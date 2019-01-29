@@ -1,2 +1,5 @@
-# reva
-Cloud Storage Sync and Share Interoperability Platform
+# REVA
+
+Cloud Storage Sync & Share Interoperability Platform
+
+

@@ -1,0 +1,16 @@
+[Unit]
+Description=revad
+After=syslog.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/local/bin/revad
+StandardOutput=syslog
+StandardError=syslog
+LimitNOFILE=49152
+
+[Install]
+WantedBy=multi-user.target
+

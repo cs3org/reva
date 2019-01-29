@@ -1,0 +1,74 @@
+[core]
+log_file = "stderr"
+log_mode = "dev"
+max_cpus = "32"
+
+[grpc]
+network = "tcp"
+address = "0.0.0.0:9999"
+access_log = "stderr"
+tls_enabled = true
+tls_cert = "/etc/gridsecurity/host.cert"
+tls_key = "/etc/gridsecurity/host.key"
+enabled_services = ["storage_provider_svc", "auth_svc", "storage_broker_svc", "app_registry_svc", "app_provider_svc"]
+
+[http]
+enabled_services = ["prometheus_svc", "webui_svc", "ocdav_svc", "iframe_ui_svc"]
+network = "tcp"
+address = "0.0.0.0:9998"
+
+[grpc.storage_provider_svc]
+driver = "local"
+mount_path = "/"
+mount_id = "123e4567-e89b-12d3-a456-426655440000"
+
+[grpc.auth_svc.auth_manager]
+driver = "demo"
+
+[grpc.auth_svc.token_manager]
+driver = "jwt"
+
+[grpc.auth_svc.user_manager]
+driver = "demo"
+
+[grpc.storage_provider_svc.eos]
+mgm = "root://nowhere.org"
+root_uid = 0
+root_gid = 0
+
+[grpc.storage_provider_svc.local]
+root = "/var/tmp/owncloud/data"
+
+[grpc.storage_broker_svc]
+driver = "static"
+
+[grpc.storage_broker_svc.static.rules]
+"/" = "localhost:9999"
+"123e4567-e89b-12d3-a456-426655440000" = "localhost:9999"
+
+[grpc.app_registry_svc]
+driver = "static"
+
+[grpc.app_registry_svc.static.rules]
+".txt" = "localhost:9999"
+"txt/plain" = "localhost:9999"
+
+[grpc.app_provider_svc]
+driver = "demo"
+
+[grpc.app_provider_svc.demo]
+iframe_ui_provider = "http://localhost:9998/iframeuisvc"
+
+[http.prometheus_svc]
+prefix = "metrics"
+
+[http.webui_svc]
+prefix = "ui"
+
+[http.ocdav_svc]
+prefix = "owncloud"
+chunk_folder = "/var/tmp/owncloud/chunks"
+storageprovidersvc = "localhost:9999"
+
+[http.iframe_ui_svc]
+prefix = "iframeuisvc"
