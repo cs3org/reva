@@ -8,26 +8,19 @@ import (
 	storagebrokerv0alphapb "github.com/cernbox/go-cs3apis/cs3/storagebroker/v0alpha"
 )
 
-func brokerFindCommand() *command {
-	cmd := newCommand("broker-find")
+func brokerDiscoverCommand() *command {
+	cmd := newCommand("broker-discover")
 	cmd.Description = func() string {
-		return "find storage provider for path"
+		return "returns a list of all available storage providers known by the broker"
 	}
 	cmd.Action = func() error {
-		fn := "/"
-		if cmd.NArg() >= 1 {
-			fn = cmd.Args()[0]
-		}
-
-		req := &storagebrokerv0alphapb.FindRequest{
-			Filename: fn,
-		}
+		req := &storagebrokerv0alphapb.DiscoverRequest{}
 		client, err := getStorageBrokerClient()
 		if err != nil {
 			return err
 		}
 		ctx := context.Background()
-		res, err := client.Find(ctx, req)
+		res, err := client.Discover(ctx, req)
 		if err != nil {
 			return err
 		}
@@ -36,7 +29,10 @@ func brokerFindCommand() *command {
 			return formatError(res.Status)
 		}
 
-		fmt.Printf("resource can be found at %s\n", res.StorageProvider.Endpoint)
+		providers := res.StorageProviders
+		for _, p := range providers {
+			fmt.Printf("%s => %s\n", p.MountPath, p.Endpoint)
+		}
 		return nil
 	}
 	return cmd

@@ -20,6 +20,7 @@ var errors = err.New("storagebrokersvc")
 type service struct {
 	broker storage.Broker
 }
+
 type config struct {
 	Driver string                 `mapstructure:"driver"`
 	Static map[string]interface{} `mapstructure:"static"`
@@ -61,6 +62,28 @@ func getBroker(c *config) (storage.Broker, error) {
 		return nil, fmt.Errorf("driver not found: %s", c.Driver)
 	}
 }
+
+func (s *service) Discover(ctx context.Context, req *storagebrokerv0alphapb.DiscoverRequest) (*storagebrokerv0alphapb.DiscoverResponse, error) {
+	providers := []*storagebrokerv0alphapb.StorageProvider{}
+	pinfos, err := s.broker.ListProviders(ctx)
+	if err != nil {
+		res := &storagebrokerv0alphapb.DiscoverResponse{
+			Status: &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL},
+		}
+		return res, nil
+	}
+
+	for _, info := range pinfos {
+		providers = append(providers, format(info))
+	}
+
+	res := &storagebrokerv0alphapb.DiscoverResponse{
+		Status:           &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
+		StorageProviders: providers,
+	}
+	return res, nil
+}
+
 func (s *service) Find(ctx context.Context, req *storagebrokerv0alphapb.FindRequest) (*storagebrokerv0alphapb.FindResponse, error) {
 	fn := req.Filename
 	p, err := s.broker.FindProvider(ctx, fn)
@@ -74,14 +97,15 @@ func (s *service) Find(ctx context.Context, req *storagebrokerv0alphapb.FindRequ
 
 	provider := format(p)
 	res := &storagebrokerv0alphapb.FindResponse{
-		Status:       &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
-		ProviderInfo: provider,
+		Status:          &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
+		StorageProvider: provider,
 	}
 	return res, nil
 }
 
-func format(p *storage.ProviderInfo) *storagebrokerv0alphapb.ProviderInfo {
-	return &storagebrokerv0alphapb.ProviderInfo{
-		Location: p.Location,
+func format(p *storage.ProviderInfo) *storagebrokerv0alphapb.StorageProvider {
+	return &storagebrokerv0alphapb.StorageProvider{
+		Endpoint:  p.Endpoint,
+		MountPath: p.MountPath,
 	}
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/cernbox/reva/pkg/mime"
 	"github.com/cernbox/reva/pkg/storage"
 	"github.com/cernbox/reva/pkg/user"
+	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
 
@@ -33,44 +34,52 @@ type eosStorage struct {
 	showHiddenSys bool
 }
 
+func parseConfig(m map[string]interface{}) (*config, error) {
+	c := &config{}
+	if err := mapstructure.Decode(m, c); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
 // Options are the configuration options to pass to the New function.
-type Options struct {
-	// Namespace for fn operations
-	Namespace string `json:"namespace"`
-
-	// Where to write the logs
-	LogOut io.Writer
-
-	// LogKey key to use for storing log traces
-	LogKey interface{}
+type config struct {
+	// Namespace for metadata operations
+	Namespace string `mapstructure:"namespace"`
 
 	// Location of the eos binary.
 	// Default is /usr/bin/eos.
-	EosBinary string `json:"eos_binary"`
+	EosBinary string `mapstructure:"eos_binary"`
 
 	// Location of the xrdcopy binary.
 	// Default is /usr/bin/xrdcopy.
-	XrdcopyBinary string `json:"xrdcopy_binary"`
+	XrdcopyBinary string `mapstructure:"xrdcopy_binary"`
 
 	// URL of the Master EOS MGM.
 	// Default is root://eos-test.org
-	MasterURL string `json:"master_url"`
+	MasterURL string `mapstructure:"master_url"`
 
 	// URL of the Slave EOS MGM.
 	// Default is root://eos-test.org
-	SlaveURL string `json:"slave_url"`
+	SlaveURL string `mapstructure:"slave_url"`
 
 	// Location on the local fs where to store reads.
 	// Defaults to os.TempDir()
-	CacheDirectory string `json:"cache_directory"`
+	CacheDirectory string `mapstructure:"cache_directory"`
 
 	// Enables logging of the commands executed
 	// Defaults to false
-	EnableLogging bool `json:"enable_logging"`
+	EnableLogging bool `mapstructure:"enable_logging"`
 
 	// ShowHiddenSysFiles shows internal EOS files like
 	// .sys.v# and .sys.a# files.
-	ShowHiddenSysFiles bool `json:"show_hidden_sys_files"`
+	ShowHiddenSysFiles bool `mapstructure:"show_hidden_sys_files"`
+
+	// ForceSingleUserMode will force connections to EOS to use SingleUsername
+	ForceSingleUserMode bool `mapstructure:"force_single_user_mode"`
+
+	// SingleUsername is the username to use when SingleUserMode is enabled
+	SingleUsername string `mapstructure:"single_username"`
 }
 
 func getUser(ctx context.Context) (*user.User, error) {
@@ -82,55 +91,59 @@ func getUser(ctx context.Context) (*user.User, error) {
 	return u, nil
 }
 
-func (opt *Options) init() {
-	opt.Namespace = path.Clean(opt.Namespace)
-	if !strings.HasPrefix(opt.Namespace, "/") {
-		opt.Namespace = "/"
+func (c *config) init() {
+	c.Namespace = path.Clean(c.Namespace)
+	if !strings.HasPrefix(c.Namespace, "/") {
+		c.Namespace = "/"
 	}
 
-	if opt.EosBinary == "" {
-		opt.EosBinary = "/usr/bin/eos"
+	if c.EosBinary == "" {
+		c.EosBinary = "/usr/bin/eos"
 	}
 
-	if opt.XrdcopyBinary == "" {
-		opt.XrdcopyBinary = "/usr/bin/xrdcopy"
+	if c.XrdcopyBinary == "" {
+		c.XrdcopyBinary = "/usr/bin/xrdcopy"
 	}
 
-	if opt.MasterURL == "" {
-		opt.MasterURL = "root://eos-example.org"
+	if c.MasterURL == "" {
+		c.MasterURL = "root://eos-example.org"
 	}
 
-	if opt.SlaveURL == "" {
-		opt.SlaveURL = opt.MasterURL
+	if c.SlaveURL == "" {
+		c.SlaveURL = c.MasterURL
 	}
 
-	if opt.CacheDirectory == "" {
-		opt.CacheDirectory = os.TempDir()
+	if c.CacheDirectory == "" {
+		c.CacheDirectory = os.TempDir()
 	}
 }
 
 // New returns a new implementation of the storage.FS interface that connects to EOS.
-func New(opt *Options) storage.FS {
-	opt.init()
+func New(m map[string]interface{}) (storage.FS, error) {
+	c, err := parseConfig(m)
+	if err != nil {
+		return nil, err
+	}
+	c.init()
 
 	eosClientOpts := &eosclient.Options{
-		XrdcopyBinary:  opt.XrdcopyBinary,
-		URL:            opt.MasterURL,
-		EosBinary:      opt.EosBinary,
-		CacheDirectory: opt.CacheDirectory,
-		LogOutput:      opt.LogOut,
-		TraceKey:       opt.LogKey,
+		XrdcopyBinary:       c.XrdcopyBinary,
+		URL:                 c.MasterURL,
+		EosBinary:           c.EosBinary,
+		CacheDirectory:      c.CacheDirectory,
+		ForceSingleUserMode: c.ForceSingleUserMode,
+		SingleUsername:      c.SingleUsername,
 	}
 
 	eosClient := eosclient.New(eosClientOpts)
 
 	eosStorage := &eosStorage{
 		c:             eosClient,
-		mountpoint:    opt.Namespace,
-		showHiddenSys: opt.ShowHiddenSysFiles,
+		mountpoint:    c.Namespace,
+		showHiddenSys: c.ShowHiddenSysFiles,
 	}
 
-	return eosStorage
+	return eosStorage, nil
 }
 
 func (fs *eosStorage) getInternalPath(ctx context.Context, fn string) string {
@@ -544,6 +557,5 @@ func (fs *eosStorage) getEosMetadata(finfo *eosclient.FileInfo) map[string]inter
 		sys.TreeCount = finfo.TreeCount
 		sys.TreeSize = finfo.TreeSize
 	}
-
 	return map[string]interface{}{"eos": sys}
 }
