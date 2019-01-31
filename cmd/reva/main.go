@@ -24,6 +24,7 @@ func main() {
 		moveCommand(),
 		mkdirCommand(),
 		brokerFindCommand(),
+		brokerDiscoverCommand(),
 		appRegistryFindCommand(),
 		appProviderGetIFrameCommand(),
 	}

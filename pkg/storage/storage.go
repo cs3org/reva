@@ -97,12 +97,14 @@ type Revision struct {
 // for discovering storage providers
 type Broker interface {
 	FindProvider(ctx context.Context, fn string) (*ProviderInfo, error)
+	ListProviders(ctx context.Context) ([]*ProviderInfo, error)
 }
 
 // ProviderInfo contains the information
 // about a StorageProvider
 type ProviderInfo struct {
-	Location string
+	MountPath string
+	Endpoint  string
 }
 
 // FSTable contains descriptive information about the various file systems.

@@ -15,7 +15,7 @@ import (
 )
 
 type config struct {
-	Root string
+	Root string `mapstructure:"root"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {

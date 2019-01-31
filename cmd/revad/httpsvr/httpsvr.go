@@ -35,6 +35,7 @@ type config struct {
 	OCDAVSvc        map[string]interface{} `mapstructure:"ocdav_svc"`
 	PromSvc         map[string]interface{} `mapstructure:"prometheus_svc"`
 	IFrameUISvc     map[string]interface{} `mapstructure:"iframe_ui_svc"`
+	Auth            map[string]interface{} `mapstructure:"auth"`
 }
 
 // Server contains the server info.
@@ -140,5 +141,5 @@ func (s *Server) getHandler() http.Handler {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	return handlers.TraceHandler(handlers.LogHandler(logger, h))
+	return handlers.TraceHandler(handlers.LogHandler(logger, handlers.AuthHandler(h)))
 }

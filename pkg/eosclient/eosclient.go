@@ -16,8 +16,8 @@ import (
 
 	"github.com/cernbox/reva/pkg/log"
 
+	"github.com/cernbox/reva/pkg/err"
 	"github.com/gofrs/uuid"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -56,6 +56,8 @@ const (
 
 var (
 	errInvalidACL = errors.New("invalid acl")
+	logger        = log.New("eosclient")
+	errors        = err.New("eosclient")
 )
 
 // ACL represents an EOS ACL.
@@ -67,6 +69,15 @@ type ACL struct {
 
 // Options to configure the Client.
 type Options struct {
+
+	// ForceSingleUserMode forces all connections to use only one user.
+	// This is the case when access to EOS is done from FUSE under apache or www-data.
+	ForceSingleUserMode bool
+
+	// SingleUsername is the username to use when connecting to EOS.
+	// Defaults to apache
+	SingleUsername string
+
 	// Location of the eos binary.
 	// Default is /usr/bin/eos.
 	EosBinary string
@@ -82,15 +93,13 @@ type Options struct {
 	// Location on the local fs where to store reads.
 	// Defaults to os.TempDir()
 	CacheDirectory string
-
-	// Writter to write logs to
-	LogOutput io.Writer
-
-	// Key to get the trace Id from.
-	TraceKey interface{}
 }
 
 func (opt *Options) init() {
+	if opt.ForceSingleUserMode && opt.SingleUsername != "" {
+		opt.SingleUsername = "apache"
+	}
+
 	if opt.EosBinary == "" {
 		opt.EosBinary = "/usr/bin/eos"
 	}
@@ -106,21 +115,12 @@ func (opt *Options) init() {
 	if opt.CacheDirectory == "" {
 		opt.CacheDirectory = os.TempDir()
 	}
-
-	if opt.LogOutput == nil {
-		opt.LogOutput = ioutil.Discard
-	}
-
-	if opt.TraceKey == nil {
-		opt.TraceKey = "traceid"
-	}
 }
 
 // Client performs actions against a EOS management node (MGM).
 // It requires the eos-client and xrootd-client packages installed to work.
 type Client struct {
-	opt    *Options
-	logger *log.Logger
+	opt *Options
 }
 
 // New creates a new client with the given options.
@@ -128,11 +128,13 @@ func New(opt *Options) *Client {
 	opt.init()
 	c := new(Client)
 	c.opt = opt
-	c.logger = log.New("eosclient")
 	return c
 }
 
-func getUnixUser(username string) (*gouser.User, error) {
+func (c *Client) getUnixUser(username string) (*gouser.User, error) {
+	if c.opt.ForceSingleUserMode {
+		username = c.opt.SingleUsername
+	}
 	return gouser.Lookup(username)
 }
 
@@ -170,11 +172,12 @@ func (c *Client) execute(ctx context.Context, cmd *exec.Cmd) (string, string, er
 		}
 	}
 
-	msg := fmt.Sprintf("cmd=%v env=%v exit=%d", cmd.Args, cmd.Env, exitStatus)
-	c.logger.Println(ctx, msg)
+	args := fmt.Sprintf("%s", cmd.Args)
+	env := fmt.Sprintf("%s", cmd.Env)
+	logger.Build().Str("args", args).Str("env", env).Int("exit", exitStatus).Msg(ctx, "eos command executed")
 
 	if err != nil {
-		err = errors.Wrap(err, "eosclient: error while executing command")
+		err = errors.Wrap(err, "error while executing command")
 	}
 
 	return outBuf.String(), errBuf.String(), err
@@ -196,7 +199,7 @@ func (c *Client) AddACL(ctx context.Context, username, path string, a *ACL) erro
 	sysACL := aclManager.serialize()
 
 	// setting of the sys.acl is only possible from root user
-	unixUser, err := getUnixUser(rootUser)
+	unixUser, err := c.getUnixUser(rootUser)
 	if err != nil {
 		return err
 	}
@@ -233,7 +236,7 @@ func (c *Client) RemoveACL(ctx context.Context, username, path string, aclType s
 	sysACL := aclManager.serialize()
 
 	// setting of the sys.acl is only possible from root user
-	unixUser, err := getUnixUser(rootUser)
+	unixUser, err := c.getUnixUser(rootUser)
 	if err != nil {
 		return err
 	}
@@ -249,6 +252,7 @@ func (c *Client) UpdateACL(ctx context.Context, username, path string, a *ACL) e
 	return c.AddACL(ctx, username, path, a)
 }
 
+// GetACL for a file
 func (c *Client) GetACL(ctx context.Context, username, path, aclType, target string) (*ACL, error) {
 	acls, err := c.ListACLs(ctx, username, path)
 	if err != nil {
@@ -271,7 +275,7 @@ func getUsername(uid string) (string, error) {
 	return user.Username, nil
 }
 
-// ListACLS returns the list of ACLs present under the given path.
+// ListACLs returns the list of ACLs present under the given path.
 // EOS returns uids/gid for Citrine version and usernames for older versions.
 // For Citire we need to convert back the uid back to username.
 func (c *Client) ListACLs(ctx context.Context, username, path string) ([]*ACL, error) {
@@ -285,7 +289,7 @@ func (c *Client) ListACLs(ctx context.Context, username, path string) ([]*ACL, e
 	for _, a := range aclManager.getEntries() {
 		username, err := getUsername(a.recipient)
 		if err != nil {
-			c.logger.Error(ctx, err)
+			logger.Error(ctx, err)
 			continue
 		}
 		acl := &ACL{
@@ -310,7 +314,7 @@ func (c *Client) getACLForPath(ctx context.Context, username, path string) (*acl
 
 // GetFileInfoByInode returns the FileInfo by the given inode
 func (c *Client) GetFileInfoByInode(ctx context.Context, username string, inode uint64) (*FileInfo, error) {
-	unixUser, err := getUnixUser(username)
+	unixUser, err := c.getUnixUser(username)
 	if err != nil {
 		return nil, err
 	}
@@ -324,7 +328,7 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, username string, inode 
 
 // GetFileInfoByPath returns the FilInfo at the given path
 func (c *Client) GetFileInfoByPath(ctx context.Context, username, path string) (*FileInfo, error) {
-	unixUser, err := getUnixUser(username)
+	unixUser, err := c.getUnixUser(username)
 	if err != nil {
 		return nil, err
 	}
@@ -339,7 +343,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, username, path string) (
 // GetQuota gets the quota of a user on the quota node defined by path
 func (c *Client) GetQuota(ctx context.Context, username, path string) (int, int, error) {
 	// setting of the sys.acl is only possible from root user
-	unixUser, err := getUnixUser(rootUser)
+	unixUser, err := c.getUnixUser(rootUser)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -353,7 +357,7 @@ func (c *Client) GetQuota(ctx context.Context, username, path string) (int, int,
 
 // CreateDir creates a directory at the given path
 func (c *Client) CreateDir(ctx context.Context, username, path string) error {
-	unixUser, err := getUnixUser(username)
+	unixUser, err := c.getUnixUser(username)
 	if err != nil {
 		return err
 	}
@@ -365,7 +369,7 @@ func (c *Client) CreateDir(ctx context.Context, username, path string) error {
 
 // Remove removes the resource at the given path
 func (c *Client) Remove(ctx context.Context, username, path string) error {
-	unixUser, err := getUnixUser(username)
+	unixUser, err := c.getUnixUser(username)
 	if err != nil {
 		return err
 	}
@@ -376,7 +380,7 @@ func (c *Client) Remove(ctx context.Context, username, path string) error {
 
 // Rename renames the resource referenced by oldPath to newPath
 func (c *Client) Rename(ctx context.Context, username, oldPath, newPath string) error {
-	unixUser, err := getUnixUser(username)
+	unixUser, err := c.getUnixUser(username)
 	if err != nil {
 		return err
 	}
@@ -387,21 +391,21 @@ func (c *Client) Rename(ctx context.Context, username, oldPath, newPath string) 
 
 // List the contents of the directory given by path
 func (c *Client) List(ctx context.Context, username, path string) ([]*FileInfo, error) {
-	unixUser, err := getUnixUser(username)
+	unixUser, err := c.getUnixUser(username)
 	if err != nil {
 		return nil, err
 	}
 	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "find", "--fileinfo", "--maxdepth", "1", path)
 	stdout, _, err := c.execute(ctx, cmd)
 	if err != nil {
-		return nil, errors.Wrapf(err, "eosclient: error listing fn=%s", path)
+		return nil, errors.Wrapf(err, "error listing fn=%s", path)
 	}
 	return c.parseFind(path, stdout)
 }
 
 // Read reads a file from the mgm
 func (c *Client) Read(ctx context.Context, username, path string) (io.ReadCloser, error) {
-	unixUser, err := getUnixUser(username)
+	unixUser, err := c.getUnixUser(username)
 	if err != nil {
 		return nil, err
 	}
@@ -419,7 +423,7 @@ func (c *Client) Read(ctx context.Context, username, path string) (io.ReadCloser
 
 // Write writes a file to the mgm
 func (c *Client) Write(ctx context.Context, username, path string, stream io.ReadCloser) error {
-	unixUser, err := getUnixUser(username)
+	unixUser, err := c.getUnixUser(username)
 	if err != nil {
 		return err
 	}
@@ -443,7 +447,7 @@ func (c *Client) Write(ctx context.Context, username, path string, stream io.Rea
 
 // ListDeletedEntries returns a list of the deleted entries.
 func (c *Client) ListDeletedEntries(ctx context.Context, username string) ([]*DeletedEntry, error) {
-	unixUser, err := getUnixUser(username)
+	unixUser, err := c.getUnixUser(username)
 	if err != nil {
 		return nil, err
 	}
@@ -459,7 +463,7 @@ func (c *Client) ListDeletedEntries(ctx context.Context, username string) ([]*De
 
 // RestoreDeletedEntry restores a deleted entry.
 func (c *Client) RestoreDeletedEntry(ctx context.Context, username, key string) error {
-	unixUser, err := getUnixUser(username)
+	unixUser, err := c.getUnixUser(username)
 	if err != nil {
 		return err
 	}
@@ -470,7 +474,7 @@ func (c *Client) RestoreDeletedEntry(ctx context.Context, username, key string) 
 
 // PurgeDeletedEntries purges all entries from the recycle bin.
 func (c *Client) PurgeDeletedEntries(ctx context.Context, username string) error {
-	unixUser, err := getUnixUser(username)
+	unixUser, err := c.getUnixUser(username)
 	if err != nil {
 		return err
 	}
@@ -499,7 +503,7 @@ func (c *Client) ListVersions(ctx context.Context, username, p string) ([]*FileI
 
 // RollbackToVersion rollbacks a file to a previous version.
 func (c *Client) RollbackToVersion(ctx context.Context, username, path, version string) error {
-	unixUser, err := getUnixUser(username)
+	unixUser, err := c.getUnixUser(username)
 	if err != nil {
 		return err
 	}

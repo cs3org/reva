@@ -16,6 +16,17 @@ type broker struct {
 	rules map[string]string
 }
 
+func (b *broker) ListProviders(ctx context.Context) ([]*storage.ProviderInfo, error) {
+	providers := []*storage.ProviderInfo{}
+	for k, v := range b.rules {
+		providers = append(providers, &storage.ProviderInfo{
+			Endpoint:  v,
+			MountPath: k,
+		})
+	}
+	return providers, nil
+}
+
 func (b *broker) FindProvider(ctx context.Context, fn string) (*storage.ProviderInfo, error) {
 	// find longest match
 	var match string
@@ -30,13 +41,14 @@ func (b *broker) FindProvider(ctx context.Context, fn string) (*storage.Provider
 	}
 
 	p := &storage.ProviderInfo{
-		Location: b.rules[match],
+		MountPath: match,
+		Endpoint:  b.rules[match],
 	}
 	return p, nil
 }
 
 type config struct {
-	Rules map[string]string
+	Rules map[string]string `mapstructure:"rules"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
