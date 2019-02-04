@@ -1,0 +1,21 @@
+[core]
+log_file = "stderr"
+log_mode = "dev"
+max_cpus = "32"
+
+[grpc]
+network = "tcp"
+address = "0.0.0.0:9999"
+
+[http]
+enabled_services = ["prometheus_svc", "ocdav_svc"]
+network = "tcp"
+address = "0.0.0.0:9998"
+
+[http.prometheus_svc]
+prefix = "metrics"
+
+[http.ocdav_svc]
+prefix = "owncloud"
+chunk_folder = "/var/tmp/owncloud/chunks"
+storageprovidersvc = "storageprovidersvc:9999"

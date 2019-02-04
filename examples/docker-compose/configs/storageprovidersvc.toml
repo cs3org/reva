@@ -1,0 +1,22 @@
+[core]
+log_file = "stderr"
+log_mode = "dev"
+max_cpus = "32"
+
+[grpc]
+network = "tcp"
+address = "0.0.0.0:9999"
+enabled_services = ["storage_provider_svc"]
+
+[http]
+enabled_services = ["prometheus_svc", "webui_svc", "ocdav_svc", "iframe_ui_svc"]
+network = "tcp"
+address = "0.0.0.0:9998"
+
+[grpc.storage_provider_svc]
+driver = "local"
+mount_path = "/"
+mount_id = "123e4567-e89b-12d3-a456-426655440000"
+
+[http.prometheus_svc]
+prefix = "metrics"
