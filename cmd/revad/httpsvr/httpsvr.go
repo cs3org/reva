@@ -141,5 +141,5 @@ func (s *Server) getHandler() http.Handler {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	return handlers.TraceHandler(handlers.LogHandler(logger, handlers.AuthHandler(h)))
+	return handlers.TraceHandler(handlers.LogHandler(logger, h))
 }
