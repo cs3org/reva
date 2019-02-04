@@ -19,3 +19,11 @@ cd reva
 docker build . -t revad
 docker run -p 9999:9999 -p 9998:9998 -v /your/config:/etc/revad/revad.toml -d revad
 ```
+
+# Getting started - Docker Compose
+
+```
+git clone https://github.com/cernbox/reva
+cd reva/examples/docker-compose/
+docker-compose up -d
+```
