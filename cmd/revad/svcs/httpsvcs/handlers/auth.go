@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	oidc "github.com/coreos/go-oidc"
-	"github.com/gofrs/uuid"
 )
 
 type user struct {
@@ -66,8 +65,4 @@ func AuthHandler(h http.Handler) http.Handler {
 		logger.Println(ctx, "user logged in: ", user)
 		h.ServeHTTP(w, r)
 	})
-}
-
-func genTrace() string {
-	return uuid.Must(uuid.NewV4()).String()
 }

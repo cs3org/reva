@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/gofrs/uuid"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -31,4 +32,8 @@ func TraceHandler(h http.Handler) http.Handler {
 		r = r.WithContext(ctx)
 		h.ServeHTTP(w, r)
 	})
+}
+
+func genTrace() string {
+	return uuid.Must(uuid.NewV4()).String()
 }

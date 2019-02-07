@@ -13,6 +13,8 @@ import (
 	"github.com/cernbox/reva/pkg/err"
 	"github.com/cernbox/reva/pkg/log"
 
+	_ "github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/loader"
+
 	"github.com/cernbox/reva/cmd/revad/config"
 	"github.com/cernbox/reva/cmd/revad/grace"
 	"github.com/cernbox/reva/cmd/revad/grpcsvr"
