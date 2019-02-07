@@ -106,25 +106,3 @@ type ProviderInfo struct {
 	MountPath string
 	Endpoint  string
 }
-
-// FSTable contains descriptive information about the various file systems.
-// It follows the same logic as unix fstab.
-type FSTable interface {
-	AddMount(m Mount) error
-	ListMounts() ([]Mount, error)
-	RemoveMount(m Mount) error
-	GetMount(dir string) (Mount, error)
-}
-
-// Mount contains the information on how to mount a filesystem.
-type Mount interface {
-	GetName() string
-	GetDir() string
-	GetFS() FS
-	GetOptions() *MountOptions
-}
-
-// MountOptions are the options for the mount.
-type MountOptions struct {
-	ForceReadOnly bool
-}

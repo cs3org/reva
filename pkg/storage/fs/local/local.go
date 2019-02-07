@@ -9,10 +9,16 @@ import (
 	"path"
 	"strings"
 
+	"github.com/cernbox/reva/pkg/storage/registry"
+
 	"github.com/cernbox/reva/pkg/storage"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
+
+func init() {
+	registry.Register("local", New)
+}
 
 type config struct {
 	Root string `mapstructure:"root"`

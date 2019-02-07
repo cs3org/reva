@@ -37,12 +37,12 @@ driver = "local"
 mount_path = "/"
 mount_id = "123e4567-e89b-12d3-a456-426655440000"
 
-[grpc.services.storageprovidersvc.eos]
+[grpc.services.storageprovidersvc.drivers.eos]
 mgm = "root://nowhere.org"
 root_uid = 0
 root_gid = 0
 
-[grpc.services.storageprovidersvc.local]
+[grpc.services.storageprovidersvc.drivers.local]
 root = "/var/tmp/owncloud/data"
 
 [grpc.services.authsvc.auth_manager]
