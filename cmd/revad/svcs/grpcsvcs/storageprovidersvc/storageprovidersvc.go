@@ -15,8 +15,7 @@ import (
 	"github.com/cernbox/reva/pkg/err"
 	"github.com/cernbox/reva/pkg/log"
 	"github.com/cernbox/reva/pkg/storage"
-	"github.com/cernbox/reva/pkg/storage/eos"
-	"github.com/cernbox/reva/pkg/storage/local"
+	"github.com/cernbox/reva/pkg/storage/registry"
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
@@ -30,13 +29,11 @@ var logger = log.New("storageprovidersvc")
 var errors = err.New("storageprovidersvc")
 
 type config struct {
-	Driver    string                 `mapstructure:"driver"`
-	MountPath string                 `mapstructure:"mount_path"`
-	MountID   string                 `mapstructure:"mount_id"`
-	TmpFolder string                 `mapstructure:"tmp_folder"`
-	EOS       map[string]interface{} `mapstructure:"eos"`
-	S3        map[string]interface{} `mapstructure:"s3"`
-	Local     map[string]interface{} `mapstructure:"local"`
+	Driver    string                            `mapstructure:"driver"`
+	MountPath string                            `mapstructure:"mount_path"`
+	MountID   string                            `mapstructure:"mount_id"`
+	TmpFolder string                            `mapstructure:"tmp_folder"`
+	Drivers   map[string]map[string]interface{} `mapstructure:"drivers"`
 }
 
 type service struct {
@@ -992,16 +989,10 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 func getFS(c *config) (storage.FS, error) {
-	switch c.Driver {
-	case "local":
-		return local.New(c.Local)
-	case "eos":
-		return eos.New(c.Local)
-	case "":
-		return nil, fmt.Errorf("driver is empty")
-	default:
-		return nil, fmt.Errorf("driver not found: %s", c.Driver)
+	if f, ok := registry.NewFuncs[c.Driver]; ok {
+		return f(c.Drivers[c.Driver])
 	}
+	return nil, fmt.Errorf("driver not found: %s", c.Driver)
 }
 
 type notFoundError interface {

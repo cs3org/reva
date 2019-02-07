@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cernbox/reva/pkg/storage/registry"
+
 	"github.com/cernbox/reva/pkg/eosclient"
 	"github.com/cernbox/reva/pkg/log"
 	"github.com/cernbox/reva/pkg/mime"
@@ -18,6 +20,10 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
+
+func init() {
+	registry.Register("eos", New)
+}
 
 var hiddenReg = regexp.MustCompile(`\.sys\..#.`)
 
