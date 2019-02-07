@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cernbox/reva/pkg/storage/registry"
+	"github.com/cernbox/reva/pkg/storage/fs/registry"
 
 	"github.com/cernbox/reva/pkg/eosclient"
 	"github.com/cernbox/reva/pkg/log"

@@ -9,7 +9,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/cernbox/reva/pkg/storage/registry"
+	"github.com/cernbox/reva/pkg/storage/fs/registry"
 
 	"github.com/cernbox/reva/pkg/storage"
 	"github.com/mitchellh/mapstructure"
