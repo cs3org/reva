@@ -1,3 +1,5 @@
+[![Go Report Card](https://goreportcard.com/badge/github.com/cernbox/reva)](https://goreportcard.com/report/github.com/cernbox/reva)
+
 # REVA
 
 Cloud Storage Sync & Share Interoperability Platform
