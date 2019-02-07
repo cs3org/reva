@@ -4,13 +4,13 @@ import (
 	"context"
 
 	"github.com/cernbox/reva/pkg/auth/manager/registry"
+	tokenmgr "github.com/cernbox/reva/pkg/token/manager/registry"
 	usermgr "github.com/cernbox/reva/pkg/user/manager/registry"
 
 	"github.com/cernbox/reva/pkg/auth"
 	"github.com/cernbox/reva/pkg/err"
 	"github.com/cernbox/reva/pkg/log"
 	"github.com/cernbox/reva/pkg/token"
-	"github.com/cernbox/reva/pkg/token/manager/jwt"
 	"github.com/cernbox/reva/pkg/user"
 
 	authv0alphapb "github.com/cernbox/go-cs3apis/cs3/auth/v0alpha"
@@ -35,8 +35,8 @@ type authManagerConfig struct {
 }
 
 type tokenManagerConfig struct {
-	Driver string                 `mapstructure:"driver"`
-	JWT    map[string]interface{} `mapstructure:"jwt"`
+	Driver  string                            `mapstructure:"driver"`
+	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
 }
 
 type userManagerConfig struct {
@@ -85,19 +85,11 @@ func getTokenManager(m map[string]interface{}) (token.Manager, error) {
 		return nil, err
 	}
 
-	switch c.Driver {
-	case "jwt":
-		mgr, err := jwt.New(c.JWT)
-		if err != nil {
-			return nil, errors.Wrap(err, "unable to create jwt token manager")
-		}
-		return mgr, nil
-	case "":
-		return nil, errors.Errorf("driver for token manager is empty")
-
-	default:
-		return nil, errors.Errorf("driver %s not found for token manager", c.Driver)
+	if f, ok := tokenmgr.NewFuncs[c.Driver]; ok {
+		return f(c.Drivers[c.Driver])
 	}
+
+	return nil, errors.Errorf("driver %s not found for token manager", c.Driver)
 }
 
 // New returns a new AuthServiceServer.

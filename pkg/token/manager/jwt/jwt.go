@@ -4,11 +4,16 @@ import (
 	"context"
 
 	"github.com/cernbox/reva/pkg/token"
+	"github.com/cernbox/reva/pkg/token/manager/registry"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
+
+func init() {
+	registry.Register("jwt", New)
+}
 
 type config struct {
 	Secret string `mapstructure:"secret"`

@@ -17,6 +17,7 @@ import (
 	_ "github.com/cernbox/reva/pkg/auth/manager/loader"
 	_ "github.com/cernbox/reva/pkg/storage/broker/loader"
 	_ "github.com/cernbox/reva/pkg/storage/fs/loader"
+	_ "github.com/cernbox/reva/pkg/token/manager/loader"
 	_ "github.com/cernbox/reva/pkg/user/manager/loader"
 
 	"github.com/cernbox/reva/cmd/revad/config"

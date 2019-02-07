@@ -6,16 +6,23 @@ import (
 	"encoding/base64"
 	"encoding/gob"
 
+	"github.com/cernbox/reva/pkg/token/manager/registry"
+
 	"github.com/cernbox/reva/pkg/token"
 )
+
+func init() {
+	registry.Register("demo", New)
+}
 
 type manager struct {
 	vault map[string]token.Claims
 }
 
-func New() token.Manager {
+// New returns a new token manager.
+func New(m map[string]interface{}) (token.Manager, error) {
 	v := getVault()
-	return &manager{vault: v}
+	return &manager{vault: v}, nil
 }
 
 func (m *manager) ForgeToken(ctx context.Context, claims token.Claims) (string, error) {
