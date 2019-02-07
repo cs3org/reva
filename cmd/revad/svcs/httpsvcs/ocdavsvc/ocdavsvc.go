@@ -7,11 +7,16 @@ import (
 	"path"
 
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
+	"github.com/cernbox/reva/cmd/revad/httpserver"
+	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs"
 	"github.com/cernbox/reva/pkg/log"
-	"github.com/cernbox/reva/services/httpsvc"
 	"github.com/mitchellh/mapstructure"
 	"google.golang.org/grpc"
 )
+
+func init() {
+	httpserver.Register("ocdavsvc", New)
+}
 
 var logger = log.New("ocdavsvc")
 
@@ -31,7 +36,7 @@ type svc struct {
 }
 
 // New returns a new ocdavsvc
-func New(m map[string]interface{}) (httpsvc.Service, error) {
+func New(m map[string]interface{}) (httpsvcs.Service, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
@@ -62,16 +67,16 @@ func (s *svc) Handler() http.Handler {
 
 func (s *svc) setHandler() {
 	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		head, tail := httpsvc.ShiftPath(r.URL.Path)
+		head, tail := httpsvcs.ShiftPath(r.URL.Path)
 
 		switch head {
 		case "ocs":
 			r.URL.Path = tail
-			head, r.URL.Path = httpsvc.ShiftPath(r.URL.Path)
+			head, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
 			if head == "v1.php" {
-				head, r.URL.Path = httpsvc.ShiftPath(r.URL.Path)
+				head, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
 				if head == "cloud" {
-					head, r.URL.Path = httpsvc.ShiftPath(r.URL.Path)
+					head, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
 					if head == "capabilities" {
 						s.doCapabilities(w, r)
 						return
@@ -90,7 +95,7 @@ func (s *svc) setHandler() {
 			return
 
 		case "remote.php":
-			head2, tail2 := httpsvc.ShiftPath(tail)
+			head2, tail2 := httpsvcs.ShiftPath(tail)
 			if head2 == "webdav" {
 				r.URL.Path = tail2
 				// webdav should be death: baseURI is encoded as part of the

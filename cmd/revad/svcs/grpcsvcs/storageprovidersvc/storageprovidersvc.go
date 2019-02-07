@@ -15,6 +15,7 @@ import (
 	"github.com/cernbox/reva/pkg/err"
 	"github.com/cernbox/reva/pkg/log"
 	"github.com/cernbox/reva/pkg/storage"
+	"github.com/cernbox/reva/pkg/storage/eos"
 	"github.com/cernbox/reva/pkg/storage/local"
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
@@ -994,6 +995,8 @@ func getFS(c *config) (storage.FS, error) {
 	switch c.Driver {
 	case "local":
 		return local.New(c.Local)
+	case "eos":
+		return eos.New(c.Local)
 	case "":
 		return nil, fmt.Errorf("driver is empty")
 	default:

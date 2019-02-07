@@ -1,4 +1,4 @@
-package httpsvr
+package httpserver
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"github.com/cernbox/reva/pkg/log"
 
 	"github.com/mitchellh/mapstructure"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // Services is a map of service name and its new function.
@@ -121,8 +122,7 @@ func (s *Server) registerServices() error {
 				logger.Error(ctx, err)
 				return err
 			}
-			//svcs[svc.Prefix()] = prometheus.InstrumentHandler(svc.Prefix(), svc.Handler())
-			svcs[svc.Prefix()] = svc.Handler()
+			svcs[svc.Prefix()] = prometheus.InstrumentHandler(svc.Prefix(), svc.Handler())
 			logger.Printf(ctx, "http service enabled: %s@/%s", svcName, svc.Prefix())
 		}
 	}

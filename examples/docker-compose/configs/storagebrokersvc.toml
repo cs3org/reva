@@ -6,19 +6,19 @@ max_cpus = "32"
 [grpc]
 network = "tcp"
 address = "0.0.0.0:9999"
-enabled_services = ["storage_broker_svc"]
+enabled_services = ["storagebrokersvc"]
 
 [http]
-enabled_services = ["prometheus_svc"]
+enabled_services = ["prometheussvc"]
 network = "tcp"
 address = "0.0.0.0:9998"
 
-[grpc.storage_broker_svc]
+[grpc.services.storagebrokersvc]
 driver = "static"
 
-[grpc.storage_broker_svc.static.rules]
+[grpc.services.storagebrokersvc.static.rules]
 "/" = "storageprovidersvc:9999"
 "123e4567-e89b-12d3-a456-426655440000" = "storageprovidersvc:9999"
 
-[http.prometheus_svc]
+[http.services.prometheussvc]
 prefix = "metrics"

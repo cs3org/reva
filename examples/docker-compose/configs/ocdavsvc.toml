@@ -8,14 +8,14 @@ network = "tcp"
 address = "0.0.0.0:9999"
 
 [http]
-enabled_services = ["prometheus_svc", "ocdav_svc"]
+enabled_services = ["prometheussvc", "ocdavsvc"]
 network = "tcp"
 address = "0.0.0.0:9998"
 
-[http.prometheus_svc]
+[http.services.prometheussvc]
 prefix = "metrics"
 
-[http.ocdav_svc]
+[http.services.ocdavsvc]
 prefix = "owncloud"
 chunk_folder = "/var/tmp/owncloud/chunks"
 storageprovidersvc = "storageprovidersvc:9999"
