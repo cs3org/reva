@@ -35,7 +35,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	}
 
 	// create root if it does not exist
-	os.MkdirAll(c.Root, 0700)
+	os.MkdirAll(c.Root, 0755)
 
 	return &localFS{root: c.Root}, nil
 }
