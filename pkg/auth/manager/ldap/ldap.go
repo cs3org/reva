@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	registry.Register("impersonator", New)
+	registry.Register("ldap", New)
 }
 
 type mgr struct {
