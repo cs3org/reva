@@ -6,8 +6,14 @@ import (
 	"fmt"
 
 	"github.com/cernbox/reva/pkg/auth"
+	"github.com/cernbox/reva/pkg/auth/manager/registry"
+	"github.com/mitchellh/mapstructure"
 	"gopkg.in/ldap.v2"
 )
+
+func init() {
+	registry.Register("impersonator", New)
+}
 
 type mgr struct {
 	hostname     string
@@ -18,16 +24,38 @@ type mgr struct {
 	bindPassword string
 }
 
-// New returns an auth manager implementation that connects to a LDAP server to validate the user.
-func New(hostname string, port int, baseDN, filter, bindUsername, bindPassword string) auth.Manager {
-	return &mgr{
-		hostname:     hostname,
-		port:         port,
-		baseDN:       baseDN,
-		filter:       filter,
-		bindUsername: bindUsername,
-		bindPassword: bindPassword,
+type config struct {
+	Hostname     string `mapstructure:"hostname"`
+	Port         int    `mapstructure:"port"`
+	BaseDN       string `mapstructure:"base_dn"`
+	Filter       string `mapstructure:"filter"`
+	BindUsername string `mapstructure:"bind_username"`
+	BindPassword string `mapstructure:"bind_password"`
+}
+
+func parseConfig(m map[string]interface{}) (*config, error) {
+	c := &config{}
+	if err := mapstructure.Decode(m, c); err != nil {
+		return nil, err
 	}
+	return c, nil
+}
+
+// New returns an auth manager implementation that connects to a LDAP server to validate the user.
+func New(m map[string]interface{}) (auth.Manager, error) {
+	c, err := parseConfig(m)
+	if err != nil {
+		return nil, err
+	}
+
+	return &mgr{
+		hostname:     c.Hostname,
+		port:         c.Port,
+		baseDN:       c.BaseDN,
+		filter:       c.Filter,
+		bindUsername: c.BindUsername,
+		bindPassword: c.BindPassword,
+	}, nil
 }
 
 func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) error {

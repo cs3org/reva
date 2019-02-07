@@ -3,8 +3,9 @@ package authsvc
 import (
 	"context"
 
+	"github.com/cernbox/reva/pkg/auth/manager/registry"
+
 	"github.com/cernbox/reva/pkg/auth"
-	"github.com/cernbox/reva/pkg/auth/manager/demo"
 	"github.com/cernbox/reva/pkg/err"
 	"github.com/cernbox/reva/pkg/log"
 	"github.com/cernbox/reva/pkg/token"
@@ -29,9 +30,8 @@ type config struct {
 }
 
 type authManagerConfig struct {
-	Driver string                 `mapstructure:"driver"`
-	Demo   map[string]interface{} `mapstructure:"demo"`
-	LDAP   map[string]interface{} `mapstructure:"ldap"`
+	Driver  string                            `mapstructure:"driver"`
+	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
 }
 
 type tokenManagerConfig struct {
@@ -80,19 +80,11 @@ func getAuthManager(m map[string]interface{}) (auth.Manager, error) {
 		return nil, err
 	}
 
-	switch c.Driver {
-	case "demo":
-		mgr, err := demo.New(c.Demo)
-		if err != nil {
-			return nil, errors.Wrap(err, "unable to create demo auth manager")
-		}
-		return mgr, nil
-	case "":
-		return nil, errors.Errorf("driver for auth manager is empty")
-
-	default:
-		return nil, errors.Errorf("driver %s not found for auth manager", c.Driver)
+	if f, ok := registry.NewFuncs[c.Driver]; ok {
+		return f(c.Drivers[c.Driver])
 	}
+
+	return nil, errors.Errorf("driver %s not found for auth manager", c.Driver)
 }
 
 func getTokenManager(m map[string]interface{}) (token.Manager, error) {
@@ -116,6 +108,7 @@ func getTokenManager(m map[string]interface{}) (token.Manager, error) {
 	}
 }
 
+// New returns a new AuthServiceServer.
 func New(m map[string]interface{}) (authv0alphapb.AuthServiceServer, error) {
 	c, err := parseConfig(m)
 	if err != nil {

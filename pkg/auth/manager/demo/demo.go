@@ -4,12 +4,18 @@ import (
 	"context"
 
 	"github.com/cernbox/reva/pkg/auth"
+	"github.com/cernbox/reva/pkg/auth/manager/registry"
 )
+
+func init() {
+	registry.Register("demo", New)
+}
 
 type manager struct {
 	credentials map[string]string
 }
 
+// New returns a new auth Manager.
 func New(m map[string]interface{}) (auth.Manager, error) {
 	// m not used
 	creds := getCredentials()
