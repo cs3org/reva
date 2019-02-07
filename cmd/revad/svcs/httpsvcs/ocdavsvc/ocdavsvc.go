@@ -7,7 +7,7 @@ import (
 	"path"
 
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
-	"github.com/cernbox/reva/cmd/revad/httpsvr"
+	"github.com/cernbox/reva/cmd/revad/httpserver"
 	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs"
 	"github.com/cernbox/reva/pkg/log"
 	"github.com/mitchellh/mapstructure"
@@ -15,7 +15,7 @@ import (
 )
 
 func init() {
-	httpsvr.Register("ocdavsvc", New)
+	httpserver.Register("ocdavsvc", New)
 }
 
 var logger = log.New("ocdavsvc")

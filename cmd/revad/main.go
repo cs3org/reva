@@ -17,8 +17,8 @@ import (
 
 	"github.com/cernbox/reva/cmd/revad/config"
 	"github.com/cernbox/reva/cmd/revad/grace"
-	"github.com/cernbox/reva/cmd/revad/grpcsvr"
-	"github.com/cernbox/reva/cmd/revad/httpsvr"
+	"github.com/cernbox/reva/cmd/revad/grpcserver"
+	"github.com/cernbox/reva/cmd/revad/httpserver"
 
 	"github.com/mitchellh/mapstructure"
 )
@@ -83,8 +83,8 @@ func main() {
 	grace.TrapSignals()
 }
 
-func getGRPCServer() *grpcsvr.Server {
-	s, err := grpcsvr.New(config.Get("grpc"))
+func getGRPCServer() *grpcserver.Server {
+	s, err := grpcserver.New(config.Get("grpc"))
 	if err != nil {
 		logger.Error(ctx, err)
 		grace.Exit(1)
@@ -92,8 +92,8 @@ func getGRPCServer() *grpcsvr.Server {
 	return s
 }
 
-func getHTTPServer() *httpsvr.Server {
-	s, err := httpsvr.New(config.Get("http"))
+func getHTTPServer() *httpserver.Server {
+	s, err := httpserver.New(config.Get("http"))
 	if err != nil {
 		logger.Error(ctx, err)
 		grace.Exit(1)

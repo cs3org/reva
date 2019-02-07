@@ -6,17 +6,17 @@ max_cpus = "32"
 [grpc]
 network = "tcp"
 address = "0.0.0.0:9999"
-enabled_services = ["storage_provider_svc"]
+enabled_services = ["storageprovidersvc"]
 
 [http]
-enabled_services = ["prometheus_svc", "webui_svc", "ocdav_svc", "iframe_ui_svc"]
+enabled_services = ["prometheussvc", "webuisvc", "ocdavsvc", "iframeuisvc"]
 network = "tcp"
 address = "0.0.0.0:9998"
 
-[grpc.storage_provider_svc]
+[grpc.services.storageprovidersvc]
 driver = "local"
 mount_path = "/"
 mount_id = "123e4567-e89b-12d3-a456-426655440000"
 
-[http.prometheus_svc]
+[http.services.prometheussvc]
 prefix = "metrics"

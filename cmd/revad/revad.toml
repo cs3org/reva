@@ -10,7 +10,7 @@ network = "tcp"
 address = "0.0.0.0:9998"
 
 [http.services.prometheussvc]
-prefix = "metrics2"
+prefix = "metrics"
 
 [http.services.iframeuisvc]
 prefix = "iframe"
@@ -30,46 +30,46 @@ access_log = "stderr"
 tls_enabled = true
 tls_cert = "/etc/gridsecurity/host.cert"
 tls_key = "/etc/gridsecurity/host.key"
-enabled_services = ["storage_provider_svc", "auth_svc", "storage_broker_svc", "app_registry_svc", "app_provider_svc"]
+enabled_services = ["storageprovidersvc", "authsvc", "storagebrokersvc", "appregistrysvc", "appprovidersvc"]
 
-[grpc.storage_provider_svc]
+[grpc.services.storageprovidersvc]
 driver = "local"
 mount_path = "/"
 mount_id = "123e4567-e89b-12d3-a456-426655440000"
 
-[grpc.auth_svc.auth_manager]
-driver = "demo"
-
-[grpc.auth_svc.token_manager]
-driver = "jwt"
-
-[grpc.auth_svc.user_manager]
-driver = "demo"
-
-[grpc.storage_provider_svc.eos]
+[grpc.services.storageprovidersvc.eos]
 mgm = "root://nowhere.org"
 root_uid = 0
 root_gid = 0
 
-[grpc.storage_provider_svc.local]
+[grpc.services.storageprovidersvc.local]
 root = "/var/tmp/owncloud/data"
 
-[grpc.storage_broker_svc]
+[grpc.services.authsvc.auth_manager]
+driver = "demo"
+
+[grpc.services.authsvc.token_manager]
+driver = "jwt"
+
+[grpc.services.authsvc.user_manager]
+driver = "demo"
+
+[grpc.services.storagebrokersvc]
 driver = "static"
 
-[grpc.storage_broker_svc.static.rules]
+[grpc.services.storagebrokersvc.static.rules]
 "/" = "localhost:9999"
 "123e4567-e89b-12d3-a456-426655440000" = "localhost:9999"
 
-[grpc.app_registry_svc]
+[grpc.services.appregistrysvc]
 driver = "static"
 
-[grpc.app_registry_svc.static.rules]
+[grpc.services.appregistrysvc.static.rules]
 ".txt" = "localhost:9999"
 "txt/plain" = "localhost:9999"
 
-[grpc.app_provider_svc]
+[grpc.services.appprovidersvc]
 driver = "demo"
 
-[grpc.app_provider_svc.demo]
+[grpc.services.appprovidersvc.demo]
 iframe_ui_provider = "http://localhost:9998/iframeuisvc"

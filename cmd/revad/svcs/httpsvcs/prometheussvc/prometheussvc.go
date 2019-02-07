@@ -1,10 +1,9 @@
 package prometheussvc
 
 import (
-	"fmt"
 	"net/http"
 
-	"github.com/cernbox/reva/cmd/revad/httpsvr"
+	"github.com/cernbox/reva/cmd/revad/httpserver"
 
 	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs"
 	"github.com/mitchellh/mapstructure"
@@ -12,7 +11,7 @@ import (
 )
 
 func init() {
-	httpsvr.Register("prometheussvc", New)
+	httpserver.Register("prometheussvc", New)
 }
 
 // New returns a new prometheus service
@@ -21,7 +20,6 @@ func New(m map[string]interface{}) (httpsvcs.Service, error) {
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
 	}
-	fmt.Println(conf)
 	return &svc{prefix: conf.Prefix}, nil
 }
 

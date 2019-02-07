@@ -3,13 +3,13 @@ package webuisvc
 import (
 	"net/http"
 
-	"github.com/cernbox/reva/cmd/revad/httpsvr"
+	"github.com/cernbox/reva/cmd/revad/httpserver"
 	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs"
 	"github.com/mitchellh/mapstructure"
 )
 
 func init() {
-	httpsvr.Register("webuisvc", New)
+	httpserver.Register("webuisvc", New)
 }
 
 type config struct {
