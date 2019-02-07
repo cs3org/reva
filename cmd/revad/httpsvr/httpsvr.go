@@ -53,18 +53,12 @@ func New(m map[string]interface{}) (*Server, error) {
 		return nil, err
 	}
 
-	httpServer := &http.Server{
-		Addr: "0.0.0.0:9995",
-		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-		}),
-	}
+	httpServer := &http.Server{}
 	s := &Server{
 		httpServer: httpServer,
 		conf:       conf,
 		svcs:       map[string]http.Handler{},
 	}
-	s.httpServer.ListenAndServe()
 	return s, nil
 }
 
