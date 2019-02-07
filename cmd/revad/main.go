@@ -14,6 +14,7 @@ import (
 	"github.com/cernbox/reva/pkg/log"
 
 	_ "github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/loader"
+	_ "github.com/cernbox/reva/pkg/storage/broker/loader"
 	_ "github.com/cernbox/reva/pkg/storage/fs/loader"
 
 	"github.com/cernbox/reva/cmd/revad/config"

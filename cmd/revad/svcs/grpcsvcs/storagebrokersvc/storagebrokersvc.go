@@ -10,7 +10,7 @@ import (
 	"github.com/cernbox/reva/pkg/err"
 	"github.com/cernbox/reva/pkg/log"
 	"github.com/cernbox/reva/pkg/storage"
-	"github.com/cernbox/reva/pkg/storage/broker/static"
+	"github.com/cernbox/reva/pkg/storage/broker/registry"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -22,8 +22,8 @@ type service struct {
 }
 
 type config struct {
-	Driver string                 `mapstructure:"driver"`
-	Static map[string]interface{} `mapstructure:"static"`
+	Driver  string                            `mapstructure:"driver"`
+	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
 }
 
 // New creates a new StorageBrokerService
@@ -55,12 +55,10 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 func getBroker(c *config) (storage.Broker, error) {
-	switch c.Driver {
-	case "static":
-		return static.New(c.Static)
-	default:
-		return nil, fmt.Errorf("driver not found: %s", c.Driver)
+	if f, ok := registry.NewFuncs[c.Driver]; ok {
+		return f(c.Drivers[c.Driver])
 	}
+	return nil, fmt.Errorf("driver not found: %s", c.Driver)
 }
 
 func (s *service) Discover(ctx context.Context, req *storagebrokerv0alphapb.DiscoverRequest) (*storagebrokerv0alphapb.DiscoverResponse, error) {

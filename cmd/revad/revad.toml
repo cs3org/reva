@@ -57,7 +57,7 @@ driver = "demo"
 [grpc.services.storagebrokersvc]
 driver = "static"
 
-[grpc.services.storagebrokersvc.static.rules]
+[grpc.services.storagebrokersvc.drivers.static.rules]
 "/" = "localhost:9999"
 "123e4567-e89b-12d3-a456-426655440000" = "localhost:9999"
 
