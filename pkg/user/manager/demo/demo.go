@@ -4,12 +4,18 @@ import (
 	"context"
 
 	"github.com/cernbox/reva/pkg/user"
+	"github.com/cernbox/reva/pkg/user/manager/registry"
 )
+
+func init() {
+	registry.Register("demo", New)
+}
 
 type manager struct {
 	catalog map[string]*user.User
 }
 
+// New returns a new user manager.
 func New(m map[string]interface{}) (user.Manager, error) {
 	cat := getUsers()
 	return &manager{catalog: cat}, nil

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/cernbox/reva/pkg/auth/manager/registry"
+	usermgr "github.com/cernbox/reva/pkg/user/manager/registry"
 
 	"github.com/cernbox/reva/pkg/auth"
 	"github.com/cernbox/reva/pkg/err"
@@ -11,7 +12,6 @@ import (
 	"github.com/cernbox/reva/pkg/token"
 	"github.com/cernbox/reva/pkg/token/manager/jwt"
 	"github.com/cernbox/reva/pkg/user"
-	usrmgrdemo "github.com/cernbox/reva/pkg/user/manager/demo"
 
 	authv0alphapb "github.com/cernbox/go-cs3apis/cs3/auth/v0alpha"
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
@@ -40,8 +40,8 @@ type tokenManagerConfig struct {
 }
 
 type userManagerConfig struct {
-	Driver string                 `mapstructure:"driver"`
-	Demo   map[string]interface{} `mapstructure:"demo"`
+	Driver  string                            `mapstructure:"driver"`
+	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -59,19 +59,11 @@ func getUserManager(m map[string]interface{}) (user.Manager, error) {
 		return nil, err
 	}
 
-	switch c.Driver {
-	case "demo":
-		mgr, err := usrmgrdemo.New(c.Demo)
-		if err != nil {
-			return nil, errors.Wrap(err, "unable to create demo user manager")
-		}
-		return mgr, nil
-	case "":
-		return nil, errors.Errorf("driver for user manager is empty")
-
-	default:
-		return nil, errors.Errorf("driver %s not found for user manager", c.Driver)
+	if f, ok := usermgr.NewFuncs[c.Driver]; ok {
+		return f(c.Drivers[c.Driver])
 	}
+
+	return nil, errors.Errorf("driver %s not found for user manager", c.Driver)
 }
 
 func getAuthManager(m map[string]interface{}) (auth.Manager, error) {
