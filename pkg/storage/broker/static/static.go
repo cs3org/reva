@@ -5,10 +5,15 @@ import (
 	"strings"
 
 	"github.com/cernbox/reva/pkg/log"
+	"github.com/cernbox/reva/pkg/storage/broker/registry"
 
 	"github.com/cernbox/reva/pkg/storage"
 	"github.com/mitchellh/mapstructure"
 )
+
+func init() {
+	registry.Register("static", New)
+}
 
 var logger = log.New("static")
 
