@@ -1,4 +1,4 @@
-package handlers
+package log
 
 import (
 	"bufio"
@@ -11,8 +11,8 @@ import (
 	"github.com/cernbox/reva/pkg/log"
 )
 
-// LogHandler is a logging middleware
-func LogHandler(l *log.Logger, h http.Handler) http.Handler {
+// Handler is a logging middleware
+func Handler(l *log.Logger, h http.Handler) http.Handler {
 	return newLoggingHandler(l, h)
 }
 

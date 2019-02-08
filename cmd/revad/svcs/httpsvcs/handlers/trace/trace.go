@@ -1,4 +1,4 @@
-package handlers
+package trace
 
 import (
 	"context"
@@ -8,10 +8,10 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// TraceHandler is a middlware that checks if there is a trace provided
+// Handler is a middlware that checks if there is a trace provided
 // as X-Trace header or generates one on the fly
 // then the trace is stored in the context
-func TraceHandler(h http.Handler) http.Handler {
+func Handler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		var trace string

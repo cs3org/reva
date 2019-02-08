@@ -13,6 +13,7 @@ import (
 	"github.com/cernbox/reva/pkg/err"
 	"github.com/cernbox/reva/pkg/log"
 
+	_ "github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers/auth/loader"
 	_ "github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/loader"
 	_ "github.com/cernbox/reva/pkg/auth/manager/loader"
 	_ "github.com/cernbox/reva/pkg/storage/broker/loader"

@@ -6,8 +6,12 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/cernbox/reva/pkg/log"
+
 	oidc "github.com/coreos/go-oidc"
 )
+
+var logger = log.New("oidc")
 
 type user struct {
 	email  string

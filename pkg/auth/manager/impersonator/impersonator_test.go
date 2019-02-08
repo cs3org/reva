@@ -7,6 +7,6 @@ import (
 
 func TestImpersonator(t *testing.T) {
 	ctx := context.Background()
-	i := New()
+	i, _ := New(nil)
 	i.Authenticate(ctx, "admin", "pwd")
 }

@@ -9,6 +9,10 @@ enabled_services = ["prometheussvc", "ocdavsvc", "webuisvc", "iframeuisvc"]
 network = "tcp"
 address = "0.0.0.0:9998"
 
+[http.handlers.auth]
+strategy = "basic"
+
+
 [http.services.prometheussvc]
 prefix = "metrics"
 
