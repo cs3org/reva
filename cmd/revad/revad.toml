@@ -67,6 +67,9 @@ driver = "demo"
 [grpc.services.authsvc.token_manager]
 driver = "jwt"
 
+[grpc.services.authsvc.token_manager.drivers.jwt]
+secret = "Pive-Fumkiu4"
+
 [grpc.services.authsvc.user_manager]
 driver = "demo"
 
