@@ -10,10 +10,10 @@ const userKey key = iota
 
 // User represents a userof the system.
 type User struct {
-	Username    string
-	Groups      []string
-	Mail        string
-	DisplayName string
+	Username    string   `mapstructure:"username"`
+	Groups      []string `mapstructure:"groups"`
+	Mail        string   `mapstructure:"mail"`
+	DisplayName string   `mapstructure:"display_name"`
 }
 
 // ContextGetUser returns the user if set in the given context.

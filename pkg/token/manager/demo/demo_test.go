@@ -10,7 +10,7 @@ import (
 
 func TestEncodeDecode(t *testing.T) {
 	ctx := context.Background()
-	m := New()
+	m, _ := New(nil)
 	groups := []string{"radium-lovers"}
 	claims := token.Claims{
 		"username":     "marie",

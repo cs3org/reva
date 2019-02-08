@@ -209,69 +209,6 @@ func (s *service) WhoAmI(ctx context.Context, req *authv0alphapb.WhoAmIRequest) 
 }
 
 /*
-func (s *service) ForgeUserToken(ctx context.Context, req *api.ForgeUserTokenReq) (*api.TokenResponse, error) {
-	l := ctx_zap.Extract(ctx)
-	user, err := s.authmgr.Authenticate(ctx, req.ClientId, req.ClientSecret)
-	if err != nil {
-		l.Error("", zap.Error(err))
-		return nil, err
-	}
-
-	token, err := s.tokenmgr.ForgeUserToken(ctx, user)
-	if err != nil {
-		l.Error("", zap.Error(err))
-		return nil, err
-	}
-	tokenResponse := &api.TokenResponse{Token: token}
-	return tokenResponse, nil
-}
-
-func (s *service) DismantleUserToken(ctx context.Context, req *api.TokenReq) (*api.UserResponse, error) {
-	l := ctx_zap.Extract(ctx)
-	token := req.Token
-	u, err := s.tokenmgr.DismantleUserToken(ctx, token)
-	if err != nil {
-		l.Warn("token invalid", zap.Error(err))
-		res := &api.UserResponse{Status: api.StatusCode_TOKEN_INVALID}
-		return res, nil
-		//return nil, api.NewError(api.TokenInvalidErrorCode).WithMessage(err.Error())
-	}
-	userRes := &api.UserResponse{User: u}
-	return userRes, nil
-}
-
-func (s *service) ForgePublicLinkToken(ctx context.Context, req *api.ForgePublicLinkTokenReq) (*api.TokenResponse, error) {
-	l := ctx_zap.Extract(ctx)
-	pl, err := s.lm.AuthenticatePublicLink(ctx, req.Token, req.Password)
-	if err != nil {
-		if api.IsErrorCode(err, api.PublicLinkInvalidPasswordErrorCode) {
-			return &api.TokenResponse{Status: api.StatusCode_PUBLIC_LINK_INVALID_PASSWORD}, nil
-		}
-		l.Error("", zap.Error(err))
-		return nil, err
-	}
-
-	token, err := s.tokenmgr.ForgePublicLinkToken(ctx, pl)
-	if err != nil {
-		l.Warn("", zap.Error(err))
-		return nil, err
-	}
-	tokenResponse := &api.TokenResponse{Token: token}
-	return tokenResponse, nil
-}
-
-func (s *service) DismantlePublicLinkToken(ctx context.Context, req *api.TokenReq) (*api.PublicLinkResponse, error) {
-	l := ctx_zap.Extract(ctx)
-	token := req.Token
-	u, err := s.tokenmgr.DismantlePublicLinkToken(ctx, token)
-	if err != nil {
-		l.Error("token invalid", zap.Error(err))
-		return nil, api.NewError(api.TokenInvalidErrorCode).WithMessage(err.Error())
-	}
-	userRes := &api.PublicLinkResponse{PublicLink: u}
-	return userRes, nil
-}
-
 // Override the Auth function to avoid checking the bearer token for this service
 // https://github.com/grpc-ecosystem/go-grpc-middleware/tree/master/auth#type-serviceauthfuncoverride
 func (s *service) AuthFuncOverride(ctx context.Context, fullMethodNauthmgre string) (context.Context, error) {

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers/auth/registry"
+	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers/auth/credential/registry"
 
 	"github.com/cernbox/reva/pkg/auth"
 )
@@ -16,7 +16,7 @@ func init() {
 type strategy struct{}
 
 // New returns a new auth strategy that checks for basic auth.
-func New(m map[string]interface{}) (auth.Strategy, error) {
+func New(m map[string]interface{}) (auth.CredentialStrategy, error) {
 	return &strategy{}, nil
 }
 

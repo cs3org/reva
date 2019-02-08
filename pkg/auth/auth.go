@@ -16,7 +16,18 @@ type Credentials struct {
 	ClientSecret string
 }
 
-// Strategy obtains Credentials from the request.
-type Strategy interface {
+// CredentialStrategy obtains Credentials from the request.
+type CredentialStrategy interface {
 	GetCredentials(r *http.Request) (*Credentials, error)
+}
+
+// TokenStrategy obtains a token from the request.
+// If token does not exist returns an empty string.
+type TokenStrategy interface {
+	GetToken(r *http.Request) string
+}
+
+// TokenWriter stores the token in a http response.
+type TokenWriter interface {
+	WriteToken(token string, w http.ResponseWriter)
 }
