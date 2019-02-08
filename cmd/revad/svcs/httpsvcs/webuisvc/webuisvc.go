@@ -5,6 +5,7 @@ import (
 
 	"github.com/cernbox/reva/cmd/revad/httpserver"
 	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs"
+	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -40,7 +41,9 @@ func (s *svc) Handler() http.Handler {
 }
 
 func getHandler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// protect with auth
+	chain := handlers.Handlers["auth"]
+	return chain(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		html := `
 		<!DOCTYPE html>
 		<html>
@@ -52,5 +55,5 @@ func getHandler() http.Handler {
 		</html>
 		`
 		w.Write([]byte(html))
-	})
+	}))
 }

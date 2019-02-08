@@ -6,8 +6,12 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers/auth"
+
 	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs"
-	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers"
+	httplog "github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers/log"
+	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers/trace"
+
 	"github.com/cernbox/reva/pkg/err"
 	"github.com/cernbox/reva/pkg/log"
 
@@ -37,6 +41,7 @@ type config struct {
 	Address         string                            `mapstructure:"address"`
 	Services        map[string]map[string]interface{} `mapstructure:"services"`
 	EnabledServices []string                          `mapstructure:"enabled_services"`
+	Handlers        map[string]map[string]interface{} `mapstructure:"handlers"`
 }
 
 // Server contains the server info.
@@ -113,6 +118,10 @@ func (s *Server) isEnabled(svcName string) bool {
 }
 
 func (s *Server) registerServices() error {
+	if err := auth.Register(s.conf.Handlers["auth"]); err != nil {
+		return err
+	}
+
 	svcs := map[string]http.Handler{}
 	for svcName, newFunc := range Services {
 		if s.isEnabled(svcName) {
@@ -141,5 +150,5 @@ func (s *Server) getHandler() http.Handler {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	return handlers.TraceHandler(handlers.LogHandler(logger, h))
+	return trace.Handler(httplog.Handler(logger, h))
 }

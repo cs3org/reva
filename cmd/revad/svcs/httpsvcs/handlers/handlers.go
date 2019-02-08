@@ -1,5 +1,16 @@
 package handlers
 
-import "github.com/cernbox/reva/pkg/log"
+import (
+	"net/http"
+)
 
-var logger = log.New("handlers")
+// Handlers is a map of all registered handlers to be used from http services.
+var Handlers = map[string]HandlerChain{}
+
+// HandlerChain is the the type that http handlers need to register.
+type HandlerChain func(http.Handler) http.Handler
+
+// Register register a handler chain.
+func Register(name string, chain HandlerChain) {
+	Handlers[name] = chain
+}
