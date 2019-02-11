@@ -58,3 +58,16 @@ ps -ax | grep revad
 ```
 
 For more information on sending signals to revad, see [Controlling REVA](./controlling-reva.md).
+
+## Configuration File’s Structure
+revad configuration file is written in the simple [TOML](https://github.com/toml-lang/toml) language.
+
+revad consists of services which are controlled by directives specified in the configuration file.
+
+An example configuration file is the following:
+
+```
+core = 
+
+```
+
