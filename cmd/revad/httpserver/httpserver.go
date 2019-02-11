@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers/auth"
-
 	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs"
 	httplog "github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers/log"
 	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers/trace"
@@ -18,6 +16,20 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/prometheus/client_golang/prometheus"
 )
+
+// Middlewares contains all the registered middlwares.
+var Middlewares = map[string]NewMiddleware{}
+
+// NewMiddleware is the function that HTTP middlewares need to register at init time.
+type NewMiddleware func(conf map[string]interface{}) (Middleware, error)
+
+// RegisterMiddleware registers a new HTTP middleware and its new function.
+func RegisterMiddleware(name string, newFunc NewMiddleware) {
+	Middlewares[name] = newFunc
+}
+
+// Middleware is a middleware http handler.
+type Middleware func(h http.Handler) http.Handler
 
 // Services is a map of service name and its new function.
 var Services = map[string]NewService{}
@@ -37,19 +49,21 @@ var (
 )
 
 type config struct {
-	Network         string                            `mapstructure:"network"`
-	Address         string                            `mapstructure:"address"`
-	Services        map[string]map[string]interface{} `mapstructure:"services"`
-	EnabledServices []string                          `mapstructure:"enabled_services"`
-	Handlers        map[string]map[string]interface{} `mapstructure:"handlers"`
+	Network            string                            `mapstructure:"network"`
+	Address            string                            `mapstructure:"address"`
+	Services           map[string]map[string]interface{} `mapstructure:"services"`
+	EnabledServices    []string                          `mapstructure:"enabled_services"`
+	Middlewares        map[string]map[string]interface{} `mapstructure:"middlewares"`
+	EnabledMiddlewares []string                          `mapstructure:"enabled_middlewares"`
 }
 
 // Server contains the server info.
 type Server struct {
-	httpServer *http.Server
-	conf       *config
-	listener   net.Listener
-	svcs       map[string]http.Handler
+	httpServer  *http.Server
+	conf        *config
+	listener    net.Listener
+	svcs        map[string]http.Handler
+	middlewares map[string]Middleware
 }
 
 // New returns a new server
@@ -71,6 +85,10 @@ func New(m map[string]interface{}) (*Server, error) {
 // Start starts the server
 func (s *Server) Start(ln net.Listener) error {
 	if err := s.registerServices(); err != nil {
+		return err
+	}
+
+	if err := s.registerMiddlewares(); err != nil {
 		return err
 	}
 
@@ -117,11 +135,32 @@ func (s *Server) isEnabled(svcName string) bool {
 	return false
 }
 
-func (s *Server) registerServices() error {
-	if err := auth.Register(s.conf.Handlers["auth"]); err != nil {
-		return err
+func (s *Server) isMiddlewareEnabled(name string) bool {
+	for _, key := range s.conf.EnabledMiddlewares {
+		if key == name {
+			return true
+		}
 	}
+	return false
+}
 
+func (s *Server) registerMiddlewares() error {
+	middlewares := map[string]Middleware{}
+	for name, newFunc := range Middlewares {
+		if s.isMiddlewareEnabled(name) {
+			m, err := newFunc(s.conf.Middlewares[name])
+			if err != nil {
+				err = errors.Wrap(err, "error creating new middleware: "+name)
+			}
+			middlewares[name] = m
+			logger.Printf(ctx, "http middleware enabled: %s", name)
+		}
+	}
+	s.middlewares = middlewares
+	return nil
+}
+
+func (s *Server) registerServices() error {
 	svcs := map[string]http.Handler{}
 	for svcName, newFunc := range Services {
 		if s.isEnabled(svcName) {
@@ -150,5 +189,17 @@ func (s *Server) getHandler() http.Handler {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
-	return trace.Handler(httplog.Handler(logger, h))
+
+	handler := http.Handler(h)
+
+	// chain the middlewares
+	// TODO(labkode): set registritation priority
+	for name, m := range s.middlewares {
+		logger.Println(ctx, "chainning middleware: "+name)
+		handler = m(handler)
+	}
+
+	// chain must-have middlewares.
+	return trace.Handler(httplog.Handler(logger, handler))
+
 }

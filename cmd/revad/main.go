@@ -16,6 +16,8 @@ import (
 	_ "github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers/auth/credential/loader"
 	_ "github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers/auth/token/loader"
 	_ "github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers/auth/tokenwriter/loader"
+	_ "github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers/loader"
+
 	_ "github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/loader"
 	_ "github.com/cernbox/reva/pkg/auth/manager/loader"
 	_ "github.com/cernbox/reva/pkg/storage/broker/loader"
