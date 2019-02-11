@@ -5,8 +5,10 @@ import (
 	"fmt"
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
+	"google.golang.org/grpc"
 
 	appregistryv0alphapb "github.com/cernbox/go-cs3apis/cs3/appregistry/v0alpha"
+	"github.com/cernbox/reva/cmd/revad/grpcserver"
 	"github.com/cernbox/reva/pkg/app"
 	"github.com/cernbox/reva/pkg/app/registry/static"
 	"github.com/cernbox/reva/pkg/err"
@@ -14,35 +16,41 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
-var logger = log.New("appregistry")
-var errors = err.New("appregistry")
+var logger = log.New("appregistrysvc")
+var errors = err.New("appregistrysvc")
+
+func init() {
+	grpcserver.Register("appregistrysvc", New)
+}
 
 type service struct {
 	registry app.Registry
 }
+
 type config struct {
 	Driver string                 `mapstructure:"driver"`
 	Static map[string]interface{} `mapstructure:"static"`
 }
 
 // New creates a new StorageRegistryService
-func New(m map[string]interface{}) (appregistryv0alphapb.AppRegistryServiceServer, error) {
+func New(m map[string]interface{}, ss *grpc.Server) error {
 
 	c, err := parseConfig(m)
 	if err != nil {
-		return nil, errors.Wrap(err, "unable to parse config")
+		return err
 	}
 
 	registry, err := getRegistry(c)
 	if err != nil {
-		return nil, errors.Wrap(err, "unable to init registry")
+		return err
 	}
 
 	service := &service{
 		registry: registry,
 	}
 
-	return service, nil
+	appregistryv0alphapb.RegisterAppRegistryServiceServer(ss, service)
+	return nil
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {

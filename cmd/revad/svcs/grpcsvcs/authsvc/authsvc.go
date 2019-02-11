@@ -3,9 +3,11 @@ package authsvc
 import (
 	"context"
 
+	"github.com/cernbox/reva/cmd/revad/grpcserver"
 	"github.com/cernbox/reva/pkg/auth/manager/registry"
 	tokenmgr "github.com/cernbox/reva/pkg/token/manager/registry"
 	usermgr "github.com/cernbox/reva/pkg/user/manager/registry"
+	"google.golang.org/grpc"
 
 	"github.com/cernbox/reva/pkg/auth"
 	"github.com/cernbox/reva/pkg/err"
@@ -22,6 +24,10 @@ import (
 var logger = log.New("authsvc")
 var errors = err.New("authsvc")
 var ctx = context.Background()
+
+func init() {
+	grpcserver.Register("authsvc", New)
+}
 
 type config struct {
 	AuthManager  map[string]interface{} `mapstructure:"auth_manager"`
@@ -93,30 +99,30 @@ func getTokenManager(m map[string]interface{}) (token.Manager, error) {
 }
 
 // New returns a new AuthServiceServer.
-func New(m map[string]interface{}) (authv0alphapb.AuthServiceServer, error) {
+func New(m map[string]interface{}, ss *grpc.Server) error {
 	c, err := parseConfig(m)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	authManager, err := getAuthManager(c.AuthManager)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	tokenManager, err := getTokenManager(c.TokenManager)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	userManager, err := getUserManager(c.UserManager)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	svc := &service{authmgr: authManager, tokenmgr: tokenManager, usermgr: userManager}
-	return svc, nil
-
+	authv0alphapb.RegisterAuthServiceServer(ss, svc)
+	return nil
 }
 
 type service struct {

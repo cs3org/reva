@@ -5,17 +5,7 @@ import (
 	"fmt"
 	"net"
 
-	appproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/appprovider/v0alpha"
-	appregistryv0alphapb "github.com/cernbox/go-cs3apis/cs3/appregistry/v0alpha"
-	authv0alphapb "github.com/cernbox/go-cs3apis/cs3/auth/v0alpha"
-	storagebrokerv0alphapb "github.com/cernbox/go-cs3apis/cs3/storagebroker/v0alpha"
-	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
-	"github.com/cernbox/reva/cmd/revad/svcs/grpcsvcs/appprovidersvc"
-	"github.com/cernbox/reva/cmd/revad/svcs/grpcsvcs/appregistrysvc"
-	"github.com/cernbox/reva/cmd/revad/svcs/grpcsvcs/authsvc"
 	"github.com/cernbox/reva/cmd/revad/svcs/grpcsvcs/interceptors"
-	"github.com/cernbox/reva/cmd/revad/svcs/grpcsvcs/storagebrokersvc"
-	"github.com/cernbox/reva/cmd/revad/svcs/grpcsvcs/storageprovidersvc"
 	"github.com/cernbox/reva/pkg/err"
 	"github.com/cernbox/reva/pkg/log"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
@@ -31,6 +21,17 @@ var (
 	logger = log.New("grpcsvr")
 	errors = err.New("grpcsvr")
 )
+
+// Services is a map of service name and its new function.
+var Services = map[string]NewService{}
+
+// Register registers a new gRPC service with name and new function.
+func Register(name string, newFunc NewService) {
+	Services[name] = newFunc
+}
+
+// NewService is the function that gRPC services need to register at init time.
+type NewService func(conf map[string]interface{}, ss *grpc.Server) error
 
 type config struct {
 	Network          string                            `mapstructure:"network"`
@@ -63,7 +64,7 @@ func New(m map[string]interface{}) (*Server, error) {
 // Start starts the server.
 func (s *Server) Start(ln net.Listener) error {
 	if err := s.registerServices(); err != nil {
-		err = errors.Wrap(err, "unable to register service")
+		err = errors.Wrap(err, "unable to register services")
 		return err
 	}
 
@@ -73,6 +74,27 @@ func (s *Server) Start(ln net.Listener) error {
 	if err != nil {
 		err = errors.Wrap(err, "serve failed")
 		return err
+	}
+	return nil
+}
+
+func (s *Server) isServiceEnabled(name string) bool {
+	for _, k := range s.conf.EnabledServices {
+		if k == name {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Server) registerServices() error {
+	for name, newFunc := range Services {
+		if s.isServiceEnabled(name) {
+			if err := newFunc(s.conf.Services[name], s.s); err != nil {
+				return err
+			}
+			logger.Println(ctx, "grpc service enabled: "+name)
+		}
 	}
 	return nil
 }
@@ -97,58 +119,6 @@ func (s *Server) Network() string {
 // Address returns the network address.
 func (s *Server) Address() string {
 	return s.conf.Address
-}
-
-func (s *Server) registerServices() error {
-	enabled := []string{}
-	for _, k := range s.conf.EnabledServices {
-		switch k {
-		case "storageprovidersvc":
-			svc, err := storageprovidersvc.New(s.conf.Services[k])
-			if err != nil {
-				return errors.Wrap(err, "unable to register service "+k)
-			}
-			storageproviderv0alphapb.RegisterStorageProviderServiceServer(s.s, svc)
-			enabled = append(enabled, k)
-		case "authsvc":
-			svc, err := authsvc.New(s.conf.Services[k])
-			if err != nil {
-				return errors.Wrap(err, "unable to register service "+k)
-			}
-			authv0alphapb.RegisterAuthServiceServer(s.s, svc)
-			enabled = append(enabled, k)
-
-		case "storagebrokersvc":
-			svc, err := storagebrokersvc.New(s.conf.Services[k])
-			if err != nil {
-				return errors.Wrap(err, "unable to register service "+k)
-			}
-			storagebrokerv0alphapb.RegisterStorageBrokerServiceServer(s.s, svc)
-			enabled = append(enabled, k)
-		case "appregistrysvc":
-			svc, err := appregistrysvc.New(s.conf.Services[k])
-			if err != nil {
-				return errors.Wrap(err, "unable to register service "+k)
-			}
-			appregistryv0alphapb.RegisterAppRegistryServiceServer(s.s, svc)
-			enabled = append(enabled, k)
-		case "appprovidersvc":
-			svc, err := appprovidersvc.New(s.conf.Services[k])
-			if err != nil {
-				return errors.Wrap(err, "unable to register service "+k)
-			}
-			appproviderv0alphapb.RegisterAppProviderServiceServer(s.s, svc)
-			enabled = append(enabled, k)
-		}
-	}
-	if len(enabled) == 0 {
-		logger.Println(ctx, "no grpc services enabled")
-	} else {
-		for k := range enabled {
-			logger.Printf(ctx, "grpc service enabled: %s", enabled[k])
-		}
-	}
-	return nil
 }
 
 func getOpts() []grpc.ServerOption {
