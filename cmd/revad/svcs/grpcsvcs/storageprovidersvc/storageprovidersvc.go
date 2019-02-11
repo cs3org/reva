@@ -12,10 +12,13 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cernbox/reva/cmd/revad/grpcserver"
+
 	"github.com/cernbox/reva/pkg/err"
 	"github.com/cernbox/reva/pkg/log"
 	"github.com/cernbox/reva/pkg/storage"
 	"github.com/cernbox/reva/pkg/storage/fs/registry"
+	"google.golang.org/grpc"
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
@@ -27,6 +30,10 @@ import (
 
 var logger = log.New("storageprovidersvc")
 var errors = err.New("storageprovidersvc")
+
+func init() {
+	grpcserver.Register("storageprovidersvc", New)
+}
 
 type config struct {
 	Driver    string                            `mapstructure:"driver"`
@@ -43,11 +50,11 @@ type service struct {
 }
 
 // New creates a new storage provider svc
-func New(m map[string]interface{}) (storageproviderv0alphapb.StorageProviderServiceServer, error) {
+func New(m map[string]interface{}, ss *grpc.Server) error {
 
 	c, err := parseConfig(m)
 	if err != nil {
-		return nil, errors.Wrap(err, "unable to parse config")
+		return err
 	}
 
 	// use os temporary folder if empty
@@ -61,7 +68,7 @@ func New(m map[string]interface{}) (storageproviderv0alphapb.StorageProviderServ
 
 	fs, err := getFS(c)
 	if err != nil {
-		return nil, errors.Wrap(err, "unable to obtain a filesystem")
+		return err
 	}
 
 	service := &service{
@@ -71,7 +78,8 @@ func New(m map[string]interface{}) (storageproviderv0alphapb.StorageProviderServ
 		mountID:   mountID,
 	}
 
-	return service, nil
+	storageproviderv0alphapb.RegisterStorageProviderServiceServer(ss, service)
+	return nil
 }
 
 func (s *service) Deref(ctx context.Context, req *storageproviderv0alphapb.DerefRequest) (*storageproviderv0alphapb.DerefResponse, error) {

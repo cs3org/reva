@@ -5,8 +5,10 @@ import (
 	"fmt"
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
+	"google.golang.org/grpc"
 
 	storagebrokerv0alphapb "github.com/cernbox/go-cs3apis/cs3/storagebroker/v0alpha"
+	"github.com/cernbox/reva/cmd/revad/grpcserver"
 	"github.com/cernbox/reva/pkg/err"
 	"github.com/cernbox/reva/pkg/log"
 	"github.com/cernbox/reva/pkg/storage"
@@ -16,6 +18,10 @@ import (
 
 var logger = log.New("storagebrokersvc")
 var errors = err.New("storagebrokersvc")
+
+func init() {
+	grpcserver.Register("storagebrokersvc", New)
+}
 
 type service struct {
 	broker storage.Broker
@@ -27,23 +33,24 @@ type config struct {
 }
 
 // New creates a new StorageBrokerService
-func New(m map[string]interface{}) (storagebrokerv0alphapb.StorageBrokerServiceServer, error) {
+func New(m map[string]interface{}, ss *grpc.Server) error {
 
 	c, err := parseConfig(m)
 	if err != nil {
-		return nil, errors.Wrap(err, "unable to parse config")
+		return err
 	}
 
 	broker, err := getBroker(c)
 	if err != nil {
-		return nil, errors.Wrap(err, "unable to init broker")
+		return err
 	}
 
 	service := &service{
 		broker: broker,
 	}
 
-	return service, nil
+	storagebrokerv0alphapb.RegisterStorageBrokerServiceServer(ss, service)
+	return nil
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
