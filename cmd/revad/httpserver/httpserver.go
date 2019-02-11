@@ -73,6 +73,15 @@ func New(m map[string]interface{}) (*Server, error) {
 		return nil, err
 	}
 
+	// apply defaults
+	if conf.Network == "" {
+		conf.Network = "tcp"
+	}
+
+	if conf.Address == "" {
+		conf.Address = "0.0.0.0:9998"
+	}
+
 	httpServer := &http.Server{}
 	s := &Server{
 		httpServer: httpServer,
@@ -182,11 +191,12 @@ func (s *Server) getHandler() http.Handler {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var head string
 		head, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
-		logger.Println(r.Context(), "http routing: head=", head, " tail=", r.URL.Path)
 		if h, ok := s.svcs[head]; ok {
+			logger.Println(r.Context(), "http routing: head=", head, " tail=", r.URL.Path, " svc="+head)
 			h.ServeHTTP(w, r)
 			return
 		}
+		logger.Println(r.Context(), "http routing: head=", head, " tail=", r.URL.Path, " svc=not-found")
 		w.WriteHeader(http.StatusNotFound)
 	})
 

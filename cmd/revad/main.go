@@ -65,30 +65,40 @@ func main() {
 	tweakCPU()
 	printLoggedPkgs()
 
-	grpcSvr := getGRPCServer()
-	httpSvr := getHTTPServer()
-	servers := []grace.Server{grpcSvr, httpSvr}
+	servers := []grace.Server{}
+	if !conf.DisableHTTP {
+		servers = append(servers, getHTTPServer())
+	}
+
+	if !conf.DisableGRPC {
+		servers = append(servers, getGRPCServer())
+	}
+
 	listeners, err := grace.GetListeners(servers)
 	if err != nil {
 		logger.Error(ctx, err)
 		grace.Exit(1)
 	}
 
-	go func() {
-		if err := grpcSvr.Start(listeners[0]); err != nil {
-			err = errors.Wrap(err, "error starting grpc server")
-			logger.Error(ctx, err)
-			grace.Exit(1)
-		}
-	}()
+	if !conf.DisableHTTP {
+		go func() {
+			if err := servers[0].(*httpserver.Server).Start(listeners[0]); err != nil {
+				err = errors.Wrap(err, "error starting grpc server")
+				logger.Error(ctx, err)
+				grace.Exit(1)
+			}
+		}()
+	}
 
-	go func() {
-		if err := httpSvr.Start(listeners[1]); err != nil {
-			err = errors.Wrap(err, "error starting http server")
-			logger.Error(ctx, err)
-			grace.Exit(1)
-		}
-	}()
+	if !conf.DisableGRPC {
+		go func() {
+			if err := servers[1].(*grpcserver.Server).Start(listeners[1]); err != nil {
+				err = errors.Wrap(err, "error starting http server")
+				logger.Error(ctx, err)
+				grace.Exit(1)
+			}
+		}()
+	}
 
 	grace.TrapSignals()
 }
@@ -157,6 +167,8 @@ func readConfig() {
 		fmt.Fprintln(os.Stderr, "unable to parse core config:", err)
 		grace.Exit(1)
 	}
+
+	// apply defaults
 }
 
 //  tweakCPU parses string cpu and sets GOMAXPROCS
@@ -168,26 +180,28 @@ func tweakCPU() error {
 
 	availCPU := runtime.NumCPU()
 
-	if strings.HasSuffix(cpu, "%") {
-		// Percent
-		var percent float32
-		pctStr := cpu[:len(cpu)-1]
-		pctInt, err := strconv.Atoi(pctStr)
-		if err != nil || pctInt < 1 || pctInt > 100 {
-			return errors.New("invalid CPU value: percentage must be between 1-100")
+	if cpu != "" {
+		if strings.HasSuffix(cpu, "%") {
+			// Percent
+			var percent float32
+			pctStr := cpu[:len(cpu)-1]
+			pctInt, err := strconv.Atoi(pctStr)
+			if err != nil || pctInt < 1 || pctInt > 100 {
+				return errors.New("invalid CPU value: percentage must be between 1-100")
+			}
+			percent = float32(pctInt) / 100
+			numCPU = int(float32(availCPU) * percent)
+		} else {
+			// Number
+			num, err := strconv.Atoi(cpu)
+			if err != nil || num < 1 {
+				return errors.New("invalid CPU value: provide a number or percent greater than 0")
+			}
+			numCPU = num
 		}
-		percent = float32(pctInt) / 100
-		numCPU = int(float32(availCPU) * percent)
-	} else {
-		// Number
-		num, err := strconv.Atoi(cpu)
-		if err != nil || num < 1 {
-			return errors.New("invalid CPU value: provide a number or percent greater than 0")
-		}
-		numCPU = num
 	}
 
-	if numCPU > availCPU {
+	if numCPU > availCPU || numCPU == 0 {
 		numCPU = availCPU
 	}
 
@@ -205,9 +219,11 @@ func writePIDFile() {
 }
 
 type coreConfig struct {
-	MaxCPUs string `mapstructure:"max_cpus"`
-	LogFile string `mapstructure:"log_file"`
-	LogMode string `mapstructure:"log_mode"`
+	MaxCPUs     string `mapstructure:"max_cpus"`
+	LogFile     string `mapstructure:"log_file"`
+	LogMode     string `mapstructure:"log_mode"`
+	DisableHTTP bool   `mapstructure:"disable_http"`
+	DisableGRPC bool   `mapstructure:"disable_grpc"`
 }
 
 func getLogOutput(val string) io.Writer {
