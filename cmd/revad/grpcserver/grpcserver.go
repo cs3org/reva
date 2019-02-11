@@ -55,6 +55,15 @@ func New(m map[string]interface{}) (*Server, error) {
 		return nil, err
 	}
 
+	// apply defaults
+	if conf.Network == "" {
+		conf.Network = "tcp"
+	}
+
+	if conf.Address == "" {
+		conf.Address = "0.0.0.0:9999"
+	}
+
 	opts := getOpts()
 	s := grpc.NewServer(opts...)
 
