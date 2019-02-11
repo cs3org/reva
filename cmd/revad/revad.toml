@@ -3,13 +3,13 @@ log_file = "stderr"
 log_mode = "dev"
 max_cpus = "32"
 
-
 [http]
 enabled_services = ["prometheussvc", "ocdavsvc", "webuisvc", "iframeuisvc"]
+enabled_middlewares = ["cors"]
 network = "tcp"
 address = "0.0.0.0:9998"
 
-[http.handlers.auth]
+[http.middlewares.auth]
 authsvc = "0.0.0.0:9999"
 credential_strategy = "basic"
 token_strategy = "header"
@@ -25,6 +25,8 @@ header = "X-Access-Token"
 [http.handlers.auth.token_writers.header]
 header = "X-Access-Token"
 
+[http.middlewares.cors]
+
 [http.services.prometheussvc]
 prefix = "metrics"
 
@@ -38,6 +40,7 @@ prefix = "ui"
 prefix = "owncloud"
 chunk_folder = "/var/tmp/owncloud/chunks"
 storageprovidersvc = "localhost:9999"
+enable_cors = true
 
 [grpc]
 network = "tcp"
