@@ -36,3 +36,25 @@ revad -s quit
 ```
 
 *This command should be executed under the same user that started nginx.*
+
+Changes made in the configuration file will not be applied until the command to reload configuration is sent to revad or it is restarted. To reload configuration, execute: 
+
+```
+revad -s reload
+```
+
+Once the main process receives the signal to reload configuration, it checks the syntax validity of the new configuration file and tries to apply the configuration provided in it. If this is a success, the main process forks a new process. The new forked process will gracefully kill the parent process. During a period of time until all ongoing requests are served, both processes will share the same network socket, the old parent process will serve ongoing requests and the new process will serve only new requests. No requests are dropped during the reload. If the provided configuration is invalid, the forked process will die and the master process will continue serving requests.
+
+A signal may also be sent to the revad process with the help of Unix tools such as the kill utility. In this case a signal is sent directly to a process with a given process ID. The process ID of the revad master process is written, by default, to the revad.pid in the directory /var/run/revad.pid. For example, if the master process ID is 1610, to send the QUIT signal resulting in revad’s graceful shutdown, execute: 
+
+```
+kill -s QUIT 1610
+```
+
+For getting the list of all running revad processes, the ps utility may be used, for example, in the following way: 
+
+```
+ps -ax | grep revad
+```
+
+For more information on sending signals to revad, see [Controlling REVA](./controlling-reva.md).
