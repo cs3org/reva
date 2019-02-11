@@ -67,7 +67,25 @@ revad consists of services which are controlled by directives specified in the c
 An example configuration file is the following:
 
 ```
-core = 
+[http]
+enabled_services = ["helloworldsvc"]
+```
 
+Running revad with this configuration directives will make revad listen on port 9998 for HTTP requests. Accessing *http://0.0.0.0:9998/* renders the message *Hello World!*.
+The *helloworldsvc* is one of the many services available in revad. To modify the configuration for this service a new directive is added to the configuration:
+
+```
+[http]
+enabled_services = ["helloworldsvc"]
+
+[http.services.helloworldsvc]
+hello_message = "Ola Mundo!"
+```
+
+Reloading revad (```revad -s reload```) will render the new message.
+
+ This is already a working configuration of a server that listens on the standard port 80 and is accessible on the local machine at http://localhost/. In response to requests with URIs starting with /images/, the server will send files from the /data/images directory. For example, in response to the http://localhost/images/example.png request nginx will send the /data/images/example.png file. If such file does not exist, nginx will send a response indicating the 404 error. Requests with URIs not starting with /images/ will be mapped onto the /data/www directory. For example, in response to the http://localhost/some/example.html request nginx will send the /data/www/some/example.html file.
+
+To apply the new configuration, start nginx if it is not yet started or send the reload signal to the nginx’s master process, by executing: 
 ```
 
