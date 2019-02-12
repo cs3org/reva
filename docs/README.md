@@ -4,3 +4,4 @@
 * [Building REVA from Sources](./building-reva.md)
 * [Beginner's Guide](./beginner-guide.md)
 * [Controlling REVA](./controlling-reva.md)
+* [Command-line parameters](./command-line.md)
