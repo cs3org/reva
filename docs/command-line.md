@@ -9,7 +9,7 @@ Usage of ./revad:
   -p string
         pid file (default "/var/run/revad.pid")
   -s string
-        send signal to a master process: stop, quit, reopen, reload
+        send signal to a master process: stop, quit, reload
   -t    test configuration and exit
   -v    show version and exit
 ```
