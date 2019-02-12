@@ -9,3 +9,4 @@
 ## Modules reference
 
 * [Core functionality](./modules/core.md)
+* [HTTP functionality](./modules/http.md)
