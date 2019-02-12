@@ -15,4 +15,11 @@
 * [http_helloworldsvc](./modules/http_helloworldsvc.md)
 * [http_prometheussvc](./modules/http_prometheussvc.md)
 * [http_ocdavsvc](./modules/http_ocdavsvc.md)
+
+* [http_middleware_auth](./modules/http_middleware_auth.md)
+* [http_middleware_log](./modules/http_middleware_log.md)
+* [http_middleware_trace](./modules/http_middleware_trace.md)
+
+* [grpc_authsvc](./modules/grpc_authsvc.md)
+* [grpc_storagebrokersvc](./modules/grpc_storagebrokersvc.md)
 * [grpc_storageprovidersvc](./modules/grpc_storageprovidersvc.md)

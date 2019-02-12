@@ -30,9 +30,12 @@ func init() {
 }
 
 type config struct {
-	AuthManager  map[string]interface{} `mapstructure:"auth_manager"`
-	TokenManager map[string]interface{} `mapstructure:"token_manager"`
-	UserManager  map[string]interface{} `mapstructure:"user_manager"`
+	AuthManager   string                            `mapstructure:"auth_manager"`
+	AuthManagers  map[string]map[string]interface{} `mapstructure:"auth_managers"`
+	TokenManager  string                            `mapstructure:"token_manager"`
+	TokenManagers map[string]map[string]interface{} `mapstructure:"token_managers"`
+	UserManager   string                            `mapstructure:"user_manager"`
+	UserManagers  map[string]map[string]interface{} `mapstructure:"user_managers"`
 }
 
 type authManagerConfig struct {
@@ -59,43 +62,28 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 }
 
-func getUserManager(m map[string]interface{}) (user.Manager, error) {
-	c := &userManagerConfig{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		return nil, err
+func getUserManager(manager string, m map[string]map[string]interface{}) (user.Manager, error) {
+	if f, ok := usermgr.NewFuncs[manager]; ok {
+		return f(m[manager])
 	}
 
-	if f, ok := usermgr.NewFuncs[c.Driver]; ok {
-		return f(c.Drivers[c.Driver])
-	}
-
-	return nil, errors.Errorf("driver %s not found for user manager", c.Driver)
+	return nil, errors.Errorf("driver %s not found for user manager", manager)
 }
 
-func getAuthManager(m map[string]interface{}) (auth.Manager, error) {
-	c := &authManagerConfig{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		return nil, err
+func getAuthManager(manager string, m map[string]map[string]interface{}) (auth.Manager, error) {
+	if f, ok := registry.NewFuncs[manager]; ok {
+		return f(m[manager])
 	}
 
-	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		return f(c.Drivers[c.Driver])
-	}
-
-	return nil, errors.Errorf("driver %s not found for auth manager", c.Driver)
+	return nil, errors.Errorf("driver %s not found for auth manager", manager)
 }
 
-func getTokenManager(m map[string]interface{}) (token.Manager, error) {
-	c := &tokenManagerConfig{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		return nil, err
+func getTokenManager(manager string, m map[string]map[string]interface{}) (token.Manager, error) {
+	if f, ok := tokenmgr.NewFuncs[manager]; ok {
+		return f(m[manager])
 	}
 
-	if f, ok := tokenmgr.NewFuncs[c.Driver]; ok {
-		return f(c.Drivers[c.Driver])
-	}
-
-	return nil, errors.Errorf("driver %s not found for token manager", c.Driver)
+	return nil, errors.Errorf("driver %s not found for token manager", manager)
 }
 
 // New returns a new AuthServiceServer.
@@ -105,17 +93,17 @@ func New(m map[string]interface{}, ss *grpc.Server) error {
 		return err
 	}
 
-	authManager, err := getAuthManager(c.AuthManager)
+	authManager, err := getAuthManager(c.AuthManager, c.AuthManagers)
 	if err != nil {
 		return err
 	}
 
-	tokenManager, err := getTokenManager(c.TokenManager)
+	tokenManager, err := getTokenManager(c.TokenManager, c.TokenManagers)
 	if err != nil {
 		return err
 	}
 
-	userManager, err := getUserManager(c.UserManager)
+	userManager, err := getUserManager(c.UserManager, c.UserManagers)
 	if err != nil {
 		return err
 	}
