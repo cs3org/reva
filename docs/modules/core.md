@@ -11,5 +11,8 @@ log_mode = "prod"
 
 ## Directives
 
-* ```max_cpus```: sets the maximun number of cpus used by revad. It is allowed to specify
-the available cpus with percentages (```max_cpus = "50%"```)
+```
+Syntax: max_cpus = uint | "uint%"
+Default: max_cpus = "100%"
+```
+If max_cpus is set it determines the available cpus to schedule revad processes.
