@@ -10,3 +10,6 @@
 
 * [Core functionality](./modules/core.md)
 * [HTTP functionality](./modules/http.md)
+
+## HTTP modules
+* [helloworldsvc](./modules/http_helloworldsvc.md)
