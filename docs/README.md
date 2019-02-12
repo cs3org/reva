@@ -5,3 +5,7 @@
 * [Beginner's Guide](./beginner-guide.md)
 * [Controlling REVA](./controlling-reva.md)
 * [Command-line parameters](./command-line.md)
+
+## Modules reference
+
+* [Core functionality](./modules/core.md)
