@@ -68,6 +68,16 @@ Example configuration:
 root = "/var/data"
 ```
 
+#### Directives
+
+```
+Syntax:  root = string
+Default: root = "/tmp"
+```
+
+root specifies the directory in the local filesystem for storing data.
+
+
 ### EOS driver - [CERN Open Storage](http://eos.web.cern.ch/)
 The EOS driver stores the files in a remote EOS storage system.
 
@@ -79,3 +89,73 @@ Example configuration:
 namespace = "/eos/user/"
 master_url = "root://eosuser.example.org"
 ```
+
+#### Directives
+
+```
+Syntax:  namespace = string
+Default: namespace = "/eos"
+```
+namespace speficies the namespace on the remote EOS
+storage system to perform storage operations.
+
+```
+Syntax:  eos_binary = string
+Default: eos_binary = "/usr/bin/eos"
+```
+eos_binary specifies the location of the eos client binary.
+
+```
+Syntax:  xrdcopy_binary = string
+Default: xrdcopy_binary = "/usr/bin/xrdcopy"
+```
+
+xrdcopy_binary specifies the location of the xrdcopy client binary.
+
+```
+Syntax:  master_url = string
+Default: master_url = "root://example.org"
+```
+master_url specifies the master EOS MGM url.
+
+```
+Syntax:  slave_url = string
+Default: slave_url = "root://example.org"
+```
+slave_url specifies the slave EOS MGM url.
+
+```
+Syntax:  cache_directory = string
+Default: cache_directory = "/tmp"
+```
+
+cache_directory specifies where to store temporary files.
+The default value is system default for a temporary folder (```echo $TMPDIR```).
+
+```
+Syntax:  show_hidden_sys_files = true | false
+Default: show_hidden_sys_files = false
+```
+
+If show_hidden_sys_files is set to true, system files
+used by EOS are exposed to the clients. System files follow the pattern
+*.sys.** like version folders (.sys.v#.*) or atomic files (.sys.a#.).
+
+
+```
+Syntax:  force_single_user_mode = true | false
+Default: force_single_user_mode = false
+```
+
+If force_single_user_mode is set all EOS command sent to the EOS
+storage system will be sent as a single user specified by the *single_username*
+directive. This directive is usefull when the access to EOS is done by 
+web servers like Apache and all the commands run as www-data or apache unix user.
+
+```
+Syntax:  single_username = string
+Default: single_username = ""
+```
+
+single_username specifies the unix account for run EOS commands. 
+
