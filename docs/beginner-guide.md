@@ -35,7 +35,7 @@ Where signal may be one of the following:
 revad -s quit
 ```
 
-*This command should be executed under the same user that started nginx.*
+*This command should be executed under the same user that started revad.*
 
 Changes made in the configuration file will not be applied until the command to reload configuration is sent to revad or it is restarted. To reload configuration, execute: 
 
