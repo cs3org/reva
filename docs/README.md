@@ -12,3 +12,4 @@
 * [HTTP functionality](./modules/http.md)
 
 * [http_helloworldsvc](./modules/http_helloworldsvc.md)
+* [http_prometheussvc](./modules/http_prometheussvc.md)
