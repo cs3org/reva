@@ -15,5 +15,4 @@
 * [http_helloworldsvc](./modules/http_helloworldsvc.md)
 * [http_prometheussvc](./modules/http_prometheussvc.md)
 * [http_ocdavsvc](./modules/http_ocdavsvc.md)
-
 * [grpc_storageprovidersvc](./modules/grpc_storageprovidersvc.md)
