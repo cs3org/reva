@@ -34,7 +34,6 @@ type config struct {
 
 // New creates a new StorageBrokerService
 func New(m map[string]interface{}, ss *grpc.Server) error {
-
 	c, err := parseConfig(m)
 	if err != nil {
 		return err

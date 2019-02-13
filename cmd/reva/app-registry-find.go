@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"mime"
 	"os"
@@ -34,7 +33,7 @@ func appRegistryFindCommand() *command {
 		if err != nil {
 			return err
 		}
-		ctx := context.Background()
+		ctx := getAuthContext()
 		res, err := client.Find(ctx, req)
 		if err != nil {
 			return err

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 
@@ -21,7 +20,7 @@ func mkdirCommand() *command {
 		fn := cmd.Args()[0]
 		provider := cmd.Args()[1]
 
-		ctx := context.Background()
+		ctx := getAuthContext()
 		client, err := getStorageProviderClient(provider)
 		if err != nil {
 			return err

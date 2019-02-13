@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"os"
@@ -31,7 +30,7 @@ func lsCommand() *command {
 			Filename: fn,
 		}
 
-		ctx := context.Background()
+		ctx := getAuthContext()
 		stream, err := client.List(ctx, req)
 		if err != nil {
 			return err

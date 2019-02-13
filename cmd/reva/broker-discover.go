@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
@@ -19,7 +18,7 @@ func brokerDiscoverCommand() *command {
 		if err != nil {
 			return err
 		}
-		ctx := context.Background()
+		ctx := getAuthContext()
 		res, err := client.Discover(ctx, req)
 		if err != nil {
 			return err

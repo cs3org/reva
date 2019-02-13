@@ -59,7 +59,10 @@ tls_enabled = true
 tls_cert = "/etc/gridsecurity/host.cert"
 tls_key = "/etc/gridsecurity/host.key"
 enabled_services = ["storageprovidersvc", "authsvc", "storagebrokersvc", "appregistrysvc", "appprovidersvc"]
-enabled_interceptors = ["prometheus", "log", "trace"]
+enabled_interceptors = ["auth", "prometheus", "log", "trace"]
+
+[grpc.interceptors.recovery]
+priority = 0
 
 [grpc.interceptors.trace]
 priority = 100
@@ -71,8 +74,18 @@ priority = 200
 [grpc.interceptors.prometheus]
 priority = 300
 
-[grpc.interceptors.recovery]
-priority = 0
+[grpc.interceptors.auth]
+priority = 400
+header = "x-access-token"
+token_manager = "jwt"
+
+[grpc.interceptors.auth.methods]
+"/cs3.storageproviderv0alpha.StorageProviderService/Stat" = true
+
+[grpc.interceptors.auth.token_managers.jwt]
+secret = "Pive-Fumkiu4"
+
+
 
 [grpc.services.storageprovidersvc]
 driver = "local"

@@ -32,7 +32,7 @@ func downloadCommand() *command {
 		}
 
 		req1 := &storageproviderv0alphapb.StatRequest{Filename: fn}
-		ctx := context.Background()
+		ctx := getAuthContext()
 		res1, err := client.Stat(ctx, req1)
 		if err != nil {
 			return err

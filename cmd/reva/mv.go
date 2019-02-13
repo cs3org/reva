@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 
@@ -22,7 +21,7 @@ func moveCommand() *command {
 		src := cmd.Args()[1]
 		dst := cmd.Args()[2]
 
-		ctx := context.Background()
+		ctx := getAuthContext()
 		client, err := getStorageProviderClient(provider)
 		if err != nil {
 			return err

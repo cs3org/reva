@@ -1,7 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"log"
+
+	"google.golang.org/grpc/metadata"
 
 	"github.com/pkg/errors"
 
@@ -14,6 +18,18 @@ import (
 
 	"google.golang.org/grpc"
 )
+
+func getAuthContext() context.Context {
+	ctx := context.Background()
+	// read token from file
+	t, err := readToken()
+	if err != nil {
+		log.Println(err)
+		return ctx
+	}
+	ctx = metadata.AppendToOutgoingContext(ctx, "x-access-token", t)
+	return ctx
+}
 
 func getAppProviderClient(host string) (appproviderv0alphapb.AppProviderServiceClient, error) {
 	conn, err := getConnToHost(host)

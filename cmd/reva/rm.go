@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 
@@ -20,7 +19,7 @@ func rmCommand() *command {
 
 		provider := cmd.Args()[0]
 		fn := cmd.Args()[1]
-		ctx := context.Background()
+		ctx := getAuthContext()
 		client, err := getStorageProviderClient(provider)
 		if err != nil {
 			return err

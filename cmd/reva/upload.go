@@ -42,7 +42,7 @@ func uploadCommand() *command {
 		}
 
 		req1 := &storageproviderv0alphapb.StartWriteSessionRequest{}
-		ctx := context.Background()
+		ctx := getAuthContext()
 		res1, err := client.StartWriteSession(ctx, req1)
 		if err != nil {
 			return err

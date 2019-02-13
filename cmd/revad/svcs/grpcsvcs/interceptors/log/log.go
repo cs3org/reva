@@ -4,6 +4,10 @@ import (
 	"context"
 	"time"
 
+	"google.golang.org/grpc/metadata"
+
+	"google.golang.org/grpc/peer"
+
 	"google.golang.org/grpc/codes"
 
 	"github.com/cernbox/reva/cmd/revad/grpcserver"
@@ -37,6 +41,17 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		code := grpc.Code(err)
 		end := time.Now()
 		diff := end.Sub(start).Nanoseconds()
+		var fromAddress, userAgent string
+		if p, ok := peer.FromContext(ctx); ok {
+			fromAddress = p.Addr.Network() + "://" + p.Addr.String()
+		}
+		if md, ok := metadata.FromIncomingContext(ctx); ok {
+			if vals, ok := md["user-agent"]; ok {
+				if len(vals) > 0 && vals[0] != "" {
+					userAgent = vals[0]
+				}
+			}
+		}
 
 		var b *log.Builder
 		if code != codes.OK {
@@ -45,6 +60,8 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 			b = logger.Build()
 		}
 
+		b = b.Str("user-agent", userAgent)
+		b = b.Str("from", fromAddress)
 		b = b.Str("uri", info.FullMethod)
 		b = b.Str("start", start.Format("02/Jan/2006:15:04:05 -0700"))
 		b = b.Str("end", end.Format("02/Jan/2006:15:04:05 -0700")).Int("time_ns", int(diff))
@@ -70,6 +87,17 @@ func NewStream(m map[string]interface{}) (grpc.StreamServerInterceptor, int, err
 		end := time.Now()
 		code := grpc.Code(err)
 		diff := end.Sub(start).Nanoseconds()
+		var fromAddress, userAgent string
+		if p, ok := peer.FromContext(ss.Context()); ok {
+			fromAddress = p.Addr.Network() + "://" + p.Addr.String()
+		}
+		if md, ok := metadata.FromIncomingContext(ss.Context()); ok {
+			if vals, ok := md["user-agent"]; ok {
+				if len(vals) > 0 && vals[0] != "" {
+					userAgent = vals[0]
+				}
+			}
+		}
 
 		var b *log.Builder
 		if code != codes.OK {
@@ -78,6 +106,8 @@ func NewStream(m map[string]interface{}) (grpc.StreamServerInterceptor, int, err
 			b = logger.Build()
 		}
 
+		b = b.Str("user-agent", userAgent)
+		b = b.Str("from", fromAddress)
 		b = b.Str("uri", info.FullMethod)
 		b = b.Str("start", start.Format("02/Jan/2006:15:04:05 -0700"))
 		b = b.Str("end", end.Format("02/Jan/2006:15:04:05 -0700")).Int("time_ns", int(diff))

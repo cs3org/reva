@@ -13,6 +13,7 @@
 
 # Ignore builds
 cmd/revad/revad
+cmd/revad/revad.pid
 cmd/reva/reva
 
 
