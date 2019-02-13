@@ -7,6 +7,7 @@ import (
 	"os"
 	"runtime/debug"
 
+	"github.com/cernbox/reva/pkg/trace"
 	"github.com/rs/zerolog"
 )
 
@@ -157,7 +158,7 @@ func createLog(pkg string, pid int) *zerolog.Logger {
 }
 
 func getTrace(ctx context.Context) string {
-	if v, ok := ctx.Value("trace").(string); ok {
+	if v, ok := trace.ContextGetTrace(ctx); ok {
 		return v
 	}
 	return ""

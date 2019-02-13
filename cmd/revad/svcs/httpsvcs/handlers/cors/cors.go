@@ -15,6 +15,7 @@ func init() {
 var logger = log.New("cors")
 
 type config struct {
+	Priority           int      `mapstructure:"priority"`
 	AllowedOrigins     []string `mapstructure:"allowed_origins"`
 	AllowCredentials   bool     `mapstructure:"allow_credentials"`
 	AllowedMethods     []string `mapstructure:"allowed_methods"`
@@ -25,10 +26,10 @@ type config struct {
 }
 
 // New creates a new CORS middleware.
-func New(m map[string]interface{}) (httpserver.Middleware, error) {
+func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	c := cors.New(cors.Options{
@@ -41,5 +42,5 @@ func New(m map[string]interface{}) (httpserver.Middleware, error) {
 		OptionsPassthrough: conf.OptionsPassthrough,
 	})
 
-	return c.Handler, nil
+	return c.Handler, conf.Priority, nil
 }

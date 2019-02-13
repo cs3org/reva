@@ -26,6 +26,7 @@ func init() {
 }
 
 type config struct {
+	Priority             int                               `mapstructure:"priority"`
 	AuthSVC              string                            `mapstructure:"authsvc"`
 	CredentialStrategy   string                            `mapstructure:"credential_strategy"`
 	CredentialStrategies map[string]map[string]interface{} `mapstructure:"credential_strategies"`
@@ -37,51 +38,51 @@ type config struct {
 	TokenWriters         map[string]map[string]interface{} `mapstructure:"token_writers"`
 }
 
-// New creates a new auth middleware.
-func New(m map[string]interface{}) (httpserver.Middleware, error) {
+// New returns a new middleware with defined priority.
+func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	f, ok := registry.NewCredentialFuncs[conf.CredentialStrategy]
 	if !ok {
-		return nil, fmt.Errorf("credential strategy not found: %s", conf.CredentialStrategy)
+		return nil, 0, fmt.Errorf("credential strategy not found: %s", conf.CredentialStrategy)
 	}
 
 	credStrategy, err := f(conf.CredentialStrategies[conf.CredentialStrategy])
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	g, ok := tokenregistry.NewTokenFuncs[conf.TokenStrategy]
 	if !ok {
-		return nil, fmt.Errorf("token strategy not found: %s", conf.TokenStrategy)
+		return nil, 0, fmt.Errorf("token strategy not found: %s", conf.TokenStrategy)
 	}
 
 	tokenStrategy, err := g(conf.TokenStrategies[conf.TokenStrategy])
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
 	if !ok {
-		return nil, fmt.Errorf("token manager not found: %s", conf.TokenStrategy)
+		return nil, 0, fmt.Errorf("token manager not found: %s", conf.TokenStrategy)
 	}
 
 	tokenManager, err := h(conf.TokenManagers[conf.TokenManager])
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	i, ok := tokenwriterregistry.NewTokenFuncs[conf.TokenWriter]
 	if !ok {
-		return nil, fmt.Errorf("token writer not found: %s", conf.TokenWriter)
+		return nil, 0, fmt.Errorf("token writer not found: %s", conf.TokenWriter)
 	}
 
 	tokenWriter, err := i(conf.TokenWriters[conf.TokenWriter])
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	chain := func(h http.Handler) http.Handler {
@@ -148,7 +149,7 @@ func New(m map[string]interface{}) (httpserver.Middleware, error) {
 			h.ServeHTTP(w, r)
 		})
 	}
-	return chain, nil
+	return chain, conf.Priority, nil
 }
 
 // TODO(labkode): re-use connection using mutex.
