@@ -38,13 +38,16 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		md, ok := metadata.FromIncomingContext(ctx)
 		if ok && md != nil {
 			if val, ok := md[conf.Header]; ok {
-				if len(val) > 0 {
+				if len(val) > 0 && val[0] != "" {
 					t = val[0]
 				}
 			}
-		} else {
+		}
+
+		if t == "" {
 			t = uuid.Must(uuid.NewV4()).String()
 		}
+
 		ctx = trace.ContextSetTrace(ctx, t)
 		return handler(ctx, req)
 	}
@@ -64,13 +67,15 @@ func NewStream(m map[string]interface{}) (grpc.StreamServerInterceptor, int, err
 		md, ok := metadata.FromIncomingContext(ss.Context())
 		if ok && md != nil {
 			if val, ok := md[conf.Header]; ok {
-				if len(val) > 0 {
+				if len(val) > 0 && val[0] != "" {
 					t = val[0]
 				}
 			}
-		} else {
+		}
+		if t == "" {
 			t = uuid.Must(uuid.NewV4()).String()
 		}
+
 		ctx := trace.ContextSetTrace(ss.Context(), t)
 		wrapped := newWrappedServerStream(ctx, ss)
 		return handler(srv, wrapped)

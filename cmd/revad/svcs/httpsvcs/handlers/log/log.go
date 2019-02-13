@@ -105,7 +105,7 @@ func writeLog(l *log.Logger, req *http.Request, url url.URL, ts time.Time, statu
 	b = b.Int("size", size)
 	b = b.Str("start", ts.Format("02/Jan/2006:15:04:05 -0700"))
 	b = b.Str("end", end.Format("02/Jan/2006:15:04:05 -0700")).Int("time_ns", int(diff))
-	b.Msg(req.Context(), "HTTP request finished")
+	b.Msg(req.Context(), "HTTP call")
 }
 
 type loggingResponseWriter interface {
