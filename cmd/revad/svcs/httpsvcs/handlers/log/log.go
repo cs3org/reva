@@ -8,11 +8,37 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/cernbox/reva/cmd/revad/httpserver"
 	"github.com/cernbox/reva/pkg/log"
+	"github.com/mitchellh/mapstructure"
 )
 
-// Handler is a logging middleware
-func Handler(l *log.Logger, h http.Handler) http.Handler {
+var logger = log.New("log")
+
+func init() {
+	httpserver.RegisterMiddleware("log", New)
+}
+
+type config struct {
+	Priority int `mapstructure:"priority"`
+}
+
+// New returns a new HTTP middleware that logs HTTP requests and responses.
+// TODO(labkode): maybe log to another file?
+func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
+	conf := &config{}
+	if err := mapstructure.Decode(m, conf); err != nil {
+		return nil, 0, err
+	}
+
+	chain := func(h http.Handler) http.Handler {
+		return handler(logger, h)
+	}
+	return chain, conf.Priority, nil
+}
+
+// handler is a logging middleware
+func handler(l *log.Logger, h http.Handler) http.Handler {
 	return newLoggingHandler(l, h)
 }
 

@@ -4,11 +4,10 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs"
-	httplog "github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers/log"
-	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers/trace"
 
 	"github.com/cernbox/reva/pkg/err"
 	"github.com/cernbox/reva/pkg/log"
@@ -17,15 +16,23 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// Middlewares contains all the registered middlwares.
-var Middlewares = map[string]NewMiddleware{}
+// NewMiddlewares contains all the registered new middleware functions.
+var NewMiddlewares = map[string]NewMiddleware{}
 
 // NewMiddleware is the function that HTTP middlewares need to register at init time.
-type NewMiddleware func(conf map[string]interface{}) (Middleware, error)
+type NewMiddleware func(conf map[string]interface{}) (Middleware, int, error)
 
 // RegisterMiddleware registers a new HTTP middleware and its new function.
-func RegisterMiddleware(name string, newFunc NewMiddleware) {
-	Middlewares[name] = newFunc
+func RegisterMiddleware(name string, n NewMiddleware) {
+	NewMiddlewares[name] = n
+}
+
+// middlewareTriple represents a middleware with the
+// priority to be chained.
+type middlewareTriple struct {
+	Name       string
+	Priority   int
+	Middleware Middleware
 }
 
 // Middleware is a middleware http handler.
@@ -44,8 +51,8 @@ type NewService func(conf map[string]interface{}) (httpsvcs.Service, error)
 
 var (
 	ctx    = context.Background()
-	logger = log.New("httpsvr")
-	errors = err.New("httpsvr")
+	logger = log.New("httpserver")
+	errors = err.New("httpserver")
 )
 
 type config struct {
@@ -63,7 +70,7 @@ type Server struct {
 	conf        *config
 	listener    net.Listener
 	svcs        map[string]http.Handler
-	middlewares map[string]Middleware
+	middlewares []*middlewareTriple
 }
 
 // New returns a new server
@@ -154,14 +161,18 @@ func (s *Server) isMiddlewareEnabled(name string) bool {
 }
 
 func (s *Server) registerMiddlewares() error {
-	middlewares := map[string]Middleware{}
-	for name, newFunc := range Middlewares {
+	middlewares := []*middlewareTriple{}
+	for name, newFunc := range NewMiddlewares {
 		if s.isMiddlewareEnabled(name) {
-			m, err := newFunc(s.conf.Middlewares[name])
+			m, prio, err := newFunc(s.conf.Middlewares[name])
 			if err != nil {
 				err = errors.Wrap(err, "error creating new middleware: "+name)
 			}
-			middlewares[name] = m
+			middlewares = append(middlewares, &middlewareTriple{
+				Name:       name,
+				Priority:   prio,
+				Middleware: m,
+			})
 			logger.Printf(ctx, "http middleware enabled: %s", name)
 		}
 	}
@@ -200,16 +211,15 @@ func (s *Server) getHandler() http.Handler {
 		w.WriteHeader(http.StatusNotFound)
 	})
 
+	// sort middlewares by priority.
+	sort.SliceStable(s.middlewares, func(i, j int) bool {
+		return s.middlewares[i].Priority < s.middlewares[j].Priority
+	})
+
 	handler := http.Handler(h)
-
-	// chain the middlewares
-	// TODO(labkode): set registritation priority
-	for name, m := range s.middlewares {
-		logger.Println(ctx, "chainning middleware: "+name)
-		handler = m(handler)
+	for _, triple := range s.middlewares {
+		logger.Printf(ctx, "chainning http middleware %s with priority  %d", triple.Name, triple.Priority)
+		handler = triple.Middleware(handler)
 	}
-
-	// chain must-have middlewares.
-	return trace.Handler(httplog.Handler(logger, handler))
-
+	return handler
 }
