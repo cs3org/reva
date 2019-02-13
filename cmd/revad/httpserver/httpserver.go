@@ -213,7 +213,7 @@ func (s *Server) getHandler() http.Handler {
 
 	// sort middlewares by priority.
 	sort.SliceStable(s.middlewares, func(i, j int) bool {
-		return s.middlewares[i].Priority < s.middlewares[j].Priority
+		return s.middlewares[i].Priority > s.middlewares[j].Priority
 	})
 
 	handler := http.Handler(h)

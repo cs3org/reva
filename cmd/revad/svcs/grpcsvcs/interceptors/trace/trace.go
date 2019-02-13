@@ -2,6 +2,7 @@ package trace
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/cernbox/reva/cmd/revad/grpcserver"
 
@@ -33,6 +34,10 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		return nil, 0, err
 	}
 
+	if conf.Header == "" {
+		return nil, 0, fmt.Errorf("trace unary interceptor: header is empty")
+	}
+
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		var t string
 		md, ok := metadata.FromIncomingContext(ctx)
@@ -60,6 +65,10 @@ func NewStream(m map[string]interface{}) (grpc.StreamServerInterceptor, int, err
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, 0, err
+	}
+
+	if conf.Header == "" {
+		return nil, 0, fmt.Errorf("trace stream interceptor: header is empty")
 	}
 
 	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {

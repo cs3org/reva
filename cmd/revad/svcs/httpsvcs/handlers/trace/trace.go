@@ -1,6 +1,7 @@
 package trace
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/cernbox/reva/cmd/revad/httpserver"
@@ -28,6 +29,10 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 		return nil, 0, err
 	}
 
+	if c.Header == "" {
+		return nil, 0, fmt.Errorf("trace middleware: header trace is empty")
+	}
+
 	chain := func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
@@ -44,8 +49,8 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 			}
 
 			ctx = tracepkg.ContextSetTrace(ctx, trace)
-			header := metadata.New(map[string]string{c.Header: trace})
-			ctx = metadata.NewOutgoingContext(ctx, header)
+			ctx = metadata.AppendToOutgoingContext(ctx, c.Header, trace)
+			fmt.Println(trace)
 			r = r.WithContext(ctx)
 			h.ServeHTTP(w, r)
 		})
