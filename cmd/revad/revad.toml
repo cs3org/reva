@@ -1,15 +1,23 @@
 [core]
 log_file = "stderr"
 log_mode = "dev"
-max_cpus = "32"
+max_cpus = "100%"
 
 [http]
-enabled_services = ["prometheussvc", "ocdavsvc", "webuisvc", "iframeuisvc"]
-enabled_middlewares = ["cors"]
+enabled_services = ["prometheussvc", "ocdavsvc"]
+enabled_middlewares = ["cors", "log", "trace"]
 network = "tcp"
 address = "0.0.0.0:9998"
 
+[http.middlewares.trace]
+priority = 100
+header = "x-trace"
+
+[http.middlewares.log]
+priority = 200
+
 [http.middlewares.auth]
+priority = 300
 authsvc = "0.0.0.0:9999"
 credential_strategy = "basic"
 token_strategy = "header"
@@ -26,6 +34,7 @@ header = "X-Access-Token"
 header = "X-Access-Token"
 
 [http.middlewares.cors]
+priority = 400
 
 [http.services.prometheussvc]
 prefix = "metrics"
@@ -50,6 +59,20 @@ tls_enabled = true
 tls_cert = "/etc/gridsecurity/host.cert"
 tls_key = "/etc/gridsecurity/host.key"
 enabled_services = ["storageprovidersvc", "authsvc", "storagebrokersvc", "appregistrysvc", "appprovidersvc"]
+enabled_interceptors = ["prometheus", "log", "trace"]
+
+[grpc.interceptors.trace]
+priority = 100
+header = "x-trace"
+
+[grpc.interceptors.log]
+priority = 200
+
+[grpc.interceptors.prometheus]
+priority = 300
+
+[grpc.interceptors.recovery]
+priority = 0
 
 [grpc.services.storageprovidersvc]
 driver = "local"
@@ -64,17 +87,13 @@ root_gid = 0
 [grpc.services.storageprovidersvc.drivers.local]
 root = "/var/tmp/owncloud/data"
 
-[grpc.services.authsvc.auth_manager]
-driver = "demo"
+[grpc.services.authsvc]
+auth_manager = "demo"
+token_manager = "jwt"
+user_manager = "demo"
 
-[grpc.services.authsvc.token_manager]
-driver = "jwt"
-
-[grpc.services.authsvc.token_manager.drivers.jwt]
+[grpc.services.authsvc.token_managers.jwt]
 secret = "Pive-Fumkiu4"
-
-[grpc.services.authsvc.user_manager]
-driver = "demo"
 
 [grpc.services.storagebrokersvc]
 driver = "static"
