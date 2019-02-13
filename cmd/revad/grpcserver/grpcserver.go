@@ -2,25 +2,43 @@ package grpcserver
 
 import (
 	"context"
-	"fmt"
 	"net"
+	"sort"
 
-	"github.com/cernbox/reva/cmd/revad/svcs/grpcsvcs/interceptors"
 	"github.com/cernbox/reva/pkg/err"
 	"github.com/cernbox/reva/pkg/log"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
-	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
-	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/mitchellh/mapstructure"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 )
 
 var (
 	ctx    = context.Background()
-	logger = log.New("grpcsvr")
-	errors = err.New("grpcsvr")
+	logger = log.New("grpcserver")
+	errors = err.New("grpcserver")
 )
+
+// UnaryInterceptors is a map of registered unary grpc interceptors.
+var UnaryInterceptors = map[string]NewUnaryInterceptor{}
+
+// StreamInterceptors is a map of registered streaming grpc interceptor
+var StreamInterceptors = map[string]NewStreamInterceptor{}
+
+// NewUnaryInterceptor is the type that unary interceptors need to register.
+type NewUnaryInterceptor func(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error)
+
+// NewStreamInterceptor is the type that stream interceptors need to register.
+type NewStreamInterceptor func(m map[string]interface{}) (grpc.StreamServerInterceptor, int, error)
+
+// RegisterUnaryInterceptor registers a new unary interceptor.
+func RegisterUnaryInterceptor(name string, newFunc NewUnaryInterceptor) {
+	UnaryInterceptors[name] = newFunc
+}
+
+// RegisterStreamInterceptor registers a new stream interceptor.
+func RegisterStreamInterceptor(name string, newFunc NewStreamInterceptor) {
+	StreamInterceptors[name] = newFunc
+}
 
 // Services is a map of service name and its new function.
 var Services = map[string]NewService{}
@@ -33,12 +51,26 @@ func Register(name string, newFunc NewService) {
 // NewService is the function that gRPC services need to register at init time.
 type NewService func(conf map[string]interface{}, ss *grpc.Server) error
 
+type unaryInterceptorTriple struct {
+	Name        string
+	Priority    int
+	Interceptor grpc.UnaryServerInterceptor
+}
+
+type streamInterceptorTriple struct {
+	Name        string
+	Priority    int
+	Interceptor grpc.StreamServerInterceptor
+}
+
 type config struct {
-	Network          string                            `mapstructure:"network"`
-	Address          string                            `mapstructure:"address"`
-	ShutdownDeadline int                               `mapstructure:"shutdown_deadline"`
-	EnabledServices  []string                          `mapstructure:"enabled_services"`
-	Services         map[string]map[string]interface{} `mapstructure:"services"`
+	Network             string                            `mapstructure:"network"`
+	Address             string                            `mapstructure:"address"`
+	ShutdownDeadline    int                               `mapstructure:"shutdown_deadline"`
+	EnabledServices     []string                          `mapstructure:"enabled_services"`
+	Services            map[string]map[string]interface{} `mapstructure:"services"`
+	EnabledInterceptors []string                          `mapstructure:"enabled_interceptors"`
+	Interceptors        map[string]map[string]interface{} `mapstructure:"interceptors"`
 }
 
 // Server is a gRPC server.
@@ -64,10 +96,15 @@ func New(m map[string]interface{}) (*Server, error) {
 		conf.Address = "0.0.0.0:9999"
 	}
 
-	opts := getOpts()
-	s := grpc.NewServer(opts...)
+	server := &Server{conf: conf}
+	opts, err := server.getInterceptors()
+	if err != nil {
+		return nil, err
+	}
 
-	return &Server{s: s, conf: conf}, nil
+	grpcServer := grpc.NewServer(opts...)
+	server.s = grpcServer
+	return server, nil
 }
 
 // Start starts the server.
@@ -85,6 +122,15 @@ func (s *Server) Start(ln net.Listener) error {
 		return err
 	}
 	return nil
+}
+
+func (s *Server) isInterceptorEnabled(name string) bool {
+	for _, k := range s.conf.EnabledInterceptors {
+		if k == name {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) isServiceEnabled(name string) bool {
@@ -130,24 +176,66 @@ func (s *Server) Address() string {
 	return s.conf.Address
 }
 
-func getOpts() []grpc.ServerOption {
-	opts := []grpc.ServerOption{
-		grpc.UnaryInterceptor(
-			grpc_middleware.ChainUnaryServer(
-				grpc_recovery.UnaryServerInterceptor(grpc_recovery.WithRecoveryHandlerContext(recoveryFunc)),
-				interceptors.TraceUnaryServerInterceptor(),
-				interceptors.LogUnaryServerInterceptor(),
-				grpc_prometheus.UnaryServerInterceptor)),
-		grpc.StreamInterceptor(
-			grpc_middleware.ChainStreamServer(
-				grpc_recovery.StreamServerInterceptor(grpc_recovery.WithRecoveryHandlerContext(recoveryFunc)),
-				interceptors.TraceStreamServerInterceptor(),
-				grpc_prometheus.StreamServerInterceptor)),
+func (s *Server) getInterceptors() ([]grpc.ServerOption, error) {
+	unaryTriples := []*unaryInterceptorTriple{}
+	for name, newFunc := range UnaryInterceptors {
+		if s.isInterceptorEnabled(name) {
+			inter, prio, err := newFunc(s.conf.Interceptors[name])
+			if err != nil {
+				return nil, err
+			}
+			triple := &unaryInterceptorTriple{
+				Name:        name,
+				Priority:    prio,
+				Interceptor: inter,
+			}
+			unaryTriples = append(unaryTriples, triple)
+		}
 	}
-	return opts
-}
 
-func recoveryFunc(ctx context.Context, p interface{}) (err error) {
-	logger.Panic(ctx, fmt.Sprintf("%+v", p))
-	return grpc.Errorf(codes.Internal, "%s", p)
+	// sort unary triples
+	sort.SliceStable(unaryTriples, func(i, j int) bool {
+		return unaryTriples[i].Priority < unaryTriples[j].Priority
+	})
+
+	unaryInterceptors := []grpc.UnaryServerInterceptor{}
+	for _, t := range unaryTriples {
+		unaryInterceptors = append(unaryInterceptors, t.Interceptor)
+		logger.Printf(ctx, "chainning grpc unary interceptor %s with priority %d", t.Name, t.Priority)
+	}
+	unaryChain := grpc_middleware.ChainUnaryServer(unaryInterceptors...)
+
+	streamTriples := []*streamInterceptorTriple{}
+	for name, newFunc := range StreamInterceptors {
+		if s.isInterceptorEnabled(name) {
+			inter, prio, err := newFunc(s.conf.Interceptors[name])
+			if err != nil {
+				return nil, err
+			}
+			triple := &streamInterceptorTriple{
+				Name:        name,
+				Priority:    prio,
+				Interceptor: inter,
+			}
+			streamTriples = append(streamTriples, triple)
+		}
+	}
+	// sort stream triples
+	sort.SliceStable(streamTriples, func(i, j int) bool {
+		return streamTriples[i].Priority < streamTriples[j].Priority
+	})
+
+	streamInterceptors := []grpc.StreamServerInterceptor{}
+	for _, t := range streamTriples {
+		streamInterceptors = append(streamInterceptors, t.Interceptor)
+		logger.Printf(ctx, "chainning grpc streaming interceptor %s with priority %d", t.Name, t.Priority)
+	}
+	streamChain := grpc_middleware.ChainStreamServer(streamInterceptors...)
+
+	opts := []grpc.ServerOption{
+		grpc.UnaryInterceptor(unaryChain),
+		grpc.StreamInterceptor(streamChain),
+	}
+
+	return opts, nil
 }
