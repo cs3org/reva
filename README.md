@@ -14,7 +14,7 @@ Read the [getting started guide](https://cernbox.github.io/reva/beginner-guide.h
 ## Build it yourself
 Read the [build from sources guide](https://cernbox.github.io/reva/building-reva.html).
 
-## Getting started - Docker
+## Run it using Docker
 
 ```
 git clone https://github.com/cernbox/reva
