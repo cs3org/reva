@@ -5,7 +5,7 @@
 REVA is interoperability platform. It connects storage, sync and share platforms and application providers, and it does it in a vendor and platform neutral way by using the [CS3 APIS](https://github.com/cernbox/cs3apis).
 
 ## Installation
-Head to [Documentation](https://cernbox.github.io/reva/)) for documentation or [download](https://github.com/cernbox/reva/releases) to get the latest release.
+Head to [Documentation](https://cernbox.github.io/reva/) for documentation or [download](https://github.com/cernbox/reva/releases) to get the latest release.
 
 ## Documentation & Support
 Read the [getting started guide](https://cernbox.github.io/reva/beginner-guide.html) and the other feature guides.
