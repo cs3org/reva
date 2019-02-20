@@ -25,6 +25,14 @@ docker run -p 9999:9999 -p 9998:9998 -d revad
 # docker run -p 9999:9999 -p 9998:9998 -v /your/config:/etc/revad/revad.toml -d revad
 ```
 
+## Plugin development
+
+Checkout the [Plugin Development Guide](https://cernbox.github.io/reva/plugin-development.html).
+
+## License
+
+REVA is distributed under [AGPL license](https://github.com/cernbox/reva/blob/master/LICENSE).
+
 ## Disclaimer
 
 There is no backward compatibility promises and semantic versioning yet.
