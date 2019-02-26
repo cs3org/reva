@@ -17,7 +17,10 @@ func (s *svc) doOptions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req := &storageproviderv0alphapb.StatRequest{Filename: fn}
+	ref := &storageproviderv0alphapb.Reference{
+		Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+	}
+	req := &storageproviderv0alphapb.StatRequest{Ref: ref}
 	res, err := client.Stat(ctx, req)
 	if err != nil {
 		logger.Error(ctx, err)
@@ -31,10 +34,10 @@ func (s *svc) doOptions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	md := res.Metadata
+	info := res.Info
 	allow := "OPTIONS, LOCK, GET, HEAD, POST, DELETE, PROPPATCH, COPY,"
 	allow += " MOVE, UNLOCK, PROPFIND"
-	if !md.IsDir {
+	if info.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_FILE {
 		allow += ", PUT"
 	}
 

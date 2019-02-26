@@ -26,7 +26,10 @@ func statCommand() *command {
 			return err
 		}
 
-		req := &storageproviderv0alphapb.StatRequest{Filename: fn}
+		ref := &storageproviderv0alphapb.Reference{
+			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+		}
+		req := &storageproviderv0alphapb.StatRequest{Ref: ref}
 		res, err := client.Stat(ctx, req)
 		if err != nil {
 			return err
@@ -36,7 +39,7 @@ func statCommand() *command {
 			return formatError(res.Status)
 		}
 
-		fmt.Println(res.Metadata)
+		fmt.Println(res.Info)
 		return nil
 	}
 	return cmd

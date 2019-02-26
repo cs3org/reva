@@ -71,12 +71,12 @@ func (fs *localFS) normalize(fi os.FileInfo, fn string) *storage.MD {
 	md := &storage.MD{
 		ID:          "fileid-" + strings.TrimPrefix(fn, "/"),
 		Path:        fn,
-		Mtime:       uint64(fi.ModTime().Unix()),
 		IsDir:       fi.IsDir(),
 		Etag:        fmt.Sprintf("%d", fi.ModTime().Unix()),
 		Mime:        mime.Detect(fi.IsDir(), fn),
-		Permissions: &storage.Permissions{Read: true, Write: true, Share: true},
 		Size:        uint64(fi.Size()),
+		Permissions: &storage.PermissionSet{ListContainer: true, CreateContainer: true},
+		Mtime:       uint64(fi.ModTime().Unix()),
 	}
 	//logger.Println(context.Background(), "normalized: ", md)
 	return md
@@ -89,22 +89,18 @@ func (fs *localFS) GetPathByID(ctx context.Context, id string) (string, error) {
 	return path.Join("/", strings.TrimPrefix(id, "fileid-")), nil
 }
 
-func (fs *localFS) SetACL(ctx context.Context, path string, a *storage.ACL) error {
+func (fs *localFS) AddGrant(ctx context.Context, path string, g *storage.Grant) error {
 	return notSupportedError("op not supported")
 }
 
-func (fs *localFS) GetACL(ctx context.Context, path string, aclType storage.ACLType, target string) (*storage.ACL, error) {
+func (fs *localFS) ListGrants(ctx context.Context, path string) ([]*storage.Grant, error) {
 	return nil, notSupportedError("op not supported")
 }
 
-func (fs *localFS) ListACLs(ctx context.Context, path string) ([]*storage.ACL, error) {
-	return nil, notSupportedError("op not supported")
-}
-
-func (fs *localFS) UnsetACL(ctx context.Context, path string, a *storage.ACL) error {
+func (fs *localFS) RemoveGrant(ctx context.Context, path string, g *storage.Grant) error {
 	return notSupportedError("op not supported")
 }
-func (fs *localFS) UpdateACL(ctx context.Context, path string, a *storage.ACL) error {
+func (fs *localFS) UpdateGrant(ctx context.Context, path string, g *storage.Grant) error {
 	return notSupportedError("op not supported")
 }
 

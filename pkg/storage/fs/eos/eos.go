@@ -192,7 +192,7 @@ func (fs *eosStorage) GetPathByID(ctx context.Context, id string) (string, error
 	return fi.Path, nil
 }
 
-func (fs *eosStorage) SetACL(ctx context.Context, fn string, a *storage.ACL) error {
+func (fs *eosStorage) AddGrant(ctx context.Context, fn string, g *storage.Grant) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "storage_eos: no user in ctx")
@@ -200,7 +200,10 @@ func (fs *eosStorage) SetACL(ctx context.Context, fn string, a *storage.ACL) err
 
 	fn = fs.getInternalPath(ctx, fn)
 
-	eosACL := fs.getEosACL(a)
+	eosACL, err := fs.getEosACL(g)
+	if err != nil {
+		return err
+	}
 
 	err = fs.c.AddACL(ctx, u.Username, fn, eosACL)
 	if err != nil {
@@ -210,59 +213,73 @@ func (fs *eosStorage) SetACL(ctx context.Context, fn string, a *storage.ACL) err
 	return nil
 }
 
-func getEosACLType(aclType storage.ACLType) string {
+func getEosACLType(aclType storage.GranteeType) (string, error) {
 	switch aclType {
-	case storage.ACLTypeUser:
-		return "u"
-	case storage.ACLTypeGroup:
-		return "g"
+	case storage.GranteeTypeUser:
+		return "u", nil
+	case storage.GranteeTypeGroup:
+		return "g", nil
 	default:
-		panic(aclType)
+		return "", errors.New("no eos acl for grantee type: " + aclType.String())
 	}
 }
 
-func getEosACLPerm(mode storage.ACLMode) string {
-	switch mode {
-	case storage.ACLModeReadOnly:
-		return "rx"
-	case storage.ACLModeReadWrite:
-		return "rwx!d"
-	default:
-		panic(mode)
+// TODO(labkode): fine grained permission controls.
+func getEosACLPerm(set *storage.PermissionSet) (string, error) {
+	if set.Delete {
+		return "rwx!d", nil
 	}
+
+	return "rx", nil
 }
 
-func (fs *eosStorage) getEosACL(a *storage.ACL) *eosclient.ACL {
-	eosACL := &eosclient.ACL{Target: a.Target}
-	eosACL.Mode = getEosACLPerm(a.Mode)
-	eosACL.Type = getEosACLType(a.Type)
-	return eosACL
+func (fs *eosStorage) getEosACL(g *storage.Grant) (*eosclient.ACL, error) {
+	mode, err := getEosACLPerm(g.PermissionSet)
+	if err != nil {
+		return nil, err
+	}
+	t, err := getEosACLType(g.Grantee.Type)
+	if err != nil {
+		return nil, err
+	}
+	eosACL := &eosclient.ACL{
+		Target: g.Grantee.ID,
+		Mode:   mode,
+		Type:   t,
+	}
+	return eosACL, nil
 }
 
-func (fs *eosStorage) UnsetACL(ctx context.Context, fn string, a *storage.ACL) error {
+func (fs *eosStorage) RemoveGrant(ctx context.Context, fn string, g *storage.Grant) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "storage_eos: no user in ctx")
 	}
 
-	eosACLType := getEosACLType(a.Type)
+	eosACLType, err := getEosACLType(g.Grantee.Type)
+	if err != nil {
+		return err
+	}
 
 	fn = fs.getInternalPath(ctx, fn)
 
-	err = fs.c.RemoveACL(ctx, u.Username, fn, eosACLType, a.Target)
+	err = fs.c.RemoveACL(ctx, u.Username, fn, eosACLType, g.Grantee.ID)
 	if err != nil {
 		return errors.Wrap(err, "storage_eos: error removing acl")
 	}
 	return nil
 }
 
-func (fs *eosStorage) UpdateACL(ctx context.Context, fn string, a *storage.ACL) error {
+func (fs *eosStorage) UpdateGrant(ctx context.Context, fn string, g *storage.Grant) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "storage_eos: no user in ctx")
 	}
 
-	eosACL := fs.getEosACL(a)
+	eosACL, err := fs.getEosACL(g)
+	if err != nil {
+		return err
+	}
 
 	fn = fs.getInternalPath(ctx, fn)
 	err = fs.c.AddACL(ctx, u.Username, fn, eosACL)
@@ -272,27 +289,7 @@ func (fs *eosStorage) UpdateACL(ctx context.Context, fn string, a *storage.ACL) 
 	return nil
 }
 
-func (fs *eosStorage) GetACL(ctx context.Context, fn string, aclType storage.ACLType, target string) (*storage.ACL, error) {
-	u, err := getUser(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	fn = fs.getInternalPath(ctx, fn)
-	eosACL, err := fs.c.GetACL(ctx, u.Username, fn, getEosACLType(aclType), target)
-	if err != nil {
-		return nil, err
-	}
-
-	acl := &storage.ACL{
-		Target: eosACL.Target,
-		Mode:   fs.getACLMode(eosACL.Mode),
-		Type:   fs.getACLType(eosACL.Type),
-	}
-	return acl, nil
-}
-
-func (fs *eosStorage) ListACLs(ctx context.Context, fn string) ([]*storage.ACL, error) {
+func (fs *eosStorage) ListGrants(ctx context.Context, fn string) ([]*storage.Grant, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, err
@@ -304,37 +301,49 @@ func (fs *eosStorage) ListACLs(ctx context.Context, fn string) ([]*storage.ACL, 
 		return nil, err
 	}
 
-	acls := []*storage.ACL{}
+	grants := []*storage.Grant{}
 	for _, a := range eosACLs {
-		acl := &storage.ACL{
-			Target: a.Target,
-			Mode:   fs.getACLMode(a.Mode),
-			Type:   fs.getACLType(a.Type),
+		grantee := &storage.Grantee{
+			ID:   a.Target,
+			Type: fs.getGranteeType(a.Type),
 		}
-		acls = append(acls, acl)
+		grants = append(grants, &storage.Grant{
+			Grantee:       grantee,
+			PermissionSet: fs.getGrantPermissionSet(a.Mode),
+		})
 	}
 
-	return acls, nil
+	return grants, nil
 }
 
-func (fs *eosStorage) getACLType(aclType string) storage.ACLType {
+func (fs *eosStorage) getGranteeType(aclType string) storage.GranteeType {
 	switch aclType {
 	case "u":
-		return storage.ACLTypeUser
+		return storage.GranteeTypeUser
 	case "g":
-		return storage.ACLTypeGroup
+		return storage.GranteeTypeGroup
 	default:
-		return storage.ACLTypeInvalid
+		return storage.GranteeTypeInvalid
 	}
 }
-func (fs *eosStorage) getACLMode(mode string) storage.ACLMode {
+
+// TODO(labkode): add more fine grained controls.
+func (fs *eosStorage) getGrantPermissionSet(mode string) *storage.PermissionSet {
 	switch mode {
 	case "rx":
-		return storage.ACLModeReadOnly
+		return &storage.PermissionSet{
+			ListContainer: true,
+		}
 	case "rwx!d":
-		return storage.ACLModeReadWrite
+		return &storage.PermissionSet{
+			Move:            true,
+			CreateContainer: true,
+			ListContainer:   true,
+		}
 	default:
-		return storage.ACLModeInvalid
+		// return no permissions are we do not know
+		// what acl is this one.
+		return &storage.PermissionSet{} // default values are false
 	}
 }
 
@@ -546,8 +555,8 @@ func (fs *eosStorage) convertToMD(ctx context.Context, eosFileInfo *eosclient.Fi
 	}
 	finfo.Mime = mime.Detect(finfo.IsDir, finfo.Path)
 	finfo.Sys = fs.getEosMetadata(eosFileInfo)
-	finfo.Permissions = &storage.Permissions{Read: true, Write: true, Share: true}
-
+	finfo.Permissions = &storage.PermissionSet{CreateContainer: true, ListContainer: true}
+	finfo.Size = eosFileInfo.Size
 	return finfo
 }
 

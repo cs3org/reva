@@ -2,10 +2,8 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"os"
 
-	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
 )
 
@@ -26,36 +24,23 @@ func lsCommand() *command {
 			return err
 		}
 
-		req := &storageproviderv0alphapb.ListRequest{
-			Filename: fn,
+		ref := &storageproviderv0alphapb.Reference{
+			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
 		}
+		req := &storageproviderv0alphapb.ListContainerRequest{Ref: ref}
 
 		ctx := getAuthContext()
-		stream, err := client.List(ctx, req)
+		res, err := client.ListContainer(ctx, req)
 		if err != nil {
 			return err
 		}
 
-		mds := []*storageproviderv0alphapb.Metadata{}
-		for {
-			res, err := stream.Recv()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				return err
-			}
-			if res.Status.Code != rpcpb.Code_CODE_OK {
-				return formatError(res.Status)
-			}
-			mds = append(mds, res.Metadata)
-		}
-
-		for _, md := range mds {
+		infos := res.Infos
+		for _, info := range infos {
 			if *longFlag {
-				fmt.Printf("%+v %d %d %s\n", md.Permissions, md.Mtime, md.Size, md.Filename)
+				fmt.Printf("%+v %d %d %v %s\n", info.PermissionSet, info.Mtime, info.Size, info.Id, info.Path)
 			} else {
-				fmt.Println(md.Filename)
+				fmt.Println(info.Path)
 			}
 		}
 		return nil

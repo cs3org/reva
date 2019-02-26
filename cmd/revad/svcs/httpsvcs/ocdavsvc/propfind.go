@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"path"
@@ -37,7 +36,10 @@ func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req := &storageproviderv0alphapb.StatRequest{Filename: fn}
+	ref := &storageproviderv0alphapb.Reference{
+		Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+	}
+	req := &storageproviderv0alphapb.StatRequest{Ref: ref}
 	res, err := client.Stat(ctx, req)
 	if err != nil {
 		logger.Error(ctx, err)
@@ -55,38 +57,24 @@ func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	md := res.Metadata
-	mds := []*storageproviderv0alphapb.Metadata{md}
-	if md.IsDir && listChildren {
-		req := &storageproviderv0alphapb.ListRequest{
-			Filename: fn,
+	info := res.Info
+	infos := []*storageproviderv0alphapb.ResourceInfo{info}
+	if info.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER && listChildren {
+		req := &storageproviderv0alphapb.ListContainerRequest{
+			Ref: ref,
 		}
-		stream, err := client.List(ctx, req)
+		res, err := client.ListContainer(ctx, req)
 		if err != nil {
 			logger.Error(ctx, err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-
-		for {
-			res, err := stream.Recv()
-			if err == io.EOF {
-				break
-			}
-
-			if err != nil {
-				logger.Error(ctx, err)
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-
-			if res.Status.Code != rpcpb.Code_CODE_OK {
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-
-			mds = append(mds, res.Metadata)
+		if res.Status.Code != rpcpb.Code_CODE_OK {
+			logger.Println(ctx, res.Status)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
+		infos = append(infos, res.Infos...)
 	}
 
 	propRes, err := s.formatPropfind(ctx, fn, mds)
@@ -151,8 +139,7 @@ func (s *svc) formatPropfind(ctx context.Context, fn string, mds []*storageprovi
 	return msg, nil
 }
 
-// TODO unused?
-func (s *svc) mdsToXML(ctx context.Context, mds []*storageproviderv0alphapb.Metadata) (string, error) {
+func (s *svc) mdsToXML(ctx context.Context, mds []*storageproviderv0alphapb.ResourceInfo) (string, error) {
 	responses := []*responseXML{}
 	for _, md := range mds {
 		res, err := s.mdToPropResponse(ctx, md)
@@ -181,7 +168,7 @@ func (s *svc) newProp(key, val string) *propertyXML {
 	}
 }
 
-func (s *svc) mdToPropResponse(ctx context.Context, md *storageproviderv0alphapb.Metadata, props ...*propertyXML) (*responseXML, error) {
+func (s *svc) mdToPropResponse(ctx context.Context, md *storageproviderv0alphapb.ResourceInfo, props ...*propertyXML) *responseXML {
 	propList := []*propertyXML{}
 	propList = append(propList, props...)
 
@@ -202,7 +189,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, md *storageproviderv0alphapb
 		ocDC,
 	)
 
-	if md.IsDir {
+	if md.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
 		getResourceType.InnerXML = []byte("<d:collection/>")
 		getContentType.InnerXML = []byte("httpd/unix-directory")
 	}
@@ -217,7 +204,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, md *storageproviderv0alphapb
 	// that contains a path as the file id. This path can contain &, for example,
 	// which if it is not encoded properly, will result in an empty view for the user
 	var fileIDEscaped bytes.Buffer
-	if err := xml.EscapeText(&fileIDEscaped, []byte(md.Id)); err != nil {
+	if err := xml.EscapeText(&fileIDEscaped, []byte(fmt.Sprintf("%s:%s", md.Id.StorageId, md.Id.OpaqueId))); err != nil {
 		return nil, err
 	}
 	ocID := s.newProp("oc:id", fileIDEscaped.String())
@@ -245,8 +232,8 @@ func (s *svc) mdToPropResponse(ctx context.Context, md *storageproviderv0alphapb
 		md.Filename = md.Filename[len(u.Username)+1:]
 	}
 
-	ref := path.Join(baseURI, md.Filename)
-	if md.IsDir {
+	ref := path.Join(baseURI, md.Path)
+	if md.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
 		ref += "/"
 	}
 	response.Href = ref

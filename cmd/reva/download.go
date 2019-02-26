@@ -1,15 +1,11 @@
 package main
 
 import (
-	"bytes"
-	"context"
 	"fmt"
-	"io"
 	"os"
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
-	"github.com/cheggaaa/pb"
 )
 
 func downloadCommand() *command {
@@ -24,14 +20,17 @@ func downloadCommand() *command {
 
 		provider := cmd.Args()[0]
 		fn = cmd.Args()[1]
-		target := cmd.Args()[2]
+		//target := cmd.Args()[2]
 
 		client, err := getStorageProviderClient(provider)
 		if err != nil {
 			return err
 		}
 
-		req1 := &storageproviderv0alphapb.StatRequest{Filename: fn}
+		ref := &storageproviderv0alphapb.Reference{
+			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+		}
+		req1 := &storageproviderv0alphapb.StatRequest{Ref: ref}
 		ctx := getAuthContext()
 		res1, err := client.Stat(ctx, req1)
 		if err != nil {
@@ -41,49 +40,52 @@ func downloadCommand() *command {
 			return formatError(res1.Status)
 		}
 
-		md := res1.Metadata
+		info := res1.Info
+		fmt.Println(info)
 
-		fd, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY, 0644)
-		if err != nil {
-			return err
-		}
-
-		req2 := &storageproviderv0alphapb.ReadRequest{Filename: fn}
-		ctx = context.Background()
-		stream, err := client.Read(ctx, req2)
-		if err != nil {
-			return err
-		}
-
-		bar := pb.New(int(md.Size)).SetUnits(pb.U_BYTES)
-		bar.Start()
-		var reader io.Reader
-		for {
-			res, err := stream.Recv()
-			if err == io.EOF {
-				break
-			}
+		/*
+			fd, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY, 0644)
 			if err != nil {
 				return err
 			}
-			if res.Status.Code != rpcpb.Code_CODE_OK {
-				return formatError(res.Status)
+
+			req2 := &storageproviderv0alphapb.ReadRequest{Filename: fn}
+			ctx = context.Background()
+			stream, err := client.Read(ctx, req2)
+			if err != nil {
+				return err
 			}
-			dc := res.DataChunk
 
-			if dc != nil {
-				if dc.Length > 0 {
-					reader = bytes.NewReader(dc.Data)
-					reader = bar.NewProxyReader(reader)
+			bar := pb.New(int(md.Size)).SetUnits(pb.U_BYTES)
+			bar.Start()
+			var reader io.Reader
+			for {
+				res, err := stream.Recv()
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					return err
+				}
+				if res.Status.Code != rpcpb.Code_CODE_OK {
+					return formatError(res.Status)
+				}
+				dc := res.DataChunk
 
-					_, err := io.CopyN(fd, reader, int64(dc.Length))
-					if err != nil {
-						return err
+				if dc != nil {
+					if dc.Length > 0 {
+						reader = bytes.NewReader(dc.Data)
+						reader = bar.NewProxyReader(reader)
+
+						_, err := io.CopyN(fd, reader, int64(dc.Length))
+						if err != nil {
+							return err
+						}
 					}
 				}
 			}
-		}
-		bar.Finish()
+			bar.Finish()
+		*/
 		return nil
 
 	}

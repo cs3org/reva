@@ -1,6 +1,7 @@
 package ocdavsvc
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -19,7 +20,10 @@ func (s *svc) doHead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req := &storageproviderv0alphapb.StatRequest{Filename: fn}
+	ref := &storageproviderv0alphapb.Reference{
+		Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+	}
+	req := &storageproviderv0alphapb.StatRequest{Ref: ref}
 	res, err := client.Stat(ctx, req)
 	if err != nil {
 		logger.Error(ctx, err)
@@ -33,12 +37,12 @@ func (s *svc) doHead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	md := res.Metadata
-	w.Header().Set("Content-Type", md.Mime)
-	w.Header().Set("ETag", md.Etag)
-	w.Header().Set("OC-FileId", md.Id)
-	w.Header().Set("OC-ETag", md.Etag)
-	t := time.Unix(int64(md.Mtime), 0)
+	info := res.Info
+	w.Header().Set("Content-Type", info.Mime)
+	w.Header().Set("ETag", info.Etag)
+	w.Header().Set("OC-FileId", fmt.Sprintf("%s:%s", info.Id.StorageId, info.Id.OpaqueId))
+	w.Header().Set("OC-ETag", info.Etag)
+	t := time.Unix(int64(info.Mtime), 0)
 	lastModifiedString := t.Format(time.RFC1123)
 	w.Header().Set("Last-Modified", lastModifiedString)
 	w.WriteHeader(http.StatusOK)

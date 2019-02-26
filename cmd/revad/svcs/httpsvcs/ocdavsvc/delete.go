@@ -18,7 +18,10 @@ func (s *svc) doDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req := &storageproviderv0alphapb.DeleteRequest{Filename: fn}
+	ref := &storageproviderv0alphapb.Reference{
+		Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+	}
+	req := &storageproviderv0alphapb.DeleteRequest{Ref: ref}
 	res, err := client.Delete(ctx, req)
 	if err != nil {
 		logger.Error(ctx, err)

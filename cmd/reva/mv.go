@@ -27,7 +27,13 @@ func moveCommand() *command {
 			return err
 		}
 
-		req := &storageproviderv0alphapb.MoveRequest{SourceFilename: src, TargetFilename: dst}
+		sourceRef := &storageproviderv0alphapb.Reference{
+			Spec: &storageproviderv0alphapb.Reference_Path{Path: src},
+		}
+		targetRef := &storageproviderv0alphapb.Reference{
+			Spec: &storageproviderv0alphapb.Reference_Path{Path: dst},
+		}
+		req := &storageproviderv0alphapb.MoveRequest{Source: sourceRef, Destination: targetRef}
 		res, err := client.Move(ctx, req)
 		if err != nil {
 			return err

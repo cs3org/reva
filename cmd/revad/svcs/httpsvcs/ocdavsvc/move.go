@@ -1,6 +1,7 @@
 package ocdavsvc
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 	"path"
@@ -133,7 +134,13 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 		// TODO what if intermediate is a file?
 	}
 
-	req := &storageproviderv0alphapb.MoveRequest{SourceFilename: src, TargetFilename: dst}
+	sourceRef := &storageproviderv0alphapb.Reference{
+		Spec: &storageproviderv0alphapb.Reference_Path{Path: src},
+	}
+	dstRef := &storageproviderv0alphapb.Reference{
+		Spec: &storageproviderv0alphapb.Reference_Path{Path: dst},
+	}
+	req := &storageproviderv0alphapb.MoveRequest{Source: sourceRef, Destination: dstRef}
 	res, err := client.Move(ctx, req)
 	if err != nil {
 		logger.Error(ctx, err)
@@ -147,7 +154,10 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req2 := &storageproviderv0alphapb.StatRequest{Filename: dst}
+	ref := &storageproviderv0alphapb.Reference{
+		Spec: &storageproviderv0alphapb.Reference_Path{Path: dst},
+	}
+	req2 := &storageproviderv0alphapb.StatRequest{Ref: ref}
 	res2, err := client.Stat(ctx, req2)
 	if err != nil {
 		logger.Error(ctx, err)
@@ -161,10 +171,10 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	md := res2.Metadata
-	w.Header().Set("Content-Type", md.Mime)
-	w.Header().Set("ETag", md.Etag)
-	w.Header().Set("OC-FileId", md.Id)
-	w.Header().Set("OC-ETag", md.Etag)
-	w.WriteHeader(successCode)
+	info := res2.Info
+	w.Header().Set("Content-Type", info.Mime)
+	w.Header().Set("ETag", info.Etag)
+	w.Header().Set("OC-FileId", fmt.Sprintf("%s:%s", info.Id.StorageId, info.Id.OpaqueId))
+	w.Header().Set("OC-ETag", info.Etag)
+	w.WriteHeader(http.StatusCreated)
 }

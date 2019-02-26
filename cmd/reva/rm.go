@@ -25,7 +25,10 @@ func rmCommand() *command {
 			return err
 		}
 
-		req := &storageproviderv0alphapb.DeleteRequest{Filename: fn}
+		ref := &storageproviderv0alphapb.Reference{
+			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+		}
+		req := &storageproviderv0alphapb.DeleteRequest{Ref: ref}
 		res, err := client.Delete(ctx, req)
 		if err != nil {
 			return err

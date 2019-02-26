@@ -2,29 +2,31 @@ package storage
 
 import (
 	"context"
+	"fmt"
 	"io"
 )
 
-// ACLMode represents the mode for the ACL (read, write, ...).
-type ACLMode uint32
+// GranteeType specifies the type of grantee.
+type GranteeType uint32
 
-// ACLType represents the type of the ACL (user, group, ...).
-type ACLType uint32
+func (g GranteeType) String() string {
+	switch g {
+	case GranteeTypeUser:
+		return "user"
+	case GranteeTypeGroup:
+		return "group"
+	default:
+		return fmt.Sprintf("invalid: %d", g)
+	}
+}
 
 const (
-	// ACLModeInvalid specifies an invalid permission.
-	ACLModeInvalid = ACLMode(0) // default is invalid.
-	// ACLModeReadOnly specifies read permissions.
-	ACLModeReadOnly = ACLMode(1) // 1
-	// ACLModeWrite specifies write-permissions.
-	ACLModeReadWrite = ACLMode(2) // 2
-
-	// ACLTypeInvalid specifies that the acl is invalid
-	ACLTypeInvalid ACLType = ACLType(0)
-	// ACLTypeUser specifies that the acl is set for an individual user.
-	ACLTypeUser ACLType = ACLType(1)
-	// ACLTypeGroup specifies that the acl is set for a group.
-	ACLTypeGroup ACLType = ACLType(2)
+	// GranteeTypeInvalid specifies an invalid permission.
+	GranteeTypeInvalid = GranteeType(0)
+	// GranteeTypeUser specifies the grantee is an individual user.
+	GranteeTypeUser = GranteeType(1)
+	// GranteeTypeGroup specifies the grantee is a group.
+	GranteeTypeGroup = GranteeType(2)
 )
 
 // FS is the interface to implement access to the storage.
@@ -43,11 +45,10 @@ type FS interface {
 	RestoreRecycleItem(ctx context.Context, fn, key string) error
 	EmptyRecycle(ctx context.Context, fn string) error
 	GetPathByID(ctx context.Context, id string) (string, error)
-	SetACL(ctx context.Context, fn string, a *ACL) error
-	UnsetACL(ctx context.Context, fn string, a *ACL) error
-	UpdateACL(ctx context.Context, fn string, a *ACL) error
-	ListACLs(ctx context.Context, fn string) ([]*ACL, error)
-	GetACL(ctx context.Context, fn string, aclType ACLType, target string) (*ACL, error)
+	AddGrant(ctx context.Context, fn string, g *Grant) error
+	RemoveGrant(ctx context.Context, fn string, g *Grant) error
+	UpdateGrant(ctx context.Context, fn string, g *Grant) error
+	ListGrants(ctx context.Context, fn string) ([]*Grant, error)
 	GetQuota(ctx context.Context, fn string) (int, int, error)
 }
 
@@ -61,19 +62,28 @@ type MD struct {
 	Etag        string
 	Checksum    string
 	Mime        string
-	Permissions *Permissions
+	Permissions *PermissionSet
 	Sys         map[string]interface{}
 }
 
-type Permissions struct {
-	Read, Write, Share bool
+// PermissionSet is the set of permissions for a resource.
+type PermissionSet struct {
+	ListContainer   bool
+	CreateContainer bool
+	Move            bool
+	Delete          bool
 }
 
-// ACL represents an ACL to persist on the storage.
-type ACL struct {
-	Target string
-	Type   ACLType
-	Mode   ACLMode
+// Grant represents a grant for the storage.
+type Grant struct {
+	Grantee       *Grantee
+	PermissionSet *PermissionSet
+}
+
+// Grantee is the receiver of the grant.
+type Grantee struct {
+	ID   string
+	Type GranteeType
 }
 
 // RecycleItem represents an entry in the recycle bin of the user.

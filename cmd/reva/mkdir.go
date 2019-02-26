@@ -26,8 +26,11 @@ func mkdirCommand() *command {
 			return err
 		}
 
-		req := &storageproviderv0alphapb.CreateDirectoryRequest{Filename: fn}
-		res, err := client.CreateDirectory(ctx, req)
+		ref := &storageproviderv0alphapb.Reference{
+			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+		}
+		req := &storageproviderv0alphapb.CreateContainerRequest{Ref: ref}
+		res, err := client.CreateContainer(ctx, req)
 		if err != nil {
 			return err
 		}

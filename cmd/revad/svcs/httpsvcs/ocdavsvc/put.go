@@ -2,11 +2,9 @@ package ocdavsvc
 
 import (
 	"fmt"
-	"io"
 	"net/http"
 	"regexp"
 	"strconv"
-	"time"
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
@@ -123,7 +121,10 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req := &storageproviderv0alphapb.StatRequest{Filename: fn}
+	ref := &storageproviderv0alphapb.Reference{
+		Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+	}
+	req := &storageproviderv0alphapb.StatRequest{Ref: ref}
 	res, err := client.Stat(ctx, req)
 	if err != nil {
 		logger.Error(ctx, err)
@@ -140,16 +141,16 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-	md := res.Metadata
-	if md != nil && md.IsDir {
+	info := res.Info
+	if info != nil && info.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
 		logger.Println(ctx, "resource is a folder")
 		w.WriteHeader(http.StatusConflict)
 		return
 	}
 
-	if md != nil {
+	if info != nil {
 		clientETag := r.Header.Get("If-Match")
-		serverETag := md.Etag
+		serverETag := info.Etag
 		if clientETag != "" {
 			serverETag = fmt.Sprintf(`"%s"`, serverETag)
 			if clientETag != serverETag {
@@ -160,116 +161,118 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	req2 := &storageproviderv0alphapb.StartWriteSessionRequest{}
-	res2, err := client.StartWriteSession(ctx, req2)
-	if err != nil {
-		logger.Error(ctx, err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if res2.Status.Code != rpcpb.Code_CODE_OK {
-		logger.Println(ctx, res2.Status)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	sessID := res2.SessionId
-	logger.Build().Str("sessID", sessID).Msg(ctx, "got write session id")
-
-	stream, err := client.Write(ctx)
-	if err != nil {
-		logger.Error(ctx, err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	buffer := make([]byte, 1024*1024*3)
-	var offset uint64
-	var numChunks uint64
-
-	for {
-		n, err := r.Body.Read(buffer)
-		if n > 0 {
-			req := &storageproviderv0alphapb.WriteRequest{Data: buffer, Length: uint64(n), SessionId: sessID, Offset: offset}
-			err = stream.Send(req)
-			if err != nil {
-				logger.Error(ctx, err)
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-
-			numChunks++
-			offset += uint64(n)
-		}
-
-		if err == io.EOF {
-			break
-		}
-
+	/*
+		req2 := &storageproviderv0alphapb.StartWriteSessionRequest{}
+		res2, err := client.StartWriteSession(ctx, req2)
 		if err != nil {
 			logger.Error(ctx, err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-	}
 
-	res3, err := stream.CloseAndRecv()
-	if err != nil {
-		logger.Error(ctx, err)
-		w.WriteHeader(http.StatusInternalServerError)
+		if res2.Status.Code != rpcpb.Code_CODE_OK {
+			logger.Println(ctx, res2.Status)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		sessID := res2.SessionId
+		logger.Build().Str("sessID", sessID).Msg(ctx, "got write session id")
+
+		stream, err := client.Write(ctx)
+		if err != nil {
+			logger.Error(ctx, err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		buffer := make([]byte, 1024*1024*3)
+		var offset uint64
+		var numChunks uint64
+
+		for {
+			n, err := r.Body.Read(buffer)
+			if n > 0 {
+				req := &storageproviderv0alphapb.WriteRequest{Data: buffer, Length: uint64(n), SessionId: sessID, Offset: offset}
+				err = stream.Send(req)
+				if err != nil {
+					logger.Error(ctx, err)
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+
+				numChunks++
+				offset += uint64(n)
+			}
+
+			if err == io.EOF {
+				break
+			}
+
+			if err != nil {
+				logger.Error(ctx, err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+		}
+
+		res3, err := stream.CloseAndRecv()
+		if err != nil {
+			logger.Error(ctx, err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		if res3.Status.Code != rpcpb.Code_CODE_OK {
+			logger.Println(ctx, err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		req4 := &storageproviderv0alphapb.FinishWriteSessionRequest{Filename: fn, SessionId: sessID}
+		res4, err := client.FinishWriteSession(ctx, req4)
+		if err != nil {
+			logger.Error(ctx, err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		if res4.Status.Code != rpcpb.Code_CODE_OK {
+			logger.Println(ctx, res4.Status)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		res, err = client.Stat(ctx, req)
+		if err != nil {
+			logger.Error(ctx, err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		if res.Status.Code != rpcpb.Code_CODE_OK {
+			logger.Println(ctx, res.Status)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		md2 := res.Metadata
+
+		w.Header().Add("Content-Type", md2.Mime)
+		w.Header().Set("ETag", md2.Etag)
+		w.Header().Set("OC-FileId", md2.Id)
+		w.Header().Set("OC-ETag", md2.Etag)
+		t := time.Unix(int64(md2.Mtime), 0)
+		lastModifiedString := t.Format(time.RFC1123)
+		w.Header().Set("Last-Modified", lastModifiedString)
+		w.Header().Set("X-OC-MTime", "accepted")
+
+		if md == nil {
+			w.WriteHeader(http.StatusCreated)
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
 		return
-	}
-
-	if res3.Status.Code != rpcpb.Code_CODE_OK {
-		logger.Println(ctx, err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	req4 := &storageproviderv0alphapb.FinishWriteSessionRequest{Filename: fn, SessionId: sessID}
-	res4, err := client.FinishWriteSession(ctx, req4)
-	if err != nil {
-		logger.Error(ctx, err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if res4.Status.Code != rpcpb.Code_CODE_OK {
-		logger.Println(ctx, res4.Status)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	res, err = client.Stat(ctx, req)
-	if err != nil {
-		logger.Error(ctx, err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if res.Status.Code != rpcpb.Code_CODE_OK {
-		logger.Println(ctx, res.Status)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	md2 := res.Metadata
-
-	w.Header().Add("Content-Type", md2.Mime)
-	w.Header().Set("ETag", md2.Etag)
-	w.Header().Set("OC-FileId", md2.Id)
-	w.Header().Set("OC-ETag", md2.Etag)
-	t := time.Unix(int64(md2.Mtime), 0)
-	lastModifiedString := t.Format(time.RFC1123)
-	w.Header().Set("Last-Modified", lastModifiedString)
-	w.Header().Set("X-OC-MTime", "accepted")
-
-	if md == nil {
-		w.WriteHeader(http.StatusCreated)
-		return
-	}
-
-	w.WriteHeader(http.StatusNoContent)
-	return
+	*/
 }
