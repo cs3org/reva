@@ -2,9 +2,13 @@ package ldap
 
 import (
 	"context"
+	"crypto/tls"
+	"fmt"
 
 	"github.com/cernbox/reva/pkg/user"
 	"github.com/cernbox/reva/pkg/user/manager/registry"
+	"github.com/mitchellh/mapstructure"
+	"gopkg.in/ldap.v2"
 )
 
 func init() {
@@ -12,68 +16,99 @@ func init() {
 }
 
 type manager struct {
-	catalog map[string]*user.User
+	hostname     string
+	port         int
+	baseDN       string
+	filter       string
+	bindUsername string
+	bindPassword string
 }
 
-// New returns a new user manager.
-func New(m map[string]interface{}) (user.Manager, error) {
-	cat := getUsers()
-	return &manager{catalog: cat}, nil
+type config struct {
+	Hostname     string `mapstructure:"hostname"`
+	Port         int    `mapstructure:"port"`
+	BaseDN       string `mapstructure:"base_dn"`
+	Filter       string `mapstructure:"filter"`
+	BindUsername string `mapstructure:"bind_username"`
+	BindPassword string `mapstructure:"bind_password"`
 }
 
-func (m *manager) GetUser(ctx context.Context, username string) (*user.User, error) {
-	if user, ok := m.catalog[username]; ok {
-		return user, nil
+func parseConfig(m map[string]interface{}) (*config, error) {
+	c := &config{}
+	if err := mapstructure.Decode(m, c); err != nil {
+		return nil, err
 	}
-	return nil, userNotFoundError(username)
+	return c, nil
 }
 
-func (m *manager) GetUserGroups(ctx context.Context, username string) ([]string, error) {
-	user, err := m.GetUser(ctx, username)
+// New returns a user manager implementation that connects to a LDAP server to provide user metadata.
+func New(m map[string]interface{}) (user.Manager, error) {
+	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
 	}
-	return user.Groups, nil
+
+	return &manager{
+		hostname:     c.Hostname,
+		port:         c.Port,
+		baseDN:       c.BaseDN,
+		filter:       c.Filter,
+		bindUsername: c.BindUsername,
+		bindPassword: c.BindPassword,
+	}, nil
+}
+
+func (m *manager) GetUser(ctx context.Context, username string) (*user.User, error) {
+	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.hostname, m.port), &tls.Config{InsecureSkipVerify: true})
+	if err != nil {
+		return nil, err
+	}
+	defer l.Close()
+
+	// First bind with a read only user
+	err = l.Bind(m.bindUsername, m.bindPassword)
+	if err != nil {
+		return nil, err
+	}
+
+	// Search for the given clientID
+	searchRequest := ldap.NewSearchRequest(
+		m.baseDN,
+		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
+		fmt.Sprintf(m.filter, username),              // TODO this is screaming for errors if filter contains >1 %s
+		[]string{"dn", "uid", "mail", "displayName"}, // TODO mapping
+		nil,
+	)
+
+	sr, err := l.Search(searchRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(sr.Entries) != 1 {
+		return nil, userNotFoundError(username)
+	}
+
+	for _, e := range sr.Entries {
+		e.Print()
+	}
+
+	return &user.User{
+		Username:    sr.Entries[0].GetAttributeValue("uid"),
+		Groups:      []string{},
+		Mail:        sr.Entries[0].GetAttributeValue("mail"),
+		DisplayName: sr.Entries[0].GetAttributeValue("displayName"),
+	}, nil
+}
+
+func (m *manager) GetUserGroups(ctx context.Context, username string) ([]string, error) {
+	return []string{}, nil
 }
 
 func (m *manager) IsInGroup(ctx context.Context, username, group string) (bool, error) {
-	user, err := m.GetUser(ctx, username)
-	if err != nil {
-		return false, err
-	}
-
-	for _, g := range user.Groups {
-		if group == g {
-			return true, nil
-		}
-	}
 	return false, nil
 }
 
 type userNotFoundError string
 
 func (e userNotFoundError) Error() string { return string(e) }
-
-func getUsers() map[string]*user.User {
-	// TODO fetch from ldap, hm ... no user id ...
-	return map[string]*user.User{
-		"aaliyah_abernathy": &user.User{
-			Username:    "aaliyah_abernathy",
-			Groups:      []string{"aggregate-ubiquitous-schemas", "cultivate-leading-edge-e-markets"},
-			Mail:        "aaliyah_abernathy@owncloudqa.com",
-			DisplayName: "aaliyah abernathy",
-		},
-		"marie": &user.User{
-			Username:    "marie",
-			Groups:      []string{"radium-lovers", "polonium-lovers"},
-			Mail:        "marie@example.org",
-			DisplayName: "Marie Curie",
-		},
-		"richard": &user.User{
-			Username:    "richard",
-			Groups:      []string{"quantum-lovers", "philosophy-haters"},
-			Mail:        "richard@example.org",
-			DisplayName: "Richard Feynman",
-		},
-	}
-}
