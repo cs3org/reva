@@ -3,11 +3,13 @@ package auth
 import (
 	"context"
 	"net/http"
+
+	"github.com/cernbox/reva/pkg/user"
 )
 
 // Manager is the interface to implement to authenticate users
 type Manager interface {
-	Authenticate(ctx context.Context, clientID, clientSecret string) error
+	Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, error)
 }
 
 // Credentials contains the client id and secret.

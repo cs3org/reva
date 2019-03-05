@@ -24,6 +24,7 @@ require (
 	github.com/spf13/viper v1.3.1
 	golang.org/x/crypto v0.0.0-20190130090550-b01c7a725664
 	golang.org/x/net v0.0.0-20190125091013-d26f9f9a57f3
+	golang.org/x/oauth2 v0.0.0-20180821212333-d2e6202438be
 	google.golang.org/grpc v1.18.0
 	gopkg.in/asn1-ber.v1 v1.0.0-20181015200546-f715ec2f112d // indirect
 	gopkg.in/cheggaaa/pb.v1 v1.0.27 // indirect

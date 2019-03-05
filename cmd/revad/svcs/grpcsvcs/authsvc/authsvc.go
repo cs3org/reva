@@ -123,7 +123,7 @@ func (s *service) GenerateAccessToken(ctx context.Context, req *authv0alphapb.Ge
 	username := req.GetUsername()
 	password := req.GetPassword()
 
-	err := s.authmgr.Authenticate(ctx, username, password)
+	user, err := s.authmgr.Authenticate(ctx, username, password)
 	if err != nil {
 		err = errors.Wrap(err, "error authenticating user")
 		logger.Error(ctx, err)
@@ -132,13 +132,15 @@ func (s *service) GenerateAccessToken(ctx context.Context, req *authv0alphapb.Ge
 		return res, nil
 	}
 
-	user, err := s.usermgr.GetUser(ctx, username)
-	if err != nil {
-		err = errors.Wrap(err, "error getting user information")
-		logger.Error(ctx, err)
-		status := &rpcpb.Status{Code: rpcpb.Code_CODE_UNAUTHENTICATED}
-		res := &authv0alphapb.GenerateAccessTokenResponse{Status: status}
-		return res, nil
+	if user == nil {
+		user, err = s.usermgr.GetUser(ctx, username)
+		if err != nil {
+			err = errors.Wrap(err, "error getting user information")
+			logger.Error(ctx, err)
+			status := &rpcpb.Status{Code: rpcpb.Code_CODE_UNAUTHENTICATED}
+			res := &authv0alphapb.GenerateAccessTokenResponse{Status: status}
+			return res, nil
+		}
 	}
 
 	claims := token.Claims{
