@@ -7,16 +7,16 @@ import (
 
 const defaultMimeDir = "httpd/unix-directory"
 
-var mimeMap map[string]string
+var mimes map[string]string
 
 func init() {
-	mimeMap = map[string]string{}
+	mimes = map[string]string{}
 }
 
 // RegisterMime is a package level function that registers
-// a mimetype with the given extension.
+// a mime type with the given extension.
 func RegisterMime(ext, mime string) {
-	mimeMap[ext] = mime
+	mimes[ext] = mime
 }
 
 // Detect returns the mimetype associated with the given filename.
@@ -37,5 +37,5 @@ func Detect(isDir bool, fn string) string {
 }
 
 func getCustomMime(ext string) string {
-	return mimeMap[ext]
+	return mimes[ext]
 }

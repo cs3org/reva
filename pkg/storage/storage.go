@@ -63,7 +63,7 @@ type MD struct {
 	Checksum    string
 	Mime        string
 	Permissions *PermissionSet
-	Sys         map[string]interface{}
+	Opaque      map[string]interface{}
 }
 
 // PermissionSet is the set of permissions for a resource.

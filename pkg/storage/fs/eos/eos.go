@@ -22,12 +22,12 @@ import (
 )
 
 func init() {
-	registry.Register("eos", New)
+	registry.Register("storage.fs.eos", New)
 }
 
 var hiddenReg = regexp.MustCompile(`\.sys\..#.`)
 
-var logger = log.New("eos")
+var logger = log.New("storage.fs.eos")
 
 type contextUserRequiredErr string
 

@@ -2,47 +2,42 @@ package demo
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
 	"encoding/gob"
 
-	"github.com/cernbox/reva/pkg/token/manager/registry"
-
+	"github.com/cernbox/reva/pkg/err"
 	"github.com/cernbox/reva/pkg/token"
+	"github.com/cernbox/reva/pkg/token/manager/registry"
 )
+
+var errors = err.New("demo")
 
 func init() {
 	registry.Register("demo", New)
 }
 
-type manager struct {
-	vault map[string]token.Claims
-}
-
 // New returns a new token manager.
 func New(m map[string]interface{}) (token.Manager, error) {
-	v := getVault()
-	return &manager{vault: v}, nil
+	mngr := manager{}
+	return &mngr, nil
 }
 
-func (m *manager) ForgeToken(ctx context.Context, claims token.Claims) (string, error) {
-	encoded, err := encode(claims)
+type manager struct{}
+
+func (m *manager) MintToken(claims token.Claims) (string, error) {
+	token, err := encode(claims)
 	if err != nil {
-		return "", err
+		return "", errors.Wrap(err, "error encoding claims")
 	}
-	return encoded, nil
+	return token, nil
 }
 
-func (m *manager) DismantleToken(ctx context.Context, token string) (token.Claims, error) {
-	decoded, err := decode(token)
+func (m *manager) DismantleToken(token string) (token.Claims, error) {
+	claims, err := decode(token)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "error decoding claims")
 	}
-	return decoded, nil
-}
-
-func getVault() map[string]token.Claims {
-	return nil
+	return claims, nil
 }
 
 // from https://stackoverflow.com/questions/28020070/golang-serialize-and-deserialize-back

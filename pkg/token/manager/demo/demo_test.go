@@ -1,15 +1,12 @@
 package demo
 
 import (
-	"context"
-	//"fmt"
 	"testing"
 
 	"github.com/cernbox/reva/pkg/token"
 )
 
 func TestEncodeDecode(t *testing.T) {
-	ctx := context.Background()
 	m, _ := New(nil)
 	groups := []string{"radium-lovers"}
 	claims := token.Claims{
@@ -19,12 +16,12 @@ func TestEncodeDecode(t *testing.T) {
 		"mail":         "marie@example.org",
 	}
 
-	encoded, err := m.ForgeToken(ctx, claims)
+	encoded, err := m.MintToken(claims)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	decodedClaims, err := m.DismantleToken(ctx, encoded)
+	decodedClaims, err := m.DismantleToken(encoded)
 	if err != nil {
 		t.Fatal(err)
 	}
