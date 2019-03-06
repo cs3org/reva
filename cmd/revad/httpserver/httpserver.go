@@ -200,14 +200,20 @@ func (s *Server) registerServices() error {
 
 func (s *Server) getHandler() http.Handler {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var head string
-		head, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
+		head, tail := httpsvcs.ShiftPath(r.URL.Path)
 		if h, ok := s.svcs[head]; ok {
+			r.URL.Path = tail
 			logger.Println(r.Context(), "http routing: head=", head, " tail=", r.URL.Path, " svc="+head)
 			h.ServeHTTP(w, r)
 			return
 		}
-		logger.Println(r.Context(), "http routing: head=", head, " tail=", r.URL.Path, " svc=not-found")
+		if h, ok := s.svcs[""]; ok {
+			r.URL.Path = "/" + head + "/" + tail
+			logger.Println(r.Context(), "http routing: head=/ tail=", head, r.URL.Path, " svc=root")
+			h.ServeHTTP(w, r)
+			return
+		}
+		logger.Println(r.Context(), "http routing: head=", head, " tail=", tail, " svc=not-found")
 		w.WriteHeader(http.StatusNotFound)
 	})
 
