@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
@@ -11,12 +12,14 @@ import (
 	tokenregistry "github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers/auth/token/registry"
 	tokenwriterregistry "github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers/auth/tokenwriter/registry"
 	"github.com/cernbox/reva/pkg/log"
+	"github.com/pkg/errors"
 
 	"github.com/cernbox/reva/pkg/token"
 	tokenmgr "github.com/cernbox/reva/pkg/token/manager/registry"
 	"github.com/cernbox/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 )
 
 var logger = log.New("auth")
@@ -38,10 +41,20 @@ type config struct {
 	TokenWriters         map[string]map[string]interface{} `mapstructure:"token_writers"`
 }
 
+func parseConfig(m map[string]interface{}) (*config, error) {
+	c := &config{}
+	if err := mapstructure.Decode(m, c); err != nil {
+		logger.Error(context.Background(), errors.Wrap(err, "error decoding conf"))
+		return nil, err
+	}
+	logger.Println(context.Background(), "config: ", c)
+	return c, nil
+}
+
 // New returns a new middleware with defined priority.
 func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
-	conf := &config{}
-	if err := mapstructure.Decode(m, conf); err != nil {
+	conf, err := parseConfig(m)
+	if err != nil {
 		return nil, 0, err
 	}
 
@@ -145,6 +158,9 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 			// store user and core access token in context.
 			ctx := user.ContextSetUser(r.Context(), u)
 			ctx = token.ContextSetToken(ctx, tkn)
+
+			ctx = metadata.AppendToOutgoingContext(ctx, "x-access-token", tkn) // FIXME hardcoded metadata key. use  PerRPCCredentials?
+
 			r = r.WithContext(ctx)
 			h.ServeHTTP(w, r)
 		})
