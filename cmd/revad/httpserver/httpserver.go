@@ -209,7 +209,7 @@ func (s *Server) getHandler() http.Handler {
 		}
 		if h, ok := s.svcs[""]; ok {
 			r.URL.Path = "/" + head + "/" + tail
-			logger.Println(r.Context(), "http routing: head=/ tail=", head, r.URL.Path, " svc=root")
+			logger.Println(r.Context(), "http routing: head=/ tail=", r.URL.Path, " svc=root")
 			h.ServeHTTP(w, r)
 			return
 		}
