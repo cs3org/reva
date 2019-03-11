@@ -130,7 +130,11 @@ func (fs *localFS) Delete(ctx context.Context, fn string) error {
 		if os.IsNotExist(err) {
 			return notFoundError(fn)
 		}
-		return errors.Wrap(err, "localfs: error deleting "+fn)
+		// try recursive delete
+		err = os.RemoveAll(fn)
+		if err != nil {
+			return errors.Wrap(err, "localfs: error deleting "+fn)
+		}
 	}
 	return nil
 }
