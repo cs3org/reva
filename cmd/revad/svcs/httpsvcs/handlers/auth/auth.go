@@ -104,7 +104,7 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 			tkn := tokenStrategy.GetToken(r)
 			if tkn == "" {
 				logger.Println(r.Context(), "core access token not set")
-				creds, err := credStrategy.GetCredentials(r)
+				creds, err := credStrategy.GetCredentials(w, r)
 				if err != nil {
 					logger.Error(r.Context(), err)
 					w.WriteHeader(http.StatusUnauthorized)

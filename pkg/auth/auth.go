@@ -20,7 +20,7 @@ type Credentials struct {
 
 // CredentialStrategy obtains Credentials from the request.
 type CredentialStrategy interface {
-	GetCredentials(r *http.Request) (*Credentials, error)
+	GetCredentials(w http.ResponseWriter, r *http.Request) (*Credentials, error)
 }
 
 // TokenStrategy obtains a token from the request.
