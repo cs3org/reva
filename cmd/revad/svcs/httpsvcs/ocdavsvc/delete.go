@@ -26,6 +26,12 @@ func (s *svc) doDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+		logger.Println(ctx, res.Status)
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
 	if res.Status.Code != rpcpb.Code_CODE_OK {
 		logger.Println(ctx, res.Status)
 		w.WriteHeader(http.StatusInternalServerError)

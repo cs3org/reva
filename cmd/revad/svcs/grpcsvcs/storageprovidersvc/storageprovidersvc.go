@@ -134,6 +134,13 @@ func (s *service) Delete(ctx context.Context, req *storageproviderv0alphapb.Dele
 	}
 
 	if err := s.storage.Delete(ctx, fsfn); err != nil {
+		if _, ok := err.(notFoundError); ok {
+			err := errors.Wrap(err, "file not found")
+			logger.Error(ctx, err)
+			status := &rpcpb.Status{Code: rpcpb.Code_CODE_NOT_FOUND}
+			res := &storageproviderv0alphapb.DeleteResponse{Status: status}
+			return res, nil
+		}
 		err := errors.Wrap(err, "error deleting file")
 		logger.Error(ctx, err)
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL}

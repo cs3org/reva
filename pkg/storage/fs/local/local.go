@@ -117,6 +117,7 @@ func (fs *localFS) CreateDir(ctx context.Context, fn string) error {
 		if os.IsNotExist(err) {
 			return notFoundError(fn)
 		}
+		// FIXME we also need already exists error, webdav expects 405 MethodNotAllowed
 		return errors.Wrap(err, "localfs: error creating dir "+fn)
 	}
 	return nil
