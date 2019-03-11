@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/cernbox/reva/cmd/revad/grpcserver"
+	"github.com/pkg/errors"
 
 	"github.com/cernbox/reva/pkg/log"
 	"github.com/cernbox/reva/pkg/trace"
@@ -26,11 +27,21 @@ type config struct {
 	Header   string `mapstructure:"header"`
 }
 
+func parseConfig(m map[string]interface{}) (*config, error) {
+	c := &config{}
+	if err := mapstructure.Decode(m, c); err != nil {
+		logger.Error(context.Background(), errors.Wrap(err, "error decoding conf"))
+		return nil, err
+	}
+	logger.Println(context.Background(), "config: ", c)
+	return c, nil
+}
+
 // NewUnary returns a new unary interceptor that adds
 // trace information for the request.
 func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error) {
-	conf := &config{}
-	if err := mapstructure.Decode(m, conf); err != nil {
+	conf, err := parseConfig(m)
+	if err != nil {
 		return nil, 0, err
 	}
 
@@ -62,8 +73,8 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 // NewStream returns a new server stream interceptor
 // that adds trace information to the request.
 func NewStream(m map[string]interface{}) (grpc.StreamServerInterceptor, int, error) {
-	conf := &config{}
-	if err := mapstructure.Decode(m, conf); err != nil {
+	conf, err := parseConfig(m)
+	if err != nil {
 		return nil, 0, err
 	}
 
