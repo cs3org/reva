@@ -1,6 +1,7 @@
 package oidc
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -9,6 +10,8 @@ import (
 	"github.com/cernbox/reva/pkg/auth"
 	"github.com/cernbox/reva/pkg/log"
 )
+
+var logger = log.New("auth-strategy-oidc")
 
 func init() {
 	registry.Register("oidc", New)
@@ -21,12 +24,16 @@ func New(m map[string]interface{}) (auth.CredentialStrategy, error) {
 	return &strategy{}, nil
 }
 
-func (s *strategy) GetCredentials(r *http.Request) (*auth.Credentials, error) {
+func (s *strategy) GetCredentials(w http.ResponseWriter, r *http.Request) (*auth.Credentials, error) {
 	// for time being just use OpenConnectID Connect
 	hdr := r.Header.Get("Authorization")
 	token := strings.TrimPrefix(hdr, "Bearer ")
+	logger.Println(r.Context(), "extracted token ", token)
+	if token == "" {
+		// TODO make realm configurable
+		w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm="%s"`, r.Host))
+		return nil, fmt.Errorf("no Bearer auth provided")
+	}
 
 	return &auth.Credentials{ClientSecret: token}, nil
 }
-
-var logger = log.New("oidc")
