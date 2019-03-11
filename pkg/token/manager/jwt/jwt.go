@@ -3,6 +3,7 @@ package jwt
 import (
 	"context"
 
+	"github.com/cernbox/reva/pkg/log"
 	"github.com/cernbox/reva/pkg/token"
 	"github.com/cernbox/reva/pkg/token/manager/registry"
 
@@ -10,6 +11,8 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
+
+var logger = log.New("token-manager-jwt")
 
 func init() {
 	registry.Register("jwt", New)
@@ -22,8 +25,10 @@ type config struct {
 func parseConfig(m map[string]interface{}) (*config, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
+		logger.Error(context.Background(), errors.Wrap(err, "error decoding conf"))
 		return nil, err
 	}
+	logger.Println(context.Background(), "config: ", c)
 	return c, nil
 }
 
