@@ -11,10 +11,13 @@ import (
 
 	"github.com/cernbox/reva/pkg/storage/fs/registry"
 
+	"github.com/cernbox/reva/pkg/log"
 	"github.com/cernbox/reva/pkg/storage"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
+
+var logger = log.New("storage-provider-local")
 
 func init() {
 	registry.Register("local", New)
@@ -27,8 +30,10 @@ type config struct {
 func parseConfig(m map[string]interface{}) (*config, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
+		logger.Error(context.Background(), errors.Wrap(err, "error decoding conf"))
 		return nil, err
 	}
+	logger.Println(context.Background(), "config: ", c)
 	return c, nil
 }
 
