@@ -49,6 +49,16 @@ type service struct {
 	tmpFolder          string
 }
 
+func parseConfig(m map[string]interface{}) (*config, error) {
+	c := &config{}
+	if err := mapstructure.Decode(m, c); err != nil {
+		logger.Error(context.Background(), errors.Wrap(err, "error decoding conf"))
+		return nil, err
+	}
+	logger.Println(context.Background(), "config: ", c)
+	return c, nil
+}
+
 // New creates a new storage provider svc
 func New(m map[string]interface{}, ss *grpc.Server) error {
 
@@ -986,14 +996,6 @@ func (s *service) trimMounPrefix(fn string) (string, string, error) {
 		return mountID, strings.TrimPrefix(fn, mountID), nil
 	}
 	return "", "", errors.New("fn does not belong to this storage provider: " + fn)
-}
-
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		return nil, err
-	}
-	return c, nil
 }
 
 func getFS(c *config) (storage.FS, error) {
