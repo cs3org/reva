@@ -5,11 +5,15 @@ import (
 	"crypto/tls"
 	"fmt"
 
+	"github.com/cernbox/reva/pkg/log"
 	"github.com/cernbox/reva/pkg/user"
 	"github.com/cernbox/reva/pkg/user/manager/registry"
 	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
 	"gopkg.in/ldap.v2"
 )
+
+var logger = log.New("user-manager-ldap")
 
 func init() {
 	registry.Register("ldap", New)
@@ -36,8 +40,10 @@ type config struct {
 func parseConfig(m map[string]interface{}) (*config, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
+		logger.Error(context.Background(), errors.Wrap(err, "error decoding conf"))
 		return nil, err
 	}
+	logger.Println(context.Background(), "config: ", c)
 	return c, nil
 }
 
