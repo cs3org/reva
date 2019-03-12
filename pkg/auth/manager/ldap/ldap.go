@@ -8,7 +8,6 @@ import (
 	"github.com/cernbox/reva/pkg/auth"
 	"github.com/cernbox/reva/pkg/auth/manager/registry"
 	"github.com/cernbox/reva/pkg/log"
-	"github.com/cernbox/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"gopkg.in/ldap.v2"
@@ -64,17 +63,17 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	}, nil
 }
 
-func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, error) {
+func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (context.Context, error) {
 	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", am.hostname, am.port), &tls.Config{InsecureSkipVerify: true})
 	if err != nil {
-		return nil, err
+		return ctx, err
 	}
 	defer l.Close()
 
 	// First bind with a read only user
 	err = l.Bind(am.bindUsername, am.bindPassword)
 	if err != nil {
-		return nil, err
+		return ctx, err
 	}
 
 	// Search for the given clientID
@@ -88,11 +87,11 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 
 	sr, err := l.Search(searchRequest)
 	if err != nil {
-		return nil, err
+		return ctx, err
 	}
 
 	if len(sr.Entries) != 1 {
-		return nil, userNotFoundError(clientID)
+		return ctx, userNotFoundError(clientID)
 	}
 
 	for _, e := range sr.Entries {
@@ -104,10 +103,10 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	// Bind as the user to verify their password
 	err = l.Bind(userdn, clientSecret)
 	if err != nil {
-		return nil, err
+		return ctx, err
 	}
 
-	return nil, nil
+	return ctx, nil
 
 }
 

@@ -107,11 +107,11 @@ func (m *manager) GetUser(ctx context.Context, username string) (*user.User, err
 }
 
 func (m *manager) GetUserGroups(ctx context.Context, username string) ([]string, error) {
-	return []string{}, nil
+	return []string{}, nil // FIXME implement GetUserGroups for ldap user manager
 }
 
 func (m *manager) IsInGroup(ctx context.Context, username, group string) (bool, error) {
-	return false, nil
+	return false, nil // FIXME implement IsInGroup for ldap user manager
 }
 
 type userNotFoundError string

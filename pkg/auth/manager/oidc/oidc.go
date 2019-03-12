@@ -9,7 +9,6 @@ import (
 	"github.com/cernbox/reva/pkg/auth"
 	"github.com/cernbox/reva/pkg/auth/manager/registry"
 	"github.com/cernbox/reva/pkg/log"
-	"github.com/cernbox/reva/pkg/user"
 	oidc "github.com/coreos/go-oidc"
 	"golang.org/x/oauth2"
 )
@@ -22,12 +21,24 @@ func init() {
 
 type mgr struct{}
 
+// Claims will be stored in the context to be consumed by the oidc user manager
+type Claims struct {
+	Email       string            `json:"email"`
+	Verified    bool              `json:"email_verified"`
+	Groups      []string          `json:"groups"`
+	DisplayName string            `json:"display_name"`
+	KCIdentity  map[string]string `json:"kc.identity"`
+}
+
+// ClaimsKey is the key for oidc claims in a context
+var ClaimsKey struct{}
+
 // New returns an auth manager implementation that validatet the oidc token to authenticate the user.
 func New(m map[string]interface{}) (auth.Manager, error) {
 	return &mgr{}, nil
 }
 
-func (am *mgr) Authenticate(ctx context.Context, clientID, token string) (*user.User, error) {
+func (am *mgr) Authenticate(ctx context.Context, clientID, token string) (context.Context, error) {
 
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{
@@ -37,48 +48,40 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, token string) (*user.
 	customHTTPClient := &http.Client{
 		Transport: tr,
 	}
-	ctx = context.WithValue(ctx, oauth2.HTTPClient, customHTTPClient)
+	insecureCtx := context.WithValue(ctx, oauth2.HTTPClient, customHTTPClient)
 
 	// Initialize a provider by specifying dex's issuer URL.
 	// provider needs to be cached as when it is created
 	// it will fetch the keys from the issuer using the .well-known
 	// endpoint
-	provider, err := oidc.NewProvider(ctx, "https://owncloud.localhost:8443")
+	provider, err := oidc.NewProvider(insecureCtx, "https://owncloud.localhost:8443")
 	if err != nil {
-		return nil, err
+		return ctx, err
 	}
 
 	verifier := provider.Verifier(&oidc.Config{ClientID: "ownCloud"})
 
-	idToken, err := verifier.Verify(ctx, token)
+	idToken, err := verifier.Verify(insecureCtx, token)
 	if err != nil {
-		return nil, fmt.Errorf("could not verify bearer token: %v", err)
+		return ctx, fmt.Errorf("could not verify bearer token: %v", err)
 	}
-	//logger.Printf(ctx, "idToken %+v", idToken)
+
 	// Extract custom claims.
-	var claims struct {
-		Email       string            `json:"email"`
-		Verified    bool              `json:"email_verified"`
-		Groups      []string          `json:"groups"`
-		DisplayName string            `json:"display_name"`
-		KCIdentity  map[string]string `json:"kc.identity"`
-	}
-	//var anyJSON map[string]interface{}
+	var claims Claims
+
 	if err := idToken.Claims(&claims); err != nil {
-		return nil, fmt.Errorf("failed to parse claims: %v", err)
+		return ctx, fmt.Errorf("failed to parse claims: %v", err)
 	}
-	//logger.Printf(ctx, "claims %+v", claims)
+
 	if !claims.Verified {
-		// FIXME
+		// FIXME make configurable
 		//return nil, fmt.Errorf("email (%q) in returned claims was not verified", claims.Email)
 	}
-	//ctx.Value("claims") = claims
-	return &user.User{
-		Username:    claims.KCIdentity["kc.i.un"],
-		Groups:      []string{},
-		Mail:        claims.Email,
-		DisplayName: claims.KCIdentity["kc.i.dn"],
-	}, nil
+
+	// store claims in context
+	ctx = context.WithValue(ctx, ClaimsKey, claims)
+
+	return ctx, nil
 }
 
 type userNotFoundError string

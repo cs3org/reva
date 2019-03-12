@@ -5,7 +5,6 @@ import (
 
 	"github.com/cernbox/reva/pkg/auth"
 	"github.com/cernbox/reva/pkg/auth/manager/registry"
-	"github.com/cernbox/reva/pkg/user"
 )
 
 func init() {
@@ -23,13 +22,13 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	return &manager{credentials: creds}, nil
 }
 
-func (m *manager) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, error) {
+func (m *manager) Authenticate(ctx context.Context, clientID, clientSecret string) (context.Context, error) {
 	if secret, ok := m.credentials[clientID]; ok {
 		if secret == clientSecret {
-			return nil, nil
+			return ctx, nil
 		}
 	}
-	return nil, invalidCredentialsError(clientID)
+	return ctx, invalidCredentialsError(clientID)
 }
 
 func getCredentials() map[string]string {
