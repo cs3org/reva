@@ -23,6 +23,8 @@ type mgr struct{}
 
 // Claims will be stored in the context to be consumed by the oidc user manager
 type Claims struct {
+	Subject     string            `json:"sub"`
+	Issuer      string            `json:"iss"`
 	Email       string            `json:"email"`
 	Verified    bool              `json:"email_verified"`
 	Groups      []string          `json:"groups"`

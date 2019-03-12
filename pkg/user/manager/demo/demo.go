@@ -56,6 +56,8 @@ func (e userNotFoundError) Error() string { return string(e) }
 
 func getUsers() map[string]*user.User {
 	return map[string]*user.User{
+		// TODO sub
+		// TODO iss
 		"einstein": &user.User{
 			Username:    "einstein",
 			Groups:      []string{"sailing-lovers", "violin-haters"},

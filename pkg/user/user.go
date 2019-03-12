@@ -8,8 +8,10 @@ type key int
 
 const userKey key = iota
 
-// User represents a userof the system.
+// User represents a user of the system.
 type User struct {
+	Subject     string   `mapstructure:"sub"`
+	Issuer      string   `mapstructure:"iss"`
 	Username    string   `mapstructure:"username"`
 	Groups      []string `mapstructure:"groups"`
 	Mail        string   `mapstructure:"mail"`
@@ -22,7 +24,7 @@ func ContextGetUser(ctx context.Context) (*User, bool) {
 	return u, ok
 }
 
-// ContextMustGetUser panics if user it not in context.
+// ContextMustGetUser panics if user is not in context.
 func ContextMustGetUser(ctx context.Context) *User {
 	u, ok := ContextGetUser(ctx)
 	if !ok {

@@ -141,7 +141,10 @@ func (s *service) GenerateAccessToken(ctx context.Context, req *authv0alphapb.Ge
 		return res, nil
 	}
 
+	//  TODO claims is redundand to the user. should we change usermgr.GetUser to GetClaims?
 	claims := token.Claims{
+		"sub":          user.Subject,
+		"iss":          user.Issuer,
 		"username":     user.Username,
 		"groups":       user.Groups,
 		"mail":         user.Mail,

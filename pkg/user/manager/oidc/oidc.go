@@ -28,6 +28,8 @@ func (m *manager) GetUser(ctx context.Context, username string) (*user.User, err
 	}
 
 	return &user.User{
+		Subject:     claims.Subject, // a stable non reassignable id
+		Issuer:      claims.Issuer,  // in the scope of this issuer
 		Username:    claims.KCIdentity["kc.i.un"],
 		Groups:      []string{},
 		Mail:        claims.Email,
