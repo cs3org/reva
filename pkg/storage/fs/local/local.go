@@ -12,6 +12,7 @@ import (
 	"github.com/cernbox/reva/pkg/storage/fs/registry"
 
 	"github.com/cernbox/reva/pkg/log"
+	"github.com/cernbox/reva/pkg/mime"
 	"github.com/cernbox/reva/pkg/storage"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -68,14 +69,16 @@ type localFS struct{ root string }
 func (fs *localFS) normalize(fi os.FileInfo, fn string) *storage.MD {
 	fn = fs.removeRoot(path.Join("/", fn))
 	md := &storage.MD{
-		IsDir:       fi.IsDir(),
-		Path:        fn,
-		Size:        uint64(fi.Size()),
 		ID:          "fileid-" + strings.TrimPrefix(fn, "/"),
-		Etag:        fmt.Sprintf("%d", fi.ModTime().Unix()),
-		Permissions: &storage.Permissions{Read: true, Write: true, Share: true},
+		Path:        fn,
 		Mtime:       uint64(fi.ModTime().Unix()),
+		IsDir:       fi.IsDir(),
+		Etag:        fmt.Sprintf("%d", fi.ModTime().Unix()),
+		Mime:        mime.Detect(fi.IsDir(), fn),
+		Permissions: &storage.Permissions{Read: true, Write: true, Share: true},
+		Size:        uint64(fi.Size()),
 	}
+	logger.Println(context.Background(), "normalized: ", md)
 	return md
 }
 
