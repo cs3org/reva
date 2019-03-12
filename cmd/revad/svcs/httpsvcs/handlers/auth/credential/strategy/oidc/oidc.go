@@ -28,7 +28,6 @@ func (s *strategy) GetCredentials(w http.ResponseWriter, r *http.Request) (*auth
 	// for time being just use OpenConnectID Connect
 	hdr := r.Header.Get("Authorization")
 	token := strings.TrimPrefix(hdr, "Bearer ")
-	logger.Println(r.Context(), "extracted token ", token)
 	if token == "" {
 		// TODO make realm configurable
 		w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm="%s"`, r.Host))

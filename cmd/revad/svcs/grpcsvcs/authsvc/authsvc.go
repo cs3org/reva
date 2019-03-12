@@ -59,7 +59,6 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 		logger.Error(context.Background(), errors.Wrap(err, "error decoding conf"))
 		return nil, err
 	}
-	logger.Println(context.Background(), "config: ", c)
 	return c, nil
 }
 
@@ -81,7 +80,6 @@ func getAuthManager(manager string, m map[string]map[string]interface{}) (auth.M
 
 func getTokenManager(manager string, m map[string]map[string]interface{}) (token.Manager, error) {
 	if f, ok := tokenmgr.NewFuncs[manager]; ok {
-		logger.Println(context.Background(), "token manager config: ", m[manager])
 		return f(m[manager])
 	}
 

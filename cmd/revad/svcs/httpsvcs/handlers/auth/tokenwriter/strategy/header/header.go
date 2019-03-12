@@ -11,7 +11,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-var logger = log.New("token-writer-header")
+var logger = log.New("tokenwriter-strategy-header")
 
 func init() {
 	registry.Register("header", New)
@@ -31,7 +31,6 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 		logger.Error(context.Background(), errors.Wrap(err, "error decoding conf"))
 		return nil, err
 	}
-	logger.Println(context.Background(), "config: ", c)
 	return c, nil
 }
 

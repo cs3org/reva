@@ -28,7 +28,6 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 		logger.Error(context.Background(), errors.Wrap(err, "error decoding conf"))
 		return nil, err
 	}
-	logger.Println(context.Background(), "config: ", c)
 	return c, nil
 }
 
