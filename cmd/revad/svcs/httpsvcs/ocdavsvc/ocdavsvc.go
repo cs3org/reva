@@ -106,7 +106,6 @@ func (s *svc) setHandler() {
 
 				switch r.Method {
 				case "PROPFIND":
-
 					s.doPropfind(w, r)
 					return
 				case "OPTIONS":
@@ -133,6 +132,9 @@ func (s *svc) setHandler() {
 				case "MOVE":
 					s.doMove(w, r)
 					return
+				case "COPY":
+					s.doCopy(w, r)
+					return
 				case "PUT":
 					s.doPut(w, r)
 					return
@@ -141,6 +143,7 @@ func (s *svc) setHandler() {
 					return
 				default:
 					w.WriteHeader(http.StatusNotFound)
+					return
 				}
 			}
 		}

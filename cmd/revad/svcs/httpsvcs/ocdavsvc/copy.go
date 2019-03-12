@@ -9,14 +9,14 @@ import (
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
 )
 
-func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
+func (s *svc) doCopy(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	src := r.URL.Path
 	dstHeader := r.Header.Get("Destination")
 	overwrite := r.Header.Get("Overwrite")
 
-	logger.Build().Str("source", src).Str("destination", dstHeader).Str("overwrite", overwrite).Msg(ctx, "move")
+	logger.Build().Str("source", src).Str("destination", dstHeader).Str("overwrite", overwrite).Msg(ctx, "copy")
 
 	if dstHeader == "" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -49,7 +49,7 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 
 	urlPath := dstURL.Path
 	baseURI := r.Context().Value("baseuri").(string)
-	logger.Println(r.Context(), "Move urlPath=", urlPath, " baseURI=", baseURI)
+	logger.Println(r.Context(), "Copy urlPath=", urlPath, " baseURI=", baseURI)
 	i := strings.Index(urlPath, baseURI)
 	if i == -1 {
 		w.WriteHeader(http.StatusBadRequest)
@@ -74,38 +74,42 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	req := &storageproviderv0alphapb.MoveRequest{SourceFilename: src, TargetFilename: dst}
-	res, err := client.Move(ctx, req)
-	if err != nil {
-		logger.Error(ctx, err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+	w.WriteHeader(http.StatusNotImplemented)
+	return
+	/*
+		req := &storageproviderv0alphapb.CopyRequest{SourceFilename: src, TargetFilename: dst}
+		res, err := client.Copy(ctx, req)
+		if err != nil {
+			logger.Error(ctx, err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
-	if res.Status.Code != rpcpb.Code_CODE_OK {
-		logger.Println(ctx, res.Status)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+		if res.Status.Code != rpcpb.Code_CODE_OK {
+			logger.Println(ctx, res.Status)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
-	req2 := &storageproviderv0alphapb.StatRequest{Filename: dst}
-	res2, err := client.Stat(ctx, req2)
-	if err != nil {
-		logger.Error(ctx, err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+		req2 := &storageproviderv0alphapb.StatRequest{Filename: dst}
+		res2, err := client.Stat(ctx, req2)
+		if err != nil {
+			logger.Error(ctx, err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
-	if res2.Status.Code != rpcpb.Code_CODE_OK {
-		logger.Println(ctx, res2.Status)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+		if res2.Status.Code != rpcpb.Code_CODE_OK {
+			logger.Println(ctx, res2.Status)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
-	md := res2.Metadata
-	w.Header().Set("Content-Type", md.Mime)
-	w.Header().Set("ETag", md.Etag)
-	w.Header().Set("OC-FileId", md.Id)
-	w.Header().Set("OC-ETag", md.Etag)
-	w.WriteHeader(http.StatusCreated)
+		md := res2.Metadata
+		w.Header().Set("Content-Type", md.Mime)
+		w.Header().Set("ETag", md.Etag)
+		w.Header().Set("OC-FileId", md.Id)
+		w.Header().Set("OC-ETag", md.Etag)
+		w.WriteHeader(http.StatusCreated)
+	*/
 }
