@@ -78,7 +78,7 @@ func (s *svc) doCopy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dst := urlPath[len(baseURI):]
+	dst := path.Clean(urlPath[len(baseURI):])
 
 	// check dst exists
 	dstStatReq := &storageproviderv0alphapb.StatRequest{Filename: dst}
@@ -91,9 +91,25 @@ func (s *svc) doCopy(w http.ResponseWriter, r *http.Request) {
 
 	var successCode int
 	if dstStatRes.Status.Code == rpcpb.Code_CODE_OK {
-		successCode = http.StatusNoContent // 204 if target already existed
+		successCode = http.StatusNoContent // 204 if target already existed, see https://tools.ietf.org/html/rfc4918#section-9.8.5
 	} else {
-		successCode = http.StatusCreated // 201 if new resource was created
+		successCode = http.StatusCreated // 201 if new resource was created, see https://tools.ietf.org/html/rfc4918#section-9.8.5
+
+		// check if an intermediate path / the parent exists
+		intermediateDir := path.Dir(dst)
+		intStatReq := &storageproviderv0alphapb.StatRequest{Filename: intermediateDir}
+		intStatRes, err := client.Stat(ctx, intStatReq)
+		if err != nil {
+			logger.Error(ctx, err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if intStatRes.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+			logger.Println(ctx, "intermediateDir:", intermediateDir)
+			w.WriteHeader(http.StatusConflict) // 409 if intermediate dir is missing, see https://tools.ietf.org/html/rfc4918#section-9.8.5
+			return
+		}
+		// TODO what if intermediate is a file?
 	}
 
 	if overwrite == "F" && successCode == http.StatusNoContent {
@@ -140,11 +156,8 @@ func descend(ctx context.Context, client storageproviderv0alphapb.StorageProvide
 				return err
 			}
 
-			dst = path.Join(dst, path.Base(res.Metadata.Filename))
-			if res.Metadata.IsDir {
-				dst = dst + "/"
-			}
-			descend(ctx, client, res.Metadata, dst)
+			childDst := path.Join(dst, path.Base(res.Metadata.Filename))
+			descend(ctx, client, res.Metadata, childDst)
 		}
 
 	} else {
