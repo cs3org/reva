@@ -78,7 +78,7 @@ func (fs *localFS) normalize(fi os.FileInfo, fn string) *storage.MD {
 		Permissions: &storage.Permissions{Read: true, Write: true, Share: true},
 		Size:        uint64(fi.Size()),
 	}
-	logger.Println(context.Background(), "normalized: ", md)
+	//logger.Println(context.Background(), "normalized: ", md)
 	return md
 }
 
@@ -196,6 +196,7 @@ func (fs *localFS) Upload(ctx context.Context, fn string, r io.ReadCloser) error
 		return errors.Wrap(err, "localfs: eror writing to tmp file "+tmp.Name())
 	}
 
+	logger.Println(ctx, "renaming ", tmp.Name(), " to ", fn)
 	// TODO(labkode): make sure rename is atomic, missing fsync ...
 	if err := os.Rename(tmp.Name(), fn); err != nil {
 		return errors.Wrap(err, "localfs: error renaming from "+tmp.Name()+" to "+fn)
