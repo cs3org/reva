@@ -56,9 +56,29 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// check src exists
+	srcStatReq := &storageproviderv0alphapb.StatRequest{Filename: src}
+	srcStatRes, err := client.Stat(ctx, srcStatReq)
+	if err != nil {
+		logger.Error(ctx, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if srcStatRes.Status.Code != rpcpb.Code_CODE_OK {
+		if srcStatRes.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		logger.Println(ctx, srcStatRes.Status)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
 	dst := urlPath[len(baseURI):]
 
 	if overwrite == "F" {
+		// check dst exists
 		dstStatReq := &storageproviderv0alphapb.StatRequest{Filename: dst}
 		dstStatRes, err := client.Stat(ctx, dstStatReq)
 		if err != nil {
