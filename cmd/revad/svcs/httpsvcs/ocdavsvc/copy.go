@@ -78,6 +78,7 @@ func (s *svc) doCopy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// TODO check if path is on same storage, return 502 on problems, see https://tools.ietf.org/html/rfc4918#section-9.9.4
 	dst := path.Clean(urlPath[len(baseURI):])
 
 	// check dst exists
@@ -92,6 +93,13 @@ func (s *svc) doCopy(w http.ResponseWriter, r *http.Request) {
 	var successCode int
 	if dstStatRes.Status.Code == rpcpb.Code_CODE_OK {
 		successCode = http.StatusNoContent // 204 if target already existed, see https://tools.ietf.org/html/rfc4918#section-9.8.5
+
+		if overwrite == "F" {
+			logger.Println(ctx, "destination already exists: ", dst)
+			w.WriteHeader(http.StatusPreconditionFailed) // 412, see https://tools.ietf.org/html/rfc4918#section-9.8.5
+			return
+		}
+
 	} else {
 		successCode = http.StatusCreated // 201 if new resource was created, see https://tools.ietf.org/html/rfc4918#section-9.8.5
 
@@ -110,12 +118,6 @@ func (s *svc) doCopy(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// TODO what if intermediate is a file?
-	}
-
-	if overwrite == "F" && successCode == http.StatusNoContent {
-		logger.Println(ctx, "destination already exists: ", dst)
-		w.WriteHeader(http.StatusPreconditionFailed)
-		return
 	}
 
 	err = descend(ctx, client, srcStatRes.Metadata, dst)

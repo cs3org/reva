@@ -28,6 +28,21 @@ func (s *svc) doMkcol(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// check fn exists
+	statReq := &storageproviderv0alphapb.StatRequest{Filename: fn}
+	statRes, err := client.Stat(ctx, statReq)
+	if err != nil {
+		logger.Error(ctx, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if statRes.Status.Code == rpcpb.Code_CODE_OK {
+		logger.Println(ctx, statRes.Status)
+		w.WriteHeader(http.StatusMethodNotAllowed) // 405 if it already exists
+		return
+	}
+
 	req := &storageproviderv0alphapb.CreateDirectoryRequest{Filename: fn}
 	res, err := client.CreateDirectory(ctx, req)
 	if err != nil {

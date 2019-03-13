@@ -3,6 +3,7 @@ package ocdavsvc
 import (
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
@@ -75,23 +76,61 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dst := urlPath[len(baseURI):]
+	// TODO check if path is on same storage, return 502 on problems, see https://tools.ietf.org/html/rfc4918#section-9.9.4
+	dst := path.Clean(urlPath[len(baseURI):])
 
-	if overwrite == "F" {
-		// check dst exists
-		dstStatReq := &storageproviderv0alphapb.StatRequest{Filename: dst}
-		dstStatRes, err := client.Stat(ctx, dstStatReq)
+	// check dst exists
+	dstStatReq := &storageproviderv0alphapb.StatRequest{Filename: dst}
+	dstStatRes, err := client.Stat(ctx, dstStatReq)
+	if err != nil {
+		logger.Error(ctx, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	var successCode int
+	if dstStatRes.Status.Code == rpcpb.Code_CODE_OK {
+		successCode = http.StatusNoContent // 204 if target already existed, see https://tools.ietf.org/html/rfc4918#section-9.9.4
+
+		if overwrite == "F" {
+			logger.Println(ctx, "destination already exists: ", dst)
+			w.WriteHeader(http.StatusPreconditionFailed) // 412, see https://tools.ietf.org/html/rfc4918#section-9.9.4
+			return
+		}
+
+		// delete existing tree
+		delReq := &storageproviderv0alphapb.DeleteRequest{Filename: dst}
+		delRes, err := client.Delete(ctx, delReq)
 		if err != nil {
 			logger.Error(ctx, err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		if dstStatRes.Status.Code == rpcpb.Code_CODE_OK {
-			logger.Println(ctx, "destination already exists: ", dst)
-			w.WriteHeader(http.StatusPreconditionFailed)
+		// TODO return a forbidden status if read only?
+		if delRes.Status.Code != rpcpb.Code_CODE_OK {
+			logger.Println(ctx, delRes.Status)
+			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+	} else {
+		successCode = http.StatusCreated // 201 if new resource was created, see https://tools.ietf.org/html/rfc4918#section-9.9.4
+
+		// check if an intermediate path / the parent exists
+		intermediateDir := path.Dir(dst)
+		intStatReq := &storageproviderv0alphapb.StatRequest{Filename: intermediateDir}
+		intStatRes, err := client.Stat(ctx, intStatReq)
+		if err != nil {
+			logger.Error(ctx, err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if intStatRes.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+			logger.Println(ctx, "intermediateDir:", intermediateDir)
+			w.WriteHeader(http.StatusConflict) // 409 if intermediate dir is missing, see https://tools.ietf.org/html/rfc4918#section-9.9.4
+			return
+		}
+		// TODO what if intermediate is a file?
 	}
 
 	req := &storageproviderv0alphapb.MoveRequest{SourceFilename: src, TargetFilename: dst}
@@ -127,5 +166,5 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("ETag", md.Etag)
 	w.Header().Set("OC-FileId", md.Id)
 	w.Header().Set("OC-ETag", md.Etag)
-	w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(successCode)
 }
