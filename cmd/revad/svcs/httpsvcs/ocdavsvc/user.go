@@ -3,6 +3,9 @@ package ocdavsvc
 import (
 	"encoding/json"
 	"net/http"
+
+	"github.com/cernbox/reva/pkg/user"
+	"github.com/pkg/errors"
 )
 
 func (s *svc) doUser(w http.ResponseWriter, r *http.Request) {
@@ -13,11 +16,19 @@ func (s *svc) doUser(w http.ResponseWriter, r *http.Request) {
 		StatusCode int         `json:"statuscode"`
 	}
 
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		err := errors.Wrap(contextUserRequiredErr("userrequired"), "error getting user from ctx")
+		logger.Error(ctx, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
 	userData := struct {
-		ID          string `json:"id"`
+		ID          string `json:"id"` // TODO needs better naming, clarify if we need a userid, a username or both
 		DisplayName string `json:"display-name"`
 		Email       string `json:"email"`
-	}{ID: "einstein", DisplayName: "Mister Einstein", Email: "einstein@relativity.com"}
+	}{ID: u.Username, DisplayName: u.DisplayName, Email: u.Mail}
 
 	meta := &responseMeta{Status: "ok", StatusCode: 100, Message: "OK"}
 	payload := &ocsPayload{Meta: meta, Data: userData}
@@ -49,3 +60,8 @@ type ocsPayload struct {
 type ocsResponse struct {
 	OCS *ocsPayload `json:"ocs"`
 }
+
+type contextUserRequiredErr string
+
+func (err contextUserRequiredErr) Error() string   { return string(err) }
+func (err contextUserRequiredErr) IsUserRequired() {}
