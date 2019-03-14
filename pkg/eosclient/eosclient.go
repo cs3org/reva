@@ -176,7 +176,7 @@ func (c *Client) execute(ctx context.Context, cmd *exec.Cmd) (string, string, er
 	env := fmt.Sprintf("%s", cmd.Env)
 	logger.Build().Str("args", args).Str("env", env).Int("exit", exitStatus).Msg(ctx, "eos command executed")
 
-	if err != nil {
+	if err != nil && exitStatus != 2 { // don't wrap the notFoundError
 		err = errors.Wrap(err, "error while executing command")
 	}
 
