@@ -362,7 +362,7 @@ func (c *Client) CreateDir(ctx context.Context, username, path string) error {
 		return err
 	}
 
-	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "mkdir", "-p", path)
+	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "mkdir", path)
 	_, _, err = c.execute(ctx, cmd)
 	return err
 }
