@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -34,8 +33,7 @@ func reGet(prefix string, kv *map[string]interface{}) {
 			reGet(prefix+"."+k, &c)
 		} else {
 			newVal := v.Get(prefix + "." + k)
-			fmt.Println("reGet", prefix, k, "val:", val, "->", newVal)
-			if newVal != nil {
+			if newVal != nil { // only overwrite if not nil
 				(*kv)[k] = newVal
 			}
 		}
