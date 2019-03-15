@@ -10,7 +10,9 @@ import (
 	"github.com/cernbox/reva/cmd/revad/httpserver"
 	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs"
 	"github.com/cernbox/reva/pkg/log"
+	"github.com/cernbox/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
 
@@ -69,6 +71,7 @@ func (s *svc) setHandler() {
 	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		head, tail := httpsvcs.ShiftPath(r.URL.Path)
 
+		logger.Println(r.Context(), "head=", head, " tail=", tail)
 		switch head {
 		case "ocs":
 			r.URL.Path = tail
@@ -96,11 +99,76 @@ func (s *svc) setHandler() {
 
 		case "remote.php":
 			head2, tail2 := httpsvcs.ShiftPath(tail)
+
+			// TODO refactor as separate handler
+			// the old `webdav` endpoint uses remote.php/webdav/$path
 			if head2 == "webdav" {
-				r.URL.Path = tail2
+				// inject username in path
+				ctx := r.Context()
+				u, ok := user.ContextGetUser(ctx)
+				if !ok {
+					err := errors.Wrap(contextUserRequiredErr("userrequired"), "error getting user from ctx")
+					logger.Error(ctx, err)
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				r.URL.Path = path.Join("/", u.Username, tail2)
 				// webdav should be death: baseURI is encoded as part of the
 				// reponse payload in href field
 				baseURI := path.Join("/", s.Prefix(), "remote.php/webdav")
+				ctx = context.WithValue(ctx, "baseuri", baseURI)
+				r = r.WithContext(ctx)
+
+				switch r.Method {
+				case "PROPFIND":
+					s.doPropfind(w, r)
+					return
+				case "OPTIONS":
+					s.doOptions(w, r)
+					return
+				case "HEAD":
+					s.doHead(w, r)
+					return
+				case "GET":
+					s.doGet(w, r)
+					return
+				case "LOCK":
+					s.doLock(w, r)
+					return
+				case "UNLOCK":
+					s.doUnlock(w, r)
+					return
+				case "PROPPATCH":
+					s.doProppatch(w, r)
+					return
+				case "MKCOL":
+					s.doMkcol(w, r)
+					return
+				case "MOVE":
+					s.doMove(w, r)
+					return
+				case "COPY":
+					s.doCopy(w, r)
+					return
+				case "PUT":
+					s.doPut(w, r)
+					return
+				case "DELETE":
+					s.doDelete(w, r)
+					return
+				default:
+					w.WriteHeader(http.StatusNotFound)
+					return
+				}
+			}
+
+			// TODO refactor as separate handler
+			// the new `files` endpoint uses remote.php/files/$user/$path style paths
+			if head2 == "files" {
+				r.URL.Path = tail2
+				// webdav should be death: baseURI is encoded as part of the
+				// reponse payload in href field
+				baseURI := path.Join("/", s.Prefix(), "remote.php/files")
 				ctx := context.WithValue(r.Context(), "baseuri", baseURI)
 				r = r.WithContext(ctx)
 
