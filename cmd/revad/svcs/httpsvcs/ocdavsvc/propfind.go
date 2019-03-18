@@ -13,12 +13,20 @@ import (
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
+	"github.com/pkg/errors"
 )
 
 func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	fn := r.URL.Path
 	listChildren := r.Header.Get("Depth") != "0"
+
+	_, status, err := readPropfind(r.Body)
+	if err != nil {
+		logger.Error(ctx, err)
+		w.WriteHeader(status)
+		return
+	}
 
 	client, err := s.getClient()
 	if err != nil {
@@ -84,6 +92,36 @@ func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 	w.WriteHeader(http.StatusMultiStatus)
 	w.Write([]byte(propRes))
+}
+
+// from https://github.com/golang/net/blob/e514e69ffb8bc3c76a71ae40de0118d794855992/webdav/xml.go#L178-L205
+func readPropfind(r io.Reader) (pf propfindXML, status int, err error) {
+	c := countingReader{r: r}
+	if err = xml.NewDecoder(&c).Decode(&pf); err != nil {
+		if err == io.EOF {
+			if c.n == 0 {
+				// An empty body means to propfind allprop.
+				// http://www.webdav.org/specs/rfc4918.html#METHOD_PROPFIND
+				return propfindXML{Allprop: new(struct{})}, 0, nil
+			}
+			err = errInvalidPropfind
+		}
+		return propfindXML{}, http.StatusBadRequest, err
+	}
+
+	if pf.Allprop == nil && pf.Include != nil {
+		return propfindXML{}, http.StatusBadRequest, errInvalidPropfind
+	}
+	if pf.Allprop != nil && (pf.Prop != nil || pf.Propname != nil) {
+		return propfindXML{}, http.StatusBadRequest, errInvalidPropfind
+	}
+	if pf.Prop != nil && pf.Propname != nil {
+		return propfindXML{}, http.StatusBadRequest, errInvalidPropfind
+	}
+	if pf.Propname == nil && pf.Allprop == nil && pf.Prop == nil {
+		return propfindXML{}, http.StatusBadRequest, errInvalidPropfind
+	}
+	return pf, 0, nil
 }
 
 func (s *svc) formatPropfind(ctx context.Context, fn string, mds []*storageproviderv0alphapb.Metadata) (string, error) {
@@ -195,6 +233,29 @@ func (s *svc) mdToPropResponse(ctx context.Context, md *storageproviderv0alphapb
 	return &response
 }
 
+type countingReader struct {
+	n int
+	r io.Reader
+}
+
+func (c *countingReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n += n
+	return n, err
+}
+
+// http://www.webdav.org/specs/rfc4918.html#ELEMENT_prop (for propfind)
+type propfindProps []xml.Name
+
+// http://www.webdav.org/specs/rfc4918.html#ELEMENT_propfind
+type propfindXML struct {
+	XMLName  xml.Name      `xml:"DAV: propfind"`
+	Allprop  *struct{}     `xml:"DAV: allprop"`
+	Propname *struct{}     `xml:"DAV: propname"`
+	Prop     propfindProps `xml:"DAV: prop"`
+	Include  propfindProps `xml:"DAV: include"`
+}
+
 type responseXML struct {
 	XMLName             xml.Name      `xml:"d:response"`
 	Href                string        `xml:"d:href"`
@@ -204,7 +265,7 @@ type responseXML struct {
 	ResponseDescription string        `xml:"d:responsedescription,omitempty"`
 }
 
-// http://www.ocwebdav.org/specs/rfc4918.html#ELEMENT_propstat
+// http://www.webdav.org/specs/rfc4918.html#ELEMENT_propstat
 type propstatXML struct {
 	// Prop requires DAV: to be the default namespace in the enclosing
 	// XML. This is due to the standard encoding/xml package currently
@@ -218,7 +279,7 @@ type propstatXML struct {
 }
 
 // Property represents a single DAV resource property as defined in RFC 4918.
-// http://www.ocwebdav.org/specs/rfc4918.html#data.model.for.resource.properties
+// http://www.webdav.org/specs/rfc4918.html#data.model.for.resource.properties
 type propertyXML struct {
 	// XMLName is the fully qualified name that identifies this property.
 	XMLName xml.Name
@@ -237,8 +298,10 @@ type propertyXML struct {
 	InnerXML []byte `xml:",innerxml"`
 }
 
-// http://www.ocwebdav.org/specs/rfc4918.html#ELEMENT_error
+// http://www.webdav.org/specs/rfc4918.html#ELEMENT_error
 type errorXML struct {
 	XMLName  xml.Name `xml:"d:error"`
 	InnerXML []byte   `xml:",innerxml"`
 }
+
+var errInvalidPropfind = errors.New("webdav: invalid propfind")
