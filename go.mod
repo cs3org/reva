@@ -20,7 +20,7 @@ require (
 	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect
 	github.com/prometheus/client_golang v0.9.2
 	github.com/rs/cors v1.6.0
-	github.com/rs/zerolog v1.11.0
+	github.com/rs/zerolog v1.13.0
 	github.com/spf13/viper v1.3.1
 	golang.org/x/crypto v0.0.0-20190130090550-b01c7a725664
 	golang.org/x/net v0.0.0-20190125091013-d26f9f9a57f3
