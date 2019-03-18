@@ -13,6 +13,7 @@ import (
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
+	"github.com/cernbox/reva/pkg/user"
 	"github.com/pkg/errors"
 )
 
@@ -87,7 +88,12 @@ func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	propRes, _ := s.formatPropfind(ctx, fn, mds)
+	propRes, err := s.formatPropfind(ctx, fn, mds)
+	if err != nil {
+		logger.Error(ctx, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("DAV", "1, 3, extended-mkcol")
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 	w.WriteHeader(http.StatusMultiStatus)
@@ -127,7 +133,10 @@ func readPropfind(r io.Reader) (pf propfindXML, status int, err error) {
 func (s *svc) formatPropfind(ctx context.Context, fn string, mds []*storageproviderv0alphapb.Metadata) (string, error) {
 	responses := []*responseXML{}
 	for _, md := range mds {
-		res := s.mdToPropResponse(ctx, md)
+		res, err := s.mdToPropResponse(ctx, md)
+		if err != nil {
+			return "", err
+		}
 		responses = append(responses, res)
 	}
 	responsesXML, err := xml.Marshal(&responses)
@@ -141,10 +150,14 @@ func (s *svc) formatPropfind(ctx context.Context, fn string, mds []*storageprovi
 	return msg, nil
 }
 
+// TODO unused?
 func (s *svc) mdsToXML(ctx context.Context, mds []*storageproviderv0alphapb.Metadata) (string, error) {
 	responses := []*responseXML{}
 	for _, md := range mds {
-		res := s.mdToPropResponse(ctx, md)
+		res, err := s.mdToPropResponse(ctx, md)
+		if err != nil {
+			return "", err
+		}
 		responses = append(responses, res)
 	}
 
@@ -167,7 +180,7 @@ func (s *svc) newProp(key, val string) *propertyXML {
 	}
 }
 
-func (s *svc) mdToPropResponse(ctx context.Context, md *storageproviderv0alphapb.Metadata, props ...*propertyXML) *responseXML {
+func (s *svc) mdToPropResponse(ctx context.Context, md *storageproviderv0alphapb.Metadata, props ...*propertyXML) (*responseXML, error) {
 	propList := []*propertyXML{}
 	propList = append(propList, props...)
 
@@ -204,7 +217,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, md *storageproviderv0alphapb
 	// which if it is not encoded properly, will result in an empty view for the user
 	var fileIDEscaped bytes.Buffer
 	if err := xml.EscapeText(&fileIDEscaped, []byte(md.Id)); err != nil {
-		panic(err)
+		return nil, err
 	}
 	ocID := s.newProp("oc:id", fileIDEscaped.String())
 	propList = append(propList, ocID)
@@ -220,6 +233,16 @@ func (s *svc) mdToPropResponse(ctx context.Context, md *storageproviderv0alphapb
 	response := responseXML{}
 
 	baseURI := ctx.Value("baseuri").(string)
+	// the old webdav endpoint does not contain the username
+	if baseURI[:18] == "/remote.php/webdav" {
+		// remove username from filename
+		u, ok := user.ContextGetUser(ctx)
+		if !ok {
+			err := errors.Wrap(contextUserRequiredErr("userrequired"), "error getting user from ctx")
+			return nil, err
+		}
+		md.Filename = md.Filename[len(u.Username)+1:]
+	}
 	ref := path.Join(baseURI, md.Filename)
 	if md.IsDir {
 		ref += "/"
@@ -230,7 +253,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, md *storageproviderv0alphapb
 	encoded := &url.URL{Path: response.Href}
 	response.Href = encoded.String()
 	response.Propstat = propStatList
-	return &response
+	return &response, nil
 }
 
 type countingReader struct {
