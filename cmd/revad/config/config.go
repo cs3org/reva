@@ -32,10 +32,7 @@ func reGet(prefix string, kv *map[string]interface{}) {
 		if c, ok := val.(map[string]interface{}); ok {
 			reGet(prefix+"."+k, &c)
 		} else {
-			newVal := v.Get(prefix + "." + k)
-			if newVal != nil { // only overwrite if not nil
-				(*kv)[k] = newVal
-			}
+			(*kv)[k] = v.Get(prefix + "." + k)
 		}
 	}
 
