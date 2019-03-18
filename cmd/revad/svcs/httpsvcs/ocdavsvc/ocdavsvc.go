@@ -3,6 +3,7 @@ package ocdavsvc
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 
@@ -112,11 +113,31 @@ func (s *svc) setHandler() {
 					w.WriteHeader(http.StatusInternalServerError)
 					return
 				}
+
 				r.URL.Path = path.Join("/", u.Username, tail2)
 				// webdav should be death: baseURI is encoded as part of the
 				// reponse payload in href field
 				baseURI := path.Join("/", s.Prefix(), "remote.php/webdav")
 				ctx = context.WithValue(ctx, "baseuri", baseURI)
+
+				// inject username into Destination header if present
+				dstHeader := r.Header.Get("Destination")
+				if dstHeader != "" {
+					dstURL, err := url.ParseRequestURI(dstHeader)
+					if err != nil {
+						w.WriteHeader(http.StatusBadRequest)
+						return
+					}
+					if dstURL.Path[:18] != "/remote.php/webdav" {
+						b := logger.BuildError()
+						b = b.Str("path", dstURL.Path)
+						b.Msg(ctx, "Destination needs to start with '/remote.php/webdav'")
+						w.WriteHeader(http.StatusBadRequest)
+						return
+					}
+					r.Header.Set("Destination", path.Join(baseURI, u.Username, dstURL.Path[18:])) // 18 = len ("/remote.php/webdav")
+				}
+
 				r = r.WithContext(ctx)
 
 				switch r.Method {
