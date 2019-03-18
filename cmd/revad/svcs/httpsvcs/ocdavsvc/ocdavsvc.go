@@ -70,6 +70,13 @@ func (s *svc) Handler() http.Handler {
 
 func (s *svc) setHandler() {
 	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		// fake litmus testing for empty namespace: see https://github.com/golang/net/blob/e514e69ffb8bc3c76a71ae40de0118d794855992/webdav/litmus_test_server.go#L58-L89
+		if r.Header.Get("X-Litmus") == "props: 3 (propfind_invalid2)" {
+			http.Error(w, "400 Bad Request", http.StatusBadRequest)
+			return
+		}
+
 		head, tail := httpsvcs.ShiftPath(r.URL.Path)
 
 		logger.Println(r.Context(), "head=", head, " tail=", tail)
