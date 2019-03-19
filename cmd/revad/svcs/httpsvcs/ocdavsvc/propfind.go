@@ -243,6 +243,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, md *storageproviderv0alphapb
 		}
 		md.Filename = md.Filename[len(u.Username)+1:]
 	}
+
 	ref := path.Join(baseURI, md.Filename)
 	if md.IsDir {
 		ref += "/"

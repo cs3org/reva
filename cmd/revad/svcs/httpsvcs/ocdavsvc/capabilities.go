@@ -21,10 +21,10 @@ func (s *svc) doCapabilities(w http.ResponseWriter, r *http.Request) {
 	      },
 	      "version": {
 	        "edition": "",
-	        "major": 8,
-	        "micro": 1,
-	        "minor": 2,
-	        "string": "8.2.1"
+	        "major": 11,
+	        "micro": 0,
+	        "minor": 0,
+	        "string": "11.0.0"
 	      }
 	    },
 	    "meta": {

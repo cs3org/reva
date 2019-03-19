@@ -95,6 +95,9 @@ func (s *svc) setHandler() {
 						s.doUser(w, r)
 						return
 					}
+				} else if head == "config" {
+					s.doConfig(w, r)
+					return
 				}
 			}
 			w.WriteHeader(http.StatusNotFound)

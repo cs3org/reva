@@ -7,12 +7,12 @@ import (
 )
 
 func (s *svc) doStatus(w http.ResponseWriter, r *http.Request) {
-	major := "8"
-	minor := "2"
-	micro := "1"
+	major := "11"
+	minor := "0"
+	micro := "0"
 	edition := ""
 
-	version := fmt.Sprintf("%s.%s.%s.4", major, minor, micro)
+	version := fmt.Sprintf("%s.%s.%s.0", major, minor, micro)
 	versionString := fmt.Sprintf("%s.%s.%s", major, minor, micro)
 	status := &struct {
 		Installed     bool   `json:"installed"`
