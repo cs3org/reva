@@ -2,30 +2,18 @@ package ocdavsvc
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 )
 
 func (s *svc) doStatus(w http.ResponseWriter, r *http.Request) {
-	major := "11"
-	minor := "0"
-	micro := "0"
-	edition := ""
-
-	version := fmt.Sprintf("%s.%s.%s.0", major, minor, micro)
-	versionString := fmt.Sprintf("%s.%s.%s", major, minor, micro)
-	status := &struct {
-		Installed     bool   `json:"installed"`
-		Maintenance   bool   `json:"maintenance"`
-		Version       string `json:"version"`
-		VersionString string `json:"versionstring"`
-		Edition       string `json:"edition"`
-	}{
-		true,
-		false,
-		version,
-		versionString,
-		edition,
+	status := &ocsStatus{
+		Installed:      true,
+		Maintenance:    false,
+		NeedsDBUpgrade: false,
+		Version:        "10.0.9.5",  // TODO make build determined
+		VersionString:  "10.0.9",    // TODO make build determined
+		Edition:        "community", // TODO make build determined
+		ProductName:    "ownCloud",  // TODO make configurable
 	}
 
 	statusJSON, err := json.MarshalIndent(status, "", "    ")
