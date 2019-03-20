@@ -194,55 +194,61 @@ func (s *svc) setHandler() {
 			}
 
 			// TODO refactor as separate handler
-			// the new `files` endpoint uses remote.php/files/$user/$path style paths
-			if head2 == "files" {
-				r.URL.Path = tail2
-				// webdav should be death: baseURI is encoded as part of the
-				// reponse payload in href field
-				baseURI := path.Join("/", s.Prefix(), "remote.php/files")
-				ctx := context.WithValue(r.Context(), "baseuri", baseURI)
-				r = r.WithContext(ctx)
+			// the new `files` endpoint uses remote.php/dav/files/$user/$path style paths
+			if head2 == "dav" {
+				head3, tail3 := httpsvcs.ShiftPath(tail2)
+				if head3 == "files" {
+					r.URL.Path = tail3
+					// webdav should be death: baseURI is encoded as part of the
+					// reponse payload in href field
+					baseURI := path.Join("/", s.Prefix(), "remote.php/files")
+					ctx := context.WithValue(r.Context(), "baseuri", baseURI)
+					r = r.WithContext(ctx)
 
-				switch r.Method {
-				case "PROPFIND":
-					s.doPropfind(w, r)
-					return
-				case "OPTIONS":
-					s.doOptions(w, r)
-					return
-				case "HEAD":
-					s.doHead(w, r)
-					return
-				case "GET":
-					s.doGet(w, r)
-					return
-				case "LOCK":
-					s.doLock(w, r)
-					return
-				case "UNLOCK":
-					s.doUnlock(w, r)
-					return
-				case "PROPPATCH":
-					s.doProppatch(w, r)
-					return
-				case "MKCOL":
-					s.doMkcol(w, r)
-					return
-				case "MOVE":
-					s.doMove(w, r)
-					return
-				case "COPY":
-					s.doCopy(w, r)
-					return
-				case "PUT":
-					s.doPut(w, r)
-					return
-				case "DELETE":
-					s.doDelete(w, r)
-					return
-				default:
-					w.WriteHeader(http.StatusNotFound)
-					return
+					switch r.Method {
+					case "PROPFIND":
+						s.doPropfind(w, r)
+						return
+					case "OPTIONS":
+						s.doOptions(w, r)
+						return
+					case "HEAD":
+						s.doHead(w, r)
+						return
+					case "GET":
+						s.doGet(w, r)
+						return
+					case "LOCK":
+						s.doLock(w, r)
+						return
+					case "UNLOCK":
+						s.doUnlock(w, r)
+						return
+					case "PROPPATCH":
+						s.doProppatch(w, r)
+						return
+					case "MKCOL":
+						s.doMkcol(w, r)
+						return
+					case "MOVE":
+						s.doMove(w, r)
+						return
+					case "COPY":
+						s.doCopy(w, r)
+						return
+					case "PUT":
+						s.doPut(w, r)
+						return
+					case "DELETE":
+						s.doDelete(w, r)
+						return
+					case "REPORT":
+						s.doReport(w, r)
+						return
+					default:
+						w.WriteHeader(http.StatusNotFound)
+						return
+					}
 				}
 			}
 		}
