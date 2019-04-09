@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 	"time"
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
@@ -234,7 +235,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, md *storageproviderv0alphapb
 
 	baseURI := ctx.Value("baseuri").(string)
 	// the old webdav endpoint does not contain the username
-	if baseURI[:18] == "/remote.php/webdav" {
+	if strings.HasPrefix(baseURI, "/remote.php/webdav") {
 		// remove username from filename
 		u, ok := user.ContextGetUser(ctx)
 		if !ok {
