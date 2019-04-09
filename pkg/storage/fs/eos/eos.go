@@ -2,6 +2,8 @@ package eos
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
@@ -538,11 +540,23 @@ func (fs *eosStorage) convertToMD(ctx context.Context, eosFileInfo *eosclient.Fi
 	finfo.Path = fs.removeNamespace(ctx, eosFileInfo.File)
 	finfo.Mtime = eosFileInfo.MTime
 	finfo.IsDir = eosFileInfo.IsDir
-	finfo.Etag = eosFileInfo.ETag
+	// FIXME the etag of dirs does not change, only mtime and size are propagated, so we have to calculate an etag for dirs
+	if eosFileInfo.IsDir {
+		h := md5.New()
+		binary.Write(h, binary.LittleEndian, eosFileInfo.MTime)
+		binary.Write(h, binary.LittleEndian, eosFileInfo.Inode)
+		io.WriteString(h, eosFileInfo.Instance)
+		binary.Write(h, binary.LittleEndian, eosFileInfo.TreeSize)
+		finfo.Etag = fmt.Sprintf(`"%x"`, h.Sum(nil))
+		finfo.Size = eosFileInfo.TreeSize
+	} else {
+		finfo.Etag = eosFileInfo.ETag
+		finfo.Size = eosFileInfo.Size
+	}
 	finfo.Mime = mime.Detect(finfo.IsDir, finfo.Path)
 	finfo.Sys = fs.getEosMetadata(eosFileInfo)
 	finfo.Permissions = &storage.Permissions{Read: true, Write: true, Share: true}
-	finfo.Size = eosFileInfo.Size
+
 	return finfo
 }
 
