@@ -81,7 +81,7 @@ func main() {
 	if !conf.DisableGRPC {
 		go func() {
 			if err := servers[1].(*grpcserver.Server).Start(listeners[1]); err != nil {
-				err = errors.Wrap(err, "error starting http server")
+				err = errors.Wrap(err, "error starting grpc server")
 				logger.Error(ctx, err)
 				grace.Exit(1)
 			}

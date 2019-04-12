@@ -149,6 +149,8 @@ func (s *Server) registerServices() error {
 				return err
 			}
 			logger.Println(ctx, "grpc service enabled: "+name)
+		} else {
+			logger.Println(ctx, "grpc service disabled: "+name)
 		}
 	}
 	return nil

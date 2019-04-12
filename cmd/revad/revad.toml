@@ -4,7 +4,7 @@ log_mode = "dev"
 max_cpus = "100%"
 
 [http]
-enabled_services = ["prometheussvc", "ocdavsvc"]
+enabled_services = ["prometheussvc", "ocdavsvc", "datasvc"]
 enabled_middlewares = ["cors", "log", "trace"]
 network = "tcp"
 address = "0.0.0.0:9998"
@@ -51,6 +51,19 @@ chunk_folder = "/var/tmp/owncloud/chunks"
 storageprovidersvc = "localhost:9999"
 enable_cors = true
 
+[http.services.datasvc]
+driver = "local"
+prefix = "data"
+temp_folder = "/var/tmp/"
+
+[http.services.datasvc.drivers.eos]
+mgm = "root://nowhere.org"
+root_uid = 0
+root_gid = 0
+
+[http.services.datasvc.drivers.local]
+root = "/var/tmp/owncloud/data"
+
 [grpc]
 network = "tcp"
 address = "0.0.0.0:9999"
@@ -58,7 +71,7 @@ access_log = "stderr"
 tls_enabled = true
 tls_cert = "/etc/gridsecurity/host.cert"
 tls_key = "/etc/gridsecurity/host.key"
-enabled_services = ["storageprovidersvc", "authsvc", "storagebrokersvc", "appregistrysvc", "appprovidersvc"]
+enabled_services = ["storageprovidersvc", "authsvc", "storageregistrysvc", "appregistrysvc", "appprovidersvc"]
 enabled_interceptors = ["auth", "prometheus", "log", "trace"]
 
 [grpc.interceptors.recovery]
@@ -91,6 +104,7 @@ secret = "Pive-Fumkiu4"
 driver = "local"
 mount_path = "/"
 mount_id = "123e4567-e89b-12d3-a456-426655440000"
+data_server_url = "localhost:9999/upload/http/"
 
 [grpc.services.storageprovidersvc.drivers.eos]
 mgm = "root://nowhere.org"
@@ -108,10 +122,10 @@ user_manager = "demo"
 [grpc.services.authsvc.token_managers.jwt]
 secret = "Pive-Fumkiu4"
 
-[grpc.services.storagebrokersvc]
+[grpc.services.storageregistrysvc]
 driver = "static"
 
-[grpc.services.storagebrokersvc.drivers.static.rules]
+[grpc.services.storageregistrysvc.drivers.static.rules]
 "/" = "localhost:9999"
 "123e4567-e89b-12d3-a456-426655440000" = "localhost:9999"
 

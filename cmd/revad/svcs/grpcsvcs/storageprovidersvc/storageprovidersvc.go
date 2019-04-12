@@ -36,12 +36,12 @@ func init() {
 }
 
 type config struct {
-	Driver     string                            `mapstructure:"driver"`
-	MountPath  string                            `mapstructure:"mount_path"`
-	MountID    string                            `mapstructure:"mount_id"`
-	TmpFolder  string                            `mapstructure:"tmp_folder"`
-	Drivers    map[string]map[string]interface{} `mapstructure:"drivers"`
-	DataServer string                            `mapstructure:"data_server"`
+	Driver        string                            `mapstructure:"driver"`
+	MountPath     string                            `mapstructure:"mount_path"`
+	MountID       string                            `mapstructure:"mount_id"`
+	TmpFolder     string                            `mapstructure:"tmp_folder"`
+	Drivers       map[string]map[string]interface{} `mapstructure:"drivers"`
+	DataServerURL string                            `mapstructure:"data_server_url"`
 }
 
 type service struct {
@@ -83,7 +83,7 @@ func New(m map[string]interface{}, ss *grpc.Server) error {
 	}
 
 	// parse data server url
-	u, err := url.Parse(c.DataServer)
+	u, err := url.Parse(c.DataServerURL)
 	if err != nil {
 		return err
 	}
