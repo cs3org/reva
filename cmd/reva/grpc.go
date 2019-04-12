@@ -13,7 +13,7 @@ import (
 	appregistryv0alphapb "github.com/cernbox/go-cs3apis/cs3/appregistry/v0alpha"
 	authv0alphapb "github.com/cernbox/go-cs3apis/cs3/auth/v0alpha"
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
-	storagebrokerv0alphapb "github.com/cernbox/go-cs3apis/cs3/storagebroker/v0alpha"
+	storageregistryv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageregistry/v0alpha"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
 
 	"google.golang.org/grpc"
@@ -38,12 +38,12 @@ func getAppProviderClient(host string) (appproviderv0alphapb.AppProviderServiceC
 	}
 	return appproviderv0alphapb.NewAppProviderServiceClient(conn), nil
 }
-func getStorageBrokerClient() (storagebrokerv0alphapb.StorageBrokerServiceClient, error) {
+func getStorageBrokerClient() (storageregistryv0alphapb.StorageBrokerServiceClient, error) {
 	conn, err := getConn()
 	if err != nil {
 		return nil, err
 	}
-	return storagebrokerv0alphapb.NewStorageBrokerServiceClient(conn), nil
+	return storageregistryv0alphapb.NewStorageBrokerServiceClient(conn), nil
 }
 
 func getAppRegistryClient() (appregistryv0alphapb.AppRegistryServiceClient, error) {

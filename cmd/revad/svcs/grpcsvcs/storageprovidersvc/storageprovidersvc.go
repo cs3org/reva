@@ -8,11 +8,13 @@ import (
 	"strings"
 
 	"github.com/cernbox/reva/cmd/revad/grpcserver"
+	"github.com/cernbox/reva/cmd/revad/svcs/grpcsvcs/utils"
 
 	"github.com/cernbox/reva/pkg/err"
 	"github.com/cernbox/reva/pkg/log"
 	"github.com/cernbox/reva/pkg/storage"
 	"github.com/cernbox/reva/pkg/storage/fs/registry"
+	"github.com/cernbox/reva/pkg/user"
 	"google.golang.org/grpc"
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
@@ -83,6 +85,18 @@ func New(m map[string]interface{}, ss *grpc.Server) error {
 
 	storageproviderv0alphapb.RegisterStorageProviderServiceServer(ss, service)
 	return nil
+}
+
+func (s *service) GetProvider(ctx context.Context, req *storageproviderv0alphapb.GetProviderRequest) (*storageproviderv0alphapb.GetProviderResponse, error) {
+
+}
+
+func (s *service) InitiateFileDownload(ctx context.Context, req *storageproviderv0alphapb.InitiateFileDownloadRequest) (*storageproviderv0alphapb.InitiateFileDownloadResponse, error) {
+
+}
+
+func (s *service) InitiateFileUpload(ctx context.Context, req *storageproviderv0alphapb.InitiateFileUploadRequest) (*storageproviderv0alphapb.InitiateFileUploadResponse, error) {
+
 }
 
 func (s *service) GetPath(ctx context.Context, req *storageproviderv0alphapb.GetPathRequest) (*storageproviderv0alphapb.GetPathResponse, error) {
@@ -302,11 +316,11 @@ func (s *service) ListRecycle(ctx context.Context, req *storageproviderv0alphapb
 	var recycleItems []*storageproviderv0alphapb.RecycleItem
 	for _, item := range items {
 		recycleItems = append(recycleItems, &storageproviderv0alphapb.RecycleItem{
-			Path:       item.RestorePath,
-			Key:        item.RestoreKey,
-			Size:       item.Size,
-			DeletionTs: item.DelMtime,
-			Type:       getResourceType(item.IsDir),
+			Path:         item.RestorePath,
+			Key:          item.RestoreKey,
+			Size:         item.Size,
+			DeletionTime: utils.UnixNanoToTS(item.DelMtime),
+			Type:         getResourceType(item.IsDir),
 		})
 	}
 
@@ -359,12 +373,16 @@ func (s *service) AddGrant(ctx context.Context, req *storageproviderv0alphapb.Ad
 		return res, nil
 	}
 
+	userID := &user.ID{
+		IDP:      req.Grant.Grantee.Id.Idp,
+		OpaqueID: req.Grant.Grantee.Id.OpaqueId,
+	}
 	g := &storage.Grant{
 		Grantee: &storage.Grantee{
-			ID:   req.Grant.Grantee.Id,
-			Type: s.getStorageGranteeType(req.Grant.Grantee.Type),
+			UserID: userID,
+			Type:   s.getStorageGranteeType(req.Grant.Grantee.Type),
 		},
-		PermissionSet: s.getStoragePermissionSet(req.Grant.ResourcePermissionSet),
+		PermissionSet: s.getStoragePermissionSet(req.Grant.Permissions),
 	}
 
 	err := s.storage.AddGrant(ctx, fn, g)
@@ -392,7 +410,7 @@ func (s *service) getStorageGranteeType(t storageproviderv0alphapb.GranteeType) 
 	}
 }
 
-func (s *service) getStoragePermissionSet(set *storageproviderv0alphapb.ResourcePermissionSet) *storage.PermissionSet {
+func (s *service) getStoragePermissionSet(set *storageproviderv0alphapb.ResourcePermissions) *storage.PermissionSet {
 	toret := &storage.PermissionSet{}
 	if set.ListContainer {
 		toret.ListContainer = true
@@ -405,7 +423,7 @@ func (s *service) getStoragePermissionSet(set *storageproviderv0alphapb.Resource
 
 func (s *service) UpdateGrant(ctx context.Context, req *storageproviderv0alphapb.UpdateGrantRequest) (*storageproviderv0alphapb.UpdateGrantResponse, error) {
 	fn := req.Ref.GetPath()
-	storagePerm := s.getStoragePermissionSet(req.Grant.ResourcePermissionSet)
+	storagePerm := s.getStoragePermissionSet(req.Grant.Permissions)
 	granteeType := s.getStorageGranteeType(req.Grant.Grantee.Type)
 
 	if granteeType == storage.GranteeTypeInvalid {
@@ -415,10 +433,14 @@ func (s *service) UpdateGrant(ctx context.Context, req *storageproviderv0alphapb
 		return res, nil
 	}
 
+	userID := &user.ID{
+		OpaqueID: req.Grant.Grantee.Id.OpaqueId,
+		IDP:      req.Grant.Grantee.Id.Idp,
+	}
 	g := &storage.Grant{
 		Grantee: &storage.Grantee{
-			ID:   req.Grant.Grantee.Id,
-			Type: granteeType,
+			UserID: userID,
+			Type:   granteeType,
 		},
 		PermissionSet: storagePerm,
 	}
@@ -438,7 +460,7 @@ func (s *service) UpdateGrant(ctx context.Context, req *storageproviderv0alphapb
 func (s *service) RemoveGrant(ctx context.Context, req *storageproviderv0alphapb.RemoveGrantRequest) (*storageproviderv0alphapb.RemoveGrantResponse, error) {
 	fn := req.Ref.GetPath()
 	granteeType := s.getStorageGranteeType(req.Grant.Grantee.Type)
-	storagePerm := s.getStoragePermissionSet(req.Grant.ResourcePermissionSet)
+	storagePerm := s.getStoragePermissionSet(req.Grant.Permissions)
 
 	// check targetType is valid
 	if granteeType == storage.GranteeTypeInvalid {
@@ -448,10 +470,14 @@ func (s *service) RemoveGrant(ctx context.Context, req *storageproviderv0alphapb
 		return res, nil
 	}
 
+	userID := &user.ID{
+		OpaqueID: req.Grant.Grantee.Id.OpaqueId,
+		IDP:      req.Grant.Grantee.Id.Idp,
+	}
 	g := &storage.Grant{
 		Grantee: &storage.Grantee{
-			ID:   req.Grant.Grantee.Id,
-			Type: granteeType,
+			UserID: userID,
+			Type:   granteeType,
 		},
 		PermissionSet: storagePerm,
 	}
@@ -470,7 +496,7 @@ func (s *service) RemoveGrant(ctx context.Context, req *storageproviderv0alphapb
 }
 
 func (s *service) GetQuota(ctx context.Context, req *storageproviderv0alphapb.GetQuotaRequest) (*storageproviderv0alphapb.GetQuotaResponse, error) {
-	total, used, err := s.storage.GetQuota(ctx, req.Ref.GetPath())
+	total, used, err := s.storage.GetQuota(ctx)
 	if err != nil {
 		err = errors.Wrap(err, "storageprovidersvc: error getting quota")
 		logger.Error(ctx, err)
@@ -580,8 +606,8 @@ type notFoundError interface {
 }
 
 // TODO(labkode): more fine grained control.
-func toResourcePermissions(p *storage.PermissionSet) *storageproviderv0alphapb.ResourcePermissionSet {
-	return &storageproviderv0alphapb.ResourcePermissionSet{
+func toResourcePermissions(p *storage.PermissionSet) *storageproviderv0alphapb.ResourcePermissions {
+	return &storageproviderv0alphapb.ResourcePermissions{
 		ListContainer:   true,
 		CreateContainer: true,
 	}
@@ -594,7 +620,7 @@ func (s *service) toInfo(md *storage.MD) *storageproviderv0alphapb.ResourceInfo 
 		OpaqueId:  md.ID,
 	}
 	checksum := &storageproviderv0alphapb.ResourceChecksum{
-		Type: storageproviderv0alphapb.ResourceChecksum_CHECKSUM_TYPE_MD5,
+		Type: storageproviderv0alphapb.ResourceChecksum_RESOURCE_CHECKSUM_TYPE_MD5,
 		Sum:  md.Checksum,
 	}
 	info := &storageproviderv0alphapb.ResourceInfo{
@@ -603,8 +629,8 @@ func (s *service) toInfo(md *storage.MD) *storageproviderv0alphapb.ResourceInfo 
 		Path:          md.Path,
 		Checksum:      checksum,
 		Etag:          md.Etag,
-		Mime:          md.Mime,
-		Mtime:         md.Mtime,
+		MimeType:      md.Mime,
+		Mtime:         utils.UnixNanoToTS(md.Mtime),
 		Size:          md.Size,
 		PermissionSet: perm,
 	}

@@ -16,26 +16,28 @@ type registry struct {
 	rules map[string]string
 }
 
-func (b *registry) FindProvider(ctx context.Context, ext, mimetype string) (*app.ProviderInfo, error) {
+func (b *registry) ListProviders(ctx context.Context) ([]*app.ProviderInfo, error) {
+	var providers []*app.ProviderInfo
+	for _, address := range b.rules {
+		providers = append(providers, &app.ProviderInfo{
+			Location: address,
+		})
+	}
+	return providers, nil
+}
+
+func (b *registry) FindProvider(ctx context.Context, mimeType string) (*app.ProviderInfo, error) {
 	// find longest match
 	var match string
+
 	for prefix := range b.rules {
-		if strings.HasPrefix(ext, prefix) && len(prefix) > len(match) {
+		if strings.HasPrefix(mimeType, prefix) && len(prefix) > len(match) {
 			match = prefix
 		}
 	}
 
 	if match == "" {
-		// try with mimetype
-		for prefix := range b.rules {
-			if strings.HasPrefix(mimetype, prefix) && len(prefix) > len(match) {
-				match = prefix
-			}
-		}
-	}
-
-	if match == "" {
-		return nil, notFoundError("application provider not found for extension " + ext + " and mimetype " + mimetype)
+		return nil, notFoundError("application provider not found for mime type " + mimeType)
 	}
 
 	p := &app.ProviderInfo{

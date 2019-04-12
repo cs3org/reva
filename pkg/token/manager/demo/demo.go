@@ -2,6 +2,7 @@ package demo
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/gob"
 
@@ -24,7 +25,7 @@ func New(m map[string]interface{}) (token.Manager, error) {
 
 type manager struct{}
 
-func (m *manager) MintToken(claims token.Claims) (string, error) {
+func (m *manager) MintToken(ctx context.Context, claims token.Claims) (string, error) {
 	token, err := encode(claims)
 	if err != nil {
 		return "", errors.Wrap(err, "error encoding claims")
@@ -32,7 +33,7 @@ func (m *manager) MintToken(claims token.Claims) (string, error) {
 	return token, nil
 }
 
-func (m *manager) DismantleToken(token string) (token.Claims, error) {
+func (m *manager) DismantleToken(ctx context.Context, token string) (token.Claims, error) {
 	claims, err := decode(token)
 	if err != nil {
 		return nil, errors.Wrap(err, "error decoding claims")

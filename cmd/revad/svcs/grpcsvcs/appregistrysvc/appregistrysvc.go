@@ -69,28 +69,47 @@ func getRegistry(c *config) (app.Registry, error) {
 		return nil, fmt.Errorf("driver not found: %s", c.Driver)
 	}
 }
-func (s *service) Find(ctx context.Context, req *appregistryv0alphapb.FindRequest) (*appregistryv0alphapb.FindResponse, error) {
-	ext := req.FilenameExtension
-	mime := req.FilenameMimetype
-	p, err := s.registry.FindProvider(ctx, ext, mime)
+func (s *service) GetAppProvider(ctx context.Context, req *appregistryv0alphapb.GetAppProviderRequest) (*appregistryv0alphapb.GetAppProviderResponse, error) {
+	mime := req.MimeType
+	p, err := s.registry.FindProvider(ctx, mime)
 	if err != nil {
 		logger.Error(ctx, err)
-		res := &appregistryv0alphapb.FindResponse{
+		res := &appregistryv0alphapb.GetAppProviderResponse{
 			Status: &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL},
 		}
 		return res, nil
 	}
 
 	provider := format(p)
-	res := &appregistryv0alphapb.FindResponse{
-		Status:          &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
-		AppProviderInfo: provider,
+	res := &appregistryv0alphapb.GetAppProviderResponse{
+		Status:   &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
+		Provider: provider,
 	}
 	return res, nil
 }
 
-func format(p *app.ProviderInfo) *appregistryv0alphapb.AppProviderInfo {
-	return &appregistryv0alphapb.AppProviderInfo{
-		Location: p.Location,
+func (s *service) ListAppProviders(ctx context.Context, req *appregistryv0alphapb.ListAppProvidersRequest) (*appregistryv0alphapb.ListAppProvidersResponse, error) {
+	pvds, err := s.registry.ListProviders(ctx)
+	if err != nil {
+		res := &appregistryv0alphapb.ListAppProvidersResponse{
+			Status: &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL},
+		}
+		return res, nil
+	}
+	var providers []*appregistryv0alphapb.ProviderInfo
+	for _, pvd := range pvds {
+		providers = append(providers, format(pvd))
+	}
+
+	res := &appregistryv0alphapb.ListAppProvidersResponse{
+		Status:    &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
+		Providers: providers,
+	}
+	return res, nil
+}
+
+func format(p *app.ProviderInfo) *appregistryv0alphapb.ProviderInfo {
+	return &appregistryv0alphapb.ProviderInfo{
+		Address: p.Location,
 	}
 }

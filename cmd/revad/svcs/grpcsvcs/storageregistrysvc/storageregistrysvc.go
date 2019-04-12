@@ -1,13 +1,15 @@
-package storagebrokersvc
+package storageregistrysvc
 
 import (
 	"context"
 	"fmt"
 
+	storagetypespb "github.com/cernbox/go-cs3apis/cs3/storagetypes"
+
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
 	"google.golang.org/grpc"
 
-	storagebrokerv0alphapb "github.com/cernbox/go-cs3apis/cs3/storagebroker/v0alpha"
+	storageregistryv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageregistry/v0alpha"
 	"github.com/cernbox/reva/cmd/revad/grpcserver"
 	"github.com/cernbox/reva/pkg/err"
 	"github.com/cernbox/reva/pkg/log"
@@ -16,11 +18,11 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
-var logger = log.New("storagebrokersvc")
-var errors = err.New("storagebrokersvc")
+var logger = log.New("storageregistrysvc")
+var errors = err.New("storageregistrysvc")
 
 func init() {
-	grpcserver.Register("storagebrokersvc", New)
+	grpcserver.Register("storageregistrysvc", New)
 }
 
 type service struct {
@@ -48,7 +50,7 @@ func New(m map[string]interface{}, ss *grpc.Server) error {
 		broker: broker,
 	}
 
-	storagebrokerv0alphapb.RegisterStorageBrokerServiceServer(ss, service)
+	storageregistryv0alphapb.RegisterStorageRegistryServiceServer(ss, service)
 	return nil
 }
 
@@ -67,11 +69,11 @@ func getBroker(c *config) (storage.Broker, error) {
 	return nil, fmt.Errorf("driver not found: %s", c.Driver)
 }
 
-func (s *service) Discover(ctx context.Context, req *storagebrokerv0alphapb.DiscoverRequest) (*storagebrokerv0alphapb.DiscoverResponse, error) {
-	providers := []*storagebrokerv0alphapb.StorageProvider{}
+func (s *service) ListStorageProviders(ctx context.Context, req *storageregistryv0alphapb.ListStorageProvidersRequest) (*storageregistryv0alphapb.ListStorageProvidersResponse, error) {
+	var providers []*storagetypespb.ProviderInfo
 	pinfos, err := s.broker.ListProviders(ctx)
 	if err != nil {
-		res := &storagebrokerv0alphapb.DiscoverResponse{
+		res := &storageregistryv0alphapb.ListStorageProvidersResponse{
 			Status: &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL},
 		}
 		return res, nil
@@ -81,35 +83,37 @@ func (s *service) Discover(ctx context.Context, req *storagebrokerv0alphapb.Disc
 		providers = append(providers, format(info))
 	}
 
-	res := &storagebrokerv0alphapb.DiscoverResponse{
-		Status:           &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
-		StorageProviders: providers,
+	res := &storageregistryv0alphapb.ListStorageProvidersResponse{
+		Status:    &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
+		Providers: providers,
 	}
 	return res, nil
 }
 
-func (s *service) Find(ctx context.Context, req *storagebrokerv0alphapb.FindRequest) (*storagebrokerv0alphapb.FindResponse, error) {
-	fn := req.Filename
+func (s *service) GetStorageProvider(ctx context.Context, req *storageregistryv0alphapb.GetStorageProviderRequest) (*storageregistryv0alphapb.GetStorageProviderResponse, error) {
+	fn := req.Ref.GetPath()
 	p, err := s.broker.FindProvider(ctx, fn)
 	if err != nil {
 		logger.Error(ctx, err)
-		res := &storagebrokerv0alphapb.FindResponse{
+		res := &storageregistryv0alphapb.GetStorageProviderResponse{
 			Status: &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL},
 		}
 		return res, nil
 	}
 
 	provider := format(p)
-	res := &storagebrokerv0alphapb.FindResponse{
-		Status:          &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
-		StorageProvider: provider,
+	res := &storageregistryv0alphapb.GetStorageProviderResponse{
+		Status:   &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
+		Provider: provider,
 	}
 	return res, nil
 }
 
-func format(p *storage.ProviderInfo) *storagebrokerv0alphapb.StorageProvider {
-	return &storagebrokerv0alphapb.StorageProvider{
-		Endpoint:  p.Endpoint,
-		MountPath: p.MountPath,
+// TODO(labkode): fix
+func format(p *storage.ProviderInfo) *storagetypespb.ProviderInfo {
+	return &storagetypespb.ProviderInfo{
+		Address:      p.Endpoint,
+		ProviderPath: p.MountPath,
+		//ProviderId: p.?
 	}
 }

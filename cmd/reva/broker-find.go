@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
-	storagebrokerv0alphapb "github.com/cernbox/go-cs3apis/cs3/storagebroker/v0alpha"
+	storageregistryv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageregistry/v0alpha"
 )
 
 func brokerFindCommand() *command {
@@ -18,7 +18,7 @@ func brokerFindCommand() *command {
 			fn = cmd.Args()[0]
 		}
 
-		req := &storagebrokerv0alphapb.FindRequest{
+		req := &storageregistryv0alphapb.FindRequest{
 			Filename: fn,
 		}
 		client, err := getStorageBrokerClient()

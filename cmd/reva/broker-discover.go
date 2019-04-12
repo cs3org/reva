@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
-	storagebrokerv0alphapb "github.com/cernbox/go-cs3apis/cs3/storagebroker/v0alpha"
+	storageregistryv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageregistry/v0alpha"
 )
 
 func brokerDiscoverCommand() *command {
@@ -13,7 +13,7 @@ func brokerDiscoverCommand() *command {
 		return "returns a list of all available storage providers known by the broker"
 	}
 	cmd.Action = func() error {
-		req := &storagebrokerv0alphapb.DiscoverRequest{}
+		req := &storageregistryv0alphapb.DiscoverRequest{}
 		client, err := getStorageBrokerClient()
 		if err != nil {
 			return err

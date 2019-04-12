@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+
+	"github.com/cernbox/reva/pkg/user"
 )
 
 // GranteeType specifies the type of grantee.
@@ -49,7 +51,7 @@ type FS interface {
 	RemoveGrant(ctx context.Context, fn string, g *Grant) error
 	UpdateGrant(ctx context.Context, fn string, g *Grant) error
 	ListGrants(ctx context.Context, fn string) ([]*Grant, error)
-	GetQuota(ctx context.Context, fn string) (int, int, error)
+	GetQuota(ctx context.Context) (int, int, error)
 }
 
 // MD represents the metadata about a file/directory.
@@ -82,8 +84,8 @@ type Grant struct {
 
 // Grantee is the receiver of the grant.
 type Grantee struct {
-	ID   string
-	Type GranteeType
+	UserID *user.ID
+	Type   GranteeType
 }
 
 // RecycleItem represents an entry in the recycle bin of the user.
@@ -115,4 +117,11 @@ type Broker interface {
 type ProviderInfo struct {
 	MountPath string
 	Endpoint  string
+}
+
+// ResourceID identifies uniquely a resource
+// across the distributed storage namespace.
+type ResourceID struct {
+	StorageID string
+	OpaqueID  string
 }

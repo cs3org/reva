@@ -38,6 +38,7 @@ type eosStorage struct {
 	c             *eosclient.Client
 	mountpoint    string
 	showHiddenSys bool
+	conf          *config
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -147,6 +148,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		c:             eosClient,
 		mountpoint:    c.Namespace,
 		showHiddenSys: c.ShowHiddenSysFiles,
+		conf:          c,
 	}
 
 	return eosStorage, nil
@@ -243,7 +245,7 @@ func (fs *eosStorage) getEosACL(g *storage.Grant) (*eosclient.ACL, error) {
 		return nil, err
 	}
 	eosACL := &eosclient.ACL{
-		Target: g.Grantee.ID,
+		Target: g.Grantee.UserID.OpaqueID,
 		Mode:   mode,
 		Type:   t,
 	}
@@ -263,7 +265,7 @@ func (fs *eosStorage) RemoveGrant(ctx context.Context, fn string, g *storage.Gra
 
 	fn = fs.getInternalPath(ctx, fn)
 
-	err = fs.c.RemoveACL(ctx, u.Username, fn, eosACLType, g.Grantee.ID)
+	err = fs.c.RemoveACL(ctx, u.Username, fn, eosACLType, g.Grantee.UserID.OpaqueID)
 	if err != nil {
 		return errors.Wrap(err, "storage_eos: error removing acl")
 	}
@@ -304,8 +306,8 @@ func (fs *eosStorage) ListGrants(ctx context.Context, fn string) ([]*storage.Gra
 	grants := []*storage.Grant{}
 	for _, a := range eosACLs {
 		grantee := &storage.Grantee{
-			ID:   a.Target,
-			Type: fs.getGranteeType(a.Type),
+			UserID: &user.ID{OpaqueID: a.Target},
+			Type:   fs.getGranteeType(a.Type),
 		}
 		grants = append(grants, &storage.Grant{
 			Grantee:       grantee,
@@ -389,13 +391,12 @@ func (fs *eosStorage) ListFolder(ctx context.Context, fn string) ([]*storage.MD,
 	return finfos, nil
 }
 
-func (fs *eosStorage) GetQuota(ctx context.Context, fn string) (int, int, error) {
+func (fs *eosStorage) GetQuota(ctx context.Context) (int, int, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return 0, 0, errors.Wrap(err, "storage_eos: no user in ctx")
 	}
-	fn = fs.getInternalPath(ctx, fn)
-	return fs.c.GetQuota(ctx, u.Username, fn)
+	return fs.c.GetQuota(ctx, u.Username, fs.conf.Namespace)
 }
 
 func (fs *eosStorage) CreateDir(ctx context.Context, fn string) error {
@@ -554,7 +555,7 @@ func (fs *eosStorage) convertToMD(ctx context.Context, eosFileInfo *eosclient.Fi
 		finfo.Size = eosFileInfo.Size
 	}
 	finfo.Mime = mime.Detect(finfo.IsDir, finfo.Path)
-	finfo.Sys = fs.getEosMetadata(eosFileInfo)
+	finfo.Opaque = fs.getEosMetadata(eosFileInfo)
 	finfo.Permissions = &storage.PermissionSet{CreateContainer: true, ListContainer: true}
 	finfo.Size = eosFileInfo.Size
 	return finfo

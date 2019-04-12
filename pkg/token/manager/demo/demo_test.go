@@ -1,10 +1,13 @@
 package demo
 
 import (
+	"context"
 	"testing"
 
 	"github.com/cernbox/reva/pkg/token"
 )
+
+var ctx = context.Background()
 
 func TestEncodeDecode(t *testing.T) {
 	m, _ := New(nil)
@@ -16,12 +19,12 @@ func TestEncodeDecode(t *testing.T) {
 		"mail":         "marie@example.org",
 	}
 
-	encoded, err := m.MintToken(claims)
+	encoded, err := m.MintToken(ctx, claims)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	decodedClaims, err := m.DismantleToken(encoded)
+	decodedClaims, err := m.DismantleToken(ctx, encoded)
 	if err != nil {
 		t.Fatal(err)
 	}

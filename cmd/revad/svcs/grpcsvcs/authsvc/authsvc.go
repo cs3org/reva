@@ -67,7 +67,7 @@ func getUserManager(manager string, m map[string]map[string]interface{}) (user.M
 		return f(m[manager])
 	}
 
-	return nil, errors.Errorf("driver %s not found for user manager", manager)
+	return nil, errors.Newf("driver %s not found for user manager", manager)
 }
 
 func getAuthManager(manager string, m map[string]map[string]interface{}) (auth.Manager, error) {
@@ -75,7 +75,7 @@ func getAuthManager(manager string, m map[string]map[string]interface{}) (auth.M
 		return f(m[manager])
 	}
 
-	return nil, errors.Errorf("driver %s not found for auth manager", manager)
+	return nil, errors.Newf("driver %s not found for auth manager", manager)
 }
 
 func getTokenManager(manager string, m map[string]map[string]interface{}) (token.Manager, error) {
@@ -83,7 +83,7 @@ func getTokenManager(manager string, m map[string]map[string]interface{}) (token
 		return f(m[manager])
 	}
 
-	return nil, errors.Errorf("driver %s not found for token manager", manager)
+	return nil, errors.Newf("driver %s not found for token manager", manager)
 }
 
 // New returns a new AuthServiceServer.
@@ -120,8 +120,8 @@ type service struct {
 }
 
 func (s *service) GenerateAccessToken(ctx context.Context, req *authv0alphapb.GenerateAccessTokenRequest) (*authv0alphapb.GenerateAccessTokenResponse, error) {
-	username := req.GetUsername()
-	password := req.GetPassword()
+	username := req.ClientId
+	password := req.ClientSecret
 
 	ctx, err := s.authmgr.Authenticate(ctx, username, password)
 	if err != nil {
@@ -151,7 +151,7 @@ func (s *service) GenerateAccessToken(ctx context.Context, req *authv0alphapb.Ge
 		"display_name": user.DisplayName,
 	}
 
-	accessToken, err := s.tokenmgr.ForgeToken(ctx, claims)
+	accessToken, err := s.tokenmgr.MintToken(ctx, claims)
 	if err != nil {
 		err = errors.Wrap(err, "error creating access token")
 		logger.Error(ctx, err)

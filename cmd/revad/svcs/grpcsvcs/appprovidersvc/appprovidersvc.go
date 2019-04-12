@@ -12,6 +12,7 @@ import (
 	"github.com/cernbox/reva/pkg/app/provider/demo"
 	"github.com/cernbox/reva/pkg/err"
 	"github.com/cernbox/reva/pkg/log"
+	"github.com/cernbox/reva/pkg/storage"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -64,25 +65,24 @@ func getProvider(c *config) (app.Provider, error) {
 		return nil, fmt.Errorf("driver not found: %s", c.Driver)
 	}
 }
-func (s *service) GetIFrame(ctx context.Context, req *appproviderv0alphapb.GetIFrameRequest) (*appproviderv0alphapb.GetIFrameResponse, error) {
+func (s *service) Open(ctx context.Context, req *appproviderv0alphapb.OpenRequest) (*appproviderv0alphapb.OpenResponse, error) {
 
-	fn := req.Filename
-	mime := req.Miemtype
+	id := req.ResourceId
 	token := req.AccessToken
 
-	s.provider.GetIFrame(ctx, fn, mime, token)
-	iframeLocation, err := s.provider.GetIFrame(ctx, fn, mime, token)
+	resID := &storage.ResourceID{OpaqueID: id.OpaqueId, StorageID: id.StorageId}
+
+	iframeLocation, err := s.provider.GetIFrame(ctx, resID, token)
 	if err != nil {
 		logger.Error(ctx, err)
-		res := &appproviderv0alphapb.GetIFrameResponse{
+		res := &appproviderv0alphapb.OpenResponse{
 			Status: &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL},
 		}
 		return res, nil
 	}
-
-	res := &appproviderv0alphapb.GetIFrameResponse{
-		Status:         &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
-		IframeLocation: iframeLocation,
+	res := &appproviderv0alphapb.OpenResponse{
+		Status:    &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
+		IframeUrl: iframeLocation,
 	}
 	return res, nil
 }

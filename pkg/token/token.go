@@ -13,8 +13,8 @@ type Claims map[string]interface{}
 
 // Manager is the interface to implement to sign and verify tokens
 type Manager interface {
-	MintToken(claims Claims) (string, error)
-	DismantleToken(token string) (Claims, error)
+	MintToken(ctx context.Context, claims Claims) (string, error)
+	DismantleToken(ctx context.Context, token string) (Claims, error)
 }
 
 // ContextGetToken returns the token if set in the given context.

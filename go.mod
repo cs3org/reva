@@ -1,15 +1,13 @@
 module github.com/cernbox/reva
 
 require (
-	github.com/BurntSushi/toml v0.3.1 // indirect
-	github.com/cernbox/go-cs3apis v0.0.0-20190131091639-e141d987d212
+	github.com/cernbox/go-cs3apis v0.0.0-20190411140205-8074b2a05a13
 	github.com/cheggaaa/pb v1.0.27
 	github.com/coreos/go-oidc v2.0.0+incompatible
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/fatih/color v1.7.0 // indirect
 	github.com/go-sql-driver/mysql v1.4.1
 	github.com/gofrs/uuid v3.2.0+incompatible
-	github.com/golang/protobuf v1.2.1-0.20181127190454-8d0c54c12466 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.0.1-0.20190118093823-f849b5445de4
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/mattn/go-colorable v0.0.9 // indirect
@@ -18,7 +16,7 @@ require (
 	github.com/mitchellh/mapstructure v1.1.2
 	github.com/pkg/errors v0.8.1
 	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect
-	github.com/prometheus/client_golang v0.9.2
+	github.com/prometheus/client_golang v0.9.3-0.20190127221311-3c4408c8b829
 	github.com/rs/cors v1.6.0
 	github.com/rs/zerolog v1.11.0
 	github.com/spf13/viper v1.3.1
