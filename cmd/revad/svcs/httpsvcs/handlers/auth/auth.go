@@ -111,8 +111,8 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 				}
 
 				req := &authv0alphapb.GenerateAccessTokenRequest{
-					Username: creds.ClientID,
-					Password: creds.ClientSecret,
+					ClientId: creds.ClientID,
+					ClientSecret: creds.ClientSecret,
 				}
 				client, err := getAuthClient(conf.AuthSVC)
 				if err != nil {

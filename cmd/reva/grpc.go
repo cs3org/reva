@@ -38,12 +38,12 @@ func getAppProviderClient(host string) (appproviderv0alphapb.AppProviderServiceC
 	}
 	return appproviderv0alphapb.NewAppProviderServiceClient(conn), nil
 }
-func getStorageBrokerClient() (storageregistryv0alphapb.StorageBrokerServiceClient, error) {
+func getStorageBrokerClient() (storageregistryv0alphapb.StorageRegistryServiceClient, error) {
 	conn, err := getConn()
 	if err != nil {
 		return nil, err
 	}
-	return storageregistryv0alphapb.NewStorageBrokerServiceClient(conn), nil
+	return storageregistryv0alphapb.NewStorageRegistryServiceClient(conn), nil
 }
 
 func getAppRegistryClient() (appregistryv0alphapb.AppRegistryServiceClient, error) {

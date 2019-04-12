@@ -2,7 +2,6 @@ package jwt
 
 import (
 	"context"
-
 	"github.com/cernbox/reva/pkg/log"
 	"github.com/cernbox/reva/pkg/err"
 	"github.com/cernbox/reva/pkg/token/manager/registry"
@@ -56,7 +55,7 @@ func parseConfig(value map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-func (m *manager) MintToken(claims token.Claims) (string, error) {
+func (m *manager) MintToken(ctx context.Context, claims token.Claims) (string, error) {
 	jc := jwt.MapClaims(claims)
 	t := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), jc)
 
@@ -68,7 +67,7 @@ func (m *manager) MintToken(claims token.Claims) (string, error) {
 	return tkn, nil
 }
 
-func (m *manager) DismantleToken(tkn string) (token.Claims, error) {
+func (m *manager) DismantleToken(ctx context.Context, tkn string) (token.Claims, error) {
 	jt, err := jwt.Parse(tkn, func(token *jwt.Token) (interface{}, error) {
 		return []byte(m.conf.Secret), nil
 	})

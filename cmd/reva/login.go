@@ -42,8 +42,8 @@ var loginCommand = func() *command {
 		}
 
 		req := &authv0alphapb.GenerateAccessTokenRequest{
-			Username: username,
-			Password: password,
+			ClientId: username,
+			ClientSecret: password,
 		}
 
 		ctx := context.Background()

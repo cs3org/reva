@@ -15,6 +15,7 @@ import (
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cernbox/reva/pkg/user"
 	"github.com/pkg/errors"
+	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/utils"
 )
 
 func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request) {
@@ -175,7 +176,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, md *storageproviderv0alphapb
 	getETag := s.newProp("d:getetag", md.Etag)
 	ocPermissions := s.newProp("oc:permissions", "WCKDNVR")
 	getContentLegnth := s.newProp("d:getcontentlength", fmt.Sprintf("%d", md.Size))
-	getContentType := s.newProp("d:getcontenttype", md.Mime)
+	getContentType := s.newProp("d:getcontenttype", md.MimeType)
 	getResourceType := s.newProp("d:resourcetype", "")
 	ocDownloadURL := s.newProp("oc:downloadUrl", "")
 	ocDC := s.newProp("oc:dDC", "")
@@ -195,7 +196,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, md *storageproviderv0alphapb
 	}
 
 	// Finder needs the the getLastModified property to work.
-	t := time.Unix(int64(md.Mtime), 0).UTC()
+	t := utils.TSToTime(md.Mtime).UTC()
 	lasModifiedString := t.Format(time.RFC1123)
 	getLastModified := s.newProp("d:getlastmodified", lasModifiedString)
 	propList = append(propList, getLastModified)

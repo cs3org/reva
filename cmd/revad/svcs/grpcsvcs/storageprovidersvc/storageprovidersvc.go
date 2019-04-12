@@ -2,10 +2,13 @@ package storageprovidersvc
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
+
+	storagetypespb "github.com/cernbox/go-cs3apis/cs3/storagetypes"
 
 	"github.com/cernbox/reva/cmd/revad/grpcserver"
 	"github.com/cernbox/reva/cmd/revad/svcs/grpcsvcs/utils"
@@ -20,8 +23,9 @@ import (
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
 
+	"context"
+
 	"github.com/mitchellh/mapstructure"
-	"golang.org/x/net/context"
 )
 
 var logger = log.New("storageprovidersvc")
@@ -32,17 +36,19 @@ func init() {
 }
 
 type config struct {
-	Driver    string                            `mapstructure:"driver"`
-	MountPath string                            `mapstructure:"mount_path"`
-	MountID   string                            `mapstructure:"mount_id"`
-	TmpFolder string                            `mapstructure:"tmp_folder"`
-	Drivers   map[string]map[string]interface{} `mapstructure:"drivers"`
+	Driver     string                            `mapstructure:"driver"`
+	MountPath  string                            `mapstructure:"mount_path"`
+	MountID    string                            `mapstructure:"mount_id"`
+	TmpFolder  string                            `mapstructure:"tmp_folder"`
+	Drivers    map[string]map[string]interface{} `mapstructure:"drivers"`
+	DataServer string                            `mapstructure:"data_server"`
 }
 
 type service struct {
 	storage            storage.FS
 	mountPath, mountID string
 	tmpFolder          string
+	dataServerURL      *url.URL
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -76,11 +82,18 @@ func New(m map[string]interface{}, ss *grpc.Server) error {
 		return err
 	}
 
+	// parse data server url
+	u, err := url.Parse(c.DataServer)
+	if err != nil {
+		return err
+	}
+
 	service := &service{
-		storage:   fs,
-		tmpFolder: tmpFolder,
-		mountPath: mountPath,
-		mountID:   mountID,
+		storage:       fs,
+		tmpFolder:     tmpFolder,
+		mountPath:     mountPath,
+		mountID:       mountID,
+		dataServerURL: u,
 	}
 
 	storageproviderv0alphapb.RegisterStorageProviderServiceServer(ss, service)
@@ -88,25 +101,72 @@ func New(m map[string]interface{}, ss *grpc.Server) error {
 }
 
 func (s *service) GetProvider(ctx context.Context, req *storageproviderv0alphapb.GetProviderRequest) (*storageproviderv0alphapb.GetProviderResponse, error) {
-
+	provider := &storagetypespb.ProviderInfo{
+		// Address:  ? TODO(labkode): how to obtain the addresss the service is listening to? not very useful if the request already comes to it :(
+		ProviderId:   s.mountID,
+		ProviderPath: s.mountPath,
+		// Description:  s.description, TODO(labkode): add to config
+		// Features: ? TODO(labkode):
+	}
+	res := &storageproviderv0alphapb.GetProviderResponse{
+		Info: provider,
+		Status: &rpcpb.Status{
+			Code: rpcpb.Code_CODE_OK,
+		},
+	}
+	return res, nil
 }
 
 func (s *service) InitiateFileDownload(ctx context.Context, req *storageproviderv0alphapb.InitiateFileDownloadRequest) (*storageproviderv0alphapb.InitiateFileDownloadResponse, error) {
-
+	// TODO(labkode): maybe add some checks before download starts?
+	// TODO(labkode): maybe add short-lived token?
+	// We now simply point the client to the data server.
+	// For example, https://data-server.example.org/home/docs/myfile.txt
+	// or ownclouds://data-server.example.org/home/docs/myfile.txt
+	res := &storageproviderv0alphapb.InitiateFileDownloadResponse{
+		DownloadEndpoint: s.dataServerURL.String(),
+		Status:           &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
+	}
+	return res, nil
 }
 
 func (s *service) InitiateFileUpload(ctx context.Context, req *storageproviderv0alphapb.InitiateFileUploadRequest) (*storageproviderv0alphapb.InitiateFileUploadResponse, error) {
-
+	// TODO(labkode): same as download
+	res := &storageproviderv0alphapb.InitiateFileUploadResponse{
+		UploadEndpoint: s.dataServerURL.String(),
+		Status:         &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
+	}
+	return res, nil
 }
 
 func (s *service) GetPath(ctx context.Context, req *storageproviderv0alphapb.GetPathRequest) (*storageproviderv0alphapb.GetPathResponse, error) {
-	return nil, nil
+	// TODO(labkode): check that the storage ID is the same as the storage provider id.
+	fn, err := s.storage.GetPathByID(ctx, req.ResourceId.OpaqueId)
+	if err != nil {
+		logger.Error(ctx, err)
+		res := &storageproviderv0alphapb.GetPathResponse{
+			Status: &rpcpb.Status{
+				Code: rpcpb.Code_CODE_INTERNAL,
+			},
+		}
+		return res, nil
+	}
+
+	fn = path.Join(s.mountPath, path.Clean(fn))
+	res := &storageproviderv0alphapb.GetPathResponse{
+		Path: fn,
+		Status: &rpcpb.Status{
+			Code: rpcpb.Code_CODE_OK,
+		},
+	}
+	return res, nil
 }
 
 func (s *service) CreateContainer(ctx context.Context, req *storageproviderv0alphapb.CreateContainerRequest) (*storageproviderv0alphapb.CreateContainerResponse, error) {
 	fn := req.Ref.GetPath()
 	fsfn, _, err := s.unwrap(ctx, fn)
 	if err != nil {
+		logger.Error(ctx, err)
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INVALID}
 		res := &storageproviderv0alphapb.CreateContainerResponse{Status: status}
 		return res, nil
@@ -223,6 +283,53 @@ func (s *service) Stat(ctx context.Context, req *storageproviderv0alphapb.StatRe
 	return res, nil
 }
 
+func (s *service) ListContainerStream(req *storageproviderv0alphapb.ListContainerStreamRequest, ss storageproviderv0alphapb.StorageProviderService_ListContainerStreamServer) error {
+	ctx := ss.Context()
+	fn := req.Ref.GetPath()
+
+	fsfn, fctx, err := s.unwrap(ctx, fn)
+	if err != nil {
+		logger.Println(ctx, err)
+		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL}
+		res := &storageproviderv0alphapb.ListContainerStreamResponse{Status: status}
+		if err := ss.Send(res); err != nil {
+			logger.Error(ctx, err)
+			return err
+		}
+		return nil
+	}
+
+	mds, err := s.storage.ListFolder(ctx, fsfn)
+	if err != nil {
+		err := errors.Wrap(err, "error listing folder")
+		logger.Error(ctx, err)
+		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL}
+		res := &storageproviderv0alphapb.ListContainerStreamResponse{Status: status}
+		if err := ss.Send(res); err != nil {
+			logger.Error(ctx, err)
+			return err
+		}
+		return nil
+	}
+
+	for _, md := range mds {
+		md.Path = s.wrap(ctx, md.Path, fctx)
+		info := s.toInfo(md)
+		res := &storageproviderv0alphapb.ListContainerStreamResponse{
+			Info: info,
+			Status: &rpcpb.Status{
+				Code: rpcpb.Code_CODE_OK,
+			},
+		}
+
+		if err := ss.Send(res); err != nil {
+			logger.Error(ctx, err)
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *service) ListContainer(ctx context.Context, req *storageproviderv0alphapb.ListContainerRequest) (*storageproviderv0alphapb.ListContainerResponse, error) {
 	fn := req.Ref.GetPath()
 
@@ -301,6 +408,42 @@ func (s *service) RestoreFileVersion(ctx context.Context, req *storageproviderv0
 	status := &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL}
 	res := &storageproviderv0alphapb.RestoreFileVersionResponse{Status: status}
 	return res, nil
+}
+
+func (s *service) ListRecycleStream(req *storageproviderv0alphapb.ListRecycleStreamRequest, ss storageproviderv0alphapb.StorageProviderService_ListRecycleStreamServer) error {
+	ctx := ss.Context()
+	items, err := s.storage.ListRecycle(ctx, "")
+	if err != nil {
+		err := errors.Wrap(err, "storageprovidersvc: error listing recycle")
+		logger.Error(ctx, err)
+		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL}
+		res := &storageproviderv0alphapb.ListRecycleStreamResponse{Status: status}
+		if err := ss.Send(res); err != nil {
+			logger.Error(ctx, err)
+			return err
+		}
+		return nil
+	}
+
+	for _, item := range items {
+		recycleItem := &storageproviderv0alphapb.RecycleItem{
+			Path:         item.RestorePath,
+			Key:          item.RestoreKey,
+			DeletionTime: utils.UnixNanoToTS(item.DelMtime),
+			Type:         getResourceType(item.IsDir),
+		}
+		res := &storageproviderv0alphapb.ListRecycleStreamResponse{
+			RecycleItem: recycleItem,
+			Status: &rpcpb.Status{
+				Code: rpcpb.Code_CODE_OK,
+			},
+		}
+		if err := ss.Send(res); err != nil {
+			logger.Error(ctx, err)
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *service) ListRecycle(ctx context.Context, req *storageproviderv0alphapb.ListRecycleRequest) (*storageproviderv0alphapb.ListRecycleResponse, error) {

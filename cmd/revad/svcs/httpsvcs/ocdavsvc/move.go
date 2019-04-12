@@ -172,7 +172,7 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 	}
 
 	info := res2.Info
-	w.Header().Set("Content-Type", info.Mime)
+	w.Header().Set("Content-Type", info.MimeType)
 	w.Header().Set("ETag", info.Etag)
 	w.Header().Set("OC-FileId", fmt.Sprintf("%s:%s", info.Id.StorageId, info.Id.OpaqueId))
 	w.Header().Set("OC-ETag", info.Etag)

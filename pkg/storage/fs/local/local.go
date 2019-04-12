@@ -104,7 +104,7 @@ func (fs *localFS) UpdateGrant(ctx context.Context, path string, g *storage.Gran
 	return notSupportedError("op not supported")
 }
 
-func (fs *localFS) GetQuota(ctx context.Context, fn string) (int, int, error) {
+func (fs *localFS) GetQuota(ctx context.Context) (int, int, error) {
 	return 0, 0, nil
 }
 

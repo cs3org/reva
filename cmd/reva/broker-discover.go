@@ -13,13 +13,13 @@ func brokerDiscoverCommand() *command {
 		return "returns a list of all available storage providers known by the broker"
 	}
 	cmd.Action = func() error {
-		req := &storageregistryv0alphapb.DiscoverRequest{}
+		req := &storageregistryv0alphapb.ListStorageProvidersRequest{}
 		client, err := getStorageBrokerClient()
 		if err != nil {
 			return err
 		}
 		ctx := getAuthContext()
-		res, err := client.Discover(ctx, req)
+		res, err := client.ListStorageProviders(ctx, req)
 		if err != nil {
 			return err
 		}
@@ -28,9 +28,9 @@ func brokerDiscoverCommand() *command {
 			return formatError(res.Status)
 		}
 
-		providers := res.StorageProviders
+		providers := res.Providers
 		for _, p := range providers {
-			fmt.Printf("%s => %s\n", p.MountPath, p.Endpoint)
+			fmt.Printf("%s => %s\n", p.ProviderPath, p.Address)
 		}
 		return nil
 	}

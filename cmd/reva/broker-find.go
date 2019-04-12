@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
+	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
 	storageregistryv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageregistry/v0alpha"
 )
 
@@ -18,15 +19,15 @@ func brokerFindCommand() *command {
 			fn = cmd.Args()[0]
 		}
 
-		req := &storageregistryv0alphapb.FindRequest{
-			Filename: fn,
+		req := &storageregistryv0alphapb.GetStorageProviderRequest{
+			Ref: &storageproviderv0alphapb.Reference{Spec: &storageproviderv0alphapb.Reference_Path{Path: fn}},
 		}
 		client, err := getStorageBrokerClient()
 		if err != nil {
 			return err
 		}
 		ctx := getAuthContext()
-		res, err := client.Find(ctx, req)
+		res, err := client.GetStorageProvider(ctx, req)
 		if err != nil {
 			return err
 		}
@@ -35,7 +36,7 @@ func brokerFindCommand() *command {
 			return formatError(res.Status)
 		}
 
-		fmt.Printf("resource can be found at %s\n", res.StorageProvider.Endpoint)
+		fmt.Printf("resource can be found at %s\n", res.Provider.Address)
 		return nil
 	}
 	return cmd

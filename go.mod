@@ -1,7 +1,7 @@
 module github.com/cernbox/reva
 
 require (
-	github.com/cernbox/go-cs3apis v0.0.0-20190411140205-8074b2a05a13
+	github.com/cernbox/go-cs3apis v0.0.0-20190412083115-22846a78f77b
 	github.com/cheggaaa/pb v1.0.27
 	github.com/coreos/go-oidc v2.0.0+incompatible
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
@@ -20,10 +20,9 @@ require (
 	github.com/rs/cors v1.6.0
 	github.com/rs/zerolog v1.11.0
 	github.com/spf13/viper v1.3.1
-	golang.org/x/crypto v0.0.0-20190130090550-b01c7a725664
-	golang.org/x/net v0.0.0-20190125091013-d26f9f9a57f3
-	golang.org/x/oauth2 v0.0.0-20180821212333-d2e6202438be
-	google.golang.org/grpc v1.18.0
+	golang.org/x/crypto v0.0.0-20190411191339-88737f569e3a
+	golang.org/x/net v0.0.0-20190404232315-eb5bcb51f2a3
+	google.golang.org/grpc v1.20.0
 	gopkg.in/asn1-ber.v1 v1.0.0-20181015200546-f715ec2f112d // indirect
 	gopkg.in/cheggaaa/pb.v1 v1.0.27 // indirect
 	gopkg.in/ldap.v2 v2.5.1

@@ -7,6 +7,7 @@ import (
 
 	appproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/appprovider/v0alpha"
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
+	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
 )
 
 func appProviderGetIFrameCommand() *command {
@@ -20,11 +21,13 @@ func appProviderGetIFrameCommand() *command {
 			os.Exit(1)
 		}
 
+		// TODO(labkode): contact first storage provider to get metadata for the resource
+		// and then get the resource id.
 		appProvider := cmd.Args()[0]
 		fn := cmd.Args()[1]
 		token := cmd.Args()[2]
-		req := &appproviderv0alphapb.GetIFrameRequest{
-			Filename:    fn,
+		req := &appproviderv0alphapb.OpenRequest{
+			ResourceId:  &storageproviderv0alphapb.ResourceId{OpaqueId: fn}, // TODO(labkode): fix me
 			AccessToken: token,
 		}
 
@@ -33,7 +36,7 @@ func appProviderGetIFrameCommand() *command {
 			return err
 		}
 		ctx := context.Background()
-		res, err := client.GetIFrame(ctx, req)
+		res, err := client.Open(ctx, req)
 		if err != nil {
 			return err
 		}
@@ -42,7 +45,7 @@ func appProviderGetIFrameCommand() *command {
 			return formatError(res.Status)
 		}
 
-		fmt.Printf("Load in your browser the following iframe to edit the resource: %s", res.IframeLocation)
+		fmt.Printf("Load in your browser the following iframe to edit the resource: %s", res.IframeUrl)
 		return nil
 	}
 	return cmd

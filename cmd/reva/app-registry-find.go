@@ -24,9 +24,8 @@ func appRegistryFindCommand() *command {
 		fn := cmd.Args()[0]
 		ext := path.Ext(fn)
 		mime := mime.TypeByExtension(ext)
-		req := &appregistryv0alphapb.FindRequest{
-			FilenameExtension: ext,
-			FilenameMimetype:  mime,
+		req := &appregistryv0alphapb.GetAppProviderRequest{
+			MimeType:  mime,
 		}
 
 		client, err := getAppRegistryClient()
@@ -34,7 +33,7 @@ func appRegistryFindCommand() *command {
 			return err
 		}
 		ctx := getAuthContext()
-		res, err := client.Find(ctx, req)
+		res, err := client.GetAppProvider(ctx, req)
 		if err != nil {
 			return err
 		}
@@ -43,7 +42,7 @@ func appRegistryFindCommand() *command {
 			return formatError(res.Status)
 		}
 
-		fmt.Printf("application provider can be found at %s\n", res.AppProviderInfo.Location)
+		fmt.Printf("application provider can be found at %s\n", res.Provider.Address)
 		return nil
 	}
 	return cmd

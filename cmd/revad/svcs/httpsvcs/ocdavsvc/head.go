@@ -7,6 +7,7 @@ import (
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
+	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/utils"
 )
 
 func (s *svc) doHead(w http.ResponseWriter, r *http.Request) {
@@ -38,11 +39,11 @@ func (s *svc) doHead(w http.ResponseWriter, r *http.Request) {
 	}
 
 	info := res.Info
-	w.Header().Set("Content-Type", info.Mime)
+	w.Header().Set("Content-Type", info.MimeType)
 	w.Header().Set("ETag", info.Etag)
 	w.Header().Set("OC-FileId", fmt.Sprintf("%s:%s", info.Id.StorageId, info.Id.OpaqueId))
 	w.Header().Set("OC-ETag", info.Etag)
-	t := time.Unix(int64(info.Mtime), 0)
+	t := utils.TSToTime(info.Mtime)
 	lastModifiedString := t.Format(time.RFC1123)
 	w.Header().Set("Last-Modified", lastModifiedString)
 	w.WriteHeader(http.StatusOK)
