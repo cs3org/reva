@@ -5,6 +5,9 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"time"
+
+	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/utils"
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
@@ -142,8 +145,8 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 	}
 
 	info := res.Info
-	if info != nil && info.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
-		logger.Println(ctx, "resource is a folder")
+	if info != nil && info.Type != storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_FILE {
+		logger.Println(ctx, "resource is not a file")
 		w.WriteHeader(http.StatusConflict)
 		return
 	}
@@ -161,118 +164,85 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	/*
-		req2 := &storageproviderv0alphapb.StartWriteSessionRequest{}
-		res2, err := client.StartWriteSession(ctx, req2)
-		if err != nil {
-			logger.Error(ctx, err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
+	req2 := &storageproviderv0alphapb.InitiateFileUploadRequest{
+		Ref: &storageproviderv0alphapb.Reference{
+			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+		},
+	}
 
-		if res2.Status.Code != rpcpb.Code_CODE_OK {
-			logger.Println(ctx, res2.Status)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		sessID := res2.SessionId
-		logger.Build().Str("sessID", sessID).Msg(ctx, "got write session id")
-
-		stream, err := client.Write(ctx)
-		if err != nil {
-			logger.Error(ctx, err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		buffer := make([]byte, 1024*1024*3)
-		var offset uint64
-		var numChunks uint64
-
-		for {
-			n, err := r.Body.Read(buffer)
-			if n > 0 {
-				req := &storageproviderv0alphapb.WriteRequest{Data: buffer, Length: uint64(n), SessionId: sessID, Offset: offset}
-				err = stream.Send(req)
-				if err != nil {
-					logger.Error(ctx, err)
-					w.WriteHeader(http.StatusInternalServerError)
-					return
-				}
-
-				numChunks++
-				offset += uint64(n)
-			}
-
-			if err == io.EOF {
-				break
-			}
-
-			if err != nil {
-				logger.Error(ctx, err)
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-		}
-
-		res3, err := stream.CloseAndRecv()
-		if err != nil {
-			logger.Error(ctx, err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		if res3.Status.Code != rpcpb.Code_CODE_OK {
-			logger.Println(ctx, err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		req4 := &storageproviderv0alphapb.FinishWriteSessionRequest{Filename: fn, SessionId: sessID}
-		res4, err := client.FinishWriteSession(ctx, req4)
-		if err != nil {
-			logger.Error(ctx, err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		if res4.Status.Code != rpcpb.Code_CODE_OK {
-			logger.Println(ctx, res4.Status)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		res, err = client.Stat(ctx, req)
-		if err != nil {
-			logger.Error(ctx, err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		if res.Status.Code != rpcpb.Code_CODE_OK {
-			logger.Println(ctx, res.Status)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		md2 := res.Metadata
-
-		w.Header().Add("Content-Type", md2.Mime)
-		w.Header().Set("ETag", md2.Etag)
-		w.Header().Set("OC-FileId", md2.Id)
-		w.Header().Set("OC-ETag", md2.Etag)
-		t := time.Unix(int64(md2.Mtime), 0)
-		lastModifiedString := t.Format(time.RFC1123)
-		w.Header().Set("Last-Modified", lastModifiedString)
-		w.Header().Set("X-OC-MTime", "accepted")
-
-		if md == nil {
-			w.WriteHeader(http.StatusCreated)
-			return
-		}
-
-		w.WriteHeader(http.StatusNoContent)
+	// where to upload the file?
+	res2, err := client.InitiateFileUpload(ctx, req2)
+	if err != nil {
+		logger.Error(ctx, err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
-	*/
+	}
+
+	if res.Status.Code != rpcpb.Code_CODE_OK {
+		logger.Println(ctx, res.Status)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	dataServerURL := res2.UploadEndpoint
+	// TODO(labkode): do a protocol switch
+	httpReq, err := http.NewRequest("PUT", dataServerURL, r.Body)
+	if err != nil {
+		logger.Error(ctx, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	// TODO(labkode): harden http client
+	// https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779
+	httpClient := &http.Client{
+		Timeout: time.Second * 10,
+	}
+
+	httpRes, err := httpClient.Do(httpReq)
+	if err != nil {
+		logger.Error(ctx, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if httpRes.StatusCode != http.StatusOK {
+		logger.Println(ctx, httpRes.StatusCode)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	res, err = client.Stat(ctx, req)
+	if err != nil {
+		logger.Error(ctx, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if res.Status.Code != rpcpb.Code_CODE_OK {
+		logger.Println(ctx, res.Status)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	info2 := res.Info
+
+	w.Header().Add("Content-Type", info2.MimeType)
+	w.Header().Set("ETag", info2.Etag)
+	w.Header().Set("OC-FileId", fmt.Sprintf("%s:%s", info2.Id.StorageId, info2.Id.OpaqueId))
+	w.Header().Set("OC-ETag", info2.Etag)
+	t := utils.TSToTime(info2.Mtime)
+	lastModifiedString := t.Format(time.RFC1123)
+	w.Header().Set("Last-Modified", lastModifiedString)
+	w.Header().Set("X-OC-MTime", "accepted")
+
+	// file was new
+	if info == nil {
+		w.WriteHeader(http.StatusCreated)
+		return
+	}
+
+	// overwrite
+	w.WriteHeader(http.StatusNoContent)
+	return
 }

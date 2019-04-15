@@ -104,7 +104,7 @@ secret = "Pive-Fumkiu4"
 driver = "local"
 mount_path = "/"
 mount_id = "123e4567-e89b-12d3-a456-426655440000"
-data_server_url = "localhost:9999/upload/http/"
+data_server_url = "http://localhost:9998/data"
 
 [grpc.services.storageprovidersvc.drivers.eos]
 mgm = "root://nowhere.org"

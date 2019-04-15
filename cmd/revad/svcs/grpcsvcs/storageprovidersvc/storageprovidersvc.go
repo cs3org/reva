@@ -123,8 +123,11 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *storageprovider
 	// We now simply point the client to the data server.
 	// For example, https://data-server.example.org/home/docs/myfile.txt
 	// or ownclouds://data-server.example.org/home/docs/myfile.txt
+	url := *s.dataServerURL
+	url.Path = path.Join("/", url.Path, path.Clean(req.Ref.GetPath()))
+	logger.Build().Str("data-server", url.String()).Str("fn", req.Ref.GetPath()).Msg(ctx, "file download")
 	res := &storageproviderv0alphapb.InitiateFileDownloadResponse{
-		DownloadEndpoint: s.dataServerURL.String(),
+		DownloadEndpoint: url.String(),
 		Status:           &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
 	}
 	return res, nil
@@ -132,8 +135,11 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *storageprovider
 
 func (s *service) InitiateFileUpload(ctx context.Context, req *storageproviderv0alphapb.InitiateFileUploadRequest) (*storageproviderv0alphapb.InitiateFileUploadResponse, error) {
 	// TODO(labkode): same as download
+	url := *s.dataServerURL
+	url.Path = path.Join("/", url.Path, path.Clean(req.Ref.GetPath()))
+	logger.Build().Str("data-server", url.String()).Str("fn", req.Ref.GetPath()).Msg(ctx, "file download")
 	res := &storageproviderv0alphapb.InitiateFileUploadResponse{
-		UploadEndpoint: s.dataServerURL.String(),
+		UploadEndpoint: url.String(),
 		Status:         &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
 	}
 	return res, nil
