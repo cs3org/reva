@@ -2,25 +2,28 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"net/http"
 	"os"
+	"time"
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
+	"github.com/cheggaaa/pb"
 )
 
 func downloadCommand() *command {
 	cmd := newCommand("download")
 	cmd.Description = func() string { return "download a remote file into the local filesystem" }
 	cmd.Action = func() error {
-		fn := "/"
 		if cmd.NArg() < 3 {
 			fmt.Println(cmd.Usage())
 			os.Exit(1)
 		}
 
 		provider := cmd.Args()[0]
-		fn = cmd.Args()[1]
-		//target := cmd.Args()[2]
+		remote := cmd.Args()[1]
+		local := cmd.Args()[2]
 
 		client, err := getStorageProviderClient(provider)
 		if err != nil {
@@ -28,7 +31,7 @@ func downloadCommand() *command {
 		}
 
 		ref := &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+			Spec: &storageproviderv0alphapb.Reference_Path{Path: remote},
 		}
 		req1 := &storageproviderv0alphapb.StatRequest{Ref: ref}
 		ctx := getAuthContext()
@@ -41,51 +44,60 @@ func downloadCommand() *command {
 		}
 
 		info := res1.Info
-		fmt.Println(info)
 
-		/*
-			fd, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY, 0644)
-			if err != nil {
-				return err
-			}
+		req2 := &storageproviderv0alphapb.InitiateFileDownloadRequest{
+			Ref: &storageproviderv0alphapb.Reference{
+				Spec: &storageproviderv0alphapb.Reference_Path{
+					Path: remote,
+				},
+			},
+		}
+		res, err := client.InitiateFileDownload(ctx, req2)
+		if err != nil {
+			return err
+		}
 
-			req2 := &storageproviderv0alphapb.ReadRequest{Filename: fn}
-			ctx = context.Background()
-			stream, err := client.Read(ctx, req2)
-			if err != nil {
-				return err
-			}
+		if res.Status.Code != rpcpb.Code_CODE_OK {
+			return formatError(res.Status)
+		}
 
-			bar := pb.New(int(md.Size)).SetUnits(pb.U_BYTES)
-			bar.Start()
-			var reader io.Reader
-			for {
-				res, err := stream.Recv()
-				if err == io.EOF {
-					break
-				}
-				if err != nil {
-					return err
-				}
-				if res.Status.Code != rpcpb.Code_CODE_OK {
-					return formatError(res.Status)
-				}
-				dc := res.DataChunk
+		// TODO(labkode): upload to data server
+		fmt.Printf("Downloading from: %s\n", res.DownloadEndpoint)
 
-				if dc != nil {
-					if dc.Length > 0 {
-						reader = bytes.NewReader(dc.Data)
-						reader = bar.NewProxyReader(reader)
+		dataServerURL := res.DownloadEndpoint
+		// TODO(labkode): do a protocol switch
+		httpReq, err := http.NewRequest("GET", dataServerURL, nil)
+		if err != nil {
+			return err
+		}
 
-						_, err := io.CopyN(fd, reader, int64(dc.Length))
-						if err != nil {
-							return err
-						}
-					}
-				}
-			}
-			bar.Finish()
-		*/
+		// TODO(labkode): harden http client
+		// https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779
+		httpClient := &http.Client{
+			Timeout: time.Second * 10,
+		}
+
+		httpRes, err := httpClient.Do(httpReq)
+		if err != nil {
+			return err
+		}
+
+		if httpRes.StatusCode != http.StatusOK {
+			return err
+		}
+
+		fd, err := os.OpenFile(local, os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			return err
+		}
+
+		bar := pb.New(int(info.Size)).SetUnits(pb.U_BYTES)
+		bar.Start()
+		reader := bar.NewProxyReader(httpRes.Body)
+		if _, err := io.Copy(fd, reader); err != nil {
+			return err
+		}
+		bar.Finish()
 		return nil
 
 	}

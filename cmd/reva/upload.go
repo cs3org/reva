@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"os"
+	"time"
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
@@ -59,7 +61,47 @@ func uploadCommand() *command {
 		// TODO(labkode): upload to data server
 		fmt.Printf("File will be uploaded to data server: %s\n", res.UploadEndpoint)
 
-		fmt.Println("Upload succeed")
+		dataServerURL := res.UploadEndpoint
+		// TODO(labkode): do a protocol switch
+		httpReq, err := http.NewRequest("PUT", dataServerURL, fd)
+		if err != nil {
+			return err
+		}
+
+		// TODO(labkode): harden http client
+		// https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779
+		httpClient := &http.Client{
+			Timeout: time.Second * 10,
+		}
+
+		httpRes, err := httpClient.Do(httpReq)
+		if err != nil {
+			return err
+		}
+
+		if httpRes.StatusCode != http.StatusOK {
+			return err
+		}
+
+		req2 := &storageproviderv0alphapb.StatRequest{
+			Ref: &storageproviderv0alphapb.Reference{
+				Spec: &storageproviderv0alphapb.Reference_Path{
+					Path: target,
+				},
+			},
+		}
+		res2, err := client.Stat(ctx, req2)
+		if err != nil {
+			return err
+		}
+
+		if res2.Status.Code != rpcpb.Code_CODE_OK {
+			return formatError(res.Status)
+		}
+
+		info := res2.Info
+
+		fmt.Printf("Upload succeed: %s:%s %d %s\n", info.Id.StorageId, info.Id.OpaqueId, info.Size, info.Path)
 		return nil
 	}
 	return cmd
