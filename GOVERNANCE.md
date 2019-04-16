@@ -16,9 +16,10 @@ These following sections define the different roles and responsibilities
 in the project, define how decisions are taken and how people are
 appointed to different roles. Overall, we expect every person who
 participates in the project to adhere to our
-`code-of-conduct`{.interpreted-text role="ref"}.
+[code-of-conduct](https://github.com/cernbox/reva/blob/676b53ee51deb927f5f65093488cec0e446ee119/CODE_OF_CONDUCT.md)
 
-```The currrent governance model puts in words how the collaboration
+```
+The currrent governance model puts in words how the collaboration
 currently works in practice today and sets a basic framework for how we
 collaborate and take decisions in the project.
 
@@ -139,7 +140,7 @@ The product manager must give a warning to the member to allow them to
 correct their behavior except in severe cases. Revoking roles should be
 a last measure, and only serve the purpose to ensure that REVA has a
 healthy community and collaboration based on our
-[code-of-conduct]()
+[code-of-conduct](https://github.com/cernbox/reva/blob/676b53ee51deb927f5f65093488cec0e446ee119/CODE_OF_CONDUCT.md)
 
 Working/Interest groups
 -----------------------
