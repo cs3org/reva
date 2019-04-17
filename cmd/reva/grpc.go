@@ -13,8 +13,8 @@ import (
 	appregistryv0alphapb "github.com/cernbox/go-cs3apis/cs3/appregistry/v0alpha"
 	authv0alphapb "github.com/cernbox/go-cs3apis/cs3/auth/v0alpha"
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
-	storageregistryv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageregistry/v0alpha"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
+	storageregistryv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageregistry/v0alpha"
 
 	"google.golang.org/grpc"
 )

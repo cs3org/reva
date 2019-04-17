@@ -111,7 +111,7 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 				}
 
 				req := &authv0alphapb.GenerateAccessTokenRequest{
-					ClientId: creds.ClientID,
+					ClientId:     creds.ClientID,
 					ClientSecret: creds.ClientSecret,
 				}
 				client, err := getAuthClient(conf.AuthSVC)
@@ -132,6 +132,7 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 					return
 				}
 
+				logger.Println(r.Context(), "core access token generated")
 				// write token to response
 				tkn = res.AccessToken
 				tokenWriter.WriteToken(tkn, w)

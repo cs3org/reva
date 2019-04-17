@@ -84,6 +84,7 @@ func writeLog(l *log.Logger, req *http.Request, url url.URL, ts time.Time, statu
 	}
 
 	uri := req.RequestURI
+	u := req.URL.String()
 
 	if req.ProtoMajor == 2 && req.Method == "CONNECT" {
 		uri = req.Host
@@ -101,7 +102,7 @@ func writeLog(l *log.Logger, req *http.Request, url url.URL, ts time.Time, statu
 		b = l.Build()
 	}
 	b.Str("host", host).Str("method", req.Method)
-	b = b.Str("uri", uri).Str("proto", req.Proto).Int("status", status)
+	b = b.Str("uri", uri).Str("url", u).Str("proto", req.Proto).Int("status", status)
 	b = b.Int("size", size)
 	b = b.Str("start", ts.Format("02/Jan/2006:15:04:05 -0700"))
 	b = b.Str("end", end.Format("02/Jan/2006:15:04:05 -0700")).Int("time_ns", int(diff))

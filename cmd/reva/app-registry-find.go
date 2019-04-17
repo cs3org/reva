@@ -25,7 +25,7 @@ func appRegistryFindCommand() *command {
 		ext := path.Ext(fn)
 		mime := mime.TypeByExtension(ext)
 		req := &appregistryv0alphapb.GetAppProviderRequest{
-			MimeType:  mime,
+			MimeType: mime,
 		}
 
 		client, err := getAppRegistryClient()

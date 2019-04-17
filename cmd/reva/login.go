@@ -42,7 +42,7 @@ var loginCommand = func() *command {
 		}
 
 		req := &authv0alphapb.GenerateAccessTokenRequest{
-			ClientId: username,
+			ClientId:     username,
 			ClientSecret: password,
 		}
 

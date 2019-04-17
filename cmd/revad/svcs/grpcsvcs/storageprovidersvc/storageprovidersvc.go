@@ -42,13 +42,41 @@ type config struct {
 	TmpFolder     string                            `mapstructure:"tmp_folder"`
 	Drivers       map[string]map[string]interface{} `mapstructure:"drivers"`
 	DataServerURL string                            `mapstructure:"data_server_url"`
+	AvailableXS   map[string]uint32                 `mapstructure:"available_checksums"`
 }
 
 type service struct {
+	conf               *config
 	storage            storage.FS
 	mountPath, mountID string
 	tmpFolder          string
 	dataServerURL      *url.URL
+	availableXS        []*storageproviderv0alphapb.ResourceChecksumPriority
+}
+
+func parseXSTypes(xsTypes map[string]uint32) ([]*storageproviderv0alphapb.ResourceChecksumPriority, error) {
+	var types []*storageproviderv0alphapb.ResourceChecksumPriority
+	for xs, prio := range xsTypes {
+		t := PKG2GRPCXS(xs)
+		if t == storageproviderv0alphapb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID {
+			return nil, errors.Newf("checksum type is invalid: %s", xs)
+		}
+		xsPrio := &storageproviderv0alphapb.ResourceChecksumPriority{
+			Priority: prio,
+			Type:     t,
+		}
+		types = append(types, xsPrio)
+	}
+	return types, nil
+}
+
+func (s *service) isXSAvailable(t storageproviderv0alphapb.ResourceChecksumType) bool {
+	for _, xsPrio := range s.availableXS {
+		if xsPrio.Type == t {
+			return true
+		}
+	}
+	return false
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -88,12 +116,24 @@ func New(m map[string]interface{}, ss *grpc.Server) error {
 		return err
 	}
 
+	// validate available checksums
+	xsTypes, err := parseXSTypes(c.AvailableXS)
+	if err != nil {
+		return err
+	}
+
+	if len(xsTypes) == 0 {
+		return errors.Newf("no available checksum, please set in config")
+	}
+
 	service := &service{
+		conf:          c,
 		storage:       fs,
 		tmpFolder:     tmpFolder,
 		mountPath:     mountPath,
 		mountID:       mountID,
 		dataServerURL: u,
+		availableXS:   xsTypes,
 	}
 
 	storageproviderv0alphapb.RegisterStorageProviderServiceServer(ss, service)
@@ -137,10 +177,14 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *storageproviderv0
 	// TODO(labkode): same as download
 	url := *s.dataServerURL
 	url.Path = path.Join("/", url.Path, path.Clean(req.Ref.GetPath()))
-	logger.Build().Str("data-server", url.String()).Str("fn", req.Ref.GetPath()).Msg(ctx, "file download")
+	logger.Build().Str("data-server", url.String()).
+		Str("fn", req.Ref.GetPath()).
+		Str("xs", fmt.Sprintf("%+v", s.conf.AvailableXS)).
+		Msg(ctx, "file download")
 	res := &storageproviderv0alphapb.InitiateFileUploadResponse{
-		UploadEndpoint: url.String(),
-		Status:         &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
+		UploadEndpoint:     url.String(),
+		Status:             &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
+		AvailableChecksums: s.availableXS,
 	}
 	return res, nil
 }
@@ -769,7 +813,7 @@ func (s *service) toInfo(md *storage.MD) *storageproviderv0alphapb.ResourceInfo 
 		OpaqueId:  md.ID,
 	}
 	checksum := &storageproviderv0alphapb.ResourceChecksum{
-		Type: storageproviderv0alphapb.ResourceChecksum_RESOURCE_CHECKSUM_TYPE_MD5,
+		Type: storageproviderv0alphapb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_MD5,
 		Sum:  md.Checksum,
 	}
 	info := &storageproviderv0alphapb.ResourceInfo{
