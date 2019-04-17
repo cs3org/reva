@@ -120,7 +120,7 @@ func uploadCommand() *command {
 
 		q := httpReq.URL.Query()
 		q.Add("xs", xs)
-		q.Add("xs_type", storageprovidersvc.GRPC2PKGXS(xsType))
+		q.Add("xs_type", storageprovidersvc.GRPC2PKGXS(xsType).String())
 		httpReq.URL.RawQuery = q.Encode()
 
 		// TODO(labkode): harden http client
