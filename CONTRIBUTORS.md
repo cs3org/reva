@@ -1,0 +1,2 @@
+- Hugo Gonzalez Labrador <github@hugo.labkode.com>
+- Hugo Labrador <labkode@users.noreply.github.com>
