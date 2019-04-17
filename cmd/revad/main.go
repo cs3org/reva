@@ -51,18 +51,7 @@ var (
 	fileFlag    = flag.String("c", "/etc/revad/revad.toml", "set configuration file")
 	pidFlag     = flag.String("p", "/var/run/revad.pid", "pid file")
 
-	// GitCommit specifies the git commit
-	GitCommit string
-	// GitBranch specifies the git branch
-	GitBranch string
-	// GitState specifies the git state
-	GitState string
-	// GitSummary specifies the git summary
-	GitSummary string
-	// BuildDate specifies the build date
-	BuildDate string
-	// Version specifies the build version
-	Version string
+	gitCommit, gitBranch, gitState, buildDate, version string
 )
 
 func init() {
@@ -141,12 +130,11 @@ func checkFlags() {
 	flag.Parse()
 
 	if *versionFlag {
-		msg := "Version: %s\n"
-		msg += "GitCommit: %s\n"
-		msg += "GitBranch: %s\n"
-		msg += "GitSummary: %s\n"
-		msg += "BuildDate: %s\n"
-		fmt.Printf(msg, Version, GitCommit, GitBranch, GitSummary, BuildDate)
+		msg := "version=%s "
+		msg += "commit=%s "
+		msg += "branch=%s "
+		msg += "build_date=%s\n"
+		fmt.Printf(msg, version, gitCommit, gitBranch, buildDate)
 		grace.Exit(1)
 	}
 
