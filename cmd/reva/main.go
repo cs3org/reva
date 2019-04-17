@@ -26,11 +26,15 @@ import (
 
 var (
 	conf *config
+
+	// Compile time variables
+	gitCommit, gitBranch, gitState, buildDate, version, goVersion, buildPlatform string
 )
 
 func main() {
 
 	cmds := []*command{
+		versionCommand(),
 		configureCommand(),
 		loginCommand(),
 		whoamiCommand(),
