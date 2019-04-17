@@ -25,3 +25,8 @@ lint:
 
 contrib:
 	git log --pretty="%an <%ae>" | sort -n | uniq  | sort -n | awk '{print "-", $$NA}' > CONTRIBUTORS.md
+
+license:
+	go run github.com/mitchellh/golicense license.hcl cmd/revad/revad
+	go run github.com/mitchellh/golicense license.hcl cmd/revad/reva
+
