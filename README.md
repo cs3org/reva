@@ -31,10 +31,11 @@ Checkout the [Plugin Development Guide](https://cernbox.github.io/reva/plugin-de
 
 ## License
 
-REVA is distributed under [AGPL license](https://github.com/cernbox/reva/blob/master/LICENSE).
+REVA is distributed under [Apache 2.0 license](https://github.com/cernbox/reva/blob/master/LICENSE).
 
 ## Disclaimer
 
 There is no backward compatibility promises and semantic versioning yet.
 If you want to use it, vendor it. It is always OK to change things to make things better.
 The API is not 100% correct in the first commit.
+Once we reached version v1.0.0, semantic versioning will be added.
