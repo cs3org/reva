@@ -45,7 +45,7 @@ var licenseText = `// Copyright 2018-2019 CERN
 // limitations under the License.
 //
 // In applying this license, CERN does not waive the privileges and immunities
-// granted to it by virtue of its status as an Intergovernmental Organization 
+// granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
 `
@@ -76,9 +76,9 @@ func main() {
 			return nil
 		}
 
-		// Find license
-		if !license.Match(src) {
-			err := fmt.Errorf("%v: license header not present", path)
+		// Check if license is at the top of the file.
+		if !bytes.HasPrefix(src, []byte(prefix)) {
+			err := fmt.Errorf("%v: license header not present or not at the top", path)
 			if *fix == true {
 				newSrc := licenseText + string(src)
 				ioutil.WriteFile(path, []byte(newSrc), 644)
@@ -86,11 +86,6 @@ func main() {
 			} else {
 				return err
 			}
-		}
-
-		// Also check it is at the top of the file.
-		if !bytes.HasPrefix(src, []byte(prefix)) {
-			return fmt.Errorf("%v: license header not at the top", path)
 		}
 		return nil
 	})
