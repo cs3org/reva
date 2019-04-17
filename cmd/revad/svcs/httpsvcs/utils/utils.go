@@ -21,10 +21,13 @@ package utils
 import typespb "github.com/cernbox/go-cs3apis/cs3/types"
 import "time"
 
+// TSToUnixNano converts a protobuf Timestamp to uint64
+// with nanoseconds resolution.
 func TSToUnixNano(ts *typespb.Timestamp) uint64 {
 	return uint64(time.Unix(int64(ts.Seconds), int64(ts.Nanos)).UnixNano())
 }
 
+// TSToTime converts a protobuf Timestamp to Go's time.Time.
 func TSToTime(ts *typespb.Timestamp) time.Time {
 	return time.Unix(int64(ts.Seconds), int64(ts.Nanos))
 }

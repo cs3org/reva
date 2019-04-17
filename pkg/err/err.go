@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// package err provides context to errors
+// Package err provides context to errors
 // by wrapping them with contextual information.
 // The current implementation relies on Dave Cheney's
 // errors package. Go2 errors proposal
@@ -29,8 +29,9 @@ import (
 	"github.com/pkg/errors"
 )
 
-// type Error represents an error
+// Err represents an error
 // with contextual information.
+// TODO(labkode): use new Go error context when released.
 type Err string
 
 // New creates a new error that adds
@@ -50,7 +51,7 @@ func (e Err) Wrap(err error, message string) error {
 	return errors.Wrap(err, message)
 }
 
-// Wrap wraps the error like Wrap but
+// Wrapf wraps the error like Wrap but
 // allows the use of formatted messages like fmt.Printf
 // and derivates.
 func (e Err) Wrapf(err error, format string, args ...interface{}) error {

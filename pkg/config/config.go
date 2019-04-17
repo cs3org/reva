@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 )
 
+// Config represents the main configuraton for revad.
 type Config struct {
 	Network  string   `json:"network"`
 	Address  string   `json:"address"`
@@ -40,6 +41,7 @@ type Config struct {
 	} `json:"storage_provider_svc"`
 }
 
+// LoadFromFile loads the configuration from a file.
 func LoadFromFile(fn string) (*Config, error) {
 	data, err := ioutil.ReadFile(fn)
 	if err != nil {

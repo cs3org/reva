@@ -46,6 +46,8 @@ var (
 	childrenPID = []int{}
 )
 
+// Exit exists the programm with the given error code.
+// Exit takes care of closing any open pid file.
 func Exit(errc int) {
 	err := removePIDFile()
 	if err != nil {
@@ -70,7 +72,7 @@ func getPIDFromFile(fn string) (int, error) {
 	return pid, nil
 }
 
-// Write a pid file, but first make sure it doesn't exist with a running pid.
+// WritePIDFile writes a pid file, but first make sure it doesn't exist with a running pid.
 func WritePIDFile(fn string) error {
 	// Read in the pid file as a slice of bytes.
 	if piddata, err := ioutil.ReadFile(fn); err == nil {
@@ -117,7 +119,7 @@ func newListener(network, addr string) (net.Listener, error) {
 	return net.Listen(network, addr)
 }
 
-// return grpc listener first and http listener second.
+// GetListeners return grpc listener first and http listener second.
 func GetListeners(servers []Server) ([]net.Listener, error) {
 	srvrs = servers
 	lns := []net.Listener{}
@@ -147,22 +149,24 @@ func GetListeners(servers []Server) ([]net.Listener, error) {
 		syscall.Kill(parentPID, syscall.SIGQUIT)
 		listeners = lns
 		return lns, nil
-	} else {
-		// create two listeners for grpc and http
-		for _, s := range servers {
-			network, addr := s.Network(), s.Address()
-			ln, err := newListener(network, addr)
-			if err != nil {
-				return nil, err
-			}
-			lns = append(lns, ln)
-
-		}
-		listeners = lns
-		return lns, nil
 	}
+
+	// create two listeners for grpc and http
+	for _, s := range servers {
+		network, addr := s.Network(), s.Address()
+		ln, err := newListener(network, addr)
+		if err != nil {
+			return nil, err
+		}
+		lns = append(lns, ln)
+
+	}
+	listeners = lns
+	return lns, nil
 }
 
+// Server is the interface that servers like HTTP or gRPC
+// servers need to implement.
 type Server interface {
 	Stop() error
 	GracefulStop() error
@@ -184,6 +188,7 @@ func removePIDFile() error {
 	return os.Remove(pidFile)
 }
 
+// TrapSignals captures the OS signal.
 func TrapSignals() {
 	signalCh := make(chan os.Signal, 1024)
 	signal.Notify(signalCh, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT)

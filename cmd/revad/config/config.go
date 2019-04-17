@@ -33,10 +33,12 @@ func init() {
 	v.AutomaticEnv()                                   // automagically read env vars on Get calls
 }
 
+// SetFile sets the configuration file.
 func SetFile(fn string) {
 	v.SetConfigFile(fn)
 }
 
+// Read reads teh configuration file.
 func Read() error {
 	err := v.ReadInConfig()
 	return err
@@ -56,6 +58,7 @@ func reGet(prefix string, kv *map[string]interface{}) {
 
 }
 
+// Get gets the configuration key.
 func Get(key string) map[string]interface{} {
 	kv := v.GetStringMap(key)
 	// we need to try and get from env as well because vipers
@@ -65,6 +68,7 @@ func Get(key string) map[string]interface{} {
 	return kv
 }
 
+// Dump dumps the configuration.
 func Dump() map[string]interface{} {
 	return v.AllSettings()
 }

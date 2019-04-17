@@ -35,6 +35,12 @@ import (
 	"google.golang.org/grpc"
 )
 
+type ctxKey int
+
+const (
+	ctxKeyBaseURI ctxKey = iota
+)
+
 func init() {
 	httpserver.Register("ocdavsvc", New)
 }
@@ -146,7 +152,7 @@ func (s *svc) setHandler() {
 				// webdav should be death: baseURI is encoded as part of the
 				// reponse payload in href field
 				baseURI := path.Join("/", s.Prefix(), "remote.php/webdav")
-				ctx = context.WithValue(ctx, "baseuri", baseURI)
+				ctx := context.WithValue(r.Context(), ctxKeyBaseURI, baseURI)
 
 				// inject username into Destination header if present
 				dstHeader := r.Header.Get("Destination")

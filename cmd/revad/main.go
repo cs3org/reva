@@ -51,8 +51,18 @@ var (
 	fileFlag    = flag.String("c", "/etc/revad/revad.toml", "set configuration file")
 	pidFlag     = flag.String("p", "/var/run/revad.pid", "pid file")
 
-	// provided at compile time
-	GitCommit, GitBranch, GitState, GitSummary, BuildDate, Version string
+	// GitCommit specifies the git commit
+	GitCommit string
+	// GitBranch specifies the git branch
+	GitBranch string
+	// GitState specifies the git state
+	GitState string
+	// GitSummary specifies the git summary
+	GitSummary string
+	// BuildDate specifies the build date
+	BuildDate string
+	// Version specifies the build version
+	Version string
 )
 
 func init() {
