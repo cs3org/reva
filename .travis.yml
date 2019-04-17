@@ -7,6 +7,7 @@ before_install:
   - env GO111MODULE=on go build -v ./...
 
 script:
+  - golint -set_exit_status ./... # enfoce  style-guide
   - env GO111MODULE=on go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
 
 after_success:
