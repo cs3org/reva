@@ -4,11 +4,12 @@ go:
   - 1.11.x
 
 before_install:
-  - env GO111MODULE=on go build -v ./...
+  - go get -u golang.org/x/lint/golint
 
 script:
   - golint -set_exit_status ./... # enfoce std style-guide
   - govet ./... # enforce best practices
+  - env GO111MODULE=on go build -v ./...
   - env GO111MODULE=on go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
 
 after_success:
