@@ -78,7 +78,7 @@ func main() {
 
 		// Check if license is at the top of the file.
 		if !bytes.HasPrefix(src, []byte(prefix)) {
-			err := fmt.Errorf("%v: license header not present or not at the top", path)
+			err := fmt.Errorf("%v: license header not present or not at the top, to fix run: go run tools/check-license/check-license.go -fix", path)
 			if *fix == true {
 				newSrc := licenseText + string(src)
 				ioutil.WriteFile(path, []byte(newSrc), 644)
