@@ -9,19 +9,19 @@ is a nice guide emphasizing that not all contributions need to be code.
 We also have a [Code of Conduct](https://github.com/cs3org/.github/tree/master/CODE_OF_CONDUCT.md)
 that is worth reading!
 
-Please **open an issue first** for any bug report or new feature if there isn't
+Please **[open an issue first](https://github.com/cs3org/reva/issues/new)** for any bug report or new feature if there isn't
 already one opened. We use GitHub issues to keep track of failures in the
 software and addition of new features. A GitHub issue is a nice place to discuss ideas
 and get feedback from other members of the project.
 
 If you have general questions or you want guidance on how to start contributing
-you can reach us on the [Gitter REVA channel](https://gitter.im/cs3org/REVA).
+you can reach us on [Gitter](https://gitter.im/cs3org/REVA).
 
 If you want to find an area that currently needs improving have a look at the
 open issues listed at the [issues page](https://github.com/cs3org/reva/issues). 
 
 For newcomers, issues with minor complexity are tagged 
-as [junior-jobs](https://github.com/cs3org/reva/labels/junior-job).
+as [junior jobs](https://github.com/cs3org/reva/labels/junior-job).
 
 
 Reporting Bugs
@@ -60,6 +60,7 @@ $ git clone https://github.com/cs3org/reva
 $ make
 $ ./cmd/revad/revad -v
 version=v0.0.0 commit=639f48d branch=review go_version=go1.11.5 build_date=2019-04-17T13:57:17+0200 build_platform=linux/amd64
+```
 
 If you only want to run the tests you can:
 
