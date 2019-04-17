@@ -8,7 +8,7 @@ before_install:
 
 script:
   - golint -set_exit_status ./... # enfoce std style-guide
-  - govet ./... # enforce best practices
+  - go vet ./... # enforce best practices
   - env GO111MODULE=on go build -v ./...
   - env GO111MODULE=on go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
 
