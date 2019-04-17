@@ -5,7 +5,7 @@ BUILD_DATE=`date +%FT%T%z`
 GIT_COMMIT=`git rev-parse --short HEAD`
 GIT_BRANCH=`git rev-parse --symbolic-full-name --abbrev-ref HEAD`
 GIT_DIRTY=`git diff-index --quiet HEAD -- || echo "dirty-"`
-VERSION=`cat VERSION`
+VERSION=`git describe`
 
 LDFLAGS=-ldflags "-s -X main.buildDate=${BUILD_DATE} -X main.gitCommit=${GIT_DIRTY}${GIT_COMMIT} -X main.gitBranch=${GIT_BRANCH} -X main.version=${VERSION}"
 
