@@ -13,19 +13,19 @@
 // limitations under the License.
 //
 // In applying this license, CERN does not waive the privileges and immunities
-// granted to it by virtue of its status as an Intergovernmental Organization 
+// granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
 package main
 
 import (
 	"bytes"
+	"flag"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"flag"
 	"regexp"
-	"fmt"
 )
 
 var fix = flag.Bool("fix", false, "add header if not present")

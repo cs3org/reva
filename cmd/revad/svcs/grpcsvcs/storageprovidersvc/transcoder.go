@@ -13,7 +13,7 @@
 // limitations under the License.
 //
 // In applying this license, CERN does not waive the privileges and immunities
-// granted to it by virtue of its status as an Intergovernmental Organization 
+// granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
 package storageprovidersvc
@@ -24,6 +24,8 @@ import (
 
 // XS defines an hex-encoded string as checksum.
 type XS string
+
+func (x XS) String() string { return string(x) }
 
 const (
 	// XSInvalid means the checksum type is invalid.
