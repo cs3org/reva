@@ -1,5 +1,5 @@
 [REVA](https://cernbox.github.io/reva/) 
-[![Go Report Card](https://goreportcard.com/badge/github.com/cernbox/reva)](https://goreportcard.com/report/github.com/cernbox/reva) [![Build Status](https://travis-ci.org/cernbox/reva.svg?branch=master)](https://travis-ci.org/cernbox/reva) [![codecov](https://codecov.io/gh/cernbox/reva/branch/master/graph/badge.svg)](https://codecov.io/gh/cernbox/reva)
+[![Go Report Card](https://goreportcard.com/badge/github.com/cernbox/reva)](https://goreportcard.com/report/github.com/cernbox/reva) [![Build Status](https://travis-ci.org/cernbox/reva.svg?branch=master)](https://travis-ci.org/cernbox/reva) [![codecov](https://codecov.io/gh/cernbox/reva/branch/master/graph/badge.svg)](https://codecov.io/gh/cernbox/reva) [![Gitter chat](https://badges.gitter.im/cs3org/reva.png)](https://gitter.im/cs3org/reva)
 ================
 [Website](https://cernbox.github.io/reva/)
 
