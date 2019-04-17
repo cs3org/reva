@@ -15,6 +15,7 @@ build:
 	go build ./...
 	go mod tidy
 	go build -o ./cmd/revad/revad ${LDFLAGS} ./cmd/revad 
+	go build -o ./cmd/reva/reva ${LDFLAGS} ./cmd/reva
 
 test:
 	go test -race ./...
