@@ -33,3 +33,6 @@ license:
 	go run github.com/mitchellh/golicense license.hcl cmd/revad/revad
 	go run github.com/mitchellh/golicense license.hcl cmd/revad/reva
 
+deploy:
+	go build -o ./cmd/revad/revad ${LDFLAGS} ./cmd/revad 
+	./cmd/revad/revad -c ./cmd/revad/revad.toml -p ./cmd/revad/revad.pid

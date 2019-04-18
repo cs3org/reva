@@ -5,7 +5,7 @@ max_cpus = "100%"
 
 [http]
 enabled_services = ["prometheussvc", "ocdavsvc", "datasvc"]
-enabled_middlewares = ["cors", "log", "trace"]
+enabled_middlewares = ["cors", "log", "trace", "auth"]
 network = "tcp"
 address = "0.0.0.0:9998"
 
@@ -24,13 +24,13 @@ token_strategy = "header"
 token_writer = "header"
 token_manager = "jwt"
 
-[http.handlers.auth.token_managers.jwt]
+[http.middlewares.auth.token_managers.jwt]
 secret = "Pive-Fumkiu4"
 
-[http.handlers.auth.token_strategies.header]
+[http.middlewares.auth.token_strategies.header]
 header = "X-Access-Token"
 
-[http.handlers.auth.token_writers.header]
+[http.middlewares.auth.token_writers.header]
 header = "X-Access-Token"
 
 [http.middlewares.cors]
