@@ -20,8 +20,9 @@ package jwt
 
 import (
 	"context"
-	"github.com/cernbox/reva/pkg/log"
 	"github.com/cernbox/reva/pkg/err"
+	"github.com/cernbox/reva/pkg/log"
+	"github.com/cernbox/reva/pkg/token"
 	"github.com/cernbox/reva/pkg/token/manager/registry"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/mitchellh/mapstructure"
@@ -33,10 +34,6 @@ func init() {
 	registry.Register("jwt", New)
 }
 
-type config struct {
-	Secret string `mapstructure:"secret"`
-}
-
 func parseConfig(m map[string]interface{}) (*config, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
@@ -45,6 +42,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	}
 	return c, nil
 }
+
 var errors = err.New("jwt")
 
 // New returns an implementation of the token manager that uses JWT as tokens.
@@ -63,14 +61,6 @@ type manager struct {
 
 type config struct {
 	Secret string `mapstructure:"secret"`
-}
-
-func parseConfig(value map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(value, c); err != nil {
-		return nil, err
-	}
-	return c, nil
 }
 
 func (m *manager) MintToken(ctx context.Context, claims token.Claims) (string, error) {

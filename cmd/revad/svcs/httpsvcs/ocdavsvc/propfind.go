@@ -23,6 +23,7 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"path"
@@ -31,9 +32,9 @@ import (
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
+	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/utils"
 	"github.com/cernbox/reva/pkg/user"
 	"github.com/pkg/errors"
-	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/utils"
 )
 
 func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request) {
@@ -96,7 +97,7 @@ func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request) {
 		infos = append(infos, res.Infos...)
 	}
 
-	propRes, err := s.formatPropfind(ctx, fn, mds)
+	propRes, err := s.formatPropfind(ctx, fn, infos)
 	if err != nil {
 		logger.Error(ctx, err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -138,7 +139,7 @@ func readPropfind(r io.Reader) (pf propfindXML, status int, err error) {
 	return pf, 0, nil
 }
 
-func (s *svc) formatPropfind(ctx context.Context, fn string, mds []*storageproviderv0alphapb.Metadata) (string, error) {
+func (s *svc) formatPropfind(ctx context.Context, fn string, mds []*storageproviderv0alphapb.ResourceInfo) (string, error) {
 	responses := []*responseXML{}
 	for _, md := range mds {
 		res, err := s.mdToPropResponse(ctx, md)
@@ -187,7 +188,7 @@ func (s *svc) newProp(key, val string) *propertyXML {
 	}
 }
 
-func (s *svc) mdToPropResponse(ctx context.Context, md *storageproviderv0alphapb.ResourceInfo, props ...*propertyXML) *responseXML {
+func (s *svc) mdToPropResponse(ctx context.Context, md *storageproviderv0alphapb.ResourceInfo, props ...*propertyXML) (*responseXML, error) {
 	propList := []*propertyXML{}
 	propList = append(propList, props...)
 
@@ -248,7 +249,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, md *storageproviderv0alphapb
 			err := errors.Wrap(contextUserRequiredErr("userrequired"), "error getting user from ctx")
 			return nil, err
 		}
-		md.Filename = md.Filename[len(u.Username)+1:]
+		md.Path = md.Path[len(u.Username)+1:]
 	}
 
 	ref := path.Join(baseURI, md.Path)

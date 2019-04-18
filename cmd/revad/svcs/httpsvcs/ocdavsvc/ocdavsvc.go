@@ -152,7 +152,7 @@ func (s *svc) setHandler() {
 				// webdav should be death: baseURI is encoded as part of the
 				// reponse payload in href field
 				baseURI := path.Join("/", s.Prefix(), "remote.php/webdav")
-				ctx := context.WithValue(r.Context(), ctxKeyBaseURI, baseURI)
+				ctx = context.WithValue(r.Context(), ctxKeyBaseURI, baseURI)
 
 				// inject username into Destination header if present
 				dstHeader := r.Header.Get("Destination")
@@ -202,9 +202,11 @@ func (s *svc) setHandler() {
 				case "MOVE":
 					s.doMove(w, r)
 					return
-				case "COPY":
-					s.doCopy(w, r)
-					return
+				/*
+					case "COPY":
+						s.doCopy(w, r)
+						return
+				*/
 				case "PUT":
 					s.doPut(w, r)
 					return
@@ -226,7 +228,7 @@ func (s *svc) setHandler() {
 					// webdav should be death: baseURI is encoded as part of the
 					// reponse payload in href field
 					baseURI := path.Join("/", s.Prefix(), "remote.php/dav/files")
-					ctx := context.WithValue(r.Context(), "baseuri", baseURI)
+					ctx := context.WithValue(r.Context(), ctxKeyBaseURI, baseURI)
 					r = r.WithContext(ctx)
 
 					switch r.Method {
@@ -257,9 +259,11 @@ func (s *svc) setHandler() {
 					case "MOVE":
 						s.doMove(w, r)
 						return
-					case "COPY":
-						s.doCopy(w, r)
-						return
+					/*
+						case "COPY":
+							s.doCopy(w, r)
+							return
+					*/
 					case "PUT":
 						s.doPut(w, r)
 						return

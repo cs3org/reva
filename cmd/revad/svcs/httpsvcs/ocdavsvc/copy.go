@@ -1,6 +1,25 @@
+// Copyright 2018-2019 CERN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// In applying this license, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
 package ocdavsvc
 
 import (
+/*
 	"context"
 	"io"
 	"net/http"
@@ -10,8 +29,10 @@ import (
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
+*/
 )
 
+/* TODO(jfd): refactor with out-of-band
 func (s *svc) doCopy(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -60,7 +81,10 @@ func (s *svc) doCopy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// check src exists
-	srcStatReq := &storageproviderv0alphapb.StatRequest{Filename: src}
+	ref := &storageproviderv0alphapb.Reference{
+		Spec: &storageproviderv0alphapb.Reference_Path{Path: src},
+	}
+	srcStatReq := &storageproviderv0alphapb.StatRequest{Ref: ref}
 	srcStatRes, err := client.Stat(ctx, srcStatReq)
 	if err != nil {
 		logger.Error(ctx, err)
@@ -82,7 +106,10 @@ func (s *svc) doCopy(w http.ResponseWriter, r *http.Request) {
 	dst := path.Clean(urlPath[len(baseURI):])
 
 	// check dst exists
-	dstStatReq := &storageproviderv0alphapb.StatRequest{Filename: dst}
+	ref = &storageproviderv0alphapb.Reference{
+		Spec: &storageproviderv0alphapb.Reference_Path{Path: dst},
+	}
+	dstStatReq := &storageproviderv0alphapb.StatRequest{Ref: ref}
 	dstStatRes, err := client.Stat(ctx, dstStatReq)
 	if err != nil {
 		logger.Error(ctx, err)
@@ -105,7 +132,10 @@ func (s *svc) doCopy(w http.ResponseWriter, r *http.Request) {
 
 		// check if an intermediate path / the parent exists
 		intermediateDir := path.Dir(dst)
-		intStatReq := &storageproviderv0alphapb.StatRequest{Filename: intermediateDir}
+		ref = &storageproviderv0alphapb.Reference{
+			Spec: &storageproviderv0alphapb.Reference_Path{Path: intermediateDir},
+		}
+		intStatReq := &storageproviderv0alphapb.StatRequest{Ref : ref}
 		intStatRes, err := client.Stat(ctx, intStatReq)
 		if err != nil {
 			logger.Error(ctx, err)
@@ -120,7 +150,7 @@ func (s *svc) doCopy(w http.ResponseWriter, r *http.Request) {
 		// TODO what if intermediate is a file?
 	}
 
-	err = descend(ctx, client, srcStatRes.Metadata, dst)
+	err = descend(ctx, client, srcStatRes.Info, dst)
 	if err != nil {
 		logger.Error(ctx, err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -129,21 +159,25 @@ func (s *svc) doCopy(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(successCode)
 }
 
-func descend(ctx context.Context, client storageproviderv0alphapb.StorageProviderServiceClient, src *storageproviderv0alphapb.Metadata, dst string) error {
+func descend(ctx context.Context, client storageproviderv0alphapb.StorageProviderServiceClient, src *storageproviderv0alphapb.ResourceInfo, dst string) error {
 	logger.Println(ctx, "descend src:", src, " dst:", dst)
-	if src.IsDir {
+	if src.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
 		// create dir
-		createReq := &storageproviderv0alphapb.CreateDirectoryRequest{Filename: dst}
-		createRes, err := client.CreateDirectory(ctx, createReq)
+		ref := &storageproviderv0alphapb.Reference{
+			Spec: &storageproviderv0alphapb.Reference_Path{Path: dst},
+		}
+		createReq := &storageproviderv0alphapb.CreateContainerRequest{Ref: ref}
+		createRes, err := client.CreateContainer(ctx, createReq)
 		if err != nil || createRes.Status.Code != rpcpb.Code_CODE_OK {
 			return err
 		}
 
 		// descend for children
-		listReq := &storageproviderv0alphapb.ListRequest{
-			Filename: src.Filename,
+		ref2 := &storageproviderv0alphapb.Reference{
+			Spec: &storageproviderv0alphapb.Reference_Path{Path: src.Path},
 		}
-		stream, err := client.List(ctx, listReq)
+		listReq := &storageproviderv0alphapb.ListContainerRequest{ Ref: ref }
+		stream, err := client.ListContainer(ctx, listReq)
 		if err != nil {
 			return err
 		}
@@ -219,3 +253,4 @@ func descend(ctx context.Context, client storageproviderv0alphapb.StorageProvide
 	}
 	return nil
 }
+*/

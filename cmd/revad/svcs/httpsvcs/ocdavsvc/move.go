@@ -77,7 +77,10 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// check src exists
-	srcStatReq := &storageproviderv0alphapb.StatRequest{Filename: src}
+	ref := &storageproviderv0alphapb.Reference{
+		Spec: &storageproviderv0alphapb.Reference_Path{Path: src},
+	}
+	srcStatReq := &storageproviderv0alphapb.StatRequest{Ref: ref}
 	srcStatRes, err := client.Stat(ctx, srcStatReq)
 	if err != nil {
 		logger.Error(ctx, err)
@@ -99,7 +102,10 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 	dst := path.Clean(urlPath[len(baseURI):])
 
 	// check dst exists
-	dstStatReq := &storageproviderv0alphapb.StatRequest{Filename: dst}
+	ref2 := &storageproviderv0alphapb.Reference{
+		Spec: &storageproviderv0alphapb.Reference_Path{Path: dst},
+	}
+	dstStatReq := &storageproviderv0alphapb.StatRequest{Ref: ref2}
 	dstStatRes, err := client.Stat(ctx, dstStatReq)
 	if err != nil {
 		logger.Error(ctx, err)
@@ -118,7 +124,7 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// delete existing tree
-		delReq := &storageproviderv0alphapb.DeleteRequest{Filename: dst}
+		delReq := &storageproviderv0alphapb.DeleteRequest{Ref: ref2}
 		delRes, err := client.Delete(ctx, delReq)
 		if err != nil {
 			logger.Error(ctx, err)
@@ -137,7 +143,10 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 
 		// check if an intermediate path / the parent exists
 		intermediateDir := path.Dir(dst)
-		intStatReq := &storageproviderv0alphapb.StatRequest{Filename: intermediateDir}
+		ref2 := &storageproviderv0alphapb.Reference{
+			Spec: &storageproviderv0alphapb.Reference_Path{Path: intermediateDir},
+		}
+		intStatReq := &storageproviderv0alphapb.StatRequest{Ref: ref2}
 		intStatRes, err := client.Stat(ctx, intStatReq)
 		if err != nil {
 			logger.Error(ctx, err)
@@ -172,7 +181,7 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ref := &storageproviderv0alphapb.Reference{
+	ref2 = &storageproviderv0alphapb.Reference{
 		Spec: &storageproviderv0alphapb.Reference_Path{Path: dst},
 	}
 	req2 := &storageproviderv0alphapb.StatRequest{Ref: ref}
@@ -194,5 +203,5 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("ETag", info.Etag)
 	w.Header().Set("OC-FileId", fmt.Sprintf("%s:%s", info.Id.StorageId, info.Id.OpaqueId))
 	w.Header().Set("OC-ETag", info.Etag)
-	w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(successCode)
 }

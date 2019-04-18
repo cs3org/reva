@@ -29,12 +29,12 @@ const userKey key = iota
 // User represents a user of the system.
 type User struct {
 	ID          *ID
-	Subject     string   `mapstructure:"sub"`
-	Issuer      string   `mapstructure:"iss"`
-	Username    string   `mapstructure:"username"`
-	Groups      []string `mapstructure:"groups"`
-	Mail        string   `mapstructure:"mail"`
-	DisplayName string   `mapstructure:"display_name"`
+	Subject     string                 `mapstructure:"sub"`
+	Issuer      string                 `mapstructure:"iss"`
+	Username    string                 `mapstructure:"username"`
+	Groups      []string               `mapstructure:"groups"`
+	Mail        string                 `mapstructure:"mail"`
+	DisplayName string                 `mapstructure:"display_name"`
 	Opaque      map[string]interface{} `mapstructure:"opaque"`
 }
 
@@ -44,7 +44,6 @@ type ID struct {
 	IDP      string
 	OpaqueID string
 }
-
 
 // ContextGetUser returns the user if set in the given context.
 func ContextGetUser(ctx context.Context) (*User, bool) {

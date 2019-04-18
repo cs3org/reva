@@ -47,7 +47,10 @@ func (s *svc) doMkcol(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// check fn exists
-	statReq := &storageproviderv0alphapb.StatRequest{Filename: fn}
+	ref := &storageproviderv0alphapb.Reference{
+		Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+	}
+	statReq := &storageproviderv0alphapb.StatRequest{Ref: ref}
 	statRes, err := client.Stat(ctx, statReq)
 	if err != nil {
 		logger.Error(ctx, err)
@@ -61,8 +64,8 @@ func (s *svc) doMkcol(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req := &storageproviderv0alphapb.CreateDirectoryRequest{Filename: fn}
-	res, err := client.CreateDirectory(ctx, req)
+	req := &storageproviderv0alphapb.CreateContainerRequest{Ref: ref}
+	res, err := client.CreateContainer(ctx, req)
 	if err != nil {
 		logger.Error(ctx, err)
 		w.WriteHeader(http.StatusInternalServerError)
