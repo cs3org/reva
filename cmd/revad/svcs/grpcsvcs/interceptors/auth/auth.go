@@ -47,7 +47,7 @@ func init() {
 
 type config struct {
 	Priority        int                               `mapstructure:"priority"`
-	Methods         map[string]bool                   `mapstructure:"methods"`
+	SkipMethods     map[string]bool                   `mapstructure:"skip_methods"`
 	Header          string                            `mapstructure:"header"`
 	TokenStrategy   string                            `mapstructure:"token_strategy"`
 	TokenStrategies map[string]map[string]interface{} `mapstructure:"token_strategies"`
@@ -64,6 +64,15 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
+func skip(url string, skipped []string) bool {
+	for _, s := range skipped {
+		if strings.HasPrefix(s, url) {
+			return true
+		}
+	}
+	return false
+}
+
 // NewUnary returns a new unary interceptor that adds
 // trace information for the request.
 func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error) {
@@ -76,8 +85,8 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		return nil, 0, errors.New("header is empty")
 	}
 
-	for k := range conf.Methods {
-		logger.Println(context.Background(), "grpc auth protected method: ", k)
+	for k := range conf.SkipMethods {
+		logger.Println(context.Background(), "skiping grpc auth for method: ", k)
 	}
 
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
@@ -92,7 +101,7 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		method := strings.ToLower(info.FullMethod)
-		if _, ok := conf.Methods[method]; !ok {
+		if _, ok := conf.SkipMethods[method]; ok {
 			return handler(ctx, req)
 		}
 
@@ -153,7 +162,7 @@ func NewStream(m map[string]interface{}) (grpc.StreamServerInterceptor, int, err
 
 	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		method := strings.ToLower(info.FullMethod)
-		if _, ok := conf.Methods[method]; !ok {
+		if _, ok := conf.SkipMethods[method]; ok {
 			return handler(srv, ss)
 		}
 

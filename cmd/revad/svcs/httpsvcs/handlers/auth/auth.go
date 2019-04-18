@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 
 	authv0alphapb "github.com/cernbox/go-cs3apis/cs3/auth/v0alpha"
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
@@ -57,6 +58,7 @@ type config struct {
 	TokenManagers        map[string]map[string]interface{} `mapstructure:"token_managers"`
 	TokenWriter          string                            `mapstructure:"token_writer"`
 	TokenWriters         map[string]map[string]interface{} `mapstructure:"token_writers"`
+	SkipMethods          []string                          `mapstructure:"skip_methods"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -66,6 +68,15 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 		return nil, err
 	}
 	return c, nil
+}
+
+func skip(url string, skipped []string) bool {
+	for _, s := range skipped {
+		if strings.HasPrefix(s, url) {
+			return true
+		}
+	}
+	return false
 }
 
 // New returns a new middleware with defined priority.
@@ -117,6 +128,12 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 
 	chain := func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// skip auth for urls set in the config.
+			if skip(r.URL.Path, conf.SkipMethods) {
+				h.ServeHTTP(w, r)
+				return
+			}
+
 			// check for token
 			tkn := tokenStrategy.GetToken(r)
 			if tkn == "" {
