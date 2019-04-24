@@ -19,12 +19,14 @@
 package ocdavsvc
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
+	"github.com/cernbox/reva/pkg/token"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/utils"
 )
@@ -40,50 +42,51 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ref := &storageproviderv0alphapb.Reference{
-		Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+	sReq := &storageproviderv0alphapb.StatRequest{
+		Ref: &storageproviderv0alphapb.Reference{
+			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+		},
 	}
-	req := &storageproviderv0alphapb.StatRequest{Ref: ref}
-	res, err := client.Stat(ctx, req)
+	sRes, err := client.Stat(ctx, sReq)
 	if err != nil {
 		logger.Error(ctx, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	if res.Status.Code != rpcpb.Code_CODE_OK {
-		logger.Println(ctx, res.Status)
+	if sRes.Status.Code != rpcpb.Code_CODE_OK {
+		logger.Println(ctx, sRes.Status)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	info := res.Info
+	info := sRes.Info
 	if info.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
 		logger.Println(ctx, "resource is a folder, cannot be downloaded")
 		w.WriteHeader(http.StatusNotImplemented)
 		return
 	}
 
-	req2 := &storageproviderv0alphapb.InitiateFileDownloadRequest{
+	dReq := &storageproviderv0alphapb.InitiateFileDownloadRequest{
 		Ref: &storageproviderv0alphapb.Reference{
 			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
 		},
 	}
 
-	res2, err := client.InitiateFileDownload(ctx, req2)
+	dRes, err := client.InitiateFileDownload(ctx, dReq)
 	if err != nil {
 		logger.Error(ctx, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	if res.Status.Code != rpcpb.Code_CODE_OK {
-		logger.Println(ctx, res.Status)
+	if dRes.Status.Code != rpcpb.Code_CODE_OK {
+		logger.Println(ctx, dRes.Status)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	dataServerURL := res2.DownloadEndpoint
+	dataServerURL := dRes.DownloadEndpoint
 	// TODO(labkode): perfrom protocol switch
 	httpReq, err := http.NewRequest("GET", dataServerURL, nil)
 	if err != nil {
@@ -91,6 +94,15 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+
+	//TODO: make header / auth configurable, check if token is available before doing stat requests
+	tkn, ok := token.ContextGetToken(ctx)
+	if !ok {
+		logger.Error(ctx, errors.New("could not read token from context"))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	httpReq.Header.Set("X-Access-Token", tkn)
 
 	// TODO(labkode): harden http client
 	// https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779

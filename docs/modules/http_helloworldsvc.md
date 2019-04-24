@@ -2,7 +2,7 @@
 
 This service is for demo purposes.
 It exposes a single endpoint that renders a
-hello message that be changed in the configuration file.
+hello message that can be changed in the configuration file.
 
 To enable the service:
 

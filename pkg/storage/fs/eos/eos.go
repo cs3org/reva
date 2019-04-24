@@ -40,12 +40,12 @@ import (
 )
 
 func init() {
-	registry.Register("storage.fs.eos", New)
+	registry.Register("eos", New)
 }
 
 var hiddenReg = regexp.MustCompile(`\.sys\..#.`)
 
-var logger = log.New("storage.fs.eos")
+var logger = log.New("storage-provider-eos")
 
 type contextUserRequiredErr string
 
@@ -81,11 +81,11 @@ type config struct {
 	XrdcopyBinary string `mapstructure:"xrdcopy_binary"`
 
 	// URL of the Master EOS MGM.
-	// Default is root://eos-test.org
+	// Default is root://eos-example.org
 	MasterURL string `mapstructure:"master_url"`
 
 	// URL of the Slave EOS MGM.
-	// Default is root://eos-test.org
+	// Default is root://eos-example.org
 	SlaveURL string `mapstructure:"slave_url"`
 
 	// Location on the local fs where to store reads.

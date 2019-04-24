@@ -105,7 +105,7 @@ type Options struct {
 	XrdcopyBinary string
 
 	// URL of the EOS MGM.
-	// Default is root://eos-test.org
+	// Default is root://eos-example.org
 	URL string
 
 	// Location on the local fs where to store reads.
