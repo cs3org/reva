@@ -19,20 +19,19 @@
 package ocdavsvc
 
 import (
-/*
 	"context"
-	"io"
+	"fmt"
 	"net/http"
 	"net/url"
 	"path"
 	"strings"
+	"time"
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
-*/
+	"github.com/cernbox/reva/pkg/token"
 )
 
-/* TODO(jfd): refactor with out-of-band
 func (s *svc) doCopy(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -135,7 +134,7 @@ func (s *svc) doCopy(w http.ResponseWriter, r *http.Request) {
 		ref = &storageproviderv0alphapb.Reference{
 			Spec: &storageproviderv0alphapb.Reference_Path{Path: intermediateDir},
 		}
-		intStatReq := &storageproviderv0alphapb.StatRequest{Ref : ref}
+		intStatReq := &storageproviderv0alphapb.StatRequest{Ref: ref}
 		intStatRes, err := client.Stat(ctx, intStatReq)
 		if err != nil {
 			logger.Error(ctx, err)
@@ -163,94 +162,129 @@ func descend(ctx context.Context, client storageproviderv0alphapb.StorageProvide
 	logger.Println(ctx, "descend src:", src, " dst:", dst)
 	if src.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
 		// create dir
-		ref := &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: dst},
+		createReq := &storageproviderv0alphapb.CreateContainerRequest{
+			Ref: &storageproviderv0alphapb.Reference{
+				Spec: &storageproviderv0alphapb.Reference_Path{Path: dst},
+			},
 		}
-		createReq := &storageproviderv0alphapb.CreateContainerRequest{Ref: ref}
 		createRes, err := client.CreateContainer(ctx, createReq)
 		if err != nil || createRes.Status.Code != rpcpb.Code_CODE_OK {
 			return err
 		}
 
 		// descend for children
-		ref2 := &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: src.Path},
+		listReq := &storageproviderv0alphapb.ListContainerRequest{
+			Ref: &storageproviderv0alphapb.Reference{
+				Spec: &storageproviderv0alphapb.Reference_Path{Path: src.Path},
+			},
 		}
-		listReq := &storageproviderv0alphapb.ListContainerRequest{ Ref: ref }
-		stream, err := client.ListContainer(ctx, listReq)
+		res, err := client.ListContainer(ctx, listReq)
 		if err != nil {
 			return err
 		}
+		if res.Status.Code != rpcpb.Code_CODE_OK {
+			return fmt.Errorf("Status code %d", res.Status.Code)
+		}
 
-		for {
-			res, err := stream.Recv()
-			if err == io.EOF {
-				break
-			}
-
-			if err != nil || res.Status.Code != rpcpb.Code_CODE_OK {
+		for _, e := range res.Infos {
+			childDst := path.Join(dst, path.Base(e.Path))
+			err := descend(ctx, client, e, childDst)
+			if err != nil {
 				return err
 			}
-
-			childDst := path.Join(dst, path.Base(res.Metadata.Filename))
-			descend(ctx, client, res.Metadata, childDst)
 		}
 
 	} else {
 		// copy file
 
-		readReq := &storageproviderv0alphapb.ReadRequest{Filename: src.Filename}
-		readStream, err := client.Read(ctx, readReq)
+		//TODO: make header / auth configurable, check if token is available before doing stat requests
+		tkn, ok := token.ContextGetToken(ctx)
+		if !ok {
+			return fmt.Errorf("could not read token from context")
+		}
+
+		// 1. get download url
+		dReq := &storageproviderv0alphapb.InitiateFileDownloadRequest{
+			Ref: &storageproviderv0alphapb.Reference{
+				Spec: &storageproviderv0alphapb.Reference_Path{Path: src.Path},
+			},
+		}
+
+		dRes, err := client.InitiateFileDownload(ctx, dReq)
 		if err != nil {
 			return err
 		}
 
-		startReq := &storageproviderv0alphapb.StartWriteSessionRequest{}
-		writeSess, err := client.StartWriteSession(ctx, startReq)
-		if err != nil || writeSess.Status.Code != rpcpb.Code_CODE_OK {
-			return err
+		if dRes.Status.Code != rpcpb.Code_CODE_OK {
+			return fmt.Errorf("Status code %d", dRes.Status.Code)
 		}
 
-		sessID := writeSess.SessionId
-		logger.Build().Str("sessID", sessID).Msg(ctx, "got write session id")
+		// 2. get upload url
 
-		writeStream, err := client.Write(ctx)
+		uReq := &storageproviderv0alphapb.InitiateFileUploadRequest{
+			Ref: &storageproviderv0alphapb.Reference{
+				Spec: &storageproviderv0alphapb.Reference_Path{Path: dst},
+			},
+		}
+
+		uRes, err := client.InitiateFileUpload(ctx, uReq)
 		if err != nil {
 			return err
 		}
 
-		for {
-			res, err := readStream.Recv()
-			if err == io.EOF {
-				break
-			}
-
-			if err != nil || res.Status.Code != rpcpb.Code_CODE_OK {
-				return err
-			}
-
-			dc := res.DataChunk
-			if dc.Length > 0 {
-				req := &storageproviderv0alphapb.WriteRequest{Data: dc.Data, Length: dc.Length, SessionId: sessID, Offset: dc.Offset}
-				err = writeStream.Send(req)
-				if err != nil {
-					return err
-				}
-			}
+		if uRes.Status.Code != rpcpb.Code_CODE_OK {
+			return fmt.Errorf("Status code %d", uRes.Status.Code)
 		}
 
-		closeRes, err := writeStream.CloseAndRecv()
-		if err != nil || closeRes.Status.Code != rpcpb.Code_CODE_OK {
+		// 3. do download
+
+		httpDownloadReq, err := http.NewRequest("GET", dRes.DownloadEndpoint, nil)
+		if err != nil {
 			return err
 		}
 
-		finishReq := &storageproviderv0alphapb.FinishWriteSessionRequest{Filename: dst, SessionId: sessID}
-		finishRes, err := client.FinishWriteSession(ctx, finishReq)
-		if err != nil || finishRes.Status.Code != rpcpb.Code_CODE_OK {
+		httpDownloadReq.Header.Set("X-Access-Token", tkn)
+
+		// TODO(labkode): harden http client
+		// https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779
+		httpDownloadClient := &http.Client{
+			Timeout: time.Second * 10,
+		}
+
+		httpDownloadRes, err := httpDownloadClient.Do(httpDownloadReq)
+		if err != nil {
 			return err
+		}
+
+		if httpDownloadRes.StatusCode != http.StatusOK {
+			return fmt.Errorf("Status code %d", httpDownloadRes.StatusCode)
+		}
+
+		// do upload
+		// TODO(jfd): check if large files are really streamed
+
+		httpUploadReq, err := http.NewRequest("PUT", uRes.UploadEndpoint, httpDownloadRes.Body)
+		if err != nil {
+			return err
+		}
+
+		httpUploadReq.Header.Set("X-Access-Token", tkn)
+
+		// TODO(labkode): harden http client
+		// https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779
+		httpUploadClient := &http.Client{
+			Timeout: time.Second * 10,
+		}
+
+		httpRes, err := httpUploadClient.Do(httpUploadReq)
+		if err != nil {
+			return err
+		}
+
+		if httpRes.StatusCode != http.StatusOK {
+			return fmt.Errorf("Status code %d", httpDownloadRes.StatusCode)
 		}
 
 	}
 	return nil
 }
-*/
