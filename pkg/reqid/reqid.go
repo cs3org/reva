@@ -16,30 +16,40 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package trace
+package reqid
 
 import "context"
+import "github.com/gofrs/uuid"
 
 type key int
 
-const traceKey key = iota
+const reqIDKey key = iota
 
-// ContextGetTrace returns the Trace if set in the given context.
-func ContextGetTrace(ctx context.Context) (string, bool) {
-	u, ok := ctx.Value(traceKey).(string)
+// ReqIDHeaderName is the header to use when storing the
+// request ID into an HTTP or GRPC header.
+const ReqIDHeaderName = "x-request-id"
+
+// ContextGetReqID returns the reqID if set in the given context.
+func ContextGetReqID(ctx context.Context) (string, bool) {
+	u, ok := ctx.Value(reqIDKey).(string)
 	return u, ok
 }
 
-// ContextMustGetTrace panics if Trace it not in context.
-func ContextMustGetTrace(ctx context.Context) string {
-	t, ok := ContextGetTrace(ctx)
+// ContextMustGetReqID panics if reqID it not in context.
+func ContextMustGetReqID(ctx context.Context) string {
+	t, ok := ContextGetReqID(ctx)
 	if !ok {
-		panic("trace not found in context")
+		panic("reqID not found in context")
 	}
 	return t
 }
 
-// ContextSetTrace stores the trace in the context.
-func ContextSetTrace(ctx context.Context, trace string) context.Context {
-	return context.WithValue(ctx, traceKey, trace)
+// ContextSetReqID stores the reqID in the context.
+func ContextSetReqID(ctx context.Context, reqID string) context.Context {
+	return context.WithValue(ctx, reqIDKey, reqID)
+}
+
+// MintReqID creates a new request id.
+func MintReqID() string {
+	return uuid.Must(uuid.NewV4()).String()
 }

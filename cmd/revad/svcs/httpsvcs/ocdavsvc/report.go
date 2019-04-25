@@ -22,16 +22,18 @@ import (
 	"encoding/xml"
 	"io"
 	"net/http"
+
+	"github.com/cernbox/reva/pkg/appctx"
 )
 
 func (s *svc) doReport(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
-	//fn := r.URL.Path
+	log := appctx.GetLogger(ctx)
 
 	rep, status, err := readReport(r.Body)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error reading report")
 		w.WriteHeader(status)
 		return
 	}
@@ -45,9 +47,10 @@ func (s *svc) doReport(w http.ResponseWriter, r *http.Request) {
 
 func (s *svc) doSearchFiles(w http.ResponseWriter, r *http.Request, sf *reportSearchFiles) {
 	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
 	_, err := s.getClient()
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

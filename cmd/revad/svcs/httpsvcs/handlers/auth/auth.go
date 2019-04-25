@@ -19,7 +19,6 @@
 package auth
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -30,9 +29,9 @@ import (
 	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers/auth/credential/registry"
 	tokenregistry "github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers/auth/token/registry"
 	tokenwriterregistry "github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers/auth/tokenwriter/registry"
-	"github.com/cernbox/reva/pkg/log"
 	"github.com/pkg/errors"
 
+	"github.com/cernbox/reva/pkg/appctx"
 	"github.com/cernbox/reva/pkg/token"
 	tokenmgr "github.com/cernbox/reva/pkg/token/manager/registry"
 	"github.com/cernbox/reva/pkg/user"
@@ -40,8 +39,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
-
-var logger = log.New("auth")
 
 func init() {
 	httpserver.RegisterMiddleware("auth", New)
@@ -64,7 +61,7 @@ type config struct {
 func parseConfig(m map[string]interface{}) (*config, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
-		logger.Error(context.Background(), errors.Wrap(err, "error decoding conf"))
+		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
 	}
 	return c, nil
@@ -134,13 +131,15 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 				return
 			}
 
+			log := appctx.GetLogger(r.Context())
+
 			// check for token
 			tkn := tokenStrategy.GetToken(r)
 			if tkn == "" {
-				logger.Println(r.Context(), "core access token not set")
+				log.Warn().Msg("core access token not set")
 				creds, err := credStrategy.GetCredentials(w, r)
 				if err != nil {
-					logger.Error(r.Context(), err)
+					log.Warn().Err(err).Msg("error retrieving credentials")
 					w.WriteHeader(http.StatusUnauthorized)
 					return
 				}
@@ -151,41 +150,42 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 				}
 				client, err := getAuthClient(conf.AuthSVC)
 				if err != nil {
-					logger.Error(r.Context(), err)
-					w.WriteHeader(http.StatusUnauthorized)
-					return
-				}
-				res, err := client.GenerateAccessToken(r.Context(), req)
-				if err != nil {
-					logger.Error(r.Context(), err)
-					w.WriteHeader(http.StatusUnauthorized)
-					return
-				}
-				if res.Status.Code != rpcpb.Code_CODE_OK {
-					logger.Error(r.Context(), fmt.Errorf("code=%d", res.Status.Code))
+					log.Error().Err(err).Msg("error getting the authsvc client")
 					w.WriteHeader(http.StatusUnauthorized)
 					return
 				}
 
-				logger.Println(r.Context(), "core access token generated")
+				res, err := client.GenerateAccessToken(r.Context(), req)
+				if err != nil {
+					log.Error().Err(err).Msg("error in grpc request")
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				if res.Status.Code != rpcpb.Code_CODE_OK {
+					log.Warn().Str("code", string(res.Status.Code)).Msg("request failed")
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+
+				log.Info().Msg("core access token generated")
 				// write token to response
 				tkn = res.AccessToken
 				tokenWriter.WriteToken(tkn, w)
 			} else {
-				logger.Println(r.Context(), "core access token is set")
+				log.Info().Msg("access token is already provided")
 			}
 
 			// validate token
 			claims, err := tokenManager.DismantleToken(r.Context(), tkn)
 			if err != nil {
-				logger.Error(r.Context(), err)
+				log.Error().Err(err).Msg("error dismantling token")
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
 
 			u := &user.User{}
 			if err := mapstructure.Decode(claims, u); err != nil {
-				logger.Error(r.Context(), err)
+				log.Error().Err(err).Msg("error decoding user claims")
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}

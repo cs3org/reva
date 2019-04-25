@@ -29,12 +29,12 @@ import (
 	"google.golang.org/grpc/codes"
 
 	"github.com/cernbox/reva/cmd/revad/grpcserver"
-	"github.com/cernbox/reva/pkg/log"
+	"github.com/cernbox/reva/pkg/appctx"
 	"github.com/mitchellh/mapstructure"
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/status"
 )
-
-var logger = log.New("grpc-interceptor-log")
 
 func init() {
 	grpcserver.RegisterUnaryInterceptor("log", NewUnary)
@@ -56,7 +56,7 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		start := time.Now()
 		res, err := handler(ctx, req)
-		code := grpc.Code(err)
+		code := status.Code(err)
 		end := time.Now()
 		diff := end.Sub(start).Nanoseconds()
 		var fromAddress, userAgent string
@@ -71,20 +71,21 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 			}
 		}
 
-		var b *log.Builder
+		log := appctx.GetLogger(ctx)
+		var event *zerolog.Event
 		if code != codes.OK {
-			b = logger.BuildError()
+			event = log.Error()
 		} else {
-			b = logger.Build()
+			event = log.Info()
 		}
 
-		b = b.Str("user-agent", userAgent)
-		b = b.Str("from", fromAddress)
-		b = b.Str("uri", info.FullMethod)
-		b = b.Str("start", start.Format("02/Jan/2006:15:04:05 -0700"))
-		b = b.Str("end", end.Format("02/Jan/2006:15:04:05 -0700")).Int("time_ns", int(diff))
-		b = b.Str("code", code.String())
-		b.Msg(ctx, "GRPC unary call")
+		event.Str("user-agent", userAgent).
+			Str("from", fromAddress).
+			Str("uri", info.FullMethod).
+			Str("start", start.Format("02/Jan/2006:15:04:05 -0700")).
+			Str("end", end.Format("02/Jan/2006:15:04:05 -0700")).Int("time_ns", int(diff)).
+			Str("code", code.String()).
+			Msg("unary")
 
 		return res, err
 	}
@@ -103,7 +104,7 @@ func NewStream(m map[string]interface{}) (grpc.StreamServerInterceptor, int, err
 		start := time.Now()
 		err := handler(srv, ss)
 		end := time.Now()
-		code := grpc.Code(err)
+		code := status.Code(err)
 		diff := end.Sub(start).Nanoseconds()
 		var fromAddress, userAgent string
 		if p, ok := peer.FromContext(ss.Context()); ok {
@@ -117,20 +118,21 @@ func NewStream(m map[string]interface{}) (grpc.StreamServerInterceptor, int, err
 			}
 		}
 
-		var b *log.Builder
+		log := appctx.GetLogger(ss.Context())
+		var event *zerolog.Event
 		if code != codes.OK {
-			b = logger.BuildError()
+			event = log.Error()
 		} else {
-			b = logger.Build()
+			event = log.Info()
 		}
 
-		b = b.Str("user-agent", userAgent)
-		b = b.Str("from", fromAddress)
-		b = b.Str("uri", info.FullMethod)
-		b = b.Str("start", start.Format("02/Jan/2006:15:04:05 -0700"))
-		b = b.Str("end", end.Format("02/Jan/2006:15:04:05 -0700")).Int("time_ns", int(diff))
-		b = b.Str("code", code.String())
-		b.Msg(ss.Context(), "GRPC stream call")
+		event.Str("user-agent", userAgent).
+			Str("from", fromAddress).
+			Str("uri", info.FullMethod).
+			Str("start", start.Format("02/Jan/2006:15:04:05 -0700")).
+			Str("end", end.Format("02/Jan/2006:15:04:05 -0700")).Int("time_ns", int(diff)).
+			Str("code", code.String()).
+			Msg("stream")
 
 		return err
 	}

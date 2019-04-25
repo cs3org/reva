@@ -20,6 +20,7 @@ package authsvc
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/cernbox/reva/cmd/revad/grpcserver"
 	"github.com/cernbox/reva/pkg/auth/manager/registry"
@@ -28,20 +29,16 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/cernbox/reva/pkg/auth"
-	"github.com/cernbox/reva/pkg/err"
-	"github.com/cernbox/reva/pkg/log"
 	"github.com/cernbox/reva/pkg/token"
 	"github.com/cernbox/reva/pkg/user"
 
 	authv0alphapb "github.com/cernbox/go-cs3apis/cs3/auth/v0alpha"
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
 
+	"github.com/cernbox/reva/pkg/appctx"
 	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
 )
-
-var logger = log.New("authsvc")
-var errors = err.New("authsvc")
-var ctx = context.Background()
 
 func init() {
 	grpcserver.Register("authsvc", New)
@@ -56,25 +53,10 @@ type config struct {
 	UserManagers  map[string]map[string]interface{} `mapstructure:"user_managers"`
 }
 
-type authManagerConfig struct {
-	Driver  string                            `mapstructure:"driver"`
-	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
-}
-
-type tokenManagerConfig struct {
-	Driver  string                            `mapstructure:"driver"`
-	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
-}
-
-type userManagerConfig struct {
-	Driver  string                            `mapstructure:"driver"`
-	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
-}
-
 func parseConfig(m map[string]interface{}) (*config, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
-		logger.Error(context.Background(), errors.Wrap(err, "error decoding conf"))
+		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
 	}
 	return c, nil
@@ -85,7 +67,7 @@ func getUserManager(manager string, m map[string]map[string]interface{}) (user.M
 		return f(m[manager])
 	}
 
-	return nil, errors.Newf("driver %s not found for user manager", manager)
+	return nil, fmt.Errorf("driver %s not found for user manager", manager)
 }
 
 func getAuthManager(manager string, m map[string]map[string]interface{}) (auth.Manager, error) {
@@ -93,7 +75,7 @@ func getAuthManager(manager string, m map[string]map[string]interface{}) (auth.M
 		return f(m[manager])
 	}
 
-	return nil, errors.Newf("driver %s not found for auth manager", manager)
+	return nil, fmt.Errorf("driver %s not found for auth manager", manager)
 }
 
 func getTokenManager(manager string, m map[string]map[string]interface{}) (token.Manager, error) {
@@ -101,7 +83,7 @@ func getTokenManager(manager string, m map[string]map[string]interface{}) (token
 		return f(m[manager])
 	}
 
-	return nil, errors.Newf("driver %s not found for token manager", manager)
+	return nil, fmt.Errorf("driver %s not found for token manager", manager)
 }
 
 // New returns a new AuthServiceServer.
@@ -138,13 +120,13 @@ type service struct {
 }
 
 func (s *service) GenerateAccessToken(ctx context.Context, req *authv0alphapb.GenerateAccessTokenRequest) (*authv0alphapb.GenerateAccessTokenResponse, error) {
+	log := appctx.GetLogger(ctx)
 	username := req.ClientId
 	password := req.ClientSecret
 
 	ctx, err := s.authmgr.Authenticate(ctx, username, password)
 	if err != nil {
-		err = errors.Wrap(err, "error authenticating user")
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error authentication user")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_UNAUTHENTICATED}
 		res := &authv0alphapb.GenerateAccessTokenResponse{Status: status}
 		return res, nil
@@ -152,8 +134,7 @@ func (s *service) GenerateAccessToken(ctx context.Context, req *authv0alphapb.Ge
 
 	user, err := s.usermgr.GetUser(ctx, username)
 	if err != nil {
-		err = errors.Wrap(err, "error getting user information")
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error getting user information")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_UNAUTHENTICATED}
 		res := &authv0alphapb.GenerateAccessTokenResponse{Status: status}
 		return res, nil
@@ -172,13 +153,13 @@ func (s *service) GenerateAccessToken(ctx context.Context, req *authv0alphapb.Ge
 	accessToken, err := s.tokenmgr.MintToken(ctx, claims)
 	if err != nil {
 		err = errors.Wrap(err, "error creating access token")
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error creating access token")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_UNAUTHENTICATED}
 		res := &authv0alphapb.GenerateAccessTokenResponse{Status: status}
 		return res, nil
 	}
 
-	logger.Printf(ctx, "user %s authenticated", user.Username)
+	log.Info().Msgf("user %s authenticated", user.Username)
 	status := &rpcpb.Status{Code: rpcpb.Code_CODE_OK}
 	res := &authv0alphapb.GenerateAccessTokenResponse{Status: status, AccessToken: accessToken}
 	return res, nil
@@ -186,11 +167,12 @@ func (s *service) GenerateAccessToken(ctx context.Context, req *authv0alphapb.Ge
 }
 
 func (s *service) WhoAmI(ctx context.Context, req *authv0alphapb.WhoAmIRequest) (*authv0alphapb.WhoAmIResponse, error) {
+	log := appctx.GetLogger(ctx)
 	token := req.AccessToken
 	claims, err := s.tokenmgr.DismantleToken(ctx, token)
 	if err != nil {
 		err = errors.Wrap(err, "error dismantling access token")
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error dismantling access token")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_UNAUTHENTICATED}
 		res := &authv0alphapb.WhoAmIResponse{Status: status}
 		return res, nil
@@ -204,8 +186,7 @@ func (s *service) WhoAmI(ctx context.Context, req *authv0alphapb.WhoAmIRequest) 
 	}{}
 
 	if err := mapstructure.Decode(claims, up); err != nil {
-		err = errors.Wrap(err, "error parsing token claims")
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msgf("error parsing token claims")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_UNAUTHENTICATED}
 		res := &authv0alphapb.WhoAmIResponse{Status: status}
 		return res, nil

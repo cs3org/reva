@@ -44,10 +44,7 @@ import (
 	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers/auth/credential/registry"
 
 	"github.com/cernbox/reva/pkg/auth"
-	"github.com/cernbox/reva/pkg/log"
 )
-
-var logger = log.New("auth-strategy-oidc")
 
 func init() {
 	registry.Register("oidc", New)

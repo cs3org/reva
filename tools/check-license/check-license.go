@@ -25,7 +25,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"regexp"
 )
 
 var fix = flag.Bool("fix", false, "add header if not present")
@@ -49,8 +48,6 @@ var licenseText = `// Copyright 2018-2019 CERN
 // or submit itself to any jurisdiction.
 
 `
-
-var license = regexp.MustCompile(licenseText)
 
 const prefix = "// Copyright "
 
@@ -79,10 +76,12 @@ func main() {
 		// Check if license is at the top of the file.
 		if !bytes.HasPrefix(src, []byte(prefix)) {
 			err := fmt.Errorf("%v: license header not present or not at the top, to fix run: go run tools/check-license/check-license.go -fix", path)
-			if *fix == true {
+			if *fix {
 				newSrc := licenseText + string(src)
-				ioutil.WriteFile(path, []byte(newSrc), 644)
-				src = []byte(newSrc)
+				if err := ioutil.WriteFile(path, []byte(newSrc), 0644); err != nil {
+					fmt.Println(err)
+					os.Exit(1)
+				}
 			} else {
 				return err
 			}

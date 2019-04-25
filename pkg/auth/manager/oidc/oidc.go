@@ -26,12 +26,9 @@ import (
 
 	"github.com/cernbox/reva/pkg/auth"
 	"github.com/cernbox/reva/pkg/auth/manager/registry"
-	"github.com/cernbox/reva/pkg/log"
 	oidc "github.com/coreos/go-oidc"
 	"golang.org/x/oauth2"
 )
-
-var logger = log.New("oidc")
 
 func init() {
 	registry.Register("oidc", New)
@@ -93,18 +90,13 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, token string) (contex
 		return ctx, fmt.Errorf("failed to parse claims: %v", err)
 	}
 
-	if !claims.Verified {
-		// FIXME make configurable
-		//return nil, fmt.Errorf("email (%q) in returned claims was not verified", claims.Email)
-	}
+	// TODO(jfd): make it configurable.
+	// if !claims.Verified {
+	// return nil, fmt.Errorf("email (%q) in returned claims was not verified", claims.Email)
+	// }
 
 	// store claims in context
 	ctx = context.WithValue(ctx, ClaimsKey, claims)
 
 	return ctx, nil
 }
-
-type userNotFoundError string
-
-func (e userNotFoundError) Error() string   { return string(e) }
-func (e userNotFoundError) IsUserNotFound() {}

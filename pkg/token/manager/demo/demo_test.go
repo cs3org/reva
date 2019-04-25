@@ -62,7 +62,7 @@ func TestEncodeDecode(t *testing.T) {
 		t.Fatal("groups key in decoded claims is not []string")
 	}
 
-	if len(groups) != len(groups) {
+	if len(groups) != len(decodedGroups) {
 		t.Fatalf("groups claims differ in length: expected=%d got=%d", len(groups), len(decodedGroups))
 	}
 }

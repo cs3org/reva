@@ -19,7 +19,6 @@
 package ocdavsvc
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -31,6 +30,7 @@ import (
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
+	"github.com/cernbox/reva/pkg/appctx"
 )
 
 func isChunked(fn string) (bool, error) {
@@ -59,15 +59,16 @@ func handleMacOSFinder(w http.ResponseWriter, r *http.Request) error {
 	   protect the end-user.
 	*/
 
+	log := appctx.GetLogger(r.Context())
 	content := r.Header.Get("Content-Length")
 	expected := r.Header.Get("X-Expected-Entity-Length")
-	logger.Build().Str("content-lenght", content).Str("x-expected-entity-length", expected).Msg(r.Context(), "Mac OS Finder corner-case detected")
+	log.Warn().Str("content-lenght", content).Str("x-expected-entity-length", expected).Msg("Mac OS Finder corner-case detected")
 
 	// The best mitigation to this problem is to tell users to not use crappy Finder.
 	// Another possible mitigation is to change the use the value of X-Expected-Entity-Length header in the Content-Length header.
 	expectedInt, err := strconv.ParseInt(expected, 10, 64)
 	if err != nil {
-		logger.Error(r.Context(), err)
+		log.Error().Err(err).Msg("error parsing expected length")
 		w.WriteHeader(http.StatusBadRequest)
 		return err
 	}
@@ -103,17 +104,18 @@ func isContentRange(r *http.Request) bool {
 
 func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
 	fn := r.URL.Path
 
 	if r.Body == nil {
-		logger.Println(ctx, "body is nil")
+		log.Warn().Msg("body is nil")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	ok, err := isChunked(fn)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error checking if request is chunked or not")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -124,7 +126,7 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if isContentRange(r) {
-		logger.Println(ctx, "Content-Range not supported for PUT")
+		log.Warn().Msg("Content-Range not supported for PUT")
 		w.WriteHeader(http.StatusNotImplemented)
 		return
 	}
@@ -132,14 +134,15 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 	if sufferMacOSFinder(r) {
 		err := handleMacOSFinder(w, r)
 		if err != nil {
-			logger.Error(ctx, err)
+			log.Error().Err(err).Msg("error handling Mac OS corner-case")
+			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 	}
 
 	client, err := s.getClient()
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -151,14 +154,13 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 	}
 	sRes, err := client.Stat(ctx, sReq)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if sRes.Status.Code != rpcpb.Code_CODE_OK {
 		if sRes.Status.Code != rpcpb.Code_CODE_NOT_FOUND {
-			logger.Println(ctx, sRes.Status)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -166,7 +168,7 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 
 	info := sRes.Info
 	if info != nil && info.Type != storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_FILE {
-		logger.Println(ctx, "resource is not a file")
+		log.Warn().Msg("resource is not a file")
 		w.WriteHeader(http.StatusConflict)
 		return
 	}
@@ -176,7 +178,7 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 		serverETag := info.Etag
 		if clientETag != "" {
 			if clientETag != serverETag {
-				logger.Build().Str("client-etag", clientETag).Str("server-etag", serverETag).Msg(ctx, "etags mismatch")
+				log.Warn().Str("client-etag", clientETag).Str("server-etag", serverETag).Msg("etags mismatch")
 				w.WriteHeader(http.StatusPreconditionFailed)
 				return
 			}
@@ -192,13 +194,12 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 	// where to upload the file?
 	uRes, err := client.InitiateFileUpload(ctx, uReq)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error initiating file upload")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if uRes.Status.Code != rpcpb.Code_CODE_OK {
-		logger.Println(ctx, uRes.Status)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -207,7 +208,7 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 	// TODO(labkode): do a protocol switch
 	httpReq, err := http.NewRequest("PUT", dataServerURL, r.Body)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error creating http request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -215,7 +216,7 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 	//TODO: make header / auth configurable, check if token is available before doing stat requests
 	tkn, ok := token.ContextGetToken(ctx)
 	if !ok {
-		logger.Error(ctx, errors.New("could not read token from context"))
+		log.Error().Msg("error reading token from context")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -229,26 +230,24 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 
 	httpRes, err := httpClient.Do(httpReq)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error doing http request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if httpRes.StatusCode != http.StatusOK {
-		logger.Println(ctx, httpRes.StatusCode)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	sRes, err = client.Stat(ctx, sReq)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if sRes.Status.Code != rpcpb.Code_CODE_OK {
-		logger.Println(ctx, sRes.Status)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -272,5 +271,4 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 
 	// overwrite
 	w.WriteHeader(http.StatusNoContent)
-	return
 }

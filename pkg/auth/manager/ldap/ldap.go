@@ -25,13 +25,10 @@ import (
 
 	"github.com/cernbox/reva/pkg/auth"
 	"github.com/cernbox/reva/pkg/auth/manager/registry"
-	"github.com/cernbox/reva/pkg/log"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"gopkg.in/ldap.v2"
 )
-
-var logger = log.New("auth-manager-ldap")
 
 func init() {
 	registry.Register("ldap", New)
@@ -58,7 +55,7 @@ type config struct {
 func parseConfig(m map[string]interface{}) (*config, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
-		logger.Error(context.Background(), errors.Wrap(err, "error decoding conf"))
+		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
 	}
 	return c, nil

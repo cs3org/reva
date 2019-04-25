@@ -23,13 +23,10 @@ import (
 	"fmt"
 
 	"github.com/cernbox/reva/pkg/app"
-	"github.com/cernbox/reva/pkg/log"
 	"github.com/cernbox/reva/pkg/storage"
 
 	"github.com/mitchellh/mapstructure"
 )
-
-var logger = log.New("demo")
 
 type provider struct {
 	iframeUIProvider string
@@ -61,8 +58,3 @@ func New(m map[string]interface{}) (app.Provider, error) {
 	}
 	return &provider{iframeUIProvider: c.IFrameUIProvider}, nil
 }
-
-type notFoundError string
-
-func (e notFoundError) Error() string { return string(e) }
-func (e notFoundError) IsNotFound()   {}

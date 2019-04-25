@@ -21,16 +21,19 @@ package datasvc
 import (
 	"net/http"
 	"strings"
+
+	"github.com/cernbox/reva/pkg/appctx"
 )
 
 func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
 	fn := r.URL.Path
 
 	fsfn := strings.TrimPrefix(fn, s.conf.ProviderPath)
 	err := s.storage.Upload(ctx, fsfn, r.Body)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error uploading file")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

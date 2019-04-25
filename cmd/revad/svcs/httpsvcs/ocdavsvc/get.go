@@ -19,7 +19,6 @@
 package ocdavsvc
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -28,16 +27,18 @@ import (
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/utils"
+	"github.com/cernbox/reva/pkg/appctx"
 	"github.com/cernbox/reva/pkg/token"
 )
 
 func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
 	fn := r.URL.Path
 
 	client, err := s.getClient()
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -49,20 +50,20 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 	}
 	sRes, err := client.Stat(ctx, sReq)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if sRes.Status.Code != rpcpb.Code_CODE_OK {
-		logger.Println(ctx, sRes.Status)
+		log.Warn().Str("code", string(sRes.Status.Code)).Msg("grpc request failed")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	info := sRes.Info
 	if info.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
-		logger.Println(ctx, "resource is a folder, cannot be downloaded")
+		log.Warn().Msg("resource is a folder and cannot be downloaded")
 		w.WriteHeader(http.StatusNotImplemented)
 		return
 	}
@@ -75,13 +76,12 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 
 	dRes, err := client.InitiateFileDownload(ctx, dReq)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error initiating file download")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if dRes.Status.Code != rpcpb.Code_CODE_OK {
-		logger.Println(ctx, dRes.Status)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -90,7 +90,7 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 	// TODO(labkode): perfrom protocol switch
 	httpReq, err := http.NewRequest("GET", dataServerURL, nil)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error creating http request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -98,7 +98,7 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 	//TODO: make header / auth configurable, check if token is available before doing stat requests
 	tkn, ok := token.ContextGetToken(ctx)
 	if !ok {
-		logger.Error(ctx, errors.New("could not read token from context"))
+		log.Error().Msg("error reading token from context")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -112,13 +112,12 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 
 	httpRes, err := httpClient.Do(httpReq)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error performing http request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if httpRes.StatusCode != http.StatusOK {
-		logger.Println(ctx, httpRes.StatusCode)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -136,6 +135,6 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 		}
 	*/
 	if _, err := io.Copy(w, httpRes.Body); err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error finishing copying data to response")
 	}
 }

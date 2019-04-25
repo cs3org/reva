@@ -49,8 +49,7 @@ type config struct {
 }
 
 type svc struct {
-	handler http.Handler
-	conf    *config
+	conf *config
 }
 
 func (s *svc) Prefix() string {

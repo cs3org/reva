@@ -27,16 +27,18 @@ import (
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
+	"github.com/cernbox/reva/pkg/appctx"
 )
 
 func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
 
 	src := r.URL.Path
 	dstHeader := r.Header.Get("Destination")
 	overwrite := r.Header.Get("Overwrite")
 
-	logger.Build().Str("source", src).Str("destination", dstHeader).Str("overwrite", overwrite).Msg(ctx, "move")
+	log.Info().Str("src", src).Str("dst", dstHeader).Str("overwrite", overwrite).Msg("move")
 
 	if dstHeader == "" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -55,7 +57,7 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 
 	client, err := s.getClient()
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -68,8 +70,8 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 	}
 
 	urlPath := dstURL.Path
-	baseURI := r.Context().Value(ctxKeyBaseURI).(string)
-	logger.Println(r.Context(), "Move urlPath=", urlPath, " baseURI=", baseURI)
+	baseURI := r.Context().Value("baseuri").(string)
+	log.Info().Str("url_path", urlPath).Str("base_uri", baseURI).Msg("move urls")
 	i := strings.Index(urlPath, baseURI)
 	if i == -1 {
 		w.WriteHeader(http.StatusBadRequest)
@@ -84,7 +86,7 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 	}
 	srcStatRes, err := client.Stat(ctx, srcStatReq)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -94,7 +96,6 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		logger.Println(ctx, srcStatRes.Status)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -109,7 +110,7 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 	dstStatReq := &storageproviderv0alphapb.StatRequest{Ref: dstStatRef}
 	dstStatRes, err := client.Stat(ctx, dstStatReq)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -119,7 +120,7 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 		successCode = http.StatusNoContent // 204 if target already existed, see https://tools.ietf.org/html/rfc4918#section-9.9.4
 
 		if overwrite == "F" {
-			logger.Println(ctx, "destination already exists: ", dst)
+			log.Warn().Str("dst", dst).Msg("dst already exists")
 			w.WriteHeader(http.StatusPreconditionFailed) // 412, see https://tools.ietf.org/html/rfc4918#section-9.9.4
 			return
 		}
@@ -128,14 +129,13 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 		delReq := &storageproviderv0alphapb.DeleteRequest{Ref: dstStatRef}
 		delRes, err := client.Delete(ctx, delReq)
 		if err != nil {
-			logger.Error(ctx, err)
+			log.Error().Err(err).Msg("error sending grpc delete request")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
 		// TODO return a forbidden status if read only?
 		if delRes.Status.Code != rpcpb.Code_CODE_OK {
-			logger.Println(ctx, delRes.Status)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -150,12 +150,11 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 		intStatReq := &storageproviderv0alphapb.StatRequest{Ref: ref2}
 		intStatRes, err := client.Stat(ctx, intStatReq)
 		if err != nil {
-			logger.Error(ctx, err)
+			log.Error().Err(err).Msg("error sending grpc stat request")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		if intStatRes.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
-			logger.Println(ctx, "intermediateDir:", intermediateDir)
 			w.WriteHeader(http.StatusConflict) // 409 if intermediate dir is missing, see https://tools.ietf.org/html/rfc4918#section-9.9.4
 			return
 		}
@@ -171,26 +170,24 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 	mReq := &storageproviderv0alphapb.MoveRequest{Source: sourceRef, Destination: dstRef}
 	mRes, err := client.Move(ctx, mReq)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error sending move grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if mRes.Status.Code != rpcpb.Code_CODE_OK {
-		logger.Println(ctx, mRes.Status)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	dstStatRes, err = client.Stat(ctx, dstStatReq)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if dstStatRes.Status.Code != rpcpb.Code_CODE_OK {
-		logger.Println(ctx, dstStatRes.Status)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

@@ -20,15 +20,13 @@ package jwt
 
 import (
 	"context"
-	"github.com/cernbox/reva/pkg/err"
-	"github.com/cernbox/reva/pkg/log"
+
 	"github.com/cernbox/reva/pkg/token"
 	"github.com/cernbox/reva/pkg/token/manager/registry"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
 )
-
-var logger = log.New("token-manager-jwt")
 
 func init() {
 	registry.Register("jwt", New)
@@ -37,13 +35,11 @@ func init() {
 func parseConfig(m map[string]interface{}) (*config, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
-		logger.Error(context.Background(), errors.Wrap(err, "error decoding conf"))
+		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
 	}
 	return c, nil
 }
-
-var errors = err.New("jwt")
 
 // New returns an implementation of the token manager that uses JWT as tokens.
 func New(value map[string]interface{}) (token.Manager, error) {

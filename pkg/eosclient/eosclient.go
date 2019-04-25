@@ -32,10 +32,9 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/cernbox/reva/pkg/log"
-
-	"github.com/cernbox/reva/pkg/err"
+	"github.com/cernbox/reva/pkg/appctx"
 	"github.com/gofrs/uuid"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -43,39 +42,9 @@ const (
 	rootGroup     = "root"
 	versionPrefix = ".sys.v#."
 )
-
-/*
-type ACLMode string
-
-// ACLType represents the type of of the acl (user, e-group, unix-group, ...)
-type ACLType string
-
-const (
-	// ACLModeInvalid specifies an invalid acl mode.
-	ACLModeInvalid = ACLMode("invalid")
-	// ACLModeRead specifies that only read and list operations will be allowed on the directory.
-	ACLModeRead = ACLMode("rx")
-	// ACLModeReadWrite specifies that the directory will be writable.
-	ACLModeReadWrite = ACLMode("rwx!d")
-
-	ACLTypeUnknown = ACLType(iota)
-	// ACLTypeUser specifies that the acl will be set for an individual user.
-	ACLTypeUser
-	// ACLTypeGroup specifies that the acl will be set for a CERN e-group.
-	ACLTypeGroup
-	// ACLTypeUnixGroup specifies that the acl will be set for a unix group.
-	ACLTypeUnixGroup
-
-	rootUser      = "root"
-	rootGroup     = "root"
-	versionPrefix = ".sys.v#."
-)
-*/
 
 var (
 	errInvalidACL = errors.New("invalid acl")
-	logger        = log.New("eosclient")
-	errors        = err.New("eosclient")
 )
 
 // ACL represents an EOS ACL.
@@ -158,6 +127,8 @@ func (c *Client) getUnixUser(username string) (*gouser.User, error) {
 
 // exec executes the command and returns the stdout, stderr and return code
 func (c *Client) execute(ctx context.Context, cmd *exec.Cmd) (string, string, error) {
+	log := appctx.GetLogger(ctx)
+
 	outBuf := &bytes.Buffer{}
 	errBuf := &bytes.Buffer{}
 	cmd.Stdout = outBuf
@@ -192,7 +163,7 @@ func (c *Client) execute(ctx context.Context, cmd *exec.Cmd) (string, string, er
 
 	args := fmt.Sprintf("%s", cmd.Args)
 	env := fmt.Sprintf("%s", cmd.Env)
-	logger.Build().Str("args", args).Str("env", env).Int("exit", exitStatus).Msg(ctx, "eos command executed")
+	log.Info().Str("args", args).Str("env", env).Int("exit", exitStatus).Msg("eos cmd")
 
 	if err != nil && exitStatus != 2 { // don't wrap the notFoundError
 		err = errors.Wrap(err, "error while executing command")
@@ -297,6 +268,8 @@ func getUsername(uid string) (string, error) {
 // EOS returns uids/gid for Citrine version and usernames for older versions.
 // For Citire we need to convert back the uid back to username.
 func (c *Client) ListACLs(ctx context.Context, username, path string) ([]*ACL, error) {
+	log := appctx.GetLogger(ctx)
+
 	finfo, err := c.GetFileInfoByPath(ctx, username, path)
 	if err != nil {
 		return nil, err
@@ -307,7 +280,7 @@ func (c *Client) ListACLs(ctx context.Context, username, path string) ([]*ACL, e
 	for _, a := range aclManager.getEntries() {
 		username, err := getUsername(a.recipient)
 		if err != nil {
-			logger.Error(ctx, err)
+			log.Warn().Err(err).Str("username", username).Msg("acl entry for user is invalid")
 			continue
 		}
 		acl := &ACL{
@@ -501,12 +474,6 @@ func (c *Client) PurgeDeletedEntries(ctx context.Context, username string) error
 	return err
 }
 
-func getVersionFolder(p string) string {
-	basename := path.Base(p)
-	versionFolder := path.Join(path.Dir(p), versionPrefix+basename)
-	return versionFolder
-}
-
 // ListVersions list all the versions for a given file.
 func (c *Client) ListVersions(ctx context.Context, username, p string) ([]*FileInfo, error) {
 	basename := path.Base(p)
@@ -639,8 +606,8 @@ func (c *Client) parseQuota(path, raw string) (int, int, error) {
 
 		space := m["space"]
 		if strings.HasPrefix(path, space) {
-			maxBytesString, _ := m["maxlogicalbytes"]
-			usedBytesString, _ := m["usedlogicalbytes"]
+			maxBytesString := m["maxlogicalbytes"]
+			usedBytesString := m["usedlogicalbytes"]
 			maxBytes, _ := strconv.ParseInt(maxBytesString, 10, 64)
 			usedBytes, _ := strconv.ParseInt(usedBytesString, 10, 64)
 			return int(maxBytes), int(usedBytes), nil
@@ -819,192 +786,6 @@ func (m *aclManager) getEntries() []*aclEntry {
 	return m.aclEntries
 }
 
-/*
-func (m *aclManager) getUsers() []*aclEntry {
-	entries := []*aclEntry{}
-	for _, e := range m.aclEntries {
-		if e.aclType == ACLTypeUser {
-			entries = append(entries, e)
-		}
-	}
-	return entries
-}
-
-func (m *aclManager) getUsersWithReadPermission() []*aclEntry {
-	entries := []*aclEntry{}
-	for _, e := range m.aclEntries {
-		if e.aclType == ACLTypeUser && e.hasReadPermissions() {
-			entries = append(entries, e)
-		}
-	}
-	return entries
-}
-
-func (m *aclManager) getUsersWithWritePermission() []*aclEntry {
-	entries := []*aclEntry{}
-	for _, e := range m.aclEntries {
-		if e.aclType == ACLTypeUser && e.hasWritePermissions() {
-			entries = append(entries, e)
-		}
-	}
-	return entries
-}
-
-func (m *aclManager) getGroups() []*aclEntry {
-	entries := []*aclEntry{}
-	for _, e := range m.aclEntries {
-		if e.aclType == ACLTypeGroup {
-			entries = append(entries, e)
-		}
-	}
-	return entries
-}
-
-func (m *aclManager) getGroupsWithReadPermission() []*aclEntry {
-	entries := []*aclEntry{}
-	for _, e := range m.aclEntries {
-		if e.aclType == ACLTypeGroup && e.hasReadPermissions() {
-			entries = append(entries, e)
-		}
-	}
-	return entries
-}
-
-func (m *aclManager) getGroupsWithWritePermission() []*aclEntry {
-	entries := []*aclEntry{}
-	for _, e := range m.aclEntries {
-		if e.aclType == ACLTypeGroup && e.hasWritePermissions() {
-			entries = append(entries, e)
-		}
-	}
-	return entries
-}
-
-func (m *aclManager) getUnixGroups() []*aclEntry {
-	entries := []*aclEntry{}
-	for _, e := range m.aclEntries {
-		if e.aclType == ACLTypeUnixGroup {
-			entries = append(entries, e)
-		}
-	}
-	return entries
-}
-
-func (m *aclManager) getUnixGroupsWithReadPermission() []*aclEntry {
-	entries := []*aclEntry{}
-	for _, e := range m.aclEntries {
-		if e.aclType == ACLTypeUnixGroup && e.hasReadPermissions() {
-			entries = append(entries, e)
-		}
-	}
-	return entries
-}
-
-func (m *aclManager) getUnixGroupsWithWritePermission() []*aclEntry {
-	entries := []*aclEntry{}
-	for _, e := range m.aclEntries {
-		if e.aclType == ACLTypeUnixGroup && e.hasWritePermissions() {
-			entries = append(entries, e)
-		}
-	}
-	return entries
-}
-
-func (m *aclManager) getUser(username string) *aclEntry {
-	for _, u := range m.getUsers() {
-		if u.recipient == username {
-			return u
-		}
-	}
-	return nil
-}
-
-func (m *aclManager) getGroup(group string) *aclEntry {
-	for _, e := range m.getGroups() {
-		if e.recipient == group {
-			return e
-		}
-	}
-	return nil
-}
-
-func (m *aclManager) getUnixGroup(unixGroup string) *aclEntry {
-	for _, e := range m.getUnixGroups() {
-		if e.recipient == unixGroup {
-			return e
-		}
-	}
-	return nil
-}
-
-func (m *aclManager) deleteUser(ctx context.Context, username string) {
-	for i, e := range m.aclEntries {
-		if e.recipient == username && e.aclType == ACLTypeUser {
-			m.aclEntries = append(m.aclEntries[:i], m.aclEntries[i+1:]...)
-			return
-		}
-	}
-}
-
-func (m *aclManager) addUser(ctx context.Context, username string, mode ACLMode) error {
-	m.deleteUser(ctx, username)
-	sysACL := strings.Join([]string{string(ACLTypeUser), username, string(mode)}, ":")
-	newEntry, err := newACLEntry(ctx, sysACL)
-	if err != nil {
-		return err
-	}
-	m.aclEntries = append(m.aclEntries, newEntry)
-	return nil
-}
-
-func (m *aclManager) deleteGroup(ctx context.Context, group string) {
-	for i, e := range m.aclEntries {
-		if e.recipient == group && e.aclType == ACLTypeGroup {
-			m.aclEntries = append(m.aclEntries[:i], m.aclEntries[i+1:]...)
-			return
-		}
-	}
-}
-
-func (m *aclManager) addGroup(ctx context.Context, group string, mode ACLMode) error {
-	m.deleteGroup(ctx, group)
-	sysACL := strings.Join([]string{string(ACLTypeGroup), group, string(mode)}, ":")
-	newEntry, err := newACLEntry(ctx, sysACL)
-	if err != nil {
-		return err
-	}
-	m.aclEntries = append(m.aclEntries, newEntry)
-	return nil
-}
-
-func (m *aclManager) deleteUnixGroup(ctx context.Context, unixGroup string) {
-	for i, e := range m.aclEntries {
-		if e.recipient == unixGroup && e.aclType == ACLTypeUnixGroup {
-			m.aclEntries = append(m.aclEntries[:i], m.aclEntries[i+1:]...)
-			return
-		}
-	}
-}
-
-func (m *aclManager) addUnixGroup(ctx context.Context, unixGroup string, mode ACLMode) error {
-	m.deleteUnixGroup(ctx, unixGroup)
-	sysACL := strings.Join([]string{string(ACLTypeUnixGroup), unixGroup, string(mode)}, ":")
-	newEntry, err := newACLEntry(ctx, sysACL)
-	if err != nil {
-		return err
-	}
-	m.aclEntries = append(m.aclEntries, newEntry)
-	return nil
-}
-*/
-
-func (m *aclManager) readOnlyToEOSPermissions(readOnly bool) string {
-	if readOnly {
-		return "rx"
-	}
-	return "rwx+d"
-}
-
 func (m *aclManager) serialize() string {
 	sysACL := []string{}
 	for _, e := range m.aclEntries {
@@ -1036,16 +817,6 @@ func newACLEntry(ctx context.Context, singleSysACL string) (*aclEntry, error) {
 		mode:      mode,
 	}, nil
 }
-
-/*
-func (a *aclEntry) hasWritePermissions() bool {
-	return a.mode == ACLModeReadWrite
-}
-
-func (a *aclEntry) hasReadPermissions() bool {
-	return a.mode == ACLModeRead || a.mode == ACLModeReadWrite
-}
-*/
 
 func (a *aclEntry) serialize() string {
 	return strings.Join([]string{string(a.aclType), a.recipient, a.mode}, ":")

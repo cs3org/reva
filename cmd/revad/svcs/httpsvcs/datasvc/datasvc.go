@@ -25,7 +25,6 @@ import (
 
 	"github.com/cernbox/reva/cmd/revad/httpserver"
 	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs"
-	"github.com/cernbox/reva/pkg/log"
 	"github.com/cernbox/reva/pkg/storage"
 	"github.com/cernbox/reva/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
@@ -34,8 +33,6 @@ import (
 func init() {
 	httpserver.Register("datasvc", New)
 }
-
-var logger = log.New("datasvc")
 
 type config struct {
 	Prefix       string                            `mapstructure:"prefix"`

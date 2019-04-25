@@ -19,8 +19,6 @@
 package cors
 
 import (
-	"github.com/cernbox/reva/pkg/log"
-
 	"github.com/cernbox/reva/cmd/revad/httpserver"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/cors"
@@ -29,8 +27,6 @@ import (
 func init() {
 	httpserver.RegisterMiddleware("cors", New)
 }
-
-var logger = log.New("cors")
 
 type config struct {
 	Priority           int      `mapstructure:"priority"`

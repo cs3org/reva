@@ -32,26 +32,30 @@ import (
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
+
 	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/utils"
+	"github.com/cernbox/reva/pkg/appctx"
 	"github.com/cernbox/reva/pkg/user"
 	"github.com/pkg/errors"
 )
 
 func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
 	fn := r.URL.Path
 	listChildren := r.Header.Get("Depth") != "0"
 
 	_, status, err := readPropfind(r.Body)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error reading propfind request")
 		w.WriteHeader(status)
 		return
 	}
 
 	client, err := s.getClient()
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -62,7 +66,7 @@ func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request) {
 	req := &storageproviderv0alphapb.StatRequest{Ref: ref}
 	res, err := client.Stat(ctx, req)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error sending a grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -72,7 +76,6 @@ func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		logger.Println(ctx, res.Status)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -85,12 +88,11 @@ func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request) {
 		}
 		res, err := client.ListContainer(ctx, req)
 		if err != nil {
-			logger.Error(ctx, err)
+			log.Error().Err(err).Msg("error sending list container grpc request")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		if res.Status.Code != rpcpb.Code_CODE_OK {
-			logger.Println(ctx, res.Status)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -99,7 +101,7 @@ func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request) {
 
 	propRes, err := s.formatPropfind(ctx, fn, infos)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -148,27 +150,6 @@ func (s *svc) formatPropfind(ctx context.Context, fn string, mds []*storageprovi
 		}
 		responses = append(responses, res)
 	}
-	responsesXML, err := xml.Marshal(&responses)
-	if err != nil {
-		return "", err
-	}
-
-	msg := `<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:" `
-	msg += `xmlns:s="http://sabredav.org/ns" xmlns:oc="http://owncloud.org/ns">`
-	msg += string(responsesXML) + `</d:multistatus>`
-	return msg, nil
-}
-
-func (s *svc) mdsToXML(ctx context.Context, mds []*storageproviderv0alphapb.ResourceInfo) (string, error) {
-	responses := []*responseXML{}
-	for _, md := range mds {
-		res, err := s.mdToPropResponse(ctx, md)
-		if err != nil {
-			return "", err
-		}
-		responses = append(responses, res)
-	}
-
 	responsesXML, err := xml.Marshal(&responses)
 	if err != nil {
 		return "", err

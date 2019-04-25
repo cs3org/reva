@@ -32,14 +32,12 @@ import (
 
 	"github.com/cernbox/reva/pkg/storage/fs/registry"
 
-	"github.com/cernbox/reva/pkg/log"
+	"github.com/cernbox/reva/pkg/appctx"
 	"github.com/cernbox/reva/pkg/mime"
 	"github.com/cernbox/reva/pkg/storage"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
-
-var logger = log.New("storage-provider-local")
 
 func init() {
 	registry.Register("local", New)
@@ -52,7 +50,7 @@ type config struct {
 func parseConfig(m map[string]interface{}) (*config, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
-		logger.Error(context.Background(), errors.Wrap(err, "error decoding conf"))
+		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
 	}
 	return c, nil
@@ -93,38 +91,39 @@ type localFS struct{ root string }
 // - device (if available) and
 // - size.
 // errors are logged, but an etag will still be returned
-func calcEtag(fi os.FileInfo) string {
+func calcEtag(ctx context.Context, fi os.FileInfo) string {
+	log := appctx.GetLogger(ctx)
 	h := md5.New()
 	err := binary.Write(h, binary.BigEndian, fi.ModTime().Unix())
 	if err != nil {
-		logger.Error(context.Background(), err)
+		log.Error().Err(err).Msg("error writing mtime")
 	}
 	stat, ok := fi.Sys().(*syscall.Stat_t)
 	if ok {
 		// take device and inode into account
 		err = binary.Write(h, binary.BigEndian, stat.Ino)
 		if err != nil {
-			logger.Error(context.Background(), err)
+			log.Error().Err(err).Msg("error writing inode")
 		}
 		err = binary.Write(h, binary.BigEndian, stat.Dev)
 		if err != nil {
-			logger.Error(context.Background(), err)
+			log.Error().Err(err).Msg("error writing device")
 		}
 	}
 	err = binary.Write(h, binary.BigEndian, fi.Size())
 	if err != nil {
-		logger.Error(context.Background(), err)
+		log.Error().Err(err).Msg("error writing size")
 	}
 	return fmt.Sprintf(`"%x"`, h.Sum(nil))
 }
 
-func (fs *localFS) normalize(fi os.FileInfo, fn string) *storage.MD {
+func (fs *localFS) normalize(ctx context.Context, fi os.FileInfo, fn string) *storage.MD {
 	fn = fs.removeRoot(path.Join("/", fn))
 	md := &storage.MD{
 		ID:          "fileid-" + strings.TrimPrefix(fn, "/"),
 		Path:        fn,
 		IsDir:       fi.IsDir(),
-		Etag:        calcEtag(fi),
+		Etag:        calcEtag(ctx, fi),
 		Mime:        mime.Detect(fi.IsDir(), fn),
 		Size:        uint64(fi.Size()),
 		Permissions: &storage.PermissionSet{ListContainer: true, CreateContainer: true},
@@ -210,7 +209,7 @@ func (fs *localFS) GetMD(ctx context.Context, fn string) (*storage.MD, error) {
 		return nil, errors.Wrap(err, "localfs: error stating "+fn)
 	}
 
-	return fs.normalize(md, fn), nil
+	return fs.normalize(ctx, md, fn), nil
 }
 
 func (fs *localFS) ListFolder(ctx context.Context, fn string) ([]*storage.MD, error) {
@@ -225,7 +224,7 @@ func (fs *localFS) ListFolder(ctx context.Context, fn string) ([]*storage.MD, er
 
 	finfos := []*storage.MD{}
 	for _, md := range mds {
-		finfos = append(finfos, fs.normalize(md, path.Join(fn, md.Name())))
+		finfos = append(finfos, fs.normalize(ctx, md, path.Join(fn, md.Name())))
 	}
 	return finfos, nil
 }
@@ -246,7 +245,6 @@ func (fs *localFS) Upload(ctx context.Context, fn string, r io.ReadCloser) error
 		return errors.Wrap(err, "localfs: eror writing to tmp file "+tmp.Name())
 	}
 
-	logger.Println(ctx, "renaming ", tmp.Name(), " to ", fn)
 	// TODO(labkode): make sure rename is atomic, missing fsync ...
 	if err := os.Rename(tmp.Name(), fn); err != nil {
 		return errors.Wrap(err, "localfs: error renaming from "+tmp.Name()+" to "+fn)

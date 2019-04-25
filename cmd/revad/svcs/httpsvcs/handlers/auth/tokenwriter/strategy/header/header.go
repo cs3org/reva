@@ -19,17 +19,13 @@
 package header
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers/auth/tokenwriter/registry"
 	"github.com/cernbox/reva/pkg/auth"
-	"github.com/cernbox/reva/pkg/log"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
-
-var logger = log.New("tokenwriter-strategy-header")
 
 func init() {
 	registry.Register("header", New)
@@ -46,7 +42,7 @@ type strategy struct {
 func parseConfig(m map[string]interface{}) (*config, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
-		logger.Error(context.Background(), errors.Wrap(err, "error decoding conf"))
+		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
 	}
 	return c, nil

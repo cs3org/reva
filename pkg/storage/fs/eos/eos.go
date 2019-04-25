@@ -31,7 +31,6 @@ import (
 	"github.com/cernbox/reva/pkg/storage/fs/registry"
 
 	"github.com/cernbox/reva/pkg/eosclient"
-	"github.com/cernbox/reva/pkg/log"
 	"github.com/cernbox/reva/pkg/mime"
 	"github.com/cernbox/reva/pkg/storage"
 	"github.com/cernbox/reva/pkg/user"
@@ -44,8 +43,6 @@ func init() {
 }
 
 var hiddenReg = regexp.MustCompile(`\.sys\..#.`)
-
-var logger = log.New("storage-provider-eos")
 
 type contextUserRequiredErr string
 
@@ -174,8 +171,6 @@ func New(m map[string]interface{}) (storage.FS, error) {
 
 func (fs *eosStorage) getInternalPath(ctx context.Context, fn string) string {
 	internalPath := path.Join(fs.mountpoint, fn)
-	msg := fmt.Sprintf("func=getInternalPath outter=%s inner=%s", fn, internalPath)
-	logger.Println(ctx, msg)
 	return internalPath
 }
 
@@ -185,8 +180,6 @@ func (fs *eosStorage) removeNamespace(ctx context.Context, np string) string {
 		p = "/"
 	}
 
-	msg := fmt.Sprintf("func=removeNamespace inner=%s outter=%s", np, p)
-	logger.Println(ctx, msg)
 	return p
 }
 

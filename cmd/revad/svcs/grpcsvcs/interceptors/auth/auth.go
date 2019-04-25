@@ -23,22 +23,20 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cernbox/reva/pkg/err"
 	"github.com/cernbox/reva/pkg/token"
 	"github.com/cernbox/reva/pkg/user"
 
 	"github.com/cernbox/reva/cmd/revad/grpcserver"
 	tokenmgr "github.com/cernbox/reva/pkg/token/manager/registry"
 
-	"github.com/cernbox/reva/pkg/log"
+	"github.com/cernbox/reva/pkg/appctx"
 	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
-
-var logger = log.New("grpc-interceptor-auth")
-var errors = err.New("grpc-interceptor-auth")
 
 func init() {
 	grpcserver.RegisterUnaryInterceptor("auth", NewUnary)
@@ -46,8 +44,9 @@ func init() {
 }
 
 type config struct {
-	Priority        int                               `mapstructure:"priority"`
-	SkipMethods     map[string]bool                   `mapstructure:"skip_methods"`
+	Priority int `mapstructure:"priority"`
+	// TODO(labkode): access a map is more performant as uri as fixed in length.
+	SkipMethods     []string                          `mapstructure:"skip_methods"`
 	Header          string                            `mapstructure:"header"`
 	TokenStrategy   string                            `mapstructure:"token_strategy"`
 	TokenStrategies map[string]map[string]interface{} `mapstructure:"token_strategies"`
@@ -58,7 +57,7 @@ type config struct {
 func parseConfig(m map[string]interface{}) (*config, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
-		logger.Error(context.Background(), errors.Wrap(err, "error decoding conf"))
+		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
 	}
 	return c, nil
@@ -85,9 +84,10 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		return nil, 0, errors.New("header is empty")
 	}
 
-	for k := range conf.SkipMethods {
-		logger.Println(context.Background(), "skiping grpc auth for method: ", k)
-	}
+	// TODO(labkode): maybe we need to log here?
+	//for k := range conf.SkipMethods {
+	//	l.Info().Msgf("skiping grpc auth for method: ", k)
+	//}
 
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
 	if !ok {
@@ -100,8 +100,10 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 	}
 
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		method := strings.ToLower(info.FullMethod)
-		if _, ok := conf.SkipMethods[method]; ok {
+		log := appctx.GetLogger(ctx)
+
+		if skip(info.FullMethod, conf.SkipMethods) {
+			log.Debug().Str("method", info.FullMethod).Msg("skiping auth")
 			return handler(ctx, req)
 		}
 
@@ -116,18 +118,21 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		}
 
 		if tkn == "" {
-			return nil, grpc.Errorf(codes.Unauthenticated, "core access token not found")
+			log.Warn().Msg("access token not found")
+			return nil, status.Errorf(codes.Unauthenticated, "core access token not found")
 		}
 
 		// validate the token
 		claims, err := tokenManager.DismantleToken(ctx, tkn)
 		if err != nil {
-			return nil, grpc.Errorf(codes.Unauthenticated, "core access token is invalid")
+			log.Warn().Msg("access token is invalid")
+			return nil, status.Errorf(codes.Unauthenticated, "core access token is invalid")
 		}
 
 		u := &user.User{}
 		if err := mapstructure.Decode(claims, u); err != nil {
-			return nil, grpc.Errorf(codes.Unauthenticated, "claims are invalid")
+			log.Warn().Msg("claims are invalid")
+			return nil, status.Errorf(codes.Unauthenticated, "claims are invalid")
 		}
 
 		// store user and core access token in context.
@@ -161,12 +166,14 @@ func NewStream(m map[string]interface{}) (grpc.StreamServerInterceptor, int, err
 	}
 
 	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		method := strings.ToLower(info.FullMethod)
-		if _, ok := conf.SkipMethods[method]; ok {
+		ctx := ss.Context()
+		log := appctx.GetLogger(ctx)
+
+		if skip(info.FullMethod, conf.SkipMethods) {
+			log.Debug().Str("method", info.FullMethod).Msg("skiping auth")
 			return handler(srv, ss)
 		}
 
-		ctx := ss.Context()
 		var tkn string
 		md, ok := metadata.FromIncomingContext(ss.Context())
 		if ok && md != nil {
@@ -178,18 +185,21 @@ func NewStream(m map[string]interface{}) (grpc.StreamServerInterceptor, int, err
 		}
 
 		if tkn == "" {
-			return grpc.Errorf(codes.Unauthenticated, "core access token is invalid")
+			log.Warn().Msg("access token not found")
+			return status.Errorf(codes.Unauthenticated, "core access token not found")
 		}
 
 		// validate the token
 		claims, err := tokenManager.DismantleToken(ctx, tkn)
 		if err != nil {
-			return grpc.Errorf(codes.Unauthenticated, "core access token is invalid")
+			log.Warn().Msg("access token invalid")
+			return status.Errorf(codes.Unauthenticated, "core access token is invalid")
 		}
 
 		u := &user.User{}
 		if err := mapstructure.Decode(claims, u); err != nil {
-			return grpc.Errorf(codes.Unauthenticated, "claims are invalid")
+			log.Warn().Msg("user claims invalid")
+			return status.Errorf(codes.Unauthenticated, "claims are invalid")
 		}
 
 		// store user and core access token in context.

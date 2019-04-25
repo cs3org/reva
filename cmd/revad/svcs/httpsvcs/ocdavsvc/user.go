@@ -22,17 +22,17 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/cernbox/reva/pkg/appctx"
 	"github.com/cernbox/reva/pkg/user"
-	"github.com/pkg/errors"
 )
 
 func (s *svc) doUser(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
 
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
-		err := errors.Wrap(contextUserRequiredErr("userrequired"), "error getting user from ctx")
-		logger.Error(ctx, err)
+		log.Error().Msg("error getting user from context")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -49,7 +49,7 @@ func (s *svc) doUser(w http.ResponseWriter, r *http.Request) {
 	}
 	encoded, err := json.Marshal(res)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error encoding json")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

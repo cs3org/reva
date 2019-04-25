@@ -23,7 +23,6 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"path/filepath"
 	"strings"
 
 	storagetypespb "github.com/cernbox/go-cs3apis/cs3/storagetypes"
@@ -32,23 +31,18 @@ import (
 	"github.com/cernbox/reva/cmd/revad/grpcserver"
 	"github.com/cernbox/reva/cmd/revad/svcs/grpcsvcs/utils"
 
-	"github.com/cernbox/reva/pkg/err"
-	"github.com/cernbox/reva/pkg/log"
-	"github.com/cernbox/reva/pkg/storage"
-	"github.com/cernbox/reva/pkg/storage/fs/registry"
-	"github.com/cernbox/reva/pkg/user"
-	"google.golang.org/grpc"
+	"context"
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
-
-	"context"
-
+	"github.com/cernbox/reva/pkg/appctx"
+	"github.com/cernbox/reva/pkg/storage"
+	"github.com/cernbox/reva/pkg/storage/fs/registry"
+	"github.com/cernbox/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
+	"google.golang.org/grpc"
 )
-
-var logger = log.New("storageprovidersvc")
-var errors = err.New("storageprovidersvc")
 
 func init() {
 	grpcserver.Register("storageprovidersvc", New)
@@ -78,7 +72,7 @@ func parseXSTypes(xsTypes map[string]uint32) ([]*storageproviderv0alphapb.Resour
 	for xs, prio := range xsTypes {
 		t := PKG2GRPCXS(xs)
 		if t == storageproviderv0alphapb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID {
-			return nil, errors.Newf("checksum type is invalid: %s", xs)
+			return nil, fmt.Errorf("checksum type is invalid: %s", xs)
 		}
 		xsPrio := &storageproviderv0alphapb.ResourceChecksumPriority{
 			Priority: prio,
@@ -89,19 +83,10 @@ func parseXSTypes(xsTypes map[string]uint32) ([]*storageproviderv0alphapb.Resour
 	return types, nil
 }
 
-func (s *service) isXSAvailable(t storageproviderv0alphapb.ResourceChecksumType) bool {
-	for _, xsPrio := range s.availableXS {
-		if xsPrio.Type == t {
-			return true
-		}
-	}
-	return false
-}
-
 func parseConfig(m map[string]interface{}) (*config, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
-		logger.Error(context.Background(), errors.Wrap(err, "error decoding conf"))
+		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
 	}
 	return c, nil
@@ -142,7 +127,7 @@ func New(m map[string]interface{}, ss *grpc.Server) error {
 	}
 
 	if len(xsTypes) == 0 {
-		return errors.Newf("no available checksum, please set in config")
+		return fmt.Errorf("no available checksum, please set in config")
 	}
 
 	service := &service{
@@ -182,9 +167,10 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *storageprovider
 	// We now simply point the client to the data server.
 	// For example, https://data-server.example.org/home/docs/myfile.txt
 	// or ownclouds://data-server.example.org/home/docs/myfile.txt
+	log := appctx.GetLogger(ctx)
 	url := *s.dataServerURL
 	url.Path = path.Join("/", url.Path, path.Clean(req.Ref.GetPath()))
-	logger.Build().Str("data-server", url.String()).Str("fn", req.Ref.GetPath()).Msg(ctx, "file download")
+	log.Info().Str("data-server", url.String()).Str("fn", req.Ref.GetPath()).Msg("file download")
 	res := &storageproviderv0alphapb.InitiateFileDownloadResponse{
 		DownloadEndpoint: url.String(),
 		Status:           &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
@@ -194,12 +180,13 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *storageprovider
 
 func (s *service) InitiateFileUpload(ctx context.Context, req *storageproviderv0alphapb.InitiateFileUploadRequest) (*storageproviderv0alphapb.InitiateFileUploadResponse, error) {
 	// TODO(labkode): same as download
+	log := appctx.GetLogger(ctx)
 	url := *s.dataServerURL
 	url.Path = path.Join("/", url.Path, path.Clean(req.Ref.GetPath()))
-	logger.Build().Str("data-server", url.String()).
+	log.Info().Str("data-server", url.String()).
 		Str("fn", req.Ref.GetPath()).
 		Str("xs", fmt.Sprintf("%+v", s.conf.AvailableXS)).
-		Msg(ctx, "file upload")
+		Msg("file upload")
 	res := &storageproviderv0alphapb.InitiateFileUploadResponse{
 		UploadEndpoint:     url.String(),
 		Status:             &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
@@ -209,10 +196,11 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *storageproviderv0
 }
 
 func (s *service) GetPath(ctx context.Context, req *storageproviderv0alphapb.GetPathRequest) (*storageproviderv0alphapb.GetPathResponse, error) {
+	log := appctx.GetLogger(ctx)
 	// TODO(labkode): check that the storage ID is the same as the storage provider id.
 	fn, err := s.storage.GetPathByID(ctx, req.ResourceId.OpaqueId)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error getting path by id")
 		res := &storageproviderv0alphapb.GetPathResponse{
 			Status: &rpcpb.Status{
 				Code: rpcpb.Code_CODE_INTERNAL,
@@ -232,10 +220,11 @@ func (s *service) GetPath(ctx context.Context, req *storageproviderv0alphapb.Get
 }
 
 func (s *service) CreateContainer(ctx context.Context, req *storageproviderv0alphapb.CreateContainerRequest) (*storageproviderv0alphapb.CreateContainerResponse, error) {
+	log := appctx.GetLogger(ctx)
 	fn := req.Ref.GetPath()
 	fsfn, _, err := s.unwrap(ctx, fn)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error unwraping path")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INVALID}
 		res := &storageproviderv0alphapb.CreateContainerResponse{Status: status}
 		return res, nil
@@ -247,8 +236,7 @@ func (s *service) CreateContainer(ctx context.Context, req *storageproviderv0alp
 			res := &storageproviderv0alphapb.CreateContainerResponse{Status: status}
 			return res, nil
 		}
-		err = errors.Wrap(err, "error creating folder "+fn)
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error creating folder " + fn)
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL}
 		res := &storageproviderv0alphapb.CreateContainerResponse{Status: status}
 		return res, nil
@@ -260,6 +248,7 @@ func (s *service) CreateContainer(ctx context.Context, req *storageproviderv0alp
 }
 
 func (s *service) Delete(ctx context.Context, req *storageproviderv0alphapb.DeleteRequest) (*storageproviderv0alphapb.DeleteResponse, error) {
+	log := appctx.GetLogger(ctx)
 	fn := req.Ref.GetPath()
 
 	fsfn, _, err := s.unwrap(ctx, fn)
@@ -271,14 +260,12 @@ func (s *service) Delete(ctx context.Context, req *storageproviderv0alphapb.Dele
 
 	if err := s.storage.Delete(ctx, fsfn); err != nil {
 		if _, ok := err.(notFoundError); ok {
-			err := errors.Wrap(err, "file not found")
-			logger.Error(ctx, err)
+			log.Error().Err(err).Msg("file not found")
 			status := &rpcpb.Status{Code: rpcpb.Code_CODE_NOT_FOUND}
 			res := &storageproviderv0alphapb.DeleteResponse{Status: status}
 			return res, nil
 		}
-		err := errors.Wrap(err, "error deleting file")
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error deleting file")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL}
 		res := &storageproviderv0alphapb.DeleteResponse{Status: status}
 		return res, nil
@@ -290,27 +277,27 @@ func (s *service) Delete(ctx context.Context, req *storageproviderv0alphapb.Dele
 }
 
 func (s *service) Move(ctx context.Context, req *storageproviderv0alphapb.MoveRequest) (*storageproviderv0alphapb.MoveResponse, error) {
+	log := appctx.GetLogger(ctx)
 	source := req.Source.GetPath()
 	target := req.Destination.GetPath()
 
 	fss, _, err := s.unwrap(ctx, source)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error unwraping path")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL}
 		res := &storageproviderv0alphapb.MoveResponse{Status: status}
 		return res, nil
 	}
 	fst, _, err := s.unwrap(ctx, target)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error unwraping path")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL}
 		res := &storageproviderv0alphapb.MoveResponse{Status: status}
 		return res, nil
 	}
 
 	if err := s.storage.Move(ctx, fss, fst); err != nil {
-		err := errors.Wrap(err, "storageprovidersvc: error moving file")
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error moving file")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL}
 		res := &storageproviderv0alphapb.MoveResponse{Status: status}
 		return res, nil
@@ -322,6 +309,7 @@ func (s *service) Move(ctx context.Context, req *storageproviderv0alphapb.MoveRe
 }
 
 func (s *service) Stat(ctx context.Context, req *storageproviderv0alphapb.StatRequest) (*storageproviderv0alphapb.StatResponse, error) {
+	log := appctx.GetLogger(ctx)
 	fn := req.Ref.GetPath()
 
 	fsfn, fctx, err := s.unwrap(ctx, fn)
@@ -338,8 +326,7 @@ func (s *service) Stat(ctx context.Context, req *storageproviderv0alphapb.StatRe
 			res := &storageproviderv0alphapb.StatResponse{Status: status}
 			return res, nil
 		}
-		err := errors.Wrap(err, "error stating file")
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error stating file")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL}
 		res := &storageproviderv0alphapb.StatResponse{Status: status}
 		return res, nil
@@ -354,15 +341,16 @@ func (s *service) Stat(ctx context.Context, req *storageproviderv0alphapb.StatRe
 
 func (s *service) ListContainerStream(req *storageproviderv0alphapb.ListContainerStreamRequest, ss storageproviderv0alphapb.StorageProviderService_ListContainerStreamServer) error {
 	ctx := ss.Context()
+	log := appctx.GetLogger(ctx)
 	fn := req.Ref.GetPath()
 
 	fsfn, fctx, err := s.unwrap(ctx, fn)
 	if err != nil {
-		logger.Println(ctx, err)
+		log.Error().Err(err).Msg("error unwraping path")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL}
 		res := &storageproviderv0alphapb.ListContainerStreamResponse{Status: status}
 		if err := ss.Send(res); err != nil {
-			logger.Error(ctx, err)
+			log.Error().Err(err).Msg("error sending response")
 			return err
 		}
 		return nil
@@ -370,12 +358,11 @@ func (s *service) ListContainerStream(req *storageproviderv0alphapb.ListContaine
 
 	mds, err := s.storage.ListFolder(ctx, fsfn)
 	if err != nil {
-		err := errors.Wrap(err, "error listing folder")
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error listing folder")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL}
 		res := &storageproviderv0alphapb.ListContainerStreamResponse{Status: status}
 		if err := ss.Send(res); err != nil {
-			logger.Error(ctx, err)
+			log.Error().Err(err).Msg("error sending response")
 			return err
 		}
 		return nil
@@ -392,7 +379,7 @@ func (s *service) ListContainerStream(req *storageproviderv0alphapb.ListContaine
 		}
 
 		if err := ss.Send(res); err != nil {
-			logger.Error(ctx, err)
+			log.Error().Err(err).Msg("error sending response")
 			return err
 		}
 	}
@@ -400,11 +387,12 @@ func (s *service) ListContainerStream(req *storageproviderv0alphapb.ListContaine
 }
 
 func (s *service) ListContainer(ctx context.Context, req *storageproviderv0alphapb.ListContainerRequest) (*storageproviderv0alphapb.ListContainerResponse, error) {
+	log := appctx.GetLogger(ctx)
 	fn := req.Ref.GetPath()
 
 	fsfn, fctx, err := s.unwrap(ctx, fn)
 	if err != nil {
-		logger.Println(ctx, err)
+		log.Error().Err(err).Msg("error unwraping path")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL}
 		res := &storageproviderv0alphapb.ListContainerResponse{Status: status}
 		return res, nil
@@ -412,8 +400,7 @@ func (s *service) ListContainer(ctx context.Context, req *storageproviderv0alpha
 
 	mds, err := s.storage.ListFolder(ctx, fsfn)
 	if err != nil {
-		err := errors.Wrap(err, "error listing folder")
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error listing folder")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL}
 		res := &storageproviderv0alphapb.ListContainerResponse{Status: status}
 		return res, nil
@@ -432,10 +419,6 @@ func (s *service) ListContainer(ctx context.Context, req *storageproviderv0alpha
 	return res, nil
 }
 
-func (s *service) getSessionFolder(sessionID string) string {
-	return filepath.Join(s.tmpFolder, sessionID)
-}
-
 func getResourceType(isDir bool) storageproviderv0alphapb.ResourceType {
 	if isDir {
 		return storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER
@@ -444,10 +427,10 @@ func getResourceType(isDir bool) storageproviderv0alphapb.ResourceType {
 }
 
 func (s *service) ListFileVersions(ctx context.Context, req *storageproviderv0alphapb.ListFileVersionsRequest) (*storageproviderv0alphapb.ListFileVersionsResponse, error) {
+	log := appctx.GetLogger(ctx)
 	revs, err := s.storage.ListRevisions(ctx, req.Ref.GetPath())
 	if err != nil {
-		err = errors.Wrap(err, "storageprovidersvc: error listing revisions")
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error listing file versions")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL}
 		res := &storageproviderv0alphapb.ListFileVersionsResponse{Status: status}
 		return res, nil
@@ -467,9 +450,9 @@ func (s *service) ListFileVersions(ctx context.Context, req *storageproviderv0al
 }
 
 func (s *service) RestoreFileVersion(ctx context.Context, req *storageproviderv0alphapb.RestoreFileVersionRequest) (*storageproviderv0alphapb.RestoreFileVersionResponse, error) {
+	log := appctx.GetLogger(ctx)
 	if err := s.storage.RestoreRevision(ctx, req.Ref.GetPath(), req.Key); err != nil {
-		err = errors.Wrap(err, "storageprovidersvc: error restoring version")
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error restoring version")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL}
 		res := &storageproviderv0alphapb.RestoreFileVersionResponse{Status: status}
 		return res, nil
@@ -481,14 +464,14 @@ func (s *service) RestoreFileVersion(ctx context.Context, req *storageproviderv0
 
 func (s *service) ListRecycleStream(req *storageproviderv0alphapb.ListRecycleStreamRequest, ss storageproviderv0alphapb.StorageProviderService_ListRecycleStreamServer) error {
 	ctx := ss.Context()
+	log := appctx.GetLogger(ctx)
 	items, err := s.storage.ListRecycle(ctx, "")
 	if err != nil {
-		err := errors.Wrap(err, "storageprovidersvc: error listing recycle")
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error listing recycle")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL}
 		res := &storageproviderv0alphapb.ListRecycleStreamResponse{Status: status}
 		if err := ss.Send(res); err != nil {
-			logger.Error(ctx, err)
+			log.Error().Err(err).Msg("error sending response")
 			return err
 		}
 		return nil
@@ -508,7 +491,7 @@ func (s *service) ListRecycleStream(req *storageproviderv0alphapb.ListRecycleStr
 			},
 		}
 		if err := ss.Send(res); err != nil {
-			logger.Error(ctx, err)
+			log.Error().Err(err).Msg("error sending response")
 			return err
 		}
 	}
@@ -516,10 +499,10 @@ func (s *service) ListRecycleStream(req *storageproviderv0alphapb.ListRecycleStr
 }
 
 func (s *service) ListRecycle(ctx context.Context, req *storageproviderv0alphapb.ListRecycleRequest) (*storageproviderv0alphapb.ListRecycleResponse, error) {
+	log := appctx.GetLogger(ctx)
 	items, err := s.storage.ListRecycle(ctx, "")
 	if err != nil {
-		err := errors.Wrap(err, "storageprovidersvc: error listing recycle")
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error listing recycle")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL}
 		res := &storageproviderv0alphapb.ListRecycleResponse{Status: status}
 		return res, nil
@@ -545,9 +528,9 @@ func (s *service) ListRecycle(ctx context.Context, req *storageproviderv0alphapb
 }
 
 func (s *service) RestoreRecycleItem(ctx context.Context, req *storageproviderv0alphapb.RestoreRecycleItemRequest) (*storageproviderv0alphapb.RestoreRecycleItemResponse, error) {
+	log := appctx.GetLogger(ctx)
 	if err := s.storage.RestoreRecycleItem(ctx, req.Ref.GetPath(), req.Key); err != nil {
-		err = errors.Wrap(err, "storageprovidersvc: error restoring recycle item")
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error restoring recycle item")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL}
 		res := &storageproviderv0alphapb.RestoreRecycleItemResponse{Status: status}
 		return res, nil
@@ -558,9 +541,9 @@ func (s *service) RestoreRecycleItem(ctx context.Context, req *storageproviderv0
 }
 
 func (s *service) PurgeRecycle(ctx context.Context, req *storageproviderv0alphapb.PurgeRecycleRequest) (*storageproviderv0alphapb.PurgeRecycleResponse, error) {
+	log := appctx.GetLogger(ctx)
 	if err := s.storage.EmptyRecycle(ctx, req.Ref.GetPath()); err != nil {
-		err = errors.Wrap(err, "storageprovidersvc: error purging recycle")
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error purging recycle")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL}
 		res := &storageproviderv0alphapb.PurgeRecycleResponse{Status: status}
 		return res, nil
@@ -575,11 +558,12 @@ func (s *service) ListGrants(ctx context.Context, req *storageproviderv0alphapb.
 }
 
 func (s *service) AddGrant(ctx context.Context, req *storageproviderv0alphapb.AddGrantRequest) (*storageproviderv0alphapb.AddGrantResponse, error) {
+	log := appctx.GetLogger(ctx)
 	fn := req.Ref.GetPath()
 
 	// check mode is valid
 	if req.Grant.Grantee.Type == storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_INVALID {
-		logger.Println(ctx, "grantee type is invalid")
+		log.Warn().Msg("grantee type is invalid")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INVALID_ARGUMENT, Message: "grantee type is invalid"}
 		res := &storageproviderv0alphapb.AddGrantResponse{Status: status}
 		return res, nil
@@ -599,8 +583,7 @@ func (s *service) AddGrant(ctx context.Context, req *storageproviderv0alphapb.Ad
 
 	err := s.storage.AddGrant(ctx, fn, g)
 	if err != nil {
-		err = errors.Wrap(err, "storageprovidersvc: error setting acl")
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error setting acl")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL}
 		res := &storageproviderv0alphapb.AddGrantResponse{Status: status}
 		return res, nil
@@ -634,12 +617,13 @@ func (s *service) getStoragePermissionSet(set *storageproviderv0alphapb.Resource
 }
 
 func (s *service) UpdateGrant(ctx context.Context, req *storageproviderv0alphapb.UpdateGrantRequest) (*storageproviderv0alphapb.UpdateGrantResponse, error) {
+	log := appctx.GetLogger(ctx)
 	fn := req.Ref.GetPath()
 	storagePerm := s.getStoragePermissionSet(req.Grant.Permissions)
 	granteeType := s.getStorageGranteeType(req.Grant.Grantee.Type)
 
 	if granteeType == storage.GranteeTypeInvalid {
-		logger.Println(ctx, "grantee type is invalid")
+		log.Warn().Msg("grantee type is invalid")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INVALID_ARGUMENT, Message: "grantee type is invalid"}
 		res := &storageproviderv0alphapb.UpdateGrantResponse{Status: status}
 		return res, nil
@@ -658,8 +642,7 @@ func (s *service) UpdateGrant(ctx context.Context, req *storageproviderv0alphapb
 	}
 
 	if err := s.storage.UpdateGrant(ctx, fn, g); err != nil {
-		err = errors.Wrap(err, "storageprovidersvc: error updating acl")
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error updating acl")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL}
 		res := &storageproviderv0alphapb.UpdateGrantResponse{Status: status}
 		return res, nil
@@ -670,13 +653,14 @@ func (s *service) UpdateGrant(ctx context.Context, req *storageproviderv0alphapb
 }
 
 func (s *service) RemoveGrant(ctx context.Context, req *storageproviderv0alphapb.RemoveGrantRequest) (*storageproviderv0alphapb.RemoveGrantResponse, error) {
+	log := appctx.GetLogger(ctx)
 	fn := req.Ref.GetPath()
 	granteeType := s.getStorageGranteeType(req.Grant.Grantee.Type)
 	storagePerm := s.getStoragePermissionSet(req.Grant.Permissions)
 
 	// check targetType is valid
 	if granteeType == storage.GranteeTypeInvalid {
-		logger.Println(ctx, "grantee type is invalid")
+		log.Warn().Msg("grantee type is invalid")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INVALID_ARGUMENT, Message: "grantee type is invalid"}
 		res := &storageproviderv0alphapb.RemoveGrantResponse{Status: status}
 		return res, nil
@@ -695,8 +679,7 @@ func (s *service) RemoveGrant(ctx context.Context, req *storageproviderv0alphapb
 	}
 
 	if err := s.storage.RemoveGrant(ctx, fn, g); err != nil {
-		err = errors.Wrap(err, "storageprovidersvc: error removing  grant")
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error removing grant")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL}
 		res := &storageproviderv0alphapb.RemoveGrantResponse{Status: status}
 		return res, nil
@@ -708,10 +691,10 @@ func (s *service) RemoveGrant(ctx context.Context, req *storageproviderv0alphapb
 }
 
 func (s *service) GetQuota(ctx context.Context, req *storageproviderv0alphapb.GetQuotaRequest) (*storageproviderv0alphapb.GetQuotaResponse, error) {
+	log := appctx.GetLogger(ctx)
 	total, used, err := s.storage.GetQuota(ctx)
 	if err != nil {
-		err = errors.Wrap(err, "storageprovidersvc: error getting quota")
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error gettign quota")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL}
 		res := &storageproviderv0alphapb.GetQuotaResponse{Status: status}
 		return res, nil

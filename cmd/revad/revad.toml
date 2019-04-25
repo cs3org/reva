@@ -3,15 +3,16 @@ log_file = "stderr"
 log_mode = "dev"
 max_cpus = "100%"
 
+[log]
+level = "debug"
+mode = "console"
+
 [http]
 enabled_services = ["prometheussvc", "ocdavsvc", "datasvc"]
-enabled_middlewares = ["cors", "log", "trace", "auth"]
+enabled_middlewares = ["cors", "log", "auth"]
 network = "tcp"
 address = "0.0.0.0:9998"
 
-[http.middlewares.trace]
-priority = 100
-header = "x-trace"
 
 [http.middlewares.log]
 priority = 200
@@ -23,7 +24,7 @@ credential_strategy = "basic"
 token_strategy = "header"
 token_writer = "header"
 token_manager = "jwt"
-skip_methods = ["/owncloud/status.php"]
+skip_methods = ["/owncloud/status.php", "/metrics"]
 
 [http.middlewares.auth.token_managers.jwt]
 secret = "Pive-Fumkiu4"
@@ -73,14 +74,10 @@ tls_enabled = true
 tls_cert = "/etc/gridsecurity/host.cert"
 tls_key = "/etc/gridsecurity/host.key"
 enabled_services = ["storageprovidersvc", "authsvc", "storageregistrysvc", "appregistrysvc", "appprovidersvc"]
-enabled_interceptors = ["auth", "prometheus", "log", "trace"]
+enabled_interceptors = ["auth", "prometheus", "log"]
 
 [grpc.interceptors.recovery]
-priority = 0
-
-[grpc.interceptors.trace]
 priority = 100
-header = "x-trace"
 
 [grpc.interceptors.log]
 priority = 200
@@ -92,9 +89,7 @@ priority = 300
 priority = 400
 header = "x-access-token"
 token_manager = "jwt"
-
-[grpc.interceptors.auth.methods]
-"/cs3.storageproviderv0alpha.StorageProviderService/Stat" = true
+skip_methods = ["/cs3.authv0alpha.AuthService/GenerateAccessToken"]
 
 [grpc.interceptors.auth.token_managers.jwt]
 secret = "Pive-Fumkiu4"

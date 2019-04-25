@@ -22,6 +22,8 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"net/http"
+
+	"github.com/cernbox/reva/pkg/appctx"
 )
 
 type ocsResponse struct {
@@ -85,7 +87,7 @@ type ocsStatus struct {
 	VersionString  string `json:"versionstring" xml:"versionstring"`
 	Edition        string `json:"edition" xml:"edition"`
 	ProductName    string `json:"productname" xml:"productname"`
-	Hostname       string `json:"hostname,omitifempty" xml:"hostname,omitifempty"`
+	Hostname       string `json:"hostname,omitempty" xml:"hostname,omitempty"`
 }
 
 type ocsCapabilitiesChecksums struct {
@@ -170,6 +172,7 @@ type ocsVersion struct {
 // handles writing ocs responses in json and xml
 func writeOCSResponse(w http.ResponseWriter, r *http.Request, res *ocsResponse) {
 	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
 
 	var encoded []byte
 	var err error
@@ -182,7 +185,7 @@ func writeOCSResponse(w http.ResponseWriter, r *http.Request, res *ocsResponse) 
 		w.Header().Set("Content-Type", "application/json")
 	}
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error writing ocs response")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

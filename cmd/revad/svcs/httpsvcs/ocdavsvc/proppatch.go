@@ -25,24 +25,24 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/cernbox/reva/pkg/appctx"
 	"github.com/pkg/errors"
 )
 
 func (s *svc) doProppatch(w http.ResponseWriter, r *http.Request) {
-
 	ctx := r.Context()
-	//fn := r.URL.Path
+	log := appctx.GetLogger(ctx)
 
 	_, status, err := readProppatch(r.Body)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error reading proppatch")
 		w.WriteHeader(status)
 		return
 	}
 
 	_, err = s.getClient()
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

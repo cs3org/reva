@@ -16,43 +16,36 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package prometheussvc
+package appctx
 
 import (
-	"net/http"
+	"context"
 
-	"github.com/cernbox/reva/cmd/revad/httpserver"
-
-	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs"
-	"github.com/mitchellh/mapstructure"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/cernbox/reva/pkg/reqid"
+	"github.com/rs/zerolog"
 )
 
-func init() {
-	httpserver.Register("prometheussvc", New)
+// WithLogger returns a context with an associated logger.
+func WithLogger(ctx context.Context, l *zerolog.Logger) context.Context {
+	return l.WithContext(ctx)
 }
 
-// New returns a new prometheus service
-func New(m map[string]interface{}) (httpsvcs.Service, error) {
-	conf := &config{}
-	if err := mapstructure.Decode(m, conf); err != nil {
-		return nil, err
+// GetLogger returns the logger associated with the given context
+// or a disabled logger in case no logger is stored inside the context.
+func GetLogger(ctx context.Context) *zerolog.Logger {
+	return zerolog.Ctx(ctx)
+}
+
+// WithTrace returns a context with an associated reqid.
+func WithTrace(ctx context.Context, t string) context.Context {
+	return reqid.ContextSetReqID(ctx, t)
+}
+
+// GetTrace returns the trace stored in the context.
+func GetTrace(ctx context.Context) string {
+	t, ok := reqid.ContextGetReqID(ctx)
+	if ok {
+		return t
 	}
-	return &svc{prefix: conf.Prefix}, nil
-}
-
-type config struct {
-	Prefix string `mapstructure:"prefix"`
-}
-
-type svc struct {
-	prefix string
-}
-
-func (s *svc) Prefix() string {
-	return s.prefix
-}
-
-func (s *svc) Handler() http.Handler {
-	return promhttp.Handler()
+	return "unknown"
 }
