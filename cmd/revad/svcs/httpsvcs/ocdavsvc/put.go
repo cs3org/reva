@@ -19,6 +19,7 @@
 package ocdavsvc
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -26,6 +27,7 @@ import (
 	"time"
 
 	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/utils"
+	"github.com/cernbox/reva/pkg/token"
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
@@ -142,27 +144,27 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ref := &storageproviderv0alphapb.Reference{
-		Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+	sReq := &storageproviderv0alphapb.StatRequest{
+		Ref: &storageproviderv0alphapb.Reference{
+			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+		},
 	}
-	req := &storageproviderv0alphapb.StatRequest{Ref: ref}
-	res, err := client.Stat(ctx, req)
+	sRes, err := client.Stat(ctx, sReq)
 	if err != nil {
 		logger.Error(ctx, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	if res.Status.Code != rpcpb.Code_CODE_OK {
-		if res.Status.Code != rpcpb.Code_CODE_NOT_FOUND {
-			logger.Println(ctx, res.Status)
+	if sRes.Status.Code != rpcpb.Code_CODE_OK {
+		if sRes.Status.Code != rpcpb.Code_CODE_NOT_FOUND {
+			logger.Println(ctx, sRes.Status)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-
 	}
 
-	info := res.Info
+	info := sRes.Info
 	if info != nil && info.Type != storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_FILE {
 		logger.Println(ctx, "resource is not a file")
 		w.WriteHeader(http.StatusConflict)
@@ -182,27 +184,27 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	req2 := &storageproviderv0alphapb.InitiateFileUploadRequest{
+	uReq := &storageproviderv0alphapb.InitiateFileUploadRequest{
 		Ref: &storageproviderv0alphapb.Reference{
 			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
 		},
 	}
 
 	// where to upload the file?
-	res2, err := client.InitiateFileUpload(ctx, req2)
+	uRes, err := client.InitiateFileUpload(ctx, uReq)
 	if err != nil {
 		logger.Error(ctx, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	if res.Status.Code != rpcpb.Code_CODE_OK {
-		logger.Println(ctx, res.Status)
+	if uRes.Status.Code != rpcpb.Code_CODE_OK {
+		logger.Println(ctx, uRes.Status)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	dataServerURL := res2.UploadEndpoint
+	dataServerURL := uRes.UploadEndpoint
 	// TODO(labkode): do a protocol switch
 	httpReq, err := http.NewRequest("PUT", dataServerURL, r.Body)
 	if err != nil {
@@ -210,6 +212,15 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+
+	//TODO: make header / auth configurable, check if token is available before doing stat requests
+	tkn, ok := token.ContextGetToken(ctx)
+	if !ok {
+		logger.Error(ctx, errors.New("could not read token from context"))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	httpReq.Header.Set("X-Access-Token", tkn)
 
 	// TODO(labkode): harden http client
 	// https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779
@@ -230,20 +241,20 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res, err = client.Stat(ctx, req)
+	sRes, err = client.Stat(ctx, sReq)
 	if err != nil {
 		logger.Error(ctx, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	if res.Status.Code != rpcpb.Code_CODE_OK {
-		logger.Println(ctx, res.Status)
+	if sRes.Status.Code != rpcpb.Code_CODE_OK {
+		logger.Println(ctx, sRes.Status)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	info2 := res.Info
+	info2 := sRes.Info
 
 	w.Header().Add("Content-Type", info2.MimeType)
 	w.Header().Set("ETag", info2.Etag)

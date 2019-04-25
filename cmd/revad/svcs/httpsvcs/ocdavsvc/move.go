@@ -68,7 +68,7 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 	}
 
 	urlPath := dstURL.Path
-	baseURI := r.Context().Value("baseuri").(string)
+	baseURI := r.Context().Value(ctxKeyBaseURI).(string)
 	logger.Println(r.Context(), "Move urlPath=", urlPath, " baseURI=", baseURI)
 	i := strings.Index(urlPath, baseURI)
 	if i == -1 {

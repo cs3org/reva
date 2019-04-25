@@ -240,7 +240,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, md *storageproviderv0alphapb
 
 	response := responseXML{}
 
-	baseURI := ctx.Value("baseuri").(string)
+	baseURI := ctx.Value(ctxKeyBaseURI).(string)
 	// the old webdav endpoint does not contain the username
 	if strings.HasPrefix(baseURI, "/remote.php/webdav") {
 		// remove username from filename

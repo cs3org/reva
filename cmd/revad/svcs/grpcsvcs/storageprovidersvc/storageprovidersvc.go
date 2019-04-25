@@ -198,7 +198,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *storageproviderv0
 	logger.Build().Str("data-server", url.String()).
 		Str("fn", req.Ref.GetPath()).
 		Str("xs", fmt.Sprintf("%+v", s.conf.AvailableXS)).
-		Msg(ctx, "file download")
+		Msg(ctx, "file upload")
 	res := &storageproviderv0alphapb.InitiateFileUploadResponse{
 		UploadEndpoint:     url.String(),
 		Status:             &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
