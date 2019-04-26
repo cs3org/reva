@@ -202,11 +202,9 @@ func (s *svc) setHandler() {
 				case "MOVE":
 					s.doMove(w, r)
 					return
-				/*
-					case "COPY":
-						s.doCopy(w, r)
-						return
-				*/
+				case "COPY":
+					s.doCopy(w, r)
+					return
 				case "PUT":
 					s.doPut(w, r)
 					return
@@ -259,11 +257,9 @@ func (s *svc) setHandler() {
 					case "MOVE":
 						s.doMove(w, r)
 						return
-					/*
-						case "COPY":
-							s.doCopy(w, r)
-							return
-					*/
+					case "COPY":
+						s.doCopy(w, r)
+						return
 					case "PUT":
 						s.doPut(w, r)
 						return
