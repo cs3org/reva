@@ -175,7 +175,6 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 		clientETag := r.Header.Get("If-Match")
 		serverETag := info.Etag
 		if clientETag != "" {
-			serverETag = fmt.Sprintf(`"%s"`, serverETag)
 			if clientETag != serverETag {
 				logger.Build().Str("client-etag", clientETag).Str("server-etag", serverETag).Msg(ctx, "etags mismatch")
 				w.WriteHeader(http.StatusPreconditionFailed)
