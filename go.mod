@@ -2,7 +2,7 @@ module github.com/cernbox/reva
 
 require (
 	github.com/cernbox/go-cs3apis v0.0.0-20190417142802-9dd8415dc24d
-	github.com/cheggaaa/pb v1.0.27
+	github.com/cheggaaa/pb v1.0.28
 	github.com/coreos/go-oidc v2.0.0+incompatible
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/fatih/color v1.7.0 // indirect
