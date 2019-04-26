@@ -77,13 +77,19 @@ type MD struct {
 	ID          string
 	Path        string
 	Size        uint64
-	Mtime       uint64
+	Mtime       *Timestamp
 	IsDir       bool
 	Etag        string
 	Checksum    string
 	Mime        string
 	Permissions *PermissionSet
 	Opaque      map[string]interface{}
+}
+
+// Timestamp allows passing around a timestamp with sub second precision
+type Timestamp struct {
+	Seconds uint64
+	Nanos   uint32
 }
 
 // PermissionSet is the set of permissions for a resource.

@@ -555,28 +555,31 @@ func (fs *eosStorage) convertToRevision(ctx context.Context, eosFileInfo *eoscli
 	revision := &storage.Revision{
 		RevKey: path.Base(md.Path),
 		Size:   md.Size,
-		Mtime:  md.Mtime,
+		Mtime:  md.Mtime.Seconds, // TODO do we need nanos here?
 		IsDir:  md.IsDir,
 	}
 	return revision
 }
 func (fs *eosStorage) convertToMD(ctx context.Context, eosFileInfo *eosclient.FileInfo) *storage.MD {
-	finfo := new(storage.MD)
-	finfo.ID = fmt.Sprintf("%d", eosFileInfo.Inode)
-	finfo.Path = fs.removeNamespace(ctx, eosFileInfo.File)
-	finfo.Mtime = eosFileInfo.MTime
-	finfo.IsDir = eosFileInfo.IsDir
-	finfo.Etag = eosFileInfo.ETag
+	path := fs.removeNamespace(ctx, eosFileInfo.File)
+	size := eosFileInfo.Size
 	if eosFileInfo.IsDir {
-		finfo.Size = eosFileInfo.TreeSize
-	} else {
-		finfo.Size = eosFileInfo.Size
+		size = eosFileInfo.TreeSize
 	}
-	finfo.Mime = mime.Detect(finfo.IsDir, finfo.Path)
-	finfo.Opaque = fs.getEosMetadata(eosFileInfo)
-	finfo.Permissions = &storage.PermissionSet{CreateContainer: true, ListContainer: true}
-	finfo.Size = eosFileInfo.Size
-	return finfo
+	return &storage.MD{
+		ID:          fmt.Sprintf("%d", eosFileInfo.Inode),
+		Path:        path,
+		IsDir:       eosFileInfo.IsDir,
+		Etag:        eosFileInfo.ETag,
+		Mime:        mime.Detect(eosFileInfo.IsDir, path),
+		Size:        size,
+		Permissions: &storage.PermissionSet{ListContainer: true, CreateContainer: true},
+		Mtime: &storage.Timestamp{
+			Seconds: eosFileInfo.MTimeSec,
+			Nanos:   eosFileInfo.MTimeNanos,
+		},
+		Opaque: fs.getEosMetadata(eosFileInfo),
+	}
 }
 
 type eosSysMetadata struct {
