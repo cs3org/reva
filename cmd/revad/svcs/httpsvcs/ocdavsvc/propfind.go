@@ -194,15 +194,19 @@ func (s *svc) mdToPropResponse(ctx context.Context, md *storageproviderv0alphapb
 
 	getETag := s.newProp("d:getetag", md.Etag)
 	ocPermissions := s.newProp("oc:permissions", "WCKDNVR")
-	getContentLegnth := s.newProp("d:getcontentlength", fmt.Sprintf("%d", md.Size))
+	size := fmt.Sprintf("%d", md.Size)
+	getContentLegnth := s.newProp("d:getcontentlength", size)
+	ocSize := s.newProp("oc:size", size)
 	getContentType := s.newProp("d:getcontenttype", md.MimeType)
 	getResourceType := s.newProp("d:resourcetype", "")
 	ocDownloadURL := s.newProp("oc:downloadUrl", "")
 	ocDC := s.newProp("oc:dDC", "")
+	// TODO(jfd) filter to only return requested props
 	propList = append(propList,
 		getETag,
 		ocPermissions,
 		getContentLegnth,
+		ocSize,
 		getContentType,
 		getResourceType,
 		ocDownloadURL,
