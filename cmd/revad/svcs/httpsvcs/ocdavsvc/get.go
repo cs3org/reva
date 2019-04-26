@@ -26,9 +26,9 @@ import (
 	"time"
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
-	"github.com/cernbox/reva/pkg/token"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/utils"
+	"github.com/cernbox/reva/pkg/token"
 )
 
 func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
