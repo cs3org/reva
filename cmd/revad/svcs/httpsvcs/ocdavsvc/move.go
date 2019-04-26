@@ -77,10 +77,11 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// check src exists
-	ref := &storageproviderv0alphapb.Reference{
-		Spec: &storageproviderv0alphapb.Reference_Path{Path: src},
+	srcStatReq := &storageproviderv0alphapb.StatRequest{
+		Ref: &storageproviderv0alphapb.Reference{
+			Spec: &storageproviderv0alphapb.Reference_Path{Path: src},
+		},
 	}
-	srcStatReq := &storageproviderv0alphapb.StatRequest{Ref: ref}
 	srcStatRes, err := client.Stat(ctx, srcStatReq)
 	if err != nil {
 		logger.Error(ctx, err)
@@ -102,10 +103,10 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 	dst := path.Clean(urlPath[len(baseURI):])
 
 	// check dst exists
-	ref2 := &storageproviderv0alphapb.Reference{
+	dstStatRef := &storageproviderv0alphapb.Reference{
 		Spec: &storageproviderv0alphapb.Reference_Path{Path: dst},
 	}
-	dstStatReq := &storageproviderv0alphapb.StatRequest{Ref: ref2}
+	dstStatReq := &storageproviderv0alphapb.StatRequest{Ref: dstStatRef}
 	dstStatRes, err := client.Stat(ctx, dstStatReq)
 	if err != nil {
 		logger.Error(ctx, err)
@@ -124,7 +125,7 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// delete existing tree
-		delReq := &storageproviderv0alphapb.DeleteRequest{Ref: ref2}
+		delReq := &storageproviderv0alphapb.DeleteRequest{Ref: dstStatRef}
 		delRes, err := client.Delete(ctx, delReq)
 		if err != nil {
 			logger.Error(ctx, err)
@@ -167,38 +168,34 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 	dstRef := &storageproviderv0alphapb.Reference{
 		Spec: &storageproviderv0alphapb.Reference_Path{Path: dst},
 	}
-	req := &storageproviderv0alphapb.MoveRequest{Source: sourceRef, Destination: dstRef}
-	res, err := client.Move(ctx, req)
+	mReq := &storageproviderv0alphapb.MoveRequest{Source: sourceRef, Destination: dstRef}
+	mRes, err := client.Move(ctx, mReq)
 	if err != nil {
 		logger.Error(ctx, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	if res.Status.Code != rpcpb.Code_CODE_OK {
-		logger.Println(ctx, res.Status)
+	if mRes.Status.Code != rpcpb.Code_CODE_OK {
+		logger.Println(ctx, mRes.Status)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	ref2 = &storageproviderv0alphapb.Reference{
-		Spec: &storageproviderv0alphapb.Reference_Path{Path: dst},
-	}
-	req2 := &storageproviderv0alphapb.StatRequest{Ref: ref}
-	res2, err := client.Stat(ctx, req2)
+	dstStatRes, err = client.Stat(ctx, dstStatReq)
 	if err != nil {
 		logger.Error(ctx, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	if res2.Status.Code != rpcpb.Code_CODE_OK {
-		logger.Println(ctx, res2.Status)
+	if dstStatRes.Status.Code != rpcpb.Code_CODE_OK {
+		logger.Println(ctx, dstStatRes.Status)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	info := res2.Info
+	info := dstStatRes.Info
 	w.Header().Set("Content-Type", info.MimeType)
 	w.Header().Set("ETag", info.Etag)
 	w.Header().Set("OC-FileId", fmt.Sprintf("%s:%s", info.Id.StorageId, info.Id.OpaqueId))

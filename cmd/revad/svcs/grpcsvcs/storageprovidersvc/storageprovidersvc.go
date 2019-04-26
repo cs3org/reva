@@ -290,7 +290,7 @@ func (s *service) Delete(ctx context.Context, req *storageproviderv0alphapb.Dele
 
 func (s *service) Move(ctx context.Context, req *storageproviderv0alphapb.MoveRequest) (*storageproviderv0alphapb.MoveResponse, error) {
 	source := req.Source.GetPath()
-	target := req.Source.GetPath()
+	target := req.Destination.GetPath()
 
 	fss, _, err := s.unwrap(ctx, source)
 	if err != nil {
