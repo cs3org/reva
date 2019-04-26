@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	storagetypespb "github.com/cernbox/go-cs3apis/cs3/storagetypes"
+	typespb "github.com/cernbox/go-cs3apis/cs3/types"
 
 	"github.com/cernbox/reva/cmd/revad/grpcserver"
 	"github.com/cernbox/reva/cmd/revad/svcs/grpcsvcs/utils"
@@ -835,13 +836,16 @@ func (s *service) toInfo(md *storage.MD) *storageproviderv0alphapb.ResourceInfo 
 		Sum:  md.Checksum,
 	}
 	info := &storageproviderv0alphapb.ResourceInfo{
-		Type:          getResourceType(md.IsDir),
-		Id:            id,
-		Path:          md.Path,
-		Checksum:      checksum,
-		Etag:          md.Etag,
-		MimeType:      md.Mime,
-		Mtime:         utils.UnixNanoToTS(md.Mtime),
+		Type:     getResourceType(md.IsDir),
+		Id:       id,
+		Path:     md.Path,
+		Checksum: checksum,
+		Etag:     md.Etag,
+		MimeType: md.Mime,
+		Mtime: &typespb.Timestamp{
+			Seconds: md.Mtime.Seconds,
+			Nanos:   md.Mtime.Nanos,
+		},
 		Size:          md.Size,
 		PermissionSet: perm,
 	}

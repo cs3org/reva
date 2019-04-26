@@ -741,7 +741,12 @@ func (c *Client) mapToFileInfo(kv map[string]string) (*FileInfo, error) {
 	}
 
 	// mtime is split by a dot, we only take the first part, do we need subsec precision?
-	mtime, err := strconv.ParseUint(strings.Split(kv["mtime"], ".")[0], 10, 64)
+	mtime := strings.Split(kv["mtime"], ".")
+	mtimesec, err := strconv.ParseUint(mtime[0], 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	mtimenanos, err := strconv.ParseUint(mtime[1], 10, 32)
 	if err != nil {
 		return nil, err
 	}
@@ -752,34 +757,36 @@ func (c *Client) mapToFileInfo(kv map[string]string) (*FileInfo, error) {
 	}
 
 	fi := &FileInfo{
-		File:      kv["file"],
-		Inode:     inode,
-		FID:       fid,
-		ETag:      kv["etag"],
-		Size:      size,
-		TreeSize:  treeSize,
-		MTime:     mtime,
-		IsDir:     isDir,
-		Instance:  c.opt.URL,
-		SysACL:    kv["sys.acl"],
-		TreeCount: treeCount,
+		File:       kv["file"],
+		Inode:      inode,
+		FID:        fid,
+		ETag:       kv["etag"],
+		Size:       size,
+		TreeSize:   treeSize,
+		MTimeSec:   mtimesec,
+		MTimeNanos: uint32(mtimenanos),
+		IsDir:      isDir,
+		Instance:   c.opt.URL,
+		SysACL:     kv["sys.acl"],
+		TreeCount:  treeCount,
 	}
 	return fi, nil
 }
 
 // FileInfo represents the metadata information returned by querying the EOS namespace.
 type FileInfo struct {
-	File      string `json:"eos_file"`
-	Inode     uint64 `json:"inode"`
-	FID       uint64 `json:"fid"`
-	ETag      string
-	TreeSize  uint64
-	MTime     uint64
-	Size      uint64
-	IsDir     bool
-	Instance  string
-	SysACL    string
-	TreeCount uint64
+	File       string `json:"eos_file"`
+	Inode      uint64 `json:"inode"`
+	FID        uint64 `json:"fid"`
+	ETag       string
+	TreeSize   uint64
+	MTimeSec   uint64
+	MTimeNanos uint32
+	Size       uint64
+	IsDir      bool
+	Instance   string
+	SysACL     string
+	TreeCount  uint64
 }
 
 // DeletedEntry represents an entry from the trashbin.

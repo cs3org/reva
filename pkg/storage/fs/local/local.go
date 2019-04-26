@@ -128,7 +128,9 @@ func (fs *localFS) normalize(fi os.FileInfo, fn string) *storage.MD {
 		Mime:        mime.Detect(fi.IsDir(), fn),
 		Size:        uint64(fi.Size()),
 		Permissions: &storage.PermissionSet{ListContainer: true, CreateContainer: true},
-		Mtime:       uint64(fi.ModTime().Unix()),
+		Mtime: &storage.Timestamp{
+			Seconds: uint64(fi.ModTime().Unix()),
+		},
 	}
 	//logger.Println(context.Background(), "normalized: ", md)
 	return md
