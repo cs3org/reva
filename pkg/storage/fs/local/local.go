@@ -20,12 +20,15 @@ package local
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"path"
 	"strings"
+	"syscall"
 
 	"github.com/cernbox/reva/pkg/storage/fs/registry"
 
@@ -84,13 +87,44 @@ func (fs *localFS) removeRoot(np string) string {
 
 type localFS struct{ root string }
 
+// calcEtag will create an etag based on the md5 of
+// - mtime,
+// - inode (if available),
+// - device (if available) and
+// - size.
+// errors are logged, but an etag will still be returned
+func calcEtag(fi os.FileInfo) string {
+	h := md5.New()
+	err := binary.Write(h, binary.BigEndian, fi.ModTime().Unix())
+	if err != nil {
+		logger.Error(context.Background(), err)
+	}
+	stat, ok := fi.Sys().(*syscall.Stat_t)
+	if ok {
+		// take device and inode into account
+		err = binary.Write(h, binary.BigEndian, stat.Ino)
+		if err != nil {
+			logger.Error(context.Background(), err)
+		}
+		err = binary.Write(h, binary.BigEndian, stat.Dev)
+		if err != nil {
+			logger.Error(context.Background(), err)
+		}
+	}
+	err = binary.Write(h, binary.BigEndian, fi.Size())
+	if err != nil {
+		logger.Error(context.Background(), err)
+	}
+	return fmt.Sprintf(`"%x"`, h.Sum(nil))
+}
+
 func (fs *localFS) normalize(fi os.FileInfo, fn string) *storage.MD {
 	fn = fs.removeRoot(path.Join("/", fn))
 	md := &storage.MD{
 		ID:          "fileid-" + strings.TrimPrefix(fn, "/"),
 		Path:        fn,
 		IsDir:       fi.IsDir(),
-		Etag:        fmt.Sprintf("%d", fi.ModTime().Unix()),
+		Etag:        calcEtag(fi),
 		Mime:        mime.Detect(fi.IsDir(), fn),
 		Size:        uint64(fi.Size()),
 		Permissions: &storage.PermissionSet{ListContainer: true, CreateContainer: true},
