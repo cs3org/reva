@@ -1,3 +1,4 @@
+- dependabot[bot] <dependabot[bot]@users.noreply.github.com>
 - Hugo Gonzalez Labrador <github@hugo.labkode.com>
 - Hugo Labrador <labkode@users.noreply.github.com>
 - Jörn Friedrich Dreyer <jfd@butonic.de>
