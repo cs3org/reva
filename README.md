@@ -14,7 +14,18 @@ Read the [getting started guide](https://cernbox.github.io/reva/beginner-guide.h
 
 
 ## Build it yourself
-Read the [build from sources guide](https://cernbox.github.io/reva/building-reva.html).
+You need to have [Go](https://golang.org/doc/install), [git](https://git-scm.com/) and [make](https://en.wikipedia.org/wiki/Make_(software)) installed.
+
+```
+$ git clone https://github.com/cernbox/reva
+$ cd reva
+$ make deps
+$ make
+$ cd cmd/revad
+$ ./revad -c revad.toml -p revad.pid
+```
+
+You can also read the [build from sources guide](https://cernbox.github.io/reva/building-reva.html).
 
 ## Run it using Docker
 
