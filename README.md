@@ -30,12 +30,12 @@ You can also read the [build from sources guide](https://cernbox.github.io/reva/
 ## Run it using Docker
 
 ```
-git clone https://github.com/cernbox/reva
-cd reva
-docker build . -t revad
-docker run -p 9999:9999 -p 9998:9998 -d revad
+$ git clone https://github.com/cernbox/reva
+$ cd reva
+$ docker build . -t revad
+$ docker run -p 9999:9999 -p 9998:9998 -d revad
 # or provide your own config 
-# docker run -p 9999:9999 -p 9998:9998 -v /your/config:/etc/revad/revad.toml -d revad
+# $ docker run -p 9999:9999 -p 9998:9998 -v /your/config:/etc/revad/revad.toml -d revad
 ```
 
 ## Plugin development
@@ -49,6 +49,8 @@ REVA is distributed under [Apache 2.0 license](https://github.com/cernbox/reva/b
 ## Disclaimer
 
 There is no backward compatibility promises and semantic versioning yet.
+
 If you want to use it, vendor it. It is always OK to change things to make things better.
 The API is not 100% correct in the first commit.
-Semantic versioning will be added on v1.0.0 is reached.
+
+Semantic versioning will be added once v1.0.0 is reached.
