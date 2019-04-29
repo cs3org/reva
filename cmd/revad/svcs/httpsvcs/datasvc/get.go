@@ -22,23 +22,26 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/cernbox/reva/pkg/appctx"
 )
 
 func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
 	fn := r.URL.Path
 
 	fsfn := strings.TrimPrefix(fn, s.conf.ProviderPath)
 	rc, err := s.storage.Download(ctx, fsfn)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error downloading file")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	_, err = io.Copy(w, rc)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error copying data to response")
 		return
 	}
 }

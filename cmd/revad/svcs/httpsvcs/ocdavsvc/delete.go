@@ -23,15 +23,17 @@ import (
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
+	"github.com/cernbox/reva/pkg/appctx"
 )
 
 func (s *svc) doDelete(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
 	fn := r.URL.Path
 
 	client, err := s.getClient()
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -42,19 +44,19 @@ func (s *svc) doDelete(w http.ResponseWriter, r *http.Request) {
 	req := &storageproviderv0alphapb.DeleteRequest{Ref: ref}
 	res, err := client.Delete(ctx, req)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error performing delete grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
-		logger.Println(ctx, res.Status)
+		log.Warn().Str("code", string(res.Status.Code)).Msg("resource not found")
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 
 	if res.Status.Code != rpcpb.Code_CODE_OK {
-		logger.Println(ctx, res.Status)
+		log.Warn().Str("code", string(res.Status.Code)).Msg("grpc request failed")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

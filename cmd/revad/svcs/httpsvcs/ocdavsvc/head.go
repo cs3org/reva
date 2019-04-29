@@ -26,15 +26,17 @@ import (
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/utils"
+	"github.com/cernbox/reva/pkg/appctx"
 )
 
 func (s *svc) doHead(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
 	fn := r.URL.Path
 
 	client, err := s.getClient()
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -45,13 +47,12 @@ func (s *svc) doHead(w http.ResponseWriter, r *http.Request) {
 	req := &storageproviderv0alphapb.StatRequest{Ref: ref}
 	res, err := client.Stat(ctx, req)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if res.Status.Code != rpcpb.Code_CODE_OK {
-		logger.Println(ctx, res.Status)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

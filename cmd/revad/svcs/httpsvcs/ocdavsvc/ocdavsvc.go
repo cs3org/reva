@@ -28,10 +28,9 @@ import (
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cernbox/reva/cmd/revad/httpserver"
 	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs"
-	"github.com/cernbox/reva/pkg/log"
+	"github.com/cernbox/reva/pkg/appctx"
 	"github.com/cernbox/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
 
@@ -44,8 +43,6 @@ const (
 func init() {
 	httpserver.Register("ocdavsvc", New)
 }
-
-var logger = log.New("ocdavsvc")
 
 type config struct {
 	Prefix             string `mapstructure:"prefix"`
@@ -94,7 +91,9 @@ func (s *svc) Handler() http.Handler {
 
 func (s *svc) setHandler() {
 	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log := appctx.GetLogger(r.Context())
 
+		// TODO(jfd): do we need this?
 		// fake litmus testing for empty namespace: see https://github.com/golang/net/blob/e514e69ffb8bc3c76a71ae40de0118d794855992/webdav/litmus_test_server.go#L58-L89
 		if r.Header.Get("X-Litmus") == "props: 3 (propfind_invalid2)" {
 			http.Error(w, "400 Bad Request", http.StatusBadRequest)
@@ -103,7 +102,7 @@ func (s *svc) setHandler() {
 
 		head, tail := httpsvcs.ShiftPath(r.URL.Path)
 
-		logger.Println(r.Context(), "head=", head, " tail=", tail)
+		log.Debug().Str("head", head).Str("tail", tail).Msg("http routing")
 		switch head {
 		case "ocs":
 			r.URL.Path = tail
@@ -135,15 +134,14 @@ func (s *svc) setHandler() {
 		case "remote.php":
 			head2, tail2 := httpsvcs.ShiftPath(tail)
 
-			// TODO refactor as separate handler
+			// TODO(jfd): refactor as separate handler
 			// the old `webdav` endpoint uses remote.php/webdav/$path
 			if head2 == "webdav" {
 				// inject username in path
 				ctx := r.Context()
 				u, ok := user.ContextGetUser(ctx)
 				if !ok {
-					err := errors.Wrap(contextUserRequiredErr("userrequired"), "error getting user from ctx")
-					logger.Error(ctx, err)
+					log.Error().Msg("error getting user from context")
 					w.WriteHeader(http.StatusInternalServerError)
 					return
 				}
@@ -163,9 +161,7 @@ func (s *svc) setHandler() {
 						return
 					}
 					if dstURL.Path[:18] != "/remote.php/webdav" {
-						b := logger.BuildError()
-						b = b.Str("path", dstURL.Path)
-						b.Msg(ctx, "Destination needs to start with '/remote.php/webdav'")
+						log.Warn().Str("path", dstURL.Path).Msg("dst needs to start with /remote.php/webdav/")
 						w.WriteHeader(http.StatusBadRequest)
 						return
 					}

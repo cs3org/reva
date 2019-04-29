@@ -19,29 +19,30 @@
 package ocdavsvc
 
 import (
-	"errors"
 	"io"
 	"net/http"
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
+	"github.com/cernbox/reva/pkg/appctx"
 )
 
 func (s *svc) doMkcol(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
 	fn := r.URL.Path
 
 	buf := make([]byte, 1)
 	_, err := r.Body.Read(buf)
 	if err != io.EOF {
-		logger.Error(ctx, errors.New("unexpected body"))
+		log.Error().Err(err).Msg("error reading request body")
 		w.WriteHeader(http.StatusUnsupportedMediaType)
 		return
 	}
 
 	client, err := s.getClient()
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -53,13 +54,13 @@ func (s *svc) doMkcol(w http.ResponseWriter, r *http.Request) {
 	statReq := &storageproviderv0alphapb.StatRequest{Ref: ref}
 	statRes, err := client.Stat(ctx, statReq)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error sending a grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if statRes.Status.Code == rpcpb.Code_CODE_OK {
-		logger.Println(ctx, statRes.Status)
+		log.Warn().Msg("resource already exists")
 		w.WriteHeader(http.StatusMethodNotAllowed) // 405 if it already exists
 		return
 	}
@@ -67,19 +68,17 @@ func (s *svc) doMkcol(w http.ResponseWriter, r *http.Request) {
 	req := &storageproviderv0alphapb.CreateContainerRequest{Ref: ref}
 	res, err := client.CreateContainer(ctx, req)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error sending create container grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
-		logger.Println(ctx, res.Status)
 		w.WriteHeader(http.StatusConflict)
 		return
 	}
 
 	if res.Status.Code != rpcpb.Code_CODE_OK {
-		logger.Println(ctx, res.Status)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

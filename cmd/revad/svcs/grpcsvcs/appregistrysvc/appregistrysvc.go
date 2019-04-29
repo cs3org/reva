@@ -29,13 +29,9 @@ import (
 	"github.com/cernbox/reva/cmd/revad/grpcserver"
 	"github.com/cernbox/reva/pkg/app"
 	"github.com/cernbox/reva/pkg/app/registry/static"
-	"github.com/cernbox/reva/pkg/err"
-	"github.com/cernbox/reva/pkg/log"
+	"github.com/cernbox/reva/pkg/appctx"
 	"github.com/mitchellh/mapstructure"
 )
-
-var logger = log.New("appregistrysvc")
-var errors = err.New("appregistrysvc")
 
 func init() {
 	grpcserver.Register("appregistrysvc", New)
@@ -88,10 +84,11 @@ func getRegistry(c *config) (app.Registry, error) {
 	}
 }
 func (s *service) GetAppProvider(ctx context.Context, req *appregistryv0alphapb.GetAppProviderRequest) (*appregistryv0alphapb.GetAppProviderResponse, error) {
+	log := appctx.GetLogger(ctx)
 	mime := req.MimeType
 	p, err := s.registry.FindProvider(ctx, mime)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error sending grpc find provider request")
 		res := &appregistryv0alphapb.GetAppProviderResponse{
 			Status: &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL},
 		}

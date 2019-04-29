@@ -31,18 +31,8 @@ import (
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
+	"github.com/cernbox/reva/pkg/appctx"
 )
-
-type chunkHeaderInfo struct {
-	// OC-Chunked = 1
-	ochunked bool
-
-	// OC-Chunk-Size
-	ocChunkSize uint64
-
-	// OC-Total-Length
-	ocTotalLength uint64
-}
 
 type chunkBLOBInfo struct {
 	path         string
@@ -101,6 +91,7 @@ func (s *svc) getChunkFolderName(i *chunkBLOBInfo) (string, error) {
 }
 
 func (s *svc) saveChunk(ctx context.Context, path string, r io.ReadCloser) (bool, string, error) {
+	log := appctx.GetLogger(ctx)
 	chunkInfo, err := getChunkBLOBInfo(path)
 	if err != nil {
 		err := fmt.Errorf("error getting chunk info from path: %s", path)
@@ -213,7 +204,7 @@ func (s *svc) saveChunk(ctx context.Context, path string, r io.ReadCloser) (bool
 	// so we free space removing the chunks folder
 	defer func() {
 		if err = os.RemoveAll(chunksFolderName); err != nil {
-			//c.logger.Crit().Log("error", err, "msg", "error deleting chunk folder")
+			log.Warn().Err(err).Msg("error deleting chunk folder, remove folder manually/cron to not leak storage space")
 		}
 	}()
 
@@ -229,17 +220,19 @@ func (s *svc) saveChunk(ctx context.Context, path string, r io.ReadCloser) (bool
 }
 func (s *svc) doPutChunked(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
 	fn := r.URL.Path
 
 	if r.Body == nil {
-		logger.Println(ctx, "body is nil")
+		log.Warn().Msg("body is nil")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	finish, chunk, err := s.saveChunk(ctx, fn, r.Body)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error saving chunk")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -251,7 +244,7 @@ func (s *svc) doPutChunked(w http.ResponseWriter, r *http.Request) {
 
 	fd, err := os.Open(chunk)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error opening chunk")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -261,7 +254,7 @@ func (s *svc) doPutChunked(w http.ResponseWriter, r *http.Request) {
 
 	client, err := s.getClient()
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -272,23 +265,21 @@ func (s *svc) doPutChunked(w http.ResponseWriter, r *http.Request) {
 	req := &storageproviderv0alphapb.StatRequest{Ref: ref}
 	res, err := client.Stat(ctx, req)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if res.Status.Code != rpcpb.Code_CODE_OK {
 		if res.Status.Code != rpcpb.Code_CODE_NOT_FOUND {
-			logger.Println(ctx, res.Status)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-
 	}
 
 	info := res.Info
-	if info != nil && info.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
-		logger.Println(ctx, "resource is a folder")
+	if info != nil && info.Type != storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_FILE {
+		log.Warn().Msg("resource is not a file")
 		w.WriteHeader(http.StatusConflict)
 		return
 	}
@@ -299,7 +290,7 @@ func (s *svc) doPutChunked(w http.ResponseWriter, r *http.Request) {
 		if clientETag != "" {
 			serverETag = fmt.Sprintf(`"%s"`, serverETag)
 			if clientETag != serverETag {
-				logger.Build().Str("client-etag", clientETag).Str("server-etag", serverETag).Msg(ctx, "etags mismatch")
+				log.Warn().Str("client-etag", clientETag).Str("server-etag", serverETag).Msg("etags mismatch")
 				w.WriteHeader(http.StatusPreconditionFailed)
 				return
 			}

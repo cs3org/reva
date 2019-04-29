@@ -19,21 +19,16 @@
 package grpcserver
 
 import (
-	"context"
 	"net"
 	"sort"
 
-	"github.com/cernbox/reva/pkg/err"
-	"github.com/cernbox/reva/pkg/log"
+	"github.com/cernbox/reva/cmd/revad/svcs/grpcsvcs/interceptors/appctx"
+	"github.com/cernbox/reva/cmd/revad/svcs/grpcsvcs/interceptors/recovery"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
-)
-
-var (
-	ctx    = context.Background()
-	logger = log.New("grpcserver")
-	errors = err.New("grpcserver")
 )
 
 // UnaryInterceptors is a map of registered unary grpc interceptors.
@@ -96,10 +91,11 @@ type Server struct {
 	s        *grpc.Server
 	conf     *config
 	listener net.Listener
+	log      zerolog.Logger
 }
 
 // New returns a new Server.
-func New(m map[string]interface{}) (*Server, error) {
+func New(m interface{}, log zerolog.Logger) (*Server, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
@@ -114,7 +110,7 @@ func New(m map[string]interface{}) (*Server, error) {
 		conf.Address = "0.0.0.0:9999"
 	}
 
-	server := &Server{conf: conf}
+	server := &Server{conf: conf, log: log}
 	opts, err := server.getInterceptors()
 	if err != nil {
 		return nil, err
@@ -133,7 +129,7 @@ func (s *Server) Start(ln net.Listener) error {
 	}
 
 	s.listener = ln
-	logger.Printf(ctx, "grpc server listening at %s:%s", s.Network(), s.Address())
+	s.log.Info().Msgf("grpc server listening at %s:%s", s.Network(), s.Address())
 	err := s.s.Serve(s.listener)
 	if err != nil {
 		err = errors.Wrap(err, "serve failed")
@@ -166,9 +162,9 @@ func (s *Server) registerServices() error {
 			if err := newFunc(s.conf.Services[name], s.s); err != nil {
 				return err
 			}
-			logger.Println(ctx, "grpc service enabled: "+name)
+			s.log.Info().Msgf("grpc service enabled: %s", name)
 		} else {
-			logger.Println(ctx, "grpc service disabled: "+name)
+			s.log.Info().Msgf("grpc service disabled: %s", name)
 		}
 	}
 	return nil
@@ -221,8 +217,10 @@ func (s *Server) getInterceptors() ([]grpc.ServerOption, error) {
 	unaryInterceptors := []grpc.UnaryServerInterceptor{}
 	for _, t := range unaryTriples {
 		unaryInterceptors = append(unaryInterceptors, t.Interceptor)
-		logger.Printf(ctx, "chainning grpc unary interceptor %s with priority %d", t.Name, t.Priority)
+		s.log.Info().Msgf("chainning grpc unary interceptor %s with priority %d", t.Name, t.Priority)
 	}
+
+	unaryInterceptors = append([]grpc.UnaryServerInterceptor{appctx.NewUnary(s.log), recovery.NewUnary()}, unaryInterceptors...)
 	unaryChain := grpc_middleware.ChainUnaryServer(unaryInterceptors...)
 
 	streamTriples := []*streamInterceptorTriple{}
@@ -248,8 +246,10 @@ func (s *Server) getInterceptors() ([]grpc.ServerOption, error) {
 	streamInterceptors := []grpc.StreamServerInterceptor{}
 	for _, t := range streamTriples {
 		streamInterceptors = append(streamInterceptors, t.Interceptor)
-		logger.Printf(ctx, "chainning grpc streaming interceptor %s with priority %d", t.Name, t.Priority)
+		s.log.Info().Msgf("chainning grpc streaming interceptor %s with priority %d", t.Name, t.Priority)
 	}
+
+	streamInterceptors = append([]grpc.StreamServerInterceptor{appctx.NewStream(s.log), recovery.NewStream()}, streamInterceptors...)
 	streamChain := grpc_middleware.ChainStreamServer(streamInterceptors...)
 
 	opts := []grpc.ServerOption{

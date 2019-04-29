@@ -28,7 +28,7 @@ var (
 	conf *config
 
 	// Compile time variables
-	gitCommit, gitBranch, gitState, buildDate, version, goVersion, buildPlatform string
+	gitCommit, gitBranch, buildDate, version, goVersion, buildPlatform string
 )
 
 func main() {

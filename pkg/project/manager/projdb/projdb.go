@@ -21,7 +21,6 @@ package projdb
 import (
 	"context"
 	"database/sql"
-	"fmt"
 
 	"github.com/cernbox/reva/pkg/project"
 	_ "github.com/go-sql-driver/mysql" // import mysql driver
@@ -32,20 +31,6 @@ type manager struct {
 	db                                     *sql.DB
 	dbUsername, dbPassword, dbHost, dbName string
 	dbPort                                 int
-}
-
-func (m *manager) getDB() (*sql.DB, error) {
-	if m.db != nil {
-		return m.db, nil
-	}
-
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", m.dbUsername, m.dbPassword, m.dbHost, m.dbPort, m.dbName))
-	if err != nil {
-		return nil, errors.Wrapf(err, "projdb: error creating connection to dbName=%s dbHost=%s dbPort=%d", m.dbName, m.dbHost, m.dbPort)
-	}
-
-	m.db = db
-	return m.db, nil
 }
 
 // New returns a new project manager that stores the project information in a mysql database.

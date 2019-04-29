@@ -19,61 +19,27 @@
 package config
 
 import (
-	"fmt"
-	"strings"
+	"io"
+	"io/ioutil"
 
-	"github.com/spf13/viper"
+	"github.com/BurntSushi/toml"
+	"github.com/pkg/errors"
 )
 
-var v *viper.Viper
-
-func init() {
-	v = viper.New()
-	v.SetEnvPrefix("reva")                             // will be uppercased automatically
-	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_")) // but check eg "REVA_CORE_MAX_CPUS" on Get("core.max_cpus")
-	v.AutomaticEnv()                                   // automagically read env vars on Get calls
-}
-
-// SetFile sets the configuration file.
-func SetFile(fn string) {
-	v.SetConfigFile(fn)
-}
-
-// Read reads teh configuration file.
-func Read() error {
-	err := v.ReadInConfig()
-	return err
-}
-
-// reGet will recursively walk the given map and execute
-// vipers Get method to allow overwriting config vars with
-// env variables.
-func reGet(prefix string, kv *map[string]interface{}) {
-	for k, val := range *kv {
-		if c, ok := val.(map[string]interface{}); ok {
-			reGet(prefix+"."+k, &c)
-		} else {
-			newVal := v.Get(prefix + "." + k)
-			fmt.Println("reGet", prefix, k, "val:", val, "->", newVal)
-			if newVal != nil {
-				(*kv)[k] = newVal
-			}
-		}
+// Read reads the configuration from the reader.
+func Read(r io.Reader) (map[string]interface{}, error) {
+	data, err := ioutil.ReadAll(r)
+	if err != nil {
+		err = errors.Wrap(err, "config: error reading from reader")
+		return nil, err
 	}
 
-}
+	v := map[string]interface{}{}
+	err = toml.Unmarshal(data, &v)
+	if err != nil {
+		err = errors.Wrap(err, "config: error decoding toml data")
+		return nil, err
+	}
 
-// Get gets the configuration key.
-func Get(key string) map[string]interface{} {
-	kv := v.GetStringMap(key)
-	// we need to try and get from env as well because vipers
-	// GetStringMap does not execute the automatic Get mapping
-	// of env vars
-	reGet(key, &kv)
-	return kv
-}
-
-// Dump dumps the configuration.
-func Dump() map[string]interface{} {
-	return v.AllSettings()
+	return v, nil
 }

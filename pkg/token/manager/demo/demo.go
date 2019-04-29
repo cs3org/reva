@@ -24,12 +24,10 @@ import (
 	"encoding/base64"
 	"encoding/gob"
 
-	"github.com/cernbox/reva/pkg/err"
 	"github.com/cernbox/reva/pkg/token"
 	"github.com/cernbox/reva/pkg/token/manager/registry"
+	"github.com/pkg/errors"
 )
-
-var errors = err.New("demo")
 
 func init() {
 	registry.Register("demo", New)

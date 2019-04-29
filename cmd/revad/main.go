@@ -19,7 +19,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -28,108 +27,140 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cernbox/reva/pkg/err"
-	"github.com/cernbox/reva/pkg/log"
-
-	"github.com/cernbox/reva/cmd/revad/config"
 	"github.com/cernbox/reva/cmd/revad/grace"
 	"github.com/cernbox/reva/cmd/revad/grpcserver"
 	"github.com/cernbox/reva/cmd/revad/httpserver"
 
+	"github.com/cernbox/reva/cmd/revad/config"
+	"github.com/cernbox/reva/pkg/logger"
 	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 )
 
 var (
-	errors = err.New("main")
-	logger = log.New("main")
-	ctx    = context.Background()
-	conf   *coreConfig
-
-	versionFlag = flag.Bool("v", false, "show version and exit")
+	versionFlag = flag.Bool("version", false, "show version and exit")
 	testFlag    = flag.Bool("t", false, "test configuration and exit")
 	signalFlag  = flag.String("s", "", "send signal to a master process: stop, quit, reopen, reload")
-	fileFlag    = flag.String("c", "/etc/revad/revad.toml", "set configuration file")
+	configFlag  = flag.String("c", "/etc/revad/revad.toml", "set configuration file")
 	pidFlag     = flag.String("p", "/var/run/revad.pid", "pid file")
 
-	// Compile time variables
-	gitCommit, gitBranch, gitState, buildDate, version, goVersion, buildPlatform string
+	// Compile time variables initialez with gcc flags.
+	gitCommit, gitBranch, buildDate, version, goVersion, buildPlatform string
 )
 
-func init() {
-	checkFlags()
-	writePIDFile()
-	readConfig()
-	log.Out = getLogOutput(conf.LogFile)
-	log.Mode = conf.LogMode
-	if err := log.EnableAll(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		grace.Exit(1)
-	}
-}
-
 func main() {
-	tweakCPU()
-	printLoggedPkgs()
-
-	servers := []grace.Server{}
-	if !conf.DisableHTTP {
-		servers = append(servers, getHTTPServer())
-	}
-
-	if !conf.DisableGRPC {
-		servers = append(servers, getGRPCServer())
-	}
-
-	listeners, err := grace.GetListeners(servers)
-	if err != nil {
-		logger.Error(ctx, err)
-		grace.Exit(1)
-	}
-
-	if !conf.DisableHTTP {
-		go func() {
-			if err := servers[0].(*httpserver.Server).Start(listeners[0]); err != nil {
-				err = errors.Wrap(err, "error starting grpc server")
-				logger.Error(ctx, err)
-				grace.Exit(1)
-			}
-		}()
-	}
-
-	if !conf.DisableGRPC {
-		go func() {
-			if err := servers[1].(*grpcserver.Server).Start(listeners[1]); err != nil {
-				err = errors.Wrap(err, "error starting grpc server")
-				logger.Error(ctx, err)
-				grace.Exit(1)
-			}
-		}()
-	}
-
-	grace.TrapSignals()
-}
-
-func getGRPCServer() *grpcserver.Server {
-	s, err := grpcserver.New(config.Get("grpc"))
-	if err != nil {
-		logger.Error(ctx, err)
-		grace.Exit(1)
-	}
-	return s
-}
-
-func getHTTPServer() *httpserver.Server {
-	s, err := httpserver.New(config.Get("http"))
-	if err != nil {
-		logger.Error(ctx, err)
-		grace.Exit(1)
-	}
-	return s
-}
-
-func checkFlags() {
 	flag.Parse()
 
+	handleVersionFlag()
+	handleSignalFlag()
+	handleTestFlag()
+
+	mainConf := handleConfigFlagOrDie()
+	coreConf := parseCoreConfOrDie(mainConf["core"])
+	logConf := parseLogConfOrDie(mainConf["log"])
+
+	log, err := newLogger(logConf)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error creating logger, exiting ...")
+		os.Exit(1)
+	}
+
+	watcher, err := handlePIDFlag(log) // TODO(labkode): maybe pidfile can be created later on?
+	if err != nil {
+		log.Error().Err(err).Msg("error creating grace watcher")
+		os.Exit(1)
+	}
+
+	ncpus, err := adjustCPU(coreConf.MaxCPUs)
+	if err != nil {
+		log.Error().Err(err).Msg("error adjusting number of cpus")
+		watcher.Exit(1)
+	}
+	log.Info().Msgf("running on %d cpus", ncpus)
+
+	servers := []grace.Server{}
+	if !coreConf.DisableHTTP {
+		s, err := getHTTPServer(mainConf["http"], log)
+		if err != nil {
+			log.Error().Err(err).Msg("error creating http server")
+			watcher.Exit(1)
+		}
+		servers = append(servers, s)
+	}
+
+	if !coreConf.DisableGRPC {
+		s, err := getGRPCServer(mainConf["grpc"], log)
+		if err != nil {
+			log.Error().Err(err).Msg("error creating grpc server")
+			watcher.Exit(1)
+		}
+		servers = append(servers, s)
+	}
+
+	listeners, err := watcher.GetListeners(servers)
+	if err != nil {
+		log.Error().Err(err).Msg("error getting sockets")
+		watcher.Exit(1)
+	}
+
+	if !coreConf.DisableHTTP {
+		go func() {
+			if err := servers[0].(*httpserver.Server).Start(listeners[0]); err != nil {
+				log.Error().Err(err).Msg("error starting the http server")
+				watcher.Exit(1)
+			}
+		}()
+	}
+
+	if !coreConf.DisableGRPC {
+		go func() {
+			if err := servers[1].(*grpcserver.Server).Start(listeners[1]); err != nil {
+				log.Error().Err(err).Msg("error starting the grpc server")
+				watcher.Exit(1)
+			}
+		}()
+	}
+
+	// wait for signal to close servers
+	watcher.TrapSignals()
+}
+
+func newLogger(conf *logConf) (*zerolog.Logger, error) {
+	var opts []logger.Option
+	opts = append(opts, logger.WithLevel(conf.Level))
+
+	w, err := getWriter(conf.Output)
+	if err != nil {
+		return nil, err
+	}
+
+	opts = append(opts, logger.WithWriter(w, logger.Mode(conf.Mode)))
+
+	l := logger.New(opts...)
+	sub := l.With().Int("pid", os.Getpid()).Logger()
+	return &sub, nil
+}
+
+func getWriter(out string) (io.Writer, error) {
+	if out == "stderr" || out == "" {
+		return os.Stderr, nil
+	}
+
+	if out == "stdout" {
+		return os.Stdout, nil
+	}
+
+	fd, err := os.Create(out)
+	if err != nil {
+		err = errors.Wrap(err, "error creating log file")
+		return nil, err
+	}
+
+	return fd, nil
+}
+
+func handleVersionFlag() {
 	if *versionFlag {
 		msg := "version=%s "
 		msg += "commit=%s "
@@ -138,52 +169,79 @@ func checkFlags() {
 		msg += "build_date=%s "
 		msg += "build_platform=%s\n"
 
-		fmt.Printf(msg, version, gitCommit, gitBranch, goVersion, buildDate, buildPlatform)
-		grace.Exit(1)
+		fmt.Fprintf(os.Stderr, msg, version, gitCommit, gitBranch, goVersion, buildDate, buildPlatform)
+		os.Exit(1)
 	}
+}
 
-	if *fileFlag != "" {
-		config.SetFile(*fileFlag)
-	}
-
-	if *testFlag {
-		err := config.Read()
-		if err != nil {
-			fmt.Println("unable to read configuration file: ", *fileFlag, err)
-			grace.Exit(1)
-		}
-		grace.Exit(0)
-	}
-
+func handleSignalFlag() {
 	if *signalFlag != "" {
 		fmt.Println("signaling master process")
-		grace.Exit(1)
+		os.Exit(1)
 	}
 }
 
-func readConfig() {
-	err := config.Read()
+func handleTestFlag() {
+	if *testFlag {
+		os.Exit(0)
+	}
+}
+
+func handlePIDFlag(l *zerolog.Logger) (*grace.Watcher, error) {
+	var opts []grace.Option
+	opts = append(opts, grace.WithPIDFile(*pidFlag))
+	opts = append(opts, grace.WithLogger(l.With().Str("pkg", "grace").Logger()))
+
+	w := grace.NewWatcher(opts...)
+	err := w.WritePID()
 	if err != nil {
-		fmt.Println("unable to read configuration file:", *fileFlag, err)
-		grace.Exit(1)
+		return nil, err
 	}
 
-	// get core config
-
-	conf = &coreConfig{}
-	if err := mapstructure.Decode(config.Get("core"), conf); err != nil {
-		fmt.Fprintln(os.Stderr, "unable to parse core config:", err)
-		grace.Exit(1)
-	}
-
-	// apply defaults
+	return w, nil
 }
 
-//  tweakCPU parses string cpu and sets GOMAXPROCS
+func getGRPCServer(conf interface{}, l *zerolog.Logger) (*grpcserver.Server, error) {
+	sub := l.With().Str("pkg", "grpcserver").Logger()
+	s, err := grpcserver.New(conf, sub)
+	if err != nil {
+		err = errors.Wrap(err, "main: error creating grpc server")
+		return nil, err
+	}
+	return s, nil
+}
+
+func getHTTPServer(conf interface{}, l *zerolog.Logger) (*httpserver.Server, error) {
+	sub := l.With().Str("pkg", "httpserver").Logger()
+	s, err := httpserver.New(conf, sub)
+	if err != nil {
+		err = errors.Wrap(err, "main: error creating http server")
+		return nil, err
+	}
+	return s, nil
+}
+
+func handleConfigFlagOrDie() map[string]interface{} {
+	fd, err := os.Open(*configFlag)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error opening file: %+v\n", err)
+		os.Exit(1)
+	}
+	defer fd.Close()
+
+	v, err := config.Read(fd)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error reading config: %+v\n", err)
+		os.Exit(1)
+	}
+
+	return v
+}
+
+//  adjustCPU parses string cpu and sets GOMAXPROCS
 // according to its value. It accepts either
 // a number (e.g. 3) or a percent (e.g. 50%).
-func tweakCPU() error {
-	cpu := conf.MaxCPUs
+func adjustCPU(cpu string) (int, error) {
 	var numCPU int
 
 	availCPU := runtime.NumCPU()
@@ -195,7 +253,7 @@ func tweakCPU() error {
 			pctStr := cpu[:len(cpu)-1]
 			pctInt, err := strconv.Atoi(pctStr)
 			if err != nil || pctInt < 1 || pctInt > 100 {
-				return errors.New("invalid CPU value: percentage must be between 1-100")
+				return 0, fmt.Errorf("invalid CPU value: percentage must be between 1-100")
 			}
 			percent = float32(pctInt) / 100
 			numCPU = int(float32(availCPU) * percent)
@@ -203,7 +261,7 @@ func tweakCPU() error {
 			// Number
 			num, err := strconv.Atoi(cpu)
 			if err != nil || num < 1 {
-				return errors.New("invalid CPU value: provide a number or percent greater than 0")
+				return 0, fmt.Errorf("invalid CPU value: provide a number or percent greater than 0")
 			}
 			numCPU = num
 		}
@@ -213,20 +271,20 @@ func tweakCPU() error {
 		numCPU = availCPU
 	}
 
-	logger.Printf(ctx, "running on %d cpus", numCPU)
 	runtime.GOMAXPROCS(numCPU)
-	return nil
+	return numCPU, nil
 }
 
-func writePIDFile() {
-	err := grace.WritePIDFile(*pidFlag)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		grace.Exit(1)
+func parseCoreConfOrDie(v interface{}) *coreConf {
+	c := &coreConf{}
+	if err := mapstructure.Decode(v, c); err != nil {
+		fmt.Fprintf(os.Stderr, "error decoding core config: %s\n", err)
+		os.Exit(1)
 	}
+	return c
 }
 
-type coreConfig struct {
+type coreConf struct {
 	MaxCPUs     string `mapstructure:"max_cpus"`
 	LogFile     string `mapstructure:"log_file"`
 	LogMode     string `mapstructure:"log_mode"`
@@ -234,13 +292,17 @@ type coreConfig struct {
 	DisableGRPC bool   `mapstructure:"disable_grpc"`
 }
 
-func getLogOutput(val string) io.Writer {
-	return os.Stderr
+func parseLogConfOrDie(v interface{}) *logConf {
+	c := &logConf{}
+	if err := mapstructure.Decode(v, c); err != nil {
+		fmt.Fprintf(os.Stderr, "error decoding log config: %s\n", err)
+		os.Exit(1)
+	}
+	return c
 }
 
-func printLoggedPkgs() {
-	pkgs := log.ListEnabledPackages()
-	for k := range pkgs {
-		logger.Printf(ctx, "logging enabled for package: %s", pkgs[k])
-	}
+type logConf struct {
+	Output string `mapstructure:"output"`
+	Mode   string `mapstructure:"mode"`
+	Level  string `mapstructure:"level"`
 }

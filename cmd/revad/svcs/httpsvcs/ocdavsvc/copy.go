@@ -29,17 +29,19 @@ import (
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
+	"github.com/cernbox/reva/pkg/appctx"
 	"github.com/cernbox/reva/pkg/token"
 )
 
 func (s *svc) doCopy(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
 
 	src := r.URL.Path
 	dstHeader := r.Header.Get("Destination")
 	overwrite := r.Header.Get("Overwrite")
 
-	logger.Build().Str("source", src).Str("destination", dstHeader).Str("overwrite", overwrite).Msg(ctx, "copy")
+	log.Info().Str("source", src).Str("destination", dstHeader).Str("overwrite", overwrite).Msg("copy")
 
 	if dstHeader == "" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -58,7 +60,7 @@ func (s *svc) doCopy(w http.ResponseWriter, r *http.Request) {
 
 	client, err := s.getClient()
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -72,7 +74,7 @@ func (s *svc) doCopy(w http.ResponseWriter, r *http.Request) {
 
 	urlPath := dstURL.Path
 	baseURI := r.Context().Value(ctxKeyBaseURI).(string)
-	logger.Println(r.Context(), "Copy urlPath=", urlPath, " baseURI=", baseURI)
+	log.Info().Str("url-path", urlPath).Str("base-uri", baseURI).Msg("copy")
 	i := strings.Index(urlPath, baseURI)
 	if i == -1 {
 		w.WriteHeader(http.StatusBadRequest)
@@ -86,7 +88,7 @@ func (s *svc) doCopy(w http.ResponseWriter, r *http.Request) {
 	srcStatReq := &storageproviderv0alphapb.StatRequest{Ref: ref}
 	srcStatRes, err := client.Stat(ctx, srcStatReq)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -96,7 +98,6 @@ func (s *svc) doCopy(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		logger.Println(ctx, srcStatRes.Status)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -111,7 +112,7 @@ func (s *svc) doCopy(w http.ResponseWriter, r *http.Request) {
 	dstStatReq := &storageproviderv0alphapb.StatRequest{Ref: ref}
 	dstStatRes, err := client.Stat(ctx, dstStatReq)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -121,7 +122,7 @@ func (s *svc) doCopy(w http.ResponseWriter, r *http.Request) {
 		successCode = http.StatusNoContent // 204 if target already existed, see https://tools.ietf.org/html/rfc4918#section-9.8.5
 
 		if overwrite == "F" {
-			logger.Println(ctx, "destination already exists: ", dst)
+			log.Warn().Str("dst", dst).Msg("dst already exists")
 			w.WriteHeader(http.StatusPreconditionFailed) // 412, see https://tools.ietf.org/html/rfc4918#section-9.8.5
 			return
 		}
@@ -137,12 +138,11 @@ func (s *svc) doCopy(w http.ResponseWriter, r *http.Request) {
 		intStatReq := &storageproviderv0alphapb.StatRequest{Ref: ref}
 		intStatRes, err := client.Stat(ctx, intStatReq)
 		if err != nil {
-			logger.Error(ctx, err)
+			log.Error().Err(err).Msg("error sending grpc stat request")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		if intStatRes.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
-			logger.Println(ctx, "intermediateDir:", intermediateDir)
 			w.WriteHeader(http.StatusConflict) // 409 if intermediate dir is missing, see https://tools.ietf.org/html/rfc4918#section-9.8.5
 			return
 		}
@@ -151,7 +151,7 @@ func (s *svc) doCopy(w http.ResponseWriter, r *http.Request) {
 
 	err = descend(ctx, client, srcStatRes.Info, dst)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error descending directory")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -159,7 +159,8 @@ func (s *svc) doCopy(w http.ResponseWriter, r *http.Request) {
 }
 
 func descend(ctx context.Context, client storageproviderv0alphapb.StorageProviderServiceClient, src *storageproviderv0alphapb.ResourceInfo, dst string) error {
-	logger.Println(ctx, "descend src:", src, " dst:", dst)
+	log := appctx.GetLogger(ctx)
+	log.Debug().Str("src", src.Path).Str("dst", dst).Msg("descending")
 	if src.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
 		// create dir
 		createReq := &storageproviderv0alphapb.CreateContainerRequest{
@@ -183,7 +184,7 @@ func descend(ctx context.Context, client storageproviderv0alphapb.StorageProvide
 			return err
 		}
 		if res.Status.Code != rpcpb.Code_CODE_OK {
-			return fmt.Errorf("Status code %d", res.Status.Code)
+			return fmt.Errorf("status code %d", res.Status.Code)
 		}
 
 		for _, e := range res.Infos {
@@ -216,7 +217,7 @@ func descend(ctx context.Context, client storageproviderv0alphapb.StorageProvide
 		}
 
 		if dRes.Status.Code != rpcpb.Code_CODE_OK {
-			return fmt.Errorf("Status code %d", dRes.Status.Code)
+			return fmt.Errorf("status code %d", dRes.Status.Code)
 		}
 
 		// 2. get upload url
@@ -233,7 +234,7 @@ func descend(ctx context.Context, client storageproviderv0alphapb.StorageProvide
 		}
 
 		if uRes.Status.Code != rpcpb.Code_CODE_OK {
-			return fmt.Errorf("Status code %d", uRes.Status.Code)
+			return fmt.Errorf("status code %d", uRes.Status.Code)
 		}
 
 		// 3. do download
@@ -257,7 +258,7 @@ func descend(ctx context.Context, client storageproviderv0alphapb.StorageProvide
 		}
 
 		if httpDownloadRes.StatusCode != http.StatusOK {
-			return fmt.Errorf("Status code %d", httpDownloadRes.StatusCode)
+			return fmt.Errorf("status code %d", httpDownloadRes.StatusCode)
 		}
 
 		// do upload
@@ -282,7 +283,7 @@ func descend(ctx context.Context, client storageproviderv0alphapb.StorageProvide
 		}
 
 		if httpRes.StatusCode != http.StatusOK {
-			return fmt.Errorf("Status code %d", httpDownloadRes.StatusCode)
+			return fmt.Errorf("status code %d", httpDownloadRes.StatusCode)
 		}
 
 	}

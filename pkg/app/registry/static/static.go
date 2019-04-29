@@ -23,12 +23,9 @@ import (
 	"strings"
 
 	"github.com/cernbox/reva/pkg/app"
-	"github.com/cernbox/reva/pkg/log"
 
 	"github.com/mitchellh/mapstructure"
 )
-
-var logger = log.New("static")
 
 type registry struct {
 	rules map[string]string

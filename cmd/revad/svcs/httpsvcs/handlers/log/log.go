@@ -27,11 +27,10 @@ import (
 	"time"
 
 	"github.com/cernbox/reva/cmd/revad/httpserver"
-	"github.com/cernbox/reva/pkg/log"
+	"github.com/cernbox/reva/pkg/appctx"
 	"github.com/mitchellh/mapstructure"
+	"github.com/rs/zerolog"
 )
-
-var logger = log.New("log")
 
 func init() {
 	httpserver.RegisterMiddleware("log", New)
@@ -50,31 +49,31 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 	}
 
 	chain := func(h http.Handler) http.Handler {
-		return handler(logger, h)
+		return handler(h)
 	}
 	return chain, conf.Priority, nil
 }
 
 // handler is a logging middleware
-func handler(l *log.Logger, h http.Handler) http.Handler {
-	return newLoggingHandler(l, h)
+func handler(h http.Handler) http.Handler {
+	return newLoggingHandler(h)
 }
 
-func newLoggingHandler(l *log.Logger, h http.Handler) http.Handler {
-	return loggingHandler{l, h}
+func newLoggingHandler(h http.Handler) http.Handler {
+	return loggingHandler{handler: h}
 }
 
 type loggingHandler struct {
-	l       *log.Logger
 	handler http.Handler
 }
 
 func (h loggingHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	log := appctx.GetLogger(req.Context())
 	t := time.Now()
 	logger := makeLogger(w)
 	url := *req.URL
 	h.handler.ServeHTTP(logger, req)
-	writeLog(h.l, req, url, t, logger.Status(), logger.Size())
+	writeLog(log, req, url, t, logger.Status(), logger.Size())
 }
 
 func makeLogger(w http.ResponseWriter) loggingResponseWriter {
@@ -93,7 +92,7 @@ func makeLogger(w http.ResponseWriter) loggingResponseWriter {
 	return logger
 }
 
-func writeLog(l *log.Logger, req *http.Request, url url.URL, ts time.Time, status, size int) {
+func writeLog(log *zerolog.Logger, req *http.Request, url url.URL, ts time.Time, status, size int) {
 	end := time.Now()
 	host, _, err := net.SplitHostPort(req.RemoteAddr)
 
@@ -113,18 +112,21 @@ func writeLog(l *log.Logger, req *http.Request, url url.URL, ts time.Time, statu
 
 	diff := end.Sub(ts).Nanoseconds()
 
-	var b *log.Builder
-	if status >= 400 {
-		b = l.BuildError()
+	var event *zerolog.Event
+	if status < 400 {
+		event = log.Info()
+	} else if status < 500 {
+		event = log.Warn()
 	} else {
-		b = l.Build()
+		event = log.Error()
 	}
-	b.Str("host", host).Str("method", req.Method)
-	b = b.Str("uri", uri).Str("url", u).Str("proto", req.Proto).Int("status", status)
-	b = b.Int("size", size)
-	b = b.Str("start", ts.Format("02/Jan/2006:15:04:05 -0700"))
-	b = b.Str("end", end.Format("02/Jan/2006:15:04:05 -0700")).Int("time_ns", int(diff))
-	b.Msg(req.Context(), "HTTP call")
+
+	event.Str("host", host).Str("method", req.Method).
+		Str("uri", uri).Str("url", u).Str("proto", req.Proto).Int("status", status).
+		Int("size", size).
+		Str("start", ts.Format("02/Jan/2006:15:04:05 -0700")).
+		Str("end", end.Format("02/Jan/2006:15:04:05 -0700")).Int("time_ns", int(diff)).
+		Msg("http")
 }
 
 type loggingResponseWriter interface {

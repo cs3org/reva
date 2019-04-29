@@ -16,61 +16,25 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package trace
+package appctx
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/cernbox/reva/cmd/revad/grpcserver"
-	"github.com/pkg/errors"
-
-	"github.com/cernbox/reva/pkg/log"
-	"github.com/cernbox/reva/pkg/trace"
-	"github.com/gofrs/uuid"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cernbox/reva/pkg/appctx"
+	"github.com/cernbox/reva/pkg/reqid"
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
 
-var logger = log.New("trace")
-
-func init() {
-	grpcserver.RegisterUnaryInterceptor("trace", NewUnary)
-	grpcserver.RegisterStreamInterceptor("trace", NewStream)
-}
-
-type config struct {
-	Priority int    `mapstructure:"priority"`
-	Header   string `mapstructure:"header"`
-}
-
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		logger.Error(context.Background(), errors.Wrap(err, "error decoding conf"))
-		return nil, err
-	}
-	return c, nil
-}
-
-// NewUnary returns a new unary interceptor that adds
-// trace information for the request.
-func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error) {
-	conf, err := parseConfig(m)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	if conf.Header == "" {
-		return nil, 0, fmt.Errorf("trace unary interceptor: header is empty")
-	}
-
+// NewUnary returns a new unary interceptor that creates the application context.
+func NewUnary(log zerolog.Logger) grpc.UnaryServerInterceptor {
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		var t string
 		md, ok := metadata.FromIncomingContext(ctx)
 		if ok && md != nil {
-			if val, ok := md[conf.Header]; ok {
+			if val, ok := md[reqid.ReqIDHeaderName]; ok {
 				if len(val) > 0 && val[0] != "" {
 					t = val[0]
 				}
@@ -78,46 +42,44 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		}
 
 		if t == "" {
-			t = uuid.Must(uuid.NewV4()).String()
+			t = reqid.MintReqID()
 		}
 
-		ctx = trace.ContextSetTrace(ctx, t)
+		ctx = reqid.ContextSetReqID(ctx, t)
+
+		sub := log.With().Str("reqid", t).Logger()
+		ctx = appctx.WithLogger(ctx, &sub)
+
 		return handler(ctx, req)
 	}
-	return interceptor, conf.Priority, nil
+	return interceptor
 }
 
 // NewStream returns a new server stream interceptor
-// that adds trace information to the request.
-func NewStream(m map[string]interface{}) (grpc.StreamServerInterceptor, int, error) {
-	conf, err := parseConfig(m)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	if conf.Header == "" {
-		return nil, 0, fmt.Errorf("trace stream interceptor: header is empty")
-	}
-
+// that creates the application context.
+func NewStream(log zerolog.Logger) grpc.StreamServerInterceptor {
 	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		var t string
 		md, ok := metadata.FromIncomingContext(ss.Context())
 		if ok && md != nil {
-			if val, ok := md[conf.Header]; ok {
+			if val, ok := md[reqid.ReqIDHeaderName]; ok {
 				if len(val) > 0 && val[0] != "" {
 					t = val[0]
 				}
 			}
 		}
 		if t == "" {
-			t = uuid.Must(uuid.NewV4()).String()
+			t = reqid.MintReqID()
 		}
 
-		ctx := trace.ContextSetTrace(ss.Context(), t)
+		ctx := reqid.ContextSetReqID(ss.Context(), t)
+		sub := log.With().Str("reqid", t).Logger()
+		ctx = appctx.WithLogger(ctx, &sub)
+
 		wrapped := newWrappedServerStream(ctx, ss)
 		return handler(srv, wrapped)
 	}
-	return interceptor, conf.Priority, nil
+	return interceptor
 }
 
 func newWrappedServerStream(ctx context.Context, ss grpc.ServerStream) *wrappedServerStream {

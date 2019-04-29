@@ -28,14 +28,10 @@ import (
 	appproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/appprovider/v0alpha"
 	"github.com/cernbox/reva/pkg/app"
 	"github.com/cernbox/reva/pkg/app/provider/demo"
-	"github.com/cernbox/reva/pkg/err"
-	"github.com/cernbox/reva/pkg/log"
+	"github.com/cernbox/reva/pkg/appctx"
 	"github.com/cernbox/reva/pkg/storage"
 	"github.com/mitchellh/mapstructure"
 )
-
-var logger = log.New("appprovidersvc")
-var errors = err.New("appprovidersvc")
 
 type service struct {
 	provider app.Provider
@@ -84,7 +80,7 @@ func getProvider(c *config) (app.Provider, error) {
 	}
 }
 func (s *service) Open(ctx context.Context, req *appproviderv0alphapb.OpenRequest) (*appproviderv0alphapb.OpenResponse, error) {
-
+	log := appctx.GetLogger(ctx)
 	id := req.ResourceId
 	token := req.AccessToken
 
@@ -92,7 +88,7 @@ func (s *service) Open(ctx context.Context, req *appproviderv0alphapb.OpenReques
 
 	iframeLocation, err := s.provider.GetIFrame(ctx, resID, token)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error getting iframe")
 		res := &appproviderv0alphapb.OpenResponse{
 			Status: &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL},
 		}

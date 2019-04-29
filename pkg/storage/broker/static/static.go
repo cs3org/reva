@@ -22,7 +22,6 @@ import (
 	"context"
 	"strings"
 
-	"github.com/cernbox/reva/pkg/log"
 	"github.com/cernbox/reva/pkg/storage/broker/registry"
 
 	"github.com/cernbox/reva/pkg/storage"
@@ -32,8 +31,6 @@ import (
 func init() {
 	registry.Register("static", New)
 }
-
-var logger = log.New("static")
 
 type broker struct {
 	rules map[string]string

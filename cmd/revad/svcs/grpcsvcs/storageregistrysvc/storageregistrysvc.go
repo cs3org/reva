@@ -29,15 +29,11 @@ import (
 
 	storageregistryv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageregistry/v0alpha"
 	"github.com/cernbox/reva/cmd/revad/grpcserver"
-	"github.com/cernbox/reva/pkg/err"
-	"github.com/cernbox/reva/pkg/log"
+	"github.com/cernbox/reva/pkg/appctx"
 	"github.com/cernbox/reva/pkg/storage"
 	"github.com/cernbox/reva/pkg/storage/broker/registry"
 	"github.com/mitchellh/mapstructure"
 )
-
-var logger = log.New("storageregistrysvc")
-var errors = err.New("storageregistrysvc")
 
 func init() {
 	grpcserver.Register("storageregistrysvc", New)
@@ -109,10 +105,11 @@ func (s *service) ListStorageProviders(ctx context.Context, req *storageregistry
 }
 
 func (s *service) GetStorageProvider(ctx context.Context, req *storageregistryv0alphapb.GetStorageProviderRequest) (*storageregistryv0alphapb.GetStorageProviderResponse, error) {
+	log := appctx.GetLogger(ctx)
 	fn := req.Ref.GetPath()
 	p, err := s.broker.FindProvider(ctx, fn)
 	if err != nil {
-		logger.Error(ctx, err)
+		log.Error().Err(err).Msg("error finding provider")
 		res := &storageregistryv0alphapb.GetStorageProviderResponse{
 			Status: &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL},
 		}

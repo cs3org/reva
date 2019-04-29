@@ -25,13 +25,14 @@ import (
 	"sort"
 	"time"
 
+	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers/appctx"
+
 	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs"
 
-	"github.com/cernbox/reva/pkg/err"
-	"github.com/cernbox/reva/pkg/log"
-
 	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/rs/zerolog"
 )
 
 // NewMiddlewares contains all the registered new middleware functions.
@@ -67,12 +68,6 @@ func Register(name string, newFunc NewService) {
 // NewService is the function that HTTP services need to register at init time.
 type NewService func(conf map[string]interface{}) (httpsvcs.Service, error)
 
-var (
-	ctx    = context.Background()
-	logger = log.New("httpserver")
-	errors = err.New("httpserver")
-)
-
 type config struct {
 	Network            string                            `mapstructure:"network"`
 	Address            string                            `mapstructure:"address"`
@@ -89,10 +84,11 @@ type Server struct {
 	listener    net.Listener
 	svcs        map[string]http.Handler
 	middlewares []*middlewareTriple
+	log         zerolog.Logger
 }
 
 // New returns a new server
-func New(m map[string]interface{}) (*Server, error) {
+func New(m interface{}, l zerolog.Logger) (*Server, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
@@ -112,6 +108,7 @@ func New(m map[string]interface{}) (*Server, error) {
 		httpServer: httpServer,
 		conf:       conf,
 		svcs:       map[string]http.Handler{},
+		log:        l,
 	}
 	return s, nil
 }
@@ -129,7 +126,7 @@ func (s *Server) Start(ln net.Listener) error {
 	s.httpServer.Handler = s.getHandler()
 	s.listener = ln
 
-	logger.Printf(ctx, "http server listening at %s:%s", s.conf.Network, s.conf.Address)
+	s.log.Info().Msgf("http server listening at %s:%s", s.conf.Network, s.conf.Address)
 	err := s.httpServer.Serve(s.listener)
 	if err == nil || err == http.ErrServerClosed {
 		return nil
@@ -140,7 +137,7 @@ func (s *Server) Start(ln net.Listener) error {
 // Stop stops the server.
 func (s *Server) Stop() error {
 	// TODO(labkode): set ctx deadline to zero
-	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	return s.httpServer.Shutdown(ctx)
 }
@@ -157,7 +154,7 @@ func (s *Server) Address() string {
 
 // GracefulStop gracefully stops the server.
 func (s *Server) GracefulStop() error {
-	return s.httpServer.Shutdown(ctx)
+	return s.httpServer.Shutdown(context.Background())
 }
 
 func (s *Server) isEnabled(svcName string) bool {
@@ -185,13 +182,14 @@ func (s *Server) registerMiddlewares() error {
 			m, prio, err := newFunc(s.conf.Middlewares[name])
 			if err != nil {
 				err = errors.Wrap(err, "error creating new middleware: "+name)
+				return err
 			}
 			middlewares = append(middlewares, &middlewareTriple{
 				Name:       name,
 				Priority:   prio,
 				Middleware: m,
 			})
-			logger.Printf(ctx, "http middleware enabled: %s", name)
+			s.log.Info().Msgf("http middleware enabled: %s", name)
 		}
 	}
 	s.middlewares = middlewares
@@ -205,11 +203,10 @@ func (s *Server) registerServices() error {
 			svc, err := newFunc(s.conf.Services[svcName])
 			if err != nil {
 				err = errors.Wrap(err, "error registering new http service")
-				logger.Error(ctx, err)
 				return err
 			}
 			svcs[svc.Prefix()] = prometheus.InstrumentHandler(svc.Prefix(), svc.Handler())
-			logger.Printf(ctx, "http service enabled: %s@/%s", svcName, svc.Prefix())
+			s.log.Info().Msgf("http service enabled: %s@/%s", svcName, svc.Prefix())
 		}
 	}
 	s.svcs = svcs
@@ -221,17 +218,19 @@ func (s *Server) getHandler() http.Handler {
 		head, tail := httpsvcs.ShiftPath(r.URL.Path)
 		if h, ok := s.svcs[head]; ok {
 			r.URL.Path = tail
-			logger.Println(r.Context(), "http routing: head=", head, " tail=", r.URL.Path, " svc="+head)
+			s.log.Info().Msgf("http routing: head=%s tail=%s svc=%s", head, r.URL.Path, head)
 			h.ServeHTTP(w, r)
 			return
 		}
+
 		if h, ok := s.svcs[""]; ok {
 			r.URL.Path = "/" + head + "/" + tail
-			logger.Println(r.Context(), "http routing: head=/ tail=", r.URL.Path, " svc=root")
+			s.log.Info().Msgf("http routing: head=/ tail=%s svc=root", r.URL.Path)
 			h.ServeHTTP(w, r)
 			return
 		}
-		logger.Println(r.Context(), "http routing: head=", head, " tail=", tail, " svc=not-found")
+
+		s.log.Info().Msgf("http routing: head=%s tail=%s svc=not-found", tail, " svc=not-found")
 		w.WriteHeader(http.StatusNotFound)
 	})
 
@@ -240,9 +239,13 @@ func (s *Server) getHandler() http.Handler {
 		return s.middlewares[i].Priority > s.middlewares[j].Priority
 	})
 
+	// add always the logctx middleware as most priority, this middleware is internal
+	// and cannot be configured from the configuration.
+	s.middlewares = append(s.middlewares, &middlewareTriple{Middleware: appctx.New(s.log), Name: "appctx"})
+
 	handler := http.Handler(h)
 	for _, triple := range s.middlewares {
-		logger.Printf(ctx, "chainning http middleware %s with priority  %d", triple.Name, triple.Priority)
+		s.log.Info().Msgf("chainning http middleware %s with priority  %d", triple.Name, triple.Priority)
 		handler = triple.Middleware(handler)
 	}
 	return handler
