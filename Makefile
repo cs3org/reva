@@ -36,3 +36,5 @@ license:
 deploy:
 	go build -o ./cmd/revad/revad ${LDFLAGS} ./cmd/revad 
 	./cmd/revad/revad -c ./cmd/revad/revad.toml -p ./cmd/revad/revad.pid
+deps:
+	cd /tmp && go get -u golang.org/x/lint/golint

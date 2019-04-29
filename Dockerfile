@@ -21,7 +21,8 @@ FROM golang:1.11
 ENV GO111MODULE=on
 WORKDIR /go/src/github/cernbox/reva
 COPY . .
-RUN go build -v ./...
+RUN GO111MODULE=off make deps
+RUN make
 WORKDIR /go/src/github/cernbox/reva/cmd/revad
 RUN go install
 RUN mkdir -p /etc/revad/
