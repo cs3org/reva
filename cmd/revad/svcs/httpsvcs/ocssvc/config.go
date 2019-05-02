@@ -16,26 +16,26 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocdavsvc
+package ocssvc
 
 import (
 	"net/http"
+
+	"github.com/cernbox/reva/pkg/appctx"
 )
 
 // the config for the ocs api
 func (s *svc) doConfig(w http.ResponseWriter, r *http.Request) {
-	res := &ocsResponse{
-		OCS: &ocsPayload{
-			Meta: ocsMetaOK,
-			Data: &ocsConfigData{
-				// hardcoded in core as well https://github.com/owncloud/core/blob/5f0af496626b957aff38730b5771ec0a33effe31/lib/private/OCS/Config.php#L28-L34
-				Version: "1.7",
-				Website: "ownCloud",
-				Host:    r.URL.Host, // FIXME r.URL.Host is empty
-				Contact: "",
-				SSL:     "false",
-			},
+	res := &Response{
+		OCS: &Payload{
+			Meta: MetaOK,
+			Data: s.c.Config,
 		},
 	}
-	writeOCSResponse(w, r, res)
+
+	err := WriteOCSResponse(w, r, res)
+	if err != nil {
+		appctx.GetLogger(r.Context()).Error().Err(err).Msg("error writing ocs response")
+		w.WriteHeader(http.StatusInternalServerError)
+	}
 }

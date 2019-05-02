@@ -104,27 +104,6 @@ func (s *svc) setHandler() {
 
 		log.Debug().Str("head", head).Str("tail", tail).Msg("http routing")
 		switch head {
-		case "ocs":
-			r.URL.Path = tail
-			head, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
-			if head == "v1.php" {
-				head, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
-				if head == "cloud" {
-					head, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
-					if head == "capabilities" {
-						s.doCapabilities(w, r)
-						return
-					} else if head == "user" {
-						s.doUser(w, r)
-						return
-					}
-				} else if head == "config" {
-					s.doConfig(w, r)
-					return
-				}
-			}
-			w.WriteHeader(http.StatusNotFound)
-			return
 
 		case "status.php":
 			r.URL.Path = tail

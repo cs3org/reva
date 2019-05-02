@@ -322,3 +322,9 @@ type errorXML struct {
 }
 
 var errInvalidPropfind = errors.New("webdav: invalid propfind")
+
+// TODO better error handling
+type contextUserRequiredErr string
+
+func (err contextUserRequiredErr) Error() string   { return string(err) }
+func (err contextUserRequiredErr) IsUserRequired() {}
