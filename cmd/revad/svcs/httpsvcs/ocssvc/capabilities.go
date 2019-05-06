@@ -16,49 +16,26 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocdavsvc
+package ocssvc
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/cernbox/reva/pkg/appctx"
-	"github.com/cernbox/reva/pkg/user"
 )
 
-func (s *svc) doUser(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
+func (s *svc) doCapabilities(w http.ResponseWriter, r *http.Request) {
 
-	u, ok := user.ContextGetUser(ctx)
-	if !ok {
-		log.Error().Msg("error getting user from context")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	res := &ocsResponse{
-		OCS: &ocsPayload{
-			Meta: ocsMetaOK,
-			Data: &ocsUserData{
-				ID:          u.Username,
-				DisplayName: u.DisplayName,
-				Email:       u.Mail,
-			},
+	res := &Response{
+		OCS: &Payload{
+			Meta: MetaOK,
+			Data: s.c.Capabilities,
 		},
 	}
-	encoded, err := json.Marshal(res)
+
+	err := WriteOCSResponse(w, r, res)
 	if err != nil {
-		log.Error().Err(err).Msg("error encoding json")
+		appctx.GetLogger(r.Context()).Error().Err(err).Msg("error writing ocs response")
 		w.WriteHeader(http.StatusInternalServerError)
-		return
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(encoded)
 }
-
-type contextUserRequiredErr string
-
-func (err contextUserRequiredErr) Error() string   { return string(err) }
-func (err contextUserRequiredErr) IsUserRequired() {}

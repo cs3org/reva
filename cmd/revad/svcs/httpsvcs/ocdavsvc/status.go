@@ -20,11 +20,12 @@ package ocdavsvc
 
 import (
 	"encoding/json"
+	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/ocssvc"
 	"net/http"
 )
 
 func (s *svc) doStatus(w http.ResponseWriter, r *http.Request) {
-	status := &ocsStatus{
+	status := &ocssvc.Status{
 		Installed:      true,
 		Maintenance:    false,
 		NeedsDBUpgrade: false,
