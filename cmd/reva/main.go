@@ -104,7 +104,6 @@ func createMainUsage(cmds []*command) string {
 	for _, cmd := range cmds {
 		usage += fmt.Sprintf("%s%s%s\n", cmd.Name, strings.Repeat(" ", 4+(n-len(cmd.Name))), cmd.Description())
 	}
-	usage += "\nAuthors: hugo.gonzalez.labrador@cern.ch"
-	usage += "\nCopyright: CERN IT Storage Group"
+	usage += "\nThe REVA authors"
 	return usage
 }
