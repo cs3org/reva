@@ -21,6 +21,7 @@ package authsvc
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/cernbox/reva/cmd/revad/grpcserver"
 	"github.com/cernbox/reva/pkg/auth/manager/registry"
@@ -87,36 +88,40 @@ func getTokenManager(manager string, m map[string]map[string]interface{}) (token
 }
 
 // New returns a new AuthServiceServer.
-func New(m map[string]interface{}, ss *grpc.Server) error {
+func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 	c, err := parseConfig(m)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	authManager, err := getAuthManager(c.AuthManager, c.AuthManagers)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	tokenManager, err := getTokenManager(c.TokenManager, c.TokenManagers)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	userManager, err := getUserManager(c.UserManager, c.UserManagers)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	svc := &service{authmgr: authManager, tokenmgr: tokenManager, usermgr: userManager}
 	authv0alphapb.RegisterAuthServiceServer(ss, svc)
-	return nil
+	return svc, nil
 }
 
 type service struct {
 	authmgr  auth.Manager
 	tokenmgr token.Manager
 	usermgr  user.Manager
+}
+
+func (s *service) Close() error {
+	return nil
 }
 
 func (s *service) GenerateAccessToken(ctx context.Context, req *authv0alphapb.GenerateAccessTokenRequest) (*authv0alphapb.GenerateAccessTokenResponse, error) {

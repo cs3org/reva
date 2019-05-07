@@ -21,6 +21,7 @@ package storageregistrysvc
 import (
 	"context"
 	"fmt"
+	"io"
 
 	storagetypespb "github.com/cernbox/go-cs3apis/cs3/storagetypes"
 
@@ -43,21 +44,25 @@ type service struct {
 	broker storage.Broker
 }
 
+func (s *service) Close() error {
+	return nil
+}
+
 type config struct {
 	Driver  string                            `mapstructure:"driver"`
 	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
 }
 
 // New creates a new StorageBrokerService
-func New(m map[string]interface{}, ss *grpc.Server) error {
+func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 	c, err := parseConfig(m)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	broker, err := getBroker(c)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	service := &service{
@@ -65,7 +70,7 @@ func New(m map[string]interface{}, ss *grpc.Server) error {
 	}
 
 	storageregistryv0alphapb.RegisterStorageRegistryServiceServer(ss, service)
-	return nil
+	return service, nil
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {

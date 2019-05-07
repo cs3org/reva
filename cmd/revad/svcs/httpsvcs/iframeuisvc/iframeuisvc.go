@@ -49,6 +49,10 @@ func New(m map[string]interface{}) (httpsvcs.Service, error) {
 	return &svc{prefix: conf.Prefix, handler: getHandler()}, nil
 }
 
+func (s *svc) Close() error {
+	return nil
+}
+
 func (s *svc) Prefix() string {
 	return s.prefix
 }

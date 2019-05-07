@@ -57,6 +57,10 @@ func (s *svc) Handler() http.Handler {
 	return s.handler
 }
 
+func (s *svc) Close() error {
+	return nil
+}
+
 func getHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		html := `
