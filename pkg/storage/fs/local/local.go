@@ -29,6 +29,7 @@ import (
 	"path"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/rjeczalik/notify"
 
@@ -81,13 +82,22 @@ func New(m map[string]interface{}) (storage.FS, error) {
 
 		// Set up a watchpoint listening for events within a directory tree rooted
 		// at current working directory. Dispatch remove events to nc.
-		if err := notify.Watch(c.Root+"/...", nc, notify.All); err != nil {
+		if err := notify.Watch(
+			c.Root+"/...",
+			nc,
+			notify.All,
+			//TODO watch for touch / mtime changes
+			// see minio platform specific code https://github.com/minio/minio/search?q=eventWrite
+			//notify.InAttrib,
+			//notify.FileAttrib,
+			//notify.FSEventsInodeMetaMod,
+			//notify.NoteAttrib,
+			//notify.FileNotifyChangeLastWrite,
+		); err != nil {
 			return nil, err
 		}
 		//log.Error().Interface("path", c.Root+"/...").Msg("watching")
 		fmt.Println("watching ", c.Root+"/...")
-
-		//defer notify.Stop(c) done in Close()
 
 		// Block until an event is received.
 		go func() {
@@ -95,6 +105,19 @@ func New(m map[string]interface{}) (storage.FS, error) {
 				fmt.Println("got event ", e)
 
 				//log.Error().Interface("event", e).Msg("got event")
+				// walk up the tree and update mtime
+				// up to which segment?
+				// - eos uses the system namespace. we cannot do that
+				// -> use a prefix, for now a subdir of root
+				currenttime := time.Now().Local()
+
+				for parent := path.Dir(e.Path()); parent != c.Root && parent != "."; parent = path.Dir(parent) {
+					//fmt.Println("touching ", parent)
+					err = os.Chtimes(parent, currenttime, currenttime)
+					if err != nil {
+						fmt.Println("could not propagate mtime for ", e, " on ", parent, ": ", err)
+					}
+				}
 			}
 		}()
 	}
@@ -103,7 +126,9 @@ func New(m map[string]interface{}) (storage.FS, error) {
 }
 
 func (fs *localFS) Close() error {
+	fmt.Println("unwatching", fs.root+"/...")
 	notify.Stop(fs.notifyChan)
+	close(fs.notifyChan)
 	return nil
 }
 
