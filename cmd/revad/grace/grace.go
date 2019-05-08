@@ -97,7 +97,9 @@ func (w *Watcher) clean() error {
 	}
 
 	if filePID != os.Getpid() {
-		return fmt.Errorf("pid:%d in pidfile is different from pid:%d", filePID, os.Getpid())
+		// the pidfile may have been changed by a forked child
+		// TODO(labkode): is there a way to list children pids for current process?
+		return fmt.Errorf("pid:%d in pidfile is different from pid:%d, it can be a leftover from a hard shutdown or that a reload was triggered", filePID, os.Getpid())
 	}
 
 	return os.Remove(w.pidFile)
@@ -114,6 +116,27 @@ func (w *Watcher) readPID() (int, error) {
 		return 0, err
 	}
 	return pid, nil
+}
+
+// GetProcessFromFile reads the pidfile and returns the running process or error if the process or file
+// are not available.
+func GetProcessFromFile(pfile string) (*os.Process, error) {
+	data, err := ioutil.ReadFile(pfile)
+	if err != nil {
+		return nil, err
+	}
+
+	pid, err := strconv.Atoi(string(data))
+	if err != nil {
+		return nil, err
+	}
+
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return nil, err
+	}
+
+	return process, nil
 }
 
 // WritePID writes the pid to the configured pid file.
