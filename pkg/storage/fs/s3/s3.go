@@ -102,6 +102,10 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	return &s3FS{client: s3Client, config: c}, nil
 }
 
+func (fs *s3FS) Shutdown() error {
+	return nil
+}
+
 func (fs *s3FS) addRoot(p string) string {
 	np := path.Join(fs.config.Prefix, p)
 	return np
