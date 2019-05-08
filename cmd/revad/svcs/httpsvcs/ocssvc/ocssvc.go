@@ -257,7 +257,9 @@ func (s *svc) Prefix() string {
 func (s *svc) Handler() http.Handler {
 	return s.handler
 }
-
+func (s *svc) Close() error {
+	return nil
+}
 func (s *svc) setHandler() {
 	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log := appctx.GetLogger(r.Context())

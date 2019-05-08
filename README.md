@@ -1,6 +1,6 @@
 [REVA](https://cernbox.github.io/reva/) 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) [![GoDoc](https://godoc.org/github.com/cernbox/reva?status.svg)](https://godoc.org/github.com/cernbox/reva)
- [![Gitter chat](https://badges.gitter.im/cs3org/reva.png)](https://gitter.im/cs3org/reva) [![Build Status](https://travis-ci.org/cernbox/reva.svg?branch=master)](https://travis-ci.org/cernbox/reva) [![Go Report Card](https://goreportcard.com/badge/github.com/cernbox/reva)](https://goreportcard.com/report/github.com/cernbox/reva)  [![codecov](https://codecov.io/gh/cernbox/reva/branch/master/graph/badge.svg)](https://codecov.io/gh/cernbox/reva) 
+ [![Gitter chat](https://badges.gitter.im/cs3org/reva.svg)](https://gitter.im/cs3org/reva) [![Build Status](https://travis-ci.org/cernbox/reva.svg?branch=master)](https://travis-ci.org/cernbox/reva) [![Go Report Card](https://goreportcard.com/badge/github.com/cernbox/reva)](https://goreportcard.com/report/github.com/cernbox/reva)  [![codecov](https://codecov.io/gh/cernbox/reva/branch/master/graph/badge.svg)](https://codecov.io/gh/cernbox/reva) 
 ================
 [Website](https://cernbox.github.io/reva/)
 
