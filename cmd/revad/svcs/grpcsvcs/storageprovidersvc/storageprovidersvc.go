@@ -68,7 +68,15 @@ type service struct {
 	availableXS        []*storageproviderv0alphapb.ResourceChecksumPriority
 }
 
+// Close will Close() storages if they implement the io.Closer interface
+// Use it to eg. properly
+// - shutdown embedded databases
+// - remove file listeners
 func (s *service) Close() error {
+	c, ok := s.storage.(io.Closer)
+	if ok {
+		return c.Close()
+	}
 	return nil
 }
 
