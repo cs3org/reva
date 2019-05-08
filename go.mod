@@ -2,7 +2,7 @@ module github.com/cernbox/reva
 
 require (
 	github.com/BurntSushi/toml v0.3.1
-	github.com/aws/aws-sdk-go v1.19.25
+	github.com/aws/aws-sdk-go v1.19.26
 	github.com/cernbox/go-cs3apis v0.0.0-20190417142802-9dd8415dc24d
 	github.com/cheggaaa/pb v1.0.28
 	github.com/coreos/go-oidc v2.0.0+incompatible
