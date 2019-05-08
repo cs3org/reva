@@ -30,6 +30,8 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/rjeczalik/notify"
+
 	"github.com/cernbox/reva/pkg/storage/fs/registry"
 
 	"github.com/cernbox/reva/pkg/appctx"
@@ -44,7 +46,8 @@ func init() {
 }
 
 type config struct {
-	Root string `mapstructure:"root"`
+	Root  string `mapstructure:"root"`
+	Watch bool   `mapstructure:"watch"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -64,11 +67,91 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		return nil, err
 	}
 
+	//TODO get the logger
+	//log := appctx.GetLogger(context.Background())
+
 	// create root if it does not exist
 	os.MkdirAll(c.Root, 0755)
 
-	return &localFS{root: c.Root}, nil
+	// Make the channel buffered to ensure no event is dropped. Notify will drop
+	// an event if the receiver is not able to keep up the sending pace.
+	nc := make(chan notify.EventInfo, 1)
+
+	if c.Watch {
+
+		// Set up a watchpoint listening for events within a directory tree rooted
+		// at current working directory. Dispatch remove events to nc.
+		if err := notify.Watch(c.Root+"/...", nc, notify.All); err != nil {
+			return nil, err
+		}
+		//log.Error().Interface("path", c.Root+"/...").Msg("watching")
+		fmt.Println("watching ", c.Root+"/...")
+
+		//defer notify.Stop(c) done in Close()
+
+		// Block until an event is received.
+		go func() {
+			for e := range nc {
+				fmt.Println("got event ", e)
+
+				//log.Error().Interface("event", e).Msg("got event")
+			}
+		}()
+	}
+
+	return &localFS{root: c.Root, notifyChan: nc}, nil
 }
+
+func (fs *localFS) Close() error {
+	notify.Stop(fs.notifyChan)
+	return nil
+}
+
+// what is cached
+// for localfs the acls / sharing permissions:
+// - what did I share with whom
+// - who shared what with me
+// -> but this is for the share provider
+
+// how often do we update the cache?
+
+// what is the key?
+// - the file id?
+// - the path?
+
+// do we need a fast fileid to path lookup?
+// - for s3 only if we store the blobs by the fileid
+// - for s3 how do we implement a tree in a kv store?
+// - badger supports key iteration with prefix https://github.com/dgraph-io/badger#prefix-scans
+
+// how can we make reva update metadata for a certain path?
+// eos handles metadata itself, maybe ... what if we want to force an update?
+// local/posix can use fsnotify
+// s3 implementations vary:
+// - minio has https://docs.min.io/docs/minio-bucket-notification-guide.html
+// - aws has https://docs.aws.amazon.com/AmazonS3/latest/dev/NotificationHowTo.html
+// - ceph has http://docs.ceph.com/docs/master/radosgw/s3-notification-compatibility/
+
+// in any case how does this affect the cache?
+// - do we get all metadata to properly update the entry?
+// - is it only an event that alows us to update the cache?
+// -> AFAICT this is implementation specific:
+//   - local only needs fsnotify to propagate the etag.
+//     the fs dir entries can hold etag itself
+//     (in contrast to s3 where we would have to introduce a dedicated namespace)
+//     - etag as ext attr? or only for files? for folders in cache to prevent hot spot on disk?
+//     - dirsum as ext attr? or only in cache?
+//     - mtime for folders in cache?
+//     - booting requires rebuilding cache? add a reva command for it?
+//     - shares in cache? is a different service?
+//     - tags as extended attributes?
+//       - user defined tags vs system tags? system tags in kv store? but is a different service anyway
+//     - comments? extended attributes too small
+//       -> separate app that stores comments for a fileid
+//       - everything is a file, store comments on filesystem so it can be eg geo distributed by eos or cephfs
+//
+//   - s3 is a different beast
+//     - needs cache to list folders efficiently
 
 func (fs *localFS) addRoot(p string) string {
 	np := path.Join(fs.root, p)
@@ -83,7 +166,10 @@ func (fs *localFS) removeRoot(np string) string {
 	return p
 }
 
-type localFS struct{ root string }
+type localFS struct {
+	root       string
+	notifyChan chan notify.EventInfo
+}
 
 // calcEtag will create an etag based on the md5 of
 // - mtime,
@@ -171,12 +257,14 @@ func (fs *localFS) CreateDir(ctx context.Context, fn string) error {
 		// FIXME we also need already exists error, webdav expects 405 MethodNotAllowed
 		return errors.Wrap(err, "localfs: error creating dir "+fn)
 	}
+	// TODO update cache
 	return nil
 }
 
 func (fs *localFS) Delete(ctx context.Context, fn string) error {
 	fn = fs.addRoot(fn)
 	err := os.Remove(fn)
+	// TODO update cache
 	if err != nil {
 		if os.IsNotExist(err) {
 			return notFoundError(fn)
@@ -196,6 +284,7 @@ func (fs *localFS) Move(ctx context.Context, oldName, newName string) error {
 	if err := os.Rename(oldName, newName); err != nil {
 		return errors.Wrap(err, "localfs: error moving "+oldName+" to "+newName)
 	}
+	// TODO update cache
 	return nil
 }
 
@@ -209,6 +298,7 @@ func (fs *localFS) GetMD(ctx context.Context, fn string) (*storage.MD, error) {
 		return nil, errors.Wrap(err, "localfs: error stating "+fn)
 	}
 
+	// TODO update cache? only if changed?
 	return fs.normalize(ctx, md, fn), nil
 }
 
@@ -226,6 +316,7 @@ func (fs *localFS) ListFolder(ctx context.Context, fn string) ([]*storage.MD, er
 	for _, md := range mds {
 		finfos = append(finfos, fs.normalize(ctx, md, path.Join(fn, md.Name())))
 	}
+	// TODO update cache
 	return finfos, nil
 }
 
@@ -250,6 +341,7 @@ func (fs *localFS) Upload(ctx context.Context, fn string, r io.ReadCloser) error
 		return errors.Wrap(err, "localfs: error renaming from "+tmp.Name()+" to "+fn)
 	}
 
+	// TODO update cache
 	return nil
 }
 
