@@ -20,6 +20,7 @@ package storageprovidersvc
 
 import (
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path"
@@ -67,6 +68,10 @@ type service struct {
 	availableXS        []*storageproviderv0alphapb.ResourceChecksumPriority
 }
 
+func (s *service) Close() error {
+	return nil
+}
+
 func parseXSTypes(xsTypes map[string]uint32) ([]*storageproviderv0alphapb.ResourceChecksumPriority, error) {
 	var types []*storageproviderv0alphapb.ResourceChecksumPriority
 	for xs, prio := range xsTypes {
@@ -93,11 +98,11 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New creates a new storage provider svc
-func New(m map[string]interface{}, ss *grpc.Server) error {
+func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 
 	c, err := parseConfig(m)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// use os temporary folder if empty
@@ -111,23 +116,23 @@ func New(m map[string]interface{}, ss *grpc.Server) error {
 
 	fs, err := getFS(c)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// parse data server url
 	u, err := url.Parse(c.DataServerURL)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// validate available checksums
 	xsTypes, err := parseXSTypes(c.AvailableXS)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if len(xsTypes) == 0 {
-		return fmt.Errorf("no available checksum, please set in config")
+		return nil, fmt.Errorf("no available checksum, please set in config")
 	}
 
 	service := &service{
@@ -141,7 +146,7 @@ func New(m map[string]interface{}, ss *grpc.Server) error {
 	}
 
 	storageproviderv0alphapb.RegisterStorageProviderServiceServer(ss, service)
-	return nil
+	return service, nil
 }
 
 func (s *service) GetProvider(ctx context.Context, req *storageproviderv0alphapb.GetProviderRequest) (*storageproviderv0alphapb.GetProviderResponse, error) {

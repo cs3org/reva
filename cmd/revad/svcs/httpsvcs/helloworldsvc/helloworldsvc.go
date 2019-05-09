@@ -43,6 +43,11 @@ func New(m map[string]interface{}) (httpsvcs.Service, error) {
 	return &svc{conf: conf}, nil
 }
 
+// Close performs cleanup.
+func (s *svc) Close() error {
+	return nil
+}
+
 type config struct {
 	Prefix       string `mapstructure:"prefix"`
 	HelloMessage string `mapstructure:"hello_message"`

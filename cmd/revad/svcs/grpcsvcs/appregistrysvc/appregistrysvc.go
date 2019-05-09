@@ -21,6 +21,7 @@ package appregistrysvc
 import (
 	"context"
 	"fmt"
+	"io"
 
 	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
 	"google.golang.org/grpc"
@@ -41,22 +42,26 @@ type service struct {
 	registry app.Registry
 }
 
+func (s *service) Close() error {
+	return nil
+}
+
 type config struct {
 	Driver string                 `mapstructure:"driver"`
 	Static map[string]interface{} `mapstructure:"static"`
 }
 
 // New creates a new StorageRegistryService
-func New(m map[string]interface{}, ss *grpc.Server) error {
+func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 
 	c, err := parseConfig(m)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	registry, err := getRegistry(c)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	service := &service{
@@ -64,7 +69,7 @@ func New(m map[string]interface{}, ss *grpc.Server) error {
 	}
 
 	appregistryv0alphapb.RegisterAppRegistryServiceServer(ss, service)
-	return nil
+	return service, nil
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {

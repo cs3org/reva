@@ -41,4 +41,5 @@ func ShiftPath(p string) (head, tail string) {
 type Service interface {
 	Handler() http.Handler
 	Prefix() string
+	Close() error
 }

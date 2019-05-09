@@ -56,3 +56,7 @@ func (s *svc) Prefix() string {
 func (s *svc) Handler() http.Handler {
 	return promhttp.Handler()
 }
+
+func (s *svc) Close() error {
+	return nil
+}

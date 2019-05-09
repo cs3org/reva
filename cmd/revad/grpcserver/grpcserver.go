@@ -19,6 +19,7 @@
 package grpcserver
 
 import (
+	"io"
 	"net"
 	"sort"
 
@@ -62,7 +63,7 @@ func Register(name string, newFunc NewService) {
 }
 
 // NewService is the function that gRPC services need to register at init time.
-type NewService func(conf map[string]interface{}, ss *grpc.Server) error
+type NewService func(conf map[string]interface{}, ss *grpc.Server) (io.Closer, error)
 
 type unaryInterceptorTriple struct {
 	Name        string
@@ -92,6 +93,7 @@ type Server struct {
 	conf     *config
 	listener net.Listener
 	log      zerolog.Logger
+	closers  map[string]io.Closer
 }
 
 // New returns a new Server.
@@ -110,7 +112,7 @@ func New(m interface{}, log zerolog.Logger) (*Server, error) {
 		conf.Address = "0.0.0.0:9999"
 	}
 
-	server := &Server{conf: conf, log: log}
+	server := &Server{conf: conf, log: log, closers: map[string]io.Closer{}}
 	opts, err := server.getInterceptors()
 	if err != nil {
 		return nil, err
@@ -159,9 +161,11 @@ func (s *Server) isServiceEnabled(name string) bool {
 func (s *Server) registerServices() error {
 	for name, newFunc := range Services {
 		if s.isServiceEnabled(name) {
-			if err := newFunc(s.conf.Services[name], s.s); err != nil {
+			closer, err := newFunc(s.conf.Services[name], s.s)
+			if err != nil {
 				return err
 			}
+			s.closers[name] = closer
 			s.log.Info().Msgf("grpc service enabled: %s", name)
 		} else {
 			s.log.Info().Msgf("grpc service disabled: %s", name)
@@ -170,14 +174,27 @@ func (s *Server) registerServices() error {
 	return nil
 }
 
+// TODO(labkode): make closing with deadline.
+func (s *Server) cleanupServices() {
+	for name, closer := range s.closers {
+		if err := closer.Close(); err != nil {
+			s.log.Error().Err(err).Msgf("error closing service %q", name)
+		} else {
+			s.log.Info().Msgf("service %q correctly closed", name)
+		}
+	}
+}
+
 // Stop stops the server.
 func (s *Server) Stop() error {
+	s.cleanupServices()
 	s.s.Stop()
 	return nil
 }
 
 // GracefulStop gracefully stops the server.
 func (s *Server) GracefulStop() error {
+	s.cleanupServices()
 	s.s.GracefulStop()
 	return nil
 }

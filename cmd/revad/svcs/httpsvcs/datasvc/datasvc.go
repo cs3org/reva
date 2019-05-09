@@ -74,6 +74,11 @@ func New(m map[string]interface{}) (httpsvcs.Service, error) {
 	return s, nil
 }
 
+// Close performs cleanup.
+func (s *svc) Close() error {
+	return nil
+}
+
 func getFS(c *config) (storage.FS, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		return f(c.Drivers[c.Driver])

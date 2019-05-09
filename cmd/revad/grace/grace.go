@@ -85,6 +85,8 @@ func (w *Watcher) Exit(errc int) {
 	err := w.clean()
 	if err != nil {
 		w.log.Warn().Err(err).Msg("error removing pid file")
+	} else {
+		w.log.Info().Msgf("pid file %q got removed", w.pidFile)
 	}
 	os.Exit(errc)
 }
