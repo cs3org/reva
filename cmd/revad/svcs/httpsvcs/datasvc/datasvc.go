@@ -23,10 +23,10 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/cernbox/reva/cmd/revad/httpserver"
-	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs"
-	"github.com/cernbox/reva/pkg/storage"
-	"github.com/cernbox/reva/pkg/storage/fs/registry"
+	"github.com/cs3org/reva/cmd/revad/httpserver"
+	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
+	"github.com/cs3org/reva/pkg/storage"
+	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
 )
 

@@ -19,7 +19,7 @@
 package storageprovidersvc
 
 import (
-	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
+	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 )
 
 // XS defines an hex-encoded string as checksum.

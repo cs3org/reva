@@ -4,7 +4,7 @@ To build REVA the Go compiler needs to be installed. See [Install Go](https://go
 the Go programming language that installs the Go compiler.
 
 ```
-git clone https://github.com/cernbox/reva
+git clone https://github.com/cs3org/reva
 cd reva/cmd/revad
 go build -o revad
 ```

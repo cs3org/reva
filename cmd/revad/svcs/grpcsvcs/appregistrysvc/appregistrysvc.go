@@ -23,14 +23,14 @@ import (
 	"fmt"
 	"io"
 
-	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
+	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	"google.golang.org/grpc"
 
-	appregistryv0alphapb "github.com/cernbox/go-cs3apis/cs3/appregistry/v0alpha"
-	"github.com/cernbox/reva/cmd/revad/grpcserver"
-	"github.com/cernbox/reva/pkg/app"
-	"github.com/cernbox/reva/pkg/app/registry/static"
-	"github.com/cernbox/reva/pkg/appctx"
+	appregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/appregistry/v0alpha"
+	"github.com/cs3org/reva/cmd/revad/grpcserver"
+	"github.com/cs3org/reva/pkg/app"
+	"github.com/cs3org/reva/pkg/app/registry/static"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/mitchellh/mapstructure"
 )
 

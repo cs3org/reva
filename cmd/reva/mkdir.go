@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"os"
 
-	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
+	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
+	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 )
 
 func mkdirCommand() *command {

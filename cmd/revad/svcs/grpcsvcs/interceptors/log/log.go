@@ -28,8 +28,8 @@ import (
 
 	"google.golang.org/grpc/codes"
 
-	"github.com/cernbox/reva/cmd/revad/grpcserver"
-	"github.com/cernbox/reva/pkg/appctx"
+	"github.com/cs3org/reva/cmd/revad/grpcserver"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"

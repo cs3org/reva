@@ -21,7 +21,7 @@ package appctx
 import (
 	"context"
 
-	"github.com/cernbox/reva/pkg/reqid"
+	"github.com/cs3org/reva/pkg/reqid"
 	"github.com/rs/zerolog"
 )
 

@@ -23,9 +23,9 @@ import (
 	"fmt"
 	"os"
 
-	appproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/appprovider/v0alpha"
-	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
+	appproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/appprovider/v0alpha"
+	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
+	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 )
 
 func appProviderGetIFrameCommand() *command {

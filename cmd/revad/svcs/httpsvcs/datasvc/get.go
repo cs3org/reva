@@ -23,7 +23,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/cernbox/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/appctx"
 )
 
 func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {

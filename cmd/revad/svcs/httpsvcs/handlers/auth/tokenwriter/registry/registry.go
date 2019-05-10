@@ -18,7 +18,7 @@
 
 package registry
 
-import "github.com/cernbox/reva/pkg/auth"
+import "github.com/cs3org/reva/pkg/auth"
 
 // NewTokenFunc is the function that token writers
 // should register at init time.

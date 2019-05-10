@@ -20,8 +20,8 @@ package loader
 
 import (
 	// Load core storage filesystem backends.
-	_ "github.com/cernbox/reva/pkg/storage/fs/eos"
-	_ "github.com/cernbox/reva/pkg/storage/fs/local"
-	_ "github.com/cernbox/reva/pkg/storage/fs/s3"
+	_ "github.com/cs3org/reva/pkg/storage/fs/eos"
+	_ "github.com/cs3org/reva/pkg/storage/fs/local"
+	_ "github.com/cs3org/reva/pkg/storage/fs/s3"
 	// Add your own here
 )

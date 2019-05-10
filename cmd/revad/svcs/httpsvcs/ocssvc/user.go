@@ -21,8 +21,8 @@ package ocssvc
 import (
 	"net/http"
 
-	"github.com/cernbox/reva/pkg/appctx"
-	"github.com/cernbox/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/user"
 )
 
 func (s *svc) doUser(w http.ResponseWriter, r *http.Request) {

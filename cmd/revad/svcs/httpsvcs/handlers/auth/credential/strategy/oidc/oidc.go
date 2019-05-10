@@ -41,9 +41,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers/auth/credential/registry"
+	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/handlers/auth/credential/registry"
 
-	"github.com/cernbox/reva/pkg/auth"
+	"github.com/cs3org/reva/pkg/auth"
 )
 
 func init() {

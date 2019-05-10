@@ -20,8 +20,8 @@ package loader
 
 import (
 	// Load core HTTP middlewares.
-	_ "github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers/auth"
-	_ "github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers/cors"
-	_ "github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers/log"
+	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/handlers/auth"
+	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/handlers/cors"
+	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/handlers/log"
 	// Add your own middlware.
 )

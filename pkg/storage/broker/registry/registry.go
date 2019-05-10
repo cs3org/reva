@@ -18,7 +18,7 @@
 
 package registry
 
-import "github.com/cernbox/reva/pkg/storage"
+import "github.com/cs3org/reva/pkg/storage"
 
 // NewFunc is the function that storage broker implementations
 // should register at init time.

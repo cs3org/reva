@@ -19,7 +19,7 @@
 package prometheus
 
 import (
-	"github.com/cernbox/reva/cmd/revad/grpcserver"
+	"github.com/cs3org/reva/cmd/revad/grpcserver"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/mitchellh/mapstructure"
 	"google.golang.org/grpc"

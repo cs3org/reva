@@ -21,8 +21,8 @@ package demo
 import (
 	"context"
 
-	"github.com/cernbox/reva/pkg/auth"
-	"github.com/cernbox/reva/pkg/auth/manager/registry"
+	"github.com/cs3org/reva/pkg/auth"
+	"github.com/cs3org/reva/pkg/auth/manager/registry"
 )
 
 func init() {

@@ -19,7 +19,7 @@
 package cors
 
 import (
-	"github.com/cernbox/reva/cmd/revad/httpserver"
+	"github.com/cs3org/reva/cmd/revad/httpserver"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/cors"
 )

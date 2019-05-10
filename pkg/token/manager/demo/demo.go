@@ -24,8 +24,8 @@ import (
 	"encoding/base64"
 	"encoding/gob"
 
-	"github.com/cernbox/reva/pkg/token"
-	"github.com/cernbox/reva/pkg/token/manager/registry"
+	"github.com/cs3org/reva/pkg/token"
+	"github.com/cs3org/reva/pkg/token/manager/registry"
 	"github.com/pkg/errors"
 )
 

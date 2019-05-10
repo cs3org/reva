@@ -26,13 +26,13 @@ import (
 	"os"
 	"time"
 
-	"github.com/cernbox/reva/cmd/revad/svcs/grpcsvcs/storageprovidersvc"
+	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/storageprovidersvc"
 
-	"github.com/cernbox/reva/pkg/crypto"
+	"github.com/cs3org/reva/pkg/crypto"
 
-	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cheggaaa/pb"
+	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
+	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 )
 
 func uploadCommand() *command {

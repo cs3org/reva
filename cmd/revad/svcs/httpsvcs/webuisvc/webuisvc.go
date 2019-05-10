@@ -21,8 +21,8 @@ package webuisvc
 import (
 	"net/http"
 
-	"github.com/cernbox/reva/cmd/revad/httpserver"
-	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs"
+	"github.com/cs3org/reva/cmd/revad/httpserver"
+	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
 	"github.com/mitchellh/mapstructure"
 )
 

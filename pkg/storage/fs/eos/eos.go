@@ -28,12 +28,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cernbox/reva/pkg/storage/fs/registry"
+	"github.com/cs3org/reva/pkg/storage/fs/registry"
 
-	"github.com/cernbox/reva/pkg/eosclient"
-	"github.com/cernbox/reva/pkg/mime"
-	"github.com/cernbox/reva/pkg/storage"
-	"github.com/cernbox/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/eosclient"
+	"github.com/cs3org/reva/pkg/mime"
+	"github.com/cs3org/reva/pkg/storage"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
