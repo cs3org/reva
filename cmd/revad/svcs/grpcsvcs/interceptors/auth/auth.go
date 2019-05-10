@@ -23,13 +23,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cernbox/reva/pkg/token"
-	"github.com/cernbox/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/token"
+	"github.com/cs3org/reva/pkg/user"
 
-	"github.com/cernbox/reva/cmd/revad/grpcserver"
-	tokenmgr "github.com/cernbox/reva/pkg/token/manager/registry"
+	"github.com/cs3org/reva/cmd/revad/grpcserver"
+	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
 
-	"github.com/cernbox/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"

@@ -18,7 +18,7 @@
 
 package registry
 
-import "github.com/cernbox/reva/pkg/token"
+import "github.com/cs3org/reva/pkg/token"
 
 // NewFunc is the function that token managers
 // should register at init time.

@@ -23,10 +23,10 @@ import (
 	"net/http"
 	"time"
 
-	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
-	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/utils"
-	"github.com/cernbox/reva/pkg/appctx"
+	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
+	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/utils"
+	"github.com/cs3org/reva/pkg/appctx"
 )
 
 func (s *svc) doHead(w http.ResponseWriter, r *http.Request) {

@@ -19,7 +19,7 @@
 package registry
 
 import (
-	"github.com/cernbox/reva/pkg/auth"
+	"github.com/cs3org/reva/pkg/auth"
 )
 
 // NewCredentialFunc is the function that credential strategies

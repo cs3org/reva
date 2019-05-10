@@ -22,7 +22,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/cernbox/reva/pkg/token"
+	"github.com/cs3org/reva/pkg/token"
 )
 
 var ctx = context.Background()

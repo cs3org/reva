@@ -19,7 +19,7 @@
 package app
 
 import "context"
-import "github.com/cernbox/reva/pkg/storage"
+import "github.com/cs3org/reva/pkg/storage"
 
 // Registry is the interface that application registries implement
 // for discovering application providers

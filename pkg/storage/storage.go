@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/cernbox/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/user"
 )
 
 // GranteeType specifies the type of grantee.

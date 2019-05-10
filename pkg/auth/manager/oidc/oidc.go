@@ -24,9 +24,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/cernbox/reva/pkg/auth"
-	"github.com/cernbox/reva/pkg/auth/manager/registry"
 	oidc "github.com/coreos/go-oidc"
+	"github.com/cs3org/reva/pkg/auth"
+	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"golang.org/x/oauth2"
 )
 

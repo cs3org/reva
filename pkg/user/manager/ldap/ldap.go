@@ -23,8 +23,8 @@ import (
 	"crypto/tls"
 	"fmt"
 
-	"github.com/cernbox/reva/pkg/user"
-	"github.com/cernbox/reva/pkg/user/manager/registry"
+	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/user/manager/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"gopkg.in/ldap.v2"

@@ -22,7 +22,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/cernbox/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/appctx"
 )
 
 func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {

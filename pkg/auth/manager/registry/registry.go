@@ -18,7 +18,7 @@
 
 package registry
 
-import "github.com/cernbox/reva/pkg/auth"
+import "github.com/cs3org/reva/pkg/auth"
 
 // NewFunc is the function that auth implementations
 // should register at init time.

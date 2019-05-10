@@ -20,7 +20,7 @@ package ocdavsvc
 
 import (
 	"encoding/json"
-	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/ocssvc"
+	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/ocssvc"
 	"net/http"
 )
 

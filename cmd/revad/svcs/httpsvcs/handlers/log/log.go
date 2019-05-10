@@ -26,8 +26,8 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/cernbox/reva/cmd/revad/httpserver"
-	"github.com/cernbox/reva/pkg/appctx"
+	"github.com/cs3org/reva/cmd/revad/httpserver"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 )

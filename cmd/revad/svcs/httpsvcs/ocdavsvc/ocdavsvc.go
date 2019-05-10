@@ -25,11 +25,11 @@ import (
 	"os"
 	"path"
 
-	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
-	"github.com/cernbox/reva/cmd/revad/httpserver"
-	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs"
-	"github.com/cernbox/reva/pkg/appctx"
-	"github.com/cernbox/reva/pkg/user"
+	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	"github.com/cs3org/reva/cmd/revad/httpserver"
+	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
+	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"google.golang.org/grpc"
 )

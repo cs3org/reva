@@ -23,8 +23,8 @@ import (
 	"net"
 	"sort"
 
-	"github.com/cernbox/reva/cmd/revad/svcs/grpcsvcs/interceptors/appctx"
-	"github.com/cernbox/reva/cmd/revad/svcs/grpcsvcs/interceptors/recovery"
+	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/interceptors/appctx"
+	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/interceptors/recovery"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"

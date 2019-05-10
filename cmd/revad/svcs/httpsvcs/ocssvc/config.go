@@ -21,7 +21,7 @@ package ocssvc
 import (
 	"net/http"
 
-	"github.com/cernbox/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/appctx"
 )
 
 // the config for the ocs api

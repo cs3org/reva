@@ -18,7 +18,7 @@
 
 package registry
 
-import "github.com/cernbox/reva/pkg/user"
+import "github.com/cs3org/reva/pkg/user"
 
 // NewFunc is the function that user managers
 // should register at init time.

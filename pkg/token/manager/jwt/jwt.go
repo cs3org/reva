@@ -21,8 +21,8 @@ package jwt
 import (
 	"context"
 
-	"github.com/cernbox/reva/pkg/token"
-	"github.com/cernbox/reva/pkg/token/manager/registry"
+	"github.com/cs3org/reva/pkg/token"
+	"github.com/cs3org/reva/pkg/token/manager/registry"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"

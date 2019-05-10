@@ -27,12 +27,12 @@ import (
 
 	"github.com/pkg/errors"
 
-	appproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/appprovider/v0alpha"
-	appregistryv0alphapb "github.com/cernbox/go-cs3apis/cs3/appregistry/v0alpha"
-	authv0alphapb "github.com/cernbox/go-cs3apis/cs3/auth/v0alpha"
-	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageprovider/v0alpha"
-	storageregistryv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageregistry/v0alpha"
+	appproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/appprovider/v0alpha"
+	appregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/appregistry/v0alpha"
+	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
+	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	storageregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageregistry/v0alpha"
 
 	"google.golang.org/grpc"
 )

@@ -22,9 +22,9 @@ import (
 	"context"
 	"strings"
 
-	"github.com/cernbox/reva/pkg/storage/broker/registry"
+	"github.com/cs3org/reva/pkg/storage/broker/registry"
 
-	"github.com/cernbox/reva/pkg/storage"
+	"github.com/cs3org/reva/pkg/storage"
 	"github.com/mitchellh/mapstructure"
 )
 

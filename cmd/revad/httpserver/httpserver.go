@@ -25,9 +25,9 @@ import (
 	"sort"
 	"time"
 
-	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers/appctx"
+	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/handlers/appctx"
 
-	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs"
+	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
 
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"

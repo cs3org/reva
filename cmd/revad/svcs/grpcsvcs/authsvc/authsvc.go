@@ -23,20 +23,20 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/cernbox/reva/cmd/revad/grpcserver"
-	"github.com/cernbox/reva/pkg/auth/manager/registry"
-	tokenmgr "github.com/cernbox/reva/pkg/token/manager/registry"
-	usermgr "github.com/cernbox/reva/pkg/user/manager/registry"
+	"github.com/cs3org/reva/cmd/revad/grpcserver"
+	"github.com/cs3org/reva/pkg/auth/manager/registry"
+	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
+	usermgr "github.com/cs3org/reva/pkg/user/manager/registry"
 	"google.golang.org/grpc"
 
-	"github.com/cernbox/reva/pkg/auth"
-	"github.com/cernbox/reva/pkg/token"
-	"github.com/cernbox/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/auth"
+	"github.com/cs3org/reva/pkg/token"
+	"github.com/cs3org/reva/pkg/user"
 
-	authv0alphapb "github.com/cernbox/go-cs3apis/cs3/auth/v0alpha"
-	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
+	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 
-	"github.com/cernbox/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )

@@ -26,13 +26,14 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 
-	"github.com/cernbox/reva/cmd/revad/grace"
-	"github.com/cernbox/reva/cmd/revad/grpcserver"
-	"github.com/cernbox/reva/cmd/revad/httpserver"
+	"github.com/cs3org/reva/cmd/revad/grace"
+	"github.com/cs3org/reva/cmd/revad/grpcserver"
+	"github.com/cs3org/reva/cmd/revad/httpserver"
 
-	"github.com/cernbox/reva/cmd/revad/config"
-	"github.com/cernbox/reva/pkg/logger"
+	"github.com/cs3org/reva/cmd/revad/config"
+	"github.com/cs3org/reva/pkg/logger"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -41,7 +42,7 @@ import (
 var (
 	versionFlag = flag.Bool("version", false, "show version and exit")
 	testFlag    = flag.Bool("t", false, "test configuration and exit")
-	signalFlag  = flag.String("s", "", "send signal to a master process: stop, quit, reopen, reload")
+	signalFlag  = flag.String("s", "", "send signal to a master process: stop, quit, reload")
 	configFlag  = flag.String("c", "/etc/revad/revad.toml", "set configuration file")
 	pidFlag     = flag.String("p", "/var/run/revad.pid", "pid file")
 
@@ -176,8 +177,33 @@ func handleVersionFlag() {
 
 func handleSignalFlag() {
 	if *signalFlag != "" {
-		fmt.Println("signaling master process")
-		os.Exit(1)
+
+		var signal syscall.Signal
+		switch *signalFlag {
+		case "reload":
+			signal = syscall.SIGHUP
+		case "quit":
+			signal = syscall.SIGQUIT
+		case "stop":
+			signal = syscall.SIGTERM
+		default:
+			fmt.Fprintf(os.Stderr, "unknown signal %q\n", *signalFlag)
+			os.Exit(1)
+		}
+
+		process, err := grace.GetProcessFromFile(*pidFlag)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error getting process from pidfile: %v\n", err)
+			os.Exit(1)
+		}
+
+		// kill process with signal
+		if err := process.Signal(signal); err != nil {
+			fmt.Fprintf(os.Stderr, "error signaling process %d with signal %s\n", process.Pid, signal)
+			os.Exit(1)
+		}
+
+		os.Exit(0)
 	}
 }
 

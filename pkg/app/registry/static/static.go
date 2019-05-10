@@ -22,7 +22,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/cernbox/reva/pkg/app"
+	"github.com/cs3org/reva/pkg/app"
 
 	"github.com/mitchellh/mapstructure"
 )

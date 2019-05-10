@@ -24,8 +24,8 @@ import (
 	"os"
 	"path"
 
-	appregistryv0alphapb "github.com/cernbox/go-cs3apis/cs3/appregistry/v0alpha"
-	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
+	appregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/appregistry/v0alpha"
+	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 )
 
 func appRegistryFindCommand() *command {

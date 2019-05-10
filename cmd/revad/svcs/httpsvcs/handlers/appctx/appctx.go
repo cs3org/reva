@@ -24,8 +24,8 @@ package appctx
 import (
 	"net/http"
 
-	"github.com/cernbox/reva/pkg/appctx"
-	"github.com/cernbox/reva/pkg/reqid"
+	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/reqid"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc/metadata"
 )
