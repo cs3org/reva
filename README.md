@@ -44,13 +44,22 @@ Checkout the [Plugin Development Guide](https://cs3org.github.io/reva/plugin-dev
 
 ## License
 
+To promote free and unrestricted adoption of [CS3 APIs](https://github.com/cs3org/cs3apis) and the reference
+implementation [REVA](https://github.com/cs3org/reva) by all EFSS implementations and all platforms and
+application providers, both community and commercial, Open Source and
+Open Core, [CERN](https://home.cern/) released the source code repositories under [Apache 2.0 license](https://github.com/cs3org/reva/blob/master/LICENSE).
+
+Further evolution of the CS3 APIs will be driven by the needs of the
+Educational and Research community with the goal of maximizing the
+portability of the applications and service extensions.
+
 REVA is distributed under [Apache 2.0 license](https://github.com/cs3org/reva/blob/master/LICENSE).
 
 ## Disclaimer
 
 There is no backward compatibility promises and semantic versioning yet.
+Semantic versioning will be added once v1.0.0 is reached.
 
 If you want to use it, vendor it. It is always OK to change things to make things better.
 The API is not 100% correct in the first commit.
 
-Semantic versioning will be added once v1.0.0 is reached.
