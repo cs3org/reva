@@ -47,8 +47,7 @@ Checkout the [Plugin Development Guide](https://cs3org.github.io/reva/plugin-dev
 To promote free and unrestricted adoption of [CS3 APIs](https://github.com/cs3org/cs3apis) and the reference
 implementation [REVA](https://github.com/cs3org/reva) by all EFSS implementations and all platforms and
 application providers, both community and commercial, Open Source and
-Open Core, [CERN](https://home.cern/) released the source code repositories under Apache 2.0
-license.
+Open Core, [CERN](https://home.cern/) released the source code repositories under [Apache 2.0 license](https://github.com/cs3org/reva/blob/master/LICENSE).
 
 Further evolution of the CS3 APIs will be driven by the needs of the
 Educational and Research community with the goal of maximizing the
