@@ -169,6 +169,10 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	return eosStorage, nil
 }
 
+func (fs *eosStorage) Shutdown() error {
+	return nil
+}
+
 func (fs *eosStorage) getInternalPath(ctx context.Context, fn string) string {
 	internalPath := path.Join(fs.mountpoint, fn)
 	return internalPath

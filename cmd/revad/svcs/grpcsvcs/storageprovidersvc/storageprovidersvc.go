@@ -69,7 +69,7 @@ type service struct {
 }
 
 func (s *service) Close() error {
-	return nil
+	return s.storage.Shutdown()
 }
 
 func parseXSTypes(xsTypes map[string]uint32) ([]*storageproviderv0alphapb.ResourceChecksumPriority, error) {

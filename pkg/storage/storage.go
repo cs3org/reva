@@ -70,6 +70,13 @@ type FS interface {
 	UpdateGrant(ctx context.Context, fn string, g *Grant) error
 	ListGrants(ctx context.Context, fn string) ([]*Grant, error)
 	GetQuota(ctx context.Context) (int, int, error)
+
+	// Shutdown will be called when the service is being stopped.
+	// Use it to properly
+	// - shutdown embedded databases
+	// - remove file listeners
+	// TODO pass in context or log
+	Shutdown() error
 }
 
 // MD represents the metadata about a file/directory.
