@@ -20,8 +20,8 @@ package loader
 
 import (
 	// Load core interceptors.
-	_ "github.com/cernbox/reva/cmd/revad/svcs/grpcsvcs/interceptors/auth"
-	_ "github.com/cernbox/reva/cmd/revad/svcs/grpcsvcs/interceptors/log"
-	_ "github.com/cernbox/reva/cmd/revad/svcs/grpcsvcs/interceptors/prometheus"
+	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/interceptors/auth"
+	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/interceptors/log"
+	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/interceptors/prometheus"
 	// Add your own.
 )

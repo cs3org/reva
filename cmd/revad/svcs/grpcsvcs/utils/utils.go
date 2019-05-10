@@ -18,7 +18,7 @@
 
 package utils
 
-import typespb "github.com/cernbox/go-cs3apis/cs3/types"
+import typespb "github.com/cs3org/go-cs3apis/cs3/types"
 
 // UnixNanoToTS converts a unix nano time to a valid cs3 Timestamp.
 func UnixNanoToTS(epoch uint64) *typespb.Timestamp {

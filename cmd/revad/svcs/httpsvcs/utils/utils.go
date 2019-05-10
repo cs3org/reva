@@ -18,7 +18,7 @@
 
 package utils
 
-import typespb "github.com/cernbox/go-cs3apis/cs3/types"
+import typespb "github.com/cs3org/go-cs3apis/cs3/types"
 import "time"
 
 // TSToUnixNano converts a protobuf Timestamp to uint64

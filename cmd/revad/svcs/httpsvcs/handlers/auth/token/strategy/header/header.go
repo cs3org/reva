@@ -21,8 +21,8 @@ package header
 import (
 	"net/http"
 
-	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs/handlers/auth/token/registry"
-	"github.com/cernbox/reva/pkg/auth"
+	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/handlers/auth/token/registry"
+	"github.com/cs3org/reva/pkg/auth"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )

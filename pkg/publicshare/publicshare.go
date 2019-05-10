@@ -21,8 +21,8 @@ package publicshare
 import (
 	"context"
 
-	"github.com/cernbox/reva/pkg/storage"
-	"github.com/cernbox/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/storage"
+	"github.com/cs3org/reva/pkg/user"
 )
 
 const (

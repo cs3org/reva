@@ -26,10 +26,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cernbox/reva/pkg/appctx"
-	"github.com/cernbox/reva/pkg/mime"
-	"github.com/cernbox/reva/pkg/storage"
-	"github.com/cernbox/reva/pkg/storage/fs/registry"
+	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/mime"
+	"github.com/cs3org/reva/pkg/storage"
+	"github.com/cs3org/reva/pkg/storage/fs/registry"
 
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"

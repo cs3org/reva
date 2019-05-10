@@ -22,7 +22,7 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/cernbox/reva/pkg/project"
+	"github.com/cs3org/reva/pkg/project"
 	_ "github.com/go-sql-driver/mysql" // import mysql driver
 	"github.com/pkg/errors"
 )

@@ -23,9 +23,9 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/cernbox/reva/cmd/revad/httpserver"
-	"github.com/cernbox/reva/cmd/revad/svcs/httpsvcs"
-	"github.com/cernbox/reva/pkg/appctx"
+	"github.com/cs3org/reva/cmd/revad/httpserver"
+	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/mitchellh/mapstructure"
 )
 

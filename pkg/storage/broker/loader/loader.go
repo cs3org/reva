@@ -20,6 +20,6 @@ package loader
 
 import (
 	// Load core storage broker drivers.
-	_ "github.com/cernbox/reva/pkg/storage/broker/static"
+	_ "github.com/cs3org/reva/pkg/storage/broker/static"
 	// Add your own here
 )

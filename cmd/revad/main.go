@@ -28,12 +28,12 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/cernbox/reva/cmd/revad/grace"
-	"github.com/cernbox/reva/cmd/revad/grpcserver"
-	"github.com/cernbox/reva/cmd/revad/httpserver"
+	"github.com/cs3org/reva/cmd/revad/grace"
+	"github.com/cs3org/reva/cmd/revad/grpcserver"
+	"github.com/cs3org/reva/cmd/revad/httpserver"
 
-	"github.com/cernbox/reva/cmd/revad/config"
-	"github.com/cernbox/reva/pkg/logger"
+	"github.com/cs3org/reva/cmd/revad/config"
+	"github.com/cs3org/reva/pkg/logger"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"

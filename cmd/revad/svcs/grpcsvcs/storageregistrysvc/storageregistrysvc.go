@@ -23,16 +23,16 @@ import (
 	"fmt"
 	"io"
 
-	storagetypespb "github.com/cernbox/go-cs3apis/cs3/storagetypes"
+	storagetypespb "github.com/cs3org/go-cs3apis/cs3/storagetypes"
 
-	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
+	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	"google.golang.org/grpc"
 
-	storageregistryv0alphapb "github.com/cernbox/go-cs3apis/cs3/storageregistry/v0alpha"
-	"github.com/cernbox/reva/cmd/revad/grpcserver"
-	"github.com/cernbox/reva/pkg/appctx"
-	"github.com/cernbox/reva/pkg/storage"
-	"github.com/cernbox/reva/pkg/storage/broker/registry"
+	storageregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageregistry/v0alpha"
+	"github.com/cs3org/reva/cmd/revad/grpcserver"
+	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/storage"
+	"github.com/cs3org/reva/pkg/storage/broker/registry"
 	"github.com/mitchellh/mapstructure"
 )
 

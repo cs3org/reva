@@ -22,8 +22,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/cernbox/reva/pkg/app"
-	"github.com/cernbox/reva/pkg/storage"
+	"github.com/cs3org/reva/pkg/app"
+	"github.com/cs3org/reva/pkg/storage"
 
 	"github.com/mitchellh/mapstructure"
 )

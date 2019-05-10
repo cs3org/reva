@@ -23,8 +23,8 @@ import (
 	"fmt"
 	"os"
 
-	authv0alphapb "github.com/cernbox/go-cs3apis/cs3/auth/v0alpha"
-	rpcpb "github.com/cernbox/go-cs3apis/cs3/rpc"
+	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 )
 
 func whoamiCommand() *command {
