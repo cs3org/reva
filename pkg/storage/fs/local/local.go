@@ -70,6 +70,10 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	return &localFS{root: c.Root}, nil
 }
 
+func (fs *localFS) Shutdown() error {
+	return nil
+}
+
 func (fs *localFS) addRoot(p string) string {
 	np := path.Join(fs.root, p)
 	return np
