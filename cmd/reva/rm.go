@@ -29,6 +29,7 @@ import (
 func rmCommand() *command {
 	cmd := newCommand("rm")
 	cmd.Description = func() string { return "removes a file or folder" }
+	cmd.Usage = func() string { return "Usage: rm [-flags] <file_name>" }
 	cmd.Action = func() error {
 		if cmd.NArg() < 2 {
 			fmt.Println(cmd.Usage())

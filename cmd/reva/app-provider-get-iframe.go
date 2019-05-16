@@ -33,6 +33,7 @@ func appProviderGetIFrameCommand() *command {
 	cmd.Description = func() string {
 		return "find iframe UI provider for filename"
 	}
+	cmd.Usage = func() string { return "Usage: app-provider-get-iframe [-flags] <file_name> <token>" }
 	cmd.Action = func() error {
 		if cmd.NArg() < 3 {
 			fmt.Println(cmd.Usage())

@@ -33,6 +33,7 @@ import (
 func downloadCommand() *command {
 	cmd := newCommand("download")
 	cmd.Description = func() string { return "download a remote file into the local filesystem" }
+	cmd.Usage = func() string { return "Usage: download [-flags] <remote_file> <local_file>" }
 	cmd.Action = func() error {
 		if cmd.NArg() < 3 {
 			fmt.Println(cmd.Usage())
