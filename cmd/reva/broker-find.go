@@ -31,6 +31,7 @@ func brokerFindCommand() *command {
 	cmd.Description = func() string {
 		return "find storage provider for path"
 	}
+	cmd.Usage = func() string { return "Usage: broker-find [<file_name>]" }
 	cmd.Action = func() error {
 		fn := "/"
 		if cmd.NArg() >= 1 {

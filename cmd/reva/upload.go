@@ -38,6 +38,7 @@ import (
 func uploadCommand() *command {
 	cmd := newCommand("upload")
 	cmd.Description = func() string { return "upload a local file to the remote server" }
+	cmd.Usage = func() string { return "Usage: upload [-flags] <file_name> <remote_target>" }
 	xsFlag := cmd.String("xs", "negotiate", "compute checksum")
 	cmd.Action = func() error {
 		if cmd.NArg() < 3 {

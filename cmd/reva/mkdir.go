@@ -29,6 +29,7 @@ import (
 func mkdirCommand() *command {
 	cmd := newCommand("mkdir")
 	cmd.Description = func() string { return "creates a folder" }
+	cmd.Usage = func() string { return "Usage: mkdir <folder_name> [-flags]" }
 	cmd.Action = func() error {
 		if cmd.NArg() < 2 {
 			fmt.Println(cmd.Usage())

@@ -31,6 +31,7 @@ import (
 var loginCommand = func() *command {
 	cmd := newCommand("login")
 	cmd.Description = func() string { return "login into the reva server" }
+	cmd.Usage = func() string { return "Usage: login <username> <password>" }
 	cmd.Action = func() error {
 		var username, password string
 		if cmd.NArg() >= 2 {

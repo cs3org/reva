@@ -29,6 +29,7 @@ import (
 func statCommand() *command {
 	cmd := newCommand("stat")
 	cmd.Description = func() string { return "get the metadata for a file or folder" }
+	cmd.Usage = func() string { return "Usage: stat [-flags] <file_name>" }
 	cmd.Action = func() error {
 		if cmd.NArg() < 2 {
 			fmt.Println(cmd.Usage())

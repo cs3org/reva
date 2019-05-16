@@ -33,6 +33,7 @@ func appRegistryFindCommand() *command {
 	cmd.Description = func() string {
 		return "find applicaton provider for file extension or mimetype"
 	}
+	cmd.Usage = func() string { return "Usage: app-registry-find <file>" }
 	cmd.Action = func() error {
 		if cmd.NArg() == 0 {
 			fmt.Println(cmd.Usage())

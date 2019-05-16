@@ -29,6 +29,7 @@ import (
 func moveCommand() *command {
 	cmd := newCommand("mv")
 	cmd.Description = func() string { return "moves/rename a file/folder" }
+	cmd.Usage = func() string { return "Usage: mv [-flags] <source> <destination>" }
 	cmd.Action = func() error {
 		if cmd.NArg() < 3 {
 			fmt.Println(cmd.Usage())
