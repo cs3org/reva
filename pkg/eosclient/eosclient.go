@@ -184,7 +184,7 @@ func (c *Client) executeEOS(ctx context.Context, cmd *exec.Cmd) (string, string,
 	cmd.Env = []string{
 		"EOS_MGM_URL=" + c.opt.URL,
 	}
-	requestid, ok := reqid.ContextGetReqID(ctx)
+	requestid, _ := reqid.ContextGetReqID(ctx)
 	cmd.Args = append(cmd.Args, "--comment", requestid)
 
 	err := cmd.Run()
