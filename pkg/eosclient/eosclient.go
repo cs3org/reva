@@ -33,6 +33,7 @@ import (
 	"syscall"
 
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/reqid"
 	"github.com/gofrs/uuid"
 	"github.com/pkg/errors"
 )
@@ -172,6 +173,55 @@ func (c *Client) execute(ctx context.Context, cmd *exec.Cmd) (string, string, er
 	return outBuf.String(), errBuf.String(), err
 }
 
+// exec executes the command and returns the stdout, stderr and return code
+func (c *Client) executeEOS(ctx context.Context, cmd *exec.Cmd) (string, string, error) {
+	log := appctx.GetLogger(ctx)
+
+	outBuf := &bytes.Buffer{}
+	errBuf := &bytes.Buffer{}
+	cmd.Stdout = outBuf
+	cmd.Stderr = errBuf
+	cmd.Env = []string{
+		"EOS_MGM_URL=" + c.opt.URL,
+	}
+	requestid, ok := reqid.ContextGetReqID(ctx)
+	cmd.Args = append(cmd.Args, "--comment", requestid)
+
+	err := cmd.Run()
+
+	var exitStatus int
+	if exiterr, ok := err.(*exec.ExitError); ok {
+		// The program has exited with an exit code != 0
+		// This works on both Unix and Windows. Although package
+		// syscall is generally platform dependent, WaitStatus is
+		// defined for both Unix and Windows and in both cases has
+		// an ExitStatus() method with the same signature.
+		if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
+
+			exitStatus = status.ExitStatus()
+			switch exitStatus {
+			case 0:
+				err = nil
+			case 2:
+				err = notFoundError(errBuf.String())
+			case 22:
+				// eos reports back error code 22 when the user is not allowed to enter the instance
+				err = notFoundError(errBuf.String())
+			}
+		}
+	}
+
+	args := fmt.Sprintf("%s", cmd.Args)
+	env := fmt.Sprintf("%s", cmd.Env)
+	log.Info().Str("args", args).Str("env", env).Int("exit", exitStatus).Msg("eos cmd")
+
+	if err != nil && exitStatus != 2 { // don't wrap the notFoundError
+		err = errors.Wrap(err, "error while executing command")
+	}
+
+	return outBuf.String(), errBuf.String(), err
+}
+
 // AddACL adds an new acl to EOS with the given aclType.
 func (c *Client) AddACL(ctx context.Context, username, path string, a *ACL) error {
 	aclManager, err := c.getACLForPath(ctx, username, path)
@@ -194,7 +244,7 @@ func (c *Client) AddACL(ctx context.Context, username, path string, a *ACL) erro
 	}
 
 	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "attr", "-r", "set", fmt.Sprintf("sys.acl=%s", sysACL), path)
-	_, _, err = c.execute(ctx, cmd)
+	_, _, err = c.executeEOS(ctx, cmd)
 	return err
 
 }
@@ -231,7 +281,7 @@ func (c *Client) RemoveACL(ctx context.Context, username, path string, aclType s
 	}
 
 	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "attr", "-r", "set", fmt.Sprintf("sys.acl=%s", sysACL), path)
-	_, _, err = c.execute(ctx, cmd)
+	_, _, err = c.executeEOS(ctx, cmd)
 	return err
 
 }
@@ -310,7 +360,7 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, username string, inode 
 		return nil, err
 	}
 	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "file", "info", fmt.Sprintf("inode:%d", inode), "-m")
-	stdout, _, err := c.execute(ctx, cmd)
+	stdout, _, err := c.executeEOS(ctx, cmd)
 	if err != nil {
 		return nil, err
 	}
@@ -324,7 +374,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, username, path string) (
 		return nil, err
 	}
 	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "file", "info", path, "-m")
-	stdout, _, err := c.execute(ctx, cmd)
+	stdout, _, err := c.executeEOS(ctx, cmd)
 	if err != nil {
 		return nil, err
 	}
@@ -339,7 +389,7 @@ func (c *Client) GetQuota(ctx context.Context, username, path string) (int, int,
 		return 0, 0, err
 	}
 	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "quota", "ls", "-u", username, "-m")
-	stdout, _, err := c.execute(ctx, cmd)
+	stdout, _, err := c.executeEOS(ctx, cmd)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -354,7 +404,7 @@ func (c *Client) CreateDir(ctx context.Context, username, path string) error {
 	}
 
 	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "mkdir", path)
-	_, _, err = c.execute(ctx, cmd)
+	_, _, err = c.executeEOS(ctx, cmd)
 	return err
 }
 
@@ -365,7 +415,7 @@ func (c *Client) Remove(ctx context.Context, username, path string) error {
 		return err
 	}
 	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "rm", "-r", path)
-	_, _, err = c.execute(ctx, cmd)
+	_, _, err = c.executeEOS(ctx, cmd)
 	return err
 }
 
@@ -376,7 +426,7 @@ func (c *Client) Rename(ctx context.Context, username, oldPath, newPath string) 
 		return err
 	}
 	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "file", "rename", oldPath, newPath)
-	_, _, err = c.execute(ctx, cmd)
+	_, _, err = c.executeEOS(ctx, cmd)
 	return err
 }
 
@@ -387,7 +437,7 @@ func (c *Client) List(ctx context.Context, username, path string) ([]*FileInfo, 
 		return nil, err
 	}
 	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "find", "--fileinfo", "--maxdepth", "1", path)
-	stdout, _, err := c.execute(ctx, cmd)
+	stdout, _, err := c.executeEOS(ctx, cmd)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error listing fn=%s", path)
 	}
@@ -445,7 +495,7 @@ func (c *Client) ListDeletedEntries(ctx context.Context, username string) ([]*De
 	// TODO(labkode): add protection if slave is configured and alive to count how many files are in the trashbin before
 	// triggering the recycle ls call that could break the instance because of unavailable memory.
 	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "recycle", "ls", "-m")
-	stdout, _, err := c.execute(ctx, cmd)
+	stdout, _, err := c.executeEOS(ctx, cmd)
 	if err != nil {
 		return nil, err
 	}
@@ -459,7 +509,7 @@ func (c *Client) RestoreDeletedEntry(ctx context.Context, username, key string) 
 		return err
 	}
 	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "recycle", "restore", key)
-	_, _, err = c.execute(ctx, cmd)
+	_, _, err = c.executeEOS(ctx, cmd)
 	return err
 }
 
@@ -470,7 +520,7 @@ func (c *Client) PurgeDeletedEntries(ctx context.Context, username string) error
 		return err
 	}
 	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "recycle", "purge")
-	_, _, err = c.execute(ctx, cmd)
+	_, _, err = c.executeEOS(ctx, cmd)
 	return err
 }
 
@@ -493,7 +543,7 @@ func (c *Client) RollbackToVersion(ctx context.Context, username, path, version 
 		return err
 	}
 	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "file", "versions", path, version)
-	_, _, err = c.execute(ctx, cmd)
+	_, _, err = c.executeEOS(ctx, cmd)
 	return err
 }
 
