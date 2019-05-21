@@ -2,3 +2,4 @@
 - Hugo Gonzalez Labrador <github@hugo.labkode.com>
 - Hugo Labrador <labkode@users.noreply.github.com>
 - Jörn Friedrich Dreyer <jfd@butonic.de>
+- Mohit Tyagi <mohitt@iitk.ac.in>
