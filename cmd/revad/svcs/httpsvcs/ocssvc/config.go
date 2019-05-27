@@ -24,18 +24,35 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 )
 
-// the config for the ocs api
-func (s *svc) doConfig(w http.ResponseWriter, r *http.Request) {
-	res := &Response{
-		OCS: &Payload{
-			Meta: MetaOK,
-			Data: s.c.Config,
-		},
-	}
+type ConfigHandler struct {
+	c ConfigData
+}
 
-	err := WriteOCSResponse(w, r, res)
-	if err != nil {
-		appctx.GetLogger(r.Context()).Error().Err(err).Msg("error writing ocs response")
-		w.WriteHeader(http.StatusInternalServerError)
-	}
+func (h *ConfigHandler) init(c *Config) {
+	h.c = c.Config
+}
+func (h *ConfigHandler) Handler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		res := &Response{
+			OCS: &Payload{
+				Meta: MetaOK,
+				Data: h.c,
+			},
+		}
+		err := WriteOCSResponse(w, r, res)
+		if err != nil {
+			appctx.GetLogger(r.Context()).Error().Err(err).Msg("error writing ocs response")
+			w.WriteHeader(http.StatusInternalServerError)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
+	})
+}
+
+// ConfigData holds basic config
+type ConfigData struct {
+	Version string `json:"version" xml:"version"`
+	Website string `json:"website" xml:"website"`
+	Host    string `json:"host" xml:"host"`
+	Contact string `json:"contact" xml:"contact"`
+	SSL     string `json:"ssl" xml:"ssl"`
 }

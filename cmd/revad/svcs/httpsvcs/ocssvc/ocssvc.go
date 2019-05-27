@@ -33,14 +33,14 @@ func init() {
 	httpserver.Register("ocssvc", New)
 }
 
-type config struct {
+type Config struct {
 	Prefix       string           `mapstructure:"prefix"`
 	Config       ConfigData       `mapstructure:"config"`
 	Capabilities CapabilitiesData `mapstructure:"capabilities"`
 }
 
 // init sets the defaults
-func (c *config) init() {
+func (c *Config) init() {
 	fmt.Fprintf(os.Stderr, "ocs config %+v\n", c)
 	// config
 	if c.Config.Version == "" {
@@ -231,21 +231,26 @@ func (c *config) init() {
 }
 
 type svc struct {
-	c       *config
-	handler http.Handler
+	c         *Config
+	handler   http.Handler
+	V1Handler *V1Handler
 }
 
 // New returns a new capabilitiessvc
 func New(m map[string]interface{}) (httpsvcs.Service, error) {
-	conf := &config{}
+	conf := &Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
 	}
 	conf.init()
 
 	s := &svc{
-		c: conf,
+		c:         conf,
+		V1Handler: new(V1Handler),
 	}
+
+	s.V1Handler.init(conf)
+
 	s.setHandler()
 	return s, nil
 }
@@ -264,26 +269,16 @@ func (s *svc) setHandler() {
 	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log := appctx.GetLogger(r.Context())
 
-		head, tail := httpsvcs.ShiftPath(r.URL.Path)
+		var head string
+		head, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
 
-		log.Debug().Str("head", head).Str("tail", tail).Msg("ocs routing")
+		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("ocs routing")
+
 		if head == "v1.php" {
-			r.URL.Path = tail // write new tail back to response
-			head, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
-			if head == "cloud" {
-				head, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
-				if head == "user" {
-					s.doUser(w, r)
-					return
-				} else if head == "capabilities" {
-					s.doCapabilities(w, r)
-					return
-				}
-			} else if head == "config" {
-				s.doConfig(w, r)
-				return
-			}
+			s.V1Handler.Handler().ServeHTTP(w, r)
+			return
 		}
-		w.WriteHeader(http.StatusNotFound)
+
+		http.Error(w, "Not Found", http.StatusNotFound)
 	})
 }

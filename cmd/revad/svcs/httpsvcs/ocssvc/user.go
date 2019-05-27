@@ -25,10 +25,14 @@ import (
 	"github.com/cs3org/reva/pkg/user"
 )
 
-func (s *svc) doUser(w http.ResponseWriter, r *http.Request) {
+type UserHandler struct {
+}
+
+func (h *UserHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
+	// TODO move user to handler parameter?
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
 		log.Error().Msg("error getting user from context")
@@ -54,7 +58,10 @@ func (s *svc) doUser(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-type contextUserRequiredErr string
-
-func (err contextUserRequiredErr) Error() string   { return string(err) }
-func (err contextUserRequiredErr) IsUserRequired() {}
+// UserData holds user data
+type UserData struct {
+	// TODO needs better naming, clarify if we need a userid, a username or both
+	ID          string `json:"id" xml:"id"`
+	DisplayName string `json:"display-name" xml:"display-name"`
+	Email       string `json:"email" xml:"email"`
+}
