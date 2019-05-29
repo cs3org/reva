@@ -49,6 +49,7 @@ func main() {
 		brokerDiscoverCommand(),
 		appRegistryFindCommand(),
 		appProviderGetIFrameCommand(),
+		preferencesCommand(),
 	}
 
 	mainUsage := createMainUsage(cmds)

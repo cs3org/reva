@@ -5,7 +5,7 @@ require (
 	github.com/aws/aws-sdk-go v1.19.27
 	github.com/cheggaaa/pb v1.0.28
 	github.com/coreos/go-oidc v2.0.0+incompatible
-	github.com/cs3org/go-cs3apis v0.0.0-20190510052541-93d4252d89d9
+	github.com/cs3org/go-cs3apis v0.0.0-20190527130632-f252d85e4bd6
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/fatih/color v1.7.0 // indirect
 	github.com/go-sql-driver/mysql v1.4.1
