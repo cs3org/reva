@@ -24,13 +24,32 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 )
 
+// ConfigHandler renders the config endpoint
 type ConfigHandler struct {
 	c ConfigData
 }
 
 func (h *ConfigHandler) init(c *Config) {
 	h.c = c.Config
+	// config
+	if h.c.Version == "" {
+		h.c.Version = "1.7"
+	}
+	if h.c.Website == "" {
+		h.c.Website = "reva"
+	}
+	if h.c.Host == "" {
+		h.c.Host = "" // TODO get from context?
+	}
+	if h.c.Contact == "" {
+		h.c.Contact = ""
+	}
+	if h.c.SSL == "" {
+		h.c.SSL = "false" // TODO get from context?
+	}
 }
+
+// Handler renders the config
 func (h *ConfigHandler) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		res := &Response{

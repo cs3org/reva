@@ -16,35 +16,19 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocssvc
+package registry
 
-import (
-	"net/http"
+import "github.com/cs3org/reva/pkg/share"
 
-	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
-)
+// NewFunc is the function that share registry implementations
+// should register at init time.
+type NewFunc func(map[string]interface{}) (share.Registry, error)
 
-// AppsHandler holds references to individual app handlers
-type AppsHandler struct {
-	SharesHandler *SharesHandler
-}
+// NewFuncs is a map containing all the registered share registries.
+var NewFuncs = map[string]NewFunc{}
 
-// ServeHTTP routes the known apps
-func (h *AppsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	var head string
-	head, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
-	switch head {
-	case "files_sharing":
-		head, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
-		if head == "api" {
-			head, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
-			if head == "v1" {
-				h.SharesHandler.ServeHTTP(w, r)
-				return
-			}
-		}
-		http.Error(w, "Not Found", http.StatusNotFound)
-	default:
-		http.Error(w, "Not Found", http.StatusNotFound)
-	}
+// Register registers a new share registry new function.
+// Not safe for concurrent use. Safe for use from package init.
+func Register(name string, f NewFunc) {
+	NewFuncs[name] = f
 }

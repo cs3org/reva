@@ -23,6 +23,7 @@ import (
 	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/appprovidersvc"
 	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/appregistrysvc"
 	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/authsvc"
+	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/shareregistrysvc"
 	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/storageprovidersvc"
 	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/storageregistrysvc"
 	// Add your own service here

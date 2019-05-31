@@ -25,6 +25,7 @@ import (
 	"github.com/cs3org/reva/pkg/user"
 )
 
+// The UserHandler renders the user endpoint
 type UserHandler struct {
 }
 
