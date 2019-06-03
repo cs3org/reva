@@ -30,6 +30,7 @@ import (
 	appproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/appprovider/v0alpha"
 	appregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/appregistry/v0alpha"
 	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	preferencesv0alphapb "github.com/cs3org/go-cs3apis/cs3/preferences/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	storageregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageregistry/v0alpha"
@@ -86,6 +87,14 @@ func getAuthClient() (authv0alphapb.AuthServiceClient, error) {
 		return nil, err
 	}
 	return authv0alphapb.NewAuthServiceClient(conn), nil
+}
+
+func getPreferencesClient() (preferencesv0alphapb.PreferencesServiceClient, error) {
+	conn, err := getConn()
+	if err != nil {
+		return nil, err
+	}
+	return preferencesv0alphapb.NewPreferencesServiceClient(conn), nil
 }
 
 func getConn() (*grpc.ClientConn, error) {
