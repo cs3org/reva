@@ -111,7 +111,6 @@ func (s *service) ListShareProviders(ctx context.Context, req *shareregistryv0al
 func (s *service) GetShareProvider(ctx context.Context, req *shareregistryv0alphapb.GetShareProviderRequest) (*shareregistryv0alphapb.GetShareProviderResponse, error) {
 	log := appctx.GetLogger(ctx)
 	sType := req.GetShareType().String()
-	// TODO type to string?
 	p, err := s.r.FindProvider(ctx, sType)
 	if err != nil {
 		log.Error().Err(err).Msg("error finding provider")
@@ -129,9 +128,8 @@ func (s *service) GetShareProvider(ctx context.Context, req *shareregistryv0alph
 	return res, nil
 }
 
-// TODO(labkode): fix
 func format(p *share.ProviderInfo) *sharetypespb.ProviderInfo {
-	// TODO isnt there a protobuf thing to map this?
+	// TODO(jfd) isnt there a protobuf thing to map this?
 	var shareType sharetypespb.ShareType
 	switch p.Type {
 	case "SHARE_TYPE_USER":

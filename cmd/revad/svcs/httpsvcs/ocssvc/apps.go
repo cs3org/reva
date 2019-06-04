@@ -29,6 +29,11 @@ type AppsHandler struct {
 	SharesHandler *SharesHandler
 }
 
+func (h *AppsHandler) init(c *Config) {
+	h.SharesHandler = new(SharesHandler)
+	h.SharesHandler.init(c)
+}
+
 // ServeHTTP routes the known apps
 func (h *AppsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var head string

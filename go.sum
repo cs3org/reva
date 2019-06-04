@@ -15,6 +15,7 @@ github.com/coreos/go-oidc v2.0.0+incompatible/go.mod h1:CgnwVTmzoESiwO9qyAFEMiHo
 github.com/coreos/go-systemd v0.0.0-20190321100706-95778dfbb74e/go.mod h1:F5haX7vjVVG0kc13fIWeqUViNPyEJxv/OmvnBo0Yme4=
 github.com/cs3org/go-cs3apis v0.0.0-20190510052541-93d4252d89d9 h1:M2xEknRW5diGe21h/y0cQYYhcamRR+tsq5fHSf5MECQ=
 github.com/cs3org/go-cs3apis v0.0.0-20190510052541-93d4252d89d9/go.mod h1:7SQqTjYB1UVIMJpNS48ynpPjh/pVTa8ybRevftZ3r68=
+github.com/cs3org/go-cs3apis v0.0.0-20190527130632-f252d85e4bd6 h1:cdDN7itEe1aCGo9/Ug/QDl5YapP6T4Yl/WgU0nOgXwM=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible h1:7qlOGliEKZXTDg6OTjfoBKDXWrumCAMpl/TFQ4/5kLM=

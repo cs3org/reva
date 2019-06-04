@@ -33,6 +33,7 @@ type V1Handler struct {
 
 func (h *V1Handler) init(c *Config) {
 	h.AppsHandler = new(AppsHandler)
+	h.AppsHandler.init(c)
 	h.CloudHandler = new(CloudHandler)
 	h.CloudHandler.init(c)
 	h.ConfigHandler = new(ConfigHandler)

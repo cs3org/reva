@@ -25,6 +25,7 @@ import (
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	shareregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/shareregistry/v0alpha"
 	sharetypespb "github.com/cs3org/go-cs3apis/cs3/sharetypes"
+	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
 
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
@@ -37,6 +38,10 @@ type SharesHandler struct {
 	shareRegistrySvc string
 	conn             *grpc.ClientConn
 	client           shareregistryv0alphapb.ShareRegistryServiceClient
+}
+
+func (h *SharesHandler) init(c *Config) {
+	h.shareRegistrySvc = ":9999" // TODO(jfd) fixme read from config
 }
 
 func (h *SharesHandler) getConn() (*grpc.ClientConn, error) {
@@ -66,8 +71,13 @@ func (h *SharesHandler) getClient() (shareregistryv0alphapb.ShareRegistryService
 }
 
 func (h *SharesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	log := appctx.GetLogger(r.Context())
+
 	var head string
 	head, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
+
+	log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
+
 	switch head {
 	case "shares":
 		// TODO PUT vs GET
@@ -100,22 +110,40 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	filters := []*usershareproviderv0alphapb.ListSharesRequest_Filter{}
+
+	path := r.URL.Query().Get("path")
+	if path != "" {
+		filters = append(filters, &usershareproviderv0alphapb.ListSharesRequest_Filter{
+			Type: usershareproviderv0alphapb.ListSharesRequest_Filter_LIST_SHARES_REQUEST_FILTER_TYPE_RESOURCE_ID,
+			Term: &usershareproviderv0alphapb.ListSharesRequest_Filter_ResourceId{
+				ResourceId: &storageproviderv0alphapb.ResourceId{
+					StorageId: "", // TODO(jfd) lookup correct storage, for now this always uses the configured storage driver, maybe the combined storage can delegate this?
+					OpaqueId:  path,
+				},
+			},
+		})
+	}
+
 	shares := []*ShareData{}
 
 	for _, p := range res.Providers {
 		// query this provider
-		conn, err := grpc.Dial(p.Address, grpc.WithInsecure())
+		pConn, err := grpc.Dial(p.Address, grpc.WithInsecure())
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+
 		switch p.ShareType {
 		case sharetypespb.ShareType_SHARE_TYPE_USER:
-			client := usershareproviderv0alphapb.NewUserShareProviderServiceClient(conn)
-			req := &usershareproviderv0alphapb.ListSharesRequest{}
-			res, err := client.ListShares(ctx, req)
+			pClient := usershareproviderv0alphapb.NewUserShareProviderServiceClient(pConn)
+			req := &usershareproviderv0alphapb.ListSharesRequest{
+				Filters: filters,
+			}
+			res, err := pClient.ListShares(ctx, req)
 			if err != nil {
-				log.Error().Err(err).Msg("error sending a grpc stat request")
+				log.Error().Err(err).Str("address", p.Address).Msg("error sending a grpc list shares request")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -130,9 +158,9 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 				shares = append(shares, sd)
 			}
 		case sharetypespb.ShareType_SHARE_TYPE_PUBLIC_LINK:
-			client := publicsharev0alphapb.NewPublicShareProviderServiceClient(conn)
+			pClient := publicsharev0alphapb.NewPublicShareProviderServiceClient(pConn)
 			req := &publicsharev0alphapb.ListPublicSharesRequest{}
-			res, err := client.ListPublicShares(ctx, req)
+			res, err := pClient.ListPublicShares(ctx, req)
 			if err != nil {
 				log.Error().Err(err).Msg("error sending a grpc stat request")
 				w.WriteHeader(http.StatusInternalServerError)

@@ -23,6 +23,7 @@ import (
 	"crypto/tls"
 	"fmt"
 
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
 	"github.com/mitchellh/mapstructure"
@@ -79,6 +80,7 @@ func New(m map[string]interface{}) (user.Manager, error) {
 }
 
 func (m *manager) GetUser(ctx context.Context, username string) (*user.User, error) {
+	log := appctx.GetLogger(ctx)
 	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.hostname, m.port), &tls.Config{InsecureSkipVerify: true})
 	if err != nil {
 		return nil, err
@@ -109,9 +111,7 @@ func (m *manager) GetUser(ctx context.Context, username string) (*user.User, err
 		return nil, userNotFoundError(username)
 	}
 
-	for _, e := range sr.Entries {
-		e.Print()
-	}
+	log.Debug().Interface("entries", sr.Entries).Msg("entries")
 
 	return &user.User{
 		// TODO map uuid, userPrincipalName as sub? -> actually objectSID for AD is recommended by MS. is also used for ACLs on NTFS

@@ -26,5 +26,6 @@ import (
 	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/shareregistrysvc"
 	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/storageprovidersvc"
 	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/storageregistrysvc"
+	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/usershareprovidersvc"
 	// Add your own service here
 )
