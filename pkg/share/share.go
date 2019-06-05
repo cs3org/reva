@@ -54,18 +54,6 @@ type (
 	// State represents the state of the share.
 	State string
 
-	// Registry is the interface that manages share providers
-	Registry interface {
-		ListProviders(ctx context.Context) ([]*ProviderInfo, error)
-		FindProvider(ctx context.Context, fn string) (*ProviderInfo, error)
-	}
-
-	// ProviderInfo describes share providers
-	ProviderInfo struct {
-		Endpoint string
-		Type     string
-	}
-
 	// Manager is the interface that manipulates shares.
 	Manager interface {
 		// Create a new share in fn with the given acl.
