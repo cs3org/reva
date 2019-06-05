@@ -2,10 +2,10 @@ module github.com/cs3org/reva
 
 require (
 	github.com/BurntSushi/toml v0.3.1
-	github.com/aws/aws-sdk-go v1.19.27
+	github.com/aws/aws-sdk-go v1.19.43
 	github.com/cheggaaa/pb v1.0.28
 	github.com/coreos/go-oidc v2.0.0+incompatible
-	github.com/cs3org/go-cs3apis v0.0.0-20190510052541-93d4252d89d9
+	github.com/cs3org/go-cs3apis v0.0.0-20190605095738-336edf0a3a8a
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/fatih/color v1.7.0 // indirect
 	github.com/go-sql-driver/mysql v1.4.1
@@ -25,7 +25,7 @@ require (
 	golang.org/x/net v0.0.0-20190415214537-1da14a5a36f2 // indirect
 	golang.org/x/oauth2 v0.0.0-20180821212333-d2e6202438be
 	golang.org/x/sys v0.0.0-20190416152802-12500544f89f // indirect
-	google.golang.org/grpc v1.20.1
+	google.golang.org/grpc v1.21.1
 	gopkg.in/asn1-ber.v1 v1.0.0-20181015200546-f715ec2f112d // indirect
 	gopkg.in/cheggaaa/pb.v1 v1.0.27 // indirect
 	gopkg.in/ldap.v2 v2.5.1

@@ -25,6 +25,7 @@ import (
 	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/iframeuisvc"
 	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/ocdavsvc"
 	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/ocssvc"
+	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/preferencessvc"
 	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/prometheussvc"
 	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/webuisvc"
 	// Add your own service here

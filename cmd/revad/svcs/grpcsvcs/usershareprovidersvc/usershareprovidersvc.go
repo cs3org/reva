@@ -21,8 +21,6 @@ package usershareprovidersvc
 import (
 	"fmt"
 	"io"
-	"path"
-	"strings"
 
 	"github.com/cs3org/reva/cmd/revad/grpcserver"
 
@@ -96,8 +94,8 @@ func (s *service) CreateShare(ctx context.Context, req *usershareproviderv0alpha
 	return res, nil
 }
 
-func (s *service) GetProvider(ctx context.Context, req *usershareproviderv0alphapb.GetProviderRequest) (*usershareproviderv0alphapb.GetProviderResponse, error) {
-	res := &usershareproviderv0alphapb.GetProviderResponse{
+func (s *service) RemoveShare(ctx context.Context, req *usershareproviderv0alphapb.RemoveShareRequest) (*usershareproviderv0alphapb.RemoveShareResponse, error) {
+	res := &usershareproviderv0alphapb.RemoveShareResponse{
 		Status: &rpcpb.Status{
 			Code: rpcpb.Code_CODE_UNIMPLEMENTED,
 		},
@@ -107,15 +105,6 @@ func (s *service) GetProvider(ctx context.Context, req *usershareproviderv0alpha
 
 func (s *service) GetShare(ctx context.Context, req *usershareproviderv0alphapb.GetShareRequest) (*usershareproviderv0alphapb.GetShareResponse, error) {
 	res := &usershareproviderv0alphapb.GetShareResponse{
-		Status: &rpcpb.Status{
-			Code: rpcpb.Code_CODE_UNIMPLEMENTED,
-		},
-	}
-	return res, nil
-}
-
-func (s *service) ListReceivedShares(ctx context.Context, req *usershareproviderv0alphapb.ListReceivedSharesRequest) (*usershareproviderv0alphapb.ListReceivedSharesResponse, error) {
-	res := &usershareproviderv0alphapb.ListReceivedSharesResponse{
 		Status: &rpcpb.Status{
 			Code: rpcpb.Code_CODE_UNIMPLEMENTED,
 		},
@@ -145,7 +134,7 @@ func (s *service) ListShares(ctx context.Context, req *usershareproviderv0alphap
 		Status: &rpcpb.Status{
 			Code: rpcpb.Code_CODE_OK,
 		},
-		Share: shares, // TODO share should be plural in cs3 apis
+		Shares: shares,
 	}
 	return res, nil
 }
@@ -157,8 +146,17 @@ func grantToShare(grant *storage.Grant) *usershareproviderv0alphapb.Share {
 	return share
 }
 
-func (s *service) RemoveShare(ctx context.Context, req *usershareproviderv0alphapb.RemoveShareRequest) (*usershareproviderv0alphapb.RemoveShareResponse, error) {
-	res := &usershareproviderv0alphapb.RemoveShareResponse{
+func (s *service) UpdateShare(ctx context.Context, req *usershareproviderv0alphapb.UpdateShareRequest) (*usershareproviderv0alphapb.UpdateShareResponse, error) {
+	res := &usershareproviderv0alphapb.UpdateShareResponse{
+		Status: &rpcpb.Status{
+			Code: rpcpb.Code_CODE_UNIMPLEMENTED,
+		},
+	}
+	return res, nil
+}
+
+func (s *service) ListReceivedShares(ctx context.Context, req *usershareproviderv0alphapb.ListReceivedSharesRequest) (*usershareproviderv0alphapb.ListReceivedSharesResponse, error) {
+	res := &usershareproviderv0alphapb.ListReceivedSharesResponse{
 		Status: &rpcpb.Status{
 			Code: rpcpb.Code_CODE_UNIMPLEMENTED,
 		},
@@ -175,66 +173,9 @@ func (s *service) UpdateReceivedShare(ctx context.Context, req *usershareprovide
 	return res, nil
 }
 
-func (s *service) UpdateShare(ctx context.Context, req *usershareproviderv0alphapb.UpdateShareRequest) (*usershareproviderv0alphapb.UpdateShareResponse, error) {
-	res := &usershareproviderv0alphapb.UpdateShareResponse{
-		Status: &rpcpb.Status{
-			Code: rpcpb.Code_CODE_UNIMPLEMENTED,
-		},
-	}
-	return res, nil
-}
-
-func (s *service) splitFn(fsfn string) (string, string, error) {
-	tokens := strings.Split(fsfn, "/")
-	l := len(tokens)
-	if l == 0 {
-		return "", "", errors.New("fsfn is not id-based")
-	}
-
-	fid := tokens[0]
-	if l > 1 {
-		return fid, path.Join(tokens[1:]...), nil
-	}
-	return fid, "", nil
-}
-
-type fnCtx struct {
-	mountPrefix string
-	*derefCtx
-}
-
-type derefCtx struct {
-	derefPath string
-	fid       string
-	rootFidFn string
-}
-
-func (s *service) deref(ctx context.Context, fsfn string) (*derefCtx, error) {
-	if strings.HasPrefix(fsfn, "/") {
-		return &derefCtx{derefPath: fsfn}, nil
-	}
-
-	fid, right, err := s.splitFn(fsfn)
-	if err != nil {
-		return nil, err
-	}
-	// resolve fid to path in the fs
-	fnPointByID, err := s.storage.GetPathByID(ctx, fid)
-	if err != nil {
-		return nil, err
-	}
-
-	derefPath := path.Join(fnPointByID, right)
-	return &derefCtx{derefPath: derefPath, fid: fid, rootFidFn: fnPointByID}, nil
-}
-
 func getFS(c *config) (storage.FS, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		return f(c.Drivers[c.Driver])
 	}
 	return nil, fmt.Errorf("driver not found: %s", c.Driver)
-}
-
-type notFoundError interface {
-	IsNotFound()
 }

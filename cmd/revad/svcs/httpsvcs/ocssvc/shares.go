@@ -24,8 +24,6 @@ import (
 
 	publicsharev0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshare/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	shareregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/shareregistry/v0alpha"
-	sharetypespb "github.com/cs3org/go-cs3apis/cs3/sharetypes"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
@@ -38,39 +36,67 @@ import (
 
 // SharesHandler implements the ownCloud sharing API
 type SharesHandler struct {
-	shareRegistrySvc string
-	conn             *grpc.ClientConn
-	client           shareregistryv0alphapb.ShareRegistryServiceClient
+	userShareProviderSVC   string
+	uConn                  *grpc.ClientConn
+	uClient                usershareproviderv0alphapb.UserShareProviderServiceClient
+	publicShareProviderSVC string
+	pConn                  *grpc.ClientConn
+	pClient                publicsharev0alphapb.PublicShareProviderServiceClient
 }
 
 func (h *SharesHandler) init(c *Config) {
-	h.shareRegistrySvc = ":9999" // TODO(jfd) fixme read from config
+	h.userShareProviderSVC = ":9999" // TODO(jfd) fixme read from config
 }
 
-func (h *SharesHandler) getConn() (*grpc.ClientConn, error) {
-	if h.conn != nil {
-		return h.conn, nil
+func (h *SharesHandler) getUConn() (*grpc.ClientConn, error) {
+	if h.uConn != nil {
+		return h.uConn, nil
 	}
 
-	conn, err := grpc.Dial(h.shareRegistrySvc, grpc.WithInsecure())
+	conn, err := grpc.Dial(h.userShareProviderSVC, grpc.WithInsecure())
 	if err != nil {
 		return nil, err
 	}
-
-	return conn, nil
+	h.uConn = conn
+	return h.uConn, nil
 }
 
-func (h *SharesHandler) getClient() (shareregistryv0alphapb.ShareRegistryServiceClient, error) {
-	if h.client != nil {
-		return h.client, nil
+func (h *SharesHandler) getUClient() (usershareproviderv0alphapb.UserShareProviderServiceClient, error) {
+	if h.uClient != nil {
+		return h.uClient, nil
 	}
 
-	conn, err := h.getConn()
+	conn, err := h.getUConn()
 	if err != nil {
 		return nil, err
 	}
-	h.client = shareregistryv0alphapb.NewShareRegistryServiceClient(conn)
-	return h.client, nil
+	h.uClient = usershareproviderv0alphapb.NewUserShareProviderServiceClient(conn)
+	return h.uClient, nil
+}
+func (h *SharesHandler) getPConn() (*grpc.ClientConn, error) {
+	if h.pConn != nil {
+		return h.pConn, nil
+	}
+
+	conn, err := grpc.Dial(h.userShareProviderSVC, grpc.WithInsecure())
+	if err != nil {
+		return nil, err
+	}
+	h.pConn = conn
+	return h.pConn, nil
+}
+
+func (h *SharesHandler) getPClient() (publicsharev0alphapb.PublicShareProviderServiceClient, error) {
+	if h.pClient != nil {
+		return h.pClient, nil
+	}
+
+	conn, err := h.getPConn()
+	if err != nil {
+		return nil, err
+	}
+	h.pClient = publicsharev0alphapb.NewPublicShareProviderServiceClient(conn)
+	return h.pClient, nil
 }
 
 func (h *SharesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -94,25 +120,6 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	client, err := h.getClient()
-	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	req := &shareregistryv0alphapb.ListShareProvidersRequest{}
-	res, err := client.ListShareProviders(ctx, req)
-	if err != nil {
-		log.Error().Err(err).Msg("error sending a grpc ListShareProviders request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if res.Status.Code != rpcpb.Code_CODE_OK {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
 	filters := []*usershareproviderv0alphapb.ListSharesRequest_Filter{}
 
 	path := r.URL.Query().Get("path")
@@ -130,54 +137,57 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 
 	shares := []*ShareData{}
 
-	for _, p := range res.Providers {
-		// query this provider
-		pConn, err := grpc.Dial(p.Address, grpc.WithInsecure())
+	// fetch user shares if configured
+	if h.userShareProviderSVC != "" {
+		uClient, err := h.getUClient()
 		if err != nil {
+			log.Error().Err(err).Msg("error getting grpc client")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-
-		switch p.ShareType {
-		case sharetypespb.ShareType_SHARE_TYPE_USER:
-			pClient := usershareproviderv0alphapb.NewUserShareProviderServiceClient(pConn)
-			req := &usershareproviderv0alphapb.ListSharesRequest{
-				Filters: filters,
-			}
-			res, err := pClient.ListShares(ctx, req)
-			if err != nil {
-				log.Error().Err(err).Str("address", p.Address).Msg("error sending a grpc list shares request")
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			if res.Status.Code != rpcpb.Code_CODE_OK {
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			for _, s := range res.Share {
-				shares = append(shares, h.userShare2ShareData(s))
-			}
-		case sharetypespb.ShareType_SHARE_TYPE_PUBLIC_LINK:
-			pClient := publicsharev0alphapb.NewPublicShareProviderServiceClient(pConn)
-			req := &publicsharev0alphapb.ListPublicSharesRequest{}
-			res, err := pClient.ListPublicShares(ctx, req)
-			if err != nil {
-				log.Error().Err(err).Msg("error sending a grpc stat request")
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			if res.Status.Code != rpcpb.Code_CODE_OK {
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			for _, s := range res.Share {
-				shares = append(shares, h.publicShare2ShareData(s))
-			}
+		req := &usershareproviderv0alphapb.ListSharesRequest{
+			Filters: filters,
 		}
-
+		res, err := uClient.ListShares(ctx, req)
+		if err != nil {
+			log.Error().Err(err).Msg("error sending a grpc list shares request")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if res.Status.Code != rpcpb.Code_CODE_OK {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		for _, s := range res.Shares {
+			shares = append(shares, h.userShare2ShareData(s))
+		}
 	}
-	// get shares registry
-	// get share provider
+	// TODO fetch group shares
+	// TODO fetch federated shares
+
+	// fetch public link shares if configured
+	if h.publicShareProviderSVC != "" {
+		pClient, err := h.getPClient()
+		if err != nil {
+			log.Error().Err(err).Msg("error getting grpc client")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		req := &publicsharev0alphapb.ListPublicSharesRequest{}
+		res, err := pClient.ListPublicShares(ctx, req)
+		if err != nil {
+			log.Error().Err(err).Msg("error sending a grpc list shares request")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if res.Status.Code != rpcpb.Code_CODE_OK {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		for _, s := range res.Share {
+			shares = append(shares, h.publicShare2ShareData(s))
+		}
+	}
 
 	res2 := &Response{
 		OCS: &Payload{
@@ -188,37 +198,11 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	err = WriteOCSResponse(w, r, res2)
+	err := WriteOCSResponse(w, r, res2)
 	if err != nil {
 		appctx.GetLogger(r.Context()).Error().Err(err).Msg("error writing ocs response")
 		w.WriteHeader(http.StatusInternalServerError)
 	}
-}
-
-// TODO sort out mapping, this is just a first guess
-func userSharePermissions2OCSPermissions(sp *usershareproviderv0alphapb.SharePermissions) Permissions {
-	permissions := PermissionInvalid
-	if sp != nil {
-		p := sp.GetPermissions()
-		if p != nil {
-			if p.Stat && p.ListContainer && p.InitiateFileDownload {
-				permissions += PermissionRead
-			}
-			if p.InitiateFileUpload {
-				permissions += PermissionWrite
-			}
-			if p.CreateContainer {
-				permissions += PermissionCreate
-			}
-			if p.Delete {
-				permissions += PermissionDelete
-			}
-			if p.AddGrant {
-				permissions += PermissionShare
-			}
-		}
-	}
-	return permissions
 }
 
 func (h *SharesHandler) userShare2ShareData(share *usershareproviderv0alphapb.Share) *ShareData {
@@ -227,7 +211,7 @@ func (h *SharesHandler) userShare2ShareData(share *usershareproviderv0alphapb.Sh
 		// TODO map share.resourceId to path and storage ... requires a stat call
 		// share.permissions ar mapped below
 		Permissions:          userSharePermissions2OCSPermissions(share.GetPermissions()),
-		ShareType:            ShareTypeUser,
+		ShareType:            shareTypeUser,
 		UIDOwner:             share.Creator,             // TODO this should come from a user object, not a string
 		DisplaynameOwner:     share.Creator,             // TODO this should come from a user object, not a string
 		STime:                share.Ctime.Seconds,       // TODO CS3 api birth time = btime
@@ -241,27 +225,38 @@ func (h *SharesHandler) userShare2ShareData(share *usershareproviderv0alphapb.Sh
 	return sd
 }
 
-// TODO sort out mapping, this is just a first guess
-func publicSharePermissions2OCSPermissions(sp *publicsharev0alphapb.PublicSharePermissions) Permissions {
-	permissions := PermissionInvalid
+func userSharePermissions2OCSPermissions(sp *usershareproviderv0alphapb.SharePermissions) Permissions {
 	if sp != nil {
-		p := sp.GetPermissions()
-		if p != nil {
-			if p.Stat && p.ListContainer && p.InitiateFileDownload {
-				permissions += PermissionRead
-			}
-			if p.InitiateFileUpload {
-				permissions += PermissionWrite
-			}
-			if p.CreateContainer {
-				permissions += PermissionCreate
-			}
-			if p.Delete {
-				permissions += PermissionDelete
-			}
-			if p.AddGrant {
-				permissions += PermissionShare
-			}
+		return permissions2OCSPermissions(sp.GetPermissions())
+	}
+	return permissionInvalid
+}
+
+func publicSharePermissions2OCSPermissions(sp *publicsharev0alphapb.PublicSharePermissions) Permissions {
+	if sp != nil {
+		return permissions2OCSPermissions(sp.GetPermissions())
+	}
+	return permissionInvalid
+}
+
+// TODO sort out mapping, this is just a first guess
+func permissions2OCSPermissions(p *storageproviderv0alphapb.ResourcePermissions) Permissions {
+	permissions := permissionInvalid
+	if p != nil {
+		if p.Stat && p.ListContainer && p.InitiateFileDownload {
+			permissions += permissionRead
+		}
+		if p.InitiateFileUpload {
+			permissions += permissionWrite
+		}
+		if p.CreateContainer {
+			permissions += permissionCreate
+		}
+		if p.Delete {
+			permissions += permissionDelete
+		}
+		if p.AddGrant {
+			permissions += permissionShare
 		}
 	}
 	return permissions
@@ -297,7 +292,7 @@ func (h *SharesHandler) publicShare2ShareData(share *publicsharev0alphapb.Public
 		// TODO map share.resourceId to path and storage ... requires a stat call
 		// share.permissions ar mapped below
 		Permissions:          publicSharePermissions2OCSPermissions(share.GetPermissions()),
-		ShareType:            ShareTypePublicLink,
+		ShareType:            shareTypePublicLink,
 		UIDOwner:             creator.ID.String(),
 		DisplaynameOwner:     creator.DisplayName,
 		STime:                share.Ctime.Seconds, // TODO CS3 api birth time = btime
@@ -322,25 +317,27 @@ type SharesData struct {
 	Shares []*ShareData `json:"element" xml:"element"`
 }
 
+// ShareType indicates the type of share
 type ShareType int
 
 const (
-	ShareTypeUser                ShareType = 0
-	ShareTypeGroup               ShareType = 1
-	ShareTypePublicLink          ShareType = 3
-	ShareTypeFederatedCloudShare ShareType = 6
+	shareTypeUser                ShareType = 0
+	shareTypeGroup               ShareType = 1
+	shareTypePublicLink          ShareType = 3
+	shareTypeFederatedCloudShare ShareType = 6
 )
 
+// Permissions reflects the CRUD permissions used in the OCS sharing API
 type Permissions uint
 
 const (
-	PermissionInvalid Permissions = 0
-	PermissionRead    Permissions = 1
-	PermissionWrite   Permissions = 2
-	PermissionCreate  Permissions = 4
-	PermissionDelete  Permissions = 8
-	PermissionShare   Permissions = 16
-	PermissionAll     Permissions = 31
+	permissionInvalid Permissions = 0
+	permissionRead    Permissions = 1
+	permissionWrite   Permissions = 2
+	permissionCreate  Permissions = 4
+	permissionDelete  Permissions = 8
+	permissionShare   Permissions = 16
+	permissionAll     Permissions = 31
 )
 
 // ShareData holds share data, see https://doc.owncloud.com/server/developer_manual/core/ocs-share-api.html#response-attributes-1

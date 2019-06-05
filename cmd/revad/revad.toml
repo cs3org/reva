@@ -8,7 +8,7 @@ level = "debug"
 mode = "console"
 
 [http]
-enabled_services = ["prometheussvc", "ocdavsvc", "datasvc"]
+enabled_services = ["prometheussvc", "ocdavsvc", "datasvc","preferencessvc"]
 enabled_middlewares = ["cors", "log", "auth"]
 network = "tcp"
 address = "0.0.0.0:9998"
@@ -37,6 +37,10 @@ header = "X-Access-Token"
 
 [http.middlewares.cors]
 priority = 400
+
+[http.services.preferencessvc]
+prefix = "preferences"
+preferencessvc = "localhost:9999"
 
 [http.services.prometheussvc]
 prefix = "metrics"
@@ -73,7 +77,7 @@ access_log = "stderr"
 tls_enabled = true
 tls_cert = "/etc/gridsecurity/host.cert"
 tls_key = "/etc/gridsecurity/host.key"
-enabled_services = ["storageprovidersvc", "authsvc", "storageregistrysvc", "appregistrysvc", "appprovidersvc"]
+enabled_services = ["storageprovidersvc", "authsvc", "storageregistrysvc", "appregistrysvc", "appprovidersvc", "preferencessvc"]
 enabled_interceptors = ["auth", "prometheus", "log"]
 
 [grpc.interceptors.recovery]
