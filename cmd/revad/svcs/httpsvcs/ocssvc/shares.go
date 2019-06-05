@@ -45,7 +45,8 @@ type SharesHandler struct {
 }
 
 func (h *SharesHandler) init(c *Config) {
-	h.userShareProviderSVC = ":9999" // TODO(jfd) fixme read from config
+	h.userShareProviderSVC = c.UserShareProviderSVC
+	h.publicShareProviderSVC = c.PublicShareProviderSVC
 }
 
 func (h *SharesHandler) getUConn() (*grpc.ClientConn, error) {

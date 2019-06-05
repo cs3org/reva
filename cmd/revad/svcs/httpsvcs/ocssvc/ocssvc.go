@@ -33,9 +33,11 @@ func init() {
 
 // Config holds the config options that need to be passed down to all ocs handlers
 type Config struct {
-	Prefix       string           `mapstructure:"prefix"`
-	Config       ConfigData       `mapstructure:"config"`
-	Capabilities CapabilitiesData `mapstructure:"capabilities"`
+	Prefix                 string           `mapstructure:"prefix"`
+	Config                 ConfigData       `mapstructure:"config"`
+	Capabilities           CapabilitiesData `mapstructure:"capabilities"`
+	PublicShareProviderSVC string           `mapstructure:"publicshareprovidersvc"`
+	UserShareProviderSVC   string           `mapstructure:"usershareprovidersvc"`
 }
 
 type svc struct {
