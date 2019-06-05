@@ -125,19 +125,36 @@ func (s *service) ListReceivedShares(ctx context.Context, req *usershareprovider
 
 func (s *service) ListShares(ctx context.Context, req *usershareproviderv0alphapb.ListSharesRequest) (*usershareproviderv0alphapb.ListSharesResponse, error) {
 	log := appctx.GetLogger(ctx)
-	path := ""
+
+	shares := []*usershareproviderv0alphapb.Share{}
+
 	for _, filter := range req.Filters {
 		if filter.Type == usershareproviderv0alphapb.ListSharesRequest_Filter_LIST_SHARES_REQUEST_FILTER_TYPE_RESOURCE_ID {
-			path = filter.GetResourceId().OpaqueId
+			path := filter.GetResourceId().OpaqueId
+			log.Debug().Str("path", path).Msg("list shares")
+			grants, err := s.storage.ListGrants(ctx, path)
+			if err != nil {
+				return nil, err
+			}
+			for _, grant := range grants {
+				shares = append(shares, grantToShare(grant))
+			}
 		}
 	}
-	log.Debug().Str("path", path).Msg("list shares")
 	res := &usershareproviderv0alphapb.ListSharesResponse{
 		Status: &rpcpb.Status{
 			Code: rpcpb.Code_CODE_OK,
 		},
+		Share: shares, // TODO share should be plural in cs3 apis
 	}
 	return res, nil
+}
+
+func grantToShare(grant *storage.Grant) *usershareproviderv0alphapb.Share {
+	share := &usershareproviderv0alphapb.Share{
+		// TODO map grant
+	}
+	return share
 }
 
 func (s *service) RemoveShare(ctx context.Context, req *usershareproviderv0alphapb.RemoveShareRequest) (*usershareproviderv0alphapb.RemoveShareResponse, error) {

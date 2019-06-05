@@ -20,6 +20,7 @@ package user
 
 import (
 	"context"
+	"fmt"
 )
 
 type key int
@@ -43,6 +44,10 @@ type User struct {
 type ID struct {
 	IDP      string
 	OpaqueID string
+}
+
+func (id ID) String() string {
+	return fmt.Sprintf("%s@%s", id.OpaqueID, id.IDP)
 }
 
 // ContextGetUser returns the user if set in the given context.

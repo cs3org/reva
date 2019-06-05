@@ -20,16 +20,19 @@ package ocssvc
 
 import (
 	"net/http"
+	"time"
 
 	publicsharev0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshare/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	shareregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/shareregistry/v0alpha"
 	sharetypespb "github.com/cs3org/go-cs3apis/cs3/sharetypes"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
 
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/user"
 	"google.golang.org/grpc"
 )
 
@@ -152,10 +155,7 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			for _, s := range res.Share {
-				sd := &ShareData{
-					ID: s.Id.OpaqueId,
-				}
-				shares = append(shares, sd)
+				shares = append(shares, h.userShare2ShareData(s))
 			}
 		case sharetypespb.ShareType_SHARE_TYPE_PUBLIC_LINK:
 			pClient := publicsharev0alphapb.NewPublicShareProviderServiceClient(pConn)
@@ -171,10 +171,7 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			for _, s := range res.Share {
-				sd := &ShareData{
-					ID: s.Id.OpaqueId,
-				}
-				shares = append(shares, sd)
+				shares = append(shares, h.publicShare2ShareData(s))
 			}
 		}
 
@@ -198,33 +195,217 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// TODO sort out mapping, this is just a first guess
+func userSharePermissions2OCSPermissions(sp *usershareproviderv0alphapb.SharePermissions) Permissions {
+	permissions := PermissionInvalid
+	if sp != nil {
+		p := sp.GetPermissions()
+		if p != nil {
+			if p.Stat && p.ListContainer && p.InitiateFileDownload {
+				permissions += PermissionRead
+			}
+			if p.InitiateFileUpload {
+				permissions += PermissionWrite
+			}
+			if p.CreateContainer {
+				permissions += PermissionCreate
+			}
+			if p.Delete {
+				permissions += PermissionDelete
+			}
+			if p.AddGrant {
+				permissions += PermissionShare
+			}
+		}
+	}
+	return permissions
+}
+
+func (h *SharesHandler) userShare2ShareData(share *usershareproviderv0alphapb.Share) *ShareData {
+	sd := &ShareData{
+		ID: share.Id.OpaqueId,
+		// TODO map share.resourceId to path and storage ... requires a stat call
+		// share.permissions ar mapped below
+		Permissions:          userSharePermissions2OCSPermissions(share.GetPermissions()),
+		ShareType:            ShareTypeUser,
+		UIDOwner:             share.Creator,             // TODO this should come from a user object, not a string
+		DisplaynameOwner:     share.Creator,             // TODO this should come from a user object, not a string
+		STime:                share.Ctime.Seconds,       // TODO CS3 api birth time = btime
+		UIDFileOwner:         share.Owner,               // TODO this should come from a user object, not a string
+		DisplaynameFileOwner: share.Owner,               // TODO this should come from a user object, not a string
+		ShareWith:            share.Grantee.Id.OpaqueId, // TODO cs3 api should pass around the minimal user data: id (sub&iss), username, email, displayname and avatar link
+		ShareWithDisplayname: share.Grantee.Id.OpaqueId, // TODO this should come from a user object, not a string
+	}
+	// actually clients should be able to GET and cache the user info themselves ...
+	// TODO check grantee type for user vs group
+	return sd
+}
+
+// TODO sort out mapping, this is just a first guess
+func publicSharePermissions2OCSPermissions(sp *publicsharev0alphapb.PublicSharePermissions) Permissions {
+	permissions := PermissionInvalid
+	if sp != nil {
+		p := sp.GetPermissions()
+		if p != nil {
+			if p.Stat && p.ListContainer && p.InitiateFileDownload {
+				permissions += PermissionRead
+			}
+			if p.InitiateFileUpload {
+				permissions += PermissionWrite
+			}
+			if p.CreateContainer {
+				permissions += PermissionCreate
+			}
+			if p.Delete {
+				permissions += PermissionDelete
+			}
+			if p.AddGrant {
+				permissions += PermissionShare
+			}
+		}
+	}
+	return permissions
+}
+
+// TODO do user lookup and cache users
+func (h *SharesHandler) resolveUserID(userID *typespb.UserId) *user.User {
+	return &user.User{
+		ID: &user.ID{
+			IDP:      userID.Idp,
+			OpaqueID: userID.OpaqueId,
+		},
+		DisplayName: "unknown",
+	}
+}
+
+// TODO do user lookup and cache users
+func (h *SharesHandler) resolveUserString(userID string) *user.User {
+	return &user.User{
+		ID: &user.ID{
+			OpaqueID: userID,
+		},
+		Username:    userID,
+		DisplayName: userID,
+	}
+}
+
+func (h *SharesHandler) publicShare2ShareData(share *publicsharev0alphapb.PublicShare) *ShareData {
+	creator := h.resolveUserID(share.Creator)
+	owner := h.resolveUserID(share.Owner)
+	sd := &ShareData{
+		ID: share.Id.OpaqueId,
+		// TODO map share.resourceId to path and storage ... requires a stat call
+		// share.permissions ar mapped below
+		Permissions:          publicSharePermissions2OCSPermissions(share.GetPermissions()),
+		ShareType:            ShareTypePublicLink,
+		UIDOwner:             creator.ID.String(),
+		DisplaynameOwner:     creator.DisplayName,
+		STime:                share.Ctime.Seconds, // TODO CS3 api birth time = btime
+		UIDFileOwner:         owner.ID.String(),
+		DisplaynameFileOwner: owner.DisplayName,
+		Token:                share.Token,
+		Expiration:           timestampToExpiration(share.Expiration),
+	}
+	// actually clients should be able to GET and cache the user info themselves ...
+	// TODO check grantee type for user vs group
+	return sd
+}
+
+// timestamp is assumed to be UTC ... just human readible ...
+// FIXME and ambiguous / error prone because there is no time zone ...
+func timestampToExpiration(t *typespb.Timestamp) string {
+	return time.Unix(int64(t.Seconds), int64(t.Nanos)).Format("2006-01-02 15:05:05")
+}
+
 // SharesData holds a list of share data
 type SharesData struct {
 	Shares []*ShareData `json:"element" xml:"element"`
 }
 
-// ShareData holds share data
+type ShareType int
+
+const (
+	ShareTypeUser                ShareType = 0
+	ShareTypeGroup               ShareType = 1
+	ShareTypePublicLink          ShareType = 3
+	ShareTypeFederatedCloudShare ShareType = 6
+)
+
+type Permissions uint
+
+const (
+	PermissionInvalid Permissions = 0
+	PermissionRead    Permissions = 1
+	PermissionWrite   Permissions = 2
+	PermissionCreate  Permissions = 4
+	PermissionDelete  Permissions = 8
+	PermissionShare   Permissions = 16
+	PermissionAll     Permissions = 31
+)
+
+// ShareData holds share data, see https://doc.owncloud.com/server/developer_manual/core/ocs-share-api.html#response-attributes-1
 type ShareData struct {
-	ID                   string `json:"id" xml:"id"`
-	ShareType            string `json:"share_type" xml:"share_type"`
-	DisplaynameOwner     string `json:"displayname_owner" xml:"displayname_owner"`
-	Permissions          string `json:"permissions" xml:"permissions"`
-	STime                string `json:"stime" xml:"stime"`
-	Parent               string `json:"parent" xml:"parent"`
-	Expiration           string `json:"expiration" xml:"expiration"`
-	Token                string `json:"token" xml:"token"`
-	UIDFileOwner         string `json:"uid_file_owner" xml:"uid_file_owner"`
+	// TODO int?
+	ID string `json:"id" xml:"id"`
+	// The share’s type. This can be one of:
+	// 0 = user
+	// 1 = group
+	// 3 = public link
+	// 6 = federated cloud share
+	ShareType ShareType `json:"share_type" xml:"share_type"`
+	// The username of the owner of the share.
+	UIDOwner string `json:"uid_owner" xml:"uid_owner"`
+	// The display name of the owner of the share.
+	DisplaynameOwner string `json:"displayname_owner" xml:"displayname_owner"`
+	// The permission attribute set on the file. Options are:
+	// * 1 = Read
+	// * 2 = Update
+	// * 4 = Create
+	// * 8 = Delete
+	// * 16 = Share
+	// * 31 = All permissions
+	// The default is 31, and for public shares is 1.
+	// TODO we should change the default to read only
+	Permissions Permissions `json:"permissions" xml:"permissions"`
+	// The UNIX timestamp when the share was created.
+	STime uint64 `json:"stime" xml:"stime"`
+	// ?
+	Parent string `json:"parent" xml:"parent"`
+	// The UNIX timestamp when the share expires.
+	Expiration string `json:"expiration" xml:"expiration"`
+	// The public link to the item being shared.
+	Token string `json:"token" xml:"token"`
+	// The unique id of the user that owns the file or folder being shared.
+	UIDFileOwner string `json:"uid_file_owner" xml:"uid_file_owner"`
+	// The display name of the user that owns the file or folder being shared.
 	DisplaynameFileOwner string `json:"displayname_file_owner" xml:"displayname_file_owner"`
-	Path                 string `json:"path" xml:"path"`
-	ItemType             string `json:"item_type" xml:"item_type"`
-	MimeType             string `json:"mimetype" xml:"mimetype"`
-	StorageID            string `json:"storage_id" xml:"storage_id"`
-	Storage              string `json:"storage" xml:"storage"`
-	ItemSource           string `json:"item_source" xml:"item_source"`
-	FileSource           string `json:"file_source" xml:"file_source"`
-	FileParent           string `json:"file_parent" xml:"file_parent"`
-	FileTarget           string `json:"file_target" xml:"file_target"`
-	ShareWith            string `json:"share_with" xml:"share_with"`
+	// The path to the shared file or folder.
+	Path string `json:"path" xml:"path"`
+	// The type of the object being shared. This can be one of file or folder.
+	ItemType string `json:"item_type" xml:"item_type"`
+	// The RFC2045-compliant mimetype of the file.
+	MimeType  string `json:"mimetype" xml:"mimetype"`
+	StorageID string `json:"storage_id" xml:"storage_id"`
+	Storage   uint64 `json:"storage" xml:"storage"`
+	// The unique node id of the item being shared.
+	// TODO int?
+	ItemSource string `json:"item_source" xml:"item_source"`
+	// The unique node id of the item being shared. For legacy reasons item_source and file_source attributes have the same value.
+	// TODO int?
+	FileSource string `json:"file_source" xml:"file_source"`
+	// The unique node id of the parent node of the item being shared.
+	// TODO int?
+	FileParent string `json:"file_parent" xml:"file_parent"`
+	// The name of the shared file.
+	FileTarget string `json:"file_target" xml:"file_target"`
+	// The uid of the receiver of the file. This is either
+	// - a GID (group id) if it is being shared with a group or
+	// - a UID (user id) if the share is shared with a user.
+	ShareWith string `json:"share_with" xml:"share_with"`
+	// The display name of the receiver of the file.
 	ShareWithDisplayname string `json:"share_with_displayname" xml:"share_with_displayname"`
-	MailSend             string `json:"mail_send" xml:"mail_send"`
+	// Whether the recipient was notified, by mail, about the share being shared with them.
+	MailSend string `json:"mail_send" xml:"mail_send"`
+	// A (human-readable) name for the share, which can be up to 64 characters in length
+	Name string `json:"name" xml:"name"`
 }
