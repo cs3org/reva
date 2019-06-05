@@ -16,16 +16,29 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package usershareprovidersvc
 
 import (
-	// Load core gRPC services.
-	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/appprovidersvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/appregistrysvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/authsvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/preferencessvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/storageprovidersvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/storageregistrysvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/usershareprovidersvc"
-	// Add your own service here
+	"io"
+
+	usershareproviderv0alpha "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
+	"github.com/cs3org/reva/cmd/revad/grpcserver"
+	"google.golang.org/grpc"
 )
+
+func init() {
+	grpcserver.Register("usershareprovidersvc", New)
+}
+
+type service struct {
+	*usershareproviderv0alpha.UnimplementedUserShareProviderServiceServer
+}
+
+func (s *service) Close() error { return nil }
+
+// New creates a new storage provider svc
+func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
+	service := &service{&usershareproviderv0alpha.UnimplementedUserShareProviderServiceServer{}}
+	usershareproviderv0alpha.RegisterUserShareProviderServiceServer(ss, service)
+	return service, nil
+}
