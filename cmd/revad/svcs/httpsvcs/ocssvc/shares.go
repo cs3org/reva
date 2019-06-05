@@ -206,20 +206,24 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// TODO(jfd) merge userShare2ShareData with publicShare2ShareData
 func (h *SharesHandler) userShare2ShareData(share *usershareproviderv0alphapb.Share) *ShareData {
+	creator := h.resolveUserString(share.Creator)
+	owner := h.resolveUserString(share.Owner)
+	grantee := h.resolveUserID(share.Grantee.Id)
 	sd := &ShareData{
 		ID: share.Id.OpaqueId,
 		// TODO map share.resourceId to path and storage ... requires a stat call
 		// share.permissions ar mapped below
 		Permissions:          userSharePermissions2OCSPermissions(share.GetPermissions()),
 		ShareType:            shareTypeUser,
-		UIDOwner:             share.Creator,             // TODO this should come from a user object, not a string
-		DisplaynameOwner:     share.Creator,             // TODO this should come from a user object, not a string
-		STime:                share.Ctime.Seconds,       // TODO CS3 api birth time = btime
-		UIDFileOwner:         share.Owner,               // TODO this should come from a user object, not a string
-		DisplaynameFileOwner: share.Owner,               // TODO this should come from a user object, not a string
-		ShareWith:            share.Grantee.Id.OpaqueId, // TODO cs3 api should pass around the minimal user data: id (sub&iss), username, email, displayname and avatar link
-		ShareWithDisplayname: share.Grantee.Id.OpaqueId, // TODO this should come from a user object, not a string
+		UIDOwner:             creator.ID.String(),
+		DisplaynameOwner:     creator.DisplayName,
+		STime:                share.Ctime.Seconds, // TODO CS3 api birth time = btime
+		UIDFileOwner:         owner.ID.String(),
+		DisplaynameFileOwner: owner.DisplayName,
+		ShareWith:            grantee.ID.String(),
+		ShareWithDisplayname: grantee.DisplayName,
 	}
 	// actually clients should be able to GET and cache the user info themselves ...
 	// TODO check grantee type for user vs group
