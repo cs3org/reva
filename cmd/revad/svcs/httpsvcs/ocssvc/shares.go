@@ -20,6 +20,7 @@ package ocssvc
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	publicsharev0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshare/v0alpha"
@@ -110,10 +111,150 @@ func (h *SharesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch head {
 	case "shares":
-		// TODO PUT vs GET
-		h.listShares(w, r)
+		switch r.Method {
+		case "GET":
+			h.listShares(w, r)
+		case "POST":
+			h.createShare(w, r)
+		default:
+			http.Error(w, "Only GET and POST are allowed", http.StatusMethodNotAllowed)
+		}
+	case "sharees":
+		h.findSharees(w, r)
 	default:
 		http.Error(w, "Not Found", http.StatusNotFound)
+	}
+}
+
+func (h *SharesHandler) findSharees(w http.ResponseWriter, r *http.Request) {
+	// TODO implement search
+
+	res := &Response{
+		OCS: &Payload{
+			Meta: MetaOK,
+			Data: &ShareeData{
+				Exact: &ExactMatchesData{
+					Users:   []*MatchData{},
+					Groups:  []*MatchData{},
+					Remotes: []*MatchData{},
+				},
+				Users: []*MatchData{
+					&MatchData{
+						Label: "Aaliya Abernathy",
+						Value: &MatchValueData{
+							ShareType: int(shareTypeUser),
+							ShareWith: "aaliya_abernathy",
+						},
+					},
+				},
+				Groups:  []*MatchData{},
+				Remotes: []*MatchData{},
+			},
+		},
+	}
+
+	err := WriteOCSResponse(w, r, res)
+	if err != nil {
+		appctx.GetLogger(r.Context()).Error().Err(err).Msg("error writing ocs response")
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+}
+
+func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
+	shareType, err := strconv.Atoi(r.FormValue("shareType"))
+	if err != nil {
+		http.Error(w, "shareType must be an integer", http.StatusBadRequest)
+		return
+	}
+	shareWith := r.FormValue("shareWith")
+
+	if shareWith == "" {
+		http.Error(w, "missing shareWith", http.StatusBadRequest)
+		return
+	}
+
+	p := r.FormValue("path")
+	// we need to prefix the path with the user id
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		http.Error(w, "missing user in context", http.StatusInternalServerError)
+		return
+	}
+	p = u.Username + "/" + p
+	share := &ShareData{}
+
+	// by defailt only allow read permissions
+	permissions := &storageproviderv0alphapb.ResourcePermissions{
+		ListContainer:        true,
+		Stat:                 true,
+		InitiateFileDownload: true,
+	}
+
+	if shareType == int(shareTypeUser) {
+
+		// if user sharing is enabled
+		if h.userShareProviderSVC != "" {
+			uClient, err := h.getUClient()
+			if err != nil {
+				log.Error().Err(err).Msg("error getting grpc client")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			req := &usershareproviderv0alphapb.CreateShareRequest{
+				// Opaque: optional
+				ResourceId: &storageproviderv0alphapb.ResourceId{
+					StorageId: "TODO",
+					OpaqueId:  p,
+				},
+				Grant: &usershareproviderv0alphapb.ShareGrant{
+					Grantee: &storageproviderv0alphapb.Grantee{
+						Type: storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER,
+						Id: &typespb.UserId{
+							// Idp: TODO get from where?
+							OpaqueId: shareWith,
+						},
+					},
+					Permissions: &usershareproviderv0alphapb.SharePermissions{
+						Permissions: permissions,
+					},
+				},
+			}
+			res, err := uClient.CreateShare(ctx, req)
+			if err != nil {
+				log.Error().Err(err).Msg("error sending a grpc list shares request")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			if res.Status.Code != rpcpb.Code_CODE_OK {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			share = h.userShare2ShareData(res.Share)
+			share.Path = r.FormValue("path") // use path without user prefix
+		} else {
+			http.Error(w, "user sharing service not configured", http.StatusServiceUnavailable)
+			return
+		}
+
+	} else {
+		http.Error(w, "unknown share type", http.StatusBadRequest)
+		return
+	}
+
+	res := &Response{
+		OCS: &Payload{
+			Meta: MetaOK,
+			Data: share,
+		},
+	}
+
+	err = WriteOCSResponse(w, r, res)
+	if err != nil {
+		appctx.GetLogger(r.Context()).Error().Err(err).Msg("error writing ocs response")
+		w.WriteHeader(http.StatusInternalServerError)
 	}
 }
 
@@ -311,7 +452,7 @@ func (h *SharesHandler) publicShare2ShareData(share *publicsharev0alphapb.Public
 	return sd
 }
 
-// timestamp is assumed to be UTC ... just human readible ...
+// timestamp is assumed to be UTC ... just human readable ...
 // FIXME and ambiguous / error prone because there is no time zone ...
 func timestampToExpiration(t *typespb.Timestamp) string {
 	return time.Unix(int64(t.Seconds), int64(t.Nanos)).Format("2006-01-02 15:05:05")
@@ -410,4 +551,25 @@ type ShareData struct {
 	MailSend string `json:"mail_send" xml:"mail_send"`
 	// A (human-readable) name for the share, which can be up to 64 characters in length
 	Name string `json:"name" xml:"name"`
+}
+
+type ShareeData struct {
+	Exact   *ExactMatchesData `json:"exact" xml:"exact"`
+	Users   []*MatchData      `json:"users" xml:"users"`
+	Groups  []*MatchData      `json:"groups" xml:"groups"`
+	Remotes []*MatchData      `json:"remotes" xml:"remotes"`
+}
+
+type ExactMatchesData struct {
+	Users   []*MatchData `json:"users" xml:"users"`
+	Groups  []*MatchData `json:"groups" xml:"groups"`
+	Remotes []*MatchData `json:"remotes" xml:"remotes"`
+}
+type MatchData struct {
+	Label string          `json:"label" xml:"label"`
+	Value *MatchValueData `json:"value" xml:"value"`
+}
+type MatchValueData struct {
+	ShareType int    `json:"shareType" xml:"shareType"`
+	ShareWith string `json:"shareWith" xml:"shareWith"`
 }

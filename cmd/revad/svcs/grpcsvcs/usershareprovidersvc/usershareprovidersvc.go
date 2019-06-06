@@ -27,10 +27,13 @@ import (
 	"context"
 
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
+	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -86,10 +89,39 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 }
 
 func (s *service) CreateShare(ctx context.Context, req *usershareproviderv0alphapb.CreateShareRequest) (*usershareproviderv0alphapb.CreateShareResponse, error) {
+	log := appctx.GetLogger(ctx)
+
+	path := req.ResourceId.OpaqueId
+	grant := &storage.Grant{
+		Grantee: &storage.Grantee{
+			UserID: &user.ID{
+				// IDP TODO ?
+				OpaqueID: req.Grant.Grantee.Id.OpaqueId,
+			},
+			Type: storage.GranteeTypeUser, // TODO hardcoded, read from share
+		},
+		PermissionSet: &storage.PermissionSet{
+			ListContainer: req.Grant.Permissions.Permissions.ListContainer,
+			CreateContainer: req.Grant.Permissions.Permissions.CreateContainer,
+			Move: req.Grant.Permissions.Permissions.Move,
+			Delete: req.Grant.Permissions.Permissions.Delete,
+			// TODO map more permissions
+		},
+	}
+
+	log.Debug().Str("path", path).Msg("list shares")
+	// check if path exists
+	err := s.storage.AddGrant(ctx, path, grant)
+	if err != nil {
+		return nil, err
+	}
+	share := grantToShare(grant)
+
 	res := &usershareproviderv0alphapb.CreateShareResponse{
 		Status: &rpcpb.Status{
-			Code: rpcpb.Code_CODE_UNIMPLEMENTED,
+			Code: rpcpb.Code_CODE_OK,
 		},
+		Share: share,
 	}
 	return res, nil
 }
@@ -121,12 +153,22 @@ func (s *service) ListShares(ctx context.Context, req *usershareproviderv0alphap
 		if filter.Type == usershareproviderv0alphapb.ListSharesRequest_Filter_LIST_SHARES_REQUEST_FILTER_TYPE_RESOURCE_ID {
 			path := filter.GetResourceId().OpaqueId
 			log.Debug().Str("path", path).Msg("list shares")
+			// check if path exists
+			_, err := s.storage.GetMD(ctx, path)
+			if err != nil {
+				return nil, err
+			}
+
 			grants, err := s.storage.ListGrants(ctx, path)
 			if err != nil {
 				return nil, err
 			}
 			for _, grant := range grants {
-				shares = append(shares, grantToShare(grant))
+				share := grantToShare(grant)
+				share.ResourceId = filter.GetResourceId()
+				// the owner is the file owner, which is the same for all shares in this case
+				// share.Owner = md.? // TODO how do we get the owner? for eos it might be in the opaque metadata
+				shares = append(shares, share)
 			}
 		}
 	}
@@ -141,7 +183,34 @@ func (s *service) ListShares(ctx context.Context, req *usershareproviderv0alphap
 
 func grantToShare(grant *storage.Grant) *usershareproviderv0alphapb.Share {
 	share := &usershareproviderv0alphapb.Share{
-		// TODO map grant
+		// Id: FIXME
+		// ResourceId: not available in grant, set in parent
+		Permissions: &usershareproviderv0alphapb.SharePermissions{
+			Permissions: &storageproviderv0alphapb.ResourcePermissions{
+				ListContainer:   grant.PermissionSet.ListContainer,
+				CreateContainer: grant.PermissionSet.CreateContainer,
+				Move:            grant.PermissionSet.Move,
+				Delete:          grant.PermissionSet.Delete,
+				// TODO add more permissons to grant.PermissionSet
+			},
+		},
+		Grantee: &storageproviderv0alphapb.Grantee{
+			Type: storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_INVALID,
+			Id: &typespb.UserId{
+				Idp:      grant.Grantee.UserID.IDP,
+				OpaqueId: grant.Grantee.UserID.OpaqueID,
+			},
+		},
+		// Owner: not available in grant, set in parent
+		// Creator: TODO not available in grant, add it?
+		// CTime: TODO should be named btime, not available in grant, add it?
+		// Mtime: TODO not available in grant, add it?
+	}
+	switch grant.Grantee.Type {
+	case storage.GranteeTypeUser:
+		share.Grantee.Type = storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER
+	case storage.GranteeTypeGroup:
+		share.Grantee.Type = storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_GROUP
 	}
 	return share
 }

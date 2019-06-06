@@ -388,7 +388,7 @@ func (fs *eosStorage) ListFolder(ctx context.Context, fn string) ([]*storage.MD,
 	fn = fs.getInternalPath(ctx, fn)
 	eosFileInfos, err := fs.c.List(ctx, u.Username, fn)
 	if err != nil {
-		return nil, errors.Wrap(err, "storage_eos: errong listing")
+		return nil, errors.Wrap(err, "storage_eos: error listing")
 	}
 
 	finfos := []*storage.MD{}

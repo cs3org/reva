@@ -84,7 +84,7 @@ func (s *svc) setHandler() {
 
 		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("ocs routing")
 
-		if head == "v1.php" {
+		if head == "v1.php" || head == "v2.php" { // TODO v1 vs v2 ... what is the difference?
 			s.V1Handler.Handler().ServeHTTP(w, r)
 			return
 		}

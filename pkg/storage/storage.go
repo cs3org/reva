@@ -81,7 +81,7 @@ type FS interface {
 
 // MD represents the metadata about a file/directory.
 type MD struct {
-	ID          string
+	ID          string // TODO use resourceID?
 	Path        string
 	Size        uint64
 	Mtime       *Timestamp
