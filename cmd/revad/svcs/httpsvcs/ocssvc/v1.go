@@ -31,13 +31,16 @@ type V1Handler struct {
 	ConfigHandler *ConfigHandler
 }
 
-func (h *V1Handler) init(c *Config) {
+func (h *V1Handler) init(c *Config) error {
 	h.AppsHandler = new(AppsHandler)
-	h.AppsHandler.init(c)
+	if err := h.AppsHandler.init(c); err != nil {
+		return err
+	}
 	h.CloudHandler = new(CloudHandler)
 	h.CloudHandler.init(c)
 	h.ConfigHandler = new(ConfigHandler)
 	h.ConfigHandler.init(c)
+	return nil
 }
 
 // Handler handles requests

@@ -101,10 +101,10 @@ func (s *service) CreateShare(ctx context.Context, req *usershareproviderv0alpha
 			Type: storage.GranteeTypeUser, // TODO hardcoded, read from share
 		},
 		PermissionSet: &storage.PermissionSet{
-			ListContainer: req.Grant.Permissions.Permissions.ListContainer,
+			ListContainer:   req.Grant.Permissions.Permissions.ListContainer,
 			CreateContainer: req.Grant.Permissions.Permissions.CreateContainer,
-			Move: req.Grant.Permissions.Permissions.Move,
-			Delete: req.Grant.Permissions.Permissions.Delete,
+			Move:            req.Grant.Permissions.Permissions.Move,
+			Delete:          req.Grant.Permissions.Permissions.Delete,
 			// TODO map more permissions
 		},
 	}

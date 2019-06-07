@@ -123,6 +123,50 @@ func (m *manager) GetUser(ctx context.Context, username string) (*user.User, err
 	}, nil
 }
 
+func (m *manager) FindUsers(ctx context.Context, query string) ([]*user.User, error) {
+	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.hostname, m.port), &tls.Config{InsecureSkipVerify: true})
+	if err != nil {
+		return nil, err
+	}
+	defer l.Close()
+
+	// First bind with a read only user
+	err = l.Bind(m.bindUsername, m.bindPassword)
+	if err != nil {
+		return nil, err
+	}
+
+	// Search for the given clientID
+	searchRequest := ldap.NewSearchRequest(
+		m.baseDN,
+		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
+		fmt.Sprintf(m.filter, query),                 // TODO this is screaming for errors if filter contains >1 %s
+		[]string{"dn", "uid", "mail", "displayName"}, // TODO mapping
+		nil,
+	)
+
+	sr, err := l.Search(searchRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	users := []*user.User{}
+
+	for _, entry := range sr.Entries {
+		user := &user.User{
+			// TODO map uuid, userPrincipalName as sub? -> actually objectSID for AD is recommended by MS. is also used for ACLs on NTFS
+			// TODO map base dn as iss?
+			Username:    entry.GetAttributeValue("uid"),
+			Groups:      []string{},
+			Mail:        entry.GetAttributeValue("mail"),
+			DisplayName: entry.GetAttributeValue("displayName"),
+		}
+		users = append(users, user)
+	}
+
+	return users, nil
+}
+
 func (m *manager) GetUserGroups(ctx context.Context, username string) ([]string, error) {
 	return []string{}, nil // FIXME implement GetUserGroups for ldap user manager
 }

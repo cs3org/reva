@@ -33,11 +33,13 @@ func init() {
 
 // Config holds the config options that need to be passed down to all ocs handlers
 type Config struct {
-	Prefix                 string           `mapstructure:"prefix"`
-	Config                 ConfigData       `mapstructure:"config"`
-	Capabilities           CapabilitiesData `mapstructure:"capabilities"`
-	PublicShareProviderSVC string           `mapstructure:"publicshareprovidersvc"`
-	UserShareProviderSVC   string           `mapstructure:"usershareprovidersvc"`
+	Prefix                 string                            `mapstructure:"prefix"`
+	Config                 ConfigData                        `mapstructure:"config"`
+	Capabilities           CapabilitiesData                  `mapstructure:"capabilities"`
+	PublicShareProviderSVC string                            `mapstructure:"publicshareprovidersvc"`
+	UserShareProviderSVC   string                            `mapstructure:"usershareprovidersvc"`
+	UserManager            string                            `mapstructure:"user_manager"`
+	UserManagers           map[string]map[string]interface{} `mapstructure:"user_managers"`
 }
 
 type svc struct {
@@ -59,7 +61,9 @@ func New(m map[string]interface{}) (httpsvcs.Service, error) {
 	}
 
 	// initialize handlers and set default configs
-	s.V1Handler.init(conf)
+	if err := s.V1Handler.init(conf); err != nil {
+		return nil, err
+	}
 
 	s.setHandler()
 	return s, nil

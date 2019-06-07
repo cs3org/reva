@@ -29,9 +29,9 @@ type AppsHandler struct {
 	SharesHandler *SharesHandler
 }
 
-func (h *AppsHandler) init(c *Config) {
+func (h *AppsHandler) init(c *Config) error {
 	h.SharesHandler = new(SharesHandler)
-	h.SharesHandler.init(c)
+	return h.SharesHandler.init(c)
 }
 
 // ServeHTTP routes the known apps

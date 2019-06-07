@@ -75,4 +75,5 @@ type Manager interface {
 	GetUser(ctx context.Context, username string) (*User, error)
 	GetUserGroups(ctx context.Context, username string) ([]string, error)
 	IsInGroup(ctx context.Context, username, group string) (bool, error)
+	FindUsers(ctx context.Context, query string) ([]*User, error)
 }

@@ -46,6 +46,10 @@ func (m *manager) GetUser(ctx context.Context, username string) (*user.User, err
 	return nil, userNotFoundError(username)
 }
 
+func (m *manager) FindUsers(ctx context.Context, query string) ([]*user.User, error) {
+	return []*user.User{}, nil // FIXME implement IsInGroup for demo user manager
+}
+
 func (m *manager) GetUserGroups(ctx context.Context, username string) ([]string, error) {
 	user, err := m.GetUser(ctx, username)
 	if err != nil {

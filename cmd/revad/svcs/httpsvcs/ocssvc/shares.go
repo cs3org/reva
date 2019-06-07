@@ -19,7 +19,9 @@
 package ocssvc
 
 import (
+	"fmt"
 	"net/http"
+	"path"
 	"strconv"
 	"time"
 
@@ -32,6 +34,7 @@ import (
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/user"
+	usermgr "github.com/cs3org/reva/pkg/user/manager/registry"
 	"google.golang.org/grpc"
 )
 
@@ -43,11 +46,27 @@ type SharesHandler struct {
 	publicShareProviderSVC string
 	pConn                  *grpc.ClientConn
 	pClient                publicsharev0alphapb.PublicShareProviderServiceClient
+	userManager            user.Manager
 }
 
-func (h *SharesHandler) init(c *Config) {
+func (h *SharesHandler) init(c *Config) error {
 	h.userShareProviderSVC = c.UserShareProviderSVC
 	h.publicShareProviderSVC = c.PublicShareProviderSVC
+
+	userManager, err := getUserManager(c.UserManager, c.UserManagers)
+	if err != nil {
+		return err
+	}
+	h.userManager = userManager
+	return nil
+}
+
+func getUserManager(manager string, m map[string]map[string]interface{}) (user.Manager, error) {
+	if f, ok := usermgr.NewFuncs[manager]; ok {
+		return f(m[manager])
+	}
+
+	return nil, fmt.Errorf("driver %s not found for user manager", manager)
 }
 
 func (h *SharesHandler) getUConn() (*grpc.ClientConn, error) {
@@ -75,6 +94,7 @@ func (h *SharesHandler) getUClient() (usershareproviderv0alphapb.UserShareProvid
 	h.uClient = usershareproviderv0alphapb.NewUserShareProviderServiceClient(conn)
 	return h.uClient, nil
 }
+
 func (h *SharesHandler) getPConn() (*grpc.ClientConn, error) {
 	if h.pConn != nil {
 		return h.pConn, nil
@@ -127,7 +147,32 @@ func (h *SharesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SharesHandler) findSharees(w http.ResponseWriter, r *http.Request) {
-	// TODO implement search
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
+	search := r.URL.Query().Get("search")
+
+	if search == "" {
+		http.Error(w, "search must not be empty", http.StatusBadRequest)
+		return
+	}
+	// TODO sanitize query
+
+	users, err := h.userManager.FindUsers(ctx, search)
+	if err != nil {
+		log.Error().Err(err).Msg("error searching users")
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+
+	log.Debug().Int("count", len(users)).Str("search", search).Msg("users found")
+
+	matches := []*MatchData{}
+
+	for _, user := range users {
+		match := h.userAsMatch(user)
+		log.Debug().Interface("user", user).Interface("match", match).Msg("mapped")
+		matches = append(matches, match)
+	}
 
 	res := &Response{
 		OCS: &Payload{
@@ -138,25 +183,27 @@ func (h *SharesHandler) findSharees(w http.ResponseWriter, r *http.Request) {
 					Groups:  []*MatchData{},
 					Remotes: []*MatchData{},
 				},
-				Users: []*MatchData{
-					&MatchData{
-						Label: "Aaliya Abernathy",
-						Value: &MatchValueData{
-							ShareType: int(shareTypeUser),
-							ShareWith: "aaliya_abernathy",
-						},
-					},
-				},
+				Users:   matches,
 				Groups:  []*MatchData{},
 				Remotes: []*MatchData{},
 			},
 		},
 	}
 
-	err := WriteOCSResponse(w, r, res)
+	err = WriteOCSResponse(w, r, res)
 	if err != nil {
-		appctx.GetLogger(r.Context()).Error().Err(err).Msg("error writing ocs response")
+		log.Error().Err(err).Msg("error writing ocs response")
 		w.WriteHeader(http.StatusInternalServerError)
+	}
+}
+
+func (h *SharesHandler) userAsMatch(u *user.User) *MatchData {
+	return &MatchData{
+		Label: u.DisplayName,
+		Value: &MatchValueData{
+			ShareType: int(shareTypeUser),
+			ShareWith: u.Username,
+		},
 	}
 }
 
@@ -177,16 +224,19 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	p := r.FormValue("path")
+
 	// we need to prefix the path with the user id
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
 		http.Error(w, "missing user in context", http.StatusInternalServerError)
 		return
 	}
-	p = u.Username + "/" + p
+	// TODO how do we get the home of a user? The path in the sharing api is relative to the users home
+	p = path.Join("/", u.Username, p)
+
 	share := &ShareData{}
 
-	// by defailt only allow read permissions
+	// by defaiut only allow read permissions
 	permissions := &storageproviderv0alphapb.ResourcePermissions{
 		ListContainer:        true,
 		Stat:                 true,
@@ -264,14 +314,22 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 
 	filters := []*usershareproviderv0alphapb.ListSharesRequest_Filter{}
 
-	path := r.URL.Query().Get("path")
-	if path != "" {
+	p := r.URL.Query().Get("path")
+	if p != "" {
+		// we need to prefix the path with the user id
+		u, ok := user.ContextGetUser(ctx)
+		if !ok {
+			http.Error(w, "missing user in context", http.StatusInternalServerError)
+			return
+		}
+		// TODO how do we get the home of a user? The path in the sharing api is relative to the users home
+		p = path.Join("/", u.Username, p)
 		filters = append(filters, &usershareproviderv0alphapb.ListSharesRequest_Filter{
 			Type: usershareproviderv0alphapb.ListSharesRequest_Filter_LIST_SHARES_REQUEST_FILTER_TYPE_RESOURCE_ID,
 			Term: &usershareproviderv0alphapb.ListSharesRequest_Filter_ResourceId{
 				ResourceId: &storageproviderv0alphapb.ResourceId{
 					StorageId: "", // TODO(jfd) lookup correct storage, for now this always uses the configured storage driver, maybe the combined storage can delegate this?
-					OpaqueId:  path,
+					OpaqueId:  p,
 				},
 			},
 		})
@@ -553,6 +611,7 @@ type ShareData struct {
 	Name string `json:"name" xml:"name"`
 }
 
+// ShareeData holds share recipaent search results
 type ShareeData struct {
 	Exact   *ExactMatchesData `json:"exact" xml:"exact"`
 	Users   []*MatchData      `json:"users" xml:"users"`
@@ -560,15 +619,20 @@ type ShareeData struct {
 	Remotes []*MatchData      `json:"remotes" xml:"remotes"`
 }
 
+// ExactMatchesData hold exact matches
 type ExactMatchesData struct {
 	Users   []*MatchData `json:"users" xml:"users"`
 	Groups  []*MatchData `json:"groups" xml:"groups"`
 	Remotes []*MatchData `json:"remotes" xml:"remotes"`
 }
+
+// MatchData describes a single match
 type MatchData struct {
 	Label string          `json:"label" xml:"label"`
 	Value *MatchValueData `json:"value" xml:"value"`
 }
+
+// MatchValueData holds the type and actual value
 type MatchValueData struct {
 	ShareType int    `json:"shareType" xml:"shareType"`
 	ShareWith string `json:"shareWith" xml:"shareWith"`
