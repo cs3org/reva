@@ -34,6 +34,7 @@ import (
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/reqid"
+	"github.com/cs3org/reva/pkg/storage/acl"
 	"github.com/gofrs/uuid"
 	"github.com/pkg/errors"
 )
@@ -43,17 +44,6 @@ const (
 	rootGroup     = "root"
 	versionPrefix = ".sys.v#."
 )
-
-var (
-	errInvalidACL = errors.New("invalid acl")
-)
-
-// ACL represents an EOS ACL.
-type ACL struct {
-	Target string
-	Mode   string
-	Type   string
-}
 
 // Options to configure the Client.
 type Options struct {
@@ -223,19 +213,22 @@ func (c *Client) executeEOS(ctx context.Context, cmd *exec.Cmd) (string, string,
 }
 
 // AddACL adds an new acl to EOS with the given aclType.
-func (c *Client) AddACL(ctx context.Context, username, path string, a *ACL) error {
-	aclManager, err := c.getACLForPath(ctx, username, path)
+func (c *Client) AddACL(ctx context.Context, username, path string, a *acl.Entry) error {
+	acls, err := c.getACLForPath(ctx, username, path)
 	if err != nil {
 		return err
 	}
 
-	aclManager.deleteEntry(ctx, a.Type, a.Target)
-	newEntry, err := newACLEntry(ctx, strings.Join([]string{a.Type, a.Target, a.Mode}, ":"))
+	// since EOS Citrine ACLs are is stored with uid, we need to convert username to uid
+	a.Qualifier, err = getUID(a.Qualifier)
 	if err != nil {
 		return err
 	}
-	aclManager.aclEntries = append(aclManager.aclEntries, newEntry)
-	sysACL := aclManager.serialize()
+	err = acls.SetEntry(a.Type, a.Qualifier, a.Permissions)
+	if err != nil {
+		return err
+	}
+	sysACL := acls.Serialize()
 
 	// setting of the sys.acl is only possible from root user
 	unixUser, err := c.getUnixUser(rootUser)
@@ -249,30 +242,20 @@ func (c *Client) AddACL(ctx context.Context, username, path string, a *ACL) erro
 
 }
 
-// deleteEntry will be called with username but acl is stored with uid, we need to convert back uid
-// to username.
-func (m *aclManager) deleteEntry(ctx context.Context, aclType, target string) {
-	for i, e := range m.aclEntries {
-		username, err := getUsername(e.recipient)
-		if err != nil {
-			continue
-		}
-		if username == target && e.aclType == aclType {
-			m.aclEntries = append(m.aclEntries[:i], m.aclEntries[i+1:]...)
-			return
-		}
-	}
-}
-
 // RemoveACL removes the acl from EOS.
 func (c *Client) RemoveACL(ctx context.Context, username, path string, aclType string, recipient string) error {
-	aclManager, err := c.getACLForPath(ctx, username, path)
+	acls, err := c.getACLForPath(ctx, username, path)
 	if err != nil {
 		return err
 	}
 
-	aclManager.deleteEntry(ctx, aclType, recipient)
-	sysACL := aclManager.serialize()
+	// since EOS Citrine ACLs are is stored with uid, we need to convert username to uid
+	uid, err := getUID(recipient)
+	if err != nil {
+		return err
+	}
+	acls.DeleteEntry(aclType, uid)
+	sysACL := acls.Serialize()
 
 	// setting of the sys.acl is only possible from root user
 	unixUser, err := c.getUnixUser(rootUser)
@@ -287,18 +270,18 @@ func (c *Client) RemoveACL(ctx context.Context, username, path string, aclType s
 }
 
 // UpdateACL updates the EOS acl.
-func (c *Client) UpdateACL(ctx context.Context, username, path string, a *ACL) error {
+func (c *Client) UpdateACL(ctx context.Context, username, path string, a *acl.Entry) error {
 	return c.AddACL(ctx, username, path, a)
 }
 
 // GetACL for a file
-func (c *Client) GetACL(ctx context.Context, username, path, aclType, target string) (*ACL, error) {
+func (c *Client) GetACL(ctx context.Context, username, path, aclType, target string) (*acl.Entry, error) {
 	acls, err := c.ListACLs(ctx, username, path)
 	if err != nil {
 		return nil, err
 	}
 	for _, a := range acls {
-		if a.Type == aclType && a.Target == target {
+		if a.Type == aclType && a.Qualifier == target {
 			return a, nil
 		}
 	}
@@ -314,43 +297,45 @@ func getUsername(uid string) (string, error) {
 	return user.Username, nil
 }
 
+func getUID(username string) (string, error) {
+	user, err := gouser.Lookup(username)
+	if err != nil {
+		return "", err
+	}
+	return user.Uid, nil
+}
+
 // ListACLs returns the list of ACLs present under the given path.
 // EOS returns uids/gid for Citrine version and usernames for older versions.
 // For Citire we need to convert back the uid back to username.
-func (c *Client) ListACLs(ctx context.Context, username, path string) ([]*ACL, error) {
+func (c *Client) ListACLs(ctx context.Context, username, path string) ([]*acl.Entry, error) {
 	log := appctx.GetLogger(ctx)
 
-	finfo, err := c.GetFileInfoByPath(ctx, username, path)
+	parsedACLs, err := c.getACLForPath(ctx, username, path)
 	if err != nil {
 		return nil, err
 	}
 
-	aclManager := c.newACLManager(ctx, finfo.SysACL)
-	acls := []*ACL{}
-	for _, a := range aclManager.getEntries() {
-		username, err := getUsername(a.recipient)
+	acls := []*acl.Entry{}
+	for _, acl := range parsedACLs.Entries {
+		// since EOS Citrine ACLs are is stored with uid, we need to convert uid to userame
+		acl.Qualifier, err = getUsername(acl.Qualifier)
 		if err != nil {
 			log.Warn().Err(err).Str("username", username).Msg("acl entry for user is invalid")
 			continue
-		}
-		acl := &ACL{
-			Target: username,
-			Mode:   a.mode,
-			Type:   a.aclType,
 		}
 		acls = append(acls, acl)
 	}
 	return acls, nil
 }
 
-func (c *Client) getACLForPath(ctx context.Context, username, path string) (*aclManager, error) {
+func (c *Client) getACLForPath(ctx context.Context, username, path string) (*acl.ACLs, error) {
 	finfo, err := c.GetFileInfoByPath(ctx, username, path)
 	if err != nil {
 		return nil, err
 	}
 
-	aclManager := c.newACLManager(ctx, finfo.SysACL)
-	return aclManager, nil
+	return acl.Parse(finfo.SysACL, acl.ShortTextForm)
 }
 
 // GetFileInfoByInode returns the FileInfo by the given inode
@@ -720,6 +705,14 @@ func (c *Client) mapToFileInfo(kv map[string]string) (*FileInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+	uid, err := strconv.ParseUint(kv["uid"], 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	gid, err := strconv.ParseUint(kv["gid"], 10, 64)
+	if err != nil {
+		return nil, err
+	}
 
 	var treeSize uint64
 	// treeSize is only for containers, so we check
@@ -777,6 +770,8 @@ func (c *Client) mapToFileInfo(kv map[string]string) (*FileInfo, error) {
 		File:       kv["file"],
 		Inode:      inode,
 		FID:        fid,
+		UID:        uid,
+		GID:        gid,
 		ETag:       kv["etag"],
 		Size:       size,
 		TreeSize:   treeSize,
@@ -795,6 +790,8 @@ type FileInfo struct {
 	File       string `json:"eos_file"`
 	Inode      uint64 `json:"inode"`
 	FID        uint64 `json:"fid"`
+	UID        uint64 `json:"uid"`
+	GID        uint64 `json:"gid"`
 	ETag       string
 	TreeSize   uint64
 	MTimeSec   uint64
@@ -813,63 +810,6 @@ type DeletedEntry struct {
 	Size          uint64
 	DeletionMTime uint64
 	IsDir         bool
-}
-
-type aclManager struct {
-	aclEntries []*aclEntry
-}
-
-func (c *Client) newACLManager(ctx context.Context, sysACL string) *aclManager {
-	tokens := strings.Split(sysACL, ",")
-	aclEntries := []*aclEntry{}
-	for _, t := range tokens {
-		aclEntry, err := newACLEntry(ctx, t)
-		if err == nil {
-			aclEntries = append(aclEntries, aclEntry)
-		}
-	}
-
-	return &aclManager{aclEntries: aclEntries}
-}
-
-func (m *aclManager) getEntries() []*aclEntry {
-	return m.aclEntries
-}
-
-func (m *aclManager) serialize() string {
-	sysACL := []string{}
-	for _, e := range m.aclEntries {
-		sysACL = append(sysACL, e.serialize())
-	}
-	return strings.Join(sysACL, ",")
-}
-
-type aclEntry struct {
-	aclType   string
-	recipient string
-	mode      string
-}
-
-// u:gonzalhu:rw
-func newACLEntry(ctx context.Context, singleSysACL string) (*aclEntry, error) {
-	tokens := strings.Split(singleSysACL, ":")
-	if len(tokens) != 3 {
-		return nil, errInvalidACL
-	}
-
-	aclType := tokens[0]
-	target := tokens[1]
-	mode := tokens[2]
-
-	return &aclEntry{
-		aclType:   aclType,
-		recipient: target,
-		mode:      mode,
-	}, nil
-}
-
-func (a *aclEntry) serialize() string {
-	return strings.Join([]string{string(a.aclType), a.recipient, a.mode}, ":")
 }
 
 type notFoundError string
