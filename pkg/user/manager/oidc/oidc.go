@@ -56,7 +56,7 @@ func (m *manager) GetUser(ctx context.Context, username string) (*user.User, err
 }
 
 func (m *manager) FindUsers(ctx context.Context, query string) ([]*user.User, error) {
-	return []*user.User{}, nil // FIXME implement IsInGroup for oidc user manager
+	return []*user.User{}, nil // FIXME implement FindUsers for oidc user manager
 }
 
 func (m *manager) GetUserGroups(ctx context.Context, username string) ([]string, error) {
