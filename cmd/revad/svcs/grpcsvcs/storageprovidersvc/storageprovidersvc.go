@@ -827,6 +827,7 @@ func (s *service) toInfo(md *storage.MD) *storageproviderv0alphapb.ResourceInfo 
 		Type:     getResourceType(md.IsDir),
 		Id:       id,
 		Path:     md.Path,
+		Owner:    md.Owner,
 		Checksum: checksum,
 		Etag:     md.Etag,
 		MimeType: md.Mime,

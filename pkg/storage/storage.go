@@ -83,6 +83,7 @@ type FS interface {
 type MD struct {
 	ID          string // TODO use resourceID?
 	Path        string
+	Owner       string
 	Size        uint64
 	Mtime       *Timestamp
 	IsDir       bool

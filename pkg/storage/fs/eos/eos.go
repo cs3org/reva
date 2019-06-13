@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	gouser "os/user"
 	"path"
 	"regexp"
 	"strconv"
@@ -30,6 +31,7 @@ import (
 
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/eosclient"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage"
@@ -564,9 +566,16 @@ func (fs *eosStorage) convertToMD(ctx context.Context, eosFileInfo *eosclient.Fi
 	if eosFileInfo.IsDir {
 		size = eosFileInfo.TreeSize
 	}
+	username, err := getUsername(eosFileInfo.UID)
+	if err != nil {
+		log := appctx.GetLogger(ctx)
+		log.Warn().Uint64("uid", eosFileInfo.UID).Msg("could not lookup userid, leaving empty")
+		username = ""
+	}
 	return &storage.MD{
 		ID:          fmt.Sprintf("%d", eosFileInfo.Inode),
 		Path:        path,
+		Owner:       username,
 		IsDir:       eosFileInfo.IsDir,
 		Etag:        eosFileInfo.ETag,
 		Mime:        mime.Detect(eosFileInfo.IsDir, path),
@@ -578,6 +587,15 @@ func (fs *eosStorage) convertToMD(ctx context.Context, eosFileInfo *eosclient.Fi
 		},
 		Opaque: fs.getEosMetadata(eosFileInfo),
 	}
+}
+
+func getUsername(uid uint64) (string, error) {
+	s := strconv.FormatUint(uid, 10)
+	user, err := gouser.LookupId(s)
+	if err != nil {
+		return "", err
+	}
+	return user.Username, nil
 }
 
 type eosSysMetadata struct {
