@@ -36,8 +36,9 @@ type Config struct {
 	Prefix                 string                            `mapstructure:"prefix"`
 	Config                 ConfigData                        `mapstructure:"config"`
 	Capabilities           CapabilitiesData                  `mapstructure:"capabilities"`
-	PublicShareProviderSVC string                            `mapstructure:"publicshareprovidersvc"`
+	StorageProviderSVC     string                            `mapstructure:"storageprovidersvc"`
 	UserShareProviderSVC   string                            `mapstructure:"usershareprovidersvc"`
+	PublicShareProviderSVC string                            `mapstructure:"publicshareprovidersvc"`
 	UserManager            string                            `mapstructure:"user_manager"`
 	UserManagers           map[string]map[string]interface{} `mapstructure:"user_managers"`
 }

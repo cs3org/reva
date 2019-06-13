@@ -40,6 +40,9 @@ import (
 
 // SharesHandler implements the ownCloud sharing API
 type SharesHandler struct {
+	storageProviderSVC     string
+	sConn                  *grpc.ClientConn
+	sClient                storageproviderv0alphapb.StorageProviderServiceClient
 	userShareProviderSVC   string
 	uConn                  *grpc.ClientConn
 	uClient                usershareproviderv0alphapb.UserShareProviderServiceClient
@@ -50,6 +53,9 @@ type SharesHandler struct {
 }
 
 func (h *SharesHandler) init(c *Config) error {
+
+	// TODO(jfd) lookup correct storage, for now this always uses the configured storage driver, maybe the combined storage can delegate this?
+	h.storageProviderSVC = c.StorageProviderSVC
 	h.userShareProviderSVC = c.UserShareProviderSVC
 	h.publicShareProviderSVC = c.PublicShareProviderSVC
 
@@ -67,6 +73,32 @@ func getUserManager(manager string, m map[string]map[string]interface{}) (user.M
 	}
 
 	return nil, fmt.Errorf("driver %s not found for user manager", manager)
+}
+
+func (h *SharesHandler) getSConn() (*grpc.ClientConn, error) {
+	if h.sConn != nil {
+		return h.sConn, nil
+	}
+
+	conn, err := grpc.Dial(h.storageProviderSVC, grpc.WithInsecure())
+	if err != nil {
+		return nil, err
+	}
+	h.sConn = conn
+	return h.sConn, nil
+}
+
+func (h *SharesHandler) getSClient() (storageproviderv0alphapb.StorageProviderServiceClient, error) {
+	if h.sClient != nil {
+		return h.sClient, nil
+	}
+
+	conn, err := h.getSConn()
+	if err != nil {
+		return nil, err
+	}
+	h.sClient = storageproviderv0alphapb.NewStorageProviderServiceClient(conn)
+	return h.sClient, nil
 }
 
 func (h *SharesHandler) getUConn() (*grpc.ClientConn, error) {
