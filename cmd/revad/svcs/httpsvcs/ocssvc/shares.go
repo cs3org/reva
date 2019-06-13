@@ -345,8 +345,17 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(ctx)
 
 	filters := []*usershareproviderv0alphapb.ListSharesRequest_Filter{}
+	var info *storageproviderv0alphapb.ResourceInfo
+
+	// default to xml
+	q := r.URL.Query()
+	if q.Get("format") == "" {
+		q.Set("format", "xml")
+		r.URL.RawQuery = q.Encode()
+	}
 
 	p := r.URL.Query().Get("path")
+	log.Debug().Str("path", p).Msg("listShares")
 	if p != "" {
 		// we need to prefix the path with the user id
 		u, ok := user.ContextGetUser(ctx)
@@ -355,14 +364,43 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// TODO how do we get the home of a user? The path in the sharing api is relative to the users home
-		p = path.Join("/", u.Username, p)
+		fn := path.Join("/", u.Username, p)
+
+		log.Debug().Str("path", p).Str("fn", fn).Interface("user", u).Msg("resolved path for user")
+
+		// first check if the file exists
+		sClient, err := h.getSClient()
+
+		ref := &storageproviderv0alphapb.Reference{
+			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+		}
+		req := &storageproviderv0alphapb.StatRequest{Ref: ref}
+		res, err := sClient.Stat(ctx, req)
+		if err != nil {
+			log.Error().Err(err).Msg("error sending a grpc stat request")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		if res.Status.Code != rpcpb.Code_CODE_OK {
+			if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		info = res.Info
+
+		log.Debug().Interface("info", info).Msg("path found")
+
 		filters = append(filters, &usershareproviderv0alphapb.ListSharesRequest_Filter{
 			Type: usershareproviderv0alphapb.ListSharesRequest_Filter_LIST_SHARES_REQUEST_FILTER_TYPE_RESOURCE_ID,
 			Term: &usershareproviderv0alphapb.ListSharesRequest_Filter_ResourceId{
-				ResourceId: &storageproviderv0alphapb.ResourceId{
-					StorageId: "", // TODO(jfd) lookup correct storage, for now this always uses the configured storage driver, maybe the combined storage can delegate this?
-					OpaqueId:  p,
-				},
+				// TODO the usershareprovider currently expects a path as the opacque id. It must accept proper ResourceIDs
+				// ResourceId: info.Id,
+				ResourceId: &storageproviderv0alphapb.ResourceId{StorageId: info.Id.StorageId, OpaqueId: fn},
 			},
 		})
 	}
@@ -391,7 +429,10 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		for _, s := range res.Shares {
-			shares = append(shares, h.userShare2ShareData(s))
+			share := h.userShare2ShareData(s)
+			h.addFileInfo(share, info)
+			log.Debug().Interface("share", s).Interface("info", info).Interface("shareData", share).Msg("mapped")
+			shares = append(shares, share)
 		}
 	}
 	// TODO fetch group shares
@@ -417,7 +458,10 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		for _, s := range res.Share {
-			shares = append(shares, h.publicShare2ShareData(s))
+			share := h.publicShare2ShareData(s)
+			h.addFileInfo(share, info)
+			log.Debug().Interface("share", s).Interface("info", info).Interface("shareData", share).Msg("mapped")
+			shares = append(shares, share)
 		}
 	}
 
@@ -437,24 +481,57 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *SharesHandler) addFileInfo(s *ShareData, info *storageproviderv0alphapb.ResourceInfo) {
+	if info != nil {
+		// TODO The owner is not set in the storage stat metadata ...
+		owner := h.resolveUserString(info.Owner)
+		s.MimeType = info.MimeType
+		// TODO STime:     &typespb.Timestamp{Seconds: info.Mtime.Seconds, Nanos: info.Mtime.Nanos},
+		s.StorageID = info.Id.StorageId
+		// TODO Storage: int
+		s.ItemSource = info.Id.OpaqueId
+		s.FileSource = info.Id.OpaqueId
+		s.FileTarget = path.Join("/", path.Base(info.Path))
+		s.Path = info.Path // TODO hm this might have to be relative to the users home ...
+		// TODO FileParent:
+
+		// file owner might not yet be set. Use file info
+		if s.UIDFileOwner == "" {
+			s.UIDFileOwner = owner.ID.String()
+		}
+		if s.DisplaynameFileOwner == "" {
+			s.DisplaynameFileOwner = owner.DisplayName
+		}
+		// share owner might not yet be set. Use file info
+		if s.UIDOwner == "" {
+			s.UIDOwner = owner.ID.String()
+		}
+		if s.DisplaynameOwner == "" {
+			s.DisplaynameOwner = owner.DisplayName
+		}
+	}
+}
+
 // TODO(jfd) merge userShare2ShareData with publicShare2ShareData
 func (h *SharesHandler) userShare2ShareData(share *usershareproviderv0alphapb.Share) *ShareData {
 	creator := h.resolveUserString(share.Creator)
 	owner := h.resolveUserString(share.Owner)
 	grantee := h.resolveUserID(share.Grantee.Id)
 	sd := &ShareData{
-		ID: share.Id.OpaqueId,
-		// TODO map share.resourceId to path and storage ... requires a stat call
-		// share.permissions ar mapped below
 		Permissions:          userSharePermissions2OCSPermissions(share.GetPermissions()),
 		ShareType:            shareTypeUser,
 		UIDOwner:             creator.ID.String(),
 		DisplaynameOwner:     creator.DisplayName,
-		STime:                share.Ctime.Seconds, // TODO CS3 api birth time = btime
 		UIDFileOwner:         owner.ID.String(),
 		DisplaynameFileOwner: owner.DisplayName,
 		ShareWith:            grantee.ID.String(),
 		ShareWithDisplayname: grantee.DisplayName,
+	}
+	if share.Id != nil && share.Id.OpaqueId != "" {
+		sd.ID = share.Id.OpaqueId
+	}
+	if share.Ctime != nil {
+		sd.STime = share.Ctime.Seconds // TODO CS3 api birth time = btime
 	}
 	// actually clients should be able to GET and cache the user info themselves ...
 	// TODO check grantee type for user vs group
@@ -479,7 +556,7 @@ func publicSharePermissions2OCSPermissions(sp *publicsharev0alphapb.PublicShareP
 func permissions2OCSPermissions(p *storageproviderv0alphapb.ResourcePermissions) Permissions {
 	permissions := permissionInvalid
 	if p != nil {
-		if p.Stat && p.ListContainer && p.InitiateFileDownload {
+		if p.ListContainer {
 			permissions += permissionRead
 		}
 		if p.InitiateFileUpload {
@@ -505,7 +582,8 @@ func (h *SharesHandler) resolveUserID(userID *typespb.UserId) *user.User {
 			IDP:      userID.Idp,
 			OpaqueID: userID.OpaqueId,
 		},
-		DisplayName: "unknown",
+		Username:    userID.OpaqueId,
+		DisplayName: userID.OpaqueId,
 	}
 }
 
@@ -554,6 +632,7 @@ type SharesData struct {
 }
 
 // ShareType indicates the type of share
+// TODO Phoenix should be able to handle int shareType in json
 type ShareType int
 
 const (

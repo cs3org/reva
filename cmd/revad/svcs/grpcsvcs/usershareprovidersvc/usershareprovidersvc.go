@@ -154,7 +154,7 @@ func (s *service) ListShares(ctx context.Context, req *usershareproviderv0alphap
 			path := filter.GetResourceId().OpaqueId
 			log.Debug().Str("path", path).Msg("list shares")
 			// check if path exists
-			_, err := s.storage.GetMD(ctx, path)
+			md, err := s.storage.GetMD(ctx, path)
 			if err != nil {
 				return nil, err
 			}
@@ -166,8 +166,11 @@ func (s *service) ListShares(ctx context.Context, req *usershareproviderv0alphap
 			for _, grant := range grants {
 				share := grantToShare(grant)
 				share.ResourceId = filter.GetResourceId()
+				// TODO check this kind of id works not only for acls ...
+				share.Id.OpaqueId = share.Id.OpaqueId + "@" + share.ResourceId.OpaqueId
 				// the owner is the file owner, which is the same for all shares in this case
-				// share.Owner = md.? // TODO how do we get the owner? for eos it might be in the opaque metadata
+				// share.Owner = md.? // TODO how do we get the owner? for eos it might be in the opaque metadata, no .. by asking the broker for the owner?
+				share.Mtime = &typespb.Timestamp{Seconds: md.Mtime.Seconds, Nanos: md.Mtime.Nanos}
 				shares = append(shares, share)
 			}
 		}
@@ -183,7 +186,7 @@ func (s *service) ListShares(ctx context.Context, req *usershareproviderv0alphap
 
 func grantToShare(grant *storage.Grant) *usershareproviderv0alphapb.Share {
 	share := &usershareproviderv0alphapb.Share{
-		// Id: FIXME
+		Id: &usershareproviderv0alphapb.ShareId{},
 		// ResourceId: not available in grant, set in parent
 		Permissions: &usershareproviderv0alphapb.SharePermissions{
 			Permissions: &storageproviderv0alphapb.ResourcePermissions{
@@ -203,14 +206,21 @@ func grantToShare(grant *storage.Grant) *usershareproviderv0alphapb.Share {
 		},
 		// Owner: not available in grant, set in parent
 		// Creator: TODO not available in grant, add it?
-		// CTime: TODO should be named btime, not available in grant, add it?
+		Ctime: &typespb.Timestamp{}, // TODO should be named btime, not available in grant, add it?
 		// Mtime: TODO not available in grant, add it?
 	}
 	switch grant.Grantee.Type {
 	case storage.GranteeTypeUser:
 		share.Grantee.Type = storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER
+		// FIXME this kind of id works only for acls ...
+		// it becomes unique if prefixed with the fileid ...
+		share.Id.OpaqueId = "u:" + grant.Grantee.UserID.OpaqueID
 	case storage.GranteeTypeGroup:
 		share.Grantee.Type = storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_GROUP
+		// FIXME this kind of id works only for acls ...
+		// it becomes unique if prefixed with the fileid ...
+		share.Id.OpaqueId = "g:" + grant.Grantee.UserID.OpaqueID
+		// FIXME grantee.UserID ... might be a group ... rename to identifier?
 	}
 	return share
 }
