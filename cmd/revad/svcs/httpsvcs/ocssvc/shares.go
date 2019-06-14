@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	publicsharev0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshare/v0alpha"
@@ -168,8 +169,11 @@ func (h *SharesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.listShares(w, r)
 		case "POST":
 			h.createShare(w, r)
+		case "PUT":
+			// TODO PUT is used with incomplete data to update a share 🤦
+			h.updateShare(w, r)
 		default:
-			http.Error(w, "Only GET and POST are allowed", http.StatusMethodNotAllowed)
+			http.Error(w, "Only GET, POST and PUT are allowed", http.StatusMethodNotAllowed)
 		}
 	case "sharees":
 		h.findSharees(w, r)
@@ -248,11 +252,25 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "shareType must be an integer", http.StatusBadRequest)
 		return
 	}
-	shareWith := r.FormValue("shareWith")
 
+	shareWith := r.FormValue("shareWith")
 	if shareWith == "" {
 		http.Error(w, "missing shareWith", http.StatusBadRequest)
 		return
+	}
+
+	perm := permissionInvalid
+	pval := r.FormValue("permissions")
+	if pval == "" {
+		// by default only allow read permissions
+		perm = permissionRead
+	} else {
+		pint, err := strconv.Atoi(pval)
+		if err != nil {
+			http.Error(w, "permissions must be an integer", http.StatusBadRequest)
+			return
+		}
+		perm = Permissions(pint)
 	}
 
 	p := r.FormValue("path")
@@ -268,12 +286,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 
 	share := &ShareData{}
 
-	// by defaiut only allow read permissions
-	permissions := &storageproviderv0alphapb.ResourcePermissions{
-		ListContainer:        true,
-		Stat:                 true,
-		InitiateFileDownload: true,
-	}
+	permissions := asCS3Permissions(perm, nil)
 
 	if shareType == int(shareTypeUser) {
 
@@ -340,19 +353,102 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *SharesHandler) updateShare(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
+	pval := r.FormValue("permissions")
+	if pval == "" {
+		http.Error(w, "permissions missing", http.StatusBadRequest)
+		return
+	}
+
+	perm, err := strconv.Atoi(pval)
+	if err != nil {
+		http.Error(w, "permissions must be an integer", http.StatusBadRequest)
+		return
+	}
+
+	shareID := strings.TrimLeft(r.URL.Path, "/")
+	// TODO we need to lookup the storage that is responsible for this share
+
+	uClient, err := h.getUClient()
+	if err != nil {
+		log.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	uReq := &usershareproviderv0alphapb.UpdateShareRequest{
+		Ref: &usershareproviderv0alphapb.ShareReference{
+			Spec: &usershareproviderv0alphapb.ShareReference_Id{
+				Id: &usershareproviderv0alphapb.ShareId{
+					OpaqueId: shareID,
+				},
+			},
+		},
+		Field: &usershareproviderv0alphapb.UpdateShareRequest_UpdateField{
+			Field: &usershareproviderv0alphapb.UpdateShareRequest_UpdateField_Permissions{
+				Permissions: &usershareproviderv0alphapb.SharePermissions{
+					// this completely overwrites the permissions for this user
+					Permissions: asCS3Permissions(Permissions(perm), nil),
+				},
+			},
+		},
+	}
+	uRes, err := uClient.UpdateShare(ctx, uReq)
+
+	if uRes.Status.Code != rpcpb.Code_CODE_OK {
+		if uRes.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	gReq := &usershareproviderv0alphapb.GetShareRequest{
+		Ref: &usershareproviderv0alphapb.ShareReference{
+			Spec: &usershareproviderv0alphapb.ShareReference_Id{
+				Id: &usershareproviderv0alphapb.ShareId{
+					OpaqueId: shareID,
+				},
+			},
+		},
+	}
+	gRes, err := uClient.GetShare(ctx, gReq)
+
+	if gRes.Status.Code != rpcpb.Code_CODE_OK {
+		if gRes.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	share := h.userShare2ShareData(gRes.Share)
+
+	res3 := &Response{
+		OCS: &Payload{
+			Meta: MetaOK,
+			Data: share,
+		},
+	}
+
+	err = WriteOCSResponse(w, r, res3)
+	if err != nil {
+		appctx.GetLogger(r.Context()).Error().Err(err).Msg("error writing ocs response")
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+}
+
 func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
 	filters := []*usershareproviderv0alphapb.ListSharesRequest_Filter{}
 	var info *storageproviderv0alphapb.ResourceInfo
-
-	// default to xml
-	q := r.URL.Query()
-	if q.Get("format") == "" {
-		q.Set("format", "xml")
-		r.URL.RawQuery = q.Encode()
-	}
 
 	p := r.URL.Query().Get("path")
 	log.Debug().Str("path", p).Msg("listShares")
@@ -573,6 +669,46 @@ func permissions2OCSPermissions(p *storageproviderv0alphapb.ResourcePermissions)
 		}
 	}
 	return permissions
+}
+
+// TODO sort out mapping, this is just a first guess
+// TODO use roles to make this configurable
+func asCS3Permissions(new Permissions, existing *storageproviderv0alphapb.ResourcePermissions) *storageproviderv0alphapb.ResourcePermissions {
+	if existing == nil {
+		existing = &storageproviderv0alphapb.ResourcePermissions{}
+	}
+
+	if new&permissionRead == 1 {
+		existing.ListContainer = true
+		existing.ListGrants = true
+		existing.ListFileVersions = true
+		existing.ListRecycle = true
+		existing.Stat = true
+		existing.GetPath = true
+		existing.GetQuota = true
+		existing.InitiateFileDownload = true
+	}
+	if new&permissionWrite == 1 {
+		existing.InitiateFileUpload = true
+		existing.RestoreFileVersion = true
+		existing.RestoreRecycleItem = true
+	}
+	if new&permissionCreate == 1 {
+		existing.CreateContainer = true
+		// FIXME permissions mismatch: double check create vs write file
+		existing.InitiateFileUpload = true
+	}
+	//existing.Move ?
+	if new&permissionDelete == 1 {
+		existing.Delete = true
+		existing.PurgeRecycle = true
+	}
+	if new&permissionShare == 1 {
+		existing.AddGrant = true
+		existing.RemoveGrant = true // TODO when are you able to unshare / delete
+		existing.UpdateGrant = true
+	}
+	return existing
 }
 
 // TODO do user lookup and cache users

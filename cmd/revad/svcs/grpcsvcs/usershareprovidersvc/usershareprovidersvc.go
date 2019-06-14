@@ -21,6 +21,7 @@ package usershareprovidersvc
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/cs3org/reva/cmd/revad/grpcserver"
 
@@ -136,11 +137,60 @@ func (s *service) RemoveShare(ctx context.Context, req *usershareproviderv0alpha
 }
 
 func (s *service) GetShare(ctx context.Context, req *usershareproviderv0alphapb.GetShareRequest) (*usershareproviderv0alphapb.GetShareResponse, error) {
+	//log := appctx.GetLogger(ctx)
+	ref := req.Ref.GetId()
+	if ref == nil {
+		res := &usershareproviderv0alphapb.GetShareResponse{
+			Status: &rpcpb.Status{
+				Code: rpcpb.Code_CODE_UNIMPLEMENTED,
+			},
+		}
+		return res, nil
+	}
+	id := ref.OpaqueId
+
+	// TODO split at @ ... encode parts as base64 / something url compatible
+	sp := strings.Split(id, "@")
+	sID, path := sp[0], sp[1]
+
+	md, err := s.storage.GetMD(ctx, path)
+	if err != nil {
+		// TODO not found
+		return nil, err
+	}
+
+	// TODO the storage has no method to get a grand by shareid
+	grants, err := s.storage.ListGrants(ctx, path)
+	if err != nil {
+		// TODO not found
+		return nil, err
+	}
 	res := &usershareproviderv0alphapb.GetShareResponse{
 		Status: &rpcpb.Status{
-			Code: rpcpb.Code_CODE_UNIMPLEMENTED,
+			Code: rpcpb.Code_CODE_NOT_FOUND,
 		},
 	}
+	for _, grant := range grants {
+		share := grantToShare(grant)
+		if share.Id.OpaqueId == sID {
+			share.ResourceId = &storageproviderv0alphapb.ResourceId{
+				StorageId: "TODO", // we need to lookup the resource id
+				OpaqueId:  path,
+			}
+			// TODO check this kind of id works not only for acls ...
+			share.Id.OpaqueId = share.Id.OpaqueId + "@" + share.ResourceId.OpaqueId
+			// the owner is the file owner, which is the same for all shares in this case
+			// share.Owner = md.? // TODO how do we get the owner? for eos it might be in the opaque metadata, no .. by asking the broker for the owner?
+			share.Mtime = &typespb.Timestamp{
+				Seconds: md.Mtime.Seconds,
+				Nanos:   md.Mtime.Nanos,
+			}
+			res.Status.Code = rpcpb.Code_CODE_OK
+			res.Share = share
+			break
+		}
+	}
+
 	return res, nil
 }
 
@@ -175,6 +225,7 @@ func (s *service) ListShares(ctx context.Context, req *usershareproviderv0alphap
 			}
 		}
 	}
+	// TODO list all shares
 	res := &usershareproviderv0alphapb.ListSharesResponse{
 		Status: &rpcpb.Status{
 			Code: rpcpb.Code_CODE_OK,
@@ -226,9 +277,66 @@ func grantToShare(grant *storage.Grant) *usershareproviderv0alphapb.Share {
 }
 
 func (s *service) UpdateShare(ctx context.Context, req *usershareproviderv0alphapb.UpdateShareRequest) (*usershareproviderv0alphapb.UpdateShareResponse, error) {
+
+	ref := req.Ref.GetId()
+	if ref == nil {
+		res := &usershareproviderv0alphapb.UpdateShareResponse{
+			Status: &rpcpb.Status{
+				Code: rpcpb.Code_CODE_UNIMPLEMENTED,
+			},
+		}
+		return res, nil
+	}
+	id := ref.OpaqueId
+
+	// TODO split at @ ... encode parts as base64 / something url compatible
+	sp := strings.Split(id, "@")
+	sID, path := sp[0], sp[1]
+	sp = strings.Split(sID, ":")
+	sType, username := sp[0], sp[1]
+
+	sPerm := req.Field.GetPermissions()
+	if sPerm == nil {
+		res := &usershareproviderv0alphapb.UpdateShareResponse{
+			Status: &rpcpb.Status{
+				Code: rpcpb.Code_CODE_INVALID_ARGUMENT,
+			},
+		}
+		return res, nil
+	}
+	rPerm := sPerm.Permissions
+	grant := &storage.Grant{
+		Grantee: &storage.Grantee{
+			UserID: &user.ID{
+				// IDP TODO ?
+				OpaqueID: username,
+			},
+		},
+		PermissionSet: &storage.PermissionSet{
+			//AddGrant:        rPerm.AddGrand, // TODO map more permissions
+			ListContainer:   rPerm.ListContainer,
+			CreateContainer: rPerm.CreateContainer,
+			Move:            rPerm.Move,
+			Delete:          rPerm.Delete,
+		},
+	}
+	switch sType {
+	case "u":
+		grant.Grantee.Type = storage.GranteeTypeUser
+	case "g":
+		grant.Grantee.Type = storage.GranteeTypeGroup
+	default:
+		grant.Grantee.Type = storage.GranteeTypeInvalid
+	}
+	// TODO the storage has no method to get a grand by shareid
+	err := s.storage.UpdateGrant(ctx, path, grant)
+	if err != nil {
+		// TODO not found error
+		return nil, err
+	}
 	res := &usershareproviderv0alphapb.UpdateShareResponse{
 		Status: &rpcpb.Status{
-			Code: rpcpb.Code_CODE_UNIMPLEMENTED,
+			Code: rpcpb.Code_CODE_OK,
 		},
 	}
 	return res, nil

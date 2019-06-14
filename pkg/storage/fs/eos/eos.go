@@ -349,10 +349,25 @@ func (fs *eosStorage) getGranteeType(aclType string) storage.GranteeType {
 
 // TODO(labkode): add more fine grained controls.
 func (fs *eosStorage) getGrantPermissionSet(mode string) *storage.PermissionSet {
+	// TODO AddGrant permission? only for owner and co owners?
+	// TODO Delete
+	// TODO GetPath
+	// TODO GetQuota
+	// TODO InitiateFileUpload
+	// TODO ListGrants
+	// TODO ListFileVersions
+	// TODO ListRecycle
+	// TODO RemoveGrant
+	// TODO PurgeRecycle only for owner and co owners?
+	// TODO RestoreFileVersion
+	// TODO RestoreRecycleItem
+	// TODO UpdateGrant
 	switch mode {
 	case "rx":
 		return &storage.PermissionSet{
 			ListContainer: true,
+			//InitiateFileDownload: true,
+			//Stat:          true,
 		}
 	case "rwx!d":
 		return &storage.PermissionSet{
