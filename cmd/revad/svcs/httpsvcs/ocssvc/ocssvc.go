@@ -89,7 +89,9 @@ func (s *svc) setHandler() {
 
 		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("ocs routing")
 
-		if head == "v1.php" || head == "v2.php" { // TODO v1 vs v2 ... what is the difference?
+		// TODO v2 uses a status code mapper
+		// see https://github.com/owncloud/core/commit/bacf1603ffd53b7a5f73854d1d0ceb4ae545ce9f#diff-262cbf0df26b45bad0cf00d947345d9c
+		if head == "v1.php" || head == "v2.php" {
 			s.V1Handler.Handler().ServeHTTP(w, r)
 			return
 		}
