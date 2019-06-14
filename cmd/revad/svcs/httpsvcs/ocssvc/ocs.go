@@ -52,16 +52,16 @@ var MetaOK = &ResponseMeta{Status: "ok", StatusCode: 100, Message: "OK"}
 func WriteOCSResponse(w http.ResponseWriter, r *http.Request, res *Response) error {
 	var encoded []byte
 	var err error
-	if r.URL.Query().Get("format") == "xml" {
+	if r.URL.Query().Get("format") == "json" {
+		w.Header().Set("Content-Type", "application/json")
+		encoded, err = json.Marshal(res)
+	} else {
 		w.Header().Set("Content-Type", "application/xml")
 		_, err = w.Write([]byte(xml.Header))
 		if err != nil {
 			return err
 		}
 		encoded, err = xml.Marshal(res.OCS)
-	} else {
-		w.Header().Set("Content-Type", "application/json")
-		encoded, err = json.Marshal(res)
 	}
 	if err != nil {
 		return err
