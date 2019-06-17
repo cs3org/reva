@@ -4,7 +4,8 @@ go:
   - 1.11.x
 
 before_install:
-  - go get -u golang.org/x/lint/golint
+  - sudo apt-get install -y libacl1-dev
+  - env GO111MODULE=on go get -u golang.org/x/lint/golint
 
 script:
   - env GO111MODULE=on golint -set_exit_status ./... # enfoce std style-guide

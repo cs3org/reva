@@ -172,7 +172,10 @@ func (fs *localFS) AddGrant(ctx context.Context, path string, g *storage.Grant) 
 	if err != nil {
 		return err
 	}
-	acls.SetEntry(newACL.Type, newACL.Qualifier, newACL.Permissions)
+	err = acls.SetEntry(newACL.Type, newACL.Qualifier, newACL.Permissions)
+	if err != nil {
+		return err
+	}
 
 	newStr := acls.Serialize()
 

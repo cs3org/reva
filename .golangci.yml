@@ -1,0 +1,4 @@
+service:
+  prepare:
+    - apt-get update && apt-get install -y libacl1-dev
+    - GO111MODULE=on go mod vendor

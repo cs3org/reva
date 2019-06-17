@@ -259,7 +259,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	perm := permissionInvalid
+	var perm Permissions
 	pval := r.FormValue("permissions")
 	if pval == "" {
 		// by default only allow read permissions
@@ -284,7 +284,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 	// TODO how do we get the home of a user? The path in the sharing api is relative to the users home
 	p = path.Join("/", u.Username, p)
 
-	share := &ShareData{}
+	var share *ShareData
 
 	permissions := asCS3Permissions(perm, nil)
 
@@ -397,6 +397,10 @@ func (h *SharesHandler) updateShare(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 	uRes, err := uClient.UpdateShare(ctx, uReq)
+	if err != nil {
+		appctx.GetLogger(r.Context()).Error().Err(err).Msg("error updating share")
+		w.WriteHeader(http.StatusInternalServerError)
+	}
 
 	if uRes.Status.Code != rpcpb.Code_CODE_OK {
 		if uRes.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
@@ -417,6 +421,10 @@ func (h *SharesHandler) updateShare(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 	gRes, err := uClient.GetShare(ctx, gReq)
+	if err != nil {
+		appctx.GetLogger(r.Context()).Error().Err(err).Msg("error getting share info")
+		w.WriteHeader(http.StatusInternalServerError)
+	}
 
 	if gRes.Status.Code != rpcpb.Code_CODE_OK {
 		if gRes.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
@@ -466,6 +474,11 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 
 		// first check if the file exists
 		sClient, err := h.getSClient()
+		if err != nil {
+			log.Error().Err(err).Msg("error getting grpc storage provider client")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
 		ref := &storageproviderv0alphapb.Reference{
 			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
@@ -507,7 +520,7 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	if h.userShareProviderSVC != "" {
 		uClient, err := h.getUClient()
 		if err != nil {
-			log.Error().Err(err).Msg("error getting grpc client")
+			log.Error().Err(err).Msg("error getting grpc user share handler client")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -538,7 +551,7 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	if h.publicShareProviderSVC != "" {
 		pClient, err := h.getPClient()
 		if err != nil {
-			log.Error().Err(err).Msg("error getting grpc client")
+			log.Error().Err(err).Msg("error getting grpc public share provider client")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -772,10 +785,10 @@ type SharesData struct {
 type ShareType int
 
 const (
-	shareTypeUser                ShareType = 0
-	shareTypeGroup               ShareType = 1
-	shareTypePublicLink          ShareType = 3
-	shareTypeFederatedCloudShare ShareType = 6
+	shareTypeUser ShareType = 0
+	//	shareTypeGroup               ShareType = 1
+	shareTypePublicLink ShareType = 3
+	//	shareTypeFederatedCloudShare ShareType = 6
 )
 
 // Permissions reflects the CRUD permissions used in the OCS sharing API
@@ -788,7 +801,7 @@ const (
 	permissionCreate  Permissions = 4
 	permissionDelete  Permissions = 8
 	permissionShare   Permissions = 16
-	permissionAll     Permissions = 31
+	//permissionAll     Permissions = 31
 )
 
 // ShareData holds share data, see https://doc.owncloud.com/server/developer_manual/core/ocs-share-api.html#response-attributes-1
