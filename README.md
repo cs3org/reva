@@ -5,7 +5,7 @@
 [Website](https://cs3org.github.io/reva/)
 
 
-![REVA Logo][https://github.com/cs3org/logos/blob/efd3d2649478193e74f3de5a41247445941026b6/reva/logo-square.jpg]
+![REVA Logo](https://raw.githubusercontent.com/cs3org/logos/efd3d2649478193e74f3de5a41247445941026b6/reva/logo.jpg)
 
 REVA is an interoperability platform. It connects storage, sync and share platforms and application providers, and it does it in a vendor and platform neutral way by using the [CS3 APIS](https://github.com/cs3org/cs3apis).
 
@@ -57,6 +57,10 @@ Educational and Research community with the goal of maximizing the
 portability of the applications and service extensions.
 
 REVA is distributed under [Apache 2.0 license](https://github.com/cs3org/reva/blob/master/LICENSE).
+
+## Logo
+REVA logo's have been designed and contributed to the project by Eamon Maguire.
+
 
 ## Disclaimer
 
