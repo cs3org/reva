@@ -23,6 +23,7 @@ import (
 	"crypto/tls"
 	"fmt"
 
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/mitchellh/mapstructure"
@@ -79,6 +80,8 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 }
 
 func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (context.Context, error) {
+	log := appctx.GetLogger(ctx)
+
 	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", am.hostname, am.port), &tls.Config{InsecureSkipVerify: true})
 	if err != nil {
 		return ctx, err
@@ -109,9 +112,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return ctx, userNotFoundError(clientID)
 	}
 
-	for _, e := range sr.Entries {
-		e.Print()
-	}
+	log.Debug().Interface("entries", sr.Entries).Msg("entries")
 
 	userdn := sr.Entries[0].DN
 

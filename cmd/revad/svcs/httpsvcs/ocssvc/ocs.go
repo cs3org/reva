@@ -22,6 +22,8 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"net/http"
+
+	"github.com/cs3org/reva/pkg/appctx"
 )
 
 // Response is the top level response structure
@@ -48,177 +50,95 @@ type ResponseMeta struct {
 // MetaOK is the default ok response
 var MetaOK = &ResponseMeta{Status: "ok", StatusCode: 100, Message: "OK"}
 
-// UserData holds user data
-type UserData struct {
-	// TODO needs better naming, clarify if we need a userid, a username or both
-	ID          string `json:"id" xml:"id"`
-	DisplayName string `json:"display-name" xml:"display-name"`
-	Email       string `json:"email" xml:"email"`
+// MetaBadRequest is used for unknown errers
+var MetaBadRequest = &ResponseMeta{Status: "error", StatusCode: 400, Message: "Bad Request"}
+
+// MetaServerError is returned on server errors
+var MetaServerError = &ResponseMeta{Status: "error", StatusCode: 996, Message: "Server Error"}
+
+// MetaUnauthorized is returned on unauthorized requests
+var MetaUnauthorized = &ResponseMeta{Status: "error", StatusCode: 997, Message: "Unauthorised"}
+
+// MetaNotFound is returned when trying to access not existing resources
+var MetaNotFound = &ResponseMeta{Status: "error", StatusCode: 998, Message: "Not Found"}
+
+// MetaUnknownError is used for unknown errers
+var MetaUnknownError = &ResponseMeta{Status: "error", StatusCode: 999, Message: "Unknown Error"}
+
+// WriteOCSSuccess handles writing successfull ocs response data
+func WriteOCSSuccess(w http.ResponseWriter, r *http.Request, d interface{}) {
+	WriteOCSData(w, r, MetaOK, d, nil)
 }
 
-// ConfigData holds basic config
-type ConfigData struct {
-	Version string `json:"version" xml:"version"`
-	Website string `json:"website" xml:"website"`
-	Host    string `json:"host" xml:"host"`
-	Contact string `json:"contact" xml:"contact"`
-	SSL     string `json:"ssl" xml:"ssl"`
+// WriteOCSError handles writing error ocs responses
+func WriteOCSError(w http.ResponseWriter, r *http.Request, c int, m string, err error) {
+	WriteOCSData(w, r, &ResponseMeta{Status: "error", StatusCode: c, Message: m}, nil, err)
 }
 
-// CapabilitiesData TODO document
-type CapabilitiesData struct {
-	Capabilities *Capabilities `json:"capabilities" xml:"capabilities"`
-	Version      *Version      `json:"version" xml:"version"`
-}
-
-// Capabilities groups several capability aspects
-type Capabilities struct {
-	Core          *CapabilitiesCore          `json:"core" xml:"core"`
-	Checksums     *CapabilitiesChecksums     `json:"checksums" xml:"checksums"`
-	Files         *CapabilitiesFiles         `json:"files" xml:"files"`
-	Dav           *CapabilitiesDav           `json:"dav" xml:"dav"`
-	FilesSharing  *CapabilitiesFilesSharing  `json:"files_sharing" xml:"files_sharing" mapstructure:"files_sharing"`
-	Notifications *CapabilitiesNotifications `json:"notifications" xml:"notifications"`
-}
-
-// CapabilitiesCore holds webdav config
-type CapabilitiesCore struct {
-	PollInterval int     `json:"pollinterval" xml:"pollinterval" mapstructure:"poll_interval"`
-	WebdavRoot   string  `json:"webdav-root,omitempty" xml:"webdav-root,omitempty" mapstructure:"webdav_root"`
-	Status       *Status `json:"status" xml:"status"`
-}
-
-// Status holds basic status information
-type Status struct {
-	Installed      bool   `json:"installed" xml:"installed"`
-	Maintenance    bool   `json:"maintenance" xml:"maintenance"`
-	NeedsDBUpgrade bool   `json:"needsDbUpgrade" xml:"needsDbUpgrade"`
-	Version        string `json:"version" xml:"version"`
-	VersionString  string `json:"versionstring" xml:"versionstring"`
-	Edition        string `json:"edition" xml:"edition"`
-	ProductName    string `json:"productname" xml:"productname"`
-	Hostname       string `json:"hostname,omitempty" xml:"hostname,omitempty"`
-}
-
-// CapabilitiesChecksums holds available hashes
-type CapabilitiesChecksums struct {
-	SupportedTypes      []string `json:"supportedTypes" xml:"supportedTypes" mapstructure:"supported_types"`
-	PreferredUploadType string   `json:"preferredUploadType" xml:"preferredUploadType" mapstructure:"preferred_upload_type"`
-}
-
-// CapabilitiesFiles TODO this is storage specific, not global. What effect do these options have on the clients?
-type CapabilitiesFiles struct {
-	PrivateLinks     bool     `json:"privateLinks" xml:"privateLinks" mapstructure:"private_links"`
-	BigFileChunking  bool     `json:"bigfilechunking" xml:"bigfilechunking"`
-	BlacklistedFiles []string `json:"blacklisted_files" xml:"blacklisted_files" mapstructure:"blacklisted_files"`
-	Undelete         bool     `json:"undelete" xml:"undelete"`
-	Versioning       bool     `json:"versioning" xml:"versioning"`
-}
-
-// CapabilitiesDav holds the chunking version
-type CapabilitiesDav struct {
-	Chunking string `json:"chunking" xml:"chunking"`
-}
-
-// CapabilitiesFilesSharing TODO document
-type CapabilitiesFilesSharing struct {
-	APIEnabled                    bool                                     `json:"api_enabled" xml:"api_enabled" mapstructure:"api_enabled"`
-	Public                        *CapabilitiesFilesSharingPublic          `json:"public" xml:"public"`
-	User                          *CapabilitiesFilesSharingUser            `json:"user" xml:"user"`
-	Resharing                     bool                                     `json:"resharing" xml:"resharing"`
-	GroupSharing                  bool                                     `json:"group_sharing" xml:"group_sharing" mapstructure:"group_sharing"`
-	AutoAcceptShare               bool                                     `json:"auto_accept_share" xml:"auto_accept_share" mapstructure:"auto_accept_share"`
-	ShareWithGroupMembersOnly     bool                                     `json:"share_with_group_members_only" xml:"share_with_group_members_only" mapstructure:"share_with_group_members_only"`
-	ShareWithMembershipGroupsOnly bool                                     `json:"share_with_membership_groups_only" xml:"share_with_membership_groups_only" mapstructure:"share_with_membership_groups_only"`
-	UserEnumeration               *CapabilitiesFilesSharingUserEnumeration `json:"user_enumeration" xml:"user_enumeration" mapstructure:"user_enumeration"`
-	DefaultPermissions            int                                      `json:"default_permissions" xml:"default_permissions" mapstructure:"default_permissions"`
-	Federation                    *CapabilitiesFilesSharingFederation      `json:"federation" xml:"federation"`
-	SearchMinLength               int                                      `json:"search_min_length" xml:"search_min_length" mapstructure:"search_min_length"`
-}
-
-// CapabilitiesFilesSharingPublic TODO document
-type CapabilitiesFilesSharingPublic struct {
-	Enabled            bool                                      `json:"enabled" xml:"enabled"`
-	Password           *CapabilitiesFilesSharingPublicPassword   `json:"password" xml:"password"`
-	ExpireDate         *CapabilitiesFilesSharingPublicExpireDate `json:"expire_date" xml:"expire_date" mapstructure:"expire_date"`
-	SendMail           bool                                      `json:"send_mail" xml:"send_mail" mapstructure:"send_mail"`
-	SocialShare        bool                                      `json:"social_share" xml:"social_share" mapstructure:"social_share"`
-	Upload             bool                                      `json:"upload" xml:"upload"`
-	Multiple           bool                                      `json:"multiple" xml:"multiple"`
-	SupportsUploadOnly bool                                      `json:"supports_upload_only" xml:"supports_upload_only" mapstructure:"supports_upload_only"`
-}
-
-// CapabilitiesFilesSharingPublicPassword TODO document
-type CapabilitiesFilesSharingPublicPassword struct {
-	EnforcedFor *CapabilitiesFilesSharingPublicPasswordEnforcedFor `json:"enforced_for" xml:"enforced_for" mapstructure:"enforced_for"`
-	Enforced    bool                                               `json:"enforced" xml:"enforced"`
-}
-
-// CapabilitiesFilesSharingPublicPasswordEnforcedFor TODO document
-type CapabilitiesFilesSharingPublicPasswordEnforcedFor struct {
-	ReadOnly   bool `json:"read_only" xml:"read_only" mapstructure:"read_only"`
-	ReadWrite  bool `json:"read_write" xml:"read_write" mapstructure:"read_write"`
-	UploadOnly bool `json:"upload_only" xml:"upload_only" mapstructure:"upload_only"`
-}
-
-// CapabilitiesFilesSharingPublicExpireDate TODO document
-type CapabilitiesFilesSharingPublicExpireDate struct {
-	Enabled bool `json:"enabled" xml:"enabled"`
-}
-
-// CapabilitiesFilesSharingUser TODO document
-type CapabilitiesFilesSharingUser struct {
-	SendMail bool `json:"send_mail" xml:"send_mail" mapstructure:"send_mail"`
-}
-
-// CapabilitiesFilesSharingUserEnumeration TODO document
-type CapabilitiesFilesSharingUserEnumeration struct {
-	Enabled          bool `json:"enabled" xml:"enabled"`
-	GroupMembersOnly bool `json:"group_members_only" xml:"group_members_only" mapstructure:"group_members_only"`
-}
-
-// CapabilitiesFilesSharingFederation holds outgoing and incoming flags
-type CapabilitiesFilesSharingFederation struct {
-	Outgoing bool `json:"outgoing" xml:"outgoing"`
-	Incoming bool `json:"incoming" xml:"incoming"`
-}
-
-// CapabilitiesNotifications holds a list of notification endpoints
-type CapabilitiesNotifications struct {
-	Endpoints []string `json:"ocs-endpoints" xml:"ocs-endpoints" mapstructure:"endpoints"`
-}
-
-// Version holds version information
-type Version struct {
-	Major   int    `json:"major" xml:"major"`
-	Minor   int    `json:"minor" xml:"minor"`
-	Micro   int    `json:"micro" xml:"micro"` // = patch level
-	String  string `json:"string" xml:"string"`
-	Edition string `json:"edition" xml:"edition"`
+// WriteOCSData handles writing ocs data in json and xml
+func WriteOCSData(w http.ResponseWriter, r *http.Request, m *ResponseMeta, d interface{}, err error) {
+	WriteOCSResponse(w, r, &Response{
+		OCS: &Payload{
+			Meta: m,
+			Data: d,
+		},
+	}, err)
 }
 
 // WriteOCSResponse handles writing ocs responses in json and xml
-func WriteOCSResponse(w http.ResponseWriter, r *http.Request, res *Response) error {
+func WriteOCSResponse(w http.ResponseWriter, r *http.Request, res *Response, err error) {
 	var encoded []byte
-	var err error
-	if r.URL.Query().Get("format") == "xml" {
+
+	if err != nil {
+		appctx.GetLogger(r.Context()).Error().Err(err).Msg(res.OCS.Meta.Message)
+	}
+
+	if r.URL.Query().Get("format") == "json" {
+		w.Header().Set("Content-Type", "application/json")
+		encoded, err = json.Marshal(res)
+	} else {
 		w.Header().Set("Content-Type", "application/xml")
 		_, err = w.Write([]byte(xml.Header))
 		if err != nil {
-			return err
+			appctx.GetLogger(r.Context()).Error().Err(err).Msg("error writing xml header")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
 		encoded, err = xml.Marshal(res.OCS)
-	} else {
-		w.Header().Set("Content-Type", "application/json")
-		encoded, err = json.Marshal(res)
 	}
 	if err != nil {
-		return err
+		appctx.GetLogger(r.Context()).Error().Err(err).Msg("error encoding ocs response")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	// TODO map error for v2 only?
+	// see https://github.com/owncloud/core/commit/bacf1603ffd53b7a5f73854d1d0ceb4ae545ce9f#diff-262cbf0df26b45bad0cf00d947345d9c
+	switch res.OCS.Meta.StatusCode {
+	case MetaNotFound.StatusCode:
+		w.WriteHeader(http.StatusNotFound)
+	case MetaServerError.StatusCode:
+		w.WriteHeader(http.StatusInternalServerError)
+	case MetaUnknownError.StatusCode:
+		w.WriteHeader(http.StatusInternalServerError)
+	case MetaUnauthorized.StatusCode:
+		w.WriteHeader(http.StatusUnauthorized)
+	case 100:
+		w.WriteHeader(http.StatusOK)
+	case 104:
+		w.WriteHeader(http.StatusForbidden)
+	default:
+		// any 2xx, 4xx and 5xx will be used as is
+		if res.OCS.Meta.StatusCode >= 200 && res.OCS.Meta.StatusCode < 600 {
+			w.WriteHeader(res.OCS.Meta.StatusCode)
+		} else {
+			w.WriteHeader(http.StatusBadRequest)
+		}
 	}
 
 	_, err = w.Write(encoded)
 	if err != nil {
-		return err
+		appctx.GetLogger(r.Context()).Error().Err(err).Msg("error writing ocs response")
+		w.WriteHeader(http.StatusInternalServerError)
 	}
-	return nil
 }

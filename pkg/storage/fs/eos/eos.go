@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	gouser "os/user"
 	"path"
 	"regexp"
 	"strconv"
@@ -30,9 +31,11 @@ import (
 
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/eosclient"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage"
+	"github.com/cs3org/reva/pkg/storage/acl"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -250,8 +253,8 @@ func getEosACLPerm(set *storage.PermissionSet) (string, error) {
 	return "rx", nil
 }
 
-func (fs *eosStorage) getEosACL(g *storage.Grant) (*eosclient.ACL, error) {
-	mode, err := getEosACLPerm(g.PermissionSet)
+func (fs *eosStorage) getEosACL(g *storage.Grant) (*acl.Entry, error) {
+	permissions, err := getEosACLPerm(g.PermissionSet)
 	if err != nil {
 		return nil, err
 	}
@@ -259,10 +262,10 @@ func (fs *eosStorage) getEosACL(g *storage.Grant) (*eosclient.ACL, error) {
 	if err != nil {
 		return nil, err
 	}
-	eosACL := &eosclient.ACL{
-		Target: g.Grantee.UserID.OpaqueID,
-		Mode:   mode,
-		Type:   t,
+	eosACL := &acl.Entry{
+		Qualifier:   g.Grantee.UserID.OpaqueID,
+		Permissions: permissions,
+		Type:        t,
 	}
 	return eosACL, nil
 }
@@ -313,20 +316,20 @@ func (fs *eosStorage) ListGrants(ctx context.Context, fn string) ([]*storage.Gra
 	}
 
 	fn = fs.getInternalPath(ctx, fn)
-	eosACLs, err := fs.c.ListACLs(ctx, u.Username, fn)
+	acls, err := fs.c.ListACLs(ctx, u.Username, fn)
 	if err != nil {
 		return nil, err
 	}
 
 	grants := []*storage.Grant{}
-	for _, a := range eosACLs {
+	for _, a := range acls {
 		grantee := &storage.Grantee{
-			UserID: &user.ID{OpaqueID: a.Target},
+			UserID: &user.ID{OpaqueID: a.Qualifier},
 			Type:   fs.getGranteeType(a.Type),
 		}
 		grants = append(grants, &storage.Grant{
 			Grantee:       grantee,
-			PermissionSet: fs.getGrantPermissionSet(a.Mode),
+			PermissionSet: fs.getGrantPermissionSet(a.Permissions),
 		})
 	}
 
@@ -346,10 +349,25 @@ func (fs *eosStorage) getGranteeType(aclType string) storage.GranteeType {
 
 // TODO(labkode): add more fine grained controls.
 func (fs *eosStorage) getGrantPermissionSet(mode string) *storage.PermissionSet {
+	// TODO AddGrant permission? only for owner and co owners?
+	// TODO Delete
+	// TODO GetPath
+	// TODO GetQuota
+	// TODO InitiateFileUpload
+	// TODO ListGrants
+	// TODO ListFileVersions
+	// TODO ListRecycle
+	// TODO RemoveGrant
+	// TODO PurgeRecycle only for owner and co owners?
+	// TODO RestoreFileVersion
+	// TODO RestoreRecycleItem
+	// TODO UpdateGrant
 	switch mode {
 	case "rx":
 		return &storage.PermissionSet{
 			ListContainer: true,
+			//InitiateFileDownload: true,
+			//Stat:          true,
 		}
 	case "rwx!d":
 		return &storage.PermissionSet{
@@ -388,7 +406,7 @@ func (fs *eosStorage) ListFolder(ctx context.Context, fn string) ([]*storage.MD,
 	fn = fs.getInternalPath(ctx, fn)
 	eosFileInfos, err := fs.c.List(ctx, u.Username, fn)
 	if err != nil {
-		return nil, errors.Wrap(err, "storage_eos: errong listing")
+		return nil, errors.Wrap(err, "storage_eos: error listing")
 	}
 
 	finfos := []*storage.MD{}
@@ -563,9 +581,16 @@ func (fs *eosStorage) convertToMD(ctx context.Context, eosFileInfo *eosclient.Fi
 	if eosFileInfo.IsDir {
 		size = eosFileInfo.TreeSize
 	}
+	username, err := getUsername(eosFileInfo.UID)
+	if err != nil {
+		log := appctx.GetLogger(ctx)
+		log.Warn().Uint64("uid", eosFileInfo.UID).Msg("could not lookup userid, leaving empty")
+		username = ""
+	}
 	return &storage.MD{
 		ID:          fmt.Sprintf("%d", eosFileInfo.Inode),
 		Path:        path,
+		Owner:       username,
 		IsDir:       eosFileInfo.IsDir,
 		Etag:        eosFileInfo.ETag,
 		Mime:        mime.Detect(eosFileInfo.IsDir, path),
@@ -577,6 +602,15 @@ func (fs *eosStorage) convertToMD(ctx context.Context, eosFileInfo *eosclient.Fi
 		},
 		Opaque: fs.getEosMetadata(eosFileInfo),
 	}
+}
+
+func getUsername(uid uint64) (string, error) {
+	s := strconv.FormatUint(uid, 10)
+	user, err := gouser.LookupId(s)
+	if err != nil {
+		return "", err
+	}
+	return user.Username, nil
 }
 
 type eosSysMetadata struct {

@@ -23,6 +23,7 @@ import (
 	"crypto/tls"
 	"fmt"
 
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
 	"github.com/mitchellh/mapstructure"
@@ -79,6 +80,7 @@ func New(m map[string]interface{}) (user.Manager, error) {
 }
 
 func (m *manager) GetUser(ctx context.Context, username string) (*user.User, error) {
+	log := appctx.GetLogger(ctx)
 	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.hostname, m.port), &tls.Config{InsecureSkipVerify: true})
 	if err != nil {
 		return nil, err
@@ -109,9 +111,7 @@ func (m *manager) GetUser(ctx context.Context, username string) (*user.User, err
 		return nil, userNotFoundError(username)
 	}
 
-	for _, e := range sr.Entries {
-		e.Print()
-	}
+	log.Debug().Interface("entries", sr.Entries).Msg("entries")
 
 	return &user.User{
 		// TODO map uuid, userPrincipalName as sub? -> actually objectSID for AD is recommended by MS. is also used for ACLs on NTFS
@@ -121,6 +121,50 @@ func (m *manager) GetUser(ctx context.Context, username string) (*user.User, err
 		Mail:        sr.Entries[0].GetAttributeValue("mail"),
 		DisplayName: sr.Entries[0].GetAttributeValue("displayName"),
 	}, nil
+}
+
+func (m *manager) FindUsers(ctx context.Context, query string) ([]*user.User, error) {
+	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.hostname, m.port), &tls.Config{InsecureSkipVerify: true})
+	if err != nil {
+		return nil, err
+	}
+	defer l.Close()
+
+	// First bind with a read only user
+	err = l.Bind(m.bindUsername, m.bindPassword)
+	if err != nil {
+		return nil, err
+	}
+
+	// Search for the given clientID
+	searchRequest := ldap.NewSearchRequest(
+		m.baseDN,
+		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
+		fmt.Sprintf(m.filter, query),                 // TODO this is screaming for errors if filter contains >1 %s
+		[]string{"dn", "uid", "mail", "displayName"}, // TODO mapping
+		nil,
+	)
+
+	sr, err := l.Search(searchRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	users := []*user.User{}
+
+	for _, entry := range sr.Entries {
+		user := &user.User{
+			// TODO map uuid, userPrincipalName as sub? -> actually objectSID for AD is recommended by MS. is also used for ACLs on NTFS
+			// TODO map base dn as iss?
+			Username:    entry.GetAttributeValue("uid"),
+			Groups:      []string{},
+			Mail:        entry.GetAttributeValue("mail"),
+			DisplayName: entry.GetAttributeValue("displayName"),
+		}
+		users = append(users, user)
+	}
+
+	return users, nil
 }
 
 func (m *manager) GetUserGroups(ctx context.Context, username string) ([]string, error) {

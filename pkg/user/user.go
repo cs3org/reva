@@ -20,6 +20,7 @@ package user
 
 import (
 	"context"
+	"fmt"
 )
 
 type key int
@@ -43,6 +44,22 @@ type User struct {
 type ID struct {
 	IDP      string
 	OpaqueID string
+}
+
+// String will concatenate the OpaqueID and IDP with an @ if both are set
+// If only one is set that is returned
+// TODO but only id.IDP does not make sense ¯\_(ツ)_/¯
+func (id ID) String() string {
+	if id.OpaqueID != "" {
+		if id.IDP != "" {
+			return fmt.Sprintf("%s@%s", id.OpaqueID, id.IDP)
+		}
+		return id.OpaqueID
+	}
+	if id.IDP != "" {
+		return id.IDP
+	}
+	return ""
 }
 
 // ContextGetUser returns the user if set in the given context.
@@ -70,4 +87,5 @@ type Manager interface {
 	GetUser(ctx context.Context, username string) (*User, error)
 	GetUserGroups(ctx context.Context, username string) ([]string, error)
 	IsInGroup(ctx context.Context, username, group string) (bool, error)
+	FindUsers(ctx context.Context, query string) ([]*User, error)
 }

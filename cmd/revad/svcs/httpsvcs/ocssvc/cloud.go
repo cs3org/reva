@@ -20,45 +20,38 @@ package ocssvc
 
 import (
 	"net/http"
+
+	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
 )
 
-// ConfigHandler renders the config endpoint
-type ConfigHandler struct {
-	c ConfigData
+// CloudHandler holds references to UserHandler and CapabilitiesHandler
+type CloudHandler struct {
+	UserHandler         *UserHandler
+	UsersHandler        *UsersHandler
+	CapabilitiesHandler *CapabilitiesHandler
 }
 
-func (h *ConfigHandler) init(c *Config) {
-	h.c = c.Config
-	// config
-	if h.c.Version == "" {
-		h.c.Version = "1.7"
-	}
-	if h.c.Website == "" {
-		h.c.Website = "reva"
-	}
-	if h.c.Host == "" {
-		h.c.Host = "" // TODO get from context?
-	}
-	if h.c.Contact == "" {
-		h.c.Contact = ""
-	}
-	if h.c.SSL == "" {
-		h.c.SSL = "false" // TODO get from context?
-	}
+func (h *CloudHandler) init(c *Config) {
+	h.UserHandler = new(UserHandler)
+	h.UsersHandler = new(UsersHandler)
+	h.CapabilitiesHandler = new(CapabilitiesHandler)
+	h.CapabilitiesHandler.init(c)
 }
 
-// Handler renders the config
-func (h *ConfigHandler) Handler() http.Handler {
+// Handler routes the cloud endpoints
+func (h *CloudHandler) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		WriteOCSSuccess(w, r, h.c)
+		var head string
+		head, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
+		switch head {
+		case "capabilities":
+			h.CapabilitiesHandler.Handler().ServeHTTP(w, r)
+		case "user":
+			h.UserHandler.ServeHTTP(w, r)
+		case "users":
+			h.UsersHandler.ServeHTTP(w, r)
+		default:
+			WriteOCSError(w, r, MetaNotFound.StatusCode, "Not found", nil)
+		}
 	})
-}
-
-// ConfigData holds basic config
-type ConfigData struct {
-	Version string `json:"version" xml:"version"`
-	Website string `json:"website" xml:"website"`
-	Host    string `json:"host" xml:"host"`
-	Contact string `json:"contact" xml:"contact"`
-	SSL     string `json:"ssl" xml:"ssl"`
 }
