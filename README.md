@@ -4,6 +4,9 @@
 ================
 [Website](https://cs3org.github.io/reva/)
 
+
+![REVA Logo][https://github.com/cs3org/logos/blob/efd3d2649478193e74f3de5a41247445941026b6/reva/logo-square.jpg]
+
 REVA is an interoperability platform. It connects storage, sync and share platforms and application providers, and it does it in a vendor and platform neutral way by using the [CS3 APIS](https://github.com/cs3org/cs3apis).
 
 ## Installation
