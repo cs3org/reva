@@ -56,7 +56,7 @@ func (h *V1Handler) Handler() http.Handler {
 		case "config":
 			h.ConfigHandler.Handler().ServeHTTP(w, r)
 		default:
-			http.Error(w, "Not Found", http.StatusNotFound)
+			WriteOCSError(w, r, MetaNotFound.StatusCode, "Not found", nil)
 		}
 	})
 }

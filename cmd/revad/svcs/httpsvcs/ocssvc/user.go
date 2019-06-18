@@ -19,9 +19,9 @@
 package ocssvc
 
 import (
+	"fmt"
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/user"
 )
 
@@ -31,32 +31,19 @@ type UserHandler struct {
 
 func (h *UserHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
 
 	// TODO move user to handler parameter?
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
-		log.Error().Msg("error getting user from context")
-		w.WriteHeader(http.StatusInternalServerError)
+		WriteOCSError(w, r, MetaServerError.StatusCode, "missing user in context", fmt.Errorf("missing user in context"))
 		return
 	}
 
-	res := &Response{
-		OCS: &Payload{
-			Meta: MetaOK,
-			Data: &UserData{
-				ID:          u.Username,
-				DisplayName: u.DisplayName,
-				Email:       u.Mail,
-			},
-		},
-	}
-
-	err := WriteOCSResponse(w, r, res)
-	if err != nil {
-		appctx.GetLogger(r.Context()).Error().Err(err).Msg("error writing ocs response")
-		w.WriteHeader(http.StatusInternalServerError)
-	}
+	WriteOCSSuccess(w, r, &UserData{
+		ID:          u.Username,
+		DisplayName: u.DisplayName,
+		Email:       u.Mail,
+	})
 }
 
 // UserData holds user data

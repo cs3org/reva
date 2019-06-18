@@ -20,8 +20,6 @@ package ocssvc
 
 import (
 	"net/http"
-
-	"github.com/cs3org/reva/pkg/appctx"
 )
 
 // ConfigHandler renders the config endpoint
@@ -52,18 +50,7 @@ func (h *ConfigHandler) init(c *Config) {
 // Handler renders the config
 func (h *ConfigHandler) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		res := &Response{
-			OCS: &Payload{
-				Meta: MetaOK,
-				Data: h.c,
-			},
-		}
-		err := WriteOCSResponse(w, r, res)
-		if err != nil {
-			appctx.GetLogger(r.Context()).Error().Err(err).Msg("error writing ocs response")
-			w.WriteHeader(http.StatusInternalServerError)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
+		WriteOCSSuccess(w, r, h.c)
 	})
 }
 

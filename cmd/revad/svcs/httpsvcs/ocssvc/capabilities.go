@@ -20,8 +20,6 @@ package ocssvc
 
 import (
 	"net/http"
-
-	"github.com/cs3org/reva/pkg/appctx"
 )
 
 // CapabilitiesHandler renders the capability endpoint
@@ -206,18 +204,7 @@ func (h *CapabilitiesHandler) init(c *Config) {
 // Handler renders the capabilities
 func (h *CapabilitiesHandler) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		res := &Response{
-			OCS: &Payload{
-				Meta: MetaOK,
-				Data: h.c,
-			},
-		}
-
-		err := WriteOCSResponse(w, r, res)
-		if err != nil {
-			appctx.GetLogger(r.Context()).Error().Err(err).Msg("error writing ocs response")
-			w.WriteHeader(http.StatusInternalServerError)
-		}
+		WriteOCSSuccess(w, r, h.c)
 	})
 }
 

@@ -96,6 +96,6 @@ func (s *svc) setHandler() {
 			return
 		}
 
-		http.Error(w, "Not Found", http.StatusNotFound)
+		WriteOCSError(w, r, MetaNotFound.StatusCode, "Not found", nil)
 	})
 }

@@ -19,10 +19,10 @@
 package ocssvc
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
-	"github.com/cs3org/reva/pkg/appctx"
 	ctxuser "github.com/cs3org/reva/pkg/user"
 )
 
@@ -32,7 +32,6 @@ type UsersHandler struct {
 
 func (h *UsersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
 
 	var user string
 	user, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
@@ -40,39 +39,28 @@ func (h *UsersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// FIXME use ldap to fetch user info
 	u, ok := ctxuser.ContextGetUser(ctx)
 	if !ok {
-		log.Error().Msg("error getting user from context")
-		w.WriteHeader(http.StatusInternalServerError)
+		WriteOCSError(w, r, MetaServerError.StatusCode, "missing user in context", fmt.Errorf("missing user in context"))
 		return
 	}
 	if user != u.Username {
-		// FIXME allow fetching uther users info?
-		w.WriteHeader(http.StatusForbidden)
+		// FIXME allow fetching other users info?
+		WriteOCSError(w, r, http.StatusForbidden, "user id mismatch", fmt.Errorf("%s tried to acces %s user info endpoint", u.ID.String(), user))
+		return
 	}
 
-	res := &Response{
-		OCS: &Payload{
-			Meta: MetaOK,
-			Data: &UsersData{
-				// FIXME query storages? cache a summary?
-				// TODO use list of storages to allow clients to resolve quota status
-				Quota: &QuotaData{
-					Free:      2840756224000,
-					Used:      5059416668,
-					Total:     2845815640668,
-					Relative:  0.18,
-					Definiton: "default",
-				},
-				DisplayName: u.DisplayName,
-				Email:       u.Mail,
-			},
+	WriteOCSSuccess(w, r, &UsersData{
+		// FIXME query storages? cache a summary?
+		// TODO use list of storages to allow clients to resolve quota status
+		Quota: &QuotaData{
+			Free:      2840756224000,
+			Used:      5059416668,
+			Total:     2845815640668,
+			Relative:  0.18,
+			Definiton: "default",
 		},
-	}
-
-	err := WriteOCSResponse(w, r, res)
-	if err != nil {
-		appctx.GetLogger(r.Context()).Error().Err(err).Msg("error writing ocs response")
-		w.WriteHeader(http.StatusInternalServerError)
-	}
+		DisplayName: u.DisplayName,
+		Email:       u.Mail,
+	})
 }
 
 // QuotaData holds quota information

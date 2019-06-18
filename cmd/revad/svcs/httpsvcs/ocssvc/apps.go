@@ -48,8 +48,8 @@ func (h *AppsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		http.Error(w, "Not Found", http.StatusNotFound)
+		WriteOCSError(w, r, MetaNotFound.StatusCode, "Not found", nil)
 	default:
-		http.Error(w, "Not Found", http.StatusNotFound)
+		WriteOCSError(w, r, MetaNotFound.StatusCode, "Not found", nil)
 	}
 }

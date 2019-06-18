@@ -51,7 +51,7 @@ func (h *CloudHandler) Handler() http.Handler {
 		case "users":
 			h.UsersHandler.ServeHTTP(w, r)
 		default:
-			http.Error(w, "Not Found", http.StatusNotFound)
+			WriteOCSError(w, r, MetaNotFound.StatusCode, "Not found", nil)
 		}
 	})
 }
