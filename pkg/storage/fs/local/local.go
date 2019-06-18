@@ -35,10 +35,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/storage/acl"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
-	sysacl "github.com/naegelejd/go-acl"
 	"github.com/pkg/errors"
 )
 
@@ -150,152 +147,11 @@ func (fs *localFS) GetPathByID(ctx context.Context, id string) (string, error) {
 }
 
 func (fs *localFS) AddGrant(ctx context.Context, path string, g *storage.Grant) error {
-	fn := fs.addRoot(path)
-	sysacls, err := sysacl.GetFileAccess(fn)
-	if err != nil {
-		return errors.Wrap(err, "Failed to get ACL from"+fn)
-	}
-	defer sysacls.Free()
-
-	astr := sysacls.String()
-
-	appctx.GetLogger(ctx).Debug().
-		Str("acls", astr).
-		Msg("read acls")
-
-	acls, err := acl.Parse(astr, acl.LongTextForm)
-	if err != nil {
-		return err
-	}
-
-	newACL, err := fs.getACL(g)
-	if err != nil {
-		return err
-	}
-	err = acls.SetEntry(newACL.Type, newACL.Qualifier, newACL.Permissions)
-	if err != nil {
-		return err
-	}
-
-	newStr := acls.Serialize()
-
-	newACLs, err := sysacl.Parse(newStr)
-	if err != nil {
-		return err
-	}
-	defer newACLs.Free()
-
-	// TODO SetFileAccess also requires mode and other it seems. How can we make this clearer
-	err = newACLs.SetFileAccess(fn)
-	if err != nil {
-		return errors.Wrap(err, "error adding acl")
-	}
-
-	return nil
-}
-func getACLType(aclType storage.GranteeType) (string, error) {
-	switch aclType {
-	case storage.GranteeTypeUser:
-		return "u", nil
-	case storage.GranteeTypeGroup:
-		return "g", nil
-	default:
-		return "", errors.New("no acl for grantee type: " + aclType.String())
-	}
-}
-
-// TODO(labkode): fine grained permission controls.
-func getACLPerm(set *storage.PermissionSet) (string, error) {
-	if set.Delete {
-		return "rwx!d", nil
-	}
-
-	return "r-x", nil
-}
-
-func (fs *localFS) getACL(g *storage.Grant) (*acl.Entry, error) {
-	mode, err := getACLPerm(g.PermissionSet)
-	if err != nil {
-		return nil, err
-	}
-	t, err := getACLType(g.Grantee.Type)
-	if err != nil {
-		return nil, err
-	}
-	e := &acl.Entry{
-		Qualifier:   g.Grantee.UserID.OpaqueID,
-		Permissions: mode,
-		Type:        t,
-	}
-	return e, nil
+	return notSupportedError("op not supported")
 }
 
 func (fs *localFS) ListGrants(ctx context.Context, path string) ([]*storage.Grant, error) {
-	fn := fs.addRoot(path)
-	sysacls, err := sysacl.GetFileAccess(fn)
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to get ACL from"+fn)
-	}
-	defer sysacls.Free()
-
-	astr := sysacls.String()
-
-	appctx.GetLogger(ctx).Debug().
-		Str("acls", astr).
-		Msg("read acls")
-
-	acls, err := acl.Parse(astr, acl.LongTextForm)
-	if err != nil {
-		return nil, err
-	}
-
-	grants := []*storage.Grant{}
-	for _, a := range acls.Entries {
-		if a.Qualifier == "" {
-			continue
-		}
-		grantee := &storage.Grantee{
-			UserID: &user.ID{OpaqueID: a.Qualifier},
-			Type:   fs.getGranteeType(a.Type),
-		}
-		grants = append(grants, &storage.Grant{
-			Grantee:       grantee,
-			PermissionSet: fs.getGrantPermissionSet(a.Permissions),
-		})
-	}
-
-	return grants, nil
-}
-
-func (fs *localFS) getGranteeType(aclType string) storage.GranteeType {
-	switch aclType {
-	case "u":
-		return storage.GranteeTypeUser
-	case "g":
-		return storage.GranteeTypeGroup
-	default:
-		return storage.GranteeTypeInvalid
-	}
-}
-
-// TODO(labkode): add more fine grained controls.
-func (fs *localFS) getGrantPermissionSet(mode string) *storage.PermissionSet {
-	switch mode {
-	case "rx":
-		return &storage.PermissionSet{
-			ListContainer: true,
-		}
-	case "rwx!d":
-		return &storage.PermissionSet{
-			Move:            true,
-			CreateContainer: true,
-			ListContainer:   true,
-		}
-	default:
-		// return no permissions are we do not know
-		// what acl is this one.
-		return &storage.PermissionSet{} // default values are false
-	}
+	return nil, notSupportedError("op not supported")
 }
 
 func (fs *localFS) RemoveGrant(ctx context.Context, path string, g *storage.Grant) error {
