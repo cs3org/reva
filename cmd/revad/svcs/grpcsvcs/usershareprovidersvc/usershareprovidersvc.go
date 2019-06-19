@@ -99,6 +99,8 @@ func (s *service) CreateShare(ctx context.Context, req *usershareproviderv0alpha
 		Permissions: req.Grant.Permissions.Permissions,
 	}
 
+	// TODO try to read role?
+
 	log.Debug().Str("path", ref.String()).Msg("list shares")
 	// check if path exists
 	err := s.storage.AddGrant(ctx, ref, grant)
@@ -370,16 +372,9 @@ func (s *service) UpdateShare(ctx context.Context, req *usershareproviderv0alpha
 		return nil, err
 	}
 
-	rPerm := sPerm.Permissions
 	grant := &storageproviderv0alphapb.Grant{
-		Grantee: grantee,
-		Permissions: &storageproviderv0alphapb.ResourcePermissions{
-			//AddGrant:        rPerm.AddGrand, // TODO map more permissions
-			ListContainer:   rPerm.ListContainer,
-			CreateContainer: rPerm.CreateContainer,
-			Move:            rPerm.Move,
-			Delete:          rPerm.Delete,
-		},
+		Grantee:     grantee,
+		Permissions: sPerm.Permissions,
 	}
 
 	ref := &storageproviderv0alphapb.Reference{Spec: &storageproviderv0alphapb.Reference_Path{Path: path}}

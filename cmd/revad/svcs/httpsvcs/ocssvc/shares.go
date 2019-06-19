@@ -19,6 +19,7 @@
 package ocssvc
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"path"
@@ -257,10 +258,6 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		role := r.FormValue("role")
-
-		p := r.FormValue("path")
-
 		// we need to prefix the path with the user id
 		u, ok := user.ContextGetUser(ctx)
 		if !ok {
@@ -269,10 +266,12 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// TODO how do we get the home of a user? The path in the sharing api is relative to the users home
+		p := r.FormValue("path")
 		p = path.Join("/", u.Username, p)
 
 		var pint int
 
+		role := r.FormValue("role")
 		// 2. if we don't have a role try to map the permissions
 		if role == "" {
 			pval := r.FormValue("permissions")
@@ -303,8 +302,21 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc client", err)
 			return
 		}
+		roleMap := map[string]string{"name": role}
+		val, err := json.Marshal(roleMap)
+		if err != nil {
+			WriteOCSError(w, r, MetaServerError.StatusCode, "could not encode role", err)
+			return
+		}
 		req := &usershareproviderv0alphapb.CreateShareRequest{
-			// Opaque: optional
+			Opaque: &typespb.Opaque{
+				Map: map[string]*typespb.OpaqueEntry{
+					"role": &typespb.OpaqueEntry{
+						Decoder: "json",
+						Value:   val,
+					},
+				},
+			},
 			ResourceId: &storageproviderv0alphapb.ResourceId{
 				StorageId: "TODO",
 				OpaqueId:  p,
@@ -375,7 +387,7 @@ func asCS3Permissions(p int, rp *storageproviderv0alphapb.ResourcePermissions) *
 		rp = &storageproviderv0alphapb.ResourcePermissions{}
 	}
 
-	if p&int(permissionRead) == 1 {
+	if p&int(permissionRead) != 0 {
 		rp.ListContainer = true
 		rp.ListGrants = true
 		rp.ListFileVersions = true
@@ -385,24 +397,24 @@ func asCS3Permissions(p int, rp *storageproviderv0alphapb.ResourcePermissions) *
 		rp.GetQuota = true
 		rp.InitiateFileDownload = true
 	}
-	if p&int(permissionWrite) == 1 {
+	if p&int(permissionWrite) != 0 {
 		rp.InitiateFileUpload = true
 		rp.RestoreFileVersion = true
 		rp.RestoreRecycleItem = true
 	}
-	if p&int(permissionCreate) == 1 {
+	if p&int(permissionCreate) != 0 {
 		rp.CreateContainer = true
 		// FIXME permissions mismatch: double check create vs write file
 		rp.InitiateFileUpload = true
-		if p&int(permissionWrite) == 1 {
+		if p&int(permissionWrite) != 0 {
 			rp.Move = true // TODO move only when create and write?
 		}
 	}
-	if p&int(permissionDelete) == 1 {
+	if p&int(permissionDelete) != 0 {
 		rp.Delete = true
 		rp.PurgeRecycle = true
 	}
-	if p&int(permissionShare) == 1 {
+	if p&int(permissionShare) != 0 {
 		rp.AddGrant = true
 		rp.RemoveGrant = true // TODO when are you able to unshare / delete
 		rp.UpdateGrant = true
