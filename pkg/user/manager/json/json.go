@@ -16,38 +16,88 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package demo
+package json
 
 import (
 	"context"
+	"encoding/json"
+	"io/ioutil"
+	"strings"
 
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
+	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
 )
 
 func init() {
-	registry.Register("demo", New)
+	registry.Register("json", New)
 }
 
 type manager struct {
-	catalog map[string]*user.User
+	users []*user.User
 }
 
-// New returns a new user manager.
+type config struct {
+	// Users holds a path to a file containing json conforming the Users struct
+	Users string `mapstructure:"users"`
+}
+
+func parseConfig(m map[string]interface{}) (*config, error) {
+	c := &config{}
+	if err := mapstructure.Decode(m, c); err != nil {
+		err = errors.Wrap(err, "error decoding conf")
+		return nil, err
+	}
+	return c, nil
+}
+
+// New returns a user manager implementation that reads a json file to provide user metadata.
 func New(m map[string]interface{}) (user.Manager, error) {
-	cat := getUsers()
-	return &manager{catalog: cat}, nil
+	c, err := parseConfig(m)
+	if err != nil {
+		return nil, err
+	}
+
+	f, err := ioutil.ReadFile(c.Users)
+	if err != nil {
+		return nil, err
+	}
+
+	users := []*user.User{}
+
+	err = json.Unmarshal([]byte(f), &users)
+	if err != nil {
+		return nil, err
+	}
+
+	return &manager{
+		users: users,
+	}, nil
 }
 
 func (m *manager) GetUser(ctx context.Context, username string) (*user.User, error) {
-	if user, ok := m.catalog[username]; ok {
-		return user, nil
+	for _, u := range m.users {
+		if u.Username == username {
+			return u, nil
+		}
 	}
 	return nil, userNotFoundError(username)
 }
 
+// TODO search Opaque? compare sub?
+func userContains(u *user.User, query string) bool {
+	return strings.Contains(u.Username, query) || strings.Contains(u.DisplayName, query) || strings.Contains(u.Mail, query)
+}
+
 func (m *manager) FindUsers(ctx context.Context, query string) ([]*user.User, error) {
-	return []*user.User{}, nil // FIXME implement FindUsers for demo user manager
+	users := []*user.User{}
+	for _, u := range m.users {
+		if userContains(u, query) {
+			users = append(users, u)
+		}
+	}
+	return users, nil
 }
 
 func (m *manager) GetUserGroups(ctx context.Context, username string) ([]string, error) {
@@ -75,28 +125,3 @@ func (m *manager) IsInGroup(ctx context.Context, username, group string) (bool, 
 type userNotFoundError string
 
 func (e userNotFoundError) Error() string { return string(e) }
-
-func getUsers() map[string]*user.User {
-	return map[string]*user.User{
-		// TODO sub
-		// TODO iss
-		"einstein": &user.User{
-			Username:    "einstein",
-			Groups:      []string{"sailing-lovers", "violin-haters"},
-			Mail:        "einstein@example.org",
-			DisplayName: "Albert Einstein",
-		},
-		"marie": &user.User{
-			Username:    "marie",
-			Groups:      []string{"radium-lovers", "polonium-lovers"},
-			Mail:        "marie@example.org",
-			DisplayName: "Marie Curie",
-		},
-		"richard": &user.User{
-			Username:    "richard",
-			Groups:      []string{"quantum-lovers", "philosophy-haters"},
-			Mail:        "richard@example.org",
-			DisplayName: "Richard Feynman",
-		},
-	}
-}

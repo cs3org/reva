@@ -1,0 +1,10 @@
+[
+	{
+		"sub": "a48cb0ed-3375-4b94-bdcd-3cac6e201b7b",
+		"iss": "example.com",
+		"username": "admin",
+		"secret": "secret",
+		"mail": "admin@example.com",
+		"displayname": "Admin"
+	}
+]
