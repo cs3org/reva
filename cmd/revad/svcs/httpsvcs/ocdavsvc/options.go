@@ -20,46 +20,21 @@ package ocdavsvc
 
 import (
 	"net/http"
-
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
-	"github.com/cs3org/reva/pkg/appctx"
 )
 
 func (s *svc) doOptions(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
-	fn := r.URL.Path
-	client, err := s.getClient()
-	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+	allow := "OPTIONS, LOCK, GET, HEAD, POST, DELETE, PROPPATCH, COPY, "
+	allow += " MOVE, UNLOCK, PROPFIND, MKCOL, REPORT, SEARCH"
+	allow += " PUT" // TODO only for files ... but we cannot create the full path without a user ... which we only have when credentials are sent
 
-	ref := &storageproviderv0alphapb.Reference{
-		Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
-	}
-	req := &storageproviderv0alphapb.StatRequest{Ref: ref}
-	res, err := client.Stat(ctx, req)
-	if err != nil {
-		log.Error().Err(err).Msg("error sending grpc stat request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if res.Status.Code != rpcpb.Code_CODE_OK {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	info := res.Info
-	allow := "OPTIONS, LOCK, GET, HEAD, POST, DELETE, PROPPATCH, COPY,"
-	allow += " MOVE, UNLOCK, PROPFIND"
-	if info.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_FILE {
-		allow += ", PUT"
-	}
-
+	w.Header().Add("Vary", "Origin")
+	w.Header().Add("Vary", "Access-Control-Request-Method")
+	w.Header().Add("Vary", "Access-Control-Request-Headers")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+	w.Header().Set("Access-Control-Allow-Methods", allow)
+	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Depth, Ocs-Apirequest")
+	w.Header().Set("Content-Type", "application/xml")
 	w.Header().Set("Allow", allow)
 	w.Header().Set("DAV", "1, 2")
 	w.Header().Set("MS-Author-Via", "DAV")

@@ -54,6 +54,7 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 		ExposedHeaders:     conf.ExposedHeaders,
 		MaxAge:             conf.MaxAge,
 		OptionsPassthrough: conf.OptionsPassthrough,
+		Debug:              true,
 	})
 
 	return c.Handler, conf.Priority, nil
