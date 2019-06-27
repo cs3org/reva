@@ -22,6 +22,7 @@ import (
 	// Load core authentication managers.
 	_ "github.com/cs3org/reva/pkg/auth/manager/demo"
 	_ "github.com/cs3org/reva/pkg/auth/manager/impersonator"
+	_ "github.com/cs3org/reva/pkg/auth/manager/json"
 	_ "github.com/cs3org/reva/pkg/auth/manager/ldap"
 	_ "github.com/cs3org/reva/pkg/auth/manager/oidc"
 	// Add your own here
