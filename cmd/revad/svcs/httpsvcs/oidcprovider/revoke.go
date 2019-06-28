@@ -19,13 +19,15 @@
 package oidcprovider
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/ory/fosite"
+
+	"github.com/cs3org/reva/pkg/appctx"
 )
 
 func (s *svc) doRevoke(w http.ResponseWriter, r *http.Request) {
+	log := appctx.GetLogger(r.Context())
 
 	// This context will be passed to all methods.
 	ctx := fosite.NewContext()
@@ -41,7 +43,7 @@ func (s *svc) doRevoke(w http.ResponseWriter, r *http.Request) {
 	// * invalid redirect
 	// * ...
 	if err != nil {
-		log.Printf("Error occurred in NewAccessRequest: %+v", err)
+		log.Error().Err(err).Msg("Error occurred in NewAccessRequest")
 		oauth2.WriteAccessError(w, accessRequest, err)
 		return
 	}
@@ -59,7 +61,7 @@ func (s *svc) doRevoke(w http.ResponseWriter, r *http.Request) {
 	// and aggregate the result in response.
 	response, err := oauth2.NewAccessResponse(ctx, accessRequest)
 	if err != nil {
-		log.Printf("Error occurred in NewAccessResponse: %+v", err)
+		log.Error().Err(err).Msg("Error occurred in NewAccessResponse")
 		oauth2.WriteAccessError(w, accessRequest, err)
 		return
 	}

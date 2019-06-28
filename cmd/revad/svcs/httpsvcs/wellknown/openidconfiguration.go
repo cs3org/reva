@@ -72,7 +72,8 @@ func (s *svc) doOpenidConfiguration(w http.ResponseWriter, r *http.Request) {
 		AuthorizationEndpoint: "http://localhost:9998/oauth2/auth",
 		TokenEndpoint:         "http://localhost:9998/oauth2/token",
 		RevocationEndpoint:    "http://localhost:9998/oauth2/auth",
-		IntrospectionEndpoint: "http://localhost:9998/oauth2/introspection",
+		IntrospectionEndpoint: "http://localhost:9998/oauth2/introspect",
+		UserinfoEndpoint:      "http://localhost:9998/oauth2/userinfo",
 	}
 	b, err := json.Marshal(pm)
 	if err != nil {

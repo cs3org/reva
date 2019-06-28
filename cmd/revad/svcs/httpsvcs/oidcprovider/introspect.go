@@ -19,18 +19,20 @@
 package oidcprovider
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/ory/fosite"
+
+	"github.com/cs3org/reva/pkg/appctx"
 )
 
 func (s *svc) doIntrospect(w http.ResponseWriter, r *http.Request) {
+	log := appctx.GetLogger(r.Context())
 	ctx := fosite.NewContext()
 	mySessionData := newSession("")
 	ir, err := oauth2.NewIntrospectionRequest(ctx, r, mySessionData)
 	if err != nil {
-		log.Printf("Error occurred in NewAuthorizeRequest: %+v", err)
+		log.Error().Err(err).Msg("Error occurred in NewIntrospectionRequest")
 		oauth2.WriteIntrospectionError(w, err)
 		return
 	}

@@ -64,20 +64,19 @@ func newExampleStore() *storage.MemoryStore {
 				GrantTypes:    []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials"},
 				Scopes:        []string{"openid", "profile", "email", "offline"},
 			},
-			"encoded:client": &fosite.DefaultClient{
-				ID:            "encoded:client",
-				Secret:        []byte(`$2a$10$A7M8b65dSSKGHF0H2sNkn.9Z0hT8U1Nv6OWPV3teUUaczXkVkxuDS`), // = "encoded&password"
-				RedirectURIs:  []string{"http://localhost:9998/callback"},
+			"reva": &fosite.DefaultClient{
+				ID:            "reva",
+				Secret:        []byte(`$2a$10$IxMdI6d.LIRZPpSfEwNoeu4rY3FhDREsxFJXikcgdRRAStxUlsuEO`), // = "foobar"
 				ResponseTypes: []string{"id_token", "code", "token"},
-				GrantTypes:    []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials"},
-				Scopes:        []string{"fosite", "openid", "photos", "offline"},
+				GrantTypes:    []string{"client_credentials"},
+				Scopes:        []string{"openid", "profile", "email", "offline"},
 			},
 		},
 		Users: map[string]storage.MemoryUserRelation{
-			"peter": {
+			"a25cbd3c-f7f7-481d-a6f5-ec5983d88fa1": {
 				// This store simply checks for equality, a real storage implementation would obviously use
 				// a hashing algorithm for encrypting the user password.
-				Username: "peter",
+				Username: "aaliyah_adams",
 				Password: "secret",
 			},
 		},
@@ -140,9 +139,9 @@ var oauth2 = compose.Compose(
 func newSession(user string) *openid.DefaultSession {
 	return &openid.DefaultSession{
 		Claims: &jwt.IDTokenClaims{
-			Issuer:      "https://reva.my-application.com",
-			Subject:     user,
-			Audience:    []string{"https://my-client.my-application.com"},
+			Issuer:  "http://localhost:9998",
+			Subject: user,
+			//Audience:    []string{"https://my-client.my-application.com"},
 			ExpiresAt:   time.Now().Add(time.Hour * 6),
 			IssuedAt:    time.Now(),
 			RequestedAt: time.Now(),
@@ -157,6 +156,7 @@ func newSession(user string) *openid.DefaultSession {
 func mustRSAKey() *rsa.PrivateKey {
 	key, err := rsa.GenerateKey(rand.Reader, 1024)
 	if err != nil {
+		// TODO really panic?
 		panic(err)
 	}
 	return key
@@ -209,26 +209,10 @@ func (s *svc) setHandler() {
 			s.doRevoke(w, r)
 		case "introspect":
 			s.doIntrospect(w, r)
+		case "userinfo":
+			s.doUserinfo(w, r)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
 	})
-}
-
-func doOpen(w http.ResponseWriter, r *http.Request) {
-	html := `
-<!DOCTYPE html>
-<html>
-<body>
-
-<h1>Markdown Editor</h1>
-<h2>TODO</h2>
-
-</body>
-<script type="text/javascript">
-alert("hello!");
-</script>
-</html>
-	`
-	w.Write([]byte(html))
 }

@@ -20,13 +20,15 @@ package oidcprovider
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 
 	"github.com/ory/fosite"
+
+	"github.com/cs3org/reva/pkg/appctx"
 )
 
 func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
+	log := appctx.GetLogger(r.Context())
 
 	// This context will be passed to all methods.
 	ctx := fosite.NewContext()
@@ -35,7 +37,7 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 	// It will analyze the request and extract important information like scopes, response type and others.
 	ar, err := oauth2.NewAuthorizeRequest(ctx, r)
 	if err != nil {
-		log.Printf("Error occurred in NewAuthorizeRequest: %+v", err)
+		log.Error().Err(err).Msg("Error occurred in NewAuthorizeRequest")
 		oauth2.WriteAuthorizeError(w, ar, err)
 		return
 	}
@@ -49,7 +51,7 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 	// Normally, this would be the place where you would check if the user is logged in and gives his consent.
 	// We're simplifying things and just checking if the request includes a valid username and password
 	r.ParseForm()
-	if r.PostForm.Get("username") != "peter" {
+	if r.PostForm.Get("username") != "aaliyah_adams" {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write([]byte(`<h1>Login page</h1>`))
 		w.Write([]byte(fmt.Sprintf(`
@@ -59,7 +61,7 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 					By logging in, you consent to grant these scopes:
 					<ul>%s</ul>
 				</p>
-				<input type="text" name="username" /> <small>try peter</small><br>
+				<input type="text" name="username" /> <small>try aaliyah_adams</small><br>
 				<input type="submit">
 			</form>
 		`, requestedScopes)))
@@ -72,7 +74,7 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Now that the user is authorized, we set up a session:
-	mySessionData := newSession("peter")
+	mySessionData := newSession("a25cbd3c-f7f7-481d-a6f5-ec5983d88fa1")
 
 	// When using the HMACSHA strategy you must use something that implements the HMACSessionContainer.
 	// It brings you the power of overriding the default values.
@@ -105,7 +107,7 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 	// * invalid redirect
 	// * ...
 	if err != nil {
-		log.Printf("Error occurred in NewAuthorizeResponse: %+v", err)
+		log.Error().Err(err).Msg("Error occurred in NewAuthorizeResponse")
 		oauth2.WriteAuthorizeError(w, ar, err)
 		return
 	}
