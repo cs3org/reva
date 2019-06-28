@@ -701,7 +701,7 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 func (h *SharesHandler) addFileInfo(s *ShareData, info *storageproviderv0alphapb.ResourceInfo) {
 	if info != nil {
 		// TODO The owner is not set in the storage stat metadata ...
-		owner := h.resolveUserString(info.Owner)
+		owner := h.resolveUserID(info.Owner)
 		s.MimeType = info.MimeType
 		// TODO STime:     &typespb.Timestamp{Seconds: info.Mtime.Seconds, Nanos: info.Mtime.Nanos},
 		s.StorageID = info.Id.StorageId
@@ -731,8 +731,8 @@ func (h *SharesHandler) addFileInfo(s *ShareData, info *storageproviderv0alphapb
 
 // TODO(jfd) merge userShare2ShareData with publicShare2ShareData
 func (h *SharesHandler) userShare2ShareData(share *usershareproviderv0alphapb.Share) *ShareData {
-	creator := h.resolveUserString(share.Creator)
-	owner := h.resolveUserString(share.Owner)
+	creator := h.resolveUserID(share.Creator)
+	owner := h.resolveUserID(share.Owner)
 	grantee := h.resolveUserID(share.Grantee.Id)
 	sd := &ShareData{
 		Permissions:          userSharePermissions2OCSPermissions(share.GetPermissions()),
@@ -778,17 +778,6 @@ func (h *SharesHandler) resolveUserID(userID *typespb.UserId) *user.User {
 		},
 		Username:    userID.OpaqueId,
 		DisplayName: userID.OpaqueId,
-	}
-}
-
-// TODO do user lookup and cache users
-func (h *SharesHandler) resolveUserString(userID string) *user.User {
-	return &user.User{
-		ID: &user.ID{
-			OpaqueID: userID,
-		},
-		Username:    userID,
-		DisplayName: userID,
 	}
 }
 
