@@ -97,6 +97,9 @@ func (s *svc) setHandler() {
 	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log := appctx.GetLogger(r.Context())
 
+		// the webdav api is accessible from anywhere
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
 		// TODO(jfd): do we need this?
 		// fake litmus testing for empty namespace: see https://github.com/golang/net/blob/e514e69ffb8bc3c76a71ae40de0118d794855992/webdav/litmus_test_server.go#L58-L89
 		if r.Header.Get("X-Litmus") == "props: 3 (propfind_invalid2)" {
@@ -120,6 +123,14 @@ func (s *svc) setHandler() {
 			// TODO(jfd): refactor as separate handler
 			// the old `webdav` endpoint uses remote.php/webdav/$path
 			if head2 == "webdav" {
+				if r.Method == "OPTIONS" {
+					// no need for the user, and we need to be able
+					// to answer preflight checks, which have no auth headers
+					r.URL.Path = tail2 // tail alwas starts with /
+					s.doOptions(w, r)
+					return
+				}
+
 				// inject username in path
 				ctx := r.Context()
 				u, ok := user.ContextGetUser(ctx)
@@ -156,9 +167,6 @@ func (s *svc) setHandler() {
 				switch r.Method {
 				case "PROPFIND":
 					s.doPropfind(w, r)
-					return
-				case "OPTIONS":
-					s.doOptions(w, r)
 					return
 				case "HEAD":
 					s.doHead(w, r)
@@ -252,6 +260,11 @@ func (s *svc) setHandler() {
 						w.WriteHeader(http.StatusNotFound)
 						return
 					}
+				}
+				if head3 == "avatars" {
+					r.URL.Path = tail3
+					s.doAvatar(w, r)
+					return
 				}
 			}
 		}

@@ -40,19 +40,29 @@ func New(m map[string]interface{}) (user.Manager, error) {
 
 func (m *manager) GetUser(ctx context.Context, username string) (*user.User, error) {
 
-	claims, ok := ctx.Value(oidc.ClaimsKey).(oidc.Claims)
+	claims, ok := ctx.Value(oidc.ClaimsKey).(oidc.StandardClaims)
 	if !ok {
 		return nil, userNotFoundError(username)
 	}
 
-	return &user.User{
-		Subject:     claims.Subject, // a stable non reassignable id
-		Issuer:      claims.Issuer,  // in the scope of this issuer
-		Username:    claims.KCIdentity["kc.i.un"],
+	user := &user.User{
+		Subject:     claims.Sub, // a stable non reassignable id
+		Issuer:      claims.Iss, // in the scope of this issuer
+		Username:    claims.PreferredUsername,
 		Groups:      []string{},
 		Mail:        claims.Email,
-		DisplayName: claims.KCIdentity["kc.i.dn"],
-	}, nil
+		DisplayName: claims.Name,
+	}
+
+	// try kopano konnect specific claims
+	if user.Username == "" {
+		user.Username = claims.KCIdentity["kc.i.un"]
+	}
+	if user.DisplayName == "" {
+		user.DisplayName = claims.KCIdentity["kc.i.dn"]
+	}
+
+	return user, nil
 }
 
 func (m *manager) FindUsers(ctx context.Context, query string) ([]*user.User, error) {

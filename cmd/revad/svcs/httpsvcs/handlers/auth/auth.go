@@ -125,6 +125,12 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 
 	chain := func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// OPTION requests need to pass for preflight requests
+			if r.Method == "OPTIONS" {
+				h.ServeHTTP(w, r)
+				return
+			}
+
 			// skip auth for urls set in the config.
 			if skip(r.URL.Path, conf.SkipMethods) {
 				h.ServeHTTP(w, r)
