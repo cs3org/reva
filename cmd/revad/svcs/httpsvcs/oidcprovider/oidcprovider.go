@@ -56,13 +56,13 @@ func newExampleStore() *storage.MemoryStore {
 	return &storage.MemoryStore{
 		IDSessions: make(map[string]fosite.Requester),
 		Clients: map[string]fosite.Client{
-			"my-client": &fosite.DefaultClient{
-				ID:            "my-client",
+			"phoenix": &fosite.DefaultClient{
+				ID:            "phoenix",
 				Secret:        []byte(`$2a$10$IxMdI6d.LIRZPpSfEwNoeu4rY3FhDREsxFJXikcgdRRAStxUlsuEO`), // = "foobar"
-				RedirectURIs:  []string{"http://localhost:9998/callback"},
+				RedirectURIs:  []string{"http://localhost:8300/oidc-callback.html"},
 				ResponseTypes: []string{"id_token", "code", "token"},
 				GrantTypes:    []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials"},
-				Scopes:        []string{"fosite", "openid", "photos", "offline"},
+				Scopes:        []string{"openid", "profile", "email", "offline"},
 			},
 			"encoded:client": &fosite.DefaultClient{
 				ID:            "encoded:client",
@@ -140,7 +140,7 @@ var oauth2 = compose.Compose(
 func newSession(user string) *openid.DefaultSession {
 	return &openid.DefaultSession{
 		Claims: &jwt.IDTokenClaims{
-			Issuer:      "https://fosite.my-application.com",
+			Issuer:      "https://reva.my-application.com",
 			Subject:     user,
 			Audience:    []string{"https://my-client.my-application.com"},
 			ExpiresAt:   time.Now().Add(time.Hour * 6),
@@ -191,6 +191,10 @@ func (s *svc) Handler() http.Handler {
 func (s *svc) setHandler() {
 	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log := appctx.GetLogger(r.Context())
+
+		// TODO use CORS allow access from everywhere
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
 		var head string
 		head, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
 		log.Info().Msgf("oidcprovider routing: head=%s tail=%s", head, r.URL.Path)
@@ -208,7 +212,6 @@ func (s *svc) setHandler() {
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
-		return
 	})
 }
 
