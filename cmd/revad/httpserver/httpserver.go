@@ -240,8 +240,8 @@ func (s *Server) getHandler() http.Handler {
 		}
 
 		if h, ok := s.handlers[""]; ok {
-			r.URL.Path = "/" + head + "/" + tail
-			s.log.Info().Msgf("http routing: head=/ tail=%s svc=root", r.URL.Path)
+			r.URL.Path = "/" + head + tail
+			s.log.Info().Msgf("http routing: head= tail=%s svc=root", r.URL.Path)
 			h.ServeHTTP(w, r)
 			return
 		}
