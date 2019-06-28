@@ -27,7 +27,7 @@ lint:
 	go run tools/check-license/check-license.go
 
 contrib:
-	git log --pretty="%an <%ae>" | sort -n | uniq  | sort -n | awk '{print "-", $$0}' > CONTRIBUTORS.md
+	git log --pretty="%an <%ae>" | sort -n | uniq  | sort -n | awk '{print "-", $$0}' | grep -v 'users.noreply.github.com' > CONTRIBUTORS.md 
 
 license:
 	go run github.com/mitchellh/golicense license.hcl cmd/revad/revad
