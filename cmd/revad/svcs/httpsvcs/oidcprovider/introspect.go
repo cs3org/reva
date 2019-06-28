@@ -16,18 +16,24 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package oidcprovider
 
 import (
-	// Load core HTTP services
-	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/datasvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/helloworldsvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/iframeuisvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/ocdavsvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/ocssvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/oidcprovider"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/preferencessvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/prometheussvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/webuisvc"
-	// Add your own service here
+	"log"
+	"net/http"
+
+	"github.com/ory/fosite"
 )
+
+func (s *svc) doIntrospect(w http.ResponseWriter, r *http.Request) {
+	ctx := fosite.NewContext()
+	mySessionData := newSession("")
+	ir, err := oauth2.NewIntrospectionRequest(ctx, r, mySessionData)
+	if err != nil {
+		log.Printf("Error occurred in NewAuthorizeRequest: %+v", err)
+		oauth2.WriteIntrospectionError(w, err)
+		return
+	}
+
+	oauth2.WriteIntrospectionResponse(w, ir)
+}
