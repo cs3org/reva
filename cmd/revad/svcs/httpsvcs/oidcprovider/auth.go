@@ -22,16 +22,12 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/ory/fosite"
-
 	"github.com/cs3org/reva/pkg/appctx"
 )
 
 func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
-	log := appctx.GetLogger(r.Context())
-
-	// This context will be passed to all methods.
-	ctx := fosite.NewContext()
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
 
 	// Let's create an AuthorizeRequest object!
 	// It will analyze the request and extract important information like scopes, response type and others.
@@ -88,7 +84,7 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Now that the user is authorized, we set up a session:
-	mySessionData := newSession(username, getSub(username))
+	mySessionData := newSession(username, getSub(ctx, username))
 
 	// When using the HMACSHA strategy you must use something that implements the HMACSessionContainer.
 	// It brings you the power of overriding the default values.

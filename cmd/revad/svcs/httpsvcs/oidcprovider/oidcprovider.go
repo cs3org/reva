@@ -19,6 +19,7 @@
 package oidcprovider
 
 import (
+	"context"
 	"crypto/md5"
 	"crypto/rand"
 	"crypto/rsa"
@@ -179,9 +180,13 @@ func mustRSAKey() *rsa.PrivateKey {
 }
 
 // TODO currently we fake a sub. it would change when tha username changes ...
-func getSub(username string) string {
+func getSub(ctx context.Context, username string) string {
 	hasher := md5.New()
-	hasher.Write([]byte(username))
+	_, err := hasher.Write([]byte(username))
+	if err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Msg("Error occurred in getSub")
+		return ""
+	}
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 

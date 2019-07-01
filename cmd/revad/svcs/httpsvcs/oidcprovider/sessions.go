@@ -26,7 +26,8 @@ import (
 )
 
 func (s *svc) doSessions(w http.ResponseWriter, r *http.Request) {
-	log := appctx.GetLogger(r.Context())
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
 	// Clients
 	_, err := w.Write([]byte(`<p>Clients</p><ul>`))
 	if err != nil {
@@ -36,7 +37,7 @@ func (s *svc) doSessions(w http.ResponseWriter, r *http.Request) {
 	for id, c := range store.Clients {
 		_, err := w.Write([]byte(fmt.Sprintf(`
 			<li>
-				%s: Id %s, IsPublic %s, GetHashedSecret %s
+				%s: Id %s, IsPublic %t, GetHashedSecret %s
 			</li>`,
 			id, c.GetID(), c.IsPublic(), c.GetHashedSecret(),
 		)))

@@ -44,5 +44,9 @@ func (s *svc) doOpenidConfiguration(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(b)
+	_, err = w.Write(b)
+	if err != nil {
+		log.Error().Err(err).Msg("Error writing response")
+		return
+	}
 }

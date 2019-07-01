@@ -27,10 +27,8 @@ import (
 )
 
 func (s *svc) doToken(w http.ResponseWriter, r *http.Request) {
-	log := appctx.GetLogger(r.Context())
-
-	// This context will be passed to all methods.
-	ctx := fosite.NewContext()
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
 
 	// This will create an access request object and iterate through the registered TokenEndpointHandlers to validate the request.
 	accessRequest, err := oauth2.NewAccessRequest(ctx, r, emptySession())

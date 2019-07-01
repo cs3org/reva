@@ -25,19 +25,9 @@ import (
 
 	"github.com/ory/fosite"
 
-	"golang.org/x/oauth2/clientcredentials"
-
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth/manager/oidc"
 )
-
-// The same thing (valid oauth2 client) but for using the client credentials grant
-var appClientConf = clientcredentials.Config{
-	ClientID:     "reva",
-	ClientSecret: "foobar",
-	Scopes:       []string{"openid profile email"},
-	TokenURL:     "http://localhost:9998/oauth2/token",
-}
 
 func (s *svc) doUserinfo(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -86,5 +76,9 @@ func (s *svc) doUserinfo(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(b)
+	_, err = w.Write(b)
+	if err != nil {
+		log.Error().Err(err).Msg("Error writing response")
+		return
+	}
 }
