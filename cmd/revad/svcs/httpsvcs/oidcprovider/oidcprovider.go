@@ -19,8 +19,10 @@
 package oidcprovider
 
 import (
+	"crypto/md5"
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/hex"
 	"net/http"
 	"time"
 
@@ -72,11 +74,18 @@ func newExampleStore() *storage.MemoryStore {
 				Scopes:        []string{"openid", "profile", "email", "offline"},
 			},
 		},
+		// TODO implement reva specific user store that uses existing user managers
 		Users: map[string]storage.MemoryUserRelation{
-			"a25cbd3c-f7f7-481d-a6f5-ec5983d88fa1": {
-				// This store simply checks for equality, a real storage implementation would obviously use
-				// a hashing algorithm for encrypting the user password.
+			"aaliyah_abernathy": {
+				Username: "aaliyah_abernathy",
+				Password: "secret",
+			},
+			"aaliyah_adams": {
 				Username: "aaliyah_adams",
+				Password: "secret",
+			},
+			"aaliyah_anderson": {
+				Username: "aaliyah_anderson",
 				Password: "secret",
 			},
 		},
@@ -136,11 +145,11 @@ var oauth2 = compose.Compose(
 // Usually, you could do:
 //
 //  session = new(fosite.DefaultSession)
-func newSession(user string) *openid.DefaultSession {
+func newSession(username string, sub string) *openid.DefaultSession {
 	return &openid.DefaultSession{
 		Claims: &jwt.IDTokenClaims{
 			Issuer:  "http://localhost:9998",
-			Subject: user,
+			Subject: sub,
 			//Audience:    []string{"https://my-client.my-application.com"},
 			ExpiresAt:   time.Now().Add(time.Hour * 6),
 			IssuedAt:    time.Now(),
@@ -150,7 +159,14 @@ func newSession(user string) *openid.DefaultSession {
 		Headers: &jwt.Headers{
 			Extra: make(map[string]interface{}),
 		},
+		Subject:  sub,
+		Username: username,
 	}
+}
+
+// emptySession creates a session object and fills it with safe defaults
+func emptySession() *openid.DefaultSession {
+	return newSession("", "")
 }
 
 func mustRSAKey() *rsa.PrivateKey {
@@ -160,6 +176,13 @@ func mustRSAKey() *rsa.PrivateKey {
 		panic(err)
 	}
 	return key
+}
+
+// TODO currently we fake a sub. it would change when tha username changes ...
+func getSub(username string) string {
+	hasher := md5.New()
+	hasher.Write([]byte(username))
+	return hex.EncodeToString(hasher.Sum(nil))
 }
 
 // New returns a new webuisvc
@@ -211,6 +234,9 @@ func (s *svc) setHandler() {
 			s.doIntrospect(w, r)
 		case "userinfo":
 			s.doUserinfo(w, r)
+		case "sessions":
+			// TODO only for development
+			s.doSessions(w, r)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}

@@ -21,21 +21,15 @@ package oidcprovider
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
-	"net/url"
-	"strings"
 
-	"golang.org/x/net/context"
+	"github.com/ory/fosite"
+
 	"golang.org/x/oauth2/clientcredentials"
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth/manager/oidc"
 )
-
-type session struct {
-	User string
-}
 
 // The same thing (valid oauth2 client) but for using the client credentials grant
 var appClientConf = clientcredentials.Config{
@@ -46,53 +40,44 @@ var appClientConf = clientcredentials.Config{
 }
 
 func (s *svc) doUserinfo(w http.ResponseWriter, r *http.Request) {
-	log := appctx.GetLogger(r.Context())
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
 
-	hdr := r.Header.Get("Authorization")
-	token := strings.TrimPrefix(hdr, "Bearer ")
-	if token == "" {
-		// TODO make realm configurable or read it from forwarded for header
-		// see https://github.com/stanvit/go-forwarded as middleware
-		w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm="%s"`, r.Host))
-		return
-	}
+	requiredScope := "openid"
 
-	resp, err := appClientConf.Client(
-		context.Background(),
-	).PostForm(
-		strings.Replace(appClientConf.TokenURL, "token", "introspect", -1),
-		url.Values{
-			"token": []string{token},
-			"scope": []string{r.URL.Query().Get("scope")},
-		},
-	)
+	_, ar, err := oauth2.IntrospectToken(ctx, fosite.AccessTokenFromRequest(r), fosite.AccessToken, emptySession(), requiredScope)
 	if err != nil {
-		fmt.Fprintf(w, "<h1>An error occurred!</h1><p>Could not perform introspection request: %v</p>", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	var introspection = &oidc.IntrospectionResponse{}
-	out, _ := ioutil.ReadAll(resp.Body)
-	if err := json.Unmarshal(out, &introspection); err != nil {
-		log.Error().Err(err).Msg("error unmarshaling introspection claims")
-		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "<h1>An error occurred!</h1><p>Could not perform introspection: %v</p>", err)
 		return
 	}
 
-	if !introspection.Active {
-		w.WriteHeader(http.StatusUnauthorized)
+	log.Debug().Interface("ar", ar).Msg("introspected")
+
+	var sc *oidc.StandardClaims
+	switch ar.GetSession().GetUsername() {
+	//TODO use reva specific implementation that uses existing user managers
+	case "aaliyah_abernathy":
+		sc = &oidc.StandardClaims{
+			Name: "Aaliyah Abernathy",
+		}
+	case "aaliyah_adams":
+		sc = &oidc.StandardClaims{
+			Name: "Aaliyah Adams",
+		}
+	case "aaliyah_anderson":
+		sc = &oidc.StandardClaims{
+			Name: "Aaliyah Anderson",
+		}
+	default:
+		log.Error().Err(err).Msg("unknown user")
+		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	log.Debug().Interface("claims", introspection).Msg("introspected")
+	sc.Sub = ar.GetSession().GetSubject()
+	sc.PreferredUsername = ar.GetSession().GetUsername()
+	sc.EmailVerified = true
+	sc.Email = sc.PreferredUsername + "@owncloudqa.com"
 
-	sc := &oidc.StandardClaims{
-		Sub:               "a25cbd3c-f7f7-481d-a6f5-ec5983d88fa1",
-		Email:             "aaliyah_adams@owncloudqa.com",
-		EmailVerified:     true,
-		Name:              "Aaliyah Adams",
-		PreferredUsername: "aaliyah_adams",
-	}
 	b, err := json.Marshal(sc)
 	if err != nil {
 		log.Error().Err(err).Msg("error marshaling standard claims")

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/cs3org/reva/pkg/appctx"
 	goauth "golang.org/x/oauth2"
 )
 
@@ -38,7 +39,8 @@ var clientConf = goauth.Config{
 }
 
 func (s *svc) doHome(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte(fmt.Sprintf(`
+	log := appctx.GetLogger(r.Context())
+	_, err := w.Write([]byte(fmt.Sprintf(`
 	<p>You can obtain an access token using various methods</p>
 	<ul>
 		<li>
@@ -65,4 +67,7 @@ func (s *svc) doHome(w http.ResponseWriter, r *http.Request) {
 		clientConf.AuthCodeURL("some-random-state-foobar")+"&nonce=some-random-nonce",
 		"/oauth2/auth?client_id=my-client&scope=fosite&response_type=123&redirect_uri=http://localhost:9998/callback",
 	)))
+	if err != nil {
+		log.Error().Err(err).Msg("Error writing response")
+	}
 }

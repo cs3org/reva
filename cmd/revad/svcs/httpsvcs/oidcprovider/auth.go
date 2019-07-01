@@ -45,27 +45,41 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 
 	var requestedScopes string
 	for _, this := range ar.GetRequestedScopes() {
-		requestedScopes += fmt.Sprintf(`<li><input type="checkbox" name="scopes" value="%s">%s</li>`, this, this)
+		requestedScopes += fmt.Sprintf(`<li><label><input type="checkbox" name="scopes" value="%s" checked>%s</label></li>`, this, this)
 	}
 
 	// Normally, this would be the place where you would check if the user is logged in and gives his consent.
 	// We're simplifying things and just checking if the request includes a valid username and password
-	r.ParseForm()
-	if r.PostForm.Get("username") != "aaliyah_adams" {
+	if err := r.ParseForm(); err != nil {
+		log.Error().Err(err).Msg("Error occurred parsing the form data")
+		oauth2.WriteAuthorizeError(w, ar, err)
+		return
+	}
+	username := r.PostForm.Get("username")
+	password := "secret"
+	if username == "" {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write([]byte(`<h1>Login page</h1>`))
-		w.Write([]byte(fmt.Sprintf(`
+		_, err := w.Write([]byte(fmt.Sprintf(`
+			<h1>Login page</h1>
 			<p>Howdy! This is the log in page. For this example, it is enough to supply the username.</p>
 			<form method="post">
 				<p>
 					By logging in, you consent to grant these scopes:
 					<ul>%s</ul>
 				</p>
-				<input type="text" name="username" /> <small>try aaliyah_adams</small><br>
+				<input type="text" name="username" /> <small>try aaliyah_abernathy, aaliyah_adams or aaliyah_anderson</small><br>
 				<input type="submit">
 			</form>
 		`, requestedScopes)))
+		if err != nil {
+			log.Error().Err(err).Msg("Error writing response")
+			oauth2.WriteAuthorizeError(w, ar, err)
+		}
 		return
+	}
+	// use reva sepcific implementation that uses existing auth managers
+	if err := store.Authenticate(ctx, username, password); err != nil {
+		oauth2.WriteAuthorizeError(w, ar, err)
 	}
 
 	// let's see what scopes the user gave consent to
@@ -74,7 +88,7 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Now that the user is authorized, we set up a session:
-	mySessionData := newSession("a25cbd3c-f7f7-481d-a6f5-ec5983d88fa1")
+	mySessionData := newSession(username, getSub(username))
 
 	// When using the HMACSHA strategy you must use something that implements the HMACSessionContainer.
 	// It brings you the power of overriding the default values.

@@ -29,8 +29,7 @@ import (
 func (s *svc) doIntrospect(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context())
 	ctx := fosite.NewContext()
-	mySessionData := newSession("")
-	ir, err := oauth2.NewIntrospectionRequest(ctx, r, mySessionData)
+	ir, err := oauth2.NewIntrospectionRequest(ctx, r, emptySession())
 	if err != nil {
 		log.Error().Err(err).Msg("Error occurred in NewIntrospectionRequest")
 		oauth2.WriteIntrospectionError(w, err)

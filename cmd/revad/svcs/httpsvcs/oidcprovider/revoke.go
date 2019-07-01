@@ -32,11 +32,8 @@ func (s *svc) doRevoke(w http.ResponseWriter, r *http.Request) {
 	// This context will be passed to all methods.
 	ctx := fosite.NewContext()
 
-	// Create an empty session object which will be passed to the request handlers
-	mySessionData := newSession("")
-
 	// This will create an access request object and iterate through the registered TokenEndpointHandlers to validate the request.
-	accessRequest, err := oauth2.NewAccessRequest(ctx, r, mySessionData)
+	accessRequest, err := oauth2.NewAccessRequest(ctx, r, emptySession())
 
 	// Catch any errors, e.g.:
 	// * unknown client
