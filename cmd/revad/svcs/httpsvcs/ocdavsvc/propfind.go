@@ -242,6 +242,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, md *storageproviderv0alphapb
 			err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
 			return nil, err
 		}
+		// TODO can lead to slice out of bounds
 		md.Path = md.Path[len(u.Username)+1:]
 	}
 
