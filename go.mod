@@ -23,7 +23,7 @@ require (
 	github.com/rs/cors v1.6.0
 	github.com/rs/zerolog v1.14.3
 	golang.org/x/crypto v0.0.0-20190411191339-88737f569e3a
-	golang.org/x/net v0.0.0-20190415214537-1da14a5a36f2
+	golang.org/x/net v0.0.0-20190415214537-1da14a5a36f2 // indirect
 	golang.org/x/oauth2 v0.0.0-20181003184128-c57b0facaced
 	golang.org/x/sys v0.0.0-20190416152802-12500544f89f // indirect
 	google.golang.org/grpc v1.21.1

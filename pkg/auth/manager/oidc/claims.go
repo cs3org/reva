@@ -18,9 +18,8 @@
 
 package oidc
 
-// The ProviderMetadata descripes an idp.
+// The ProviderMetadata describes an idp.
 // see https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
-
 type ProviderMetadata struct {
 	AuthorizationEndpoint string `json:"authorization_endpoint,omitempty"`
 	//claims_parameter_supported
