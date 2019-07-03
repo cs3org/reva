@@ -1,5 +1,6 @@
 [REVA](https://cs3org.github.io/reva/) 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) [![GoDoc](https://godoc.org/github.com/cs3org/reva?status.svg)](https://godoc.org/github.com/cs3org/reva)
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fcs3org%2Freva.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Fcs3org%2Freva?ref=badge_shield)
  [![Gitter chat](https://badges.gitter.im/cs3org/reva.svg)](https://gitter.im/cs3org/reva) [![Build Status](https://travis-ci.org/cs3org/reva.svg?branch=master)](https://travis-ci.org/cs3org/reva) [![Go Report Card](https://goreportcard.com/badge/github.com/cs3org/reva)](https://goreportcard.com/report/github.com/cs3org/reva)  [![codecov](https://codecov.io/gh/cs3org/reva/branch/master/graph/badge.svg)](https://codecov.io/gh/cs3org/reva) 
 ================
 [Website](https://cs3org.github.io/reva/)
@@ -58,6 +59,9 @@ portability of the applications and service extensions.
 
 REVA is distributed under [Apache 2.0 license](https://github.com/cs3org/reva/blob/master/LICENSE).
 
+
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fcs3org%2Freva.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Fcs3org%2Freva?ref=badge_large)
+
 ## Logo
 REVA logo's have been designed and contributed to the project by Eamon Maguire.
 
@@ -69,4 +73,3 @@ Semantic versioning will be added once v1.0.0 is reached.
 
 If you want to use it, vendor it. It is always OK to change things to make things better.
 The API is not 100% correct in the first commit.
-
