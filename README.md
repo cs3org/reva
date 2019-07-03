@@ -1,8 +1,9 @@
-[REVA](https://cs3org.github.io/reva/) 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) [![GoDoc](https://godoc.org/github.com/cs3org/reva?status.svg)](https://godoc.org/github.com/cs3org/reva)
  [![Gitter chat](https://badges.gitter.im/cs3org/reva.svg)](https://gitter.im/cs3org/reva) [![Build Status](https://travis-ci.org/cs3org/reva.svg?branch=master)](https://travis-ci.org/cs3org/reva) [![Go Report Card](https://goreportcard.com/badge/github.com/cs3org/reva)](https://goreportcard.com/report/github.com/cs3org/reva)  [![codecov](https://codecov.io/gh/cs3org/reva/branch/master/graph/badge.svg)](https://codecov.io/gh/cs3org/reva) 
 ================
-[Website](https://cs3org.github.io/reva/)
+
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fcs3org%2Freva.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fcs3org%2Freva?ref=badge_large)
+===============
 
 
 ![REVA Logo](https://raw.githubusercontent.com/cs3org/logos/efd3d2649478193e74f3de5a41247445941026b6/reva/logo.jpg)
