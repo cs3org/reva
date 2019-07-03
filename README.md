@@ -2,8 +2,7 @@
  [![Gitter chat](https://badges.gitter.im/cs3org/reva.svg)](https://gitter.im/cs3org/reva) [![Build Status](https://travis-ci.org/cs3org/reva.svg?branch=master)](https://travis-ci.org/cs3org/reva) [![Go Report Card](https://goreportcard.com/badge/github.com/cs3org/reva)](https://goreportcard.com/report/github.com/cs3org/reva)  [![codecov](https://codecov.io/gh/cs3org/reva/branch/master/graph/badge.svg)](https://codecov.io/gh/cs3org/reva) 
 ================
 
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fcs3org%2Freva.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fcs3org%2Freva?ref=badge_large)
-===============
+
 
 
 ![REVA Logo](https://raw.githubusercontent.com/cs3org/logos/efd3d2649478193e74f3de5a41247445941026b6/reva/logo.jpg)
@@ -71,3 +70,5 @@ Semantic versioning will be added once v1.0.0 is reached.
 If you want to use it, vendor it. It is always OK to change things to make things better.
 The API is not 100% correct in the first commit.
 
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fcs3org%2Freva.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fcs3org%2Freva?ref=badge_large)
+===============
