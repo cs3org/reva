@@ -70,5 +70,6 @@ Semantic versioning will be added once v1.0.0 is reached.
 If you want to use it, vendor it. It is always OK to change things to make things better.
 The API is not 100% correct in the first commit.
 
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fcs3org%2Freva.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fcs3org%2Freva?ref=badge_large)
+
 ===============
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fcs3org%2Freva.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fcs3org%2Freva?ref=badge_large)
