@@ -16,19 +16,23 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package oidcprovider
 
 import (
-	// Load core HTTP services
-	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/datasvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/helloworldsvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/iframeuisvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/ocdavsvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/ocssvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/oidcprovider"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/preferencessvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/prometheussvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/webuisvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/wellknown"
-	// Add your own service here
+	"net/http"
+
+	"github.com/cs3org/reva/pkg/appctx"
 )
+
+func (s *svc) doIntrospect(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+	ir, err := oauth2.NewIntrospectionRequest(ctx, r, emptySession())
+	if err != nil {
+		log.Error().Err(err).Msg("Error occurred in NewIntrospectionRequest")
+		oauth2.WriteIntrospectionError(w, err)
+		return
+	}
+
+	oauth2.WriteIntrospectionResponse(w, ir)
+}

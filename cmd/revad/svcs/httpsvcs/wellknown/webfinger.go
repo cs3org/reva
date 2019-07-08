@@ -16,19 +16,12 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package wellknown
 
 import (
-	// Load core HTTP services
-	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/datasvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/helloworldsvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/iframeuisvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/ocdavsvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/ocssvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/oidcprovider"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/preferencessvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/prometheussvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/webuisvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/wellknown"
-	// Add your own service here
+	"net/http"
 )
+
+func (s *svc) doWebfinger(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotFound)
+}

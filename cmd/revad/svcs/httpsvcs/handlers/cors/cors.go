@@ -54,7 +54,9 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 		ExposedHeaders:     conf.ExposedHeaders,
 		MaxAge:             conf.MaxAge,
 		OptionsPassthrough: conf.OptionsPassthrough,
-		Debug:              true,
+		Debug:              false,
+		// TODO use log from request context, otherwise fmt will be used to log,
+		// preventing us from pinging the log to eg jq
 	})
 
 	return c.Handler, conf.Priority, nil
