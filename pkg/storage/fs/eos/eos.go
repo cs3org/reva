@@ -213,11 +213,6 @@ func (fs *eosStorage) GetPathByID(ctx context.Context, id string) (string, error
 }
 
 func (fs *eosStorage) AddGrant(ctx context.Context, fn string, g *storage.Grant) error {
-	u, err := getUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "storage_eos: no user in ctx")
-	}
-
 	fn = fs.getInternalPath(ctx, fn)
 
 	eosACL, err := fs.getEosACL(g)
@@ -225,7 +220,7 @@ func (fs *eosStorage) AddGrant(ctx context.Context, fn string, g *storage.Grant)
 		return err
 	}
 
-	err = fs.c.AddACL(ctx, u.Username, fn, eosACL)
+	err = fs.c.AddACL(ctx, g.Grantee.UserID.OpaqueID, fn, eosACL)
 	if err != nil {
 		return errors.Wrap(err, "storage_eos: error adding acl")
 	}
