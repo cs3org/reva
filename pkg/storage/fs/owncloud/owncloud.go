@@ -22,21 +22,24 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/binary"
+	"encoding/csv"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
-	"github.com/cs3org/reva/pkg/storage/fs/registry"
-
+	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage"
+	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/gofrs/uuid"
 	"github.com/gomodule/redigo/redis"
 	"github.com/mitchellh/mapstructure"
@@ -45,8 +48,95 @@ import (
 )
 
 const (
+	// Currently,extended file attributes have four separated
+	// namespaces (user, trusted, security and system) followed by a dot.
+	// A non ruut user can only manipulate the user. namespace, which is what
+	// we will use to store ownCloud specific metadata. To prevent name
+	// collisions with other apps We are going to introduca a sub namespace
+	// "user.oc."
+
 	// idAttribute is the name of the filesystem extended attribute that is used to store the uuid in
 	idAttribute string = "user.oc.id"
+
+	// shares are persisted using extended attributes. We are going to mimic
+	// NFS4 ACLs, with one extended attribute per share, following Access
+	// Control Entries (ACEs). The following is taken from the nfs4_acl man page,
+	// see https://linux.die.net/man/5/nfs4_acl:
+	// the extended attributes will look like this
+	// "user.oc.acl.<type>:<flags>:<principal>:<permissions>"
+	// - *type* will be limited to A for now
+	//     A: Allow - allow *principal* to perform actions requiring *permissions*
+	//   In the future we can use:
+	//     U: aUdit - log any attempted access by principal which requires
+	//                permissions.
+	//     L: aLarm - generate a system alarm at any attempted access by
+	//                principal which requires permissions
+	//   D for deny is not recommended
+	// - *flags* for now empty or g for group, no inheritance yet
+	//   - d directory-inherit - newly-created subdirectories will inherit the
+	//                           ACE.
+	//   - f file-inherit - newly-created files will inherit the ACE, minus its
+	//                      inheritance flags. Newly-created subdirectories
+	//                      will inherit the ACE; if directory-inherit is not
+	//                      also specified in the parent ACE, inherit-only will
+	//                      be added to the inherited ACE.
+	//   - n no-propagate-inherit - newly-created subdirectories will inherit
+	//                              the ACE, minus its inheritance flags.
+	//   - i inherit-only - the ACE is not considered in permissions checks,
+	//                      but it is heritable; however, the inherit-only
+	//                      flag is stripped from inherited ACEs.
+	// - *principal* a named user, group or special principal
+	//   - the oidc sub@iss maps nicely to this
+	//   - 'OWNER@', 'GROUP@', and 'EVERYONE@', which are, respectively, analogous to the POSIX user/group/other
+	// - *permissions*
+	//   - r read-data (files) / list-directory (directories)
+	//   - w write-data (files) / create-file (directories)
+	//   - a append-data (files) / create-subdirectory (directories)
+	//   - x execute (files) / change-directory (directories)
+	//   - d delete - delete the file/directory. Some servers will allow a delete to occur if either this permission is set in the file/directory or if the delete-child permission is set in its parent direcory.
+	//   - D delete-child - remove a file or subdirectory from within the given directory (directories only)
+	//   - t read-attributes - read the attributes of the file/directory.
+	//   - T write-attributes - write the attributes of the file/directory.
+	//   - n read-named-attributes - read the named attributes of the file/directory.
+	//   - N write-named-attributes - write the named attributes of the file/directory.
+	//   - c read-ACL - read the file/directory NFSv4 ACL.
+	//   - C write-ACL - write the file/directory NFSv4 ACL.
+	//   - o write-owner - change ownership of the file/directory.
+	//   - y synchronize - allow clients to use synchronous I/O with the server.
+	// TODO implement OWNER@ as "user.oc.acl.A::OWNER@:rwaDxtTnNcCy"
+	// attribute names are limited to 255 chars by the linux kernel vfs, values to 64 kb
+	// ext3 extended attributes must fit inside a signle filesystem block ... 4096 bytes
+	// that leaves us with "user.oc.acl.A::someonewithaslightlylongersubject@whateverissuer:rwaDxtTnNcCy" ~80 chars
+	// 4096/80 = 51 shares ... with luck we might move the actual permissions to the value, saving ~15 chars
+	// 4096/64 = 64 shares ... still meh ... we can do better by using ints instead of strings for principals
+	//   "user.oc.acl.u:100000" is pretty neat, but we can still do better: base64 encode the int
+	//   "user.oc.acl.u:6Jqg" but base64 always has at least 4 chars, maybe hex is better for smaller numbers
+	//   well use 4 chars in addition to the ace: "user.oc.acl.u:////" = 65535 -> 18 chars
+	// 4096/18 = 227 shares
+	// still ... ext attrs for this are not infinite scale ...
+	// so .. attach shares via fileid.
+	// <userhome>/metadata/<fileid>/shares, similar to <userhome>/files
+	// <userhome>/metadata/<fileid>/shares/u/<issuer>/<subject>/A:fdi:rwaDxtTnNcCy permissions as filename to keep them in the stat cache?
+	//
+	// whatever ... 50 shares is good enough. If more is needed we can delegate to the metadata
+	// if "user.oc.acl.M" is present look inside the metadata app.
+	// - if we cannot set an ace we might get an io error.
+	//   in that case convert all shares to metadata and try to set "user.oc.acl.m"
+	//
+	// what about metadata like share creator, share time, expiry?
+	// - creator is same as owner, but can be set
+	// - share date, or abbreviated st is a unix timestamp
+	// - expiry is a unix timestamp
+	// - can be put inside the value
+	// - we need to reorder the fields:
+	// "user.oc.acl.<u|g|o>:<principal>" -> "kv:t=<type>:f=<flags>:p=<permissions>:st=<share time>:c=<creator>:e=<expiry>:pw=<password>:n=<name>"
+	// "user.oc.acl.<u|g|o>:<principal>" -> "v1:<type>:<flags>:<permissions>:<share time>:<creator>:<expiry>:<password>:<name>"
+	// or the first byte determines the format
+	// 0x00 = key value
+	// 0x01 = v1 ...
+	//
+	// SharePrefix is the prefix for sharing related extended attributes
+	sharePrefix string = "user.oc.acl."
 )
 
 func init() {
@@ -125,7 +215,7 @@ type ocFS struct {
 	pool *redis.Pool
 }
 
-func (fs *ocFS) Shutdown() error {
+func (fs *ocFS) Shutdown(ctx context.Context) error {
 	return fs.pool.Close()
 }
 
@@ -158,10 +248,10 @@ func (fs *ocFS) scanFiles(ctx context.Context, conn redis.Conn) {
 // the incoming path starts with /<username>, so we need to insert the files subfolder into the path
 // and prefix the datadirectory
 // TODO the path handed to a storage provider should not contain the username
-func (fs *ocFS) jail(p string) string {
+func (fs *ocFS) getInternalPath(ctx context.Context, fn string) string {
 	// p = /<username> or
 	// p = /<username>/foo/bar.txt
-	parts := strings.SplitN(p, "/", 3)
+	parts := strings.SplitN(fn, "/", 3)
 
 	switch len(parts) {
 	case 2:
@@ -175,7 +265,7 @@ func (fs *ocFS) jail(p string) string {
 	}
 
 }
-func (fs *ocFS) unJail(np string) string {
+func (fs *ocFS) removeNamespace(ctx context.Context, np string) string {
 	// np = /data/<username>/files/foo/bar.txt
 	// remove data dir
 	if fs.c.DataDirectory != "/" {
@@ -230,32 +320,59 @@ func calcEtag(ctx context.Context, fi os.FileInfo) string {
 	return fmt.Sprintf(`"%x"`, h.Sum(nil))
 }
 
-func (fs *ocFS) normalize(ctx context.Context, fi os.FileInfo, fn string) *storage.MD {
-	fn = fs.unJail(path.Join("/", fn))
-	md := &storage.MD{
-		ID:          "fileid-" + strings.TrimPrefix(fn, "/"),
-		Path:        fn,
-		IsDir:       fi.IsDir(),
-		Etag:        calcEtag(ctx, fi),
-		Mime:        mime.Detect(fi.IsDir(), fn),
-		Size:        uint64(fi.Size()),
-		Permissions: &storage.PermissionSet{ListContainer: true, CreateContainer: true},
-		Mtime: &storage.Timestamp{
-			Seconds: uint64(fi.ModTime().Unix()),
-		},
+func getOwner(fn string) string {
+	parts := strings.SplitN(fn, "/", 3)
+	// parts = "", "<username>", "files", "foo/bar.txt"
+	if len(parts) > 1 {
+		return parts[1]
 	}
-	//logger.Println(context.Background(), "normalized: ", md)
-	return md
+	return ""
 }
 
-func readOrCreateID(ctx context.Context, fn string, conn redis.Conn) string {
+func (fs *ocFS) convertToResourceInfo(ctx context.Context, fi os.FileInfo, np string, c redis.Conn) *storageproviderv0alphapb.ResourceInfo {
+	id := readOrCreateID(ctx, np, c)
+	fn := fs.removeNamespace(ctx, path.Join("/", np))
+
+	return &storageproviderv0alphapb.ResourceInfo{
+		Id:            &storageproviderv0alphapb.ResourceId{OpaqueId: id},
+		Path:          fn,
+		Owner:         &typespb.UserId{OpaqueId: getOwner(fn)},
+		Type:          getResourceType(fi.IsDir()),
+		Etag:          calcEtag(ctx, fi),
+		MimeType:      mime.Detect(fi.IsDir(), fn),
+		Size:          uint64(fi.Size()),
+		PermissionSet: &storageproviderv0alphapb.ResourcePermissions{ListContainer: true, CreateContainer: true},
+		Mtime: &typespb.Timestamp{
+			Seconds: uint64(fi.ModTime().Unix()),
+			// TODO read nanos from where? Nanos:   fi.MTimeNanos,
+		},
+		/*
+			Opaque: &typespb.Opaque{
+				Map: map[string]*typespb.OpaqueEntry{
+					"eos": &typespb.OpaqueEntry{
+						Decoder: "json",
+						Value:   fs.getEosMetadata(eosFileInfo),
+					},
+				},
+			},
+		*/
+	}
+}
+func getResourceType(isDir bool) storageproviderv0alphapb.ResourceType {
+	if isDir {
+		return storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER
+	}
+	return storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_FILE
+}
+
+func readOrCreateID(ctx context.Context, np string, conn redis.Conn) string {
 	log := appctx.GetLogger(ctx)
 
 	// read extended file attribute for id
 	//generate if not present
 	var id []byte
 	var err error
-	if id, err = xattr.Get(fn, idAttribute); err != nil {
+	if id, err = xattr.Get(np, idAttribute); err != nil {
 		log.Warn().Err(err).Msg("error reading file id")
 		// try generating a uuid
 		if uuid, err := uuid.NewV4(); err != nil {
@@ -263,13 +380,13 @@ func readOrCreateID(ctx context.Context, fn string, conn redis.Conn) string {
 		} else {
 			// store uuid
 			id = uuid.Bytes()
-			if err := xattr.Set(fn, idAttribute, id); err != nil {
+			if err := xattr.Set(np, idAttribute, id); err != nil {
 				log.Error().Err(err).Msg("error storing file id")
 			}
 			// TODO cache path for uuid in redis
 			// TODO reuse conn?
 			if conn != nil {
-				conn.Do("SET", uuid.String(), fn)
+				conn.Do("SET", uuid.String(), np)
 			}
 		}
 	}
@@ -285,43 +402,401 @@ func readOrCreateID(ctx context.Context, fn string, conn redis.Conn) string {
 func (fs *ocFS) autocreate(ctx context.Context, fsfn string) error {
 	log := appctx.GetLogger(ctx)
 	if fs.c.Autocreate {
-		err := os.MkdirAll(fsfn, 0700)
-		if err != nil {
-			log.Debug().
-				Err(err).
-				Str("fsfn", fsfn).
-				Msg("could not autocreate home")
+		parts := strings.SplitN(fsfn, "/files", 2)
+		switch len(parts) {
+		case 1:
+			return nil // error? there is no files in here ...
+		case 2:
+			if parts[1] == "" {
+				// nothing to do, fsfn is the home
+			} else {
+				// only create home
+				fsfn = path.Join(parts[0], "files")
+			}
+			err := os.MkdirAll(fsfn, 0700)
+			if err != nil {
+				log.Debug().
+					Err(err).
+					Str("fsfn", fsfn).
+					Msg("could not autocreate home")
+			}
 		}
 	}
 	return nil
 }
 
-// GetPathByID returns the path pointed by the file id
-func (fs *ocFS) GetPathByID(ctx context.Context, id string) (string, error) {
+func (fs *ocFS) getPath(ctx context.Context, id *storageproviderv0alphapb.ResourceId) (string, error) {
 	c := fs.pool.Get()
 	defer c.Close()
 	fs.scanFiles(ctx, c)
-	s, err := redis.String(c.Do("GET", id))
+	np, err := redis.String(c.Do("GET", id))
 	if err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).Msg("error reading fileid")
+		appctx.GetLogger(ctx).Error().Err(err).Msg("error looking up fileid")
 		return "", err
 	}
-	return s, nil
+	return np, nil
 }
 
-func (fs *ocFS) AddGrant(ctx context.Context, path string, g *storage.Grant) error {
-	return notSupportedError("op not supported")
+// GetPathByID returns the fn pointed by the file id, without the internal namespace
+func (fs *ocFS) GetPathByID(ctx context.Context, id *storageproviderv0alphapb.ResourceId) (string, error) {
+	np, err := fs.getPath(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	return fs.removeNamespace(ctx, np), nil
 }
 
-func (fs *ocFS) ListGrants(ctx context.Context, path string) ([]*storage.Grant, error) {
-	return nil, notSupportedError("op not supported")
+// resolve takes in a request path or request id and converts it to a internal path.
+func (fs *ocFS) resolve(ctx context.Context, ref *storageproviderv0alphapb.Reference) (string, error) {
+	if ref.GetPath() != "" {
+		return fs.getInternalPath(ctx, ref.GetPath()), nil
+	}
+
+	if ref.GetId() != nil {
+		np, err := fs.getPath(ctx, ref.GetId())
+		if err != nil {
+			return "", err
+		}
+		return np, nil
+	}
+
+	// reference is invalid
+	return "", fmt.Errorf("invalid reference %+v", ref)
 }
 
-func (fs *ocFS) RemoveGrant(ctx context.Context, path string, g *storage.Grant) error {
-	return notSupportedError("op not supported")
+func (fs *ocFS) AddGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
+	np, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "storage_owncloud: error resolving reference")
+	}
+
+	e, err := fs.getACE(g)
+	if err != nil {
+		return err
+	}
+
+	var attr string
+	if g.Grantee.Type == storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_GROUP {
+		attr = sharePrefix + "g:" + e.Principal
+	} else {
+		attr = sharePrefix + "u:" + e.Principal
+	}
+
+	return xattr.Set(np, attr, getValue(e))
 }
-func (fs *ocFS) UpdateGrant(ctx context.Context, path string, g *storage.Grant) error {
-	return notSupportedError("op not supported")
+
+func getValue(e *ace) []byte {
+	// first byte will be replaced after converting to byte array
+	val := fmt.Sprintf("_t=%s:f=%s:p=%s", e.Type, e.Flags, e.Permissions)
+	b := []byte(val)
+	b[0] = 0 // indicalte key value
+	return b
+}
+
+func getACEPerm(set *storageproviderv0alphapb.ResourcePermissions) (string, error) {
+	var b strings.Builder
+
+	if set.Stat || set.InitiateFileDownload || set.ListContainer {
+		b.WriteString("r")
+	}
+	if set.InitiateFileUpload || set.Move {
+		b.WriteString("w")
+	}
+	if set.CreateContainer {
+		b.WriteString("a")
+	}
+	if set.Delete {
+		b.WriteString("d")
+	}
+
+	// sharing
+	if set.AddGrant || set.RemoveGrant || set.UpdateGrant {
+		b.WriteString("C")
+	}
+	if set.ListGrants {
+		b.WriteString("c")
+	}
+
+	// trash
+	if set.ListRecycle {
+		b.WriteString("u")
+	}
+	if set.RestoreRecycleItem {
+		b.WriteString("U")
+	}
+	if set.PurgeRecycle {
+		b.WriteString("P")
+	}
+
+	// versions
+	if set.ListFileVersions {
+		b.WriteString("v")
+	}
+	if set.RestoreFileVersion {
+		b.WriteString("V")
+	}
+
+	// quota
+	if set.GetQuota {
+		b.WriteString("q")
+	}
+	// TODO set quota permission?
+	// TODO GetPath
+	return b.String(), nil
+}
+
+func (fs *ocFS) getACE(g *storageproviderv0alphapb.Grant) (*ace, error) {
+	permissions, err := getACEPerm(g.Permissions)
+	if err != nil {
+		return nil, err
+	}
+	e := &ace{
+		Principal:   g.Grantee.Id.OpaqueId,
+		Permissions: permissions,
+		// TODO creator ...
+		Type: "A",
+	}
+	if g.Grantee.Type == storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_GROUP {
+		e.Flags = "g"
+	}
+	return e, nil
+}
+
+type ace struct {
+	//NFSv4 acls
+	Type        string // t
+	Flags       string // f
+	Principal   string // im key
+	Permissions string // p
+
+	// sharing specific
+	ShareTime int    // s
+	Creator   string // c
+	Expires   int    // e
+	Password  string // w passWord TODO h = hash
+	Label     string // l
+}
+
+func unmarshalACE(v []byte) (*ace, error) {
+	// first byte indicates type of value
+	switch v[0] {
+	case 0: // = ':' separated key=value pairs
+		s := string(v[1:])
+		return unmarshalKV(s)
+	default:
+		return nil, fmt.Errorf("unknown ace encoding")
+	}
+}
+
+func unmarshalKV(s string) (*ace, error) {
+	e := &ace{}
+	r := csv.NewReader(strings.NewReader(s))
+	r.Comma = ':'
+	r.Comment = 0
+	r.FieldsPerRecord = -1
+	r.LazyQuotes = false
+	r.TrimLeadingSpace = false
+	records, err := r.ReadAll()
+	if err != nil {
+		return nil, err
+	}
+	if len(records) != 1 {
+		return nil, fmt.Errorf("more than one row of ace kvs")
+	}
+	for _, t := range records[0] {
+		kv := strings.Split(t, "=")
+		switch kv[0] {
+		case "t":
+			e.Type = kv[1]
+		case "f":
+			e.Flags = kv[1]
+		case "p":
+			e.Permissions = kv[1]
+		case "s":
+			v, err := strconv.Atoi(kv[1])
+			if err != nil {
+				return nil, err
+			}
+			e.ShareTime = v
+		case "c":
+			e.Creator = kv[1]
+		case "e":
+			v, err := strconv.Atoi(kv[1])
+			if err != nil {
+				return nil, err
+			}
+			e.Expires = v
+		case "w":
+			e.Password = kv[1]
+		case "l":
+			e.Label = kv[1]
+			// TODO default ... log unknown keys? or add as opaque? hm we need that for tagged shares ...
+		}
+	}
+	return e, nil
+}
+
+// Parse parses an acl string with the given delimiter (LongTextForm or ShortTextForm)
+func getACEs(ctx context.Context, fsfn string, attrs []string) ([]*ace, error) {
+	log := appctx.GetLogger(ctx)
+	entries := []*ace{}
+	for _, attr := range attrs {
+		if strings.HasPrefix(attr, sharePrefix) {
+			principal := attr[len(sharePrefix):]
+			value, err := xattr.Get(fsfn, attr)
+			if err != nil {
+				log.Error().Err(err).Str("attr", attr).Msg("could not read attribute")
+				continue
+			}
+			e, err := unmarshalACE(value)
+			if err != nil {
+				log.Error().Err(err).Str("attr", attr).Msg("could unmarshal ace")
+				continue
+			}
+			e.Principal = principal[2:]
+			// check consistency of Flags and principal type
+			if strings.Contains(e.Flags, "g") {
+				if principal[:1] != "g" {
+					log.Error().Str("attr", attr).Interface("ace", e).Msg("inconsistent ace: expected group")
+					continue
+				}
+			} else {
+				if principal[:1] != "u" {
+					log.Error().Str("attr", attr).Interface("ace", e).Msg("inconsistent ace: expected user")
+					continue
+				}
+			}
+			entries = append(entries, e)
+		}
+	}
+	return entries, nil
+}
+
+func (fs *ocFS) ListGrants(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.Grant, error) {
+	log := appctx.GetLogger(ctx)
+	np, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return nil, errors.Wrap(err, "storage_owncloud: error resolving reference")
+	}
+	attrs, err := xattr.List(np)
+	if err != nil {
+		log.Error().Err(err).Msg("error listing attributes")
+		return nil, err
+	}
+
+	log.Debug().Interface("attrs", attrs).Msg("read attributes")
+	// filter attributes
+	aces, err := getACEs(ctx, np, attrs)
+
+	grants := []*storageproviderv0alphapb.Grant{}
+	for _, e := range aces {
+		grantee := &storageproviderv0alphapb.Grantee{
+			Id:   &typespb.UserId{OpaqueId: e.Principal},
+			Type: fs.getGranteeType(e),
+		}
+		grants = append(grants, &storageproviderv0alphapb.Grant{
+			Grantee:     grantee,
+			Permissions: fs.getGrantPermissionSet(e.Permissions),
+		})
+	}
+
+	return grants, nil
+}
+
+func (fs *ocFS) getGranteeType(e *ace) storageproviderv0alphapb.GranteeType {
+	if strings.Contains(e.Flags, "g") {
+		return storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_GROUP
+	}
+	return storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER
+}
+
+func (fs *ocFS) getGrantPermissionSet(mode string) *storageproviderv0alphapb.ResourcePermissions {
+	p := &storageproviderv0alphapb.ResourcePermissions{}
+	// r
+	if strings.Contains(mode, "r") {
+		p.Stat = true
+		p.InitiateFileDownload = true
+		p.ListContainer = true
+	}
+	// w
+	if strings.Contains(mode, "w") {
+		p.InitiateFileUpload = true
+		if p.InitiateFileDownload {
+			p.Move = true
+		}
+	}
+	//a
+	if strings.Contains(mode, "a") {
+		// TODO append data to file permission?
+		p.CreateContainer = true
+	}
+	//x
+	//if strings.Contains(mode, "x") {
+	// TODO execute file permission?
+	// TODO change directory permission?
+	//}
+	//d
+	if strings.Contains(mode, "d") {
+		p.Delete = true
+	}
+	//D ?
+
+	// sharing
+	if strings.Contains(mode, "C") {
+		p.AddGrant = true
+		p.RemoveGrant = true
+		p.UpdateGrant = true
+	}
+	if strings.Contains(mode, "c") {
+		p.ListGrants = true
+	}
+
+	// trash
+	if strings.Contains(mode, "u") { // u = undelete
+		p.ListRecycle = true
+	}
+	if strings.Contains(mode, "U") {
+		p.RestoreRecycleItem = true
+	}
+	if strings.Contains(mode, "P") {
+		p.PurgeRecycle = true
+	}
+
+	// versions
+	if strings.Contains(mode, "v") {
+		p.ListFileVersions = true
+	}
+	if strings.Contains(mode, "V") {
+		p.RestoreFileVersion = true
+	}
+
+	// ?
+	// TODO GetPath
+	if strings.Contains(mode, "q") {
+		p.GetQuota = true
+	}
+	// TODO set quota permission?
+	return p
+}
+
+func (fs *ocFS) RemoveGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
+
+	np, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "storage_owncloud: error resolving reference")
+	}
+
+	var attr string
+	if g.Grantee.Type == storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_GROUP {
+		attr = sharePrefix + "g:" + g.Grantee.Id.OpaqueId
+	} else {
+		attr = sharePrefix + "u:" + g.Grantee.Id.OpaqueId
+	}
+
+	return xattr.Remove(np, attr)
+}
+func (fs *ocFS) UpdateGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
+	return fs.AddGrant(ctx, ref, g)
 }
 
 func (fs *ocFS) GetQuota(ctx context.Context) (int, int, error) {
@@ -329,93 +804,110 @@ func (fs *ocFS) GetQuota(ctx context.Context) (int, int, error) {
 }
 
 func (fs *ocFS) CreateDir(ctx context.Context, fn string) error {
-	fsfn := fs.jail(fn)
-	err := os.Mkdir(fsfn, 0700)
+	np := fs.getInternalPath(ctx, fn)
+	err := os.Mkdir(np, 0700)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return notFoundError(fn)
 		}
 		// FIXME we also need already exists error, webdav expects 405 MethodNotAllowed
-		return errors.Wrap(err, "ocFS: error creating dir "+fsfn)
+		return errors.Wrap(err, "ocFS: error creating dir "+np)
 	}
 	return nil
 }
 
-func (fs *ocFS) Delete(ctx context.Context, fn string) error {
-	fsfn := fs.jail(fn)
-	err := os.Remove(fsfn)
+func (fs *ocFS) Delete(ctx context.Context, ref *storageproviderv0alphapb.Reference) error {
+	np, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "storage_owncloud: error resolving reference")
+	}
+	err = os.Remove(np)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return notFoundError(fn)
+			return notFoundError(fs.removeNamespace(ctx, np))
 		}
 		// try recursive delete
-		err = os.RemoveAll(fsfn)
+		err = os.RemoveAll(np)
 		if err != nil {
-			return errors.Wrap(err, "ocFS: error deleting "+fsfn)
+			return errors.Wrap(err, "ocFS: error deleting "+np)
 		}
 	}
 	return nil
 }
 
-func (fs *ocFS) Move(ctx context.Context, oldName, newName string) error {
-	oldName = fs.jail(oldName)
-	newName = fs.jail(newName)
+func (fs *ocFS) Move(ctx context.Context, oldRef, newRef *storageproviderv0alphapb.Reference) error {
+	oldName, err := fs.resolve(ctx, oldRef)
+	if err != nil {
+		return errors.Wrap(err, "storage_owncloud: error resolving reference")
+	}
+	newName, err := fs.resolve(ctx, newRef)
+	if err != nil {
+		return errors.Wrap(err, "storage_owncloud: error resolving reference")
+	}
 	if err := os.Rename(oldName, newName); err != nil {
 		return errors.Wrap(err, "ocFS: error moving "+oldName+" to "+newName)
 	}
 	return nil
 }
 
-func (fs *ocFS) GetMD(ctx context.Context, fn string) (*storage.MD, error) {
-	fsfn := fs.jail(fn)
-	fs.autocreate(ctx, fsfn)
-	md, err := os.Stat(fsfn)
+func (fs *ocFS) GetMD(ctx context.Context, ref *storageproviderv0alphapb.Reference) (*storageproviderv0alphapb.ResourceInfo, error) {
+	np, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return nil, errors.Wrap(err, "storage_owncloud: error resolving reference")
+	}
+	fs.autocreate(ctx, np)
+	md, err := os.Stat(np)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, notFoundError(fn)
+			return nil, notFoundError(fs.removeNamespace(ctx, np))
 		}
-		return nil, errors.Wrap(err, "ocFS: error stating "+fsfn)
+		return nil, errors.Wrap(err, "ocFS: error stating "+np)
 	}
-	m := fs.normalize(ctx, md, fsfn)
-
 	c := fs.pool.Get()
 	defer c.Close()
-	m.ID = readOrCreateID(ctx, fsfn, c)
+	m := fs.convertToResourceInfo(ctx, md, np, c)
+
 	return m, nil
 }
 
-func (fs *ocFS) ListFolder(ctx context.Context, fn string) ([]*storage.MD, error) {
-	fsfn := fs.jail(fn)
-	fs.autocreate(ctx, fsfn)
-	mds, err := ioutil.ReadDir(fsfn)
+func (fs *ocFS) ListFolder(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.ResourceInfo, error) {
+	np, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return nil, errors.Wrap(err, "storage_owncloud: error resolving reference")
+	}
+	fs.autocreate(ctx, np)
+	mds, err := ioutil.ReadDir(np)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, notFoundError(fn)
+			return nil, notFoundError(fs.removeNamespace(ctx, np))
 		}
-		return nil, errors.Wrap(err, "ocFS: error listing "+fsfn)
+		return nil, errors.Wrap(err, "ocFS: error listing "+np)
 	}
 
-	finfos := []*storage.MD{}
+	finfos := []*storageproviderv0alphapb.ResourceInfo{}
+	// TODO we should only open a connection if we need to set / store the fileid. no need to always open a connection when listing files
 	c := fs.pool.Get()
 	defer c.Close()
 	for _, md := range mds {
-		p := path.Join(fsfn, md.Name())
-		m := fs.normalize(ctx, md, p)
-		m.ID = readOrCreateID(ctx, p, c)
+		p := path.Join(np, md.Name())
+		m := fs.convertToResourceInfo(ctx, md, p, c)
 		finfos = append(finfos, m)
 	}
 	return finfos, nil
 }
 
-func (fs *ocFS) Upload(ctx context.Context, fn string, r io.ReadCloser) error {
-	fsfn := fs.jail(fn)
+func (fs *ocFS) Upload(ctx context.Context, ref *storageproviderv0alphapb.Reference, r io.ReadCloser) error {
+	np, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "storage_owncloud: error resolving reference")
+	}
 
 	// we cannot rely on /tmp as it can live in another partition and we can
 	// hit invalid cross-device link errors, so we create the tmp file in the same directory
 	// the file is supposed to be written.
-	tmp, err := ioutil.TempFile(path.Dir(fsfn), "._reva_atomic_upload")
+	tmp, err := ioutil.TempFile(path.Dir(np), "._reva_atomic_upload")
 	if err != nil {
-		return errors.Wrap(err, "ocFS: error creating tmp fn at "+path.Dir(fsfn))
+		return errors.Wrap(err, "ocFS: error creating tmp fn at "+path.Dir(np))
 	}
 
 	_, err = io.Copy(tmp, r)
@@ -424,53 +916,63 @@ func (fs *ocFS) Upload(ctx context.Context, fn string, r io.ReadCloser) error {
 	}
 
 	// TODO(labkode): make sure rename is atomic, missing fsync ...
-	if err := os.Rename(tmp.Name(), fsfn); err != nil {
-		return errors.Wrap(err, "ocFS: error renaming from "+tmp.Name()+" to "+fsfn)
+	if err := os.Rename(tmp.Name(), np); err != nil {
+		return errors.Wrap(err, "ocFS: error renaming from "+tmp.Name()+" to "+np)
 	}
 
 	return nil
 }
 
-func (fs *ocFS) Download(ctx context.Context, fn string) (io.ReadCloser, error) {
-	fsfn := fs.jail(fn)
-	r, err := os.Open(fsfn)
+func (fs *ocFS) Download(ctx context.Context, ref *storageproviderv0alphapb.Reference) (io.ReadCloser, error) {
+	np, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return nil, errors.Wrap(err, "storage_owncloud: error resolving reference")
+	}
+	r, err := os.Open(np)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, notFoundError(fn)
+			return nil, notFoundError(fs.removeNamespace(ctx, np))
 		}
-		return nil, errors.Wrap(err, "ocFS: error reading "+fsfn)
+		return nil, errors.Wrap(err, "ocFS: error reading "+np)
 	}
 	return r, nil
 }
 
-func (fs *ocFS) ListRevisions(ctx context.Context, path string) ([]*storage.Revision, error) {
+func (fs *ocFS) ListRevisions(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.FileVersion, error) {
 	return nil, notSupportedError("list revisions")
 }
 
-func (fs *ocFS) DownloadRevision(ctx context.Context, path, revisionKey string) (io.ReadCloser, error) {
+func (fs *ocFS) DownloadRevision(ctx context.Context, ref *storageproviderv0alphapb.Reference, revisionKey string) (io.ReadCloser, error) {
 	return nil, notSupportedError("download revision")
 }
 
-func (fs *ocFS) RestoreRevision(ctx context.Context, path, revisionKey string) error {
+func (fs *ocFS) RestoreRevision(ctx context.Context, ref *storageproviderv0alphapb.Reference, revisionKey string) error {
 	return notSupportedError("restore revision")
 }
 
-func (fs *ocFS) EmptyRecycle(ctx context.Context, path string) error {
+func (fs *ocFS) EmptyRecycle(ctx context.Context) error {
 	return notSupportedError("empty recycle")
 }
 
-func (fs *ocFS) ListRecycle(ctx context.Context, path string) ([]*storage.RecycleItem, error) {
+func (fs *ocFS) ListRecycle(ctx context.Context) ([]*storageproviderv0alphapb.RecycleItem, error) {
 	return nil, notSupportedError("list recycle")
 }
 
-func (fs *ocFS) RestoreRecycleItem(ctx context.Context, fn, restoreKey string) error {
+func (fs *ocFS) RestoreRecycleItem(ctx context.Context, key string) error {
 	return notSupportedError("restore recycle")
 }
 
 type notSupportedError string
-type notFoundError string
 
 func (e notSupportedError) Error() string   { return string(e) }
 func (e notSupportedError) IsNotSupported() {}
-func (e notFoundError) Error() string       { return string(e) }
-func (e notFoundError) IsNotFound()         {}
+
+type notFoundError string
+
+func (e notFoundError) Error() string { return string(e) }
+func (e notFoundError) IsNotFound()   {}
+
+type contextUserRequiredErr string
+
+func (err contextUserRequiredErr) Error() string   { return string(err) }
+func (err contextUserRequiredErr) IsUserRequired() {}

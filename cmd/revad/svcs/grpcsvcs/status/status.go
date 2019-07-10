@@ -63,6 +63,15 @@ func NewUnauthenticated(ctx context.Context, msg string) *rpcpb.Status {
 	}
 }
 
+// NewUnimplemented returns a Status with CODE_UNIMPLEMENTED.
+func NewUnimplemented(ctx context.Context, msg string) *rpcpb.Status {
+	return &rpcpb.Status{
+		Code:    rpcpb.Code_CODE_UNIMPLEMENTED,
+		Message: msg,
+		Trace:   getTrace(ctx),
+	}
+}
+
 func getTrace(ctx context.Context) string {
 	span := trace.FromContext(ctx)
 	return span.SpanContext().TraceID.String()

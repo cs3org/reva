@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 
+	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/grpcserver"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
@@ -147,12 +148,40 @@ func (s *service) GetShare(ctx context.Context, req *usershareproviderv0alphapb.
 
 func (s *service) ListShares(ctx context.Context, req *usershareproviderv0alphapb.ListSharesRequest) (*usershareproviderv0alphapb.ListSharesResponse, error) {
 	log := appctx.GetLogger(ctx)
-	shares, err := s.sm.ListShares(ctx, req.Filters) // TODO(labkode): add filter to share manager
-	if err != nil {
-		log.Err(err).Msg("error listing shares")
-		return &usershareproviderv0alphapb.ListSharesResponse{
-			Status: status.NewInternal(ctx, "error listing shares"),
-		}, nil
+
+	shares := []*usershareproviderv0alphapb.Share{}
+	var err error
+
+	if req.Filters == nil {
+		shares, err = s.sm.ListShares(ctx, nil) // TODO(labkode): add filter to share manager
+		if err != nil {
+			log.Err(err).Msg("error listing shares")
+			return &usershareproviderv0alphapb.ListSharesResponse{
+				Status: status.NewInternal(ctx, "error listing shares"),
+			}, nil
+		}
+	} else {
+		for _, filter := range req.Filters {
+			if filter.Type == usershareproviderv0alphapb.ListSharesRequest_Filter_LIST_SHARES_REQUEST_FILTER_TYPE_RESOURCE_ID {
+				ref := &storageproviderv0alphapb.ResourceInfo{
+					Id: filter.GetResourceId(),
+				}
+				log.Debug().Str("ref", ref.String()).Msg("list shares by resource id")
+
+				shares, err = s.sm.ListShares(ctx, ref)
+				if err != nil {
+					log.Err(err).Msg("error listing shares")
+					return &usershareproviderv0alphapb.ListSharesResponse{
+						Status: status.NewInternal(ctx, "error listing shares"),
+					}, nil
+				}
+			} else {
+				log.Warn().Interface("filter", filter).Msg("fileter not implemented")
+				return &usershareproviderv0alphapb.ListSharesResponse{
+					Status: status.NewUnimplemented(ctx, "error listing shares"),
+				}, nil
+			}
+		}
 	}
 
 	res := &usershareproviderv0alphapb.ListSharesResponse{
