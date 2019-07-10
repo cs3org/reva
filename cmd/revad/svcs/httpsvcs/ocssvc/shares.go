@@ -702,7 +702,6 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 func (h *SharesHandler) addFileInfo(s *ShareData, info *storageproviderv0alphapb.ResourceInfo) {
 	if info != nil {
 		// TODO The owner is not set in the storage stat metadata ...
-		owner := h.resolveUserID(info.Owner)
 		s.MimeType = info.MimeType
 		// TODO STime:     &typespb.Timestamp{Seconds: info.Mtime.Seconds, Nanos: info.Mtime.Nanos},
 		s.StorageID = info.Id.StorageId
@@ -715,35 +714,45 @@ func (h *SharesHandler) addFileInfo(s *ShareData, info *storageproviderv0alphapb
 
 		// file owner might not yet be set. Use file info
 		if s.UIDFileOwner == "" {
-			s.UIDFileOwner = owner.Id.OpaqueId
+			s.UIDFileOwner = UserIDToString(info.Owner)
 		}
+		/* TODO lookup user metadata
 		if s.DisplaynameFileOwner == "" {
 			s.DisplaynameFileOwner = owner.DisplayName
 		}
+		*/
 		// share owner might not yet be set. Use file info
 		if s.UIDOwner == "" {
-			s.UIDOwner = owner.Id.OpaqueId
+			s.UIDOwner = UserIDToString(info.Owner)
 		}
+		/* TODO lookup user metadata
 		if s.DisplaynameOwner == "" {
 			s.DisplaynameOwner = owner.DisplayName
 		}
+		*/
 	}
 }
 
 // TODO(jfd) merge userShare2ShareData with publicShare2ShareData
 func (h *SharesHandler) userShare2ShareData(share *usershareproviderv0alphapb.Share) *ShareData {
-	creator := h.resolveUserID(share.Creator)
-	owner := h.resolveUserID(share.Owner)
-	grantee := h.resolveUserID(share.Grantee.Id)
 	sd := &ShareData{
-		Permissions:          userSharePermissions2OCSPermissions(share.GetPermissions()),
-		ShareType:            shareTypeUser,
-		UIDOwner:             creator.Id.OpaqueId,
-		DisplaynameOwner:     creator.DisplayName,
-		UIDFileOwner:         owner.Id.OpaqueId,
-		DisplaynameFileOwner: owner.DisplayName,
-		ShareWith:            grantee.Id.OpaqueId,
-		ShareWithDisplayname: grantee.DisplayName,
+		Permissions: userSharePermissions2OCSPermissions(share.GetPermissions()),
+		ShareType:   shareTypeUser,
+	}
+	if share.Creator != nil {
+		sd.UIDOwner = UserIDToString(share.Creator)
+		// TODO lookup user metadata
+		//sd.DisplaynameOwner = creator.DisplayName
+	}
+	if share.Owner != nil {
+		sd.UIDFileOwner = UserIDToString(share.Owner)
+		// TODO lookup user metadata
+		//sd.DisplaynameFileOwner = owner.DisplayName
+	}
+	if share.Grantee.Id != nil {
+		sd.ShareWith = UserIDToString(share.Grantee.Id)
+		// TODO lookup user metadata
+		//sd.ShareWithDisplayname = grantee.DisplayName
 	}
 	if share.Id != nil && share.Id.OpaqueId != "" {
 		sd.ID = share.Id.OpaqueId
@@ -770,34 +779,22 @@ func publicSharePermissions2OCSPermissions(sp *publicshareproviderv0alphapb.Publ
 	return permissionInvalid
 }
 
-// TODO do user lookup and cache users
-func (h *SharesHandler) resolveUserID(userID *typespb.UserId) *authv0alphapb.User {
-	return &authv0alphapb.User{
-		Id: &typespb.UserId{
-			Idp:      userID.Idp,
-			OpaqueId: userID.OpaqueId,
-		},
-		Username:    userID.OpaqueId,
-		DisplayName: userID.OpaqueId,
-	}
-}
-
 func (h *SharesHandler) publicShare2ShareData(share *publicshareproviderv0alphapb.PublicShare) *ShareData {
-	creator := h.resolveUserID(share.Creator)
-	owner := h.resolveUserID(share.Owner)
 	sd := &ShareData{
 		ID: share.Id.OpaqueId,
 		// TODO map share.resourceId to path and storage ... requires a stat call
 		// share.permissions ar mapped below
-		Permissions:          publicSharePermissions2OCSPermissions(share.GetPermissions()),
-		ShareType:            shareTypePublicLink,
-		UIDOwner:             creator.Id.OpaqueId,
-		DisplaynameOwner:     creator.DisplayName,
-		STime:                share.Ctime.Seconds, // TODO CS3 api birth time = btime
-		UIDFileOwner:         owner.Id.OpaqueId,
-		DisplaynameFileOwner: owner.DisplayName,
-		Token:                share.Token,
-		Expiration:           timestampToExpiration(share.Expiration),
+		Permissions: publicSharePermissions2OCSPermissions(share.GetPermissions()),
+		ShareType:   shareTypePublicLink,
+		UIDOwner:    UserIDToString(share.Creator),
+		// TODO lookup user metadata
+		//DisplaynameOwner:     creator.DisplayName,
+		STime:        share.Ctime.Seconds, // TODO CS3 api birth time = btime
+		UIDFileOwner: UserIDToString(share.Owner),
+		// TODO lookup user metadata
+		//DisplaynameFileOwner: owner.DisplayName,
+		Token:      share.Token,
+		Expiration: timestampToExpiration(share.Expiration),
 	}
 	// actually clients should be able to GET and cache the user info themselves ...
 	// TODO check grantee type for user vs group
