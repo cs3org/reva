@@ -33,6 +33,7 @@ import (
 	preferencesv0alphapb "github.com/cs3org/go-cs3apis/cs3/preferences/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
 	storageregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageregistry/v0alpha"
 
 	"google.golang.org/grpc"
@@ -71,6 +72,14 @@ func getAppRegistryClient() (appregistryv0alphapb.AppRegistryServiceClient, erro
 		return nil, err
 	}
 	return appregistryv0alphapb.NewAppRegistryServiceClient(conn), nil
+}
+
+func getUserShareProviderClient(host string) (usershareproviderv0alphapb.UserShareProviderServiceClient, error) {
+	conn, err := getConnToHost(host)
+	if err != nil {
+		return nil, err
+	}
+	return usershareproviderv0alphapb.NewUserShareProviderServiceClient(conn), nil
 }
 
 func getStorageProviderClient(host string) (storageproviderv0alphapb.StorageProviderServiceClient, error) {
