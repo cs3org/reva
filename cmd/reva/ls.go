@@ -28,7 +28,7 @@ import (
 func lsCommand() *command {
 	cmd := newCommand("ls")
 	cmd.Description = func() string { return "list a folder contents" }
-	cmd.Usage = func() string { return "Usage: ls [-flags] <folder_name>" }
+	cmd.Usage = func() string { return "Usage: ls [-flags] <provider> <folder_name>" }
 	longFlag := cmd.Bool("l", false, "long listing")
 	cmd.Action = func() error {
 		if cmd.NArg() < 2 {
