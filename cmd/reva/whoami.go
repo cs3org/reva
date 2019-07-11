@@ -19,7 +19,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 
@@ -58,7 +57,7 @@ func whoamiCommand() *command {
 
 		req := &authv0alphapb.WhoAmIRequest{AccessToken: token}
 
-		ctx := context.Background()
+		ctx := getAuthContext()
 		res, err := client.WhoAmI(ctx, req)
 		if err != nil {
 			return err
