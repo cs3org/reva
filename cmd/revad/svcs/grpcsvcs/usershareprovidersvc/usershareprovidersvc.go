@@ -287,11 +287,18 @@ func (s *service) UpdateShare(ctx context.Context, req *usershareproviderv0alpha
 		}
 		return res, nil
 	}
-	id := ref.OpaqueId
+	oid := ref.OpaqueId
 
 	// TODO split at @ ... encode parts as base64 / something url compatible
-	sp := strings.Split(id, "@")
-	sID, path := sp[0], sp[1]
+	sp := strings.Split(oid, "@")
+	sID, id := sp[0], sp[1]
+
+	path, err := s.storage.GetPathByID(ctx, id)
+	if err != nil {
+		// TODO not found
+		return nil, err
+	}
+
 	sp = strings.Split(sID, ":")
 	sType, username := sp[0], sp[1]
 
@@ -328,9 +335,8 @@ func (s *service) UpdateShare(ctx context.Context, req *usershareproviderv0alpha
 	default:
 		grant.Grantee.Type = storage.GranteeTypeInvalid
 	}
-	// TODO the storage has no method to get a grand by shareid
-	err := s.storage.UpdateGrant(ctx, path, grant)
-	if err != nil {
+	// TODO the storage has no method to get a grant by shareid
+	if err := s.storage.UpdateGrant(ctx, path, grant); err != nil {
 		// TODO not found error
 		return nil, err
 	}
