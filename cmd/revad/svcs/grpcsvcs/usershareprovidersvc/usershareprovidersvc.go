@@ -138,20 +138,21 @@ func (s *service) RemoveShare(ctx context.Context, req *usershareproviderv0alpha
 
 func (s *service) GetShare(ctx context.Context, req *usershareproviderv0alphapb.GetShareRequest) (*usershareproviderv0alphapb.GetShareResponse, error) {
 	//log := appctx.GetLogger(ctx)
-	ref := req.Ref.GetId()
-	if ref == nil {
+
+	// TODO we don't need the owner?
+	owner, resourceID, grantee, status := resolveShare(req.Ref)
+	if status != nil {
 		res := &usershareproviderv0alphapb.GetShareResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_UNIMPLEMENTED,
-			},
+			Status: status,
 		}
 		return res, nil
 	}
-	id := ref.OpaqueId
 
-	// TODO split at @ ... encode parts as base64 / something url compatible
-	sp := strings.Split(id, "@")
-	sID, path := sp[0], sp[1]
+	path, err := s.storage.GetPathByID(ctx, resourceID.OpaqueId)
+	if err != nil {
+		// TODO not found
+		return nil, err
+	}
 
 	md, err := s.storage.GetMD(ctx, path)
 	if err != nil {
@@ -171,16 +172,16 @@ func (s *service) GetShare(ctx context.Context, req *usershareproviderv0alphapb.
 		},
 	}
 	for _, grant := range grants {
-		share := grantToShare(grant)
-		if share.Id.OpaqueId == sID {
+		if storageGranteeMatchesCS3Grantee(grant.Grantee, grantee) {
+			share := grantToShare(grant)
 			share.ResourceId = &storageproviderv0alphapb.ResourceId{
 				StorageId: "TODO", // we need to lookup the resource id
 				OpaqueId:  path,
 			}
 			// TODO check this kind of id works not only for acls ...
-			share.Id.OpaqueId = share.Id.OpaqueId + "@" + share.ResourceId.OpaqueId
+			share.Id.OpaqueId = generateOpaqueID(share.Id.OpaqueId, share.ResourceId.OpaqueId)
 			// the owner is the file owner, which is the same for all shares in this case
-			// share.Owner = md.? // TODO how do we get the owner? for eos it might be in the opaque metadata, no .. by asking the broker for the owner?
+			share.Owner = owner
 			share.Mtime = &typespb.Timestamp{
 				Seconds: md.Mtime.Seconds,
 				Nanos:   md.Mtime.Nanos,
@@ -192,6 +193,22 @@ func (s *service) GetShare(ctx context.Context, req *usershareproviderv0alphapb.
 	}
 
 	return res, nil
+}
+
+func storageGranteeMatchesCS3Grantee(sg *storage.Grantee, cg *storageproviderv0alphapb.Grantee) bool {
+	if sg != nil && cg != nil {
+		if sg.UserID != nil || cg.Id != nil {
+			if sg.UserID.IDP == cg.Id.Idp && sg.UserID.OpaqueID == cg.Id.OpaqueId {
+				if sg.Type == storage.GranteeTypeUser && cg.Type == storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER {
+					return true
+				}
+				if sg.Type == storage.GranteeTypeGroup && cg.Type == storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_GROUP {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func (s *service) ListShares(ctx context.Context, req *usershareproviderv0alphapb.ListSharesRequest) (*usershareproviderv0alphapb.ListSharesResponse, error) {
@@ -217,7 +234,7 @@ func (s *service) ListShares(ctx context.Context, req *usershareproviderv0alphap
 				share := grantToShare(grant)
 				share.ResourceId = filter.GetResourceId()
 				// TODO check this kind of id works not only for acls ...
-				share.Id.OpaqueId = share.Id.OpaqueId + "@" + share.ResourceId.OpaqueId
+				share.Id.OpaqueId = generateOpaqueID(share.Id.OpaqueId, share.ResourceId.OpaqueId)
 				// the owner is the file owner, which is the same for all shares in this case
 				// share.Owner = md.? // TODO how do we get the owner? for eos it might be in the opaque metadata, no .. by asking the broker for the owner?
 				share.Mtime = &typespb.Timestamp{Seconds: md.Mtime.Seconds, Nanos: md.Mtime.Nanos}
@@ -276,40 +293,124 @@ func grantToShare(grant *storage.Grant) *usershareproviderv0alphapb.Share {
 	return share
 }
 
-func (s *service) UpdateShare(ctx context.Context, req *usershareproviderv0alphapb.UpdateShareRequest) (*usershareproviderv0alphapb.UpdateShareResponse, error) {
-
-	ref := req.Ref.GetId()
-	if ref == nil {
-		res := &usershareproviderv0alphapb.UpdateShareResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_UNIMPLEMENTED,
-			},
-		}
-		return res, nil
-	}
-	id := ref.OpaqueId
-
+func generateOpaqueID(shareID string, resourceID string) string {
+	return fmt.Sprintf("%s@%s", shareID, resourceID)
+}
+func lookupOpaqueID(opaqueID string) (string, string, string, error) {
 	// TODO split at @ ... encode parts as base64 / something url compatible
-	sp := strings.Split(id, "@")
-	sID, path := sp[0], sp[1]
-	sp = strings.Split(sID, ":")
-	sType, username := sp[0], sp[1]
+	p := strings.SplitN(opaqueID, "@", 2)
+	if len(p) != 2 {
+		return "", "", "", fmt.Errorf("unknown opaque id: %s", opaqueID)
+	}
+	share, resource := p[0], p[1]
 
+	p = strings.SplitN(share, ":", 2)
+	if len(p) != 2 {
+		return "", "", "", fmt.Errorf("unknown share id: %s", share)
+	}
+	return p[0], p[1], resource, nil
+}
+
+func resolveShare(r *usershareproviderv0alphapb.ShareReference) (owner *typespb.UserId, resourceID *storageproviderv0alphapb.ResourceId, grantee *storageproviderv0alphapb.Grantee, status *rpcpb.Status) {
+	s := r.GetId()
+	// shares must have a unique id
+	if s == nil || s.OpaqueId == "" {
+		return nil, nil, nil, &rpcpb.Status{
+			Code:    rpcpb.Code_CODE_INVALID_ARGUMENT,
+			Message: "missing shareid",
+		}
+	}
+
+	k := r.GetKey()
+	// if key is set it takes precedence
+	if k != nil {
+		owner = k.GetOwner()
+		if owner == nil {
+			return nil, nil, nil, &rpcpb.Status{
+				Code:    rpcpb.Code_CODE_INVALID_ARGUMENT,
+				Message: "sharekey owner missing",
+			}
+		}
+		resourceID = k.GetResourceId()
+		if resourceID == nil {
+			return nil, nil, nil, &rpcpb.Status{
+				Code:    rpcpb.Code_CODE_INVALID_ARGUMENT,
+				Message: "sharekey resourceid missing",
+			}
+		}
+		grantee = k.GetGrantee()
+		if grantee == nil {
+			return nil, nil, nil, &rpcpb.Status{
+				Code:    rpcpb.Code_CODE_INVALID_ARGUMENT,
+				Message: "sharekey grantee missing",
+			}
+		}
+	} else {
+		// fallback to shareid based reference
+		t, u, r, err := lookupOpaqueID(s.OpaqueId)
+		if err != nil {
+			return nil, nil, nil, &rpcpb.Status{
+				Code:    rpcpb.Code_CODE_NOT_FOUND,
+				Message: "share id not found",
+			}
+		}
+		if t == "u" {
+			grantee = &storageproviderv0alphapb.Grantee{
+				Type: storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER,
+				Id: &typespb.UserId{
+					// IDP TODO ?
+					OpaqueId: u,
+				},
+			}
+		} else {
+			return nil, nil, nil, &rpcpb.Status{
+				Code:    rpcpb.Code_CODE_INVALID_ARGUMENT,
+				Message: "invalid grantee type",
+			}
+		}
+		resourceID = &storageproviderv0alphapb.ResourceId{
+			// StorageId: // TODO we need to lookup the StorageId
+			OpaqueId: r,
+		}
+		// TODO how do we get the owner? for eos it might be in the opaque metadata, no .. by asking the broker for the owner?
+	}
+	return owner, resourceID, grantee, nil
+}
+
+func (s *service) UpdateShare(ctx context.Context, req *usershareproviderv0alphapb.UpdateShareRequest) (*usershareproviderv0alphapb.UpdateShareResponse, error) {
+	// shares must have a set of permissions
 	sPerm := req.Field.GetPermissions()
 	if sPerm == nil {
 		res := &usershareproviderv0alphapb.UpdateShareResponse{
 			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INVALID_ARGUMENT,
+				Code:    rpcpb.Code_CODE_INVALID_ARGUMENT,
+				Message: "missing permissions",
 			},
 		}
 		return res, nil
 	}
+
+	// TODO we don't need the owner?
+	_, resourceID, grantee, status := resolveShare(req.Ref)
+	if status != nil {
+		res := &usershareproviderv0alphapb.UpdateShareResponse{
+			Status: status,
+		}
+		return res, nil
+	}
+
+	path, err := s.storage.GetPathByID(ctx, resourceID.OpaqueId)
+	if err != nil {
+		// TODO not found
+		return nil, err
+	}
+
 	rPerm := sPerm.Permissions
 	grant := &storage.Grant{
 		Grantee: &storage.Grantee{
 			UserID: &user.ID{
-				// IDP TODO ?
-				OpaqueID: username,
+				IDP:      grantee.GetId().Idp,
+				OpaqueID: grantee.GetId().OpaqueId,
 			},
 		},
 		PermissionSet: &storage.PermissionSet{
@@ -320,17 +421,9 @@ func (s *service) UpdateShare(ctx context.Context, req *usershareproviderv0alpha
 			Delete:          rPerm.Delete,
 		},
 	}
-	switch sType {
-	case "u":
-		grant.Grantee.Type = storage.GranteeTypeUser
-	case "g":
-		grant.Grantee.Type = storage.GranteeTypeGroup
-	default:
-		grant.Grantee.Type = storage.GranteeTypeInvalid
-	}
-	// TODO the storage has no method to get a grand by shareid
-	err := s.storage.UpdateGrant(ctx, path, grant)
-	if err != nil {
+
+	// TODO the storage has no method to get a grant by shareid
+	if err := s.storage.UpdateGrant(ctx, path, grant); err != nil {
 		// TODO not found error
 		return nil, err
 	}
