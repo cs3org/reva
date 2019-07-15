@@ -38,6 +38,7 @@ func main() {
 		configureCommand(),
 		loginCommand(),
 		whoamiCommand(),
+		importCommand(),
 		lsCommand(),
 		statCommand(),
 		uploadCommand(),
