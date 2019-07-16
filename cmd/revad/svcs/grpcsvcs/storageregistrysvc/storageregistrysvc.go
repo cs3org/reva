@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package storageregistrysvc
+package storageregsvc
 
 import (
 	"context"
@@ -28,11 +28,11 @@ import (
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	"google.golang.org/grpc"
 
-	storageregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageregistry/v0alpha"
+	storageregv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageregistry/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/grpcserver"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/storage/broker/registry"
+	"github.com/cs3org/reva/pkg/storage/registry/registry"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -41,7 +41,7 @@ func init() {
 }
 
 type service struct {
-	broker storage.Broker
+	reg storage.Registry
 }
 
 func (s *service) Close() error {
@@ -60,16 +60,16 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 		return nil, err
 	}
 
-	broker, err := getBroker(c)
+	reg, err := getRegistry(c)
 	if err != nil {
 		return nil, err
 	}
 
 	service := &service{
-		broker: broker,
+		reg: reg,
 	}
 
-	storageregistryv0alphapb.RegisterStorageRegistryServiceServer(ss, service)
+	storageregv0alphapb.RegisterStorageRegistryServiceServer(ss, service)
 	return service, nil
 }
 
@@ -81,59 +81,54 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-func getBroker(c *config) (storage.Broker, error) {
+func getRegistry(c *config) (storage.Registry, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		return f(c.Drivers[c.Driver])
 	}
 	return nil, fmt.Errorf("driver not found: %s", c.Driver)
 }
 
-func (s *service) ListStorageProviders(ctx context.Context, req *storageregistryv0alphapb.ListStorageProvidersRequest) (*storageregistryv0alphapb.ListStorageProvidersResponse, error) {
+func (s *service) ListStorageProviders(ctx context.Context, req *storageregv0alphapb.ListStorageProvidersRequest) (*storageregv0alphapb.ListStorageProvidersResponse, error) {
 	var providers []*storagetypespb.ProviderInfo
-	pinfos, err := s.broker.ListProviders(ctx)
+	pinfos, err := s.reg.ListProviders(ctx)
 	if err != nil {
-		res := &storageregistryv0alphapb.ListStorageProvidersResponse{
+		res := &storageregv0alphapb.ListStorageProvidersResponse{
 			Status: &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL},
 		}
 		return res, nil
 	}
 
 	for _, info := range pinfos {
-		providers = append(providers, format(info))
+		fill(info)
+		providers = append(providers, info)
 	}
 
-	res := &storageregistryv0alphapb.ListStorageProvidersResponse{
+	res := &storageregv0alphapb.ListStorageProvidersResponse{
 		Status:    &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
 		Providers: providers,
 	}
 	return res, nil
 }
 
-func (s *service) GetStorageProvider(ctx context.Context, req *storageregistryv0alphapb.GetStorageProviderRequest) (*storageregistryv0alphapb.GetStorageProviderResponse, error) {
+func (s *service) GetStorageProvider(ctx context.Context, req *storageregv0alphapb.GetStorageProviderRequest) (*storageregv0alphapb.GetStorageProviderResponse, error) {
 	log := appctx.GetLogger(ctx)
 	fn := req.Ref.GetPath()
-	p, err := s.broker.FindProvider(ctx, fn)
+	p, err := s.reg.FindProvider(ctx, fn)
 	if err != nil {
 		log.Error().Err(err).Msg("error finding provider")
-		res := &storageregistryv0alphapb.GetStorageProviderResponse{
+		res := &storageregv0alphapb.GetStorageProviderResponse{
 			Status: &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL},
 		}
 		return res, nil
 	}
 
-	provider := format(p)
-	res := &storageregistryv0alphapb.GetStorageProviderResponse{
+	fill(p)
+	res := &storageregv0alphapb.GetStorageProviderResponse{
 		Status:   &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
-		Provider: provider,
+		Provider: p,
 	}
 	return res, nil
 }
 
 // TODO(labkode): fix
-func format(p *storage.ProviderInfo) *storagetypespb.ProviderInfo {
-	return &storagetypespb.ProviderInfo{
-		Address:      p.Endpoint,
-		ProviderPath: p.MountPath,
-		//ProviderId: p.?
-	}
-}
+func fill(p *storagetypespb.ProviderInfo) {}

@@ -18,8 +18,11 @@
 
 package app
 
-import "context"
-import "github.com/cs3org/reva/pkg/storage"
+import (
+	"context"
+
+	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+)
 
 // Registry is the interface that application registries implement
 // for discovering application providers
@@ -37,5 +40,5 @@ type ProviderInfo struct {
 // Provider is the interface that application providers implement
 // for providing the iframe location to a iframe UI Provider
 type Provider interface {
-	GetIFrame(ctx context.Context, resID *storage.ResourceID, token string) (string, error)
+	GetIFrame(ctx context.Context, resID *storageproviderv0alphapb.ResourceId, token string) (string, error)
 }

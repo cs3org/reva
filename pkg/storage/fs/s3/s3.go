@@ -40,6 +40,9 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+
+	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 )
 
 func init() {
@@ -102,7 +105,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	return &s3FS{client: s3Client, config: c}, nil
 }
 
-func (fs *s3FS) Shutdown() error {
+func (fs *s3FS) Shutdown(ctx context.Context) error {
 	return nil
 }
 
@@ -124,18 +127,18 @@ type s3FS struct {
 	config *config
 }
 
-func (fs *s3FS) normalizeObject(ctx context.Context, o *s3.Object, fn string) *storage.MD {
+func (fs *s3FS) normalizeObject(ctx context.Context, o *s3.Object, fn string) *storageproviderv0alphapb.ResourceInfo {
 	fn = fs.removeRoot(path.Join("/", fn))
 	isDir := strings.HasSuffix(*o.Key, "/")
-	md := &storage.MD{
-		ID:          "fileid-" + strings.TrimPrefix(fn, "/"),
-		Path:        fn,
-		IsDir:       isDir,
-		Etag:        *o.ETag,
-		Mime:        mime.Detect(isDir, fn),
-		Permissions: &storage.PermissionSet{ListContainer: true, CreateContainer: true},
-		Size:        uint64(*o.Size),
-		Mtime: &storage.Timestamp{
+	md := &storageproviderv0alphapb.ResourceInfo{
+		Id:            &storageproviderv0alphapb.ResourceId{OpaqueId: "fileid-" + strings.TrimPrefix(fn, "/")},
+		Path:          fn,
+		Type:          getResourceType(isDir),
+		Etag:          *o.ETag,
+		MimeType:      mime.Detect(isDir, fn),
+		PermissionSet: &storageproviderv0alphapb.ResourcePermissions{ListContainer: true, CreateContainer: true},
+		Size:          uint64(*o.Size),
+		Mtime: &typespb.Timestamp{
 			Seconds: uint64(o.LastModified.Unix()),
 		},
 	}
@@ -145,18 +148,26 @@ func (fs *s3FS) normalizeObject(ctx context.Context, o *s3.Object, fn string) *s
 		Msg("normalized Object")
 	return md
 }
-func (fs *s3FS) normalizeHead(ctx context.Context, o *s3.HeadObjectOutput, fn string) *storage.MD {
+
+func getResourceType(isDir bool) storageproviderv0alphapb.ResourceType {
+	if isDir {
+		return storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER
+	}
+	return storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER
+}
+
+func (fs *s3FS) normalizeHead(ctx context.Context, o *s3.HeadObjectOutput, fn string) *storageproviderv0alphapb.ResourceInfo {
 	fn = fs.removeRoot(path.Join("/", fn))
 	isDir := strings.HasSuffix(fn, "/")
-	md := &storage.MD{
-		ID:          "fileid-" + strings.TrimPrefix(fn, "/"),
-		Path:        fn,
-		IsDir:       isDir,
-		Etag:        *o.ETag,
-		Mime:        mime.Detect(isDir, fn),
-		Permissions: &storage.PermissionSet{ListContainer: true, CreateContainer: true},
-		Size:        uint64(*o.ContentLength),
-		Mtime: &storage.Timestamp{
+	md := &storageproviderv0alphapb.ResourceInfo{
+		Id:            &storageproviderv0alphapb.ResourceId{OpaqueId: "fileid-" + strings.TrimPrefix(fn, "/")},
+		Path:          fn,
+		Type:          getResourceType(isDir),
+		Etag:          *o.ETag,
+		MimeType:      mime.Detect(isDir, fn),
+		PermissionSet: &storageproviderv0alphapb.ResourcePermissions{ListContainer: true, CreateContainer: true},
+		Size:          uint64(*o.ContentLength),
+		Mtime: &typespb.Timestamp{
 			Seconds: uint64(o.LastModified.Unix()),
 		},
 	}
@@ -166,17 +177,17 @@ func (fs *s3FS) normalizeHead(ctx context.Context, o *s3.HeadObjectOutput, fn st
 		Msg("normalized Head")
 	return md
 }
-func (fs *s3FS) normalizeCommonPrefix(ctx context.Context, p *s3.CommonPrefix) *storage.MD {
+func (fs *s3FS) normalizeCommonPrefix(ctx context.Context, p *s3.CommonPrefix) *storageproviderv0alphapb.ResourceInfo {
 	fn := fs.removeRoot(path.Join("/", *p.Prefix))
-	md := &storage.MD{
-		ID:          "fileid-" + strings.TrimPrefix(fn, "/"),
-		Path:        fn,
-		IsDir:       true,
-		Etag:        "TODO",
-		Mime:        mime.Detect(true, fn),
-		Permissions: &storage.PermissionSet{ListContainer: true, CreateContainer: true},
-		Size:        0,
-		Mtime: &storage.Timestamp{
+	md := &storageproviderv0alphapb.ResourceInfo{
+		Id:            &storageproviderv0alphapb.ResourceId{OpaqueId: "fileid-" + strings.TrimPrefix(fn, "/")},
+		Path:          fn,
+		Type:          getResourceType(true),
+		Etag:          "TODO(labkode)",
+		MimeType:      mime.Detect(true, fn),
+		PermissionSet: &storageproviderv0alphapb.ResourcePermissions{ListContainer: true, CreateContainer: true},
+		Size:          0,
+		Mtime: &typespb.Timestamp{
 			Seconds: 0,
 		},
 	}
@@ -194,19 +205,19 @@ func (fs *s3FS) GetPathByID(ctx context.Context, id string) (string, error) {
 	return path.Join("/", strings.TrimPrefix(id, "fileid-")), nil
 }
 
-func (fs *s3FS) AddGrant(ctx context.Context, path string, g *storage.Grant) error {
+func (fs *s3FS) AddGrant(ctx context.Context, path string, g *storageproviderv0alphapb.Grant) error {
 	return notSupportedError("op not supported")
 }
 
-func (fs *s3FS) ListGrants(ctx context.Context, path string) ([]*storage.Grant, error) {
+func (fs *s3FS) ListGrants(ctx context.Context, path string) ([]*storageproviderv0alphapb.Grant, error) {
 	return nil, notSupportedError("op not supported")
 }
 
-func (fs *s3FS) RemoveGrant(ctx context.Context, path string, g *storage.Grant) error {
+func (fs *s3FS) RemoveGrant(ctx context.Context, path string, g *storageproviderv0alphapb.Grant) error {
 	return notSupportedError("op not supported")
 }
 
-func (fs *s3FS) UpdateGrant(ctx context.Context, path string, g *storage.Grant) error {
+func (fs *s3FS) UpdateGrant(ctx context.Context, path string, g *storageproviderv0alphapb.Grant) error {
 	return notSupportedError("op not supported")
 }
 
@@ -390,7 +401,7 @@ func (fs *s3FS) Move(ctx context.Context, oldName, newName string) error {
 	return nil
 }
 
-func (fs *s3FS) GetMD(ctx context.Context, fn string) (*storage.MD, error) {
+func (fs *s3FS) GetMD(ctx context.Context, fn string) (*storageproviderv0alphapb.ResourceInfo, error) {
 	log := appctx.GetLogger(ctx)
 	fn = fs.addRoot(fn)
 	// first try a head, works for files
@@ -448,7 +459,7 @@ func (fs *s3FS) GetMD(ctx context.Context, fn string) (*storage.MD, error) {
 	return fs.normalizeHead(ctx, output, fn), nil
 }
 
-func (fs *s3FS) ListFolder(ctx context.Context, fn string) ([]*storage.MD, error) {
+func (fs *s3FS) ListFolder(ctx context.Context, fn string) ([]*storageproviderv0alphapb.ResourceInfo, error) {
 	fn = fs.addRoot(fn)
 
 	input := &s3.ListObjectsV2Input{
@@ -458,7 +469,7 @@ func (fs *s3FS) ListFolder(ctx context.Context, fn string) ([]*storage.MD, error
 	}
 	isTruncated := true
 
-	finfos := []*storage.MD{}
+	finfos := []*storageproviderv0alphapb.ResourceInfo{}
 
 	for isTruncated {
 		output, err := fs.client.ListObjectsV2(input)
@@ -533,7 +544,7 @@ func (fs *s3FS) Download(ctx context.Context, fn string) (io.ReadCloser, error) 
 	return r.Body, nil
 }
 
-func (fs *s3FS) ListRevisions(ctx context.Context, path string) ([]*storage.Revision, error) {
+func (fs *s3FS) ListRevisions(ctx context.Context, path string) ([]*storageproviderv0alphapb.FileVersion, error) {
 	return nil, notSupportedError("list revisions")
 }
 
@@ -549,7 +560,7 @@ func (fs *s3FS) EmptyRecycle(ctx context.Context, path string) error {
 	return notSupportedError("empty recycle")
 }
 
-func (fs *s3FS) ListRecycle(ctx context.Context, path string) ([]*storage.RecycleItem, error) {
+func (fs *s3FS) ListRecycle(ctx context.Context, path string) ([]*storageproviderv0alphapb.RecycleItem, error) {
 	return nil, notSupportedError("list recycle")
 }
 

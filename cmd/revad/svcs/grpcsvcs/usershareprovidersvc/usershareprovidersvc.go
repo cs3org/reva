@@ -34,7 +34,6 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -54,8 +53,9 @@ type service struct {
 	storage storage.FS
 }
 
+// TODO(labkode): add ctx to Close.
 func (s *service) Close() error {
-	return s.storage.Shutdown()
+	return s.storage.Shutdown(context.Background())
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -93,21 +93,10 @@ func (s *service) CreateShare(ctx context.Context, req *usershareproviderv0alpha
 	log := appctx.GetLogger(ctx)
 
 	path := req.ResourceId.OpaqueId
-	grant := &storage.Grant{
-		Grantee: &storage.Grantee{
-			UserID: &user.ID{
-				// IDP TODO ?
-				OpaqueID: req.Grant.Grantee.Id.OpaqueId,
-			},
-			Type: storage.GranteeTypeUser, // TODO hardcoded, read from share
-		},
-		PermissionSet: &storage.PermissionSet{
-			ListContainer:   req.Grant.Permissions.Permissions.ListContainer,
-			CreateContainer: req.Grant.Permissions.Permissions.CreateContainer,
-			Move:            req.Grant.Permissions.Permissions.Move,
-			Delete:          req.Grant.Permissions.Permissions.Delete,
-			// TODO map more permissions
-		},
+
+	grant := &storageproviderv0alphapb.Grant{
+		Grantee:     req.Grant.Grantee,
+		Permissions: req.Grant.Permissions.Permissions,
 	}
 
 	log.Debug().Str("path", path).Msg("list shares")
@@ -139,7 +128,7 @@ func (s *service) RemoveShare(ctx context.Context, req *usershareproviderv0alpha
 func (s *service) GetShare(ctx context.Context, req *usershareproviderv0alphapb.GetShareRequest) (*usershareproviderv0alphapb.GetShareResponse, error) {
 	//log := appctx.GetLogger(ctx)
 
-	// TODO we don't need the owner?
+	// TODO(labkode): we don't need the owner?
 	owner, resourceID, grantee, status := resolveShare(req.Ref)
 	if status != nil {
 		res := &usershareproviderv0alphapb.GetShareResponse{
@@ -160,7 +149,7 @@ func (s *service) GetShare(ctx context.Context, req *usershareproviderv0alphapb.
 		return nil, err
 	}
 
-	// TODO the storage has no method to get a grand by shareid
+	// TODO(labkode): the storage has no method to get a grant by shareid yet
 	grants, err := s.storage.ListGrants(ctx, path)
 	if err != nil {
 		// TODO not found
@@ -171,8 +160,9 @@ func (s *service) GetShare(ctx context.Context, req *usershareproviderv0alphapb.
 			Code: rpcpb.Code_CODE_NOT_FOUND,
 		},
 	}
+
 	for _, grant := range grants {
-		if storageGranteeMatchesCS3Grantee(grant.Grantee, grantee) {
+		if matches(grant.Grantee, grantee) {
 			share := grantToShare(grant)
 			share.ResourceId = &storageproviderv0alphapb.ResourceId{
 				StorageId: "TODO", // we need to lookup the resource id
@@ -195,14 +185,11 @@ func (s *service) GetShare(ctx context.Context, req *usershareproviderv0alphapb.
 	return res, nil
 }
 
-func storageGranteeMatchesCS3Grantee(sg *storage.Grantee, cg *storageproviderv0alphapb.Grantee) bool {
-	if sg != nil && cg != nil {
-		if sg.UserID != nil || cg.Id != nil {
-			if sg.UserID.IDP == cg.Id.Idp && sg.UserID.OpaqueID == cg.Id.OpaqueId {
-				if sg.Type == storage.GranteeTypeUser && cg.Type == storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER {
-					return true
-				}
-				if sg.Type == storage.GranteeTypeGroup && cg.Type == storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_GROUP {
+func matches(a, b *storageproviderv0alphapb.Grantee) bool {
+	if a != nil && b != nil {
+		if a.Id != nil || b.Id != nil {
+			if a.Id.Idp == b.Id.Idp && a.Id.OpaqueId == b.Id.OpaqueId {
+				if a.Type == b.Type {
 					return true
 				}
 			}
@@ -252,44 +239,19 @@ func (s *service) ListShares(ctx context.Context, req *usershareproviderv0alphap
 	return res, nil
 }
 
-func grantToShare(grant *storage.Grant) *usershareproviderv0alphapb.Share {
+func grantToShare(grant *storageproviderv0alphapb.Grant) *usershareproviderv0alphapb.Share {
 	share := &usershareproviderv0alphapb.Share{
 		Id: &usershareproviderv0alphapb.ShareId{},
-		// ResourceId: not available in grant, set in parent
+		// TODO(jfd): why ResourceId: not available in grant, set in parent
 		Permissions: &usershareproviderv0alphapb.SharePermissions{
-			Permissions: &storageproviderv0alphapb.ResourcePermissions{
-				ListContainer:   grant.PermissionSet.ListContainer,
-				CreateContainer: grant.PermissionSet.CreateContainer,
-				Move:            grant.PermissionSet.Move,
-				Delete:          grant.PermissionSet.Delete,
-				// TODO add more permissons to grant.PermissionSet
-			},
+			Permissions: grant.Permissions,
 		},
-		Grantee: &storageproviderv0alphapb.Grantee{
-			Type: storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_INVALID,
-			Id: &typespb.UserId{
-				Idp:      grant.Grantee.UserID.IDP,
-				OpaqueId: grant.Grantee.UserID.OpaqueID,
-			},
-		},
+		Grantee: grant.Grantee,
 		// Owner: not available in grant, set in parent
 		// Creator: TODO not available in grant, add it?
-		Ctime: &typespb.Timestamp{}, // TODO should be named btime, not available in grant, add it?
 		// Mtime: TODO not available in grant, add it?
 	}
-	switch grant.Grantee.Type {
-	case storage.GranteeTypeUser:
-		share.Grantee.Type = storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER
-		// FIXME this kind of id works only for acls ...
-		// it becomes unique if prefixed with the fileid ...
-		share.Id.OpaqueId = "u:" + grant.Grantee.UserID.OpaqueID
-	case storage.GranteeTypeGroup:
-		share.Grantee.Type = storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_GROUP
-		// FIXME this kind of id works only for acls ...
-		// it becomes unique if prefixed with the fileid ...
-		share.Id.OpaqueId = "g:" + grant.Grantee.UserID.OpaqueID
-		// FIXME grantee.UserID ... might be a group ... rename to identifier?
-	}
+
 	return share
 }
 
@@ -390,7 +352,7 @@ func (s *service) UpdateShare(ctx context.Context, req *usershareproviderv0alpha
 		return res, nil
 	}
 
-	// TODO we don't need the owner?
+	// TODO(labkode): we don't need the owner?
 	_, resourceID, grantee, status := resolveShare(req.Ref)
 	if status != nil {
 		res := &usershareproviderv0alphapb.UpdateShareResponse{
@@ -406,14 +368,9 @@ func (s *service) UpdateShare(ctx context.Context, req *usershareproviderv0alpha
 	}
 
 	rPerm := sPerm.Permissions
-	grant := &storage.Grant{
-		Grantee: &storage.Grantee{
-			UserID: &user.ID{
-				IDP:      grantee.GetId().Idp,
-				OpaqueID: grantee.GetId().OpaqueId,
-			},
-		},
-		PermissionSet: &storage.PermissionSet{
+	grant := &storageproviderv0alphapb.Grant{
+		Grantee: grantee,
+		Permissions: &storageproviderv0alphapb.ResourcePermissions{
 			//AddGrant:        rPerm.AddGrand, // TODO map more permissions
 			ListContainer:   rPerm.ListContainer,
 			CreateContainer: rPerm.CreateContainer,

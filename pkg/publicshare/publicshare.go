@@ -21,7 +21,7 @@ package publicshare
 import (
 	"context"
 
-	"github.com/cs3org/reva/pkg/storage"
+	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cs3org/reva/pkg/user"
 )
 
@@ -42,12 +42,11 @@ const (
 type (
 	// Manager manipulates public shares.
 	Manager interface {
-		CreatePublicShare(ctx context.Context, u *user.User, md *storage.MD, a *ACL) (*PublicShare, error)
+		CreatePublicShare(ctx context.Context, u *user.User, md *storageproviderv0alphapb.ResourceInfo, a *ACL) (*PublicShare, error)
 		UpdatePublicShare(ctx context.Context, u *user.User, id string, up *UpdatePolicy, a *ACL) (*PublicShare, error)
 		GetPublicShare(ctx context.Context, u *user.User, id string) (*PublicShare, error)
-		ListPublicShares(ctx context.Context, u *user.User, md *storage.MD) ([]*PublicShare, error)
+		ListPublicShares(ctx context.Context, u *user.User, md *storageproviderv0alphapb.ResourceInfo) ([]*PublicShare, error)
 		RevokePublicShare(ctx context.Context, u *user.User, id string) error
-
 		GetPublicShareByToken(ctx context.Context, token string) (*PublicShare, error)
 	}
 
