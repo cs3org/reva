@@ -66,7 +66,7 @@ type service struct {
 }
 
 func (s *service) Close() error {
-	return s.storage.Shutdown(nil)
+	return s.storage.Shutdown(context.Background())
 }
 
 func parseXSTypes(xsTypes map[string]uint32) ([]*storageproviderv0alphapb.ResourceChecksumPriority, error) {
@@ -335,7 +335,7 @@ func (s *service) Stat(ctx context.Context, req *storageproviderv0alphapb.StatRe
 	}
 	md.Path = s.wrap(ctx, md.Path, fctx)
 
-	s.toInfo(md)
+	s.fillInfo(md)
 	status := &rpcpb.Status{Code: rpcpb.Code_CODE_OK}
 	res := &storageproviderv0alphapb.StatResponse{Status: status, Info: md}
 	return res, nil
@@ -372,7 +372,7 @@ func (s *service) ListContainerStream(req *storageproviderv0alphapb.ListContaine
 
 	for _, md := range mds {
 		md.Path = s.wrap(ctx, md.Path, fctx)
-		s.toInfo(md)
+		s.fillInfo(md)
 		res := &storageproviderv0alphapb.ListContainerStreamResponse{
 			Info: md,
 			Status: &rpcpb.Status{
@@ -412,7 +412,7 @@ func (s *service) ListContainer(ctx context.Context, req *storageproviderv0alpha
 	for _, md := range mds {
 
 		md.Path = s.wrap(ctx, md.Path, fctx)
-		s.toInfo(md)
+		s.fillInfo(md)
 		infos = append(infos, md)
 	}
 	res := &storageproviderv0alphapb.ListContainerResponse{
@@ -722,6 +722,6 @@ type notFoundError interface {
 	IsNotFound()
 }
 
-func (s *service) toInfo(ri *storageproviderv0alphapb.ResourceInfo) {
+func (s *service) fillInfo(ri *storageproviderv0alphapb.ResourceInfo) {
 	ri.Id.StorageId = s.mountID
 }

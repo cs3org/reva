@@ -55,7 +55,7 @@ type service struct {
 
 // TODO(labkode): add ctx to Close.
 func (s *service) Close() error {
-	return s.storage.Shutdown(nil)
+	return s.storage.Shutdown(context.Background())
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
