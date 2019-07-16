@@ -37,6 +37,9 @@ import (
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+
+	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 )
 
 func init() {
@@ -70,7 +73,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	return &localFS{root: c.Root}, nil
 }
 
-func (fs *localFS) Shutdown() error {
+func (fs *localFS) Shutdown(ctx context.Context) error {
 	return nil
 }
 
@@ -121,22 +124,30 @@ func calcEtag(ctx context.Context, fi os.FileInfo) string {
 	return fmt.Sprintf(`"%x"`, h.Sum(nil))
 }
 
-func (fs *localFS) normalize(ctx context.Context, fi os.FileInfo, fn string) *storage.MD {
+func (fs *localFS) normalize(ctx context.Context, fi os.FileInfo, fn string) *storageproviderv0alphapb.ResourceInfo {
 	fn = fs.removeRoot(path.Join("/", fn))
-	md := &storage.MD{
-		ID:          "fileid-" + strings.TrimPrefix(fn, "/"),
-		Path:        fn,
-		IsDir:       fi.IsDir(),
-		Etag:        calcEtag(ctx, fi),
-		Mime:        mime.Detect(fi.IsDir(), fn),
-		Size:        uint64(fi.Size()),
-		Permissions: &storage.PermissionSet{ListContainer: true, CreateContainer: true},
-		Mtime: &storage.Timestamp{
+	md := &storageproviderv0alphapb.ResourceInfo{
+		Id:            &storageproviderv0alphapb.ResourceId{OpaqueId: "fileid-" + strings.TrimPrefix(fn, "/")},
+		Path:          fn,
+		Type:          getResourceType(fi.IsDir()),
+		Etag:          calcEtag(ctx, fi),
+		MimeType:      mime.Detect(fi.IsDir(), fn),
+		Size:          uint64(fi.Size()),
+		PermissionSet: &storageproviderv0alphapb.ResourcePermissions{ListContainer: true, CreateContainer: true},
+		Mtime: &typespb.Timestamp{
 			Seconds: uint64(fi.ModTime().Unix()),
 		},
 	}
+
 	//logger.Println(context.Background(), "normalized: ", md)
 	return md
+}
+
+func getResourceType(isDir bool) storageproviderv0alphapb.ResourceType {
+	if isDir {
+		return storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER
+	}
+	return storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_FILE
 }
 
 // GetPathByID returns the path pointed by the file id
@@ -146,18 +157,18 @@ func (fs *localFS) GetPathByID(ctx context.Context, id string) (string, error) {
 	return path.Join("/", strings.TrimPrefix(id, "fileid-")), nil
 }
 
-func (fs *localFS) AddGrant(ctx context.Context, path string, g *storage.Grant) error {
+func (fs *localFS) AddGrant(ctx context.Context, path string, g *storageproviderv0alphapb.Grant) error {
 	return notSupportedError("op not supported")
 }
 
-func (fs *localFS) ListGrants(ctx context.Context, path string) ([]*storage.Grant, error) {
+func (fs *localFS) ListGrants(ctx context.Context, path string) ([]*storageproviderv0alphapb.Grant, error) {
 	return nil, notSupportedError("op not supported")
 }
 
-func (fs *localFS) RemoveGrant(ctx context.Context, path string, g *storage.Grant) error {
+func (fs *localFS) RemoveGrant(ctx context.Context, path string, g *storageproviderv0alphapb.Grant) error {
 	return notSupportedError("op not supported")
 }
-func (fs *localFS) UpdateGrant(ctx context.Context, path string, g *storage.Grant) error {
+func (fs *localFS) UpdateGrant(ctx context.Context, path string, g *storageproviderv0alphapb.Grant) error {
 	return notSupportedError("op not supported")
 }
 
@@ -203,7 +214,7 @@ func (fs *localFS) Move(ctx context.Context, oldName, newName string) error {
 	return nil
 }
 
-func (fs *localFS) GetMD(ctx context.Context, fn string) (*storage.MD, error) {
+func (fs *localFS) GetMD(ctx context.Context, fn string) (*storageproviderv0alphapb.ResourceInfo, error) {
 	fn = fs.addRoot(fn)
 	md, err := os.Stat(fn)
 	if err != nil {
@@ -216,7 +227,7 @@ func (fs *localFS) GetMD(ctx context.Context, fn string) (*storage.MD, error) {
 	return fs.normalize(ctx, md, fn), nil
 }
 
-func (fs *localFS) ListFolder(ctx context.Context, fn string) ([]*storage.MD, error) {
+func (fs *localFS) ListFolder(ctx context.Context, fn string) ([]*storageproviderv0alphapb.ResourceInfo, error) {
 	fn = fs.addRoot(fn)
 	mds, err := ioutil.ReadDir(fn)
 	if err != nil {
@@ -226,7 +237,7 @@ func (fs *localFS) ListFolder(ctx context.Context, fn string) ([]*storage.MD, er
 		return nil, errors.Wrap(err, "localfs: error listing "+fn)
 	}
 
-	finfos := []*storage.MD{}
+	finfos := []*storageproviderv0alphapb.ResourceInfo{}
 	for _, md := range mds {
 		finfos = append(finfos, fs.normalize(ctx, md, path.Join(fn, md.Name())))
 	}
@@ -269,7 +280,7 @@ func (fs *localFS) Download(ctx context.Context, fn string) (io.ReadCloser, erro
 	return r, nil
 }
 
-func (fs *localFS) ListRevisions(ctx context.Context, path string) ([]*storage.Revision, error) {
+func (fs *localFS) ListRevisions(ctx context.Context, path string) ([]*storageproviderv0alphapb.FileVersion, error) {
 	return nil, notSupportedError("list revisions")
 }
 
@@ -285,7 +296,7 @@ func (fs *localFS) EmptyRecycle(ctx context.Context, path string) error {
 	return notSupportedError("empty recycle")
 }
 
-func (fs *localFS) ListRecycle(ctx context.Context, path string) ([]*storage.RecycleItem, error) {
+func (fs *localFS) ListRecycle(ctx context.Context, path string) ([]*storageproviderv0alphapb.RecycleItem, error) {
 	return nil, notSupportedError("list recycle")
 }
 
