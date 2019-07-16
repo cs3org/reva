@@ -21,7 +21,7 @@ package share
 import (
 	"context"
 
-	"github.com/cs3org/reva/pkg/storage"
+	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cs3org/reva/pkg/user"
 )
 
@@ -57,7 +57,7 @@ type (
 	// Manager is the interface that manipulates shares.
 	Manager interface {
 		// Create a new share in fn with the given acl.
-		Share(ctx context.Context, u *user.User, md *storage.MD, a *ACL) (*Share, error)
+		Share(ctx context.Context, u *user.User, md *storageproviderv0alphapb.ResourceInfo, a *ACL) (*Share, error)
 
 		// GetShare gets the information for a share by the given id.
 		GetShare(ctx context.Context, u *user.User, id string) (*Share, error)
@@ -70,7 +70,7 @@ type (
 
 		// ListShares returns the shares created by the user. If forPath is not empty,
 		// it returns only shares attached to the given path.
-		ListShares(ctx context.Context, u *user.User, md *storage.MD) ([]*Share, error)
+		ListShares(ctx context.Context, u *user.User, md *storageproviderv0alphapb.ResourceInfo) ([]*Share, error)
 
 		// ListReceivedShares returns the list of shares the user has access.
 		ListReceivedShares(ctx context.Context, u *user.User) ([]*Share, error)
