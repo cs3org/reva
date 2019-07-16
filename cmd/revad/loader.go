@@ -28,8 +28,8 @@ import (
 	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/handlers/loader"
 	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/loader"
 	_ "github.com/cs3org/reva/pkg/auth/manager/loader"
-	_ "github.com/cs3org/reva/pkg/storage/broker/loader"
 	_ "github.com/cs3org/reva/pkg/storage/fs/loader"
+	_ "github.com/cs3org/reva/pkg/storage/registry/loader"
 	_ "github.com/cs3org/reva/pkg/token/manager/loader"
 	_ "github.com/cs3org/reva/pkg/user/manager/loader"
 )

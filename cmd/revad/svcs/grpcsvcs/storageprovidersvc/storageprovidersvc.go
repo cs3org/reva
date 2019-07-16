@@ -27,10 +27,8 @@ import (
 	"strings"
 
 	storagetypespb "github.com/cs3org/go-cs3apis/cs3/storagetypes"
-	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 
 	"github.com/cs3org/reva/cmd/revad/grpcserver"
-	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/utils"
 
 	"context"
 
@@ -39,7 +37,6 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -69,7 +66,7 @@ type service struct {
 }
 
 func (s *service) Close() error {
-	return s.storage.Shutdown()
+	return s.storage.Shutdown(nil)
 }
 
 func parseXSTypes(xsTypes map[string]uint32) ([]*storageproviderv0alphapb.ResourceChecksumPriority, error) {
@@ -338,9 +335,9 @@ func (s *service) Stat(ctx context.Context, req *storageproviderv0alphapb.StatRe
 	}
 	md.Path = s.wrap(ctx, md.Path, fctx)
 
-	info := s.toInfo(md)
+	s.toInfo(md)
 	status := &rpcpb.Status{Code: rpcpb.Code_CODE_OK}
-	res := &storageproviderv0alphapb.StatResponse{Status: status, Info: info}
+	res := &storageproviderv0alphapb.StatResponse{Status: status, Info: md}
 	return res, nil
 }
 
@@ -375,9 +372,9 @@ func (s *service) ListContainerStream(req *storageproviderv0alphapb.ListContaine
 
 	for _, md := range mds {
 		md.Path = s.wrap(ctx, md.Path, fctx)
-		info := s.toInfo(md)
+		s.toInfo(md)
 		res := &storageproviderv0alphapb.ListContainerStreamResponse{
-			Info: info,
+			Info: md,
 			Status: &rpcpb.Status{
 				Code: rpcpb.Code_CODE_OK,
 			},
@@ -415,7 +412,8 @@ func (s *service) ListContainer(ctx context.Context, req *storageproviderv0alpha
 	for _, md := range mds {
 
 		md.Path = s.wrap(ctx, md.Path, fctx)
-		infos = append(infos, s.toInfo(md))
+		s.toInfo(md)
+		infos = append(infos, md)
 	}
 	res := &storageproviderv0alphapb.ListContainerResponse{
 		Status: &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
@@ -441,16 +439,8 @@ func (s *service) ListFileVersions(ctx context.Context, req *storageproviderv0al
 		return res, nil
 	}
 
-	var versions []*storageproviderv0alphapb.FileVersion
-	for _, rev := range revs {
-		versions = append(versions, &storageproviderv0alphapb.FileVersion{
-			Key:   rev.RevKey,
-			Mtime: rev.Mtime,
-			Size:  rev.Size,
-		})
-	}
 	status := &rpcpb.Status{Code: rpcpb.Code_CODE_OK}
-	res := &storageproviderv0alphapb.ListFileVersionsResponse{Status: status, Versions: versions}
+	res := &storageproviderv0alphapb.ListFileVersionsResponse{Status: status, Versions: revs}
 	return res, nil
 }
 
@@ -483,14 +473,9 @@ func (s *service) ListRecycleStream(req *storageproviderv0alphapb.ListRecycleStr
 	}
 
 	for _, item := range items {
-		recycleItem := &storageproviderv0alphapb.RecycleItem{
-			Path:         item.RestorePath,
-			Key:          item.RestoreKey,
-			DeletionTime: utils.UnixNanoToTS(item.DelMtime),
-			Type:         getResourceType(item.IsDir),
-		}
+
 		res := &storageproviderv0alphapb.ListRecycleStreamResponse{
-			RecycleItem: recycleItem,
+			RecycleItem: item,
 			Status: &rpcpb.Status{
 				Code: rpcpb.Code_CODE_OK,
 			},
@@ -515,13 +500,7 @@ func (s *service) ListRecycle(ctx context.Context, req *storageproviderv0alphapb
 
 	var recycleItems []*storageproviderv0alphapb.RecycleItem
 	for _, item := range items {
-		recycleItems = append(recycleItems, &storageproviderv0alphapb.RecycleItem{
-			Path:         item.RestorePath,
-			Key:          item.RestoreKey,
-			Size:         item.Size,
-			DeletionTime: utils.UnixNanoToTS(item.DelMtime),
-			Type:         getResourceType(item.IsDir),
-		})
+		recycleItems = append(recycleItems, item)
 	}
 
 	status := &rpcpb.Status{Code: rpcpb.Code_CODE_OK}
@@ -574,19 +553,7 @@ func (s *service) AddGrant(ctx context.Context, req *storageproviderv0alphapb.Ad
 		return res, nil
 	}
 
-	userID := &user.ID{
-		IDP:      req.Grant.Grantee.Id.Idp,
-		OpaqueID: req.Grant.Grantee.Id.OpaqueId,
-	}
-	g := &storage.Grant{
-		Grantee: &storage.Grantee{
-			UserID: userID,
-			Type:   s.getStorageGranteeType(req.Grant.Grantee.Type),
-		},
-		PermissionSet: s.getStoragePermissionSet(req.Grant.Permissions),
-	}
-
-	err := s.storage.AddGrant(ctx, fn, g)
+	err := s.storage.AddGrant(ctx, fn, req.Grant)
 	if err != nil {
 		log.Error().Err(err).Msg("error setting acl")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL}
@@ -599,54 +566,18 @@ func (s *service) AddGrant(ctx context.Context, req *storageproviderv0alphapb.Ad
 	return res, nil
 }
 
-func (s *service) getStorageGranteeType(t storageproviderv0alphapb.GranteeType) storage.GranteeType {
-	switch t {
-	case storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER:
-		return storage.GranteeTypeUser
-	case storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_GROUP:
-		return storage.GranteeTypeGroup
-	default:
-		return storage.GranteeTypeInvalid
-	}
-}
-
-func (s *service) getStoragePermissionSet(set *storageproviderv0alphapb.ResourcePermissions) *storage.PermissionSet {
-	toret := &storage.PermissionSet{}
-	if set.ListContainer {
-		toret.ListContainer = true
-	}
-	if set.CreateContainer {
-		toret.CreateContainer = true
-	}
-	return toret
-}
-
 func (s *service) UpdateGrant(ctx context.Context, req *storageproviderv0alphapb.UpdateGrantRequest) (*storageproviderv0alphapb.UpdateGrantResponse, error) {
 	log := appctx.GetLogger(ctx)
 	fn := req.Ref.GetPath()
-	storagePerm := s.getStoragePermissionSet(req.Grant.Permissions)
-	granteeType := s.getStorageGranteeType(req.Grant.Grantee.Type)
 
-	if granteeType == storage.GranteeTypeInvalid {
+	if req.Grant.Grantee.Type == storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_INVALID {
 		log.Warn().Msg("grantee type is invalid")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INVALID_ARGUMENT, Message: "grantee type is invalid"}
 		res := &storageproviderv0alphapb.UpdateGrantResponse{Status: status}
 		return res, nil
 	}
 
-	userID := &user.ID{
-		OpaqueID: req.Grant.Grantee.Id.OpaqueId,
-		IDP:      req.Grant.Grantee.Id.Idp,
-	}
-	g := &storage.Grant{
-		Grantee: &storage.Grantee{
-			UserID: userID,
-			Type:   granteeType,
-		},
-		PermissionSet: storagePerm,
-	}
-
-	if err := s.storage.UpdateGrant(ctx, fn, g); err != nil {
+	if err := s.storage.UpdateGrant(ctx, fn, req.Grant); err != nil {
 		log.Error().Err(err).Msg("error updating acl")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL}
 		res := &storageproviderv0alphapb.UpdateGrantResponse{Status: status}
@@ -660,30 +591,16 @@ func (s *service) UpdateGrant(ctx context.Context, req *storageproviderv0alphapb
 func (s *service) RemoveGrant(ctx context.Context, req *storageproviderv0alphapb.RemoveGrantRequest) (*storageproviderv0alphapb.RemoveGrantResponse, error) {
 	log := appctx.GetLogger(ctx)
 	fn := req.Ref.GetPath()
-	granteeType := s.getStorageGranteeType(req.Grant.Grantee.Type)
-	storagePerm := s.getStoragePermissionSet(req.Grant.Permissions)
 
 	// check targetType is valid
-	if granteeType == storage.GranteeTypeInvalid {
+	if req.Grant.Grantee.Type == storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_INVALID {
 		log.Warn().Msg("grantee type is invalid")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INVALID_ARGUMENT, Message: "grantee type is invalid"}
 		res := &storageproviderv0alphapb.RemoveGrantResponse{Status: status}
 		return res, nil
 	}
 
-	userID := &user.ID{
-		OpaqueID: req.Grant.Grantee.Id.OpaqueId,
-		IDP:      req.Grant.Grantee.Id.Idp,
-	}
-	g := &storage.Grant{
-		Grantee: &storage.Grantee{
-			UserID: userID,
-			Type:   granteeType,
-		},
-		PermissionSet: storagePerm,
-	}
-
-	if err := s.storage.RemoveGrant(ctx, fn, g); err != nil {
+	if err := s.storage.RemoveGrant(ctx, fn, req.Grant); err != nil {
 		log.Error().Err(err).Msg("error removing grant")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL}
 		res := &storageproviderv0alphapb.RemoveGrantResponse{Status: status}
@@ -805,39 +722,6 @@ type notFoundError interface {
 	IsNotFound()
 }
 
-// TODO(labkode): more fine grained control.
-func toResourcePermissions(p *storage.PermissionSet) *storageproviderv0alphapb.ResourcePermissions {
-	return &storageproviderv0alphapb.ResourcePermissions{
-		ListContainer:   true,
-		CreateContainer: true,
-	}
-}
-
-func (s *service) toInfo(md *storage.MD) *storageproviderv0alphapb.ResourceInfo {
-	perm := toResourcePermissions(md.Permissions)
-	id := &storageproviderv0alphapb.ResourceId{
-		StorageId: s.mountID,
-		OpaqueId:  md.ID,
-	}
-	checksum := &storageproviderv0alphapb.ResourceChecksum{
-		Type: storageproviderv0alphapb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_MD5,
-		Sum:  md.Checksum,
-	}
-	info := &storageproviderv0alphapb.ResourceInfo{
-		Type:     getResourceType(md.IsDir),
-		Id:       id,
-		Path:     md.Path,
-		Owner:    &typespb.UserId{OpaqueId: md.Owner},
-		Checksum: checksum,
-		Etag:     md.Etag,
-		MimeType: md.Mime,
-		Mtime: &typespb.Timestamp{
-			Seconds: md.Mtime.Seconds,
-			Nanos:   md.Mtime.Nanos,
-		},
-		Size:          md.Size,
-		PermissionSet: perm,
-	}
-
-	return info
+func (s *service) toInfo(ri *storageproviderv0alphapb.ResourceInfo) {
+	ri.Id.StorageId = s.mountID
 }

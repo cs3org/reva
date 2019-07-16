@@ -29,8 +29,9 @@ import (
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/provider/demo"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/storage"
 	"github.com/mitchellh/mapstructure"
+
+	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 )
 
 type service struct {
@@ -84,7 +85,7 @@ func (s *service) Open(ctx context.Context, req *appproviderv0alphapb.OpenReques
 	id := req.ResourceId
 	token := req.AccessToken
 
-	resID := &storage.ResourceID{OpaqueID: id.OpaqueId, StorageID: id.StorageId}
+	resID := &storageproviderv0alphapb.ResourceId{OpaqueId: id.OpaqueId, StorageId: id.StorageId}
 
 	iframeLocation, err := s.provider.GetIFrame(ctx, resID, token)
 	if err != nil {
