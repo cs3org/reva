@@ -22,32 +22,34 @@ import (
 	"context"
 	"strings"
 
-	"github.com/cs3org/reva/pkg/storage/broker/registry"
+	"github.com/cs3org/reva/pkg/storage/registry/registry"
 
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/mitchellh/mapstructure"
+
+	storagetypespb "github.com/cs3org/go-cs3apis/cs3/storagetypes"
 )
 
 func init() {
 	registry.Register("static", New)
 }
 
-type broker struct {
+type reg struct {
 	rules map[string]string
 }
 
-func (b *broker) ListProviders(ctx context.Context) ([]*storage.ProviderInfo, error) {
-	providers := []*storage.ProviderInfo{}
+func (b *reg) ListProviders(ctx context.Context) ([]*storagetypespb.ProviderInfo, error) {
+	providers := []*storagetypespb.ProviderInfo{}
 	for k, v := range b.rules {
-		providers = append(providers, &storage.ProviderInfo{
-			Endpoint:  v,
-			MountPath: k,
+		providers = append(providers, &storagetypespb.ProviderInfo{
+			Address:      v,
+			ProviderPath: k,
 		})
 	}
 	return providers, nil
 }
 
-func (b *broker) FindProvider(ctx context.Context, fn string) (*storage.ProviderInfo, error) {
+func (b *reg) FindProvider(ctx context.Context, fn string) (*storagetypespb.ProviderInfo, error) {
 	// find longest match
 	var match string
 	for prefix := range b.rules {
@@ -60,9 +62,9 @@ func (b *broker) FindProvider(ctx context.Context, fn string) (*storage.Provider
 		return nil, notFoundError("storage provider not found for path " + fn)
 	}
 
-	p := &storage.ProviderInfo{
-		MountPath: match,
-		Endpoint:  b.rules[match],
+	p := &storagetypespb.ProviderInfo{
+		ProviderPath: match,
+		Address:      b.rules[match],
 	}
 	return p, nil
 }
@@ -81,12 +83,12 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 // New returns an implementation to of the storage.FS interface that talk to
 // a local filesystem.
-func New(m map[string]interface{}) (storage.Broker, error) {
+func New(m map[string]interface{}) (storage.Registry, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
 	}
-	return &broker{rules: c.Rules}, nil
+	return &reg{rules: c.Rules}, nil
 }
 
 type notFoundError string
