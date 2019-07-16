@@ -20,6 +20,7 @@ package eos
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -39,6 +40,9 @@ import (
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+
+	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 )
 
 func init() {
@@ -172,7 +176,8 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	return eosStorage, nil
 }
 
-func (fs *eosStorage) Shutdown() error {
+func (fs *eosStorage) Shutdown(ctx context.Context) error {
+	// TODO(labkode): in a grpc implementation we can close connections.
 	return nil
 }
 
@@ -208,11 +213,11 @@ func (fs *eosStorage) GetPathByID(ctx context.Context, id string) (string, error
 		return "", errors.Wrap(err, "storage_eos: error getting file info by inode")
 	}
 
-	fi := fs.convertToMD(ctx, eosFileInfo)
+	fi := fs.convertToResourceInfo(ctx, eosFileInfo)
 	return fi.Path, nil
 }
 
-func (fs *eosStorage) AddGrant(ctx context.Context, fn string, g *storage.Grant) error {
+func (fs *eosStorage) AddGrant(ctx context.Context, fn string, g *storageproviderv0alphapb.Grant) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "storage_eos: no user in ctx")
@@ -233,28 +238,28 @@ func (fs *eosStorage) AddGrant(ctx context.Context, fn string, g *storage.Grant)
 	return nil
 }
 
-func getEosACLType(aclType storage.GranteeType) (string, error) {
-	switch aclType {
-	case storage.GranteeTypeUser:
+func getEosACLType(gt storageproviderv0alphapb.GranteeType) (string, error) {
+	switch gt {
+	case storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER:
 		return "u", nil
-	case storage.GranteeTypeGroup:
+	case storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_GROUP:
 		return "g", nil
 	default:
-		return "", errors.New("no eos acl for grantee type: " + aclType.String())
+		return "", errors.New("no eos acl for grantee type: " + gt.String())
 	}
 }
 
 // TODO(labkode): fine grained permission controls.
-func getEosACLPerm(set *storage.PermissionSet) (string, error) {
-	if set.Delete {
+func getEosACLPerm(rp *storageproviderv0alphapb.ResourcePermissions) (string, error) {
+	if rp.Delete {
 		return "rwx!d", nil
 	}
 
 	return "rx", nil
 }
 
-func (fs *eosStorage) getEosACL(g *storage.Grant) (*acl.Entry, error) {
-	permissions, err := getEosACLPerm(g.PermissionSet)
+func (fs *eosStorage) getEosACL(g *storageproviderv0alphapb.Grant) (*acl.Entry, error) {
+	permissions, err := getEosACLPerm(g.Permissions)
 	if err != nil {
 		return nil, err
 	}
@@ -263,14 +268,14 @@ func (fs *eosStorage) getEosACL(g *storage.Grant) (*acl.Entry, error) {
 		return nil, err
 	}
 	eosACL := &acl.Entry{
-		Qualifier:   g.Grantee.UserID.OpaqueID,
+		Qualifier:   g.Grantee.Id.OpaqueId,
 		Permissions: permissions,
 		Type:        t,
 	}
 	return eosACL, nil
 }
 
-func (fs *eosStorage) RemoveGrant(ctx context.Context, fn string, g *storage.Grant) error {
+func (fs *eosStorage) RemoveGrant(ctx context.Context, fn string, g *storageproviderv0alphapb.Grant) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "storage_eos: no user in ctx")
@@ -283,14 +288,14 @@ func (fs *eosStorage) RemoveGrant(ctx context.Context, fn string, g *storage.Gra
 
 	fn = fs.getInternalPath(ctx, fn)
 
-	err = fs.c.RemoveACL(ctx, u.Username, fn, eosACLType, g.Grantee.UserID.OpaqueID)
+	err = fs.c.RemoveACL(ctx, u.Username, fn, eosACLType, g.Grantee.Id.OpaqueId)
 	if err != nil {
 		return errors.Wrap(err, "storage_eos: error removing acl")
 	}
 	return nil
 }
 
-func (fs *eosStorage) UpdateGrant(ctx context.Context, fn string, g *storage.Grant) error {
+func (fs *eosStorage) UpdateGrant(ctx context.Context, fn string, g *storageproviderv0alphapb.Grant) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "storage_eos: no user in ctx")
@@ -309,7 +314,7 @@ func (fs *eosStorage) UpdateGrant(ctx context.Context, fn string, g *storage.Gra
 	return nil
 }
 
-func (fs *eosStorage) ListGrants(ctx context.Context, fn string) ([]*storage.Grant, error) {
+func (fs *eosStorage) ListGrants(ctx context.Context, fn string) ([]*storageproviderv0alphapb.Grant, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, err
@@ -321,56 +326,44 @@ func (fs *eosStorage) ListGrants(ctx context.Context, fn string) ([]*storage.Gra
 		return nil, err
 	}
 
-	grants := []*storage.Grant{}
+	grants := []*storageproviderv0alphapb.Grant{}
 	for _, a := range acls {
-		grantee := &storage.Grantee{
-			UserID: &user.ID{OpaqueID: a.Qualifier},
-			Type:   fs.getGranteeType(a.Type),
+		grantee := &storageproviderv0alphapb.Grantee{
+			Id:   &typespb.UserId{OpaqueId: a.Qualifier},
+			Type: fs.getGranteeType(a.Type),
 		}
-		grants = append(grants, &storage.Grant{
-			Grantee:       grantee,
-			PermissionSet: fs.getGrantPermissionSet(a.Permissions),
+		grants = append(grants, &storageproviderv0alphapb.Grant{
+			Grantee:     grantee,
+			Permissions: fs.getGrantPermissionSet(a.Permissions),
 		})
 	}
 
 	return grants, nil
 }
 
-func (fs *eosStorage) getGranteeType(aclType string) storage.GranteeType {
+func (fs *eosStorage) getGranteeType(aclType string) storageproviderv0alphapb.GranteeType {
 	switch aclType {
 	case "u":
-		return storage.GranteeTypeUser
+		return storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER
 	case "g":
-		return storage.GranteeTypeGroup
+		return storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_GROUP
 	default:
-		return storage.GranteeTypeInvalid
+		return storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_INVALID
 	}
 }
 
 // TODO(labkode): add more fine grained controls.
-func (fs *eosStorage) getGrantPermissionSet(mode string) *storage.PermissionSet {
-	// TODO AddGrant permission? only for owner and co owners?
-	// TODO Delete
-	// TODO GetPath
-	// TODO GetQuota
-	// TODO InitiateFileUpload
-	// TODO ListGrants
-	// TODO ListFileVersions
-	// TODO ListRecycle
-	// TODO RemoveGrant
-	// TODO PurgeRecycle only for owner and co owners?
-	// TODO RestoreFileVersion
-	// TODO RestoreRecycleItem
-	// TODO UpdateGrant
+func (fs *eosStorage) getGrantPermissionSet(mode string) *storageproviderv0alphapb.ResourcePermissions {
+	// TODO(labkode) map other permissions.
 	switch mode {
 	case "rx":
-		return &storage.PermissionSet{
+		return &storageproviderv0alphapb.ResourcePermissions{
 			ListContainer: true,
 			//InitiateFileDownload: true,
 			//Stat:          true,
 		}
 	case "rwx!d":
-		return &storage.PermissionSet{
+		return &storageproviderv0alphapb.ResourcePermissions{
 			Move:            true,
 			CreateContainer: true,
 			ListContainer:   true,
@@ -378,11 +371,11 @@ func (fs *eosStorage) getGrantPermissionSet(mode string) *storage.PermissionSet 
 	default:
 		// return no permissions are we do not know
 		// what acl is this one.
-		return &storage.PermissionSet{} // default values are false
+		return &storageproviderv0alphapb.ResourcePermissions{} // default values are false
 	}
 }
 
-func (fs *eosStorage) GetMD(ctx context.Context, fn string) (*storage.MD, error) {
+func (fs *eosStorage) GetMD(ctx context.Context, fn string) (*storageproviderv0alphapb.ResourceInfo, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, err
@@ -393,11 +386,11 @@ func (fs *eosStorage) GetMD(ctx context.Context, fn string) (*storage.MD, error)
 	if err != nil {
 		return nil, err
 	}
-	fi := fs.convertToMD(ctx, eosFileInfo)
+	fi := fs.convertToResourceInfo(ctx, eosFileInfo)
 	return fi, nil
 }
 
-func (fs *eosStorage) ListFolder(ctx context.Context, fn string) ([]*storage.MD, error) {
+func (fs *eosStorage) ListFolder(ctx context.Context, fn string) ([]*storageproviderv0alphapb.ResourceInfo, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "storage_eos: no user in ctx")
@@ -409,7 +402,7 @@ func (fs *eosStorage) ListFolder(ctx context.Context, fn string) ([]*storage.MD,
 		return nil, errors.Wrap(err, "storage_eos: error listing")
 	}
 
-	finfos := []*storage.MD{}
+	finfos := []*storageproviderv0alphapb.ResourceInfo{}
 	for _, eosFileInfo := range eosFileInfos {
 		// filter out sys files
 		if !fs.showHiddenSys {
@@ -419,7 +412,7 @@ func (fs *eosStorage) ListFolder(ctx context.Context, fn string) ([]*storage.MD,
 			}
 
 		}
-		finfos = append(finfos, fs.convertToMD(ctx, eosFileInfo))
+		finfos = append(finfos, fs.convertToResourceInfo(ctx, eosFileInfo))
 	}
 	return finfos, nil
 }
@@ -478,7 +471,7 @@ func (fs *eosStorage) Upload(ctx context.Context, fn string, r io.ReadCloser) er
 	return fs.c.Write(ctx, u.Username, fn, r)
 }
 
-func (fs *eosStorage) ListRevisions(ctx context.Context, fn string) ([]*storage.Revision, error) {
+func (fs *eosStorage) ListRevisions(ctx context.Context, fn string) ([]*storageproviderv0alphapb.FileVersion, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "storage_eos: no user in ctx")
@@ -488,7 +481,7 @@ func (fs *eosStorage) ListRevisions(ctx context.Context, fn string) ([]*storage.
 	if err != nil {
 		return nil, errors.Wrap(err, "storage_eos: error listing versions")
 	}
-	revisions := []*storage.Revision{}
+	revisions := []*storageproviderv0alphapb.FileVersion{}
 	for _, eosRev := range eosRevisions {
 		rev := fs.convertToRevision(ctx, eosRev)
 		revisions = append(revisions, rev)
@@ -522,7 +515,7 @@ func (fs *eosStorage) EmptyRecycle(ctx context.Context, fn string) error {
 	return fs.c.PurgeDeletedEntries(ctx, u.Username)
 }
 
-func (fs *eosStorage) ListRecycle(ctx context.Context, fn string) ([]*storage.RecycleItem, error) {
+func (fs *eosStorage) ListRecycle(ctx context.Context, fn string) ([]*storageproviderv0alphapb.RecycleItem, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "storage_eos: no user in ctx")
@@ -531,7 +524,7 @@ func (fs *eosStorage) ListRecycle(ctx context.Context, fn string) ([]*storage.Re
 	if err != nil {
 		return nil, errors.Wrap(err, "storage_eos: error listing deleted entries")
 	}
-	recycleEntries := []*storage.RecycleItem{}
+	recycleEntries := []*storageproviderv0alphapb.RecycleItem{}
 	for _, entry := range eosDeletedEntries {
 		if !fs.showHiddenSys {
 			base := path.Base(entry.RestorePath)
@@ -554,28 +547,33 @@ func (fs *eosStorage) RestoreRecycleItem(ctx context.Context, fn, key string) er
 	return fs.c.RestoreDeletedEntry(ctx, u.Username, key)
 }
 
-func (fs *eosStorage) convertToRecycleItem(ctx context.Context, eosDeletedItem *eosclient.DeletedEntry) *storage.RecycleItem {
-	recycleItem := &storage.RecycleItem{
-		RestorePath: fs.removeNamespace(ctx, eosDeletedItem.RestorePath),
-		RestoreKey:  eosDeletedItem.RestoreKey,
-		Size:        eosDeletedItem.Size,
-		DelMtime:    eosDeletedItem.DeletionMTime,
-		IsDir:       eosDeletedItem.IsDir,
+func (fs *eosStorage) convertToRecycleItem(ctx context.Context, eosDeletedItem *eosclient.DeletedEntry) *storageproviderv0alphapb.RecycleItem {
+	recycleItem := &storageproviderv0alphapb.RecycleItem{
+		Path:         fs.removeNamespace(ctx, eosDeletedItem.RestorePath),
+		Key:          eosDeletedItem.RestoreKey,
+		Size:         eosDeletedItem.Size,
+		DeletionTime: &typespb.Timestamp{Seconds: eosDeletedItem.DeletionMTime / 1000}, // TODO(labkode): check if eos time is millis or nanos
+	}
+	if eosDeletedItem.IsDir {
+		recycleItem.Type = storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER
+	} else {
+		// TODO(labkode): if eos returns more types oin the future we need to map them.
+		recycleItem.Type = storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_FILE
 	}
 	return recycleItem
 }
 
-func (fs *eosStorage) convertToRevision(ctx context.Context, eosFileInfo *eosclient.FileInfo) *storage.Revision {
-	md := fs.convertToMD(ctx, eosFileInfo)
-	revision := &storage.Revision{
-		RevKey: path.Base(md.Path),
-		Size:   md.Size,
-		Mtime:  md.Mtime.Seconds, // TODO do we need nanos here?
-		IsDir:  md.IsDir,
+func (fs *eosStorage) convertToRevision(ctx context.Context, eosFileInfo *eosclient.FileInfo) *storageproviderv0alphapb.FileVersion {
+	md := fs.convertToResourceInfo(ctx, eosFileInfo)
+	revision := &storageproviderv0alphapb.FileVersion{
+		Key:   path.Base(md.Path),
+		Size:  md.Size,
+		Mtime: md.Mtime.Seconds, // TODO do we need nanos here?
 	}
 	return revision
 }
-func (fs *eosStorage) convertToMD(ctx context.Context, eosFileInfo *eosclient.FileInfo) *storage.MD {
+
+func (fs *eosStorage) convertToResourceInfo(ctx context.Context, eosFileInfo *eosclient.FileInfo) *storageproviderv0alphapb.ResourceInfo {
 	path := fs.removeNamespace(ctx, eosFileInfo.File)
 	size := eosFileInfo.Size
 	if eosFileInfo.IsDir {
@@ -585,23 +583,38 @@ func (fs *eosStorage) convertToMD(ctx context.Context, eosFileInfo *eosclient.Fi
 	if err != nil {
 		log := appctx.GetLogger(ctx)
 		log.Warn().Uint64("uid", eosFileInfo.UID).Msg("could not lookup userid, leaving empty")
-		username = ""
+		username = "" // TODO(labkode): should we abort here?
 	}
-	return &storage.MD{
-		ID:          fmt.Sprintf("%d", eosFileInfo.Inode),
-		Path:        path,
-		Owner:       username,
-		IsDir:       eosFileInfo.IsDir,
-		Etag:        eosFileInfo.ETag,
-		Mime:        mime.Detect(eosFileInfo.IsDir, path),
-		Size:        size,
-		Permissions: &storage.PermissionSet{ListContainer: true, CreateContainer: true},
-		Mtime: &storage.Timestamp{
+
+	return &storageproviderv0alphapb.ResourceInfo{
+		Id:            &storageproviderv0alphapb.ResourceId{OpaqueId: fmt.Sprintf("%d", eosFileInfo.Inode)},
+		Path:          path,
+		Owner:         &typespb.UserId{OpaqueId: username},
+		Type:          getResourceType(eosFileInfo.IsDir),
+		Etag:          eosFileInfo.ETag,
+		MimeType:      mime.Detect(eosFileInfo.IsDir, path),
+		Size:          size,
+		PermissionSet: &storageproviderv0alphapb.ResourcePermissions{ListContainer: true, CreateContainer: true},
+		Mtime: &typespb.Timestamp{
 			Seconds: eosFileInfo.MTimeSec,
 			Nanos:   eosFileInfo.MTimeNanos,
 		},
-		Opaque: fs.getEosMetadata(eosFileInfo),
+		Opaque: &typespb.Opaque{
+			Map: map[string]*typespb.OpaqueEntry{
+				"eos": &typespb.OpaqueEntry{
+					Decoder: "json",
+					Value:   fs.getEosMetadata(eosFileInfo),
+				},
+			},
+		},
 	}
+}
+
+func getResourceType(isDir bool) storageproviderv0alphapb.ResourceType {
+	if isDir {
+		return storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER
+	}
+	return storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_FILE
 }
 
 func getUsername(uid uint64) (string, error) {
@@ -614,13 +627,13 @@ func getUsername(uid uint64) (string, error) {
 }
 
 type eosSysMetadata struct {
-	TreeSize  uint64
-	TreeCount uint64
-	File      string
-	Instance  string
+	TreeSize  uint64 `json:"tree_size"`
+	TreeCount uint64 `json:"tree_count"`
+	File      string `json:"file"`
+	Instance  string `json:"instance"`
 }
 
-func (fs *eosStorage) getEosMetadata(finfo *eosclient.FileInfo) map[string]interface{} {
+func (fs *eosStorage) getEosMetadata(finfo *eosclient.FileInfo) []byte {
 	sys := &eosSysMetadata{
 		File:     finfo.File,
 		Instance: finfo.Instance,
@@ -630,5 +643,7 @@ func (fs *eosStorage) getEosMetadata(finfo *eosclient.FileInfo) map[string]inter
 		sys.TreeCount = finfo.TreeCount
 		sys.TreeSize = finfo.TreeSize
 	}
-	return map[string]interface{}{"eos": sys}
+
+	v, _ := json.Marshal(sys)
+	return v
 }
