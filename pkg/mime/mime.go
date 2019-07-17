@@ -33,6 +33,7 @@ func init() {
 
 // RegisterMime is a package level function that registers
 // a mime type with the given extension.
+// TODO(labkode): check that we do not override mime type mappings?
 func RegisterMime(ext, mime string) {
 	mimes[ext] = mime
 }

@@ -29,23 +29,23 @@ import (
 // FS is the interface to implement access to the storage.
 type FS interface {
 	CreateDir(ctx context.Context, fn string) error
-	Delete(ctx context.Context, fn string) error
-	Move(ctx context.Context, old, new string) error
-	GetMD(ctx context.Context, fn string) (*storageproviderv0alphapb.ResourceInfo, error)
-	ListFolder(ctx context.Context, fn string) ([]*storageproviderv0alphapb.ResourceInfo, error)
-	Upload(ctx context.Context, fn string, r io.ReadCloser) error
-	Download(ctx context.Context, fn string) (io.ReadCloser, error)
-	ListRevisions(ctx context.Context, fn string) ([]*storageproviderv0alphapb.FileVersion, error)
-	DownloadRevision(ctx context.Context, fn, key string) (io.ReadCloser, error)
-	RestoreRevision(ctx context.Context, fn, key string) error
-	ListRecycle(ctx context.Context, fn string) ([]*storageproviderv0alphapb.RecycleItem, error)
-	RestoreRecycleItem(ctx context.Context, fn, key string) error
-	EmptyRecycle(ctx context.Context, fn string) error
-	GetPathByID(ctx context.Context, id string) (string, error)
-	AddGrant(ctx context.Context, fn string, g *storageproviderv0alphapb.Grant) error
-	RemoveGrant(ctx context.Context, fn string, g *storageproviderv0alphapb.Grant) error
-	UpdateGrant(ctx context.Context, fn string, g *storageproviderv0alphapb.Grant) error
-	ListGrants(ctx context.Context, fn string) ([]*storageproviderv0alphapb.Grant, error)
+	Delete(ctx context.Context, ref *storageproviderv0alphapb.Reference) error
+	Move(ctx context.Context, oldRef, newRef *storageproviderv0alphapb.Reference) error
+	GetMD(ctx context.Context, ref *storageproviderv0alphapb.Reference) (*storageproviderv0alphapb.ResourceInfo, error)
+	ListFolder(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.ResourceInfo, error)
+	Upload(ctx context.Context, ref *storageproviderv0alphapb.Reference, r io.ReadCloser) error
+	Download(ctx context.Context, ref *storageproviderv0alphapb.Reference) (io.ReadCloser, error)
+	ListRevisions(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.FileVersion, error)
+	DownloadRevision(ctx context.Context, ref *storageproviderv0alphapb.Reference, key string) (io.ReadCloser, error)
+	RestoreRevision(ctx context.Context, ref *storageproviderv0alphapb.Reference, key string) error
+	ListRecycle(ctx context.Context) ([]*storageproviderv0alphapb.RecycleItem, error)
+	RestoreRecycleItem(ctx context.Context, key string) error
+	EmptyRecycle(ctx context.Context) error
+	GetPathByID(ctx context.Context, id *storageproviderv0alphapb.ResourceId) (string, error)
+	AddGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error
+	RemoveGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error
+	UpdateGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error
+	ListGrants(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.Grant, error)
 	GetQuota(ctx context.Context) (int, int, error)
 	Shutdown(ctx context.Context) error
 }

@@ -196,14 +196,14 @@ func (fs *eosStorage) removeNamespace(ctx context.Context, np string) string {
 	return p
 }
 
-func (fs *eosStorage) GetPathByID(ctx context.Context, id string) (string, error) {
+func (fs *eosStorage) GetPathByID(ctx context.Context, id *storageproviderv0alphapb.ResourceId) (string, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return "", errors.Wrap(err, "storage_eos: no user in ctx")
 	}
 
 	// parts[0] = 868317, parts[1] = photos, ...
-	parts := strings.Split(id, "/")
+	parts := strings.Split(id.OpaqueId, "/")
 	fileID, err := strconv.ParseUint(parts[0], 10, 64)
 	if err != nil {
 		return "", errors.Wrap(err, "storage_eos: error parsing fileid string")
@@ -218,13 +218,46 @@ func (fs *eosStorage) GetPathByID(ctx context.Context, id string) (string, error
 	return fi.Path, nil
 }
 
-func (fs *eosStorage) AddGrant(ctx context.Context, fn string, g *storageproviderv0alphapb.Grant) error {
+// resolve takes in a request path or request id and converts it to a internal path.
+func (fs *eosStorage) resolve(ctx context.Context, u *authv0alphapb.User, ref *storageproviderv0alphapb.Reference) (string, error) {
+	if ref.GetPath() != "" {
+		return fs.getInternalPath(ctx, ref.GetPath()), nil
+	}
+
+	if ref.GetId() != nil {
+		fn, err := fs.getPath(ctx, u, ref.GetId())
+		if err != nil {
+			return "", err
+		}
+		return fn, nil
+	}
+
+	// reference is invalid
+	return "", fmt.Errorf("invalid reference %+v", ref)
+}
+
+func (fs *eosStorage) getPath(ctx context.Context, u *authv0alphapb.User, id *storageproviderv0alphapb.ResourceId) (string, error) {
+	fid, err := strconv.ParseUint(id.OpaqueId, 10, 64)
+	if err != nil {
+		return "", fmt.Errorf("error converting string to int for eos fileid: %s", id.OpaqueId)
+	}
+	eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, u.Username, fid)
+	if err != nil {
+		return "", errors.Wrap(err, "storage_eos: error getting file info by inode")
+	}
+	return eosFileInfo.File, nil
+}
+
+func (fs *eosStorage) AddGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "storage_eos: no user in ctx")
 	}
 
-	fn = fs.getInternalPath(ctx, fn)
+	fn, err := fs.resolve(ctx, u, ref)
+	if err != nil {
+		return errors.Wrap(err, "storage_eos: error resolving reference")
+	}
 
 	eosACL, err := fs.getEosACL(g)
 	if err != nil {
@@ -276,7 +309,7 @@ func (fs *eosStorage) getEosACL(g *storageproviderv0alphapb.Grant) (*acl.Entry, 
 	return eosACL, nil
 }
 
-func (fs *eosStorage) RemoveGrant(ctx context.Context, fn string, g *storageproviderv0alphapb.Grant) error {
+func (fs *eosStorage) RemoveGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "storage_eos: no user in ctx")
@@ -287,7 +320,10 @@ func (fs *eosStorage) RemoveGrant(ctx context.Context, fn string, g *storageprov
 		return err
 	}
 
-	fn = fs.getInternalPath(ctx, fn)
+	fn, err := fs.resolve(ctx, u, ref)
+	if err != nil {
+		return errors.Wrap(err, "storage_eos: error resolving reference")
+	}
 
 	err = fs.c.RemoveACL(ctx, u.Username, fn, eosACLType, g.Grantee.Id.OpaqueId)
 	if err != nil {
@@ -296,7 +332,7 @@ func (fs *eosStorage) RemoveGrant(ctx context.Context, fn string, g *storageprov
 	return nil
 }
 
-func (fs *eosStorage) UpdateGrant(ctx context.Context, fn string, g *storageproviderv0alphapb.Grant) error {
+func (fs *eosStorage) UpdateGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "storage_eos: no user in ctx")
@@ -307,7 +343,11 @@ func (fs *eosStorage) UpdateGrant(ctx context.Context, fn string, g *storageprov
 		return err
 	}
 
-	fn = fs.getInternalPath(ctx, fn)
+	fn, err := fs.resolve(ctx, u, ref)
+	if err != nil {
+		return errors.Wrap(err, "storage_eos: error resolving reference")
+	}
+
 	err = fs.c.AddACL(ctx, u.Username, fn, eosACL)
 	if err != nil {
 		return errors.Wrap(err, "storage_eos: error updating acl")
@@ -315,13 +355,17 @@ func (fs *eosStorage) UpdateGrant(ctx context.Context, fn string, g *storageprov
 	return nil
 }
 
-func (fs *eosStorage) ListGrants(ctx context.Context, fn string) ([]*storageproviderv0alphapb.Grant, error) {
+func (fs *eosStorage) ListGrants(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.Grant, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	fn = fs.getInternalPath(ctx, fn)
+	fn, err := fs.resolve(ctx, u, ref)
+	if err != nil {
+		return nil, errors.Wrap(err, "storage_eos: error resolving reference")
+	}
+
 	acls, err := fs.c.ListACLs(ctx, u.Username, fn)
 	if err != nil {
 		return nil, err
@@ -376,13 +420,16 @@ func (fs *eosStorage) getGrantPermissionSet(mode string) *storageproviderv0alpha
 	}
 }
 
-func (fs *eosStorage) GetMD(ctx context.Context, fn string) (*storageproviderv0alphapb.ResourceInfo, error) {
+func (fs *eosStorage) GetMD(ctx context.Context, ref *storageproviderv0alphapb.Reference) (*storageproviderv0alphapb.ResourceInfo, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, err
 	}
+	fn, err := fs.resolve(ctx, u, ref)
+	if err != nil {
+		return nil, errors.Wrap(err, "storage_eos: error resolving reference")
+	}
 
-	fn = fs.getInternalPath(ctx, fn)
 	eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, u.Username, fn)
 	if err != nil {
 		return nil, err
@@ -391,13 +438,17 @@ func (fs *eosStorage) GetMD(ctx context.Context, fn string) (*storageproviderv0a
 	return fi, nil
 }
 
-func (fs *eosStorage) ListFolder(ctx context.Context, fn string) ([]*storageproviderv0alphapb.ResourceInfo, error) {
+func (fs *eosStorage) ListFolder(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.ResourceInfo, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "storage_eos: no user in ctx")
 	}
 
-	fn = fs.getInternalPath(ctx, fn)
+	fn, err := fs.resolve(ctx, u, ref)
+	if err != nil {
+		return nil, errors.Wrap(err, "storage_eos: error resolving reference")
+	}
+
 	eosFileInfos, err := fs.c.List(ctx, u.Username, fn)
 	if err != nil {
 		return nil, errors.Wrap(err, "storage_eos: error listing")
@@ -431,53 +482,82 @@ func (fs *eosStorage) CreateDir(ctx context.Context, fn string) error {
 	if err != nil {
 		return errors.Wrap(err, "storage_eos: no user in ctx")
 	}
+
 	fn = fs.getInternalPath(ctx, fn)
 	return fs.c.CreateDir(ctx, u.Username, fn)
 }
 
-func (fs *eosStorage) Delete(ctx context.Context, fn string) error {
+func (fs *eosStorage) Delete(ctx context.Context, ref *storageproviderv0alphapb.Reference) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "storage_eos: no user in ctx")
 	}
-	fn = fs.getInternalPath(ctx, fn)
+
+	fn, err := fs.resolve(ctx, u, ref)
+	if err != nil {
+		return errors.Wrap(err, "storage_eos: error resolving reference")
+	}
+
 	return fs.c.Remove(ctx, u.Username, fn)
 }
 
-func (fs *eosStorage) Move(ctx context.Context, oldPath, newPath string) error {
+func (fs *eosStorage) Move(ctx context.Context, oldRef, newRef *storageproviderv0alphapb.Reference) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "storage_eos: no user in ctx")
 	}
-	oldPath = fs.getInternalPath(ctx, oldPath)
-	newPath = fs.getInternalPath(ctx, newPath)
+	oldPath, err := fs.resolve(ctx, u, oldRef)
+	if err != nil {
+		return errors.Wrap(err, "storage_eos: error resolving reference")
+	}
+
+	newPath, err := fs.resolve(ctx, u, newRef)
+	if err != nil {
+		return errors.Wrap(err, "storage_eos: error resolving reference")
+	}
+
 	return fs.c.Rename(ctx, u.Username, oldPath, newPath)
 }
 
-func (fs *eosStorage) Download(ctx context.Context, fn string) (io.ReadCloser, error) {
+func (fs *eosStorage) Download(ctx context.Context, ref *storageproviderv0alphapb.Reference) (io.ReadCloser, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "storage_eos: no user in ctx")
 	}
-	fn = fs.getInternalPath(ctx, fn)
+
+	fn, err := fs.resolve(ctx, u, ref)
+	if err != nil {
+		return nil, errors.Wrap(err, "storage_eos: error resolving reference")
+	}
+
 	return fs.c.Read(ctx, u.Username, fn)
 }
 
-func (fs *eosStorage) Upload(ctx context.Context, fn string, r io.ReadCloser) error {
+func (fs *eosStorage) Upload(ctx context.Context, ref *storageproviderv0alphapb.Reference, r io.ReadCloser) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "storage_eos: no user in ctx")
 	}
-	fn = fs.getInternalPath(ctx, fn)
+
+	fn, err := fs.resolve(ctx, u, ref)
+	if err != nil {
+		return errors.Wrap(err, "storage_eos: error resolving reference")
+	}
+
 	return fs.c.Write(ctx, u.Username, fn, r)
 }
 
-func (fs *eosStorage) ListRevisions(ctx context.Context, fn string) ([]*storageproviderv0alphapb.FileVersion, error) {
+func (fs *eosStorage) ListRevisions(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.FileVersion, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "storage_eos: no user in ctx")
 	}
-	fn = fs.getInternalPath(ctx, fn)
+
+	fn, err := fs.resolve(ctx, u, ref)
+	if err != nil {
+		return nil, errors.Wrap(err, "storage_eos: error resolving reference")
+	}
+
 	eosRevisions, err := fs.c.ListVersions(ctx, u.Username, fn)
 	if err != nil {
 		return nil, errors.Wrap(err, "storage_eos: error listing versions")
@@ -490,25 +570,36 @@ func (fs *eosStorage) ListRevisions(ctx context.Context, fn string) ([]*storagep
 	return revisions, nil
 }
 
-func (fs *eosStorage) DownloadRevision(ctx context.Context, fn, revisionKey string) (io.ReadCloser, error) {
+func (fs *eosStorage) DownloadRevision(ctx context.Context, ref *storageproviderv0alphapb.Reference, revisionKey string) (io.ReadCloser, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "storage_eos: no user in ctx")
 	}
+
+	fn, err := fs.resolve(ctx, u, ref)
+	if err != nil {
+		return nil, errors.Wrap(err, "storage_eos: error resolving reference")
+	}
+
 	fn = fs.getInternalPath(ctx, fn)
 	return fs.c.ReadVersion(ctx, u.Username, fn, revisionKey)
 }
 
-func (fs *eosStorage) RestoreRevision(ctx context.Context, fn, revisionKey string) error {
+func (fs *eosStorage) RestoreRevision(ctx context.Context, ref *storageproviderv0alphapb.Reference, revisionKey string) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "storage_eos: no user in ctx")
 	}
-	fn = fs.getInternalPath(ctx, fn)
+
+	fn, err := fs.resolve(ctx, u, ref)
+	if err != nil {
+		return errors.Wrap(err, "storage_eos: error resolving reference")
+	}
+
 	return fs.c.RollbackToVersion(ctx, u.Username, fn, revisionKey)
 }
 
-func (fs *eosStorage) EmptyRecycle(ctx context.Context, fn string) error {
+func (fs *eosStorage) EmptyRecycle(ctx context.Context) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "storage_eos: no user in ctx")
@@ -516,7 +607,7 @@ func (fs *eosStorage) EmptyRecycle(ctx context.Context, fn string) error {
 	return fs.c.PurgeDeletedEntries(ctx, u.Username)
 }
 
-func (fs *eosStorage) ListRecycle(ctx context.Context, fn string) ([]*storageproviderv0alphapb.RecycleItem, error) {
+func (fs *eosStorage) ListRecycle(ctx context.Context) ([]*storageproviderv0alphapb.RecycleItem, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "storage_eos: no user in ctx")
@@ -540,7 +631,7 @@ func (fs *eosStorage) ListRecycle(ctx context.Context, fn string) ([]*storagepro
 	return recycleEntries, nil
 }
 
-func (fs *eosStorage) RestoreRecycleItem(ctx context.Context, fn, key string) error {
+func (fs *eosStorage) RestoreRecycleItem(ctx context.Context, key string) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "storage_eos: no user in ctx")
