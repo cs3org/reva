@@ -28,6 +28,9 @@ import (
 	"github.com/cs3org/reva/pkg/user/manager/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+
+	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 )
 
 func init() {
@@ -35,7 +38,7 @@ func init() {
 }
 
 type manager struct {
-	users []*user.User
+	users []*authv0alphapb.User
 }
 
 type config struct {
@@ -64,7 +67,7 @@ func New(m map[string]interface{}) (user.Manager, error) {
 		return nil, err
 	}
 
-	users := []*user.User{}
+	users := []*authv0alphapb.User{}
 
 	err = json.Unmarshal([]byte(f), &users)
 	if err != nil {
@@ -76,22 +79,22 @@ func New(m map[string]interface{}) (user.Manager, error) {
 	}, nil
 }
 
-func (m *manager) GetUser(ctx context.Context, username string) (*user.User, error) {
+func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*authv0alphapb.User, error) {
 	for _, u := range m.users {
-		if u.Username == username {
+		if u.Username == uid.OpaqueId {
 			return u, nil
 		}
 	}
-	return nil, userNotFoundError(username)
+	return nil, userNotFoundError(uid.OpaqueId)
 }
 
 // TODO search Opaque? compare sub?
-func userContains(u *user.User, query string) bool {
+func userContains(u *authv0alphapb.User, query string) bool {
 	return strings.Contains(u.Username, query) || strings.Contains(u.DisplayName, query) || strings.Contains(u.Mail, query)
 }
 
-func (m *manager) FindUsers(ctx context.Context, query string) ([]*user.User, error) {
-	users := []*user.User{}
+func (m *manager) FindUsers(ctx context.Context, query string) ([]*authv0alphapb.User, error) {
+	users := []*authv0alphapb.User{}
 	for _, u := range m.users {
 		if userContains(u, query) {
 			users = append(users, u)
@@ -100,16 +103,16 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*user.User, er
 	return users, nil
 }
 
-func (m *manager) GetUserGroups(ctx context.Context, username string) ([]string, error) {
-	user, err := m.GetUser(ctx, username)
+func (m *manager) GetUserGroups(ctx context.Context, uid *typespb.UserId) ([]string, error) {
+	user, err := m.GetUser(ctx, uid)
 	if err != nil {
 		return nil, err
 	}
 	return user.Groups, nil
 }
 
-func (m *manager) IsInGroup(ctx context.Context, username, group string) (bool, error) {
-	user, err := m.GetUser(ctx, username)
+func (m *manager) IsInGroup(ctx context.Context, uid *typespb.UserId, group string) (bool, error) {
+	user, err := m.GetUser(ctx, uid)
 	if err != nil {
 		return false, err
 	}

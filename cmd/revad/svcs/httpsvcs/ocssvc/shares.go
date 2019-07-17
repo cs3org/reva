@@ -26,12 +26,13 @@ import (
 	"strings"
 	"time"
 
-	publicsharev0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshare/v0alpha"
+	publicshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
 
+	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/user"
@@ -49,7 +50,7 @@ type SharesHandler struct {
 	uClient                usershareproviderv0alphapb.UserShareProviderServiceClient
 	publicShareProviderSVC string
 	pConn                  *grpc.ClientConn
-	pClient                publicsharev0alphapb.PublicShareProviderServiceClient
+	pClient                publicshareproviderv0alphapb.PublicShareProviderServiceClient
 	userManager            user.Manager
 }
 
@@ -141,7 +142,7 @@ func (h *SharesHandler) getPConn() (*grpc.ClientConn, error) {
 	return h.pConn, nil
 }
 
-func (h *SharesHandler) getPClient() (publicsharev0alphapb.PublicShareProviderServiceClient, error) {
+func (h *SharesHandler) getPClient() (publicshareproviderv0alphapb.PublicShareProviderServiceClient, error) {
 	if h.pClient != nil {
 		return h.pClient, nil
 	}
@@ -150,7 +151,7 @@ func (h *SharesHandler) getPClient() (publicsharev0alphapb.PublicShareProviderSe
 	if err != nil {
 		return nil, err
 	}
-	h.pClient = publicsharev0alphapb.NewPublicShareProviderServiceClient(conn)
+	h.pClient = publicshareproviderv0alphapb.NewPublicShareProviderServiceClient(conn)
 	return h.pClient, nil
 }
 
@@ -222,7 +223,7 @@ func (h *SharesHandler) findSharees(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *SharesHandler) userAsMatch(u *user.User) *MatchData {
+func (h *SharesHandler) userAsMatch(u *authv0alphapb.User) *MatchData {
 	return &MatchData{
 		Label: u.DisplayName,
 		Value: &MatchValueData{
@@ -671,7 +672,7 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc public share provider client", err)
 			return
 		}
-		req := &publicsharev0alphapb.ListPublicSharesRequest{}
+		req := &publicshareproviderv0alphapb.ListPublicSharesRequest{}
 		res, err := pClient.ListPublicShares(ctx, req)
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error sending a grpc list shares request", err)
@@ -714,14 +715,14 @@ func (h *SharesHandler) addFileInfo(s *ShareData, info *storageproviderv0alphapb
 
 		// file owner might not yet be set. Use file info
 		if s.UIDFileOwner == "" {
-			s.UIDFileOwner = owner.ID.String()
+			s.UIDFileOwner = owner.Id.OpaqueId
 		}
 		if s.DisplaynameFileOwner == "" {
 			s.DisplaynameFileOwner = owner.DisplayName
 		}
 		// share owner might not yet be set. Use file info
 		if s.UIDOwner == "" {
-			s.UIDOwner = owner.ID.String()
+			s.UIDOwner = owner.Id.OpaqueId
 		}
 		if s.DisplaynameOwner == "" {
 			s.DisplaynameOwner = owner.DisplayName
@@ -737,11 +738,11 @@ func (h *SharesHandler) userShare2ShareData(share *usershareproviderv0alphapb.Sh
 	sd := &ShareData{
 		Permissions:          userSharePermissions2OCSPermissions(share.GetPermissions()),
 		ShareType:            shareTypeUser,
-		UIDOwner:             creator.ID.String(),
+		UIDOwner:             creator.Id.OpaqueId,
 		DisplaynameOwner:     creator.DisplayName,
-		UIDFileOwner:         owner.ID.String(),
+		UIDFileOwner:         owner.Id.OpaqueId,
 		DisplaynameFileOwner: owner.DisplayName,
-		ShareWith:            grantee.ID.String(),
+		ShareWith:            grantee.Id.OpaqueId,
 		ShareWithDisplayname: grantee.DisplayName,
 	}
 	if share.Id != nil && share.Id.OpaqueId != "" {
@@ -762,7 +763,7 @@ func userSharePermissions2OCSPermissions(sp *usershareproviderv0alphapb.SharePer
 	return permissionInvalid
 }
 
-func publicSharePermissions2OCSPermissions(sp *publicsharev0alphapb.PublicSharePermissions) Permissions {
+func publicSharePermissions2OCSPermissions(sp *publicshareproviderv0alphapb.PublicSharePermissions) Permissions {
 	if sp != nil {
 		return permissions2OCSPermissions(sp.GetPermissions())
 	}
@@ -770,18 +771,18 @@ func publicSharePermissions2OCSPermissions(sp *publicsharev0alphapb.PublicShareP
 }
 
 // TODO do user lookup and cache users
-func (h *SharesHandler) resolveUserID(userID *typespb.UserId) *user.User {
-	return &user.User{
-		ID: &user.ID{
-			IDP:      userID.Idp,
-			OpaqueID: userID.OpaqueId,
+func (h *SharesHandler) resolveUserID(userID *typespb.UserId) *authv0alphapb.User {
+	return &authv0alphapb.User{
+		Id: &typespb.UserId{
+			Idp:      userID.Idp,
+			OpaqueId: userID.OpaqueId,
 		},
 		Username:    userID.OpaqueId,
 		DisplayName: userID.OpaqueId,
 	}
 }
 
-func (h *SharesHandler) publicShare2ShareData(share *publicsharev0alphapb.PublicShare) *ShareData {
+func (h *SharesHandler) publicShare2ShareData(share *publicshareproviderv0alphapb.PublicShare) *ShareData {
 	creator := h.resolveUserID(share.Creator)
 	owner := h.resolveUserID(share.Owner)
 	sd := &ShareData{
@@ -790,10 +791,10 @@ func (h *SharesHandler) publicShare2ShareData(share *publicsharev0alphapb.Public
 		// share.permissions ar mapped below
 		Permissions:          publicSharePermissions2OCSPermissions(share.GetPermissions()),
 		ShareType:            shareTypePublicLink,
-		UIDOwner:             creator.ID.String(),
+		UIDOwner:             creator.Id.OpaqueId,
 		DisplaynameOwner:     creator.DisplayName,
 		STime:                share.Ctime.Seconds, // TODO CS3 api birth time = btime
-		UIDFileOwner:         owner.ID.String(),
+		UIDFileOwner:         owner.Id.OpaqueId,
 		DisplaynameFileOwner: owner.DisplayName,
 		Token:                share.Token,
 		Expiration:           timestampToExpiration(share.Expiration),

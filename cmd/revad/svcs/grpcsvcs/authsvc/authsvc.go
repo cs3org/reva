@@ -36,6 +36,7 @@ import (
 	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 
+	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -128,6 +129,7 @@ func (s *service) GenerateAccessToken(ctx context.Context, req *authv0alphapb.Ge
 	log := appctx.GetLogger(ctx)
 	username := req.ClientId
 	password := req.ClientSecret
+	uid := &typespb.UserId{OpaqueId: username}
 
 	ctx, err := s.authmgr.Authenticate(ctx, username, password)
 	if err != nil {
@@ -137,7 +139,7 @@ func (s *service) GenerateAccessToken(ctx context.Context, req *authv0alphapb.Ge
 		return res, nil
 	}
 
-	user, err := s.usermgr.GetUser(ctx, username)
+	user, err := s.usermgr.GetUser(ctx, uid)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting user information")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_UNAUTHENTICATED}

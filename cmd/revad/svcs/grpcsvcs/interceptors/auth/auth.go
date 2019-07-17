@@ -29,6 +29,7 @@ import (
 	"github.com/cs3org/reva/cmd/revad/grpcserver"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
 
+	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -129,7 +130,7 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 			return nil, status.Errorf(codes.Unauthenticated, "core access token is invalid")
 		}
 
-		u := &user.User{}
+		u := &authv0alphapb.User{}
 		if err := mapstructure.Decode(claims, u); err != nil {
 			log.Warn().Msg("claims are invalid")
 			return nil, status.Errorf(codes.Unauthenticated, "claims are invalid")
@@ -196,7 +197,7 @@ func NewStream(m map[string]interface{}) (grpc.StreamServerInterceptor, int, err
 			return status.Errorf(codes.Unauthenticated, "core access token is invalid")
 		}
 
-		u := &user.User{}
+		u := &authv0alphapb.User{}
 		if err := mapstructure.Decode(claims, u); err != nil {
 			log.Warn().Msg("user claims invalid")
 			return status.Errorf(codes.Unauthenticated, "claims are invalid")

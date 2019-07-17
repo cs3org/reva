@@ -77,6 +77,21 @@ func (fs *localFS) Shutdown(ctx context.Context) error {
 	return nil
 }
 
+func (fs *localFS) resolve(ctx context.Context, ref *storageproviderv0alphapb.Reference) (string, error) {
+	if ref.GetPath() != "" {
+		return fs.addRoot(ref.GetPath()), nil
+	}
+
+	if ref.GetId() != nil {
+
+		fn := path.Join("/", strings.TrimPrefix(ref.GetId().OpaqueId, "fileid-"))
+		fn = fs.addRoot(fn)
+		return fn, nil
+	}
+
+	// reference is invalid
+	return "", fmt.Errorf("invalid reference %+v", ref)
+}
 func (fs *localFS) addRoot(p string) string {
 	np := path.Join(fs.root, p)
 	return np
@@ -153,22 +168,22 @@ func getResourceType(isDir bool) storageproviderv0alphapb.ResourceType {
 // GetPathByID returns the path pointed by the file id
 // In this implementation the file id is that path of the file without the first slash
 // thus the file id always points to the filename
-func (fs *localFS) GetPathByID(ctx context.Context, id string) (string, error) {
-	return path.Join("/", strings.TrimPrefix(id, "fileid-")), nil
+func (fs *localFS) GetPathByID(ctx context.Context, id *storageproviderv0alphapb.ResourceId) (string, error) {
+	return path.Join("/", strings.TrimPrefix(id.OpaqueId, "fileid-")), nil
 }
 
-func (fs *localFS) AddGrant(ctx context.Context, path string, g *storageproviderv0alphapb.Grant) error {
+func (fs *localFS) AddGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
 	return notSupportedError("op not supported")
 }
 
-func (fs *localFS) ListGrants(ctx context.Context, path string) ([]*storageproviderv0alphapb.Grant, error) {
+func (fs *localFS) ListGrants(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.Grant, error) {
 	return nil, notSupportedError("op not supported")
 }
 
-func (fs *localFS) RemoveGrant(ctx context.Context, path string, g *storageproviderv0alphapb.Grant) error {
+func (fs *localFS) RemoveGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
 	return notSupportedError("op not supported")
 }
-func (fs *localFS) UpdateGrant(ctx context.Context, path string, g *storageproviderv0alphapb.Grant) error {
+func (fs *localFS) UpdateGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
 	return notSupportedError("op not supported")
 }
 
@@ -189,9 +204,13 @@ func (fs *localFS) CreateDir(ctx context.Context, fn string) error {
 	return nil
 }
 
-func (fs *localFS) Delete(ctx context.Context, fn string) error {
-	fn = fs.addRoot(fn)
-	err := os.Remove(fn)
+func (fs *localFS) Delete(ctx context.Context, ref *storageproviderv0alphapb.Reference) error {
+	fn, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "error resolving ref")
+	}
+
+	err = os.Remove(fn)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return notFoundError(fn)
@@ -205,17 +224,29 @@ func (fs *localFS) Delete(ctx context.Context, fn string) error {
 	return nil
 }
 
-func (fs *localFS) Move(ctx context.Context, oldName, newName string) error {
-	oldName = fs.addRoot(oldName)
-	newName = fs.addRoot(newName)
+func (fs *localFS) Move(ctx context.Context, oldRef, newRef *storageproviderv0alphapb.Reference) error {
+	oldName, err := fs.resolve(ctx, oldRef)
+	if err != nil {
+		return errors.Wrap(err, "error resolving ref")
+	}
+
+	newName, err := fs.resolve(ctx, newRef)
+	if err != nil {
+		return errors.Wrap(err, "error resolving ref")
+	}
+
 	if err := os.Rename(oldName, newName); err != nil {
 		return errors.Wrap(err, "localfs: error moving "+oldName+" to "+newName)
 	}
 	return nil
 }
 
-func (fs *localFS) GetMD(ctx context.Context, fn string) (*storageproviderv0alphapb.ResourceInfo, error) {
-	fn = fs.addRoot(fn)
+func (fs *localFS) GetMD(ctx context.Context, ref *storageproviderv0alphapb.Reference) (*storageproviderv0alphapb.ResourceInfo, error) {
+	fn, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return nil, errors.Wrap(err, "error resolving ref")
+	}
+
 	md, err := os.Stat(fn)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -227,8 +258,12 @@ func (fs *localFS) GetMD(ctx context.Context, fn string) (*storageproviderv0alph
 	return fs.normalize(ctx, md, fn), nil
 }
 
-func (fs *localFS) ListFolder(ctx context.Context, fn string) ([]*storageproviderv0alphapb.ResourceInfo, error) {
-	fn = fs.addRoot(fn)
+func (fs *localFS) ListFolder(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.ResourceInfo, error) {
+	fn, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return nil, errors.Wrap(err, "error resolving ref")
+	}
+
 	mds, err := ioutil.ReadDir(fn)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -244,8 +279,11 @@ func (fs *localFS) ListFolder(ctx context.Context, fn string) ([]*storageprovide
 	return finfos, nil
 }
 
-func (fs *localFS) Upload(ctx context.Context, fn string, r io.ReadCloser) error {
-	fn = fs.addRoot(fn)
+func (fs *localFS) Upload(ctx context.Context, ref *storageproviderv0alphapb.Reference, r io.ReadCloser) error {
+	fn, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "error resolving ref")
+	}
 
 	// we cannot rely on /tmp as it can live in another partition and we can
 	// hit invalid cross-device link errors, so we create the tmp file in the same directory
@@ -268,8 +306,12 @@ func (fs *localFS) Upload(ctx context.Context, fn string, r io.ReadCloser) error
 	return nil
 }
 
-func (fs *localFS) Download(ctx context.Context, fn string) (io.ReadCloser, error) {
-	fn = fs.addRoot(fn)
+func (fs *localFS) Download(ctx context.Context, ref *storageproviderv0alphapb.Reference) (io.ReadCloser, error) {
+	fn, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return nil, errors.Wrap(err, "error resolving ref")
+	}
+
 	r, err := os.Open(fn)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -280,27 +322,27 @@ func (fs *localFS) Download(ctx context.Context, fn string) (io.ReadCloser, erro
 	return r, nil
 }
 
-func (fs *localFS) ListRevisions(ctx context.Context, path string) ([]*storageproviderv0alphapb.FileVersion, error) {
+func (fs *localFS) ListRevisions(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.FileVersion, error) {
 	return nil, notSupportedError("list revisions")
 }
 
-func (fs *localFS) DownloadRevision(ctx context.Context, path, revisionKey string) (io.ReadCloser, error) {
+func (fs *localFS) DownloadRevision(ctx context.Context, ref *storageproviderv0alphapb.Reference, revisionKey string) (io.ReadCloser, error) {
 	return nil, notSupportedError("download revision")
 }
 
-func (fs *localFS) RestoreRevision(ctx context.Context, path, revisionKey string) error {
+func (fs *localFS) RestoreRevision(ctx context.Context, ref *storageproviderv0alphapb.Reference, revisionKey string) error {
 	return notSupportedError("restore revision")
 }
 
-func (fs *localFS) EmptyRecycle(ctx context.Context, path string) error {
+func (fs *localFS) EmptyRecycle(ctx context.Context) error {
 	return notSupportedError("empty recycle")
 }
 
-func (fs *localFS) ListRecycle(ctx context.Context, path string) ([]*storageproviderv0alphapb.RecycleItem, error) {
+func (fs *localFS) ListRecycle(ctx context.Context) ([]*storageproviderv0alphapb.RecycleItem, error) {
 	return nil, notSupportedError("list recycle")
 }
 
-func (fs *localFS) RestoreRecycleItem(ctx context.Context, fn, restoreKey string) error {
+func (fs *localFS) RestoreRecycleItem(ctx context.Context, restoreKey string) error {
 	return notSupportedError("restore recycle")
 }
 

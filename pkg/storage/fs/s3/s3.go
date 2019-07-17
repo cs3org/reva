@@ -20,6 +20,7 @@ package s3
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"path"
@@ -114,6 +115,21 @@ func (fs *s3FS) addRoot(p string) string {
 	return np
 }
 
+func (fs *s3FS) resolve(ctx context.Context, ref *storageproviderv0alphapb.Reference) (string, error) {
+	if ref.GetPath() != "" {
+		return fs.addRoot(ref.GetPath()), nil
+	}
+
+	if ref.GetId() != nil {
+		fn := path.Join("/", strings.TrimPrefix(ref.GetId().OpaqueId, "fileid-"))
+		fn = fs.addRoot(fn)
+		return fn, nil
+	}
+
+	// reference is invalid
+	return "", fmt.Errorf("invalid reference %+v", ref)
+}
+
 func (fs *s3FS) removeRoot(np string) string {
 	p := strings.TrimPrefix(np, fs.config.Prefix)
 	if p == "" {
@@ -201,23 +217,23 @@ func (fs *s3FS) normalizeCommonPrefix(ctx context.Context, p *s3.CommonPrefix) *
 // GetPathByID returns the path pointed by the file id
 // In this implementation the file id is that path of the file without the first slash
 // thus the file id always points to the filename
-func (fs *s3FS) GetPathByID(ctx context.Context, id string) (string, error) {
-	return path.Join("/", strings.TrimPrefix(id, "fileid-")), nil
+func (fs *s3FS) GetPathByID(ctx context.Context, id *storageproviderv0alphapb.ResourceId) (string, error) {
+	return path.Join("/", strings.TrimPrefix(id.OpaqueId, "fileid-")), nil
 }
 
-func (fs *s3FS) AddGrant(ctx context.Context, path string, g *storageproviderv0alphapb.Grant) error {
+func (fs *s3FS) AddGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
 	return notSupportedError("op not supported")
 }
 
-func (fs *s3FS) ListGrants(ctx context.Context, path string) ([]*storageproviderv0alphapb.Grant, error) {
+func (fs *s3FS) ListGrants(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.Grant, error) {
 	return nil, notSupportedError("op not supported")
 }
 
-func (fs *s3FS) RemoveGrant(ctx context.Context, path string, g *storageproviderv0alphapb.Grant) error {
+func (fs *s3FS) RemoveGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
 	return notSupportedError("op not supported")
 }
 
-func (fs *s3FS) UpdateGrant(ctx context.Context, path string, g *storageproviderv0alphapb.Grant) error {
+func (fs *s3FS) UpdateGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
 	return notSupportedError("op not supported")
 }
 
@@ -253,13 +269,17 @@ func (fs *s3FS) CreateDir(ctx context.Context, fn string) error {
 	return nil
 }
 
-func (fs *s3FS) Delete(ctx context.Context, fn string) error {
+func (fs *s3FS) Delete(ctx context.Context, ref *storageproviderv0alphapb.Reference) error {
 	log := appctx.GetLogger(ctx)
-	fn = fs.addRoot(fn)
+
+	fn, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "error resolving ref")
+	}
 
 	// first we need to find out if fn is a dir or a file
 
-	_, err := fs.client.HeadObject(&s3.HeadObjectInput{
+	_, err = fs.client.HeadObject(&s3.HeadObjectInput{
 		Bucket: aws.String(fs.config.Bucket),
 		Key:    aws.String(fn),
 	})
@@ -341,13 +361,22 @@ func (fs *s3FS) moveObject(ctx context.Context, oldKey string, newKey string) er
 	return nil
 }
 
-func (fs *s3FS) Move(ctx context.Context, oldName, newName string) error {
+func (fs *s3FS) Move(ctx context.Context, oldRef, newRef *storageproviderv0alphapb.Reference) error {
 	log := appctx.GetLogger(ctx)
-	fn := fs.addRoot(oldName)
+
+	fn, err := fs.resolve(ctx, oldRef)
+	if err != nil {
+		return errors.Wrap(err, "error resolving ref")
+	}
+
+	newName, err := fs.resolve(ctx, newRef)
+	if err != nil {
+		return errors.Wrap(err, "error resolving ref")
+	}
 
 	// first we need to find out if fn is a dir or a file
 
-	_, err := fs.client.HeadObject(&s3.HeadObjectInput{
+	_, err = fs.client.HeadObject(&s3.HeadObjectInput{
 		Bucket: aws.String(fs.config.Bucket),
 		Key:    aws.String(fn),
 	})
@@ -401,9 +430,14 @@ func (fs *s3FS) Move(ctx context.Context, oldName, newName string) error {
 	return nil
 }
 
-func (fs *s3FS) GetMD(ctx context.Context, fn string) (*storageproviderv0alphapb.ResourceInfo, error) {
+func (fs *s3FS) GetMD(ctx context.Context, ref *storageproviderv0alphapb.Reference) (*storageproviderv0alphapb.ResourceInfo, error) {
 	log := appctx.GetLogger(ctx)
-	fn = fs.addRoot(fn)
+
+	fn, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return nil, errors.Wrap(err, "error resolving ref")
+	}
+
 	// first try a head, works for files
 	log.Debug().
 		Str("fn", fn).
@@ -459,8 +493,11 @@ func (fs *s3FS) GetMD(ctx context.Context, fn string) (*storageproviderv0alphapb
 	return fs.normalizeHead(ctx, output, fn), nil
 }
 
-func (fs *s3FS) ListFolder(ctx context.Context, fn string) ([]*storageproviderv0alphapb.ResourceInfo, error) {
-	fn = fs.addRoot(fn)
+func (fs *s3FS) ListFolder(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.ResourceInfo, error) {
+	fn, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return nil, errors.Wrap(err, "error resolving ref")
+	}
 
 	input := &s3.ListObjectsV2Input{
 		Bucket:    aws.String(fs.config.Bucket),
@@ -492,9 +529,13 @@ func (fs *s3FS) ListFolder(ctx context.Context, fn string) ([]*storageproviderv0
 	return finfos, nil
 }
 
-func (fs *s3FS) Upload(ctx context.Context, fn string, r io.ReadCloser) error {
+func (fs *s3FS) Upload(ctx context.Context, ref *storageproviderv0alphapb.Reference, r io.ReadCloser) error {
 	log := appctx.GetLogger(ctx)
-	fn = fs.addRoot(fn)
+
+	fn, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "error resolving ref")
+	}
 
 	upParams := &s3manager.UploadInput{
 		Bucket: aws.String(fs.config.Bucket),
@@ -519,9 +560,13 @@ func (fs *s3FS) Upload(ctx context.Context, fn string, r io.ReadCloser) error {
 	return nil
 }
 
-func (fs *s3FS) Download(ctx context.Context, fn string) (io.ReadCloser, error) {
+func (fs *s3FS) Download(ctx context.Context, ref *storageproviderv0alphapb.Reference) (io.ReadCloser, error) {
 	log := appctx.GetLogger(ctx)
-	fn = fs.addRoot(fn)
+
+	fn, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return nil, errors.Wrap(err, "error resolving ref")
+	}
 
 	// use GetObject instead of s3manager.Downloader:
 	// the result.Body is a ReadCloser, which allows streaming
@@ -544,27 +589,27 @@ func (fs *s3FS) Download(ctx context.Context, fn string) (io.ReadCloser, error) 
 	return r.Body, nil
 }
 
-func (fs *s3FS) ListRevisions(ctx context.Context, path string) ([]*storageproviderv0alphapb.FileVersion, error) {
+func (fs *s3FS) ListRevisions(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.FileVersion, error) {
 	return nil, notSupportedError("list revisions")
 }
 
-func (fs *s3FS) DownloadRevision(ctx context.Context, path, revisionKey string) (io.ReadCloser, error) {
+func (fs *s3FS) DownloadRevision(ctx context.Context, ref *storageproviderv0alphapb.Reference, revisionKey string) (io.ReadCloser, error) {
 	return nil, notSupportedError("download revision")
 }
 
-func (fs *s3FS) RestoreRevision(ctx context.Context, path, revisionKey string) error {
+func (fs *s3FS) RestoreRevision(ctx context.Context, ref *storageproviderv0alphapb.Reference, revisionKey string) error {
 	return notSupportedError("restore revision")
 }
 
-func (fs *s3FS) EmptyRecycle(ctx context.Context, path string) error {
+func (fs *s3FS) EmptyRecycle(ctx context.Context) error {
 	return notSupportedError("empty recycle")
 }
 
-func (fs *s3FS) ListRecycle(ctx context.Context, path string) ([]*storageproviderv0alphapb.RecycleItem, error) {
+func (fs *s3FS) ListRecycle(ctx context.Context) ([]*storageproviderv0alphapb.RecycleItem, error) {
 	return nil, notSupportedError("list recycle")
 }
 
-func (fs *s3FS) RestoreRecycleItem(ctx context.Context, fn, restoreKey string) error {
+func (fs *s3FS) RestoreRecycleItem(ctx context.Context, restoreKey string) error {
 	return notSupportedError("restore recycle")
 }
 

@@ -21,70 +21,17 @@ package publicshare
 import (
 	"context"
 
+	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	publicshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
-	"github.com/cs3org/reva/pkg/user"
 )
 
-const (
-	// ACLModeReadOnly specifies that the share is read-only.
-	ACLModeReadOnly ACLMode = "read-only"
-
-	// ACLModeReadWrite specifies that the share is read-writable.
-	ACLModeReadWrite ACLMode = "read-write"
-
-	// ACLTypeDirectory specifies that the share points to a directory.
-	ACLTypeDirectory ACLType = "directory"
-
-	// ACLTypeFile specifies that the share points to a file.
-	ACLTypeFile ACLType = "file"
-)
-
-type (
-	// Manager manipulates public shares.
-	Manager interface {
-		CreatePublicShare(ctx context.Context, u *user.User, md *storageproviderv0alphapb.ResourceInfo, a *ACL) (*PublicShare, error)
-		UpdatePublicShare(ctx context.Context, u *user.User, id string, up *UpdatePolicy, a *ACL) (*PublicShare, error)
-		GetPublicShare(ctx context.Context, u *user.User, id string) (*PublicShare, error)
-		ListPublicShares(ctx context.Context, u *user.User, md *storageproviderv0alphapb.ResourceInfo) ([]*PublicShare, error)
-		RevokePublicShare(ctx context.Context, u *user.User, id string) error
-		GetPublicShareByToken(ctx context.Context, token string) (*PublicShare, error)
-	}
-
-	// PublicShare represents a public share.
-	PublicShare struct {
-		ID          string
-		Token       string
-		Filename    string
-		Modified    uint64
-		Owner       string
-		DisplayName string
-		ACL         *ACL
-	}
-
-	// ACL is the the acl to use when creating or updating public shares.
-	ACL struct {
-		Password   string
-		Expiration uint64
-		SetMode    bool
-		Mode       ACLMode
-		Type       ACLType
-	}
-
-	// UpdatePolicy specifies which attributes to update when calling UpdateACL.
-	UpdatePolicy struct {
-		SetPassword   bool
-		SetExpiration bool
-		SetMode       bool
-	}
-
-	// ACLMode represents the mode for the share (read-only, read-write, ...)
-	ACLMode string
-
-	// ACLType represents the type of file the share points to (file, directory, ...)
-	ACLType string
-)
-
-/*
-AuthenticatePublicShare(ctx context.Context, token, password string) (*PublicShare, error)
-	IsPublicShareProtected(ctx context.Context, token string) (bool, error)
-*/
+// Manager manipulates public shares.
+type Manager interface {
+	CreatePublicShare(ctx context.Context, u *authv0alphapb.User, md *storageproviderv0alphapb.ResourceInfo, g *publicshareproviderv0alphapb.Grant) (*publicshareproviderv0alphapb.PublicShare, error)
+	UpdatePublicShare(ctx context.Context, u *authv0alphapb.User, ref *publicshareproviderv0alphapb.PublicShareReference, g *publicshareproviderv0alphapb.Grant) (*publicshareproviderv0alphapb.PublicShare, error)
+	GetPublicShare(ctx context.Context, u *authv0alphapb.User, ref *publicshareproviderv0alphapb.PublicShareReference) (*publicshareproviderv0alphapb.PublicShare, error)
+	ListPublicShares(ctx context.Context, u *authv0alphapb.User, md *storageproviderv0alphapb.ResourceInfo) ([]*publicshareproviderv0alphapb.PublicShare, error)
+	RevokePublicShare(ctx context.Context, u *authv0alphapb.User, id string) error
+	GetPublicShareByToken(ctx context.Context, token string) (*publicshareproviderv0alphapb.PublicShare, error)
+}
