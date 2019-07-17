@@ -109,6 +109,13 @@ func (s *service) CreateShare(ctx context.Context, req *usershareproviderv0alpha
 	}
 	share := grantToShare(grant)
 
+	// add owner
+	if md, err := s.storage.GetMD(ctx, ref); err == nil {
+		share.Owner = md.Owner
+	} else {
+		log.Error().Err(err).Interface("ref", ref).Msg("create share")
+	}
+
 	res := &usershareproviderv0alphapb.CreateShareResponse{
 		Status: &rpcpb.Status{
 			Code: rpcpb.Code_CODE_OK,
@@ -221,15 +228,17 @@ func (s *service) ListShares(ctx context.Context, req *usershareproviderv0alphap
 			if err != nil {
 				return nil, err
 			}
-
 			for _, grant := range grants {
 				share := grantToShare(grant)
 				share.ResourceId = filter.GetResourceId()
 				// TODO check this kind of id works not only for acls ...
 				share.Id.OpaqueId = generateOpaqueID(share.Id.OpaqueId, share.ResourceId.OpaqueId)
 				// the owner is the file owner, which is the same for all shares in this case
-				// share.Owner = md.? // TODO how do we get the owner? for eos it might be in the opaque metadata, no .. by asking the broker for the owner?
-				share.Mtime = &typespb.Timestamp{Seconds: md.Mtime.Seconds, Nanos: md.Mtime.Nanos}
+				share.Owner = md.Owner
+				share.Mtime = &typespb.Timestamp{
+					Seconds: md.Mtime.Seconds,
+					Nanos:   md.Mtime.Nanos,
+				}
 				shares = append(shares, share)
 			}
 		}
