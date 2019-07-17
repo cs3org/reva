@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	publicsharev0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshare/v0alpha"
+	publicshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
@@ -50,7 +50,7 @@ type SharesHandler struct {
 	uClient                usershareproviderv0alphapb.UserShareProviderServiceClient
 	publicShareProviderSVC string
 	pConn                  *grpc.ClientConn
-	pClient                publicsharev0alphapb.PublicShareProviderServiceClient
+	pClient                publicshareproviderv0alphapb.PublicShareProviderServiceClient
 	userManager            user.Manager
 }
 
@@ -142,7 +142,7 @@ func (h *SharesHandler) getPConn() (*grpc.ClientConn, error) {
 	return h.pConn, nil
 }
 
-func (h *SharesHandler) getPClient() (publicsharev0alphapb.PublicShareProviderServiceClient, error) {
+func (h *SharesHandler) getPClient() (publicshareproviderv0alphapb.PublicShareProviderServiceClient, error) {
 	if h.pClient != nil {
 		return h.pClient, nil
 	}
@@ -151,7 +151,7 @@ func (h *SharesHandler) getPClient() (publicsharev0alphapb.PublicShareProviderSe
 	if err != nil {
 		return nil, err
 	}
-	h.pClient = publicsharev0alphapb.NewPublicShareProviderServiceClient(conn)
+	h.pClient = publicshareproviderv0alphapb.NewPublicShareProviderServiceClient(conn)
 	return h.pClient, nil
 }
 
@@ -672,7 +672,7 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc public share provider client", err)
 			return
 		}
-		req := &publicsharev0alphapb.ListPublicSharesRequest{}
+		req := &publicshareproviderv0alphapb.ListPublicSharesRequest{}
 		res, err := pClient.ListPublicShares(ctx, req)
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error sending a grpc list shares request", err)
@@ -763,7 +763,7 @@ func userSharePermissions2OCSPermissions(sp *usershareproviderv0alphapb.SharePer
 	return permissionInvalid
 }
 
-func publicSharePermissions2OCSPermissions(sp *publicsharev0alphapb.PublicSharePermissions) Permissions {
+func publicSharePermissions2OCSPermissions(sp *publicshareproviderv0alphapb.PublicSharePermissions) Permissions {
 	if sp != nil {
 		return permissions2OCSPermissions(sp.GetPermissions())
 	}
@@ -782,7 +782,7 @@ func (h *SharesHandler) resolveUserID(userID *typespb.UserId) *authv0alphapb.Use
 	}
 }
 
-func (h *SharesHandler) publicShare2ShareData(share *publicsharev0alphapb.PublicShare) *ShareData {
+func (h *SharesHandler) publicShare2ShareData(share *publicshareproviderv0alphapb.PublicShare) *ShareData {
 	creator := h.resolveUserID(share.Creator)
 	owner := h.resolveUserID(share.Owner)
 	sd := &ShareData{
