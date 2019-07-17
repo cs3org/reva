@@ -31,26 +31,26 @@ type Manager interface {
 	// Create a new share in fn with the given acl.
 	Share(ctx context.Context, u *authv0alphapb.User, md *storageproviderv0alphapb.ResourceInfo, g *usershareproviderv0alphapb.ShareGrant) (*usershareproviderv0alphapb.Share, error)
 
-	// GetShare gets the information for a share by the given id.
-	GetShare(ctx context.Context, u *authv0alphapb.User, id *usershareproviderv0alphapb.ShareId) (*usershareproviderv0alphapb.Share, error)
+	// GetShare gets the information for a share by the given ref.
+	GetShare(ctx context.Context, u *authv0alphapb.User, ref *usershareproviderv0alphapb.ShareReference) (*usershareproviderv0alphapb.Share, error)
 
-	// Unshare deletes the share pointed by id.
-	Unshare(ctx context.Context, u *authv0alphapb.User, id *usershareproviderv0alphapb.ShareId) error
+	// Unshare deletes the share pointed by ref.
+	Unshare(ctx context.Context, u *authv0alphapb.User, ref *usershareproviderv0alphapb.ShareReference) error
 
 	// UpdateShare updates the mode of the given share.
-	UpdateShare(ctx context.Context, u *authv0alphapb.User, id *usershareproviderv0alphapb.ShareId, g *usershareproviderv0alphapb.ShareGrant) (*usershareproviderv0alphapb.ShareGrant, error)
+	UpdateShare(ctx context.Context, u *authv0alphapb.User, ref *usershareproviderv0alphapb.ShareReference, g *usershareproviderv0alphapb.ShareGrant) (*usershareproviderv0alphapb.ShareGrant, error)
 
-	// ListShares returns the shares created by the user. If forPath is not empty,
-	// it returns only shares attached to the given path.
+	// ListShares returns the shares created by the user. If md is provided is not nil,
+	// it returns only shares attached to the given resource.
 	ListShares(ctx context.Context, u *authv0alphapb.User, md *storageproviderv0alphapb.ResourceInfo) ([]*usershareproviderv0alphapb.ShareGrant, error)
 
 	// ListReceivedShares returns the list of shares the user has access.
 	ListReceivedShares(ctx context.Context, u *authv0alphapb.User) ([]*usershareproviderv0alphapb.ShareGrant, error)
 
 	// GetReceivedShare returns the information for the share received with
-	// the given id.
-	GetReceivedShare(ctx context.Context, u *authv0alphapb.User, id *usershareproviderv0alphapb.ShareId) (*usershareproviderv0alphapb.ShareGrant, error)
+	// the given ref.
+	GetReceivedShare(ctx context.Context, u *authv0alphapb.User, ref *usershareproviderv0alphapb.ShareReference) (*usershareproviderv0alphapb.ShareGrant, error)
 
 	// RejectReceivedShare rejects the share by the given id.
-	RejectReceivedShare(ctx context.Context, u *authv0alphapb.User, id *usershareproviderv0alphapb.ShareId) error
+	RejectReceivedShare(ctx context.Context, u *authv0alphapb.User, ref *usershareproviderv0alphapb.ShareReference) error
 }
