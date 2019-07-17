@@ -24,6 +24,9 @@ import (
 	"github.com/cs3org/reva/pkg/auth/manager/oidc"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
+
+	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 )
 
 func init() {
@@ -38,14 +41,14 @@ func New(m map[string]interface{}) (user.Manager, error) {
 	return &manager{}, nil
 }
 
-func (m *manager) GetUser(ctx context.Context, username string) (*user.User, error) {
+func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*authv0alphapb.User, error) {
 
 	claims, ok := ctx.Value(oidc.ClaimsKey).(oidc.StandardClaims)
 	if !ok {
-		return nil, userNotFoundError(username)
+		return nil, userNotFoundError(uid.OpaqueId)
 	}
 
-	user := &user.User{
+	user := &authv0alphapb.User{
 		Subject:     claims.Sub, // a stable non reassignable id
 		Issuer:      claims.Iss, // in the scope of this issuer
 		Username:    claims.PreferredUsername,
@@ -65,15 +68,15 @@ func (m *manager) GetUser(ctx context.Context, username string) (*user.User, err
 	return user, nil
 }
 
-func (m *manager) FindUsers(ctx context.Context, query string) ([]*user.User, error) {
-	return []*user.User{}, nil // FIXME implement FindUsers for oidc user manager
+func (m *manager) FindUsers(ctx context.Context, query string) ([]*authv0alphapb.User, error) {
+	return []*authv0alphapb.User{}, nil // FIXME implement FindUsers for oidc user manager
 }
 
-func (m *manager) GetUserGroups(ctx context.Context, username string) ([]string, error) {
+func (m *manager) GetUserGroups(ctx context.Context, uid *typespb.UserId) ([]string, error) {
 	return []string{}, nil // FIXME implement GetUserGroups for oidc user manager
 }
 
-func (m *manager) IsInGroup(ctx context.Context, username, group string) (bool, error) {
+func (m *manager) IsInGroup(ctx context.Context, uid *typespb.UserId, group string) (bool, error) {
 	return false, nil // FIXME implement IsInGroup for oidc user manager
 }
 

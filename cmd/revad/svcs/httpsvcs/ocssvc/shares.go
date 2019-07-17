@@ -32,6 +32,7 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
 
+	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/user"
@@ -222,7 +223,7 @@ func (h *SharesHandler) findSharees(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *SharesHandler) userAsMatch(u *user.User) *MatchData {
+func (h *SharesHandler) userAsMatch(u *authv0alphapb.User) *MatchData {
 	return &MatchData{
 		Label: u.DisplayName,
 		Value: &MatchValueData{
@@ -714,14 +715,14 @@ func (h *SharesHandler) addFileInfo(s *ShareData, info *storageproviderv0alphapb
 
 		// file owner might not yet be set. Use file info
 		if s.UIDFileOwner == "" {
-			s.UIDFileOwner = owner.ID.String()
+			s.UIDFileOwner = owner.Id.OpaqueId
 		}
 		if s.DisplaynameFileOwner == "" {
 			s.DisplaynameFileOwner = owner.DisplayName
 		}
 		// share owner might not yet be set. Use file info
 		if s.UIDOwner == "" {
-			s.UIDOwner = owner.ID.String()
+			s.UIDOwner = owner.Id.OpaqueId
 		}
 		if s.DisplaynameOwner == "" {
 			s.DisplaynameOwner = owner.DisplayName
@@ -737,11 +738,11 @@ func (h *SharesHandler) userShare2ShareData(share *usershareproviderv0alphapb.Sh
 	sd := &ShareData{
 		Permissions:          userSharePermissions2OCSPermissions(share.GetPermissions()),
 		ShareType:            shareTypeUser,
-		UIDOwner:             creator.ID.String(),
+		UIDOwner:             creator.Id.OpaqueId,
 		DisplaynameOwner:     creator.DisplayName,
-		UIDFileOwner:         owner.ID.String(),
+		UIDFileOwner:         owner.Id.OpaqueId,
 		DisplaynameFileOwner: owner.DisplayName,
-		ShareWith:            grantee.ID.String(),
+		ShareWith:            grantee.Id.OpaqueId,
 		ShareWithDisplayname: grantee.DisplayName,
 	}
 	if share.Id != nil && share.Id.OpaqueId != "" {
@@ -770,11 +771,11 @@ func publicSharePermissions2OCSPermissions(sp *publicsharev0alphapb.PublicShareP
 }
 
 // TODO do user lookup and cache users
-func (h *SharesHandler) resolveUserID(userID *typespb.UserId) *user.User {
-	return &user.User{
-		ID: &user.ID{
-			IDP:      userID.Idp,
-			OpaqueID: userID.OpaqueId,
+func (h *SharesHandler) resolveUserID(userID *typespb.UserId) *authv0alphapb.User {
+	return &authv0alphapb.User{
+		Id: &typespb.UserId{
+			Idp:      userID.Idp,
+			OpaqueId: userID.OpaqueId,
 		},
 		Username:    userID.OpaqueId,
 		DisplayName: userID.OpaqueId,
@@ -790,10 +791,10 @@ func (h *SharesHandler) publicShare2ShareData(share *publicsharev0alphapb.Public
 		// share.permissions ar mapped below
 		Permissions:          publicSharePermissions2OCSPermissions(share.GetPermissions()),
 		ShareType:            shareTypePublicLink,
-		UIDOwner:             creator.ID.String(),
+		UIDOwner:             creator.Id.OpaqueId,
 		DisplaynameOwner:     creator.DisplayName,
 		STime:                share.Ctime.Seconds, // TODO CS3 api birth time = btime
-		UIDFileOwner:         owner.ID.String(),
+		UIDFileOwner:         owner.Id.OpaqueId,
 		DisplaynameFileOwner: owner.DisplayName,
 		Token:                share.Token,
 		Expiration:           timestampToExpiration(share.Expiration),

@@ -21,6 +21,8 @@ package demo
 import (
 	"context"
 
+	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
 )
@@ -30,7 +32,7 @@ func init() {
 }
 
 type manager struct {
-	catalog map[string]*user.User
+	catalog map[string]*authv0alphapb.User
 }
 
 // New returns a new user manager.
@@ -39,27 +41,27 @@ func New(m map[string]interface{}) (user.Manager, error) {
 	return &manager{catalog: cat}, nil
 }
 
-func (m *manager) GetUser(ctx context.Context, username string) (*user.User, error) {
-	if user, ok := m.catalog[username]; ok {
+func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*authv0alphapb.User, error) {
+	if user, ok := m.catalog[uid.OpaqueId]; ok {
 		return user, nil
 	}
-	return nil, userNotFoundError(username)
+	return nil, userNotFoundError(uid.OpaqueId)
 }
 
-func (m *manager) FindUsers(ctx context.Context, query string) ([]*user.User, error) {
-	return []*user.User{}, nil // FIXME implement FindUsers for demo user manager
+func (m *manager) FindUsers(ctx context.Context, query string) ([]*authv0alphapb.User, error) {
+	return []*authv0alphapb.User{}, nil // FIXME implement FindUsers for demo user manager
 }
 
-func (m *manager) GetUserGroups(ctx context.Context, username string) ([]string, error) {
-	user, err := m.GetUser(ctx, username)
+func (m *manager) GetUserGroups(ctx context.Context, uid *typespb.UserId) ([]string, error) {
+	user, err := m.GetUser(ctx, uid)
 	if err != nil {
 		return nil, err
 	}
 	return user.Groups, nil
 }
 
-func (m *manager) IsInGroup(ctx context.Context, username, group string) (bool, error) {
-	user, err := m.GetUser(ctx, username)
+func (m *manager) IsInGroup(ctx context.Context, uid *typespb.UserId, group string) (bool, error) {
+	user, err := m.GetUser(ctx, uid)
 	if err != nil {
 		return false, err
 	}
@@ -76,23 +78,23 @@ type userNotFoundError string
 
 func (e userNotFoundError) Error() string { return string(e) }
 
-func getUsers() map[string]*user.User {
-	return map[string]*user.User{
+func getUsers() map[string]*authv0alphapb.User {
+	return map[string]*authv0alphapb.User{
 		// TODO sub
 		// TODO iss
-		"einstein": &user.User{
+		"einstein": &authv0alphapb.User{
 			Username:    "einstein",
 			Groups:      []string{"sailing-lovers", "violin-haters"},
 			Mail:        "einstein@example.org",
 			DisplayName: "Albert Einstein",
 		},
-		"marie": &user.User{
+		"marie": &authv0alphapb.User{
 			Username:    "marie",
 			Groups:      []string{"radium-lovers", "polonium-lovers"},
 			Mail:        "marie@example.org",
 			DisplayName: "Marie Curie",
 		},
-		"richard": &user.User{
+		"richard": &authv0alphapb.User{
 			Username:    "richard",
 			Groups:      []string{"quantum-lovers", "philosophy-haters"},
 			Mail:        "richard@example.org",

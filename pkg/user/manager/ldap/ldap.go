@@ -23,6 +23,8 @@ import (
 	"crypto/tls"
 	"fmt"
 
+	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
@@ -79,7 +81,7 @@ func New(m map[string]interface{}) (user.Manager, error) {
 	}, nil
 }
 
-func (m *manager) GetUser(ctx context.Context, username string) (*user.User, error) {
+func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*authv0alphapb.User, error) {
 	log := appctx.GetLogger(ctx)
 	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.hostname, m.port), &tls.Config{InsecureSkipVerify: true})
 	if err != nil {
@@ -97,7 +99,7 @@ func (m *manager) GetUser(ctx context.Context, username string) (*user.User, err
 	searchRequest := ldap.NewSearchRequest(
 		m.baseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-		fmt.Sprintf(m.filter, username),              // TODO this is screaming for errors if filter contains >1 %s
+		fmt.Sprintf(m.filter, uid.OpaqueId),          // TODO this is screaming for errors if filter contains >1 %s
 		[]string{"dn", "uid", "mail", "displayName"}, // TODO mapping
 		nil,
 	)
@@ -108,12 +110,12 @@ func (m *manager) GetUser(ctx context.Context, username string) (*user.User, err
 	}
 
 	if len(sr.Entries) != 1 {
-		return nil, userNotFoundError(username)
+		return nil, userNotFoundError(uid.OpaqueId)
 	}
 
 	log.Debug().Interface("entries", sr.Entries).Msg("entries")
 
-	return &user.User{
+	return &authv0alphapb.User{
 		// TODO map uuid, userPrincipalName as sub? -> actually objectSID for AD is recommended by MS. is also used for ACLs on NTFS
 		// TODO map base dn as iss?
 		Username:    sr.Entries[0].GetAttributeValue("uid"),
@@ -123,7 +125,7 @@ func (m *manager) GetUser(ctx context.Context, username string) (*user.User, err
 	}, nil
 }
 
-func (m *manager) FindUsers(ctx context.Context, query string) ([]*user.User, error) {
+func (m *manager) FindUsers(ctx context.Context, query string) ([]*authv0alphapb.User, error) {
 	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.hostname, m.port), &tls.Config{InsecureSkipVerify: true})
 	if err != nil {
 		return nil, err
@@ -150,10 +152,10 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*user.User, er
 		return nil, err
 	}
 
-	users := []*user.User{}
+	users := []*authv0alphapb.User{}
 
 	for _, entry := range sr.Entries {
-		user := &user.User{
+		user := &authv0alphapb.User{
 			// TODO map uuid, userPrincipalName as sub? -> actually objectSID for AD is recommended by MS. is also used for ACLs on NTFS
 			// TODO map base dn as iss?
 			Username:    entry.GetAttributeValue("uid"),
@@ -167,11 +169,11 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*user.User, er
 	return users, nil
 }
 
-func (m *manager) GetUserGroups(ctx context.Context, username string) ([]string, error) {
+func (m *manager) GetUserGroups(ctx context.Context, uid *typespb.UserId) ([]string, error) {
 	return []string{}, nil // FIXME implement GetUserGroups for ldap user manager
 }
 
-func (m *manager) IsInGroup(ctx context.Context, username, group string) (bool, error) {
+func (m *manager) IsInGroup(ctx context.Context, uid *typespb.UserId, group string) (bool, error) {
 	return false, nil // FIXME implement IsInGroup for ldap user manager
 }
 

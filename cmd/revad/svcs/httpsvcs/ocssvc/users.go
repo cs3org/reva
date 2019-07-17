@@ -44,7 +44,7 @@ func (h *UsersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if user != u.Username {
 		// FIXME allow fetching other users info?
-		WriteOCSError(w, r, http.StatusForbidden, "user id mismatch", fmt.Errorf("%s tried to acces %s user info endpoint", u.ID.String(), user))
+		WriteOCSError(w, r, http.StatusForbidden, "user id mismatch", fmt.Errorf("%s tried to acces %s user info endpoint", u.Id.OpaqueId, user))
 		return
 	}
 

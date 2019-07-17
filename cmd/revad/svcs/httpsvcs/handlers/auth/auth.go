@@ -23,7 +23,6 @@ import (
 	"net/http"
 	"strings"
 
-	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	"github.com/cs3org/reva/cmd/revad/httpserver"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/handlers/auth/credential/registry"
@@ -31,6 +30,7 @@ import (
 	tokenwriterregistry "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/handlers/auth/tokenwriter/registry"
 	"github.com/pkg/errors"
 
+	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/token"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
@@ -189,7 +189,7 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 				return
 			}
 
-			u := &user.User{}
+			u := &authv0alphapb.User{}
 			if err := mapstructure.Decode(claims, u); err != nil {
 				log.Error().Err(err).Msg("error decoding user claims")
 				w.WriteHeader(http.StatusUnauthorized)

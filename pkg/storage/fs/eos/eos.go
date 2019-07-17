@@ -41,6 +41,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 
+	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 )
@@ -111,7 +112,7 @@ type config struct {
 	SingleUsername string `mapstructure:"single_username"`
 }
 
-func getUser(ctx context.Context) (*user.User, error) {
+func getUser(ctx context.Context) (*authv0alphapb.User, error) {
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(contextUserRequiredErr("userrequired"), "storage_eos: error getting user from ctx")
