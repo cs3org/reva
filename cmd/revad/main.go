@@ -40,11 +40,16 @@ import (
 )
 
 var (
-	versionFlag = flag.Bool("version", false, "show version and exit")
-	testFlag    = flag.Bool("t", false, "test configuration and exit")
-	signalFlag  = flag.String("s", "", "send signal to a master process: stop, quit, reload")
-	configFlag  = flag.String("c", "/etc/revad/revad.toml", "set configuration file")
-	pidFlag     = flag.String("p", "/var/run/revad.pid", "pid file")
+	versionFlag             = flag.Bool("version", false, "show version and exit")
+	forceFlag               = flag.Bool("f", false, "force")
+	testFlag                = flag.Bool("t", false, "test configuration and exit")
+	initFlag                = flag.Bool("i", false, "create initial configuration and exit")
+	credentialsStrategyFlag = flag.String("cs", "basic", "when initializing the config, choose 'basic' or 'oidc' credentials strategy")
+	dataDriverFlag          = flag.String("dd", "local", "'local' or 'owncloud', ('s3' or 'eos' are supported when providing a custom config)")
+	dataPathFlag            = flag.String("dp", "./data", "path to the data folder")
+	signalFlag              = flag.String("s", "", "send signal to a master process: stop, quit, reload")
+	configFlag              = flag.String("c", "/etc/revad/revad.toml", "set configuration file")
+	pidFlag                 = flag.String("p", "/var/run/revad.pid", "pid file")
 
 	// Compile time variables initialez with gcc flags.
 	gitCommit, gitBranch, buildDate, version, goVersion, buildPlatform string
@@ -54,6 +59,7 @@ func main() {
 	flag.Parse()
 
 	handleVersionFlag()
+	handleInitFlags()
 	handleSignalFlag()
 	handleTestFlag()
 
@@ -210,6 +216,49 @@ func handleSignalFlag() {
 func handleTestFlag() {
 	if *testFlag {
 		os.Exit(0)
+	}
+}
+func handleInitFlags() {
+	if *initFlag {
+		if !*forceFlag {
+			if _, err := os.Stat(*configFlag); err == nil {
+				// config exists, overwrite?
+				fmt.Fprintf(os.Stdout, "config file %s exists, overwrite (y/N)? ", *configFlag)
+				var r string
+				_, err := fmt.Scanln(&r)
+				if err != nil || "y" != strings.ToLower(r[:1]) {
+					fmt.Fprintf(os.Stderr, "aborting\n")
+					os.Exit(1)
+				}
+			} else if os.IsNotExist(err) {
+				// config does not exist, go on
+			} else {
+				fmt.Fprintf(os.Stderr, "io error %v\n", err)
+				os.Exit(1)
+			}
+		}
+		if *credentialsStrategyFlag != "basic" && *credentialsStrategyFlag != "oidc" {
+			fmt.Fprintf(os.Stderr, "unknown credentials strategy %s\n", *credentialsStrategyFlag)
+			os.Exit(1)
+		}
+		if *dataDriverFlag == "local" || *dataDriverFlag == "owncloud" {
+			config.WriteConfig(*configFlag, *credentialsStrategyFlag, *dataDriverFlag, *dataPathFlag)
+			if _, err := os.Stat("./users.json"); os.IsNotExist(err) {
+				config.WriteUsers("./users.json", nil)
+			}
+			if *credentialsStrategyFlag == "oidc" {
+				fmt.Fprintf(os.Stdout, "make sure to serve phoenix on http://localhost:8300\n")
+			}
+			if *dataDriverFlag == "owncloud" {
+				fmt.Fprintf(os.Stdout, "make sure to start a local redis server\n")
+			}
+			os.Exit(0)
+		} else if *dataDriverFlag == "eos" || *dataDriverFlag == "s3" {
+			fmt.Fprintf(os.Stderr, "initializing %s configuration is not yet implemented\n", *dataDriverFlag)
+			os.Exit(1)
+		}
+		fmt.Fprintf(os.Stderr, "unknown data driver %s\n", *dataDriverFlag)
+		os.Exit(1)
 	}
 }
 
