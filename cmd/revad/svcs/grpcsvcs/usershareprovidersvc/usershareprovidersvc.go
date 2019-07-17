@@ -255,7 +255,9 @@ func (s *service) ListShares(ctx context.Context, req *usershareproviderv0alphap
 
 func grantToShare(grant *storageproviderv0alphapb.Grant) *usershareproviderv0alphapb.Share {
 	share := &usershareproviderv0alphapb.Share{
-		Id: &usershareproviderv0alphapb.ShareId{},
+		Id: &usershareproviderv0alphapb.ShareId{
+			// OpaqueId is constructed below
+		},
 		// TODO(jfd): why ResourceId: not available in grant, set in parent
 		Permissions: &usershareproviderv0alphapb.SharePermissions{
 			Permissions: grant.Permissions,
@@ -263,9 +265,20 @@ func grantToShare(grant *storageproviderv0alphapb.Grant) *usershareproviderv0alp
 		Grantee: grant.Grantee,
 		// Owner: not available in grant, set in parent
 		// Creator: TODO not available in grant, add it?
+		Ctime: &typespb.Timestamp{}, // TODO should be named btime, not available in grant, add it?
 		// Mtime: TODO not available in grant, add it?
 	}
-
+	switch grant.Grantee.Type {
+	case storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER:
+		// FIXME this kind of id works only for acls ...
+		// it becomes unique if prefixed with the fileid ...
+		share.Id.OpaqueId = "u:" + grant.Grantee.Id.OpaqueId
+	case storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_GROUP:
+		// FIXME this kind of id works only for acls ...
+		// it becomes unique if prefixed with the fileid ...
+		share.Id.OpaqueId = "g:" + grant.Grantee.Id.OpaqueId
+		// FIXME grantee.UserID ... might be a group ... rename to identifier?
+	}
 	return share
 }
 

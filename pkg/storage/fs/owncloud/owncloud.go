@@ -429,9 +429,9 @@ func (fs *ocFS) getPath(ctx context.Context, id *storageproviderv0alphapb.Resour
 	c := fs.pool.Get()
 	defer c.Close()
 	fs.scanFiles(ctx, c)
-	np, err := redis.String(c.Do("GET", id))
+	np, err := redis.String(c.Do("GET", id.OpaqueId))
 	if err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).Msg("error looking up fileid")
+		appctx.GetLogger(ctx).Error().Err(err).Interface("id", id).Msg("error looking up fileid")
 		return "", err
 	}
 	return np, nil
