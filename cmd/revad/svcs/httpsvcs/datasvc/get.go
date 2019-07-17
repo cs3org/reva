@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"strings"
 
+	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cs3org/reva/pkg/appctx"
 )
 
@@ -32,7 +33,9 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 	fn := r.URL.Path
 
 	fsfn := strings.TrimPrefix(fn, s.conf.ProviderPath)
-	rc, err := s.storage.Download(ctx, fsfn)
+	ref := &storageproviderv0alphapb.Reference{Spec: &storageproviderv0alphapb.Reference_Path{Path: fsfn}}
+
+	rc, err := s.storage.Download(ctx, ref)
 	if err != nil {
 		log.Error().Err(err).Msg("error downloading file")
 		w.WriteHeader(http.StatusInternalServerError)

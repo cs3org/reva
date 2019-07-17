@@ -92,16 +92,16 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 func (s *service) CreateShare(ctx context.Context, req *usershareproviderv0alphapb.CreateShareRequest) (*usershareproviderv0alphapb.CreateShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 
-	path := req.ResourceId.OpaqueId
+	ref := &storageproviderv0alphapb.Reference{Spec: &storageproviderv0alphapb.Reference_Id{Id: req.ResourceId}}
 
 	grant := &storageproviderv0alphapb.Grant{
 		Grantee:     req.Grant.Grantee,
 		Permissions: req.Grant.Permissions.Permissions,
 	}
 
-	log.Debug().Str("path", path).Msg("list shares")
+	log.Debug().Str("path", ref.String()).Msg("list shares")
 	// check if path exists
-	err := s.storage.AddGrant(ctx, path, grant)
+	err := s.storage.AddGrant(ctx, ref, grant)
 	if err != nil {
 		return nil, err
 	}
@@ -137,20 +137,21 @@ func (s *service) GetShare(ctx context.Context, req *usershareproviderv0alphapb.
 		return res, nil
 	}
 
-	path, err := s.storage.GetPathByID(ctx, resourceID.OpaqueId)
+	path, err := s.storage.GetPathByID(ctx, resourceID)
 	if err != nil {
 		// TODO not found
 		return nil, err
 	}
 
-	md, err := s.storage.GetMD(ctx, path)
+	ref := &storageproviderv0alphapb.Reference{Spec: &storageproviderv0alphapb.Reference_Path{Path: path}}
+	md, err := s.storage.GetMD(ctx, ref)
 	if err != nil {
 		// TODO not found
 		return nil, err
 	}
 
 	// TODO(labkode): the storage has no method to get a grant by shareid yet
-	grants, err := s.storage.ListGrants(ctx, path)
+	grants, err := s.storage.ListGrants(ctx, ref)
 	if err != nil {
 		// TODO not found
 		return nil, err
@@ -205,18 +206,20 @@ func (s *service) ListShares(ctx context.Context, req *usershareproviderv0alphap
 
 	for _, filter := range req.Filters {
 		if filter.Type == usershareproviderv0alphapb.ListSharesRequest_Filter_LIST_SHARES_REQUEST_FILTER_TYPE_RESOURCE_ID {
-			path := filter.GetResourceId().OpaqueId
-			log.Debug().Str("path", path).Msg("list shares")
+			ref := &storageproviderv0alphapb.Reference{Spec: &storageproviderv0alphapb.Reference_Id{Id: filter.GetResourceId()}}
+			log.Debug().Str("ref", ref.String()).Msg("list shares by resource id")
+
 			// check if path exists
-			md, err := s.storage.GetMD(ctx, path)
+			md, err := s.storage.GetMD(ctx, ref)
 			if err != nil {
 				return nil, err
 			}
 
-			grants, err := s.storage.ListGrants(ctx, path)
+			grants, err := s.storage.ListGrants(ctx, ref)
 			if err != nil {
 				return nil, err
 			}
+
 			for _, grant := range grants {
 				share := grantToShare(grant)
 				share.ResourceId = filter.GetResourceId()
@@ -361,7 +364,7 @@ func (s *service) UpdateShare(ctx context.Context, req *usershareproviderv0alpha
 		return res, nil
 	}
 
-	path, err := s.storage.GetPathByID(ctx, resourceID.OpaqueId)
+	path, err := s.storage.GetPathByID(ctx, resourceID)
 	if err != nil {
 		// TODO not found
 		return nil, err
@@ -379,8 +382,9 @@ func (s *service) UpdateShare(ctx context.Context, req *usershareproviderv0alpha
 		},
 	}
 
+	ref := &storageproviderv0alphapb.Reference{Spec: &storageproviderv0alphapb.Reference_Path{Path: path}}
 	// TODO the storage has no method to get a grant by shareid
-	if err := s.storage.UpdateGrant(ctx, path, grant); err != nil {
+	if err := s.storage.UpdateGrant(ctx, ref, grant); err != nil {
 		// TODO not found error
 		return nil, err
 	}
