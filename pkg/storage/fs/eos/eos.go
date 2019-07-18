@@ -297,7 +297,9 @@ func getEosACLPerm(set *storageproviderv0alphapb.ResourcePermissions) (string, e
 		b.WriteString("x")
 	}
 
-	if !set.Delete {
+	if set.Delete {
+		b.WriteString("+d")
+	} else {
 		b.WriteString("!d")
 	}
 
@@ -442,6 +444,8 @@ func (fs *eosStorage) getGrantPermissionSet(mode string) *storageproviderv0alpha
 	}
 	if strings.Contains(mode, "!d") {
 		p.Delete = false
+	} else if strings.Contains(mode, "+d") {
+		p.Delete = true
 	}
 	// x
 	if strings.Contains(mode, "x") {
