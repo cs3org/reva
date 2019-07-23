@@ -8,7 +8,7 @@ level = "debug"
 mode = "console"
 
 [http]
-enabled_services = ["prometheussvc", "ocdavsvc", "datasvc","preferencessvc"]
+enabled_services = ["appregistrysvc","prometheussvc", "ocdavsvc", "datasvc","preferencessvc"]
 enabled_middlewares = ["cors", "log", "auth"]
 network = "tcp"
 address = "0.0.0.0:9998"
@@ -37,6 +37,10 @@ header = "X-Access-Token"
 
 [http.middlewares.cors]
 priority = 400
+
+[http.services.appregistrysvc]
+prefix = "appregistry"
+appregistrysvc = "localhost:9999"
 
 [http.services.preferencessvc]
 prefix = "preferences"
@@ -137,7 +141,7 @@ driver = "static"
 
 [grpc.services.appregistrysvc.static.rules]
 ".txt" = "localhost:9999"
-"txt/plain" = "localhost:9999"
+"text/plain" = "localhost:9999"
 
 [grpc.services.appprovidersvc]
 driver = "demo"
