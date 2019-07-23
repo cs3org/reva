@@ -60,16 +60,23 @@ type config struct {
 	Secret string `mapstructure:"secret"`
 }
 
+// TODO(labkode): resulting JSON contains internal protobuf fields:
+//  "Username": "einstein",
+//  "XXX_NoUnkeyedLiteral": {},
+//  "XXX_sizecache": 0,
+//  "XXX_unrecognized": null
+//}
 func (m *manager) MintToken(ctx context.Context, u *authv0alphapb.User) (string, error) {
-	claims := &jwt.MapClaims{
-			"id": u.Id,
+	claims := &jwt.MapClaims{}
+	if err := mapstructure.Decode(u, claims); err != nil {
+		return "", errors.Wrap(err, "error decoding user into jwt claims")
 	}
 
 	t := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), claims)
 
 	tkn, err := t.SignedString([]byte(m.conf.Secret))
 	if err != nil {
-		return "", errors.Wrapf(err, "error signing token with claims %+v", jc)
+		return "", errors.Wrapf(err, "error signing token with claims %+v", claims)
 	}
 
 	return tkn, nil
@@ -89,6 +96,10 @@ func (m *manager) DismantleToken(ctx context.Context, tkn string) (*authv0alphap
 
 	}
 
-	jc := jt.Claims.(jwt.MapClaims)
-	
+	claims := jt.Claims.(jwt.MapClaims)
+	u := &authv0alphapb.User{}
+	if err := mapstructure.Decode(claims, u); err != nil {
+		return nil, errors.Wrap(err, "error decoding claims into user")
+	}
+	return u, nil
 }

@@ -24,10 +24,10 @@ import (
 	"encoding/base64"
 	"encoding/gob"
 
+	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	"github.com/cs3org/reva/pkg/token"
 	"github.com/cs3org/reva/pkg/token/manager/registry"
 	"github.com/pkg/errors"
-	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 )
 
 func init() {
