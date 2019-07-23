@@ -21,6 +21,7 @@ package jwt
 import (
 	"context"
 
+	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	"github.com/cs3org/reva/pkg/token"
 	"github.com/cs3org/reva/pkg/token/manager/registry"
 	"github.com/dgrijalva/jwt-go"
@@ -59,9 +60,12 @@ type config struct {
 	Secret string `mapstructure:"secret"`
 }
 
-func (m *manager) MintToken(ctx context.Context, claims token.Claims) (string, error) {
-	jc := jwt.MapClaims(claims)
-	t := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), jc)
+func (m *manager) MintToken(ctx context.Context, u *authv0alphapb.User) (string, error) {
+	claims := &jwt.MapClaims{
+			"id": u.Id,
+	}
+
+	t := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), claims)
 
 	tkn, err := t.SignedString([]byte(m.conf.Secret))
 	if err != nil {
@@ -71,7 +75,7 @@ func (m *manager) MintToken(ctx context.Context, claims token.Claims) (string, e
 	return tkn, nil
 }
 
-func (m *manager) DismantleToken(ctx context.Context, tkn string) (token.Claims, error) {
+func (m *manager) DismantleToken(ctx context.Context, tkn string) (*authv0alphapb.User, error) {
 	jt, err := jwt.Parse(tkn, func(token *jwt.Token) (interface{}, error) {
 		return []byte(m.conf.Secret), nil
 	})
@@ -86,7 +90,5 @@ func (m *manager) DismantleToken(ctx context.Context, tkn string) (token.Claims,
 	}
 
 	jc := jt.Claims.(jwt.MapClaims)
-	c := token.Claims(jc)
-
-	return c, nil
+	
 }

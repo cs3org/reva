@@ -83,18 +83,30 @@ func getUsers() map[string]*authv0alphapb.User {
 		// TODO sub
 		// TODO iss
 		"einstein": &authv0alphapb.User{
+			Id: &typespb.UserId{
+				Idp:      "localhost",
+				OpaqueId: "einstein",
+			},
 			Username:    "einstein",
 			Groups:      []string{"sailing-lovers", "violin-haters"},
 			Mail:        "einstein@example.org",
 			DisplayName: "Albert Einstein",
 		},
 		"marie": &authv0alphapb.User{
+			Id: &typespb.UserId{
+				Idp:      "localhost",
+				OpaqueId: "marie",
+			},
 			Username:    "marie",
 			Groups:      []string{"radium-lovers", "polonium-lovers"},
 			Mail:        "marie@example.org",
 			DisplayName: "Marie Curie",
 		},
 		"richard": &authv0alphapb.User{
+			Id: &typespb.UserId{
+				Idp:      "localhost",
+				OpaqueId: "richard",
+			},
 			Username:    "richard",
 			Groups:      []string{"quantum-lovers", "philosophy-haters"},
 			Mail:        "richard@example.org",

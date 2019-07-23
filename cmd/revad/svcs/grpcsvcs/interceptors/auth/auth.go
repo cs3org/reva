@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -101,12 +102,17 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 	}
 
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		ctx, span := trace.StartSpan(ctx, "auth")
+		defer span.End()
 		log := appctx.GetLogger(ctx)
 
 		if skip(info.FullMethod, conf.SkipMethods) {
+			span.AddAttributes(trace.BoolAttribute("auth_enabled", false))
 			log.Debug().Str("method", info.FullMethod).Msg("skiping auth")
 			return handler(ctx, req)
 		}
+
+		span.AddAttributes(trace.BoolAttribute("auth_enabled", true))
 
 		var tkn string
 		md, ok := metadata.FromIncomingContext(ctx)
@@ -137,6 +143,15 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		}
 
 		// store user and core access token in context.
+		/*
+			span.AddAttributes(
+				trace.StringAttribute("id.idp", u.Id.Idp),
+				trace.StringAttribute("id.opaque_id", u.Id.OpaqueId),
+				trace.StringAttribute("username", u.Username),
+				trace.StringAttribute("token", tkn))
+		*/
+		span.AddAttributes(trace.StringAttribute("user", u.String()), trace.StringAttribute("token", tkn))
+
 		ctx = user.ContextSetUser(ctx, u)
 		ctx = token.ContextSetToken(ctx, tkn)
 		return handler(ctx, req)

@@ -22,35 +22,22 @@ import (
 	"context"
 
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/reqid"
 	"github.com/rs/zerolog"
+	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
 )
 
 // NewUnary returns a new unary interceptor that creates the application context.
 func NewUnary(log zerolog.Logger) grpc.UnaryServerInterceptor {
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		var t string
-		md, ok := metadata.FromIncomingContext(ctx)
-		if ok && md != nil {
-			if val, ok := md[reqid.ReqIDHeaderName]; ok {
-				if len(val) > 0 && val[0] != "" {
-					t = val[0]
-				}
-			}
-		}
+		ctx, span := trace.StartSpan(ctx, info.FullMethod)
 
-		if t == "" {
-			t = reqid.MintReqID()
-		}
-
-		ctx = reqid.ContextSetReqID(ctx, t)
-
-		sub := log.With().Str("reqid", t).Logger()
+		sub := log.With().Str("traceid", span.SpanContext().TraceID.String()).Logger()
 		ctx = appctx.WithLogger(ctx, &sub)
 
-		return handler(ctx, req)
+		res, err := handler(ctx, req)
+		span.End()
+		return res, err
 	}
 	return interceptor
 }
@@ -59,25 +46,14 @@ func NewUnary(log zerolog.Logger) grpc.UnaryServerInterceptor {
 // that creates the application context.
 func NewStream(log zerolog.Logger) grpc.StreamServerInterceptor {
 	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		var t string
-		md, ok := metadata.FromIncomingContext(ss.Context())
-		if ok && md != nil {
-			if val, ok := md[reqid.ReqIDHeaderName]; ok {
-				if len(val) > 0 && val[0] != "" {
-					t = val[0]
-				}
-			}
-		}
-		if t == "" {
-			t = reqid.MintReqID()
-		}
-
-		ctx := reqid.ContextSetReqID(ss.Context(), t)
-		sub := log.With().Str("reqid", t).Logger()
+		ctx, span := trace.StartSpan(ss.Context(), info.FullMethod)
+		sub := log.With().Str("traceid", span.SpanContext().TraceID.String()).Logger()
 		ctx = appctx.WithLogger(ctx, &sub)
 
 		wrapped := newWrappedServerStream(ctx, ss)
-		return handler(srv, wrapped)
+		err := handler(srv, wrapped)
+		span.End()
+		return err
 	}
 	return interceptor
 }

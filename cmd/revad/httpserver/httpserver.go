@@ -33,6 +33,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
+	"go.opencensus.io/plugin/ochttp"
 )
 
 // NewMiddlewares contains all the registered new middleware functions.
@@ -260,6 +261,8 @@ func (s *Server) getHandler() http.Handler {
 	s.middlewares = append(s.middlewares, &middlewareTriple{Middleware: appctx.New(s.log), Name: "appctx"})
 
 	handler := http.Handler(h)
+	handler = &ochttp.Handler{Handler: handler}
+
 	for _, triple := range s.middlewares {
 		s.log.Info().Msgf("chainning http middleware %s with priority  %d", triple.Name, triple.Priority)
 		handler = triple.Middleware(handler)

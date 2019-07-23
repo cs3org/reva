@@ -23,8 +23,6 @@ import (
 	"fmt"
 	"io"
 
-	"contrib.go.opencensus.io/exporter/jaeger"
-
 	"github.com/cs3org/reva/cmd/revad/grpcserver"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
@@ -42,7 +40,6 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-	"go.opencensus.io/trace"
 )
 
 func init() {
@@ -116,24 +113,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 	svc := &service{authmgr: authManager, tokenmgr: tokenManager, usermgr: userManager}
 	authv0alphapb.RegisterAuthServiceServer(ss, svc)
 
-	// Tracing
-	// Port details: https://www.jaegertracing.io/docs/getting-started/
-	agentEndpointURI := "localhost:6831"
-	collectorEndpointURI := "http://localhost:14268/api/traces"
-
-	je, err := jaeger.NewExporter(jaeger.Options{
-		AgentEndpoint:     agentEndpointURI,
-		CollectorEndpoint: collectorEndpointURI,
-		ServiceName:       "reva",
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// And now finally register it as a Trace Exporter
-	trace.RegisterExporter(je)
-	trace.ApplyConfig(trace.Config{DefaultSampler: trace.AlwaysSample()})
-
 	return svc, nil
 }
 
@@ -169,17 +148,7 @@ func (s *service) GenerateAccessToken(ctx context.Context, req *authv0alphapb.Ge
 		return res, nil
 	}
 
-	//  TODO claims is redundand to the user. should we change usermgr.GetUser to GetClaims?
-	claims := token.Claims{
-		"sub":          user.Subject,
-		"iss":          user.Issuer,
-		"username":     user.Username,
-		"groups":       user.Groups,
-		"mail":         user.Mail,
-		"display_name": user.DisplayName,
-	}
-
-	accessToken, err := s.tokenmgr.MintToken(ctx, claims)
+	accessToken, err := s.tokenmgr.MintToken(ctx, user)
 	if err != nil {
 		err = errors.Wrap(err, "error creating access token")
 		log.Error().Err(err).Msg("error creating access token")
@@ -196,11 +165,6 @@ func (s *service) GenerateAccessToken(ctx context.Context, req *authv0alphapb.Ge
 }
 
 func (s *service) WhoAmI(ctx context.Context, req *authv0alphapb.WhoAmIRequest) (*authv0alphapb.WhoAmIResponse, error) {
-
-	ctx, span := trace.StartSpan(context.Background(), "whoami")
-	span.AddAttributes(trace.StringAttribute("username", "peter"))
-	defer span.End()
-
 	log := appctx.GetLogger(ctx)
 	token := req.AccessToken
 	claims, err := s.tokenmgr.DismantleToken(ctx, token)
@@ -213,10 +177,11 @@ func (s *service) WhoAmI(ctx context.Context, req *authv0alphapb.WhoAmIRequest) 
 	}
 
 	up := &struct {
-		Username    string   `mapstructure:"username"`
-		DisplayName string   `mapstructure:"display_name"`
-		Mail        string   `mapstructure:"mail"`
-		Groups      []string `mapstructure:"groups"`
+		ID          *typespb.UserId `mapstructure:"id"`
+		Username    string          `mapstructure:"username"`
+		DisplayName string          `mapstructure:"display_name"`
+		Mail        string          `mapstructure:"mail"`
+		Groups      []string        `mapstructure:"groups"`
 	}{}
 
 	if err := mapstructure.Decode(claims, up); err != nil {
@@ -227,6 +192,7 @@ func (s *service) WhoAmI(ctx context.Context, req *authv0alphapb.WhoAmIRequest) 
 	}
 
 	user := &authv0alphapb.User{
+		Id:          up.ID,
 		Username:    up.Username,
 		DisplayName: up.DisplayName,
 		Mail:        up.Mail,
