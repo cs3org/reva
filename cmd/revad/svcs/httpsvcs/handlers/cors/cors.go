@@ -55,7 +55,7 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 		MaxAge:             conf.MaxAge,
 		OptionsPassthrough: conf.OptionsPassthrough,
 		Debug:              false,
-		// TODO use log from request context, otherwise fmt will be used to log,
+		// TODO(jfd): use log from request context, otherwise fmt will be used to log,
 		// preventing us from pinging the log to eg jq
 	})
 
