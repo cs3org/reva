@@ -25,7 +25,6 @@ import (
 
 	preferencesv0alphapb "github.com/cs3org/go-cs3apis/cs3/preferences/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/user"
 )
@@ -44,8 +43,7 @@ func (s *svc) doSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var key string
-	key, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
+	key := r.URL.Path
 
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
