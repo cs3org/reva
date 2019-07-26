@@ -20,8 +20,9 @@ package ocdavsvc
 
 import (
 	"encoding/json"
-	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/ocssvc"
 	"net/http"
+
+	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/ocssvc"
 )
 
 func (s *svc) doStatus(w http.ResponseWriter, r *http.Request) {
@@ -29,10 +30,10 @@ func (s *svc) doStatus(w http.ResponseWriter, r *http.Request) {
 		Installed:      true,
 		Maintenance:    false,
 		NeedsDBUpgrade: false,
-		Version:        "10.0.9.5",  // TODO make build determined
-		VersionString:  "10.0.9",    // TODO make build determined
-		Edition:        "community", // TODO make build determined
-		ProductName:    "ownCloud",  // TODO make configurable
+		Version:        "10.0.9.5", // TODO(jfd) make build/config determined
+		VersionString:  "10.0.9",
+		Edition:        "community",
+		ProductName:    "ownCloud",
 	}
 
 	statusJSON, err := json.MarshalIndent(status, "", "    ")

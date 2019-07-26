@@ -25,7 +25,7 @@ import (
 func (s *svc) doOptions(w http.ResponseWriter, r *http.Request) {
 	allow := "OPTIONS, LOCK, GET, HEAD, POST, DELETE, PROPPATCH, COPY,"
 	allow += " MOVE, UNLOCK, PROPFIND, MKCOL, REPORT, SEARCH,"
-	allow += " PUT" // TODO only for files ... but we cannot create the full path without a user ... which we only have when credentials are sent
+	allow += " PUT" // TODO(jfd): only for files ... but we cannot create the full path without a user ... which we only have when credentials are sent
 
 	w.Header().Add("Vary", "Origin")
 	w.Header().Add("Vary", "Access-Control-Request-Method")

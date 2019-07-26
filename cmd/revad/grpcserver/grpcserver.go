@@ -29,6 +29,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"go.opencensus.io/plugin/ocgrpc"
 	"google.golang.org/grpc"
 )
 
@@ -117,6 +118,7 @@ func New(m interface{}, log zerolog.Logger) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	opts = append(opts, grpc.StatsHandler(&ocgrpc.ServerHandler{}))
 
 	grpcServer := grpc.NewServer(opts...)
 	server.s = grpcServer

@@ -39,6 +39,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
 )
 
@@ -181,7 +182,7 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *storageprovider
 }
 
 func (s *service) InitiateFileUpload(ctx context.Context, req *storageproviderv0alphapb.InitiateFileUploadRequest) (*storageproviderv0alphapb.InitiateFileUploadResponse, error) {
-	// TODO(labkode): same as download
+	// TODO(labkode): same considerations as download
 	log := appctx.GetLogger(ctx)
 	url := *s.dataServerURL
 	url.Path = path.Join("/", url.Path, path.Clean(req.Ref.GetPath()))
@@ -315,6 +316,13 @@ func (s *service) Move(ctx context.Context, req *storageproviderv0alphapb.MoveRe
 }
 
 func (s *service) Stat(ctx context.Context, req *storageproviderv0alphapb.StatRequest) (*storageproviderv0alphapb.StatResponse, error) {
+	ctx, span := trace.StartSpan(ctx, "Stat")
+	defer span.End()
+
+	span.AddAttributes(
+		trace.StringAttribute("ref", req.Ref.String()),
+	)
+
 	log := appctx.GetLogger(ctx)
 	fn := req.Ref.GetPath()
 
@@ -329,6 +337,7 @@ func (s *service) Stat(ctx context.Context, req *storageproviderv0alphapb.StatRe
 	md, err := s.storage.GetMD(ctx, ref)
 	if err != nil {
 		if _, ok := err.(notFoundError); ok {
+			log.Warn().Str("ref", req.Ref.String()).Msg("resource not found")
 			status := &rpcpb.Status{Code: rpcpb.Code_CODE_NOT_FOUND}
 			res := &storageproviderv0alphapb.StatResponse{Status: status}
 			return res, nil

@@ -30,6 +30,8 @@ import (
 	"strings"
 	"time"
 
+	"go.opencensus.io/trace"
+
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 
@@ -41,6 +43,8 @@ import (
 
 func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	ctx, span := trace.StartSpan(ctx, "propfind")
+	defer span.End()
 	log := appctx.GetLogger(ctx)
 
 	fn := r.URL.Path
@@ -73,6 +77,7 @@ func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request) {
 
 	if res.Status.Code != rpcpb.Code_CODE_OK {
 		if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+			log.Warn().Str("path", fn).Msg("resource not found")
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
@@ -93,6 +98,7 @@ func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if res.Status.Code != rpcpb.Code_CODE_OK {
+			log.Err(err).Msg("error calling grpc list container")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
