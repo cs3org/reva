@@ -23,26 +23,27 @@ import (
 	"net/http"
 	"strings"
 
+	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	"github.com/cs3org/reva/cmd/revad/httpserver"
+	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/handlers/auth/credential/registry"
 	tokenregistry "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/handlers/auth/token/registry"
 	tokenwriterregistry "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/handlers/auth/tokenwriter/registry"
-	"github.com/pkg/errors"
-
-	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/token"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
-	"google.golang.org/grpc"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
 )
 
 func init() {
 	httpserver.RegisterMiddleware("auth", New)
 }
+
+var authClient authv0alphapb.AuthServiceClient
 
 type config struct {
 	Priority             int                               `mapstructure:"priority"`
@@ -156,7 +157,8 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 					ClientId:     creds.ClientID,
 					ClientSecret: creds.ClientSecret,
 				}
-				client, err := getAuthClient(conf.AuthSVC)
+
+				client, err := pool.GetAuthServiceClient(conf.AuthSVC)
 				if err != nil {
 					log.Error().Err(err).Msg("error getting the authsvc client")
 					w.WriteHeader(http.StatusUnauthorized)
@@ -208,17 +210,4 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 		})
 	}
 	return chain, conf.Priority, nil
-}
-
-// TODO(labkode): re-use connection using mutex.
-func getAuthClient(host string) (authv0alphapb.AuthServiceClient, error) {
-	conn, err := getConn(host)
-	if err != nil {
-		return nil, err
-	}
-	return authv0alphapb.NewAuthServiceClient(conn), nil
-}
-
-func getConn(host string) (*grpc.ClientConn, error) {
-	return grpc.Dial(host, grpc.WithInsecure())
 }

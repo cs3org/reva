@@ -25,10 +25,9 @@ import (
 	"os"
 	"path"
 
-	"go.opencensus.io/plugin/ocgrpc"
-
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/httpserver"
+	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/user"
@@ -281,30 +280,6 @@ func (s *svc) setHandler() {
 	})
 }
 
-func (s *svc) getConn() (*grpc.ClientConn, error) {
-	if s.conn != nil {
-		return s.conn, nil
-	}
-
-	conn, err := grpc.Dial(s.storageProviderSvc, grpc.WithInsecure(), grpc.WithStatsHandler(&ocgrpc.ClientHandler{}))
-	if err != nil {
-		return nil, err
-	}
-
-	s.conn = conn
-
-	return conn, nil
-}
-
 func (s *svc) getClient() (storageproviderv0alphapb.StorageProviderServiceClient, error) {
-	if s.client != nil {
-		return s.client, nil
-	}
-
-	conn, err := s.getConn()
-	if err != nil {
-		return nil, err
-	}
-	s.client = storageproviderv0alphapb.NewStorageProviderServiceClient(conn)
-	return s.client, nil
+	return pool.GetStorageProviderServiceClient(s.storageProviderSvc)
 }

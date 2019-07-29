@@ -27,6 +27,7 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -40,8 +41,8 @@ type Watcher struct {
 	log       zerolog.Logger
 	graceful  bool
 	ppid      int
-	lns       []net.Listener
-	ss        []Server
+	lns       map[string]net.Listener
+	ss        map[string]Server
 	pidFile   string
 	childPIDs []int
 }
@@ -70,6 +71,7 @@ func NewWatcher(opts ...Option) *Watcher {
 		graceful: os.Getenv("GRACEFUL") == "true",
 		ppid:     os.Getppid(),
 		pidFile:  path.Join(os.TempDir(), "revad.pid"),
+		ss:       map[string]Server{},
 	}
 
 	for _, opt := range opts {
@@ -187,13 +189,13 @@ func newListener(network, addr string) (net.Listener, error) {
 }
 
 // GetListeners return grpc listener first and http listener second.
-func (w *Watcher) GetListeners(servers []Server) ([]net.Listener, error) {
+func (w *Watcher) GetListeners(servers map[string]Server) (map[string]net.Listener, error) {
 	w.ss = servers
-	lns := []net.Listener{}
+	lns := map[string]net.Listener{}
 	if w.graceful {
 		w.log.Info().Msg("graceful restart, inheriting parent ln fds for grpc and http")
 		count := 3
-		for _, s := range servers {
+		for k, s := range servers {
 			network, addr := s.Network(), s.Address()
 			fd := os.NewFile(uintptr(count), "") // 3 because ExtraFile passed to new process
 			count++
@@ -205,9 +207,9 @@ func (w *Watcher) GetListeners(servers []Server) ([]net.Listener, error) {
 				if err != nil {
 					return nil, err
 				}
-				lns = append(lns, ln)
+				lns[k] = ln
 			} else {
-				lns = append(lns, ln)
+				lns[k] = ln
 			}
 
 		}
@@ -229,13 +231,13 @@ func (w *Watcher) GetListeners(servers []Server) ([]net.Listener, error) {
 	}
 
 	// create two listeners for grpc and http
-	for _, s := range servers {
+	for k, s := range servers {
 		network, addr := s.Network(), s.Address()
 		ln, err := newListener(network, addr)
 		if err != nil {
 			return nil, err
 		}
-		lns = append(lns, ln)
+		lns[k] = ln
 
 	}
 	w.lns = lns
@@ -265,7 +267,7 @@ func (w *Watcher) TrapSignals() {
 
 			// Fork a child process.
 			listeners := w.lns
-			p, err := forkChild(listeners...)
+			p, err := forkChild(listeners)
 			if err != nil {
 				w.log.Error().Err(err).Msgf("unable to fork child process")
 			} else {
@@ -328,16 +330,16 @@ func getListenerFile(ln net.Listener) (*os.File, error) {
 	return nil, fmt.Errorf("unsupported listener: %T", ln)
 }
 
-func forkChild(lns ...net.Listener) (*os.Process, error) {
+func forkChild(lns map[string]net.Listener) (*os.Process, error) {
 	// Get the file descriptor for the listener and marshal the metadata to pass
 	// to the child in the environment.
-	fds := []*os.File{}
-	for _, ln := range lns {
+	fds := map[string]*os.File{}
+	for k, ln := range lns {
 		fd, err := getListenerFile(ln)
 		if err != nil {
 			return nil, err
 		}
-		fds = append(fds, fd)
+		fds[k] = fd
 	}
 
 	// Pass stdin, stdout, and stderr along with the listener file to the child
@@ -346,10 +348,16 @@ func forkChild(lns ...net.Listener) (*os.Process, error) {
 		os.Stdout,
 		os.Stderr,
 	}
-	files = append(files, fds...)
 
 	// Get current environment and add in the listener to it.
 	environment := append(os.Environ(), "GRACEFUL=true")
+	var counter = 3
+	for k, fd := range fds {
+		k = strings.ToUpper(k)
+		environment = append(environment, k+"FD="+fmt.Sprintf("%d", counter))
+		files = append(files, fd)
+		counter++
+	}
 
 	// Get current process name and directory.
 	execName, err := os.Executable()

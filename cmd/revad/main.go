@@ -87,14 +87,14 @@ func main() {
 	}
 	log.Info().Msgf("running on %d cpus", ncpus)
 
-	servers := []grace.Server{}
+	servers := map[string]grace.Server{}
 	if !coreConf.DisableHTTP {
 		s, err := getHTTPServer(mainConf["http"], log)
 		if err != nil {
 			log.Error().Err(err).Msg("error creating http server")
 			watcher.Exit(1)
 		}
-		servers = append(servers, s)
+		servers["http"] = s
 	}
 
 	if !coreConf.DisableGRPC {
@@ -103,7 +103,7 @@ func main() {
 			log.Error().Err(err).Msg("error creating grpc server")
 			watcher.Exit(1)
 		}
-		servers = append(servers, s)
+		servers["grpc"] = s
 	}
 
 	listeners, err := watcher.GetListeners(servers)
@@ -114,7 +114,7 @@ func main() {
 
 	if !coreConf.DisableHTTP {
 		go func() {
-			if err := servers[0].(*httpserver.Server).Start(listeners[0]); err != nil {
+			if err := servers["http"].(*httpserver.Server).Start(listeners["http"]); err != nil {
 				log.Error().Err(err).Msg("error starting the http server")
 				watcher.Exit(1)
 			}
@@ -123,7 +123,7 @@ func main() {
 
 	if !coreConf.DisableGRPC {
 		go func() {
-			if err := servers[1].(*grpcserver.Server).Start(listeners[1]); err != nil {
+			if err := servers["grpc"].(*grpcserver.Server).Start(listeners["grpc"]); err != nil {
 				log.Error().Err(err).Msg("error starting the grpc server")
 				watcher.Exit(1)
 			}

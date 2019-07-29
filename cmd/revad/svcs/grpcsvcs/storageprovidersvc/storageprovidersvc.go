@@ -19,6 +19,7 @@
 package storageprovidersvc
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/url"
@@ -26,14 +27,10 @@ import (
 	"path"
 	"strings"
 
-	storagetypespb "github.com/cs3org/go-cs3apis/cs3/storagetypes"
-
-	"github.com/cs3org/reva/cmd/revad/grpcserver"
-
-	"context"
-
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	storagetypespb "github.com/cs3org/go-cs3apis/cs3/storagetypes"
+	"github.com/cs3org/reva/cmd/revad/grpcserver"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
