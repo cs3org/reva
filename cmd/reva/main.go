@@ -51,6 +51,7 @@ func main() {
 		appRegistryFindCommand(),
 		appProviderGetIFrameCommand(),
 		preferencesCommand(),
+		genCommand(),
 	}
 
 	mainUsage := createMainUsage(cmds)
