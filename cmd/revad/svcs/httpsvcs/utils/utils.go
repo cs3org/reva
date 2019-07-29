@@ -18,8 +18,17 @@
 
 package utils
 
-import typespb "github.com/cs3org/go-cs3apis/cs3/types"
-import "time"
+import (
+	"context"
+	"io"
+	"net/http"
+	"time"
+
+	typespb "github.com/cs3org/go-cs3apis/cs3/types"
+	"github.com/cs3org/reva/pkg/token"
+	"github.com/pkg/errors"
+	"go.opencensus.io/plugin/ochttp"
+)
 
 // TSToUnixNano converts a protobuf Timestamp to uint64
 // with nanoseconds resolution.
@@ -30,4 +39,32 @@ func TSToUnixNano(ts *typespb.Timestamp) uint64 {
 // TSToTime converts a protobuf Timestamp to Go's time.Time.
 func TSToTime(ts *typespb.Timestamp) time.Time {
 	return time.Unix(int64(ts.Seconds), int64(ts.Nanos))
+}
+
+// GetHTTPClient returns an http client with open census tracing support.
+// TODO(labkode): harden it.
+// https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779
+func GetHTTPClient(ctx context.Context) *http.Client {
+	httpClient := &http.Client{
+		Timeout:   time.Second * 10,
+		Transport: &ochttp.Transport{},
+	}
+	return httpClient
+}
+
+// NewRequest creates an HTTP request that sets the token if it is passed in ctx.
+func NewRequest(ctx context.Context, method, url string, body io.Reader) (*http.Request, error) {
+	httpReq, err := http.NewRequest(method, url, body)
+	if err != nil {
+		return nil, errors.Wrap(err, "utils: error creating request")
+	}
+
+	// TODO(labkode): make header / auth configurable
+	tkn, ok := token.ContextGetToken(ctx)
+	if ok {
+		httpReq.Header.Set("X-Access-Token", tkn)
+	}
+
+	httpReq = httpReq.WithContext(ctx)
+	return httpReq, nil
 }

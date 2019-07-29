@@ -291,6 +291,8 @@ func (s *svc) getConn() (*grpc.ClientConn, error) {
 		return nil, err
 	}
 
+	s.conn = conn
+
 	return conn, nil
 }
 

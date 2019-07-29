@@ -25,12 +25,11 @@ import (
 	"net/url"
 	"path"
 	"strings"
-	"time"
 
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/utils"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/token"
 )
 
 func (s *svc) doCopy(w http.ResponseWriter, r *http.Request) {
@@ -198,12 +197,6 @@ func descend(ctx context.Context, client storageproviderv0alphapb.StorageProvide
 	} else {
 		// copy file
 
-		//TODO: make header / auth configurable, check if token is available before doing stat requests
-		tkn, ok := token.ContextGetToken(ctx)
-		if !ok {
-			return fmt.Errorf("could not read token from context")
-		}
-
 		// 1. get download url
 		dReq := &storageproviderv0alphapb.InitiateFileDownloadRequest{
 			Ref: &storageproviderv0alphapb.Reference{
@@ -239,18 +232,12 @@ func descend(ctx context.Context, client storageproviderv0alphapb.StorageProvide
 
 		// 3. do download
 
-		httpDownloadReq, err := http.NewRequest("GET", dRes.DownloadEndpoint, nil)
+		httpDownloadReq, err := utils.NewRequest(ctx, "GET", dRes.DownloadEndpoint, nil)
 		if err != nil {
 			return err
 		}
 
-		httpDownloadReq.Header.Set("X-Access-Token", tkn)
-
-		// TODO(labkode): harden http client
-		// https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779
-		httpDownloadClient := &http.Client{
-			Timeout: time.Second * 10,
-		}
+		httpDownloadClient := utils.GetHTTPClient(ctx)
 
 		httpDownloadRes, err := httpDownloadClient.Do(httpDownloadReq)
 		if err != nil {
@@ -264,18 +251,12 @@ func descend(ctx context.Context, client storageproviderv0alphapb.StorageProvide
 		// do upload
 		// TODO(jfd): check if large files are really streamed
 
-		httpUploadReq, err := http.NewRequest("PUT", uRes.UploadEndpoint, httpDownloadRes.Body)
+		httpUploadReq, err := utils.NewRequest(ctx, "PUT", uRes.UploadEndpoint, httpDownloadRes.Body)
 		if err != nil {
 			return err
 		}
 
-		httpUploadReq.Header.Set("X-Access-Token", tkn)
-
-		// TODO(labkode): harden http client
-		// https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779
-		httpUploadClient := &http.Client{
-			Timeout: time.Second * 10,
-		}
+		httpUploadClient := utils.GetHTTPClient(ctx)
 
 		httpRes, err := httpUploadClient.Do(httpUploadReq)
 		if err != nil {

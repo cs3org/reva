@@ -28,7 +28,6 @@ import (
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/utils"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/token"
 )
 
 func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
@@ -87,28 +86,15 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dataServerURL := dRes.DownloadEndpoint
+
 	// TODO(labkode): perfrom protocol switch
-	httpReq, err := http.NewRequest("GET", dataServerURL, nil)
+	httpReq, err := utils.NewRequest(ctx, "GET", dataServerURL, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("error creating http request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-
-	//TODO: make header / auth configurable, check if token is available before doing stat requests
-	tkn, ok := token.ContextGetToken(ctx)
-	if !ok {
-		log.Error().Msg("error reading token from context")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	httpReq.Header.Set("X-Access-Token", tkn)
-
-	// TODO(labkode): harden http client
-	// https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779
-	httpClient := &http.Client{
-		Timeout: time.Second * 10,
-	}
+	httpClient := utils.GetHTTPClient(ctx)
 
 	httpRes, err := httpClient.Do(httpReq)
 	if err != nil {

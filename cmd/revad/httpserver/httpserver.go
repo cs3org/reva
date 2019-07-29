@@ -285,8 +285,8 @@ func (s *Server) getHandler() http.Handler {
 	// use opencensus handler to trace endpoints.
 	// TODO(labkode): enable also opencensus telemetry.
 	handler = &ochttp.Handler{
-		Handler:          handler,
-		IsPublicEndpoint: true,
+		Handler: handler,
+		//IsPublicEndpoint: true,
 	}
 
 	return handler
