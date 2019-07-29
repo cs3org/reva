@@ -23,6 +23,8 @@ import (
 	"fmt"
 	"io"
 
+	"contrib.go.opencensus.io/exporter/jaeger"
+
 	"github.com/cs3org/reva/cmd/revad/grpcserver"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
@@ -40,6 +42,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"go.opencensus.io/trace"
 )
 
 func init() {
@@ -112,6 +115,25 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 
 	svc := &service{authmgr: authManager, tokenmgr: tokenManager, usermgr: userManager}
 	authv0alphapb.RegisterAuthServiceServer(ss, svc)
+
+	// Tracing
+	// Port details: https://www.jaegertracing.io/docs/getting-started/
+	agentEndpointURI := "localhost:6831"
+	collectorEndpointURI := "http://localhost:14268/api/traces"
+
+	je, err := jaeger.NewExporter(jaeger.Options{
+		AgentEndpoint:     agentEndpointURI,
+		CollectorEndpoint: collectorEndpointURI,
+		ServiceName:       "reva",
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// And now finally register it as a Trace Exporter
+	trace.RegisterExporter(je)
+	trace.ApplyConfig(trace.Config{DefaultSampler: trace.AlwaysSample()})
+
 	return svc, nil
 }
 
@@ -174,6 +196,11 @@ func (s *service) GenerateAccessToken(ctx context.Context, req *authv0alphapb.Ge
 }
 
 func (s *service) WhoAmI(ctx context.Context, req *authv0alphapb.WhoAmIRequest) (*authv0alphapb.WhoAmIResponse, error) {
+
+	ctx, span := trace.StartSpan(context.Background(), "whoami")
+	span.AddAttributes(trace.StringAttribute("username", "peter"))
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	token := req.AccessToken
 	claims, err := s.tokenmgr.DismantleToken(ctx, token)
@@ -210,11 +237,3 @@ func (s *service) WhoAmI(ctx context.Context, req *authv0alphapb.WhoAmIRequest) 
 	res := &authv0alphapb.WhoAmIResponse{Status: status, User: user}
 	return res, nil
 }
-
-/*
-// Override the Auth function to avoid checking the bearer token for this service
-// https://github.com/grpc-ecosystem/go-grpc-middleware/tree/master/auth#type-serviceauthfuncoverride
-func (s *service) AuthFuncOverride(ctx context.Context, fullMethodNauthmgre string) (context.Context, error) {
-	return ctx, nil
-}
-*/
