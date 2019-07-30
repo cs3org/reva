@@ -46,18 +46,18 @@ func init() {
 }
 
 type config struct {
-	Prefix             string `mapstructure:"prefix"`
-	ChunkFolder        string `mapstructure:"chunk_folder"`
-	StorageProviderSvc string `mapstructure:"storageprovidersvc"`
+	Prefix      string `mapstructure:"prefix"`
+	ChunkFolder string `mapstructure:"chunk_folder"`
+	GatewaySvc  string `mapstructure:"gatewaysvc"`
 }
 
 type svc struct {
-	prefix             string
-	chunkFolder        string
-	handler            http.Handler
-	storageProviderSvc string
-	conn               *grpc.ClientConn
-	client             storageproviderv0alphapb.StorageProviderServiceClient
+	prefix      string
+	chunkFolder string
+	handler     http.Handler
+	gatewaySvc  string
+	conn        *grpc.ClientConn
+	client      storageproviderv0alphapb.StorageProviderServiceClient
 }
 
 // New returns a new ocdavsvc
@@ -74,9 +74,9 @@ func New(m map[string]interface{}) (httpsvcs.Service, error) {
 	}
 
 	s := &svc{
-		prefix:             conf.Prefix,
-		storageProviderSvc: conf.StorageProviderSvc,
-		chunkFolder:        conf.ChunkFolder,
+		prefix:      conf.Prefix,
+		gatewaySvc:  conf.GatewaySvc,
+		chunkFolder: conf.ChunkFolder,
 	}
 	s.setHandler()
 	return s, nil
@@ -281,5 +281,5 @@ func (s *svc) setHandler() {
 }
 
 func (s *svc) getClient() (storageproviderv0alphapb.StorageProviderServiceClient, error) {
-	return pool.GetStorageProviderServiceClient(s.storageProviderSvc)
+	return pool.GetStorageProviderServiceClient(s.gatewaySvc)
 }

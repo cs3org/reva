@@ -43,24 +43,20 @@ import (
 
 // SharesHandler implements the ownCloud sharing API
 type SharesHandler struct {
-	storageProviderSVC     string
-	sConn                  *grpc.ClientConn
-	sClient                storageproviderv0alphapb.StorageProviderServiceClient
-	userShareProviderSVC   string
-	uConn                  *grpc.ClientConn
-	uClient                usershareproviderv0alphapb.UserShareProviderServiceClient
-	publicShareProviderSVC string
-	pConn                  *grpc.ClientConn
-	pClient                publicshareproviderv0alphapb.PublicShareProviderServiceClient
-	userManager            user.Manager
+	gatewaySvc  string
+	sConn       *grpc.ClientConn
+	sClient     storageproviderv0alphapb.StorageProviderServiceClient
+	uConn       *grpc.ClientConn
+	uClient     usershareproviderv0alphapb.UserShareProviderServiceClient
+	pConn       *grpc.ClientConn
+	pClient     publicshareproviderv0alphapb.PublicShareProviderServiceClient
+	userManager user.Manager
 }
 
 func (h *SharesHandler) init(c *Config) error {
 
 	// TODO(jfd) lookup correct storage, for now this always uses the configured storage driver, maybe the combined storage can delegate this?
-	h.storageProviderSVC = c.StorageProviderSVC
-	h.userShareProviderSVC = c.UserShareProviderSVC
-	h.publicShareProviderSVC = c.PublicShareProviderSVC
+	h.gatewaySvc = c.GatewaySvc
 
 	userManager, err := getUserManager(c.UserManager, c.UserManagers)
 	if err != nil {
@@ -83,7 +79,7 @@ func (h *SharesHandler) getSConn() (*grpc.ClientConn, error) {
 		return h.sConn, nil
 	}
 
-	conn, err := grpc.Dial(h.storageProviderSVC, grpc.WithInsecure())
+	conn, err := grpc.Dial(h.gatewaySvc, grpc.WithInsecure())
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +105,7 @@ func (h *SharesHandler) getUConn() (*grpc.ClientConn, error) {
 		return h.uConn, nil
 	}
 
-	conn, err := grpc.Dial(h.userShareProviderSVC, grpc.WithInsecure())
+	conn, err := grpc.Dial(h.gatewaySvc, grpc.WithInsecure())
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +131,7 @@ func (h *SharesHandler) getPConn() (*grpc.ClientConn, error) {
 		return h.pConn, nil
 	}
 
-	conn, err := grpc.Dial(h.userShareProviderSVC, grpc.WithInsecure())
+	conn, err := grpc.Dial(h.gatewaySvc, grpc.WithInsecure())
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +243,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 	if shareType == int(shareTypeUser) {
 
 		// if user sharing is disabled
-		if h.userShareProviderSVC == "" {
+		if h.gatewaySvc == "" {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "user sharing service not configured", nil)
 			return
 		}
@@ -645,7 +641,7 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	shares := []*ShareData{}
 
 	// fetch user shares if configured
-	if h.userShareProviderSVC != "" {
+	if h.gatewaySvc != "" {
 		uClient, err := h.getUClient()
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc user share handler client", err)
@@ -678,7 +674,7 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	// TODO fetch federated shares
 
 	// fetch public link shares if configured
-	if h.publicShareProviderSVC != "" {
+	if h.gatewaySvc != "" {
 		pClient, err := h.getPClient()
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc public share provider client", err)

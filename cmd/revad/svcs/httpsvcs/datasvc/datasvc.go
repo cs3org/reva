@@ -48,7 +48,7 @@ type svc struct {
 	storage storage.FS
 }
 
-// New returns a new httpuploadsvc
+// New returns a new datasvc
 func New(m map[string]interface{}) (httpsvcs.Service, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {

@@ -59,7 +59,7 @@ prefix = "ui"
 [http.services.ocdavsvc]
 prefix = "owncloud"
 chunk_folder = "/var/tmp/owncloud/chunks"
-storageprovidersvc = "localhost:9999"
+storageprovidersvc = "localhost:10000"
 enable_cors = true
 
 [http.services.datasvc]
@@ -79,30 +79,17 @@ root = "/var/tmp/owncloud/data"
 network = "tcp"
 address = "0.0.0.0:9999"
 access_log = "stderr"
-tls_enabled = true
-tls_cert = "/etc/gridsecurity/host.cert"
-tls_key = "/etc/gridsecurity/host.key"
 enabled_services = ["storageprovidersvc", "authsvc", "storageregistrysvc", "appregistrysvc", "appprovidersvc", "preferencessvc"]
-enabled_interceptors = ["auth", "prometheus", "log"]
-
-[grpc.interceptors.recovery]
-priority = 100
-
-[grpc.interceptors.log]
-priority = 200
-
-[grpc.interceptors.prometheus]
-priority = 300
+enabled_interceptors = ["auth"]
 
 [grpc.interceptors.auth]
-priority = 400
+priority = 100
 header = "x-access-token"
 token_manager = "jwt"
 skip_methods = ["/cs3.authv0alpha.AuthService/GenerateAccessToken"]
 
 [grpc.interceptors.auth.token_managers.jwt]
 secret = "Pive-Fumkiu4"
-
 
 
 [grpc.services.storageprovidersvc]
@@ -113,11 +100,6 @@ data_server_url = "http://localhost:9998/data"
 [grpc.services.storageprovidersvc.available_checksums]
 md5   = 100
 unset = 1000
-
-[grpc.services.storageprovidersvc.drivers.eos]
-mgm = "root://nowhere.org"
-root_uid = 0
-root_gid = 0
 
 [grpc.services.storageprovidersvc.drivers.local]
 root = "/var/tmp/owncloud/data"
