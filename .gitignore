@@ -19,6 +19,9 @@ cmd/revad/revad
 cmd/revad/revad.pid
 cmd/reva/reva
 
+# Ignore pid files
+*.pid
+
 
 # For Mac OS
 .DS_Store
