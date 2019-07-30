@@ -24,15 +24,13 @@ import (
 	"math"
 	"net/http"
 	"os"
-	"time"
-
-	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/storageprovidersvc"
-
-	"github.com/cs3org/reva/pkg/crypto"
 
 	"github.com/cheggaaa/pb"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/storageprovidersvc"
+	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/utils"
+	"github.com/cs3org/reva/pkg/crypto"
 )
 
 func uploadCommand() *command {
@@ -41,14 +39,15 @@ func uploadCommand() *command {
 	cmd.Usage = func() string { return "Usage: upload [-flags] <file_name> <remote_target>" }
 	xsFlag := cmd.String("xs", "negotiate", "compute checksum")
 	cmd.Action = func() error {
-		if cmd.NArg() < 3 {
+		ctx := getAuthContext()
+
+		if cmd.NArg() < 2 {
 			fmt.Println(cmd.Usage())
 			os.Exit(1)
 		}
 
-		provider := cmd.Args()[0]
-		fn := cmd.Args()[1]
-		target := cmd.Args()[2]
+		fn := cmd.Args()[0]
+		target := cmd.Args()[1]
 
 		fd, err := os.Open(fn)
 		if err != nil {
@@ -64,8 +63,7 @@ func uploadCommand() *command {
 
 		fmt.Printf("Local file size: %d bytes\n", md.Size())
 
-		ctx := getAuthContext()
-		client, err := getStorageProviderClient(provider)
+		client, err := getStorageProviderClient()
 		if err != nil {
 			return err
 		}
@@ -113,8 +111,7 @@ func uploadCommand() *command {
 		bar.Start()
 		reader := bar.NewProxyReader(fd)
 
-		// TODO(labkode): do a protocol switch
-		httpReq, err := http.NewRequest("PUT", dataServerURL, reader)
+		httpReq, err := utils.NewRequest(ctx, "PUT", dataServerURL, reader)
 		if err != nil {
 			return err
 		}
@@ -124,11 +121,7 @@ func uploadCommand() *command {
 		q.Add("xs_type", storageprovidersvc.GRPC2PKGXS(xsType).String())
 		httpReq.URL.RawQuery = q.Encode()
 
-		// TODO(labkode): harden http client
-		// https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779
-		httpClient := &http.Client{
-			Timeout: time.Second * 10,
-		}
+		httpClient := utils.GetHTTPClient(ctx)
 
 		httpRes, err := httpClient.Do(httpReq)
 		if err != nil {
@@ -160,6 +153,7 @@ func uploadCommand() *command {
 		info := res2.Info
 
 		fmt.Printf("File uploaded: %s:%s %d %s\n", info.Id.StorageId, info.Id.OpaqueId, info.Size, info.Path)
+
 		return nil
 	}
 	return cmd

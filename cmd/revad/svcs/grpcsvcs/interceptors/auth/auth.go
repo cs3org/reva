@@ -36,7 +36,6 @@ import (
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -86,11 +85,6 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		return nil, 0, errors.New("header is empty")
 	}
 
-	// TODO(labkode): maybe we need to log here?
-	//for k := range conf.SkipMethods {
-	//	l.Info().Msgf("skiping grpc auth for method: ", k)
-	//}
-
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
 	if !ok {
 		return nil, 0, errors.New("token manager not found: " + conf.TokenStrategy)
@@ -114,15 +108,7 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 
 		span.AddAttributes(trace.BoolAttribute("auth_enabled", true))
 
-		var tkn string
-		md, ok := metadata.FromIncomingContext(ctx)
-		if ok && md != nil {
-			if val, ok := md[conf.Header]; ok {
-				if len(val) > 0 && val[0] != "" {
-					tkn = val[0]
-				}
-			}
-		}
+		tkn, _ := token.ContextGetToken(ctx)
 
 		if tkn == "" {
 			log.Warn().Msg("access token not found")
@@ -143,13 +129,11 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		}
 
 		// store user and core access token in context.
-		/*
-			span.AddAttributes(
-				trace.StringAttribute("id.idp", u.Id.Idp),
-				trace.StringAttribute("id.opaque_id", u.Id.OpaqueId),
-				trace.StringAttribute("username", u.Username),
-				trace.StringAttribute("token", tkn))
-		*/
+		span.AddAttributes(
+			trace.StringAttribute("id.idp", u.Id.Idp),
+			trace.StringAttribute("id.opaque_id", u.Id.OpaqueId),
+			trace.StringAttribute("username", u.Username),
+			trace.StringAttribute("token", tkn))
 		span.AddAttributes(trace.StringAttribute("user", u.String()), trace.StringAttribute("token", tkn))
 
 		ctx = user.ContextSetUser(ctx, u)
@@ -190,15 +174,7 @@ func NewStream(m map[string]interface{}) (grpc.StreamServerInterceptor, int, err
 			return handler(srv, ss)
 		}
 
-		var tkn string
-		md, ok := metadata.FromIncomingContext(ss.Context())
-		if ok && md != nil {
-			if val, ok := md[conf.Header]; ok {
-				if len(val) > 0 && val[0] != "" {
-					tkn = val[0]
-				}
-			}
-		}
+		tkn, _ := token.ContextGetToken(ctx)
 
 		if tkn == "" {
 			log.Warn().Msg("access token not found")

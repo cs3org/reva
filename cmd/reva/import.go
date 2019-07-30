@@ -34,20 +34,19 @@ import (
 func importCommand() *command {
 	cmd := newCommand("import")
 	cmd.Description = func() string { return "import metadata" }
-	cmd.Usage = func() string { return "Usage: import [-flags] <provider> <user export folder>" }
+	cmd.Usage = func() string { return "Usage: import [-flags] <user export folder>" }
 	cmd.Action = func() error {
-		if cmd.NArg() < 2 {
+		if cmd.NArg() < 1 {
 			fmt.Println(cmd.Usage())
 			os.Exit(1)
 		}
-		provider := cmd.Args()[0]
-		f := cmd.Args()[1]
+		f := cmd.Args()[0]
 
-		sClient, err := getStorageProviderClient(provider)
+		sClient, err := getStorageProviderClient()
 		if err != nil {
 			return err
 		}
-		uClient, err := getUserShareProviderClient(provider)
+		uClient, err := getUserShareProviderClient()
 		if err != nil {
 			return err
 		}

@@ -31,16 +31,15 @@ func statCommand() *command {
 	cmd.Description = func() string { return "get the metadata for a file or folder" }
 	cmd.Usage = func() string { return "Usage: stat [-flags] <file_name>" }
 	cmd.Action = func() error {
-		if cmd.NArg() < 2 {
+		if cmd.NArg() < 1 {
 			fmt.Println(cmd.Usage())
 			os.Exit(1)
 		}
 
-		provider := cmd.Args()[0]
-		fn := cmd.Args()[1]
+		fn := cmd.Args()[0]
 
 		ctx := getAuthContext()
-		client, err := getStorageProviderClient(provider)
+		client, err := getStorageProviderClient()
 		if err != nil {
 			return err
 		}

@@ -31,17 +31,16 @@ func moveCommand() *command {
 	cmd.Description = func() string { return "moves/rename a file/folder" }
 	cmd.Usage = func() string { return "Usage: mv [-flags] <source> <destination>" }
 	cmd.Action = func() error {
-		if cmd.NArg() < 3 {
+		if cmd.NArg() < 2 {
 			fmt.Println(cmd.Usage())
 			os.Exit(1)
 		}
 
-		provider := cmd.Args()[0]
-		src := cmd.Args()[1]
-		dst := cmd.Args()[2]
+		src := cmd.Args()[0]
+		dst := cmd.Args()[1]
 
 		ctx := getAuthContext()
-		client, err := getStorageProviderClient(provider)
+		client, err := getStorageProviderClient()
 		if err != nil {
 			return err
 		}

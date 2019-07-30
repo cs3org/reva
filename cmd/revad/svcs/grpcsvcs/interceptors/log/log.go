@@ -22,37 +22,18 @@ import (
 	"context"
 	"time"
 
-	"google.golang.org/grpc/metadata"
-
-	"google.golang.org/grpc/peer"
-
-	"google.golang.org/grpc/codes"
-
-	"github.com/cs3org/reva/cmd/revad/grpcserver"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
 
-func init() {
-	grpcserver.RegisterUnaryInterceptor("log", NewUnary)
-	grpcserver.RegisterStreamInterceptor("log", NewStream)
-}
-
-type config struct {
-	Priority int `mapstructure:"priority"`
-}
-
 // NewUnary returns a new unary interceptor
 // that logs grpc calls.
-func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error) {
-	conf := &config{}
-	if err := mapstructure.Decode(m, conf); err != nil {
-		return nil, 0, err
-	}
-
+func NewUnary() grpc.UnaryServerInterceptor {
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		start := time.Now()
 		res, err := handler(ctx, req)
@@ -89,17 +70,12 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 
 		return res, err
 	}
-	return interceptor, conf.Priority, nil
+	return interceptor
 }
 
 // NewStream returns a new server stream interceptor
 // that adds trace information to the request.
-func NewStream(m map[string]interface{}) (grpc.StreamServerInterceptor, int, error) {
-	conf := &config{}
-	if err := mapstructure.Decode(m, conf); err != nil {
-		return nil, 0, err
-	}
-
+func NewStream() grpc.StreamServerInterceptor {
 	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		start := time.Now()
 		err := handler(srv, ss)
@@ -136,5 +112,5 @@ func NewStream(m map[string]interface{}) (grpc.StreamServerInterceptor, int, err
 
 		return err
 	}
-	return interceptor, conf.Priority, nil
+	return interceptor
 }

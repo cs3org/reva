@@ -23,10 +23,6 @@ import (
 	"fmt"
 	"log"
 
-	"google.golang.org/grpc/metadata"
-
-	"github.com/pkg/errors"
-
 	appproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/appprovider/v0alpha"
 	appregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/appregistry/v0alpha"
 	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
@@ -35,9 +31,14 @@ import (
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	storageregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageregistry/v0alpha"
 	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
-
+	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
+	"github.com/cs3org/reva/pkg/token"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 )
+
+const defaultHeader = "x-access-token"
 
 func getAuthContext() context.Context {
 	ctx := context.Background()
@@ -47,7 +48,8 @@ func getAuthContext() context.Context {
 		log.Println(err)
 		return ctx
 	}
-	ctx = metadata.AppendToOutgoingContext(ctx, "x-access-token", t)
+	ctx = token.ContextSetToken(ctx, t)
+	ctx = metadata.AppendToOutgoingContext(ctx, defaultHeader, t)
 	return ctx
 }
 
@@ -74,20 +76,16 @@ func getAppRegistryClient() (appregistryv0alphapb.AppRegistryServiceClient, erro
 	return appregistryv0alphapb.NewAppRegistryServiceClient(conn), nil
 }
 
-func getUserShareProviderClient(host string) (usershareproviderv0alphapb.UserShareProviderServiceClient, error) {
-	conn, err := getConnToHost(host)
+func getUserShareProviderClient() (usershareproviderv0alphapb.UserShareProviderServiceClient, error) {
+	conn, err := getConn()
 	if err != nil {
 		return nil, err
 	}
 	return usershareproviderv0alphapb.NewUserShareProviderServiceClient(conn), nil
 }
 
-func getStorageProviderClient(host string) (storageproviderv0alphapb.StorageProviderServiceClient, error) {
-	conn, err := getConnToHost(host)
-	if err != nil {
-		return nil, err
-	}
-	return storageproviderv0alphapb.NewStorageProviderServiceClient(conn), nil
+func getStorageProviderClient() (storageproviderv0alphapb.StorageProviderServiceClient, error) {
+	return pool.GetStorageProviderServiceClient(conf.Host)
 }
 
 func getAuthClient() (authv0alphapb.AuthServiceClient, error) {

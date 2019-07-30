@@ -9,23 +9,11 @@ disable_http = true
 level = "debug"
 mode = "console"
 
-[http]
-address = "0.0.0.0:2000"
 [grpc]
 network = "tcp"
 address = "0.0.0.0:10000"
-access_log = "stderr"
 enabled_services = ["gatewaysvc"]
-enabled_interceptors = ["log"]
-
-[grpc.interceptors.recovery]
-priority = 100
-
-[grpc.interceptors.log]
-priority = 200
-
-[grpc.interceptors.prometheus]
-priority = 300
 
 [grpc.services.gatewaysvc]
 storageregistrysvc = "localhost:9999"
+authsvc = "localhost:9999"
