@@ -33,16 +33,16 @@ func init() {
 }
 
 type config struct {
-	Prefix         string `mapstructure:"prefix"`
-	Preferencessvc string `mapstructure:"preferencessvc"`
+	Prefix     string `mapstructure:"prefix"`
+	GatewaySvc string `mapstructure:"gatewaysvc"`
 }
 
 type svc struct {
-	prefix         string
-	handler        http.Handler
-	PreferencesSvc string
-	conn           *grpc.ClientConn
-	client         preferencesv0alphapb.PreferencesServiceClient
+	prefix     string
+	handler    http.Handler
+	GatewaySvc string
+	conn       *grpc.ClientConn
+	client     preferencesv0alphapb.PreferencesServiceClient
 }
 
 // New returns a new webuisvc
@@ -53,7 +53,7 @@ func New(m map[string]interface{}) (httpsvcs.Service, error) {
 	}
 
 	s := &svc{prefix: conf.Prefix,
-		PreferencesSvc: conf.Preferencessvc,
+		GatewaySvc: conf.GatewaySvc,
 	}
 	s.setHandler()
 	return s, nil
@@ -93,7 +93,7 @@ func (s *svc) getConn() (*grpc.ClientConn, error) {
 		return s.conn, nil
 	}
 
-	conn, err := grpc.Dial(s.PreferencesSvc, grpc.WithInsecure())
+	conn, err := grpc.Dial(s.GatewaySvc, grpc.WithInsecure())
 	if err != nil {
 		return nil, err
 	}

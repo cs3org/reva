@@ -27,6 +27,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	defaultHeader = "X-Access-Token"
+)
+
 func init() {
 	registry.Register("header", New)
 }
@@ -44,6 +48,11 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
 	}
+
+	if c.Header == "" {
+		c.Header = defaultHeader
+	}
+
 	return c, nil
 }
 

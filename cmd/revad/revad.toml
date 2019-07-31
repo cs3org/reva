@@ -2,7 +2,7 @@
 log_file = "stderr"
 log_mode = "dev"
 max_cpus = "100%"
-tracing_enabled = false
+tracing_enabled = true
 
 [log]
 level = "debug"
@@ -10,17 +10,12 @@ mode = "console"
 
 [http]
 enabled_services = ["appregistrysvc","prometheussvc", "ocdavsvc", "datasvc","preferencessvc"]
-enabled_middlewares = ["cors", "log", "auth"]
+enabled_middlewares = ["cors", "auth", "log"]
 network = "tcp"
 address = "0.0.0.0:9998"
 
-
-[http.middlewares.log]
-priority = 200
-
 [http.middlewares.auth]
-priority = 300
-authsvc = "0.0.0.0:9999"
+gatewaysvc = "0.0.0.0:9999"
 credential_strategy = "basic"
 token_strategy = "header"
 token_writer = "header"
@@ -30,22 +25,13 @@ skip_methods = ["/owncloud/status.php", "/metrics"]
 [http.middlewares.auth.token_managers.jwt]
 secret = "Pive-Fumkiu4"
 
-[http.middlewares.auth.token_strategies.header]
-header = "X-Access-Token"
-
-[http.middlewares.auth.token_writers.header]
-header = "X-Access-Token"
-
-[http.middlewares.cors]
-priority = 400
-
 [http.services.appregistrysvc]
 prefix = "appregistry"
-appregistrysvc = "localhost:9999"
+gatewaysvc = "localhost:9999"
 
 [http.services.preferencessvc]
 prefix = "preferences"
-preferencessvc = "localhost:9999"
+gatewaysvc = "localhost:9999"
 
 [http.services.prometheussvc]
 prefix = "metrics"
@@ -58,8 +44,8 @@ prefix = "ui"
 
 [http.services.ocdavsvc]
 prefix = "owncloud"
-chunk_folder = "/var/tmp/owncloud/chunks"
-storageprovidersvc = "localhost:10000"
+chunk_folder = "/var/tmp/revad/chunks"
+gatewaysvc = "localhost:9999"
 enable_cors = true
 
 [http.services.datasvc]
@@ -67,24 +53,16 @@ driver = "local"
 prefix = "data"
 temp_folder = "/var/tmp/"
 
-[http.services.datasvc.drivers.eos]
-mgm = "root://nowhere.org"
-root_uid = 0
-root_gid = 0
-
 [http.services.datasvc.drivers.local]
-root = "/var/tmp/owncloud/data"
+root = "/var/tmp/reva/data"
 
 [grpc]
 network = "tcp"
 address = "0.0.0.0:9999"
-access_log = "stderr"
 enabled_services = ["storageprovidersvc", "authsvc", "storageregistrysvc", "appregistrysvc", "appprovidersvc", "preferencessvc"]
 enabled_interceptors = ["auth"]
 
 [grpc.interceptors.auth]
-priority = 100
-header = "x-access-token"
 token_manager = "jwt"
 skip_methods = ["/cs3.authv0alpha.AuthService/GenerateAccessToken"]
 
@@ -102,7 +80,7 @@ md5   = 100
 unset = 1000
 
 [grpc.services.storageprovidersvc.drivers.local]
-root = "/var/tmp/owncloud/data"
+root = "/var/tmp/reva/data"
 
 [grpc.services.authsvc]
 auth_manager = "demo"

@@ -24,6 +24,10 @@ import (
 	"github.com/rs/cors"
 )
 
+const (
+	defaultPriority = 200
+)
+
 func init() {
 	httpserver.RegisterMiddleware("cors", New)
 }
@@ -44,6 +48,10 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, 0, err
+	}
+
+	if conf.Priority == 0 {
+		conf.Priority = defaultPriority
 	}
 
 	c := cors.New(cors.Options{

@@ -20,6 +20,7 @@ package utils
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -28,6 +29,10 @@ import (
 	"github.com/cs3org/reva/pkg/token"
 	"github.com/pkg/errors"
 	"go.opencensus.io/plugin/ochttp"
+)
+
+const (
+	defaultAccessHeader = "X-Access-Token"
 )
 
 // TSToUnixNano converts a protobuf Timestamp to uint64
@@ -61,8 +66,9 @@ func NewRequest(ctx context.Context, method, url string, body io.Reader) (*http.
 
 	// TODO(labkode): make header / auth configurable
 	tkn, ok := token.ContextGetToken(ctx)
+	fmt.Println("hugo: ", tkn, ok)
 	if ok {
-		httpReq.Header.Set("X-Access-Token", tkn)
+		httpReq.Header.Set(defaultAccessHeader, tkn)
 	}
 
 	httpReq = httpReq.WithContext(ctx)

@@ -39,6 +39,11 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+const (
+	defaultHeader   = "x-access-token"
+	defaultPriority = 100
+)
+
 func init() {
 	httpserver.RegisterMiddleware("auth", New)
 }
@@ -47,7 +52,7 @@ var authClient authv0alphapb.AuthServiceClient
 
 type config struct {
 	Priority             int                               `mapstructure:"priority"`
-	AuthSVC              string                            `mapstructure:"authsvc"`
+	GatewaySvc           string                            `mapstructure:"gatewaysvc"`
 	CredentialStrategy   string                            `mapstructure:"credential_strategy"`
 	CredentialStrategies map[string]map[string]interface{} `mapstructure:"credential_strategies"`
 	TokenStrategy        string                            `mapstructure:"token_strategy"`
@@ -82,6 +87,10 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 	conf, err := parseConfig(m)
 	if err != nil {
 		return nil, 0, err
+	}
+
+	if conf.Priority == 0 {
+		conf.Priority = defaultPriority
 	}
 
 	f, ok := registry.NewCredentialFuncs[conf.CredentialStrategy]
@@ -158,7 +167,7 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 					ClientSecret: creds.ClientSecret,
 				}
 
-				client, err := pool.GetAuthServiceClient(conf.AuthSVC)
+				client, err := pool.GetAuthServiceClient(conf.GatewaySvc)
 				if err != nil {
 					log.Error().Err(err).Msg("error getting the authsvc client")
 					w.WriteHeader(http.StatusUnauthorized)
@@ -203,7 +212,7 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 			// store user and core access token in context.
 			ctx := user.ContextSetUser(r.Context(), u)
 			ctx = token.ContextSetToken(ctx, tkn)
-			ctx = metadata.AppendToOutgoingContext(ctx, "x-access-token", tkn) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
+			ctx = metadata.AppendToOutgoingContext(ctx, defaultHeader, tkn) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
 
 			r = r.WithContext(ctx)
 			h.ServeHTTP(w, r)

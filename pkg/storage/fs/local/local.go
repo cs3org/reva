@@ -308,7 +308,7 @@ func (fs *localFS) Upload(ctx context.Context, ref *storageproviderv0alphapb.Ref
 func (fs *localFS) Download(ctx context.Context, ref *storageproviderv0alphapb.Reference) (io.ReadCloser, error) {
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return nil, errors.Wrap(err, "error resolving ref")
+		return nil, errors.Wrap(err, "localfs: error resolving ref")
 	}
 
 	r, err := os.Open(fn)
@@ -350,5 +350,5 @@ type notFoundError string
 
 func (e notSupportedError) Error() string   { return string(e) }
 func (e notSupportedError) IsNotSupported() {}
-func (e notFoundError) Error() string       { return string(e) }
+func (e notFoundError) Error() string       { return "not found: " + string(e) }
 func (e notFoundError) IsNotFound()         {}

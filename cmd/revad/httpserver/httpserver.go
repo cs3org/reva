@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/handlers/appctx"
+	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/handlers/log"
 
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
 
@@ -271,14 +272,20 @@ func (s *Server) getHandler() http.Handler {
 		return s.middlewares[i].Priority > s.middlewares[j].Priority
 	})
 
-	// add always the logctx middleware as most priority, this middleware is internal
-	// and cannot be configured from the configuration.
-	s.middlewares = append(s.middlewares, &middlewareTriple{Middleware: appctx.New(s.log), Name: "appctx"})
-
 	handler := http.Handler(h)
 
 	for _, triple := range s.middlewares {
 		s.log.Info().Msgf("chainning http middleware %s with priority  %d", triple.Name, triple.Priority)
+		handler = triple.Middleware(traceHandler(triple.Name, handler))
+	}
+
+	// add always the logctx middleware as most priority, this middleware is internal
+	// and cannot be configured from the configuration.
+	coreMiddlewares := []*middlewareTriple{}
+	coreMiddlewares = append(coreMiddlewares, &middlewareTriple{Middleware: log.New(), Name: "log"})
+	coreMiddlewares = append(coreMiddlewares, &middlewareTriple{Middleware: appctx.New(s.log), Name: "appctx"})
+
+	for _, triple := range coreMiddlewares {
 		handler = triple.Middleware(traceHandler(triple.Name, handler))
 	}
 
