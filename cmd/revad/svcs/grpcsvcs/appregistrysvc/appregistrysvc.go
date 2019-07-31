@@ -88,6 +88,7 @@ func getRegistry(c *config) (app.Registry, error) {
 		return nil, fmt.Errorf("driver not found: %s", c.Driver)
 	}
 }
+
 func (s *service) GetAppProvider(ctx context.Context, req *appregistryv0alphapb.GetAppProviderRequest) (*appregistryv0alphapb.GetAppProviderResponse, error) {
 	log := appctx.GetLogger(ctx)
 	mime := req.MimeType
