@@ -66,7 +66,6 @@ func NewRequest(ctx context.Context, method, url string, body io.Reader) (*http.
 
 	// TODO(labkode): make header / auth configurable
 	tkn, ok := token.ContextGetToken(ctx)
-	fmt.Println("hugo: ", tkn, ok)
 	if ok {
 		httpReq.Header.Set(defaultAccessHeader, tkn)
 	}

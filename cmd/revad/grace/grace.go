@@ -367,7 +367,6 @@ func forkChild(lns map[string]net.Listener) (*os.Process, error) {
 	execDir := filepath.Dir(execName)
 
 	// Spawn child process.
-	fmt.Println(execName, os.Args)
 	p, err := os.StartProcess(execName, os.Args, &os.ProcAttr{
 		Dir:   execDir,
 		Env:   environment,
