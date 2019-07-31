@@ -28,22 +28,22 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (s *svc) GetAppProvider(ctx context.Context, req *appregistryv0alphapb.GetAppProviderRequest) (*appregistryv0alphapb.GetAppProviderResponse, error) {
+func (s *svc) GetAppProviders(ctx context.Context, req *appregistryv0alphapb.GetAppProvidersRequest) (*appregistryv0alphapb.GetAppProvidersResponse, error) {
 	log := appctx.GetLogger(ctx)
 
 	c, err := pool.GetAppRegistryClient(s.c.AppRegistryEndpoint)
 	if err != nil {
 		log.Err(err).Msg("gatewaysvc: error getting appregistry client")
-		return &appregistryv0alphapb.GetAppProviderResponse{
+		return &appregistryv0alphapb.GetAppProvidersResponse{
 			Status: &rpcpb.Status{
 				Code: rpcpb.Code_CODE_INTERNAL,
 			},
 		}, nil
 	}
 
-	res, err := c.GetAppProvider(ctx, req)
+	res, err := c.GetAppProviders(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling GetAppProvider")
+		return nil, errors.Wrap(err, "gatewaysvc: error calling GetAppProviders")
 	}
 
 	return res, nil

@@ -20,12 +20,11 @@ package main
 
 import (
 	"fmt"
-	"mime"
 	"os"
-	"path"
 
 	appregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/appregistry/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
+	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 )
 
 func appRegistryFindCommand() *command {
@@ -41,18 +40,18 @@ func appRegistryFindCommand() *command {
 		}
 
 		fn := cmd.Args()[0]
-		ext := path.Ext(fn)
-		mime := mime.TypeByExtension(ext)
-		req := &appregistryv0alphapb.GetAppProviderRequest{
-			MimeType: mime,
-		}
 
-		client, err := getAppRegistryClient()
+		ctx := getAuthContext()
+		client, err := getStorageProviderClient()
 		if err != nil {
 			return err
 		}
-		ctx := getAuthContext()
-		res, err := client.GetAppProvider(ctx, req)
+
+		ref := &storageproviderv0alphapb.Reference{
+			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+		}
+		req := &storageproviderv0alphapb.StatRequest{Ref: ref}
+		res, err := client.Stat(ctx, req)
 		if err != nil {
 			return err
 		}
@@ -61,7 +60,28 @@ func appRegistryFindCommand() *command {
 			return formatError(res.Status)
 		}
 
-		fmt.Printf("application provider can be found at %s\n", res.Provider.Address)
+		req2 := &appregistryv0alphapb.GetAppProvidersRequest{
+			ResourceInfo: res.Info,
+		}
+
+		client2, err := getAppRegistryClient()
+		if err != nil {
+			return err
+		}
+
+		res2, err := client2.GetAppProviders(ctx, req2)
+		if err != nil {
+			return err
+		}
+
+		if res2.Status.Code != rpcpb.Code_CODE_OK {
+			return formatError(res2.Status)
+		}
+
+		for _, p := range res2.Providers {
+			fmt.Printf("%s\n", p.Address)
+		}
+
 		return nil
 	}
 	return cmd

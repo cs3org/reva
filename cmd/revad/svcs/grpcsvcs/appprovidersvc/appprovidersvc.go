@@ -22,16 +22,13 @@ import (
 	"context"
 	"fmt"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	"google.golang.org/grpc"
-
 	appproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/appprovider/v0alpha"
+	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/provider/demo"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/mitchellh/mapstructure"
-
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	"google.golang.org/grpc"
 )
 
 type service struct {
@@ -80,14 +77,12 @@ func getProvider(c *config) (app.Provider, error) {
 		return nil, fmt.Errorf("driver not found: %s", c.Driver)
 	}
 }
+
 func (s *service) Open(ctx context.Context, req *appproviderv0alphapb.OpenRequest) (*appproviderv0alphapb.OpenResponse, error) {
 	log := appctx.GetLogger(ctx)
-	id := req.ResourceId
 	token := req.AccessToken
 
-	resID := &storageproviderv0alphapb.ResourceId{OpaqueId: id.OpaqueId, StorageId: id.StorageId}
-
-	iframeLocation, err := s.provider.GetIFrame(ctx, resID, token)
+	iframeLocation, err := s.provider.GetIFrame(ctx, req.ResourceInfo.Id, token)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting iframe")
 		res := &appproviderv0alphapb.OpenResponse{

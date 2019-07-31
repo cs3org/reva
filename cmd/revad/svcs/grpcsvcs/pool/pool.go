@@ -19,6 +19,7 @@
 package pool
 
 import (
+	appproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/appprovider/v0alpha"
 	appregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/appregistry/v0alpha"
 	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	preferencesv0alphapb "github.com/cs3org/go-cs3apis/cs3/preferences/v0alpha"
@@ -38,6 +39,7 @@ var userShareProviders = map[string]usershareproviderv0alphapb.UserShareProvider
 var publicShareProviders = map[string]publicshareproviderv0alphapb.PublicShareProviderServiceClient{}
 var preferencesProviders = map[string]preferencesv0alphapb.PreferencesServiceClient{}
 var appRegistries = map[string]appregistryv0alphapb.AppRegistryServiceClient{}
+var appProviders = map[string]appproviderv0alphapb.AppProviderServiceClient{}
 var storageRegistries = map[string]storageregistryv0alphapb.StorageRegistryServiceClient{}
 
 // NewConn creates a new connection to a grpc server
@@ -146,6 +148,22 @@ func GetAppRegistryClient(endpoint string) (appregistryv0alphapb.AppRegistryServ
 	appRegistries[endpoint] = appregistryv0alphapb.NewAppRegistryServiceClient(conn)
 
 	return appRegistries[endpoint], nil
+}
+
+// GetAppProviderClient returns a new AppRegistryClient.
+func GetAppProviderClient(endpoint string) (appproviderv0alphapb.AppProviderServiceClient, error) {
+	if val, ok := appProviders[endpoint]; ok {
+		return val, nil
+	}
+
+	conn, err := NewConn(endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	appProviders[endpoint] = appproviderv0alphapb.NewAppProviderServiceClient(conn)
+
+	return appProviders[endpoint], nil
 }
 
 // GetStorageRegistryClient returns a new StorageRegistryClient.
