@@ -26,7 +26,6 @@ import (
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/interceptors/log"
 
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/interceptors/appctx"
-	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/interceptors/prometheus"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/interceptors/recovery"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/interceptors/token"
 
@@ -243,7 +242,7 @@ func (s *Server) getInterceptors() ([]grpc.ServerOption, error) {
 		unaryInterceptors = append(unaryInterceptors, t.Interceptor)
 		s.log.Info().Msgf("chainning grpc unary interceptor %s with priority %d", t.Name, t.Priority)
 	}
-	unaryInterceptors = append([]grpc.UnaryServerInterceptor{prometheus.NewUnary(), appctx.NewUnary(s.log), token.NewUnary(), log.NewUnary(), recovery.NewUnary()}, unaryInterceptors...)
+	unaryInterceptors = append([]grpc.UnaryServerInterceptor{appctx.NewUnary(s.log), token.NewUnary(), log.NewUnary(), recovery.NewUnary()}, unaryInterceptors...)
 	unaryChain := grpc_middleware.ChainUnaryServer(unaryInterceptors...)
 
 	streamTriples := []*streamInterceptorTriple{}
@@ -272,7 +271,7 @@ func (s *Server) getInterceptors() ([]grpc.ServerOption, error) {
 		s.log.Info().Msgf("chainning grpc streaming interceptor %s with priority %d", t.Name, t.Priority)
 	}
 
-	streamInterceptors = append([]grpc.StreamServerInterceptor{prometheus.NewStream(), appctx.NewStream(s.log), token.NewStream(), log.NewStream(), recovery.NewStream()}, streamInterceptors...)
+	streamInterceptors = append([]grpc.StreamServerInterceptor{appctx.NewStream(s.log), token.NewStream(), log.NewStream(), recovery.NewStream()}, streamInterceptors...)
 	streamChain := grpc_middleware.ChainStreamServer(streamInterceptors...)
 
 	opts := []grpc.ServerOption{

@@ -28,16 +28,18 @@ import (
 	"strings"
 	"syscall"
 
+	"contrib.go.opencensus.io/exporter/jaeger"
+	"github.com/cs3org/reva/cmd/revad/config"
 	"github.com/cs3org/reva/cmd/revad/grace"
 	"github.com/cs3org/reva/cmd/revad/grpcserver"
 	"github.com/cs3org/reva/cmd/revad/httpserver"
-
-	"contrib.go.opencensus.io/exporter/jaeger"
-	"github.com/cs3org/reva/cmd/revad/config"
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"go.opencensus.io/plugin/ocgrpc"
+	"go.opencensus.io/plugin/ochttp"
+	"go.opencensus.io/stats/view"
 	"go.opencensus.io/trace"
 )
 
@@ -75,8 +77,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := configureTracing(coreConf); err != nil {
-		log.Error().Err(err).Msg("error configuring tracing")
+	if err := setupOpenCensus(coreConf); err != nil {
+		log.Error().Err(err).Msg("error configuring open census stats and tracing")
 		watcher.Exit(1)
 	}
 
@@ -271,7 +273,15 @@ func handleConfigFlagOrDie() map[string]interface{} {
 	return v
 }
 
-func configureTracing(conf *coreConf) error {
+func setupOpenCensus(conf *coreConf) error {
+	if err := view.Register(ochttp.DefaultServerViews...); err != nil {
+		return err
+	}
+
+	if err := view.Register(ocgrpc.DefaultServerViews...); err != nil {
+		return err
+	}
+
 	if !conf.TracingEnabled {
 		return nil
 	}

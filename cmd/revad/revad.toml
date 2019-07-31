@@ -9,8 +9,8 @@ level = "debug"
 mode = "console"
 
 [http]
-enabled_services = ["appregistrysvc","prometheussvc", "ocdavsvc", "datasvc","preferencessvc"]
-enabled_middlewares = ["cors", "auth", "log"]
+enabled_services = ["appregistrysvc", "ocdavsvc", "datasvc","preferencessvc", "prometheussvc"]
+enabled_middlewares = ["cors", "auth"]
 network = "tcp"
 address = "0.0.0.0:9998"
 
@@ -32,9 +32,6 @@ gatewaysvc = "localhost:9999"
 [http.services.preferencessvc]
 prefix = "preferences"
 gatewaysvc = "localhost:9999"
-
-[http.services.prometheussvc]
-prefix = "metrics"
 
 [http.services.iframeuisvc]
 prefix = "iframe"

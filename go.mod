@@ -2,6 +2,7 @@ module github.com/cs3org/reva
 
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.1.0
+	contrib.go.opencensus.io/exporter/prometheus v0.1.0
 	github.com/BurntSushi/toml v0.3.1
 	github.com/aws/aws-sdk-go v1.21.6
 	github.com/cheggaaa/pb v1.0.28
@@ -12,7 +13,6 @@ require (
 	github.com/gofrs/uuid v3.2.0+incompatible
 	github.com/gogo/protobuf v1.2.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.0.1-0.20190118093823-f849b5445de4
-	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/mattn/go-colorable v0.0.9 // indirect
 	github.com/mattn/go-isatty v0.0.4 // indirect
 	github.com/mattn/go-runewidth v0.0.4 // indirect
