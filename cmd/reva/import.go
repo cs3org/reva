@@ -26,10 +26,15 @@ import (
 	"os"
 	"path"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
 )
+
+var ocPermToRole = map[float64]string{
+	1:  "viewer",
+	15: "co-owner",
+	31: "editor",
+}
 
 func importCommand() *command {
 	cmd := newCommand("import")
@@ -60,13 +65,13 @@ func importCommand() *command {
 		// see https://github.com/owncloud/data_exporter/issues/77#issuecomment-507582067 for the import file layout
 		// the concrete format still needs to be determined
 
-		file, err := os.Open(path.Join(f, "files.jsonl"))
+		shares, err := os.Open(path.Join(f, "shares.jsonl"))
 		if err != nil {
 			log.Fatal(err)
 		}
-		defer file.Close()
+		defer shares.Close()
 
-		dec := json.NewDecoder(file)
+		dec := json.NewDecoder(shares)
 
 		for {
 			var j map[string]interface{}
@@ -77,94 +82,82 @@ func importCommand() *command {
 				log.Fatal(err)
 				return err
 			}
-			fn := path.Join("/", path.Base(f), j["path"].(string))
 
-			sReq := &storageproviderv0alphapb.StatRequest{
-				Ref: &storageproviderv0alphapb.Reference{
-					Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
-				},
-			}
-			sRes, err := sClient.Stat(ctx, sReq)
-			if err != nil {
-				// TODO log that a file does not exist
-				log.Fatal(err)
-				return err
-			}
-			if sRes.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
-				// TODO log that a file does not exist
-				log.Print("file does not exist: " + fn)
-				continue
-			}
+			for range j {
+				fn := path.Join("/", path.Base(f), j["path"].(string))
+				sReq := &storageproviderv0alphapb.StatRequest{
+					Ref: &storageproviderv0alphapb.Reference{
+						Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+					},
+				}
+				sRes, err := sClient.Stat(ctx, sReq)
+				info := sRes.Info
 
-			info := sRes.Info
-
-			if j["shares"] != nil {
 				// update shares
-				for _, s := range j["shares"].([]interface{}) {
-					share := s.(map[string]interface{})
-					role := share["role"].(string)
-					permissions := &storageproviderv0alphapb.ResourcePermissions{}
+				//share := share.(map[string]interface{})
+				perms := j["permissions"].(float64)
 
-					// TODO use roles mapping to map to permissions
-					switch role {
-					case "viewer":
-						permissions.Stat = true
-						permissions.ListContainer = true
-						permissions.InitiateFileDownload = true
+				//map owncloud perm to role
+				role := ocPermToRole[perms]
+				permissions := &storageproviderv0alphapb.ResourcePermissions{}
 
-						permissions.ListGrants = true
-					case "editor":
-						permissions.Stat = true
-						permissions.ListContainer = true
-						permissions.InitiateFileDownload = true
+				switch role {
+				case "viewer":
+					permissions.Stat = true
+					permissions.ListContainer = true
+					permissions.InitiateFileDownload = true
 
-						permissions.CreateContainer = true
-						permissions.InitiateFileUpload = true
-						permissions.Delete = true
-						permissions.Move = true
+					permissions.ListGrants = true
+				case "editor":
+					permissions.Stat = true
+					permissions.ListContainer = true
+					permissions.InitiateFileDownload = true
 
-						permissions.ListGrants = true
-					case "co-owner":
-						permissions.Stat = true
-						permissions.ListContainer = true
-						permissions.InitiateFileDownload = true
+					permissions.CreateContainer = true
+					permissions.InitiateFileUpload = true
+					permissions.Delete = true
+					permissions.Move = true
 
-						permissions.CreateContainer = true
-						permissions.InitiateFileUpload = true
-						permissions.Delete = true
-						permissions.Move = true
+					permissions.ListGrants = true
+				case "co-owner":
+					permissions.Stat = true
+					permissions.ListContainer = true
+					permissions.InitiateFileDownload = true
 
-						permissions.ListGrants = true
-						permissions.AddGrant = true
-						permissions.RemoveGrant = true
-						permissions.UpdateGrant = true
-					}
-					user := share["user"].(string)
-					shareID := "u:" + user + "@" + info.GetId().OpaqueId
-					uReq := &usershareproviderv0alphapb.UpdateShareRequest{
-						Ref: &usershareproviderv0alphapb.ShareReference{
-							Spec: &usershareproviderv0alphapb.ShareReference_Id{
-								Id: &usershareproviderv0alphapb.ShareId{
-									OpaqueId: shareID,
-								},
+					permissions.CreateContainer = true
+					permissions.InitiateFileUpload = true
+					permissions.Delete = true
+					permissions.Move = true
+
+					permissions.ListGrants = true
+					permissions.AddGrant = true
+					permissions.RemoveGrant = true
+					permissions.UpdateGrant = true
+				}
+				user := j["sharedBy"].(string)
+				shareID := "u:" + user + "@" + info.GetId().OpaqueId
+				uReq := &usershareproviderv0alphapb.UpdateShareRequest{
+					Ref: &usershareproviderv0alphapb.ShareReference{
+						Spec: &usershareproviderv0alphapb.ShareReference_Id{
+							Id: &usershareproviderv0alphapb.ShareId{
+								OpaqueId: shareID,
 							},
 						},
-						Field: &usershareproviderv0alphapb.UpdateShareRequest_UpdateField{
-							Field: &usershareproviderv0alphapb.UpdateShareRequest_UpdateField_Permissions{
-								Permissions: &usershareproviderv0alphapb.SharePermissions{
-									// this completely overwrites the permissions for this user
-									Permissions: permissions,
-								},
+					},
+					Field: &usershareproviderv0alphapb.UpdateShareRequest_UpdateField{
+						Field: &usershareproviderv0alphapb.UpdateShareRequest_UpdateField_Permissions{
+							Permissions: &usershareproviderv0alphapb.SharePermissions{
+								// this completely overwrites the permissions for this user
+								Permissions: permissions,
 							},
 						},
-					}
-					_, err := uClient.UpdateShare(ctx, uReq)
-					if err != nil {
-						return err
-					}
+					},
+				}
+				_, err = uClient.UpdateShare(ctx, uReq)
+				if err != nil {
+					return err
 				}
 			}
-
 		}
 
 		return nil
