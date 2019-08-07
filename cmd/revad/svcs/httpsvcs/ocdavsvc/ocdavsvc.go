@@ -19,18 +19,14 @@
 package ocdavsvc
 
 import (
-	"context"
 	"net/http"
-	"net/url"
 	"os"
-	"path"
 
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/httpserver"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -44,22 +40,24 @@ func init() {
 	httpserver.Register("ocdavsvc", New)
 }
 
-type config struct {
+// Config holds the config options that need to be passed down to all ocdav handlers
+type Config struct {
 	Prefix      string `mapstructure:"prefix"`
 	ChunkFolder string `mapstructure:"chunk_folder"`
 	GatewaySvc  string `mapstructure:"gatewaysvc"`
 }
 
 type svc struct {
-	prefix      string
-	chunkFolder string
-	handler     http.Handler
-	gatewaySvc  string
+	c             *Config
+	handler       http.Handler
+	webDavHandler *WebDavHandler
+	davHandler    *DavHandler
+	gatewaySvc    string
 }
 
 // New returns a new ocdavsvc
 func New(m map[string]interface{}) (httpsvcs.Service, error) {
-	conf := &config{}
+	conf := &Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
 	}
@@ -73,28 +71,27 @@ func New(m map[string]interface{}) (httpsvcs.Service, error) {
 	}
 
 	s := &svc{
-		prefix:      conf.Prefix,
-		gatewaySvc:  conf.GatewaySvc,
-		chunkFolder: conf.ChunkFolder,
+		c:             conf,
+		webDavHandler: new(WebDavHandler),
+		davHandler:    new(DavHandler),
 	}
-	s.setHandler()
+	// initialize handlers and set default configs
+	if err := s.davHandler.init(conf); err != nil {
+		return nil, err
+	}
 	return s, nil
 }
 
 func (s *svc) Prefix() string {
-	return s.prefix
-}
-
-func (s *svc) Handler() http.Handler {
-	return s.handler
+	return s.c.Prefix
 }
 
 func (s *svc) Close() error {
 	return nil
 }
 
-func (s *svc) setHandler() {
-	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func (s *svc) Handler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log := appctx.GetLogger(r.Context())
 
 		// the webdav api is accessible from anywhere
@@ -107,171 +104,28 @@ func (s *svc) setHandler() {
 			return
 		}
 
-		head, tail := httpsvcs.ShiftPath(r.URL.Path)
-		log.Debug().Str("head", head).Str("tail", tail).Msg("http routing")
-
+		var head string
+		head, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
+		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
 		switch head {
 		case "status.php":
-			r.URL.Path = tail
 			s.doStatus(w, r)
 			return
 
 		case "remote.php":
-			head2, tail2 := httpsvcs.ShiftPath(tail)
+			var head2 string
+			head2, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
 
-			// TODO(jfd): refactor as separate handler
-			// the old `webdav` endpoint uses remote.php/webdav/$path
+			// the old `/webdav` endpoint uses remote.php/webdav/$path
 			if head2 == "webdav" {
-
-				r.URL.Path = tail2
-
-				if r.Method == "OPTIONS" {
-					// no need for the user, and we need to be able
-					// to answer preflight checks, which have no auth headers
-					r.URL.Path = tail2 // tail alwas starts with /
-					s.doOptions(w, r)
-					return
-				}
-
-				// inject username in path
-				ctx := r.Context()
-				u, ok := user.ContextGetUser(ctx)
-				if !ok {
-					log.Error().Msg("error getting user from context")
-					w.WriteHeader(http.StatusInternalServerError)
-					return
-				}
-
-				// TODO(labkode): this assumes too much, basically using ocdavsvc you can't access a global namespace.
-				// This must be changed.
-				// r.URL.Path = path.Join("/", u.Username, tail2)
-				// webdav should be death: baseURI is encoded as part of the
-				// response payload in href field
-				baseURI := path.Join("/", s.Prefix(), "remote.php/webdav")
-				ctx = context.WithValue(r.Context(), ctxKeyBaseURI, baseURI)
-
-				// inject username into Destination header if present
-				dstHeader := r.Header.Get("Destination")
-				if dstHeader != "" {
-					dstURL, err := url.ParseRequestURI(dstHeader)
-					if err != nil {
-						w.WriteHeader(http.StatusBadRequest)
-						return
-					}
-					if dstURL.Path[:18] != "/remote.php/webdav" {
-						log.Warn().Str("path", dstURL.Path).Msg("dst needs to start with /remote.php/webdav/")
-						w.WriteHeader(http.StatusBadRequest)
-						return
-					}
-					r.Header.Set("Destination", path.Join(baseURI, u.Username, dstURL.Path[18:])) // 18 = len ("/remote.php/webdav")
-				}
-
-				r = r.WithContext(ctx)
-
-				switch r.Method {
-				case "PROPFIND":
-					s.doPropfind(w, r)
-					return
-				case "HEAD":
-					s.doHead(w, r)
-					return
-				case "GET":
-					s.doGet(w, r)
-					return
-				case "LOCK":
-					s.doLock(w, r)
-					return
-				case "UNLOCK":
-					s.doUnlock(w, r)
-					return
-				case "PROPPATCH":
-					s.doProppatch(w, r)
-					return
-				case "MKCOL":
-					s.doMkcol(w, r)
-					return
-				case "MOVE":
-					s.doMove(w, r)
-					return
-				case "COPY":
-					s.doCopy(w, r)
-					return
-				case "PUT":
-					s.doPut(w, r)
-					return
-				case "DELETE":
-					s.doDelete(w, r)
-					return
-				default:
-					log.Warn().Msg("resource not found")
-					w.WriteHeader(http.StatusNotFound)
-					return
-				}
+				s.webDavHandler.Handler(s).ServeHTTP(w, r)
+				return
 			}
 
-			// TODO(jfd) refactor as separate handler
-			// the new `files` endpoint uses remote.php/dav/files/$user/$path style paths
+			// the new `/dav/files` endpoint uses remote.php/dav/files/$user/$path style paths
 			if head2 == "dav" {
-				head3, tail3 := httpsvcs.ShiftPath(tail2)
-				if head3 == "files" {
-					r.URL.Path = tail3
-					// webdav should be death: baseURI is encoded as part of the
-					// response payload in href field
-					baseURI := path.Join("/", s.Prefix(), "remote.php/dav/files")
-					ctx := context.WithValue(r.Context(), ctxKeyBaseURI, baseURI)
-					r = r.WithContext(ctx)
-
-					switch r.Method {
-					case "PROPFIND":
-						s.doPropfind(w, r)
-						return
-					case "OPTIONS":
-						s.doOptions(w, r)
-						return
-					case "HEAD":
-						s.doHead(w, r)
-						return
-					case "GET":
-						s.doGet(w, r)
-						return
-					case "LOCK":
-						s.doLock(w, r)
-						return
-					case "UNLOCK":
-						s.doUnlock(w, r)
-						return
-					case "PROPPATCH":
-						s.doProppatch(w, r)
-						return
-					case "MKCOL":
-						s.doMkcol(w, r)
-						return
-					case "MOVE":
-						s.doMove(w, r)
-						return
-					case "COPY":
-						s.doCopy(w, r)
-						return
-					case "PUT":
-						s.doPut(w, r)
-						return
-					case "DELETE":
-						s.doDelete(w, r)
-						return
-					case "REPORT":
-						s.doReport(w, r)
-						return
-					default:
-						log.Warn().Msg("resource not found")
-						w.WriteHeader(http.StatusNotFound)
-						return
-					}
-				}
-				if head3 == "avatars" {
-					r.URL.Path = tail3
-					s.doAvatar(w, r)
-					return
-				}
+				s.davHandler.Handler(s).ServeHTTP(w, r)
+				return
 			}
 		}
 		log.Warn().Msg("resource not found")
@@ -280,5 +134,5 @@ func (s *svc) setHandler() {
 }
 
 func (s *svc) getClient() (storageproviderv0alphapb.StorageProviderServiceClient, error) {
-	return pool.GetStorageProviderServiceClient(s.gatewaySvc)
+	return pool.GetStorageProviderServiceClient(s.c.GatewaySvc)
 }

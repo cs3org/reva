@@ -74,7 +74,7 @@ func getChunkBLOBInfo(path string) (*chunkBLOBInfo, error) {
 }
 
 func (s *svc) createChunkTempFile() (string, *os.File, error) {
-	file, err := ioutil.TempFile(fmt.Sprintf("/%s", s.chunkFolder), "")
+	file, err := ioutil.TempFile(fmt.Sprintf("/%s", s.c.ChunkFolder), "")
 	if err != nil {
 		return "", nil, err
 	}
@@ -83,7 +83,7 @@ func (s *svc) createChunkTempFile() (string, *os.File, error) {
 }
 
 func (s *svc) getChunkFolderName(i *chunkBLOBInfo) (string, error) {
-	path := "/" + s.chunkFolder + filepath.Clean("/"+i.uploadID())
+	path := "/" + s.c.ChunkFolder + filepath.Clean("/"+i.uploadID())
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return "", err
 	}

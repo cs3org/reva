@@ -43,7 +43,6 @@ type Config struct {
 
 type svc struct {
 	c         *Config
-	handler   http.Handler
 	V1Handler *V1Handler
 }
 
@@ -64,7 +63,6 @@ func New(m map[string]interface{}) (httpsvcs.Service, error) {
 		return nil, err
 	}
 
-	s.setHandler()
 	return s, nil
 }
 
@@ -72,14 +70,11 @@ func (s *svc) Prefix() string {
 	return s.c.Prefix
 }
 
-func (s *svc) Handler() http.Handler {
-	return s.handler
-}
 func (s *svc) Close() error {
 	return nil
 }
-func (s *svc) setHandler() {
-	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func (s *svc) Handler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log := appctx.GetLogger(r.Context())
 
 		var head string
