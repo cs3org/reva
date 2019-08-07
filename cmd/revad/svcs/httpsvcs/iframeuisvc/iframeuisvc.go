@@ -73,18 +73,28 @@ func getHandler() http.Handler {
 }
 
 func doOpen(w http.ResponseWriter, r *http.Request) {
+	filename := r.URL.Path
 	html := `
 <!DOCTYPE html>
 <html>
+<head>
+	<meta charset="UTF-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+	<script src="https://root.cern/js/latest/scripts/JSRootCore.min.js" type="text/javascript"></script>
+
+	<script type="text/javascript">
+		var filename = "http://localhost:9998/data` + filename + `";
+		JSROOT.OpenFile(filename, function(file) {
+			file.ReadObject("c1;1", function(obj) {
+				JSROOT.draw("drawing", obj, "colz");
+			});
+		});
+	</script>
+</head>
 <body>
-
-<h1>Markdown Editor</h1>
-<h2>TODO</h2>
-
+<div id="drawing" style="width:800px; height:600px"></div>
 </body>
-<script type="text/javascript">
-alert("hello!");
-</script>
 </html>
 	`
 	w.Write([]byte(html))
