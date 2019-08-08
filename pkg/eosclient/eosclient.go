@@ -33,6 +33,7 @@ import (
 	"syscall"
 
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/reqid"
 	"github.com/cs3org/reva/pkg/storage/acl"
 	"github.com/gofrs/uuid"
@@ -144,10 +145,10 @@ func (c *Client) execute(ctx context.Context, cmd *exec.Cmd) (string, string, er
 			case 0:
 				err = nil
 			case 2:
-				err = notFoundError(errBuf.String())
+				err = errtypes.NotFound(errBuf.String())
 			case 22:
 				// eos reports back error code 22 when the user is not allowed to enter the instance
-				err = notFoundError(errBuf.String())
+				err = errtypes.NotFound(errBuf.String())
 			}
 		}
 	}
@@ -156,7 +157,7 @@ func (c *Client) execute(ctx context.Context, cmd *exec.Cmd) (string, string, er
 	env := fmt.Sprintf("%s", cmd.Env)
 	log.Info().Str("args", args).Str("env", env).Int("exit", exitStatus).Msg("eos cmd")
 
-	if err != nil && exitStatus != 2 { // don't wrap the notFoundError
+	if err != nil && exitStatus != 2 { // don't wrap the errtypes.NotFoundError
 		err = errors.Wrap(err, "error while executing command")
 	}
 
@@ -193,10 +194,10 @@ func (c *Client) executeEOS(ctx context.Context, cmd *exec.Cmd) (string, string,
 			case 0:
 				err = nil
 			case 2:
-				err = notFoundError(errBuf.String())
+				err = errtypes.NotFound(errBuf.String())
 			case 22:
 				// eos reports back error code 22 when the user is not allowed to enter the instance
-				err = notFoundError(errBuf.String())
+				err = errtypes.NotFound(errBuf.String())
 			}
 		}
 	}
@@ -205,7 +206,7 @@ func (c *Client) executeEOS(ctx context.Context, cmd *exec.Cmd) (string, string,
 	env := fmt.Sprintf("%s", cmd.Env)
 	log.Info().Str("args", args).Str("env", env).Int("exit", exitStatus).Msg("eos cmd")
 
-	if err != nil && exitStatus != 2 { // don't wrap the notFoundError
+	if err != nil && exitStatus != 2 { // don't wrap the errtypes.NotFoundError
 		err = errors.Wrap(err, "error while executing command")
 	}
 
@@ -285,7 +286,7 @@ func (c *Client) GetACL(ctx context.Context, username, path, aclType, target str
 			return a, nil
 		}
 	}
-	return nil, notFoundError(fmt.Sprintf("%s:%s", aclType, target))
+	return nil, errtypes.NotFound(fmt.Sprintf("%s:%s", aclType, target))
 
 }
 
@@ -812,8 +813,3 @@ type DeletedEntry struct {
 	DeletionMTime uint64
 	IsDir         bool
 }
-
-type notFoundError string
-
-func (e notFoundError) IsNotFound()   {}
-func (e notFoundError) Error() string { return string(e) }

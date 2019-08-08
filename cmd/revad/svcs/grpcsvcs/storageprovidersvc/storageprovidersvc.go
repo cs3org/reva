@@ -38,6 +38,7 @@ import (
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
+	"github.com/cs3org/reva/pkg/errtypes"
 )
 
 func init() {
@@ -231,7 +232,7 @@ func (s *service) CreateContainer(ctx context.Context, req *storageproviderv0alp
 	}
 
 	if err := s.storage.CreateDir(ctx, fsfn); err != nil {
-		if _, ok := err.(notFoundError); ok {
+		if _, ok := err.(errtypes.IsNotFound); ok {
 			status := &rpcpb.Status{Code: rpcpb.Code_CODE_NOT_FOUND}
 			res := &storageproviderv0alphapb.CreateContainerResponse{Status: status}
 			return res, nil
@@ -260,7 +261,7 @@ func (s *service) Delete(ctx context.Context, req *storageproviderv0alphapb.Dele
 
 	ref := &storageproviderv0alphapb.Reference{Spec: &storageproviderv0alphapb.Reference_Path{Path: fsfn}}
 	if err := s.storage.Delete(ctx, ref); err != nil {
-		if _, ok := err.(notFoundError); ok {
+		if _, ok := err.(errtypes.IsNotFound); ok {
 			log.Error().Err(err).Msg("file not found")
 			status := &rpcpb.Status{Code: rpcpb.Code_CODE_NOT_FOUND}
 			res := &storageproviderv0alphapb.DeleteResponse{Status: status}
@@ -333,7 +334,7 @@ func (s *service) Stat(ctx context.Context, req *storageproviderv0alphapb.StatRe
 	ref := &storageproviderv0alphapb.Reference{Spec: &storageproviderv0alphapb.Reference_Path{Path: fsfn}}
 	md, err := s.storage.GetMD(ctx, ref)
 	if err != nil {
-		if _, ok := err.(notFoundError); ok {
+		if _, ok := err.(errtypes.IsNotFound); ok {
 			log.Warn().Str("ref", req.Ref.String()).Msg("resource not found")
 			status := &rpcpb.Status{Code: rpcpb.Code_CODE_NOT_FOUND}
 			res := &storageproviderv0alphapb.StatResponse{Status: status}
@@ -790,10 +791,6 @@ func getFS(c *config) (storage.FS, error) {
 		return f(c.Drivers[c.Driver])
 	}
 	return nil, fmt.Errorf("driver not found: %s", c.Driver)
-}
-
-type notFoundError interface {
-	IsNotFound()
 }
 
 func (s *service) fillInfo(ri *storageproviderv0alphapb.ResourceInfo) {

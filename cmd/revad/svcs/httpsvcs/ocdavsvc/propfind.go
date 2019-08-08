@@ -34,9 +34,9 @@ import (
 
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
-
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/utils"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/pkg/errors"
 )
@@ -237,7 +237,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, md *storageproviderv0alphapb
 		// remove username from filename
 		u, ok := user.ContextGetUser(ctx)
 		if !ok {
-			err := errors.Wrap(contextUserRequiredErr("userrequired"), "error getting user from ctx")
+			err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
 			return nil, err
 		}
 		md.Path = md.Path[len(u.Username)+1:]
@@ -328,9 +328,3 @@ type errorXML struct {
 }
 
 var errInvalidPropfind = errors.New("webdav: invalid propfind")
-
-// TODO better error handling
-type contextUserRequiredErr string
-
-func (err contextUserRequiredErr) Error() string   { return string(err) }
-func (err contextUserRequiredErr) IsUserRequired() {}

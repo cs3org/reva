@@ -44,6 +44,7 @@ import (
 	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
+	"github.com/cs3org/reva/pkg/errtypes"
 )
 
 func init() {
@@ -51,11 +52,6 @@ func init() {
 }
 
 var hiddenReg = regexp.MustCompile(`\.sys\..#.`)
-
-type contextUserRequiredErr string
-
-func (err contextUserRequiredErr) Error() string   { return string(err) }
-func (err contextUserRequiredErr) IsUserRequired() {}
 
 type eosStorage struct {
 	c             *eosclient.Client
@@ -115,7 +111,7 @@ type config struct {
 func getUser(ctx context.Context) (*authv0alphapb.User, error) {
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
-		err := errors.Wrap(contextUserRequiredErr("userrequired"), "storage_eos: error getting user from ctx")
+		err := errors.Wrap(errtypes.UserRequired(""), "storage_eos: error getting user from ctx")
 		return nil, err
 	}
 	return u, nil

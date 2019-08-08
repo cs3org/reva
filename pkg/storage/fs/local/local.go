@@ -30,6 +30,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 
 	"github.com/cs3org/reva/pkg/appctx"
@@ -172,18 +173,18 @@ func (fs *localFS) GetPathByID(ctx context.Context, id *storageproviderv0alphapb
 }
 
 func (fs *localFS) AddGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
-	return notSupportedError("op not supported")
+	return errtypes.NotSupported("op not supported")
 }
 
 func (fs *localFS) ListGrants(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.Grant, error) {
-	return nil, notSupportedError("op not supported")
+	return nil, errtypes.NotSupported("op not supported")
 }
 
 func (fs *localFS) RemoveGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
-	return notSupportedError("op not supported")
+	return errtypes.NotSupported("op not supported")
 }
 func (fs *localFS) UpdateGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
-	return notSupportedError("op not supported")
+	return errtypes.NotSupported("op not supported")
 }
 
 func (fs *localFS) GetQuota(ctx context.Context) (int, int, error) {
@@ -195,7 +196,7 @@ func (fs *localFS) CreateDir(ctx context.Context, fn string) error {
 	err := os.Mkdir(fn, 0700)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return notFoundError(fn)
+			return errtypes.NotFound(fn)
 		}
 		// TODO(jfd): we also need already exists error, webdav expects 405 MethodNotAllowed
 		return errors.Wrap(err, "localfs: error creating dir "+fn)
@@ -212,7 +213,7 @@ func (fs *localFS) Delete(ctx context.Context, ref *storageproviderv0alphapb.Ref
 	err = os.Remove(fn)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return notFoundError(fn)
+			return errtypes.NotFound(fn)
 		}
 		// try recursive delete
 		err = os.RemoveAll(fn)
@@ -249,7 +250,7 @@ func (fs *localFS) GetMD(ctx context.Context, ref *storageproviderv0alphapb.Refe
 	md, err := os.Stat(fn)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, notFoundError(fn)
+			return nil, errtypes.NotFound(fn)
 		}
 		return nil, errors.Wrap(err, "localfs: error stating "+fn)
 	}
@@ -266,7 +267,7 @@ func (fs *localFS) ListFolder(ctx context.Context, ref *storageproviderv0alphapb
 	mds, err := ioutil.ReadDir(fn)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, notFoundError(fn)
+			return nil, errtypes.NotFound(fn)
 		}
 		return nil, errors.Wrap(err, "localfs: error listing "+fn)
 	}
@@ -314,7 +315,7 @@ func (fs *localFS) Download(ctx context.Context, ref *storageproviderv0alphapb.R
 	r, err := os.Open(fn)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, notFoundError(fn)
+			return nil, errtypes.NotFound(fn)
 		}
 		return nil, errors.Wrap(err, "localfs: error reading "+fn)
 	}
@@ -322,33 +323,25 @@ func (fs *localFS) Download(ctx context.Context, ref *storageproviderv0alphapb.R
 }
 
 func (fs *localFS) ListRevisions(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.FileVersion, error) {
-	return nil, notSupportedError("list revisions")
+	return nil, errtypes.NotSupported("list revisions")
 }
 
 func (fs *localFS) DownloadRevision(ctx context.Context, ref *storageproviderv0alphapb.Reference, revisionKey string) (io.ReadCloser, error) {
-	return nil, notSupportedError("download revision")
+	return nil, errtypes.NotSupported("download revision")
 }
 
 func (fs *localFS) RestoreRevision(ctx context.Context, ref *storageproviderv0alphapb.Reference, revisionKey string) error {
-	return notSupportedError("restore revision")
+	return errtypes.NotSupported("restore revision")
 }
 
 func (fs *localFS) EmptyRecycle(ctx context.Context) error {
-	return notSupportedError("empty recycle")
+	return errtypes.NotSupported("empty recycle")
 }
 
 func (fs *localFS) ListRecycle(ctx context.Context) ([]*storageproviderv0alphapb.RecycleItem, error) {
-	return nil, notSupportedError("list recycle")
+	return nil, errtypes.NotSupported("list recycle")
 }
 
 func (fs *localFS) RestoreRecycleItem(ctx context.Context, restoreKey string) error {
-	return notSupportedError("restore recycle")
+	return errtypes.NotSupported("restore recycle")
 }
-
-type notSupportedError string
-type notFoundError string
-
-func (e notSupportedError) Error() string   { return string(e) }
-func (e notSupportedError) IsNotSupported() {}
-func (e notFoundError) Error() string       { return "not found: " + string(e) }
-func (e notFoundError) IsNotFound()         {}

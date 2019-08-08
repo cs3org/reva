@@ -31,6 +31,7 @@ import (
 
 	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
+	"github.com/cs3org/reva/pkg/errtypes"
 )
 
 func init() {
@@ -85,7 +86,7 @@ func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*authv0alph
 			return u, nil
 		}
 	}
-	return nil, userNotFoundError(uid.OpaqueId)
+	return nil, errtypes.NotFound(uid.OpaqueId)
 }
 
 // TODO search Opaque? compare sub?
@@ -124,7 +125,3 @@ func (m *manager) IsInGroup(ctx context.Context, uid *typespb.UserId, group stri
 	}
 	return false, nil
 }
-
-type userNotFoundError string
-
-func (e userNotFoundError) Error() string { return string(e) }

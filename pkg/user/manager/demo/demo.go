@@ -25,6 +25,7 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
+	"github.com/cs3org/reva/pkg/errtypes"
 )
 
 func init() {
@@ -45,7 +46,7 @@ func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*authv0alph
 	if user, ok := m.catalog[uid.OpaqueId]; ok {
 		return user, nil
 	}
-	return nil, userNotFoundError(uid.OpaqueId)
+	return nil, errtypes.NotFound(uid.OpaqueId)
 }
 
 func (m *manager) FindUsers(ctx context.Context, query string) ([]*authv0alphapb.User, error) {
@@ -73,10 +74,6 @@ func (m *manager) IsInGroup(ctx context.Context, uid *typespb.UserId, group stri
 	}
 	return false, nil
 }
-
-type userNotFoundError string
-
-func (e userNotFoundError) Error() string { return string(e) }
 
 func getUsers() map[string]*authv0alphapb.User {
 	return map[string]*authv0alphapb.User{

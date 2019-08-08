@@ -27,23 +27,21 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/mime"
-	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/storage/fs/registry"
-
-	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
-
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
+	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/mime"
+	"github.com/cs3org/reva/pkg/storage"
+	"github.com/cs3org/reva/pkg/storage/fs/registry"
+	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
 )
 
 func init() {
@@ -222,19 +220,19 @@ func (fs *s3FS) GetPathByID(ctx context.Context, id *storageproviderv0alphapb.Re
 }
 
 func (fs *s3FS) AddGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
-	return notSupportedError("op not supported")
+	return errtypes.NotSupported("op not supported")
 }
 
 func (fs *s3FS) ListGrants(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.Grant, error) {
-	return nil, notSupportedError("op not supported")
+	return nil, errtypes.NotSupported("op not supported")
 }
 
 func (fs *s3FS) RemoveGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
-	return notSupportedError("op not supported")
+	return errtypes.NotSupported("op not supported")
 }
 
 func (fs *s3FS) UpdateGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
-	return notSupportedError("op not supported")
+	return errtypes.NotSupported("op not supported")
 }
 
 func (fs *s3FS) GetQuota(ctx context.Context) (int, int, error) {
@@ -258,7 +256,7 @@ func (fs *s3FS) CreateDir(ctx context.Context, fn string) error {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
 			case s3.ErrCodeNoSuchBucket:
-				return notFoundError(fn)
+				return errtypes.NotFound(fn)
 			}
 		}
 		// FIXME we also need already exists error, webdav expects 405 MethodNotAllowed
@@ -289,7 +287,7 @@ func (fs *s3FS) Delete(ctx context.Context, ref *storageproviderv0alphapb.Refere
 			switch aerr.Code() {
 			case s3.ErrCodeNoSuchBucket:
 			case s3.ErrCodeNoSuchKey:
-				return notFoundError(fn)
+				return errtypes.NotFound(fn)
 			}
 		}
 		// it might be a directory, so we can batch delete the prefix + /
@@ -316,7 +314,7 @@ func (fs *s3FS) Delete(ctx context.Context, ref *storageproviderv0alphapb.Refere
 			switch aerr.Code() {
 			case s3.ErrCodeNoSuchBucket:
 			case s3.ErrCodeNoSuchKey:
-				return notFoundError(fn)
+				return errtypes.NotFound(fn)
 			}
 		}
 		return errors.Wrap(err, "s3fs: error deleting "+fn)
@@ -339,7 +337,7 @@ func (fs *s3FS) moveObject(ctx context.Context, oldKey string, newKey string) er
 	if aerr, ok := err.(awserr.Error); ok {
 		switch aerr.Code() {
 		case s3.ErrCodeNoSuchBucket:
-			return notFoundError(oldKey)
+			return errtypes.NotFound(oldKey)
 		}
 		return err
 	}
@@ -354,7 +352,7 @@ func (fs *s3FS) moveObject(ctx context.Context, oldKey string, newKey string) er
 		switch aerr.Code() {
 		case s3.ErrCodeNoSuchBucket:
 		case s3.ErrCodeNoSuchKey:
-			return notFoundError(oldKey)
+			return errtypes.NotFound(oldKey)
 		}
 		return err
 	}
@@ -386,7 +384,7 @@ func (fs *s3FS) Move(ctx context.Context, oldRef, newRef *storageproviderv0alpha
 			switch aerr.Code() {
 			case s3.ErrCodeNoSuchBucket:
 			case s3.ErrCodeNoSuchKey:
-				return notFoundError(fn)
+				return errtypes.NotFound(fn)
 			}
 		}
 
@@ -454,7 +452,7 @@ func (fs *s3FS) GetMD(ctx context.Context, ref *storageproviderv0alphapb.Referen
 			switch aerr.Code() {
 			case s3.ErrCodeNoSuchBucket:
 			case s3.ErrCodeNoSuchKey:
-				return nil, notFoundError(fn)
+				return nil, errtypes.NotFound(fn)
 			}
 		}
 		log.Debug().
@@ -487,7 +485,7 @@ func (fs *s3FS) GetMD(ctx context.Context, ref *storageproviderv0alphapb.Referen
 			input.ContinuationToken = output.NextContinuationToken
 			isTruncated = *output.IsTruncated
 		}
-		return nil, notFoundError(fn)
+		return nil, errtypes.NotFound(fn)
 	}
 
 	return fs.normalizeHead(ctx, output, fn), nil
@@ -550,7 +548,7 @@ func (fs *s3FS) Upload(ctx context.Context, ref *storageproviderv0alphapb.Refere
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
 			case s3.ErrCodeNoSuchBucket:
-				return notFoundError(fn)
+				return errtypes.NotFound(fn)
 			}
 		}
 		return errors.Wrap(err, "s3fs: error creating object "+fn)
@@ -581,7 +579,7 @@ func (fs *s3FS) Download(ctx context.Context, ref *storageproviderv0alphapb.Refe
 			switch aerr.Code() {
 			case s3.ErrCodeNoSuchBucket:
 			case s3.ErrCodeNoSuchKey:
-				return nil, notFoundError(fn)
+				return nil, errtypes.NotFound(fn)
 			}
 		}
 		return nil, errors.Wrap(err, "s3fs: error deleting "+fn)
@@ -590,33 +588,25 @@ func (fs *s3FS) Download(ctx context.Context, ref *storageproviderv0alphapb.Refe
 }
 
 func (fs *s3FS) ListRevisions(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.FileVersion, error) {
-	return nil, notSupportedError("list revisions")
+	return nil, errtypes.NotSupported("list revisions")
 }
 
 func (fs *s3FS) DownloadRevision(ctx context.Context, ref *storageproviderv0alphapb.Reference, revisionKey string) (io.ReadCloser, error) {
-	return nil, notSupportedError("download revision")
+	return nil, errtypes.NotSupported("download revision")
 }
 
 func (fs *s3FS) RestoreRevision(ctx context.Context, ref *storageproviderv0alphapb.Reference, revisionKey string) error {
-	return notSupportedError("restore revision")
+	return errtypes.NotSupported("restore revision")
 }
 
 func (fs *s3FS) EmptyRecycle(ctx context.Context) error {
-	return notSupportedError("empty recycle")
+	return errtypes.NotSupported("empty recycle")
 }
 
 func (fs *s3FS) ListRecycle(ctx context.Context) ([]*storageproviderv0alphapb.RecycleItem, error) {
-	return nil, notSupportedError("list recycle")
+	return nil, errtypes.NotSupported("list recycle")
 }
 
 func (fs *s3FS) RestoreRecycleItem(ctx context.Context, restoreKey string) error {
-	return notSupportedError("restore recycle")
+	return errtypes.NotSupported("restore recycle")
 }
-
-type notSupportedError string
-type notFoundError string
-
-func (e notSupportedError) Error() string   { return string(e) }
-func (e notSupportedError) IsNotSupported() {}
-func (e notFoundError) Error() string       { return string(e) }
-func (e notFoundError) IsNotFound()         {}

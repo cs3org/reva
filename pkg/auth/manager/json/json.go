@@ -25,6 +25,7 @@ import (
 
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -90,9 +91,5 @@ func (m *manager) Authenticate(ctx context.Context, username string, secret stri
 			return ctx, nil
 		}
 	}
-	return ctx, invalidCredentialsError(username)
+	return ctx, errtypes.InvalidCredentials(username)
 }
-
-type invalidCredentialsError string
-
-func (e invalidCredentialsError) Error() string { return string(e) }
