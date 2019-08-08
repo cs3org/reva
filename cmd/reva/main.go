@@ -52,6 +52,7 @@ func main() {
 		appProviderGetIFrameCommand(),
 		preferencesCommand(),
 		genCommand(),
+		shareCommand(),
 	}
 
 	mainUsage := createMainUsage(cmds)

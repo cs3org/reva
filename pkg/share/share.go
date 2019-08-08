@@ -21,7 +21,6 @@ package share
 import (
 	"context"
 
-	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
 )
@@ -29,20 +28,20 @@ import (
 // Manager is the interface that manipulates shares.
 type Manager interface {
 	// Create a new share in fn with the given acl.
-	Share(ctx context.Context, u *authv0alphapb.User, md *storageproviderv0alphapb.ResourceInfo, g *usershareproviderv0alphapb.ShareGrant) (*usershareproviderv0alphapb.Share, error)
+	Share(ctx context.Context, md *storageproviderv0alphapb.ResourceInfo, g *usershareproviderv0alphapb.ShareGrant) (*usershareproviderv0alphapb.Share, error)
 
 	// GetShare gets the information for a share by the given ref.
-	GetShare(ctx context.Context, u *authv0alphapb.User, ref *usershareproviderv0alphapb.ShareReference) (*usershareproviderv0alphapb.Share, error)
+	GetShare(ctx context.Context, ref *usershareproviderv0alphapb.ShareReference) (*usershareproviderv0alphapb.Share, error)
 
 	// Unshare deletes the share pointed by ref.
-	Unshare(ctx context.Context, u *authv0alphapb.User, ref *usershareproviderv0alphapb.ShareReference) error
+	Unshare(ctx context.Context, ref *usershareproviderv0alphapb.ShareReference) error
 
 	// UpdateShare updates the mode of the given share.
-	UpdateShare(ctx context.Context, u *authv0alphapb.User, ref *usershareproviderv0alphapb.ShareReference, g *usershareproviderv0alphapb.ShareGrant) (*usershareproviderv0alphapb.Share, error)
+	UpdateShare(ctx context.Context, ref *usershareproviderv0alphapb.ShareReference, p *usershareproviderv0alphapb.SharePermissions) (*usershareproviderv0alphapb.Share, error)
 
 	// ListShares returns the shares created by the user. If md is provided is not nil,
 	// it returns only shares attached to the given resource.
-	ListShares(ctx context.Context, u *authv0alphapb.User, md *storageproviderv0alphapb.ResourceInfo) ([]*usershareproviderv0alphapb.Share, error)
+	ListShares(ctx context.Context, md *storageproviderv0alphapb.ResourceInfo) ([]*usershareproviderv0alphapb.Share, error)
 
 	// ListReceivedShares returns the list of shares the user has access.
 	ListReceivedShares(ctx context.Context) ([]*usershareproviderv0alphapb.ReceivedShare, error)

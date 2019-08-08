@@ -28,15 +28,27 @@ import (
 
 	"github.com/cs3org/reva/pkg/share"
 
-	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/share/manager/registry"
 	"github.com/cs3org/reva/pkg/user"
 )
 
 var counter uint64
+
+func init() {
+	registry.Register("memory", New)
+}
+
+// New returns a new manager.
+func New(c map[string]interface{}) (share.Manager, error) {
+	state := map[string]map[*usershareproviderv0alphapb.ShareId]usershareproviderv0alphapb.ShareState{}
+	return &manager{
+		shareState: state,
+	}, nil
+}
 
 type manager struct {
 	lock   *sync.Mutex
@@ -46,21 +58,13 @@ type manager struct {
 	shareState map[string]map[*usershareproviderv0alphapb.ShareId]usershareproviderv0alphapb.ShareState
 }
 
-// New returns a new manager.
-func New() share.Manager {
-	state := map[string]map[*usershareproviderv0alphapb.ShareId]usershareproviderv0alphapb.ShareState{}
-	return &manager{
-		shareState: state,
-	}
-}
-
 func (m *manager) add(ctx context.Context, s *usershareproviderv0alphapb.Share) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	m.shares = append(m.shares, s)
 }
 
-func (m *manager) Share(ctx context.Context, u *authv0alphapb.User, md *storageproviderv0alphapb.ResourceInfo, g *usershareproviderv0alphapb.ShareGrant) (*usershareproviderv0alphapb.Share, error) {
+func (m *manager) Share(ctx context.Context, md *storageproviderv0alphapb.ResourceInfo, g *usershareproviderv0alphapb.ShareGrant) (*usershareproviderv0alphapb.Share, error) {
 	id := atomic.AddUint64(&counter, 1)
 	user := user.ContextMustGetUser(ctx)
 	now := time.Now().UnixNano()
@@ -127,7 +131,7 @@ func (m *manager) get(ctx context.Context, ref *usershareproviderv0alphapb.Share
 	return nil, errtypes.NotFound(ref.String())
 }
 
-func (m *manager) GetShare(ctx context.Context, u *authv0alphapb.User, ref *usershareproviderv0alphapb.ShareReference) (*usershareproviderv0alphapb.Share, error) {
+func (m *manager) GetShare(ctx context.Context, ref *usershareproviderv0alphapb.ShareReference) (*usershareproviderv0alphapb.Share, error) {
 	share, err := m.get(ctx, ref)
 	if err != nil {
 		return nil, err
@@ -136,7 +140,7 @@ func (m *manager) GetShare(ctx context.Context, u *authv0alphapb.User, ref *user
 	return share, nil
 }
 
-func (m *manager) Unshare(ctx context.Context, u *authv0alphapb.User, ref *usershareproviderv0alphapb.ShareReference) error {
+func (m *manager) Unshare(ctx context.Context, ref *usershareproviderv0alphapb.ShareReference) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	user := user.ContextMustGetUser(ctx)
@@ -162,15 +166,14 @@ func equal(ref *usershareproviderv0alphapb.ShareReference, s *usershareproviderv
 	}
 }
 
-func (m *manager) UpdateShare(ctx context.Context, u *authv0alphapb.User, ref *usershareproviderv0alphapb.ShareReference, g *usershareproviderv0alphapb.ShareGrant) (*usershareproviderv0alphapb.Share, error) {
+func (m *manager) UpdateShare(ctx context.Context, ref *usershareproviderv0alphapb.ShareReference, p *usershareproviderv0alphapb.SharePermissions) (*usershareproviderv0alphapb.Share, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	user := user.ContextMustGetUser(ctx)
 	for i, s := range m.shares {
 		if equal(ref, s) {
 			if reflect.DeepEqual(*user.Id, *s.Owner) || reflect.DeepEqual(*user.Id, *s.Owner) {
-				m.shares[i].Grantee = g.Grantee
-				m.shares[i].Permissions = g.Permissions
+				m.shares[i].Permissions = p
 				return m.shares[i], nil
 			}
 		}
@@ -178,7 +181,7 @@ func (m *manager) UpdateShare(ctx context.Context, u *authv0alphapb.User, ref *u
 	return nil, errtypes.NotFound(ref.String())
 }
 
-func (m *manager) ListShares(ctx context.Context, u *authv0alphapb.User, md *storageproviderv0alphapb.ResourceInfo) ([]*usershareproviderv0alphapb.Share, error) {
+func (m *manager) ListShares(ctx context.Context, md *storageproviderv0alphapb.ResourceInfo) ([]*usershareproviderv0alphapb.Share, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	return m.shares, nil
