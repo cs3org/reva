@@ -26,6 +26,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cs3org/reva/pkg/share"
+
 	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
@@ -39,6 +41,17 @@ var counter uint64
 type manager struct {
 	lock   *sync.Mutex
 	shares []*usershareproviderv0alphapb.Share
+	// shareState contains the share state for a user.
+	// map["alice"]["share-id"]state.
+	shareState map[string]map[*usershareproviderv0alphapb.ShareId]usershareproviderv0alphapb.ShareState
+}
+
+// New returns a new manager.
+func New() share.Manager {
+	state := map[string]map[*usershareproviderv0alphapb.ShareId]usershareproviderv0alphapb.ShareState{}
+	return &manager{
+		shareState: state,
+	}
 }
 
 func (m *manager) add(ctx context.Context, s *usershareproviderv0alphapb.Share) {
@@ -103,7 +116,15 @@ func (m *manager) get(ctx context.Context, ref *usershareproviderv0alphapb.Share
 	} else {
 		err = errtypes.NotFound(ref.String())
 	}
-	return
+
+	// check if we are the owner
+	user := user.ContextMustGetUser(ctx)
+	if reflect.DeepEqual(*user.Id, s.Owner) || reflect.DeepEqual(*user.Id, s.Creator) {
+		return s, nil
+	}
+
+	// we return not found to not disclose information
+	return nil, errtypes.NotFound(ref.String())
 }
 
 func (m *manager) GetShare(ctx context.Context, u *authv0alphapb.User, ref *usershareproviderv0alphapb.ShareReference) (*usershareproviderv0alphapb.Share, error) {
@@ -118,11 +139,14 @@ func (m *manager) GetShare(ctx context.Context, u *authv0alphapb.User, ref *user
 func (m *manager) Unshare(ctx context.Context, u *authv0alphapb.User, ref *usershareproviderv0alphapb.ShareReference) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
+	user := user.ContextMustGetUser(ctx)
 	for i, s := range m.shares {
 		if equal(ref, s) {
-			m.shares[len(m.shares)-1], m.shares[i] = m.shares[i], m.shares[len(m.shares)-1]
-			m.shares = m.shares[:len(m.shares)-1]
-			return nil
+			if reflect.DeepEqual(*user.Id, *s.Owner) || reflect.DeepEqual(*user.Id, *s.Owner) {
+				m.shares[len(m.shares)-1], m.shares[i] = m.shares[i], m.shares[len(m.shares)-1]
+				m.shares = m.shares[:len(m.shares)-1]
+				return nil
+			}
 		}
 	}
 	return errtypes.NotFound(ref.String())
@@ -141,11 +165,14 @@ func equal(ref *usershareproviderv0alphapb.ShareReference, s *usershareproviderv
 func (m *manager) UpdateShare(ctx context.Context, u *authv0alphapb.User, ref *usershareproviderv0alphapb.ShareReference, g *usershareproviderv0alphapb.ShareGrant) (*usershareproviderv0alphapb.Share, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
+	user := user.ContextMustGetUser(ctx)
 	for i, s := range m.shares {
 		if equal(ref, s) {
-			m.shares[i].Grantee = g.Grantee
-			m.shares[i].Permissions = g.Permissions
-			return m.shares[i], nil
+			if reflect.DeepEqual(*user.Id, *s.Owner) || reflect.DeepEqual(*user.Id, *s.Owner) {
+				m.shares[i].Grantee = g.Grantee
+				m.shares[i].Permissions = g.Permissions
+				return m.shares[i], nil
+			}
 		}
 	}
 	return nil, errtypes.NotFound(ref.String())
@@ -157,14 +184,73 @@ func (m *manager) ListShares(ctx context.Context, u *authv0alphapb.User, md *sto
 	return m.shares, nil
 }
 
-func (m *manager) ListReceivedShares(ctx context.Context, u *authv0alphapb.User) ([]*usershareproviderv0alphapb.ShareGrant, error) {
-	return nil, nil
+// we list the shares that are targeted to the user in context or to the user groups.
+func (m *manager) ListReceivedShares(ctx context.Context) ([]*usershareproviderv0alphapb.ReceivedShare, error) {
+	var rss []*usershareproviderv0alphapb.ReceivedShare
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	user := user.ContextMustGetUser(ctx)
+	for _, s := range m.shares {
+		if s.Grantee.Type == storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER &&
+			reflect.DeepEqual(*s.Grantee.Id, user.Id) {
+			rs := m.convert(ctx, s)
+			rss = append(rss, rs)
+		}
+	}
+	return rss, nil
 }
 
-func (m *manager) GetReceivedShare(ctx context.Context, u *authv0alphapb.User, ref *usershareproviderv0alphapb.ShareReference) (*usershareproviderv0alphapb.ShareGrant, error) {
-	return nil, nil
+// convert must be called in a lock-controlled area.
+func (m *manager) convert(ctx context.Context, s *usershareproviderv0alphapb.Share) *usershareproviderv0alphapb.ReceivedShare {
+	rs := &usershareproviderv0alphapb.ReceivedShare{
+		Share: s,
+	}
+	user := user.ContextMustGetUser(ctx)
+	if v, ok := m.shareState[user.Id.String()]; ok {
+		if state, ok := v[s.Id]; ok {
+			rs.State = state
+		}
+	}
+	return rs
 }
 
-func (m *manager) RejectReceivedShare(ctx context.Context, u *authv0alphapb.User, ref *usershareproviderv0alphapb.ShareReference) error {
-	return nil
+func (m *manager) GetReceivedShare(ctx context.Context, ref *usershareproviderv0alphapb.ShareReference) (*usershareproviderv0alphapb.ReceivedShare, error) {
+	return m.getReceived(ctx, ref)
+}
+
+func (m *manager) getReceived(ctx context.Context, ref *usershareproviderv0alphapb.ShareReference) (*usershareproviderv0alphapb.ReceivedShare, error) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	user := user.ContextMustGetUser(ctx)
+	for _, s := range m.shares {
+		if equal(ref, s) && s.Grantee.Type == storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER &&
+			reflect.DeepEqual(*s.Grantee.Id, user.Id) {
+			rs := m.convert(ctx, s)
+			return rs, nil
+
+		}
+	}
+	return nil, errtypes.NotFound(ref.String())
+}
+
+func (m *manager) UpdateReceivedShare(ctx context.Context, ref *usershareproviderv0alphapb.ShareReference, f *usershareproviderv0alphapb.UpdateReceivedShareRequest_UpdateField) (*usershareproviderv0alphapb.ReceivedShare, error) {
+	rs, err := m.getReceived(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+
+	user := user.ContextMustGetUser(ctx)
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	if v, ok := m.shareState[user.Id.String()]; ok {
+		v[rs.Share.Id] = f.GetState()
+		m.shareState[user.Id.String()] = v
+	} else {
+		a := map[*usershareproviderv0alphapb.ShareId]usershareproviderv0alphapb.ShareState{
+			rs.Share.Id: f.GetState(),
+		}
+		m.shareState[user.Id.String()] = a
+	}
+	return rs, nil
 }

@@ -38,19 +38,15 @@ type Manager interface {
 	Unshare(ctx context.Context, u *authv0alphapb.User, ref *usershareproviderv0alphapb.ShareReference) error
 
 	// UpdateShare updates the mode of the given share.
-	UpdateShare(ctx context.Context, u *authv0alphapb.User, ref *usershareproviderv0alphapb.ShareReference, g *usershareproviderv0alphapb.ShareGrant) (*usershareproviderv0alphapb.ShareGrant, error)
+	UpdateShare(ctx context.Context, u *authv0alphapb.User, ref *usershareproviderv0alphapb.ShareReference, g *usershareproviderv0alphapb.ShareGrant) (*usershareproviderv0alphapb.Share, error)
 
 	// ListShares returns the shares created by the user. If md is provided is not nil,
 	// it returns only shares attached to the given resource.
-	ListShares(ctx context.Context, u *authv0alphapb.User, md *storageproviderv0alphapb.ResourceInfo) ([]*usershareproviderv0alphapb.ShareGrant, error)
+	ListShares(ctx context.Context, u *authv0alphapb.User, md *storageproviderv0alphapb.ResourceInfo) ([]*usershareproviderv0alphapb.Share, error)
 
 	// ListReceivedShares returns the list of shares the user has access.
-	ListReceivedShares(ctx context.Context, u *authv0alphapb.User) ([]*usershareproviderv0alphapb.ShareGrant, error)
+	ListReceivedShares(ctx context.Context) ([]*usershareproviderv0alphapb.ReceivedShare, error)
 
-	// GetReceivedShare returns the information for the share received with
-	// the given ref.
-	GetReceivedShare(ctx context.Context, u *authv0alphapb.User, ref *usershareproviderv0alphapb.ShareReference) (*usershareproviderv0alphapb.ShareGrant, error)
-
-	// RejectReceivedShare rejects the share by the given id.
-	RejectReceivedShare(ctx context.Context, u *authv0alphapb.User, ref *usershareproviderv0alphapb.ShareReference) error
+	// UpdateReceivedShare updates the received share with share state.
+	UpdateReceivedShare(ctx context.Context, ref *usershareproviderv0alphapb.ShareReference, f *usershareproviderv0alphapb.UpdateReceivedShareRequest_UpdateField) (*usershareproviderv0alphapb.ReceivedShare, error)
 }
