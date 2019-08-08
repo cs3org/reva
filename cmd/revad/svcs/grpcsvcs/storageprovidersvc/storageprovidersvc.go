@@ -32,13 +32,13 @@ import (
 	storagetypespb "github.com/cs3org/go-cs3apis/cs3/storagetypes"
 	"github.com/cs3org/reva/cmd/revad/grpcserver"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
-	"github.com/cs3org/reva/pkg/errtypes"
 )
 
 func init() {
