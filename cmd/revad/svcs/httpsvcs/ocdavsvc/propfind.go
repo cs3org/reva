@@ -105,7 +105,7 @@ func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request) {
 		infos = append(infos, res.Infos...)
 	}
 
-	propRes, err := s.formatPropfind(ctx, fn, infos)
+	propRes, err := s.formatPropfind(ctx, infos)
 	if err != nil {
 		log.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -149,7 +149,7 @@ func readPropfind(r io.Reader) (pf propfindXML, status int, err error) {
 	return pf, 0, nil
 }
 
-func (s *svc) formatPropfind(ctx context.Context, fn string, mds []*storageproviderv0alphapb.ResourceInfo) (string, error) {
+func (s *svc) formatPropfind(ctx context.Context, mds []*storageproviderv0alphapb.ResourceInfo) (string, error) {
 	responses := []*responseXML{}
 	for _, md := range mds {
 		res, err := s.mdToPropResponse(ctx, md)

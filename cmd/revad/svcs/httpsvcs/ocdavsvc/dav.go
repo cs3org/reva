@@ -52,7 +52,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 		case "avatars":
 			h.AvatarsHandler.Handler(s).ServeHTTP(w, r)
 		case "meta":
-			h.MetaHandler.Handler().ServeHTTP(w, r)
+			h.MetaHandler.Handler(s).ServeHTTP(w, r)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}

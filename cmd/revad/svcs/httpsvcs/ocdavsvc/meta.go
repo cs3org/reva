@@ -20,19 +20,41 @@ package ocdavsvc
 
 import (
 	"net/http"
+
+	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
 )
 
 // MetaHandler handles meta requests
 type MetaHandler struct {
+	VersionsHandler *VersionsHandler
 }
 
 func (h *MetaHandler) init(c *Config) error {
+	h.VersionsHandler = new(VersionsHandler)
+	h.VersionsHandler.init(c)
 	return nil
 }
 
 // Handler handles requests
-func (h *MetaHandler) Handler() http.Handler {
+func (h *MetaHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotImplemented)
+
+		var id string
+		id, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
+		if id == "" {
+			http.Error(w, "400 Bad Request", http.StatusBadRequest)
+			return
+		}
+
+		var head string
+		head, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
+
+		switch head {
+		case "v":
+			h.VersionsHandler.Handler(s, id).ServeHTTP(w, r)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+
 	})
 }
