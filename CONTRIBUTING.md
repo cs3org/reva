@@ -33,7 +33,7 @@ the bug (when you know how), what environment the bug appeared and so on.
 Please tell us at least the following things:
 
  * What's the version of binary you used? Please include the output of
-   `revad -v` or `reva version` in your bug report.
+   `revad --version` or `reva version` in your bug report.
  * What commands did you execute to get to where the bug occurred?
  * What did you expect?
  * What happened instead?
@@ -58,7 +58,7 @@ To compile the REVA daemon and the REVA command line you can:
 ```
 $ git clone https://github.com/cs3org/reva
 $ make
-$ ./cmd/revad/revad -v
+$ ./cmd/revad/revad --version
 version=v0.0.0 commit=639f48d branch=review go_version=go1.11.5 build_date=2019-04-17T13:57:17+0200 build_platform=linux/amd64
 ```
 
