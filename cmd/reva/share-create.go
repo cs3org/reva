@@ -106,8 +106,8 @@ func shareCreateCommand() *command {
 			return err
 		}
 
-		if res.Status.Code != rpcpb.Code_CODE_OK {
-			return formatError(res.Status)
+		if shareRes.Status.Code != rpcpb.Code_CODE_OK {
+			return formatError(shareRes.Status)
 		}
 
 		t := table.NewWriter()

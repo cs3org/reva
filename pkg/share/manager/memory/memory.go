@@ -20,6 +20,7 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"sync"
@@ -74,6 +75,24 @@ func (m *manager) Share(ctx context.Context, md *storageproviderv0alphapb.Resour
 		Nanos:   uint32(now % 1000000000),
 	}
 
+	// do not allow share to myself if share is for a user
+	if g.Grantee.Type == storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER &&
+		g.Grantee.Id.Idp == user.Id.Idp && g.Grantee.Id.OpaqueId == user.Id.OpaqueId {
+		return nil, errors.New("memory: user and grantee are the same")
+	}
+
+	// check if share already exists.
+	key := &usershareproviderv0alphapb.ShareKey{
+		Owner:      user.Id,
+		ResourceId: md.Id,
+		Grantee:    g.Grantee,
+	}
+	_, err := m.getByKey(ctx, key)
+	// share already exists
+	if err == nil {
+		return nil, errtypes.AlreadyExists(key.String())
+	}
+
 	s := &usershareproviderv0alphapb.Share{
 		Id: &usershareproviderv0alphapb.ShareId{
 			OpaqueId: fmt.Sprintf("%d", id),
@@ -95,7 +114,7 @@ func (m *manager) getByID(ctx context.Context, id *usershareproviderv0alphapb.Sh
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	for _, s := range m.shares {
-		if reflect.DeepEqual(*s.GetId(), *id) {
+		if s.GetId().OpaqueId == id.OpaqueId {
 			return s, nil
 		}
 	}
@@ -106,7 +125,9 @@ func (m *manager) getByKey(ctx context.Context, key *usershareproviderv0alphapb.
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	for _, s := range m.shares {
-		if reflect.DeepEqual(*key.Owner, *s.Owner) && reflect.DeepEqual(*key.ResourceId, *s.ResourceId) && reflect.DeepEqual(*key.Grantee, *s.Grantee) {
+		if key.Owner.Idp == s.Owner.Idp && key.Owner.OpaqueId == s.Owner.OpaqueId &&
+			key.ResourceId.StorageId == s.ResourceId.StorageId && key.ResourceId.OpaqueId == s.ResourceId.OpaqueId &&
+			key.Grantee.Type == s.Grantee.Type && key.Grantee.Id.Idp == s.Grantee.Id.Idp && key.Grantee.Id.OpaqueId == s.Grantee.Id.OpaqueId {
 			return s, nil
 		}
 	}
@@ -123,8 +144,9 @@ func (m *manager) get(ctx context.Context, ref *usershareproviderv0alphapb.Share
 	}
 
 	// check if we are the owner
+	// TODO(labkode): check for creator also.
 	user := user.ContextMustGetUser(ctx)
-	if reflect.DeepEqual(*user.Id, s.Owner) || reflect.DeepEqual(*user.Id, s.Creator) {
+	if user.Id.Idp == s.Owner.Idp && user.Id.OpaqueId == s.Owner.OpaqueId {
 		return s, nil
 	}
 
@@ -192,8 +214,8 @@ func (m *manager) ListShares(ctx context.Context, md *storageproviderv0alphapb.R
 	defer m.lock.Unlock()
 	user := user.ContextMustGetUser(ctx)
 	for _, s := range m.shares {
-		if s.Grantee.Type == storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER &&
-			user.Id.Idp == s.Owner.Idp && user.Id.OpaqueId == s.Owner.OpaqueId {
+		// TODO(labkode): add check for owner.
+		if user.Id.Idp == s.Owner.Idp && user.Id.OpaqueId == s.Owner.OpaqueId {
 			ss = append(ss, s)
 		}
 	}
@@ -207,11 +229,16 @@ func (m *manager) ListReceivedShares(ctx context.Context) ([]*usershareproviderv
 	defer m.lock.Unlock()
 	user := user.ContextMustGetUser(ctx)
 	for _, s := range m.shares {
-		fmt.Println(user.String(), s.String())
-		if s.Grantee.Type == storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER &&
-			user.Id.Idp == s.Grantee.Id.Idp && user.Id.OpaqueId == s.Grantee.Id.OpaqueId {
-			rs := m.convert(ctx, s)
-			rss = append(rss, rs)
+		if user.Id.Idp == s.Owner.Idp && user.Id.OpaqueId == s.Owner.OpaqueId {
+			// omit shares created by me
+			// TODO(labkode): apply check for s.Creator also.
+			continue
+		}
+		if s.Grantee.Type == storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER {
+			if user.Id.Idp == s.Grantee.Id.Idp && user.Id.OpaqueId == s.Grantee.Id.OpaqueId {
+				rs := m.convert(ctx, s)
+				rss = append(rss, rs)
+			}
 		} else if s.Grantee.Type == storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_GROUP {
 			// check if all user groups match this share; TODO(labkode): filter shares created by us.
 			for _, g := range user.Groups {
@@ -225,7 +252,7 @@ func (m *manager) ListReceivedShares(ctx context.Context) ([]*usershareproviderv
 	return rss, nil
 }
 
-// convert must be called in a lock-controlled area.
+// convert must be called in a lock-controlled block.
 func (m *manager) convert(ctx context.Context, s *usershareproviderv0alphapb.Share) *usershareproviderv0alphapb.ReceivedShare {
 	rs := &usershareproviderv0alphapb.ReceivedShare{
 		Share: s,
@@ -248,11 +275,19 @@ func (m *manager) getReceived(ctx context.Context, ref *usershareproviderv0alpha
 	defer m.lock.Unlock()
 	user := user.ContextMustGetUser(ctx)
 	for _, s := range m.shares {
-		if equal(ref, s) && s.Grantee.Type == storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER &&
-			reflect.DeepEqual(*s.Grantee.Id, user.Id) {
-			rs := m.convert(ctx, s)
-			return rs, nil
-
+		if equal(ref, s) {
+			if s.Grantee.Type == storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER &&
+				s.Grantee.Id.Idp == user.Id.Idp && s.Grantee.Id.OpaqueId == user.Id.OpaqueId {
+				rs := m.convert(ctx, s)
+				return rs, nil
+			} else if s.Grantee.Type == storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_GROUP {
+				for _, g := range user.Groups {
+					if s.Grantee.Id.OpaqueId == g {
+						rs := m.convert(ctx, s)
+						return rs, nil
+					}
+				}
+			}
 		}
 	}
 	return nil, errtypes.NotFound(ref.String())

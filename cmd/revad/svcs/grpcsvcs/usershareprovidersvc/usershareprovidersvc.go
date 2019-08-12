@@ -203,9 +203,9 @@ func (s *service) UpdateReceivedShare(ctx context.Context, req *usershareprovide
 
 	_, err := s.sm.UpdateReceivedShare(ctx, req.Ref, req.Field) // TODO(labkode): check what to update
 	if err != nil {
-		log.Err(err).Msg("error listing received shares")
+		log.Err(err).Msg("error updating received share")
 		return &usershareproviderv0alphapb.UpdateReceivedShareResponse{
-			Status: status.NewInternal(ctx, "error listing received shares"),
+			Status: status.NewInternal(ctx, "error updating received share"),
 		}, nil
 	}
 
