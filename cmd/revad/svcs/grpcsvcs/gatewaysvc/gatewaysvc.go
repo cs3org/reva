@@ -21,8 +21,14 @@ package gatewaysvc
 import (
 	"io"
 
+	appproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/appprovider/v0alpha"
+	appregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/appregistry/v0alpha"
 	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	preferencesv0alphapb "github.com/cs3org/go-cs3apis/cs3/preferences/v0alpha"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	storageregv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageregistry/v0alpha"
+	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
+
 	"github.com/cs3org/reva/cmd/revad/grpcserver"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -48,6 +54,12 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 
 	storageproviderv0alphapb.RegisterStorageProviderServiceServer(ss, s)
 	authv0alphapb.RegisterAuthServiceServer(ss, s)
+	usershareproviderv0alphapb.RegisterUserShareProviderServiceServer(ss, s)
+	appregistryv0alphapb.RegisterAppRegistryServiceServer(ss, s)
+	appproviderv0alphapb.RegisterAppProviderServiceServer(ss, s)
+	preferencesv0alphapb.RegisterPreferencesServiceServer(ss, s)
+	storageregv0alphapb.RegisterStorageRegistryServiceServer(ss, s)
+
 	return s, nil
 }
 

@@ -2,7 +2,7 @@
 log_file = "stderr"
 log_mode = "dev"
 max_cpus = "100%"
-tracing_enabled = true
+#tracing_enabled = true
 disable_http = true
 
 [log]
@@ -17,3 +17,6 @@ enabled_services = ["gatewaysvc"]
 [grpc.services.gatewaysvc]
 storageregistrysvc = "localhost:9999"
 authsvc = "localhost:9999"
+usershareprovidersvc = "localhost:9999"
+appregistrysvc = "localhost:9999"
+preferencessvc = "localhost:9999"
