@@ -21,11 +21,13 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
+	"github.com/jedib0t/go-pretty/table"
 	"github.com/pkg/errors"
 )
 
@@ -108,7 +110,16 @@ func shareCreateCommand() *command {
 			return formatError(res.Status)
 		}
 
-		fmt.Println(shareRes.Share.String())
+		t := table.NewWriter()
+		t.SetOutputMirror(os.Stdout)
+		t.AppendHeader(table.Row{"#", "Owner.Idp", "Owner.OpaqueId", "ResourceId", "Permissions", "Type", "Grantee.Idp", "Grantee.OpaqueId", "Created", "Updated"})
+
+		s := shareRes.Share
+		t.AppendRows([]table.Row{
+			{s.Id.OpaqueId, s.Owner.Idp, s.Owner.OpaqueId, s.ResourceId.String(), s.Permissions.String(), s.Grantee.Type.String(), s.Grantee.Id.Idp, s.Grantee.Id.OpaqueId, time.Unix(int64(s.Ctime.Seconds), 0), time.Unix(int64(s.Mtime.Seconds), 0)},
+		})
+		t.Render()
+
 		return nil
 	}
 	return cmd
@@ -116,9 +127,9 @@ func shareCreateCommand() *command {
 
 func getGrantType(t string) storageproviderv0alphapb.GranteeType {
 	switch t {
-	case "u":
+	case "user":
 		return storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER
-	case "g":
+	case "group":
 		return storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_GROUP
 	default:
 		return storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_INVALID

@@ -94,6 +94,11 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 func (s *service) CreateShare(ctx context.Context, req *usershareproviderv0alphapb.CreateShareRequest) (*usershareproviderv0alphapb.CreateShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 
+	// TODO(labkode): validate input
+	// TODO(labkode): hack: use configured IDP or use hostname as default.
+	if req.Grant.Grantee.Id.Idp == "" {
+		req.Grant.Grantee.Id.Idp = "localhost"
+	}
 	share, err := s.sm.Share(ctx, req.ResourceInfo, req.Grant)
 	if err != nil {
 		log.Err(err).Msg("error creating share")

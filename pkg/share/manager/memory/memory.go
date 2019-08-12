@@ -187,9 +187,17 @@ func (m *manager) UpdateShare(ctx context.Context, ref *usershareproviderv0alpha
 }
 
 func (m *manager) ListShares(ctx context.Context, md *storageproviderv0alphapb.ResourceInfo) ([]*usershareproviderv0alphapb.Share, error) {
+	var ss []*usershareproviderv0alphapb.Share
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	return m.shares, nil
+	user := user.ContextMustGetUser(ctx)
+	for _, s := range m.shares {
+		if s.Grantee.Type == storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER &&
+			user.Id.Idp == s.Owner.Idp && user.Id.OpaqueId == s.Owner.OpaqueId {
+			ss = append(ss, s)
+		}
+	}
+	return ss, nil
 }
 
 // we list the shares that are targeted to the user in context or to the user groups.
@@ -199,10 +207,19 @@ func (m *manager) ListReceivedShares(ctx context.Context) ([]*usershareproviderv
 	defer m.lock.Unlock()
 	user := user.ContextMustGetUser(ctx)
 	for _, s := range m.shares {
+		fmt.Println(user.String(), s.String())
 		if s.Grantee.Type == storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER &&
-			reflect.DeepEqual(*s.Grantee.Id, user.Id) {
+			user.Id.Idp == s.Grantee.Id.Idp && user.Id.OpaqueId == s.Grantee.Id.OpaqueId {
 			rs := m.convert(ctx, s)
 			rss = append(rss, rs)
+		} else if s.Grantee.Type == storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_GROUP {
+			// check if all user groups match this share; TODO(labkode): filter shares created by us.
+			for _, g := range user.Groups {
+				if g == s.Grantee.Id.OpaqueId {
+					rs := m.convert(ctx, s)
+					rss = append(rss, rs)
+				}
+			}
 		}
 	}
 	return rss, nil

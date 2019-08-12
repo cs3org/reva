@@ -10,9 +10,11 @@ require (
 	github.com/cs3org/go-cs3apis v0.0.0-20190809124338-bd2fb913922c
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/fatih/color v1.7.0 // indirect
+	github.com/go-openapi/strfmt v0.19.2 // indirect
 	github.com/gofrs/uuid v3.2.0+incompatible
 	github.com/gogo/protobuf v1.2.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.0.1-0.20190118093823-f849b5445de4
+	github.com/jedib0t/go-pretty v4.3.0+incompatible
 	github.com/mattn/go-colorable v0.0.9 // indirect
 	github.com/mattn/go-isatty v0.0.4 // indirect
 	github.com/mattn/go-runewidth v0.0.4 // indirect

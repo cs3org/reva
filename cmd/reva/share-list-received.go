@@ -27,10 +27,10 @@ import (
 	"github.com/jedib0t/go-pretty/table"
 )
 
-func shareListCommand() *command {
-	cmd := newCommand("share-list")
-	cmd.Description = func() string { return "list shares you manage" }
-	cmd.Usage = func() string { return "Usage: share list [-flags]" }
+func shareListReceivedCommand() *command {
+	cmd := newCommand("share-list-received")
+	cmd.Description = func() string { return "list shares you have received" }
+	cmd.Usage = func() string { return "Usage: share-list-received [-flags]" }
 	cmd.Action = func() error {
 		ctx := getAuthContext()
 		shareClient, err := getUserShareProviderClient()
@@ -38,9 +38,9 @@ func shareListCommand() *command {
 			return err
 		}
 
-		shareRequest := &usershareproviderv0alphapb.ListSharesRequest{}
+		shareRequest := &usershareproviderv0alphapb.ListReceivedSharesRequest{}
 
-		shareRes, err := shareClient.ListShares(ctx, shareRequest)
+		shareRes, err := shareClient.ListReceivedShares(ctx, shareRequest)
 		if err != nil {
 			return err
 		}
@@ -51,11 +51,10 @@ func shareListCommand() *command {
 
 		t := table.NewWriter()
 		t.SetOutputMirror(os.Stdout)
-		t.AppendHeader(table.Row{"#", "Owner.Idp", "Owner.OpaqueId", "ResourceId", "Permissions", "Type", "Grantee.Idp", "Grantee.OpaqueId", "Created", "Updated"})
-
+		t.AppendHeader(table.Row{"#", "Owner.Idp", "Owner.OpaqueId", "ResourceId", "Permissions", "Type", "Grantee.Idp", "Grantee.OpaqueId", "Created", "Updated", "State"})
 		for _, s := range shareRes.Shares {
 			t.AppendRows([]table.Row{
-				{s.Id.OpaqueId, s.Owner.Idp, s.Owner.OpaqueId, s.ResourceId.String(), s.Permissions.String(), s.Grantee.Type.String(), s.Grantee.Id.Idp, s.Grantee.Id.OpaqueId, time.Unix(int64(s.Ctime.Seconds), 0), time.Unix(int64(s.Mtime.Seconds), 0)},
+				{s.Share.Owner.OpaqueId, s.Share.Owner.Idp, s.Share.Owner.OpaqueId, s.Share.ResourceId.String(), s.Share.Permissions.String(), s.Share.Grantee.Type.String(), s.Share.Grantee.Id.Idp, s.Share.Grantee.Id.OpaqueId, time.Unix(int64(s.Share.Ctime.Seconds), 0), time.Unix(int64(s.Share.Mtime.Seconds), 0), s.State.String()},
 			})
 		}
 		t.Render()
