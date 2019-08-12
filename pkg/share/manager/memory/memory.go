@@ -200,7 +200,12 @@ func (m *manager) UpdateShare(ctx context.Context, ref *usershareproviderv0alpha
 	for i, s := range m.shares {
 		if equal(ref, s) {
 			if user.Id.Idp == s.Owner.Idp && user.Id.OpaqueId == s.Owner.OpaqueId {
+				now := time.Now().UnixNano()
 				m.shares[i].Permissions = p
+				m.shares[i].Mtime = &typespb.Timestamp{
+					Seconds: uint64(now / 1000000000),
+					Nanos:   uint32(now % 1000000000),
+				}
 				return m.shares[i], nil
 			}
 		}

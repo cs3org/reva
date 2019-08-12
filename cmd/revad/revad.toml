@@ -67,6 +67,7 @@ driver = "local"
 mount_path = "/"
 mount_id = "123e4567-e89b-12d3-a456-426655440000"
 data_server_url = "http://localhost:9998/data"
+
 [grpc.services.storageprovidersvc.available_checksums]
 md5   = 100
 unset = 1000
@@ -108,5 +109,3 @@ skip_methods = ["/cs3.authv0alpha.AuthService/GenerateAccessToken", "/cs3.authv0
 
 [grpc.interceptors.auth.token_managers.jwt]
 secret = "Pive-Fumkiu4"
-
-
