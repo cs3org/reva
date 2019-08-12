@@ -140,7 +140,6 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 			trace.StringAttribute("token", tkn))
 		span.AddAttributes(trace.StringAttribute("user", u.String()), trace.StringAttribute("token", tkn))
 
-		fmt.Println(u)
 		ctx = user.ContextSetUser(ctx, u)
 		ctx = token.ContextSetToken(ctx, tkn)
 		return handler(ctx, req)

@@ -55,6 +55,7 @@ func main() {
 		shareCreateCommand(),
 		shareListCommand(),
 		shareRemoveCommand(),
+		shareUpdateCommand(),
 	}
 
 	mainUsage := createMainUsage(cmds)

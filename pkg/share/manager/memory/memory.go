@@ -177,7 +177,7 @@ func (m *manager) UpdateShare(ctx context.Context, ref *usershareproviderv0alpha
 	user := user.ContextMustGetUser(ctx)
 	for i, s := range m.shares {
 		if equal(ref, s) {
-			if reflect.DeepEqual(*user.Id, *s.Owner) || reflect.DeepEqual(*user.Id, *s.Owner) {
+			if user.Id.Idp == s.Owner.Idp && user.Id.OpaqueId == s.Owner.OpaqueId {
 				m.shares[i].Permissions = p
 				return m.shares[i], nil
 			}
