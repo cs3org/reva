@@ -47,6 +47,7 @@ func New(c map[string]interface{}) (share.Manager, error) {
 	state := map[string]map[*usershareproviderv0alphapb.ShareId]usershareproviderv0alphapb.ShareState{}
 	return &manager{
 		shareState: state,
+		lock:       &sync.Mutex{},
 	}, nil
 }
 
@@ -146,7 +147,7 @@ func (m *manager) Unshare(ctx context.Context, ref *usershareproviderv0alphapb.S
 	user := user.ContextMustGetUser(ctx)
 	for i, s := range m.shares {
 		if equal(ref, s) {
-			if reflect.DeepEqual(*user.Id, *s.Owner) || reflect.DeepEqual(*user.Id, *s.Owner) {
+			if user.Id.Idp == s.Owner.Idp && user.Id.OpaqueId == s.Owner.OpaqueId {
 				m.shares[len(m.shares)-1], m.shares[i] = m.shares[i], m.shares[len(m.shares)-1]
 				m.shares = m.shares[:len(m.shares)-1]
 				return nil
@@ -156,14 +157,18 @@ func (m *manager) Unshare(ctx context.Context, ref *usershareproviderv0alphapb.S
 	return errtypes.NotFound(ref.String())
 }
 
+// TODO(labkode): this is fragile, the check should be done on primitve types.
 func equal(ref *usershareproviderv0alphapb.ShareReference, s *usershareproviderv0alphapb.Share) bool {
-	if reflect.DeepEqual(*ref.GetId(), *s.Id) {
-		return true
-	} else if reflect.DeepEqual(*ref.GetKey().Owner, *s.Owner) && reflect.DeepEqual(*ref.GetKey().ResourceId, *s.ResourceId) && reflect.DeepEqual(*ref.GetKey().Grantee, *s.Grantee) {
-		return true
-	} else {
-		return false
+	if ref.GetId() != nil && s.Id != nil {
+		if ref.GetId().OpaqueId == s.Id.OpaqueId {
+			return true
+		}
+	} else if ref.GetKey() != nil {
+		if reflect.DeepEqual(*ref.GetKey().Owner, *s.Owner) && reflect.DeepEqual(*ref.GetKey().ResourceId, *s.ResourceId) && reflect.DeepEqual(*ref.GetKey().Grantee, *s.Grantee) {
+			return true
+		}
 	}
+	return false
 }
 
 func (m *manager) UpdateShare(ctx context.Context, ref *usershareproviderv0alphapb.ShareReference, p *usershareproviderv0alphapb.SharePermissions) (*usershareproviderv0alphapb.Share, error) {

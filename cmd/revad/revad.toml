@@ -2,7 +2,7 @@
 log_file = "stderr"
 log_mode = "dev"
 max_cpus = "100%"
-tracing_enabled = true
+#tracing_enabled = true
 
 [log]
 level = "debug"
@@ -56,16 +56,11 @@ root = "/var/tmp/reva/data"
 [grpc]
 network = "tcp"
 address = "0.0.0.0:9999"
-enabled_services = ["storageprovidersvc", "authsvc", "storageregistrysvc", "appregistrysvc", "appprovidersvc", "preferencessvc"]
+enabled_services = ["storageprovidersvc", "authsvc", "storageregistrysvc", "appregistrysvc", "appprovidersvc", "preferencessvc", "usershareprovidersvc"]
 enabled_interceptors = ["auth"]
 
-[grpc.interceptors.auth]
-token_manager = "jwt"
-skip_methods = ["/cs3.authv0alpha.AuthService/GenerateAccessToken"]
-
-[grpc.interceptors.auth.token_managers.jwt]
-secret = "Pive-Fumkiu4"
-
+[grpc.services.usershareprovidersvc]
+driver = "memory"
 
 [grpc.services.storageprovidersvc]
 driver = "local"
@@ -106,3 +101,12 @@ driver = "demo"
 
 [grpc.services.appprovidersvc.demo]
 iframe_ui_provider = "http://localhost:9998/iframeuisvc"
+
+[grpc.interceptors.auth]
+token_manager = "jwt"
+skip_methods = ["/cs3.authv0alpha.AuthService/GenerateAccessToken", "/cs3.authv0alpha.AuthService/WhoAmI"]
+
+[grpc.interceptors.auth.token_managers.jwt]
+secret = "Pive-Fumkiu4"
+
+

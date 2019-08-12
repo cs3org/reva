@@ -20,14 +20,18 @@ package jwt
 
 import (
 	"context"
+	"time"
 
 	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/token"
 	"github.com/cs3org/reva/pkg/token/manager/registry"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
+
+const defaultExpiraton int64 = 3600 // 1 hour
 
 func init() {
 	registry.Register("jwt", New)
@@ -48,6 +52,11 @@ func New(value map[string]interface{}) (token.Manager, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "error parsing config")
 	}
+
+	if c.Expires == 0 {
+		c.Expires = defaultExpiraton
+	}
+
 	m := &manager{conf: c}
 	return m, nil
 }
@@ -57,7 +66,14 @@ type manager struct {
 }
 
 type config struct {
-	Secret string `mapstructure:"secret"`
+	Secret  string `mapstructure:"secret"`
+	Expires int64  `mapstructure:"expires"`
+}
+
+// claims are custom claims for the JWT token.
+type claims struct {
+	jwt.StandardClaims
+	User *authv0alphapb.User `json:"user"`
 }
 
 // TODO(labkode): resulting JSON contains internal protobuf fields:
@@ -67,9 +83,15 @@ type config struct {
 //  "XXX_unrecognized": null
 //}
 func (m *manager) MintToken(ctx context.Context, u *authv0alphapb.User) (string, error) {
-	claims := &jwt.MapClaims{}
-	if err := mapstructure.Decode(u, claims); err != nil {
-		return "", errors.Wrap(err, "error decoding user into jwt claims")
+	ttl := time.Duration(m.conf.Expires) * time.Second
+	claims := claims{
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: time.Now().Add(ttl).Unix(),
+			Issuer:    u.Id.Idp,
+			Audience:  "reva",
+			IssuedAt:  time.Now().Unix(),
+		},
+		User: u,
 	}
 
 	t := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), claims)
@@ -83,7 +105,7 @@ func (m *manager) MintToken(ctx context.Context, u *authv0alphapb.User) (string,
 }
 
 func (m *manager) DismantleToken(ctx context.Context, tkn string) (*authv0alphapb.User, error) {
-	jt, err := jwt.Parse(tkn, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(tkn, &claims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(m.conf.Secret), nil
 	})
 
@@ -91,15 +113,10 @@ func (m *manager) DismantleToken(ctx context.Context, tkn string) (*authv0alphap
 		return nil, errors.Wrap(err, "error parsing token")
 	}
 
-	if !jt.Valid {
-		return nil, errors.Wrap(err, "token invalid")
-
+	if claims, ok := token.Claims.(*claims); ok && token.Valid {
+		return claims.User, nil
 	}
 
-	claims := jt.Claims.(jwt.MapClaims)
-	u := &authv0alphapb.User{}
-	if err := mapstructure.Decode(claims, u); err != nil {
-		return nil, errors.Wrap(err, "error decoding claims into user")
-	}
-	return u, nil
+	err = errtypes.InvalidCredentials("token invalid")
+	return nil, err
 }
