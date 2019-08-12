@@ -167,39 +167,16 @@ func (s *service) GenerateAccessToken(ctx context.Context, req *authv0alphapb.Ge
 func (s *service) WhoAmI(ctx context.Context, req *authv0alphapb.WhoAmIRequest) (*authv0alphapb.WhoAmIResponse, error) {
 	log := appctx.GetLogger(ctx)
 	token := req.AccessToken
-	claims, err := s.tokenmgr.DismantleToken(ctx, token)
+	u, err := s.tokenmgr.DismantleToken(ctx, token)
 	if err != nil {
-		err = errors.Wrap(err, "error dismantling access token")
+		err = errors.Wrap(err, "error getting user from access token")
 		log.Error().Err(err).Msg("error dismantling access token")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_UNAUTHENTICATED}
 		res := &authv0alphapb.WhoAmIResponse{Status: status}
 		return res, nil
 	}
 
-	up := &struct {
-		ID          *typespb.UserId `mapstructure:"id"`
-		Username    string          `mapstructure:"username"`
-		DisplayName string          `mapstructure:"display_name"`
-		Mail        string          `mapstructure:"mail"`
-		Groups      []string        `mapstructure:"groups"`
-	}{}
-
-	if err := mapstructure.Decode(claims, up); err != nil {
-		log.Error().Err(err).Msgf("error parsing token claims")
-		status := &rpcpb.Status{Code: rpcpb.Code_CODE_UNAUTHENTICATED}
-		res := &authv0alphapb.WhoAmIResponse{Status: status}
-		return res, nil
-	}
-
-	user := &authv0alphapb.User{
-		Id:          up.ID,
-		Username:    up.Username,
-		DisplayName: up.DisplayName,
-		Mail:        up.Mail,
-		Groups:      up.Groups,
-	}
-
 	status := &rpcpb.Status{Code: rpcpb.Code_CODE_OK}
-	res := &authv0alphapb.WhoAmIResponse{Status: status, User: user}
+	res := &authv0alphapb.WhoAmIResponse{Status: status, User: u}
 	return res, nil
 }

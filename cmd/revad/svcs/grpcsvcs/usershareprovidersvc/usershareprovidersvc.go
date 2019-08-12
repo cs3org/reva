@@ -19,15 +19,13 @@
 package usershareprovidersvc
 
 import (
+	"context"
 	"fmt"
 	"io"
 
-	"github.com/cs3org/reva/cmd/revad/grpcserver"
-
-	"context"
-
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
+	"github.com/cs3org/reva/cmd/revad/grpcserver"
+	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/share"
 	"github.com/cs3org/reva/pkg/share/manager/registry"
@@ -100,28 +98,30 @@ func (s *service) CreateShare(ctx context.Context, req *usershareproviderv0alpha
 	if err != nil {
 		log.Err(err).Msg("error creating share")
 		return &usershareproviderv0alphapb.CreateShareResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, "error creating share"),
 		}, nil
 	}
 
 	res := &usershareproviderv0alphapb.CreateShareResponse{
-		Status: &rpcpb.Status{
-			Code: rpcpb.Code_CODE_OK,
-		},
-		Share: share,
+		Status: status.NewOK(ctx),
+		Share:  share,
 	}
 	return res, nil
 }
 
 func (s *service) RemoveShare(ctx context.Context, req *usershareproviderv0alphapb.RemoveShareRequest) (*usershareproviderv0alphapb.RemoveShareResponse, error) {
-	res := &usershareproviderv0alphapb.RemoveShareResponse{
-		Status: &rpcpb.Status{
-			Code: rpcpb.Code_CODE_UNIMPLEMENTED,
-		},
+	log := appctx.GetLogger(ctx)
+	err := s.sm.Unshare(ctx, req.Ref)
+	if err != nil {
+		log.Err(err).Msg("error removing share")
+		return &usershareproviderv0alphapb.RemoveShareResponse{
+			Status: status.NewInternal(ctx, "error removing share"),
+		}, nil
 	}
-	return res, nil
+
+	return &usershareproviderv0alphapb.RemoveShareResponse{
+		Status: status.NewOK(ctx),
+	}, nil
 }
 
 func (s *service) GetShare(ctx context.Context, req *usershareproviderv0alphapb.GetShareRequest) (*usershareproviderv0alphapb.GetShareResponse, error) {
@@ -130,19 +130,14 @@ func (s *service) GetShare(ctx context.Context, req *usershareproviderv0alphapb.
 	if err != nil {
 		log.Err(err).Msg("error getting share")
 		return &usershareproviderv0alphapb.GetShareResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, "error getting share"),
 		}, nil
 	}
 
 	return &usershareproviderv0alphapb.GetShareResponse{
-		Status: &rpcpb.Status{
-			Code: rpcpb.Code_CODE_OK,
-		},
-		Share: share,
+		Status: status.NewOK(ctx),
+		Share:  share,
 	}, nil
-
 }
 
 func (s *service) ListShares(ctx context.Context, req *usershareproviderv0alphapb.ListSharesRequest) (*usershareproviderv0alphapb.ListSharesResponse, error) {
@@ -152,16 +147,12 @@ func (s *service) ListShares(ctx context.Context, req *usershareproviderv0alphap
 	if err != nil {
 		log.Err(err).Msg("error listing shares")
 		return &usershareproviderv0alphapb.ListSharesResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, "error listing shares"),
 		}, nil
 	}
 
 	res := &usershareproviderv0alphapb.ListSharesResponse{
-		Status: &rpcpb.Status{
-			Code: rpcpb.Code_CODE_OK,
-		},
+		Status: status.NewOK(ctx),
 		Shares: shares,
 	}
 	return res, nil
@@ -174,16 +165,12 @@ func (s *service) UpdateShare(ctx context.Context, req *usershareproviderv0alpha
 	if err != nil {
 		log.Err(err).Msg("error updating share")
 		return &usershareproviderv0alphapb.UpdateShareResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, "error updating share"),
 		}, nil
 	}
 
 	res := &usershareproviderv0alphapb.UpdateShareResponse{
-		Status: &rpcpb.Status{
-			Code: rpcpb.Code_CODE_OK,
-		},
+		Status: status.NewOK(ctx),
 	}
 	return res, nil
 }
@@ -195,16 +182,12 @@ func (s *service) ListReceivedShares(ctx context.Context, req *usershareprovider
 	if err != nil {
 		log.Err(err).Msg("error listing received shares")
 		return &usershareproviderv0alphapb.ListReceivedSharesResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, "error listing received shares"),
 		}, nil
 	}
 
 	res := &usershareproviderv0alphapb.ListReceivedSharesResponse{
-		Status: &rpcpb.Status{
-			Code: rpcpb.Code_CODE_OK,
-		},
+		Status: status.NewOK(ctx),
 		Shares: shares,
 	}
 	return res, nil
@@ -217,16 +200,12 @@ func (s *service) UpdateReceivedShare(ctx context.Context, req *usershareprovide
 	if err != nil {
 		log.Err(err).Msg("error listing received shares")
 		return &usershareproviderv0alphapb.UpdateReceivedShareResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, "error listing received shares"),
 		}, nil
 	}
 
 	res := &usershareproviderv0alphapb.UpdateReceivedShareResponse{
-		Status: &rpcpb.Status{
-			Code: rpcpb.Code_CODE_OK,
-		},
+		Status: status.NewOK(ctx),
 	}
 	return res, nil
 }

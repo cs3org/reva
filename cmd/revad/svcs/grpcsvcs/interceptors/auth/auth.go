@@ -126,16 +126,10 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		}
 
 		// validate the token
-		claims, err := tokenManager.DismantleToken(ctx, tkn)
+		u, err := tokenManager.DismantleToken(ctx, tkn)
 		if err != nil {
 			log.Warn().Msg("access token is invalid")
 			return nil, status.Errorf(codes.Unauthenticated, "auth: core access token is invalid")
-		}
-
-		u := &authv0alphapb.User{}
-		if err := mapstructure.Decode(claims, u); err != nil {
-			log.Warn().Msg("claims are invalid")
-			return nil, status.Errorf(codes.Unauthenticated, "auth: claims are invalid")
 		}
 
 		// store user and core access token in context.
@@ -146,6 +140,7 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 			trace.StringAttribute("token", tkn))
 		span.AddAttributes(trace.StringAttribute("user", u.String()), trace.StringAttribute("token", tkn))
 
+		fmt.Println(u)
 		ctx = user.ContextSetUser(ctx, u)
 		ctx = token.ContextSetToken(ctx, tkn)
 		return handler(ctx, req)
