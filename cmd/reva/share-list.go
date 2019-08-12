@@ -20,54 +20,36 @@ package main
 
 import (
 	"fmt"
-	"os"
 
-	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
+	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
 )
 
-func whoamiCommand() *command {
-	cmd := newCommand("whoami")
-	cmd.Description = func() string { return "tells who you are" }
-	tokenFlag := cmd.String("token", "", "access token to use")
-
+func shareListCommand() *command {
+	cmd := newCommand("share-list")
+	cmd.Description = func() string { return "list shares you manage" }
+	cmd.Usage = func() string { return "Usage: share list [-flags]" }
 	cmd.Action = func() error {
-		if cmd.NArg() != 0 {
-			cmd.PrintDefaults()
-			os.Exit(1)
-		}
-		var token string
-		if *tokenFlag != "" {
-			token = *tokenFlag
-		} else {
-			// read token from file
-			t, err := readToken()
-			if err != nil {
-				fmt.Println("the token file cannot be readed from file ", getTokenFile())
-				fmt.Println("make sure you have login before with \"reva login\"")
-				return err
-			}
-			token = t
-		}
-
-		client, err := getAuthClient()
-		if err != nil {
-			return err
-		}
-
-		req := &authv0alphapb.WhoAmIRequest{AccessToken: token}
-
 		ctx := getAuthContext()
-		res, err := client.WhoAmI(ctx, req)
+		shareClient, err := getUserShareProviderClient()
 		if err != nil {
 			return err
 		}
 
-		if res.Status.Code != rpcpb.Code_CODE_OK {
-			return formatError(res.Status)
+		shareRequest := &usershareproviderv0alphapb.ListSharesRequest{}
+
+		shareRes, err := shareClient.ListShares(ctx, shareRequest)
+		if err != nil {
+			return err
 		}
 
-		fmt.Println(res.User)
+		if shareRes.Status.Code != rpcpb.Code_CODE_OK {
+			return formatError(shareRes.Status)
+		}
+
+		for _, s := range shareRes.Shares {
+			fmt.Println(s)
+		}
 		return nil
 	}
 	return cmd

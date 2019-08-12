@@ -33,7 +33,6 @@ import (
 	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
 	"github.com/cs3org/reva/pkg/token"
-	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
@@ -113,11 +112,5 @@ func getConnToHost(host string) (*grpc.ClientConn, error) {
 }
 
 func formatError(status *rpcpb.Status) error {
-	switch status.Code {
-	case rpcpb.Code_CODE_NOT_FOUND:
-		return errors.New("error: not found")
-
-	default:
-		return errors.New(fmt.Sprintf("apierror: code=%v msg=%s", status.Code, status.Message))
-	}
+	return fmt.Errorf("error: code=%+v msg=%q support_trace=%q", status.Code, status.Message, status.Trace)
 }

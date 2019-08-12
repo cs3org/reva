@@ -29,57 +29,28 @@ import (
 	"github.com/pkg/errors"
 )
 
-func shareCommand() *command {
-	cmd := newCommand("share")
-	cmd.Description = func() string { return "share module" }
-	cmd.Usage = func() string { return "Usage: share <create|remove|list|update>" }
+func shareCreateCommand() *command {
+	cmd := newCommand("share-create")
+	cmd.Description = func() string { return "create share to a user or group" }
+	cmd.Usage = func() string { return "Usage: share create [-flags] <path>" }
+	grantType := cmd.String("type", "user", "grantee type (user or group)")
+	grantee := cmd.String("grantee", "", "the grantee")
+	idp := cmd.String("idp", "", "the idp of the grantee, default to same idp as the user triggering the action")
+	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor)")
 	cmd.Action = func() error {
 		if cmd.NArg() < 1 {
+			fmt.Println(cmd.Usage())
+			os.Exit(1)
+		}
+
+		// validate flags
+		if *grantee == "" {
+			fmt.Println("grantee cannot be empty: use -grantee flag")
 			fmt.Println(cmd.Usage())
 			os.Exit(1)
 		}
 
 		fn := cmd.Args()[0]
-
-		ctx := getAuthContext()
-		client, err := getStorageProviderClient()
-		if err != nil {
-			return err
-		}
-
-		ref := &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
-		}
-		req := &storageproviderv0alphapb.CreateContainerRequest{Ref: ref}
-		res, err := client.CreateContainer(ctx, req)
-		if err != nil {
-			return err
-		}
-
-		if res.Status.Code != rpcpb.Code_CODE_OK {
-			return formatError(res.Status)
-		}
-
-		return nil
-	}
-	return cmd
-}
-
-func shareCreateCommmand() *command {
-	cmd := newCommand("create")
-	cmd.Description = func() string { return "create share" }
-	cmd.Usage = func() string { return "Usage: share create [-flags] <path>" }
-	grantType := cmd.String("t", "user", "grantee type (user or group)")
-	grantee := cmd.String("g", "", "the grantee")
-	idp := cmd.String("idp", "", "the idp of the grantee, default to same idp as the user triggering the action")
-	rol := cmd.String("r", "viewer", "the permission for the share (viewer or editor)")
-	cmd.Action = func() error {
-		if cmd.NArg() < 1 {
-			fmt.Println(cmd.Usage())
-			os.Exit(1)
-		}
-
-		fn := cmd.Args()[1]
 
 		ctx := getAuthContext()
 		client, err := getStorageProviderClient()
