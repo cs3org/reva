@@ -107,6 +107,8 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 		tmpFolder = os.TempDir()
 	}
 
+	os.Mkdir(tmpFolder, 0755)
+
 	mountPath := c.MountPath
 	mountID := c.MountID
 

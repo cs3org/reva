@@ -69,9 +69,9 @@ func New(m map[string]interface{}) (httpsvcs.Service, error) {
 
 	if conf.ChunkFolder == "" {
 		conf.ChunkFolder = os.TempDir()
-	} else {
-		os.MkdirAll(conf.ChunkFolder, 0700)
 	}
+
+	os.MkdirAll(conf.ChunkFolder, 0755)
 
 	s := &svc{
 		prefix:      conf.Prefix,
