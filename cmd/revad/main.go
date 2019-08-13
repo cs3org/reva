@@ -128,11 +128,6 @@ func main() {
 				watcher.Exit(1)
 			}
 		}(servers[0], listeners[0])
-		// shift servers and listeners array
-		if len(servers) > 1 {
-			servers = servers[1:]
-			listeners = listeners[1:]
-		}
 	}
 
 	// wait for signal to close servers
