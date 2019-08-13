@@ -87,6 +87,7 @@ func main() {
 		log.Error().Err(err).Msg("error adjusting number of cpus")
 		watcher.Exit(1)
 	}
+	log.Info().Msgf("%s", getVersionString())
 	log.Info().Msgf("running on %d cpus", ncpus)
 
 	servers := map[string]grace.Server{}
@@ -170,16 +171,20 @@ func getWriter(out string) (io.Writer, error) {
 	return fd, nil
 }
 
+func getVersionString() string {
+	msg := "version=%s "
+	msg += "commit=%s "
+	msg += "branch=%s "
+	msg += "go_version=%s "
+	msg += "build_date=%s "
+	msg += "build_platform=%s\n"
+
+	return fmt.Sprintf(msg, version, gitCommit, gitBranch, goVersion, buildDate, buildPlatform)
+}
+
 func handleVersionFlag() {
 	if *versionFlag {
-		msg := "version=%s "
-		msg += "commit=%s "
-		msg += "branch=%s "
-		msg += "go_version=%s "
-		msg += "build_date=%s "
-		msg += "build_platform=%s\n"
-
-		fmt.Fprintf(os.Stderr, msg, version, gitCommit, gitBranch, goVersion, buildDate, buildPlatform)
+		fmt.Fprintf(os.Stderr, getVersionString())
 		os.Exit(1)
 	}
 }

@@ -99,6 +99,9 @@ func (s *svc) Handler() http.Handler {
 func (s *svc) setHandler() {
 	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
+		case "HEAD":
+			w.WriteHeader(http.StatusOK)
+			return
 		case "GET":
 			s.doGet(w, r)
 			return

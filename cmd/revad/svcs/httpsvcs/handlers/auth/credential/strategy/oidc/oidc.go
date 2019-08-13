@@ -64,8 +64,13 @@ func (s *strategy) GetCredentials(w http.ResponseWriter, r *http.Request) (*auth
 	if token == "" {
 		// TODO make realm configurable or read it from forwarded for header
 		// see https://github.com/stanvit/go-forwarded as middleware
-		w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm="%s"`, r.Host))
-		return nil, fmt.Errorf("no Bearer auth provided")
+		tokens, ok := r.URL.Query()["access_token"]
+
+		if !ok || len(tokens[0]) < 1 {
+			w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm="%s"`, r.Host))
+			return nil, fmt.Errorf("no Bearer auth provided")
+		}
+		token = tokens[0]
 	}
 
 	return &auth.Credentials{ClientSecret: token}, nil
