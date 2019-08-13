@@ -95,6 +95,7 @@ func downloadCommand() *command {
 		if err != nil {
 			return err
 		}
+		defer httpRes.Body.Close()
 
 		if httpRes.StatusCode != http.StatusOK {
 			return err

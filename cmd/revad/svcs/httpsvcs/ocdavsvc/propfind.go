@@ -114,7 +114,9 @@ func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("DAV", "1, 3, extended-mkcol")
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 	w.WriteHeader(http.StatusMultiStatus)
-	w.Write([]byte(propRes))
+	if _, err := w.Write([]byte(propRes)); err != nil {
+		log.Err(err).Msg("error writing response")
+	}
 }
 
 // from https://github.com/golang/net/blob/e514e69ffb8bc3c76a71ae40de0118d794855992/webdav/xml.go#L178-L205

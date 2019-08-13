@@ -70,7 +70,7 @@ func New(m map[string]interface{}) (user.Manager, error) {
 
 	users := []*authv0alphapb.User{}
 
-	err = json.Unmarshal([]byte(f), &users)
+	err = json.Unmarshal(f, &users)
 	if err != nil {
 		return nil, err
 	}

@@ -21,10 +21,9 @@ test:
 	go test -race ./...
 
 lint:
-	go vet ./...
-	golint -set_exit_status ./...
-	go fmt ./...
 	go run tools/check-license/check-license.go
+	goimports -w .
+	golangci-lint run
 
 contrib:
 	git log --pretty="%an <%ae>" | sort -n | uniq  | sort -n | awk '{print "-", $$0}' | grep -v 'users.noreply.github.com' > CONTRIBUTORS.md 
@@ -38,3 +37,5 @@ deploy:
 	./cmd/revad/revad -c ./cmd/revad/revad.toml -p ./cmd/revad/revad.pid
 deps:
 	cd /tmp && go get -u golang.org/x/lint/golint
+	cd /tmp && GO111MODULE=on go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.17.1
+	cd /tmp && go get -u golang.org/x/tools/cmd/goimports

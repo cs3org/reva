@@ -48,7 +48,10 @@ func getTokenFile() string {
 }
 
 func writeToken(token string) {
-	ioutil.WriteFile(getTokenFile(), []byte(token), 0600)
+	err := ioutil.WriteFile(getTokenFile(), []byte(token), 0600)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func readToken() (string, error) {

@@ -361,15 +361,15 @@ func parseCoreConfOrDie(v interface{}) *coreConf {
 }
 
 type coreConf struct {
+	DisableHTTP        bool   `mapstructure:"disable_http"`
+	DisableGRPC        bool   `mapstructure:"disable_grpc"`
+	TracingEnabled     bool   `mapstructure:"tracing_enabled"`
 	MaxCPUs            string `mapstructure:"max_cpus"`
 	LogFile            string `mapstructure:"log_file"`
 	LogMode            string `mapstructure:"log_mode"`
-	DisableHTTP        bool   `mapstructure:"disable_http"`
-	DisableGRPC        bool   `mapstructure:"disable_grpc"`
 	TracingEndpoint    string `mapstructure:"tracing_endpoint"`
 	TracingCollector   string `mapstructure:"tracing_collector"`
 	TracingServiceName string `mapstructure:"tracing_service_name"`
-	TracingEnabled     bool   `mapstructure:"tracing_enabled"`
 }
 
 func parseLogConfOrDie(v interface{}) *logConf {

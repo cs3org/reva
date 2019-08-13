@@ -42,7 +42,6 @@ import (
 
 const (
 	rootUser      = "root"
-	rootGroup     = "root"
 	versionPrefix = ".sys.v#."
 )
 
@@ -677,13 +676,15 @@ func (c *Client) parseFileInfo(raw string) (*FileInfo, error) {
 		partsByEqual := strings.Split(p, "=") // we have kv pairs like [size 14]
 		if len(partsByEqual) == 2 {
 			// handle xattrn and xattrv special cases
-			if partsByEqual[0] == "xattrn" {
+			switch {
+			case partsByEqual[0] == "xattrn":
 				previousXAttr = partsByEqual[1]
-			} else if partsByEqual[0] == "xattrv" {
+			case partsByEqual[0] == "xattrv":
 				kv[previousXAttr] = partsByEqual[1]
 				previousXAttr = ""
-			} else {
+			default:
 				kv[partsByEqual[0]] = partsByEqual[1]
+
 			}
 		}
 	}
@@ -789,20 +790,20 @@ func (c *Client) mapToFileInfo(kv map[string]string) (*FileInfo, error) {
 
 // FileInfo represents the metadata information returned by querying the EOS namespace.
 type FileInfo struct {
-	File       string `json:"eos_file"`
+	IsDir      bool
+	MTimeNanos uint32
 	Inode      uint64 `json:"inode"`
 	FID        uint64 `json:"fid"`
 	UID        uint64 `json:"uid"`
 	GID        uint64 `json:"gid"`
-	ETag       string
 	TreeSize   uint64
 	MTimeSec   uint64
-	MTimeNanos uint32
 	Size       uint64
-	IsDir      bool
+	TreeCount  uint64
+	File       string `json:"eos_file"`
+	ETag       string
 	Instance   string
 	SysACL     string
-	TreeCount  uint64
 }
 
 // DeletedEntry represents an entry from the trashbin.

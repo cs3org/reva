@@ -243,6 +243,7 @@ func descend(ctx context.Context, client storageproviderv0alphapb.StorageProvide
 		if err != nil {
 			return err
 		}
+		defer httpDownloadRes.Body.Close()
 
 		if httpDownloadRes.StatusCode != http.StatusOK {
 			return fmt.Errorf("status code %d", httpDownloadRes.StatusCode)
@@ -262,6 +263,7 @@ func descend(ctx context.Context, client storageproviderv0alphapb.StorageProvide
 		if err != nil {
 			return err
 		}
+		defer httpRes.Body.Close()
 
 		if httpRes.StatusCode != http.StatusOK {
 			return fmt.Errorf("status code %d", httpDownloadRes.StatusCode)

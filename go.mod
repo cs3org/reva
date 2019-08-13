@@ -22,7 +22,7 @@ require (
 	github.com/ory/fosite v0.29.6
 	github.com/pkg/errors v0.8.1
 	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect
-	github.com/prometheus/client_golang v0.9.3-0.20190127221311-3c4408c8b829
+	github.com/prometheus/client_golang v0.9.3-0.20190127221311-3c4408c8b829 // indirect
 	github.com/rs/cors v1.6.0
 	github.com/rs/zerolog v1.14.3
 	go.opencensus.io v0.22.0

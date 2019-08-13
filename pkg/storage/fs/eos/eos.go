@@ -413,7 +413,7 @@ func (fs *eosStorage) getGranteeType(aclType string) storageproviderv0alphapb.Gr
 // TODO(labkode): add more fine grained controls.
 // EOS acls are a mix of ACLs and POSIX permissions. More details can be found in
 // https://github.com/cern-eos/eos/blob/master/doc/configuration/permission.rst
-// TODO we need to evaluate all acls in the list at once to properly forbid (!) and overwrite (+) permissons
+// TODO we need to evaluate all acls in the list at once to properly forbid (!) and overwrite (+) permissions
 // This is ugly, because those are actually negative permissions ...
 func (fs *eosStorage) getGrantPermissionSet(mode string) *storageproviderv0alphapb.ResourcePermissions {
 

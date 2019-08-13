@@ -32,7 +32,6 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
-	"google.golang.org/grpc"
 )
 
 type ctxKey int
@@ -56,8 +55,6 @@ type svc struct {
 	chunkFolder string
 	handler     http.Handler
 	gatewaySvc  string
-	conn        *grpc.ClientConn
-	client      storageproviderv0alphapb.StorageProviderServiceClient
 }
 
 // New returns a new ocdavsvc
@@ -71,7 +68,9 @@ func New(m map[string]interface{}) (httpsvcs.Service, error) {
 		conf.ChunkFolder = os.TempDir()
 	}
 
-	os.MkdirAll(conf.ChunkFolder, 0755)
+	if err := os.MkdirAll(conf.ChunkFolder, 0755); err != nil {
+		return nil, err
+	}
 
 	s := &svc{
 		prefix:      conf.Prefix,
@@ -147,7 +146,7 @@ func (s *svc) setHandler() {
 				// This must be changed.
 				// r.URL.Path = path.Join("/", u.Username, tail2)
 				// webdav should be death: baseURI is encoded as part of the
-				// reponse payload in href field
+				// response payload in href field
 				baseURI := path.Join("/", s.Prefix(), "remote.php/webdav")
 				ctx = context.WithValue(r.Context(), ctxKeyBaseURI, baseURI)
 
@@ -217,7 +216,7 @@ func (s *svc) setHandler() {
 				if head3 == "files" {
 					r.URL.Path = tail3
 					// webdav should be death: baseURI is encoded as part of the
-					// reponse payload in href field
+					// response payload in href field
 					baseURI := path.Join("/", s.Prefix(), "remote.php/dav/files")
 					ctx := context.WithValue(r.Context(), ctxKeyBaseURI, baseURI)
 					r = r.WithContext(ctx)

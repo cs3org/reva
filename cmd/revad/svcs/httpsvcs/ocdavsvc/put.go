@@ -61,7 +61,7 @@ func handleMacOSFinder(w http.ResponseWriter, r *http.Request) error {
 	log := appctx.GetLogger(r.Context())
 	content := r.Header.Get("Content-Length")
 	expected := r.Header.Get("X-Expected-Entity-Length")
-	log.Warn().Str("content-lenght", content).Str("x-expected-entity-length", expected).Msg("Mac OS Finder corner-case detected")
+	log.Warn().Str("content-length", content).Str("x-expected-entity-length", expected).Msg("Mac OS Finder corner-case detected")
 
 	// The best mitigation to this problem is to tell users to not use crappy Finder.
 	// Another possible mitigation is to change the use the value of X-Expected-Entity-Length header in the Content-Length header.
@@ -219,6 +219,7 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	defer httpRes.Body.Close()
 
 	if httpRes.StatusCode != http.StatusOK {
 		w.WriteHeader(http.StatusInternalServerError)

@@ -102,6 +102,7 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	defer httpRes.Body.Close()
 
 	if httpRes.StatusCode != http.StatusOK {
 		w.WriteHeader(http.StatusInternalServerError)

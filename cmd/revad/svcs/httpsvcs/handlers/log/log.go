@@ -33,10 +33,7 @@ import (
 // New returns a new HTTP middleware that logs HTTP requests and responses.
 // TODO(labkode): maybe log to another file?
 func New() func(http.Handler) http.Handler {
-	chain := func(h http.Handler) http.Handler {
-		return handler(h)
-	}
-	return chain
+	return handler
 }
 
 // handler is a logging middleware
@@ -98,11 +95,12 @@ func writeLog(log *zerolog.Logger, req *http.Request, url url.URL, ts time.Time,
 	diff := end.Sub(ts).Nanoseconds()
 
 	var event *zerolog.Event
-	if status < 400 {
+	switch {
+	case status < 400:
 		event = log.Info()
-	} else if status < 500 {
+	case status < 500:
 		event = log.Warn()
-	} else {
+	default:
 		event = log.Error()
 	}
 

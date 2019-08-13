@@ -115,7 +115,7 @@ func (ps *proppatchProps) UnmarshalXML(d *xml.Decoder, start xml.StartElement) e
 			return nil
 		case xml.StartElement:
 			p := propertyXML{
-				XMLName: xml.Name(t.(xml.StartElement).Name),
+				XMLName: t.(xml.StartElement).Name,
 				Lang:    xmlLang(t.(xml.StartElement), lang),
 			}
 			err = d.DecodeElement(((*xmlValue)(&p.InnerXML)), &elem)

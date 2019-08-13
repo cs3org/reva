@@ -38,18 +38,11 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/user"
 	usermgr "github.com/cs3org/reva/pkg/user/manager/registry"
-	"google.golang.org/grpc"
 )
 
 // SharesHandler implements the ownCloud sharing API
 type SharesHandler struct {
 	gatewaySvc  string
-	sConn       *grpc.ClientConn
-	sClient     storageproviderv0alphapb.StorageProviderServiceClient
-	uConn       *grpc.ClientConn
-	uClient     usershareproviderv0alphapb.UserShareProviderServiceClient
-	pConn       *grpc.ClientConn
-	pClient     publicshareproviderv0alphapb.PublicShareProviderServiceClient
 	userManager user.Manager
 }
 
@@ -72,19 +65,6 @@ func getUserManager(manager string, m map[string]map[string]interface{}) (user.M
 	}
 
 	return nil, fmt.Errorf("driver %s not found for user manager", manager)
-}
-
-func (h *SharesHandler) getSConn() (*grpc.ClientConn, error) {
-	if h.sConn != nil {
-		return h.sConn, nil
-	}
-
-	conn, err := grpc.Dial(h.gatewaySvc, grpc.WithInsecure())
-	if err != nil {
-		return nil, err
-	}
-	h.sConn = conn
-	return h.sConn, nil
 }
 
 func (h *SharesHandler) getSClient() (storageproviderv0alphapb.StorageProviderServiceClient, error) {

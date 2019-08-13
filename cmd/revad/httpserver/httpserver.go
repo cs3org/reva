@@ -32,7 +32,6 @@ import (
 
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 	"go.opencensus.io/plugin/ochttp"
 	"go.opencensus.io/trace"
@@ -225,10 +224,9 @@ func (s *Server) registerServices() error {
 				return err
 			}
 
-			// intrument services with opencensus tracing.
-			// TODO(labkode): change prometheus telemetry for opencensus.
+			// instrument services with opencensus tracing.
 			h := traceHandler(svcName, svc.Handler())
-			s.handlers[svc.Prefix()] = prometheus.InstrumentHandler(svc.Prefix(), h)
+			s.handlers[svc.Prefix()] = h
 			s.svcs[svc.Prefix()] = svc
 			s.log.Info().Msgf("http service enabled: %s@/%s", svcName, svc.Prefix())
 		}

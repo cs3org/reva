@@ -48,8 +48,6 @@ func init() {
 	httpserver.RegisterMiddleware("auth", New)
 }
 
-var authClient authv0alphapb.AuthServiceClient
-
 type config struct {
 	Priority             int                               `mapstructure:"priority"`
 	GatewaySvc           string                            `mapstructure:"gatewaysvc"`

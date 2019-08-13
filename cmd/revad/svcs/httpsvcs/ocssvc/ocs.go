@@ -65,7 +65,7 @@ var MetaNotFound = &ResponseMeta{Status: "error", StatusCode: 998, Message: "Not
 // MetaUnknownError is used for unknown errers
 var MetaUnknownError = &ResponseMeta{Status: "error", StatusCode: 999, Message: "Unknown Error"}
 
-// WriteOCSSuccess handles writing successfull ocs response data
+// WriteOCSSuccess handles writing successful ocs response data
 func WriteOCSSuccess(w http.ResponseWriter, r *http.Request, d interface{}) {
 	WriteOCSData(w, r, MetaOK, d, nil)
 }

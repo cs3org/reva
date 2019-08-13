@@ -41,7 +41,7 @@ func init() {
 
 // New creates a new gateway svc that acts as a proxy for any grpc operation.
 // The gateway is responsible for high-level controls: rate-limiting, coordination between svcs
-// liek sharing and storage acls, asynchronous transactions, ...
+// like sharing and storage acls, asynchronous transactions, ...
 func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 	c, err := parseConfig(m)
 	if err != nil {

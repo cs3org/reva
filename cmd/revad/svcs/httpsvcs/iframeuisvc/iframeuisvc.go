@@ -23,6 +23,7 @@ import (
 
 	"github.com/cs3org/reva/cmd/revad/httpserver"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -73,6 +74,7 @@ func getHandler() http.Handler {
 }
 
 func doOpen(w http.ResponseWriter, r *http.Request) {
+	log := appctx.GetLogger(r.Context())
 	html := `
 <!DOCTYPE html>
 <html>
@@ -87,5 +89,7 @@ alert("hello!");
 </script>
 </html>
 	`
-	w.Write([]byte(html))
+	if _, err := w.Write([]byte(html)); err != nil {
+		log.Err(err).Msg("error writing response")
+	}
 }

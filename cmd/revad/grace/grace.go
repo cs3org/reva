@@ -218,7 +218,7 @@ func (w *Watcher) GetListeners(servers map[string]Server) (map[string]net.Listen
 		// TODO(labkode): maybe race condition here?
 		// What do we do if we cannot kill the parent but we have valid fds?
 		// Do we abort running the forked child? Probably yes, as if the parent cannot be
-		// killed that means we run two version of the code indefinetely.
+		// killed that means we run two version of the code indefinitely.
 		w.log.Info().Msgf("killing parent pid gracefully with SIGQUIT: %d", w.ppid)
 		err := syscall.Kill(w.ppid, syscall.SIGQUIT)
 		if err != nil {

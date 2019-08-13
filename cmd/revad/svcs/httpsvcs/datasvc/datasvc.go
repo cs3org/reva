@@ -59,7 +59,9 @@ func New(m map[string]interface{}) (httpsvcs.Service, error) {
 		conf.TmpFolder = os.TempDir()
 	}
 
-	os.MkdirAll(conf.TmpFolder, 0755)
+	if err := os.MkdirAll(conf.TmpFolder, 0755); err != nil {
+		return nil, err
+	}
 
 	fs, err := getFS(conf)
 	if err != nil {

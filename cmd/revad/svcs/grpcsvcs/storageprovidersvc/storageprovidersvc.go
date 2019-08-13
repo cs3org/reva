@@ -69,7 +69,7 @@ func (s *service) Close() error {
 }
 
 func parseXSTypes(xsTypes map[string]uint32) ([]*storageproviderv0alphapb.ResourceChecksumPriority, error) {
-	var types []*storageproviderv0alphapb.ResourceChecksumPriority
+	var types = make([]*storageproviderv0alphapb.ResourceChecksumPriority, len(xsTypes))
 	for xs, prio := range xsTypes {
 		t := PKG2GRPCXS(xs)
 		if t == storageproviderv0alphapb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID {
@@ -107,7 +107,9 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 		tmpFolder = os.TempDir()
 	}
 
-	os.Mkdir(tmpFolder, 0755)
+	if err := os.Mkdir(tmpFolder, 0755); err != nil {
+		return nil, err
+	}
 
 	mountPath := c.MountPath
 	mountID := c.MountID
@@ -424,7 +426,7 @@ func (s *service) ListContainer(ctx context.Context, req *storageproviderv0alpha
 		return res, nil
 	}
 
-	var infos []*storageproviderv0alphapb.ResourceInfo
+	var infos = make([]*storageproviderv0alphapb.ResourceInfo, len(mds))
 	for _, md := range mds {
 
 		md.Path = s.wrap(ctx, md.Path, fctx)
@@ -436,13 +438,6 @@ func (s *service) ListContainer(ctx context.Context, req *storageproviderv0alpha
 		Infos:  infos,
 	}
 	return res, nil
-}
-
-func getResourceType(isDir bool) storageproviderv0alphapb.ResourceType {
-	if isDir {
-		return storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER
-	}
-	return storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_FILE
 }
 
 func (s *service) ListFileVersions(ctx context.Context, req *storageproviderv0alphapb.ListFileVersionsRequest) (*storageproviderv0alphapb.ListFileVersionsResponse, error) {
@@ -538,15 +533,10 @@ func (s *service) ListRecycle(ctx context.Context, req *storageproviderv0alphapb
 		return res, nil
 	}
 
-	var recycleItems []*storageproviderv0alphapb.RecycleItem
-	for _, item := range items {
-		recycleItems = append(recycleItems, item)
-	}
-
 	status := &rpcpb.Status{Code: rpcpb.Code_CODE_OK}
 	res := &storageproviderv0alphapb.ListRecycleResponse{
 		Status:       status,
-		RecycleItems: recycleItems,
+		RecycleItems: items,
 	}
 	return res, nil
 }

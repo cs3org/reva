@@ -52,11 +52,11 @@ func (h *UsersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// FIXME query storages? cache a summary?
 		// TODO use list of storages to allow clients to resolve quota status
 		Quota: &QuotaData{
-			Free:      2840756224000,
-			Used:      5059416668,
-			Total:     2845815640668,
-			Relative:  0.18,
-			Definiton: "default",
+			Free:       2840756224000,
+			Used:       5059416668,
+			Total:      2845815640668,
+			Relative:   0.18,
+			Definition: "default",
 		},
 		DisplayName: u.DisplayName,
 		Email:       u.Mail,
@@ -65,11 +65,11 @@ func (h *UsersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // QuotaData holds quota information
 type QuotaData struct {
-	Free      int64   `json:"free" xml:"free"`
-	Used      int64   `json:"used" xml:"used"`
-	Total     int64   `json:"total" xml:"total"`
-	Relative  float32 `json:"relative" xml:"relative"`
-	Definiton string  `json:"definiton" xml:"definiton"`
+	Free       int64   `json:"free" xml:"free"`
+	Used       int64   `json:"used" xml:"used"`
+	Total      int64   `json:"total" xml:"total"`
+	Relative   float32 `json:"relative" xml:"relative"`
+	Definition string  `json:"definition" xml:"definition"`
 }
 
 // UsersData holds user data

@@ -33,14 +33,14 @@ func init() {
 }
 
 type config struct {
-	Priority           int      `mapstructure:"priority"`
-	AllowedOrigins     []string `mapstructure:"allowed_origins"`
 	AllowCredentials   bool     `mapstructure:"allow_credentials"`
+	OptionsPassthrough bool     `mapstructure:"options_passthrough"`
+	MaxAge             int      `mapstructure:"max_age"`
+	Priority           int      `mapstructure:"priority"`
 	AllowedMethods     []string `mapstructure:"allowed_methods"`
 	AllowedHeaders     []string `mapstructure:"allowed_headers"`
 	ExposedHeaders     []string `mapstructure:"exposed_headers"`
-	MaxAge             int      `mapstructure:"max_age"`
-	OptionsPassthrough bool     `mapstructure:"options_passthrough"`
+	AllowedOrigins     []string `mapstructure:"allowed_origins"`
 }
 
 // New creates a new CORS middleware.

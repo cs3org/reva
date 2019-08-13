@@ -30,7 +30,7 @@ import (
 func appRegistryFindCommand() *command {
 	cmd := newCommand("app-registry-find")
 	cmd.Description = func() string {
-		return "find applicaton provider for file extension or mimetype"
+		return "find application provider for file extension or mimetype"
 	}
 	cmd.Usage = func() string { return "Usage: app-registry-find <file>" }
 	cmd.Action = func() error {

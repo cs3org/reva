@@ -65,7 +65,7 @@ func (s *svc) doList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var rawResponse []string
+	var rawResponse = make([]string, len(res.Providers))
 	for _, provider := range res.Providers {
 		rawResponse = append(rawResponse, provider.Address)
 	}

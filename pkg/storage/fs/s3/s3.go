@@ -254,8 +254,7 @@ func (fs *s3FS) CreateDir(ctx context.Context, fn string) error {
 	if err != nil {
 		log.Error().Err(err)
 		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case s3.ErrCodeNoSuchBucket:
+			if aerr.Code() == s3.ErrCodeNoSuchBucket {
 				return errtypes.NotFound(fn)
 			}
 		}
@@ -335,8 +334,7 @@ func (fs *s3FS) moveObject(ctx context.Context, oldKey string, newKey string) er
 		Key:        aws.String(newKey),
 	})
 	if aerr, ok := err.(awserr.Error); ok {
-		switch aerr.Code() {
-		case s3.ErrCodeNoSuchBucket:
+		if aerr.Code() == s3.ErrCodeNoSuchBucket {
 			return errtypes.NotFound(oldKey)
 		}
 		return err
@@ -546,8 +544,7 @@ func (fs *s3FS) Upload(ctx context.Context, ref *storageproviderv0alphapb.Refere
 	if err != nil {
 		log.Error().Err(err)
 		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case s3.ErrCodeNoSuchBucket:
+			if aerr.Code() == s3.ErrCodeNoSuchBucket {
 				return errtypes.NotFound(fn)
 			}
 		}

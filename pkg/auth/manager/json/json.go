@@ -73,7 +73,7 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = json.Unmarshal([]byte(f), &credentials)
+	err = json.Unmarshal(f, &credentials)
 	if err != nil {
 		return nil, err
 	}

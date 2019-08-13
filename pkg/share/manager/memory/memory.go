@@ -135,12 +135,17 @@ func (m *manager) getByKey(ctx context.Context, key *usershareproviderv0alphapb.
 }
 
 func (m *manager) get(ctx context.Context, ref *usershareproviderv0alphapb.ShareReference) (s *usershareproviderv0alphapb.Share, err error) {
-	if ref.GetId() != nil {
+	switch {
+	case ref.GetId() != nil:
 		s, err = m.getByID(ctx, ref.GetId())
-	} else if ref.GetKey() != nil {
+	case ref.GetKey() != nil:
 		s, err = m.getByKey(ctx, ref.GetKey())
-	} else {
+	default:
 		err = errtypes.NotFound(ref.String())
+	}
+
+	if err != nil {
+		return s, err
 	}
 
 	// check if we are the owner

@@ -127,6 +127,7 @@ func uploadCommand() *command {
 		if err != nil {
 			return err
 		}
+		defer httpRes.Body.Close()
 
 		bar.Finish()
 

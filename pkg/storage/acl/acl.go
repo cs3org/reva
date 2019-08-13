@@ -23,7 +23,7 @@ import (
 	"strings"
 )
 
-// The ACLs represent a delimiter seperated list of ACL entries.
+// The ACLs represent a delimiter separated list of ACL entries.
 type ACLs struct {
 	Entries   []*Entry
 	delimiter string
@@ -143,5 +143,5 @@ func getShortType(aclType string) string {
 }
 
 func (a *Entry) serialize() string {
-	return strings.Join([]string{string(a.Type), a.Qualifier, a.Permissions}, ":")
+	return strings.Join([]string{a.Type, a.Qualifier, a.Permissions}, ":")
 }

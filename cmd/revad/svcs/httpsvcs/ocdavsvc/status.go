@@ -23,9 +23,11 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/ocssvc"
+	"github.com/cs3org/reva/pkg/appctx"
 )
 
 func (s *svc) doStatus(w http.ResponseWriter, r *http.Request) {
+	log := appctx.GetLogger(r.Context())
 	status := &ocssvc.Status{
 		Installed:      true,
 		Maintenance:    false,
@@ -44,5 +46,7 @@ func (s *svc) doStatus(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write(statusJSON)
+	if _, err := w.Write(statusJSON); err != nil {
+		log.Err(err).Msg("error writing response")
+	}
 }
