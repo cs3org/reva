@@ -22,6 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"runtime"
 	"strconv"
@@ -107,21 +108,31 @@ func main() {
 	}
 
 	if !coreConf.DisableHTTP {
-		go func() {
-			if err := servers[0].(*httpserver.Server).Start(listeners[0]); err != nil {
+		go func(server grace.Server, listener net.Listener) {
+			if err := server.(*httpserver.Server).Start(listener); err != nil {
 				log.Error().Err(err).Msg("error starting the http server")
 				watcher.Exit(1)
 			}
-		}()
+		}(servers[0], listeners[0])
+		// shift servers and listeners array
+		if len(servers) > 1 {
+			servers = servers[1:]
+			listeners = listeners[1:]
+		}
 	}
 
 	if !coreConf.DisableGRPC {
-		go func() {
-			if err := servers[1].(*grpcserver.Server).Start(listeners[1]); err != nil {
+		go func(server grace.Server, listener net.Listener) {
+			if err := server.(*grpcserver.Server).Start(listener); err != nil {
 				log.Error().Err(err).Msg("error starting the grpc server")
 				watcher.Exit(1)
 			}
-		}()
+		}(servers[0], listeners[0])
+		// shift servers and listeners array
+		if len(servers) > 1 {
+			servers = servers[1:]
+			listeners = listeners[1:]
+		}
 	}
 
 	// wait for signal to close servers
