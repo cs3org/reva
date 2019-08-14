@@ -116,7 +116,7 @@ func (s *svc) ListAppProviders(ctx context.Context, req *appregistryv0alphapb.Li
 		}
 		return res, nil
 	}
-	providers := make([]*appregistryv0alphapb.ProviderInfo, len(pvds))
+	providers := make([]*appregistryv0alphapb.ProviderInfo, 0, len(pvds))
 	for _, pvd := range pvds {
 		providers = append(providers, format(pvd))
 	}

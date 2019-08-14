@@ -97,7 +97,7 @@ func (s *service) ListStorageProviders(ctx context.Context, req *storageregv0alp
 		return res, nil
 	}
 
-	providers := make([]*storagetypespb.ProviderInfo, len(pinfos))
+	providers := make([]*storagetypespb.ProviderInfo, 0, len(pinfos))
 	for _, info := range pinfos {
 		fill(info)
 		providers = append(providers, info)

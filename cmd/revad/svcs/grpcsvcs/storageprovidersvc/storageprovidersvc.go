@@ -69,7 +69,7 @@ func (s *service) Close() error {
 }
 
 func parseXSTypes(xsTypes map[string]uint32) ([]*storageproviderv0alphapb.ResourceChecksumPriority, error) {
-	var types = make([]*storageproviderv0alphapb.ResourceChecksumPriority, len(xsTypes))
+	var types = make([]*storageproviderv0alphapb.ResourceChecksumPriority, 0, len(xsTypes))
 	for xs, prio := range xsTypes {
 		t := PKG2GRPCXS(xs)
 		if t == storageproviderv0alphapb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID {
@@ -426,13 +426,13 @@ func (s *service) ListContainer(ctx context.Context, req *storageproviderv0alpha
 		return res, nil
 	}
 
-	var infos = make([]*storageproviderv0alphapb.ResourceInfo, len(mds))
+	var infos = make([]*storageproviderv0alphapb.ResourceInfo, 0, len(mds))
 	for _, md := range mds {
-
 		md.Path = s.wrap(ctx, md.Path, fctx)
 		s.fillInfo(md)
 		infos = append(infos, md)
 	}
+	fmt.Println(len(infos), len(mds), infos)
 	res := &storageproviderv0alphapb.ListContainerResponse{
 		Status: &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
 		Infos:  infos,

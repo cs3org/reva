@@ -32,7 +32,7 @@ type registry struct {
 }
 
 func (b *registry) ListProviders(ctx context.Context) ([]*app.ProviderInfo, error) {
-	var providers = make([]*app.ProviderInfo, len(b.rules))
+	var providers = make([]*app.ProviderInfo, 0, len(b.rules))
 	for _, address := range b.rules {
 		providers = append(providers, &app.ProviderInfo{
 			Location: address,
