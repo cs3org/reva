@@ -410,7 +410,7 @@ func (s *service) ListContainer(ctx context.Context, req *storageproviderv0alpha
 		return res, nil
 	}
 
-	var infos = make([]*storageproviderv0alphapb.ResourceInfo, 0, len(mds))
+	infos := []*storageproviderv0alphapb.ResourceInfo{}
 	for _, md := range mds {
 		s.wrap(md)
 		infos = append(infos, md)

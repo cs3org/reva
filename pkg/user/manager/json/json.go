@@ -82,14 +82,15 @@ func New(m map[string]interface{}) (user.Manager, error) {
 
 func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*authv0alphapb.User, error) {
 	for _, u := range m.users {
-		if u.Username == uid.OpaqueId {
+		// TODO(jfd) we should also compare idp / iss?
+		if u.Id.GetOpaqueId() == uid.OpaqueId {
 			return u, nil
 		}
 	}
 	return nil, errtypes.NotFound(uid.OpaqueId)
 }
 
-// TODO search Opaque? compare sub?
+// TODO(jfd) search Opaque? compare sub?
 func userContains(u *authv0alphapb.User, query string) bool {
 	return strings.Contains(u.Username, query) || strings.Contains(u.DisplayName, query) || strings.Contains(u.Mail, query)
 }

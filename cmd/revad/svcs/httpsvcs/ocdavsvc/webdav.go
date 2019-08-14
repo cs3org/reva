@@ -41,7 +41,7 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log := appctx.GetLogger(r.Context())
 
-		if r.Method == "OPTIONS" {
+		if r.Method == http.MethodOptions {
 			// no need for the user, and we need to be able
 			// to answer preflight checks, which have no auth headers
 			s.doOptions(w, r)
@@ -87,9 +87,9 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 		switch r.Method {
 		case "PROPFIND":
 			s.doPropfind(w, r)
-		case "HEAD":
+		case http.MethodHead:
 			s.doHead(w, r)
-		case "GET":
+		case http.MethodGet:
 			s.doGet(w, r)
 		case "LOCK":
 			s.doLock(w, r)
@@ -103,9 +103,9 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 			s.doMove(w, r)
 		case "COPY":
 			s.doCopy(w, r)
-		case "PUT":
+		case http.MethodPut:
 			s.doPut(w, r)
-		case "DELETE":
+		case http.MethodDelete:
 			s.doDelete(w, r)
 		case "REPORT":
 			s.doReport(w, r)

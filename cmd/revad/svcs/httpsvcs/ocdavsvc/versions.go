@@ -45,6 +45,10 @@ func (h *VersionsHandler) Handler(s *svc, fileid string) http.Handler {
 
 		var timestamp string
 		timestamp, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
+		if r.Method == http.MethodOptions {
+			s.doOptions(w, r)
+			return
+		}
 		if timestamp == "" && r.Method == "PROPFIND" {
 			// TODO(jfd) list versions
 			h.doPropfind(w, r, s, fileid)
@@ -59,11 +63,11 @@ func (h *VersionsHandler) Handler(s *svc, fileid string) http.Handler {
 				h.doPropfind(w, r, s, fileid)
 			//case "HEAD": // TODO(jfd) since we cant GET ... there is no HEAD
 			//	s.doHead(w, r)
-			case "GET": // TODO(jfd) it seems we cannot directly GET version content with cs3 ...
+			case http.MethodGet: // TODO(jfd) it seems we cannot directly GET version content with cs3 ...
 				s.doGet(w, r)
 			case "COPY": // TODO(jfd) restore version to Destination, but cs3api has no destination
 				s.doCopy(w, r)
-			case "DELETE": // TODO(jfd) cs3api has no delete file version call
+			case http.MethodDelete: // TODO(jfd) cs3api has no delete file version call
 				s.doDelete(w, r)
 			default:
 				http.Error(w, "403 Forbidden", http.StatusForbidden)

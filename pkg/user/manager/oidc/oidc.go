@@ -50,8 +50,13 @@ func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*authv0alph
 	}
 
 	user := &authv0alphapb.User{
-		Subject:     claims.Sub, // a stable non reassignable id
-		Issuer:      claims.Iss, // in the scope of this issuer
+		// TODO(jfd) clean up idp = iss, sub = opaque ... is redundant
+		Id: &typespb.UserId{
+			OpaqueId: claims.Sub, // a stable non reassignable id
+			Idp:      claims.Iss, // in the scope of this issuer
+		},
+		// Subject:     claims.Sub, // TODO(labkode) remove from CS3, is in Id
+		// Issuer:      claims.Iss, // TODO(labkode) remove from CS3, is in Id
 		Username:    claims.PreferredUsername,
 		Groups:      []string{},
 		Mail:        claims.Email,

@@ -19,6 +19,7 @@
 package ocdavsvc
 
 import (
+	"encoding/base64"
 	"net/http"
 
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
@@ -46,12 +47,18 @@ func (h *MetaHandler) Handler(s *svc) http.Handler {
 			return
 		}
 
+		decodedID, err := base64.StdEncoding.DecodeString(id)
+		if err != nil {
+			http.Error(w, "400 Bad Request", http.StatusBadRequest)
+			return
+		}
+
 		var head string
 		head, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
 
 		switch head {
 		case "v":
-			h.VersionsHandler.Handler(s, id).ServeHTTP(w, r)
+			h.VersionsHandler.Handler(s, string(decodedID)).ServeHTTP(w, r)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}

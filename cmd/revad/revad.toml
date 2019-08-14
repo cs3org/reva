@@ -43,7 +43,6 @@ prefix = "ui"
 prefix = "owncloud"
 chunk_folder = "/var/tmp/revad/chunks"
 gatewaysvc = "localhost:9999"
-enable_cors = true
 
 [http.services.datasvc]
 driver = "local"

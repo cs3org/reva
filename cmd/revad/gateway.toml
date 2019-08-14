@@ -42,5 +42,4 @@ secret = "Pive-Fumkiu4"
 prefix = "owncloud"
 chunk_folder = "/var/tmp/revad/chunks"
 gatewaysvc = "localhost:10000"
-enable_cors = true
 

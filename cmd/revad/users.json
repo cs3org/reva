@@ -1,10 +1,12 @@
 [
 	{
-		"sub": "a48cb0ed-3375-4b94-bdcd-3cac6e201b7b",
-		"iss": "example.com",
+		"id": {
+			"opaque_id": "a48cb0ed-3375-4b94-bdcd-3cac6e201b7b",
+			"idp": "example.com"
+		},
 		"username": "admin",
 		"secret": "secret",
 		"mail": "admin@example.com",
-		"displayname": "Admin"
+		"display_name": "Admin"
 	}
 ]

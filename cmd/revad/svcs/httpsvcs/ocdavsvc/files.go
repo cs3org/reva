@@ -45,11 +45,11 @@ func (h *FilesHandler) Handler(s *svc) http.Handler {
 		switch r.Method {
 		case "PROPFIND":
 			s.doPropfind(w, r)
-		case "OPTIONS":
+		case http.MethodOptions:
 			s.doOptions(w, r)
-		case "HEAD":
+		case http.MethodHead:
 			s.doHead(w, r)
-		case "GET":
+		case http.MethodGet:
 			s.doGet(w, r)
 		case "LOCK":
 			s.doLock(w, r)
@@ -63,9 +63,9 @@ func (h *FilesHandler) Handler(s *svc) http.Handler {
 			s.doMove(w, r)
 		case "COPY":
 			s.doCopy(w, r)
-		case "PUT":
+		case http.MethodPut:
 			s.doPut(w, r)
-		case "DELETE":
+		case http.MethodDelete:
 			s.doDelete(w, r)
 		case "REPORT":
 			s.doReport(w, r)
