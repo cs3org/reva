@@ -107,7 +107,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 		tmpFolder = os.TempDir()
 	}
 
-	if err := os.Mkdir(tmpFolder, 0755); err != nil {
+	if err := os.MkdirAll(tmpFolder, 0755); err != nil {
 		return nil, err
 	}
 
