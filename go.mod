@@ -24,7 +24,7 @@ require (
 	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect
 	github.com/prometheus/client_golang v0.9.3-0.20190127221311-3c4408c8b829 // indirect
 	github.com/rs/cors v1.7.0
-	github.com/rs/zerolog v1.14.3
+	github.com/rs/zerolog v1.15.0
 	go.opencensus.io v0.22.0
 	golang.org/x/crypto v0.0.0-20190411191339-88737f569e3a
 	golang.org/x/oauth2 v0.0.0-20190226205417-e64efc72b421
