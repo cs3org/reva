@@ -23,11 +23,11 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/cheggaaa/pb"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/utils"
 )
 
 func downloadCommand() *command {
@@ -35,16 +35,15 @@ func downloadCommand() *command {
 	cmd.Description = func() string { return "download a remote file into the local filesystem" }
 	cmd.Usage = func() string { return "Usage: download [-flags] <remote_file> <local_file>" }
 	cmd.Action = func() error {
-		if cmd.NArg() < 3 {
+		if cmd.NArg() < 2 {
 			fmt.Println(cmd.Usage())
 			os.Exit(1)
 		}
 
-		provider := cmd.Args()[0]
-		remote := cmd.Args()[1]
-		local := cmd.Args()[2]
+		remote := cmd.Args()[0]
+		local := cmd.Args()[1]
 
-		client, err := getStorageProviderClient(provider)
+		client, err := getStorageProviderClient()
 		if err != nil {
 			return err
 		}
@@ -85,21 +84,18 @@ func downloadCommand() *command {
 
 		dataServerURL := res.DownloadEndpoint
 		// TODO(labkode): do a protocol switch
-		httpReq, err := http.NewRequest("GET", dataServerURL, nil)
+		httpReq, err := utils.NewRequest(ctx, "GET", dataServerURL, nil)
 		if err != nil {
 			return err
 		}
 
-		// TODO(labkode): harden http client
-		// https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779
-		httpClient := &http.Client{
-			Timeout: time.Second * 10,
-		}
+		httpClient := utils.GetHTTPClient(ctx)
 
 		httpRes, err := httpClient.Do(httpReq)
 		if err != nil {
 			return err
 		}
+		defer httpRes.Body.Close()
 
 		if httpRes.StatusCode != http.StatusOK {
 			return err

@@ -26,13 +26,15 @@ import (
 	"time"
 
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/handlers/appctx"
+	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/handlers/log"
 
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
 
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
+	"go.opencensus.io/plugin/ochttp"
+	"go.opencensus.io/trace"
 )
 
 // NewMiddlewares contains all the registered new middleware functions.
@@ -221,12 +223,24 @@ func (s *Server) registerServices() error {
 				err = errors.Wrap(err, "error registering new http service")
 				return err
 			}
-			s.handlers[svc.Prefix()] = prometheus.InstrumentHandler(svc.Prefix(), svc.Handler())
+
+			// instrument services with opencensus tracing.
+			h := traceHandler(svcName, svc.Handler())
+			s.handlers[svc.Prefix()] = h
 			s.svcs[svc.Prefix()] = svc
 			s.log.Info().Msgf("http service enabled: %s@/%s", svcName, svc.Prefix())
 		}
 	}
 	return nil
+}
+
+func traceHandler(name string, h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx, span := trace.StartSpan(r.Context(), name)
+		r = r.WithContext(ctx)
+		h.ServeHTTP(w, r)
+		span.End()
+	})
 }
 
 func (s *Server) getHandler() http.Handler {
@@ -239,6 +253,7 @@ func (s *Server) getHandler() http.Handler {
 			return
 		}
 
+		// when a service is exposed at the root.
 		if h, ok := s.handlers[""]; ok {
 			r.URL.Path = "/" + head + tail
 			s.log.Info().Msgf("http routing: head= tail=%s svc=root", r.URL.Path)
@@ -246,7 +261,7 @@ func (s *Server) getHandler() http.Handler {
 			return
 		}
 
-		s.log.Info().Msgf("http routing: head=%s tail=%s svc=not-found", tail, " svc=not-found")
+		s.log.Info().Msgf("http routing: head=%s tail=%s svc=not-found", head, tail)
 		w.WriteHeader(http.StatusNotFound)
 	})
 
@@ -255,14 +270,29 @@ func (s *Server) getHandler() http.Handler {
 		return s.middlewares[i].Priority > s.middlewares[j].Priority
 	})
 
-	// add always the logctx middleware as most priority, this middleware is internal
-	// and cannot be configured from the configuration.
-	s.middlewares = append(s.middlewares, &middlewareTriple{Middleware: appctx.New(s.log), Name: "appctx"})
-
 	handler := http.Handler(h)
+
 	for _, triple := range s.middlewares {
 		s.log.Info().Msgf("chainning http middleware %s with priority  %d", triple.Name, triple.Priority)
-		handler = triple.Middleware(handler)
+		handler = triple.Middleware(traceHandler(triple.Name, handler))
 	}
+
+	// add always the logctx middleware as most priority, this middleware is internal
+	// and cannot be configured from the configuration.
+	coreMiddlewares := []*middlewareTriple{}
+	coreMiddlewares = append(coreMiddlewares, &middlewareTriple{Middleware: log.New(), Name: "log"})
+	coreMiddlewares = append(coreMiddlewares, &middlewareTriple{Middleware: appctx.New(s.log), Name: "appctx"})
+
+	for _, triple := range coreMiddlewares {
+		handler = triple.Middleware(traceHandler(triple.Name, handler))
+	}
+
+	// use opencensus handler to trace endpoints.
+	// TODO(labkode): enable also opencensus telemetry.
+	handler = &ochttp.Handler{
+		Handler: handler,
+		//IsPublicEndpoint: true,
+	}
+
 	return handler
 }

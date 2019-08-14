@@ -23,6 +23,7 @@ import (
 
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
+	"github.com/cs3org/reva/pkg/errtypes"
 )
 
 func init() {
@@ -46,7 +47,7 @@ func (m *manager) Authenticate(ctx context.Context, clientID, clientSecret strin
 			return ctx, nil
 		}
 	}
-	return ctx, invalidCredentialsError(clientID)
+	return ctx, errtypes.InvalidCredentials(clientID)
 }
 
 func getCredentials() map[string]string {
@@ -56,7 +57,3 @@ func getCredentials() map[string]string {
 		"richard":  "superfluidity",
 	}
 }
-
-type invalidCredentialsError string
-
-func (e invalidCredentialsError) Error() string { return string(e) }

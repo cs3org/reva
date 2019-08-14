@@ -28,19 +28,18 @@ import (
 
 func mkdirCommand() *command {
 	cmd := newCommand("mkdir")
-	cmd.Description = func() string { return "creates a folder" }
-	cmd.Usage = func() string { return "Usage: mkdir <folder_name> [-flags]" }
+	cmd.Description = func() string { return "creates a container" }
+	cmd.Usage = func() string { return "Usage: mkdir [-flags] <container_name>" }
 	cmd.Action = func() error {
-		if cmd.NArg() < 2 {
+		if cmd.NArg() < 1 {
 			fmt.Println(cmd.Usage())
 			os.Exit(1)
 		}
 
 		fn := cmd.Args()[0]
-		provider := cmd.Args()[1]
 
 		ctx := getAuthContext()
-		client, err := getStorageProviderClient(provider)
+		client, err := getStorageProviderClient()
 		if err != nil {
 			return err
 		}

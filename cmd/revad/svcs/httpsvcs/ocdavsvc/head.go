@@ -53,6 +53,7 @@ func (s *svc) doHead(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if res.Status.Code != rpcpb.Code_CODE_OK {
+		log.Error().Msgf("error calling grpc: %s", res.Status.String())
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

@@ -23,21 +23,25 @@ import (
 	"net/http"
 	"strings"
 
+	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	"github.com/cs3org/reva/cmd/revad/httpserver"
+	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/handlers/auth/credential/registry"
 	tokenregistry "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/handlers/auth/token/registry"
 	tokenwriterregistry "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/handlers/auth/tokenwriter/registry"
-	"github.com/pkg/errors"
-
-	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/token"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
-	"google.golang.org/grpc"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
+)
+
+const (
+	defaultHeader   = "x-access-token"
+	defaultPriority = 100
 )
 
 func init() {
@@ -46,7 +50,7 @@ func init() {
 
 type config struct {
 	Priority             int                               `mapstructure:"priority"`
-	AuthSVC              string                            `mapstructure:"authsvc"`
+	GatewaySvc           string                            `mapstructure:"gatewaysvc"`
 	CredentialStrategy   string                            `mapstructure:"credential_strategy"`
 	CredentialStrategies map[string]map[string]interface{} `mapstructure:"credential_strategies"`
 	TokenStrategy        string                            `mapstructure:"token_strategy"`
@@ -81,6 +85,10 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 	conf, err := parseConfig(m)
 	if err != nil {
 		return nil, 0, err
+	}
+
+	if conf.Priority == 0 {
+		conf.Priority = defaultPriority
 	}
 
 	f, ok := registry.NewCredentialFuncs[conf.CredentialStrategy]
@@ -126,12 +134,14 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 	chain := func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// OPTION requests need to pass for preflight requests
+			// TODO(labkode): this will break options for auth protected routes.
 			if r.Method == "OPTIONS" {
 				h.ServeHTTP(w, r)
 				return
 			}
 
 			// skip auth for urls set in the config.
+			// TODO(labkode): maybe use method:url to bypass auth.
 			if skip(r.URL.Path, conf.SkipMethods) {
 				h.ServeHTTP(w, r)
 				return
@@ -154,7 +164,8 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 					ClientId:     creds.ClientID,
 					ClientSecret: creds.ClientSecret,
 				}
-				client, err := getAuthClient(conf.AuthSVC)
+
+				client, err := pool.GetAuthServiceClient(conf.GatewaySvc)
 				if err != nil {
 					log.Error().Err(err).Msg("error getting the authsvc client")
 					w.WriteHeader(http.StatusUnauthorized)
@@ -199,25 +210,11 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 			// store user and core access token in context.
 			ctx := user.ContextSetUser(r.Context(), u)
 			ctx = token.ContextSetToken(ctx, tkn)
-
-			ctx = metadata.AppendToOutgoingContext(ctx, "x-access-token", tkn) // FIXME hardcoded metadata key. use  PerRPCCredentials?
+			ctx = metadata.AppendToOutgoingContext(ctx, defaultHeader, tkn) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
 
 			r = r.WithContext(ctx)
 			h.ServeHTTP(w, r)
 		})
 	}
 	return chain, conf.Priority, nil
-}
-
-// TODO(labkode): re-use connection using mutex.
-func getAuthClient(host string) (authv0alphapb.AuthServiceClient, error) {
-	conn, err := getConn(host)
-	if err != nil {
-		return nil, err
-	}
-	return authv0alphapb.NewAuthServiceClient(conn), nil
-}
-
-func getConn(host string) (*grpc.ClientConn, error) {
-	return grpc.Dial(host, grpc.WithInsecure())
 }

@@ -24,19 +24,23 @@ import (
 	"github.com/rs/cors"
 )
 
+const (
+	defaultPriority = 200
+)
+
 func init() {
 	httpserver.RegisterMiddleware("cors", New)
 }
 
 type config struct {
-	Priority           int      `mapstructure:"priority"`
-	AllowedOrigins     []string `mapstructure:"allowed_origins"`
 	AllowCredentials   bool     `mapstructure:"allow_credentials"`
+	OptionsPassthrough bool     `mapstructure:"options_passthrough"`
+	MaxAge             int      `mapstructure:"max_age"`
+	Priority           int      `mapstructure:"priority"`
 	AllowedMethods     []string `mapstructure:"allowed_methods"`
 	AllowedHeaders     []string `mapstructure:"allowed_headers"`
 	ExposedHeaders     []string `mapstructure:"exposed_headers"`
-	MaxAge             int      `mapstructure:"max_age"`
-	OptionsPassthrough bool     `mapstructure:"options_passthrough"`
+	AllowedOrigins     []string `mapstructure:"allowed_origins"`
 }
 
 // New creates a new CORS middleware.
@@ -44,6 +48,10 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, 0, err
+	}
+
+	if conf.Priority == 0 {
+		conf.Priority = defaultPriority
 	}
 
 	c := cors.New(cors.Options{
@@ -55,7 +63,7 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 		MaxAge:             conf.MaxAge,
 		OptionsPassthrough: conf.OptionsPassthrough,
 		Debug:              false,
-		// TODO use log from request context, otherwise fmt will be used to log,
+		// TODO(jfd): use log from request context, otherwise fmt will be used to log,
 		// preventing us from pinging the log to eg jq
 	})
 

@@ -24,10 +24,10 @@ import (
 
 	"github.com/cs3org/reva/pkg/storage/registry/registry"
 
+	storagetypespb "github.com/cs3org/go-cs3apis/cs3/storagetypes"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/mitchellh/mapstructure"
-
-	storagetypespb "github.com/cs3org/go-cs3apis/cs3/storagetypes"
 )
 
 func init() {
@@ -59,7 +59,7 @@ func (b *reg) FindProvider(ctx context.Context, fn string) (*storagetypespb.Prov
 	}
 
 	if match == "" {
-		return nil, notFoundError("storage provider not found for path " + fn)
+		return nil, errtypes.NotFound("storage provider not found for path " + fn)
 	}
 
 	p := &storagetypespb.ProviderInfo{
@@ -90,8 +90,3 @@ func New(m map[string]interface{}) (storage.Registry, error) {
 	}
 	return &reg{rules: c.Rules}, nil
 }
-
-type notFoundError string
-
-func (e notFoundError) Error() string { return string(e) }
-func (e notFoundError) IsNotFound()   {}

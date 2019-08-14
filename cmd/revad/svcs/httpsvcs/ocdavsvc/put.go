@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/utils"
-	"github.com/cs3org/reva/pkg/token"
 
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
@@ -62,7 +61,7 @@ func handleMacOSFinder(w http.ResponseWriter, r *http.Request) error {
 	log := appctx.GetLogger(r.Context())
 	content := r.Header.Get("Content-Length")
 	expected := r.Header.Get("X-Expected-Entity-Length")
-	log.Warn().Str("content-lenght", content).Str("x-expected-entity-length", expected).Msg("Mac OS Finder corner-case detected")
+	log.Warn().Str("content-length", content).Str("x-expected-entity-length", expected).Msg("Mac OS Finder corner-case detected")
 
 	// The best mitigation to this problem is to tell users to not use crappy Finder.
 	// Another possible mitigation is to change the use the value of X-Expected-Entity-Length header in the Content-Length header.
@@ -206,34 +205,21 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 
 	dataServerURL := uRes.UploadEndpoint
 	// TODO(labkode): do a protocol switch
-	httpReq, err := http.NewRequest("PUT", dataServerURL, r.Body)
+	httpReq, err := utils.NewRequest(ctx, "PUT", dataServerURL, r.Body)
 	if err != nil {
 		log.Error().Err(err).Msg("error creating http request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	//TODO: make header / auth configurable, check if token is available before doing stat requests
-	tkn, ok := token.ContextGetToken(ctx)
-	if !ok {
-		log.Error().Msg("error reading token from context")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	httpReq.Header.Set("X-Access-Token", tkn)
-
-	// TODO(labkode): harden http client
-	// https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779
-	httpClient := &http.Client{
-		Timeout: time.Second * 10,
-	}
-
+	httpClient := utils.GetHTTPClient(ctx)
 	httpRes, err := httpClient.Do(httpReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error doing http request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	defer httpRes.Body.Close()
 
 	if httpRes.StatusCode != http.StatusOK {
 		w.WriteHeader(http.StatusInternalServerError)

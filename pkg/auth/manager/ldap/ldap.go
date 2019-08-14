@@ -26,6 +26,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"gopkg.in/ldap.v2"
@@ -109,7 +110,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	}
 
 	if len(sr.Entries) != 1 {
-		return ctx, userNotFoundError(clientID)
+		return ctx, errtypes.NotFound(clientID)
 	}
 
 	log.Debug().Interface("entries", sr.Entries).Msg("entries")
@@ -125,8 +126,3 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	return ctx, nil
 
 }
-
-type userNotFoundError string
-
-func (e userNotFoundError) Error() string   { return string(e) }
-func (e userNotFoundError) IsUserNotFound() {}

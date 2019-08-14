@@ -104,7 +104,7 @@ var fconfig = new(compose.Config)
 
 // Because we are using oauth2 and open connect id, we use this little helper to combine the two in one
 // variable.
-var strat = compose.CommonStrategy{
+var start = compose.CommonStrategy{
 	// alternatively you could use:
 	//  OAuth2Strategy: compose.NewOAuth2JWTStrategy(mustRSAKey())
 	CoreStrategy: compose.NewOAuth2HMACStrategy(fconfig, []byte("some-super-cool-secret-that-nobody-knows"), nil),
@@ -116,7 +116,7 @@ var strat = compose.CommonStrategy{
 var oauth2 = compose.Compose(
 	fconfig,
 	store,
-	strat,
+	start,
 	nil,
 
 	// enabled handlers
@@ -171,7 +171,7 @@ func emptySession() *openid.DefaultSession {
 }
 
 func mustRSAKey() *rsa.PrivateKey {
-	key, err := rsa.GenerateKey(rand.Reader, 1024)
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		// TODO really panic?
 		panic(err)

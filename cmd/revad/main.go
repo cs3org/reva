@@ -28,15 +28,19 @@ import (
 	"strings"
 	"syscall"
 
+	"contrib.go.opencensus.io/exporter/jaeger"
+	"github.com/cs3org/reva/cmd/revad/config"
 	"github.com/cs3org/reva/cmd/revad/grace"
 	"github.com/cs3org/reva/cmd/revad/grpcserver"
 	"github.com/cs3org/reva/cmd/revad/httpserver"
-
-	"github.com/cs3org/reva/cmd/revad/config"
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"go.opencensus.io/plugin/ocgrpc"
+	"go.opencensus.io/plugin/ochttp"
+	"go.opencensus.io/stats/view"
+	"go.opencensus.io/trace"
 )
 
 var (
@@ -73,6 +77,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := setupOpenCensus(coreConf); err != nil {
+		log.Error().Err(err).Msg("error configuring open census stats and tracing")
+		watcher.Exit(1)
+	}
+
 	ncpus, err := adjustCPU(coreConf.MaxCPUs)
 	if err != nil {
 		log.Error().Err(err).Msg("error adjusting number of cpus")
@@ -81,14 +90,14 @@ func main() {
 	log.Info().Msgf("%s", getVersionString())
 	log.Info().Msgf("running on %d cpus", ncpus)
 
-	servers := []grace.Server{}
+	servers := map[string]grace.Server{}
 	if !coreConf.DisableHTTP {
 		s, err := getHTTPServer(mainConf["http"], log)
 		if err != nil {
 			log.Error().Err(err).Msg("error creating http server")
 			watcher.Exit(1)
 		}
-		servers = append(servers, s)
+		servers["http"] = s
 	}
 
 	if !coreConf.DisableGRPC {
@@ -97,7 +106,7 @@ func main() {
 			log.Error().Err(err).Msg("error creating grpc server")
 			watcher.Exit(1)
 		}
-		servers = append(servers, s)
+		servers["grpc"] = s
 	}
 
 	listeners, err := watcher.GetListeners(servers)
@@ -108,7 +117,7 @@ func main() {
 
 	if !coreConf.DisableHTTP {
 		go func() {
-			if err := servers[0].(*httpserver.Server).Start(listeners[0]); err != nil {
+			if err := servers["http"].(*httpserver.Server).Start(listeners["http"]); err != nil {
 				log.Error().Err(err).Msg("error starting the http server")
 				watcher.Exit(1)
 			}
@@ -117,7 +126,7 @@ func main() {
 
 	if !coreConf.DisableGRPC {
 		go func() {
-			if err := servers[1].(*grpcserver.Server).Start(listeners[1]); err != nil {
+			if err := servers["grpc"].(*grpcserver.Server).Start(listeners["grpc"]); err != nil {
 				log.Error().Err(err).Msg("error starting the grpc server")
 				watcher.Exit(1)
 			}
@@ -269,6 +278,47 @@ func handleConfigFlagOrDie() map[string]interface{} {
 	return v
 }
 
+func setupOpenCensus(conf *coreConf) error {
+	if err := view.Register(ochttp.DefaultServerViews...); err != nil {
+		return err
+	}
+
+	if err := view.Register(ocgrpc.DefaultServerViews...); err != nil {
+		return err
+	}
+
+	if !conf.TracingEnabled {
+		return nil
+	}
+
+	if conf.TracingEndpoint == "" {
+		conf.TracingEndpoint = "localhost:6831"
+	}
+
+	if conf.TracingCollector == "" {
+		conf.TracingCollector = "http://localhost:14268/api/traces"
+	}
+
+	if conf.TracingServiceName == "" {
+		conf.TracingServiceName = "revad"
+	}
+
+	je, err := jaeger.NewExporter(jaeger.Options{
+		AgentEndpoint:     conf.TracingEndpoint,
+		CollectorEndpoint: conf.TracingCollector,
+		ServiceName:       conf.TracingServiceName,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	// register it as a trace exporter
+	trace.RegisterExporter(je)
+	trace.ApplyConfig(trace.Config{DefaultSampler: trace.AlwaysSample()})
+	return nil
+}
+
 //  adjustCPU parses string cpu and sets GOMAXPROCS
 // according to its value. It accepts either
 // a number (e.g. 3) or a percent (e.g. 50%).
@@ -316,11 +366,15 @@ func parseCoreConfOrDie(v interface{}) *coreConf {
 }
 
 type coreConf struct {
-	MaxCPUs     string `mapstructure:"max_cpus"`
-	LogFile     string `mapstructure:"log_file"`
-	LogMode     string `mapstructure:"log_mode"`
-	DisableHTTP bool   `mapstructure:"disable_http"`
-	DisableGRPC bool   `mapstructure:"disable_grpc"`
+	DisableHTTP        bool   `mapstructure:"disable_http"`
+	DisableGRPC        bool   `mapstructure:"disable_grpc"`
+	TracingEnabled     bool   `mapstructure:"tracing_enabled"`
+	MaxCPUs            string `mapstructure:"max_cpus"`
+	LogFile            string `mapstructure:"log_file"`
+	LogMode            string `mapstructure:"log_mode"`
+	TracingEndpoint    string `mapstructure:"tracing_endpoint"`
+	TracingCollector   string `mapstructure:"tracing_collector"`
+	TracingServiceName string `mapstructure:"tracing_service_name"`
 }
 
 func parseLogConfOrDie(v interface{}) *logConf {

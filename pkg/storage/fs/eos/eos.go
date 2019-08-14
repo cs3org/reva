@@ -44,6 +44,7 @@ import (
 	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
+	"github.com/cs3org/reva/pkg/errtypes"
 )
 
 func init() {
@@ -51,11 +52,6 @@ func init() {
 }
 
 var hiddenReg = regexp.MustCompile(`\.sys\..#.`)
-
-type contextUserRequiredErr string
-
-func (err contextUserRequiredErr) Error() string   { return string(err) }
-func (err contextUserRequiredErr) IsUserRequired() {}
 
 type eosStorage struct {
 	c             *eosclient.Client
@@ -115,7 +111,7 @@ type config struct {
 func getUser(ctx context.Context) (*authv0alphapb.User, error) {
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
-		err := errors.Wrap(contextUserRequiredErr("userrequired"), "storage_eos: error getting user from ctx")
+		err := errors.Wrap(errtypes.UserRequired(""), "storage_eos: error getting user from ctx")
 		return nil, err
 	}
 	return u, nil
@@ -417,7 +413,7 @@ func (fs *eosStorage) getGranteeType(aclType string) storageproviderv0alphapb.Gr
 // TODO(labkode): add more fine grained controls.
 // EOS acls are a mix of ACLs and POSIX permissions. More details can be found in
 // https://github.com/cern-eos/eos/blob/master/doc/configuration/permission.rst
-// TODO we need to evaluate all acls in the list at once to properly forbid (!) and overwrite (+) permissons
+// TODO we need to evaluate all acls in the list at once to properly forbid (!) and overwrite (+) permissions
 // This is ugly, because those are actually negative permissions ...
 func (fs *eosStorage) getGrantPermissionSet(mode string) *storageproviderv0alphapb.ResourcePermissions {
 

@@ -38,11 +38,11 @@ func init() {
 	grpcserver.Register("appregistrysvc", New)
 }
 
-type service struct {
+type svc struct {
 	registry app.Registry
 }
 
-func (s *service) Close() error {
+func (s *svc) Close() error {
 	return nil
 }
 
@@ -64,12 +64,12 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 		return nil, err
 	}
 
-	service := &service{
+	svc := &svc{
 		registry: registry,
 	}
 
-	appregistryv0alphapb.RegisterAppRegistryServiceServer(ss, service)
-	return service, nil
+	appregistryv0alphapb.RegisterAppRegistryServiceServer(ss, svc)
+	return svc, nil
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -88,27 +88,27 @@ func getRegistry(c *config) (app.Registry, error) {
 		return nil, fmt.Errorf("driver not found: %s", c.Driver)
 	}
 }
-func (s *service) GetAppProvider(ctx context.Context, req *appregistryv0alphapb.GetAppProviderRequest) (*appregistryv0alphapb.GetAppProviderResponse, error) {
+
+func (s *svc) GetAppProviders(ctx context.Context, req *appregistryv0alphapb.GetAppProvidersRequest) (*appregistryv0alphapb.GetAppProvidersResponse, error) {
 	log := appctx.GetLogger(ctx)
-	mime := req.MimeType
-	p, err := s.registry.FindProvider(ctx, mime)
+	p, err := s.registry.FindProvider(ctx, req.ResourceInfo.MimeType)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending grpc find provider request")
-		res := &appregistryv0alphapb.GetAppProviderResponse{
+		res := &appregistryv0alphapb.GetAppProvidersResponse{
 			Status: &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL},
 		}
 		return res, nil
 	}
 
 	provider := format(p)
-	res := &appregistryv0alphapb.GetAppProviderResponse{
-		Status:   &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
-		Provider: provider,
+	res := &appregistryv0alphapb.GetAppProvidersResponse{
+		Status:    &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
+		Providers: []*appregistryv0alphapb.ProviderInfo{provider},
 	}
 	return res, nil
 }
 
-func (s *service) ListAppProviders(ctx context.Context, req *appregistryv0alphapb.ListAppProvidersRequest) (*appregistryv0alphapb.ListAppProvidersResponse, error) {
+func (s *svc) ListAppProviders(ctx context.Context, req *appregistryv0alphapb.ListAppProvidersRequest) (*appregistryv0alphapb.ListAppProvidersResponse, error) {
 	pvds, err := s.registry.ListProviders(ctx)
 	if err != nil {
 		res := &appregistryv0alphapb.ListAppProvidersResponse{
@@ -116,7 +116,7 @@ func (s *service) ListAppProviders(ctx context.Context, req *appregistryv0alphap
 		}
 		return res, nil
 	}
-	var providers []*appregistryv0alphapb.ProviderInfo
+	providers := make([]*appregistryv0alphapb.ProviderInfo, len(pvds))
 	for _, pvd := range pvds {
 		providers = append(providers, format(pvd))
 	}

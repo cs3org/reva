@@ -24,6 +24,7 @@ import (
 	"encoding/base64"
 	"encoding/gob"
 
+	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	"github.com/cs3org/reva/pkg/token"
 	"github.com/cs3org/reva/pkg/token/manager/registry"
 	"github.com/pkg/errors"
@@ -41,28 +42,28 @@ func New(m map[string]interface{}) (token.Manager, error) {
 
 type manager struct{}
 
-func (m *manager) MintToken(ctx context.Context, claims token.Claims) (string, error) {
-	token, err := encode(claims)
+func (m *manager) MintToken(ctx context.Context, u *authv0alphapb.User) (string, error) {
+	token, err := encode(u)
 	if err != nil {
-		return "", errors.Wrap(err, "error encoding claims")
+		return "", errors.Wrap(err, "error encoding user")
 	}
 	return token, nil
 }
 
-func (m *manager) DismantleToken(ctx context.Context, token string) (token.Claims, error) {
-	claims, err := decode(token)
+func (m *manager) DismantleToken(ctx context.Context, token string) (*authv0alphapb.User, error) {
+	u, err := decode(token)
 	if err != nil {
 		return nil, errors.Wrap(err, "error decoding claims")
 	}
-	return claims, nil
+	return u, nil
 }
 
 // from https://stackoverflow.com/questions/28020070/golang-serialize-and-deserialize-back
 // go binary encoder
-func encode(m token.Claims) (string, error) {
+func encode(u *authv0alphapb.User) (string, error) {
 	b := bytes.Buffer{}
 	e := gob.NewEncoder(&b)
-	err := e.Encode(m)
+	err := e.Encode(u)
 	if err != nil {
 		return "", err
 	}
@@ -71,18 +72,18 @@ func encode(m token.Claims) (string, error) {
 
 // from https://stackoverflow.com/questions/28020070/golang-serialize-and-deserialize-back
 // go binary decoder
-func decode(str string) (token.Claims, error) {
-	m := token.Claims{}
-	by, err := base64.StdEncoding.DecodeString(str)
+func decode(token string) (*authv0alphapb.User, error) {
+	u := &authv0alphapb.User{}
+	by, err := base64.StdEncoding.DecodeString(token)
 	if err != nil {
 		return nil, err
 	}
 	b := bytes.Buffer{}
 	b.Write(by)
 	d := gob.NewDecoder(&b)
-	err = d.Decode(&m)
+	err = d.Decode(&u)
 	if err != nil {
 		return nil, err
 	}
-	return m, nil
+	return u, nil
 }

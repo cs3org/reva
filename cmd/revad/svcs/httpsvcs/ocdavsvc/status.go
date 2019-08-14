@@ -20,19 +20,22 @@ package ocdavsvc
 
 import (
 	"encoding/json"
-	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/ocssvc"
 	"net/http"
+
+	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/ocssvc"
+	"github.com/cs3org/reva/pkg/appctx"
 )
 
 func (s *svc) doStatus(w http.ResponseWriter, r *http.Request) {
+	log := appctx.GetLogger(r.Context())
 	status := &ocssvc.Status{
 		Installed:      true,
 		Maintenance:    false,
 		NeedsDBUpgrade: false,
-		Version:        "10.0.9.5",  // TODO make build determined
-		VersionString:  "10.0.9",    // TODO make build determined
-		Edition:        "community", // TODO make build determined
-		ProductName:    "ownCloud",  // TODO make configurable
+		Version:        "10.0.9.5", // TODO(jfd) make build/config determined
+		VersionString:  "10.0.9",
+		Edition:        "community",
+		ProductName:    "ownCloud",
 	}
 
 	statusJSON, err := json.MarshalIndent(status, "", "    ")
@@ -43,5 +46,7 @@ func (s *svc) doStatus(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write(statusJSON)
+	if _, err := w.Write(statusJSON); err != nil {
+		log.Err(err).Msg("error writing response")
+	}
 }

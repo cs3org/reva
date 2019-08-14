@@ -23,6 +23,7 @@ import (
 
 	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
 )
@@ -45,7 +46,7 @@ func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*authv0alph
 	if user, ok := m.catalog[uid.OpaqueId]; ok {
 		return user, nil
 	}
-	return nil, userNotFoundError(uid.OpaqueId)
+	return nil, errtypes.NotFound(uid.OpaqueId)
 }
 
 func (m *manager) FindUsers(ctx context.Context, query string) ([]*authv0alphapb.User, error) {
@@ -74,29 +75,37 @@ func (m *manager) IsInGroup(ctx context.Context, uid *typespb.UserId, group stri
 	return false, nil
 }
 
-type userNotFoundError string
-
-func (e userNotFoundError) Error() string { return string(e) }
-
 func getUsers() map[string]*authv0alphapb.User {
 	return map[string]*authv0alphapb.User{
 		// TODO sub
 		// TODO iss
 		"einstein": &authv0alphapb.User{
+			Id: &typespb.UserId{
+				Idp:      "localhost",
+				OpaqueId: "einstein",
+			},
 			Username:    "einstein",
-			Groups:      []string{"sailing-lovers", "violin-haters"},
+			Groups:      []string{"sailing-lovers", "violin-haters", "physics-lovers"},
 			Mail:        "einstein@example.org",
 			DisplayName: "Albert Einstein",
 		},
 		"marie": &authv0alphapb.User{
+			Id: &typespb.UserId{
+				Idp:      "localhost",
+				OpaqueId: "marie",
+			},
 			Username:    "marie",
-			Groups:      []string{"radium-lovers", "polonium-lovers"},
+			Groups:      []string{"radium-lovers", "polonium-lovers", "physics-lovers"},
 			Mail:        "marie@example.org",
 			DisplayName: "Marie Curie",
 		},
 		"richard": &authv0alphapb.User{
+			Id: &typespb.UserId{
+				Idp:      "localhost",
+				OpaqueId: "richard",
+			},
 			Username:    "richard",
-			Groups:      []string{"quantum-lovers", "philosophy-haters"},
+			Groups:      []string{"quantum-lovers", "philosophy-haters", "physics-lovers"},
 			Mail:        "richard@example.org",
 			DisplayName: "Richard Feynman",
 		},

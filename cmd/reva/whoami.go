@@ -67,8 +67,7 @@ func whoamiCommand() *command {
 			return formatError(res.Status)
 		}
 
-		me := res.User
-		fmt.Printf("username: %s\ndisplay_name: %s\nmail: %s\ngroups: %v\n", me.Username, me.DisplayName, me.Mail, me.Groups)
+		fmt.Println(res.User)
 		return nil
 	}
 	return cmd

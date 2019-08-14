@@ -52,6 +52,12 @@ func main() {
 		appProviderGetIFrameCommand(),
 		preferencesCommand(),
 		genCommand(),
+		shareCreateCommand(),
+		shareListCommand(),
+		shareRemoveCommand(),
+		shareUpdateCommand(),
+		shareListReceivedCommand(),
+		shareUpdateReceivedCommand(),
 	}
 
 	mainUsage := createMainUsage(cmds)
@@ -70,17 +76,18 @@ func main() {
 	if err != nil && os.Args[1] != "configure" {
 		fmt.Println("reva is not initialized, run \"reva configure\"")
 		os.Exit(1)
-	} else {
-		if os.Args[1] != "configure" {
-			conf = c
-		}
+	} else if os.Args[1] != "configure" {
+		conf = c
 	}
 
 	// Run command
 	action := os.Args[1]
 	for _, v := range cmds {
 		if v.Name == action {
-			v.Parse(os.Args[2:])
+			if err := v.Parse(os.Args[2:]); err != nil {
+				fmt.Println(err)
+				os.Exit(1)
+			}
 			err := v.Action()
 			if err != nil {
 				fmt.Println(err)

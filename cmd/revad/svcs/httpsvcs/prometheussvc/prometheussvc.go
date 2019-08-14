@@ -21,11 +21,12 @@ package prometheussvc
 import (
 	"net/http"
 
+	"contrib.go.opencensus.io/exporter/prometheus"
 	"github.com/cs3org/reva/cmd/revad/httpserver"
-
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
 	"github.com/mitchellh/mapstructure"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/pkg/errors"
+	"go.opencensus.io/stats/view"
 )
 
 func init() {
@@ -38,7 +39,21 @@ func New(m map[string]interface{}) (httpsvcs.Service, error) {
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
 	}
-	return &svc{prefix: conf.Prefix}, nil
+
+	if conf.Prefix == "" {
+		conf.Prefix = "metrics"
+	}
+
+	pe, err := prometheus.NewExporter(prometheus.Options{
+		Namespace: "revad",
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "prometheus: error creating exporter")
+	}
+
+	view.RegisterExporter(pe)
+
+	return &svc{prefix: conf.Prefix, h: pe}, nil
 }
 
 type config struct {
@@ -47,6 +62,7 @@ type config struct {
 
 type svc struct {
 	prefix string
+	h      http.Handler
 }
 
 func (s *svc) Prefix() string {
@@ -54,7 +70,7 @@ func (s *svc) Prefix() string {
 }
 
 func (s *svc) Handler() http.Handler {
-	return promhttp.Handler()
+	return s.h
 }
 
 func (s *svc) Close() error {

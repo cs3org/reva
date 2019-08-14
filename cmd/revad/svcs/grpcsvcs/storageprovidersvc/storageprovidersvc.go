@@ -19,6 +19,7 @@
 package storageprovidersvc
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/url"
@@ -26,19 +27,17 @@ import (
 	"path"
 	"strings"
 
-	storagetypespb "github.com/cs3org/go-cs3apis/cs3/storagetypes"
-
-	"github.com/cs3org/reva/cmd/revad/grpcserver"
-
-	"context"
-
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	storagetypespb "github.com/cs3org/go-cs3apis/cs3/storagetypes"
+	"github.com/cs3org/reva/cmd/revad/grpcserver"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
 )
 
@@ -70,7 +69,7 @@ func (s *service) Close() error {
 }
 
 func parseXSTypes(xsTypes map[string]uint32) ([]*storageproviderv0alphapb.ResourceChecksumPriority, error) {
-	var types []*storageproviderv0alphapb.ResourceChecksumPriority
+	var types = make([]*storageproviderv0alphapb.ResourceChecksumPriority, len(xsTypes))
 	for xs, prio := range xsTypes {
 		t := PKG2GRPCXS(xs)
 		if t == storageproviderv0alphapb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID {
@@ -106,6 +105,10 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 	tmpFolder := c.TmpFolder
 	if tmpFolder == "" {
 		tmpFolder = os.TempDir()
+	}
+
+	if err := os.Mkdir(tmpFolder, 0755); err != nil {
+		return nil, err
 	}
 
 	mountPath := c.MountPath
@@ -181,7 +184,7 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *storageprovider
 }
 
 func (s *service) InitiateFileUpload(ctx context.Context, req *storageproviderv0alphapb.InitiateFileUploadRequest) (*storageproviderv0alphapb.InitiateFileUploadResponse, error) {
-	// TODO(labkode): same as download
+	// TODO(labkode): same considerations as download
 	log := appctx.GetLogger(ctx)
 	url := *s.dataServerURL
 	url.Path = path.Join("/", url.Path, path.Clean(req.Ref.GetPath()))
@@ -233,7 +236,7 @@ func (s *service) CreateContainer(ctx context.Context, req *storageproviderv0alp
 	}
 
 	if err := s.storage.CreateDir(ctx, fsfn); err != nil {
-		if _, ok := err.(notFoundError); ok {
+		if _, ok := err.(errtypes.IsNotFound); ok {
 			status := &rpcpb.Status{Code: rpcpb.Code_CODE_NOT_FOUND}
 			res := &storageproviderv0alphapb.CreateContainerResponse{Status: status}
 			return res, nil
@@ -262,7 +265,7 @@ func (s *service) Delete(ctx context.Context, req *storageproviderv0alphapb.Dele
 
 	ref := &storageproviderv0alphapb.Reference{Spec: &storageproviderv0alphapb.Reference_Path{Path: fsfn}}
 	if err := s.storage.Delete(ctx, ref); err != nil {
-		if _, ok := err.(notFoundError); ok {
+		if _, ok := err.(errtypes.IsNotFound); ok {
 			log.Error().Err(err).Msg("file not found")
 			status := &rpcpb.Status{Code: rpcpb.Code_CODE_NOT_FOUND}
 			res := &storageproviderv0alphapb.DeleteResponse{Status: status}
@@ -315,6 +318,13 @@ func (s *service) Move(ctx context.Context, req *storageproviderv0alphapb.MoveRe
 }
 
 func (s *service) Stat(ctx context.Context, req *storageproviderv0alphapb.StatRequest) (*storageproviderv0alphapb.StatResponse, error) {
+	ctx, span := trace.StartSpan(ctx, "Stat")
+	defer span.End()
+
+	span.AddAttributes(
+		trace.StringAttribute("ref", req.Ref.String()),
+	)
+
 	log := appctx.GetLogger(ctx)
 	fn := req.Ref.GetPath()
 
@@ -328,7 +338,8 @@ func (s *service) Stat(ctx context.Context, req *storageproviderv0alphapb.StatRe
 	ref := &storageproviderv0alphapb.Reference{Spec: &storageproviderv0alphapb.Reference_Path{Path: fsfn}}
 	md, err := s.storage.GetMD(ctx, ref)
 	if err != nil {
-		if _, ok := err.(notFoundError); ok {
+		if _, ok := err.(errtypes.IsNotFound); ok {
+			log.Warn().Str("ref", req.Ref.String()).Msg("resource not found")
 			status := &rpcpb.Status{Code: rpcpb.Code_CODE_NOT_FOUND}
 			res := &storageproviderv0alphapb.StatResponse{Status: status}
 			return res, nil
@@ -415,7 +426,7 @@ func (s *service) ListContainer(ctx context.Context, req *storageproviderv0alpha
 		return res, nil
 	}
 
-	var infos []*storageproviderv0alphapb.ResourceInfo
+	var infos = make([]*storageproviderv0alphapb.ResourceInfo, len(mds))
 	for _, md := range mds {
 
 		md.Path = s.wrap(ctx, md.Path, fctx)
@@ -427,13 +438,6 @@ func (s *service) ListContainer(ctx context.Context, req *storageproviderv0alpha
 		Infos:  infos,
 	}
 	return res, nil
-}
-
-func getResourceType(isDir bool) storageproviderv0alphapb.ResourceType {
-	if isDir {
-		return storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER
-	}
-	return storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_FILE
 }
 
 func (s *service) ListFileVersions(ctx context.Context, req *storageproviderv0alphapb.ListFileVersionsRequest) (*storageproviderv0alphapb.ListFileVersionsResponse, error) {
@@ -529,15 +533,10 @@ func (s *service) ListRecycle(ctx context.Context, req *storageproviderv0alphapb
 		return res, nil
 	}
 
-	var recycleItems []*storageproviderv0alphapb.RecycleItem
-	for _, item := range items {
-		recycleItems = append(recycleItems, item)
-	}
-
 	status := &rpcpb.Status{Code: rpcpb.Code_CODE_OK}
 	res := &storageproviderv0alphapb.ListRecycleResponse{
 		Status:       status,
-		RecycleItems: recycleItems,
+		RecycleItems: items,
 	}
 	return res, nil
 }
@@ -784,10 +783,6 @@ func getFS(c *config) (storage.FS, error) {
 		return f(c.Drivers[c.Driver])
 	}
 	return nil, fmt.Errorf("driver not found: %s", c.Driver)
-}
-
-type notFoundError interface {
-	IsNotFound()
 }
 
 func (s *service) fillInfo(ri *storageproviderv0alphapb.ResourceInfo) {

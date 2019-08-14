@@ -19,11 +19,13 @@
 package appregistrysvc
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 
 	appregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/appregistry/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
+	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/user"
 )
@@ -47,11 +49,13 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req := &appregistryv0alphapb.GetAppProviderRequest{
-		MimeType: key,
+	req := &appregistryv0alphapb.GetAppProvidersRequest{
+		ResourceInfo: &storageproviderv0alphapb.ResourceInfo{
+			MimeType: key,
+		},
 	}
 
-	res, err := client.GetAppProvider(ctx, req)
+	res, err := client.GetAppProviders(ctx, req)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending grpc GetAppProvider request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -68,10 +72,15 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	_, err = w.Write([]byte(res.Provider.Address))
+	j, err := json.Marshal(res.Providers)
 	if err != nil {
-		log.Warn().Str("code", string(res.Status.Code)).Msg("couldn't write to response")
+		log.Err(err).Msg("appregistrysvc: error encoding providers")
 		w.WriteHeader(http.StatusInternalServerError)
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_, err = w.Write(j)
+	if err != nil {
+		log.Error().Msg("appregistrysvc: error writing response")
 	}
 }

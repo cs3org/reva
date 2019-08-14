@@ -23,7 +23,7 @@ import (
 	"strings"
 
 	"github.com/cs3org/reva/pkg/app"
-
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -32,7 +32,7 @@ type registry struct {
 }
 
 func (b *registry) ListProviders(ctx context.Context) ([]*app.ProviderInfo, error) {
-	var providers []*app.ProviderInfo
+	var providers = make([]*app.ProviderInfo, len(b.rules))
 	for _, address := range b.rules {
 		providers = append(providers, &app.ProviderInfo{
 			Location: address,
@@ -52,7 +52,7 @@ func (b *registry) FindProvider(ctx context.Context, mimeType string) (*app.Prov
 	}
 
 	if match == "" {
-		return nil, notFoundError("application provider not found for mime type " + mimeType)
+		return nil, errtypes.NotFound("application provider not found for mime type " + mimeType)
 	}
 
 	p := &app.ProviderInfo{
@@ -82,8 +82,3 @@ func New(m map[string]interface{}) (app.Registry, error) {
 	}
 	return &registry{rules: c.Rules}, nil
 }
-
-type notFoundError string
-
-func (e notFoundError) Error() string { return string(e) }
-func (e notFoundError) IsNotFound()   {}

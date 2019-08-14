@@ -21,6 +21,8 @@ package recovery
 import (
 	"context"
 
+	"runtime/debug"
+
 	"github.com/cs3org/reva/pkg/appctx"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"google.golang.org/grpc"
@@ -43,7 +45,8 @@ func NewStream() grpc.StreamServerInterceptor {
 }
 
 func recoveryFunc(ctx context.Context, p interface{}) (err error) {
+	stack := debug.Stack()
 	log := appctx.GetLogger(ctx)
-	log.Error().Msgf("%+v", p)
+	log.Error().Str("stack", string(stack)).Msgf("%+v", p)
 	return status.Errorf(codes.Internal, "%s", p)
 }

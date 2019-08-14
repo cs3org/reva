@@ -27,11 +27,11 @@ import (
 
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/httpserver"
+	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
-	"google.golang.org/grpc"
 )
 
 type ctxKey int
@@ -45,18 +45,16 @@ func init() {
 }
 
 type config struct {
-	Prefix             string `mapstructure:"prefix"`
-	ChunkFolder        string `mapstructure:"chunk_folder"`
-	StorageProviderSvc string `mapstructure:"storageprovidersvc"`
+	Prefix      string `mapstructure:"prefix"`
+	ChunkFolder string `mapstructure:"chunk_folder"`
+	GatewaySvc  string `mapstructure:"gatewaysvc"`
 }
 
 type svc struct {
-	prefix             string
-	chunkFolder        string
-	handler            http.Handler
-	storageProviderSvc string
-	conn               *grpc.ClientConn
-	client             storageproviderv0alphapb.StorageProviderServiceClient
+	prefix      string
+	chunkFolder string
+	handler     http.Handler
+	gatewaySvc  string
 }
 
 // New returns a new ocdavsvc
@@ -68,14 +66,16 @@ func New(m map[string]interface{}) (httpsvcs.Service, error) {
 
 	if conf.ChunkFolder == "" {
 		conf.ChunkFolder = os.TempDir()
-	} else {
-		os.MkdirAll(conf.ChunkFolder, 0700)
+	}
+
+	if err := os.MkdirAll(conf.ChunkFolder, 0755); err != nil {
+		return nil, err
 	}
 
 	s := &svc{
-		prefix:             conf.Prefix,
-		storageProviderSvc: conf.StorageProviderSvc,
-		chunkFolder:        conf.ChunkFolder,
+		prefix:      conf.Prefix,
+		gatewaySvc:  conf.GatewaySvc,
+		chunkFolder: conf.ChunkFolder,
 	}
 	s.setHandler()
 	return s, nil
@@ -108,10 +108,9 @@ func (s *svc) setHandler() {
 		}
 
 		head, tail := httpsvcs.ShiftPath(r.URL.Path)
-
 		log.Debug().Str("head", head).Str("tail", tail).Msg("http routing")
-		switch head {
 
+		switch head {
 		case "status.php":
 			r.URL.Path = tail
 			s.doStatus(w, r)
@@ -123,6 +122,9 @@ func (s *svc) setHandler() {
 			// TODO(jfd): refactor as separate handler
 			// the old `webdav` endpoint uses remote.php/webdav/$path
 			if head2 == "webdav" {
+
+				r.URL.Path = tail2
+
 				if r.Method == "OPTIONS" {
 					// no need for the user, and we need to be able
 					// to answer preflight checks, which have no auth headers
@@ -140,9 +142,11 @@ func (s *svc) setHandler() {
 					return
 				}
 
-				r.URL.Path = path.Join("/", u.Username, tail2)
+				// TODO(labkode): this assumes too much, basically using ocdavsvc you can't access a global namespace.
+				// This must be changed.
+				// r.URL.Path = path.Join("/", u.Username, tail2)
 				// webdav should be death: baseURI is encoded as part of the
-				// reponse payload in href field
+				// response payload in href field
 				baseURI := path.Join("/", s.Prefix(), "remote.php/webdav")
 				ctx = context.WithValue(r.Context(), ctxKeyBaseURI, baseURI)
 
@@ -199,19 +203,20 @@ func (s *svc) setHandler() {
 					s.doDelete(w, r)
 					return
 				default:
+					log.Warn().Msg("resource not found")
 					w.WriteHeader(http.StatusNotFound)
 					return
 				}
 			}
 
-			// TODO refactor as separate handler
+			// TODO(jfd) refactor as separate handler
 			// the new `files` endpoint uses remote.php/dav/files/$user/$path style paths
 			if head2 == "dav" {
 				head3, tail3 := httpsvcs.ShiftPath(tail2)
 				if head3 == "files" {
 					r.URL.Path = tail3
 					// webdav should be death: baseURI is encoded as part of the
-					// reponse payload in href field
+					// response payload in href field
 					baseURI := path.Join("/", s.Prefix(), "remote.php/dav/files")
 					ctx := context.WithValue(r.Context(), ctxKeyBaseURI, baseURI)
 					r = r.WithContext(ctx)
@@ -257,6 +262,7 @@ func (s *svc) setHandler() {
 						s.doReport(w, r)
 						return
 					default:
+						log.Warn().Msg("resource not found")
 						w.WriteHeader(http.StatusNotFound)
 						return
 					}
@@ -268,32 +274,11 @@ func (s *svc) setHandler() {
 				}
 			}
 		}
+		log.Warn().Msg("resource not found")
 		w.WriteHeader(http.StatusNotFound)
 	})
 }
 
-func (s *svc) getConn() (*grpc.ClientConn, error) {
-	if s.conn != nil {
-		return s.conn, nil
-	}
-
-	conn, err := grpc.Dial(s.storageProviderSvc, grpc.WithInsecure())
-	if err != nil {
-		return nil, err
-	}
-
-	return conn, nil
-}
-
 func (s *svc) getClient() (storageproviderv0alphapb.StorageProviderServiceClient, error) {
-	if s.client != nil {
-		return s.client, nil
-	}
-
-	conn, err := s.getConn()
-	if err != nil {
-		return nil, err
-	}
-	s.client = storageproviderv0alphapb.NewStorageProviderServiceClient(conn)
-	return s.client, nil
+	return pool.GetStorageProviderServiceClient(s.gatewaySvc)
 }

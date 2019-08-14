@@ -33,6 +33,7 @@ import (
 	"syscall"
 
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/reqid"
 	"github.com/cs3org/reva/pkg/storage/acl"
 	"github.com/gofrs/uuid"
@@ -41,7 +42,6 @@ import (
 
 const (
 	rootUser      = "root"
-	rootGroup     = "root"
 	versionPrefix = ".sys.v#."
 )
 
@@ -144,10 +144,10 @@ func (c *Client) execute(ctx context.Context, cmd *exec.Cmd) (string, string, er
 			case 0:
 				err = nil
 			case 2:
-				err = notFoundError(errBuf.String())
+				err = errtypes.NotFound(errBuf.String())
 			case 22:
 				// eos reports back error code 22 when the user is not allowed to enter the instance
-				err = notFoundError(errBuf.String())
+				err = errtypes.NotFound(errBuf.String())
 			}
 		}
 	}
@@ -156,7 +156,7 @@ func (c *Client) execute(ctx context.Context, cmd *exec.Cmd) (string, string, er
 	env := fmt.Sprintf("%s", cmd.Env)
 	log.Info().Str("args", args).Str("env", env).Int("exit", exitStatus).Msg("eos cmd")
 
-	if err != nil && exitStatus != 2 { // don't wrap the notFoundError
+	if err != nil && exitStatus != 2 { // don't wrap the errtypes.NotFoundError
 		err = errors.Wrap(err, "error while executing command")
 	}
 
@@ -193,10 +193,10 @@ func (c *Client) executeEOS(ctx context.Context, cmd *exec.Cmd) (string, string,
 			case 0:
 				err = nil
 			case 2:
-				err = notFoundError(errBuf.String())
+				err = errtypes.NotFound(errBuf.String())
 			case 22:
 				// eos reports back error code 22 when the user is not allowed to enter the instance
-				err = notFoundError(errBuf.String())
+				err = errtypes.NotFound(errBuf.String())
 			}
 		}
 	}
@@ -205,7 +205,7 @@ func (c *Client) executeEOS(ctx context.Context, cmd *exec.Cmd) (string, string,
 	env := fmt.Sprintf("%s", cmd.Env)
 	log.Info().Str("args", args).Str("env", env).Int("exit", exitStatus).Msg("eos cmd")
 
-	if err != nil && exitStatus != 2 { // don't wrap the notFoundError
+	if err != nil && exitStatus != 2 { // don't wrap the errtypes.NotFoundError
 		err = errors.Wrap(err, "error while executing command")
 	}
 
@@ -285,7 +285,7 @@ func (c *Client) GetACL(ctx context.Context, username, path, aclType, target str
 			return a, nil
 		}
 	}
-	return nil, notFoundError(fmt.Sprintf("%s:%s", aclType, target))
+	return nil, errtypes.NotFound(fmt.Sprintf("%s:%s", aclType, target))
 
 }
 
@@ -676,13 +676,15 @@ func (c *Client) parseFileInfo(raw string) (*FileInfo, error) {
 		partsByEqual := strings.Split(p, "=") // we have kv pairs like [size 14]
 		if len(partsByEqual) == 2 {
 			// handle xattrn and xattrv special cases
-			if partsByEqual[0] == "xattrn" {
+			switch {
+			case partsByEqual[0] == "xattrn":
 				previousXAttr = partsByEqual[1]
-			} else if partsByEqual[0] == "xattrv" {
+			case partsByEqual[0] == "xattrv":
 				kv[previousXAttr] = partsByEqual[1]
 				previousXAttr = ""
-			} else {
+			default:
 				kv[partsByEqual[0]] = partsByEqual[1]
+
 			}
 		}
 	}
@@ -788,20 +790,20 @@ func (c *Client) mapToFileInfo(kv map[string]string) (*FileInfo, error) {
 
 // FileInfo represents the metadata information returned by querying the EOS namespace.
 type FileInfo struct {
-	File       string `json:"eos_file"`
+	IsDir      bool
+	MTimeNanos uint32
 	Inode      uint64 `json:"inode"`
 	FID        uint64 `json:"fid"`
 	UID        uint64 `json:"uid"`
 	GID        uint64 `json:"gid"`
-	ETag       string
 	TreeSize   uint64
 	MTimeSec   uint64
-	MTimeNanos uint32
 	Size       uint64
-	IsDir      bool
+	TreeCount  uint64
+	File       string `json:"eos_file"`
+	ETag       string
 	Instance   string
 	SysACL     string
-	TreeCount  uint64
 }
 
 // DeletedEntry represents an entry from the trashbin.
@@ -812,8 +814,3 @@ type DeletedEntry struct {
 	DeletionMTime uint64
 	IsDir         bool
 }
-
-type notFoundError string
-
-func (e notFoundError) IsNotFound()   {}
-func (e notFoundError) Error() string { return string(e) }

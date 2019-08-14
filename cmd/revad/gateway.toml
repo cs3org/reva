@@ -1,0 +1,45 @@
+[core]
+log_file = "stderr"
+log_mode = "dev"
+max_cpus = "100%"
+#tracing_enabled = true
+
+[log]
+level = "debug"
+mode = "console"
+
+[grpc]
+network = "tcp"
+address = "0.0.0.0:10000"
+enabled_services = ["gatewaysvc"]
+
+[grpc.services.gatewaysvc]
+storageregistrysvc = "localhost:9999"
+authsvc = "localhost:9999"
+usershareprovidersvc = "localhost:9999"
+appregistrysvc = "localhost:9999"
+preferencessvc = "localhost:9999"
+
+[http]
+enabled_services = ["ocdavsvc"]
+enabled_middlewares = ["cors", "auth"]
+network = "tcp"
+address = "0.0.0.0:10001"
+
+[http.middlewares.auth]
+gatewaysvc = "0.0.0.0:10000"
+credential_strategy = "basic"
+token_strategy = "header"
+token_writer = "header"
+token_manager = "jwt"
+skip_methods = ["/owncloud/status.php", "/metrics"]
+
+[http.middlewares.auth.token_managers.jwt]
+secret = "Pive-Fumkiu4"
+
+[http.services.ocdavsvc]
+prefix = "owncloud"
+chunk_folder = "/var/tmp/revad/chunks"
+gatewaysvc = "localhost:10000"
+enable_cors = true
+

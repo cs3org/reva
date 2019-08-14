@@ -33,10 +33,15 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+)
+
+const (
+	defaultHeader   = "x-access-token"
+	defaultPriority = 100
 )
 
 func init() {
@@ -45,8 +50,9 @@ func init() {
 }
 
 type config struct {
-	Priority int `mapstructure:"priority"`
-	// TODO(labkode): access a map is more performant as uri as fixed in length.
+	// TODO(labkode): access a map is more performant as uri as fixed in length
+	// for SkipMethods.
+	Priority        int                               `mapstructure:"priority"`
 	SkipMethods     []string                          `mapstructure:"skip_methods"`
 	Header          string                            `mapstructure:"header"`
 	TokenStrategy   string                            `mapstructure:"token_strategy"`
@@ -82,61 +88,58 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 	}
 
 	if conf.Header == "" {
-		return nil, 0, errors.New("header is empty")
+		conf.Header = defaultHeader
 	}
 
-	// TODO(labkode): maybe we need to log here?
-	//for k := range conf.SkipMethods {
-	//	l.Info().Msgf("skiping grpc auth for method: ", k)
-	//}
+	if conf.Priority == 0 {
+		conf.Priority = defaultPriority
+	}
 
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
 	if !ok {
-		return nil, 0, errors.New("token manager not found: " + conf.TokenStrategy)
+		return nil, 0, errors.New("auth: token manager not found: " + conf.TokenStrategy)
 	}
 
 	tokenManager, err := h(conf.TokenManagers[conf.TokenManager])
 	if err != nil {
-		return nil, 0, errors.Wrap(err, "error creating token manager")
+		return nil, 0, errors.Wrap(err, "auth: error creating token manager")
 	}
 
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		ctx, span := trace.StartSpan(ctx, "auth")
+		defer span.End()
 		log := appctx.GetLogger(ctx)
 
 		if skip(info.FullMethod, conf.SkipMethods) {
+			span.AddAttributes(trace.BoolAttribute("auth_enabled", false))
 			log.Debug().Str("method", info.FullMethod).Msg("skiping auth")
 			return handler(ctx, req)
 		}
 
-		var tkn string
-		md, ok := metadata.FromIncomingContext(ctx)
-		if ok && md != nil {
-			if val, ok := md[conf.Header]; ok {
-				if len(val) > 0 && val[0] != "" {
-					tkn = val[0]
-				}
-			}
-		}
+		span.AddAttributes(trace.BoolAttribute("auth_enabled", true))
+
+		tkn, _ := token.ContextGetToken(ctx)
 
 		if tkn == "" {
 			log.Warn().Msg("access token not found")
-			return nil, status.Errorf(codes.Unauthenticated, "core access token not found")
+			return nil, status.Errorf(codes.Unauthenticated, "auth: core access token not found")
 		}
 
 		// validate the token
-		claims, err := tokenManager.DismantleToken(ctx, tkn)
+		u, err := tokenManager.DismantleToken(ctx, tkn)
 		if err != nil {
 			log.Warn().Msg("access token is invalid")
-			return nil, status.Errorf(codes.Unauthenticated, "core access token is invalid")
-		}
-
-		u := &authv0alphapb.User{}
-		if err := mapstructure.Decode(claims, u); err != nil {
-			log.Warn().Msg("claims are invalid")
-			return nil, status.Errorf(codes.Unauthenticated, "claims are invalid")
+			return nil, status.Errorf(codes.Unauthenticated, "auth: core access token is invalid")
 		}
 
 		// store user and core access token in context.
+		span.AddAttributes(
+			trace.StringAttribute("id.idp", u.Id.Idp),
+			trace.StringAttribute("id.opaque_id", u.Id.OpaqueId),
+			trace.StringAttribute("username", u.Username),
+			trace.StringAttribute("token", tkn))
+		span.AddAttributes(trace.StringAttribute("user", u.String()), trace.StringAttribute("token", tkn))
+
 		ctx = user.ContextSetUser(ctx, u)
 		ctx = token.ContextSetToken(ctx, tkn)
 		return handler(ctx, req)
@@ -153,17 +156,21 @@ func NewStream(m map[string]interface{}) (grpc.StreamServerInterceptor, int, err
 	}
 
 	if conf.Header == "" {
-		return nil, 0, errors.New("header is empty")
+		conf.Header = defaultHeader
+	}
+
+	if conf.Priority == 0 {
+		conf.Priority = defaultPriority
 	}
 
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
 	if !ok {
-		return nil, 0, fmt.Errorf("token manager not found: %s", conf.TokenStrategy)
+		return nil, 0, fmt.Errorf("auth: token manager not found: %s", conf.TokenStrategy)
 	}
 
 	tokenManager, err := h(conf.TokenManagers[conf.TokenManager])
 	if err != nil {
-		return nil, 0, errors.New("token manager not found: " + conf.TokenStrategy)
+		return nil, 0, errors.New("auth: token manager not found: " + conf.TokenStrategy)
 	}
 
 	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
@@ -175,32 +182,24 @@ func NewStream(m map[string]interface{}) (grpc.StreamServerInterceptor, int, err
 			return handler(srv, ss)
 		}
 
-		var tkn string
-		md, ok := metadata.FromIncomingContext(ss.Context())
-		if ok && md != nil {
-			if val, ok := md[conf.Header]; ok {
-				if len(val) > 0 && val[0] != "" {
-					tkn = val[0]
-				}
-			}
-		}
+		tkn, _ := token.ContextGetToken(ctx)
 
 		if tkn == "" {
 			log.Warn().Msg("access token not found")
-			return status.Errorf(codes.Unauthenticated, "core access token not found")
+			return status.Errorf(codes.Unauthenticated, "auth: core access token not found")
 		}
 
 		// validate the token
 		claims, err := tokenManager.DismantleToken(ctx, tkn)
 		if err != nil {
 			log.Warn().Msg("access token invalid")
-			return status.Errorf(codes.Unauthenticated, "core access token is invalid")
+			return status.Errorf(codes.Unauthenticated, "auth: core access token is invalid")
 		}
 
 		u := &authv0alphapb.User{}
 		if err := mapstructure.Decode(claims, u); err != nil {
 			log.Warn().Msg("user claims invalid")
-			return status.Errorf(codes.Unauthenticated, "claims are invalid")
+			return status.Errorf(codes.Unauthenticated, "auth: claims are invalid")
 		}
 
 		// store user and core access token in context.

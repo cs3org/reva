@@ -30,17 +30,21 @@ import (
 	"strings"
 	"time"
 
+	"go.opencensus.io/trace"
+
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
-
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/utils"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/pkg/errors"
 )
 
 func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	ctx, span := trace.StartSpan(ctx, "propfind")
+	defer span.End()
 	log := appctx.GetLogger(ctx)
 
 	fn := r.URL.Path
@@ -73,6 +77,7 @@ func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request) {
 
 	if res.Status.Code != rpcpb.Code_CODE_OK {
 		if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+			log.Warn().Str("path", fn).Msg("resource not found")
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
@@ -93,6 +98,7 @@ func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if res.Status.Code != rpcpb.Code_CODE_OK {
+			log.Err(err).Msg("error calling grpc list container")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -108,7 +114,9 @@ func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("DAV", "1, 3, extended-mkcol")
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 	w.WriteHeader(http.StatusMultiStatus)
-	w.Write([]byte(propRes))
+	if _, err := w.Write([]byte(propRes)); err != nil {
+		log.Err(err).Msg("error writing response")
+	}
 }
 
 // from https://github.com/golang/net/blob/e514e69ffb8bc3c76a71ae40de0118d794855992/webdav/xml.go#L178-L205
@@ -231,7 +239,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, md *storageproviderv0alphapb
 		// remove username from filename
 		u, ok := user.ContextGetUser(ctx)
 		if !ok {
-			err := errors.Wrap(contextUserRequiredErr("userrequired"), "error getting user from ctx")
+			err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
 			return nil, err
 		}
 		md.Path = md.Path[len(u.Username)+1:]
@@ -322,9 +330,3 @@ type errorXML struct {
 }
 
 var errInvalidPropfind = errors.New("webdav: invalid propfind")
-
-// TODO better error handling
-type contextUserRequiredErr string
-
-func (err contextUserRequiredErr) Error() string   { return string(err) }
-func (err contextUserRequiredErr) IsUserRequired() {}

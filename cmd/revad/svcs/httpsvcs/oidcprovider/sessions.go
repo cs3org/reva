@@ -35,6 +35,7 @@ func (s *svc) doSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for id, c := range store.Clients {
+		c := c
 		_, err := w.Write([]byte(fmt.Sprintf(`
 			<li>
 				%s: Id %s, IsPublic %t, GetHashedSecret %s
@@ -53,12 +54,13 @@ func (s *svc) doSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for id, c := range store.AuthorizeCodes {
+		c := c
 		_, err := w.Write([]byte(fmt.Sprintf(`
 			<li>
 				%s: %#v
 			</li>`,
 
-			id, &c,
+			id, c,
 		)))
 		if err != nil {
 			log.Error().Err(err).Msg("Error writing response")
@@ -72,12 +74,13 @@ func (s *svc) doSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for id, c := range store.IDSessions {
+		c := c
 		_, err := w.Write([]byte(fmt.Sprintf(`
 			<li>
 				%s: %#v
 			</li>`,
 
-			id, &c,
+			id, c,
 		)))
 		if err != nil {
 			log.Error().Err(err).Msg("Error writing response")
@@ -96,7 +99,7 @@ func (s *svc) doSessions(w http.ResponseWriter, r *http.Request) {
 				%s: %#v
 			</li>`,
 
-			id, &c,
+			id, c,
 		)))
 		if err != nil {
 			log.Error().Err(err).Msg("Error writing response")
@@ -110,12 +113,13 @@ func (s *svc) doSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for id, c := range store.Implicit {
+		c := c
 		_, err := w.Write([]byte(fmt.Sprintf(`
 			<li>
 				%s: %#v
 			</li>`,
 
-			id, &c,
+			id, c,
 		)))
 		if err != nil {
 			log.Error().Err(err).Msg("Error writing response")
@@ -129,12 +133,13 @@ func (s *svc) doSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for id, c := range store.RefreshTokens {
+		c := c
 		_, err := w.Write([]byte(fmt.Sprintf(`
 			<li>
 				%s: %#v
 			</li>`,
 
-			id, &c,
+			id, c,
 		)))
 		if err != nil {
 			log.Error().Err(err).Msg("Error writing response")
@@ -148,12 +153,13 @@ func (s *svc) doSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for id, c := range store.PKCES {
+		c := c
 		_, err := w.Write([]byte(fmt.Sprintf(`
 			<li>
 				%s: %#v
 			</li>`,
 
-			id, &c,
+			id, c,
 		)))
 		if err != nil {
 			log.Error().Err(err).Msg("Error writing response")
@@ -167,12 +173,13 @@ func (s *svc) doSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for id, c := range store.Users {
+		c := c
 		_, err := w.Write([]byte(fmt.Sprintf(`
 			<li>
 				%s: %#v
 			</li>`,
 
-			id, &c,
+			id, c,
 		)))
 		if err != nil {
 			log.Error().Err(err).Msg("Error writing response")
@@ -186,12 +193,13 @@ func (s *svc) doSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for id, c := range store.AccessTokenRequestIDs {
+		c := c
 		_, err := w.Write([]byte(fmt.Sprintf(`
 			<li>
 				%s: %#v
 			</li>`,
 
-			id, &c,
+			id, c,
 		)))
 		if err != nil {
 			log.Error().Err(err).Msg("Error writing response")
@@ -205,12 +213,13 @@ func (s *svc) doSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for id, c := range store.RefreshTokenRequestIDs {
+		c := c
 		_, err := w.Write([]byte(fmt.Sprintf(`
 			<li>
 				%s: %#v
 			</li>`,
 
-			id, &c,
+			id, c,
 		)))
 		if err != nil {
 			log.Error().Err(err).Msg("Error writing response")

@@ -37,7 +37,7 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 
 	rc, err := s.storage.Download(ctx, ref)
 	if err != nil {
-		log.Error().Err(err).Msg("error downloading file")
+		log.Err(err).Msg("datasvc: error downloading file")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

@@ -26,6 +26,7 @@ import (
 	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
 	"github.com/mitchellh/mapstructure"
@@ -110,7 +111,7 @@ func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*authv0alph
 	}
 
 	if len(sr.Entries) != 1 {
-		return nil, userNotFoundError(uid.OpaqueId)
+		return nil, errtypes.NotFound(uid.OpaqueId)
 	}
 
 	log.Debug().Interface("entries", sr.Entries).Msg("entries")
@@ -176,7 +177,3 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *typespb.UserId) ([]str
 func (m *manager) IsInGroup(ctx context.Context, uid *typespb.UserId, group string) (bool, error) {
 	return false, nil // FIXME implement IsInGroup for ldap user manager
 }
-
-type userNotFoundError string
-
-func (e userNotFoundError) Error() string { return string(e) }

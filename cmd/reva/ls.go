@@ -21,24 +21,26 @@ package main
 import (
 	"fmt"
 	"os"
+	"path"
 
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 )
 
 func lsCommand() *command {
 	cmd := newCommand("ls")
-	cmd.Description = func() string { return "list a folder contents" }
-	cmd.Usage = func() string { return "Usage: ls [-flags] <provider> <folder_name>" }
+	cmd.Description = func() string { return "list a container contents" }
+	cmd.Usage = func() string { return "Usage: ls [-flags] <container_name>" }
 	longFlag := cmd.Bool("l", false, "long listing")
+	fullFlag := cmd.Bool("f", false, "shows full path")
+
 	cmd.Action = func() error {
-		if cmd.NArg() < 2 {
+		if cmd.NArg() < 1 {
 			fmt.Println(cmd.Usage())
 			os.Exit(1)
 		}
 
-		provider := cmd.Args()[0]
-		fn := cmd.Args()[1]
-		client, err := getStorageProviderClient(provider)
+		fn := cmd.Args()[0]
+		client, err := getStorageProviderClient()
 		if err != nil {
 			return err
 		}
@@ -56,10 +58,15 @@ func lsCommand() *command {
 
 		infos := res.Infos
 		for _, info := range infos {
+			p := info.Path
+			if !*fullFlag {
+				p = path.Base(info.Path)
+			}
+
 			if *longFlag {
-				fmt.Printf("%+v %d %d %v %s\n", info.PermissionSet, info.Mtime, info.Size, info.Id, info.Path)
+				fmt.Printf("%+v %d %d %v %s\n", info.PermissionSet, info.Mtime, info.Size, info.Id, p)
 			} else {
-				fmt.Println(info.Path)
+				fmt.Println(p)
 			}
 		}
 		return nil

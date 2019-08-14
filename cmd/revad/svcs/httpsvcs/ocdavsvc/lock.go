@@ -20,9 +20,12 @@ package ocdavsvc
 
 import (
 	"net/http"
+
+	"github.com/cs3org/reva/pkg/appctx"
 )
 
 func (s *svc) doLock(w http.ResponseWriter, r *http.Request) {
+	log := appctx.GetLogger(r.Context())
 	xml := `<?xml version="1.0" encoding="utf-8"?>
 	<prop xmlns="DAV:">
 		<lockdiscovery>
@@ -40,5 +43,8 @@ func (s *svc) doLock(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/xml; charset=\"utf-8\"")
 	w.Header().Set("Lock-Token",
 		"opaquelocktoken:00000000-0000-0000-0000-000000000000")
-	w.Write([]byte(xml))
+	_, err := w.Write([]byte(xml))
+	if err != nil {
+		log.Err(err).Msg("error writing response")
+	}
 }

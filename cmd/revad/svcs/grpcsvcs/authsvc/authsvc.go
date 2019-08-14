@@ -112,6 +112,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 
 	svc := &service{authmgr: authManager, tokenmgr: tokenManager, usermgr: userManager}
 	authv0alphapb.RegisterAuthServiceServer(ss, svc)
+
 	return svc, nil
 }
 
@@ -147,17 +148,7 @@ func (s *service) GenerateAccessToken(ctx context.Context, req *authv0alphapb.Ge
 		return res, nil
 	}
 
-	//  TODO claims is redundand to the user. should we change usermgr.GetUser to GetClaims?
-	claims := token.Claims{
-		"sub":          user.Subject,
-		"iss":          user.Issuer,
-		"username":     user.Username,
-		"groups":       user.Groups,
-		"mail":         user.Mail,
-		"display_name": user.DisplayName,
-	}
-
-	accessToken, err := s.tokenmgr.MintToken(ctx, claims)
+	accessToken, err := s.tokenmgr.MintToken(ctx, user)
 	if err != nil {
 		err = errors.Wrap(err, "error creating access token")
 		log.Error().Err(err).Msg("error creating access token")
@@ -176,45 +167,16 @@ func (s *service) GenerateAccessToken(ctx context.Context, req *authv0alphapb.Ge
 func (s *service) WhoAmI(ctx context.Context, req *authv0alphapb.WhoAmIRequest) (*authv0alphapb.WhoAmIResponse, error) {
 	log := appctx.GetLogger(ctx)
 	token := req.AccessToken
-	claims, err := s.tokenmgr.DismantleToken(ctx, token)
+	u, err := s.tokenmgr.DismantleToken(ctx, token)
 	if err != nil {
-		err = errors.Wrap(err, "error dismantling access token")
+		err = errors.Wrap(err, "error getting user from access token")
 		log.Error().Err(err).Msg("error dismantling access token")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_UNAUTHENTICATED}
 		res := &authv0alphapb.WhoAmIResponse{Status: status}
 		return res, nil
 	}
 
-	up := &struct {
-		Username    string   `mapstructure:"username"`
-		DisplayName string   `mapstructure:"display_name"`
-		Mail        string   `mapstructure:"mail"`
-		Groups      []string `mapstructure:"groups"`
-	}{}
-
-	if err := mapstructure.Decode(claims, up); err != nil {
-		log.Error().Err(err).Msgf("error parsing token claims")
-		status := &rpcpb.Status{Code: rpcpb.Code_CODE_UNAUTHENTICATED}
-		res := &authv0alphapb.WhoAmIResponse{Status: status}
-		return res, nil
-	}
-
-	user := &authv0alphapb.User{
-		Username:    up.Username,
-		DisplayName: up.DisplayName,
-		Mail:        up.Mail,
-		Groups:      up.Groups,
-	}
-
 	status := &rpcpb.Status{Code: rpcpb.Code_CODE_OK}
-	res := &authv0alphapb.WhoAmIResponse{Status: status, User: user}
+	res := &authv0alphapb.WhoAmIResponse{Status: status, User: u}
 	return res, nil
 }
-
-/*
-// Override the Auth function to avoid checking the bearer token for this service
-// https://github.com/grpc-ecosystem/go-grpc-middleware/tree/master/auth#type-serviceauthfuncoverride
-func (s *service) AuthFuncOverride(ctx context.Context, fullMethodNauthmgre string) (context.Context, error) {
-	return ctx, nil
-}
-*/

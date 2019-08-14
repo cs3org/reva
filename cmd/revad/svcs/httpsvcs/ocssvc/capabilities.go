@@ -253,9 +253,9 @@ type CapabilitiesChecksums struct {
 type CapabilitiesFiles struct {
 	PrivateLinks     bool     `json:"privateLinks" xml:"privateLinks" mapstructure:"private_links"`
 	BigFileChunking  bool     `json:"bigfilechunking" xml:"bigfilechunking"`
-	BlacklistedFiles []string `json:"blacklisted_files" xml:"blacklisted_files" mapstructure:"blacklisted_files"`
 	Undelete         bool     `json:"undelete" xml:"undelete"`
 	Versioning       bool     `json:"versioning" xml:"versioning"`
+	BlacklistedFiles []string `json:"blacklisted_files" xml:"blacklisted_files" mapstructure:"blacklisted_files"`
 }
 
 // CapabilitiesDav holds the chunking version
@@ -266,29 +266,29 @@ type CapabilitiesDav struct {
 // CapabilitiesFilesSharing TODO document
 type CapabilitiesFilesSharing struct {
 	APIEnabled                    bool                                     `json:"api_enabled" xml:"api_enabled" mapstructure:"api_enabled"`
-	Public                        *CapabilitiesFilesSharingPublic          `json:"public" xml:"public"`
-	User                          *CapabilitiesFilesSharingUser            `json:"user" xml:"user"`
 	Resharing                     bool                                     `json:"resharing" xml:"resharing"`
 	GroupSharing                  bool                                     `json:"group_sharing" xml:"group_sharing" mapstructure:"group_sharing"`
 	AutoAcceptShare               bool                                     `json:"auto_accept_share" xml:"auto_accept_share" mapstructure:"auto_accept_share"`
 	ShareWithGroupMembersOnly     bool                                     `json:"share_with_group_members_only" xml:"share_with_group_members_only" mapstructure:"share_with_group_members_only"`
 	ShareWithMembershipGroupsOnly bool                                     `json:"share_with_membership_groups_only" xml:"share_with_membership_groups_only" mapstructure:"share_with_membership_groups_only"`
-	UserEnumeration               *CapabilitiesFilesSharingUserEnumeration `json:"user_enumeration" xml:"user_enumeration" mapstructure:"user_enumeration"`
-	DefaultPermissions            int                                      `json:"default_permissions" xml:"default_permissions" mapstructure:"default_permissions"`
-	Federation                    *CapabilitiesFilesSharingFederation      `json:"federation" xml:"federation"`
 	SearchMinLength               int                                      `json:"search_min_length" xml:"search_min_length" mapstructure:"search_min_length"`
+	DefaultPermissions            int                                      `json:"default_permissions" xml:"default_permissions" mapstructure:"default_permissions"`
+	UserEnumeration               *CapabilitiesFilesSharingUserEnumeration `json:"user_enumeration" xml:"user_enumeration" mapstructure:"user_enumeration"`
+	Federation                    *CapabilitiesFilesSharingFederation      `json:"federation" xml:"federation"`
+	Public                        *CapabilitiesFilesSharingPublic          `json:"public" xml:"public"`
+	User                          *CapabilitiesFilesSharingUser            `json:"user" xml:"user"`
 }
 
 // CapabilitiesFilesSharingPublic TODO document
 type CapabilitiesFilesSharingPublic struct {
 	Enabled            bool                                      `json:"enabled" xml:"enabled"`
-	Password           *CapabilitiesFilesSharingPublicPassword   `json:"password" xml:"password"`
-	ExpireDate         *CapabilitiesFilesSharingPublicExpireDate `json:"expire_date" xml:"expire_date" mapstructure:"expire_date"`
 	SendMail           bool                                      `json:"send_mail" xml:"send_mail" mapstructure:"send_mail"`
 	SocialShare        bool                                      `json:"social_share" xml:"social_share" mapstructure:"social_share"`
 	Upload             bool                                      `json:"upload" xml:"upload"`
 	Multiple           bool                                      `json:"multiple" xml:"multiple"`
 	SupportsUploadOnly bool                                      `json:"supports_upload_only" xml:"supports_upload_only" mapstructure:"supports_upload_only"`
+	Password           *CapabilitiesFilesSharingPublicPassword   `json:"password" xml:"password"`
+	ExpireDate         *CapabilitiesFilesSharingPublicExpireDate `json:"expire_date" xml:"expire_date" mapstructure:"expire_date"`
 }
 
 // CapabilitiesFilesSharingPublicPassword TODO document

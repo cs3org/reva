@@ -86,9 +86,7 @@ func readReport(r io.Reader) (rep *report, status int, err error) {
 			return nil, http.StatusBadRequest, err
 		}
 
-		switch v := t.(type) {
-
-		case xml.StartElement:
+		if v, ok := t.(xml.StartElement); ok {
 			if v.Name.Local == "search-files" {
 				var repSF reportSearchFiles
 				err = decoder.DecodeElement(&repSF, &v)

@@ -89,7 +89,6 @@ func getRegistry(c *config) (storage.Registry, error) {
 }
 
 func (s *service) ListStorageProviders(ctx context.Context, req *storageregv0alphapb.ListStorageProvidersRequest) (*storageregv0alphapb.ListStorageProvidersResponse, error) {
-	var providers []*storagetypespb.ProviderInfo
 	pinfos, err := s.reg.ListProviders(ctx)
 	if err != nil {
 		res := &storageregv0alphapb.ListStorageProvidersResponse{
@@ -98,6 +97,7 @@ func (s *service) ListStorageProviders(ctx context.Context, req *storageregv0alp
 		return res, nil
 	}
 
+	providers := make([]*storagetypespb.ProviderInfo, len(pinfos))
 	for _, info := range pinfos {
 		fill(info)
 		providers = append(providers, info)

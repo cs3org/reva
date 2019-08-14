@@ -25,9 +25,8 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/reqid"
 	"github.com/rs/zerolog"
-	"google.golang.org/grpc/metadata"
+	"go.opencensus.io/trace"
 )
 
 // New returns a new HTTP middleware that stores the log
@@ -40,33 +39,16 @@ func New(log zerolog.Logger) func(http.Handler) http.Handler {
 }
 
 func handler(log zerolog.Logger, h http.Handler) http.Handler {
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		reqID := getReqID(r)
 
-		// set reqID into context.
-		ctx = reqid.ContextSetReqID(ctx, reqID)
-		ctx = metadata.AppendToOutgoingContext(ctx, reqid.ReqIDHeaderName, reqID) // for grpc
-
-		sub := log.With().Str("reqid", reqID).Logger()
+		// trace is set on the httpserver.go file as the outermost wraper handler.
+		span := trace.FromContext(ctx)
+		sub := log.With().Str("traceid", span.SpanContext().TraceID.String()).Logger()
 		ctx = appctx.WithLogger(ctx, &sub)
 
 		r = r.WithContext(ctx)
 		h.ServeHTTP(w, r)
 	})
-}
-
-func getReqID(r *http.Request) string {
-	var reqID string
-	val, ok := reqid.ContextGetReqID(r.Context())
-	if ok && val != "" {
-		reqID = val
-	} else {
-		// try to get it from header
-		reqID = r.Header.Get(reqid.ReqIDHeaderName)
-		if reqID == "" {
-			reqID = reqid.MintReqID()
-		}
-	}
-	return reqID
 }

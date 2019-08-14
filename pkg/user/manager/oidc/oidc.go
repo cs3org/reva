@@ -27,6 +27,7 @@ import (
 
 	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
+	"github.com/cs3org/reva/pkg/errtypes"
 )
 
 func init() {
@@ -45,7 +46,7 @@ func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*authv0alph
 
 	claims, ok := ctx.Value(oidc.ClaimsKey).(oidc.StandardClaims)
 	if !ok {
-		return nil, userNotFoundError(uid.OpaqueId)
+		return nil, errtypes.NotFound(uid.OpaqueId)
 	}
 
 	user := &authv0alphapb.User{
@@ -79,7 +80,3 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *typespb.UserId) ([]str
 func (m *manager) IsInGroup(ctx context.Context, uid *typespb.UserId, group string) (bool, error) {
 	return false, nil // FIXME implement IsInGroup for oidc user manager
 }
-
-type userNotFoundError string
-
-func (e userNotFoundError) Error() string { return string(e) }

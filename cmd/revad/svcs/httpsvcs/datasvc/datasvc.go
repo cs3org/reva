@@ -48,7 +48,7 @@ type svc struct {
 	storage storage.FS
 }
 
-// New returns a new httpuploadsvc
+// New returns a new datasvc
 func New(m map[string]interface{}) (httpsvcs.Service, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
@@ -57,8 +57,10 @@ func New(m map[string]interface{}) (httpsvcs.Service, error) {
 
 	if conf.TmpFolder == "" {
 		conf.TmpFolder = os.TempDir()
-	} else {
-		os.MkdirAll(conf.TmpFolder, 0755)
+	}
+
+	if err := os.MkdirAll(conf.TmpFolder, 0755); err != nil {
+		return nil, err
 	}
 
 	fs, err := getFS(conf)

@@ -22,8 +22,8 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/cmd/revad/httpserver"
-
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -63,6 +63,8 @@ func (s *svc) Prefix() string {
 
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(s.conf.HelloMessage))
+		log := appctx.GetLogger(r.Context())
+		_, err := w.Write([]byte(s.conf.HelloMessage))
+		log.Err(err).Msg("error writing response")
 	})
 }

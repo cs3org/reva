@@ -19,7 +19,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 
@@ -45,17 +44,18 @@ func appProviderGetIFrameCommand() *command {
 		appProvider := cmd.Args()[0]
 		fn := cmd.Args()[1]
 		token := cmd.Args()[2]
-		req := &appproviderv0alphapb.OpenRequest{
-			ResourceId:  &storageproviderv0alphapb.ResourceId{OpaqueId: fn}, // TODO(labkode): fix me
-			AccessToken: token,
-		}
 
-		client, err := getAppProviderClient(appProvider)
+		ctx := getAuthContext()
+		client, err := getStorageProviderClient()
 		if err != nil {
 			return err
 		}
-		ctx := context.Background()
-		res, err := client.Open(ctx, req)
+
+		ref := &storageproviderv0alphapb.Reference{
+			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+		}
+		req := &storageproviderv0alphapb.StatRequest{Ref: ref}
+		res, err := client.Stat(ctx, req)
 		if err != nil {
 			return err
 		}
@@ -64,7 +64,26 @@ func appProviderGetIFrameCommand() *command {
 			return formatError(res.Status)
 		}
 
-		fmt.Printf("Load in your browser the following iframe to edit the resource: %s", res.IframeUrl)
+		req2 := &appproviderv0alphapb.OpenRequest{
+			ResourceInfo: res.Info,
+			AccessToken:  token,
+		}
+
+		client2, err := getAppProviderClient(appProvider)
+		if err != nil {
+			return err
+		}
+
+		res2, err := client2.Open(ctx, req2)
+		if err != nil {
+			return err
+		}
+
+		if res2.Status.Code != rpcpb.Code_CODE_OK {
+			return formatError(res2.Status)
+		}
+
+		fmt.Printf("Load in your browser the following iframe to edit the resource: %s", res2.IframeUrl)
 		return nil
 	}
 	return cmd

@@ -20,10 +20,10 @@ package gen
 
 import (
 	"crypto/md5"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"math/rand"
 	"os"
 	"text/template"
 
