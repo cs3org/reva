@@ -415,6 +415,7 @@ func (s *service) ListContainer(ctx context.Context, req *storageproviderv0alpha
 		s.wrap(md)
 		infos = append(infos, md)
 	}
+	fmt.Println(len(infos), len(mds), infos)
 	res := &storageproviderv0alphapb.ListContainerResponse{
 		Status: &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
 		Infos:  infos,
