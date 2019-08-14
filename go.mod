@@ -2,7 +2,7 @@ module github.com/cs3org/reva
 
 require (
 	github.com/BurntSushi/toml v0.3.1
-	github.com/aws/aws-sdk-go v1.21.6
+	github.com/aws/aws-sdk-go v1.23.0
 	github.com/cheggaaa/pb v1.0.28
 	github.com/coreos/go-oidc v2.0.0+incompatible
 	github.com/cs3org/go-cs3apis v0.0.0-20190723115118-51a7dae466b7
