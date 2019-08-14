@@ -177,14 +177,14 @@ func getVersionString() string {
 	msg += "branch=%s "
 	msg += "go_version=%s "
 	msg += "build_date=%s "
-	msg += "build_platform=%s\n"
+	msg += "build_platform=%s"
 
 	return fmt.Sprintf(msg, version, gitCommit, gitBranch, goVersion, buildDate, buildPlatform)
 }
 
 func handleVersionFlag() {
 	if *versionFlag {
-		fmt.Fprintf(os.Stderr, getVersionString())
+		fmt.Fprintf(os.Stderr, "%s\n", getVersionString())
 		os.Exit(1)
 	}
 }
