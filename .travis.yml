@@ -1,15 +1,13 @@
 language: go
 
 go:
-  - 1.11.x
+  - 1.12.x
 
 before_install:
-  - env GO111MODULE=on go get -u golang.org/x/lint/golint
+  - env GO111MODULE=on make deps
 
 script:
-  - env GO111MODULE=on golint -set_exit_status ./... # enfoce std style-guide
-  - env GO111MODULE=on go build -v ./...
-  - env GO111MODULE=on go vet ./... # enforce best practices
+  - env GO111MODULE=on make
   - env GO111MODULE=on go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
 
 after_success:
