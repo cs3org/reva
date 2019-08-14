@@ -49,6 +49,10 @@ func (s *svc) CreateShare(ctx context.Context, req *usershareproviderv0alphapb.C
 		return nil, errors.Wrap(err, "gatewaysvc: error calling CreateShare")
 	}
 
+	if res.Status.Code != rpcpb.Code_CODE_OK {
+		return res, nil
+	}
+
 	// if we don't need to commit we return earlier
 	if !s.c.CommitShareToStorageGrant && !s.c.CommitShareToStorageRef {
 		return res, nil

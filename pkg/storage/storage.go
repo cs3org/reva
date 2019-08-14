@@ -53,6 +53,6 @@ type FS interface {
 // Registry is the interface that storage registries implement
 // for discovering storage providers
 type Registry interface {
-	FindProvider(ctx context.Context, fn string) (*storagetypespb.ProviderInfo, error)
+	FindProvider(ctx context.Context, ref *storageproviderv0alphapb.Reference) (*storagetypespb.ProviderInfo, error)
 	ListProviders(ctx context.Context) ([]*storagetypespb.ProviderInfo, error)
 }

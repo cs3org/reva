@@ -19,6 +19,7 @@ authsvc = "localhost:9999"
 usershareprovidersvc = "localhost:9999"
 appregistrysvc = "localhost:9999"
 preferencessvc = "localhost:9999"
+commit_share_to_storage_grant = true
 
 [http]
 enabled_services = ["ocdavsvc"]

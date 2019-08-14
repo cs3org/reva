@@ -494,7 +494,7 @@ func (s *svc) AddGrant(ctx context.Context, req *storageproviderv0alphapb.AddGra
 		}, nil
 	}
 
-	log.Info().Str("address", pi.Address).Str("ref", req.Ref.String()).Msg("storage provider found")
+	log.Info().Str("address", pi.Address).Str("ref", req.Ref.String()).Str("provider", pi.String()).Msg("storage provider found")
 
 	// TODO(labkode): check for capabilities here
 	c, err := pool.GetStorageProviderServiceClient(pi.Address)
@@ -624,7 +624,7 @@ func (s *svc) find(ctx context.Context, ref *storageproviderv0alphapb.Reference)
 		return nil, err
 	}
 
-	if res.Status.Code == rpcpb.Code_CODE_OK {
+	if res.Status.Code == rpcpb.Code_CODE_OK && res.Provider != nil {
 		return res.Provider, nil
 	}
 
