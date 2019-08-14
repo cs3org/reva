@@ -22,12 +22,15 @@ import (
 	"context"
 
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
+	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
+	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/pkg/errors"
 )
 
+// TODO(labkode): add multi-phase commit logic when commit share or commit ref is enabled.
 func (s *svc) CreateShare(ctx context.Context, req *usershareproviderv0alphapb.CreateShareRequest) (*usershareproviderv0alphapb.CreateShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 
@@ -46,6 +49,36 @@ func (s *svc) CreateShare(ctx context.Context, req *usershareproviderv0alphapb.C
 		return nil, errors.Wrap(err, "gatewaysvc: error calling CreateShare")
 	}
 
+	// if we don't need to commit we return earlier
+	if !s.c.CommitShareToStorageGrant && !s.c.CommitShareToStorageRef {
+		return res, nil
+	}
+
+	// TODO(labkode): if both commits are enabled they could be done concurrently.
+	if s.c.CommitShareToStorageGrant {
+		grantReq := &storageproviderv0alphapb.AddGrantRequest{
+			Ref: &storageproviderv0alphapb.Reference{
+				Spec: &storageproviderv0alphapb.Reference_Id{
+					Id: req.ResourceInfo.Id,
+				},
+			},
+			Grant: &storageproviderv0alphapb.Grant{
+				Grantee:     req.Grant.Grantee,
+				Permissions: req.Grant.Permissions.Permissions,
+			},
+		}
+		grantRes, err := s.AddGrant(ctx, grantReq)
+		if err != nil {
+			return nil, errors.Wrap(err, "gatewaysvc: error calling AddGrant")
+		}
+		if grantRes.Status.Code != rpcpb.Code_CODE_OK {
+			res := &usershareproviderv0alphapb.CreateShareResponse{
+				Status: status.NewInternal(ctx, "error committing share to storage grant"),
+			}
+			return res, nil
+		}
+	}
+
 	return res, nil
 }
 
@@ -56,9 +89,7 @@ func (s *svc) RemoveShare(ctx context.Context, req *usershareproviderv0alphapb.R
 	if err != nil {
 		log.Err(err).Msg("gatewaysvc: error getting usershareprovider client")
 		return &usershareproviderv0alphapb.RemoveShareResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, "error getting user share provider client"),
 		}, nil
 	}
 
@@ -67,10 +98,62 @@ func (s *svc) RemoveShare(ctx context.Context, req *usershareproviderv0alphapb.R
 		return nil, errors.Wrap(err, "gatewaysvc: error calling RemoveShare")
 	}
 
+	// if we don't need to commit we return earlier
+	if !s.c.CommitShareToStorageGrant && !s.c.CommitShareToStorageRef {
+		return res, nil
+	}
+
+	// TODO(labkode): if both commits are enabled they could be done concurrently.
+	if s.c.CommitShareToStorageGrant {
+		getShareReq := &usershareproviderv0alphapb.GetShareRequest{
+			Ref: req.Ref,
+		}
+		getShareRes, err := c.GetShare(ctx, getShareReq)
+		if err != nil {
+			return nil, errors.Wrap(err, "gatewaysvc: error calling GetShare")
+		}
+
+		if getShareRes.Status.Code != rpcpb.Code_CODE_OK {
+			res := &usershareproviderv0alphapb.RemoveShareResponse{
+				Status: status.NewInternal(ctx, "error getting share when committing to the share"),
+			}
+			return res, nil
+		}
+
+		grantReq := &storageproviderv0alphapb.RemoveGrantRequest{
+			Ref: &storageproviderv0alphapb.Reference{
+				Spec: &storageproviderv0alphapb.Reference_Id{
+					Id: getShareRes.Share.ResourceId,
+				},
+			},
+			Grant: &storageproviderv0alphapb.Grant{
+				Grantee:     getShareRes.Share.Grantee,
+				Permissions: getShareRes.Share.Permissions.Permissions,
+			},
+		}
+		grantRes, err := s.RemoveGrant(ctx, grantReq)
+		if err != nil {
+			return nil, errors.Wrap(err, "gatewaysvc: error calling RemoveGrant")
+		}
+		if grantRes.Status.Code != rpcpb.Code_CODE_OK {
+			res := &usershareproviderv0alphapb.RemoveShareResponse{
+				Status: status.NewInternal(ctx, "error removing storage grant"),
+			}
+			return res, nil
+		}
+	}
+
 	return res, nil
 }
 
+// TODO(labkode): we need to validate share state vs storage grant and storage ref
+// If there are any inconsitencies, the share needs to be flag as invalid and a background process
+// or active fix needs to be performed.
 func (s *svc) GetShare(ctx context.Context, req *usershareproviderv0alphapb.GetShareRequest) (*usershareproviderv0alphapb.GetShareResponse, error) {
+	return s.getShare(ctx, req)
+}
+
+func (s *svc) getShare(ctx context.Context, req *usershareproviderv0alphapb.GetShareRequest) (*usershareproviderv0alphapb.GetShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
@@ -91,6 +174,7 @@ func (s *svc) GetShare(ctx context.Context, req *usershareproviderv0alphapb.GetS
 	return res, nil
 }
 
+// TODO(labkode): read GetShare comment.
 func (s *svc) ListShares(ctx context.Context, req *usershareproviderv0alphapb.ListSharesRequest) (*usershareproviderv0alphapb.ListSharesResponse, error) {
 	log := appctx.GetLogger(ctx)
 
@@ -128,6 +212,51 @@ func (s *svc) UpdateShare(ctx context.Context, req *usershareproviderv0alphapb.U
 	res, err := c.UpdateShare(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gatewaysvc: error calling UpdateShare")
+	}
+
+	// if we don't need to commit we return earlier
+	if !s.c.CommitShareToStorageGrant && !s.c.CommitShareToStorageRef {
+		return res, nil
+	}
+
+	// TODO(labkode): if both commits are enabled they could be done concurrently.
+	if s.c.CommitShareToStorageGrant {
+		getShareReq := &usershareproviderv0alphapb.GetShareRequest{
+			Ref: req.Ref,
+		}
+		getShareRes, err := c.GetShare(ctx, getShareReq)
+		if err != nil {
+			return nil, errors.Wrap(err, "gatewaysvc: error calling GetShare")
+		}
+
+		if getShareRes.Status.Code != rpcpb.Code_CODE_OK {
+			res := &usershareproviderv0alphapb.UpdateShareResponse{
+				Status: status.NewInternal(ctx, "error getting share when committing to the share"),
+			}
+			return res, nil
+		}
+
+		grantReq := &storageproviderv0alphapb.UpdateGrantRequest{
+			Ref: &storageproviderv0alphapb.Reference{
+				Spec: &storageproviderv0alphapb.Reference_Id{
+					Id: getShareRes.Share.ResourceId,
+				},
+			},
+			Grant: &storageproviderv0alphapb.Grant{
+				Grantee:     getShareRes.Share.Grantee,
+				Permissions: getShareRes.Share.Permissions.Permissions,
+			},
+		}
+		grantRes, err := s.UpdateGrant(ctx, grantReq)
+		if err != nil {
+			return nil, errors.Wrap(err, "gatewaysvc: error calling UpdateGrant")
+		}
+		if grantRes.Status.Code != rpcpb.Code_CODE_OK {
+			res := &usershareproviderv0alphapb.UpdateShareResponse{
+				Status: status.NewInternal(ctx, "error updating storage grant"),
+			}
+			return res, nil
+		}
 	}
 
 	return res, nil

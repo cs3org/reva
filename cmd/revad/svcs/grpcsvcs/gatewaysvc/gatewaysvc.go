@@ -86,4 +86,6 @@ type config struct {
 	AppRegistryEndpoint       string `mapstructure:"appregistrysvc"`
 	PreferencesEndpoint       string `mapstructure:"preferencessvc"`
 	UserShareProviderEndpoint string `mapstructure:"usershareprovidersvc"`
+	CommitShareToStorageGrant bool   `mapstructure:"commit_share_to_storage_grant"`
+	CommitShareToStorageRef   bool   `mapstructure:"commit_share_to_storage_ref"`
 }
