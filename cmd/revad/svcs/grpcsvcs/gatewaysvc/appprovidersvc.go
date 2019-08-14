@@ -27,6 +27,7 @@ import (
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/pkg/errors"
 )
 
@@ -35,7 +36,7 @@ func (s *svc) Open(ctx context.Context, req *appproviderv0alphapb.OpenRequest) (
 	provider, err := s.findAppProvider(ctx, req.ResourceInfo)
 	if err != nil {
 		log.Err(err).Msg("gatewaysvc: error finding app provider")
-		if _, ok := err.(*notFoundError); ok {
+		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &appproviderv0alphapb.OpenResponse{
 				Status: &rpcpb.Status{
 					Code: rpcpb.Code_CODE_NOT_FOUND,
@@ -90,7 +91,7 @@ func (s *svc) findAppProvider(ctx context.Context, ri *storageproviderv0alphapb.
 	}
 
 	if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
-		return nil, notFoundError("gatewaysvc: app provider not found for resource:" + ri.String())
+		return nil, errtypes.NotFound("gatewaysvc: app provider not found for resource:" + ri.String())
 	}
 
 	return nil, errors.New("gatewaysvc: error finding a storage provider")

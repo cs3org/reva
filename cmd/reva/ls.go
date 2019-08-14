@@ -23,6 +23,7 @@ import (
 	"os"
 	"path"
 
+	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 )
 
@@ -54,6 +55,10 @@ func lsCommand() *command {
 		res, err := client.ListContainer(ctx, req)
 		if err != nil {
 			return err
+		}
+
+		if res.Status.Code != rpcpb.Code_CODE_OK {
+			return formatError(res.Status)
 		}
 
 		infos := res.Infos
