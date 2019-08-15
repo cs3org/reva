@@ -19,10 +19,13 @@
 package main
 
 import (
+	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
+	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
 	"github.com/jedib0t/go-pretty/table"
 )
@@ -30,7 +33,8 @@ import (
 func shareListCommand() *command {
 	cmd := newCommand("share-list")
 	cmd.Description = func() string { return "list shares you manage" }
-	cmd.Usage = func() string { return "Usage: share list [-flags]" }
+	cmd.Usage = func() string { return "Usage: share-list [-flags]" }
+	resID := cmd.String("by-resource-id", "", "filter by resource id (storage_id:opaque_id)")
 	cmd.Action = func() error {
 		ctx := getAuthContext()
 		shareClient, err := getUserShareProviderClient()
@@ -39,6 +43,25 @@ func shareListCommand() *command {
 		}
 
 		shareRequest := &usershareproviderv0alphapb.ListSharesRequest{}
+		if *resID != "" {
+			// check split by colon (:)
+			tokens := strings.Split(*resID, ":")
+			if len(tokens) != 2 {
+				return fmt.Errorf("resource id invalid")
+			}
+			id := &storageproviderv0alphapb.ResourceId{
+				StorageId: tokens[0],
+				OpaqueId:  tokens[1],
+			}
+			shareRequest.Filters = []*usershareproviderv0alphapb.ListSharesRequest_Filter{
+				&usershareproviderv0alphapb.ListSharesRequest_Filter{
+					Type: usershareproviderv0alphapb.ListSharesRequest_Filter_LIST_SHARES_REQUEST_FILTER_TYPE_RESOURCE_ID,
+					Term: &usershareproviderv0alphapb.ListSharesRequest_Filter_ResourceId{
+						ResourceId: id,
+					},
+				},
+			}
+		}
 
 		shareRes, err := shareClient.ListShares(ctx, shareRequest)
 		if err != nil {

@@ -218,15 +218,28 @@ func (m *manager) UpdateShare(ctx context.Context, ref *usershareproviderv0alpha
 	return nil, errtypes.NotFound(ref.String())
 }
 
-func (m *manager) ListShares(ctx context.Context, md *storageproviderv0alphapb.ResourceInfo) ([]*usershareproviderv0alphapb.Share, error) {
+func (m *manager) ListShares(ctx context.Context, filters []*usershareproviderv0alphapb.ListSharesRequest_Filter) ([]*usershareproviderv0alphapb.Share, error) {
 	var ss []*usershareproviderv0alphapb.Share
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	user := user.ContextMustGetUser(ctx)
 	for _, s := range m.shares {
-		// TODO(labkode): add check for owner.
+		// TODO(labkode): add check for creator.
 		if user.Id.Idp == s.Owner.Idp && user.Id.OpaqueId == s.Owner.OpaqueId {
-			ss = append(ss, s)
+			// no filter we return earlier
+			if len(filters) == 0 {
+				ss = append(ss, s)
+			} else {
+				// check filters
+				// TODO(labkode): add the rest of filters.
+				for _, f := range filters {
+					if f.Type == usershareproviderv0alphapb.ListSharesRequest_Filter_LIST_SHARES_REQUEST_FILTER_TYPE_RESOURCE_ID {
+						if s.ResourceId.StorageId == f.GetResourceId().StorageId && s.ResourceId.OpaqueId == f.GetResourceId().OpaqueId {
+							ss = append(ss, s)
+						}
+					}
+				}
+			}
 		}
 	}
 	return ss, nil
