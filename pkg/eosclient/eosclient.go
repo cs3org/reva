@@ -34,10 +34,10 @@ import (
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/reqid"
 	"github.com/cs3org/reva/pkg/storage/acl"
 	"github.com/gofrs/uuid"
 	"github.com/pkg/errors"
+	"go.opencensus.io/trace"
 )
 
 const (
@@ -174,8 +174,8 @@ func (c *Client) executeEOS(ctx context.Context, cmd *exec.Cmd) (string, string,
 	cmd.Env = []string{
 		"EOS_MGM_URL=" + c.opt.URL,
 	}
-	requestid, _ := reqid.ContextGetReqID(ctx)
-	cmd.Args = append(cmd.Args, "--comment", requestid)
+	trace := trace.FromContext(ctx).SpanContext().TraceID.String()
+	cmd.Args = append(cmd.Args, "--comment", trace)
 
 	err := cmd.Run()
 
@@ -203,7 +203,7 @@ func (c *Client) executeEOS(ctx context.Context, cmd *exec.Cmd) (string, string,
 
 	args := fmt.Sprintf("%s", cmd.Args)
 	env := fmt.Sprintf("%s", cmd.Env)
-	log.Info().Str("args", args).Str("env", env).Int("exit", exitStatus).Msg("eos cmd")
+	log.Info().Str("args", args).Str("env", env).Int("exit", exitStatus).Str("err", errBuf.String()).Msg("eos cmd")
 
 	if err != nil && exitStatus != 2 { // don't wrap the errtypes.NotFoundError
 		err = errors.Wrap(err, "error while executing command")
