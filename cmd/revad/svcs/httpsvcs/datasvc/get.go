@@ -30,9 +30,7 @@ import (
 func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
-	
 	files, ok := r.URL.Query()["filename"]
-
 	if !ok || len(files[0]) < 1 {
 		w.WriteHeader(http.StatusBadRequest)
 		return

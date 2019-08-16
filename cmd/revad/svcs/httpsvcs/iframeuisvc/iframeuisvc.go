@@ -20,10 +20,12 @@ package iframeuisvc
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/cs3org/reva/cmd/revad/httpserver"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -74,32 +76,25 @@ func getHandler() http.Handler {
 }
 
 func doOpen(w http.ResponseWriter, r *http.Request) {
-	log := appctx.GetLogger(r.Context())
-	filename := r.URL.Path
-	html := `
-<!DOCTYPE html>
-<html>
-<head>
-	<meta charset="UTF-8">
-	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
 
-	<script src="https://root.cern/js/latest/scripts/JSRootCore.min.js" type="text/javascript"></script>
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		log.Error().Msg("error getting user from context")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
-	<script type="text/javascript">
-		var filename = "http://localhost:9998/data` + filename + `";
-		JSROOT.OpenFile(filename, function(file) {
-			file.ReadObject("c1;1", function(obj) {
-				JSROOT.draw("drawing", obj, "colz");
-			});
-		});
-	</script>
-</head>
-<body>
-<div id="drawing" style="width:800px; height:600px"></div>
-</body>
-</html>
-	`
-	if _, err := w.Write([]byte(html)); err != nil {
-		log.Err(err).Msg("error writing response")
+	filename := strings.TrimPrefix(r.URL.Path, "/")
+
+	tokens := r.URL.Query()["access_token"]
+	token := tokens[0]
+
+	responseString := `https://root.cern/js/latest/?file=http://localhost:9998/data?filename=/` + u.Username + `/` + filename + `&access_token=` + token
+	_, err := w.Write([]byte(responseString))
+	if err != nil {
+		log.Error().Err(err).Msg("can't write to response")
+		w.WriteHeader(http.StatusInternalServerError)
 	}
 }
