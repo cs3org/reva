@@ -32,11 +32,18 @@ import (
 var ctx = context.Background()
 
 func TestUserManager(t *testing.T) {
+	// add tempdir
+	tempdir, err := ioutil.TempDir("", "json_test")
+	if err != nil {
+		t.Fatalf("error while create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempdir)
+
 	// parseConfig - negative test
 	input := map[string]interface{}{
 		"users": true,
 	}
-	_, err := New(input)
+	_, err = New(input)
 	if err == nil {
 		t.Fatalf("no error (but we expected one) while get manager")
 	}
@@ -54,12 +61,12 @@ func TestUserManager(t *testing.T) {
 	userJSON := `[{`
 
 	// get file handler for temporary file
-	file, err := ioutil.TempFile("/tmp", "json_test")
+	file, err := ioutil.TempFile(tempdir, "json_test")
 	if err != nil {
 		t.Fatalf("error while open temp file: %v", err)
 	}
 
-	// write json object to /tmp
+	// write json object to tempdir
 	_, err = file.WriteString(userJSON)
 	if err != nil {
 		t.Fatalf("error while writing temp file: %v", err)
@@ -81,13 +88,13 @@ func TestUserManager(t *testing.T) {
 	userJSON = `[{"id":{"idp":"localhost","opaque_id":"einstein"},"username":"einstein","mail":"einstein@example.org","display_name":"Albert Einstein","groups":["sailing-lovers","violin-haters","physics-lovers"]}]`
 
 	// get file handler for temporary file
-	file, err = ioutil.TempFile("/tmp", "json_test")
+	file, err = ioutil.TempFile(tempdir, "json_test")
 	if err != nil {
 		t.Fatalf("error while open temp file: %v", err)
 	}
 	defer os.Remove(file.Name())
 
-	// write json object to /tmp
+	// write json object to tempdir
 	_, err = file.WriteString(userJSON)
 	if err != nil {
 		t.Fatalf("error while writing temp file: %v", err)
