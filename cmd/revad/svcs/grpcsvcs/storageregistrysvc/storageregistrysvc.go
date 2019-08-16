@@ -97,7 +97,7 @@ func (s *service) ListStorageProviders(ctx context.Context, req *storageregv0alp
 		return res, nil
 	}
 
-	providers := make([]*storagetypespb.ProviderInfo, len(pinfos))
+	providers := make([]*storagetypespb.ProviderInfo, 0, len(pinfos))
 	for _, info := range pinfos {
 		fill(info)
 		providers = append(providers, info)
@@ -112,10 +112,9 @@ func (s *service) ListStorageProviders(ctx context.Context, req *storageregv0alp
 
 func (s *service) GetStorageProvider(ctx context.Context, req *storageregv0alphapb.GetStorageProviderRequest) (*storageregv0alphapb.GetStorageProviderResponse, error) {
 	log := appctx.GetLogger(ctx)
-	fn := req.Ref.GetPath()
-	p, err := s.reg.FindProvider(ctx, fn)
+	p, err := s.reg.FindProvider(ctx, req.Ref)
 	if err != nil {
-		log.Error().Err(err).Msg("error finding provider")
+		log.Error().Err(err).Msg("error finding storage provider")
 		res := &storageregv0alphapb.GetStorageProviderResponse{
 			Status: &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL},
 		}

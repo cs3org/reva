@@ -41,7 +41,7 @@ type Manager interface {
 
 	// ListShares returns the shares created by the user. If md is provided is not nil,
 	// it returns only shares attached to the given resource.
-	ListShares(ctx context.Context, md *storageproviderv0alphapb.ResourceInfo) ([]*usershareproviderv0alphapb.Share, error)
+	ListShares(ctx context.Context, filters []*usershareproviderv0alphapb.ListSharesRequest_Filter) ([]*usershareproviderv0alphapb.Share, error)
 
 	// ListReceivedShares returns the list of shares the user has access.
 	ListReceivedShares(ctx context.Context) ([]*usershareproviderv0alphapb.ReceivedShare, error)

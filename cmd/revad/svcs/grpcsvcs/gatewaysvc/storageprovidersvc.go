@@ -27,6 +27,7 @@ import (
 	storagetypespb "github.com/cs3org/go-cs3apis/cs3/storagetypes"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/pkg/errors"
 )
 
@@ -45,7 +46,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *storageproviderv0al
 	if err != nil {
 		log.Err(err).Msg("gatewaysvc: error finding storage provider")
 
-		if _, ok := err.(notFoundError); ok {
+		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.InitiateFileDownloadResponse{
 				Status: &rpcpb.Status{
 					Code: rpcpb.Code_CODE_NOT_FOUND,
@@ -87,7 +88,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *storageproviderv0alph
 	if err != nil {
 		log.Err(err).Msg("gatewaysvc: error finding storage provider")
 
-		if _, ok := err.(notFoundError); ok {
+		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.InitiateFileUploadResponse{
 				Status: &rpcpb.Status{
 					Code: rpcpb.Code_CODE_NOT_FOUND,
@@ -138,7 +139,7 @@ func (s *svc) CreateContainer(ctx context.Context, req *storageproviderv0alphapb
 	if err != nil {
 		log.Err(err).Msg("gatewaysvc: error finding storage provider")
 
-		if _, ok := err.(notFoundError); ok {
+		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.CreateContainerResponse{
 				Status: &rpcpb.Status{
 					Code: rpcpb.Code_CODE_NOT_FOUND,
@@ -180,7 +181,7 @@ func (s *svc) Delete(ctx context.Context, req *storageproviderv0alphapb.DeleteRe
 	if err != nil {
 		log.Err(err).Msg("gatewaysvc: error finding storage provider")
 
-		if _, ok := err.(notFoundError); ok {
+		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.DeleteResponse{
 				Status: &rpcpb.Status{
 					Code: rpcpb.Code_CODE_NOT_FOUND,
@@ -231,7 +232,7 @@ func (s *svc) Stat(ctx context.Context, req *storageproviderv0alphapb.StatReques
 	if err != nil {
 		log.Err(err).Msg("gatewaysvc: error finding storage provider")
 
-		if _, ok := err.(notFoundError); ok {
+		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.StatResponse{
 				Status: &rpcpb.Status{
 					Code: rpcpb.Code_CODE_NOT_FOUND,
@@ -277,7 +278,7 @@ func (s *svc) ListContainer(ctx context.Context, req *storageproviderv0alphapb.L
 	if err != nil {
 		log.Err(err).Msg("gatewaysvc: error finding storage provider")
 
-		if _, ok := err.(notFoundError); ok {
+		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.ListContainerResponse{
 				Status: &rpcpb.Status{
 					Code: rpcpb.Code_CODE_NOT_FOUND,
@@ -307,7 +308,7 @@ func (s *svc) ListContainer(ctx context.Context, req *storageproviderv0alphapb.L
 
 	res, err := c.ListContainer(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling Stat")
+		return nil, errors.Wrap(err, "gatewaysvc: error calling ListContainer")
 	}
 
 	return res, nil
@@ -319,7 +320,7 @@ func (s *svc) ListFileVersions(ctx context.Context, req *storageproviderv0alphap
 	if err != nil {
 		log.Err(err).Msg("gatewaysvc: error finding storage provider")
 
-		if _, ok := err.(notFoundError); ok {
+		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.ListFileVersionsResponse{
 				Status: &rpcpb.Status{
 					Code: rpcpb.Code_CODE_NOT_FOUND,
@@ -361,7 +362,7 @@ func (s *svc) RestoreFileVersion(ctx context.Context, req *storageproviderv0alph
 	if err != nil {
 		log.Err(err).Msg("gatewaysvc: error finding storage provider")
 
-		if _, ok := err.(notFoundError); ok {
+		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.RestoreFileVersionResponse{
 				Status: &rpcpb.Status{
 					Code: rpcpb.Code_CODE_NOT_FOUND,
@@ -436,7 +437,7 @@ func (s *svc) ListGrants(ctx context.Context, req *storageproviderv0alphapb.List
 	if err != nil {
 		log.Err(err).Msg("gatewaysvc: error finding storage provider")
 
-		if _, ok := err.(notFoundError); ok {
+		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.ListGrantsResponse{
 				Status: &rpcpb.Status{
 					Code: rpcpb.Code_CODE_NOT_FOUND,
@@ -478,7 +479,7 @@ func (s *svc) AddGrant(ctx context.Context, req *storageproviderv0alphapb.AddGra
 	if err != nil {
 		log.Err(err).Msg("gatewaysvc: error finding storage provider")
 
-		if _, ok := err.(notFoundError); ok {
+		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.AddGrantResponse{
 				Status: &rpcpb.Status{
 					Code: rpcpb.Code_CODE_NOT_FOUND,
@@ -493,7 +494,7 @@ func (s *svc) AddGrant(ctx context.Context, req *storageproviderv0alphapb.AddGra
 		}, nil
 	}
 
-	log.Info().Str("address", pi.Address).Str("ref", req.Ref.String()).Msg("storage provider found")
+	log.Info().Str("address", pi.Address).Str("ref", req.Ref.String()).Str("provider", pi.String()).Msg("storage provider found")
 
 	// TODO(labkode): check for capabilities here
 	c, err := pool.GetStorageProviderServiceClient(pi.Address)
@@ -520,7 +521,7 @@ func (s *svc) UpdateGrant(ctx context.Context, req *storageproviderv0alphapb.Upd
 	if err != nil {
 		log.Err(err).Msg("gatewaysvc: error finding storage provider")
 
-		if _, ok := err.(notFoundError); ok {
+		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.UpdateGrantResponse{
 				Status: &rpcpb.Status{
 					Code: rpcpb.Code_CODE_NOT_FOUND,
@@ -562,7 +563,7 @@ func (s *svc) RemoveGrant(ctx context.Context, req *storageproviderv0alphapb.Rem
 	if err != nil {
 		log.Err(err).Msg("gatewaysvc: error finding storage provider")
 
-		if _, ok := err.(notFoundError); ok {
+		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.RemoveGrantResponse{
 				Status: &rpcpb.Status{
 					Code: rpcpb.Code_CODE_NOT_FOUND,
@@ -623,18 +624,13 @@ func (s *svc) find(ctx context.Context, ref *storageproviderv0alphapb.Reference)
 		return nil, err
 	}
 
-	if res.Status.Code == rpcpb.Code_CODE_OK {
+	if res.Status.Code == rpcpb.Code_CODE_OK && res.Provider != nil {
 		return res.Provider, nil
 	}
 
 	if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
-		return nil, notFoundError("gatewaysvc: storage provider not found for reference:" + ref.String())
+		return nil, errtypes.NotFound("gatewaysvc: storage provider not found for reference:" + ref.String())
 	}
 
 	return nil, errors.New("gatewaysvc: error finding a storage provider")
 }
-
-type notFoundError string
-
-func (e notFoundError) Error() string { return string(e) }
-func (e notFoundError) IsNotFound()   {}

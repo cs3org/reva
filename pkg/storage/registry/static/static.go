@@ -24,6 +24,7 @@ import (
 
 	"github.com/cs3org/reva/pkg/storage/registry/registry"
 
+	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	storagetypespb "github.com/cs3org/go-cs3apis/cs3/storagetypes"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage"
@@ -49,24 +50,43 @@ func (b *reg) ListProviders(ctx context.Context) ([]*storagetypespb.ProviderInfo
 	return providers, nil
 }
 
-func (b *reg) FindProvider(ctx context.Context, fn string) (*storagetypespb.ProviderInfo, error) {
+func (b *reg) FindProvider(ctx context.Context, ref *storageproviderv0alphapb.Reference) (*storagetypespb.ProviderInfo, error) {
 	// find longest match
 	var match string
-	for prefix := range b.rules {
-		if strings.HasPrefix(fn, prefix) && len(prefix) > len(match) {
-			match = prefix
+
+	// we try to find first by path as most storage operations will be done on path.
+	fn := ref.GetPath()
+	if fn != "" {
+		for prefix := range b.rules {
+			if strings.HasPrefix(fn, prefix) && len(prefix) > len(match) {
+				match = prefix
+			}
 		}
 	}
 
-	if match == "" {
-		return nil, errtypes.NotFound("storage provider not found for path " + fn)
+	if match != "" {
+		return &storagetypespb.ProviderInfo{
+			ProviderPath: match,
+			Address:      b.rules[match],
+		}, nil
 	}
 
-	p := &storagetypespb.ProviderInfo{
-		ProviderPath: match,
-		Address:      b.rules[match],
+	// we try with id
+	id := ref.GetId()
+	if id == nil {
+		return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())
 	}
-	return p, nil
+
+	for prefix := range b.rules {
+		if id.StorageId == prefix {
+			// TODO(labkode): fill path info based on provider id, if path and storage id points to same id, take that.
+			return &storagetypespb.ProviderInfo{
+				ProviderId: prefix,
+				Address:    b.rules[prefix],
+			}, nil
+		}
+	}
+	return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())
 }
 
 type config struct {

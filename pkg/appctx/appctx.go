@@ -21,7 +21,6 @@ package appctx
 import (
 	"context"
 
-	"github.com/cs3org/reva/pkg/reqid"
 	"github.com/rs/zerolog"
 )
 
@@ -34,18 +33,4 @@ func WithLogger(ctx context.Context, l *zerolog.Logger) context.Context {
 // or a disabled logger in case no logger is stored inside the context.
 func GetLogger(ctx context.Context) *zerolog.Logger {
 	return zerolog.Ctx(ctx)
-}
-
-// WithTrace returns a context with an associated reqid.
-func WithTrace(ctx context.Context, t string) context.Context {
-	return reqid.ContextSetReqID(ctx, t)
-}
-
-// GetTrace returns the trace stored in the context.
-func GetTrace(ctx context.Context) string {
-	t, ok := reqid.ContextGetReqID(ctx)
-	if ok {
-		return t
-	}
-	return "unknown"
 }
