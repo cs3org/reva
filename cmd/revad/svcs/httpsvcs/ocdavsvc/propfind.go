@@ -20,7 +20,6 @@ package ocdavsvc
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -150,7 +149,7 @@ func readPropfind(r io.Reader) (pf propfindXML, status int, err error) {
 }
 
 func (s *svc) formatPropfind(ctx context.Context, mds []*storageproviderv0alphapb.ResourceInfo) (string, error) {
-	responses := []*responseXML{}
+	responses := make([]*responseXML, 0, len(mds))
 	for _, md := range mds {
 		res, err := s.mdToPropResponse(ctx, md)
 		if err != nil {
@@ -213,18 +212,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, md *storageproviderv0alphapb
 	getLastModified := s.newProp("d:getlastmodified", lasModifiedString)
 	propList = append(propList, getLastModified)
 
-	// the fileID must be xml-escaped as there are cases like public links
-	// that contains a path as the file id. This path can contain &, for example,
-	// which if it is not encoded properly, will result in an empty view for the user
-	//var fileIDEscaped bytes.Buffer
-	//if err := xml.EscapeText(&fileIDEscaped, []byte(fmt.Sprintf("%s:%s", md.Id.StorageId, md.Id.OpaqueId))); err != nil {
-	//	return nil, err
-	//}
-	//ocID := s.newProp("oc:fileid", fileIDEscaped.String())
-	// TODO(jfd) xmlencoding still contains slashes, but the fileid might be used in the url as well.
-	// for the versions endpoint we need to either also urlencode ... or just base64 encode ... it should be opaque anyway.
-	base64id := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", md.Id.StorageId, md.Id.OpaqueId)))
-	ocID := s.newProp("oc:fileid", base64id)
+	ocID := s.newProp("oc:fileid", wrapResourceID(md.Id))
 	propList = append(propList, ocID)
 
 	// PropStat, only HTTP/1.1 200 is sent.

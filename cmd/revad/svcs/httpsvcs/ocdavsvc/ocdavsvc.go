@@ -19,8 +19,11 @@
 package ocdavsvc
 
 import (
+	"encoding/base64"
+	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/httpserver"
@@ -49,10 +52,8 @@ type Config struct {
 
 type svc struct {
 	c             *Config
-	handler       http.Handler
 	webDavHandler *WebDavHandler
 	davHandler    *DavHandler
-	gatewaySvc    string
 }
 
 // New returns a new ocdavsvc
@@ -76,6 +77,9 @@ func New(m map[string]interface{}) (httpsvcs.Service, error) {
 		davHandler:    new(DavHandler),
 	}
 	// initialize handlers and set default configs
+	if err := s.webDavHandler.init(conf); err != nil {
+		return nil, err
+	}
 	if err := s.davHandler.init(conf); err != nil {
 		return nil, err
 	}
@@ -135,4 +139,31 @@ func (s *svc) Handler() http.Handler {
 
 func (s *svc) getClient() (storageproviderv0alphapb.StorageProviderServiceClient, error) {
 	return pool.GetStorageProviderServiceClient(s.c.GatewaySvc)
+}
+
+func wrapResourceID(r *storageproviderv0alphapb.ResourceId) string {
+	return wrap(r.StorageId, r.OpaqueId)
+}
+
+// The fileID must be encoded
+// - XML safe, because it is going to be used in the profind result
+// - url safe, because the id might be used in a url, eg. the /dav/meta nodes
+// which is why we base62 encode it
+func wrap(sid string, oid string) string {
+	return base64.URLEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", sid, oid)))
+}
+
+func unwrap(rid string) *storageproviderv0alphapb.ResourceId {
+	decodedID, err := base64.URLEncoding.DecodeString(rid)
+	if err != nil {
+		return nil
+	}
+	parts := strings.SplitN(string(decodedID), ":", 2)
+	if len(parts) != 2 {
+		return nil
+	}
+	return &storageproviderv0alphapb.ResourceId{
+		StorageId: parts[0],
+		OpaqueId:  parts[1],
+	}
 }

@@ -19,7 +19,6 @@
 package ocdavsvc
 
 import (
-	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -242,7 +241,7 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Add("Content-Type", info2.MimeType)
 	w.Header().Set("ETag", info2.Etag)
-	w.Header().Set("OC-FileId", fmt.Sprintf("%s:%s", info2.Id.StorageId, info2.Id.OpaqueId))
+	w.Header().Set("OC-FileId", wrapResourceID(info2.Id))
 	w.Header().Set("OC-ETag", info2.Etag)
 	t := utils.TSToTime(info2.Mtime)
 	lastModifiedString := t.Format(time.RFC1123)

@@ -37,6 +37,7 @@ import (
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
@@ -185,7 +186,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	// c.DataDirectoryshould never end in / unless it is the root?
 	c.DataDirectory = path.Clean(c.DataDirectory)
 
-	// create root if it does not exist
+	//TODO(jfd) only try to create root if it does not exist
 	os.MkdirAll(c.DataDirectory, 0755)
 
 	pool := &redis.Pool{
@@ -224,16 +225,27 @@ func (fs *ocFS) scanFiles(ctx context.Context, conn redis.Conn) {
 	if fs.c.Scan {
 		fs.c.Scan = false // TODO ... in progress use mutex ?
 		log := appctx.GetLogger(ctx)
-		log.Debug().Str("path", fs.c.DataDirectory).Msg("scannig data directory")
+		log.Debug().Str("path", fs.c.DataDirectory).Msg("scanning data directory")
 		err := filepath.Walk(fs.c.DataDirectory, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				log.Error().Str("path", path).Err(err).Msg("error accessing path")
 				return filepath.SkipDir
 			}
+			// TODO(jfd) skip versions folder only if direct in users home dir
+			// we need to skip versions, otherwise a lookup by id might resolve to a version
+			if strings.Contains(path, "files_versions") {
+				log.Debug().Str("path", path).Err(err).Msg("skipping versions")
+				return filepath.SkipDir
+			}
 
 			// reuse connection to store file ids
 			id := readOrCreateID(context.Background(), path, nil)
-			conn.Do("SET", id, path)
+			_, err = conn.Do("SET", id, path)
+			if err != nil {
+				log.Error().Str("path", path).Err(err).Msg("error caching id")
+				// continue scanning
+				return nil
+			}
 
 			log.Debug().Str("path", path).Str("id", id).Msg("scanned path")
 			return nil
@@ -263,8 +275,35 @@ func (fs *ocFS) getInternalPath(ctx context.Context, fn string) string {
 	default:
 		return "" // TODO Must not happen?
 	}
+}
+
+// ownloud stores versions in the files_versions subfolder
+// the incoming path starts with /<username>, so we need to insert the files subfolder into the path
+// and prefix the datadirectory
+// TODO the path handed to a storage provider should not contain the username
+func (fs *ocFS) getVersionsPath(ctx context.Context, np string) string {
+	// np = /path/to/data/<username>/files/foo/bar.txt
+	// remove data dir
+	if fs.c.DataDirectory != "/" {
+		// fs.c.DataDirectory is a clean puth, so it never ends in /
+		np = strings.TrimPrefix(np, fs.c.DataDirectory)
+	}
+	// np = /<username>/files/foo/bar.txt
+	parts := strings.SplitN(np, "/", 4)
+
+	switch len(parts) {
+	case 3:
+		// parts = "", "<username>"
+		return path.Join(fs.c.DataDirectory, parts[1], "files_versions")
+	case 4:
+		// parts = "", "<username>", "foo/bar.txt"
+		return path.Join(fs.c.DataDirectory, parts[1], "files_versions", parts[3])
+	default:
+		return "" // TODO Must not happen?
+	}
 
 }
+
 func (fs *ocFS) removeNamespace(ctx context.Context, np string) string {
 	// np = /data/<username>/files/foo/bar.txt
 	// remove data dir
@@ -346,16 +385,6 @@ func (fs *ocFS) convertToResourceInfo(ctx context.Context, fi os.FileInfo, np st
 			Seconds: uint64(fi.ModTime().Unix()),
 			// TODO read nanos from where? Nanos:   fi.MTimeNanos,
 		},
-		/*
-			Opaque: &typespb.Opaque{
-				Map: map[string]*typespb.OpaqueEntry{
-					"eos": &typespb.OpaqueEntry{
-						Decoder: "json",
-						Value:   fs.getEosMetadata(eosFileInfo),
-					},
-				},
-			},
-		*/
 	}
 }
 func getResourceType(isDir bool) storageproviderv0alphapb.ResourceType {
@@ -386,7 +415,11 @@ func readOrCreateID(ctx context.Context, np string, conn redis.Conn) string {
 			// TODO cache path for uuid in redis
 			// TODO reuse conn?
 			if conn != nil {
-				conn.Do("SET", uuid.String(), np)
+				_, err := conn.Do("SET", uuid.String(), np)
+				if err != nil {
+					log.Error().Str("path", np).Err(err).Msg("error caching id")
+					// continue
+				}
 			}
 		}
 	}
@@ -399,6 +432,7 @@ func readOrCreateID(ctx context.Context, np string, conn redis.Conn) string {
 	return uid.String()
 }
 
+// TODO(jfd) swallow the error?
 func (fs *ocFS) autocreate(ctx context.Context, fsfn string) error {
 	log := appctx.GetLogger(ctx)
 	if fs.c.Autocreate {
@@ -467,7 +501,7 @@ func (fs *ocFS) resolve(ctx context.Context, ref *storageproviderv0alphapb.Refer
 func (fs *ocFS) AddGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return errors.Wrap(err, "storage_owncloud: error resolving reference")
+		return errors.Wrap(err, "ocFS: error resolving reference")
 	}
 
 	e, err := fs.getACE(g)
@@ -676,7 +710,7 @@ func (fs *ocFS) ListGrants(ctx context.Context, ref *storageproviderv0alphapb.Re
 	log := appctx.GetLogger(ctx)
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return nil, errors.Wrap(err, "storage_owncloud: error resolving reference")
+		return nil, errors.Wrap(err, "ocFS: error resolving reference")
 	}
 	attrs, err := xattr.List(np)
 	if err != nil {
@@ -687,8 +721,12 @@ func (fs *ocFS) ListGrants(ctx context.Context, ref *storageproviderv0alphapb.Re
 	log.Debug().Interface("attrs", attrs).Msg("read attributes")
 	// filter attributes
 	aces, err := getACEs(ctx, np, attrs)
+	if err != nil {
+		log.Error().Err(err).Msg("error getting aces")
+		return nil, err
+	}
 
-	grants := []*storageproviderv0alphapb.Grant{}
+	grants := make([]*storageproviderv0alphapb.Grant, 0, len(aces))
 	for _, e := range aces {
 		grantee := &storageproviderv0alphapb.Grantee{
 			Id:   &typespb.UserId{OpaqueId: e.Principal},
@@ -783,7 +821,7 @@ func (fs *ocFS) RemoveGrant(ctx context.Context, ref *storageproviderv0alphapb.R
 
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return errors.Wrap(err, "storage_owncloud: error resolving reference")
+		return errors.Wrap(err, "ocFS: error resolving reference")
 	}
 
 	var attr string
@@ -795,6 +833,7 @@ func (fs *ocFS) RemoveGrant(ctx context.Context, ref *storageproviderv0alphapb.R
 
 	return xattr.Remove(np, attr)
 }
+
 func (fs *ocFS) UpdateGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
 	return fs.AddGrant(ctx, ref, g)
 }
@@ -808,7 +847,7 @@ func (fs *ocFS) CreateDir(ctx context.Context, fn string) error {
 	err := os.Mkdir(np, 0700)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return notFoundError(fn)
+			return errtypes.NotFound(fn)
 		}
 		// FIXME we also need already exists error, webdav expects 405 MethodNotAllowed
 		return errors.Wrap(err, "ocFS: error creating dir "+np)
@@ -819,12 +858,12 @@ func (fs *ocFS) CreateDir(ctx context.Context, fn string) error {
 func (fs *ocFS) Delete(ctx context.Context, ref *storageproviderv0alphapb.Reference) error {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return errors.Wrap(err, "storage_owncloud: error resolving reference")
+		return errors.Wrap(err, "ocFS: error resolving reference")
 	}
 	err = os.Remove(np)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return notFoundError(fs.removeNamespace(ctx, np))
+			return errtypes.NotFound(fs.removeNamespace(ctx, np))
 		}
 		// try recursive delete
 		err = os.RemoveAll(np)
@@ -838,11 +877,11 @@ func (fs *ocFS) Delete(ctx context.Context, ref *storageproviderv0alphapb.Refere
 func (fs *ocFS) Move(ctx context.Context, oldRef, newRef *storageproviderv0alphapb.Reference) error {
 	oldName, err := fs.resolve(ctx, oldRef)
 	if err != nil {
-		return errors.Wrap(err, "storage_owncloud: error resolving reference")
+		return errors.Wrap(err, "ocFS: error resolving reference")
 	}
 	newName, err := fs.resolve(ctx, newRef)
 	if err != nil {
-		return errors.Wrap(err, "storage_owncloud: error resolving reference")
+		return errors.Wrap(err, "ocFS: error resolving reference")
 	}
 	if err := os.Rename(oldName, newName); err != nil {
 		return errors.Wrap(err, "ocFS: error moving "+oldName+" to "+newName)
@@ -853,13 +892,16 @@ func (fs *ocFS) Move(ctx context.Context, oldRef, newRef *storageproviderv0alpha
 func (fs *ocFS) GetMD(ctx context.Context, ref *storageproviderv0alphapb.Reference) (*storageproviderv0alphapb.ResourceInfo, error) {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return nil, errors.Wrap(err, "storage_owncloud: error resolving reference")
+		return nil, errors.Wrap(err, "ocFS: error resolving reference")
 	}
+
+	//TODO(jfd) only try to create home if it does not exist
 	fs.autocreate(ctx, np)
+
 	md, err := os.Stat(np)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, notFoundError(fs.removeNamespace(ctx, np))
+			return nil, errtypes.NotFound(fs.removeNamespace(ctx, np))
 		}
 		return nil, errors.Wrap(err, "ocFS: error stating "+np)
 	}
@@ -873,18 +915,20 @@ func (fs *ocFS) GetMD(ctx context.Context, ref *storageproviderv0alphapb.Referen
 func (fs *ocFS) ListFolder(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.ResourceInfo, error) {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return nil, errors.Wrap(err, "storage_owncloud: error resolving reference")
+		return nil, errors.Wrap(err, "ocFS: error resolving reference")
 	}
+	//TODO(jfd) only try to create home if it does not exist
 	fs.autocreate(ctx, np)
+
 	mds, err := ioutil.ReadDir(np)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, notFoundError(fs.removeNamespace(ctx, np))
+			return nil, errtypes.NotFound(fs.removeNamespace(ctx, np))
 		}
 		return nil, errors.Wrap(err, "ocFS: error listing "+np)
 	}
 
-	finfos := []*storageproviderv0alphapb.ResourceInfo{}
+	finfos := make([]*storageproviderv0alphapb.ResourceInfo, 0, len(mds))
 	// TODO we should only open a connection if we need to set / store the fileid. no need to always open a connection when listing files
 	c := fs.pool.Get()
 	defer c.Close()
@@ -899,7 +943,7 @@ func (fs *ocFS) ListFolder(ctx context.Context, ref *storageproviderv0alphapb.Re
 func (fs *ocFS) Upload(ctx context.Context, ref *storageproviderv0alphapb.Reference, r io.ReadCloser) error {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return errors.Wrap(err, "storage_owncloud: error resolving reference")
+		return errors.Wrap(err, "ocFS: error resolving reference")
 	}
 
 	// we cannot rely on /tmp as it can live in another partition and we can
@@ -912,10 +956,22 @@ func (fs *ocFS) Upload(ctx context.Context, ref *storageproviderv0alphapb.Refere
 
 	_, err = io.Copy(tmp, r)
 	if err != nil {
-		return errors.Wrap(err, "ocFS: eror writing to tmp file "+tmp.Name())
+		return errors.Wrap(err, "ocFS: error writing to tmp file "+tmp.Name())
 	}
 
-	// TODO(labkode): make sure rename is atomic, missing fsync ...
+	// TODO(jfd): copy attributes of existing file to tmp file?
+	if err := fs.copyMD(np, tmp.Name()); err != nil {
+		return errors.Wrap(err, "ocFS: error copying metadata from "+np+" to "+tmp.Name())
+	}
+
+	// create revision if destination exists
+	if _, err := os.Stat(np); err != nil {
+		if err := fs.archiveRevision(ctx, np); err != nil {
+			return err
+		}
+	}
+
+	// TODO(jfd): make sure rename is atomic, missing fsync ...
 	if err := os.Rename(tmp.Name(), np); err != nil {
 		return errors.Wrap(err, "ocFS: error renaming from "+tmp.Name()+" to "+np)
 	}
@@ -923,15 +979,49 @@ func (fs *ocFS) Upload(ctx context.Context, ref *storageproviderv0alphapb.Refere
 	return nil
 }
 
+func (fs *ocFS) archiveRevision(ctx context.Context, np string) error {
+	// move existing file to versions dir
+	vp := fmt.Sprintf("%s.v%d", fs.getVersionsPath(ctx, np), time.Now().Unix())
+	if err := os.MkdirAll(path.Dir(vp), 0700); err != nil {
+		return errors.Wrap(err, "ocFS: error creating versions dir "+vp)
+	}
+
+	// TODO(jfd): make sure rename is atomic, missing fsync ...
+	if err := os.Rename(np, vp); err != nil {
+		return errors.Wrap(err, "ocFS: error renaming from "+np+" to "+vp)
+	}
+
+	return nil
+}
+
+func (fs *ocFS) copyMD(s string, t string) (err error) {
+	var attrs []string
+	if attrs, err = xattr.List(s); err != nil {
+		return err
+	}
+	for _, a := range attrs {
+		if strings.HasPrefix(a, "user.oc.") {
+			var d []byte
+			if d, err = xattr.Get(s, a); err != nil {
+				return err
+			}
+			if err = xattr.Set(t, a, d); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (fs *ocFS) Download(ctx context.Context, ref *storageproviderv0alphapb.Reference) (io.ReadCloser, error) {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return nil, errors.Wrap(err, "storage_owncloud: error resolving reference")
+		return nil, errors.Wrap(err, "ocFS: error resolving reference")
 	}
 	r, err := os.Open(np)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, notFoundError(fs.removeNamespace(ctx, np))
+			return nil, errtypes.NotFound(fs.removeNamespace(ctx, np))
 		}
 		return nil, errors.Wrap(err, "ocFS: error reading "+np)
 	}
@@ -939,40 +1029,102 @@ func (fs *ocFS) Download(ctx context.Context, ref *storageproviderv0alphapb.Refe
 }
 
 func (fs *ocFS) ListRevisions(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.FileVersion, error) {
-	return nil, notSupportedError("list revisions")
+	np, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return nil, errors.Wrap(err, "ocFS: error resolving reference")
+	}
+	vp := fs.getVersionsPath(ctx, np)
+
+	//TODO(jfd) only try to create versions if it does not exist
+	fs.autocreate(ctx, vp)
+
+	bn := path.Base(np)
+
+	revisions := []*storageproviderv0alphapb.FileVersion{}
+	mds, err := ioutil.ReadDir(path.Dir(vp))
+	for _, md := range mds {
+		rev := fs.filterAsRevision(ctx, bn, md)
+		if rev != nil {
+			revisions = append(revisions, rev)
+		}
+
+	}
+	return revisions, nil
+}
+
+func (fs *ocFS) filterAsRevision(ctx context.Context, bn string, md os.FileInfo) *storageproviderv0alphapb.FileVersion {
+	if strings.HasPrefix(md.Name(), bn) {
+		// versions have filename.ext.v12345678
+		version := md.Name()[len(bn)+2:] // truncate "<base filename>.v" to get version mtime
+		mtime, err := strconv.Atoi(version)
+		if err != nil {
+			log := appctx.GetLogger(ctx)
+			log.Error().Err(err).Str("path", md.Name()).Msg("invalid version mtime")
+			return nil
+		}
+		// TODO(jfd) trashed versions are in the files_trashbin/versions folder ... not relevant here
+		return &storageproviderv0alphapb.FileVersion{
+			Key:   version,
+			Size:  uint64(md.Size()),
+			Mtime: uint64(mtime),
+		}
+	}
+	return nil
 }
 
 func (fs *ocFS) DownloadRevision(ctx context.Context, ref *storageproviderv0alphapb.Reference, revisionKey string) (io.ReadCloser, error) {
-	return nil, notSupportedError("download revision")
+	return nil, errtypes.NotSupported("download revision")
 }
 
 func (fs *ocFS) RestoreRevision(ctx context.Context, ref *storageproviderv0alphapb.Reference, revisionKey string) error {
-	return notSupportedError("restore revision")
+	np, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "ocFS: error resolving reference")
+	}
+	vp := fs.getVersionsPath(ctx, np)
+	rp := vp + ".v" + revisionKey
+
+	// check revision exists
+	rs, err := os.Stat(rp)
+	if err != nil {
+		return err
+	}
+
+	if !rs.Mode().IsRegular() {
+		return fmt.Errorf("%s is not a regular file", rp)
+	}
+
+	source, err := os.Open(rp)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+
+	// destination should be avaliable, otherwise we could not have navigated to its revisions
+	if err := fs.archiveRevision(ctx, np); err != nil {
+		return err
+	}
+
+	destination, err := os.Create(np)
+	if err != nil {
+		// TODO(jfd) bring back revision in case sth goes wrong?
+		return err
+	}
+	defer destination.Close()
+
+	_, err = io.Copy(destination, source)
+	// TODO(jfd) bring back revision in case sth goes wrong?
+	return err
 }
 
 func (fs *ocFS) EmptyRecycle(ctx context.Context) error {
-	return notSupportedError("empty recycle")
+	return errtypes.NotSupported("empty recycle")
 }
 
 func (fs *ocFS) ListRecycle(ctx context.Context) ([]*storageproviderv0alphapb.RecycleItem, error) {
-	return nil, notSupportedError("list recycle")
+	return nil, errtypes.NotSupported("list recycle")
 }
 
 func (fs *ocFS) RestoreRecycleItem(ctx context.Context, key string) error {
-	return notSupportedError("restore recycle")
+	return errtypes.NotSupported("restore recycle")
 }
-
-type notSupportedError string
-
-func (e notSupportedError) Error() string   { return string(e) }
-func (e notSupportedError) IsNotSupported() {}
-
-type notFoundError string
-
-func (e notFoundError) Error() string { return string(e) }
-func (e notFoundError) IsNotFound()   {}
-
-type contextUserRequiredErr string
-
-func (err contextUserRequiredErr) Error() string   { return string(err) }
-func (err contextUserRequiredErr) IsUserRequired() {}

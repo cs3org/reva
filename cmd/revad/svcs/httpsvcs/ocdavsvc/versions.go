@@ -19,6 +19,7 @@
 package ocdavsvc
 
 import (
+	"context"
 	"net/http"
 	"path"
 
@@ -40,46 +41,43 @@ func (h *VersionsHandler) init(c *Config) error {
 // Handler handles requests
 // versions can be listed with a PROPFIND to /remote.php/dav/meta/<fileid>/v
 // a version is identified by a timestamp, eg. /remote.php/dav/meta/<fileid>/v/1561410426
-func (h *VersionsHandler) Handler(s *svc, fileid string) http.Handler {
+func (h *VersionsHandler) Handler(s *svc, rid *storageproviderv0alphapb.ResourceId) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		var timestamp string
-		timestamp, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
+		// webdav should be death: baseURI is encoded as part of the
+		// response payload in href field
+		baseURI := path.Join("/", s.Prefix(), "remote.php/dav/meta", wrapResourceID(rid))
+		ctx := context.WithValue(r.Context(), ctxKeyBaseURI, baseURI)
+		r = r.WithContext(ctx)
+
+		var key string
+		key, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
 		if r.Method == http.MethodOptions {
 			s.doOptions(w, r)
 			return
 		}
-		if timestamp == "" && r.Method == "PROPFIND" {
-			// TODO(jfd) list versions
-			h.doPropfind(w, r, s, fileid)
+		if key == "" && r.Method == "PROPFIND" {
+			h.doListVersions(w, r, s, rid)
 			return
 		}
-		if timestamp != "" {
+		if key != "" {
 			// TODO(jfd) version operations
 			// TODO(jfd) we need to use the fileid and directly interact with the storage
 
 			switch r.Method {
-			case "PROPFIND":
-				h.doPropfind(w, r, s, fileid)
-			//case "HEAD": // TODO(jfd) since we cant GET ... there is no HEAD
-			//	s.doHead(w, r)
-			case http.MethodGet: // TODO(jfd) it seems we cannot directly GET version content with cs3 ...
-				s.doGet(w, r)
+			// TODO(jfd) it seems we cannot directly GET version content with cs3 ...
+			// TODO(jfd) cs3api has no delete file version call
 			case "COPY": // TODO(jfd) restore version to Destination, but cs3api has no destination
-				s.doCopy(w, r)
-			case http.MethodDelete: // TODO(jfd) cs3api has no delete file version call
-				s.doDelete(w, r)
-			default:
-				http.Error(w, "403 Forbidden", http.StatusForbidden)
+				h.doRestore(w, r, s, rid, key)
+				return
 			}
-			return
 		}
 
-		http.Error(w, "403 Forbidden", http.StatusForbidden)
+		http.Error(w, "501 Forbidden", http.StatusNotImplemented)
 	})
 }
 
-func (h *VersionsHandler) doPropfind(w http.ResponseWriter, r *http.Request, s *svc, fileid string) {
+func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request, s *svc, rid *storageproviderv0alphapb.ResourceId) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -98,13 +96,7 @@ func (h *VersionsHandler) doPropfind(w http.ResponseWriter, r *http.Request, s *
 	}
 
 	ref := &storageproviderv0alphapb.Reference{
-		Spec: &storageproviderv0alphapb.Reference_Id{
-			Id: &storageproviderv0alphapb.ResourceId{
-				// StorageId: TODO ??? where do we get that from?
-				// somewhere in the ocdavapi we need to resolve the ids
-				OpaqueId: fileid,
-			},
-		},
+		Spec: &storageproviderv0alphapb.Reference_Id{Id: rid},
 	}
 	req := &storageproviderv0alphapb.StatRequest{Ref: ref}
 	res, err := client.Stat(ctx, req)
@@ -123,7 +115,6 @@ func (h *VersionsHandler) doPropfind(w http.ResponseWriter, r *http.Request, s *
 	}
 
 	info := res.Info
-	infos := []*storageproviderv0alphapb.ResourceInfo{info}
 
 	lvReq := &storageproviderv0alphapb.ListFileVersionsRequest{
 		Ref: ref,
@@ -138,7 +129,25 @@ func (h *VersionsHandler) doPropfind(w http.ResponseWriter, r *http.Request, s *
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	for _, v := range lvRes.GetVersions() {
+	versions := lvRes.GetVersions()
+	infos := make([]*storageproviderv0alphapb.ResourceInfo, 0, len(versions)+1)
+	// add version dir . entry, derived from file info
+	infos = append(infos, &storageproviderv0alphapb.ResourceInfo{
+		Type: storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER,
+		Id: &storageproviderv0alphapb.ResourceId{
+			StorageId: "virtual", // this is a virtual storage
+			OpaqueId:  path.Join("meta", wrapResourceID(rid), "v"),
+		},
+		Etag:     info.Etag,
+		MimeType: "httpd/unix-directory",
+		Mtime:    info.Mtime,
+		Path:     "v",
+		//PermissionSet
+		Size:  0,
+		Owner: info.Owner,
+	})
+
+	for _, v := range versions {
 		vi := &storageproviderv0alphapb.ResourceInfo{
 			// TODO(jfd) we cannot access version content, this will be a problem when trying to fetch version thumbnails
 			//Opaque
@@ -154,7 +163,7 @@ func (h *VersionsHandler) doPropfind(w http.ResponseWriter, r *http.Request, s *
 				Seconds: v.Mtime,
 				// TODO cs3apis FileVersion should use typespb.Timestamp instead of uint64
 			},
-			Path: path.Join("/", s.Prefix(), "remote.php/dav/meta", fileid, "v", v.Key),
+			Path: path.Join("v", v.Key),
 			//PermissionSet
 			Size:  v.Size,
 			Owner: info.Owner,
@@ -171,5 +180,45 @@ func (h *VersionsHandler) doPropfind(w http.ResponseWriter, r *http.Request, s *
 	w.Header().Set("DAV", "1, 3, extended-mkcol")
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 	w.WriteHeader(http.StatusMultiStatus)
-	w.Write([]byte(propRes))
+	_, err = w.Write([]byte(propRes))
+	if err != nil {
+		log.Error().Err(err).Msg("error writing body")
+		return
+	}
+
+}
+
+func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *svc, rid *storageproviderv0alphapb.ResourceId, key string) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
+	client, err := s.getClient()
+	if err != nil {
+		log.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	req := &storageproviderv0alphapb.RestoreFileVersionRequest{
+		Ref: &storageproviderv0alphapb.Reference{
+			Spec: &storageproviderv0alphapb.Reference_Id{Id: rid},
+		},
+		Key: key,
+	}
+
+	res, err := client.RestoreFileVersion(ctx, req)
+	if err != nil {
+		log.Error().Err(err).Msg("error sending a grpc restore version request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if res.Status.Code != rpcpb.Code_CODE_OK {
+		if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

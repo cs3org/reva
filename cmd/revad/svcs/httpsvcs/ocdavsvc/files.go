@@ -37,7 +37,7 @@ func (h *FilesHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		// webdav should be death: baseURI is encoded as part of the
-		// reponse payload in href field
+		// response payload in href field
 		baseURI := path.Join("/", s.Prefix(), "remote.php/dav/files")
 		ctx := context.WithValue(r.Context(), ctxKeyBaseURI, baseURI)
 		r = r.WithContext(ctx)

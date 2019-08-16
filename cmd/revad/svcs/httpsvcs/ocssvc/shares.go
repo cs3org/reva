@@ -116,7 +116,7 @@ func (h *SharesHandler) findSharees(w http.ResponseWriter, r *http.Request) {
 
 	log.Debug().Int("count", len(users)).Str("search", search).Msg("users found")
 
-	matches := []*MatchData{}
+	matches := make([]*MatchData, 0, len(users))
 
 	for _, user := range users {
 		match := h.userAsMatch(user)

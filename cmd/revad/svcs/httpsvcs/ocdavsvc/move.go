@@ -19,7 +19,6 @@
 package ocdavsvc
 
 import (
-	"fmt"
 	"net/http"
 	"net/url"
 	"path"
@@ -195,7 +194,7 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 	info := dstStatRes.Info
 	w.Header().Set("Content-Type", info.MimeType)
 	w.Header().Set("ETag", info.Etag)
-	w.Header().Set("OC-FileId", fmt.Sprintf("%s:%s", info.Id.StorageId, info.Id.OpaqueId))
+	w.Header().Set("OC-FileId", wrapResourceID(info.Id))
 	w.Header().Set("OC-ETag", info.Etag)
 	w.WriteHeader(successCode)
 }

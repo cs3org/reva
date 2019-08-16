@@ -33,12 +33,15 @@ type DavHandler struct {
 
 func (h *DavHandler) init(c *Config) error {
 	h.FilesHandler = new(FilesHandler)
-	h.FilesHandler.init(c)
+	if err := h.FilesHandler.init(c); err != nil {
+		return err
+	}
 	h.AvatarsHandler = new(AvatarsHandler)
-	h.AvatarsHandler.init(c)
+	if err := h.AvatarsHandler.init(c); err != nil {
+		return err
+	}
 	h.MetaHandler = new(MetaHandler)
-	h.MetaHandler.init(c)
-	return nil
+	return h.MetaHandler.init(c)
 }
 
 // Handler handles requests

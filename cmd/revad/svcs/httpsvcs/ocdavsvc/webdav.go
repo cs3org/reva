@@ -62,7 +62,7 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 		r.URL.Path = path.Join("/", u.Username, r.URL.Path)
 
 		// webdav should be death: baseURI is encoded as part of the
-		// reponse payload in href field
+		// response payload in href field
 		baseURI := path.Join("/", s.Prefix(), "remote.php/webdav")
 		ctx = context.WithValue(r.Context(), ctxKeyBaseURI, baseURI)
 
