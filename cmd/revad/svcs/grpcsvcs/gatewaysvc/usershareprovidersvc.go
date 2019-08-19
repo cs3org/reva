@@ -97,6 +97,26 @@ func (s *svc) RemoveShare(ctx context.Context, req *usershareproviderv0alphapb.R
 		}, nil
 	}
 
+	// if we need to commit the share, we need the resource it points to.
+	var share *usershareproviderv0alphapb.Share
+	if s.c.CommitShareToStorageGrant || s.c.CommitShareToStorageRef {
+		getShareReq := &usershareproviderv0alphapb.GetShareRequest{
+			Ref: req.Ref,
+		}
+		getShareRes, err := c.GetShare(ctx, getShareReq)
+		if err != nil {
+			return nil, errors.Wrap(err, "gatewaysvc: error calling GetShare")
+		}
+
+		if getShareRes.Status.Code != rpcpb.Code_CODE_OK {
+			res := &usershareproviderv0alphapb.RemoveShareResponse{
+				Status: status.NewInternal(ctx, "error getting share when committing to the storage"),
+			}
+			return res, nil
+		}
+		share = getShareRes.Share
+	}
+
 	res, err := c.RemoveShare(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gatewaysvc: error calling RemoveShare")
@@ -109,32 +129,18 @@ func (s *svc) RemoveShare(ctx context.Context, req *usershareproviderv0alphapb.R
 
 	// TODO(labkode): if both commits are enabled they could be done concurrently.
 	if s.c.CommitShareToStorageGrant {
-		getShareReq := &usershareproviderv0alphapb.GetShareRequest{
-			Ref: req.Ref,
-		}
-		getShareRes, err := c.GetShare(ctx, getShareReq)
-		if err != nil {
-			return nil, errors.Wrap(err, "gatewaysvc: error calling GetShare")
-		}
-
-		if getShareRes.Status.Code != rpcpb.Code_CODE_OK {
-			res := &usershareproviderv0alphapb.RemoveShareResponse{
-				Status: status.NewInternal(ctx, "error getting share when committing to the share"),
-			}
-			return res, nil
-		}
-
 		grantReq := &storageproviderv0alphapb.RemoveGrantRequest{
 			Ref: &storageproviderv0alphapb.Reference{
 				Spec: &storageproviderv0alphapb.Reference_Id{
-					Id: getShareRes.Share.ResourceId,
+					Id: share.ResourceId,
 				},
 			},
 			Grant: &storageproviderv0alphapb.Grant{
-				Grantee:     getShareRes.Share.Grantee,
-				Permissions: getShareRes.Share.Permissions.Permissions,
+				Grantee:     share.Grantee,
+				Permissions: share.Permissions.Permissions,
 			},
 		}
+
 		grantRes, err := s.RemoveGrant(ctx, grantReq)
 		if err != nil {
 			return nil, errors.Wrap(err, "gatewaysvc: error calling RemoveGrant")

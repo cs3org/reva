@@ -145,7 +145,7 @@ func (m *manager) get(ctx context.Context, ref *usershareproviderv0alphapb.Share
 	}
 
 	if err != nil {
-		return s, err
+		return nil, err
 	}
 
 	// check if we are the owner
