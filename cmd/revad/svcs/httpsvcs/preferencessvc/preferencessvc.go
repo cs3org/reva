@@ -81,11 +81,23 @@ func (s *svc) setHandler() {
 		case "POST":
 			s.doSet(w, r)
 			return
+		case "OPTIONS":
+			addCorsHeader(w)
+			w.WriteHeader(http.StatusOK)
+			return
 		default:
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 	})
+}
+
+func addCorsHeader(res http.ResponseWriter) {
+	headers := res.Header()
+	headers.Set("Access-Control-Allow-Origin", "http://localhost:8300")
+	headers.Set("Access-Control-Allow-Headers", "Content-Type, Origin, Authorization")
+	headers.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	headers.Set("Content-Type", "application/json")
 }
 
 func (s *svc) getConn() (*grpc.ClientConn, error) {
