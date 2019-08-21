@@ -30,12 +30,13 @@ import (
 func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
+	var fn string
 	files, ok := r.URL.Query()["filename"]
 	if !ok || len(files[0]) < 1 {
-		w.WriteHeader(http.StatusBadRequest)
-		return
+		fn = r.URL.Path
+	} else {
+		fn = files[0]
 	}
-	fn := files[0]
 
 	fsfn := strings.TrimPrefix(fn, s.conf.ProviderPath)
 	ref := &storageproviderv0alphapb.Reference{Spec: &storageproviderv0alphapb.Reference_Path{Path: fsfn}}
