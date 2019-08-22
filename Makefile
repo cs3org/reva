@@ -17,6 +17,16 @@ build:
 	go build -o ./cmd/revad/revad ${LDFLAGS} ./cmd/revad 
 	go build -o ./cmd/reva/reva ${LDFLAGS} ./cmd/reva
 
+build-revad:
+	go build ./...
+	go mod tidy
+	go build -o ./cmd/revad/revad ${LDFLAGS} ./cmd/revad 
+
+build-reva:
+	go build ./...
+	go mod tidy
+	go build -o ./cmd/revad/revad ${LDFLAGS} ./cmd/revad 
+	
 test:
 	go test -race ./...
 
@@ -37,5 +47,5 @@ deploy:
 	./cmd/revad/revad -c ./cmd/revad/revad.toml -p ./cmd/revad/revad.pid
 deps:
 	cd /tmp && go get -u golang.org/x/lint/golint
-	cd /tmp && GO111MODULE=on go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.17.1
+	cd /tmp && go get github.com/golangci/golangci-lint/cmd/golangci-lint
 	cd /tmp && go get -u golang.org/x/tools/cmd/goimports
