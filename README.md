@@ -32,14 +32,7 @@ You can also read the [build from sources guide](https://cs3org.github.io/reva/b
 
 ## Run it using Docker
 
-```
-$ git clone https://github.com/cs3org/reva
-$ cd reva
-$ docker build . -t revad
-$ docker run -p 9999:9999 -p 9998:9998 -d revad
-# or provide your own config 
-# $ docker run -p 9999:9999 -p 9998:9998 -v /your/config:/etc/revad/revad.toml -d revad
-```
+See [https://hub.docker.com/r/cs3org/reva](https://hub.docker.com/r/cs3org/reva).
 
 ## Plugin development
 
