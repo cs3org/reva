@@ -148,10 +148,7 @@ func (s *service) GetShare(ctx context.Context, req *usershareproviderv0alphapb.
 func (s *service) ListShares(ctx context.Context, req *usershareproviderv0alphapb.ListSharesRequest) (*usershareproviderv0alphapb.ListSharesResponse, error) {
 	log := appctx.GetLogger(ctx)
 
-	shares := []*usershareproviderv0alphapb.Share{}
-	var err error
-
-	shares, err = s.sm.ListShares(ctx, req.Filters) // TODO(labkode): add filter to share manager
+	shares, err := s.sm.ListShares(ctx, req.Filters) // TODO(labkode): add filter to share manager
 	if err != nil {
 		log.Err(err).Msg("error listing shares")
 		return &usershareproviderv0alphapb.ListSharesResponse{

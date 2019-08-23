@@ -38,6 +38,7 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
@@ -186,8 +187,13 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	// c.DataDirectoryshould never end in / unless it is the root?
 	c.DataDirectory = path.Clean(c.DataDirectory)
 
-	//TODO(jfd) only try to create root if it does not exist
-	os.MkdirAll(c.DataDirectory, 0755)
+	// create datadir if it does not exist
+	err = os.MkdirAll(c.DataDirectory, 0700)
+	if err != nil {
+		logger.New().Error().Err(err).
+			Str("path", c.DataDirectory).
+			Msg("could not create datadir")
+	}
 
 	pool := &redis.Pool{
 
@@ -432,14 +438,12 @@ func readOrCreateID(ctx context.Context, np string, conn redis.Conn) string {
 	return uid.String()
 }
 
-// TODO(jfd) swallow the error?
-func (fs *ocFS) autocreate(ctx context.Context, fsfn string) error {
-	log := appctx.GetLogger(ctx)
+func (fs *ocFS) autocreate(ctx context.Context, fsfn string) {
 	if fs.c.Autocreate {
 		parts := strings.SplitN(fsfn, "/files", 2)
 		switch len(parts) {
 		case 1:
-			return nil // error? there is no files in here ...
+			return // error? there is no files in here ...
 		case 2:
 			if parts[1] == "" {
 				// nothing to do, fsfn is the home
@@ -449,14 +453,12 @@ func (fs *ocFS) autocreate(ctx context.Context, fsfn string) error {
 			}
 			err := os.MkdirAll(fsfn, 0700)
 			if err != nil {
-				log.Debug().
-					Err(err).
+				appctx.GetLogger(ctx).Debug().Err(err).
 					Str("fsfn", fsfn).
-					Msg("could not autocreate home")
+					Msg("could not autocreate dir")
 			}
 		}
 	}
-	return nil
 }
 
 func (fs *ocFS) getPath(ctx context.Context, id *storageproviderv0alphapb.ResourceId) (string, error) {
@@ -895,7 +897,6 @@ func (fs *ocFS) GetMD(ctx context.Context, ref *storageproviderv0alphapb.Referen
 		return nil, errors.Wrap(err, "ocFS: error resolving reference")
 	}
 
-	//TODO(jfd) only try to create home if it does not exist
 	fs.autocreate(ctx, np)
 
 	md, err := os.Stat(np)
@@ -917,7 +918,7 @@ func (fs *ocFS) ListFolder(ctx context.Context, ref *storageproviderv0alphapb.Re
 	if err != nil {
 		return nil, errors.Wrap(err, "ocFS: error resolving reference")
 	}
-	//TODO(jfd) only try to create home if it does not exist
+
 	fs.autocreate(ctx, np)
 
 	mds, err := ioutil.ReadDir(np)
@@ -1035,13 +1036,15 @@ func (fs *ocFS) ListRevisions(ctx context.Context, ref *storageproviderv0alphapb
 	}
 	vp := fs.getVersionsPath(ctx, np)
 
-	//TODO(jfd) only try to create versions if it does not exist
 	fs.autocreate(ctx, vp)
 
 	bn := path.Base(np)
 
 	revisions := []*storageproviderv0alphapb.FileVersion{}
 	mds, err := ioutil.ReadDir(path.Dir(vp))
+	if err != nil {
+		return nil, errors.Wrap(err, "ocFS: error reading"+path.Dir(vp))
+	}
 	for _, md := range mds {
 		rev := fs.filterAsRevision(ctx, bn, md)
 		if rev != nil {
@@ -1100,7 +1103,7 @@ func (fs *ocFS) RestoreRevision(ctx context.Context, ref *storageproviderv0alpha
 	}
 	defer source.Close()
 
-	// destination should be avaliable, otherwise we could not have navigated to its revisions
+	// destination should be available, otherwise we could not have navigated to its revisions
 	if err := fs.archiveRevision(ctx, np); err != nil {
 		return err
 	}

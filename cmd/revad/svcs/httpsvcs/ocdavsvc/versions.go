@@ -60,17 +60,12 @@ func (h *VersionsHandler) Handler(s *svc, rid *storageproviderv0alphapb.Resource
 			h.doListVersions(w, r, s, rid)
 			return
 		}
-		if key != "" {
-			// TODO(jfd) version operations
-			// TODO(jfd) we need to use the fileid and directly interact with the storage
-
-			switch r.Method {
+		if key != "" && r.Method == "COPY" {
 			// TODO(jfd) it seems we cannot directly GET version content with cs3 ...
 			// TODO(jfd) cs3api has no delete file version call
-			case "COPY": // TODO(jfd) restore version to Destination, but cs3api has no destination
-				h.doRestore(w, r, s, rid, key)
-				return
-			}
+			// TODO(jfd) restore version to given Destination, but cs3api has no destination
+			h.doRestore(w, r, s, rid, key)
+			return
 		}
 
 		http.Error(w, "501 Forbidden", http.StatusNotImplemented)
