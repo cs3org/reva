@@ -22,6 +22,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"reflect"
 
 	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
@@ -45,15 +46,36 @@ type manager struct {
 	filter       string
 	bindUsername string
 	bindPassword string
+	schema       attributes
 }
 
 type config struct {
-	Hostname     string `mapstructure:"hostname"`
-	Port         int    `mapstructure:"port"`
-	BaseDN       string `mapstructure:"base_dn"`
-	Filter       string `mapstructure:"filter"`
-	BindUsername string `mapstructure:"bind_username"`
-	BindPassword string `mapstructure:"bind_password"`
+	Hostname     string     `mapstructure:"hostname"`
+	Port         int        `mapstructure:"port"`
+	BaseDN       string     `mapstructure:"base_dn"`
+	Filter       string     `mapstructure:"filter"`
+	BindUsername string     `mapstructure:"bind_username"`
+	BindPassword string     `mapstructure:"bind_password"`
+	Schema       attributes `mapstructure:"schema"`
+}
+
+// Attributes maps provides type safety for ldap attributes. Defaults to Active Directory.
+type attributes struct {
+	Mail        string `mapstructure:"mail" default:"mail"`
+	UID         string `mapstructure:"uid" default:"objectSid"`
+	DisplayName string `mapstructure:"displayName" default:"displayName"`
+	DN          string `mapstructure:"dn" default:"dn"`
+}
+
+func (u *attributes) mapDefaultTags() {
+	rv := reflect.ValueOf(u).Elem()
+	rt := reflect.TypeOf(*u)
+	for i := 0; i < rt.NumField(); i++ {
+		field := rv.Field(i)
+		if field.Kind() == reflect.String && field.String() == "" {
+			field.SetString(rt.Field(i).Tag.Get("default"))
+		}
+	}
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -62,6 +84,8 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
 	}
+
+	c.Schema.mapDefaultTags()
 	return c, nil
 }
 
@@ -79,6 +103,7 @@ func New(m map[string]interface{}) (user.Manager, error) {
 		filter:       c.Filter,
 		bindUsername: c.BindUsername,
 		bindPassword: c.BindPassword,
+		schema:       c.Schema,
 	}, nil
 }
 
@@ -100,8 +125,8 @@ func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*authv0alph
 	searchRequest := ldap.NewSearchRequest(
 		m.baseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-		fmt.Sprintf(m.filter, uid.OpaqueId),          // TODO this is screaming for errors if filter contains >1 %s
-		[]string{"dn", "uid", "mail", "displayName"}, // TODO mapping
+		fmt.Sprintf(m.filter, uid.OpaqueId), // TODO this is screaming for errors if filter contains >1 %s
+		[]string{m.schema.DN, m.schema.UID, m.schema.Mail, m.schema.DisplayName},
 		nil,
 	)
 
@@ -121,8 +146,8 @@ func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*authv0alph
 		// TODO map base dn as iss?
 		Username:    sr.Entries[0].GetAttributeValue("uid"),
 		Groups:      []string{},
-		Mail:        sr.Entries[0].GetAttributeValue("mail"),
-		DisplayName: sr.Entries[0].GetAttributeValue("displayName"),
+		Mail:        sr.Entries[0].GetAttributeValue(m.schema.Mail),
+		DisplayName: sr.Entries[0].GetAttributeValue(m.schema.DisplayName),
 	}, nil
 }
 
@@ -143,8 +168,8 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*authv0alphapb
 	searchRequest := ldap.NewSearchRequest(
 		m.baseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-		fmt.Sprintf(m.filter, query),                 // TODO this is screaming for errors if filter contains >1 %s
-		[]string{"dn", "uid", "mail", "displayName"}, // TODO mapping
+		fmt.Sprintf(m.filter, query), // TODO this is screaming for errors if filter contains >1 %s
+		[]string{m.schema.DN, m.schema.UID, m.schema.Mail, m.schema.DisplayName},
 		nil,
 	)
 
@@ -161,8 +186,8 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*authv0alphapb
 			// TODO map base dn as iss?
 			Username:    entry.GetAttributeValue("uid"),
 			Groups:      []string{},
-			Mail:        entry.GetAttributeValue("mail"),
-			DisplayName: entry.GetAttributeValue("displayName"),
+			Mail:        sr.Entries[0].GetAttributeValue(m.schema.Mail),
+			DisplayName: sr.Entries[0].GetAttributeValue(m.schema.DisplayName),
 		}
 		users = append(users, user)
 	}

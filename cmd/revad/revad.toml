@@ -78,7 +78,13 @@ root = "/var/tmp/reva/data"
 [grpc.services.authsvc]
 auth_manager = "demo"
 token_manager = "jwt"
-user_manager = "demo"
+user_manager = "ldap"
+
+# [grpc.services.authsvc.user_managers.ldap.schema]
+#     mail = "mail"
+#     uid = "objectSid"
+#     displayName = "displayName"
+#     dn = "dn"
 
 [grpc.services.authsvc.token_managers.jwt]
 secret = "Pive-Fumkiu4"
@@ -104,8 +110,8 @@ driver = "demo"
 iframe_ui_provider = "http://localhost:9998/iframeuisvc"
 
 [grpc.interceptors.auth]
-token_manager = "jwt"
-skip_methods = ["/cs3.authv0alpha.AuthService/GenerateAccessToken", "/cs3.authv0alpha.AuthService/WhoAmI"]
+    token_manager = "jwt"
+    skip_methods = ["/cs3.authv0alpha.AuthService/GenerateAccessToken", "/cs3.authv0alpha.AuthService/WhoAmI"]
 
 [grpc.interceptors.auth.token_managers.jwt]
-secret = "Pive-Fumkiu4"
+    secret = "Pive-Fumkiu4"
