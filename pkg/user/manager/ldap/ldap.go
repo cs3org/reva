@@ -191,9 +191,9 @@ func (m *manager) IsInGroup(ctx context.Context, uid *typespb.UserId, group stri
 func (u *attributes) mapDefaultTags() {
 	rv := reflect.ValueOf(u).Elem()
 	rt := reflect.TypeOf(*u)
-	// iterate receiver attributes
 	for i := 0; i < rt.NumField(); i++ {
 		field := rv.Field(i)
+		// empty strings (not provided attributes in the config file) will attempt to load from default
 		if field.Kind() == reflect.String && field.String() == "" {
 			field.SetString(rt.Field(i).Tag.Get("default"))
 		}

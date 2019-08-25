@@ -78,13 +78,13 @@ root = "/var/tmp/reva/data"
 [grpc.services.authsvc]
 auth_manager = "demo"
 token_manager = "jwt"
-user_manager = "ldap"
+user_manager = "demo"
 
 # [grpc.services.authsvc.user_managers.ldap.schema]
-#     mail = "mail"
-#     uid = "objectSid"
-#     displayName = "displayName"
-#     dn = "dn"
+#    mail = "mail"
+#    uid = "objectSid"
+#    displayName = "displayName"
+#    dn = "dn"
 
 [grpc.services.authsvc.token_managers.jwt]
 secret = "Pive-Fumkiu4"
