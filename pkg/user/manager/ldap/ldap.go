@@ -59,23 +59,12 @@ type config struct {
 	Schema       attributes `mapstructure:"schema"`
 }
 
-// Attributes maps provides type safety for ldap attributes. Defaults to Active Directory.
+// Attributes maps provides basic type safety for ldap attributes. Defaults to Active Directory.
 type attributes struct {
 	Mail        string `mapstructure:"mail" default:"mail"`
-	UID         string `mapstructure:"uid" default:"objectSid"`
+	UID         string `mapstructure:"uid" default:"objectGUID"`
 	DisplayName string `mapstructure:"displayName" default:"displayName"`
 	DN          string `mapstructure:"dn" default:"dn"`
-}
-
-func (u *attributes) mapDefaultTags() {
-	rv := reflect.ValueOf(u).Elem()
-	rt := reflect.TypeOf(*u)
-	for i := 0; i < rt.NumField(); i++ {
-		field := rv.Field(i)
-		if field.Kind() == reflect.String && field.String() == "" {
-			field.SetString(rt.Field(i).Tag.Get("default"))
-		}
-	}
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -142,9 +131,7 @@ func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*authv0alph
 	log.Debug().Interface("entries", sr.Entries).Msg("entries")
 
 	return &authv0alphapb.User{
-		// TODO map uuid, userPrincipalName as sub? -> actually objectSID for AD is recommended by MS. is also used for ACLs on NTFS
-		// TODO map base dn as iss?
-		Username:    sr.Entries[0].GetAttributeValue("uid"),
+		Username:    sr.Entries[0].GetAttributeValue(m.schema.UID),
 		Groups:      []string{},
 		Mail:        sr.Entries[0].GetAttributeValue(m.schema.Mail),
 		DisplayName: sr.Entries[0].GetAttributeValue(m.schema.DisplayName),
@@ -182,9 +169,7 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*authv0alphapb
 
 	for _, entry := range sr.Entries {
 		user := &authv0alphapb.User{
-			// TODO map uuid, userPrincipalName as sub? -> actually objectSID for AD is recommended by MS. is also used for ACLs on NTFS
-			// TODO map base dn as iss?
-			Username:    entry.GetAttributeValue("uid"),
+			Username:    entry.GetAttributeValue(m.schema.UID),
 			Groups:      []string{},
 			Mail:        sr.Entries[0].GetAttributeValue(m.schema.Mail),
 			DisplayName: sr.Entries[0].GetAttributeValue(m.schema.DisplayName),
@@ -201,4 +186,16 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *typespb.UserId) ([]str
 
 func (m *manager) IsInGroup(ctx context.Context, uid *typespb.UserId, group string) (bool, error) {
 	return false, nil // FIXME implement IsInGroup for ldap user manager
+}
+
+func (u *attributes) mapDefaultTags() {
+	rv := reflect.ValueOf(u).Elem()
+	rt := reflect.TypeOf(*u)
+	// iterate receiver attributes
+	for i := 0; i < rt.NumField(); i++ {
+		field := rv.Field(i)
+		if field.Kind() == reflect.String && field.String() == "" {
+			field.SetString(rt.Field(i).Tag.Get("default"))
+		}
+	}
 }
