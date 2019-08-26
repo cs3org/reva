@@ -1,3 +1,21 @@
+// Copyright 2018-2019 CERN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// In applying this license, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
 package ldap
 
 import (
@@ -9,35 +27,42 @@ import (
 )
 
 var configs = map[string]string{
-	"ad_schema": `
+	"adSchema": `
 		[schema]
+			mail = "email"
+			uid = "objectSID"
 			displayName = "displayName"
 			dn = "dn"
-			uid = "objectSid"
 		`,
-	"no_schema": ``,
-	"mail_uid_set": `
+	"noSchema": ``,
+	"partialSet": `
 		[schema]
 			mail = "myEmailAttribute"
 			uid = "someObscureSchema"
 	`,
 }
 
-func TestAttributesDefaults(t *testing.T) {
-	ad_schema := mustLoadConfig("ad_schema")
-	assert.Equal(t, ad_schema.Schema.UID, "objectSid")
-	assert.Equal(t, ad_schema.Schema.Mail, "mail") // mail not provided in config defaults to tag "mail"
+func TestInitFromSchema(t *testing.T) {
+	config := mustLoadConfig("adSchema")
+	assert.Equal(t, config.Schema.Mail, "email")
+	assert.Equal(t, config.Schema.UID, "objectSID")
+	assert.Equal(t, config.Schema.DisplayName, "displayName")
+	assert.Equal(t, config.Schema.DN, "dn")
+}
 
-	// no ldap schema provided - use defaults
-	no_schema := mustLoadConfig("no_schema")
-	assert.Equal(t, no_schema.Schema.Mail, "mail")
-	assert.Equal(t, no_schema.Schema.UID, "objectGUID")
-	assert.Equal(t, no_schema.Schema.DisplayName, "displayName")
-	assert.Equal(t, no_schema.Schema.DN, "dn")
+func TestNoSchema(t *testing.T) {
+	config := mustLoadConfig("noSchema")
+	assert.Equal(t, config.Schema.Mail, "mail")
+	assert.Equal(t, config.Schema.UID, "objectGUID")
+	assert.Equal(t, config.Schema.DisplayName, "displayName")
+	assert.Equal(t, config.Schema.DN, "dn")
+}
 
-	// attributes defined in the config file take precedence
-	mail_uid_set := mustLoadConfig("mail_uid_set")
-	assert.Equal(t, mail_uid_set.Schema.Mail, "myEmailAttribute")
+func TestPartialSchemaProvided(t *testing.T) {
+	config := mustLoadConfig("partialSet")
+	assert.Equal(t, config.Schema.Mail, "myEmailAttribute")
+	assert.Equal(t, config.Schema.UID, "someObscureSchema")
+	assert.Equal(t, config.Schema.DN, "dn")
 }
 
 func mustLoadConfig(key string) *config {
