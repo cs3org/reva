@@ -22,7 +22,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"reflect"
 
 	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
@@ -59,22 +58,30 @@ type config struct {
 	Schema       attributes `mapstructure:"schema"`
 }
 
-// Attributes maps provides basic type safety for ldap attributes. Defaults to Active Directory.
 type attributes struct {
-	Mail        string `mapstructure:"mail" default:"mail"`
-	UID         string `mapstructure:"uid" default:"objectGUID"`
-	DisplayName string `mapstructure:"displayName" default:"displayName"`
-	DN          string `mapstructure:"dn" default:"dn"`
+	Mail        string `mapstructure:"mail"`
+	UID         string `mapstructure:"uid"`
+	DisplayName string `mapstructure:"displayName"`
+	DN          string `mapstructure:"dn"`
+}
+
+// Set config default attributes (Active Directory)
+var ldapDefaults = attributes{
+	Mail:        "mail",
+	UID:         "objectGUID",
+	DisplayName: "displayName",
+	DN:          "dn",
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
+	c := &config{
+		Schema: ldapDefaults,
+	}
 	if err := mapstructure.Decode(m, c); err != nil {
 		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
 	}
 
-	c.Schema.mapDefaultTags()
 	return c, nil
 }
 
@@ -186,16 +193,4 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *typespb.UserId) ([]str
 
 func (m *manager) IsInGroup(ctx context.Context, uid *typespb.UserId, group string) (bool, error) {
 	return false, nil // FIXME implement IsInGroup for ldap user manager
-}
-
-func (u *attributes) mapDefaultTags() {
-	rv := reflect.ValueOf(u).Elem()
-	rt := reflect.TypeOf(*u)
-	for i := 0; i < rt.NumField(); i++ {
-		field := rv.Field(i)
-		// empty strings (not provided attributes in the config file) will attempt to load from default
-		if field.Kind() == reflect.String && field.String() == "" {
-			field.SetString(rt.Field(i).Tag.Get("default"))
-		}
-	}
 }
