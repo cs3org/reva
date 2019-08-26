@@ -673,19 +673,19 @@ func unmarshalKV(s string) (*ace, error) {
 }
 
 // Parse parses an acl string with the given delimiter (LongTextForm or ShortTextForm)
-func getACEs(ctx context.Context, fsfn string, attrs []string) ([]*ace, error) {
+func getACEs(ctx context.Context, fsfn string, attrs []string) (entries []*ace, err error) {
 	log := appctx.GetLogger(ctx)
-	entries := []*ace{}
+	entries = []*ace{}
 	for _, attr := range attrs {
 		if strings.HasPrefix(attr, sharePrefix) {
 			principal := attr[len(sharePrefix):]
-			value, err := xattr.Get(fsfn, attr)
-			if err != nil {
+			var value []byte
+			if value, err = xattr.Get(fsfn, attr); err != nil {
 				log.Error().Err(err).Str("attr", attr).Msg("could not read attribute")
 				continue
 			}
-			e, err := unmarshalACE(value)
-			if err != nil {
+			var e *ace
+			if e, err = unmarshalACE(value); err != nil {
 				log.Error().Err(err).Str("attr", attr).Msg("could unmarshal ace")
 				continue
 			}
@@ -708,27 +708,27 @@ func getACEs(ctx context.Context, fsfn string, attrs []string) ([]*ace, error) {
 	return entries, nil
 }
 
-func (fs *ocFS) ListGrants(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.Grant, error) {
+func (fs *ocFS) ListGrants(ctx context.Context, ref *storageproviderv0alphapb.Reference) (grants []*storageproviderv0alphapb.Grant, err error) {
 	log := appctx.GetLogger(ctx)
-	np, err := fs.resolve(ctx, ref)
-	if err != nil {
+	var np string
+	if np, err = fs.resolve(ctx, ref); err != nil {
 		return nil, errors.Wrap(err, "ocFS: error resolving reference")
 	}
-	attrs, err := xattr.List(np)
-	if err != nil {
+	var attrs []string
+	if attrs, err = xattr.List(np); err != nil {
 		log.Error().Err(err).Msg("error listing attributes")
 		return nil, err
 	}
 
 	log.Debug().Interface("attrs", attrs).Msg("read attributes")
 	// filter attributes
-	aces, err := getACEs(ctx, np, attrs)
-	if err != nil {
+	var aces []*ace
+	if aces, err = getACEs(ctx, np, attrs); err != nil {
 		log.Error().Err(err).Msg("error getting aces")
 		return nil, err
 	}
 
-	grants := make([]*storageproviderv0alphapb.Grant, 0, len(aces))
+	grants = make([]*storageproviderv0alphapb.Grant, 0, len(aces))
 	for _, e := range aces {
 		grantee := &storageproviderv0alphapb.Grantee{
 			Id:   &typespb.UserId{OpaqueId: e.Principal},
@@ -819,10 +819,10 @@ func (fs *ocFS) getGrantPermissionSet(mode string) *storageproviderv0alphapb.Res
 	return p
 }
 
-func (fs *ocFS) RemoveGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
+func (fs *ocFS) RemoveGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) (err error) {
 
-	np, err := fs.resolve(ctx, ref)
-	if err != nil {
+	var np string
+	if np, err = fs.resolve(ctx, ref); err != nil {
 		return errors.Wrap(err, "ocFS: error resolving reference")
 	}
 
@@ -844,10 +844,9 @@ func (fs *ocFS) GetQuota(ctx context.Context) (int, int, error) {
 	return 0, 0, nil
 }
 
-func (fs *ocFS) CreateDir(ctx context.Context, fn string) error {
+func (fs *ocFS) CreateDir(ctx context.Context, fn string) (err error) {
 	np := fs.getInternalPath(ctx, fn)
-	err := os.Mkdir(np, 0700)
-	if err != nil {
+	if err = os.Mkdir(np, 0700); err != nil {
 		if os.IsNotExist(err) {
 			return errtypes.NotFound(fn)
 		}
@@ -857,35 +856,33 @@ func (fs *ocFS) CreateDir(ctx context.Context, fn string) error {
 	return nil
 }
 
-func (fs *ocFS) Delete(ctx context.Context, ref *storageproviderv0alphapb.Reference) error {
-	np, err := fs.resolve(ctx, ref)
-	if err != nil {
+func (fs *ocFS) Delete(ctx context.Context, ref *storageproviderv0alphapb.Reference) (err error) {
+	var np string
+	if np, err = fs.resolve(ctx, ref); err != nil {
 		return errors.Wrap(err, "ocFS: error resolving reference")
 	}
-	err = os.Remove(np)
-	if err != nil {
+	if err = os.Remove(np); err != nil {
 		if os.IsNotExist(err) {
 			return errtypes.NotFound(fs.removeNamespace(ctx, np))
 		}
 		// try recursive delete
-		err = os.RemoveAll(np)
-		if err != nil {
+		if err = os.RemoveAll(np); err != nil {
 			return errors.Wrap(err, "ocFS: error deleting "+np)
 		}
 	}
 	return nil
 }
 
-func (fs *ocFS) Move(ctx context.Context, oldRef, newRef *storageproviderv0alphapb.Reference) error {
-	oldName, err := fs.resolve(ctx, oldRef)
-	if err != nil {
+func (fs *ocFS) Move(ctx context.Context, oldRef, newRef *storageproviderv0alphapb.Reference) (err error) {
+	var oldName string
+	if oldName, err = fs.resolve(ctx, oldRef); err != nil {
 		return errors.Wrap(err, "ocFS: error resolving reference")
 	}
-	newName, err := fs.resolve(ctx, newRef)
-	if err != nil {
+	var newName string
+	if newName, err = fs.resolve(ctx, newRef); err != nil {
 		return errors.Wrap(err, "ocFS: error resolving reference")
 	}
-	if err := os.Rename(oldName, newName); err != nil {
+	if err = os.Rename(oldName, newName); err != nil {
 		return errors.Wrap(err, "ocFS: error moving "+oldName+" to "+newName)
 	}
 	return nil
