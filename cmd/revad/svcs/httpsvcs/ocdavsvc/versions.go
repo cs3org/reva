@@ -142,25 +142,25 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		Owner: info.Owner,
 	})
 
-	for _, v := range versions {
+	for i := range versions {
 		vi := &storageproviderv0alphapb.ResourceInfo{
 			// TODO(jfd) we cannot access version content, this will be a problem when trying to fetch version thumbnails
 			//Opaque
 			Type: storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_FILE,
 			Id: &storageproviderv0alphapb.ResourceId{
 				StorageId: "versions", // this is a virtual storage
-				OpaqueId:  info.Id.OpaqueId + "@" + v.GetKey(),
+				OpaqueId:  info.Id.OpaqueId + "@" + versions[i].GetKey(),
 			},
 			//Checksum
 			//Etag: v.ETag,
 			//MimeType
 			Mtime: &typespb.Timestamp{
-				Seconds: v.Mtime,
+				Seconds: versions[i].Mtime,
 				// TODO cs3apis FileVersion should use typespb.Timestamp instead of uint64
 			},
-			Path: path.Join("v", v.Key),
+			Path: path.Join("v", versions[i].Key),
 			//PermissionSet
-			Size:  v.Size,
+			Size:  versions[i].Size,
 			Owner: info.Owner,
 		}
 		infos = append(infos, vi)

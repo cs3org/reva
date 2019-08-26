@@ -639,8 +639,8 @@ func unmarshalKV(s string) (*ace, error) {
 	if len(records) != 1 {
 		return nil, fmt.Errorf("more than one row of ace kvs")
 	}
-	for _, t := range records[0] {
-		kv := strings.Split(t, "=")
+	for i := range records[0] {
+		kv := strings.Split(records[0][i], "=")
 		switch kv[0] {
 		case "t":
 			e.Type = kv[1]
@@ -676,29 +676,29 @@ func unmarshalKV(s string) (*ace, error) {
 func getACEs(ctx context.Context, fsfn string, attrs []string) (entries []*ace, err error) {
 	log := appctx.GetLogger(ctx)
 	entries = []*ace{}
-	for _, attr := range attrs {
-		if strings.HasPrefix(attr, sharePrefix) {
-			principal := attr[len(sharePrefix):]
+	for i := range attrs {
+		if strings.HasPrefix(attrs[i], sharePrefix) {
+			principal := attrs[i][len(sharePrefix):]
 			var value []byte
-			if value, err = xattr.Get(fsfn, attr); err != nil {
-				log.Error().Err(err).Str("attr", attr).Msg("could not read attribute")
+			if value, err = xattr.Get(fsfn, attrs[i]); err != nil {
+				log.Error().Err(err).Str("attr", attrs[i]).Msg("could not read attribute")
 				continue
 			}
 			var e *ace
 			if e, err = unmarshalACE(value); err != nil {
-				log.Error().Err(err).Str("attr", attr).Msg("could unmarshal ace")
+				log.Error().Err(err).Str("attr", attrs[i]).Msg("could unmarshal ace")
 				continue
 			}
 			e.Principal = principal[2:]
 			// check consistency of Flags and principal type
 			if strings.Contains(e.Flags, "g") {
 				if principal[:1] != "g" {
-					log.Error().Str("attr", attr).Interface("ace", e).Msg("inconsistent ace: expected group")
+					log.Error().Str("attr", attrs[i]).Interface("ace", e).Msg("inconsistent ace: expected group")
 					continue
 				}
 			} else {
 				if principal[:1] != "u" {
-					log.Error().Str("attr", attr).Interface("ace", e).Msg("inconsistent ace: expected user")
+					log.Error().Str("attr", attrs[i]).Interface("ace", e).Msg("inconsistent ace: expected user")
 					continue
 				}
 			}
@@ -729,14 +729,14 @@ func (fs *ocFS) ListGrants(ctx context.Context, ref *storageproviderv0alphapb.Re
 	}
 
 	grants = make([]*storageproviderv0alphapb.Grant, 0, len(aces))
-	for _, e := range aces {
+	for i := range aces {
 		grantee := &storageproviderv0alphapb.Grantee{
-			Id:   &typespb.UserId{OpaqueId: e.Principal},
-			Type: fs.getGranteeType(e),
+			Id:   &typespb.UserId{OpaqueId: aces[i].Principal},
+			Type: fs.getGranteeType(aces[i]),
 		}
 		grants = append(grants, &storageproviderv0alphapb.Grant{
 			Grantee:     grantee,
-			Permissions: fs.getGrantPermissionSet(e.Permissions),
+			Permissions: fs.getGrantPermissionSet(aces[i].Permissions),
 		})
 	}
 
@@ -930,9 +930,9 @@ func (fs *ocFS) ListFolder(ctx context.Context, ref *storageproviderv0alphapb.Re
 	// TODO we should only open a connection if we need to set / store the fileid. no need to always open a connection when listing files
 	c := fs.pool.Get()
 	defer c.Close()
-	for _, md := range mds {
-		p := path.Join(np, md.Name())
-		m := fs.convertToResourceInfo(ctx, md, p, c)
+	for i := range mds {
+		p := path.Join(np, mds[i].Name())
+		m := fs.convertToResourceInfo(ctx, mds[i], p, c)
 		finfos = append(finfos, m)
 	}
 	return finfos, nil
@@ -997,13 +997,13 @@ func (fs *ocFS) copyMD(s string, t string) (err error) {
 	if attrs, err = xattr.List(s); err != nil {
 		return err
 	}
-	for _, a := range attrs {
-		if strings.HasPrefix(a, "user.oc.") {
+	for i := range attrs {
+		if strings.HasPrefix(attrs[i], "user.oc.") {
 			var d []byte
-			if d, err = xattr.Get(s, a); err != nil {
+			if d, err = xattr.Get(s, attrs[i]); err != nil {
 				return err
 			}
-			if err = xattr.Set(t, a, d); err != nil {
+			if err = xattr.Set(t, attrs[i], d); err != nil {
 				return err
 			}
 		}
@@ -1042,8 +1042,8 @@ func (fs *ocFS) ListRevisions(ctx context.Context, ref *storageproviderv0alphapb
 	if err != nil {
 		return nil, errors.Wrap(err, "ocFS: error reading"+path.Dir(vp))
 	}
-	for _, md := range mds {
-		rev := fs.filterAsRevision(ctx, bn, md)
+	for i := range mds {
+		rev := fs.filterAsRevision(ctx, bn, mds[i])
 		if rev != nil {
 			revisions = append(revisions, rev)
 		}

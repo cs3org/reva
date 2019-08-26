@@ -150,8 +150,8 @@ func readPropfind(r io.Reader) (pf propfindXML, status int, err error) {
 
 func (s *svc) formatPropfind(ctx context.Context, mds []*storageproviderv0alphapb.ResourceInfo) (string, error) {
 	responses := make([]*responseXML, 0, len(mds))
-	for _, md := range mds {
-		res, err := s.mdToPropResponse(ctx, md)
+	for i := range mds {
+		res, err := s.mdToPropResponse(ctx, mds[i])
 		if err != nil {
 			return "", err
 		}

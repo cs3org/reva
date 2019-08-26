@@ -186,9 +186,9 @@ func descend(ctx context.Context, client storageproviderv0alphapb.StorageProvide
 			return fmt.Errorf("status code %d", res.Status.Code)
 		}
 
-		for _, e := range res.Infos {
-			childDst := path.Join(dst, path.Base(e.Path))
-			err := descend(ctx, client, e, childDst)
+		for i := range res.Infos {
+			childDst := path.Join(dst, path.Base(res.Infos[i].Path))
+			err := descend(ctx, client, res.Infos[i], childDst)
 			if err != nil {
 				return err
 			}
