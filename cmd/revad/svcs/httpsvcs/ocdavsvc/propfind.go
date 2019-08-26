@@ -19,7 +19,6 @@
 package ocdavsvc
 
 import (
-	"bytes"
 	"context"
 	"encoding/xml"
 	"fmt"
@@ -105,7 +104,7 @@ func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request) {
 		infos = append(infos, res.Infos...)
 	}
 
-	propRes, err := s.formatPropfind(ctx, fn, infos)
+	propRes, err := s.formatPropfind(ctx, infos)
 	if err != nil {
 		log.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -149,10 +148,10 @@ func readPropfind(r io.Reader) (pf propfindXML, status int, err error) {
 	return pf, 0, nil
 }
 
-func (s *svc) formatPropfind(ctx context.Context, fn string, mds []*storageproviderv0alphapb.ResourceInfo) (string, error) {
-	responses := []*responseXML{}
-	for _, md := range mds {
-		res, err := s.mdToPropResponse(ctx, md)
+func (s *svc) formatPropfind(ctx context.Context, mds []*storageproviderv0alphapb.ResourceInfo) (string, error) {
+	responses := make([]*responseXML, 0, len(mds))
+	for i := range mds {
+		res, err := s.mdToPropResponse(ctx, mds[i])
 		if err != nil {
 			return "", err
 		}
@@ -213,14 +212,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, md *storageproviderv0alphapb
 	getLastModified := s.newProp("d:getlastmodified", lasModifiedString)
 	propList = append(propList, getLastModified)
 
-	// the fileID must be xml-escaped as there are cases like public links
-	// that contains a path as the file id. This path can contain &, for example,
-	// which if it is not encoded properly, will result in an empty view for the user
-	var fileIDEscaped bytes.Buffer
-	if err := xml.EscapeText(&fileIDEscaped, []byte(fmt.Sprintf("%s:%s", md.Id.StorageId, md.Id.OpaqueId))); err != nil {
-		return nil, err
-	}
-	ocID := s.newProp("oc:id", fileIDEscaped.String())
+	ocID := s.newProp("oc:fileid", wrapResourceID(md.Id))
 	propList = append(propList, ocID)
 
 	// PropStat, only HTTP/1.1 200 is sent.
@@ -242,6 +234,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, md *storageproviderv0alphapb
 			err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
 			return nil, err
 		}
+		// TODO can lead to slice out of bounds
 		md.Path = md.Path[len(u.Username)+1:]
 	}
 

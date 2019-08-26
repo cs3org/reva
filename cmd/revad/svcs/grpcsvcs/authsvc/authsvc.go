@@ -134,7 +134,7 @@ func (s *service) GenerateAccessToken(ctx context.Context, req *authv0alphapb.Ge
 
 	ctx, err := s.authmgr.Authenticate(ctx, username, password)
 	if err != nil {
-		log.Error().Err(err).Msg("error authentication user")
+		log.Error().Err(err).Msg("error authenticating user")
 		status := &rpcpb.Status{Code: rpcpb.Code_CODE_UNAUTHENTICATED}
 		res := &authv0alphapb.GenerateAccessTokenResponse{Status: status}
 		return res, nil

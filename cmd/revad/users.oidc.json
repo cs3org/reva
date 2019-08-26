@@ -1,26 +1,32 @@
 [
 	{
-		"sub": "c6e5995d6c7fa1986b830b78b478e6c2",
-		"iss": "localhost:9998",
+		"id": {
+			"opaque_id": "c6e5995d6c7fa1986b830b78b478e6c2",
+			"idp": "localhost:9998"
+		},
 		"username": "aaliyah_abernathy",
 		"secret": "secret",
 		"mail": "aaliyah_abernathy@owncloudqa.com",
-		"displayname": "Aaliyah Abernathy"
+		"display_name": "Aaliyah Abernathy"
 	},
 	{
-		"sub": "9fb5f8d212cbf3fc55f1bf67d97ed05d",
-		"iss": "localhost:9998",
+		"id": {
+			"opaque_id": "9fb5f8d212cbf3fc55f1bf67d97ed05d",
+			"idp": "localhost:9998"
+		},
 		"username": "aaliyah_adams",
 		"secret": "secret",
 		"mail": "aaliyah_adams@owncloudqa.com",
-		"displayname": "Aaliyah Adams"
+		"display_name": "Aaliyah Adams"
 	},
 	{
-		"sub": "a84075b398fe6a0aee1155f8ead13331",
-		"iss": "localhost:9998",
+		"id": {
+			"opaque_id": "a84075b398fe6a0aee1155f8ead13331",
+			"idp": "localhost:9998"
+		},
 		"username": "aaliyah_anderson",
 		"secret": "secret",
 		"mail": "aaliyah_anderson@owncloudqa.com",
-		"displayname": "Aaliyah Anderson"
+		"display_name": "Aaliyah Anderson"
 	}
 ]

@@ -375,12 +375,16 @@ func WriteConfig(p string, cs string, dd string, dp string) {
 
 var usersTemplate = `[{{range  $i, $e := .}}{{if $i}},{{end}}
 	{
+		"id": {
+			"idp": "{{$e.Iss}}",
+			"opaque_id": "{{$e.Sub}}",
+		},
 		"sub": "{{$e.Sub}}",
 		"iss": "{{$e.Iss}}",
 		"username": "{{$e.Username}}",
 		"secret": "{{$e.Secret}}",
 		"mail": "{{$e.Mail}}",
-		"displayname": "{{$e.Displayname}}"
+		"display_name": "{{$e.Displayname}}"
 	}{{end}}
 ]
 `

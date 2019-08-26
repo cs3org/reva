@@ -33,7 +33,7 @@ func (s *svc) doOptions(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
 	w.Header().Set("Access-Control-Allow-Methods", allow)
-	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Depth, Ocs-Apirequest")
+	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Depth, Ocs-Apirequest, If-None-Match, Destination")
 	w.Header().Set("Content-Type", "application/xml")
 	w.Header().Set("Allow", allow)
 	w.Header().Set("DAV", "1, 2")

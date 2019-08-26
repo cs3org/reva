@@ -19,6 +19,7 @@
 package ocssvc
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -65,18 +66,6 @@ func getUserManager(manager string, m map[string]map[string]interface{}) (user.M
 	}
 
 	return nil, fmt.Errorf("driver %s not found for user manager", manager)
-}
-
-func (h *SharesHandler) getSClient() (storageproviderv0alphapb.StorageProviderServiceClient, error) {
-	return pool.GetStorageProviderServiceClient(h.gatewaySvc)
-}
-
-func (h *SharesHandler) getUClient() (usershareproviderv0alphapb.UserShareProviderServiceClient, error) {
-	return pool.GetUserShareProviderClient(h.gatewaySvc)
-}
-
-func (h *SharesHandler) getPClient() (publicshareproviderv0alphapb.PublicShareProviderServiceClient, error) {
-	return pool.GetPublicShareProviderClient(h.gatewaySvc)
 }
 
 func (h *SharesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -127,7 +116,7 @@ func (h *SharesHandler) findSharees(w http.ResponseWriter, r *http.Request) {
 
 	log.Debug().Int("count", len(users)).Str("search", search).Msg("users found")
 
-	matches := []*MatchData{}
+	matches := make([]*MatchData, 0, len(users))
 
 	for _, user := range users {
 		match := h.userAsMatch(user)
@@ -152,6 +141,8 @@ func (h *SharesHandler) userAsMatch(u *authv0alphapb.User) *MatchData {
 		Label: u.DisplayName,
 		Value: &MatchValueData{
 			ShareType: int(shareTypeUser),
+			// TODO(jfd) find more robust userid
+			// username might be ok as it is uniqe at a given point in time
 			ShareWith: u.Username,
 		},
 	}
@@ -179,6 +170,20 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		if shareWith == "" {
 			WriteOCSError(w, r, MetaBadRequest.StatusCode, "missing shareWith", nil)
 			return
+		}
+
+		// find recipient based on username
+		users, err := h.userManager.FindUsers(ctx, shareWith)
+		if err != nil {
+			WriteOCSError(w, r, MetaServerError.StatusCode, "error searching recipient", err)
+			return
+		}
+		var recipient *authv0alphapb.User
+		for _, user := range users {
+			if user.Username == shareWith {
+				recipient = user
+				break
+			}
 		}
 
 		// we need to prefix the path with the user id
@@ -214,13 +219,13 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		// map role to permissions
 
 		var permissions *storageproviderv0alphapb.ResourcePermissions
-		permissions, err := h.role2CS3Permissions(role)
+		permissions, err = h.role2CS3Permissions(role)
 		if err != nil {
 			log.Warn().Err(err).Msg("unknown role, mapping legacy permissions")
 			permissions = asCS3Permissions(pint, nil)
 		}
 
-		uClient, err := h.getUClient()
+		uClient, err := pool.GetUserShareProviderClient(h.gatewaySvc)
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc client", err)
 			return
@@ -240,7 +245,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			},
 		}
 
-		sClient, err := h.getSClient()
+		sClient, err := pool.GetStorageProviderServiceClient(h.gatewaySvc)
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting storage grpc client", err)
 			return
@@ -274,10 +279,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			Grant: &usershareproviderv0alphapb.ShareGrant{
 				Grantee: &storageproviderv0alphapb.Grantee{
 					Type: storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER,
-					Id: &typespb.UserId{
-						// Idp: TODO get from where?
-						OpaqueId: shareWith,
-					},
+					Id:   recipient.Id,
 				},
 				Permissions: &usershareproviderv0alphapb.SharePermissions{
 					Permissions: permissions,
@@ -297,7 +299,11 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "grpc create share request failed", err)
 			return
 		}
-		s := h.userShare2ShareData(res.Share)
+		s, err := h.userShare2ShareData(ctx, res.Share)
+		if err != nil {
+			WriteOCSError(w, r, MetaServerError.StatusCode, "error mapping share data", err)
+			return
+		}
 		s.Path = r.FormValue("path") // use path without user prefix
 		WriteOCSSuccess(w, r, s)
 		return
@@ -464,7 +470,7 @@ func (h *SharesHandler) updateShare(w http.ResponseWriter, r *http.Request) {
 	shareID := strings.TrimLeft(r.URL.Path, "/")
 	// TODO we need to lookup the storage that is responsible for this share
 
-	uClient, err := h.getUClient()
+	uClient, err := pool.GetUserShareProviderClient(h.gatewaySvc)
 	if err != nil {
 		WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc client", err)
 		return
@@ -526,7 +532,11 @@ func (h *SharesHandler) updateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	share := h.userShare2ShareData(gRes.Share)
+	share, err := h.userShare2ShareData(ctx, gRes.Share)
+	if err != nil {
+		WriteOCSError(w, r, MetaServerError.StatusCode, "error mapping share data", err)
+		return
+	}
 
 	WriteOCSSuccess(w, r, share)
 }
@@ -553,7 +563,7 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 		log.Debug().Str("path", p).Str("fn", fn).Interface("user", u).Msg("resolved path for user")
 
 		// first check if the file exists
-		sClient, err := h.getSClient()
+		sClient, err := pool.GetStorageProviderServiceClient(h.gatewaySvc)
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc storage provider client", err)
 			return
@@ -585,9 +595,7 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 		filters = append(filters, &usershareproviderv0alphapb.ListSharesRequest_Filter{
 			Type: usershareproviderv0alphapb.ListSharesRequest_Filter_LIST_SHARES_REQUEST_FILTER_TYPE_RESOURCE_ID,
 			Term: &usershareproviderv0alphapb.ListSharesRequest_Filter_ResourceId{
-				// TODO the usershareprovider currently expects a path as the opacque id. It must accept proper ResourceIDs
-				// ResourceId: info.Id,
-				ResourceId: &storageproviderv0alphapb.ResourceId{StorageId: info.Id.StorageId, OpaqueId: fn},
+				ResourceId: info.Id,
 			},
 		})
 	}
@@ -596,7 +604,7 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 
 	// fetch user shares if configured
 	if h.gatewaySvc != "" {
-		uClient, err := h.getUClient()
+		uClient, err := pool.GetUserShareProviderClient(h.gatewaySvc)
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc user share handler client", err)
 			return
@@ -618,8 +626,15 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		for _, s := range res.Shares {
-			share := h.userShare2ShareData(s)
-			h.addFileInfo(share, info)
+			share, err := h.userShare2ShareData(ctx, s)
+			if err != nil {
+				WriteOCSError(w, r, MetaServerError.StatusCode, "error mapping share data", err)
+				return
+			}
+			if h.addFileInfo(ctx, share, info) != nil {
+				WriteOCSError(w, r, MetaServerError.StatusCode, "error adding file info", err)
+				return
+			}
 			log.Debug().Interface("share", s).Interface("info", info).Interface("shareData", share).Msg("mapped")
 			shares = append(shares, share)
 		}
@@ -628,12 +643,11 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	// TODO fetch federated shares
 
 	// fetch public link shares if configured
-	if h.gatewaySvc != "" {
-		pClient, err := h.getPClient()
-		if err != nil {
-			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc public share provider client", err)
-			return
-		}
+	pClient, err := pool.GetPublicShareProviderClient(h.gatewaySvc)
+	if err != nil {
+		// TODO(jfd) log error if it is not available, log nothing if disabled ... somehow
+		log.Error().Err(err).Msg("error getting grpc public share provider client")
+	} else {
 		req := &publicshareproviderv0alphapb.ListPublicSharesRequest{}
 		res, err := pClient.ListPublicShares(ctx, req)
 		if err != nil {
@@ -650,7 +664,11 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, s := range res.Share {
 			share := h.publicShare2ShareData(s)
-			h.addFileInfo(share, info)
+			err := h.addFileInfo(ctx, share, info)
+			if err != nil {
+				WriteOCSError(w, r, MetaServerError.StatusCode, "error adding file info", err)
+				return
+			}
 			log.Debug().Interface("share", s).Interface("info", info).Interface("shareData", share).Msg("mapped")
 			shares = append(shares, share)
 		}
@@ -661,10 +679,9 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *SharesHandler) addFileInfo(s *ShareData, info *storageproviderv0alphapb.ResourceInfo) {
+func (h *SharesHandler) addFileInfo(ctx context.Context, s *ShareData, info *storageproviderv0alphapb.ResourceInfo) error {
 	if info != nil {
 		// TODO The owner is not set in the storage stat metadata ...
-		owner := h.resolveUserID(info.Owner)
 		s.MimeType = info.MimeType
 		// TODO STime:     &typespb.Timestamp{Seconds: info.Mtime.Seconds, Nanos: info.Mtime.Nanos},
 		s.StorageID = info.Id.StorageId
@@ -677,35 +694,60 @@ func (h *SharesHandler) addFileInfo(s *ShareData, info *storageproviderv0alphapb
 
 		// file owner might not yet be set. Use file info
 		if s.UIDFileOwner == "" {
-			s.UIDFileOwner = owner.Id.OpaqueId
+			s.UIDFileOwner = UserIDToString(info.Owner)
 		}
-		if s.DisplaynameFileOwner == "" {
+		if s.DisplaynameFileOwner == "" && info.Owner != nil {
+			owner, err := h.userManager.GetUser(ctx, info.Owner)
+			if err != nil {
+				return err
+			}
 			s.DisplaynameFileOwner = owner.DisplayName
 		}
 		// share owner might not yet be set. Use file info
 		if s.UIDOwner == "" {
-			s.UIDOwner = owner.Id.OpaqueId
+			s.UIDOwner = UserIDToString(info.Owner)
 		}
-		if s.DisplaynameOwner == "" {
+		if s.DisplaynameOwner == "" && info.Owner != nil {
+			owner, err := h.userManager.GetUser(ctx, info.Owner)
+			if err != nil {
+				return err
+			}
 			s.DisplaynameOwner = owner.DisplayName
 		}
 	}
+	return nil
 }
 
 // TODO(jfd) merge userShare2ShareData with publicShare2ShareData
-func (h *SharesHandler) userShare2ShareData(share *usershareproviderv0alphapb.Share) *ShareData {
-	creator := h.resolveUserID(share.Creator)
-	owner := h.resolveUserID(share.Owner)
-	grantee := h.resolveUserID(share.Grantee.Id)
+func (h *SharesHandler) userShare2ShareData(ctx context.Context, share *usershareproviderv0alphapb.Share) (*ShareData, error) {
 	sd := &ShareData{
-		Permissions:          userSharePermissions2OCSPermissions(share.GetPermissions()),
-		ShareType:            shareTypeUser,
-		UIDOwner:             creator.Id.OpaqueId,
-		DisplaynameOwner:     creator.DisplayName,
-		UIDFileOwner:         owner.Id.OpaqueId,
-		DisplaynameFileOwner: owner.DisplayName,
-		ShareWith:            grantee.Id.OpaqueId,
-		ShareWithDisplayname: grantee.DisplayName,
+		Permissions: userSharePermissions2OCSPermissions(share.GetPermissions()),
+		ShareType:   shareTypeUser,
+	}
+	if share.Creator != nil {
+		if creator, err := h.userManager.GetUser(ctx, share.Creator); err == nil {
+			// TODO the user from GetUser might not have an ID set, so we are using the one we have
+			sd.UIDOwner = UserIDToString(share.Creator)
+			sd.DisplaynameOwner = creator.DisplayName
+		} else {
+			return nil, err
+		}
+	}
+	if share.Owner != nil {
+		if owner, err := h.userManager.GetUser(ctx, share.Owner); err == nil {
+			sd.UIDFileOwner = UserIDToString(share.Owner)
+			sd.DisplaynameFileOwner = owner.DisplayName
+		} else {
+			return nil, err
+		}
+	}
+	if share.Grantee.Id != nil {
+		if grantee, err := h.userManager.GetUser(ctx, share.Grantee.Id); err == nil {
+			sd.ShareWith = UserIDToString(share.Grantee.Id)
+			sd.ShareWithDisplayname = grantee.DisplayName
+		} else {
+			return nil, err
+		}
 	}
 	if share.Id != nil && share.Id.OpaqueId != "" {
 		sd.ID = share.Id.OpaqueId
@@ -715,7 +757,7 @@ func (h *SharesHandler) userShare2ShareData(share *usershareproviderv0alphapb.Sh
 	}
 	// actually clients should be able to GET and cache the user info themselves ...
 	// TODO check grantee type for user vs group
-	return sd
+	return sd, nil
 }
 
 func userSharePermissions2OCSPermissions(sp *usershareproviderv0alphapb.SharePermissions) Permissions {
@@ -732,34 +774,22 @@ func publicSharePermissions2OCSPermissions(sp *publicshareproviderv0alphapb.Publ
 	return permissionInvalid
 }
 
-// TODO do user lookup and cache users
-func (h *SharesHandler) resolveUserID(userID *typespb.UserId) *authv0alphapb.User {
-	return &authv0alphapb.User{
-		Id: &typespb.UserId{
-			Idp:      userID.Idp,
-			OpaqueId: userID.OpaqueId,
-		},
-		Username:    userID.OpaqueId,
-		DisplayName: userID.OpaqueId,
-	}
-}
-
 func (h *SharesHandler) publicShare2ShareData(share *publicshareproviderv0alphapb.PublicShare) *ShareData {
-	creator := h.resolveUserID(share.Creator)
-	owner := h.resolveUserID(share.Owner)
 	sd := &ShareData{
 		ID: share.Id.OpaqueId,
 		// TODO map share.resourceId to path and storage ... requires a stat call
 		// share.permissions ar mapped below
-		Permissions:          publicSharePermissions2OCSPermissions(share.GetPermissions()),
-		ShareType:            shareTypePublicLink,
-		UIDOwner:             creator.Id.OpaqueId,
-		DisplaynameOwner:     creator.DisplayName,
-		STime:                share.Ctime.Seconds, // TODO CS3 api birth time = btime
-		UIDFileOwner:         owner.Id.OpaqueId,
-		DisplaynameFileOwner: owner.DisplayName,
-		Token:                share.Token,
-		Expiration:           timestampToExpiration(share.Expiration),
+		Permissions: publicSharePermissions2OCSPermissions(share.GetPermissions()),
+		ShareType:   shareTypePublicLink,
+		UIDOwner:    UserIDToString(share.Creator),
+		// TODO lookup user metadata
+		//DisplaynameOwner:     creator.DisplayName,
+		STime:        share.Ctime.Seconds, // TODO CS3 api birth time = btime
+		UIDFileOwner: UserIDToString(share.Owner),
+		// TODO lookup user metadata
+		//DisplaynameFileOwner: owner.DisplayName,
+		Token:      share.Token,
+		Expiration: timestampToExpiration(share.Expiration),
 	}
 	// actually clients should be able to GET and cache the user info themselves ...
 	// TODO check grantee type for user vs group

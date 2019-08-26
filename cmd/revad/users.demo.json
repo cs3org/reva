@@ -1,26 +1,32 @@
 [
 	{
-		"sub": "37a08ed30093a133b1bb4ae0b8f3601f",
-		"iss": "localhost:9998",
+		"id": {
+			"opaque_id": "37a08ed30093a133b1bb4ae0b8f3601f",
+			"idp": "localhost"
+		},
 		"username": "einstein",
 		"secret": "relativity",
 		"mail": "einstein@example.org",
-		"displayname": "Albert Einstein"
+		"display_name": "Albert Einstein"
 	},
 	{
-		"sub": "b3725122c9d3bfef5664619e08e31877",
-		"iss": "localhost:9998",
+		"id": {
+			"opaque_id": "b3725122c9d3bfef5664619e08e31877",
+			"idp": "localhost"
+		},
 		"username": "marie",
 		"secret": "radioactivity",
 		"mail": "marie@example.org",
-		"displayname": "Marie Curie"
+		"display_name": "Marie Curie"
 	},
 	{
-		"sub": "6ae199a93c381bf6d5de27491139d3f9",
-		"iss": "localhost:9998",
+		"id": {
+			"opaque_id": "6ae199a93c381bf6d5de27491139d3f9",
+			"idp": "localhost"
+		},
 		"username": "richard",
 		"secret": "superfluidity",
 		"mail": "richard@example.org",
-		"displayname": "Richard Feynman"
+		"display_name": "Richard Feynman"
 	}
 ]
