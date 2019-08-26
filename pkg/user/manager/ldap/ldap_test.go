@@ -40,6 +40,10 @@ var configs = map[string]string{
 			mail = "myEmailAttribute"
 			uid = "someObscureSchema"
 	`,
+	"invalidAttribute": `
+		[schema]
+			invalid = "myEmailAttribute"
+	`,
 }
 
 func TestInitFromSchema(t *testing.T) {
@@ -62,6 +66,13 @@ func TestPartialSchemaProvided(t *testing.T) {
 	config := mustLoadConfig("partialSet")
 	assert.Equal(t, config.Schema.Mail, "myEmailAttribute")
 	assert.Equal(t, config.Schema.UID, "someObscureSchema")
+	assert.Equal(t, config.Schema.DN, "dn")
+}
+
+func TestIgnoreInvalidAttribute(t *testing.T) {
+	config := mustLoadConfig("invalidAttribute")
+	assert.Equal(t, config.Schema.Mail, "mail")
+	assert.Equal(t, config.Schema.UID, "objectGUID")
 	assert.Equal(t, config.Schema.DN, "dn")
 }
 
