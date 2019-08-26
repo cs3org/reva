@@ -65,7 +65,7 @@ type attributes struct {
 	DN          string `mapstructure:"dn"`
 }
 
-// Set config default attributes (Active Directory)
+// Default attributes (Active Directory)
 var ldapDefaults = attributes{
 	Mail:        "mail",
 	UID:         "objectGUID",
@@ -74,15 +74,15 @@ var ldapDefaults = attributes{
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{
+	c := config{
 		Schema: ldapDefaults,
 	}
-	if err := mapstructure.Decode(m, c); err != nil {
+	if err := mapstructure.Decode(m, &c); err != nil {
 		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
 	}
 
-	return c, nil
+	return &c, nil
 }
 
 // New returns a user manager implementation that connects to a LDAP server to provide user metadata.

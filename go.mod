@@ -33,5 +33,4 @@ require (
 	gopkg.in/cheggaaa/pb.v1 v1.0.27 // indirect
 	gopkg.in/ldap.v2 v2.5.1
 	gopkg.in/square/go-jose.v2 v2.2.2 // indirect
-	gotest.tools v2.2.0+incompatible
 )

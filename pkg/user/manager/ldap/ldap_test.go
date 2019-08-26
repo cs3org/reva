@@ -23,70 +23,55 @@ import (
 	"testing"
 
 	configreader "github.com/cs3org/reva/cmd/revad/config"
-	"gotest.tools/assert"
 )
 
-var configs = map[string]string{
-	"adSchema": `
-		[schema]
-			mail = "email"
-			uid = "objectSID"
-			displayName = "displayName"
-			dn = "dn"
-		`,
-	"noSchema": ``,
-	"partialSet": `
-		[schema]
-			mail = "myEmailAttribute"
-			uid = "someObscureSchema"
-	`,
-	"invalidAttribute": `
-		[schema]
-			invalid = "myEmailAttribute"
-	`,
-}
+var conf = `
+[schema]
+	mail = "email"
+	dn = "dn"
+`
 
-func TestInitFromSchema(t *testing.T) {
-	config := mustLoadConfig("adSchema")
-	assert.Equal(t, config.Schema.Mail, "email")
-	assert.Equal(t, config.Schema.UID, "objectSID")
-	assert.Equal(t, config.Schema.DisplayName, "displayName")
-	assert.Equal(t, config.Schema.DN, "dn")
-}
+func TestUserManager(t *testing.T) {
+	// negative test for parseConfig
+	_, err := New(map[string]interface{}{"hostname": 42})
+	if err == nil {
+		t.Fatal("expected error but got none")
+	}
 
-func TestNoSchema(t *testing.T) {
-	config := mustLoadConfig("noSchema")
-	assert.Equal(t, config.Schema.Mail, "mail")
-	assert.Equal(t, config.Schema.UID, "objectGUID")
-	assert.Equal(t, config.Schema.DisplayName, "displayName")
-	assert.Equal(t, config.Schema.DN, "dn")
-}
-
-func TestPartialSchemaProvided(t *testing.T) {
-	config := mustLoadConfig("partialSet")
-	assert.Equal(t, config.Schema.Mail, "myEmailAttribute")
-	assert.Equal(t, config.Schema.UID, "someObscureSchema")
-	assert.Equal(t, config.Schema.DN, "dn")
-}
-
-func TestIgnoreInvalidAttribute(t *testing.T) {
-	config := mustLoadConfig("invalidAttribute")
-	assert.Equal(t, config.Schema.Mail, "mail")
-	assert.Equal(t, config.Schema.UID, "objectGUID")
-	assert.Equal(t, config.Schema.DN, "dn")
-}
-
-func mustLoadConfig(key string) *config {
-	r := strings.NewReader(configs[key])
+	r := strings.NewReader(conf)
 	config, err := configreader.Read(r)
 	if err != nil {
-		panic("error reading configuration")
+		t.Fatal("error reading config")
 	}
 
 	c, err := parseConfig(config)
 	if err != nil {
-		panic("error while parsing configuration from file")
+		t.Fatal("error parsing config")
 	}
 
-	return c
+	// UID not provided in config file. should not modify defaults
+	if c.Schema.UID != ldapDefaults.UID {
+		t.Fatalf("expected default UID to be: %v, got %v", ldapDefaults.UID, c.Schema.UID)
+	}
+
+	// DisplayName not provided in config file. should not modify defaults
+	if c.Schema.DisplayName != ldapDefaults.DisplayName {
+		t.Fatalf("expected DisplayName to be: %v, got %v", ldapDefaults.DisplayName, c.Schema.DisplayName)
+	}
+
+	// Mail provided in config file
+	if c.Schema.Mail != "email" {
+		t.Fatalf("expected default UID to be: %v, got %v", "email", c.Schema.Mail)
+	}
+
+	// DN provided in config file
+	if c.Schema.DN != ldapDefaults.DN {
+		t.Fatalf("expected DisplayName to be: %v, got %v", ldapDefaults.DN, c.Schema.DN)
+	}
+
+	// possitive tests for New
+	_, err = New(config)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
 }
