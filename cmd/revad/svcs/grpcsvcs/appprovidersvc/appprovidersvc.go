@@ -21,15 +21,21 @@ package appprovidersvc
 import (
 	"context"
 	"fmt"
+	"io"
 
 	appproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/appprovider/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
+	"github.com/cs3org/reva/cmd/revad/grpcserver"
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/provider/demo"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/mitchellh/mapstructure"
 	"google.golang.org/grpc"
 )
+
+func init() {
+	grpcserver.Register("appprovidersvc", New)
+}
 
 type service struct {
 	provider app.Provider
@@ -41,16 +47,16 @@ type config struct {
 }
 
 // New creates a new StorageRegistryService
-func New(m map[string]interface{}, ss *grpc.Server) error {
+func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 
 	c, err := parseConfig(m)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	provider, err := getProvider(c)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	service := &service{
@@ -58,7 +64,7 @@ func New(m map[string]interface{}, ss *grpc.Server) error {
 	}
 
 	appproviderv0alphapb.RegisterAppProviderServiceServer(ss, service)
-	return nil
+	return service, nil
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -67,6 +73,10 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 		return nil, err
 	}
 	return c, nil
+}
+
+func (s *service) Close() error {
+	return nil
 }
 
 func getProvider(c *config) (app.Provider, error) {
