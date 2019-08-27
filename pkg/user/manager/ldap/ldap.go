@@ -45,24 +45,44 @@ type manager struct {
 	filter       string
 	bindUsername string
 	bindPassword string
+	schema       attributes
 }
 
 type config struct {
-	Hostname     string `mapstructure:"hostname"`
-	Port         int    `mapstructure:"port"`
-	BaseDN       string `mapstructure:"base_dn"`
-	Filter       string `mapstructure:"filter"`
-	BindUsername string `mapstructure:"bind_username"`
-	BindPassword string `mapstructure:"bind_password"`
+	Hostname     string     `mapstructure:"hostname"`
+	Port         int        `mapstructure:"port"`
+	BaseDN       string     `mapstructure:"base_dn"`
+	Filter       string     `mapstructure:"filter"`
+	BindUsername string     `mapstructure:"bind_username"`
+	BindPassword string     `mapstructure:"bind_password"`
+	Schema       attributes `mapstructure:"schema"`
+}
+
+type attributes struct {
+	Mail        string `mapstructure:"mail"`
+	UID         string `mapstructure:"uid"`
+	DisplayName string `mapstructure:"displayName"`
+	DN          string `mapstructure:"dn"`
+}
+
+// Default attributes (Active Directory)
+var ldapDefaults = attributes{
+	Mail:        "mail",
+	UID:         "objectGUID",
+	DisplayName: "displayName",
+	DN:          "dn",
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
+	c := config{
+		Schema: ldapDefaults,
+	}
+	if err := mapstructure.Decode(m, &c); err != nil {
 		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
 	}
-	return c, nil
+
+	return &c, nil
 }
 
 // New returns a user manager implementation that connects to a LDAP server to provide user metadata.
@@ -79,6 +99,7 @@ func New(m map[string]interface{}) (user.Manager, error) {
 		filter:       c.Filter,
 		bindUsername: c.BindUsername,
 		bindPassword: c.BindPassword,
+		schema:       c.Schema,
 	}, nil
 }
 
@@ -100,8 +121,8 @@ func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*authv0alph
 	searchRequest := ldap.NewSearchRequest(
 		m.baseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-		fmt.Sprintf(m.filter, uid.OpaqueId),          // TODO this is screaming for errors if filter contains >1 %s
-		[]string{"dn", "uid", "mail", "displayName"}, // TODO mapping
+		fmt.Sprintf(m.filter, uid.OpaqueId), // TODO this is screaming for errors if filter contains >1 %s
+		[]string{m.schema.DN, m.schema.UID, m.schema.Mail, m.schema.DisplayName},
 		nil,
 	)
 
@@ -117,12 +138,10 @@ func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*authv0alph
 	log.Debug().Interface("entries", sr.Entries).Msg("entries")
 
 	return &authv0alphapb.User{
-		// TODO map uuid, userPrincipalName as sub? -> actually objectSID for AD is recommended by MS. is also used for ACLs on NTFS
-		// TODO map base dn as iss?
-		Username:    sr.Entries[0].GetAttributeValue("uid"),
+		Username:    sr.Entries[0].GetAttributeValue(m.schema.UID),
 		Groups:      []string{},
-		Mail:        sr.Entries[0].GetAttributeValue("mail"),
-		DisplayName: sr.Entries[0].GetAttributeValue("displayName"),
+		Mail:        sr.Entries[0].GetAttributeValue(m.schema.Mail),
+		DisplayName: sr.Entries[0].GetAttributeValue(m.schema.DisplayName),
 	}, nil
 }
 
@@ -143,8 +162,8 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*authv0alphapb
 	searchRequest := ldap.NewSearchRequest(
 		m.baseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-		fmt.Sprintf(m.filter, query),                 // TODO this is screaming for errors if filter contains >1 %s
-		[]string{"dn", "uid", "mail", "displayName"}, // TODO mapping
+		fmt.Sprintf(m.filter, query), // TODO this is screaming for errors if filter contains >1 %s
+		[]string{m.schema.DN, m.schema.UID, m.schema.Mail, m.schema.DisplayName},
 		nil,
 	)
 
@@ -157,12 +176,10 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*authv0alphapb
 
 	for _, entry := range sr.Entries {
 		user := &authv0alphapb.User{
-			// TODO map uuid, userPrincipalName as sub? -> actually objectSID for AD is recommended by MS. is also used for ACLs on NTFS
-			// TODO map base dn as iss?
-			Username:    entry.GetAttributeValue("uid"),
+			Username:    entry.GetAttributeValue(m.schema.UID),
 			Groups:      []string{},
-			Mail:        entry.GetAttributeValue("mail"),
-			DisplayName: entry.GetAttributeValue("displayName"),
+			Mail:        sr.Entries[0].GetAttributeValue(m.schema.Mail),
+			DisplayName: sr.Entries[0].GetAttributeValue(m.schema.DisplayName),
 		}
 		users = append(users, user)
 	}
