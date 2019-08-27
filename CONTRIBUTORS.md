@@ -1,3 +1,4 @@
+- Alex Unger <zyxancf@gmail.com>
 - Felix Hillingshaeuser <felix@mxcore.de>
 - Hugo Gonzalez Labrador <github@hugo.labkode.com>
 - Jörn Friedrich Dreyer <jfd@butonic.de>
