@@ -20,6 +20,7 @@ package httpserver
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"sort"
@@ -176,8 +177,8 @@ func (s *Server) GracefulStop() error {
 	return s.httpServer.Shutdown(context.Background())
 }
 
-func (s *Server) isEnabled(svcName string) bool {
-	for _, key := range s.conf.EnabledServices {
+func (s *Server) isService(svcName string) bool {
+	for key := range Services {
 		if key == svcName {
 			return true
 		}
@@ -216,8 +217,9 @@ func (s *Server) registerMiddlewares() error {
 }
 
 func (s *Server) registerServices() error {
-	for svcName, newFunc := range Services {
-		if s.isEnabled(svcName) {
+	for _, svcName := range s.conf.EnabledServices {
+		if s.isService(svcName) {
+			newFunc := Services[svcName]
 			svc, err := newFunc(s.conf.Services[svcName])
 			if err != nil {
 				err = errors.Wrap(err, "error registering new http service")
@@ -229,6 +231,9 @@ func (s *Server) registerServices() error {
 			s.handlers[svc.Prefix()] = h
 			s.svcs[svc.Prefix()] = svc
 			s.log.Info().Msgf("http service enabled: %s@/%s", svcName, svc.Prefix())
+		} else {
+			message := fmt.Sprintf("http service %s does not exist", svcName)
+			return errors.New(message)
 		}
 	}
 	return nil
