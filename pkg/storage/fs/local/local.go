@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"path"
 	"strings"
@@ -191,6 +192,9 @@ func (fs *localFS) UpdateGrant(ctx context.Context, ref *storageproviderv0alphap
 
 func (fs *localFS) GetQuota(ctx context.Context) (int, int, error) {
 	return 0, 0, nil
+}
+func (fs *localFS) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
+	return errtypes.NotSupported("op not supported")
 }
 
 func (fs *localFS) CreateDir(ctx context.Context, fn string) error {

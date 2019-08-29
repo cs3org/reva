@@ -20,6 +20,7 @@ package gatewaysvc
 
 import (
 	"context"
+	"fmt"
 
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
@@ -293,6 +294,27 @@ func (s *svc) ListReceivedShares(ctx context.Context, req *usershareproviderv0al
 	return res, nil
 }
 
+func (s *svc) GetReceivedShare(ctx context.Context, req *usershareproviderv0alphapb.GetReceivedShareRequest) (*usershareproviderv0alphapb.GetReceivedShareResponse, error) {
+	log := appctx.GetLogger(ctx)
+
+	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
+	if err != nil {
+		log.Err(err).Msg("gatewaysvc: error getting usershareprovider client")
+		return &usershareproviderv0alphapb.GetReceivedShareResponse{
+			Status: &rpcpb.Status{
+				Code: rpcpb.Code_CODE_INTERNAL,
+			},
+		}, nil
+	}
+
+	res, err := c.GetReceivedShare(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gatewaysvc: error calling GetReceivedShare")
+	}
+
+	return res, nil
+}
+
 func (s *svc) UpdateReceivedShare(ctx context.Context, req *usershareproviderv0alphapb.UpdateReceivedShareRequest) (*usershareproviderv0alphapb.UpdateReceivedShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 
@@ -308,8 +330,59 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *usershareproviderv0a
 
 	res, err := c.UpdateReceivedShare(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling UpdateReceivedShare")
+		log.Err(err).Msg("gateway: error calling UpdateReceivedShare")
+		return &usershareproviderv0alphapb.UpdateReceivedShareResponse{
+			Status: &rpcpb.Status{
+				Code: rpcpb.Code_CODE_INTERNAL,
+			},
+		}, nil
 	}
 
-	return res, nil
+	if !s.c.CommitShareToStorageRef {
+		return res, nil
+	}
+
+	if res.Status.Code != rpcpb.Code_CODE_OK {
+		return res, nil
+	}
+
+	// we don't commit to storage invalid update fields.
+	if req.Field.GetState() == usershareproviderv0alphapb.ShareState_SHARE_STATE_INVALID && req.Field.GetDisplayName() == "" {
+		return res, nil
+
+	}
+
+	// TODO(labkode): if update field is displayName we need to do a rename on the storage to align
+	// share display name and storage filename.
+	if req.Field.GetState() != usershareproviderv0alphapb.ShareState_SHARE_STATE_INVALID {
+		if req.Field.GetState() == usershareproviderv0alphapb.ShareState_SHARE_STATE_ACCEPTED {
+			// get received share information to obtain the resource it points to.
+			getShareReq := &usershareproviderv0alphapb.GetReceivedShareRequest{Ref: req.Ref}
+			getShareRes, err := s.GetReceivedShare(ctx, getShareReq)
+			if err != nil {
+				log.Err(err).Msg("gateway: error calling GetReceivedShare")
+				return &usershareproviderv0alphapb.UpdateReceivedShareResponse{
+					Status: &rpcpb.Status{
+						Code: rpcpb.Code_CODE_INTERNAL,
+					},
+				}, nil
+			}
+
+			if getShareRes.Status.Code != rpcpb.Code_CODE_OK {
+				log.Error().Msg("gateway: error calling GetReceivedShare")
+				return &usershareproviderv0alphapb.UpdateReceivedShareResponse{
+					Status: &rpcpb.Status{
+						Code: rpcpb.Code_CODE_INTERNAL,
+					},
+				}, nil
+			}
+
+			share := getShareRes.Share
+
+			createRefReq := &storageproviderv0alphapb.CreateReferenceRequest{
+				Path:      req.Ref.String(), // TODO(labkode): the name of the share should be the filename it points to by default.
+				TargetUri: fmt.Sprintf("cs3:%s", req.Ref.GetId().OpaqueId),
+			}
+		}
+	}
 }

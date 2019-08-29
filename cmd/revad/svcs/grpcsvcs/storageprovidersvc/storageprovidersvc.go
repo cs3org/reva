@@ -31,6 +31,7 @@ import (
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	storagetypespb "github.com/cs3org/go-cs3apis/cs3/storagetypes"
 	"github.com/cs3org/reva/cmd/revad/grpcserver"
+	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage"
@@ -578,6 +579,30 @@ func (s *service) AddGrant(ctx context.Context, req *storageproviderv0alphapb.Ad
 	status := &rpcpb.Status{Code: rpcpb.Code_CODE_OK}
 	res := &storageproviderv0alphapb.AddGrantResponse{Status: status}
 	return res, nil
+}
+
+func (s *service) CreateReference(ctx context.Context, req *storageproviderv0alphapb.CreateReferenceRequest) (*storageproviderv0alphapb.CreateReferenceResponse, error) {
+	log := appctx.GetLogger(ctx)
+
+	// parse uri is valid
+	u, err := url.Parse(req.TargetUri)
+	if err != nil {
+		log.Err(err).Msg("invalid target uri")
+		return &storageproviderv0alphapb.CreateReferenceResponse{
+			Status: status.NewInvalidArg(ctx, "target uri is invalid: "+err.Error()),
+		}, nil
+	}
+
+	if err := s.storage.CreateReference(ctx, req.Path, u); err != nil {
+		log.Err(err).Msg("error calling CreateReference")
+		return &storageproviderv0alphapb.CreateReferenceResponse{
+			Status: status.NewInternal(ctx, "error creating reference"),
+		}, nil
+	}
+
+	return &storageproviderv0alphapb.CreateReferenceResponse{
+		Status: status.NewOK(ctx),
+	}, nil
 }
 
 func (s *service) UpdateGrant(ctx context.Context, req *storageproviderv0alphapb.UpdateGrantRequest) (*storageproviderv0alphapb.UpdateGrantResponse, error) {

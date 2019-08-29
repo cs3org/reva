@@ -23,12 +23,12 @@ import (
 	"strings"
 
 	"github.com/cs3org/reva/pkg/storage/registry/registry"
-
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	storagetypespb "github.com/cs3org/go-cs3apis/cs3/storagetypes"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
 )
 
 func init() {
@@ -48,6 +48,17 @@ func (b *reg) ListProviders(ctx context.Context) ([]*storagetypespb.ProviderInfo
 		})
 	}
 	return providers, nil
+}
+
+// returns the the root path of the first provider in the list. 
+// TODO(labkode): this is not production ready.
+func (b *reg) GetHome(ctx context.Context) (string, error) {
+	for _, v := range b.rules {
+		if strings.HasPrefix(v, "/") {
+			return v, nil
+		}
+	}
+	return "", errors.New("static: home not found")
 }
 
 func (b *reg) FindProvider(ctx context.Context, ref *storageproviderv0alphapb.Reference) (*storagetypespb.ProviderInfo, error) {

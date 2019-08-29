@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 	"time"
@@ -237,6 +238,11 @@ func (fs *s3FS) UpdateGrant(ctx context.Context, ref *storageproviderv0alphapb.R
 
 func (fs *s3FS) GetQuota(ctx context.Context) (int, int, error) {
 	return 0, 0, nil
+}
+
+func (fs *s3FS) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
+	// TODO(jfd):implement
+	return errtypes.NotSupported("op not supported")
 }
 
 func (fs *s3FS) CreateDir(ctx context.Context, fn string) error {

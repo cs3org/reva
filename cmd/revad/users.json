@@ -1,12 +1,22 @@
 [
 	{
 		"id": {
-			"opaque_id": "a48cb0ed-3375-4b94-bdcd-3cac6e201b7b",
-			"idp": "example.com"
+			"opaque_id": "labradorsvc",
+			"idp": "localhost"
 		},
-		"username": "admin",
+		"username": "labradorsvc",
 		"secret": "secret",
 		"mail": "admin@example.com",
-		"display_name": "Admin"
+		"display_name": "Hugo LAbrador"
+	},
+	{
+		"id": {
+			"opaque_id": "orense",
+			"idp": "localhost"
+		},
+		"username": "orense",
+		"secret": "secret",
+		"mail": "admin@example.com",
+		"display_name": "Hugo LAbrador"
 	}
 ]

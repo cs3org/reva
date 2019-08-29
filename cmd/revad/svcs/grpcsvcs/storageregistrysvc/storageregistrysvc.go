@@ -129,5 +129,23 @@ func (s *service) GetStorageProvider(ctx context.Context, req *storageregv0alpha
 	return res, nil
 }
 
+func (s *service) GetHome(ctx context.Context, req *storageregv0alphapb.GetHomeRequest) (*storageregv0alphapb.GetHomeResponse, error) {
+	log := appctx.GetLogger(ctx)
+	p, err := s.reg.GetHome(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("error getting home")
+		res := &storageregv0alphapb.GetHomeResponse{
+			Status: &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL},
+		}
+		return res, nil
+	}
+
+	res := &storageregv0alphapb.GetHomeResponse{
+		Status:   &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
+		Path: p,
+	}
+	return res, nil
+}
+
 // TODO(labkode): fix
 func fill(p *storagetypespb.ProviderInfo) {}

@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	gouser "os/user"
 	"path"
@@ -534,6 +535,11 @@ func (fs *eosStorage) CreateDir(ctx context.Context, fn string) error {
 
 	fn = fs.getInternalPath(ctx, fn)
 	return fs.c.CreateDir(ctx, u.Username, fn)
+}
+
+func (fs *eosStorage) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
+	// TODO(labkode):implement
+	return errtypes.NotSupported("op not supported")
 }
 
 func (fs *eosStorage) Delete(ctx context.Context, ref *storageproviderv0alphapb.Reference) error {

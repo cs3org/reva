@@ -72,6 +72,14 @@ func NewUnimplemented(ctx context.Context, msg string) *rpcpb.Status {
 	}
 }
 
+// NewInvalidArg returns a Status with CODE_INVALID_ARGUMENT.
+func NewInvalidArg(ctx context.Context, msg string) *rpcpb.Status {
+	return &rpcpb.Status{Code: rpcpb.Code_CODE_INVALID_ARGUMENT,
+		Message: msg,
+		Trace:   getTrace(ctx),
+	}
+}
+
 func getTrace(ctx context.Context) string {
 	span := trace.FromContext(ctx)
 	return span.SpanContext().TraceID.String()

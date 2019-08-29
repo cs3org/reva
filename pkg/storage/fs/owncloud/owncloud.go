@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -854,6 +855,11 @@ func (fs *ocFS) CreateDir(ctx context.Context, fn string) (err error) {
 		return errors.Wrap(err, "ocFS: error creating dir "+np)
 	}
 	return nil
+}
+
+func (fs *ocFS) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
+	// TODO(jfd):implement
+	return errtypes.NotSupported("op not supported")
 }
 
 func (fs *ocFS) Delete(ctx context.Context, ref *storageproviderv0alphapb.Reference) (err error) {

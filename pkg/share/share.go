@@ -46,6 +46,9 @@ type Manager interface {
 	// ListReceivedShares returns the list of shares the user has access.
 	ListReceivedShares(ctx context.Context) ([]*usershareproviderv0alphapb.ReceivedShare, error)
 
+	// GetReceivedShare returns the information for a received share the user has access.
+	GetReceivedShare(ctx context.Context, ref *usershareproviderv0alphapb.ShareReference) (*usershareproviderv0alphapb.ReceivedShare, error)
+
 	// UpdateReceivedShare updates the received share with share state.
 	UpdateReceivedShare(ctx context.Context, ref *usershareproviderv0alphapb.ShareReference, f *usershareproviderv0alphapb.UpdateReceivedShareRequest_UpdateField) (*usershareproviderv0alphapb.ReceivedShare, error)
 }

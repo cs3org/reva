@@ -198,6 +198,23 @@ func (s *service) ListReceivedShares(ctx context.Context, req *usershareprovider
 	return res, nil
 }
 
+func (s *service) GetReceivedShare(ctx context.Context, req *usershareproviderv0alphapb.GetReceivedShareRequest) (*usershareproviderv0alphapb.GetReceivedShareResponse, error) {
+	log := appctx.GetLogger(ctx)
+
+	_, err := s.sm.GetReceivedShare(ctx, req.Ref)
+	if err != nil {
+		log.Err(err).Msg("error getting received share")
+		return &usershareproviderv0alphapb.GetReceivedShareResponse{
+			Status: status.NewInternal(ctx, "error getting received share"),
+		}, nil
+	}
+
+	res := &usershareproviderv0alphapb.GetReceivedShareResponse{
+		Status: status.NewOK(ctx),
+	}
+	return res, nil
+}
+
 func (s *service) UpdateReceivedShare(ctx context.Context, req *usershareproviderv0alphapb.UpdateReceivedShareRequest) (*usershareproviderv0alphapb.UpdateReceivedShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 
