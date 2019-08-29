@@ -104,6 +104,12 @@ func (h *CapabilitiesHandler) init(c *Config) {
 	if h.c.Capabilities.Dav.Chunking == "" {
 		h.c.Capabilities.Dav.Chunking = "1.0"
 	}
+	if h.c.Capabilities.Dav.Trashbin == "" {
+		h.c.Capabilities.Dav.Trashbin = "1.0"
+	}
+	if h.c.Capabilities.Dav.Reports == nil {
+		h.c.Capabilities.Dav.Reports = []string{"search-files"}
+	}
 
 	// sharing
 
@@ -245,7 +251,7 @@ type Status struct {
 
 // CapabilitiesChecksums holds available hashes
 type CapabilitiesChecksums struct {
-	SupportedTypes      []string `json:"supportedTypes" xml:"supportedTypes" mapstructure:"supported_types"`
+	SupportedTypes      []string `json:"supportedTypes" xml:"supportedTypes>element" mapstructure:"supported_types"`
 	PreferredUploadType string   `json:"preferredUploadType" xml:"preferredUploadType" mapstructure:"preferred_upload_type"`
 }
 
@@ -255,12 +261,14 @@ type CapabilitiesFiles struct {
 	BigFileChunking  bool     `json:"bigfilechunking" xml:"bigfilechunking"`
 	Undelete         bool     `json:"undelete" xml:"undelete"`
 	Versioning       bool     `json:"versioning" xml:"versioning"`
-	BlacklistedFiles []string `json:"blacklisted_files" xml:"blacklisted_files" mapstructure:"blacklisted_files"`
+	BlacklistedFiles []string `json:"blacklisted_files" xml:"blacklisted_files>element" mapstructure:"blacklisted_files"`
 }
 
-// CapabilitiesDav holds the chunking version
+// CapabilitiesDav holds dav endpoint config
 type CapabilitiesDav struct {
-	Chunking string `json:"chunking" xml:"chunking"`
+	Chunking string   `json:"chunking" xml:"chunking"`
+	Trashbin string   `json:"trashbin" xml:"trashbin"`
+	Reports  []string `json:"reports" xml:"reports>element" mapstructure:"reports"`
 }
 
 // CapabilitiesFilesSharing TODO document
@@ -299,9 +307,9 @@ type CapabilitiesFilesSharingPublicPassword struct {
 
 // CapabilitiesFilesSharingPublicPasswordEnforcedFor TODO document
 type CapabilitiesFilesSharingPublicPasswordEnforcedFor struct {
-	ReadOnly   bool `json:"read_only" xml:"read_only" mapstructure:"read_only"`
-	ReadWrite  bool `json:"read_write" xml:"read_write" mapstructure:"read_write"`
-	UploadOnly bool `json:"upload_only" xml:"upload_only" mapstructure:"upload_only"`
+	ReadOnly   bool `json:"read_only" xml:"read_only,omitempty" mapstructure:"read_only"`
+	ReadWrite  bool `json:"read_write" xml:"read_write,omitempty" mapstructure:"read_write"`
+	UploadOnly bool `json:"upload_only" xml:"upload_only,omitempty" mapstructure:"upload_only"`
 }
 
 // CapabilitiesFilesSharingPublicExpireDate TODO document
@@ -328,7 +336,7 @@ type CapabilitiesFilesSharingFederation struct {
 
 // CapabilitiesNotifications holds a list of notification endpoints
 type CapabilitiesNotifications struct {
-	Endpoints []string `json:"ocs-endpoints" xml:"ocs-endpoints" mapstructure:"endpoints"`
+	Endpoints []string `json:"ocs-endpoints" xml:"ocs-endpoints>element" mapstructure:"endpoints"`
 }
 
 // Version holds version information
