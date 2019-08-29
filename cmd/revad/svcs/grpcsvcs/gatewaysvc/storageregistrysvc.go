@@ -69,3 +69,24 @@ func (s *svc) GetStorageProvider(ctx context.Context, req *storageregv0alphapb.G
 
 	return res, nil
 }
+
+func (s *svc) GetHome(ctx context.Context, req *storageregv0alphapb.GetHomeRequest) (*storageregv0alphapb.GetHomeResponse, error) {
+	log := appctx.GetLogger(ctx)
+
+	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
+	if err != nil {
+		log.Err(err).Msg("gatewaysvc: error getting storageregistry client")
+		return &storageregv0alphapb.GetHomeResponse{
+			Status: &rpcpb.Status{
+				Code: rpcpb.Code_CODE_INTERNAL,
+			},
+		}, nil
+	}
+
+	res, err := c.GetHome(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gatewaysvc: error calling GetHome")
+	}
+
+	return res, nil
+}

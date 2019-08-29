@@ -4,9 +4,9 @@ require (
 	contrib.go.opencensus.io/exporter/jaeger v0.1.0
 	contrib.go.opencensus.io/exporter/prometheus v0.1.0
 	github.com/BurntSushi/toml v0.3.1
-	github.com/aws/aws-sdk-go v1.23.0
+	github.com/aws/aws-sdk-go v1.23.11
 	github.com/cheggaaa/pb v1.0.28
-	github.com/coreos/go-oidc v2.0.0+incompatible
+	github.com/coreos/go-oidc v2.1.0+incompatible
 	github.com/cs3org/go-cs3apis v0.0.0-20190829084735-3a2855f280d6
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/fatih/color v1.7.0 // indirect

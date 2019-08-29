@@ -19,6 +19,7 @@
 package grpcserver
 
 import (
+	"fmt"
 	"io"
 	"net"
 	"sort"
@@ -155,9 +156,9 @@ func (s *Server) isInterceptorEnabled(name string) bool {
 	return false
 }
 
-func (s *Server) isServiceEnabled(name string) bool {
-	for _, k := range s.conf.EnabledServices {
-		if k == name {
+func (s *Server) isService(svcName string) bool {
+	for key := range Services {
+		if key == svcName {
 			return true
 		}
 	}
@@ -165,16 +166,18 @@ func (s *Server) isServiceEnabled(name string) bool {
 }
 
 func (s *Server) registerServices() error {
-	for name, newFunc := range Services {
-		if s.isServiceEnabled(name) {
-			closer, err := newFunc(s.conf.Services[name], s.s)
+	for _, svcName := range s.conf.EnabledServices {
+		if s.isService(svcName) {
+			newFunc := Services[svcName]
+			closer, err := newFunc(s.conf.Services[svcName], s.s)
 			if err != nil {
 				return err
 			}
-			s.closers[name] = closer
-			s.log.Info().Msgf("grpc service enabled: %s", name)
+			s.closers[svcName] = closer
+			s.log.Info().Msgf("grpc service enabled: %s", svcName)
 		} else {
-			s.log.Info().Msgf("grpc service disabled: %s", name)
+			message := fmt.Sprintf("grpc service %s does not exist", svcName)
+			return errors.New(message)
 		}
 	}
 	return nil

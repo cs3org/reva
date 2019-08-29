@@ -379,9 +379,33 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *usershareproviderv0a
 
 			share := getShareRes.Share
 
+			// get user home
+			storageRegClient, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
+			if err != nil {
+				log.Err(err).Msg("gatewaysvc: error getting storage registry client")
+				return &usershareproviderv0alphapb.UpdateReceivedShareResponse{
+					Status: &rpcpb.Status{
+						Code: rpcpb.Code_CODE_INTERNAL,
+					},
+				}, nil
+			}
+
+			homeReq := &storageregv0alpahpb.GetHomeRequest{}
+			homeRes, err := storageRegClient.GetHome(ctx, homeReq)
+			if err != nil {
+				log.Err(err).Msg("gateway: error calling GetHome")
+				return &usershareproviderv0alphapb.UpdateReceivedShareResponse{
+					Status: &rpcpb.Status{
+						Code: rpcpb.Code_CODE_INTERNAL,
+					},
+				}, nil
+			}
+			
+			// reference path is the home path + some name
+			refPath := path.Join(homeRes.Path, req.Ref.String()) // TODO(labkode): the name of the share should be the filename it points to by default.
 			createRefReq := &storageproviderv0alphapb.CreateReferenceRequest{
-				Path:      req.Ref.String(), // TODO(labkode): the name of the share should be the filename it points to by default.
-				TargetUri: fmt.Sprintf("cs3:%s", req.Ref.GetId().OpaqueId),
+				Path:      refPath,
+ 				TargetUri: fmt.Sprintf("cs3:%s", req.Ref.GetId().OpaqueId),
 			}
 		}
 	}

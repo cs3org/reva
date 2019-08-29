@@ -76,7 +76,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *storageproviderv0al
 
 	res, err := c.InitiateFileDownload(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling Stat")
+		return nil, errors.Wrap(err, "gatewaysvc: error calling InitiateFileDownload")
 	}
 
 	return res, nil
@@ -118,7 +118,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *storageproviderv0alph
 
 	res, err := c.InitiateFileUpload(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling Stat")
+		return nil, errors.Wrap(err, "gatewaysvc: error calling InitiateFileUpload")
 	}
 
 	return res, nil
@@ -169,7 +169,7 @@ func (s *svc) CreateContainer(ctx context.Context, req *storageproviderv0alphapb
 
 	res, err := c.CreateContainer(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling Stat")
+		return nil, errors.Wrap(err, "gatewaysvc: error calling CreateContainer")
 	}
 
 	return res, nil
@@ -211,7 +211,7 @@ func (s *svc) Delete(ctx context.Context, req *storageproviderv0alphapb.DeleteRe
 
 	res, err := c.Delete(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling Stat")
+		return nil, errors.Wrap(err, "gatewaysvc: error calling Delete")
 	}
 
 	return res, nil
@@ -350,7 +350,7 @@ func (s *svc) ListFileVersions(ctx context.Context, req *storageproviderv0alphap
 
 	res, err := c.ListFileVersions(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling Stat")
+		return nil, errors.Wrap(err, "gatewaysvc: error calling ListFileVersions")
 	}
 
 	return res, nil
@@ -392,7 +392,7 @@ func (s *svc) RestoreFileVersion(ctx context.Context, req *storageproviderv0alph
 
 	res, err := c.RestoreFileVersion(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling Stat")
+		return nil, errors.Wrap(err, "gatewaysvc: error calling RestoreFileVersion")
 	}
 
 	return res, nil
@@ -467,7 +467,7 @@ func (s *svc) ListGrants(ctx context.Context, req *storageproviderv0alphapb.List
 
 	res, err := c.ListGrants(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling Stat")
+		return nil, errors.Wrap(err, "gatewaysvc: error calling ListGrants")
 	}
 
 	return res, nil
@@ -509,10 +509,52 @@ func (s *svc) AddGrant(ctx context.Context, req *storageproviderv0alphapb.AddGra
 
 	res, err := c.AddGrant(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling Stat")
+		return nil, errors.Wrap(err, "gatewaysvc: error calling AddGrant")
 	}
 
 	return res, nil
+}
+
+func (s *svc) CreateReference(ctx context.Context, req *storageproviderv0alphapb.CreateReferenceRequest) (*storageproviderv0alphapb.CreateReferenceResponse, error) {
+	log := appctx.GetLogger(ctx)
+	pi, err := s.find(ctx, req.Ref)
+	if err != nil {
+		log.Err(err).Msg("gatewaysvc: error finding storage provider")
+
+		if _, ok := err.(errtypes.IsNotFound); ok {
+			return &storageproviderv0alphapb.CreateReferenceResponse{
+				Status: &rpcpb.Status{
+					Code: rpcpb.Code_CODE_NOT_FOUND,
+				},
+			}, nil
+		}
+
+		return &storageproviderv0alphapb.CreateReferenceResponse{
+			Status: &rpcpb.Status{
+				Code: rpcpb.Code_CODE_INTERNAL,
+			},
+		}, nil
+	}
+	
+	log.Info().Str("address", pi.Address).Str("ref", req.Ref.String()).Msg("storage provider found")
+
+	c, err := pool.GetStorageProviderServiceClient(pi.Address)
+	if err != nil {
+		log.Err(err).Msg("gatewaysvc: error getting storage provider client")
+		return &storageproviderv0alphapb.UpdateGrantResponse{
+			Status: &rpcpb.Status{
+				Code: rpcpb.Code_CODE_INTERNAL,
+			},
+		}, nil
+	}
+
+	res, err := c.CreateReference(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gatewaysvc: error calling CreateReference")
+	}
+
+	return res, nil
+
 }
 
 func (s *svc) UpdateGrant(ctx context.Context, req *storageproviderv0alphapb.UpdateGrantRequest) (*storageproviderv0alphapb.UpdateGrantResponse, error) {
@@ -551,7 +593,7 @@ func (s *svc) UpdateGrant(ctx context.Context, req *storageproviderv0alphapb.Upd
 
 	res, err := c.UpdateGrant(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling Stat")
+		return nil, errors.Wrap(err, "gatewaysvc: error calling UpdateGrant")
 	}
 
 	return res, nil
@@ -593,7 +635,7 @@ func (s *svc) RemoveGrant(ctx context.Context, req *storageproviderv0alphapb.Rem
 
 	res, err := c.RemoveGrant(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling Stat")
+		return nil, errors.Wrap(err, "gatewaysvc: error calling RemoveGrant")
 	}
 
 	return res, nil

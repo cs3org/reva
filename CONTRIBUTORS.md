@@ -1,4 +1,5 @@
 - Alex Unger <zyxancf@gmail.com>
+- Diogo Castro <diogo.castro@cern.ch>
 - Felix Hillingshaeuser <felix@mxcore.de>
 - Hugo Gonzalez Labrador <github@hugo.labkode.com>
 - Jörn Friedrich Dreyer <jfd@butonic.de>

@@ -963,13 +963,13 @@ func (fs *ocFS) Upload(ctx context.Context, ref *storageproviderv0alphapb.Refere
 		return errors.Wrap(err, "ocFS: error writing to tmp file "+tmp.Name())
 	}
 
-	// TODO(jfd): copy attributes of existing file to tmp file?
-	if err := fs.copyMD(np, tmp.Name()); err != nil {
-		return errors.Wrap(err, "ocFS: error copying metadata from "+np+" to "+tmp.Name())
-	}
-
-	// create revision if destination exists
-	if _, err := os.Stat(np); err != nil {
+	// if destination exists
+	if _, err := os.Stat(np); err == nil {
+		// copy attributes of existing file to tmp file
+		if err := fs.copyMD(np, tmp.Name()); err != nil {
+			return errors.Wrap(err, "ocFS: error copying metadata from "+np+" to "+tmp.Name())
+		}
+		// create revision
 		if err := fs.archiveRevision(ctx, np); err != nil {
 			return err
 		}
