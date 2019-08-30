@@ -26,7 +26,6 @@ import (
 	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
-	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/pkg/errors"
 )
 
@@ -158,15 +157,11 @@ func (s *svc) GetShare(ctx context.Context, req *usershareproviderv0alphapb.GetS
 }
 
 func (s *svc) getShare(ctx context.Context, req *usershareproviderv0alphapb.GetShareRequest) (*usershareproviderv0alphapb.GetShareResponse, error) {
-	log := appctx.GetLogger(ctx)
-
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error getting usershareprovider client")
+		err = errors.Wrap(err, "gatewaysvc: error calling GetUserShareProviderClient")
 		return &usershareproviderv0alphapb.GetShareResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
 		}, nil
 	}
 
@@ -184,7 +179,7 @@ func (s *svc) ListShares(ctx context.Context, req *usershareproviderv0alphapb.Li
 	if err != nil {
 		err = errors.Wrap(err, "gatewaysvc: error calling GetUserShareProviderClient")
 		return &usershareproviderv0alphapb.ListSharesResponse{
-			Status: status.NewInternal(ctx, err, "error getting share provider client"),
+			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
 		}, nil
 	}
 
@@ -259,15 +254,11 @@ func (s *svc) UpdateShare(ctx context.Context, req *usershareproviderv0alphapb.U
 }
 
 func (s *svc) ListReceivedShares(ctx context.Context, req *usershareproviderv0alphapb.ListReceivedSharesRequest) (*usershareproviderv0alphapb.ListReceivedSharesResponse, error) {
-	log := appctx.GetLogger(ctx)
-
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error getting usershareprovider client")
+		err = errors.Wrap(err, "gatewaysvc: error calling GetUserShareProviderClient")
 		return &usershareproviderv0alphapb.ListReceivedSharesResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error getting share provider client"),
 		}, nil
 	}
 
@@ -280,15 +271,11 @@ func (s *svc) ListReceivedShares(ctx context.Context, req *usershareproviderv0al
 }
 
 func (s *svc) UpdateReceivedShare(ctx context.Context, req *usershareproviderv0alphapb.UpdateReceivedShareRequest) (*usershareproviderv0alphapb.UpdateReceivedShareResponse, error) {
-	log := appctx.GetLogger(ctx)
-
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error getting usershareprovider client")
+		err = errors.Wrap(err, "gatewaysvc: error calling GetUserShareProviderClient")
 		return &usershareproviderv0alphapb.UpdateReceivedShareResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error getting share provider client"),
 		}, nil
 	}
 

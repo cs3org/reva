@@ -22,22 +22,16 @@ import (
 	"context"
 
 	appregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/appregistry/v0alpha"
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
-	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
 	"github.com/pkg/errors"
 )
 
 func (s *svc) GetAppProviders(ctx context.Context, req *appregistryv0alphapb.GetAppProvidersRequest) (*appregistryv0alphapb.GetAppProvidersResponse, error) {
-	log := appctx.GetLogger(ctx)
-
 	c, err := pool.GetAppRegistryClient(s.c.AppRegistryEndpoint)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error getting appregistry client")
 		return &appregistryv0alphapb.GetAppProvidersResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error getting app registry client"),
 		}, nil
 	}
 
@@ -50,15 +44,10 @@ func (s *svc) GetAppProviders(ctx context.Context, req *appregistryv0alphapb.Get
 }
 
 func (s *svc) ListAppProviders(ctx context.Context, req *appregistryv0alphapb.ListAppProvidersRequest) (*appregistryv0alphapb.ListAppProvidersResponse, error) {
-	log := appctx.GetLogger(ctx)
-
 	c, err := pool.GetAppRegistryClient(s.c.AppRegistryEndpoint)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error getting appregistry client")
 		return &appregistryv0alphapb.ListAppProvidersResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error getting app registry client"),
 		}, nil
 	}
 

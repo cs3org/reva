@@ -23,12 +23,12 @@ import (
 	"io"
 	"sync"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	"google.golang.org/grpc"
 
 	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	preferencesv0alphapb "github.com/cs3org/go-cs3apis/cs3/preferences/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/grpcserver"
+	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/pkg/errors"
 )
@@ -75,10 +75,10 @@ func (s *service) SetKey(ctx context.Context, req *preferencesv0alphapb.SetKeyRe
 
 	u, err := getUser(ctx)
 	if err != nil {
-		res := &preferencesv0alphapb.SetKeyResponse{
-			Status: &rpcpb.Status{Code: rpcpb.Code_CODE_UNAUTHENTICATED},
-		}
-		return res, err
+		err = errors.Wrap(err, "preferencessvc: failed to call getUser")
+		return &preferencesv0alphapb.SetKeyResponse{
+			Status: status.NewUnauthenticated(ctx, err, "user not found or invalid"),
+		}, err
 	}
 
 	name := u.Username
@@ -92,20 +92,19 @@ func (s *service) SetKey(ctx context.Context, req *preferencesv0alphapb.SetKeyRe
 		usersettings[key] = value
 	}
 
-	res := &preferencesv0alphapb.SetKeyResponse{
-		Status: &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
-	}
-	return res, nil
+	return &preferencesv0alphapb.SetKeyResponse{
+		Status: status.NewOK(ctx),
+	}, nil
 }
 
 func (s *service) GetKey(ctx context.Context, req *preferencesv0alphapb.GetKeyRequest) (*preferencesv0alphapb.GetKeyResponse, error) {
 	key := req.Key
 	u, err := getUser(ctx)
 	if err != nil {
-		res := &preferencesv0alphapb.GetKeyResponse{
-			Status: &rpcpb.Status{Code: rpcpb.Code_CODE_UNAUTHENTICATED},
-		}
-		return res, err
+		err = errors.Wrap(err, "preferencessvc: failed to call getUser")
+		return &preferencesv0alphapb.GetKeyResponse{
+			Status: status.NewUnauthenticated(ctx, err, "user not found or invalid"),
+		}, err
 	}
 
 	name := u.Username
@@ -114,16 +113,15 @@ func (s *service) GetKey(ctx context.Context, req *preferencesv0alphapb.GetKeyRe
 	defer mutex.Unlock()
 	if len(m[name]) != 0 {
 		if value, ok := m[name][key]; ok {
-			res := &preferencesv0alphapb.GetKeyResponse{
-				Status: &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
+			return &preferencesv0alphapb.GetKeyResponse{
+				Status: status.NewOK(ctx),
 				Val:    value,
-			}
-			return res, nil
+			}, nil
 		}
 	}
 
 	res := &preferencesv0alphapb.GetKeyResponse{
-		Status: &rpcpb.Status{Code: rpcpb.Code_CODE_NOT_FOUND},
+		Status: status.NewNotFound(ctx, nil, "key not found"),
 		Val:    "",
 	}
 	return res, nil
