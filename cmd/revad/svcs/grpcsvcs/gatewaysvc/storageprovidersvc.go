@@ -517,7 +517,7 @@ func (s *svc) AddGrant(ctx context.Context, req *storageproviderv0alphapb.AddGra
 
 func (s *svc) CreateReference(ctx context.Context, req *storageproviderv0alphapb.CreateReferenceRequest) (*storageproviderv0alphapb.CreateReferenceResponse, error) {
 	log := appctx.GetLogger(ctx)
-	pi, err := s.find(ctx, req.Ref)
+	pi, err := s.find(ctx, req.Path)
 	if err != nil {
 		log.Err(err).Msg("gatewaysvc: error finding storage provider")
 
