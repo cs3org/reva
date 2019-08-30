@@ -37,7 +37,7 @@ func (s *svc) Open(ctx context.Context, req *appproviderv0alphapb.OpenRequest) (
 		err = errors.Wrap(err, "gatewaysvc: error calling findAppProvider")
 		var st *rpcpb.Status
 		if _, ok := err.(errtypes.IsNotFound); ok {
-			st = status.NewNotFound(ctx, err, "app provider not found")
+			st = status.NewNotFound(ctx, "app provider not found")
 		} else {
 			st = status.NewInternal(ctx, err, "error searching for app provider")
 		}

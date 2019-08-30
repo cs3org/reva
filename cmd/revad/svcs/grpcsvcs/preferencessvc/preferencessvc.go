@@ -121,7 +121,7 @@ func (s *service) GetKey(ctx context.Context, req *preferencesv0alphapb.GetKeyRe
 	}
 
 	res := &preferencesv0alphapb.GetKeyResponse{
-		Status: status.NewNotFound(ctx, nil, "key not found"),
+		Status: status.NewNotFound(ctx, "key not found"),
 		Val:    "",
 	}
 	return res, nil

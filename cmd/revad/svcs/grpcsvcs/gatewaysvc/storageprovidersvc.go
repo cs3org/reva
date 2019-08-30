@@ -45,7 +45,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *storageproviderv0al
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.InitiateFileDownloadResponse{
-				Status: status.NewNotFound(ctx, err, "storage provider not found"),
+				Status: status.NewNotFound(ctx, "storage provider not found"),
 			}, nil
 		}
 		return &storageproviderv0alphapb.InitiateFileDownloadResponse{
@@ -77,7 +77,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *storageproviderv0alph
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.InitiateFileUploadResponse{
-				Status: status.NewNotFound(ctx, err, "storage provider not found"),
+				Status: status.NewNotFound(ctx, "storage provider not found"),
 			}, nil
 		}
 		return &storageproviderv0alphapb.InitiateFileUploadResponse{
@@ -116,7 +116,7 @@ func (s *svc) CreateContainer(ctx context.Context, req *storageproviderv0alphapb
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.CreateContainerResponse{
-				Status: status.NewNotFound(ctx, err, "storage provider not found"),
+				Status: status.NewNotFound(ctx, "storage provider not found"),
 			}, nil
 		}
 		return &storageproviderv0alphapb.CreateContainerResponse{
@@ -148,7 +148,7 @@ func (s *svc) Delete(ctx context.Context, req *storageproviderv0alphapb.DeleteRe
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.DeleteResponse{
-				Status: status.NewNotFound(ctx, err, "storage provider not found"),
+				Status: status.NewNotFound(ctx, "storage provider not found"),
 			}, nil
 		}
 		return &storageproviderv0alphapb.DeleteResponse{
@@ -187,7 +187,7 @@ func (s *svc) Stat(ctx context.Context, req *storageproviderv0alphapb.StatReques
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.StatResponse{
-				Status: status.NewNotFound(ctx, err, "storage provider not found"),
+				Status: status.NewNotFound(ctx, "storage provider not found"),
 			}, nil
 		}
 		return &storageproviderv0alphapb.StatResponse{
@@ -223,7 +223,7 @@ func (s *svc) ListContainer(ctx context.Context, req *storageproviderv0alphapb.L
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.ListContainerResponse{
-				Status: status.NewNotFound(ctx, err, "storage provider not found"),
+				Status: status.NewNotFound(ctx, "storage provider not found"),
 			}, nil
 		}
 		return &storageproviderv0alphapb.ListContainerResponse{
@@ -255,7 +255,7 @@ func (s *svc) ListFileVersions(ctx context.Context, req *storageproviderv0alphap
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.ListFileVersionsResponse{
-				Status: status.NewNotFound(ctx, err, "storage provider not found"),
+				Status: status.NewNotFound(ctx, "storage provider not found"),
 			}, nil
 		}
 		return &storageproviderv0alphapb.ListFileVersionsResponse{
@@ -287,7 +287,7 @@ func (s *svc) RestoreFileVersion(ctx context.Context, req *storageproviderv0alph
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.RestoreFileVersionResponse{
-				Status: status.NewNotFound(ctx, err, "storage provider not found"),
+				Status: status.NewNotFound(ctx, "storage provider not found"),
 			}, nil
 		}
 		return &storageproviderv0alphapb.RestoreFileVersionResponse{
@@ -346,7 +346,7 @@ func (s *svc) ListGrants(ctx context.Context, req *storageproviderv0alphapb.List
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.ListGrantsResponse{
-				Status: status.NewNotFound(ctx, err, "storage provider not found"),
+				Status: status.NewNotFound(ctx, "storage provider not found"),
 			}, nil
 		}
 		return &storageproviderv0alphapb.ListGrantsResponse{
@@ -378,7 +378,7 @@ func (s *svc) AddGrant(ctx context.Context, req *storageproviderv0alphapb.AddGra
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.AddGrantResponse{
-				Status: status.NewNotFound(ctx, err, "storage provider not found"),
+				Status: status.NewNotFound(ctx, "storage provider not found"),
 			}, nil
 		}
 		return &storageproviderv0alphapb.AddGrantResponse{
@@ -410,7 +410,7 @@ func (s *svc) UpdateGrant(ctx context.Context, req *storageproviderv0alphapb.Upd
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.UpdateGrantResponse{
-				Status: status.NewNotFound(ctx, err, "storage provider not found"),
+				Status: status.NewNotFound(ctx, "storage provider not found"),
 			}, nil
 		}
 		return &storageproviderv0alphapb.UpdateGrantResponse{
@@ -442,7 +442,7 @@ func (s *svc) RemoveGrant(ctx context.Context, req *storageproviderv0alphapb.Rem
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.RemoveGrantResponse{
-				Status: status.NewNotFound(ctx, err, "storage provider not found"),
+				Status: status.NewNotFound(ctx, "storage provider not found"),
 			}, nil
 		}
 		return &storageproviderv0alphapb.RemoveGrantResponse{

@@ -39,10 +39,8 @@ func NewOK(ctx context.Context) *rpcpb.Status {
 }
 
 // NewNotFound returns a Status with CODE_NOT_FOUND and logs the msg.
-func NewNotFound(ctx context.Context, err error, msg string) *rpcpb.Status {
-	if err != nil {
-		appctx.GetLogger(ctx).Err(err).Msg(msg)
-	}
+func NewNotFound(ctx context.Context, msg string) *rpcpb.Status {
+	appctx.GetLogger(ctx).Warn().Msg(msg)
 	return &rpcpb.Status{
 		Code:    rpcpb.Code_CODE_NOT_FOUND,
 		Message: msg,
@@ -51,10 +49,8 @@ func NewNotFound(ctx context.Context, err error, msg string) *rpcpb.Status {
 }
 
 // NewInvalid returns a Status with CODE_INVALID and logs the msg.
-func NewInvalid(ctx context.Context, err error, msg string) *rpcpb.Status {
-	if err != nil {
-		appctx.GetLogger(ctx).Err(err).Msg(msg)
-	}
+func NewInvalid(ctx context.Context, msg string) *rpcpb.Status {
+	appctx.GetLogger(ctx).Warn().Msg(msg)
 	return &rpcpb.Status{
 		Code:    rpcpb.Code_CODE_INVALID,
 		Message: msg,
