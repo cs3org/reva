@@ -79,6 +79,9 @@ func (h *SharesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch head {
 	case "shares":
 		switch r.Method {
+		case "OPTIONS":
+			w.WriteHeader(http.StatusOK) // TODO cors?
+			return
 		case "GET":
 			h.listShares(w, r)
 		case "POST":
