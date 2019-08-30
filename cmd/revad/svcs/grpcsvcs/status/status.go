@@ -48,11 +48,11 @@ func NewNotFound(ctx context.Context, msg string) *rpcpb.Status {
 	}
 }
 
-// NewInvalid returns a Status with CODE_INVALID and logs the msg.
+// NewInvalid returns a Status with CODE_INVALID_ARGUMENT and logs the msg.
 func NewInvalid(ctx context.Context, msg string) *rpcpb.Status {
 	appctx.GetLogger(ctx).Warn().Msg(msg)
 	return &rpcpb.Status{
-		Code:    rpcpb.Code_CODE_INVALID,
+		Code:    rpcpb.Code_CODE_INVALID_ARGUMENT,
 		Message: msg,
 		Trace:   getTrace(ctx),
 	}
