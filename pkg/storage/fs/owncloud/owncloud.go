@@ -20,8 +20,6 @@ package owncloud
 
 import (
 	"context"
-	"crypto/md5"
-	"encoding/binary"
 	"encoding/csv"
 	"fmt"
 	"io"
@@ -31,7 +29,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
@@ -331,38 +328,6 @@ func (fs *ocFS) removeNamespace(ctx context.Context, np string) string {
 	default:
 		return path.Join("/", parts[1], parts[3])
 	}
-}
-
-// calcEtag will create an etag based on the md5 of
-// - mtime,
-// - inode (if available),
-// - device (if available) and
-// - size.
-// errors are logged, but an etag will still be returned
-func calcEtag(ctx context.Context, fi os.FileInfo) string {
-	log := appctx.GetLogger(ctx)
-	h := md5.New()
-	err := binary.Write(h, binary.BigEndian, fi.ModTime().Unix())
-	if err != nil {
-		log.Error().Err(err).Msg("error writing mtime")
-	}
-	stat, ok := fi.Sys().(*syscall.Stat_t)
-	if ok {
-		// take device and inode into account
-		err = binary.Write(h, binary.BigEndian, stat.Ino)
-		if err != nil {
-			log.Error().Err(err).Msg("error writing inode")
-		}
-		err = binary.Write(h, binary.BigEndian, stat.Dev)
-		if err != nil {
-			log.Error().Err(err).Msg("error writing device")
-		}
-	}
-	err = binary.Write(h, binary.BigEndian, fi.Size())
-	if err != nil {
-		log.Error().Err(err).Msg("error writing size")
-	}
-	return fmt.Sprintf(`"%x"`, h.Sum(nil))
 }
 
 func getOwner(fn string) string {
