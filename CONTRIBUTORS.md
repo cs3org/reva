@@ -2,6 +2,7 @@
 - Diogo Castro <diogo.castro@cern.ch>
 - Felix Hillingshaeuser <felix@mxcore.de>
 - Giuseppe <giuseppe.lopresti@cern.ch>
+- Giuseppe Lo Presti <giuseppe.lopresti@cern.ch>
 - Hugo Gonzalez Labrador <github@hugo.labkode.com>
 - Jörn Friedrich Dreyer <jfd@butonic.de>
 - Mohitty <mohitt@iitk.ac.in>

@@ -59,10 +59,12 @@ func NewInvalid(ctx context.Context, msg string) *rpcpb.Status {
 }
 
 // NewInternal returns a Status with CODE_INTERNAL and logs the msg.
+// In this case, err MUST be filled for tracking purposes.
 func NewInternal(ctx context.Context, err error, msg string) *rpcpb.Status {
 	if err != nil {
-		appctx.GetLogger(ctx).Err(err).Msg(msg)
+		panic("Internal error triggered without an error context")
 	}
+	appctx.GetLogger(ctx).Err(err).Msg(msg)
 	return &rpcpb.Status{
 		Code:    rpcpb.Code_CODE_INTERNAL,
 		Message: msg,
@@ -72,9 +74,7 @@ func NewInternal(ctx context.Context, err error, msg string) *rpcpb.Status {
 
 // NewUnauthenticated returns a Status with CODE_UNAUTHENTICATED and logs the msg.
 func NewUnauthenticated(ctx context.Context, err error, msg string) *rpcpb.Status {
-	if err != nil {
-		appctx.GetLogger(ctx).Err(err).Msg(msg)
-	}
+	appctx.GetLogger(ctx).Warn().Err(err).Msg(msg)
 	return &rpcpb.Status{
 		Code:    rpcpb.Code_CODE_UNAUTHENTICATED,
 		Message: msg,
@@ -84,9 +84,7 @@ func NewUnauthenticated(ctx context.Context, err error, msg string) *rpcpb.Statu
 
 // NewUnimplemented returns a Status with CODE_UNIMPLEMENTED and logs the msg.
 func NewUnimplemented(ctx context.Context, err error, msg string) *rpcpb.Status {
-	if err != nil {
-		appctx.GetLogger(ctx).Err(err).Msg(msg)
-	}
+	appctx.GetLogger(ctx).Error().Err(err).Msg(msg)
 	return &rpcpb.Status{
 		Code:    rpcpb.Code_CODE_UNIMPLEMENTED,
 		Message: msg,
