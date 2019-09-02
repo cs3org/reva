@@ -25,12 +25,11 @@ import (
 
 	storagetypespb "github.com/cs3org/go-cs3apis/cs3/storagetypes"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	"google.golang.org/grpc"
 
 	storageregv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageregistry/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/grpcserver"
-	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/registry/registry"
 	"github.com/mitchellh/mapstructure"
@@ -91,10 +90,9 @@ func getRegistry(c *config) (storage.Registry, error) {
 func (s *service) ListStorageProviders(ctx context.Context, req *storageregv0alphapb.ListStorageProvidersRequest) (*storageregv0alphapb.ListStorageProvidersResponse, error) {
 	pinfos, err := s.reg.ListProviders(ctx)
 	if err != nil {
-		res := &storageregv0alphapb.ListStorageProvidersResponse{
-			Status: &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL},
-		}
-		return res, nil
+		return &storageregv0alphapb.ListStorageProvidersResponse{
+			Status: status.NewInternal(ctx, err, "error getting list of storage providers"),
+		}, nil
 	}
 
 	providers := make([]*storagetypespb.ProviderInfo, 0, len(pinfos))
@@ -104,26 +102,23 @@ func (s *service) ListStorageProviders(ctx context.Context, req *storageregv0alp
 	}
 
 	res := &storageregv0alphapb.ListStorageProvidersResponse{
-		Status:    &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
+		Status:    status.NewOK(ctx),
 		Providers: providers,
 	}
 	return res, nil
 }
 
 func (s *service) GetStorageProvider(ctx context.Context, req *storageregv0alphapb.GetStorageProviderRequest) (*storageregv0alphapb.GetStorageProviderResponse, error) {
-	log := appctx.GetLogger(ctx)
 	p, err := s.reg.FindProvider(ctx, req.Ref)
 	if err != nil {
-		log.Error().Err(err).Msg("error finding storage provider")
-		res := &storageregv0alphapb.GetStorageProviderResponse{
-			Status: &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL},
-		}
-		return res, nil
+		return &storageregv0alphapb.GetStorageProviderResponse{
+			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+		}, nil
 	}
 
 	fill(p)
 	res := &storageregv0alphapb.GetStorageProviderResponse{
-		Status:   &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
+		Status:   status.NewOK(ctx),
 		Provider: p,
 	}
 	return res, nil

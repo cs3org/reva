@@ -26,7 +26,6 @@ import (
 	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/grpcserver"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
-	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/share"
 	"github.com/cs3org/reva/pkg/share/manager/registry"
 	"github.com/mitchellh/mapstructure"
@@ -92,8 +91,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 }
 
 func (s *service) CreateShare(ctx context.Context, req *usershareproviderv0alphapb.CreateShareRequest) (*usershareproviderv0alphapb.CreateShareResponse, error) {
-	log := appctx.GetLogger(ctx)
-
 	// TODO(labkode): validate input
 	// TODO(labkode): hack: use configured IDP or use hostname as default.
 	if req.Grant.Grantee.Id.Idp == "" {
@@ -101,9 +98,8 @@ func (s *service) CreateShare(ctx context.Context, req *usershareproviderv0alpha
 	}
 	share, err := s.sm.Share(ctx, req.ResourceInfo, req.Grant)
 	if err != nil {
-		log.Err(err).Msg("error creating share")
 		return &usershareproviderv0alphapb.CreateShareResponse{
-			Status: status.NewInternal(ctx, "error creating share"),
+			Status: status.NewInternal(ctx, err, "error creating share"),
 		}, nil
 	}
 
@@ -115,12 +111,10 @@ func (s *service) CreateShare(ctx context.Context, req *usershareproviderv0alpha
 }
 
 func (s *service) RemoveShare(ctx context.Context, req *usershareproviderv0alphapb.RemoveShareRequest) (*usershareproviderv0alphapb.RemoveShareResponse, error) {
-	log := appctx.GetLogger(ctx)
 	err := s.sm.Unshare(ctx, req.Ref)
 	if err != nil {
-		log.Err(err).Msg("error removing share")
 		return &usershareproviderv0alphapb.RemoveShareResponse{
-			Status: status.NewInternal(ctx, "error removing share"),
+			Status: status.NewInternal(ctx, err, "error removing share"),
 		}, nil
 	}
 
@@ -130,12 +124,10 @@ func (s *service) RemoveShare(ctx context.Context, req *usershareproviderv0alpha
 }
 
 func (s *service) GetShare(ctx context.Context, req *usershareproviderv0alphapb.GetShareRequest) (*usershareproviderv0alphapb.GetShareResponse, error) {
-	log := appctx.GetLogger(ctx)
 	share, err := s.sm.GetShare(ctx, req.Ref)
 	if err != nil {
-		log.Err(err).Msg("error getting share")
 		return &usershareproviderv0alphapb.GetShareResponse{
-			Status: status.NewInternal(ctx, "error getting share"),
+			Status: status.NewInternal(ctx, err, "error getting share"),
 		}, nil
 	}
 
@@ -146,13 +138,10 @@ func (s *service) GetShare(ctx context.Context, req *usershareproviderv0alphapb.
 }
 
 func (s *service) ListShares(ctx context.Context, req *usershareproviderv0alphapb.ListSharesRequest) (*usershareproviderv0alphapb.ListSharesResponse, error) {
-	log := appctx.GetLogger(ctx)
-
 	shares, err := s.sm.ListShares(ctx, req.Filters) // TODO(labkode): add filter to share manager
 	if err != nil {
-		log.Err(err).Msg("error listing shares")
 		return &usershareproviderv0alphapb.ListSharesResponse{
-			Status: status.NewInternal(ctx, "error listing shares"),
+			Status: status.NewInternal(ctx, err, "error listing shares"),
 		}, nil
 	}
 
@@ -164,13 +153,10 @@ func (s *service) ListShares(ctx context.Context, req *usershareproviderv0alphap
 }
 
 func (s *service) UpdateShare(ctx context.Context, req *usershareproviderv0alphapb.UpdateShareRequest) (*usershareproviderv0alphapb.UpdateShareResponse, error) {
-	log := appctx.GetLogger(ctx)
-
 	_, err := s.sm.UpdateShare(ctx, req.Ref, req.Field.GetPermissions()) // TODO(labkode): check what to update
 	if err != nil {
-		log.Err(err).Msg("error updating share")
 		return &usershareproviderv0alphapb.UpdateShareResponse{
-			Status: status.NewInternal(ctx, "error updating share"),
+			Status: status.NewInternal(ctx, err, "error updating share"),
 		}, nil
 	}
 
@@ -181,13 +167,10 @@ func (s *service) UpdateShare(ctx context.Context, req *usershareproviderv0alpha
 }
 
 func (s *service) ListReceivedShares(ctx context.Context, req *usershareproviderv0alphapb.ListReceivedSharesRequest) (*usershareproviderv0alphapb.ListReceivedSharesResponse, error) {
-	log := appctx.GetLogger(ctx)
-
 	shares, err := s.sm.ListReceivedShares(ctx) // TODO(labkode): check what to update
 	if err != nil {
-		log.Err(err).Msg("error listing received shares")
 		return &usershareproviderv0alphapb.ListReceivedSharesResponse{
-			Status: status.NewInternal(ctx, "error listing received shares"),
+			Status: status.NewInternal(ctx, err, "error listing received shares"),
 		}, nil
 	}
 
@@ -199,13 +182,10 @@ func (s *service) ListReceivedShares(ctx context.Context, req *usershareprovider
 }
 
 func (s *service) UpdateReceivedShare(ctx context.Context, req *usershareproviderv0alphapb.UpdateReceivedShareRequest) (*usershareproviderv0alphapb.UpdateReceivedShareResponse, error) {
-	log := appctx.GetLogger(ctx)
-
 	_, err := s.sm.UpdateReceivedShare(ctx, req.Ref, req.Field) // TODO(labkode): check what to update
 	if err != nil {
-		log.Err(err).Msg("error updating received share")
 		return &usershareproviderv0alphapb.UpdateReceivedShareResponse{
-			Status: status.NewInternal(ctx, "error updating received share"),
+			Status: status.NewInternal(ctx, err, "error updating received share"),
 		}, nil
 	}
 
