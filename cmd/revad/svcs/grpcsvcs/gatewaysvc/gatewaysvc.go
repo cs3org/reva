@@ -25,6 +25,7 @@ import (
 	appregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/appregistry/v0alpha"
 	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	preferencesv0alphapb "github.com/cs3org/go-cs3apis/cs3/preferences/v0alpha"
+	publicshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	storageregv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageregistry/v0alpha"
 	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
@@ -55,6 +56,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 	storageproviderv0alphapb.RegisterStorageProviderServiceServer(ss, s)
 	authv0alphapb.RegisterAuthServiceServer(ss, s)
 	usershareproviderv0alphapb.RegisterUserShareProviderServiceServer(ss, s)
+	publicshareproviderv0alphapb.RegisterPublicShareProviderServiceServer(ss, s)
 	appregistryv0alphapb.RegisterAppRegistryServiceServer(ss, s)
 	appproviderv0alphapb.RegisterAppProviderServiceServer(ss, s)
 	preferencesv0alphapb.RegisterPreferencesServiceServer(ss, s)
@@ -81,11 +83,12 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 type config struct {
-	StorageRegistryEndpoint   string `mapstructure:"storageregistrysvc"`
-	AuthEndpoint              string `mapstructure:"authsvc"`
-	AppRegistryEndpoint       string `mapstructure:"appregistrysvc"`
-	PreferencesEndpoint       string `mapstructure:"preferencessvc"`
-	UserShareProviderEndpoint string `mapstructure:"usershareprovidersvc"`
-	CommitShareToStorageGrant bool   `mapstructure:"commit_share_to_storage_grant"`
-	CommitShareToStorageRef   bool   `mapstructure:"commit_share_to_storage_ref"`
+	StorageRegistryEndpoint     string `mapstructure:"storageregistrysvc"`
+	AuthEndpoint                string `mapstructure:"authsvc"`
+	AppRegistryEndpoint         string `mapstructure:"appregistrysvc"`
+	PreferencesEndpoint         string `mapstructure:"preferencessvc"`
+	UserShareProviderEndpoint   string `mapstructure:"usershareprovidersvc"`
+	PublicShareProviderEndpoint string `mapstructure:"publicshareprovidersvc"`
+	CommitShareToStorageGrant   bool   `mapstructure:"commit_share_to_storage_grant"`
+	CommitShareToStorageRef     bool   `mapstructure:"commit_share_to_storage_ref"`
 }
