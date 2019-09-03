@@ -24,11 +24,13 @@ import (
 	"io"
 
 	publicshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
+	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/grpcserver"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/share"
-	"github.com/cs3org/reva/pkg/share/manager/registry"
+	"github.com/cs3org/reva/pkg/publicshare"
+	"github.com/cs3org/reva/pkg/publicshare/manager/registry"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -45,10 +47,10 @@ type config struct {
 
 type service struct {
 	conf *config
-	sm   share.Manager
+	sm   publicshare.Manager
 }
 
-func getShareManager(c *config) (share.Manager, error) {
+func getShareManager(c *config) (publicshare.Manager, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		return f(c.Drivers[c.Driver])
 	}
@@ -133,10 +135,19 @@ func (s *service) GetPublicShare(ctx context.Context, req *publicshareproviderv0
 func (s *service) ListPublicShares(ctx context.Context, req *publicshareproviderv0alphapb.ListPublicSharesRequest) (*publicshareproviderv0alphapb.ListPublicSharesResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("list public share")
+	user, _ := user.ContextGetUser(ctx)
+
+	shares, err := s.sm.ListPublicShares(ctx, user, &storageproviderv0alphapb.ResourceInfo{})
+	if err != nil {
+		log.Err(err).Msg("error listing shares")
+		return &publicshareproviderv0alphapb.ListPublicSharesResponse{
+			Status: status.NewInternal(ctx, "error listing public shares"),
+		}, nil
+	}
 
 	res := &publicshareproviderv0alphapb.ListPublicSharesResponse{
 		Status: status.NewOK(ctx),
-		// Shares: shares,
+		Share:  shares,
 	}
 	return res, nil
 }
