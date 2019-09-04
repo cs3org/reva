@@ -20,20 +20,16 @@ package local
 
 import (
 	"context"
-	"crypto/md5"
-	"encoding/binary"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"path"
 	"strings"
-	"syscall"
 
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 
-	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/mitchellh/mapstructure"
@@ -108,38 +104,6 @@ func (fs *localFS) removeRoot(np string) string {
 }
 
 type localFS struct{ root string }
-
-// calcEtag will create an etag based on the md5 of
-// - mtime,
-// - inode (if available),
-// - device (if available) and
-// - size.
-// errors are logged, but an etag will still be returned
-func calcEtag(ctx context.Context, fi os.FileInfo) string {
-	log := appctx.GetLogger(ctx)
-	h := md5.New()
-	err := binary.Write(h, binary.BigEndian, fi.ModTime().Unix())
-	if err != nil {
-		log.Error().Err(err).Msg("error writing mtime")
-	}
-	stat, ok := fi.Sys().(*syscall.Stat_t)
-	if ok {
-		// take device and inode into account
-		err = binary.Write(h, binary.BigEndian, stat.Ino)
-		if err != nil {
-			log.Error().Err(err).Msg("error writing inode")
-		}
-		err = binary.Write(h, binary.BigEndian, stat.Dev)
-		if err != nil {
-			log.Error().Err(err).Msg("error writing device")
-		}
-	}
-	err = binary.Write(h, binary.BigEndian, fi.Size())
-	if err != nil {
-		log.Error().Err(err).Msg("error writing size")
-	}
-	return fmt.Sprintf(`"%x"`, h.Sum(nil))
-}
 
 func (fs *localFS) normalize(ctx context.Context, fi os.FileInfo, fn string) *storageproviderv0alphapb.ResourceInfo {
 	fn = fs.removeRoot(path.Join("/", fn))
