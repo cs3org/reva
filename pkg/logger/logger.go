@@ -18,9 +18,12 @@
 
 package logger
 
-import "github.com/rs/zerolog"
-import "os"
-import "io"
+import (
+	"io"
+	"os"
+
+	"github.com/rs/zerolog"
+)
 
 func init() {
 	zerolog.CallerSkipFrameCount = 2
