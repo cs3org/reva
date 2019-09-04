@@ -22,22 +22,17 @@ import (
 	"context"
 
 	preferencesv0alphapb "github.com/cs3org/go-cs3apis/cs3/preferences/v0alpha"
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
-	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
 	"github.com/pkg/errors"
 )
 
 func (s *svc) SetKey(ctx context.Context, req *preferencesv0alphapb.SetKeyRequest) (*preferencesv0alphapb.SetKeyResponse, error) {
-	log := appctx.GetLogger(ctx)
-
 	c, err := pool.GetPreferencesClient(s.c.PreferencesEndpoint)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error getting preferences client")
+		err = errors.Wrap(err, "gatewaysvc: error calling GetPreferencesClient")
 		return &preferencesv0alphapb.SetKeyResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error getting preferences client"),
 		}, nil
 	}
 
@@ -50,15 +45,11 @@ func (s *svc) SetKey(ctx context.Context, req *preferencesv0alphapb.SetKeyReques
 }
 
 func (s *svc) GetKey(ctx context.Context, req *preferencesv0alphapb.GetKeyRequest) (*preferencesv0alphapb.GetKeyResponse, error) {
-	log := appctx.GetLogger(ctx)
-
 	c, err := pool.GetPreferencesClient(s.c.PreferencesEndpoint)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error getting preferences client")
+		err = errors.Wrap(err, "gatewaysvc: error calling GetPreferencesClient")
 		return &preferencesv0alphapb.GetKeyResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error getting preferences client"),
 		}, nil
 	}
 

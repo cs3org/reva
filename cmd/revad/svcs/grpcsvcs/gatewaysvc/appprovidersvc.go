@@ -26,43 +26,38 @@ import (
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
-	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/pkg/errors"
 )
 
 func (s *svc) Open(ctx context.Context, req *appproviderv0alphapb.OpenRequest) (*appproviderv0alphapb.OpenResponse, error) {
-	log := appctx.GetLogger(ctx)
 	provider, err := s.findAppProvider(ctx, req.ResourceInfo)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error finding app provider")
+		err = errors.Wrap(err, "gatewaysvc: error calling findAppProvider")
+		var st *rpcpb.Status
 		if _, ok := err.(errtypes.IsNotFound); ok {
-			return &appproviderv0alphapb.OpenResponse{
-				Status: &rpcpb.Status{
-					Code: rpcpb.Code_CODE_NOT_FOUND,
-				},
-			}, nil
+			st = status.NewNotFound(ctx, "app provider not found")
+		} else {
+			st = status.NewInternal(ctx, err, "error searching for app provider")
 		}
+
 		return &appproviderv0alphapb.OpenResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: st,
 		}, nil
 	}
 
 	c, err := pool.GetAppProviderClient(provider.Address)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error getting appprovider client")
+		err = errors.Wrap(err, "gatewaysvc: error calling GetAppProviderClient")
 		return &appproviderv0alphapb.OpenResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error getting appprovider client"),
 		}, nil
 	}
 
 	res, err := c.Open(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling Open")
+		return nil, errors.Wrap(err, "gatewaysvc: error calling c.Open")
 	}
 
 	return res, nil
@@ -91,7 +86,7 @@ func (s *svc) findAppProvider(ctx context.Context, ri *storageproviderv0alphapb.
 	}
 
 	if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
-		return nil, errtypes.NotFound("gatewaysvc: app provider not found for resource:" + ri.String())
+		return nil, errtypes.NotFound("gatewaysvc: app provider not found for resource: " + ri.String())
 	}
 
 	return nil, errors.New("gatewaysvc: error finding a storage provider")

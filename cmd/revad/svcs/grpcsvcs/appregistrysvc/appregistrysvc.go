@@ -23,14 +23,13 @@ import (
 	"fmt"
 	"io"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	"google.golang.org/grpc"
 
 	appregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/appregistry/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/grpcserver"
+	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/registry/static"
-	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -90,19 +89,16 @@ func getRegistry(c *config) (app.Registry, error) {
 }
 
 func (s *svc) GetAppProviders(ctx context.Context, req *appregistryv0alphapb.GetAppProvidersRequest) (*appregistryv0alphapb.GetAppProvidersResponse, error) {
-	log := appctx.GetLogger(ctx)
 	p, err := s.registry.FindProvider(ctx, req.ResourceInfo.MimeType)
 	if err != nil {
-		log.Error().Err(err).Msg("error sending grpc find provider request")
-		res := &appregistryv0alphapb.GetAppProvidersResponse{
-			Status: &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL},
-		}
-		return res, nil
+		return &appregistryv0alphapb.GetAppProvidersResponse{
+			Status: status.NewInternal(ctx, err, "error looking for the app provider"),
+		}, nil
 	}
 
 	provider := format(p)
 	res := &appregistryv0alphapb.GetAppProvidersResponse{
-		Status:    &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
+		Status:    status.NewOK(ctx),
 		Providers: []*appregistryv0alphapb.ProviderInfo{provider},
 	}
 	return res, nil
@@ -111,10 +107,9 @@ func (s *svc) GetAppProviders(ctx context.Context, req *appregistryv0alphapb.Get
 func (s *svc) ListAppProviders(ctx context.Context, req *appregistryv0alphapb.ListAppProvidersRequest) (*appregistryv0alphapb.ListAppProvidersResponse, error) {
 	pvds, err := s.registry.ListProviders(ctx)
 	if err != nil {
-		res := &appregistryv0alphapb.ListAppProvidersResponse{
-			Status: &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL},
-		}
-		return res, nil
+		return &appregistryv0alphapb.ListAppProvidersResponse{
+			Status: status.NewInternal(ctx, err, "error listing the app providers"),
+		}, nil
 	}
 	providers := make([]*appregistryv0alphapb.ProviderInfo, 0, len(pvds))
 	for _, pvd := range pvds {
@@ -122,7 +117,7 @@ func (s *svc) ListAppProviders(ctx context.Context, req *appregistryv0alphapb.Li
 	}
 
 	res := &appregistryv0alphapb.ListAppProvidersResponse{
-		Status:    &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
+		Status:    status.NewOK(ctx),
 		Providers: providers,
 	}
 	return res, nil

@@ -24,12 +24,12 @@ import (
 	"io"
 
 	appproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/appprovider/v0alpha"
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	"github.com/cs3org/reva/cmd/revad/grpcserver"
+	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/provider/demo"
-	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
 
@@ -89,19 +89,16 @@ func getProvider(c *config) (app.Provider, error) {
 }
 
 func (s *service) Open(ctx context.Context, req *appproviderv0alphapb.OpenRequest) (*appproviderv0alphapb.OpenResponse, error) {
-	log := appctx.GetLogger(ctx)
-	token := req.AccessToken
-
-	iframeLocation, err := s.provider.GetIFrame(ctx, req.ResourceInfo.Id, token)
+	iframeLocation, err := s.provider.GetIFrame(ctx, req.ResourceInfo.Id, req.AccessToken)
 	if err != nil {
-		log.Error().Err(err).Msg("error getting iframe")
+		err := errors.Wrap(err, "appprovidersvc: error calling GetIFrame")
 		res := &appproviderv0alphapb.OpenResponse{
-			Status: &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL},
+			Status: status.NewInternal(ctx, err, "error getting app's iframe"),
 		}
 		return res, nil
 	}
 	res := &appproviderv0alphapb.OpenResponse{
-		Status:    &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
+		Status:    status.NewOK(ctx),
 		IframeUrl: iframeLocation,
 	}
 	return res, nil
