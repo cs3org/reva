@@ -30,7 +30,6 @@ github.com/coreos/go-oidc v2.1.0+incompatible/go.mod h1:CgnwVTmzoESiwO9qyAFEMiHo
 github.com/coreos/go-systemd v0.0.0-20190321100706-95778dfbb74e/go.mod h1:F5haX7vjVVG0kc13fIWeqUViNPyEJxv/OmvnBo0Yme4=
 github.com/cs3org/go-cs3apis v0.0.0-20190809124338-bd2fb913922c h1:A2tEKdOhmucueGcaSNpzl3iJJTdGBsLjqXG2uYoWqxw=
 github.com/cs3org/go-cs3apis v0.0.0-20190809124338-bd2fb913922c/go.mod h1:xXet4ZmuUWqr/LATX9EGUIp8xq6Lk9wZK5dK8BZDCu4=
-github.com/cs3org/go-cs3apis v0.0.0-20190829084735-3a2855f280d6 h1:ItwDg/rHvPYc23uCFteqK864JPypC9yFNtwfwp8fvac=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
@@ -114,8 +113,6 @@ github.com/onsi/ginkgo v1.7.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+W
 github.com/onsi/gomega v1.4.3/go.mod h1:ex+gbHU/CVuBBDIJjb2X0qEXbFg53c61hWP/1CpauHY=
 github.com/openzipkin/zipkin-go v0.1.6 h1:yXiysv1CSK7Q5yjGy1710zZGnsbMUIjluWBxtLXHPBo=
 github.com/openzipkin/zipkin-go v0.1.6/go.mod h1:QgAqvLzwWbR/WpD4A3cGpPtJrZXNIiJc5AZX7/PBEpw=
-github.com/ory/fosite v0.29.7 h1:mgERhQfDfzh7ZrOFMQPip6G4L8PhGzmA4iMYrNnsbIU=
-github.com/ory/fosite v0.29.7/go.mod h1:0atSZmXO7CAcs6NPMI/Qtot8tmZYj04Nddoold4S2h0=
 github.com/ory/fosite v0.29.8 h1:g0lzlwlziAlRciRYk11lfGByFpF5EEQDxSps5CeHUnc=
 github.com/ory/fosite v0.29.8/go.mod h1:0atSZmXO7CAcs6NPMI/Qtot8tmZYj04Nddoold4S2h0=
 github.com/ory/go-convenience v0.1.0 h1:zouLKfF2GoSGnJwGq+PE/nJAE6dj2Zj5QlTgmMTsTS8=
