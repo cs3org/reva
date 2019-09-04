@@ -141,7 +141,7 @@ func (s *service) ListPublicShares(ctx context.Context, req *publicshareprovider
 	if err != nil {
 		log.Err(err).Msg("error listing shares")
 		return &publicshareproviderv0alphapb.ListPublicSharesResponse{
-			Status: status.NewInternal(ctx, "error listing public shares"),
+			Status: status.NewInternal(ctx, err, "error listing public shares"),
 		}, nil
 	}
 
