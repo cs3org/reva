@@ -27,7 +27,6 @@ import (
 	appregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/appregistry/v0alpha"
 	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	preferencesv0alphapb "github.com/cs3org/go-cs3apis/cs3/preferences/v0alpha"
-	publicshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	storageregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageregistry/v0alpha"
@@ -84,13 +83,13 @@ func getUserShareProviderClient() (usershareproviderv0alphapb.UserShareProviderS
 	return usershareproviderv0alphapb.NewUserShareProviderServiceClient(conn), nil
 }
 
-func getPublicShareProviderClient() (publicshareproviderv0alphapb.PublicShareProviderServiceClient, error) {
-	conn, err := getConn()
-	if err != nil {
-		return nil, err
-	}
-	return publicshareproviderv0alphapb.NewPublicShareProviderServiceClient(conn), nil
-}
+// func getPublicShareProviderClient() (publicshareproviderv0alphapb.PublicShareProviderServiceClient, error) {
+// 	conn, err := getConn()
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return publicshareproviderv0alphapb.NewPublicShareProviderServiceClient(conn), nil
+// }
 
 func getStorageProviderClient() (storageproviderv0alphapb.StorageProviderServiceClient, error) {
 	return pool.GetStorageProviderServiceClient(conf.Host)
