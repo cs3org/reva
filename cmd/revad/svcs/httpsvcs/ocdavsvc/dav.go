@@ -26,22 +26,27 @@ import (
 
 // DavHandler routes to the different sub handlers
 type DavHandler struct {
-	FilesHandler   *FilesHandler
-	AvatarsHandler *AvatarsHandler
-	MetaHandler    *MetaHandler
+	AvatarsHandler  *AvatarsHandler
+	FilesHandler    *FilesHandler
+	MetaHandler     *MetaHandler
+	TrashbinHandler *TrashbinHandler
 }
 
 func (h *DavHandler) init(c *Config) error {
-	h.FilesHandler = new(FilesHandler)
-	if err := h.FilesHandler.init(c); err != nil {
-		return err
-	}
 	h.AvatarsHandler = new(AvatarsHandler)
 	if err := h.AvatarsHandler.init(c); err != nil {
 		return err
 	}
+	h.FilesHandler = new(FilesHandler)
+	if err := h.FilesHandler.init(c); err != nil {
+		return err
+	}
 	h.MetaHandler = new(MetaHandler)
-	return h.MetaHandler.init(c)
+	if err := h.MetaHandler.init(c); err != nil {
+		return err
+	}
+	h.TrashbinHandler = new(TrashbinHandler)
+	return h.TrashbinHandler.init(c)
 }
 
 // Handler handles requests
@@ -50,12 +55,14 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 		var head string
 		head, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
 		switch head {
-		case "files":
-			h.FilesHandler.Handler(s).ServeHTTP(w, r)
 		case "avatars":
 			h.AvatarsHandler.Handler(s).ServeHTTP(w, r)
+		case "files":
+			h.FilesHandler.Handler(s).ServeHTTP(w, r)
 		case "meta":
 			h.MetaHandler.Handler(s).ServeHTTP(w, r)
+		case "trash-bin":
+			h.TrashbinHandler.Handler(s).ServeHTTP(w, r)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}

@@ -21,35 +21,58 @@ package ocdavsvc
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"path"
+	"strings"
 
+	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
-	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxuser "github.com/cs3org/reva/pkg/user"
 )
 
-// VersionsHandler handles version requests
-type VersionsHandler struct {
+// TrashbinHandler handles version requests
+type TrashbinHandler struct {
 }
 
-func (h *VersionsHandler) init(c *Config) error {
+func (h *TrashbinHandler) init(c *Config) error {
 	return nil
 }
 
 // Handler handles requests
-// versions can be listed with a PROPFIND to /remote.php/dav/meta/<fileid>/v
-// a version is identified by a timestamp, eg. /remote.php/dav/meta/<fileid>/v/1561410426
-func (h *VersionsHandler) Handler(s *svc, rid *storageproviderv0alphapb.ResourceId) http.Handler {
+func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		log := appctx.GetLogger(ctx)
 
-		// webdav should be death: baseURI is encoded as part of the
-		// response payload in href field
-		baseURI := path.Join("/", s.Prefix(), "remote.php/dav/meta", wrapResourceID(rid))
-		ctx := context.WithValue(r.Context(), ctxKeyBaseURI, baseURI)
-		r = r.WithContext(ctx)
+		if r.Method == http.MethodOptions {
+			s.doOptions(w, r)
+			return
+		}
 
+		var username string
+		username, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
+
+		if username == "" {
+			// listing is disabled, no auth will change that
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		u, ok := ctxuser.ContextGetUser(ctx)
+		if !ok {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if u.Username != username {
+			// listing other users trash is forbidden, no auth will change that
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		// key is the fileid ... TODO call it fileid? there is a difference to the treshbin key we got from the cs3 api
 		var key string
 		key, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
 		if r.Method == http.MethodOptions {
@@ -57,14 +80,49 @@ func (h *VersionsHandler) Handler(s *svc, rid *storageproviderv0alphapb.Resource
 			return
 		}
 		if key == "" && r.Method == "PROPFIND" {
-			h.doListVersions(w, r, s, rid)
+
+			// webdav should be death: baseURI is encoded as part of the
+			// response payload in href field
+			baseURI := path.Join("/", s.Prefix(), "remote.php/dav/trash-bin", username)
+			ctx = context.WithValue(r.Context(), ctxKeyBaseURI, baseURI)
+			r = r.WithContext(ctx)
+
+			h.listTrashbin(w, r, s, u)
 			return
 		}
-		if key != "" && r.Method == "COPY" {
-			// TODO(jfd) it seems we cannot directly GET version content with cs3 ...
-			// TODO(jfd) cs3api has no delete file version call
-			// TODO(jfd) restore version to given Destination, but cs3api has no destination
-			h.doRestore(w, r, s, rid, key)
+		if key != "" && r.Method == "MOVE" {
+			dstHeader := r.Header.Get("Destination")
+
+			log.Info().Str("key", key).Str("dst", dstHeader).Msg("restore")
+
+			if dstHeader == "" {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			// strip baseURL from destination
+			dstURL, err := url.ParseRequestURI(dstHeader)
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+
+			urlPath := dstURL.Path
+
+			// webdav should be death: baseURI is encoded as part of the
+			// response payload in href field
+			baseURI := path.Join("/", s.Prefix(), "remote.php/dav/files", username)
+			ctx = context.WithValue(r.Context(), ctxKeyBaseURI, baseURI)
+			r = r.WithContext(ctx)
+
+			log.Info().Str("url_path", urlPath).Str("base_uri", baseURI).Msg("move urls")
+			i := strings.Index(urlPath, baseURI)
+			if i == -1 {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			dst := path.Clean(urlPath[len(baseURI):])
+
+			h.restore(w, r, s, u, dst, key)
 			return
 		}
 
@@ -72,7 +130,7 @@ func (h *VersionsHandler) Handler(s *svc, rid *storageproviderv0alphapb.Resource
 	})
 }
 
-func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request, s *svc, rid *storageproviderv0alphapb.ResourceId) {
+func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s *svc, u *authv0alphapb.User) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -90,87 +148,67 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	ref := &storageproviderv0alphapb.Reference{
-		Spec: &storageproviderv0alphapb.Reference_Id{Id: rid},
+	lrReq := &storageproviderv0alphapb.ListRecycleRequest{
+		// TODO implement from to?
+		//FromTs
+		//ToTs
 	}
-	req := &storageproviderv0alphapb.StatRequest{Ref: ref}
-	res, err := client.Stat(ctx, req)
-	if err != nil {
-		log.Error().Err(err).Msg("error sending a grpc stat request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if res.Status.Code != rpcpb.Code_CODE_OK {
-		if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	info := res.Info
-
-	lvReq := &storageproviderv0alphapb.ListFileVersionsRequest{
-		Ref: ref,
-	}
-	lvRes, err := client.ListFileVersions(ctx, lvReq)
+	lrRes, err := client.ListRecycle(ctx, lrReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending list container grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	if lvRes.Status.Code != rpcpb.Code_CODE_OK {
+	if lrRes.Status.Code != rpcpb.Code_CODE_OK {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	versions := lvRes.GetVersions()
-	infos := make([]*storageproviderv0alphapb.ResourceInfo, 0, len(versions)+1)
-	// add version dir . entry, derived from file info
+	items := lrRes.GetRecycleItems()
+	infos := make([]*storageproviderv0alphapb.ResourceInfo, 0, len(items)+1)
+	// add trashbin dir . entry, derived from file info
 	infos = append(infos, &storageproviderv0alphapb.ResourceInfo{
 		Type: storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER,
 		Id: &storageproviderv0alphapb.ResourceId{
-			StorageId: "virtual", // this is a virtual storage
-			OpaqueId:  path.Join("meta", wrapResourceID(rid), "v"),
+			StorageId: "trashbin", // this is a virtual storage
+			OpaqueId:  path.Join("trash-bin", u.Username),
 		},
-		Etag:     info.Etag,
+		//Etag:     info.Etag,
 		MimeType: "httpd/unix-directory",
-		Mtime:    info.Mtime,
-		Path:     "v",
+		//Mtime:    info.Mtime,
+		Path: u.Username,
 		//PermissionSet
 		Size:  0,
-		Owner: info.Owner,
+		Owner: u.Id,
 	})
 
-	for i := range versions {
+	for i := range items {
 		vi := &storageproviderv0alphapb.ResourceInfo{
 			// TODO(jfd) we cannot access version content, this will be a problem when trying to fetch version thumbnails
 			//Opaque
 			Type: storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_FILE,
 			Id: &storageproviderv0alphapb.ResourceId{
-				StorageId: "versions", // this is a virtual storage
-				OpaqueId:  info.Id.OpaqueId + "@" + versions[i].GetKey(),
+				StorageId: "trashbin", // this is a virtual storage
+				OpaqueId:  path.Join("trash-bin", u.Username, items[i].GetKey()),
 			},
 			//Checksum
 			//Etag: v.ETag,
 			//MimeType
-			Mtime: &typespb.Timestamp{
-				Seconds: versions[i].Mtime,
-				// TODO cs3apis FileVersion should use typespb.Timestamp instead of uint64
-			},
-			Path: path.Join("v", versions[i].Key),
+			Mtime: items[i].DeletionTime,
+			Path:  items[i].Key,
 			//PermissionSet
-			Size:  versions[i].Size,
-			Owner: info.Owner,
+			Size:  items[i].Size,
+			Owner: u.Id,
 		}
 		infos = append(infos, vi)
 	}
 
-	// <d:getlastmodified>Thu, 29 Aug 2019 15:22:34 GMT</d:getlastmodified>
-	// <d:getcontentlength>7</d:getcontentlength>
-	// <d:resourcetype/>
-	// <d:getetag>fdd850ceb59bf839e8174a99c699fbae</d:getetag>
-	// <d:getcontenttype>text/markdown</d:getcontenttype>
+	// TODO(jfd) render trashbin response
+	// <oc:trashbin-original-filename>ownCloud Manual.pdf</oc:trashbin-original-filename>
+	// this seems to be relative to the users home ... which is bad: now the client has to build the proper Destination url
+	// <oc:trashbin-original-location>ownCloud Manual.pdf</oc:trashbin-original-location>
+	// <oc:trashbin-delete-datetime>Thu, 29 Aug 2019 14:06:24 GMT</oc:trashbin-delete-datetime>
+	// d:getcontentlength
+	// d:resourcetype
 	propRes, err := s.formatPropfind(ctx, &pf, infos)
 	if err != nil {
 		log.Error().Err(err).Msg("error formatting propfind")
@@ -188,7 +226,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 
 }
 
-func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *svc, rid *storageproviderv0alphapb.ResourceId, key string) {
+func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, u *authv0alphapb.User, dst string, key string) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -201,7 +239,7 @@ func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *s
 
 	req := &storageproviderv0alphapb.RestoreFileVersionRequest{
 		Ref: &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Id{Id: rid},
+			Spec: &storageproviderv0alphapb.Reference_Path{Path: dst},
 		},
 		Key: key,
 	}

@@ -49,7 +49,7 @@ func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request) {
 	fn := r.URL.Path
 	listChildren := r.Header.Get("Depth") != "0"
 
-	_, status, err := readPropfind(r.Body)
+	pf, status, err := readPropfind(r.Body)
 	if err != nil {
 		log.Error().Err(err).Msg("error reading propfind request")
 		w.WriteHeader(status)
@@ -104,7 +104,7 @@ func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request) {
 		infos = append(infos, res.Infos...)
 	}
 
-	propRes, err := s.formatPropfind(ctx, infos)
+	propRes, err := s.formatPropfind(ctx, &pf, infos)
 	if err != nil {
 		log.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -143,15 +143,16 @@ func readPropfind(r io.Reader) (pf propfindXML, status int, err error) {
 		return propfindXML{}, http.StatusBadRequest, errInvalidPropfind
 	}
 	if pf.Propname == nil && pf.Allprop == nil && pf.Prop == nil {
-		return propfindXML{}, http.StatusBadRequest, errInvalidPropfind
+		// jfd: I think <d:prop></d:prop> is perfectly valid ... treat it as allprop
+		return propfindXML{Allprop: new(struct{})}, 0, nil
 	}
 	return pf, 0, nil
 }
 
-func (s *svc) formatPropfind(ctx context.Context, mds []*storageproviderv0alphapb.ResourceInfo) (string, error) {
+func (s *svc) formatPropfind(ctx context.Context, pf *propfindXML, mds []*storageproviderv0alphapb.ResourceInfo) (string, error) {
 	responses := make([]*responseXML, 0, len(mds))
 	for i := range mds {
-		res, err := s.mdToPropResponse(ctx, mds[i])
+		res, err := s.mdToPropResponse(ctx, pf, mds[i])
 		if err != nil {
 			return "", err
 		}
@@ -176,54 +177,7 @@ func (s *svc) newProp(key, val string) *propertyXML {
 	}
 }
 
-func (s *svc) mdToPropResponse(ctx context.Context, md *storageproviderv0alphapb.ResourceInfo, props ...*propertyXML) (*responseXML, error) {
-	propList := []*propertyXML{}
-	propList = append(propList, props...)
-
-	getETag := s.newProp("d:getetag", md.Etag)
-	ocPermissions := s.newProp("oc:permissions", "WCKDNVR")
-	size := fmt.Sprintf("%d", md.Size)
-	getContentLegnth := s.newProp("d:getcontentlength", size)
-	ocSize := s.newProp("oc:size", size)
-	getContentType := s.newProp("d:getcontenttype", md.MimeType)
-	getResourceType := s.newProp("d:resourcetype", "")
-	ocDownloadURL := s.newProp("oc:downloadUrl", "")
-	ocDC := s.newProp("oc:dDC", "")
-	// TODO(jfd) filter to only return requested props
-	propList = append(propList,
-		getETag,
-		ocPermissions,
-		getContentLegnth,
-		ocSize,
-		getContentType,
-		getResourceType,
-		ocDownloadURL,
-		ocDC,
-	)
-
-	if md.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
-		getResourceType.InnerXML = []byte("<d:collection/>")
-		getContentType.InnerXML = []byte("httpd/unix-directory")
-	}
-
-	// Finder needs the the getLastModified property to work.
-	t := utils.TSToTime(md.Mtime).UTC()
-	lasModifiedString := t.Format(time.RFC1123)
-	getLastModified := s.newProp("d:getlastmodified", lasModifiedString)
-	propList = append(propList, getLastModified)
-
-	ocID := s.newProp("oc:fileid", wrapResourceID(md.Id))
-	propList = append(propList, ocID)
-
-	// PropStat, only HTTP/1.1 200 is sent.
-	propStatList := []propstatXML{}
-
-	propStat := propstatXML{}
-	propStat.Prop = propList
-	propStat.Status = "HTTP/1.1 200 OK"
-	propStatList = append(propStatList, propStat)
-
-	response := responseXML{}
+func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *storageproviderv0alphapb.ResourceInfo) (*responseXML, error) {
 
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
 	// the old webdav endpoint does not contain the username
@@ -242,12 +196,131 @@ func (s *svc) mdToPropResponse(ctx context.Context, md *storageproviderv0alphapb
 	if md.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
 		ref += "/"
 	}
-	response.Href = ref
 
-	// url encode response.Href
-	encoded := &url.URL{Path: response.Href}
-	response.Href = encoded.String()
-	response.Propstat = propStatList
+	response := responseXML{
+		Href:     (&url.URL{Path: ref}).EscapedPath(), // url encode response.Href
+		Propstat: []propstatXML{},
+	}
+
+	// when allprops has been requested
+	if pf.Allprop != nil {
+		// return all known properties
+		response.Propstat = append(response.Propstat, propstatXML{
+			Status: "HTTP/1.1 200 OK",
+			Prop:   []*propertyXML{},
+		})
+		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:fileid", wrapResourceID(md.Id)))
+		if md.Etag != "" {
+			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("d:getetag", md.Etag))
+		}
+		if md.PermissionSet != nil {
+			// TODO(jfd) no longer hardcode permissions
+			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:permissions", "WCKDNVR"))
+		}
+		// always return size
+		size := fmt.Sprintf("%d", md.Size)
+		response.Propstat[0].Prop = append(response.Propstat[0].Prop,
+			s.newProp("d:getcontentlength", size),
+			s.newProp("oc:size", size),
+		)
+		if md.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+			response.Propstat[0].Prop = append(response.Propstat[0].Prop,
+				s.newProp("d:resourcetype", "<d:collection/>"),
+				s.newProp("d:getcontenttype", "httpd/unix-directory"),
+			)
+		} else if md.MimeType != "" {
+			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("d:getcontenttype", md.MimeType))
+		}
+		// Finder needs the the getLastModified property to work.
+		t := utils.TSToTime(md.Mtime).UTC()
+		lasModifiedString := t.Format(time.RFC1123)
+		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("d:getlastmodified", lasModifiedString))
+
+	} else {
+		// otherwise return only the requested properties
+		propstatOK := propstatXML{
+			Status: "HTTP/1.1 200 OK",
+			Prop:   []*propertyXML{},
+		}
+		propstatNotFound := propstatXML{
+			Status: "HTTP/1.1 404 Not Found",
+			Prop:   []*propertyXML{},
+		}
+		size := fmt.Sprintf("%d", md.Size)
+		for i := range pf.Prop {
+			switch pf.Prop[i].Space {
+			case "http://owncloud.org/ns":
+				switch pf.Prop[i].Local {
+				case "fileid": // TODO upper lowercase sensivity?
+					if md.Id != nil {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", wrapResourceID(md.Id)))
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:fileid", ""))
+					}
+				case "permissions":
+					if md.PermissionSet != nil {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:permissions", "WCKDNVR"))
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:permissions", ""))
+					}
+				case "size":
+					// TODO we cannot find out if md.Size is set or not because ints in go default to 0
+					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:size", size))
+				case "favorite":
+					fallthrough
+				case "owner-id":
+					fallthrough
+				case "owner-display-name":
+					fallthrough
+				case "privatelink":
+					fallthrough
+				case "downloadUrl":
+					fallthrough
+				case "dDC":
+					fallthrough
+				default:
+					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:"+pf.Prop[i].Local, ""))
+				}
+			case "DAV:":
+				switch pf.Prop[i].Local {
+				case "getetag":
+					if md.Etag != "" {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getetag", md.Etag))
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:getetag", ""))
+					}
+				case "getcontentlength":
+					// TODO we cannot find out if md.Size is set or not because ints in go default to 0
+					propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontentlength", size))
+				case "resourcetype":
+					if md.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:resourcetype", "<d:collection/>"))
+					} else {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:resourcetype", ""))
+						// redirectref is another option
+					}
+				case "getcontenttype":
+					if md.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontenttype", "httpd/unix-directory"))
+					} else if md.MimeType != "" {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontenttype", md.MimeType))
+					}
+				case "getlastmodified":
+					// TODO we cannot find out if md.Mtime is set or not because ints in go default to 0
+					t := utils.TSToTime(md.Mtime).UTC()
+					lastModifiedString := t.Format(time.RFC1123)
+					propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getlastmodified", lastModifiedString))
+				default:
+					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:"+pf.Prop[i].Local, ""))
+				}
+			default:
+				// TODO (jfd) lookup shortname for unknown namespaces?
+				propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp(pf.Prop[i].Space+":"+pf.Prop[i].Local, ""))
+			}
+		}
+		response.Propstat = append(response.Propstat, propstatOK, propstatNotFound)
+	}
+
 	return &response, nil
 }
 
@@ -264,6 +337,38 @@ func (c *countingReader) Read(p []byte) (int, error) {
 
 // http://www.webdav.org/specs/rfc4918.html#ELEMENT_prop (for propfind)
 type propfindProps []xml.Name
+
+// UnmarshalXML appends the property names enclosed within start to pn.
+//
+// It returns an error if start does not contain any properties or if
+// properties contain values. Character data between properties is ignored.
+func (pn *propfindProps) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	for {
+		t, err := next(d)
+		if err != nil {
+			return err
+		}
+		switch e := t.(type) {
+		case xml.EndElement:
+			// jfd: I think <d:prop></d:prop> is perfectly valid ... treat it as allprop
+			/*
+				if len(*pn) == 0 {
+					return fmt.Errorf("%s must not be empty", start.Name.Local)
+				}
+			*/
+			return nil
+		case xml.StartElement:
+			t, err = next(d)
+			if err != nil {
+				return err
+			}
+			if _, ok := t.(xml.EndElement); !ok {
+				return fmt.Errorf("unexpected token %T", t)
+			}
+			*pn = append(*pn, e.Name)
+		}
+	}
+}
 
 // http://www.webdav.org/specs/rfc4918.html#ELEMENT_propfind
 type propfindXML struct {
