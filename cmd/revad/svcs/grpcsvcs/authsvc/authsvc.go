@@ -130,7 +130,6 @@ func (s *service) GenerateAccessToken(ctx context.Context, req *authv0alphapb.Ge
 	log := appctx.GetLogger(ctx)
 	username := req.ClientId
 	password := req.ClientSecret
-	uid := &typespb.UserId{OpaqueId: username}
 
 	ctx, err := s.authmgr.Authenticate(ctx, username, password)
 	if err != nil {
@@ -139,6 +138,15 @@ func (s *service) GenerateAccessToken(ctx context.Context, req *authv0alphapb.Ge
 			Status: status.NewUnauthenticated(ctx, err, "error authenticating user"),
 		}
 		return res, nil
+	}
+
+	uid, ok := user.ContextGetUserID(ctx)
+	if !ok {
+		// try to look up user by username
+		// TODO log warning or should we fail?
+		uid = &typespb.UserId{
+			OpaqueId: username,
+		}
 	}
 
 	user, err := s.usermgr.GetUser(ctx, uid)
