@@ -40,6 +40,7 @@ import (
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/gofrs/uuid"
 	"github.com/gomodule/redigo/redis"
 	"github.com/mitchellh/mapstructure"
@@ -136,7 +137,8 @@ const (
 	// 0x01 = v1 ...
 	//
 	// SharePrefix is the prefix for sharing related extended attributes
-	sharePrefix string = "user.oc.acl."
+	sharePrefix       string = "user.oc.acl."
+	trashOriginPrefix string = "user.oc.o"
 )
 
 func init() {
@@ -306,6 +308,16 @@ func (fs *ocFS) getVersionsPath(ctx context.Context, np string) string {
 		return "" // TODO Must not happen?
 	}
 
+}
+
+// ownloud stores trashed items in the files_trashbin subfolder of a users home
+func (fs *ocFS) getRecyclePath(ctx context.Context) (string, error) {
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
+		return "", err
+	}
+	return path.Join(fs.c.DataDirectory, u.Username, "files_trashbin/files"), nil
 }
 
 func (fs *ocFS) removeNamespace(ctx context.Context, np string) string {
@@ -827,20 +839,52 @@ func (fs *ocFS) CreateReference(ctx context.Context, path string, targetURI *url
 	return errtypes.NotSupported("op not supported")
 }
 
+// Delete is actually only a move to trash
+>>>>>>> master
 func (fs *ocFS) Delete(ctx context.Context, ref *storageproviderv0alphapb.Reference) (err error) {
+
 	var np string
 	if np, err = fs.resolve(ctx, ref); err != nil {
 		return errors.Wrap(err, "ocFS: error resolving reference")
 	}
-	if err = os.Remove(np); err != nil {
-		if os.IsNotExist(err) {
-			return errtypes.NotFound(fs.removeNamespace(ctx, np))
-		}
-		// try recursive delete
-		if err = os.RemoveAll(np); err != nil {
-			return errors.Wrap(err, "ocFS: error deleting "+np)
-		}
+
+	rp, err := fs.getRecyclePath(ctx)
+	if err != nil {
+		return errors.Wrap(err, "ocFS: error resolving recycle path")
 	}
+
+	if err := os.MkdirAll(rp, 0700); err != nil {
+		return errors.Wrap(err, "ocFS: error creating trashbin dir "+rp)
+	}
+
+	// np is the path on disk ... we need only the path relative to root
+	origin := path.Dir(fs.removeNamespace(ctx, np))
+
+	// and we need to get rid of the user prefix
+	parts := strings.SplitN(origin, "/", 3)
+	fp := ""
+	// parts = "", "<username>", "files", "foo/bar.txt"
+	switch len(parts) {
+	case 2:
+		fp = "/"
+	case 3:
+		fp = path.Join("/", parts[2])
+	default:
+		return errors.Wrap(err, "ocFS: error creating trashbin dir "+rp)
+	}
+
+	// set origin location in metadata
+	if err := xattr.Set(np, trashOriginPrefix, []byte(fp)); err != nil {
+		return err
+	}
+
+	// move to trash location
+	tgt := path.Join(rp, fmt.Sprintf("%s.d%d", path.Base(np), time.Now().Unix()))
+	if err := os.Rename(np, tgt); err != nil {
+		return errors.Wrap(err, "ocFS: could not restore item")
+	}
+
+	// TODO(jfd) move versions to trash
 	return nil
 }
 
@@ -1089,13 +1133,120 @@ func (fs *ocFS) RestoreRevision(ctx context.Context, ref *storageproviderv0alpha
 }
 
 func (fs *ocFS) EmptyRecycle(ctx context.Context) error {
-	return errtypes.NotSupported("empty recycle")
+	rp, err := fs.getRecyclePath(ctx)
+	if err != nil {
+		return errors.Wrap(err, "ocFS: error resolving recycle path")
+	}
+	err = os.RemoveAll(rp)
+	if err != nil {
+		return errors.Wrap(err, "ocFS: error deleting recycle files")
+	}
+	err = os.RemoveAll(path.Join(path.Dir(rp), "versions"))
+	if err != nil {
+		return errors.Wrap(err, "ocFS: error deleting recycle files versions")
+	}
+	// TODO delete keyfiles, keys, share-keys ... or just everything?
+	return nil
+}
+
+func (fs *ocFS) convertToRecycleItem(ctx context.Context, rp string, md os.FileInfo) *storageproviderv0alphapb.RecycleItem {
+	// trashbin items have filename.ext.d12345678
+	suffix := path.Ext(md.Name())
+	if len(suffix) == 0 || !strings.HasPrefix(suffix, ".d") {
+		log := appctx.GetLogger(ctx)
+		log.Error().Str("path", md.Name()).Msg("invalid trash item suffix")
+		return nil
+	}
+	trashtime := suffix[2:] // truncate "d" to get trashbin time
+	ttime, err := strconv.Atoi(trashtime)
+	if err != nil {
+		log := appctx.GetLogger(ctx)
+		log.Error().Err(err).Str("path", md.Name()).Msg("invalid trash time")
+		return nil
+	}
+	origin := "."
+	if v, err := xattr.Get(path.Join(rp, md.Name()), trashOriginPrefix); err != nil {
+		log := appctx.GetLogger(ctx)
+		log.Error().Err(err).Str("path", md.Name()).Msg("could not read origin")
+	} else {
+		origin = string(v)
+	}
+	return &storageproviderv0alphapb.RecycleItem{
+		Type: getResourceType(md.IsDir()),
+		Key:  md.Name(),
+		// ownCloud 10 stores the original location in the oc_files_trashbin table
+		// TODO (jfd) use extended attributes for original location
+		// TODO do we need to prefix the path? it should be relative to this storage root, right?
+		Path: origin,
+		Size: uint64(md.Size()),
+		DeletionTime: &typespb.Timestamp{
+			Seconds: uint64(ttime),
+			// no nanos available
+		},
+	}
 }
 
 func (fs *ocFS) ListRecycle(ctx context.Context) ([]*storageproviderv0alphapb.RecycleItem, error) {
-	return nil, errtypes.NotSupported("list recycle")
+	rp, err := fs.getRecyclePath(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "ocFS: error resolving recycle path")
+	}
+
+	// list files folder
+	mds, err := ioutil.ReadDir(rp)
+	if err != nil {
+		log := appctx.GetLogger(ctx)
+		log.Debug().Err(err).Str("path", rp).Msg("trash not readable")
+		// TODO jfd only ignore not found errors
+		return []*storageproviderv0alphapb.RecycleItem{}, nil
+	}
+	// TODO (jfd) limit and offset
+	items := []*storageproviderv0alphapb.RecycleItem{}
+	for i := range mds {
+		ri := fs.convertToRecycleItem(ctx, rp, mds[i])
+		if ri != nil {
+			items = append(items, ri)
+		}
+
+	}
+	return items, nil
 }
 
 func (fs *ocFS) RestoreRecycleItem(ctx context.Context, key string) error {
-	return errtypes.NotSupported("restore recycle")
+	log := appctx.GetLogger(ctx)
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		return errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
+	}
+	rp, err := fs.getRecyclePath(ctx)
+	if err != nil {
+		return errors.Wrap(err, "ocFS: error resolving recycle path")
+	}
+	src := path.Join(rp, path.Clean(key))
+
+	suffix := path.Ext(src)
+	if len(suffix) == 0 || !strings.HasPrefix(suffix, ".d") {
+		log.Error().Str("path", src).Msg("invalid trash item suffix")
+		return nil
+	}
+
+	origin := "/"
+	if v, err := xattr.Get(src, trashOriginPrefix); err != nil {
+		log.Error().Err(err).Str("path", src).Msg("could not read origin")
+	} else {
+		origin = path.Clean(string(v))
+	}
+	tgt := path.Join(fs.getInternalPath(ctx, path.Join("/", u.Username, origin)), strings.TrimSuffix(path.Base(src), suffix))
+	// move back to original location
+	if err := os.Rename(src, tgt); err != nil {
+		log.Error().Err(err).Str("path", src).Msg("could not restore item")
+		return errors.Wrap(err, "ocFS: could not restore item")
+	}
+	// unset trash origin location in metadata
+	if err := xattr.Remove(tgt, trashOriginPrefix); err != nil {
+		// just a warning, will be overwritten next time it is deleted
+		log.Warn().Err(err).Str("path", tgt).Msg("could not unset origin")
+	}
+	// TODO(jfd) restore versions
+	return nil
 }
