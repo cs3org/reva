@@ -13,18 +13,18 @@ LDFLAGS=-ldflags "-s -X main.buildDate=${BUILD_DATE} -X main.gitCommit=${GIT_DIR
 
 build:
 	go build ./...
-	go mod tidy
 	go build -o ./cmd/revad/revad ${LDFLAGS} ./cmd/revad 
 	go build -o ./cmd/reva/reva ${LDFLAGS} ./cmd/reva
 
+tidy:
+	go mod tidy
+
 build-revad:
 	go build ./...
-	go mod tidy
 	go build -o ./cmd/revad/revad ${LDFLAGS} ./cmd/revad 
 
 build-reva:
 	go build ./...
-	go mod tidy
 	go build -o ./cmd/revad/revad ${LDFLAGS} ./cmd/revad 
 	
 test:

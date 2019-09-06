@@ -26,6 +26,7 @@ import (
 	storageregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageregistry/v0alpha"
 	storagetypespb "github.com/cs3org/go-cs3apis/cs3/storagetypes"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
+	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/pkg/errors"
@@ -33,9 +34,7 @@ import (
 
 func (s *svc) GetProvider(ctx context.Context, req *storageproviderv0alphapb.GetProviderRequest) (*storageproviderv0alphapb.GetProviderResponse, error) {
 	res := &storageproviderv0alphapb.GetProviderResponse{
-		Status: &rpcpb.Status{
-			Code: rpcpb.Code_CODE_UNIMPLEMENTED,
-		},
+		Status: status.NewUnimplemented(ctx, nil, "GetProvider not yet implemented"),
 	}
 	return res, nil
 }
@@ -44,20 +43,13 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *storageproviderv0al
 	log := appctx.GetLogger(ctx)
 	pi, err := s.find(ctx, req.Ref)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error finding storage provider")
-
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.InitiateFileDownloadResponse{
-				Status: &rpcpb.Status{
-					Code: rpcpb.Code_CODE_NOT_FOUND,
-				},
+				Status: status.NewNotFound(ctx, "storage provider not found"),
 			}, nil
 		}
-
 		return &storageproviderv0alphapb.InitiateFileDownloadResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error finding storage provider"),
 		}, nil
 	}
 
@@ -66,11 +58,8 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *storageproviderv0al
 	// TODO(labkode): check for capabilities here
 	c, err := pool.GetStorageProviderServiceClient(pi.Address)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error getting storage provider client")
 		return &storageproviderv0alphapb.InitiateFileDownloadResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error getting storage provider client"),
 		}, nil
 	}
 
@@ -86,20 +75,13 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *storageproviderv0alph
 	log := appctx.GetLogger(ctx)
 	pi, err := s.find(ctx, req.Ref)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error finding storage provider")
-
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.InitiateFileUploadResponse{
-				Status: &rpcpb.Status{
-					Code: rpcpb.Code_CODE_NOT_FOUND,
-				},
+				Status: status.NewNotFound(ctx, "storage provider not found"),
 			}, nil
 		}
-
 		return &storageproviderv0alphapb.InitiateFileUploadResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error finding storage provider"),
 		}, nil
 	}
 
@@ -108,11 +90,8 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *storageproviderv0alph
 	// TODO(labkode): check for capabilities here
 	c, err := pool.GetStorageProviderServiceClient(pi.Address)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error getting storage provider client")
 		return &storageproviderv0alphapb.InitiateFileUploadResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error getting storage provider client"),
 		}, nil
 	}
 
@@ -126,9 +105,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *storageproviderv0alph
 
 func (s *svc) GetPath(ctx context.Context, req *storageproviderv0alphapb.GetPathRequest) (*storageproviderv0alphapb.GetPathResponse, error) {
 	res := &storageproviderv0alphapb.GetPathResponse{
-		Status: &rpcpb.Status{
-			Code: rpcpb.Code_CODE_UNIMPLEMENTED,
-		},
+		Status: status.NewUnimplemented(ctx, nil, "GetPath not yet implemented"),
 	}
 	return res, nil
 }
@@ -137,20 +114,13 @@ func (s *svc) CreateContainer(ctx context.Context, req *storageproviderv0alphapb
 	log := appctx.GetLogger(ctx)
 	pi, err := s.find(ctx, req.Ref)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error finding storage provider")
-
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.CreateContainerResponse{
-				Status: &rpcpb.Status{
-					Code: rpcpb.Code_CODE_NOT_FOUND,
-				},
+				Status: status.NewNotFound(ctx, "storage provider not found"),
 			}, nil
 		}
-
 		return &storageproviderv0alphapb.CreateContainerResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error finding storage provider"),
 		}, nil
 	}
 
@@ -159,11 +129,8 @@ func (s *svc) CreateContainer(ctx context.Context, req *storageproviderv0alphapb
 	// TODO(labkode): check for capabilities here
 	c, err := pool.GetStorageProviderServiceClient(pi.Address)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error getting storage provider client")
 		return &storageproviderv0alphapb.CreateContainerResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error getting storage provider client"),
 		}, nil
 	}
 
@@ -179,20 +146,13 @@ func (s *svc) Delete(ctx context.Context, req *storageproviderv0alphapb.DeleteRe
 	log := appctx.GetLogger(ctx)
 	pi, err := s.find(ctx, req.Ref)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error finding storage provider")
-
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.DeleteResponse{
-				Status: &rpcpb.Status{
-					Code: rpcpb.Code_CODE_NOT_FOUND,
-				},
+				Status: status.NewNotFound(ctx, "storage provider not found"),
 			}, nil
 		}
-
 		return &storageproviderv0alphapb.DeleteResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error finding storage provider"),
 		}, nil
 	}
 
@@ -201,11 +161,8 @@ func (s *svc) Delete(ctx context.Context, req *storageproviderv0alphapb.DeleteRe
 	// TODO(labkode): check for capabilities here
 	c, err := pool.GetStorageProviderServiceClient(pi.Address)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error getting storage provider client")
 		return &storageproviderv0alphapb.DeleteResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error getting storage provider client"),
 		}, nil
 	}
 
@@ -219,9 +176,7 @@ func (s *svc) Delete(ctx context.Context, req *storageproviderv0alphapb.DeleteRe
 
 func (s *svc) Move(ctx context.Context, req *storageproviderv0alphapb.MoveRequest) (*storageproviderv0alphapb.MoveResponse, error) {
 	res := &storageproviderv0alphapb.MoveResponse{
-		Status: &rpcpb.Status{
-			Code: rpcpb.Code_CODE_UNIMPLEMENTED,
-		},
+		Status: status.NewUnimplemented(ctx, nil, "Move not yet implemented"),
 	}
 	return res, nil
 }
@@ -230,20 +185,13 @@ func (s *svc) Stat(ctx context.Context, req *storageproviderv0alphapb.StatReques
 	log := appctx.GetLogger(ctx)
 	pi, err := s.find(ctx, req.Ref)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error finding storage provider")
-
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.StatResponse{
-				Status: &rpcpb.Status{
-					Code: rpcpb.Code_CODE_NOT_FOUND,
-				},
+				Status: status.NewNotFound(ctx, "storage provider not found"),
 			}, nil
 		}
-
 		return &storageproviderv0alphapb.StatResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error finding storage provider"),
 		}, nil
 	}
 
@@ -252,11 +200,8 @@ func (s *svc) Stat(ctx context.Context, req *storageproviderv0alphapb.StatReques
 	// TODO(labkode): check for capabilities here
 	c, err := pool.GetStorageProviderServiceClient(pi.Address)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error getting storage provider client")
 		return &storageproviderv0alphapb.StatResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error getting storage provider client"),
 		}, nil
 	}
 
@@ -269,27 +214,20 @@ func (s *svc) Stat(ctx context.Context, req *storageproviderv0alphapb.StatReques
 }
 
 func (s *svc) ListContainerStream(req *storageproviderv0alphapb.ListContainerStreamRequest, ss storageproviderv0alphapb.StorageProviderService_ListContainerStreamServer) error {
-	return errors.New("unimplemented")
+	return errors.New("Unimplemented")
 }
 
 func (s *svc) ListContainer(ctx context.Context, req *storageproviderv0alphapb.ListContainerRequest) (*storageproviderv0alphapb.ListContainerResponse, error) {
 	log := appctx.GetLogger(ctx)
 	pi, err := s.find(ctx, req.Ref)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error finding storage provider")
-
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.ListContainerResponse{
-				Status: &rpcpb.Status{
-					Code: rpcpb.Code_CODE_NOT_FOUND,
-				},
+				Status: status.NewNotFound(ctx, "storage provider not found"),
 			}, nil
 		}
-
 		return &storageproviderv0alphapb.ListContainerResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error finding storage provider"),
 		}, nil
 	}
 
@@ -298,11 +236,8 @@ func (s *svc) ListContainer(ctx context.Context, req *storageproviderv0alphapb.L
 	// TODO(labkode): check for capabilities here
 	c, err := pool.GetStorageProviderServiceClient(pi.Address)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error getting storage provider client")
 		return &storageproviderv0alphapb.ListContainerResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error getting storage provider client"),
 		}, nil
 	}
 
@@ -318,20 +253,13 @@ func (s *svc) ListFileVersions(ctx context.Context, req *storageproviderv0alphap
 	log := appctx.GetLogger(ctx)
 	pi, err := s.find(ctx, req.Ref)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error finding storage provider")
-
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.ListFileVersionsResponse{
-				Status: &rpcpb.Status{
-					Code: rpcpb.Code_CODE_NOT_FOUND,
-				},
+				Status: status.NewNotFound(ctx, "storage provider not found"),
 			}, nil
 		}
-
 		return &storageproviderv0alphapb.ListFileVersionsResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error finding storage provider"),
 		}, nil
 	}
 
@@ -340,11 +268,8 @@ func (s *svc) ListFileVersions(ctx context.Context, req *storageproviderv0alphap
 	// TODO(labkode): check for capabilities here
 	c, err := pool.GetStorageProviderServiceClient(pi.Address)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error getting storage provider client")
 		return &storageproviderv0alphapb.ListFileVersionsResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error getting storage provider client"),
 		}, nil
 	}
 
@@ -360,20 +285,13 @@ func (s *svc) RestoreFileVersion(ctx context.Context, req *storageproviderv0alph
 	log := appctx.GetLogger(ctx)
 	pi, err := s.find(ctx, req.Ref)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error finding storage provider")
-
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.RestoreFileVersionResponse{
-				Status: &rpcpb.Status{
-					Code: rpcpb.Code_CODE_NOT_FOUND,
-				},
+				Status: status.NewNotFound(ctx, "storage provider not found"),
 			}, nil
 		}
-
 		return &storageproviderv0alphapb.RestoreFileVersionResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error finding storage provider"),
 		}, nil
 	}
 
@@ -382,11 +300,8 @@ func (s *svc) RestoreFileVersion(ctx context.Context, req *storageproviderv0alph
 	// TODO(labkode): check for capabilities here
 	c, err := pool.GetStorageProviderServiceClient(pi.Address)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error getting storage provider client")
 		return &storageproviderv0alphapb.RestoreFileVersionResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error getting storage provider client"),
 		}, nil
 	}
 
@@ -399,34 +314,28 @@ func (s *svc) RestoreFileVersion(ctx context.Context, req *storageproviderv0alph
 }
 
 func (s *svc) ListRecycleStream(req *storageproviderv0alphapb.ListRecycleStreamRequest, ss storageproviderv0alphapb.StorageProviderService_ListRecycleStreamServer) error {
-	return errors.New("unimplemented")
+	return errors.New("Unimplemented")
 }
 
 func (s *svc) ListRecycle(ctx context.Context, req *storageproviderv0alphapb.ListRecycleRequest) (*storageproviderv0alphapb.ListRecycleResponse, error) {
 	// TODO(labkode): query all available storage providers to get unified list as the request does not come
 	// with ref information to target only one storage provider.
 	res := &storageproviderv0alphapb.ListRecycleResponse{
-		Status: &rpcpb.Status{
-			Code: rpcpb.Code_CODE_UNIMPLEMENTED,
-		},
+		Status: status.NewUnimplemented(ctx, nil, "ListRecycle not yet implemented"),
 	}
 	return res, nil
 }
 
 func (s *svc) RestoreRecycleItem(ctx context.Context, req *storageproviderv0alphapb.RestoreRecycleItemRequest) (*storageproviderv0alphapb.RestoreRecycleItemResponse, error) {
 	res := &storageproviderv0alphapb.RestoreRecycleItemResponse{
-		Status: &rpcpb.Status{
-			Code: rpcpb.Code_CODE_UNIMPLEMENTED,
-		},
+		Status: status.NewUnimplemented(ctx, nil, "RestoreRecycleItem not yet implemented"),
 	}
 	return res, nil
 }
 
 func (s *svc) PurgeRecycle(ctx context.Context, req *storageproviderv0alphapb.PurgeRecycleRequest) (*storageproviderv0alphapb.PurgeRecycleResponse, error) {
 	res := &storageproviderv0alphapb.PurgeRecycleResponse{
-		Status: &rpcpb.Status{
-			Code: rpcpb.Code_CODE_UNIMPLEMENTED,
-		},
+		Status: status.NewUnimplemented(ctx, nil, "PurgeRecycle not yet implemented"),
 	}
 	return res, nil
 }
@@ -435,20 +344,13 @@ func (s *svc) ListGrants(ctx context.Context, req *storageproviderv0alphapb.List
 	log := appctx.GetLogger(ctx)
 	pi, err := s.find(ctx, req.Ref)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error finding storage provider")
-
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.ListGrantsResponse{
-				Status: &rpcpb.Status{
-					Code: rpcpb.Code_CODE_NOT_FOUND,
-				},
+				Status: status.NewNotFound(ctx, "storage provider not found"),
 			}, nil
 		}
-
 		return &storageproviderv0alphapb.ListGrantsResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error finding storage provider"),
 		}, nil
 	}
 
@@ -457,11 +359,8 @@ func (s *svc) ListGrants(ctx context.Context, req *storageproviderv0alphapb.List
 	// TODO(labkode): check for capabilities here
 	c, err := pool.GetStorageProviderServiceClient(pi.Address)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error getting storage provider client")
 		return &storageproviderv0alphapb.ListGrantsResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error getting storage provider client"),
 		}, nil
 	}
 
@@ -477,33 +376,23 @@ func (s *svc) AddGrant(ctx context.Context, req *storageproviderv0alphapb.AddGra
 	log := appctx.GetLogger(ctx)
 	pi, err := s.find(ctx, req.Ref)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error finding storage provider")
-
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.AddGrantResponse{
-				Status: &rpcpb.Status{
-					Code: rpcpb.Code_CODE_NOT_FOUND,
-				},
+				Status: status.NewNotFound(ctx, "storage provider not found"),
 			}, nil
 		}
-
 		return &storageproviderv0alphapb.AddGrantResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error finding storage provider"),
 		}, nil
 	}
 
-	log.Info().Str("address", pi.Address).Str("ref", req.Ref.String()).Str("provider", pi.String()).Msg("storage provider found")
+	log.Info().Str("address", pi.Address).Str("ref", req.Ref.String()).Msg("storage provider found")
 
 	// TODO(labkode): check for capabilities here
 	c, err := pool.GetStorageProviderServiceClient(pi.Address)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error getting storage provider client")
 		return &storageproviderv0alphapb.AddGrantResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error getting storage provider client"),
 		}, nil
 	}
 
@@ -561,20 +450,13 @@ func (s *svc) UpdateGrant(ctx context.Context, req *storageproviderv0alphapb.Upd
 	log := appctx.GetLogger(ctx)
 	pi, err := s.find(ctx, req.Ref)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error finding storage provider")
-
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.UpdateGrantResponse{
-				Status: &rpcpb.Status{
-					Code: rpcpb.Code_CODE_NOT_FOUND,
-				},
+				Status: status.NewNotFound(ctx, "storage provider not found"),
 			}, nil
 		}
-
 		return &storageproviderv0alphapb.UpdateGrantResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error finding storage provider"),
 		}, nil
 	}
 
@@ -583,11 +465,8 @@ func (s *svc) UpdateGrant(ctx context.Context, req *storageproviderv0alphapb.Upd
 	// TODO(labkode): check for capabilities here
 	c, err := pool.GetStorageProviderServiceClient(pi.Address)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error getting storage provider client")
 		return &storageproviderv0alphapb.UpdateGrantResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error getting storage provider client"),
 		}, nil
 	}
 
@@ -603,20 +482,13 @@ func (s *svc) RemoveGrant(ctx context.Context, req *storageproviderv0alphapb.Rem
 	log := appctx.GetLogger(ctx)
 	pi, err := s.find(ctx, req.Ref)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error finding storage provider")
-
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.RemoveGrantResponse{
-				Status: &rpcpb.Status{
-					Code: rpcpb.Code_CODE_NOT_FOUND,
-				},
+				Status: status.NewNotFound(ctx, "storage provider not found"),
 			}, nil
 		}
-
 		return &storageproviderv0alphapb.RemoveGrantResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error finding storage provider"),
 		}, nil
 	}
 
@@ -625,11 +497,8 @@ func (s *svc) RemoveGrant(ctx context.Context, req *storageproviderv0alphapb.Rem
 	// TODO(labkode): check for capabilities here
 	c, err := pool.GetStorageProviderServiceClient(pi.Address)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error getting storage provider client")
 		return &storageproviderv0alphapb.RemoveGrantResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error getting storage provider client"),
 		}, nil
 	}
 
@@ -643,9 +512,7 @@ func (s *svc) RemoveGrant(ctx context.Context, req *storageproviderv0alphapb.Rem
 
 func (s *svc) GetQuota(ctx context.Context, req *storageproviderv0alphapb.GetQuotaRequest) (*storageproviderv0alphapb.GetQuotaResponse, error) {
 	res := &storageproviderv0alphapb.GetQuotaResponse{
-		Status: &rpcpb.Status{
-			Code: rpcpb.Code_CODE_UNIMPLEMENTED,
-		},
+		Status: status.NewUnimplemented(ctx, nil, "GetQuota not yet implemented"),
 	}
 	return res, nil
 }

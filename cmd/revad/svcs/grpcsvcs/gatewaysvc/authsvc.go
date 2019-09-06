@@ -22,22 +22,16 @@ import (
 	"context"
 
 	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
-	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
 	"github.com/pkg/errors"
 )
 
 func (s *svc) GenerateAccessToken(ctx context.Context, req *authv0alphapb.GenerateAccessTokenRequest) (*authv0alphapb.GenerateAccessTokenResponse, error) {
-	log := appctx.GetLogger(ctx)
-
 	c, err := pool.GetAuthServiceClient(s.c.AuthEndpoint)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error getting auth client")
 		return &authv0alphapb.GenerateAccessTokenResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error getting auth client"),
 		}, nil
 	}
 
@@ -50,15 +44,10 @@ func (s *svc) GenerateAccessToken(ctx context.Context, req *authv0alphapb.Genera
 }
 
 func (s *svc) WhoAmI(ctx context.Context, req *authv0alphapb.WhoAmIRequest) (*authv0alphapb.WhoAmIResponse, error) {
-	log := appctx.GetLogger(ctx)
-
 	c, err := pool.GetAuthServiceClient(s.c.AuthEndpoint)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error getting auth client")
 		return &authv0alphapb.WhoAmIResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error getting auth client"),
 		}, nil
 	}
 

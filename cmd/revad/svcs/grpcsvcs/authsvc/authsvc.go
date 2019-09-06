@@ -24,6 +24,7 @@ import (
 	"io"
 
 	"github.com/cs3org/reva/cmd/revad/grpcserver"
+	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
 	usermgr "github.com/cs3org/reva/pkg/user/manager/registry"
@@ -34,7 +35,6 @@ import (
 	"github.com/cs3org/reva/pkg/user"
 
 	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -134,49 +134,51 @@ func (s *service) GenerateAccessToken(ctx context.Context, req *authv0alphapb.Ge
 
 	ctx, err := s.authmgr.Authenticate(ctx, username, password)
 	if err != nil {
-		log.Error().Err(err).Msg("error authenticating user")
-		status := &rpcpb.Status{Code: rpcpb.Code_CODE_UNAUTHENTICATED}
-		res := &authv0alphapb.GenerateAccessTokenResponse{Status: status}
+		err = errors.Wrap(err, "authsvc: error in Authenticate")
+		res := &authv0alphapb.GenerateAccessTokenResponse{
+			Status: status.NewUnauthenticated(ctx, err, "error authenticating user"),
+		}
 		return res, nil
 	}
 
 	user, err := s.usermgr.GetUser(ctx, uid)
 	if err != nil {
-		log.Error().Err(err).Msg("error getting user information")
-		status := &rpcpb.Status{Code: rpcpb.Code_CODE_UNAUTHENTICATED}
-		res := &authv0alphapb.GenerateAccessTokenResponse{Status: status}
+		err = errors.Wrap(err, "authsvc: error in GetUser")
+		res := &authv0alphapb.GenerateAccessTokenResponse{
+			Status: status.NewUnauthenticated(ctx, err, "error getting user information"),
+		}
 		return res, nil
 	}
 
 	accessToken, err := s.tokenmgr.MintToken(ctx, user)
 	if err != nil {
-		err = errors.Wrap(err, "error creating access token")
-		log.Error().Err(err).Msg("error creating access token")
-		status := &rpcpb.Status{Code: rpcpb.Code_CODE_UNAUTHENTICATED}
-		res := &authv0alphapb.GenerateAccessTokenResponse{Status: status}
+		err = errors.Wrap(err, "authsvc: error in MintToken")
+		res := &authv0alphapb.GenerateAccessTokenResponse{
+			Status: status.NewUnauthenticated(ctx, err, "error creating access token"),
+		}
 		return res, nil
 	}
 
 	log.Info().Msgf("user %s authenticated", user.Username)
-	status := &rpcpb.Status{Code: rpcpb.Code_CODE_OK}
-	res := &authv0alphapb.GenerateAccessTokenResponse{Status: status, AccessToken: accessToken}
+	res := &authv0alphapb.GenerateAccessTokenResponse{
+		Status:      status.NewOK(ctx),
+		AccessToken: accessToken,
+	}
 	return res, nil
-
 }
 
 func (s *service) WhoAmI(ctx context.Context, req *authv0alphapb.WhoAmIRequest) (*authv0alphapb.WhoAmIResponse, error) {
-	log := appctx.GetLogger(ctx)
-	token := req.AccessToken
-	u, err := s.tokenmgr.DismantleToken(ctx, token)
+	u, err := s.tokenmgr.DismantleToken(ctx, req.AccessToken)
 	if err != nil {
-		err = errors.Wrap(err, "error getting user from access token")
-		log.Error().Err(err).Msg("error dismantling access token")
-		status := &rpcpb.Status{Code: rpcpb.Code_CODE_UNAUTHENTICATED}
-		res := &authv0alphapb.WhoAmIResponse{Status: status}
-		return res, nil
+		err = errors.Wrap(err, "authsvc: error getting user from access token")
+		return &authv0alphapb.WhoAmIResponse{
+			Status: status.NewUnauthenticated(ctx, err, "error dismantling access token"),
+		}, nil
 	}
 
-	status := &rpcpb.Status{Code: rpcpb.Code_CODE_OK}
-	res := &authv0alphapb.WhoAmIResponse{Status: status, User: u}
+	res := &authv0alphapb.WhoAmIResponse{
+		Status: status.NewOK(ctx),
+		User:   u,
+	}
 	return res, nil
 }

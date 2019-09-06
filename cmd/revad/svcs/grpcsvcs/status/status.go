@@ -23,8 +23,10 @@ package status
 
 import (
 	"context"
+	"errors"
 
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
+	"github.com/cs3org/reva/pkg/appctx"
 	"go.opencensus.io/trace"
 )
 
@@ -36,8 +38,9 @@ func NewOK(ctx context.Context) *rpcpb.Status {
 	}
 }
 
-// NewNotFound returns a Status with CODE_NOT_FOUND.
+// NewNotFound returns a Status with CODE_NOT_FOUND and logs the msg.
 func NewNotFound(ctx context.Context, msg string) *rpcpb.Status {
+	appctx.GetLogger(ctx).Warn().Msg(msg)
 	return &rpcpb.Status{
 		Code:    rpcpb.Code_CODE_NOT_FOUND,
 		Message: msg,
@@ -45,8 +48,23 @@ func NewNotFound(ctx context.Context, msg string) *rpcpb.Status {
 	}
 }
 
-// NewInternal returns a Status with CODE_INTERNAL.
-func NewInternal(ctx context.Context, msg string) *rpcpb.Status {
+// NewInvalid returns a Status with CODE_INVALID_ARGUMENT and logs the msg.
+func NewInvalid(ctx context.Context, msg string) *rpcpb.Status {
+	appctx.GetLogger(ctx).Warn().Msg(msg)
+	return &rpcpb.Status{
+		Code:    rpcpb.Code_CODE_INVALID_ARGUMENT,
+		Message: msg,
+		Trace:   getTrace(ctx),
+	}
+}
+
+// NewInternal returns a Status with CODE_INTERNAL and logs the msg.
+// In this case, err MUST be filled for tracking purposes.
+func NewInternal(ctx context.Context, err error, msg string) *rpcpb.Status {
+	if err != nil {
+		panic("Internal error triggered without an error context")
+	}
+	appctx.GetLogger(ctx).Err(err).Msg(msg)
 	return &rpcpb.Status{
 		Code:    rpcpb.Code_CODE_INTERNAL,
 		Message: msg,
@@ -54,8 +72,9 @@ func NewInternal(ctx context.Context, msg string) *rpcpb.Status {
 	}
 }
 
-// NewUnauthenticated returns a Status with CODE_UNAUTHENTICATED.
-func NewUnauthenticated(ctx context.Context, msg string) *rpcpb.Status {
+// NewUnauthenticated returns a Status with CODE_UNAUTHENTICATED and logs the msg.
+func NewUnauthenticated(ctx context.Context, err error, msg string) *rpcpb.Status {
+	appctx.GetLogger(ctx).Warn().Err(err).Msg(msg)
 	return &rpcpb.Status{
 		Code:    rpcpb.Code_CODE_UNAUTHENTICATED,
 		Message: msg,
@@ -63,8 +82,9 @@ func NewUnauthenticated(ctx context.Context, msg string) *rpcpb.Status {
 	}
 }
 
-// NewUnimplemented returns a Status with CODE_UNIMPLEMENTED.
-func NewUnimplemented(ctx context.Context, msg string) *rpcpb.Status {
+// NewUnimplemented returns a Status with CODE_UNIMPLEMENTED and logs the msg.
+func NewUnimplemented(ctx context.Context, err error, msg string) *rpcpb.Status {
+	appctx.GetLogger(ctx).Error().Err(err).Msg(msg)
 	return &rpcpb.Status{
 		Code:    rpcpb.Code_CODE_UNIMPLEMENTED,
 		Message: msg,
@@ -80,6 +100,12 @@ func NewInvalidArg(ctx context.Context, msg string) *rpcpb.Status {
 	}
 }
 
+// NewErrorFromCode returns a standardized Error for a given RPC code.
+func NewErrorFromCode(code rpcpb.Code, pkgname string) error {
+	return errors.New(pkgname + ": RPC failed with code " + code.String())
+}
+
+// internal function to attach the trace to a context
 func getTrace(ctx context.Context) string {
 	span := trace.FromContext(ctx)
 	return span.SpanContext().TraceID.String()

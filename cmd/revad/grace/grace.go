@@ -220,7 +220,13 @@ func (w *Watcher) GetListeners(servers map[string]Server) (map[string]net.Listen
 		// Do we abort running the forked child? Probably yes, as if the parent cannot be
 		// killed that means we run two version of the code indefinitely.
 		w.log.Info().Msgf("killing parent pid gracefully with SIGQUIT: %d", w.ppid)
-		err := syscall.Kill(w.ppid, syscall.SIGQUIT)
+		p, err := os.FindProcess(w.ppid)
+		if err != nil {
+			w.log.Error().Err(err).Msgf("error finding parent process with ppid:%d", w.ppid)
+			err = errors.Wrap(err, "error finding parent process")
+			return nil, err
+		}
+		err = p.Kill()
 		if err != nil {
 			w.log.Error().Err(err).Msgf("error killing parent process with ppid:%d", w.ppid)
 			err = errors.Wrap(err, "error killing parent process")

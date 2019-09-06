@@ -48,19 +48,29 @@ func (h *UsersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	WriteOCSSuccess(w, r, &UsersData{
-		// FIXME query storages? cache a summary?
-		// TODO use list of storages to allow clients to resolve quota status
-		Quota: &QuotaData{
-			Free:       2840756224000,
-			Used:       5059416668,
-			Total:      2845815640668,
-			Relative:   0.18,
-			Definition: "default",
-		},
-		DisplayName: u.DisplayName,
-		Email:       u.Mail,
-	})
+	var head string
+	head, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
+	switch head {
+	case "":
+		WriteOCSSuccess(w, r, &UsersData{
+			// FIXME query storages? cache a summary?
+			// TODO use list of storages to allow clients to resolve quota status
+			Quota: &QuotaData{
+				Free:       2840756224000,
+				Used:       5059416668,
+				Total:      2845815640668,
+				Relative:   0.18,
+				Definition: "default",
+			},
+			DisplayName: u.DisplayName,
+			Email:       u.Mail,
+		})
+	case "groups":
+		WriteOCSSuccess(w, r, &GroupsData{})
+	default:
+		WriteOCSError(w, r, MetaNotFound.StatusCode, "Not found", nil)
+	}
+
 }
 
 // QuotaData holds quota information
@@ -80,4 +90,9 @@ type UsersData struct {
 	// FIXME home should never be exposed ... even in oc 10
 	//home
 	TwoFactorAuthEnabled bool `json:"two_factor_auth_enabled" xml:"two_factor_auth_enabled"`
+}
+
+// GroupsData holds group data
+type GroupsData struct {
+	Groups []string `json:"groups" xml:"groups>element"`
 }
