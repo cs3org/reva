@@ -44,8 +44,7 @@ func (h *VersionsHandler) init(c *Config) error {
 func (h *VersionsHandler) Handler(s *svc, rid *storageproviderv0alphapb.ResourceId) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		// webdav should be death: baseURI is encoded as part of the
-		// response payload in href field
+		// baseURI is encoded as part of the response payload in href field
 		baseURI := path.Join("/", s.Prefix(), "remote.php/dav/meta", wrapResourceID(rid))
 		ctx := context.WithValue(r.Context(), ctxKeyBaseURI, baseURI)
 		r = r.WithContext(ctx)
@@ -166,11 +165,6 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		infos = append(infos, vi)
 	}
 
-	// <d:getlastmodified>Thu, 29 Aug 2019 15:22:34 GMT</d:getlastmodified>
-	// <d:getcontentlength>7</d:getcontentlength>
-	// <d:resourcetype/>
-	// <d:getetag>fdd850ceb59bf839e8174a99c699fbae</d:getetag>
-	// <d:getcontenttype>text/markdown</d:getcontenttype>
 	propRes, err := s.formatPropfind(ctx, &pf, infos)
 	if err != nil {
 		log.Error().Err(err).Msg("error formatting propfind")
