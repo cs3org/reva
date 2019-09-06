@@ -61,7 +61,7 @@ func NewInvalid(ctx context.Context, msg string) *rpcpb.Status {
 // NewInternal returns a Status with CODE_INTERNAL and logs the msg.
 // In this case, err MUST be filled for tracking purposes.
 func NewInternal(ctx context.Context, err error, msg string) *rpcpb.Status {
-	if err != nil {
+	if err == nil {
 		panic("Internal error triggered without an error context")
 	}
 	appctx.GetLogger(ctx).Err(err).Msg(msg)
