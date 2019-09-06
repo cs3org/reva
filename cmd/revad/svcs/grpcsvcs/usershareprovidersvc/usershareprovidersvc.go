@@ -26,6 +26,7 @@ import (
 	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/grpcserver"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/share"
 	"github.com/cs3org/reva/pkg/share/manager/registry"
 	"github.com/mitchellh/mapstructure"
@@ -188,7 +189,7 @@ func (s *service) GetReceivedShare(ctx context.Context, req *usershareproviderv0
 	if err != nil {
 		log.Err(err).Msg("error getting received share")
 		return &usershareproviderv0alphapb.GetReceivedShareResponse{
-			Status: status.NewInternal(ctx, "error getting received share"),
+			Status: status.NewInternal(ctx, err, "error getting received share"),
 		}, nil
 	}
 

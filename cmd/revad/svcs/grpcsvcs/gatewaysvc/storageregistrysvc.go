@@ -21,9 +21,11 @@ package gatewaysvc
 import (
 	"context"
 
+	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageregv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageregistry/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/pkg/errors"
 )
 

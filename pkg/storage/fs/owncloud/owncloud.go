@@ -840,7 +840,6 @@ func (fs *ocFS) CreateReference(ctx context.Context, path string, targetURI *url
 }
 
 // Delete is actually only a move to trash
->>>>>>> master
 func (fs *ocFS) Delete(ctx context.Context, ref *storageproviderv0alphapb.Reference) (err error) {
 
 	var np string

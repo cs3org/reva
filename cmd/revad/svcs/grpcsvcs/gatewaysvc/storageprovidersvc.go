@@ -406,7 +406,12 @@ func (s *svc) AddGrant(ctx context.Context, req *storageproviderv0alphapb.AddGra
 
 func (s *svc) CreateReference(ctx context.Context, req *storageproviderv0alphapb.CreateReferenceRequest) (*storageproviderv0alphapb.CreateReferenceResponse, error) {
 	log := appctx.GetLogger(ctx)
-	pi, err := s.find(ctx, req.Path)
+	ref := &storageproviderv0alphapb.Reference{
+		Spec: &storageproviderv0alphapb.Reference_Path{
+			Path: req.Path,
+		},
+	}
+	pi, err := s.find(ctx, ref)
 	if err != nil {
 		log.Err(err).Msg("gatewaysvc: error finding storage provider")
 
@@ -424,16 +429,14 @@ func (s *svc) CreateReference(ctx context.Context, req *storageproviderv0alphapb
 			},
 		}, nil
 	}
-	
-	log.Info().Str("address", pi.Address).Str("ref", req.Ref.String()).Msg("storage provider found")
+
+	log.Info().Str("address", pi.Address).Str("ref", ref.String()).Msg("storage provider found")
 
 	c, err := pool.GetStorageProviderServiceClient(pi.Address)
 	if err != nil {
 		log.Err(err).Msg("gatewaysvc: error getting storage provider client")
-		return &storageproviderv0alphapb.UpdateGrantResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+		return &storageproviderv0alphapb.CreateReferenceResponse{
+			Status: status.NewInternal(ctx, err, "error creating reference"),
 		}, nil
 	}
 

@@ -21,12 +21,15 @@ package gatewaysvc
 import (
 	"context"
 	"fmt"
+	"path"
 
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	storageregv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageregistry/v0alpha"
 	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/pkg/errors"
 )
 
@@ -272,15 +275,11 @@ func (s *svc) ListReceivedShares(ctx context.Context, req *usershareproviderv0al
 }
 
 func (s *svc) GetReceivedShare(ctx context.Context, req *usershareproviderv0alphapb.GetReceivedShareRequest) (*usershareproviderv0alphapb.GetReceivedShareResponse, error) {
-	log := appctx.GetLogger(ctx)
-
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error getting usershareprovider client")
+		err := errors.Wrap(err, "gatewaysvc: error getting user share provider client")
 		return &usershareproviderv0alphapb.GetReceivedShareResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
+			Status: status.NewInternal(ctx, err, "error getting received share"),
 		}, nil
 	}
 
@@ -293,6 +292,7 @@ func (s *svc) GetReceivedShare(ctx context.Context, req *usershareproviderv0alph
 }
 
 func (s *svc) UpdateReceivedShare(ctx context.Context, req *usershareproviderv0alphapb.UpdateReceivedShareRequest) (*usershareproviderv0alphapb.UpdateReceivedShareResponse, error) {
+	log := appctx.GetLogger(ctx)
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
 		err = errors.Wrap(err, "gatewaysvc: error calling GetUserShareProviderClient")
@@ -363,8 +363,23 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *usershareproviderv0a
 				}, nil
 			}
 
-			homeReq := &storageregv0alpahpb.GetHomeRequest{}
+			homeReq := &storageregv0alphapb.GetHomeRequest{}
 			homeRes, err := storageRegClient.GetHome(ctx, homeReq)
+			if err != nil {
+				err := errors.Wrap(err, "gateway: error calling GetHome")
+				return &usershareproviderv0alphapb.UpdateReceivedShareResponse{
+					Status: status.NewInternal(ctx, err, "error updating received share"),
+				}, nil
+			}
+
+			// reference path is the home path + some name
+			refPath := path.Join(homeRes.Path, req.Ref.String()) // TODO(labkode): the name of the share should be the filename it points to by default.
+			createRefReq := &storageproviderv0alphapb.CreateReferenceRequest{
+				Path:      refPath,
+				TargetUri: fmt.Sprintf("cs3:%s/%s", share.Share.ResourceId.GetStorageId(), share.Share.ResourceId.GetOpaqueId()),
+			}
+
+			createRefRes, err := s.CreateReference(ctx, createRefReq)
 			if err != nil {
 				log.Err(err).Msg("gateway: error calling GetHome")
 				return &usershareproviderv0alphapb.UpdateReceivedShareResponse{
@@ -373,13 +388,23 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *usershareproviderv0a
 					},
 				}, nil
 			}
-			
-			// reference path is the home path + some name
-			refPath := path.Join(homeRes.Path, req.Ref.String()) // TODO(labkode): the name of the share should be the filename it points to by default.
-			createRefReq := &storageproviderv0alphapb.CreateReferenceRequest{
-				Path:      refPath,
- 				TargetUri: fmt.Sprintf("cs3:%s", req.Ref.GetId().OpaqueId),
+
+			if createRefRes.Status.Code != rpcpb.Code_CODE_OK {
+				err := status.NewErrorFromCode(createRefRes.Status.GetCode(), "gatewaysvc")
+				return &usershareproviderv0alphapb.UpdateReceivedShareResponse{
+					Status: status.NewInternal(ctx, err, "error updating received share"),
+				}, nil
 			}
+
+			return &usershareproviderv0alphapb.UpdateReceivedShareResponse{
+				Status: status.NewOK(ctx),
+			}, nil
 		}
 	}
+
+	// TODO(labkode): implementing updating display name
+	err = errors.New("gatewaysvc: update of display name is not yet implemented")
+	return &usershareproviderv0alphapb.UpdateReceivedShareResponse{
+		Status: status.NewUnimplemented(ctx, err, "error updaring received share"),
+	}, nil
 }

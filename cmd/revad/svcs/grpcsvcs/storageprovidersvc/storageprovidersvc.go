@@ -562,7 +562,7 @@ func (s *service) CreateReference(ctx context.Context, req *storageproviderv0alp
 	if err := s.storage.CreateReference(ctx, req.Path, u); err != nil {
 		log.Err(err).Msg("error calling CreateReference")
 		return &storageproviderv0alphapb.CreateReferenceResponse{
-			Status: status.NewInternal(ctx, "error creating reference"),
+			Status: status.NewInternal(ctx, err, "error creating reference"),
 		}, nil
 	}
 

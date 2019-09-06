@@ -23,16 +23,15 @@ import (
 	"fmt"
 	"io"
 
-	storagetypespb "github.com/cs3org/go-cs3apis/cs3/storagetypes"
-
-	"google.golang.org/grpc"
-
 	storageregv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageregistry/v0alpha"
+	storagetypespb "github.com/cs3org/go-cs3apis/cs3/storagetypes"
 	"github.com/cs3org/reva/cmd/revad/grpcserver"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/registry/registry"
 	"github.com/mitchellh/mapstructure"
+	"google.golang.org/grpc"
 )
 
 func init() {
@@ -130,14 +129,14 @@ func (s *service) GetHome(ctx context.Context, req *storageregv0alphapb.GetHomeR
 	if err != nil {
 		log.Error().Err(err).Msg("error getting home")
 		res := &storageregv0alphapb.GetHomeResponse{
-			Status: &rpcpb.Status{Code: rpcpb.Code_CODE_INTERNAL},
+			Status: status.NewInternal(ctx, err, "error getting home"),
 		}
 		return res, nil
 	}
 
 	res := &storageregv0alphapb.GetHomeResponse{
-		Status:   &rpcpb.Status{Code: rpcpb.Code_CODE_OK},
-		Path: p,
+		Status: status.NewOK(ctx),
+		Path:   p,
 	}
 	return res, nil
 }
