@@ -539,7 +539,7 @@ func (fs *eosStorage) CreateDir(ctx context.Context, fn string) error {
 
 func (fs *eosStorage) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
 	// TODO(labkode):implement
-	return errtypes.NotSupported("op not supported")
+	return errtypes.NotSupported("eos: operation not supported")
 }
 
 func (fs *eosStorage) Delete(ctx context.Context, ref *storageproviderv0alphapb.Reference) error {

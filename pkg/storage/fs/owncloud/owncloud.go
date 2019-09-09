@@ -836,7 +836,7 @@ func (fs *ocFS) CreateDir(ctx context.Context, fn string) (err error) {
 
 func (fs *ocFS) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
 	// TODO(jfd):implement
-	return errtypes.NotSupported("op not supported")
+	return errtypes.NotSupported("owncloud: operation not supported")
 }
 
 // Delete is actually only a move to trash

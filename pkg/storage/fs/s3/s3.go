@@ -221,19 +221,19 @@ func (fs *s3FS) GetPathByID(ctx context.Context, id *storageproviderv0alphapb.Re
 }
 
 func (fs *s3FS) AddGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
-	return errtypes.NotSupported("op not supported")
+	return errtypes.NotSupported("s3: operation not supported")
 }
 
 func (fs *s3FS) ListGrants(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.Grant, error) {
-	return nil, errtypes.NotSupported("op not supported")
+	return nil, errtypes.NotSupported("s3: operation not supported")
 }
 
 func (fs *s3FS) RemoveGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
-	return errtypes.NotSupported("op not supported")
+	return errtypes.NotSupported("s3: operation not supported")
 }
 
 func (fs *s3FS) UpdateGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
-	return errtypes.NotSupported("op not supported")
+	return errtypes.NotSupported("s3: operation not supported")
 }
 
 func (fs *s3FS) GetQuota(ctx context.Context) (int, int, error) {
@@ -242,7 +242,7 @@ func (fs *s3FS) GetQuota(ctx context.Context) (int, int, error) {
 
 func (fs *s3FS) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
 	// TODO(jfd):implement
-	return errtypes.NotSupported("op not supported")
+	return errtypes.NotSupported("s3: operation not supported")
 }
 
 func (fs *s3FS) CreateDir(ctx context.Context, fn string) error {
