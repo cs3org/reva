@@ -22,7 +22,9 @@ import (
 	"fmt"
 	"net/http"
 
+	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/user"
 )
 
 func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
@@ -31,10 +33,10 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 
 	// Let's create an AuthorizeRequest object!
 	// It will analyze the request and extract important information like scopes, response type and others.
-	ar, err := oauth2.NewAuthorizeRequest(ctx, r)
+	ar, err := s.oauth2.NewAuthorizeRequest(ctx, r)
 	if err != nil {
 		log.Error().Err(err).Msg("Error occurred in NewAuthorizeRequest")
-		oauth2.WriteAuthorizeError(w, ar, err)
+		s.oauth2.WriteAuthorizeError(w, ar, err)
 		return
 	}
 	// You have now access to authorizeRequest, Code ResponseTypes, Scopes ...
@@ -48,11 +50,11 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 	// We're simplifying things and just checking if the request includes a valid username and password
 	if err := r.ParseForm(); err != nil {
 		log.Error().Err(err).Msg("Error occurred parsing the form data")
-		oauth2.WriteAuthorizeError(w, ar, err)
+		s.oauth2.WriteAuthorizeError(w, ar, err)
 		return
 	}
 	username := r.PostForm.Get("username")
-	password := "secret"
+	password := r.PostForm.Get("password")
 	if username == "" {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, err := w.Write([]byte(fmt.Sprintf(`
@@ -63,19 +65,29 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 					By logging in, you consent to grant these scopes:
 					<ul>%s</ul>
 				</p>
-				<input type="text" name="username" /> <small>try aaliyah_abernathy, aaliyah_adams or aaliyah_anderson</small><br>
+				<input type="text" name="username" placeholder="Username" autofocus="autofocus"/><br>
+				<input type="password" name="password" placeholder="Password"/><br>
 				<input type="submit">
 			</form>
 		`, requestedScopes)))
 		if err != nil {
 			log.Error().Err(err).Msg("Error writing response")
-			oauth2.WriteAuthorizeError(w, ar, err)
+			s.oauth2.WriteAuthorizeError(w, ar, err)
 		}
 		return
 	}
 	// TODO(jfd): use reva sepcific implementation that uses existing auth managers
-	if err := store.Authenticate(ctx, username, password); err != nil {
-		oauth2.WriteAuthorizeError(w, ar, err)
+	actx, err := s.authmgr.Authenticate(ctx, username, password)
+	if err != nil {
+		s.oauth2.WriteAuthorizeError(w, ar, err)
+	}
+	uid, ok := user.ContextGetUserID(actx)
+	if !ok {
+		// try to look up user by username
+		// TODO log warning or should we fail?
+		uid = &typespb.UserId{
+			OpaqueId: username,
+		}
 	}
 
 	// let's see what scopes the user gave consent to
@@ -84,7 +96,7 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Now that the user is authorized, we set up a session:
-	mySessionData := newSession(username, getSub(ctx, username))
+	mySessionData := newSession(username, uid)
 
 	// When using the HMACSHA strategy you must use something that implements the HMACSessionContainer.
 	// It brings you the power of overriding the default values.
@@ -110,7 +122,7 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 	// Now we need to get a response. This is the place where the AuthorizeEndpointHandlers kick in and start processing the request.
 	// NewAuthorizeResponse is capable of running multiple response type handlers which in turn enables this library
 	// to support open id connect.
-	response, err := oauth2.NewAuthorizeResponse(ctx, ar, mySessionData)
+	response, err := s.oauth2.NewAuthorizeResponse(ctx, ar, mySessionData)
 
 	// Catch any errors, e.g.:
 	// * unknown client
@@ -118,10 +130,10 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 	// * ...
 	if err != nil {
 		log.Error().Err(err).Msg("Error occurred in NewAuthorizeResponse")
-		oauth2.WriteAuthorizeError(w, ar, err)
+		s.oauth2.WriteAuthorizeError(w, ar, err)
 		return
 	}
 
 	// Last but not least, send the response!
-	oauth2.WriteAuthorizeResponse(w, ar, response)
+	s.oauth2.WriteAuthorizeResponse(w, ar, response)
 }
