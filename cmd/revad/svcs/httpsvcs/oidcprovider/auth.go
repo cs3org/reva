@@ -73,7 +73,7 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	// use reva sepcific implementation that uses existing auth managers
+	// TODO(jfd): use reva sepcific implementation that uses existing auth managers
 	if err := store.Authenticate(ctx, username, password); err != nil {
 		oauth2.WriteAuthorizeError(w, ar, err)
 	}

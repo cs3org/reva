@@ -75,7 +75,7 @@ func newExampleStore() *storage.MemoryStore {
 				Scopes:        []string{"openid", "profile", "email", "offline"},
 			},
 		},
-		// TODO implement reva specific user store that uses existing user managers
+		// TODO(jfd): implement reva specific user store that uses existing user managers
 		Users: map[string]storage.MemoryUserRelation{
 			"aaliyah_abernathy": {
 				Username: "aaliyah_abernathy",
@@ -107,6 +107,7 @@ var fconfig = new(compose.Config)
 var start = compose.CommonStrategy{
 	// alternatively you could use:
 	//  OAuth2Strategy: compose.NewOAuth2JWTStrategy(mustRSAKey())
+	// TODO(jfd): generate / read proper secret from config
 	CoreStrategy: compose.NewOAuth2HMACStrategy(fconfig, []byte("some-super-cool-secret-that-nobody-knows"), nil),
 
 	// open id connect strategy
@@ -173,13 +174,13 @@ func emptySession() *openid.DefaultSession {
 func mustRSAKey() *rsa.PrivateKey {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
-		// TODO really panic?
+		// TODO(jfd): don't panic!
 		panic(err)
 	}
 	return key
 }
 
-// TODO currently we fake a sub. it would change when tha username changes ...
+// TODO(jfd): do not fake the sub like tkis. it would change when the username changes ...
 func getSub(ctx context.Context, username string) string {
 	hasher := md5.New()
 	_, err := hasher.Write([]byte(username))
@@ -190,7 +191,7 @@ func getSub(ctx context.Context, username string) string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
-// New returns a new webuisvc
+// New returns a new oidcprovidersvc
 func New(m map[string]interface{}) (httpsvcs.Service, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
@@ -240,7 +241,7 @@ func (s *svc) setHandler() {
 		case "userinfo":
 			s.doUserinfo(w, r)
 		case "sessions":
-			// TODO only for development
+			// TODO(jfd) make session lookup configurable? only for development?
 			s.doSessions(w, r)
 		default:
 			w.WriteHeader(http.StatusNotFound)

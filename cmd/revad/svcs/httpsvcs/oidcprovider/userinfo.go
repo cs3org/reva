@@ -45,7 +45,7 @@ func (s *svc) doUserinfo(w http.ResponseWriter, r *http.Request) {
 
 	var sc *oidc.StandardClaims
 	switch ar.GetSession().GetUsername() {
-	//TODO use reva specific implementation that uses existing user managers
+	// TODO(jfd): use reva specific implementation that uses existing user managers
 	case "aaliyah_abernathy":
 		sc = &oidc.StandardClaims{
 			Name: "Aaliyah Abernathy",

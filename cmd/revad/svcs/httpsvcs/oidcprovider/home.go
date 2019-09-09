@@ -62,6 +62,9 @@ func (s *svc) doHome(w http.ResponseWriter, r *http.Request) {
 			<a href="%s">Make an invalid request</a>
 		</li>
 	</ul>`,
+	// TODO(jfd): make sure phoenix uses random state and nonce, see https://tools.ietf.org/html/rfc6819#section-4.4.1.8
+	// - nonce vs jti https://security.stackexchange.com/a/188171
+	// - state vs nonce https://stackoverflow.com/a/46859861
 		clientConf.AuthCodeURL("some-random-state-foobar")+"&nonce=some-random-nonce",
 		"http://localhost:9998/oauth2/auth?client_id=my-client&redirect_uri=http%3A%2F%2Flocalhost%3A9998%2Fcallback&response_type=token%20id_token&scope=fosite%20openid&state=some-random-state-foobar&nonce=some-random-nonce",
 		clientConf.AuthCodeURL("some-random-state-foobar")+"&nonce=some-random-nonce",
