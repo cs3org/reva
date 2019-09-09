@@ -23,10 +23,12 @@ import (
 	"crypto/tls"
 	"fmt"
 
+	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"gopkg.in/ldap.v2"
@@ -100,7 +102,8 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		am.baseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		fmt.Sprintf(am.filter, clientID),
-		[]string{"dn"},
+		// TODO(jfd): objectguid, entryuuid etc ... make configurable
+		[]string{"dn", "objectguid"},
 		nil,
 	)
 
@@ -123,6 +126,13 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return ctx, err
 	}
 
-	return ctx, nil
+	uid := &typespb.UserId{
+		// TODO(jfd): how do we determine the issuer for ldap? ... make configurable
+		Idp: fmt.Sprintf("%s:%d", am.hostname, am.port),
+		// TODO(jfd): objectguid, entryuuid etc ... make configurable
+		OpaqueId: sr.Entries[0].GetAttributeValue("objectguid"),
+	}
+
+	return user.ContextSetUserID(ctx, uid), nil
 
 }

@@ -36,7 +36,7 @@ func init() {
 	registry.Register("json", New)
 }
 
-// Credentials holds a pair of userid and secret
+// Credentials holds a pair of secret and userid
 type Credentials struct {
 	ID       *typespb.UserId `mapstructure:"id"`
 	Username string          `mapstructure:"username"`

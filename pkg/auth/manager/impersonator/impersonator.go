@@ -20,9 +20,12 @@ package impersonator
 
 import (
 	"context"
+	"strings"
 
+	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
+	"github.com/cs3org/reva/pkg/user"
 )
 
 func init() {
@@ -37,5 +40,14 @@ func New(c map[string]interface{}) (auth.Manager, error) {
 }
 
 func (m *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (context.Context, error) {
-	return ctx, nil
+	// allow passing in uid as <opaqueid>@<idp>
+	at := strings.LastIndex(clientID, "@")
+	uid := &typespb.UserId{}
+	if at < 0 {
+		uid.OpaqueId = clientID
+	} else {
+		uid.OpaqueId = clientID[:at]
+		uid.Idp = clientID[at+1:]
+	}
+	return user.ContextSetUserID(ctx, uid), nil
 }
