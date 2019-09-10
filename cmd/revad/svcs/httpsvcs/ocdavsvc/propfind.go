@@ -209,7 +209,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *storage
 			Status: "HTTP/1.1 200 OK",
 			Prop:   []*propertyXML{},
 		})
-		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:fileid", wrapResourceID(md.Id)))
+		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:id", wrapResourceID(md.Id)))
 		if md.Etag != "" {
 			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("d:getetag", md.Etag))
 		}
@@ -251,11 +251,11 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *storage
 			switch pf.Prop[i].Space {
 			case "http://owncloud.org/ns":
 				switch pf.Prop[i].Local {
-				case "fileid": // TODO upper lowercase sensivity?
+				case "id": // TODO upper lowercase sensivity?
 					if md.Id != nil {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", wrapResourceID(md.Id)))
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:id", wrapResourceID(md.Id)))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:fileid", ""))
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:id", ""))
 					}
 				case "permissions":
 					if md.PermissionSet != nil {
