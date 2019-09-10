@@ -209,33 +209,53 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *storage
 			Status: "HTTP/1.1 200 OK",
 			Prop:   []*propertyXML{},
 		})
-		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:id", wrapResourceID(md.Id)))
+
+		id := wrapResourceID(md.Id)
+		response.Propstat[0].Prop = append(response.Propstat[0].Prop,
+			s.newProp("oc:id", id),
+			s.newProp("oc:fileid", id),
+		)
+
 		if md.Etag != "" {
 			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("d:getetag", md.Etag))
 		}
+
 		if md.PermissionSet != nil {
 			// TODO(jfd) no longer hardcode permissions
 			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:permissions", "WCKDNVR"))
 		}
+
 		// always return size
 		size := fmt.Sprintf("%d", md.Size)
-		response.Propstat[0].Prop = append(response.Propstat[0].Prop,
-			s.newProp("d:getcontentlength", size),
-			s.newProp("oc:size", size),
-		)
 		if md.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
 			response.Propstat[0].Prop = append(response.Propstat[0].Prop,
 				s.newProp("d:resourcetype", "<d:collection/>"),
 				s.newProp("d:getcontenttype", "httpd/unix-directory"),
+				s.newProp("oc:size", size),
 			)
 		} else if md.MimeType != "" {
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("d:getcontenttype", md.MimeType))
+			response.Propstat[0].Prop = append(response.Propstat[0].Prop,
+				s.newProp("d:getcontenttype", md.MimeType),
+				s.newProp("d:getcontentlength", size),
+			)
 		}
 		// Finder needs the the getLastModified property to work.
 		t := utils.TSToTime(md.Mtime).UTC()
-		lasModifiedString := t.Format(time.RFC1123)
-		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("d:getlastmodified", lasModifiedString))
+		lastModifiedString := t.Format(time.RFC1123)
+		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("d:getlastmodified", lastModifiedString))
 
+		if md.Checksum != nil {
+			// TODO(jfd): the actual value is an abomination like this:
+			// <oc:checksums>
+			//   <oc:checksum>SHA1:9bd253a09d58be107bcb4169ebf338c8df34d086 MD5:d90bcc6bf847403d22a4abba64e79994 ADLER32:fca23ff5</oc:checksum>
+			// </oc:checksums>
+			// yep, correct, space delimited key value pairs inside an oc:checksum tag inside an oc:checksums tag
+			value := fmt.Sprintf("<oc:checksum>%s:%s</oc:checksum>", md.Checksum.Type, md.Checksum.Sum)
+			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:checksums", value))
+		}
+
+		// TODO: read favorite via separate call? that would be expensive? I hope it is in the md
+		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:favorite", "0"))
 	} else {
 		// otherwise return only the requested properties
 		propstatOK := propstatXML{
@@ -251,61 +271,111 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *storage
 			switch pf.Prop[i].Space {
 			case "http://owncloud.org/ns":
 				switch pf.Prop[i].Local {
-				case "id": // TODO upper lowercase sensivity?
+				// TODO(jfd): maybe phoenix and the other clients can just use this id as an opaque string?
+				// I tested the desktop client and phoenix to annotate which properties are requestted, see below cases
+				case "fileid": // phoenix only
+					if md.Id != nil {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:fileid", wrapResourceID(md.Id)))
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:fileid", ""))
+					}
+				case "id": // desktop client only
 					if md.Id != nil {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:id", wrapResourceID(md.Id)))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:id", ""))
 					}
-				case "permissions":
+				case "permissions": // both
 					if md.PermissionSet != nil {
+						// TODO(jfd): properly build permissions string
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:permissions", "WCKDNVR"))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:permissions", ""))
 					}
-				case "size":
+				case "size": // phoenix only
 					// TODO we cannot find out if md.Size is set or not because ints in go default to 0
+					// oc:size is also available on folders
 					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:size", size))
-				case "favorite":
+				case "owner-id": // phoenix only
+					if md.Owner != nil && md.Owner.OpaqueId != "" {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-id", md.Owner.OpaqueId))
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:owner-id", ""))
+					}
+				case "favorite": // phoenix only
+					// can be 0 or 1
+					// TODO: read favorite via separate call? that would be expensive? I hope it is in the md
+					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
+				case "checksums": // desktop
+					if md.Checksum != nil {
+						// TODO(jfd): the actual value is an abomination like this:
+						// <oc:checksums>
+						//   <oc:checksum>SHA1:9bd253a09d58be107bcb4169ebf338c8df34d086 MD5:d90bcc6bf847403d22a4abba64e79994 ADLER32:fca23ff5</oc:checksum>
+						// </oc:checksums>
+						// yep, correct, space delimited key value pairs inside an oc:checksum tag inside an oc:checksums tag
+						value := fmt.Sprintf("<oc:checksum>%s:%s</oc:checksum>", md.Checksum.Type, md.Checksum.Sum)
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:checksums", value))
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:checksums", ""))
+					}
+				case "owner-display-name": // phoenix only
+					// TODO(jfd): lookup displayname? or let clients do that? They should cache that IMO
 					fallthrough
-				case "owner-id":
+				case "privatelink": // phoenix only
+					// <oc:privatelink>https://phoenix.owncloud.com/f/9</oc:privatelink>
 					fallthrough
-				case "owner-display-name":
+				case "downloadUrl": // desktop
 					fallthrough
-				case "privatelink":
+				case "dDC": // desktop
 					fallthrough
-				case "downloadUrl":
+				case "data-fingerprint": // desktop
+					// used by admins to indicate a backup has been restored,
+					// can only occur on the root node
+					// server implementation in https://github.com/owncloud/core/pull/24054
+					// see https://doc.owncloud.com/server/admin_manual/configuration/server/occ_command.html#maintenance-commands
+					// TODO(jfd): double check the client behavior with reva on backup restore
 					fallthrough
-				case "dDC":
+				case "share-types": // desktop
+					// <oc:share-types>
+					//   <oc:share-type>1</oc:share-type>
+					// </oc:share-types>
 					fallthrough
 				default:
 					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:"+pf.Prop[i].Local, ""))
 				}
 			case "DAV:":
 				switch pf.Prop[i].Local {
-				case "getetag":
+				case "getetag": // both
 					if md.Etag != "" {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getetag", md.Etag))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:getetag", ""))
 					}
-				case "getcontentlength":
+				case "getcontentlength": // both
+					// see everts stance on this https://stackoverflow.com/a/31621912, he points to http://tools.ietf.org/html/rfc4918#section-15.3
+					// > Purpose: Contains the Content-Length header returned by a GET without accept headers.
+					// which only would make sense when eg. rendering a plain HTML filelisting when GETing a collection,
+					// which is not the case ... so we don't return it on collections. owncloud has oc:size for that
 					// TODO we cannot find out if md.Size is set or not because ints in go default to 0
-					propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontentlength", size))
-				case "resourcetype":
+					if md.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:getcontentlength", ""))
+					} else {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontentlength", size))
+					}
+				case "resourcetype": // both
 					if md.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:resourcetype", "<d:collection/>"))
 					} else {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:resourcetype", ""))
 						// redirectref is another option
 					}
-				case "getcontenttype":
+				case "getcontenttype": // phoenix
 					if md.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontenttype", "httpd/unix-directory"))
 					} else if md.MimeType != "" {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontenttype", md.MimeType))
 					}
-				case "getlastmodified":
+				case "getlastmodified": // both
 					// TODO we cannot find out if md.Mtime is set or not because ints in go default to 0
 					t := utils.TSToTime(md.Mtime).UTC()
 					lastModifiedString := t.Format(time.RFC1123)
