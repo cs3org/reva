@@ -59,7 +59,7 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *authv0alphapb.User, 
 
 	newShare := publicshareproviderv0alphapb.PublicShare{
 		Id:          id,
-		Owner:       u.Id,
+		Owner:       rInfo.GetOwner(),
 		Creator:     u.Id,
 		ResourceId:  rInfo.Id,
 		Token:       tkn,
@@ -121,7 +121,6 @@ func (m *manager) GetPublicShare(ctx context.Context, u *authv0alphapb.User, ref
 	}
 
 	return share, nil
-	// return nil, errors.New("there are no shares for the given reference")
 }
 
 func (m *manager) ListPublicShares(ctx context.Context, u *authv0alphapb.User, md *storageproviderv0alphapb.ResourceInfo) ([]*publicshareproviderv0alphapb.PublicShare, error) {
