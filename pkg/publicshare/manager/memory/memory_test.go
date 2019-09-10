@@ -11,9 +11,9 @@ import (
 )
 
 func TestMemoryProvider(t *testing.T) {
-	// TODO: table driven tests is perhaps more readable
+	// table driven tests is perhaps more readable
 	// setup a new public shares manager
-	manager, err := New()
+	manager, err := New(make(map[string]interface{}))
 	if err != nil {
 		t.Error(err)
 	}

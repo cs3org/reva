@@ -50,8 +50,6 @@ type manager struct {
 
 // CreatePublicShare safely adds a new entry to manager.shares
 func (m *manager) CreatePublicShare(ctx context.Context, u *authv0alphapb.User, rInfo *storageproviderv0alphapb.ResourceInfo, g *publicshareproviderv0alphapb.Grant) (*publicshareproviderv0alphapb.PublicShare, error) {
-	// what to set id?
-	//  TODO does OpaqueId expecting a specific format?
 	// where could this initialization go wrong and early return?
 	id := &publicshareproviderv0alphapb.PublicShareId{
 		OpaqueId: randString(12),
