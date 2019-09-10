@@ -135,7 +135,7 @@ func TestMemoryProvider(t *testing.T) {
 		t.Error(err)
 	}
 
-	// attemts to revoke a public share that does not exist, we expect an error
+	// attempts to revoke a public share that does not exist, we expect an error
 	err = manager.RevokePublicShare(context.Background(), &user, "ref_does_not_exist")
 	if err == nil {
 		t.Error("expected a failure when revoking a public share that does not exist")
