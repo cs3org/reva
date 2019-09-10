@@ -66,6 +66,7 @@ type svc struct {
 func newExampleStore() *storage.MemoryStore {
 	return &storage.MemoryStore{
 		IDSessions: make(map[string]fosite.Requester),
+		// TODO(jfd): read clients from a json file
 		Clients: map[string]fosite.Client{
 			"phoenix": &fosite.DefaultClient{
 				ID:            "phoenix",

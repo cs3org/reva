@@ -47,7 +47,16 @@ func (s *svc) doUserinfo(w http.ResponseWriter, r *http.Request) {
 	sub := ar.GetSession().GetSubject()
 
 	uid := &typespb.UserId{
-		// TODO(jfd): also fill the idp if possible.
+		// TODO(jfd): also fill the idp, if possible.
+		// well .. that might be hard, because in this case we are the idp
+		// we should put oar hostname into the Iss field
+		// - only an oidc provider would be able to provide an iss
+		// - maybe for ldap the uidNumber attribute makes more sense as sub?
+		//    - this is still a tricky question. ms eg uses sid - security identifiers
+		//      but they change when a usename changes or he moves to a new node in the tree
+		//      to mitigate this they keep track of past ids in the sidHistory attribute
+		//      so the filesystem might use an outdated sid in the permissions but the system
+		//      can still resolve the user using the sidhistory attribute
 		OpaqueId: sub,
 	}
 	user, err := s.usermgr.GetUser(ctx, uid)

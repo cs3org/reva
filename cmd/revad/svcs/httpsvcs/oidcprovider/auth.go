@@ -76,7 +76,6 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	// TODO(jfd): use reva sepcific implementation that uses existing auth managers
 	actx, err := s.authmgr.Authenticate(ctx, username, password)
 	if err != nil {
 		s.oauth2.WriteAuthorizeError(w, ar, err)
