@@ -20,6 +20,7 @@ package demo
 
 import (
 	"context"
+	"strings"
 
 	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
@@ -49,8 +50,19 @@ func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*authv0alph
 	return nil, errtypes.NotFound(uid.OpaqueId)
 }
 
+// TODO(jfd) search Opaque? compare sub?
+func userContains(u *authv0alphapb.User, query string) bool {
+	return strings.Contains(u.Username, query) || strings.Contains(u.DisplayName, query) || strings.Contains(u.Mail, query)
+}
+
 func (m *manager) FindUsers(ctx context.Context, query string) ([]*authv0alphapb.User, error) {
-	return []*authv0alphapb.User{}, nil // FIXME implement FindUsers for demo user manager
+	users := []*authv0alphapb.User{}
+	for _, u := range m.catalog {
+		if userContains(u, query) {
+			users = append(users, u)
+		}
+	}
+	return users, nil
 }
 
 func (m *manager) GetUserGroups(ctx context.Context, uid *typespb.UserId) ([]string, error) {
@@ -77,32 +89,30 @@ func (m *manager) IsInGroup(ctx context.Context, uid *typespb.UserId, group stri
 
 func getUsers() map[string]*authv0alphapb.User {
 	return map[string]*authv0alphapb.User{
-		// TODO sub
-		// TODO iss
-		"einstein": &authv0alphapb.User{
+		"4c510ada-c86b-4815-8820-42cdf82c3d51": &authv0alphapb.User{
 			Id: &typespb.UserId{
-				Idp:      "localhost",
-				OpaqueId: "einstein",
+				Idp:      "http://localhost:9998",
+				OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51",
 			},
 			Username:    "einstein",
 			Groups:      []string{"sailing-lovers", "violin-haters", "physics-lovers"},
 			Mail:        "einstein@example.org",
 			DisplayName: "Albert Einstein",
 		},
-		"marie": &authv0alphapb.User{
+		"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c": &authv0alphapb.User{
 			Id: &typespb.UserId{
-				Idp:      "localhost",
-				OpaqueId: "marie",
+				Idp:      "http://localhost:9998",
+				OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
 			},
 			Username:    "marie",
 			Groups:      []string{"radium-lovers", "polonium-lovers", "physics-lovers"},
 			Mail:        "marie@example.org",
 			DisplayName: "Marie Curie",
 		},
-		"richard": &authv0alphapb.User{
+		"932b4540-8d16-481e-8ef4-588e4b6b151c": &authv0alphapb.User{
 			Id: &typespb.UserId{
-				Idp:      "localhost",
-				OpaqueId: "richard",
+				Idp:      "http://localhost:9998",
+				OpaqueId: "932b4540-8d16-481e-8ef4-588e4b6b151c",
 			},
 			Username:    "richard",
 			Groups:      []string{"quantum-lovers", "philosophy-haters", "physics-lovers"},

@@ -1,8 +1,8 @@
 [
 	{
 		"id": {
-			"opaque_id": "37a08ed30093a133b1bb4ae0b8f3601f",
-			"idp": "localhost"
+			"opaque_id": "4c510ada-c86b-4815-8820-42cdf82c3d51",
+			"idp": "http://localhost:9998"
 		},
 		"username": "einstein",
 		"secret": "relativity",
@@ -11,8 +11,8 @@
 	},
 	{
 		"id": {
-			"opaque_id": "b3725122c9d3bfef5664619e08e31877",
-			"idp": "localhost"
+			"opaque_id": "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+			"idp": "http://localhost:9998"
 		},
 		"username": "marie",
 		"secret": "radioactivity",
@@ -21,8 +21,8 @@
 	},
 	{
 		"id": {
-			"opaque_id": "6ae199a93c381bf6d5de27491139d3f9",
-			"idp": "localhost"
+			"opaque_id": "932b4540-8d16-481e-8ef4-588e4b6b151c",
+			"idp": "http://localhost:9998"
 		},
 		"username": "richard",
 		"secret": "superfluidity",
