@@ -856,7 +856,7 @@ func (fs *ocFS) Delete(ctx context.Context, ref *storageproviderv0alphapb.Refere
 	// and we need to get rid of the user prefix
 	parts := strings.SplitN(origin, "/", 3)
 	fp := ""
-	// parts = "", "<username>", "files", "foo/bar.txt"
+	// parts = "", "<username>", "foo/bar.txt"
 	switch len(parts) {
 	case 2:
 		fp = "/"
@@ -1157,20 +1157,22 @@ func (fs *ocFS) convertToRecycleItem(ctx context.Context, rp string, md os.FileI
 		log.Error().Err(err).Str("path", md.Name()).Msg("invalid trash time")
 		return nil
 	}
-	origin := "."
-	if v, err := xattr.Get(path.Join(rp, md.Name()), trashOriginPrefix); err != nil {
+	var v []byte
+	if v, err = xattr.Get(path.Join(rp, md.Name()), trashOriginPrefix); err != nil {
 		log := appctx.GetLogger(ctx)
 		log.Error().Err(err).Str("path", md.Name()).Msg("could not read origin")
-	} else {
-		origin = string(v)
+		return nil
 	}
+	// ownCloud 10 stores the parent dir of the deleted item as the location in the oc_files_trashbin table
+	// we use extended attributes for original location, but also only the parent location, which is why
+	// we need to join and trim the path when listing it
+	originalPath := path.Join(string(v), strings.TrimSuffix(path.Base(md.Name()), suffix))
+
 	return &storageproviderv0alphapb.RecycleItem{
 		Type: getResourceType(md.IsDir()),
 		Key:  md.Name(),
-		// ownCloud 10 stores the original location in the oc_files_trashbin table
-		// TODO (jfd) use extended attributes for original location
 		// TODO do we need to prefix the path? it should be relative to this storage root, right?
-		Path: origin,
+		Path: originalPath,
 		Size: uint64(md.Size()),
 		DeletionTime: &typespb.Timestamp{
 			Seconds: uint64(ttime),

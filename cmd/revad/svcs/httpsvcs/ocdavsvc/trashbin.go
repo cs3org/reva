@@ -245,19 +245,10 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *au
 	return msg, nil
 }
 
-// TODO(jfd) render trashbin response
-// <oc:trashbin-original-filename>ownCloud Manual.pdf</oc:trashbin-original-filename>
-// this seems to be relative to the users home ... which is bad: now the client has to build the proper Destination url
-// <oc:trashbin-original-location>ownCloud Manual.pdf</oc:trashbin-original-location>
-// <oc:trashbin-delete-datetime>Thu, 29 Aug 2019 14:06:24 GMT</oc:trashbin-delete-datetime>
-// d:getcontentlength
-// d:resourcetype
 func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, pf *propfindXML, item *storageproviderv0alphapb.RecycleItem) (*responseXML, error) {
 
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
-	t := utils.TSToTime(item.DeletionTime).UTC()
-	dTime := t.Format(time.RFC1123)
-	ref := path.Join(baseURI, item.Key+".d"+dTime)
+	ref := path.Join(baseURI, item.Key)
 	if item.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
 		ref += "/"
 	}
@@ -267,6 +258,11 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, pf *pr
 		Propstat: []propstatXML{},
 	}
 
+	// TODO(jfd): if the path we list here is taken from the ListRecycle request we rely on the gateway to prefix it with the mount point
+
+	t := utils.TSToTime(item.DeletionTime).UTC()
+	dTime := t.Format(time.RFC1123)
+
 	// when allprops has been requested
 	if pf.Allprop != nil {
 		// return all known properties
@@ -274,15 +270,18 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, pf *pr
 			Status: "HTTP/1.1 200 OK",
 			Prop:   []*propertyXML{},
 		})
-		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-filename", item.Key))
-		// TODO (jfd) double check and clarify the cs3 spec what the Key is about and if Path is only the folder that contains the file or if it includes the filename
-		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-location", path.Join(item.Path, item.Key)))
+		// yes this is redundant, can be derived from oc:trashbin-original-location which contains the full path, clients should not fetch it
+		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-filename", path.Base(item.Path)))
+		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-location", item.Path))
 		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-delete-datetime", dTime))
-		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("d:getcontentlength", fmt.Sprintf("%d", item.Size)))
 		if item.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
 			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("d:resourcetype", "<d:collection/>"))
+			// TODO(jfd): decide if we can and want to list oc:size for folders
 		} else {
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("d:resourcetype", ""))
+			response.Propstat[0].Prop = append(response.Propstat[0].Prop,
+				s.newProp("d:resourcetype", ""),
+				s.newProp("d:getcontentlength", fmt.Sprintf("%d", item.Size)),
+			)
 		}
 
 	} else {
@@ -300,11 +299,18 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, pf *pr
 			switch pf.Prop[i].Space {
 			case "http://owncloud.org/ns":
 				switch pf.Prop[i].Local {
+				case "oc:size":
+					if item.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontentlength", size))
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:size", ""))
+					}
 				case "trashbin-original-filename":
-					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-original-filename", item.Path))
+					// yes this is redundant, can be derived from oc:trashbin-original-location which contains the full path, clients should not fetch it
+					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-original-filename", path.Base(item.Path)))
 				case "trashbin-original-location":
 					// TODO (jfd) double check and clarify the cs3 spec what the Key is about and if Path is only the folder that contains the file or if it includes the filename
-					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-original-location", path.Join(item.Path, item.Key)))
+					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-original-location", item.Path))
 				case "trashbin-delete-datetime":
 					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-delete-datetime", dTime))
 				default:
@@ -313,8 +319,11 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, pf *pr
 			case "DAV:":
 				switch pf.Prop[i].Local {
 				case "getcontentlength":
-					// TODO we cannot find out if md.Size is set or not because ints in go default to 0
-					propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontentlength", size))
+					if item.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:getcontentlength", ""))
+					} else {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontentlength", size))
+					}
 				case "resourcetype":
 					if item.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:resourcetype", "<d:collection/>"))
