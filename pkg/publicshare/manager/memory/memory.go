@@ -20,12 +20,15 @@ package memory
 
 import (
 	"context"
+	"errors"
+	"math/rand"
+	"sync"
+	"time"
 
 	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	publicshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
-	v0alpha "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
-	pbtypes "github.com/cs3org/go-cs3apis/cs3/types"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/publicshare/manager/registry"
 )
@@ -34,50 +37,145 @@ func init() {
 	registry.Register("memory", New)
 }
 
-// New returns a new memory manager
-func New(c map[string]interface{}) (publicshare.Manager, error) {
-	return &manager{}, nil
+// New returns a new memory manager.
+func New() (publicshare.Manager, error) {
+	return &manager{
+		shares: sync.Map{},
+	}, nil
 }
 
-type manager struct{}
-
-// TODO(refs) implement application logic.
-func (m *manager) CreatePublicShare(ctx context.Context, u *authv0alphapb.User, md *storageproviderv0alphapb.ResourceInfo, g *publicshareproviderv0alphapb.Grant) (*publicshareproviderv0alphapb.PublicShare, error) {
-	return &publicshareproviderv0alphapb.PublicShare{}, nil
+type manager struct {
+	shares sync.Map
 }
 
+// CreatePublicShare safely adds a new entry to manager.shares
+func (m *manager) CreatePublicShare(ctx context.Context, u *authv0alphapb.User, rInfo *storageproviderv0alphapb.ResourceInfo, g *publicshareproviderv0alphapb.Grant) (*publicshareproviderv0alphapb.PublicShare, error) {
+	// what to set id?
+	//  TODO does OpaqueId expecting a specific format?
+	// where could this initialization go wrong and early return?
+	id := &publicshareproviderv0alphapb.PublicShareId{
+		OpaqueId: randString(12),
+	}
+	tkn := randString(12)
+	now := uint64(time.Now().Unix())
+
+	newShare := publicshareproviderv0alphapb.PublicShare{
+		Id:          id,
+		Owner:       u.Id,
+		Creator:     u.Id,
+		ResourceId:  rInfo.Id,
+		Token:       tkn,
+		Permissions: g.Permissions,
+		Ctime: &typespb.Timestamp{
+			Seconds: now,
+			Nanos:   uint32(now % 1000000000),
+		},
+		Mtime: &typespb.Timestamp{
+			Seconds: now,
+			Nanos:   uint32(now % 1000000000),
+		},
+		PasswordProtected: false,
+		Expiration:        g.Expiration,
+		DisplayName:       tkn,
+	}
+
+	m.shares.Store(newShare.Token, &newShare)
+	return &newShare, nil
+}
+
+// UpdatePublicShare updates the expiration date, permissions and Mtime
 func (m *manager) UpdatePublicShare(ctx context.Context, u *authv0alphapb.User, ref *publicshareproviderv0alphapb.PublicShareReference, g *publicshareproviderv0alphapb.Grant) (*publicshareproviderv0alphapb.PublicShare, error) {
+	share, err := m.GetPublicShare(ctx, u, ref)
+	if err != nil {
+		return nil, errors.New("ref does not exist")
+	}
+
+	token := share.GetToken()
+
+	// thread unsafe. 2 goroutines can access to the same resource?
+	share.Permissions = g.Permissions
+	share.Expiration = g.Expiration
+	share.Mtime = &typespb.Timestamp{
+		Seconds: uint64(time.Now().Unix()),
+		Nanos:   uint32(time.Now().Unix() % 1000000000),
+	}
+
+	m.shares.Store(token, share)
+
 	return &publicshareproviderv0alphapb.PublicShare{}, nil
 }
 
-func (m *manager) GetPublicShare(ctx context.Context, u *authv0alphapb.User, ref *publicshareproviderv0alphapb.PublicShareReference) (*publicshareproviderv0alphapb.PublicShare, error) {
-	return &publicshareproviderv0alphapb.PublicShare{}, nil
+func (m *manager) GetPublicShare(ctx context.Context, u *authv0alphapb.User, ref *publicshareproviderv0alphapb.PublicShareReference) (share *publicshareproviderv0alphapb.PublicShare, err error) {
+	// Attempt to fetch public share by token
+	if ref.GetToken() != "" {
+		share, err = m.GetPublicShareByToken(ctx, ref.GetToken())
+		if err != nil {
+			return nil, errors.New("there are no shares for the given reference")
+		}
+	}
+
+	// Attempt to fetch public share by Id
+	if ref.GetId() != nil {
+		share, err = m.getPublicShareByTokenID(ctx, *ref.GetId())
+		if err != nil {
+			return nil, errors.New("there are no shares for the given reference")
+		}
+	}
+
+	return share, nil
+	// return nil, errors.New("there are no shares for the given reference")
 }
 
 func (m *manager) ListPublicShares(ctx context.Context, u *authv0alphapb.User, md *storageproviderv0alphapb.ResourceInfo) ([]*publicshareproviderv0alphapb.PublicShare, error) {
-	shares := []*publicshareproviderv0alphapb.PublicShare{
-		&publicshareproviderv0alphapb.PublicShare{
-			Id: &publicshareproviderv0alphapb.PublicShareId{
-				OpaqueId: "some_publicly_shared_id",
-			},
-			Token:       "my_token",
-			ResourceId:  &v0alpha.ResourceId{},
-			Permissions: &publicshareproviderv0alphapb.PublicSharePermissions{},
-			Owner:       &pbtypes.UserId{},
-			Creator:     &pbtypes.UserId{},
-			Ctime:       &pbtypes.Timestamp{},
-			Expiration:  &pbtypes.Timestamp{},
-			Mtime:       &pbtypes.Timestamp{},
-			DisplayName: "some_public_share",
-		},
-	}
+	shares := []*publicshareproviderv0alphapb.PublicShare{}
+	m.shares.Range(func(k, v interface{}) bool {
+		shares = append(shares, v.(*publicshareproviderv0alphapb.PublicShare))
+		return true
+	})
+
 	return shares, nil
 }
 
-func (m *manager) RevokePublicShare(ctx context.Context, u *authv0alphapb.User, id string) error {
-	return nil
+func (m *manager) RevokePublicShare(ctx context.Context, u *authv0alphapb.User, id string) (err error) {
+	// check whether the referente exists
+	if _, err := m.GetPublicShareByToken(ctx, id); err != nil {
+		return errors.New("reference does not exist")
+	}
+	m.shares.Delete(id)
+	return
 }
 
 func (m *manager) GetPublicShareByToken(ctx context.Context, token string) (*publicshareproviderv0alphapb.PublicShare, error) {
-	return &publicshareproviderv0alphapb.PublicShare{}, nil
+	if ps, ok := m.shares.Load(token); ok {
+		return ps.(*publicshareproviderv0alphapb.PublicShare), nil
+	}
+	return nil, errors.New("invalid token")
+}
+
+// Helpers
+func randString(n int) string {
+	var l = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = l[rand.Intn(len(l))]
+	}
+	return string(b)
+}
+
+func (m *manager) getPublicShareByTokenID(ctx context.Context, targetID publicshareproviderv0alphapb.PublicShareId) (*publicshareproviderv0alphapb.PublicShare, error) {
+	// iterate over existing shares and return the first one matching the id
+	var found *publicshareproviderv0alphapb.PublicShare
+	m.shares.Range(func(k, v interface{}) bool {
+		id := v.(*publicshareproviderv0alphapb.PublicShare).GetId()
+		if targetID.String() == id.String() {
+			found = v.(*publicshareproviderv0alphapb.PublicShare)
+			return true
+		}
+		return false
+	})
+
+	if found != nil {
+		return found, nil
+	}
+	return nil, errors.New("invalid token")
 }
