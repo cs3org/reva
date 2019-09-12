@@ -117,13 +117,20 @@ func (h *CapabilitiesHandler) init(c *Config) {
 		h.c.Capabilities.FilesSharing = &CapabilitiesFilesSharing{}
 	}
 
-	// h.c.Capabilities.FilesSharing.APIEnabled is boolean
+	// h.c.Capabilities.FilesSharing.APIEnabled is string ... with a boolean flag
 
+	if h.c.Capabilities.FilesSharing.APIEnabled == "" {
+		h.c.Capabilities.FilesSharing.APIEnabled = "1"
+	}
 	if h.c.Capabilities.FilesSharing.Public == nil {
 		h.c.Capabilities.FilesSharing.Public = &CapabilitiesFilesSharingPublic{}
 	}
 
-	// h.c.Capabilities.FilesSharing.Public.Enabled is boolean
+	// h.c.Capabilities.FilesSharing.Public.Enabled is string ... with a boolean flag
+
+	if h.c.Capabilities.FilesSharing.Public.Enabled == "" {
+		h.c.Capabilities.FilesSharing.Public.Enabled = "1"
+	}
 
 	if h.c.Capabilities.FilesSharing.Public.Password == nil {
 		h.c.Capabilities.FilesSharing.Public.Password = &CapabilitiesFilesSharingPublicPassword{}
@@ -273,7 +280,7 @@ type CapabilitiesDav struct {
 
 // CapabilitiesFilesSharing TODO document
 type CapabilitiesFilesSharing struct {
-	APIEnabled                    bool                                     `json:"api_enabled" xml:"api_enabled" mapstructure:"api_enabled"`
+	APIEnabled                    string                                   `json:"api_enabled" xml:"api_enabled" mapstructure:"api_enabled"`
 	Resharing                     bool                                     `json:"resharing" xml:"resharing"`
 	GroupSharing                  bool                                     `json:"group_sharing" xml:"group_sharing" mapstructure:"group_sharing"`
 	AutoAcceptShare               bool                                     `json:"auto_accept_share" xml:"auto_accept_share" mapstructure:"auto_accept_share"`
@@ -289,7 +296,7 @@ type CapabilitiesFilesSharing struct {
 
 // CapabilitiesFilesSharingPublic TODO document
 type CapabilitiesFilesSharingPublic struct {
-	Enabled            bool                                      `json:"enabled" xml:"enabled"`
+	Enabled            string                                    `json:"enabled" xml:"enabled"`
 	SendMail           bool                                      `json:"send_mail" xml:"send_mail" mapstructure:"send_mail"`
 	SocialShare        bool                                      `json:"social_share" xml:"social_share" mapstructure:"social_share"`
 	Upload             bool                                      `json:"upload" xml:"upload"`
