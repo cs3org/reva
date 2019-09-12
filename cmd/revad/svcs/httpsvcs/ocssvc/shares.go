@@ -642,10 +642,10 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 			shares = append(shares, share)
 		}
 
+		// TODO(refs): refactor
 		pClient, err := pool.GetPublicShareProviderClient(h.gatewaySvc)
 		if err != nil {
-			// TODO(jfd) log error if it is not available, log nothing if disabled ... somehow
-			log.Error().Err(err).Msg("error getting grpc public share provider client")
+			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting public share provider grpc client", err)
 		} else {
 			req := &publicshareproviderv0alphapb.ListPublicSharesRequest{}
 			res, err := pClient.ListPublicShares(ctx, req)
