@@ -3,7 +3,6 @@ package ocssvc
 import (
 	"encoding/json"
 	"encoding/xml"
-	"fmt"
 	"testing"
 )
 
@@ -25,8 +24,6 @@ func TestMarshal(t *testing.T) {
 	}
 
 	if string(jsonData) != jsonExpect {
-		fmt.Println(string(jsonData))
-		fmt.Println(jsonExpect)
 		t.Fail()
 	}
 
@@ -36,7 +33,6 @@ func TestMarshal(t *testing.T) {
 	}
 
 	if string(xmlData) != xmlExpect {
-		fmt.Println(string(xmlData))
 		t.Fail()
 	}
 }
