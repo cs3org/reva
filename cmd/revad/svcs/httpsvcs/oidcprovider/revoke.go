@@ -31,7 +31,7 @@ func (s *svc) doRevoke(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(ctx)
 
 	// This will create an access request object and iterate through the registered TokenEndpointHandlers to validate the request.
-	accessRequest, err := oauth2.NewAccessRequest(ctx, r, emptySession())
+	accessRequest, err := s.oauth2.NewAccessRequest(ctx, r, emptySession())
 
 	// Catch any errors, e.g.:
 	// * unknown client
@@ -39,7 +39,7 @@ func (s *svc) doRevoke(w http.ResponseWriter, r *http.Request) {
 	// * ...
 	if err != nil {
 		log.Error().Err(err).Msg("Error occurred in NewAccessRequest")
-		oauth2.WriteAccessError(w, accessRequest, err)
+		s.oauth2.WriteAccessError(w, accessRequest, err)
 		return
 	}
 
@@ -54,15 +54,15 @@ func (s *svc) doRevoke(w http.ResponseWriter, r *http.Request) {
 
 	// Next we create a response for the access request. Again, we iterate through the TokenEndpointHandlers
 	// and aggregate the result in response.
-	response, err := oauth2.NewAccessResponse(ctx, accessRequest)
+	response, err := s.oauth2.NewAccessResponse(ctx, accessRequest)
 	if err != nil {
 		log.Error().Err(err).Msg("Error occurred in NewAccessResponse")
-		oauth2.WriteAccessError(w, accessRequest, err)
+		s.oauth2.WriteAccessError(w, accessRequest, err)
 		return
 	}
 
 	// All done, send the response.
-	oauth2.WriteAccessResponse(w, accessRequest, response)
+	s.oauth2.WriteAccessResponse(w, accessRequest, response)
 
 	// The client now has a valid access token
 }
