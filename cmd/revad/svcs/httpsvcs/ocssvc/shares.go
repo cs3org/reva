@@ -79,6 +79,9 @@ func (h *SharesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch head {
 	case "shares":
 		switch r.Method {
+		case "OPTIONS":
+			w.WriteHeader(http.StatusOK) // TODO cors?
+			return
 		case "GET":
 			h.listShares(w, r)
 		case "POST":
@@ -604,7 +607,7 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 
 	// fetch user shares if configured
 	if h.gatewaySvc != "" {
-		uClient, err := pool.GetUserShareProviderClient(h.gatewaySvc)
+		userShareProviderClient, err := pool.GetUserShareProviderClient(h.gatewaySvc)
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc user share handler client", err)
 			return
@@ -612,7 +615,7 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 		req := &usershareproviderv0alphapb.ListSharesRequest{
 			Filters: filters,
 		}
-		res, err := uClient.ListShares(ctx, req)
+		res, err := userShareProviderClient.ListShares(ctx, req)
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error sending a grpc list shares request", err)
 			return
@@ -638,41 +641,43 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 			log.Debug().Interface("share", s).Interface("info", info).Interface("shareData", share).Msg("mapped")
 			shares = append(shares, share)
 		}
+
+		// TODO(refs): refactor
+		pClient, err := pool.GetPublicShareProviderClient(h.gatewaySvc)
+		if err != nil {
+			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting public share provider grpc client", err)
+		} else {
+			req := &publicshareproviderv0alphapb.ListPublicSharesRequest{}
+			res, err := pClient.ListPublicShares(ctx, req)
+			if err != nil {
+				WriteOCSError(w, r, MetaServerError.StatusCode, "error sending a grpc list public shares request", err)
+				return
+			}
+			if res.Status.Code != rpcpb.Code_CODE_OK {
+				if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+					WriteOCSError(w, r, MetaNotFound.StatusCode, "not found", nil)
+					return
+				}
+				WriteOCSError(w, r, MetaServerError.StatusCode, "grpc list shares request failed", err)
+				return
+			}
+
+			for _, s := range res.Share {
+				share := h.publicShare2ShareData(s)
+				err := h.addFileInfo(ctx, share, info)
+				if err != nil {
+					WriteOCSError(w, r, MetaServerError.StatusCode, "error adding file info", err)
+					return
+				}
+				log.Debug().Interface("share", s).Interface("info", info).Interface("shareData", share).Msg("mapped")
+				shares = append(shares, share)
+			}
+		}
 	}
 	// TODO fetch group shares
 	// TODO fetch federated shares
 
 	// fetch public link shares if configured
-	pClient, err := pool.GetPublicShareProviderClient(h.gatewaySvc)
-	if err != nil {
-		// TODO(jfd) log error if it is not available, log nothing if disabled ... somehow
-		log.Error().Err(err).Msg("error getting grpc public share provider client")
-	} else {
-		req := &publicshareproviderv0alphapb.ListPublicSharesRequest{}
-		res, err := pClient.ListPublicShares(ctx, req)
-		if err != nil {
-			WriteOCSError(w, r, MetaServerError.StatusCode, "error sending a grpc list shares request", err)
-			return
-		}
-		if res.Status.Code != rpcpb.Code_CODE_OK {
-			if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
-				WriteOCSError(w, r, MetaNotFound.StatusCode, "not found", nil)
-				return
-			}
-			WriteOCSError(w, r, MetaServerError.StatusCode, "grpc list shares request failed", err)
-			return
-		}
-		for _, s := range res.Share {
-			share := h.publicShare2ShareData(s)
-			err := h.addFileInfo(ctx, share, info)
-			if err != nil {
-				WriteOCSError(w, r, MetaServerError.StatusCode, "error adding file info", err)
-				return
-			}
-			log.Debug().Interface("share", s).Interface("info", info).Interface("shareData", share).Msg("mapped")
-			shares = append(shares, share)
-		}
-	}
 
 	WriteOCSSuccess(w, r, &SharesData{
 		Shares: shares,

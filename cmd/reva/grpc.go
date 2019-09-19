@@ -83,6 +83,14 @@ func getUserShareProviderClient() (usershareproviderv0alphapb.UserShareProviderS
 	return usershareproviderv0alphapb.NewUserShareProviderServiceClient(conn), nil
 }
 
+// func getPublicShareProviderClient() (publicshareproviderv0alphapb.PublicShareProviderServiceClient, error) {
+// 	conn, err := getConn()
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return publicshareproviderv0alphapb.NewPublicShareProviderServiceClient(conn), nil
+// }
+
 func getStorageProviderClient() (storageproviderv0alphapb.StorageProviderServiceClient, error) {
 	return pool.GetStorageProviderServiceClient(conf.Host)
 }
