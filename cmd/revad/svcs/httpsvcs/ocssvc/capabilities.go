@@ -19,8 +19,29 @@
 package ocssvc
 
 import (
+	"encoding/xml"
 	"net/http"
 )
+
+// ocsBool implements the xml/json Marshaler interface. The OCS API inconsistency require us to parse boolean values
+// as native booleans for json requests but "truthy" 0/1 values for xml requests.
+type ocsBool bool
+
+func (c *ocsBool) MarshalJSON() ([]byte, error) {
+	if *c {
+		return []byte("true"), nil
+	}
+
+	return []byte("false"), nil
+}
+
+func (c ocsBool) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	if c {
+		return e.EncodeElement("1", start)
+	}
+
+	return e.EncodeElement("0", start)
+}
 
 // CapabilitiesHandler renders the capability endpoint
 type CapabilitiesHandler struct {
@@ -239,14 +260,14 @@ type CapabilitiesCore struct {
 
 // Status holds basic status information
 type Status struct {
-	Installed      bool   `json:"installed" xml:"installed"`
-	Maintenance    bool   `json:"maintenance" xml:"maintenance"`
-	NeedsDBUpgrade bool   `json:"needsDbUpgrade" xml:"needsDbUpgrade"`
-	Version        string `json:"version" xml:"version"`
-	VersionString  string `json:"versionstring" xml:"versionstring"`
-	Edition        string `json:"edition" xml:"edition"`
-	ProductName    string `json:"productname" xml:"productname"`
-	Hostname       string `json:"hostname,omitempty" xml:"hostname,omitempty"`
+	Installed      ocsBool `json:"installed" xml:"installed"`
+	Maintenance    ocsBool `json:"maintenance" xml:"maintenance"`
+	NeedsDBUpgrade ocsBool `json:"needsDbUpgrade" xml:"needsDbUpgrade"`
+	Version        string  `json:"version" xml:"version"`
+	VersionString  string  `json:"versionstring" xml:"versionstring"`
+	Edition        string  `json:"edition" xml:"edition"`
+	ProductName    string  `json:"productname" xml:"productname"`
+	Hostname       string  `json:"hostname,omitempty" xml:"hostname,omitempty"`
 }
 
 // CapabilitiesChecksums holds available hashes
@@ -257,10 +278,10 @@ type CapabilitiesChecksums struct {
 
 // CapabilitiesFiles TODO this is storage specific, not global. What effect do these options have on the clients?
 type CapabilitiesFiles struct {
-	PrivateLinks     bool     `json:"privateLinks" xml:"privateLinks" mapstructure:"private_links"`
-	BigFileChunking  bool     `json:"bigfilechunking" xml:"bigfilechunking"`
-	Undelete         bool     `json:"undelete" xml:"undelete"`
-	Versioning       bool     `json:"versioning" xml:"versioning"`
+	PrivateLinks     ocsBool  `json:"privateLinks" xml:"privateLinks" mapstructure:"private_links"`
+	BigFileChunking  ocsBool  `json:"bigfilechunking" xml:"bigfilechunking"`
+	Undelete         ocsBool  `json:"undelete" xml:"undelete"`
+	Versioning       ocsBool  `json:"versioning" xml:"versioning"`
 	BlacklistedFiles []string `json:"blacklisted_files" xml:"blacklisted_files>element" mapstructure:"blacklisted_files"`
 }
 
@@ -273,12 +294,12 @@ type CapabilitiesDav struct {
 
 // CapabilitiesFilesSharing TODO document
 type CapabilitiesFilesSharing struct {
-	APIEnabled                    bool                                     `json:"api_enabled" xml:"api_enabled" mapstructure:"api_enabled"`
-	Resharing                     bool                                     `json:"resharing" xml:"resharing"`
-	GroupSharing                  bool                                     `json:"group_sharing" xml:"group_sharing" mapstructure:"group_sharing"`
-	AutoAcceptShare               bool                                     `json:"auto_accept_share" xml:"auto_accept_share" mapstructure:"auto_accept_share"`
-	ShareWithGroupMembersOnly     bool                                     `json:"share_with_group_members_only" xml:"share_with_group_members_only" mapstructure:"share_with_group_members_only"`
-	ShareWithMembershipGroupsOnly bool                                     `json:"share_with_membership_groups_only" xml:"share_with_membership_groups_only" mapstructure:"share_with_membership_groups_only"`
+	APIEnabled                    ocsBool                                  `json:"api_enabled" xml:"api_enabled" mapstructure:"api_enabled"`
+	Resharing                     ocsBool                                  `json:"resharing" xml:"resharing"`
+	GroupSharing                  ocsBool                                  `json:"group_sharing" xml:"group_sharing" mapstructure:"group_sharing"`
+	AutoAcceptShare               ocsBool                                  `json:"auto_accept_share" xml:"auto_accept_share" mapstructure:"auto_accept_share"`
+	ShareWithGroupMembersOnly     ocsBool                                  `json:"share_with_group_members_only" xml:"share_with_group_members_only" mapstructure:"share_with_group_members_only"`
+	ShareWithMembershipGroupsOnly ocsBool                                  `json:"share_with_membership_groups_only" xml:"share_with_membership_groups_only" mapstructure:"share_with_membership_groups_only"`
 	SearchMinLength               int                                      `json:"search_min_length" xml:"search_min_length" mapstructure:"search_min_length"`
 	DefaultPermissions            int                                      `json:"default_permissions" xml:"default_permissions" mapstructure:"default_permissions"`
 	UserEnumeration               *CapabilitiesFilesSharingUserEnumeration `json:"user_enumeration" xml:"user_enumeration" mapstructure:"user_enumeration"`
@@ -289,12 +310,12 @@ type CapabilitiesFilesSharing struct {
 
 // CapabilitiesFilesSharingPublic TODO document
 type CapabilitiesFilesSharingPublic struct {
-	Enabled            bool                                      `json:"enabled" xml:"enabled"`
-	SendMail           bool                                      `json:"send_mail" xml:"send_mail" mapstructure:"send_mail"`
-	SocialShare        bool                                      `json:"social_share" xml:"social_share" mapstructure:"social_share"`
-	Upload             bool                                      `json:"upload" xml:"upload"`
-	Multiple           bool                                      `json:"multiple" xml:"multiple"`
-	SupportsUploadOnly bool                                      `json:"supports_upload_only" xml:"supports_upload_only" mapstructure:"supports_upload_only"`
+	Enabled            ocsBool                                   `json:"enabled" xml:"enabled"`
+	SendMail           ocsBool                                   `json:"send_mail" xml:"send_mail" mapstructure:"send_mail"`
+	SocialShare        ocsBool                                   `json:"social_share" xml:"social_share" mapstructure:"social_share"`
+	Upload             ocsBool                                   `json:"upload" xml:"upload"`
+	Multiple           ocsBool                                   `json:"multiple" xml:"multiple"`
+	SupportsUploadOnly ocsBool                                   `json:"supports_upload_only" xml:"supports_upload_only" mapstructure:"supports_upload_only"`
 	Password           *CapabilitiesFilesSharingPublicPassword   `json:"password" xml:"password"`
 	ExpireDate         *CapabilitiesFilesSharingPublicExpireDate `json:"expire_date" xml:"expire_date" mapstructure:"expire_date"`
 }
@@ -302,36 +323,36 @@ type CapabilitiesFilesSharingPublic struct {
 // CapabilitiesFilesSharingPublicPassword TODO document
 type CapabilitiesFilesSharingPublicPassword struct {
 	EnforcedFor *CapabilitiesFilesSharingPublicPasswordEnforcedFor `json:"enforced_for" xml:"enforced_for" mapstructure:"enforced_for"`
-	Enforced    bool                                               `json:"enforced" xml:"enforced"`
+	Enforced    ocsBool                                            `json:"enforced" xml:"enforced"`
 }
 
 // CapabilitiesFilesSharingPublicPasswordEnforcedFor TODO document
 type CapabilitiesFilesSharingPublicPasswordEnforcedFor struct {
-	ReadOnly   bool `json:"read_only" xml:"read_only,omitempty" mapstructure:"read_only"`
-	ReadWrite  bool `json:"read_write" xml:"read_write,omitempty" mapstructure:"read_write"`
-	UploadOnly bool `json:"upload_only" xml:"upload_only,omitempty" mapstructure:"upload_only"`
+	ReadOnly   ocsBool `json:"read_only" xml:"read_only,omitempty" mapstructure:"read_only"`
+	ReadWrite  ocsBool `json:"read_write" xml:"read_write,omitempty" mapstructure:"read_write"`
+	UploadOnly ocsBool `json:"upload_only" xml:"upload_only,omitempty" mapstructure:"upload_only"`
 }
 
 // CapabilitiesFilesSharingPublicExpireDate TODO document
 type CapabilitiesFilesSharingPublicExpireDate struct {
-	Enabled bool `json:"enabled" xml:"enabled"`
+	Enabled ocsBool `json:"enabled" xml:"enabled"`
 }
 
 // CapabilitiesFilesSharingUser TODO document
 type CapabilitiesFilesSharingUser struct {
-	SendMail bool `json:"send_mail" xml:"send_mail" mapstructure:"send_mail"`
+	SendMail ocsBool `json:"send_mail" xml:"send_mail" mapstructure:"send_mail"`
 }
 
 // CapabilitiesFilesSharingUserEnumeration TODO document
 type CapabilitiesFilesSharingUserEnumeration struct {
-	Enabled          bool `json:"enabled" xml:"enabled"`
-	GroupMembersOnly bool `json:"group_members_only" xml:"group_members_only" mapstructure:"group_members_only"`
+	Enabled          ocsBool `json:"enabled" xml:"enabled"`
+	GroupMembersOnly ocsBool `json:"group_members_only" xml:"group_members_only" mapstructure:"group_members_only"`
 }
 
 // CapabilitiesFilesSharingFederation holds outgoing and incoming flags
 type CapabilitiesFilesSharingFederation struct {
-	Outgoing bool `json:"outgoing" xml:"outgoing"`
-	Incoming bool `json:"incoming" xml:"incoming"`
+	Outgoing ocsBool `json:"outgoing" xml:"outgoing"`
+	Incoming ocsBool `json:"incoming" xml:"incoming"`
 }
 
 // CapabilitiesNotifications holds a list of notification endpoints
