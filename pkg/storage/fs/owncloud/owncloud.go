@@ -169,7 +169,7 @@ func (c *config) init(m map[string]interface{}) {
 		c.Scan = true
 	}
 	// default to autocreate if not configured
-	if _, ok := m["scan"]; !ok {
+	if _, ok := m["autocreate"]; !ok {
 		c.Autocreate = true
 	}
 }
