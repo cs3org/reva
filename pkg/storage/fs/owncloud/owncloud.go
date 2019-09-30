@@ -138,6 +138,8 @@ const (
 	// SharePrefix is the prefix for sharing related extended attributes
 	sharePrefix       string = "user.oc.acl."
 	trashOriginPrefix string = "user.oc.o"
+	filesDir                 = "files"
+	filesVersionDir          = "files_versions"
 )
 
 func init() {
@@ -147,8 +149,10 @@ func init() {
 type config struct {
 	DataDirectory string `mapstructure:"datadirectory"`
 	Scan          bool   `mapstructure:"scan"`
-	Autocreate    bool   `mapstructure:"autocreate"`
-	Redis         string `mapstructure:"redis"`
+	// Autocreate creates the neccessary folders for the file system to operate.
+	// TODO(refs) if autocreate is set to false we need defensive code
+	Autocreate bool   `mapstructure:"autocreate"`
+	Redis      string `mapstructure:"redis"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -160,6 +164,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
+// TODO(refs): bootstrap required folders (/files, /files_versions on init)
 func (c *config) init(m map[string]interface{}) {
 	if c.Redis == "" {
 		c.Redis = ":6379"
@@ -290,7 +295,7 @@ func (fs *ocFS) getVersionsPath(ctx context.Context, np string) string {
 	// np = /path/to/data/<username>/files/foo/bar.txt
 	// remove data dir
 	if fs.c.DataDirectory != "/" {
-		// fs.c.DataDirectory is a clean puth, so it never ends in /
+		// fs.c.DataDirectory is a clean path, so it never ends in /
 		np = strings.TrimPrefix(np, fs.c.DataDirectory)
 	}
 	// np = /<username>/files/foo/bar.txt
@@ -415,27 +420,20 @@ func readOrCreateID(ctx context.Context, np string, conn redis.Conn) string {
 	return uid.String()
 }
 
-func (fs *ocFS) autocreate(ctx context.Context, fsfn string) {
-	if fs.c.Autocreate {
-		parts := strings.SplitN(fsfn, "/files", 2)
-		switch len(parts) {
-		case 1:
-			return // error? there is no files in here ...
-		case 2:
-			if parts[1] == "" {
-				// nothing to do, fsfn is the home
-			} else {
-				// only create home
-				fsfn = path.Join(parts[0], "files")
-			}
-			err := os.MkdirAll(fsfn, 0700)
-			if err != nil {
-				appctx.GetLogger(ctx).Debug().Err(err).
-					Str("fsfn", fsfn).
-					Msg("could not autocreate dir")
-			}
-		}
+// TODO(refs) this function assumes too much...
+func (fs *ocFS) autocreate(ctx context.Context, p string) {
+	segments := strings.Split(p, "/") // TODO(refs) add defensive code at this point
+	home := path.Join("/", segments[1], segments[2])
+	fs.bootstrapDir(path.Join(home, filesDir))
+	fs.bootstrapDir(path.Join(home, filesVersionDir))
+}
+
+// bootstrap oC directories
+func (fs *ocFS) bootstrapDir(dest string) error {
+	if err := os.MkdirAll(dest, 0700); err != nil {
+		return err
 	}
+	return nil
 }
 
 func (fs *ocFS) getPath(ctx context.Context, id *storageproviderv0alphapb.ResourceId) (string, error) {
@@ -902,7 +900,9 @@ func (fs *ocFS) GetMD(ctx context.Context, ref *storageproviderv0alphapb.Referen
 		return nil, errors.Wrap(err, "ocFS: error resolving reference")
 	}
 
-	fs.autocreate(ctx, np)
+	if fs.c.Autocreate {
+		fs.autocreate(ctx, np)
+	}
 
 	md, err := os.Stat(np)
 	if err != nil {
@@ -924,7 +924,9 @@ func (fs *ocFS) ListFolder(ctx context.Context, ref *storageproviderv0alphapb.Re
 		return nil, errors.Wrap(err, "ocFS: error resolving reference")
 	}
 
-	fs.autocreate(ctx, np)
+	if fs.c.Autocreate {
+		fs.autocreate(ctx, np)
+	}
 
 	mds, err := ioutil.ReadDir(np)
 	if err != nil {
@@ -1040,14 +1042,16 @@ func (fs *ocFS) ListRevisions(ctx context.Context, ref *storageproviderv0alphapb
 		return nil, errors.Wrap(err, "ocFS: error resolving reference")
 	}
 	vp := fs.getVersionsPath(ctx, np)
-
-	fs.autocreate(ctx, vp)
-
+	if fs.c.Autocreate {
+		fs.autocreate(ctx, vp)
+	}
 	bn := path.Base(np)
-
 	revisions := []*storageproviderv0alphapb.FileVersion{}
 	mds, err := ioutil.ReadDir(path.Dir(vp))
 	if err != nil {
+		// TODO(refs): this is really permissive, checks for ENOENT need to be added
+		// create "/files_versions" if it doesn't exist
+		// os.Mkdir()
 		return nil, errors.Wrap(err, "ocFS: error reading"+path.Dir(vp))
 	}
 	for i := range mds {

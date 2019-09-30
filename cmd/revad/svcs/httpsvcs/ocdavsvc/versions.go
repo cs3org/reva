@@ -72,6 +72,15 @@ func (h *VersionsHandler) Handler(s *svc, rid *storageproviderv0alphapb.Resource
 }
 
 func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request, s *svc, rid *storageproviderv0alphapb.ResourceId) {
+	// read propfinds
+	// get a client to the storage provider
+	// prepare a reference
+	// prepare a request to use the reference in
+	// do a stat call on the reference to get resource info
+	// prepare a list file version request
+	// do list file versions request
+	// get versions from the response (GetVersions())
+
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
