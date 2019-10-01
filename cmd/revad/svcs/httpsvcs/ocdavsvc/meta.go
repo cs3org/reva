@@ -21,6 +21,7 @@ package ocdavsvc
 import (
 	"net/http"
 
+	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
 )
 
@@ -45,7 +46,10 @@ func (h *MetaHandler) Handler(s *svc) http.Handler {
 			return
 		}
 
-		did := unwrap(id)
+		// did := unwrap(id)
+		did := &storageproviderv0alphapb.ResourceId{
+			OpaqueId: id,
+		}
 
 		var head string
 		head, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)

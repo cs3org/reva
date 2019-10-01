@@ -26,10 +26,8 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"time"
 
 	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
-	publicshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
@@ -572,12 +570,12 @@ func userSharePermissions2OCSPermissions(sp *usershareproviderv0alphapb.SharePer
 	return permissionInvalid
 }
 
-func publicSharePermissions2OCSPermissions(sp *publicshareproviderv0alphapb.PublicSharePermissions) Permissions {
-	if sp != nil {
-		return permissions2OCSPermissions(sp.GetPermissions())
-	}
-	return permissionInvalid
-}
+// func publicSharePermissions2OCSPermissions(sp *publicshareproviderv0alphapb.PublicSharePermissions) Permissions {
+// 	if sp != nil {
+// 		return permissions2OCSPermissions(sp.GetPermissions())
+// 	}
+// 	return permissionInvalid
+// }
 
 // TODO(refs): uncomment when working on public shares
 // func (h *SharesHandler) publicShare2ShareData(share *publicshareproviderv0alphapb.PublicShare) *shareData {
@@ -604,9 +602,9 @@ func publicSharePermissions2OCSPermissions(sp *publicshareproviderv0alphapb.Publ
 
 // timestamp is assumed to be UTC ... just human readable ...
 // FIXME and ambiguous / error prone because there is no time zone ...
-func timestampToExpiration(t *typespb.Timestamp) string {
-	return time.Unix(int64(t.Seconds), int64(t.Nanos)).Format("2006-01-02 15:05:05")
-}
+// func timestampToExpiration(t *typespb.Timestamp) string {
+// 	return time.Unix(int64(t.Seconds), int64(t.Nanos)).Format("2006-01-02 15:05:05")
+// }
 
 // TODO sort out mapping, this is just a first guess
 func permissions2OCSPermissions(p *storageproviderv0alphapb.ResourcePermissions) Permissions {

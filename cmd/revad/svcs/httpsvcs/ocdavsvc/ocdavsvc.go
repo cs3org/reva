@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"strings"
 
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/httpserver"
@@ -127,6 +126,7 @@ func (s *svc) Handler() http.Handler {
 			}
 
 			// the new `/dav/files` endpoint uses remote.php/dav/files/$user/$path style paths
+			// http://localhost:9998/remote.php/dav/meta/efcdfdd7-7cda-4b83-a426-1fade610f191/v
 			if head2 == "dav" {
 				s.davHandler.Handler(s).ServeHTTP(w, r)
 				return
@@ -153,17 +153,18 @@ func wrap(sid string, oid string) string {
 	return base64.URLEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", sid, oid)))
 }
 
-func unwrap(rid string) *storageproviderv0alphapb.ResourceId {
-	decodedID, err := base64.URLEncoding.DecodeString(rid)
-	if err != nil {
-		return nil
-	}
-	parts := strings.SplitN(string(decodedID), ":", 2)
-	if len(parts) != 2 {
-		return nil
-	}
-	return &storageproviderv0alphapb.ResourceId{
-		StorageId: parts[0],
-		OpaqueId:  parts[1],
-	}
-}
+// TODO(refs): is this needed?
+// func unwrap(rid string) *storageproviderv0alphapb.ResourceId {
+// 	decodedID, err := base64.URLEncoding.DecodeString(rid)
+// 	if err != nil {
+// 		return nil
+// 	}
+// 	parts := strings.SplitN(string(decodedID), ":", 2)
+// 	if len(parts) != 2 {
+// 		return nil
+// 	}
+// 	return &storageproviderv0alphapb.ResourceId{
+// 		StorageId: parts[0],
+// 		OpaqueId:  parts[1],
+// 	}
+// }
