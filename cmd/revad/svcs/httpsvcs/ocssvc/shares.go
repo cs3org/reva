@@ -579,27 +579,28 @@ func publicSharePermissions2OCSPermissions(sp *publicshareproviderv0alphapb.Publ
 	return permissionInvalid
 }
 
-func (h *SharesHandler) publicShare2ShareData(share *publicshareproviderv0alphapb.PublicShare) *shareData {
-	sd := &shareData{
-		ID: share.Id.OpaqueId,
-		// TODO map share.resourceId to path and storage ... requires a stat call
-		// share.permissions ar mapped below
-		Permissions: publicSharePermissions2OCSPermissions(share.GetPermissions()),
-		ShareType:   shareTypePublicLink,
-		UIDOwner:    UserIDToString(share.Creator),
-		// TODO lookup user metadata
-		//DisplaynameOwner:     creator.DisplayName,
-		STime:        share.Ctime.Seconds, // TODO CS3 api birth time = btime
-		UIDFileOwner: UserIDToString(share.Owner),
-		// TODO lookup user metadata
-		//DisplaynameFileOwner: owner.DisplayName,
-		Token:      share.Token,
-		Expiration: timestampToExpiration(share.Expiration),
-	}
-	// actually clients should be able to GET and cache the user info themselves ...
-	// TODO check grantee type for user vs group
-	return sd
-}
+// TODO(refs): uncomment when working on public shares
+// func (h *SharesHandler) publicShare2ShareData(share *publicshareproviderv0alphapb.PublicShare) *shareData {
+// 	sd := &shareData{
+// 		ID: share.Id.OpaqueId,
+// 		// TODO map share.resourceId to path and storage ... requires a stat call
+// 		// share.permissions ar mapped below
+// 		Permissions: publicSharePermissions2OCSPermissions(share.GetPermissions()),
+// 		ShareType:   shareTypePublicLink,
+// 		UIDOwner:    UserIDToString(share.Creator),
+// 		// TODO lookup user metadata
+// 		//DisplaynameOwner:     creator.DisplayName,
+// 		STime:        share.Ctime.Seconds, // TODO CS3 api birth time = btime
+// 		UIDFileOwner: UserIDToString(share.Owner),
+// 		// TODO lookup user metadata
+// 		//DisplaynameFileOwner: owner.DisplayName,
+// 		Token:      share.Token,
+// 		Expiration: timestampToExpiration(share.Expiration),
+// 	}
+// 	// actually clients should be able to GET and cache the user info themselves ...
+// 	// TODO check grantee type for user vs group
+// 	return sd
+// }
 
 // timestamp is assumed to be UTC ... just human readable ...
 // FIXME and ambiguous / error prone because there is no time zone ...
@@ -875,13 +876,6 @@ type MatchValueData struct {
 }
 
 type resourceType int
-
-const (
-	invalid resourceType = iota
-	file
-	folder
-	reference
-)
 
 func (rt resourceType) String() (s string) {
 	switch rt {

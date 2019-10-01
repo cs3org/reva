@@ -149,7 +149,7 @@ func init() {
 type config struct {
 	DataDirectory string `mapstructure:"datadirectory"`
 	Scan          bool   `mapstructure:"scan"`
-	// Autocreate creates the neccessary folders for the file system to operate.
+	// Autocreate creates the necessary folders for the file system to operate.
 	// TODO(refs) if autocreate is set to false we need defensive code
 	Autocreate bool   `mapstructure:"autocreate"`
 	Redis      string `mapstructure:"redis"`
@@ -422,10 +422,18 @@ func readOrCreateID(ctx context.Context, np string, conn redis.Conn) string {
 
 // TODO(refs) this function assumes too much...
 func (fs *ocFS) autocreate(ctx context.Context, p string) {
+	log := appctx.GetLogger(ctx)
 	segments := strings.Split(p, "/") // TODO(refs) add defensive code at this point
 	home := path.Join("/", segments[1], segments[2])
-	fs.bootstrapDir(path.Join(home, filesDir))
-	fs.bootstrapDir(path.Join(home, filesVersionDir))
+	if err := fs.bootstrapDir(path.Join(home, filesDir)); err != nil {
+		log.Error().Err(err).Msg("error bootstraping /files dir")
+		return
+	}
+
+	if err := fs.bootstrapDir(path.Join(home, filesVersionDir)); err != nil {
+		log.Error().Err(err).Msg("error bootstraping /files_versions dir")
+		return
+	}
 }
 
 // bootstrap oC directories
