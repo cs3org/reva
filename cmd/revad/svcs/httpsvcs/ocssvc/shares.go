@@ -757,7 +757,7 @@ type shareType int
 const (
 	shareTypeUser shareType = 0
 	//	shareTypeGroup               ShareType = 1
-	shareTypePublicLink shareType = 3
+	// shareTypePublicLink shareType = 3
 	//	shareTypeFederatedCloudShare ShareType = 6
 )
 
