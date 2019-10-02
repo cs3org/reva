@@ -425,7 +425,6 @@ func (h *SharesHandler) updateShare(w http.ResponseWriter, r *http.Request) {
 func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	// TODO fetch group shares
 	// TODO fetch federated shares
-	// TODO fetch public link shares
 	shares := make([]*shareData, 0) // we need a zero value here, and new() is not a good practice
 	shares = append(shares, h.listUserShares(w, r)...)
 	shares = append(shares, h.listPublicShares(w, r)...)
