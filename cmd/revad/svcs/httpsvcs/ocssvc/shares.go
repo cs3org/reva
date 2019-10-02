@@ -21,13 +21,16 @@ package ocssvc
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	publicshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
@@ -100,7 +103,6 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if shareType == int(shareTypeUser) {
-
 		// if user sharing is disabled
 		if h.gatewaySvc == "" {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "user sharing service not configured", nil)
@@ -247,8 +249,85 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		}
 		s.Path = r.FormValue("path") // use path without user prefix
 		WriteOCSSuccess(w, r, s)
-		return
 
+		return
+	}
+
+	if shareType == int(shareTypePublicLink) {
+		// create a public link share
+		// get a connection to the public shares service
+		c, err := pool.GetPublicShareProviderClient(h.gatewaySvc)
+		if err != nil {
+			log.Debug().Err(err).Str("createShare", "shares").Msg("error creating public link share")
+			WriteOCSError(w, r, MetaServerError.StatusCode, "missing user in context", fmt.Errorf("error getting a connection to a public shares provider"))
+			return
+		}
+
+		u, ok := user.ContextGetUser(ctx)
+		if !ok {
+			WriteOCSError(w, r, MetaServerError.StatusCode, "missing user in context", fmt.Errorf("missing user in context"))
+			return
+		}
+
+		// build the path for the stat request. User is needed for creating a path to the resource
+		p := r.FormValue("path")
+		p = path.Join("/", u.Username, p)
+
+		// prepare stat call to get resource information
+		statReq := storageproviderv0alphapb.StatRequest{
+			Ref: &storageproviderv0alphapb.Reference{
+				Spec: &storageproviderv0alphapb.Reference_Path{
+					Path: p,
+				},
+			},
+		}
+
+		// for launching a stat call we need a connection to the storage provicer
+		spConn, err := pool.GetStorageProviderServiceClient(h.gatewaySvc)
+		if err != nil {
+			log.Debug().Err(err).Str("createShare", "shares").Msg("error connecting to storage provider")
+			WriteOCSError(w, r, MetaServerError.StatusCode, "shares", fmt.Errorf("error getting a connection to a storage provider"))
+			return
+		}
+
+		statRes, err := spConn.Stat(ctx, &statReq)
+		if err != nil {
+			log.Debug().Err(err).Str("createShare", "shares").Msg("error on stat call")
+			WriteOCSError(w, r, MetaServerError.StatusCode, "missing resource information", fmt.Errorf("error getting resource information"))
+			return
+		}
+
+		// TODO(refs) phoenix is not setting expiration. Default to (now + 1 year?)
+		// create public share request.
+		req := publicshareproviderv0alphapb.CreatePublicShareRequest{
+			// where do we get the ResourceID from? - from a stat call
+			ResourceId: statRes.Info.GetId(),
+			Grant: &publicshareproviderv0alphapb.Grant{
+				Expiration: &typespb.Timestamp{
+					Nanos:   uint32(time.Now().Add(time.Duration(31536000)).Nanosecond()),
+					Seconds: uint64(time.Now().Add(time.Duration(31536000)).Second()),
+				}, // transform string date from request into timestamp
+			},
+		}
+
+		createRes, err := c.CreatePublicShare(ctx, &req)
+		if err != nil {
+			log.Debug().Err(err).Str("createShare", "shares").Msgf("error creating a public share to resource id: %v", statRes.Info.GetId())
+			WriteOCSError(w, r, MetaServerError.StatusCode, "error creating public share", fmt.Errorf("error creating a public share to resource id: %v", statRes.Info.GetId()))
+			return
+		}
+
+		if createRes.Status.Code != rpcpb.Code_CODE_OK {
+			log.Debug().Err(errors.New("create public share failed")).Str("shares", "createShare").Msgf("create public share failed with status code: %v", createRes.Status.Code.String())
+			WriteOCSError(w, r, MetaServerError.StatusCode, "grpc create public share request failed", err)
+			return
+		}
+
+		// build ocs response for Phoenix
+		s := h.publicShare2ShareData(createRes.Share)
+		WriteOCSSuccess(w, r, s)
+
+		return
 	}
 
 	WriteOCSError(w, r, MetaBadRequest.StatusCode, "unknown share type", nil)
@@ -349,6 +428,7 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	// TODO fetch public link shares
 	shares := make([]*shareData, 0) // we need a zero value here, and new() is not a good practice
 	shares = append(shares, h.listUserShares(w, r)...)
+	shares = append(shares, h.listPublicShares(w, r)...)
 	WriteOCSSuccess(w, r, shares)
 }
 
@@ -390,6 +470,41 @@ func (h *SharesHandler) findSharees(w http.ResponseWriter, r *http.Request) {
 		Groups:  []*matchData{},
 		Remotes: []*matchData{},
 	})
+}
+
+func (h *SharesHandler) listPublicShares(w http.ResponseWriter, r *http.Request) (shares []*shareData) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
+	if h.gatewaySvc != "" {
+		// get the public shares provider (pool?)
+		publicSharesProvider, err := pool.GetPublicShareProviderClient(h.gatewaySvc)
+		if err != nil {
+			log.Debug().Err(err).Str("service", "publicshareprovidersvc").Msg("error connecting to public shares provider")
+			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc user share handler client", err)
+			return
+		}
+
+		// get the public shares for the given user ([]*shareData)
+
+		// prepare a listPublicShares request. for which we need filters -> for which we'll use the ResourceId
+		filters := []*publicshareproviderv0alphapb.ListPublicSharesRequest_Filter{}
+		req := publicshareproviderv0alphapb.ListPublicSharesRequest{
+			Filters: filters,
+		}
+
+		lst, err := publicSharesProvider.ListPublicShares(ctx, &req)
+		if err != nil {
+			log.Debug().Err(err).Str("service", "publicshareprovidersvc").Msg("error requesting list of public shares")
+			return
+		}
+
+		fmt.Println(lst)
+
+		// convert the list of public shares into a ocs valid response
+	}
+
+	return
 }
 
 func (h *SharesHandler) listUserShares(w http.ResponseWriter, r *http.Request) (shares []*shareData) {
@@ -570,41 +685,40 @@ func userSharePermissions2OCSPermissions(sp *usershareproviderv0alphapb.SharePer
 	return permissionInvalid
 }
 
-// func publicSharePermissions2OCSPermissions(sp *publicshareproviderv0alphapb.PublicSharePermissions) Permissions {
-// 	if sp != nil {
-// 		return permissions2OCSPermissions(sp.GetPermissions())
-// 	}
-// 	return permissionInvalid
-// }
+func publicSharePermissions2OCSPermissions(sp *publicshareproviderv0alphapb.PublicSharePermissions) Permissions {
+	if sp != nil {
+		return permissions2OCSPermissions(sp.GetPermissions())
+	}
+	return permissionInvalid
+}
 
-// TODO(refs): uncomment when working on public shares
-// func (h *SharesHandler) publicShare2ShareData(share *publicshareproviderv0alphapb.PublicShare) *shareData {
-// 	sd := &shareData{
-// 		ID: share.Id.OpaqueId,
-// 		// TODO map share.resourceId to path and storage ... requires a stat call
-// 		// share.permissions ar mapped below
-// 		Permissions: publicSharePermissions2OCSPermissions(share.GetPermissions()),
-// 		ShareType:   shareTypePublicLink,
-// 		UIDOwner:    UserIDToString(share.Creator),
-// 		// TODO lookup user metadata
-// 		//DisplaynameOwner:     creator.DisplayName,
-// 		STime:        share.Ctime.Seconds, // TODO CS3 api birth time = btime
-// 		UIDFileOwner: UserIDToString(share.Owner),
-// 		// TODO lookup user metadata
-// 		//DisplaynameFileOwner: owner.DisplayName,
-// 		Token:      share.Token,
-// 		Expiration: timestampToExpiration(share.Expiration),
-// 	}
-// 	// actually clients should be able to GET and cache the user info themselves ...
-// 	// TODO check grantee type for user vs group
-// 	return sd
-// }
+func (h *SharesHandler) publicShare2ShareData(share *publicshareproviderv0alphapb.PublicShare) *shareData {
+	sd := &shareData{
+		ID: share.Id.OpaqueId,
+		// TODO map share.resourceId to path and storage ... requires a stat call
+		// share.permissions ar mapped below
+		Permissions: publicSharePermissions2OCSPermissions(share.GetPermissions()),
+		ShareType:   shareTypePublicLink,
+		UIDOwner:    UserIDToString(share.Creator),
+		// TODO lookup user metadata
+		//DisplaynameOwner:     creator.DisplayName,
+		STime:        share.Ctime.Seconds, // TODO CS3 api birth time = btime
+		UIDFileOwner: UserIDToString(share.Owner),
+		// TODO lookup user metadata
+		//DisplaynameFileOwner: owner.DisplayName,
+		Token:      share.Token,
+		Expiration: timestampToExpiration(share.Expiration),
+	}
+	// actually clients should be able to GET and cache the user info themselves ...
+	// TODO check grantee type for user vs group
+	return sd
+}
 
 // timestamp is assumed to be UTC ... just human readable ...
 // FIXME and ambiguous / error prone because there is no time zone ...
-// func timestampToExpiration(t *typespb.Timestamp) string {
-// 	return time.Unix(int64(t.Seconds), int64(t.Nanos)).Format("2006-01-02 15:05:05")
-// }
+func timestampToExpiration(t *typespb.Timestamp) string {
+	return time.Unix(int64(t.Seconds), int64(t.Nanos)).Format("2006-01-02 15:05:05")
+}
 
 // TODO sort out mapping, this is just a first guess
 func permissions2OCSPermissions(p *storageproviderv0alphapb.ResourcePermissions) Permissions {
@@ -754,9 +868,9 @@ type shareType int
 
 const (
 	shareTypeUser shareType = 0
-	//	shareTypeGroup               ShareType = 1
-	// shareTypePublicLink shareType = 3
-	//	shareTypeFederatedCloudShare ShareType = 6
+	// shareTypeGroup shareType = 1
+	shareTypePublicLink shareType = 3
+	//	shareTypeFederatedCloudShare shareType = 6
 )
 
 // Permissions reflects the CRUD permissions used in the OCS sharing API
