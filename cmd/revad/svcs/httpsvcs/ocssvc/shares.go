@@ -499,9 +499,13 @@ func (h *SharesHandler) listPublicShares(w http.ResponseWriter, r *http.Request)
 			return
 		}
 
-		fmt.Println(lst)
+		// transform into an ocs payload
+		ocsDataPayload := make([]*shareData, 0)
+		for _, share := range lst.Share {
+			ocsDataPayload = append(ocsDataPayload, h.publicShare2ShareData(share))
+		}
 
-		// convert the list of public shares into a ocs valid response
+		return ocsDataPayload
 	}
 
 	return
