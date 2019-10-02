@@ -39,7 +39,7 @@ type Config struct {
 	GatewaySvc          string                            `mapstructure:"gatewaysvc"`
 	UserManager         string                            `mapstructure:"user_manager"`
 	UserManagers        map[string]map[string]interface{} `mapstructure:"user_managers"`
-	PublicShareManager  string                            `mapstructure:"public_manager"`
+	PublicShareManager  string                            `mapstructure:"publicshare_manager"`
 	PublicShareManagers map[string]map[string]interface{} `mapstructure:"publicshare_managers"`
 }
 
