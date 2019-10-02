@@ -38,14 +38,17 @@ import (
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/publicshare"
+	publicsharemgr "github.com/cs3org/reva/pkg/publicshare/manager/registry"
 	"github.com/cs3org/reva/pkg/user"
 	usermgr "github.com/cs3org/reva/pkg/user/manager/registry"
 )
 
 // SharesHandler implements the ownCloud sharing API
 type SharesHandler struct {
-	gatewaySvc  string
-	userManager user.Manager
+	gatewaySvc          string
+	userManager         user.Manager
+	publicSharesManager publicshare.Manager
 }
 
 func (h *SharesHandler) init(c *Config) error {
@@ -58,6 +61,15 @@ func (h *SharesHandler) init(c *Config) error {
 		return err
 	}
 	h.userManager = userManager
+
+	publicShareManager, err := getPublicShareManager(c.PublicShareManager, c.PublicShareManagers)
+	if err != nil {
+		return err
+	}
+
+	h.userManager = userManager
+	h.publicSharesManager = publicShareManager
+
 	return nil
 }
 
@@ -501,7 +513,50 @@ func (h *SharesHandler) listPublicShares(w http.ResponseWriter, r *http.Request)
 		// transform into an ocs payload
 		ocsDataPayload := make([]*shareData, 0)
 		for _, share := range lst.Share {
-			ocsDataPayload = append(ocsDataPayload, h.publicShare2ShareData(share))
+			sData := h.publicShare2ShareData(share)
+
+			// TODO(refs) abstract this boilerplate to a function
+			// at this point we are missing file info on the shareData. do stat and call h.addFileInfo
+			// check if the resource exists
+			sClient, err := pool.GetStorageProviderServiceClient(h.gatewaySvc)
+			if err != nil {
+				WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc storage provider client", err)
+				return
+			}
+
+			// prepare the stat request
+			statReq := &storageproviderv0alphapb.StatRequest{
+				// prepare the reference
+				Ref: &storageproviderv0alphapb.Reference{
+					// using ResourceId from the share
+					Spec: &storageproviderv0alphapb.Reference_Id{Id: share.ResourceId},
+				},
+			}
+
+			statResponse, err := sClient.Stat(ctx, statReq)
+			if err != nil {
+				WriteOCSError(w, r, MetaServerError.StatusCode, "error sending Stat call to the storage provider", err)
+				return
+			}
+
+			if statResponse.Status.Code != rpcpb.Code_CODE_OK {
+				if statResponse.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+					WriteOCSError(w, r, MetaNotFound.StatusCode, "not found", nil)
+					return
+				}
+				WriteOCSError(w, r, MetaServerError.StatusCode, "grpc stat request failed", err)
+				return
+			}
+
+			// add file info to share data
+			if h.addFileInfo(ctx, sData, statResponse.Info) != nil {
+				WriteOCSError(w, r, MetaServerError.StatusCode, "error adding file info", err)
+				return
+			}
+
+			log.Debug().Interface("share", share).Interface("info", statResponse.Info).Interface("shareData", share).Msg("mapped")
+			ocsDataPayload = append(ocsDataPayload, sData)
+
 		}
 
 		return ocsDataPayload
@@ -613,23 +668,33 @@ func (h *SharesHandler) addFileInfo(ctx context.Context, s *shareData, info *sto
 		if s.UIDFileOwner == "" {
 			s.UIDFileOwner = UserIDToString(info.Owner)
 		}
-		if s.DisplaynameFileOwner == "" && info.Owner != nil {
+
+		// user shares
+		if s.DisplaynameFileOwner == "" && info.Owner != nil && s.ShareType == 0 {
 			owner, err := h.userManager.GetUser(ctx, info.Owner)
 			if err != nil {
 				return err
 			}
 			s.DisplaynameFileOwner = owner.DisplayName
+		} else {
+			// TODO(refs) fill with contextual user info
+			s.DisplaynameFileOwner = "fixme"
 		}
 		// share owner might not yet be set. Use file info
 		if s.UIDOwner == "" {
 			s.UIDOwner = UserIDToString(info.Owner)
 		}
-		if s.DisplaynameOwner == "" && info.Owner != nil {
+
+		// user shares
+		if s.DisplaynameOwner == "" && info.Owner != nil && s.ShareType == 0 {
 			owner, err := h.userManager.GetUser(ctx, info.Owner)
 			if err != nil {
 				return err
 			}
 			s.DisplaynameOwner = owner.DisplayName
+		} else {
+			// TODO(refs) fill with contextual user info
+			s.DisplaynameOwner = "fixme"
 		}
 	}
 	return nil
@@ -708,7 +773,7 @@ func (h *SharesHandler) publicShare2ShareData(share *publicshareproviderv0alphap
 		STime:        share.Ctime.Seconds, // TODO CS3 api birth time = btime
 		UIDFileOwner: UserIDToString(share.Owner),
 		// TODO lookup user metadata
-		//DisplaynameFileOwner: owner.DisplayName,
+		// DisplaynameFileOwner: owner.DisplayName,
 		Token:      share.Token,
 		Expiration: timestampToExpiration(share.Expiration),
 	}
@@ -1018,6 +1083,14 @@ func getUserManager(manager string, m map[string]map[string]interface{}) (user.M
 	}
 
 	return nil, fmt.Errorf("driver %s not found for user manager", manager)
+}
+
+func getPublicShareManager(manager string, m map[string]map[string]interface{}) (publicshare.Manager, error) {
+	if f, ok := publicsharemgr.NewFuncs[manager]; ok {
+		return f(m[manager])
+	}
+
+	return nil, fmt.Errorf("driver %s not found for public shares manager", manager)
 }
 
 func (h *SharesHandler) userAsMatch(u *authv0alphapb.User) *matchData {
