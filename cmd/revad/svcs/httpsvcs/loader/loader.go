@@ -29,6 +29,7 @@ import (
 	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/oidcprovider"
 	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/preferencessvc"
 	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/prometheussvc"
+	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/tusdsvc"
 	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/webuisvc"
 	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/wellknown"
 	// Add your own service here
