@@ -26,11 +26,11 @@ import (
 	"github.com/cs3org/reva/cmd/revad/httpserver"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/tusdsvc/filestore"
+	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/tusdsvc/handler"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
-	tusd "github.com/tus/tusd/pkg/handler"
 )
 
 func init() {
@@ -115,7 +115,7 @@ func (s *svc) setHandler() (err error) {
 	// handle upload creation, locking, termination and so on. The composer is a
 	// place where all those separated pieces are joined together. In this example
 	// we only use the file store but you may plug in multiple.
-	composer := tusd.NewStoreComposer()
+	composer := handler.NewStoreComposer()
 	// TODO use Terminater
 	// TODO use Locker
 	// TODO use Concater
@@ -124,13 +124,13 @@ func (s *svc) setHandler() (err error) {
 
 	//logger := log.New(os.Stdout, "tusd ", log.Ldate|log.Ltime|log.Lshortfile)
 
-	config := tusd.Config{
+	config := handler.Config{
 		BasePath:      "/tus/", //s.conf.Prefix,
 		StoreComposer: composer,
 		//Logger:        logger,
 	}
 
-	handler, err := tusd.NewUnroutedHandler(config)
+	handler, err := handler.NewUnroutedHandler(config)
 	if err != nil {
 		return err
 	}

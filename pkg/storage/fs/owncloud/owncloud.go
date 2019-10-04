@@ -244,6 +244,7 @@ func (fs *ocFS) scanFiles(ctx context.Context, conn redis.Conn) {
 				log.Debug().Str("path", path).Err(err).Msg("skipping versions")
 				return filepath.SkipDir
 			}
+			// TODO(jfd) skip uploads folder only if direct in users home dir ... actually only scan files folder
 
 			// reuse connection to store file ids
 			id := readOrCreateID(context.Background(), path, nil)
@@ -958,7 +959,7 @@ func (fs *ocFS) ListFolder(ctx context.Context, ref *storageproviderv0alphapb.Re
 
 var defaultFilePerm = os.FileMode(0664)
 
-// NewUpload retuns an upload id that can be used for uploads with tus
+// NewUpload returns an upload id that can be used for uploads with tus
 // TODO read optional content for small files in this request
 func (fs *ocFS) NewUpload(ctx context.Context, ref *storageproviderv0alphapb.Reference) (uploadID string, err error) {
 	np, err := fs.resolve(ctx, ref)
@@ -1064,9 +1065,18 @@ func (fs *ocFS) Upload(ctx context.Context, ref *storageproviderv0alphapb.Refere
 }
 */
 
-func (fs *ocFS) archiveRevision(ctx context.Context, np string) error {
+func VersionsBasePath(ctx context.Context, datadir string) (string, error) {
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
+		return "", err
+	}
+	return filepath.Join(datadir, u.Username, "files_versions"), nil
+}
+
+func ArchiveRevision(ctx context.Context, vbp string, np string) error {
 	// move existing file to versions dir
-	vp := fmt.Sprintf("%s.v%d", fs.getVersionsPath(ctx, np), time.Now().Unix())
+	vp := fmt.Sprintf("%s.v%d", vbp, time.Now().Unix())
 	if err := os.MkdirAll(path.Dir(vp), 0700); err != nil {
 		return errors.Wrap(err, "ocFS: error creating versions dir "+vp)
 	}
@@ -1079,7 +1089,7 @@ func (fs *ocFS) archiveRevision(ctx context.Context, np string) error {
 	return nil
 }
 
-func (fs *ocFS) copyMD(s string, t string) (err error) {
+func CopyMD(s string, t string) (err error) {
 	var attrs []string
 	if attrs, err = xattr.List(s); err != nil {
 		return err
@@ -1188,7 +1198,7 @@ func (fs *ocFS) RestoreRevision(ctx context.Context, ref *storageproviderv0alpha
 	defer source.Close()
 
 	// destination should be available, otherwise we could not have navigated to its revisions
-	if err := fs.archiveRevision(ctx, np); err != nil {
+	if err := ArchiveRevision(ctx, fs.getVersionsPath(ctx, np), np); err != nil {
 		return err
 	}
 
@@ -1324,3 +1334,6 @@ func (fs *ocFS) RestoreRecycleItem(ctx context.Context, key string) error {
 	// TODO(jfd) restore versions
 	return nil
 }
+
+// TODO propagate etag and mtime or append event to history? propagate on disk ...
+// - but propagation is a separate task. only if upload was successful ...

@@ -1,3 +1,21 @@
+// Copyright 2018-2019 CERN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// In applying this license, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
 //Package filestore provides a storage backend based on the local file system.
 //
 // OwnCloudStore is a storage backend used as a handler.DataStore in handler.NewHandler.
@@ -17,10 +35,11 @@ import (
 	"os"
 	"path/filepath"
 
+	tusd "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/tusdsvc/handler"
 	"github.com/cs3org/reva/pkg/errtypes"
+	driver "github.com/cs3org/reva/pkg/storage/fs/owncloud"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/pkg/errors"
-	tusd "github.com/tus/tusd/pkg/handler"
 )
 
 // TODO make configurable
@@ -178,16 +197,6 @@ func (store OwnCloudStore) binPath(ctx context.Context, id string) (string, erro
 	return filepath.Join(store.Path, u.Username, "uploads", id), nil
 }
 
-// infoPath returns the path to the .info file storing the file's info.
-func (store OwnCloudStore) infoPath(ctx context.Context, id string) (string, error) {
-	u, ok := user.ContextGetUser(ctx)
-	if !ok {
-		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
-		return "", err
-	}
-	return filepath.Join(store.Path, u.Username, "uploads", id+".info"), nil
-}
-
 type fileUpload struct {
 	// info stores the current information about the upload
 	info tusd.FileInfo
@@ -277,8 +286,25 @@ func (upload *fileUpload) writeInfo() error {
 
 func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 
+	// if destination exists
+	// TODO this only works when the target lives on this storage, what if we uploaded to the users upload folder but now need to move to a different storage?
+	// can that happen? the storageprovider is tied to a tusdsvc ... and initiate upload should have been called on the parent folder ... which in theory already is the correct destination storage
+	//
+	if _, err := os.Stat(upload.info.MetaData["filename"]); err == nil {
+		// copy attributes of existing file to tmp file
+		if err := driver.CopyMD(upload.info.MetaData["filename"], upload.binPath); err != nil {
+			return errors.Wrap(err, "ocFS: error copying metadata from "+upload.info.MetaData["filename"]+" to "+upload.binPath)
+		}
+		vbp := filepath.Join(filepath.Dir(filepath.Dir(upload.binPath)), "files_versions")
+		// create revision
+		if err := driver.ArchiveRevision(ctx, vbp, upload.info.MetaData["filename"]); err != nil {
+			return err
+		}
+	}
+
 	// TODO double check the metadata path exists
 	err := os.Rename(upload.binPath, upload.info.MetaData["filename"])
 
+	// TODO trigger metadata propagation?
 	return err
 }

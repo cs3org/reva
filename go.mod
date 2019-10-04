@@ -5,7 +5,6 @@ require (
 	contrib.go.opencensus.io/exporter/prometheus v0.1.0
 	github.com/BurntSushi/toml v0.3.1
 	github.com/aws/aws-sdk-go v1.23.13
-	github.com/bmizerany/pat v0.0.0-20170815010413-6226ea591a40
 	github.com/cheggaaa/pb v1.0.28
 	github.com/coreos/go-oidc v2.1.0+incompatible
 	github.com/cs3org/go-cs3apis v0.0.0-20190809124338-bd2fb913922c
@@ -13,7 +12,6 @@ require (
 	github.com/fatih/color v1.7.0 // indirect
 	github.com/go-openapi/strfmt v0.19.2 // indirect
 	github.com/gofrs/uuid v3.2.0+incompatible
-	github.com/gogo/protobuf v1.2.0 // indirect
 	github.com/gomodule/redigo v2.0.0+incompatible
 	github.com/grpc-ecosystem/go-grpc-middleware v1.0.1-0.20190118093823-f849b5445de4
 	github.com/jedib0t/go-pretty v4.3.0+incompatible

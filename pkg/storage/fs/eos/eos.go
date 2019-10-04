@@ -582,7 +582,7 @@ func (fs *eosStorage) Download(ctx context.Context, ref *storageproviderv0alphap
 	return fs.c.Read(ctx, u.Username, fn)
 }
 
-// NewUpload retuns an upload id that can be used for uploads with tus
+// NewUpload returns an upload id that can be used for uploads with tus
 func (fs *eosStorage) NewUpload(ctx context.Context, ref *storageproviderv0alphapb.Reference) (uploadID string, err error) {
 	return "", errtypes.NotSupported("op not supported")
 }
