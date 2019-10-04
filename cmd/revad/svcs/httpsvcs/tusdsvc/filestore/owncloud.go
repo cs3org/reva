@@ -1,4 +1,4 @@
-//Package store provides a storage backend based on the local file system.
+//Package filestore provides a storage backend based on the local file system.
 //
 // OwnCloudStore is a storage backend used as a handler.DataStore in handler.NewHandler.
 // It stores the uploads in a directory specified in two different files: The
@@ -6,7 +6,7 @@
 // `[id]` files without an extension contain the raw binary data uploaded.
 // No cleanup is performed so you may want to run a cronjob to ensure your disk
 // is not filled up with old and finished uploads.
-package store
+package filestore
 
 import (
 	"context"
@@ -17,10 +17,13 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/tus/tusd/internal/uid"
-	"github.com/tus/tusd/pkg/handler"
+	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/user"
+	"github.com/pkg/errors"
+	tusd "github.com/tus/tusd/pkg/handler"
 )
 
+// TODO make configurable
 var defaultFilePerm = os.FileMode(0664)
 
 // OwnCloudStore handles storage inside a local posix filesystem thet follows the legacy owncloud datadir layout.
@@ -72,7 +75,7 @@ func New(path string) OwnCloudStore {
 
 // UseIn sets this store as the core data store in the passed composer and adds
 // all possible extension to it.
-func (store OwnCloudStore) UseIn(composer *handler.StoreComposer) {
+func (store OwnCloudStore) UseIn(composer *tusd.StoreComposer) {
 	composer.UseCore(store)
 	composer.UseTerminater(store)
 	composer.UseConcater(store)
@@ -80,43 +83,57 @@ func (store OwnCloudStore) UseIn(composer *handler.StoreComposer) {
 }
 
 // NewUpload is called by the storage provider?
-func (store OwnCloudStore) NewUpload(ctx context.Context, info handler.FileInfo) (handler.Upload, error) {
-	id := uid.Uid()
-	binPath := store.binPath(id)
-	info.ID = id
-	info.Storage = map[string]string{
-		"Type": "OwnCloudStore",
-		"Path": binPath,
-	}
-
-	// Create binary file with no content
-	file, err := os.OpenFile(binPath, os.O_CREATE|os.O_WRONLY, defaultFilePerm)
-	if err != nil {
-		if os.IsNotExist(err) {
-			err = fmt.Errorf("upload directory does not exist: %s", store.Path)
+// TODO how do we get the parent? / path?
+// No ... the owncloud driver should create the file in the users uploads folder, that will save us the request
+// currently the storageprovidersvc points clients to the datasvc and appends the path ...
+// - TODO add call to the storage driver to create the upload
+func (store OwnCloudStore) NewUpload(ctx context.Context, info tusd.FileInfo) (tusd.Upload, error) {
+	// TODO submit PR that allows using the tusd middleware without the creation extensin
+	// TODO implement custom middleware that does announce the creation extension
+	return nil, fmt.Errorf("tus creation extension not supportod, create upload using the CS3 api")
+	/*
+		id := uid.Uid()
+		binPath := store.binPath(id)
+		info.ID = id
+		info.Storage = map[string]string{
+			"Type": "OwnCloudStore",
+			"Path": binPath,
 		}
-		return nil, err
-	}
-	defer file.Close()
 
-	upload := &fileUpload{
-		info:     info,
-		infoPath: store.infoPath(id),
-		binPath:  store.binPath(id),
-	}
+		// Create binary file with no content
+		file, err := os.OpenFile(binPath, os.O_CREATE|os.O_WRONLY, defaultFilePerm)
+		if err != nil {
+			if os.IsNotExist(err) {
+				err = fmt.Errorf("upload directory does not exist: %s", store.Path)
+			}
+			return nil, err
+		}
+		defer file.Close()
 
-	// writeInfo creates the file by itself if necessary
-	err = upload.writeInfo()
-	if err != nil {
-		return nil, err
-	}
+		upload := &fileUpload{
+			info:     info,
+			infoPath: store.infoPath(id),
+			binPath:  store.binPath(id),
+		}
 
-	return upload, nil
+		// writeInfo creates the file by itself if necessary
+		err = upload.writeInfo()
+		if err != nil {
+			return nil, err
+		}
+
+		return upload, nil
+	*/
 }
 
-func (store OwnCloudStore) GetUpload(ctx context.Context, id string) (handler.Upload, error) {
-	info := handler.FileInfo{}
-	data, err := ioutil.ReadFile(store.infoPath(id))
+func (store OwnCloudStore) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
+	binPath, err := store.binPath(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	infoPath := binPath + ".info"
+	info := tusd.FileInfo{}
+	data, err := ioutil.ReadFile(infoPath)
 	if err != nil {
 		return nil, err
 	}
@@ -124,8 +141,6 @@ func (store OwnCloudStore) GetUpload(ctx context.Context, id string) (handler.Up
 		return nil, err
 	}
 
-	binPath := store.binPath(id)
-	infoPath := store.infoPath(id)
 	stat, err := os.Stat(binPath)
 	if err != nil {
 		return nil, err
@@ -140,38 +155,49 @@ func (store OwnCloudStore) GetUpload(ctx context.Context, id string) (handler.Up
 	}, nil
 }
 
-func (store OwnCloudStore) AsTerminatableUpload(upload handler.Upload) handler.TerminatableUpload {
+func (store OwnCloudStore) AsTerminatableUpload(upload tusd.Upload) tusd.TerminatableUpload {
 	return upload.(*fileUpload)
 }
 
-func (store OwnCloudStore) AsLengthDeclarableUpload(upload handler.Upload) handler.LengthDeclarableUpload {
+func (store OwnCloudStore) AsLengthDeclarableUpload(upload tusd.Upload) tusd.LengthDeclarableUpload {
 	return upload.(*fileUpload)
 }
 
-func (store OwnCloudStore) AsConcatableUpload(upload handler.Upload) handler.ConcatableUpload {
+func (store OwnCloudStore) AsConcatableUpload(upload tusd.Upload) tusd.ConcatableUpload {
 	return upload.(*fileUpload)
 }
 
 // binPath returns the path to the file storing the binary data.
-func (store OwnCloudStore) binPath(id string) string {
-	return filepath.Join(store.Path, id)
+// TODO use the <users home>/uploads/id
+func (store OwnCloudStore) binPath(ctx context.Context, id string) (string, error) {
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
+		return "", err
+	}
+	return filepath.Join(store.Path, u.Username, "uploads", id), nil
 }
 
 // infoPath returns the path to the .info file storing the file's info.
-func (store OwnCloudStore) infoPath(id string) string {
-	return filepath.Join(store.Path, id+".info")
+func (store OwnCloudStore) infoPath(ctx context.Context, id string) (string, error) {
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
+		return "", err
+	}
+	return filepath.Join(store.Path, u.Username, "uploads", id+".info"), nil
 }
 
 type fileUpload struct {
 	// info stores the current information about the upload
-	info handler.FileInfo
+	info tusd.FileInfo
 	// infoPath is the path to the .info file
 	infoPath string
 	// binPath is the path to the binary file (which has no extension)
 	binPath string
 }
 
-func (upload *fileUpload) GetInfo(ctx context.Context) (handler.FileInfo, error) {
+func (upload *fileUpload) GetInfo(ctx context.Context) (tusd.FileInfo, error) {
 	return upload.info, nil
 }
 
@@ -211,7 +237,7 @@ func (upload *fileUpload) Terminate(ctx context.Context) error {
 	return nil
 }
 
-func (upload *fileUpload) ConcatUploads(ctx context.Context, uploads []handler.Upload) (err error) {
+func (upload *fileUpload) ConcatUploads(ctx context.Context, uploads []tusd.Upload) (err error) {
 	file, err := os.OpenFile(upload.binPath, os.O_WRONLY|os.O_APPEND, defaultFilePerm)
 	if err != nil {
 		return err
@@ -250,5 +276,9 @@ func (upload *fileUpload) writeInfo() error {
 }
 
 func (upload *fileUpload) FinishUpload(ctx context.Context) error {
-	return nil
+
+	// TODO double check the metadata path exists
+	err := os.Rename(upload.binPath, upload.info.MetaData["filename"])
+
+	return err
 }

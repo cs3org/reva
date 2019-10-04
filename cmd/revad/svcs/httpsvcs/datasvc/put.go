@@ -20,14 +20,10 @@ package datasvc
 
 import (
 	"net/http"
-	"strings"
-
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
-	"github.com/cs3org/reva/pkg/appctx"
 )
 
 func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+	/*ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 	fn := r.URL.Path
 
@@ -39,7 +35,7 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 		log.Error().Err(err).Msg("error uploading file")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
-	}
+	}*/
 
 	r.Body.Close()
 	w.WriteHeader(http.StatusOK)

@@ -25,11 +25,11 @@ import (
 
 	"github.com/cs3org/reva/cmd/revad/httpserver"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
+	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/tusdsvc/filestore"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
-	"github.com/tus/tusd/pkg/filestore"
 	tusd "github.com/tus/tusd/pkg/handler"
 )
 
@@ -107,8 +107,8 @@ func (s *svc) setHandler() (err error) {
 	// If you want to save them on a different medium, for example
 	// a remote FTP server, you can implement your own storage backend
 	// by implementing the tusd.DataStore interface.
-	store := filestore.FileStore{
-		Path: "/data/uploads",
+	store := filestore.OwnCloudStore{
+		Path: "/data",
 	}
 
 	// A storage backend for tusd may consist of multiple different parts which
@@ -139,9 +139,10 @@ func (s *svc) setHandler() (err error) {
 
 		log := appctx.GetLogger(r.Context())
 		log.Info().Msgf("tusd routing: path=%s", r.URL.Path)
+
 		switch r.Method {
-		case "POST":
-			handler.PostFile(w, r)
+		//case "POST":
+		//	handler.PostFile(w, r)
 		case "HEAD":
 			handler.HeadFile(w, r)
 		case "PATCH":

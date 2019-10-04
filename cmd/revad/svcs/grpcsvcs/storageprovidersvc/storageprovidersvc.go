@@ -185,8 +185,14 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *storageprovider
 func (s *service) InitiateFileUpload(ctx context.Context, req *storageproviderv0alphapb.InitiateFileUploadRequest) (*storageproviderv0alphapb.InitiateFileUploadResponse, error) {
 	// TODO(labkode): same considerations as download
 	log := appctx.GetLogger(ctx)
+	uploadID, err := s.storage.NewUpload(ctx, req.Ref)
+	if err != nil {
+		return &storageproviderv0alphapb.InitiateFileUploadResponse{
+			Status: status.NewInternal(ctx, err, "error getting upload id"),
+		}, nil
+	}
 	url := *s.dataServerURL
-	url.Path = path.Join("/", url.Path, path.Clean(req.Ref.GetPath()))
+	url.Path = path.Join("/", url.Path, uploadID)
 	log.Info().Str("data-server", url.String()).
 		Str("fn", req.Ref.GetPath()).
 		Str("xs", fmt.Sprintf("%+v", s.conf.AvailableXS)).

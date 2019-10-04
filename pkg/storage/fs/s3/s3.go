@@ -525,34 +525,14 @@ func (fs *s3FS) ListFolder(ctx context.Context, ref *storageproviderv0alphapb.Re
 	return finfos, nil
 }
 
+// NewUpload retuns an upload id that can be used for uploads with tus
+func (fs *s3FS) NewUpload(ctx context.Context, ref *storageproviderv0alphapb.Reference) (uploadID string, err error) {
+	return "", errtypes.NotSupported("op not supported")
+}
+
+// Upload is deprecated, handled by tus
 func (fs *s3FS) Upload(ctx context.Context, ref *storageproviderv0alphapb.Reference, r io.ReadCloser) error {
-	log := appctx.GetLogger(ctx)
-
-	fn, err := fs.resolve(ctx, ref)
-	if err != nil {
-		return errors.Wrap(err, "error resolving ref")
-	}
-
-	upParams := &s3manager.UploadInput{
-		Bucket: aws.String(fs.config.Bucket),
-		Key:    aws.String(fn),
-		Body:   r,
-	}
-	uploader := s3manager.NewUploaderWithClient(fs.client)
-	result, err := uploader.Upload(upParams)
-
-	if err != nil {
-		log.Error().Err(err)
-		if aerr, ok := err.(awserr.Error); ok {
-			if aerr.Code() == s3.ErrCodeNoSuchBucket {
-				return errtypes.NotFound(fn)
-			}
-		}
-		return errors.Wrap(err, "s3fs: error creating object "+fn)
-	}
-
-	log.Debug().Interface("result", result) // todo cache etag?
-	return nil
+	return errtypes.NotSupported("op not supported")
 }
 
 func (fs *s3FS) Download(ctx context.Context, ref *storageproviderv0alphapb.Reference) (io.ReadCloser, error) {

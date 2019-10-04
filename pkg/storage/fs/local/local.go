@@ -245,31 +245,14 @@ func (fs *localFS) ListFolder(ctx context.Context, ref *storageproviderv0alphapb
 	return finfos, nil
 }
 
+// NewUpload retuns an upload id that can be used for uploads with tus
+func (fs *localFS) NewUpload(ctx context.Context, ref *storageproviderv0alphapb.Reference) (uploadID string, err error) {
+	return "", errtypes.NotSupported("op not supported")
+}
+
+// Upload is deprecated, handled by tus
 func (fs *localFS) Upload(ctx context.Context, ref *storageproviderv0alphapb.Reference, r io.ReadCloser) error {
-	fn, err := fs.resolve(ctx, ref)
-	if err != nil {
-		return errors.Wrap(err, "error resolving ref")
-	}
-
-	// we cannot rely on /tmp as it can live in another partition and we can
-	// hit invalid cross-device link errors, so we create the tmp file in the same directory
-	// the file is supposed to be written.
-	tmp, err := ioutil.TempFile(path.Dir(fn), "._reva_atomic_upload")
-	if err != nil {
-		return errors.Wrap(err, "localfs: error creating tmp fn at "+path.Dir(fn))
-	}
-
-	_, err = io.Copy(tmp, r)
-	if err != nil {
-		return errors.Wrap(err, "localfs: eror writing to tmp file "+tmp.Name())
-	}
-
-	// TODO(labkode): make sure rename is atomic, missing fsync ...
-	if err := os.Rename(tmp.Name(), fn); err != nil {
-		return errors.Wrap(err, "localfs: error renaming from "+tmp.Name()+" to "+fn)
-	}
-
-	return nil
+	return errtypes.NotSupported("op not supported")
 }
 
 func (fs *localFS) Download(ctx context.Context, ref *storageproviderv0alphapb.Reference) (io.ReadCloser, error) {

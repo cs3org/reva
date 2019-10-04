@@ -204,7 +204,14 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 
 	dataServerURL := uRes.UploadEndpoint
 	// TODO(labkode): do a protocol switch
-	httpReq, err := utils.NewRequest(ctx, "PUT", dataServerURL, r.Body)
+	// see http://tus.io for the protocol
+	httpReq, err := utils.NewRequest(ctx, "PATCH", dataServerURL, r.Body)
+	// tus headers:
+	httpReq.Header.Set("Tus-Resumable", "1.0.0")
+	httpReq.Header.Set("Content-Type", "application/offset+octet-stream")
+	httpReq.Header.Set("Upload-Offset", "0")
+	httpReq.Header.Set("Upload-Length", r.Header.Get("Content-Length"))
+	httpReq.Header.Set("Authorization", "Basic YWFsaXlhaF9hYmVybmF0aHk6c2VjcmV0")
 	if err != nil {
 		log.Error().Err(err).Msg("error creating http request")
 		w.WriteHeader(http.StatusInternalServerError)

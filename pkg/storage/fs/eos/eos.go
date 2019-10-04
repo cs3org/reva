@@ -582,18 +582,14 @@ func (fs *eosStorage) Download(ctx context.Context, ref *storageproviderv0alphap
 	return fs.c.Read(ctx, u.Username, fn)
 }
 
+// NewUpload retuns an upload id that can be used for uploads with tus
+func (fs *eosStorage) NewUpload(ctx context.Context, ref *storageproviderv0alphapb.Reference) (uploadID string, err error) {
+	return "", errtypes.NotSupported("op not supported")
+}
+
+// Upload is deprecated, handled by tus
 func (fs *eosStorage) Upload(ctx context.Context, ref *storageproviderv0alphapb.Reference, r io.ReadCloser) error {
-	u, err := getUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "storage_eos: no user in ctx")
-	}
-
-	fn, err := fs.resolve(ctx, u, ref)
-	if err != nil {
-		return errors.Wrap(err, "storage_eos: error resolving reference")
-	}
-
-	return fs.c.Write(ctx, u.Username, fn, r)
+	return errtypes.NotSupported("op not supported")
 }
 
 func (fs *eosStorage) ListRevisions(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.FileVersion, error) {

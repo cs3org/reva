@@ -21,6 +21,7 @@ package owncloud
 import (
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -45,6 +46,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
+	tusd "github.com/tus/tusd/pkg/handler"
 )
 
 const (
@@ -290,7 +292,7 @@ func (fs *ocFS) getVersionsPath(ctx context.Context, np string) string {
 	// np = /path/to/data/<username>/files/foo/bar.txt
 	// remove data dir
 	if fs.c.DataDirectory != "/" {
-		// fs.c.DataDirectory is a clean puth, so it never ends in /
+		// fs.c.DataDirectory is a clean path, so it never ends in /
 		np = strings.TrimPrefix(np, fs.c.DataDirectory)
 	}
 	// np = /<username>/files/foo/bar.txt
@@ -306,7 +308,15 @@ func (fs *ocFS) getVersionsPath(ctx context.Context, np string) string {
 	default:
 		return "" // TODO Must not happen?
 	}
+}
 
+func (fs *ocFS) getUploadPath(ctx context.Context, uploadID string) (string, error) {
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
+		return "", err
+	}
+	return path.Join(fs.c.DataDirectory, u.Username, "uploads", uploadID), nil
 }
 
 // ownloud stores trashed items in the files_trashbin subfolder of a users home
@@ -946,6 +956,74 @@ func (fs *ocFS) ListFolder(ctx context.Context, ref *storageproviderv0alphapb.Re
 	return finfos, nil
 }
 
+var defaultFilePerm = os.FileMode(0664)
+
+// NewUpload retuns an upload id that can be used for uploads with tus
+// TODO read optional content for small files in this request
+func (fs *ocFS) NewUpload(ctx context.Context, ref *storageproviderv0alphapb.Reference) (uploadID string, err error) {
+	np, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return "", errors.Wrap(err, "ocFS: error resolving reference")
+	}
+
+	// try generating a uuid
+	// TODO remember uploadID and use as versionid?
+	if id, err := uuid.NewV4(); err != nil {
+		return "", errors.Wrap(err, "ocFS: error generating upload id")
+	} else {
+		uploadID = id.String()
+	}
+
+	info := tusd.FileInfo{
+		// we do not know the size yet
+		SizeIsDeferred: true,
+		// store filename so tusdsvc can move there when finalizing the upload
+		MetaData: tusd.MetaData{
+			"filename": np,
+		},
+	}
+
+	binPath, err := fs.getUploadPath(ctx, uploadID)
+	if err != nil {
+		return "", errors.Wrap(err, "ocFS: error resolving upload path")
+	}
+	info.ID = uploadID
+	info.Storage = map[string]string{
+		"Type": "OwnCloudStore",
+		"Path": binPath,
+	}
+
+	// Create binary file with no content
+	file, err := os.OpenFile(binPath, os.O_CREATE|os.O_WRONLY, defaultFilePerm)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// try creating upload dir
+			// TODO refactor this to have a single method that creates all dirs instead of spreading this all over the code.
+			// the method should return a struct with all needed paths
+			ud := path.Dir(binPath)
+			if err := os.MkdirAll(ud, 0700); err != nil {
+				return "", errors.Wrap(err, "ocFS: error creating upload dir "+ud)
+			} else {
+				// try creating upload file again
+				file, err = os.OpenFile(binPath, os.O_CREATE|os.O_WRONLY, defaultFilePerm)
+				if err != nil {
+					return "", err
+				}
+			}
+		} else {
+			return "", err
+		}
+	}
+	defer file.Close()
+
+	data, err := json.Marshal(info)
+	if err != nil {
+		return "", err
+	}
+	return uploadID, ioutil.WriteFile(binPath+".info", data, defaultFilePerm)
+}
+
+/* TODO deprecated ... use tus
 func (fs *ocFS) Upload(ctx context.Context, ref *storageproviderv0alphapb.Reference, r io.ReadCloser) error {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
@@ -984,6 +1062,7 @@ func (fs *ocFS) Upload(ctx context.Context, ref *storageproviderv0alphapb.Refere
 
 	return nil
 }
+*/
 
 func (fs *ocFS) archiveRevision(ctx context.Context, np string) error {
 	// move existing file to versions dir
