@@ -193,6 +193,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, token string) (contex
 			if err := json.Unmarshal(body, &ir); err != nil {
 				return ctx, fmt.Errorf("failed to parse claims: %v", err)
 			}
+
 			// verify the auth token is still active
 			if !ir.Active {
 				log.Debug().Interface("ir", ir).Str("body", string(body)).Msg("token no longer active")
@@ -209,7 +210,6 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, token string) (contex
 			if err := userInfo.Claims(&claims); err != nil {
 				return ctx, fmt.Errorf("failed to unmarshal userinfo claims: %v", err)
 			}
-			claims.Iss = ir.Iss
 			log.Debug().Interface("claims", claims).Interface("userInfo", userInfo).Msg("unmarshalled userinfo")
 
 		default:
