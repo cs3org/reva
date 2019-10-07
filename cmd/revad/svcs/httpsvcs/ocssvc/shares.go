@@ -172,7 +172,6 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// map role to permissions
-
 		var permissions *storageproviderv0alphapb.ResourcePermissions
 		permissions, err = h.role2CS3Permissions(role)
 		if err != nil {
@@ -569,19 +568,19 @@ func (h *SharesHandler) listUserShares(w http.ResponseWriter, r *http.Request) (
 	var rInfo *storageproviderv0alphapb.ResourceInfo
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
-	filters := []*usershareproviderv0alphapb.ListSharesRequest_Filter{}
+
+	lsUserSharesRequest := usershareproviderv0alphapb.ListSharesRequest{}
 
 	if h.gatewaySvc != "" {
+		// get a connection to the users share provider
 		userShareProviderClient, err := pool.GetUserShareProviderClient(h.gatewaySvc)
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc user share handler client", err)
 			return
 		}
 
-		// list of shares with other users
-		lsUserSharesResponse, err := userShareProviderClient.ListShares(ctx, &usershareproviderv0alphapb.ListSharesRequest{
-			Filters: filters,
-		})
+		// do list shares request. unfiltered
+		lsUserSharesResponse, err := userShareProviderClient.ListShares(ctx, &lsUserSharesRequest)
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error sending a grpc list shares request", err)
 			return

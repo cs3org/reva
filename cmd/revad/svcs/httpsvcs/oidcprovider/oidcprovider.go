@@ -119,7 +119,7 @@ var start = compose.CommonStrategy{
 //
 //  session = new(fosite.DefaultSession)
 func newSession(username string, uid *typespb.UserId) *openid.DefaultSession {
-	return &openid.DefaultSession{
+	s := openid.DefaultSession{
 		Claims: &jwt.IDTokenClaims{
 			Issuer:  uid.Idp,
 			Subject: uid.OpaqueId,
@@ -135,10 +135,12 @@ func newSession(username string, uid *typespb.UserId) *openid.DefaultSession {
 		Subject:  uid.OpaqueId,
 		Username: username,
 	}
+	return &s
 }
 
 // emptySession creates a session object and fills it with safe defaults
 func emptySession() *openid.DefaultSession {
+	// why not getting user from context?
 	return newSession("", &typespb.UserId{})
 }
 
