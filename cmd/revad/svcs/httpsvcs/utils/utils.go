@@ -50,7 +50,7 @@ func TSToTime(ts *typespb.Timestamp) time.Time {
 // https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779
 func GetHTTPClient(ctx context.Context) *http.Client {
 	httpClient := &http.Client{
-		Timeout:   time.Second * 10,
+		Timeout:   time.Second * 100,
 		Transport: &ochttp.Transport{},
 	}
 	return httpClient

@@ -21,7 +21,6 @@ package owncloud
 import (
 	"context"
 	"encoding/csv"
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -46,7 +45,6 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
-	tusd "github.com/tus/tusd/pkg/handler"
 )
 
 const (
@@ -233,33 +231,41 @@ func (fs *ocFS) scanFiles(ctx context.Context, conn redis.Conn) {
 		fs.c.Scan = false // TODO ... in progress use mutex ?
 		log := appctx.GetLogger(ctx)
 		log.Debug().Str("path", fs.c.DataDirectory).Msg("scanning data directory")
-		err := filepath.Walk(fs.c.DataDirectory, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				log.Error().Str("path", path).Err(err).Msg("error accessing path")
-				return filepath.SkipDir
-			}
-			// TODO(jfd) skip versions folder only if direct in users home dir
-			// we need to skip versions, otherwise a lookup by id might resolve to a version
-			if strings.Contains(path, "files_versions") {
-				log.Debug().Str("path", path).Err(err).Msg("skipping versions")
-				return filepath.SkipDir
-			}
-			// TODO(jfd) skip uploads folder only if direct in users home dir ... actually only scan files folder
 
-			// reuse connection to store file ids
-			id := readOrCreateID(context.Background(), path, nil)
-			_, err = conn.Do("SET", id, path)
-			if err != nil {
-				log.Error().Str("path", path).Err(err).Msg("error caching id")
-				// continue scanning
-				return nil
-			}
-
-			log.Debug().Str("path", path).Str("id", id).Msg("scanned path")
-			return nil
-		})
+		f, err := os.Open(fs.c.DataDirectory)
 		if err != nil {
-			log.Error().Err(err).Str("path", fs.c.DataDirectory).Msg("error scanning data directory")
+			log.Error().Str("path", fs.c.DataDirectory).Err(err).Msg("error accessing datadir")
+			return
+		}
+		names, err := f.Readdirnames(-1)
+		f.Close()
+		if err != nil {
+			log.Error().Str("path", fs.c.DataDirectory).Err(err).Msg("error reading datadir names")
+			return
+		}
+		//sort.Strings(names) // no need to sort
+		// TODO in parallel?
+		for i := range names {
+			err := filepath.Walk(filepath.Join(fs.c.DataDirectory, names[i], "files"), func(path string, info os.FileInfo, err error) error {
+				if err != nil {
+					log.Error().Str("path", path).Err(err).Msg("error accessing path")
+					return filepath.SkipDir
+				}
+				// reuse connection to store file ids
+				id := readOrCreateID(context.Background(), path, nil)
+				_, err = conn.Do("SET", id, path)
+				if err != nil {
+					log.Error().Str("path", path).Err(err).Msg("error caching id")
+					// continue scanning
+					return nil
+				}
+
+				log.Debug().Str("path", path).Str("id", id).Msg("scanned path")
+				return nil
+			})
+			if err != nil {
+				log.Error().Err(err).Str("path", names[i]).Msg("error scanning user")
+			}
 		}
 	}
 }
@@ -959,122 +965,7 @@ func (fs *ocFS) ListFolder(ctx context.Context, ref *storageproviderv0alphapb.Re
 
 var defaultFilePerm = os.FileMode(0664)
 
-// NewUpload returns an upload id that can be used for uploads with tus
-// TODO read optional content for small files in this request
-func (fs *ocFS) NewUpload(ctx context.Context, ref *storageproviderv0alphapb.Reference) (uploadID string, err error) {
-	np, err := fs.resolve(ctx, ref)
-	if err != nil {
-		return "", errors.Wrap(err, "ocFS: error resolving reference")
-	}
-
-	// try generating a uuid
-	// TODO remember uploadID and use as versionid?
-	if id, err := uuid.NewV4(); err != nil {
-		return "", errors.Wrap(err, "ocFS: error generating upload id")
-	} else {
-		uploadID = id.String()
-	}
-
-	info := tusd.FileInfo{
-		// we do not know the size yet
-		SizeIsDeferred: true,
-		// store filename so tusdsvc can move there when finalizing the upload
-		MetaData: tusd.MetaData{
-			"filename": np,
-		},
-	}
-
-	binPath, err := fs.getUploadPath(ctx, uploadID)
-	if err != nil {
-		return "", errors.Wrap(err, "ocFS: error resolving upload path")
-	}
-	info.ID = uploadID
-	info.Storage = map[string]string{
-		"Type": "OwnCloudStore",
-		"Path": binPath,
-	}
-
-	// Create binary file with no content
-	file, err := os.OpenFile(binPath, os.O_CREATE|os.O_WRONLY, defaultFilePerm)
-	if err != nil {
-		if os.IsNotExist(err) {
-			// try creating upload dir
-			// TODO refactor this to have a single method that creates all dirs instead of spreading this all over the code.
-			// the method should return a struct with all needed paths
-			ud := path.Dir(binPath)
-			if err := os.MkdirAll(ud, 0700); err != nil {
-				return "", errors.Wrap(err, "ocFS: error creating upload dir "+ud)
-			} else {
-				// try creating upload file again
-				file, err = os.OpenFile(binPath, os.O_CREATE|os.O_WRONLY, defaultFilePerm)
-				if err != nil {
-					return "", err
-				}
-			}
-		} else {
-			return "", err
-		}
-	}
-	defer file.Close()
-
-	data, err := json.Marshal(info)
-	if err != nil {
-		return "", err
-	}
-	return uploadID, ioutil.WriteFile(binPath+".info", data, defaultFilePerm)
-}
-
-/* TODO deprecated ... use tus
-func (fs *ocFS) Upload(ctx context.Context, ref *storageproviderv0alphapb.Reference, r io.ReadCloser) error {
-	np, err := fs.resolve(ctx, ref)
-	if err != nil {
-		return errors.Wrap(err, "ocFS: error resolving reference")
-	}
-
-	// we cannot rely on /tmp as it can live in another partition and we can
-	// hit invalid cross-device link errors, so we create the tmp file in the same directory
-	// the file is supposed to be written.
-	tmp, err := ioutil.TempFile(path.Dir(np), "._reva_atomic_upload")
-	if err != nil {
-		return errors.Wrap(err, "ocFS: error creating tmp fn at "+path.Dir(np))
-	}
-
-	_, err = io.Copy(tmp, r)
-	if err != nil {
-		return errors.Wrap(err, "ocFS: error writing to tmp file "+tmp.Name())
-	}
-
-	// if destination exists
-	if _, err := os.Stat(np); err == nil {
-		// copy attributes of existing file to tmp file
-		if err := fs.copyMD(np, tmp.Name()); err != nil {
-			return errors.Wrap(err, "ocFS: error copying metadata from "+np+" to "+tmp.Name())
-		}
-		// create revision
-		if err := fs.archiveRevision(ctx, np); err != nil {
-			return err
-		}
-	}
-
-	// TODO(jfd): make sure rename is atomic, missing fsync ...
-	if err := os.Rename(tmp.Name(), np); err != nil {
-		return errors.Wrap(err, "ocFS: error renaming from "+tmp.Name()+" to "+np)
-	}
-
-	return nil
-}
-*/
-
-func VersionsBasePath(ctx context.Context, datadir string) (string, error) {
-	u, ok := user.ContextGetUser(ctx)
-	if !ok {
-		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
-		return "", err
-	}
-	return filepath.Join(datadir, u.Username, "files_versions"), nil
-}
-
-func ArchiveRevision(ctx context.Context, vbp string, np string) error {
+func (fs *ocFS) archiveRevision(ctx context.Context, vbp string, np string) error {
 	// move existing file to versions dir
 	vp := fmt.Sprintf("%s.v%d", vbp, time.Now().Unix())
 	if err := os.MkdirAll(path.Dir(vp), 0700); err != nil {
@@ -1089,7 +980,7 @@ func ArchiveRevision(ctx context.Context, vbp string, np string) error {
 	return nil
 }
 
-func CopyMD(s string, t string) (err error) {
+func (fs *ocFS) copyMD(s string, t string) (err error) {
 	var attrs []string
 	if attrs, err = xattr.List(s); err != nil {
 		return err
@@ -1198,7 +1089,7 @@ func (fs *ocFS) RestoreRevision(ctx context.Context, ref *storageproviderv0alpha
 	defer source.Close()
 
 	// destination should be available, otherwise we could not have navigated to its revisions
-	if err := ArchiveRevision(ctx, fs.getVersionsPath(ctx, np), np); err != nil {
+	if err := fs.archiveRevision(ctx, fs.getVersionsPath(ctx, np), np); err != nil {
 		return err
 	}
 

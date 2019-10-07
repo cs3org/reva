@@ -227,7 +227,9 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 	}
 	defer httpRes.Body.Close()
 
-	if httpRes.StatusCode != http.StatusOK {
+	// TODO support legacy PUT response
+	if httpRes.StatusCode != http.StatusNoContent {
+		log.Error().Err(err).Int("status", httpRes.StatusCode).Msg("expected 204 No Content")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

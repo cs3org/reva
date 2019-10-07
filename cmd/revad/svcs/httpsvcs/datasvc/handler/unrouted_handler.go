@@ -298,7 +298,7 @@ func (handler *UnroutedHandler) Middleware(h http.Handler) http.Handler {
 // PostFile creates a new file upload using the datastore after validating the
 // length and parsing the metadata.
 func (handler *UnroutedHandler) PostFile(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Background()
+	ctx := r.Context()
 
 	// Check for presence of application/offset+octet-stream. If another content
 	// type is defined, it will be ignored and treated as none was set because
@@ -372,7 +372,7 @@ func (handler *UnroutedHandler) PostFile(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	upload, err := handler.composer.Core.NewUpload(ctx, info)
+	upload, err := handler.composer.Creator.NewUpload(ctx, info)
 	if err != nil {
 		handler.sendError(w, r, err)
 		return
@@ -438,7 +438,7 @@ func (handler *UnroutedHandler) PostFile(w http.ResponseWriter, r *http.Request)
 
 // HeadFile returns the length and offset for the HEAD request
 func (handler *UnroutedHandler) HeadFile(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Background()
+	ctx := r.Context()
 
 	id, err := extractIDFromPath(r.URL.Path)
 	if err != nil {
@@ -637,6 +637,7 @@ func (handler *UnroutedHandler) writeChunk(ctx context.Context, upload Upload, i
 		reader := io.LimitReader(r.Body, maxSize)
 
 		// We use a context object to allow the hook system to cancel an upload
+		// TODO(jfd) in theory it should be possible to use the request context, or create a sub context that still carries the tracing info. Then the handler implementation could pass on the tracing spans...
 		uploadCtx, stopUpload := context.WithCancel(context.Background())
 		info.stopUpload = stopUpload
 		// terminateUpload specifies whether the upload should be deleted after
@@ -717,7 +718,7 @@ func (handler *UnroutedHandler) finishUploadIfComplete(ctx context.Context, uplo
 // GetFile handles requests to download a file using a GET request. This is not
 // part of the specification.
 func (handler *UnroutedHandler) GetFile(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Background()
+	ctx := r.Context()
 
 	id, err := extractIDFromPath(r.URL.Path)
 	if err != nil {
@@ -838,7 +839,7 @@ func filterContentType(info FileInfo) (contentType string, contentDisposition st
 
 // DelFile terminates an upload permanently.
 func (handler *UnroutedHandler) DelFile(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Background()
+	ctx := r.Context()
 
 	// Abort the request handling if the required interface is not implemented
 	if !handler.composer.UsesTerminater {

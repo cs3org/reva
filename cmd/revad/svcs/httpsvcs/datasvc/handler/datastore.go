@@ -100,13 +100,18 @@ type Upload interface {
 }
 
 type DataStore interface {
+	GetUpload(ctx context.Context, id string) (upload Upload, err error)
+}
+
+// CreatorDataStore is the interface which must be implemented by DataStores
+// if they want to receive POST requests using the Handler. If this interface
+// is not implemented, no request handler for this method is attached.
+type CreatingDataStore interface {
 	// Create a new upload using the size as the file's length. The method must
 	// return an unique id which is used to identify the upload. If no backend
 	// (e.g. Riak) specifes the id you may want to use the uid package to
 	// generate one. The properties Size and MetaData will be filled.
 	NewUpload(ctx context.Context, info FileInfo) (upload Upload, err error)
-
-	GetUpload(ctx context.Context, id string) (upload Upload, err error)
 }
 
 type TerminatableUpload interface {

@@ -27,7 +27,8 @@ package handler
 type StoreComposer struct {
 	Core DataStore
 
-	// TODO jfd UsesComposer ...
+	UsesCreator        bool
+	Creator            CreatingDataStore
 	UsesTerminater     bool
 	Terminater         TerminaterDataStore
 	UsesLocker         bool
@@ -54,6 +55,12 @@ func (store *StoreComposer) Capabilities() string {
 		str += "✗"
 	}
 
+	str += ` Creator: `
+	if store.UsesCreator {
+		str += "✓"
+	} else {
+		str += "✗"
+	}
 	str += ` Terminater: `
 	if store.UsesTerminater {
 		str += "✓"
@@ -88,6 +95,10 @@ func (store *StoreComposer) UseCore(core DataStore) {
 	store.Core = core
 }
 
+func (store *StoreComposer) UseCreator(ext CreatingDataStore) {
+	store.UsesCreator = ext != nil
+	store.Creator = ext
+}
 func (store *StoreComposer) UseTerminater(ext TerminaterDataStore) {
 	store.UsesTerminater = ext != nil
 	store.Terminater = ext
@@ -106,4 +117,8 @@ func (store *StoreComposer) UseConcater(ext ConcaterDataStore) {
 func (store *StoreComposer) UseLengthDeferrer(ext LengthDeferrerDataStore) {
 	store.UsesLengthDeferrer = ext != nil
 	store.LengthDeferrer = ext
+}
+
+type Composable interface {
+	UseIn(composer *StoreComposer)
 }

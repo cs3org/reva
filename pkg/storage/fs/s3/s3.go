@@ -525,7 +525,7 @@ func (fs *s3FS) ListFolder(ctx context.Context, ref *storageproviderv0alphapb.Re
 	return finfos, nil
 }
 
-// NewUpload retuns an upload id that can be used for uploads with tus
+// NewUpload returns an upload id that can be used for uploads with tus
 func (fs *s3FS) NewUpload(ctx context.Context, ref *storageproviderv0alphapb.Reference) (uploadID string, err error) {
 	return "", errtypes.NotSupported("op not supported")
 }
