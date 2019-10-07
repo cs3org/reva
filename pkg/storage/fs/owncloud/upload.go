@@ -83,7 +83,7 @@ func (fs *ocFS) UseIn(composer *tusd.StoreComposer) {
 
 // NewUpload returns an upload id that can be used for uploads with tus
 // TODO read optional content for small files in this request
-func (fs *ocFS) NewUpload(ctx context.Context, ref *storageproviderv0alphapb.Reference) (uploadID string, err error) {
+func (fs *ocFS) NewUpload(ctx context.Context, ref *storageproviderv0alphapb.Reference, uploadLength int64) (uploadID string, err error) {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return "", errors.Wrap(err, "ocFS: error resolving reference")
@@ -98,12 +98,16 @@ func (fs *ocFS) NewUpload(ctx context.Context, ref *storageproviderv0alphapb.Ref
 	uploadID = newid.String()
 
 	info := tusd.FileInfo{
-		// we do not know the size yet
-		SizeIsDeferred: true,
 		// store filename so tusdsvc can move there when finalizing the upload
 		MetaData: tusd.MetaData{
 			"filename": np,
 		},
+	}
+
+	if uploadLength == 0 {
+		info.SizeIsDeferred = true
+	} else {
+		info.Size = uploadLength
 	}
 
 	binPath, err := fs.getUploadPath(ctx, uploadID)
@@ -222,6 +226,7 @@ func (upload *fileUpload) WriteChunk(ctx context.Context, offset int64, src io.R
 	}
 
 	upload.info.Offset += n
+	upload.writeInfo()
 
 	return n, err
 }

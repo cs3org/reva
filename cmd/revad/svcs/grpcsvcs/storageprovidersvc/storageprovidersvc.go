@@ -25,6 +25,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
@@ -185,7 +186,17 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *storageprovider
 func (s *service) InitiateFileUpload(ctx context.Context, req *storageproviderv0alphapb.InitiateFileUploadRequest) (*storageproviderv0alphapb.InitiateFileUploadResponse, error) {
 	// TODO(labkode): same considerations as download
 	log := appctx.GetLogger(ctx)
-	uploadID, err := s.storage.NewUpload(ctx, req.Ref)
+	var uploadLength int64
+	if req.Opaque != nil && req.Opaque.Map != nil && req.Opaque.Map["Upload-Length"] != nil {
+		var err error
+		uploadLength, err = strconv.ParseInt(string(req.Opaque.Map["Upload-Length"].Value), 10, 64)
+		if err != nil {
+			return &storageproviderv0alphapb.InitiateFileUploadResponse{
+				Status: status.NewInternal(ctx, err, "error parsing upload length"),
+			}, nil
+		}
+	}
+	uploadID, err := s.storage.NewUpload(ctx, req.Ref, uploadLength)
 	if err != nil {
 		return &storageproviderv0alphapb.InitiateFileUploadResponse{
 			Status: status.NewInternal(ctx, err, "error getting upload id"),

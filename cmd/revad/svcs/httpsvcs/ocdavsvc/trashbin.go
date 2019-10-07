@@ -76,7 +76,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 			return
 		}
 
-		// key is the fileid ... TODO call it fileid? there is a difference to the treshbin key we got from the cs3 api
+		// key is the fileid ... TODO call it fileid? there is a difference to the trashbin key we got from the cs3 api
 		var key string
 		key, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
 		if r.Method == http.MethodOptions {

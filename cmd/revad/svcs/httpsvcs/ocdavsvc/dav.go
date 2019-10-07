@@ -29,6 +29,7 @@ type DavHandler struct {
 	AvatarsHandler  *AvatarsHandler
 	FilesHandler    *FilesHandler
 	MetaHandler     *MetaHandler
+	UploadsHandler  *UploadsHandler
 	TrashbinHandler *TrashbinHandler
 }
 
@@ -43,6 +44,10 @@ func (h *DavHandler) init(c *Config) error {
 	}
 	h.MetaHandler = new(MetaHandler)
 	if err := h.MetaHandler.init(c); err != nil {
+		return err
+	}
+	h.UploadsHandler = new(UploadsHandler)
+	if err := h.UploadsHandler.init(c); err != nil {
 		return err
 	}
 	h.TrashbinHandler = new(TrashbinHandler)
@@ -61,6 +66,8 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			h.FilesHandler.Handler(s).ServeHTTP(w, r)
 		case "meta":
 			h.MetaHandler.Handler(s).ServeHTTP(w, r)
+		case "uploads":
+			h.UploadsHandler.Handler(s).ServeHTTP(w, r)
 		case "trash-bin":
 			h.TrashbinHandler.Handler(s).ServeHTTP(w, r)
 		default:

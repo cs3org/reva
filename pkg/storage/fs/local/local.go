@@ -246,7 +246,7 @@ func (fs *localFS) ListFolder(ctx context.Context, ref *storageproviderv0alphapb
 }
 
 // NewUpload returns an upload id that can be used for uploads with tus
-func (fs *localFS) NewUpload(ctx context.Context, ref *storageproviderv0alphapb.Reference) (uploadID string, err error) {
+func (fs *localFS) NewUpload(ctx context.Context, ref *storageproviderv0alphapb.Reference, uploadLength int64) (uploadID string, err error) {
 	return "", errtypes.NotSupported("op not supported")
 }
 

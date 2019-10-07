@@ -33,7 +33,7 @@ type FS interface {
 	Move(ctx context.Context, oldRef, newRef *storageproviderv0alphapb.Reference) error
 	GetMD(ctx context.Context, ref *storageproviderv0alphapb.Reference) (*storageproviderv0alphapb.ResourceInfo, error)
 	ListFolder(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.ResourceInfo, error)
-	NewUpload(ctx context.Context, ref *storageproviderv0alphapb.Reference) (string, error)
+	NewUpload(ctx context.Context, ref *storageproviderv0alphapb.Reference, uploadLength int64) (string, error)
 	Upload(ctx context.Context, ref *storageproviderv0alphapb.Reference, r io.ReadCloser) error
 	Download(ctx context.Context, ref *storageproviderv0alphapb.Reference) (io.ReadCloser, error)
 	ListRevisions(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.FileVersion, error)
