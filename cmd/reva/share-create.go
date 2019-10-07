@@ -36,7 +36,7 @@ func shareCreateCommand() *command {
 	cmd.Description = func() string { return "create share to a user or group" }
 	cmd.Usage = func() string { return "Usage: share create [-flags] <path>" }
 	grantType := cmd.String("type", "user", "grantee type (user or group)")
-	grantee := cmd.String("grantee", "", "the grantee")
+	grantee := cmd.String("grantee", "", "the opaqueId of the grantee")
 	idp := cmd.String("idp", "", "the idp of the grantee, default to same idp as the user triggering the action")
 	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor)")
 	cmd.Action = func() error {
