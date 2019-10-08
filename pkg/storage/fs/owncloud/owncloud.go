@@ -969,6 +969,8 @@ func (fs *ocFS) Upload(ctx context.Context, ref *storageproviderv0alphapb.Refere
 	if err != nil {
 		return errors.Wrap(err, "ocFS: error creating tmp fn at "+path.Dir(np))
 	}
+	defer tmp.Close()
+	defer os.RemoveAll(tmp.Name())
 
 	_, err = io.Copy(tmp, r)
 	if err != nil {

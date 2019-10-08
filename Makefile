@@ -5,7 +5,7 @@ BUILD_DATE=`date +%FT%T%z`
 GIT_COMMIT=`git rev-parse --short HEAD`
 GIT_BRANCH=`git rev-parse --symbolic-full-name --abbrev-ref HEAD`
 GIT_DIRTY=`git diff-index --quiet HEAD -- || echo "dirty-"`
-VERSION=`git describe`
+VERSION=`git describe --always`
 GO_VERSION=`go version | awk '{print $$3}'`
 BUILD_PLATFORM=`go version | awk '{print $$4}'`
 
