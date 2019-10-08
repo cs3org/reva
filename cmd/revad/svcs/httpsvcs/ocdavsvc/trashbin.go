@@ -29,6 +29,7 @@ import (
 	"time"
 
 	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
@@ -150,7 +151,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
-	lrReq := &storageproviderv0alphapb.ListRecycleRequest{
+	lrReq := &gatewayv0alphapb.ListRecycleRequest{
 		// TODO implement from to?
 		//FromTs
 		//ToTs

@@ -248,7 +248,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			},
 		}
 
-		sClient, err := pool.GetStorageProviderServiceClient(h.gatewaySvc)
+		sClient, err := pool.GetGatewayServiceClient(h.gatewaySvc)
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting storage grpc client", err)
 			return
@@ -566,7 +566,7 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 		log.Debug().Str("path", p).Str("fn", fn).Interface("user", u).Msg("resolved path for user")
 
 		// first check if the file exists
-		sClient, err := pool.GetStorageProviderServiceClient(h.gatewaySvc)
+		sClient, err := pool.GetGatewayServiceClient(h.gatewaySvc)
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc storage provider client", err)
 			return
@@ -607,7 +607,7 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 
 	// fetch user shares if configured
 	if h.gatewaySvc != "" {
-		userShareProviderClient, err := pool.GetUserShareProviderClient(h.gatewaySvc)
+		userShareProviderClient, err := pool.GetGatewayServiceClient(h.gatewaySvc)
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc user share handler client", err)
 			return
@@ -643,7 +643,7 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// TODO(refs): refactor
-		pClient, err := pool.GetPublicShareProviderClient(h.gatewaySvc)
+		pClient, err := pool.GetGatewayServiceClient(h.gatewaySvc)
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting public share provider grpc client", err)
 		} else {

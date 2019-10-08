@@ -26,6 +26,7 @@ import (
 	"path"
 	"strings"
 
+	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/utils"
@@ -157,7 +158,7 @@ func (s *svc) doCopy(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(successCode)
 }
 
-func descend(ctx context.Context, client storageproviderv0alphapb.StorageProviderServiceClient, src *storageproviderv0alphapb.ResourceInfo, dst string) error {
+func descend(ctx context.Context, client gatewayv0alphapb.GatewayServiceClient, src *storageproviderv0alphapb.ResourceInfo, dst string) error {
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("src", src.Path).Str("dst", dst).Msg("descending")
 	if src.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {

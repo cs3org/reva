@@ -165,7 +165,7 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 					ClientSecret: creds.ClientSecret,
 				}
 
-				client, err := pool.GetAuthServiceClient(conf.GatewaySvc)
+				client, err := pool.GetGatewayServiceClient(conf.GatewaySvc)
 				if err != nil {
 					log.Error().Err(err).Msg("error getting the authsvc client")
 					w.WriteHeader(http.StatusUnauthorized)

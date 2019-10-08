@@ -25,6 +25,7 @@ import (
 	"os"
 	"strings"
 
+	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/httpserver"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
@@ -137,8 +138,8 @@ func (s *svc) Handler() http.Handler {
 	})
 }
 
-func (s *svc) getClient() (storageproviderv0alphapb.StorageProviderServiceClient, error) {
-	return pool.GetStorageProviderServiceClient(s.c.GatewaySvc)
+func (s *svc) getClient() (gatewayv0alphapb.GatewayServiceClient, error) {
+	return pool.GetGatewayServiceClient(s.c.GatewaySvc)
 }
 
 func wrapResourceID(r *storageproviderv0alphapb.ResourceId) string {

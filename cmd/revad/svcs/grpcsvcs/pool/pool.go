@@ -22,6 +22,7 @@ import (
 	appproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/appprovider/v0alpha"
 	appregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/appregistry/v0alpha"
 	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	gatewayv0alpahpb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
 	ocmshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/ocmshareprovider/v0alpha"
 	preferencesv0alphapb "github.com/cs3org/go-cs3apis/cs3/preferences/v0alpha"
 	publicshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
@@ -43,6 +44,7 @@ var preferencesProviders = map[string]preferencesv0alphapb.PreferencesServiceCli
 var appRegistries = map[string]appregistryv0alphapb.AppRegistryServiceClient{}
 var appProviders = map[string]appproviderv0alphapb.AppProviderServiceClient{}
 var storageRegistries = map[string]storageregistryv0alphapb.StorageRegistryServiceClient{}
+var gatewayProviders = map[string]gatewayv0alpahpb.GatewayServiceClient{}
 
 // NewConn creates a new connection to a grpc server
 // with open census tracing support.
@@ -54,6 +56,22 @@ func NewConn(endpoint string) (*grpc.ClientConn, error) {
 	}
 
 	return conn, nil
+}
+
+// GetGatewayServiceClient returns a GatewayServiceClient.
+func GetGatewayServiceClient(endpoint string) (gatewayv0alpahpb.GatewayServiceClient, error) {
+	if val, ok := gatewayProviders[endpoint]; ok {
+		return val, nil
+	}
+
+	conn, err := NewConn(endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	gatewayProviders[endpoint] = gatewayv0alpahpb.NewGatewayServiceClient(conn)
+
+	return gatewayProviders[endpoint], nil
 }
 
 // GetStorageProviderServiceClient returns a StorageProviderServiceClient.
