@@ -138,6 +138,48 @@ func (s *svc) Move(ctx context.Context, req *storageproviderv0alphapb.MoveReques
 	return res, nil
 }
 
+func (s *svc) SetArbitraryMetadata(ctx context.Context, req *storageproviderv0alphapb.SetArbitraryMetadataRequest) (*storageproviderv0alphapb.SetArbitraryMetadataResponse, error) {
+	c, err := s.find(ctx, req.Ref)
+	if err != nil {
+		if _, ok := err.(errtypes.IsNotFound); ok {
+			return &storageproviderv0alphapb.SetArbitraryMetadataResponse{
+				Status: status.NewNotFound(ctx, "storage provider not found"),
+			}, nil
+		}
+		return &storageproviderv0alphapb.SetArbitraryMetadataResponse{
+			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+		}, nil
+	}
+
+	res, err := c.SetArbitraryMetadata(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gatewaysvc: error calling Stat")
+	}
+
+	return res, nil
+}
+
+func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *storageproviderv0alphapb.UnsetArbitraryMetadataRequest) (*storageproviderv0alphapb.UnsetArbitraryMetadataResponse, error) {
+	c, err := s.find(ctx, req.Ref)
+	if err != nil {
+		if _, ok := err.(errtypes.IsNotFound); ok {
+			return &storageproviderv0alphapb.UnsetArbitraryMetadataResponse{
+				Status: status.NewNotFound(ctx, "storage provider not found"),
+			}, nil
+		}
+		return &storageproviderv0alphapb.UnsetArbitraryMetadataResponse{
+			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+		}, nil
+	}
+
+	res, err := c.UnsetArbitraryMetadata(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gatewaysvc: error calling Stat")
+	}
+
+	return res, nil
+}
+
 func (s *svc) Stat(ctx context.Context, req *storageproviderv0alphapb.StatRequest) (*storageproviderv0alphapb.StatResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {

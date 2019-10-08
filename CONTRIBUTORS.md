@@ -5,5 +5,6 @@
 - Giuseppe Lo Presti <giuseppe.lopresti@cern.ch>
 - Hugo Gonzalez Labrador <github@hugo.labkode.com>
 - Hugo Gonzalez Labrador <gonzalhu@iota.cern.ch>
+- Ilja Neumann <ineumann@owncloud.com>
 - Jörn Friedrich Dreyer <jfd@butonic.de>
 - Mohitty <mohitt@iitk.ac.in>

@@ -22,6 +22,7 @@ import (
 	appproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/appprovider/v0alpha"
 	appregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/appregistry/v0alpha"
 	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	ocmshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/ocmshareprovider/v0alpha"
 	preferencesv0alphapb "github.com/cs3org/go-cs3apis/cs3/preferences/v0alpha"
 	publicshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
@@ -36,6 +37,7 @@ import (
 var storageProviders = map[string]storageproviderv0alphapb.StorageProviderServiceClient{}
 var authProviders = map[string]authv0alphapb.AuthServiceClient{}
 var userShareProviders = map[string]usershareproviderv0alphapb.UserShareProviderServiceClient{}
+var ocmShareProviders = map[string]ocmshareproviderv0alphapb.OCMShareProviderServiceClient{}
 var publicShareProviders = map[string]publicshareproviderv0alphapb.PublicShareProviderServiceClient{}
 var preferencesProviders = map[string]preferencesv0alphapb.PreferencesServiceClient{}
 var appRegistries = map[string]appregistryv0alphapb.AppRegistryServiceClient{}
@@ -100,6 +102,22 @@ func GetUserShareProviderClient(endpoint string) (usershareproviderv0alphapb.Use
 	userShareProviders[endpoint] = usershareproviderv0alphapb.NewUserShareProviderServiceClient(conn)
 
 	return userShareProviders[endpoint], nil
+}
+
+// GetOCMShareProviderClient returns a new OCMShareProviderClient.
+func GetOCMShareProviderClient(endpoint string) (ocmshareproviderv0alphapb.OCMShareProviderServiceClient, error) {
+	if val, ok := ocmShareProviders[endpoint]; ok {
+		return val, nil
+	}
+
+	conn, err := NewConn(endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	ocmShareProviders[endpoint] = ocmshareproviderv0alphapb.NewOCMShareProviderServiceClient(conn)
+
+	return ocmShareProviders[endpoint], nil
 }
 
 // GetPublicShareProviderClient returns a new PublicShareProviderClient.
