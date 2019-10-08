@@ -37,11 +37,10 @@ import (
 	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
+	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/ocssvc/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/publicshare"
-	publicsharemgr "github.com/cs3org/reva/pkg/publicshare/manager/registry"
 	"github.com/cs3org/reva/pkg/user"
-	usermgr "github.com/cs3org/reva/pkg/user/manager/registry"
 )
 
 // SharesHandler implements the ownCloud sharing API
@@ -56,13 +55,13 @@ func (h *SharesHandler) init(c *Config) error {
 	// TODO(jfd) lookup correct storage, for now this always uses the configured storage driver, maybe the combined storage can delegate this?
 	h.gatewaySvc = c.GatewaySvc
 
-	userManager, err := getUserManager(c.UserManager, c.UserManagers)
+	userManager, err := conversions.GetUserManager(c.UserManager, c.UserManagers)
 	if err != nil {
 		return err
 	}
 	h.userManager = userManager
 
-	publicShareManager, err := getPublicShareManager(c.PublicShareManager, c.PublicShareManagers)
+	publicShareManager, err := conversions.GetPublicShareManager(c.PublicShareManager, c.PublicShareManagers)
 	if err != nil {
 		return err
 	}
@@ -114,7 +113,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if shareType == int(shareTypeUser) {
+	if shareType == int(conversions.ShareTypeUser) {
 		// if user sharing is disabled
 		if h.gatewaySvc == "" {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "user sharing service not configured", nil)
@@ -160,23 +159,23 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			pval := r.FormValue("permissions")
 			if pval == "" {
 				// by default only allow read permissions / assign viewer role
-				role = roleViewer
+				role = conversions.RoleViewer
 			} else {
 				pint, err = strconv.Atoi(pval)
 				if err != nil {
 					WriteOCSError(w, r, MetaBadRequest.StatusCode, "permissions must be an integer", nil)
 					return
 				}
-				role = h.permissions2Role(pint)
+				role = conversions.Permissions2Role(pint)
 			}
 		}
 
 		// map role to permissions
 		var permissions *storageproviderv0alphapb.ResourcePermissions
-		permissions, err = h.role2CS3Permissions(role)
+		permissions, err = conversions.Role2CS3Permissions(role)
 		if err != nil {
 			log.Warn().Err(err).Msg("unknown role, mapping legacy permissions")
-			permissions = asCS3Permissions(pint, nil)
+			permissions = conversions.AsCS3Permissions(pint, nil)
 		}
 
 		uClient, err := pool.GetUserShareProviderClient(h.gatewaySvc)
@@ -264,7 +263,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if shareType == int(shareTypePublicLink) {
+	if shareType == int(conversions.ShareTypePublicLink) {
 		// create a public link share
 		// get a connection to the public shares service
 		c, err := pool.GetPublicShareProviderClient(h.gatewaySvc)
@@ -334,7 +333,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// build ocs response for Phoenix
-		s := publicShare2ShareData(createRes.Share)
+		s := conversions.PublicShare2ShareData(createRes.Share)
 		WriteOCSSuccess(w, r, s)
 
 		return
@@ -379,7 +378,7 @@ func (h *SharesHandler) updateShare(w http.ResponseWriter, r *http.Request) {
 			Field: &usershareproviderv0alphapb.UpdateShareRequest_UpdateField_Permissions{
 				Permissions: &usershareproviderv0alphapb.SharePermissions{
 					// this completely overwrites the permissions for this user
-					Permissions: asCS3Permissions(perm, nil),
+					Permissions: conversions.AsCS3Permissions(perm, nil),
 				},
 			},
 		},
@@ -434,7 +433,7 @@ func (h *SharesHandler) updateShare(w http.ResponseWriter, r *http.Request) {
 
 // listShares bundles user and public shares
 func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
-	shares := make([]*shareData, 0)
+	shares := make([]*conversions.ShareData, 0)
 
 	userShares, err := h.listUserShares(w, r)
 	if err != nil {
@@ -471,7 +470,7 @@ func (h *SharesHandler) findSharees(w http.ResponseWriter, r *http.Request) {
 
 	log.Debug().Int("count", len(users)).Str("search", search).Msg("users found")
 
-	matches := make([]*matchData, 0, len(users))
+	matches := make([]*conversions.MatchData, 0, len(users))
 
 	for _, user := range users {
 		match := h.userAsMatch(user)
@@ -479,19 +478,19 @@ func (h *SharesHandler) findSharees(w http.ResponseWriter, r *http.Request) {
 		matches = append(matches, match)
 	}
 
-	WriteOCSSuccess(w, r, &shareeData{
-		Exact: &exactMatchesData{
-			Users:   []*matchData{},
-			Groups:  []*matchData{},
-			Remotes: []*matchData{},
+	WriteOCSSuccess(w, r, &conversions.ShareeData{
+		Exact: &conversions.ExactMatchesData{
+			Users:   []*conversions.MatchData{},
+			Groups:  []*conversions.MatchData{},
+			Remotes: []*conversions.MatchData{},
 		},
 		Users:   matches,
-		Groups:  []*matchData{},
-		Remotes: []*matchData{},
+		Groups:  []*conversions.MatchData{},
+		Remotes: []*conversions.MatchData{},
 	})
 }
 
-func (h *SharesHandler) listPublicShares(w http.ResponseWriter, r *http.Request) ([]*shareData, error) {
+func (h *SharesHandler) listPublicShares(w http.ResponseWriter, r *http.Request) ([]*conversions.ShareData, error) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -516,9 +515,9 @@ func (h *SharesHandler) listPublicShares(w http.ResponseWriter, r *http.Request)
 		}
 
 		// In order to return a OCS payload we need to do a series of transformations:
-		ocsDataPayload := make([]*shareData, 0)
+		ocsDataPayload := make([]*conversions.ShareData, 0)
 		for _, share := range list.Share {
-			sData := publicShare2ShareData(share)
+			sData := conversions.PublicShare2ShareData(share)
 			sClient, err := pool.GetStorageProviderServiceClient(h.gatewaySvc)
 			if err != nil {
 				return nil, err
@@ -560,14 +559,14 @@ func (h *SharesHandler) listPublicShares(w http.ResponseWriter, r *http.Request)
 	return nil, errors.New("bad request")
 }
 
-func (h *SharesHandler) listUserShares(w http.ResponseWriter, r *http.Request) ([]*shareData, error) {
+func (h *SharesHandler) listUserShares(w http.ResponseWriter, r *http.Request) ([]*conversions.ShareData, error) {
 	var rInfo *storageproviderv0alphapb.ResourceInfo
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
 	lsUserSharesRequest := usershareproviderv0alphapb.ListSharesRequest{}
 
-	ocsDataPayload := make([]*shareData, 0)
+	ocsDataPayload := make([]*conversions.ShareData, 0)
 	if h.gatewaySvc != "" {
 		// get a connection to the users share provider
 		userShareProviderClient, err := pool.GetUserShareProviderClient(h.gatewaySvc)
@@ -630,7 +629,7 @@ func (h *SharesHandler) listUserShares(w http.ResponseWriter, r *http.Request) (
 
 // glue code between cs3apis / ocs
 // TODO(refs) get rid of pointer receiver
-func (h *SharesHandler) addFileInfo(ctx context.Context, s *shareData, info *storageproviderv0alphapb.ResourceInfo) error {
+func (h *SharesHandler) addFileInfo(ctx context.Context, s *conversions.ShareData, info *storageproviderv0alphapb.ResourceInfo) error {
 	if info != nil {
 		// TODO The owner is not set in the storage stat metadata ...
 		// TODO FileParent:
@@ -643,7 +642,7 @@ func (h *SharesHandler) addFileInfo(ctx context.Context, s *shareData, info *sto
 		s.FileTarget = path.Join("/", path.Base(info.Path))
 		s.Path = info.Path // TODO hm this might have to be relative to the users home ...
 		// item type
-		s.ItemType = resourceType(info.GetType()).String()
+		s.ItemType = conversions.ResourceType(info.GetType()).String()
 
 		// file owner might not yet be set. Use file info
 		if s.UIDFileOwner == "" {
@@ -686,10 +685,10 @@ func (h *SharesHandler) addFileInfo(ctx context.Context, s *shareData, info *sto
 // ===========
 
 // TODO(jfd) merge userShare2ShareData with publicShare2ShareData
-func (h *SharesHandler) userShare2ShareData(ctx context.Context, share *usershareproviderv0alphapb.Share) (*shareData, error) {
-	sd := &shareData{
-		Permissions: userSharePermissions2OCSPermissions(share.GetPermissions()),
-		ShareType:   shareTypeUser,
+func (h *SharesHandler) userShare2ShareData(ctx context.Context, share *usershareproviderv0alphapb.Share) (*conversions.ShareData, error) {
+	sd := &conversions.ShareData{
+		Permissions: conversions.UserSharePermissions2OCSPermissions(share.GetPermissions()),
+		ShareType:   conversions.ShareTypeUser,
 	}
 	if share.Creator != nil {
 		if creator, err := h.userManager.GetUser(ctx, share.Creator); err == nil {
@@ -727,359 +726,11 @@ func (h *SharesHandler) userShare2ShareData(ctx context.Context, share *usershar
 	return sd, nil
 }
 
-func userSharePermissions2OCSPermissions(sp *usershareproviderv0alphapb.SharePermissions) Permissions {
-	if sp != nil {
-		return permissions2OCSPermissions(sp.GetPermissions())
-	}
-	return permissionInvalid
-}
-
-func publicSharePermissions2OCSPermissions(sp *publicshareproviderv0alphapb.PublicSharePermissions) Permissions {
-	if sp != nil {
-		return permissions2OCSPermissions(sp.GetPermissions())
-	}
-	return permissionInvalid
-}
-
-// timestamp is assumed to be UTC ... just human readable ...
-// FIXME and ambiguous / error prone because there is no time zone ...
-func timestampToExpiration(t *typespb.Timestamp) string {
-	return time.Unix(int64(t.Seconds), int64(t.Nanos)).Format("2006-01-02 15:05:05")
-}
-
-// TODO sort out mapping, this is just a first guess
-func permissions2OCSPermissions(p *storageproviderv0alphapb.ResourcePermissions) Permissions {
-	permissions := permissionInvalid
-	if p != nil {
-		if p.ListContainer {
-			permissions += permissionRead
-		}
-		if p.InitiateFileUpload {
-			permissions += permissionWrite
-		}
-		if p.CreateContainer {
-			permissions += permissionCreate
-		}
-		if p.Delete {
-			permissions += permissionDelete
-		}
-		if p.AddGrant {
-			permissions += permissionShare
-		}
-	}
-	return permissions
-}
-
-// TODO sort out mapping, this is just a first guess
-// TODO use roles to make this configurable
-func asCS3Permissions(p int, rp *storageproviderv0alphapb.ResourcePermissions) *storageproviderv0alphapb.ResourcePermissions {
-	if rp == nil {
-		rp = &storageproviderv0alphapb.ResourcePermissions{}
-	}
-
-	if p&int(permissionRead) != 0 {
-		rp.ListContainer = true
-		rp.ListGrants = true
-		rp.ListFileVersions = true
-		rp.ListRecycle = true
-		rp.Stat = true
-		rp.GetPath = true
-		rp.GetQuota = true
-		rp.InitiateFileDownload = true
-	}
-	if p&int(permissionWrite) != 0 {
-		rp.InitiateFileUpload = true
-		rp.RestoreFileVersion = true
-		rp.RestoreRecycleItem = true
-	}
-	if p&int(permissionCreate) != 0 {
-		rp.CreateContainer = true
-		// FIXME permissions mismatch: double check create vs write file
-		rp.InitiateFileUpload = true
-		if p&int(permissionWrite) != 0 {
-			rp.Move = true // TODO move only when create and write?
-		}
-	}
-	if p&int(permissionDelete) != 0 {
-		rp.Delete = true
-		rp.PurgeRecycle = true
-	}
-	if p&int(permissionShare) != 0 {
-		rp.AddGrant = true
-		rp.RemoveGrant = true // TODO when are you able to unshare / delete
-		rp.UpdateGrant = true
-	}
-	return rp
-}
-
-func (h *SharesHandler) permissions2Role(p int) string {
-	role := roleLegacy
-	if p == int(permissionRead) {
-		role = roleViewer
-	}
-	if p&int(permissionWrite) == 1 {
-		role = roleEditor
-	}
-	if p&int(permissionShare) == 1 {
-		role = roleCoowner
-	}
-	return role
-}
-
-func (h *SharesHandler) role2CS3Permissions(r string) (*storageproviderv0alphapb.ResourcePermissions, error) {
-	switch r {
-	case roleViewer:
-		return &storageproviderv0alphapb.ResourcePermissions{
-			ListContainer:        true,
-			ListGrants:           true,
-			ListFileVersions:     true,
-			ListRecycle:          true,
-			Stat:                 true,
-			GetPath:              true,
-			GetQuota:             true,
-			InitiateFileDownload: true,
-		}, nil
-	case roleEditor:
-		return &storageproviderv0alphapb.ResourcePermissions{
-			ListContainer:        true,
-			ListGrants:           true,
-			ListFileVersions:     true,
-			ListRecycle:          true,
-			Stat:                 true,
-			GetPath:              true,
-			GetQuota:             true,
-			InitiateFileDownload: true,
-
-			Move:               true,
-			InitiateFileUpload: true,
-			RestoreFileVersion: true,
-			RestoreRecycleItem: true,
-			CreateContainer:    true,
-			Delete:             true,
-			PurgeRecycle:       true,
-		}, nil
-	case roleCoowner:
-		return &storageproviderv0alphapb.ResourcePermissions{
-			ListContainer:        true,
-			ListGrants:           true,
-			ListFileVersions:     true,
-			ListRecycle:          true,
-			Stat:                 true,
-			GetPath:              true,
-			GetQuota:             true,
-			InitiateFileDownload: true,
-
-			Move:               true,
-			InitiateFileUpload: true,
-			RestoreFileVersion: true,
-			RestoreRecycleItem: true,
-			CreateContainer:    true,
-			Delete:             true,
-			PurgeRecycle:       true,
-
-			AddGrant:    true,
-			RemoveGrant: true, // TODO when are you able to unshare / delete
-			UpdateGrant: true,
-		}, nil
-	default:
-		return nil, fmt.Errorf("unknown role: %s", r)
-	}
-}
-
-// ============
-// Custom Types
-// ============
-
-// TODO Phoenix should be able to handle int shareType in json
-type shareType int
-
-const (
-	shareTypeUser shareType = 0
-	// shareTypeGroup shareType = 1
-	shareTypePublicLink shareType = 3
-	//	shareTypeFederatedCloudShare shareType = 6
-)
-
-// Permissions reflects the CRUD permissions used in the OCS sharing API
-type Permissions uint
-
-const (
-	permissionInvalid Permissions = 0
-	permissionRead    Permissions = 1
-	permissionWrite   Permissions = 2
-	permissionCreate  Permissions = 4
-	permissionDelete  Permissions = 8
-	permissionShare   Permissions = 16
-	//permissionAll     Permissions = 31
-)
-
-const (
-	roleLegacy  string = "legacy"
-	roleViewer  string = "viewer"
-	roleEditor  string = "editor"
-	roleCoowner string = "coowner"
-)
-
-// shareData represents https://doc.owncloud.com/server/developer_manual/core/ocs-share-api.html#response-attributes-1
-type shareData struct {
-	// TODO int?
-	ID string `json:"id" xml:"id"`
-	// The share’s type. This can be one of:
-	// 0 = user
-	// 1 = group
-	// 3 = public link
-	// 6 = federated cloud share
-	ShareType shareType `json:"share_type" xml:"share_type"`
-	// The username of the owner of the share.
-	UIDOwner string `json:"uid_owner" xml:"uid_owner"`
-	// The display name of the owner of the share.
-	DisplaynameOwner string `json:"displayname_owner" xml:"displayname_owner"`
-	// The permission attribute set on the file. Options are:
-	// * 1 = Read
-	// * 2 = Update
-	// * 4 = Create
-	// * 8 = Delete
-	// * 16 = Share
-	// * 31 = All permissions
-	// The default is 31, and for public shares is 1.
-	// TODO we should change the default to read only
-	Permissions Permissions `json:"permissions" xml:"permissions"`
-	// The UNIX timestamp when the share was created.
-	STime uint64 `json:"stime" xml:"stime"`
-	// ?
-	Parent string `json:"parent" xml:"parent"`
-	// The UNIX timestamp when the share expires.
-	Expiration string `json:"expiration" xml:"expiration"`
-	// The public link to the item being shared.
-	Token string `json:"token" xml:"token"`
-	// The unique id of the user that owns the file or folder being shared.
-	UIDFileOwner string `json:"uid_file_owner" xml:"uid_file_owner"`
-	// The display name of the user that owns the file or folder being shared.
-	DisplaynameFileOwner string `json:"displayname_file_owner" xml:"displayname_file_owner"`
-	// The path to the shared file or folder.
-	Path string `json:"path" xml:"path"`
-	// The type of the object being shared. This can be one of file or folder.
-	ItemType string `json:"item_type" xml:"item_type"`
-	// The RFC2045-compliant mimetype of the file.
-	MimeType  string `json:"mimetype" xml:"mimetype"`
-	StorageID string `json:"storage_id" xml:"storage_id"`
-	Storage   uint64 `json:"storage" xml:"storage"`
-	// The unique node id of the item being shared.
-	// TODO int?
-	ItemSource string `json:"item_source" xml:"item_source"`
-	// The unique node id of the item being shared. For legacy reasons item_source and file_source attributes have the same value.
-	// TODO int?
-	FileSource string `json:"file_source" xml:"file_source"`
-	// The unique node id of the parent node of the item being shared.
-	// TODO int?
-	FileParent string `json:"file_parent" xml:"file_parent"`
-	// The name of the shared file.
-	FileTarget string `json:"file_target" xml:"file_target"`
-	// The uid of the receiver of the file. This is either
-	// - a GID (group id) if it is being shared with a group or
-	// - a UID (user id) if the share is shared with a user.
-	ShareWith string `json:"share_with" xml:"share_with"`
-	// The display name of the receiver of the file.
-	ShareWithDisplayname string `json:"share_with_displayname" xml:"share_with_displayname"`
-	// Whether the recipient was notified, by mail, about the share being shared with them.
-	MailSend string `json:"mail_send" xml:"mail_send"`
-	// A (human-readable) name for the share, which can be up to 64 characters in length
-	Name string `json:"name" xml:"name"`
-}
-
-// shareeData holds share recipient search results
-type shareeData struct {
-	Exact   *exactMatchesData `json:"exact" xml:"exact"`
-	Users   []*matchData      `json:"users" xml:"users"`
-	Groups  []*matchData      `json:"groups" xml:"groups"`
-	Remotes []*matchData      `json:"remotes" xml:"remotes"`
-}
-
-// exactMatchesData hold exact matches
-type exactMatchesData struct {
-	Users   []*matchData `json:"users" xml:"users"`
-	Groups  []*matchData `json:"groups" xml:"groups"`
-	Remotes []*matchData `json:"remotes" xml:"remotes"`
-}
-
-// matchData describes a single match
-type matchData struct {
-	Label string          `json:"label" xml:"label"`
-	Value *matchValueData `json:"value" xml:"value"`
-}
-
-// matchValueData holds the type and actual value
-type matchValueData struct {
-	ShareType int    `json:"shareType" xml:"shareType"`
-	ShareWith string `json:"shareWith" xml:"shareWith"`
-}
-
-type resourceType int
-
-func (rt resourceType) String() (s string) {
-	switch rt {
-	case 0:
-		s = "invalid"
-	case 1:
-		s = "file"
-	case 2:
-		s = "folder"
-	case 3:
-		s = "reference"
-	default:
-		s = "invalid"
-	}
-	return
-}
-
-// =======
-// Helpers
-// =======
-
-// TODO(refs) helper function, move to a mixins
-func publicShare2ShareData(share *publicshareproviderv0alphapb.PublicShare) *shareData {
-	sd := &shareData{
-		// TODO map share.resourceId to path and storage ... requires a stat call
-		// share.permissions ar mapped below
-		// TODO lookup user metadata
-		//DisplaynameOwner:     creator.DisplayName,
-		// TODO lookup user metadata
-		// DisplaynameFileOwner: owner.DisplayName,
-		ID:           share.Id.OpaqueId,
-		Permissions:  publicSharePermissions2OCSPermissions(share.GetPermissions()),
-		ShareType:    shareTypePublicLink,
-		UIDOwner:     UserIDToString(share.Creator),
-		STime:        share.Ctime.Seconds, // TODO CS3 api birth time = btime
-		UIDFileOwner: UserIDToString(share.Owner),
-		Token:        share.Token,
-		Expiration:   timestampToExpiration(share.Expiration),
-	}
-	// actually clients should be able to GET and cache the user info themselves ...
-	// TODO check grantee type for user vs group
-	return sd
-}
-
-func getUserManager(manager string, m map[string]map[string]interface{}) (user.Manager, error) {
-	if f, ok := usermgr.NewFuncs[manager]; ok {
-		return f(m[manager])
-	}
-
-	return nil, fmt.Errorf("driver %s not found for user manager", manager)
-}
-
-func getPublicShareManager(manager string, m map[string]map[string]interface{}) (publicshare.Manager, error) {
-	if f, ok := publicsharemgr.NewFuncs[manager]; ok {
-		return f(m[manager])
-	}
-
-	return nil, fmt.Errorf("driver %s not found for public shares manager", manager)
-}
-
-func (h *SharesHandler) userAsMatch(u *authv0alphapb.User) *matchData {
-	return &matchData{
+func (h *SharesHandler) userAsMatch(u *authv0alphapb.User) *conversions.MatchData {
+	return &conversions.MatchData{
 		Label: u.DisplayName,
-		Value: &matchValueData{
-			ShareType: int(shareTypeUser),
+		Value: &conversions.MatchValueData{
+			ShareType: int(conversions.ShareTypeUser),
 			// TODO(jfd) find more robust userid
 			// username might be ok as it is uniqe at a given point in time
 			ShareWith: u.Username,
