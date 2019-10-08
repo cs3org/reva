@@ -20,20 +20,24 @@ package ocdavsvc
 
 import (
 	"context"
+	"encoding/xml"
+	"fmt"
 	"net/http"
 	"net/url"
 	"path"
 	"strings"
+	"time"
 
 	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
+	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/utils"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxuser "github.com/cs3org/reva/pkg/user"
 )
 
-// TrashbinHandler handles version requests
+// TrashbinHandler handles trashbin requests
 type TrashbinHandler struct {
 }
 
@@ -81,8 +85,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 		}
 		if key == "" && r.Method == "PROPFIND" {
 
-			// webdav should be death: baseURI is encoded as part of the
-			// response payload in href field
+			// baseURI is encoded as part of the response payload in href field
 			baseURI := path.Join("/", s.Prefix(), "remote.php/dav/trash-bin", username)
 			ctx = context.WithValue(r.Context(), ctxKeyBaseURI, baseURI)
 			r = r.WithContext(ctx)
@@ -108,8 +111,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 
 			urlPath := dstURL.Path
 
-			// webdav should be death: baseURI is encoded as part of the
-			// response payload in href field
+			// baseURI is encoded as part of the response payload in href field
 			baseURI := path.Join("/", s.Prefix(), "remote.php/dav/files", username)
 			ctx = context.WithValue(r.Context(), ctxKeyBaseURI, baseURI)
 			r = r.WithContext(ctx)
@@ -163,53 +165,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	items := lrRes.GetRecycleItems()
-	infos := make([]*storageproviderv0alphapb.ResourceInfo, 0, len(items)+1)
-	// add trashbin dir . entry, derived from file info
-	infos = append(infos, &storageproviderv0alphapb.ResourceInfo{
-		Type: storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER,
-		Id: &storageproviderv0alphapb.ResourceId{
-			StorageId: "trashbin", // this is a virtual storage
-			OpaqueId:  path.Join("trash-bin", u.Username),
-		},
-		//Etag:     info.Etag,
-		MimeType: "httpd/unix-directory",
-		//Mtime:    info.Mtime,
-		Path: u.Username,
-		//PermissionSet
-		Size:  0,
-		Owner: u.Id,
-	})
-
-	for i := range items {
-		vi := &storageproviderv0alphapb.ResourceInfo{
-			// TODO(jfd) we cannot access version content, this will be a problem when trying to fetch version thumbnails
-			//Opaque
-			Type: storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_FILE,
-			Id: &storageproviderv0alphapb.ResourceId{
-				StorageId: "trashbin", // this is a virtual storage
-				OpaqueId:  path.Join("trash-bin", u.Username, items[i].GetKey()),
-			},
-			//Checksum
-			//Etag: v.ETag,
-			//MimeType
-			Mtime: items[i].DeletionTime,
-			Path:  items[i].Key,
-			//PermissionSet
-			Size:  items[i].Size,
-			Owner: u.Id,
-		}
-		infos = append(infos, vi)
-	}
-
-	// TODO(jfd) render trashbin response
-	// <oc:trashbin-original-filename>ownCloud Manual.pdf</oc:trashbin-original-filename>
-	// this seems to be relative to the users home ... which is bad: now the client has to build the proper Destination url
-	// <oc:trashbin-original-location>ownCloud Manual.pdf</oc:trashbin-original-location>
-	// <oc:trashbin-delete-datetime>Thu, 29 Aug 2019 14:06:24 GMT</oc:trashbin-delete-datetime>
-	// d:getcontentlength
-	// d:resourcetype
-	propRes, err := s.formatPropfind(ctx, &pf, infos)
+	propRes, err := h.formatTrashPropfind(ctx, s, u, &pf, lrRes.GetRecycleItems())
 	if err != nil {
 		log.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -226,6 +182,175 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 
 }
 
+func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *authv0alphapb.User, pf *propfindXML, items []*storageproviderv0alphapb.RecycleItem) (string, error) {
+	responses := make([]*responseXML, 0, len(items)+1)
+	// add trashbin dir . entry
+	responses = append(responses, &responseXML{
+		Href: (&url.URL{Path: ctx.Value(ctxKeyBaseURI).(string) + "/"}).EscapedPath(), // url encode response.Href TODO (jfd) really? /should be ok ... we may actually only need to escape the username
+		Propstat: []propstatXML{
+			propstatXML{
+				Status: "HTTP/1.1 200 OK",
+				Prop: []*propertyXML{
+					s.newProp("d:resourcetype", "<d:collection/>"),
+				},
+			},
+			propstatXML{
+				Status: "HTTP/1.1 404 Not Found",
+				Prop: []*propertyXML{
+					s.newProp("oc:trashbin-original-filename", ""),
+					s.newProp("oc:trashbin-original-location", ""),
+					s.newProp("oc:trashbin-delete-datetime", ""),
+					s.newProp("d:getcontentlength", ""),
+				},
+			},
+		},
+	})
+	/*
+		for i := range items {
+			vi := &storageproviderv0alphapb.ResourceInfo{
+				// TODO(jfd) we cannot access version content, this will be a problem when trying to fetch version thumbnails
+				//Opaque
+				Type: storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_FILE,
+				Id: &storageproviderv0alphapb.ResourceId{
+					StorageId: "trashbin", // this is a virtual storage
+					OpaqueId:  path.Join("trash-bin", u.Username, items[i].GetKey()),
+				},
+				//Checksum
+				//Etag: v.ETag,
+				//MimeType
+				Mtime: items[i].DeletionTime,
+				Path:  items[i].Key,
+				//PermissionSet
+				Size:  items[i].Size,
+				Owner: u.Id,
+			}
+			infos = append(infos, vi)
+		}
+	*/
+	for i := range items {
+		res, err := h.itemToPropResponse(ctx, s, pf, items[i])
+		if err != nil {
+			return "", err
+		}
+		responses = append(responses, res)
+	}
+	responsesXML, err := xml.Marshal(&responses)
+	if err != nil {
+		return "", err
+	}
+
+	msg := `<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:" `
+	msg += `xmlns:s="http://sabredav.org/ns" xmlns:oc="http://owncloud.org/ns">`
+	msg += string(responsesXML) + `</d:multistatus>`
+	return msg, nil
+}
+
+func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, pf *propfindXML, item *storageproviderv0alphapb.RecycleItem) (*responseXML, error) {
+
+	baseURI := ctx.Value(ctxKeyBaseURI).(string)
+	ref := path.Join(baseURI, item.Key)
+	if item.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+		ref += "/"
+	}
+
+	response := responseXML{
+		Href:     (&url.URL{Path: ref}).EscapedPath(), // url encode response.Href
+		Propstat: []propstatXML{},
+	}
+
+	// TODO(jfd): if the path we list here is taken from the ListRecycle request we rely on the gateway to prefix it with the mount point
+
+	t := utils.TSToTime(item.DeletionTime).UTC()
+	dTime := t.Format(time.RFC1123)
+
+	// when allprops has been requested
+	if pf.Allprop != nil {
+		// return all known properties
+		response.Propstat = append(response.Propstat, propstatXML{
+			Status: "HTTP/1.1 200 OK",
+			Prop:   []*propertyXML{},
+		})
+		// yes this is redundant, can be derived from oc:trashbin-original-location which contains the full path, clients should not fetch it
+		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-filename", path.Base(item.Path)))
+		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-location", item.Path))
+		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-delete-datetime", dTime))
+		if item.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("d:resourcetype", "<d:collection/>"))
+			// TODO(jfd): decide if we can and want to list oc:size for folders
+		} else {
+			response.Propstat[0].Prop = append(response.Propstat[0].Prop,
+				s.newProp("d:resourcetype", ""),
+				s.newProp("d:getcontentlength", fmt.Sprintf("%d", item.Size)),
+			)
+		}
+
+	} else {
+		// otherwise return only the requested properties
+		propstatOK := propstatXML{
+			Status: "HTTP/1.1 200 OK",
+			Prop:   []*propertyXML{},
+		}
+		propstatNotFound := propstatXML{
+			Status: "HTTP/1.1 404 Not Found",
+			Prop:   []*propertyXML{},
+		}
+		size := fmt.Sprintf("%d", item.Size)
+		for i := range pf.Prop {
+			switch pf.Prop[i].Space {
+			case "http://owncloud.org/ns":
+				switch pf.Prop[i].Local {
+				case "oc:size":
+					if item.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontentlength", size))
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:size", ""))
+					}
+				case "trashbin-original-filename":
+					// yes this is redundant, can be derived from oc:trashbin-original-location which contains the full path, clients should not fetch it
+					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-original-filename", path.Base(item.Path)))
+				case "trashbin-original-location":
+					// TODO (jfd) double check and clarify the cs3 spec what the Key is about and if Path is only the folder that contains the file or if it includes the filename
+					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-original-location", item.Path))
+				case "trashbin-delete-datetime":
+					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-delete-datetime", dTime))
+				default:
+					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:"+pf.Prop[i].Local, ""))
+				}
+			case "DAV:":
+				switch pf.Prop[i].Local {
+				case "getcontentlength":
+					if item.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:getcontentlength", ""))
+					} else {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontentlength", size))
+					}
+				case "resourcetype":
+					if item.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:resourcetype", "<d:collection/>"))
+					} else {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:resourcetype", ""))
+						// redirectref is another option
+					}
+				case "getcontenttype":
+					if item.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontenttype", "httpd/unix-directory"))
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:getcontenttype", ""))
+					}
+				default:
+					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:"+pf.Prop[i].Local, ""))
+				}
+			default:
+				// TODO (jfd) lookup shortname for unknown namespaces?
+				propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp(pf.Prop[i].Space+":"+pf.Prop[i].Local, ""))
+			}
+		}
+		response.Propstat = append(response.Propstat, propstatOK, propstatNotFound)
+	}
+
+	return &response, nil
+}
+
 func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, u *authv0alphapb.User, dst string, key string) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
@@ -237,16 +362,19 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		return
 	}
 
-	req := &storageproviderv0alphapb.RestoreFileVersionRequest{
+	req := &storageproviderv0alphapb.RestoreRecycleItemRequest{
+		/* TODO(jfd) Ref is required ... but which resource should it reference?
 		Ref: &storageproviderv0alphapb.Reference{
 			Spec: &storageproviderv0alphapb.Reference_Path{Path: dst},
 		},
-		Key: key,
+		*/
+		Key:         key,
+		RestorePath: dst,
 	}
 
-	res, err := client.RestoreFileVersion(ctx, req)
+	res, err := client.RestoreRecycleItem(ctx, req)
 	if err != nil {
-		log.Error().Err(err).Msg("error sending a grpc restore version request")
+		log.Error().Err(err).Msg("error sending a grpc restore recycle item request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

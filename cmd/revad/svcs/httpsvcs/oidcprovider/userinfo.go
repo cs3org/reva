@@ -25,6 +25,7 @@ import (
 
 	"github.com/ory/fosite"
 
+	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth/manager/oidc"
 )
@@ -35,7 +36,7 @@ func (s *svc) doUserinfo(w http.ResponseWriter, r *http.Request) {
 
 	requiredScope := "openid"
 
-	_, ar, err := oauth2.IntrospectToken(ctx, fosite.AccessTokenFromRequest(r), fosite.AccessToken, emptySession(), requiredScope)
+	_, ar, err := s.oauth2.IntrospectToken(ctx, fosite.AccessTokenFromRequest(r), fosite.AccessToken, emptySession(), requiredScope)
 	if err != nil {
 		fmt.Fprintf(w, "<h1>An error occurred!</h1><p>Could not perform introspection: %v</p>", err)
 		return
@@ -43,30 +44,35 @@ func (s *svc) doUserinfo(w http.ResponseWriter, r *http.Request) {
 
 	log.Debug().Interface("ar", ar).Msg("introspected")
 
-	var sc *oidc.StandardClaims
-	switch ar.GetSession().GetUsername() {
-	//TODO use reva specific implementation that uses existing user managers
-	case "aaliyah_abernathy":
-		sc = &oidc.StandardClaims{
-			Name: "Aaliyah Abernathy",
-		}
-	case "aaliyah_adams":
-		sc = &oidc.StandardClaims{
-			Name: "Aaliyah Adams",
-		}
-	case "aaliyah_anderson":
-		sc = &oidc.StandardClaims{
-			Name: "Aaliyah Anderson",
-		}
-	default:
-		log.Error().Err(err).Msg("unknown user")
+	sub := ar.GetSession().GetSubject()
+
+	uid := &typespb.UserId{
+		// TODO(jfd): also fill the idp, if possible.
+		// well .. that might be hard, because in this case we are the idp
+		// we should put oar hostname into the Iss field
+		// - only an oidc provider would be able to provide an iss
+		// - maybe for ldap the uidNumber attribute makes more sense as sub?
+		//    - this is still a tricky question. ms eg uses sid - security identifiers
+		//      but they change when a usename changes or he moves to a new node in the tree
+		//      to mitigate this they keep track of past ids in the sidHistory attribute
+		//      so the filesystem might use an outdated sid in the permissions but the system
+		//      can still resolve the user using the sidhistory attribute
+		OpaqueId: sub,
+	}
+	user, err := s.usermgr.GetUser(ctx, uid)
+	if err != nil {
+		log.Error().Err(err).Str("sub", sub).Msg("unknown user")
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	sc.Sub = ar.GetSession().GetSubject()
-	sc.PreferredUsername = ar.GetSession().GetUsername()
-	sc.EmailVerified = true
-	sc.Email = sc.PreferredUsername + "@owncloudqa.com"
+
+	sc := &oidc.StandardClaims{
+		Sub:               user.Id.OpaqueId,
+		Iss:               user.Id.Idp,
+		PreferredUsername: user.Username,
+		Name:              user.DisplayName,
+		Email:             user.Mail,
+	}
 
 	b, err := json.Marshal(sc)
 	if err != nil {

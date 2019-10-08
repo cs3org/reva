@@ -19,11 +19,9 @@
 package oidcprovider
 
 import (
-	"context"
-	"crypto/md5"
 	"crypto/rand"
 	"crypto/rsa"
-	"encoding/hex"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -33,9 +31,14 @@ import (
 	"github.com/ory/fosite/storage"
 	"github.com/ory/fosite/token/jwt"
 
+	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	"github.com/cs3org/reva/cmd/revad/httpserver"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/auth"
+	authmgr "github.com/cs3org/reva/pkg/auth/manager/registry"
+	"github.com/cs3org/reva/pkg/user"
+	usermgr "github.com/cs3org/reva/pkg/user/manager/registry"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -44,20 +47,26 @@ func init() {
 }
 
 type config struct {
-	Prefix string `mapstructure:"prefix"`
+	Prefix       string                            `mapstructure:"prefix"`
+	AuthManager  string                            `mapstructure:"auth_manager"`
+	AuthManagers map[string]map[string]interface{} `mapstructure:"auth_managers"`
+	UserManager  string                            `mapstructure:"user_manager"`
+	UserManagers map[string]map[string]interface{} `mapstructure:"user_managers"`
 }
 
 type svc struct {
 	prefix  string
 	handler http.Handler
+	authmgr auth.Manager
+	usermgr user.Manager
+	store   *storage.MemoryStore
+	oauth2  fosite.OAuth2Provider
 }
-
-// This is an exemplary storage instance. We will add a client and a user to it so we can use these later on.
-var store = newExampleStore()
 
 func newExampleStore() *storage.MemoryStore {
 	return &storage.MemoryStore{
 		IDSessions: make(map[string]fosite.Requester),
+		// TODO(jfd): read clients from a json file
 		Clients: map[string]fosite.Client{
 			"phoenix": &fosite.DefaultClient{
 				ID:            "phoenix",
@@ -73,21 +82,6 @@ func newExampleStore() *storage.MemoryStore {
 				ResponseTypes: []string{"id_token", "code", "token"},
 				GrantTypes:    []string{"client_credentials"},
 				Scopes:        []string{"openid", "profile", "email", "offline"},
-			},
-		},
-		// TODO implement reva specific user store that uses existing user managers
-		Users: map[string]storage.MemoryUserRelation{
-			"aaliyah_abernathy": {
-				Username: "aaliyah_abernathy",
-				Password: "secret",
-			},
-			"aaliyah_adams": {
-				Username: "aaliyah_adams",
-				Password: "secret",
-			},
-			"aaliyah_anderson": {
-				Username: "aaliyah_anderson",
-				Password: "secret",
 			},
 		},
 		AuthorizeCodes:         map[string]storage.StoreAuthorizeCode{},
@@ -107,34 +101,12 @@ var fconfig = new(compose.Config)
 var start = compose.CommonStrategy{
 	// alternatively you could use:
 	//  OAuth2Strategy: compose.NewOAuth2JWTStrategy(mustRSAKey())
+	// TODO(jfd): generate / read proper secret from config
 	CoreStrategy: compose.NewOAuth2HMACStrategy(fconfig, []byte("some-super-cool-secret-that-nobody-knows"), nil),
 
 	// open id connect strategy
 	OpenIDConnectTokenStrategy: compose.NewOpenIDConnectStrategy(fconfig, mustRSAKey()),
 }
-
-var oauth2 = compose.Compose(
-	fconfig,
-	store,
-	start,
-	nil,
-
-	// enabled handlers
-	compose.OAuth2AuthorizeExplicitFactory,
-	compose.OAuth2AuthorizeImplicitFactory,
-	compose.OAuth2ClientCredentialsGrantFactory,
-	compose.OAuth2RefreshTokenGrantFactory,
-	compose.OAuth2ResourceOwnerPasswordCredentialsFactory,
-
-	compose.OAuth2TokenRevocationFactory,
-	compose.OAuth2TokenIntrospectionFactory,
-
-	// be aware that open id connect factories need to be added after oauth2 factories to work properly.
-	compose.OpenIDConnectExplicitFactory,
-	compose.OpenIDConnectImplicitFactory,
-	compose.OpenIDConnectHybridFactory,
-	compose.OpenIDConnectRefreshFactory,
-)
 
 // A session is passed from the `/auth` to the `/token` endpoint. You probably want to store data like: "Who made the request",
 // "What organization does that person belong to" and so on.
@@ -146,11 +118,11 @@ var oauth2 = compose.Compose(
 // Usually, you could do:
 //
 //  session = new(fosite.DefaultSession)
-func newSession(username string, sub string) *openid.DefaultSession {
+func newSession(username string, uid *typespb.UserId) *openid.DefaultSession {
 	return &openid.DefaultSession{
 		Claims: &jwt.IDTokenClaims{
-			Issuer:  "http://localhost:9998",
-			Subject: sub,
+			Issuer:  uid.Idp,
+			Subject: uid.OpaqueId,
 			//Audience:    []string{"https://my-client.my-application.com"},
 			ExpiresAt:   time.Now().Add(time.Hour * 6),
 			IssuedAt:    time.Now(),
@@ -160,45 +132,87 @@ func newSession(username string, sub string) *openid.DefaultSession {
 		Headers: &jwt.Headers{
 			Extra: make(map[string]interface{}),
 		},
-		Subject:  sub,
+		Subject:  uid.OpaqueId,
 		Username: username,
 	}
 }
 
 // emptySession creates a session object and fills it with safe defaults
 func emptySession() *openid.DefaultSession {
-	return newSession("", "")
+	return newSession("", &typespb.UserId{})
 }
 
 func mustRSAKey() *rsa.PrivateKey {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
-		// TODO really panic?
+		// TODO(jfd): don't panic!
 		panic(err)
 	}
 	return key
 }
 
-// TODO currently we fake a sub. it would change when tha username changes ...
-func getSub(ctx context.Context, username string) string {
-	hasher := md5.New()
-	_, err := hasher.Write([]byte(username))
-	if err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).Msg("Error occurred in getSub")
-		return ""
+func getAuthManager(manager string, m map[string]map[string]interface{}) (auth.Manager, error) {
+	if f, ok := authmgr.NewFuncs[manager]; ok {
+		return f(m[manager])
 	}
-	return hex.EncodeToString(hasher.Sum(nil))
+
+	return nil, fmt.Errorf("driver %s not found for auth manager", manager)
 }
 
-// New returns a new webuisvc
+func getUserManager(manager string, m map[string]map[string]interface{}) (user.Manager, error) {
+	if f, ok := usermgr.NewFuncs[manager]; ok {
+		return f(m[manager])
+	}
+
+	return nil, fmt.Errorf("driver %s not found for user manager", manager)
+}
+
+// New returns a new oidcprovidersvc
 func New(m map[string]interface{}) (httpsvcs.Service, error) {
-	conf := &config{}
-	if err := mapstructure.Decode(m, conf); err != nil {
+	c := &config{}
+	if err := mapstructure.Decode(m, c); err != nil {
 		return nil, err
 	}
 
+	authManager, err := getAuthManager(c.AuthManager, c.AuthManagers)
+	if err != nil {
+		return nil, err
+	}
+
+	userManager, err := getUserManager(c.UserManager, c.UserManagers)
+	if err != nil {
+		return nil, err
+	}
+
+	store := newExampleStore()
 	s := &svc{
-		prefix: conf.Prefix,
+		prefix:  c.Prefix,
+		authmgr: authManager,
+		usermgr: userManager,
+		// This is an exemplary storage instance. We will add a client and a user to it so we can use these later on.
+		store: store,
+		oauth2: compose.Compose(
+			fconfig,
+			store,
+			start,
+			nil,
+
+			// enabled handlers
+			compose.OAuth2AuthorizeExplicitFactory,
+			compose.OAuth2AuthorizeImplicitFactory,
+			compose.OAuth2ClientCredentialsGrantFactory,
+			compose.OAuth2RefreshTokenGrantFactory,
+			compose.OAuth2ResourceOwnerPasswordCredentialsFactory,
+
+			compose.OAuth2TokenRevocationFactory,
+			compose.OAuth2TokenIntrospectionFactory,
+
+			// be aware that open id connect factories need to be added after oauth2 factories to work properly.
+			compose.OpenIDConnectExplicitFactory,
+			compose.OpenIDConnectImplicitFactory,
+			compose.OpenIDConnectHybridFactory,
+			compose.OpenIDConnectRefreshFactory,
+		),
 	}
 	s.setHandler()
 	return s, nil
@@ -240,7 +254,7 @@ func (s *svc) setHandler() {
 		case "userinfo":
 			s.doUserinfo(w, r)
 		case "sessions":
-			// TODO only for development
+			// TODO(jfd) make session lookup configurable? only for development?
 			s.doSessions(w, r)
 		default:
 			w.WriteHeader(http.StatusNotFound)

@@ -28,6 +28,7 @@ import (
 	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/handlers/loader"
 	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/loader"
 	_ "github.com/cs3org/reva/pkg/auth/manager/loader"
+	_ "github.com/cs3org/reva/pkg/publicshare/manager/loader"
 	_ "github.com/cs3org/reva/pkg/share/manager/loader"
 	_ "github.com/cs3org/reva/pkg/storage/fs/loader"
 	_ "github.com/cs3org/reva/pkg/storage/registry/loader"

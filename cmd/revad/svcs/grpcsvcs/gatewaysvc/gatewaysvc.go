@@ -47,7 +47,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 	}
 
 	gatewayv0alphapb.RegisterGatewayServiceServer(ss, s)
-
 	return s, nil
 }
 
@@ -69,11 +68,12 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 type config struct {
-	StorageRegistryEndpoint   string `mapstructure:"storageregistrysvc"`
-	AuthEndpoint              string `mapstructure:"authsvc"`
-	AppRegistryEndpoint       string `mapstructure:"appregistrysvc"`
-	PreferencesEndpoint       string `mapstructure:"preferencessvc"`
-	UserShareProviderEndpoint string `mapstructure:"usershareprovidersvc"`
-	CommitShareToStorageGrant bool   `mapstructure:"commit_share_to_storage_grant"`
-	CommitShareToStorageRef   bool   `mapstructure:"commit_share_to_storage_ref"`
+	StorageRegistryEndpoint     string `mapstructure:"storageregistrysvc"`
+	AuthEndpoint                string `mapstructure:"authsvc"`
+	AppRegistryEndpoint         string `mapstructure:"appregistrysvc"`
+	PreferencesEndpoint         string `mapstructure:"preferencessvc"`
+	UserShareProviderEndpoint   string `mapstructure:"usershareprovidersvc"`
+	PublicShareProviderEndpoint string `mapstructure:"publicshareprovidersvc"`
+	CommitShareToStorageGrant   bool   `mapstructure:"commit_share_to_storage_grant"`
+	CommitShareToStorageRef     bool   `mapstructure:"commit_share_to_storage_ref"`
 }

@@ -16,18 +16,19 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package registry
 
-import (
-	// Load core gRPC services.
-	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/appprovidersvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/appregistrysvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/authsvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/gatewaysvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/preferencessvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/publicshareprovidersvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/storageprovidersvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/storageregistrysvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/usershareprovidersvc"
-	// Add your own service here
-)
+import "github.com/cs3org/reva/pkg/publicshare"
+
+// NewFunc is the function that share managers
+// should register at init time.
+type NewFunc func(map[string]interface{}) (publicshare.Manager, error)
+
+// NewFuncs is a map containing all the registered share managers.
+var NewFuncs = map[string]NewFunc{}
+
+// Register registers a new share manager new function.
+// Not safe for concurrent use. Safe for use from package init.
+func Register(name string, f NewFunc) {
+	NewFuncs[name] = f
+}

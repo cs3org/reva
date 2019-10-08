@@ -29,9 +29,11 @@ import (
 	"time"
 
 	oidc "github.com/coreos/go-oidc"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
@@ -221,6 +223,11 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, token string) (contex
 
 	// store claims in context
 	ctx = context.WithValue(ctx, ClaimsKey, claims)
+	uid := &typespb.UserId{
+		Idp:      claims.Iss,
+		OpaqueId: claims.Sub,
+	}
+	ctx = user.ContextSetUserID(ctx, uid)
 
 	return ctx, nil
 }

@@ -27,7 +27,10 @@ import (
 
 type key int
 
-const userKey key = iota
+const (
+	userKey key = iota
+	idKey
+)
 
 // ContextGetUser returns the user if set in the given context.
 func ContextGetUser(ctx context.Context) (*authv0alphapb.User, bool) {
@@ -47,6 +50,17 @@ func ContextMustGetUser(ctx context.Context) *authv0alphapb.User {
 // ContextSetUser stores the user in the context.
 func ContextSetUser(ctx context.Context, u *authv0alphapb.User) context.Context {
 	return context.WithValue(ctx, userKey, u)
+}
+
+// ContextGetUserID returns the user if set in the given context.
+func ContextGetUserID(ctx context.Context) (*typespb.UserId, bool) {
+	u, ok := ctx.Value(idKey).(*typespb.UserId)
+	return u, ok
+}
+
+// ContextSetUserID stores the userid in the context.
+func ContextSetUserID(ctx context.Context, id *typespb.UserId) context.Context {
+	return context.WithValue(ctx, idKey, id)
 }
 
 // Manager is the interface to implement to manipulate users.
