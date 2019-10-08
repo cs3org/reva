@@ -486,7 +486,6 @@ func (h *SharesHandler) listPublicShares(w http.ResponseWriter, r *http.Request)
 	log := appctx.GetLogger(ctx)
 
 	if h.gatewaySvc != "" {
-		// get the public shares provider (pool?)
 		publicSharesProvider, err := pool.GetPublicShareProviderClient(h.gatewaySvc)
 		if err != nil {
 			log.Debug().Err(err).Str("service", "publicshareprovidersvc").Msg("error connecting to public shares provider")
@@ -494,9 +493,7 @@ func (h *SharesHandler) listPublicShares(w http.ResponseWriter, r *http.Request)
 			return
 		}
 
-		// get the public shares for the given user ([]*shareData)
-
-		// prepare a listPublicShares request. for which we need filters -> for which we'll use the ResourceId
+		// prepare a listPublicShares request
 		filters := []*publicshareproviderv0alphapb.ListPublicSharesRequest_Filter{}
 		req := publicshareproviderv0alphapb.ListPublicSharesRequest{
 			Filters: filters,
@@ -515,7 +512,7 @@ func (h *SharesHandler) listPublicShares(w http.ResponseWriter, r *http.Request)
 
 			// TODO(refs) abstract this boilerplate to a function
 			// at this point we are missing file info on the shareData. do stat and call h.addFileInfo
-			// check if the resource exists
+
 			sClient, err := pool.GetStorageProviderServiceClient(h.gatewaySvc)
 			if err != nil {
 				WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc storage provider client", err)
