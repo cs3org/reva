@@ -1005,11 +1005,11 @@ type exactMatchesData struct {
 // matchData describes a single match
 type matchData struct {
 	Label string          `json:"label" xml:"label"`
-	Value *MatchValueData `json:"value" xml:"value"`
+	Value *matchValueData `json:"value" xml:"value"`
 }
 
-// MatchValueData holds the type and actual value
-type MatchValueData struct {
+// matchValueData holds the type and actual value
+type matchValueData struct {
 	ShareType int    `json:"shareType" xml:"shareType"`
 	ShareWith string `json:"shareWith" xml:"shareWith"`
 }
@@ -1078,7 +1078,7 @@ func getPublicShareManager(manager string, m map[string]map[string]interface{}) 
 func (h *SharesHandler) userAsMatch(u *authv0alphapb.User) *matchData {
 	return &matchData{
 		Label: u.DisplayName,
-		Value: &MatchValueData{
+		Value: &matchValueData{
 			ShareType: int(shareTypeUser),
 			// TODO(jfd) find more robust userid
 			// username might be ok as it is uniqe at a given point in time
