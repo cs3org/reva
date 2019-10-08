@@ -50,6 +50,8 @@ type FS interface {
 	GetQuota(ctx context.Context) (int, int, error)
 	CreateReference(ctx context.Context, path string, targetURI *url.URL) error
 	Shutdown(ctx context.Context) error
+	SetArbitraryMetadata(ctx context.Context, ref *storageproviderv0alphapb.Reference, md *storageproviderv0alphapb.ArbitraryMetadata) error
+	UnsetArbitraryMetadata(ctx context.Context, ref *storageproviderv0alphapb.Reference, keys []string) error
 }
 
 // Registry is the interface that storage registries implement

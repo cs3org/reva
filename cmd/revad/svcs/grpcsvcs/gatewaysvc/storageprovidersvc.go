@@ -21,27 +21,18 @@ package gatewaysvc
 import (
 	"context"
 
+	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	storageregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageregistry/v0alpha"
-	storagetypespb "github.com/cs3org/go-cs3apis/cs3/storagetypes"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
-	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/pkg/errors"
 )
 
-func (s *svc) GetProvider(ctx context.Context, req *storageproviderv0alphapb.GetProviderRequest) (*storageproviderv0alphapb.GetProviderResponse, error) {
-	res := &storageproviderv0alphapb.GetProviderResponse{
-		Status: status.NewUnimplemented(ctx, nil, "GetProvider not yet implemented"),
-	}
-	return res, nil
-}
-
 func (s *svc) InitiateFileDownload(ctx context.Context, req *storageproviderv0alphapb.InitiateFileDownloadRequest) (*storageproviderv0alphapb.InitiateFileDownloadResponse, error) {
-	log := appctx.GetLogger(ctx)
-	pi, err := s.find(ctx, req.Ref)
+	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.InitiateFileDownloadResponse{
@@ -53,27 +44,25 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *storageproviderv0al
 		}, nil
 	}
 
-	log.Info().Str("address", pi.Address).Str("ref", req.Ref.String()).Msg("storage provider found")
-
-	// TODO(labkode): check for capabilities here
-	c, err := pool.GetStorageProviderServiceClient(pi.Address)
-	if err != nil {
-		return &storageproviderv0alphapb.InitiateFileDownloadResponse{
-			Status: status.NewInternal(ctx, err, "error getting storage provider client"),
-		}, nil
+	storageReq := &storageproviderv0alphapb.InitiateFileDownloadRequest{
+		Opaque: req.Opaque,
+		Ref:    req.Ref,
 	}
-
-	res, err := c.InitiateFileDownload(ctx, req)
+	res, err := c.InitiateFileDownload(ctx, storageReq)
 	if err != nil {
 		return nil, errors.Wrap(err, "gatewaysvc: error calling InitiateFileDownload")
 	}
 
-	return res, nil
+	storageRes := &storageproviderv0alphapb.InitiateFileDownloadResponse{
+		Status:           res.Status,
+		Opaque:           res.Opaque,
+		DownloadEndpoint: res.DownloadEndpoint,
+	}
+	return storageRes, nil
 }
 
 func (s *svc) InitiateFileUpload(ctx context.Context, req *storageproviderv0alphapb.InitiateFileUploadRequest) (*storageproviderv0alphapb.InitiateFileUploadResponse, error) {
-	log := appctx.GetLogger(ctx)
-	pi, err := s.find(ctx, req.Ref)
+	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.InitiateFileUploadResponse{
@@ -82,16 +71,6 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *storageproviderv0alph
 		}
 		return &storageproviderv0alphapb.InitiateFileUploadResponse{
 			Status: status.NewInternal(ctx, err, "error finding storage provider"),
-		}, nil
-	}
-
-	log.Info().Str("address", pi.Address).Str("ref", req.Ref.String()).Msg("storage provider found")
-
-	// TODO(labkode): check for capabilities here
-	c, err := pool.GetStorageProviderServiceClient(pi.Address)
-	if err != nil {
-		return &storageproviderv0alphapb.InitiateFileUploadResponse{
-			Status: status.NewInternal(ctx, err, "error getting storage provider client"),
 		}, nil
 	}
 
@@ -111,8 +90,7 @@ func (s *svc) GetPath(ctx context.Context, req *storageproviderv0alphapb.GetPath
 }
 
 func (s *svc) CreateContainer(ctx context.Context, req *storageproviderv0alphapb.CreateContainerRequest) (*storageproviderv0alphapb.CreateContainerResponse, error) {
-	log := appctx.GetLogger(ctx)
-	pi, err := s.find(ctx, req.Ref)
+	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.CreateContainerResponse{
@@ -121,16 +99,6 @@ func (s *svc) CreateContainer(ctx context.Context, req *storageproviderv0alphapb
 		}
 		return &storageproviderv0alphapb.CreateContainerResponse{
 			Status: status.NewInternal(ctx, err, "error finding storage provider"),
-		}, nil
-	}
-
-	log.Info().Str("address", pi.Address).Str("ref", req.Ref.String()).Msg("storage provider found")
-
-	// TODO(labkode): check for capabilities here
-	c, err := pool.GetStorageProviderServiceClient(pi.Address)
-	if err != nil {
-		return &storageproviderv0alphapb.CreateContainerResponse{
-			Status: status.NewInternal(ctx, err, "error getting storage provider client"),
 		}, nil
 	}
 
@@ -143,8 +111,7 @@ func (s *svc) CreateContainer(ctx context.Context, req *storageproviderv0alphapb
 }
 
 func (s *svc) Delete(ctx context.Context, req *storageproviderv0alphapb.DeleteRequest) (*storageproviderv0alphapb.DeleteResponse, error) {
-	log := appctx.GetLogger(ctx)
-	pi, err := s.find(ctx, req.Ref)
+	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.DeleteResponse{
@@ -153,16 +120,6 @@ func (s *svc) Delete(ctx context.Context, req *storageproviderv0alphapb.DeleteRe
 		}
 		return &storageproviderv0alphapb.DeleteResponse{
 			Status: status.NewInternal(ctx, err, "error finding storage provider"),
-		}, nil
-	}
-
-	log.Info().Str("address", pi.Address).Str("ref", req.Ref.String()).Msg("storage provider found")
-
-	// TODO(labkode): check for capabilities here
-	c, err := pool.GetStorageProviderServiceClient(pi.Address)
-	if err != nil {
-		return &storageproviderv0alphapb.DeleteResponse{
-			Status: status.NewInternal(ctx, err, "error getting storage provider client"),
 		}, nil
 	}
 
@@ -182,8 +139,7 @@ func (s *svc) Move(ctx context.Context, req *storageproviderv0alphapb.MoveReques
 }
 
 func (s *svc) Stat(ctx context.Context, req *storageproviderv0alphapb.StatRequest) (*storageproviderv0alphapb.StatResponse, error) {
-	log := appctx.GetLogger(ctx)
-	pi, err := s.find(ctx, req.Ref)
+	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.StatResponse{
@@ -195,16 +151,6 @@ func (s *svc) Stat(ctx context.Context, req *storageproviderv0alphapb.StatReques
 		}, nil
 	}
 
-	log.Info().Str("address", pi.Address).Str("ref", req.Ref.String()).Msg("storage provider found")
-
-	// TODO(labkode): check for capabilities here
-	c, err := pool.GetStorageProviderServiceClient(pi.Address)
-	if err != nil {
-		return &storageproviderv0alphapb.StatResponse{
-			Status: status.NewInternal(ctx, err, "error getting storage provider client"),
-		}, nil
-	}
-
 	res, err := c.Stat(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gatewaysvc: error calling Stat")
@@ -213,13 +159,12 @@ func (s *svc) Stat(ctx context.Context, req *storageproviderv0alphapb.StatReques
 	return res, nil
 }
 
-func (s *svc) ListContainerStream(req *storageproviderv0alphapb.ListContainerStreamRequest, ss storageproviderv0alphapb.StorageProviderService_ListContainerStreamServer) error {
+func (s *svc) ListContainerStream(req *storageproviderv0alphapb.ListContainerStreamRequest, ss gatewayv0alphapb.GatewayService_ListContainerStreamServer) error {
 	return errors.New("Unimplemented")
 }
 
 func (s *svc) ListContainer(ctx context.Context, req *storageproviderv0alphapb.ListContainerRequest) (*storageproviderv0alphapb.ListContainerResponse, error) {
-	log := appctx.GetLogger(ctx)
-	pi, err := s.find(ctx, req.Ref)
+	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.ListContainerResponse{
@@ -228,16 +173,6 @@ func (s *svc) ListContainer(ctx context.Context, req *storageproviderv0alphapb.L
 		}
 		return &storageproviderv0alphapb.ListContainerResponse{
 			Status: status.NewInternal(ctx, err, "error finding storage provider"),
-		}, nil
-	}
-
-	log.Info().Str("address", pi.Address).Str("ref", req.Ref.String()).Msg("storage provider found")
-
-	// TODO(labkode): check for capabilities here
-	c, err := pool.GetStorageProviderServiceClient(pi.Address)
-	if err != nil {
-		return &storageproviderv0alphapb.ListContainerResponse{
-			Status: status.NewInternal(ctx, err, "error getting storage provider client"),
 		}, nil
 	}
 
@@ -250,8 +185,7 @@ func (s *svc) ListContainer(ctx context.Context, req *storageproviderv0alphapb.L
 }
 
 func (s *svc) ListFileVersions(ctx context.Context, req *storageproviderv0alphapb.ListFileVersionsRequest) (*storageproviderv0alphapb.ListFileVersionsResponse, error) {
-	log := appctx.GetLogger(ctx)
-	pi, err := s.find(ctx, req.Ref)
+	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.ListFileVersionsResponse{
@@ -260,16 +194,6 @@ func (s *svc) ListFileVersions(ctx context.Context, req *storageproviderv0alphap
 		}
 		return &storageproviderv0alphapb.ListFileVersionsResponse{
 			Status: status.NewInternal(ctx, err, "error finding storage provider"),
-		}, nil
-	}
-
-	log.Info().Str("address", pi.Address).Str("ref", req.Ref.String()).Msg("storage provider found")
-
-	// TODO(labkode): check for capabilities here
-	c, err := pool.GetStorageProviderServiceClient(pi.Address)
-	if err != nil {
-		return &storageproviderv0alphapb.ListFileVersionsResponse{
-			Status: status.NewInternal(ctx, err, "error getting storage provider client"),
 		}, nil
 	}
 
@@ -282,8 +206,7 @@ func (s *svc) ListFileVersions(ctx context.Context, req *storageproviderv0alphap
 }
 
 func (s *svc) RestoreFileVersion(ctx context.Context, req *storageproviderv0alphapb.RestoreFileVersionRequest) (*storageproviderv0alphapb.RestoreFileVersionResponse, error) {
-	log := appctx.GetLogger(ctx)
-	pi, err := s.find(ctx, req.Ref)
+	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.RestoreFileVersionResponse{
@@ -295,16 +218,6 @@ func (s *svc) RestoreFileVersion(ctx context.Context, req *storageproviderv0alph
 		}, nil
 	}
 
-	log.Info().Str("address", pi.Address).Str("ref", req.Ref.String()).Msg("storage provider found")
-
-	// TODO(labkode): check for capabilities here
-	c, err := pool.GetStorageProviderServiceClient(pi.Address)
-	if err != nil {
-		return &storageproviderv0alphapb.RestoreFileVersionResponse{
-			Status: status.NewInternal(ctx, err, "error getting storage provider client"),
-		}, nil
-	}
-
 	res, err := c.RestoreFileVersion(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gatewaysvc: error calling RestoreFileVersion")
@@ -313,11 +226,11 @@ func (s *svc) RestoreFileVersion(ctx context.Context, req *storageproviderv0alph
 	return res, nil
 }
 
-func (s *svc) ListRecycleStream(req *storageproviderv0alphapb.ListRecycleStreamRequest, ss storageproviderv0alphapb.StorageProviderService_ListRecycleStreamServer) error {
+func (s *svc) ListRecycleStream(req *gatewayv0alphapb.ListRecycleStreamRequest, ss gatewayv0alphapb.GatewayService_ListRecycleStreamServer) error {
 	return errors.New("Unimplemented")
 }
 
-func (s *svc) ListRecycle(ctx context.Context, req *storageproviderv0alphapb.ListRecycleRequest) (*storageproviderv0alphapb.ListRecycleResponse, error) {
+func (s *svc) ListRecycle(ctx context.Context, req *gatewayv0alphapb.ListRecycleRequest) (*storageproviderv0alphapb.ListRecycleResponse, error) {
 	// TODO(labkode): query all available storage providers to get unified list as the request does not come
 	// with ref information to target only one storage provider.
 	res := &storageproviderv0alphapb.ListRecycleResponse{
@@ -333,194 +246,39 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *storageproviderv0alph
 	return res, nil
 }
 
-func (s *svc) PurgeRecycle(ctx context.Context, req *storageproviderv0alphapb.PurgeRecycleRequest) (*storageproviderv0alphapb.PurgeRecycleResponse, error) {
+func (s *svc) PurgeRecycle(ctx context.Context, req *gatewayv0alphapb.PurgeRecycleRequest) (*storageproviderv0alphapb.PurgeRecycleResponse, error) {
 	res := &storageproviderv0alphapb.PurgeRecycleResponse{
 		Status: status.NewUnimplemented(ctx, nil, "PurgeRecycle not yet implemented"),
 	}
 	return res, nil
 }
 
-func (s *svc) ListGrants(ctx context.Context, req *storageproviderv0alphapb.ListGrantsRequest) (*storageproviderv0alphapb.ListGrantsResponse, error) {
-	log := appctx.GetLogger(ctx)
-	pi, err := s.find(ctx, req.Ref)
-	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return &storageproviderv0alphapb.ListGrantsResponse{
-				Status: status.NewNotFound(ctx, "storage provider not found"),
-			}, nil
-		}
-		return &storageproviderv0alphapb.ListGrantsResponse{
-			Status: status.NewInternal(ctx, err, "error finding storage provider"),
-		}, nil
-	}
-
-	log.Info().Str("address", pi.Address).Str("ref", req.Ref.String()).Msg("storage provider found")
-
-	// TODO(labkode): check for capabilities here
-	c, err := pool.GetStorageProviderServiceClient(pi.Address)
-	if err != nil {
-		return &storageproviderv0alphapb.ListGrantsResponse{
-			Status: status.NewInternal(ctx, err, "error getting storage provider client"),
-		}, nil
-	}
-
-	res, err := c.ListGrants(ctx, req)
-	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling ListGrants")
-	}
-
-	return res, nil
-}
-
-func (s *svc) AddGrant(ctx context.Context, req *storageproviderv0alphapb.AddGrantRequest) (*storageproviderv0alphapb.AddGrantResponse, error) {
-	log := appctx.GetLogger(ctx)
-	pi, err := s.find(ctx, req.Ref)
-	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return &storageproviderv0alphapb.AddGrantResponse{
-				Status: status.NewNotFound(ctx, "storage provider not found"),
-			}, nil
-		}
-		return &storageproviderv0alphapb.AddGrantResponse{
-			Status: status.NewInternal(ctx, err, "error finding storage provider"),
-		}, nil
-	}
-
-	log.Info().Str("address", pi.Address).Str("ref", req.Ref.String()).Msg("storage provider found")
-
-	// TODO(labkode): check for capabilities here
-	c, err := pool.GetStorageProviderServiceClient(pi.Address)
-	if err != nil {
-		return &storageproviderv0alphapb.AddGrantResponse{
-			Status: status.NewInternal(ctx, err, "error getting storage provider client"),
-		}, nil
-	}
-
-	res, err := c.AddGrant(ctx, req)
-	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling AddGrant")
-	}
-
-	return res, nil
-}
-
-func (s *svc) CreateReference(ctx context.Context, req *storageproviderv0alphapb.CreateReferenceRequest) (*storageproviderv0alphapb.CreateReferenceResponse, error) {
-	log := appctx.GetLogger(ctx)
-	ref := &storageproviderv0alphapb.Reference{
-		Spec: &storageproviderv0alphapb.Reference_Path{
-			Path: req.Path,
-		},
-	}
-	pi, err := s.find(ctx, ref)
-	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error finding storage provider")
-
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return &storageproviderv0alphapb.CreateReferenceResponse{
-				Status: &rpcpb.Status{
-					Code: rpcpb.Code_CODE_NOT_FOUND,
-				},
-			}, nil
-		}
-
-		return &storageproviderv0alphapb.CreateReferenceResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
-			},
-		}, nil
-	}
-
-	log.Info().Str("address", pi.Address).Str("ref", ref.String()).Msg("storage provider found")
-
-	c, err := pool.GetStorageProviderServiceClient(pi.Address)
-	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error getting storage provider client")
-		return &storageproviderv0alphapb.CreateReferenceResponse{
-			Status: status.NewInternal(ctx, err, "error creating reference"),
-		}, nil
-	}
-
-	res, err := c.CreateReference(ctx, req)
-	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling CreateReference")
-	}
-
-	return res, nil
-
-}
-
-func (s *svc) UpdateGrant(ctx context.Context, req *storageproviderv0alphapb.UpdateGrantRequest) (*storageproviderv0alphapb.UpdateGrantResponse, error) {
-	log := appctx.GetLogger(ctx)
-	pi, err := s.find(ctx, req.Ref)
-	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return &storageproviderv0alphapb.UpdateGrantResponse{
-				Status: status.NewNotFound(ctx, "storage provider not found"),
-			}, nil
-		}
-		return &storageproviderv0alphapb.UpdateGrantResponse{
-			Status: status.NewInternal(ctx, err, "error finding storage provider"),
-		}, nil
-	}
-
-	log.Info().Str("address", pi.Address).Str("ref", req.Ref.String()).Msg("storage provider found")
-
-	// TODO(labkode): check for capabilities here
-	c, err := pool.GetStorageProviderServiceClient(pi.Address)
-	if err != nil {
-		return &storageproviderv0alphapb.UpdateGrantResponse{
-			Status: status.NewInternal(ctx, err, "error getting storage provider client"),
-		}, nil
-	}
-
-	res, err := c.UpdateGrant(ctx, req)
-	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling UpdateGrant")
-	}
-
-	return res, nil
-}
-
-func (s *svc) RemoveGrant(ctx context.Context, req *storageproviderv0alphapb.RemoveGrantRequest) (*storageproviderv0alphapb.RemoveGrantResponse, error) {
-	log := appctx.GetLogger(ctx)
-	pi, err := s.find(ctx, req.Ref)
-	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return &storageproviderv0alphapb.RemoveGrantResponse{
-				Status: status.NewNotFound(ctx, "storage provider not found"),
-			}, nil
-		}
-		return &storageproviderv0alphapb.RemoveGrantResponse{
-			Status: status.NewInternal(ctx, err, "error finding storage provider"),
-		}, nil
-	}
-
-	log.Info().Str("address", pi.Address).Str("ref", req.Ref.String()).Msg("storage provider found")
-
-	// TODO(labkode): check for capabilities here
-	c, err := pool.GetStorageProviderServiceClient(pi.Address)
-	if err != nil {
-		return &storageproviderv0alphapb.RemoveGrantResponse{
-			Status: status.NewInternal(ctx, err, "error getting storage provider client"),
-		}, nil
-	}
-
-	res, err := c.RemoveGrant(ctx, req)
-	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling RemoveGrant")
-	}
-
-	return res, nil
-}
-
-func (s *svc) GetQuota(ctx context.Context, req *storageproviderv0alphapb.GetQuotaRequest) (*storageproviderv0alphapb.GetQuotaResponse, error) {
+func (s *svc) GetQuota(ctx context.Context, req *gatewayv0alphapb.GetQuotaRequest) (*storageproviderv0alphapb.GetQuotaResponse, error) {
 	res := &storageproviderv0alphapb.GetQuotaResponse{
 		Status: status.NewUnimplemented(ctx, nil, "GetQuota not yet implemented"),
 	}
 	return res, nil
 }
 
-func (s *svc) find(ctx context.Context, ref *storageproviderv0alphapb.Reference) (*storagetypespb.ProviderInfo, error) {
+func (s *svc) findByID(ctx context.Context, id *storageproviderv0alphapb.ResourceId) (storageproviderv0alphapb.StorageProviderServiceClient, error) {
+	ref := &storageproviderv0alphapb.Reference{
+		Spec: &storageproviderv0alphapb.Reference_Id{
+			Id: id,
+		},
+	}
+	return s.find(ctx, ref)
+}
+
+func (s *svc) findByPath(ctx context.Context, path string) (storageproviderv0alphapb.StorageProviderServiceClient, error) {
+	ref := &storageproviderv0alphapb.Reference{
+		Spec: &storageproviderv0alphapb.Reference_Path{
+			Path: path,
+		},
+	}
+	return s.find(ctx, ref)
+}
+
+func (s *svc) find(ctx context.Context, ref *storageproviderv0alphapb.Reference) (storageproviderv0alphapb.StorageProviderServiceClient, error) {
 	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
 	if err != nil {
 		err = errors.Wrap(err, "gatewaysvc: error getting storage registry client")
@@ -537,7 +295,14 @@ func (s *svc) find(ctx context.Context, ref *storageproviderv0alphapb.Reference)
 	}
 
 	if res.Status.Code == rpcpb.Code_CODE_OK && res.Provider != nil {
-		return res.Provider, nil
+		// TODO(labkode): check for capabilities here
+		c, err := pool.GetStorageProviderServiceClient(res.Provider.Address)
+		if err != nil {
+			err = errors.Wrap(err, "gatewaysvc: error getting a storage provider client")
+			return nil, err
+		}
+
+		return c, nil
 	}
 
 	if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {

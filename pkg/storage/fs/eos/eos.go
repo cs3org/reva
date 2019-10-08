@@ -323,6 +323,14 @@ func (fs *eosStorage) getEosACL(g *storageproviderv0alphapb.Grant) (*acl.Entry, 
 	return eosACL, nil
 }
 
+func (fs *eosStorage) SetArbitraryMetadata(ctx context.Context, ref *storageproviderv0alphapb.Reference, md *storageproviderv0alphapb.ArbitraryMetadata) error {
+	return errtypes.NotSupported("eos: operation not supported")
+}
+
+func (fs *eosStorage) UnsetArbitraryMetadata(ctx context.Context, ref *storageproviderv0alphapb.Reference, keys []string) error {
+	return errtypes.NotSupported("eos: operation not supported")
+}
+
 func (fs *eosStorage) RemoveGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
 	u, err := getUser(ctx)
 	if err != nil {

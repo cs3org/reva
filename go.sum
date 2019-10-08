@@ -38,6 +38,12 @@ github.com/cs3org/go-cs3apis v0.0.0-20190827123632-21adb62efb35 h1:R4xTbJHw73UUH
 github.com/cs3org/go-cs3apis v0.0.0-20190827123632-21adb62efb35/go.mod h1:+SahswLd+p4bLlXXG+UuNiWSgRin4dSQQOgPXCsdiTM=
 github.com/cs3org/go-cs3apis v0.0.0-20190829084735-3a2855f280d6 h1:ItwDg/rHvPYc23uCFteqK864JPypC9yFNtwfwp8fvac=
 github.com/cs3org/go-cs3apis v0.0.0-20190829084735-3a2855f280d6/go.mod h1:+SahswLd+p4bLlXXG+UuNiWSgRin4dSQQOgPXCsdiTM=
+github.com/cs3org/go-cs3apis v0.0.0-20190910075726-6e2d4669e259 h1:WVlpWRQusVzlnGUXXPfP+gse5SkcodvZJCPa01wleBU=
+github.com/cs3org/go-cs3apis v0.0.0-20190910075726-6e2d4669e259/go.mod h1:+SahswLd+p4bLlXXG+UuNiWSgRin4dSQQOgPXCsdiTM=
+github.com/cs3org/go-cs3apis v0.0.0-20191007125643-bc09a1fe38c7 h1:PUqIhO0McmRSz8F7BdYao8ynkHcif2IArA6/7oXcesA=
+github.com/cs3org/go-cs3apis v0.0.0-20191007125643-bc09a1fe38c7/go.mod h1:+SahswLd+p4bLlXXG+UuNiWSgRin4dSQQOgPXCsdiTM=
+github.com/cs3org/go-cs3apis v0.0.0-20191007135719-8a3d0e8a9e18 h1:G+AzVD66pAj0eSgVdim6fqu7ceAWg9LIqdN7fjdJwEU=
+github.com/cs3org/go-cs3apis v0.0.0-20191007135719-8a3d0e8a9e18/go.mod h1:+SahswLd+p4bLlXXG+UuNiWSgRin4dSQQOgPXCsdiTM=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

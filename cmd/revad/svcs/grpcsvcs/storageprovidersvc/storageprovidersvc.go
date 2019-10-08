@@ -150,6 +150,60 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 	return service, nil
 }
 
+func (s *service) SetArbitraryMetadata(ctx context.Context, req *storageproviderv0alphapb.SetArbitraryMetadataRequest) (*storageproviderv0alphapb.SetArbitraryMetadataResponse, error) {
+	newRef, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		err := errors.Wrap(err, "storageprovidersvc: error unwrapping path")
+		return &storageproviderv0alphapb.SetArbitraryMetadataResponse{
+			Status: status.NewInternal(ctx, err, "error setting arbitrary metadata"),
+		}, nil
+	}
+
+	if err := s.storage.SetArbitraryMetadata(ctx, newRef, req.ArbitraryMetadata); err != nil {
+		var st *rpcpb.Status
+		if _, ok := err.(errtypes.IsNotFound); ok {
+			st = status.NewNotFound(ctx, "ref not found when setting arbitrary metadata")
+		} else {
+			st = status.NewInternal(ctx, err, "error setting arbitrary metadata: "+req.Ref.String())
+		}
+		return &storageproviderv0alphapb.SetArbitraryMetadataResponse{
+			Status: st,
+		}, nil
+	}
+
+	res := &storageproviderv0alphapb.SetArbitraryMetadataResponse{
+		Status: status.NewOK(ctx),
+	}
+	return res, nil
+}
+
+func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *storageproviderv0alphapb.UnsetArbitraryMetadataRequest) (*storageproviderv0alphapb.UnsetArbitraryMetadataResponse, error) {
+	newRef, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		err := errors.Wrap(err, "storageprovidersvc: error unwrapping path")
+		return &storageproviderv0alphapb.UnsetArbitraryMetadataResponse{
+			Status: status.NewInternal(ctx, err, "error unsetting arbitrary metadata"),
+		}, nil
+	}
+
+	if err := s.storage.UnsetArbitraryMetadata(ctx, newRef, req.ArbitraryMetadataKeys); err != nil {
+		var st *rpcpb.Status
+		if _, ok := err.(errtypes.IsNotFound); ok {
+			st = status.NewNotFound(ctx, "path not found when unsetting arbitrary metadata")
+		} else {
+			st = status.NewInternal(ctx, err, "error unsetting arbitrary metadata: "+req.Ref.String())
+		}
+		return &storageproviderv0alphapb.UnsetArbitraryMetadataResponse{
+			Status: st,
+		}, nil
+	}
+
+	res := &storageproviderv0alphapb.UnsetArbitraryMetadataResponse{
+		Status: status.NewOK(ctx),
+	}
+	return res, nil
+}
+
 func (s *service) GetProvider(ctx context.Context, req *storageproviderv0alphapb.GetProviderRequest) (*storageproviderv0alphapb.GetProviderResponse, error) {
 	provider := &storagetypespb.ProviderInfo{
 		// Address:  ? TODO(labkode): how to obtain the addresss the service is listening to? not very useful if the request already comes to it :(

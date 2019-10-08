@@ -240,6 +240,14 @@ func (fs *s3FS) GetQuota(ctx context.Context) (int, int, error) {
 	return 0, 0, nil
 }
 
+func (fs *s3FS) SetArbitraryMetadata(ctx context.Context, ref *storageproviderv0alphapb.Reference, md *storageproviderv0alphapb.ArbitraryMetadata) error {
+	return errtypes.NotSupported("s3: operation not supported")
+}
+
+func (fs *s3FS) UnsetArbitraryMetadata(ctx context.Context, ref *storageproviderv0alphapb.Reference, keys []string) error {
+	return errtypes.NotSupported("s3: operation not supported")
+}
+
 func (fs *s3FS) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
 	// TODO(jfd):implement
 	return errtypes.NotSupported("s3: operation not supported")

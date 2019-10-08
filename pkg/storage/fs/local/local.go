@@ -161,6 +161,14 @@ func (fs *localFS) CreateReference(ctx context.Context, path string, targetURI *
 	return errtypes.NotSupported("local: operation not supported")
 }
 
+func (fs *localFS) SetArbitraryMetadata(ctx context.Context, ref *storageproviderv0alphapb.Reference, md *storageproviderv0alphapb.ArbitraryMetadata) error {
+	return errtypes.NotSupported("local: operation not supported")
+}
+
+func (fs *localFS) UnsetArbitraryMetadata(ctx context.Context, ref *storageproviderv0alphapb.Reference, keys []string) error {
+	return errtypes.NotSupported("local: operation not supported")
+}
+
 func (fs *localFS) CreateDir(ctx context.Context, fn string) error {
 	fn = fs.addRoot(fn)
 	err := os.Mkdir(fn, 0700)

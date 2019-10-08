@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/pkg/errors"
 )
 
@@ -69,7 +70,20 @@ func (s *svc) CreateShare(ctx context.Context, req *usershareproviderv0alphapb.C
 				Permissions: req.Grant.Permissions.Permissions,
 			},
 		}
-		grantRes, err := s.AddGrant(ctx, grantReq)
+
+		c, err := s.findByID(ctx, req.ResourceInfo.Id)
+		if err != nil {
+			if _, ok := err.(errtypes.IsNotFound); ok {
+				return &usershareproviderv0alphapb.CreateShareResponse{
+					Status: status.NewNotFound(ctx, "storage provider not found"),
+				}, nil
+			}
+			return &usershareproviderv0alphapb.CreateShareResponse{
+				Status: status.NewInternal(ctx, err, "error finding storage provider"),
+			}, nil
+		}
+
+		grantRes, err := c.AddGrant(ctx, grantReq)
 		if err != nil {
 			return nil, errors.Wrap(err, "gatewaysvc: error calling AddGrant")
 		}
@@ -138,7 +152,19 @@ func (s *svc) RemoveShare(ctx context.Context, req *usershareproviderv0alphapb.R
 			},
 		}
 
-		grantRes, err := s.RemoveGrant(ctx, grantReq)
+		c, err := s.findByID(ctx, share.ResourceId)
+		if err != nil {
+			if _, ok := err.(errtypes.IsNotFound); ok {
+				return &usershareproviderv0alphapb.RemoveShareResponse{
+					Status: status.NewNotFound(ctx, "storage provider not found"),
+				}, nil
+			}
+			return &usershareproviderv0alphapb.RemoveShareResponse{
+				Status: status.NewInternal(ctx, err, "error finding storage provider"),
+			}, nil
+		}
+
+		grantRes, err := c.RemoveGrant(ctx, grantReq)
 		if err != nil {
 			return nil, errors.Wrap(err, "gatewaysvc: error calling RemoveGrant")
 		}
@@ -215,44 +241,46 @@ func (s *svc) UpdateShare(ctx context.Context, req *usershareproviderv0alphapb.U
 	}
 
 	// TODO(labkode): if both commits are enabled they could be done concurrently.
-	if s.c.CommitShareToStorageGrant {
-		getShareReq := &usershareproviderv0alphapb.GetShareRequest{
-			Ref: req.Ref,
-		}
-		getShareRes, err := c.GetShare(ctx, getShareReq)
-		if err != nil {
-			return nil, errors.Wrap(err, "gatewaysvc: error calling GetShare")
-		}
+	/*
+		if s.c.CommitShareToStorageGrant {
+			getShareReq := &usershareproviderv0alphapb.GetShareRequest{
+				Ref: req.Ref,
+			}
+			getShareRes, err := c.GetShare(ctx, getShareReq)
+			if err != nil {
+				return nil, errors.Wrap(err, "gatewaysvc: error calling GetShare")
+			}
 
-		if getShareRes.Status.Code != rpcpb.Code_CODE_OK {
-			return &usershareproviderv0alphapb.UpdateShareResponse{
-				Status: status.NewInternal(ctx, status.NewErrorFromCode(getShareRes.Status.Code, "gatewaysvc"),
-					"error getting share when committing to the share"),
-			}, nil
-		}
+			if getShareRes.Status.Code != rpcpb.Code_CODE_OK {
+				return &usershareproviderv0alphapb.UpdateShareResponse{
+					Status: status.NewInternal(ctx, status.NewErrorFromCode(getShareRes.Status.Code, "gatewaysvc"),
+						"error getting share when committing to the share"),
+				}, nil
+			}
 
-		grantReq := &storageproviderv0alphapb.UpdateGrantRequest{
-			Ref: &storageproviderv0alphapb.Reference{
-				Spec: &storageproviderv0alphapb.Reference_Id{
-					Id: getShareRes.Share.ResourceId,
+			grantReq := &storageproviderv0alphapb.UpdateGrantRequest{
+				Ref: &storageproviderv0alphapb.Reference{
+					Spec: &storageproviderv0alphapb.Reference_Id{
+						Id: getShareRes.Share.ResourceId,
+					},
 				},
-			},
-			Grant: &storageproviderv0alphapb.Grant{
-				Grantee:     getShareRes.Share.Grantee,
-				Permissions: getShareRes.Share.Permissions.Permissions,
-			},
+				Grant: &storageproviderv0alphapb.Grant{
+					Grantee:     getShareRes.Share.Grantee,
+					Permissions: getShareRes.Share.Permissions.Permissions,
+				},
+			}
+				grantRes, err := s.UpdateGrant(ctx, grantReq)
+				if err != nil {
+					return nil, errors.Wrap(err, "gatewaysvc: error calling UpdateGrant")
+				}
+				if grantRes.Status.Code != rpcpb.Code_CODE_OK {
+					return &usershareproviderv0alphapb.UpdateShareResponse{
+						Status: status.NewInternal(ctx, status.NewErrorFromCode(grantRes.Status.Code, "gatewaysvc"),
+							"error updating storage grant"),
+					}, nil
+				}
 		}
-		grantRes, err := s.UpdateGrant(ctx, grantReq)
-		if err != nil {
-			return nil, errors.Wrap(err, "gatewaysvc: error calling UpdateGrant")
-		}
-		if grantRes.Status.Code != rpcpb.Code_CODE_OK {
-			return &usershareproviderv0alphapb.UpdateShareResponse{
-				Status: status.NewInternal(ctx, status.NewErrorFromCode(grantRes.Status.Code, "gatewaysvc"),
-					"error updating storage grant"),
-			}, nil
-		}
-	}
+	*/
 
 	return res, nil
 }
@@ -379,7 +407,19 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *usershareproviderv0a
 				TargetUri: fmt.Sprintf("cs3:%s/%s", share.Share.ResourceId.GetStorageId(), share.Share.ResourceId.GetOpaqueId()),
 			}
 
-			createRefRes, err := s.CreateReference(ctx, createRefReq)
+			c, err := s.findByPath(ctx, refPath)
+			if err != nil {
+				if _, ok := err.(errtypes.IsNotFound); ok {
+					return &usershareproviderv0alphapb.UpdateReceivedShareResponse{
+						Status: status.NewNotFound(ctx, "storage provider not found"),
+					}, nil
+				}
+				return &usershareproviderv0alphapb.UpdateReceivedShareResponse{
+					Status: status.NewInternal(ctx, err, "error finding storage provider"),
+				}, nil
+			}
+
+			createRefRes, err := c.CreateReference(ctx, createRefReq)
 			if err != nil {
 				log.Err(err).Msg("gateway: error calling GetHome")
 				return &usershareproviderv0alphapb.UpdateReceivedShareResponse{

@@ -839,6 +839,14 @@ func (fs *ocFS) CreateReference(ctx context.Context, path string, targetURI *url
 	return errtypes.NotSupported("owncloud: operation not supported")
 }
 
+func (fs *ocFS) SetArbitraryMetadata(ctx context.Context, ref *storageproviderv0alphapb.Reference, md *storageproviderv0alphapb.ArbitraryMetadata) error {
+	return errtypes.NotSupported("owncloud: operation not supported")
+}
+
+func (fs *ocFS) UnsetArbitraryMetadata(ctx context.Context, ref *storageproviderv0alphapb.Reference, keys []string) error {
+	return errtypes.NotSupported("owncloud: operation not supported")
+}
+
 // Delete is actually only a move to trash
 func (fs *ocFS) Delete(ctx context.Context, ref *storageproviderv0alphapb.Reference) (err error) {
 
