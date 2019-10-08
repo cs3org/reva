@@ -311,8 +311,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		// TODO(refs) phoenix is not setting expiration. Default to (now + 1 year?)
 		// create public share request.
 		req := publicshareproviderv0alphapb.CreatePublicShareRequest{
-			// where do we get the ResourceID from? - from a stat call
-			ResourceId: statRes.Info.GetId(),
+			ResourceInfo: statRes.GetInfo(),
 			Grant: &publicshareproviderv0alphapb.Grant{
 				Expiration: &typespb.Timestamp{
 					Nanos:   uint32(time.Now().Add(time.Duration(31536000)).Nanosecond()),

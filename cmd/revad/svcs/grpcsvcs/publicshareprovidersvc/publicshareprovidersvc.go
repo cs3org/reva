@@ -26,7 +26,6 @@ import (
 	publicshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/grpcserver"
-	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/publicshare"
@@ -98,39 +97,13 @@ func (s *service) CreatePublicShare(ctx context.Context, req *publicshareprovide
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("create public share")
 
-	// TODO(refs) this is just for testing purposes until the update of the cs3apis: https://github.com/cs3org/cs3apis/pull/34
-	endpoint := "localhost:9999"
-	// TODO(refs) wait until [] is merged and get rid of this hardcoded url
-	_, err := pool.GetStorageProviderServiceClient(endpoint)
-	if err != nil {
-		log.Debug().Err(errors.New("error getting a connection to a storage provider")).Msgf("address: %v", endpoint)
-	}
-
-	// TODO(refs) until https://github.com/cs3org/cs3apis/pull/34 is merged, we need a stat call to get the ResourceInfo
-	// build stat request. We have the ID from the CreatePublicShareRequest
-	statReq := storageproviderv0alphapb.StatRequest{
-		Ref: &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Id{
-				Id: req.GetResourceId(),
-			},
-		},
-	}
-
 	// get user from context
-	u, _ := user.ContextGetUser(ctx) // TODO(refs) handle error
-
-	// do stat
-	spConn, err := pool.GetStorageProviderServiceClient(endpoint)
-	if err != nil {
-		log.Debug().Err(err).Str("createShare", "shares").Msg("error connecting to storage provider")
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		log.Error().Msg("error getting user from context")
 	}
 
-	statRes, err := spConn.Stat(ctx, &statReq)
-	if err != nil {
-		log.Debug().Err(err).Str("createShare", "shares").Msg("error on stat call")
-	}
-
-	share, err := s.sm.CreatePublicShare(ctx, u, statRes.GetInfo(), req.Grant)
+	share, err := s.sm.CreatePublicShare(ctx, u, req.ResourceInfo, req.Grant)
 	if err != nil {
 		log.Debug().Err(err).Str("createShare", "shares").Msg("error connecting to storage provider")
 	}

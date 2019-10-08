@@ -40,6 +40,8 @@ import (
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	grpcStatus "google.golang.org/grpc/status"
 )
 
 func init() {
@@ -615,6 +617,18 @@ func (s *service) GetQuota(ctx context.Context, req *storageproviderv0alphapb.Ge
 		UsedBytes:  uint64(used),
 	}
 	return res, nil
+}
+
+func (s *service) CreateReference(ctx context.Context, req *storageproviderv0alphapb.CreateReferenceRequest) (*storageproviderv0alphapb.CreateReferenceResponse, error) {
+	return nil, grpcStatus.Error(codes.Unimplemented, "method CreateReference is not yet implemented")
+}
+
+func (s *service) SetArbitraryMetadata(ctx context.Context, req *storageproviderv0alphapb.SetArbitraryMetadataRequest) (*storageproviderv0alphapb.SetArbitraryMetadataResponse, error) {
+	return nil, grpcStatus.Error(codes.Unimplemented, "method SetArbitraryMetadata is not yet implemented")
+}
+
+func (s *service) UnsetArbitraryMetadata(ctx context.Context, rq *storageproviderv0alphapb.UnsetArbitraryMetadataRequest) (*storageproviderv0alphapb.UnsetArbitraryMetadataResponse, error) {
+	return nil, grpcStatus.Error(codes.Unimplemented, "method UnsetArbitraryMetadata is not yet implemented")
 }
 
 func (s *service) unwrap(ctx context.Context, ref *storageproviderv0alphapb.Reference) (*storageproviderv0alphapb.Reference, error) {

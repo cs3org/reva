@@ -53,16 +53,16 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 		c: c,
 	}
 
-	storageproviderv0alphapb.RegisterStorageProviderServiceServer(ss, s)
 	if c.AuthEndpoint != "" {
 		authv0alphapb.RegisterAuthServiceServer(ss, s)
 	}
+	storageproviderv0alphapb.RegisterStorageProviderServiceServer(ss, s)
 	usershareproviderv0alphapb.RegisterUserShareProviderServiceServer(ss, s)
-	publicshareproviderv0alphapb.RegisterPublicShareProviderServiceServer(ss, s)
+	storageregv0alphapb.RegisterStorageRegistryServiceServer(ss, s)
 	appregistryv0alphapb.RegisterAppRegistryServiceServer(ss, s)
 	appproviderv0alphapb.RegisterAppProviderServiceServer(ss, s)
 	preferencesv0alphapb.RegisterPreferencesServiceServer(ss, s)
-	storageregv0alphapb.RegisterStorageRegistryServiceServer(ss, s)
+	publicshareproviderv0alphapb.RegisterPublicShareProviderServiceServer(ss, s)
 
 	return s, nil
 }

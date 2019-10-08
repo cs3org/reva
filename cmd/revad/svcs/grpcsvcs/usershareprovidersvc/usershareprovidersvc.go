@@ -31,6 +31,8 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	grpcStatus "google.golang.org/grpc/status"
 )
 
 func init() {
@@ -193,4 +195,8 @@ func (s *service) UpdateReceivedShare(ctx context.Context, req *usershareprovide
 		Status: status.NewOK(ctx),
 	}
 	return res, nil
+}
+
+func (s *service) GetReceivedShare(ctx context.Context, req *usershareproviderv0alphapb.GetReceivedShareRequest) (*usershareproviderv0alphapb.GetReceivedShareResponse, error) {
+	return nil, grpcStatus.Error(codes.Unimplemented, "method GetReceivedShare is not yet implemented")
 }

@@ -286,3 +286,10 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *usershareproviderv0a
 
 	return res, nil
 }
+
+func (s *svc) GetReceivedShare(ctx context.Context, req *usershareproviderv0alphapb.GetReceivedShareRequest) (*usershareproviderv0alphapb.GetReceivedShareResponse, error) {
+	res := &usershareproviderv0alphapb.GetReceivedShareResponse{
+		Status: status.NewUnimplemented(ctx, nil, "(gateway) GetReceivedShare not yet implemented"),
+	}
+	return res, nil
+}

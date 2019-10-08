@@ -26,6 +26,7 @@ import (
 	storagetypespb "github.com/cs3org/go-cs3apis/cs3/storagetypes"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 
 	storageregv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageregistry/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/grpcserver"
@@ -33,6 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/registry/registry"
 	"github.com/mitchellh/mapstructure"
+	grpcStatus "google.golang.org/grpc/status"
 )
 
 func init() {
@@ -122,6 +124,10 @@ func (s *service) GetStorageProvider(ctx context.Context, req *storageregv0alpha
 		Provider: p,
 	}
 	return res, nil
+}
+
+func (s *service) GetHome(ctx context.Context, req *storageregv0alphapb.GetHomeRequest) (*storageregv0alphapb.GetHomeResponse, error) {
+	return nil, grpcStatus.Error(codes.Unimplemented, "method GetHome is not yet implemented")
 }
 
 // TODO(labkode): fix

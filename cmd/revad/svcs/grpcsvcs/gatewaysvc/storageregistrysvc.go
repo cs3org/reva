@@ -60,3 +60,10 @@ func (s *svc) GetStorageProvider(ctx context.Context, req *storageregv0alphapb.G
 
 	return res, nil
 }
+
+func (s *svc) GetHome(ctx context.Context, req *storageregv0alphapb.GetHomeRequest) (*storageregv0alphapb.GetHomeResponse, error) {
+	res := &storageregv0alphapb.GetHomeResponse{
+		Status: status.NewUnimplemented(ctx, nil, "(gateway) GetHome not yet implemented"),
+	}
+	return res, nil
+}

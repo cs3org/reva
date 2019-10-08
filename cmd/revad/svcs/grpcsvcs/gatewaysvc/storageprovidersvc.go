@@ -475,6 +475,27 @@ func (s *svc) GetQuota(ctx context.Context, req *storageproviderv0alphapb.GetQuo
 	return res, nil
 }
 
+func (s *svc) CreateReference(ctx context.Context, req *storageproviderv0alphapb.CreateReferenceRequest) (*storageproviderv0alphapb.CreateReferenceResponse, error) {
+	res := &storageproviderv0alphapb.CreateReferenceResponse{
+		Status: status.NewUnimplemented(ctx, nil, "CreateReference not yet implemented"),
+	}
+	return res, nil
+}
+
+func (s *svc) SetArbitraryMetadata(ctx context.Context, req *storageproviderv0alphapb.SetArbitraryMetadataRequest) (*storageproviderv0alphapb.SetArbitraryMetadataResponse, error) {
+	res := &storageproviderv0alphapb.SetArbitraryMetadataResponse{
+		Status: status.NewUnimplemented(ctx, nil, "SetArbitraryMetadata not yet implemented"),
+	}
+	return res, nil
+}
+
+func (s *svc) UnsetArbitraryMetadata(ctx context.Context, rq *storageproviderv0alphapb.UnsetArbitraryMetadataRequest) (*storageproviderv0alphapb.UnsetArbitraryMetadataResponse, error) {
+	res := &storageproviderv0alphapb.UnsetArbitraryMetadataResponse{
+		Status: status.NewUnimplemented(ctx, nil, "UnsetArbitraryMetadataResponse not yet implemented"),
+	}
+	return res, nil
+}
+
 func (s *svc) find(ctx context.Context, ref *storageproviderv0alphapb.Reference) (*storagetypespb.ProviderInfo, error) {
 	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
 	if err != nil {
