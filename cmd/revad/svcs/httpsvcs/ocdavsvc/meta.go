@@ -21,6 +21,7 @@ package ocdavsvc
 import (
 	"net/http"
 
+	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
 )
 
@@ -47,13 +48,23 @@ func (h *MetaHandler) Handler(s *svc) http.Handler {
 			return
 		}
 
+		// TODO(refs) this smells and does not solve the underlying problem that is:
+		// why does phoenix sometimes send an encoded base64 and sometimes plain text? Is OCIS sending a base64 encoded id sometimes and sometimes not?
+		var resourceID *storageproviderv0alphapb.ResourceId
 		decodedResourceID := decode(encodedResourceID)
+		if decodedResourceID == nil {
+			resourceID = &storageproviderv0alphapb.ResourceId{
+				OpaqueId: encodedResourceID,
+			}
+		} else {
+			resourceID = decodedResourceID
+		}
 
 		var head string
 		head, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
 		switch head {
 		case "v":
-			h.VersionsHandler.Handler(s, decodedResourceID).ServeHTTP(w, r)
+			h.VersionsHandler.Handler(s, resourceID).ServeHTTP(w, r)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}

@@ -94,6 +94,7 @@ func WriteOCSResponse(w http.ResponseWriter, r *http.Request, res *Response, err
 		appctx.GetLogger(r.Context()).Error().Err(err).Msg(res.OCS.Meta.Message)
 	}
 
+	// TODO is this assumption true? default to xml?
 	if r.URL.Query().Get("format") == "json" {
 		w.Header().Set("Content-Type", "application/json")
 		encoded, err = json.Marshal(res)

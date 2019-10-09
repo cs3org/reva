@@ -73,6 +73,11 @@ const (
 	// ShareTypeFederatedCloudShare shareType = 6
 )
 
+// Element is a commodity type wraps members of any interface (as per Owncloud's OCS V1 Spec)f
+type Element struct {
+	Data interface{} `json:"element" xml:"element"`
+}
+
 // ShareData represents https://doc.owncloud.com/server/developer_manual/core/ocs-share-api.html#response-attributes-1
 type ShareData struct {
 	// TODO int?
@@ -134,10 +139,10 @@ type ShareData struct {
 	ShareWith string `json:"share_with" xml:"share_with"`
 	// The display name of the receiver of the file.
 	ShareWithDisplayname string `json:"share_with_displayname" xml:"share_with_displayname"`
+	// sharee Additional info
+	ShareWithAdditionalInfo string `json:"share_with_additional_info" xml:"share_with_additional_info"`
 	// Whether the recipient was notified, by mail, about the share being shared with them.
 	MailSend string `json:"mail_send" xml:"mail_send"`
-	// A (human-readable) name for the share, which can be up to 64 characters in length
-	Name string `json:"name" xml:"name"`
 }
 
 // ShareeData holds share recipient search results
@@ -275,7 +280,7 @@ func AsCS3Permissions(p int, rp *storageproviderv0alphapb.ResourcePermissions) *
 
 // PublicShare2ShareData converts a cs3api public share into shareData data model
 func PublicShare2ShareData(share *publicshareproviderv0alphapb.PublicShare) *ShareData {
-	sd := &ShareData{
+	return &ShareData{
 		// TODO map share.resourceId to path and storage ... requires a stat call
 		// share.permissions ar mapped below
 		// TODO lookup user metadata
@@ -293,7 +298,6 @@ func PublicShare2ShareData(share *publicshareproviderv0alphapb.PublicShare) *Sha
 	}
 	// actually clients should be able to GET and cache the user info themselves ...
 	// TODO check grantee type for user vs group
-	return sd
 }
 
 // UserIDToString transforms a cs3api user id into an ocs data model

@@ -431,6 +431,22 @@ func (h *SharesHandler) updateShare(w http.ResponseWriter, r *http.Request) {
 	WriteOCSSuccess(w, r, share)
 }
 
+// this probablt has to be handled at the handler level. v1 != v2. check ocssvc.go:87
+func isReshare(req *http.Request) bool {
+	return req.URL.Query().Get("reshares") != ""
+}
+
+// reshare requests require to be wrapped around <elements>
+func (h *SharesHandler) doReshareResponse(w http.ResponseWriter, r *http.Request, shares []*conversions.ShareData) {
+	out := make([]*conversions.Element, 0)
+
+	// wrap every item on an <element> type
+	for _, share := range shares {
+		out = append(out, &conversions.Element{Data: share})
+	}
+	WriteOCSSuccess(w, r, out)
+}
+
 // listShares bundles user and public shares
 func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	shares := make([]*conversions.ShareData, 0)
@@ -447,6 +463,13 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 
 	// TODO(refs) horrendous syntax. Abstract it to a variadic function that uses the unpack operator on every argument and appends to result.
 	shares = append(shares, append(userShares, publicShares...)...)
+
+	// do something if reshares is present
+	if isReshare(r) {
+		h.doReshareResponse(w, r, shares)
+		return
+	}
+
 	WriteOCSSuccess(w, r, shares)
 }
 
