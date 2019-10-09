@@ -22,9 +22,8 @@ import (
 	"fmt"
 	"os"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
-
+	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 )
 
 func recycleListCommand() *command {

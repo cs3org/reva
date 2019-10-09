@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"log"
 
-	appproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/appprovider/v0alpha"
 	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	"github.com/cs3org/reva/pkg/token"
@@ -46,14 +45,6 @@ func getAuthContext() context.Context {
 	return ctx
 }
 
-func getAppProviderClient(host string) (appproviderv0alphapb.AppProviderServiceClient, error) {
-	conn, err := getConnToHost(host)
-	if err != nil {
-		return nil, err
-	}
-	return appproviderv0alphapb.NewAppProviderServiceClient(conn), nil
-}
-
 func getClient() (gatewayv0alphapb.GatewayServiceClient, error) {
 	conn, err := getConn()
 	if err != nil {
@@ -64,10 +55,6 @@ func getClient() (gatewayv0alphapb.GatewayServiceClient, error) {
 
 func getConn() (*grpc.ClientConn, error) {
 	return grpc.Dial(conf.Host, grpc.WithInsecure())
-}
-
-func getConnToHost(host string) (*grpc.ClientConn, error) {
-	return grpc.Dial(host, grpc.WithInsecure())
 }
 
 func formatError(status *rpcpb.Status) error {
