@@ -16,5 +16,5 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// The conversions package provides a series of glue code that converts cs3api types into OCS data structures
+// Package conversions package provides a series of glue code that converts cs3api types into OCS data structures
 package conversions

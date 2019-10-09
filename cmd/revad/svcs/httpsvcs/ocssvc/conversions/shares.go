@@ -34,6 +34,7 @@ import (
 
 // Types
 
+// ResourceType indicates the OCS type of the resource
 type ResourceType int
 
 func (rt ResourceType) String() (s string) {
@@ -55,13 +56,21 @@ func (rt ResourceType) String() (s string) {
 // Permissions reflects the CRUD permissions used in the OCS sharing API
 type Permissions uint
 
+// ShareType denotes a type of share
 type ShareType int
 
 const (
+	// ShareTypeUser refers to user shares
 	ShareTypeUser ShareType = 0
-	// shareTypeGroup shareType = 1
+
+	// ShareTypePublicLink refers to public link shares
 	ShareTypePublicLink ShareType = 3
-	//	shareTypeFederatedCloudShare shareType = 6
+
+	// ShareTypeGroup represents a group share
+	// ShareTypeGroup shareType = 1
+
+	// ShareTypeFederatedCloudShare represents a federated share
+	// ShareTypeFederatedCloudShare shareType = 6
 )
 
 // ShareData represents https://doc.owncloud.com/server/developer_manual/core/ocs-share-api.html#response-attributes-1
@@ -160,6 +169,7 @@ type MatchValueData struct {
 
 // Conversion functions. From cs3api types => ocs
 
+// Role2CS3Permissions converts string roles (from the request body) into cs3 permissions
 func Role2CS3Permissions(r string) (*storageproviderv0alphapb.ResourcePermissions, error) {
 	switch r {
 	case RoleViewer:
@@ -220,6 +230,7 @@ func Role2CS3Permissions(r string) (*storageproviderv0alphapb.ResourcePermission
 	}
 }
 
+// AsCS3Permissions returns permission values as cs3api permissions
 // TODO sort out mapping, this is just a first guess
 // TODO use roles to make this configurable
 func AsCS3Permissions(p int, rp *storageproviderv0alphapb.ResourcePermissions) *storageproviderv0alphapb.ResourcePermissions {
@@ -262,7 +273,7 @@ func AsCS3Permissions(p int, rp *storageproviderv0alphapb.ResourcePermissions) *
 	return rp
 }
 
-// TODO(refs) helper function, move to a mixins
+// PublicShare2ShareData converts a cs3api public share into shareData data model
 func PublicShare2ShareData(share *publicshareproviderv0alphapb.PublicShare) *ShareData {
 	sd := &ShareData{
 		// TODO map share.resourceId to path and storage ... requires a stat call
@@ -285,6 +296,7 @@ func PublicShare2ShareData(share *publicshareproviderv0alphapb.PublicShare) *Sha
 	return sd
 }
 
+// UserIDToString transforms a cs3api user id into an ocs data model
 func UserIDToString(userID *typespb.UserId) string {
 	if userID == nil || userID.OpaqueId == "" {
 		return ""
@@ -295,11 +307,45 @@ func UserIDToString(userID *typespb.UserId) string {
 	return userID.OpaqueId + "@" + userID.Idp
 }
 
+// UserSharePermissions2OCSPermissions transforms cs3api permissions into OCS Permissions data model
 func UserSharePermissions2OCSPermissions(sp *usershareproviderv0alphapb.SharePermissions) Permissions {
 	if sp != nil {
 		return permissions2OCSPermissions(sp.GetPermissions())
 	}
 	return PermissionInvalid
+}
+
+// GetUserManager returns a connection to a user share manager
+func GetUserManager(manager string, m map[string]map[string]interface{}) (user.Manager, error) {
+	if f, ok := usermgr.NewFuncs[manager]; ok {
+		return f(m[manager])
+	}
+
+	return nil, fmt.Errorf("driver %s not found for user manager", manager)
+}
+
+// GetPublicShareManager returns a connection to a public share manager
+func GetPublicShareManager(manager string, m map[string]map[string]interface{}) (publicshare.Manager, error) {
+	if f, ok := publicsharemgr.NewFuncs[manager]; ok {
+		return f(m[manager])
+	}
+
+	return nil, fmt.Errorf("driver %s not found for public shares manager", manager)
+}
+
+// Permissions2Role performs permission conversions
+func Permissions2Role(p int) string {
+	role := RoleLegacy
+	if p == int(PermissionRead) {
+		role = RoleViewer
+	}
+	if p&int(PermissionWrite) == 1 {
+		role = RoleEditor
+	}
+	if p&int(PermissionShare) == 1 {
+		role = RoleCoowner
+	}
+	return role
 }
 
 func publicSharePermissions2OCSPermissions(sp *publicshareproviderv0alphapb.PublicSharePermissions) Permissions {
@@ -332,23 +378,6 @@ func permissions2OCSPermissions(p *storageproviderv0alphapb.ResourcePermissions)
 	return permissions
 }
 
-// TODO(refs) this doesn't belong here
-func GetUserManager(manager string, m map[string]map[string]interface{}) (user.Manager, error) {
-	if f, ok := usermgr.NewFuncs[manager]; ok {
-		return f(m[manager])
-	}
-
-	return nil, fmt.Errorf("driver %s not found for user manager", manager)
-}
-
-func GetPublicShareManager(manager string, m map[string]map[string]interface{}) (publicshare.Manager, error) {
-	if f, ok := publicsharemgr.NewFuncs[manager]; ok {
-		return f(m[manager])
-	}
-
-	return nil, fmt.Errorf("driver %s not found for public shares manager", manager)
-}
-
 // timestamp is assumed to be UTC ... just human readable ...
 // FIXME and ambiguous / error prone because there is no time zone ...
 func timestampToExpiration(t *typespb.Timestamp) string {
@@ -371,17 +400,3 @@ const (
 	PermissionShare   Permissions = 16
 	//PermissionAll     Permissions = 31
 )
-
-func Permissions2Role(p int) string {
-	role := RoleLegacy
-	if p == int(PermissionRead) {
-		role = RoleViewer
-	}
-	if p&int(PermissionWrite) == 1 {
-		role = RoleEditor
-	}
-	if p&int(PermissionShare) == 1 {
-		role = RoleCoowner
-	}
-	return role
-}
