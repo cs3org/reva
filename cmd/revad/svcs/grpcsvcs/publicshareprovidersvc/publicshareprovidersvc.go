@@ -46,8 +46,8 @@ type config struct {
 }
 
 type service struct {
-	conf *config
-	sm   publicshare.Manager
+	conf         *config
+	shareManager publicshare.Manager
 }
 
 func getShareManager(c *config) (publicshare.Manager, error) {
@@ -58,7 +58,7 @@ func getShareManager(c *config) (publicshare.Manager, error) {
 }
 
 // TODO(labkode): add ctx to Close.
-func (s *service) Close() error {
+func (svc *service) Close() error {
 	return nil
 }
 
@@ -85,25 +85,24 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 	}
 
 	service := &service{
-		conf: c,
-		sm:   sm,
+		conf:         c,
+		shareManager: sm,
 	}
 
 	publicshareproviderv0alphapb.RegisterPublicShareProviderServiceServer(ss, service)
 	return service, nil
 }
 
-func (s *service) CreatePublicShare(ctx context.Context, req *publicshareproviderv0alphapb.CreatePublicShareRequest) (*publicshareproviderv0alphapb.CreatePublicShareResponse, error) {
+func (svc *service) CreatePublicShare(ctx context.Context, req *publicshareproviderv0alphapb.CreatePublicShareRequest) (*publicshareproviderv0alphapb.CreatePublicShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("create public share")
 
-	// get user from context
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
 		log.Error().Msg("error getting user from context")
 	}
 
-	share, err := s.sm.CreatePublicShare(ctx, u, req.ResourceInfo, req.Grant)
+	share, err := svc.shareManager.CreatePublicShare(ctx, u, req.ResourceInfo, req.Grant)
 	if err != nil {
 		log.Debug().Err(err).Str("createShare", "shares").Msg("error connecting to storage provider")
 	}
@@ -116,7 +115,7 @@ func (s *service) CreatePublicShare(ctx context.Context, req *publicshareprovide
 	return res, nil
 }
 
-func (s *service) RemovePublicShare(ctx context.Context, req *publicshareproviderv0alphapb.RemovePublicShareRequest) (*publicshareproviderv0alphapb.RemovePublicShareResponse, error) {
+func (svc *service) RemovePublicShare(ctx context.Context, req *publicshareproviderv0alphapb.RemovePublicShareRequest) (*publicshareproviderv0alphapb.RemovePublicShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("remove public share")
 
@@ -125,7 +124,8 @@ func (s *service) RemovePublicShare(ctx context.Context, req *publicshareprovide
 	}, nil
 }
 
-func (s *service) GetPublicShareByToken(ctx context.Context, req *publicshareproviderv0alphapb.GetPublicShareByTokenRequest) (*publicshareproviderv0alphapb.GetPublicShareByTokenResponse, error) {
+// TODO(refs) implement
+func (svc *service) GetPublicShareByToken(ctx context.Context, req *publicshareproviderv0alphapb.GetPublicShareByTokenRequest) (*publicshareproviderv0alphapb.GetPublicShareByTokenResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("remove public share")
 
@@ -134,7 +134,8 @@ func (s *service) GetPublicShareByToken(ctx context.Context, req *publicsharepro
 	}, nil
 }
 
-func (s *service) GetPublicShare(ctx context.Context, req *publicshareproviderv0alphapb.GetPublicShareRequest) (*publicshareproviderv0alphapb.GetPublicShareResponse, error) {
+// TODO(refs) implement
+func (svc *service) GetPublicShare(ctx context.Context, req *publicshareproviderv0alphapb.GetPublicShareRequest) (*publicshareproviderv0alphapb.GetPublicShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("get public share")
 
@@ -144,12 +145,12 @@ func (s *service) GetPublicShare(ctx context.Context, req *publicshareproviderv0
 	}, nil
 }
 
-func (s *service) ListPublicShares(ctx context.Context, req *publicshareproviderv0alphapb.ListPublicSharesRequest) (*publicshareproviderv0alphapb.ListPublicSharesResponse, error) {
+func (svc *service) ListPublicShares(ctx context.Context, req *publicshareproviderv0alphapb.ListPublicSharesRequest) (*publicshareproviderv0alphapb.ListPublicSharesResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("list public share")
 	user, _ := user.ContextGetUser(ctx)
 
-	shares, err := s.sm.ListPublicShares(ctx, user, &storageproviderv0alphapb.ResourceInfo{})
+	shares, err := svc.shareManager.ListPublicShares(ctx, user, &storageproviderv0alphapb.ResourceInfo{})
 	if err != nil {
 		log.Err(err).Msg("error listing shares")
 		return &publicshareproviderv0alphapb.ListPublicSharesResponse{
@@ -164,7 +165,7 @@ func (s *service) ListPublicShares(ctx context.Context, req *publicshareprovider
 	return res, nil
 }
 
-func (s *service) UpdatePublicShare(ctx context.Context, req *publicshareproviderv0alphapb.UpdatePublicShareRequest) (*publicshareproviderv0alphapb.UpdatePublicShareResponse, error) {
+func (svc *service) UpdatePublicShare(ctx context.Context, req *publicshareproviderv0alphapb.UpdatePublicShareRequest) (*publicshareproviderv0alphapb.UpdatePublicShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("list public share")
 
