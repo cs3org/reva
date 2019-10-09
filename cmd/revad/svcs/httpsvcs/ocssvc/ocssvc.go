@@ -90,6 +90,7 @@ func (s *svc) Handler() http.Handler {
 			s.V1Handler.Handler().ServeHTTP(w, r)
 			return
 		}
+		// TODO(refs) perhaps it's a good time to start with the v2.php now.
 
 		WriteOCSError(w, r, MetaNotFound.StatusCode, "Not found", nil)
 	})
