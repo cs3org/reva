@@ -21,7 +21,6 @@ package ocdavsvc
 import (
 	"net/http"
 
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
 )
 
@@ -39,23 +38,22 @@ func (h *MetaHandler) init(c *Config) error {
 func (h *MetaHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		var id string
-		id, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
-		if id == "" {
+		// encodedResourceID - base64 encoded resource id:
+		// http://localhost:9998/remote.php/dav/meta/MTIzZTQ1NjctZTg5Yi0xMmQzLWE0NTYtNDI2NjU1NDQwMDAwOmVmY2RmZGQ3LTdjZGEtNGI4My1hNDI2LTFmYWRlNjEwZjE5MQ%3D%3D/v
+		var encodedResourceID string
+		encodedResourceID, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
+		if encodedResourceID == "" {
 			http.Error(w, "400 Bad Request", http.StatusBadRequest)
 			return
 		}
 
-		// did := unwrap(id)
-		did := &storageproviderv0alphapb.ResourceId{
-			OpaqueId: id,
-		}
+		decodedResourceID := decode(encodedResourceID)
 
 		var head string
 		head, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
 		switch head {
 		case "v":
-			h.VersionsHandler.Handler(s, did).ServeHTTP(w, r)
+			h.VersionsHandler.Handler(s, decodedResourceID).ServeHTTP(w, r)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}

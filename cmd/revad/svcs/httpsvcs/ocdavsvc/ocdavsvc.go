@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/httpserver"
@@ -153,18 +154,20 @@ func wrap(sid string, oid string) string {
 	return base64.URLEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", sid, oid)))
 }
 
-// TODO(refs): is this needed?
-// func unwrap(rid string) *storageproviderv0alphapb.ResourceId {
-// 	decodedID, err := base64.URLEncoding.DecodeString(rid)
-// 	if err != nil {
-// 		return nil
-// 	}
-// 	parts := strings.SplitN(string(decodedID), ":", 2)
-// 	if len(parts) != 2 {
-// 		return nil
-// 	}
-// 	return &storageproviderv0alphapb.ResourceId{
-// 		StorageId: parts[0],
-// 		OpaqueId:  parts[1],
-// 	}
-// }
+// unwrap accepts base64 encoded url's like: MTIzZTQ1NjctZTg5Yi0xMmQzLWE0NTYtNDI2NjU1NDQwMDAwOmVmY2RmZGQ3LTdjZGEtNGI4My1hNDI2LTFmYWRlNjEwZjE5MQ==
+// decodes them: 123e4567-e89b-12d3-a456-426655440000:efcdfdd7-7cda-4b83-a426-1fade610f191
+// where parts[0] = storageID, parts[1] = opaqueID
+func decode(rid string) *storageproviderv0alphapb.ResourceId {
+	decodedID, err := base64.URLEncoding.DecodeString(rid)
+	if err != nil {
+		return nil
+	}
+	parts := strings.SplitN(string(decodedID), ":", 2)
+	if len(parts) != 2 {
+		return nil
+	}
+	return &storageproviderv0alphapb.ResourceId{
+		StorageId: parts[0],
+		OpaqueId:  parts[1],
+	}
+}
