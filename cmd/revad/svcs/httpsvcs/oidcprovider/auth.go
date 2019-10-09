@@ -59,7 +59,7 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, err := w.Write([]byte(fmt.Sprintf(`
 			<h1>Login page</h1>
-			<p>Howdy! This is the log in page. For this example, it is enough to supply the username.</p>
+			<p>Howdy! This is the log in page. It requires username and password</p>
 			<form method="post">
 				<p>
 					By logging in, you consent to grant these scopes:
