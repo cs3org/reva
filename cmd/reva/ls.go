@@ -41,7 +41,7 @@ func lsCommand() *command {
 		}
 
 		fn := cmd.Args()[0]
-		client, err := getStorageProviderClient()
+		client, err := getClient()
 		if err != nil {
 			return err
 		}

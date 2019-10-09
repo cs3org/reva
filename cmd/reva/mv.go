@@ -40,7 +40,7 @@ func moveCommand() *command {
 		dst := cmd.Args()[1]
 
 		ctx := getAuthContext()
-		client, err := getStorageProviderClient()
+		client, err := getClient()
 		if err != nil {
 			return err
 		}

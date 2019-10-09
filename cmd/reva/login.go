@@ -55,7 +55,7 @@ var loginCommand = func() *command {
 			password = passwordInput
 		}
 
-		client, err := getAuthClient()
+		client, err := getClient()
 		if err != nil {
 			return err
 		}

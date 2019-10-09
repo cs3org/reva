@@ -33,7 +33,7 @@ func shareListReceivedCommand() *command {
 	cmd.Usage = func() string { return "Usage: share-list-received [-flags]" }
 	cmd.Action = func() error {
 		ctx := getAuthContext()
-		shareClient, err := getUserShareProviderClient()
+		shareClient, err := getClient()
 		if err != nil {
 			return err
 		}

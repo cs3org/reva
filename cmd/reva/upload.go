@@ -63,7 +63,7 @@ func uploadCommand() *command {
 
 		fmt.Printf("Local file size: %d bytes\n", md.Size())
 
-		client, err := getStorageProviderClient()
+		client, err := getClient()
 		if err != nil {
 			return err
 		}

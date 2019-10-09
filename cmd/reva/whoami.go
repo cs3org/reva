@@ -50,7 +50,7 @@ func whoamiCommand() *command {
 			token = t
 		}
 
-		client, err := getAuthClient()
+		client, err := getClient()
 		if err != nil {
 			return err
 		}

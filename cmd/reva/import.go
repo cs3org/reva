@@ -78,11 +78,11 @@ func importCommand() *command {
 
 //Imports shares from a shares.jsonl file in exportPath. The files must already be present on the storage
 func importShares(exportPath string) error {
-	storage, err := getStorageProviderClient()
+	storage, err := getClient()
 	if err != nil {
 		return err
 	}
-	sharing, err := getUserShareProviderClient()
+	sharing, err := getClient()
 	if err != nil {
 		return err
 	}

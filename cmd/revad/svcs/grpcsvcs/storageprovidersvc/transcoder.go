@@ -53,6 +53,8 @@ func GRPC2PKGXS(t storageproviderv0alphapb.ResourceChecksumType) XS {
 		return XSSHA1
 	case storageproviderv0alphapb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_ADLER32:
 		return XSAdler32
+	case storageproviderv0alphapb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_MD5:
+		return XSMD5
 	default:
 		return XSInvalid
 	}
