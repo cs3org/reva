@@ -21,6 +21,7 @@ package loader
 import (
 	// Load core HTTP services
 	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/appregistrysvc"
+	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/datagatewaysvc"
 	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/datasvc"
 	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/helloworldsvc"
 	_ "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/iframeuisvc"

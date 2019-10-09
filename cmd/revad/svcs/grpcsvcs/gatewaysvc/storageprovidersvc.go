@@ -44,21 +44,11 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *storageproviderv0al
 		}, nil
 	}
 
-	storageReq := &storageproviderv0alphapb.InitiateFileDownloadRequest{
-		Opaque: req.Opaque,
-		Ref:    req.Ref,
-	}
-	res, err := c.InitiateFileDownload(ctx, storageReq)
+	res, err := c.InitiateFileDownload(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gatewaysvc: error calling InitiateFileDownload")
 	}
-
-	storageRes := &storageproviderv0alphapb.InitiateFileDownloadResponse{
-		Status:           res.Status,
-		Opaque:           res.Opaque,
-		DownloadEndpoint: res.DownloadEndpoint,
-	}
-	return storageRes, nil
+	return res, nil
 }
 
 func (s *svc) InitiateFileUpload(ctx context.Context, req *storageproviderv0alphapb.InitiateFileUploadRequest) (*storageproviderv0alphapb.InitiateFileUploadResponse, error) {

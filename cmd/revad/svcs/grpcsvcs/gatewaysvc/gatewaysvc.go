@@ -77,4 +77,5 @@ type config struct {
 	OCMShareProviderEndpoint    string `mapstructure:"ocmshareprovidersvc"`
 	CommitShareToStorageGrant   bool   `mapstructure:"commit_share_to_storage_grant"`
 	CommitShareToStorageRef     bool   `mapstructure:"commit_share_to_storage_ref"`
+	DataGatewayEndpoint         string `mapstructure:"datagatewaysvc"`
 }
