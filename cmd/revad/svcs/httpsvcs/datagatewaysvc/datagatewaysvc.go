@@ -101,41 +101,13 @@ func addCorsHeader(res http.ResponseWriter) {
 func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
-	fn := r.URL.Path
-	ref := &storageproviderv0alphapb.Reference{Spec: &storageproviderv0alphapb.Reference_Path{Path: fn}}
 
-	c, err := pool.GetGatewayServiceClient(s.conf.GatewayEndpoint)
-	if err != nil {
-		log.Err(err).Msg("error getting gateway service client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+	// TODO(labkode): validate signature
+	//sig := r.URL.Query().Get("sig")
+	target := r.URL.Query().Get("target")
 
-	req := &storageproviderv0alphapb.InitiateFileDownloadRequest{
-		Ref: ref,
-	}
-
-	res, err := c.InitiateFileDownload(ctx, req)
-	if err != nil {
-		log.Err(err).Msg("error calling InitiateFileDownload")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if res.Status.Code != rpcpb.Code_CODE_OK {
-		log.Error().Str("code", res.Status.Code.String()).Msg("wrong response from calling InitiateFileDownload")
-		if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	// we call the endpoint and we pipe the response body
-	endpoint := res.DownloadEndpoint
 	httpClient := utils.GetHTTPClient(ctx)
-	httpReq, err := utils.NewRequest(ctx, "GET", endpoint, nil)
+	httpReq, err := utils.NewRequest(ctx, "GET", target, nil)
 	if err != nil {
 		log.Err(err).Msg("wrong request")
 		w.WriteHeader(http.StatusInternalServerError)

@@ -47,13 +47,14 @@ func init() {
 }
 
 type config struct {
-	Driver        string                            `mapstructure:"driver"`
-	MountPath     string                            `mapstructure:"mount_path"`
-	MountID       string                            `mapstructure:"mount_id"`
-	TmpFolder     string                            `mapstructure:"tmp_folder"`
-	Drivers       map[string]map[string]interface{} `mapstructure:"drivers"`
-	DataServerURL string                            `mapstructure:"data_server_url"`
-	AvailableXS   map[string]uint32                 `mapstructure:"available_checksums"`
+	Driver           string                            `mapstructure:"driver"`
+	MountPath        string                            `mapstructure:"mount_path"`
+	MountID          string                            `mapstructure:"mount_id"`
+	TmpFolder        string                            `mapstructure:"tmp_folder"`
+	Drivers          map[string]map[string]interface{} `mapstructure:"drivers"`
+	DataServerURL    string                            `mapstructure:"data_server_url"`
+	ExposeDataServer bool                              `mapstructure:"expose_data_server"` // if true the client will be able to upload/download directly to it
+	AvailableXS      map[string]uint32                 `mapstructure:"available_checksums"`
 }
 
 type service struct {
@@ -232,6 +233,7 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *storageprovider
 	res := &storageproviderv0alphapb.InitiateFileDownloadResponse{
 		DownloadEndpoint: url.String(),
 		Status:           status.NewOK(ctx),
+		Expose:           s.conf.ExposeDataServer,
 	}
 	return res, nil
 }
@@ -249,6 +251,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *storageproviderv0
 		UploadEndpoint:     url.String(),
 		Status:             status.NewOK(ctx),
 		AvailableChecksums: s.availableXS,
+		Expose:             s.conf.ExposeDataServer,
 	}
 	return res, nil
 }

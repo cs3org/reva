@@ -20,6 +20,7 @@ package gatewaysvc
 
 import (
 	"context"
+	"net/url"
 
 	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
@@ -48,6 +49,28 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *storageproviderv0al
 	if err != nil {
 		return nil, errors.Wrap(err, "gatewaysvc: error calling InitiateFileDownload")
 	}
+
+	if res.Expose {
+		return res, nil
+	}
+
+	// sign the download location and pass it to the data gateway
+	u, err := url.Parse(res.DownloadEndpoint)
+	if err != nil {
+		return &storageproviderv0alphapb.InitiateFileDownloadResponse{
+			Status: status.NewInternal(ctx, err, "wrong format for download endpoint"),
+		}, nil
+	}
+
+	// TODO(labkode): calculate signature of the url, we don't need to sing the whole URL
+	q := u.Query()
+	q.Set("sig", "xyz123")
+	q.Set("target", u.String())
+	u.Host = s.dataGatewayURL.Host
+	u.RawQuery = q.Encode()
+
+	res.DownloadEndpoint = u.String()
+
 	return res, nil
 }
 

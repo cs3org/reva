@@ -20,6 +20,7 @@ package gatewaysvc
 
 import (
 	"io"
+	"net/url"
 
 	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
 
@@ -42,8 +43,19 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 		return nil, err
 	}
 
+	// ensure DataGatewayEndpoint is a valid URI
+	if c.DataGatewayEndpoint == "" {
+		return nil, errors.New("datagatewaysvc is not defined")
+	}
+
+	u, err := url.Parse(c.DataGatewayEndpoint)
+	if err != nil {
+		return nil, err
+	}
+
 	s := &svc{
-		c: c,
+		c:              c,
+		dataGatewayURL: *u,
 	}
 
 	gatewayv0alphapb.RegisterGatewayServiceServer(ss, s)
@@ -51,7 +63,8 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 }
 
 type svc struct {
-	c *config
+	c              *config
+	dataGatewayURL url.URL
 }
 
 func (s *svc) Close() error {
