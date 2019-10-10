@@ -1,0 +1,135 @@
+[core]
+log_file = "stderr"
+log_mode = "dev"
+max_cpus = "100%"
+
+[log]
+level = "debug"
+mode = "console"
+
+[http]
+network = "tcp"
+address = "0.0.0.0:10000"
+enabled_services = ["datasvc", "ocdavsvc", "prometheussvc", "wellknown", "oidcprovider"]
+enabled_middlewares = ["cors", "auth"]
+
+[http.middlewares.auth]
+gatewaysvc = "0.0.0.0:9999"
+credential_strategy = "oidc"
+token_strategy = "header"
+token_writer = "header"
+token_manager = "jwt"
+skip_methods = [
+"/status.php",
+"/oauth2",
+"/oauth2/auth", 
+"/oauth2/token",
+"/oauth2/introspect",
+"/oauth2/userinfo",
+"/oauth2/sessions",
+"/.well-known/openid-configuration",
+"/metrics"
+]
+
+[http.services.oidcprovider]
+gatewaysvc = "0.0.0.0:10000"
+auth_manager = "json" # it should be gatewaysvc
+user_manager = "json" # it should be gatewaysvc, we need a user manager API
+
+[http.services.oidcprovider.clients.phoenix]
+id = "phoenix"
+client_secret = "$2a$10$IxMdI6d.LIRZPpSfEwNoeu4rY3FhDREsxFJXikcgdRRAStxUlsuEO"
+redirect_uris = ["http://localhost:8300/oidc-callback.html"]
+grant_types = ["implicit", "refresh_token", "authorization_code", "password", "client_credentials"]
+response_types = ["id_token", "code", "token"]
+scopes = ["openid", "profile", "email", "offline"]
+
+[http.services.oidcprovider.user_managers.json]
+users = "./examples/users.demo.json"
+
+[http.services.oidcprovider.auth_managers.json]
+users = "./examples/users.demo.json"
+
+[http.middlewares.cors]
+allow_credentials = true
+options_passthrough = true
+
+[http.middlewares.auth.token_managers.jwt]
+secret = "Pive-Fumkiu4"
+
+[http.services.datasvc]
+driver = "local"
+prefix = "data"
+temp_folder = "/var/tmp/"
+
+[http.services.datasvc.drivers.local]
+root = "/var/tmp/reva/data"
+
+[http.services.ocdavsvc]
+prefix = "owncloud"
+chunk_folder = "/var/tmp/revad/chunks"
+gatewaysvc = "0.0.0.0:9999"
+
+[grpc]
+network = "tcp"
+address = "0.0.0.0:9999"
+enabled_services = ["storageprovidersvc", "authsvc", "storageregistrysvc", "preferencessvc", "usershareprovidersvc", "gatewaysvc"]
+enabled_interceptors = ["auth"]
+
+[grpc.interceptors.auth]
+token_manager = "jwt"
+skip_methods = ["/cs3.gatewayv0alpha.GatewayService/GenerateAccessToken", "/cs3.gatewayv0alpha.GatewayService/WhoAmI", "/cs3.authv0alpha.AuthService/GenerateAccessToken", "/cs3.authv0alpha.AuthService/WhoAmI"]
+
+[grpc.interceptors.auth.token_managers.jwt]
+secret = "Pive-Fumkiu4"
+
+[grpc.services.usershareprovidersvc]
+driver = "memory"
+
+[grpc.services.storageprovidersvc]
+driver = "local"
+mount_path = "/"
+mount_id = "123e4567-e89b-12d3-a456-426655440000"
+data_server_url = "http://0.0.0.0:10000/data"
+expose_data_server = true
+
+[grpc.services.storageprovidersvc.available_checksums]
+md5   = 100
+unset = 1000
+
+[grpc.services.storageprovidersvc.drivers.local]
+root = "/var/tmp/reva/data"
+
+[grpc.services.authsvc]
+token_manager = "jwt"
+auth_manager = "oidc"
+user_manager = "oidc"
+
+[grpc.services.authsvc.auth_managers.oidc]
+provider = "http://0.0.0.0:10000"
+insecure = true
+client_id = "phoenix"
+client_secret = "foobar"
+
+[grpc.services.authsvc.token_managers.jwt]
+secret = "Pive-Fumkiu4"
+
+[grpc.services.storageregistrysvc]
+driver = "static"
+
+[grpc.services.storageregistrysvc.drivers.static.rules]
+"/" = "0.0.0.0:9999"
+"123e4567-e89b-12d3-a456-426655440000" = "0.0.0.0:9999"
+
+
+[grpc.services.gatewaysvc]
+storageregistrysvc = "0.0.0.0:9999"
+authsvc = "0.0.0.0:9999"
+publicshareprovidersvc = "0.0.0.0:9999"
+usershareprovidersvc = "0.0.0.0:9999"
+ocmshareprovidersvc = "0.0.0.0:9999"
+appregistrysvc = "0.0.0.0:9999"
+preferencessvc = "0.0.0.0:9999"
+commit_share_to_storage_grant = true
+datagatewaysvc = "http://0.0.0.0:10000/data"
+shared_secret_key = "xyz"

@@ -32,11 +32,17 @@ func init() {
 }
 
 type config struct {
-	Prefix string `mapstructure:"prefix"`
+	Prefix                string `mapstructure:"prefix"`
+	Issuer                string `mapstructure:"issuer"`
+	AuthorizationEndpoint string `mapstructure:"authorization_endpoint"`
+	TokenEndpoint         string `mapstructure:"token_endpoint"`
+	RevocationEndpoint    string `mapstructure:"revocation_endpoint"`
+	IntrospectionEndpoint string `mapstructure:"introspection_endpoint"`
+	UserinfoEndpoint      string `mapstructure:"userinfo_endpoint"`
 }
 
 type svc struct {
-	prefix  string
+	conf    *config
 	handler http.Handler
 }
 
@@ -47,8 +53,12 @@ func New(m map[string]interface{}) (httpsvcs.Service, error) {
 		return nil, err
 	}
 
+	if conf.Prefix == "" {
+		conf.Prefix = ".well-known"
+	}
+
 	s := &svc{
-		prefix: conf.Prefix,
+		conf: conf,
 	}
 	s.setHandler()
 	return s, nil
@@ -59,7 +69,7 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) Prefix() string {
-	return s.prefix
+	return s.conf.Prefix
 }
 
 func (s *svc) Handler() http.Handler {

@@ -29,13 +29,14 @@ import (
 func (s *svc) doOpenidConfiguration(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context())
 	pm := &oidc.ProviderMetadata{
-		Issuer:                "http://localhost:9998",
-		AuthorizationEndpoint: "http://localhost:9998/oauth2/auth",
-		TokenEndpoint:         "http://localhost:9998/oauth2/token",
-		RevocationEndpoint:    "http://localhost:9998/oauth2/auth",
-		IntrospectionEndpoint: "http://localhost:9998/oauth2/introspect",
-		UserinfoEndpoint:      "http://localhost:9998/oauth2/userinfo",
+		Issuer:                s.conf.Prefix,
+		AuthorizationEndpoint: s.conf.AuthorizationEndpoint,
+		TokenEndpoint:         s.conf.TokenEndpoint,
+		RevocationEndpoint:    s.conf.RevocationEndpoint,
+		IntrospectionEndpoint: s.conf.IntrospectionEndpoint,
+		UserinfoEndpoint:      s.conf.UserinfoEndpoint,
 	}
+
 	b, err := json.Marshal(pm)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")

@@ -30,6 +30,7 @@ import (
 	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/storage"
 	"github.com/ory/fosite/token/jwt"
+	"github.com/pkg/errors"
 
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	"github.com/cs3org/reva/cmd/revad/httpserver"
@@ -52,6 +53,18 @@ type config struct {
 	AuthManagers map[string]map[string]interface{} `mapstructure:"auth_managers"`
 	UserManager  string                            `mapstructure:"user_manager"`
 	UserManagers map[string]map[string]interface{} `mapstructure:"user_managers"`
+	Clients      map[string]map[string]interface{} `mapstructure:"clients"`
+}
+
+type client struct {
+	ID            string   `mapstructure:"id"`
+	Secret        string   `mapstructure:"client_secret,"`
+	RedirectURIs  []string `mapstructure:"redirect_uris"`
+	GrantTypes    []string `mapstructure:"grant_types"`
+	ResponseTypes []string `mapstructure:"response_types"`
+	Scopes        []string `mapstructure:"scopes"`
+	Audience      []string `mapstructure:"audience"`
+	Public        bool     `mapstructure:"public"`
 }
 
 type svc struct {
@@ -61,29 +74,137 @@ type svc struct {
 	usermgr user.Manager
 	store   *storage.MemoryStore
 	oauth2  fosite.OAuth2Provider
+	clients map[string]fosite.Client
 }
 
-func newExampleStore() *storage.MemoryStore {
+// New returns a new oidcprovidersvc
+func New(m map[string]interface{}) (httpsvcs.Service, error) {
+	c := &config{}
+	if err := mapstructure.Decode(m, c); err != nil {
+		return nil, err
+	}
+
+	if c.Prefix == "" {
+		c.Prefix = "oauth2"
+	}
+
+	// parse clients
+	clients := map[string]fosite.Client{}
+	for id, val := range c.Clients {
+		client := &client{}
+		if err := mapstructure.Decode(val, client); err != nil {
+			err = errors.Wrap(err, "oidcprovider: error decoding client configuration")
+			return nil, err
+		}
+
+		fosClient := &fosite.DefaultClient{
+			ID:            client.ID,
+			Secret:        []byte(client.Secret),
+			RedirectURIs:  client.RedirectURIs,
+			GrantTypes:    client.GrantTypes,
+			ResponseTypes: client.ResponseTypes,
+			Scopes:        client.Scopes,
+			Audience:      client.Audience,
+			Public:        client.Public,
+		}
+
+		clients[id] = fosClient
+	}
+
+	authManager, err := getAuthManager(c.AuthManager, c.AuthManagers)
+	if err != nil {
+		return nil, err
+	}
+
+	userManager, err := getUserManager(c.UserManager, c.UserManagers)
+	if err != nil {
+		return nil, err
+	}
+
+	store := newExampleStore(clients)
+
+	s := &svc{
+		prefix:  c.Prefix,
+		clients: clients,
+		authmgr: authManager,
+		usermgr: userManager,
+		// This is an exemplary storage instance. We will add a client and a user to it so we can use these later on.
+		store: store,
+		oauth2: compose.Compose(
+			fconfig,
+			store,
+			start,
+			nil,
+
+			// enabled handlers
+			compose.OAuth2AuthorizeExplicitFactory,
+			compose.OAuth2AuthorizeImplicitFactory,
+			compose.OAuth2ClientCredentialsGrantFactory,
+			compose.OAuth2RefreshTokenGrantFactory,
+			compose.OAuth2ResourceOwnerPasswordCredentialsFactory,
+
+			compose.OAuth2TokenRevocationFactory,
+			compose.OAuth2TokenIntrospectionFactory,
+
+			// be aware that open id connect factories need to be added after oauth2 factories to work properly.
+			compose.OpenIDConnectExplicitFactory,
+			compose.OpenIDConnectImplicitFactory,
+			compose.OpenIDConnectHybridFactory,
+			compose.OpenIDConnectRefreshFactory,
+		),
+	}
+	s.setHandler()
+	return s, nil
+}
+
+func (s *svc) Close() error {
+	return nil
+}
+
+func (s *svc) Prefix() string {
+	return s.prefix
+}
+
+func (s *svc) Handler() http.Handler {
+	return s.handler
+}
+
+func (s *svc) setHandler() {
+	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log := appctx.GetLogger(r.Context())
+
+		// TODO use CORS allow access from everywhere
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		var head string
+		head, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
+		log.Info().Msgf("oidcprovider routing: head=%s tail=%s", head, r.URL.Path)
+		switch head {
+		case "":
+			s.doHome(w, r)
+		case "auth":
+			s.doAuth(w, r)
+		case "token":
+			s.doToken(w, r)
+		case "revoke":
+			s.doRevoke(w, r)
+		case "introspect":
+			s.doIntrospect(w, r)
+		case "userinfo":
+			s.doUserinfo(w, r)
+		case "sessions":
+			// TODO(jfd) make session lookup configurable? only for development?
+			s.doSessions(w, r)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+}
+
+func newExampleStore(clients map[string]fosite.Client) *storage.MemoryStore {
 	return &storage.MemoryStore{
-		IDSessions: make(map[string]fosite.Requester),
-		// TODO(jfd): read clients from a json file
-		Clients: map[string]fosite.Client{
-			"phoenix": &fosite.DefaultClient{
-				ID:            "phoenix",
-				Secret:        []byte(`$2a$10$IxMdI6d.LIRZPpSfEwNoeu4rY3FhDREsxFJXikcgdRRAStxUlsuEO`), // = "foobar"
-				RedirectURIs:  []string{"http://localhost:8300/oidc-callback.html"},
-				ResponseTypes: []string{"id_token", "code", "token"},
-				GrantTypes:    []string{"implicit", "refresh_token", "authorization_code", "password", "client_credentials"},
-				Scopes:        []string{"openid", "profile", "email", "offline"},
-			},
-			"reva": &fosite.DefaultClient{
-				ID:            "reva",
-				Secret:        []byte(`$2a$10$IxMdI6d.LIRZPpSfEwNoeu4rY3FhDREsxFJXikcgdRRAStxUlsuEO`), // = "foobar"
-				ResponseTypes: []string{"id_token", "code", "token"},
-				GrantTypes:    []string{"client_credentials"},
-				Scopes:        []string{"openid", "profile", "email", "offline"},
-			},
-		},
+		IDSessions:             make(map[string]fosite.Requester),
+		Clients:                clients,
 		AuthorizeCodes:         map[string]storage.StoreAuthorizeCode{},
 		Implicit:               map[string]fosite.Requester{},
 		AccessTokens:           map[string]fosite.Requester{},
@@ -165,99 +286,4 @@ func getUserManager(manager string, m map[string]map[string]interface{}) (user.M
 	}
 
 	return nil, fmt.Errorf("driver %s not found for user manager", manager)
-}
-
-// New returns a new oidcprovidersvc
-func New(m map[string]interface{}) (httpsvcs.Service, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		return nil, err
-	}
-
-	authManager, err := getAuthManager(c.AuthManager, c.AuthManagers)
-	if err != nil {
-		return nil, err
-	}
-
-	userManager, err := getUserManager(c.UserManager, c.UserManagers)
-	if err != nil {
-		return nil, err
-	}
-
-	store := newExampleStore()
-	s := &svc{
-		prefix:  c.Prefix,
-		authmgr: authManager,
-		usermgr: userManager,
-		// This is an exemplary storage instance. We will add a client and a user to it so we can use these later on.
-		store: store,
-		oauth2: compose.Compose(
-			fconfig,
-			store,
-			start,
-			nil,
-
-			// enabled handlers
-			compose.OAuth2AuthorizeExplicitFactory,
-			compose.OAuth2AuthorizeImplicitFactory,
-			compose.OAuth2ClientCredentialsGrantFactory,
-			compose.OAuth2RefreshTokenGrantFactory,
-			compose.OAuth2ResourceOwnerPasswordCredentialsFactory,
-
-			compose.OAuth2TokenRevocationFactory,
-			compose.OAuth2TokenIntrospectionFactory,
-
-			// be aware that open id connect factories need to be added after oauth2 factories to work properly.
-			compose.OpenIDConnectExplicitFactory,
-			compose.OpenIDConnectImplicitFactory,
-			compose.OpenIDConnectHybridFactory,
-			compose.OpenIDConnectRefreshFactory,
-		),
-	}
-	s.setHandler()
-	return s, nil
-}
-
-func (s *svc) Close() error {
-	return nil
-}
-
-func (s *svc) Prefix() string {
-	return s.prefix
-}
-
-func (s *svc) Handler() http.Handler {
-	return s.handler
-}
-
-func (s *svc) setHandler() {
-	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log := appctx.GetLogger(r.Context())
-
-		// TODO use CORS allow access from everywhere
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-
-		var head string
-		head, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
-		log.Info().Msgf("oidcprovider routing: head=%s tail=%s", head, r.URL.Path)
-		switch head {
-		case "":
-			s.doHome(w, r)
-		case "auth":
-			s.doAuth(w, r)
-		case "token":
-			s.doToken(w, r)
-		case "revoke":
-			s.doRevoke(w, r)
-		case "introspect":
-			s.doIntrospect(w, r)
-		case "userinfo":
-			s.doUserinfo(w, r)
-		case "sessions":
-			// TODO(jfd) make session lookup configurable? only for development?
-			s.doSessions(w, r)
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	})
 }

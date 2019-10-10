@@ -54,6 +54,19 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 		conf.Priority = defaultPriority
 	}
 
+	// apply some defaults to reduce configuration boilerplate
+	if len(conf.AllowedOrigins) == 0 {
+		conf.AllowedOrigins = []string{"*"}
+	}
+
+	if len(conf.AllowedMethods) == 0 {
+		conf.AllowedMethods = []string{"OPTIONS", "GET", "PUT", "POST", "DELETE", "MKCOL", "PROPFIND", "PROPPATCH", "MOVE", "COPY", "REPORT", "SEARCH"}
+	}
+
+	if len(conf.AllowedHeaders) == 0 {
+		conf.AllowedHeaders = []string{"Origin", "Accept", "Content-Type", "X-Requested-With", "Authorization", "Ocs-Apirequest", "If-None-Match"}
+	}
+
 	c := cors.New(cors.Options{
 		AllowCredentials:   conf.AllowCredentials,
 		AllowedHeaders:     conf.AllowedHeaders,
