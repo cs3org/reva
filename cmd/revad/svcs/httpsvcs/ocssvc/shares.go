@@ -518,7 +518,6 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	shares = append(shares, append(userShares, publicShares...)...)
 
 	if isReshare(r) {
-		// this request expects a V1 response - we need to wrap it on an <element> node
 		WriteOCSSuccess(w, r, &conversions.Element{Data: shares})
 		return
 	}

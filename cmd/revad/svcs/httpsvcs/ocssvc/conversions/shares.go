@@ -73,7 +73,7 @@ const (
 	// ShareTypeFederatedCloudShare shareType = 6
 )
 
-// Element is a commodity type wraps members of any interface (as per Owncloud's OCS V1 Spec)f
+// Element is a commodity type wraps members of any interface (as per Owncloud's OCS V1 Spec)
 type Element struct {
 	Data interface{} `json:"element" xml:"element"`
 }
