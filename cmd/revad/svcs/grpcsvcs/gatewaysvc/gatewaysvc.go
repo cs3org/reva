@@ -91,4 +91,6 @@ type config struct {
 	CommitShareToStorageGrant   bool   `mapstructure:"commit_share_to_storage_grant"`
 	CommitShareToStorageRef     bool   `mapstructure:"commit_share_to_storage_ref"`
 	DataGatewayEndpoint         string `mapstructure:"datagatewaysvc"`
+	TransferSharedSecret        string `mapstructure:"transfer_shared_secret"`
+	TranserExpires              int64  `mapstructure:"transfer_expires"`
 }

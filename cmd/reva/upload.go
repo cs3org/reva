@@ -116,6 +116,7 @@ func uploadCommand() *command {
 			return err
 		}
 
+		httpReq.Header.Set("X-Reva-Transfer", res.Token)
 		q := httpReq.URL.Query()
 		q.Add("xs", xs)
 		q.Add("xs_type", storageprovidersvc.GRPC2PKGXS(xsType).String())

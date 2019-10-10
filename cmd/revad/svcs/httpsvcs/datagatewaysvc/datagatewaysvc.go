@@ -19,26 +19,38 @@
 package datagatewaysvc
 
 import (
+	"context"
 	"io"
 	"net/http"
+	"net/url"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/httpserver"
-	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/utils"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
+)
+
+const (
+	tokenTransportHeader = "X-Reva-Transfer"
 )
 
 func init() {
 	httpserver.Register("datagatewaysvc", New)
 }
 
+// transerClaims are custom claims for a JWT token to be used between the metadata and data gateways.
+type transferClaims struct {
+	jwt.StandardClaims
+	Target string `json:"target"`
+}
 type config struct {
-	Prefix          string `mapstructure:"prefix"`
-	GatewayEndpoint string `mapstructure:"gatewaysvc"`
+	Prefix               string `mapstructure:"prefix"`
+	GatewayEndpoint      string `mapstructure:"gatewaysvc"`
+	TransferSharedSecret string `mapstructure:"transfer_shared_secret"`
 }
 
 type svc struct {
@@ -98,16 +110,40 @@ func addCorsHeader(res http.ResponseWriter) {
 	headers.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, HEAD")
 }
 
+func (s *svc) verify(ctx context.Context, token string) (*transferClaims, error) {
+	j, err := jwt.ParseWithClaims(token, &transferClaims{}, func(token *jwt.Token) (interface{}, error) {
+		return []byte(s.conf.TransferSharedSecret), nil
+	})
+
+	if err != nil {
+		return nil, errors.Wrap(err, "error parsing token")
+	}
+
+	if claims, ok := j.Claims.(*transferClaims); ok && j.Valid {
+		return claims, nil
+	}
+
+	err = errtypes.InvalidCredentials("token invalid")
+	return nil, err
+}
+
 func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	// TODO(labkode): validate signature
-	//sig := r.URL.Query().Get("sig")
-	target := r.URL.Query().Get("target")
+	token := r.Header.Get(tokenTransportHeader)
+	claims, err := s.verify(ctx, token)
+	if err != nil {
+		err = errors.Wrap(err, "datagatewaysvc: error validating transfer token")
+		log.Err(err)
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
+	log.Info().Str("target", claims.Target).Msg("sending request to internal data server")
 
 	httpClient := utils.GetHTTPClient(ctx)
-	httpReq, err := utils.NewRequest(ctx, "GET", target, nil)
+	httpReq, err := utils.NewRequest(ctx, "GET", claims.Target, nil)
 	if err != nil {
 		log.Err(err).Msg("wrong request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -130,48 +166,39 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, err = io.Copy(w, httpRes.Body)
 	if err != nil {
-		log.Err(err).Msg("error writing body after header were set")
+		log.Err(err).Msg("error writing body after headers were sent")
 	}
 }
 
 func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
-	fn := r.URL.Path
-	ref := &storageproviderv0alphapb.Reference{Spec: &storageproviderv0alphapb.Reference_Path{Path: fn}}
 
-	c, err := pool.GetGatewayServiceClient(s.conf.GatewayEndpoint)
+	token := r.Header.Get(tokenTransportHeader)
+	claims, err := s.verify(ctx, token)
 	if err != nil {
-		log.Err(err).Msg("error getting gateway service client")
-		w.WriteHeader(http.StatusInternalServerError)
+		err = errors.Wrap(err, "datagatewaysvc: error validating transfer token")
+		log.Err(err).Str("token", token).Msg("invalid token")
+		w.WriteHeader(http.StatusForbidden)
 		return
 	}
 
-	req := &storageproviderv0alphapb.InitiateFileUploadRequest{
-		Ref: ref,
-	}
-
-	res, err := c.InitiateFileUpload(ctx, req)
+	target := claims.Target
+	// add query params to target, clients can send checksums and other information.
+	targetURL, err := url.Parse(target)
 	if err != nil {
-		log.Err(err).Msg("error calling InitiateFileUpload")
+		log.Err(err).Msg("datagatewaysvc: error parsing target url")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	if res.Status.Code != rpcpb.Code_CODE_OK {
-		log.Error().Str("code", res.Status.Code.String()).Msg("wrong response from calling InitiateFileUpload")
-		if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+	targetURL.RawQuery = r.URL.RawQuery
+	target = targetURL.String()
 
-	// we call the endpoint and we pipe the response body
-	endpoint := res.UploadEndpoint
+	log.Info().Str("target", claims.Target).Msg("sending request to internal data server")
+
 	httpClient := utils.GetHTTPClient(ctx)
-	httpReq, err := utils.NewRequest(ctx, "PUT", endpoint, r.Body)
+	httpReq, err := utils.NewRequest(ctx, "PUT", target, r.Body)
 	if err != nil {
 		log.Err(err).Msg("wrong request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -184,7 +211,16 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	defer httpRes.Body.Close()
 
-	w.WriteHeader(httpRes.StatusCode)
+	if httpRes.StatusCode != http.StatusOK {
+		w.WriteHeader(httpRes.StatusCode)
+		return
+	}
+
+	defer httpRes.Body.Close()
+	w.WriteHeader(http.StatusOK)
+	_, err = io.Copy(w, httpRes.Body)
+	if err != nil {
+		log.Err(err).Msg("error writing body after header were set")
+	}
 }

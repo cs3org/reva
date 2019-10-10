@@ -89,6 +89,7 @@ func downloadCommand() *command {
 			return err
 		}
 
+		httpReq.Header.Set("X-Reva-Transfer", res.Token)
 		httpClient := utils.GetHTTPClient(ctx)
 
 		httpRes, err := httpClient.Do(httpReq)

@@ -21,6 +21,7 @@ package gatewaysvc
 import (
 	"context"
 	"net/url"
+	"time"
 
 	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
@@ -29,68 +30,139 @@ import (
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/user"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/pkg/errors"
 )
 
-func (s *svc) InitiateFileDownload(ctx context.Context, req *storageproviderv0alphapb.InitiateFileDownloadRequest) (*storageproviderv0alphapb.InitiateFileDownloadResponse, error) {
+// transerClaims are custom claims for a JWT token to be used between the metadata and data gateways.
+type transferClaims struct {
+	jwt.StandardClaims
+	Target string `json:"target"`
+}
+
+func (s *svc) sign(ctx context.Context, target string) (string, error) {
+	u := user.ContextMustGetUser(ctx)
+	ttl := time.Duration(s.c.TranserExpires) * time.Second
+	claims := transferClaims{
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: time.Now().Add(ttl).Unix(),
+			Issuer:    u.Id.Idp,
+			Audience:  "reva",
+			IssuedAt:  time.Now().Unix(),
+		},
+		Target: target,
+	}
+
+	t := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), claims)
+
+	tkn, err := t.SignedString([]byte(s.c.TransferSharedSecret))
+	if err != nil {
+		return "", errors.Wrapf(err, "error signing token with claims %+v", claims)
+	}
+
+	return tkn, nil
+}
+
+func (s *svc) InitiateFileDownload(ctx context.Context, req *storageproviderv0alphapb.InitiateFileDownloadRequest) (*gatewayv0alphapb.InitiateFileDownloadResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
-			return &storageproviderv0alphapb.InitiateFileDownloadResponse{
+			return &gatewayv0alphapb.InitiateFileDownloadResponse{
 				Status: status.NewNotFound(ctx, "storage provider not found"),
 			}, nil
 		}
-		return &storageproviderv0alphapb.InitiateFileDownloadResponse{
+		return &gatewayv0alphapb.InitiateFileDownloadResponse{
 			Status: status.NewInternal(ctx, err, "error finding storage provider"),
 		}, nil
 	}
 
-	res, err := c.InitiateFileDownload(ctx, req)
+	storageRes, err := c.InitiateFileDownload(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gatewaysvc: error calling InitiateFileDownload")
 	}
 
-	if res.Expose {
+	res := &gatewayv0alphapb.InitiateFileDownloadResponse{
+		Opaque:           storageRes.Opaque,
+		Status:           storageRes.Status,
+		DownloadEndpoint: storageRes.DownloadEndpoint,
+	}
+
+	if storageRes.Expose {
 		return res, nil
 	}
 
 	// sign the download location and pass it to the data gateway
 	u, err := url.Parse(res.DownloadEndpoint)
 	if err != nil {
-		return &storageproviderv0alphapb.InitiateFileDownloadResponse{
+		return &gatewayv0alphapb.InitiateFileDownloadResponse{
 			Status: status.NewInternal(ctx, err, "wrong format for download endpoint"),
 		}, nil
 	}
 
-	// TODO(labkode): calculate signature of the url, we don't need to sing the whole URL
-	q := u.Query()
-	q.Set("sig", "xyz123")
-	q.Set("target", u.String())
-	u.Host = s.dataGatewayURL.Host
-	u.RawQuery = q.Encode()
+	// TODO(labkode): calculate signature of the url, we only sign the URI. At some points maybe worth https://tools.ietf.org/html/draft-cavage-http-signatures-11
+	target := u.String()
+	token, err := s.sign(ctx, target)
+	if err != nil {
+		return &gatewayv0alphapb.InitiateFileDownloadResponse{
+			Status: status.NewInternal(ctx, err, "error creating signature for download"),
+		}, nil
+	}
 
-	res.DownloadEndpoint = u.String()
+	res.DownloadEndpoint = s.c.DataGatewayEndpoint
+	res.Token = token
 
 	return res, nil
 }
 
-func (s *svc) InitiateFileUpload(ctx context.Context, req *storageproviderv0alphapb.InitiateFileUploadRequest) (*storageproviderv0alphapb.InitiateFileUploadResponse, error) {
+func (s *svc) InitiateFileUpload(ctx context.Context, req *storageproviderv0alphapb.InitiateFileUploadRequest) (*gatewayv0alphapb.InitiateFileUploadResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
-			return &storageproviderv0alphapb.InitiateFileUploadResponse{
+			return &gatewayv0alphapb.InitiateFileUploadResponse{
 				Status: status.NewNotFound(ctx, "storage provider not found"),
 			}, nil
 		}
-		return &storageproviderv0alphapb.InitiateFileUploadResponse{
+		return &gatewayv0alphapb.InitiateFileUploadResponse{
 			Status: status.NewInternal(ctx, err, "error finding storage provider"),
 		}, nil
 	}
 
-	res, err := c.InitiateFileUpload(ctx, req)
+	storageRes, err := c.InitiateFileUpload(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gatewaysvc: error calling InitiateFileUpload")
 	}
+
+	res := &gatewayv0alphapb.InitiateFileUploadResponse{
+		Opaque:             storageRes.Opaque,
+		Status:             storageRes.Status,
+		UploadEndpoint:     storageRes.UploadEndpoint,
+		AvailableChecksums: storageRes.AvailableChecksums,
+	}
+
+	if storageRes.Expose {
+		return res, nil
+	}
+
+	// sign the upload location and pass it to the data gateway
+	u, err := url.Parse(res.UploadEndpoint)
+	if err != nil {
+		return &gatewayv0alphapb.InitiateFileUploadResponse{
+			Status: status.NewInternal(ctx, err, "wrong format for upload endpoint"),
+		}, nil
+	}
+
+	// TODO(labkode): calculate signature of the url, we only sign the URI. At some points maybe worth https://tools.ietf.org/html/draft-cavage-http-signatures-11
+	target := u.String()
+	token, err := s.sign(ctx, target)
+	if err != nil {
+		return &gatewayv0alphapb.InitiateFileUploadResponse{
+			Status: status.NewInternal(ctx, err, "error creating signature for download"),
+		}, nil
+	}
+
+	res.UploadEndpoint = s.c.DataGatewayEndpoint
+	res.Token = token
 
 	return res, nil
 }
