@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 )
 
 // transerClaims are custom claims for a JWT token to be used between the metadata and data gateways.
@@ -89,6 +90,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *storageproviderv0al
 	}
 
 	if storageRes.Expose {
+		log.Info().Msg("download is routed directly to data server - skiping datagatewaysvc")
 		return res, nil
 	}
 
@@ -141,6 +143,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *storageproviderv0alph
 	}
 
 	if storageRes.Expose {
+		log.Info().Msg("download is routed directly to data server - skiping datagatewaysvc")
 		return res, nil
 	}
 

@@ -297,6 +297,8 @@ func (s *svc) doPutChunked(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// TODO(labkode): implement old chunking
+
 	/*
 		req2 := &storageproviderv0alphapb.StartWriteSessionRequest{}
 		res2, err := client.StartWriteSession(ctx, req2)

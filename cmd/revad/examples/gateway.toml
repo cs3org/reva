@@ -2,7 +2,6 @@
 log_file = "stderr"
 log_mode = "dev"
 max_cpus = "100%"
-#tracing_enabled = true
 
 [log]
 level = "debug"
@@ -12,20 +11,37 @@ mode = "console"
 network = "tcp"
 address = "0.0.0.0:10000"
 enabled_services = ["gatewaysvc"]
+enabled_interceptors = ["auth"]
+
+[grpc.interceptors.auth]
+token_manager = "jwt"
+skip_methods = ["/cs3.gatewayv0alpha.GatewayService/GenerateAccessToken", "/cs3.gatewayv0alpha.GatewayService/WhoAmI"]
+
+[grpc.interceptors.auth.token_managers.jwt]
+secret = "Pive-Fumkiu4"
 
 [grpc.services.gatewaysvc]
 storageregistrysvc = "localhost:9999"
 authsvc = "localhost:9999"
+publicshareprovidersvc = "localhost:9999"
 usershareprovidersvc = "localhost:9999"
+ocmshareprovidersvc = "localhost:9999"
 appregistrysvc = "localhost:9999"
 preferencessvc = "localhost:9999"
 commit_share_to_storage_grant = true
+datagatewaysvc = "http://localhost:10001/data"
+shared_secret_key = "xyz"
 
 [http]
-enabled_services = ["ocdavsvc"]
-enabled_middlewares = ["cors", "auth"]
 network = "tcp"
 address = "0.0.0.0:10001"
+enabled_services = ["datagatewaysvc"]
+enabled_middlewares = ["auth"]
+
+[http.services.datagatewaysvc]
+prefix = "data"
+gatewaysvc = "localhost:10000"
+shared_secret_key = "xyz"
 
 [http.middlewares.auth]
 gatewaysvc = "0.0.0.0:10000"
@@ -33,13 +49,6 @@ credential_strategy = "basic"
 token_strategy = "header"
 token_writer = "header"
 token_manager = "jwt"
-skip_methods = ["/owncloud/status.php", "/metrics"]
 
 [http.middlewares.auth.token_managers.jwt]
 secret = "Pive-Fumkiu4"
-
-[http.services.ocdavsvc]
-prefix = "owncloud"
-chunk_folder = "/var/tmp/revad/chunks"
-gatewaysvc = "localhost:10000"
-

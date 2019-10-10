@@ -93,6 +93,7 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	httpReq.Header.Set("X-Reva-Transfer", dRes.Token)
 	httpClient := utils.GetHTTPClient(ctx)
 
 	httpRes, err := httpClient.Do(httpReq)
