@@ -151,6 +151,7 @@ func (fs *ocFS) NewUpload(ctx context.Context, ref *storageproviderv0alphapb.Ref
 	return uploadID, ioutil.WriteFile(binPath+".info", data, defaultFilePerm)
 }
 
+// GetUpload returns the Upload for the given upload id
 func (fs *ocFS) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
 	binPath, err := fs.getUploadPath(ctx, id)
 	if err != nil {
@@ -181,14 +182,17 @@ func (fs *ocFS) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
 	}, nil
 }
 
+// AsTerminatableUpload returnsa a TerminatableUpload
 func (fs *ocFS) AsTerminatableUpload(upload tusd.Upload) tusd.TerminatableUpload {
 	return upload.(*fileUpload)
 }
 
+// AsLengthDeclarableUpload returnsa a LengthDeclarableUpload
 func (fs *ocFS) AsLengthDeclarableUpload(upload tusd.Upload) tusd.LengthDeclarableUpload {
 	return upload.(*fileUpload)
 }
 
+// AsConcatableUpload returnsa a ConcatableUpload
 func (fs *ocFS) AsConcatableUpload(upload tusd.Upload) tusd.ConcatableUpload {
 	return upload.(*fileUpload)
 }
@@ -204,10 +208,12 @@ type fileUpload struct {
 	fs *ocFS
 }
 
+// GetInfo returns the FileInfo
 func (upload *fileUpload) GetInfo(ctx context.Context) (tusd.FileInfo, error) {
 	return upload.info, nil
 }
 
+// WriteChunk writes the stream from the reader to the given offset of the upload
 func (upload *fileUpload) WriteChunk(ctx context.Context, offset int64, src io.Reader) (int64, error) {
 	file, err := os.OpenFile(upload.binPath, os.O_WRONLY|os.O_APPEND, defaultFilePerm)
 	if err != nil {
@@ -231,10 +237,12 @@ func (upload *fileUpload) WriteChunk(ctx context.Context, offset int64, src io.R
 	return n, err
 }
 
+// GetReader returns an io.Readerfor the upload
 func (upload *fileUpload) GetReader(ctx context.Context) (io.Reader, error) {
 	return os.Open(upload.binPath)
 }
 
+// Terminate terminates the upload
 func (upload *fileUpload) Terminate(ctx context.Context) error {
 	if err := os.Remove(upload.infoPath); err != nil {
 		return err
@@ -245,6 +253,7 @@ func (upload *fileUpload) Terminate(ctx context.Context) error {
 	return nil
 }
 
+// ConcatUploads concatenates multiple uploads
 func (upload *fileUpload) ConcatUploads(ctx context.Context, uploads []tusd.Upload) (err error) {
 	file, err := os.OpenFile(upload.binPath, os.O_WRONLY|os.O_APPEND, defaultFilePerm)
 	if err != nil {
@@ -268,6 +277,7 @@ func (upload *fileUpload) ConcatUploads(ctx context.Context, uploads []tusd.Uplo
 	return
 }
 
+// DeclareLength updates the upload length information
 func (upload *fileUpload) DeclareLength(ctx context.Context, length int64) error {
 	upload.info.Size = length
 	upload.info.SizeIsDeferred = false
@@ -283,6 +293,7 @@ func (upload *fileUpload) writeInfo() error {
 	return ioutil.WriteFile(upload.infoPath, data, defaultFilePerm)
 }
 
+// FinishUpload finishes an upload and moves the file to the target destination
 func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 
 	fn := upload.info.MetaData["filename"]
