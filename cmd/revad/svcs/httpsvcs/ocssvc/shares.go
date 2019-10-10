@@ -48,6 +48,8 @@ type SharesHandler struct {
 	gatewaySvc          string
 	userManager         user.Manager
 	publicSharesManager publicshare.Manager
+	r                   *http.Request
+	w                   http.ResponseWriter
 }
 
 func (h *SharesHandler) init(c *Config) error {
@@ -74,6 +76,8 @@ func (h *SharesHandler) init(c *Config) error {
 
 func (h *SharesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context())
+	h.r = r
+	h.w = w
 
 	var head string
 	head, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
@@ -87,7 +91,7 @@ func (h *SharesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK) // TODO cors?
 			return
 		case "GET":
-			h.listShares(w, r)
+			h.listShares()
 		case "POST":
 			h.createShare(w, r)
 		case "PUT":
@@ -431,22 +435,22 @@ func (h *SharesHandler) updateShare(w http.ResponseWriter, r *http.Request) {
 	WriteOCSSuccess(w, r, share)
 }
 
-func isReshare(req *http.Request) bool {
-	return req.URL.Query().Get("reshares") != ""
+func (h *SharesHandler) isReshareRequest() bool {
+	return h.r.URL.Query().Get("reshares") != ""
 }
 
-func (h *SharesHandler) addFilters(w http.ResponseWriter, r *http.Request) ([]*usershareproviderv0alphapb.ListSharesRequest_Filter, error) {
+func (h *SharesHandler) addFilters() ([]*usershareproviderv0alphapb.ListSharesRequest_Filter, error) {
 	filters := []*usershareproviderv0alphapb.ListSharesRequest_Filter{}
 	var info *storageproviderv0alphapb.ResourceInfo
-	ctx := r.Context()
+	ctx := h.r.Context()
 
 	// TODO guard against this
-	p := r.URL.Query().Get("path")
+	p := h.r.URL.Query().Get("path")
 
 	// we need to prefix the path with the user id
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
-		WriteOCSError(w, r, MetaServerError.StatusCode, "missing user in context", fmt.Errorf("missing user in context"))
+		WriteOCSError(h.w, h.r, MetaServerError.StatusCode, "missing user in context", fmt.Errorf("missing user in context"))
 		return nil, errors.New("fixme")
 	}
 
@@ -455,7 +459,7 @@ func (h *SharesHandler) addFilters(w http.ResponseWriter, r *http.Request) ([]*u
 	// first check if the file exists
 	sClient, err := pool.GetStorageProviderServiceClient(h.gatewaySvc)
 	if err != nil {
-		WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc storage provider client", err)
+		WriteOCSError(h.w, h.r, MetaServerError.StatusCode, "error getting grpc storage provider client", err)
 		return nil, err
 	}
 
@@ -465,16 +469,16 @@ func (h *SharesHandler) addFilters(w http.ResponseWriter, r *http.Request) ([]*u
 	req := &storageproviderv0alphapb.StatRequest{Ref: ref}
 	res, err := sClient.Stat(ctx, req)
 	if err != nil {
-		WriteOCSError(w, r, MetaServerError.StatusCode, "error sending a grpc stat request", err)
+		WriteOCSError(h.w, h.r, MetaServerError.StatusCode, "error sending a grpc stat request", err)
 		return nil, err
 	}
 
 	if res.Status.Code != rpcpb.Code_CODE_OK {
 		if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
-			WriteOCSError(w, r, MetaNotFound.StatusCode, "not found", nil)
+			WriteOCSError(h.w, h.r, MetaNotFound.StatusCode, "not found", nil)
 			return filters, errors.New("fixme")
 		}
-		WriteOCSError(w, r, MetaServerError.StatusCode, "grpc stat request failed", err)
+		WriteOCSError(h.w, h.r, MetaServerError.StatusCode, "grpc stat request failed", err)
 		return filters, errors.New("fixme")
 	}
 
@@ -490,38 +494,38 @@ func (h *SharesHandler) addFilters(w http.ResponseWriter, r *http.Request) ([]*u
 	return filters, nil
 }
 
-func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
+func (h *SharesHandler) listShares() {
 	shares := make([]*conversions.ShareData, 0)
 	filters := []*usershareproviderv0alphapb.ListSharesRequest_Filter{}
 	var err error
 
 	// listing single file collaborators (path is present)
-	p := r.URL.Query().Get("path")
+	p := h.r.URL.Query().Get("path")
 	if p != "" {
-		filters, err = h.addFilters(w, r)
+		filters, err = h.addFilters()
 		if err != nil {
-			WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
+			WriteOCSError(h.w, h.r, MetaServerError.StatusCode, err.Error(), err)
 		}
 	}
 
-	userShares, err := h.listUserShares(w, r, filters)
+	userShares, err := h.listUserShares(filters)
 	if err != nil {
-		WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
+		WriteOCSError(h.w, h.r, MetaServerError.StatusCode, err.Error(), err)
 	}
 
-	publicShares, err := h.listPublicShares(w, r)
+	publicShares, err := h.listPublicShares()
 	if err != nil {
-		WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
+		WriteOCSError(h.w, h.r, MetaServerError.StatusCode, err.Error(), err)
 	}
 
 	shares = append(shares, append(userShares, publicShares...)...)
 
-	if isReshare(r) {
-		WriteOCSSuccess(w, r, &conversions.Element{Data: shares})
+	if h.isReshareRequest() {
+		WriteOCSSuccess(h.w, h.r, &conversions.Element{Data: shares})
 		return
 	}
 
-	WriteOCSSuccess(w, r, shares)
+	WriteOCSSuccess(h.w, h.r, shares)
 }
 
 func (h *SharesHandler) findSharees(w http.ResponseWriter, r *http.Request) {
@@ -564,8 +568,8 @@ func (h *SharesHandler) findSharees(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *SharesHandler) listPublicShares(w http.ResponseWriter, r *http.Request) ([]*conversions.ShareData, error) {
-	ctx := r.Context()
+func (h *SharesHandler) listPublicShares() ([]*conversions.ShareData, error) {
+	ctx := h.r.Context()
 	log := appctx.GetLogger(ctx)
 
 	// TODO(refs) why is this guard needed?
@@ -633,9 +637,9 @@ func (h *SharesHandler) listPublicShares(w http.ResponseWriter, r *http.Request)
 	return nil, errors.New("bad request")
 }
 
-func (h *SharesHandler) listUserShares(w http.ResponseWriter, r *http.Request, filters []*usershareproviderv0alphapb.ListSharesRequest_Filter) ([]*conversions.ShareData, error) {
+func (h *SharesHandler) listUserShares(filters []*usershareproviderv0alphapb.ListSharesRequest_Filter) ([]*conversions.ShareData, error) {
 	var rInfo *storageproviderv0alphapb.ResourceInfo
-	ctx := r.Context()
+	ctx := h.r.Context()
 	log := appctx.GetLogger(ctx)
 
 	lsUserSharesRequest := usershareproviderv0alphapb.ListSharesRequest{
