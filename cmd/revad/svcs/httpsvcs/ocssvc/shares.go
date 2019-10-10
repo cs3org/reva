@@ -431,7 +431,6 @@ func (h *SharesHandler) updateShare(w http.ResponseWriter, r *http.Request) {
 	WriteOCSSuccess(w, r, share)
 }
 
-// this probablt has to be handled at the handler level. v1 != v2. check ocssvc.go:87
 func isReshare(req *http.Request) bool {
 	return req.URL.Query().Get("reshares") != ""
 }
