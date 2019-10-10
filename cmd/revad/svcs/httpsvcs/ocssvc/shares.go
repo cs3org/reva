@@ -436,10 +436,76 @@ func isReshare(req *http.Request) bool {
 	return req.URL.Query().Get("reshares") != ""
 }
 
+func (h *SharesHandler) addFilters(w http.ResponseWriter, r *http.Request) ([]*usershareproviderv0alphapb.ListSharesRequest_Filter, error) {
+	filters := []*usershareproviderv0alphapb.ListSharesRequest_Filter{}
+	var info *storageproviderv0alphapb.ResourceInfo
+	ctx := r.Context()
+
+	// TODO guard against this
+	p := r.URL.Query().Get("path")
+
+	// we need to prefix the path with the user id
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		WriteOCSError(w, r, MetaServerError.StatusCode, "missing user in context", fmt.Errorf("missing user in context"))
+		return nil, errors.New("fixme")
+	}
+
+	fn := path.Join("/", u.Username, p)
+
+	// first check if the file exists
+	sClient, err := pool.GetStorageProviderServiceClient(h.gatewaySvc)
+	if err != nil {
+		WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc storage provider client", err)
+		return nil, err
+	}
+
+	ref := &storageproviderv0alphapb.Reference{
+		Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+	}
+	req := &storageproviderv0alphapb.StatRequest{Ref: ref}
+	res, err := sClient.Stat(ctx, req)
+	if err != nil {
+		WriteOCSError(w, r, MetaServerError.StatusCode, "error sending a grpc stat request", err)
+		return nil, err
+	}
+
+	if res.Status.Code != rpcpb.Code_CODE_OK {
+		if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+			WriteOCSError(w, r, MetaNotFound.StatusCode, "not found", nil)
+			return filters, errors.New("fixme")
+		}
+		WriteOCSError(w, r, MetaServerError.StatusCode, "grpc stat request failed", err)
+		return filters, errors.New("fixme")
+	}
+
+	info = res.Info
+
+	filters = append(filters, &usershareproviderv0alphapb.ListSharesRequest_Filter{
+		Type: usershareproviderv0alphapb.ListSharesRequest_Filter_LIST_SHARES_REQUEST_FILTER_TYPE_RESOURCE_ID,
+		Term: &usershareproviderv0alphapb.ListSharesRequest_Filter_ResourceId{
+			ResourceId: info.Id,
+		},
+	})
+
+	return filters, nil
+}
+
 func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	shares := make([]*conversions.ShareData, 0)
+	filters := []*usershareproviderv0alphapb.ListSharesRequest_Filter{}
+	var err error
 
-	userShares, err := h.listUserShares(w, r)
+	// listing single file collaborators (path is present)
+	p := r.URL.Query().Get("path")
+	if p != "" {
+		filters, err = h.addFilters(w, r)
+		if err != nil {
+			WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
+		}
+	}
+
+	userShares, err := h.listUserShares(w, r, filters)
 	if err != nil {
 		WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
 	}
@@ -449,7 +515,6 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 		WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
 	}
 
-	// TODO(refs) horrendous syntax. Abstract it to a variadic function that uses the unpack operator on every argument and appends to result.
 	shares = append(shares, append(userShares, publicShares...)...)
 
 	if isReshare(r) {
@@ -570,12 +635,14 @@ func (h *SharesHandler) listPublicShares(w http.ResponseWriter, r *http.Request)
 	return nil, errors.New("bad request")
 }
 
-func (h *SharesHandler) listUserShares(w http.ResponseWriter, r *http.Request) ([]*conversions.ShareData, error) {
+func (h *SharesHandler) listUserShares(w http.ResponseWriter, r *http.Request, filters []*usershareproviderv0alphapb.ListSharesRequest_Filter) ([]*conversions.ShareData, error) {
 	var rInfo *storageproviderv0alphapb.ResourceInfo
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	lsUserSharesRequest := usershareproviderv0alphapb.ListSharesRequest{}
+	lsUserSharesRequest := usershareproviderv0alphapb.ListSharesRequest{
+		Filters: filters,
+	}
 
 	ocsDataPayload := make([]*conversions.ShareData, 0)
 	if h.gatewaySvc != "" {
