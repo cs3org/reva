@@ -41,6 +41,7 @@ import (
 	tusd "github.com/tus/tusd/pkg/handler"
 )
 
+// UploadLengthDeferred = "1" is the only valid value for that header
 const UploadLengthDeferred = "1"
 
 var (

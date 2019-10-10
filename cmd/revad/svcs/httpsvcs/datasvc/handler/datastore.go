@@ -26,8 +26,10 @@ import (
 	"io"
 )
 
+// MetaData is a simple key value map for arbitrary metadata
 type MetaData map[string]string
 
+// FileInfo holds the current offset of an upload as well as other metadata
 type FileInfo struct {
 	ID string
 	// Total file size in bytes specified in the NewUpload call
@@ -68,6 +70,8 @@ func (f FileInfo) StopUpload() {
 	}
 }
 
+// Upload is the interface that needs to be implemented by uploads for the
+// core protocol
 type Upload interface {
 	// Write the chunk read from src into the file specified by the id at the
 	// given offset. The handler will take care of validating the offset and
@@ -99,11 +103,12 @@ type Upload interface {
 	FinishUpload(ctx context.Context) error
 }
 
+// DataStore is the interface that needs to be implemented for the core protocol
 type DataStore interface {
 	GetUpload(ctx context.Context, id string) (upload Upload, err error)
 }
 
-// CreatorDataStore is the interface which must be implemented by DataStores
+// CreatingDataStore is the interface which must be implemented by DataStores
 // if they want to receive POST requests using the Handler. If this interface
 // is not implemented, no request handler for this method is attached.
 type CreatingDataStore interface {
@@ -114,6 +119,8 @@ type CreatingDataStore interface {
 	NewUpload(ctx context.Context, info FileInfo) (upload Upload, err error)
 }
 
+// TerminatableUpload is the interface that needs to be implemented by an upload
+// for the termination extension
 type TerminatableUpload interface {
 	// Terminate an upload so any further requests to the resource, both reading
 	// and writing, must return os.ErrNotExist or similar.
@@ -134,6 +141,8 @@ type ConcaterDataStore interface {
 	AsConcatableUpload(upload Upload) ConcatableUpload
 }
 
+// ConcatableUpload is the interface that needs to be implemented by an upload
+// for the concatenation extension
 type ConcatableUpload interface {
 	// ConcatUploads concatenates the content from the provided partial uploads
 	// and writes the result in the destination upload.
@@ -152,6 +161,8 @@ type LengthDeferrerDataStore interface {
 	AsLengthDeclarableUpload(upload Upload) LengthDeclarableUpload
 }
 
+// LengthDeclarableUpload is the interface Uploads need to implement for the
+// creation-defer-length extension
 type LengthDeclarableUpload interface {
 	DeclareLength(ctx context.Context, length int64) error
 }
