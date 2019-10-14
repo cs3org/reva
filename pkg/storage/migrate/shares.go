@@ -26,6 +26,7 @@ import (
 	"os"
 	"path"
 
+	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
@@ -48,7 +49,7 @@ type share struct {
 }
 
 //ImportShares from a shares.jsonl file in exportPath. The files must already be present on the storage
-func ImportShares(ctx context.Context, storage storageproviderv0alphapb.StorageProviderServiceClient, sharing usershareproviderv0alphapb.UserShareProviderServiceClient, exportPath string) error {
+func ImportShares(ctx context.Context, client gatewayv0alphapb.GatewayServiceClient, exportPath string) error {
 
 	sharesJSONL, err := os.Open(path.Join(exportPath, "shares.jsonl"))
 	if err != nil {
@@ -71,7 +72,7 @@ func ImportShares(ctx context.Context, storage storageproviderv0alphapb.StorageP
 				Spec: &storageproviderv0alphapb.Reference_Path{Path: resourcePath},
 			},
 		}
-		statResp, err := storage.Stat(ctx, statReq)
+		statResp, err := client.Stat(ctx, statReq)
 
 		if err != nil {
 			log.Fatal(err)
@@ -82,7 +83,7 @@ func ImportShares(ctx context.Context, storage storageproviderv0alphapb.StorageP
 			continue
 		}
 
-		_, err = sharing.CreateShare(ctx, shareReq(statResp.Info, &shareData))
+		_, err = client.CreateShare(ctx, shareReq(statResp.Info, &shareData))
 		if err != nil {
 			return err
 		}

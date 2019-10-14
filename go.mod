@@ -25,7 +25,6 @@ require (
 	github.com/pkg/errors v0.8.1
 	github.com/pkg/xattr v0.4.1
 	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect
-	github.com/prometheus/client_golang v0.9.3-0.20190127221311-3c4408c8b829 // indirect
 	github.com/rs/cors v1.7.0
 	github.com/rs/zerolog v1.15.0
 	go.opencensus.io v0.22.1
@@ -38,3 +37,5 @@ require (
 	gopkg.in/ldap.v2 v2.5.1
 	gopkg.in/square/go-jose.v2 v2.2.2 // indirect
 )
+
+go 1.13

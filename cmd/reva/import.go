@@ -38,15 +38,11 @@ func importCommand() *command {
 		exportPath := cmd.Args()[0]
 
 		ctx := getAuthContext()
-		storage, err := getStorageProviderClient()
+		client, err := getClient()
 		if err != nil {
 			return err
 		}
-		sharing, err := getUserShareProviderClient()
-		if err != nil {
-			return err
-		}
-		if err := migrate.ImportShares(ctx, storage, sharing, exportPath); err != nil {
+		if err := migrate.ImportShares(ctx, client, exportPath); err != nil {
 			log.Fatal(err)
 			return err
 		}
