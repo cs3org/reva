@@ -19,41 +19,12 @@
 package main
 
 import (
-	"bufio"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
-	"path"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	typespb "github.com/cs3org/go-cs3apis/cs3/types"
-
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
-	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
+	"github.com/cs3org/reva/pkg/storage/migrate"
 )
-
-// share representation in the import metadata
-type share struct {
-	Path           string `json:"path"`
-	ShareType      string `json:"shareType"`
-	Type           string `json:"type"`
-	Owner          string `json:"owner"`
-	SharedBy       string `json:"sharedBy"`
-	SharedWith     string `json:"sharedWith"`
-	Permissions    int    `json:"permissions"`
-	ExpirationDate string `json:"expirationDate"`
-	Password       string `json:"password"`
-	Name           string `json:"name"`
-	Token          string `json:"token"`
-}
-
-// Maps oc10 permissions to roles
-var ocPermToRole = map[int]string{
-	1:  "viewer",
-	15: "co-owner",
-	31: "editor",
-}
 
 func importCommand() *command {
 	cmd := newCommand("import")
@@ -66,118 +37,21 @@ func importCommand() *command {
 		}
 		exportPath := cmd.Args()[0]
 
-		err := importShares(exportPath)
+		ctx := getAuthContext()
+		storage, err := getStorageProviderClient()
 		if err != nil {
+			return err
+		}
+		sharing, err := getUserShareProviderClient()
+		if err != nil {
+			return err
+		}
+		if err := migrate.ImportShares(ctx, storage, sharing, exportPath); err != nil {
 			log.Fatal(err)
+			return err
 		}
 
-		return err
+		return nil
 	}
 	return cmd
-}
-
-//Imports shares from a shares.jsonl file in exportPath. The files must already be present on the storage
-func importShares(exportPath string) error {
-	storage, err := getClient()
-	if err != nil {
-		return err
-	}
-	sharing, err := getClient()
-	if err != nil {
-		return err
-	}
-	ctx := getAuthContext()
-	sharesJSONL, err := os.Open(path.Join(exportPath, "shares.jsonl"))
-	if err != nil {
-		return err
-	}
-	defer sharesJSONL.Close()
-	jsonLines := bufio.NewScanner(sharesJSONL)
-
-	for jsonLines.Scan() {
-		var shareData share
-		if err := json.Unmarshal(jsonLines.Bytes(), &shareData); err != nil {
-			log.Fatal(err)
-			return err
-		}
-
-		//Stat file, skip share creation if it does not exist on the target system
-		resourcePath := path.Join("/", path.Base(exportPath), shareData.Path)
-		statReq := &storageproviderv0alphapb.StatRequest{
-			Ref: &storageproviderv0alphapb.Reference{
-				Spec: &storageproviderv0alphapb.Reference_Path{Path: resourcePath},
-			},
-		}
-		statResp, err := storage.Stat(ctx, statReq)
-
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		if statResp.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
-			log.Print("File does not exist on target system, skipping share import: " + resourcePath)
-			continue
-		}
-
-		_, err = sharing.CreateShare(ctx, shareReq(statResp.Info, &shareData))
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func shareReq(info *storageproviderv0alphapb.ResourceInfo, share *share) *usershareproviderv0alphapb.CreateShareRequest {
-	return &usershareproviderv0alphapb.CreateShareRequest{
-		ResourceInfo: info,
-		Grant: &usershareproviderv0alphapb.ShareGrant{
-			Grantee: &storageproviderv0alphapb.Grantee{
-				Type: storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER,
-				Id: &typespb.UserId{
-					OpaqueId: share.SharedWith,
-				},
-			},
-			Permissions: &usershareproviderv0alphapb.SharePermissions{
-				Permissions: convertPermissions(share.Permissions),
-			},
-		},
-	}
-}
-
-// Create resource permission-set from ownCloud permissions int
-func convertPermissions(ocPermissions int) *storageproviderv0alphapb.ResourcePermissions {
-	perms := &storageproviderv0alphapb.ResourcePermissions{}
-	switch ocPermToRole[ocPermissions] {
-	case "viewer":
-		perms.Stat = true
-		perms.ListContainer = true
-		perms.InitiateFileDownload = true
-		perms.ListGrants = true
-	case "editor":
-		perms.Stat = true
-		perms.ListContainer = true
-		perms.InitiateFileDownload = true
-
-		perms.CreateContainer = true
-		perms.InitiateFileUpload = true
-		perms.Delete = true
-		perms.Move = true
-		perms.ListGrants = true
-	case "co-owner":
-		perms.Stat = true
-		perms.ListContainer = true
-		perms.InitiateFileDownload = true
-
-		perms.CreateContainer = true
-		perms.InitiateFileUpload = true
-		perms.Delete = true
-		perms.Move = true
-
-		perms.ListGrants = true
-		perms.AddGrant = true
-		perms.RemoveGrant = true
-		perms.UpdateGrant = true
-	}
-
-	return perms
 }
