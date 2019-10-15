@@ -29,13 +29,13 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/gofrs/uuid"
 	"contrib.go.opencensus.io/exporter/jaeger"
 	"github.com/cs3org/reva/cmd/revad/config"
 	"github.com/cs3org/reva/cmd/revad/grace"
 	"github.com/cs3org/reva/cmd/revad/grpcserver"
 	"github.com/cs3org/reva/cmd/revad/httpserver"
 	"github.com/cs3org/reva/pkg/logger"
+	"github.com/gofrs/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -50,7 +50,7 @@ var (
 	testFlag    = flag.Bool("t", false, "test configuration and exit")
 	signalFlag  = flag.String("s", "", "send signal to a master process: stop, quit, reload")
 	configFlag  = flag.String("c", "/etc/revad/revad.toml", "set configuration file")
-	pidFlag     = flag.String("p", "", "pid file, defaults to os temporary directory if empty")
+	pidFlag     = flag.String("p", "", "pid file. If empty defaults to a random file in the OS temporary directory")
 
 	// Compile time variables initialez with gcc flags.
 	gitCommit, gitBranch, buildDate, version, goVersion, buildPlatform string
