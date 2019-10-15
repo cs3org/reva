@@ -52,13 +52,11 @@ func init() {
 type config struct {
 	// TODO(labkode): access a map is more performant as uri as fixed in length
 	// for SkipMethods.
-	Priority        int                               `mapstructure:"priority"`
-	SkipMethods     []string                          `mapstructure:"skip_methods"`
-	Header          string                            `mapstructure:"header"`
-	TokenStrategy   string                            `mapstructure:"token_strategy"`
-	TokenStrategies map[string]map[string]interface{} `mapstructure:"token_strategies"`
-	TokenManager    string                            `mapstructure:"token_manager"`
-	TokenManagers   map[string]map[string]interface{} `mapstructure:"token_managers"`
+	Priority      int                               `mapstructure:"priority"`
+	SkipMethods   []string                          `mapstructure:"skip_methods"`
+	Header        string                            `mapstructure:"header"`
+	TokenManager  string                            `mapstructure:"token_manager"`
+	TokenManagers map[string]map[string]interface{} `mapstructure:"token_managers"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -102,7 +100,7 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 	}
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
 	if !ok {
-		return nil, 0, errors.New("auth: token manager does not exist: " + conf.TokenStrategy)
+		return nil, 0, errors.New("auth: token manager does not exist: " + conf.TokenManager)
 	}
 
 	tokenManager, err := h(conf.TokenManagers[conf.TokenManager])
@@ -170,12 +168,12 @@ func NewStream(m map[string]interface{}) (grpc.StreamServerInterceptor, int, err
 
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
 	if !ok {
-		return nil, 0, fmt.Errorf("auth: token manager not found: %s", conf.TokenStrategy)
+		return nil, 0, fmt.Errorf("auth: token manager not found: %s", conf.TokenManager)
 	}
 
 	tokenManager, err := h(conf.TokenManagers[conf.TokenManager])
 	if err != nil {
-		return nil, 0, errors.New("auth: token manager not found: " + conf.TokenStrategy)
+		return nil, 0, errors.New("auth: token manager not found: " + conf.TokenManager)
 	}
 
 	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {

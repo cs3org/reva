@@ -29,6 +29,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/gofrs/uuid"
 	"contrib.go.opencensus.io/exporter/jaeger"
 	"github.com/cs3org/reva/cmd/revad/config"
 	"github.com/cs3org/reva/cmd/revad/grace"
@@ -206,7 +207,6 @@ func handleVersionFlag() {
 
 func handleSignalFlag() {
 	if *signalFlag != "" {
-
 		var signal syscall.Signal
 		switch *signalFlag {
 		case "reload":
@@ -220,6 +220,11 @@ func handleSignalFlag() {
 			os.Exit(1)
 		}
 
+		// check that we have a valid pidfile
+		if *pidFlag == "" {
+			fmt.Fprintf(os.Stderr, "-s flag not set, no clue where the pidfile is stored\n")
+			os.Exit(1)
+		}
 		process, err := grace.GetProcessFromFile(*pidFlag)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error getting process from pidfile: %v\n", err)
@@ -243,9 +248,10 @@ func handleTestFlag() {
 }
 
 func handlePIDFlag(l *zerolog.Logger) (*grace.Watcher, error) {
-	// if pid is empty, we store it in OS temporary folder
+	// if pid is empty, we store it in the OS temporary folder with random name
 	if *pidFlag == "" {
-		*pidFlag = path.Join(os.TempDir(), "revad.pid")
+		uuid := uuid.Must(uuid.NewV4())
+		*pidFlag = path.Join(os.TempDir(), "revad-"+uuid.String()+".pid")
 	}
 
 	var opts []grace.Option

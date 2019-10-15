@@ -37,6 +37,11 @@ func init() {
 	registry.Register("jwt", New)
 }
 
+type config struct {
+	Secret  string `mapstructure:"secret"`
+	Expires int64  `mapstructure:"expires"`
+}
+
 func parseConfig(m map[string]interface{}) (*config, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
@@ -57,17 +62,16 @@ func New(value map[string]interface{}) (token.Manager, error) {
 		c.Expires = defaultExpiraton
 	}
 
+	if c.Secret == "" {
+		return nil, errors.New("jwt: secret for signing payloads is not defined in config")
+	}
+
 	m := &manager{conf: c}
 	return m, nil
 }
 
 type manager struct {
 	conf *config
-}
-
-type config struct {
-	Secret  string `mapstructure:"secret"`
-	Expires int64  `mapstructure:"expires"`
 }
 
 // claims are custom claims for the JWT token.
