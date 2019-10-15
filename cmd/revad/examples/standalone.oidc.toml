@@ -10,31 +10,44 @@ mode = "console"
 [http]
 network = "tcp"
 address = "0.0.0.0:10000"
-enabled_services = ["datasvc", "ocdavsvc", "prometheussvc", "wellknown", "oidcprovider"]
+enabled_services = ["datasvc", "ocdavsvc", "prometheussvc", "wellknown", "oidcprovider", "ocssvc"]
 enabled_middlewares = ["cors", "auth"]
 
 [http.middlewares.auth]
 gatewaysvc = "0.0.0.0:9999"
+auth_type = "oidc"
 credential_strategy = "oidc"
 token_strategy = "header"
 token_writer = "header"
 token_manager = "jwt"
 skip_methods = [
-"/status.php",
-"/oauth2",
-"/oauth2/auth", 
-"/oauth2/token",
-"/oauth2/introspect",
-"/oauth2/userinfo",
-"/oauth2/sessions",
-"/.well-known/openid-configuration",
-"/metrics"
+	"/status.php",
+	"/oauth2",
+	"/oauth2/auth", 
+	"/oauth2/token",
+	"/oauth2/introspect",
+	"/oauth2/userinfo",
+	"/oauth2/sessions",
+	"/.well-known/openid-configuration",
+	"/metrics"
 ]
 
+[http.middlewares.auth.token_managers.jwt]
+secret = "Pive-Fumkiu4"
+
+
+[http.services.wellknown]
+issuer = "http://0.0.0.0:10000"
+authorization_endpoint =  "http://0.0.0.0:10000/oauth2/auth"
+token_endpoint = "http://0.0.0.0:10000/oauth2/token" 
+revocation_endpoint =  "http://0.0.0.0:10000/oauth2/auth"
+introspection_endpoint =  "http://0.0.0.0:10000/oauth2/introspect"
+userinfo_endpoint =  "http://0.0.0.0:10000/oauth2/userinfo"
+
 [http.services.oidcprovider]
-gatewaysvc = "0.0.0.0:10000"
-auth_manager = "json" # it should be gatewaysvc
-user_manager = "json" # it should be gatewaysvc, we need a user manager API
+gatewaysvc = "0.0.0.0:9999"
+auth_type = "basic"
+issuer = "http://0.0.0.0:10000"
 
 [http.services.oidcprovider.clients.phoenix]
 id = "phoenix"
@@ -44,18 +57,10 @@ grant_types = ["implicit", "refresh_token", "authorization_code", "password", "c
 response_types = ["id_token", "code", "token"]
 scopes = ["openid", "profile", "email", "offline"]
 
-[http.services.oidcprovider.user_managers.json]
-users = "./examples/users.demo.json"
-
-[http.services.oidcprovider.auth_managers.json]
-users = "./examples/users.demo.json"
-
 [http.middlewares.cors]
 allow_credentials = true
 options_passthrough = true
 
-[http.middlewares.auth.token_managers.jwt]
-secret = "Pive-Fumkiu4"
 
 [http.services.datasvc]
 driver = "local"
@@ -66,22 +71,54 @@ temp_folder = "/var/tmp/"
 root = "/var/tmp/reva/data"
 
 [http.services.ocdavsvc]
-prefix = "owncloud"
+prefix = ""
 chunk_folder = "/var/tmp/revad/chunks"
 gatewaysvc = "0.0.0.0:9999"
 
 [grpc]
 network = "tcp"
 address = "0.0.0.0:9999"
-enabled_services = ["storageprovidersvc", "authsvc", "storageregistrysvc", "preferencessvc", "usershareprovidersvc", "gatewaysvc"]
+enabled_services = [
+"storageprovidersvc",
+"authsvc",
+"storageregistrysvc",
+"preferencessvc",
+"usershareprovidersvc",
+"userprovidersvc",
+"gatewaysvc",
+"authregistrysvc",
+]
 enabled_interceptors = ["auth"]
 
 [grpc.interceptors.auth]
 token_manager = "jwt"
-skip_methods = ["/cs3.gatewayv0alpha.GatewayService/GenerateAccessToken", "/cs3.gatewayv0alpha.GatewayService/WhoAmI", "/cs3.authv0alpha.AuthService/GenerateAccessToken", "/cs3.authv0alpha.AuthService/WhoAmI"]
+skip_methods = [
+"/cs3.gatewayv0alpha.GatewayService/Authenticate",
+"/cs3.gatewayv0alpha.GatewayService/WhoAmI",
+"/cs3.gatewayv0alpha.GatewayService/GetUser",
+"/cs3.gatewayv0alpha.GatewayService/ListAuthProviders",
+"/cs3.authregistryv0alpha.AuthRegistryService/ListAuthProviders",
+"/cs3.authregistryv0alpha.AuthRegistryService/GetAuthProvider",
+"/cs3.authproviderv0alpha.AuthProviderService/Authenticate",
+"/cs3.userproviderv0alpha.UserProviderService/GetUser",
+]
 
 [grpc.interceptors.auth.token_managers.jwt]
 secret = "Pive-Fumkiu4"
+
+[grpc.services.userprovidersvc]
+driver = "json"
+
+[grpc.services.userprovidersvc.drivers.json]
+users = "./examples/users.demo.json"
+
+[grpc.services.authregistrysvc]
+driver = "static"
+
+[grpc.services.authregistrysvc.drivers.static.rules]
+"basic" = "0.0.0.0:9999"
+"oidc" = "0.0.0.0:9998"
+
 
 [grpc.services.usershareprovidersvc]
 driver = "memory"
@@ -101,18 +138,19 @@ unset = 1000
 root = "/var/tmp/reva/data"
 
 [grpc.services.authsvc]
-token_manager = "jwt"
-auth_manager = "oidc"
-user_manager = "oidc"
+#auth_manager = "oidc"
+auth_manager = "json"
+userprovidersvc = "0.0.0.0:9999"
 
-[grpc.services.authsvc.auth_managers.oidc]
-provider = "http://0.0.0.0:10000"
-insecure = true
-client_id = "phoenix"
-client_secret = "foobar"
+[grpc.services.authsvc.auth_managers.json]
+users = "./examples/users.demo.json"
 
-[grpc.services.authsvc.token_managers.jwt]
-secret = "Pive-Fumkiu4"
+#[grpc.services.authsvc.auth_managers.oidc]
+#provider = "http://0.0.0.0:10000"
+#insecure = true
+#client_id = "phoenix"
+#client_secret = "foobar"
+
 
 [grpc.services.storageregistrysvc]
 driver = "static"
@@ -124,7 +162,8 @@ driver = "static"
 
 [grpc.services.gatewaysvc]
 storageregistrysvc = "0.0.0.0:9999"
-authsvc = "0.0.0.0:9999"
+authregistrysvc = "0.0.0.0:9999"
+userprovidersvc = "0.0.0.0:9999"
 publicshareprovidersvc = "0.0.0.0:9999"
 usershareprovidersvc = "0.0.0.0:9999"
 ocmshareprovidersvc = "0.0.0.0:9999"
@@ -133,3 +172,7 @@ preferencessvc = "0.0.0.0:9999"
 commit_share_to_storage_grant = true
 datagatewaysvc = "http://0.0.0.0:10000/data"
 shared_secret_key = "xyz"
+token_manager = "jwt"
+
+[grpc.services.gatewaysvc.token_managers.jwt]
+secret = "Pive-Fumkiu4"

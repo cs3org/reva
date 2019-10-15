@@ -64,7 +64,7 @@ type config struct {
 func parseConfig(m map[string]interface{}) (*config, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
+		err = errors.Wrap(err, "auth: error decoding conf")
 		return nil, err
 	}
 	return c, nil
@@ -84,6 +84,7 @@ func skip(url string, skipped []string) bool {
 func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error) {
 	conf, err := parseConfig(m)
 	if err != nil {
+		err = errors.Wrap(err, "auth: error parsing config")
 		return nil, 0, err
 	}
 
@@ -95,9 +96,13 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		conf.Priority = defaultPriority
 	}
 
+	if conf.TokenManager == "" {
+		err := errors.New("auth: token manager is not configured for interceptor")
+		return nil, 0, err
+	}
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
 	if !ok {
-		return nil, 0, errors.New("auth: token manager not found: " + conf.TokenStrategy)
+		return nil, 0, errors.New("auth: token manager does not exist: " + conf.TokenStrategy)
 	}
 
 	tokenManager, err := h(conf.TokenManagers[conf.TokenManager])

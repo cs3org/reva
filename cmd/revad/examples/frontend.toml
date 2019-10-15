@@ -2,14 +2,13 @@
 log_file = "stderr"
 log_mode = "dev"
 max_cpus = "100%"
-disable_grpc = true
 
 [log]
 level = "debug"
 mode = "console"
 
 [http]
-enabled_services = ["ocdavsvc"]
+#enabled_services = ["ocdavsvc"]
 enabled_middlewares = ["cors", "auth"]
 network = "tcp"
 address = "0.0.0.0:20000"
