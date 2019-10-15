@@ -10,9 +10,9 @@
 
 ## Config reference
 
-* [Core](./modules/core.md)
-* [HTTP](./modules/http.md)
-* [GRPC](./modules/grpc.md)
+* [:link:](https://github.com/cs3org/reva/blob/master/cmd/revad/main.go#L368)  [Core](./modules/core.md) 
+* [:link:](https://github.com/cs3org/reva/blob/master/cmd/revad/httpserver/httpserver.go#L74) [HTTP](./modules/http.md)
+* [:link:](https://github.com/cs3org/reva/blob/master/cmd/revad/grpcserver/grpcserver.go#L86) [GRPC](./modules/grpc.md) 
 
 >**HTTP services**
 
