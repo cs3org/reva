@@ -22,7 +22,7 @@ import (
 	"context"
 	"testing"
 
-	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	authproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/authprovider/v0alpha"
 	shareProviderpb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	types "github.com/cs3org/go-cs3apis/cs3/types"
@@ -37,7 +37,7 @@ func TestMemoryProvider(t *testing.T) {
 	}
 
 	// Setup dat
-	user := authv0alphapb.User{}
+	user := authproviderv0alphapb.User{}
 	rInfo := storageproviderv0alphapb.ResourceInfo{}
 	grant := shareProviderpb.Grant{}
 

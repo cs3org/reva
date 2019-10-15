@@ -23,7 +23,7 @@ import (
 	"crypto/tls"
 	"fmt"
 
-	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	authproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/authprovider/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -103,7 +103,7 @@ func New(m map[string]interface{}) (user.Manager, error) {
 	}, nil
 }
 
-func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*authv0alphapb.User, error) {
+func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*authproviderv0alphapb.User, error) {
 	log := appctx.GetLogger(ctx)
 	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.hostname, m.port), &tls.Config{InsecureSkipVerify: true})
 	if err != nil {
@@ -137,7 +137,7 @@ func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*authv0alph
 
 	log.Debug().Interface("entries", sr.Entries).Msg("entries")
 
-	return &authv0alphapb.User{
+	return &authproviderv0alphapb.User{
 		Username:    sr.Entries[0].GetAttributeValue(m.schema.UID),
 		Groups:      []string{},
 		Mail:        sr.Entries[0].GetAttributeValue(m.schema.Mail),
@@ -145,7 +145,7 @@ func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*authv0alph
 	}, nil
 }
 
-func (m *manager) FindUsers(ctx context.Context, query string) ([]*authv0alphapb.User, error) {
+func (m *manager) FindUsers(ctx context.Context, query string) ([]*authproviderv0alphapb.User, error) {
 	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.hostname, m.port), &tls.Config{InsecureSkipVerify: true})
 	if err != nil {
 		return nil, err
@@ -172,10 +172,10 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*authv0alphapb
 		return nil, err
 	}
 
-	users := []*authv0alphapb.User{}
+	users := []*authproviderv0alphapb.User{}
 
 	for _, entry := range sr.Entries {
-		user := &authv0alphapb.User{
+		user := &authproviderv0alphapb.User{
 			Username:    entry.GetAttributeValue(m.schema.UID),
 			Groups:      []string{},
 			Mail:        sr.Entries[0].GetAttributeValue(m.schema.Mail),

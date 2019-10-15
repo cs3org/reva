@@ -42,7 +42,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 
-	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	authproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/authprovider/v0alpha"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -109,7 +109,7 @@ type config struct {
 	SingleUsername string `mapstructure:"single_username"`
 }
 
-func getUser(ctx context.Context) (*authv0alphapb.User, error) {
+func getUser(ctx context.Context) (*authproviderv0alphapb.User, error) {
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired(""), "storage_eos: error getting user from ctx")
@@ -216,7 +216,7 @@ func (fs *eosStorage) GetPathByID(ctx context.Context, id *storageproviderv0alph
 }
 
 // resolve takes in a request path or request id and converts it to a internal path.
-func (fs *eosStorage) resolve(ctx context.Context, u *authv0alphapb.User, ref *storageproviderv0alphapb.Reference) (string, error) {
+func (fs *eosStorage) resolve(ctx context.Context, u *authproviderv0alphapb.User, ref *storageproviderv0alphapb.Reference) (string, error) {
 	if ref.GetPath() != "" {
 		return fs.getInternalPath(ctx, ref.GetPath()), nil
 	}
@@ -233,7 +233,7 @@ func (fs *eosStorage) resolve(ctx context.Context, u *authv0alphapb.User, ref *s
 	return "", fmt.Errorf("invalid reference %+v", ref)
 }
 
-func (fs *eosStorage) getPath(ctx context.Context, u *authv0alphapb.User, id *storageproviderv0alphapb.ResourceId) (string, error) {
+func (fs *eosStorage) getPath(ctx context.Context, u *authproviderv0alphapb.User, id *storageproviderv0alphapb.ResourceId) (string, error) {
 	fid, err := strconv.ParseUint(id.OpaqueId, 10, 64)
 	if err != nil {
 		return "", fmt.Errorf("error converting string to int for eos fileid: %s", id.OpaqueId)

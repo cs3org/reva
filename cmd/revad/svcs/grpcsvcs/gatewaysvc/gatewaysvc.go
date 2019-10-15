@@ -34,6 +34,23 @@ func init() {
 	grpcserver.Register("gatewaysvc", New)
 }
 
+type config struct {
+	AuthRegistryEndpoint        string `mapstructure:"authregistrysvc"`
+	StorageRegistryEndpoint     string `mapstructure:"storageregistrysvc"`
+	AuthEndpoint                string `mapstructure:"authsvc"`
+	AppRegistryEndpoint         string `mapstructure:"appregistrysvc"`
+	PreferencesEndpoint         string `mapstructure:"preferencessvc"`
+	UserShareProviderEndpoint   string `mapstructure:"usershareprovidersvc"`
+	PublicShareProviderEndpoint string `mapstructure:"publicshareprovidersvc"`
+	OCMShareProviderEndpoint    string `mapstructure:"ocmshareprovidersvc"`
+	UserProviderEndpoint        string `mapstructure:"userprovidersvc"`
+	CommitShareToStorageGrant   bool   `mapstructure:"commit_share_to_storage_grant"`
+	CommitShareToStorageRef     bool   `mapstructure:"commit_share_to_storage_ref"`
+	DataGatewayEndpoint         string `mapstructure:"datagatewaysvc"`
+	TransferSharedSecret        string `mapstructure:"transfer_shared_secret"`
+	TranserExpires              int64  `mapstructure:"transfer_expires"`
+}
+
 // New creates a new gateway svc that acts as a proxy for any grpc operation.
 // The gateway is responsible for high-level controls: rate-limiting, coordination between svcs
 // like sharing and storage acls, asynchronous transactions, ...
@@ -78,19 +95,4 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 		return nil, err
 	}
 	return c, nil
-}
-
-type config struct {
-	StorageRegistryEndpoint     string `mapstructure:"storageregistrysvc"`
-	AuthEndpoint                string `mapstructure:"authsvc"`
-	AppRegistryEndpoint         string `mapstructure:"appregistrysvc"`
-	PreferencesEndpoint         string `mapstructure:"preferencessvc"`
-	UserShareProviderEndpoint   string `mapstructure:"usershareprovidersvc"`
-	PublicShareProviderEndpoint string `mapstructure:"publicshareprovidersvc"`
-	OCMShareProviderEndpoint    string `mapstructure:"ocmshareprovidersvc"`
-	CommitShareToStorageGrant   bool   `mapstructure:"commit_share_to_storage_grant"`
-	CommitShareToStorageRef     bool   `mapstructure:"commit_share_to_storage_ref"`
-	DataGatewayEndpoint         string `mapstructure:"datagatewaysvc"`
-	TransferSharedSecret        string `mapstructure:"transfer_shared_secret"`
-	TranserExpires              int64  `mapstructure:"transfer_expires"`
 }

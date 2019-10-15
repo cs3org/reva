@@ -21,21 +21,16 @@ package impersonator
 import (
 	"context"
 	"testing"
-
-	"github.com/cs3org/reva/pkg/user"
 )
 
 func TestImpersonator(t *testing.T) {
 	ctx := context.Background()
 	i, _ := New(nil)
-	ctx, err := i.Authenticate(ctx, "admin", "pwd")
+	uid, err := i.Authenticate(ctx, "admin", "pwd")
 	if err != nil {
 		t.Fatal(err)
 	}
-	uid, ok := user.ContextGetUserID(ctx)
-	if !ok {
-		t.Fatal("no userid in context")
-	}
+
 	if uid.OpaqueId != "admin" {
 		t.Errorf("%#v, wanted %#v", uid.OpaqueId, "admin")
 	}
@@ -44,13 +39,9 @@ func TestImpersonator(t *testing.T) {
 	}
 
 	ctx = context.Background()
-	ctx, err = i.Authenticate(ctx, "opaqueid@idp", "pwd")
+	uid, err = i.Authenticate(ctx, "opaqueid@idp", "pwd")
 	if err != nil {
 		t.Fatal(err)
-	}
-	uid, ok = user.ContextGetUserID(ctx)
-	if !ok {
-		t.Fatal("no userid in context")
 	}
 	if uid.OpaqueId != "opaqueid" {
 		t.Errorf("%#v, wanted %#v", uid.OpaqueId, "opaqueid")

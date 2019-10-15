@@ -21,7 +21,6 @@ package oidcprovider
 import (
 	"crypto/rand"
 	"crypto/rsa"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -32,14 +31,10 @@ import (
 	"github.com/ory/fosite/token/jwt"
 	"github.com/pkg/errors"
 
-	typespb "github.com/cs3org/go-cs3apis/cs3/types"
+	authproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/authprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/httpserver"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/auth"
-	authmgr "github.com/cs3org/reva/pkg/auth/manager/registry"
-	"github.com/cs3org/reva/pkg/user"
-	usermgr "github.com/cs3org/reva/pkg/user/manager/registry"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -48,12 +43,11 @@ func init() {
 }
 
 type config struct {
-	Prefix       string                            `mapstructure:"prefix"`
-	AuthManager  string                            `mapstructure:"auth_manager"`
-	AuthManagers map[string]map[string]interface{} `mapstructure:"auth_managers"`
-	UserManager  string                            `mapstructure:"user_manager"`
-	UserManagers map[string]map[string]interface{} `mapstructure:"user_managers"`
-	Clients      map[string]map[string]interface{} `mapstructure:"clients"`
+	Prefix          string                            `mapstructure:"prefix"`
+	AuthType        string                            `mapstructure:"auth_type"`
+	GatewayEndpoint string                            `mapstructure:"gatewaysvc"`
+	Clients         map[string]map[string]interface{} `mapstructure:"clients"`
+	Issuer          string                            `mapstructure:"issuer"`
 }
 
 type client struct {
@@ -69,9 +63,8 @@ type client struct {
 
 type svc struct {
 	prefix  string
+	conf    *config
 	handler http.Handler
-	authmgr auth.Manager
-	usermgr user.Manager
 	store   *storage.MemoryStore
 	oauth2  fosite.OAuth2Provider
 	clients map[string]fosite.Client
@@ -111,23 +104,12 @@ func New(m map[string]interface{}) (httpsvcs.Service, error) {
 		clients[id] = fosClient
 	}
 
-	authManager, err := getAuthManager(c.AuthManager, c.AuthManagers)
-	if err != nil {
-		return nil, err
-	}
-
-	userManager, err := getUserManager(c.UserManager, c.UserManagers)
-	if err != nil {
-		return nil, err
-	}
-
 	store := newExampleStore(clients)
 
 	s := &svc{
+		conf:    c,
 		prefix:  c.Prefix,
 		clients: clients,
-		authmgr: authManager,
-		usermgr: userManager,
 		// This is an exemplary storage instance. We will add a client and a user to it so we can use these later on.
 		store: store,
 		oauth2: compose.Compose(
@@ -173,8 +155,11 @@ func (s *svc) setHandler() {
 	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log := appctx.GetLogger(r.Context())
 
-		// TODO use CORS allow access from everywhere
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		if r.Method == "OPTIONS" {
+			// TODO use CORS allow access from everywhere
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			return
+		}
 
 		var head string
 		head, r.URL.Path = httpsvcs.ShiftPath(r.URL.Path)
@@ -229,6 +214,33 @@ var start = compose.CommonStrategy{
 	OpenIDConnectTokenStrategy: compose.NewOpenIDConnectStrategy(fconfig, mustRSAKey()),
 }
 
+// customSession keeps track of the session between the auth and token and userinfo endpoints.
+// We need our custom session to store the internal token.
+type customSession struct {
+	*openid.DefaultSession
+	internalToken string
+	fosite.Session
+}
+
+func (s *customSession) SetExpiresAt(key fosite.TokenType, exp time.Time) {
+	s.DefaultSession.SetExpiresAt(key, exp)
+}
+
+func (s *customSession) GetExpiresAt(key fosite.TokenType) time.Time {
+	return s.DefaultSession.GetExpiresAt(key)
+}
+func (s *customSession) GetUsername() string {
+	return s.DefaultSession.GetUsername()
+}
+
+func (s *customSession) GetSubject() string {
+	return s.DefaultSession.GetSubject()
+}
+
+func (s *customSession) Clone() fosite.Session {
+	return s.DefaultSession.Clone()
+}
+
 // A session is passed from the `/auth` to the `/token` endpoint. You probably want to store data like: "Who made the request",
 // "What organization does that person belong to" and so on.
 // For our use case, the session will meet the requirements imposed by JWT access tokens, HMAC access tokens and OpenID Connect
@@ -239,28 +251,57 @@ var start = compose.CommonStrategy{
 // Usually, you could do:
 //
 //  session = new(fosite.DefaultSession)
-func newSession(username string, uid *typespb.UserId) *openid.DefaultSession {
-	return &openid.DefaultSession{
-		Claims: &jwt.IDTokenClaims{
-			Issuer:  uid.Idp,
-			Subject: uid.OpaqueId,
-			//Audience:    []string{"https://my-client.my-application.com"},
-			ExpiresAt:   time.Now().Add(time.Hour * 6),
-			IssuedAt:    time.Now(),
-			RequestedAt: time.Now(),
-			AuthTime:    time.Now(),
+func (s *svc) newSession(token string, user *authproviderv0alphapb.User) *customSession {
+	return &customSession{
+		DefaultSession: &openid.DefaultSession{
+			Claims: &jwt.IDTokenClaims{
+				// TODO(labkode): we override the issuer here as we are the OIDC provider.
+				// Does it make sense? The auth backend can be on another domain, but this service
+				// is the one responsible for oidc logic.
+				// The issuer needs to map the in the configuration.
+				Issuer:  s.conf.Issuer,
+				Subject: user.Id.OpaqueId,
+				// TODO(labkode): check what audience means and set it correctly.
+				//Audience:    []string{"https://my-client.my-application.com"},
+				// TODO(labkode): make times configurable to align to internal token lifetime.
+				ExpiresAt: time.Now().Add(time.Hour * 6),
+				//IssuedAt:    time.Now(),
+				//RequestedAt: time.Now(),
+				//AuthTime:    time.Now(),
+			},
+			Headers: &jwt.Headers{
+				Extra: make(map[string]interface{}),
+			},
+			Username: user.Username,
+			Subject:  user.Id.OpaqueId,
 		},
-		Headers: &jwt.Headers{
-			Extra: make(map[string]interface{}),
-		},
-		Subject:  uid.OpaqueId,
-		Username: username,
+		internalToken: token,
 	}
 }
 
 // emptySession creates a session object and fills it with safe defaults
-func emptySession() *openid.DefaultSession {
-	return newSession("", &typespb.UserId{})
+func (s *svc) emptySession() *customSession {
+	return &customSession{
+		DefaultSession: &openid.DefaultSession{
+			Claims: &jwt.IDTokenClaims{
+				// TODO(labkode): we override the issuer here as we are the OIDC provider.
+				// Does it make sense? The auth backend can be on another domain, but this service
+				// is the one responsible for oidc logic.
+				// The issuer needs to map the in the configuration.
+				Issuer: s.conf.Issuer,
+				// TODO(labkode): check what audience means and set it correctly.
+				//Audience:    []string{"https://my-client.my-application.com"},
+				// TODO(labkode): make times configurable to align to internal token lifetime.
+				ExpiresAt: time.Now().Add(time.Hour * 6),
+				//IssuedAt:    time.Now(),
+				//RequestedAt: time.Now(),
+				//AuthTime:    time.Now(),
+			},
+			Headers: &jwt.Headers{
+				Extra: make(map[string]interface{}),
+			},
+		},
+	}
 }
 
 func mustRSAKey() *rsa.PrivateKey {
@@ -270,20 +311,4 @@ func mustRSAKey() *rsa.PrivateKey {
 		panic(err)
 	}
 	return key
-}
-
-func getAuthManager(manager string, m map[string]map[string]interface{}) (auth.Manager, error) {
-	if f, ok := authmgr.NewFuncs[manager]; ok {
-		return f(m[manager])
-	}
-
-	return nil, fmt.Errorf("driver %s not found for auth manager", manager)
-}
-
-func getUserManager(manager string, m map[string]map[string]interface{}) (user.Manager, error) {
-	if f, ok := usermgr.NewFuncs[manager]; ok {
-		return f(m[manager])
-	}
-
-	return nil, fmt.Errorf("driver %s not found for user manager", manager)
 }

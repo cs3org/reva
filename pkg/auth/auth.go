@@ -21,11 +21,13 @@ package auth
 import (
 	"context"
 	"net/http"
+
+	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 )
 
 // Manager is the interface to implement to authenticate users
 type Manager interface {
-	Authenticate(ctx context.Context, clientID, clientSecret string) (context.Context, error)
+	Authenticate(ctx context.Context, clientID, clientSecret string) (*typespb.UserId, error)
 }
 
 // Credentials contains the client id and secret.

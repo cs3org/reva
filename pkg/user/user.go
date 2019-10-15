@@ -21,7 +21,7 @@ package user
 import (
 	"context"
 
-	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	authproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/authprovider/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 )
 
@@ -33,13 +33,13 @@ const (
 )
 
 // ContextGetUser returns the user if set in the given context.
-func ContextGetUser(ctx context.Context) (*authv0alphapb.User, bool) {
-	u, ok := ctx.Value(userKey).(*authv0alphapb.User)
+func ContextGetUser(ctx context.Context) (*authproviderv0alphapb.User, bool) {
+	u, ok := ctx.Value(userKey).(*authproviderv0alphapb.User)
 	return u, ok
 }
 
 // ContextMustGetUser panics if user is not in context.
-func ContextMustGetUser(ctx context.Context) *authv0alphapb.User {
+func ContextMustGetUser(ctx context.Context) *authproviderv0alphapb.User {
 	u, ok := ContextGetUser(ctx)
 	if !ok {
 		panic("user not found in context")
@@ -48,7 +48,7 @@ func ContextMustGetUser(ctx context.Context) *authv0alphapb.User {
 }
 
 // ContextSetUser stores the user in the context.
-func ContextSetUser(ctx context.Context, u *authv0alphapb.User) context.Context {
+func ContextSetUser(ctx context.Context, u *authproviderv0alphapb.User) context.Context {
 	return context.WithValue(ctx, userKey, u)
 }
 
@@ -65,8 +65,8 @@ func ContextSetUserID(ctx context.Context, id *typespb.UserId) context.Context {
 
 // Manager is the interface to implement to manipulate users.
 type Manager interface {
-	GetUser(ctx context.Context, uid *typespb.UserId) (*authv0alphapb.User, error)
+	GetUser(ctx context.Context, uid *typespb.UserId) (*authproviderv0alphapb.User, error)
 	GetUserGroups(ctx context.Context, uid *typespb.UserId) ([]string, error)
 	IsInGroup(ctx context.Context, uid *typespb.UserId, group string) (bool, error)
-	FindUsers(ctx context.Context, query string) ([]*authv0alphapb.User, error)
+	FindUsers(ctx context.Context, query string) ([]*authproviderv0alphapb.User, error)
 }

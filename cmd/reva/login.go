@@ -24,20 +24,21 @@ import (
 	"fmt"
 	"os"
 
-	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 )
 
 var loginCommand = func() *command {
 	cmd := newCommand("login")
 	cmd.Description = func() string { return "login into the reva server" }
-	cmd.Usage = func() string { return "Usage: login <username> <password>" }
+	cmd.Usage = func() string { return "Usage: login <type>" }
 	cmd.Action = func() error {
-		var username, password string
-		if cmd.NArg() >= 2 {
-			username = cmd.Args()[0]
-			password = cmd.Args()[1]
+		var authType, username, password string
+		if cmd.NArg() != 1 {
+			fmt.Println(cmd.Usage())
+			os.Exit(1)
 		} else {
+			authType = cmd.Args()[0]
 			reader := bufio.NewReader(os.Stdin)
 			fmt.Print("username: ")
 			usernameInput, err := read(reader)
@@ -60,7 +61,8 @@ var loginCommand = func() *command {
 			return err
 		}
 
-		req := &authv0alphapb.GenerateAccessTokenRequest{
+		req := &gatewayv0alphapb.GenerateAccessTokenRequest{
+			Type:         authType,
 			ClientId:     username,
 			ClientSecret: password,
 		}

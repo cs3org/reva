@@ -25,7 +25,6 @@ import (
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/user"
 )
 
 func init() {
@@ -49,13 +48,13 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	return &manager{credentials: creds}, nil
 }
 
-func (m *manager) Authenticate(ctx context.Context, clientID, clientSecret string) (context.Context, error) {
+func (m *manager) Authenticate(ctx context.Context, clientID, clientSecret string) (*typespb.UserId, error) {
 	if c, ok := m.credentials[clientID]; ok {
 		if c.Secret == clientSecret {
-			return user.ContextSetUserID(ctx, c.ID), nil
+			return c.ID, nil
 		}
 	}
-	return ctx, errtypes.InvalidCredentials(clientID)
+	return nil, errtypes.InvalidCredentials(clientID)
 }
 
 func getCredentials() map[string]Credentials {

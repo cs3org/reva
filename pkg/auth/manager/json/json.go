@@ -27,7 +27,6 @@ import (
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -89,11 +88,11 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	return manager, nil
 }
 
-func (m *manager) Authenticate(ctx context.Context, username string, secret string) (context.Context, error) {
+func (m *manager) Authenticate(ctx context.Context, username string, secret string) (*typespb.UserId, error) {
 	if c, ok := m.credentials[username]; ok {
 		if c.Secret == secret {
-			return user.ContextSetUserID(ctx, c.ID), nil
+			return c.ID, nil
 		}
 	}
-	return ctx, errtypes.InvalidCredentials(username)
+	return nil, errtypes.InvalidCredentials(username)
 }

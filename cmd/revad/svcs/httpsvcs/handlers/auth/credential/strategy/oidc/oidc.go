@@ -37,6 +37,7 @@ package oidc
 // or submit itself to any jurisdiction.
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -67,8 +68,9 @@ func (s *strategy) GetCredentials(w http.ResponseWriter, r *http.Request) (*auth
 		tokens, ok := r.URL.Query()["access_token"]
 
 		if !ok || len(tokens[0]) < 1 {
+			err := errors.New("oidc: no oidc bearer token set")
 			w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm="%s"`, r.Host))
-			return nil, fmt.Errorf("no Bearer auth provided")
+			return nil, err
 		}
 		token = tokens[0]
 	}

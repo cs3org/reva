@@ -28,7 +28,7 @@ import (
 	"strings"
 	"time"
 
-	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	authproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/authprovider/v0alpha"
 	publicshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
@@ -38,7 +38,6 @@ import (
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/user"
-	usermgr "github.com/cs3org/reva/pkg/user/manager/registry"
 )
 
 // SharesHandler implements the ownCloud sharing API
@@ -48,24 +47,8 @@ type SharesHandler struct {
 }
 
 func (h *SharesHandler) init(c *Config) error {
-
-	// TODO(jfd) lookup correct storage, for now this always uses the configured storage driver, maybe the combined storage can delegate this?
 	h.gatewaySvc = c.GatewaySvc
-
-	userManager, err := getUserManager(c.UserManager, c.UserManagers)
-	if err != nil {
-		return err
-	}
-	h.userManager = userManager
 	return nil
-}
-
-func getUserManager(manager string, m map[string]map[string]interface{}) (user.Manager, error) {
-	if f, ok := usermgr.NewFuncs[manager]; ok {
-		return f(m[manager])
-	}
-
-	return nil, fmt.Errorf("driver %s not found for user manager", manager)
 }
 
 func (h *SharesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -139,7 +122,7 @@ func (h *SharesHandler) findSharees(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *SharesHandler) userAsMatch(u *authv0alphapb.User) *MatchData {
+func (h *SharesHandler) userAsMatch(u *authproviderv0alphapb.User) *MatchData {
 	return &MatchData{
 		Label: u.DisplayName,
 		Value: &MatchValueData{
@@ -181,7 +164,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error searching recipient", err)
 			return
 		}
-		var recipient *authv0alphapb.User
+		var recipient *authproviderv0alphapb.User
 		for _, user := range users {
 			if user.Username == shareWith {
 				recipient = user

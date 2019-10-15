@@ -29,7 +29,7 @@ import (
 func (s *svc) doOpenidConfiguration(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context())
 	pm := &oidc.ProviderMetadata{
-		Issuer:                s.conf.Prefix,
+		Issuer:                s.conf.Issuer,
 		AuthorizationEndpoint: s.conf.AuthorizationEndpoint,
 		TokenEndpoint:         s.conf.TokenEndpoint,
 		RevocationEndpoint:    s.conf.RevocationEndpoint,

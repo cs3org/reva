@@ -21,13 +21,15 @@ package pool
 import (
 	appproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/appprovider/v0alpha"
 	appregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/appregistry/v0alpha"
-	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	authproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/authprovider/v0alpha"
+	authregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/authregistry/v0alpha"
 	gatewayv0alpahpb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
 	ocmshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/ocmshareprovider/v0alpha"
 	preferencesv0alphapb "github.com/cs3org/go-cs3apis/cs3/preferences/v0alpha"
 	publicshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	storageregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageregistry/v0alpha"
+	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
 	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
 
 	"go.opencensus.io/plugin/ocgrpc"
@@ -36,7 +38,8 @@ import (
 
 // TODO(labkode): protect with mutexes.
 var storageProviders = map[string]storageproviderv0alphapb.StorageProviderServiceClient{}
-var authProviders = map[string]authv0alphapb.AuthServiceClient{}
+var authProviders = map[string]authproviderv0alphapb.AuthProviderServiceClient{}
+var authRegistries = map[string]authregistryv0alphapb.AuthRegistryServiceClient{}
 var userShareProviders = map[string]usershareproviderv0alphapb.UserShareProviderServiceClient{}
 var ocmShareProviders = map[string]ocmshareproviderv0alphapb.OCMShareProviderServiceClient{}
 var publicShareProviders = map[string]publicshareproviderv0alphapb.PublicShareProviderServiceClient{}
@@ -45,6 +48,7 @@ var appRegistries = map[string]appregistryv0alphapb.AppRegistryServiceClient{}
 var appProviders = map[string]appproviderv0alphapb.AppProviderServiceClient{}
 var storageRegistries = map[string]storageregistryv0alphapb.StorageRegistryServiceClient{}
 var gatewayProviders = map[string]gatewayv0alpahpb.GatewayServiceClient{}
+var userProviders = map[string]userproviderv0alphapb.UserProviderServiceClient{}
 
 // NewConn creates a new connection to a grpc server
 // with open census tracing support.
@@ -74,6 +78,21 @@ func GetGatewayServiceClient(endpoint string) (gatewayv0alpahpb.GatewayServiceCl
 	return gatewayProviders[endpoint], nil
 }
 
+// GetUserProviderServiceClient returns a UserProviderServiceClient.
+func GetUserProviderServiceClient(endpoint string) (userproviderv0alphapb.UserProviderServiceClient, error) {
+	if val, ok := userProviders[endpoint]; ok {
+		return val, nil
+	}
+
+	conn, err := NewConn(endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	userProviders[endpoint] = userproviderv0alphapb.NewUserProviderServiceClient(conn)
+	return userProviders[endpoint], nil
+}
+
 // GetStorageProviderServiceClient returns a StorageProviderServiceClient.
 func GetStorageProviderServiceClient(endpoint string) (storageproviderv0alphapb.StorageProviderServiceClient, error) {
 	if val, ok := storageProviders[endpoint]; ok {
@@ -90,8 +109,24 @@ func GetStorageProviderServiceClient(endpoint string) (storageproviderv0alphapb.
 	return storageProviders[endpoint], nil
 }
 
-// GetAuthServiceClient returns a new AuthServiceClient.
-func GetAuthServiceClient(endpoint string) (authv0alphapb.AuthServiceClient, error) {
+// GetAuthRegistryServiceClient returns a new AuthRegistryServiceClient.
+func GetAuthRegistryServiceClient(endpoint string) (authregistryv0alphapb.AuthRegistryServiceClient, error) {
+	if val, ok := authRegistries[endpoint]; ok {
+		return val, nil
+	}
+
+	conn, err := NewConn(endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	authRegistries[endpoint] = authregistryv0alphapb.NewAuthRegistryServiceClient(conn)
+
+	return authRegistries[endpoint], nil
+}
+
+// GetAuthProviderServiceClient returns a new AuthProviderServiceClient.
+func GetAuthProviderServiceClient(endpoint string) (authproviderv0alphapb.AuthProviderServiceClient, error) {
 	if val, ok := authProviders[endpoint]; ok {
 		return val, nil
 	}
@@ -101,7 +136,7 @@ func GetAuthServiceClient(endpoint string) (authv0alphapb.AuthServiceClient, err
 		return nil, err
 	}
 
-	authProviders[endpoint] = authv0alphapb.NewAuthServiceClient(conn)
+	authProviders[endpoint] = authproviderv0alphapb.NewAuthProviderServiceClient(conn)
 
 	return authProviders[endpoint], nil
 }

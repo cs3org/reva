@@ -25,7 +25,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	authproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/authprovider/v0alpha"
 	preferencesv0alphapb "github.com/cs3org/go-cs3apis/cs3/preferences/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/grpcserver"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
@@ -60,7 +60,7 @@ func (s *service) Close() error {
 	return nil
 }
 
-func getUser(ctx context.Context) (*authv0alphapb.User, error) {
+func getUser(ctx context.Context) (*authproviderv0alphapb.User, error) {
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(contextUserRequiredErr("userrequired"), "preferencessvc: error getting user from ctx")

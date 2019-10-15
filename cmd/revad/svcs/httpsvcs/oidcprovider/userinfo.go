@@ -24,10 +24,16 @@ import (
 	"net/http"
 
 	"github.com/ory/fosite"
+	"google.golang.org/grpc/metadata"
 
+	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
+	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
+	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
+	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth/manager/oidc"
+	"github.com/cs3org/reva/pkg/token"
 )
 
 func (s *svc) doUserinfo(w http.ResponseWriter, r *http.Request) {
@@ -36,7 +42,7 @@ func (s *svc) doUserinfo(w http.ResponseWriter, r *http.Request) {
 
 	requiredScope := "openid"
 
-	_, ar, err := s.oauth2.IntrospectToken(ctx, fosite.AccessTokenFromRequest(r), fosite.AccessToken, emptySession(), requiredScope)
+	_, ar, err := s.oauth2.IntrospectToken(ctx, fosite.AccessTokenFromRequest(r), fosite.AccessToken, s.emptySession(), requiredScope)
 	if err != nil {
 		fmt.Fprintf(w, "<h1>An error occurred!</h1><p>Could not perform introspection: %v</p>", err)
 		return
@@ -44,9 +50,26 @@ func (s *svc) doUserinfo(w http.ResponseWriter, r *http.Request) {
 
 	log.Debug().Interface("ar", ar).Msg("introspected")
 
-	sub := ar.GetSession().GetSubject()
+	// sub is uid.OpaqueId and issuer is uid.Provider
+	session, ok := ar.GetSession().(*customSession)
+	if !ok {
+		log.Error().Msg("session is not of type *customSession")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	internalToken := session.internalToken // To include in the context.
+	ctx = token.ContextSetToken(ctx, internalToken)
+	ctx = metadata.AppendToOutgoingContext(ctx, "x-access-token", internalToken) // TODO(labkode): this sucks.
+	sub := session.GetSubject()
+
+	fmt.Printf("internal token: %s subject: %s session:%+v", internalToken, sub, session)
+	issuer := s.conf.Issuer
 
 	uid := &typespb.UserId{
+		// TODO(labkode): how to get issuer from session? we store it in newSession,
+		// so we should be able to get it somehow ... we can use customSession now :)
+		// For the time being, the issuer is set in the configuration of the service.
 		// TODO(jfd): also fill the idp, if possible.
 		// well .. that might be hard, because in this case we are the idp
 		// we should put oar hostname into the Iss field
@@ -58,17 +81,40 @@ func (s *svc) doUserinfo(w http.ResponseWriter, r *http.Request) {
 		//      so the filesystem might use an outdated sid in the permissions but the system
 		//      can still resolve the user using the sidhistory attribute
 		OpaqueId: sub,
+		Idp:      issuer,
 	}
-	user, err := s.usermgr.GetUser(ctx, uid)
+
+	// Needs to be an authenticated request, for such reason we need to store the internal reva token
+	// in the user session using a custom session.
+	c, err := pool.GetGatewayServiceClient(s.conf.GatewayEndpoint)
 	if err != nil {
-		log.Error().Err(err).Str("sub", sub).Msg("unknown user")
-		w.WriteHeader(http.StatusNotFound)
+		log.Error().Err(err).Msg("error getting gateway service client")
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
+	getUserReq := &userproviderv0alphapb.GetUserRequest{
+		UserId: uid,
+	}
+	getUserRes, err := c.GetUser(ctx, getUserReq)
+	if err != nil {
+		log.Err(err).Msg("error calling GetUser")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if getUserRes.Status.Code != rpcpb.Code_CODE_OK {
+		err := status.NewErrorFromCode(getUserRes.Status.Code, "oidcprovider")
+		log.Err(err).Msg("error getting user information")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	user := getUserRes.User
 	sc := &oidc.StandardClaims{
-		Sub:               user.Id.OpaqueId,
-		Iss:               user.Id.Idp,
+		Sub: user.Id.OpaqueId,
+		// TODO(labkode): Iss is overwriten by config
+		Iss:               s.conf.Issuer,
 		PreferredUsername: user.Username,
 		Name:              user.DisplayName,
 		Email:             user.Mail,

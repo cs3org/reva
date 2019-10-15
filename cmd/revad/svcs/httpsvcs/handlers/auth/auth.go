@@ -23,10 +23,12 @@ import (
 	"net/http"
 	"strings"
 
-	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	authproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/authprovider/v0alpha"
+	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	"github.com/cs3org/reva/cmd/revad/httpserver"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
+	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/handlers/auth/credential/registry"
 	tokenregistry "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/handlers/auth/token/registry"
 	tokenwriterregistry "github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/handlers/auth/tokenwriter/registry"
@@ -50,6 +52,7 @@ func init() {
 
 type config struct {
 	Priority             int                               `mapstructure:"priority"`
+	AuthType             string                            `mapstructure:"auth_type"`
 	GatewaySvc           string                            `mapstructure:"gatewaysvc"`
 	CredentialStrategy   string                            `mapstructure:"credential_strategy"`
 	CredentialStrategies map[string]map[string]interface{} `mapstructure:"credential_strategies"`
@@ -140,14 +143,15 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 				return
 			}
 
+			log := appctx.GetLogger(r.Context())
+
 			// skip auth for urls set in the config.
 			// TODO(labkode): maybe use method:url to bypass auth.
 			if skip(r.URL.Path, conf.SkipMethods) {
+				log.Info().Msg("skipping auth check for: " + r.URL.Path)
 				h.ServeHTTP(w, r)
 				return
 			}
-
-			log := appctx.GetLogger(r.Context())
 
 			// check for token
 			tkn := tokenStrategy.GetToken(r)
@@ -160,7 +164,10 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 					return
 				}
 
-				req := &authv0alphapb.GenerateAccessTokenRequest{
+				log.Debug().Msg("credentials obtained from the request")
+
+				req := &gatewayv0alphapb.GenerateAccessTokenRequest{
+					Type:         conf.AuthType,
 					ClientId:     creds.ClientID,
 					ClientSecret: creds.ClientSecret,
 				}
@@ -174,12 +181,14 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 
 				res, err := client.GenerateAccessToken(r.Context(), req)
 				if err != nil {
-					log.Error().Err(err).Msg("error in grpc request")
+					log.Error().Err(err).Msg("error calling GenerateAccessToken")
 					w.WriteHeader(http.StatusUnauthorized)
 					return
 				}
+
 				if res.Status.Code != rpcpb.Code_CODE_OK {
-					log.Warn().Str("code", string(res.Status.Code)).Msg("request failed")
+					err := status.NewErrorFromCode(res.Status.Code, "auth")
+					log.Err(err).Msg("error generating access token from credentials")
 					w.WriteHeader(http.StatusUnauthorized)
 					return
 				}
@@ -200,7 +209,7 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 				return
 			}
 
-			u := &authv0alphapb.User{}
+			u := &authproviderv0alphapb.User{}
 			if err := mapstructure.Decode(claims, u); err != nil {
 				log.Error().Err(err).Msg("error decoding user claims")
 				w.WriteHeader(http.StatusUnauthorized)

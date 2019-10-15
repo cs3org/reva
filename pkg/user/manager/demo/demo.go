@@ -22,7 +22,7 @@ import (
 	"context"
 	"strings"
 
-	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	authproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/authprovider/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/user"
@@ -34,7 +34,7 @@ func init() {
 }
 
 type manager struct {
-	catalog map[string]*authv0alphapb.User
+	catalog map[string]*authproviderv0alphapb.User
 }
 
 // New returns a new user manager.
@@ -43,7 +43,7 @@ func New(m map[string]interface{}) (user.Manager, error) {
 	return &manager{catalog: cat}, nil
 }
 
-func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*authv0alphapb.User, error) {
+func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*authproviderv0alphapb.User, error) {
 	if user, ok := m.catalog[uid.OpaqueId]; ok {
 		return user, nil
 	}
@@ -51,12 +51,12 @@ func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*authv0alph
 }
 
 // TODO(jfd) search Opaque? compare sub?
-func userContains(u *authv0alphapb.User, query string) bool {
+func userContains(u *authproviderv0alphapb.User, query string) bool {
 	return strings.Contains(u.Username, query) || strings.Contains(u.DisplayName, query) || strings.Contains(u.Mail, query)
 }
 
-func (m *manager) FindUsers(ctx context.Context, query string) ([]*authv0alphapb.User, error) {
-	users := []*authv0alphapb.User{}
+func (m *manager) FindUsers(ctx context.Context, query string) ([]*authproviderv0alphapb.User, error) {
+	users := []*authproviderv0alphapb.User{}
 	for _, u := range m.catalog {
 		if userContains(u, query) {
 			users = append(users, u)
@@ -87,9 +87,9 @@ func (m *manager) IsInGroup(ctx context.Context, uid *typespb.UserId, group stri
 	return false, nil
 }
 
-func getUsers() map[string]*authv0alphapb.User {
-	return map[string]*authv0alphapb.User{
-		"4c510ada-c86b-4815-8820-42cdf82c3d51": &authv0alphapb.User{
+func getUsers() map[string]*authproviderv0alphapb.User {
+	return map[string]*authproviderv0alphapb.User{
+		"4c510ada-c86b-4815-8820-42cdf82c3d51": &authproviderv0alphapb.User{
 			Id: &typespb.UserId{
 				Idp:      "http://localhost:9998",
 				OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51",
@@ -99,7 +99,7 @@ func getUsers() map[string]*authv0alphapb.User {
 			Mail:        "einstein@example.org",
 			DisplayName: "Albert Einstein",
 		},
-		"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c": &authv0alphapb.User{
+		"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c": &authproviderv0alphapb.User{
 			Id: &typespb.UserId{
 				Idp:      "http://localhost:9998",
 				OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
@@ -109,7 +109,7 @@ func getUsers() map[string]*authv0alphapb.User {
 			Mail:        "marie@example.org",
 			DisplayName: "Marie Curie",
 		},
-		"932b4540-8d16-481e-8ef4-588e4b6b151c": &authv0alphapb.User{
+		"932b4540-8d16-481e-8ef4-588e4b6b151c": &authproviderv0alphapb.User{
 			Id: &typespb.UserId{
 				Idp:      "http://localhost:9998",
 				OpaqueId: "932b4540-8d16-481e-8ef4-588e4b6b151c",

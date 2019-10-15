@@ -27,12 +27,11 @@ import (
 func (s *svc) doIntrospect(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
-	ir, err := s.oauth2.NewIntrospectionRequest(ctx, r, emptySession())
+	ir, err := s.oauth2.NewIntrospectionRequest(ctx, r, s.emptySession())
 	if err != nil {
 		log.Error().Err(err).Msg("Error occurred in NewIntrospectionRequest")
 		s.oauth2.WriteIntrospectionError(w, err)
 		return
 	}
-
 	s.oauth2.WriteIntrospectionResponse(w, ir)
 }

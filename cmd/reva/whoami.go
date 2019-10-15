@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"os"
 
-	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	authproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/authprovider/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 )
 
@@ -55,7 +55,7 @@ func whoamiCommand() *command {
 			return err
 		}
 
-		req := &authv0alphapb.WhoAmIRequest{AccessToken: token}
+		req := &authproviderv0alphapb.WhoAmIRequest{AccessToken: token}
 
 		ctx := getAuthContext()
 		res, err := client.WhoAmI(ctx, req)

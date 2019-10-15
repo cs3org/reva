@@ -22,9 +22,12 @@ import (
 	"fmt"
 	"net/http"
 
-	typespb "github.com/cs3org/go-cs3apis/cs3/types"
+	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
+	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
+	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
+	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
+	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/user"
 )
 
 func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
@@ -39,8 +42,8 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 		s.oauth2.WriteAuthorizeError(w, ar, err)
 		return
 	}
-	// You have now access to authorizeRequest, Code ResponseTypes, Scopes ...
 
+	// You have now access to authorizeRequest, Code ResponseTypes, Scopes ...
 	var requestedScopes string
 	for _, this := range ar.GetRequestedScopes() {
 		requestedScopes += fmt.Sprintf(`<li><label><input type="checkbox" name="scopes" value="%s" checked>%s</label></li>`, this, this)
@@ -53,8 +56,12 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 		s.oauth2.WriteAuthorizeError(w, ar, err)
 		return
 	}
+
+	// TODO(labkode): this should be a flexible mechanism to
+	// use any kind of authentication, basic auth, SSO, anything ...
 	username := r.PostForm.Get("username")
 	password := r.PostForm.Get("password")
+	// No username we ask to give one, here we provide only a form validation.
 	if username == "" {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, err := w.Write([]byte(fmt.Sprintf(`
@@ -76,17 +83,53 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	actx, err := s.authmgr.Authenticate(ctx, username, password)
+
+	c, err := pool.GetGatewayServiceClient(s.conf.GatewayEndpoint)
 	if err != nil {
-		s.oauth2.WriteAuthorizeError(w, ar, err)
+		log.Error().Err(err).Msg("error getting gateway service client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
-	uid, ok := user.ContextGetUserID(actx)
-	if !ok {
-		// try to look up user by username
-		// TODO log warning or should we fail?
-		uid = &typespb.UserId{
-			OpaqueId: username,
-		}
+
+	genReq := &gatewayv0alphapb.GenerateAccessTokenRequest{
+		Type:         s.conf.AuthType,
+		ClientId:     username,
+		ClientSecret: password,
+	}
+	genRes, err := c.GenerateAccessToken(ctx, genReq)
+	if err != nil {
+		log.Err(err).Msg("error calling GenerateAccessToken")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if genRes.Status.Code != rpcpb.Code_CODE_OK {
+		err := status.NewErrorFromCode(genRes.Status.Code, "oidcprovider")
+		log.Err(err).Msg("error authenticating client credentials")
+		// TODO(labkode): maybe oauth response is better
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	// Once the authentication is successful, we have a user id that has been
+	// validated, to fill other fields we need the user information also.
+
+	uid := genRes.UserId
+
+	getUserReq := &userproviderv0alphapb.GetUserRequest{
+		UserId: uid,
+	}
+	getUserRes, err := c.GetUser(ctx, getUserReq)
+	if err != nil {
+		log.Err(err).Msg("error calling GetUser")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if getUserRes.Status.Code != rpcpb.Code_CODE_OK {
+		err := status.NewErrorFromCode(getUserRes.Status.Code, "oidcprovider")
+		log.Err(err).Msg("error getting user information")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
 	// let's see what scopes the user gave consent to
@@ -95,7 +138,7 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Now that the user is authorized, we set up a session:
-	mySessionData := newSession(username, uid)
+	mySessionData := s.newSession(genRes.AccessToken, getUserRes.User)
 
 	// When using the HMACSHA strategy you must use something that implements the HMACSessionContainer.
 	// It brings you the power of overriding the default values.
@@ -110,7 +153,7 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 	// Therefore, you both access token and authorize code will have the same "exp" claim. If this is something you
 	// need let us know on github.
 	//
-	// mySessionData.JWTClaims.ExpiresAt = time.Now().Add(time.Day)
+	//mySessionData.JWTClaims.ExpiresAt = time.Now().Add(time.Day)
 
 	// It's also wise to check the requested scopes, e.g.:
 	// if authorizeRequest.GetScopes().Has("admin") {

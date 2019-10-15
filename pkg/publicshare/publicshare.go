@@ -21,17 +21,17 @@ package publicshare
 import (
 	"context"
 
-	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	authproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/authprovider/v0alpha"
 	publicshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 )
 
 // Manager manipulates public shares.
 type Manager interface {
-	CreatePublicShare(ctx context.Context, u *authv0alphapb.User, md *storageproviderv0alphapb.ResourceInfo, g *publicshareproviderv0alphapb.Grant) (*publicshareproviderv0alphapb.PublicShare, error)
-	UpdatePublicShare(ctx context.Context, u *authv0alphapb.User, ref *publicshareproviderv0alphapb.PublicShareReference, g *publicshareproviderv0alphapb.Grant) (*publicshareproviderv0alphapb.PublicShare, error)
-	GetPublicShare(ctx context.Context, u *authv0alphapb.User, ref *publicshareproviderv0alphapb.PublicShareReference) (*publicshareproviderv0alphapb.PublicShare, error)
-	ListPublicShares(ctx context.Context, u *authv0alphapb.User, md *storageproviderv0alphapb.ResourceInfo) ([]*publicshareproviderv0alphapb.PublicShare, error)
-	RevokePublicShare(ctx context.Context, u *authv0alphapb.User, id string) error
+	CreatePublicShare(ctx context.Context, u *authproviderv0alphapb.User, md *storageproviderv0alphapb.ResourceInfo, g *publicshareproviderv0alphapb.Grant) (*publicshareproviderv0alphapb.PublicShare, error)
+	UpdatePublicShare(ctx context.Context, u *authproviderv0alphapb.User, ref *publicshareproviderv0alphapb.PublicShareReference, g *publicshareproviderv0alphapb.Grant) (*publicshareproviderv0alphapb.PublicShare, error)
+	GetPublicShare(ctx context.Context, u *authproviderv0alphapb.User, ref *publicshareproviderv0alphapb.PublicShareReference) (*publicshareproviderv0alphapb.PublicShare, error)
+	ListPublicShares(ctx context.Context, u *authproviderv0alphapb.User, md *storageproviderv0alphapb.ResourceInfo) ([]*publicshareproviderv0alphapb.PublicShare, error)
+	RevokePublicShare(ctx context.Context, u *authproviderv0alphapb.User, id string) error
 	GetPublicShareByToken(ctx context.Context, token string) (*publicshareproviderv0alphapb.PublicShare, error)
 }
