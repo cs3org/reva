@@ -26,7 +26,6 @@ import (
 	"net/http"
 	"net/url"
 	"path"
-	"strings"
 	"time"
 
 	"go.opencensus.io/trace"
@@ -35,8 +34,6 @@ import (
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/utils"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/pkg/errors"
 )
 
@@ -181,16 +178,22 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *storage
 
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
 	// the old webdav endpoint does not contain the username
-	if strings.HasPrefix(baseURI, "/remote.php/webdav") {
+	/*
 		// remove username from filename
-		u, ok := user.ContextGetUser(ctx)
-		if !ok {
-			err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
-			return nil, err
+		// TODO(labkode): I'm commenting it out as I think is not needed anymore
+		// becase we don't mangle the baseURI with the user if the request goes to
+		// old endpoint.
+		if strings.HasPrefix(baseURI, "/remote.php/webdav") {
+				u, ok := user.ContextGetUser(ctx)
+				if !ok {
+					err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
+					return nil, err
+				}
+				fmt.Println(md.Path, baseURI, u.Username)
+				// TODO can lead to slice out of bounds
+				md.Path = md.Path[len(u.Username)+1:]
 		}
-		// TODO can lead to slice out of bounds
-		md.Path = md.Path[len(u.Username)+1:]
-	}
+	*/
 
 	ref := path.Join(baseURI, md.Path)
 	if md.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {

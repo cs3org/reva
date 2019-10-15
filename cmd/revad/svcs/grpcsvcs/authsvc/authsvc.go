@@ -24,10 +24,7 @@ import (
 	"io"
 
 	authproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/authprovider/v0alpha"
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/grpcserver"
-	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
@@ -105,59 +102,10 @@ func (s *service) Authenticate(ctx context.Context, req *authproviderv0alphapb.A
 		return res, nil
 	}
 
-	c, err := pool.GetUserProviderServiceClient(s.conf.UserProviderEndpoint)
-	if err != nil {
-		log.Err(err).Msg("error getting user provider client")
-		return &authproviderv0alphapb.AuthenticateResponse{
-			Status: status.NewInternal(ctx, err, "error getting user provider service client"),
-		}, nil
-	}
-
-	getUserReq := &userproviderv0alphapb.GetUserRequest{
-		UserId: uid,
-	}
-
-	getUserRes, err := c.GetUser(ctx, getUserReq)
-	if err != nil {
-		err = errors.Wrap(err, "authsvc: error in GetUser")
-		res := &authproviderv0alphapb.AuthenticateResponse{
-			Status: status.NewUnauthenticated(ctx, err, "error getting user information"),
-		}
-		return res, nil
-	}
-
-	if getUserRes.Status.Code != rpcpb.Code_CODE_OK {
-		err := status.NewErrorFromCode(getUserRes.Status.Code, "authsvc")
-		return &authproviderv0alphapb.AuthenticateResponse{
-			Status: status.NewUnauthenticated(ctx, err, "error getting user information"),
-		}, nil
-	}
-
-	user := getUserRes.User
-
-	log.Info().Msgf("user %s authenticated", user.Username)
+	log.Info().Msgf("user %s authenticated", uid.String())
 	res := &authproviderv0alphapb.AuthenticateResponse{
 		Status: status.NewOK(ctx),
 		UserId: uid,
 	}
 	return res, nil
 }
-
-/*
-
-func (s *service) WhoAmI(ctx context.Context, req *authproviderv0alphapb.WhoAmIRequest) (*authproviderv0alphapb.WhoAmIResponse, error) {
-	u, err := s.tokenmgr.DismantleToken(ctx, req.AccessToken)
-	if err != nil {
-		err = errors.Wrap(err, "authsvc: error getting user from access token")
-		return &authproviderv0alphapb.WhoAmIResponse{
-			Status: status.NewUnauthenticated(ctx, err, "error dismantling access token"),
-		}, nil
-	}
-
-	res := &authproviderv0alphapb.WhoAmIResponse{
-		Status: status.NewOK(ctx),
-		User:   u,
-	}
-	return res, nil
-}
-*/

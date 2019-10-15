@@ -24,7 +24,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -70,7 +69,6 @@ func NewWatcher(opts ...Option) *Watcher {
 		log:      zerolog.Nop(),
 		graceful: os.Getenv("GRACEFUL") == "true",
 		ppid:     os.Getppid(),
-		pidFile:  path.Join(os.TempDir(), "revad.pid"),
 		ss:       map[string]Server{},
 	}
 
@@ -170,9 +168,9 @@ func (w *Watcher) WritePID() error {
 		} else {
 			w.log.Warn().Msg("error casting contents of pidfile to pid(int)")
 		}
-	} else {
-		w.log.Warn().Msg("error reading pidfile")
-	}
+	} // else {
+	// w.log.Info().Msg("error reading pidfile")
+	//}
 
 	// If we get here, then the pidfile didn't exist or we are are in graceful reload and thus we overwrite
 	// or the pid in it doesn't belong to the user running this app.
@@ -180,7 +178,7 @@ func (w *Watcher) WritePID() error {
 	if err != nil {
 		return err
 	}
-	w.log.Info().Msgf("pidfile written to %s", w.pidFile)
+	w.log.Info().Msgf("pidfile saved at: %s", w.pidFile)
 	return nil
 }
 

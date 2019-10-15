@@ -50,7 +50,7 @@ func (s *svc) Close() error {
 
 type config struct {
 	Prefix       string `mapstructure:"prefix"`
-	HelloMessage string `mapstructure:"hello_message"`
+	HelloMessage string `mapstructure:"message"`
 }
 
 type svc struct {
@@ -64,7 +64,8 @@ func (s *svc) Prefix() string {
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log := appctx.GetLogger(r.Context())
-		_, err := w.Write([]byte(s.conf.HelloMessage))
-		log.Err(err).Msg("error writing response")
+		if _, err := w.Write([]byte(s.conf.HelloMessage)); err != nil {
+			log.Err(err).Msg("error writing response")
+		}
 	})
 }

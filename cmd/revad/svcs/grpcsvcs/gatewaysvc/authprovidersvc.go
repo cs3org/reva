@@ -39,7 +39,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gatewayv0alphapb.Authentica
 	// find auth provider
 	c, err := s.findAuthProvider(ctx, req.Type)
 	if err != nil {
-		err = errors.New("gatewaysvc: error finding auth provider")
+		err = errors.New("gatewaysvc: error finding auth provider for type: " + req.Type)
 		return &gatewayv0alphapb.AuthenticateResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth provider client"),
 		}, nil
@@ -56,7 +56,22 @@ func (s *svc) Authenticate(ctx context.Context, req *gatewayv0alphapb.Authentica
 		}, nil
 	}
 
+	if res.Status.Code != rpcpb.Code_CODE_OK {
+		err := status.NewErrorFromCode(res.Status.Code, "gatewaysvc")
+		return &gatewayv0alphapb.AuthenticateResponse{
+			Status: status.NewUnauthenticated(ctx, err, ""),
+		}, nil
+	}
+
+	// validate valid userId
 	uid := res.UserId
+	if uid == nil {
+		err := errors.New("gatewaysvc: uid after Authenticate is nil")
+		log.Err(err).Msg("user id is nil")
+		return &gatewayv0alphapb.AuthenticateResponse{
+			Status: status.NewInternal(ctx, err, "user id is nil"),
+		}, nil
+	}
 
 	userClient, err := pool.GetUserProviderServiceClient(s.c.UserProviderEndpoint)
 	if err != nil {
@@ -98,6 +113,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gatewayv0alphapb.Authentica
 	}
 
 	gwRes := &gatewayv0alphapb.AuthenticateResponse{
+		Status: status.NewOK(ctx),
 		UserId: res.UserId,
 		Token:  token,
 	}
@@ -151,5 +167,5 @@ func (s *svc) findAuthProvider(ctx context.Context, authType string) (authprovid
 		return nil, errtypes.NotFound("gatewaysvc: auth provider not found for type:" + authType)
 	}
 
-	return nil, errors.New("gatewaysvc: error finding an auth provider")
+	return nil, errors.New("gatewaysvc: error finding an auth provider for type: " + authType)
 }

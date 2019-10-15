@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"runtime"
 	"strconv"
 	"strings"
@@ -48,11 +49,19 @@ var (
 	testFlag    = flag.Bool("t", false, "test configuration and exit")
 	signalFlag  = flag.String("s", "", "send signal to a master process: stop, quit, reload")
 	configFlag  = flag.String("c", "/etc/revad/revad.toml", "set configuration file")
-	pidFlag     = flag.String("p", "/var/run/revad.pid", "pid file")
+	pidFlag     = flag.String("p", "", "pid file, defaults to os temporary directory if empty")
 
 	// Compile time variables initialez with gcc flags.
 	gitCommit, gitBranch, buildDate, version, goVersion, buildPlatform string
 )
+
+type coreConf struct {
+	MaxCPUs            string `mapstructure:"max_cpus"`
+	TracingEnabled     bool   `mapstructure:"tracing_enabled"`
+	TracingEndpoint    string `mapstructure:"tracing_endpoint"`
+	TracingCollector   string `mapstructure:"tracing_collector"`
+	TracingServiceName string `mapstructure:"tracing_service_name"`
+}
 
 func main() {
 	flag.Parse()
@@ -71,42 +80,48 @@ func main() {
 		os.Exit(1)
 	}
 
-	watcher, err := handlePIDFlag(log) // TODO(labkode): maybe pidfile can be created later on?
-	if err != nil {
-		log.Error().Err(err).Msg("error creating grace watcher")
-		os.Exit(1)
-	}
-
 	if err := setupOpenCensus(coreConf); err != nil {
 		log.Error().Err(err).Msg("error configuring open census stats and tracing")
-		watcher.Exit(1)
+		os.Exit(1)
 	}
 
 	ncpus, err := adjustCPU(coreConf.MaxCPUs)
 	if err != nil {
 		log.Error().Err(err).Msg("error adjusting number of cpus")
-		watcher.Exit(1)
+		os.Exit(1)
 	}
 	log.Info().Msgf("%s", getVersionString())
 	log.Info().Msgf("running on %d cpus", ncpus)
 
 	servers := map[string]grace.Server{}
-	if !coreConf.DisableHTTP {
+	if isEnabledHTTP(mainConf) {
 		s, err := getHTTPServer(mainConf["http"], log)
 		if err != nil {
 			log.Error().Err(err).Msg("error creating http server")
-			watcher.Exit(1)
+			os.Exit(1)
 		}
 		servers["http"] = s
 	}
 
-	if !coreConf.DisableGRPC {
+	if isEnabledGRPC(mainConf) {
 		s, err := getGRPCServer(mainConf["grpc"], log)
 		if err != nil {
 			log.Error().Err(err).Msg("error creating grpc server")
-			watcher.Exit(1)
+			os.Exit(1)
 		}
 		servers["grpc"] = s
+	}
+
+	if len(servers) == 0 {
+		// nothing to do
+		log.Info().Msg("nothing to do, no grpc/http enabled_services declared in config")
+		os.Exit(1)
+	}
+
+	watcher, err := handlePIDFlag(log) // TODO(labkode): maybe pidfile can be created later on? like once a server is going to be created?
+	if err != nil {
+		log.Error().Err(err).Msg("error creating grace watcher")
+		os.Exit(1)
 	}
 
 	listeners, err := watcher.GetListeners(servers)
@@ -115,7 +130,7 @@ func main() {
 		watcher.Exit(1)
 	}
 
-	if !coreConf.DisableHTTP {
+	if isEnabledHTTP(mainConf) {
 		go func() {
 			if err := servers["http"].(*httpserver.Server).Start(listeners["http"]); err != nil {
 				log.Error().Err(err).Msg("error starting the http server")
@@ -124,7 +139,7 @@ func main() {
 		}()
 	}
 
-	if !coreConf.DisableGRPC {
+	if isEnabledGRPC(mainConf) {
 		go func() {
 			if err := servers["grpc"].(*grpcserver.Server).Start(listeners["grpc"]); err != nil {
 				log.Error().Err(err).Msg("error starting the grpc server")
@@ -164,7 +179,7 @@ func getWriter(out string) (io.Writer, error) {
 
 	fd, err := os.Create(out)
 	if err != nil {
-		err = errors.Wrap(err, "error creating log file")
+		err = errors.Wrap(err, "error creating log file: "+out)
 		return nil, err
 	}
 
@@ -228,10 +243,14 @@ func handleTestFlag() {
 }
 
 func handlePIDFlag(l *zerolog.Logger) (*grace.Watcher, error) {
+	// if pid is empty, we store it in OS temporary folder
+	if *pidFlag == "" {
+		*pidFlag = path.Join(os.TempDir(), "revad.pid")
+	}
+
 	var opts []grace.Option
 	opts = append(opts, grace.WithPIDFile(*pidFlag))
 	opts = append(opts, grace.WithLogger(l.With().Str("pkg", "grace").Logger()))
-
 	w := grace.NewWatcher(opts...)
 	err := w.WritePID()
 	if err != nil {
@@ -264,14 +283,14 @@ func getHTTPServer(conf interface{}, l *zerolog.Logger) (*httpserver.Server, err
 func handleConfigFlagOrDie() map[string]interface{} {
 	fd, err := os.Open(*configFlag)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error opening file: %+v\n", err)
+		fmt.Fprintf(os.Stderr, "error opening file: %+s\n", err.Error())
 		os.Exit(1)
 	}
 	defer fd.Close()
 
 	v, err := config.Read(fd)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error reading config: %+v\n", err)
+		fmt.Fprintf(os.Stderr, "error reading config: %s\n", err.Error())
 		os.Exit(1)
 	}
 
@@ -322,6 +341,7 @@ func setupOpenCensus(conf *coreConf) error {
 //  adjustCPU parses string cpu and sets GOMAXPROCS
 // according to its value. It accepts either
 // a number (e.g. 3) or a percent (e.g. 50%).
+// Default is to use all available cores.
 func adjustCPU(cpu string) (int, error) {
 	var numCPU int
 
@@ -346,6 +366,8 @@ func adjustCPU(cpu string) (int, error) {
 			}
 			numCPU = num
 		}
+	} else {
+		numCPU = availCPU
 	}
 
 	if numCPU > availCPU || numCPU == 0 {
@@ -359,30 +381,24 @@ func adjustCPU(cpu string) (int, error) {
 func parseCoreConfOrDie(v interface{}) *coreConf {
 	c := &coreConf{}
 	if err := mapstructure.Decode(v, c); err != nil {
-		fmt.Fprintf(os.Stderr, "error decoding core config: %s\n", err)
+		fmt.Fprintf(os.Stderr, "error decoding core config: %s\n", err.Error())
 		os.Exit(1)
 	}
 	return c
 }
 
-type coreConf struct {
-	DisableHTTP        bool   `mapstructure:"disable_http"`
-	DisableGRPC        bool   `mapstructure:"disable_grpc"`
-	TracingEnabled     bool   `mapstructure:"tracing_enabled"`
-	MaxCPUs            string `mapstructure:"max_cpus"`
-	LogFile            string `mapstructure:"log_file"`
-	LogMode            string `mapstructure:"log_mode"`
-	TracingEndpoint    string `mapstructure:"tracing_endpoint"`
-	TracingCollector   string `mapstructure:"tracing_collector"`
-	TracingServiceName string `mapstructure:"tracing_service_name"`
-}
-
 func parseLogConfOrDie(v interface{}) *logConf {
 	c := &logConf{}
 	if err := mapstructure.Decode(v, c); err != nil {
-		fmt.Fprintf(os.Stderr, "error decoding log config: %s\n", err)
+		fmt.Fprintf(os.Stderr, "error decoding log config: %s\n", err.Error())
 		os.Exit(1)
 	}
+
+	// if mode is not set, we use console mode, easier for devs
+	if c.Mode == "" {
+		c.Mode = "console"
+	}
+
 	return c
 }
 
@@ -390,4 +406,27 @@ type logConf struct {
 	Output string `mapstructure:"output"`
 	Mode   string `mapstructure:"mode"`
 	Level  string `mapstructure:"level"`
+}
+
+func isEnabledHTTP(conf map[string]interface{}) bool {
+	return isEnabled("http", conf)
+}
+
+func isEnabledGRPC(conf map[string]interface{}) bool {
+	return isEnabled("grpc", conf)
+}
+
+func isEnabled(key string, conf map[string]interface{}) bool {
+	if a, ok := conf[key]; ok {
+		if b, ok := a.(map[string]interface{}); ok {
+			if c, ok := b["enabled_services"]; ok {
+				if d, ok := c.([]interface{}); ok {
+					if len(d) > 0 {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
 }

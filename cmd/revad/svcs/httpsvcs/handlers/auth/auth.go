@@ -142,6 +142,7 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 
 	chain := func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
 			// OPTION requests need to pass for preflight requests
 			// TODO(labkode): this will break options for auth protected routes.
 			if r.Method == "OPTIONS" {
@@ -149,7 +150,7 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 				return
 			}
 
-			log := appctx.GetLogger(r.Context())
+			log := appctx.GetLogger(ctx)
 
 			// skip auth for urls set in the config.
 			// TODO(labkode): maybe use method:url to bypass auth.
@@ -185,7 +186,7 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 					return
 				}
 
-				res, err := client.Authenticate(r.Context(), req)
+				res, err := client.Authenticate(ctx, req)
 				if err != nil {
 					log.Error().Err(err).Msg("error calling Authenticate")
 					w.WriteHeader(http.StatusUnauthorized)
@@ -223,7 +224,7 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 			}
 
 			// store user and core access token in context.
-			ctx := user.ContextSetUser(r.Context(), u)
+			ctx = user.ContextSetUser(ctx, u)
 			ctx = token.ContextSetToken(ctx, tkn)
 			ctx = metadata.AppendToOutgoingContext(ctx, defaultHeader, tkn) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
 

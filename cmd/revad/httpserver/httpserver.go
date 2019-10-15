@@ -104,7 +104,7 @@ func New(m interface{}, l zerolog.Logger) (*Server, error) {
 	}
 
 	if conf.Address == "" {
-		conf.Address = "0.0.0.0:9998"
+		conf.Address = "localhost:9998"
 	}
 
 	httpServer := &http.Server{}
@@ -131,7 +131,7 @@ func (s *Server) Start(ln net.Listener) error {
 	s.httpServer.Handler = s.getHandler()
 	s.listener = ln
 
-	s.log.Info().Msgf("http server listening at %s:%s", s.conf.Network, s.conf.Address)
+	s.log.Info().Msgf("http server listening at %s://%s", "http", s.conf.Address)
 	err := s.httpServer.Serve(s.listener)
 	if err == nil || err == http.ErrServerClosed {
 		return nil
@@ -253,7 +253,7 @@ func (s *Server) getHandler() http.Handler {
 		head, tail := httpsvcs.ShiftPath(r.URL.Path)
 		if h, ok := s.handlers[head]; ok {
 			r.URL.Path = tail
-			s.log.Info().Msgf("http routing: head=%s tail=%s svc=%s", head, r.URL.Path, head)
+			s.log.Debug().Msgf("http routing: head=%s tail=%s svc=%s", head, r.URL.Path, head)
 			h.ServeHTTP(w, r)
 			return
 		}
@@ -261,12 +261,12 @@ func (s *Server) getHandler() http.Handler {
 		// when a service is exposed at the root.
 		if h, ok := s.handlers[""]; ok {
 			r.URL.Path = "/" + head + tail
-			s.log.Info().Msgf("http routing: head= tail=%s svc=root", r.URL.Path)
+			s.log.Debug().Msgf("http routing: head= tail=%s svc=root", r.URL.Path)
 			h.ServeHTTP(w, r)
 			return
 		}
 
-		s.log.Info().Msgf("http routing: head=%s tail=%s svc=not-found", head, tail)
+		s.log.Debug().Msgf("http routing: head=%s tail=%s svc=not-found", head, tail)
 		w.WriteHeader(http.StatusNotFound)
 	})
 
