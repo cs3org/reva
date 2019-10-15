@@ -70,8 +70,17 @@ An example configuration file is the following:
 [http]
 enabled_services = ["helloworldsvc"]
 ```
+Running revad, will output some lines similar to these:
 
-Running revad with this configuration directives will make revad listen on port 9998 for HTTP requests. Accessing *http://0.0.0.0:9998/* renders the message *Hello World!*.
+```
+4:44PM INF main.go:94 > version= commit= branch= go_version= build_date= build_platform= pid=27856
+4:44PM INF main.go:95 > running on 4 cpus pid=27856
+4:44PM INF grace/grace.go:181 > pidfile saved at: /tmp/gonzalhu/revad-44b42674-2f10-4d06-b681-328b5a9b2581.pid pid=27856 pkg=grace
+4:44PM INF httpserver/httpserver.go:233 > http service enabled: helloworldsvc@/ pid=27856 pkg=httpserver
+4:44PM INF httpserver/httpserver.go:134 > http server listening at http://localhost:9998 pid=27856 pkg=httpserver
+```
+
+Revad will listen by default at http://localhost:9998, curl-ing this address will render the message *Hello World!*.
 The *helloworldsvc* is one of the many services available in revad. To modify the configuration for this service a new directive is added to the configuration:
 
 ```
