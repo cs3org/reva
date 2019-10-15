@@ -91,14 +91,14 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	genReq := &gatewayv0alphapb.GenerateAccessTokenRequest{
+	genReq := &gatewayv0alphapb.AuthenticateRequest{
 		Type:         s.conf.AuthType,
 		ClientId:     username,
 		ClientSecret: password,
 	}
-	genRes, err := c.GenerateAccessToken(ctx, genReq)
+	genRes, err := c.Authenticate(ctx, genReq)
 	if err != nil {
-		log.Err(err).Msg("error calling GenerateAccessToken")
+		log.Err(err).Msg("error calling Authenticate")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -138,7 +138,7 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Now that the user is authorized, we set up a session:
-	mySessionData := s.newSession(genRes.AccessToken, getUserRes.User)
+	mySessionData := s.newSession(genRes.Token, getUserRes.User)
 
 	// When using the HMACSHA strategy you must use something that implements the HMACSessionContainer.
 	// It brings you the power of overriding the default values.

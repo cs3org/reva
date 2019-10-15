@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"os"
 
+	authregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/authregistry/v0alpha"
 	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 )
@@ -32,7 +33,34 @@ var loginCommand = func() *command {
 	cmd := newCommand("login")
 	cmd.Description = func() string { return "login into the reva server" }
 	cmd.Usage = func() string { return "Usage: login <type>" }
+	listFlag := cmd.Bool("list", false, "list available login methods")
 	cmd.Action = func() error {
+		if *listFlag {
+			// list available login methods
+			client, err := getClient()
+			if err != nil {
+				return err
+			}
+
+			req := &authregistryv0alphapb.ListAuthProvidersRequest{}
+
+			ctx := context.Background()
+			res, err := client.ListAuthProviders(ctx, req)
+			if err != nil {
+				return err
+			}
+
+			if res.Status.Code != rpcpb.Code_CODE_OK {
+				return formatError(res.Status)
+			}
+
+			fmt.Println("Available login methods:")
+			for _, v := range res.Types {
+				fmt.Printf("- %s\n", v)
+			}
+			return nil
+		}
+
 		var authType, username, password string
 		if cmd.NArg() != 1 {
 			fmt.Println(cmd.Usage())
@@ -61,14 +89,14 @@ var loginCommand = func() *command {
 			return err
 		}
 
-		req := &gatewayv0alphapb.GenerateAccessTokenRequest{
+		req := &gatewayv0alphapb.AuthenticateRequest{
 			Type:         authType,
 			ClientId:     username,
 			ClientSecret: password,
 		}
 
 		ctx := context.Background()
-		res, err := client.GenerateAccessToken(ctx, req)
+		res, err := client.Authenticate(ctx, req)
 		if err != nil {
 			return err
 		}
@@ -77,7 +105,7 @@ var loginCommand = func() *command {
 			return formatError(res.Status)
 		}
 
-		writeToken(res.AccessToken)
+		writeToken(res.Token)
 		fmt.Println("OK")
 		return nil
 	}

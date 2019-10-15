@@ -19,12 +19,15 @@
 package gatewaysvc
 
 import (
+	"fmt"
 	"io"
 	"net/url"
 
 	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
 
 	"github.com/cs3org/reva/cmd/revad/grpcserver"
+	"github.com/cs3org/reva/pkg/token"
+	"github.com/cs3org/reva/pkg/token/manager/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -35,20 +38,27 @@ func init() {
 }
 
 type config struct {
-	AuthRegistryEndpoint        string `mapstructure:"authregistrysvc"`
-	StorageRegistryEndpoint     string `mapstructure:"storageregistrysvc"`
-	AuthEndpoint                string `mapstructure:"authsvc"`
-	AppRegistryEndpoint         string `mapstructure:"appregistrysvc"`
-	PreferencesEndpoint         string `mapstructure:"preferencessvc"`
-	UserShareProviderEndpoint   string `mapstructure:"usershareprovidersvc"`
-	PublicShareProviderEndpoint string `mapstructure:"publicshareprovidersvc"`
-	OCMShareProviderEndpoint    string `mapstructure:"ocmshareprovidersvc"`
-	UserProviderEndpoint        string `mapstructure:"userprovidersvc"`
-	CommitShareToStorageGrant   bool   `mapstructure:"commit_share_to_storage_grant"`
-	CommitShareToStorageRef     bool   `mapstructure:"commit_share_to_storage_ref"`
-	DataGatewayEndpoint         string `mapstructure:"datagatewaysvc"`
-	TransferSharedSecret        string `mapstructure:"transfer_shared_secret"`
-	TranserExpires              int64  `mapstructure:"transfer_expires"`
+	AuthRegistryEndpoint        string                            `mapstructure:"authregistrysvc"`
+	StorageRegistryEndpoint     string                            `mapstructure:"storageregistrysvc"`
+	AppRegistryEndpoint         string                            `mapstructure:"appregistrysvc"`
+	PreferencesEndpoint         string                            `mapstructure:"preferencessvc"`
+	UserShareProviderEndpoint   string                            `mapstructure:"usershareprovidersvc"`
+	PublicShareProviderEndpoint string                            `mapstructure:"publicshareprovidersvc"`
+	OCMShareProviderEndpoint    string                            `mapstructure:"ocmshareprovidersvc"`
+	UserProviderEndpoint        string                            `mapstructure:"userprovidersvc"`
+	CommitShareToStorageGrant   bool                              `mapstructure:"commit_share_to_storage_grant"`
+	CommitShareToStorageRef     bool                              `mapstructure:"commit_share_to_storage_ref"`
+	DataGatewayEndpoint         string                            `mapstructure:"datagatewaysvc"`
+	TransferSharedSecret        string                            `mapstructure:"transfer_shared_secret"`
+	TranserExpires              int64                             `mapstructure:"transfer_expires"`
+	TokenManager                string                            `mapstructure:"token_manager"`
+	TokenManagers               map[string]map[string]interface{} `mapstructure:"token_managers"`
+}
+
+type svc struct {
+	c              *config
+	dataGatewayURL url.URL
+	tokenmgr       token.Manager
 }
 
 // New creates a new gateway svc that acts as a proxy for any grpc operation.
@@ -70,18 +80,19 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 		return nil, err
 	}
 
+	tokenManager, err := getTokenManager(c.TokenManager, c.TokenManagers)
+	if err != nil {
+		return nil, err
+	}
+
 	s := &svc{
 		c:              c,
 		dataGatewayURL: *u,
+		tokenmgr:       tokenManager,
 	}
 
 	gatewayv0alphapb.RegisterGatewayServiceServer(ss, s)
 	return s, nil
-}
-
-type svc struct {
-	c              *config
-	dataGatewayURL url.URL
 }
 
 func (s *svc) Close() error {
@@ -95,4 +106,12 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 		return nil, err
 	}
 	return c, nil
+}
+
+func getTokenManager(manager string, m map[string]map[string]interface{}) (token.Manager, error) {
+	if f, ok := registry.NewFuncs[manager]; ok {
+		return f(m[manager])
+	}
+
+	return nil, fmt.Errorf("driver %s not found for token manager", manager)
 }

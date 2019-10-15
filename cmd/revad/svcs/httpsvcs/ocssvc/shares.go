@@ -28,11 +28,11 @@ import (
 	"strings"
 	"time"
 
-	authproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/authprovider/v0alpha"
 	publicshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
+	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
 	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
@@ -122,7 +122,7 @@ func (h *SharesHandler) findSharees(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *SharesHandler) userAsMatch(u *authproviderv0alphapb.User) *MatchData {
+func (h *SharesHandler) userAsMatch(u *userproviderv0alphapb.User) *MatchData {
 	return &MatchData{
 		Label: u.DisplayName,
 		Value: &MatchValueData{
@@ -164,7 +164,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error searching recipient", err)
 			return
 		}
-		var recipient *authproviderv0alphapb.User
+		var recipient *userproviderv0alphapb.User
 		for _, user := range users {
 			if user.Username == shareWith {
 				recipient = user

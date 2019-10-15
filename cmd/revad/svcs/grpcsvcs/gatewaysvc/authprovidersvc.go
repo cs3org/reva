@@ -25,46 +25,98 @@ import (
 	authregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/authregistry/v0alpha"
 	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
+	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/pkg/errors"
 )
 
-func (s *svc) GenerateAccessToken(ctx context.Context, req *gatewayv0alphapb.GenerateAccessTokenRequest) (*authproviderv0alphapb.GenerateAccessTokenResponse, error) {
+func (s *svc) Authenticate(ctx context.Context, req *gatewayv0alphapb.AuthenticateRequest) (*gatewayv0alphapb.AuthenticateResponse, error) {
+	log := appctx.GetLogger(ctx)
+
 	// find auth provider
 	c, err := s.findAuthProvider(ctx, req.Type)
 	if err != nil {
-		return &authproviderv0alphapb.GenerateAccessTokenResponse{
+		err = errors.New("gatewaysvc: error finding auth provider")
+		return &gatewayv0alphapb.AuthenticateResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth provider client"),
 		}, nil
 	}
 
-	authProviderReq := &authproviderv0alphapb.GenerateAccessTokenRequest{
+	authProviderReq := &authproviderv0alphapb.AuthenticateRequest{
 		ClientId:     req.ClientId,
 		ClientSecret: req.ClientSecret,
 	}
-	res, err := c.GenerateAccessToken(ctx, authProviderReq)
+	res, err := c.Authenticate(ctx, authProviderReq)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling GenerateAccessToken")
-	}
-
-	return res, nil
-}
-
-func (s *svc) WhoAmI(ctx context.Context, req *authproviderv0alphapb.WhoAmIRequest) (*authproviderv0alphapb.WhoAmIResponse, error) {
-	c, err := pool.GetAuthProviderServiceClient(s.c.AuthEndpoint)
-	if err != nil {
-		return &authproviderv0alphapb.WhoAmIResponse{
-			Status: status.NewInternal(ctx, err, "error getting auth client"),
+		return &gatewayv0alphapb.AuthenticateResponse{
+			Status: status.NewInternal(ctx, err, "error getting user provider service client"),
 		}, nil
 	}
 
-	res, err := c.WhoAmI(ctx, req)
+	uid := res.UserId
+
+	userClient, err := pool.GetUserProviderServiceClient(s.c.UserProviderEndpoint)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling WhoAmI")
+		log.Err(err).Msg("error getting user provider client")
+		return &gatewayv0alphapb.AuthenticateResponse{
+			Status: status.NewInternal(ctx, err, "error getting user provider service client"),
+		}, nil
 	}
 
+	getUserReq := &userproviderv0alphapb.GetUserRequest{
+		UserId: uid,
+	}
+
+	getUserRes, err := userClient.GetUser(ctx, getUserReq)
+	if err != nil {
+		err = errors.Wrap(err, "authsvc: error in GetUser")
+		res := &gatewayv0alphapb.AuthenticateResponse{
+			Status: status.NewUnauthenticated(ctx, err, "error getting user information"),
+		}
+		return res, nil
+	}
+
+	if getUserRes.Status.Code != rpcpb.Code_CODE_OK {
+		err := status.NewErrorFromCode(getUserRes.Status.Code, "authsvc")
+		return &gatewayv0alphapb.AuthenticateResponse{
+			Status: status.NewUnauthenticated(ctx, err, "error getting user information"),
+		}, nil
+	}
+
+	user := getUserRes.User
+
+	token, err := s.tokenmgr.MintToken(ctx, user)
+	if err != nil {
+		err = errors.Wrap(err, "authsvc: error in MintToken")
+		res := &gatewayv0alphapb.AuthenticateResponse{
+			Status: status.NewUnauthenticated(ctx, err, "error creating access token"),
+		}
+		return res, nil
+	}
+
+	gwRes := &gatewayv0alphapb.AuthenticateResponse{
+		UserId: res.UserId,
+		Token:  token,
+	}
+	return gwRes, nil
+}
+
+func (s *svc) WhoAmI(ctx context.Context, req *gatewayv0alphapb.WhoAmIRequest) (*gatewayv0alphapb.WhoAmIResponse, error) {
+	u, err := s.tokenmgr.DismantleToken(ctx, req.Token)
+	if err != nil {
+		err = errors.Wrap(err, "gatewaysvc: error getting user from token")
+		return &gatewayv0alphapb.WhoAmIResponse{
+			Status: status.NewUnauthenticated(ctx, err, "error dismantling token"),
+		}, nil
+	}
+
+	res := &gatewayv0alphapb.WhoAmIResponse{
+		Status: status.NewOK(ctx),
+		User:   u,
+	}
 	return res, nil
 }
 

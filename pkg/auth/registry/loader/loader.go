@@ -19,17 +19,7 @@
 package loader
 
 import (
-	// Load core gRPC services.
-	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/appprovidersvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/appregistrysvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/authregistrysvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/authsvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/gatewaysvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/preferencessvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/publicshareprovidersvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/storageprovidersvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/storageregistrysvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/userprovidersvc"
-	_ "github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/usershareprovidersvc"
-	// Add your own service here
+	// Load core storage broker drivers.
+	_ "github.com/cs3org/reva/pkg/auth/registry/static"
+	// Add your own here
 )

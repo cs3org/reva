@@ -32,8 +32,6 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
-	"github.com/cs3org/reva/pkg/token"
-	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -46,15 +44,12 @@ func init() {
 type config struct {
 	AuthManager          string                            `mapstructure:"auth_manager"`
 	AuthManagers         map[string]map[string]interface{} `mapstructure:"auth_managers"`
-	TokenManager         string                            `mapstructure:"token_manager"`
-	TokenManagers        map[string]map[string]interface{} `mapstructure:"token_managers"`
 	UserProviderEndpoint string                            `mapstructure:"userprovidersvc"`
 }
 
 type service struct {
-	authmgr  auth.Manager
-	tokenmgr token.Manager
-	conf     *config
+	authmgr auth.Manager
+	conf    *config
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -74,14 +69,6 @@ func getAuthManager(manager string, m map[string]map[string]interface{}) (auth.M
 	return nil, fmt.Errorf("driver %s not found for auth manager", manager)
 }
 
-func getTokenManager(manager string, m map[string]map[string]interface{}) (token.Manager, error) {
-	if f, ok := tokenmgr.NewFuncs[manager]; ok {
-		return f(m[manager])
-	}
-
-	return nil, fmt.Errorf("driver %s not found for token manager", manager)
-}
-
 // New returns a new AuthProviderServiceServer.
 func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 	c, err := parseConfig(m)
@@ -94,12 +81,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 		return nil, err
 	}
 
-	tokenManager, err := getTokenManager(c.TokenManager, c.TokenManagers)
-	if err != nil {
-		return nil, err
-	}
-
-	svc := &service{conf: c, authmgr: authManager, tokenmgr: tokenManager}
+	svc := &service{conf: c, authmgr: authManager}
 	authproviderv0alphapb.RegisterAuthProviderServiceServer(ss, svc)
 
 	return svc, nil
@@ -109,7 +91,7 @@ func (s *service) Close() error {
 	return nil
 }
 
-func (s *service) GenerateAccessToken(ctx context.Context, req *authproviderv0alphapb.GenerateAccessTokenRequest) (*authproviderv0alphapb.GenerateAccessTokenResponse, error) {
+func (s *service) Authenticate(ctx context.Context, req *authproviderv0alphapb.AuthenticateRequest) (*authproviderv0alphapb.AuthenticateResponse, error) {
 	log := appctx.GetLogger(ctx)
 	username := req.ClientId
 	password := req.ClientSecret
@@ -117,7 +99,7 @@ func (s *service) GenerateAccessToken(ctx context.Context, req *authproviderv0al
 	uid, err := s.authmgr.Authenticate(ctx, username, password)
 	if err != nil {
 		err = errors.Wrap(err, "authsvc: error in Authenticate")
-		res := &authproviderv0alphapb.GenerateAccessTokenResponse{
+		res := &authproviderv0alphapb.AuthenticateResponse{
 			Status: status.NewUnauthenticated(ctx, err, "error authenticating user"),
 		}
 		return res, nil
@@ -126,7 +108,7 @@ func (s *service) GenerateAccessToken(ctx context.Context, req *authproviderv0al
 	c, err := pool.GetUserProviderServiceClient(s.conf.UserProviderEndpoint)
 	if err != nil {
 		log.Err(err).Msg("error getting user provider client")
-		return &authproviderv0alphapb.GenerateAccessTokenResponse{
+		return &authproviderv0alphapb.AuthenticateResponse{
 			Status: status.NewInternal(ctx, err, "error getting user provider service client"),
 		}, nil
 	}
@@ -138,7 +120,7 @@ func (s *service) GenerateAccessToken(ctx context.Context, req *authproviderv0al
 	getUserRes, err := c.GetUser(ctx, getUserReq)
 	if err != nil {
 		err = errors.Wrap(err, "authsvc: error in GetUser")
-		res := &authproviderv0alphapb.GenerateAccessTokenResponse{
+		res := &authproviderv0alphapb.AuthenticateResponse{
 			Status: status.NewUnauthenticated(ctx, err, "error getting user information"),
 		}
 		return res, nil
@@ -146,29 +128,22 @@ func (s *service) GenerateAccessToken(ctx context.Context, req *authproviderv0al
 
 	if getUserRes.Status.Code != rpcpb.Code_CODE_OK {
 		err := status.NewErrorFromCode(getUserRes.Status.Code, "authsvc")
-		return &authproviderv0alphapb.GenerateAccessTokenResponse{
+		return &authproviderv0alphapb.AuthenticateResponse{
 			Status: status.NewUnauthenticated(ctx, err, "error getting user information"),
 		}, nil
 	}
 
 	user := getUserRes.User
-	accessToken, err := s.tokenmgr.MintToken(ctx, user)
-	if err != nil {
-		err = errors.Wrap(err, "authsvc: error in MintToken")
-		res := &authproviderv0alphapb.GenerateAccessTokenResponse{
-			Status: status.NewUnauthenticated(ctx, err, "error creating access token"),
-		}
-		return res, nil
-	}
 
 	log.Info().Msgf("user %s authenticated", user.Username)
-	res := &authproviderv0alphapb.GenerateAccessTokenResponse{
-		Status:      status.NewOK(ctx),
-		AccessToken: accessToken,
-		UserId:      uid,
+	res := &authproviderv0alphapb.AuthenticateResponse{
+		Status: status.NewOK(ctx),
+		UserId: uid,
 	}
 	return res, nil
 }
+
+/*
 
 func (s *service) WhoAmI(ctx context.Context, req *authproviderv0alphapb.WhoAmIRequest) (*authproviderv0alphapb.WhoAmIResponse, error) {
 	u, err := s.tokenmgr.DismantleToken(ctx, req.AccessToken)
@@ -185,3 +160,4 @@ func (s *service) WhoAmI(ctx context.Context, req *authproviderv0alphapb.WhoAmIR
 	}
 	return res, nil
 }
+*/

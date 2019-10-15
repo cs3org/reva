@@ -22,6 +22,7 @@ import (
 	"context"
 	"net/http"
 
+	authregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/authregistry/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 )
 
@@ -50,4 +51,11 @@ type TokenStrategy interface {
 // TokenWriter stores the token in a http response.
 type TokenWriter interface {
 	WriteToken(token string, w http.ResponseWriter)
+}
+
+// Registry is the interface that auth registries implement
+// for discovering auth providers
+type Registry interface {
+	ListProviders(ctx context.Context) ([]*authregistryv0alphapb.ProviderInfo, error)
+	GetProvider(ctx context.Context, authType string) (*authregistryv0alphapb.ProviderInfo, error)
 }

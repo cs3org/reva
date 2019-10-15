@@ -16,34 +16,19 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package demo
+package registry
 
-import (
-	"context"
-	"testing"
+import "github.com/cs3org/reva/pkg/auth"
 
-	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
-)
+// NewFunc is the function that auth provider implementations
+// should register at init time.
+type NewFunc func(map[string]interface{}) (auth.Registry, error)
 
-var ctx = context.Background()
+// NewFuncs is a map containing all the registered auth backends.
+var NewFuncs = map[string]NewFunc{}
 
-func TestEncodeDecode(t *testing.T) {
-	m, _ := New(nil)
-	u := &userproviderv0alphapb.User{
-		Username: "marie",
-	}
-
-	encoded, err := m.MintToken(ctx, u)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	decodedUser, err := m.DismantleToken(ctx, encoded)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if u.Username != decodedUser.Username {
-		t.Fatalf("mail claims differ: expected=%s got=%s", u.Username, decodedUser.Username)
-	}
+// Register registers a new auth provider new function.
+// Not safe for concurrent use. Safe for use from package init.
+func Register(name string, f NewFunc) {
+	NewFuncs[name] = f
 }

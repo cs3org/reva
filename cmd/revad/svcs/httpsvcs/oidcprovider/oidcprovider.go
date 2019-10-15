@@ -21,6 +21,7 @@ package oidcprovider
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -31,7 +32,7 @@ import (
 	"github.com/ory/fosite/token/jwt"
 	"github.com/pkg/errors"
 
-	authproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/authprovider/v0alpha"
+	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/httpserver"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -81,6 +82,9 @@ func New(m map[string]interface{}) (httpsvcs.Service, error) {
 		c.Prefix = "oauth2"
 	}
 
+	if c.AuthType == "" {
+		return nil, fmt.Errorf("oidcprovidersvc: auth_type cannot be empty")
+	}
 	// parse clients
 	clients := map[string]fosite.Client{}
 	for id, val := range c.Clients {
@@ -251,7 +255,7 @@ func (s *customSession) Clone() fosite.Session {
 // Usually, you could do:
 //
 //  session = new(fosite.DefaultSession)
-func (s *svc) newSession(token string, user *authproviderv0alphapb.User) *customSession {
+func (s *svc) newSession(token string, user *userproviderv0alphapb.User) *customSession {
 	return &customSession{
 		DefaultSession: &openid.DefaultSession{
 			Claims: &jwt.IDTokenClaims{

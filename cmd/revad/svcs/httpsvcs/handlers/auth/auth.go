@@ -23,9 +23,9 @@ import (
 	"net/http"
 	"strings"
 
-	authproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/authprovider/v0alpha"
 	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
+	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/httpserver"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/status"
@@ -92,6 +92,12 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 
 	if conf.Priority == 0 {
 		conf.Priority = defaultPriority
+	}
+
+	// the authentication type must be provided
+	// TODO(labkode): would be nice to negotiate the auth type between client and server.
+	if conf.AuthType == "" {
+		return nil, 0, fmt.Errorf("auth: auth_type cannot be empty")
 	}
 
 	f, ok := registry.NewCredentialFuncs[conf.CredentialStrategy]
@@ -166,7 +172,7 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 
 				log.Debug().Msg("credentials obtained from the request")
 
-				req := &gatewayv0alphapb.GenerateAccessTokenRequest{
+				req := &gatewayv0alphapb.AuthenticateRequest{
 					Type:         conf.AuthType,
 					ClientId:     creds.ClientID,
 					ClientSecret: creds.ClientSecret,
@@ -179,9 +185,9 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 					return
 				}
 
-				res, err := client.GenerateAccessToken(r.Context(), req)
+				res, err := client.Authenticate(r.Context(), req)
 				if err != nil {
-					log.Error().Err(err).Msg("error calling GenerateAccessToken")
+					log.Error().Err(err).Msg("error calling Authenticate")
 					w.WriteHeader(http.StatusUnauthorized)
 					return
 				}
@@ -195,7 +201,7 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 
 				log.Info().Msg("core access token generated")
 				// write token to response
-				tkn = res.AccessToken
+				tkn = res.Token
 				tokenWriter.WriteToken(tkn, w)
 			} else {
 				log.Info().Msg("access token is already provided")
@@ -209,7 +215,7 @@ func New(m map[string]interface{}) (httpserver.Middleware, int, error) {
 				return
 			}
 
-			u := &authproviderv0alphapb.User{}
+			u := &userproviderv0alphapb.User{}
 			if err := mapstructure.Decode(claims, u); err != nil {
 				log.Error().Err(err).Msg("error decoding user claims")
 				w.WriteHeader(http.StatusUnauthorized)

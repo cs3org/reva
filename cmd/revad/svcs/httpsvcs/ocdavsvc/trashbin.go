@@ -28,10 +28,10 @@ import (
 	"strings"
 	"time"
 
-	authproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/authprovider/v0alpha"
 	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs"
 	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/utils"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -133,7 +133,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 	})
 }
 
-func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s *svc, u *authproviderv0alphapb.User) {
+func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s *svc, u *userproviderv0alphapb.User) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -183,7 +183,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 
 }
 
-func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *authproviderv0alphapb.User, pf *propfindXML, items []*storageproviderv0alphapb.RecycleItem) (string, error) {
+func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *userproviderv0alphapb.User, pf *propfindXML, items []*storageproviderv0alphapb.RecycleItem) (string, error) {
 	responses := make([]*responseXML, 0, len(items)+1)
 	// add trashbin dir . entry
 	responses = append(responses, &responseXML{
@@ -352,7 +352,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, pf *pr
 	return &response, nil
 }
 
-func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, u *authproviderv0alphapb.User, dst string, key string) {
+func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, u *userproviderv0alphapb.User, dst string, key string) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 

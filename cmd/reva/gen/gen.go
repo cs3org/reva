@@ -27,7 +27,7 @@ import (
 	"os"
 	"text/template"
 
-	authproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/authprovider/v0alpha"
+	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
 )
 
 var baseTemplate = `# This config file will start a reva instance that:
@@ -401,7 +401,7 @@ type UserVars struct {
 }
 
 // WriteUsers writes a basic auth protected reva.toml file to the given path
-func WriteUsers(p string, users []*authproviderv0alphapb.User) {
+func WriteUsers(p string, users []*userproviderv0alphapb.User) {
 
 	var uservars []*UserVars
 
