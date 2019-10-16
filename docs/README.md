@@ -10,7 +10,7 @@
 
 ## Guides
 
-* [Getting started]("./guides/getting-started.md")
+* [Getting started with REVA](./guides/getting-started.md)
 
 ## Config reference
 
