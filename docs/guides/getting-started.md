@@ -44,3 +44,22 @@ $ revad -c ~/revad.toml
 ```
 
 
+## HTTP services
+
+Let's enable the helloworld service:
+
+```
+$ cat revad.toml 
+[http]
+enabled_services = ["helloworldsvc"]
+```
+
+```
+$ revad -c ~/revad.toml 
+9:27AM INF dev/reva/cmd/revad/main.go:94 > version= commit= branch= go_version= build_date= build_platform= pid=24558
+9:27AM INF dev/reva/cmd/revad/main.go:95 > running on 4 cpus pid=24558
+9:27AM INF dev/reva/cmd/revad/grace/grace.go:181 > pidfile saved at: /tmp/gonzalhu/revad-ea51bb72-2d20-403e-a7db-73843e530115.pid pid=24558 pkg=grace
+9:27AM INF dev/reva/cmd/revad/httpserver/httpserver.go:233 > http service enabled: helloworldsvc@/ pid=24558 pkg=httpserver
+9:27AM INF dev/reva/cmd/revad/httpserver/httpserver.go:134 > http server listening at http://localhost:9998 pid=24558 pkg=httpserver
+```
+
