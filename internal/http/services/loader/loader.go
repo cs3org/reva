@@ -26,6 +26,7 @@ import (
 	_ "github.com/cs3org/reva/internal/http/services/oidcprovider"
 	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
 	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocs"
+	_ "github.com/cs3org/reva/internal/http/services/owncloud/thumbnails"
 	_ "github.com/cs3org/reva/internal/http/services/prometheus"
 	_ "github.com/cs3org/reva/internal/http/services/wellknown"
 	// Add your own service here

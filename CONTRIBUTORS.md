@@ -3,6 +3,7 @@
 - Felix Hillingshaeuser <felix@mxcore.de>
 - Giuseppe <giuseppe.lopresti@cern.ch>
 - Giuseppe Lo Presti <giuseppe.lopresti@cern.ch>
+- Hannah von Reth <hannah.vonreth@owncloud.com>
 - Hannah von Reth <vonreth@kde.org>
 - Hugo Gonzalez Labrador <github@hugo.labkode.com>
 - Ilja Neumann <ineumann@owncloud.com>
