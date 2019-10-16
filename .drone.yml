@@ -1,0 +1,16 @@
+---
+kind: pipeline
+type: docker
+name: build
+
+platform:
+  os: linux
+  arch: amd64
+
+steps:
+- name: build
+  pull: always
+  image: golang:1.13
+  commands:
+    - make deps
+    - make
