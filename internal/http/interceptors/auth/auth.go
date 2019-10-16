@@ -53,7 +53,7 @@ func init() {
 type config struct {
 	Priority             int                               `mapstructure:"priority"`
 	AuthType             string                            `mapstructure:"auth_type"`
-	GatewaySvc           string                            `mapstructure:"gatewaysvc"`
+	GatewaySvc           string                            `mapstructure:"gateway"`
 	CredentialStrategy   string                            `mapstructure:"credential_strategy"`
 	CredentialStrategies map[string]map[string]interface{} `mapstructure:"credential_strategies"`
 	TokenStrategy        string                            `mapstructure:"token_strategy"`

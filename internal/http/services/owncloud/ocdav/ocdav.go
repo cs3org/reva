@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocdavsvc
+package ocdav
 
 import (
 	"encoding/base64"
@@ -47,7 +47,7 @@ func init() {
 type Config struct {
 	Prefix      string `mapstructure:"prefix"`
 	ChunkFolder string `mapstructure:"chunk_folder"`
-	GatewaySvc  string `mapstructure:"gatewaysvc"`
+	GatewaySvc  string `mapstructure:"gateway"`
 }
 
 type svc struct {
@@ -56,7 +56,7 @@ type svc struct {
 	davHandler    *DavHandler
 }
 
-// New returns a new ocdavsvc
+// New returns a new ocdav
 func New(m map[string]interface{}) (rhttp.Service, error) {
 	conf := &Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {

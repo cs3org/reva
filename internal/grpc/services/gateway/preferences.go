@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package gatewaysvc
+package gateway
 
 import (
 	"context"
@@ -30,7 +30,7 @@ import (
 func (s *svc) SetKey(ctx context.Context, req *preferencesv0alphapb.SetKeyRequest) (*preferencesv0alphapb.SetKeyResponse, error) {
 	c, err := pool.GetPreferencesClient(s.c.PreferencesEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gatewaysvc: error calling GetPreferencesClient")
+		err = errors.Wrap(err, "gateway: error calling GetPreferencesClient")
 		return &preferencesv0alphapb.SetKeyResponse{
 			Status: status.NewInternal(ctx, err, "error getting preferences client"),
 		}, nil
@@ -38,7 +38,7 @@ func (s *svc) SetKey(ctx context.Context, req *preferencesv0alphapb.SetKeyReques
 
 	res, err := c.SetKey(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling SetKey")
+		return nil, errors.Wrap(err, "gateway: error calling SetKey")
 	}
 
 	return res, nil
@@ -47,7 +47,7 @@ func (s *svc) SetKey(ctx context.Context, req *preferencesv0alphapb.SetKeyReques
 func (s *svc) GetKey(ctx context.Context, req *preferencesv0alphapb.GetKeyRequest) (*preferencesv0alphapb.GetKeyResponse, error) {
 	c, err := pool.GetPreferencesClient(s.c.PreferencesEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gatewaysvc: error calling GetPreferencesClient")
+		err = errors.Wrap(err, "gateway: error calling GetPreferencesClient")
 		return &preferencesv0alphapb.GetKeyResponse{
 			Status: status.NewInternal(ctx, err, "error getting preferences client"),
 		}, nil
@@ -55,7 +55,7 @@ func (s *svc) GetKey(ctx context.Context, req *preferencesv0alphapb.GetKeyReques
 
 	res, err := c.GetKey(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling GetKey")
+		return nil, errors.Wrap(err, "gateway: error calling GetKey")
 	}
 
 	return res, nil

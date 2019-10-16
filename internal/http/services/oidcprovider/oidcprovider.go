@@ -45,7 +45,7 @@ func init() {
 type config struct {
 	Prefix          string                            `mapstructure:"prefix"`
 	AuthType        string                            `mapstructure:"auth_type"`
-	GatewayEndpoint string                            `mapstructure:"gatewaysvc"`
+	GatewayEndpoint string                            `mapstructure:"gateway"`
 	Clients         map[string]map[string]interface{} `mapstructure:"clients"`
 	Issuer          string                            `mapstructure:"issuer"`
 }

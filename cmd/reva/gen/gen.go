@@ -48,7 +48,7 @@ level = "debug"
 # What services, http middlewares and grpc interceptors should be started?
 
 [http]
-enabled_services = ["datasvc", "ocdavsvc", "ocssvc"{{if eq .CredentialStrategy "oidc"}}, "oidcprovider", "wellknown"{{end}}]
+enabled_services = ["datasvc", "ocdav", "ocssvc"{{if eq .CredentialStrategy "oidc"}}, "oidcprovider", "wellknown"{{end}}]
 enabled_middlewares = ["log", "trace", "auth"{{if eq .CredentialStrategy "oidc"}}, "cors"{{end}}]
 network = "tcp"
 address = "0.0.0.0:9998"
@@ -140,7 +140,7 @@ secret = "{{.TokenSecret}}"
 
 # HTTP services
 
-[http.services.ocdavsvc]
+[http.services.ocdav]
 prefix = ""
 chunk_folder = "/var/tmp/owncloud/chunks"
 storageregistrysvc = "127.0.0.1:9999"
