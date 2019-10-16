@@ -65,7 +65,7 @@ $ revad -c ~/revad.toml
 
 When the directive **enabled_services** is declared and the value is not empty, REVA will start an HTTP server with the declared services, in this case, the helloworld service. 
 
-When REVA starts it will create a PID (process ID file), that will contain the PID of the REVA process, this file is needed to do reloads of the service as explained in [Controlling REVA](/controlling-reva.md). If no **-p flag** is specified, REVA will create the PID file in the operating system temporary directory, in this example: */tmp/gonzalhu/revad-ea51bb72-2d20-403e-a7db-73843e530115.pid**.
+When REVA starts it will create a PID (process ID file), that will contain the PID of the REVA process, this file is needed to do reloads of the service as explained in [Controlling REVA](/controlling-reva.md). If no **-p flag** is specified, REVA will create the PID file in the operating system temporary directory, in this example: `/tmp/gonzalhu/revad-ea51bb72-2d20-403e-a7db-73843e530115.pid`.
 
 The line *http service enabled: helloworldsvc@/* indicated that the helloworld service has been enabled and it can be reach at the root URL (/).
 
