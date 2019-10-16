@@ -25,7 +25,7 @@
 * [oidcprovider](./config/services/http/oidcprovider.md)
 * [wellknown](./config/services/http/wellknown.md)
 
-**HTT interceptors**
+**HTTP interceptors**
 
 * [auth](./config/interceptors/http/auth.md)
 * [log](./config/interceptors/http/cors.md)
