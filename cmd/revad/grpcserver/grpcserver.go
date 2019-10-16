@@ -24,18 +24,17 @@ import (
 	"net"
 	"sort"
 
-	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/interceptors/log"
-
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/interceptors/appctx"
+	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/interceptors/log"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/interceptors/recovery"
 	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/interceptors/token"
-
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.opencensus.io/plugin/ocgrpc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 // UnaryInterceptors is a map of registered unary grpc interceptors.
@@ -91,6 +90,7 @@ type config struct {
 	Services            map[string]map[string]interface{} `mapstructure:"services"`
 	EnabledInterceptors []string                          `mapstructure:"enabled_interceptors"`
 	Interceptors        map[string]map[string]interface{} `mapstructure:"interceptors"`
+	EnableReflection    bool                              `mapstructure:"enable_reflection"`
 }
 
 // Server is a gRPC server.
@@ -115,7 +115,7 @@ func New(m interface{}, log zerolog.Logger) (*Server, error) {
 	}
 
 	if conf.Address == "" {
-		conf.Address = "0.0.0.0:9999"
+		conf.Address = "localhost:9999"
 	}
 
 	server := &Server{conf: conf, log: log, closers: map[string]io.Closer{}}
@@ -126,6 +126,11 @@ func New(m interface{}, log zerolog.Logger) (*Server, error) {
 	opts = append(opts, grpc.StatsHandler(&ocgrpc.ServerHandler{}))
 
 	grpcServer := grpc.NewServer(opts...)
+	if conf.EnableReflection {
+		log.Info().Msg("grpc server reflection enabled")
+		reflection.Register(grpcServer)
+	}
+
 	server.s = grpcServer
 	return server, nil
 }
