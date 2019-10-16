@@ -100,6 +100,7 @@ REVA offers the possibility to expose GRPC services, let's do an example with th
 ```
 $ cat ~/revad.toml
 [grpc]
+enable_reflection = true # needed to query GRPC services dynamically without having the protobuf definitions.
 enabled_services = ["helloworldsvc"]
 ```
 
@@ -110,4 +111,51 @@ $ revad -c ~/revad.toml
 9:44AM INF dev/reva/cmd/revad/grace/grace.go:181 > pidfile saved at: /tmp/gonzalhu/revad-68d20c91-1d3a-4e1c-a2a3-e9216e2f63d5.pid pid=13514 pkg=grace
 9:44AM INF dev/reva/cmd/revad/grpcserver/grpcserver.go:177 > grpc service enabled: helloworldsvc pid=13514 pkg=grpcserver
 9:44AM INF dev/reva/cmd/revad/grpcserver/grpcserver.go:141 > grpc server listening at tcp:0.0.0.0:9999 pid=13514 pkg=grpcserver
+```
+
+To query the GRPC endpoint we need another tool, we'll use [grpcurl](https://github.com/fullstorydev/grpcurl), make sure you have it installed. 
+
+We can list the available services:
+
+```
+$ grpcurl -plaintext localhost:9999 list
+grpc.reflection.v1alpha.ServerReflection
+revad.helloworld.HelloWorldService
+```
+
+And we can ask the server the available methods for a service:
+
+```
+$ grpcurl -plaintext localhost:9999 describe revad.helloworld.HelloWorldService
+revad.helloworld.HelloWorldService is a service:
+service HelloWorldService {
+  rpc Hello ( .revad.helloworld.HelloRequest ) returns ( .revad.helloworld.HelloResponse );
+}
+```
+
+Let's query the method:
+
+```
+$ grpcurl -plaintext localhost:9999 'revad.helloworld.HelloWorldService/Hello'
+{
+  "message": "Hello Mr. Nobody"
+}
+
+```
+
+The HelloWorldService accepts a message for its Hello method:
+
+```
+$ grpcurl -plaintext localhost:9999 describe revad.helloworld.HelloRequest
+revad.helloworld.HelloRequest is a message:
+message HelloRequest {
+  string name = 1;
+}
+```
+
+```
+$ grpcurl -plaintext -d '{"name": "Alice"}' localhost:9999 'revad.helloworld.HelloWorldService/Hello'
+{
+  "message": "Hello Alice"
+}
 ```
