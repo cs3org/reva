@@ -38,7 +38,7 @@ max_cpus = "50%"
 ```
 $ revad -c ~/revad.toml 
 9:25AM INF dev/reva/cmd/revad/main.go:94 > version= commit= branch= go_version= build_date= build_platform= pid=19783
-9:25AM INF dev/reva/cmd/revad/main.go:95 > **running** on 2 cpus pid=19783
+9:25AM INF dev/reva/cmd/revad/main.go:95 > running on 2 cpus pid=19783
 9:25AM INF dev/reva/cmd/revad/main.go:118 > nothing to do, no grpc/http enabled_services declared in config pid=19783
 
 ```
