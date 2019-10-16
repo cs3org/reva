@@ -98,6 +98,7 @@ message = "Ola Mundo!"
 REVA offers the possibility to expose GRPC services, let's do an example with the GRPC helloworld service:
 
 ```
+$ cat ~/revad.toml
 [grpc]
 enabled_services = ["helloworldsvc"]
 ```
