@@ -63,13 +63,13 @@ $ revad -c ~/revad.toml
 9:27AM INF dev/reva/cmd/revad/httpserver/httpserver.go:134 > http server listening at http://localhost:9998 pid=24558 pkg=httpserver
 ```
 
-When the directive **enabled_services** is declared and the value is not empty, REVA will start an HTTP server with the declared services, in this case, the helloworld service. 
+When the directive `enabled_services` is declared and the value is not empty, REVA will start an HTTP server with the declared services, in this case, the helloworld service. 
 
-When REVA starts it will create a PID (process ID file), that will contain the PID of the REVA process, this file is needed to do reloads of the service as explained in [Controlling REVA](/controlling-reva.md). If no **-p flag** is specified, REVA will create the PID file in the operating system temporary directory, in this example: `/tmp/gonzalhu/revad-ea51bb72-2d20-403e-a7db-73843e530115.pid`.
+When REVA starts it will create a PID (process ID file), that will contain the PID of the REVA process, this file is needed to do reloads of the service as explained in [Controlling REVA](/controlling-reva.md). If no `-p flag` is specified, REVA will create the PID file in the operating system temporary directory, in this example: `/tmp/gonzalhu/revad-ea51bb72-2d20-403e-a7db-73843e530115.pid`.
 
-The line *http service enabled: helloworldsvc@/* indicated that the helloworld service has been enabled and it can be reach at the root URL (/).
+The line `http service enabled: helloworldsvc@/` indicated that the helloworld service has been enabled and it can be reach at the root URL (`/`).
 
-We can *curl* this endpoint:
+We can `curl` this endpoint:
 
 ```
 $ curl http://localhost:9998
@@ -80,5 +80,4 @@ In the log lines of the server we see the result of the HTTP request:
 
 ```
 9:34AM INF dev/reva/cmd/revad/svcs/httpsvcs/handlers/log/log.go:112 > http end="16/Oct/2019:09:34:11 +0200" host=127.0.0.1 method=GET pid=13968 pkg=httpserver proto=HTTP/1.1 size=12 start="16/Oct/2019:09:34:11 +0200" status=200 time_ns=67614 traceid=af56a393712698d362b0939b2caabb72 uri=/ url=/
-
 ```
