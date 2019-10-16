@@ -27,7 +27,7 @@ import (
 	"github.com/cheggaaa/pb"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
-	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/utils"
+	"github.com/cs3org/reva/pkg/rhttp"
 )
 
 func downloadCommand() *command {
@@ -84,13 +84,13 @@ func downloadCommand() *command {
 
 		dataServerURL := res.DownloadEndpoint
 		// TODO(labkode): do a protocol switch
-		httpReq, err := utils.NewRequest(ctx, "GET", dataServerURL, nil)
+		httpReq, err := rhttp.NewRequest(ctx, "GET", dataServerURL, nil)
 		if err != nil {
 			return err
 		}
 
 		httpReq.Header.Set("X-Reva-Transfer", res.Token)
-		httpClient := utils.GetHTTPClient(ctx)
+		httpClient := rhttp.GetHTTPClient(ctx)
 
 		httpRes, err := httpClient.Do(httpReq)
 		if err != nil {

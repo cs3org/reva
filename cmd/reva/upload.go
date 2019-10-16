@@ -28,9 +28,11 @@ import (
 	"github.com/cheggaaa/pb"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
-	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/storageprovidersvc"
-	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/utils"
+
+	// TODO(labkode): this should not come from this package.
+	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/pkg/crypto"
+	"github.com/cs3org/reva/pkg/rhttp"
 )
 
 func uploadCommand() *command {
@@ -111,7 +113,7 @@ func uploadCommand() *command {
 		bar.Start()
 		reader := bar.NewProxyReader(fd)
 
-		httpReq, err := utils.NewRequest(ctx, "PUT", dataServerURL, reader)
+		httpReq, err := rhttp.NewRequest(ctx, "PUT", dataServerURL, reader)
 		if err != nil {
 			return err
 		}
@@ -119,10 +121,10 @@ func uploadCommand() *command {
 		httpReq.Header.Set("X-Reva-Transfer", res.Token)
 		q := httpReq.URL.Query()
 		q.Add("xs", xs)
-		q.Add("xs_type", storageprovidersvc.GRPC2PKGXS(xsType).String())
+		q.Add("xs_type", storageprovider.GRPC2PKGXS(xsType).String())
 		httpReq.URL.RawQuery = q.Encode()
 
-		httpClient := utils.GetHTTPClient(ctx)
+		httpClient := rhttp.GetHTTPClient(ctx)
 
 		httpRes, err := httpClient.Do(httpReq)
 		if err != nil {
@@ -180,7 +182,7 @@ func computeXS(t storageproviderv0alphapb.ResourceChecksumType, r io.Reader) (st
 func guessXS(xsFlag string, availableXS []*storageproviderv0alphapb.ResourceChecksumPriority) (storageproviderv0alphapb.ResourceChecksumType, error) {
 	// force use of cheksum if available server side.
 	if xsFlag != "negotiate" {
-		wanted := storageprovidersvc.PKG2GRPCXS(xsFlag)
+		wanted := storageprovider.PKG2GRPCXS(xsFlag)
 		if wanted == storageproviderv0alphapb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID {
 			return storageproviderv0alphapb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID, fmt.Errorf("desired checksum is invalid: %s", xsFlag)
 		}

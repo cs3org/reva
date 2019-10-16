@@ -30,11 +30,11 @@ import (
 	"syscall"
 
 	"contrib.go.opencensus.io/exporter/jaeger"
-	"github.com/cs3org/reva/cmd/revad/config"
-	"github.com/cs3org/reva/cmd/revad/grace"
-	"github.com/cs3org/reva/cmd/revad/grpcserver"
-	"github.com/cs3org/reva/cmd/revad/httpserver"
+	"github.com/cs3org/reva/cmd/revad/internal/config"
+	"github.com/cs3org/reva/cmd/revad/internal/grace"
 	"github.com/cs3org/reva/pkg/logger"
+	"github.com/cs3org/reva/pkg/rgrpc"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/gofrs/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -133,7 +133,7 @@ func main() {
 
 	if isEnabledHTTP(mainConf) {
 		go func() {
-			if err := servers["http"].(*httpserver.Server).Start(listeners["http"]); err != nil {
+			if err := servers["http"].(*rhttp.Server).Start(listeners["http"]); err != nil {
 				log.Error().Err(err).Msg("error starting the http server")
 				watcher.Exit(1)
 			}
@@ -142,7 +142,7 @@ func main() {
 
 	if isEnabledGRPC(mainConf) {
 		go func() {
-			if err := servers["grpc"].(*grpcserver.Server).Start(listeners["grpc"]); err != nil {
+			if err := servers["grpc"].(*rgrpc.Server).Start(listeners["grpc"]); err != nil {
 				log.Error().Err(err).Msg("error starting the grpc server")
 				watcher.Exit(1)
 			}
@@ -266,9 +266,9 @@ func handlePIDFlag(l *zerolog.Logger) (*grace.Watcher, error) {
 	return w, nil
 }
 
-func getGRPCServer(conf interface{}, l *zerolog.Logger) (*grpcserver.Server, error) {
-	sub := l.With().Str("pkg", "grpcserver").Logger()
-	s, err := grpcserver.New(conf, sub)
+func getGRPCServer(conf interface{}, l *zerolog.Logger) (*rgrpc.Server, error) {
+	sub := l.With().Str("pkg", "rgrpc").Logger()
+	s, err := rgrpc.NewServer(conf, sub)
 	if err != nil {
 		err = errors.Wrap(err, "main: error creating grpc server")
 		return nil, err
@@ -276,9 +276,9 @@ func getGRPCServer(conf interface{}, l *zerolog.Logger) (*grpcserver.Server, err
 	return s, nil
 }
 
-func getHTTPServer(conf interface{}, l *zerolog.Logger) (*httpserver.Server, error) {
-	sub := l.With().Str("pkg", "httpserver").Logger()
-	s, err := httpserver.New(conf, sub)
+func getHTTPServer(conf interface{}, l *zerolog.Logger) (*rhttp.Server, error) {
+	sub := l.With().Str("pkg", "rhttp").Logger()
+	s, err := rhttp.New(conf, sub)
 	if err != nil {
 		err = errors.Wrap(err, "main: error creating http server")
 		return nil, err
