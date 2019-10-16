@@ -8,6 +8,10 @@
 * [Controlling REVA](./controlling-reva.md)
 * [Command-line parameters](./command-line.md)
 
+## Guides
+
+* [Getting started]("./guides/getting-started.md")
+
 ## Config reference
 
 * [Core](./config/core.md) 
