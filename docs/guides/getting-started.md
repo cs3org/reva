@@ -93,7 +93,20 @@ enabled_services = ["helloworldsvc"]
 message = "Ola Mundo!"
 ```
 
+## GRPC services
+
+REVA offers the possibility to expose GRPC services, let's do an example with the GRPC helloworld service:
+
 ```
-$ curl http://localhost:9998
-Ola Mundo!
+[grpc]
+enabled_services = ["helloworldsvc"]
+```
+
+```
+$ revad -c ~/revad.toml 
+9:44AM INF dev/reva/cmd/revad/main.go:94 > version= commit= branch= go_version= build_date= build_platform= pid=13514
+9:44AM INF dev/reva/cmd/revad/main.go:95 > running on 4 cpus pid=13514
+9:44AM INF dev/reva/cmd/revad/grace/grace.go:181 > pidfile saved at: /tmp/gonzalhu/revad-68d20c91-1d3a-4e1c-a2a3-e9216e2f63d5.pid pid=13514 pkg=grace
+9:44AM INF dev/reva/cmd/revad/grpcserver/grpcserver.go:177 > grpc service enabled: helloworldsvc pid=13514 pkg=grpcserver
+9:44AM INF dev/reva/cmd/revad/grpcserver/grpcserver.go:141 > grpc server listening at tcp:0.0.0.0:9999 pid=13514 pkg=grpcserver
 ```
