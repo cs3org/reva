@@ -81,3 +81,19 @@ In the log lines of the server we see the result of the HTTP request:
 ```
 9:34AM INF dev/reva/cmd/revad/svcs/httpsvcs/handlers/log/log.go:112 > http end="16/Oct/2019:09:34:11 +0200" host=127.0.0.1 method=GET pid=13968 pkg=httpserver proto=HTTP/1.1 size=12 start="16/Oct/2019:09:34:11 +0200" status=200 time_ns=67614 traceid=af56a393712698d362b0939b2caabb72 uri=/ url=/
 ```
+
+The helloworld service allows to change the message being returned with the `message` directive:
+
+```
+$ cat revad.toml 
+[http]
+enabled_services = ["helloworldsvc"]
+
+[http.services.helloworldsvc]
+message = "Ola Mundo!"
+```
+
+```
+$ curl http://localhost:9998
+Ola Mundo!
+```
