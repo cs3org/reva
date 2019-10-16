@@ -32,7 +32,7 @@ require (
 	golang.org/x/crypto v0.0.0-20190411191339-88737f569e3a
 	golang.org/x/net v0.0.0-20190827160401-ba9fcec4b297 // indirect
 	golang.org/x/oauth2 v0.0.0-20190226205417-e64efc72b421
-	google.golang.org/grpc v1.23.0
+	google.golang.org/grpc v1.24.0
 	gopkg.in/asn1-ber.v1 v1.0.0-20181015200546-f715ec2f112d // indirect
 	gopkg.in/cheggaaa/pb.v1 v1.0.27 // indirect
 	gopkg.in/ldap.v2 v2.5.1
