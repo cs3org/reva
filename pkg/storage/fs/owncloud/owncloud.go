@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -831,6 +832,19 @@ func (fs *ocFS) CreateDir(ctx context.Context, fn string) (err error) {
 		return errors.Wrap(err, "ocFS: error creating dir "+np)
 	}
 	return nil
+}
+
+func (fs *ocFS) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
+	// TODO(jfd):implement
+	return errtypes.NotSupported("owncloud: operation not supported")
+}
+
+func (fs *ocFS) SetArbitraryMetadata(ctx context.Context, ref *storageproviderv0alphapb.Reference, md *storageproviderv0alphapb.ArbitraryMetadata) error {
+	return errtypes.NotSupported("owncloud: operation not supported")
+}
+
+func (fs *ocFS) UnsetArbitraryMetadata(ctx context.Context, ref *storageproviderv0alphapb.Reference, keys []string) error {
+	return errtypes.NotSupported("owncloud: operation not supported")
 }
 
 // Delete is actually only a move to trash

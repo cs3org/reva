@@ -39,7 +39,7 @@ func shareRemoveCommand() *command {
 		id := cmd.Args()[0]
 
 		ctx := getAuthContext()
-		shareClient, err := getUserShareProviderClient()
+		shareClient, err := getClient()
 		if err != nil {
 			return err
 		}

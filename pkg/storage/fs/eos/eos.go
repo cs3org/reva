@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	gouser "os/user"
 	"path"
@@ -41,9 +42,9 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 
-	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
+	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
 	"github.com/cs3org/reva/pkg/errtypes"
 )
 
@@ -108,7 +109,7 @@ type config struct {
 	SingleUsername string `mapstructure:"single_username"`
 }
 
-func getUser(ctx context.Context) (*authv0alphapb.User, error) {
+func getUser(ctx context.Context) (*userproviderv0alphapb.User, error) {
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired(""), "storage_eos: error getting user from ctx")
@@ -215,7 +216,7 @@ func (fs *eosStorage) GetPathByID(ctx context.Context, id *storageproviderv0alph
 }
 
 // resolve takes in a request path or request id and converts it to a internal path.
-func (fs *eosStorage) resolve(ctx context.Context, u *authv0alphapb.User, ref *storageproviderv0alphapb.Reference) (string, error) {
+func (fs *eosStorage) resolve(ctx context.Context, u *userproviderv0alphapb.User, ref *storageproviderv0alphapb.Reference) (string, error) {
 	if ref.GetPath() != "" {
 		return fs.getInternalPath(ctx, ref.GetPath()), nil
 	}
@@ -232,7 +233,7 @@ func (fs *eosStorage) resolve(ctx context.Context, u *authv0alphapb.User, ref *s
 	return "", fmt.Errorf("invalid reference %+v", ref)
 }
 
-func (fs *eosStorage) getPath(ctx context.Context, u *authv0alphapb.User, id *storageproviderv0alphapb.ResourceId) (string, error) {
+func (fs *eosStorage) getPath(ctx context.Context, u *userproviderv0alphapb.User, id *storageproviderv0alphapb.ResourceId) (string, error) {
 	fid, err := strconv.ParseUint(id.OpaqueId, 10, 64)
 	if err != nil {
 		return "", fmt.Errorf("error converting string to int for eos fileid: %s", id.OpaqueId)
@@ -320,6 +321,14 @@ func (fs *eosStorage) getEosACL(g *storageproviderv0alphapb.Grant) (*acl.Entry, 
 		Type:        t,
 	}
 	return eosACL, nil
+}
+
+func (fs *eosStorage) SetArbitraryMetadata(ctx context.Context, ref *storageproviderv0alphapb.Reference, md *storageproviderv0alphapb.ArbitraryMetadata) error {
+	return errtypes.NotSupported("eos: operation not supported")
+}
+
+func (fs *eosStorage) UnsetArbitraryMetadata(ctx context.Context, ref *storageproviderv0alphapb.Reference, keys []string) error {
+	return errtypes.NotSupported("eos: operation not supported")
 }
 
 func (fs *eosStorage) RemoveGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
@@ -534,6 +543,11 @@ func (fs *eosStorage) CreateDir(ctx context.Context, fn string) error {
 
 	fn = fs.getInternalPath(ctx, fn)
 	return fs.c.CreateDir(ctx, u.Username, fn)
+}
+
+func (fs *eosStorage) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
+	// TODO(labkode):implement
+	return errtypes.NotSupported("eos: operation not supported")
 }
 
 func (fs *eosStorage) Delete(ctx context.Context, ref *storageproviderv0alphapb.Reference) error {

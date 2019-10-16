@@ -21,6 +21,7 @@ package storage
 import (
 	"context"
 	"io"
+	"net/url"
 
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	storagetypespb "github.com/cs3org/go-cs3apis/cs3/storagetypes"
@@ -47,7 +48,10 @@ type FS interface {
 	UpdateGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error
 	ListGrants(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.Grant, error)
 	GetQuota(ctx context.Context) (int, int, error)
+	CreateReference(ctx context.Context, path string, targetURI *url.URL) error
 	Shutdown(ctx context.Context) error
+	SetArbitraryMetadata(ctx context.Context, ref *storageproviderv0alphapb.Reference, md *storageproviderv0alphapb.ArbitraryMetadata) error
+	UnsetArbitraryMetadata(ctx context.Context, ref *storageproviderv0alphapb.Reference, keys []string) error
 }
 
 // Registry is the interface that storage registries implement
@@ -55,4 +59,5 @@ type FS interface {
 type Registry interface {
 	FindProvider(ctx context.Context, ref *storageproviderv0alphapb.Reference) (*storagetypespb.ProviderInfo, error)
 	ListProviders(ctx context.Context) ([]*storagetypespb.ProviderInfo, error)
+	GetHome(ctx context.Context) (string, error)
 }

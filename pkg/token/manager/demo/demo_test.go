@@ -22,14 +22,14 @@ import (
 	"context"
 	"testing"
 
-	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
 )
 
 var ctx = context.Background()
 
 func TestEncodeDecode(t *testing.T) {
 	m, _ := New(nil)
-	u := &authv0alphapb.User{
+	u := &userproviderv0alphapb.User{
 		Username: "marie",
 	}
 

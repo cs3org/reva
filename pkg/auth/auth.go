@@ -21,11 +21,14 @@ package auth
 import (
 	"context"
 	"net/http"
+
+	authregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/authregistry/v0alpha"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 )
 
 // Manager is the interface to implement to authenticate users
 type Manager interface {
-	Authenticate(ctx context.Context, clientID, clientSecret string) (context.Context, error)
+	Authenticate(ctx context.Context, clientID, clientSecret string) (*typespb.UserId, error)
 }
 
 // Credentials contains the client id and secret.
@@ -48,4 +51,11 @@ type TokenStrategy interface {
 // TokenWriter stores the token in a http response.
 type TokenWriter interface {
 	WriteToken(token string, w http.ResponseWriter)
+}
+
+// Registry is the interface that auth registries implement
+// for discovering auth providers
+type Registry interface {
+	ListProviders(ctx context.Context) ([]*authregistryv0alphapb.ProviderInfo, error)
+	GetProvider(ctx context.Context, authType string) (*authregistryv0alphapb.ProviderInfo, error)
 }

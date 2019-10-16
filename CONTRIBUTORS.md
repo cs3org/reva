@@ -3,7 +3,9 @@
 - Felix Hillingshaeuser <felix@mxcore.de>
 - Giuseppe <giuseppe.lopresti@cern.ch>
 - Giuseppe Lo Presti <giuseppe.lopresti@cern.ch>
+- Hannah von Reth <vonreth@kde.org>
 - Hugo Gonzalez Labrador <github@hugo.labkode.com>
+- Hugo Gonzalez Labrador <gonzalhu@iota.cern.ch>
 - Ilja Neumann <ineumann@owncloud.com>
 - Jörn Friedrich Dreyer <jfd@butonic.de>
 - Mohitty <mohitt@iitk.ac.in>

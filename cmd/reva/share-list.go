@@ -37,7 +37,7 @@ func shareListCommand() *command {
 	resID := cmd.String("by-resource-id", "", "filter by resource id (storage_id:opaque_id)")
 	cmd.Action = func() error {
 		ctx := getAuthContext()
-		shareClient, err := getUserShareProviderClient()
+		shareClient, err := getClient()
 		if err != nil {
 			return err
 		}

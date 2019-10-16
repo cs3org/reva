@@ -41,7 +41,7 @@ var preferencesCommand = func() *command {
 		subcommand := cmd.Args()[0]
 		key := cmd.Args()[1]
 
-		client, err := getPreferencesClient()
+		client, err := getClient()
 		if err != nil {
 			return err
 		}

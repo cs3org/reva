@@ -22,7 +22,7 @@ import (
 	"context"
 	"time"
 
-	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/token"
 	"github.com/cs3org/reva/pkg/token/manager/registry"
@@ -35,6 +35,11 @@ const defaultExpiraton int64 = 3600 // 1 hour
 
 func init() {
 	registry.Register("jwt", New)
+}
+
+type config struct {
+	Secret  string `mapstructure:"secret"`
+	Expires int64  `mapstructure:"expires"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -57,6 +62,10 @@ func New(value map[string]interface{}) (token.Manager, error) {
 		c.Expires = defaultExpiraton
 	}
 
+	if c.Secret == "" {
+		return nil, errors.New("jwt: secret for signing payloads is not defined in config")
+	}
+
 	m := &manager{conf: c}
 	return m, nil
 }
@@ -65,15 +74,10 @@ type manager struct {
 	conf *config
 }
 
-type config struct {
-	Secret  string `mapstructure:"secret"`
-	Expires int64  `mapstructure:"expires"`
-}
-
 // claims are custom claims for the JWT token.
 type claims struct {
 	jwt.StandardClaims
-	User *authv0alphapb.User `json:"user"`
+	User *userproviderv0alphapb.User `json:"user"`
 }
 
 // TODO(labkode): resulting JSON contains internal protobuf fields:
@@ -82,7 +86,7 @@ type claims struct {
 //  "XXX_sizecache": 0,
 //  "XXX_unrecognized": null
 //}
-func (m *manager) MintToken(ctx context.Context, u *authv0alphapb.User) (string, error) {
+func (m *manager) MintToken(ctx context.Context, u *userproviderv0alphapb.User) (string, error) {
 	ttl := time.Duration(m.conf.Expires) * time.Second
 	claims := claims{
 		StandardClaims: jwt.StandardClaims{
@@ -104,7 +108,7 @@ func (m *manager) MintToken(ctx context.Context, u *authv0alphapb.User) (string,
 	return tkn, nil
 }
 
-func (m *manager) DismantleToken(ctx context.Context, tkn string) (*authv0alphapb.User, error) {
+func (m *manager) DismantleToken(ctx context.Context, tkn string) (*userproviderv0alphapb.User, error) {
 	token, err := jwt.ParseWithClaims(tkn, &claims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(m.conf.Secret), nil
 	})

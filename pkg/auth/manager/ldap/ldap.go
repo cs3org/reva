@@ -28,7 +28,6 @@ import (
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"gopkg.in/ldap.v2"
@@ -82,19 +81,19 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	}, nil
 }
 
-func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (context.Context, error) {
+func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*typespb.UserId, error) {
 	log := appctx.GetLogger(ctx)
 
 	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", am.hostname, am.port), &tls.Config{InsecureSkipVerify: true})
 	if err != nil {
-		return ctx, err
+		return nil, err
 	}
 	defer l.Close()
 
 	// First bind with a read only user
 	err = l.Bind(am.bindUsername, am.bindPassword)
 	if err != nil {
-		return ctx, err
+		return nil, err
 	}
 
 	// Search for the given clientID
@@ -109,11 +108,11 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 
 	sr, err := l.Search(searchRequest)
 	if err != nil {
-		return ctx, err
+		return nil, err
 	}
 
 	if len(sr.Entries) != 1 {
-		return ctx, errtypes.NotFound(clientID)
+		return nil, errtypes.NotFound(clientID)
 	}
 
 	log.Debug().Interface("entries", sr.Entries).Msg("entries")
@@ -123,7 +122,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	// Bind as the user to verify their password
 	err = l.Bind(userdn, clientSecret)
 	if err != nil {
-		return ctx, err
+		return nil, err
 	}
 
 	uid := &typespb.UserId{
@@ -133,6 +132,6 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		OpaqueId: sr.Entries[0].GetAttributeValue("objectguid"),
 	}
 
-	return user.ContextSetUserID(ctx, uid), nil
+	return uid, nil
 
 }

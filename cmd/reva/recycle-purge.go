@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"os"
 
+	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 )
 
 func recyclePurgeCommand() *command {
@@ -37,12 +37,12 @@ func recyclePurgeCommand() *command {
 			os.Exit(1)
 		}
 
-		client, err := getStorageProviderClient()
+		client, err := getClient()
 		if err != nil {
 			return err
 		}
 
-		req := &storageproviderv0alphapb.PurgeRecycleRequest{}
+		req := &gatewayv0alphapb.PurgeRecycleRequest{}
 
 		ctx := getAuthContext()
 		res, err := client.PurgeRecycle(ctx, req)

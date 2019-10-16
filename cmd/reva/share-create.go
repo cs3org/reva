@@ -55,7 +55,7 @@ func shareCreateCommand() *command {
 		fn := cmd.Args()[0]
 
 		ctx := getAuthContext()
-		client, err := getStorageProviderClient()
+		client, err := getClient()
 		if err != nil {
 			return err
 		}
@@ -72,11 +72,6 @@ func shareCreateCommand() *command {
 
 		if res.Status.Code != rpcpb.Code_CODE_OK {
 			return formatError(res.Status)
-		}
-
-		shareClient, err := getUserShareProviderClient()
-		if err != nil {
-			return err
 		}
 
 		perm, err := getSharePerm(*rol)
@@ -101,7 +96,7 @@ func shareCreateCommand() *command {
 			Grant:        grant,
 		}
 
-		shareRes, err := shareClient.CreateShare(ctx, shareRequest)
+		shareRes, err := client.CreateShare(ctx, shareRequest)
 		if err != nil {
 			return err
 		}

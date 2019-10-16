@@ -29,8 +29,8 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 
-	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
+	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
 	"github.com/cs3org/reva/pkg/errtypes"
 )
 
@@ -39,7 +39,7 @@ func init() {
 }
 
 type manager struct {
-	users []*authv0alphapb.User
+	users []*userproviderv0alphapb.User
 }
 
 type config struct {
@@ -68,7 +68,7 @@ func New(m map[string]interface{}) (user.Manager, error) {
 		return nil, err
 	}
 
-	users := []*authv0alphapb.User{}
+	users := []*userproviderv0alphapb.User{}
 
 	err = json.Unmarshal(f, &users)
 	if err != nil {
@@ -80,10 +80,10 @@ func New(m map[string]interface{}) (user.Manager, error) {
 	}, nil
 }
 
-func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*authv0alphapb.User, error) {
+func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*userproviderv0alphapb.User, error) {
 	for _, u := range m.users {
-		// TODO(jfd) we should also compare idp / iss?
-		if u.Id.GetOpaqueId() == uid.OpaqueId {
+		// TODO(jfd) we should also compare idp / iss? labkode: yes we should
+		if u.Id.GetOpaqueId() == uid.OpaqueId || u.Username == uid.OpaqueId {
 			return u, nil
 		}
 	}
@@ -91,12 +91,12 @@ func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*authv0alph
 }
 
 // TODO(jfd) search Opaque? compare sub?
-func userContains(u *authv0alphapb.User, query string) bool {
-	return strings.Contains(u.Username, query) || strings.Contains(u.DisplayName, query) || strings.Contains(u.Mail, query)
+func userContains(u *userproviderv0alphapb.User, query string) bool {
+	return strings.Contains(u.Username, query) || strings.Contains(u.DisplayName, query) || strings.Contains(u.Mail, query) || strings.Contains(u.Id.OpaqueId, query)
 }
 
-func (m *manager) FindUsers(ctx context.Context, query string) ([]*authv0alphapb.User, error) {
-	users := []*authv0alphapb.User{}
+func (m *manager) FindUsers(ctx context.Context, query string) ([]*userproviderv0alphapb.User, error) {
+	users := []*userproviderv0alphapb.User{}
 	for _, u := range m.users {
 		if userContains(u, query) {
 			users = append(users, u)

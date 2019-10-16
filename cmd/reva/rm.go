@@ -38,7 +38,7 @@ func rmCommand() *command {
 
 		fn := cmd.Args()[0]
 		ctx := getAuthContext()
-		client, err := getStorageProviderClient()
+		client, err := getClient()
 		if err != nil {
 			return err
 		}

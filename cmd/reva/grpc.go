@@ -23,15 +23,8 @@ import (
 	"fmt"
 	"log"
 
-	appproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/appprovider/v0alpha"
-	appregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/appregistry/v0alpha"
-	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
-	preferencesv0alphapb "github.com/cs3org/go-cs3apis/cs3/preferences/v0alpha"
+	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
-	storageregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageregistry/v0alpha"
-	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
-	"github.com/cs3org/reva/cmd/revad/svcs/grpcsvcs/pool"
 	"github.com/cs3org/reva/pkg/token"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -52,71 +45,16 @@ func getAuthContext() context.Context {
 	return ctx
 }
 
-func getAppProviderClient(host string) (appproviderv0alphapb.AppProviderServiceClient, error) {
-	conn, err := getConnToHost(host)
-	if err != nil {
-		return nil, err
-	}
-	return appproviderv0alphapb.NewAppProviderServiceClient(conn), nil
-}
-func getStorageBrokerClient() (storageregistryv0alphapb.StorageRegistryServiceClient, error) {
+func getClient() (gatewayv0alphapb.GatewayServiceClient, error) {
 	conn, err := getConn()
 	if err != nil {
 		return nil, err
 	}
-	return storageregistryv0alphapb.NewStorageRegistryServiceClient(conn), nil
-}
-
-func getAppRegistryClient() (appregistryv0alphapb.AppRegistryServiceClient, error) {
-	conn, err := getConn()
-	if err != nil {
-		return nil, err
-	}
-	return appregistryv0alphapb.NewAppRegistryServiceClient(conn), nil
-}
-
-func getUserShareProviderClient() (usershareproviderv0alphapb.UserShareProviderServiceClient, error) {
-	conn, err := getConn()
-	if err != nil {
-		return nil, err
-	}
-	return usershareproviderv0alphapb.NewUserShareProviderServiceClient(conn), nil
-}
-
-// func getPublicShareProviderClient() (publicshareproviderv0alphapb.PublicShareProviderServiceClient, error) {
-// 	conn, err := getConn()
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	return publicshareproviderv0alphapb.NewPublicShareProviderServiceClient(conn), nil
-// }
-
-func getStorageProviderClient() (storageproviderv0alphapb.StorageProviderServiceClient, error) {
-	return pool.GetStorageProviderServiceClient(conf.Host)
-}
-
-func getAuthClient() (authv0alphapb.AuthServiceClient, error) {
-	conn, err := getConn()
-	if err != nil {
-		return nil, err
-	}
-	return authv0alphapb.NewAuthServiceClient(conn), nil
-}
-
-func getPreferencesClient() (preferencesv0alphapb.PreferencesServiceClient, error) {
-	conn, err := getConn()
-	if err != nil {
-		return nil, err
-	}
-	return preferencesv0alphapb.NewPreferencesServiceClient(conn), nil
+	return gatewayv0alphapb.NewGatewayServiceClient(conn), nil
 }
 
 func getConn() (*grpc.ClientConn, error) {
 	return grpc.Dial(conf.Host, grpc.WithInsecure())
-}
-
-func getConnToHost(host string) (*grpc.ClientConn, error) {
-	return grpc.Dial(host, grpc.WithInsecure())
 }
 
 func formatError(status *rpcpb.Status) error {

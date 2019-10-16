@@ -39,7 +39,7 @@ func recycleRestoreCommand() *command {
 
 		key := cmd.Args()[0]
 
-		client, err := getStorageProviderClient()
+		client, err := getClient()
 		if err != nil {
 			return err
 		}

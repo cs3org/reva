@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"path"
 	"strings"
@@ -139,22 +140,33 @@ func (fs *localFS) GetPathByID(ctx context.Context, id *storageproviderv0alphapb
 }
 
 func (fs *localFS) AddGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
-	return errtypes.NotSupported("op not supported")
+	return errtypes.NotSupported("local: operation not supported")
 }
 
 func (fs *localFS) ListGrants(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.Grant, error) {
-	return nil, errtypes.NotSupported("op not supported")
+	return nil, errtypes.NotSupported("local: operation not supported")
 }
 
 func (fs *localFS) RemoveGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
-	return errtypes.NotSupported("op not supported")
+	return errtypes.NotSupported("local: operation not supported")
 }
 func (fs *localFS) UpdateGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
-	return errtypes.NotSupported("op not supported")
+	return errtypes.NotSupported("local: operation not supported")
 }
 
 func (fs *localFS) GetQuota(ctx context.Context) (int, int, error) {
 	return 0, 0, nil
+}
+func (fs *localFS) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
+	return errtypes.NotSupported("local: operation not supported")
+}
+
+func (fs *localFS) SetArbitraryMetadata(ctx context.Context, ref *storageproviderv0alphapb.Reference, md *storageproviderv0alphapb.ArbitraryMetadata) error {
+	return errtypes.NotSupported("local: operation not supported")
+}
+
+func (fs *localFS) UnsetArbitraryMetadata(ctx context.Context, ref *storageproviderv0alphapb.Reference, keys []string) error {
+	return errtypes.NotSupported("local: operation not supported")
 }
 
 func (fs *localFS) CreateDir(ctx context.Context, fn string) error {
