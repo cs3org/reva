@@ -14,7 +14,7 @@
 * [HTTP](./config/http.md)
 * [GRPC](./config/grpc.md) 
 
->**HTTP services**
+**HTTP services**
 
 * [helloworld](./config/services/http/helloworld.md)
 * [datagateway](./config/services/http/datagateway.md)
@@ -25,12 +25,12 @@
 * [oidcprovider](./config/services/http/oidcprovider.md)
 * [wellknown](./config/services/http/wellknown.md)
 
->**HTT interceptors**
+**HTT interceptors**
 
 * [auth](./config/interceptors/http/auth.md)
 * [log](./config/interceptors/http/cors.md)
 
->**GRPC Services**
+**GRPC Services**
 
 * [authprovider](./config/services/grpc/authprovider.md)
 * [authregistry](./config/services/grpc/authregistry.md)
@@ -41,7 +41,7 @@
 * [userprovider](./config/services/grpc/userprovider.md)
 * [usershareprovider](./config/services/grpc/usershareprovider.md)
 
->**GRPC interceptors**
+**GRPC interceptors**
 
 * [auth](./config/interceptors/grpc/auth.md)
 
