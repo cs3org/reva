@@ -8,6 +8,8 @@ platform:
   arch: amd64
 
 trigger:
+  branch:
+  - master
   event:
     exclude:
     - pull_request
@@ -57,9 +59,6 @@ trigger:
   event:
     include:
     - pull_request
-    - tag
-    - promote
-    - rollback
 
 steps:
 - name: build
