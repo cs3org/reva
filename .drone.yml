@@ -1,12 +1,19 @@
 ---
 kind: pipeline
 type: docker
-name: build-on-push
+name: build-and-publish-docker
 
 platform:
   os: linux
   arch: amd64
 
+trigger:
+  event:
+    exclude:
+    - pull_request
+    - tag
+    - promote
+    - rollback
 steps:
 - name: build
   image: golang:1.13
@@ -36,3 +43,26 @@ steps:
       from_secret: dockerhub_username
     password:
       from_secret: dockerhub_password
+
+---
+kind: pipeline
+type: docker
+name: build-only
+
+platform:
+  os: linux
+  arch: amd64
+
+trigger:
+  event:
+    include:
+    - pull_request
+    - tag
+    - promote
+    - rollback
+
+steps:
+- name: build
+  image: golang:1.13
+  commands:
+    - make ci
