@@ -40,7 +40,7 @@ func init() {
 	rhttp.Register("datagateway", New)
 }
 
-// transerClaims are custom claims for a JWT token to be used between the metadata and data gateways.
+// transferClaims are custom claims for a JWT token to be used between the metadata and data gateways.
 type transferClaims struct {
 	jwt.StandardClaims
 	Target string `json:"target"`
