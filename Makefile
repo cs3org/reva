@@ -25,7 +25,7 @@ tidy:
 	go mod tidy
 
 build-revad: imports
-	go build -mod=venodr -o ./cmd/revad/revad ${LDFLAGS} ./cmd/revad 
+	go build -mod=vendor -o ./cmd/revad/revad ${LDFLAGS} ./cmd/revad 
 
 build-reva: imports
 	go build -mod=vendor -o ./cmd/reva/reva ${LDFLAGS} ./cmd/reva
@@ -54,3 +54,10 @@ lint-ci:
 
 # to be run in CI platform
 ci: build-ci test  lint-ci
+
+# to be run in Docker build
+build-revad-docker: off
+	go build -mod=vendor -o ./cmd/revad/revad ${LDFLAGS} ./cmd/revad 
+build-reva-docker: off
+	go build -mod=vendor -o ./cmd/revad/reva ${LDFLAGS} ./cmd/reva
+

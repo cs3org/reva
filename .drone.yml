@@ -1,11 +1,64 @@
 ---
 kind: pipeline
 type: docker
-name: build
+name: build-and-publish-docker
 
 platform:
   os: linux
   arch: amd64
+
+trigger:
+  branch:
+  - master
+  event:
+    exclude:
+    - pull_request
+    - tag
+    - promote
+    - rollback
+steps:
+- name: build
+  image: golang:1.13
+  commands:
+    - make ci
+
+- name: publish-docker-reva-latest
+  pull: always
+  image: plugins/docker
+  settings:
+    repo: cs3org/reva
+    tags: latest
+    dockerfile: Dockerfile.reva
+    username:
+      from_secret: dockerhub_username
+    password:
+      from_secret: dockerhub_password
+
+- name: publish-docker-revad-latest
+  pull: always
+  image: plugins/docker
+  settings:
+    repo: cs3org/revad
+    tags: latest
+    dockerfile: Dockerfile.revad
+    username:
+      from_secret: dockerhub_username
+    password:
+      from_secret: dockerhub_password
+
+---
+kind: pipeline
+type: docker
+name: build-only
+
+platform:
+  os: linux
+  arch: amd64
+
+trigger:
+  event:
+    include:
+    - pull_request
 
 steps:
 - name: build

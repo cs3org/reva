@@ -20,13 +20,7 @@ FROM golang:1.13
 
 WORKDIR /go/src/github/cs3org/reva
 COPY . .
-RUN GO111MODULE=off make deps
-ENV GO111MODULE=on
-RUN make deps && make 
-WORKDIR /go/src/github/cs3org/reva/cmd/revad
-RUN go install
-RUN mkdir -p /etc/revad/
-RUN echo "" > /etc/revad/revad.toml
+RUN make build-revad-docker && cp /go/src/github/cs3org/reva/cmd/revad/revad /go/bin/revad && mkdir -p /etc/revad/ && echo "" > /etc/revad/revad.toml
 EXPOSE 9999
 EXPOSE 10000
 CMD ["/go/bin/revad", "-c", "/etc/revad/revad.toml", "-p", "/var/run/revad.pid"]

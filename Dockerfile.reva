@@ -20,9 +20,5 @@ FROM golang:1.13
 
 WORKDIR /go/src/github/cs3org/reva
 COPY . .
-RUN GO111MODULE=off make deps
-ENV GO111MODULE=on
-RUN make deps && make
-WORKDIR /go/src/github/cs3org/reva/cmd/reva
-RUN go install
+RUN make build-reva-docker && cp /go/src/github/cs3org/reva/cmd/reva/reva /go/bin/reva
 ENTRYPOINT ["/go/bin/reva"]
