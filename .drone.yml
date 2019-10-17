@@ -9,8 +9,6 @@ platform:
 
 steps:
 - name: build
-  pull: always
   image: golang:1.13
   commands:
-    - make deps
-    - make
+    - make ci

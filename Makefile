@@ -11,41 +11,46 @@ BUILD_PLATFORM=`go version | awk '{print $$4}'`
 
 LDFLAGS=-ldflags "-s -X main.buildDate=${BUILD_DATE} -X main.gitCommit=${GIT_DIRTY}${GIT_COMMIT} -X main.gitBranch=${GIT_BRANCH} -X main.version=${VERSION} -X main.goVersion=${GO_VERSION} -X main.buildPlatform=${BUILD_PLATFORM}"
 
-build:
-	go build ./...
-	go build -o ./cmd/revad/revad ${LDFLAGS} ./cmd/revad 
-	go build -o ./cmd/reva/reva ${LDFLAGS} ./cmd/reva
+off: 
+	GORPOXY=off
 
+imports: off
+	goimports -w tools pkg internal cmd
+
+build: imports
+	go build -mod=vendor -o ./cmd/revad/revad ${LDFLAGS} ./cmd/revad 
+	go build -mod=vendor -o ./cmd/reva/reva ${LDFLAGS} ./cmd/reva
+	
 tidy:
 	go mod tidy
 
-build-revad:
-	go build ./...
-	go build -o ./cmd/revad/revad ${LDFLAGS} ./cmd/revad 
+build-revad: imports
+	go build -mod=venodr -o ./cmd/revad/revad ${LDFLAGS} ./cmd/revad 
 
-build-reva:
-	go build ./...
-	go build -o ./cmd/revad/revad ${LDFLAGS} ./cmd/revad 
+build-reva: imports
+	go build -mod=vendor -o ./cmd/reva/reva ${LDFLAGS} ./cmd/reva
 	
-test:
-	go test -race ./...
+test: off
+	go test -mod=vendor -race ./... 
 
 lint:
 	go run tools/check-license/check-license.go
-	goimports -w .
 	golangci-lint run
 
 contrib:
 	git log --pretty="%an <%ae>" | sort -n | uniq  | sort -n | awk '{print "-", $$0}' | grep -v 'users.noreply.github.com' > CONTRIBUTORS.md 
 
-license:
-	go run github.com/mitchellh/golicense license.hcl cmd/revad/revad
-	go run github.com/mitchellh/golicense license.hcl cmd/revad/reva
-
-deploy:
-	go build -o ./cmd/revad/revad ${LDFLAGS} ./cmd/revad 
-	./cmd/revad/revad -c ./cmd/revad/revad.toml -p ./cmd/revad/revad.pid
-deps:
-	cd /tmp && go get -u golang.org/x/lint/golint
+# for manual building only
+deps: 
 	cd /tmp && go get github.com/golangci/golangci-lint/cmd/golangci-lint
-	cd /tmp && go get -u golang.org/x/tools/cmd/goimports
+	cd /tmp && go get golang.org/x/tools/cmd/goimports
+
+build-ci: off
+	go build -mod=vendor -o ./cmd/revad/revad ${LDFLAGS} ./cmd/revad 
+	go build -mod=vendor -o ./cmd/reva/reva ${LDFLAGS} ./cmd/reva
+lint-ci:
+	go run tools/check-license/check-license.go
+
+
+# to be run in CI platform
+ci: build-ci test  lint-ci
