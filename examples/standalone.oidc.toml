@@ -64,11 +64,11 @@ options_passthrough = true
 
 [http.services.wellknown]
 issuer = "http://localhost:10000"
-authorization_endpoint =  "http://localhost:10000/oauth2/auth"
+authorization_endpoint = "http://localhost:10000/oauth2/auth"
 token_endpoint = "http://localhost:10000/oauth2/token" 
-revocation_endpoint =  "http://localhost:10000/oauth2/auth"
-introspection_endpoint =  "http://localhost:10000/oauth2/introspect"
-userinfo_endpoint =  "http://localhost:10000/oauth2/userinfo"
+revocation_endpoint = "http://localhost:10000/oauth2/auth"
+introspection_endpoint = "http://localhost:10000/oauth2/introspect"
+userinfo_endpoint = "http://localhost:10000/oauth2/userinfo"
 
 [http.services.oidcprovider]
 prefix = "oauth2"
@@ -78,10 +78,23 @@ issuer = "http://localhost:10000"
 
 [http.services.oidcprovider.clients.phoenix]
 id = "phoenix"
-client_secret = "$2a$10$IxMdI6d.LIRZPpSfEwNoeu4rY3FhDREsxFJXikcgdRRAStxUlsuEO"
 redirect_uris = ["http://localhost:8300/oidc-callback.html", "http://localhost:8300/"]
 grant_types = ["implicit", "refresh_token", "authorization_code", "password", "client_credentials"]
+# response_type "id_token token" is currently broken in phoenix, see https://github.com/owncloud/phoenix/issues/2288
+# TODO the oidcprovider service would have to implement a jwks_uri endpoint anyway
+#response_types = ["id_token token"] # use implicit flow for web apps
+response_types = ["code"] # use authorization code flow ... this is for the decsktop client
+# codo flow needs a secret
+client_secret = "$2a$10$IxMdI6d.LIRZPpSfEwNoeu4rY3FhDREsxFJXikcgdRRAStxUlsuEO"  # = "foobar"
+scopes = ["openid", "profile", "email", "offline"]
+
+# to debug the oidc provider allow https://oidcdebugger.com
+[http.services.oidcprovider.clients.oidcdebugger]
+id = "oidcdebugger"
+redirect_uris = ["https://oidcdebugger.com/debug"]
+grant_types = ["implicit", "refresh_token", "authorization_code", "password", "client_credentials"]
 response_types = ["id_token token", "code"]
+client_secret = "$2a$10$IxMdI6d.LIRZPpSfEwNoeu4rY3FhDREsxFJXikcgdRRAStxUlsuEO"  # = "foobar"
 scopes = ["openid", "profile", "email", "offline"]
 
 [http.services.dataprovider]

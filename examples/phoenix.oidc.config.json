@@ -1,0 +1,21 @@
+{
+    "__doc": "install https://github.com/owncloud/ocis-phoenix, then run this with `./ocis-phoenix-testing-linux-amd64 server --http-addr localhost:8300 --config-file phoenix.oidc.config.json --log-level debug`",
+    "server": "http://localhost:10000",
+    "theme": "owncloud",
+    "version": "0.1.0",
+    "openIdConnect": {
+      "metadataUrl": "http://localhost:10000/.well-known/openid-configuration",
+      "authority": "http://localhost:10000",
+      "client_id": "phoenix",
+      "__response_type": "id_token token",
+      "__doc": "response_type id_token token needs https://github.com/owncloud/phoenix/issues/2288",
+      "response_type": "code",
+      "client_secret": "foobar",
+      "scope": "openid profile email"
+    },
+    "apps": [
+      "files",
+      "markdown-editor",
+      "pdf-viewer"
+    ]
+  }
