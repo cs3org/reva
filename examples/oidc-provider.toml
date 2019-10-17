@@ -12,14 +12,14 @@ mode = "console"
 network = "tcp"
 address = "0.0.0.0:9998"
 enabled_services = [
-"authsvc"
+    "authprovider"
 ]
 
-[grpc.services.authsvc]
+[grpc.services.authprovider]
 auth_manager = "oidc"
 
-[grpc.services.authsvc.auth_managers.oidc]
-provider = "http://0.0.0.0:10000"
+[grpc.services.authprovider.auth_managers.oidc]
+provider = "http://localhost:10000"
 insecure = true
 client_id = "phoenix"
 client_secret = "foobar"
