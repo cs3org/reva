@@ -12,36 +12,39 @@ BUILD_PLATFORM=`go version | awk '{print $$4}'`
 LDFLAGS=-ldflags "-s -X main.buildDate=${BUILD_DATE} -X main.gitCommit=${GIT_DIRTY}${GIT_COMMIT} -X main.gitBranch=${GIT_BRANCH} -X main.version=${VERSION} -X main.goVersion=${GO_VERSION} -X main.buildPlatform=${BUILD_PLATFORM}"
 
 build:
-	go build ./...
-	go build -o ./cmd/revad/revad ${LDFLAGS} ./cmd/revad 
-	go build -o ./cmd/reva/reva ${LDFLAGS} ./cmd/reva
+	GOPROXY=off
+	go build -mod=vendor -o ./cmd/revad/revad ${LDFLAGS} ./cmd/revad 
+	go build -mod=vendor -o ./cmd/reva/reva ${LDFLAGS} ./cmd/reva
 
 tidy:
 	go mod tidy
 
 build-revad:
-	go build ./...
-	go build -o ./cmd/revad/revad ${LDFLAGS} ./cmd/revad 
+	GOPROXY=off
+	go build -mod=venodr -o ./cmd/revad/revad ${LDFLAGS} ./cmd/revad 
 
 build-reva:
-	go build ./...
-	go build -o ./cmd/revad/revad ${LDFLAGS} ./cmd/revad 
+	GOPROXY=off
+	go build -mod=vendor -o ./cmd/reva/reva ${LDFLAGS} ./cmd/reva
 	
 test:
-	go test -race ./...
+	GOPROXY=off
+	go test -mod=vendor ./...
+
+test-race:
+	GOPROXY=off
+	go test -mod=vendor -race ./...
 
 lint:
 	go run tools/check-license/check-license.go
-	goimports -w .
+	goimports -w tools pkg internal cmd
 
 contrib:
 	git log --pretty="%an <%ae>" | sort -n | uniq  | sort -n | awk '{print "-", $$0}' | grep -v 'users.noreply.github.com' > CONTRIBUTORS.md 
 
 # for manual building
 deps: 
-	cd /tmp && go get -u golang.org/x/lint/golint
-	cd /tmp && go get github.com/golangci/golangci-lint/cmd/golangci-lint
 	cd /tmp && go get -u golang.org/x/tools/cmd/goimports
 
 # to be run in CI platform
-ci: build test lint
+ci: build test-race lint

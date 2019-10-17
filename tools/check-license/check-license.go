@@ -25,6 +25,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 var fix = flag.Bool("fix", false, "add header if not present")
@@ -51,12 +52,22 @@ var licenseText = `// Copyright 2018-2019 CERN
 
 const prefix = "// Copyright "
 
-var skip = map[string]bool{}
+var toSkip = []string{"vendor/"}
+
+func skip(path string) bool {
+	for _, v := range toSkip {
+		if strings.HasPrefix(path, v) {
+			return true
+		}
+		return false
+	}
+	return false
+}
 
 func main() {
 	flag.Parse()
 	err := filepath.Walk(".", func(path string, fi os.FileInfo, err error) error {
-		if skip[path] {
+		if skip(path) {
 			return nil
 		}
 
