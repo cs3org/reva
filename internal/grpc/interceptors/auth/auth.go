@@ -113,7 +113,7 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 
 		if skip(info.FullMethod, conf.SkipMethods) {
 			span.AddAttributes(trace.BoolAttribute("auth_enabled", false))
-			log.Debug().Str("method", info.FullMethod).Msg("skiping auth")
+			log.Debug().Str("method", info.FullMethod).Msg("skipping auth")
 			return handler(ctx, req)
 		}
 
