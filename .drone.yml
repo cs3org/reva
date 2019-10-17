@@ -65,3 +65,8 @@ steps:
   image: golang:1.13
   commands:
     - make ci
+
+- name: lint
+  image: golangci/golangci-lint:v1.21.0
+  commands:
+    - golangci-lint run
