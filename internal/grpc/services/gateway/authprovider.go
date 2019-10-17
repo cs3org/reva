@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package gatewaysvc
+package gateway
 
 import (
 	"context"
@@ -39,7 +39,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gatewayv0alphapb.Authentica
 	// find auth provider
 	c, err := s.findAuthProvider(ctx, req.Type)
 	if err != nil {
-		err = errors.New("gatewaysvc: error finding auth provider for type: " + req.Type)
+		err = errors.New("gateway: error finding auth provider for type: " + req.Type)
 		return &gatewayv0alphapb.AuthenticateResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth provider client"),
 		}, nil
@@ -57,7 +57,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gatewayv0alphapb.Authentica
 	}
 
 	if res.Status.Code != rpcpb.Code_CODE_OK {
-		err := status.NewErrorFromCode(res.Status.Code, "gatewaysvc")
+		err := status.NewErrorFromCode(res.Status.Code, "gateway")
 		return &gatewayv0alphapb.AuthenticateResponse{
 			Status: status.NewUnauthenticated(ctx, err, ""),
 		}, nil
@@ -66,7 +66,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gatewayv0alphapb.Authentica
 	// validate valid userId
 	uid := res.UserId
 	if uid == nil {
-		err := errors.New("gatewaysvc: uid after Authenticate is nil")
+		err := errors.New("gateway: uid after Authenticate is nil")
 		log.Err(err).Msg("user id is nil")
 		return &gatewayv0alphapb.AuthenticateResponse{
 			Status: status.NewInternal(ctx, err, "user id is nil"),
@@ -123,7 +123,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gatewayv0alphapb.Authentica
 func (s *svc) WhoAmI(ctx context.Context, req *gatewayv0alphapb.WhoAmIRequest) (*gatewayv0alphapb.WhoAmIResponse, error) {
 	u, err := s.tokenmgr.DismantleToken(ctx, req.Token)
 	if err != nil {
-		err = errors.Wrap(err, "gatewaysvc: error getting user from token")
+		err = errors.Wrap(err, "gateway: error getting user from token")
 		return &gatewayv0alphapb.WhoAmIResponse{
 			Status: status.NewUnauthenticated(ctx, err, "error dismantling token"),
 		}, nil
@@ -139,7 +139,7 @@ func (s *svc) WhoAmI(ctx context.Context, req *gatewayv0alphapb.WhoAmIRequest) (
 func (s *svc) findAuthProvider(ctx context.Context, authType string) (authproviderv0alphapb.AuthProviderServiceClient, error) {
 	c, err := pool.GetAuthRegistryServiceClient(s.c.AuthRegistryEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gatewaysvc: error getting auth registry client")
+		err = errors.Wrap(err, "gateway: error getting auth registry client")
 		return nil, err
 	}
 
@@ -148,7 +148,7 @@ func (s *svc) findAuthProvider(ctx context.Context, authType string) (authprovid
 	})
 
 	if err != nil {
-		err = errors.Wrap(err, "gatewaysvc: error calling GetAuthProvider")
+		err = errors.Wrap(err, "gateway: error calling GetAuthProvider")
 		return nil, err
 	}
 
@@ -156,7 +156,7 @@ func (s *svc) findAuthProvider(ctx context.Context, authType string) (authprovid
 		// TODO(labkode): check for capabilities here
 		c, err := pool.GetAuthProviderServiceClient(res.Provider.Address)
 		if err != nil {
-			err = errors.Wrap(err, "gatewaysvc: error getting an auth provider client")
+			err = errors.Wrap(err, "gateway: error getting an auth provider client")
 			return nil, err
 		}
 
@@ -164,8 +164,8 @@ func (s *svc) findAuthProvider(ctx context.Context, authType string) (authprovid
 	}
 
 	if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
-		return nil, errtypes.NotFound("gatewaysvc: auth provider not found for type:" + authType)
+		return nil, errtypes.NotFound("gateway: auth provider not found for type:" + authType)
 	}
 
-	return nil, errors.New("gatewaysvc: error finding an auth provider for type: " + authType)
+	return nil, errors.New("gateway: error finding an auth provider for type: " + authType)
 }

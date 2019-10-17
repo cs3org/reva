@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package gatewaysvc
+package gateway
 
 import (
 	"context"
@@ -32,24 +32,24 @@ import (
 func (s *svc) ListAuthProviders(ctx context.Context, req *authregistryv0alphapb.ListAuthProvidersRequest) (*gatewayv0alphapb.ListAuthProvidersResponse, error) {
 	c, err := pool.GetAuthRegistryServiceClient(s.c.AuthRegistryEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gatewaysvc: error getting auth registry client")
+		err = errors.Wrap(err, "gateway: error getting auth registry client")
 		return &gatewayv0alphapb.ListAuthProvidersResponse{
-			Status: status.NewInternal(ctx, err, "gatewaysvc"),
+			Status: status.NewInternal(ctx, err, "gateway"),
 		}, nil
 	}
 
 	res, err := c.ListAuthProviders(ctx, req)
 	if err != nil {
-		err = errors.Wrap(err, "gatewaysvc: error calling ListAuthProviders")
+		err = errors.Wrap(err, "gateway: error calling ListAuthProviders")
 		return &gatewayv0alphapb.ListAuthProvidersResponse{
-			Status: status.NewInternal(ctx, err, "gatewaysvc"),
+			Status: status.NewInternal(ctx, err, "gateway"),
 		}, nil
 	}
 
 	if res.Status.Code != rpcpb.Code_CODE_OK {
-		err := status.NewErrorFromCode(res.Status.Code, "gatewaysvc")
+		err := status.NewErrorFromCode(res.Status.Code, "gateway")
 		return &gatewayv0alphapb.ListAuthProvidersResponse{
-			Status: status.NewInternal(ctx, err, "gatewaysvc"),
+			Status: status.NewInternal(ctx, err, "gateway"),
 		}, nil
 	}
 

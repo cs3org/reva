@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package gatewaysvc
+package gateway
 
 import (
 	"context"
@@ -37,7 +37,7 @@ func (s *svc) GetUser(ctx context.Context, req *userproviderv0alphapb.GetUserReq
 
 	res, err := c.GetUser(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling GetUser")
+		return nil, errors.Wrap(err, "gateway: error calling GetUser")
 	}
 
 	return res, nil
@@ -53,7 +53,7 @@ func (s *svc) FindUsers(ctx context.Context, req *userproviderv0alphapb.FindUser
 
 	res, err := c.FindUsers(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling GetUser")
+		return nil, errors.Wrap(err, "gateway: error calling GetUser")
 	}
 
 	return res, nil
@@ -69,7 +69,7 @@ func (s *svc) GetUserGroups(ctx context.Context, req *userproviderv0alphapb.GetU
 
 	res, err := c.GetUserGroups(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling GetUser")
+		return nil, errors.Wrap(err, "gateway: error calling GetUser")
 	}
 
 	return res, nil
@@ -85,7 +85,7 @@ func (s *svc) IsInGroup(ctx context.Context, req *userproviderv0alphapb.IsInGrou
 
 	res, err := c.IsInGroup(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling GetUser")
+		return nil, errors.Wrap(err, "gateway: error calling GetUser")
 	}
 
 	return res, nil

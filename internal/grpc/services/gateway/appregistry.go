@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package gatewaysvc
+package gateway
 
 import (
 	"context"
@@ -30,7 +30,7 @@ import (
 func (s *svc) GetAppProviders(ctx context.Context, req *appregistryv0alphapb.GetAppProvidersRequest) (*appregistryv0alphapb.GetAppProvidersResponse, error) {
 	c, err := pool.GetAppRegistryClient(s.c.AppRegistryEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gatewaysvc: error calling GetOCMShareProviderClient")
+		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
 		return &appregistryv0alphapb.GetAppProvidersResponse{
 			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
 		}, nil
@@ -38,7 +38,7 @@ func (s *svc) GetAppProviders(ctx context.Context, req *appregistryv0alphapb.Get
 
 	res, err := c.GetAppProviders(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling ListShares")
+		return nil, errors.Wrap(err, "gateway: error calling ListShares")
 	}
 
 	return res, nil
@@ -47,7 +47,7 @@ func (s *svc) GetAppProviders(ctx context.Context, req *appregistryv0alphapb.Get
 func (s *svc) ListAppProviders(ctx context.Context, req *appregistryv0alphapb.ListAppProvidersRequest) (*appregistryv0alphapb.ListAppProvidersResponse, error) {
 	c, err := pool.GetAppRegistryClient(s.c.AppRegistryEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gatewaysvc: error calling GetOCMShareProviderClient")
+		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
 		return &appregistryv0alphapb.ListAppProvidersResponse{
 			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
 		}, nil
@@ -55,7 +55,7 @@ func (s *svc) ListAppProviders(ctx context.Context, req *appregistryv0alphapb.Li
 
 	res, err := c.ListAppProviders(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling ListShares")
+		return nil, errors.Wrap(err, "gateway: error calling ListShares")
 	}
 
 	return res, nil

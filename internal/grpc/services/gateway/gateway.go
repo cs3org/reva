@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package gatewaysvc
+package gateway
 
 import (
 	"fmt"
@@ -34,7 +34,7 @@ import (
 )
 
 func init() {
-	rgrpc.Register("gatewaysvc", New)
+	rgrpc.Register("gateway", New)
 }
 
 type config struct {
@@ -48,7 +48,7 @@ type config struct {
 	UserProviderEndpoint        string                            `mapstructure:"userprovidersvc"`
 	CommitShareToStorageGrant   bool                              `mapstructure:"commit_share_to_storage_grant"`
 	CommitShareToStorageRef     bool                              `mapstructure:"commit_share_to_storage_ref"`
-	DataGatewayEndpoint         string                            `mapstructure:"datagatewaysvc"`
+	DataGatewayEndpoint         string                            `mapstructure:"datagateway"`
 	TransferSharedSecret        string                            `mapstructure:"transfer_shared_secret"`
 	TranserExpires              int64                             `mapstructure:"transfer_expires"`
 	TokenManager                string                            `mapstructure:"token_manager"`
@@ -72,7 +72,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 
 	// ensure DataGatewayEndpoint is a valid URI
 	if c.DataGatewayEndpoint == "" {
-		return nil, errors.New("datagatewaysvc is not defined")
+		return nil, errors.New("datagateway is not defined")
 	}
 
 	u, err := url.Parse(c.DataGatewayEndpoint)
@@ -102,7 +102,7 @@ func (s *svc) Close() error {
 func parseConfig(m map[string]interface{}) (*config, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "gatewaysvc: error decoding conf")
+		err = errors.Wrap(err, "gateway: error decoding conf")
 		return nil, err
 	}
 	return c, nil

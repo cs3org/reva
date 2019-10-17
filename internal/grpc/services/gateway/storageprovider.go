@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package gatewaysvc
+package gateway
 
 import (
 	"context"
@@ -80,7 +80,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *storageproviderv0al
 
 	storageRes, err := c.InitiateFileDownload(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling InitiateFileDownload")
+		return nil, errors.Wrap(err, "gateway: error calling InitiateFileDownload")
 	}
 
 	res := &gatewayv0alphapb.InitiateFileDownloadResponse{
@@ -90,7 +90,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *storageproviderv0al
 	}
 
 	if storageRes.Expose {
-		log.Info().Msg("download is routed directly to data server - skiping datagatewaysvc")
+		log.Info().Msg("download is routed directly to data server - skiping datagateway")
 		return res, nil
 	}
 
@@ -132,7 +132,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *storageproviderv0alph
 
 	storageRes, err := c.InitiateFileUpload(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling InitiateFileUpload")
+		return nil, errors.Wrap(err, "gateway: error calling InitiateFileUpload")
 	}
 
 	res := &gatewayv0alphapb.InitiateFileUploadResponse{
@@ -143,7 +143,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *storageproviderv0alph
 	}
 
 	if storageRes.Expose {
-		log.Info().Msg("download is routed directly to data server - skiping datagatewaysvc")
+		log.Info().Msg("download is routed directly to data server - skiping datagateway")
 		return res, nil
 	}
 
@@ -192,7 +192,7 @@ func (s *svc) CreateContainer(ctx context.Context, req *storageproviderv0alphapb
 
 	res, err := c.CreateContainer(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling CreateContainer")
+		return nil, errors.Wrap(err, "gateway: error calling CreateContainer")
 	}
 
 	return res, nil
@@ -213,7 +213,7 @@ func (s *svc) Delete(ctx context.Context, req *storageproviderv0alphapb.DeleteRe
 
 	res, err := c.Delete(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling Delete")
+		return nil, errors.Wrap(err, "gateway: error calling Delete")
 	}
 
 	return res, nil
@@ -241,7 +241,7 @@ func (s *svc) SetArbitraryMetadata(ctx context.Context, req *storageproviderv0al
 
 	res, err := c.SetArbitraryMetadata(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling Stat")
+		return nil, errors.Wrap(err, "gateway: error calling Stat")
 	}
 
 	return res, nil
@@ -262,7 +262,7 @@ func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *storageproviderv0
 
 	res, err := c.UnsetArbitraryMetadata(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling Stat")
+		return nil, errors.Wrap(err, "gateway: error calling Stat")
 	}
 
 	return res, nil
@@ -283,7 +283,7 @@ func (s *svc) Stat(ctx context.Context, req *storageproviderv0alphapb.StatReques
 
 	res, err := c.Stat(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling Stat")
+		return nil, errors.Wrap(err, "gateway: error calling Stat")
 	}
 
 	return res, nil
@@ -308,7 +308,7 @@ func (s *svc) ListContainer(ctx context.Context, req *storageproviderv0alphapb.L
 
 	res, err := c.ListContainer(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling ListContainer")
+		return nil, errors.Wrap(err, "gateway: error calling ListContainer")
 	}
 
 	return res, nil
@@ -329,7 +329,7 @@ func (s *svc) ListFileVersions(ctx context.Context, req *storageproviderv0alphap
 
 	res, err := c.ListFileVersions(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling ListFileVersions")
+		return nil, errors.Wrap(err, "gateway: error calling ListFileVersions")
 	}
 
 	return res, nil
@@ -350,7 +350,7 @@ func (s *svc) RestoreFileVersion(ctx context.Context, req *storageproviderv0alph
 
 	res, err := c.RestoreFileVersion(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling RestoreFileVersion")
+		return nil, errors.Wrap(err, "gateway: error calling RestoreFileVersion")
 	}
 
 	return res, nil
@@ -411,7 +411,7 @@ func (s *svc) findByPath(ctx context.Context, path string) (storageproviderv0alp
 func (s *svc) find(ctx context.Context, ref *storageproviderv0alphapb.Reference) (storageproviderv0alphapb.StorageProviderServiceClient, error) {
 	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gatewaysvc: error getting storage registry client")
+		err = errors.Wrap(err, "gateway: error getting storage registry client")
 		return nil, err
 	}
 
@@ -420,7 +420,7 @@ func (s *svc) find(ctx context.Context, ref *storageproviderv0alphapb.Reference)
 	})
 
 	if err != nil {
-		err = errors.Wrap(err, "gatewaysvc: error calling GetStorageProvider")
+		err = errors.Wrap(err, "gateway: error calling GetStorageProvider")
 		return nil, err
 	}
 
@@ -428,7 +428,7 @@ func (s *svc) find(ctx context.Context, ref *storageproviderv0alphapb.Reference)
 		// TODO(labkode): check for capabilities here
 		c, err := pool.GetStorageProviderServiceClient(res.Provider.Address)
 		if err != nil {
-			err = errors.Wrap(err, "gatewaysvc: error getting a storage provider client")
+			err = errors.Wrap(err, "gateway: error getting a storage provider client")
 			return nil, err
 		}
 
@@ -436,8 +436,8 @@ func (s *svc) find(ctx context.Context, ref *storageproviderv0alphapb.Reference)
 	}
 
 	if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
-		return nil, errtypes.NotFound("gatewaysvc: storage provider not found for reference:" + ref.String())
+		return nil, errtypes.NotFound("gateway: storage provider not found for reference:" + ref.String())
 	}
 
-	return nil, errors.New("gatewaysvc: error finding a storage provider")
+	return nil, errors.New("gateway: error finding a storage provider")
 }

@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package gatewaysvc
+package gateway
 
 import (
 	"context"
@@ -74,7 +74,7 @@ func (s *svc) ListPublicShares(ctx context.Context, req *publicshareproviderv0al
 
 	pClient, err := pool.GetPublicShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
-		log.Err(err).Msg("gatewaysvc: error getting usershareprovider client")
+		log.Err(err).Msg("gateway: error getting usershareprovider client")
 		return &publicshareproviderv0alphapb.ListPublicSharesResponse{
 			Status: &rpcpb.Status{
 				Code: rpcpb.Code_CODE_INTERNAL,
@@ -84,7 +84,7 @@ func (s *svc) ListPublicShares(ctx context.Context, req *publicshareproviderv0al
 
 	res, err := pClient.ListPublicShares(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling ListShares")
+		return nil, errors.Wrap(err, "gateway: error calling ListShares")
 	}
 
 	// res := &publicshareproviderv0alphapb.ListPublicSharesResponse{

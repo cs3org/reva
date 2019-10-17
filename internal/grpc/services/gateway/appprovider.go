@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package gatewaysvc
+package gateway
 
 import (
 	"context"
@@ -34,7 +34,7 @@ import (
 func (s *svc) Open(ctx context.Context, req *appproviderv0alphapb.OpenRequest) (*appproviderv0alphapb.OpenResponse, error) {
 	provider, err := s.findAppProvider(ctx, req.ResourceInfo)
 	if err != nil {
-		err = errors.Wrap(err, "gatewaysvc: error calling findAppProvider")
+		err = errors.Wrap(err, "gateway: error calling findAppProvider")
 		var st *rpcpb.Status
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			st = status.NewNotFound(ctx, "app provider not found")
@@ -49,7 +49,7 @@ func (s *svc) Open(ctx context.Context, req *appproviderv0alphapb.OpenRequest) (
 
 	c, err := pool.GetAppProviderClient(provider.Address)
 	if err != nil {
-		err = errors.Wrap(err, "gatewaysvc: error calling GetAppProviderClient")
+		err = errors.Wrap(err, "gateway: error calling GetAppProviderClient")
 		return &appproviderv0alphapb.OpenResponse{
 			Status: status.NewInternal(ctx, err, "error getting appprovider client"),
 		}, nil
@@ -57,7 +57,7 @@ func (s *svc) Open(ctx context.Context, req *appproviderv0alphapb.OpenRequest) (
 
 	res, err := c.Open(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling c.Open")
+		return nil, errors.Wrap(err, "gateway: error calling c.Open")
 	}
 
 	return res, nil
@@ -66,7 +66,7 @@ func (s *svc) Open(ctx context.Context, req *appproviderv0alphapb.OpenRequest) (
 func (s *svc) findAppProvider(ctx context.Context, ri *storageproviderv0alphapb.ResourceInfo) (*appregistryv0alphapb.ProviderInfo, error) {
 	c, err := pool.GetAppRegistryClient(s.c.AppRegistryEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gatewaysvc: error getting appregistry client")
+		err = errors.Wrap(err, "gateway: error getting appregistry client")
 		return nil, err
 	}
 
@@ -75,7 +75,7 @@ func (s *svc) findAppProvider(ctx context.Context, ri *storageproviderv0alphapb.
 	})
 
 	if err != nil {
-		err = errors.Wrap(err, "gatewaysvc: error calling GetAppProviders")
+		err = errors.Wrap(err, "gateway: error calling GetAppProviders")
 		return nil, err
 	}
 
@@ -86,8 +86,8 @@ func (s *svc) findAppProvider(ctx context.Context, ri *storageproviderv0alphapb.
 	}
 
 	if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
-		return nil, errtypes.NotFound("gatewaysvc: app provider not found for resource: " + ri.String())
+		return nil, errtypes.NotFound("gateway: app provider not found for resource: " + ri.String())
 	}
 
-	return nil, errors.New("gatewaysvc: error finding a storage provider")
+	return nil, errors.New("gateway: error finding a storage provider")
 }

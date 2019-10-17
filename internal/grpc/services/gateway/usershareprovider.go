@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package gatewaysvc
+package gateway
 
 import (
 	"context"
@@ -45,7 +45,7 @@ func (s *svc) CreateShare(ctx context.Context, req *usershareproviderv0alphapb.C
 
 	res, err := c.CreateShare(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling CreateShare")
+		return nil, errors.Wrap(err, "gateway: error calling CreateShare")
 	}
 
 	if res.Status.Code != rpcpb.Code_CODE_OK {
@@ -85,11 +85,11 @@ func (s *svc) CreateShare(ctx context.Context, req *usershareproviderv0alphapb.C
 
 		grantRes, err := c.AddGrant(ctx, grantReq)
 		if err != nil {
-			return nil, errors.Wrap(err, "gatewaysvc: error calling AddGrant")
+			return nil, errors.Wrap(err, "gateway: error calling AddGrant")
 		}
 		if grantRes.Status.Code != rpcpb.Code_CODE_OK {
 			res := &usershareproviderv0alphapb.CreateShareResponse{
-				Status: status.NewInternal(ctx, status.NewErrorFromCode(grantRes.Status.Code, "gatewaysvc"),
+				Status: status.NewInternal(ctx, status.NewErrorFromCode(grantRes.Status.Code, "gateway"),
 					"error committing share to storage grant"),
 			}
 			return res, nil
@@ -115,12 +115,12 @@ func (s *svc) RemoveShare(ctx context.Context, req *usershareproviderv0alphapb.R
 		}
 		getShareRes, err := c.GetShare(ctx, getShareReq)
 		if err != nil {
-			return nil, errors.Wrap(err, "gatewaysvc: error calling GetShare")
+			return nil, errors.Wrap(err, "gateway: error calling GetShare")
 		}
 
 		if getShareRes.Status.Code != rpcpb.Code_CODE_OK {
 			res := &usershareproviderv0alphapb.RemoveShareResponse{
-				Status: status.NewInternal(ctx, status.NewErrorFromCode(getShareRes.Status.Code, "gatewaysvc"),
+				Status: status.NewInternal(ctx, status.NewErrorFromCode(getShareRes.Status.Code, "gateway"),
 					"error getting share when committing to the storage"),
 			}
 			return res, nil
@@ -130,7 +130,7 @@ func (s *svc) RemoveShare(ctx context.Context, req *usershareproviderv0alphapb.R
 
 	res, err := c.RemoveShare(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling RemoveShare")
+		return nil, errors.Wrap(err, "gateway: error calling RemoveShare")
 	}
 
 	// if we don't need to commit we return earlier
@@ -166,11 +166,11 @@ func (s *svc) RemoveShare(ctx context.Context, req *usershareproviderv0alphapb.R
 
 		grantRes, err := c.RemoveGrant(ctx, grantReq)
 		if err != nil {
-			return nil, errors.Wrap(err, "gatewaysvc: error calling RemoveGrant")
+			return nil, errors.Wrap(err, "gateway: error calling RemoveGrant")
 		}
 		if grantRes.Status.Code != rpcpb.Code_CODE_OK {
 			return &usershareproviderv0alphapb.RemoveShareResponse{
-				Status: status.NewInternal(ctx, status.NewErrorFromCode(grantRes.Status.Code, "gatewaysvc"),
+				Status: status.NewInternal(ctx, status.NewErrorFromCode(grantRes.Status.Code, "gateway"),
 					"error removing storage grant"),
 			}, nil
 		}
@@ -189,7 +189,7 @@ func (s *svc) GetShare(ctx context.Context, req *usershareproviderv0alphapb.GetS
 func (s *svc) getShare(ctx context.Context, req *usershareproviderv0alphapb.GetShareRequest) (*usershareproviderv0alphapb.GetShareResponse, error) {
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gatewaysvc: error calling GetUserShareProviderClient")
+		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
 		return &usershareproviderv0alphapb.GetShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
 		}, nil
@@ -197,7 +197,7 @@ func (s *svc) getShare(ctx context.Context, req *usershareproviderv0alphapb.GetS
 
 	res, err := c.GetShare(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling GetShare")
+		return nil, errors.Wrap(err, "gateway: error calling GetShare")
 	}
 
 	return res, nil
@@ -207,7 +207,7 @@ func (s *svc) getShare(ctx context.Context, req *usershareproviderv0alphapb.GetS
 func (s *svc) ListShares(ctx context.Context, req *usershareproviderv0alphapb.ListSharesRequest) (*usershareproviderv0alphapb.ListSharesResponse, error) {
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gatewaysvc: error calling GetUserShareProviderClient")
+		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
 		return &usershareproviderv0alphapb.ListSharesResponse{
 			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
 		}, nil
@@ -215,7 +215,7 @@ func (s *svc) ListShares(ctx context.Context, req *usershareproviderv0alphapb.Li
 
 	res, err := c.ListShares(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling ListShares")
+		return nil, errors.Wrap(err, "gateway: error calling ListShares")
 	}
 
 	return res, nil
@@ -224,7 +224,7 @@ func (s *svc) ListShares(ctx context.Context, req *usershareproviderv0alphapb.Li
 func (s *svc) UpdateShare(ctx context.Context, req *usershareproviderv0alphapb.UpdateShareRequest) (*usershareproviderv0alphapb.UpdateShareResponse, error) {
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gatewaysvc: error calling GetUserShareProviderClient")
+		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
 		return &usershareproviderv0alphapb.UpdateShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting share provider client"),
 		}, nil
@@ -232,7 +232,7 @@ func (s *svc) UpdateShare(ctx context.Context, req *usershareproviderv0alphapb.U
 
 	res, err := c.UpdateShare(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling UpdateShare")
+		return nil, errors.Wrap(err, "gateway: error calling UpdateShare")
 	}
 
 	// if we don't need to commit we return earlier
@@ -248,12 +248,12 @@ func (s *svc) UpdateShare(ctx context.Context, req *usershareproviderv0alphapb.U
 			}
 			getShareRes, err := c.GetShare(ctx, getShareReq)
 			if err != nil {
-				return nil, errors.Wrap(err, "gatewaysvc: error calling GetShare")
+				return nil, errors.Wrap(err, "gateway: error calling GetShare")
 			}
 
 			if getShareRes.Status.Code != rpcpb.Code_CODE_OK {
 				return &usershareproviderv0alphapb.UpdateShareResponse{
-					Status: status.NewInternal(ctx, status.NewErrorFromCode(getShareRes.Status.Code, "gatewaysvc"),
+					Status: status.NewInternal(ctx, status.NewErrorFromCode(getShareRes.Status.Code, "gateway"),
 						"error getting share when committing to the share"),
 				}, nil
 			}
@@ -271,11 +271,11 @@ func (s *svc) UpdateShare(ctx context.Context, req *usershareproviderv0alphapb.U
 			}
 				grantRes, err := s.UpdateGrant(ctx, grantReq)
 				if err != nil {
-					return nil, errors.Wrap(err, "gatewaysvc: error calling UpdateGrant")
+					return nil, errors.Wrap(err, "gateway: error calling UpdateGrant")
 				}
 				if grantRes.Status.Code != rpcpb.Code_CODE_OK {
 					return &usershareproviderv0alphapb.UpdateShareResponse{
-						Status: status.NewInternal(ctx, status.NewErrorFromCode(grantRes.Status.Code, "gatewaysvc"),
+						Status: status.NewInternal(ctx, status.NewErrorFromCode(grantRes.Status.Code, "gateway"),
 							"error updating storage grant"),
 					}, nil
 				}
@@ -288,7 +288,7 @@ func (s *svc) UpdateShare(ctx context.Context, req *usershareproviderv0alphapb.U
 func (s *svc) ListReceivedShares(ctx context.Context, req *usershareproviderv0alphapb.ListReceivedSharesRequest) (*usershareproviderv0alphapb.ListReceivedSharesResponse, error) {
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gatewaysvc: error calling GetUserShareProviderClient")
+		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
 		return &usershareproviderv0alphapb.ListReceivedSharesResponse{
 			Status: status.NewInternal(ctx, err, "error getting share provider client"),
 		}, nil
@@ -296,7 +296,7 @@ func (s *svc) ListReceivedShares(ctx context.Context, req *usershareproviderv0al
 
 	res, err := c.ListReceivedShares(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling ListReceivedShares")
+		return nil, errors.Wrap(err, "gateway: error calling ListReceivedShares")
 	}
 
 	return res, nil
@@ -305,7 +305,7 @@ func (s *svc) ListReceivedShares(ctx context.Context, req *usershareproviderv0al
 func (s *svc) GetReceivedShare(ctx context.Context, req *usershareproviderv0alphapb.GetReceivedShareRequest) (*usershareproviderv0alphapb.GetReceivedShareResponse, error) {
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
-		err := errors.Wrap(err, "gatewaysvc: error getting user share provider client")
+		err := errors.Wrap(err, "gateway: error getting user share provider client")
 		return &usershareproviderv0alphapb.GetReceivedShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting received share"),
 		}, nil
@@ -313,7 +313,7 @@ func (s *svc) GetReceivedShare(ctx context.Context, req *usershareproviderv0alph
 
 	res, err := c.GetReceivedShare(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gatewaysvc: error calling GetReceivedShare")
+		return nil, errors.Wrap(err, "gateway: error calling GetReceivedShare")
 	}
 
 	return res, nil
@@ -323,7 +323,7 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *usershareproviderv0a
 	log := appctx.GetLogger(ctx)
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gatewaysvc: error calling GetUserShareProviderClient")
+		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
 		return &usershareproviderv0alphapb.UpdateReceivedShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting share provider client"),
 		}, nil
@@ -383,7 +383,7 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *usershareproviderv0a
 			// get user home
 			storageRegClient, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
 			if err != nil {
-				log.Err(err).Msg("gatewaysvc: error getting storage registry client")
+				log.Err(err).Msg("gateway: error getting storage registry client")
 				return &usershareproviderv0alphapb.UpdateReceivedShareResponse{
 					Status: &rpcpb.Status{
 						Code: rpcpb.Code_CODE_INTERNAL,
@@ -430,7 +430,7 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *usershareproviderv0a
 			}
 
 			if createRefRes.Status.Code != rpcpb.Code_CODE_OK {
-				err := status.NewErrorFromCode(createRefRes.Status.GetCode(), "gatewaysvc")
+				err := status.NewErrorFromCode(createRefRes.Status.GetCode(), "gateway")
 				return &usershareproviderv0alphapb.UpdateReceivedShareResponse{
 					Status: status.NewInternal(ctx, err, "error updating received share"),
 				}, nil
@@ -443,7 +443,7 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *usershareproviderv0a
 	}
 
 	// TODO(labkode): implementing updating display name
-	err = errors.New("gatewaysvc: update of display name is not yet implemented")
+	err = errors.New("gateway: update of display name is not yet implemented")
 	return &usershareproviderv0alphapb.UpdateReceivedShareResponse{
 		Status: status.NewUnimplemented(ctx, err, "error updaring received share"),
 	}, nil

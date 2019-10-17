@@ -47,7 +47,7 @@ type transferClaims struct {
 }
 type config struct {
 	Prefix               string `mapstructure:"prefix"`
-	GatewayEndpoint      string `mapstructure:"gatewaysvc"`
+	GatewayEndpoint      string `mapstructure:"gateway"`
 	TransferSharedSecret string `mapstructure:"transfer_shared_secret"`
 }
 
@@ -56,7 +56,7 @@ type svc struct {
 	handler http.Handler
 }
 
-// New returns a new datagatewaysvc
+// New returns a new datagateway
 func New(m map[string]interface{}) (rhttp.Service, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
@@ -132,7 +132,7 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 	token := r.Header.Get(tokenTransportHeader)
 	claims, err := s.verify(ctx, token)
 	if err != nil {
-		err = errors.Wrap(err, "datagatewaysvc: error validating transfer token")
+		err = errors.Wrap(err, "datagateway: error validating transfer token")
 		log.Err(err)
 		w.WriteHeader(http.StatusForbidden)
 		return
@@ -175,7 +175,7 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 	token := r.Header.Get(tokenTransportHeader)
 	claims, err := s.verify(ctx, token)
 	if err != nil {
-		err = errors.Wrap(err, "datagatewaysvc: error validating transfer token")
+		err = errors.Wrap(err, "datagateway: error validating transfer token")
 		log.Err(err).Str("token", token).Msg("invalid token")
 		w.WriteHeader(http.StatusForbidden)
 		return
@@ -185,7 +185,7 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 	// add query params to target, clients can send checksums and other information.
 	targetURL, err := url.Parse(target)
 	if err != nil {
-		log.Err(err).Msg("datagatewaysvc: error parsing target url")
+		log.Err(err).Msg("datagateway: error parsing target url")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
