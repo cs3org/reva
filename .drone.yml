@@ -86,4 +86,3 @@ steps:
   image: golangci/golangci-lint:v1.21.0
   commands:
     - golangci-lint run
-
