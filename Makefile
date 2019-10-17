@@ -33,19 +33,15 @@ test:
 lint:
 	go run tools/check-license/check-license.go
 	goimports -w .
-	golangci-lint run
 
 contrib:
 	git log --pretty="%an <%ae>" | sort -n | uniq  | sort -n | awk '{print "-", $$0}' | grep -v 'users.noreply.github.com' > CONTRIBUTORS.md 
 
-license:
-	go run github.com/mitchellh/golicense license.hcl cmd/revad/revad
-	go run github.com/mitchellh/golicense license.hcl cmd/revad/reva
-
-deploy:
-	go build -o ./cmd/revad/revad ${LDFLAGS} ./cmd/revad 
-	./cmd/revad/revad -c ./cmd/revad/revad.toml -p ./cmd/revad/revad.pid
-deps:
+# for manual building
+deps: 
 	cd /tmp && go get -u golang.org/x/lint/golint
 	cd /tmp && go get github.com/golangci/golangci-lint/cmd/golangci-lint
 	cd /tmp && go get -u golang.org/x/tools/cmd/goimports
+
+# to be run in CI platform
+ci: build test lint

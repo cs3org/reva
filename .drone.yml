@@ -13,4 +13,4 @@ steps:
   image: golang:1.13
   commands:
     - make deps
-    - make
+    - make ci
