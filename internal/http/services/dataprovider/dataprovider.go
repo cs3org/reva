@@ -27,6 +27,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
 )
 
 func init() {
@@ -59,7 +60,7 @@ func New(m map[string]interface{}) (rhttp.Service, error) {
 	}
 
 	if err := os.MkdirAll(conf.TmpFolder, 0755); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "could not create tmp dir")
 	}
 
 	fs, err := getFS(conf)

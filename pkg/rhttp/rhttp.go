@@ -221,7 +221,7 @@ func (s *Server) registerServices() error {
 			newFunc := Services[svcName]
 			svc, err := newFunc(s.conf.Services[svcName])
 			if err != nil {
-				err = errors.Wrap(err, "error registering new http service")
+				err = errors.Wrapf(err, "error registering new http service %s", svcName)
 				return err
 			}
 
