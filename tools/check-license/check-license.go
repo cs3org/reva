@@ -59,7 +59,6 @@ func skip(path string) bool {
 		if strings.HasPrefix(path, v) {
 			return true
 		}
-		return false
 	}
 	return false
 }
