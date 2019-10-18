@@ -1,22 +1,22 @@
-# gRPC Service: storageprovidersvc
+# gRPC Service: storageprovider
 
 To enable the service:
 
 ```
 [grpc]
-enabled_services = ["storageprovidersvc"]
+enabled_services = ["storageprovider"]
 ```
 
 Example configuration:
 
 ```
-[grpc.services.storageprovidersvc]
+[grpc.services.storageprovider]
 driver = "local"
 mount_path = "/localfs"
 mount_id = "123e4567-e89b-12d3-a456-426655440000"
 tmp_folder = "/var/tmp"
 
-[grpc.services.storageprovidersvc.drivers.local]
+[grpc.services.storageprovider.drivers.local]
 root = "/var/data"
 ```
 
@@ -159,3 +159,43 @@ Default: single_username = ""
 
 single_username specifies the unix account for run EOS commands. 
 
+
+### Owncloud data directory
+The `owncloud` driver stores the files in a local filesytem using the owncloud data directory layout. Files will be assigned a uuid, stored in extended attributes and cahced via redis.
+
+Example configuration: 
+
+```
+[grpc.services.storageprovidersvc.drivers.owncloud]
+datadirectory = "/data"
+```
+
+#### Directives
+
+```
+Syntax:  datadirectory = string
+Default: datadirectory = ""
+```
+
+datadirectory specifies the directory in the local filesystem for storing data.
+
+```
+Syntax:  scan = boolean
+Default: scan = true
+```
+
+scan will scan files on the first request to index file ids into the configured redis server
+
+```
+Syntax:  autocreate = boolean
+Default: autocreate = true
+```
+
+autocreate will create the home dir and necessary subfolders for new users
+
+```
+Syntax:  redis = string
+Default: redis = ":6379"
+```
+
+redis is used to store fileid to path mappings

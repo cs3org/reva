@@ -1,4 +1,4 @@
-# HTTP Service: prometheussvc
+# HTTP Service: prometheus
 
 This service exposes a [Prometheus](https://prometheus.io/)
 telemetry endpoint so metrics can be consumed.
@@ -7,13 +7,13 @@ To enable the service:
 
 ```
 [http]
-enabled_services = ["prometheussvc"]
+enabled_services = ["prometheus"]
 ```
 
 Example configuration:
 
 ```
-[http.services.prometheussvc]
+[http.services.prometheus]
 prefix = "metrics"
 ```
 

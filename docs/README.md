@@ -15,37 +15,39 @@
 ## Config reference
 
 * [Core](./config/core.md) 
+* [Log](./config/log.md) 
 * [HTTP](./config/http.md)
 * [GRPC](./config/grpc.md) 
 
 **HTTP services**
 
-* [helloworld](./config/services/http/helloworld.md)
-* [datagateway](./config/services/http/datagateway.md)
-* [dataprovider](./config/services/http/dataprovider.md)
-* [prometheussvc](./config/services/http/prometheus.md)
-* [ocdav](./config/services/http/ocdav.md)
-* [ocs](./config/services/http/ocs.md)
-* [oidcprovider](./config/services/http/oidcprovider.md)
-* [wellknown](./config/services/http/wellknown.md)
+* [helloworld](./config/http/services/helloworld.md)
+* [datagateway](./config/http/services/datagateway.md)
+* [dataprovider](./config/http/services/dataprovider.md)
+* [prometheussvc](./config/http/services/prometheus.md)
+* [ocdav](./config/http/services/ocdav.md)
+* [ocs](./config/http/services/ocs.md)
+* [oidcprovider](./config/http/services/oidcprovider.md)
+* [wellknown](./config/http/services/wellknown.md)
 
-**HTTP interceptors**
+**HTTP middleware**
 
-* [auth](./config/interceptors/http/auth.md)
-* [log](./config/interceptors/http/cors.md)
+* [auth](./config/http/middleware/auth.md)
+* [cors](./config/http/middleware/cors.md)
+* [log](./config/http/middleware/log.md)
 
 **GRPC Services**
 
-* [authprovider](./config/services/grpc/authprovider.md)
-* [authregistry](./config/services/grpc/authregistry.md)
-* [gateway](./config/services/grpc/gateway.md)
-* [helloworld](./config/services/grpc/helloworld.md)
-* [storageprovider](./config/services/grpc/storageprovider.md)
-* [storageregistry](./config/services/grpc/storageregistry.md)
-* [userprovider](./config/services/grpc/userprovider.md)
-* [usershareprovider](./config/services/grpc/usershareprovider.md)
+* [authprovider](./config/grpc/services/authprovider.md)
+* [authregistry](./config/grpc/services/authregistry.md)
+* [gateway](./config/grpc/services/gateway.md)
+* [helloworld](./config/grpc/services/helloworld.md)
+* [storageprovider](./config/grpc/services/storageprovider.md)
+* [storageregistry](./config/grpc/services/storageregistry.md)
+* [userprovider](./config/grpc/services/userprovider.md)
+* [usershareprovider](./config/grpc/services/usershareprovider.md)
 
 **GRPC interceptors**
 
-* [auth](./config/interceptors/grpc/auth.md)
+* [auth](./config/grpc/interceptors/auth.md)
 

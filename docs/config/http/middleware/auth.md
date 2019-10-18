@@ -26,7 +26,8 @@ Example configuration:
 
 ```
 [http.middlewares.auth]
-authsvc = "0.0.0.0:9999"
+gateway = "localhost:9999"
+auth_type = "basic"
 credential_strategy = "basic"
 token_strategy = "header"
 token_writer = "header"
@@ -45,10 +46,16 @@ header = "X-Access-Token"
 ## Directives
 
 ```
-Syntax:  authsvc = string
-Default: authsvc = "0.0.0.0:9999"
+Syntax:  gateway = string
+Default: gateway = "0.0.0.0:9999"
 ```
-authsvc specifies the location of the authentication service.
+gateway specifies the location of the gateway service.
+
+```
+Syntax:  auth_type = string
+Default: auth_type = ""
+```
+auth_type specifies the type of authprovider the gateway should look up using the configured authregistry. Must be set (`basic` or `oidc` make sense, but those are arbitrary strings the are just used to do a lookup of the actual authprovider url)
 
 ```
 Syntax:  credential_strategy = string
@@ -89,6 +96,8 @@ The default manager is to verify it using JWT.
 **The token manager configured for the authentication service and the token manager for 
 this middleware MUST be the same**.
 
+
+TODO: skip_methods
 
 ## Credential strategies
 

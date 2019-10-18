@@ -1,16 +1,16 @@
-# gRPC Service: authsvc
+# gRPC Service: authprovider
 
 To enable the service:
 
 ```
 [grpc]
-enabled_services = ["authsvc"]
+enabled_services = ["authprovider"]
 ```
 
 Example configuration:
 
 ```
-[grpc.services.authsvc]
+[grpc.services.authprovider]
 auth_manager  = "demo"
 token_manager = "jwt"
 user_manager  = "demo"
@@ -57,6 +57,10 @@ einstein => relativity
 marie    => radioactivity
 richard  => superfluidity 
 ```
+
+### JSON
+The json driver allows using a json file to authenticate users.
+TODO: example json config
 
 ### LDAP
 The LDAP driver authenticates against an LDAP server.
