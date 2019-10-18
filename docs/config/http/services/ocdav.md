@@ -1,4 +1,4 @@
-# HTTP Service: ocdavsvc
+# HTTP Service: ocdav
 
 This service exposes an [ownCloud](https://ownlcloud.org/)
 WebDAV endpoint. This service allows ownCloud sync clients to connect
@@ -11,13 +11,13 @@ To enable the service:
 
 ```
 [http]
-enabled_services = ["ocdavsvc"]
+enabled_services = ["ocdav"]
 ```
 
 Example configuration:
 
 ```
-[http.services.ocdavsvc]
+[http.services.ocdav]
 prefix = "webdav"
 ```
 

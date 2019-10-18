@@ -4,9 +4,8 @@ Example configuration:
 
 ```
 [core]
-max_cpus = 4
-log_file = "/var/log/revad.log"
-log_mode = "prod"
+max_cpus = 2
+tracing_enabled = true
 ```
 
 ## Directives
@@ -18,24 +17,24 @@ Default: max_cpus = "100%"
 If max_cpus is set it determines the available cpus to schedule revad processes.
 
 ```
-Syntax:  log_file = string
-Default: log_file = "stderr"
+Syntax:  tracing_enabled = boolean
+Default: tracing_enabled = false
 ```
 
-log_file sets the output for writting logs. The "stdout" and "stderr" strings have special meaning
-as they will set the log output to stdout and stderr respectively. revad will create the filename 
-specified in the directive if it does not exists. revad does not perform any log rotate logic, this task
-is delegated to tools like *logrotate(8)* configured by the system administrator.
-
 ```
-Syntax:  log_mode  = dev | prod
-Default: log_mode  = dev
+Syntax:  tracing_endpoint = string
+Default: tracing_endpoint = "localhost:6831"
 ```
 
-log_mode sets the format for the logs. dev mode sets the output to be consumed by humans on a terminal.
-prod mode sets the output format to JSON so it can be parsed by machines and send to central logging systems
-like Kibana.
+```
+Syntax:  tracing_collector = string
+Default: tracing_collector = "http://localhost:14268/api/traces"
+```
 
+```
+Syntax:  tracing_service_name = string
+Default: tracing_service_name = "revad"
+```
 
 ```
 Syntax:  disable_http = false | true

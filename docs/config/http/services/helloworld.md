@@ -1,4 +1,4 @@
-# HTTP Service: helloworldsvc
+# HTTP Service: helloworld
 
 This service is for demo purposes.
 It exposes a single endpoint that renders a
@@ -8,13 +8,13 @@ To enable the service:
 
 ```
 [http]
-enabled_services = ["helloworldsvc"]
+enabled_services = ["helloworld"]
 ```
 
 Example configuration:
 
 ```
-[http.services.helloworldsvc]
+[http.services.helloworld]
 hello_message = "Ola Mundo!"
 ```
 
@@ -22,19 +22,19 @@ hello_message = "Ola Mundo!"
 
 ```
 Syntax:  prefix = string
-Default: prefix = "helloworldsvc"
+Default: prefix = "helloworld"
 ```
 
-prefix specifies where the service should be exposed.
+`prefix` specifies where the service should be exposed.
 For example, if the prefix is "myservice", it will be
 reachable at http://localhost:9998/myservice
 
 
 ```
-Syntax:  hello_message = string
-Default: hello_message = "Hello World!"
+Syntax:  message = string
+Default: message = "Hello World!"
 ```
 
-hello_message defines the message that will be rendered under the
+`message` defines the message that will be rendered under the
 http endpoint configured by the **prefix** directive.
 
