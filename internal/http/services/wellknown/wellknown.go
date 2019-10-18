@@ -34,10 +34,12 @@ type config struct {
 	Prefix                string `mapstructure:"prefix"`
 	Issuer                string `mapstructure:"issuer"`
 	AuthorizationEndpoint string `mapstructure:"authorization_endpoint"`
+	JwksURI               string `mapstructure:"jwks_uri"`
 	TokenEndpoint         string `mapstructure:"token_endpoint"`
 	RevocationEndpoint    string `mapstructure:"revocation_endpoint"`
 	IntrospectionEndpoint string `mapstructure:"introspection_endpoint"`
 	UserinfoEndpoint      string `mapstructure:"userinfo_endpoint"`
+	EndSessionEndpoint    string `mapstructure:"end_session_endpoint"`
 }
 
 type svc struct {
