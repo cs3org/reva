@@ -31,10 +31,12 @@ func (s *svc) doOpenidConfiguration(w http.ResponseWriter, r *http.Request) {
 	pm := &oidc.ProviderMetadata{
 		Issuer:                s.conf.Issuer,
 		AuthorizationEndpoint: s.conf.AuthorizationEndpoint,
+		JwksURI:               s.conf.JwksURI,
 		TokenEndpoint:         s.conf.TokenEndpoint,
 		RevocationEndpoint:    s.conf.RevocationEndpoint,
 		IntrospectionEndpoint: s.conf.IntrospectionEndpoint,
 		UserinfoEndpoint:      s.conf.UserinfoEndpoint,
+		EndSessionEndpoint:    s.conf.EndSessionEndpoint,
 	}
 
 	b, err := json.Marshal(pm)

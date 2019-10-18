@@ -7,10 +7,7 @@
       "metadataUrl": "http://localhost:10000/.well-known/openid-configuration",
       "authority": "http://localhost:10000",
       "client_id": "phoenix",
-      "__response_type": "id_token token",
-      "__doc": "response_type id_token token needs https://github.com/owncloud/phoenix/issues/2288",
       "response_type": "code",
-      "client_secret": "foobar",
       "scope": "openid profile email"
     },
     "apps": [

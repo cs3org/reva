@@ -119,7 +119,7 @@ func New(m map[string]interface{}) (rhttp.Service, error) {
 			fconfig,
 			store,
 			start,
-			nil,
+			nil, // filled in by Compose based on the hash cost in the config
 
 			// enabled handlers
 			compose.OAuth2AuthorizeExplicitFactory,
@@ -128,14 +128,17 @@ func New(m map[string]interface{}) (rhttp.Service, error) {
 			compose.OAuth2RefreshTokenGrantFactory,
 			compose.OAuth2ResourceOwnerPasswordCredentialsFactory,
 
-			compose.OAuth2TokenRevocationFactory,
-			compose.OAuth2TokenIntrospectionFactory,
-
 			// be aware that open id connect factories need to be added after oauth2 factories to work properly.
 			compose.OpenIDConnectExplicitFactory,
 			compose.OpenIDConnectImplicitFactory,
 			compose.OpenIDConnectHybridFactory,
 			compose.OpenIDConnectRefreshFactory,
+
+			compose.OAuth2TokenRevocationFactory,
+			compose.OAuth2TokenIntrospectionFactory,
+
+			// needs to come last
+			compose.OAuth2PKCEFactory,
 		),
 	}
 	s.setHandler()
