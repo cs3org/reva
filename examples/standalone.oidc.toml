@@ -48,6 +48,9 @@ skip_methods = [
 	"/oauth2",
 	"/oauth2/auth", 
 	"/oauth2/token",
+	# TODO protect the introspection endpoint from external requests.
+	# should only be reachable by internal services, which is why the
+	# oidc-provider.toml has clientid and secret that are used for a basic auth
 	"/oauth2/introspect",
 	"/oauth2/userinfo",
 	"/oauth2/sessions",
@@ -59,16 +62,21 @@ skip_methods = [
 secret = "Pive-Fumkiu4"
 
 [http.middlewares.cors]
+allowed_origins = ["*"]
+allowed_methods = ["OPTIONS", "GET", "PUT", "POST", "DELETE", "MKCOL", "PROPFIND", "PROPPATCH", "MOVE", "COPY", "REPORT", "SEARCH"]
+allowed_headers = ["Origin", "Accept", "Depth", "Content-Type", "X-Requested-With", "Authorization", "Ocs-Apirequest", "If-None-Match"]
 allow_credentials = true
-options_passthrough = true
+options_passthrough = false
 
 [http.services.wellknown]
 issuer = "http://localhost:10000"
 authorization_endpoint = "http://localhost:10000/oauth2/auth"
 token_endpoint = "http://localhost:10000/oauth2/token" 
+#jwks_uri = ""
 revocation_endpoint = "http://localhost:10000/oauth2/auth"
 introspection_endpoint = "http://localhost:10000/oauth2/introspect"
 userinfo_endpoint = "http://localhost:10000/oauth2/userinfo"
+#end_session_endpoint = 
 
 [http.services.oidcprovider]
 prefix = "oauth2"
@@ -80,11 +88,15 @@ issuer = "http://localhost:10000"
 id = "phoenix"
 redirect_uris = ["http://localhost:8300/oidc-callback.html", "http://localhost:8300/"]
 grant_types = ["implicit", "refresh_token", "authorization_code", "password", "client_credentials"]
-# response_type "id_token token" is currently broken in phoenix, see https://github.com/owncloud/phoenix/issues/2288
-# TODO the oidcprovider service would have to implement a jwks_uri endpoint anyway
-#response_types = ["id_token token"] # use implicit flow for web apps
-response_types = ["code"] # use authorization code flow ... this is for the decsktop client
-# codo flow needs a secret
+response_types = ["code"] # use authorization code flow, see https://developer.okta.com/blog/2019/05/01/is-the-oauth-implicit-flow-dead for details
+scopes = ["openid", "profile", "email", "offline"]
+public = true # force PKCS for public clients
+
+[http.services.oidcprovider.clients.reva]
+id = "reva"
+grant_types = ["implicit", "refresh_token", "authorization_code", "password", "client_credentials"]
+response_types = ["code"] # use authorization code flow
+# private clients can use a secret
 client_secret = "$2a$10$IxMdI6d.LIRZPpSfEwNoeu4rY3FhDREsxFJXikcgdRRAStxUlsuEO"  # = "foobar"
 scopes = ["openid", "profile", "email", "offline"]
 
