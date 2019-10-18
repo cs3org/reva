@@ -1,0 +1,40 @@
+# This frontend.toml config file will start a reva service that:
+# - serves as the entypoint for all legacy owncloud requests
+# - serves http endpoints on port 20000
+#   - /owncloud - ocdav
+#   - /ocs - ocs
+#   - TODO ocm
+[core]
+max_cpus = "2"
+disable_grpc = true
+
+[log]
+level = "debug"
+
+[http]
+enabled_services = ["ocdav", "ocs"]
+enabled_middlewares = ["cors", "auth"]
+address = "0.0.0.0:20000"
+
+[http.middlewares.auth]
+gateway = "localhost:19000"
+auth_type = "basic"
+credential_strategy = "basic"
+token_strategy = "header"
+token_writer = "header"
+token_manager = "jwt"
+skip_methods = ["/owncloud/status.php"]
+
+[http.middlewares.auth.token_managers.jwt]
+secret = "Pive-Fumkiu4"
+
+[http.services.ocdav]
+prefix = "owncloud"
+chunk_folder = "/var/tmp/revad/chunks"
+# for user lookups
+gateway = "localhost:19000"
+
+[http.services.ocs]
+# prefix = "ocs"
+# for user lookups and sharing
+gateway = "localhost:19000"

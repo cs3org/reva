@@ -1,0 +1,109 @@
+# This gateway.toml config file will start a reva service that:
+# - serves as a gateway for all requests
+# - looks up the storageprovider using a storageregistry
+# - looks up the authprovider using an authregistry
+# - serves the gateway on grpc port 19000
+# - serves http datagateway on port 19001
+#   - /data - datagateway: file up and download
+[core]
+max_cpus = "2"
+
+[log]
+level = "debug"
+
+[grpc]
+address = "0.0.0.0:19000"
+enabled_services = [
+    "gateway",
+    "appregistry", # TODO
+    "authregistry",
+    "storageregistry",
+]
+enabled_interceptors = ["auth"]
+
+[grpc.interceptors.auth]
+token_manager = "jwt"
+skip_methods = [
+    # we need to allow calls that happen during authentication
+	"/cs3.gatewayv0alpha.GatewayService/Authenticate",
+	"/cs3.gatewayv0alpha.GatewayService/WhoAmI",
+	"/cs3.gatewayv0alpha.GatewayService/GetUser",
+	"/cs3.gatewayv0alpha.GatewayService/ListAuthProviders",
+	"/cs3.authregistryv0alpha.AuthRegistryService/ListAuthProviders",
+	"/cs3.authregistryv0alpha.AuthRegistryService/GetAuthProvider",
+]
+
+[grpc.interceptors.auth.token_managers.jwt]
+secret = "Pive-Fumkiu4"
+
+[grpc.services.gateway]
+# registries
+authregistrysvc = "localhost:19000"
+storageregistrysvc = "localhost:19000"
+appregistrysvc = "localhost:19000"
+# auth and user metadata
+preferencessvc = "localhost:18000"
+userprovidersvc = "localhost:18000"
+# sharing
+usershareprovidersvc = "localhost:17000"
+publicshareprovidersvc = "localhost:17000"
+ocmshareprovidersvc = "localhost:17000"
+# other
+commit_share_to_storage_grant = true
+datagateway = "http://localhost:19001/data"
+transfer_shared_secret = "replace-me-with-a-transfer-secret" # for direct uploads
+transfer_expires = 6 # give it a moment
+token_manager = "jwt"
+
+[grpc.services.gateway.token_managers.jwt]
+secret = "Pive-Fumkiu4"
+
+[grpc.services.appregistry]
+driver = "static"
+
+[grpc.services.appregistry.static.rules]
+# TODO 
+".txt" = "localhost:16000"
+"text/plain" = "localhost:16000"
+
+# TODO move to a dedicated approvider.toml
+#[grpc.services.appprovider]
+#driver = "demo"
+#[grpc.services.appprovider.demo]
+#iframe_ui_provider = "http://localhost:16000/iframeuisvc"
+
+[grpc.services.authregistry]
+driver = "static"
+
+[grpc.services.authregistry.drivers.static.rules]
+basic = "localhost:18000"
+# needs to be started as a second service using the frontend-oidc.toml
+oidc = "localhost:18001"
+
+[grpc.services.storageregistry]
+driver = "static"
+
+[grpc.services.storageregistry.drivers.static.rules]
+"/" = "localhost:11000"
+"123e4567-e89b-12d3-a456-426655440000" = "localhost:11000"
+
+[http]
+address = "0.0.0.0:19001"
+enabled_services = ["datagateway"]
+enabled_middlewares = ["auth"]
+
+[http.services.datagateway]
+prefix = "data"
+gateway = "" # TODO not needed?
+transfer_shared_secret = "replace-me-with-a-transfer-secret"
+
+[http.middlewares.auth]
+gatewaysvc = "0.0.0.0:19000"
+auth_type = "basic"
+credential_strategy = "basic"
+token_strategy = "header"
+token_writer = "header"
+token_manager = "jwt"
+
+[http.middlewares.auth.token_managers.jwt]
+secret = "Pive-Fumkiu4"

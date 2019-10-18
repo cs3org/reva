@@ -1,0 +1,63 @@
+# This storage.toml config file will start a reva service that:
+# - authenticates grpc storage provider requests using the internal jwt token
+# - authenticates http upload and download requests requests using basic auth
+# - serves the storage provider on grpc port 11000
+# - serves http dataprovider for this storage on port 11001
+#   - /data - dataprovider: file up and download
+[core]
+max_cpus = "2"
+
+[log]
+level = "debug"
+
+[grpc]
+network = "tcp"
+address = "0.0.0.0:11000"
+enabled_services = ["storageprovider"]
+enabled_interceptors = ["auth"]
+
+[grpc.services.storageprovider]
+driver = "owncloud"
+mount_path = "/"
+mount_id = "123e4567-e89b-12d3-a456-426655440000"
+# we have a locally running dataprovider
+expose_data_server = true
+# this is where clients can find it
+data_server_url = "http://localhost:11001/data"
+
+[grpc.services.storageprovider.available_checksums]
+md5   = 100
+unset = 1000
+
+[grpc.services.storageprovider.drivers.owncloud]
+datadirectory = "/var/tmp/reva/data"
+
+[grpc.interceptors.auth]
+token_manager = "jwt"
+
+[grpc.interceptors.auth.token_managers.jwt]
+secret = "Pive-Fumkiu4"
+
+[http]
+address = "0.0.0.0:11001"
+enabled_services = ["dataprovider"]
+enabled_middlewares = ["auth"]
+
+[http.middlewares.auth]
+gatewaysvc = "localhost:19000"
+auth_type = "basic"
+credential_strategy = "basic"
+token_strategy = "header"
+token_writer = "header"
+token_manager = "jwt"
+
+[http.middlewares.auth.token_managers.jwt]
+secret = "Pive-Fumkiu4"
+
+[http.services.dataprovider]
+driver = "owncloud"
+prefix = "data"
+temp_folder = "/var/tmp/"
+
+[http.services.dataprovider.drivers.owncloud]
+datadirectory = "/var/tmp/reva/data"

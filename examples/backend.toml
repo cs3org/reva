@@ -1,36 +1,8 @@
 [core]
-log_file = "stderr"
-log_mode = "dev"
-max_cpus = "100%"
+max_cpus = "2"
 
 [log]
 level = "debug"
-mode = "console"
-
-[http]
-network = "tcp"
-address = "0.0.0.0:9998"
-enabled_services = ["datasvc"]
-enabled_middlewares = ["auth"]
-
-[http.middlewares.auth]
-gatewaysvc = "0.0.0.0:9999"
-credential_strategy = "basic"
-token_strategy = "header"
-token_writer = "header"
-token_manager = "jwt"
-skip_methods = ["/owncloud/status.php", "/metrics"]
-
-[http.middlewares.auth.token_managers.jwt]
-secret = "Pive-Fumkiu4"
-
-[http.services.datasvc]
-driver = "local"
-prefix = "data"
-temp_folder = "/var/tmp/"
-
-[http.services.datasvc.drivers.local]
-root = "/var/tmp/reva/data"
 
 [grpc]
 network = "tcp"
@@ -77,3 +49,26 @@ skip_methods = ["/cs3.authv0alpha.AuthService/GenerateAccessToken", "/cs3.authv0
 [grpc.interceptors.auth.token_managers.jwt]
 secret = "Pive-Fumkiu4"
 
+[http]
+address = "0.0.0.0:9998"
+enabled_services = ["datasvc"]
+enabled_middlewares = ["auth"]
+
+[http.middlewares.auth]
+gatewaysvc = "0.0.0.0:9999"
+credential_strategy = "basic"
+token_strategy = "header"
+token_writer = "header"
+token_manager = "jwt"
+skip_methods = ["/owncloud/status.php", "/metrics"]
+
+[http.middlewares.auth.token_managers.jwt]
+secret = "Pive-Fumkiu4"
+
+[http.services.datasvc]
+driver = "local"
+prefix = "data"
+temp_folder = "/var/tmp/"
+
+[http.services.datasvc.drivers.local]
+root = "/var/tmp/reva/data"
