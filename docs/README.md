@@ -1,53 +1,58 @@
-# REVA Documentation
+# Docsy Example
 
-:warning: REVA is a very young project and documentation is subject to change very often!
+[Docsy](https://github.com/google/docsy) is a Hugo theme for technical documentation sites, providing easy site navigation, structure, and more. This **Docsy Example Project** uses the Docsy theme, as well as providing a skeleton documentation structure for you to use. You can either copy this project and edit it with your own content, or use the theme in your projects like any other [Hugo theme](https://gohugo.io/themes/installing-and-using-themes/).
 
-* [Installing REVA](./installing-reva.md)
-* [Building REVA from Sources](./building-reva.md)
-* [Beginner's Guide](./beginner-guide.md)
-* [Controlling REVA](./controlling-reva.md)
-* [Command-line parameters](./command-line.md)
+This Docsy Example Project is hosted at [https://example.docsy.dev/](https://example.docsy.dev/).
 
-## Guides
+You can find detailed theme instructions in the Docsy user guide: https://docsy.dev/docs/
 
-* [Getting started with REVA](./guides/getting-started.md)
+This is not an officially supported Google product. This project is currently maintained.
 
-## Config reference
+## Cloning the Docsy Example Project
 
-* [Core](./config/core.md) 
-* [Log](./config/log.md) 
-* [HTTP](./config/http.md)
-* [GRPC](./config/grpc.md) 
+The following will give you a project that is set up and ready to use (don't forget to use `--recurse-submodules` or you won't pull down some of the code you need to generate a working site). The `hugo server` command builds and serves the site. If you just want to build the site, run `hugo` instead.
 
-**HTTP services**
+```bash
+git clone --recurse-submodules --depth 1 https://github.com/google/docsy-example.git
+cd docsy-example
+hugo server
+```
 
-* [helloworld](./config/http/services/helloworld.md)
-* [datagateway](./config/http/services/datagateway.md)
-* [dataprovider](./config/http/services/dataprovider.md)
-* [prometheussvc](./config/http/services/prometheus.md)
-* [ocdav](./config/http/services/ocdav.md)
-* [ocs](./config/http/services/ocs.md)
-* [oidcprovider](./config/http/services/oidcprovider.md)
-* [wellknown](./config/http/services/wellknown.md)
+The theme is included as a Git submodule:
 
-**HTTP middleware**
+```bash
+▶ git submodule
+ a053131a4ebf6a59e4e8834a42368e248d98c01d themes/docsy (heads/master)
+```
 
-* [auth](./config/http/middleware/auth.md)
-* [cors](./config/http/middleware/cors.md)
-* [log](./config/http/middleware/log.md)
+If you want to do SCSS edits and want to publish these, you need to install `PostCSS` (not needed for `hugo server`):
 
-**GRPC Services**
+```bash
+npm install
+```
 
-* [authprovider](./config/grpc/services/authprovider.md)
-* [authregistry](./config/grpc/services/authregistry.md)
-* [gateway](./config/grpc/services/gateway.md)
-* [helloworld](./config/grpc/services/helloworld.md)
-* [storageprovider](./config/grpc/services/storageprovider.md)
-* [storageregistry](./config/grpc/services/storageregistry.md)
-* [userprovider](./config/grpc/services/userprovider.md)
-* [usershareprovider](./config/grpc/services/usershareprovider.md)
+<!--### Cloning the Example from the Theme Project
 
-**GRPC interceptors**
 
-* [auth](./config/grpc/interceptors/auth.md)
+```bash
+git clone --recurse-submodules --depth 1 https://github.com/docsy.git
+cd tech-doc-hugo-theme/exampleSite
+HUGO_THEMESDIR="../.." hugo server
+```
 
+
+Note that the Hugo Theme Site requires the `exampleSite` to live in a subfolder of the theme itself. To avoid recursive duplication, the example site is added as a Git subtree:
+
+```bash
+git subtree add --prefix exampleSite https://github.com/google/docsy.git  master --squash
+```
+
+To pull in changes, see `pull-deps.sh` script in the theme.-->
+
+## Running the website locally
+
+Once you've cloned the site repo, from the repo root folder, run:
+
+```
+hugo server
+```
