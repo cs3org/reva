@@ -1,7 +1,7 @@
 
 [build]
-  publish = "public"
-  command = "git submodule update -f --init && npm install postcss-cli && hugo --gc --minify"
+  publish = "docs/public"
+  command = "git submodule update -f --init && cd docs/ && npm install postcss-cli && hugo --gc --minify"
 
 [build.environment]
   HUGO_VERSION = "0.55.6"
