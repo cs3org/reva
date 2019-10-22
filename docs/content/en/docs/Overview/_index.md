@@ -19,7 +19,7 @@ Today any cloud sync and share provider either closed-source (Dropbox, Google Dr
 of integrations with many applicaition providers. The pitty about these integrations is that they are ad-hoc to the cloud vendor, making it impossible to port 
 anywhere else.
 
-{{< imgproc overview.png Fit "800x600">}}
+{{< imgproc "overview.png" Fit "800x600" >}}
 {{< /imgproc >}}
 
 #### The goal
@@ -28,7 +28,7 @@ Our ultimate goal is that any open source project and software vendor that provi
 will adopt the CS3APIS as the facto standard way to collaborate. Having all the partners using the same APIs will enable all of us for a new dimension 
 of portability of applications across vendors. 
 
-{{< imgproc final.png Fit "800x600">}}
+{{< imgproc "final.png" Fit "800x600">}}
 {{< /imgproc >}}
 
 We know that for our vision to realize we need to allow time for the different stakeholders to adopt the CS3APIS.
@@ -44,7 +44,7 @@ that could potencially connect to an eco-system of applications and storage cata
 The platform acts as middleware component in your current infrastructure, and by connecting your cloud to Reva you gain access
 to multiple storage backends and multiple integrations with many application providers.
 
-{{< imgproc reva.png Fit "800x600">}}
+{{< imgproc "reva.png" Fit "800x600">}}
 {{< /imgproc >}}
 
 ## Why do I want it?

@@ -4,5 +4,5 @@
   ignore = "git diff --quiet HEAD^ HEAD docs/"
 
 [build.environment]
-  HUGO_VERSION = "0.55.6"
+  HUGO_VERSION = "0.59.0"
   HUGO_ENV = "production"
