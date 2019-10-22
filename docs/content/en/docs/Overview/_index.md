@@ -49,9 +49,8 @@ to multiple storage backends and multiple integrations with many application pro
 
 ## Why do I want it?
 
-* **What is it good for?**: Reva is good to avoid vendor locking in various ways: you could change your storage backend or the EFSS platform and your users
-will still be able to use the same applications as before, making cloud migrations more transparent and friction-less. How many times have you been using an app
-and we you switched cloud you lost access to it?
+* **What is it good for?**: Reva is good to ensure switching applications and storage backends between cloud providers is as much transparent as possible.
+How many times have you been using an app that you lost when you switched cloud provider ?
 
 * **What is it not good for?**: Reva is not a replacement for a EFFSS or Cloud Platform, it is just a middleware component that enables inter-operability
 and runs alongside your infrastructure.
