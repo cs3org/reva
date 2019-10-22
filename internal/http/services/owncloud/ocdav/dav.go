@@ -19,7 +19,9 @@
 package ocdav
 
 import (
+	"context"
 	"net/http"
+	"path"
 
 	"github.com/cs3org/reva/pkg/rhttp"
 )
@@ -27,7 +29,7 @@ import (
 // DavHandler routes to the different sub handlers
 type DavHandler struct {
 	AvatarsHandler  *AvatarsHandler
-	FilesHandler    *FilesHandler
+	FilesHandler    *WebDavHandler
 	MetaHandler     *MetaHandler
 	TrashbinHandler *TrashbinHandler
 }
@@ -37,8 +39,8 @@ func (h *DavHandler) init(c *Config) error {
 	if err := h.AvatarsHandler.init(c); err != nil {
 		return err
 	}
-	h.FilesHandler = new(FilesHandler)
-	if err := h.FilesHandler.init(c); err != nil {
+	h.FilesHandler = new(WebDavHandler)
+	if err := h.FilesHandler.init(c.FilesNamespace); err != nil {
 		return err
 	}
 	h.MetaHandler = new(MetaHandler)
@@ -52,16 +54,32 @@ func (h *DavHandler) init(c *Config) error {
 // Handler handles requests
 func (h *DavHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
 		var head string
 		head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+
 		switch head {
 		case "avatars":
+			// the avatars endpoint does not need a href prop ... yet
 			h.AvatarsHandler.Handler(s).ServeHTTP(w, r)
 		case "files":
+			// to build correct href prop urls we need to keep track of the base path
+			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files")
+			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+			r = r.WithContext(ctx)
 			h.FilesHandler.Handler(s).ServeHTTP(w, r)
 		case "meta":
+			// to build correct href prop urls we need to keep track of the base path
+			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "meta")
+			ctx = context.WithValue(ctx, ctxKeyBaseURI, base)
+			r = r.WithContext(ctx)
 			h.MetaHandler.Handler(s).ServeHTTP(w, r)
 		case "trash-bin":
+			// to build correct href prop urls we need to keep track of the base path
+			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "trash-bin")
+			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+			r = r.WithContext(ctx)
 			h.TrashbinHandler.Handler(s).ServeHTTP(w, r)
 		default:
 			w.WriteHeader(http.StatusNotFound)

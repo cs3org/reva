@@ -1,9 +1,13 @@
-# This storage.toml config file will start a reva service that:
+# This storage-home.toml config file will start a reva service that:
 # - authenticates grpc storage provider requests using the internal jwt token
 # - authenticates http upload and download requests requests using basic auth
-# - serves the storage provider on grpc port 11000
-# - serves http dataprovider for this storage on port 11001
+# - serves the home storage provider on grpc port 12000
+# - serves http dataprovider for this storage on port 12001
 #   - /data - dataprovider: file up and download
+#
+# The home storage will inject the username into the path and jail users into
+# their home directory
+
 [core]
 max_cpus = "2"
 
@@ -12,19 +16,22 @@ level = "debug"
 
 [grpc]
 network = "tcp"
-address = "0.0.0.0:11000"
+address = "0.0.0.0:12000"
 enabled_services = ["storageprovider"]
 enabled_interceptors = ["auth"]
 
 # This is a storage proider that grants direct acces to the wrapped storage
 [grpc.services.storageprovider]
 driver = "owncloud"
-mount_path = "/oc/"
+path_wrapper = "context"
+mount_path = "/home/"
+# TODO same storage id as the /oc/ storage provider
+# if we have an id, we can directly go to that storage, no need to wrap paths
 mount_id = "123e4567-e89b-12d3-a456-426655440000"
 # we have a locally running dataprovider
 expose_data_server = true
 # this is where clients can find it
-data_server_url = "http://localhost:11001/data"
+data_server_url = "http://localhost:12001/data"
 
 [grpc.services.storageprovider.available_checksums]
 md5   = 100
@@ -33,6 +40,9 @@ unset = 1000
 [grpc.services.storageprovider.drivers.owncloud]
 datadirectory = "/var/tmp/reva/data"
 
+[grpc.services.storageprovider.path_wrappers.context]
+prefix = ""
+
 [grpc.interceptors.auth]
 token_manager = "jwt"
 
@@ -40,7 +50,7 @@ token_manager = "jwt"
 secret = "Pive-Fumkiu4"
 
 [http]
-address = "0.0.0.0:11001"
+address = "0.0.0.0:12001"
 enabled_services = ["dataprovider"]
 enabled_middlewares = ["auth"]
 

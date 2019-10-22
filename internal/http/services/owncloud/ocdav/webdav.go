@@ -19,60 +19,52 @@
 package ocdav
 
 import (
-	"context"
 	"net/http"
-	"path"
 )
 
-// WebDavHandler routes to the legacy dav endpoint
+// WebDavHandler implements a dav endpoint
 type WebDavHandler struct {
+	namespace string
 }
 
-func (h *WebDavHandler) init(c *Config) error {
+func (h *WebDavHandler) init(ns string) error {
+	h.namespace = ns
+	if h.namespace == "" {
+		h.namespace = "/"
+	}
 	return nil
 }
 
 // Handler handles requests
 func (h *WebDavHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodOptions {
-			// no need for the user, and we need to be able
-			// to answer preflight checks, which have no auth headers
-			s.doOptions(w, r)
-			return
-		}
-
-		// webdav should be death: baseURI is encoded as part of the
-		// response payload in href field
-		baseURI := path.Join("/", s.Prefix(), "remote.php/webdav")
-		ctx := context.WithValue(r.Context(), ctxKeyBaseURI, baseURI)
-		r = r.WithContext(ctx)
-
 		switch r.Method {
 		case "PROPFIND":
-			s.doPropfind(w, r)
+			s.doPropfind(w, r, h.namespace)
+		case http.MethodOptions:
+			s.doOptions(w, r, h.namespace)
 		case http.MethodHead:
-			s.doHead(w, r)
+			s.doHead(w, r, h.namespace)
 		case http.MethodGet:
-			s.doGet(w, r)
+			s.doGet(w, r, h.namespace)
 		case "LOCK":
-			s.doLock(w, r)
+			s.doLock(w, r, h.namespace)
 		case "UNLOCK":
-			s.doUnlock(w, r)
+			s.doUnlock(w, r, h.namespace)
 		case "PROPPATCH":
-			s.doProppatch(w, r)
+			s.doProppatch(w, r, h.namespace)
 		case "MKCOL":
-			s.doMkcol(w, r)
+			s.doMkcol(w, r, h.namespace)
 		case "MOVE":
-			s.doMove(w, r)
+			s.doMove(w, r, h.namespace)
 		case "COPY":
-			s.doCopy(w, r)
+			s.doCopy(w, r, h.namespace)
 		case http.MethodPut:
-			s.doPut(w, r)
+			s.doPut(w, r, h.namespace)
 		case http.MethodDelete:
-			s.doDelete(w, r)
+			s.doDelete(w, r, h.namespace)
 		case "REPORT":
-			s.doReport(w, r)
+			s.doReport(w, r, h.namespace)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}

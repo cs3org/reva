@@ -16,13 +16,10 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocdav
+package loader
 
 import (
-	"net/http"
+	// Load core storage path wrapper backends.
+	_ "github.com/cs3org/reva/pkg/storage/pw/context"
+	// Add your own here
 )
-
-//TODO(jfd): implement unlock
-func (s *svc) doUnlock(w http.ResponseWriter, r *http.Request, ns string) {
-	w.WriteHeader(http.StatusNoContent)
-}

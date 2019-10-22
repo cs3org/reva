@@ -37,13 +37,14 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request) {
+// ns is the namespace that is prefixed to the path in the cs3 namespace
+func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "propfind")
 	defer span.End()
 	log := appctx.GetLogger(ctx)
 
-	fn := r.URL.Path
+	fn := path.Join(ns, r.URL.Path)
 	listChildren := r.Header.Get("Depth") != "0"
 
 	pf, status, err := readPropfind(r.Body)
@@ -178,20 +179,26 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *storage
 
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
 	// the old webdav endpoint does not contain the username
+
+	// remove username from filename
+	// TODO(labkode): I'm commenting it out as I think is not needed anymore
+	// becase we don't mangle the baseURI with the user if the request goes to
+	// old endpoint.
+	// TODO(jfd): Unfortunately, this might be a difference in the way cern uses
+	// the old webdav endpoint vs tho owncloud web ui. If you want to use a path
+	// that includes the username you must you the new webdav endpoint /remote.php/dav/files.
+	// /remote.php/webdav is used by all clients without the username in the path.
+	// the new endpoint can be read from the capabilities
 	/*
-		// remove username from filename
-		// TODO(labkode): I'm commenting it out as I think is not needed anymore
-		// becase we don't mangle the baseURI with the user if the request goes to
-		// old endpoint.
 		if strings.HasPrefix(baseURI, "/remote.php/webdav") {
-				u, ok := user.ContextGetUser(ctx)
-				if !ok {
-					err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
-					return nil, err
-				}
-				fmt.Println(md.Path, baseURI, u.Username)
-				// TODO can lead to slice out of bounds
-				md.Path = md.Path[len(u.Username)+1:]
+			u, ok := user.ContextGetUser(ctx)
+			if !ok {
+				err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
+				return nil, err
+			}
+			fmt.Println(md.Path, baseURI, u.Username)
+			// TODO can lead to slice out of bounds
+			md.Path = md.Path[len(u.Username)+1:]
 		}
 	*/
 

@@ -29,9 +29,10 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (s *svc) doProppatch(w http.ResponseWriter, r *http.Request) {
+func (s *svc) doProppatch(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
+	//fn := path.Join(ns, r.URL.Path)
 
 	_, status, err := readProppatch(r.Body)
 	if err != nil {
@@ -46,6 +47,7 @@ func (s *svc) doProppatch(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	// TODO(jfd): implement properties
 
 	w.WriteHeader(http.StatusNotImplemented)
 }

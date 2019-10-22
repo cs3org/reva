@@ -24,7 +24,8 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 )
 
-func (s *svc) doLock(w http.ResponseWriter, r *http.Request) {
+// TODO(jfd) implement lock
+func (s *svc) doLock(w http.ResponseWriter, r *http.Request, ns string) {
 	log := appctx.GetLogger(r.Context())
 	xml := `<?xml version="1.0" encoding="utf-8"?>
 	<prop xmlns="DAV:">

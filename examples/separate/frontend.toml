@@ -33,6 +33,15 @@ prefix = "owncloud"
 chunk_folder = "/var/tmp/revad/chunks"
 # for user lookups
 gateway = "localhost:19000"
+# prefix the path of requests to /dav/files with this namespace
+# While owncloud has only listed usernames at this endpoint CERN has
+# been exposing more than just usernames. For owncloud deployments we
+# can prefix the path to jail the requests to the correct CS3 namespace.
+# In this deployment we mounted the owncloud storage provider at /oc. It
+# expects a username as the first path segment.
+files_namespace = "/oc/"
+# similar to the dav/files endpoint we can configure a prefix for the old webdav endpoint
+webdav_namespace = "/home/"
 
 [http.services.ocs]
 # prefix = "ocs"
