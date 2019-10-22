@@ -1,9 +1,9 @@
 ---
-title: "oidcprovider"
-linkTitle: "oidcprovider"
+title: "userregistry"
+linkTitle: "userregistry"
 weight: 10
 description: >
-  Configuration for the OIDC Provider service
+  Configuration for the User Registry service
 ---
 
 {{% pageinfo %}}
@@ -13,7 +13,7 @@ TODO
 {{% dir name="prefix" type="string" default="oauth2" %}}
 Where the HTTP service is exposed.
 {{< highlight toml >}}
-[http.services.oidcprovider]
+[grpc.services.storageprovider]
 prefix = "/"
 {{< /highlight >}}
 {{% /dir %}}
