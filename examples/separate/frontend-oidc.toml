@@ -122,6 +122,8 @@ gateway = "localhost:19000"
 # In this deployment we mounted the owncloud storage provider at /oc. It
 # expects a username as the first path segment.
 files_namespace = "/oc/"
+# similar to the dav/files endpoint we can configure a prefix for the old webdav endpoint
+webdav_namespace = "/home/"
 
 [http.services.ocs]
 # prefix = "ocs"

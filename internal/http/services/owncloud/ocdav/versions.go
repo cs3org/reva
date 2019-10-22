@@ -43,10 +43,11 @@ func (h *VersionsHandler) init(c *Config) error {
 // a version is identified by a timestamp, eg. /remote.php/dav/meta/<fileid>/v/1561410426
 func (h *VersionsHandler) Handler(s *svc, rid *storageproviderv0alphapb.ResourceId) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
 
 		// baseURI is encoded as part of the response payload in href field
-		baseURI := path.Join("/", s.Prefix(), "remote.php/dav/meta", wrapResourceID(rid))
-		ctx := context.WithValue(r.Context(), ctxKeyBaseURI, baseURI)
+		baseURI := path.Join(ctx.Value(ctxKeyBaseURI).(string), wrapResourceID(rid))
+		ctx = context.WithValue(ctx, ctxKeyBaseURI, baseURI)
 		r = r.WithContext(ctx)
 
 		var key string

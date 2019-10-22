@@ -19,61 +19,52 @@
 package ocdav
 
 import (
-	"context"
 	"net/http"
-	"path"
 )
 
-// WebDavHandler routes to the legacy dav endpoint
+// WebDavHandler implements a dav endpoint
 type WebDavHandler struct {
+	namespace string
 }
 
-func (h *WebDavHandler) init(c *Config) error {
+func (h *WebDavHandler) init(ns string) error {
+	h.namespace = ns
+	if h.namespace == "" {
+		h.namespace = "/"
+	}
 	return nil
 }
 
 // Handler handles requests
 func (h *WebDavHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
-		// webdav should be death: baseURI is encoded as part of the
-		// response payload in href field
-		baseURI := path.Join("/", s.Prefix(), "remote.php/webdav")
-
-		ctx := context.WithValue(r.Context(), ctxKeyBaseURI, baseURI)
-
-		// always send requests to the home namespace in CS3
-		// the /home namespace expects paths relative to the users home dir without a username in it
-		namespace := "/home"
-		r = r.WithContext(ctx)
-
 		switch r.Method {
 		case "PROPFIND":
-			s.doPropfind(w, r, namespace)
+			s.doPropfind(w, r, h.namespace)
 		case http.MethodOptions:
-			s.doOptions(w, r, namespace)
+			s.doOptions(w, r, h.namespace)
 		case http.MethodHead:
-			s.doHead(w, r, namespace)
+			s.doHead(w, r, h.namespace)
 		case http.MethodGet:
-			s.doGet(w, r, namespace)
+			s.doGet(w, r, h.namespace)
 		case "LOCK":
-			s.doLock(w, r, namespace)
+			s.doLock(w, r, h.namespace)
 		case "UNLOCK":
-			s.doUnlock(w, r, namespace)
+			s.doUnlock(w, r, h.namespace)
 		case "PROPPATCH":
-			s.doProppatch(w, r, namespace)
+			s.doProppatch(w, r, h.namespace)
 		case "MKCOL":
-			s.doMkcol(w, r, namespace)
+			s.doMkcol(w, r, h.namespace)
 		case "MOVE":
-			s.doMove(w, r, namespace)
+			s.doMove(w, r, h.namespace)
 		case "COPY":
-			s.doCopy(w, r, namespace)
+			s.doCopy(w, r, h.namespace)
 		case http.MethodPut:
-			s.doPut(w, r, namespace)
+			s.doPut(w, r, h.namespace)
 		case http.MethodDelete:
-			s.doDelete(w, r, namespace)
+			s.doDelete(w, r, h.namespace)
 		case "REPORT":
-			s.doReport(w, r, namespace)
+			s.doReport(w, r, h.namespace)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}

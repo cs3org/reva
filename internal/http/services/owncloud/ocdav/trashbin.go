@@ -85,12 +85,6 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 			return
 		}
 		if key == "" && r.Method == "PROPFIND" {
-
-			// baseURI is encoded as part of the response payload in href field
-			baseURI := path.Join("/", s.Prefix(), "remote.php/dav/trash-bin", username)
-			ctx = context.WithValue(r.Context(), ctxKeyBaseURI, baseURI)
-			r = r.WithContext(ctx)
-
 			h.listTrashbin(w, r, s, u)
 			return
 		}
@@ -113,11 +107,12 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 			urlPath := dstURL.Path
 
 			// baseURI is encoded as part of the response payload in href field
-			baseURI := path.Join("/", s.Prefix(), "remote.php/dav/files", username)
-			ctx = context.WithValue(r.Context(), ctxKeyBaseURI, baseURI)
+			baseURI := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files", username)
+			ctx = context.WithValue(ctx, ctxKeyBaseURI, baseURI)
 			r = r.WithContext(ctx)
 
 			log.Info().Str("url_path", urlPath).Str("base_uri", baseURI).Msg("move urls")
+			// TODO make request.php optional in destination header
 			i := strings.Index(urlPath, baseURI)
 			if i == -1 {
 				w.WriteHeader(http.StatusBadRequest)

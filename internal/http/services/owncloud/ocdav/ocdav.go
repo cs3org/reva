@@ -19,10 +19,12 @@
 package ocdav
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"net/http"
 	"os"
+	"path"
 	"strings"
 
 	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
@@ -45,10 +47,11 @@ func init() {
 
 // Config holds the config options that need to be passed down to all ocdav handlers
 type Config struct {
-	Prefix         string `mapstructure:"prefix"`
-	FilesNamespace string `mapstructure:"files_namespace"`
-	ChunkFolder    string `mapstructure:"chunk_folder"`
-	GatewaySvc     string `mapstructure:"gateway"`
+	Prefix          string `mapstructure:"prefix"`
+	FilesNamespace  string `mapstructure:"files_namespace"`
+	WebdavNamespace string `mapstructure:"webdav_namespace"`
+	ChunkFolder     string `mapstructure:"chunk_folder"`
+	GatewaySvc      string `mapstructure:"gateway"`
 }
 
 type svc struct {
@@ -78,7 +81,7 @@ func New(m map[string]interface{}) (rhttp.Service, error) {
 		davHandler:    new(DavHandler),
 	}
 	// initialize handlers and set default configs
-	if err := s.webDavHandler.init(conf); err != nil {
+	if err := s.webDavHandler.init(conf.WebdavNamespace); err != nil {
 		return nil, err
 	}
 	if err := s.davHandler.init(conf); err != nil {
@@ -97,7 +100,8 @@ func (s *svc) Close() error {
 
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log := appctx.GetLogger(r.Context())
+		ctx := r.Context()
+		log := appctx.GetLogger(ctx)
 
 		// the webdav api is accessible from anywhere
 		w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -109,6 +113,9 @@ func (s *svc) Handler() http.Handler {
 			return
 		}
 
+		// to build correct href prop urls we need to keep track of the base path
+		base := s.Prefix()
+
 		var head string
 		head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
 		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
@@ -116,28 +123,34 @@ func (s *svc) Handler() http.Handler {
 		case "status.php":
 			s.doStatus(w, r)
 			return
-		// TODO make "remote.php" optional
 		case "remote.php":
-			var head2 string
-			head2, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+			// skip optional "remote.php"
+			head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
 
-			// the old `/webdav` endpoint uses remote.php/webdav/$path
-			if head2 == "webdav" {
-				// for oc we need to prepend /home as the path that will be passed to the home storage provider
-				// will not contain the username
-				s.webDavHandler.Handler(s).ServeHTTP(w, r)
-				return
-			}
+			// yet, add it to baseURI
+			base = path.Join(base, "remote.php")
 
-			// the new `/dav/files` endpoint uses remote.php/dav/files/$user/$path style paths
-			if head2 == "dav" {
-				// cern uses /dav/files/$namespace -> /$namespace/...
-				// oc uses /dav/files/$user -> /$home/$user/...
-				// for oc we need to prepend the path to user homes
-				// or we take the path starting at /dav and allow rewriting it?
-				s.davHandler.Handler(s).ServeHTTP(w, r)
-				return
-			}
+		}
+		switch head {
+		// the old `/webdav` endpoint uses remote.php/webdav/$path
+		case "webdav":
+			// for oc we need to prepend /home as the path that will be passed to the home storage provider
+			// will not contain the username
+			base = path.Join(base, "webdav")
+			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+			r = r.WithContext(ctx)
+			s.webDavHandler.Handler(s).ServeHTTP(w, r)
+			return
+		case "dav":
+			// cern uses /dav/files/$namespace -> /$namespace/...
+			// oc uses /dav/files/$user -> /$home/$user/...
+			// for oc we need to prepend the path to user homes
+			// or we take the path starting at /dav and allow rewriting it?
+			base = path.Join(base, "dav")
+			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+			r = r.WithContext(ctx)
+			s.davHandler.Handler(s).ServeHTTP(w, r)
+			return
 		}
 		log.Warn().Msg("resource not found")
 		w.WriteHeader(http.StatusNotFound)
