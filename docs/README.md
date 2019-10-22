@@ -1,53 +1,27 @@
-# REVA Documentation
+# Reva Documentation
 
-:warning: REVA is a very young project and documentation is subject to change very often!
+This documentation is available at: [https://reva.link](https://reva.link)
 
-* [Installing REVA](./installing-reva.md)
-* [Building REVA from Sources](./building-reva.md)
-* [Beginner's Guide](./beginner-guide.md)
-* [Controlling REVA](./controlling-reva.md)
-* [Command-line parameters](./command-line.md)
+## Build locally
 
-## Guides
+Before hacking you need to install [Hugo extended version](https://github.com/gohugoio/hugo/releases) and
+run `npm install postcss-cli` only if you plan to hack on the theme style.
 
-* [Getting started with REVA](./guides/getting-started.md)
+```
+git clone https://github.com/cs3org/reva
+cd reva
+git submodule update --init --recursive # to install the theme and deps
+cd docs
+hugo server
+```
 
-## Config reference
+Open a browser at http://localhost:1313
 
-* [Core](./config/core.md) 
-* [Log](./config/log.md) 
-* [HTTP](./config/http.md)
-* [GRPC](./config/grpc.md) 
+## Theme
+The documentation is based on the [Docsy](https://github.com/google/docsy) theme for technical documentation sites, providing easy site navigation, structure, and more. 
+In the [Docsy User Guide](https://www.docsy.dev/docs/getting-started/) to get started.
 
-**HTTP services**
 
-* [helloworld](./config/http/services/helloworld.md)
-* [datagateway](./config/http/services/datagateway.md)
-* [dataprovider](./config/http/services/dataprovider.md)
-* [prometheussvc](./config/http/services/prometheus.md)
-* [ocdav](./config/http/services/ocdav.md)
-* [ocs](./config/http/services/ocs.md)
-* [oidcprovider](./config/http/services/oidcprovider.md)
-* [wellknown](./config/http/services/wellknown.md)
-
-**HTTP middleware**
-
-* [auth](./config/http/middleware/auth.md)
-* [cors](./config/http/middleware/cors.md)
-* [log](./config/http/middleware/log.md)
-
-**GRPC Services**
-
-* [authprovider](./config/grpc/services/authprovider.md)
-* [authregistry](./config/grpc/services/authregistry.md)
-* [gateway](./config/grpc/services/gateway.md)
-* [helloworld](./config/grpc/services/helloworld.md)
-* [storageprovider](./config/grpc/services/storageprovider.md)
-* [storageregistry](./config/grpc/services/storageregistry.md)
-* [userprovider](./config/grpc/services/userprovider.md)
-* [usershareprovider](./config/grpc/services/usershareprovider.md)
-
-**GRPC interceptors**
-
-* [auth](./config/grpc/interceptors/auth.md)
-
+## Continous Deployment
+If you don't want to build locally, once you create a Pull Request to the repo, a Continous Integration
+step will take care of deploying your changes to Netlify for previewing your changes to the documentation.
