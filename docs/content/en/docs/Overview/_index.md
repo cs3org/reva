@@ -50,15 +50,16 @@ to multiple storage backends and multiple integrations with many application pro
 ## Why do I want it?
 
 * **What is it good for?**: Reva is good to avoid vendor locking in various ways: you could change your storage backend or the EFSS platform and your users
-will still be able to use the same applications as before, making cloud migrations much transparent and friction-less. How many times have you been using an app
-that when you move out to another cloud you have to loose access to it?
+will still be able to use the same applications as before, making cloud migrations more transparent and friction-less. How many times have you been using an app
+and we you switched cloud you lost access to it?
 
 * **What is it not good for?**: Reva is not a replacement for a EFFSS or Cloud Platform, it is just a middleware component that enables inter-operability
 and runs alongside your infrastructure.
 
 * **What is it *not yet* good for?**: Reva is still very young to be used in production. We are working hard to reach a stable version soon with decent integrations to storage
-and applications. We don't want to re-invent the wheel so will provide integrations with [rclone](https://rclone.org/) for storages and with other protocols out there like 
-[WOPI](https://wopi.readthedocs.io/en/latest/) or [Learning Tools Interoperability](https://www.imsglobal.org/activity/learning-tools-interoperability) for compatible collaboration.
+and applications. We don't want to re-invent the wheel so we have in mind that Reva will provide integrations with [rclone](https://rclone.org/) for multiple-storage support and with other protocols out there like [WOPI](https://wopi.readthedocs.io/en/latest/) 
+, [Learning Tools Interoperability](https://www.imsglobal.org/activity/learning-tools-interoperability) and
+[OpenCloudMesh](https://rawgit.com/GEANT/OCM-API/v1/docs.html) to enable seamless collaboration.
 
 ## Where should I go next?
 
