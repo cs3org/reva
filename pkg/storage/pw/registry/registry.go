@@ -16,13 +16,19 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocdav
+package registry
 
-import (
-	"net/http"
-)
+import "github.com/cs3org/reva/pkg/storage"
 
-//TODO(jfd): implement unlock
-func (s *svc) doUnlock(w http.ResponseWriter, r *http.Request, ns string) {
-	w.WriteHeader(http.StatusNoContent)
+// NewFunc is the function that storage implementations
+// should register at init time.
+type NewFunc func(map[string]interface{}) (storage.PathWrapper, error)
+
+// NewFuncs is a map containing all the registered storage backends.
+var NewFuncs = map[string]NewFunc{}
+
+// Register registers a new storage backend new function.
+// Not safe for concurrent use. Safe for use from package init.
+func Register(name string, f NewFunc) {
+	NewFuncs[name] = f
 }

@@ -3,6 +3,8 @@
 # - serves http endpoints on port 20080
 #   - /owncloud - ocdav
 #   - /ocs - ocs
+#   - /oauth2 - oidcprovider
+#   - /.well-known - wellknown service to announce openid-configuration
 #   - TODO ocm
 [core]
 max_cpus = "2"
@@ -21,6 +23,7 @@ auth_manager = "oidc"
 userprovidersvc = "http://localhost:20080"
 
 [grpc.services.authprovider.auth_managers.oidc]
+# If you want to use your own openid provider change this config
 provider = "http://localhost:20080"
 insecure = true
 # credentials used for the introspection endpoint with basic auth
@@ -30,6 +33,7 @@ client_id = "reva"
 client_secret = "foobar"
 
 [http]
+#enabled_services = ["ocdav", "ocs"] # use this if you want to use your own oidc provider. 
 enabled_services = ["wellknown", "oidcprovider", "ocdav", "ocs"]
 enabled_middlewares = ["cors", "auth"]
 address = "0.0.0.0:20080"
@@ -111,6 +115,13 @@ prefix = ""
 chunk_folder = "/var/tmp/revad/chunks"
 # for user lookups
 gateway = "localhost:19000"
+# prefix the path of requests to /dav/files with this namespace
+# While owncloud has only listed usernames at this endpoint CERN has
+# been exposing more than just usernames. For owncloud deployments we
+# can prefix the path to jail the requests to the correct CS3 namespace.
+# In this deployment we mounted the owncloud storage provider at /oc. It
+# expects a username as the first path segment.
+files_namespace = "/oc/"
 
 [http.services.ocs]
 # prefix = "ocs"

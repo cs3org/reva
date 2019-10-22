@@ -21,16 +21,17 @@ package ocdav
 import (
 	"io"
 	"net/http"
+	"path"
 
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cs3org/reva/pkg/appctx"
 )
 
-func (s *svc) doMkcol(w http.ResponseWriter, r *http.Request) {
+func (s *svc) doMkcol(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
-	fn := r.URL.Path
+	fn := path.Join(ns, r.URL.Path)
 
 	buf := make([]byte, 1)
 	_, err := r.Body.Read(buf)

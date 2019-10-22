@@ -61,3 +61,9 @@ type Registry interface {
 	ListProviders(ctx context.Context) ([]*storagetypespb.ProviderInfo, error)
 	GetHome(ctx context.Context) (string, error)
 }
+
+// PathWrapper is the interface to implement for path transformations
+type PathWrapper interface {
+	Unwrap(ctx context.Context, rp string) (string, error)
+	Wrap(ctx context.Context, rp string) (string, error)
+}

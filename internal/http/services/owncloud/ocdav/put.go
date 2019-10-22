@@ -20,6 +20,7 @@ package ocdav
 
 import (
 	"net/http"
+	"path"
 	"regexp"
 	"strconv"
 	"time"
@@ -100,10 +101,10 @@ func isContentRange(r *http.Request) bool {
 	return r.Header.Get("Content-Range") != ""
 }
 
-func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
+func (s *svc) doPut(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
-	fn := r.URL.Path
+	fn := path.Join(ns, r.URL.Path)
 
 	if r.Body == nil {
 		log.Warn().Msg("body is nil")

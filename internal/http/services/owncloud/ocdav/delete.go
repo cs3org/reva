@@ -20,16 +20,17 @@ package ocdav
 
 import (
 	"net/http"
+	"path"
 
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cs3org/reva/pkg/appctx"
 )
 
-func (s *svc) doDelete(w http.ResponseWriter, r *http.Request) {
+func (s *svc) doDelete(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
-	fn := r.URL.Path
+	fn := path.Join(ns, r.URL.Path)
 
 	client, err := s.getClient()
 	if err != nil {

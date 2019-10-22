@@ -26,9 +26,14 @@ import (
 
 // FilesHandler routes to the different sub handlers
 type FilesHandler struct {
+	namespace string
 }
 
 func (h *FilesHandler) init(c *Config) error {
+	h.namespace = c.FilesNamespace
+	if h.namespace == "" {
+		h.namespace = "/"
+	}
 	return nil
 }
 
@@ -44,31 +49,31 @@ func (h *FilesHandler) Handler(s *svc) http.Handler {
 
 		switch r.Method {
 		case "PROPFIND":
-			s.doPropfind(w, r)
+			s.doPropfind(w, r, h.namespace)
 		case http.MethodOptions:
-			s.doOptions(w, r)
+			s.doOptions(w, r, h.namespace)
 		case http.MethodHead:
-			s.doHead(w, r)
+			s.doHead(w, r, h.namespace)
 		case http.MethodGet:
-			s.doGet(w, r)
+			s.doGet(w, r, h.namespace)
 		case "LOCK":
-			s.doLock(w, r)
+			s.doLock(w, r, h.namespace)
 		case "UNLOCK":
-			s.doUnlock(w, r)
+			s.doUnlock(w, r, h.namespace)
 		case "PROPPATCH":
-			s.doProppatch(w, r)
+			s.doProppatch(w, r, h.namespace)
 		case "MKCOL":
-			s.doMkcol(w, r)
+			s.doMkcol(w, r, h.namespace)
 		case "MOVE":
-			s.doMove(w, r)
+			s.doMove(w, r, h.namespace)
 		case "COPY":
-			s.doCopy(w, r)
+			s.doCopy(w, r, h.namespace)
 		case http.MethodPut:
-			s.doPut(w, r)
+			s.doPut(w, r, h.namespace)
 		case http.MethodDelete:
-			s.doDelete(w, r)
+			s.doDelete(w, r, h.namespace)
 		case "REPORT":
-			s.doReport(w, r)
+			s.doReport(w, r, h.namespace)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}

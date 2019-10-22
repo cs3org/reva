@@ -36,6 +36,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
+	pwregistry "github.com/cs3org/reva/pkg/storage/pw/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
@@ -47,11 +48,13 @@ func init() {
 }
 
 type config struct {
-	Driver           string                            `mapstructure:"driver"`
 	MountPath        string                            `mapstructure:"mount_path"`
 	MountID          string                            `mapstructure:"mount_id"`
-	TmpFolder        string                            `mapstructure:"tmp_folder"`
+	Driver           string                            `mapstructure:"driver"`
 	Drivers          map[string]map[string]interface{} `mapstructure:"drivers"`
+	PathWrapper      string                            `mapstructure:"path_wrapper"`
+	PathWrappers     map[string]map[string]interface{} `mapstructure:"path_wrappers"`
+	TmpFolder        string                            `mapstructure:"tmp_folder"`
 	DataServerURL    string                            `mapstructure:"data_server_url"`
 	ExposeDataServer bool                              `mapstructure:"expose_data_server"` // if true the client will be able to upload/download directly to it
 	AvailableXS      map[string]uint32                 `mapstructure:"available_checksums"`
@@ -60,6 +63,7 @@ type config struct {
 type service struct {
 	conf               *config
 	storage            storage.FS
+	pathWrapper        storage.PathWrapper
 	mountPath, mountID string
 	tmpFolder          string
 	dataServerURL      *url.URL
@@ -120,6 +124,10 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 	if err != nil {
 		return nil, err
 	}
+	pw, err := getPW(c)
+	if err != nil {
+		return nil, err
+	}
 
 	// parse data server url
 	u, err := url.Parse(c.DataServerURL)
@@ -140,6 +148,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 	service := &service{
 		conf:          c,
 		storage:       fs,
+		pathWrapper:   pw,
 		tmpFolder:     tmpFolder,
 		mountPath:     mountPath,
 		mountID:       mountID,
@@ -228,7 +237,13 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *storageprovider
 	// or ownclouds://data-server.example.org/home/docs/myfile.txt
 	log := appctx.GetLogger(ctx)
 	url := *s.dataServerURL
-	url.Path = path.Join("/", url.Path, path.Clean(req.Ref.GetPath()))
+	newRef, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		return &storageproviderv0alphapb.InitiateFileDownloadResponse{
+			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+		}, nil
+	}
+	url.Path = path.Join("/", url.Path, newRef.GetPath())
 	log.Info().Str("data-server", url.String()).Str("fn", req.Ref.GetPath()).Msg("file download")
 	res := &storageproviderv0alphapb.InitiateFileDownloadResponse{
 		DownloadEndpoint: url.String(),
@@ -242,7 +257,13 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *storageproviderv0
 	// TODO(labkode): same considerations as download
 	log := appctx.GetLogger(ctx)
 	url := *s.dataServerURL
-	url.Path = path.Join("/", url.Path, path.Clean(req.Ref.GetPath()))
+	newRef, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		return &storageproviderv0alphapb.InitiateFileUploadResponse{
+			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+		}, nil
+	}
+	url.Path = path.Join("/", url.Path, newRef.GetPath())
 	log.Info().Str("data-server", url.String()).
 		Str("fn", req.Ref.GetPath()).
 		Str("xs", fmt.Sprintf("%+v", s.conf.AvailableXS)).
@@ -379,7 +400,11 @@ func (s *service) Stat(ctx context.Context, req *storageproviderv0alphapb.StatRe
 		}, nil
 	}
 
-	s.wrap(md)
+	if err := s.wrap(ctx, md); err != nil {
+		return &storageproviderv0alphapb.StatResponse{
+			Status: status.NewInternal(ctx, err, "error wrapping path"),
+		}, nil
+	}
 	res := &storageproviderv0alphapb.StatResponse{
 		Status: status.NewOK(ctx),
 		Info:   md,
@@ -416,7 +441,16 @@ func (s *service) ListContainerStream(req *storageproviderv0alphapb.ListContaine
 	}
 
 	for _, md := range mds {
-		s.wrap(md)
+		if err := s.wrap(ctx, md); err != nil {
+			res := &storageproviderv0alphapb.ListContainerStreamResponse{
+				Status: status.NewInternal(ctx, err, "error wrapping path"),
+			}
+			if err := ss.Send(res); err != nil {
+				log.Error().Err(err).Msg("ListContainerStream: error sending response")
+				return err
+			}
+			return nil
+		}
 		res := &storageproviderv0alphapb.ListContainerStreamResponse{
 			Info:   md,
 			Status: status.NewOK(ctx),
@@ -447,7 +481,11 @@ func (s *service) ListContainer(ctx context.Context, req *storageproviderv0alpha
 
 	var infos = make([]*storageproviderv0alphapb.ResourceInfo, 0, len(mds))
 	for _, md := range mds {
-		s.wrap(md)
+		if err := s.wrap(ctx, md); err != nil {
+			return &storageproviderv0alphapb.ListContainerResponse{
+				Status: status.NewInternal(ctx, err, "error wrapping path"),
+			}, nil
+		}
 		infos = append(infos, md)
 	}
 	res := &storageproviderv0alphapb.ListContainerResponse{
@@ -698,6 +736,23 @@ func (s *service) GetQuota(ctx context.Context, req *storageproviderv0alphapb.Ge
 	return res, nil
 }
 
+func getFS(c *config) (storage.FS, error) {
+	if f, ok := registry.NewFuncs[c.Driver]; ok {
+		return f(c.Drivers[c.Driver])
+	}
+	return nil, fmt.Errorf("driver not found: %s", c.Driver)
+}
+
+func getPW(c *config) (storage.PathWrapper, error) {
+	if c.PathWrapper == "" {
+		return nil, nil
+	}
+	if f, ok := pwregistry.NewFuncs[c.PathWrapper]; ok {
+		return f(c.PathWrappers[c.PathWrapper])
+	}
+	return nil, fmt.Errorf("path wrapper not found: %s", c.Driver)
+}
+
 func (s *service) unwrap(ctx context.Context, ref *storageproviderv0alphapb.Reference) (*storageproviderv0alphapb.Reference, error) {
 	if ref.GetId() != nil {
 		idRef := &storageproviderv0alphapb.Reference{
@@ -723,6 +778,13 @@ func (s *service) unwrap(ctx context.Context, ref *storageproviderv0alphapb.Refe
 		return nil, err
 	}
 
+	if s.pathWrapper != nil {
+		fsfn, err = s.pathWrapper.Unwrap(ctx, fsfn)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	pathRef := &storageproviderv0alphapb.Reference{
 		Spec: &storageproviderv0alphapb.Reference_Path{
 			Path: fsfn,
@@ -739,14 +801,17 @@ func (s *service) trimMountPrefix(fn string) (string, error) {
 	return "", errors.New(fmt.Sprintf("path=%q does not belong to this storage provider mount path=%q"+fn, s.mountPath))
 }
 
-func getFS(c *config) (storage.FS, error) {
-	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		return f(c.Drivers[c.Driver])
-	}
-	return nil, fmt.Errorf("driver not found: %s", c.Driver)
-}
-
-func (s *service) wrap(ri *storageproviderv0alphapb.ResourceInfo) {
+func (s *service) wrap(ctx context.Context, ri *storageproviderv0alphapb.ResourceInfo) error {
 	ri.Id.StorageId = s.mountID
+
+	if s.pathWrapper != nil {
+		var err error
+		ri.Path, err = s.pathWrapper.Wrap(ctx, ri.Path)
+		if err != nil {
+			return err
+		}
+	}
+
 	ri.Path = path.Join(s.mountPath, ri.Path)
+	return nil
 }

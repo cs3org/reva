@@ -33,11 +33,10 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp"
 )
 
-func (s *svc) doCopy(w http.ResponseWriter, r *http.Request) {
+func (s *svc) doCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
-
-	src := r.URL.Path
+	src := path.Join(ns, r.URL.Path)
 	dstHeader := r.Header.Get("Destination")
 	overwrite := r.Header.Get("Overwrite")
 
@@ -75,6 +74,7 @@ func (s *svc) doCopy(w http.ResponseWriter, r *http.Request) {
 	urlPath := dstURL.Path
 	baseURI := r.Context().Value(ctxKeyBaseURI).(string)
 	log.Info().Str("url-path", urlPath).Str("base-uri", baseURI).Msg("copy")
+	// TODO replace with HasPrefix:
 	i := strings.Index(urlPath, baseURI)
 	if i == -1 {
 		w.WriteHeader(http.StatusBadRequest)
@@ -103,7 +103,8 @@ func (s *svc) doCopy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// TODO check if path is on same storage, return 502 on problems, see https://tools.ietf.org/html/rfc4918#section-9.9.4
-	dst := path.Clean(urlPath[len(baseURI):])
+	// prefix to namespace
+	dst := path.Join(ns, urlPath[len(baseURI):])
 
 	// check dst exists
 	ref = &storageproviderv0alphapb.Reference{

@@ -26,10 +26,10 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 )
 
-func (s *svc) doReport(w http.ResponseWriter, r *http.Request) {
-
+func (s *svc) doReport(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
+	//fn := path.Join(ns, r.URL.Path)
 
 	rep, status, err := readReport(r.Body)
 	if err != nil {
@@ -41,6 +41,8 @@ func (s *svc) doReport(w http.ResponseWriter, r *http.Request) {
 		s.doSearchFiles(w, r, rep.SearchFiles)
 		return
 	}
+
+	// TODO(jfd): implement report
 
 	w.WriteHeader(http.StatusNotImplemented)
 }

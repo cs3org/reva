@@ -45,9 +45,10 @@ func init() {
 
 // Config holds the config options that need to be passed down to all ocdav handlers
 type Config struct {
-	Prefix      string `mapstructure:"prefix"`
-	ChunkFolder string `mapstructure:"chunk_folder"`
-	GatewaySvc  string `mapstructure:"gateway"`
+	Prefix         string `mapstructure:"prefix"`
+	FilesNamespace string `mapstructure:"files_namespace"`
+	ChunkFolder    string `mapstructure:"chunk_folder"`
+	GatewaySvc     string `mapstructure:"gateway"`
 }
 
 type svc struct {
@@ -115,19 +116,25 @@ func (s *svc) Handler() http.Handler {
 		case "status.php":
 			s.doStatus(w, r)
 			return
-
+		// TODO make "remote.php" optional
 		case "remote.php":
 			var head2 string
 			head2, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
 
 			// the old `/webdav` endpoint uses remote.php/webdav/$path
 			if head2 == "webdav" {
+				// for oc we need to prepend /home as the path that will be passed to the home storage provider
+				// will not contain the username
 				s.webDavHandler.Handler(s).ServeHTTP(w, r)
 				return
 			}
 
 			// the new `/dav/files` endpoint uses remote.php/dav/files/$user/$path style paths
 			if head2 == "dav" {
+				// cern uses /dav/files/$namespace -> /$namespace/...
+				// oc uses /dav/files/$user -> /$home/$user/...
+				// for oc we need to prepend the path to user homes
+				// or we take the path starting at /dav and allow rewriting it?
 				s.davHandler.Handler(s).ServeHTTP(w, r)
 				return
 			}

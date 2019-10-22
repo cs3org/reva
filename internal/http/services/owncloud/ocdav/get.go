@@ -21,6 +21,7 @@ package ocdav
 import (
 	"io"
 	"net/http"
+	"path"
 	"time"
 
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
@@ -30,10 +31,10 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp"
 )
 
-func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
+func (s *svc) doGet(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
-	fn := r.URL.Path
+	fn := path.Join(ns, r.URL.Path)
 
 	client, err := s.getClient()
 	if err != nil {

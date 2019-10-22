@@ -52,7 +52,7 @@ func (h *VersionsHandler) Handler(s *svc, rid *storageproviderv0alphapb.Resource
 		var key string
 		key, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
 		if r.Method == http.MethodOptions {
-			s.doOptions(w, r)
+			s.doOptions(w, r, "versions")
 			return
 		}
 		if key == "" && r.Method == "PROPFIND" {

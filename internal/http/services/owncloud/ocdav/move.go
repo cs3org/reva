@@ -29,11 +29,10 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 )
 
-func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
+func (s *svc) doMove(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
-
-	src := r.URL.Path
+	src := path.Join(ns, r.URL.Path)
 	dstHeader := r.Header.Get("Destination")
 	overwrite := r.Header.Get("Overwrite")
 
@@ -71,6 +70,7 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 	urlPath := dstURL.Path
 	baseURI := r.Context().Value("baseuri").(string)
 	log.Info().Str("url_path", urlPath).Str("base_uri", baseURI).Msg("move urls")
+	// TODO replace with HasPrefix:
 	i := strings.Index(urlPath, baseURI)
 	if i == -1 {
 		w.WriteHeader(http.StatusBadRequest)
@@ -100,7 +100,8 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// TODO check if path is on same storage, return 502 on problems, see https://tools.ietf.org/html/rfc4918#section-9.9.4
-	dst := path.Clean(urlPath[len(baseURI):])
+	// prefix to namespace
+	dst := path.Join(ns, urlPath[len(baseURI):])
 
 	// check dst exists
 	dstStatRef := &storageproviderv0alphapb.Reference{
