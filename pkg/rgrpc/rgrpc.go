@@ -138,7 +138,7 @@ func NewServer(m interface{}, log zerolog.Logger) (*Server, error) {
 // Start starts the server.
 func (s *Server) Start(ln net.Listener) error {
 	if err := s.registerServices(); err != nil {
-		err = errors.Wrap(err, "unable to register services")
+		err = errors.Wrap(err, "unable to register services,")
 		return err
 	}
 
@@ -176,7 +176,7 @@ func (s *Server) registerServices() error {
 			newFunc := Services[svcName]
 			closer, err := newFunc(s.conf.Services[svcName], s.s)
 			if err != nil {
-				return err
+				return errors.Wrapf(err, "grpc service %s could not be started,", svcName)
 			}
 			s.closers[svcName] = closer
 			s.log.Info().Msgf("grpc service enabled: %s", svcName)
@@ -229,6 +229,7 @@ func (s *Server) getInterceptors() ([]grpc.ServerOption, error) {
 		if s.isInterceptorEnabled(name) {
 			inter, prio, err := newFunc(s.conf.Interceptors[name])
 			if err != nil {
+				err = errors.Wrapf(err, "error creating unary interceptor: %s,", name)
 				return nil, err
 			}
 			triple := &unaryInterceptorTriple{
@@ -248,7 +249,7 @@ func (s *Server) getInterceptors() ([]grpc.ServerOption, error) {
 	unaryInterceptors := []grpc.UnaryServerInterceptor{}
 	for _, t := range unaryTriples {
 		unaryInterceptors = append(unaryInterceptors, t.Interceptor)
-		s.log.Info().Msgf("chainning grpc unary interceptor %s with priority %d", t.Name, t.Priority)
+		s.log.Info().Msgf("chaining grpc unary interceptor %s with priority %d", t.Name, t.Priority)
 	}
 	unaryInterceptors = append([]grpc.UnaryServerInterceptor{appctx.NewUnary(s.log), token.NewUnary(), log.NewUnary(), recovery.NewUnary()}, unaryInterceptors...)
 	unaryChain := grpc_middleware.ChainUnaryServer(unaryInterceptors...)
@@ -258,6 +259,7 @@ func (s *Server) getInterceptors() ([]grpc.ServerOption, error) {
 		if s.isInterceptorEnabled(name) {
 			inter, prio, err := newFunc(s.conf.Interceptors[name])
 			if err != nil {
+				err = errors.Wrapf(err, "error creating streaming interceptor: %s,", name)
 				return nil, err
 			}
 			triple := &streamInterceptorTriple{

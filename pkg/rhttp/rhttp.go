@@ -200,7 +200,7 @@ func (s *Server) registerMiddlewares() error {
 		if s.isMiddlewareEnabled(name) {
 			m, prio, err := newFunc(s.conf.Middlewares[name])
 			if err != nil {
-				err = errors.Wrap(err, "error creating new middleware: "+name)
+				err = errors.Wrapf(err, "error creating new middleware: %s,", name)
 				return err
 			}
 			middlewares = append(middlewares, &middlewareTriple{
@@ -221,7 +221,7 @@ func (s *Server) registerServices() error {
 			newFunc := Services[svcName]
 			svc, err := newFunc(s.conf.Services[svcName])
 			if err != nil {
-				err = errors.Wrapf(err, "error registering new http service %s", svcName)
+				err = errors.Wrapf(err, "http service %s could not be started,", svcName)
 				return err
 			}
 
