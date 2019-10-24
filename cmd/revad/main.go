@@ -53,7 +53,7 @@ var (
 	pidFlag     = flag.String("p", "", "pid file. If empty defaults to a random file in the OS temporary directory")
 
 	// Compile time variables initialez with gcc flags.
-	gitCommit, gitBranch, buildDate, version, goVersion, buildPlatform string
+	gitCommit, buildDate, version, goVersion string
 )
 
 type coreConf struct {
@@ -190,12 +190,10 @@ func getWriter(out string) (io.Writer, error) {
 func getVersionString() string {
 	msg := "version=%s "
 	msg += "commit=%s "
-	msg += "branch=%s "
 	msg += "go_version=%s "
-	msg += "build_date=%s "
-	msg += "build_platform=%s"
+	msg += "build_date=%s"
 
-	return fmt.Sprintf(msg, version, gitCommit, gitBranch, goVersion, buildDate, buildPlatform)
+	return fmt.Sprintf(msg, version, gitCommit, goVersion, buildDate)
 }
 
 func handleVersionFlag() {

@@ -18,6 +18,7 @@
 cmd/revad/revad
 cmd/revad/revad.pid
 cmd/reva/reva
+tools/release/release
 
 # Ignore pid files
 *.pid
@@ -33,3 +34,4 @@ docs/node_modules/
 docs/tech-doc-hugo
 docs/themes/
 
+dist/
