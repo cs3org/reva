@@ -46,7 +46,7 @@ contrib:
 
 # for manual building only
 deps: 
-	cd /tmp && go get github.com/golangci/golangci-lint/cmd/golangci-lint
+	cd /tmp && GO111MODULE=on go get -u github.com/golangci/golangci-lint@v1.21.0
 	cd /tmp && go get golang.org/x/tools/cmd/goimports
 
 build-ci: off
