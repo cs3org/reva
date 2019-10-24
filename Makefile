@@ -74,6 +74,6 @@ release-deps:
 
 # create local build versions
 dist: default
-	go run tools/create-artifacts/main.go -version ${VERSION} -commit ${GIT_COMMIT} -branch ${GIT_BRANCH} -goversion ${GO_VERSION}
+	go run tools/create-artifacts/main.go -version ${VERSION} -commit ${GIT_COMMIT} -goversion ${GO_VERSION}
 
 all: deps default

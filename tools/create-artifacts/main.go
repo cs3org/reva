@@ -34,7 +34,6 @@ import (
 
 var (
 	commit    = flag.String("commit", "", "sets git commit")
-	branch    = flag.String("branch", "", "sets git branch")
 	version   = flag.String("version", "", "sets git version")
 	goVersion = flag.String("goversion", "", "sets go version")
 	buildDate = time.Now().Format("2006-01-02")
@@ -47,7 +46,7 @@ var (
 func init() {
 	flag.Parse()
 
-	if *commit == "" || *branch == "" || *version == "" || *goVersion == "" {
+	if *commit == "" || *version == "" || *goVersion == "" {
 		fmt.Fprint(os.Stderr, "fill all the flags\n")
 		os.Exit(1)
 	}
@@ -65,10 +64,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	ldFlags := fmt.Sprintf("-s -X main.buildDate=%s -X main.gitCommit=%s -X main.gitBranch=%s -X main.version=%s -X main.goVersion=%s",
+	ldFlags := fmt.Sprintf("-s -X main.buildDate=%s -X main.gitCommit=%s -X main.version=%s -X main.goVersion=%s",
 		buildDate,
 		*commit,
-		*branch,
 		*version,
 		*goVersion,
 	)
