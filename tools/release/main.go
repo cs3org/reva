@@ -59,15 +59,14 @@ func main() {
 	date := dt.Format("2006-01-02")
 	newChangelog := fmt.Sprintf("changelog/%s_%s", *version, date)
 
+	if info, _ := os.Stat("changelog/unreleased"); info == nil {
+		fmt.Fprintf(os.Stderr, "no changelog/unreleased folder, to create a new version you need to fill it")
+		os.Exit(1)
+	}
+
 	cmd := exec.Command("mv", "changelog/unreleased", newChangelog)
 	run(cmd)
 	add(fmt.Sprintf("Prepare changelog for version %s", *version), "changelog")
-
-	// always created a new unreleased
-	if err := os.MkdirAll("changelog/unreleased", 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "error creating new changelog/unreleased")
-		os.Exit(1)
-	}
 
 	// install release-deps: calens
 	cmd = exec.Command("make", "release-deps")
