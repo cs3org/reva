@@ -68,10 +68,16 @@ release-deps:
 	cd /tmp && go get github.com/restic/calens
 
 # usually to be run from CI, it will push artefacts to github releases
-publish:
+dist:
 	rm -rf dist && mkdir dist
 	GOOS=linux GOARCH=amd64 go build -mod=vendor -o ./dist/revad_${VERSION}_linux_amd64 ${LDFLAGS} ./cmd/revad
 	GOOS=linux GOARCH=386   go build -mod=vendor -o ./dist/revad_${VERSION}_linux_386   ${LDFLAGS} ./cmd/revad
 	GOOS=darwin GOARCH=amd64 go build -mod=vendor -o ./dist/revad_${VERSION}_darwin_amd64 ${LDFLAGS} ./cmd/revad
 	GOOS=darwin GOARCH=386   go build -mod=vendor -o ./dist/revad_${VERSION}_darwin_386   ${LDFLAGS} ./cmd/revad
+	
+	GOOS=linux GOARCH=amd64 go build -mod=vendor -o ./dist/reva_${VERSION}_linux_amd64 ${LDFLAGS} ./cmd/reva
+	GOOS=linux GOARCH=386   go build -mod=vendor -o ./dist/reva_${VERSION}_linux_386   ${LDFLAGS} ./cmd/reva
+	GOOS=darwin GOARCH=amd64 go build -mod=vendor -o ./dist/reva_${VERSION}_darwin_amd64 ${LDFLAGS} ./cmd/reva
+	GOOS=darwin GOARCH=386   go build -mod=vendor -o ./dist/reva_${VERSION}_darwin_386   ${LDFLAGS} ./cmd/reva
+	
 	cd dist && sha256sum * > checksums-sha256.txt

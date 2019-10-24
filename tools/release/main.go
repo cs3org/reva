@@ -33,7 +33,8 @@ import (
 
 var (
 	version = flag.String("version", "", "version to release: 0.0.1")
-	dry     = flag.Bool("dry", false, "if true does not do git commit")
+	commit  = flag.Bool("commit", false, "creates a commit")
+	tag     = flag.Bool("tag", false, "creates a tag")
 )
 
 func init() {
@@ -66,7 +67,17 @@ func main() {
 
 	cmd := exec.Command("mv", "changelog/unreleased", newChangelog)
 	run(cmd)
-	add(fmt.Sprintf("Prepare changelog for version %s", *version), "changelog")
+
+	// Create empty unreleased changelog with .gitkeep file inside
+	if err := os.MkdirAll("changelog/unreleased", 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "error creating changelog/unreleased")
+		os.Exit(1)
+	}
+
+	if err := ioutil.WriteFile("changelog/unreleased/.gitkeep", []byte(""), 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "error writing changelog/unreleased/.gitkeep: %s", err)
+		os.Exit(1)
+	}
 
 	// install release-deps: calens
 	cmd = exec.Command("make", "release-deps")
@@ -75,7 +86,6 @@ func main() {
 	// create new changelog
 	cmd = exec.Command("calens", "-o", "CHANGELOG.md")
 	run(cmd)
-	add(fmt.Sprintf("Generate CHANGELOG.md for %s", *version), "CHANGELOG.md")
 
 	// add new VERSION and BUILD_DATE
 	if err := ioutil.WriteFile("VERSION", []byte(*version), 0644); err != nil {
@@ -88,9 +98,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "error writing to RELEASE_DATE file: %s", err)
 		os.Exit(1)
 	}
-
-	add(fmt.Sprintf("Update VERSION file to %s", *version), "VERSION")
-	add(fmt.Sprintf("Update RELEASE_DATE file to %s", date), "RELEASE_DATE")
 
 	tmp, err := ioutil.TempDir("", "reva-changelog")
 	if err != nil {
@@ -111,7 +118,6 @@ func main() {
 	// create new changelog
 	cmd = exec.Command("calens", "-o", "changelog/NOTE.md", "-i", path.Join(tmp, "changelog"))
 	run(cmd)
-	add(fmt.Sprintf("Generate NOTE.md for %s", *version), "changelog/NOTE.md")
 
 	// Generate changelog also in the documentation
 	if err := os.MkdirAll(fmt.Sprintf("docs/content/en/docs/Changelog/%s", *version), 0755); err != nil {
@@ -142,12 +148,23 @@ description: >
 		os.Exit(1)
 	}
 
-	add(fmt.Sprintf("Generate changelog in docs for %s", *version), "docs/content/en/docs/Changelog")
+	add(fmt.Sprintf("v%s", *version),
+		"changelog",
+		"CHANGELOG.md",
+		"VERSION",
+		"RELEASE_DATE",
+		"docs/content/en/docs/Changelog",
+	)
 
-	// tag with v$version
-	tag(*version)
+	if *commit {
+		createCommit(fmt.Sprintf("v%s", *version))
+	}
 
-	fmt.Println("RELEASE READY: you only need to\n$ git push --tags")
+	if *tag {
+		createTag(*version)
+	}
+
+	fmt.Println("RELEASE READY: you only need to\n$ git push --follow-tags")
 }
 
 func isRepoDirty() bool {
@@ -169,24 +186,23 @@ func add(msg string, files ...string) {
 		run(cmd)
 	}
 
-	if !*dry {
-		cmd := exec.Command("git", "commit", "-m", msg)
-		cmd.Dir = "." // always run from the root of the repo
-		run(cmd)
-	}
 }
 
-func tag(version string) {
+func createCommit(msg string) {
+	cmd := exec.Command("git", "commit", "-m", msg)
+	cmd.Dir = "." // always run from the root of the repo
+	run(cmd)
+}
+
+func createTag(version string) {
 	// check if repo is dirty
 	if isRepoDirty() {
 		fmt.Fprintf(os.Stderr, "repo is dirty when creating a new tag for version %s", version)
 		os.Exit(1)
 	}
 
-	if !*dry {
-		cmd := exec.Command("git", "tag", "-a", "v"+version, "-m", "v"+version)
-		run(cmd)
-	}
+	cmd := exec.Command("git", "tag", "-a", "v"+version, "-m", "v"+version)
+	run(cmd)
 }
 
 func run(cmd *exec.Cmd) {

@@ -123,9 +123,6 @@ platform:
   arch: amd64
 
 trigger:
-  branch:
-    include:
-      - ci-release
   event:
     include:
     - tag
@@ -159,7 +156,15 @@ steps:
     - wget -qO- https://github.com/fossas/fossa-cli/releases/download/v1.0.11/fossa-cli_1.0.11_linux_amd64.tar.gz | tar xvz -C /go/bin/ 
     - /go/bin/fossa test
 
-- name: publish
+- name: create-dist
   image: golang:1.13
   commands:
-    - make ci
+    - make dist
+
+- name: publish
+  image: plugins/github-release
+  settings:
+    api_key:
+      from_secret: github_token
+    files: dist/*
+    note: changelog/NOTE.md
