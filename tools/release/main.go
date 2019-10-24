@@ -63,6 +63,12 @@ func main() {
 	run(cmd)
 	add(fmt.Sprintf("Prepare changelog for version %s", *version), "changelog")
 
+	// always created a new unreleased
+	if err := os.MkdirAll("changelog/unreleased", 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "error creating new changelog/unreleased")
+		os.Exit(1)
+	}
+
 	// install release-deps: calens
 	cmd = exec.Command("make", "release-deps")
 	run(cmd)
