@@ -27,8 +27,7 @@ import (
 var (
 	conf *config
 
-	// Compile time variables
-	gitCommit, gitBranch, buildDate, version, goVersion, buildPlatform string
+	gitCommit, buildDate, version, goVersion string
 )
 
 func main() {
