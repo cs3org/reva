@@ -13,6 +13,13 @@ LDFLAGS=-ldflags "-s -X main.buildDate=${BUILD_DATE} -X main.gitCommit=${GIT_DIR
 
 off: 
 	GORPOXY=off
+	echo BUILD_DATE=${BUILD_DATE}
+	echo GIT_COMMIT=${GIT_COMMIT}
+	echo GIT_BRANCH=${GIT_BRANCH}
+	echo GIT_DIRTY=${GIT_DIRTY}
+	echo VERSION=${VERSION}
+	echo GO_VERSION=${GO_VERSION}
+	echo BUILD_PLATFORM=${BUILD_PLATFORM}
 
 imports: off
 	goimports -w tools pkg internal cmd
