@@ -131,7 +131,7 @@ Changelog for Reva v%s (%s)
 `, *version, *version, *version, date)
 
 	releaseDocs += string(data)
-	if err := ioutil.WriteFile(fmt.Sprintf("docs/content/end/docs/Changelog/%s/_index.md", *version), []byte(releaseDocs), 0644); err != nil {
+	if err := ioutil.WriteFile(fmt.Sprintf("docs/content/en/docs/Changelog/%s/_index.md", *version), []byte(releaseDocs), 0644); err != nil {
 		fmt.Fprintf(os.Stderr, "error writing docs release file _index.md: %s", err)
 		os.Exit(1)
 	}
