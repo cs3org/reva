@@ -159,7 +159,7 @@ steps:
 - name: create-dist
   image: golang:1.13
   commands:
-    - go run tools/create-artifacts/main.go -version ${DRONE_TAG} -commit ${DRONE_COMMIT} -branch ${DRONE_BRANCH} -goversion `go version | awk '{print $$3}'`
+    - go run tools/create-artifacts/main.go -version ${DRONE_TAG} -commit ${DRONE_COMMIT} -goversion `go version | awk '{print $$3}'`
 
 - name: publish
   image: plugins/github-release
