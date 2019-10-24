@@ -68,17 +68,6 @@ func main() {
 	cmd := exec.Command("mv", "changelog/unreleased", newChangelog)
 	run(cmd)
 
-	// Create empty unreleased changelog with .gitkeep file inside
-	if err := os.MkdirAll("changelog/unreleased", 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "error creating changelog/unreleased")
-		os.Exit(1)
-	}
-
-	if err := ioutil.WriteFile("changelog/unreleased/.gitkeep", []byte(""), 0644); err != nil {
-		fmt.Fprintf(os.Stderr, "error writing changelog/unreleased/.gitkeep: %s", err)
-		os.Exit(1)
-	}
-
 	// install release-deps: calens
 	cmd = exec.Command("make", "release-deps")
 	run(cmd)
