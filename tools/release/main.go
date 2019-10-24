@@ -121,7 +121,7 @@ func main() {
 }
 
 func isRepoDirty() bool {
-	repo := "." //
+	repo := "."
 	cmd := exec.Command("git", "status", "-s")
 	cmd.Dir = repo
 	changes := runAndGet(cmd)
