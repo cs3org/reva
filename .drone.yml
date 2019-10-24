@@ -168,3 +168,27 @@ steps:
       from_secret: github_token
     files: dist/*
     note: changelog/NOTE.md
+
+- name: publish-docker-reva-version
+  pull: always
+  image: plugins/docker
+  settings:
+    repo: cs3org/reva
+    tags: ${DRONE_TAG}
+    dockerfile: Dockerfile.reva
+    username:
+      from_secret: dockerhub_username
+    password:
+      from_secret: dockerhub_password
+
+- name: publish-docker-revad-latest
+  pull: always
+  image: plugins/docker
+  settings:
+    repo: cs3org/revad
+    tags: ${DRONE_TAG}
+    dockerfile: Dockerfile.revad
+    username:
+      from_secret: dockerhub_username
+    password:
+      from_secret: dockerhub_password
