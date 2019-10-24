@@ -114,7 +114,8 @@ func (s *svc) Handler() http.Handler {
 		}
 
 		// to build correct href prop urls we need to keep track of the base path
-		base := s.Prefix()
+		// always starts with /
+		base := path.Join("/", s.Prefix())
 
 		var head string
 		head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)

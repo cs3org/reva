@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 	"time"
 
 	"go.opencensus.io/trace"
@@ -102,7 +103,7 @@ func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request, ns string) {
 		infos = append(infos, res.Infos...)
 	}
 
-	propRes, err := s.formatPropfind(ctx, &pf, infos)
+	propRes, err := s.formatPropfind(ctx, &pf, infos, ns)
 	if err != nil {
 		log.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -147,10 +148,10 @@ func readPropfind(r io.Reader) (pf propfindXML, status int, err error) {
 	return pf, 0, nil
 }
 
-func (s *svc) formatPropfind(ctx context.Context, pf *propfindXML, mds []*storageproviderv0alphapb.ResourceInfo) (string, error) {
+func (s *svc) formatPropfind(ctx context.Context, pf *propfindXML, mds []*storageproviderv0alphapb.ResourceInfo, ns string) (string, error) {
 	responses := make([]*responseXML, 0, len(mds))
 	for i := range mds {
-		res, err := s.mdToPropResponse(ctx, pf, mds[i])
+		res, err := s.mdToPropResponse(ctx, pf, mds[i], ns)
 		if err != nil {
 			return "", err
 		}
@@ -175,32 +176,14 @@ func (s *svc) newProp(key, val string) *propertyXML {
 	}
 }
 
-func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *storageproviderv0alphapb.ResourceInfo) (*responseXML, error) {
+// mdToPropResponse converts the CS3 metadata into a webdav propesponse
+// ns is the CS3 namespace that needs to be removed from the CS3 path before
+// prefixing it with the baseURI
+func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *storageproviderv0alphapb.ResourceInfo, ns string) (*responseXML, error) {
+
+	md.Path = strings.TrimPrefix(md.Path, ns)
 
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
-	// the old webdav endpoint does not contain the username
-
-	// remove username from filename
-	// TODO(labkode): I'm commenting it out as I think is not needed anymore
-	// becase we don't mangle the baseURI with the user if the request goes to
-	// old endpoint.
-	// TODO(jfd): Unfortunately, this might be a difference in the way cern uses
-	// the old webdav endpoint vs tho owncloud web ui. If you want to use a path
-	// that includes the username you must you the new webdav endpoint /remote.php/dav/files.
-	// /remote.php/webdav is used by all clients without the username in the path.
-	// the new endpoint can be read from the capabilities
-	/*
-		if strings.HasPrefix(baseURI, "/remote.php/webdav") {
-			u, ok := user.ContextGetUser(ctx)
-			if !ok {
-				err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
-				return nil, err
-			}
-			fmt.Println(md.Path, baseURI, u.Username)
-			// TODO can lead to slice out of bounds
-			md.Path = md.Path[len(u.Username)+1:]
-		}
-	*/
 
 	ref := path.Join(baseURI, md.Path)
 	if md.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {

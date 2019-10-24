@@ -20,6 +20,7 @@ package ocdav
 
 import (
 	"net/http"
+	"path"
 )
 
 // WebDavHandler implements a dav endpoint
@@ -28,10 +29,7 @@ type WebDavHandler struct {
 }
 
 func (h *WebDavHandler) init(ns string) error {
-	h.namespace = ns
-	if h.namespace == "" {
-		h.namespace = "/"
-	}
+	h.namespace = path.Join("/", ns)
 	return nil
 }
 
