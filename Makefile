@@ -69,6 +69,7 @@ clean:
 	rm -rf dist
 
 # for releasing you need to run: go run tools/prepare-release/main.go
+# $ go run tools/prepare-release/main.go -version 0.0.1 -commit -tag
 release-deps:
 	cd /tmp && go get github.com/restic/calens
 
