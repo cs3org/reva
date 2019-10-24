@@ -1,7 +1,7 @@
-Changelog for Reva 0.0.1 (2019-10-24)
+Changelog for Reva unreleased (UNRELEASED)
 =======================================
 
-The following sections list the changes in Reva 0.0.1 relevant to
+The following sections list the changes in Reva unreleased relevant to
 Reva users. The changes are ordered by importance.
 
 Summary
