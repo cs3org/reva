@@ -60,4 +60,18 @@ build-revad-docker: off
 	go build -mod=vendor -o ./cmd/revad/revad ${LDFLAGS} ./cmd/revad 
 build-reva-docker: off
 	go build -mod=vendor -o ./cmd/revad/reva ${LDFLAGS} ./cmd/reva
+clean:
+	rm -rf dist
 
+# for releasing you need to run go run tools/release/main.go
+release-deps:
+	cd /tmp && go get github.com/restic/calens
+
+# usually to be run from CI, it will push artefacts to github releases
+publish: release-deps
+	rm -rf dist && mkdir dist
+	GOOS=linux GOARCH=amd64 go build -mod=vendor -o ./dist/revad_${VERSION}_linux_amd64 ${LDFLAGS} ./cmd/revad
+	GOOS=linux GOARCH=386   go build -mod=vendor -o ./dist/revad_${VERSION}_linux_386   ${LDFLAGS} ./cmd/revad
+	GOOS=darwin GOARCH=amd64 go build -mod=vendor -o ./dist/revad_${VERSION}_darwin_amd64 ${LDFLAGS} ./cmd/revad
+	GOOS=darwin GOARCH=386   go build -mod=vendor -o ./dist/revad_${VERSION}_darwin_386   ${LDFLAGS} ./cmd/revad
+	cd dist && sha256sum * > checksums-sha256.txt
