@@ -121,6 +121,7 @@ func main() {
 	}
 
 	releaseDocs := fmt.Sprintf(`
+---
 title: "v%s"
 linkTitle: "v%s"
 weight: 40
