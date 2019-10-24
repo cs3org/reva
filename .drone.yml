@@ -169,7 +169,7 @@ steps:
     files: dist/*
     note: changelog/NOTE.md
 
-- name: publish-docker-reva-version
+- name: docker-reva-tag
   pull: always
   image: plugins/docker
   settings:
@@ -181,7 +181,7 @@ steps:
     password:
       from_secret: dockerhub_password
 
-- name: publish-docker-revad-latest
+- name: docker-revad-tag
   pull: always
   image: plugins/docker
   settings:
