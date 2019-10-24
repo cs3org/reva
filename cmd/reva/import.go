@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path"
 
 	"github.com/cs3org/reva/pkg/storage/migrate"
 )
@@ -30,6 +31,9 @@ func importCommand() *command {
 	cmd := newCommand("import")
 	cmd.Description = func() string { return "import metadata" }
 	cmd.Usage = func() string { return "Usage: import [-flags] <user export folder>" }
+
+	namespaceFlag := cmd.String("n", "/", "CS3 namespace prefix")
+
 	cmd.Action = func() error {
 		if cmd.NArg() < 1 {
 			fmt.Println(cmd.Usage())
@@ -42,7 +46,14 @@ func importCommand() *command {
 		if err != nil {
 			return err
 		}
-		if err := migrate.ImportShares(ctx, client, exportPath); err != nil {
+
+		ns := path.Join("/", *namespaceFlag)
+
+		if err := migrate.ImportMetadata(ctx, client, exportPath, ns); err != nil {
+			log.Fatal(err)
+			return err
+		}
+		if err := migrate.ImportShares(ctx, client, exportPath, ns); err != nil {
 			log.Fatal(err)
 			return err
 		}
