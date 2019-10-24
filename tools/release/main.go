@@ -87,12 +87,6 @@ func main() {
 	add(fmt.Sprintf("Update VERSION file to %s", *version), "VERSION")
 	add(fmt.Sprintf("Update RELEASE_DATE file to %s", date), "RELEASE_DATE")
 
-	// Generate changelog also in the documentation
-	if err := os.MkdirAll(fmt.Sprintf("docs/content/en/docs/Changelog/%s", *version), 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "error creating docs/content/en/docs/Changelog/%s: %s", *version, err)
-		os.Exit(1)
-	}
-
 	tmp, err := ioutil.TempDir("", "reva-changelog")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error creating tmp directory to store changelog: %s", err)
@@ -113,6 +107,36 @@ func main() {
 	cmd = exec.Command("calens", "-o", "changelog/NOTE.md", "-i", path.Join(tmp, "changelog"))
 	run(cmd)
 	add(fmt.Sprintf("Generate NOTE.md for %s", *version), "changelog/NOTE.md")
+
+	// Generate changelog also in the documentation
+	if err := os.MkdirAll(fmt.Sprintf("docs/content/en/docs/Changelog/%s", *version), 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "error creating docs/content/en/docs/Changelog/%s: %s", *version, err)
+		os.Exit(1)
+	}
+
+	data, err := ioutil.ReadFile("NOTE.md")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error reading NOTE.md: %s", err)
+		os.Exit(1)
+	}
+
+	releaseDocs := fmt.Sprintf(`
+title: "v%s"
+linkTitle: "v%s"
+weight: 40
+description: >
+Changelog for Reva v%s (%s)
+---
+
+`, *version, *version, *version, date)
+
+	releaseDocs += string(data)
+	if err := ioutil.WriteFile(fmt.Sprintf("docs/content/end/docs/Changelog/%s/_index.md", *version), []byte(releaseDocs), 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "error writing docs release file _index.md: %s", err)
+		os.Exit(1)
+	}
+
+	add("Generate changelog in docs for %s", *version)
 
 	// tag with v$version
 	tag(*version)
