@@ -114,7 +114,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	data, err := ioutil.ReadFile("NOTE.md")
+	data, err := ioutil.ReadFile("changelog/NOTE.md")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error reading NOTE.md: %s", err)
 		os.Exit(1)
