@@ -157,8 +157,10 @@ description: >
 
 	if *tag || *commit {
 		fmt.Println("Was a dry run, run with -commit and -tag to create release")
+		os.Exit(1)
 	} else {
 		fmt.Println("RELEASE READY: you only need to\n$ git push --follow-tags")
+		os.Exit(0)
 	}
 }
 
