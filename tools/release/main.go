@@ -136,7 +136,7 @@ Changelog for Reva v%s (%s)
 		os.Exit(1)
 	}
 
-	add("Generate changelog in docs for %s", *version)
+	add(fmt.Sprintf("Generate changelog in docs for %s", *version), "docs/content/en/docs/Changelog")
 
 	// tag with v$version
 	tag(*version)
