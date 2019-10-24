@@ -26,6 +26,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"strings"
 
 	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
@@ -43,7 +44,7 @@ type metaData struct {
 
 //ImportMetadata from a files.jsonl file in exportPath. The files must already be present on the storage
 //Will set etag and mtime
-func ImportMetadata(ctx context.Context, client gatewayv0alphapb.GatewayServiceClient, exportPath string) error {
+func ImportMetadata(ctx context.Context, client gatewayv0alphapb.GatewayServiceClient, exportPath string, ns string) error {
 
 	filesJSONL, err := os.Open(path.Join(exportPath, "files.jsonl"))
 	if err != nil {
@@ -70,7 +71,7 @@ func ImportMetadata(ctx context.Context, client gatewayv0alphapb.GatewayServiceC
 		//TODO permissions? is done via share? but this is owner permissions
 
 		if len(m) > 0 {
-			resourcePath := path.Join("/", path.Base(exportPath), fileData.Path)
+			resourcePath := path.Join(ns, path.Base(exportPath), strings.TrimPrefix(fileData.Path, "/files/"))
 			samReq := &storageproviderv0alphapb.SetArbitraryMetadataRequest{
 				Ref: &storageproviderv0alphapb.Reference{
 					Spec: &storageproviderv0alphapb.Reference_Path{Path: resourcePath},
@@ -80,11 +81,15 @@ func ImportMetadata(ctx context.Context, client gatewayv0alphapb.GatewayServiceC
 				},
 			}
 			samResp, err := client.SetArbitraryMetadata(ctx, samReq)
+			if err != nil {
+				log.Fatal(err)
+			}
 
 			if samResp.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
 				log.Print("File does not exist on target system, skipping metadata import: " + resourcePath)
-			} else if err != nil {
-				log.Fatal(err)
+			}
+			if samResp.Status.Code != rpcpb.Code_CODE_OK {
+				log.Print("Error importing metadata, skipping metadata import: " + resourcePath + ", " + samResp.Status.Message)
 			}
 		} else {
 			log.Print("no etag or mtime for : " + fileData.Path)

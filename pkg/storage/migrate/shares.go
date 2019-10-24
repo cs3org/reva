@@ -49,7 +49,7 @@ type share struct {
 }
 
 //ImportShares from a shares.jsonl file in exportPath. The files must already be present on the storage
-func ImportShares(ctx context.Context, client gatewayv0alphapb.GatewayServiceClient, exportPath string) error {
+func ImportShares(ctx context.Context, client gatewayv0alphapb.GatewayServiceClient, exportPath string, ns string) error {
 
 	sharesJSONL, err := os.Open(path.Join(exportPath, "shares.jsonl"))
 	if err != nil {
@@ -66,7 +66,7 @@ func ImportShares(ctx context.Context, client gatewayv0alphapb.GatewayServiceCli
 		}
 
 		//Stat file, skip share creation if it does not exist on the target system
-		resourcePath := path.Join("/", path.Base(exportPath), shareData.Path)
+		resourcePath := path.Join(ns, path.Base(exportPath), shareData.Path)
 		statReq := &storageproviderv0alphapb.StatRequest{
 			Ref: &storageproviderv0alphapb.Reference{
 				Spec: &storageproviderv0alphapb.Reference_Path{Path: resourcePath},
