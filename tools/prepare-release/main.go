@@ -54,6 +54,10 @@ func main() {
 		return
 	}
 
+	// also the build is okay
+	cmd := exec.Command("make", "all")
+	run(cmd)
+
 	fmt.Printf("Generating new release: version=%s\n", *version)
 
 	dt := time.Now()
@@ -65,7 +69,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	cmd := exec.Command("mv", "changelog/unreleased", newChangelog)
+	cmd = exec.Command("mv", "changelog/unreleased", newChangelog)
 	run(cmd)
 
 	// install release-deps: calens

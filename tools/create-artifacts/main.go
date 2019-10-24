@@ -55,8 +55,15 @@ func init() {
 
 func main() {
 
-	os.RemoveAll("dist")
-	os.MkdirAll("dist", 0755)
+	if err := os.RemoveAll("dist"); err != nil {
+		fmt.Fprintf(os.Stderr, "error removing dist folder: %s", err)
+		os.Exit(1)
+	}
+
+	if err := os.MkdirAll("dist", 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "error creating dist folder: %s", err)
+		os.Exit(1)
+	}
 
 	ldFlags := fmt.Sprintf("-s -X main.buildDate=%s -X main.gitCommit=%s -X main.gitBranch=%s -X main.version=%s -X main.goVersion=%s",
 		buildDate,

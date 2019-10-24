@@ -73,5 +73,7 @@ release-deps:
 	cd /tmp && go get github.com/restic/calens
 
 # create local build versions
-dist: off
+dist: default
 	go run tools/create-artifacts/main.go -version ${VERSION} -commit ${GIT_COMMIT} -branch ${GIT_BRANCH} -goversion ${GO_VERSION}
+
+all: deps default
