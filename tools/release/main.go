@@ -126,7 +126,7 @@ title: "v%s"
 linkTitle: "v%s"
 weight: 40
 description: >
-Changelog for Reva v%s (%s)
+  Changelog for Reva v%s (%s)
 ---
 
 `, *version, *version, *version, date)
