@@ -79,7 +79,7 @@ func main() {
 				out := fmt.Sprintf("./dist/%s_%s_%s_%s", bin, *version, o, arch)
 				args := []string{"build", "-mod=vendor", "-o", out, "-ldflags", ldFlags, "./cmd/" + bin}
 				cmd := exec.Command("go", args...)
-				cmd.Env = append(os.Environ())
+				cmd.Env = os.Environ()
 				cmd.Env = append(cmd.Env, []string{"GOOS=" + o, "GOARCH=" + arch}...)
 				cmd.Dir = "." // root of the repo
 				run(cmd)
