@@ -147,13 +147,19 @@ description: >
 
 	if *commit {
 		createCommit(fmt.Sprintf("v%s", *version))
+		fmt.Println("Commit created, check with git log")
 	}
 
 	if *tag {
 		createTag(*version)
+		fmt.Println("Tag created, check with git tag")
 	}
 
-	fmt.Println("RELEASE READY: you only need to\n$ git push --follow-tags")
+	if *tag || *commit {
+		fmt.Println("Was a dry run, run with -commit and -tag to create release")
+	} else {
+		fmt.Println("RELEASE READY: you only need to\n$ git push --follow-tags")
+	}
 }
 
 func isRepoDirty() bool {
