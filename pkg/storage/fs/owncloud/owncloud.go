@@ -139,6 +139,8 @@ const (
 	// SharePrefix is the prefix for sharing related extended attributes
 	sharePrefix       string = "user.oc.acl."
 	trashOriginPrefix string = "user.oc.o"
+	mdPrefix          string = "user.oc.md."   // arbitrary metadada
+	etagPrefix        string = "user.oc.etag." // allow overriding a calculated etag with one from the extended attributes
 )
 
 func init() {
@@ -356,12 +358,23 @@ func (fs *ocFS) convertToResourceInfo(ctx context.Context, fi os.FileInfo, np st
 	id := readOrCreateID(ctx, np, c)
 	fn := fs.removeNamespace(ctx, path.Join("/", np))
 
+	etag := calcEtag(ctx, fi)
+
+	if val, err := xattr.Get(np, etagPrefix+etag); err == nil {
+		appctx.GetLogger(ctx).Debug().
+			Str("np", np).
+			Str("calcetag", etag).
+			Str("etag", string(val)).
+			Msg("overriding calculated etag")
+		etag = string(val)
+	}
+
 	return &storageproviderv0alphapb.ResourceInfo{
 		Id:            &storageproviderv0alphapb.ResourceId{OpaqueId: id},
 		Path:          fn,
 		Owner:         &typespb.UserId{OpaqueId: getOwner(fn)},
 		Type:          getResourceType(fi.IsDir()),
-		Etag:          calcEtag(ctx, fi),
+		Etag:          etag,
 		MimeType:      mime.Detect(fi.IsDir(), fn),
 		Size:          uint64(fi.Size()),
 		PermissionSet: &storageproviderv0alphapb.ResourcePermissions{ListContainer: true, CreateContainer: true},
@@ -835,16 +848,126 @@ func (fs *ocFS) CreateDir(ctx context.Context, fn string) (err error) {
 }
 
 func (fs *ocFS) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
-	// TODO(jfd):implement
+	// TODO(jfd): implement
 	return errtypes.NotSupported("owncloud: operation not supported")
 }
 
-func (fs *ocFS) SetArbitraryMetadata(ctx context.Context, ref *storageproviderv0alphapb.Reference, md *storageproviderv0alphapb.ArbitraryMetadata) error {
-	return errtypes.NotSupported("owncloud: operation not supported")
+func (fs *ocFS) SetArbitraryMetadata(ctx context.Context, ref *storageproviderv0alphapb.Reference, md *storageproviderv0alphapb.ArbitraryMetadata) (err error) {
+	log := appctx.GetLogger(ctx)
+
+	var np string
+	if np, err = fs.resolve(ctx, ref); err != nil {
+		return errors.Wrap(err, "ocFS: error resolving reference")
+	}
+
+	var fi os.FileInfo
+	fi, err = os.Stat(np)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errtypes.NotFound(fs.removeNamespace(ctx, np))
+		}
+		return errors.Wrap(err, "ocFS: error stating "+np)
+	}
+
+	var mtime time.Time
+	var mtimeErr, etagErr, mdErr error
+
+	if md.Metadata != nil {
+		if val, ok := md.Metadata["mtime"]; ok {
+			if mtime, mtimeErr = parseMTime(val); mtimeErr == nil {
+				// updating mtime also updates atime
+				if mtimeErr = os.Chtimes(np, mtime, mtime); mtimeErr != nil {
+					log.Error().Err(mtimeErr).
+						Str("np", np).
+						Time("mtime", mtime).
+						Msg("could not set mtime")
+					err = errors.Wrapf(err, "could not set mtime")
+				}
+			} else {
+				log.Error().Err(mtimeErr).
+					Str("np", np).
+					Str("val", val).
+					Msg("could not parse mtime")
+				err = errors.Wrapf(err, "could not parse mtime")
+			}
+			// remove from metadata
+			delete(md.Metadata, "mtime")
+		}
+		// TODO(jfd) special handling for atime?
+		// TODO(jfd) allow setting birth time (btime)?
+		// TODO(jfd) any other metadata that is interesting? fileid?
+		if val, ok := md.Metadata["etag"]; ok {
+			etag := calcEtag(ctx, fi)
+			if etag == md.Metadata["etag"] {
+				log.Debug().
+					Str("np", np).
+					Str("etag", val).
+					Msg("ignoring request to update identical etag")
+			} else
+			// etag is only valid until the calculated etag changes
+			// TODO(jfd) cleanup in a batch job
+			if etagErr = xattr.Set(np, etagPrefix+etag, []byte(val)); etagErr != nil {
+
+				log.Error().Err(etagErr).
+					Str("np", np).
+					Str("calcetag", etag).
+					Str("etag", val).
+					Msg("could not set etag")
+				err = errors.Wrapf(err, "could not set etag")
+			}
+			delete(md.Metadata, "etag")
+		}
+	}
+	for k, v := range md.Metadata {
+		if mdErr = xattr.Set(np, mdPrefix+k, []byte(v)); mdErr != nil {
+			log.Error().Err(etagErr).
+				Str("np", np).
+				Str("key", k).
+				Str("val", v).
+				Msg("could not set metadata")
+			err = errors.Wrapf(mdErr, "could not set metadata")
+		}
+	}
+	return err
 }
 
-func (fs *ocFS) UnsetArbitraryMetadata(ctx context.Context, ref *storageproviderv0alphapb.Reference, keys []string) error {
-	return errtypes.NotSupported("owncloud: operation not supported")
+func parseMTime(v string) (t time.Time, err error) {
+	p := strings.SplitN(v, ".", 2)
+	var sec, nsec int64
+	if sec, err = strconv.ParseInt(p[0], 10, 64); err == nil {
+		if len(p) > 1 {
+			nsec, err = strconv.ParseInt(p[1], 10, 64)
+		}
+	}
+	return time.Unix(sec, nsec), err
+}
+
+func (fs *ocFS) UnsetArbitraryMetadata(ctx context.Context, ref *storageproviderv0alphapb.Reference, keys []string) (err error) {
+	log := appctx.GetLogger(ctx)
+
+	var np string
+	if np, err = fs.resolve(ctx, ref); err != nil {
+		return errors.Wrap(err, "ocFS: error resolving reference")
+	}
+
+	_, err = os.Stat(np)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errtypes.NotFound(fs.removeNamespace(ctx, np))
+		}
+		return errors.Wrap(err, "ocFS: error stating "+np)
+	}
+
+	for _, k := range keys {
+		if err = xattr.Remove(np, mdPrefix+k); err != nil {
+			log.Error().Err(err).
+				Str("np", np).
+				Str("key", k).
+				Msg("could not set metadata")
+			err = errors.Wrapf(err, "could not unset metadata")
+		}
+	}
+	return err
 }
 
 // Delete is actually only a move to trash
