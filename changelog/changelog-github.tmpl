@@ -18,10 +18,10 @@ Details
    {{ $par }}
 {{ end }}
    {{ range $id := .Issues -}}
-{{ ` ` }}[#{{ $id }}](https://github.com/reva/reva/issues/{{ $id -}})
+{{ ` ` }}[#{{ $id }}](https://github.com/cs3org/reva/issues/{{ $id -}})
 {{- end -}}
 {{ range $id := .PRs -}}
-{{ ` ` }}[#{{ $id }}](https://github.com/reva/reva/pull/{{ $id -}})
+{{ ` ` }}[#{{ $id }}](https://github.com/cs3org/reva/pull/{{ $id -}})
 {{- end -}}
 {{ ` ` }}{{ range $url := .OtherURLs -}}
 {{ $url -}}
