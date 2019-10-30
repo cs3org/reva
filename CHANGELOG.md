@@ -18,6 +18,6 @@ Details
    versions (tools/release) and prepares the necessary files for artefact distributed made
    from Drone into Github pages.
 
-   https://github.com/reva/reva/pull/334
+   https://github.com/cs3org/reva/pull/334
 
 
