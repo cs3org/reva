@@ -9,6 +9,7 @@ VERSION=`git describe --always`
 GO_VERSION=`go version | awk '{print $$3}'`
 
 off: 
+	echo ${PATH}
 	GORPOXY=off
 	echo BUILD_DATE=${BUILD_DATE}
 	echo GIT_COMMIT=${GIT_COMMIT}
@@ -17,7 +18,7 @@ off:
 	echo GO_VERSION=${GO_VERSION}
 
 imports: off
-	goimports -w tools pkg internal cmd
+	`go env GOPATH`/bin/goimports -w tools pkg internal cmd
 
 build: imports
 	go build -mod=vendor -o ./cmd/revad/revad ./cmd/revad 
@@ -37,7 +38,7 @@ test: off
 
 lint:
 	go run tools/check-license/check-license.go
-	golangci-lint run
+	`go env GOPATH`/bin/golangci-lint run
 
 contrib:
 	git log --pretty="%an <%ae>" | sort -n | uniq  | sort -n | awk '{print "-", $$0}' | grep -v 'users.noreply.github.com' > CONTRIBUTORS.md 
