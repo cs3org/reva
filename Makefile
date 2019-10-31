@@ -9,7 +9,6 @@ VERSION=`git describe --always`
 GO_VERSION=`go version | awk '{print $$3}'`
 
 off: 
-	echo ${PATH}
 	GORPOXY=off
 	echo BUILD_DATE=${BUILD_DATE}
 	echo GIT_COMMIT=${GIT_COMMIT}
