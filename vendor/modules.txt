@@ -111,6 +111,8 @@ github.com/matttproud/golang_protobuf_extensions/pbutil
 github.com/mitchellh/mapstructure
 # github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
 github.com/mohae/deepcopy
+# github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
+github.com/nfnt/resize
 # github.com/ory/fosite v0.30.1
 github.com/ory/fosite
 github.com/ory/fosite/compose
@@ -136,7 +138,7 @@ github.com/pquerna/cachecontrol/cacheobject
 github.com/prometheus/client_golang/prometheus
 github.com/prometheus/client_golang/prometheus/internal
 github.com/prometheus/client_golang/prometheus/promhttp
-# github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4
+# github.com/prometheus/client_model v0.0.0-20190115171406-56726106282f
 github.com/prometheus/client_model/go
 # github.com/prometheus/common v0.2.0
 github.com/prometheus/common/expfmt
@@ -219,11 +221,10 @@ google.golang.org/appengine/internal/log
 google.golang.org/appengine/internal/remote_api
 google.golang.org/appengine/internal/urlfetch
 google.golang.org/appengine/urlfetch
-# google.golang.org/genproto v0.0.0-20190819201941-24fa4b261c55
+# google.golang.org/genproto v0.0.0-20190425155659-357c62f0e4bb
 google.golang.org/genproto/googleapis/rpc/status
 # google.golang.org/grpc v1.25.0
 google.golang.org/grpc
-google.golang.org/grpc/backoff
 google.golang.org/grpc/balancer
 google.golang.org/grpc/balancer/base
 google.golang.org/grpc/balancer/roundrobin
@@ -244,8 +245,6 @@ google.golang.org/grpc/internal/channelz
 google.golang.org/grpc/internal/envconfig
 google.golang.org/grpc/internal/grpcrand
 google.golang.org/grpc/internal/grpcsync
-google.golang.org/grpc/internal/resolver/dns
-google.golang.org/grpc/internal/resolver/passthrough
 google.golang.org/grpc/internal/syscall
 google.golang.org/grpc/internal/transport
 google.golang.org/grpc/keepalive
