@@ -41,9 +41,10 @@ secret = "Pive-Fumkiu4"
 authregistrysvc = "localhost:19000"
 storageregistrysvc = "localhost:19000"
 appregistrysvc = "localhost:19000"
-# auth and user metadata
+# user metadata
 preferencessvc = "localhost:18000"
 userprovidersvc = "localhost:18000"
+# an approvider lives on "localhost:18000" as well, see users.toml
 # sharing
 usershareprovidersvc = "localhost:17000"
 publicshareprovidersvc = "localhost:17000"
@@ -62,23 +63,18 @@ secret = "Pive-Fumkiu4"
 driver = "static"
 
 [grpc.services.appregistry.static.rules]
-# TODO 
-".txt" = "localhost:16000"
-"text/plain" = "localhost:16000"
-
-# TODO move to a dedicated approvider.toml
-#[grpc.services.appprovider]
-#driver = "demo"
-#[grpc.services.appprovider.demo]
-#iframe_ui_provider = "http://localhost:16000/iframeuisvc"
+# TODO implement user specifir app registry
+".txt" = "localhost:18000"
+"text/plain" = "localhost:18000"
 
 [grpc.services.authregistry]
 driver = "static"
 
 [grpc.services.authregistry.drivers.static.rules]
-basic = "localhost:18000"
-# needs to be started as a second service using the frontend-oidc.toml
-oidc = "localhost:18001"
+# started with the frontend-basic.toml
+basic = "localhost:18001"
+# started with the frontend-oidc.toml
+oidc = "localhost:18002"
 
 [grpc.services.storageregistry]
 driver = "static"

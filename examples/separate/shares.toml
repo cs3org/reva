@@ -1,0 +1,28 @@
+# This storage.toml config file will start a reva service that:
+# - authenticates grpc storage provider requests using the internal jwt token
+# - authenticates http upload and download requests requests using basic auth
+# - serves the storage provider on grpc port 11000
+# - serves http dataprovider for this storage on port 11001
+#   - /data - dataprovider: file up and download
+[core]
+max_cpus = "2"
+
+[log]
+level = "debug"
+
+[grpc]
+address = "0.0.0.0:17000"
+enabled_services = ["usershareprovider", "publicshareprovider"] # TODO ocmshareprovider
+enabled_interceptors = ["auth"]
+
+[grpc.services.usershareprovider]
+driver = "memory"
+
+[grpc.services.publicshareprovider]
+driver = "memory"
+
+[grpc.interceptors.auth]
+token_manager = "jwt"
+
+[grpc.interceptors.auth.token_managers.jwt]
+secret = "Pive-Fumkiu4"
