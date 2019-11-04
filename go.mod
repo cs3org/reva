@@ -4,7 +4,7 @@ require (
 	contrib.go.opencensus.io/exporter/jaeger v0.1.0
 	contrib.go.opencensus.io/exporter/prometheus v0.1.0
 	github.com/BurntSushi/toml v0.3.1
-	github.com/aws/aws-sdk-go v1.25.19
+	github.com/aws/aws-sdk-go v1.25.23
 	github.com/cheggaaa/pb v1.0.28
 	github.com/coreos/go-oidc v2.1.0+incompatible
 	github.com/cs3org/go-cs3apis v0.0.0-20191015062230-f4cde4c589eb
@@ -25,7 +25,7 @@ require (
 	github.com/pkg/xattr v0.4.1
 	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect
 	github.com/rs/cors v1.7.0
-	github.com/rs/zerolog v1.15.0
+	github.com/rs/zerolog v1.16.0
 	go.opencensus.io v0.22.1
 	golang.org/x/crypto v0.0.0-20190411191339-88737f569e3a
 	golang.org/x/net v0.0.0-20190827160401-ba9fcec4b297 // indirect
