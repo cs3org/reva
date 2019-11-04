@@ -42,12 +42,11 @@ import (
 
 // SharesHandler implements the ownCloud sharing API
 type SharesHandler struct {
-	gatewaySvc  string
-	userManager user.Manager
+	gatewayAddr string
 }
 
 func (h *SharesHandler) init(c *Config) error {
-	h.gatewaySvc = c.GatewaySvc
+	h.gatewayAddr = c.GatewaySvc
 	return nil
 }
 
@@ -94,17 +93,29 @@ func (h *SharesHandler) findSharees(w http.ResponseWriter, r *http.Request) {
 	}
 	// TODO sanitize query
 
-	users, err := h.userManager.FindUsers(ctx, search)
+	// fetch a connection to the user provider
+	gatewayProvider, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	if err != nil {
+		WriteOCSError(w, r, MetaServerError.StatusCode, "error connecting to user provider", err)
+		return
+	}
+
+	req := userproviderv0alphapb.FindUsersRequest{
+		Filter: search,
+	}
+
+	// users, err := h.userManager.FindUsers(ctx, search)
+	res, err := gatewayProvider.FindUsers(ctx, &req)
 	if err != nil {
 		WriteOCSError(w, r, MetaServerError.StatusCode, "error searching users", err)
 		return
 	}
 
-	log.Debug().Int("count", len(users)).Str("search", search).Msg("users found")
+	log.Debug().Int("count", len(res.GetUsers())).Str("search", search).Msg("users found")
 
-	matches := make([]*MatchData, 0, len(users))
+	matches := make([]*MatchData, 0, len(res.GetUsers()))
 
-	for _, user := range users {
+	for _, user := range res.GetUsers() {
 		match := h.userAsMatch(user)
 		log.Debug().Interface("user", user).Interface("match", match).Msg("mapped")
 		matches = append(matches, match)
@@ -147,7 +158,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 	if shareType == int(shareTypeUser) {
 
 		// if user sharing is disabled
-		if h.gatewaySvc == "" {
+		if h.gatewayAddr == "" {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "user sharing service not configured", nil)
 			return
 		}
@@ -158,14 +169,23 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+		if err != nil {
+			WriteOCSError(w, r, MetaServerError.StatusCode, fmt.Sprintf("no gateway service on addr: %v", h.gatewayAddr), err)
+			return
+		}
+
 		// find recipient based on username
-		users, err := h.userManager.FindUsers(ctx, shareWith)
+		res, err := gatewayClient.FindUsers(ctx, &userproviderv0alphapb.FindUsersRequest{
+			Filter: shareWith,
+		})
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error searching recipient", err)
 			return
 		}
+
 		var recipient *userproviderv0alphapb.User
-		for _, user := range users {
+		for _, user := range res.GetUsers() {
 			if user.Username == shareWith {
 				recipient = user
 				break
@@ -211,11 +231,11 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			permissions = asCS3Permissions(pint, nil)
 		}
 
-		uClient, err := pool.GetUserShareProviderClient(h.gatewaySvc)
-		if err != nil {
-			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc client", err)
-			return
-		}
+		// uClient, err := pool.GetUserShareProviderClient(h.gatewayAddr)
+		// if err != nil {
+		// 	WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc client", err)
+		// 	return
+		// }
 		roleMap := map[string]string{"name": role}
 		val, err := json.Marshal(roleMap)
 		if err != nil {
@@ -231,7 +251,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			},
 		}
 
-		sClient, err := pool.GetGatewayServiceClient(h.gatewaySvc)
+		sClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting storage grpc client", err)
 			return
@@ -252,7 +272,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		req := &usershareproviderv0alphapb.CreateShareRequest{
+		createShareReq := &usershareproviderv0alphapb.CreateShareRequest{
 			Opaque: &typespb.Opaque{
 				Map: map[string]*typespb.OpaqueEntry{
 					"role": &typespb.OpaqueEntry{
@@ -272,20 +292,21 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 				},
 			},
 		}
-		res, err := uClient.CreateShare(ctx, req)
+
+		createShareResponse, err := gatewayClient.CreateShare(ctx, createShareReq)
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error sending a grpc create share request", err)
 			return
 		}
-		if res.Status.Code != rpcpb.Code_CODE_OK {
-			if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+		if createShareResponse.Status.Code != rpcpb.Code_CODE_OK {
+			if createShareResponse.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
 				WriteOCSError(w, r, MetaNotFound.StatusCode, "not found", nil)
 				return
 			}
 			WriteOCSError(w, r, MetaServerError.StatusCode, "grpc create share request failed", err)
 			return
 		}
-		s, err := h.userShare2ShareData(ctx, res.Share)
+		s, err := h.userShare2ShareData(ctx, createShareResponse.Share)
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error mapping share data", err)
 			return
@@ -456,7 +477,7 @@ func (h *SharesHandler) updateShare(w http.ResponseWriter, r *http.Request) {
 	shareID := strings.TrimLeft(r.URL.Path, "/")
 	// TODO we need to lookup the storage that is responsible for this share
 
-	uClient, err := pool.GetUserShareProviderClient(h.gatewaySvc)
+	uClient, err := pool.GetUserShareProviderClient(h.gatewayAddr)
 	if err != nil {
 		WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc client", err)
 		return
@@ -549,7 +570,7 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 		log.Debug().Str("path", p).Str("fn", fn).Interface("user", u).Msg("resolved path for user")
 
 		// first check if the file exists
-		sClient, err := pool.GetGatewayServiceClient(h.gatewaySvc)
+		sClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc storage provider client", err)
 			return
@@ -589,8 +610,8 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	shares := []*ShareData{}
 
 	// fetch user shares if configured
-	if h.gatewaySvc != "" {
-		userShareProviderClient, err := pool.GetGatewayServiceClient(h.gatewaySvc)
+	if h.gatewayAddr != "" {
+		userShareProviderClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc user share handler client", err)
 			return
@@ -626,7 +647,7 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// TODO(refs): refactor
-		pClient, err := pool.GetGatewayServiceClient(h.gatewaySvc)
+		pClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting public share provider grpc client", err)
 		} else {
@@ -680,27 +701,36 @@ func (h *SharesHandler) addFileInfo(ctx context.Context, s *ShareData, info *sto
 		s.Path = info.Path // TODO hm this might have to be relative to the users home ...
 		// TODO FileParent:
 
+		c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+		if err != nil {
+			return err
+		}
+
 		// file owner might not yet be set. Use file info
 		if s.UIDFileOwner == "" {
 			s.UIDFileOwner = UserIDToString(info.Owner)
 		}
 		if s.DisplaynameFileOwner == "" && info.Owner != nil {
-			owner, err := h.userManager.GetUser(ctx, info.Owner)
+			owner, err := c.GetUser(ctx, &userproviderv0alphapb.GetUserRequest{
+				UserId: info.Owner,
+			})
 			if err != nil {
 				return err
 			}
-			s.DisplaynameFileOwner = owner.DisplayName
+			s.DisplaynameFileOwner = owner.GetUser().DisplayName
 		}
 		// share owner might not yet be set. Use file info
 		if s.UIDOwner == "" {
 			s.UIDOwner = UserIDToString(info.Owner)
 		}
 		if s.DisplaynameOwner == "" && info.Owner != nil {
-			owner, err := h.userManager.GetUser(ctx, info.Owner)
+			owner, err := c.GetUser(ctx, &userproviderv0alphapb.GetUserRequest{
+				UserId: info.Owner,
+			})
 			if err != nil {
 				return err
 			}
-			s.DisplaynameOwner = owner.DisplayName
+			s.DisplaynameOwner = owner.GetUser().DisplayName
 		}
 	}
 	return nil
@@ -712,27 +742,39 @@ func (h *SharesHandler) userShare2ShareData(ctx context.Context, share *usershar
 		Permissions: userSharePermissions2OCSPermissions(share.GetPermissions()),
 		ShareType:   shareTypeUser,
 	}
+
+	c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	if err != nil {
+		return nil, err
+	}
+
 	if share.Creator != nil {
-		if creator, err := h.userManager.GetUser(ctx, share.Creator); err == nil {
+		if creator, err := c.GetUser(ctx, &userproviderv0alphapb.GetUserRequest{
+			UserId: share.Creator,
+		}); err == nil {
 			// TODO the user from GetUser might not have an ID set, so we are using the one we have
 			sd.UIDOwner = UserIDToString(share.Creator)
-			sd.DisplaynameOwner = creator.DisplayName
+			sd.DisplaynameOwner = creator.GetUser().DisplayName
 		} else {
 			return nil, err
 		}
 	}
 	if share.Owner != nil {
-		if owner, err := h.userManager.GetUser(ctx, share.Owner); err == nil {
+		if owner, err := c.GetUser(ctx, &userproviderv0alphapb.GetUserRequest{
+			UserId: share.Owner,
+		}); err == nil {
 			sd.UIDFileOwner = UserIDToString(share.Owner)
-			sd.DisplaynameFileOwner = owner.DisplayName
+			sd.DisplaynameFileOwner = owner.GetUser().DisplayName
 		} else {
 			return nil, err
 		}
 	}
 	if share.Grantee.Id != nil {
-		if grantee, err := h.userManager.GetUser(ctx, share.Grantee.Id); err == nil {
+		if grantee, err := c.GetUser(ctx, &userproviderv0alphapb.GetUserRequest{
+			UserId: share.Grantee.GetId(),
+		}); err == nil {
 			sd.ShareWith = UserIDToString(share.Grantee.Id)
-			sd.ShareWithDisplayname = grantee.DisplayName
+			sd.ShareWithDisplayname = grantee.GetUser().DisplayName
 		} else {
 			return nil, err
 		}
