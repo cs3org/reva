@@ -33,9 +33,14 @@ func (s *svc) CreatePublicShare(ctx context.Context, req *publicshareproviderv0a
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("create public share")
 
-	res := &publicshareproviderv0alphapb.CreatePublicShareResponse{
-		Status: status.NewOK(ctx),
-		// Share:  share,
+	c, err := pool.GetPublicShareProviderClient(s.c.PublicShareProviderEndpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := c.CreatePublicShare(ctx, req)
+	if err != nil {
+		return nil, err
 	}
 	return res, nil
 }
