@@ -39,9 +39,8 @@ func init() {
 }
 
 type config struct {
-	AuthManager          string                            `mapstructure:"auth_manager"`
-	AuthManagers         map[string]map[string]interface{} `mapstructure:"auth_managers"`
-	UserProviderEndpoint string                            `mapstructure:"userprovidersvc"`
+	AuthManager  string                            `mapstructure:"auth_manager"`
+	AuthManagers map[string]map[string]interface{} `mapstructure:"auth_managers"`
 }
 
 type service struct {

@@ -4,12 +4,27 @@
 #   - /owncloud - ocdav
 #   - /ocs - ocs
 #   - TODO ocm
+# - authenticates requests using basic auth
+# - serves the grpc services on port 18001
 [core]
 max_cpus = "2"
-disable_grpc = true
 
 [log]
 level = "debug"
+
+[grpc]
+network = "tcp"
+address = "0.0.0.0:18001"
+enabled_services = [
+    "authprovider", # provides basic auth
+]
+enabled_interceptors = ["auth"]
+
+[grpc.services.authprovider]
+auth_manager = "json"
+
+[grpc.services.authprovider.auth_managers.json]
+users = "./examples/separate/users.demo.json"
 
 [http]
 enabled_services = ["ocdav", "ocs"]
@@ -23,13 +38,14 @@ credential_strategy = "basic"
 token_strategy = "header"
 token_writer = "header"
 token_manager = "jwt"
-skip_methods = ["/owncloud/status.php"]
+skip_methods = ["/status.php"]
 
 [http.middlewares.auth.token_managers.jwt]
 secret = "Pive-Fumkiu4"
 
 [http.services.ocdav]
-prefix = "owncloud"
+# serve ocdav on the root path
+prefix = ""
 chunk_folder = "/var/tmp/revad/chunks"
 # for user lookups
 gateway = "localhost:19000"

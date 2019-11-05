@@ -23,6 +23,7 @@ enabled_interceptors = ["auth"]
 # This is a storage proider that grants direct acces to the wrapped storage
 [grpc.services.storageprovider]
 driver = "owncloud"
+# the context path wrapper reads tho username from the context and prefixes the relative storage path with it
 path_wrapper = "context"
 mount_path = "/home/"
 # TODO same storage id as the /oc/ storage provider
