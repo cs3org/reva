@@ -45,8 +45,9 @@ func init() {
 type mgr struct {
 	// cached on first request
 	provider     *oidc.Provider
-	providerURL  string
 	insecure     bool
+	skipCheck    bool
+	providerURL  string
 	audience     string
 	clientID     string
 	clientSecret string
@@ -56,8 +57,9 @@ type mgr struct {
 // TODO(labkode): add support for multiple clients, like we do in the oidc provider http svc.
 type config struct {
 	// the endpoint of the oidc provider
-	Provider     string `mapstructure:"provider"`
 	Insecure     bool   `mapstructure:"insecure"`
+	SkipCheck    bool   `mapstructure:"skipcheck"`
+	Provider     string `mapstructure:"provider"`
 	Audience     string `mapstructure:"audience"`
 	ClientID     string `mapstructure:"client_id"`
 	ClientSecret string `mapstructure:"client_secret"`
@@ -93,6 +95,7 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 		audience:     c.Audience,
 		clientID:     c.ClientID,
 		clientSecret: c.ClientSecret,
+		skipCheck:    c.SkipCheck,
 	}, nil
 }
 
@@ -135,7 +138,12 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, token string) (*types
 
 		log.Debug().Msg("no introspection endpoint, trying to decode token as jwt")
 		//maybe our access token is a jwt token
-		verifier := provider.Verifier(&oidc.Config{ClientID: am.audience})
+		var verifier *oidc.IDTokenVerifier
+		if am.skipCheck { // not safe but only way for simplesamlphp to work with an almost compliant oidc (for now)
+			verifier = provider.Verifier(&oidc.Config{SkipClientIDCheck: true, SkipIssuerCheck: true})
+		} else {
+			verifier = provider.Verifier(&oidc.Config{ClientID: am.audience})
+		}
 		idToken, err := verifier.Verify(customCtx, token)
 		if err != nil {
 			return nil, fmt.Errorf("could not verify jwt: %v", err)
