@@ -26,6 +26,12 @@ auth_manager = "json"
 [grpc.services.authprovider.auth_managers.json]
 users = "./examples/separate/users.demo.json"
 
+[grpc.interceptors.auth]
+token_manager = "jwt"
+
+[grpc.interceptors.auth.token_managers.jwt]
+secret = "Pive-Fumkiu4"
+
 [http]
 enabled_services = ["ocdav", "ocs"]
 enabled_middlewares = ["cors", "auth"]
