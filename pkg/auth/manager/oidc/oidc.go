@@ -50,6 +50,7 @@ type mgr struct {
 	audience     string
 	clientID     string
 	clientSecret string
+	skipCheck    bool
 	metadata     *ProviderMetadata
 }
 
@@ -61,6 +62,7 @@ type config struct {
 	Audience     string `mapstructure:"audience"`
 	ClientID     string `mapstructure:"client_id"`
 	ClientSecret string `mapstructure:"client_secret"`
+	SkipCheck    bool   `mapstructure:"skipcheck"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -93,6 +95,7 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 		audience:     c.Audience,
 		clientID:     c.ClientID,
 		clientSecret: c.ClientSecret,
+		skipCheck:    c.SkipCheck,
 	}, nil
 }
 
@@ -135,7 +138,12 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, token string) (*types
 
 		log.Debug().Msg("no introspection endpoint, trying to decode token as jwt")
 		//maybe our access token is a jwt token
-		verifier := provider.Verifier(&oidc.Config{ClientID: am.audience})
+		var verifier *oidc.IDTokenVerifier
+		if am.skipCheck { // not safe but only way for simplesamlphp to work with an almost compliant oidc (for now)
+			verifier = provider.Verifier(&oidc.Config{SkipClientIDCheck: true, SkipIssuerCheck: true})
+		} else {
+			verifier = provider.Verifier(&oidc.Config{ClientID: am.audience})
+		}
 		idToken, err := verifier.Verify(customCtx, token)
 		if err != nil {
 			return nil, fmt.Errorf("could not verify jwt: %v", err)
