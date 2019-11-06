@@ -16,34 +16,45 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package basic
+package bearer
 
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/cs3org/reva/internal/http/interceptors/auth/credential/registry"
 	"github.com/cs3org/reva/pkg/auth"
 )
 
 func init() {
-	registry.Register("basic", New)
+	registry.Register("bearer", New)
 }
 
 type strategy struct{}
 
-// New returns a new auth strategy that checks for basic auth.
-// See https://tools.ietf.org/html/rfc7617
+// New returns a new auth strategy that checks "Bearer" OAuth Access Tokens
+// See https://tools.ietf.org/html/rfc6750#section-6.1
 func New(m map[string]interface{}) (auth.CredentialStrategy, error) {
 	return &strategy{}, nil
 }
 
 func (s *strategy) GetCredentials(w http.ResponseWriter, r *http.Request) (*auth.Credentials, error) {
-	id, secret, ok := r.BasicAuth()
-	if !ok {
-		return nil, fmt.Errorf("no basic auth provided")
+	// 1. check Authorization header
+	hdr := r.Header.Get("Authorization")
+	token := strings.TrimPrefix(hdr, "Bearer ")
+	if token != "" {
+		return &auth.Credentials{Type: "bearer", ClientSecret: token}, nil
 	}
-	return &auth.Credentials{Type: "basic", ClientID: id, ClientSecret: secret}, nil
+	// TODO 2. check form encoded body parameter for POST requests, see https://tools.ietf.org/html/rfc6750#section-2.2
+
+	// 3. check uri query parameter, see https://tools.ietf.org/html/rfc6750#section-2.3
+	tokens, ok := r.URL.Query()["access_token"]
+	if !ok || len(tokens[0]) < 1 {
+		return nil, fmt.Errorf("no bearer auth provided")
+	}
+	return &auth.Credentials{Type: "bearer", ClientSecret: tokens[0]}, nil
+
 }
 
 func (s *strategy) AddWWWAuthenticate(w http.ResponseWriter, r *http.Request, realm string) {
@@ -52,5 +63,5 @@ func (s *strategy) AddWWWAuthenticate(w http.ResponseWriter, r *http.Request, re
 		// fall back to hostname if not configured
 		realm = r.Host
 	}
-	w.Header().Add("WWW-Authenticate", fmt.Sprintf(`Basic realm="%s"`, realm))
+	w.Header().Add("WWW-Authenticate", fmt.Sprintf(`Bearer realm="%s"`, realm))
 }

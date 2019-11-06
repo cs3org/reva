@@ -15,7 +15,7 @@ max_cpus = "2"
 level = "debug"
 
 [grpc]
-address = "0.0.0.0:18002"
+address = "0.0.0.0:20099"
 enabled_services = [
     "authprovider"
 ]
@@ -47,8 +47,7 @@ address = "0.0.0.0:20080"
 
 [http.middlewares.auth]
 gateway = "localhost:19000"
-auth_type = "oidc"
-credential_strategy = "oidc"
+credential_chain = ["basic", "bearer"]
 token_strategy = "header"
 token_writer = "header"
 token_manager = "jwt"
