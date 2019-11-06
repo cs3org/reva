@@ -391,18 +391,29 @@ func timestampToExpiration(t *typespb.Timestamp) string {
 }
 
 const (
-	RoleLegacy  string = "legacy"
-	RoleViewer  string = "viewer"
-	RoleEditor  string = "editor"
+	// RoleLegacy provides backwards compatibility
+	RoleLegacy string = "legacy"
+	// RoleViewer grants non-editor role on a resource
+	RoleViewer string = "viewer"
+	// RoleEditor grants editor permission on a resource
+	RoleEditor string = "editor"
+	// RoleCoowner grants owner permissions on a resource
 	RoleCoowner string = "coowner"
 )
 
 const (
+	// PermissionInvalid grants no permissions on a resource
 	PermissionInvalid Permissions = 0
-	PermissionRead    Permissions = 1
-	PermissionWrite   Permissions = 2
-	PermissionCreate  Permissions = 4
-	PermissionDelete  Permissions = 8
-	PermissionShare   Permissions = 16
+	// PermissionRead grants read permissions on a resource
+	PermissionRead Permissions = 1
+	// PermissionWrite grants write permissions on a resource
+	PermissionWrite Permissions = 2
+	// PermissionCreate grants create permissions on a resource
+	PermissionCreate Permissions = 4
+	// PermissionDelete grants delete permissions on a resource
+	PermissionDelete Permissions = 8
+	// PermissionShare grants share permissions on a resource
+	PermissionShare Permissions = 16
+	// PermissionAll grants all permissions on a resource
 	//PermissionAll     Permissions = 31
 )
