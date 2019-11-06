@@ -285,6 +285,9 @@ func (s *svc) UpdateShare(ctx context.Context, req *usershareproviderv0alphapb.U
 	return res, nil
 }
 
+// TODO(labkode): listing received shares just goes to the user share manager and gets the list of
+// received shares. The display name of the shares should be the a friendly name, like the basename
+// of the original file.
 func (s *svc) ListReceivedShares(ctx context.Context, req *usershareproviderv0alphapb.ListReceivedSharesRequest) (*usershareproviderv0alphapb.ListReceivedSharesResponse, error) {
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
@@ -298,7 +301,6 @@ func (s *svc) ListReceivedShares(ctx context.Context, req *usershareproviderv0al
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling ListReceivedShares")
 	}
-
 	return res, nil
 }
 
@@ -319,6 +321,10 @@ func (s *svc) GetReceivedShare(ctx context.Context, req *usershareproviderv0alph
 	return res, nil
 }
 
+// When updated a received share:
+// if the update contains update for displayName:
+//   1) if receives share is mounted: we also do a rename in the storage
+//   2) if received share is not mounted: we only rename in user share provider.
 func (s *svc) UpdateReceivedShare(ctx context.Context, req *usershareproviderv0alphapb.UpdateReceivedShareRequest) (*usershareproviderv0alphapb.UpdateReceivedShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
@@ -339,16 +345,19 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *usershareproviderv0a
 		}, nil
 	}
 
-	if !s.c.CommitShareToStorageRef {
-		return res, nil
-	}
-
+	// error failing to update share state.
 	if res.Status.Code != rpcpb.Code_CODE_OK {
 		return res, nil
 	}
 
-	// we don't commit to storage invalid update fields.
+	// if we don't need to create/delete references then we return early.
+	if !s.c.CommitShareToStorageRef {
+		return res, nil
+	}
+
+	// we don't commit to storage invalid update fields or empty display names.
 	if req.Field.GetState() == usershareproviderv0alphapb.ShareState_SHARE_STATE_INVALID && req.Field.GetDisplayName() == "" {
+		log.Error().Msg("the update field is invalid, aborting reference manipulation")
 		return res, nil
 
 	}
@@ -401,7 +410,18 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *usershareproviderv0a
 			}
 
 			// reference path is the home path + some name
-			refPath := path.Join(homeRes.Path, req.Ref.String()) // TODO(labkode): the name of the share should be the filename it points to by default.
+			// TODO(labkode): where shares should be created, here we can define the folder in the gateway
+			// so the target path on the home storage provider will be:
+			// CreateReferene(cs3://home/shares/x)
+			// CreateReference(cs3://eos/user/g/gonzalhu/.shares/x)
+			// CreateReference(cs3://eos/user/.hidden/g/gonzalhu/shares/x)
+			// A reference can point to any place, for that reason the namespace starts with cs3://
+			// For example, a reference can point also to a dropbox resource:
+			// CreateReference(dropbox://x/y/z)
+			// It is the responsability of the gateway to resolve this references and merge the response back
+			// from the main request.
+			// TODO(labkode): the name of the share should be the filename it points to by default.
+			refPath := path.Join(homeRes.Path, req.Ref.String())
 			createRefReq := &storageproviderv0alphapb.CreateReferenceRequest{
 				Path:      refPath,
 				TargetUri: fmt.Sprintf("cs3:%s/%s", share.Share.ResourceId.GetStorageId(), share.Share.ResourceId.GetOpaqueId()),
@@ -445,6 +465,6 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *usershareproviderv0a
 	// TODO(labkode): implementing updating display name
 	err = errors.New("gateway: update of display name is not yet implemented")
 	return &usershareproviderv0alphapb.UpdateReceivedShareResponse{
-		Status: status.NewUnimplemented(ctx, err, "error updaring received share"),
+		Status: status.NewUnimplemented(ctx, err, "error updating received share"),
 	}, nil
 }

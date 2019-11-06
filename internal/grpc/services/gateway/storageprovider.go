@@ -102,7 +102,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *storageproviderv0al
 		}, nil
 	}
 
-	// TODO(labkode): calculate signature of the url, we only sign the URI. At some points maybe worth https://tools.ietf.org/html/draft-cavage-http-signatures-11
+	// TODO(labkode): calculate signature of the whole request? we only sign the URI now. Maybe worth https://tools.ietf.org/html/draft-cavage-http-signatures-11
 	target := u.String()
 	token, err := s.sign(ctx, target)
 	if err != nil {

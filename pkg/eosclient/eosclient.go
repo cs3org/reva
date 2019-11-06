@@ -45,6 +45,31 @@ const (
 	versionPrefix = ".sys.v#."
 )
 
+// AttrType is the type of extended attribute,
+// either system (sys) or user (user).
+type AttrType uint32
+
+func (at AttrType) String() string {
+	switch 
+}
+
+const (
+	// SystemAttr is the system extended attribute.
+	SystemAttr AttrType = iota
+	// UserAttr is the user extended attribute.
+	UserAttr
+)
+
+// Attribute represents an EOS extended attribute.
+type Attribute struct {
+	Type     AttrType
+	Key, Val string
+}
+
+func (a *Attribute) serialize() string {
+	return fmt.Sprintf("%s.%s=%q", a.Type, a.Key, a.Key)
+}
+
 // Options to configure the Client.
 type Options struct {
 
@@ -187,7 +212,6 @@ func (c *Client) executeEOS(ctx context.Context, cmd *exec.Cmd) (string, string,
 		// defined for both Unix and Windows and in both cases has
 		// an ExitStatus() method with the same signature.
 		if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
-
 			exitStatus = status.ExitStatus()
 			switch exitStatus {
 			case 0:
@@ -346,6 +370,20 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, username string, inode 
 		return nil, err
 	}
 	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "file", "info", fmt.Sprintf("inode:%d", inode), "-m")
+	stdout, _, err := c.executeEOS(ctx, cmd)
+	if err != nil {
+		return nil, err
+	}
+	return c.parseFileInfo(stdout)
+}
+
+// SetAttr sets an extended attributes on a path.
+func (c *Client) SetAttr(ctx context.Context, username string, attr Attribute, path string) error {
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return err
+	}
+	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "set", "attr", path, "-m")
 	stdout, _, err := c.executeEOS(ctx, cmd)
 	if err != nil {
 		return nil, err
