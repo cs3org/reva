@@ -45,24 +45,24 @@ func init() {
 type mgr struct {
 	// cached on first request
 	provider     *oidc.Provider
-	providerURL  string
 	insecure     bool
+	skipCheck    bool
+	providerURL  string
 	audience     string
 	clientID     string
 	clientSecret string
-	skipCheck    bool
 	metadata     *ProviderMetadata
 }
 
 // TODO(labkode): add support for multiple clients, like we do in the oidc provider http svc.
 type config struct {
 	// the endpoint of the oidc provider
-	Provider     string `mapstructure:"provider"`
 	Insecure     bool   `mapstructure:"insecure"`
+	SkipCheck    bool   `mapstructure:"skipcheck"`
+	Provider     string `mapstructure:"provider"`
 	Audience     string `mapstructure:"audience"`
 	ClientID     string `mapstructure:"client_id"`
 	ClientSecret string `mapstructure:"client_secret"`
-	SkipCheck    bool   `mapstructure:"skipcheck"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
