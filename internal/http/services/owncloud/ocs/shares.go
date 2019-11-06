@@ -38,7 +38,6 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
-	"github.com/cs3org/reva/pkg/user"
 )
 
 // SharesHandler implements the ownCloud sharing API
@@ -571,12 +570,16 @@ func (h *SharesHandler) listShares() {
 	// shares = append(shares, append(userShares, publicShares...)...)
 	shares := userShares
 
-	// if h.isReshareRequest() {
-	// 	WriteOCSSuccess(h.w, h.r, &conversions.Element{Data: shares})
-	// 	return
-	// }
+	if h.isReshareRequest() {
+		WriteOCSSuccess(h.w, h.r, &conversions.Element{Data: shares})
+		return
+	}
 
 	WriteOCSSuccess(h.w, h.r, shares)
+}
+
+func (h *SharesHandler) isReshareRequest() bool {
+	return h.r.URL.Query().Get("reshares") != ""
 }
 
 func (h *SharesHandler) addFilters() ([]*usershareproviderv0alphapb.ListSharesRequest_Filter, error) {
@@ -584,30 +587,35 @@ func (h *SharesHandler) addFilters() ([]*usershareproviderv0alphapb.ListSharesRe
 	var info *storageproviderv0alphapb.ResourceInfo
 	ctx := h.r.Context()
 
-	// TODO guard against this
-	p := h.r.URL.Query().Get("path")
+	// // TODO guard against this
+	// p := h.r.URL.Query().Get("path")
 
-	// we need to prefix the path with the user id
-	u, ok := user.ContextGetUser(ctx)
-	if !ok {
-		WriteOCSError(h.w, h.r, MetaServerError.StatusCode, "missing user in context", fmt.Errorf("missing user in context"))
-		return nil, errors.New("fixme")
-	}
+	// // we need to prefix the path with the user id
+	// u, ok := user.ContextGetUser(ctx)
+	// if !ok {
+	// 	WriteOCSError(h.w, h.r, MetaServerError.StatusCode, "missing user in context", fmt.Errorf("missing user in context"))
+	// 	return nil, errors.New("fixme")
+	// }
 
-	fn := path.Join("/", u.Username, p)
+	// fn := path.Join("/", u.Username, p)
 
 	// first check if the file exists
-	sClient, err := pool.GetStorageProviderServiceClient(h.gatewayAddr)
+	gwClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
 		WriteOCSError(h.w, h.r, MetaServerError.StatusCode, "error getting grpc storage provider client", err)
 		return nil, err
 	}
 
-	ref := &storageproviderv0alphapb.Reference{
-		Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+	statReq := &storageproviderv0alphapb.StatRequest{
+		Ref: &storageproviderv0alphapb.Reference{
+			Spec: &storageproviderv0alphapb.Reference_Path{
+				// Path: "/home" + p,
+				Path: "/home/shared.txt", // TODO(refs) remove this hardcoded url. /home/file.ext works whereas /home/username/file.ext crashes.
+			},
+		},
 	}
-	req := &storageproviderv0alphapb.StatRequest{Ref: ref}
-	res, err := sClient.Stat(ctx, req)
+
+	res, err := gwClient.Stat(ctx, statReq)
 	if err != nil {
 		WriteOCSError(h.w, h.r, MetaServerError.StatusCode, "error sending a grpc stat request", err)
 		return nil, err
@@ -669,7 +677,7 @@ func (h *SharesHandler) listUserShares(filters []*usershareproviderv0alphapb.Lis
 			}
 
 			// check if the resource exists
-			sClient, err := pool.GetStorageProviderServiceClient(h.gatewayAddr)
+			sClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 			if err != nil {
 				return nil, err
 			}
@@ -716,6 +724,8 @@ func (h *SharesHandler) addFileInfo(ctx context.Context, s *conversions.ShareDat
 		s.FileTarget = path.Join("/", path.Base(info.Path))
 		s.Path = info.Path // TODO hm this might have to be relative to the users home ...
 		// TODO FileParent:
+		// item type
+		s.ItemType = conversions.ResourceType(info.GetType()).String()
 
 		c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 		if err != nil {
@@ -934,4 +944,8 @@ type MatchData struct {
 type MatchValueData struct {
 	ShareType int    `json:"shareType" xml:"shareType"`
 	ShareWith string `json:"shareWith" xml:"shareWith"`
+}
+
+type Element struct {
+	Data interface{} `json:"element" xml:"element"`
 }
