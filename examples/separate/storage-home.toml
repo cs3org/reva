@@ -25,7 +25,7 @@ enabled_interceptors = ["auth"]
 driver = "owncloud"
 # the context path wrapper reads tho username from the context and prefixes the relative storage path with it
 path_wrapper = "context"
-mount_path = "/home/"
+mount_path = "/home"
 # TODO same storage id as the /oc/ storage provider
 # if we have an id, we can directly go to that storage, no need to wrap paths
 mount_id = "123e4567-e89b-12d3-a456-426655440000"
