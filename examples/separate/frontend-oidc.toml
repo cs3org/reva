@@ -33,6 +33,12 @@ insecure = true
 client_id = "reva"
 client_secret = "foobar"
 
+[grpc.interceptors.auth]
+token_manager = "jwt"
+
+[grpc.interceptors.auth.token_managers.jwt]
+secret = "Pive-Fumkiu4"
+
 [http]
 #enabled_services = ["ocdav", "ocs"] # use this if you want to use your own oidc provider. 
 enabled_services = ["wellknown", "oidcprovider", "ocdav", "ocs"]
