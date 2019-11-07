@@ -46,8 +46,7 @@ enabled_middlewares = ["auth"]
 
 [http.middlewares.auth]
 gatewaysvc = "localhost:19000"
-auth_type = "basic"
-credential_strategy = "basic"
+credential_chain = ["basic", "bearer"]
 token_strategy = "header"
 token_writer = "header"
 token_manager = "jwt"

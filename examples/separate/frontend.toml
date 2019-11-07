@@ -128,9 +128,26 @@ gateway = "localhost:19000"
 # can prefix the path to jail the requests to the correct CS3 namespace.
 # In this deployment we mounted the owncloud storage provider at /oc. It
 # expects a username as the first path segment.
-files_namespace = "/oc/"
+files_namespace = "/"
+# currently, only the desktop client will use this endpoint, but only if
+# the dav.chunking capability is available
+# TODO implement a path wrapper that rewrites `<username>` into the path
+# layout for the users home?
+# no, use GetHome?
+# for eos we need to rewrite the path
+# TODO strip the username from the path so the CS3 namespace can be mounted
+# at the files/<username> endpoint? what about migration? separate reva instance
+
 # similar to the dav/files endpoint we can configure a prefix for the old webdav endpoint
-webdav_namespace = "/home/"
+# we use the old webdav endpoint to present the cs3 namespace
+webdav_namespace = "/"
+# note: this changes the tree that is rendered at remote.php/webdav from the users home to the cs3 namespace
+# use webdav_namespace = "/home" to use the old namespace that only exposes the users files
+# this endpoint should not affect the desktop client sync but will present different folders for the other clients:
+# - the desktop clients use a hardcoded remote.php/dav/files/<username> if the dav.chunkung capability is present
+# - the ios ios uses the core.webdav-root capability which points to remote.php/webdav in oc10
+# - the oc js sdk is hardcoded to the remote.php/webdav so it will see the new tree
+# - TODO android? no sync ... but will see different tree
 
 [http.services.ocs]
 # prefix = "ocs"
