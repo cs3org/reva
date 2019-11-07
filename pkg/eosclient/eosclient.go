@@ -49,16 +49,23 @@ const (
 // either system (sys) or user (user).
 type AttrType uint32
 
-func (at AttrType) String() string {
-	switch 
-}
-
 const (
 	// SystemAttr is the system extended attribute.
 	SystemAttr AttrType = iota
 	// UserAttr is the user extended attribute.
 	UserAttr
 )
+
+func (at AttrType) String() string {
+	switch at {
+	case SystemAttr:
+		return "sys"
+	case UserAttr:
+		return "user"
+	default:
+		return "invalid"
+	}
+}
 
 // Attribute represents an EOS extended attribute.
 type Attribute struct {
@@ -68,6 +75,14 @@ type Attribute struct {
 
 func (a *Attribute) serialize() string {
 	return fmt.Sprintf("%s.%s=%q", a.Type, a.Key, a.Key)
+}
+
+func (a *Attribute) isValid() bool {
+	// validate that an attribute is correct.
+	if (a.Type != SystemAttr && a.Type != UserAttr) || a.Key == "" {
+		return false
+	}
+	return true
 }
 
 // Options to configure the Client.
@@ -394,16 +409,36 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, username string, inode 
 
 // SetAttr sets an extended attributes on a path.
 func (c *Client) SetAttr(ctx context.Context, username string, attr Attribute, path string) error {
+	if !attr.isValid() {
+		return errors.New("eos: attr is invalid: " + attr.serialize())
+	}
 	unixUser, err := c.getUnixUser(username)
 	if err != nil {
 		return err
 	}
-	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "set", "attr", path, "-m")
-	stdout, _, err := c.executeEOS(ctx, cmd)
+	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "attr", "-r", "set", attr.serialize(), path)
+	_, _, err = c.executeEOS(ctx, cmd)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return c.parseFileInfo(stdout)
+	return nil
+}
+
+// UnsetAttr unsets an extended attribute on a path.
+func (c *Client) UnsetAttr(ctx context.Context, username string, attr Attribute, path string) error {
+	if !attr.isValid() {
+		return errors.New("eos: attr is invalid: " + attr.serialize())
+	}
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return err
+	}
+	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "attr", "-r", "rm", fmt.Sprintf("%s.%s", attr.Type, attr.Key), path)
+	_, _, err = c.executeEOS(ctx, cmd)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // GetFileInfoByPath returns the FilInfo at the given path

@@ -418,7 +418,7 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *usershareproviderv0a
 			// A reference can point to any place, for that reason the namespace starts with cs3://
 			// For example, a reference can point also to a dropbox resource:
 			// CreateReference(dropbox://x/y/z)
-			// It is the responsability of the gateway to resolve this references and merge the response back
+			// It is the responsibility of the gateway to resolve these references and merge the response back
 			// from the main request.
 			// TODO(labkode): the name of the share should be the filename it points to by default.
 			refPath := path.Join(homeRes.Path, req.Ref.String())
