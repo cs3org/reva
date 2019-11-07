@@ -162,6 +162,14 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	}
 	c.init()
 
+	// bail out if keytab is not found.
+	if c.UseKeytab {
+		if _, err := os.Stat(c.Keytab); err != nil {
+			err = errors.Wrapf(err, "eos: keytab not accesible at location: %s", err)
+			return nil, err
+		}
+	}
+
 	eosClientOpts := &eosclient.Options{
 		XrdcopyBinary:       c.XrdcopyBinary,
 		URL:                 c.MasterURL,
