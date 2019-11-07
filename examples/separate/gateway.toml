@@ -71,10 +71,10 @@ driver = "static"
 driver = "static"
 
 [grpc.services.authregistry.drivers.static.rules]
-# started with the frontend-basic.toml
-basic = "localhost:18001"
-# started with the frontend-oidc.toml
-oidc = "localhost:18002"
+# started with the users.toml
+basic = "localhost:18000"
+# started with the frontend.toml
+bearer = "localhost:20099"
 
 [grpc.services.storageregistry]
 driver = "static"
@@ -82,13 +82,15 @@ driver = "static"
 [grpc.services.storageregistry.drivers.static.rules]
 # mount a home storage provider that uses a context based path wrapper
 # to jail users into their home dir
-"/home/" = "localhost:12000"
+"/home" = "localhost:12000"
 # the home storage cannot be access by fileid, because it is 'virtual'
 # check the storage-home.toml. it uses the same storageid, so id based requests are routed to the next storage
 
 # mount a storage provider without a path wrapper for direct access to files
-"/oc/" = "localhost:11000"
+"/oc" = "localhost:11000"
 "123e4567-e89b-12d3-a456-426655440000" = "localhost:11000"
+
+# another mount point might be "/projects/" 
 
 [http]
 address = "0.0.0.0:19001"

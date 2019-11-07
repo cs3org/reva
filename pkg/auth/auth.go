@@ -31,8 +31,9 @@ type Manager interface {
 	Authenticate(ctx context.Context, clientID, clientSecret string) (*typespb.UserId, error)
 }
 
-// Credentials contains the client id and secret.
+// Credentials contains the auth type, client id and secret.
 type Credentials struct {
+	Type         string
 	ClientID     string
 	ClientSecret string
 }
@@ -40,6 +41,7 @@ type Credentials struct {
 // CredentialStrategy obtains Credentials from the request.
 type CredentialStrategy interface {
 	GetCredentials(w http.ResponseWriter, r *http.Request) (*Credentials, error)
+	AddWWWAuthenticate(w http.ResponseWriter, r *http.Request, realm string)
 }
 
 // TokenStrategy obtains a token from the request.

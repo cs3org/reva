@@ -105,6 +105,15 @@ type config struct {
 	// ForceSingleUserMode will force connections to EOS to use SingleUsername
 	ForceSingleUserMode bool `mapstructure:"force_single_user_mode"`
 
+	// UseKeyTabAuth changes will authenticate requests by using an EOS keytab.
+	UseKeytab bool `mapstrucuture:"use_keytab"`
+
+	// SecProtocol specifies the xrootd security protocol to use between the server and EOS.
+	SecProtocol string `mapstructure:"sec_protocol"`
+
+	// Keytab specifies the location of the keytab to use to authenticate to EOS.
+	Keytab string `mapstructure:"keytab"`
+
 	// SingleUsername is the username to use when SingleUserMode is enabled
 	SingleUsername string `mapstructure:"single_username"`
 }
@@ -153,6 +162,14 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	}
 	c.init()
 
+	// bail out if keytab is not found.
+	if c.UseKeytab {
+		if _, err := os.Stat(c.Keytab); err != nil {
+			err = errors.Wrapf(err, "eos: keytab not accesible at location: %s", err)
+			return nil, err
+		}
+	}
+
 	eosClientOpts := &eosclient.Options{
 		XrdcopyBinary:       c.XrdcopyBinary,
 		URL:                 c.MasterURL,
@@ -160,6 +177,9 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		CacheDirectory:      c.CacheDirectory,
 		ForceSingleUserMode: c.ForceSingleUserMode,
 		SingleUsername:      c.SingleUsername,
+		UseKeytab:           c.UseKeytab,
+		Keytab:              c.Keytab,
+		SecProtocol:         c.SecProtocol,
 	}
 
 	eosClient := eosclient.New(eosClientOpts)

@@ -19,7 +19,7 @@ enabled_interceptors = ["auth"]
 # This is a storage proider that grants direct acces to the wrapped storage
 [grpc.services.storageprovider]
 driver = "owncloud"
-mount_path = "/oc/"
+mount_path = "/oc"
 mount_id = "123e4567-e89b-12d3-a456-426655440000"
 # we have a locally running dataprovider
 expose_data_server = true
