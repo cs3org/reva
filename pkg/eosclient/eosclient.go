@@ -52,6 +52,9 @@ type Options struct {
 	// This is the case when access to EOS is done from FUSE under apache or www-data.
 	ForceSingleUserMode bool
 
+	// UseKeyTabAuth changes will authenticate requests by using an EOS keytab.
+	UseKeytab bool
+
 	// SingleUsername is the username to use when connecting to EOS.
 	// Defaults to apache
 	SingleUsername string
@@ -71,6 +74,13 @@ type Options struct {
 	// Location on the local fs where to store reads.
 	// Defaults to os.TempDir()
 	CacheDirectory string
+
+	// Keytab is the location of the EOS keytab file.
+	Keytab string
+
+	// SecProtocol is the comma separated list of security protocols used by xrootd.
+	// For example: "sss, unix"
+	SecProtocol string
 }
 
 func (opt *Options) init() {
@@ -126,6 +136,11 @@ func (c *Client) execute(ctx context.Context, cmd *exec.Cmd) (string, string, er
 	cmd.Stderr = errBuf
 	cmd.Env = []string{
 		"EOS_MGM_URL=" + c.opt.URL,
+	}
+
+	if c.opt.UseKeytab {
+		cmd.Env = append(cmd.Env, "XrdSecPROTOCOL="+c.opt.SecProtocol)
+		cmd.Env = append(cmd.Env, "XrdSecSSSKT="+c.opt.Keytab)
 	}
 
 	err := cmd.Run()
