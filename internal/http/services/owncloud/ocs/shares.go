@@ -44,13 +44,13 @@ import (
 
 // SharesHandler implements the ownCloud sharing API
 type SharesHandler struct {
-	gatewayAddr string
-	r           *http.Request
-	w           http.ResponseWriter
+	gatewayAddr    string
+	filesNamespace string
 }
 
 func (h *SharesHandler) init(c *Config) error {
 	h.gatewayAddr = c.GatewaySvc
+	h.filesNamespace = c.FilesNamespace
 	return nil
 }
 
@@ -59,10 +59,6 @@ func (h *SharesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	var head string
 	head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
-
-	// TODO(refs) move this away from here
-	h.r = r
-	h.w = w
 
 	log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
 
@@ -73,7 +69,7 @@ func (h *SharesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK) // TODO cors?
 			return
 		case "GET":
-			h.listShares()
+			h.listShares(w, r)
 		case "POST":
 			h.createShare(w, r)
 		case "PUT":
@@ -229,12 +225,10 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// TODO(refs) do we need to append the user's home path? path contains only the file path
 		statReq := &storageproviderv0alphapb.StatRequest{
 			Ref: &storageproviderv0alphapb.Reference{
 				Spec: &storageproviderv0alphapb.Reference_Path{
-					// Path: "/home" + p,
-					Path: "/home/shared.txt", // TODO(refs) remove this hardcoded url. /home/file.ext works whereas /home/username/file.ext crashes.
+					Path: h.filesNamespace + r.FormValue("path"),
 				},
 			},
 		}
@@ -310,25 +304,16 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 		if err != nil {
 			log.Debug().Err(err).Str("createShare", "shares").Msg("error creating public link share")
-			WriteOCSError(h.w, h.r, MetaServerError.StatusCode, "missing user in context", fmt.Errorf("error getting a connection to a public shares provider"))
+			WriteOCSError(w, r, MetaServerError.StatusCode, "missing user in context", fmt.Errorf("error getting a connection to a public shares provider"))
 			return
 		}
 
-		// u, ok := user.ContextGetUser(ctx)
-		// if !ok {
-		// 	WriteOCSError(h.w, h.r, MetaServerError.StatusCode, "missing user in context", fmt.Errorf("missing user in context"))
-		// 	return
-		// }
+		p := r.FormValue("path")
 
-		// build the path for the stat request. User is needed for creating a path to the resource
-		// p := h.r.FormValue("path")
-		// p = path.Join("/", u.Username, p)
-
-		// prepare stat call to get resource information
 		statReq := storageproviderv0alphapb.StatRequest{
 			Ref: &storageproviderv0alphapb.Reference{
 				Spec: &storageproviderv0alphapb.Reference_Path{
-					Path: "/home/shared.txt",
+					Path: h.filesNamespace + p,
 				},
 			},
 		}
@@ -336,7 +321,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		statRes, err := c.Stat(ctx, &statReq)
 		if err != nil {
 			log.Debug().Err(err).Str("createShare", "shares").Msg("error on stat call")
-			WriteOCSError(h.w, h.r, MetaServerError.StatusCode, "missing resource information", fmt.Errorf("error getting resource information"))
+			WriteOCSError(w, r, MetaServerError.StatusCode, "missing resource information", fmt.Errorf("error getting resource information"))
 			return
 		}
 
@@ -347,26 +332,26 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 				Expiration: &typespb.Timestamp{
 					Nanos:   uint32(time.Now().Add(time.Duration(31536000)).Nanosecond()),
 					Seconds: uint64(time.Now().Add(time.Duration(31536000)).Second()),
-				}, // transform string date from request into timestamp
+				},
 			},
 		}
 
 		createRes, err := c.CreatePublicShare(ctx, &req)
 		if err != nil {
 			log.Debug().Err(err).Str("createShare", "shares").Msgf("error creating a public share to resource id: %v", statRes.Info.GetId())
-			WriteOCSError(h.w, h.r, MetaServerError.StatusCode, "error creating public share", fmt.Errorf("error creating a public share to resource id: %v", statRes.Info.GetId()))
+			WriteOCSError(w, r, MetaServerError.StatusCode, "error creating public share", fmt.Errorf("error creating a public share to resource id: %v", statRes.Info.GetId()))
 			return
 		}
 
 		if createRes.Status.Code != rpcpb.Code_CODE_OK {
 			log.Debug().Err(errors.New("create public share failed")).Str("shares", "createShare").Msgf("create public share failed with status code: %v", createRes.Status.Code.String())
-			WriteOCSError(h.w, h.r, MetaServerError.StatusCode, "grpc create public share request failed", err)
+			WriteOCSError(w, r, MetaServerError.StatusCode, "grpc create public share request failed", err)
 			return
 		}
 
 		// build ocs response for Phoenix
 		s := conversions.PublicShare2ShareData(createRes.Share)
-		WriteOCSSuccess(h.w, h.r, s)
+		WriteOCSSuccess(w, r, s)
 
 		return
 	}
@@ -579,45 +564,45 @@ func (h *SharesHandler) updateShare(w http.ResponseWriter, r *http.Request) {
 	WriteOCSSuccess(w, r, share)
 }
 
-func (h *SharesHandler) listShares() {
+func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	shares := make([]*conversions.ShareData, 0)
 	filters := []*usershareproviderv0alphapb.ListSharesRequest_Filter{}
 	var err error
 
-	p := h.r.URL.Query().Get("path")
+	p := r.URL.Query().Get("path")
 	if p != "" {
-		filters, err = h.addFilters()
+		filters, err = h.addFilters(w, r)
 		if err != nil {
-			WriteOCSError(h.w, h.r, MetaServerError.StatusCode, err.Error(), err)
+			WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
 		}
 	}
 
-	userShares, err := h.listUserShares(filters)
+	userShares, err := h.listUserShares(r, filters)
 	if err != nil {
-		WriteOCSError(h.w, h.r, MetaServerError.StatusCode, err.Error(), err)
+		WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
 	}
 
-	publicShares, err := h.listPublicShares()
+	publicShares, err := h.listPublicShares(r)
 	if err != nil {
-		WriteOCSError(h.w, h.r, MetaServerError.StatusCode, err.Error(), err)
+		WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
 	}
 
 	shares = append(shares, append(userShares, publicShares...)...)
 
-	if h.isReshareRequest() {
-		WriteOCSSuccess(h.w, h.r, &conversions.Element{Data: shares})
+	if h.isReshareRequest(r) {
+		WriteOCSSuccess(w, r, &conversions.Element{Data: shares})
 		return
 	}
 
-	WriteOCSSuccess(h.w, h.r, shares)
+	WriteOCSSuccess(w, r, shares)
 }
 
-func (h *SharesHandler) isReshareRequest() bool {
-	return h.r.URL.Query().Get("reshares") != ""
+func (h *SharesHandler) isReshareRequest(r *http.Request) bool {
+	return r.URL.Query().Get("reshares") != ""
 }
 
-func (h *SharesHandler) listPublicShares() ([]*conversions.ShareData, error) {
-	ctx := h.r.Context()
+func (h *SharesHandler) listPublicShares(r *http.Request) ([]*conversions.ShareData, error) {
+	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
 	// TODO(refs) why is this guard needed? Are we moving towards a gateway only for service discovery? without a gateway this is dead code.
@@ -677,51 +662,38 @@ func (h *SharesHandler) listPublicShares() ([]*conversions.ShareData, error) {
 	return nil, errors.New("bad request")
 }
 
-func (h *SharesHandler) addFilters() ([]*usershareproviderv0alphapb.ListSharesRequest_Filter, error) {
+func (h *SharesHandler) addFilters(w http.ResponseWriter, r *http.Request) ([]*usershareproviderv0alphapb.ListSharesRequest_Filter, error) {
 	filters := []*usershareproviderv0alphapb.ListSharesRequest_Filter{}
 	var info *storageproviderv0alphapb.ResourceInfo
-	ctx := h.r.Context()
-
-	// // TODO guard against this
-	// p := h.r.URL.Query().Get("path")
-
-	// // we need to prefix the path with the user id
-	// u, ok := user.ContextGetUser(ctx)
-	// if !ok {
-	// 	WriteOCSError(h.w, h.r, MetaServerError.StatusCode, "missing user in context", fmt.Errorf("missing user in context"))
-	// 	return nil, errors.New("fixme")
-	// }
-
-	// fn := path.Join("/", u.Username, p)
+	ctx := r.Context()
 
 	// first check if the file exists
 	gwClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
-		WriteOCSError(h.w, h.r, MetaServerError.StatusCode, "error getting grpc storage provider client", err)
+		WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc storage provider client", err)
 		return nil, err
 	}
 
 	statReq := &storageproviderv0alphapb.StatRequest{
 		Ref: &storageproviderv0alphapb.Reference{
 			Spec: &storageproviderv0alphapb.Reference_Path{
-				// Path: "/home" + p,
-				Path: "/home/shared.txt", // TODO(refs) remove this hardcoded url. /home/file.ext works whereas /home/username/file.ext crashes.
+				Path: h.filesNamespace + r.FormValue("path"),
 			},
 		},
 	}
 
 	res, err := gwClient.Stat(ctx, statReq)
 	if err != nil {
-		WriteOCSError(h.w, h.r, MetaServerError.StatusCode, "error sending a grpc stat request", err)
+		WriteOCSError(w, r, MetaServerError.StatusCode, "error sending a grpc stat request", err)
 		return nil, err
 	}
 
 	if res.Status.Code != rpcpb.Code_CODE_OK {
 		if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
-			WriteOCSError(h.w, h.r, MetaNotFound.StatusCode, "not found", nil)
+			WriteOCSError(w, r, MetaNotFound.StatusCode, "not found", nil)
 			return filters, errors.New("fixme")
 		}
-		WriteOCSError(h.w, h.r, MetaServerError.StatusCode, "grpc stat request penis failed", err)
+		WriteOCSError(w, r, MetaServerError.StatusCode, "grpc stat request penis failed", err)
 		return filters, errors.New("fixme")
 	}
 
@@ -737,9 +709,9 @@ func (h *SharesHandler) addFilters() ([]*usershareproviderv0alphapb.ListSharesRe
 	return filters, nil
 }
 
-func (h *SharesHandler) listUserShares(filters []*usershareproviderv0alphapb.ListSharesRequest_Filter) ([]*conversions.ShareData, error) {
+func (h *SharesHandler) listUserShares(r *http.Request, filters []*usershareproviderv0alphapb.ListSharesRequest_Filter) ([]*conversions.ShareData, error) {
 	var rInfo *storageproviderv0alphapb.ResourceInfo
-	ctx := h.r.Context()
+	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
 	lsUserSharesRequest := usershareproviderv0alphapb.ListSharesRequest{
