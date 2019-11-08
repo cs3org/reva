@@ -269,19 +269,24 @@ func (fs *ocFS) scanFiles(ctx context.Context, conn redis.Conn) {
 // and prefix the datadirectory
 // TODO the path handed to a storage provider should not contain the username
 func (fs *ocFS) getInternalPath(ctx context.Context, fn string) string {
-	// p = /<username> or
-	// p = /<username>/foo/bar.txt
-	parts := strings.SplitN(fn, "/", 3)
+	// trim all /
+	fn = strings.Trim(fn, "/")
+	// p = "" or
+	// p = <username> or
+	// p = <username>/foo/bar.txt
+	parts := strings.SplitN(fn, "/", 2)
 
 	switch len(parts) {
-	case 2:
-		// parts = "", "<username>"
-		return path.Join(fs.c.DataDirectory, parts[1], "files")
-	case 3:
-		// parts = "", "<username>", "foo/bar.txt"
-		return path.Join(fs.c.DataDirectory, parts[1], "files", parts[2])
+	case 1:
+		// parts = "" or "<username>"
+		if parts[0] == "" {
+			return fs.c.DataDirectory
+		}
+		// parts = "<username>"
+		return path.Join(fs.c.DataDirectory, parts[0], "files")
 	default:
-		return "" // TODO Must not happen?
+		// parts = "<username>", "foo/bar.txt"
+		return path.Join(fs.c.DataDirectory, parts[0], "files", parts[1])
 	}
 }
 

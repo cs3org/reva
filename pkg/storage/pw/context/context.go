@@ -21,6 +21,7 @@ package context
 import (
 	"context"
 	"path"
+	"strings"
 
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage"
@@ -82,5 +83,12 @@ func (pw *pw) Unwrap(ctx context.Context, rp string) (string, error) {
 	return path.Join("/", pw.prefix, u.Username, rp), nil
 }
 func (pw *pw) Wrap(ctx context.Context, rp string) (string, error) {
-	return rp, nil
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		return "", errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
+	}
+	if u.Username == "" {
+		return "", errors.Wrap(errtypes.UserRequired("userrequired"), "user has no username")
+	}
+	return strings.TrimPrefix(rp, path.Join("/", u.Username)), nil
 }

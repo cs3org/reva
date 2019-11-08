@@ -80,6 +80,9 @@ bearer = "localhost:20099"
 driver = "static"
 
 [grpc.services.storageregistry.drivers.static.rules]
+# this is the list of namespaces that build the cs3 namespace
+# - every storage as mounted in the root
+
 # mount a home storage provider that uses a context based path wrapper
 # to jail users into their home dir
 "/home" = "localhost:12000"
@@ -89,6 +92,8 @@ driver = "static"
 # mount a storage provider without a path wrapper for direct access to files
 "/oc" = "localhost:11000"
 "123e4567-e89b-12d3-a456-426655440000" = "localhost:11000"
+"/" = "localhost:11100"
+"123e4567-e89b-12d3-a456-426655440001" = "localhost:11100"
 
 # another mount point might be "/projects/" 
 
@@ -104,8 +109,7 @@ transfer_shared_secret = "replace-me-with-a-transfer-secret"
 
 [http.middlewares.auth]
 gatewaysvc = "0.0.0.0:19000"
-auth_type = "basic"
-credential_strategy = "basic"
+credential_chain = ["basic", "bearer"]
 token_strategy = "header"
 token_writer = "header"
 token_manager = "jwt"
