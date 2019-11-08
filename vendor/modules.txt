@@ -55,7 +55,7 @@ github.com/beorn7/perks/quantile
 github.com/cheggaaa/pb
 # github.com/coreos/go-oidc v2.1.0+incompatible
 github.com/coreos/go-oidc
-# github.com/cs3org/go-cs3apis v0.0.0-20191015062230-f4cde4c589eb
+# github.com/cs3org/go-cs3apis v0.0.0-20191108224558-365d440ba78a
 github.com/cs3org/go-cs3apis/cs3/appprovider/v0alpha
 github.com/cs3org/go-cs3apis/cs3/appregistry/v0alpha
 github.com/cs3org/go-cs3apis/cs3/authprovider/v0alpha

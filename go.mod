@@ -7,7 +7,7 @@ require (
 	github.com/aws/aws-sdk-go v1.25.27
 	github.com/cheggaaa/pb v1.0.28
 	github.com/coreos/go-oidc v2.1.0+incompatible
-	github.com/cs3org/go-cs3apis v0.0.0-20191015062230-f4cde4c589eb
+	github.com/cs3org/go-cs3apis v0.0.0-20191108224558-365d440ba78a
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/fatih/color v1.7.0 // indirect
 	github.com/go-openapi/strfmt v0.19.2 // indirect

@@ -65,6 +65,22 @@ func (s *svc) sign(ctx context.Context, target string) (string, error) {
 	return tkn, nil
 }
 
+func (s *svc) GetHome(ctx context.Context, ref *storageregistryv0alphapb.GetHomeRequest) (*storageregistryv0alphapb.GetHomeResponse, error) {
+	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error getting storage registry client")
+		return nil, err
+	}
+
+	res, err := c.GetHome(ctx, &storageregistryv0alphapb.GetHomeRequest{})
+
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error calling GetHome")
+		return nil, err
+	}
+	return res, nil
+}
+
 func (s *svc) InitiateFileDownload(ctx context.Context, req *storageproviderv0alphapb.InitiateFileDownloadRequest) (*gatewayv0alphapb.InitiateFileDownloadResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {

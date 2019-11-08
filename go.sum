@@ -29,8 +29,8 @@ github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDk
 github.com/coreos/go-oidc v2.1.0+incompatible h1:sdJrfw8akMnCuUlaZU3tE/uYXFgfqom8DBE9so9EBsM=
 github.com/coreos/go-oidc v2.1.0+incompatible/go.mod h1:CgnwVTmzoESiwO9qyAFEMiHoZ1nMCKZlZ9V6mm3/LKc=
 github.com/coreos/go-systemd v0.0.0-20190321100706-95778dfbb74e/go.mod h1:F5haX7vjVVG0kc13fIWeqUViNPyEJxv/OmvnBo0Yme4=
-github.com/cs3org/go-cs3apis v0.0.0-20191015062230-f4cde4c589eb h1:1/emyd/qbeGElCYoADO02JekYnVbT8rHpWnTT/Ewlzk=
-github.com/cs3org/go-cs3apis v0.0.0-20191015062230-f4cde4c589eb/go.mod h1:+SahswLd+p4bLlXXG+UuNiWSgRin4dSQQOgPXCsdiTM=
+github.com/cs3org/go-cs3apis v0.0.0-20191108224558-365d440ba78a h1:VAtkhkCSQpNU+Vvw0ZpBv5s08rQHFlzMt6AhKuhxbSY=
+github.com/cs3org/go-cs3apis v0.0.0-20191108224558-365d440ba78a/go.mod h1:vA2ohA0bZacDI5E0K/EgnVKybTGHPD/fGncABMAjOzI=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
