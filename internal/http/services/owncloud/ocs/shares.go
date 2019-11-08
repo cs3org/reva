@@ -569,20 +569,45 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	filters := []*usershareproviderv0alphapb.ListSharesRequest_Filter{}
 	var err error
 
-	// Because the only way to filter shares is via the query parameter "shared_with_me", we
-	// need to guard against its value
-	sharedWithMe, _ := strconv.ParseBool(r.FormValue("shared_with_me"))
-	if sharedWithMe {
-		// shared with me
-		swmShares := h.sharedWithMe(r)
+	// the only way to route shares (shared with me / shared by me) is via the query parameter "shared_with_me"
+	listSharedWithMe, err := strconv.ParseBool(r.FormValue("shared_with_me"))
+	if err != nil {
+		WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
+	}
 
-		// transform received shares into ocs share data
-		// - iterate on all received shares
-		// - add only the active ones ... for tests purposes add all of them, next iteration filter them out
-		for _, v := range swmShares {
-			// TODO(refs) handle error
-			receivedShareOCSData, _ := h.userShare2ShareData(r.Context(), v.Share)
-			shares = append(shares, receivedShareOCSData)
+	if listSharedWithMe {
+		sharedWithMe := h.listSharedWithMe(r)
+
+		sClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+		if err != nil {
+			WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
+		}
+
+		// TODO(refs) filter out "invalid" shares
+		for _, v := range sharedWithMe {
+			statRequest := storageproviderv0alphapb.StatRequest{
+				Ref: &storageproviderv0alphapb.Reference{
+					Spec: &storageproviderv0alphapb.Reference_Id{
+						Id: v.Share.ResourceId,
+					},
+				},
+			}
+
+			statResponse, err := sClient.Stat(r.Context(), &statRequest)
+			if err != nil {
+				WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
+			}
+
+			data, err := h.userShare2ShareData(r.Context(), v.Share)
+			if err != nil {
+				WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
+			}
+
+			if h.addFileInfo(r.Context(), data, statResponse.Info) != nil {
+				WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
+			}
+
+			shares = append(shares, data)
 		}
 
 		WriteOCSSuccess(w, r, shares)
@@ -617,7 +642,7 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	WriteOCSSuccess(w, r, shares)
 }
 
-func (h *SharesHandler) sharedWithMe(r *http.Request) []*usershareproviderv0alphapb.ReceivedShare {
+func (h *SharesHandler) listSharedWithMe(r *http.Request) []*usershareproviderv0alphapb.ReceivedShare {
 	c, err := pool.GetUserShareProviderClient(h.gatewayAddr)
 	if err != nil {
 		panic(err)
