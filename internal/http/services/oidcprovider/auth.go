@@ -57,8 +57,6 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO(labkode): this should be a flexible mechanism to
-	// use any kind of authentication, basic auth, SSO, anything ...
 	username := r.PostForm.Get("username")
 	password := r.PostForm.Get("password")
 	// No username we ask to give one, here we provide only a form validation.
@@ -92,7 +90,7 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	genReq := &gatewayv0alphapb.AuthenticateRequest{
-		Type:         s.conf.AuthType,
+		Type:         "basic", // we are sending username and password -> basic auth
 		ClientId:     username,
 		ClientSecret: password,
 	}

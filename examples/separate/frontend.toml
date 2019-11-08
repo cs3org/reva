@@ -88,7 +88,6 @@ userinfo_endpoint = "http://localhost:20080/oauth2/userinfo"
 [http.services.oidcprovider]
 prefix = "oauth2"
 gateway = "localhost:19000"
-auth_type = "basic"
 issuer = "http://localhost:20080"
 
 [http.services.oidcprovider.clients.phoenix]
