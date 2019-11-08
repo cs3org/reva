@@ -569,6 +569,26 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	filters := []*usershareproviderv0alphapb.ListSharesRequest_Filter{}
 	var err error
 
+	// Because the only way to filter shares is via the query parameter "shared_with_me", we
+	// need to guard against its value
+	sharedWithMe, _ := strconv.ParseBool(r.FormValue("shared_with_me"))
+	if sharedWithMe {
+		// shared with me
+		swmShares := h.sharedWithMe(r)
+
+		// transform received shares into ocs share data
+		// - iterate on all received shares
+		// - add only the active ones ... for tests purposes add all of them, next iteration filter them out
+		for _, v := range swmShares {
+			// TODO(refs) handle error
+			receivedShareOCSData, _ := h.userShare2ShareData(r.Context(), v.Share)
+			shares = append(shares, receivedShareOCSData)
+		}
+
+		WriteOCSSuccess(w, r, shares)
+		return
+	}
+	// shared with others
 	p := r.URL.Query().Get("path")
 	if p != "" {
 		filters, err = h.addFilters(w, r)
@@ -595,6 +615,18 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	}
 
 	WriteOCSSuccess(w, r, shares)
+}
+
+func (h *SharesHandler) sharedWithMe(r *http.Request) []*usershareproviderv0alphapb.ReceivedShare {
+	c, err := pool.GetUserShareProviderClient(h.gatewayAddr)
+	if err != nil {
+		panic(err)
+	}
+
+	lrs := usershareproviderv0alphapb.ListReceivedSharesRequest{}
+	// TODO(refs) handle error...
+	shares, _ := c.ListReceivedShares(r.Context(), &lrs)
+	return shares.GetShares()
 }
 
 func (h *SharesHandler) isReshareRequest(r *http.Request) bool {
