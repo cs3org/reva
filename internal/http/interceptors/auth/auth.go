@@ -30,6 +30,7 @@ import (
 	tokenregistry "github.com/cs3org/reva/internal/http/interceptors/auth/token/registry"
 	tokenwriterregistry "github.com/cs3org/reva/internal/http/interceptors/auth/tokenwriter/registry"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
@@ -51,10 +52,11 @@ func init() {
 }
 
 type config struct {
-	Priority             int                               `mapstructure:"priority"`
-	AuthType             string                            `mapstructure:"auth_type"`
-	GatewaySvc           string                            `mapstructure:"gateway"`
-	CredentialStrategy   string                            `mapstructure:"credential_strategy"`
+	Priority   int    `mapstructure:"priority"`
+	GatewaySvc string `mapstructure:"gateway"`
+	// Realm is optional, will be filled with request host if not given
+	Realm                string                            `mapstructure:"realm"`
+	CredentialChain      []string                          `mapstructure:"credential_chain"`
 	CredentialStrategies map[string]map[string]interface{} `mapstructure:"credential_strategies"`
 	TokenStrategy        string                            `mapstructure:"token_strategy"`
 	TokenStrategies      map[string]map[string]interface{} `mapstructure:"token_strategies"`
@@ -75,8 +77,8 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 func skip(url string, skipped []string) bool {
-	for _, s := range skipped {
-		if strings.HasPrefix(s, url) {
+	for i := range skipped {
+		if strings.HasPrefix(skipped[i], url) {
 			return true
 		}
 	}
@@ -94,20 +96,18 @@ func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
 		conf.Priority = defaultPriority
 	}
 
-	// the authentication type must be provided
-	// TODO(labkode): would be nice to negotiate the auth type between client and server.
-	if conf.AuthType == "" {
-		return nil, 0, fmt.Errorf("auth: auth_type cannot be empty")
-	}
+	credChain := []auth.CredentialStrategy{}
+	for i := range conf.CredentialChain {
+		f, ok := registry.NewCredentialFuncs[conf.CredentialChain[i]]
+		if !ok {
+			return nil, 0, fmt.Errorf("credential strategy not found: %s", conf.CredentialChain[i])
+		}
 
-	f, ok := registry.NewCredentialFuncs[conf.CredentialStrategy]
-	if !ok {
-		return nil, 0, fmt.Errorf("credential strategy not found: %s", conf.CredentialStrategy)
-	}
-
-	credStrategy, err := f(conf.CredentialStrategies[conf.CredentialStrategy])
-	if err != nil {
-		return nil, 0, err
+		credStrategy, err := f(conf.CredentialStrategies[conf.CredentialChain[i]])
+		if err != nil {
+			return nil, 0, err
+		}
+		credChain = append(credChain, credStrategy)
 	}
 
 	g, ok := tokenregistry.NewTokenFuncs[conf.TokenStrategy]
@@ -164,9 +164,23 @@ func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
 			tkn := tokenStrategy.GetToken(r)
 			if tkn == "" {
 				log.Warn().Msg("core access token not set")
-				creds, err := credStrategy.GetCredentials(w, r)
-				if err != nil {
-					log.Warn().Err(err).Msg("error retrieving credentials")
+				var creds *auth.Credentials
+				for i := range credChain {
+					creds, err = credChain[i].GetCredentials(w, r)
+					if err != nil {
+						log.Debug().Err(err).Msg("error retrieving credentials")
+					}
+					if creds != nil {
+						break
+					}
+				}
+				if creds == nil {
+					// TODO read realm from forwarded for header?
+					// see https://github.com/stanvit/go-forwarded as middleware
+					// indicate all possible authentications to the client
+					for i := range credChain {
+						credChain[i].AddWWWAuthenticate(w, r, conf.Realm)
+					}
 					w.WriteHeader(http.StatusUnauthorized)
 					return
 				}
@@ -174,7 +188,7 @@ func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
 				log.Debug().Msg("credentials obtained from the request")
 
 				req := &gatewayv0alphapb.AuthenticateRequest{
-					Type:         conf.AuthType,
+					Type:         creds.Type,
 					ClientId:     creds.ClientID,
 					ClientSecret: creds.ClientSecret,
 				}

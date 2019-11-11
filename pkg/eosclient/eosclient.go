@@ -52,6 +52,9 @@ type Options struct {
 	// This is the case when access to EOS is done from FUSE under apache or www-data.
 	ForceSingleUserMode bool
 
+	// UseKeyTabAuth changes will authenticate requests by using an EOS keytab.
+	UseKeytab bool
+
 	// SingleUsername is the username to use when connecting to EOS.
 	// Defaults to apache
 	SingleUsername string
@@ -71,6 +74,13 @@ type Options struct {
 	// Location on the local fs where to store reads.
 	// Defaults to os.TempDir()
 	CacheDirectory string
+
+	// Keytab is the location of the EOS keytab file.
+	Keytab string
+
+	// SecProtocol is the comma separated list of security protocols used by xrootd.
+	// For example: "sss, unix"
+	SecProtocol string
 }
 
 func (opt *Options) init() {
@@ -126,6 +136,11 @@ func (c *Client) execute(ctx context.Context, cmd *exec.Cmd) (string, string, er
 	cmd.Stderr = errBuf
 	cmd.Env = []string{
 		"EOS_MGM_URL=" + c.opt.URL,
+	}
+
+	if c.opt.UseKeytab {
+		cmd.Env = append(cmd.Env, "XrdSecPROTOCOL="+c.opt.SecProtocol)
+		cmd.Env = append(cmd.Env, "XrdSecSSSKT="+c.opt.Keytab)
 	}
 
 	err := cmd.Run()
@@ -236,7 +251,7 @@ func (c *Client) AddACL(ctx context.Context, username, path string, a *acl.Entry
 		return err
 	}
 
-	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "attr", "-r", "set", fmt.Sprintf("sys.acl=%s", sysACL), path)
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "attr", "-r", "set", fmt.Sprintf("sys.acl=%s", sysACL), path)
 	_, _, err = c.executeEOS(ctx, cmd)
 	return err
 
@@ -263,7 +278,7 @@ func (c *Client) RemoveACL(ctx context.Context, username, path string, aclType s
 		return err
 	}
 
-	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "attr", "-r", "set", fmt.Sprintf("sys.acl=%s", sysACL), path)
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "attr", "-r", "set", fmt.Sprintf("sys.acl=%s", sysACL), path)
 	_, _, err = c.executeEOS(ctx, cmd)
 	return err
 
@@ -345,7 +360,7 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, username string, inode 
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "file", "info", fmt.Sprintf("inode:%d", inode), "-m")
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "file", "info", fmt.Sprintf("inode:%d", inode), "-m")
 	stdout, _, err := c.executeEOS(ctx, cmd)
 	if err != nil {
 		return nil, err
@@ -359,7 +374,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, username, path string) (
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "file", "info", path, "-m")
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "file", "info", path, "-m")
 	stdout, _, err := c.executeEOS(ctx, cmd)
 	if err != nil {
 		return nil, err
@@ -374,7 +389,7 @@ func (c *Client) GetQuota(ctx context.Context, username, path string) (int, int,
 	if err != nil {
 		return 0, 0, err
 	}
-	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "quota", "ls", "-u", username, "-m")
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "quota", "ls", "-u", username, "-m")
 	stdout, _, err := c.executeEOS(ctx, cmd)
 	if err != nil {
 		return 0, 0, err
@@ -389,7 +404,7 @@ func (c *Client) CreateDir(ctx context.Context, username, path string) error {
 		return err
 	}
 
-	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "mkdir", path)
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "mkdir", path)
 	_, _, err = c.executeEOS(ctx, cmd)
 	return err
 }
@@ -400,7 +415,7 @@ func (c *Client) Remove(ctx context.Context, username, path string) error {
 	if err != nil {
 		return err
 	}
-	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "rm", "-r", path)
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "rm", "-r", path)
 	_, _, err = c.executeEOS(ctx, cmd)
 	return err
 }
@@ -411,7 +426,7 @@ func (c *Client) Rename(ctx context.Context, username, oldPath, newPath string) 
 	if err != nil {
 		return err
 	}
-	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "file", "rename", oldPath, newPath)
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "file", "rename", oldPath, newPath)
 	_, _, err = c.executeEOS(ctx, cmd)
 	return err
 }
@@ -422,7 +437,7 @@ func (c *Client) List(ctx context.Context, username, path string) ([]*FileInfo, 
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "find", "--fileinfo", "--maxdepth", "1", path)
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "find", "--fileinfo", "--maxdepth", "1", path)
 	stdout, _, err := c.executeEOS(ctx, cmd)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error listing fn=%s", path)
@@ -440,7 +455,7 @@ func (c *Client) Read(ctx context.Context, username, path string) (io.ReadCloser
 	rand := "eosread-" + uuid.String()
 	localTarget := fmt.Sprintf("%s/%s", c.opt.CacheDirectory, rand)
 	xrdPath := fmt.Sprintf("%s//%s", c.opt.URL, path)
-	cmd := exec.CommandContext(ctx, "/usr/bin/xrdcopy", "--nopbar", "--silent", "-f", xrdPath, localTarget, fmt.Sprintf("-OSeos.ruid=%s&eos.rgid=%s", unixUser.Uid, unixUser.Gid))
+	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, "--nopbar", "--silent", "-f", xrdPath, localTarget, fmt.Sprintf("-OSeos.ruid=%s&eos.rgid=%s", unixUser.Uid, unixUser.Gid))
 	_, _, err = c.execute(ctx, cmd)
 	if err != nil {
 		return nil, err
@@ -467,7 +482,7 @@ func (c *Client) Write(ctx context.Context, username, path string, stream io.Rea
 		return err
 	}
 	xrdPath := fmt.Sprintf("%s//%s", c.opt.URL, path)
-	cmd := exec.CommandContext(ctx, "/usr/bin/xrdcopy", "--nopbar", "--silent", "-f", fd.Name(), xrdPath, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s", unixUser.Uid, unixUser.Gid))
+	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, "--nopbar", "--silent", "-f", fd.Name(), xrdPath, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s", unixUser.Uid, unixUser.Gid))
 	_, _, err = c.execute(ctx, cmd)
 	return err
 }
@@ -480,7 +495,7 @@ func (c *Client) ListDeletedEntries(ctx context.Context, username string) ([]*De
 	}
 	// TODO(labkode): add protection if slave is configured and alive to count how many files are in the trashbin before
 	// triggering the recycle ls call that could break the instance because of unavailable memory.
-	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "recycle", "ls", "-m")
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "recycle", "ls", "-m")
 	stdout, _, err := c.executeEOS(ctx, cmd)
 	if err != nil {
 		return nil, err
@@ -494,7 +509,7 @@ func (c *Client) RestoreDeletedEntry(ctx context.Context, username, key string) 
 	if err != nil {
 		return err
 	}
-	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "recycle", "restore", key)
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "recycle", "restore", key)
 	_, _, err = c.executeEOS(ctx, cmd)
 	return err
 }
@@ -505,7 +520,7 @@ func (c *Client) PurgeDeletedEntries(ctx context.Context, username string) error
 	if err != nil {
 		return err
 	}
-	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "recycle", "purge")
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "recycle", "purge")
 	_, _, err = c.executeEOS(ctx, cmd)
 	return err
 }
@@ -528,7 +543,7 @@ func (c *Client) RollbackToVersion(ctx context.Context, username, path, version 
 	if err != nil {
 		return err
 	}
-	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "file", "versions", path, version)
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "file", "versions", path, version)
 	_, _, err = c.executeEOS(ctx, cmd)
 	return err
 }
