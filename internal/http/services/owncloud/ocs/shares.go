@@ -29,6 +29,7 @@ import (
 	"strings"
 	"time"
 
+	gatewayv0alpahpb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
 	publicshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
@@ -66,15 +67,14 @@ func (h *SharesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "shares":
 		switch r.Method {
 		case "OPTIONS":
-			w.WriteHeader(http.StatusOK) // TODO cors?
+			w.WriteHeader(http.StatusOK)
 			return
 		case "GET":
 			h.listShares(w, r)
 		case "POST":
 			h.createShare(w, r)
 		case "PUT":
-			// TODO PUT is used with incomplete data to update a share 🤦
-			h.updateShare(w, r)
+			h.updateShare(w, r) // TODO PUT is used with incomplete data to update a share 🤦
 		default:
 			WriteOCSError(w, r, MetaBadRequest.StatusCode, "Only GET, POST and PUT are allowed", nil)
 		}
@@ -86,33 +86,27 @@ func (h *SharesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SharesHandler) findSharees(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
+	log := appctx.GetLogger(r.Context())
+	term := r.URL.Query().Get("search")
 
-	search := r.URL.Query().Get("search")
-
-	if search == "" {
+	if term == "" {
 		WriteOCSError(w, r, MetaBadRequest.StatusCode, "search must not be empty", nil)
 		return
 	}
 
-	gatewayProvider, err := pool.GetGatewayServiceClient(h.gatewayAddr)
-	if err != nil {
-		WriteOCSError(w, r, MetaServerError.StatusCode, "error connecting to user provider", err)
-		return
-	}
+	gatewayProvider := mustGetGateway(h.gatewayAddr, r, w)
 
 	req := userproviderv0alphapb.FindUsersRequest{
-		Filter: search,
+		Filter: term,
 	}
 
-	res, err := gatewayProvider.FindUsers(ctx, &req)
+	res, err := gatewayProvider.FindUsers(r.Context(), &req)
 	if err != nil {
 		WriteOCSError(w, r, MetaServerError.StatusCode, "error searching users", err)
 		return
 	}
 
-	log.Debug().Int("count", len(res.GetUsers())).Str("search", search).Msg("users found")
+	log.Debug().Int("count", len(res.GetUsers())).Str("search", term).Msg("users found")
 
 	matches := make([]*conversions.MatchData, 0, len(res.GetUsers()))
 
@@ -940,7 +934,12 @@ func (h *SharesHandler) userShare2ShareData(ctx context.Context, share *usershar
 	return sd, nil
 }
 
-// SharesData holds a list of share data
-type SharesData struct {
-	Shares []*conversions.ShareData `json:"element" xml:"element"`
+// mustGetGateway returns a client to the gateway service, returns an error otherwise
+func mustGetGateway(addr string, r *http.Request, w http.ResponseWriter) gatewayv0alpahpb.GatewayServiceClient {
+	client, err := pool.GetGatewayServiceClient(addr)
+	if err != nil {
+		WriteOCSError(w, r, MetaBadRequest.StatusCode, "no connection to gateway service", nil)
+	}
+
+	return client
 }

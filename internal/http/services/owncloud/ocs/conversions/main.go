@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// Package conversions molds cs3 apis data structures into ocs responses
+// Package conversions sits between CS3 type definitions and OCS API Responses
 package conversions
 
 import (
@@ -34,7 +34,19 @@ import (
 	usermgr "github.com/cs3org/reva/pkg/user/manager/registry"
 )
 
-// Types
+const (
+	// ShareTypeUser refers to user shares
+	ShareTypeUser ShareType = 0
+
+	// ShareTypePublicLink refers to public link shares
+	ShareTypePublicLink ShareType = 3
+
+	// ShareTypeGroup represents a group share
+	// ShareTypeGroup shareType = 1
+
+	// ShareTypeFederatedCloudShare represents a federated share
+	// ShareTypeFederatedCloudShare shareType = 6
+)
 
 // ResourceType indicates the OCS type of the resource
 type ResourceType int
@@ -61,20 +73,6 @@ type Permissions uint
 // ShareType denotes a type of share
 type ShareType int
 
-const (
-	// ShareTypeUser refers to user shares
-	ShareTypeUser ShareType = 0
-
-	// ShareTypePublicLink refers to public link shares
-	ShareTypePublicLink ShareType = 3
-
-	// ShareTypeGroup represents a group share
-	// ShareTypeGroup shareType = 1
-
-	// ShareTypeFederatedCloudShare represents a federated share
-	// ShareTypeFederatedCloudShare shareType = 6
-)
-
 // Element is a commodity type wraps members of any interface (as per Owncloud's OCS V1 Spec)
 type Element struct {
 	Data interface{} `json:"element" xml:"element"`
@@ -84,25 +82,14 @@ type Element struct {
 type ShareData struct {
 	// TODO int?
 	ID string `json:"id" xml:"id"`
-	// The share’s type. This can be one of:
-	// 0 = user
-	// 1 = group
-	// 3 = public link
-	// 6 = federated cloud share
+	// The share’s type
 	ShareType ShareType `json:"share_type" xml:"share_type"`
 	// The username of the owner of the share.
 	UIDOwner string `json:"uid_owner" xml:"uid_owner"`
 	// The display name of the owner of the share.
 	DisplaynameOwner string `json:"displayname_owner" xml:"displayname_owner"`
-	// The permission attribute set on the file. Options are:
-	// * 1 = Read
-	// * 2 = Update
-	// * 4 = Create
-	// * 8 = Delete
-	// * 16 = Share
-	// * 31 = All permissions
-	// The default is 31, and for public shares is 1.
-	// TODO we should change the default to read only
+	// The permission attribute set on the file.
+	// TODO(jfd) change the default to read only
 	Permissions Permissions `json:"permissions" xml:"permissions"`
 	// The UNIX timestamp when the share was created.
 	STime uint64 `json:"stime" xml:"stime"`
@@ -125,13 +112,10 @@ type ShareData struct {
 	StorageID string `json:"storage_id" xml:"storage_id"`
 	Storage   uint64 `json:"storage" xml:"storage"`
 	// The unique node id of the item being shared.
-	// TODO int?
 	ItemSource string `json:"item_source" xml:"item_source"`
 	// The unique node id of the item being shared. For legacy reasons item_source and file_source attributes have the same value.
-	// TODO int?
 	FileSource string `json:"file_source" xml:"file_source"`
 	// The unique node id of the parent node of the item being shared.
-	// TODO int?
 	FileParent string `json:"file_parent" xml:"file_parent"`
 	// The name of the shared file.
 	FileTarget string `json:"file_target" xml:"file_target"`
@@ -174,9 +158,8 @@ type MatchValueData struct {
 	ShareWith string `json:"shareWith" xml:"shareWith"`
 }
 
-// Conversion functions. From cs3api types => ocs
-
 // Role2CS3Permissions converts string roles (from the request body) into cs3 permissions
+// TODO(refs) consider using a mask instead of booleans here, might reduce all this boilerplate
 func Role2CS3Permissions(r string) (*storageprovider.ResourcePermissions, error) {
 	switch r {
 	case RoleViewer:
