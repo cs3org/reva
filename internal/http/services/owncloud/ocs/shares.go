@@ -766,7 +766,7 @@ func (h *SharesHandler) addFilters(w http.ResponseWriter, r *http.Request) ([]*u
 			WriteOCSError(w, r, MetaNotFound.StatusCode, "not found", nil)
 			return filters, errors.New("fixme")
 		}
-		WriteOCSError(w, r, MetaServerError.StatusCode, "grpc stat request penis failed", err)
+		WriteOCSError(w, r, MetaServerError.StatusCode, "grpc stat request failed", err)
 		return filters, errors.New("fixme")
 	}
 
