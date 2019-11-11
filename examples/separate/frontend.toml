@@ -52,7 +52,7 @@ token_strategy = "header"
 token_writer = "header"
 token_manager = "jwt"
 skip_methods = [
-    "/owncloud/status.php",
+    "/status.php",
 	"/oauth2",
 	"/oauth2/auth", 
 	"/oauth2/token",
@@ -152,3 +152,77 @@ webdav_namespace = "/"
 # prefix = "ocs"
 # for user lookups and sharing
 gateway = "localhost:19000"
+
+
+# options for the /ocs/v1.php/config endpoint
+[http.services.ocs.config]
+version = "1.8"
+website = "reva"
+host = "http://localhost:20080"
+contact = "admin@localhost"
+ssl = "false"
+
+# options for the /ocs/v1.php/cloud/capabilities endpoint
+[http.services.ocs.capabilities.capabilities.core]
+poll_interval = 60
+webdav_root = "remote.php/webdav"
+[http.services.ocs.capabilities.capabilities.core.status]
+installed = true
+maintenance = false
+needsDbUpgrade = false
+version = "10.0.11.5"
+versionstring = "10.0.11"
+edition = "community"
+productname = "reva"
+hostname = ""
+[http.services.ocs.capabilities.capabilities.checksums]
+supported_types = ["SHA256"]
+preferred_upload_type = "SHA256"
+[http.services.ocs.capabilities.capabilities.files]
+private_links = false
+bigfilechunking = false
+blacklisted_files = []
+undelete = true
+versioning = true
+[http.services.ocs.capabilities.capabilities.dav]
+chunking = "1.0"
+[http.services.ocs.capabilities.capabilities.files_sharing]
+api_enabled = true
+resharing = true
+group_sharing = true
+auto_accept_share = true
+share_with_group_members_only = true
+share_with_membership_groups_only = true
+default_permissions = 22
+search_min_length = 3
+[http.services.ocs.capabilities.capabilities.files_sharing.public]
+enabled = true
+send_mail = true
+social_share = true
+upload = true
+multiple = true
+supports_upload_only = true
+[http.services.ocs.capabilities.capabilities.files_sharing.public.password]
+enforced = true
+[http.services.ocs.capabilities.capabilities.files_sharing.public.password.enforced_for]
+read_only = true
+read_write = true
+upload_only = true
+[http.services.ocs.capabilities.capabilities.files_sharing.public.expire_date]
+enabled = true
+[http.services.ocs.capabilities.capabilities.files_sharing.user]
+send_mail = true
+[http.services.ocs.capabilities.capabilities.files_sharing.user_enumeration]
+enabled = true
+group_members_only = true
+[http.services.ocs.capabilities.capabilities.files_sharing.federation]
+outgoing = true
+incoming = true
+[http.services.ocs.capabilities.capabilities.notifications]
+endpoints = ["list", "get", "delete"]
+[http.services.ocs.capabilities.version]
+edition = "reva"
+major = 10
+minor = 0
+micro = 11
+string = "10.0.11"
