@@ -33,6 +33,7 @@ import (
 	publicshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	storageregistryprovider "github.com/cs3org/go-cs3apis/cs3/storageregistry/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
 	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
@@ -45,13 +46,11 @@ import (
 
 // SharesHandler implements the ownCloud sharing API
 type SharesHandler struct {
-	gatewayAddr    string
-	filesNamespace string
+	gatewayAddr string
 }
 
 func (h *SharesHandler) init(c *Config) error {
 	h.gatewayAddr = c.GatewaySvc
-	h.filesNamespace = c.FilesNamespace
 	return nil
 }
 
@@ -219,18 +218,26 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		statReq := &storageproviderv0alphapb.StatRequest{
-			Ref: &storageproviderv0alphapb.Reference{
-				Spec: &storageproviderv0alphapb.Reference_Path{
-					Path: h.filesNamespace + r.FormValue("path"),
-				},
-			},
-		}
-
 		sClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting storage grpc client", err)
 			return
+		}
+
+		// append "home"
+		getHomeReq := storageregistryprovider.GetHomeRequest{}
+		getHomeRes, err := sClient.GetHome(ctx, &getHomeReq)
+		if err != nil {
+			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting user home", err)
+			return
+		}
+
+		statReq := &storageproviderv0alphapb.StatRequest{
+			Ref: &storageproviderv0alphapb.Reference{
+				Spec: &storageproviderv0alphapb.Reference_Path{
+					Path: getHomeRes.GetPath() + r.FormValue("path"),
+				},
+			},
 		}
 
 		statRes, err := sClient.Stat(ctx, statReq)
@@ -304,10 +311,17 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 
 		p := r.FormValue("path")
 
+		getHomeReq := storageregistryprovider.GetHomeRequest{}
+		getHomeRes, err := c.GetHome(ctx, &getHomeReq)
+		if err != nil {
+			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting user home", err)
+			return
+		}
+
 		statReq := storageproviderv0alphapb.StatRequest{
 			Ref: &storageproviderv0alphapb.Reference{
 				Spec: &storageproviderv0alphapb.Reference_Path{
-					Path: h.filesNamespace + p,
+					Path: getHomeRes.GetPath() + p,
 				},
 			},
 		}
@@ -563,50 +577,52 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	filters := []*usershareproviderv0alphapb.ListSharesRequest_Filter{}
 	var err error
 
-	// the only way to route shares (shared with me / shared by me) is via the query parameter "shared_with_me"
-	listSharedWithMe, err := strconv.ParseBool(r.FormValue("shared_with_me"))
-	if err != nil {
-		WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
-	}
-
-	if listSharedWithMe {
-		sharedWithMe := h.listSharedWithMe(r)
-
-		sClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	// do shared with me. Please abstract this piece, this reads like hell.
+	if r.FormValue("shared_with_me") != "" {
+		listSharedWithMe, err := strconv.ParseBool(r.FormValue("shared_with_me"))
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
 		}
+		if listSharedWithMe {
+			sharedWithMe := h.listSharedWithMe(r)
 
-		// TODO(refs) filter out "invalid" shares
-		for _, v := range sharedWithMe {
-			statRequest := storageproviderv0alphapb.StatRequest{
-				Ref: &storageproviderv0alphapb.Reference{
-					Spec: &storageproviderv0alphapb.Reference_Id{
-						Id: v.Share.ResourceId,
+			sClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+			if err != nil {
+				WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
+			}
+
+			// TODO(refs) filter out "invalid" shares
+			for _, v := range sharedWithMe {
+				statRequest := storageproviderv0alphapb.StatRequest{
+					Ref: &storageproviderv0alphapb.Reference{
+						Spec: &storageproviderv0alphapb.Reference_Id{
+							Id: v.Share.ResourceId,
+						},
 					},
-				},
+				}
+
+				statResponse, err := sClient.Stat(r.Context(), &statRequest)
+				if err != nil {
+					WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
+				}
+
+				data, err := h.userShare2ShareData(r.Context(), v.Share)
+				if err != nil {
+					WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
+				}
+
+				if h.addFileInfo(r.Context(), data, statResponse.Info) != nil {
+					WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
+				}
+
+				shares = append(shares, data)
 			}
 
-			statResponse, err := sClient.Stat(r.Context(), &statRequest)
-			if err != nil {
-				WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
-			}
-
-			data, err := h.userShare2ShareData(r.Context(), v.Share)
-			if err != nil {
-				WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
-			}
-
-			if h.addFileInfo(r.Context(), data, statResponse.Info) != nil {
-				WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
-			}
-
-			shares = append(shares, data)
+			WriteOCSSuccess(w, r, shares)
+			return
 		}
-
-		WriteOCSSuccess(w, r, shares)
-		return
 	}
+
 	// shared with others
 	p := r.URL.Query().Get("path")
 	if p != "" {
@@ -725,10 +741,16 @@ func (h *SharesHandler) addFilters(w http.ResponseWriter, r *http.Request) ([]*u
 		return nil, err
 	}
 
+	getHomeReq := storageregistryprovider.GetHomeRequest{}
+	getHomeRes, err := gwClient.GetHome(ctx, &getHomeReq)
+	if err != nil {
+		WriteOCSError(w, r, MetaServerError.StatusCode, "error getting user home", err)
+	}
+
 	statReq := &storageproviderv0alphapb.StatRequest{
 		Ref: &storageproviderv0alphapb.Reference{
 			Spec: &storageproviderv0alphapb.Reference_Path{
-				Path: h.filesNamespace + r.FormValue("path"),
+				Path: getHomeRes.GetPath() + r.FormValue("path"),
 			},
 		},
 	}
