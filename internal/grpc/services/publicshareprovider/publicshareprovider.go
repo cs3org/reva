@@ -97,9 +97,19 @@ func (s *service) CreatePublicShare(ctx context.Context, req *publicshareprovide
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("create public share")
 
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		log.Error().Msg("error getting user from context")
+	}
+
+	share, err := s.sm.CreatePublicShare(ctx, u, req.ResourceInfo, req.Grant)
+	if err != nil {
+		log.Debug().Err(err).Str("createShare", "shares").Msg("error connecting to storage provider")
+	}
+
 	res := &publicshareproviderv0alphapb.CreatePublicShareResponse{
 		Status: status.NewOK(ctx),
-		// Share:  share,
+		Share:  share,
 	}
 	return res, nil
 }

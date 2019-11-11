@@ -53,9 +53,9 @@ func (b *reg) ListProviders(ctx context.Context) ([]*storagetypespb.ProviderInfo
 // returns the the root path of the first provider in the list.
 // TODO(labkode): this is not production ready.
 func (b *reg) GetHome(ctx context.Context) (string, error) {
-	for _, v := range b.rules {
-		if strings.HasPrefix(v, "/") {
-			return v, nil
+	for k := range b.rules {
+		if strings.HasPrefix(k, "/") {
+			return k, nil
 		}
 	}
 	return "", errors.New("static: home not found")
