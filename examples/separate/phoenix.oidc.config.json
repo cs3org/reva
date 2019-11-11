@@ -13,6 +13,7 @@
     "apps": [
       "files",
       "markdown-editor",
-      "pdf-viewer"
+      "pdf-viewer",
+      "media-viewer"
     ]
   }
