@@ -33,7 +33,6 @@ import (
 	publicshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
-	storageregistryprovider "github.com/cs3org/go-cs3apis/cs3/storageregistry/v0alpha"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
 	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
@@ -224,18 +223,10 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// append "home"
-		getHomeReq := storageregistryprovider.GetHomeRequest{}
-		getHomeRes, err := sClient.GetHome(ctx, &getHomeReq)
-		if err != nil {
-			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting user home", err)
-			return
-		}
-
 		statReq := &storageproviderv0alphapb.StatRequest{
 			Ref: &storageproviderv0alphapb.Reference{
 				Spec: &storageproviderv0alphapb.Reference_Path{
-					Path: getHomeRes.GetPath() + r.FormValue("path"),
+					Path: r.FormValue("path"),
 				},
 			},
 		}
@@ -309,19 +300,10 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		p := r.FormValue("path")
-
-		getHomeReq := storageregistryprovider.GetHomeRequest{}
-		getHomeRes, err := c.GetHome(ctx, &getHomeReq)
-		if err != nil {
-			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting user home", err)
-			return
-		}
-
 		statReq := storageproviderv0alphapb.StatRequest{
 			Ref: &storageproviderv0alphapb.Reference{
 				Spec: &storageproviderv0alphapb.Reference_Path{
-					Path: getHomeRes.GetPath() + p,
+					Path: r.FormValue("path"),
 				},
 			},
 		}
@@ -582,6 +564,7 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 		listSharedWithMe, err := strconv.ParseBool(r.FormValue("shared_with_me"))
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
+			return
 		}
 		if listSharedWithMe {
 			sharedWithMe := h.listSharedWithMe(r)
@@ -589,6 +572,7 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 			sClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 			if err != nil {
 				WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
+				return
 			}
 
 			// TODO(refs) filter out "invalid" shares
@@ -604,15 +588,19 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 				statResponse, err := sClient.Stat(r.Context(), &statRequest)
 				if err != nil {
 					WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
+					return
 				}
 
 				data, err := h.userShare2ShareData(r.Context(), v.Share)
 				if err != nil {
 					WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
+					return
 				}
 
-				if h.addFileInfo(r.Context(), data, statResponse.Info) != nil {
+				err = h.addFileInfo(r.Context(), data, statResponse.Info)
+				if err != nil {
 					WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
+					return
 				}
 
 				shares = append(shares, data)
@@ -629,17 +617,20 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 		filters, err = h.addFilters(w, r)
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
+			return
 		}
 	}
 
 	userShares, err := h.listUserShares(r, filters)
 	if err != nil {
 		WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
+		return
 	}
 
 	publicShares, err := h.listPublicShares(r)
 	if err != nil {
 		WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
+		return
 	}
 
 	shares = append(shares, append(userShares, publicShares...)...)
@@ -741,16 +732,10 @@ func (h *SharesHandler) addFilters(w http.ResponseWriter, r *http.Request) ([]*u
 		return nil, err
 	}
 
-	getHomeReq := storageregistryprovider.GetHomeRequest{}
-	getHomeRes, err := gwClient.GetHome(ctx, &getHomeReq)
-	if err != nil {
-		WriteOCSError(w, r, MetaServerError.StatusCode, "error getting user home", err)
-	}
-
 	statReq := &storageproviderv0alphapb.StatRequest{
 		Ref: &storageproviderv0alphapb.Reference{
 			Spec: &storageproviderv0alphapb.Reference_Path{
-				Path: getHomeRes.GetPath() + r.FormValue("path"),
+				Path: r.FormValue("path"),
 			},
 		},
 	}
@@ -961,6 +946,7 @@ func mustGetGateway(addr string, r *http.Request, w http.ResponseWriter) gateway
 	client, err := pool.GetGatewayServiceClient(addr)
 	if err != nil {
 		WriteOCSError(w, r, MetaBadRequest.StatusCode, "no connection to gateway service", nil)
+		return nil
 	}
 
 	return client
