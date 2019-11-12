@@ -92,6 +92,7 @@ allowed_headers = [
 	"X-Requested-With",
 	"Authorization",
 	"Ocs-Apirequest",
+	"If-Match",
 	"If-None-Match",
 	"Destination",
 	"Overwrite"

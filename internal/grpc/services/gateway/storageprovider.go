@@ -408,11 +408,11 @@ func (s *svc) ListRecycle(ctx context.Context, req *gatewayv0alphapb.ListRecycle
 	queried := map[string]bool{}
 	for _, p := range lspres.GetProviders() {
 		pp := p.GetProviderPath()
-		if strings.HasPrefix(pp, "/") == false {
+		if !strings.HasPrefix(pp, "/") {
 			// only query storages reachable via a path
 			continue
 		}
-		if queried[p.GetProviderId()] == true {
+		if queried[p.GetProviderId()] {
 			// storages might be accessible from multiple paths
 			continue
 		}
@@ -435,10 +435,9 @@ func (s *svc) ListRecycle(ctx context.Context, req *gatewayv0alphapb.ListRecycle
 			return nil, err
 		}
 		if lrrres.Status.Code != rpcpb.Code_CODE_OK {
-			if err != nil {
-				err = errors.Wrap(err, "gateway: error calling ListRecycleRequest")
-				return nil, err
-			}
+			return &storageproviderv0alphapb.ListRecycleResponse{
+				Status: lrrres.Status,
+			}, err
 		}
 		// prefix the path?
 		// remove duplicates?
