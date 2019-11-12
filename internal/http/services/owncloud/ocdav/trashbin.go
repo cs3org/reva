@@ -106,8 +106,9 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 
 			urlPath := dstURL.Path
 
-			// baseURI is encoded as part of the response payload in href field
-			baseURI := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files", username)
+			// find path in url relative to trash base
+			trashBase := ctx.Value(ctxKeyBaseURI).(string)
+			baseURI := path.Join(path.Dir(trashBase), "files", username)
 			ctx = context.WithValue(ctx, ctxKeyBaseURI, baseURI)
 			r = r.WithContext(ctx)
 
@@ -359,11 +360,11 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	}
 
 	req := &storageproviderv0alphapb.RestoreRecycleItemRequest{
-		/* TODO(jfd) Ref is required ... but which resource should it reference?
+		// use the target path to find the storage provider
+		// this means we can only undelete on the same storage, not to a different folder
 		Ref: &storageproviderv0alphapb.Reference{
 			Spec: &storageproviderv0alphapb.Reference_Path{Path: dst},
 		},
-		*/
 		Key:         key,
 		RestorePath: dst,
 	}
