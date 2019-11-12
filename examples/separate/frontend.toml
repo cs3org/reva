@@ -70,8 +70,32 @@ secret = "Pive-Fumkiu4"
 
 [http.middlewares.cors]
 allowed_origins = ["*"]
-allowed_methods = ["OPTIONS", "GET", "PUT", "POST", "DELETE", "MKCOL", "PROPFIND", "PROPPATCH", "MOVE", "COPY", "REPORT", "SEARCH"]
-allowed_headers = ["Origin", "Accept", "Depth", "Content-Type", "X-Requested-With", "Authorization", "Ocs-Apirequest", "If-None-Match"]
+allowed_methods = [
+	"OPTIONS",
+	"GET",
+	"PUT",
+	"POST",
+	"DELETE",
+	"MKCOL",
+	"PROPFIND",
+	"PROPPATCH",
+	"MOVE",
+	"COPY",
+	"REPORT",
+	"SEARCH"
+]
+allowed_headers = [
+	"Origin",
+	"Accept",
+	"Depth",
+	"Content-Type",
+	"X-Requested-With",
+	"Authorization",
+	"Ocs-Apirequest",
+	"If-None-Match",
+	"Destination",
+	"Overwrite"
+]
 allow_credentials = true
 options_passthrough = false
 
