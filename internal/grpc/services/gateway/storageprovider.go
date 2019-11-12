@@ -453,9 +453,23 @@ func (s *svc) ListRecycle(ctx context.Context, req *gatewayv0alphapb.ListRecycle
 }
 
 func (s *svc) RestoreRecycleItem(ctx context.Context, req *storageproviderv0alphapb.RestoreRecycleItemRequest) (*storageproviderv0alphapb.RestoreRecycleItemResponse, error) {
-	res := &storageproviderv0alphapb.RestoreRecycleItemResponse{
-		Status: status.NewUnimplemented(ctx, nil, "RestoreRecycleItem not yet implemented"),
+	c, err := s.find(ctx, req.Ref)
+	if err != nil {
+		if _, ok := err.(errtypes.IsNotFound); ok {
+			return &storageproviderv0alphapb.RestoreRecycleItemResponse{
+				Status: status.NewNotFound(ctx, "storage provider not found"),
+			}, nil
+		}
+		return &storageproviderv0alphapb.RestoreRecycleItemResponse{
+			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+		}, nil
 	}
+
+	res, err := c.RestoreRecycleItem(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling RestoreRecycleItem")
+	}
+
 	return res, nil
 }
 
