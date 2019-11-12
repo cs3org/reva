@@ -21,6 +21,8 @@ package gateway
 import (
 	"context"
 	"net/url"
+	"path"
+	"strings"
 	"time"
 
 	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
@@ -377,12 +379,76 @@ func (s *svc) ListRecycleStream(req *gatewayv0alphapb.ListRecycleStreamRequest, 
 	return errors.New("Unimplemented")
 }
 
+// TODO allow passing a path prefix to limit the ListRecycle to a specific storage
 func (s *svc) ListRecycle(ctx context.Context, req *gatewayv0alphapb.ListRecycleRequest) (*storageproviderv0alphapb.ListRecycleResponse, error) {
-	// TODO(labkode): query all available storage providers to get unified list as the request does not come
+	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error getting storage registry client")
+		return nil, err
+	}
+
+	lspres, err := c.ListStorageProviders(ctx, &storageregistryv0alphapb.ListStorageProvidersRequest{})
+
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error calling ListStorageProviders")
+		return nil, err
+	}
+	if lspres.Status.Code != rpcpb.Code_CODE_OK {
+		return &storageproviderv0alphapb.ListRecycleResponse{
+			Status: lspres.Status,
+		}, err
+	}
+
+	// query all available storage providers to get unified list as the request does not come
 	// with ref information to target only one storage provider.
 	res := &storageproviderv0alphapb.ListRecycleResponse{
-		Status: status.NewUnimplemented(ctx, nil, "ListRecycle not yet implemented"),
+		Status:       status.NewOK(ctx),
+		RecycleItems: []*storageproviderv0alphapb.RecycleItem{},
 	}
+	queried := map[string]bool{}
+	for _, p := range lspres.GetProviders() {
+		pp := p.GetProviderPath()
+		if strings.HasPrefix(pp, "/") == false {
+			// only query storages reachable via a path
+			continue
+		}
+		if queried[p.GetProviderId()] == true {
+			// storages might be accessible from multiple paths
+			continue
+		}
+		// remember which storage we queried
+		queried[p.GetProviderId()] = true
+		pc, err := pool.GetStorageProviderServiceClient(p.GetAddress())
+		if err != nil {
+			// TODO continue with other storages to be more resilient!
+			// how do we make the user aware that some storages are not available?
+			// opaque response property? Or a list of errors?
+			// add a recycle entry with the path to the storage that produced the error?
+			err = errors.Wrap(err, "gateway: error getting storage provider client")
+			return nil, err
+		}
+
+		lrrres, err := pc.ListRecycle(ctx, &storageproviderv0alphapb.ListRecycleRequest{})
+
+		if err != nil {
+			err = errors.Wrap(err, "gateway: error calling ListRecycleRequest")
+			return nil, err
+		}
+		if lrrres.Status.Code != rpcpb.Code_CODE_OK {
+			if err != nil {
+				err = errors.Wrap(err, "gateway: error calling ListRecycleRequest")
+				return nil, err
+			}
+		}
+		// prefix the path?
+		// remove duplicates?
+		items := lrrres.GetRecycleItems()
+		for i := range items {
+			items[i].Path = path.Join(p.GetProviderPath(), items[i].GetPath())
+		}
+		res.RecycleItems = append(res.RecycleItems, items...)
+	}
+
 	return res, nil
 }
 
