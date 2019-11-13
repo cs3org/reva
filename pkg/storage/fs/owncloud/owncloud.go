@@ -140,6 +140,7 @@ const (
 	sharePrefix       string = "user.oc.acl."
 	trashOriginPrefix string = "user.oc.o"
 	mdPrefix          string = "user.oc.md."   // arbitrary metadada
+	favPrefix         string = "user.oc.fav."  // favorite flag, per user
 	etagPrefix        string = "user.oc.etag." // allow overriding a calculated etag with one from the extended attributes
 )
 
@@ -324,7 +325,7 @@ func (fs *ocFS) getRecyclePath(ctx context.Context) (string, error) {
 		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
 		return "", err
 	}
-	return path.Join(fs.c.DataDirectory, u.Username, "files_trashbin/files"), nil
+	return path.Join(fs.c.DataDirectory, u.GetUsername(), "files_trashbin/files"), nil
 }
 
 func (fs *ocFS) removeNamespace(ctx context.Context, np string) string {
@@ -374,6 +375,27 @@ func (fs *ocFS) convertToResourceInfo(ctx context.Context, fi os.FileInfo, np st
 		etag = string(val)
 	}
 
+	// TODO how do we tell the storage providen/driver which arbitrary metadata to retrieve? an analogy to webdav allprops or a list of requested properties
+	favorite := ""
+	if u, ok := user.ContextGetUser(ctx); ok {
+		// the favorite flag is specific to the user, so we need to incorporate the userid
+		if uid := u.GetId(); uid != nil {
+			fa := fmt.Sprintf("%s%s@%s", favPrefix, uid.GetOpaqueId(), uid.GetIdp())
+			if val, err := xattr.Get(np, fa); err == nil {
+				appctx.GetLogger(ctx).Debug().
+					Str("np", np).
+					Str("favorite", string(val)).
+					Str("username", u.GetUsername()).
+					Msg("found favorite flag")
+				favorite = string(val)
+			}
+		} else {
+			appctx.GetLogger(ctx).Error().Err(errtypes.UserRequired("userrequired")).Msg("user has no id")
+		}
+	} else {
+		appctx.GetLogger(ctx).Error().Err(errtypes.UserRequired("userrequired")).Msg("error getting user from ctx")
+	}
+
 	return &storageproviderv0alphapb.ResourceInfo{
 		Id:            &storageproviderv0alphapb.ResourceId{OpaqueId: id},
 		Path:          fn,
@@ -386,6 +408,11 @@ func (fs *ocFS) convertToResourceInfo(ctx context.Context, fi os.FileInfo, np st
 		Mtime: &typespb.Timestamp{
 			Seconds: uint64(fi.ModTime().Unix()),
 			// TODO read nanos from where? Nanos:   fi.MTimeNanos,
+		},
+		ArbitraryMetadata: &storageproviderv0alphapb.ArbitraryMetadata{
+			Metadata: map[string]string{
+				"http://owncloud.org/ns/favorite": favorite,
+			},
 		},
 	}
 }
@@ -874,26 +901,25 @@ func (fs *ocFS) SetArbitraryMetadata(ctx context.Context, ref *storageproviderv0
 		return errors.Wrap(err, "ocFS: error stating "+np)
 	}
 
-	var mtime time.Time
-	var mtimeErr, etagErr, mdErr error
+	errs := []error{}
 
 	if md.Metadata != nil {
 		if val, ok := md.Metadata["mtime"]; ok {
-			if mtime, mtimeErr = parseMTime(val); mtimeErr == nil {
+			if mtime, err := parseMTime(val); err == nil {
 				// updating mtime also updates atime
-				if mtimeErr = os.Chtimes(np, mtime, mtime); mtimeErr != nil {
-					log.Error().Err(mtimeErr).
+				if err := os.Chtimes(np, mtime, mtime); err != nil {
+					log.Error().Err(err).
 						Str("np", np).
 						Time("mtime", mtime).
 						Msg("could not set mtime")
-					err = errors.Wrapf(err, "could not set mtime")
+					errs = append(errs, errors.Wrap(err, "could not set mtime"))
 				}
 			} else {
-				log.Error().Err(mtimeErr).
+				log.Error().Err(err).
 					Str("np", np).
 					Str("val", val).
 					Msg("could not parse mtime")
-				err = errors.Wrapf(err, "could not parse mtime")
+				errs = append(errs, errors.Wrap(err, "could not parse mtime"))
 			}
 			// remove from metadata
 			delete(md.Metadata, "mtime")
@@ -911,29 +937,82 @@ func (fs *ocFS) SetArbitraryMetadata(ctx context.Context, ref *storageproviderv0
 			} else
 			// etag is only valid until the calculated etag changes
 			// TODO(jfd) cleanup in a batch job
-			if etagErr = xattr.Set(np, etagPrefix+etag, []byte(val)); etagErr != nil {
-
-				log.Error().Err(etagErr).
+			if err := xattr.Set(np, etagPrefix+etag, []byte(val)); err != nil {
+				log.Error().Err(err).
 					Str("np", np).
 					Str("calcetag", etag).
 					Str("etag", val).
 					Msg("could not set etag")
-				err = errors.Wrapf(err, "could not set etag")
+				errs = append(errs, errors.Wrap(err, "could not set etag"))
 			}
 			delete(md.Metadata, "etag")
 		}
+		if val, ok := md.Metadata["http://owncloud.org/ns/favorite"]; ok {
+			// TODO we should not mess with the user here ... the favorites is now a user specific property for a file
+			// that cannot be mapped to extended attributes without leaking who has marked a file as a favorite
+			// it is a specific case of a tag, which is user individual as well
+			// TODO there are different types of tags
+			// 1. public that are maganed by everyone
+			// 2. private tags that are only visible to the user
+			// 3. system tags that are only visible to the system
+			// 4. group tags that are only visible to a group ...
+			// urgh ... well this can be solved using different namespaces
+			// 1. public = p:
+			// 2. private = u:<uid>: for user specific
+			// 3. system = s: for system
+			// 4. group = g:<gid>:
+			// 5. app? = a:<aid>: for apps?
+			// obviously this only is secure when the u/s/g/a namespaces are not accessible by users in the filesystem
+			// public tags can be mapped to extended attributes
+			if u, ok := user.ContextGetUser(ctx); ok {
+				// the favorite flag is specific to the user, so we need to incorporate the userid
+				if uid := u.GetId(); uid != nil {
+					fa := fmt.Sprintf("%s%s@%s", favPrefix, uid.GetOpaqueId(), uid.GetIdp())
+					if err := xattr.Set(np, fa, []byte(val)); err != nil {
+						log.Error().Err(err).
+							Str("np", np).
+							Interface("user", u).
+							Str("key", fa).
+							Msg("could not set favorite flag")
+						errs = append(errs, errors.Wrap(err, "could not set favorite flag"))
+					}
+				} else {
+					log.Error().
+						Str("np", np).
+						Interface("user", u).
+						Msg("user has no id")
+					errs = append(errs, errors.Wrap(errtypes.UserRequired("userrequired"), "user has no id"))
+				}
+			} else {
+				log.Error().
+					Str("np", np).
+					Interface("user", u).
+					Msg("error getting user from ctx")
+				errs = append(errs, errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx"))
+			}
+			// remove from metadata
+			delete(md.Metadata, "http://owncloud.org/ns/favorite")
+		}
 	}
 	for k, v := range md.Metadata {
-		if mdErr = xattr.Set(np, mdPrefix+k, []byte(v)); mdErr != nil {
-			log.Error().Err(etagErr).
+		if err := xattr.Set(np, mdPrefix+k, []byte(v)); err != nil {
+			log.Error().Err(err).
 				Str("np", np).
 				Str("key", k).
 				Str("val", v).
 				Msg("could not set metadata")
-			err = errors.Wrapf(mdErr, "could not set metadata")
+			errs = append(errs, errors.Wrap(err, "could not set metadata"))
 		}
 	}
-	return err
+	switch len(errs) {
+	case 0:
+		return nil
+	case 1:
+		return errs[0]
+	default:
+		// TODO how to return multiple errors?
+		return errors.New("multiple errors occurred, see log for details")
+	}
 }
 
 func parseMTime(v string) (t time.Time, err error) {
@@ -963,16 +1042,56 @@ func (fs *ocFS) UnsetArbitraryMetadata(ctx context.Context, ref *storageprovider
 		return errors.Wrap(err, "ocFS: error stating "+np)
 	}
 
+	errs := []error{}
 	for _, k := range keys {
-		if err = xattr.Remove(np, mdPrefix+k); err != nil {
-			log.Error().Err(err).
-				Str("np", np).
-				Str("key", k).
-				Msg("could not set metadata")
-			err = errors.Wrapf(err, "could not unset metadata")
+		switch k {
+		case "http://owncloud.org/ns/favorite":
+			if u, ok := user.ContextGetUser(ctx); ok {
+				// the favorite flag is specific to the user, so we need to incorporate the userid
+				if uid := u.GetId(); uid != nil {
+					fa := fmt.Sprintf("%s%s@%s", favPrefix, uid.GetOpaqueId(), uid.GetIdp())
+					if err := xattr.Remove(np, fa); err != nil {
+						log.Error().Err(err).
+							Str("np", np).
+							Interface("user", u).
+							Str("key", fa).
+							Msg("could not unset favorite flag")
+						errs = append(errs, errors.Wrap(err, "could not unset favorite flag"))
+					}
+				} else {
+					log.Error().
+						Str("np", np).
+						Interface("user", u).
+						Msg("user has no id")
+					errs = append(errs, errors.Wrap(errtypes.UserRequired("userrequired"), "user has no id"))
+				}
+			} else {
+				log.Error().
+					Str("np", np).
+					Interface("user", u).
+					Msg("error getting user from ctx")
+				errs = append(errs, errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx"))
+			}
+		default:
+			if err = xattr.Remove(np, mdPrefix+k); err != nil {
+				log.Error().Err(err).
+					Str("np", np).
+					Str("key", k).
+					Msg("could not unset metadata")
+				errs = append(errs, errors.Wrap(err, "could not unset metadata"))
+			}
 		}
 	}
-	return err
+
+	switch len(errs) {
+	case 0:
+		return nil
+	case 1:
+		return errs[0]
+	default:
+		// TODO how to return multiple errors?
+		return errors.New("multiple errors occurred, see log for details")
+	}
 }
 
 // Delete is actually only a move to trash
@@ -1375,7 +1494,7 @@ func (fs *ocFS) RestoreRecycleItem(ctx context.Context, key string) error {
 	} else {
 		origin = path.Clean(string(v))
 	}
-	tgt := path.Join(fs.getInternalPath(ctx, path.Join("/", u.Username, origin)), strings.TrimSuffix(path.Base(src), suffix))
+	tgt := path.Join(fs.getInternalPath(ctx, path.Join("/", u.GetUsername(), origin)), strings.TrimSuffix(path.Base(src), suffix))
 	// move back to original location
 	if err := os.Rename(src, tgt); err != nil {
 		log.Error().Err(err).Str("path", src).Msg("could not restore item")
