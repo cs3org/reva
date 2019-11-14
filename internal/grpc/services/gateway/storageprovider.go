@@ -21,8 +21,6 @@ package gateway
 import (
 	"context"
 	"net/url"
-	"path"
-	"strings"
 	"time"
 
 	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
@@ -379,73 +377,27 @@ func (s *svc) ListRecycleStream(req *gatewayv0alphapb.ListRecycleStreamRequest, 
 	return errors.New("Unimplemented")
 }
 
-// TODO allow passing a path prefix to limit the ListRecycle to a specific storage
+// TODO use the ListRecycleRequest.Ref to only list the trish of a specific storage
 func (s *svc) ListRecycle(ctx context.Context, req *gatewayv0alphapb.ListRecycleRequest) (*storageproviderv0alphapb.ListRecycleResponse, error) {
-	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
+	c, err := s.find(ctx, req.GetRef())
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error getting storage registry client")
-		return nil, err
-	}
-
-	lspres, err := c.ListStorageProviders(ctx, &storageregistryv0alphapb.ListStorageProvidersRequest{})
-
-	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling ListStorageProviders")
-		return nil, err
-	}
-	if lspres.Status.Code != rpcpb.Code_CODE_OK {
-		return &storageproviderv0alphapb.ListRecycleResponse{
-			Status: lspres.Status,
-		}, err
-	}
-
-	// query all available storage providers to get unified list as the request does not come
-	// with ref information to target only one storage provider.
-	res := &storageproviderv0alphapb.ListRecycleResponse{
-		Status:       status.NewOK(ctx),
-		RecycleItems: []*storageproviderv0alphapb.RecycleItem{},
-	}
-	queried := map[string]bool{}
-	for _, p := range lspres.GetProviders() {
-		pp := p.GetProviderPath()
-		if !strings.HasPrefix(pp, "/") {
-			// only query storages reachable via a path
-			continue
-		}
-		if queried[p.GetProviderId()] {
-			// storages might be accessible from multiple paths
-			continue
-		}
-		// remember which storage we queried
-		queried[p.GetProviderId()] = true
-		pc, err := pool.GetStorageProviderServiceClient(p.GetAddress())
-		if err != nil {
-			// TODO continue with other storages to be more resilient!
-			// how do we make the user aware that some storages are not available?
-			// opaque response property? Or a list of errors?
-			// add a recycle entry with the path to the storage that produced the error?
-			err = errors.Wrap(err, "gateway: error getting storage provider client")
-			return nil, err
-		}
-
-		lrrres, err := pc.ListRecycle(ctx, &storageproviderv0alphapb.ListRecycleRequest{})
-
-		if err != nil {
-			err = errors.Wrap(err, "gateway: error calling ListRecycleRequest")
-			return nil, err
-		}
-		if lrrres.Status.Code != rpcpb.Code_CODE_OK {
+		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &storageproviderv0alphapb.ListRecycleResponse{
-				Status: lrrres.Status,
-			}, err
+				Status: status.NewNotFound(ctx, "storage provider not found"),
+			}, nil
 		}
-		// prefix the path?
-		// remove duplicates?
-		items := lrrres.GetRecycleItems()
-		for i := range items {
-			items[i].Path = path.Join(p.GetProviderPath(), items[i].GetPath())
-		}
-		res.RecycleItems = append(res.RecycleItems, items...)
+		return &storageproviderv0alphapb.ListRecycleResponse{
+			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+		}, nil
+	}
+
+	res, err := c.ListRecycle(ctx, &storageproviderv0alphapb.ListRecycleRequest{
+		Opaque: req.Opaque,
+		FromTs: req.FromTs,
+		ToTs:   req.ToTs,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling ListRecycleRequest")
 	}
 
 	return res, nil
@@ -473,8 +425,25 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *storageproviderv0alph
 }
 
 func (s *svc) PurgeRecycle(ctx context.Context, req *gatewayv0alphapb.PurgeRecycleRequest) (*storageproviderv0alphapb.PurgeRecycleResponse, error) {
-	res := &storageproviderv0alphapb.PurgeRecycleResponse{
-		Status: status.NewUnimplemented(ctx, nil, "PurgeRecycle not yet implemented"),
+	// lookup storagy by treating the key as a path. It has been prefixed with the storage path in ListRecycle
+	c, err := s.find(ctx, req.Ref)
+	if err != nil {
+		if _, ok := err.(errtypes.IsNotFound); ok {
+			return &storageproviderv0alphapb.PurgeRecycleResponse{
+				Status: status.NewNotFound(ctx, "storage provider not found"),
+			}, nil
+		}
+		return &storageproviderv0alphapb.PurgeRecycleResponse{
+			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+		}, nil
+	}
+
+	res, err := c.PurgeRecycle(ctx, &storageproviderv0alphapb.PurgeRecycleRequest{
+		Opaque: req.GetOpaque(),
+		Ref:    req.GetRef(),
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling PurgeRecycle")
 	}
 	return res, nil
 }
