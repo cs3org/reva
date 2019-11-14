@@ -39,7 +39,7 @@ import (
 )
 
 // ns is the namespace that is prefixed to the path in the cs3 namespace
-func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request, ns string) {
+func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "propfind")
 	defer span.End()

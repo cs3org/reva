@@ -29,7 +29,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 )
 
-func (s *svc) doMove(w http.ResponseWriter, r *http.Request, ns string) {
+func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 	src := path.Join(ns, r.URL.Path)

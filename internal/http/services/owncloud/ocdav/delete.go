@@ -27,7 +27,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 )
 
-func (s *svc) doDelete(w http.ResponseWriter, r *http.Request, ns string) {
+func (s *svc) handleDelete(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 	fn := path.Join(ns, r.URL.Path)

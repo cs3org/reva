@@ -18,7 +18,9 @@
 
 package ocdav
 
-import "net/http"
+import (
+	"net/http"
+)
 
 // PublicFilesHandler handles public files requests
 type PublicFilesHandler struct{}
@@ -26,6 +28,11 @@ type PublicFilesHandler struct{}
 // Handler implements http.Handler interface
 func (p *PublicFilesHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "PROPFIND":
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
 		w.WriteHeader(http.StatusNotImplemented)
 	})
 }

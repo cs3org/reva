@@ -23,6 +23,6 @@ import (
 )
 
 //TODO(jfd): implement unlock
-func (s *svc) doUnlock(w http.ResponseWriter, r *http.Request, ns string) {
-	w.WriteHeader(http.StatusNoContent)
+func (s *svc) handleUnlock(w http.ResponseWriter, r *http.Request, ns string) {
+	w.WriteHeader(http.StatusNotImplemented)
 }

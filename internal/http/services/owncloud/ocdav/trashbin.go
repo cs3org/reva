@@ -53,7 +53,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 		log := appctx.GetLogger(ctx)
 
 		if r.Method == http.MethodOptions {
-			s.doOptions(w, r, "trashbin")
+			s.handleOptions(w, r, "trashbin")
 			return
 		}
 
@@ -81,7 +81,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 		var key string
 		key, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
 		if r.Method == http.MethodOptions {
-			s.doOptions(w, r, "trashbin")
+			s.handleOptions(w, r, "trashbin")
 			return
 		}
 		if key == "" && r.Method == "PROPFIND" {

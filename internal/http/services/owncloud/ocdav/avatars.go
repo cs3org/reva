@@ -44,7 +44,7 @@ func (h *AvatarsHandler) Handler(s *svc) http.Handler {
 			// no need for the user, and we need to be able
 			// to answer preflight checks, which have no auth headers
 			r.URL.Path = "/" // always use / ... we just want the options answered so phoenix doesnt hiccup
-			s.doOptions(w, r, "avatars")
+			s.handleOptions(w, r, "avatars")
 			return
 		}
 
