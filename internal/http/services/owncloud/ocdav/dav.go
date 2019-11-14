@@ -81,6 +81,8 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
 			r = r.WithContext(ctx)
 			h.TrashbinHandler.Handler(s).ServeHTTP(w, r)
+		case "public-files":
+			w.WriteHeader(http.StatusNotImplemented)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
