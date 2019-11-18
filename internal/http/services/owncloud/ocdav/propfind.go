@@ -251,8 +251,17 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *storage
 			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:checksums", value))
 		}
 
-		// TODO: read favorite via separate call? that would be expensive? I hope it is in the md
-		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:favorite", "0"))
+		// favorites from arbitrary metadata
+		if k := md.GetArbitraryMetadata(); k == nil {
+			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:favorite", "0"))
+		} else if amd := k.GetMetadata(); amd == nil {
+			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:favorite", "0"))
+		} else if v, ok := amd["http://owncloud.org/ns/favorite"]; ok && v != "" {
+			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:favorite", "1"))
+		} else {
+			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:favorite", "0"))
+		}
+		// TODO return other properties ... but how do we put them in a namespace?
 	} else {
 		// otherwise return only the requested properties
 		propstatOK := propstatXML{
@@ -300,9 +309,18 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *storage
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:owner-id", ""))
 					}
 				case "favorite": // phoenix only
-					// can be 0 or 1
+					// TODO: can be 0 or 1?, in oc10 it is present or not
 					// TODO: read favorite via separate call? that would be expensive? I hope it is in the md
-					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
+					// TODO: this boolean favorite property is so horribly wrong ... either it is presont, or it is not ... unless ... it is possible to have a non binary value ... we need to double check
+					if k := md.GetArbitraryMetadata(); k == nil {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
+					} else if amd := k.GetMetadata(); amd == nil {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
+					} else if v, ok := amd["http://owncloud.org/ns/favorite"]; ok && v != "" {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "1"))
+					} else {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
+					}
 				case "checksums": // desktop
 					if md.Checksum != nil {
 						// TODO(jfd): the actual value is an abomination like this:
