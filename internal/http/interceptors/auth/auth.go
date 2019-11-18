@@ -76,9 +76,11 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-func skip(url string, skipped []string) bool {
-	for i := range skipped {
-		if strings.HasPrefix(skipped[i], url) {
+// skip evaluates whether a source url is a subpath of base
+// i.e: /a/b/c/d/e is a subpath of /a/b/c
+func skip(source string, base []string) bool {
+	for i := range base {
+		if strings.HasPrefix(source, base[i]) {
 			return true
 		}
 	}
