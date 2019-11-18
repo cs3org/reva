@@ -24,32 +24,181 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path"
+	"strings"
 
+	"go.opencensus.io/trace"
+
+	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
+	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/pkg/errors"
 )
 
 func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
+	ctx, span := trace.StartSpan(ctx, "proppatch")
+	defer span.End()
 	log := appctx.GetLogger(ctx)
-	//fn := path.Join(ns, r.URL.Path)
 
-	_, status, err := readProppatch(r.Body)
+	fn := path.Join(ns, r.URL.Path)
+
+	pp, status, err := readProppatch(r.Body)
 	if err != nil {
 		log.Error().Err(err).Msg("error reading proppatch")
 		w.WriteHeader(status)
 		return
 	}
 
-	_, err = s.getClient()
+	c, err := s.getClient()
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	// TODO(jfd): implement properties
 
-	w.WriteHeader(http.StatusNotImplemented)
+	mkeys := []string{}
+
+	pf := &propfindXML{
+		Prop: propfindProps{},
+	}
+	rreq := &storageproviderv0alphapb.UnsetArbitraryMetadataRequest{
+		Ref: &storageproviderv0alphapb.Reference{
+			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+		},
+		ArbitraryMetadataKeys: []string{},
+	}
+	sreq := &storageproviderv0alphapb.SetArbitraryMetadataRequest{
+		Ref: &storageproviderv0alphapb.Reference{
+			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+		},
+		ArbitraryMetadata: &storageproviderv0alphapb.ArbitraryMetadata{
+			Metadata: map[string]string{},
+		},
+	}
+	for i := range pp {
+		if len(pp[i].Props) < 1 {
+			continue
+		}
+		for j := range pp[i].Props {
+			pf.Prop = append(pf.Prop, pp[i].Props[j].XMLName)
+			// don't use path.Join. It removes the double slash! concatenate with a /
+			key := fmt.Sprintf("%s/%s", pp[i].Props[j].XMLName.Space, pp[i].Props[j].XMLName.Local)
+			value := string(pp[i].Props[j].InnerXML)
+			remove := pp[i].Remove
+			// boolean flags may be "set" to false as well
+			if s.isBooleanProperty(key) {
+				// Make boolean properties either "0" or "1"
+				value = s.as0or1(value)
+				if value == "0" {
+					remove = true
+				}
+			}
+			if remove {
+				rreq.ArbitraryMetadataKeys = append(rreq.ArbitraryMetadataKeys, key)
+			} else {
+				sreq.ArbitraryMetadata.Metadata[key] = value
+			}
+			mkeys = append(mkeys, key)
+		}
+		// what do we need to unset
+		if len(rreq.ArbitraryMetadataKeys) > 0 {
+			res, err := c.UnsetArbitraryMetadata(ctx, rreq)
+			if err != nil {
+				log.Error().Err(err).Msg("error sending a grpc UnsetArbitraryMetadata request")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			if res.Status.Code != rpcpb.Code_CODE_OK {
+				if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+					log.Warn().Str("path", fn).Msg("resource not found")
+					w.WriteHeader(http.StatusNotFound)
+					return
+				}
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+		}
+		if len(sreq.ArbitraryMetadata.Metadata) > 0 {
+			res, err := c.SetArbitraryMetadata(ctx, sreq)
+			if err != nil {
+				log.Error().Err(err).Msg("error sending a grpc SetArbitraryMetadata request")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			if res.Status.Code != rpcpb.Code_CODE_OK {
+				if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+					log.Warn().Str("path", fn).Msg("resource not found")
+					w.WriteHeader(http.StatusNotFound)
+					return
+				}
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+		}
+	}
+
+	req := &storageproviderv0alphapb.StatRequest{
+		Ref: &storageproviderv0alphapb.Reference{
+			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+		},
+		ArbitraryMetadataKeys: mkeys,
+	}
+	res, err := c.Stat(ctx, req)
+	if err != nil {
+		log.Error().Err(err).Msg("error sending a grpc stat request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if res.Status.Code != rpcpb.Code_CODE_OK {
+		if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+			log.Warn().Str("path", fn).Msg("resource not found")
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	info := res.Info
+	infos := []*storageproviderv0alphapb.ResourceInfo{info}
+
+	propRes, err := s.formatPropfind(ctx, pf, infos, ns)
+	if err != nil {
+		log.Error().Err(err).Msg("error formatting propfind")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("DAV", "1, 3, extended-mkcol")
+	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+	w.WriteHeader(http.StatusMultiStatus)
+	if _, err := w.Write([]byte(propRes)); err != nil {
+		log.Err(err).Msg("error writing response")
+	}
+}
+
+func (s *svc) isBooleanProperty(prop string) bool {
+	// TODO add other properties we know to be boolean?
+	return prop == "http://owncloud.org/ns/favorite"
+}
+
+func (s *svc) as0or1(val string) string {
+	switch strings.TrimSpace(val) {
+	case "false":
+		return "0"
+	case "":
+		return "0"
+	case "0":
+		return "0"
+	case "no":
+		return "0"
+	case "off":
+		return "0"
+	}
+	return "1"
 }
 
 // Proppatch describes a property update instruction as defined in RFC 4918.
