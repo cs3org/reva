@@ -57,12 +57,13 @@ type mgr struct {
 // TODO(labkode): add support for multiple clients, like we do in the oidc provider http svc.
 type config struct {
 	// the endpoint of the oidc provider
-	Insecure     bool   `mapstructure:"insecure"`
-	SkipCheck    bool   `mapstructure:"skipcheck"`
-	Provider     string `mapstructure:"provider"`
-	Audience     string `mapstructure:"audience"`
-	ClientID     string `mapstructure:"client_id"`
-	ClientSecret string `mapstructure:"client_secret"`
+	Insecure     bool     `mapstructure:"insecure"`
+	SkipCheck    bool     `mapstructure:"skipcheck"`
+	Provider     string   `mapstructure:"provider"`
+	Audience     string   `mapstructure:"audience"`
+	SigningAlgs  []string `mapstructure:"signing_algorithms"`
+	ClientID     string   `mapstructure:"client_id"`
+	ClientSecret string   `mapstructure:"client_secret"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -76,6 +77,9 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 func (c *config) init() {
 	// TODO set defaults for dev env
+	if len(c.SigningAlgs) < 1 {
+		c.SigningAlgs = []string{"RS256", "PS256"}
+	}
 }
 
 // ClaimsKey is the key for oidc claims in a context
@@ -138,12 +142,15 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, token string) (*types
 
 		log.Debug().Msg("no introspection endpoint, trying to decode token as jwt")
 		//maybe our access token is a jwt token
-		var verifier *oidc.IDTokenVerifier
-		if am.skipCheck { // not safe but only way for simplesamlphp to work with an almost compliant oidc (for now)
-			verifier = provider.Verifier(&oidc.Config{SkipClientIDCheck: true, SkipIssuerCheck: true})
-		} else {
-			verifier = provider.Verifier(&oidc.Config{ClientID: am.audience})
+		c := &oidc.Config{
+			ClientID:             am.audience,
+			SupportedSigningAlgs: []string{"RS256", "PS256"},
 		}
+		if am.skipCheck { // not safe but only way for simplesamlphp to work with an almost compliant oidc (for now)
+			c.SkipClientIDCheck = true
+			c.SkipIssuerCheck = true
+		}
+		verifier := provider.Verifier(c)
 		idToken, err := verifier.Verify(customCtx, token)
 		if err != nil {
 			return nil, fmt.Errorf("could not verify jwt: %v", err)
