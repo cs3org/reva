@@ -16,11 +16,27 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package noop
 
 import (
-	// Load core token writer strategies.
-	_ "github.com/cs3org/reva/internal/http/interceptors/auth/tokenwriter/strategy/header"
-	_ "github.com/cs3org/reva/internal/http/interceptors/auth/tokenwriter/strategy/noop"
-	// Add your own here.
+	"net/http"
+
+	"github.com/cs3org/reva/internal/http/interceptors/auth/tokenwriter/registry"
+	"github.com/cs3org/reva/pkg/auth"
 )
+
+func init() {
+	registry.Register("noop", New)
+}
+
+type strategy struct {
+}
+
+// New returns a new token writer strategy that stores token in a header.
+func New(m map[string]interface{}) (auth.TokenWriter, error) {
+	return &strategy{}, nil
+}
+
+func (s *strategy) WriteToken(token string, w http.ResponseWriter) {
+	// noop
+}
