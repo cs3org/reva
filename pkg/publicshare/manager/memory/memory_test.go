@@ -41,13 +41,19 @@ func TestMemoryProvider(t *testing.T) {
 	rInfo := storageproviderv0alphapb.ResourceInfo{}
 	grant := shareProviderpb.Grant{}
 
+	rInfo.ArbitraryMetadata = &storageproviderv0alphapb.ArbitraryMetadata{
+		Metadata: map[string]string{
+			"name": "woof",
+		},
+	}
+
 	// create a new public share
 	share, _ := manager.CreatePublicShare(context.Background(), &user, &rInfo, &grant)
 
 	// store its token for further retrieval
 	shareToken := share.GetToken()
 
-	// Test updating a public share. test with --race
+	// Test updating a public share.
 	existingRefToken := shareProviderpb.PublicShareReference{
 		Spec: &shareProviderpb.PublicShareReference_Token{
 			Token: shareToken,
@@ -62,7 +68,7 @@ func TestMemoryProvider(t *testing.T) {
 
 	newGrant := shareProviderpb.Grant{
 		Permissions: &shareProviderpb.PublicSharePermissions{
-			Permissions: &storageproviderv0alphapb.ResourcePermissions{}, // add some permissions maybe?
+			Permissions: &storageproviderv0alphapb.ResourcePermissions{},
 		},
 		Expiration: updatedMtime,
 	}
