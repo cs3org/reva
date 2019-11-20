@@ -682,6 +682,14 @@ func (fs *eosStorage) RestoreRevision(ctx context.Context, ref *storageproviderv
 	return fs.c.RollbackToVersion(ctx, u.Username, fn, revisionKey)
 }
 
+func (fs *eosStorage) PurgeRecycleItem(ctx context.Context, key string) error {
+	u, err := getUser(ctx)
+	if err != nil {
+		return errors.Wrap(err, "storage_eos: no user in ctx")
+	}
+	return fs.c.RestoreDeletedEntry(ctx, u.Username, key)
+}
+
 func (fs *eosStorage) EmptyRecycle(ctx context.Context) error {
 	u, err := getUser(ctx)
 	if err != nil {

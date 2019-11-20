@@ -598,9 +598,17 @@ func (s *service) RestoreRecycleItem(ctx context.Context, req *storageproviderv0
 }
 
 func (s *service) PurgeRecycle(ctx context.Context, req *storageproviderv0alphapb.PurgeRecycleRequest) (*storageproviderv0alphapb.PurgeRecycleResponse, error) {
-	if err := s.storage.EmptyRecycle(ctx); err != nil {
+	// if a key was sent as opacque id purge only that item
+	if req.GetRef().GetId() != nil && req.GetRef().GetId().GetOpaqueId() != "" {
+		if err := s.storage.PurgeRecycleItem(ctx, req.GetRef().GetId().GetOpaqueId()); err != nil {
+			return &storageproviderv0alphapb.PurgeRecycleResponse{
+				Status: status.NewInternal(ctx, err, "error purging recycle item"),
+			}, nil
+		}
+	} else if err := s.storage.EmptyRecycle(ctx); err != nil {
+		// otherwise try emptying the whole recycle bin
 		return &storageproviderv0alphapb.PurgeRecycleResponse{
-			Status: status.NewInternal(ctx, err, "error purging recycle bin"),
+			Status: status.NewInternal(ctx, err, "error emptying recycle bin"),
 		}, nil
 	}
 

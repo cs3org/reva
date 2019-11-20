@@ -610,6 +610,10 @@ func (fs *s3FS) RestoreRevision(ctx context.Context, ref *storageproviderv0alpha
 	return errtypes.NotSupported("restore revision")
 }
 
+func (fs *s3FS) PurgeRecycleItem(ctx context.Context, key string) error {
+	return errtypes.NotSupported("purge recycle item")
+}
+
 func (fs *s3FS) EmptyRecycle(ctx context.Context) error {
 	return errtypes.NotSupported("empty recycle")
 }
