@@ -63,6 +63,8 @@ skip_methods = [
 	"/oauth2/userinfo",
 	"/oauth2/sessions",
 	"/.well-known/openid-configuration",
+	"/remote.php/dav/public-files/",
+	"/remote.php/dav/public-link/",
 ]
 
 [http.middlewares.auth.token_managers.jwt]

@@ -286,12 +286,13 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.Path = r.FormValue("path") // use path without user prefix
+		// s.MailSend = "0"
 		WriteOCSSuccess(w, r, s)
 		return
 	}
 
+	// create a public link share
 	if shareType == int(conversions.ShareTypePublicLink) {
-		// create a public link share
 		// get a connection to the public shares service
 		c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 		if err != nil {
@@ -315,14 +316,38 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// TODO(refs) set expiration date to whatever phoenix sends
+		// TODO(refs) set permissions to what phoenix sends
+		// TODO(refs) error handling please
+		testPerm, _ := h.role2CS3Permissions(conversions.RoleViewer)
+
 		req := publicshareproviderv0alphapb.CreatePublicShareRequest{
 			ResourceInfo: statRes.GetInfo(),
 			Grant: &publicshareproviderv0alphapb.Grant{
-				Expiration: &typespb.Timestamp{
-					Nanos:   uint32(time.Now().Add(time.Duration(31536000)).Nanosecond()),
-					Seconds: uint64(time.Now().Add(time.Duration(31536000)).Second()),
+				Permissions: &publicshareproviderv0alphapb.PublicSharePermissions{
+					Permissions: testPerm,
 				},
+			},
+		}
+
+		var expireTime time.Time
+		expireDate := r.FormValue("expireDate")
+		if expireDate != "" {
+			expireTime, err = time.Parse("2006-01-02T15:04:05Z0700", expireDate)
+			if err != nil {
+				WriteOCSError(w, r, MetaServerError.StatusCode, "invalid date format", err)
+				return
+			}
+			req.Grant.Expiration = &typespb.Timestamp{
+				Nanos:   uint32(expireTime.UnixNano()),
+				Seconds: uint64(expireTime.Unix()),
+			}
+		}
+
+		// set displayname and password protected as arbitrary metadata
+		req.ResourceInfo.ArbitraryMetadata = &storageproviderv0alphapb.ArbitraryMetadata{
+			Metadata: map[string]string{
+				"name": r.FormValue("name"),
+				// "password": r.FormValue("password"),
 			},
 		}
 
@@ -339,8 +364,13 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// build ocs response for Phoenix
-		s := conversions.PublicShare2ShareData(createRes.Share)
+		s := conversions.PublicShare2ShareData(createRes.Share, r)
+		err = h.addFileInfo(ctx, s, statRes.Info)
+		if err != nil {
+			WriteOCSError(w, r, MetaServerError.StatusCode, "error enhancing response with share data", err)
+			return
+		}
+
 		WriteOCSSuccess(w, r, s)
 
 		return
@@ -348,6 +378,9 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 
 	WriteOCSError(w, r, MetaBadRequest.StatusCode, "unknown share type", nil)
 }
+
+// PublicShareContextName represent cross boundaries context for the name of the public share
+type PublicShareContextName string
 
 // TODO sort out mapping, this is just a first guess
 // TODO use roles to make this configurable
@@ -632,15 +665,9 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 		WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
 		return
 	}
-
 	shares = append(shares, append(userShares, publicShares...)...)
 
-	if h.isReshareRequest(r) {
-		WriteOCSSuccess(w, r, &conversions.Element{Data: shares})
-		return
-	}
-
-	WriteOCSSuccess(w, r, shares)
+	WriteOCSSuccess(w, r, &conversions.Element{Data: shares})
 }
 
 func (h *SharesHandler) listSharedWithMe(r *http.Request) []*usershareproviderv0alphapb.ReceivedShare {
@@ -653,10 +680,6 @@ func (h *SharesHandler) listSharedWithMe(r *http.Request) []*usershareproviderv0
 	// TODO(refs) handle error...
 	shares, _ := c.ListReceivedShares(r.Context(), &lrs)
 	return shares.GetShares()
-}
-
-func (h *SharesHandler) isReshareRequest(r *http.Request) bool {
-	return r.URL.Query().Get("reshares") != ""
 }
 
 func (h *SharesHandler) listPublicShares(r *http.Request) ([]*conversions.ShareData, error) {
@@ -700,16 +723,19 @@ func (h *SharesHandler) listPublicShares(r *http.Request) ([]*conversions.ShareD
 				return nil, err
 			}
 
-			sData := conversions.PublicShare2ShareData(share)
+			sData := conversions.PublicShare2ShareData(share, r)
 			if statResponse.Status.Code != rpcpb.Code_CODE_OK {
 				return nil, err
 			}
+
+			sData.Name = share.DisplayName
 
 			if h.addFileInfo(ctx, sData, statResponse.Info) != nil {
 				return nil, err
 			}
 
 			log.Debug().Interface("share", share).Interface("info", statResponse.Info).Interface("shareData", share).Msg("mapped")
+
 			ocsDataPayload = append(ocsDataPayload, sData)
 
 		}

@@ -50,31 +50,42 @@ type manager struct {
 
 // CreatePublicShare safely adds a new entry to manager.shares
 func (m *manager) CreatePublicShare(ctx context.Context, u *userproviderv0alphapb.User, rInfo *storageproviderv0alphapb.ResourceInfo, g *publicshareproviderv0alphapb.Grant) (*publicshareproviderv0alphapb.PublicShare, error) {
-	// where could this initialization go wrong and early return?
 	id := &publicshareproviderv0alphapb.PublicShareId{
 		OpaqueId: randString(12),
 	}
+
 	tkn := randString(12)
 	now := uint64(time.Now().Unix())
 
+	displayName, ok := rInfo.ArbitraryMetadata.Metadata["name"]
+	if !ok {
+		displayName = tkn
+	}
+
+	_, passwdOk := rInfo.ArbitraryMetadata.Metadata["password"]
+
+	ctime := &typespb.Timestamp{
+		Seconds: now,
+		Nanos:   uint32(now % 1000000000),
+	}
+
+	mtime := &typespb.Timestamp{
+		Seconds: now,
+		Nanos:   uint32(now % 1000000000),
+	}
+
 	newShare := publicshareproviderv0alphapb.PublicShare{
-		Id:          id,
-		Owner:       rInfo.GetOwner(),
-		Creator:     u.Id,
-		ResourceId:  rInfo.Id,
-		Token:       tkn,
-		Permissions: g.Permissions,
-		Ctime: &typespb.Timestamp{
-			Seconds: now,
-			Nanos:   uint32(now % 1000000000),
-		},
-		Mtime: &typespb.Timestamp{
-			Seconds: now,
-			Nanos:   uint32(now % 1000000000),
-		},
-		PasswordProtected: false,
+		Id:                id,
+		Owner:             rInfo.GetOwner(),
+		Creator:           u.Id,
+		ResourceId:        rInfo.Id,
+		Token:             tkn,
+		Permissions:       g.Permissions,
+		Ctime:             ctime,
+		Mtime:             mtime,
+		PasswordProtected: passwdOk,
 		Expiration:        g.Expiration,
-		DisplayName:       tkn,
+		DisplayName:       displayName,
 	}
 
 	m.shares.Store(newShare.Token, &newShare)
