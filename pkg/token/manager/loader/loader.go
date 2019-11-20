@@ -22,5 +22,6 @@ import (
 	// Load core token managers.
 	_ "github.com/cs3org/reva/pkg/token/manager/demo"
 	_ "github.com/cs3org/reva/pkg/token/manager/jwt"
+	_ "github.com/cs3org/reva/pkg/token/manager/oidc"
 	// Add your own here.
 )
