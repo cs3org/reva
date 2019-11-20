@@ -23,7 +23,7 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/auth/manager/oidc"
+	"github.com/cs3org/reva/pkg/token/manager/oidc"
 )
 
 func (s *svc) doOpenidConfiguration(w http.ResponseWriter, r *http.Request) {

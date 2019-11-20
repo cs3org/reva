@@ -32,7 +32,6 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
 	"github.com/cs3org/reva/pkg/appctx"
-	revaoidc "github.com/cs3org/reva/pkg/auth/manager/oidc"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/token"
 	"github.com/cs3org/reva/pkg/token/manager/registry"
@@ -89,7 +88,7 @@ type manager struct {
 	c *config
 	// cached on first request
 	provider *oidc.Provider
-	metadata *revaoidc.ProviderMetadata
+	metadata *ProviderMetadata
 }
 
 func (m *manager) MintToken(ctx context.Context, u *userproviderv0alphapb.User) (string, error) {
@@ -120,7 +119,7 @@ func (m *manager) DismantleToken(ctx context.Context, accessToken string) (*user
 			return nil, err
 		}
 		m.provider = provider
-		metadata := &revaoidc.ProviderMetadata{}
+		metadata := &ProviderMetadata{}
 		if err := provider.Claims(metadata); err != nil {
 			return nil, fmt.Errorf("could not unmarshal provider metadata: %v", err)
 		}
@@ -129,7 +128,7 @@ func (m *manager) DismantleToken(ctx context.Context, accessToken string) (*user
 	provider := m.provider
 
 	// The claims we want to have
-	var claims revaoidc.StandardClaims
+	var claims StandardClaims
 
 	if m.metadata.IntrospectionEndpoint == "" {
 
@@ -195,7 +194,7 @@ func (m *manager) DismantleToken(ctx context.Context, accessToken string) (*user
 				return nil, fmt.Errorf("failed to parse claims: %v", err)
 			}
 		case "application/json":
-			var ir revaoidc.IntrospectionResponse
+			var ir IntrospectionResponse
 			// parse json
 			if err := json.Unmarshal(body, &ir); err != nil {
 				return nil, fmt.Errorf("failed to parse claims: %v", err)
