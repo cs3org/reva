@@ -41,6 +41,7 @@ type FS interface {
 	RestoreRevision(ctx context.Context, ref *storageproviderv0alphapb.Reference, key string) error
 	ListRecycle(ctx context.Context) ([]*storageproviderv0alphapb.RecycleItem, error)
 	RestoreRecycleItem(ctx context.Context, key string) error
+	PurgeRecycleItem(ctx context.Context, key string) error
 	EmptyRecycle(ctx context.Context) error
 	GetPathByID(ctx context.Context, id *storageproviderv0alphapb.ResourceId) (string, error)
 	AddGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error

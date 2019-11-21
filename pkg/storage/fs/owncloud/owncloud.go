@@ -1388,6 +1388,25 @@ func (fs *ocFS) RestoreRevision(ctx context.Context, ref *storageproviderv0alpha
 	return err
 }
 
+func (fs *ocFS) PurgeRecycleItem(ctx context.Context, key string) error {
+	rp, err := fs.getRecyclePath(ctx)
+	if err != nil {
+		return errors.Wrap(err, "ocFS: error resolving recycle path")
+	}
+	ip := path.Join(rp, path.Clean(key))
+
+	err = os.Remove(ip)
+	if err != nil {
+		return errors.Wrap(err, "ocFS: error deleting recycle item")
+	}
+	err = os.RemoveAll(path.Join(path.Dir(rp), "versions", path.Clean(key)))
+	if err != nil {
+		return errors.Wrap(err, "ocFS: error deleting recycle item versions")
+	}
+	// TODO delete keyfiles, keys, share-keys
+	return nil
+}
+
 func (fs *ocFS) EmptyRecycle(ctx context.Context) error {
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
