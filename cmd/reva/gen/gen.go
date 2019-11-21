@@ -379,8 +379,6 @@ var usersTemplate = `[{{range  $i, $e := .}}{{if $i}},{{end}}
 			"idp": "{{$e.Iss}}",
 			"opaque_id": "{{$e.Sub}}",
 		},
-		"sub": "{{$e.Sub}}",
-		"iss": "{{$e.Iss}}",
 		"username": "{{$e.Username}}",
 		"secret": "{{$e.Secret}}",
 		"mail": "{{$e.Mail}}",
@@ -438,14 +436,17 @@ func WriteUsers(p string, users []*userproviderv0alphapb.User) {
 		for _, user := range users {
 			// TODO this could be parameterized to create an admin account?
 			u := &UserVars{
-				Sub:         user.Subject,
-				Iss:         user.Issuer,
 				Username:    user.Username,
 				Secret:      genSecret(12),
 				Mail:        user.Mail,
 				Displayname: user.DisplayName,
 			}
-			if user.Subject == "" {
+			if user.Id != nil {
+				u.Sub = user.Id.OpaqueId
+				u.Iss = user.Id.Idp
+			}
+			// fall back to hashing a username if no sub is provided
+			if u.Sub == "" {
 				_, err := hasher.Write([]byte(user.Username))
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "error hashing username: %v\n", err)

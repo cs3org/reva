@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
+	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 )
@@ -38,7 +39,7 @@ func New(c map[string]interface{}) (auth.Manager, error) {
 	return &mgr{}, nil
 }
 
-func (m *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*typespb.UserId, error) {
+func (m *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*userproviderv0alphapb.User, error) {
 	// allow passing in uid as <opaqueid>@<idp>
 	at := strings.LastIndex(clientID, "@")
 	uid := &typespb.UserId{}
@@ -48,5 +49,8 @@ func (m *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (
 		uid.OpaqueId = clientID[:at]
 		uid.Idp = clientID[at+1:]
 	}
-	return uid, nil
+	return &userproviderv0alphapb.User{
+		Id: uid,
+		// not much else to provide
+	}, nil
 }

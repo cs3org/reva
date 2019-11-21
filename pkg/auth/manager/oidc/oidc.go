@@ -30,6 +30,7 @@ import (
 
 	oidc "github.com/coreos/go-oidc"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
+	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
@@ -44,25 +45,21 @@ func init() {
 
 type mgr struct {
 	// cached on first request
-	provider     *oidc.Provider
-	insecure     bool
-	skipCheck    bool
-	providerURL  string
-	audience     string
-	clientID     string
-	clientSecret string
-	metadata     *ProviderMetadata
+	provider *oidc.Provider
+	c        *config
+	metadata *ProviderMetadata
 }
 
 // TODO(labkode): add support for multiple clients, like we do in the oidc provider http svc.
 type config struct {
 	// the endpoint of the oidc provider
-	Insecure     bool   `mapstructure:"insecure"`
-	SkipCheck    bool   `mapstructure:"skipcheck"`
-	Provider     string `mapstructure:"provider"`
-	Audience     string `mapstructure:"audience"`
-	ClientID     string `mapstructure:"client_id"`
-	ClientSecret string `mapstructure:"client_secret"`
+	Insecure     bool     `mapstructure:"insecure"`
+	SkipCheck    bool     `mapstructure:"skipcheck"`
+	Provider     string   `mapstructure:"provider"`
+	Audience     string   `mapstructure:"audience"`
+	SigningAlgs  []string `mapstructure:"signing_algorithms"`
+	ClientID     string   `mapstructure:"client_id"`
+	ClientSecret string   `mapstructure:"client_secret"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -76,6 +73,9 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 func (c *config) init() {
 	// TODO set defaults for dev env
+	if len(c.SigningAlgs) < 1 {
+		c.SigningAlgs = []string{"RS256", "PS256"}
+	}
 }
 
 // ClaimsKey is the key for oidc claims in a context
@@ -89,22 +89,15 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	}
 	c.init()
 
-	return &mgr{
-		providerURL:  c.Provider,
-		insecure:     c.Insecure,
-		audience:     c.Audience,
-		clientID:     c.ClientID,
-		clientSecret: c.ClientSecret,
-		skipCheck:    c.SkipCheck,
-	}, nil
+	return &mgr{c: c}, nil
 }
 
-func (am *mgr) Authenticate(ctx context.Context, clientID, token string) (*typespb.UserId, error) {
+func (m *mgr) Authenticate(ctx context.Context, clientID, accessToken string) (*userproviderv0alphapb.User, error) {
 	log := appctx.GetLogger(ctx)
 
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: am.insecure,
+			InsecureSkipVerify: m.c.Insecure,
 		},
 	}
 	customHTTPClient := &http.Client{
@@ -113,38 +106,41 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, token string) (*types
 	}
 	customCtx := context.WithValue(ctx, oauth2.HTTPClient, customHTTPClient)
 
-	if am.provider == nil {
-		// Initialize a provider by specifying dex's issuer URL.
+	if m.provider == nil {
+		// Initialize a provider by specifying the issuer URL.
 		// provider needs to be cached as when it is created
 		// it will fetch the keys from the issuer using the .well-known
 		// endpoint
-		provider, err := oidc.NewProvider(customCtx, am.providerURL)
+		provider, err := oidc.NewProvider(customCtx, m.c.Provider)
 		if err != nil {
 			return nil, err
 		}
-		am.provider = provider
+		m.provider = provider
 		metadata := &ProviderMetadata{}
 		if err := provider.Claims(metadata); err != nil {
 			return nil, fmt.Errorf("could not unmarshal provider metadata: %v", err)
 		}
-		am.metadata = metadata
+		m.metadata = metadata
 	}
-	provider := am.provider
+	provider := m.provider
 
 	// The claims we want to have
 	var claims StandardClaims
 
-	if am.metadata.IntrospectionEndpoint == "" {
+	if m.metadata.IntrospectionEndpoint == "" {
 
-		log.Debug().Msg("no introspection endpoint, trying to decode token as jwt")
+		log.Debug().Msg("no introspection endpoint, trying to decode access token as jwt")
 		//maybe our access token is a jwt token
-		var verifier *oidc.IDTokenVerifier
-		if am.skipCheck { // not safe but only way for simplesamlphp to work with an almost compliant oidc (for now)
-			verifier = provider.Verifier(&oidc.Config{SkipClientIDCheck: true, SkipIssuerCheck: true})
-		} else {
-			verifier = provider.Verifier(&oidc.Config{ClientID: am.audience})
+		c := &oidc.Config{
+			ClientID:             m.c.Audience,
+			SupportedSigningAlgs: m.c.SigningAlgs,
 		}
-		idToken, err := verifier.Verify(customCtx, token)
+		if m.c.SkipCheck { // not safe but only way for simplesamlphp to work with an almost compliant oidc (for now)
+			c.SkipClientIDCheck = true
+			c.SkipIssuerCheck = true
+		}
+		verifier := provider.Verifier(c)
+		idToken, err := verifier.Verify(customCtx, accessToken)
 		if err != nil {
 			return nil, fmt.Errorf("could not verify jwt: %v", err)
 		}
@@ -157,19 +153,19 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, token string) (*types
 		// we need to lookup the id token with the access token we got
 		// see oidc IDToken.VerifyAccessToken
 
-		data := fmt.Sprintf("token=%s&token_type_hint=access_token", token)
-		req, err := http.NewRequest("POST", am.metadata.IntrospectionEndpoint, strings.NewReader(data))
+		data := fmt.Sprintf("token=%s&token_type_hint=access_token", accessToken)
+		req, err := http.NewRequest("POST", m.metadata.IntrospectionEndpoint, strings.NewReader(data))
 		if err != nil {
 			return nil, fmt.Errorf("could not create introspection request: %v", err)
 		}
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		// we follow https://tools.ietf.org/html/rfc7662
 		req.Header.Set("Accept", "application/json")
-		req.SetBasicAuth(am.clientID, am.clientSecret)
+		req.SetBasicAuth(m.c.ClientID, m.c.ClientSecret)
 
 		res, err := customHTTPClient.Do(req)
 		if err != nil {
-			return nil, fmt.Errorf("could not introspect token %s: %v", token, err)
+			return nil, fmt.Errorf("could not introspect access token %s: %v", accessToken, err)
 		}
 		defer res.Body.Close()
 
@@ -183,9 +179,9 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, token string) (*types
 		// application/jwt is in draft https://tools.ietf.org/html/draft-ietf-oauth-jwt-introspection-response-03
 		case "application/jwt":
 			// verify the jwt
-			log.Warn().Msg("TODO untested verification of jwt encoded auth token")
+			log.Warn().Msg("TODO untested verification of jwt encoded introspection response")
 
-			verifier := provider.Verifier(&oidc.Config{ClientID: "ownCloud"}) // TODO make audience configurable
+			verifier := provider.Verifier(&oidc.Config{ClientID: m.c.Audience})
 			idToken, err := verifier.Verify(customCtx, string(body))
 			if err != nil {
 				return nil, fmt.Errorf("could not verify jwt: %v", err)
@@ -207,7 +203,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, token string) (*types
 			}
 			// resolve user info here? cache it?
 			oauth2Token := &oauth2.Token{
-				AccessToken: token,
+				AccessToken: accessToken,
 			}
 			userInfo, err := provider.UserInfo(customCtx, oauth2.StaticTokenSource(oauth2Token))
 			if err != nil {
@@ -224,15 +220,29 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, token string) (*types
 		}
 	}
 
-	// TODO(jfd): make it configurable.
-	// if !claims.Verified {
-	// return nil, fmt.Errorf("email (%q) in returned claims was not verified", claims.Email)
-	// }
-
-	uid := &typespb.UserId{
-		Idp:      claims.Iss,
-		OpaqueId: claims.Sub,
+	u := &userproviderv0alphapb.User{
+		// TODO(jfd) clean up idp = iss, sub = opaque ... is redundant
+		Id: &typespb.UserId{
+			OpaqueId: claims.Sub, // a stable non reassignable id
+			Idp:      claims.Iss, // in the scope of this issuer
+		},
+		// Subject:     claims.Sub, // TODO(labkode) remove from CS3, is in Id
+		// Issuer:      claims.Iss, // TODO(labkode) remove from CS3, is in Id
+		Username: claims.PreferredUsername,
+		// TODO groups
+		// TODO ... use all claims from oidc?
+		Groups:       []string{},
+		Mail:         claims.Email,
+		MailVerified: claims.EmailVerified,
+		DisplayName:  claims.Name,
 	}
 
-	return uid, nil
+	// try kopano konnect specific claims
+	if u.Username == "" {
+		u.Username = claims.KCIdentity["kc.i.un"]
+	}
+	if u.DisplayName == "" {
+		u.DisplayName = claims.KCIdentity["kc.i.dn"]
+	}
+	return u, nil
 }

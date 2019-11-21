@@ -25,7 +25,6 @@ import (
 	authregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/authregistry/v0alpha"
 	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
@@ -63,45 +62,23 @@ func (s *svc) Authenticate(ctx context.Context, req *gatewayv0alphapb.Authentica
 		}, nil
 	}
 
-	// validate valid userId
-	uid := res.UserId
-	if uid == nil {
-		err := errors.New("gateway: uid after Authenticate is nil")
-		log.Err(err).Msg("user id is nil")
+	// validate valid user
+	if res.User == nil {
+		err := errors.New("gateway: user after Authenticate is nil")
+		log.Err(err).Msg("user is nil")
+		return &gatewayv0alphapb.AuthenticateResponse{
+			Status: status.NewInternal(ctx, err, "user is nil"),
+		}, nil
+	}
+	if res.User.Id == nil {
+		err := errors.New("gateway: user id after Authenticate is nil")
+		log.Err(err).Interface("user", res.User).Msg("user id is nil")
 		return &gatewayv0alphapb.AuthenticateResponse{
 			Status: status.NewInternal(ctx, err, "user id is nil"),
 		}, nil
 	}
 
-	userClient, err := pool.GetUserProviderServiceClient(s.c.UserProviderEndpoint)
-	if err != nil {
-		log.Err(err).Msg("error getting user provider client")
-		return &gatewayv0alphapb.AuthenticateResponse{
-			Status: status.NewInternal(ctx, err, "error getting user provider service client"),
-		}, nil
-	}
-
-	getUserReq := &userproviderv0alphapb.GetUserRequest{
-		UserId: uid,
-	}
-
-	getUserRes, err := userClient.GetUser(ctx, getUserReq)
-	if err != nil {
-		err = errors.Wrap(err, "authsvc: error in GetUser")
-		res := &gatewayv0alphapb.AuthenticateResponse{
-			Status: status.NewUnauthenticated(ctx, err, "error getting user information"),
-		}
-		return res, nil
-	}
-
-	if getUserRes.Status.Code != rpcpb.Code_CODE_OK {
-		err := status.NewErrorFromCode(getUserRes.Status.Code, "authsvc")
-		return &gatewayv0alphapb.AuthenticateResponse{
-			Status: status.NewUnauthenticated(ctx, err, "error getting user information"),
-		}, nil
-	}
-
-	user := getUserRes.User
+	user := res.User
 
 	token, err := s.tokenmgr.MintToken(ctx, user)
 	if err != nil {
@@ -114,7 +91,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gatewayv0alphapb.Authentica
 
 	gwRes := &gatewayv0alphapb.AuthenticateResponse{
 		Status: status.NewOK(ctx),
-		UserId: res.UserId,
+		User:   res.User,
 		Token:  token,
 	}
 	return gwRes, nil

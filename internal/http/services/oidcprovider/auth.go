@@ -111,7 +111,7 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 	// Once the authentication is successful, we have a user id that has been
 	// validated, to fill other fields we need the user information also.
 
-	uid := genRes.UserId
+	uid := genRes.User.Id
 
 	getUserReq := &userproviderv0alphapb.GetUserRequest{
 		UserId: uid,

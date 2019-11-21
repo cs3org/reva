@@ -22,6 +22,7 @@ import (
 	"context"
 
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
+	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -37,7 +38,7 @@ type manager struct {
 
 // Credentials holds a pair of secret and userid
 type Credentials struct {
-	ID     *typespb.UserId
+	User   *userproviderv0alphapb.User
 	Secret string
 }
 
@@ -48,10 +49,10 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	return &manager{credentials: creds}, nil
 }
 
-func (m *manager) Authenticate(ctx context.Context, clientID, clientSecret string) (*typespb.UserId, error) {
+func (m *manager) Authenticate(ctx context.Context, clientID, clientSecret string) (*userproviderv0alphapb.User, error) {
 	if c, ok := m.credentials[clientID]; ok {
 		if c.Secret == clientSecret {
-			return c.ID, nil
+			return c.User, nil
 		}
 	}
 	return nil, errtypes.InvalidCredentials(clientID)
@@ -61,23 +62,41 @@ func getCredentials() map[string]Credentials {
 	return map[string]Credentials{
 		"einstein": Credentials{
 			Secret: "relativity",
-			ID: &typespb.UserId{
-				OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51",
-				Idp:      "http://localhost:9998",
+			User: &userproviderv0alphapb.User{
+				Id: &typespb.UserId{
+					Idp:      "http://localhost:9998",
+					OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51",
+				},
+				Username:    "einstein",
+				Groups:      []string{"sailing-lovers", "violin-haters", "physics-lovers"},
+				Mail:        "einstein@example.org",
+				DisplayName: "Albert Einstein",
 			},
 		},
 		"marie": Credentials{
 			Secret: "radioactivity",
-			ID: &typespb.UserId{
-				OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-				Idp:      "http://localhost:9998",
+			User: &userproviderv0alphapb.User{
+				Id: &typespb.UserId{
+					Idp:      "http://localhost:9998",
+					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+				},
+				Username:    "marie",
+				Groups:      []string{"radium-lovers", "polonium-lovers", "physics-lovers"},
+				Mail:        "marie@example.org",
+				DisplayName: "Marie Curie",
 			},
 		},
 		"richard": Credentials{
 			Secret: "superfluidity",
-			ID: &typespb.UserId{
-				OpaqueId: "932b4540-8d16-481e-8ef4-588e4b6b151c",
-				Idp:      "http://localhost:9998",
+			User: &userproviderv0alphapb.User{
+				Id: &typespb.UserId{
+					Idp:      "http://localhost:9998",
+					OpaqueId: "932b4540-8d16-481e-8ef4-588e4b6b151c",
+				},
+				Username:    "richard",
+				Groups:      []string{"quantum-lovers", "philosophy-haters", "physics-lovers"},
+				Mail:        "richard@example.org",
+				DisplayName: "Richard Feynman",
 			},
 		},
 	}

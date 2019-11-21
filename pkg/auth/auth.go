@@ -23,12 +23,12 @@ import (
 	"net/http"
 
 	authregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/authregistry/v0alpha"
-	typespb "github.com/cs3org/go-cs3apis/cs3/types"
+	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
 )
 
 // Manager is the interface to implement to authenticate users
 type Manager interface {
-	Authenticate(ctx context.Context, clientID, clientSecret string) (*typespb.UserId, error)
+	Authenticate(ctx context.Context, clientID, clientSecret string) (*userproviderv0alphapb.User, error)
 }
 
 // Credentials contains the auth type, client id and secret.

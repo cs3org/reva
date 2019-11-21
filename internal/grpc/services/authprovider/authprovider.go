@@ -106,7 +106,7 @@ func (s *service) Authenticate(ctx context.Context, req *authproviderv0alphapb.A
 	log.Info().Msgf("user %s authenticated", uid.String())
 	res := &authproviderv0alphapb.AuthenticateResponse{
 		Status: status.NewOK(ctx),
-		UserId: uid,
+		User:   uid,
 	}
 	return res, nil
 }
