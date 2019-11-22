@@ -285,7 +285,6 @@ func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *storageproviderv0
 }
 
 func (s *svc) Stat(ctx context.Context, req *storageproviderv0alphapb.StatRequest) (*storageproviderv0alphapb.StatResponse, error) {
-	// TODO(refs) do we need to append home to every stat request?
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {

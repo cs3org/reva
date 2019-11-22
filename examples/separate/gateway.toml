@@ -31,6 +31,8 @@ skip_methods = [
 	"/cs3.gatewayv0alpha.GatewayService/ListAuthProviders",
 	"/cs3.authregistryv0alpha.AuthRegistryService/ListAuthProviders",
 	"/cs3.authregistryv0alpha.AuthRegistryService/GetAuthProvider",
+	"/cs3.gatewayv0alpha.GatewayService/GetPublicShareByToken",
+	"/cs3.publicshareproviderv0alpha.PublicShareProviderService/GetPublicShareByToken",
 ]
 
 [grpc.interceptors.auth.token_managers.jwt]

@@ -125,10 +125,16 @@ func (s *service) RemovePublicShare(ctx context.Context, req *publicshareprovide
 
 func (s *service) GetPublicShareByToken(ctx context.Context, req *publicshareproviderv0alphapb.GetPublicShareByTokenRequest) (*publicshareproviderv0alphapb.GetPublicShareByTokenResponse, error) {
 	log := appctx.GetLogger(ctx)
-	log.Info().Msg("remove public share")
+	log.Info().Msg("getting public share by token")
+
+	found, err := s.sm.GetPublicShareByToken(ctx, req.GetToken())
+	if err != nil {
+		return nil, err
+	}
 
 	return &publicshareproviderv0alphapb.GetPublicShareByTokenResponse{
 		Status: status.NewOK(ctx),
+		Share:  found,
 	}, nil
 }
 

@@ -58,21 +58,36 @@ func (s *svc) RemovePublicShare(ctx context.Context, req *publicshareproviderv0a
 
 func (s *svc) GetPublicShareByToken(ctx context.Context, req *publicshareproviderv0alphapb.GetPublicShareByTokenRequest) (*publicshareproviderv0alphapb.GetPublicShareByTokenResponse, error) {
 	log := appctx.GetLogger(ctx)
-	log.Info().Msg("remove public share")
+	log.Info().Msg("get public share by token")
 
-	return &publicshareproviderv0alphapb.GetPublicShareByTokenResponse{
-		Status: status.NewOK(ctx),
-	}, nil
+	pClient, err := pool.GetPublicShareProviderClient(s.c.PublicShareProviderEndpoint)
+	if err != nil {
+		log.Err(err).Msg("error connecting to a public share provider")
+		return &publicshareproviderv0alphapb.GetPublicShareByTokenResponse{
+			Status: &rpcpb.Status{
+				Code: rpcpb.Code_CODE_INTERNAL,
+			},
+		}, nil
+	}
+
+	return pClient.GetPublicShareByToken(ctx, req)
 }
 
 func (s *svc) GetPublicShare(ctx context.Context, req *publicshareproviderv0alphapb.GetPublicShareRequest) (*publicshareproviderv0alphapb.GetPublicShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("get public share")
 
-	return &publicshareproviderv0alphapb.GetPublicShareResponse{
-		Status: status.NewOK(ctx),
-		// Share:  share,
-	}, nil
+	pClient, err := pool.GetPublicShareProviderClient(s.c.PublicShareProviderEndpoint)
+	if err != nil {
+		log.Err(err).Msg("error connecting to a public share provider")
+		return &publicshareproviderv0alphapb.GetPublicShareResponse{
+			Status: &rpcpb.Status{
+				Code: rpcpb.Code_CODE_INTERNAL,
+			},
+		}, nil
+	}
+
+	return pClient.GetPublicShare(ctx, req)
 }
 
 func (s *svc) ListPublicShares(ctx context.Context, req *publicshareproviderv0alphapb.ListPublicSharesRequest) (*publicshareproviderv0alphapb.ListPublicSharesResponse, error) {
@@ -94,25 +109,6 @@ func (s *svc) ListPublicShares(ctx context.Context, req *publicshareproviderv0al
 		return nil, errors.Wrap(err, "error calling ListShares")
 	}
 
-	// res := &publicshareproviderv0alphapb.ListPublicSharesResponse{
-	// 	Status: status.NewOK(ctx),
-	// 	Share: []*publicshareproviderv0alphapb.PublicShare{
-	// &publicshareproviderv0alphapb.PublicShare{
-	// 	Id: &publicshareproviderv0alphapb.PublicShareId{
-	// 		OpaqueId: "some_publicly_shared_id",
-	// 	},
-	// 	Token:       "my_token",
-	// 	ResourceId:  &v0alpha.ResourceId{},
-	// 	Permissions: &publicshareproviderv0alphapb.PublicSharePermissions{},
-	// 	Owner:       &types.UserId{},
-	// 	Creator:     &types.UserId{},
-	// 	Ctime:       &types.Timestamp{},
-	// 	Expiration:  &types.Timestamp{},
-	// 	Mtime:       &types.Timestamp{},
-	// 	DisplayName: "some_public_share",
-	// },
-	// 	},
-	// }
 	return res, nil
 }
 

@@ -20,6 +20,14 @@ package ocdav
 
 import (
 	"net/http"
+	"strings"
+
+	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
+	publicshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
+	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	"github.com/cs3org/reva/pkg/token"
+	"github.com/rs/zerolog/log"
+	"google.golang.org/grpc/metadata"
 )
 
 // PublicFilesHandler handles public files requests
@@ -31,40 +39,94 @@ func (p *PublicFilesHandler) Handler(s *svc) http.Handler {
 		switch r.Method {
 		// https://tools.ietf.org/html/rfc4918#section-9.1.3
 		case "PROPFIND":
-			w.WriteHeader(http.StatusNotImplemented)
-			// // pf, status, err := readPropfind(r.Body)
-			// // if err != nil {
-			// // 	log.Error().Err(err).Msg("error reading propfind request")
-			// // 	w.WriteHeader(status)
-			// // 	return
-			// // }
+			// - get a gateway client
+			// - validate against a regexp the url is valid, since we do no routing
+			// - get the URL path (i.e: /#/s/token) -> "token"
+			// - use "token" to query the public share provider by token
+			// - get public share
+			// - prepare response
+			// 	- get the file info (stat -> storageprovider)
+			// - set response headers
+			// - send response to phoenix
+			// - add validations
+			// 	- is the public share protected by password?
+			// 	- is the public share still valid in time?
+			// 	- if none of the above tests pass -> what do we return, not found? invalid?
 
-			// c, err := s.getClient()
-			// if err != nil {
-			// 	log.Error().Err(err).Msg("error getting grpc client")
-			// 	w.WriteHeader(http.StatusInternalServerError)
-			// 	return
-			// }
+			pf, status, err := readPropfind(r.Body)
+			if err != nil {
+				log.Error().Err(err).Msg("error reading propfind request")
+				w.WriteHeader(status)
+				return
+			}
 
-			// // - query the publicShareProvider looking for such id
-			// psRequest := publicshareproviderv0alphapb.GetPublicShareRequest{
-			// 	Ref: &publicshareproviderv0alphapb.PublicShareReference{
-			// 		Spec: &publicshareproviderv0alphapb.PublicShareReference_Token{
-			// 			Token: shareTokenFromURL(r.URL),
-			// 		},
-			// 	},
-			// }
+			gwClient, err := s.getClient()
+			if err != nil {
+				log.Error().Err(err).Msg("error getting grpc client")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
 
-			// // TODO(refs) whitelist requesting a public share on interceptors? either that or don't enable auth interceptor on whatever service exposes public shares (in this case the gateway)
-			// publicShareResponse, err := c.GetPublicShare(r.Context(), &psRequest)
-			// if err != nil {
-			// 	log.Error().Err(err).Msg("error getting grpc client")
-			// 	w.WriteHeader(http.StatusInternalServerError)
-			// 	return
-			// }
-			// fmt.Println(publicShareResponse)
-			// // - shift path to get the id of the public share in the url
-			// // - do DAV response
+			// TODO(refs) authenticate request. use plain text user credentials temporarily, later on use resource owner credentials, and ideally not basic auth
+			authRequest := gatewayv0alphapb.AuthenticateRequest{
+				ClientId:     "einstein",
+				ClientSecret: "relativity",
+				Type:         "basic",
+			}
+
+			authResponse, err := gwClient.Authenticate(r.Context(), &authRequest)
+			if err != nil {
+				log.Error().Err(err).Msg("error authenticating resource owner")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			psRequestByToken := publicshareproviderv0alphapb.GetPublicShareByTokenRequest{
+				Token: getRequestToken(r.URL.Path),
+			}
+
+			publicShareResponse, err := gwClient.GetPublicShareByToken(r.Context(), &psRequestByToken)
+			if err != nil {
+				log.Error().Err(err).Msg("error requesting public share")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			// now that we got the share we need to get the resource info
+			statReq := storageproviderv0alphapb.StatRequest{
+				Ref: &storageproviderv0alphapb.Reference{
+					Spec: &storageproviderv0alphapb.Reference_Id{
+						Id: publicShareResponse.GetShare().ResourceId,
+					},
+				},
+			}
+
+			ctx := token.ContextSetToken(r.Context(), authResponse.GetToken())
+			ctx = metadata.AppendToOutgoingContext(ctx, "x-access-token", authResponse.GetToken())
+
+			statResponse, err := gwClient.Stat(ctx, &statReq)
+			if err != nil {
+				log.Error().Err(err).Msg("error during stat call")
+				return
+			}
+
+			sInfo := []*storageproviderv0alphapb.ResourceInfo{statResponse.GetInfo()}
+			// now prepare the dav response with the resource info
+			propRes, err := s.formatPropfind(ctx, &pf, sInfo, "")
+			if err != nil {
+				log.Error().Err(err).Msg("error formatting propfind")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("DAV", "1, 3, extended-mkcol")
+			w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+			w.WriteHeader(http.StatusMultiStatus)
+			_, err = w.Write([]byte(propRes))
+			if err != nil {
+				log.Error().Err(err).Msg("error writing body")
+				return
+			}
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -72,6 +134,8 @@ func (p *PublicFilesHandler) Handler(s *svc) http.Handler {
 	})
 }
 
-// func shareTokenFromURL(u *url.URL) string {
-// 	return strings.Split(u.Path, "/")[1] // remove prefixed "/"
-// }
+// extracts the share token from the url. /#/{token} -> // {token}
+// TODO(refs) unit test this
+func getRequestToken(path string) string {
+	return strings.Split(path, "/")[1]
+}

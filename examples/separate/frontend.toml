@@ -35,6 +35,9 @@ client_secret = "foobar"
 
 [grpc.interceptors.auth]
 token_manager = "jwt"
+skip_methods = [
+	"/cs3.publicshareproviderv0alpha.PublicShareProviderService/GetPublicShareByToken",
+]
 
 [grpc.interceptors.auth.token_managers.jwt]
 secret = "Pive-Fumkiu4"
