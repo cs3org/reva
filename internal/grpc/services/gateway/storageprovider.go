@@ -285,6 +285,7 @@ func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *storageproviderv0
 }
 
 func (s *svc) Stat(ctx context.Context, req *storageproviderv0alphapb.StatRequest) (*storageproviderv0alphapb.StatResponse, error) {
+	// TODO(refs) do we need to append home to every stat request?
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
@@ -376,25 +377,73 @@ func (s *svc) ListRecycleStream(req *gatewayv0alphapb.ListRecycleStreamRequest, 
 	return errors.New("Unimplemented")
 }
 
+// TODO use the ListRecycleRequest.Ref to only list the trish of a specific storage
 func (s *svc) ListRecycle(ctx context.Context, req *gatewayv0alphapb.ListRecycleRequest) (*storageproviderv0alphapb.ListRecycleResponse, error) {
-	// TODO(labkode): query all available storage providers to get unified list as the request does not come
-	// with ref information to target only one storage provider.
-	res := &storageproviderv0alphapb.ListRecycleResponse{
-		Status: status.NewUnimplemented(ctx, nil, "ListRecycle not yet implemented"),
+	c, err := s.find(ctx, req.GetRef())
+	if err != nil {
+		if _, ok := err.(errtypes.IsNotFound); ok {
+			return &storageproviderv0alphapb.ListRecycleResponse{
+				Status: status.NewNotFound(ctx, "storage provider not found"),
+			}, nil
+		}
+		return &storageproviderv0alphapb.ListRecycleResponse{
+			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+		}, nil
 	}
+
+	res, err := c.ListRecycle(ctx, &storageproviderv0alphapb.ListRecycleRequest{
+		Opaque: req.Opaque,
+		FromTs: req.FromTs,
+		ToTs:   req.ToTs,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling ListRecycleRequest")
+	}
+
 	return res, nil
 }
 
 func (s *svc) RestoreRecycleItem(ctx context.Context, req *storageproviderv0alphapb.RestoreRecycleItemRequest) (*storageproviderv0alphapb.RestoreRecycleItemResponse, error) {
-	res := &storageproviderv0alphapb.RestoreRecycleItemResponse{
-		Status: status.NewUnimplemented(ctx, nil, "RestoreRecycleItem not yet implemented"),
+	c, err := s.find(ctx, req.Ref)
+	if err != nil {
+		if _, ok := err.(errtypes.IsNotFound); ok {
+			return &storageproviderv0alphapb.RestoreRecycleItemResponse{
+				Status: status.NewNotFound(ctx, "storage provider not found"),
+			}, nil
+		}
+		return &storageproviderv0alphapb.RestoreRecycleItemResponse{
+			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+		}, nil
 	}
+
+	res, err := c.RestoreRecycleItem(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling RestoreRecycleItem")
+	}
+
 	return res, nil
 }
 
 func (s *svc) PurgeRecycle(ctx context.Context, req *gatewayv0alphapb.PurgeRecycleRequest) (*storageproviderv0alphapb.PurgeRecycleResponse, error) {
-	res := &storageproviderv0alphapb.PurgeRecycleResponse{
-		Status: status.NewUnimplemented(ctx, nil, "PurgeRecycle not yet implemented"),
+	// lookup storagy by treating the key as a path. It has been prefixed with the storage path in ListRecycle
+	c, err := s.find(ctx, req.Ref)
+	if err != nil {
+		if _, ok := err.(errtypes.IsNotFound); ok {
+			return &storageproviderv0alphapb.PurgeRecycleResponse{
+				Status: status.NewNotFound(ctx, "storage provider not found"),
+			}, nil
+		}
+		return &storageproviderv0alphapb.PurgeRecycleResponse{
+			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+		}, nil
+	}
+
+	res, err := c.PurgeRecycle(ctx, &storageproviderv0alphapb.PurgeRecycleRequest{
+		Opaque: req.GetOpaque(),
+		Ref:    req.GetRef(),
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling PurgeRecycle")
 	}
 	return res, nil
 }

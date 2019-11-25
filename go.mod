@@ -4,7 +4,7 @@ require (
 	contrib.go.opencensus.io/exporter/jaeger v0.1.0
 	contrib.go.opencensus.io/exporter/prometheus v0.1.0
 	github.com/BurntSushi/toml v0.3.1
-	github.com/aws/aws-sdk-go v1.25.27
+	github.com/aws/aws-sdk-go v1.25.41
 	github.com/cheggaaa/pb v1.0.28
 	github.com/coreos/go-oidc v2.1.0+incompatible
 	github.com/cs3org/go-cs3apis v0.0.0-20191108224558-365d440ba78a
@@ -20,7 +20,7 @@ require (
 	github.com/mattn/go-isatty v0.0.4 // indirect
 	github.com/mattn/go-runewidth v0.0.4 // indirect
 	github.com/mitchellh/mapstructure v1.1.2
-	github.com/ory/fosite v0.30.1
+	github.com/ory/fosite v0.30.2
 	github.com/pkg/errors v0.8.1
 	github.com/pkg/xattr v0.4.1
 	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect

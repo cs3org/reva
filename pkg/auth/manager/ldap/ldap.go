@@ -44,19 +44,38 @@ type mgr struct {
 	filter       string
 	bindUsername string
 	bindPassword string
+	schema       attributes
 }
 
 type config struct {
-	Hostname     string `mapstructure:"hostname"`
-	Port         int    `mapstructure:"port"`
-	BaseDN       string `mapstructure:"base_dn"`
-	Filter       string `mapstructure:"filter"`
-	BindUsername string `mapstructure:"bind_username"`
-	BindPassword string `mapstructure:"bind_password"`
+	Hostname     string     `mapstructure:"hostname"`
+	Port         int        `mapstructure:"port"`
+	BaseDN       string     `mapstructure:"base_dn"`
+	Filter       string     `mapstructure:"filter"`
+	BindUsername string     `mapstructure:"bind_username"`
+	BindPassword string     `mapstructure:"bind_password"`
+	Schema       attributes `mapstructure:"schema"`
+}
+
+type attributes struct {
+	Mail        string `mapstructure:"mail"`
+	UID         string `mapstructure:"uid"`
+	DisplayName string `mapstructure:"displayName"`
+	DN          string `mapstructure:"dn"`
+}
+
+// Default attributes (Active Directory)
+var ldapDefaults = attributes{
+	Mail:        "mail",
+	UID:         "objectGUID",
+	DisplayName: "displayName",
+	DN:          "dn",
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
+	c := &config{
+		Schema: ldapDefaults,
+	}
 	if err := mapstructure.Decode(m, c); err != nil {
 		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
@@ -78,6 +97,7 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 		filter:       c.Filter,
 		bindUsername: c.BindUsername,
 		bindPassword: c.BindPassword,
+		schema:       c.Schema,
 	}, nil
 }
 
@@ -101,8 +121,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		am.baseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		fmt.Sprintf(am.filter, clientID),
-		// TODO(jfd): objectguid, entryuuid etc ... make configurable
-		[]string{"dn", "objectguid"},
+		[]string{am.schema.DN, am.schema.UID},
 		nil,
 	)
 
@@ -128,8 +147,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	uid := &typespb.UserId{
 		// TODO(jfd): how do we determine the issuer for ldap? ... make configurable
 		Idp: fmt.Sprintf("%s:%d", am.hostname, am.port),
-		// TODO(jfd): objectguid, entryuuid etc ... make configurable
-		OpaqueId: sr.Entries[0].GetAttributeValue("objectguid"),
+		OpaqueId: sr.Entries[0].GetAttributeValue(am.schema.UID),
 	}
 
 	return uid, nil
