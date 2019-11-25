@@ -44,6 +44,7 @@ type mgr struct {
 	filter       string
 	bindUsername string
 	bindPassword string
+	idp          string
 	schema       attributes
 }
 
@@ -54,6 +55,7 @@ type config struct {
 	Filter       string     `mapstructure:"filter"`
 	BindUsername string     `mapstructure:"bind_username"`
 	BindPassword string     `mapstructure:"bind_password"`
+	Idp          string     `mapstructure:"idp"`
 	Schema       attributes `mapstructure:"schema"`
 }
 
@@ -97,6 +99,7 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 		filter:       c.Filter,
 		bindUsername: c.BindUsername,
 		bindPassword: c.BindPassword,
+		idp:          c.Idp,
 		schema:       c.Schema,
 	}, nil
 }
@@ -145,8 +148,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	}
 
 	uid := &typespb.UserId{
-		// TODO(jfd): how do we determine the issuer for ldap? ... make configurable
-		Idp: fmt.Sprintf("%s:%d", am.hostname, am.port),
+		Idp:      am.idp,
 		OpaqueId: sr.Entries[0].GetAttributeValue(am.schema.UID),
 	}
 
