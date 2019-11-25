@@ -45,6 +45,7 @@ type manager struct {
 	filter       string
 	bindUsername string
 	bindPassword string
+	idp          string
 	schema       attributes
 }
 
@@ -55,6 +56,7 @@ type config struct {
 	Filter       string     `mapstructure:"filter"`
 	BindUsername string     `mapstructure:"bind_username"`
 	BindPassword string     `mapstructure:"bind_password"`
+	Idp          string     `mapstructure:"idp"`
 	Schema       attributes `mapstructure:"schema"`
 }
 
@@ -99,6 +101,7 @@ func New(m map[string]interface{}) (user.Manager, error) {
 		filter:       c.Filter,
 		bindUsername: c.BindUsername,
 		bindPassword: c.BindPassword,
+		idp:          c.Idp,
 		schema:       c.Schema,
 	}, nil
 }
@@ -138,6 +141,10 @@ func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*userprovid
 	log.Debug().Interface("entries", sr.Entries).Msg("entries")
 
 	return &userproviderv0alphapb.User{
+                Id: &typespb.UserId{
+                        Idp:      m.idp,
+                        OpaqueId: uid.OpaqueId,
+                },		
 		Username:    sr.Entries[0].GetAttributeValue(m.schema.UID),
 		Groups:      []string{},
 		Mail:        sr.Entries[0].GetAttributeValue(m.schema.Mail),
@@ -159,7 +166,7 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userproviderv
 	}
 
 	// Search for the given clientID
-	searchRequest := ldap.NewSearchRequest(
+	searchRequest := ldap.NewSearchRequest(	
 		m.baseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		fmt.Sprintf(m.filter, query), // TODO this is screaming for errors if filter contains >1 %s
@@ -176,6 +183,10 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userproviderv
 
 	for _, entry := range sr.Entries {
 		user := &userproviderv0alphapb.User{
+                        Id: &typespb.UserId{
+                                Idp:      m.idp,
+                                OpaqueId: sr.Entries[0].GetAttributeValue(m.schema.UID),
+                        },			
 			Username:    entry.GetAttributeValue(m.schema.UID),
 			Groups:      []string{},
 			Mail:        sr.Entries[0].GetAttributeValue(m.schema.Mail),
