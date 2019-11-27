@@ -1,6 +1,37 @@
 ---
 kind: pipeline
 type: docker
+name: build-and-xrootd-docker
+
+platform:
+  os: linux
+  arch: amd64
+
+trigger:
+  branch:
+  - aritz-ops
+  event:
+    exclude:
+    - pull_request
+    - tag
+    - promote
+    - rollback
+steps:
+
+- name: xrootd_install
+  image: plugins/docker
+  settings:
+    repo: cs3org/reva
+    tags: latest
+    dockerfile: Dockerfile.xrootd
+    username:
+      from_secret: dockerhub_username
+    password:
+      from_secret: dockerhub_password
+
+---
+kind: pipeline
+type: docker
 name: build-and-publish-docker
 
 platform:
@@ -17,16 +48,6 @@ trigger:
     - promote
     - rollback
 steps:
-- name: xrootd_install
-  image: plugins/docker
-  settings:
-    repo: cs3org/reva
-    tags: latest
-    dockerfile: Dockerfile.xrootd
-    username:
-      from_secret: dockerhub_username
-    password:
-      from_secret: dockerhub_password
 
 - name: license-scan
   image: golang:1.13
