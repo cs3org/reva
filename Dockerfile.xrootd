@@ -21,5 +21,6 @@ FROM golang:1.13
 WORKDIR /go/src/github/cs3org/reva
 COPY . .
 RUN make build-reva-docker && cp /go/src/github/cs3org/reva/cmd/reva/reva /go/bin/reva
+RUN yum-config-manager --add-repo http://xrootd.cern.ch/sw/repos/stable/slc/7/x86_64
 RUN yum install eos-xrootd eos-xrootd-debuginfo xrootd xrootd-client xrootd-client-libs xrootd-debuginfo xrootd-libs xrootd-private-devel xrootd-selinux xrootd-server xrootd-server-libs
 ENTRYPOINT ['ls']
