@@ -24,5 +24,6 @@ import (
 	_ "github.com/cs3org/reva/pkg/user/manager/json"
 	_ "github.com/cs3org/reva/pkg/user/manager/ldap"
 	_ "github.com/cs3org/reva/pkg/user/manager/oidc"
+	_ "github.com/cs3org/reva/pkg/user/manager/scim"
 	// Add your own here
 )
