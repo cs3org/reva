@@ -22,9 +22,9 @@ import (
 	"fmt"
 	"net/http"
 
-	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -57,8 +57,6 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO(labkode): this should be a flexible mechanism to
-	// use any kind of authentication, basic auth, SSO, anything ...
 	username := r.PostForm.Get("username")
 	password := r.PostForm.Get("password")
 	// No username we ask to give one, here we provide only a form validation.
@@ -91,8 +89,8 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	genReq := &gatewayv0alphapb.AuthenticateRequest{
-		Type:         s.conf.AuthType,
+	genReq := &gateway.AuthenticateRequest{
+		Type:         "basic", // we are sending username and password -> basic auth
 		ClientId:     username,
 		ClientSecret: password,
 	}
@@ -103,7 +101,7 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if genRes.Status.Code != rpcpb.Code_CODE_OK {
+	if genRes.Status.Code != rpc.Code_CODE_OK {
 		err := status.NewErrorFromCode(genRes.Status.Code, "oidcprovider")
 		log.Err(err).Msg("error authenticating client credentials")
 		// TODO(labkode): maybe oauth response is better
@@ -113,9 +111,9 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 	// Once the authentication is successful, we have a user id that has been
 	// validated, to fill other fields we need the user information also.
 
-	uid := genRes.UserId
+	uid := genRes.User.Id
 
-	getUserReq := &userproviderv0alphapb.GetUserRequest{
+	getUserReq := &userpb.GetUserRequest{
 		UserId: uid,
 	}
 	getUserRes, err := c.GetUser(ctx, getUserReq)
@@ -125,7 +123,7 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if getUserRes.Status.Code != rpcpb.Code_CODE_OK {
+	if getUserRes.Status.Code != rpc.Code_CODE_OK {
 		err := status.NewErrorFromCode(getUserRes.Status.Code, "oidcprovider")
 		log.Err(err).Msg("error getting user information")
 		w.WriteHeader(http.StatusInternalServerError)

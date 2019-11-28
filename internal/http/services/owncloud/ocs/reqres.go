@@ -23,7 +23,7 @@ import (
 	"encoding/xml"
 	"net/http"
 
-	typespb "github.com/cs3org/go-cs3apis/cs3/types"
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 )
 
@@ -145,7 +145,7 @@ func WriteOCSResponse(w http.ResponseWriter, r *http.Request, res *Response, err
 }
 
 // UserIDToString returns a userid string with an optional idp separated by @: "<opaque id>[@<idp>]"
-func UserIDToString(userID *typespb.UserId) string {
+func UserIDToString(userID *user.UserId) string {
 	if userID == nil || userID.OpaqueId == "" {
 		return ""
 	}

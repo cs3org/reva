@@ -21,7 +21,7 @@ package static
 import (
 	"context"
 
-	authregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/authregistry/v0alpha"
+	registrypb "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/registry/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -40,10 +40,10 @@ type reg struct {
 	rules map[string]string
 }
 
-func (r *reg) ListProviders(ctx context.Context) ([]*authregistryv0alphapb.ProviderInfo, error) {
-	providers := []*authregistryv0alphapb.ProviderInfo{}
+func (r *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, error) {
+	providers := []*registrypb.ProviderInfo{}
 	for k, v := range r.rules {
-		providers = append(providers, &authregistryv0alphapb.ProviderInfo{
+		providers = append(providers, &registrypb.ProviderInfo{
 			ProviderType: k,
 			Address:      v,
 		})
@@ -51,10 +51,10 @@ func (r *reg) ListProviders(ctx context.Context) ([]*authregistryv0alphapb.Provi
 	return providers, nil
 }
 
-func (r *reg) GetProvider(ctx context.Context, authType string) (*authregistryv0alphapb.ProviderInfo, error) {
+func (r *reg) GetProvider(ctx context.Context, authType string) (*registrypb.ProviderInfo, error) {
 	for k, v := range r.rules {
 		if k == authType {
-			return &authregistryv0alphapb.ProviderInfo{
+			return &registrypb.ProviderInfo{
 				ProviderType: k,
 				Address:      v,
 			}, nil

@@ -21,7 +21,6 @@ package oidcprovider
 import (
 	"crypto/rand"
 	"crypto/rsa"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -32,7 +31,7 @@ import (
 	"github.com/ory/fosite/token/jwt"
 	"github.com/pkg/errors"
 
-	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/mitchellh/mapstructure"
@@ -44,7 +43,6 @@ func init() {
 
 type config struct {
 	Prefix          string                            `mapstructure:"prefix"`
-	AuthType        string                            `mapstructure:"auth_type"`
 	GatewayEndpoint string                            `mapstructure:"gateway"`
 	Clients         map[string]map[string]interface{} `mapstructure:"clients"`
 	Issuer          string                            `mapstructure:"issuer"`
@@ -81,9 +79,6 @@ func New(m map[string]interface{}) (rhttp.Service, error) {
 		c.Prefix = "oauth2"
 	}
 
-	if c.AuthType == "" {
-		return nil, fmt.Errorf("oidcprovidersvc: auth_type cannot be empty")
-	}
 	// parse clients
 	clients := map[string]fosite.Client{}
 	for id, val := range c.Clients {
@@ -257,7 +252,7 @@ func (s *customSession) Clone() fosite.Session {
 // Usually, you could do:
 //
 //  session = new(fosite.DefaultSession)
-func (s *svc) newSession(token string, user *userproviderv0alphapb.User) *customSession {
+func (s *svc) newSession(token string, user *userpb.User) *customSession {
 	return &customSession{
 		DefaultSession: &openid.DefaultSession{
 			Claims: &jwt.IDTokenClaims{

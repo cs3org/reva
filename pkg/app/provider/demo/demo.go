@@ -24,7 +24,7 @@ import (
 
 	"github.com/cs3org/reva/pkg/app"
 
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -32,7 +32,7 @@ type provider struct {
 	iframeUIProvider string
 }
 
-func (p *provider) GetIFrame(ctx context.Context, resID *storageproviderv0alphapb.ResourceId, token string) (string, error) {
+func (p *provider) GetIFrame(ctx context.Context, resID *providerpb.ResourceId, token string) (string, error) {
 	msg := fmt.Sprintf("<iframe src=%s/open/%s?access-token=%s />", p.iframeUIProvider, resID.StorageId+":"+resID.OpaqueId, token)
 	return msg, nil
 }

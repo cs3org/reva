@@ -21,6 +21,7 @@ package ocs
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"path"
@@ -28,26 +29,27 @@ import (
 	"strings"
 	"time"
 
-	publicshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
-	typespb "github.com/cs3org/go-cs3apis/cs3/types"
-	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
-	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
-	"github.com/cs3org/reva/pkg/user"
 )
 
 // SharesHandler implements the ownCloud sharing API
 type SharesHandler struct {
-	gatewaySvc  string
-	userManager user.Manager
+	gatewayAddr string
 }
 
 func (h *SharesHandler) init(c *Config) error {
-	h.gatewaySvc = c.GatewaySvc
+	h.gatewayAddr = c.GatewaySvc
 	return nil
 }
 
@@ -63,15 +65,14 @@ func (h *SharesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "shares":
 		switch r.Method {
 		case "OPTIONS":
-			w.WriteHeader(http.StatusOK) // TODO cors?
+			w.WriteHeader(http.StatusOK)
 			return
 		case "GET":
 			h.listShares(w, r)
 		case "POST":
 			h.createShare(w, r)
 		case "PUT":
-			// TODO PUT is used with incomplete data to update a share 🤦
-			h.updateShare(w, r)
+			h.updateShare(w, r) // TODO PUT is used with incomplete data to update a share 🤦
 		default:
 			WriteOCSError(w, r, MetaBadRequest.StatusCode, "Only GET, POST and PUT are allowed", nil)
 		}
@@ -83,50 +84,53 @@ func (h *SharesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SharesHandler) findSharees(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
+	log := appctx.GetLogger(r.Context())
+	term := r.URL.Query().Get("search")
 
-	search := r.URL.Query().Get("search")
-
-	if search == "" {
+	if term == "" {
 		WriteOCSError(w, r, MetaBadRequest.StatusCode, "search must not be empty", nil)
 		return
 	}
-	// TODO sanitize query
 
-	users, err := h.userManager.FindUsers(ctx, search)
+	gatewayProvider := mustGetGateway(h.gatewayAddr, r, w)
+
+	req := userpb.FindUsersRequest{
+		Filter: term,
+	}
+
+	res, err := gatewayProvider.FindUsers(r.Context(), &req)
 	if err != nil {
 		WriteOCSError(w, r, MetaServerError.StatusCode, "error searching users", err)
 		return
 	}
 
-	log.Debug().Int("count", len(users)).Str("search", search).Msg("users found")
+	log.Debug().Int("count", len(res.GetUsers())).Str("search", term).Msg("users found")
 
-	matches := make([]*MatchData, 0, len(users))
+	matches := make([]*conversions.MatchData, 0, len(res.GetUsers()))
 
-	for _, user := range users {
+	for _, user := range res.GetUsers() {
 		match := h.userAsMatch(user)
 		log.Debug().Interface("user", user).Interface("match", match).Msg("mapped")
 		matches = append(matches, match)
 	}
 
-	WriteOCSSuccess(w, r, &ShareeData{
-		Exact: &ExactMatchesData{
-			Users:   []*MatchData{},
-			Groups:  []*MatchData{},
-			Remotes: []*MatchData{},
+	WriteOCSSuccess(w, r, &conversions.ShareeData{
+		Exact: &conversions.ExactMatchesData{
+			Users:   []*conversions.MatchData{},
+			Groups:  []*conversions.MatchData{},
+			Remotes: []*conversions.MatchData{},
 		},
 		Users:   matches,
-		Groups:  []*MatchData{},
-		Remotes: []*MatchData{},
+		Groups:  []*conversions.MatchData{},
+		Remotes: []*conversions.MatchData{},
 	})
 }
 
-func (h *SharesHandler) userAsMatch(u *userproviderv0alphapb.User) *MatchData {
-	return &MatchData{
+func (h *SharesHandler) userAsMatch(u *userpb.User) *conversions.MatchData {
+	return &conversions.MatchData{
 		Label: u.DisplayName,
-		Value: &MatchValueData{
-			ShareType: int(shareTypeUser),
+		Value: &conversions.MatchValueData{
+			ShareType: int(conversions.ShareTypeUser),
 			// TODO(jfd) find more robust userid
 			// username might be ok as it is uniqe at a given point in time
 			ShareWith: u.Username,
@@ -144,10 +148,10 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if shareType == int(shareTypeUser) {
+	if shareType == int(conversions.ShareTypeUser) {
 
 		// if user sharing is disabled
-		if h.gatewaySvc == "" {
+		if h.gatewayAddr == "" {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "user sharing service not configured", nil)
 			return
 		}
@@ -158,30 +162,27 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// find recipient based on username
-		users, err := h.userManager.FindUsers(ctx, shareWith)
+		gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+		if err != nil {
+			WriteOCSError(w, r, MetaServerError.StatusCode, fmt.Sprintf("no gateway service on addr: %v", h.gatewayAddr), err)
+			return
+		}
+
+		res, err := gatewayClient.FindUsers(ctx, &userpb.FindUsersRequest{
+			Filter: shareWith,
+		})
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error searching recipient", err)
 			return
 		}
-		var recipient *userproviderv0alphapb.User
-		for _, user := range users {
+
+		var recipient *userpb.User
+		for _, user := range res.GetUsers() {
 			if user.Username == shareWith {
 				recipient = user
 				break
 			}
 		}
-
-		// we need to prefix the path with the user id
-		u, ok := user.ContextGetUser(ctx)
-		if !ok {
-			WriteOCSError(w, r, MetaServerError.StatusCode, "missing user in context", fmt.Errorf("missing user in context"))
-			return
-		}
-
-		// TODO how do we get the home of a user? The path in the sharing api is relative to the users home
-		p := r.FormValue("path")
-		p = path.Join("/", u.Username, p)
 
 		var pint int
 
@@ -191,7 +192,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			pval := r.FormValue("permissions")
 			if pval == "" {
 				// by default only allow read permissions / assign viewer role
-				role = roleViewer
+				role = conversions.RoleViewer
 			} else {
 				pint, err = strconv.Atoi(pval)
 				if err != nil {
@@ -202,20 +203,13 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// map role to permissions
-
-		var permissions *storageproviderv0alphapb.ResourcePermissions
+		var permissions *provider.ResourcePermissions
 		permissions, err = h.role2CS3Permissions(role)
 		if err != nil {
 			log.Warn().Err(err).Msg("unknown role, mapping legacy permissions")
 			permissions = asCS3Permissions(pint, nil)
 		}
 
-		uClient, err := pool.GetUserShareProviderClient(h.gatewaySvc)
-		if err != nil {
-			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc client", err)
-			return
-		}
 		roleMap := map[string]string{"name": role}
 		val, err := json.Marshal(roleMap)
 		if err != nil {
@@ -223,18 +217,18 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		statReq := &storageproviderv0alphapb.StatRequest{
-			Ref: &storageproviderv0alphapb.Reference{
-				Spec: &storageproviderv0alphapb.Reference_Path{
-					Path: p,
-				},
-			},
-		}
-
-		sClient, err := pool.GetGatewayServiceClient(h.gatewaySvc)
+		sClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting storage grpc client", err)
 			return
+		}
+
+		statReq := &provider.StatRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{
+					Path: r.FormValue("path"),
+				},
+			},
 		}
 
 		statRes, err := sClient.Stat(ctx, statReq)
@@ -243,8 +237,8 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if statRes.Status.Code != rpcpb.Code_CODE_OK {
-			if statRes.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+		if statRes.Status.Code != rpc.Code_CODE_OK {
+			if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 				WriteOCSError(w, r, MetaNotFound.StatusCode, "not found", nil)
 				return
 			}
@@ -252,40 +246,41 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		req := &usershareproviderv0alphapb.CreateShareRequest{
-			Opaque: &typespb.Opaque{
-				Map: map[string]*typespb.OpaqueEntry{
-					"role": &typespb.OpaqueEntry{
+		createShareReq := &collaboration.CreateShareRequest{
+			Opaque: &types.Opaque{
+				Map: map[string]*types.OpaqueEntry{
+					"role": &types.OpaqueEntry{
 						Decoder: "json",
 						Value:   val,
 					},
 				},
 			},
 			ResourceInfo: statRes.Info,
-			Grant: &usershareproviderv0alphapb.ShareGrant{
-				Grantee: &storageproviderv0alphapb.Grantee{
-					Type: storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER,
+			Grant: &collaboration.ShareGrant{
+				Grantee: &provider.Grantee{
+					Type: provider.GranteeType_GRANTEE_TYPE_USER,
 					Id:   recipient.Id,
 				},
-				Permissions: &usershareproviderv0alphapb.SharePermissions{
+				Permissions: &collaboration.SharePermissions{
 					Permissions: permissions,
 				},
 			},
 		}
-		res, err := uClient.CreateShare(ctx, req)
+
+		createShareResponse, err := gatewayClient.CreateShare(ctx, createShareReq)
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error sending a grpc create share request", err)
 			return
 		}
-		if res.Status.Code != rpcpb.Code_CODE_OK {
-			if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+		if createShareResponse.Status.Code != rpc.Code_CODE_OK {
+			if createShareResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
 				WriteOCSError(w, r, MetaNotFound.StatusCode, "not found", nil)
 				return
 			}
 			WriteOCSError(w, r, MetaServerError.StatusCode, "grpc create share request failed", err)
 			return
 		}
-		s, err := h.userShare2ShareData(ctx, res.Share)
+		s, err := h.userShare2ShareData(ctx, createShareResponse.Share)
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error mapping share data", err)
 			return
@@ -293,43 +288,75 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		s.Path = r.FormValue("path") // use path without user prefix
 		WriteOCSSuccess(w, r, s)
 		return
+	}
 
+	if shareType == int(conversions.ShareTypePublicLink) {
+		// create a public link share
+		// get a connection to the public shares service
+		c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+		if err != nil {
+			log.Debug().Err(err).Str("createShare", "shares").Msg("error creating public link share")
+			WriteOCSError(w, r, MetaServerError.StatusCode, "missing user in context", fmt.Errorf("error getting a connection to a public shares provider"))
+			return
+		}
+
+		statReq := provider.StatRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{
+					Path: r.FormValue("path"),
+				},
+			},
+		}
+
+		statRes, err := c.Stat(ctx, &statReq)
+		if err != nil {
+			log.Debug().Err(err).Str("createShare", "shares").Msg("error on stat call")
+			WriteOCSError(w, r, MetaServerError.StatusCode, "missing resource information", fmt.Errorf("error getting resource information"))
+			return
+		}
+
+		// TODO(refs) set expiration date to whatever phoenix sends
+		req := link.CreatePublicShareRequest{
+			ResourceInfo: statRes.GetInfo(),
+			Grant: &link.Grant{
+				Expiration: &types.Timestamp{
+					Nanos:   uint32(time.Now().Add(time.Duration(31536000)).Nanosecond()),
+					Seconds: uint64(time.Now().Add(time.Duration(31536000)).Second()),
+				},
+			},
+		}
+
+		createRes, err := c.CreatePublicShare(ctx, &req)
+		if err != nil {
+			log.Debug().Err(err).Str("createShare", "shares").Msgf("error creating a public share to resource id: %v", statRes.Info.GetId())
+			WriteOCSError(w, r, MetaServerError.StatusCode, "error creating public share", fmt.Errorf("error creating a public share to resource id: %v", statRes.Info.GetId()))
+			return
+		}
+
+		if createRes.Status.Code != rpc.Code_CODE_OK {
+			log.Debug().Err(errors.New("create public share failed")).Str("shares", "createShare").Msgf("create public share failed with status code: %v", createRes.Status.Code.String())
+			WriteOCSError(w, r, MetaServerError.StatusCode, "grpc create public share request failed", err)
+			return
+		}
+
+		// build ocs response for Phoenix
+		s := conversions.PublicShare2ShareData(createRes.Share)
+		WriteOCSSuccess(w, r, s)
+
+		return
 	}
 
 	WriteOCSError(w, r, MetaBadRequest.StatusCode, "unknown share type", nil)
 }
 
 // TODO sort out mapping, this is just a first guess
-func permissions2OCSPermissions(p *storageproviderv0alphapb.ResourcePermissions) Permissions {
-	permissions := permissionInvalid
-	if p != nil {
-		if p.ListContainer {
-			permissions += permissionRead
-		}
-		if p.InitiateFileUpload {
-			permissions += permissionWrite
-		}
-		if p.CreateContainer {
-			permissions += permissionCreate
-		}
-		if p.Delete {
-			permissions += permissionDelete
-		}
-		if p.AddGrant {
-			permissions += permissionShare
-		}
-	}
-	return permissions
-}
-
-// TODO sort out mapping, this is just a first guess
 // TODO use roles to make this configurable
-func asCS3Permissions(p int, rp *storageproviderv0alphapb.ResourcePermissions) *storageproviderv0alphapb.ResourcePermissions {
+func asCS3Permissions(p int, rp *provider.ResourcePermissions) *provider.ResourcePermissions {
 	if rp == nil {
-		rp = &storageproviderv0alphapb.ResourcePermissions{}
+		rp = &provider.ResourcePermissions{}
 	}
 
-	if p&int(permissionRead) != 0 {
+	if p&int(conversions.PermissionRead) != 0 {
 		rp.ListContainer = true
 		rp.ListGrants = true
 		rp.ListFileVersions = true
@@ -339,24 +366,24 @@ func asCS3Permissions(p int, rp *storageproviderv0alphapb.ResourcePermissions) *
 		rp.GetQuota = true
 		rp.InitiateFileDownload = true
 	}
-	if p&int(permissionWrite) != 0 {
+	if p&int(conversions.PermissionWrite) != 0 {
 		rp.InitiateFileUpload = true
 		rp.RestoreFileVersion = true
 		rp.RestoreRecycleItem = true
 	}
-	if p&int(permissionCreate) != 0 {
+	if p&int(conversions.PermissionCreate) != 0 {
 		rp.CreateContainer = true
 		// FIXME permissions mismatch: double check create vs write file
 		rp.InitiateFileUpload = true
-		if p&int(permissionWrite) != 0 {
+		if p&int(conversions.PermissionWrite) != 0 {
 			rp.Move = true // TODO move only when create and write?
 		}
 	}
-	if p&int(permissionDelete) != 0 {
+	if p&int(conversions.PermissionDelete) != 0 {
 		rp.Delete = true
 		rp.PurgeRecycle = true
 	}
-	if p&int(permissionShare) != 0 {
+	if p&int(conversions.PermissionShare) != 0 {
 		rp.AddGrant = true
 		rp.RemoveGrant = true // TODO when are you able to unshare / delete
 		rp.UpdateGrant = true
@@ -365,23 +392,23 @@ func asCS3Permissions(p int, rp *storageproviderv0alphapb.ResourcePermissions) *
 }
 
 func (h *SharesHandler) permissions2Role(p int) string {
-	role := roleLegacy
-	if p == int(permissionRead) {
-		role = roleViewer
+	role := conversions.RoleLegacy
+	if p == int(conversions.PermissionRead) {
+		role = conversions.RoleViewer
 	}
-	if p&int(permissionWrite) == 1 {
-		role = roleEditor
+	if p&int(conversions.PermissionWrite) == 1 {
+		role = conversions.RoleEditor
 	}
-	if p&int(permissionShare) == 1 {
-		role = roleCoowner
+	if p&int(conversions.PermissionShare) == 1 {
+		role = conversions.RoleCoowner
 	}
 	return role
 }
 
-func (h *SharesHandler) role2CS3Permissions(r string) (*storageproviderv0alphapb.ResourcePermissions, error) {
+func (h *SharesHandler) role2CS3Permissions(r string) (*provider.ResourcePermissions, error) {
 	switch r {
-	case roleViewer:
-		return &storageproviderv0alphapb.ResourcePermissions{
+	case conversions.RoleViewer:
+		return &provider.ResourcePermissions{
 			ListContainer:        true,
 			ListGrants:           true,
 			ListFileVersions:     true,
@@ -391,8 +418,8 @@ func (h *SharesHandler) role2CS3Permissions(r string) (*storageproviderv0alphapb
 			GetQuota:             true,
 			InitiateFileDownload: true,
 		}, nil
-	case roleEditor:
-		return &storageproviderv0alphapb.ResourcePermissions{
+	case conversions.RoleEditor:
+		return &provider.ResourcePermissions{
 			ListContainer:        true,
 			ListGrants:           true,
 			ListFileVersions:     true,
@@ -410,8 +437,8 @@ func (h *SharesHandler) role2CS3Permissions(r string) (*storageproviderv0alphapb
 			Delete:             true,
 			PurgeRecycle:       true,
 		}, nil
-	case roleCoowner:
-		return &storageproviderv0alphapb.ResourcePermissions{
+	case conversions.RoleCoowner:
+		return &provider.ResourcePermissions{
 			ListContainer:        true,
 			ListGrants:           true,
 			ListFileVersions:     true,
@@ -456,23 +483,23 @@ func (h *SharesHandler) updateShare(w http.ResponseWriter, r *http.Request) {
 	shareID := strings.TrimLeft(r.URL.Path, "/")
 	// TODO we need to lookup the storage that is responsible for this share
 
-	uClient, err := pool.GetUserShareProviderClient(h.gatewaySvc)
+	uClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
 		WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc client", err)
 		return
 	}
 
-	uReq := &usershareproviderv0alphapb.UpdateShareRequest{
-		Ref: &usershareproviderv0alphapb.ShareReference{
-			Spec: &usershareproviderv0alphapb.ShareReference_Id{
-				Id: &usershareproviderv0alphapb.ShareId{
+	uReq := &collaboration.UpdateShareRequest{
+		Ref: &collaboration.ShareReference{
+			Spec: &collaboration.ShareReference_Id{
+				Id: &collaboration.ShareId{
 					OpaqueId: shareID,
 				},
 			},
 		},
-		Field: &usershareproviderv0alphapb.UpdateShareRequest_UpdateField{
-			Field: &usershareproviderv0alphapb.UpdateShareRequest_UpdateField_Permissions{
-				Permissions: &usershareproviderv0alphapb.SharePermissions{
+		Field: &collaboration.UpdateShareRequest_UpdateField{
+			Field: &collaboration.UpdateShareRequest_UpdateField_Permissions{
+				Permissions: &collaboration.SharePermissions{
 					// this completely overwrites the permissions for this user
 					Permissions: asCS3Permissions(perm, nil),
 				},
@@ -485,8 +512,8 @@ func (h *SharesHandler) updateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if uRes.Status.Code != rpcpb.Code_CODE_OK {
-		if uRes.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+	if uRes.Status.Code != rpc.Code_CODE_OK {
+		if uRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			WriteOCSError(w, r, MetaNotFound.StatusCode, "not found", nil)
 			return
 		}
@@ -494,10 +521,10 @@ func (h *SharesHandler) updateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gReq := &usershareproviderv0alphapb.GetShareRequest{
-		Ref: &usershareproviderv0alphapb.ShareReference{
-			Spec: &usershareproviderv0alphapb.ShareReference_Id{
-				Id: &usershareproviderv0alphapb.ShareId{
+	gReq := &collaboration.GetShareRequest{
+		Ref: &collaboration.ShareReference{
+			Spec: &collaboration.ShareReference_Id{
+				Id: &collaboration.ShareId{
 					OpaqueId: shareID,
 				},
 			},
@@ -509,8 +536,8 @@ func (h *SharesHandler) updateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if gRes.Status.Code != rpcpb.Code_CODE_OK {
-		if gRes.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+	if gRes.Status.Code != rpc.Code_CODE_OK {
+		if gRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			WriteOCSError(w, r, MetaNotFound.StatusCode, "not found", nil)
 			return
 		}
@@ -528,150 +555,293 @@ func (h *SharesHandler) updateShare(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
+	shares := make([]*conversions.ShareData, 0)
+	filters := []*collaboration.ListSharesRequest_Filter{}
+	var err error
+
+	// do shared with me. Please abstract this piece, this reads like hell.
+	if r.FormValue("shared_with_me") != "" {
+		listSharedWithMe, err := strconv.ParseBool(r.FormValue("shared_with_me"))
+		if err != nil {
+			WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
+			return
+		}
+		if listSharedWithMe {
+			sharedWithMe := h.listSharedWithMe(r)
+
+			sClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+			if err != nil {
+				WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
+				return
+			}
+
+			// TODO(refs) filter out "invalid" shares
+			for _, v := range sharedWithMe {
+				statRequest := provider.StatRequest{
+					Ref: &provider.Reference{
+						Spec: &provider.Reference_Id{
+							Id: v.Share.ResourceId,
+						},
+					},
+				}
+
+				statResponse, err := sClient.Stat(r.Context(), &statRequest)
+				if err != nil {
+					WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
+					return
+				}
+
+				data, err := h.userShare2ShareData(r.Context(), v.Share)
+				if err != nil {
+					WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
+					return
+				}
+
+				err = h.addFileInfo(r.Context(), data, statResponse.Info)
+				if err != nil {
+					WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
+					return
+				}
+
+				shares = append(shares, data)
+			}
+
+			WriteOCSSuccess(w, r, shares)
+			return
+		}
+	}
+
+	// shared with others
+	p := r.URL.Query().Get("path")
+	if p != "" {
+		filters, err = h.addFilters(w, r)
+		if err != nil {
+			WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
+			return
+		}
+	}
+
+	userShares, err := h.listUserShares(r, filters)
+	if err != nil {
+		WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
+		return
+	}
+
+	publicShares, err := h.listPublicShares(r)
+	if err != nil {
+		WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
+		return
+	}
+
+	shares = append(shares, append(userShares, publicShares...)...)
+
+	if h.isReshareRequest(r) {
+		WriteOCSSuccess(w, r, &conversions.Element{Data: shares})
+		return
+	}
+
+	WriteOCSSuccess(w, r, shares)
+}
+
+func (h *SharesHandler) listSharedWithMe(r *http.Request) []*collaboration.ReceivedShare {
+	c, err := pool.GetUserShareProviderClient(h.gatewayAddr)
+	if err != nil {
+		panic(err)
+	}
+
+	lrs := collaboration.ListReceivedSharesRequest{}
+	// TODO(refs) handle error...
+	shares, _ := c.ListReceivedShares(r.Context(), &lrs)
+	return shares.GetShares()
+}
+
+func (h *SharesHandler) isReshareRequest(r *http.Request) bool {
+	return r.URL.Query().Get("reshares") != ""
+}
+
+func (h *SharesHandler) listPublicShares(r *http.Request) ([]*conversions.ShareData, error) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	filters := []*usershareproviderv0alphapb.ListSharesRequest_Filter{}
-	var info *storageproviderv0alphapb.ResourceInfo
-
-	p := r.URL.Query().Get("path")
-	log.Debug().Str("path", p).Msg("listShares")
-	if p != "" {
-		// we need to prefix the path with the user id
-		u, ok := user.ContextGetUser(ctx)
-		if !ok {
-			WriteOCSError(w, r, MetaServerError.StatusCode, "missing user in context", fmt.Errorf("missing user in context"))
-			return
-		}
-		// TODO how do we get the home of a user? The path in the sharing api is relative to the users home
-		fn := path.Join("/", u.Username, p)
-
-		log.Debug().Str("path", p).Str("fn", fn).Interface("user", u).Msg("resolved path for user")
-
-		// first check if the file exists
-		sClient, err := pool.GetGatewayServiceClient(h.gatewaySvc)
+	// TODO(refs) why is this guard needed? Are we moving towards a gateway only for service discovery? without a gateway this is dead code.
+	if h.gatewayAddr != "" {
+		c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 		if err != nil {
-			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc storage provider client", err)
-			return
+			return nil, err
 		}
 
-		ref := &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
-		}
-		req := &storageproviderv0alphapb.StatRequest{Ref: ref}
-		res, err := sClient.Stat(ctx, req)
-		if err != nil {
-			WriteOCSError(w, r, MetaServerError.StatusCode, "error sending a grpc stat request", err)
-			return
-		}
-
-		if res.Status.Code != rpcpb.Code_CODE_OK {
-			if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
-				WriteOCSError(w, r, MetaNotFound.StatusCode, "not found", nil)
-				return
-			}
-			WriteOCSError(w, r, MetaServerError.StatusCode, "grpc stat request failed", err)
-			return
-		}
-
-		info = res.Info
-
-		log.Debug().Interface("info", info).Msg("path found")
-
-		filters = append(filters, &usershareproviderv0alphapb.ListSharesRequest_Filter{
-			Type: usershareproviderv0alphapb.ListSharesRequest_Filter_LIST_SHARES_REQUEST_FILTER_TYPE_RESOURCE_ID,
-			Term: &usershareproviderv0alphapb.ListSharesRequest_Filter_ResourceId{
-				ResourceId: info.Id,
-			},
-		})
-	}
-
-	shares := []*ShareData{}
-
-	// fetch user shares if configured
-	if h.gatewaySvc != "" {
-		userShareProviderClient, err := pool.GetGatewayServiceClient(h.gatewaySvc)
-		if err != nil {
-			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc user share handler client", err)
-			return
-		}
-		req := &usershareproviderv0alphapb.ListSharesRequest{
+		filters := []*link.ListPublicSharesRequest_Filter{}
+		req := link.ListPublicSharesRequest{
 			Filters: filters,
 		}
-		res, err := userShareProviderClient.ListShares(ctx, req)
+
+		res, err := c.ListPublicShares(ctx, &req)
 		if err != nil {
-			WriteOCSError(w, r, MetaServerError.StatusCode, "error sending a grpc list shares request", err)
-			return
-		}
-		if res.Status.Code != rpcpb.Code_CODE_OK {
-			if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
-				WriteOCSError(w, r, MetaNotFound.StatusCode, "not found", nil)
-				return
-			}
-			WriteOCSError(w, r, MetaServerError.StatusCode, "grpc list shares request failed", err)
-			return
-		}
-		for _, s := range res.Shares {
-			share, err := h.userShare2ShareData(ctx, s)
-			if err != nil {
-				WriteOCSError(w, r, MetaServerError.StatusCode, "error mapping share data", err)
-				return
-			}
-			if h.addFileInfo(ctx, share, info) != nil {
-				WriteOCSError(w, r, MetaServerError.StatusCode, "error adding file info", err)
-				return
-			}
-			log.Debug().Interface("share", s).Interface("info", info).Interface("shareData", share).Msg("mapped")
-			shares = append(shares, share)
+			return nil, err
 		}
 
-		// TODO(refs): refactor
-		pClient, err := pool.GetGatewayServiceClient(h.gatewaySvc)
-		if err != nil {
-			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting public share provider grpc client", err)
-		} else {
-			req := &publicshareproviderv0alphapb.ListPublicSharesRequest{}
-			res, err := pClient.ListPublicShares(ctx, req)
+		ocsDataPayload := make([]*conversions.ShareData, 0)
+		for _, share := range res.GetShare() {
+			sClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 			if err != nil {
-				WriteOCSError(w, r, MetaServerError.StatusCode, "error sending a grpc list public shares request", err)
-				return
-			}
-			if res.Status.Code != rpcpb.Code_CODE_OK {
-				if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
-					WriteOCSError(w, r, MetaNotFound.StatusCode, "not found", nil)
-					return
-				}
-				WriteOCSError(w, r, MetaServerError.StatusCode, "grpc list shares request failed", err)
-				return
+				return nil, err
 			}
 
-			for _, s := range res.Share {
-				share := h.publicShare2ShareData(s)
-				err := h.addFileInfo(ctx, share, info)
-				if err != nil {
-					WriteOCSError(w, r, MetaServerError.StatusCode, "error adding file info", err)
-					return
-				}
-				log.Debug().Interface("share", s).Interface("info", info).Interface("shareData", share).Msg("mapped")
-				shares = append(shares, share)
+			statRequest := &provider.StatRequest{
+				Ref: &provider.Reference{
+					Spec: &provider.Reference_Id{
+						Id: share.ResourceId,
+					},
+				},
 			}
+
+			statResponse, err := sClient.Stat(ctx, statRequest)
+			if err != nil {
+				return nil, err
+			}
+
+			sData := conversions.PublicShare2ShareData(share)
+			if statResponse.Status.Code != rpc.Code_CODE_OK {
+				return nil, err
+			}
+
+			if h.addFileInfo(ctx, sData, statResponse.Info) != nil {
+				return nil, err
+			}
+
+			log.Debug().Interface("share", share).Interface("info", statResponse.Info).Interface("shareData", share).Msg("mapped")
+			ocsDataPayload = append(ocsDataPayload, sData)
+
 		}
+
+		return ocsDataPayload, nil
 	}
-	// TODO fetch group shares
-	// TODO fetch federated shares
 
-	// fetch public link shares if configured
-
-	WriteOCSSuccess(w, r, &SharesData{
-		Shares: shares,
-	})
+	return nil, errors.New("bad request")
 }
 
-func (h *SharesHandler) addFileInfo(ctx context.Context, s *ShareData, info *storageproviderv0alphapb.ResourceInfo) error {
+func (h *SharesHandler) addFilters(w http.ResponseWriter, r *http.Request) ([]*collaboration.ListSharesRequest_Filter, error) {
+	filters := []*collaboration.ListSharesRequest_Filter{}
+	var info *provider.ResourceInfo
+	ctx := r.Context()
+
+	// first check if the file exists
+	gwClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	if err != nil {
+		WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc storage provider client", err)
+		return nil, err
+	}
+
+	statReq := &provider.StatRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: r.FormValue("path"),
+			},
+		},
+	}
+
+	res, err := gwClient.Stat(ctx, statReq)
+	if err != nil {
+		WriteOCSError(w, r, MetaServerError.StatusCode, "error sending a grpc stat request", err)
+		return nil, err
+	}
+
+	if res.Status.Code != rpc.Code_CODE_OK {
+		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			WriteOCSError(w, r, MetaNotFound.StatusCode, "not found", nil)
+			return filters, errors.New("fixme")
+		}
+		WriteOCSError(w, r, MetaServerError.StatusCode, "grpc stat request failed", err)
+		return filters, errors.New("fixme")
+	}
+
+	info = res.Info
+
+	filters = append(filters, &collaboration.ListSharesRequest_Filter{
+		Type: collaboration.ListSharesRequest_Filter_TYPE_RESOURCE_ID,
+		Term: &collaboration.ListSharesRequest_Filter_ResourceId{
+			ResourceId: info.Id,
+		},
+	})
+
+	return filters, nil
+}
+
+func (h *SharesHandler) listUserShares(r *http.Request, filters []*collaboration.ListSharesRequest_Filter) ([]*conversions.ShareData, error) {
+	var rInfo *provider.ResourceInfo
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
+	lsUserSharesRequest := collaboration.ListSharesRequest{
+		Filters: filters,
+	}
+
+	ocsDataPayload := make([]*conversions.ShareData, 0)
+	if h.gatewayAddr != "" {
+		// get a connection to the users share provider
+		c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+		if err != nil {
+			return nil, err
+		}
+
+		// do list shares request. unfiltered
+		lsUserSharesResponse, err := c.ListShares(ctx, &lsUserSharesRequest)
+		if err != nil {
+			return nil, err
+		}
+
+		if lsUserSharesResponse.Status.Code != rpc.Code_CODE_OK {
+			return nil, err
+		}
+
+		// build OCS response payload
+		for _, s := range lsUserSharesResponse.Shares {
+			share, err := h.userShare2ShareData(ctx, s)
+			if err != nil {
+				return nil, err
+			}
+
+			// check if the resource exists
+			sClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+			if err != nil {
+				return nil, err
+			}
+
+			// prepare the stat request
+			statReq := &provider.StatRequest{
+				// prepare the reference
+				Ref: &provider.Reference{
+					// using ResourceId from the share
+					Spec: &provider.Reference_Id{Id: s.ResourceId},
+				},
+			}
+
+			statResponse, err := sClient.Stat(ctx, statReq)
+			if err != nil {
+				return nil, err
+			}
+
+			if statResponse.Status.Code != rpc.Code_CODE_OK {
+				return nil, err
+			}
+
+			if h.addFileInfo(ctx, share, statResponse.Info) != nil {
+				return nil, err
+			}
+
+			log.Debug().Interface("share", s).Interface("info", rInfo).Interface("shareData", share).Msg("mapped")
+			ocsDataPayload = append(ocsDataPayload, share)
+		}
+	}
+
+	return ocsDataPayload, nil
+}
+
+func (h *SharesHandler) addFileInfo(ctx context.Context, s *conversions.ShareData, info *provider.ResourceInfo) error {
 	if info != nil {
 		// TODO The owner is not set in the storage stat metadata ...
 		s.MimeType = info.MimeType
-		// TODO STime:     &typespb.Timestamp{Seconds: info.Mtime.Seconds, Nanos: info.Mtime.Nanos},
+		// TODO STime:     &types.Timestamp{Seconds: info.Mtime.Seconds, Nanos: info.Mtime.Nanos},
 		s.StorageID = info.Id.StorageId
 		// TODO Storage: int
 		s.ItemSource = info.Id.OpaqueId
@@ -679,60 +849,83 @@ func (h *SharesHandler) addFileInfo(ctx context.Context, s *ShareData, info *sto
 		s.FileTarget = path.Join("/", path.Base(info.Path))
 		s.Path = info.Path // TODO hm this might have to be relative to the users home ...
 		// TODO FileParent:
+		// item type
+		s.ItemType = conversions.ResourceType(info.GetType()).String()
+
+		c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+		if err != nil {
+			return err
+		}
 
 		// file owner might not yet be set. Use file info
 		if s.UIDFileOwner == "" {
 			s.UIDFileOwner = UserIDToString(info.Owner)
 		}
 		if s.DisplaynameFileOwner == "" && info.Owner != nil {
-			owner, err := h.userManager.GetUser(ctx, info.Owner)
+			owner, err := c.GetUser(ctx, &userpb.GetUserRequest{
+				UserId: info.Owner,
+			})
 			if err != nil {
 				return err
 			}
-			s.DisplaynameFileOwner = owner.DisplayName
+			s.DisplaynameFileOwner = owner.GetUser().DisplayName
 		}
 		// share owner might not yet be set. Use file info
 		if s.UIDOwner == "" {
 			s.UIDOwner = UserIDToString(info.Owner)
 		}
 		if s.DisplaynameOwner == "" && info.Owner != nil {
-			owner, err := h.userManager.GetUser(ctx, info.Owner)
+			owner, err := c.GetUser(ctx, &userpb.GetUserRequest{
+				UserId: info.Owner,
+			})
 			if err != nil {
 				return err
 			}
-			s.DisplaynameOwner = owner.DisplayName
+			s.DisplaynameOwner = owner.GetUser().DisplayName
 		}
 	}
 	return nil
 }
 
 // TODO(jfd) merge userShare2ShareData with publicShare2ShareData
-func (h *SharesHandler) userShare2ShareData(ctx context.Context, share *usershareproviderv0alphapb.Share) (*ShareData, error) {
-	sd := &ShareData{
-		Permissions: userSharePermissions2OCSPermissions(share.GetPermissions()),
-		ShareType:   shareTypeUser,
+func (h *SharesHandler) userShare2ShareData(ctx context.Context, share *collaboration.Share) (*conversions.ShareData, error) {
+	sd := &conversions.ShareData{
+		Permissions: conversions.UserSharePermissions2OCSPermissions(share.GetPermissions()),
+		ShareType:   conversions.ShareTypeUser,
 	}
+
+	c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	if err != nil {
+		return nil, err
+	}
+
 	if share.Creator != nil {
-		if creator, err := h.userManager.GetUser(ctx, share.Creator); err == nil {
+		if creator, err := c.GetUser(ctx, &userpb.GetUserRequest{
+			UserId: share.Creator,
+		}); err == nil {
 			// TODO the user from GetUser might not have an ID set, so we are using the one we have
 			sd.UIDOwner = UserIDToString(share.Creator)
-			sd.DisplaynameOwner = creator.DisplayName
+			sd.DisplaynameOwner = creator.GetUser().DisplayName
 		} else {
 			return nil, err
 		}
 	}
 	if share.Owner != nil {
-		if owner, err := h.userManager.GetUser(ctx, share.Owner); err == nil {
+		if owner, err := c.GetUser(ctx, &userpb.GetUserRequest{
+			UserId: share.Owner,
+		}); err == nil {
 			sd.UIDFileOwner = UserIDToString(share.Owner)
-			sd.DisplaynameFileOwner = owner.DisplayName
+			sd.DisplaynameFileOwner = owner.GetUser().DisplayName
 		} else {
 			return nil, err
 		}
 	}
 	if share.Grantee.Id != nil {
-		if grantee, err := h.userManager.GetUser(ctx, share.Grantee.Id); err == nil {
+		if grantee, err := c.GetUser(ctx, &userpb.GetUserRequest{
+			UserId: share.Grantee.GetId(),
+		}); err == nil {
 			sd.ShareWith = UserIDToString(share.Grantee.Id)
-			sd.ShareWithDisplayname = grantee.DisplayName
+			sd.ShareWithDisplayname = grantee.GetUser().DisplayName
 		} else {
 			return nil, err
 		}
@@ -748,174 +941,13 @@ func (h *SharesHandler) userShare2ShareData(ctx context.Context, share *usershar
 	return sd, nil
 }
 
-func userSharePermissions2OCSPermissions(sp *usershareproviderv0alphapb.SharePermissions) Permissions {
-	if sp != nil {
-		return permissions2OCSPermissions(sp.GetPermissions())
+// mustGetGateway returns a client to the gateway service, returns an error otherwise
+func mustGetGateway(addr string, r *http.Request, w http.ResponseWriter) gateway.GatewayAPIClient {
+	client, err := pool.GetGatewayServiceClient(addr)
+	if err != nil {
+		WriteOCSError(w, r, MetaBadRequest.StatusCode, "no connection to gateway service", nil)
+		return nil
 	}
-	return permissionInvalid
-}
 
-func publicSharePermissions2OCSPermissions(sp *publicshareproviderv0alphapb.PublicSharePermissions) Permissions {
-	if sp != nil {
-		return permissions2OCSPermissions(sp.GetPermissions())
-	}
-	return permissionInvalid
-}
-
-func (h *SharesHandler) publicShare2ShareData(share *publicshareproviderv0alphapb.PublicShare) *ShareData {
-	sd := &ShareData{
-		ID: share.Id.OpaqueId,
-		// TODO map share.resourceId to path and storage ... requires a stat call
-		// share.permissions ar mapped below
-		Permissions: publicSharePermissions2OCSPermissions(share.GetPermissions()),
-		ShareType:   shareTypePublicLink,
-		UIDOwner:    UserIDToString(share.Creator),
-		// TODO lookup user metadata
-		//DisplaynameOwner:     creator.DisplayName,
-		STime:        share.Ctime.Seconds, // TODO CS3 api birth time = btime
-		UIDFileOwner: UserIDToString(share.Owner),
-		// TODO lookup user metadata
-		//DisplaynameFileOwner: owner.DisplayName,
-		Token:      share.Token,
-		Expiration: timestampToExpiration(share.Expiration),
-	}
-	// actually clients should be able to GET and cache the user info themselves ...
-	// TODO check grantee type for user vs group
-	return sd
-}
-
-// timestamp is assumed to be UTC ... just human readable ...
-// FIXME and ambiguous / error prone because there is no time zone ...
-func timestampToExpiration(t *typespb.Timestamp) string {
-	return time.Unix(int64(t.Seconds), int64(t.Nanos)).Format("2006-01-02 15:05:05")
-}
-
-// SharesData holds a list of share data
-type SharesData struct {
-	Shares []*ShareData `json:"element" xml:"element"`
-}
-
-// ShareType indicates the type of share
-// TODO Phoenix should be able to handle int shareType in json
-type ShareType int
-
-const (
-	shareTypeUser ShareType = 0
-	//	shareTypeGroup               ShareType = 1
-	shareTypePublicLink ShareType = 3
-	//	shareTypeFederatedCloudShare ShareType = 6
-)
-
-// Permissions reflects the CRUD permissions used in the OCS sharing API
-type Permissions uint
-
-const (
-	permissionInvalid Permissions = 0
-	permissionRead    Permissions = 1
-	permissionWrite   Permissions = 2
-	permissionCreate  Permissions = 4
-	permissionDelete  Permissions = 8
-	permissionShare   Permissions = 16
-	//permissionAll     Permissions = 31
-)
-
-const (
-	roleLegacy  string = "legacy"
-	roleViewer  string = "viewer"
-	roleEditor  string = "editor"
-	roleCoowner string = "coowner"
-)
-
-// ShareData holds share data, see https://doc.owncloud.com/server/developer_manual/core/ocs-share-api.html#response-attributes-1
-type ShareData struct {
-	// TODO int?
-	ID string `json:"id" xml:"id"`
-	// The share’s type. This can be one of:
-	// 0 = user
-	// 1 = group
-	// 3 = public link
-	// 6 = federated cloud share
-	ShareType ShareType `json:"share_type" xml:"share_type"`
-	// The username of the owner of the share.
-	UIDOwner string `json:"uid_owner" xml:"uid_owner"`
-	// The display name of the owner of the share.
-	DisplaynameOwner string `json:"displayname_owner" xml:"displayname_owner"`
-	// The permission attribute set on the file. Options are:
-	// * 1 = Read
-	// * 2 = Update
-	// * 4 = Create
-	// * 8 = Delete
-	// * 16 = Share
-	// * 31 = All permissions
-	// The default is 31, and for public shares is 1.
-	// TODO we should change the default to read only
-	Permissions Permissions `json:"permissions" xml:"permissions"`
-	// The UNIX timestamp when the share was created.
-	STime uint64 `json:"stime" xml:"stime"`
-	// ?
-	Parent string `json:"parent" xml:"parent"`
-	// The UNIX timestamp when the share expires.
-	Expiration string `json:"expiration" xml:"expiration"`
-	// The public link to the item being shared.
-	Token string `json:"token" xml:"token"`
-	// The unique id of the user that owns the file or folder being shared.
-	UIDFileOwner string `json:"uid_file_owner" xml:"uid_file_owner"`
-	// The display name of the user that owns the file or folder being shared.
-	DisplaynameFileOwner string `json:"displayname_file_owner" xml:"displayname_file_owner"`
-	// The path to the shared file or folder.
-	Path string `json:"path" xml:"path"`
-	// The type of the object being shared. This can be one of file or folder.
-	ItemType string `json:"item_type" xml:"item_type"`
-	// The RFC2045-compliant mimetype of the file.
-	MimeType  string `json:"mimetype" xml:"mimetype"`
-	StorageID string `json:"storage_id" xml:"storage_id"`
-	Storage   uint64 `json:"storage" xml:"storage"`
-	// The unique node id of the item being shared.
-	// TODO int?
-	ItemSource string `json:"item_source" xml:"item_source"`
-	// The unique node id of the item being shared. For legacy reasons item_source and file_source attributes have the same value.
-	// TODO int?
-	FileSource string `json:"file_source" xml:"file_source"`
-	// The unique node id of the parent node of the item being shared.
-	// TODO int?
-	FileParent string `json:"file_parent" xml:"file_parent"`
-	// The name of the shared file.
-	FileTarget string `json:"file_target" xml:"file_target"`
-	// The uid of the receiver of the file. This is either
-	// - a GID (group id) if it is being shared with a group or
-	// - a UID (user id) if the share is shared with a user.
-	ShareWith string `json:"share_with" xml:"share_with"`
-	// The display name of the receiver of the file.
-	ShareWithDisplayname string `json:"share_with_displayname" xml:"share_with_displayname"`
-	// Whether the recipient was notified, by mail, about the share being shared with them.
-	MailSend string `json:"mail_send" xml:"mail_send"`
-	// A (human-readable) name for the share, which can be up to 64 characters in length
-	Name string `json:"name" xml:"name"`
-}
-
-// ShareeData holds share recipaent search results
-type ShareeData struct {
-	Exact   *ExactMatchesData `json:"exact" xml:"exact"`
-	Users   []*MatchData      `json:"users" xml:"users"`
-	Groups  []*MatchData      `json:"groups" xml:"groups"`
-	Remotes []*MatchData      `json:"remotes" xml:"remotes"`
-}
-
-// ExactMatchesData hold exact matches
-type ExactMatchesData struct {
-	Users   []*MatchData `json:"users" xml:"users"`
-	Groups  []*MatchData `json:"groups" xml:"groups"`
-	Remotes []*MatchData `json:"remotes" xml:"remotes"`
-}
-
-// MatchData describes a single match
-type MatchData struct {
-	Label string          `json:"label" xml:"label"`
-	Value *MatchValueData `json:"value" xml:"value"`
-}
-
-// MatchValueData holds the type and actual value
-type MatchValueData struct {
-	ShareType int    `json:"shareType" xml:"shareType"`
-	ShareWith string `json:"shareWith" xml:"shareWith"`
+	return client
 }

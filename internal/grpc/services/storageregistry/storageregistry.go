@@ -23,8 +23,7 @@ import (
 	"fmt"
 	"io"
 
-	storageregv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageregistry/v0alpha"
-	storagetypespb "github.com/cs3org/go-cs3apis/cs3/storagetypes"
+	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
@@ -67,7 +66,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 		reg: reg,
 	}
 
-	storageregv0alphapb.RegisterStorageRegistryServiceServer(ss, service)
+	registrypb.RegisterRegistryAPIServer(ss, service)
 	return service, nil
 }
 
@@ -86,55 +85,55 @@ func getRegistry(c *config) (storage.Registry, error) {
 	return nil, fmt.Errorf("driver not found: %s", c.Driver)
 }
 
-func (s *service) ListStorageProviders(ctx context.Context, req *storageregv0alphapb.ListStorageProvidersRequest) (*storageregv0alphapb.ListStorageProvidersResponse, error) {
+func (s *service) ListStorageProviders(ctx context.Context, req *registrypb.ListStorageProvidersRequest) (*registrypb.ListStorageProvidersResponse, error) {
 	pinfos, err := s.reg.ListProviders(ctx)
 	if err != nil {
-		return &storageregv0alphapb.ListStorageProvidersResponse{
+		return &registrypb.ListStorageProvidersResponse{
 			Status: status.NewInternal(ctx, err, "error getting list of storage providers"),
 		}, nil
 	}
 
-	providers := make([]*storagetypespb.ProviderInfo, 0, len(pinfos))
+	providers := make([]*registrypb.ProviderInfo, 0, len(pinfos))
 	for _, info := range pinfos {
 		fill(info)
 		providers = append(providers, info)
 	}
 
-	res := &storageregv0alphapb.ListStorageProvidersResponse{
+	res := &registrypb.ListStorageProvidersResponse{
 		Status:    status.NewOK(ctx),
 		Providers: providers,
 	}
 	return res, nil
 }
 
-func (s *service) GetStorageProvider(ctx context.Context, req *storageregv0alphapb.GetStorageProviderRequest) (*storageregv0alphapb.GetStorageProviderResponse, error) {
+func (s *service) GetStorageProvider(ctx context.Context, req *registrypb.GetStorageProviderRequest) (*registrypb.GetStorageProviderResponse, error) {
 	p, err := s.reg.FindProvider(ctx, req.Ref)
 	if err != nil {
-		return &storageregv0alphapb.GetStorageProviderResponse{
+		return &registrypb.GetStorageProviderResponse{
 			Status: status.NewInternal(ctx, err, "error finding storage provider"),
 		}, nil
 	}
 
 	fill(p)
-	res := &storageregv0alphapb.GetStorageProviderResponse{
+	res := &registrypb.GetStorageProviderResponse{
 		Status:   status.NewOK(ctx),
 		Provider: p,
 	}
 	return res, nil
 }
 
-func (s *service) GetHome(ctx context.Context, req *storageregv0alphapb.GetHomeRequest) (*storageregv0alphapb.GetHomeResponse, error) {
+func (s *service) GetHome(ctx context.Context, req *registrypb.GetHomeRequest) (*registrypb.GetHomeResponse, error) {
 	log := appctx.GetLogger(ctx)
 	p, err := s.reg.GetHome(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting home")
-		res := &storageregv0alphapb.GetHomeResponse{
+		res := &registrypb.GetHomeResponse{
 			Status: status.NewInternal(ctx, err, "error getting home"),
 		}
 		return res, nil
 	}
 
-	res := &storageregv0alphapb.GetHomeResponse{
+	res := &registrypb.GetHomeResponse{
 		Status: status.NewOK(ctx),
 		Path:   p,
 	}
@@ -142,4 +141,4 @@ func (s *service) GetHome(ctx context.Context, req *storageregv0alphapb.GetHomeR
 }
 
 // TODO(labkode): fix
-func fill(p *storagetypespb.ProviderInfo) {}
+func fill(p *registrypb.ProviderInfo) {}

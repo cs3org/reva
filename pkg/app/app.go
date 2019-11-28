@@ -21,7 +21,7 @@ package app
 import (
 	"context"
 
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
 // Registry is the interface that application registries implement
@@ -40,5 +40,5 @@ type ProviderInfo struct {
 // Provider is the interface that application providers implement
 // for providing the iframe location to a iframe UI Provider
 type Provider interface {
-	GetIFrame(ctx context.Context, resID *storageproviderv0alphapb.ResourceId, token string) (string, error)
+	GetIFrame(ctx context.Context, resID *provider.ResourceId, token string) (string, error)
 }

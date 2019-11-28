@@ -23,8 +23,8 @@ import (
 	"net/http"
 	"path"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 )
 
@@ -49,10 +49,10 @@ func (s *svc) doMkcol(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	// check fn exists
-	ref := &storageproviderv0alphapb.Reference{
-		Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+	ref := &provider.Reference{
+		Spec: &provider.Reference_Path{Path: fn},
 	}
-	statReq := &storageproviderv0alphapb.StatRequest{Ref: ref}
+	statReq := &provider.StatRequest{Ref: ref}
 	statRes, err := client.Stat(ctx, statReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending a grpc stat request")
@@ -60,13 +60,13 @@ func (s *svc) doMkcol(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	if statRes.Status.Code == rpcpb.Code_CODE_OK {
+	if statRes.Status.Code == rpc.Code_CODE_OK {
 		log.Warn().Msg("resource already exists")
 		w.WriteHeader(http.StatusMethodNotAllowed) // 405 if it already exists
 		return
 	}
 
-	req := &storageproviderv0alphapb.CreateContainerRequest{Ref: ref}
+	req := &provider.CreateContainerRequest{Ref: ref}
 	res, err := client.CreateContainer(ctx, req)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending create container grpc request")
@@ -74,12 +74,12 @@ func (s *svc) doMkcol(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+	if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
 		w.WriteHeader(http.StatusConflict)
 		return
 	}
 
-	if res.Status.Code != rpcpb.Code_CODE_OK {
+	if res.Status.Code != rpc.Code_CODE_OK {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

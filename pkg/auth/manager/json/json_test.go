@@ -26,7 +26,7 @@ import (
 	//"reflect"
 	//"fmt"
 	"testing"
-	//typespb "github.com/cs3org/go-cs3apis/cs3/types"
+	//user "github.com/cs3org/go-cs3apis/cs3/types"
 	//"github.com/cs3org/reva/pkg/errtypes"
 )
 

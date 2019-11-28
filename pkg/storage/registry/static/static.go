@@ -22,8 +22,8 @@ import (
 	"context"
 	"strings"
 
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
-	storagetypespb "github.com/cs3org/go-cs3apis/cs3/storagetypes"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/registry/registry"
@@ -39,10 +39,10 @@ type reg struct {
 	rules map[string]string
 }
 
-func (b *reg) ListProviders(ctx context.Context) ([]*storagetypespb.ProviderInfo, error) {
-	providers := []*storagetypespb.ProviderInfo{}
+func (b *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, error) {
+	providers := []*registrypb.ProviderInfo{}
 	for k, v := range b.rules {
-		providers = append(providers, &storagetypespb.ProviderInfo{
+		providers = append(providers, &registrypb.ProviderInfo{
 			Address:      v,
 			ProviderPath: k,
 		})
@@ -53,15 +53,15 @@ func (b *reg) ListProviders(ctx context.Context) ([]*storagetypespb.ProviderInfo
 // returns the the root path of the first provider in the list.
 // TODO(labkode): this is not production ready.
 func (b *reg) GetHome(ctx context.Context) (string, error) {
-	for _, v := range b.rules {
-		if strings.HasPrefix(v, "/") {
-			return v, nil
+	for k := range b.rules {
+		if strings.HasPrefix(k, "/") {
+			return k, nil
 		}
 	}
 	return "", errors.New("static: home not found")
 }
 
-func (b *reg) FindProvider(ctx context.Context, ref *storageproviderv0alphapb.Reference) (*storagetypespb.ProviderInfo, error) {
+func (b *reg) FindProvider(ctx context.Context, ref *provider.Reference) (*registrypb.ProviderInfo, error) {
 	// find longest match
 	var match string
 
@@ -76,7 +76,7 @@ func (b *reg) FindProvider(ctx context.Context, ref *storageproviderv0alphapb.Re
 	}
 
 	if match != "" {
-		return &storagetypespb.ProviderInfo{
+		return &registrypb.ProviderInfo{
 			ProviderPath: match,
 			Address:      b.rules[match],
 		}, nil
@@ -91,7 +91,7 @@ func (b *reg) FindProvider(ctx context.Context, ref *storageproviderv0alphapb.Re
 	for prefix := range b.rules {
 		if id.StorageId == prefix {
 			// TODO(labkode): fill path info based on provider id, if path and storage id points to same id, take that.
-			return &storagetypespb.ProviderInfo{
+			return &registrypb.ProviderInfo{
 				ProviderId: prefix,
 				Address:    b.rules[prefix],
 			}, nil

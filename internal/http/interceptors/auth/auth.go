@@ -23,9 +23,9 @@ import (
 	"net/http"
 	"strings"
 
-	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/internal/http/interceptors/auth/credential/registry"
 	tokenregistry "github.com/cs3org/reva/internal/http/interceptors/auth/token/registry"
 	tokenwriterregistry "github.com/cs3org/reva/internal/http/interceptors/auth/tokenwriter/registry"
@@ -76,9 +76,11 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-func skip(url string, skipped []string) bool {
-	for i := range skipped {
-		if strings.HasPrefix(skipped[i], url) {
+// skip evaluates whether a source url is a subpath of base
+// i.e: /a/b/c/d/e is a subpath of /a/b/c
+func skip(source string, base []string) bool {
+	for i := range base {
+		if strings.HasPrefix(source, base[i]) {
 			return true
 		}
 	}
@@ -187,7 +189,7 @@ func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
 
 				log.Debug().Msg("credentials obtained from the request")
 
-				req := &gatewayv0alphapb.AuthenticateRequest{
+				req := &gateway.AuthenticateRequest{
 					Type:         creds.Type,
 					ClientId:     creds.ClientID,
 					ClientSecret: creds.ClientSecret,
@@ -207,7 +209,7 @@ func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
 					return
 				}
 
-				if res.Status.Code != rpcpb.Code_CODE_OK {
+				if res.Status.Code != rpc.Code_CODE_OK {
 					err := status.NewErrorFromCode(res.Status.Code, "auth")
 					log.Err(err).Msg("error generating access token from credentials")
 					w.WriteHeader(http.StatusUnauthorized)
@@ -230,7 +232,7 @@ func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
 				return
 			}
 
-			u := &userproviderv0alphapb.User{}
+			u := &userpb.User{}
 			if err := mapstructure.Decode(claims, u); err != nil {
 				log.Error().Err(err).Msg("error decoding user claims")
 				w.WriteHeader(http.StatusUnauthorized)
