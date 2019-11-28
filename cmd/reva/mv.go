@@ -23,7 +23,7 @@ import (
 	"os"
 
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
 )
 
 func moveCommand() *command {
@@ -45,13 +45,13 @@ func moveCommand() *command {
 			return err
 		}
 
-		sourceRef := &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: src},
+		sourceRef := &storageproviderv1beta1pb.Reference{
+			Spec: &storageproviderv1beta1pb.Reference_Path{Path: src},
 		}
-		targetRef := &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: dst},
+		targetRef := &storageproviderv1beta1pb.Reference{
+			Spec: &storageproviderv1beta1pb.Reference_Path{Path: dst},
 		}
-		req := &storageproviderv0alphapb.MoveRequest{Source: sourceRef, Destination: targetRef}
+		req := &storageproviderv1beta1pb.MoveRequest{Source: sourceRef, Destination: targetRef}
 		res, err := client.Move(ctx, req)
 		if err != nil {
 			return err

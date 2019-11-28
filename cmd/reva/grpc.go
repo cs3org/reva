@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"log"
 
-	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
+	gatewayv1beta1pb "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	"github.com/cs3org/reva/pkg/token"
 	"google.golang.org/grpc"
@@ -45,12 +45,12 @@ func getAuthContext() context.Context {
 	return ctx
 }
 
-func getClient() (gatewayv0alphapb.GatewayServiceClient, error) {
+func getClient() (gatewayv1beta1pb.GatewayServiceClient, error) {
 	conn, err := getConn()
 	if err != nil {
 		return nil, err
 	}
-	return gatewayv0alphapb.NewGatewayServiceClient(conn), nil
+	return gatewayv1beta1pb.NewGatewayServiceClient(conn), nil
 }
 
 func getConn() (*grpc.ClientConn, error) {

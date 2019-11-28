@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"io"
 
-	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
+	usershareproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
@@ -87,11 +87,11 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 		sm:   sm,
 	}
 
-	usershareproviderv0alphapb.RegisterUserShareProviderServiceServer(ss, service)
+	usershareproviderv1beta1pb.RegisterUserShareProviderServiceServer(ss, service)
 	return service, nil
 }
 
-func (s *service) CreateShare(ctx context.Context, req *usershareproviderv0alphapb.CreateShareRequest) (*usershareproviderv0alphapb.CreateShareResponse, error) {
+func (s *service) CreateShare(ctx context.Context, req *usershareproviderv1beta1pb.CreateShareRequest) (*usershareproviderv1beta1pb.CreateShareResponse, error) {
 	// TODO(labkode): validate input
 	// TODO(labkode): hack: use configured IDP or use hostname as default.
 	if req.Grant.Grantee.Id.Idp == "" {
@@ -99,115 +99,115 @@ func (s *service) CreateShare(ctx context.Context, req *usershareproviderv0alpha
 	}
 	share, err := s.sm.Share(ctx, req.ResourceInfo, req.Grant)
 	if err != nil {
-		return &usershareproviderv0alphapb.CreateShareResponse{
+		return &usershareproviderv1beta1pb.CreateShareResponse{
 			Status: status.NewInternal(ctx, err, "error creating share"),
 		}, nil
 	}
 
-	res := &usershareproviderv0alphapb.CreateShareResponse{
+	res := &usershareproviderv1beta1pb.CreateShareResponse{
 		Status: status.NewOK(ctx),
 		Share:  share,
 	}
 	return res, nil
 }
 
-func (s *service) RemoveShare(ctx context.Context, req *usershareproviderv0alphapb.RemoveShareRequest) (*usershareproviderv0alphapb.RemoveShareResponse, error) {
+func (s *service) RemoveShare(ctx context.Context, req *usershareproviderv1beta1pb.RemoveShareRequest) (*usershareproviderv1beta1pb.RemoveShareResponse, error) {
 	err := s.sm.Unshare(ctx, req.Ref)
 	if err != nil {
-		return &usershareproviderv0alphapb.RemoveShareResponse{
+		return &usershareproviderv1beta1pb.RemoveShareResponse{
 			Status: status.NewInternal(ctx, err, "error removing share"),
 		}, nil
 	}
 
-	return &usershareproviderv0alphapb.RemoveShareResponse{
+	return &usershareproviderv1beta1pb.RemoveShareResponse{
 		Status: status.NewOK(ctx),
 	}, nil
 }
 
-func (s *service) GetShare(ctx context.Context, req *usershareproviderv0alphapb.GetShareRequest) (*usershareproviderv0alphapb.GetShareResponse, error) {
+func (s *service) GetShare(ctx context.Context, req *usershareproviderv1beta1pb.GetShareRequest) (*usershareproviderv1beta1pb.GetShareResponse, error) {
 	share, err := s.sm.GetShare(ctx, req.Ref)
 	if err != nil {
-		return &usershareproviderv0alphapb.GetShareResponse{
+		return &usershareproviderv1beta1pb.GetShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting share"),
 		}, nil
 	}
 
-	return &usershareproviderv0alphapb.GetShareResponse{
+	return &usershareproviderv1beta1pb.GetShareResponse{
 		Status: status.NewOK(ctx),
 		Share:  share,
 	}, nil
 }
 
-func (s *service) ListShares(ctx context.Context, req *usershareproviderv0alphapb.ListSharesRequest) (*usershareproviderv0alphapb.ListSharesResponse, error) {
+func (s *service) ListShares(ctx context.Context, req *usershareproviderv1beta1pb.ListSharesRequest) (*usershareproviderv1beta1pb.ListSharesResponse, error) {
 	shares, err := s.sm.ListShares(ctx, req.Filters) // TODO(labkode): add filter to share manager
 	if err != nil {
-		return &usershareproviderv0alphapb.ListSharesResponse{
+		return &usershareproviderv1beta1pb.ListSharesResponse{
 			Status: status.NewInternal(ctx, err, "error listing shares"),
 		}, nil
 	}
 
-	res := &usershareproviderv0alphapb.ListSharesResponse{
+	res := &usershareproviderv1beta1pb.ListSharesResponse{
 		Status: status.NewOK(ctx),
 		Shares: shares,
 	}
 	return res, nil
 }
 
-func (s *service) UpdateShare(ctx context.Context, req *usershareproviderv0alphapb.UpdateShareRequest) (*usershareproviderv0alphapb.UpdateShareResponse, error) {
+func (s *service) UpdateShare(ctx context.Context, req *usershareproviderv1beta1pb.UpdateShareRequest) (*usershareproviderv1beta1pb.UpdateShareResponse, error) {
 	_, err := s.sm.UpdateShare(ctx, req.Ref, req.Field.GetPermissions()) // TODO(labkode): check what to update
 	if err != nil {
-		return &usershareproviderv0alphapb.UpdateShareResponse{
+		return &usershareproviderv1beta1pb.UpdateShareResponse{
 			Status: status.NewInternal(ctx, err, "error updating share"),
 		}, nil
 	}
 
-	res := &usershareproviderv0alphapb.UpdateShareResponse{
+	res := &usershareproviderv1beta1pb.UpdateShareResponse{
 		Status: status.NewOK(ctx),
 	}
 	return res, nil
 }
 
-func (s *service) ListReceivedShares(ctx context.Context, req *usershareproviderv0alphapb.ListReceivedSharesRequest) (*usershareproviderv0alphapb.ListReceivedSharesResponse, error) {
+func (s *service) ListReceivedShares(ctx context.Context, req *usershareproviderv1beta1pb.ListReceivedSharesRequest) (*usershareproviderv1beta1pb.ListReceivedSharesResponse, error) {
 	shares, err := s.sm.ListReceivedShares(ctx) // TODO(labkode): check what to update
 	if err != nil {
-		return &usershareproviderv0alphapb.ListReceivedSharesResponse{
+		return &usershareproviderv1beta1pb.ListReceivedSharesResponse{
 			Status: status.NewInternal(ctx, err, "error listing received shares"),
 		}, nil
 	}
 
-	res := &usershareproviderv0alphapb.ListReceivedSharesResponse{
+	res := &usershareproviderv1beta1pb.ListReceivedSharesResponse{
 		Status: status.NewOK(ctx),
 		Shares: shares,
 	}
 	return res, nil
 }
 
-func (s *service) GetReceivedShare(ctx context.Context, req *usershareproviderv0alphapb.GetReceivedShareRequest) (*usershareproviderv0alphapb.GetReceivedShareResponse, error) {
+func (s *service) GetReceivedShare(ctx context.Context, req *usershareproviderv1beta1pb.GetReceivedShareRequest) (*usershareproviderv1beta1pb.GetReceivedShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 
 	_, err := s.sm.GetReceivedShare(ctx, req.Ref)
 	if err != nil {
 		log.Err(err).Msg("error getting received share")
-		return &usershareproviderv0alphapb.GetReceivedShareResponse{
+		return &usershareproviderv1beta1pb.GetReceivedShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting received share"),
 		}, nil
 	}
 
-	res := &usershareproviderv0alphapb.GetReceivedShareResponse{
+	res := &usershareproviderv1beta1pb.GetReceivedShareResponse{
 		Status: status.NewOK(ctx),
 	}
 	return res, nil
 }
 
-func (s *service) UpdateReceivedShare(ctx context.Context, req *usershareproviderv0alphapb.UpdateReceivedShareRequest) (*usershareproviderv0alphapb.UpdateReceivedShareResponse, error) {
+func (s *service) UpdateReceivedShare(ctx context.Context, req *usershareproviderv1beta1pb.UpdateReceivedShareRequest) (*usershareproviderv1beta1pb.UpdateReceivedShareResponse, error) {
 	_, err := s.sm.UpdateReceivedShare(ctx, req.Ref, req.Field) // TODO(labkode): check what to update
 	if err != nil {
-		return &usershareproviderv0alphapb.UpdateReceivedShareResponse{
+		return &usershareproviderv1beta1pb.UpdateReceivedShareResponse{
 			Status: status.NewInternal(ctx, err, "error updating received share"),
 		}, nil
 	}
 
-	res := &usershareproviderv0alphapb.UpdateReceivedShareResponse{
+	res := &usershareproviderv1beta1pb.UpdateReceivedShareResponse{
 		Status: status.NewOK(ctx),
 	}
 	return res, nil

@@ -26,9 +26,9 @@ import (
 	"path"
 	"strings"
 
-	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
+	gatewayv1beta1pb "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
 )
@@ -82,10 +82,10 @@ func (s *svc) doCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	// check src exists
-	ref := &storageproviderv0alphapb.Reference{
-		Spec: &storageproviderv0alphapb.Reference_Path{Path: src},
+	ref := &storageproviderv1beta1pb.Reference{
+		Spec: &storageproviderv1beta1pb.Reference_Path{Path: src},
 	}
-	srcStatReq := &storageproviderv0alphapb.StatRequest{Ref: ref}
+	srcStatReq := &storageproviderv1beta1pb.StatRequest{Ref: ref}
 	srcStatRes, err := client.Stat(ctx, srcStatReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending grpc stat request")
@@ -107,10 +107,10 @@ func (s *svc) doCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	dst := path.Join(ns, urlPath[len(baseURI):])
 
 	// check dst exists
-	ref = &storageproviderv0alphapb.Reference{
-		Spec: &storageproviderv0alphapb.Reference_Path{Path: dst},
+	ref = &storageproviderv1beta1pb.Reference{
+		Spec: &storageproviderv1beta1pb.Reference_Path{Path: dst},
 	}
-	dstStatReq := &storageproviderv0alphapb.StatRequest{Ref: ref}
+	dstStatReq := &storageproviderv1beta1pb.StatRequest{Ref: ref}
 	dstStatRes, err := client.Stat(ctx, dstStatReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending grpc stat request")
@@ -133,10 +133,10 @@ func (s *svc) doCopy(w http.ResponseWriter, r *http.Request, ns string) {
 
 		// check if an intermediate path / the parent exists
 		intermediateDir := path.Dir(dst)
-		ref = &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: intermediateDir},
+		ref = &storageproviderv1beta1pb.Reference{
+			Spec: &storageproviderv1beta1pb.Reference_Path{Path: intermediateDir},
 		}
-		intStatReq := &storageproviderv0alphapb.StatRequest{Ref: ref}
+		intStatReq := &storageproviderv1beta1pb.StatRequest{Ref: ref}
 		intStatRes, err := client.Stat(ctx, intStatReq)
 		if err != nil {
 			log.Error().Err(err).Msg("error sending grpc stat request")
@@ -159,14 +159,14 @@ func (s *svc) doCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	w.WriteHeader(successCode)
 }
 
-func descend(ctx context.Context, client gatewayv0alphapb.GatewayServiceClient, src *storageproviderv0alphapb.ResourceInfo, dst string) error {
+func descend(ctx context.Context, client gatewayv1beta1pb.GatewayServiceClient, src *storageproviderv1beta1pb.ResourceInfo, dst string) error {
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("src", src.Path).Str("dst", dst).Msg("descending")
-	if src.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+	if src.Type == storageproviderv1beta1pb.ResourceType_RESOURCE_TYPE_CONTAINER {
 		// create dir
-		createReq := &storageproviderv0alphapb.CreateContainerRequest{
-			Ref: &storageproviderv0alphapb.Reference{
-				Spec: &storageproviderv0alphapb.Reference_Path{Path: dst},
+		createReq := &storageproviderv1beta1pb.CreateContainerRequest{
+			Ref: &storageproviderv1beta1pb.Reference{
+				Spec: &storageproviderv1beta1pb.Reference_Path{Path: dst},
 			},
 		}
 		createRes, err := client.CreateContainer(ctx, createReq)
@@ -175,9 +175,9 @@ func descend(ctx context.Context, client gatewayv0alphapb.GatewayServiceClient, 
 		}
 
 		// descend for children
-		listReq := &storageproviderv0alphapb.ListContainerRequest{
-			Ref: &storageproviderv0alphapb.Reference{
-				Spec: &storageproviderv0alphapb.Reference_Path{Path: src.Path},
+		listReq := &storageproviderv1beta1pb.ListContainerRequest{
+			Ref: &storageproviderv1beta1pb.Reference{
+				Spec: &storageproviderv1beta1pb.Reference_Path{Path: src.Path},
 			},
 		}
 		res, err := client.ListContainer(ctx, listReq)
@@ -200,9 +200,9 @@ func descend(ctx context.Context, client gatewayv0alphapb.GatewayServiceClient, 
 		// copy file
 
 		// 1. get download url
-		dReq := &storageproviderv0alphapb.InitiateFileDownloadRequest{
-			Ref: &storageproviderv0alphapb.Reference{
-				Spec: &storageproviderv0alphapb.Reference_Path{Path: src.Path},
+		dReq := &storageproviderv1beta1pb.InitiateFileDownloadRequest{
+			Ref: &storageproviderv1beta1pb.Reference{
+				Spec: &storageproviderv1beta1pb.Reference_Path{Path: src.Path},
 			},
 		}
 
@@ -217,9 +217,9 @@ func descend(ctx context.Context, client gatewayv0alphapb.GatewayServiceClient, 
 
 		// 2. get upload url
 
-		uReq := &storageproviderv0alphapb.InitiateFileUploadRequest{
-			Ref: &storageproviderv0alphapb.Reference{
-				Spec: &storageproviderv0alphapb.Reference_Path{Path: dst},
+		uReq := &storageproviderv1beta1pb.InitiateFileUploadRequest{
+			Ref: &storageproviderv1beta1pb.Reference{
+				Spec: &storageproviderv1beta1pb.Reference_Path{Path: dst},
 			},
 		}
 

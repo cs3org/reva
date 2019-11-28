@@ -21,11 +21,11 @@ package gateway
 import (
 	"context"
 
-	authproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/authprovider/v0alpha"
-	authregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/authregistry/v0alpha"
-	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
+	authproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/authprovider/v1beta1"
+	authregistryv1beta1pb "github.com/cs3org/go-cs3apis/cs3/authregistry/v1beta1"
+	gatewayv1beta1pb "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
+	userproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/userprovider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
@@ -33,32 +33,32 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (s *svc) Authenticate(ctx context.Context, req *gatewayv0alphapb.AuthenticateRequest) (*gatewayv0alphapb.AuthenticateResponse, error) {
+func (s *svc) Authenticate(ctx context.Context, req *gatewayv1beta1pb.AuthenticateRequest) (*gatewayv1beta1pb.AuthenticateResponse, error) {
 	log := appctx.GetLogger(ctx)
 
 	// find auth provider
 	c, err := s.findAuthProvider(ctx, req.Type)
 	if err != nil {
 		err = errors.New("gateway: error finding auth provider for type: " + req.Type)
-		return &gatewayv0alphapb.AuthenticateResponse{
+		return &gatewayv1beta1pb.AuthenticateResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth provider client"),
 		}, nil
 	}
 
-	authProviderReq := &authproviderv0alphapb.AuthenticateRequest{
+	authProviderReq := &authproviderv1beta1pb.AuthenticateRequest{
 		ClientId:     req.ClientId,
 		ClientSecret: req.ClientSecret,
 	}
 	res, err := c.Authenticate(ctx, authProviderReq)
 	if err != nil {
-		return &gatewayv0alphapb.AuthenticateResponse{
+		return &gatewayv1beta1pb.AuthenticateResponse{
 			Status: status.NewInternal(ctx, err, "error getting user provider service client"),
 		}, nil
 	}
 
 	if res.Status.Code != rpcpb.Code_CODE_OK {
 		err := status.NewErrorFromCode(res.Status.Code, "gateway")
-		return &gatewayv0alphapb.AuthenticateResponse{
+		return &gatewayv1beta1pb.AuthenticateResponse{
 			Status: status.NewUnauthenticated(ctx, err, ""),
 		}, nil
 	}
@@ -68,7 +68,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gatewayv0alphapb.Authentica
 	if uid == nil {
 		err := errors.New("gateway: uid after Authenticate is nil")
 		log.Err(err).Msg("user id is nil")
-		return &gatewayv0alphapb.AuthenticateResponse{
+		return &gatewayv1beta1pb.AuthenticateResponse{
 			Status: status.NewInternal(ctx, err, "user id is nil"),
 		}, nil
 	}
@@ -76,19 +76,19 @@ func (s *svc) Authenticate(ctx context.Context, req *gatewayv0alphapb.Authentica
 	userClient, err := pool.GetUserProviderServiceClient(s.c.UserProviderEndpoint)
 	if err != nil {
 		log.Err(err).Msg("error getting user provider client")
-		return &gatewayv0alphapb.AuthenticateResponse{
+		return &gatewayv1beta1pb.AuthenticateResponse{
 			Status: status.NewInternal(ctx, err, "error getting user provider service client"),
 		}, nil
 	}
 
-	getUserReq := &userproviderv0alphapb.GetUserRequest{
+	getUserReq := &userproviderv1beta1pb.GetUserRequest{
 		UserId: uid,
 	}
 
 	getUserRes, err := userClient.GetUser(ctx, getUserReq)
 	if err != nil {
 		err = errors.Wrap(err, "authsvc: error in GetUser")
-		res := &gatewayv0alphapb.AuthenticateResponse{
+		res := &gatewayv1beta1pb.AuthenticateResponse{
 			Status: status.NewUnauthenticated(ctx, err, "error getting user information"),
 		}
 		return res, nil
@@ -96,7 +96,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gatewayv0alphapb.Authentica
 
 	if getUserRes.Status.Code != rpcpb.Code_CODE_OK {
 		err := status.NewErrorFromCode(getUserRes.Status.Code, "authsvc")
-		return &gatewayv0alphapb.AuthenticateResponse{
+		return &gatewayv1beta1pb.AuthenticateResponse{
 			Status: status.NewUnauthenticated(ctx, err, "error getting user information"),
 		}, nil
 	}
@@ -106,13 +106,13 @@ func (s *svc) Authenticate(ctx context.Context, req *gatewayv0alphapb.Authentica
 	token, err := s.tokenmgr.MintToken(ctx, user)
 	if err != nil {
 		err = errors.Wrap(err, "authsvc: error in MintToken")
-		res := &gatewayv0alphapb.AuthenticateResponse{
+		res := &gatewayv1beta1pb.AuthenticateResponse{
 			Status: status.NewUnauthenticated(ctx, err, "error creating access token"),
 		}
 		return res, nil
 	}
 
-	gwRes := &gatewayv0alphapb.AuthenticateResponse{
+	gwRes := &gatewayv1beta1pb.AuthenticateResponse{
 		Status: status.NewOK(ctx),
 		UserId: res.UserId,
 		Token:  token,
@@ -120,30 +120,30 @@ func (s *svc) Authenticate(ctx context.Context, req *gatewayv0alphapb.Authentica
 	return gwRes, nil
 }
 
-func (s *svc) WhoAmI(ctx context.Context, req *gatewayv0alphapb.WhoAmIRequest) (*gatewayv0alphapb.WhoAmIResponse, error) {
+func (s *svc) WhoAmI(ctx context.Context, req *gatewayv1beta1pb.WhoAmIRequest) (*gatewayv1beta1pb.WhoAmIResponse, error) {
 	u, err := s.tokenmgr.DismantleToken(ctx, req.Token)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting user from token")
-		return &gatewayv0alphapb.WhoAmIResponse{
+		return &gatewayv1beta1pb.WhoAmIResponse{
 			Status: status.NewUnauthenticated(ctx, err, "error dismantling token"),
 		}, nil
 	}
 
-	res := &gatewayv0alphapb.WhoAmIResponse{
+	res := &gatewayv1beta1pb.WhoAmIResponse{
 		Status: status.NewOK(ctx),
 		User:   u,
 	}
 	return res, nil
 }
 
-func (s *svc) findAuthProvider(ctx context.Context, authType string) (authproviderv0alphapb.AuthProviderServiceClient, error) {
+func (s *svc) findAuthProvider(ctx context.Context, authType string) (authproviderv1beta1pb.AuthProviderServiceClient, error) {
 	c, err := pool.GetAuthRegistryServiceClient(s.c.AuthRegistryEndpoint)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting auth registry client")
 		return nil, err
 	}
 
-	res, err := c.GetAuthProvider(ctx, &authregistryv0alphapb.GetAuthProviderRequest{
+	res, err := c.GetAuthProvider(ctx, &authregistryv1beta1pb.GetAuthProviderRequest{
 		Type: authType,
 	})
 

@@ -28,9 +28,9 @@ import (
 	"strconv"
 	"strings"
 
-	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
+	gatewayv1beta1pb "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
 )
 
 // metaData representation in the import data
@@ -44,7 +44,7 @@ type metaData struct {
 
 //ImportMetadata from a files.jsonl file in exportPath. The files must already be present on the storage
 //Will set etag and mtime
-func ImportMetadata(ctx context.Context, client gatewayv0alphapb.GatewayServiceClient, exportPath string, ns string) error {
+func ImportMetadata(ctx context.Context, client gatewayv1beta1pb.GatewayServiceClient, exportPath string, ns string) error {
 
 	filesJSONL, err := os.Open(path.Join(exportPath, "files.jsonl"))
 	if err != nil {
@@ -72,11 +72,11 @@ func ImportMetadata(ctx context.Context, client gatewayv0alphapb.GatewayServiceC
 
 		if len(m) > 0 {
 			resourcePath := path.Join(ns, path.Base(exportPath), strings.TrimPrefix(fileData.Path, "/files/"))
-			samReq := &storageproviderv0alphapb.SetArbitraryMetadataRequest{
-				Ref: &storageproviderv0alphapb.Reference{
-					Spec: &storageproviderv0alphapb.Reference_Path{Path: resourcePath},
+			samReq := &storageproviderv1beta1pb.SetArbitraryMetadataRequest{
+				Ref: &storageproviderv1beta1pb.Reference{
+					Spec: &storageproviderv1beta1pb.Reference_Path{Path: resourcePath},
 				},
-				ArbitraryMetadata: &storageproviderv0alphapb.ArbitraryMetadata{
+				ArbitraryMetadata: &storageproviderv1beta1pb.ArbitraryMetadata{
 					Metadata: m,
 				},
 			}

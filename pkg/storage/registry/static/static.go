@@ -22,7 +22,7 @@ import (
 	"context"
 	"strings"
 
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
 	storagetypespb "github.com/cs3org/go-cs3apis/cs3/storagetypes"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage"
@@ -61,7 +61,7 @@ func (b *reg) GetHome(ctx context.Context) (string, error) {
 	return "", errors.New("static: home not found")
 }
 
-func (b *reg) FindProvider(ctx context.Context, ref *storageproviderv0alphapb.Reference) (*storagetypespb.ProviderInfo, error) {
+func (b *reg) FindProvider(ctx context.Context, ref *storageproviderv1beta1pb.Reference) (*storagetypespb.ProviderInfo, error) {
 	// find longest match
 	var match string
 

@@ -27,7 +27,7 @@ import (
 
 	"github.com/cheggaaa/pb"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
 
 	// TODO(labkode): this should not come from this package.
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
@@ -70,9 +70,9 @@ func uploadCommand() *command {
 			return err
 		}
 
-		req := &storageproviderv0alphapb.InitiateFileUploadRequest{
-			Ref: &storageproviderv0alphapb.Reference{
-				Spec: &storageproviderv0alphapb.Reference_Path{
+		req := &storageproviderv1beta1pb.InitiateFileUploadRequest{
+			Ref: &storageproviderv1beta1pb.Reference{
+				Spec: &storageproviderv1beta1pb.Reference_Path{
 					Path: target,
 				},
 			},
@@ -138,9 +138,9 @@ func uploadCommand() *command {
 			return err
 		}
 
-		req2 := &storageproviderv0alphapb.StatRequest{
-			Ref: &storageproviderv0alphapb.Reference{
-				Spec: &storageproviderv0alphapb.Reference_Path{
+		req2 := &storageproviderv1beta1pb.StatRequest{
+			Ref: &storageproviderv1beta1pb.Reference{
+				Spec: &storageproviderv1beta1pb.Reference_Path{
 					Path: target,
 				},
 			},
@@ -163,15 +163,15 @@ func uploadCommand() *command {
 	return cmd
 }
 
-func computeXS(t storageproviderv0alphapb.ResourceChecksumType, r io.Reader) (string, error) {
+func computeXS(t storageproviderv1beta1pb.ResourceChecksumType, r io.Reader) (string, error) {
 	switch t {
-	case storageproviderv0alphapb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_ADLER32:
+	case storageproviderv1beta1pb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_ADLER32:
 		return crypto.ComputeAdler32XS(r)
-	case storageproviderv0alphapb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_MD5:
+	case storageproviderv1beta1pb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_MD5:
 		return crypto.ComputeMD5XS(r)
-	case storageproviderv0alphapb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_SHA1:
+	case storageproviderv1beta1pb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_SHA1:
 		return crypto.ComputeSHA1XS(r)
-	case storageproviderv0alphapb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET:
+	case storageproviderv1beta1pb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET:
 		return "", nil
 	default:
 		return "", fmt.Errorf("invalid checksum: %s", t)
@@ -179,22 +179,22 @@ func computeXS(t storageproviderv0alphapb.ResourceChecksumType, r io.Reader) (st
 	}
 }
 
-func guessXS(xsFlag string, availableXS []*storageproviderv0alphapb.ResourceChecksumPriority) (storageproviderv0alphapb.ResourceChecksumType, error) {
+func guessXS(xsFlag string, availableXS []*storageproviderv1beta1pb.ResourceChecksumPriority) (storageproviderv1beta1pb.ResourceChecksumType, error) {
 	// force use of cheksum if available server side.
 	if xsFlag != "negotiate" {
 		wanted := storageprovider.PKG2GRPCXS(xsFlag)
-		if wanted == storageproviderv0alphapb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID {
-			return storageproviderv0alphapb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID, fmt.Errorf("desired checksum is invalid: %s", xsFlag)
+		if wanted == storageproviderv1beta1pb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID {
+			return storageproviderv1beta1pb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID, fmt.Errorf("desired checksum is invalid: %s", xsFlag)
 		}
 		if isXSAvailable(wanted, availableXS) {
 			return wanted, nil
 		}
-		return storageproviderv0alphapb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID, fmt.Errorf("checksum not available server side: %s", xsFlag)
+		return storageproviderv1beta1pb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID, fmt.Errorf("checksum not available server side: %s", xsFlag)
 	}
 
 	// negotiate the checksum type based on priority list from server-side.
 	if len(availableXS) == 0 {
-		return storageproviderv0alphapb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID, fmt.Errorf("no available xs for negotiating")
+		return storageproviderv1beta1pb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID, fmt.Errorf("no available xs for negotiating")
 	}
 
 	// pick the one with priority to the lower number.
@@ -202,8 +202,8 @@ func guessXS(xsFlag string, availableXS []*storageproviderv0alphapb.ResourceChec
 	return desired, nil
 }
 
-func pickChecksumWithHighestPrio(xss []*storageproviderv0alphapb.ResourceChecksumPriority) storageproviderv0alphapb.ResourceChecksumType {
-	var chosen storageproviderv0alphapb.ResourceChecksumType
+func pickChecksumWithHighestPrio(xss []*storageproviderv1beta1pb.ResourceChecksumPriority) storageproviderv1beta1pb.ResourceChecksumType {
+	var chosen storageproviderv1beta1pb.ResourceChecksumType
 	var maxPrio uint32 = math.MaxUint32
 	for _, xs := range xss {
 		if xs.Priority < maxPrio {
@@ -214,7 +214,7 @@ func pickChecksumWithHighestPrio(xss []*storageproviderv0alphapb.ResourceChecksu
 	return chosen
 }
 
-func isXSAvailable(t storageproviderv0alphapb.ResourceChecksumType, available []*storageproviderv0alphapb.ResourceChecksumPriority) bool {
+func isXSAvailable(t storageproviderv1beta1pb.ResourceChecksumType, available []*storageproviderv1beta1pb.ResourceChecksumPriority) bool {
 	for _, xsPrio := range available {
 		if xsPrio.Type == t {
 			return true

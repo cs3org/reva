@@ -26,11 +26,11 @@ import (
 	"os"
 	"path"
 
-	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
+	gatewayv1beta1pb "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
-	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
+	usershareproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v1beta1"
 )
 
 // share representation in the import metadata
@@ -49,7 +49,7 @@ type share struct {
 }
 
 //ImportShares from a shares.jsonl file in exportPath. The files must already be present on the storage
-func ImportShares(ctx context.Context, client gatewayv0alphapb.GatewayServiceClient, exportPath string, ns string) error {
+func ImportShares(ctx context.Context, client gatewayv1beta1pb.GatewayServiceClient, exportPath string, ns string) error {
 
 	sharesJSONL, err := os.Open(path.Join(exportPath, "shares.jsonl"))
 	if err != nil {
@@ -67,9 +67,9 @@ func ImportShares(ctx context.Context, client gatewayv0alphapb.GatewayServiceCli
 
 		//Stat file, skip share creation if it does not exist on the target system
 		resourcePath := path.Join(ns, path.Base(exportPath), shareData.Path)
-		statReq := &storageproviderv0alphapb.StatRequest{
-			Ref: &storageproviderv0alphapb.Reference{
-				Spec: &storageproviderv0alphapb.Reference_Path{Path: resourcePath},
+		statReq := &storageproviderv1beta1pb.StatRequest{
+			Ref: &storageproviderv1beta1pb.Reference{
+				Spec: &storageproviderv1beta1pb.Reference_Path{Path: resourcePath},
 			},
 		}
 		statResp, err := client.Stat(ctx, statReq)
@@ -91,17 +91,17 @@ func ImportShares(ctx context.Context, client gatewayv0alphapb.GatewayServiceCli
 	return nil
 }
 
-func shareReq(info *storageproviderv0alphapb.ResourceInfo, share *share) *usershareproviderv0alphapb.CreateShareRequest {
-	return &usershareproviderv0alphapb.CreateShareRequest{
+func shareReq(info *storageproviderv1beta1pb.ResourceInfo, share *share) *usershareproviderv1beta1pb.CreateShareRequest {
+	return &usershareproviderv1beta1pb.CreateShareRequest{
 		ResourceInfo: info,
-		Grant: &usershareproviderv0alphapb.ShareGrant{
-			Grantee: &storageproviderv0alphapb.Grantee{
-				Type: storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER,
+		Grant: &usershareproviderv1beta1pb.ShareGrant{
+			Grantee: &storageproviderv1beta1pb.Grantee{
+				Type: storageproviderv1beta1pb.GranteeType_GRANTEE_TYPE_USER,
 				Id: &typespb.UserId{
 					OpaqueId: share.SharedWith,
 				},
 			},
-			Permissions: &usershareproviderv0alphapb.SharePermissions{
+			Permissions: &usershareproviderv1beta1pb.SharePermissions{
 				Permissions: convertPermissions(share.Permissions),
 			},
 		},
@@ -116,8 +116,8 @@ var ocPermToRole = map[int]string{
 }
 
 // Create resource permission-set from ownCloud permissions int
-func convertPermissions(ocPermissions int) *storageproviderv0alphapb.ResourcePermissions {
-	perms := &storageproviderv0alphapb.ResourcePermissions{}
+func convertPermissions(ocPermissions int) *storageproviderv1beta1pb.ResourcePermissions {
+	perms := &storageproviderv1beta1pb.ResourcePermissions{}
 	switch ocPermToRole[ocPermissions] {
 	case "viewer":
 		perms.Stat = true

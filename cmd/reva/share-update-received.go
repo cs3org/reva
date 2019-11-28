@@ -23,7 +23,7 @@ import (
 	"os"
 
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
+	usershareproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v1beta1"
 )
 
 func shareUpdateReceivedCommand() *command {
@@ -54,16 +54,16 @@ func shareUpdateReceivedCommand() *command {
 
 		shareState := getShareState(*state)
 
-		shareRequest := &usershareproviderv0alphapb.UpdateReceivedShareRequest{
-			Ref: &usershareproviderv0alphapb.ShareReference{
-				Spec: &usershareproviderv0alphapb.ShareReference_Id{
-					Id: &usershareproviderv0alphapb.ShareId{
+		shareRequest := &usershareproviderv1beta1pb.UpdateReceivedShareRequest{
+			Ref: &usershareproviderv1beta1pb.ShareReference{
+				Spec: &usershareproviderv1beta1pb.ShareReference_Id{
+					Id: &usershareproviderv1beta1pb.ShareId{
 						OpaqueId: id,
 					},
 				},
 			},
-			Field: &usershareproviderv0alphapb.UpdateReceivedShareRequest_UpdateField{
-				Field: &usershareproviderv0alphapb.UpdateReceivedShareRequest_UpdateField_State{
+			Field: &usershareproviderv1beta1pb.UpdateReceivedShareRequest_UpdateField{
+				Field: &usershareproviderv1beta1pb.UpdateReceivedShareRequest_UpdateField_State{
 					State: shareState,
 				},
 			},
@@ -84,15 +84,15 @@ func shareUpdateReceivedCommand() *command {
 	return cmd
 }
 
-func getShareState(state string) usershareproviderv0alphapb.ShareState {
+func getShareState(state string) usershareproviderv1beta1pb.ShareState {
 	switch state {
 	case "pending":
-		return usershareproviderv0alphapb.ShareState_SHARE_STATE_PENDING
+		return usershareproviderv1beta1pb.ShareState_SHARE_STATE_PENDING
 	case "accepted":
-		return usershareproviderv0alphapb.ShareState_SHARE_STATE_ACCEPTED
+		return usershareproviderv1beta1pb.ShareState_SHARE_STATE_ACCEPTED
 	case "rejected":
-		return usershareproviderv0alphapb.ShareState_SHARE_STATE_REJECTED
+		return usershareproviderv1beta1pb.ShareState_SHARE_STATE_REJECTED
 	default:
-		return usershareproviderv0alphapb.ShareState_SHARE_STATE_INVALID
+		return usershareproviderv1beta1pb.ShareState_SHARE_STATE_INVALID
 	}
 }

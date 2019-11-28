@@ -25,7 +25,7 @@ import (
 	"strings"
 
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 )
 
@@ -78,9 +78,9 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	// check src exists
-	srcStatReq := &storageproviderv0alphapb.StatRequest{
-		Ref: &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: src},
+	srcStatReq := &storageproviderv1beta1pb.StatRequest{
+		Ref: &storageproviderv1beta1pb.Reference{
+			Spec: &storageproviderv1beta1pb.Reference_Path{Path: src},
 		},
 	}
 	srcStatRes, err := client.Stat(ctx, srcStatReq)
@@ -104,10 +104,10 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request, ns string) {
 	dst := path.Join(ns, urlPath[len(baseURI):])
 
 	// check dst exists
-	dstStatRef := &storageproviderv0alphapb.Reference{
-		Spec: &storageproviderv0alphapb.Reference_Path{Path: dst},
+	dstStatRef := &storageproviderv1beta1pb.Reference{
+		Spec: &storageproviderv1beta1pb.Reference_Path{Path: dst},
 	}
-	dstStatReq := &storageproviderv0alphapb.StatRequest{Ref: dstStatRef}
+	dstStatReq := &storageproviderv1beta1pb.StatRequest{Ref: dstStatRef}
 	dstStatRes, err := client.Stat(ctx, dstStatReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
@@ -126,7 +126,7 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request, ns string) {
 		}
 
 		// delete existing tree
-		delReq := &storageproviderv0alphapb.DeleteRequest{Ref: dstStatRef}
+		delReq := &storageproviderv1beta1pb.DeleteRequest{Ref: dstStatRef}
 		delRes, err := client.Delete(ctx, delReq)
 		if err != nil {
 			log.Error().Err(err).Msg("error sending grpc delete request")
@@ -144,10 +144,10 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request, ns string) {
 
 		// check if an intermediate path / the parent exists
 		intermediateDir := path.Dir(dst)
-		ref2 := &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: intermediateDir},
+		ref2 := &storageproviderv1beta1pb.Reference{
+			Spec: &storageproviderv1beta1pb.Reference_Path{Path: intermediateDir},
 		}
-		intStatReq := &storageproviderv0alphapb.StatRequest{Ref: ref2}
+		intStatReq := &storageproviderv1beta1pb.StatRequest{Ref: ref2}
 		intStatRes, err := client.Stat(ctx, intStatReq)
 		if err != nil {
 			log.Error().Err(err).Msg("error sending grpc stat request")
@@ -161,13 +161,13 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request, ns string) {
 		// TODO what if intermediate is a file?
 	}
 
-	sourceRef := &storageproviderv0alphapb.Reference{
-		Spec: &storageproviderv0alphapb.Reference_Path{Path: src},
+	sourceRef := &storageproviderv1beta1pb.Reference{
+		Spec: &storageproviderv1beta1pb.Reference_Path{Path: src},
 	}
-	dstRef := &storageproviderv0alphapb.Reference{
-		Spec: &storageproviderv0alphapb.Reference_Path{Path: dst},
+	dstRef := &storageproviderv1beta1pb.Reference{
+		Spec: &storageproviderv1beta1pb.Reference_Path{Path: dst},
 	}
-	mReq := &storageproviderv0alphapb.MoveRequest{Source: sourceRef, Destination: dstRef}
+	mReq := &storageproviderv1beta1pb.MoveRequest{Source: sourceRef, Destination: dstRef}
 	mRes, err := client.Move(ctx, mReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending move grpc request")

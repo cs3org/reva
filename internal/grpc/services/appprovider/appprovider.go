@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"io"
 
-	appproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/appprovider/v0alpha"
+	appproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/appprovider/v1beta1"
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/provider/demo"
 	"github.com/cs3org/reva/pkg/rgrpc"
@@ -63,7 +63,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 		provider: provider,
 	}
 
-	appproviderv0alphapb.RegisterAppProviderServiceServer(ss, service)
+	appproviderv1beta1pb.RegisterAppProviderServiceServer(ss, service)
 	return service, nil
 }
 
@@ -88,16 +88,16 @@ func getProvider(c *config) (app.Provider, error) {
 	}
 }
 
-func (s *service) Open(ctx context.Context, req *appproviderv0alphapb.OpenRequest) (*appproviderv0alphapb.OpenResponse, error) {
+func (s *service) Open(ctx context.Context, req *appproviderv1beta1pb.OpenRequest) (*appproviderv1beta1pb.OpenResponse, error) {
 	iframeLocation, err := s.provider.GetIFrame(ctx, req.ResourceInfo.Id, req.AccessToken)
 	if err != nil {
 		err := errors.Wrap(err, "appprovidersvc: error calling GetIFrame")
-		res := &appproviderv0alphapb.OpenResponse{
+		res := &appproviderv1beta1pb.OpenResponse{
 			Status: status.NewInternal(ctx, err, "error getting app's iframe"),
 		}
 		return res, nil
 	}
-	res := &appproviderv0alphapb.OpenResponse{
+	res := &appproviderv1beta1pb.OpenResponse{
 		Status:    status.NewOK(ctx),
 		IframeUrl: iframeLocation,
 	}

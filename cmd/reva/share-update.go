@@ -23,7 +23,7 @@ import (
 	"os"
 
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
+	usershareproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v1beta1"
 )
 
 func shareUpdateCommand() *command {
@@ -57,16 +57,16 @@ func shareUpdateCommand() *command {
 			return err
 		}
 
-		shareRequest := &usershareproviderv0alphapb.UpdateShareRequest{
-			Ref: &usershareproviderv0alphapb.ShareReference{
-				Spec: &usershareproviderv0alphapb.ShareReference_Id{
-					Id: &usershareproviderv0alphapb.ShareId{
+		shareRequest := &usershareproviderv1beta1pb.UpdateShareRequest{
+			Ref: &usershareproviderv1beta1pb.ShareReference{
+				Spec: &usershareproviderv1beta1pb.ShareReference_Id{
+					Id: &usershareproviderv1beta1pb.ShareId{
 						OpaqueId: id,
 					},
 				},
 			},
-			Field: &usershareproviderv0alphapb.UpdateShareRequest_UpdateField{
-				Field: &usershareproviderv0alphapb.UpdateShareRequest_UpdateField_Permissions{
+			Field: &usershareproviderv1beta1pb.UpdateShareRequest_UpdateField{
+				Field: &usershareproviderv1beta1pb.UpdateShareRequest_UpdateField_Permissions{
 					Permissions: perm,
 				},
 			},

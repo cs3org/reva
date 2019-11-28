@@ -22,9 +22,9 @@ import (
 	"fmt"
 	"net/http"
 
-	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
+	gatewayv1beta1pb "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
+	userproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/userprovider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -89,7 +89,7 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	genReq := &gatewayv0alphapb.AuthenticateRequest{
+	genReq := &gatewayv1beta1pb.AuthenticateRequest{
 		Type:         "basic", // we are sending username and password -> basic auth
 		ClientId:     username,
 		ClientSecret: password,
@@ -113,7 +113,7 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 
 	uid := genRes.UserId
 
-	getUserReq := &userproviderv0alphapb.GetUserRequest{
+	getUserReq := &userproviderv1beta1pb.GetUserRequest{
 		UserId: uid,
 	}
 	getUserRes, err := c.GetUser(ctx, getUserReq)

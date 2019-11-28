@@ -32,7 +32,7 @@ import (
 	"strings"
 	"time"
 
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -360,7 +360,7 @@ func getOwner(fn string) string {
 	return ""
 }
 
-func (fs *ocFS) convertToResourceInfo(ctx context.Context, fi os.FileInfo, np string, c redis.Conn) *storageproviderv0alphapb.ResourceInfo {
+func (fs *ocFS) convertToResourceInfo(ctx context.Context, fi os.FileInfo, np string, c redis.Conn) *storageproviderv1beta1pb.ResourceInfo {
 	id := readOrCreateID(ctx, np, c)
 	fn := fs.removeNamespace(ctx, path.Join("/", np))
 
@@ -396,31 +396,31 @@ func (fs *ocFS) convertToResourceInfo(ctx context.Context, fi os.FileInfo, np st
 		appctx.GetLogger(ctx).Error().Err(errtypes.UserRequired("userrequired")).Msg("error getting user from ctx")
 	}
 
-	return &storageproviderv0alphapb.ResourceInfo{
-		Id:            &storageproviderv0alphapb.ResourceId{OpaqueId: id},
+	return &storageproviderv1beta1pb.ResourceInfo{
+		Id:            &storageproviderv1beta1pb.ResourceId{OpaqueId: id},
 		Path:          fn,
 		Owner:         &typespb.UserId{OpaqueId: getOwner(fn)},
 		Type:          getResourceType(fi.IsDir()),
 		Etag:          etag,
 		MimeType:      mime.Detect(fi.IsDir(), fn),
 		Size:          uint64(fi.Size()),
-		PermissionSet: &storageproviderv0alphapb.ResourcePermissions{ListContainer: true, CreateContainer: true},
+		PermissionSet: &storageproviderv1beta1pb.ResourcePermissions{ListContainer: true, CreateContainer: true},
 		Mtime: &typespb.Timestamp{
 			Seconds: uint64(fi.ModTime().Unix()),
 			// TODO read nanos from where? Nanos:   fi.MTimeNanos,
 		},
-		ArbitraryMetadata: &storageproviderv0alphapb.ArbitraryMetadata{
+		ArbitraryMetadata: &storageproviderv1beta1pb.ArbitraryMetadata{
 			Metadata: map[string]string{
 				"http://owncloud.org/ns/favorite": favorite,
 			},
 		},
 	}
 }
-func getResourceType(isDir bool) storageproviderv0alphapb.ResourceType {
+func getResourceType(isDir bool) storageproviderv1beta1pb.ResourceType {
 	if isDir {
-		return storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER
+		return storageproviderv1beta1pb.ResourceType_RESOURCE_TYPE_CONTAINER
 	}
-	return storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_FILE
+	return storageproviderv1beta1pb.ResourceType_RESOURCE_TYPE_FILE
 }
 
 func readOrCreateID(ctx context.Context, np string, conn redis.Conn) string {
@@ -484,7 +484,7 @@ func (fs *ocFS) autocreate(ctx context.Context, fsfn string) {
 	}
 }
 
-func (fs *ocFS) getPath(ctx context.Context, id *storageproviderv0alphapb.ResourceId) (string, error) {
+func (fs *ocFS) getPath(ctx context.Context, id *storageproviderv1beta1pb.ResourceId) (string, error) {
 	c := fs.pool.Get()
 	defer c.Close()
 	fs.scanFiles(ctx, c)
@@ -497,7 +497,7 @@ func (fs *ocFS) getPath(ctx context.Context, id *storageproviderv0alphapb.Resour
 }
 
 // GetPathByID returns the fn pointed by the file id, without the internal namespace
-func (fs *ocFS) GetPathByID(ctx context.Context, id *storageproviderv0alphapb.ResourceId) (string, error) {
+func (fs *ocFS) GetPathByID(ctx context.Context, id *storageproviderv1beta1pb.ResourceId) (string, error) {
 	np, err := fs.getPath(ctx, id)
 	if err != nil {
 		return "", err
@@ -506,7 +506,7 @@ func (fs *ocFS) GetPathByID(ctx context.Context, id *storageproviderv0alphapb.Re
 }
 
 // resolve takes in a request path or request id and converts it to a internal path.
-func (fs *ocFS) resolve(ctx context.Context, ref *storageproviderv0alphapb.Reference) (string, error) {
+func (fs *ocFS) resolve(ctx context.Context, ref *storageproviderv1beta1pb.Reference) (string, error) {
 	if ref.GetPath() != "" {
 		return fs.getInternalPath(ctx, ref.GetPath()), nil
 	}
@@ -523,7 +523,7 @@ func (fs *ocFS) resolve(ctx context.Context, ref *storageproviderv0alphapb.Refer
 	return "", fmt.Errorf("invalid reference %+v", ref)
 }
 
-func (fs *ocFS) AddGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
+func (fs *ocFS) AddGrant(ctx context.Context, ref *storageproviderv1beta1pb.Reference, g *storageproviderv1beta1pb.Grant) error {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "ocFS: error resolving reference")
@@ -535,7 +535,7 @@ func (fs *ocFS) AddGrant(ctx context.Context, ref *storageproviderv0alphapb.Refe
 	}
 
 	var attr string
-	if g.Grantee.Type == storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_GROUP {
+	if g.Grantee.Type == storageproviderv1beta1pb.GranteeType_GRANTEE_TYPE_GROUP {
 		attr = sharePrefix + "g:" + e.Principal
 	} else {
 		attr = sharePrefix + "u:" + e.Principal
@@ -552,7 +552,7 @@ func getValue(e *ace) []byte {
 	return b
 }
 
-func getACEPerm(set *storageproviderv0alphapb.ResourcePermissions) (string, error) {
+func getACEPerm(set *storageproviderv1beta1pb.ResourcePermissions) (string, error) {
 	var b strings.Builder
 
 	if set.Stat || set.InitiateFileDownload || set.ListContainer {
@@ -604,7 +604,7 @@ func getACEPerm(set *storageproviderv0alphapb.ResourcePermissions) (string, erro
 	return b.String(), nil
 }
 
-func (fs *ocFS) getACE(g *storageproviderv0alphapb.Grant) (*ace, error) {
+func (fs *ocFS) getACE(g *storageproviderv1beta1pb.Grant) (*ace, error) {
 	permissions, err := getACEPerm(g.Permissions)
 	if err != nil {
 		return nil, err
@@ -615,7 +615,7 @@ func (fs *ocFS) getACE(g *storageproviderv0alphapb.Grant) (*ace, error) {
 		// TODO creator ...
 		Type: "A",
 	}
-	if g.Grantee.Type == storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_GROUP {
+	if g.Grantee.Type == storageproviderv1beta1pb.GranteeType_GRANTEE_TYPE_GROUP {
 		e.Flags = "g"
 	}
 	return e, nil
@@ -731,7 +731,7 @@ func getACEs(ctx context.Context, fsfn string, attrs []string) (entries []*ace, 
 	return entries, nil
 }
 
-func (fs *ocFS) ListGrants(ctx context.Context, ref *storageproviderv0alphapb.Reference) (grants []*storageproviderv0alphapb.Grant, err error) {
+func (fs *ocFS) ListGrants(ctx context.Context, ref *storageproviderv1beta1pb.Reference) (grants []*storageproviderv1beta1pb.Grant, err error) {
 	log := appctx.GetLogger(ctx)
 	var np string
 	if np, err = fs.resolve(ctx, ref); err != nil {
@@ -751,13 +751,13 @@ func (fs *ocFS) ListGrants(ctx context.Context, ref *storageproviderv0alphapb.Re
 		return nil, err
 	}
 
-	grants = make([]*storageproviderv0alphapb.Grant, 0, len(aces))
+	grants = make([]*storageproviderv1beta1pb.Grant, 0, len(aces))
 	for i := range aces {
-		grantee := &storageproviderv0alphapb.Grantee{
+		grantee := &storageproviderv1beta1pb.Grantee{
 			Id:   &typespb.UserId{OpaqueId: aces[i].Principal},
 			Type: fs.getGranteeType(aces[i]),
 		}
-		grants = append(grants, &storageproviderv0alphapb.Grant{
+		grants = append(grants, &storageproviderv1beta1pb.Grant{
 			Grantee:     grantee,
 			Permissions: fs.getGrantPermissionSet(aces[i].Permissions),
 		})
@@ -766,15 +766,15 @@ func (fs *ocFS) ListGrants(ctx context.Context, ref *storageproviderv0alphapb.Re
 	return grants, nil
 }
 
-func (fs *ocFS) getGranteeType(e *ace) storageproviderv0alphapb.GranteeType {
+func (fs *ocFS) getGranteeType(e *ace) storageproviderv1beta1pb.GranteeType {
 	if strings.Contains(e.Flags, "g") {
-		return storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_GROUP
+		return storageproviderv1beta1pb.GranteeType_GRANTEE_TYPE_GROUP
 	}
-	return storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER
+	return storageproviderv1beta1pb.GranteeType_GRANTEE_TYPE_USER
 }
 
-func (fs *ocFS) getGrantPermissionSet(mode string) *storageproviderv0alphapb.ResourcePermissions {
-	p := &storageproviderv0alphapb.ResourcePermissions{}
+func (fs *ocFS) getGrantPermissionSet(mode string) *storageproviderv1beta1pb.ResourcePermissions {
+	p := &storageproviderv1beta1pb.ResourcePermissions{}
 	// r
 	if strings.Contains(mode, "r") {
 		p.Stat = true
@@ -842,7 +842,7 @@ func (fs *ocFS) getGrantPermissionSet(mode string) *storageproviderv0alphapb.Res
 	return p
 }
 
-func (fs *ocFS) RemoveGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) (err error) {
+func (fs *ocFS) RemoveGrant(ctx context.Context, ref *storageproviderv1beta1pb.Reference, g *storageproviderv1beta1pb.Grant) (err error) {
 
 	var np string
 	if np, err = fs.resolve(ctx, ref); err != nil {
@@ -850,7 +850,7 @@ func (fs *ocFS) RemoveGrant(ctx context.Context, ref *storageproviderv0alphapb.R
 	}
 
 	var attr string
-	if g.Grantee.Type == storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_GROUP {
+	if g.Grantee.Type == storageproviderv1beta1pb.GranteeType_GRANTEE_TYPE_GROUP {
 		attr = sharePrefix + "g:" + g.Grantee.Id.OpaqueId
 	} else {
 		attr = sharePrefix + "u:" + g.Grantee.Id.OpaqueId
@@ -859,7 +859,7 @@ func (fs *ocFS) RemoveGrant(ctx context.Context, ref *storageproviderv0alphapb.R
 	return xattr.Remove(np, attr)
 }
 
-func (fs *ocFS) UpdateGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error {
+func (fs *ocFS) UpdateGrant(ctx context.Context, ref *storageproviderv1beta1pb.Reference, g *storageproviderv1beta1pb.Grant) error {
 	return fs.AddGrant(ctx, ref, g)
 }
 
@@ -884,7 +884,7 @@ func (fs *ocFS) CreateReference(ctx context.Context, path string, targetURI *url
 	return errtypes.NotSupported("owncloud: operation not supported")
 }
 
-func (fs *ocFS) SetArbitraryMetadata(ctx context.Context, ref *storageproviderv0alphapb.Reference, md *storageproviderv0alphapb.ArbitraryMetadata) (err error) {
+func (fs *ocFS) SetArbitraryMetadata(ctx context.Context, ref *storageproviderv1beta1pb.Reference, md *storageproviderv1beta1pb.ArbitraryMetadata) (err error) {
 	log := appctx.GetLogger(ctx)
 
 	var np string
@@ -1026,7 +1026,7 @@ func parseMTime(v string) (t time.Time, err error) {
 	return time.Unix(sec, nsec), err
 }
 
-func (fs *ocFS) UnsetArbitraryMetadata(ctx context.Context, ref *storageproviderv0alphapb.Reference, keys []string) (err error) {
+func (fs *ocFS) UnsetArbitraryMetadata(ctx context.Context, ref *storageproviderv1beta1pb.Reference, keys []string) (err error) {
 	log := appctx.GetLogger(ctx)
 
 	var np string
@@ -1095,7 +1095,7 @@ func (fs *ocFS) UnsetArbitraryMetadata(ctx context.Context, ref *storageprovider
 }
 
 // Delete is actually only a move to trash
-func (fs *ocFS) Delete(ctx context.Context, ref *storageproviderv0alphapb.Reference) (err error) {
+func (fs *ocFS) Delete(ctx context.Context, ref *storageproviderv1beta1pb.Reference) (err error) {
 
 	var np string
 	if np, err = fs.resolve(ctx, ref); err != nil {
@@ -1142,7 +1142,7 @@ func (fs *ocFS) Delete(ctx context.Context, ref *storageproviderv0alphapb.Refere
 	return nil
 }
 
-func (fs *ocFS) Move(ctx context.Context, oldRef, newRef *storageproviderv0alphapb.Reference) (err error) {
+func (fs *ocFS) Move(ctx context.Context, oldRef, newRef *storageproviderv1beta1pb.Reference) (err error) {
 	var oldName string
 	if oldName, err = fs.resolve(ctx, oldRef); err != nil {
 		return errors.Wrap(err, "ocFS: error resolving reference")
@@ -1157,7 +1157,7 @@ func (fs *ocFS) Move(ctx context.Context, oldRef, newRef *storageproviderv0alpha
 	return nil
 }
 
-func (fs *ocFS) GetMD(ctx context.Context, ref *storageproviderv0alphapb.Reference) (*storageproviderv0alphapb.ResourceInfo, error) {
+func (fs *ocFS) GetMD(ctx context.Context, ref *storageproviderv1beta1pb.Reference) (*storageproviderv1beta1pb.ResourceInfo, error) {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "ocFS: error resolving reference")
@@ -1179,7 +1179,7 @@ func (fs *ocFS) GetMD(ctx context.Context, ref *storageproviderv0alphapb.Referen
 	return m, nil
 }
 
-func (fs *ocFS) ListFolder(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.ResourceInfo, error) {
+func (fs *ocFS) ListFolder(ctx context.Context, ref *storageproviderv1beta1pb.Reference) ([]*storageproviderv1beta1pb.ResourceInfo, error) {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "ocFS: error resolving reference")
@@ -1195,7 +1195,7 @@ func (fs *ocFS) ListFolder(ctx context.Context, ref *storageproviderv0alphapb.Re
 		return nil, errors.Wrap(err, "ocFS: error listing "+np)
 	}
 
-	finfos := make([]*storageproviderv0alphapb.ResourceInfo, 0, len(mds))
+	finfos := make([]*storageproviderv1beta1pb.ResourceInfo, 0, len(mds))
 	// TODO we should only open a connection if we need to set / store the fileid. no need to always open a connection when listing files
 	c := fs.pool.Get()
 	defer c.Close()
@@ -1207,7 +1207,7 @@ func (fs *ocFS) ListFolder(ctx context.Context, ref *storageproviderv0alphapb.Re
 	return finfos, nil
 }
 
-func (fs *ocFS) Upload(ctx context.Context, ref *storageproviderv0alphapb.Reference, r io.ReadCloser) error {
+func (fs *ocFS) Upload(ctx context.Context, ref *storageproviderv1beta1pb.Reference, r io.ReadCloser) error {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "ocFS: error resolving reference")
@@ -1282,7 +1282,7 @@ func (fs *ocFS) copyMD(s string, t string) (err error) {
 	return nil
 }
 
-func (fs *ocFS) Download(ctx context.Context, ref *storageproviderv0alphapb.Reference) (io.ReadCloser, error) {
+func (fs *ocFS) Download(ctx context.Context, ref *storageproviderv1beta1pb.Reference) (io.ReadCloser, error) {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "ocFS: error resolving reference")
@@ -1297,7 +1297,7 @@ func (fs *ocFS) Download(ctx context.Context, ref *storageproviderv0alphapb.Refe
 	return r, nil
 }
 
-func (fs *ocFS) ListRevisions(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.FileVersion, error) {
+func (fs *ocFS) ListRevisions(ctx context.Context, ref *storageproviderv1beta1pb.Reference) ([]*storageproviderv1beta1pb.FileVersion, error) {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "ocFS: error resolving reference")
@@ -1308,7 +1308,7 @@ func (fs *ocFS) ListRevisions(ctx context.Context, ref *storageproviderv0alphapb
 
 	bn := path.Base(np)
 
-	revisions := []*storageproviderv0alphapb.FileVersion{}
+	revisions := []*storageproviderv1beta1pb.FileVersion{}
 	mds, err := ioutil.ReadDir(path.Dir(vp))
 	if err != nil {
 		return nil, errors.Wrap(err, "ocFS: error reading"+path.Dir(vp))
@@ -1323,7 +1323,7 @@ func (fs *ocFS) ListRevisions(ctx context.Context, ref *storageproviderv0alphapb
 	return revisions, nil
 }
 
-func (fs *ocFS) filterAsRevision(ctx context.Context, bn string, md os.FileInfo) *storageproviderv0alphapb.FileVersion {
+func (fs *ocFS) filterAsRevision(ctx context.Context, bn string, md os.FileInfo) *storageproviderv1beta1pb.FileVersion {
 	if strings.HasPrefix(md.Name(), bn) {
 		// versions have filename.ext.v12345678
 		version := md.Name()[len(bn)+2:] // truncate "<base filename>.v" to get version mtime
@@ -1334,7 +1334,7 @@ func (fs *ocFS) filterAsRevision(ctx context.Context, bn string, md os.FileInfo)
 			return nil
 		}
 		// TODO(jfd) trashed versions are in the files_trashbin/versions folder ... not relevant here
-		return &storageproviderv0alphapb.FileVersion{
+		return &storageproviderv1beta1pb.FileVersion{
 			Key:   version,
 			Size:  uint64(md.Size()),
 			Mtime: uint64(mtime),
@@ -1343,11 +1343,11 @@ func (fs *ocFS) filterAsRevision(ctx context.Context, bn string, md os.FileInfo)
 	return nil
 }
 
-func (fs *ocFS) DownloadRevision(ctx context.Context, ref *storageproviderv0alphapb.Reference, revisionKey string) (io.ReadCloser, error) {
+func (fs *ocFS) DownloadRevision(ctx context.Context, ref *storageproviderv1beta1pb.Reference, revisionKey string) (io.ReadCloser, error) {
 	return nil, errtypes.NotSupported("download revision")
 }
 
-func (fs *ocFS) RestoreRevision(ctx context.Context, ref *storageproviderv0alphapb.Reference, revisionKey string) error {
+func (fs *ocFS) RestoreRevision(ctx context.Context, ref *storageproviderv1beta1pb.Reference, revisionKey string) error {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "ocFS: error resolving reference")
@@ -1424,7 +1424,7 @@ func (fs *ocFS) EmptyRecycle(ctx context.Context) error {
 	return nil
 }
 
-func (fs *ocFS) convertToRecycleItem(ctx context.Context, rp string, md os.FileInfo) *storageproviderv0alphapb.RecycleItem {
+func (fs *ocFS) convertToRecycleItem(ctx context.Context, rp string, md os.FileInfo) *storageproviderv1beta1pb.RecycleItem {
 	// trashbin items have filename.ext.d12345678
 	suffix := path.Ext(md.Name())
 	if len(suffix) == 0 || !strings.HasPrefix(suffix, ".d") {
@@ -1450,7 +1450,7 @@ func (fs *ocFS) convertToRecycleItem(ctx context.Context, rp string, md os.FileI
 	// we need to join and trim the path when listing it
 	originalPath := path.Join(string(v), strings.TrimSuffix(path.Base(md.Name()), suffix))
 
-	return &storageproviderv0alphapb.RecycleItem{
+	return &storageproviderv1beta1pb.RecycleItem{
 		Type: getResourceType(md.IsDir()),
 		Key:  md.Name(),
 		// TODO do we need to prefix the path? it should be relative to this storage root, right?
@@ -1463,7 +1463,7 @@ func (fs *ocFS) convertToRecycleItem(ctx context.Context, rp string, md os.FileI
 	}
 }
 
-func (fs *ocFS) ListRecycle(ctx context.Context) ([]*storageproviderv0alphapb.RecycleItem, error) {
+func (fs *ocFS) ListRecycle(ctx context.Context) ([]*storageproviderv1beta1pb.RecycleItem, error) {
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "ocFS: error resolving recycle path")
@@ -1475,10 +1475,10 @@ func (fs *ocFS) ListRecycle(ctx context.Context) ([]*storageproviderv0alphapb.Re
 		log := appctx.GetLogger(ctx)
 		log.Debug().Err(err).Str("path", rp).Msg("trash not readable")
 		// TODO jfd only ignore not found errors
-		return []*storageproviderv0alphapb.RecycleItem{}, nil
+		return []*storageproviderv1beta1pb.RecycleItem{}, nil
 	}
 	// TODO (jfd) limit and offset
-	items := []*storageproviderv0alphapb.RecycleItem{}
+	items := []*storageproviderv1beta1pb.RecycleItem{}
 	for i := range mds {
 		ri := fs.convertToRecycleItem(ctx, rp, mds[i])
 		if ri != nil {

@@ -24,8 +24,8 @@ import (
 	"fmt"
 	"os"
 
-	authregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/authregistry/v0alpha"
-	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
+	authregistryv1beta1 "github.com/cs3org/go-cs3apis/cs3/auth/registry/v0alpha"
+	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 )
 
@@ -42,7 +42,7 @@ var loginCommand = func() *command {
 				return err
 			}
 
-			req := &authregistryv0alphapb.ListAuthProvidersRequest{}
+			req := &authregistryv1beta1.ListAuthProvidersRequest{}
 
 			ctx := context.Background()
 			res, err := client.ListAuthProviders(ctx, req)
@@ -89,7 +89,7 @@ var loginCommand = func() *command {
 			return err
 		}
 
-		req := &gatewayv0alphapb.AuthenticateRequest{
+		req := &gatewayv1beta1.AuthenticateRequest{
 			Type:         authType,
 			ClientId:     username,
 			ClientSecret: password,

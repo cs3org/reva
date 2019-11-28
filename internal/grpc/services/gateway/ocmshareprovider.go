@@ -21,7 +21,7 @@ package gateway
 import (
 	"context"
 
-	ocmshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/ocmshareprovider/v0alpha"
+	ocmshareproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/ocmshareprovider/v1beta1"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
@@ -30,10 +30,10 @@ import (
 )
 
 // TODO(labkode): add multi-phase commit logic when commit share or commit ref is enabled.
-func (s *svc) CreateOCMShare(ctx context.Context, req *ocmshareproviderv0alphapb.CreateOCMShareRequest) (*ocmshareproviderv0alphapb.CreateOCMShareResponse, error) {
+func (s *svc) CreateOCMShare(ctx context.Context, req *ocmshareproviderv1beta1pb.CreateOCMShareRequest) (*ocmshareproviderv1beta1pb.CreateOCMShareResponse, error) {
 	c, err := pool.GetOCMShareProviderClient(s.c.OCMShareProviderEndpoint)
 	if err != nil {
-		return &ocmshareproviderv0alphapb.CreateOCMShareResponse{
+		return &ocmshareproviderv1beta1pb.CreateOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
 		}, nil
 	}
@@ -46,10 +46,10 @@ func (s *svc) CreateOCMShare(ctx context.Context, req *ocmshareproviderv0alphapb
 	return res, nil
 }
 
-func (s *svc) RemoveOCMShare(ctx context.Context, req *ocmshareproviderv0alphapb.RemoveOCMShareRequest) (*ocmshareproviderv0alphapb.RemoveOCMShareResponse, error) {
+func (s *svc) RemoveOCMShare(ctx context.Context, req *ocmshareproviderv1beta1pb.RemoveOCMShareRequest) (*ocmshareproviderv1beta1pb.RemoveOCMShareResponse, error) {
 	c, err := pool.GetOCMShareProviderClient(s.c.OCMShareProviderEndpoint)
 	if err != nil {
-		return &ocmshareproviderv0alphapb.RemoveOCMShareResponse{
+		return &ocmshareproviderv1beta1pb.RemoveOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
 		}, nil
 	}
@@ -64,15 +64,15 @@ func (s *svc) RemoveOCMShare(ctx context.Context, req *ocmshareproviderv0alphapb
 // TODO(labkode): we need to validate share state vs storage grant and storage ref
 // If there are any inconsitencies, the share needs to be flag as invalid and a background process
 // or active fix needs to be performed.
-func (s *svc) GetOCMShare(ctx context.Context, req *ocmshareproviderv0alphapb.GetOCMShareRequest) (*ocmshareproviderv0alphapb.GetOCMShareResponse, error) {
+func (s *svc) GetOCMShare(ctx context.Context, req *ocmshareproviderv1beta1pb.GetOCMShareRequest) (*ocmshareproviderv1beta1pb.GetOCMShareResponse, error) {
 	return s.getOCMShare(ctx, req)
 }
 
-func (s *svc) getOCMShare(ctx context.Context, req *ocmshareproviderv0alphapb.GetOCMShareRequest) (*ocmshareproviderv0alphapb.GetOCMShareResponse, error) {
+func (s *svc) getOCMShare(ctx context.Context, req *ocmshareproviderv1beta1pb.GetOCMShareRequest) (*ocmshareproviderv1beta1pb.GetOCMShareResponse, error) {
 	c, err := pool.GetOCMShareProviderClient(s.c.OCMShareProviderEndpoint)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
-		return &ocmshareproviderv0alphapb.GetOCMShareResponse{
+		return &ocmshareproviderv1beta1pb.GetOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
 		}, nil
 	}
@@ -86,11 +86,11 @@ func (s *svc) getOCMShare(ctx context.Context, req *ocmshareproviderv0alphapb.Ge
 }
 
 // TODO(labkode): read GetShare comment.
-func (s *svc) ListOCMShares(ctx context.Context, req *ocmshareproviderv0alphapb.ListOCMSharesRequest) (*ocmshareproviderv0alphapb.ListOCMSharesResponse, error) {
+func (s *svc) ListOCMShares(ctx context.Context, req *ocmshareproviderv1beta1pb.ListOCMSharesRequest) (*ocmshareproviderv1beta1pb.ListOCMSharesResponse, error) {
 	c, err := pool.GetOCMShareProviderClient(s.c.OCMShareProviderEndpoint)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
-		return &ocmshareproviderv0alphapb.ListOCMSharesResponse{
+		return &ocmshareproviderv1beta1pb.ListOCMSharesResponse{
 			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
 		}, nil
 	}
@@ -103,11 +103,11 @@ func (s *svc) ListOCMShares(ctx context.Context, req *ocmshareproviderv0alphapb.
 	return res, nil
 }
 
-func (s *svc) UpdateOCMShare(ctx context.Context, req *ocmshareproviderv0alphapb.UpdateOCMShareRequest) (*ocmshareproviderv0alphapb.UpdateOCMShareResponse, error) {
+func (s *svc) UpdateOCMShare(ctx context.Context, req *ocmshareproviderv1beta1pb.UpdateOCMShareRequest) (*ocmshareproviderv1beta1pb.UpdateOCMShareResponse, error) {
 	c, err := pool.GetOCMShareProviderClient(s.c.OCMShareProviderEndpoint)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
-		return &ocmshareproviderv0alphapb.UpdateOCMShareResponse{
+		return &ocmshareproviderv1beta1pb.UpdateOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting share provider client"),
 		}, nil
 	}
@@ -120,11 +120,11 @@ func (s *svc) UpdateOCMShare(ctx context.Context, req *ocmshareproviderv0alphapb
 	return res, nil
 }
 
-func (s *svc) ListReceivedOCMShares(ctx context.Context, req *ocmshareproviderv0alphapb.ListReceivedOCMSharesRequest) (*ocmshareproviderv0alphapb.ListReceivedOCMSharesResponse, error) {
+func (s *svc) ListReceivedOCMShares(ctx context.Context, req *ocmshareproviderv1beta1pb.ListReceivedOCMSharesRequest) (*ocmshareproviderv1beta1pb.ListReceivedOCMSharesResponse, error) {
 	c, err := pool.GetOCMShareProviderClient(s.c.OCMShareProviderEndpoint)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
-		return &ocmshareproviderv0alphapb.ListReceivedOCMSharesResponse{
+		return &ocmshareproviderv1beta1pb.ListReceivedOCMSharesResponse{
 			Status: status.NewInternal(ctx, err, "error getting share provider client"),
 		}, nil
 	}
@@ -137,12 +137,12 @@ func (s *svc) ListReceivedOCMShares(ctx context.Context, req *ocmshareproviderv0
 	return res, nil
 }
 
-func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocmshareproviderv0alphapb.UpdateReceivedOCMShareRequest) (*ocmshareproviderv0alphapb.UpdateReceivedOCMShareResponse, error) {
+func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocmshareproviderv1beta1pb.UpdateReceivedOCMShareRequest) (*ocmshareproviderv1beta1pb.UpdateReceivedOCMShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 	c, err := pool.GetOCMShareProviderClient(s.c.OCMShareProviderEndpoint)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
-		return &ocmshareproviderv0alphapb.UpdateReceivedOCMShareResponse{
+		return &ocmshareproviderv1beta1pb.UpdateReceivedOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting share provider client"),
 		}, nil
 	}
@@ -150,7 +150,7 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocmshareproviderv
 	res, err := c.UpdateReceivedOCMShare(ctx, req)
 	if err != nil {
 		log.Err(err).Msg("gateway: error calling UpdateReceivedShare")
-		return &ocmshareproviderv0alphapb.UpdateReceivedOCMShareResponse{
+		return &ocmshareproviderv1beta1pb.UpdateReceivedOCMShareResponse{
 			Status: &rpcpb.Status{
 				Code: rpcpb.Code_CODE_INTERNAL,
 			},

@@ -32,7 +32,7 @@ import (
 	"go.opencensus.io/trace"
 
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
 	"github.com/cs3org/reva/internal/http/utils"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/pkg/errors"
@@ -62,10 +62,10 @@ func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	ref := &storageproviderv0alphapb.Reference{
-		Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+	ref := &storageproviderv1beta1pb.Reference{
+		Spec: &storageproviderv1beta1pb.Reference_Path{Path: fn},
 	}
-	req := &storageproviderv0alphapb.StatRequest{Ref: ref}
+	req := &storageproviderv1beta1pb.StatRequest{Ref: ref}
 	res, err := client.Stat(ctx, req)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending a grpc stat request")
@@ -84,9 +84,9 @@ func (s *svc) doPropfind(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	info := res.Info
-	infos := []*storageproviderv0alphapb.ResourceInfo{info}
-	if info.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER && listChildren {
-		req := &storageproviderv0alphapb.ListContainerRequest{
+	infos := []*storageproviderv1beta1pb.ResourceInfo{info}
+	if info.Type == storageproviderv1beta1pb.ResourceType_RESOURCE_TYPE_CONTAINER && listChildren {
+		req := &storageproviderv1beta1pb.ListContainerRequest{
 			Ref: ref,
 		}
 		res, err := client.ListContainer(ctx, req)
@@ -148,7 +148,7 @@ func readPropfind(r io.Reader) (pf propfindXML, status int, err error) {
 	return pf, 0, nil
 }
 
-func (s *svc) formatPropfind(ctx context.Context, pf *propfindXML, mds []*storageproviderv0alphapb.ResourceInfo, ns string) (string, error) {
+func (s *svc) formatPropfind(ctx context.Context, pf *propfindXML, mds []*storageproviderv1beta1pb.ResourceInfo, ns string) (string, error) {
 	responses := make([]*responseXML, 0, len(mds))
 	for i := range mds {
 		res, err := s.mdToPropResponse(ctx, pf, mds[i], ns)
@@ -179,14 +179,14 @@ func (s *svc) newProp(key, val string) *propertyXML {
 // mdToPropResponse converts the CS3 metadata into a webdav propesponse
 // ns is the CS3 namespace that needs to be removed from the CS3 path before
 // prefixing it with the baseURI
-func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *storageproviderv0alphapb.ResourceInfo, ns string) (*responseXML, error) {
+func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *storageproviderv1beta1pb.ResourceInfo, ns string) (*responseXML, error) {
 
 	md.Path = strings.TrimPrefix(md.Path, ns)
 
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
 
 	ref := path.Join(baseURI, md.Path)
-	if md.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+	if md.Type == storageproviderv1beta1pb.ResourceType_RESOURCE_TYPE_CONTAINER {
 		ref += "/"
 	}
 
@@ -224,7 +224,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *storage
 
 		// always return size
 		size := fmt.Sprintf("%d", md.Size)
-		if md.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+		if md.Type == storageproviderv1beta1pb.ResourceType_RESOURCE_TYPE_CONTAINER {
 			response.Propstat[0].Prop = append(response.Propstat[0].Prop,
 				s.newProp("d:resourcetype", "<d:collection/>"),
 				s.newProp("d:getcontenttype", "httpd/unix-directory"),
@@ -372,20 +372,20 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *storage
 					// which only would make sense when eg. rendering a plain HTML filelisting when GETing a collection,
 					// which is not the case ... so we don't return it on collections. owncloud has oc:size for that
 					// TODO we cannot find out if md.Size is set or not because ints in go default to 0
-					if md.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+					if md.Type == storageproviderv1beta1pb.ResourceType_RESOURCE_TYPE_CONTAINER {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:getcontentlength", ""))
 					} else {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontentlength", size))
 					}
 				case "resourcetype": // both
-					if md.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+					if md.Type == storageproviderv1beta1pb.ResourceType_RESOURCE_TYPE_CONTAINER {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:resourcetype", "<d:collection/>"))
 					} else {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:resourcetype", ""))
 						// redirectref is another option
 					}
 				case "getcontenttype": // phoenix
-					if md.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+					if md.Type == storageproviderv1beta1pb.ResourceType_RESOURCE_TYPE_CONTAINER {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontenttype", "httpd/unix-directory"))
 					} else if md.MimeType != "" {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontenttype", md.MimeType))

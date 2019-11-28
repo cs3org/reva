@@ -22,10 +22,10 @@ import (
 	"context"
 	"testing"
 
-	shareProviderpb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	shareProviderpb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v1beta1"
+	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types"
-	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
+	userproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/userprovider/v1beta1"
 )
 
 func TestMemoryProvider(t *testing.T) {
@@ -37,8 +37,8 @@ func TestMemoryProvider(t *testing.T) {
 	}
 
 	// Setup dat
-	user := userproviderv0alphapb.User{}
-	rInfo := storageproviderv0alphapb.ResourceInfo{}
+	user := userproviderv1beta1pb.User{}
+	rInfo := storageproviderv1beta1pb.ResourceInfo{}
 	grant := shareProviderpb.Grant{}
 
 	// create a new public share
@@ -62,7 +62,7 @@ func TestMemoryProvider(t *testing.T) {
 
 	newGrant := shareProviderpb.Grant{
 		Permissions: &shareProviderpb.PublicSharePermissions{
-			Permissions: &storageproviderv0alphapb.ResourcePermissions{}, // add some permissions maybe?
+			Permissions: &storageproviderv1beta1pb.ResourcePermissions{}, // add some permissions maybe?
 		},
 		Expiration: updatedMtime,
 	}

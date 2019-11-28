@@ -28,11 +28,11 @@ import (
 	"strings"
 	"time"
 
-	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
+	gatewayv1beta1pb "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
-	storageregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageregistry/v0alpha"
-	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
+	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
+	storageregistryv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageregistry/v1beta1"
+	userproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/userprovider/v1beta1"
 	"github.com/cs3org/reva/internal/http/utils"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -138,7 +138,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 	})
 }
 
-func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s *svc, u *userproviderv0alphapb.User) {
+func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s *svc, u *userproviderv1beta1pb.User) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -165,7 +165,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
-	lspres, err := c.ListStorageProviders(ctx, &storageregistryv0alphapb.ListStorageProvidersRequest{})
+	lspres, err := c.ListStorageProviders(ctx, &storageregistryv1beta1pb.ListStorageProvidersRequest{})
 
 	if err != nil {
 		log.Error().Err(err).Msg("error calling ListStorageProviders")
@@ -179,11 +179,11 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 
 	// query all available storage providers to get unified list as the request does not come
 	// with ref information to target only one storage provider.
-	//res := &storageproviderv0alphapb.ListRecycleResponse{
+	//res := &storageproviderv1beta1pb.ListRecycleResponse{
 	//	Status:       status.NewOK(ctx),
-	//	RecycleItems: []*storageproviderv0alphapb.RecycleItem{},
+	//	RecycleItems: []*storageproviderv1beta1pb.RecycleItem{},
 	//}
-	ri := []*storageproviderv0alphapb.RecycleItem{}
+	ri := []*storageproviderv1beta1pb.RecycleItem{}
 	// TODO the listing is currently non deterministic, causing files to show up in /home or /oc
 	for _, p := range lspres.GetProviders() {
 		pp := p.GetProviderPath()
@@ -204,7 +204,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 
 		//we need to fetch the full provider info
 		//TODO make the storage registry return the full info
-		gpres, err := pc.GetProvider(ctx, &storageproviderv0alphapb.GetProviderRequest{})
+		gpres, err := pc.GetProvider(ctx, &storageproviderv1beta1pb.GetProviderRequest{})
 		if err != nil {
 			log.Error().Err(err).Msg("error calling ListRecycle")
 			continue
@@ -220,10 +220,10 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		}
 		// now actually fetch the recycle items
 		// we have to use the gateway to be forwarded to the correct storage
-		lrrres, err := gc.ListRecycle(ctx, &gatewayv0alphapb.ListRecycleRequest{
-			Ref: &storageproviderv0alphapb.Reference{
-				Spec: &storageproviderv0alphapb.Reference_Id{
-					Id: &storageproviderv0alphapb.ResourceId{
+		lrrres, err := gc.ListRecycle(ctx, &gatewayv1beta1pb.ListRecycleRequest{
+			Ref: &storageproviderv1beta1pb.Reference{
+				Spec: &storageproviderv1beta1pb.Reference_Id{
+					Id: &storageproviderv1beta1pb.ResourceId{
 						StorageId: gpres.GetInfo().GetProviderId(),
 					},
 				},
@@ -269,7 +269,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	}
 }
 
-func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *userproviderv0alphapb.User, pf *propfindXML, items []*storageproviderv0alphapb.RecycleItem) (string, error) {
+func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *userproviderv1beta1pb.User, pf *propfindXML, items []*storageproviderv1beta1pb.RecycleItem) (string, error) {
 	responses := make([]*responseXML, 0, len(items)+1)
 	// add trashbin dir . entry
 	responses = append(responses, &responseXML{
@@ -294,11 +294,11 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *us
 	})
 	/*
 		for i := range items {
-			vi := &storageproviderv0alphapb.ResourceInfo{
+			vi := &storageproviderv1beta1pb.ResourceInfo{
 				// TODO(jfd) we cannot access version content, this will be a problem when trying to fetch version thumbnails
 				//Opaque
-				Type: storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_FILE,
-				Id: &storageproviderv0alphapb.ResourceId{
+				Type: storageproviderv1beta1pb.ResourceType_RESOURCE_TYPE_FILE,
+				Id: &storageproviderv1beta1pb.ResourceId{
 					StorageId: "trashbin", // this is a virtual storage
 					OpaqueId:  path.Join("trash-bin", u.Username, items[i].GetKey()),
 				},
@@ -332,11 +332,11 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *us
 	return msg, nil
 }
 
-func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, pf *propfindXML, item *storageproviderv0alphapb.RecycleItem) (*responseXML, error) {
+func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, pf *propfindXML, item *storageproviderv1beta1pb.RecycleItem) (*responseXML, error) {
 
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
 	ref := path.Join(baseURI, item.Key)
-	if item.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+	if item.Type == storageproviderv1beta1pb.ResourceType_RESOURCE_TYPE_CONTAINER {
 		ref += "/"
 	}
 
@@ -361,7 +361,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, pf *pr
 		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-filename", path.Base(item.Path)))
 		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-location", item.Path))
 		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-delete-datetime", dTime))
-		if item.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+		if item.Type == storageproviderv1beta1pb.ResourceType_RESOURCE_TYPE_CONTAINER {
 			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("d:resourcetype", "<d:collection/>"))
 			// TODO(jfd): decide if we can and want to list oc:size for folders
 		} else {
@@ -387,7 +387,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, pf *pr
 			case "http://owncloud.org/ns":
 				switch pf.Prop[i].Local {
 				case "oc:size":
-					if item.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+					if item.Type == storageproviderv1beta1pb.ResourceType_RESOURCE_TYPE_CONTAINER {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontentlength", size))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:size", ""))
@@ -406,20 +406,20 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, pf *pr
 			case "DAV:":
 				switch pf.Prop[i].Local {
 				case "getcontentlength":
-					if item.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+					if item.Type == storageproviderv1beta1pb.ResourceType_RESOURCE_TYPE_CONTAINER {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:getcontentlength", ""))
 					} else {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontentlength", size))
 					}
 				case "resourcetype":
-					if item.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+					if item.Type == storageproviderv1beta1pb.ResourceType_RESOURCE_TYPE_CONTAINER {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:resourcetype", "<d:collection/>"))
 					} else {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:resourcetype", ""))
 						// redirectref is another option
 					}
 				case "getcontenttype":
-					if item.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+					if item.Type == storageproviderv1beta1pb.ResourceType_RESOURCE_TYPE_CONTAINER {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontenttype", "httpd/unix-directory"))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:getcontenttype", ""))
@@ -438,7 +438,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, pf *pr
 	return &response, nil
 }
 
-func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, u *userproviderv0alphapb.User, dst string, key string) {
+func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, u *userproviderv1beta1pb.User, dst string, key string) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -451,12 +451,12 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 
 	rid := unwrap(key)
 
-	req := &storageproviderv0alphapb.RestoreRecycleItemRequest{
+	req := &storageproviderv1beta1pb.RestoreRecycleItemRequest{
 		// use the target path to find the storage provider
 		// this means we can only undelete on the same storage, not to a different folder
 		// use the key which is prefixed with the StoragePath to lookup the correct storage ...
-		Ref: &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Id{
+		Ref: &storageproviderv1beta1pb.Reference{
+			Spec: &storageproviderv1beta1pb.Reference_Id{
 				Id: rid,
 			},
 		},
@@ -481,7 +481,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc, u *userproviderv0alphapb.User, key string) {
+func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc, u *userproviderv1beta1pb.User, key string) {
 
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
@@ -495,9 +495,9 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 
 	rid := unwrap(key)
 
-	req := &gatewayv0alphapb.PurgeRecycleRequest{
-		Ref: &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Id{
+	req := &gatewayv1beta1pb.PurgeRecycleRequest{
+		Ref: &storageproviderv1beta1pb.Reference{
+			Spec: &storageproviderv1beta1pb.Reference_Id{
 				Id: rid,
 			},
 		},

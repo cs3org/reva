@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"os"
 
-	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
+	gatewayv1beta1pb "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 )
 
@@ -42,7 +42,7 @@ func recyclePurgeCommand() *command {
 			return err
 		}
 
-		req := &gatewayv0alphapb.PurgeRecycleRequest{}
+		req := &gatewayv1beta1pb.PurgeRecycleRequest{}
 
 		ctx := getAuthContext()
 		res, err := client.PurgeRecycle(ctx, req)

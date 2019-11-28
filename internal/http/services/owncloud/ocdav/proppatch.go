@@ -30,7 +30,7 @@ import (
 	"go.opencensus.io/trace"
 
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/pkg/errors"
 )
@@ -62,17 +62,17 @@ func (s *svc) doProppatch(w http.ResponseWriter, r *http.Request, ns string) {
 	pf := &propfindXML{
 		Prop: propfindProps{},
 	}
-	rreq := &storageproviderv0alphapb.UnsetArbitraryMetadataRequest{
-		Ref: &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+	rreq := &storageproviderv1beta1pb.UnsetArbitraryMetadataRequest{
+		Ref: &storageproviderv1beta1pb.Reference{
+			Spec: &storageproviderv1beta1pb.Reference_Path{Path: fn},
 		},
 		ArbitraryMetadataKeys: []string{},
 	}
-	sreq := &storageproviderv0alphapb.SetArbitraryMetadataRequest{
-		Ref: &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+	sreq := &storageproviderv1beta1pb.SetArbitraryMetadataRequest{
+		Ref: &storageproviderv1beta1pb.Reference{
+			Spec: &storageproviderv1beta1pb.Reference_Path{Path: fn},
 		},
-		ArbitraryMetadata: &storageproviderv0alphapb.ArbitraryMetadata{
+		ArbitraryMetadata: &storageproviderv1beta1pb.ArbitraryMetadata{
 			Metadata: map[string]string{},
 		},
 	}
@@ -140,9 +140,9 @@ func (s *svc) doProppatch(w http.ResponseWriter, r *http.Request, ns string) {
 		}
 	}
 
-	req := &storageproviderv0alphapb.StatRequest{
-		Ref: &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+	req := &storageproviderv1beta1pb.StatRequest{
+		Ref: &storageproviderv1beta1pb.Reference{
+			Spec: &storageproviderv1beta1pb.Reference_Path{Path: fn},
 		},
 		ArbitraryMetadataKeys: mkeys,
 	}
@@ -164,7 +164,7 @@ func (s *svc) doProppatch(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	info := res.Info
-	infos := []*storageproviderv0alphapb.ResourceInfo{info}
+	infos := []*storageproviderv1beta1pb.ResourceInfo{info}
 
 	propRes, err := s.formatPropfind(ctx, pf, infos, ns)
 	if err != nil {

@@ -26,10 +26,10 @@ import (
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/user"
 
-	publicshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
-	storageprovider "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	publicshareproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v1beta1"
+	storageprovider "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
-	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
+	usershareproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v1beta1"
 	publicsharemgr "github.com/cs3org/reva/pkg/publicshare/manager/registry"
 	usermgr "github.com/cs3org/reva/pkg/user/manager/registry"
 )
@@ -264,7 +264,7 @@ func AsCS3Permissions(p int, rp *storageprovider.ResourcePermissions) *storagepr
 }
 
 // PublicShare2ShareData converts a cs3api public share into shareData data model
-func PublicShare2ShareData(share *publicshareproviderv0alphapb.PublicShare) *ShareData {
+func PublicShare2ShareData(share *publicshareproviderv1beta1pb.PublicShare) *ShareData {
 	return &ShareData{
 		// TODO map share.resourceId to path and storage ... requires a stat call
 		// share.permissions ar mapped below
@@ -297,7 +297,7 @@ func UserIDToString(userID *typespb.UserId) string {
 }
 
 // UserSharePermissions2OCSPermissions transforms cs3api permissions into OCS Permissions data model
-func UserSharePermissions2OCSPermissions(sp *usershareproviderv0alphapb.SharePermissions) Permissions {
+func UserSharePermissions2OCSPermissions(sp *usershareproviderv1beta1pb.SharePermissions) Permissions {
 	if sp != nil {
 		return permissions2OCSPermissions(sp.GetPermissions())
 	}
@@ -337,7 +337,7 @@ func Permissions2Role(p int) string {
 	return role
 }
 
-func publicSharePermissions2OCSPermissions(sp *publicshareproviderv0alphapb.PublicSharePermissions) Permissions {
+func publicSharePermissions2OCSPermissions(sp *publicshareproviderv1beta1pb.PublicSharePermissions) Permissions {
 	if sp != nil {
 		return permissions2OCSPermissions(sp.GetPermissions())
 	}

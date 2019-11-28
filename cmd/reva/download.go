@@ -26,7 +26,7 @@ import (
 
 	"github.com/cheggaaa/pb"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
 	"github.com/cs3org/reva/pkg/rhttp"
 )
 
@@ -48,10 +48,10 @@ func downloadCommand() *command {
 			return err
 		}
 
-		ref := &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: remote},
+		ref := &storageproviderv1beta1pb.Reference{
+			Spec: &storageproviderv1beta1pb.Reference_Path{Path: remote},
 		}
-		req1 := &storageproviderv0alphapb.StatRequest{Ref: ref}
+		req1 := &storageproviderv1beta1pb.StatRequest{Ref: ref}
 		ctx := getAuthContext()
 		res1, err := client.Stat(ctx, req1)
 		if err != nil {
@@ -63,9 +63,9 @@ func downloadCommand() *command {
 
 		info := res1.Info
 
-		req2 := &storageproviderv0alphapb.InitiateFileDownloadRequest{
-			Ref: &storageproviderv0alphapb.Reference{
-				Spec: &storageproviderv0alphapb.Reference_Path{
+		req2 := &storageproviderv1beta1pb.InitiateFileDownloadRequest{
+			Ref: &storageproviderv1beta1pb.Reference{
+				Spec: &storageproviderv1beta1pb.Reference_Path{
 					Path: remote,
 				},
 			},

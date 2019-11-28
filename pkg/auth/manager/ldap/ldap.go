@@ -23,7 +23,7 @@ import (
 	"crypto/tls"
 	"fmt"
 
-	typespb "github.com/cs3org/go-cs3apis/cs3/types"
+	user "github.com/cs3org/go-cs3apis/cs3/types"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
@@ -101,7 +101,7 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	}, nil
 }
 
-func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*typespb.UserId, error) {
+func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.UserId, error) {
 	log := appctx.GetLogger(ctx)
 
 	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", am.hostname, am.port), &tls.Config{InsecureSkipVerify: true})
@@ -144,7 +144,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, err
 	}
 
-	uid := &typespb.UserId{
+	uid := &user.UserId{
 		// TODO(jfd): how do we determine the issuer for ldap? ... make configurable
 		Idp:      fmt.Sprintf("%s:%d", am.hostname, am.port),
 		OpaqueId: sr.Entries[0].GetAttributeValue(am.schema.UID),

@@ -21,17 +21,17 @@ package gateway
 import (
 	"context"
 
-	preferencesv0alphapb "github.com/cs3org/go-cs3apis/cs3/preferences/v0alpha"
+	preferencesv1beta1pb "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
 )
 
-func (s *svc) SetKey(ctx context.Context, req *preferencesv0alphapb.SetKeyRequest) (*preferencesv0alphapb.SetKeyResponse, error) {
+func (s *svc) SetKey(ctx context.Context, req *preferencesv1beta1pb.SetKeyRequest) (*preferencesv1beta1pb.SetKeyResponse, error) {
 	c, err := pool.GetPreferencesClient(s.c.PreferencesEndpoint)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetPreferencesClient")
-		return &preferencesv0alphapb.SetKeyResponse{
+		return &preferencesv1beta1pb.SetKeyResponse{
 			Status: status.NewInternal(ctx, err, "error getting preferences client"),
 		}, nil
 	}
@@ -44,11 +44,11 @@ func (s *svc) SetKey(ctx context.Context, req *preferencesv0alphapb.SetKeyReques
 	return res, nil
 }
 
-func (s *svc) GetKey(ctx context.Context, req *preferencesv0alphapb.GetKeyRequest) (*preferencesv0alphapb.GetKeyResponse, error) {
+func (s *svc) GetKey(ctx context.Context, req *preferencesv1beta1pb.GetKeyRequest) (*preferencesv1beta1pb.GetKeyResponse, error) {
 	c, err := pool.GetPreferencesClient(s.c.PreferencesEndpoint)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetPreferencesClient")
-		return &preferencesv0alphapb.GetKeyResponse{
+		return &preferencesv1beta1pb.GetKeyResponse{
 			Status: status.NewInternal(ctx, err, "error getting preferences client"),
 		}, nil
 	}

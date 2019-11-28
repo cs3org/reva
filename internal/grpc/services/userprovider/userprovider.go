@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"io"
 
-	userproviderpb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
+	userproviderpb "github.com/cs3org/go-cs3apis/cs3/userprovider/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/user"

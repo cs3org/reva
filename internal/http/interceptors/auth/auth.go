@@ -23,9 +23,9 @@ import (
 	"net/http"
 	"strings"
 
-	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
+	gatewayv1beta1pb "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
+	userproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/userprovider/v1beta1"
 	"github.com/cs3org/reva/internal/http/interceptors/auth/credential/registry"
 	tokenregistry "github.com/cs3org/reva/internal/http/interceptors/auth/token/registry"
 	tokenwriterregistry "github.com/cs3org/reva/internal/http/interceptors/auth/tokenwriter/registry"
@@ -189,7 +189,7 @@ func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
 
 				log.Debug().Msg("credentials obtained from the request")
 
-				req := &gatewayv0alphapb.AuthenticateRequest{
+				req := &gatewayv1beta1pb.AuthenticateRequest{
 					Type:         creds.Type,
 					ClientId:     creds.ClientID,
 					ClientSecret: creds.ClientSecret,
@@ -232,7 +232,7 @@ func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
 				return
 			}
 
-			u := &userproviderv0alphapb.User{}
+			u := &userproviderv1beta1pb.User{}
 			if err := mapstructure.Decode(claims, u); err != nil {
 				log.Error().Err(err).Msg("error decoding user claims")
 				w.WriteHeader(http.StatusUnauthorized)

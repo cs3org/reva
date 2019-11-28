@@ -29,13 +29,13 @@ import (
 	"strings"
 	"time"
 
-	gatewayv0alpahpb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
-	publicshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
+	gatewayv0alpahpb "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	publicshareproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v1beta1"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
-	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
-	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
+	userproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/userprovider/v1beta1"
+	usershareproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v1beta1"
 
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -94,7 +94,7 @@ func (h *SharesHandler) findSharees(w http.ResponseWriter, r *http.Request) {
 
 	gatewayProvider := mustGetGateway(h.gatewayAddr, r, w)
 
-	req := userproviderv0alphapb.FindUsersRequest{
+	req := userproviderv1beta1pb.FindUsersRequest{
 		Filter: term,
 	}
 
@@ -126,7 +126,7 @@ func (h *SharesHandler) findSharees(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *SharesHandler) userAsMatch(u *userproviderv0alphapb.User) *conversions.MatchData {
+func (h *SharesHandler) userAsMatch(u *userproviderv1beta1pb.User) *conversions.MatchData {
 	return &conversions.MatchData{
 		Label: u.DisplayName,
 		Value: &conversions.MatchValueData{
@@ -168,7 +168,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		res, err := gatewayClient.FindUsers(ctx, &userproviderv0alphapb.FindUsersRequest{
+		res, err := gatewayClient.FindUsers(ctx, &userproviderv1beta1pb.FindUsersRequest{
 			Filter: shareWith,
 		})
 		if err != nil {
@@ -176,7 +176,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		var recipient *userproviderv0alphapb.User
+		var recipient *userproviderv1beta1pb.User
 		for _, user := range res.GetUsers() {
 			if user.Username == shareWith {
 				recipient = user
@@ -203,7 +203,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		var permissions *storageproviderv0alphapb.ResourcePermissions
+		var permissions *storageproviderv1beta1pb.ResourcePermissions
 		permissions, err = h.role2CS3Permissions(role)
 		if err != nil {
 			log.Warn().Err(err).Msg("unknown role, mapping legacy permissions")
@@ -223,9 +223,9 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		statReq := &storageproviderv0alphapb.StatRequest{
-			Ref: &storageproviderv0alphapb.Reference{
-				Spec: &storageproviderv0alphapb.Reference_Path{
+		statReq := &storageproviderv1beta1pb.StatRequest{
+			Ref: &storageproviderv1beta1pb.Reference{
+				Spec: &storageproviderv1beta1pb.Reference_Path{
 					Path: r.FormValue("path"),
 				},
 			},
@@ -246,7 +246,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		createShareReq := &usershareproviderv0alphapb.CreateShareRequest{
+		createShareReq := &usershareproviderv1beta1pb.CreateShareRequest{
 			Opaque: &typespb.Opaque{
 				Map: map[string]*typespb.OpaqueEntry{
 					"role": &typespb.OpaqueEntry{
@@ -256,12 +256,12 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 				},
 			},
 			ResourceInfo: statRes.Info,
-			Grant: &usershareproviderv0alphapb.ShareGrant{
-				Grantee: &storageproviderv0alphapb.Grantee{
-					Type: storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER,
+			Grant: &usershareproviderv1beta1pb.ShareGrant{
+				Grantee: &storageproviderv1beta1pb.Grantee{
+					Type: storageproviderv1beta1pb.GranteeType_GRANTEE_TYPE_USER,
 					Id:   recipient.Id,
 				},
-				Permissions: &usershareproviderv0alphapb.SharePermissions{
+				Permissions: &usershareproviderv1beta1pb.SharePermissions{
 					Permissions: permissions,
 				},
 			},
@@ -300,9 +300,9 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		statReq := storageproviderv0alphapb.StatRequest{
-			Ref: &storageproviderv0alphapb.Reference{
-				Spec: &storageproviderv0alphapb.Reference_Path{
+		statReq := storageproviderv1beta1pb.StatRequest{
+			Ref: &storageproviderv1beta1pb.Reference{
+				Spec: &storageproviderv1beta1pb.Reference_Path{
 					Path: r.FormValue("path"),
 				},
 			},
@@ -316,9 +316,9 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// TODO(refs) set expiration date to whatever phoenix sends
-		req := publicshareproviderv0alphapb.CreatePublicShareRequest{
+		req := publicshareproviderv1beta1pb.CreatePublicShareRequest{
 			ResourceInfo: statRes.GetInfo(),
-			Grant: &publicshareproviderv0alphapb.Grant{
+			Grant: &publicshareproviderv1beta1pb.Grant{
 				Expiration: &typespb.Timestamp{
 					Nanos:   uint32(time.Now().Add(time.Duration(31536000)).Nanosecond()),
 					Seconds: uint64(time.Now().Add(time.Duration(31536000)).Second()),
@@ -351,9 +351,9 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 
 // TODO sort out mapping, this is just a first guess
 // TODO use roles to make this configurable
-func asCS3Permissions(p int, rp *storageproviderv0alphapb.ResourcePermissions) *storageproviderv0alphapb.ResourcePermissions {
+func asCS3Permissions(p int, rp *storageproviderv1beta1pb.ResourcePermissions) *storageproviderv1beta1pb.ResourcePermissions {
 	if rp == nil {
-		rp = &storageproviderv0alphapb.ResourcePermissions{}
+		rp = &storageproviderv1beta1pb.ResourcePermissions{}
 	}
 
 	if p&int(conversions.PermissionRead) != 0 {
@@ -405,10 +405,10 @@ func (h *SharesHandler) permissions2Role(p int) string {
 	return role
 }
 
-func (h *SharesHandler) role2CS3Permissions(r string) (*storageproviderv0alphapb.ResourcePermissions, error) {
+func (h *SharesHandler) role2CS3Permissions(r string) (*storageproviderv1beta1pb.ResourcePermissions, error) {
 	switch r {
 	case conversions.RoleViewer:
-		return &storageproviderv0alphapb.ResourcePermissions{
+		return &storageproviderv1beta1pb.ResourcePermissions{
 			ListContainer:        true,
 			ListGrants:           true,
 			ListFileVersions:     true,
@@ -419,7 +419,7 @@ func (h *SharesHandler) role2CS3Permissions(r string) (*storageproviderv0alphapb
 			InitiateFileDownload: true,
 		}, nil
 	case conversions.RoleEditor:
-		return &storageproviderv0alphapb.ResourcePermissions{
+		return &storageproviderv1beta1pb.ResourcePermissions{
 			ListContainer:        true,
 			ListGrants:           true,
 			ListFileVersions:     true,
@@ -438,7 +438,7 @@ func (h *SharesHandler) role2CS3Permissions(r string) (*storageproviderv0alphapb
 			PurgeRecycle:       true,
 		}, nil
 	case conversions.RoleCoowner:
-		return &storageproviderv0alphapb.ResourcePermissions{
+		return &storageproviderv1beta1pb.ResourcePermissions{
 			ListContainer:        true,
 			ListGrants:           true,
 			ListFileVersions:     true,
@@ -489,17 +489,17 @@ func (h *SharesHandler) updateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	uReq := &usershareproviderv0alphapb.UpdateShareRequest{
-		Ref: &usershareproviderv0alphapb.ShareReference{
-			Spec: &usershareproviderv0alphapb.ShareReference_Id{
-				Id: &usershareproviderv0alphapb.ShareId{
+	uReq := &usershareproviderv1beta1pb.UpdateShareRequest{
+		Ref: &usershareproviderv1beta1pb.ShareReference{
+			Spec: &usershareproviderv1beta1pb.ShareReference_Id{
+				Id: &usershareproviderv1beta1pb.ShareId{
 					OpaqueId: shareID,
 				},
 			},
 		},
-		Field: &usershareproviderv0alphapb.UpdateShareRequest_UpdateField{
-			Field: &usershareproviderv0alphapb.UpdateShareRequest_UpdateField_Permissions{
-				Permissions: &usershareproviderv0alphapb.SharePermissions{
+		Field: &usershareproviderv1beta1pb.UpdateShareRequest_UpdateField{
+			Field: &usershareproviderv1beta1pb.UpdateShareRequest_UpdateField_Permissions{
+				Permissions: &usershareproviderv1beta1pb.SharePermissions{
 					// this completely overwrites the permissions for this user
 					Permissions: asCS3Permissions(perm, nil),
 				},
@@ -521,10 +521,10 @@ func (h *SharesHandler) updateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gReq := &usershareproviderv0alphapb.GetShareRequest{
-		Ref: &usershareproviderv0alphapb.ShareReference{
-			Spec: &usershareproviderv0alphapb.ShareReference_Id{
-				Id: &usershareproviderv0alphapb.ShareId{
+	gReq := &usershareproviderv1beta1pb.GetShareRequest{
+		Ref: &usershareproviderv1beta1pb.ShareReference{
+			Spec: &usershareproviderv1beta1pb.ShareReference_Id{
+				Id: &usershareproviderv1beta1pb.ShareId{
 					OpaqueId: shareID,
 				},
 			},
@@ -556,7 +556,7 @@ func (h *SharesHandler) updateShare(w http.ResponseWriter, r *http.Request) {
 
 func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	shares := make([]*conversions.ShareData, 0)
-	filters := []*usershareproviderv0alphapb.ListSharesRequest_Filter{}
+	filters := []*usershareproviderv1beta1pb.ListSharesRequest_Filter{}
 	var err error
 
 	// do shared with me. Please abstract this piece, this reads like hell.
@@ -577,9 +577,9 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 
 			// TODO(refs) filter out "invalid" shares
 			for _, v := range sharedWithMe {
-				statRequest := storageproviderv0alphapb.StatRequest{
-					Ref: &storageproviderv0alphapb.Reference{
-						Spec: &storageproviderv0alphapb.Reference_Id{
+				statRequest := storageproviderv1beta1pb.StatRequest{
+					Ref: &storageproviderv1beta1pb.Reference{
+						Spec: &storageproviderv1beta1pb.Reference_Id{
 							Id: v.Share.ResourceId,
 						},
 					},
@@ -643,13 +643,13 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	WriteOCSSuccess(w, r, shares)
 }
 
-func (h *SharesHandler) listSharedWithMe(r *http.Request) []*usershareproviderv0alphapb.ReceivedShare {
+func (h *SharesHandler) listSharedWithMe(r *http.Request) []*usershareproviderv1beta1pb.ReceivedShare {
 	c, err := pool.GetUserShareProviderClient(h.gatewayAddr)
 	if err != nil {
 		panic(err)
 	}
 
-	lrs := usershareproviderv0alphapb.ListReceivedSharesRequest{}
+	lrs := usershareproviderv1beta1pb.ListReceivedSharesRequest{}
 	// TODO(refs) handle error...
 	shares, _ := c.ListReceivedShares(r.Context(), &lrs)
 	return shares.GetShares()
@@ -670,8 +670,8 @@ func (h *SharesHandler) listPublicShares(r *http.Request) ([]*conversions.ShareD
 			return nil, err
 		}
 
-		filters := []*publicshareproviderv0alphapb.ListPublicSharesRequest_Filter{}
-		req := publicshareproviderv0alphapb.ListPublicSharesRequest{
+		filters := []*publicshareproviderv1beta1pb.ListPublicSharesRequest_Filter{}
+		req := publicshareproviderv1beta1pb.ListPublicSharesRequest{
 			Filters: filters,
 		}
 
@@ -687,9 +687,9 @@ func (h *SharesHandler) listPublicShares(r *http.Request) ([]*conversions.ShareD
 				return nil, err
 			}
 
-			statRequest := &storageproviderv0alphapb.StatRequest{
-				Ref: &storageproviderv0alphapb.Reference{
-					Spec: &storageproviderv0alphapb.Reference_Id{
+			statRequest := &storageproviderv1beta1pb.StatRequest{
+				Ref: &storageproviderv1beta1pb.Reference{
+					Spec: &storageproviderv1beta1pb.Reference_Id{
 						Id: share.ResourceId,
 					},
 				},
@@ -720,9 +720,9 @@ func (h *SharesHandler) listPublicShares(r *http.Request) ([]*conversions.ShareD
 	return nil, errors.New("bad request")
 }
 
-func (h *SharesHandler) addFilters(w http.ResponseWriter, r *http.Request) ([]*usershareproviderv0alphapb.ListSharesRequest_Filter, error) {
-	filters := []*usershareproviderv0alphapb.ListSharesRequest_Filter{}
-	var info *storageproviderv0alphapb.ResourceInfo
+func (h *SharesHandler) addFilters(w http.ResponseWriter, r *http.Request) ([]*usershareproviderv1beta1pb.ListSharesRequest_Filter, error) {
+	filters := []*usershareproviderv1beta1pb.ListSharesRequest_Filter{}
+	var info *storageproviderv1beta1pb.ResourceInfo
 	ctx := r.Context()
 
 	// first check if the file exists
@@ -732,9 +732,9 @@ func (h *SharesHandler) addFilters(w http.ResponseWriter, r *http.Request) ([]*u
 		return nil, err
 	}
 
-	statReq := &storageproviderv0alphapb.StatRequest{
-		Ref: &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{
+	statReq := &storageproviderv1beta1pb.StatRequest{
+		Ref: &storageproviderv1beta1pb.Reference{
+			Spec: &storageproviderv1beta1pb.Reference_Path{
 				Path: r.FormValue("path"),
 			},
 		},
@@ -757,9 +757,9 @@ func (h *SharesHandler) addFilters(w http.ResponseWriter, r *http.Request) ([]*u
 
 	info = res.Info
 
-	filters = append(filters, &usershareproviderv0alphapb.ListSharesRequest_Filter{
-		Type: usershareproviderv0alphapb.ListSharesRequest_Filter_LIST_SHARES_REQUEST_FILTER_TYPE_RESOURCE_ID,
-		Term: &usershareproviderv0alphapb.ListSharesRequest_Filter_ResourceId{
+	filters = append(filters, &usershareproviderv1beta1pb.ListSharesRequest_Filter{
+		Type: usershareproviderv1beta1pb.ListSharesRequest_Filter_LIST_SHARES_REQUEST_FILTER_TYPE_RESOURCE_ID,
+		Term: &usershareproviderv1beta1pb.ListSharesRequest_Filter_ResourceId{
 			ResourceId: info.Id,
 		},
 	})
@@ -767,12 +767,12 @@ func (h *SharesHandler) addFilters(w http.ResponseWriter, r *http.Request) ([]*u
 	return filters, nil
 }
 
-func (h *SharesHandler) listUserShares(r *http.Request, filters []*usershareproviderv0alphapb.ListSharesRequest_Filter) ([]*conversions.ShareData, error) {
-	var rInfo *storageproviderv0alphapb.ResourceInfo
+func (h *SharesHandler) listUserShares(r *http.Request, filters []*usershareproviderv1beta1pb.ListSharesRequest_Filter) ([]*conversions.ShareData, error) {
+	var rInfo *storageproviderv1beta1pb.ResourceInfo
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	lsUserSharesRequest := usershareproviderv0alphapb.ListSharesRequest{
+	lsUserSharesRequest := usershareproviderv1beta1pb.ListSharesRequest{
 		Filters: filters,
 	}
 
@@ -808,11 +808,11 @@ func (h *SharesHandler) listUserShares(r *http.Request, filters []*usershareprov
 			}
 
 			// prepare the stat request
-			statReq := &storageproviderv0alphapb.StatRequest{
+			statReq := &storageproviderv1beta1pb.StatRequest{
 				// prepare the reference
-				Ref: &storageproviderv0alphapb.Reference{
+				Ref: &storageproviderv1beta1pb.Reference{
 					// using ResourceId from the share
-					Spec: &storageproviderv0alphapb.Reference_Id{Id: s.ResourceId},
+					Spec: &storageproviderv1beta1pb.Reference_Id{Id: s.ResourceId},
 				},
 			}
 
@@ -837,7 +837,7 @@ func (h *SharesHandler) listUserShares(r *http.Request, filters []*usershareprov
 	return ocsDataPayload, nil
 }
 
-func (h *SharesHandler) addFileInfo(ctx context.Context, s *conversions.ShareData, info *storageproviderv0alphapb.ResourceInfo) error {
+func (h *SharesHandler) addFileInfo(ctx context.Context, s *conversions.ShareData, info *storageproviderv1beta1pb.ResourceInfo) error {
 	if info != nil {
 		// TODO The owner is not set in the storage stat metadata ...
 		s.MimeType = info.MimeType
@@ -862,7 +862,7 @@ func (h *SharesHandler) addFileInfo(ctx context.Context, s *conversions.ShareDat
 			s.UIDFileOwner = UserIDToString(info.Owner)
 		}
 		if s.DisplaynameFileOwner == "" && info.Owner != nil {
-			owner, err := c.GetUser(ctx, &userproviderv0alphapb.GetUserRequest{
+			owner, err := c.GetUser(ctx, &userproviderv1beta1pb.GetUserRequest{
 				UserId: info.Owner,
 			})
 			if err != nil {
@@ -875,7 +875,7 @@ func (h *SharesHandler) addFileInfo(ctx context.Context, s *conversions.ShareDat
 			s.UIDOwner = UserIDToString(info.Owner)
 		}
 		if s.DisplaynameOwner == "" && info.Owner != nil {
-			owner, err := c.GetUser(ctx, &userproviderv0alphapb.GetUserRequest{
+			owner, err := c.GetUser(ctx, &userproviderv1beta1pb.GetUserRequest{
 				UserId: info.Owner,
 			})
 			if err != nil {
@@ -888,7 +888,7 @@ func (h *SharesHandler) addFileInfo(ctx context.Context, s *conversions.ShareDat
 }
 
 // TODO(jfd) merge userShare2ShareData with publicShare2ShareData
-func (h *SharesHandler) userShare2ShareData(ctx context.Context, share *usershareproviderv0alphapb.Share) (*conversions.ShareData, error) {
+func (h *SharesHandler) userShare2ShareData(ctx context.Context, share *usershareproviderv1beta1pb.Share) (*conversions.ShareData, error) {
 	sd := &conversions.ShareData{
 		Permissions: conversions.UserSharePermissions2OCSPermissions(share.GetPermissions()),
 		ShareType:   conversions.ShareTypeUser,
@@ -900,7 +900,7 @@ func (h *SharesHandler) userShare2ShareData(ctx context.Context, share *usershar
 	}
 
 	if share.Creator != nil {
-		if creator, err := c.GetUser(ctx, &userproviderv0alphapb.GetUserRequest{
+		if creator, err := c.GetUser(ctx, &userproviderv1beta1pb.GetUserRequest{
 			UserId: share.Creator,
 		}); err == nil {
 			// TODO the user from GetUser might not have an ID set, so we are using the one we have
@@ -911,7 +911,7 @@ func (h *SharesHandler) userShare2ShareData(ctx context.Context, share *usershar
 		}
 	}
 	if share.Owner != nil {
-		if owner, err := c.GetUser(ctx, &userproviderv0alphapb.GetUserRequest{
+		if owner, err := c.GetUser(ctx, &userproviderv1beta1pb.GetUserRequest{
 			UserId: share.Owner,
 		}); err == nil {
 			sd.UIDFileOwner = UserIDToString(share.Owner)
@@ -921,7 +921,7 @@ func (h *SharesHandler) userShare2ShareData(ctx context.Context, share *usershar
 		}
 	}
 	if share.Grantee.Id != nil {
-		if grantee, err := c.GetUser(ctx, &userproviderv0alphapb.GetUserRequest{
+		if grantee, err := c.GetUser(ctx, &userproviderv1beta1pb.GetUserRequest{
 			UserId: share.Grantee.GetId(),
 		}); err == nil {
 			sd.ShareWith = UserIDToString(share.Grantee.Id)

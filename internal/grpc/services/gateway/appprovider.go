@@ -21,17 +21,17 @@ package gateway
 import (
 	"context"
 
-	appproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/appprovider/v0alpha"
-	appregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/appregistry/v0alpha"
+	appproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/appprovider/v1beta1"
+	appregistryv1beta1pb "github.com/cs3org/go-cs3apis/cs3/appregistry/v1beta1"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
 )
 
-func (s *svc) Open(ctx context.Context, req *appproviderv0alphapb.OpenRequest) (*appproviderv0alphapb.OpenResponse, error) {
+func (s *svc) Open(ctx context.Context, req *appproviderv1beta1pb.OpenRequest) (*appproviderv1beta1pb.OpenResponse, error) {
 	provider, err := s.findAppProvider(ctx, req.ResourceInfo)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling findAppProvider")
@@ -42,7 +42,7 @@ func (s *svc) Open(ctx context.Context, req *appproviderv0alphapb.OpenRequest) (
 			st = status.NewInternal(ctx, err, "error searching for app provider")
 		}
 
-		return &appproviderv0alphapb.OpenResponse{
+		return &appproviderv1beta1pb.OpenResponse{
 			Status: st,
 		}, nil
 	}
@@ -50,7 +50,7 @@ func (s *svc) Open(ctx context.Context, req *appproviderv0alphapb.OpenRequest) (
 	c, err := pool.GetAppProviderClient(provider.Address)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAppProviderClient")
-		return &appproviderv0alphapb.OpenResponse{
+		return &appproviderv1beta1pb.OpenResponse{
 			Status: status.NewInternal(ctx, err, "error getting appprovider client"),
 		}, nil
 	}
@@ -63,14 +63,14 @@ func (s *svc) Open(ctx context.Context, req *appproviderv0alphapb.OpenRequest) (
 	return res, nil
 }
 
-func (s *svc) findAppProvider(ctx context.Context, ri *storageproviderv0alphapb.ResourceInfo) (*appregistryv0alphapb.ProviderInfo, error) {
+func (s *svc) findAppProvider(ctx context.Context, ri *storageproviderv1beta1pb.ResourceInfo) (*appregistryv1beta1pb.ProviderInfo, error) {
 	c, err := pool.GetAppRegistryClient(s.c.AppRegistryEndpoint)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting appregistry client")
 		return nil, err
 	}
 
-	res, err := c.GetAppProviders(ctx, &appregistryv0alphapb.GetAppProvidersRequest{
+	res, err := c.GetAppProviders(ctx, &appregistryv1beta1pb.GetAppProvidersRequest{
 		ResourceInfo: ri,
 	})
 

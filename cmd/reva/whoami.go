@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"os"
 
-	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
+	gatewayv1beta1pb "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 )
 
@@ -55,7 +55,7 @@ func whoamiCommand() *command {
 			return err
 		}
 
-		req := &gatewayv0alphapb.WhoAmIRequest{Token: token}
+		req := &gatewayv1beta1pb.WhoAmIRequest{Token: token}
 
 		ctx := getAuthContext()
 		res, err := client.WhoAmI(ctx, req)

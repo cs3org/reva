@@ -24,9 +24,9 @@ import (
 	"time"
 
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
-	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
+	usershareproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v1beta1"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/pkg/errors"
 )
@@ -60,11 +60,11 @@ func shareCreateCommand() *command {
 			return err
 		}
 
-		ref := &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+		ref := &storageproviderv1beta1pb.Reference{
+			Spec: &storageproviderv1beta1pb.Reference_Path{Path: fn},
 		}
 
-		req := &storageproviderv0alphapb.StatRequest{Ref: ref}
+		req := &storageproviderv1beta1pb.StatRequest{Ref: ref}
 		res, err := client.Stat(ctx, req)
 		if err != nil {
 			return err
@@ -81,9 +81,9 @@ func shareCreateCommand() *command {
 
 		gt := getGrantType(*grantType)
 
-		grant := &usershareproviderv0alphapb.ShareGrant{
+		grant := &usershareproviderv1beta1pb.ShareGrant{
 			Permissions: perm,
-			Grantee: &storageproviderv0alphapb.Grantee{
+			Grantee: &storageproviderv1beta1pb.Grantee{
 				Type: gt,
 				Id: &typespb.UserId{
 					Idp:      *idp,
@@ -91,7 +91,7 @@ func shareCreateCommand() *command {
 				},
 			},
 		}
-		shareRequest := &usershareproviderv0alphapb.CreateShareRequest{
+		shareRequest := &usershareproviderv1beta1pb.CreateShareRequest{
 			ResourceInfo: res.Info,
 			Grant:        grant,
 		}
@@ -120,21 +120,21 @@ func shareCreateCommand() *command {
 	return cmd
 }
 
-func getGrantType(t string) storageproviderv0alphapb.GranteeType {
+func getGrantType(t string) storageproviderv1beta1pb.GranteeType {
 	switch t {
 	case "user":
-		return storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER
+		return storageproviderv1beta1pb.GranteeType_GRANTEE_TYPE_USER
 	case "group":
-		return storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_GROUP
+		return storageproviderv1beta1pb.GranteeType_GRANTEE_TYPE_GROUP
 	default:
-		return storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_INVALID
+		return storageproviderv1beta1pb.GranteeType_GRANTEE_TYPE_INVALID
 	}
 }
 
-func getSharePerm(p string) (*usershareproviderv0alphapb.SharePermissions, error) {
+func getSharePerm(p string) (*usershareproviderv1beta1pb.SharePermissions, error) {
 	if p == "viewer" {
-		return &usershareproviderv0alphapb.SharePermissions{
-			Permissions: &storageproviderv0alphapb.ResourcePermissions{
+		return &usershareproviderv1beta1pb.SharePermissions{
+			Permissions: &storageproviderv1beta1pb.ResourcePermissions{
 				GetPath:              true,
 				InitiateFileDownload: true,
 				ListFileVersions:     true,
@@ -143,8 +143,8 @@ func getSharePerm(p string) (*usershareproviderv0alphapb.SharePermissions, error
 			},
 		}, nil
 	} else if p == "editor" {
-		return &usershareproviderv0alphapb.SharePermissions{
-			Permissions: &storageproviderv0alphapb.ResourcePermissions{
+		return &usershareproviderv1beta1pb.SharePermissions{
+			Permissions: &storageproviderv1beta1pb.ResourcePermissions{
 				GetPath:              true,
 				InitiateFileDownload: true,
 				ListFileVersions:     true,

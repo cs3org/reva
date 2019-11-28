@@ -24,7 +24,7 @@ import (
 	"path"
 
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
@@ -41,7 +41,7 @@ func (h *VersionsHandler) init(c *Config) error {
 // Handler handles requests
 // versions can be listed with a PROPFIND to /remote.php/dav/meta/<fileid>/v
 // a version is identified by a timestamp, eg. /remote.php/dav/meta/<fileid>/v/1561410426
-func (h *VersionsHandler) Handler(s *svc, rid *storageproviderv0alphapb.ResourceId) http.Handler {
+func (h *VersionsHandler) Handler(s *svc, rid *storageproviderv1beta1pb.ResourceId) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
@@ -72,7 +72,7 @@ func (h *VersionsHandler) Handler(s *svc, rid *storageproviderv0alphapb.Resource
 	})
 }
 
-func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request, s *svc, rid *storageproviderv0alphapb.ResourceId) {
+func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request, s *svc, rid *storageproviderv1beta1pb.ResourceId) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -90,10 +90,10 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	ref := &storageproviderv0alphapb.Reference{
-		Spec: &storageproviderv0alphapb.Reference_Id{Id: rid},
+	ref := &storageproviderv1beta1pb.Reference{
+		Spec: &storageproviderv1beta1pb.Reference_Id{Id: rid},
 	}
-	req := &storageproviderv0alphapb.StatRequest{Ref: ref}
+	req := &storageproviderv1beta1pb.StatRequest{Ref: ref}
 	res, err := client.Stat(ctx, req)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending a grpc stat request")
@@ -111,7 +111,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 
 	info := res.Info
 
-	lvReq := &storageproviderv0alphapb.ListFileVersionsRequest{
+	lvReq := &storageproviderv1beta1pb.ListFileVersionsRequest{
 		Ref: ref,
 	}
 	lvRes, err := client.ListFileVersions(ctx, lvReq)
@@ -125,11 +125,11 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	versions := lvRes.GetVersions()
-	infos := make([]*storageproviderv0alphapb.ResourceInfo, 0, len(versions)+1)
+	infos := make([]*storageproviderv1beta1pb.ResourceInfo, 0, len(versions)+1)
 	// add version dir . entry, derived from file info
-	infos = append(infos, &storageproviderv0alphapb.ResourceInfo{
-		Type: storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER,
-		Id: &storageproviderv0alphapb.ResourceId{
+	infos = append(infos, &storageproviderv1beta1pb.ResourceInfo{
+		Type: storageproviderv1beta1pb.ResourceType_RESOURCE_TYPE_CONTAINER,
+		Id: &storageproviderv1beta1pb.ResourceId{
 			StorageId: "virtual", // this is a virtual storage
 			OpaqueId:  path.Join("meta", wrapResourceID(rid), "v"),
 		},
@@ -143,11 +143,11 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 	})
 
 	for i := range versions {
-		vi := &storageproviderv0alphapb.ResourceInfo{
+		vi := &storageproviderv1beta1pb.ResourceInfo{
 			// TODO(jfd) we cannot access version content, this will be a problem when trying to fetch version thumbnails
 			//Opaque
-			Type: storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_FILE,
-			Id: &storageproviderv0alphapb.ResourceId{
+			Type: storageproviderv1beta1pb.ResourceType_RESOURCE_TYPE_FILE,
+			Id: &storageproviderv1beta1pb.ResourceId{
 				StorageId: "versions", // this is a virtual storage
 				OpaqueId:  info.Id.OpaqueId + "@" + versions[i].GetKey(),
 			},
@@ -183,7 +183,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 
 }
 
-func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *svc, rid *storageproviderv0alphapb.ResourceId, key string) {
+func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *svc, rid *storageproviderv1beta1pb.ResourceId, key string) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -194,9 +194,9 @@ func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *s
 		return
 	}
 
-	req := &storageproviderv0alphapb.RestoreFileVersionRequest{
-		Ref: &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Id{Id: rid},
+	req := &storageproviderv1beta1pb.RestoreFileVersionRequest{
+		Ref: &storageproviderv1beta1pb.Reference{
+			Spec: &storageproviderv1beta1pb.Reference_Id{Id: rid},
 		},
 		Key: key,
 	}

@@ -23,8 +23,8 @@ import (
 	"crypto/tls"
 	"fmt"
 
-	typespb "github.com/cs3org/go-cs3apis/cs3/types"
-	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
+	types "github.com/cs3org/go-cs3apis/cs3/types"
+	userproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/userprovider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/user"
@@ -103,7 +103,7 @@ func New(m map[string]interface{}) (user.Manager, error) {
 	}, nil
 }
 
-func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*userproviderv0alphapb.User, error) {
+func (m *manager) GetUser(ctx context.Context, uid *types.UserId) (*userproviderv1beta1pb.User, error) {
 	log := appctx.GetLogger(ctx)
 	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.hostname, m.port), &tls.Config{InsecureSkipVerify: true})
 	if err != nil {
@@ -137,7 +137,7 @@ func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*userprovid
 
 	log.Debug().Interface("entries", sr.Entries).Msg("entries")
 
-	return &userproviderv0alphapb.User{
+	return &userproviderv1beta1pb.User{
 		Username:    sr.Entries[0].GetAttributeValue(m.schema.UID),
 		Groups:      []string{},
 		Mail:        sr.Entries[0].GetAttributeValue(m.schema.Mail),
@@ -145,7 +145,7 @@ func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*userprovid
 	}, nil
 }
 
-func (m *manager) FindUsers(ctx context.Context, query string) ([]*userproviderv0alphapb.User, error) {
+func (m *manager) FindUsers(ctx context.Context, query string) ([]*userproviderv1beta1pb.User, error) {
 	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.hostname, m.port), &tls.Config{InsecureSkipVerify: true})
 	if err != nil {
 		return nil, err
@@ -172,10 +172,10 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userproviderv
 		return nil, err
 	}
 
-	users := []*userproviderv0alphapb.User{}
+	users := []*userproviderv1beta1pb.User{}
 
 	for _, entry := range sr.Entries {
-		user := &userproviderv0alphapb.User{
+		user := &userproviderv1beta1pb.User{
 			Username:    entry.GetAttributeValue(m.schema.UID),
 			Groups:      []string{},
 			Mail:        sr.Entries[0].GetAttributeValue(m.schema.Mail),
@@ -187,10 +187,10 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userproviderv
 	return users, nil
 }
 
-func (m *manager) GetUserGroups(ctx context.Context, uid *typespb.UserId) ([]string, error) {
+func (m *manager) GetUserGroups(ctx context.Context, uid *types.UserId) ([]string, error) {
 	return []string{}, nil // FIXME implement GetUserGroups for ldap user manager
 }
 
-func (m *manager) IsInGroup(ctx context.Context, uid *typespb.UserId, group string) (bool, error) {
+func (m *manager) IsInGroup(ctx context.Context, uid *types.UserId, group string) (bool, error) {
 	return false, nil // FIXME implement IsInGroup for ldap user manager
 }

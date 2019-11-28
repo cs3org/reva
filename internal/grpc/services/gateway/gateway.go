@@ -23,7 +23,7 @@ import (
 	"io"
 	"net/url"
 
-	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
+	gatewayv1beta1pb "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/token"
@@ -91,7 +91,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 		tokenmgr:       tokenManager,
 	}
 
-	gatewayv0alphapb.RegisterGatewayServiceServer(ss, s)
+	gatewayv1beta1pb.RegisterGatewayServiceServer(ss, s)
 	return s, nil
 }
 

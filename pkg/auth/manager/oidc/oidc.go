@@ -29,7 +29,7 @@ import (
 	"time"
 
 	oidc "github.com/coreos/go-oidc"
-	typespb "github.com/cs3org/go-cs3apis/cs3/types"
+	user "github.com/cs3org/go-cs3apis/cs3/types"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
@@ -99,7 +99,7 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	}, nil
 }
 
-func (am *mgr) Authenticate(ctx context.Context, clientID, token string) (*typespb.UserId, error) {
+func (am *mgr) Authenticate(ctx context.Context, clientID, token string) (*user.UserId, error) {
 	log := appctx.GetLogger(ctx)
 
 	tr := &http.Transport{
@@ -229,7 +229,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, token string) (*types
 	// return nil, fmt.Errorf("email (%q) in returned claims was not verified", claims.Email)
 	// }
 
-	uid := &typespb.UserId{
+	uid := &user.UserId{
 		Idp:      claims.Iss,
 		OpaqueId: claims.Sub,
 	}

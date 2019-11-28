@@ -26,7 +26,7 @@ import (
 	"time"
 
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
 	"github.com/cs3org/reva/internal/http/utils"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
@@ -146,9 +146,9 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	sReq := &storageproviderv0alphapb.StatRequest{
-		Ref: &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+	sReq := &storageproviderv1beta1pb.StatRequest{
+		Ref: &storageproviderv1beta1pb.Reference{
+			Spec: &storageproviderv1beta1pb.Reference_Path{Path: fn},
 		},
 	}
 	sRes, err := client.Stat(ctx, sReq)
@@ -166,7 +166,7 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	info := sRes.Info
-	if info != nil && info.Type != storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_FILE {
+	if info != nil && info.Type != storageproviderv1beta1pb.ResourceType_RESOURCE_TYPE_FILE {
 		log.Warn().Msg("resource is not a file")
 		w.WriteHeader(http.StatusConflict)
 		return
@@ -184,9 +184,9 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request, ns string) {
 		}
 	}
 
-	uReq := &storageproviderv0alphapb.InitiateFileUploadRequest{
-		Ref: &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+	uReq := &storageproviderv1beta1pb.InitiateFileUploadRequest{
+		Ref: &storageproviderv1beta1pb.Reference{
+			Spec: &storageproviderv1beta1pb.Reference_Path{Path: fn},
 		},
 	}
 

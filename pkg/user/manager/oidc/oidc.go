@@ -25,8 +25,8 @@ import (
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
 
-	typespb "github.com/cs3org/go-cs3apis/cs3/types"
-	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
+	types "github.com/cs3org/go-cs3apis/cs3/types"
+	userproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/userprovider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 )
 
@@ -42,16 +42,16 @@ func New(m map[string]interface{}) (user.Manager, error) {
 	return &manager{}, nil
 }
 
-func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*userproviderv0alphapb.User, error) {
+func (m *manager) GetUser(ctx context.Context, uid *types.UserId) (*userproviderv1beta1pb.User, error) {
 
 	claims, ok := ctx.Value(oidc.ClaimsKey).(oidc.StandardClaims)
 	if !ok {
 		return nil, errtypes.NotFound(uid.OpaqueId)
 	}
 
-	user := &userproviderv0alphapb.User{
+	user := &userproviderv1beta1pb.User{
 		// TODO(jfd) clean up idp = iss, sub = opaque ... is redundant
-		Id: &typespb.UserId{
+		Id: &types.UserId{
 			OpaqueId: claims.Sub, // a stable non reassignable id
 			Idp:      claims.Iss, // in the scope of this issuer
 		},
@@ -74,14 +74,14 @@ func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*userprovid
 	return user, nil
 }
 
-func (m *manager) FindUsers(ctx context.Context, query string) ([]*userproviderv0alphapb.User, error) {
-	return []*userproviderv0alphapb.User{}, nil // FIXME implement FindUsers for oidc user manager
+func (m *manager) FindUsers(ctx context.Context, query string) ([]*userproviderv1beta1pb.User, error) {
+	return []*userproviderv1beta1pb.User{}, nil // FIXME implement FindUsers for oidc user manager
 }
 
-func (m *manager) GetUserGroups(ctx context.Context, uid *typespb.UserId) ([]string, error) {
+func (m *manager) GetUserGroups(ctx context.Context, uid *types.UserId) ([]string, error) {
 	return []string{}, nil // FIXME implement GetUserGroups for oidc user manager
 }
 
-func (m *manager) IsInGroup(ctx context.Context, uid *typespb.UserId, group string) (bool, error) {
+func (m *manager) IsInGroup(ctx context.Context, uid *types.UserId, group string) (bool, error) {
 	return false, nil // FIXME implement IsInGroup for oidc user manager
 }

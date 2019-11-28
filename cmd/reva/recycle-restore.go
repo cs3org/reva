@@ -23,7 +23,7 @@ import (
 	"os"
 
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
 )
 
 func recycleRestoreCommand() *command {
@@ -44,7 +44,7 @@ func recycleRestoreCommand() *command {
 			return err
 		}
 
-		req := &storageproviderv0alphapb.RestoreRecycleItemRequest{
+		req := &storageproviderv1beta1pb.RestoreRecycleItemRequest{
 			Key: key,
 		}
 

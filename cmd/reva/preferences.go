@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"os"
 
-	preferencesv0alphapb "github.com/cs3org/go-cs3apis/cs3/preferences/v0alpha"
+	preferencesv1beta1pb "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 )
 
@@ -55,7 +55,7 @@ var preferencesCommand = func() *command {
 				os.Exit(1)
 			}
 			value := cmd.Args()[2]
-			req := &preferencesv0alphapb.SetKeyRequest{
+			req := &preferencesv1beta1pb.SetKeyRequest{
 				Key: key,
 				Val: value,
 			}
@@ -70,7 +70,7 @@ var preferencesCommand = func() *command {
 			}
 
 		case "get":
-			req := &preferencesv0alphapb.GetKeyRequest{
+			req := &preferencesv1beta1pb.GetKeyRequest{
 				Key: key,
 			}
 

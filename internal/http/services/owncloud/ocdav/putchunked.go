@@ -30,7 +30,7 @@ import (
 	"strings"
 
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 )
 
@@ -259,10 +259,10 @@ func (s *svc) doPutChunked(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ref := &storageproviderv0alphapb.Reference{
-		Spec: &storageproviderv0alphapb.Reference_Path{Path: chunkInfo.path},
+	ref := &storageproviderv1beta1pb.Reference{
+		Spec: &storageproviderv1beta1pb.Reference_Path{Path: chunkInfo.path},
 	}
-	req := &storageproviderv0alphapb.StatRequest{Ref: ref}
+	req := &storageproviderv1beta1pb.StatRequest{Ref: ref}
 	res, err := client.Stat(ctx, req)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending grpc stat request")
@@ -278,7 +278,7 @@ func (s *svc) doPutChunked(w http.ResponseWriter, r *http.Request) {
 	}
 
 	info := res.Info
-	if info != nil && info.Type != storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_FILE {
+	if info != nil && info.Type != storageproviderv1beta1pb.ResourceType_RESOURCE_TYPE_FILE {
 		log.Warn().Msg("resource is not a file")
 		w.WriteHeader(http.StatusConflict)
 		return
@@ -300,7 +300,7 @@ func (s *svc) doPutChunked(w http.ResponseWriter, r *http.Request) {
 	// TODO(labkode): implement old chunking
 
 	/*
-		req2 := &storageproviderv0alphapb.StartWriteSessionRequest{}
+		req2 := &storageproviderv1beta1pb.StartWriteSessionRequest{}
 		res2, err := client.StartWriteSession(ctx, req2)
 		if err != nil {
 			logger.Error(ctx, err)
@@ -331,7 +331,7 @@ func (s *svc) doPutChunked(w http.ResponseWriter, r *http.Request) {
 		for {
 			n, err := fd.Read(buffer)
 			if n > 0 {
-				req := &storageproviderv0alphapb.WriteRequest{Data: buffer, Length: uint64(n), SessionId: sessID, Offset: offset}
+				req := &storageproviderv1beta1pb.WriteRequest{Data: buffer, Length: uint64(n), SessionId: sessID, Offset: offset}
 				err = stream.Send(req)
 				if err != nil {
 					logger.Error(ctx, err)
@@ -367,7 +367,7 @@ func (s *svc) doPutChunked(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		req4 := &storageproviderv0alphapb.FinishWriteSessionRequest{Filename: chunkInfo.path, SessionId: sessID}
+		req4 := &storageproviderv1beta1pb.FinishWriteSessionRequest{Filename: chunkInfo.path, SessionId: sessID}
 		res4, err := client.FinishWriteSession(ctx, req4)
 		if err != nil {
 			logger.Error(ctx, err)

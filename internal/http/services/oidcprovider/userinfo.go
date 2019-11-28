@@ -28,7 +28,7 @@ import (
 
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types"
-	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
+	userproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/userprovider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth/manager/oidc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
@@ -93,7 +93,7 @@ func (s *svc) doUserinfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	getUserReq := &userproviderv0alphapb.GetUserRequest{
+	getUserReq := &userproviderv1beta1pb.GetUserRequest{
 		UserId: uid,
 	}
 	getUserRes, err := c.GetUser(ctx, getUserReq)

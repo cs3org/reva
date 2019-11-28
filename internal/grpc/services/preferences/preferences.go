@@ -25,8 +25,8 @@ import (
 
 	"google.golang.org/grpc"
 
-	preferencesv0alphapb "github.com/cs3org/go-cs3apis/cs3/preferences/v0alpha"
-	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
+	preferencesv1beta1pb "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
+	userproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/userprovider/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/user"
@@ -52,7 +52,7 @@ type service struct{}
 // New returns a new PreferencesServiceServer
 func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 	service := &service{}
-	preferencesv0alphapb.RegisterPreferencesServiceServer(ss, service)
+	preferencesv1beta1pb.RegisterPreferencesServiceServer(ss, service)
 	return service, nil
 }
 
@@ -60,7 +60,7 @@ func (s *service) Close() error {
 	return nil
 }
 
-func getUser(ctx context.Context) (*userproviderv0alphapb.User, error) {
+func getUser(ctx context.Context) (*userproviderv1beta1pb.User, error) {
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(contextUserRequiredErr("userrequired"), "preferences: error getting user from ctx")
@@ -69,14 +69,14 @@ func getUser(ctx context.Context) (*userproviderv0alphapb.User, error) {
 	return u, nil
 }
 
-func (s *service) SetKey(ctx context.Context, req *preferencesv0alphapb.SetKeyRequest) (*preferencesv0alphapb.SetKeyResponse, error) {
+func (s *service) SetKey(ctx context.Context, req *preferencesv1beta1pb.SetKeyRequest) (*preferencesv1beta1pb.SetKeyResponse, error) {
 	key := req.Key
 	value := req.Val
 
 	u, err := getUser(ctx)
 	if err != nil {
 		err = errors.Wrap(err, "preferences: failed to call getUser")
-		return &preferencesv0alphapb.SetKeyResponse{
+		return &preferencesv1beta1pb.SetKeyResponse{
 			Status: status.NewUnauthenticated(ctx, err, "user not found or invalid"),
 		}, err
 	}
@@ -92,17 +92,17 @@ func (s *service) SetKey(ctx context.Context, req *preferencesv0alphapb.SetKeyRe
 		usersettings[key] = value
 	}
 
-	return &preferencesv0alphapb.SetKeyResponse{
+	return &preferencesv1beta1pb.SetKeyResponse{
 		Status: status.NewOK(ctx),
 	}, nil
 }
 
-func (s *service) GetKey(ctx context.Context, req *preferencesv0alphapb.GetKeyRequest) (*preferencesv0alphapb.GetKeyResponse, error) {
+func (s *service) GetKey(ctx context.Context, req *preferencesv1beta1pb.GetKeyRequest) (*preferencesv1beta1pb.GetKeyResponse, error) {
 	key := req.Key
 	u, err := getUser(ctx)
 	if err != nil {
 		err = errors.Wrap(err, "preferences: failed to call getUser")
-		return &preferencesv0alphapb.GetKeyResponse{
+		return &preferencesv1beta1pb.GetKeyResponse{
 			Status: status.NewUnauthenticated(ctx, err, "user not found or invalid"),
 		}, err
 	}
@@ -113,14 +113,14 @@ func (s *service) GetKey(ctx context.Context, req *preferencesv0alphapb.GetKeyRe
 	defer mutex.Unlock()
 	if len(m[name]) != 0 {
 		if value, ok := m[name][key]; ok {
-			return &preferencesv0alphapb.GetKeyResponse{
+			return &preferencesv1beta1pb.GetKeyResponse{
 				Status: status.NewOK(ctx),
 				Val:    value,
 			}, nil
 		}
 	}
 
-	res := &preferencesv0alphapb.GetKeyResponse{
+	res := &preferencesv1beta1pb.GetKeyResponse{
 		Status: status.NewNotFound(ctx, "key not found"),
 		Val:    "",
 	}

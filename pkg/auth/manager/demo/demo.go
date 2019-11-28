@@ -21,7 +21,7 @@ package demo
 import (
 	"context"
 
-	typespb "github.com/cs3org/go-cs3apis/cs3/types"
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -37,7 +37,7 @@ type manager struct {
 
 // Credentials holds a pair of secret and userid
 type Credentials struct {
-	ID     *typespb.UserId
+	ID     *user.UserId
 	Secret string
 }
 
@@ -48,7 +48,7 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	return &manager{credentials: creds}, nil
 }
 
-func (m *manager) Authenticate(ctx context.Context, clientID, clientSecret string) (*typespb.UserId, error) {
+func (m *manager) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.UserId, error) {
 	if c, ok := m.credentials[clientID]; ok {
 		if c.Secret == clientSecret {
 			return c.ID, nil
@@ -61,21 +61,21 @@ func getCredentials() map[string]Credentials {
 	return map[string]Credentials{
 		"einstein": Credentials{
 			Secret: "relativity",
-			ID: &typespb.UserId{
+			ID: &user.UserId{
 				OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51",
 				Idp:      "http://localhost:9998",
 			},
 		},
 		"marie": Credentials{
 			Secret: "radioactivity",
-			ID: &typespb.UserId{
+			ID: &user.UserId{
 				OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
 				Idp:      "http://localhost:9998",
 			},
 		},
 		"richard": Credentials{
 			Secret: "superfluidity",
-			ID: &typespb.UserId{
+			ID: &user.UserId{
 				OpaqueId: "932b4540-8d16-481e-8ef4-588e4b6b151c",
 				Idp:      "http://localhost:9998",
 			},

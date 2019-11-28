@@ -22,13 +22,13 @@ import (
 	"context"
 	"net/http"
 
-	authregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/authregistry/v0alpha"
-	typespb "github.com/cs3org/go-cs3apis/cs3/types"
+	registry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 )
 
 // Manager is the interface to implement to authenticate users
 type Manager interface {
-	Authenticate(ctx context.Context, clientID, clientSecret string) (*typespb.UserId, error)
+	Authenticate(ctx context.Context, clientID, clientSecret string) (*user.UserId, error)
 }
 
 // Credentials contains the auth type, client id and secret.
@@ -58,6 +58,6 @@ type TokenWriter interface {
 // Registry is the interface that auth registries implement
 // for discovering auth providers
 type Registry interface {
-	ListProviders(ctx context.Context) ([]*authregistryv0alphapb.ProviderInfo, error)
-	GetProvider(ctx context.Context, authType string) (*authregistryv0alphapb.ProviderInfo, error)
+	ListProviders(ctx context.Context) ([]*registry.ProviderInfo, error)
+	GetProvider(ctx context.Context, authType string) (*registry.ProviderInfo, error)
 }

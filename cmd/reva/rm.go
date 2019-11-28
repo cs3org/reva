@@ -23,7 +23,7 @@ import (
 	"os"
 
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
 )
 
 func rmCommand() *command {
@@ -43,10 +43,10 @@ func rmCommand() *command {
 			return err
 		}
 
-		ref := &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+		ref := &storageproviderv1beta1pb.Reference{
+			Spec: &storageproviderv1beta1pb.Reference_Path{Path: fn},
 		}
-		req := &storageproviderv0alphapb.DeleteRequest{Ref: ref}
+		req := &storageproviderv1beta1pb.DeleteRequest{Ref: ref}
 		res, err := client.Delete(ctx, req)
 		if err != nil {
 			return err

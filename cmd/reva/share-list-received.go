@@ -23,7 +23,7 @@ import (
 	"time"
 
 	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
+	usershareproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v1beta1"
 	"github.com/jedib0t/go-pretty/table"
 )
 
@@ -38,7 +38,7 @@ func shareListReceivedCommand() *command {
 			return err
 		}
 
-		shareRequest := &usershareproviderv0alphapb.ListReceivedSharesRequest{}
+		shareRequest := &usershareproviderv1beta1pb.ListReceivedSharesRequest{}
 
 		shareRes, err := shareClient.ListReceivedShares(ctx, shareRequest)
 		if err != nil {
