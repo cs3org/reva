@@ -23,10 +23,10 @@ import (
 	"os"
 	"time"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
-	typespb "github.com/cs3org/go-cs3apis/cs3/types"
-	usershareproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/pkg/errors"
 )
@@ -60,17 +60,17 @@ func shareCreateCommand() *command {
 			return err
 		}
 
-		ref := &storageproviderv1beta1pb.Reference{
-			Spec: &storageproviderv1beta1pb.Reference_Path{Path: fn},
+		ref := &provider.Reference{
+			Spec: &provider.Reference_Path{Path: fn},
 		}
 
-		req := &storageproviderv1beta1pb.StatRequest{Ref: ref}
+		req := &provider.StatRequest{Ref: ref}
 		res, err := client.Stat(ctx, req)
 		if err != nil {
 			return err
 		}
 
-		if res.Status.Code != rpcpb.Code_CODE_OK {
+		if res.Status.Code != rpc.Code_CODE_OK {
 			return formatError(res.Status)
 		}
 
@@ -81,17 +81,17 @@ func shareCreateCommand() *command {
 
 		gt := getGrantType(*grantType)
 
-		grant := &usershareproviderv1beta1pb.ShareGrant{
+		grant := &collaboration.ShareGrant{
 			Permissions: perm,
-			Grantee: &storageproviderv1beta1pb.Grantee{
+			Grantee: &provider.Grantee{
 				Type: gt,
-				Id: &typespb.UserId{
+				Id: &userpb.UserId{
 					Idp:      *idp,
 					OpaqueId: *grantee,
 				},
 			},
 		}
-		shareRequest := &usershareproviderv1beta1pb.CreateShareRequest{
+		shareRequest := &collaboration.CreateShareRequest{
 			ResourceInfo: res.Info,
 			Grant:        grant,
 		}
@@ -101,7 +101,7 @@ func shareCreateCommand() *command {
 			return err
 		}
 
-		if shareRes.Status.Code != rpcpb.Code_CODE_OK {
+		if shareRes.Status.Code != rpc.Code_CODE_OK {
 			return formatError(shareRes.Status)
 		}
 
@@ -120,21 +120,21 @@ func shareCreateCommand() *command {
 	return cmd
 }
 
-func getGrantType(t string) storageproviderv1beta1pb.GranteeType {
+func getGrantType(t string) provider.GranteeType {
 	switch t {
 	case "user":
-		return storageproviderv1beta1pb.GranteeType_GRANTEE_TYPE_USER
+		return provider.GranteeType_GRANTEE_TYPE_USER
 	case "group":
-		return storageproviderv1beta1pb.GranteeType_GRANTEE_TYPE_GROUP
+		return provider.GranteeType_GRANTEE_TYPE_GROUP
 	default:
-		return storageproviderv1beta1pb.GranteeType_GRANTEE_TYPE_INVALID
+		return provider.GranteeType_GRANTEE_TYPE_INVALID
 	}
 }
 
-func getSharePerm(p string) (*usershareproviderv1beta1pb.SharePermissions, error) {
+func getSharePerm(p string) (*collaboration.SharePermissions, error) {
 	if p == "viewer" {
-		return &usershareproviderv1beta1pb.SharePermissions{
-			Permissions: &storageproviderv1beta1pb.ResourcePermissions{
+		return &collaboration.SharePermissions{
+			Permissions: &provider.ResourcePermissions{
 				GetPath:              true,
 				InitiateFileDownload: true,
 				ListFileVersions:     true,
@@ -143,8 +143,8 @@ func getSharePerm(p string) (*usershareproviderv1beta1pb.SharePermissions, error
 			},
 		}, nil
 	} else if p == "editor" {
-		return &usershareproviderv1beta1pb.SharePermissions{
-			Permissions: &storageproviderv1beta1pb.ResourcePermissions{
+		return &collaboration.SharePermissions{
+			Permissions: &provider.ResourcePermissions{
 				GetPath:              true,
 				InitiateFileDownload: true,
 				ListFileVersions:     true,

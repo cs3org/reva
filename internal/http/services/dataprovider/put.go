@@ -22,7 +22,7 @@ import (
 	"net/http"
 	"strings"
 
-	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 )
 
@@ -32,7 +32,7 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 	fn := r.URL.Path
 
 	fsfn := strings.TrimPrefix(fn, s.conf.ProviderPath)
-	ref := &storageproviderv1beta1pb.Reference{Spec: &storageproviderv1beta1pb.Reference_Path{Path: fsfn}}
+	ref := &provider.Reference{Spec: &provider.Reference_Path{Path: fsfn}}
 
 	err := s.storage.Upload(ctx, ref, r.Body)
 	if err != nil {

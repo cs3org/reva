@@ -29,8 +29,8 @@ import (
 	"strconv"
 	"strings"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 )
 
@@ -259,10 +259,10 @@ func (s *svc) doPutChunked(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ref := &storageproviderv1beta1pb.Reference{
-		Spec: &storageproviderv1beta1pb.Reference_Path{Path: chunkInfo.path},
+	ref := &provider.Reference{
+		Spec: &provider.Reference_Path{Path: chunkInfo.path},
 	}
-	req := &storageproviderv1beta1pb.StatRequest{Ref: ref}
+	req := &provider.StatRequest{Ref: ref}
 	res, err := client.Stat(ctx, req)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending grpc stat request")
@@ -270,15 +270,15 @@ func (s *svc) doPutChunked(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if res.Status.Code != rpcpb.Code_CODE_OK {
-		if res.Status.Code != rpcpb.Code_CODE_NOT_FOUND {
+	if res.Status.Code != rpc.Code_CODE_OK {
+		if res.Status.Code != rpc.Code_CODE_NOT_FOUND {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 	}
 
 	info := res.Info
-	if info != nil && info.Type != storageproviderv1beta1pb.ResourceType_RESOURCE_TYPE_FILE {
+	if info != nil && info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
 		log.Warn().Msg("resource is not a file")
 		w.WriteHeader(http.StatusConflict)
 		return
@@ -300,7 +300,7 @@ func (s *svc) doPutChunked(w http.ResponseWriter, r *http.Request) {
 	// TODO(labkode): implement old chunking
 
 	/*
-		req2 := &storageproviderv1beta1pb.StartWriteSessionRequest{}
+		req2 := &provider.StartWriteSessionRequest{}
 		res2, err := client.StartWriteSession(ctx, req2)
 		if err != nil {
 			logger.Error(ctx, err)
@@ -308,7 +308,7 @@ func (s *svc) doPutChunked(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if res2.Status.Code != rpcpb.Code_CODE_OK {
+		if res2.Status.Code != rpc.Code_CODE_OK {
 			logger.Println(ctx, res2.Status)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -331,7 +331,7 @@ func (s *svc) doPutChunked(w http.ResponseWriter, r *http.Request) {
 		for {
 			n, err := fd.Read(buffer)
 			if n > 0 {
-				req := &storageproviderv1beta1pb.WriteRequest{Data: buffer, Length: uint64(n), SessionId: sessID, Offset: offset}
+				req := &provider.WriteRequest{Data: buffer, Length: uint64(n), SessionId: sessID, Offset: offset}
 				err = stream.Send(req)
 				if err != nil {
 					logger.Error(ctx, err)
@@ -361,13 +361,13 @@ func (s *svc) doPutChunked(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if res3.Status.Code != rpcpb.Code_CODE_OK {
+		if res3.Status.Code != rpc.Code_CODE_OK {
 			logger.Println(ctx, err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		req4 := &storageproviderv1beta1pb.FinishWriteSessionRequest{Filename: chunkInfo.path, SessionId: sessID}
+		req4 := &provider.FinishWriteSessionRequest{Filename: chunkInfo.path, SessionId: sessID}
 		res4, err := client.FinishWriteSession(ctx, req4)
 		if err != nil {
 			logger.Error(ctx, err)
@@ -375,7 +375,7 @@ func (s *svc) doPutChunked(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if res4.Status.Code != rpcpb.Code_CODE_OK {
+		if res4.Status.Code != rpc.Code_CODE_OK {
 			logger.Println(ctx, res4.Status)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -389,7 +389,7 @@ func (s *svc) doPutChunked(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if res.Status.Code != rpcpb.Code_CODE_OK {
+		if res.Status.Code != rpc.Code_CODE_OK {
 			logger.Println(ctx, res.Status)
 			w.WriteHeader(http.StatusInternalServerError)
 			return

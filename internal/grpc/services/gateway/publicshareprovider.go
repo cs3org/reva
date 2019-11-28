@@ -21,15 +21,15 @@ package gateway
 import (
 	"context"
 
-	publicshareproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v1beta1"
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
 )
 
-func (s *svc) CreatePublicShare(ctx context.Context, req *publicshareproviderv1beta1pb.CreatePublicShareRequest) (*publicshareproviderv1beta1pb.CreatePublicShareResponse, error) {
+func (s *svc) CreatePublicShare(ctx context.Context, req *link.CreatePublicShareRequest) (*link.CreatePublicShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("create public share")
 
@@ -47,44 +47,44 @@ func (s *svc) CreatePublicShare(ctx context.Context, req *publicshareproviderv1b
 	return res, nil
 }
 
-func (s *svc) RemovePublicShare(ctx context.Context, req *publicshareproviderv1beta1pb.RemovePublicShareRequest) (*publicshareproviderv1beta1pb.RemovePublicShareResponse, error) {
+func (s *svc) RemovePublicShare(ctx context.Context, req *link.RemovePublicShareRequest) (*link.RemovePublicShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("remove public share")
 
-	return &publicshareproviderv1beta1pb.RemovePublicShareResponse{
+	return &link.RemovePublicShareResponse{
 		Status: status.NewOK(ctx),
 	}, nil
 }
 
-func (s *svc) GetPublicShareByToken(ctx context.Context, req *publicshareproviderv1beta1pb.GetPublicShareByTokenRequest) (*publicshareproviderv1beta1pb.GetPublicShareByTokenResponse, error) {
+func (s *svc) GetPublicShareByToken(ctx context.Context, req *link.GetPublicShareByTokenRequest) (*link.GetPublicShareByTokenResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("remove public share")
 
-	return &publicshareproviderv1beta1pb.GetPublicShareByTokenResponse{
+	return &link.GetPublicShareByTokenResponse{
 		Status: status.NewOK(ctx),
 	}, nil
 }
 
-func (s *svc) GetPublicShare(ctx context.Context, req *publicshareproviderv1beta1pb.GetPublicShareRequest) (*publicshareproviderv1beta1pb.GetPublicShareResponse, error) {
+func (s *svc) GetPublicShare(ctx context.Context, req *link.GetPublicShareRequest) (*link.GetPublicShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("get public share")
 
-	return &publicshareproviderv1beta1pb.GetPublicShareResponse{
+	return &link.GetPublicShareResponse{
 		Status: status.NewOK(ctx),
 		// Share:  share,
 	}, nil
 }
 
-func (s *svc) ListPublicShares(ctx context.Context, req *publicshareproviderv1beta1pb.ListPublicSharesRequest) (*publicshareproviderv1beta1pb.ListPublicSharesResponse, error) {
+func (s *svc) ListPublicShares(ctx context.Context, req *link.ListPublicSharesRequest) (*link.ListPublicSharesResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("listing public shares")
 
 	pClient, err := pool.GetPublicShareProviderClient(s.c.PublicShareProviderEndpoint)
 	if err != nil {
 		log.Err(err).Msg("error connecting to a public share provider")
-		return &publicshareproviderv1beta1pb.ListPublicSharesResponse{
-			Status: &rpcpb.Status{
-				Code: rpcpb.Code_CODE_INTERNAL,
+		return &link.ListPublicSharesResponse{
+			Status: &rpc.Status{
+				Code: rpc.Code_CODE_INTERNAL,
 			},
 		}, nil
 	}
@@ -94,16 +94,16 @@ func (s *svc) ListPublicShares(ctx context.Context, req *publicshareproviderv1be
 		return nil, errors.Wrap(err, "error calling ListShares")
 	}
 
-	// res := &publicshareproviderv1beta1pb.ListPublicSharesResponse{
+	// res := &link.ListPublicSharesResponse{
 	// 	Status: status.NewOK(ctx),
-	// 	Share: []*publicshareproviderv1beta1pb.PublicShare{
-	// &publicshareproviderv1beta1pb.PublicShare{
-	// 	Id: &publicshareproviderv1beta1pb.PublicShareId{
+	// 	Share: []*link.PublicShare{
+	// &link.PublicShare{
+	// 	Id: &link.PublicShareId{
 	// 		OpaqueId: "some_publicly_shared_id",
 	// 	},
 	// 	Token:       "my_token",
 	// 	ResourceId:  &v1beta1.ResourceId{},
-	// 	Permissions: &publicshareproviderv1beta1pb.PublicSharePermissions{},
+	// 	Permissions: &link.PublicSharePermissions{},
 	// 	Owner:       &types.UserId{},
 	// 	Creator:     &types.UserId{},
 	// 	Ctime:       &types.Timestamp{},
@@ -116,11 +116,11 @@ func (s *svc) ListPublicShares(ctx context.Context, req *publicshareproviderv1be
 	return res, nil
 }
 
-func (s *svc) UpdatePublicShare(ctx context.Context, req *publicshareproviderv1beta1pb.UpdatePublicShareRequest) (*publicshareproviderv1beta1pb.UpdatePublicShareResponse, error) {
+func (s *svc) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicShareRequest) (*link.UpdatePublicShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("list public share")
 
-	res := &publicshareproviderv1beta1pb.UpdatePublicShareResponse{
+	res := &link.UpdatePublicShareResponse{
 		Status: status.NewOK(ctx),
 	}
 	return res, nil

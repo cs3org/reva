@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"io"
 
-	authregistryv1beta1pb "github.com/cs3org/go-cs3apis/cs3/authregistry/v1beta1"
+	registrypb "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/registry/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
@@ -65,7 +65,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 		reg: reg,
 	}
 
-	authregistryv1beta1pb.RegisterAuthRegistryServiceServer(ss, service)
+	registrypb.RegisterRegistryAPIServer(ss, service)
 	return service, nil
 }
 
@@ -84,30 +84,30 @@ func getRegistry(c *config) (auth.Registry, error) {
 	return nil, fmt.Errorf("authregistrysvc: driver not found: %s", c.Driver)
 }
 
-func (s *service) ListAuthProviders(ctx context.Context, req *authregistryv1beta1pb.ListAuthProvidersRequest) (*authregistryv1beta1pb.ListAuthProvidersResponse, error) {
+func (s *service) ListAuthProviders(ctx context.Context, req *registrypb.ListAuthProvidersRequest) (*registrypb.ListAuthProvidersResponse, error) {
 	pinfos, err := s.reg.ListProviders(ctx)
 	if err != nil {
-		return &authregistryv1beta1pb.ListAuthProvidersResponse{
+		return &registrypb.ListAuthProvidersResponse{
 			Status: status.NewInternal(ctx, err, "error getting list of auth providers"),
 		}, nil
 	}
 
-	res := &authregistryv1beta1pb.ListAuthProvidersResponse{
+	res := &registrypb.ListAuthProvidersResponse{
 		Status:    status.NewOK(ctx),
 		Providers: pinfos,
 	}
 	return res, nil
 }
 
-func (s *service) GetAuthProvider(ctx context.Context, req *authregistryv1beta1pb.GetAuthProviderRequest) (*authregistryv1beta1pb.GetAuthProviderResponse, error) {
+func (s *service) GetAuthProvider(ctx context.Context, req *registrypb.GetAuthProviderRequest) (*registrypb.GetAuthProviderResponse, error) {
 	pinfo, err := s.reg.GetProvider(ctx, req.Type)
 	if err != nil {
-		return &authregistryv1beta1pb.GetAuthProviderResponse{
+		return &registrypb.GetAuthProviderResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth provider for type: "+req.Type),
 		}, nil
 	}
 
-	res := &authregistryv1beta1pb.GetAuthProviderResponse{
+	res := &registrypb.GetAuthProviderResponse{
 		Status:   status.NewOK(ctx),
 		Provider: pinfo,
 	}

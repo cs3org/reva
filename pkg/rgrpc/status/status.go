@@ -25,34 +25,34 @@ import (
 	"context"
 	"errors"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"go.opencensus.io/trace"
 )
 
 // NewOK returns a Status with CODE_OK.
-func NewOK(ctx context.Context) *rpcpb.Status {
-	return &rpcpb.Status{
-		Code:  rpcpb.Code_CODE_OK,
+func NewOK(ctx context.Context) *rpc.Status {
+	return &rpc.Status{
+		Code:  rpc.Code_CODE_OK,
 		Trace: getTrace(ctx),
 	}
 }
 
 // NewNotFound returns a Status with CODE_NOT_FOUND and logs the msg.
-func NewNotFound(ctx context.Context, msg string) *rpcpb.Status {
+func NewNotFound(ctx context.Context, msg string) *rpc.Status {
 	appctx.GetLogger(ctx).Warn().Msg(msg)
-	return &rpcpb.Status{
-		Code:    rpcpb.Code_CODE_NOT_FOUND,
+	return &rpc.Status{
+		Code:    rpc.Code_CODE_NOT_FOUND,
 		Message: msg,
 		Trace:   getTrace(ctx),
 	}
 }
 
 // NewInvalid returns a Status with CODE_INVALID_ARGUMENT and logs the msg.
-func NewInvalid(ctx context.Context, msg string) *rpcpb.Status {
+func NewInvalid(ctx context.Context, msg string) *rpc.Status {
 	appctx.GetLogger(ctx).Warn().Msg(msg)
-	return &rpcpb.Status{
-		Code:    rpcpb.Code_CODE_INVALID_ARGUMENT,
+	return &rpc.Status{
+		Code:    rpc.Code_CODE_INVALID_ARGUMENT,
 		Message: msg,
 		Trace:   getTrace(ctx),
 	}
@@ -60,48 +60,48 @@ func NewInvalid(ctx context.Context, msg string) *rpcpb.Status {
 
 // NewInternal returns a Status with CODE_INTERNAL and logs the msg.
 // In this case, err MUST be filled for tracking purposes.
-func NewInternal(ctx context.Context, err error, msg string) *rpcpb.Status {
+func NewInternal(ctx context.Context, err error, msg string) *rpc.Status {
 	if err == nil {
 		panic("Internal error triggered without an error context")
 	}
 	appctx.GetLogger(ctx).Err(err).Msg(msg)
-	return &rpcpb.Status{
-		Code:    rpcpb.Code_CODE_INTERNAL,
+	return &rpc.Status{
+		Code:    rpc.Code_CODE_INTERNAL,
 		Message: msg,
 		Trace:   getTrace(ctx),
 	}
 }
 
 // NewUnauthenticated returns a Status with CODE_UNAUTHENTICATED and logs the msg.
-func NewUnauthenticated(ctx context.Context, err error, msg string) *rpcpb.Status {
+func NewUnauthenticated(ctx context.Context, err error, msg string) *rpc.Status {
 	appctx.GetLogger(ctx).Warn().Err(err).Msg(msg)
-	return &rpcpb.Status{
-		Code:    rpcpb.Code_CODE_UNAUTHENTICATED,
+	return &rpc.Status{
+		Code:    rpc.Code_CODE_UNAUTHENTICATED,
 		Message: msg,
 		Trace:   getTrace(ctx),
 	}
 }
 
 // NewUnimplemented returns a Status with CODE_UNIMPLEMENTED and logs the msg.
-func NewUnimplemented(ctx context.Context, err error, msg string) *rpcpb.Status {
+func NewUnimplemented(ctx context.Context, err error, msg string) *rpc.Status {
 	appctx.GetLogger(ctx).Error().Err(err).Msg(msg)
-	return &rpcpb.Status{
-		Code:    rpcpb.Code_CODE_UNIMPLEMENTED,
+	return &rpc.Status{
+		Code:    rpc.Code_CODE_UNIMPLEMENTED,
 		Message: msg,
 		Trace:   getTrace(ctx),
 	}
 }
 
 // NewInvalidArg returns a Status with CODE_INVALID_ARGUMENT.
-func NewInvalidArg(ctx context.Context, msg string) *rpcpb.Status {
-	return &rpcpb.Status{Code: rpcpb.Code_CODE_INVALID_ARGUMENT,
+func NewInvalidArg(ctx context.Context, msg string) *rpc.Status {
+	return &rpc.Status{Code: rpc.Code_CODE_INVALID_ARGUMENT,
 		Message: msg,
 		Trace:   getTrace(ctx),
 	}
 }
 
 // NewErrorFromCode returns a standardized Error for a given RPC code.
-func NewErrorFromCode(code rpcpb.Code, pkgname string) error {
+func NewErrorFromCode(code rpc.Code, pkgname string) error {
 	return errors.New(pkgname + ": RPC failed with code " + code.String())
 }
 

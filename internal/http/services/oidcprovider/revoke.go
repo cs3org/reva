@@ -21,9 +21,8 @@ package oidcprovider
 import (
 	"net/http"
 
-	"github.com/ory/fosite"
-
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/ory/fosite"
 )
 
 func (s *svc) doRevoke(w http.ResponseWriter, r *http.Request) {

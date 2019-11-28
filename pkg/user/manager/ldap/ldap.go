@@ -23,8 +23,7 @@ import (
 	"crypto/tls"
 	"fmt"
 
-	types "github.com/cs3org/go-cs3apis/cs3/types"
-	userproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/userprovider/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/user"
@@ -103,7 +102,7 @@ func New(m map[string]interface{}) (user.Manager, error) {
 	}, nil
 }
 
-func (m *manager) GetUser(ctx context.Context, uid *types.UserId) (*userproviderv1beta1pb.User, error) {
+func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
 	log := appctx.GetLogger(ctx)
 	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.hostname, m.port), &tls.Config{InsecureSkipVerify: true})
 	if err != nil {
@@ -137,7 +136,7 @@ func (m *manager) GetUser(ctx context.Context, uid *types.UserId) (*userprovider
 
 	log.Debug().Interface("entries", sr.Entries).Msg("entries")
 
-	return &userproviderv1beta1pb.User{
+	return &userpb.User{
 		Username:    sr.Entries[0].GetAttributeValue(m.schema.UID),
 		Groups:      []string{},
 		Mail:        sr.Entries[0].GetAttributeValue(m.schema.Mail),
@@ -145,7 +144,7 @@ func (m *manager) GetUser(ctx context.Context, uid *types.UserId) (*userprovider
 	}, nil
 }
 
-func (m *manager) FindUsers(ctx context.Context, query string) ([]*userproviderv1beta1pb.User, error) {
+func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
 	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.hostname, m.port), &tls.Config{InsecureSkipVerify: true})
 	if err != nil {
 		return nil, err
@@ -172,10 +171,10 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userproviderv
 		return nil, err
 	}
 
-	users := []*userproviderv1beta1pb.User{}
+	users := []*userpb.User{}
 
 	for _, entry := range sr.Entries {
-		user := &userproviderv1beta1pb.User{
+		user := &userpb.User{
 			Username:    entry.GetAttributeValue(m.schema.UID),
 			Groups:      []string{},
 			Mail:        sr.Entries[0].GetAttributeValue(m.schema.Mail),
@@ -187,10 +186,10 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userproviderv
 	return users, nil
 }
 
-func (m *manager) GetUserGroups(ctx context.Context, uid *types.UserId) ([]string, error) {
+func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
 	return []string{}, nil // FIXME implement GetUserGroups for ldap user manager
 }
 
-func (m *manager) IsInGroup(ctx context.Context, uid *types.UserId, group string) (bool, error) {
+func (m *manager) IsInGroup(ctx context.Context, uid *userpb.UserId, group string) (bool, error) {
 	return false, nil // FIXME implement IsInGroup for ldap user manager
 }

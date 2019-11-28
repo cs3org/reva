@@ -23,8 +23,7 @@ import (
 	"reflect"
 	"testing"
 
-	types "github.com/cs3org/go-cs3apis/cs3/types"
-	userproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/userprovider/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 )
 
@@ -35,15 +34,15 @@ func TestUserManager(t *testing.T) {
 	manager, _ := New(nil)
 
 	// setup test data
-	uidEinstein := &types.UserId{Idp: "http://localhost:9998", OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51"}
-	userEinstein := &userproviderv1beta1pb.User{
+	uidEinstein := &userpb.UserId{Idp: "http://localhost:9998", OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51"}
+	userEinstein := &userpb.User{
 		Id:          uidEinstein,
 		Username:    "einstein",
 		Groups:      []string{"sailing-lovers", "violin-haters", "physics-lovers"},
 		Mail:        "einstein@example.org",
 		DisplayName: "Albert Einstein",
 	}
-	uidFake := &types.UserId{Idp: "nonesense", OpaqueId: "fakeUser"}
+	uidFake := &userpb.UserId{Idp: "nonesense", OpaqueId: "fakeUser"}
 	groupsEinstein := []string{"sailing-lovers", "violin-haters", "physics-lovers"}
 
 	// positive test GetUserGroups
@@ -61,14 +60,14 @@ func TestUserManager(t *testing.T) {
 
 	// test FindUsers
 	resUser, _ := manager.FindUsers(ctx, "einstein")
-	if !reflect.DeepEqual(resUser, []*userproviderv1beta1pb.User{userEinstein}) {
-		t.Fatalf("user differ: expected=%v got=%v", []*userproviderv1beta1pb.User{userEinstein}, resUser)
+	if !reflect.DeepEqual(resUser, []*userpb.User{userEinstein}) {
+		t.Fatalf("user differ: expected=%v got=%v", []*userpb.User{userEinstein}, resUser)
 	}
 
 	// negative test FindUsers
 	resUsers, _ := manager.FindUsers(ctx, "notARealUser")
 	if len(resUsers) > 0 {
-		t.Fatalf("user not in group: expected=%v got=%v", []*userproviderv1beta1pb.User{}, resUsers)
+		t.Fatalf("user not in group: expected=%v got=%v", []*userpb.User{}, resUsers)
 	}
 
 	// positive test IsInGroup

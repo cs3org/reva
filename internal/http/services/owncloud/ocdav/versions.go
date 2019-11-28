@@ -23,9 +23,9 @@ import (
 	"net/http"
 	"path"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
-	typespb "github.com/cs3org/go-cs3apis/cs3/types"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
 )
@@ -41,7 +41,7 @@ func (h *VersionsHandler) init(c *Config) error {
 // Handler handles requests
 // versions can be listed with a PROPFIND to /remote.php/dav/meta/<fileid>/v
 // a version is identified by a timestamp, eg. /remote.php/dav/meta/<fileid>/v/1561410426
-func (h *VersionsHandler) Handler(s *svc, rid *storageproviderv1beta1pb.ResourceId) http.Handler {
+func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
@@ -72,7 +72,7 @@ func (h *VersionsHandler) Handler(s *svc, rid *storageproviderv1beta1pb.Resource
 	})
 }
 
-func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request, s *svc, rid *storageproviderv1beta1pb.ResourceId) {
+func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -90,18 +90,18 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	ref := &storageproviderv1beta1pb.Reference{
-		Spec: &storageproviderv1beta1pb.Reference_Id{Id: rid},
+	ref := &provider.Reference{
+		Spec: &provider.Reference_Id{Id: rid},
 	}
-	req := &storageproviderv1beta1pb.StatRequest{Ref: ref}
+	req := &provider.StatRequest{Ref: ref}
 	res, err := client.Stat(ctx, req)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending a grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	if res.Status.Code != rpcpb.Code_CODE_OK {
-		if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+	if res.Status.Code != rpc.Code_CODE_OK {
+		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
@@ -111,7 +111,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 
 	info := res.Info
 
-	lvReq := &storageproviderv1beta1pb.ListFileVersionsRequest{
+	lvReq := &provider.ListFileVersionsRequest{
 		Ref: ref,
 	}
 	lvRes, err := client.ListFileVersions(ctx, lvReq)
@@ -120,16 +120,16 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	if lvRes.Status.Code != rpcpb.Code_CODE_OK {
+	if lvRes.Status.Code != rpc.Code_CODE_OK {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	versions := lvRes.GetVersions()
-	infos := make([]*storageproviderv1beta1pb.ResourceInfo, 0, len(versions)+1)
+	infos := make([]*provider.ResourceInfo, 0, len(versions)+1)
 	// add version dir . entry, derived from file info
-	infos = append(infos, &storageproviderv1beta1pb.ResourceInfo{
-		Type: storageproviderv1beta1pb.ResourceType_RESOURCE_TYPE_CONTAINER,
-		Id: &storageproviderv1beta1pb.ResourceId{
+	infos = append(infos, &provider.ResourceInfo{
+		Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+		Id: &provider.ResourceId{
 			StorageId: "virtual", // this is a virtual storage
 			OpaqueId:  path.Join("meta", wrapResourceID(rid), "v"),
 		},
@@ -143,20 +143,20 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 	})
 
 	for i := range versions {
-		vi := &storageproviderv1beta1pb.ResourceInfo{
+		vi := &provider.ResourceInfo{
 			// TODO(jfd) we cannot access version content, this will be a problem when trying to fetch version thumbnails
 			//Opaque
-			Type: storageproviderv1beta1pb.ResourceType_RESOURCE_TYPE_FILE,
-			Id: &storageproviderv1beta1pb.ResourceId{
+			Type: provider.ResourceType_RESOURCE_TYPE_FILE,
+			Id: &provider.ResourceId{
 				StorageId: "versions", // this is a virtual storage
 				OpaqueId:  info.Id.OpaqueId + "@" + versions[i].GetKey(),
 			},
 			//Checksum
 			//Etag: v.ETag,
 			//MimeType
-			Mtime: &typespb.Timestamp{
+			Mtime: &types.Timestamp{
 				Seconds: versions[i].Mtime,
-				// TODO cs3apis FileVersion should use typespb.Timestamp instead of uint64
+				// TODO cs3apis FileVersion should use types.Timestamp instead of uint64
 			},
 			Path: path.Join("v", versions[i].Key),
 			//PermissionSet
@@ -183,7 +183,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 
 }
 
-func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *svc, rid *storageproviderv1beta1pb.ResourceId, key string) {
+func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId, key string) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -194,9 +194,9 @@ func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *s
 		return
 	}
 
-	req := &storageproviderv1beta1pb.RestoreFileVersionRequest{
-		Ref: &storageproviderv1beta1pb.Reference{
-			Spec: &storageproviderv1beta1pb.Reference_Id{Id: rid},
+	req := &provider.RestoreFileVersionRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Id{Id: rid},
 		},
 		Key: key,
 	}
@@ -207,8 +207,8 @@ func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *s
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	if res.Status.Code != rpcpb.Code_CODE_OK {
-		if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+	if res.Status.Code != rpc.Code_CODE_OK {
+		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}

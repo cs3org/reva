@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"os"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	usershareproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 )
 
 func shareUpdateReceivedCommand() *command {
@@ -54,16 +54,16 @@ func shareUpdateReceivedCommand() *command {
 
 		shareState := getShareState(*state)
 
-		shareRequest := &usershareproviderv1beta1pb.UpdateReceivedShareRequest{
-			Ref: &usershareproviderv1beta1pb.ShareReference{
-				Spec: &usershareproviderv1beta1pb.ShareReference_Id{
-					Id: &usershareproviderv1beta1pb.ShareId{
+		shareRequest := &collaboration.UpdateReceivedShareRequest{
+			Ref: &collaboration.ShareReference{
+				Spec: &collaboration.ShareReference_Id{
+					Id: &collaboration.ShareId{
 						OpaqueId: id,
 					},
 				},
 			},
-			Field: &usershareproviderv1beta1pb.UpdateReceivedShareRequest_UpdateField{
-				Field: &usershareproviderv1beta1pb.UpdateReceivedShareRequest_UpdateField_State{
+			Field: &collaboration.UpdateReceivedShareRequest_UpdateField{
+				Field: &collaboration.UpdateReceivedShareRequest_UpdateField_State{
 					State: shareState,
 				},
 			},
@@ -74,7 +74,7 @@ func shareUpdateReceivedCommand() *command {
 			return err
 		}
 
-		if shareRes.Status.Code != rpcpb.Code_CODE_OK {
+		if shareRes.Status.Code != rpc.Code_CODE_OK {
 			return formatError(shareRes.Status)
 		}
 
@@ -84,15 +84,15 @@ func shareUpdateReceivedCommand() *command {
 	return cmd
 }
 
-func getShareState(state string) usershareproviderv1beta1pb.ShareState {
+func getShareState(state string) collaboration.ShareState {
 	switch state {
 	case "pending":
-		return usershareproviderv1beta1pb.ShareState_SHARE_STATE_PENDING
+		return collaboration.ShareState_SHARE_STATE_PENDING
 	case "accepted":
-		return usershareproviderv1beta1pb.ShareState_SHARE_STATE_ACCEPTED
+		return collaboration.ShareState_SHARE_STATE_ACCEPTED
 	case "rejected":
-		return usershareproviderv1beta1pb.ShareState_SHARE_STATE_REJECTED
+		return collaboration.ShareState_SHARE_STATE_REJECTED
 	default:
-		return usershareproviderv1beta1pb.ShareState_SHARE_STATE_INVALID
+		return collaboration.ShareState_SHARE_STATE_INVALID
 	}
 }

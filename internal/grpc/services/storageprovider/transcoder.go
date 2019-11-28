@@ -19,7 +19,7 @@
 package storageprovider
 
 import (
-	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
 // XS defines an hex-encoded string as checksum.
@@ -43,17 +43,17 @@ const (
 )
 
 // GRPC2PKGXS converts the grpc checksum type to an internal pkg type.
-func GRPC2PKGXS(t storageproviderv1beta1pb.ResourceChecksumType) XS {
+func GRPC2PKGXS(t provider.ResourceChecksumType) XS {
 	switch t {
-	case storageproviderv1beta1pb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID:
+	case provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID:
 		return XSInvalid
-	case storageproviderv1beta1pb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET:
+	case provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET:
 		return XSUnset
-	case storageproviderv1beta1pb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_SHA1:
+	case provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_SHA1:
 		return XSSHA1
-	case storageproviderv1beta1pb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_ADLER32:
+	case provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_ADLER32:
 		return XSAdler32
-	case storageproviderv1beta1pb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_MD5:
+	case provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_MD5:
 		return XSMD5
 	default:
 		return XSInvalid
@@ -61,17 +61,17 @@ func GRPC2PKGXS(t storageproviderv1beta1pb.ResourceChecksumType) XS {
 }
 
 // PKG2GRPCXS converts an internal checksum type to the grpc checksum type.
-func PKG2GRPCXS(xsType string) storageproviderv1beta1pb.ResourceChecksumType {
+func PKG2GRPCXS(xsType string) provider.ResourceChecksumType {
 	switch xsType {
 	case XSUnset:
-		return storageproviderv1beta1pb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET
+		return provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET
 	case XSAdler32:
-		return storageproviderv1beta1pb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_ADLER32
+		return provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_ADLER32
 	case XSMD5:
-		return storageproviderv1beta1pb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_MD5
+		return provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_MD5
 	case XSSHA1:
-		return storageproviderv1beta1pb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_SHA1
+		return provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_SHA1
 	default:
-		return storageproviderv1beta1pb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID
+		return provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID
 	}
 }

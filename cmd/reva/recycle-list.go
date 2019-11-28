@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"os"
 
-	gatewayv1beta1pb "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 )
 
 func recycleListCommand() *command {
@@ -42,7 +42,7 @@ func recycleListCommand() *command {
 			return err
 		}
 
-		req := &gatewayv1beta1pb.ListRecycleRequest{}
+		req := &gateway.ListRecycleRequest{}
 
 		ctx := getAuthContext()
 		res, err := client.ListRecycle(ctx, req)
@@ -50,7 +50,7 @@ func recycleListCommand() *command {
 			return err
 		}
 
-		if res.Status.Code != rpcpb.Code_CODE_OK {
+		if res.Status.Code != rpc.Code_CODE_OK {
 			return formatError(res.Status)
 		}
 

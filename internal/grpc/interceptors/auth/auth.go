@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"strings"
 
-	userproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/userprovider/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/token"
@@ -197,7 +197,7 @@ func NewStream(m map[string]interface{}) (grpc.StreamServerInterceptor, int, err
 			return status.Errorf(codes.Unauthenticated, "auth: core access token is invalid")
 		}
 
-		u := &userproviderv1beta1pb.User{}
+		u := &userpb.User{}
 		if err := mapstructure.Decode(claims, u); err != nil {
 			log.Warn().Msg("user claims invalid")
 			return status.Errorf(codes.Unauthenticated, "auth: claims are invalid")

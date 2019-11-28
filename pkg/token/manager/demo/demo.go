@@ -24,7 +24,7 @@ import (
 	"encoding/base64"
 	"encoding/gob"
 
-	userproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/userprovider/v1beta1"
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/token"
 	"github.com/cs3org/reva/pkg/token/manager/registry"
 	"github.com/pkg/errors"
@@ -42,7 +42,7 @@ func New(m map[string]interface{}) (token.Manager, error) {
 
 type manager struct{}
 
-func (m *manager) MintToken(ctx context.Context, u *userproviderv1beta1pb.User) (string, error) {
+func (m *manager) MintToken(ctx context.Context, u *user.User) (string, error) {
 	token, err := encode(u)
 	if err != nil {
 		return "", errors.Wrap(err, "error encoding user")
@@ -50,7 +50,7 @@ func (m *manager) MintToken(ctx context.Context, u *userproviderv1beta1pb.User) 
 	return token, nil
 }
 
-func (m *manager) DismantleToken(ctx context.Context, token string) (*userproviderv1beta1pb.User, error) {
+func (m *manager) DismantleToken(ctx context.Context, token string) (*user.User, error) {
 	u, err := decode(token)
 	if err != nil {
 		return nil, errors.Wrap(err, "error decoding claims")
@@ -60,7 +60,7 @@ func (m *manager) DismantleToken(ctx context.Context, token string) (*userprovid
 
 // from https://stackoverflow.com/questions/28020070/golang-serialize-and-deserialize-back
 // go binary encoder
-func encode(u *userproviderv1beta1pb.User) (string, error) {
+func encode(u *user.User) (string, error) {
 	b := bytes.Buffer{}
 	e := gob.NewEncoder(&b)
 	err := e.Encode(u)
@@ -72,8 +72,8 @@ func encode(u *userproviderv1beta1pb.User) (string, error) {
 
 // from https://stackoverflow.com/questions/28020070/golang-serialize-and-deserialize-back
 // go binary decoder
-func decode(token string) (*userproviderv1beta1pb.User, error) {
-	u := &userproviderv1beta1pb.User{}
+func decode(token string) (*user.User, error) {
+	u := &user.User{}
 	by, err := base64.StdEncoding.DecodeString(token)
 	if err != nil {
 		return nil, err

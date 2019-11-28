@@ -21,17 +21,17 @@ package publicshare
 import (
 	"context"
 
-	publicshareproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v1beta1"
-	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
-	userproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/userprovider/v1beta1"
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
 // Manager manipulates public shares.
 type Manager interface {
-	CreatePublicShare(ctx context.Context, u *userproviderv1beta1pb.User, md *storageproviderv1beta1pb.ResourceInfo, g *publicshareproviderv1beta1pb.Grant) (*publicshareproviderv1beta1pb.PublicShare, error)
-	UpdatePublicShare(ctx context.Context, u *userproviderv1beta1pb.User, ref *publicshareproviderv1beta1pb.PublicShareReference, g *publicshareproviderv1beta1pb.Grant) (*publicshareproviderv1beta1pb.PublicShare, error)
-	GetPublicShare(ctx context.Context, u *userproviderv1beta1pb.User, ref *publicshareproviderv1beta1pb.PublicShareReference) (*publicshareproviderv1beta1pb.PublicShare, error)
-	ListPublicShares(ctx context.Context, u *userproviderv1beta1pb.User, md *storageproviderv1beta1pb.ResourceInfo) ([]*publicshareproviderv1beta1pb.PublicShare, error)
-	RevokePublicShare(ctx context.Context, u *userproviderv1beta1pb.User, id string) error
-	GetPublicShareByToken(ctx context.Context, token string) (*publicshareproviderv1beta1pb.PublicShare, error)
+	CreatePublicShare(ctx context.Context, u *user.User, md *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error)
+	UpdatePublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference, g *link.Grant) (*link.PublicShare, error)
+	GetPublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) (*link.PublicShare, error)
+	ListPublicShares(ctx context.Context, u *user.User, md *provider.ResourceInfo) ([]*link.PublicShare, error)
+	RevokePublicShare(ctx context.Context, u *user.User, id string) error
+	GetPublicShareByToken(ctx context.Context, token string) (*link.PublicShare, error)
 }

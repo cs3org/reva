@@ -24,8 +24,8 @@ import (
 	"path"
 	"time"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/utils"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
@@ -43,9 +43,9 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	sReq := &storageproviderv1beta1pb.StatRequest{
-		Ref: &storageproviderv1beta1pb.Reference{
-			Spec: &storageproviderv1beta1pb.Reference_Path{Path: fn},
+	sReq := &provider.StatRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Path{Path: fn},
 		},
 	}
 	sRes, err := client.Stat(ctx, sReq)
@@ -55,22 +55,22 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	if sRes.Status.Code != rpcpb.Code_CODE_OK {
+	if sRes.Status.Code != rpc.Code_CODE_OK {
 		log.Warn().Str("code", string(sRes.Status.Code)).Msg("grpc request failed")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	info := sRes.Info
-	if info.Type == storageproviderv1beta1pb.ResourceType_RESOURCE_TYPE_CONTAINER {
+	if info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		log.Warn().Msg("resource is a folder and cannot be downloaded")
 		w.WriteHeader(http.StatusNotImplemented)
 		return
 	}
 
-	dReq := &storageproviderv1beta1pb.InitiateFileDownloadRequest{
-		Ref: &storageproviderv1beta1pb.Reference{
-			Spec: &storageproviderv1beta1pb.Reference_Path{Path: fn},
+	dReq := &provider.InitiateFileDownloadRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Path{Path: fn},
 		},
 	}
 
@@ -81,7 +81,7 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	if dRes.Status.Code != rpcpb.Code_CODE_OK {
+	if dRes.Status.Code != rpc.Code_CODE_OK {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

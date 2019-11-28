@@ -29,8 +29,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 
-	types "github.com/cs3org/go-cs3apis/cs3/types"
-	userproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/userprovider/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 )
 
@@ -39,7 +38,7 @@ func init() {
 }
 
 type manager struct {
-	users []*userproviderv1beta1pb.User
+	users []*userpb.User
 }
 
 type config struct {
@@ -68,7 +67,7 @@ func New(m map[string]interface{}) (user.Manager, error) {
 		return nil, err
 	}
 
-	users := []*userproviderv1beta1pb.User{}
+	users := []*userpb.User{}
 
 	err = json.Unmarshal(f, &users)
 	if err != nil {
@@ -80,7 +79,7 @@ func New(m map[string]interface{}) (user.Manager, error) {
 	}, nil
 }
 
-func (m *manager) GetUser(ctx context.Context, uid *types.UserId) (*userproviderv1beta1pb.User, error) {
+func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
 	for _, u := range m.users {
 		// TODO(jfd) we should also compare idp / iss? labkode: yes we should
 		if u.Id.GetOpaqueId() == uid.OpaqueId || u.Username == uid.OpaqueId {
@@ -91,12 +90,12 @@ func (m *manager) GetUser(ctx context.Context, uid *types.UserId) (*userprovider
 }
 
 // TODO(jfd) search Opaque? compare sub?
-func userContains(u *userproviderv1beta1pb.User, query string) bool {
+func userContains(u *userpb.User, query string) bool {
 	return strings.Contains(u.Username, query) || strings.Contains(u.DisplayName, query) || strings.Contains(u.Mail, query) || strings.Contains(u.Id.OpaqueId, query)
 }
 
-func (m *manager) FindUsers(ctx context.Context, query string) ([]*userproviderv1beta1pb.User, error) {
-	users := []*userproviderv1beta1pb.User{}
+func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
+	users := []*userpb.User{}
 	for _, u := range m.users {
 		if userContains(u, query) {
 			users = append(users, u)
@@ -105,7 +104,7 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userproviderv
 	return users, nil
 }
 
-func (m *manager) GetUserGroups(ctx context.Context, uid *types.UserId) ([]string, error) {
+func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
 	user, err := m.GetUser(ctx, uid)
 	if err != nil {
 		return nil, err
@@ -113,7 +112,7 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *types.UserId) ([]strin
 	return user.Groups, nil
 }
 
-func (m *manager) IsInGroup(ctx context.Context, uid *types.UserId, group string) (bool, error) {
+func (m *manager) IsInGroup(ctx context.Context, uid *userpb.UserId, group string) (bool, error) {
 	user, err := m.GetUser(ctx, uid)
 	if err != nil {
 		return false, err

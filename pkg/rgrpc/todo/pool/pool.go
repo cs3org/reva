@@ -19,36 +19,36 @@
 package pool
 
 import (
-	appproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/appprovider/v1beta1"
-	appregistryv1beta1pb "github.com/cs3org/go-cs3apis/cs3/appregistry/v1beta1"
-	authproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/authprovider/v1beta1"
-	authregistryv1beta1pb "github.com/cs3org/go-cs3apis/cs3/authregistry/v1beta1"
-	gatewayv0alpahpb "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	ocmshareproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/ocmshareprovider/v1beta1"
-	preferencesv1beta1pb "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
-	publicshareproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v1beta1"
-	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
-	storageregistryv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageregistry/v1beta1"
-	userproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/userprovider/v1beta1"
-	usershareproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v1beta1"
+	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
+	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
+	authprovider "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
+	authregistry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	preferences "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	storageregistry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 
 	"go.opencensus.io/plugin/ocgrpc"
 	"google.golang.org/grpc"
 )
 
 // TODO(labkode): is concurrent access to the maps safe?
-var storageProviders = map[string]storageproviderv1beta1pb.StorageProviderServiceClient{}
-var authProviders = map[string]authproviderv1beta1pb.AuthProviderServiceClient{}
-var authRegistries = map[string]authregistryv1beta1pb.AuthRegistryServiceClient{}
-var userShareProviders = map[string]usershareproviderv1beta1pb.UserShareProviderServiceClient{}
-var ocmShareProviders = map[string]ocmshareproviderv1beta1pb.OCMShareProviderServiceClient{}
-var publicShareProviders = map[string]publicshareproviderv1beta1pb.PublicShareProviderServiceClient{}
-var preferencesProviders = map[string]preferencesv1beta1pb.PreferencesServiceClient{}
-var appRegistries = map[string]appregistryv1beta1pb.AppRegistryServiceClient{}
-var appProviders = map[string]appproviderv1beta1pb.AppProviderServiceClient{}
-var storageRegistries = map[string]storageregistryv1beta1pb.StorageRegistryServiceClient{}
-var gatewayProviders = map[string]gatewayv0alpahpb.GatewayServiceClient{}
-var userProviders = map[string]userproviderv1beta1pb.UserProviderServiceClient{}
+var storageProviders = map[string]storageprovider.ProviderAPIClient{}
+var authProviders = map[string]authprovider.ProviderAPIClient{}
+var authRegistries = map[string]authregistry.RegistryAPIClient{}
+var userShareProviders = map[string]collaboration.CollaborationAPIClient{}
+var ocmShareProviders = map[string]ocm.OcmAPIClient{}
+var publicShareProviders = map[string]link.LinkAPIClient{}
+var preferencesProviders = map[string]preferences.PreferencesAPIClient{}
+var appRegistries = map[string]appregistry.RegistryAPIClient{}
+var appProviders = map[string]appprovider.ProviderAPIClient{}
+var storageRegistries = map[string]storageregistry.RegistryAPIClient{}
+var gatewayProviders = map[string]gateway.GatewayAPIClient{}
+var userProviders = map[string]user.UserAPIClient{}
 
 // NewConn creates a new connection to a grpc server
 // with open census tracing support.
@@ -63,7 +63,7 @@ func NewConn(endpoint string) (*grpc.ClientConn, error) {
 }
 
 // GetGatewayServiceClient returns a GatewayServiceClient.
-func GetGatewayServiceClient(endpoint string) (gatewayv0alpahpb.GatewayServiceClient, error) {
+func GetGatewayServiceClient(endpoint string) (gateway.GatewayAPIClient, error) {
 	if val, ok := gatewayProviders[endpoint]; ok {
 		return val, nil
 	}
@@ -73,13 +73,13 @@ func GetGatewayServiceClient(endpoint string) (gatewayv0alpahpb.GatewayServiceCl
 		return nil, err
 	}
 
-	gatewayProviders[endpoint] = gatewayv0alpahpb.NewGatewayServiceClient(conn)
+	gatewayProviders[endpoint] = gateway.NewGatewayAPIClient(conn)
 
 	return gatewayProviders[endpoint], nil
 }
 
 // GetUserProviderServiceClient returns a UserProviderServiceClient.
-func GetUserProviderServiceClient(endpoint string) (userproviderv1beta1pb.UserProviderServiceClient, error) {
+func GetUserProviderServiceClient(endpoint string) (user.UserAPIClient, error) {
 	if val, ok := userProviders[endpoint]; ok {
 		return val, nil
 	}
@@ -89,12 +89,12 @@ func GetUserProviderServiceClient(endpoint string) (userproviderv1beta1pb.UserPr
 		return nil, err
 	}
 
-	userProviders[endpoint] = userproviderv1beta1pb.NewUserProviderServiceClient(conn)
+	userProviders[endpoint] = user.NewUserAPIClient(conn)
 	return userProviders[endpoint], nil
 }
 
 // GetStorageProviderServiceClient returns a StorageProviderServiceClient.
-func GetStorageProviderServiceClient(endpoint string) (storageproviderv1beta1pb.StorageProviderServiceClient, error) {
+func GetStorageProviderServiceClient(endpoint string) (storageprovider.ProviderAPIClient, error) {
 	if val, ok := storageProviders[endpoint]; ok {
 		return val, nil
 	}
@@ -104,13 +104,13 @@ func GetStorageProviderServiceClient(endpoint string) (storageproviderv1beta1pb.
 		return nil, err
 	}
 
-	storageProviders[endpoint] = storageproviderv1beta1pb.NewStorageProviderServiceClient(conn)
+	storageProviders[endpoint] = storageprovider.NewProviderAPIClient(conn)
 
 	return storageProviders[endpoint], nil
 }
 
 // GetAuthRegistryServiceClient returns a new AuthRegistryServiceClient.
-func GetAuthRegistryServiceClient(endpoint string) (authregistryv1beta1pb.AuthRegistryServiceClient, error) {
+func GetAuthRegistryServiceClient(endpoint string) (authregistry.RegistryAPIClient, error) {
 	if val, ok := authRegistries[endpoint]; ok {
 		return val, nil
 	}
@@ -120,13 +120,13 @@ func GetAuthRegistryServiceClient(endpoint string) (authregistryv1beta1pb.AuthRe
 		return nil, err
 	}
 
-	authRegistries[endpoint] = authregistryv1beta1pb.NewAuthRegistryServiceClient(conn)
+	authRegistries[endpoint] = authregistry.NewRegistryAPIClient(conn)
 
 	return authRegistries[endpoint], nil
 }
 
 // GetAuthProviderServiceClient returns a new AuthProviderServiceClient.
-func GetAuthProviderServiceClient(endpoint string) (authproviderv1beta1pb.AuthProviderServiceClient, error) {
+func GetAuthProviderServiceClient(endpoint string) (authprovider.ProviderAPIClient, error) {
 	if val, ok := authProviders[endpoint]; ok {
 		return val, nil
 	}
@@ -136,13 +136,13 @@ func GetAuthProviderServiceClient(endpoint string) (authproviderv1beta1pb.AuthPr
 		return nil, err
 	}
 
-	authProviders[endpoint] = authproviderv1beta1pb.NewAuthProviderServiceClient(conn)
+	authProviders[endpoint] = authprovider.NewProviderAPIClient(conn)
 
 	return authProviders[endpoint], nil
 }
 
 // GetUserShareProviderClient returns a new UserShareProviderClient.
-func GetUserShareProviderClient(endpoint string) (usershareproviderv1beta1pb.UserShareProviderServiceClient, error) {
+func GetUserShareProviderClient(endpoint string) (collaboration.CollaborationAPIClient, error) {
 	if val, ok := userShareProviders[endpoint]; ok {
 		return val, nil
 	}
@@ -152,13 +152,13 @@ func GetUserShareProviderClient(endpoint string) (usershareproviderv1beta1pb.Use
 		return nil, err
 	}
 
-	userShareProviders[endpoint] = usershareproviderv1beta1pb.NewUserShareProviderServiceClient(conn)
+	userShareProviders[endpoint] = collaboration.NewCollaborationAPIClient(conn)
 
 	return userShareProviders[endpoint], nil
 }
 
 // GetOCMShareProviderClient returns a new OCMShareProviderClient.
-func GetOCMShareProviderClient(endpoint string) (ocmshareproviderv1beta1pb.OCMShareProviderServiceClient, error) {
+func GetOCMShareProviderClient(endpoint string) (ocm.OcmAPIClient, error) {
 	if val, ok := ocmShareProviders[endpoint]; ok {
 		return val, nil
 	}
@@ -168,13 +168,13 @@ func GetOCMShareProviderClient(endpoint string) (ocmshareproviderv1beta1pb.OCMSh
 		return nil, err
 	}
 
-	ocmShareProviders[endpoint] = ocmshareproviderv1beta1pb.NewOCMShareProviderServiceClient(conn)
+	ocmShareProviders[endpoint] = ocm.NewOcmAPIClient(conn)
 
 	return ocmShareProviders[endpoint], nil
 }
 
 // GetPublicShareProviderClient returns a new PublicShareProviderClient.
-func GetPublicShareProviderClient(endpoint string) (publicshareproviderv1beta1pb.PublicShareProviderServiceClient, error) {
+func GetPublicShareProviderClient(endpoint string) (link.LinkAPIClient, error) {
 	if val, ok := publicShareProviders[endpoint]; ok {
 		return val, nil
 	}
@@ -184,13 +184,13 @@ func GetPublicShareProviderClient(endpoint string) (publicshareproviderv1beta1pb
 		return nil, err
 	}
 
-	publicShareProviders[endpoint] = publicshareproviderv1beta1pb.NewPublicShareProviderServiceClient(conn)
+	publicShareProviders[endpoint] = link.NewLinkAPIClient(conn)
 
 	return publicShareProviders[endpoint], nil
 }
 
 // GetPreferencesClient returns a new PreferencesClient.
-func GetPreferencesClient(endpoint string) (preferencesv1beta1pb.PreferencesServiceClient, error) {
+func GetPreferencesClient(endpoint string) (preferences.PreferencesAPIClient, error) {
 	if val, ok := preferencesProviders[endpoint]; ok {
 		return val, nil
 	}
@@ -200,13 +200,13 @@ func GetPreferencesClient(endpoint string) (preferencesv1beta1pb.PreferencesServ
 		return nil, err
 	}
 
-	preferencesProviders[endpoint] = preferencesv1beta1pb.NewPreferencesServiceClient(conn)
+	preferencesProviders[endpoint] = preferences.NewPreferencesAPIClient(conn)
 
 	return preferencesProviders[endpoint], nil
 }
 
 // GetAppRegistryClient returns a new AppRegistryClient.
-func GetAppRegistryClient(endpoint string) (appregistryv1beta1pb.AppRegistryServiceClient, error) {
+func GetAppRegistryClient(endpoint string) (appregistry.RegistryAPIClient, error) {
 	if val, ok := appRegistries[endpoint]; ok {
 		return val, nil
 	}
@@ -216,13 +216,13 @@ func GetAppRegistryClient(endpoint string) (appregistryv1beta1pb.AppRegistryServ
 		return nil, err
 	}
 
-	appRegistries[endpoint] = appregistryv1beta1pb.NewAppRegistryServiceClient(conn)
+	appRegistries[endpoint] = appregistry.NewRegistryAPIClient(conn)
 
 	return appRegistries[endpoint], nil
 }
 
 // GetAppProviderClient returns a new AppRegistryClient.
-func GetAppProviderClient(endpoint string) (appproviderv1beta1pb.AppProviderServiceClient, error) {
+func GetAppProviderClient(endpoint string) (appprovider.ProviderAPIClient, error) {
 	if val, ok := appProviders[endpoint]; ok {
 		return val, nil
 	}
@@ -232,13 +232,13 @@ func GetAppProviderClient(endpoint string) (appproviderv1beta1pb.AppProviderServ
 		return nil, err
 	}
 
-	appProviders[endpoint] = appproviderv1beta1pb.NewAppProviderServiceClient(conn)
+	appProviders[endpoint] = appprovider.NewProviderAPIClient(conn)
 
 	return appProviders[endpoint], nil
 }
 
 // GetStorageRegistryClient returns a new StorageRegistryClient.
-func GetStorageRegistryClient(endpoint string) (storageregistryv1beta1pb.StorageRegistryServiceClient, error) {
+func GetStorageRegistryClient(endpoint string) (storageregistry.RegistryAPIClient, error) {
 	if val, ok := storageRegistries[endpoint]; ok {
 		return val, nil
 	}
@@ -248,7 +248,7 @@ func GetStorageRegistryClient(endpoint string) (storageregistryv1beta1pb.Storage
 		return nil, err
 	}
 
-	storageRegistries[endpoint] = storageregistryv1beta1pb.NewStorageRegistryServiceClient(conn)
+	storageRegistries[endpoint] = storageregistry.NewRegistryAPIClient(conn)
 
 	return storageRegistries[endpoint], nil
 }

@@ -28,9 +28,9 @@ import (
 	"strconv"
 	"strings"
 
-	gatewayv1beta1pb "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v1beta1"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
 // metaData representation in the import data
@@ -44,7 +44,7 @@ type metaData struct {
 
 //ImportMetadata from a files.jsonl file in exportPath. The files must already be present on the storage
 //Will set etag and mtime
-func ImportMetadata(ctx context.Context, client gatewayv1beta1pb.GatewayServiceClient, exportPath string, ns string) error {
+func ImportMetadata(ctx context.Context, client gateway.GatewayAPIClient, exportPath string, ns string) error {
 
 	filesJSONL, err := os.Open(path.Join(exportPath, "files.jsonl"))
 	if err != nil {
@@ -72,11 +72,11 @@ func ImportMetadata(ctx context.Context, client gatewayv1beta1pb.GatewayServiceC
 
 		if len(m) > 0 {
 			resourcePath := path.Join(ns, path.Base(exportPath), strings.TrimPrefix(fileData.Path, "/files/"))
-			samReq := &storageproviderv1beta1pb.SetArbitraryMetadataRequest{
-				Ref: &storageproviderv1beta1pb.Reference{
-					Spec: &storageproviderv1beta1pb.Reference_Path{Path: resourcePath},
+			samReq := &storageprovider.SetArbitraryMetadataRequest{
+				Ref: &storageprovider.Reference{
+					Spec: &storageprovider.Reference_Path{Path: resourcePath},
 				},
-				ArbitraryMetadata: &storageproviderv1beta1pb.ArbitraryMetadata{
+				ArbitraryMetadata: &storageprovider.ArbitraryMetadata{
 					Metadata: m,
 				},
 			}
@@ -85,10 +85,10 @@ func ImportMetadata(ctx context.Context, client gatewayv1beta1pb.GatewayServiceC
 				log.Fatal(err)
 			}
 
-			if samResp.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+			if samResp.Status.Code == rpc.Code_CODE_NOT_FOUND {
 				log.Print("File does not exist on target system, skipping metadata import: " + resourcePath)
 			}
-			if samResp.Status.Code != rpcpb.Code_CODE_OK {
+			if samResp.Status.Code != rpc.Code_CODE_OK {
 				log.Print("Error importing metadata, skipping metadata import: " + resourcePath + ", " + samResp.Status.Message)
 			}
 		} else {

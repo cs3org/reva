@@ -23,7 +23,7 @@ import (
 	"crypto/tls"
 	"fmt"
 
-	user "github.com/cs3org/go-cs3apis/cs3/types"
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
@@ -38,13 +38,7 @@ func init() {
 }
 
 type mgr struct {
-	hostname     string
-	port         int
-	baseDN       string
-	filter       string
-	bindUsername string
-	bindPassword string
-	schema       attributes
+	c *config
 }
 
 type config struct {
@@ -58,10 +52,11 @@ type config struct {
 }
 
 type attributes struct {
-	Mail        string `mapstructure:"mail"`
-	UID         string `mapstructure:"uid"`
-	DisplayName string `mapstructure:"displayName"`
 	DN          string `mapstructure:"dn"`
+	UID         string `mapstructure:"uid"`
+	UserName    string `mapstructure:"userName"`
+	Mail        string `mapstructure:"mail"`
+	DisplayName string `mapstructure:"displayName"`
 }
 
 // Default attributes (Active Directory)
@@ -91,37 +86,32 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	}
 
 	return &mgr{
-		hostname:     c.Hostname,
-		port:         c.Port,
-		baseDN:       c.BaseDN,
-		filter:       c.Filter,
-		bindUsername: c.BindUsername,
-		bindPassword: c.BindPassword,
-		schema:       c.Schema,
+		c: c,
 	}, nil
 }
 
-func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.UserId, error) {
+func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, error) {
 	log := appctx.GetLogger(ctx)
 
-	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", am.hostname, am.port), &tls.Config{InsecureSkipVerify: true})
+	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", am.c.Hostname, am.c.Port), &tls.Config{InsecureSkipVerify: true})
 	if err != nil {
 		return nil, err
 	}
 	defer l.Close()
 
 	// First bind with a read only user
-	err = l.Bind(am.bindUsername, am.bindPassword)
+	err = l.Bind(am.c.BindUsername, am.c.BindPassword)
 	if err != nil {
 		return nil, err
 	}
 
 	// Search for the given clientID
 	searchRequest := ldap.NewSearchRequest(
-		am.baseDN,
+		am.c.BaseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-		fmt.Sprintf(am.filter, clientID),
-		[]string{am.schema.DN, am.schema.UID},
+		fmt.Sprintf(am.c.Filter, clientID),
+		// TODO(jfd): objectguid, entryuuid etc ... make configurable
+		[]string{am.c.Schema.DN, am.c.Schema.UID, am.c.Schema.Mail, am.c.Schema.DisplayName},
 		nil,
 	)
 
@@ -144,12 +134,23 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, err
 	}
 
-	uid := &user.UserId{
-		// TODO(jfd): how do we determine the issuer for ldap? ... make configurable
-		Idp:      fmt.Sprintf("%s:%d", am.hostname, am.port),
-		OpaqueId: sr.Entries[0].GetAttributeValue(am.schema.UID),
+	u := &user.User{
+		// TODO(jfd) clean up idp = iss, sub = opaque ... is redundant
+		Id: &user.UserId{
+			// TODO(jfd): how do we determine the issuer for ldap? ... make configurable
+			Idp: fmt.Sprintf("%s:%d", am.c.Hostname, am.c.Port),
+			// TODO(jfd): objectguid, entryuuid etc ... make configurable
+			OpaqueId: sr.Entries[0].GetAttributeValue(am.c.Schema.UID),
+		},
+		// Subject:     claims.Sub, // TODO(labkode) remove from CS3, is in Id
+		// Issuer:      claims.Iss, // TODO(labkode) remove from CS3, is in Id
+		// TODO add more claims from the StandardClaims, eg EmailVerified
+		Username: sr.Entries[0].GetAttributeValue(am.c.Schema.UserName),
+		// TODO groups
+		Groups:      []string{},
+		Mail:        sr.Entries[0].GetAttributeValue(am.c.Schema.Mail),
+		DisplayName: sr.Entries[0].GetAttributeValue(am.c.Schema.DisplayName),
 	}
-
-	return uid, nil
+	return u, nil
 
 }

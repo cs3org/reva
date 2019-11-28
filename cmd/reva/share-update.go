@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"os"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	usershareproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 )
 
 func shareUpdateCommand() *command {
@@ -57,16 +57,16 @@ func shareUpdateCommand() *command {
 			return err
 		}
 
-		shareRequest := &usershareproviderv1beta1pb.UpdateShareRequest{
-			Ref: &usershareproviderv1beta1pb.ShareReference{
-				Spec: &usershareproviderv1beta1pb.ShareReference_Id{
-					Id: &usershareproviderv1beta1pb.ShareId{
+		shareRequest := &collaboration.UpdateShareRequest{
+			Ref: &collaboration.ShareReference{
+				Spec: &collaboration.ShareReference_Id{
+					Id: &collaboration.ShareId{
 						OpaqueId: id,
 					},
 				},
 			},
-			Field: &usershareproviderv1beta1pb.UpdateShareRequest_UpdateField{
-				Field: &usershareproviderv1beta1pb.UpdateShareRequest_UpdateField_Permissions{
+			Field: &collaboration.UpdateShareRequest_UpdateField{
+				Field: &collaboration.UpdateShareRequest_UpdateField_Permissions{
 					Permissions: perm,
 				},
 			},
@@ -77,7 +77,7 @@ func shareUpdateCommand() *command {
 			return err
 		}
 
-		if shareRes.Status.Code != rpcpb.Code_CODE_OK {
+		if shareRes.Status.Code != rpc.Code_CODE_OK {
 			return formatError(shareRes.Status)
 		}
 

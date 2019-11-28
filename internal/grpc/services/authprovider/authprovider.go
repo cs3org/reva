@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"io"
 
-	authproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/authprovider/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
@@ -80,7 +80,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 	}
 
 	svc := &service{conf: c, authmgr: authManager}
-	authproviderv1beta1pb.RegisterAuthProviderServiceServer(ss, svc)
+	provider.RegisterProviderAPIServer(ss, svc)
 
 	return svc, nil
 }
@@ -89,7 +89,7 @@ func (s *service) Close() error {
 	return nil
 }
 
-func (s *service) Authenticate(ctx context.Context, req *authproviderv1beta1pb.AuthenticateRequest) (*authproviderv1beta1pb.AuthenticateResponse, error) {
+func (s *service) Authenticate(ctx context.Context, req *provider.AuthenticateRequest) (*provider.AuthenticateResponse, error) {
 	log := appctx.GetLogger(ctx)
 	username := req.ClientId
 	password := req.ClientSecret
@@ -97,16 +97,16 @@ func (s *service) Authenticate(ctx context.Context, req *authproviderv1beta1pb.A
 	uid, err := s.authmgr.Authenticate(ctx, username, password)
 	if err != nil {
 		err = errors.Wrap(err, "authsvc: error in Authenticate")
-		res := &authproviderv1beta1pb.AuthenticateResponse{
+		res := &provider.AuthenticateResponse{
 			Status: status.NewUnauthenticated(ctx, err, "error authenticating user"),
 		}
 		return res, nil
 	}
 
 	log.Info().Msgf("user %s authenticated", uid.String())
-	res := &authproviderv1beta1pb.AuthenticateResponse{
+	res := &provider.AuthenticateResponse{
 		Status: status.NewOK(ctx),
-		UserId: uid,
+		User:   uid,
 	}
 	return res, nil
 }

@@ -23,8 +23,8 @@ import (
 	"fmt"
 	"log"
 
-	gatewayv1beta1pb "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/token"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -45,18 +45,18 @@ func getAuthContext() context.Context {
 	return ctx
 }
 
-func getClient() (gatewayv1beta1pb.GatewayServiceClient, error) {
+func getClient() (gateway.GatewayAPIClient, error) {
 	conn, err := getConn()
 	if err != nil {
 		return nil, err
 	}
-	return gatewayv1beta1pb.NewGatewayServiceClient(conn), nil
+	return gateway.NewGatewayAPIClient(conn), nil
 }
 
 func getConn() (*grpc.ClientConn, error) {
 	return grpc.Dial(conf.Host, grpc.WithInsecure())
 }
 
-func formatError(status *rpcpb.Status) error {
+func formatError(status *rpc.Status) error {
 	return fmt.Errorf("error: code=%+v msg=%q support_trace=%q", status.Code, status.Message, status.Trace)
 }

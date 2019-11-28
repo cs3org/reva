@@ -21,16 +21,16 @@ package gateway
 import (
 	"context"
 
-	userproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/userprovider/v1beta1"
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
 )
 
-func (s *svc) GetUser(ctx context.Context, req *userproviderv1beta1pb.GetUserRequest) (*userproviderv1beta1pb.GetUserResponse, error) {
+func (s *svc) GetUser(ctx context.Context, req *user.GetUserRequest) (*user.GetUserResponse, error) {
 	c, err := pool.GetUserProviderServiceClient(s.c.UserProviderEndpoint)
 	if err != nil {
-		return &userproviderv1beta1pb.GetUserResponse{
+		return &user.GetUserResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth client"),
 		}, nil
 	}
@@ -43,10 +43,10 @@ func (s *svc) GetUser(ctx context.Context, req *userproviderv1beta1pb.GetUserReq
 	return res, nil
 }
 
-func (s *svc) FindUsers(ctx context.Context, req *userproviderv1beta1pb.FindUsersRequest) (*userproviderv1beta1pb.FindUsersResponse, error) {
+func (s *svc) FindUsers(ctx context.Context, req *user.FindUsersRequest) (*user.FindUsersResponse, error) {
 	c, err := pool.GetUserProviderServiceClient(s.c.UserProviderEndpoint)
 	if err != nil {
-		return &userproviderv1beta1pb.FindUsersResponse{
+		return &user.FindUsersResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth client"),
 		}, nil
 	}
@@ -59,10 +59,10 @@ func (s *svc) FindUsers(ctx context.Context, req *userproviderv1beta1pb.FindUser
 	return res, nil
 }
 
-func (s *svc) GetUserGroups(ctx context.Context, req *userproviderv1beta1pb.GetUserGroupsRequest) (*userproviderv1beta1pb.GetUserGroupsResponse, error) {
+func (s *svc) GetUserGroups(ctx context.Context, req *user.GetUserGroupsRequest) (*user.GetUserGroupsResponse, error) {
 	c, err := pool.GetUserProviderServiceClient(s.c.UserProviderEndpoint)
 	if err != nil {
-		return &userproviderv1beta1pb.GetUserGroupsResponse{
+		return &user.GetUserGroupsResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth client"),
 		}, nil
 	}
@@ -75,10 +75,10 @@ func (s *svc) GetUserGroups(ctx context.Context, req *userproviderv1beta1pb.GetU
 	return res, nil
 }
 
-func (s *svc) IsInGroup(ctx context.Context, req *userproviderv1beta1pb.IsInGroupRequest) (*userproviderv1beta1pb.IsInGroupResponse, error) {
+func (s *svc) IsInGroup(ctx context.Context, req *user.IsInGroupRequest) (*user.IsInGroupResponse, error) {
 	c, err := pool.GetUserProviderServiceClient(s.c.UserProviderEndpoint)
 	if err != nil {
-		return &userproviderv1beta1pb.IsInGroupResponse{
+		return &user.IsInGroupResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth client"),
 		}, nil
 	}

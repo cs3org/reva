@@ -22,7 +22,7 @@ import (
 	"context"
 	"time"
 
-	userproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/userprovider/v1beta1"
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/token"
 	"github.com/cs3org/reva/pkg/token/manager/registry"
@@ -77,7 +77,7 @@ type manager struct {
 // claims are custom claims for the JWT token.
 type claims struct {
 	jwt.StandardClaims
-	User *userproviderv1beta1pb.User `json:"user"`
+	User *user.User `json:"user"`
 }
 
 // TODO(labkode): resulting JSON contains internal protobuf fields:
@@ -86,7 +86,7 @@ type claims struct {
 //  "XXX_sizecache": 0,
 //  "XXX_unrecognized": null
 //}
-func (m *manager) MintToken(ctx context.Context, u *userproviderv1beta1pb.User) (string, error) {
+func (m *manager) MintToken(ctx context.Context, u *user.User) (string, error) {
 	ttl := time.Duration(m.conf.Expires) * time.Second
 	claims := claims{
 		StandardClaims: jwt.StandardClaims{
@@ -108,7 +108,7 @@ func (m *manager) MintToken(ctx context.Context, u *userproviderv1beta1pb.User) 
 	return tkn, nil
 }
 
-func (m *manager) DismantleToken(ctx context.Context, tkn string) (*userproviderv1beta1pb.User, error) {
+func (m *manager) DismantleToken(ctx context.Context, tkn string) (*user.User, error) {
 	token, err := jwt.ParseWithClaims(tkn, &claims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(m.conf.Secret), nil
 	})

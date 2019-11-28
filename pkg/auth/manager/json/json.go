@@ -37,9 +37,13 @@ func init() {
 
 // Credentials holds a pair of secret and userid
 type Credentials struct {
-	ID       *user.UserId `mapstructure:"id"`
-	Username string       `mapstructure:"username"`
-	Secret   string       `mapstructure:"secret"`
+	ID           *user.UserId `mapstructure:"id"`
+	Username     string       `mapstructure:"username"`
+	Mail         string       `mapstructure:"mail"`
+	MailVerified bool         `mapstructure:"mail_verified"`
+	DisplayName  string       `mapstructure:"display_name"`
+	Secret       string       `mapstructure:"secret"`
+	Groups       []string     `mapstructure:"groups"`
 }
 
 type manager struct {
@@ -91,7 +95,15 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 func (m *manager) Authenticate(ctx context.Context, username string, secret string) (*user.User, error) {
 	if c, ok := m.credentials[username]; ok {
 		if c.Secret == secret {
-			return c, nil
+			return &user.User{
+				Id:           c.ID,
+				Username:     c.Username,
+				Mail:         c.Mail,
+				MailVerified: c.MailVerified,
+				DisplayName:  c.DisplayName,
+				Groups:       c.Groups,
+				// TODO add arbitrary keys as opaque data
+			}, nil
 		}
 	}
 	return nil, errtypes.InvalidCredentials(username)

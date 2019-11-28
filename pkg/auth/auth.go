@@ -28,7 +28,7 @@ import (
 
 // Manager is the interface to implement to authenticate users
 type Manager interface {
-	Authenticate(ctx context.Context, clientID, clientSecret string) (*user.UserId, error)
+	Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, error)
 }
 
 // Credentials contains the auth type, client id and secret.

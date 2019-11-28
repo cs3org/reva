@@ -38,7 +38,7 @@ func New(c map[string]interface{}) (auth.Manager, error) {
 	return &mgr{}, nil
 }
 
-func (m *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.UserId, error) {
+func (m *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, error) {
 	// allow passing in uid as <opaqueid>@<idp>
 	at := strings.LastIndex(clientID, "@")
 	uid := &user.UserId{}
@@ -48,5 +48,8 @@ func (m *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (
 		uid.OpaqueId = clientID[:at]
 		uid.Idp = clientID[at+1:]
 	}
-	return uid, nil
+	return &user.User{
+		Id: uid,
+		// not much else to provide
+	}, nil
 }
