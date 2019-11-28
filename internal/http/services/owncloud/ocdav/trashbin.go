@@ -28,11 +28,11 @@ import (
 	"strings"
 	"time"
 
-	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
-	storageregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageregistry/v0alpha"
-	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/internal/http/utils"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -42,9 +42,11 @@ import (
 
 // TrashbinHandler handles trashbin requests
 type TrashbinHandler struct {
+	gatewaySvc string
 }
 
 func (h *TrashbinHandler) init(c *Config) error {
+	h.gatewaySvc = c.GatewaySvc
 	return nil
 }
 
@@ -138,7 +140,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 	})
 }
 
-func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s *svc, u *userproviderv0alphapb.User) {
+func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -151,109 +153,46 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 
 	gc, err := pool.GetGatewayServiceClient(s.c.GatewaySvc)
 	if err != nil {
-		// TODO how do we make the user aware that some storages are not available?
+		// TODO(jfd) how do we make the user aware that some storages are not available?
 		// opaque response property? Or a list of errors?
 		// add a recycle entry with the path to the storage that produced the error?
 		log.Error().Err(err).Msg("error getting gateway client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	c, err := pool.GetStorageRegistryClient(s.c.GatewaySvc)
+
+	getHomeRes, err := gc.GetHome(ctx, &registry.GetHomeRequest{})
 	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
+		log.Error().Err(err).Msg("error calling GetHomeProvider")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-
-	lspres, err := c.ListStorageProviders(ctx, &storageregistryv0alphapb.ListStorageProvidersRequest{})
-
-	if err != nil {
-		log.Error().Err(err).Msg("error calling ListStorageProviders")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if lspres.Status.Code != rpcpb.Code_CODE_OK {
-		log.Error().Int32("code", int32(lspres.Status.Code)).Str("trace", lspres.Status.Trace).Msg(lspres.Status.Message)
+	if getHomeRes.Status.Code != rpc.Code_CODE_OK {
+		log.Error().Int32("code", int32(getHomeRes.Status.Code)).Str("trace", getHomeRes.Status.Trace).Msg(getHomeRes.Status.Message)
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 
-	// query all available storage providers to get unified list as the request does not come
-	// with ref information to target only one storage provider.
-	//res := &storageproviderv0alphapb.ListRecycleResponse{
-	//	Status:       status.NewOK(ctx),
-	//	RecycleItems: []*storageproviderv0alphapb.RecycleItem{},
-	//}
-	ri := []*storageproviderv0alphapb.RecycleItem{}
-	// TODO the listing is currently non deterministic, causing files to show up in /home or /oc
-	for _, p := range lspres.GetProviders() {
-		pp := p.GetProviderPath()
-		if strings.HasPrefix(pp, "/") {
-			// only query storages with an id
-			continue
-		}
-		// at this point the pp is actually the provider id, not the provider path 🤷‍♂️
-
-		pc, err := pool.GetStorageProviderServiceClient(p.GetAddress())
-		if err != nil {
-			// TODO how do we make the user aware that some storages are not available?
-			// opaque response property? Or a list of errors?
-			// add a recycle entry with the path to the storage that produced the error?
-			log.Error().Err(err).Msg("error getting storage provider client")
-			continue
-		}
-
-		//we need to fetch the full provider info
-		//TODO make the storage registry return the full info
-		gpres, err := pc.GetProvider(ctx, &storageproviderv0alphapb.GetProviderRequest{})
-		if err != nil {
-			log.Error().Err(err).Msg("error calling ListRecycle")
-			continue
-		}
-		if gpres.Status.Code != rpcpb.Code_CODE_OK {
-			log.Error().Int32("code", int32(gpres.Status.Code)).Str("trace", gpres.Status.Trace).Msg(gpres.Status.Message)
-			continue
-		}
-		// double check we have a real path
-		if gpres.GetInfo() != nil && gpres.GetInfo().GetProviderPath() == "" {
-			log.Error().Err(err).Msg("provider path empty")
-			continue
-		}
-		// now actually fetch the recycle items
-		// we have to use the gateway to be forwarded to the correct storage
-		lrrres, err := gc.ListRecycle(ctx, &gatewayv0alphapb.ListRecycleRequest{
-			Ref: &storageproviderv0alphapb.Reference{
-				Spec: &storageproviderv0alphapb.Reference_Id{
-					Id: &storageproviderv0alphapb.ResourceId{
-						StorageId: gpres.GetInfo().GetProviderId(),
-					},
-				},
+	// ask gateway for recycle items
+	// TODO(labkode): add Reference to ListRecycleRequest
+	getRecycleRes, err := gc.ListRecycle(ctx, &gateway.ListRecycleRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: getHomeRes.Path,
 			},
-			// TODO implement from to?
-			//FromTs
-			//ToTs
-		})
-		if err != nil {
-			log.Error().Err(err).Msg("error calling ListRecycle")
-			continue
-		}
-		if lrrres.Status.Code != rpcpb.Code_CODE_OK {
-			log.Error().Int32("code", int32(lrrres.Status.Code)).Str("trace", lrrres.Status.Trace).Msg(lrrres.Status.Message)
-			continue
-		}
-		// prefix the path?
-		// remove duplicates?
-		items := lrrres.GetRecycleItems()
-		for i := range items {
-			// new use the real path to prefix the path
-			items[i].Path = path.Join(gpres.GetInfo().GetProviderPath(), items[i].GetPath())
-			// TODO the key must be prefixed with the storage id so the gateway can route to the correct storage, based on the key
-			// the clients might cut off the storage id if we use / to concatenate.
-			items[i].Key = path.Join(u.Username, wrap(gpres.GetInfo().GetProviderId(), items[i].GetKey()))
-		}
-		ri = append(ri, items...)
+		},
+	})
+
+	if err != nil {
+		log.Error().Err(err).Msg("error calling ListRecycle")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if getRecycleRes.Status.Code != rpc.Code_CODE_OK {
+		log.Error().Int32("code", int32(getRecycleRes.Status.Code)).Str("trace", getRecycleRes.Status.Trace).Msg(getRecycleRes.Status.Message)
+		w.WriteHeader(http.StatusInternalServerError)
 	}
 
-	propRes, err := h.formatTrashPropfind(ctx, s, u, &pf, ri)
+	propRes, err := h.formatTrashPropfind(ctx, s, u, &pf, getRecycleRes.RecycleItems)
 	if err != nil {
 		log.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -269,7 +208,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	}
 }
 
-func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *userproviderv0alphapb.User, pf *propfindXML, items []*storageproviderv0alphapb.RecycleItem) (string, error) {
+func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *userpb.User, pf *propfindXML, items []*provider.RecycleItem) (string, error) {
 	responses := make([]*responseXML, 0, len(items)+1)
 	// add trashbin dir . entry
 	responses = append(responses, &responseXML{
@@ -294,11 +233,11 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *us
 	})
 	/*
 		for i := range items {
-			vi := &storageproviderv0alphapb.ResourceInfo{
+			vi := &provider.ResourceInfo{
 				// TODO(jfd) we cannot access version content, this will be a problem when trying to fetch version thumbnails
 				//Opaque
-				Type: storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_FILE,
-				Id: &storageproviderv0alphapb.ResourceId{
+				Type: provider.ResourceType_RESOURCE_TYPE_FILE,
+				Id: &provider.ResourceId{
 					StorageId: "trashbin", // this is a virtual storage
 					OpaqueId:  path.Join("trash-bin", u.Username, items[i].GetKey()),
 				},
@@ -332,11 +271,11 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *us
 	return msg, nil
 }
 
-func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, pf *propfindXML, item *storageproviderv0alphapb.RecycleItem) (*responseXML, error) {
+func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, pf *propfindXML, item *provider.RecycleItem) (*responseXML, error) {
 
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
 	ref := path.Join(baseURI, item.Key)
-	if item.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+	if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		ref += "/"
 	}
 
@@ -361,7 +300,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, pf *pr
 		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-filename", path.Base(item.Path)))
 		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-location", item.Path))
 		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-delete-datetime", dTime))
-		if item.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+		if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("d:resourcetype", "<d:collection/>"))
 			// TODO(jfd): decide if we can and want to list oc:size for folders
 		} else {
@@ -387,7 +326,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, pf *pr
 			case "http://owncloud.org/ns":
 				switch pf.Prop[i].Local {
 				case "oc:size":
-					if item.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+					if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontentlength", size))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:size", ""))
@@ -406,20 +345,20 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, pf *pr
 			case "DAV:":
 				switch pf.Prop[i].Local {
 				case "getcontentlength":
-					if item.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+					if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:getcontentlength", ""))
 					} else {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontentlength", size))
 					}
 				case "resourcetype":
-					if item.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+					if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:resourcetype", "<d:collection/>"))
 					} else {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:resourcetype", ""))
 						// redirectref is another option
 					}
 				case "getcontenttype":
-					if item.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+					if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontenttype", "httpd/unix-directory"))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:getcontenttype", ""))
@@ -438,7 +377,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, pf *pr
 	return &response, nil
 }
 
-func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, u *userproviderv0alphapb.User, dst string, key string) {
+func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, dst string, key string) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -451,12 +390,12 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 
 	rid := unwrap(key)
 
-	req := &storageproviderv0alphapb.RestoreRecycleItemRequest{
+	req := &provider.RestoreRecycleItemRequest{
 		// use the target path to find the storage provider
 		// this means we can only undelete on the same storage, not to a different folder
 		// use the key which is prefixed with the StoragePath to lookup the correct storage ...
-		Ref: &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Id{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Id{
 				Id: rid,
 			},
 		},
@@ -470,8 +409,8 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	if res.Status.Code != rpcpb.Code_CODE_OK {
-		if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+	if res.Status.Code != rpc.Code_CODE_OK {
+		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
@@ -481,7 +420,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc, u *userproviderv0alphapb.User, key string) {
+func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, key string) {
 
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
@@ -495,9 +434,9 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 
 	rid := unwrap(key)
 
-	req := &gatewayv0alphapb.PurgeRecycleRequest{
-		Ref: &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Id{
+	req := &gateway.PurgeRecycleRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Id{
 				Id: rid,
 			},
 		},
@@ -509,8 +448,8 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	if res.Status.Code != rpcpb.Code_CODE_OK {
-		if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+	if res.Status.Code != rpc.Code_CODE_OK {
+		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}

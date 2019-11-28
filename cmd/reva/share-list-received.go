@@ -22,8 +22,8 @@ import (
 	"os"
 	"time"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	"github.com/jedib0t/go-pretty/table"
 )
 
@@ -38,14 +38,14 @@ func shareListReceivedCommand() *command {
 			return err
 		}
 
-		shareRequest := &usershareproviderv0alphapb.ListReceivedSharesRequest{}
+		shareRequest := &collaboration.ListReceivedSharesRequest{}
 
 		shareRes, err := shareClient.ListReceivedShares(ctx, shareRequest)
 		if err != nil {
 			return err
 		}
 
-		if shareRes.Status.Code != rpcpb.Code_CODE_OK {
+		if shareRes.Status.Code != rpc.Code_CODE_OK {
 			return formatError(shareRes.Status)
 		}
 

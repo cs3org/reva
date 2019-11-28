@@ -26,10 +26,11 @@ import (
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/user"
 
-	publicshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
-	storageprovider "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
-	typespb "github.com/cs3org/go-cs3apis/cs3/types"
-	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	publicsharemgr "github.com/cs3org/reva/pkg/publicshare/manager/registry"
 	usermgr "github.com/cs3org/reva/pkg/user/manager/registry"
 )
@@ -160,10 +161,10 @@ type MatchValueData struct {
 
 // Role2CS3Permissions converts string roles (from the request body) into cs3 permissions
 // TODO(refs) consider using a mask instead of booleans here, might reduce all this boilerplate
-func Role2CS3Permissions(r string) (*storageprovider.ResourcePermissions, error) {
+func Role2CS3Permissions(r string) (*provider.ResourcePermissions, error) {
 	switch r {
 	case RoleViewer:
-		return &storageprovider.ResourcePermissions{
+		return &provider.ResourcePermissions{
 			ListContainer:        true,
 			ListGrants:           true,
 			ListFileVersions:     true,
@@ -174,7 +175,7 @@ func Role2CS3Permissions(r string) (*storageprovider.ResourcePermissions, error)
 			InitiateFileDownload: true,
 		}, nil
 	case RoleEditor:
-		return &storageprovider.ResourcePermissions{
+		return &provider.ResourcePermissions{
 			ListContainer:        true,
 			ListGrants:           true,
 			ListFileVersions:     true,
@@ -193,7 +194,7 @@ func Role2CS3Permissions(r string) (*storageprovider.ResourcePermissions, error)
 			PurgeRecycle:       true,
 		}, nil
 	case RoleCoowner:
-		return &storageprovider.ResourcePermissions{
+		return &provider.ResourcePermissions{
 			ListContainer:        true,
 			ListGrants:           true,
 			ListFileVersions:     true,
@@ -223,9 +224,9 @@ func Role2CS3Permissions(r string) (*storageprovider.ResourcePermissions, error)
 // AsCS3Permissions returns permission values as cs3api permissions
 // TODO sort out mapping, this is just a first guess
 // TODO use roles to make this configurable
-func AsCS3Permissions(p int, rp *storageprovider.ResourcePermissions) *storageprovider.ResourcePermissions {
+func AsCS3Permissions(p int, rp *provider.ResourcePermissions) *provider.ResourcePermissions {
 	if rp == nil {
-		rp = &storageprovider.ResourcePermissions{}
+		rp = &provider.ResourcePermissions{}
 	}
 
 	if p&int(PermissionRead) != 0 {
@@ -264,7 +265,7 @@ func AsCS3Permissions(p int, rp *storageprovider.ResourcePermissions) *storagepr
 }
 
 // PublicShare2ShareData converts a cs3api public share into shareData data model
-func PublicShare2ShareData(share *publicshareproviderv0alphapb.PublicShare) *ShareData {
+func PublicShare2ShareData(share *link.PublicShare) *ShareData {
 	return &ShareData{
 		// TODO map share.resourceId to path and storage ... requires a stat call
 		// share.permissions ar mapped below
@@ -286,7 +287,7 @@ func PublicShare2ShareData(share *publicshareproviderv0alphapb.PublicShare) *Sha
 }
 
 // UserIDToString transforms a cs3api user id into an ocs data model
-func UserIDToString(userID *typespb.UserId) string {
+func UserIDToString(userID *userpb.UserId) string {
 	if userID == nil || userID.OpaqueId == "" {
 		return ""
 	}
@@ -297,7 +298,7 @@ func UserIDToString(userID *typespb.UserId) string {
 }
 
 // UserSharePermissions2OCSPermissions transforms cs3api permissions into OCS Permissions data model
-func UserSharePermissions2OCSPermissions(sp *usershareproviderv0alphapb.SharePermissions) Permissions {
+func UserSharePermissions2OCSPermissions(sp *collaboration.SharePermissions) Permissions {
 	if sp != nil {
 		return permissions2OCSPermissions(sp.GetPermissions())
 	}
@@ -337,7 +338,7 @@ func Permissions2Role(p int) string {
 	return role
 }
 
-func publicSharePermissions2OCSPermissions(sp *publicshareproviderv0alphapb.PublicSharePermissions) Permissions {
+func publicSharePermissions2OCSPermissions(sp *link.PublicSharePermissions) Permissions {
 	if sp != nil {
 		return permissions2OCSPermissions(sp.GetPermissions())
 	}
@@ -345,7 +346,7 @@ func publicSharePermissions2OCSPermissions(sp *publicshareproviderv0alphapb.Publ
 }
 
 // TODO sort out mapping, this is just a first guess
-func permissions2OCSPermissions(p *storageprovider.ResourcePermissions) Permissions {
+func permissions2OCSPermissions(p *provider.ResourcePermissions) Permissions {
 	permissions := PermissionInvalid
 	if p != nil {
 		if p.ListContainer {
@@ -369,7 +370,7 @@ func permissions2OCSPermissions(p *storageprovider.ResourcePermissions) Permissi
 
 // timestamp is assumed to be UTC ... just human readable ...
 // FIXME and ambiguous / error prone because there is no time zone ...
-func timestampToExpiration(t *typespb.Timestamp) string {
+func timestampToExpiration(t *types.Timestamp) string {
 	return time.Unix(int64(t.Seconds), int64(t.Nanos)).Format("2006-01-02 15:05:05")
 }
 

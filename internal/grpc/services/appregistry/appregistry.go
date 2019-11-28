@@ -25,7 +25,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	appregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/appregistry/v0alpha"
+	registrypb "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/registry/static"
 	"github.com/cs3org/reva/pkg/rgrpc"
@@ -67,7 +67,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 		registry: registry,
 	}
 
-	appregistryv0alphapb.RegisterAppRegistryServiceServer(ss, svc)
+	registrypb.RegisterRegistryAPIServer(ss, svc)
 	return svc, nil
 }
 
@@ -88,43 +88,43 @@ func getRegistry(c *config) (app.Registry, error) {
 	}
 }
 
-func (s *svc) GetAppProviders(ctx context.Context, req *appregistryv0alphapb.GetAppProvidersRequest) (*appregistryv0alphapb.GetAppProvidersResponse, error) {
+func (s *svc) GetAppProviders(ctx context.Context, req *registrypb.GetAppProvidersRequest) (*registrypb.GetAppProvidersResponse, error) {
 	p, err := s.registry.FindProvider(ctx, req.ResourceInfo.MimeType)
 	if err != nil {
-		return &appregistryv0alphapb.GetAppProvidersResponse{
+		return &registrypb.GetAppProvidersResponse{
 			Status: status.NewInternal(ctx, err, "error looking for the app provider"),
 		}, nil
 	}
 
 	provider := format(p)
-	res := &appregistryv0alphapb.GetAppProvidersResponse{
+	res := &registrypb.GetAppProvidersResponse{
 		Status:    status.NewOK(ctx),
-		Providers: []*appregistryv0alphapb.ProviderInfo{provider},
+		Providers: []*registrypb.ProviderInfo{provider},
 	}
 	return res, nil
 }
 
-func (s *svc) ListAppProviders(ctx context.Context, req *appregistryv0alphapb.ListAppProvidersRequest) (*appregistryv0alphapb.ListAppProvidersResponse, error) {
+func (s *svc) ListAppProviders(ctx context.Context, req *registrypb.ListAppProvidersRequest) (*registrypb.ListAppProvidersResponse, error) {
 	pvds, err := s.registry.ListProviders(ctx)
 	if err != nil {
-		return &appregistryv0alphapb.ListAppProvidersResponse{
+		return &registrypb.ListAppProvidersResponse{
 			Status: status.NewInternal(ctx, err, "error listing the app providers"),
 		}, nil
 	}
-	providers := make([]*appregistryv0alphapb.ProviderInfo, 0, len(pvds))
+	providers := make([]*registrypb.ProviderInfo, 0, len(pvds))
 	for _, pvd := range pvds {
 		providers = append(providers, format(pvd))
 	}
 
-	res := &appregistryv0alphapb.ListAppProvidersResponse{
+	res := &registrypb.ListAppProvidersResponse{
 		Status:    status.NewOK(ctx),
 		Providers: providers,
 	}
 	return res, nil
 }
 
-func format(p *app.ProviderInfo) *appregistryv0alphapb.ProviderInfo {
-	return &appregistryv0alphapb.ProviderInfo{
+func format(p *app.ProviderInfo) *registrypb.ProviderInfo {
+	return &registrypb.ProviderInfo{
 		Address: p.Location,
 	}
 }

@@ -29,8 +29,8 @@ import (
 
 	"go.opencensus.io/trace"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/pkg/errors"
 )
@@ -62,17 +62,17 @@ func (s *svc) doProppatch(w http.ResponseWriter, r *http.Request, ns string) {
 	pf := &propfindXML{
 		Prop: propfindProps{},
 	}
-	rreq := &storageproviderv0alphapb.UnsetArbitraryMetadataRequest{
-		Ref: &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+	rreq := &provider.UnsetArbitraryMetadataRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Path{Path: fn},
 		},
 		ArbitraryMetadataKeys: []string{},
 	}
-	sreq := &storageproviderv0alphapb.SetArbitraryMetadataRequest{
-		Ref: &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+	sreq := &provider.SetArbitraryMetadataRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Path{Path: fn},
 		},
-		ArbitraryMetadata: &storageproviderv0alphapb.ArbitraryMetadata{
+		ArbitraryMetadata: &provider.ArbitraryMetadata{
 			Metadata: map[string]string{},
 		},
 	}
@@ -110,8 +110,8 @@ func (s *svc) doProppatch(w http.ResponseWriter, r *http.Request, ns string) {
 				return
 			}
 
-			if res.Status.Code != rpcpb.Code_CODE_OK {
-				if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+			if res.Status.Code != rpc.Code_CODE_OK {
+				if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
 					log.Warn().Str("path", fn).Msg("resource not found")
 					w.WriteHeader(http.StatusNotFound)
 					return
@@ -128,8 +128,8 @@ func (s *svc) doProppatch(w http.ResponseWriter, r *http.Request, ns string) {
 				return
 			}
 
-			if res.Status.Code != rpcpb.Code_CODE_OK {
-				if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+			if res.Status.Code != rpc.Code_CODE_OK {
+				if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
 					log.Warn().Str("path", fn).Msg("resource not found")
 					w.WriteHeader(http.StatusNotFound)
 					return
@@ -140,9 +140,9 @@ func (s *svc) doProppatch(w http.ResponseWriter, r *http.Request, ns string) {
 		}
 	}
 
-	req := &storageproviderv0alphapb.StatRequest{
-		Ref: &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+	req := &provider.StatRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Path{Path: fn},
 		},
 		ArbitraryMetadataKeys: mkeys,
 	}
@@ -153,8 +153,8 @@ func (s *svc) doProppatch(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	if res.Status.Code != rpcpb.Code_CODE_OK {
-		if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+	if res.Status.Code != rpc.Code_CODE_OK {
+		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			log.Warn().Str("path", fn).Msg("resource not found")
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -164,7 +164,7 @@ func (s *svc) doProppatch(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	info := res.Info
-	infos := []*storageproviderv0alphapb.ResourceInfo{info}
+	infos := []*provider.ResourceInfo{info}
 
 	propRes, err := s.formatPropfind(ctx, pf, infos, ns)
 	if err != nil {

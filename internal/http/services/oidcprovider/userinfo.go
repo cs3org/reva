@@ -26,9 +26,8 @@ import (
 	"github.com/ory/fosite"
 	"google.golang.org/grpc/metadata"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	typespb "github.com/cs3org/go-cs3apis/cs3/types"
-	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth/manager/oidc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
@@ -66,7 +65,7 @@ func (s *svc) doUserinfo(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("internal token: %s subject: %s session:%+v", internalToken, sub, session)
 	issuer := s.conf.Issuer
 
-	uid := &typespb.UserId{
+	uid := &user.UserId{
 		// TODO(labkode): how to get issuer from session? we store it in newSession,
 		// so we should be able to get it somehow ... we can use customSession now :)
 		// For the time being, the issuer is set in the configuration of the service.
@@ -93,7 +92,7 @@ func (s *svc) doUserinfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	getUserReq := &userproviderv0alphapb.GetUserRequest{
+	getUserReq := &user.GetUserRequest{
 		UserId: uid,
 	}
 	getUserRes, err := c.GetUser(ctx, getUserReq)
@@ -103,7 +102,7 @@ func (s *svc) doUserinfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if getUserRes.Status.Code != rpcpb.Code_CODE_OK {
+	if getUserRes.Status.Code != rpc.Code_CODE_OK {
 		err := status.NewErrorFromCode(getUserRes.Status.Code, "oidcprovider")
 		log.Err(err).Msg("error getting user information")
 		w.WriteHeader(http.StatusInternalServerError)
