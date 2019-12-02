@@ -220,15 +220,12 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, token string) (*user.
 	}
 
 	u := &user.User{
-		// TODO(jfd) clean up idp = iss, sub = opaque ... is redundant
 		Id: &user.UserId{
 			OpaqueId: claims.Sub, // a stable non reassignable id
 			Idp:      claims.Iss, // in the scope of this issuer
 		},
-		// Subject:     claims.Sub, // TODO(labkode) remove from CS3, is in Id
-		// Issuer:      claims.Iss, // TODO(labkode) remove from CS3, is in Id
 		Username: claims.PreferredUsername,
-		// TODO groups
+		// TODO groups are not covered by oidc but might be sent as a custom claim.
 		// TODO ... use all claims from oidc?
 		Groups:       []string{},
 		Mail:         claims.Email,
