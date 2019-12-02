@@ -52,9 +52,11 @@ type mgr struct {
 // TODO(labkode): add support for multiple clients, like we do in the oidc provider http svc.
 type config struct {
 	// the endpoint of the oidc provider
-	Insecure     bool     `mapstructure:"insecure"`
-	SkipCheck    bool     `mapstructure:"skipcheck"`
-	Provider     string   `mapstructure:"provider"`
+	Insecure  bool   `mapstructure:"insecure"`
+	SkipCheck bool   `mapstructure:"skipcheck"`
+	Provider  string `mapstructure:"provider"`
+	// IDClaim is the claim used as the opaqueid
+	IDClaim      string   `mapstructure:"id_claim"`
 	Audience     string   `mapstructure:"audience"`
 	SigningAlgs  []string `mapstructure:"signing_algorithms"`
 	ClientID     string   `mapstructure:"client_id"`
@@ -74,6 +76,10 @@ func (c *config) init() {
 	// TODO set defaults for dev env
 	if len(c.SigningAlgs) < 1 {
 		c.SigningAlgs = []string{"RS256", "PS256"}
+	}
+	if c.IDClaim == "" {
+		// sub is stable and defined as unique. the user manager needs to take care of the sub to user metadata lookup
+		c.IDClaim = "sub"
 	}
 }
 
@@ -123,8 +129,8 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, token string) (*user.
 	}
 	provider := am.provider
 
-	// The claims we want to have
-	var claims StandardClaims
+	// parse any claims
+	var claims map[string]interface{}
 
 	if am.metadata.IntrospectionEndpoint == "" {
 
@@ -211,7 +217,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, token string) (*user.
 			if err := userInfo.Claims(&claims); err != nil {
 				return nil, fmt.Errorf("failed to unmarshal userinfo claims: %v", err)
 			}
-			claims.Iss = ir.Iss
+			claims["iss"] = ir.Iss
 			log.Debug().Interface("claims", claims).Interface("userInfo", userInfo).Msg("unmarshalled userinfo")
 
 		default:
@@ -220,28 +226,29 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, token string) (*user.
 	}
 
 	u := &user.User{
-		// TODO(jfd) clean up idp = iss, sub = opaque ... is redundant
 		Id: &user.UserId{
-			OpaqueId: claims.Sub, // a stable non reassignable id
-			Idp:      claims.Iss, // in the scope of this issuer
+			OpaqueId: claims[am.c.IDClaim].(string), // a stable non reassignable id
+			Idp:      claims["iss"].(string),        // in the scope of this issuer
 		},
-		// Subject:     claims.Sub, // TODO(labkode) remove from CS3, is in Id
-		// Issuer:      claims.Iss, // TODO(labkode) remove from CS3, is in Id
-		Username: claims.PreferredUsername,
-		// TODO groups
+		Username: claims["preferred_username"].(string),
+		// TODO groups are not covered by oidc but might be sent as a custom claim.
 		// TODO ... use all claims from oidc?
 		Groups:       []string{},
-		Mail:         claims.Email,
-		MailVerified: claims.EmailVerified,
-		DisplayName:  claims.Name,
+		Mail:         claims["email"].(string),
+		MailVerified: claims["email_verified"].(bool),
+		DisplayName:  claims["name"].(string),
 	}
 
 	// try kopano konnect specific claims
 	if u.Username == "" {
-		u.Username = claims.KCIdentity["kc.i.un"]
+		if val, ok := claims["kc.identity"]; ok {
+			u.Username = val.(map[string]interface{})["kc.i.un"].(string)
+		}
 	}
 	if u.DisplayName == "" {
-		u.DisplayName = claims.KCIdentity["kc.i.dn"]
+		if val, ok := claims["kc.identity"]; ok {
+			u.DisplayName = val.(map[string]interface{})["kc.i.dn"].(string)
+		}
 	}
 	return u, nil
 }
