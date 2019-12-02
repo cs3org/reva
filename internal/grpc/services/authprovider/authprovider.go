@@ -94,7 +94,7 @@ func (s *service) Authenticate(ctx context.Context, req *provider.AuthenticateRe
 	username := req.ClientId
 	password := req.ClientSecret
 
-	uid, err := s.authmgr.Authenticate(ctx, username, password)
+	u, err := s.authmgr.Authenticate(ctx, username, password)
 	if err != nil {
 		err = errors.Wrap(err, "authsvc: error in Authenticate")
 		res := &provider.AuthenticateResponse{
@@ -103,10 +103,10 @@ func (s *service) Authenticate(ctx context.Context, req *provider.AuthenticateRe
 		return res, nil
 	}
 
-	log.Info().Msgf("user %s authenticated", uid.String())
+	log.Info().Msgf("user %s authenticated", u.String())
 	res := &provider.AuthenticateResponse{
 		Status: status.NewOK(ctx),
-		User:   uid,
+		User:   u,
 	}
 	return res, nil
 }
