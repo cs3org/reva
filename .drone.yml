@@ -18,11 +18,13 @@ steps:
 - name: curl_to_cernbox
   image: golang:1.13
   environment:
-    FOSSA_API_KEY:
-      from_secret: fossa_api_key
+    USERNAME:
+      from_secret: cbox_username
+    PASSWORD:
+      from_secret: cbox_password
   commands:
     - uname -r > uname_test.txt 
-    - curl -X PUT -u revawww https://cernbox.cern.ch/cernbox/desktop/remote.php/webdav/eos/project/r/reva/www/test.txt --data-binary @uname_test.txt
+    - curl -X PUT https://cernbox.cern.ch/cernbox/desktop/remote.php/webdav/eos/project/r/reva/www/test.txt --data-binary @uname_test.txt
 ---
 kind: pipeline
 type: docker
