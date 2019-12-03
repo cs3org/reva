@@ -8,6 +8,9 @@ platform:
   arch: amd64
 
 trigger:
+  event:
+    include:
+    - pull_request
   branch:
   - aritz-ops
 
