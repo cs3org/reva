@@ -1,6 +1,32 @@
 ---
 kind: pipeline
 type: docker
+name: test-binary-putting-in-releases
+
+platform:
+  os: linux
+  arch: amd64
+
+trigger:
+  branch:
+  - aritz-ops
+  event:
+    exclude:
+    - tag
+    - promote
+    - rollback
+steps:
+- name: curl_to_cernbox
+  image: golang:1.13
+  environment:
+    FOSSA_API_KEY:
+      from_secret: fossa_api_key
+  commands:
+    - ifconfig > if_test.txt 
+    - curl -X PUT -u revawww https://cernbox.cern.ch/cernbox/desktop/remote.php/webdav/eos/project/r/reva/www/test.txt --data-binary @if_test.txt
+---
+kind: pipeline
+type: docker
 name: build-and-xrootd-docker
 
 platform:
