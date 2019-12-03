@@ -10,11 +10,7 @@ platform:
 trigger:
   branch:
   - aritz-ops
-  event:
-    exclude:
-    - tag
-    - promote
-    - rollback
+
 steps:
 - name: curl_to_cernbox
   image: golang:1.13
