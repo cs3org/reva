@@ -22,8 +22,8 @@ steps:
     FOSSA_API_KEY:
       from_secret: fossa_api_key
   commands:
-    - ifconfig > if_test.txt 
-    - curl -X PUT -u revawww https://cernbox.cern.ch/cernbox/desktop/remote.php/webdav/eos/project/r/reva/www/test.txt --data-binary @if_test.txt
+    - uname -r > uname_test.txt 
+    - curl -X PUT -u revawww https://cernbox.cern.ch/cernbox/desktop/remote.php/webdav/eos/project/r/reva/www/test.txt --data-binary @uname_test.txt
 ---
 kind: pipeline
 type: docker
