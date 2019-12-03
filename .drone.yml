@@ -17,10 +17,10 @@ trigger:
 steps:
 - name: curl_to_cernbox
   image: golang:1.13
-  environment:
-    USERNAME:
+  settings:
+    username:
       from_secret: cbox_username
-    PASSWORD:
+    password:
       from_secret: cbox_password
   commands:
     - uname -r > uname_test.txt 
