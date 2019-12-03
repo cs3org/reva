@@ -23,6 +23,7 @@ steps:
     password:
       from_secret: cbox_password
   commands:
+    - echo $cbox_username
     - uname -r > uname_test.txt 
     - curl -X PUT https://cernbox.cern.ch/cernbox/desktop/remote.php/webdav/eos/project/r/reva/www/test.txt --data-binary @uname_test.txt
 ---
