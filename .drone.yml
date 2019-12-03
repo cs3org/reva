@@ -17,13 +17,18 @@ trigger:
 steps:
 - name: curl_to_cernbox
   image: golang:1.13
+  environment:
+    USERNAME:
+      from_secret: cbox_username
+    PASSWORD:
+      from_secret: cbox_password
   settings:
     username:
       from_secret: cbox_username
     password:
       from_secret: cbox_password
   commands:
-    - echo $cbox_username
+    - echo "a ${username} b ${USERNAME} c ${cbox_username}"
     - uname -r > uname_test.txt 
     - curl -X PUT https://cernbox.cern.ch/cernbox/desktop/remote.php/webdav/eos/project/r/reva/www/test.txt --data-binary @uname_test.txt
 ---
