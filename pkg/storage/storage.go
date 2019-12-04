@@ -23,43 +23,43 @@ import (
 	"io"
 	"net/url"
 
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
-	storagetypespb "github.com/cs3org/go-cs3apis/cs3/storagetypes"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 )
 
 // FS is the interface to implement access to the storage.
 type FS interface {
 	CreateDir(ctx context.Context, fn string) error
-	Delete(ctx context.Context, ref *storageproviderv0alphapb.Reference) error
-	Move(ctx context.Context, oldRef, newRef *storageproviderv0alphapb.Reference) error
-	GetMD(ctx context.Context, ref *storageproviderv0alphapb.Reference) (*storageproviderv0alphapb.ResourceInfo, error)
-	ListFolder(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.ResourceInfo, error)
-	Upload(ctx context.Context, ref *storageproviderv0alphapb.Reference, r io.ReadCloser) error
-	Download(ctx context.Context, ref *storageproviderv0alphapb.Reference) (io.ReadCloser, error)
-	ListRevisions(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.FileVersion, error)
-	DownloadRevision(ctx context.Context, ref *storageproviderv0alphapb.Reference, key string) (io.ReadCloser, error)
-	RestoreRevision(ctx context.Context, ref *storageproviderv0alphapb.Reference, key string) error
-	ListRecycle(ctx context.Context) ([]*storageproviderv0alphapb.RecycleItem, error)
+	Delete(ctx context.Context, ref *provider.Reference) error
+	Move(ctx context.Context, oldRef, newRef *provider.Reference) error
+	GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error)
+	ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error)
+	Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error
+	Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error)
+	ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error)
+	DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error)
+	RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error
+	ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error)
 	RestoreRecycleItem(ctx context.Context, key string) error
 	PurgeRecycleItem(ctx context.Context, key string) error
 	EmptyRecycle(ctx context.Context) error
-	GetPathByID(ctx context.Context, id *storageproviderv0alphapb.ResourceId) (string, error)
-	AddGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error
-	RemoveGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error
-	UpdateGrant(ctx context.Context, ref *storageproviderv0alphapb.Reference, g *storageproviderv0alphapb.Grant) error
-	ListGrants(ctx context.Context, ref *storageproviderv0alphapb.Reference) ([]*storageproviderv0alphapb.Grant, error)
+	GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error)
+	AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
+	RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
+	UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
+	ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error)
 	GetQuota(ctx context.Context) (int, int, error)
 	CreateReference(ctx context.Context, path string, targetURI *url.URL) error
 	Shutdown(ctx context.Context) error
-	SetArbitraryMetadata(ctx context.Context, ref *storageproviderv0alphapb.Reference, md *storageproviderv0alphapb.ArbitraryMetadata) error
-	UnsetArbitraryMetadata(ctx context.Context, ref *storageproviderv0alphapb.Reference, keys []string) error
+	SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error
+	UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error
 }
 
 // Registry is the interface that storage registries implement
 // for discovering storage providers
 type Registry interface {
-	FindProvider(ctx context.Context, ref *storageproviderv0alphapb.Reference) (*storagetypespb.ProviderInfo, error)
-	ListProviders(ctx context.Context) ([]*storagetypespb.ProviderInfo, error)
+	FindProvider(ctx context.Context, ref *provider.Reference) (*registry.ProviderInfo, error)
+	ListProviders(ctx context.Context) ([]*registry.ProviderInfo, error)
 	GetHome(ctx context.Context) (string, error)
 }
 

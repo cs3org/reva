@@ -25,8 +25,8 @@ import (
 	"strconv"
 	"time"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/utils"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
@@ -146,9 +146,9 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	sReq := &storageproviderv0alphapb.StatRequest{
-		Ref: &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+	sReq := &provider.StatRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Path{Path: fn},
 		},
 	}
 	sRes, err := client.Stat(ctx, sReq)
@@ -158,15 +158,15 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	if sRes.Status.Code != rpcpb.Code_CODE_OK {
-		if sRes.Status.Code != rpcpb.Code_CODE_NOT_FOUND {
+	if sRes.Status.Code != rpc.Code_CODE_OK {
+		if sRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 	}
 
 	info := sRes.Info
-	if info != nil && info.Type != storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_FILE {
+	if info != nil && info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
 		log.Warn().Msg("resource is not a file")
 		w.WriteHeader(http.StatusConflict)
 		return
@@ -184,9 +184,9 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request, ns string) {
 		}
 	}
 
-	uReq := &storageproviderv0alphapb.InitiateFileUploadRequest{
-		Ref: &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+	uReq := &provider.InitiateFileUploadRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Path{Path: fn},
 		},
 	}
 
@@ -198,7 +198,7 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	if uRes.Status.Code != rpcpb.Code_CODE_OK {
+	if uRes.Status.Code != rpc.Code_CODE_OK {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -234,7 +234,7 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	if sRes.Status.Code != rpcpb.Code_CODE_OK {
+	if sRes.Status.Code != rpc.Code_CODE_OK {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

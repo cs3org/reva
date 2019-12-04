@@ -21,17 +21,17 @@ package gateway
 import (
 	"context"
 
-	appregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/appregistry/v0alpha"
+	registry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
 )
 
-func (s *svc) GetAppProviders(ctx context.Context, req *appregistryv0alphapb.GetAppProvidersRequest) (*appregistryv0alphapb.GetAppProvidersResponse, error) {
+func (s *svc) GetAppProviders(ctx context.Context, req *registry.GetAppProvidersRequest) (*registry.GetAppProvidersResponse, error) {
 	c, err := pool.GetAppRegistryClient(s.c.AppRegistryEndpoint)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
-		return &appregistryv0alphapb.GetAppProvidersResponse{
+		return &registry.GetAppProvidersResponse{
 			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
 		}, nil
 	}
@@ -44,11 +44,11 @@ func (s *svc) GetAppProviders(ctx context.Context, req *appregistryv0alphapb.Get
 	return res, nil
 }
 
-func (s *svc) ListAppProviders(ctx context.Context, req *appregistryv0alphapb.ListAppProvidersRequest) (*appregistryv0alphapb.ListAppProvidersResponse, error) {
+func (s *svc) ListAppProviders(ctx context.Context, req *registry.ListAppProvidersRequest) (*registry.ListAppProvidersResponse, error) {
 	c, err := pool.GetAppRegistryClient(s.c.AppRegistryEndpoint)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
-		return &appregistryv0alphapb.ListAppProvidersResponse{
+		return &registry.ListAppProvidersResponse{
 			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
 		}, nil
 	}

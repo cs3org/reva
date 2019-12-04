@@ -23,8 +23,7 @@ import (
 	"crypto/tls"
 	"fmt"
 
-	typespb "github.com/cs3org/go-cs3apis/cs3/types"
-	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/user"
@@ -106,7 +105,7 @@ func New(m map[string]interface{}) (user.Manager, error) {
 	}, nil
 }
 
-func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*userproviderv0alphapb.User, error) {
+func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
 	log := appctx.GetLogger(ctx)
 	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.hostname, m.port), &tls.Config{InsecureSkipVerify: true})
 	if err != nil {
@@ -140,11 +139,11 @@ func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*userprovid
 
 	log.Debug().Interface("entries", sr.Entries).Msg("entries")
 
-	return &userproviderv0alphapb.User{
-		Id: &typespb.UserId{
-                        Idp:      m.idp,
-                        OpaqueId: uid.OpaqueId,
-                },
+	return &userpb.User{
+    Id: &userpb.UserId{
+      Idp:      m.idp,
+      OpaqueId: uid.OpaqueId,
+    },
 		Username:    sr.Entries[0].GetAttributeValue(m.schema.UID),
 		Groups:      []string{},
 		Mail:        sr.Entries[0].GetAttributeValue(m.schema.Mail),
@@ -152,7 +151,7 @@ func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*userprovid
 	}, nil
 }
 
-func (m *manager) FindUsers(ctx context.Context, query string) ([]*userproviderv0alphapb.User, error) {
+func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
 	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.hostname, m.port), &tls.Config{InsecureSkipVerify: true})
 	if err != nil {
 		return nil, err
@@ -179,15 +178,15 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userproviderv
 		return nil, err
 	}
 
-	users := []*userproviderv0alphapb.User{}
+	users := []*userpb.User{}
 
 	for _, entry := range sr.Entries {
-		user := &userproviderv0alphapb.User{
-			Id: &typespb.UserId{
-                                Idp:      m.idp,
-                                OpaqueId: sr.Entries[0].GetAttributeValue(m.schema.UID),
-                        },
-			Username:    entry.GetAttributeValue(m.schema.UID),
+		user := &userpb.User{
+      Id: &userpb.UserId{
+        Idp:      m.idp,
+        OpaqueId: sr.Entries[0].GetAttributeValue(m.schema.UID),
+      },
+      Username:    entry.GetAttributeValue(m.schema.UID),
 			Groups:      []string{},
 			Mail:        sr.Entries[0].GetAttributeValue(m.schema.Mail),
 			DisplayName: sr.Entries[0].GetAttributeValue(m.schema.DisplayName),
@@ -198,10 +197,10 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userproviderv
 	return users, nil
 }
 
-func (m *manager) GetUserGroups(ctx context.Context, uid *typespb.UserId) ([]string, error) {
+func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
 	return []string{}, nil // FIXME implement GetUserGroups for ldap user manager
 }
 
-func (m *manager) IsInGroup(ctx context.Context, uid *typespb.UserId, group string) (bool, error) {
+func (m *manager) IsInGroup(ctx context.Context, uid *userpb.UserId, group string) (bool, error) {
 	return false, nil // FIXME implement IsInGroup for ldap user manager
 }

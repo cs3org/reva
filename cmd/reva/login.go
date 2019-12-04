@@ -24,9 +24,9 @@ import (
 	"fmt"
 	"os"
 
-	authregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/authregistry/v0alpha"
-	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
+	registry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 )
 
 var loginCommand = func() *command {
@@ -42,7 +42,7 @@ var loginCommand = func() *command {
 				return err
 			}
 
-			req := &authregistryv0alphapb.ListAuthProvidersRequest{}
+			req := &registry.ListAuthProvidersRequest{}
 
 			ctx := context.Background()
 			res, err := client.ListAuthProviders(ctx, req)
@@ -50,7 +50,7 @@ var loginCommand = func() *command {
 				return err
 			}
 
-			if res.Status.Code != rpcpb.Code_CODE_OK {
+			if res.Status.Code != rpc.Code_CODE_OK {
 				return formatError(res.Status)
 			}
 
@@ -89,7 +89,7 @@ var loginCommand = func() *command {
 			return err
 		}
 
-		req := &gatewayv0alphapb.AuthenticateRequest{
+		req := &gateway.AuthenticateRequest{
 			Type:         authType,
 			ClientId:     username,
 			ClientSecret: password,
@@ -101,7 +101,7 @@ var loginCommand = func() *command {
 			return err
 		}
 
-		if res.Status.Code != rpcpb.Code_CODE_OK {
+		if res.Status.Code != rpc.Code_CODE_OK {
 			return formatError(res.Status)
 		}
 

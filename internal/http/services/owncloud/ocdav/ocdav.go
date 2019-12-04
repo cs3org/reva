@@ -27,8 +27,8 @@ import (
 	"path"
 	"strings"
 
-	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
@@ -158,11 +158,11 @@ func (s *svc) Handler() http.Handler {
 	})
 }
 
-func (s *svc) getClient() (gatewayv0alphapb.GatewayServiceClient, error) {
+func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
 	return pool.GetGatewayServiceClient(s.c.GatewaySvc)
 }
 
-func wrapResourceID(r *storageproviderv0alphapb.ResourceId) string {
+func wrapResourceID(r *provider.ResourceId) string {
 	return wrap(r.StorageId, r.OpaqueId)
 }
 
@@ -174,7 +174,7 @@ func wrap(sid string, oid string) string {
 	return base64.URLEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", sid, oid)))
 }
 
-func unwrap(rid string) *storageproviderv0alphapb.ResourceId {
+func unwrap(rid string) *provider.ResourceId {
 	decodedID, err := base64.URLEncoding.DecodeString(rid)
 	if err != nil {
 		return nil
@@ -183,7 +183,7 @@ func unwrap(rid string) *storageproviderv0alphapb.ResourceId {
 	if len(parts) != 2 {
 		return nil
 	}
-	return &storageproviderv0alphapb.ResourceId{
+	return &provider.ResourceId{
 		StorageId: parts[0],
 		OpaqueId:  parts[1],
 	}

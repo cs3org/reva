@@ -19,15 +19,15 @@
 package utils
 
 import (
-	typespb "github.com/cs3org/go-cs3apis/cs3/types"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 )
 
 // UnixNanoToTS converts a unix nano time to a valid cs3 Timestamp.
 // TODO(labkode): review this code, optimize it?
-func UnixNanoToTS(epoch uint64) *typespb.Timestamp {
+func UnixNanoToTS(epoch uint64) *types.Timestamp {
 	seconds := epoch / 1000000000
 	nanos := epoch * 1000000000
-	ts := &typespb.Timestamp{
+	ts := &types.Timestamp{
 		Nanos:   uint32(nanos),
 		Seconds: seconds,
 	}

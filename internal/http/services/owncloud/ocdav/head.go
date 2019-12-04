@@ -23,8 +23,8 @@ import (
 	"path"
 	"time"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/utils"
 	"github.com/cs3org/reva/pkg/appctx"
 )
@@ -41,10 +41,10 @@ func (s *svc) doHead(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	ref := &storageproviderv0alphapb.Reference{
-		Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+	ref := &provider.Reference{
+		Spec: &provider.Reference_Path{Path: fn},
 	}
-	req := &storageproviderv0alphapb.StatRequest{Ref: ref}
+	req := &provider.StatRequest{Ref: ref}
 	res, err := client.Stat(ctx, req)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending grpc stat request")
@@ -52,7 +52,7 @@ func (s *svc) doHead(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	if res.Status.Code != rpcpb.Code_CODE_OK {
+	if res.Status.Code != rpc.Code_CODE_OK {
 		log.Error().Msgf("error calling grpc: %s", res.Status.String())
 		w.WriteHeader(http.StatusInternalServerError)
 		return
