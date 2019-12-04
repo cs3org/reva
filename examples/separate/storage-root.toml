@@ -1,0 +1,49 @@
+# This storage-root.toml config file will start a reva service that:
+# - authenticates grpc storage provider requests using the internal jwt token
+# - serves a root storage provider on grpc port 11100
+
+# it is used to render the root namespace. you need to create a folder
+# layout in "/var/tmp/reva/root" that matches the storage registry:
+# tree /var/tmp/reva/root should give for this example
+# /var/tmp/reva/root
+# ├── home
+# └── oc
+# that will allow you to list the existing namespaces.
+# TODO either make the gateway return a proper ListCollection for the root,
+# TODO or implement a virtual storage that implements this
+
+[core]
+max_cpus = "2"
+disable_http = true
+
+[log]
+level = "debug"
+
+[grpc]
+network = "tcp"
+address = "0.0.0.0:11100"
+enabled_services = ["storageprovider"]
+enabled_interceptors = ["auth"]
+
+# This is a storage proider that grants direct acces to the wrapped storage
+[grpc.services.storageprovider]
+driver = "local"
+mount_path = "/"
+# if we have an id, we can directly go to that storage, no need to wrap paths
+mount_id = "123e4567-e89b-12d3-a456-426655440001"
+
+[grpc.services.storageprovider.available_checksums]
+md5   = 100
+unset = 1000
+
+[grpc.services.storageprovider.drivers.local]
+root = "/var/tmp/reva/root"
+
+[grpc.services.storageprovider.path_wrappers.context]
+prefix = ""
+
+[grpc.interceptors.auth]
+token_manager = "jwt"
+
+[grpc.interceptors.auth.token_managers.jwt]
+secret = "Pive-Fumkiu4"

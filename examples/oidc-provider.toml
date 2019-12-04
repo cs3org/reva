@@ -1,0 +1,30 @@
+# This oidc-provider.toml config starts an authprovider that uses the oidc introspection endpoint to authenticate requests
+# See https://tools.ietf.org/html/rfc7662 for the spec
+[core]
+log_file = "stderr"
+log_mode = "dev"
+max_cpus = "100%"
+disable_http = true
+
+[log]
+level = "debug"
+mode = "console"
+
+[grpc]
+address = "0.0.0.0:9998"
+enabled_services = [
+    "authprovider"
+]
+
+[grpc.services.authprovider]
+auth_manager = "oidc"
+userprovidersvc = "http://localhost:10000"
+
+[grpc.services.authprovider.auth_managers.oidc]
+provider = "http://localhost:10000"
+insecure = true
+# credentials used for the introspection endpoint with basic auth
+# also rate limit the endpoint: https://tools.ietf.org/html/rfc7662#section-4
+# TODO(jfd) introduce rate limits
+client_id = "reva"
+client_secret = "foobar"
