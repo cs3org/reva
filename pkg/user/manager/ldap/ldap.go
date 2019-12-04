@@ -44,6 +44,7 @@ type manager struct {
 	filter       string
 	bindUsername string
 	bindPassword string
+	idp          string
 	schema       attributes
 }
 
@@ -54,6 +55,7 @@ type config struct {
 	Filter       string     `mapstructure:"filter"`
 	BindUsername string     `mapstructure:"bind_username"`
 	BindPassword string     `mapstructure:"bind_password"`
+	Idp          string     `mapstructure:"idp"`
 	Schema       attributes `mapstructure:"schema"`
 }
 
@@ -98,6 +100,7 @@ func New(m map[string]interface{}) (user.Manager, error) {
 		filter:       c.Filter,
 		bindUsername: c.BindUsername,
 		bindPassword: c.BindPassword,
+		idp:          c.Idp,
 		schema:       c.Schema,
 	}, nil
 }
@@ -137,6 +140,10 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 	log.Debug().Interface("entries", sr.Entries).Msg("entries")
 
 	return &userpb.User{
+		Id: &userpb.UserId{
+			Idp:      m.idp,
+			OpaqueId: uid.OpaqueId,
+		},
 		Username:    sr.Entries[0].GetAttributeValue(m.schema.UID),
 		Groups:      []string{},
 		Mail:        sr.Entries[0].GetAttributeValue(m.schema.Mail),
@@ -175,6 +182,10 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 
 	for _, entry := range sr.Entries {
 		user := &userpb.User{
+			Id: &userpb.UserId{
+				Idp:      m.idp,
+				OpaqueId: sr.Entries[0].GetAttributeValue(m.schema.UID),
+			},
 			Username:    entry.GetAttributeValue(m.schema.UID),
 			Groups:      []string{},
 			Mail:        sr.Entries[0].GetAttributeValue(m.schema.Mail),

@@ -48,6 +48,7 @@ type config struct {
 	Filter       string     `mapstructure:"filter"`
 	BindUsername string     `mapstructure:"bind_username"`
 	BindPassword string     `mapstructure:"bind_password"`
+	Idp          string     `mapstructure:"idp"`
 	Schema       attributes `mapstructure:"schema"`
 }
 
@@ -137,9 +138,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	u := &user.User{
 		// TODO(jfd) clean up idp = iss, sub = opaque ... is redundant
 		Id: &user.UserId{
-			// TODO(jfd): how do we determine the issuer for ldap? ... make configurable
-			Idp: fmt.Sprintf("%s:%d", am.c.Hostname, am.c.Port),
-			// TODO(jfd): objectguid, entryuuid etc ... make configurable
+			Idp:      am.c.Idp,
 			OpaqueId: sr.Entries[0].GetAttributeValue(am.c.Schema.UID),
 		},
 		// Subject:     claims.Sub, // TODO(labkode) remove from CS3, is in Id
