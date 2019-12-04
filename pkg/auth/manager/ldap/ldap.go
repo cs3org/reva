@@ -136,13 +136,10 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	}
 
 	u := &user.User{
-		// TODO(jfd) clean up idp = iss, sub = opaque ... is redundant
 		Id: &user.UserId{
 			Idp:      am.c.Idp,
 			OpaqueId: sr.Entries[0].GetAttributeValue(am.c.Schema.UID),
 		},
-		// Subject:     claims.Sub, // TODO(labkode) remove from CS3, is in Id
-		// Issuer:      claims.Iss, // TODO(labkode) remove from CS3, is in Id
 		// TODO add more claims from the StandardClaims, eg EmailVerified
 		Username: sr.Entries[0].GetAttributeValue(am.c.Schema.UserName),
 		// TODO groups
