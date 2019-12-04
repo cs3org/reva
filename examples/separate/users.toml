@@ -23,8 +23,8 @@ enabled_services = [
 token_manager = "jwt"
 skip_methods = [
     # we need to allow calls that happen during authentication
-    "/cs3.authproviderv0alpha.AuthProviderService/Authenticate",
-	"/cs3.userproviderv0alpha.UserProviderService/GetUser",
+    "/cs3.auth.provider.v1beta1.ProviderAPI/Authenticate",
+    "/cs3.identity.user.v1beta1.UserAPI/GetUser",
 ]
 
 [grpc.interceptors.auth.token_managers.jwt]

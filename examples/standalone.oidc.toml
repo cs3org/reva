@@ -142,15 +142,15 @@ enabled_interceptors = ["auth"]
 token_manager = "jwt"
 #header   = "x-access-token"
 skip_methods = [
-    # we need to allow calls that happen during authentication
-	"/cs3.gatewayv0alpha.GatewayService/Authenticate",
-	"/cs3.gatewayv0alpha.GatewayService/WhoAmI",
-	"/cs3.gatewayv0alpha.GatewayService/GetUser",
-	"/cs3.gatewayv0alpha.GatewayService/ListAuthProviders",
-	"/cs3.authregistryv0alpha.AuthRegistryService/ListAuthProviders",
-	"/cs3.authregistryv0alpha.AuthRegistryService/GetAuthProvider",
-	"/cs3.authproviderv0alpha.AuthProviderService/Authenticate",
-	"/cs3.userproviderv0alpha.UserProviderService/GetUser",
+  # we need to allow calls that happen during authentication
+	"/cs3.gateway.v1beta1.GatewayAPI/Authenticate",
+	"/cs3.gateway.v1beta1.GatewayAPI/WhoAmI",
+	"/cs3.gateway.v1beta1.GatewayAPI/GetUser",
+	"/cs3.gateway.v1beta1.GatewayAPI/ListAuthProviders",
+	"/cs3.auth.registry.v1beta1.RegistryAPI/ListAuthProviders",
+	"/cs3.auth.registry.v1beta1.RegistryAPI/GetAuthProvider",
+	"/cs3.auth.provider.v1beta1.ProviderAPI/Authenticate",
+	"/cs3.identity.user.v1beta1.UserAPI/GetUser",
 ]
 
 [grpc.interceptors.auth.token_managers.jwt]
@@ -188,7 +188,7 @@ unset = 1000
 root = "/var/tmp/reva/data"
 
 # cannot be started in the same process because it has to serve the same
-# "/cs3.authproviderv0alpha.AuthProviderService/Authenticate" request as the oidcprovider
+# "/cs3.auth.provider.v1beta1.ProviderAPI/Authenticate" request as the oidcprovider
 [grpc.services.authprovider]
 auth_manager = "json"
 userprovidersvc = "localhost:9999"
