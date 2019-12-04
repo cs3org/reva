@@ -140,10 +140,10 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 	log.Debug().Interface("entries", sr.Entries).Msg("entries")
 
 	return &userpb.User{
-    Id: &userpb.UserId{
-      Idp:      m.idp,
-      OpaqueId: uid.OpaqueId,
-    },
+		Id: &userpb.UserId{
+			Idp:      m.idp,
+			OpaqueId: uid.OpaqueId,
+		},
 		Username:    sr.Entries[0].GetAttributeValue(m.schema.UID),
 		Groups:      []string{},
 		Mail:        sr.Entries[0].GetAttributeValue(m.schema.Mail),
@@ -165,7 +165,7 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 	}
 
 	// Search for the given clientID
-	searchRequest := ldap.NewSearchRequest(	
+	searchRequest := ldap.NewSearchRequest(
 		m.baseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		fmt.Sprintf(m.filter, query), // TODO this is screaming for errors if filter contains >1 %s
@@ -182,11 +182,11 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 
 	for _, entry := range sr.Entries {
 		user := &userpb.User{
-      Id: &userpb.UserId{
-        Idp:      m.idp,
-        OpaqueId: sr.Entries[0].GetAttributeValue(m.schema.UID),
-      },
-      Username:    entry.GetAttributeValue(m.schema.UID),
+			Id: &userpb.UserId{
+				Idp:      m.idp,
+				OpaqueId: sr.Entries[0].GetAttributeValue(m.schema.UID),
+			},
+			Username:    entry.GetAttributeValue(m.schema.UID),
 			Groups:      []string{},
 			Mail:        sr.Entries[0].GetAttributeValue(m.schema.Mail),
 			DisplayName: sr.Entries[0].GetAttributeValue(m.schema.DisplayName),

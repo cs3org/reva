@@ -138,7 +138,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	u := &user.User{
 		// TODO(jfd) clean up idp = iss, sub = opaque ... is redundant
 		Id: &user.UserId{
-			Idp: am.c.Idp,
+			Idp:      am.c.Idp,
 			OpaqueId: sr.Entries[0].GetAttributeValue(am.c.Schema.UID),
 		},
 		// Subject:     claims.Sub, // TODO(labkode) remove from CS3, is in Id
