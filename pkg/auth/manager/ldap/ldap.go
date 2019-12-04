@@ -23,12 +23,11 @@ import (
 	"crypto/tls"
 	"fmt"
 
-	typespb "github.com/cs3org/go-cs3apis/cs3/types"
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"gopkg.in/ldap.v2"
@@ -39,25 +38,39 @@ func init() {
 }
 
 type mgr struct {
-	hostname     string
-	port         int
-	baseDN       string
-	filter       string
-	bindUsername string
-	bindPassword string
+	c *config
 }
 
 type config struct {
-	Hostname     string `mapstructure:"hostname"`
-	Port         int    `mapstructure:"port"`
-	BaseDN       string `mapstructure:"base_dn"`
-	Filter       string `mapstructure:"filter"`
-	BindUsername string `mapstructure:"bind_username"`
-	BindPassword string `mapstructure:"bind_password"`
+	Hostname     string     `mapstructure:"hostname"`
+	Port         int        `mapstructure:"port"`
+	BaseDN       string     `mapstructure:"base_dn"`
+	Filter       string     `mapstructure:"filter"`
+	BindUsername string     `mapstructure:"bind_username"`
+	BindPassword string     `mapstructure:"bind_password"`
+	Schema       attributes `mapstructure:"schema"`
+}
+
+type attributes struct {
+	DN          string `mapstructure:"dn"`
+	UID         string `mapstructure:"uid"`
+	UserName    string `mapstructure:"userName"`
+	Mail        string `mapstructure:"mail"`
+	DisplayName string `mapstructure:"displayName"`
+}
+
+// Default attributes (Active Directory)
+var ldapDefaults = attributes{
+	Mail:        "mail",
+	UID:         "objectGUID",
+	DisplayName: "displayName",
+	DN:          "dn",
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
+	c := &config{
+		Schema: ldapDefaults,
+	}
 	if err := mapstructure.Decode(m, c); err != nil {
 		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
@@ -73,47 +86,42 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	}
 
 	return &mgr{
-		hostname:     c.Hostname,
-		port:         c.Port,
-		baseDN:       c.BaseDN,
-		filter:       c.Filter,
-		bindUsername: c.BindUsername,
-		bindPassword: c.BindPassword,
+		c: c,
 	}, nil
 }
 
-func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (context.Context, error) {
+func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, error) {
 	log := appctx.GetLogger(ctx)
 
-	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", am.hostname, am.port), &tls.Config{InsecureSkipVerify: true})
+	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", am.c.Hostname, am.c.Port), &tls.Config{InsecureSkipVerify: true})
 	if err != nil {
-		return ctx, err
+		return nil, err
 	}
 	defer l.Close()
 
 	// First bind with a read only user
-	err = l.Bind(am.bindUsername, am.bindPassword)
+	err = l.Bind(am.c.BindUsername, am.c.BindPassword)
 	if err != nil {
-		return ctx, err
+		return nil, err
 	}
 
 	// Search for the given clientID
 	searchRequest := ldap.NewSearchRequest(
-		am.baseDN,
+		am.c.BaseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-		fmt.Sprintf(am.filter, clientID),
+		fmt.Sprintf(am.c.Filter, clientID),
 		// TODO(jfd): objectguid, entryuuid etc ... make configurable
-		[]string{"dn", "objectguid"},
+		[]string{am.c.Schema.DN, am.c.Schema.UID, am.c.Schema.Mail, am.c.Schema.DisplayName},
 		nil,
 	)
 
 	sr, err := l.Search(searchRequest)
 	if err != nil {
-		return ctx, err
+		return nil, err
 	}
 
 	if len(sr.Entries) != 1 {
-		return ctx, errtypes.NotFound(clientID)
+		return nil, errtypes.NotFound(clientID)
 	}
 
 	log.Debug().Interface("entries", sr.Entries).Msg("entries")
@@ -123,16 +131,26 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	// Bind as the user to verify their password
 	err = l.Bind(userdn, clientSecret)
 	if err != nil {
-		return ctx, err
+		return nil, err
 	}
 
-	uid := &typespb.UserId{
-		// TODO(jfd): how do we determine the issuer for ldap? ... make configurable
-		Idp: fmt.Sprintf("%s:%d", am.hostname, am.port),
-		// TODO(jfd): objectguid, entryuuid etc ... make configurable
-		OpaqueId: sr.Entries[0].GetAttributeValue("objectguid"),
+	u := &user.User{
+		// TODO(jfd) clean up idp = iss, sub = opaque ... is redundant
+		Id: &user.UserId{
+			// TODO(jfd): how do we determine the issuer for ldap? ... make configurable
+			Idp: fmt.Sprintf("%s:%d", am.c.Hostname, am.c.Port),
+			// TODO(jfd): objectguid, entryuuid etc ... make configurable
+			OpaqueId: sr.Entries[0].GetAttributeValue(am.c.Schema.UID),
+		},
+		// Subject:     claims.Sub, // TODO(labkode) remove from CS3, is in Id
+		// Issuer:      claims.Iss, // TODO(labkode) remove from CS3, is in Id
+		// TODO add more claims from the StandardClaims, eg EmailVerified
+		Username: sr.Entries[0].GetAttributeValue(am.c.Schema.UserName),
+		// TODO groups
+		Groups:      []string{},
+		Mail:        sr.Entries[0].GetAttributeValue(am.c.Schema.Mail),
+		DisplayName: sr.Entries[0].GetAttributeValue(am.c.Schema.DisplayName),
 	}
-
-	return user.ContextSetUserID(ctx, uid), nil
+	return u, nil
 
 }

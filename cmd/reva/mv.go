@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"os"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
 func moveCommand() *command {
@@ -40,24 +40,24 @@ func moveCommand() *command {
 		dst := cmd.Args()[1]
 
 		ctx := getAuthContext()
-		client, err := getStorageProviderClient()
+		client, err := getClient()
 		if err != nil {
 			return err
 		}
 
-		sourceRef := &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: src},
+		sourceRef := &provider.Reference{
+			Spec: &provider.Reference_Path{Path: src},
 		}
-		targetRef := &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: dst},
+		targetRef := &provider.Reference{
+			Spec: &provider.Reference_Path{Path: dst},
 		}
-		req := &storageproviderv0alphapb.MoveRequest{Source: sourceRef, Destination: targetRef}
+		req := &provider.MoveRequest{Source: sourceRef, Destination: targetRef}
 		res, err := client.Move(ctx, req)
 		if err != nil {
 			return err
 		}
 
-		if res.Status.Code != rpcpb.Code_CODE_OK {
+		if res.Status.Code != rpc.Code_CODE_OK {
 			return formatError(res.Status)
 		}
 

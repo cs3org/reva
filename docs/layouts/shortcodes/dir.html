@@ -1,0 +1,15 @@
+<!--https://gohugo.io/content-management/shortcodes/#shortcodes-with-markdown-->
+<!-- https://github.com/gohugoio/hugo/pull/2623 -->
+{{ $_hugo_config := `{ "version": 1 }` }}
+{{ $color   := .Get "color" | default "white" }}
+{{ $name    := .Get "name" }}
+{{ $type    := .Get "type" }}
+{{ $default := .Get "default" }}
+{{ $desc    := .Get "description" }}
+
+<div class="alert alert-{{ $color }}" role="alert">
+<h1 id="{{ $name }}">{{ $name }}  <span class="badge text-muted">{{ $type }}</span> <span class="badge badge-primary">{{ $default }}</span></h1>
+<p>
+{{ .Inner }}
+</p>
+</div>

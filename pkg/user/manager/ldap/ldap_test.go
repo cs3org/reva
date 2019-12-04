@@ -19,17 +19,8 @@
 package ldap
 
 import (
-	"strings"
 	"testing"
-
-	configreader "github.com/cs3org/reva/cmd/revad/config"
 )
-
-var conf = `
-[schema]
-	mail = "email"
-	dn = "dn"
-`
 
 func TestUserManager(t *testing.T) {
 	// negative test for parseConfig
@@ -38,15 +29,18 @@ func TestUserManager(t *testing.T) {
 		t.Fatal("expected error but got none")
 	}
 
-	r := strings.NewReader(conf)
-	config, err := configreader.Read(r)
-	if err != nil {
-		t.Fatal("error reading config")
+	internal := map[string]interface{}{
+		"mail": "email",
+		"dn":   "dn",
 	}
 
-	c, err := parseConfig(config)
+	con := map[string]interface{}{
+		"schema": internal,
+	}
+
+	c, err := parseConfig(con)
 	if err != nil {
-		t.Fatal("error parsing config")
+		t.Fatalf("config is invalid")
 	}
 
 	// UID not provided in config file. should not modify defaults
@@ -70,7 +64,7 @@ func TestUserManager(t *testing.T) {
 	}
 
 	// possitive tests for New
-	_, err = New(config)
+	_, err = New(map[string]interface{}{})
 	if err != nil {
 		t.Fatalf(err.Error())
 	}

@@ -21,15 +21,19 @@ package auth
 import (
 	"context"
 	"net/http"
+
+	registry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 )
 
 // Manager is the interface to implement to authenticate users
 type Manager interface {
-	Authenticate(ctx context.Context, clientID, clientSecret string) (context.Context, error)
+	Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, error)
 }
 
-// Credentials contains the client id and secret.
+// Credentials contains the auth type, client id and secret.
 type Credentials struct {
+	Type         string
 	ClientID     string
 	ClientSecret string
 }
@@ -37,6 +41,7 @@ type Credentials struct {
 // CredentialStrategy obtains Credentials from the request.
 type CredentialStrategy interface {
 	GetCredentials(w http.ResponseWriter, r *http.Request) (*Credentials, error)
+	AddWWWAuthenticate(w http.ResponseWriter, r *http.Request, realm string)
 }
 
 // TokenStrategy obtains a token from the request.
@@ -48,4 +53,11 @@ type TokenStrategy interface {
 // TokenWriter stores the token in a http response.
 type TokenWriter interface {
 	WriteToken(token string, w http.ResponseWriter)
+}
+
+// Registry is the interface that auth registries implement
+// for discovering auth providers
+type Registry interface {
+	ListProviders(ctx context.Context) ([]*registry.ProviderInfo, error)
+	GetProvider(ctx context.Context, authType string) (*registry.ProviderInfo, error)
 }

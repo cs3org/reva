@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"os"
 
-	preferencesv0alphapb "github.com/cs3org/go-cs3apis/cs3/preferences/v0alpha"
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
+	preferences "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 )
 
 var preferencesCommand = func() *command {
@@ -41,7 +41,7 @@ var preferencesCommand = func() *command {
 		subcommand := cmd.Args()[0]
 		key := cmd.Args()[1]
 
-		client, err := getPreferencesClient()
+		client, err := getClient()
 		if err != nil {
 			return err
 		}
@@ -55,7 +55,7 @@ var preferencesCommand = func() *command {
 				os.Exit(1)
 			}
 			value := cmd.Args()[2]
-			req := &preferencesv0alphapb.SetKeyRequest{
+			req := &preferences.SetKeyRequest{
 				Key: key,
 				Val: value,
 			}
@@ -65,12 +65,12 @@ var preferencesCommand = func() *command {
 				return err
 			}
 
-			if res.Status.Code != rpcpb.Code_CODE_OK {
+			if res.Status.Code != rpc.Code_CODE_OK {
 				return formatError(res.Status)
 			}
 
 		case "get":
-			req := &preferencesv0alphapb.GetKeyRequest{
+			req := &preferences.GetKeyRequest{
 				Key: key,
 			}
 
@@ -79,7 +79,7 @@ var preferencesCommand = func() *command {
 				return err
 			}
 
-			if res.Status.Code != rpcpb.Code_CODE_OK {
+			if res.Status.Code != rpc.Code_CODE_OK {
 				return formatError(res.Status)
 			}
 

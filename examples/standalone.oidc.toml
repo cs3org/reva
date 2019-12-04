@@ -142,7 +142,7 @@ enabled_interceptors = ["auth"]
 token_manager = "jwt"
 #header   = "x-access-token"
 skip_methods = [
-    # we need to allow calls that happen during authentication
+  # we need to allow calls that happen during authentication
 	"/cs3.gateway.v1beta1.GatewayAPI/Authenticate",
 	"/cs3.gateway.v1beta1.GatewayAPI/WhoAmI",
 	"/cs3.gateway.v1beta1.GatewayAPI/GetUser",

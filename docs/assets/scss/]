@@ -1,0 +1,25 @@
+svg {
+    display: inline-block;
+    margin: 0 10px;
+    height: 60px;
+}
+
+navbar-brand {
+  color: black;
+}
+
+.navbar-dark .navbar-nav .nav-link {
+  color: black;
+}
+
+.navbar-dark .navbar-nav .show > .nav-link, .navbar-dark .navbar-nav .active > .nav-link, .navbar-dark .navbar-nav .nav-link.show, .navbar-dark .navbar-nav .nav-link.active {
+  color: $primary;
+}
+
+.navbar-dark .navbar-nav .show > .nav-link, .navbar-dark .navbar-nav .active > .nav-link, .navbar-dark .navbar-nav .nav-link.show, .navbar-dark .navbar-nav .nav-link.active:hover {
+  color: $primary;
+}
+
+.navbar {
+  border-bottom: 1px solid #dee2e6;
+}

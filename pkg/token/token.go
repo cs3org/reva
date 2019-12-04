@@ -21,7 +21,7 @@ package token
 import (
 	"context"
 
-	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 )
 
 type key int
@@ -33,8 +33,8 @@ type Claims map[string]interface{}
 
 // Manager is the interface to implement to sign and verify tokens
 type Manager interface {
-	MintToken(ctx context.Context, u *authv0alphapb.User) (string, error)
-	DismantleToken(ctx context.Context, token string) (*authv0alphapb.User, error)
+	MintToken(ctx context.Context, u *user.User) (string, error)
+	DismantleToken(ctx context.Context, token string) (*user.User, error)
 }
 
 // ContextGetToken returns the token if set in the given context.

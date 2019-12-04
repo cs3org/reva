@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"os"
 
-	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 )
 
 func whoamiCommand() *command {
@@ -50,12 +50,12 @@ func whoamiCommand() *command {
 			token = t
 		}
 
-		client, err := getAuthClient()
+		client, err := getClient()
 		if err != nil {
 			return err
 		}
 
-		req := &authv0alphapb.WhoAmIRequest{AccessToken: token}
+		req := &gateway.WhoAmIRequest{Token: token}
 
 		ctx := getAuthContext()
 		res, err := client.WhoAmI(ctx, req)
@@ -63,7 +63,7 @@ func whoamiCommand() *command {
 			return err
 		}
 
-		if res.Status.Code != rpcpb.Code_CODE_OK {
+		if res.Status.Code != rpc.Code_CODE_OK {
 			return formatError(res.Status)
 		}
 

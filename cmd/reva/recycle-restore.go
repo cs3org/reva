@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"os"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
 func recycleRestoreCommand() *command {
@@ -39,12 +39,12 @@ func recycleRestoreCommand() *command {
 
 		key := cmd.Args()[0]
 
-		client, err := getStorageProviderClient()
+		client, err := getClient()
 		if err != nil {
 			return err
 		}
 
-		req := &storageproviderv0alphapb.RestoreRecycleItemRequest{
+		req := &provider.RestoreRecycleItemRequest{
 			Key: key,
 		}
 
@@ -54,7 +54,7 @@ func recycleRestoreCommand() *command {
 			return err
 		}
 
-		if res.Status.Code != rpcpb.Code_CODE_OK {
+		if res.Status.Code != rpc.Code_CODE_OK {
 			return formatError(res.Status)
 		}
 

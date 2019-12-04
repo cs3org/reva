@@ -28,12 +28,10 @@ var versionCommand = func() *command {
 	cmd.Action = func() error {
 		msg := "version=%s "
 		msg += "commit=%s "
-		msg += "branch=%s "
 		msg += "go_version=%s "
-		msg += "build_date=%s "
-		msg += "build_platform=%s\n"
+		msg += "build_date=%s\n"
 
-		fmt.Printf(msg, version, gitCommit, gitBranch, goVersion, buildDate, buildPlatform)
+		fmt.Printf(msg, version, gitCommit, goVersion, buildDate)
 		return nil
 	}
 	return cmd

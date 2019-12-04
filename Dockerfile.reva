@@ -16,13 +16,9 @@
 # granted to it by virtue of its status as an Intergovernmental Organization 
 # or submit itself to any jurisdiction.
 
-FROM golang:1.11
+FROM golang:1.13
 
 WORKDIR /go/src/github/cs3org/reva
 COPY . .
-RUN GO111MODULE=off make deps
-ENV GO111MODULE=on
-RUN make build-reva
-WORKDIR /go/src/github/cs3org/reva/cmd/reva
-RUN go install
+RUN make build-reva-docker && cp /go/src/github/cs3org/reva/cmd/reva/reva /go/bin/reva
 ENTRYPOINT ["/go/bin/reva"]

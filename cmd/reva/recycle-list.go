@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"os"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 )
 
 func recycleListCommand() *command {
@@ -37,12 +37,12 @@ func recycleListCommand() *command {
 			os.Exit(1)
 		}
 
-		client, err := getStorageProviderClient()
+		client, err := getClient()
 		if err != nil {
 			return err
 		}
 
-		req := &storageproviderv0alphapb.ListRecycleRequest{}
+		req := &gateway.ListRecycleRequest{}
 
 		ctx := getAuthContext()
 		res, err := client.ListRecycle(ctx, req)
@@ -50,7 +50,7 @@ func recycleListCommand() *command {
 			return err
 		}
 
-		if res.Status.Code != rpcpb.Code_CODE_OK {
+		if res.Status.Code != rpc.Code_CODE_OK {
 			return formatError(res.Status)
 		}
 

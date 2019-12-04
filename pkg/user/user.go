@@ -21,8 +21,7 @@ package user
 import (
 	"context"
 
-	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
-	typespb "github.com/cs3org/go-cs3apis/cs3/types"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 )
 
 type key int
@@ -33,13 +32,13 @@ const (
 )
 
 // ContextGetUser returns the user if set in the given context.
-func ContextGetUser(ctx context.Context) (*authv0alphapb.User, bool) {
-	u, ok := ctx.Value(userKey).(*authv0alphapb.User)
+func ContextGetUser(ctx context.Context) (*userpb.User, bool) {
+	u, ok := ctx.Value(userKey).(*userpb.User)
 	return u, ok
 }
 
 // ContextMustGetUser panics if user is not in context.
-func ContextMustGetUser(ctx context.Context) *authv0alphapb.User {
+func ContextMustGetUser(ctx context.Context) *userpb.User {
 	u, ok := ContextGetUser(ctx)
 	if !ok {
 		panic("user not found in context")
@@ -48,25 +47,25 @@ func ContextMustGetUser(ctx context.Context) *authv0alphapb.User {
 }
 
 // ContextSetUser stores the user in the context.
-func ContextSetUser(ctx context.Context, u *authv0alphapb.User) context.Context {
+func ContextSetUser(ctx context.Context, u *userpb.User) context.Context {
 	return context.WithValue(ctx, userKey, u)
 }
 
 // ContextGetUserID returns the user if set in the given context.
-func ContextGetUserID(ctx context.Context) (*typespb.UserId, bool) {
-	u, ok := ctx.Value(idKey).(*typespb.UserId)
+func ContextGetUserID(ctx context.Context) (*userpb.UserId, bool) {
+	u, ok := ctx.Value(idKey).(*userpb.UserId)
 	return u, ok
 }
 
 // ContextSetUserID stores the userid in the context.
-func ContextSetUserID(ctx context.Context, id *typespb.UserId) context.Context {
+func ContextSetUserID(ctx context.Context, id *userpb.UserId) context.Context {
 	return context.WithValue(ctx, idKey, id)
 }
 
 // Manager is the interface to implement to manipulate users.
 type Manager interface {
-	GetUser(ctx context.Context, uid *typespb.UserId) (*authv0alphapb.User, error)
-	GetUserGroups(ctx context.Context, uid *typespb.UserId) ([]string, error)
-	IsInGroup(ctx context.Context, uid *typespb.UserId, group string) (bool, error)
-	FindUsers(ctx context.Context, query string) ([]*authv0alphapb.User, error)
+	GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error)
+	GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error)
+	IsInGroup(ctx context.Context, uid *userpb.UserId, group string) (bool, error)
+	FindUsers(ctx context.Context, query string) ([]*userpb.User, error)
 }

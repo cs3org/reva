@@ -27,7 +27,7 @@ import (
 	"os"
 	"text/template"
 
-	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 )
 
 var baseTemplate = `# This config file will start a reva instance that:
@@ -48,7 +48,7 @@ level = "debug"
 # What services, http middlewares and grpc interceptors should be started?
 
 [http]
-enabled_services = ["datasvc", "ocdavsvc", "ocssvc"{{if eq .CredentialStrategy "oidc"}}, "oidcprovider", "wellknown"{{end}}]
+enabled_services = ["datasvc", "ocdav", "ocssvc"{{if eq .CredentialStrategy "oidc"}}, "oidcprovider", "wellknown"{{end}}]
 enabled_middlewares = ["log", "trace", "auth"{{if eq .CredentialStrategy "oidc"}}, "cors"{{end}}]
 network = "tcp"
 address = "0.0.0.0:9998"
@@ -130,7 +130,7 @@ header = "x-access-token"
 token_strategy = "header"
 token_manager = "jwt"
 # GenerateAccessToken contains the credentials in the payload. Skip auth, otherwise services cannot obtain a token.
-skip_methods = ["/cs3.authv0alpha.AuthService/GenerateAccessToken"]
+skip_methods = ["/cs3.authproviderv1beta1.AuthService/GenerateAccessToken"]
 
 [grpc.interceptors.auth.token_strategies.header]
 header = "X-Access-Token"
@@ -140,7 +140,7 @@ secret = "{{.TokenSecret}}"
 
 # HTTP services
 
-[http.services.ocdavsvc]
+[http.services.ocdav]
 prefix = ""
 chunk_folder = "/var/tmp/owncloud/chunks"
 storageregistrysvc = "127.0.0.1:9999"
@@ -379,8 +379,6 @@ var usersTemplate = `[{{range  $i, $e := .}}{{if $i}},{{end}}
 			"idp": "{{$e.Iss}}",
 			"opaque_id": "{{$e.Sub}}",
 		},
-		"sub": "{{$e.Sub}}",
-		"iss": "{{$e.Iss}}",
 		"username": "{{$e.Username}}",
 		"secret": "{{$e.Secret}}",
 		"mail": "{{$e.Mail}}",
@@ -401,7 +399,7 @@ type UserVars struct {
 }
 
 // WriteUsers writes a basic auth protected reva.toml file to the given path
-func WriteUsers(p string, users []*authv0alphapb.User) {
+func WriteUsers(p string, users []*userpb.User) {
 
 	var uservars []*UserVars
 
@@ -438,14 +436,17 @@ func WriteUsers(p string, users []*authv0alphapb.User) {
 		for _, user := range users {
 			// TODO this could be parameterized to create an admin account?
 			u := &UserVars{
-				Sub:         user.Subject,
-				Iss:         user.Issuer,
 				Username:    user.Username,
 				Secret:      genSecret(12),
 				Mail:        user.Mail,
 				Displayname: user.DisplayName,
 			}
-			if user.Subject == "" {
+			if user.Id != nil {
+				u.Sub = user.Id.OpaqueId
+				u.Iss = user.Id.Idp
+			}
+			// fall back to hashing a username if no sub is provided
+			if u.Sub == "" {
 				_, err := hasher.Write([]byte(user.Username))
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "error hashing username: %v\n", err)

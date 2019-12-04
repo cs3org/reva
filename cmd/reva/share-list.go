@@ -24,9 +24,9 @@ import (
 	"strings"
 	"time"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
-	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/jedib0t/go-pretty/table"
 )
 
@@ -37,26 +37,26 @@ func shareListCommand() *command {
 	resID := cmd.String("by-resource-id", "", "filter by resource id (storage_id:opaque_id)")
 	cmd.Action = func() error {
 		ctx := getAuthContext()
-		shareClient, err := getUserShareProviderClient()
+		shareClient, err := getClient()
 		if err != nil {
 			return err
 		}
 
-		shareRequest := &usershareproviderv0alphapb.ListSharesRequest{}
+		shareRequest := &collaboration.ListSharesRequest{}
 		if *resID != "" {
 			// check split by colon (:)
 			tokens := strings.Split(*resID, ":")
 			if len(tokens) != 2 {
 				return fmt.Errorf("resource id invalid")
 			}
-			id := &storageproviderv0alphapb.ResourceId{
+			id := &provider.ResourceId{
 				StorageId: tokens[0],
 				OpaqueId:  tokens[1],
 			}
-			shareRequest.Filters = []*usershareproviderv0alphapb.ListSharesRequest_Filter{
-				&usershareproviderv0alphapb.ListSharesRequest_Filter{
-					Type: usershareproviderv0alphapb.ListSharesRequest_Filter_LIST_SHARES_REQUEST_FILTER_TYPE_RESOURCE_ID,
-					Term: &usershareproviderv0alphapb.ListSharesRequest_Filter_ResourceId{
+			shareRequest.Filters = []*collaboration.ListSharesRequest_Filter{
+				&collaboration.ListSharesRequest_Filter{
+					Type: collaboration.ListSharesRequest_Filter_TYPE_RESOURCE_ID,
+					Term: &collaboration.ListSharesRequest_Filter_ResourceId{
 						ResourceId: id,
 					},
 				},
@@ -68,7 +68,7 @@ func shareListCommand() *command {
 			return err
 		}
 
-		if shareRes.Status.Code != rpcpb.Code_CODE_OK {
+		if shareRes.Status.Code != rpc.Code_CODE_OK {
 			return formatError(shareRes.Status)
 		}
 

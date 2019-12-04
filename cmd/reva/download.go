@@ -25,9 +25,9 @@ import (
 	"os"
 
 	"github.com/cheggaaa/pb"
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
-	"github.com/cs3org/reva/cmd/revad/svcs/httpsvcs/utils"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/rhttp"
 )
 
 func downloadCommand() *command {
@@ -43,29 +43,29 @@ func downloadCommand() *command {
 		remote := cmd.Args()[0]
 		local := cmd.Args()[1]
 
-		client, err := getStorageProviderClient()
+		client, err := getClient()
 		if err != nil {
 			return err
 		}
 
-		ref := &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: remote},
+		ref := &provider.Reference{
+			Spec: &provider.Reference_Path{Path: remote},
 		}
-		req1 := &storageproviderv0alphapb.StatRequest{Ref: ref}
+		req1 := &provider.StatRequest{Ref: ref}
 		ctx := getAuthContext()
 		res1, err := client.Stat(ctx, req1)
 		if err != nil {
 			return err
 		}
-		if res1.Status.Code != rpcpb.Code_CODE_OK {
+		if res1.Status.Code != rpc.Code_CODE_OK {
 			return formatError(res1.Status)
 		}
 
 		info := res1.Info
 
-		req2 := &storageproviderv0alphapb.InitiateFileDownloadRequest{
-			Ref: &storageproviderv0alphapb.Reference{
-				Spec: &storageproviderv0alphapb.Reference_Path{
+		req2 := &provider.InitiateFileDownloadRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{
 					Path: remote,
 				},
 			},
@@ -75,7 +75,7 @@ func downloadCommand() *command {
 			return err
 		}
 
-		if res.Status.Code != rpcpb.Code_CODE_OK {
+		if res.Status.Code != rpc.Code_CODE_OK {
 			return formatError(res.Status)
 		}
 
@@ -84,12 +84,13 @@ func downloadCommand() *command {
 
 		dataServerURL := res.DownloadEndpoint
 		// TODO(labkode): do a protocol switch
-		httpReq, err := utils.NewRequest(ctx, "GET", dataServerURL, nil)
+		httpReq, err := rhttp.NewRequest(ctx, "GET", dataServerURL, nil)
 		if err != nil {
 			return err
 		}
 
-		httpClient := utils.GetHTTPClient(ctx)
+		httpReq.Header.Set("X-Reva-Transfer", res.Token)
+		httpClient := rhttp.GetHTTPClient(ctx)
 
 		httpRes, err := httpClient.Do(httpReq)
 		if err != nil {

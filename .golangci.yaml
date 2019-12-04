@@ -1,6 +1,6 @@
 issues:
   exclude-rules:
-    - path: cmd/revad/svcs/httpsvcs/handlers/log/log.go
+    - path: internal/http/interceptors/log/log.go
       text: "SA1019:"
       linters:
         - staticcheck

@@ -1,25 +1,27 @@
-# REVA Documentation
+# Reva Documentation
 
-* [Installing REVA](./installing-reva.md)
-* [Building REVA from Sources](./building-reva.md)
-* [Beginner's Guide](./beginner-guide.md)
-* [Controlling REVA](./controlling-reva.md)
-* [Command-line parameters](./command-line.md)
+This documentation is available at: [https://reva.link](https://reva.link)
 
-## Modules reference
+## Build locally
 
-* [Core functionality](./modules/core.md)
-* [HTTP functionality](./modules/http.md)
-* [gRPC functionality](./modules/grpc.md)
+Before hacking you need to install [Hugo extended version](https://github.com/gohugoio/hugo/releases) and
+run `npm install postcss-cli` only if you plan to hack on the theme style.
 
-* [http_helloworldsvc](./modules/http_helloworldsvc.md)
-* [http_prometheussvc](./modules/http_prometheussvc.md)
-* [http_ocdavsvc](./modules/http_ocdavsvc.md)
+```
+git clone https://github.com/cs3org/reva
+cd reva
+git submodule update --init --recursive # to install the theme and deps
+cd docs
+hugo server
+```
 
-* [http_middleware_auth](./modules/http_middleware_auth.md)
-* [http_middleware_log](./modules/http_middleware_log.md)
-* [http_middleware_trace](./modules/http_middleware_trace.md)
+Open a browser at http://localhost:1313
 
-* [grpc_authsvc](./modules/grpc_authsvc.md)
-* [grpc_storagebrokersvc](./modules/grpc_storagebrokersvc.md)
-* [grpc_storageprovidersvc](./modules/grpc_storageprovidersvc.md)
+## Theme
+The documentation is based on the [Docsy](https://github.com/google/docsy) theme for technical documentation sites, providing easy site navigation, structure, and more. 
+In the [Docsy User Guide](https://www.docsy.dev/docs/getting-started/) to get started.
+
+
+## Continous Deployment
+If you don't want to build locally, once you create a Pull Request to the repo, a Continous Integration
+step will take care of deploying your changes to Netlify for previewing your changes to the documentation.

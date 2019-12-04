@@ -25,8 +25,7 @@ import (
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
 
-	authv0alphapb "github.com/cs3org/go-cs3apis/cs3/auth/v0alpha"
-	typespb "github.com/cs3org/go-cs3apis/cs3/types"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 )
 
@@ -42,16 +41,16 @@ func New(m map[string]interface{}) (user.Manager, error) {
 	return &manager{}, nil
 }
 
-func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*authv0alphapb.User, error) {
+func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
 
 	claims, ok := ctx.Value(oidc.ClaimsKey).(oidc.StandardClaims)
 	if !ok {
 		return nil, errtypes.NotFound(uid.OpaqueId)
 	}
 
-	user := &authv0alphapb.User{
+	user := &userpb.User{
 		// TODO(jfd) clean up idp = iss, sub = opaque ... is redundant
-		Id: &typespb.UserId{
+		Id: &userpb.UserId{
 			OpaqueId: claims.Sub, // a stable non reassignable id
 			Idp:      claims.Iss, // in the scope of this issuer
 		},
@@ -74,14 +73,14 @@ func (m *manager) GetUser(ctx context.Context, uid *typespb.UserId) (*authv0alph
 	return user, nil
 }
 
-func (m *manager) FindUsers(ctx context.Context, query string) ([]*authv0alphapb.User, error) {
-	return []*authv0alphapb.User{}, nil // FIXME implement FindUsers for oidc user manager
+func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
+	return []*userpb.User{}, nil // FIXME implement FindUsers for oidc user manager
 }
 
-func (m *manager) GetUserGroups(ctx context.Context, uid *typespb.UserId) ([]string, error) {
+func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
 	return []string{}, nil // FIXME implement GetUserGroups for oidc user manager
 }
 
-func (m *manager) IsInGroup(ctx context.Context, uid *typespb.UserId, group string) (bool, error) {
+func (m *manager) IsInGroup(ctx context.Context, uid *userpb.UserId, group string) (bool, error) {
 	return false, nil // FIXME implement IsInGroup for oidc user manager
 }

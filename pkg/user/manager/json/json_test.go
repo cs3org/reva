@@ -25,7 +25,7 @@ import (
 	"reflect"
 	"testing"
 
-	typespb "github.com/cs3org/go-cs3apis/cs3/types"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 )
 
@@ -107,8 +107,8 @@ func TestUserManager(t *testing.T) {
 	manager, _ := New(input)
 
 	// setup test data
-	userEinstein := &typespb.UserId{Idp: "localhost", OpaqueId: "einstein"}
-	userFake := &typespb.UserId{Idp: "localhost", OpaqueId: "fakeUser"}
+	userEinstein := &userpb.UserId{Idp: "localhost", OpaqueId: "einstein"}
+	userFake := &userpb.UserId{Idp: "localhost", OpaqueId: "fakeUser"}
 	groupsEinstein := []string{"sailing-lovers", "violin-haters", "physics-lovers"}
 
 	// positive test GetUserGroups
