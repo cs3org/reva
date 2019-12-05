@@ -20,7 +20,6 @@ package preferences
 
 import (
 	"context"
-	"io"
 	"sync"
 
 	"google.golang.org/grpc"
@@ -50,14 +49,21 @@ var mutex = &sync.Mutex{}
 type service struct{}
 
 // New returns a new PreferencesServiceServer
-func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
+func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	service := &service{}
-	preferences.RegisterPreferencesAPIServer(ss, service)
 	return service, nil
 }
 
 func (s *service) Close() error {
 	return nil
+}
+
+func (s *service) UnprotectedEndpoints() []string {
+	return []string{}
+}
+
+func (s *service) Register(ss *grpc.Server) {
+	preferences.RegisterPreferencesAPIServer(ss, s)
 }
 
 func getUser(ctx context.Context) (*userpb.User, error) {

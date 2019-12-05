@@ -25,7 +25,6 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/token"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
 	"github.com/cs3org/reva/pkg/user"
@@ -38,20 +37,12 @@ import (
 )
 
 const (
-	defaultHeader   = "x-access-token"
-	defaultPriority = 100
+	defaultHeader = "x-access-token"
 )
-
-func init() {
-	rgrpc.RegisterUnaryInterceptor("auth", NewUnary)
-	rgrpc.RegisterStreamInterceptor("auth", NewStream)
-}
 
 type config struct {
 	// TODO(labkode): access a map is more performant as uri as fixed in length
 	// for SkipMethods.
-	Priority      int                               `mapstructure:"priority"`
-	SkipMethods   []string                          `mapstructure:"skip_methods"`
 	Header        string                            `mapstructure:"header"`
 	TokenManager  string                            `mapstructure:"token_manager"`
 	TokenManagers map[string]map[string]interface{} `mapstructure:"token_managers"`
@@ -77,33 +68,29 @@ func skip(url string, skipped []string) bool {
 
 // NewUnary returns a new unary interceptor that adds
 // trace information for the request.
-func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error) {
+func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerInterceptor, error) {
 	conf, err := parseConfig(m)
 	if err != nil {
 		err = errors.Wrap(err, "auth: error parsing config")
-		return nil, 0, err
+		return nil, err
 	}
 
 	if conf.Header == "" {
 		conf.Header = defaultHeader
 	}
 
-	if conf.Priority == 0 {
-		conf.Priority = defaultPriority
-	}
-
 	if conf.TokenManager == "" {
 		err := errors.New("auth: token manager is not configured for interceptor")
-		return nil, 0, err
+		return nil, err
 	}
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
 	if !ok {
-		return nil, 0, errors.New("auth: token manager does not exist: " + conf.TokenManager)
+		return nil, errors.New("auth: token manager does not exist: " + conf.TokenManager)
 	}
 
 	tokenManager, err := h(conf.TokenManagers[conf.TokenManager])
 	if err != nil {
-		return nil, 0, errors.Wrap(err, "auth: error creating token manager")
+		return nil, errors.Wrap(err, "auth: error creating token manager")
 	}
 
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
@@ -111,7 +98,7 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		defer span.End()
 		log := appctx.GetLogger(ctx)
 
-		if skip(info.FullMethod, conf.SkipMethods) {
+		if skip(info.FullMethod, unprotected) {
 			span.AddAttributes(trace.BoolAttribute("auth_enabled", false))
 			log.Debug().Str("method", info.FullMethod).Msg("skipping auth")
 			return handler(ctx, req)
@@ -145,40 +132,36 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		ctx = token.ContextSetToken(ctx, tkn)
 		return handler(ctx, req)
 	}
-	return interceptor, conf.Priority, nil
+	return interceptor, nil
 }
 
 // NewStream returns a new server stream interceptor
 // that adds trace information to the request.
-func NewStream(m map[string]interface{}) (grpc.StreamServerInterceptor, int, error) {
+func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServerInterceptor, error) {
 	conf, err := parseConfig(m)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
 	if conf.Header == "" {
 		conf.Header = defaultHeader
 	}
 
-	if conf.Priority == 0 {
-		conf.Priority = defaultPriority
-	}
-
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
 	if !ok {
-		return nil, 0, fmt.Errorf("auth: token manager not found: %s", conf.TokenManager)
+		return nil, fmt.Errorf("auth: token manager not found: %s", conf.TokenManager)
 	}
 
 	tokenManager, err := h(conf.TokenManagers[conf.TokenManager])
 	if err != nil {
-		return nil, 0, errors.New("auth: token manager not found: " + conf.TokenManager)
+		return nil, errors.New("auth: token manager not found: " + conf.TokenManager)
 	}
 
 	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		ctx := ss.Context()
 		log := appctx.GetLogger(ctx)
 
-		if skip(info.FullMethod, conf.SkipMethods) {
+		if skip(info.FullMethod, unprotected) {
 			log.Debug().Str("method", info.FullMethod).Msg("skiping auth")
 			return handler(srv, ss)
 		}
@@ -210,7 +193,7 @@ func NewStream(m map[string]interface{}) (grpc.StreamServerInterceptor, int, err
 		wrapped := newWrappedServerStream(ctx, ss)
 		return handler(srv, wrapped)
 	}
-	return interceptor, conf.Priority, nil
+	return interceptor, nil
 }
 
 func newWrappedServerStream(ctx context.Context, ss grpc.ServerStream) *wrappedServerStream {

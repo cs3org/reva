@@ -21,7 +21,6 @@ package authprovider
 import (
 	"context"
 	"fmt"
-	"io"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -68,7 +67,7 @@ func getAuthManager(manager string, m map[string]map[string]interface{}) (auth.M
 }
 
 // New returns a new AuthProviderServiceServer.
-func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
+func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -80,13 +79,20 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 	}
 
 	svc := &service{conf: c, authmgr: authManager}
-	provider.RegisterProviderAPIServer(ss, svc)
 
 	return svc, nil
 }
 
 func (s *service) Close() error {
 	return nil
+}
+
+func (s *service) UnprotectedEndpoints() []string {
+	return []string{}
+}
+
+func (s *service) Register(ss *grpc.Server) {
+	provider.RegisterProviderAPIServer(ss, s)
 }
 
 func (s *service) Authenticate(ctx context.Context, req *provider.AuthenticateRequest) (*provider.AuthenticateResponse, error) {

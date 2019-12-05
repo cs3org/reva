@@ -21,7 +21,6 @@ package usershareprovider
 import (
 	"context"
 	"fmt"
-	"io"
 
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -60,6 +59,14 @@ func (s *service) Close() error {
 	return nil
 }
 
+func (s *service) UnprotectedEndpoints() []string {
+	return []string{}
+}
+
+func (s *service) Register(ss *grpc.Server) {
+	collaboration.RegisterCollaborationAPIServer(ss, s)
+}
+
 func parseConfig(m map[string]interface{}) (*config, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
@@ -70,7 +77,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New creates a new user share provider svc
-func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
+func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 
 	c, err := parseConfig(m)
 	if err != nil {
@@ -87,7 +94,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 		sm:   sm,
 	}
 
-	collaboration.RegisterCollaborationAPIServer(ss, service)
 	return service, nil
 }
 
