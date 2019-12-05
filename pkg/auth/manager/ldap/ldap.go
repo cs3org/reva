@@ -55,7 +55,6 @@ type config struct {
 type attributes struct {
 	DN          string `mapstructure:"dn"`
 	UID         string `mapstructure:"uid"`
-	UserName    string `mapstructure:"userName"`
 	Mail        string `mapstructure:"mail"`
 	DisplayName string `mapstructure:"displayName"`
 }
@@ -141,12 +140,13 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 			OpaqueId: sr.Entries[0].GetAttributeValue(am.c.Schema.UID),
 		},
 		// TODO add more claims from the StandardClaims, eg EmailVerified
-		Username: sr.Entries[0].GetAttributeValue(am.c.Schema.UserName),
+		Username: sr.Entries[0].GetAttributeValue(am.c.Schema.UID),
 		// TODO groups
 		Groups:      []string{},
 		Mail:        sr.Entries[0].GetAttributeValue(am.c.Schema.Mail),
 		DisplayName: sr.Entries[0].GetAttributeValue(am.c.Schema.DisplayName),
 	}
+
 	return u, nil
 
 }

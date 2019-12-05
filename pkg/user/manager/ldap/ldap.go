@@ -139,7 +139,7 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 
 	log.Debug().Interface("entries", sr.Entries).Msg("entries")
 
-	return &userpb.User{
+	u := &userpb.User{
 		Id: &userpb.UserId{
 			Idp:      m.idp,
 			OpaqueId: uid.OpaqueId,
@@ -148,7 +148,9 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 		Groups:      []string{},
 		Mail:        sr.Entries[0].GetAttributeValue(m.schema.Mail),
 		DisplayName: sr.Entries[0].GetAttributeValue(m.schema.DisplayName),
-	}, nil
+	}
+
+	return u, nil
 }
 
 func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
