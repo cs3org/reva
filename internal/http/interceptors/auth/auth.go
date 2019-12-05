@@ -173,6 +173,8 @@ func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
 						log.Debug().Err(err).Msg("error retrieving credentials")
 					}
 					if creds != nil {
+						log.Debug().Msgf("credentials obtained from credential strategy: %+v", creds)
+
 						break
 					}
 				}
@@ -187,13 +189,13 @@ func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
 					return
 				}
 
-				log.Debug().Msg("credentials obtained from the request")
-
 				req := &gateway.AuthenticateRequest{
 					Type:         creds.Type,
 					ClientId:     creds.ClientID,
 					ClientSecret: creds.ClientSecret,
 				}
+
+				log.Debug().Msgf("AuthenticateRequest: %+v", req)
 
 				client, err := pool.GetGatewayServiceClient(conf.GatewaySvc)
 				if err != nil {
