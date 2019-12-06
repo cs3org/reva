@@ -22,8 +22,13 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"log"
+	"net"
 	"os"
+	"os/signal"
 	"path"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -51,8 +56,8 @@ var (
 	signalFlag  = flag.String("s", "", "send signal to a master process: stop, quit, reload")
 	configFlag  = flag.String("c", "/etc/revad/revad.toml", "set configuration file")
 	pidFlag     = flag.String("p", "", "pid file. If empty defaults to a random file in the OS temporary directory")
-
-	// Compile time variables initialez with gcc flags.
+	dirFlag     = flag.String("dir", "", "runs any toml file in the directory specified")
+	// Compile time variables initialized with gcc flags.
 	gitCommit, buildDate, version, goVersion string
 )
 
@@ -67,6 +72,7 @@ type coreConf struct {
 func main() {
 	flag.Parse()
 
+	handleDirFlag()
 	handleVersionFlag()
 	handleSignalFlag()
 	handleTestFlag()
@@ -75,25 +81,45 @@ func main() {
 	coreConf := parseCoreConfOrDie(mainConf["core"])
 	logConf := parseLogConfOrDie(mainConf["log"])
 
-	log, err := newLogger(logConf)
+	run(mainConf, coreConf, logConf, "")
+}
+
+func run(mainConf map[string]interface{}, coreConf *coreConf, logConf *logConf, filename string) {
+	logger := initLogger(logConf)
+
+	initTracing(coreConf, logger)
+	initCPUCount(coreConf, logger)
+
+	servers := initServers(mainConf, logger)
+	watcher, err := initWatcher(logger, filename)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error creating logger, exiting ...")
-		os.Exit(1)
+		log.Panic(err)
 	}
+	listeners := initListeners(watcher, servers, logger)
 
-	if err := setupOpenCensus(coreConf); err != nil {
-		log.Error().Err(err).Msg("error configuring open census stats and tracing")
-		os.Exit(1)
-	}
+	start(mainConf, servers, listeners, logger, watcher)
+}
 
-	ncpus, err := adjustCPU(coreConf.MaxCPUs)
+func initListeners(watcher *grace.Watcher, servers map[string]grace.Server, log *zerolog.Logger) map[string]net.Listener {
+	listeners, err := watcher.GetListeners(servers)
 	if err != nil {
-		log.Error().Err(err).Msg("error adjusting number of cpus")
+		log.Error().Err(err).Msg("error getting sockets")
+		watcher.Exit(1)
+	}
+	return listeners
+}
+
+func initWatcher(log *zerolog.Logger, filename string) (*grace.Watcher, error) {
+	watcher, err := handlePIDFlag(log, filename)
+	// TODO(labkode): maybe pidfile can be created later on? like once a server is going to be created?
+	if err != nil {
+		log.Error().Err(err).Msg("error creating grace watcher")
 		os.Exit(1)
 	}
-	log.Info().Msgf("%s", getVersionString())
-	log.Info().Msgf("running on %d cpus", ncpus)
+	return watcher, err
+}
 
+func initServers(mainConf map[string]interface{}, log *zerolog.Logger) map[string]grace.Server {
 	servers := map[string]grace.Server{}
 	if isEnabledHTTP(mainConf) {
 		s, err := getHTTPServer(mainConf["http"], log)
@@ -118,19 +144,36 @@ func main() {
 		log.Info().Msg("nothing to do, no grpc/http enabled_services declared in config")
 		os.Exit(1)
 	}
+	return servers
+}
 
-	watcher, err := handlePIDFlag(log) // TODO(labkode): maybe pidfile can be created later on? like once a server is going to be created?
-	if err != nil {
-		log.Error().Err(err).Msg("error creating grace watcher")
+func initTracing(conf *coreConf, log *zerolog.Logger) {
+	if err := setupOpenCensus(conf); err != nil {
+		log.Error().Err(err).Msg("error configuring open census stats and tracing")
 		os.Exit(1)
 	}
+}
 
-	listeners, err := watcher.GetListeners(servers)
+func initCPUCount(conf *coreConf, log *zerolog.Logger) {
+	ncpus, err := adjustCPU(conf.MaxCPUs)
 	if err != nil {
-		log.Error().Err(err).Msg("error getting sockets")
-		watcher.Exit(1)
+		log.Error().Err(err).Msg("error adjusting number of cpus")
+		os.Exit(1)
 	}
+	log.Info().Msgf("%s", getVersionString())
+	log.Info().Msgf("running on %d cpus", ncpus)
+}
 
+func initLogger(conf *logConf) *zerolog.Logger {
+	log, err := newLogger(conf)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error creating logger, exiting ...")
+		os.Exit(1)
+	}
+	return log
+}
+
+func start(mainConf map[string]interface{}, servers map[string]grace.Server, listeners map[string]net.Listener, log *zerolog.Logger, watcher *grace.Watcher) {
 	if isEnabledHTTP(mainConf) {
 		go func() {
 			if err := servers["http"].(*rhttp.Server).Start(listeners["http"]); err != nil {
@@ -139,7 +182,6 @@ func main() {
 			}
 		}()
 	}
-
 	if isEnabledGRPC(mainConf) {
 		go func() {
 			if err := servers["grpc"].(*rgrpc.Server).Start(listeners["grpc"]); err != nil {
@@ -148,9 +190,10 @@ func main() {
 			}
 		}()
 	}
-
-	// wait for signal to close servers
-	watcher.TrapSignals()
+	// wait for signal to close servers when running on single process mode
+	if *dirFlag == "" {
+		watcher.TrapSignals()
+	}
 }
 
 func newLogger(conf *logConf) (*zerolog.Logger, error) {
@@ -194,6 +237,48 @@ func getVersionString() string {
 	msg += "build_date=%s"
 
 	return fmt.Sprintf(msg, version, gitCommit, goVersion, buildDate)
+}
+
+func handleDirFlag() {
+	var configFiles []string
+	if *dirFlag != "" {
+		files, err := ioutil.ReadDir(*dirFlag)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		for _, value := range files {
+			if !value.IsDir() {
+				expr := regexp.MustCompile(`[\w].toml`)
+
+				if expr.Match([]byte(value.Name())) {
+					configFiles = append(configFiles, value.Name())
+				}
+			}
+		}
+
+		stop := make(chan os.Signal, 1)
+		defer close(stop)
+
+		for _, file := range configFiles {
+			f := file
+			mainConf := parseConfigFlagOrDie(f)
+			coreConf := parseCoreConfOrDie(mainConf["core"])
+			logConf := parseLogConfOrDie(mainConf["log"])
+
+			go run(mainConf, coreConf, logConf, f+".pid")
+		}
+
+		signal.Notify(stop, os.Interrupt)
+		for range stop {
+			for i := 0; i < len(configFiles); i++ {
+				fname := configFiles[i] + ".pid"
+				fmt.Printf("removing pid file: %v\n", fname)
+				os.Remove(fname)
+			}
+			os.Exit(0)
+		}
+	}
 }
 
 func handleVersionFlag() {
@@ -245,9 +330,12 @@ func handleTestFlag() {
 	}
 }
 
-func handlePIDFlag(l *zerolog.Logger) (*grace.Watcher, error) {
-	// if pid is empty, we store it in the OS temporary folder with random name
-	if *pidFlag == "" {
+func handlePIDFlag(l *zerolog.Logger, filename string) (*grace.Watcher, error) {
+	// if a filename is provided use this instead
+	if filename != "" {
+		*pidFlag = filename
+	} else if *pidFlag == "" {
+		// if pid is empty, we store it in the OS temporary folder with random name
 		uuid := uuid.Must(uuid.NewV4())
 		*pidFlag = path.Join(os.TempDir(), "revad-"+uuid.String()+".pid")
 	}
@@ -286,6 +374,28 @@ func getHTTPServer(conf interface{}, l *zerolog.Logger) (*rhttp.Server, error) {
 
 func handleConfigFlagOrDie() map[string]interface{} {
 	fd, err := os.Open(*configFlag)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error opening file: %+s\n", err.Error())
+		os.Exit(1)
+	}
+	defer fd.Close()
+
+	v, err := config.Read(fd)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error reading config: %s\n", err.Error())
+		os.Exit(1)
+	}
+
+	return v
+}
+
+func parseConfigFlagOrDie(dst string) map[string]interface{} {
+	var path string
+	if *dirFlag != "" && *dirFlag != "." {
+		path = *dirFlag
+	}
+
+	fd, err := os.Open(path + dst)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error opening file: %+s\n", err.Error())
 		os.Exit(1)
