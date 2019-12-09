@@ -25,6 +25,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp"
 )
 
+// NotificationsHandler placeholder
 type NotificationsHandler struct {
 	gatewayAddr string
 }
