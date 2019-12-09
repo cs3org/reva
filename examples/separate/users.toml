@@ -40,13 +40,13 @@ iframe_ui_provider = "http://localhost:19500/iframeui"
 auth_manager = "json"
 
 [grpc.services.authprovider.auth_managers.json]
-users = "./examples/separate/users.demo.json"
+users = "users.demo.json"
 
 [grpc.services.userprovider]
 driver = "json"
 
 [grpc.services.userprovider.drivers.json]
-users = "./examples/separate/users.demo.json"
+users = "users.demo.json"
 
 
 # TODO bring back iframe app ui demo
