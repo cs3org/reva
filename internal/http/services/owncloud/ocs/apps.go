@@ -26,11 +26,13 @@ import (
 
 // AppsHandler holds references to individual app handlers
 type AppsHandler struct {
-	SharesHandler *SharesHandler
+	SharesHandler        *SharesHandler
+	NotificationsHandler *NotificationsHandler
 }
 
 func (h *AppsHandler) init(c *Config) error {
 	h.SharesHandler = new(SharesHandler)
+	h.NotificationsHandler = new(NotificationsHandler)
 	return h.SharesHandler.init(c)
 }
 
@@ -45,6 +47,16 @@ func (h *AppsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
 			if head == "v1" {
 				h.SharesHandler.ServeHTTP(w, r)
+				return
+			}
+		}
+		WriteOCSError(w, r, MetaNotFound.StatusCode, "Not found", nil)
+	case "notifications":
+		head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+		if head == "api" {
+			head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+			if head == "v1" {
+				h.NotificationsHandler.ServeHTTP(w, r)
 				return
 			}
 		}
