@@ -56,7 +56,7 @@ var (
 	signalFlag  = flag.String("s", "", "send signal to a master process: stop, quit, reload")
 	configFlag  = flag.String("c", "/etc/revad/revad.toml", "set configuration file")
 	pidFlag     = flag.String("p", "", "pid file. If empty defaults to a random file in the OS temporary directory")
-	dirFlag     = flag.String("dir", "", "runs any toml file in the directory specified")
+	dirFlag     = flag.String("dev-dir", "", "runs any toml file in the specified directory. Intended for development use only")
 	// Compile time variables initialized with gcc flags.
 	gitCommit, buildDate, version, goVersion string
 )
