@@ -88,7 +88,7 @@ func (s *service) Close() error {
 }
 
 func (s *service) UnprotectedEndpoints() []string {
-	return []string{}
+	return []string{"/cs3.auth.provider.v1beta1.ProviderAPI/Authenticate"}
 }
 
 func (s *service) Register(ss *grpc.Server) {

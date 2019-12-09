@@ -200,6 +200,10 @@ func (s *Server) registerServices() error {
 		reflection.Register(grpcServer)
 	}
 
+	for _, svc := range s.services {
+		svc.Register(grpcServer)
+	}
+
 	s.s = grpcServer
 
 	return nil
@@ -263,19 +267,18 @@ func (s *Server) getInterceptors(unprotected []string) ([]grpc.ServerOption, err
 		return unaryTriples[i].Priority < unaryTriples[j].Priority
 	})
 
-	unaryInterceptors := []grpc.UnaryServerInterceptor{}
-	for _, t := range unaryTriples {
-		unaryInterceptors = append(unaryInterceptors, t.Interceptor)
-		s.log.Info().Msgf("rgrpc: chaining grpc unary interceptor %s with priority %d", t.Name, t.Priority)
-	}
-
 	authUnary, err := auth.NewUnary(s.conf.Interceptors["auth"], unprotected)
 	if err != nil {
 		return nil, errors.Wrap(err, "rgrpc: error creating unary auth interceptor")
 	}
 
+	unaryInterceptors := []grpc.UnaryServerInterceptor{authUnary}
+	for _, t := range unaryTriples {
+		unaryInterceptors = append(unaryInterceptors, t.Interceptor)
+		s.log.Info().Msgf("rgrpc: chaining grpc unary interceptor %s with priority %d", t.Name, t.Priority)
+	}
+
 	unaryInterceptors = append([]grpc.UnaryServerInterceptor{
-		authUnary,
 		appctx.NewUnary(s.log),
 		token.NewUnary(),
 		log.NewUnary(),
@@ -309,7 +312,7 @@ func (s *Server) getInterceptors(unprotected []string) ([]grpc.ServerOption, err
 		return nil, errors.Wrap(err, "rgrpc: error creating stream auth interceptor")
 	}
 
-	streamInterceptors := []grpc.StreamServerInterceptor{}
+	streamInterceptors := []grpc.StreamServerInterceptor{authStream}
 	for _, t := range streamTriples {
 		streamInterceptors = append(streamInterceptors, t.Interceptor)
 		s.log.Info().Msgf("rgrpc: chainning grpc streaming interceptor %s with priority %d", t.Name, t.Priority)

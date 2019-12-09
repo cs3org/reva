@@ -195,7 +195,7 @@ func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
 					ClientSecret: creds.ClientSecret,
 				}
 
-				log.Debug().Msgf("AuthenticateRequest: %+v", req)
+				log.Debug().Msgf("AuthenticateRequest: %+v against %s", req, conf.GatewaySvc)
 
 				client, err := pool.GetGatewayServiceClient(conf.GatewaySvc)
 				if err != nil {

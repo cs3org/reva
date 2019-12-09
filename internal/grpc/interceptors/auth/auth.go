@@ -59,7 +59,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 func skip(url string, skipped []string) bool {
 	for _, s := range skipped {
-		if strings.HasPrefix(s, url) {
+		if strings.HasPrefix(url, s) {
 			return true
 		}
 	}
