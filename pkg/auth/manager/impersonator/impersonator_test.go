@@ -26,27 +26,27 @@ import (
 func TestImpersonator(t *testing.T) {
 	ctx := context.Background()
 	i, _ := New(nil)
-	uid, err := i.Authenticate(ctx, "admin", "pwd")
+	u, err := i.Authenticate(ctx, "admin", "pwd")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if uid.OpaqueId != "admin" {
-		t.Errorf("%#v, wanted %#v", uid.OpaqueId, "admin")
+	if u.Id.OpaqueId != "admin" {
+		t.Errorf("%#v, wanted %#v", u.Id.OpaqueId, "admin")
 	}
-	if uid.Idp != "" {
-		t.Errorf("%#v, wanted %#v", uid.Idp, "")
+	if u.Id.Idp != "" {
+		t.Errorf("%#v, wanted %#v", u.Id.Idp, "")
 	}
 
 	ctx = context.Background()
-	uid, err = i.Authenticate(ctx, "opaqueid@idp", "pwd")
+	u, err = i.Authenticate(ctx, "opaqueid@idp", "pwd")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if uid.OpaqueId != "opaqueid" {
-		t.Errorf("%#v, wanted %#v", uid.OpaqueId, "opaqueid")
+	if u.Id.OpaqueId != "opaqueid" {
+		t.Errorf("%#v, wanted %#v", u.Id.OpaqueId, "opaqueid")
 	}
-	if uid.Idp != "idp" {
-		t.Errorf("%#v, wanted %#v", uid.Idp, "idp")
+	if u.Id.Idp != "idp" {
+		t.Errorf("%#v, wanted %#v", u.Id.Idp, "idp")
 	}
 }

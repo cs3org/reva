@@ -35,7 +35,7 @@ import (
 )
 
 // Watcher watches a process for a graceful restart
-// preserving open network sockets to avoid packets.
+// preserving open network sockets to avoid packet loss.
 type Watcher struct {
 	log       zerolog.Logger
 	graceful  bool

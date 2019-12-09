@@ -24,8 +24,8 @@ import (
 	"path"
 	"strings"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 )
 
@@ -78,9 +78,9 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	// check src exists
-	srcStatReq := &storageproviderv0alphapb.StatRequest{
-		Ref: &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: src},
+	srcStatReq := &provider.StatRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Path{Path: src},
 		},
 	}
 	srcStatRes, err := client.Stat(ctx, srcStatReq)
@@ -90,8 +90,8 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	if srcStatRes.Status.Code != rpcpb.Code_CODE_OK {
-		if srcStatRes.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+	if srcStatRes.Status.Code != rpc.Code_CODE_OK {
+		if srcStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
@@ -104,10 +104,10 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request, ns string) {
 	dst := path.Join(ns, urlPath[len(baseURI):])
 
 	// check dst exists
-	dstStatRef := &storageproviderv0alphapb.Reference{
-		Spec: &storageproviderv0alphapb.Reference_Path{Path: dst},
+	dstStatRef := &provider.Reference{
+		Spec: &provider.Reference_Path{Path: dst},
 	}
-	dstStatReq := &storageproviderv0alphapb.StatRequest{Ref: dstStatRef}
+	dstStatReq := &provider.StatRequest{Ref: dstStatRef}
 	dstStatRes, err := client.Stat(ctx, dstStatReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
@@ -116,7 +116,7 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	var successCode int
-	if dstStatRes.Status.Code == rpcpb.Code_CODE_OK {
+	if dstStatRes.Status.Code == rpc.Code_CODE_OK {
 		successCode = http.StatusNoContent // 204 if target already existed, see https://tools.ietf.org/html/rfc4918#section-9.9.4
 
 		if overwrite == "F" {
@@ -126,7 +126,7 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request, ns string) {
 		}
 
 		// delete existing tree
-		delReq := &storageproviderv0alphapb.DeleteRequest{Ref: dstStatRef}
+		delReq := &provider.DeleteRequest{Ref: dstStatRef}
 		delRes, err := client.Delete(ctx, delReq)
 		if err != nil {
 			log.Error().Err(err).Msg("error sending grpc delete request")
@@ -135,7 +135,7 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request, ns string) {
 		}
 
 		// TODO return a forbidden status if read only?
-		if delRes.Status.Code != rpcpb.Code_CODE_OK {
+		if delRes.Status.Code != rpc.Code_CODE_OK {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -144,30 +144,30 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request, ns string) {
 
 		// check if an intermediate path / the parent exists
 		intermediateDir := path.Dir(dst)
-		ref2 := &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: intermediateDir},
+		ref2 := &provider.Reference{
+			Spec: &provider.Reference_Path{Path: intermediateDir},
 		}
-		intStatReq := &storageproviderv0alphapb.StatRequest{Ref: ref2}
+		intStatReq := &provider.StatRequest{Ref: ref2}
 		intStatRes, err := client.Stat(ctx, intStatReq)
 		if err != nil {
 			log.Error().Err(err).Msg("error sending grpc stat request")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		if intStatRes.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+		if intStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			w.WriteHeader(http.StatusConflict) // 409 if intermediate dir is missing, see https://tools.ietf.org/html/rfc4918#section-9.9.4
 			return
 		}
 		// TODO what if intermediate is a file?
 	}
 
-	sourceRef := &storageproviderv0alphapb.Reference{
-		Spec: &storageproviderv0alphapb.Reference_Path{Path: src},
+	sourceRef := &provider.Reference{
+		Spec: &provider.Reference_Path{Path: src},
 	}
-	dstRef := &storageproviderv0alphapb.Reference{
-		Spec: &storageproviderv0alphapb.Reference_Path{Path: dst},
+	dstRef := &provider.Reference{
+		Spec: &provider.Reference_Path{Path: dst},
 	}
-	mReq := &storageproviderv0alphapb.MoveRequest{Source: sourceRef, Destination: dstRef}
+	mReq := &provider.MoveRequest{Source: sourceRef, Destination: dstRef}
 	mRes, err := client.Move(ctx, mReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending move grpc request")
@@ -175,7 +175,7 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	if mRes.Status.Code != rpcpb.Code_CODE_OK {
+	if mRes.Status.Code != rpc.Code_CODE_OK {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -187,7 +187,7 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	if dstStatRes.Status.Code != rpcpb.Code_CODE_OK {
+	if dstStatRes.Status.Code != rpc.Code_CODE_OK {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

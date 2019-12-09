@@ -23,8 +23,8 @@ enabled_services = [
 token_manager = "jwt"
 skip_methods = [
     # we need to allow calls that happen during authentication
-    "/cs3.authproviderv0alpha.AuthProviderService/Authenticate",
-	"/cs3.userproviderv0alpha.UserProviderService/GetUser",
+    "/cs3.auth.provider.v1beta1.ProviderAPI/Authenticate",
+    "/cs3.identity.user.v1beta1.UserAPI/GetUser",
 ]
 
 [grpc.interceptors.auth.token_managers.jwt]
@@ -40,13 +40,13 @@ iframe_ui_provider = "http://localhost:19500/iframeui"
 auth_manager = "json"
 
 [grpc.services.authprovider.auth_managers.json]
-users = "./examples/separate/users.demo.json"
+users = "users.demo.json"
 
 [grpc.services.userprovider]
 driver = "json"
 
 [grpc.services.userprovider.drivers.json]
-users = "./examples/separate/users.demo.json"
+users = "users.demo.json"
 
 
 # TODO bring back iframe app ui demo

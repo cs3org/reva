@@ -23,8 +23,8 @@ import (
 	"os"
 	"path"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
 func lsCommand() *command {
@@ -46,10 +46,10 @@ func lsCommand() *command {
 			return err
 		}
 
-		ref := &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+		ref := &provider.Reference{
+			Spec: &provider.Reference_Path{Path: fn},
 		}
-		req := &storageproviderv0alphapb.ListContainerRequest{Ref: ref}
+		req := &provider.ListContainerRequest{Ref: ref}
 
 		ctx := getAuthContext()
 		res, err := client.ListContainer(ctx, req)
@@ -57,7 +57,7 @@ func lsCommand() *command {
 			return err
 		}
 
-		if res.Status.Code != rpcpb.Code_CODE_OK {
+		if res.Status.Code != rpc.Code_CODE_OK {
 			return formatError(res.Status)
 		}
 

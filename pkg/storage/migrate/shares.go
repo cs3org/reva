@@ -26,11 +26,11 @@ import (
 	"os"
 	"path"
 
-	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
-	typespb "github.com/cs3org/go-cs3apis/cs3/types"
-	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
 // share representation in the import metadata
@@ -49,7 +49,7 @@ type share struct {
 }
 
 //ImportShares from a shares.jsonl file in exportPath. The files must already be present on the storage
-func ImportShares(ctx context.Context, client gatewayv0alphapb.GatewayServiceClient, exportPath string, ns string) error {
+func ImportShares(ctx context.Context, client gateway.GatewayAPIClient, exportPath string, ns string) error {
 
 	sharesJSONL, err := os.Open(path.Join(exportPath, "shares.jsonl"))
 	if err != nil {
@@ -67,9 +67,9 @@ func ImportShares(ctx context.Context, client gatewayv0alphapb.GatewayServiceCli
 
 		//Stat file, skip share creation if it does not exist on the target system
 		resourcePath := path.Join(ns, path.Base(exportPath), shareData.Path)
-		statReq := &storageproviderv0alphapb.StatRequest{
-			Ref: &storageproviderv0alphapb.Reference{
-				Spec: &storageproviderv0alphapb.Reference_Path{Path: resourcePath},
+		statReq := &provider.StatRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{Path: resourcePath},
 			},
 		}
 		statResp, err := client.Stat(ctx, statReq)
@@ -78,7 +78,7 @@ func ImportShares(ctx context.Context, client gatewayv0alphapb.GatewayServiceCli
 			log.Fatal(err)
 		}
 
-		if statResp.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+		if statResp.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			log.Print("File does not exist on target system, skipping share import: " + resourcePath)
 			continue
 		}
@@ -91,17 +91,17 @@ func ImportShares(ctx context.Context, client gatewayv0alphapb.GatewayServiceCli
 	return nil
 }
 
-func shareReq(info *storageproviderv0alphapb.ResourceInfo, share *share) *usershareproviderv0alphapb.CreateShareRequest {
-	return &usershareproviderv0alphapb.CreateShareRequest{
+func shareReq(info *provider.ResourceInfo, share *share) *collaboration.CreateShareRequest {
+	return &collaboration.CreateShareRequest{
 		ResourceInfo: info,
-		Grant: &usershareproviderv0alphapb.ShareGrant{
-			Grantee: &storageproviderv0alphapb.Grantee{
-				Type: storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER,
-				Id: &typespb.UserId{
+		Grant: &collaboration.ShareGrant{
+			Grantee: &provider.Grantee{
+				Type: provider.GranteeType_GRANTEE_TYPE_USER,
+				Id: &user.UserId{
 					OpaqueId: share.SharedWith,
 				},
 			},
-			Permissions: &usershareproviderv0alphapb.SharePermissions{
+			Permissions: &collaboration.SharePermissions{
 				Permissions: convertPermissions(share.Permissions),
 			},
 		},
@@ -116,8 +116,8 @@ var ocPermToRole = map[int]string{
 }
 
 // Create resource permission-set from ownCloud permissions int
-func convertPermissions(ocPermissions int) *storageproviderv0alphapb.ResourcePermissions {
-	perms := &storageproviderv0alphapb.ResourcePermissions{}
+func convertPermissions(ocPermissions int) *provider.ResourcePermissions {
+	perms := &provider.ResourcePermissions{}
 	switch ocPermToRole[ocPermissions] {
 	case "viewer":
 		perms.Stat = true

@@ -21,19 +21,19 @@ package gateway
 import (
 	"context"
 
-	authregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/authregistry/v0alpha"
-	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
+	registry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
 )
 
-func (s *svc) ListAuthProviders(ctx context.Context, req *authregistryv0alphapb.ListAuthProvidersRequest) (*gatewayv0alphapb.ListAuthProvidersResponse, error) {
+func (s *svc) ListAuthProviders(ctx context.Context, req *registry.ListAuthProvidersRequest) (*gateway.ListAuthProvidersResponse, error) {
 	c, err := pool.GetAuthRegistryServiceClient(s.c.AuthRegistryEndpoint)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting auth registry client")
-		return &gatewayv0alphapb.ListAuthProvidersResponse{
+		return &gateway.ListAuthProvidersResponse{
 			Status: status.NewInternal(ctx, err, "gateway"),
 		}, nil
 	}
@@ -41,14 +41,14 @@ func (s *svc) ListAuthProviders(ctx context.Context, req *authregistryv0alphapb.
 	res, err := c.ListAuthProviders(ctx, req)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling ListAuthProviders")
-		return &gatewayv0alphapb.ListAuthProvidersResponse{
+		return &gateway.ListAuthProvidersResponse{
 			Status: status.NewInternal(ctx, err, "gateway"),
 		}, nil
 	}
 
-	if res.Status.Code != rpcpb.Code_CODE_OK {
+	if res.Status.Code != rpc.Code_CODE_OK {
 		err := status.NewErrorFromCode(res.Status.Code, "gateway")
-		return &gatewayv0alphapb.ListAuthProvidersResponse{
+		return &gateway.ListAuthProvidersResponse{
 			Status: status.NewInternal(ctx, err, "gateway"),
 		}, nil
 	}
@@ -58,7 +58,7 @@ func (s *svc) ListAuthProviders(ctx context.Context, req *authregistryv0alphapb.
 		types[i] = p.ProviderType
 	}
 
-	gwRes := &gatewayv0alphapb.ListAuthProvidersResponse{
+	gwRes := &gateway.ListAuthProvidersResponse{
 		Status: res.Status,
 		Opaque: res.Opaque,
 		Types:  types,

@@ -22,8 +22,8 @@ import (
 	"net/http"
 	"path"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 )
 
@@ -39,10 +39,10 @@ func (s *svc) doDelete(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	ref := &storageproviderv0alphapb.Reference{
-		Spec: &storageproviderv0alphapb.Reference_Path{Path: fn},
+	ref := &provider.Reference{
+		Spec: &provider.Reference_Path{Path: fn},
 	}
-	req := &storageproviderv0alphapb.DeleteRequest{Ref: ref}
+	req := &provider.DeleteRequest{Ref: ref}
 	res, err := client.Delete(ctx, req)
 	if err != nil {
 		log.Error().Err(err).Msg("error performing delete grpc request")
@@ -50,13 +50,13 @@ func (s *svc) doDelete(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+	if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
 		log.Warn().Str("code", string(res.Status.Code)).Msg("resource not found")
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 
-	if res.Status.Code != rpcpb.Code_CODE_OK {
+	if res.Status.Code != rpc.Code_CODE_OK {
 		log.Warn().Str("code", string(res.Status.Code)).Msg("grpc request failed")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
