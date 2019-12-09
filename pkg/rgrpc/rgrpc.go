@@ -200,7 +200,7 @@ func (s *Server) registerServices() error {
 		reflection.Register(grpcServer)
 	}
 
-	//s.s = grpcServer
+	s.s = grpcServer
 
 	return nil
 }

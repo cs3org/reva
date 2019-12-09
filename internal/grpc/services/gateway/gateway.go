@@ -37,21 +37,23 @@ func init() {
 }
 
 type config struct {
-	AuthRegistryEndpoint        string                            `mapstructure:"authregistrysvc"`
-	StorageRegistryEndpoint     string                            `mapstructure:"storageregistrysvc"`
-	AppRegistryEndpoint         string                            `mapstructure:"appregistrysvc"`
-	PreferencesEndpoint         string                            `mapstructure:"preferencessvc"`
-	UserShareProviderEndpoint   string                            `mapstructure:"usershareprovidersvc"`
-	PublicShareProviderEndpoint string                            `mapstructure:"publicshareprovidersvc"`
-	OCMShareProviderEndpoint    string                            `mapstructure:"ocmshareprovidersvc"`
-	UserProviderEndpoint        string                            `mapstructure:"userprovidersvc"`
-	CommitShareToStorageGrant   bool                              `mapstructure:"commit_share_to_storage_grant"`
-	CommitShareToStorageRef     bool                              `mapstructure:"commit_share_to_storage_ref"`
-	DataGatewayEndpoint         string                            `mapstructure:"datagateway"`
-	TransferSharedSecret        string                            `mapstructure:"transfer_shared_secret"`
-	TranserExpires              int64                             `mapstructure:"transfer_expires"`
-	TokenManager                string                            `mapstructure:"token_manager"`
-	TokenManagers               map[string]map[string]interface{} `mapstructure:"token_managers"`
+	AuthRegistryEndpoint        string `mapstructure:"authregistrysvc"`
+	StorageRegistryEndpoint     string `mapstructure:"storageregistrysvc"`
+	AppRegistryEndpoint         string `mapstructure:"appregistrysvc"`
+	PreferencesEndpoint         string `mapstructure:"preferencessvc"`
+	UserShareProviderEndpoint   string `mapstructure:"usershareprovidersvc"`
+	PublicShareProviderEndpoint string `mapstructure:"publicshareprovidersvc"`
+	OCMShareProviderEndpoint    string `mapstructure:"ocmshareprovidersvc"`
+	UserProviderEndpoint        string `mapstructure:"userprovidersvc"`
+	CommitShareToStorageGrant   bool   `mapstructure:"commit_share_to_storage_grant"`
+	CommitShareToStorageRef     bool   `mapstructure:"commit_share_to_storage_ref"`
+	DataGatewayEndpoint         string `mapstructure:"datagateway"`
+	TransferSharedSecret        string `mapstructure:"transfer_shared_secret"`
+	TranserExpires              int64  `mapstructure:"transfer_expires"`
+	TokenManager                string `mapstructure:"token_manager"`
+	// ShareFolder is the location where to create shares in the recipient's storage provider.
+	ShareFolder   string                            `mapstructure:"share_folder"`
+	TokenManagers map[string]map[string]interface{} `mapstructure:"token_managers"`
 }
 
 type svc struct {

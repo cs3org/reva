@@ -45,6 +45,46 @@ const (
 	versionPrefix = ".sys.v#."
 )
 
+// AttrType is the type of extended attribute,
+// either system (sys) or user (user).
+type AttrType uint32
+
+const (
+	// SystemAttr is the system extended attribute.
+	SystemAttr AttrType = iota
+	// UserAttr is the user extended attribute.
+	UserAttr
+)
+
+func (at AttrType) String() string {
+	switch at {
+	case SystemAttr:
+		return "sys"
+	case UserAttr:
+		return "user"
+	default:
+		return "invalid"
+	}
+}
+
+// Attribute represents an EOS extended attribute.
+type Attribute struct {
+	Type     AttrType
+	Key, Val string
+}
+
+func (a *Attribute) serialize() string {
+	return fmt.Sprintf("%s.%s=%q", a.Type, a.Key, a.Key)
+}
+
+func (a *Attribute) isValid() bool {
+	// validate that an attribute is correct.
+	if (a.Type != SystemAttr && a.Type != UserAttr) || a.Key == "" {
+		return false
+	}
+	return true
+}
+
 // Options to configure the Client.
 type Options struct {
 
@@ -202,7 +242,6 @@ func (c *Client) executeEOS(ctx context.Context, cmd *exec.Cmd) (string, string,
 		// defined for both Unix and Windows and in both cases has
 		// an ExitStatus() method with the same signature.
 		if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
-
 			exitStatus = status.ExitStatus()
 			switch exitStatus {
 			case 0:
@@ -368,6 +407,40 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, username string, inode 
 	return c.parseFileInfo(stdout)
 }
 
+// SetAttr sets an extended attributes on a path.
+func (c *Client) SetAttr(ctx context.Context, username string, attr *Attribute, path string) error {
+	if !attr.isValid() {
+		return errors.New("eos: attr is invalid: " + attr.serialize())
+	}
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return err
+	}
+	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "attr", "-r", "set", attr.serialize(), path)
+	_, _, err = c.executeEOS(ctx, cmd)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// UnsetAttr unsets an extended attribute on a path.
+func (c *Client) UnsetAttr(ctx context.Context, username string, attr *Attribute, path string) error {
+	if !attr.isValid() {
+		return errors.New("eos: attr is invalid: " + attr.serialize())
+	}
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return err
+	}
+	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "attr", "-r", "rm", fmt.Sprintf("%s.%s", attr.Type, attr.Key), path)
+	_, _, err = c.executeEOS(ctx, cmd)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // GetFileInfoByPath returns the FilInfo at the given path
 func (c *Client) GetFileInfoByPath(ctx context.Context, username, path string) (*FileInfo, error) {
 	unixUser, err := c.getUnixUser(username)
@@ -395,6 +468,18 @@ func (c *Client) GetQuota(ctx context.Context, username, path string) (int, int,
 		return 0, 0, err
 	}
 	return c.parseQuota(path, stdout)
+}
+
+// Touch creates a 0-size,0-replica file in the EOS namespace.
+func (c *Client) Touch(ctx context.Context, username, path string) error {
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return err
+	}
+
+	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "file", "touch", path)
+	_, _, err = c.executeEOS(ctx, cmd)
+	return err
 }
 
 // CreateDir creates a directory at the given path
@@ -667,6 +752,7 @@ func (c *Client) parseQuota(path, raw string) (int, int, error) {
 	return 0, 0, nil
 }
 
+// TODO(labkode): better API to access extended attributes.
 func (c *Client) parseFileInfo(raw string) (*FileInfo, error) {
 
 	line := raw[15:]
@@ -799,7 +885,9 @@ func (c *Client) mapToFileInfo(kv map[string]string) (*FileInfo, error) {
 		Instance:   c.opt.URL,
 		SysACL:     kv["sys.acl"],
 		TreeCount:  treeCount,
+		Attrs:      kv,
 	}
+
 	return fi, nil
 }
 
@@ -807,18 +895,19 @@ func (c *Client) mapToFileInfo(kv map[string]string) (*FileInfo, error) {
 type FileInfo struct {
 	IsDir      bool
 	MTimeNanos uint32
-	Inode      uint64 `json:"inode"`
-	FID        uint64 `json:"fid"`
-	UID        uint64 `json:"uid"`
-	GID        uint64 `json:"gid"`
-	TreeSize   uint64
-	MTimeSec   uint64
-	Size       uint64
-	TreeCount  uint64
-	File       string `json:"eos_file"`
-	ETag       string
-	Instance   string
-	SysACL     string
+	Inode      uint64            `json:"inode"`
+	FID        uint64            `json:"fid"`
+	UID        uint64            `json:"uid"`
+	GID        uint64            `json:"gid"`
+	TreeSize   uint64            `json:"tree_size"`
+	MTimeSec   uint64            `json:"mtime_sec"`
+	Size       uint64            `json:"size"`
+	TreeCount  uint64            `json:"tree_count"`
+	File       string            `json:"eos_file"`
+	ETag       string            `json:"etag"`
+	Instance   string            `json:"instance"`
+	SysACL     string            `json:"sys_acl"`
+	Attrs      map[string]string `json:"attrs"`
 }
 
 // DeletedEntry represents an entry from the trashbin.
