@@ -27,12 +27,6 @@ import (
 
 // NotificationsHandler placeholder
 type NotificationsHandler struct {
-	gatewayAddr string
-}
-
-func (h *NotificationsHandler) init(c *Config) error {
-	h.gatewayAddr = c.GatewaySvc
-	return nil
 }
 
 func (h *NotificationsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -44,5 +38,4 @@ func (h *NotificationsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
 
 	w.WriteHeader(http.StatusOK)
-	return
 }
