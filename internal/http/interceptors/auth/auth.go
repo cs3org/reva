@@ -21,7 +21,6 @@ package auth
 import (
 	"fmt"
 	"net/http"
-	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -37,6 +36,7 @@ import (
 	"github.com/cs3org/reva/pkg/token"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
 	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
@@ -74,17 +74,6 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 		return nil, err
 	}
 	return c, nil
-}
-
-// skip evaluates whether a source url is a subpath of base
-// i.e: /a/b/c/d/e is a subpath of /a/b/c
-func skip(source string, base []string) bool {
-	for i := range base {
-		if strings.HasPrefix(source, base[i]) {
-			return true
-		}
-	}
-	return false
 }
 
 // New returns a new middleware with defined priority.
@@ -156,7 +145,7 @@ func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
 
 			// skip auth for urls set in the config.
 			// TODO(labkode): maybe use method:url to bypass auth.
-			if skip(r.URL.Path, conf.SkipMethods) {
+			if utils.Skip(r.URL.Path, conf.SkipMethods) {
 				log.Info().Msg("skipping auth check for: " + r.URL.Path)
 				h.ServeHTTP(w, r)
 				return

@@ -21,13 +21,13 @@ package auth
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/token"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
 	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
@@ -55,15 +55,6 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 		return nil, err
 	}
 	return c, nil
-}
-
-func skip(url string, skipped []string) bool {
-	for _, s := range skipped {
-		if strings.HasPrefix(url, s) {
-			return true
-		}
-	}
-	return false
 }
 
 // NewUnary returns a new unary interceptor that adds
@@ -98,7 +89,7 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 		defer span.End()
 		log := appctx.GetLogger(ctx)
 
-		if skip(info.FullMethod, unprotected) {
+		if utils.Skip(info.FullMethod, unprotected) {
 			span.AddAttributes(trace.BoolAttribute("auth_enabled", false))
 			log.Debug().Str("method", info.FullMethod).Msg("skipping auth")
 			return handler(ctx, req)
@@ -161,7 +152,7 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 		ctx := ss.Context()
 		log := appctx.GetLogger(ctx)
 
-		if skip(info.FullMethod, unprotected) {
+		if utils.Skip(info.FullMethod, unprotected) {
 			log.Debug().Str("method", info.FullMethod).Msg("skiping auth")
 			return handler(srv, ss)
 		}
