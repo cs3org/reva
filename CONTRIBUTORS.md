@@ -1,4 +1,5 @@
 - Alex Unger <zyxancf@gmail.com>
+- Aritz Brosa <aritz.brosa.iartza@cern.ch>
 - Diogo Castro <diogo.castro@cern.ch>
 - Felix Hillingshaeuser <felix@mxcore.de>
 - Giuseppe <giuseppe.lopresti@cern.ch>
