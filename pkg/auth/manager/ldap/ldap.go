@@ -45,7 +45,7 @@ type config struct {
 	Hostname     string     `mapstructure:"hostname"`
 	Port         int        `mapstructure:"port"`
 	BaseDN       string     `mapstructure:"base_dn"`
-	Filter       string     `mapstructure:"filter"`
+	UserFilter   string     `mapstructure:"userfilter"`
 	BindUsername string     `mapstructure:"bind_username"`
 	BindPassword string     `mapstructure:"bind_password"`
 	Idp          string     `mapstructure:"idp"`
@@ -109,7 +109,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	searchRequest := ldap.NewSearchRequest(
 		am.c.BaseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-		fmt.Sprintf(am.c.Filter, clientID),
+		fmt.Sprintf(am.c.UserFilter, clientID),
 		// TODO(jfd): objectguid, entryuuid etc ... make configurable
 		[]string{am.c.Schema.DN, am.c.Schema.UID, am.c.Schema.Mail, am.c.Schema.DisplayName},
 		nil,

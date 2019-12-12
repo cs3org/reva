@@ -144,13 +144,18 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 
 	log.Debug().Interface("entries", sr.Entries).Msg("entries")
 
+	id := &userpb.UserId{
+		Idp:      m.idp,
+		OpaqueId: sr.Entries[0].GetAttributeValue(m.schema.UID),
+	}
+	groups, err := m.GetUserGroups(ctx, id)
+	if err != nil {
+		return nil, err
+	}
 	u := &userpb.User{
-		Id: &userpb.UserId{
-			Idp:      m.idp,
-			OpaqueId: uid.OpaqueId,
-		},
+		Id:          id,
 		Username:    sr.Entries[0].GetAttributeValue(m.schema.UID),
-		Groups:      []string{},
+		Groups:      groups,
 		Mail:        sr.Entries[0].GetAttributeValue(m.schema.Mail),
 		DisplayName: sr.Entries[0].GetAttributeValue(m.schema.DisplayName),
 	}
@@ -188,13 +193,18 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 	users := []*userpb.User{}
 
 	for _, entry := range sr.Entries {
+		id := &userpb.UserId{
+			Idp:      m.idp,
+			OpaqueId: entry.GetAttributeValue(m.schema.UID),
+		}
+		groups, err := m.GetUserGroups(ctx, id)
+		if err != nil {
+			return nil, err
+		}
 		user := &userpb.User{
-			Id: &userpb.UserId{
-				Idp:      m.idp,
-				OpaqueId: entry.GetAttributeValue(m.schema.UID),
-			},
+			Id:          id,
 			Username:    entry.GetAttributeValue(m.schema.UID),
-			Groups:      []string{},
+			Groups:      groups,
 			Mail:        entry.GetAttributeValue(m.schema.Mail),
 			DisplayName: entry.GetAttributeValue(m.schema.DisplayName),
 		}
