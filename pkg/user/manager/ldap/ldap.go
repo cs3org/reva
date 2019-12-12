@@ -41,7 +41,8 @@ type manager struct {
 	hostname     string
 	port         int
 	baseDN       string
-	filter       string
+	userfilter   string
+	groupfilter  string
 	bindUsername string
 	bindPassword string
 	idp          string
@@ -52,7 +53,8 @@ type config struct {
 	Hostname     string     `mapstructure:"hostname"`
 	Port         int        `mapstructure:"port"`
 	BaseDN       string     `mapstructure:"base_dn"`
-	Filter       string     `mapstructure:"filter"`
+	UserFilter   string     `mapstructure:"userfilter"`
+	GroupFilter  string     `mapstructure:"groupfilter"`
 	BindUsername string     `mapstructure:"bind_username"`
 	BindPassword string     `mapstructure:"bind_password"`
 	Idp          string     `mapstructure:"idp"`
@@ -64,6 +66,7 @@ type attributes struct {
 	UID         string `mapstructure:"uid"`
 	DisplayName string `mapstructure:"displayName"`
 	DN          string `mapstructure:"dn"`
+	CN          string `mapstructure:"cn"`
 }
 
 // Default attributes (Active Directory)
@@ -72,6 +75,7 @@ var ldapDefaults = attributes{
 	UID:         "objectGUID",
 	DisplayName: "displayName",
 	DN:          "dn",
+	CN:          "cn",
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -97,7 +101,8 @@ func New(m map[string]interface{}) (user.Manager, error) {
 		hostname:     c.Hostname,
 		port:         c.Port,
 		baseDN:       c.BaseDN,
-		filter:       c.Filter,
+		userfilter:   c.UserFilter,
+		groupfilter:  c.GroupFilter,
 		bindUsername: c.BindUsername,
 		bindPassword: c.BindPassword,
 		idp:          c.Idp,
@@ -123,7 +128,7 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 	searchRequest := ldap.NewSearchRequest(
 		m.baseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-		fmt.Sprintf(m.filter, uid.OpaqueId), // TODO this is screaming for errors if filter contains >1 %s
+		fmt.Sprintf(m.userfilter, uid.OpaqueId), // TODO this is screaming for errors if filter contains >1 %s
 		[]string{m.schema.DN, m.schema.UID, m.schema.Mail, m.schema.DisplayName},
 		nil,
 	)
@@ -170,7 +175,7 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 	searchRequest := ldap.NewSearchRequest(
 		m.baseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-		fmt.Sprintf(m.filter, query), // TODO this is screaming for errors if filter contains >1 %s
+		fmt.Sprintf(m.userfilter, query), // TODO this is screaming for errors if filter contains >1 %s
 		[]string{m.schema.DN, m.schema.UID, m.schema.Mail, m.schema.DisplayName},
 		nil,
 	)
@@ -186,12 +191,12 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 		user := &userpb.User{
 			Id: &userpb.UserId{
 				Idp:      m.idp,
-				OpaqueId: sr.Entries[0].GetAttributeValue(m.schema.UID),
+				OpaqueId: entry.GetAttributeValue(m.schema.UID),
 			},
 			Username:    entry.GetAttributeValue(m.schema.UID),
 			Groups:      []string{},
-			Mail:        sr.Entries[0].GetAttributeValue(m.schema.Mail),
-			DisplayName: sr.Entries[0].GetAttributeValue(m.schema.DisplayName),
+			Mail:        entry.GetAttributeValue(m.schema.Mail),
+			DisplayName: entry.GetAttributeValue(m.schema.DisplayName),
 		}
 		users = append(users, user)
 	}
@@ -200,9 +205,52 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 }
 
 func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
-	return []string{}, nil // FIXME implement GetUserGroups for ldap user manager
+	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.hostname, m.port), &tls.Config{InsecureSkipVerify: true})
+	if err != nil {
+		return []string{}, err
+	}
+	defer l.Close()
+
+	// First bind with a read only user
+	err = l.Bind(m.bindUsername, m.bindPassword)
+	if err != nil {
+		return []string{}, err
+	}
+
+	// Search for the given clientID
+	searchRequest := ldap.NewSearchRequest(
+		m.baseDN,
+		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
+		fmt.Sprintf(m.groupfilter, uid.OpaqueId), // TODO this is screaming for errors if filter contains >1 %s
+		[]string{m.schema.CN},
+		nil,
+	)
+
+	sr, err := l.Search(searchRequest)
+	if err != nil {
+		return []string{}, err
+	}
+
+	groups := []string{}
+
+	for _, entry := range sr.Entries {
+		groups = append(groups, entry.GetAttributeValue(m.schema.CN))
+	}
+
+	return groups, nil
 }
 
 func (m *manager) IsInGroup(ctx context.Context, uid *userpb.UserId, group string) (bool, error) {
-	return false, nil // FIXME implement IsInGroup for ldap user manager
+	groups, err := m.GetUserGroups(ctx, uid)
+	if err != nil {
+		return false, err
+	}
+
+	for _, g := range groups {
+		if g == group {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
