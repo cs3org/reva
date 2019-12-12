@@ -1,3 +1,21 @@
+// Copyright 2018-2019 CERN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// In applying this license, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
 package runtime
 
 import (
@@ -27,7 +45,7 @@ import (
 	"go.opencensus.io/trace"
 )
 
-// Runs a reva server with the given config file and pid file.
+// Run runs a reva server with the given config file and pid file.
 func Run(config string, pidFile string) {
 	mainConf := handleConfigFlagOrDie(config)
 	coreConf := parseCoreConfOrDie(mainConf["core"])
@@ -227,23 +245,6 @@ func getHTTPServer(conf interface{}, l *zerolog.Logger) (*rhttp.Server, error) {
 }
 
 func handleConfigFlagOrDie(configFile string) map[string]interface{} {
-	fd, err := os.Open(configFile)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error opening file: %+s\n", err.Error())
-		os.Exit(1)
-	}
-	defer fd.Close()
-
-	v, err := config.Read(fd)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error reading config: %s\n", err.Error())
-		os.Exit(1)
-	}
-
-	return v
-}
-
-func parseConfigFlagOrDie(configFile string) map[string]interface{} {
 	fd, err := os.Open(configFile)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error opening file: %+s\n", err.Error())
