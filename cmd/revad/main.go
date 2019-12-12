@@ -29,6 +29,7 @@ import (
 	"regexp"
 	"syscall"
 
+	"github.com/cs3org/reva/cmd/revad/internal/config"
 	"github.com/cs3org/reva/cmd/revad/internal/grace"
 	"github.com/cs3org/reva/cmd/revad/runtime"
 )
@@ -51,8 +52,9 @@ func main() {
 	handleVersionFlag()
 	handleSignalFlag()
 	handleTestFlag()
+	conf := handleConfigFlagOrDie(*configFlag)
 
-	runtime.Run(*configFlag, *pidFlag)
+	runtime.Run(conf, *pidFlag)
 }
 
 func getVersionString() string {
@@ -62,6 +64,27 @@ func getVersionString() string {
 	msg += "build_date=%s"
 
 	return fmt.Sprintf(msg, version, gitCommit, goVersion, buildDate)
+}
+
+func handleConfigFlagOrDie(configFile string) map[string]interface{} {
+	return readConfOrDie(configFile)
+}
+
+func readConfOrDie(configFile string) map[string]interface{} {
+	fd, err := os.Open(configFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error opening file: %+s\n", err.Error())
+		os.Exit(1)
+	}
+	defer fd.Close()
+
+	v, err := config.Read(fd)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error reading config: %s\n", err.Error())
+		os.Exit(1)
+	}
+
+	return v
 }
 
 func handleDirFlag() {
@@ -86,7 +109,8 @@ func handleDirFlag() {
 		defer close(stop)
 
 		for _, file := range configFiles {
-			go runtime.Run(file, file+".pid")
+			conf := readConfOrDie(file)
+			go runtime.Run(conf, file+".pid")
 		}
 
 		signal.Notify(stop, os.Interrupt)

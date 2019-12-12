@@ -30,7 +30,6 @@ import (
 	"strings"
 
 	"contrib.go.opencensus.io/exporter/jaeger"
-	"github.com/cs3org/reva/cmd/revad/internal/config"
 	"github.com/cs3org/reva/cmd/revad/internal/grace"
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/rgrpc"
@@ -46,8 +45,7 @@ import (
 )
 
 // Run runs a reva server with the given config file and pid file.
-func Run(config string, pidFile string) {
-	mainConf := handleConfigFlagOrDie(config)
+func Run(mainConf map[string]interface{}, pidFile string) {
 	coreConf := parseCoreConfOrDie(mainConf["core"])
 	logConf := parseLogConfOrDie(mainConf["log"])
 
@@ -242,23 +240,6 @@ func getHTTPServer(conf interface{}, l *zerolog.Logger) (*rhttp.Server, error) {
 		return nil, err
 	}
 	return s, nil
-}
-
-func handleConfigFlagOrDie(configFile string) map[string]interface{} {
-	fd, err := os.Open(configFile)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error opening file: %+s\n", err.Error())
-		os.Exit(1)
-	}
-	defer fd.Close()
-
-	v, err := config.Read(fd)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error reading config: %s\n", err.Error())
-		os.Exit(1)
-	}
-
-	return v
 }
 
 func setupOpenCensus(conf *coreConf) error {
