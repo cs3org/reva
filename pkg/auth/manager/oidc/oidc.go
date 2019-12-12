@@ -140,6 +140,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, token string) (*user.
 		}
 		verifier := provider.Verifier(c)
 		idToken, err := verifier.Verify(customCtx, token)
+
 		if err != nil {
 			return nil, fmt.Errorf("could not verify jwt: %v", err)
 		}
@@ -147,6 +148,18 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, token string) (*user.
 			return nil, fmt.Errorf("failed to parse claims: %v", err)
 		}
 
+		// resolve user info here? cache it?
+		oauth2Token := &oauth2.Token{
+			AccessToken: token,
+		}
+		userInfo, err := provider.UserInfo(customCtx, oauth2.StaticTokenSource(oauth2Token))
+		if err != nil {
+			return nil, fmt.Errorf("Failed to get userinfo: %v", err)
+		}
+		if err := userInfo.Claims(&claims); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal userinfo claims: %v", err)
+		}
+		log.Debug().Interface("claims", claims).Interface("userInfo", userInfo).Msg("unmarshalled userinfo")
 	} else {
 
 		// we need to lookup the id token with the access token we got
