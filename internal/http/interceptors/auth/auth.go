@@ -32,7 +32,7 @@ import (
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/token"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
 	"github.com/cs3org/reva/pkg/user"
@@ -43,18 +43,13 @@ import (
 )
 
 const (
-	defaultHeader   = "x-access-token"
-	defaultPriority = 100
+	defaultHeader = "x-access-token"
 )
-
-func init() {
-	rhttp.RegisterMiddleware("auth", New)
-}
 
 type config struct {
 	Priority   int    `mapstructure:"priority"`
 	GatewaySvc string `mapstructure:"gateway"`
-	// Realm is optional, will be filled with request host if not given
+	// TODO(jdf): Realm is optional, will be filled with request host if not given?
 	Realm                string                            `mapstructure:"realm"`
 	CredentialChain      []string                          `mapstructure:"credential_chain"`
 	CredentialStrategies map[string]map[string]interface{} `mapstructure:"credential_strategies"`
@@ -64,7 +59,6 @@ type config struct {
 	TokenManagers        map[string]map[string]interface{} `mapstructure:"token_managers"`
 	TokenWriter          string                            `mapstructure:"token_writer"`
 	TokenWriters         map[string]map[string]interface{} `mapstructure:"token_writers"`
-	SkipMethods          []string                          `mapstructure:"skip_methods"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -77,58 +71,54 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New returns a new middleware with defined priority.
-func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
+func New(m map[string]interface{}, unprotected []string) (global.Middleware, error) {
 	conf, err := parseConfig(m)
 	if err != nil {
-		return nil, 0, err
-	}
-
-	if conf.Priority == 0 {
-		conf.Priority = defaultPriority
+		return nil, err
 	}
 
 	credChain := []auth.CredentialStrategy{}
 	for i := range conf.CredentialChain {
 		f, ok := registry.NewCredentialFuncs[conf.CredentialChain[i]]
 		if !ok {
-			return nil, 0, fmt.Errorf("credential strategy not found: %s", conf.CredentialChain[i])
+			return nil, fmt.Errorf("credential strategy not found: %s", conf.CredentialChain[i])
 		}
 
 		credStrategy, err := f(conf.CredentialStrategies[conf.CredentialChain[i]])
 		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 		credChain = append(credChain, credStrategy)
 	}
 
 	g, ok := tokenregistry.NewTokenFuncs[conf.TokenStrategy]
 	if !ok {
-		return nil, 0, fmt.Errorf("token strategy not found: %s", conf.TokenStrategy)
+		return nil, fmt.Errorf("token strategy not found: %s", conf.TokenStrategy)
 	}
 
 	tokenStrategy, err := g(conf.TokenStrategies[conf.TokenStrategy])
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
 	if !ok {
-		return nil, 0, fmt.Errorf("token manager not found: %s", conf.TokenStrategy)
+		return nil, fmt.Errorf("token manager not found: %s", conf.TokenStrategy)
 	}
 
 	tokenManager, err := h(conf.TokenManagers[conf.TokenManager])
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
 	i, ok := tokenwriterregistry.NewTokenFuncs[conf.TokenWriter]
 	if !ok {
-		return nil, 0, fmt.Errorf("token writer not found: %s", conf.TokenWriter)
+		return nil, fmt.Errorf("token writer not found: %s", conf.TokenWriter)
 	}
 
 	tokenWriter, err := i(conf.TokenWriters[conf.TokenWriter])
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
 	chain := func(h http.Handler) http.Handler {
@@ -136,6 +126,7 @@ func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
 			ctx := r.Context()
 			// OPTION requests need to pass for preflight requests
 			// TODO(labkode): this will break options for auth protected routes.
+			// Maybe running the CORS middleware before auth kicks in is enough.
 			if r.Method == "OPTIONS" {
 				h.ServeHTTP(w, r)
 				return
@@ -145,7 +136,7 @@ func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
 
 			// skip auth for urls set in the config.
 			// TODO(labkode): maybe use method:url to bypass auth.
-			if utils.Skip(r.URL.Path, conf.SkipMethods) {
+			if utils.Skip(r.URL.Path, unprotected) {
 				log.Info().Msg("skipping auth check for: " + r.URL.Path)
 				h.ServeHTTP(w, r)
 				return
@@ -239,5 +230,5 @@ func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
 			h.ServeHTTP(w, r)
 		})
 	}
-	return chain, conf.Priority, nil
+	return chain, nil
 }

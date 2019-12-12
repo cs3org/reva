@@ -21,7 +21,7 @@ package ocs
 import (
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 )
 
 // AppsHandler holds references to individual app handlers
@@ -37,12 +37,12 @@ func (h *AppsHandler) init(c *Config) error {
 // ServeHTTP routes the known apps
 func (h *AppsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var head string
-	head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+	head, r.URL.Path = router.ShiftPath(r.URL.Path)
 	switch head {
 	case "files_sharing":
-		head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 		if head == "api" {
-			head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+			head, r.URL.Path = router.ShiftPath(r.URL.Path)
 			if head == "v1" {
 				h.SharesHandler.ServeHTTP(w, r)
 				return

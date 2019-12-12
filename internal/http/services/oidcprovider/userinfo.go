@@ -41,7 +41,7 @@ func (s *svc) doUserinfo(w http.ResponseWriter, r *http.Request) {
 
 	requiredScope := "openid"
 
-	_, ar, err := s.oauth2.IntrospectToken(ctx, fosite.AccessTokenFromRequest(r), fosite.AccessToken, s.emptySession(), requiredScope)
+	_, ar, err := s.oauth2.IntrospectToken(ctx, fosite.AccessTokenFromRequest(r), fosite.AccessToken, s.getEmptySession(), requiredScope)
 	if err != nil {
 		fmt.Fprintf(w, "<h1>An error occurred!</h1><p>Could not perform introspection: %v</p>", err)
 		return

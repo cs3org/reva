@@ -25,70 +25,19 @@ import (
 	"net/http"
 	"path"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/cs3org/reva/internal/http/interceptors/appctx"
+	"github.com/cs3org/reva/internal/http/interceptors/auth"
 	"github.com/cs3org/reva/internal/http/interceptors/log"
+	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.opencensus.io/plugin/ochttp"
 	"go.opencensus.io/trace"
 )
-
-// NewMiddlewares contains all the registered new middleware functions.
-var NewMiddlewares = map[string]NewMiddleware{}
-
-// NewMiddleware is the function that HTTP middlewares need to register at init time.
-type NewMiddleware func(conf map[string]interface{}) (Middleware, int, error)
-
-// RegisterMiddleware registers a new HTTP middleware and its new function.
-func RegisterMiddleware(name string, n NewMiddleware) {
-	NewMiddlewares[name] = n
-}
-
-// middlewareTriple represents a middleware with the
-// priority to be chained.
-type middlewareTriple struct {
-	Name       string
-	Priority   int
-	Middleware Middleware
-}
-
-// Middleware is a middleware http handler.
-type Middleware func(h http.Handler) http.Handler
-
-// Services is a map of service name and its new function.
-var Services = map[string]NewService{}
-
-// Register registers a new HTTP services with name and new function.
-func Register(name string, newFunc NewService) {
-	Services[name] = newFunc
-}
-
-// NewService is the function that HTTP services need to register at init time.
-type NewService func(conf map[string]interface{}) (Service, error)
-
-type config struct {
-	Network            string                            `mapstructure:"network"`
-	Address            string                            `mapstructure:"address"`
-	Services           map[string]map[string]interface{} `mapstructure:"services"`
-	EnabledServices    []string                          `mapstructure:"enabled_services"`
-	Middlewares        map[string]map[string]interface{} `mapstructure:"middlewares"`
-	EnabledMiddlewares []string                          `mapstructure:"enabled_middlewares"`
-}
-
-// Server contains the server info.
-type Server struct {
-	httpServer  *http.Server
-	conf        *config
-	listener    net.Listener
-	svcs        map[string]Service
-	handlers    map[string]http.Handler
-	middlewares []*middlewareTriple
-	log         zerolog.Logger
-}
 
 // New returns a new server
 func New(m interface{}, l zerolog.Logger) (*Server, error) {
@@ -108,13 +57,35 @@ func New(m interface{}, l zerolog.Logger) (*Server, error) {
 
 	httpServer := &http.Server{}
 	s := &Server{
-		httpServer: httpServer,
-		conf:       conf,
-		svcs:       map[string]Service{},
-		handlers:   map[string]http.Handler{},
-		log:        l,
+		httpServer:  httpServer,
+		conf:        conf,
+		svcs:        map[string]global.Service{},
+		unprotected: []string{},
+		handlers:    map[string]http.Handler{},
+		log:         l,
 	}
 	return s, nil
+}
+
+// Server contains the server info.
+type Server struct {
+	httpServer  *http.Server
+	conf        *config
+	listener    net.Listener
+	svcs        map[string]global.Service // map key is svc Prefix
+	unprotected []string
+	handlers    map[string]http.Handler
+	middlewares []*middlewareTriple
+	log         zerolog.Logger
+}
+
+type config struct {
+	Network            string                            `mapstructure:"network"`
+	Address            string                            `mapstructure:"address"`
+	Services           map[string]map[string]interface{} `mapstructure:"services"`
+	EnabledServices    []string                          `mapstructure:"enabled_services"`
+	Middlewares        map[string]map[string]interface{} `mapstructure:"middlewares"`
+	EnabledMiddlewares []string                          `mapstructure:"enabled_middlewares"`
 }
 
 // Start starts the server
@@ -127,11 +98,16 @@ func (s *Server) Start(ln net.Listener) error {
 		return err
 	}
 
-	s.httpServer.Handler = s.getHandler()
+	handler, err := s.getHandler()
+	if err != nil {
+		return errors.Wrap(err, "rhttp: error creating http handler")
+	}
+
+	s.httpServer.Handler = handler
 	s.listener = ln
 
 	s.log.Info().Msgf("http server listening at %s://%s", "http", s.conf.Address)
-	err := s.httpServer.Serve(s.listener)
+	err = s.httpServer.Serve(s.listener)
 	if err == nil || err == http.ErrServerClosed {
 		return nil
 	}
@@ -176,27 +152,17 @@ func (s *Server) GracefulStop() error {
 	return s.httpServer.Shutdown(context.Background())
 }
 
-func (s *Server) isService(svcName string) bool {
-	for key := range Services {
-		if key == svcName {
-			return true
-		}
-	}
-	return false
-}
-
-func (s *Server) isMiddlewareEnabled(name string) bool {
-	for _, key := range s.conf.EnabledMiddlewares {
-		if key == name {
-			return true
-		}
-	}
-	return false
+// middlewareTriple represents a middleware with the
+// priority to be chained.
+type middlewareTriple struct {
+	Name       string
+	Priority   int
+	Middleware global.Middleware
 }
 
 func (s *Server) registerMiddlewares() error {
 	middlewares := []*middlewareTriple{}
-	for name, newFunc := range NewMiddlewares {
+	for name, newFunc := range global.NewMiddlewares {
 		if s.isMiddlewareEnabled(name) {
 			m, prio, err := newFunc(s.conf.Middlewares[name])
 			if err != nil {
@@ -215,10 +181,19 @@ func (s *Server) registerMiddlewares() error {
 	return nil
 }
 
+func (s *Server) isMiddlewareEnabled(name string) bool {
+	for _, key := range s.conf.EnabledMiddlewares {
+		if key == name {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Server) registerServices() error {
 	for _, svcName := range s.conf.EnabledServices {
-		if s.isService(svcName) {
-			newFunc := Services[svcName]
+		if s.isServiceEnabled(svcName) {
+			newFunc := global.Services[svcName]
 			svc, err := newFunc(s.conf.Services[svcName])
 			if err != nil {
 				err = errors.Wrapf(err, "http service %s could not be started,", svcName)
@@ -229,6 +204,7 @@ func (s *Server) registerServices() error {
 			h := traceHandler(svcName, svc.Handler())
 			s.handlers[svc.Prefix()] = h
 			s.svcs[svc.Prefix()] = svc
+			s.unprotected = append(s.unprotected, getUnprotected(svc.Prefix(), svc.Unprotected())...)
 			s.log.Info().Msgf("http service enabled: %s@/%s", svcName, svc.Prefix())
 		} else {
 			message := fmt.Sprintf("http service %s does not exist", svcName)
@@ -238,18 +214,27 @@ func (s *Server) registerServices() error {
 	return nil
 }
 
-func traceHandler(name string, h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx, span := trace.StartSpan(r.Context(), name)
-		r = r.WithContext(ctx)
-		h.ServeHTTP(w, r)
-		span.End()
-	})
+func (s *Server) isServiceEnabled(svcName string) bool {
+	for key := range global.Services {
+		if key == svcName {
+			return true
+		}
+	}
+	return false
 }
 
-func (s *Server) getHandler() http.Handler {
+// TODO(labkode): if the http server is exposed under a basename we need to prepend
+// to prefix.
+func getUnprotected(prefix string, unprotected []string) []string {
+	for i := range unprotected {
+		unprotected[i] = path.Join("/", prefix, unprotected[i])
+	}
+	return unprotected
+}
+
+func (s *Server) getHandler() (http.Handler, error) {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		head, tail := ShiftPath(r.URL.Path)
+		head, tail := router.ShiftPath(r.URL.Path)
 		if h, ok := s.handlers[head]; ok {
 			r.URL.Path = tail
 			s.log.Debug().Msgf("http routing: head=%s tail=%s svc=%s", head, r.URL.Path, head)
@@ -281,9 +266,18 @@ func (s *Server) getHandler() http.Handler {
 		handler = triple.Middleware(traceHandler(triple.Name, handler))
 	}
 
+	for _, v := range s.unprotected {
+		s.log.Info().Msgf("unprotected URL: %s", v)
+	}
+	authMiddle, err := auth.New(s.conf.Middlewares["auth"], s.unprotected)
+	if err != nil {
+		return nil, errors.Wrap(err, "rhttp: error creating auth middleware")
+	}
+
 	// add always the logctx middleware as most priority, this middleware is internal
 	// and cannot be configured from the configuration.
 	coreMiddlewares := []*middlewareTriple{}
+	coreMiddlewares = append(coreMiddlewares, &middlewareTriple{Middleware: authMiddle, Name: "auth"})
 	coreMiddlewares = append(coreMiddlewares, &middlewareTriple{Middleware: log.New(), Name: "log"})
 	coreMiddlewares = append(coreMiddlewares, &middlewareTriple{Middleware: appctx.New(s.log), Name: "appctx"})
 
@@ -298,29 +292,14 @@ func (s *Server) getHandler() http.Handler {
 		//IsPublicEndpoint: true,
 	}
 
-	return handler
+	return handler, nil
 }
 
-// ShiftPath splits off the first component of p, which will be cleaned of
-// relative components before processing. head will never contain a slash and
-// tail will always be a rooted path without trailing slash.
-// see https://blog.merovius.de/2017/06/18/how-not-to-use-an-http-router.html
-// and https://gist.github.com/weatherglass/62bd8a704d4dfdc608fe5c5cb5a6980c#gistcomment-2161690 for the zero alloc code below
-func ShiftPath(p string) (head, tail string) {
-	if p == "" {
-		return "", "/"
-	}
-	p = strings.TrimPrefix(path.Clean(p), "/")
-	i := strings.Index(p, "/")
-	if i < 0 {
-		return p, "/"
-	}
-	return p[:i], p[i:]
-}
-
-// Service represents a HTTP service.
-type Service interface {
-	Handler() http.Handler
-	Prefix() string
-	Close() error
+func traceHandler(name string, h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx, span := trace.StartSpan(r.Context(), name)
+		r = r.WithContext(ctx)
+		h.ServeHTTP(w, r)
+		span.End()
+	})
 }
