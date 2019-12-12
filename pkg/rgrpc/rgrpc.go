@@ -138,7 +138,7 @@ func NewServer(m interface{}, log zerolog.Logger) (*Server, error) {
 // Start starts the server.
 func (s *Server) Start(ln net.Listener) error {
 	if err := s.registerServices(); err != nil {
-		err = errors.Wrap(err, "unable to register services,")
+		err = errors.Wrap(err, "unable to register services")
 		return err
 	}
 

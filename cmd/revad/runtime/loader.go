@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package main
+package runtime
 
 import (
 	// These are all the extensions points for REVA
