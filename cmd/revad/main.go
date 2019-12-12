@@ -22,16 +22,16 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
-	"os/signal"
 	"path"
 	"regexp"
+	"sync"
 	"syscall"
 
 	"github.com/cs3org/reva/cmd/revad/internal/config"
 	"github.com/cs3org/reva/cmd/revad/internal/grace"
 	"github.com/cs3org/reva/cmd/revad/runtime"
+	"github.com/gofrs/uuid"
 )
 
 var (
@@ -41,6 +41,7 @@ var (
 	configFlag  = flag.String("c", "/etc/revad/revad.toml", "set configuration file")
 	pidFlag     = flag.String("p", "", "pid file. If empty defaults to a random file in the OS temporary directory")
 	dirFlag     = flag.String("dev-dir", "", "runs any toml file in the specified directory. Intended for development use only")
+
 	// Compile time variables initialized with gcc flags.
 	gitCommit, buildDate, version, goVersion string
 )
@@ -48,13 +49,36 @@ var (
 func main() {
 	flag.Parse()
 
-	handleDirFlag()
 	handleVersionFlag()
 	handleSignalFlag()
-	handleTestFlag()
-	conf := handleConfigFlagOrDie(*configFlag)
 
-	runtime.Run(conf, *pidFlag)
+	confs, err := getConfigs()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error reading the configuration file(s): %s\n", err.Error())
+		os.Exit(1)
+	}
+
+	// if there is more than one configuration available and
+	// the pid flag has been set we abort as the pid flag
+	// is meant to work only with one main configuration.
+	if len(confs) != 1 && *pidFlag != "" {
+		fmt.Fprintf(os.Stderr, "cannot run with with multiple configurations and one pid file, remote the -p flag\n")
+		os.Exit(1)
+	}
+
+	// if test flag is true we exit as this flag only tests for valid configurations.
+	if *testFlag {
+		os.Exit(0)
+	}
+
+	runConfigs(confs)
+}
+
+func handleVersionFlag() {
+	if *versionFlag {
+		fmt.Fprintf(os.Stderr, "%s\n", getVersionString())
+		os.Exit(1)
+	}
 }
 
 func getVersionString() string {
@@ -64,72 +88,6 @@ func getVersionString() string {
 	msg += "build_date=%s"
 
 	return fmt.Sprintf(msg, version, gitCommit, goVersion, buildDate)
-}
-
-func handleConfigFlagOrDie(configFile string) map[string]interface{} {
-	return readConfOrDie(configFile)
-}
-
-func readConfOrDie(configFile string) map[string]interface{} {
-	fd, err := os.Open(configFile)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error opening file: %+s\n", err.Error())
-		os.Exit(1)
-	}
-	defer fd.Close()
-
-	v, err := config.Read(fd)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error reading config: %s\n", err.Error())
-		os.Exit(1)
-	}
-
-	return v
-}
-
-func handleDirFlag() {
-	var configFiles []string
-	if *dirFlag != "" {
-		files, err := ioutil.ReadDir(*dirFlag)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		for _, value := range files {
-			if !value.IsDir() {
-				expr := regexp.MustCompile(`[\w].toml`)
-
-				if expr.Match([]byte(value.Name())) {
-					configFiles = append(configFiles, path.Join(*dirFlag, value.Name()))
-				}
-			}
-		}
-
-		stop := make(chan os.Signal, 1)
-		defer close(stop)
-
-		for _, file := range configFiles {
-			conf := readConfOrDie(file)
-			go runtime.Run(conf, file+".pid")
-		}
-
-		signal.Notify(stop, os.Interrupt)
-		for range stop {
-			for i := 0; i < len(configFiles); i++ {
-				fname := configFiles[i] + ".pid"
-				fmt.Printf("removing pid file: %v\n", fname)
-				os.Remove(fname)
-			}
-			os.Exit(0)
-		}
-	}
-}
-
-func handleVersionFlag() {
-	if *versionFlag {
-		fmt.Fprintf(os.Stderr, "%s\n", getVersionString())
-		os.Exit(1)
-	}
 }
 
 func handleSignalFlag() {
@@ -149,7 +107,7 @@ func handleSignalFlag() {
 
 		// check that we have a valid pidfile
 		if *pidFlag == "" {
-			fmt.Fprintf(os.Stderr, "-s flag not set, no clue where the pidfile is stored\n")
+			fmt.Fprintf(os.Stderr, "-s flag not set, no clue where the pidfile is stored. Check the logs for its location.\n")
 			os.Exit(1)
 		}
 		process, err := grace.GetProcessFromFile(*pidFlag)
@@ -168,8 +126,102 @@ func handleSignalFlag() {
 	}
 }
 
-func handleTestFlag() {
-	if *testFlag {
-		os.Exit(0)
+func getConfigs() ([]map[string]interface{}, error) {
+	var confs []string
+	// give priority to read from dev-dir
+	if *dirFlag != "" {
+		cfgs, err := getConfigsFromDir(*dirFlag)
+		if err != nil {
+			return nil, err
+		}
+		confs = append(confs, cfgs...)
+	} else {
+		confs = append(confs, *configFlag)
 	}
+
+	// if we don't have a config file we abort
+	if len(confs) == 0 {
+		fmt.Fprintf(os.Stderr, "no configuration found\n")
+		os.Exit(1)
+	}
+
+	configs, err := readConfigs(confs)
+	if err != nil {
+		return nil, err
+	}
+
+	return configs, nil
+}
+
+func getConfigsFromDir(dir string) (confs []string, err error) {
+	files, err := ioutil.ReadDir(*dirFlag)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, value := range files {
+		if !value.IsDir() {
+			expr := regexp.MustCompile(`[\w].toml`)
+			if expr.Match([]byte(value.Name())) {
+				confs = append(confs, path.Join(dir, value.Name()))
+			}
+		}
+	}
+	return
+}
+
+func readConfigs(files []string) ([]map[string]interface{}, error) {
+	confs := make([]map[string]interface{}, 0, len(files))
+	for _, conf := range files {
+		fd, err := os.Open(conf)
+		if err != nil {
+			return nil, err
+		}
+		defer fd.Close()
+
+		v, err := config.Read(fd)
+		if err != nil {
+			return nil, err
+		}
+		confs = append(confs, v)
+	}
+	return confs, nil
+}
+
+func runConfigs(confs []map[string]interface{}) {
+	if len(confs) == 1 {
+		runSingle(confs[0])
+		return
+	}
+
+	runMultiple(confs)
+}
+
+func runSingle(conf map[string]interface{}) {
+	if *pidFlag == "" {
+		*pidFlag = getPidfile()
+	}
+
+	runtime.Run(conf, *pidFlag)
+}
+
+func getPidfile() string {
+	uuid := uuid.Must(uuid.NewV4())
+	name := fmt.Sprintf("revad-%s.pid", uuid)
+
+	return path.Join(os.TempDir(), name)
+}
+
+func runMultiple(confs []map[string]interface{}) {
+	var wg sync.WaitGroup
+	for _, conf := range confs {
+		wg.Add(1)
+		pidfile := getPidfile()
+		go func(wg *sync.WaitGroup, conf map[string]interface{}) {
+			runtime.Run(conf, pidfile)
+			wg.Done()
+		}(&wg, conf)
+	}
+	wg.Wait()
+	os.Exit(0)
 }

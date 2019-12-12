@@ -24,7 +24,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"path"
 	"runtime"
 	"strconv"
 	"strings"
@@ -34,7 +33,6 @@ import (
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rhttp"
-	"github.com/gofrs/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -150,12 +148,6 @@ func initLogger(conf *logConf) *zerolog.Logger {
 }
 
 func handlePIDFlag(l *zerolog.Logger, pidFile string) (*grace.Watcher, error) {
-	if pidFile == "" {
-		// if pid is empty, we store it in the OS temporary folder with random name
-		uuid := uuid.Must(uuid.NewV4())
-		pidFile = path.Join(os.TempDir(), "revad-"+uuid.String()+".pid")
-	}
-
 	var opts []grace.Option
 	opts = append(opts, grace.WithPIDFile(pidFile))
 	opts = append(opts, grace.WithLogger(l.With().Str("pkg", "grace").Logger()))
