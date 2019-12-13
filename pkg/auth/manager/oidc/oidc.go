@@ -47,10 +47,8 @@ type mgr struct {
 }
 
 type config struct {
-	Insecure    bool     `mapstructure:"insecure"`
-	SkipCheck   bool     `mapstructure:"skipcheck"`
-	Provider    string   `mapstructure:"provider"`
-	SigningAlgs []string `mapstructure:"signing_algorithms"`
+	Insecure bool   `mapstructure:"insecure"`
+	Issuer   string `mapstructure:"issuer"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -62,20 +60,12 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-func (c *config) init() {
-	// set default signing algorithms to verifiy against.
-	if len(c.SigningAlgs) < 1 {
-		c.SigningAlgs = []string{"RS256", "PS256"}
-	}
-}
-
 // New returns an auth manager implementation that verifies the oidc token and obtains the user claims.
 func New(m map[string]interface{}) (auth.Manager, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
 	}
-	c.init()
 
 	return &mgr{c: c}, nil
 }
@@ -149,7 +139,7 @@ func (am *mgr) getOIDCProvider(ctx context.Context) (*oidc.Provider, error) {
 	// Once initialized is a singleton that is reuser if further requests.
 	// The provider is responsible to verify the token sent by the client
 	// against the security keys oftentimes available in the .well-known endpoint.
-	provider, err := oidc.NewProvider(ctx, am.c.Provider)
+	provider, err := oidc.NewProvider(ctx, am.c.Issuer)
 	if err != nil {
 		return nil, fmt.Errorf("error creating a new oidc provider: %+v", err)
 	}

@@ -25,13 +25,7 @@ auth_manager = "oidc"
 
 [grpc.services.authprovider.auth_managers.oidc]
 # If you want to use your own openid provider change this config
-provider = "http://localhost:20080"
-insecure = true
-# credentials used for the introspection endpoint with basic auth
-# also rate limit the endpoint: https://tools.ietf.org/html/rfc7662#section-4
-# TODO(jfd) introduce rate limits
-client_id = "reva"
-client_secret = "foobar"
+issuer = "http://localhost:20080"
 
 [grpc.interceptors.auth]
 token_manager = "jwt"
@@ -51,19 +45,6 @@ credential_chain = ["basic", "bearer"]
 token_strategy = "header"
 token_writer = "header"
 token_manager = "jwt"
-skip_methods = [
-    "/status.php",
-	"/oauth2",
-	"/oauth2/auth", 
-	"/oauth2/token",
-	# TODO protect the introspection endpoint from external requests.
-	# should only be reachable by internal services, which is why the
-	# oidc-provider.toml has clientid and secret that are used for a basic auth
-	"/oauth2/introspect",
-	"/oauth2/userinfo",
-	"/oauth2/sessions",
-	"/.well-known/openid-configuration",
-]
 
 [http.middlewares.auth.token_managers.jwt]
 secret = "Pive-Fumkiu4"

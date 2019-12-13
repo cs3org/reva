@@ -13,7 +13,6 @@ network = "tcp"
 address = "0.0.0.0:18000"
 enabled_interceptors = ["auth"]
 enabled_services = [
-    "appprovider",
     "authprovider", # provides basic auth
     "userprovider", # provides user matadata (used to look up email, displayname etc after a login)
     "preferences",  # provides user preferences
@@ -21,20 +20,9 @@ enabled_services = [
 
 [grpc.interceptors.auth]
 token_manager = "jwt"
-skip_methods = [
-    # we need to allow calls that happen during authentication
-    "/cs3.auth.provider.v1beta1.ProviderAPI/Authenticate",
-    "/cs3.identity.user.v1beta1.UserAPI/GetUser",
-]
 
 [grpc.interceptors.auth.token_managers.jwt]
 secret = "Pive-Fumkiu4"
-
-[grpc.services.appprovider]
-driver = "demo"
-
-[grpc.services.appprovider.demo]
-iframe_ui_provider = "http://localhost:19500/iframeui"
 
 [grpc.services.authprovider]
 auth_manager = "json"
@@ -47,9 +35,3 @@ driver = "json"
 
 [grpc.services.userprovider.drivers.json]
 users = "users.demo.json"
-
-
-# TODO bring back iframe app ui demo
-#[http]
-#address = "0.0.0.0:19500"
-#enabled_services = ["iframeui"]
