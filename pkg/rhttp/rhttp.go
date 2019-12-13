@@ -80,12 +80,10 @@ type Server struct {
 }
 
 type config struct {
-	Network            string                            `mapstructure:"network"`
-	Address            string                            `mapstructure:"address"`
-	Services           map[string]map[string]interface{} `mapstructure:"services"`
-	EnabledServices    []string                          `mapstructure:"enabled_services"`
-	Middlewares        map[string]map[string]interface{} `mapstructure:"middlewares"`
-	EnabledMiddlewares []string                          `mapstructure:"enabled_middlewares"`
+	Network     string                            `mapstructure:"network"`
+	Address     string                            `mapstructure:"address"`
+	Services    map[string]map[string]interface{} `mapstructure:"services"`
+	Middlewares map[string]map[string]interface{} `mapstructure:"middlewares"`
 }
 
 // Start starts the server
@@ -182,7 +180,7 @@ func (s *Server) registerMiddlewares() error {
 }
 
 func (s *Server) isMiddlewareEnabled(name string) bool {
-	for _, key := range s.conf.EnabledMiddlewares {
+	for key := range s.conf.Middlewares {
 		if key == name {
 			return true
 		}
@@ -191,7 +189,7 @@ func (s *Server) isMiddlewareEnabled(name string) bool {
 }
 
 func (s *Server) registerServices() error {
-	for _, svcName := range s.conf.EnabledServices {
+	for svcName := range s.conf.Services {
 		if s.isServiceEnabled(svcName) {
 			newFunc := global.Services[svcName]
 			svc, err := newFunc(s.conf.Services[svcName])

@@ -92,14 +92,12 @@ type streamInterceptorTriple struct {
 }
 
 type config struct {
-	Network             string                            `mapstructure:"network"`
-	Address             string                            `mapstructure:"address"`
-	ShutdownDeadline    int                               `mapstructure:"shutdown_deadline"`
-	EnabledServices     []string                          `mapstructure:"enabled_services"`
-	Services            map[string]map[string]interface{} `mapstructure:"services"`
-	EnabledInterceptors []string                          `mapstructure:"enabled_interceptors"`
-	Interceptors        map[string]map[string]interface{} `mapstructure:"interceptors"`
-	EnableReflection    bool                              `mapstructure:"enable_reflection"`
+	Network          string                            `mapstructure:"network"`
+	Address          string                            `mapstructure:"address"`
+	ShutdownDeadline int                               `mapstructure:"shutdown_deadline"`
+	Services         map[string]map[string]interface{} `mapstructure:"services"`
+	Interceptors     map[string]map[string]interface{} `mapstructure:"interceptors"`
+	EnableReflection bool                              `mapstructure:"enable_reflection"`
 }
 
 // Server is a gRPC server.
@@ -150,7 +148,7 @@ func (s *Server) Start(ln net.Listener) error {
 }
 
 func (s *Server) isInterceptorEnabled(name string) bool {
-	for _, k := range s.conf.EnabledInterceptors {
+	for k := range s.conf.Interceptors {
 		if k == name {
 			return true
 		}
@@ -168,7 +166,7 @@ func (s *Server) isServiceEnabled(svcName string) bool {
 }
 
 func (s *Server) registerServices() error {
-	for _, svcName := range s.conf.EnabledServices {
+	for svcName := range s.conf.Services {
 		if s.isServiceEnabled(svcName) {
 			newFunc := Services[svcName]
 			svc, err := newFunc(s.conf.Services[svcName], s.s)

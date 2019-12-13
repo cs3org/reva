@@ -1,24 +1,15 @@
-# This frontend-oidc.toml config file will start a reva service that:
-# - serves as the entypoint for legacy owncloud requests
+# This frontend.toml config file will start a reva service that:
+# - serves as the entrypoint for owncloud APIs.
 # - serves http endpoints on port 20080
 #   - /owncloud - ocdav
 #   - /ocs - ocs
 #   - /oauth2 - oidcprovider
 #   - /.well-known - wellknown service to announce openid-configuration
-#   - TODO ocm
-# - authenticates requests using oidc bearer auth
+#   - TODO(diocas): ocm
+# - authenticates requests using oidc bearer auth and basic auth as fallback
 # - serves the grpc services on port 18002
-[core]
-max_cpus = "2"
-
-[log]
-level = "debug"
-
 [grpc]
 address = "0.0.0.0:20099"
-enabled_services = [
-    "authprovider"
-]
 
 [grpc.services.authprovider]
 auth_manager = "oidc"
@@ -34,9 +25,6 @@ token_manager = "jwt"
 secret = "Pive-Fumkiu4"
 
 [http]
-#enabled_services = ["ocdav", "ocs"] # use this if you want to use your own oidc provider. 
-enabled_services = ["wellknown", "oidcprovider", "ocdav", "ocs"]
-enabled_middlewares = ["cors", "auth"]
 address = "0.0.0.0:20080"
 
 [http.middlewares.auth]
