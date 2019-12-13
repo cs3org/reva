@@ -62,7 +62,7 @@ type eosStorage struct {
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
+	c := &config{Autocreate: true}
 	if err := mapstructure.Decode(m, c); err != nil {
 		return nil, err
 	}
@@ -107,6 +107,9 @@ type config struct {
 
 	// UseKeyTabAuth changes will authenticate requests by using an EOS keytab.
 	UseKeytab bool `mapstrucuture:"use_keytab"`
+
+	// Autocreate home if missing
+	Autocreate bool `mapstructure:"autocreate"`
 
 	// SecProtocol specifies the xrootd security protocol to use between the server and EOS.
 	SecProtocol string `mapstructure:"sec_protocol"`
@@ -258,6 +261,7 @@ func (fs *eosStorage) getPath(ctx context.Context, u *userpb.User, id *provider.
 	if err != nil {
 		return "", fmt.Errorf("error converting string to int for eos fileid: %s", id.OpaqueId)
 	}
+
 	eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, u.Username, fid)
 	if err != nil {
 		return "", errors.Wrap(err, "storage_eos: error getting file info by inode")
@@ -508,6 +512,16 @@ func (fs *eosStorage) GetMD(ctx context.Context, ref *provider.Reference) (*prov
 		return nil, errors.Wrap(err, "storage_eos: error resolving reference")
 	}
 
+	if fs.conf.Autocreate && ref.GetPath() == "/"+u.Username {
+		_, err := fs.c.GetFileInfoByPath(ctx, u.Username, fn)
+		if err != nil {
+			err := fs.c.CreateDir(ctx, u.Username, fn)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, u.Username, fn)
 	if err != nil {
 		return nil, err
@@ -525,6 +539,16 @@ func (fs *eosStorage) ListFolder(ctx context.Context, ref *provider.Reference) (
 	fn, err := fs.resolve(ctx, u, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "storage_eos: error resolving reference")
+	}
+
+	if fs.conf.Autocreate && ref.GetPath() == "/"+u.Username {
+		_, err := fs.c.GetFileInfoByPath(ctx, u.Username, fn)
+		if err != nil {
+			err := fs.c.CreateDir(ctx, u.Username, fn)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	eosFileInfos, err := fs.c.List(ctx, u.Username, fn)
