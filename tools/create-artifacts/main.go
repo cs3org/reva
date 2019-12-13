@@ -33,6 +33,7 @@ import (
 )
 
 var (
+	dev       = flag.Bool("dev", false, "if devs is set to true creates dev builds with commit and build date")
 	commit    = flag.String("commit", "", "sets git commit")
 	version   = flag.String("version", "", "sets git version")
 	goVersion = flag.String("goversion", "", "sets go version")
@@ -46,9 +47,14 @@ var (
 func init() {
 	flag.Parse()
 
-	if *commit == "" || *version == "" || *goVersion == "" {
+	if (*commit == "" || *goVersion == "") && (*version == "" && !*dev) {
 		fmt.Fprint(os.Stderr, "fill all the flags\n")
 		os.Exit(1)
+	}
+
+	// if version is not set we use the dev build setting build date and commit number.
+	if *version == "" {
+		*version = fmt.Sprintf("%s_%s", time.Now().Format("2006_01_02T150405"), *commit)
 	}
 }
 

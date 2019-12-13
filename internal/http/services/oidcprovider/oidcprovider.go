@@ -105,7 +105,7 @@ func getOAuth2Provider(st fosite.Storage, conf *compose.Config) fosite.OAuth2Pro
 	return compose.ComposeAllEnabled(
 		conf,
 		st,
-		[]byte("my super secret signing password"), // Attention it MUST be 32 bytes long.
+		[]byte("my super secret signing password"), // Caution: it MUST always be 32 bytes long.
 		mustRSAKey(),
 	)
 }

@@ -17,6 +17,22 @@ trigger:
     - promote
     - rollback
 steps:
+
+- name: store-dev-release
+  image: golang:1.13
+  environment:
+    USERNAME:
+      from_secret: cbox_username
+    PASSWORD:
+      from_secret: cbox_password
+  detach: true
+  commands:
+    - TZ=Europe/Berlin go run tools/create-artifacts/main.go -dev -commit ${DRONE_COMMIT} -goversion `go version | awk '{print $$3}'`
+    - curl -X MKCOL "https://cernbox.cern.ch/cernbox/desktop/remote.php/webdav/eos/project/r/reva/www/daily/" -k -u $${USERNAME}:$${PASSWORD}
+    - curl -X MKCOL "https://cernbox.cern.ch/cernbox/desktop/remote.php/webdav/eos/project/r/reva/www/daily/`date '+%Y-%m-%d'`" -k -u $${USERNAME}:$${PASSWORD}
+    - curl -X MKCOL "https://cernbox.cern.ch/cernbox/desktop/remote.php/webdav/eos/project/r/reva/www/daily/`date '+%Y-%m-%d'`/${DRONE_COMMIT}" -k -u $${USERNAME}:$${PASSWORD}
+    - for i in $(ls /drone/src/dist);do curl -X PUT -u $${USERNAME}:$${PASSWORD} https://cernbox.cern.ch/cernbox/desktop/remote.php/webdav/eos/project/r/reva/www/daily/`date '+%Y-%m-%d'`/${DRONE_COMMIT}/$${i} --data-binary @./dist/$${i} ; done
+
 - name: license-scan
   image: golang:1.13
   environment:

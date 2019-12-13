@@ -40,7 +40,7 @@ type strategy struct {
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
+	c := &config{Header: "X-Access-Token"}
 	if err := mapstructure.Decode(m, c); err != nil {
 		err = errors.Wrap(err, "error decoding conf")
 		return nil, err

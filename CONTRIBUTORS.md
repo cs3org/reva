@@ -8,3 +8,4 @@
 - Ilja Neumann <ineumann@owncloud.com>
 - Jörn Friedrich Dreyer <jfd@butonic.de>
 - Mohitty <mohitt@iitk.ac.in>
+- zazola <aritz.brosa@gmail.com>

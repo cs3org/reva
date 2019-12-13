@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/oauth2"
 )
 
@@ -46,13 +47,10 @@ type mgr struct {
 }
 
 type config struct {
-	Insecure     bool     `mapstructure:"insecure"`
-	SkipCheck    bool     `mapstructure:"skipcheck"`
-	Provider     string   `mapstructure:"provider"` // the endpoint of the oidc provider, a.k.a the issuer OIDC term.
-	Audience     string   `mapstructure:"audience"`
-	SigningAlgs  []string `mapstructure:"signing_algorithms"`
-	ClientID     string   `mapstructure:"client_id"`
-	ClientSecret string   `mapstructure:"client_secret"`
+	Insecure    bool     `mapstructure:"insecure"`
+	SkipCheck   bool     `mapstructure:"skipcheck"`
+	Provider    string   `mapstructure:"provider"`
+	SigningAlgs []string `mapstructure:"signing_algorithms"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -83,10 +81,9 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 }
 
 // the clientID it would be empty as we only need to validate the clientSecret variable
-// that contains the OIDC token to be verified against the OIDC provider.
+// which contains the access token that we can use to contact the UserInfo endpoint
+// and get the user claims.
 func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, error) {
-	//log := appctx.GetLogger(ctx)
-
 	ctx = am.getOAuthCtx(ctx)
 
 	provider, err := am.getOIDCProvider(ctx)
@@ -94,117 +91,20 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, fmt.Errorf("error creating oidc provider: +%v", err)
 	}
 
-	// verifier is used to verify the oidc token againsy the oidc provider.
-	verifier := am.getVerifier(provider)
-
-	idToken, err := verifier.Verify(ctx, clientSecret)
+	oauth2Token := &oauth2.Token{
+		AccessToken: clientSecret,
+	}
+	userInfo, err := provider.UserInfo(ctx, oauth2.StaticTokenSource(oauth2Token))
 	if err != nil {
-		return nil, errors.Wrap(err, "oidc: error verifying oidc token")
+		return nil, fmt.Errorf("oidc: error getting userinfo: +%v", err)
 	}
 
 	// claims contains the standard OIDC claims like issuer, iat, aud, ...
 	var claims StandardClaims
-	if err := idToken.Claims(&claims); err != nil {
-		return nil, errors.Wrap(err, "oidc: error parsing claims")
+	if err := userInfo.Claims(&claims); err != nil {
+		return nil, fmt.Errorf("oidc: error unmarshaling userinfo claims: %v", err)
 	}
-
-	/*
-		if am.metadata.IntrospectionEndpoint == "" {
-
-			log.Debug().Msg("no introspection endpoint, trying to decode access token as jwt")
-			// maybe our access token is a jwt token
-			c := &oidc.Config{
-				ClientID:             am.c.Audience,
-				SupportedSigningAlgs: am.c.SigningAlgs,
-			}
-			if am.c.SkipCheck { // not safe but only way for simplesamlphp to work with an almost compliant oidc (for now)
-				c.SkipClientIDCheck = true
-				c.SkipIssuerCheck = true
-			}
-			verifier := provider.Verifier(c)
-			idToken, err := verifier.Verify(customCtx, token)
-			if err != nil {
-				return nil, fmt.Errorf("could not verify jwt: %v", err)
-			}
-			if err := idToken.Claims(&claims); err != nil {
-				return nil, fmt.Errorf("failed to parse claims: %v", err)
-			}
-
-		} else {
-
-			// we need to lookup the id token with the access token we got
-			// see oidc IDToken.Verifytoken
-
-			data := fmt.Sprintf("token=%s&token_type_hint=access_token", token)
-			req, err := http.NewRequest("POST", am.metadata.UserinfoEndpoint, strings.NewReader(data))
-			if err != nil {
-				return nil, fmt.Errorf("could not create introspection request: %v", err)
-			}
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-			// we follow https://tools.ietf.org/html/rfc7662
-			req.Header.Set("Accept", "application/json")
-			//req.SetBasicAuth(am.c.ClientID, am.c.ClientSecret)
-			//req.SetBasicAuth(am.c.ClientID, token)
-			req.SetBasicAuth(am.c.ClientID, "")
-
-			res, err := customHTTPClient.Do(req)
-			if err != nil {
-				return nil, fmt.Errorf("could not introspect access token %s: %v", token, err)
-			}
-			defer res.Body.Close()
-
-			body, err := ioutil.ReadAll(res.Body)
-			if err != nil {
-				return nil, fmt.Errorf("could not read introspection response body: %v", err)
-			}
-
-			log.Debug().Str("body", string(body)).Str("client", am.c.ClientID).Str("req", fmt.Sprintf("%+v", req)).Msg("oidc introspect response")
-			switch strings.Split(res.Header.Get("Content-Type"), ";")[0] {
-			// application/jwt is in draft https://tools.ietf.org/html/draft-ietf-oauth-jwt-introspection-response-03
-			case "application/jwt":
-				// verify the jwt
-				log.Warn().Msg("TODO untested verification of jwt encoded introspection response")
-
-				verifier := provider.Verifier(&oidc.Config{ClientID: am.c.Audience})
-				idToken, err := verifier.Verify(customCtx, string(body))
-				if err != nil {
-					return nil, fmt.Errorf("could not verify jwt: %v", err)
-				}
-
-				if err := idToken.Claims(&claims); err != nil {
-					return nil, fmt.Errorf("failed to parse claims: %v", err)
-				}
-			case "application/json":
-				var ir IntrospectionResponse
-				// parse json
-				if err := json.Unmarshal(body, &ir); err != nil {
-					return nil, fmt.Errorf("failed to parse claims: %v", err)
-				}
-				// verify the auth token is still active
-				if !ir.Active {
-					log.Debug().Interface("ir", ir).Str("body", string(body)).Msg("token no longer active")
-					return nil, fmt.Errorf("token no longer active")
-				}
-				// resolve user info here? cache it?
-				oauth2Token := &oauth2.Token{
-					AccessToken: token,
-				}
-				userInfo, err := provider.UserInfo(customCtx, oauth2.StaticTokenSource(oauth2Token))
-				if err != nil {
-					return nil, fmt.Errorf("Failed to get userinfo: %v", err)
-				}
-				if err := userInfo.Claims(&claims); err != nil {
-					return nil, fmt.Errorf("failed to unmarshal userinfo claims: %v", err)
-				}
-				claims.Iss = ir.Iss
-				log.Debug().Interface("claims", claims).Interface("userInfo", userInfo).Msg("unmarshalled userinfo")
-
-			default:
-				return nil, fmt.Errorf("unknown content type: %s", res.Header.Get("Content-Type"))
-			}
-		}
-
-	*/
+	log.Debug().Interface("claims", claims).Interface("userInfo", userInfo).Msg("unmarshalled userinfo")
 
 	u := &user.User{
 		Id: &user.UserId{
@@ -254,34 +154,6 @@ func (am *mgr) getOIDCProvider(ctx context.Context) (*oidc.Provider, error) {
 		return nil, fmt.Errorf("error creating a new oidc provider: %+v", err)
 	}
 
-	// Once the provider is configured we obtain the metadata claims like the
-	// authorization, token and instrospection endpoints if they are available.
-
-	/*metadata := &ProviderMetadata{}
-	if err := provider.Claims(metadata); err != nil {
-		return nil, fmt.Errorf("error unmarshaling oidc provider metadata: %v", err)
-	}
-	*/
-
 	am.provider = provider
-	//am.metadata = metadata
 	return am.provider, nil
-}
-
-func (am *mgr) getVerifier(provider *oidc.Provider) *oidc.IDTokenVerifier {
-	c := &oidc.Config{
-		ClientID:             am.c.ClientID,
-		SupportedSigningAlgs: am.c.SigningAlgs,
-	}
-
-	// it is unsage to skip client id and issuer check but it comes useful when
-	// testing against dev oidc providers that are not properly setup.
-	if am.c.SkipCheck {
-		c.SkipClientIDCheck = true
-		c.SkipIssuerCheck = true
-		c.SkipExpiryCheck = true
-	}
-
-	verifier := provider.Verifier(c)
-	return verifier
 }
