@@ -49,6 +49,14 @@ type mgr struct {
 type config struct {
 	Insecure bool   `mapstructure:"insecure"`
 	Issuer   string `mapstructure:"issuer"`
+	IDClaim  string `mapstructure:"id_claim"`
+}
+
+func (c *config) init() {
+	if c.IDClaim == "" {
+		// sub is stable and defined as unique. the user manager needs to take care of the sub to user metadata lookup
+		c.IDClaim = "sub"
+	}
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -89,8 +97,9 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, fmt.Errorf("oidc: error getting userinfo: +%v", err)
 	}
 
-	// claims contains the standard OIDC claims like issuer, iat, aud, ...
-	var claims StandardClaims
+	// claims contains the standard OIDC claims like issuer, iat, aud, ... and any other non-standard one.
+	// TODO(labkode): make claims configuration dynamic from the config file so we can add arbitrary mappings from claims to user struct.
+	var claims map[string]interface{}
 	if err := userInfo.Claims(&claims); err != nil {
 		return nil, fmt.Errorf("oidc: error unmarshaling userinfo claims: %v", err)
 	}
@@ -98,17 +107,18 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 
 	u := &user.User{
 		Id: &user.UserId{
-			OpaqueId: claims.Sub, // a stable non reassignable id
-			Idp:      claims.Iss, // in the scope of this issuer
+			OpaqueId: claims[am.c.IDClaim].(string), // a stable non reassignable id
+			Idp:      claims["issuer"].(string),     // in the scope of this issuer
 		},
-		Username: claims.PreferredUsername,
+		Username: claims["preferred_username"].(string),
 		// TODO(labkode) if we can get groups from the claim we need to give the possibility
 		// to the admin to chosse what claim provides the groups.
 		// TODO(labkode) ... use all claims from oidc?
+		// TODO(labkode): do like K8s does it: https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/apiserver/plugin/pkg/authenticator/token/oidc/oidc.go
 		Groups:       []string{},
-		Mail:         claims.Email,
-		MailVerified: claims.EmailVerified,
-		DisplayName:  claims.Name,
+		Mail:         claims["email"].(string),
+		MailVerified: claims["email_verified"].(bool),
+		DisplayName:  claims["name"].(string),
 	}
 
 	return u, nil

@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package oidc
+package oidcprovider
 
 // StandardClaims are the standard claims defined in OIDC.
 // Section 5.3.2, or in the ID Token, per Section 2.
