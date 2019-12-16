@@ -74,6 +74,7 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	if err != nil {
 		return nil, err
 	}
+	c.init()
 
 	return &mgr{c: c}, nil
 }
