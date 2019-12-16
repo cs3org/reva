@@ -1,5 +1,5 @@
 .PHONY: build
-default: build test lint contrib
+default: build test lint vendor contrib-sort
 
 BUILD_DATE=`date +%FT%T%z`
 GIT_COMMIT=`git rev-parse --short HEAD`
@@ -38,9 +38,13 @@ test: off
 lint:
 	go run tools/check-license/check-license.go
 	`go env GOPATH`/bin/golangci-lint run
+vendor:
+	go mod vendor
 
-contrib:
-	git log --pretty="%an <%ae>" | sort -n | uniq  | sort -n | awk '{print "-", $$0}' | grep -v 'users.noreply.github.com' > CONTRIBUTORS.md 
+#contrib:
+#	git log --pretty="%an <%ae>" | sort -n | uniq  | sort -n | awk '{print "-", $$0}' | grep -v 'users.noreply.github.com' > CONTRIBUTORS.md 
+contrib-sort:
+	cat CONTRIBUTORS.md | sort -o CONTRIBUTORS.md 
 
 # for manual building only
 deps: 
