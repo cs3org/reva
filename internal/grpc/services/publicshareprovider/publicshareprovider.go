@@ -21,7 +21,6 @@ package publicshareprovider
 import (
 	"context"
 	"fmt"
-	"io"
 
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -61,6 +60,13 @@ func getShareManager(c *config) (publicshare.Manager, error) {
 func (s *service) Close() error {
 	return nil
 }
+func (s *service) UnprotectedEndpoints() []string {
+	return []string{}
+}
+
+func (s *service) Register(ss *grpc.Server) {
+	link.RegisterLinkAPIServer(ss, s)
+}
 
 func parseConfig(m map[string]interface{}) (*config, error) {
 	c := &config{}
@@ -72,7 +78,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New creates a new user share provider svc
-func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
+func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 
 	c, err := parseConfig(m)
 	if err != nil {
@@ -89,7 +95,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 		sm:   sm,
 	}
 
-	link.RegisterLinkAPIServer(ss, service)
 	return service, nil
 }
 

@@ -21,7 +21,6 @@ package appregistry
 import (
 	"context"
 	"fmt"
-	"io"
 
 	"google.golang.org/grpc"
 
@@ -45,13 +44,21 @@ func (s *svc) Close() error {
 	return nil
 }
 
+func (s *svc) UnprotectedEndpoints() []string {
+	return []string{}
+}
+
+func (s *svc) Register(ss *grpc.Server) {
+	registrypb.RegisterRegistryAPIServer(ss, s)
+}
+
 type config struct {
 	Driver string                 `mapstructure:"driver"`
 	Static map[string]interface{} `mapstructure:"static"`
 }
 
 // New creates a new StorageRegistryService
-func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
+func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 
 	c, err := parseConfig(m)
 	if err != nil {
@@ -67,7 +74,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 		registry: registry,
 	}
 
-	registrypb.RegisterRegistryAPIServer(ss, svc)
 	return svc, nil
 }
 

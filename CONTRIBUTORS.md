@@ -7,5 +7,6 @@
 - Hugo Gonzalez Labrador <github@hugo.labkode.com>
 - Ilja Neumann <ineumann@owncloud.com>
 - Jörn Friedrich Dreyer <jfd@butonic.de>
+- Michael D'Silva <md@aarnet.edu.au>
 - Mohitty <mohitt@iitk.ac.in>
 - zazola <aritz.brosa@gmail.com>

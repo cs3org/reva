@@ -16,54 +16,13 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package oidc
+package oidcprovider
 
-// The ProviderMetadata describes an idp.
-// see https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
-type ProviderMetadata struct {
-	AuthorizationEndpoint string `json:"authorization_endpoint,omitempty"`
-	//claims_parameter_supported
-	ClaimsSupported []string `json:"claims_supported,omitempty"`
-	//grant_types_supported
-	IDTokenSigningAlgValuesSupported []string `json:"id_token_signing_alg_values_supported,omitempty"`
-	Issuer                           string   `json:"issuer,omitempty"`
-	JwksURI                          string   `json:"jwks_uri,omitempty"`
-	//registration_endpoint
-	//request_object_signing_alg_values_supported
-	//request_parameter_supported
-	//request_uri_parameter_supported
-	//require_request_uri_registration
-	//response_modes_supported
-	ResponseTypesSupported []string `json:"response_types_supported,omitempty"`
-	ScopesSupported        []string `json:"scopes_supported,omitempty"`
-	SubjectTypesSupported  []string `json:"subject_types_supported,omitempty"`
-	TokenEndpoint          string   `json:"token_endpoint,omitempty"`
-	//token_endpoint_auth_methods_supported
-	//token_endpoint_auth_signing_alg_values_supported
-	UserinfoEndpoint string `json:"userinfo_endpoint,omitempty"`
-	//userinfo_signing_alg_values_supported
-	//code_challenge_methods_supported
-	IntrospectionEndpoint string `json:"introspection_endpoint,omitempty"`
-	//introspection_endpoint_auth_methods_supported
-	//introspection_endpoint_auth_signing_alg_values_supported
-	RevocationEndpoint string `json:"revocation_endpoint,omitempty"`
-	//revocation_endpoint_auth_methods_supported
-	//revocation_endpoint_auth_signing_alg_values_supported
-	//id_token_encryption_alg_values_supported
-	//id_token_encryption_enc_values_supported
-	//userinfo_encryption_alg_values_supported
-	//userinfo_encryption_enc_values_supported
-	//request_object_encryption_alg_values_supported
-	//request_object_encryption_enc_values_supported
-	CheckSessionIframe string `json:"check_session_iframe,omitempty"`
-	EndSessionEndpoint string `json:"end_session_endpoint,omitempty"`
-	//claim_types_supported
-}
-
-// StandardClaims will be stored in the context to be consumed by the oidc user manager
-// They can be requested to be returned either in the UserInfo Response, per
+// StandardClaims are the standard claims defined in OIDC.
 // Section 5.3.2, or in the ID Token, per Section 2.
 // see https://openid.net/specs/openid-connect-core-1_0.html#StandardClaims
+// TODO(labkode): create PR for the core-os/oidc with StandardClaims public struct.
+// TODO(labkode): we need to allow adding custom claims and define the mappings to the user struct.
 type StandardClaims struct {
 	// Time the End-User's information was last updated. Its value is a
 	// JSON number representing the number of seconds from 1970-01-01T0:0:0Z
@@ -186,10 +145,10 @@ type StandardClaims struct {
 	// is a JSON [RFC4627] structure containing some or all of the members
 	// defined in Section 5.1.1.
 	// TODO add address claim https://openid.net/specs/openid-connect-core-1_0.html#AddressClaim
-	Address    map[string]interface{} `json:"address,omitempty"`
-	KCIdentity map[string]string      `json:"kc.identity,omitempty"`
+	Address map[string]interface{} `json:"address,omitempty"`
 }
 
+/*
 // The IntrospectionResponse is a JSON object [RFC7159] in
 // "application/json" format with the following top-level members.
 // see https://tools.ietf.org/html/rfc7662#section-2.2
@@ -244,3 +203,4 @@ type IntrospectionResponse struct {
 	// OPTIONAL.  String identifier for the token, as defined in JWT [RFC7519].
 	Jti string `json:"jti,omitempty"`
 }
+*/

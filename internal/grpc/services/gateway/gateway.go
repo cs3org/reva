@@ -20,7 +20,6 @@ package gateway
 
 import (
 	"fmt"
-	"io"
 	"net/url"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -38,21 +37,23 @@ func init() {
 }
 
 type config struct {
-	AuthRegistryEndpoint        string                            `mapstructure:"authregistrysvc"`
-	StorageRegistryEndpoint     string                            `mapstructure:"storageregistrysvc"`
-	AppRegistryEndpoint         string                            `mapstructure:"appregistrysvc"`
-	PreferencesEndpoint         string                            `mapstructure:"preferencessvc"`
-	UserShareProviderEndpoint   string                            `mapstructure:"usershareprovidersvc"`
-	PublicShareProviderEndpoint string                            `mapstructure:"publicshareprovidersvc"`
-	OCMShareProviderEndpoint    string                            `mapstructure:"ocmshareprovidersvc"`
-	UserProviderEndpoint        string                            `mapstructure:"userprovidersvc"`
-	CommitShareToStorageGrant   bool                              `mapstructure:"commit_share_to_storage_grant"`
-	CommitShareToStorageRef     bool                              `mapstructure:"commit_share_to_storage_ref"`
-	DataGatewayEndpoint         string                            `mapstructure:"datagateway"`
-	TransferSharedSecret        string                            `mapstructure:"transfer_shared_secret"`
-	TranserExpires              int64                             `mapstructure:"transfer_expires"`
-	TokenManager                string                            `mapstructure:"token_manager"`
-	TokenManagers               map[string]map[string]interface{} `mapstructure:"token_managers"`
+	AuthRegistryEndpoint        string `mapstructure:"authregistrysvc"`
+	StorageRegistryEndpoint     string `mapstructure:"storageregistrysvc"`
+	AppRegistryEndpoint         string `mapstructure:"appregistrysvc"`
+	PreferencesEndpoint         string `mapstructure:"preferencessvc"`
+	UserShareProviderEndpoint   string `mapstructure:"usershareprovidersvc"`
+	PublicShareProviderEndpoint string `mapstructure:"publicshareprovidersvc"`
+	OCMShareProviderEndpoint    string `mapstructure:"ocmshareprovidersvc"`
+	UserProviderEndpoint        string `mapstructure:"userprovidersvc"`
+	CommitShareToStorageGrant   bool   `mapstructure:"commit_share_to_storage_grant"`
+	CommitShareToStorageRef     bool   `mapstructure:"commit_share_to_storage_ref"`
+	DataGatewayEndpoint         string `mapstructure:"datagateway"`
+	TransferSharedSecret        string `mapstructure:"transfer_shared_secret"`
+	TranserExpires              int64  `mapstructure:"transfer_expires"`
+	TokenManager                string `mapstructure:"token_manager"`
+	// ShareFolder is the location where to create shares in the recipient's storage provider.
+	ShareFolder   string                            `mapstructure:"share_folder"`
+	TokenManagers map[string]map[string]interface{} `mapstructure:"token_managers"`
 }
 
 type svc struct {
@@ -64,7 +65,7 @@ type svc struct {
 // New creates a new gateway svc that acts as a proxy for any grpc operation.
 // The gateway is responsible for high-level controls: rate-limiting, coordination between svcs
 // like sharing and storage acls, asynchronous transactions, ...
-func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
+func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -91,12 +92,19 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 		tokenmgr:       tokenManager,
 	}
 
-	gateway.RegisterGatewayAPIServer(ss, s)
 	return s, nil
+}
+
+func (s *svc) Register(ss *grpc.Server) {
+	gateway.RegisterGatewayAPIServer(ss, s)
 }
 
 func (s *svc) Close() error {
 	return nil
+}
+
+func (s *svc) UnprotectedEndpoints() []string {
+	return []string{"/cs3.gateway.v1beta1.GatewayAPI"}
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
