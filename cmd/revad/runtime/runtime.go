@@ -61,6 +61,9 @@ type coreConf struct {
 func run(mainConf map[string]interface{}, coreConf *coreConf, logConf *logConf, filename string) {
 	logger := initLogger(logConf)
 
+	host, _ := os.Hostname()
+	logger.Info().Msgf("host info: %s", host)
+
 	initTracing(coreConf, logger)
 	initCPUCount(coreConf, logger)
 
