@@ -514,7 +514,11 @@ func (fs *eosStorage) GetMD(ctx context.Context, ref *provider.Reference) (*prov
 	if fs.conf.Autocreate && ref.GetPath() == "/"+u.Username {
 		_, err := fs.c.GetFileInfoByPath(ctx, u.Username, fn)
 		if err != nil {
-			err := fs.c.CreateDir(ctx, u.Username, fn)
+			err := fs.c.CreateDir(ctx, "root", fn)
+			if err != nil {
+				return nil, err
+			}
+			err = fs.c.Chown(ctx, "root", u.Username, fn)
 			if err != nil {
 				return nil, err
 			}
