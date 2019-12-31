@@ -482,6 +482,23 @@ func (c *Client) Touch(ctx context.Context, username, path string) error {
 	return err
 }
 
+// Chown given path
+func (c *Client) Chown(ctx context.Context, username, chownUser, path string) error {
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return err
+	}
+
+	unixChownUser, err := c.getUnixUser(chownUser)
+	if err != nil {
+		return err
+	}
+
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "chown", unixChownUser.Uid+":"+unixChownUser.Gid, path)
+	_, _, err = c.executeEOS(ctx, cmd)
+	return err
+}
+
 // CreateDir creates a directory at the given path
 func (c *Client) CreateDir(ctx context.Context, username, path string) error {
 	unixUser, err := c.getUnixUser(username)

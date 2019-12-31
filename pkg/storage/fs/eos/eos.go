@@ -261,7 +261,6 @@ func (fs *eosStorage) getPath(ctx context.Context, u *userpb.User, id *provider.
 	if err != nil {
 		return "", fmt.Errorf("error converting string to int for eos fileid: %s", id.OpaqueId)
 	}
-
 	eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, u.Username, fid)
 	if err != nil {
 		return "", errors.Wrap(err, "eos: error getting file info by inode")
@@ -544,7 +543,11 @@ func (fs *eosStorage) ListFolder(ctx context.Context, ref *provider.Reference) (
 	if fs.conf.Autocreate && ref.GetPath() == "/"+u.Username {
 		_, err := fs.c.GetFileInfoByPath(ctx, u.Username, fn)
 		if err != nil {
-			err := fs.c.CreateDir(ctx, u.Username, fn)
+			err := fs.c.CreateDir(ctx, "root", fn)
+			if err != nil {
+				return nil, err
+			}
+			err = fs.c.Chown(ctx, "root", u.Username, fn)
 			if err != nil {
 				return nil, err
 			}
