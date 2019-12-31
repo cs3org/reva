@@ -24,7 +24,6 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -51,13 +50,15 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	}
 	res, err := c.Authenticate(ctx, authProviderReq)
 	if err != nil {
+		log.Err(err).Msgf("gateway: error calling Authenticate for type: %s", req.Type)
 		return &gateway.AuthenticateResponse{
-			Status: status.NewInternal(ctx, err, "error getting user provider service client"),
+			Status: status.NewUnauthenticated(ctx, err, "error authenticating request"),
 		}, nil
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
 		err := status.NewErrorFromCode(res.Status.Code, "gateway")
+		log.Err(err).Msgf("error authenticating credentials to auth provider for type: %s", req.Type)
 		return &gateway.AuthenticateResponse{
 			Status: status.NewUnauthenticated(ctx, err, ""),
 		}, nil
@@ -81,34 +82,39 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		}, nil
 	}
 
-	userClient, err := pool.GetUserProviderServiceClient(s.c.UserProviderEndpoint)
-	if err != nil {
-		log.Err(err).Msg("error getting user provider client")
-		return &gateway.AuthenticateResponse{
-			Status: status.NewInternal(ctx, err, "error getting user provider service client"),
-		}, nil
-	}
-
-	getUserReq := &user.GetUserRequest{
-		UserId: uid,
-	}
-
-	getUserRes, err := userClient.GetUser(ctx, getUserReq)
-	if err != nil {
-		err = errors.Wrap(err, "authsvc: error in GetUser")
-		res := &gateway.AuthenticateResponse{
-			Status: status.NewUnauthenticated(ctx, err, "error getting user information"),
+	// TODO(labkode): we don't ned to call the user manager in the auth phase
+	// as the auth must provide a valid user. The mapping between user credentials and
+	// unique claims is done at the Authenticate logic an not here.
+	/*
+		userClient, err := pool.GetUserProviderServiceClient(s.c.UserProviderEndpoint)
+		if err != nil {
+			log.Err(err).Msg("error getting user provider client")
+			return &gateway.AuthenticateResponse{
+				Status: status.NewInternal(ctx, err, "error getting user provider service client"),
+			}, nil
 		}
-		return res, nil
-	}
 
-	if getUserRes.Status.Code != rpc.Code_CODE_OK {
-		err := status.NewErrorFromCode(getUserRes.Status.Code, "authsvc")
-		return &gateway.AuthenticateResponse{
-			Status: status.NewUnauthenticated(ctx, err, "error getting user information"),
-		}, nil
-	}
+		getUserReq := &user.GetUserRequest{
+			UserId: uid,
+		}
 
+		getUserRes, err := userClient.GetUser(ctx, getUserReq)
+		if err != nil {
+			err = errors.Wrap(err, "authsvc: error in GetUser")
+			res := &gateway.AuthenticateResponse{
+				Status: status.NewUnauthenticated(ctx, err, "error getting user information"),
+			}
+			return res, nil
+		}
+
+		if getUserRes.Status.Code != rpc.Code_CODE_OK {
+			err := status.NewErrorFromCode(getUserRes.Status.Code, "authsvc")
+			return &gateway.AuthenticateResponse{
+				Status: status.NewUnauthenticated(ctx, err, "error getting user information"),
+			}, nil
+		}
+
+	*/
 	user := res.User
 
 	token, err := s.tokenmgr.MintToken(ctx, user)

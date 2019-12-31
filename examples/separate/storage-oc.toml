@@ -4,17 +4,15 @@
 # - serves the storage provider on grpc port 11000
 # - serves http dataprovider for this storage on port 11001
 #   - /data - dataprovider: file up and download
-[core]
-max_cpus = "2"
-
-[log]
-level = "debug"
-
 [grpc]
 network = "tcp"
 address = "0.0.0.0:11000"
-enabled_services = ["storageprovider"]
-enabled_interceptors = ["auth"]
+
+[grpc.interceptors.auth]
+token_manager = "jwt"
+
+[grpc.interceptors.auth.token_managers.jwt]
+secret = "Pive-Fumkiu4"
 
 # This is a storage proider that grants direct acces to the wrapped storage
 [grpc.services.storageprovider]
@@ -33,11 +31,6 @@ unset = 1000
 [grpc.services.storageprovider.drivers.owncloud]
 datadirectory = "/var/tmp/reva/data"
 
-[grpc.interceptors.auth]
-token_manager = "jwt"
-
-[grpc.interceptors.auth.token_managers.jwt]
-secret = "Pive-Fumkiu4"
 
 [http]
 address = "0.0.0.0:11001"

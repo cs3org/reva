@@ -8,17 +8,15 @@
 # The home storage will inject the username into the path and jail users into
 # their home directory
 
-[core]
-max_cpus = "2"
-
-[log]
-level = "debug"
-
 [grpc]
 network = "tcp"
 address = "0.0.0.0:12000"
-enabled_services = ["storageprovider"]
-enabled_interceptors = ["auth"]
+
+[grpc.interceptors.auth]
+token_manager = "jwt"
+
+[grpc.interceptors.auth.token_managers.jwt]
+secret = "Pive-Fumkiu4"
 
 # This is a storage proider that grants direct acces to the wrapped storage
 [grpc.services.storageprovider]
@@ -44,16 +42,8 @@ datadirectory = "/var/tmp/reva/data"
 [grpc.services.storageprovider.path_wrappers.context]
 prefix = ""
 
-[grpc.interceptors.auth]
-token_manager = "jwt"
-
-[grpc.interceptors.auth.token_managers.jwt]
-secret = "Pive-Fumkiu4"
-
 [http]
 address = "0.0.0.0:12001"
-enabled_services = ["dataprovider"]
-enabled_middlewares = ["auth"]
 
 [http.middlewares.auth]
 gatewaysvc = "localhost:19000"

@@ -30,7 +30,7 @@ func (s *svc) doToken(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(ctx)
 
 	// This will create an access request object and iterate through the registered TokenEndpointHandlers to validate the request.
-	accessRequest, err := s.oauth2.NewAccessRequest(ctx, r, s.emptySession())
+	accessRequest, err := s.oauth2.NewAccessRequest(ctx, r, s.getEmptySession())
 
 	// Catch any errors, e.g.:
 	// * unknown client

@@ -22,16 +22,16 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/mitchellh/mapstructure"
 )
 
 func init() {
-	rhttp.Register("helloworld", New)
+	global.Register("helloworld", New)
 }
 
 // New returns a new helloworld service
-func New(m map[string]interface{}) (rhttp.Service, error) {
+func New(m map[string]interface{}) (global.Service, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
@@ -58,6 +58,10 @@ type svc struct {
 
 func (s *svc) Prefix() string {
 	return s.conf.Prefix
+}
+
+func (s *svc) Unprotected() []string {
+	return []string{"/"}
 }
 
 func (s *svc) Handler() http.Handler {

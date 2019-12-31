@@ -27,7 +27,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 )
 
 // VersionsHandler handles version requests
@@ -51,7 +51,7 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 		r = r.WithContext(ctx)
 
 		var key string
-		key, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+		key, r.URL.Path = router.ShiftPath(r.URL.Path)
 		if r.Method == http.MethodOptions {
 			s.doOptions(w, r, "versions")
 			return

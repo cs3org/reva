@@ -5,33 +5,11 @@
 # - serves the gateway on grpc port 19000
 # - serves http datagateway on port 19001
 #   - /data - datagateway: file up and download
-[core]
-max_cpus = "2"
-
-[log]
-level = "debug"
-
 [grpc]
 address = "0.0.0.0:19000"
-enabled_services = [
-    "gateway",
-    "appregistry", # TODO
-    "authregistry",
-    "storageregistry",
-]
-enabled_interceptors = ["auth"]
 
 [grpc.interceptors.auth]
 token_manager = "jwt"
-skip_methods = [
-  # we need to allow calls that happen during authentication
-	"/cs3.gateway.v1beta1.GatewayAPI/Authenticate",
-	"/cs3.gateway.v1beta1.GatewayAPI/WhoAmI",
-	"/cs3.gateway.v1beta1.GatewayAPI/GetUser",
-	"/cs3.gateway.v1beta1.GatewayAPI/ListAuthProviders",
-	"/cs3.auth.registry.v1beta1.RegistryAPI/ListAuthProviders",
-	"/cs3.auth.registry.v1beta1.RegistryAPI/GetAuthProvider",
-]
 
 [grpc.interceptors.auth.token_managers.jwt]
 secret = "Pive-Fumkiu4"
@@ -40,7 +18,6 @@ secret = "Pive-Fumkiu4"
 # registries
 authregistrysvc = "localhost:19000"
 storageregistrysvc = "localhost:19000"
-appregistrysvc = "localhost:19000"
 # user metadata
 preferencessvc = "localhost:18000"
 userprovidersvc = "localhost:18000"
@@ -58,14 +35,6 @@ token_manager = "jwt"
 
 [grpc.services.gateway.token_managers.jwt]
 secret = "Pive-Fumkiu4"
-
-[grpc.services.appregistry]
-driver = "static"
-
-[grpc.services.appregistry.static.rules]
-# TODO implement user specifir app registry
-".txt" = "localhost:18000"
-"text/plain" = "localhost:18000"
 
 [grpc.services.authregistry]
 driver = "static"
@@ -99,8 +68,6 @@ driver = "static"
 
 [http]
 address = "0.0.0.0:19001"
-enabled_services = ["datagateway"]
-enabled_middlewares = ["auth"]
 
 [http.services.datagateway]
 prefix = "data"

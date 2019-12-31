@@ -21,7 +21,6 @@ package userprovider
 import (
 	"context"
 	"fmt"
-	"io"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc"
@@ -60,7 +59,7 @@ func getDriver(c *config) (user.Manager, error) {
 }
 
 // New returns a new UserProviderServiceServer.
-func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
+func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -72,7 +71,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 	}
 
 	svc := &service{usermgr: userManager}
-	userpb.RegisterUserAPIServer(ss, svc)
 
 	return svc, nil
 }
@@ -83,6 +81,14 @@ type service struct {
 
 func (s *service) Close() error {
 	return nil
+}
+
+func (s *service) UnprotectedEndpoints() []string {
+	return []string{}
+}
+
+func (s *service) Register(ss *grpc.Server) {
+	userpb.RegisterUserAPIServer(ss, s)
 }
 
 func (s *service) GetUser(ctx context.Context, req *userpb.GetUserRequest) (*userpb.GetUserResponse, error) {

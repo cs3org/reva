@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package auth
+package utils
 
 import "testing"
 
@@ -35,7 +35,7 @@ func TestSkip(t *testing.T) {
 	for _, tt := range skipTests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			r := skip(tt.url, tt.base)
+			r := Skip(tt.url, tt.base)
 			if r != tt.out {
 				t.Errorf("expected %v, want %v", r, tt.out)
 			}

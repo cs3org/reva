@@ -36,7 +36,7 @@ import (
 	"github.com/cs3org/reva/internal/http/utils"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 	ctxuser "github.com/cs3org/reva/pkg/user"
 )
 
@@ -62,7 +62,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 		}
 
 		var username string
-		username, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+		username, r.URL.Path = router.ShiftPath(r.URL.Path)
 
 		if username == "" {
 			// listing is disabled, no auth will change that
@@ -83,7 +83,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 
 		// key will be a base63 encoded cs3 path, it uniquely identifies a trash item & storage
 		var key string
-		key, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+		key, r.URL.Path = router.ShiftPath(r.URL.Path)
 
 		// TODO another options handler should not be necessary
 		//if r.Method == http.MethodOptions {

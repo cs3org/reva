@@ -22,18 +22,18 @@ import (
 	"net/http"
 
 	"contrib.go.opencensus.io/exporter/prometheus"
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"go.opencensus.io/stats/view"
 )
 
 func init() {
-	rhttp.Register("prometheus", New)
+	global.Register("prometheus", New)
 }
 
 // New returns a new prometheus service
-func New(m map[string]interface{}) (rhttp.Service, error) {
+func New(m map[string]interface{}) (global.Service, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
@@ -74,4 +74,9 @@ func (s *svc) Handler() http.Handler {
 
 func (s *svc) Close() error {
 	return nil
+}
+
+func (s *svc) Unprotected() []string {
+	// TODO(labkode): all prometheus endpoints are public?
+	return []string{"/"}
 }

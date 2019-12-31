@@ -1,37 +1,22 @@
-# This frontend-oidc.toml config file will start a reva service that:
-# - serves as the entypoint for legacy owncloud requests
+# This frontend.toml config file will start a reva service that:
+# - serves as the entrypoint for owncloud APIs.
 # - serves http endpoints on port 20080
 #   - /owncloud - ocdav
 #   - /ocs - ocs
 #   - /oauth2 - oidcprovider
 #   - /.well-known - wellknown service to announce openid-configuration
-#   - TODO ocm
-# - authenticates requests using oidc bearer auth
+#   - TODO(diocas): ocm
+# - authenticates requests using oidc bearer auth and basic auth as fallback
 # - serves the grpc services on port 18002
-[core]
-max_cpus = "2"
-
-[log]
-level = "debug"
-
 [grpc]
 address = "0.0.0.0:20099"
-enabled_services = [
-    "authprovider"
-]
 
 [grpc.services.authprovider]
 auth_manager = "oidc"
 
 [grpc.services.authprovider.auth_managers.oidc]
 # If you want to use your own openid provider change this config
-provider = "http://localhost:20080"
-insecure = true
-# credentials used for the introspection endpoint with basic auth
-# also rate limit the endpoint: https://tools.ietf.org/html/rfc7662#section-4
-# TODO(jfd) introduce rate limits
-client_id = "reva"
-client_secret = "foobar"
+issuer = "http://localhost:20080"
 
 [grpc.interceptors.auth]
 token_manager = "jwt"
@@ -40,9 +25,6 @@ token_manager = "jwt"
 secret = "Pive-Fumkiu4"
 
 [http]
-#enabled_services = ["ocdav", "ocs"] # use this if you want to use your own oidc provider. 
-enabled_services = ["wellknown", "oidcprovider", "ocdav", "ocs"]
-enabled_middlewares = ["cors", "auth"]
 address = "0.0.0.0:20080"
 
 [http.middlewares.auth]
@@ -51,19 +33,6 @@ credential_chain = ["basic", "bearer"]
 token_strategy = "header"
 token_writer = "header"
 token_manager = "jwt"
-skip_methods = [
-    "/status.php",
-	"/oauth2",
-	"/oauth2/auth", 
-	"/oauth2/token",
-	# TODO protect the introspection endpoint from external requests.
-	# should only be reachable by internal services, which is why the
-	# oidc-provider.toml has clientid and secret that are used for a basic auth
-	"/oauth2/introspect",
-	"/oauth2/userinfo",
-	"/oauth2/sessions",
-	"/.well-known/openid-configuration",
-]
 
 [http.middlewares.auth.token_managers.jwt]
 secret = "Pive-Fumkiu4"
@@ -122,23 +91,6 @@ grant_types = ["implicit", "refresh_token", "authorization_code", "password", "c
 response_types = ["code"] # use authorization code flow, see https://developer.okta.com/blog/2019/05/01/is-the-oauth-implicit-flow-dead for details
 scopes = ["openid", "profile", "email", "offline"]
 public = true # force PKCS for public clients
-
-[http.services.oidcprovider.clients.reva]
-id = "reva"
-grant_types = ["implicit", "refresh_token", "authorization_code", "password", "client_credentials"]
-response_types = ["code"] # use authorization code flow
-# private clients can use a secret
-client_secret = "$2a$10$IxMdI6d.LIRZPpSfEwNoeu4rY3FhDREsxFJXikcgdRRAStxUlsuEO"  # = "foobar"
-scopes = ["openid", "profile", "email", "offline"]
-
-# to debug the oidc provider allow https://oidcdebugger.com
-[http.services.oidcprovider.clients.oidcdebugger]
-id = "oidcdebugger"
-redirect_uris = ["https://oidcdebugger.com/debug"]
-grant_types = ["implicit", "refresh_token", "authorization_code", "password", "client_credentials"]
-response_types = ["id_token token", "code"]
-client_secret = "$2a$10$IxMdI6d.LIRZPpSfEwNoeu4rY3FhDREsxFJXikcgdRRAStxUlsuEO"  # = "foobar"
-scopes = ["openid", "profile", "email", "offline"]
 
 [http.services.ocdav]
 # serve ocdav on the root path

@@ -21,7 +21,6 @@ package storageregistry
 import (
 	"context"
 	"fmt"
-	"io"
 
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -45,13 +44,21 @@ func (s *service) Close() error {
 	return nil
 }
 
+func (s *service) UnprotectedEndpoints() []string {
+	return []string{}
+}
+
+func (s *service) Register(ss *grpc.Server) {
+	registrypb.RegisterRegistryAPIServer(ss, s)
+}
+
 type config struct {
 	Driver  string                            `mapstructure:"driver"`
 	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
 }
 
 // New creates a new StorageBrokerService
-func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
+func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -66,7 +73,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 		reg: reg,
 	}
 
-	registrypb.RegisterRegistryAPIServer(ss, service)
 	return service, nil
 }
 

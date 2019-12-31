@@ -22,12 +22,13 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/mitchellh/mapstructure"
 )
 
 func init() {
-	rhttp.Register("wellknown", New)
+	global.Register("wellknown", New)
 }
 
 type config struct {
@@ -48,7 +49,7 @@ type svc struct {
 }
 
 // New returns a new webuisvc
-func New(m map[string]interface{}) (rhttp.Service, error) {
+func New(m map[string]interface{}) (global.Service, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
@@ -77,11 +78,17 @@ func (s *svc) Handler() http.Handler {
 	return s.handler
 }
 
+func (s *svc) Unprotected() []string {
+	return []string{
+		"/openid-configuration",
+	}
+}
+
 func (s *svc) setHandler() {
 	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log := appctx.GetLogger(r.Context())
 		var head string
-		head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 		log.Info().Msgf("wellknown routing: head=%s tail=%s", head, r.URL.Path)
 		switch head {
 		case "webfinger":

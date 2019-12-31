@@ -1,5 +1,5 @@
 .PHONY: build
-default: build test lint contrib
+default: build test lint vendor contrib
 
 BUILD_DATE=`date +%FT%T%z`
 GIT_COMMIT=`git rev-parse --short HEAD`
@@ -8,7 +8,7 @@ GIT_DIRTY=`git diff-index --quiet HEAD -- || echo "dirty-"`
 VERSION=`git describe --always`
 GO_VERSION=`go version | awk '{print $$3}'`
 
-off: 
+off:
 	GORPOXY=off
 	echo BUILD_DATE=${BUILD_DATE}
 	echo GIT_COMMIT=${GIT_COMMIT}
@@ -20,35 +20,37 @@ imports: off
 	`go env GOPATH`/bin/goimports -w tools pkg internal cmd
 
 build: imports
-	go build -mod=vendor -o ./cmd/revad/revad ./cmd/revad 
+	go build -mod=vendor -o ./cmd/revad/revad ./cmd/revad
 	go build -mod=vendor -o ./cmd/reva/reva ./cmd/reva
-	
+
 tidy:
 	go mod tidy
 
 build-revad: imports
-	go build -mod=vendor -o ./cmd/revad/revad ./cmd/revad 
+	go build -mod=vendor -o ./cmd/revad/revad ./cmd/revad
 
 build-reva: imports
 	go build -mod=vendor -o ./cmd/reva/reva ./cmd/reva
-	
+
 test: off
-	go test -mod=vendor -race ./... 
+	go test -mod=vendor -race ./...
 
 lint:
 	go run tools/check-license/check-license.go
 	`go env GOPATH`/bin/golangci-lint run
+vendor:
+	go mod vendor
 
 contrib:
-	git log --pretty="%an <%ae>" | sort -n | uniq  | sort -n | awk '{print "-", $$0}' | grep -v 'users.noreply.github.com' > CONTRIBUTORS.md 
+	git shortlog -se | cut -c8- | sort -u | awk '{print "-", $$0}' | grep -v 'users.noreply.github.com' > CONTRIBUTORS.md
 
 # for manual building only
-deps: 
+deps:
 	cd /tmp && rm -rf golangci-lint &&  git clone --quiet -b 'v1.21.0' --single-branch --depth 1 https://github.com/golangci/golangci-lint &> /dev/null && cd golangci-lint/cmd/golangci-lint && go install
 	cd /tmp && go get golang.org/x/tools/cmd/goimports
 
 build-ci: off
-	go build -mod=vendor -o ./cmd/revad/revad ./cmd/revad 
+	go build -mod=vendor -o ./cmd/revad/revad ./cmd/revad
 	go build -mod=vendor -o ./cmd/reva/reva ./cmd/reva
 
 lint-ci:
@@ -60,7 +62,7 @@ ci: build-ci test  lint-ci
 
 # to be run in Docker build
 build-revad-docker: off
-	go build -mod=vendor -o ./cmd/revad/revad ./cmd/revad 
+	go build -mod=vendor -o ./cmd/revad/revad ./cmd/revad
 build-reva-docker: off
 	go build -mod=vendor -o ./cmd/revad/reva ./cmd/reva
 clean:
