@@ -512,16 +512,9 @@ func (fs *eosStorage) GetMD(ctx context.Context, ref *provider.Reference) (*prov
 	}
 
 	if fs.conf.Autocreate && ref.GetPath() == "/"+u.Username {
-		_, err := fs.c.GetFileInfoByPath(ctx, u.Username, fn)
+		err := fs.CreateUserHome(ctx, u.Username, fn)
 		if err != nil {
-			err := fs.c.CreateDir(ctx, "root", fn)
-			if err != nil {
-				return nil, err
-			}
-			err = fs.c.Chown(ctx, "root", u.Username, fn)
-			if err != nil {
-				return nil, err
-			}
+			return nil, err
 		}
 	}
 
@@ -545,16 +538,9 @@ func (fs *eosStorage) ListFolder(ctx context.Context, ref *provider.Reference) (
 	}
 
 	if fs.conf.Autocreate && ref.GetPath() == "/"+u.Username {
-		_, err := fs.c.GetFileInfoByPath(ctx, u.Username, fn)
+		err := fs.CreateUserHome(ctx, u.Username, fn)
 		if err != nil {
-			err := fs.c.CreateDir(ctx, "root", fn)
-			if err != nil {
-				return nil, err
-			}
-			err = fs.c.Chown(ctx, "root", u.Username, fn)
-			if err != nil {
-				return nil, err
-			}
+			return nil, err
 		}
 	}
 
@@ -584,6 +570,20 @@ func (fs *eosStorage) GetQuota(ctx context.Context) (int, int, error) {
 		return 0, 0, errors.Wrap(err, "eos: no user in ctx")
 	}
 	return fs.c.GetQuota(ctx, u.Username, fs.conf.Namespace)
+}
+
+func (fs *eosStorage) CreateUserHome(ctx context.Context, username, fn string) error {
+	_, err := fs.c.GetFileInfoByPath(ctx, username, fn)
+	if err != nil {
+		err = fs.c.CreateDir(ctx, "root", fn)
+		if err != nil {
+			//Dont stop on error, dir might exist already
+			log := appctx.GetLogger(ctx)
+			log.Debug().Msg("eos: CreateDir issue, continuing")
+		}
+		err = fs.c.Chown(ctx, "root", username, fn)
+	}
+	return err
 }
 
 func (fs *eosStorage) CreateDir(ctx context.Context, fn string) error {
