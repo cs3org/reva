@@ -499,6 +499,18 @@ func (c *Client) Chown(ctx context.Context, username, chownUser, path string) er
 	return err
 }
 
+// Chmod given path
+func (c *Client) Chmod(ctx context.Context, username, mode, path string) error {
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return err
+	}
+
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "chmod", mode, path)
+	_, _, err = c.executeEOS(ctx, cmd)
+	return err
+}
+
 // CreateDir creates a directory at the given path
 func (c *Client) CreateDir(ctx context.Context, username, path string) error {
 	unixUser, err := c.getUnixUser(username)

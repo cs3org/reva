@@ -573,15 +573,25 @@ func (fs *eosStorage) GetQuota(ctx context.Context) (int, int, error) {
 }
 
 func (fs *eosStorage) CreateUserHome(ctx context.Context, username, fn string) error {
+	log := appctx.GetLogger(ctx)
+
 	_, err := fs.c.GetFileInfoByPath(ctx, username, fn)
 	if err != nil {
 		err = fs.c.CreateDir(ctx, "root", fn)
 		if err != nil {
 			//Dont stop on error, dir might exist already
-			log := appctx.GetLogger(ctx)
 			log.Debug().Msg("eos: CreateDir issue, continuing")
 		}
 		err = fs.c.Chown(ctx, "root", username, fn)
+		if err != nil {
+			log.Debug().Msg("eos: Chown issue/failed")
+			return err
+		}
+		err = fs.c.Chmod(ctx, "root", "2770", fn)
+		if err != nil {
+			log.Debug().Msg("eos: Chmod issue/failed")
+			return err
+		}
 	}
 	return err
 }
