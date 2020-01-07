@@ -23,8 +23,8 @@ import (
 	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	manager "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/token"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/metadata"
