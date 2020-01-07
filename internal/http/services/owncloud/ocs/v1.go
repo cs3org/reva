@@ -21,7 +21,7 @@ package ocs
 import (
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 )
 
 // V1Handler routes to the different sub handlers
@@ -47,7 +47,7 @@ func (h *V1Handler) init(c *Config) error {
 func (h *V1Handler) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var head string
-		head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 		switch head {
 		case "apps":
 			h.AppsHandler.ServeHTTP(w, r)

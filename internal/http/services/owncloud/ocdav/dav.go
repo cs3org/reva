@@ -23,7 +23,7 @@ import (
 	"net/http"
 	"path"
 
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 )
 
 // DavHandler routes to the different sub handlers
@@ -61,7 +61,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 		ctx := r.Context()
 
 		var head string
-		head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 
 		switch head {
 		case "avatars":

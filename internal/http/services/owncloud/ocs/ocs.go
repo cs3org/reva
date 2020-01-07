@@ -22,12 +22,13 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/mitchellh/mapstructure"
 )
 
 func init() {
-	rhttp.Register("ocs", New)
+	global.Register("ocs", New)
 }
 
 // Config holds the config options that need to be passed down to all ocs handlers
@@ -44,7 +45,7 @@ type svc struct {
 }
 
 // New returns a new capabilitiessvc
-func New(m map[string]interface{}) (rhttp.Service, error) {
+func New(m map[string]interface{}) (global.Service, error) {
 	conf := &Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
@@ -74,12 +75,17 @@ func (s *svc) Prefix() string {
 func (s *svc) Close() error {
 	return nil
 }
+
+func (s *svc) Unprotected() []string {
+	return []string{}
+}
+
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log := appctx.GetLogger(r.Context())
 
 		var head string
-		head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 
 		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("ocs routing")
 

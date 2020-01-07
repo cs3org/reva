@@ -21,9 +21,8 @@ package appprovider
 import (
 	"context"
 	"fmt"
-	"io"
 
-	appproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/appprovider/v0alpha"
+	providerpb "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/provider/demo"
 	"github.com/cs3org/reva/pkg/rgrpc"
@@ -47,7 +46,7 @@ type config struct {
 }
 
 // New creates a new StorageRegistryService
-func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
+func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 
 	c, err := parseConfig(m)
 	if err != nil {
@@ -63,7 +62,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 		provider: provider,
 	}
 
-	appproviderv0alphapb.RegisterAppProviderServiceServer(ss, service)
 	return service, nil
 }
 
@@ -79,6 +77,13 @@ func (s *service) Close() error {
 	return nil
 }
 
+func (s *service) UnprotectedEndpoints() []string {
+	return []string{}
+}
+
+func (s *service) Register(ss *grpc.Server) {
+	providerpb.RegisterProviderAPIServer(ss, s)
+}
 func getProvider(c *config) (app.Provider, error) {
 	switch c.Driver {
 	case "demo":
@@ -88,16 +93,16 @@ func getProvider(c *config) (app.Provider, error) {
 	}
 }
 
-func (s *service) Open(ctx context.Context, req *appproviderv0alphapb.OpenRequest) (*appproviderv0alphapb.OpenResponse, error) {
+func (s *service) Open(ctx context.Context, req *providerpb.OpenRequest) (*providerpb.OpenResponse, error) {
 	iframeLocation, err := s.provider.GetIFrame(ctx, req.ResourceInfo.Id, req.AccessToken)
 	if err != nil {
 		err := errors.Wrap(err, "appprovidersvc: error calling GetIFrame")
-		res := &appproviderv0alphapb.OpenResponse{
+		res := &providerpb.OpenResponse{
 			Status: status.NewInternal(ctx, err, "error getting app's iframe"),
 		}
 		return res, nil
 	}
-	res := &appproviderv0alphapb.OpenResponse{
+	res := &providerpb.OpenResponse{
 		Status:    status.NewOK(ctx),
 		IframeUrl: iframeLocation,
 	}

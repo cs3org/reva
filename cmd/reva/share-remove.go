@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"os"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 )
 
 func shareRemoveCommand() *command {
@@ -44,10 +44,10 @@ func shareRemoveCommand() *command {
 			return err
 		}
 
-		shareRequest := &usershareproviderv0alphapb.RemoveShareRequest{
-			Ref: &usershareproviderv0alphapb.ShareReference{
-				Spec: &usershareproviderv0alphapb.ShareReference_Id{
-					Id: &usershareproviderv0alphapb.ShareId{
+		shareRequest := &collaboration.RemoveShareRequest{
+			Ref: &collaboration.ShareReference{
+				Spec: &collaboration.ShareReference_Id{
+					Id: &collaboration.ShareId{
 						OpaqueId: id,
 					},
 				},
@@ -59,7 +59,7 @@ func shareRemoveCommand() *command {
 			return err
 		}
 
-		if shareRes.Status.Code != rpcpb.Code_CODE_OK {
+		if shareRes.Status.Code != rpc.Code_CODE_OK {
 			return formatError(shareRes.Status)
 		}
 

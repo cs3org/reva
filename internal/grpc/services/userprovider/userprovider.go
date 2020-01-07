@@ -21,9 +21,8 @@ package userprovider
 import (
 	"context"
 	"fmt"
-	"io"
 
-	userproviderpb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/user"
@@ -60,7 +59,7 @@ func getDriver(c *config) (user.Manager, error) {
 }
 
 // New returns a new UserProviderServiceServer.
-func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
+func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -72,7 +71,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 	}
 
 	svc := &service{usermgr: userManager}
-	userproviderpb.RegisterUserProviderServiceServer(ss, svc)
 
 	return svc, nil
 }
@@ -85,69 +83,77 @@ func (s *service) Close() error {
 	return nil
 }
 
-func (s *service) GetUser(ctx context.Context, req *userproviderpb.GetUserRequest) (*userproviderpb.GetUserResponse, error) {
+func (s *service) UnprotectedEndpoints() []string {
+	return []string{}
+}
+
+func (s *service) Register(ss *grpc.Server) {
+	userpb.RegisterUserAPIServer(ss, s)
+}
+
+func (s *service) GetUser(ctx context.Context, req *userpb.GetUserRequest) (*userpb.GetUserResponse, error) {
 	user, err := s.usermgr.GetUser(ctx, req.UserId)
 	if err != nil {
 		// TODO(labkode): check for not found.
 		err = errors.Wrap(err, "userprovidersvc: error getting user")
-		res := &userproviderpb.GetUserResponse{
+		res := &userpb.GetUserResponse{
 			Status: status.NewInternal(ctx, err, "error authenticating user"),
 		}
 		return res, nil
 	}
 
-	res := &userproviderpb.GetUserResponse{
+	res := &userpb.GetUserResponse{
 		Status: status.NewOK(ctx),
 		User:   user,
 	}
 	return res, nil
 }
 
-func (s *service) FindUsers(ctx context.Context, req *userproviderpb.FindUsersRequest) (*userproviderpb.FindUsersResponse, error) {
+func (s *service) FindUsers(ctx context.Context, req *userpb.FindUsersRequest) (*userpb.FindUsersResponse, error) {
 	users, err := s.usermgr.FindUsers(ctx, req.Filter)
 	if err != nil {
 		err = errors.Wrap(err, "userprovidersvc: error finding users")
-		res := &userproviderpb.FindUsersResponse{
+		res := &userpb.FindUsersResponse{
 			Status: status.NewInternal(ctx, err, "error finding users"),
 		}
 		return res, nil
 	}
 
-	res := &userproviderpb.FindUsersResponse{
+	res := &userpb.FindUsersResponse{
 		Status: status.NewOK(ctx),
 		Users:  users,
 	}
 	return res, nil
 }
 
-func (s *service) GetUserGroups(ctx context.Context, req *userproviderpb.GetUserGroupsRequest) (*userproviderpb.GetUserGroupsResponse, error) {
+func (s *service) GetUserGroups(ctx context.Context, req *userpb.GetUserGroupsRequest) (*userpb.GetUserGroupsResponse, error) {
 	groups, err := s.usermgr.GetUserGroups(ctx, req.UserId)
 	if err != nil {
 		err = errors.Wrap(err, "userprovidersvc: error getting user groups")
-		res := &userproviderpb.GetUserGroupsResponse{
+		res := &userpb.GetUserGroupsResponse{
 			Status: status.NewInternal(ctx, err, "error getting user groups"),
 		}
 		return res, nil
 	}
 
-	res := &userproviderpb.GetUserGroupsResponse{
+	res := &userpb.GetUserGroupsResponse{
 		Status: status.NewOK(ctx),
 		Groups: groups,
 	}
 	return res, nil
 }
 
-func (s *service) IsInGroup(ctx context.Context, req *userproviderpb.IsInGroupRequest) (*userproviderpb.IsInGroupResponse, error) {
+func (s *service) IsInGroup(ctx context.Context, req *userpb.IsInGroupRequest) (*userpb.IsInGroupResponse, error) {
 	ok, err := s.usermgr.IsInGroup(ctx, req.UserId, req.Group)
 	if err != nil {
 		err = errors.Wrap(err, "userprovidersvc: error checking if user belongs to group")
-		res := &userproviderpb.IsInGroupResponse{
+		res := &userpb.IsInGroupResponse{
 			Status: status.NewInternal(ctx, err, "error checking if user belongs to group"),
 		}
 		return res, nil
 	}
 
-	res := &userproviderpb.IsInGroupResponse{
+	res := &userpb.IsInGroupResponse{
 		Status: status.NewOK(ctx),
 		Ok:     ok,
 	}

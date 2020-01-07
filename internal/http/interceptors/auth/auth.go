@@ -21,11 +21,10 @@ package auth
 import (
 	"fmt"
 	"net/http"
-	"strings"
 
-	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/internal/http/interceptors/auth/credential/registry"
 	tokenregistry "github.com/cs3org/reva/internal/http/interceptors/auth/token/registry"
 	tokenwriterregistry "github.com/cs3org/reva/internal/http/interceptors/auth/tokenwriter/registry"
@@ -33,28 +32,24 @@ import (
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/token"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
 	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
 )
 
 const (
-	defaultHeader   = "x-access-token"
-	defaultPriority = 100
+	defaultHeader = "x-access-token"
 )
-
-func init() {
-	rhttp.RegisterMiddleware("auth", New)
-}
 
 type config struct {
 	Priority   int    `mapstructure:"priority"`
 	GatewaySvc string `mapstructure:"gateway"`
-	// Realm is optional, will be filled with request host if not given
+	// TODO(jdf): Realm is optional, will be filled with request host if not given?
 	Realm                string                            `mapstructure:"realm"`
 	CredentialChain      []string                          `mapstructure:"credential_chain"`
 	CredentialStrategies map[string]map[string]interface{} `mapstructure:"credential_strategies"`
@@ -64,7 +59,6 @@ type config struct {
 	TokenManagers        map[string]map[string]interface{} `mapstructure:"token_managers"`
 	TokenWriter          string                            `mapstructure:"token_writer"`
 	TokenWriters         map[string]map[string]interface{} `mapstructure:"token_writers"`
-	SkipMethods          []string                          `mapstructure:"skip_methods"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -76,70 +70,55 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-// skip evaluates whether a source url is a subpath of base
-// i.e: /a/b/c/d/e is a subpath of /a/b/c
-func skip(source string, base []string) bool {
-	for i := range base {
-		if strings.HasPrefix(source, base[i]) {
-			return true
-		}
-	}
-	return false
-}
-
 // New returns a new middleware with defined priority.
-func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
+func New(m map[string]interface{}, unprotected []string) (global.Middleware, error) {
 	conf, err := parseConfig(m)
 	if err != nil {
-		return nil, 0, err
-	}
-
-	if conf.Priority == 0 {
-		conf.Priority = defaultPriority
+		return nil, err
 	}
 
 	credChain := []auth.CredentialStrategy{}
 	for i := range conf.CredentialChain {
 		f, ok := registry.NewCredentialFuncs[conf.CredentialChain[i]]
 		if !ok {
-			return nil, 0, fmt.Errorf("credential strategy not found: %s", conf.CredentialChain[i])
+			return nil, fmt.Errorf("credential strategy not found: %s", conf.CredentialChain[i])
 		}
 
 		credStrategy, err := f(conf.CredentialStrategies[conf.CredentialChain[i]])
 		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 		credChain = append(credChain, credStrategy)
 	}
 
 	g, ok := tokenregistry.NewTokenFuncs[conf.TokenStrategy]
 	if !ok {
-		return nil, 0, fmt.Errorf("token strategy not found: %s", conf.TokenStrategy)
+		return nil, fmt.Errorf("token strategy not found: %s", conf.TokenStrategy)
 	}
 
 	tokenStrategy, err := g(conf.TokenStrategies[conf.TokenStrategy])
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
 	if !ok {
-		return nil, 0, fmt.Errorf("token manager not found: %s", conf.TokenStrategy)
+		return nil, fmt.Errorf("token manager not found: %s", conf.TokenStrategy)
 	}
 
 	tokenManager, err := h(conf.TokenManagers[conf.TokenManager])
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
 	i, ok := tokenwriterregistry.NewTokenFuncs[conf.TokenWriter]
 	if !ok {
-		return nil, 0, fmt.Errorf("token writer not found: %s", conf.TokenWriter)
+		return nil, fmt.Errorf("token writer not found: %s", conf.TokenWriter)
 	}
 
 	tokenWriter, err := i(conf.TokenWriters[conf.TokenWriter])
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
 	chain := func(h http.Handler) http.Handler {
@@ -147,6 +126,7 @@ func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
 			ctx := r.Context()
 			// OPTION requests need to pass for preflight requests
 			// TODO(labkode): this will break options for auth protected routes.
+			// Maybe running the CORS middleware before auth kicks in is enough.
 			if r.Method == "OPTIONS" {
 				h.ServeHTTP(w, r)
 				return
@@ -156,7 +136,7 @@ func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
 
 			// skip auth for urls set in the config.
 			// TODO(labkode): maybe use method:url to bypass auth.
-			if skip(r.URL.Path, conf.SkipMethods) {
+			if utils.Skip(r.URL.Path, unprotected) {
 				log.Info().Msg("skipping auth check for: " + r.URL.Path)
 				h.ServeHTTP(w, r)
 				return
@@ -173,6 +153,8 @@ func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
 						log.Debug().Err(err).Msg("error retrieving credentials")
 					}
 					if creds != nil {
+						log.Debug().Msgf("credentials obtained from credential strategy: %+v", creds)
+
 						break
 					}
 				}
@@ -187,13 +169,13 @@ func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
 					return
 				}
 
-				log.Debug().Msg("credentials obtained from the request")
-
-				req := &gatewayv0alphapb.AuthenticateRequest{
+				req := &gateway.AuthenticateRequest{
 					Type:         creds.Type,
 					ClientId:     creds.ClientID,
 					ClientSecret: creds.ClientSecret,
 				}
+
+				log.Debug().Msgf("AuthenticateRequest: %+v against %s", req, conf.GatewaySvc)
 
 				client, err := pool.GetGatewayServiceClient(conf.GatewaySvc)
 				if err != nil {
@@ -209,7 +191,7 @@ func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
 					return
 				}
 
-				if res.Status.Code != rpcpb.Code_CODE_OK {
+				if res.Status.Code != rpc.Code_CODE_OK {
 					err := status.NewErrorFromCode(res.Status.Code, "auth")
 					log.Err(err).Msg("error generating access token from credentials")
 					w.WriteHeader(http.StatusUnauthorized)
@@ -232,7 +214,7 @@ func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
 				return
 			}
 
-			u := &userproviderv0alphapb.User{}
+			u := &userpb.User{}
 			if err := mapstructure.Decode(claims, u); err != nil {
 				log.Error().Err(err).Msg("error decoding user claims")
 				w.WriteHeader(http.StatusUnauthorized)
@@ -248,5 +230,5 @@ func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
 			h.ServeHTTP(w, r)
 		})
 	}
-	return chain, conf.Priority, nil
+	return chain, nil
 }

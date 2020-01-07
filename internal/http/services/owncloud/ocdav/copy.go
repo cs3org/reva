@@ -26,9 +26,9 @@ import (
 	"path"
 	"strings"
 
-	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
 )
@@ -82,10 +82,10 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	// check src exists
-	ref := &storageproviderv0alphapb.Reference{
-		Spec: &storageproviderv0alphapb.Reference_Path{Path: src},
+	ref := &provider.Reference{
+		Spec: &provider.Reference_Path{Path: src},
 	}
-	srcStatReq := &storageproviderv0alphapb.StatRequest{Ref: ref}
+	srcStatReq := &provider.StatRequest{Ref: ref}
 	srcStatRes, err := client.Stat(ctx, srcStatReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending grpc stat request")
@@ -93,8 +93,8 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	if srcStatRes.Status.Code != rpcpb.Code_CODE_OK {
-		if srcStatRes.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+	if srcStatRes.Status.Code != rpc.Code_CODE_OK {
+		if srcStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
@@ -107,10 +107,10 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	dst := path.Join(ns, urlPath[len(baseURI):])
 
 	// check dst exists
-	ref = &storageproviderv0alphapb.Reference{
-		Spec: &storageproviderv0alphapb.Reference_Path{Path: dst},
+	ref = &provider.Reference{
+		Spec: &provider.Reference_Path{Path: dst},
 	}
-	dstStatReq := &storageproviderv0alphapb.StatRequest{Ref: ref}
+	dstStatReq := &provider.StatRequest{Ref: ref}
 	dstStatRes, err := client.Stat(ctx, dstStatReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending grpc stat request")
@@ -119,7 +119,7 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	var successCode int
-	if dstStatRes.Status.Code == rpcpb.Code_CODE_OK {
+	if dstStatRes.Status.Code == rpc.Code_CODE_OK {
 		successCode = http.StatusNoContent // 204 if target already existed, see https://tools.ietf.org/html/rfc4918#section-9.8.5
 
 		if overwrite == "F" {
@@ -133,17 +133,17 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 
 		// check if an intermediate path / the parent exists
 		intermediateDir := path.Dir(dst)
-		ref = &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{Path: intermediateDir},
+		ref = &provider.Reference{
+			Spec: &provider.Reference_Path{Path: intermediateDir},
 		}
-		intStatReq := &storageproviderv0alphapb.StatRequest{Ref: ref}
+		intStatReq := &provider.StatRequest{Ref: ref}
 		intStatRes, err := client.Stat(ctx, intStatReq)
 		if err != nil {
 			log.Error().Err(err).Msg("error sending grpc stat request")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		if intStatRes.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+		if intStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			w.WriteHeader(http.StatusConflict) // 409 if intermediate dir is missing, see https://tools.ietf.org/html/rfc4918#section-9.8.5
 			return
 		}
@@ -159,32 +159,32 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	w.WriteHeader(successCode)
 }
 
-func descend(ctx context.Context, client gatewayv0alphapb.GatewayServiceClient, src *storageproviderv0alphapb.ResourceInfo, dst string) error {
+func descend(ctx context.Context, client gateway.GatewayAPIClient, src *provider.ResourceInfo, dst string) error {
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("src", src.Path).Str("dst", dst).Msg("descending")
-	if src.Type == storageproviderv0alphapb.ResourceType_RESOURCE_TYPE_CONTAINER {
+	if src.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		// create dir
-		createReq := &storageproviderv0alphapb.CreateContainerRequest{
-			Ref: &storageproviderv0alphapb.Reference{
-				Spec: &storageproviderv0alphapb.Reference_Path{Path: dst},
+		createReq := &provider.CreateContainerRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{Path: dst},
 			},
 		}
 		createRes, err := client.CreateContainer(ctx, createReq)
-		if err != nil || createRes.Status.Code != rpcpb.Code_CODE_OK {
+		if err != nil || createRes.Status.Code != rpc.Code_CODE_OK {
 			return err
 		}
 
 		// descend for children
-		listReq := &storageproviderv0alphapb.ListContainerRequest{
-			Ref: &storageproviderv0alphapb.Reference{
-				Spec: &storageproviderv0alphapb.Reference_Path{Path: src.Path},
+		listReq := &provider.ListContainerRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{Path: src.Path},
 			},
 		}
 		res, err := client.ListContainer(ctx, listReq)
 		if err != nil {
 			return err
 		}
-		if res.Status.Code != rpcpb.Code_CODE_OK {
+		if res.Status.Code != rpc.Code_CODE_OK {
 			return fmt.Errorf("status code %d", res.Status.Code)
 		}
 
@@ -200,9 +200,9 @@ func descend(ctx context.Context, client gatewayv0alphapb.GatewayServiceClient, 
 		// copy file
 
 		// 1. get download url
-		dReq := &storageproviderv0alphapb.InitiateFileDownloadRequest{
-			Ref: &storageproviderv0alphapb.Reference{
-				Spec: &storageproviderv0alphapb.Reference_Path{Path: src.Path},
+		dReq := &provider.InitiateFileDownloadRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{Path: src.Path},
 			},
 		}
 
@@ -211,15 +211,15 @@ func descend(ctx context.Context, client gatewayv0alphapb.GatewayServiceClient, 
 			return err
 		}
 
-		if dRes.Status.Code != rpcpb.Code_CODE_OK {
+		if dRes.Status.Code != rpc.Code_CODE_OK {
 			return fmt.Errorf("status code %d", dRes.Status.Code)
 		}
 
 		// 2. get upload url
 
-		uReq := &storageproviderv0alphapb.InitiateFileUploadRequest{
-			Ref: &storageproviderv0alphapb.Reference{
-				Spec: &storageproviderv0alphapb.Reference_Path{Path: dst},
+		uReq := &provider.InitiateFileUploadRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{Path: dst},
 			},
 		}
 
@@ -228,7 +228,7 @@ func descend(ctx context.Context, client gatewayv0alphapb.GatewayServiceClient, 
 			return err
 		}
 
-		if uRes.Status.Code != rpcpb.Code_CODE_OK {
+		if uRes.Status.Code != rpc.Code_CODE_OK {
 			return fmt.Errorf("status code %d", uRes.Status.Code)
 		}
 

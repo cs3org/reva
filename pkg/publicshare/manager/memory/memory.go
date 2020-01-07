@@ -25,10 +25,10 @@ import (
 	"sync"
 	"time"
 
-	publicshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
-	typespb "github.com/cs3org/go-cs3apis/cs3/types"
-	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/publicshare/manager/registry"
 )
@@ -49,8 +49,9 @@ type manager struct {
 }
 
 // CreatePublicShare safely adds a new entry to manager.shares
-func (m *manager) CreatePublicShare(ctx context.Context, u *userproviderv0alphapb.User, rInfo *storageproviderv0alphapb.ResourceInfo, g *publicshareproviderv0alphapb.Grant) (*publicshareproviderv0alphapb.PublicShare, error) {
-	id := &publicshareproviderv0alphapb.PublicShareId{
+func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error) {
+	// where could this initialization go wrong and early return?
+	id := &link.PublicShareId{
 		OpaqueId: randString(12),
 	}
 
@@ -74,7 +75,7 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *userproviderv0alphap
 		Nanos:   uint32(now % 1000000000),
 	}
 
-	newShare := publicshareproviderv0alphapb.PublicShare{
+	newShare := link.PublicShare{
 		Id:                id,
 		Owner:             rInfo.GetOwner(),
 		Creator:           u.Id,
@@ -93,7 +94,7 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *userproviderv0alphap
 }
 
 // UpdatePublicShare updates the expiration date, permissions and Mtime
-func (m *manager) UpdatePublicShare(ctx context.Context, u *userproviderv0alphapb.User, ref *publicshareproviderv0alphapb.PublicShareReference, g *publicshareproviderv0alphapb.Grant) (*publicshareproviderv0alphapb.PublicShare, error) {
+func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference, g *link.Grant) (*link.PublicShare, error) {
 	share, err := m.GetPublicShare(ctx, u, ref)
 	if err != nil {
 		return nil, errors.New("ref does not exist")
@@ -111,10 +112,10 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *userproviderv0alphap
 
 	m.shares.Store(token, share)
 
-	return &publicshareproviderv0alphapb.PublicShare{}, nil
+	return &link.PublicShare{}, nil
 }
 
-func (m *manager) GetPublicShare(ctx context.Context, u *userproviderv0alphapb.User, ref *publicshareproviderv0alphapb.PublicShareReference) (share *publicshareproviderv0alphapb.PublicShare, err error) {
+func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) (share *link.PublicShare, err error) {
 	// Attempt to fetch public share by token
 	if ref.GetToken() != "" {
 		share, err = m.GetPublicShareByToken(ctx, ref.GetToken())
@@ -134,17 +135,17 @@ func (m *manager) GetPublicShare(ctx context.Context, u *userproviderv0alphapb.U
 	return share, nil
 }
 
-func (m *manager) ListPublicShares(ctx context.Context, u *userproviderv0alphapb.User, md *storageproviderv0alphapb.ResourceInfo) ([]*publicshareproviderv0alphapb.PublicShare, error) {
-	shares := []*publicshareproviderv0alphapb.PublicShare{}
+func (m *manager) ListPublicShares(ctx context.Context, u *user.User, md *provider.ResourceInfo) ([]*link.PublicShare, error) {
+	shares := []*link.PublicShare{}
 	m.shares.Range(func(k, v interface{}) bool {
-		shares = append(shares, v.(*publicshareproviderv0alphapb.PublicShare))
+		shares = append(shares, v.(*link.PublicShare))
 		return true
 	})
 
 	return shares, nil
 }
 
-func (m *manager) RevokePublicShare(ctx context.Context, u *userproviderv0alphapb.User, id string) (err error) {
+func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, id string) (err error) {
 	// check whether the referente exists
 	if _, err := m.GetPublicShareByToken(ctx, id); err != nil {
 		return errors.New("reference does not exist")
@@ -153,9 +154,9 @@ func (m *manager) RevokePublicShare(ctx context.Context, u *userproviderv0alphap
 	return
 }
 
-func (m *manager) GetPublicShareByToken(ctx context.Context, token string) (*publicshareproviderv0alphapb.PublicShare, error) {
+func (m *manager) GetPublicShareByToken(ctx context.Context, token string) (*link.PublicShare, error) {
 	if ps, ok := m.shares.Load(token); ok {
-		return ps.(*publicshareproviderv0alphapb.PublicShare), nil
+		return ps.(*link.PublicShare), nil
 	}
 	return nil, errors.New("invalid token")
 }
@@ -170,13 +171,13 @@ func randString(n int) string {
 	return string(b)
 }
 
-func (m *manager) getPublicShareByTokenID(ctx context.Context, targetID publicshareproviderv0alphapb.PublicShareId) (*publicshareproviderv0alphapb.PublicShare, error) {
+func (m *manager) getPublicShareByTokenID(ctx context.Context, targetID link.PublicShareId) (*link.PublicShare, error) {
 	// iterate over existing shares and return the first one matching the id
-	var found *publicshareproviderv0alphapb.PublicShare
+	var found *link.PublicShare
 	m.shares.Range(func(k, v interface{}) bool {
-		id := v.(*publicshareproviderv0alphapb.PublicShare).GetId()
+		id := v.(*link.PublicShare).GetId()
 		if targetID.String() == id.String() {
-			found = v.(*publicshareproviderv0alphapb.PublicShare)
+			found = v.(*link.PublicShare)
 			return true
 		}
 		return false

@@ -1,55 +1,24 @@
 # This users.toml config file will start a reva service that:
 # - handles user metadata and user preferences
 # - serves the grpc services on port 18000
-[core]
-max_cpus = "2"
-disable_http = true
-
-[log]
-level = "debug"
-
 [grpc]
 network = "tcp"
 address = "0.0.0.0:18000"
-enabled_interceptors = ["auth"]
-enabled_services = [
-    "appprovider",
-    "authprovider", # provides basic auth
-    "userprovider", # provides user matadata (used to look up email, displayname etc after a login)
-    "preferences",  # provides user preferences
-]
 
 [grpc.interceptors.auth]
 token_manager = "jwt"
-skip_methods = [
-    # we need to allow calls that happen during authentication
-    "/cs3.authproviderv0alpha.AuthProviderService/Authenticate",
-	"/cs3.userproviderv0alpha.UserProviderService/GetUser",
-]
 
 [grpc.interceptors.auth.token_managers.jwt]
 secret = "Pive-Fumkiu4"
-
-[grpc.services.appprovider]
-driver = "demo"
-
-[grpc.services.appprovider.demo]
-iframe_ui_provider = "http://localhost:19500/iframeui"
 
 [grpc.services.authprovider]
 auth_manager = "json"
 
 [grpc.services.authprovider.auth_managers.json]
-users = "./examples/separate/users.demo.json"
+users = "users.demo.json"
 
 [grpc.services.userprovider]
 driver = "json"
 
 [grpc.services.userprovider.drivers.json]
-users = "./examples/separate/users.demo.json"
-
-
-# TODO bring back iframe app ui demo
-#[http]
-#address = "0.0.0.0:19500"
-#enabled_services = ["iframeui"]
+users = "users.demo.json"

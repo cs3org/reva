@@ -22,9 +22,8 @@ import (
 	"fmt"
 	"net/http"
 
-	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -59,7 +58,9 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 
 	username := r.PostForm.Get("username")
 	password := r.PostForm.Get("password")
-	// No username we ask to give one, here we provide only a form validation.
+
+	// If no username is set we send to the user an HTML form fill.
+	// MVC is dead, long live MCV.
 	if username == "" {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, err := w.Write([]byte(fmt.Sprintf(`
@@ -89,31 +90,33 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	genReq := &gatewayv0alphapb.AuthenticateRequest{
+	// TODO(labkode): the auth type should be configurable in the config file.
+	authReq := &gateway.AuthenticateRequest{
 		Type:         "basic", // we are sending username and password -> basic auth
 		ClientId:     username,
 		ClientSecret: password,
 	}
-	genRes, err := c.Authenticate(ctx, genReq)
+	authRes, err := c.Authenticate(ctx, authReq)
 	if err != nil {
 		log.Err(err).Msg("error calling Authenticate")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	if genRes.Status.Code != rpcpb.Code_CODE_OK {
-		err := status.NewErrorFromCode(genRes.Status.Code, "oidcprovider")
+	if authRes.Status.Code != rpc.Code_CODE_OK {
+		err := status.NewErrorFromCode(authRes.Status.Code, "oidcprovider")
 		log.Err(err).Msg("error authenticating client credentials")
 		// TODO(labkode): maybe oauth response is better
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+
+	/* TODO(labkode): I think is not needed anymore because
+	// the auth returns a full user object already.
+
 	// Once the authentication is successful, we have a user id that has been
 	// validated, to fill other fields we need the user information also.
-
-	uid := genRes.UserId
-
-	getUserReq := &userproviderv0alphapb.GetUserRequest{
+	getUserReq := &userpb.GetUserRequest{
 		UserId: uid,
 	}
 	getUserRes, err := c.GetUser(ctx, getUserReq)
@@ -123,12 +126,13 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if getUserRes.Status.Code != rpcpb.Code_CODE_OK {
+	if getUserRes.Status.Code != rpc.Code_CODE_OK {
 		err := status.NewErrorFromCode(getUserRes.Status.Code, "oidcprovider")
 		log.Err(err).Msg("error getting user information")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	*/
 
 	// let's see what scopes the user gave consent to
 	for _, scope := range r.PostForm["scopes"] {
@@ -136,7 +140,7 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Now that the user is authorized, we set up a session:
-	mySessionData := s.newSession(genRes.Token, getUserRes.User)
+	mySessionData := s.getSession(authRes.Token, authRes.User)
 
 	// When using the HMACSHA strategy you must use something that implements the HMACSessionContainer.
 	// It brings you the power of overriding the default values.
@@ -151,7 +155,7 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 	// Therefore, you both access token and authorize code will have the same "exp" claim. If this is something you
 	// need let us know on github.
 	//
-	//mySessionData.JWTClaims.ExpiresAt = time.Now().Add(time.Day)
+	// mySessionData.JWTClaims.ExpiresAt = time.Now().Add(time.Day)
 
 	// It's also wise to check the requested scopes, e.g.:
 	// if authorizeRequest.GetScopes().Has("admin") {
@@ -169,7 +173,8 @@ func (s *svc) doAuth(w http.ResponseWriter, r *http.Request) {
 	// * invalid redirect
 	// * ...
 	if err != nil {
-		log.Error().Err(err).Msg("Error occurred in NewAuthorizeResponse")
+		log.Error().Msgf("error unstack: %+v", err)
+		log.Error().Err(err).Msg("oidcprovider: error occurred in NewAuthorizeResponse")
 		s.oauth2.WriteAuthorizeError(w, ar, err)
 		return
 	}

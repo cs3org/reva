@@ -22,10 +22,10 @@ import (
 	"context"
 	"testing"
 
-	shareProviderpb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
-	types "github.com/cs3org/go-cs3apis/cs3/types"
-	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 )
 
 func TestMemoryProvider(t *testing.T) {
@@ -37,11 +37,11 @@ func TestMemoryProvider(t *testing.T) {
 	}
 
 	// Setup dat
-	user := userproviderv0alphapb.User{}
-	rInfo := storageproviderv0alphapb.ResourceInfo{}
-	grant := shareProviderpb.Grant{}
+	user := userpb.User{}
+	rInfo := provider.ResourceInfo{}
+	grant := link.Grant{}
 
-	rInfo.ArbitraryMetadata = &storageproviderv0alphapb.ArbitraryMetadata{
+	rInfo.ArbitraryMetadata = &provider.ArbitraryMetadata{
 		Metadata: map[string]string{
 			"name": "woof",
 		},
@@ -54,23 +54,21 @@ func TestMemoryProvider(t *testing.T) {
 	shareToken := share.GetToken()
 
 	// Test updating a public share.
-	existingRefToken := shareProviderpb.PublicShareReference{
-		Spec: &shareProviderpb.PublicShareReference_Token{
+	existingRefToken := link.PublicShareReference{
+		Spec: &link.PublicShareReference_Token{
 			Token: shareToken,
 		},
 	}
 
-	nonExistingPublicShareRef := shareProviderpb.PublicShareReference{
-		Spec: &shareProviderpb.PublicShareReference_Token{Token: "somethingsomething"},
+	nonExistingPublicShareRef := link.PublicShareReference{
+		Spec: &link.PublicShareReference_Token{Token: "somethingsomething"},
 	}
 
 	updatedMtime := &types.Timestamp{Seconds: uint64(46800)}
 
-	newGrant := shareProviderpb.Grant{
-		Permissions: &shareProviderpb.PublicSharePermissions{
-			Permissions: &storageproviderv0alphapb.ResourcePermissions{},
-		},
-		Expiration: updatedMtime,
+	newGrant := link.Grant{
+		Permissions: &link.PublicSharePermissions{},
+		Expiration:  updatedMtime,
 	}
 
 	// attempt to update an invalid public share. we expect an error
@@ -117,8 +115,8 @@ func TestMemoryProvider(t *testing.T) {
 	}
 
 	// holds a reference of hte public share with the previously fetched token
-	publicShareRef := shareProviderpb.PublicShareReference{
-		Spec: &shareProviderpb.PublicShareReference_Token{Token: shareToken},
+	publicShareRef := link.PublicShareReference{
+		Spec: &link.PublicShareReference_Token{Token: shareToken},
 	}
 
 	// error expected
@@ -133,15 +131,15 @@ func TestMemoryProvider(t *testing.T) {
 		t.Error(err)
 	}
 
-	existingRefID := shareProviderpb.PublicShareReference{
-		Spec: &shareProviderpb.PublicShareReference_Id{
+	existingRefID := link.PublicShareReference{
+		Spec: &link.PublicShareReference_Id{
 			Id: pShare.GetId(),
 		},
 	}
 
-	nonExistingRefID := shareProviderpb.PublicShareReference{
-		Spec: &shareProviderpb.PublicShareReference_Id{
-			Id: &shareProviderpb.PublicShareId{
+	nonExistingRefID := link.PublicShareReference{
+		Spec: &link.PublicShareReference_Id{
+			Id: &link.PublicShareId{
 				OpaqueId: "doesnt_exist",
 			},
 		},

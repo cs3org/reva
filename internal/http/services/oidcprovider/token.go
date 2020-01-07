@@ -21,9 +21,8 @@ package oidcprovider
 import (
 	"net/http"
 
-	"github.com/ory/fosite"
-
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/ory/fosite"
 )
 
 func (s *svc) doToken(w http.ResponseWriter, r *http.Request) {
@@ -31,7 +30,7 @@ func (s *svc) doToken(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(ctx)
 
 	// This will create an access request object and iterate through the registered TokenEndpointHandlers to validate the request.
-	accessRequest, err := s.oauth2.NewAccessRequest(ctx, r, s.emptySession())
+	accessRequest, err := s.oauth2.NewAccessRequest(ctx, r, s.getEmptySession())
 
 	// Catch any errors, e.g.:
 	// * unknown client

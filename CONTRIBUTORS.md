@@ -1,10 +1,12 @@
 - Alex Unger <zyxancf@gmail.com>
+- Aritz Brosa <aritz.brosa.iartza@cern.ch>
 - Diogo Castro <diogo.castro@cern.ch>
 - Felix Hillingshaeuser <felix@mxcore.de>
-- Giuseppe <giuseppe.lopresti@cern.ch>
 - Giuseppe Lo Presti <giuseppe.lopresti@cern.ch>
 - Hannah von Reth <vonreth@kde.org>
 - Hugo Gonzalez Labrador <github@hugo.labkode.com>
 - Ilja Neumann <ineumann@owncloud.com>
 - Jörn Friedrich Dreyer <jfd@butonic.de>
+- Michael D'Silva <md@aarnet.edu.au>
 - Mohitty <mohitt@iitk.ac.in>
+- Thomas Boerger <thomas@webhippie.de>

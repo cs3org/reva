@@ -23,7 +23,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
@@ -31,7 +31,7 @@ import (
 )
 
 func init() {
-	rhttp.Register("dataprovider", New)
+	global.Register("dataprovider", New)
 }
 
 type config struct {
@@ -49,7 +49,7 @@ type svc struct {
 }
 
 // New returns a new datasvc
-func New(m map[string]interface{}) (rhttp.Service, error) {
+func New(m map[string]interface{}) (global.Service, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
@@ -79,6 +79,10 @@ func New(m map[string]interface{}) (rhttp.Service, error) {
 // Close performs cleanup.
 func (s *svc) Close() error {
 	return nil
+}
+
+func (s *svc) Unprotected() []string {
+	return []string{}
 }
 
 func getFS(c *config) (storage.FS, error) {

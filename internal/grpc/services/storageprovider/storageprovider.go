@@ -21,15 +21,13 @@ package storageprovider
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/url"
 	"os"
 	"path"
 	"strings"
 
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
-	storagetypespb "github.com/cs3org/go-cs3apis/cs3/storagetypes"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
@@ -67,21 +65,27 @@ type service struct {
 	mountPath, mountID string
 	tmpFolder          string
 	dataServerURL      *url.URL
-	availableXS        []*storageproviderv0alphapb.ResourceChecksumPriority
+	availableXS        []*provider.ResourceChecksumPriority
 }
 
 func (s *service) Close() error {
 	return s.storage.Shutdown(context.Background())
 }
 
-func parseXSTypes(xsTypes map[string]uint32) ([]*storageproviderv0alphapb.ResourceChecksumPriority, error) {
-	var types = make([]*storageproviderv0alphapb.ResourceChecksumPriority, 0, len(xsTypes))
+func (s *service) UnprotectedEndpoints() []string { return []string{} }
+
+func (s *service) Register(ss *grpc.Server) {
+	provider.RegisterProviderAPIServer(ss, s)
+}
+
+func parseXSTypes(xsTypes map[string]uint32) ([]*provider.ResourceChecksumPriority, error) {
+	var types = make([]*provider.ResourceChecksumPriority, 0, len(xsTypes))
 	for xs, prio := range xsTypes {
 		t := PKG2GRPCXS(xs)
-		if t == storageproviderv0alphapb.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID {
+		if t == provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID {
 			return nil, fmt.Errorf("checksum type is invalid: %s", xs)
 		}
-		xsPrio := &storageproviderv0alphapb.ResourceChecksumPriority{
+		xsPrio := &provider.ResourceChecksumPriority{
 			Priority: prio,
 			Type:     t,
 		}
@@ -100,7 +104,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New creates a new storage provider svc
-func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
+func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 
 	c, err := parseConfig(m)
 	if err != nil {
@@ -156,80 +160,64 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 		availableXS:   xsTypes,
 	}
 
-	storageproviderv0alphapb.RegisterStorageProviderServiceServer(ss, service)
 	return service, nil
 }
 
-func (s *service) SetArbitraryMetadata(ctx context.Context, req *storageproviderv0alphapb.SetArbitraryMetadataRequest) (*storageproviderv0alphapb.SetArbitraryMetadataResponse, error) {
+func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest) (*provider.SetArbitraryMetadataResponse, error) {
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		err := errors.Wrap(err, "storageprovidersvc: error unwrapping path")
-		return &storageproviderv0alphapb.SetArbitraryMetadataResponse{
+		return &provider.SetArbitraryMetadataResponse{
 			Status: status.NewInternal(ctx, err, "error setting arbitrary metadata"),
 		}, nil
 	}
 
 	if err := s.storage.SetArbitraryMetadata(ctx, newRef, req.ArbitraryMetadata); err != nil {
-		var st *rpcpb.Status
+		var st *rpc.Status
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			st = status.NewNotFound(ctx, "ref not found when setting arbitrary metadata")
 		} else {
 			st = status.NewInternal(ctx, err, "error setting arbitrary metadata: "+req.Ref.String())
 		}
-		return &storageproviderv0alphapb.SetArbitraryMetadataResponse{
+		return &provider.SetArbitraryMetadataResponse{
 			Status: st,
 		}, nil
 	}
 
-	res := &storageproviderv0alphapb.SetArbitraryMetadataResponse{
+	res := &provider.SetArbitraryMetadataResponse{
 		Status: status.NewOK(ctx),
 	}
 	return res, nil
 }
 
-func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *storageproviderv0alphapb.UnsetArbitraryMetadataRequest) (*storageproviderv0alphapb.UnsetArbitraryMetadataResponse, error) {
+func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArbitraryMetadataRequest) (*provider.UnsetArbitraryMetadataResponse, error) {
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		err := errors.Wrap(err, "storageprovidersvc: error unwrapping path")
-		return &storageproviderv0alphapb.UnsetArbitraryMetadataResponse{
+		return &provider.UnsetArbitraryMetadataResponse{
 			Status: status.NewInternal(ctx, err, "error unsetting arbitrary metadata"),
 		}, nil
 	}
 
 	if err := s.storage.UnsetArbitraryMetadata(ctx, newRef, req.ArbitraryMetadataKeys); err != nil {
-		var st *rpcpb.Status
+		var st *rpc.Status
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			st = status.NewNotFound(ctx, "path not found when unsetting arbitrary metadata")
 		} else {
 			st = status.NewInternal(ctx, err, "error unsetting arbitrary metadata: "+req.Ref.String())
 		}
-		return &storageproviderv0alphapb.UnsetArbitraryMetadataResponse{
+		return &provider.UnsetArbitraryMetadataResponse{
 			Status: st,
 		}, nil
 	}
 
-	res := &storageproviderv0alphapb.UnsetArbitraryMetadataResponse{
+	res := &provider.UnsetArbitraryMetadataResponse{
 		Status: status.NewOK(ctx),
 	}
 	return res, nil
 }
 
-func (s *service) GetProvider(ctx context.Context, req *storageproviderv0alphapb.GetProviderRequest) (*storageproviderv0alphapb.GetProviderResponse, error) {
-	provider := &storagetypespb.ProviderInfo{
-		// Address:  ? TODO(labkode): how to obtain the addresss the service is listening to? not very useful if the request already comes to it :(
-		ProviderId:   s.mountID,
-		ProviderPath: s.mountPath,
-		// Description:  s.description, TODO(labkode): add to config
-		// Features: ? TODO(labkode):
-	}
-	res := &storageproviderv0alphapb.GetProviderResponse{
-		Info:   provider,
-		Status: status.NewOK(ctx),
-	}
-	return res, nil
-}
-
-func (s *service) InitiateFileDownload(ctx context.Context, req *storageproviderv0alphapb.InitiateFileDownloadRequest) (*storageproviderv0alphapb.InitiateFileDownloadResponse, error) {
+func (s *service) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*provider.InitiateFileDownloadResponse, error) {
 	// TODO(labkode): maybe add some checks before download starts?
 	// TODO(labkode): maybe add short-lived token?
 	// We now simply point the client to the data server.
@@ -239,13 +227,13 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *storageprovider
 	url := *s.dataServerURL
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
-		return &storageproviderv0alphapb.InitiateFileDownloadResponse{
+		return &provider.InitiateFileDownloadResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
 		}, nil
 	}
 	url.Path = path.Join("/", url.Path, newRef.GetPath())
 	log.Info().Str("data-server", url.String()).Str("fn", req.Ref.GetPath()).Msg("file download")
-	res := &storageproviderv0alphapb.InitiateFileDownloadResponse{
+	res := &provider.InitiateFileDownloadResponse{
 		DownloadEndpoint: url.String(),
 		Status:           status.NewOK(ctx),
 		Expose:           s.conf.ExposeDataServer,
@@ -253,13 +241,13 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *storageprovider
 	return res, nil
 }
 
-func (s *service) InitiateFileUpload(ctx context.Context, req *storageproviderv0alphapb.InitiateFileUploadRequest) (*storageproviderv0alphapb.InitiateFileUploadResponse, error) {
+func (s *service) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*provider.InitiateFileUploadResponse, error) {
 	// TODO(labkode): same considerations as download
 	log := appctx.GetLogger(ctx)
 	url := *s.dataServerURL
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
-		return &storageproviderv0alphapb.InitiateFileUploadResponse{
+		return &provider.InitiateFileUploadResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
 		}, nil
 	}
@@ -268,7 +256,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *storageproviderv0
 		Str("fn", req.Ref.GetPath()).
 		Str("xs", fmt.Sprintf("%+v", s.conf.AvailableXS)).
 		Msg("file upload")
-	res := &storageproviderv0alphapb.InitiateFileUploadResponse{
+	res := &provider.InitiateFileUploadResponse{
 		UploadEndpoint:     url.String(),
 		Status:             status.NewOK(ctx),
 		AvailableChecksums: s.availableXS,
@@ -277,102 +265,102 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *storageproviderv0
 	return res, nil
 }
 
-func (s *service) GetPath(ctx context.Context, req *storageproviderv0alphapb.GetPathRequest) (*storageproviderv0alphapb.GetPathResponse, error) {
+func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provider.GetPathResponse, error) {
 	// TODO(labkode): check that the storage ID is the same as the storage provider id.
 	fn, err := s.storage.GetPathByID(ctx, req.ResourceId)
 	if err != nil {
-		return &storageproviderv0alphapb.GetPathResponse{
+		return &provider.GetPathResponse{
 			Status: status.NewInternal(ctx, err, "error getting path by id"),
 		}, nil
 	}
 
 	fn = path.Join(s.mountPath, path.Clean(fn))
-	res := &storageproviderv0alphapb.GetPathResponse{
+	res := &provider.GetPathResponse{
 		Path:   fn,
 		Status: status.NewOK(ctx),
 	}
 	return res, nil
 }
 
-func (s *service) CreateContainer(ctx context.Context, req *storageproviderv0alphapb.CreateContainerRequest) (*storageproviderv0alphapb.CreateContainerResponse, error) {
+func (s *service) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
-		return &storageproviderv0alphapb.CreateContainerResponse{
+		return &provider.CreateContainerResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
 		}, nil
 	}
 
 	if err := s.storage.CreateDir(ctx, newRef.GetPath()); err != nil {
-		var st *rpcpb.Status
+		var st *rpc.Status
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			st = status.NewNotFound(ctx, "path not found when creating container")
 		} else {
 			st = status.NewInternal(ctx, err, "error creating container: "+req.Ref.String())
 		}
-		return &storageproviderv0alphapb.CreateContainerResponse{
+		return &provider.CreateContainerResponse{
 			Status: st,
 		}, nil
 	}
 
-	res := &storageproviderv0alphapb.CreateContainerResponse{
+	res := &provider.CreateContainerResponse{
 		Status: status.NewOK(ctx),
 	}
 	return res, nil
 }
 
-func (s *service) Delete(ctx context.Context, req *storageproviderv0alphapb.DeleteRequest) (*storageproviderv0alphapb.DeleteResponse, error) {
+func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
-		return &storageproviderv0alphapb.DeleteResponse{
+		return &provider.DeleteResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
 		}, nil
 	}
 
 	if err := s.storage.Delete(ctx, newRef); err != nil {
-		var st *rpcpb.Status
+		var st *rpc.Status
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			st = status.NewNotFound(ctx, "file not found")
 		} else {
 			st = status.NewInternal(ctx, err, "error deleting file: "+req.Ref.String())
 		}
-		return &storageproviderv0alphapb.DeleteResponse{
+		return &provider.DeleteResponse{
 			Status: st,
 		}, nil
 	}
 
-	res := &storageproviderv0alphapb.DeleteResponse{
+	res := &provider.DeleteResponse{
 		Status: status.NewOK(ctx),
 	}
 	return res, nil
 }
 
-func (s *service) Move(ctx context.Context, req *storageproviderv0alphapb.MoveRequest) (*storageproviderv0alphapb.MoveResponse, error) {
+func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
 	sourceRef, err := s.unwrap(ctx, req.Source)
 	if err != nil {
-		return &storageproviderv0alphapb.MoveResponse{
+		return &provider.MoveResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping source path"),
 		}, nil
 	}
 	targetRef, err := s.unwrap(ctx, req.Destination)
 	if err != nil {
-		return &storageproviderv0alphapb.MoveResponse{
+		return &provider.MoveResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping destination path"),
 		}, nil
 	}
 
 	if err := s.storage.Move(ctx, sourceRef, targetRef); err != nil {
-		return &storageproviderv0alphapb.MoveResponse{
+		return &provider.MoveResponse{
 			Status: status.NewInternal(ctx, err, "error moving file"),
 		}, nil
 	}
 
-	res := &storageproviderv0alphapb.MoveResponse{
+	res := &provider.MoveResponse{
 		Status: status.NewOK(ctx),
 	}
 	return res, nil
 }
 
-func (s *service) Stat(ctx context.Context, req *storageproviderv0alphapb.StatRequest) (*storageproviderv0alphapb.StatResponse, error) {
+func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "Stat")
 	defer span.End()
 
@@ -382,43 +370,43 @@ func (s *service) Stat(ctx context.Context, req *storageproviderv0alphapb.StatRe
 
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
-		return &storageproviderv0alphapb.StatResponse{
+		return &provider.StatResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
 		}, nil
 	}
 
 	md, err := s.storage.GetMD(ctx, newRef)
 	if err != nil {
-		var st *rpcpb.Status
+		var st *rpc.Status
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			st = status.NewNotFound(ctx, "file not found")
 		} else {
 			st = status.NewInternal(ctx, err, "error stating file: "+req.Ref.String())
 		}
-		return &storageproviderv0alphapb.StatResponse{
+		return &provider.StatResponse{
 			Status: st,
 		}, nil
 	}
 
 	if err := s.wrap(ctx, md); err != nil {
-		return &storageproviderv0alphapb.StatResponse{
+		return &provider.StatResponse{
 			Status: status.NewInternal(ctx, err, "error wrapping path"),
 		}, nil
 	}
-	res := &storageproviderv0alphapb.StatResponse{
+	res := &provider.StatResponse{
 		Status: status.NewOK(ctx),
 		Info:   md,
 	}
 	return res, nil
 }
 
-func (s *service) ListContainerStream(req *storageproviderv0alphapb.ListContainerStreamRequest, ss storageproviderv0alphapb.StorageProviderService_ListContainerStreamServer) error {
+func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, ss provider.ProviderAPI_ListContainerStreamServer) error {
 	ctx := ss.Context()
 	log := appctx.GetLogger(ctx)
 
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
-		res := &storageproviderv0alphapb.ListContainerStreamResponse{
+		res := &provider.ListContainerStreamResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
 		}
 		if err := ss.Send(res); err != nil {
@@ -430,7 +418,7 @@ func (s *service) ListContainerStream(req *storageproviderv0alphapb.ListContaine
 
 	mds, err := s.storage.ListFolder(ctx, newRef)
 	if err != nil {
-		res := &storageproviderv0alphapb.ListContainerStreamResponse{
+		res := &provider.ListContainerStreamResponse{
 			Status: status.NewInternal(ctx, err, "error listing folder"),
 		}
 		if err := ss.Send(res); err != nil {
@@ -442,7 +430,7 @@ func (s *service) ListContainerStream(req *storageproviderv0alphapb.ListContaine
 
 	for _, md := range mds {
 		if err := s.wrap(ctx, md); err != nil {
-			res := &storageproviderv0alphapb.ListContainerStreamResponse{
+			res := &provider.ListContainerStreamResponse{
 				Status: status.NewInternal(ctx, err, "error wrapping path"),
 			}
 			if err := ss.Send(res); err != nil {
@@ -451,7 +439,7 @@ func (s *service) ListContainerStream(req *storageproviderv0alphapb.ListContaine
 			}
 			return nil
 		}
-		res := &storageproviderv0alphapb.ListContainerStreamResponse{
+		res := &provider.ListContainerStreamResponse{
 			Info:   md,
 			Status: status.NewOK(ctx),
 		}
@@ -464,86 +452,86 @@ func (s *service) ListContainerStream(req *storageproviderv0alphapb.ListContaine
 	return nil
 }
 
-func (s *service) ListContainer(ctx context.Context, req *storageproviderv0alphapb.ListContainerRequest) (*storageproviderv0alphapb.ListContainerResponse, error) {
+func (s *service) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
-		return &storageproviderv0alphapb.ListContainerResponse{
+		return &provider.ListContainerResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
 		}, nil
 	}
 
 	mds, err := s.storage.ListFolder(ctx, newRef)
 	if err != nil {
-		return &storageproviderv0alphapb.ListContainerResponse{
+		return &provider.ListContainerResponse{
 			Status: status.NewInternal(ctx, err, "error listing folder"),
 		}, nil
 	}
 
-	var infos = make([]*storageproviderv0alphapb.ResourceInfo, 0, len(mds))
+	var infos = make([]*provider.ResourceInfo, 0, len(mds))
 	for _, md := range mds {
 		if err := s.wrap(ctx, md); err != nil {
-			return &storageproviderv0alphapb.ListContainerResponse{
+			return &provider.ListContainerResponse{
 				Status: status.NewInternal(ctx, err, "error wrapping path"),
 			}, nil
 		}
 		infos = append(infos, md)
 	}
-	res := &storageproviderv0alphapb.ListContainerResponse{
+	res := &provider.ListContainerResponse{
 		Status: status.NewOK(ctx),
 		Infos:  infos,
 	}
 	return res, nil
 }
 
-func (s *service) ListFileVersions(ctx context.Context, req *storageproviderv0alphapb.ListFileVersionsRequest) (*storageproviderv0alphapb.ListFileVersionsResponse, error) {
+func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVersionsRequest) (*provider.ListFileVersionsResponse, error) {
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
-		return &storageproviderv0alphapb.ListFileVersionsResponse{
+		return &provider.ListFileVersionsResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
 		}, nil
 	}
 
 	revs, err := s.storage.ListRevisions(ctx, newRef)
 	if err != nil {
-		return &storageproviderv0alphapb.ListFileVersionsResponse{
+		return &provider.ListFileVersionsResponse{
 			Status: status.NewInternal(ctx, err, "error listing file versions"),
 		}, nil
 	}
 
-	res := &storageproviderv0alphapb.ListFileVersionsResponse{
+	res := &provider.ListFileVersionsResponse{
 		Status:   status.NewOK(ctx),
 		Versions: revs,
 	}
 	return res, nil
 }
 
-func (s *service) RestoreFileVersion(ctx context.Context, req *storageproviderv0alphapb.RestoreFileVersionRequest) (*storageproviderv0alphapb.RestoreFileVersionResponse, error) {
+func (s *service) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileVersionRequest) (*provider.RestoreFileVersionResponse, error) {
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
-		return &storageproviderv0alphapb.RestoreFileVersionResponse{
+		return &provider.RestoreFileVersionResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
 		}, nil
 	}
 
 	if err := s.storage.RestoreRevision(ctx, newRef, req.Key); err != nil {
-		return &storageproviderv0alphapb.RestoreFileVersionResponse{
+		return &provider.RestoreFileVersionResponse{
 			Status: status.NewInternal(ctx, err, "error restoring version"),
 		}, nil
 	}
 
-	res := &storageproviderv0alphapb.RestoreFileVersionResponse{
+	res := &provider.RestoreFileVersionResponse{
 		Status: status.NewOK(ctx),
 	}
 	return res, nil
 }
 
-func (s *service) ListRecycleStream(req *storageproviderv0alphapb.ListRecycleStreamRequest, ss storageproviderv0alphapb.StorageProviderService_ListRecycleStreamServer) error {
+func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss provider.ProviderAPI_ListRecycleStreamServer) error {
 	ctx := ss.Context()
 	log := appctx.GetLogger(ctx)
 
 	items, err := s.storage.ListRecycle(ctx)
 	if err != nil {
-		res := &storageproviderv0alphapb.ListRecycleStreamResponse{
+		res := &provider.ListRecycleStreamResponse{
 			Status: status.NewInternal(ctx, err, "error listing recycle"),
 		}
 		if err := ss.Send(res); err != nil {
@@ -555,7 +543,7 @@ func (s *service) ListRecycleStream(req *storageproviderv0alphapb.ListRecycleStr
 
 	// TODO(labkode): CRITICAL: fill recycle info with storage provider.
 	for _, item := range items {
-		res := &storageproviderv0alphapb.ListRecycleStreamResponse{
+		res := &provider.ListRecycleStreamResponse{
 			RecycleItem: item,
 			Status:      status.NewOK(ctx),
 		}
@@ -567,176 +555,176 @@ func (s *service) ListRecycleStream(req *storageproviderv0alphapb.ListRecycleStr
 	return nil
 }
 
-func (s *service) ListRecycle(ctx context.Context, req *storageproviderv0alphapb.ListRecycleRequest) (*storageproviderv0alphapb.ListRecycleResponse, error) {
+func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
 	items, err := s.storage.ListRecycle(ctx)
 	// TODO(labkode): CRITICAL: fill recycle info with storage provider.
 	if err != nil {
-		return &storageproviderv0alphapb.ListRecycleResponse{
+		return &provider.ListRecycleResponse{
 			Status: status.NewInternal(ctx, err, "error listing recycle bin"),
 		}, nil
 	}
 
-	res := &storageproviderv0alphapb.ListRecycleResponse{
+	res := &provider.ListRecycleResponse{
 		Status:       status.NewOK(ctx),
 		RecycleItems: items,
 	}
 	return res, nil
 }
 
-func (s *service) RestoreRecycleItem(ctx context.Context, req *storageproviderv0alphapb.RestoreRecycleItemRequest) (*storageproviderv0alphapb.RestoreRecycleItemResponse, error) {
+func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecycleItemRequest) (*provider.RestoreRecycleItemResponse, error) {
 	// TODO(labkode): CRITICAL: fill recycle info with storage provider.
 	if err := s.storage.RestoreRecycleItem(ctx, req.Key); err != nil {
-		return &storageproviderv0alphapb.RestoreRecycleItemResponse{
+		return &provider.RestoreRecycleItemResponse{
 			Status: status.NewInternal(ctx, err, "error restoring recycle bin item"),
 		}, nil
 	}
 
-	res := &storageproviderv0alphapb.RestoreRecycleItemResponse{
+	res := &provider.RestoreRecycleItemResponse{
 		Status: status.NewOK(ctx),
 	}
 	return res, nil
 }
 
-func (s *service) PurgeRecycle(ctx context.Context, req *storageproviderv0alphapb.PurgeRecycleRequest) (*storageproviderv0alphapb.PurgeRecycleResponse, error) {
+func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
 	// if a key was sent as opacque id purge only that item
 	if req.GetRef().GetId() != nil && req.GetRef().GetId().GetOpaqueId() != "" {
 		if err := s.storage.PurgeRecycleItem(ctx, req.GetRef().GetId().GetOpaqueId()); err != nil {
-			return &storageproviderv0alphapb.PurgeRecycleResponse{
+			return &provider.PurgeRecycleResponse{
 				Status: status.NewInternal(ctx, err, "error purging recycle item"),
 			}, nil
 		}
 	} else if err := s.storage.EmptyRecycle(ctx); err != nil {
 		// otherwise try emptying the whole recycle bin
-		return &storageproviderv0alphapb.PurgeRecycleResponse{
+		return &provider.PurgeRecycleResponse{
 			Status: status.NewInternal(ctx, err, "error emptying recycle bin"),
 		}, nil
 	}
 
-	res := &storageproviderv0alphapb.PurgeRecycleResponse{
+	res := &provider.PurgeRecycleResponse{
 		Status: status.NewOK(ctx),
 	}
 	return res, nil
 }
 
-func (s *service) ListGrants(ctx context.Context, req *storageproviderv0alphapb.ListGrantsRequest) (*storageproviderv0alphapb.ListGrantsResponse, error) {
+func (s *service) ListGrants(ctx context.Context, req *provider.ListGrantsRequest) (*provider.ListGrantsResponse, error) {
 	return nil, nil
 }
 
-func (s *service) AddGrant(ctx context.Context, req *storageproviderv0alphapb.AddGrantRequest) (*storageproviderv0alphapb.AddGrantResponse, error) {
+func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (*provider.AddGrantResponse, error) {
 	// check grantee type is valid
-	if req.Grant.Grantee.Type == storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_INVALID {
-		return &storageproviderv0alphapb.AddGrantResponse{
+	if req.Grant.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_INVALID {
+		return &provider.AddGrantResponse{
 			Status: status.NewInvalid(ctx, "grantee type is invalid"),
 		}, nil
 	}
 
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
-		return &storageproviderv0alphapb.AddGrantResponse{
+		return &provider.AddGrantResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
 		}, nil
 	}
 
 	err = s.storage.AddGrant(ctx, newRef, req.Grant)
 	if err != nil {
-		return &storageproviderv0alphapb.AddGrantResponse{
+		return &provider.AddGrantResponse{
 			Status: status.NewInternal(ctx, err, "error setting ACL"),
 		}, nil
 	}
 
-	res := &storageproviderv0alphapb.AddGrantResponse{
+	res := &provider.AddGrantResponse{
 		Status: status.NewOK(ctx),
 	}
 	return res, nil
 }
 
-func (s *service) CreateReference(ctx context.Context, req *storageproviderv0alphapb.CreateReferenceRequest) (*storageproviderv0alphapb.CreateReferenceResponse, error) {
+func (s *service) CreateReference(ctx context.Context, req *provider.CreateReferenceRequest) (*provider.CreateReferenceResponse, error) {
 	log := appctx.GetLogger(ctx)
 
 	// parse uri is valid
 	u, err := url.Parse(req.TargetUri)
 	if err != nil {
 		log.Err(err).Msg("invalid target uri")
-		return &storageproviderv0alphapb.CreateReferenceResponse{
+		return &provider.CreateReferenceResponse{
 			Status: status.NewInvalidArg(ctx, "target uri is invalid: "+err.Error()),
 		}, nil
 	}
 
 	if err := s.storage.CreateReference(ctx, req.Path, u); err != nil {
 		log.Err(err).Msg("error calling CreateReference")
-		return &storageproviderv0alphapb.CreateReferenceResponse{
+		return &provider.CreateReferenceResponse{
 			Status: status.NewInternal(ctx, err, "error creating reference"),
 		}, nil
 	}
 
-	return &storageproviderv0alphapb.CreateReferenceResponse{
+	return &provider.CreateReferenceResponse{
 		Status: status.NewOK(ctx),
 	}, nil
 }
 
-func (s *service) UpdateGrant(ctx context.Context, req *storageproviderv0alphapb.UpdateGrantRequest) (*storageproviderv0alphapb.UpdateGrantResponse, error) {
+func (s *service) UpdateGrant(ctx context.Context, req *provider.UpdateGrantRequest) (*provider.UpdateGrantResponse, error) {
 	// check grantee type is valid
-	if req.Grant.Grantee.Type == storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_INVALID {
-		return &storageproviderv0alphapb.UpdateGrantResponse{
+	if req.Grant.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_INVALID {
+		return &provider.UpdateGrantResponse{
 			Status: status.NewInvalid(ctx, "grantee type is invalid"),
 		}, nil
 	}
 
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
-		return &storageproviderv0alphapb.UpdateGrantResponse{
+		return &provider.UpdateGrantResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
 		}, nil
 	}
 
 	if err := s.storage.UpdateGrant(ctx, newRef, req.Grant); err != nil {
-		return &storageproviderv0alphapb.UpdateGrantResponse{
+		return &provider.UpdateGrantResponse{
 			Status: status.NewInternal(ctx, err, "error updating ACL"),
 		}, nil
 	}
 
-	res := &storageproviderv0alphapb.UpdateGrantResponse{
+	res := &provider.UpdateGrantResponse{
 		Status: status.NewOK(ctx),
 	}
 	return res, nil
 }
 
-func (s *service) RemoveGrant(ctx context.Context, req *storageproviderv0alphapb.RemoveGrantRequest) (*storageproviderv0alphapb.RemoveGrantResponse, error) {
+func (s *service) RemoveGrant(ctx context.Context, req *provider.RemoveGrantRequest) (*provider.RemoveGrantResponse, error) {
 	// check targetType is valid
-	if req.Grant.Grantee.Type == storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_INVALID {
-		return &storageproviderv0alphapb.RemoveGrantResponse{
+	if req.Grant.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_INVALID {
+		return &provider.RemoveGrantResponse{
 			Status: status.NewInvalid(ctx, "grantee type is invalid"),
 		}, nil
 	}
 
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
-		return &storageproviderv0alphapb.RemoveGrantResponse{
+		return &provider.RemoveGrantResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
 		}, nil
 	}
 
 	if err := s.storage.RemoveGrant(ctx, newRef, req.Grant); err != nil {
-		return &storageproviderv0alphapb.RemoveGrantResponse{
+		return &provider.RemoveGrantResponse{
 			Status: status.NewInternal(ctx, err, "error removing ACL"),
 		}, nil
 	}
 
-	res := &storageproviderv0alphapb.RemoveGrantResponse{
+	res := &provider.RemoveGrantResponse{
 		Status: status.NewOK(ctx),
 	}
 	return res, nil
 }
 
-func (s *service) GetQuota(ctx context.Context, req *storageproviderv0alphapb.GetQuotaRequest) (*storageproviderv0alphapb.GetQuotaResponse, error) {
+func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (*provider.GetQuotaResponse, error) {
 	total, used, err := s.storage.GetQuota(ctx)
 	if err != nil {
-		return &storageproviderv0alphapb.GetQuotaResponse{
+		return &provider.GetQuotaResponse{
 			Status: status.NewInternal(ctx, err, "error getting quota"),
 		}, nil
 	}
 
-	res := &storageproviderv0alphapb.GetQuotaResponse{
+	res := &provider.GetQuotaResponse{
 		Status:     status.NewOK(ctx),
 		TotalBytes: uint64(total),
 		UsedBytes:  uint64(used),
@@ -761,11 +749,11 @@ func getPW(c *config) (storage.PathWrapper, error) {
 	return nil, fmt.Errorf("path wrapper not found: %s", c.Driver)
 }
 
-func (s *service) unwrap(ctx context.Context, ref *storageproviderv0alphapb.Reference) (*storageproviderv0alphapb.Reference, error) {
+func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (*provider.Reference, error) {
 	if ref.GetId() != nil {
-		idRef := &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Id{
-				Id: &storageproviderv0alphapb.ResourceId{
+		idRef := &provider.Reference{
+			Spec: &provider.Reference_Id{
+				Id: &provider.ResourceId{
 					StorageId: "", // on purpose, we are unwrapping, bottom layers only need OpaqueId.
 					OpaqueId:  ref.GetId().OpaqueId,
 				},
@@ -793,8 +781,8 @@ func (s *service) unwrap(ctx context.Context, ref *storageproviderv0alphapb.Refe
 		}
 	}
 
-	pathRef := &storageproviderv0alphapb.Reference{
-		Spec: &storageproviderv0alphapb.Reference_Path{
+	pathRef := &provider.Reference{
+		Spec: &provider.Reference_Path{
 			Path: fsfn,
 		},
 	}
@@ -809,7 +797,7 @@ func (s *service) trimMountPrefix(fn string) (string, error) {
 	return "", errors.New(fmt.Sprintf("path=%q does not belong to this storage provider mount path=%q"+fn, s.mountPath))
 }
 
-func (s *service) wrap(ctx context.Context, ri *storageproviderv0alphapb.ResourceInfo) error {
+func (s *service) wrap(ctx context.Context, ri *provider.ResourceInfo) error {
 	ri.Id.StorageId = s.mountID
 
 	if s.pathWrapper != nil {

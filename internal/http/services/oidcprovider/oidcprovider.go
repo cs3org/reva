@@ -31,14 +31,15 @@ import (
 	"github.com/ory/fosite/token/jwt"
 	"github.com/pkg/errors"
 
-	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/mitchellh/mapstructure"
 )
 
 func init() {
-	rhttp.Register("oidcprovider", New)
+	global.Register("oidcprovider", New)
 }
 
 type config struct {
@@ -69,7 +70,7 @@ type svc struct {
 }
 
 // New returns a new oidcprovidersvc
-func New(m map[string]interface{}) (rhttp.Service, error) {
+func New(m map[string]interface{}) (global.Service, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
 		return nil, err
@@ -79,9 +80,39 @@ func New(m map[string]interface{}) (rhttp.Service, error) {
 		c.Prefix = "oauth2"
 	}
 
-	// parse clients
+	clients, err := getClients(c.Clients)
+	if err != nil {
+		return nil, errors.Wrap(err, "oidcprovider: error parsing oidc clients")
+	}
+
+	store := getStore(clients)
+	conf := getConfig(c.Issuer)
+	provider := getOAuth2Provider(store, conf)
+
+	s := &svc{
+		conf:    c,
+		prefix:  c.Prefix,
+		clients: clients,
+		store:   store,
+		oauth2:  provider,
+	}
+
+	s.setHandler()
+	return s, nil
+}
+
+func getOAuth2Provider(st fosite.Storage, conf *compose.Config) fosite.OAuth2Provider {
+	return compose.ComposeAllEnabled(
+		conf,
+		st,
+		[]byte("my super secret signing password"), // Caution: it MUST always be 32 bytes long.
+		mustRSAKey(),
+	)
+}
+
+func getClients(confClients map[string]map[string]interface{}) (map[string]fosite.Client, error) {
 	clients := map[string]fosite.Client{}
-	for id, val := range c.Clients {
+	for id, val := range confClients {
 		client := &client{}
 		if err := mapstructure.Decode(val, client); err != nil {
 			err = errors.Wrap(err, "oidcprovider: error decoding client configuration")
@@ -101,43 +132,7 @@ func New(m map[string]interface{}) (rhttp.Service, error) {
 
 		clients[id] = fosClient
 	}
-
-	store := newExampleStore(clients)
-
-	s := &svc{
-		conf:    c,
-		prefix:  c.Prefix,
-		clients: clients,
-		// This is an exemplary storage instance. We will add a client and a user to it so we can use these later on.
-		store: store,
-		oauth2: compose.Compose(
-			fconfig,
-			store,
-			start,
-			nil, // filled in by Compose based on the hash cost in the config
-
-			// enabled handlers
-			compose.OAuth2AuthorizeExplicitFactory,
-			compose.OAuth2AuthorizeImplicitFactory,
-			compose.OAuth2ClientCredentialsGrantFactory,
-			compose.OAuth2RefreshTokenGrantFactory,
-			compose.OAuth2ResourceOwnerPasswordCredentialsFactory,
-
-			// be aware that open id connect factories need to be added after oauth2 factories to work properly.
-			compose.OpenIDConnectExplicitFactory,
-			compose.OpenIDConnectImplicitFactory,
-			compose.OpenIDConnectHybridFactory,
-			compose.OpenIDConnectRefreshFactory,
-
-			compose.OAuth2TokenRevocationFactory,
-			compose.OAuth2TokenIntrospectionFactory,
-
-			// needs to come last
-			compose.OAuth2PKCEFactory,
-		),
-	}
-	s.setHandler()
-	return s, nil
+	return clients, nil
 }
 
 func (s *svc) Close() error {
@@ -152,6 +147,13 @@ func (s *svc) Handler() http.Handler {
 	return s.handler
 }
 
+func (s *svc) Unprotected() []string {
+	// TODO(jfd): the introspect endpoint should be protected? That is why we have client id and client secret?
+	return []string{
+		"/",
+	}
+}
+
 func (s *svc) setHandler() {
 	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log := appctx.GetLogger(r.Context())
@@ -163,7 +165,7 @@ func (s *svc) setHandler() {
 		}
 
 		var head string
-		head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 		log.Info().Msgf("oidcprovider routing: head=%s tail=%s", head, r.URL.Path)
 		switch head {
 		case "":
@@ -187,7 +189,7 @@ func (s *svc) setHandler() {
 	})
 }
 
-func newExampleStore(clients map[string]fosite.Client) *storage.MemoryStore {
+func getStore(clients map[string]fosite.Client) *storage.MemoryStore {
 	return &storage.MemoryStore{
 		IDSessions:             make(map[string]fosite.Requester),
 		Clients:                clients,
@@ -201,18 +203,10 @@ func newExampleStore(clients map[string]fosite.Client) *storage.MemoryStore {
 	}
 }
 
-var fconfig = new(compose.Config)
-
-// Because we are using oauth2 and open connect id, we use this little helper to combine the two in one
-// variable.
-var start = compose.CommonStrategy{
-	// alternatively you could use:
-	//  OAuth2Strategy: compose.NewOAuth2JWTStrategy(mustRSAKey())
-	// TODO(jfd): generate / read proper secret from config
-	CoreStrategy: compose.NewOAuth2HMACStrategy(fconfig, []byte("some-super-cool-secret-that-nobody-knows"), nil),
-
-	// open id connect strategy
-	OpenIDConnectTokenStrategy: compose.NewOpenIDConnectStrategy(fconfig, mustRSAKey()),
+func getConfig(issuer string) *compose.Config {
+	return &compose.Config{
+		IDTokenIssuer: issuer,
+	}
 }
 
 // customSession keeps track of the session between the auth and token and userinfo endpoints.
@@ -220,26 +214,6 @@ var start = compose.CommonStrategy{
 type customSession struct {
 	*openid.DefaultSession
 	internalToken string
-	fosite.Session
-}
-
-func (s *customSession) SetExpiresAt(key fosite.TokenType, exp time.Time) {
-	s.DefaultSession.SetExpiresAt(key, exp)
-}
-
-func (s *customSession) GetExpiresAt(key fosite.TokenType) time.Time {
-	return s.DefaultSession.GetExpiresAt(key)
-}
-func (s *customSession) GetUsername() string {
-	return s.DefaultSession.GetUsername()
-}
-
-func (s *customSession) GetSubject() string {
-	return s.DefaultSession.GetSubject()
-}
-
-func (s *customSession) Clone() fosite.Session {
-	return s.DefaultSession.Clone()
 }
 
 // A session is passed from the `/auth` to the `/token` endpoint. You probably want to store data like: "Who made the request",
@@ -252,21 +226,21 @@ func (s *customSession) Clone() fosite.Session {
 // Usually, you could do:
 //
 //  session = new(fosite.DefaultSession)
-func (s *svc) newSession(token string, user *userproviderv0alphapb.User) *customSession {
+func (s *svc) getSession(token string, user *userpb.User) *customSession {
 	return &customSession{
 		DefaultSession: &openid.DefaultSession{
 			Claims: &jwt.IDTokenClaims{
 				// TODO(labkode): we override the issuer here as we are the OIDC provider.
 				// Does it make sense? The auth backend can be on another domain, but this service
 				// is the one responsible for oidc logic.
-				// The issuer needs to map the in the configuration.
+				// The issuer needs to map the subject in the configuration.
 				Issuer:  s.conf.Issuer,
 				Subject: user.Id.OpaqueId,
 				// TODO(labkode): check what audience means and set it correctly.
 				//Audience:    []string{"https://my-client.my-application.com"},
 				// TODO(labkode): make times configurable to align to internal token lifetime.
 				ExpiresAt: time.Now().Add(time.Hour * 6),
-				//IssuedAt:    time.Now(),
+				IssuedAt:  time.Now(),
 				//RequestedAt: time.Now(),
 				//AuthTime:    time.Now(),
 			},
@@ -281,7 +255,7 @@ func (s *svc) newSession(token string, user *userproviderv0alphapb.User) *custom
 }
 
 // emptySession creates a session object and fills it with safe defaults
-func (s *svc) emptySession() *customSession {
+func (s *svc) getEmptySession() *customSession {
 	return &customSession{
 		DefaultSession: &openid.DefaultSession{
 			Claims: &jwt.IDTokenClaims{
@@ -294,7 +268,7 @@ func (s *svc) emptySession() *customSession {
 				//Audience:    []string{"https://my-client.my-application.com"},
 				// TODO(labkode): make times configurable to align to internal token lifetime.
 				ExpiresAt: time.Now().Add(time.Hour * 6),
-				//IssuedAt:    time.Now(),
+				IssuedAt:  time.Now(),
 				//RequestedAt: time.Now(),
 				//AuthTime:    time.Now(),
 			},

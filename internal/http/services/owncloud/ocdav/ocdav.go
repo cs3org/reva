@@ -27,11 +27,12 @@ import (
 	"path"
 	"strings"
 
-	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -42,7 +43,7 @@ const (
 )
 
 func init() {
-	rhttp.Register("ocdav", New)
+	global.Register("ocdav", New)
 }
 
 // Config holds the config options that need to be passed down to all ocdav handlers
@@ -61,7 +62,7 @@ type svc struct {
 }
 
 // New returns a new ocdav
-func New(m map[string]interface{}) (rhttp.Service, error) {
+func New(m map[string]interface{}) (global.Service, error) {
 	conf := &Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
@@ -98,6 +99,10 @@ func (s *svc) Close() error {
 	return nil
 }
 
+func (s *svc) Unprotected() []string {
+	return []string{"/status.php"}
+}
+
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -118,7 +123,7 @@ func (s *svc) Handler() http.Handler {
 		base := path.Join("/", s.Prefix())
 
 		var head string
-		head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
 		switch head {
 		case "status.php":
@@ -126,7 +131,7 @@ func (s *svc) Handler() http.Handler {
 			return
 		case "remote.php":
 			// skip optional "remote.php"
-			head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+			head, r.URL.Path = router.ShiftPath(r.URL.Path)
 
 			// yet, add it to baseURI
 			base = path.Join(base, "remote.php")
@@ -158,11 +163,11 @@ func (s *svc) Handler() http.Handler {
 	})
 }
 
-func (s *svc) getClient() (gatewayv0alphapb.GatewayServiceClient, error) {
+func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
 	return pool.GetGatewayServiceClient(s.c.GatewaySvc)
 }
 
-func wrapResourceID(r *storageproviderv0alphapb.ResourceId) string {
+func wrapResourceID(r *provider.ResourceId) string {
 	return wrap(r.StorageId, r.OpaqueId)
 }
 
@@ -174,7 +179,7 @@ func wrap(sid string, oid string) string {
 	return base64.URLEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", sid, oid)))
 }
 
-func unwrap(rid string) *storageproviderv0alphapb.ResourceId {
+func unwrap(rid string) *provider.ResourceId {
 	decodedID, err := base64.URLEncoding.DecodeString(rid)
 	if err != nil {
 		return nil
@@ -183,7 +188,7 @@ func unwrap(rid string) *storageproviderv0alphapb.ResourceId {
 	if len(parts) != 2 {
 		return nil
 	}
-	return &storageproviderv0alphapb.ResourceId{
+	return &provider.ResourceId{
 		StorageId: parts[0],
 		OpaqueId:  parts[1],
 	}

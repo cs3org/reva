@@ -21,28 +21,17 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"os"
 	"path"
-	"runtime"
-	"strconv"
-	"strings"
+	"regexp"
+	"sync"
 	"syscall"
 
-	"contrib.go.opencensus.io/exporter/jaeger"
 	"github.com/cs3org/reva/cmd/revad/internal/config"
 	"github.com/cs3org/reva/cmd/revad/internal/grace"
-	"github.com/cs3org/reva/pkg/logger"
-	"github.com/cs3org/reva/pkg/rgrpc"
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/cmd/revad/runtime"
 	"github.com/gofrs/uuid"
-	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
-	"github.com/rs/zerolog"
-	"go.opencensus.io/plugin/ocgrpc"
-	"go.opencensus.io/plugin/ochttp"
-	"go.opencensus.io/stats/view"
-	"go.opencensus.io/trace"
 )
 
 var (
@@ -51,140 +40,45 @@ var (
 	signalFlag  = flag.String("s", "", "send signal to a master process: stop, quit, reload")
 	configFlag  = flag.String("c", "/etc/revad/revad.toml", "set configuration file")
 	pidFlag     = flag.String("p", "", "pid file. If empty defaults to a random file in the OS temporary directory")
+	dirFlag     = flag.String("dev-dir", "", "runs any toml file in the specified directory. Intended for development use only")
 
-	// Compile time variables initialez with gcc flags.
+	// Compile time variables initialized with gcc flags.
 	gitCommit, buildDate, version, goVersion string
 )
-
-type coreConf struct {
-	MaxCPUs            string `mapstructure:"max_cpus"`
-	TracingEnabled     bool   `mapstructure:"tracing_enabled"`
-	TracingEndpoint    string `mapstructure:"tracing_endpoint"`
-	TracingCollector   string `mapstructure:"tracing_collector"`
-	TracingServiceName string `mapstructure:"tracing_service_name"`
-}
 
 func main() {
 	flag.Parse()
 
 	handleVersionFlag()
 	handleSignalFlag()
-	handleTestFlag()
 
-	mainConf := handleConfigFlagOrDie()
-	coreConf := parseCoreConfOrDie(mainConf["core"])
-	logConf := parseLogConfOrDie(mainConf["log"])
-
-	log, err := newLogger(logConf)
+	confs, err := getConfigs()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error creating logger, exiting ...")
+		fmt.Fprintf(os.Stderr, "error reading the configuration file(s): %s\n", err.Error())
 		os.Exit(1)
 	}
 
-	if err := setupOpenCensus(coreConf); err != nil {
-		log.Error().Err(err).Msg("error configuring open census stats and tracing")
+	// if there is more than one configuration available and
+	// the pid flag has been set we abort as the pid flag
+	// is meant to work only with one main configuration.
+	if len(confs) != 1 && *pidFlag != "" {
+		fmt.Fprintf(os.Stderr, "cannot run with with multiple configurations and one pid file, remote the -p flag\n")
 		os.Exit(1)
 	}
 
-	ncpus, err := adjustCPU(coreConf.MaxCPUs)
-	if err != nil {
-		log.Error().Err(err).Msg("error adjusting number of cpus")
-		os.Exit(1)
-	}
-	log.Info().Msgf("%s", getVersionString())
-	log.Info().Msgf("running on %d cpus", ncpus)
-
-	servers := map[string]grace.Server{}
-	if isEnabledHTTP(mainConf) {
-		s, err := getHTTPServer(mainConf["http"], log)
-		if err != nil {
-			log.Error().Err(err).Msg("error creating http server")
-			os.Exit(1)
-		}
-		servers["http"] = s
+	// if test flag is true we exit as this flag only tests for valid configurations.
+	if *testFlag {
+		os.Exit(0)
 	}
 
-	if isEnabledGRPC(mainConf) {
-		s, err := getGRPCServer(mainConf["grpc"], log)
-		if err != nil {
-			log.Error().Err(err).Msg("error creating grpc server")
-			os.Exit(1)
-		}
-		servers["grpc"] = s
-	}
-
-	if len(servers) == 0 {
-		// nothing to do
-		log.Info().Msg("nothing to do, no grpc/http enabled_services declared in config")
-		os.Exit(1)
-	}
-
-	watcher, err := handlePIDFlag(log) // TODO(labkode): maybe pidfile can be created later on? like once a server is going to be created?
-	if err != nil {
-		log.Error().Err(err).Msg("error creating grace watcher")
-		os.Exit(1)
-	}
-
-	listeners, err := watcher.GetListeners(servers)
-	if err != nil {
-		log.Error().Err(err).Msg("error getting sockets")
-		watcher.Exit(1)
-	}
-
-	if isEnabledHTTP(mainConf) {
-		go func() {
-			if err := servers["http"].(*rhttp.Server).Start(listeners["http"]); err != nil {
-				log.Error().Err(err).Msg("error starting the http server")
-				watcher.Exit(1)
-			}
-		}()
-	}
-
-	if isEnabledGRPC(mainConf) {
-		go func() {
-			if err := servers["grpc"].(*rgrpc.Server).Start(listeners["grpc"]); err != nil {
-				log.Error().Err(err).Msg("error starting the grpc server")
-				watcher.Exit(1)
-			}
-		}()
-	}
-
-	// wait for signal to close servers
-	watcher.TrapSignals()
+	runConfigs(confs)
 }
 
-func newLogger(conf *logConf) (*zerolog.Logger, error) {
-	var opts []logger.Option
-	opts = append(opts, logger.WithLevel(conf.Level))
-
-	w, err := getWriter(conf.Output)
-	if err != nil {
-		return nil, err
+func handleVersionFlag() {
+	if *versionFlag {
+		fmt.Fprintf(os.Stderr, "%s\n", getVersionString())
+		os.Exit(1)
 	}
-
-	opts = append(opts, logger.WithWriter(w, logger.Mode(conf.Mode)))
-
-	l := logger.New(opts...)
-	sub := l.With().Int("pid", os.Getpid()).Logger()
-	return &sub, nil
-}
-
-func getWriter(out string) (io.Writer, error) {
-	if out == "stderr" || out == "" {
-		return os.Stderr, nil
-	}
-
-	if out == "stdout" {
-		return os.Stdout, nil
-	}
-
-	fd, err := os.Create(out)
-	if err != nil {
-		err = errors.Wrap(err, "error creating log file: "+out)
-		return nil, err
-	}
-
-	return fd, nil
 }
 
 func getVersionString() string {
@@ -194,13 +88,6 @@ func getVersionString() string {
 	msg += "build_date=%s"
 
 	return fmt.Sprintf(msg, version, gitCommit, goVersion, buildDate)
-}
-
-func handleVersionFlag() {
-	if *versionFlag {
-		fmt.Fprintf(os.Stderr, "%s\n", getVersionString())
-		os.Exit(1)
-	}
 }
 
 func handleSignalFlag() {
@@ -220,7 +107,7 @@ func handleSignalFlag() {
 
 		// check that we have a valid pidfile
 		if *pidFlag == "" {
-			fmt.Fprintf(os.Stderr, "-s flag not set, no clue where the pidfile is stored\n")
+			fmt.Fprintf(os.Stderr, "-s flag not set, no clue where the pidfile is stored. Check the logs for its location.\n")
 			os.Exit(1)
 		}
 		process, err := grace.GetProcessFromFile(*pidFlag)
@@ -239,198 +126,102 @@ func handleSignalFlag() {
 	}
 }
 
-func handleTestFlag() {
-	if *testFlag {
-		os.Exit(0)
-	}
-}
-
-func handlePIDFlag(l *zerolog.Logger) (*grace.Watcher, error) {
-	// if pid is empty, we store it in the OS temporary folder with random name
-	if *pidFlag == "" {
-		uuid := uuid.Must(uuid.NewV4())
-		*pidFlag = path.Join(os.TempDir(), "revad-"+uuid.String()+".pid")
-	}
-
-	var opts []grace.Option
-	opts = append(opts, grace.WithPIDFile(*pidFlag))
-	opts = append(opts, grace.WithLogger(l.With().Str("pkg", "grace").Logger()))
-	w := grace.NewWatcher(opts...)
-	err := w.WritePID()
-	if err != nil {
-		return nil, err
-	}
-
-	return w, nil
-}
-
-func getGRPCServer(conf interface{}, l *zerolog.Logger) (*rgrpc.Server, error) {
-	sub := l.With().Str("pkg", "rgrpc").Logger()
-	s, err := rgrpc.NewServer(conf, sub)
-	if err != nil {
-		err = errors.Wrap(err, "main: error creating grpc server")
-		return nil, err
-	}
-	return s, nil
-}
-
-func getHTTPServer(conf interface{}, l *zerolog.Logger) (*rhttp.Server, error) {
-	sub := l.With().Str("pkg", "rhttp").Logger()
-	s, err := rhttp.New(conf, sub)
-	if err != nil {
-		err = errors.Wrap(err, "main: error creating http server")
-		return nil, err
-	}
-	return s, nil
-}
-
-func handleConfigFlagOrDie() map[string]interface{} {
-	fd, err := os.Open(*configFlag)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error opening file: %+s\n", err.Error())
-		os.Exit(1)
-	}
-	defer fd.Close()
-
-	v, err := config.Read(fd)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error reading config: %s\n", err.Error())
-		os.Exit(1)
-	}
-
-	return v
-}
-
-func setupOpenCensus(conf *coreConf) error {
-	if err := view.Register(ochttp.DefaultServerViews...); err != nil {
-		return err
-	}
-
-	if err := view.Register(ocgrpc.DefaultServerViews...); err != nil {
-		return err
-	}
-
-	if !conf.TracingEnabled {
-		return nil
-	}
-
-	if conf.TracingEndpoint == "" {
-		conf.TracingEndpoint = "localhost:6831"
-	}
-
-	if conf.TracingCollector == "" {
-		conf.TracingCollector = "http://localhost:14268/api/traces"
-	}
-
-	if conf.TracingServiceName == "" {
-		conf.TracingServiceName = "revad"
-	}
-
-	je, err := jaeger.NewExporter(jaeger.Options{
-		AgentEndpoint:     conf.TracingEndpoint,
-		CollectorEndpoint: conf.TracingCollector,
-		ServiceName:       conf.TracingServiceName,
-	})
-
-	if err != nil {
-		return err
-	}
-
-	// register it as a trace exporter
-	trace.RegisterExporter(je)
-	trace.ApplyConfig(trace.Config{DefaultSampler: trace.AlwaysSample()})
-	return nil
-}
-
-//  adjustCPU parses string cpu and sets GOMAXPROCS
-// according to its value. It accepts either
-// a number (e.g. 3) or a percent (e.g. 50%).
-// Default is to use all available cores.
-func adjustCPU(cpu string) (int, error) {
-	var numCPU int
-
-	availCPU := runtime.NumCPU()
-
-	if cpu != "" {
-		if strings.HasSuffix(cpu, "%") {
-			// Percent
-			var percent float32
-			pctStr := cpu[:len(cpu)-1]
-			pctInt, err := strconv.Atoi(pctStr)
-			if err != nil || pctInt < 1 || pctInt > 100 {
-				return 0, fmt.Errorf("invalid CPU value: percentage must be between 1-100")
-			}
-			percent = float32(pctInt) / 100
-			numCPU = int(float32(availCPU) * percent)
-		} else {
-			// Number
-			num, err := strconv.Atoi(cpu)
-			if err != nil || num < 1 {
-				return 0, fmt.Errorf("invalid CPU value: provide a number or percent greater than 0")
-			}
-			numCPU = num
+func getConfigs() ([]map[string]interface{}, error) {
+	var confs []string
+	// give priority to read from dev-dir
+	if *dirFlag != "" {
+		cfgs, err := getConfigsFromDir(*dirFlag)
+		if err != nil {
+			return nil, err
 		}
+		confs = append(confs, cfgs...)
 	} else {
-		numCPU = availCPU
+		confs = append(confs, *configFlag)
 	}
 
-	if numCPU > availCPU || numCPU == 0 {
-		numCPU = availCPU
-	}
-
-	runtime.GOMAXPROCS(numCPU)
-	return numCPU, nil
-}
-
-func parseCoreConfOrDie(v interface{}) *coreConf {
-	c := &coreConf{}
-	if err := mapstructure.Decode(v, c); err != nil {
-		fmt.Fprintf(os.Stderr, "error decoding core config: %s\n", err.Error())
-		os.Exit(1)
-	}
-	return c
-}
-
-func parseLogConfOrDie(v interface{}) *logConf {
-	c := &logConf{}
-	if err := mapstructure.Decode(v, c); err != nil {
-		fmt.Fprintf(os.Stderr, "error decoding log config: %s\n", err.Error())
+	// if we don't have a config file we abort
+	if len(confs) == 0 {
+		fmt.Fprintf(os.Stderr, "no configuration found\n")
 		os.Exit(1)
 	}
 
-	// if mode is not set, we use console mode, easier for devs
-	if c.Mode == "" {
-		c.Mode = "console"
+	configs, err := readConfigs(confs)
+	if err != nil {
+		return nil, err
 	}
 
-	return c
+	return configs, nil
 }
 
-type logConf struct {
-	Output string `mapstructure:"output"`
-	Mode   string `mapstructure:"mode"`
-	Level  string `mapstructure:"level"`
-}
+func getConfigsFromDir(dir string) (confs []string, err error) {
+	files, err := ioutil.ReadDir(*dirFlag)
+	if err != nil {
+		return nil, err
+	}
 
-func isEnabledHTTP(conf map[string]interface{}) bool {
-	return isEnabled("http", conf)
-}
-
-func isEnabledGRPC(conf map[string]interface{}) bool {
-	return isEnabled("grpc", conf)
-}
-
-func isEnabled(key string, conf map[string]interface{}) bool {
-	if a, ok := conf[key]; ok {
-		if b, ok := a.(map[string]interface{}); ok {
-			if c, ok := b["enabled_services"]; ok {
-				if d, ok := c.([]interface{}); ok {
-					if len(d) > 0 {
-						return true
-					}
-				}
+	for _, value := range files {
+		if !value.IsDir() {
+			expr := regexp.MustCompile(`[\w].toml`)
+			if expr.Match([]byte(value.Name())) {
+				confs = append(confs, path.Join(dir, value.Name()))
 			}
 		}
 	}
-	return false
+	return
+}
+
+func readConfigs(files []string) ([]map[string]interface{}, error) {
+	confs := make([]map[string]interface{}, 0, len(files))
+	for _, conf := range files {
+		fd, err := os.Open(conf)
+		if err != nil {
+			return nil, err
+		}
+		defer fd.Close()
+
+		v, err := config.Read(fd)
+		if err != nil {
+			return nil, err
+		}
+		confs = append(confs, v)
+	}
+	return confs, nil
+}
+
+func runConfigs(confs []map[string]interface{}) {
+	if len(confs) == 1 {
+		runSingle(confs[0])
+		return
+	}
+
+	runMultiple(confs)
+}
+
+func runSingle(conf map[string]interface{}) {
+	if *pidFlag == "" {
+		*pidFlag = getPidfile()
+	}
+
+	runtime.Run(conf, *pidFlag)
+}
+
+func getPidfile() string {
+	uuid := uuid.Must(uuid.NewV4())
+	name := fmt.Sprintf("revad-%s.pid", uuid)
+
+	return path.Join(os.TempDir(), name)
+}
+
+func runMultiple(confs []map[string]interface{}) {
+	var wg sync.WaitGroup
+	for _, conf := range confs {
+		wg.Add(1)
+		pidfile := getPidfile()
+		go func(wg *sync.WaitGroup, conf map[string]interface{}) {
+			runtime.Run(conf, pidfile)
+			wg.Done()
+		}(&wg, conf)
+	}
+	wg.Wait()
+	os.Exit(0)
 }

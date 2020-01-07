@@ -21,7 +21,7 @@ package ocs
 import (
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 )
 
 // CloudHandler holds references to UserHandler and CapabilitiesHandler
@@ -42,7 +42,7 @@ func (h *CloudHandler) init(c *Config) {
 func (h *CloudHandler) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var head string
-		head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 		switch head {
 		case "capabilities":
 			h.CapabilitiesHandler.Handler().ServeHTTP(w, r)

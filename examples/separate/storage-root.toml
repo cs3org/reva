@@ -11,19 +11,15 @@
 # that will allow you to list the existing namespaces.
 # TODO either make the gateway return a proper ListCollection for the root,
 # TODO or implement a virtual storage that implements this
-
-[core]
-max_cpus = "2"
-disable_http = true
-
-[log]
-level = "debug"
-
 [grpc]
 network = "tcp"
 address = "0.0.0.0:11100"
-enabled_services = ["storageprovider"]
-enabled_interceptors = ["auth"]
+
+[grpc.interceptors.auth]
+token_manager = "jwt"
+
+[grpc.interceptors.auth.token_managers.jwt]
+secret = "Pive-Fumkiu4"
 
 # This is a storage proider that grants direct acces to the wrapped storage
 [grpc.services.storageprovider]
@@ -42,8 +38,3 @@ root = "/var/tmp/reva/root"
 [grpc.services.storageprovider.path_wrappers.context]
 prefix = ""
 
-[grpc.interceptors.auth]
-token_manager = "jwt"
-
-[grpc.interceptors.auth.token_managers.jwt]
-secret = "Pive-Fumkiu4"

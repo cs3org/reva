@@ -29,18 +29,18 @@ import (
 	"strings"
 	"time"
 
-	gatewayv0alpahpb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
-	publicshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
-	typespb "github.com/cs3org/go-cs3apis/cs3/types"
-	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
-	usershareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/usershareprovider/v0alpha"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 )
 
 // SharesHandler implements the ownCloud sharing API
@@ -57,7 +57,7 @@ func (h *SharesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context())
 
 	var head string
-	head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+	head, r.URL.Path = router.ShiftPath(r.URL.Path)
 
 	log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
 
@@ -94,7 +94,7 @@ func (h *SharesHandler) findSharees(w http.ResponseWriter, r *http.Request) {
 
 	gatewayProvider := mustGetGateway(h.gatewayAddr, r, w)
 
-	req := userproviderv0alphapb.FindUsersRequest{
+	req := userpb.FindUsersRequest{
 		Filter: term,
 	}
 
@@ -126,7 +126,7 @@ func (h *SharesHandler) findSharees(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *SharesHandler) userAsMatch(u *userproviderv0alphapb.User) *conversions.MatchData {
+func (h *SharesHandler) userAsMatch(u *userpb.User) *conversions.MatchData {
 	return &conversions.MatchData{
 		Label: u.DisplayName,
 		Value: &conversions.MatchValueData{
@@ -168,7 +168,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		res, err := gatewayClient.FindUsers(ctx, &userproviderv0alphapb.FindUsersRequest{
+		res, err := gatewayClient.FindUsers(ctx, &userpb.FindUsersRequest{
 			Filter: shareWith,
 		})
 		if err != nil {
@@ -176,7 +176,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		var recipient *userproviderv0alphapb.User
+		var recipient *userpb.User
 		for _, user := range res.GetUsers() {
 			if user.Username == shareWith {
 				recipient = user
@@ -203,7 +203,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		var permissions *storageproviderv0alphapb.ResourcePermissions
+		var permissions *provider.ResourcePermissions
 		permissions, err = h.role2CS3Permissions(role)
 		if err != nil {
 			log.Warn().Err(err).Msg("unknown role, mapping legacy permissions")
@@ -223,9 +223,9 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		statReq := &storageproviderv0alphapb.StatRequest{
-			Ref: &storageproviderv0alphapb.Reference{
-				Spec: &storageproviderv0alphapb.Reference_Path{
+		statReq := &provider.StatRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{
 					Path: r.FormValue("path"),
 				},
 			},
@@ -237,8 +237,8 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if statRes.Status.Code != rpcpb.Code_CODE_OK {
-			if statRes.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+		if statRes.Status.Code != rpc.Code_CODE_OK {
+			if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 				WriteOCSError(w, r, MetaNotFound.StatusCode, "not found", nil)
 				return
 			}
@@ -246,22 +246,22 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		createShareReq := &usershareproviderv0alphapb.CreateShareRequest{
-			Opaque: &typespb.Opaque{
-				Map: map[string]*typespb.OpaqueEntry{
-					"role": &typespb.OpaqueEntry{
+		createShareReq := &collaboration.CreateShareRequest{
+			Opaque: &types.Opaque{
+				Map: map[string]*types.OpaqueEntry{
+					"role": &types.OpaqueEntry{
 						Decoder: "json",
 						Value:   val,
 					},
 				},
 			},
 			ResourceInfo: statRes.Info,
-			Grant: &usershareproviderv0alphapb.ShareGrant{
-				Grantee: &storageproviderv0alphapb.Grantee{
-					Type: storageproviderv0alphapb.GranteeType_GRANTEE_TYPE_USER,
+			Grant: &collaboration.ShareGrant{
+				Grantee: &provider.Grantee{
+					Type: provider.GranteeType_GRANTEE_TYPE_USER,
 					Id:   recipient.Id,
 				},
-				Permissions: &usershareproviderv0alphapb.SharePermissions{
+				Permissions: &collaboration.SharePermissions{
 					Permissions: permissions,
 				},
 			},
@@ -272,8 +272,8 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error sending a grpc create share request", err)
 			return
 		}
-		if createShareResponse.Status.Code != rpcpb.Code_CODE_OK {
-			if createShareResponse.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+		if createShareResponse.Status.Code != rpc.Code_CODE_OK {
+			if createShareResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
 				WriteOCSError(w, r, MetaNotFound.StatusCode, "not found", nil)
 				return
 			}
@@ -301,9 +301,9 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		statReq := storageproviderv0alphapb.StatRequest{
-			Ref: &storageproviderv0alphapb.Reference{
-				Spec: &storageproviderv0alphapb.Reference_Path{
+		statReq := provider.StatRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{
 					Path: r.FormValue("path"),
 				},
 			},
@@ -320,10 +320,10 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		// TODO(refs) error handling please
 		testPerm, _ := h.role2CS3Permissions(conversions.RoleViewer)
 
-		req := publicshareproviderv0alphapb.CreatePublicShareRequest{
+		req := link.CreatePublicShareRequest{
 			ResourceInfo: statRes.GetInfo(),
-			Grant: &publicshareproviderv0alphapb.Grant{
-				Permissions: &publicshareproviderv0alphapb.PublicSharePermissions{
+			Grant: &link.Grant{
+				Permissions: &link.PublicSharePermissions{
 					Permissions: testPerm,
 				},
 			},
@@ -337,14 +337,14 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 				WriteOCSError(w, r, MetaServerError.StatusCode, "invalid date format", err)
 				return
 			}
-			req.Grant.Expiration = &typespb.Timestamp{
+			req.Grant.Expiration = &types.Timestamp{
 				Nanos:   uint32(expireTime.UnixNano()),
 				Seconds: uint64(expireTime.Unix()),
 			}
 		}
 
 		// set displayname and password protected as arbitrary metadata
-		req.ResourceInfo.ArbitraryMetadata = &storageproviderv0alphapb.ArbitraryMetadata{
+		req.ResourceInfo.ArbitraryMetadata = &provider.ArbitraryMetadata{
 			Metadata: map[string]string{
 				"name": r.FormValue("name"),
 				// "password": r.FormValue("password"),
@@ -358,7 +358,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if createRes.Status.Code != rpcpb.Code_CODE_OK {
+		if createRes.Status.Code != rpc.Code_CODE_OK {
 			log.Debug().Err(errors.New("create public share failed")).Str("shares", "createShare").Msgf("create public share failed with status code: %v", createRes.Status.Code.String())
 			WriteOCSError(w, r, MetaServerError.StatusCode, "grpc create public share request failed", err)
 			return
@@ -366,6 +366,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 
 		s := conversions.PublicShare2ShareData(createRes.Share, r)
 		err = h.addFileInfo(ctx, s, statRes.Info)
+
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error enhancing response with share data", err)
 			return
@@ -384,9 +385,9 @@ type PublicShareContextName string
 
 // TODO sort out mapping, this is just a first guess
 // TODO use roles to make this configurable
-func asCS3Permissions(p int, rp *storageproviderv0alphapb.ResourcePermissions) *storageproviderv0alphapb.ResourcePermissions {
+func asCS3Permissions(p int, rp *provider.ResourcePermissions) *provider.ResourcePermissions {
 	if rp == nil {
-		rp = &storageproviderv0alphapb.ResourcePermissions{}
+		rp = &provider.ResourcePermissions{}
 	}
 
 	if p&int(conversions.PermissionRead) != 0 {
@@ -438,10 +439,10 @@ func (h *SharesHandler) permissions2Role(p int) string {
 	return role
 }
 
-func (h *SharesHandler) role2CS3Permissions(r string) (*storageproviderv0alphapb.ResourcePermissions, error) {
+func (h *SharesHandler) role2CS3Permissions(r string) (*provider.ResourcePermissions, error) {
 	switch r {
 	case conversions.RoleViewer:
-		return &storageproviderv0alphapb.ResourcePermissions{
+		return &provider.ResourcePermissions{
 			ListContainer:        true,
 			ListGrants:           true,
 			ListFileVersions:     true,
@@ -452,7 +453,7 @@ func (h *SharesHandler) role2CS3Permissions(r string) (*storageproviderv0alphapb
 			InitiateFileDownload: true,
 		}, nil
 	case conversions.RoleEditor:
-		return &storageproviderv0alphapb.ResourcePermissions{
+		return &provider.ResourcePermissions{
 			ListContainer:        true,
 			ListGrants:           true,
 			ListFileVersions:     true,
@@ -471,7 +472,7 @@ func (h *SharesHandler) role2CS3Permissions(r string) (*storageproviderv0alphapb
 			PurgeRecycle:       true,
 		}, nil
 	case conversions.RoleCoowner:
-		return &storageproviderv0alphapb.ResourcePermissions{
+		return &provider.ResourcePermissions{
 			ListContainer:        true,
 			ListGrants:           true,
 			ListFileVersions:     true,
@@ -522,17 +523,17 @@ func (h *SharesHandler) updateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	uReq := &usershareproviderv0alphapb.UpdateShareRequest{
-		Ref: &usershareproviderv0alphapb.ShareReference{
-			Spec: &usershareproviderv0alphapb.ShareReference_Id{
-				Id: &usershareproviderv0alphapb.ShareId{
+	uReq := &collaboration.UpdateShareRequest{
+		Ref: &collaboration.ShareReference{
+			Spec: &collaboration.ShareReference_Id{
+				Id: &collaboration.ShareId{
 					OpaqueId: shareID,
 				},
 			},
 		},
-		Field: &usershareproviderv0alphapb.UpdateShareRequest_UpdateField{
-			Field: &usershareproviderv0alphapb.UpdateShareRequest_UpdateField_Permissions{
-				Permissions: &usershareproviderv0alphapb.SharePermissions{
+		Field: &collaboration.UpdateShareRequest_UpdateField{
+			Field: &collaboration.UpdateShareRequest_UpdateField_Permissions{
+				Permissions: &collaboration.SharePermissions{
 					// this completely overwrites the permissions for this user
 					Permissions: asCS3Permissions(perm, nil),
 				},
@@ -545,8 +546,8 @@ func (h *SharesHandler) updateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if uRes.Status.Code != rpcpb.Code_CODE_OK {
-		if uRes.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+	if uRes.Status.Code != rpc.Code_CODE_OK {
+		if uRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			WriteOCSError(w, r, MetaNotFound.StatusCode, "not found", nil)
 			return
 		}
@@ -554,10 +555,10 @@ func (h *SharesHandler) updateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gReq := &usershareproviderv0alphapb.GetShareRequest{
-		Ref: &usershareproviderv0alphapb.ShareReference{
-			Spec: &usershareproviderv0alphapb.ShareReference_Id{
-				Id: &usershareproviderv0alphapb.ShareId{
+	gReq := &collaboration.GetShareRequest{
+		Ref: &collaboration.ShareReference{
+			Spec: &collaboration.ShareReference_Id{
+				Id: &collaboration.ShareId{
 					OpaqueId: shareID,
 				},
 			},
@@ -569,8 +570,8 @@ func (h *SharesHandler) updateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if gRes.Status.Code != rpcpb.Code_CODE_OK {
-		if gRes.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+	if gRes.Status.Code != rpc.Code_CODE_OK {
+		if gRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			WriteOCSError(w, r, MetaNotFound.StatusCode, "not found", nil)
 			return
 		}
@@ -589,7 +590,7 @@ func (h *SharesHandler) updateShare(w http.ResponseWriter, r *http.Request) {
 
 func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	shares := make([]*conversions.ShareData, 0)
-	filters := []*usershareproviderv0alphapb.ListSharesRequest_Filter{}
+	filters := []*collaboration.ListSharesRequest_Filter{}
 	var err error
 
 	// do shared with me. Please abstract this piece, this reads like hell.
@@ -610,9 +611,9 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 
 			// TODO(refs) filter out "invalid" shares
 			for _, v := range sharedWithMe {
-				statRequest := storageproviderv0alphapb.StatRequest{
-					Ref: &storageproviderv0alphapb.Reference{
-						Spec: &storageproviderv0alphapb.Reference_Id{
+				statRequest := provider.StatRequest{
+					Ref: &provider.Reference{
+						Spec: &provider.Reference_Id{
 							Id: v.Share.ResourceId,
 						},
 					},
@@ -670,13 +671,13 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	WriteOCSSuccess(w, r, &conversions.Element{Data: shares})
 }
 
-func (h *SharesHandler) listSharedWithMe(r *http.Request) []*usershareproviderv0alphapb.ReceivedShare {
+func (h *SharesHandler) listSharedWithMe(r *http.Request) []*collaboration.ReceivedShare {
 	c, err := pool.GetUserShareProviderClient(h.gatewayAddr)
 	if err != nil {
 		panic(err)
 	}
 
-	lrs := usershareproviderv0alphapb.ListReceivedSharesRequest{}
+	lrs := collaboration.ListReceivedSharesRequest{}
 	// TODO(refs) handle error...
 	shares, _ := c.ListReceivedShares(r.Context(), &lrs)
 	return shares.GetShares()
@@ -693,8 +694,8 @@ func (h *SharesHandler) listPublicShares(r *http.Request) ([]*conversions.ShareD
 			return nil, err
 		}
 
-		filters := []*publicshareproviderv0alphapb.ListPublicSharesRequest_Filter{}
-		req := publicshareproviderv0alphapb.ListPublicSharesRequest{
+		filters := []*link.ListPublicSharesRequest_Filter{}
+		req := link.ListPublicSharesRequest{
 			Filters: filters,
 		}
 
@@ -710,9 +711,9 @@ func (h *SharesHandler) listPublicShares(r *http.Request) ([]*conversions.ShareD
 				return nil, err
 			}
 
-			statRequest := &storageproviderv0alphapb.StatRequest{
-				Ref: &storageproviderv0alphapb.Reference{
-					Spec: &storageproviderv0alphapb.Reference_Id{
+			statRequest := &provider.StatRequest{
+				Ref: &provider.Reference{
+					Spec: &provider.Reference_Id{
 						Id: share.ResourceId,
 					},
 				},
@@ -724,7 +725,7 @@ func (h *SharesHandler) listPublicShares(r *http.Request) ([]*conversions.ShareD
 			}
 
 			sData := conversions.PublicShare2ShareData(share, r)
-			if statResponse.Status.Code != rpcpb.Code_CODE_OK {
+			if statResponse.Status.Code != rpc.Code_CODE_OK {
 				return nil, err
 			}
 
@@ -746,9 +747,9 @@ func (h *SharesHandler) listPublicShares(r *http.Request) ([]*conversions.ShareD
 	return nil, errors.New("bad request")
 }
 
-func (h *SharesHandler) addFilters(w http.ResponseWriter, r *http.Request) ([]*usershareproviderv0alphapb.ListSharesRequest_Filter, error) {
-	filters := []*usershareproviderv0alphapb.ListSharesRequest_Filter{}
-	var info *storageproviderv0alphapb.ResourceInfo
+func (h *SharesHandler) addFilters(w http.ResponseWriter, r *http.Request) ([]*collaboration.ListSharesRequest_Filter, error) {
+	filters := []*collaboration.ListSharesRequest_Filter{}
+	var info *provider.ResourceInfo
 	ctx := r.Context()
 
 	// first check if the file exists
@@ -758,9 +759,9 @@ func (h *SharesHandler) addFilters(w http.ResponseWriter, r *http.Request) ([]*u
 		return nil, err
 	}
 
-	statReq := &storageproviderv0alphapb.StatRequest{
-		Ref: &storageproviderv0alphapb.Reference{
-			Spec: &storageproviderv0alphapb.Reference_Path{
+	statReq := &provider.StatRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Path{
 				Path: r.FormValue("path"),
 			},
 		},
@@ -772,8 +773,8 @@ func (h *SharesHandler) addFilters(w http.ResponseWriter, r *http.Request) ([]*u
 		return nil, err
 	}
 
-	if res.Status.Code != rpcpb.Code_CODE_OK {
-		if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+	if res.Status.Code != rpc.Code_CODE_OK {
+		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			WriteOCSError(w, r, MetaNotFound.StatusCode, "not found", nil)
 			return filters, errors.New("fixme")
 		}
@@ -783,9 +784,9 @@ func (h *SharesHandler) addFilters(w http.ResponseWriter, r *http.Request) ([]*u
 
 	info = res.Info
 
-	filters = append(filters, &usershareproviderv0alphapb.ListSharesRequest_Filter{
-		Type: usershareproviderv0alphapb.ListSharesRequest_Filter_LIST_SHARES_REQUEST_FILTER_TYPE_RESOURCE_ID,
-		Term: &usershareproviderv0alphapb.ListSharesRequest_Filter_ResourceId{
+	filters = append(filters, &collaboration.ListSharesRequest_Filter{
+		Type: collaboration.ListSharesRequest_Filter_TYPE_RESOURCE_ID,
+		Term: &collaboration.ListSharesRequest_Filter_ResourceId{
 			ResourceId: info.Id,
 		},
 	})
@@ -793,12 +794,12 @@ func (h *SharesHandler) addFilters(w http.ResponseWriter, r *http.Request) ([]*u
 	return filters, nil
 }
 
-func (h *SharesHandler) listUserShares(r *http.Request, filters []*usershareproviderv0alphapb.ListSharesRequest_Filter) ([]*conversions.ShareData, error) {
-	var rInfo *storageproviderv0alphapb.ResourceInfo
+func (h *SharesHandler) listUserShares(r *http.Request, filters []*collaboration.ListSharesRequest_Filter) ([]*conversions.ShareData, error) {
+	var rInfo *provider.ResourceInfo
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	lsUserSharesRequest := usershareproviderv0alphapb.ListSharesRequest{
+	lsUserSharesRequest := collaboration.ListSharesRequest{
 		Filters: filters,
 	}
 
@@ -816,7 +817,7 @@ func (h *SharesHandler) listUserShares(r *http.Request, filters []*usershareprov
 			return nil, err
 		}
 
-		if lsUserSharesResponse.Status.Code != rpcpb.Code_CODE_OK {
+		if lsUserSharesResponse.Status.Code != rpc.Code_CODE_OK {
 			return nil, err
 		}
 
@@ -834,11 +835,11 @@ func (h *SharesHandler) listUserShares(r *http.Request, filters []*usershareprov
 			}
 
 			// prepare the stat request
-			statReq := &storageproviderv0alphapb.StatRequest{
+			statReq := &provider.StatRequest{
 				// prepare the reference
-				Ref: &storageproviderv0alphapb.Reference{
+				Ref: &provider.Reference{
 					// using ResourceId from the share
-					Spec: &storageproviderv0alphapb.Reference_Id{Id: s.ResourceId},
+					Spec: &provider.Reference_Id{Id: s.ResourceId},
 				},
 			}
 
@@ -847,7 +848,7 @@ func (h *SharesHandler) listUserShares(r *http.Request, filters []*usershareprov
 				return nil, err
 			}
 
-			if statResponse.Status.Code != rpcpb.Code_CODE_OK {
+			if statResponse.Status.Code != rpc.Code_CODE_OK {
 				return nil, err
 			}
 
@@ -863,11 +864,11 @@ func (h *SharesHandler) listUserShares(r *http.Request, filters []*usershareprov
 	return ocsDataPayload, nil
 }
 
-func (h *SharesHandler) addFileInfo(ctx context.Context, s *conversions.ShareData, info *storageproviderv0alphapb.ResourceInfo) error {
+func (h *SharesHandler) addFileInfo(ctx context.Context, s *conversions.ShareData, info *provider.ResourceInfo) error {
 	if info != nil {
 		// TODO The owner is not set in the storage stat metadata ...
 		s.MimeType = info.MimeType
-		// TODO STime:     &typespb.Timestamp{Seconds: info.Mtime.Seconds, Nanos: info.Mtime.Nanos},
+		// TODO STime:     &types.Timestamp{Seconds: info.Mtime.Seconds, Nanos: info.Mtime.Nanos},
 		s.StorageID = info.Id.StorageId
 		// TODO Storage: int
 		s.ItemSource = info.Id.OpaqueId
@@ -888,7 +889,7 @@ func (h *SharesHandler) addFileInfo(ctx context.Context, s *conversions.ShareDat
 			s.UIDFileOwner = UserIDToString(info.Owner)
 		}
 		if s.DisplaynameFileOwner == "" && info.Owner != nil {
-			owner, err := c.GetUser(ctx, &userproviderv0alphapb.GetUserRequest{
+			owner, err := c.GetUser(ctx, &userpb.GetUserRequest{
 				UserId: info.Owner,
 			})
 			if err != nil {
@@ -901,7 +902,7 @@ func (h *SharesHandler) addFileInfo(ctx context.Context, s *conversions.ShareDat
 			s.UIDOwner = UserIDToString(info.Owner)
 		}
 		if s.DisplaynameOwner == "" && info.Owner != nil {
-			owner, err := c.GetUser(ctx, &userproviderv0alphapb.GetUserRequest{
+			owner, err := c.GetUser(ctx, &userpb.GetUserRequest{
 				UserId: info.Owner,
 			})
 			if err != nil {
@@ -914,7 +915,7 @@ func (h *SharesHandler) addFileInfo(ctx context.Context, s *conversions.ShareDat
 }
 
 // TODO(jfd) merge userShare2ShareData with publicShare2ShareData
-func (h *SharesHandler) userShare2ShareData(ctx context.Context, share *usershareproviderv0alphapb.Share) (*conversions.ShareData, error) {
+func (h *SharesHandler) userShare2ShareData(ctx context.Context, share *collaboration.Share) (*conversions.ShareData, error) {
 	sd := &conversions.ShareData{
 		Permissions: conversions.UserSharePermissions2OCSPermissions(share.GetPermissions()),
 		ShareType:   conversions.ShareTypeUser,
@@ -926,7 +927,7 @@ func (h *SharesHandler) userShare2ShareData(ctx context.Context, share *usershar
 	}
 
 	if share.Creator != nil {
-		if creator, err := c.GetUser(ctx, &userproviderv0alphapb.GetUserRequest{
+		if creator, err := c.GetUser(ctx, &userpb.GetUserRequest{
 			UserId: share.Creator,
 		}); err == nil {
 			// TODO the user from GetUser might not have an ID set, so we are using the one we have
@@ -937,7 +938,7 @@ func (h *SharesHandler) userShare2ShareData(ctx context.Context, share *usershar
 		}
 	}
 	if share.Owner != nil {
-		if owner, err := c.GetUser(ctx, &userproviderv0alphapb.GetUserRequest{
+		if owner, err := c.GetUser(ctx, &userpb.GetUserRequest{
 			UserId: share.Owner,
 		}); err == nil {
 			sd.UIDFileOwner = UserIDToString(share.Owner)
@@ -947,7 +948,7 @@ func (h *SharesHandler) userShare2ShareData(ctx context.Context, share *usershar
 		}
 	}
 	if share.Grantee.Id != nil {
-		if grantee, err := c.GetUser(ctx, &userproviderv0alphapb.GetUserRequest{
+		if grantee, err := c.GetUser(ctx, &userpb.GetUserRequest{
 			UserId: share.Grantee.GetId(),
 		}); err == nil {
 			sd.ShareWith = UserIDToString(share.Grantee.Id)
@@ -968,7 +969,7 @@ func (h *SharesHandler) userShare2ShareData(ctx context.Context, share *usershar
 }
 
 // mustGetGateway returns a client to the gateway service, returns an error otherwise
-func mustGetGateway(addr string, r *http.Request, w http.ResponseWriter) gatewayv0alpahpb.GatewayServiceClient {
+func mustGetGateway(addr string, r *http.Request, w http.ResponseWriter) gateway.GatewayAPIClient {
 	client, err := pool.GetGatewayServiceClient(addr)
 	if err != nil {
 		WriteOCSError(w, r, MetaBadRequest.StatusCode, "no connection to gateway service", nil)

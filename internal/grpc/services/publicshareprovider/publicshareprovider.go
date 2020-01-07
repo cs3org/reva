@@ -21,10 +21,9 @@ package publicshareprovider
 import (
 	"context"
 	"fmt"
-	"io"
 
-	publicshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/publicshare/manager/registry"
@@ -61,6 +60,13 @@ func getShareManager(c *config) (publicshare.Manager, error) {
 func (s *service) Close() error {
 	return nil
 }
+func (s *service) UnprotectedEndpoints() []string {
+	return []string{}
+}
+
+func (s *service) Register(ss *grpc.Server) {
+	link.RegisterLinkAPIServer(ss, s)
+}
 
 func parseConfig(m map[string]interface{}) (*config, error) {
 	c := &config{}
@@ -72,7 +78,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New creates a new user share provider svc
-func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
+func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 
 	c, err := parseConfig(m)
 	if err != nil {
@@ -89,11 +95,10 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 		sm:   sm,
 	}
 
-	publicshareproviderv0alphapb.RegisterPublicShareProviderServiceServer(ss, service)
 	return service, nil
 }
 
-func (s *service) CreatePublicShare(ctx context.Context, req *publicshareproviderv0alphapb.CreatePublicShareRequest) (*publicshareproviderv0alphapb.CreatePublicShareResponse, error) {
+func (s *service) CreatePublicShare(ctx context.Context, req *link.CreatePublicShareRequest) (*link.CreatePublicShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("create public share")
 
@@ -107,23 +112,23 @@ func (s *service) CreatePublicShare(ctx context.Context, req *publicshareprovide
 		log.Debug().Err(err).Str("createShare", "shares").Msg("error connecting to storage provider")
 	}
 
-	res := &publicshareproviderv0alphapb.CreatePublicShareResponse{
+	res := &link.CreatePublicShareResponse{
 		Status: status.NewOK(ctx),
 		Share:  share,
 	}
 	return res, nil
 }
 
-func (s *service) RemovePublicShare(ctx context.Context, req *publicshareproviderv0alphapb.RemovePublicShareRequest) (*publicshareproviderv0alphapb.RemovePublicShareResponse, error) {
+func (s *service) RemovePublicShare(ctx context.Context, req *link.RemovePublicShareRequest) (*link.RemovePublicShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("remove public share")
 
-	return &publicshareproviderv0alphapb.RemovePublicShareResponse{
+	return &link.RemovePublicShareResponse{
 		Status: status.NewOK(ctx),
 	}, nil
 }
 
-func (s *service) GetPublicShareByToken(ctx context.Context, req *publicshareproviderv0alphapb.GetPublicShareByTokenRequest) (*publicshareproviderv0alphapb.GetPublicShareByTokenResponse, error) {
+func (s *service) GetPublicShareByToken(ctx context.Context, req *link.GetPublicShareByTokenRequest) (*link.GetPublicShareByTokenResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("getting public share by token")
 
@@ -132,47 +137,47 @@ func (s *service) GetPublicShareByToken(ctx context.Context, req *publicsharepro
 		return nil, err
 	}
 
-	return &publicshareproviderv0alphapb.GetPublicShareByTokenResponse{
+	return &link.GetPublicShareByTokenResponse{
 		Status: status.NewOK(ctx),
 		Share:  found,
 	}, nil
 }
 
-func (s *service) GetPublicShare(ctx context.Context, req *publicshareproviderv0alphapb.GetPublicShareRequest) (*publicshareproviderv0alphapb.GetPublicShareResponse, error) {
+func (s *service) GetPublicShare(ctx context.Context, req *link.GetPublicShareRequest) (*link.GetPublicShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("get public share")
 
-	return &publicshareproviderv0alphapb.GetPublicShareResponse{
+	return &link.GetPublicShareResponse{
 		Status: status.NewOK(ctx),
 		// Share:  share,
 	}, nil
 }
 
-func (s *service) ListPublicShares(ctx context.Context, req *publicshareproviderv0alphapb.ListPublicSharesRequest) (*publicshareproviderv0alphapb.ListPublicSharesResponse, error) {
+func (s *service) ListPublicShares(ctx context.Context, req *link.ListPublicSharesRequest) (*link.ListPublicSharesResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("list public share")
 	user, _ := user.ContextGetUser(ctx)
 
-	shares, err := s.sm.ListPublicShares(ctx, user, &storageproviderv0alphapb.ResourceInfo{})
+	shares, err := s.sm.ListPublicShares(ctx, user, &provider.ResourceInfo{})
 	if err != nil {
 		log.Err(err).Msg("error listing shares")
-		return &publicshareproviderv0alphapb.ListPublicSharesResponse{
+		return &link.ListPublicSharesResponse{
 			Status: status.NewInternal(ctx, err, "error listing public shares"),
 		}, nil
 	}
 
-	res := &publicshareproviderv0alphapb.ListPublicSharesResponse{
+	res := &link.ListPublicSharesResponse{
 		Status: status.NewOK(ctx),
 		Share:  shares,
 	}
 	return res, nil
 }
 
-func (s *service) UpdatePublicShare(ctx context.Context, req *publicshareproviderv0alphapb.UpdatePublicShareRequest) (*publicshareproviderv0alphapb.UpdatePublicShareResponse, error) {
+func (s *service) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicShareRequest) (*link.UpdatePublicShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("list public share")
 
-	res := &publicshareproviderv0alphapb.UpdatePublicShareResponse{
+	res := &link.UpdatePublicShareResponse{
 		Status: status.NewOK(ctx),
 	}
 	return res, nil

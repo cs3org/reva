@@ -21,11 +21,10 @@ package gateway
 import (
 	"context"
 
-	authproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/authprovider/v0alpha"
-	authregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/authregistry/v0alpha"
-	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
-	rpcpb "github.com/cs3org/go-cs3apis/cs3/rpc"
-	userproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/userprovider/v0alpha"
+	provider "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
+	registry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
@@ -33,117 +32,132 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (s *svc) Authenticate(ctx context.Context, req *gatewayv0alphapb.AuthenticateRequest) (*gatewayv0alphapb.AuthenticateResponse, error) {
+func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest) (*gateway.AuthenticateResponse, error) {
 	log := appctx.GetLogger(ctx)
 
 	// find auth provider
 	c, err := s.findAuthProvider(ctx, req.Type)
 	if err != nil {
 		err = errors.New("gateway: error finding auth provider for type: " + req.Type)
-		return &gatewayv0alphapb.AuthenticateResponse{
+		return &gateway.AuthenticateResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth provider client"),
 		}, nil
 	}
 
-	authProviderReq := &authproviderv0alphapb.AuthenticateRequest{
+	authProviderReq := &provider.AuthenticateRequest{
 		ClientId:     req.ClientId,
 		ClientSecret: req.ClientSecret,
 	}
 	res, err := c.Authenticate(ctx, authProviderReq)
 	if err != nil {
-		return &gatewayv0alphapb.AuthenticateResponse{
-			Status: status.NewInternal(ctx, err, "error getting user provider service client"),
+		log.Err(err).Msgf("gateway: error calling Authenticate for type: %s", req.Type)
+		return &gateway.AuthenticateResponse{
+			Status: status.NewUnauthenticated(ctx, err, "error authenticating request"),
 		}, nil
 	}
 
-	if res.Status.Code != rpcpb.Code_CODE_OK {
+	if res.Status.Code != rpc.Code_CODE_OK {
 		err := status.NewErrorFromCode(res.Status.Code, "gateway")
-		return &gatewayv0alphapb.AuthenticateResponse{
+		log.Err(err).Msgf("error authenticating credentials to auth provider for type: %s", req.Type)
+		return &gateway.AuthenticateResponse{
 			Status: status.NewUnauthenticated(ctx, err, ""),
 		}, nil
 	}
 
 	// validate valid userId
-	uid := res.UserId
+	if res.User == nil {
+		err := errors.New("gateway: user after Authenticate is nil")
+		log.Err(err).Msg("user is nil")
+		return &gateway.AuthenticateResponse{
+			Status: status.NewInternal(ctx, err, "user is nil"),
+		}, nil
+	}
+
+	uid := res.User.Id
 	if uid == nil {
 		err := errors.New("gateway: uid after Authenticate is nil")
 		log.Err(err).Msg("user id is nil")
-		return &gatewayv0alphapb.AuthenticateResponse{
+		return &gateway.AuthenticateResponse{
 			Status: status.NewInternal(ctx, err, "user id is nil"),
 		}, nil
 	}
 
-	userClient, err := pool.GetUserProviderServiceClient(s.c.UserProviderEndpoint)
-	if err != nil {
-		log.Err(err).Msg("error getting user provider client")
-		return &gatewayv0alphapb.AuthenticateResponse{
-			Status: status.NewInternal(ctx, err, "error getting user provider service client"),
-		}, nil
-	}
-
-	getUserReq := &userproviderv0alphapb.GetUserRequest{
-		UserId: uid,
-	}
-
-	getUserRes, err := userClient.GetUser(ctx, getUserReq)
-	if err != nil {
-		err = errors.Wrap(err, "authsvc: error in GetUser")
-		res := &gatewayv0alphapb.AuthenticateResponse{
-			Status: status.NewUnauthenticated(ctx, err, "error getting user information"),
+	// TODO(labkode): we don't ned to call the user manager in the auth phase
+	// as the auth must provide a valid user. The mapping between user credentials and
+	// unique claims is done at the Authenticate logic an not here.
+	/*
+		userClient, err := pool.GetUserProviderServiceClient(s.c.UserProviderEndpoint)
+		if err != nil {
+			log.Err(err).Msg("error getting user provider client")
+			return &gateway.AuthenticateResponse{
+				Status: status.NewInternal(ctx, err, "error getting user provider service client"),
+			}, nil
 		}
-		return res, nil
-	}
 
-	if getUserRes.Status.Code != rpcpb.Code_CODE_OK {
-		err := status.NewErrorFromCode(getUserRes.Status.Code, "authsvc")
-		return &gatewayv0alphapb.AuthenticateResponse{
-			Status: status.NewUnauthenticated(ctx, err, "error getting user information"),
-		}, nil
-	}
+		getUserReq := &user.GetUserRequest{
+			UserId: uid,
+		}
 
-	user := getUserRes.User
+		getUserRes, err := userClient.GetUser(ctx, getUserReq)
+		if err != nil {
+			err = errors.Wrap(err, "authsvc: error in GetUser")
+			res := &gateway.AuthenticateResponse{
+				Status: status.NewUnauthenticated(ctx, err, "error getting user information"),
+			}
+			return res, nil
+		}
+
+		if getUserRes.Status.Code != rpc.Code_CODE_OK {
+			err := status.NewErrorFromCode(getUserRes.Status.Code, "authsvc")
+			return &gateway.AuthenticateResponse{
+				Status: status.NewUnauthenticated(ctx, err, "error getting user information"),
+			}, nil
+		}
+
+	*/
+	user := res.User
 
 	token, err := s.tokenmgr.MintToken(ctx, user)
 	if err != nil {
 		err = errors.Wrap(err, "authsvc: error in MintToken")
-		res := &gatewayv0alphapb.AuthenticateResponse{
+		res := &gateway.AuthenticateResponse{
 			Status: status.NewUnauthenticated(ctx, err, "error creating access token"),
 		}
 		return res, nil
 	}
 
-	gwRes := &gatewayv0alphapb.AuthenticateResponse{
+	gwRes := &gateway.AuthenticateResponse{
 		Status: status.NewOK(ctx),
-		UserId: res.UserId,
+		User:   res.User,
 		Token:  token,
 	}
 	return gwRes, nil
 }
 
-func (s *svc) WhoAmI(ctx context.Context, req *gatewayv0alphapb.WhoAmIRequest) (*gatewayv0alphapb.WhoAmIResponse, error) {
+func (s *svc) WhoAmI(ctx context.Context, req *gateway.WhoAmIRequest) (*gateway.WhoAmIResponse, error) {
 	u, err := s.tokenmgr.DismantleToken(ctx, req.Token)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting user from token")
-		return &gatewayv0alphapb.WhoAmIResponse{
+		return &gateway.WhoAmIResponse{
 			Status: status.NewUnauthenticated(ctx, err, "error dismantling token"),
 		}, nil
 	}
 
-	res := &gatewayv0alphapb.WhoAmIResponse{
+	res := &gateway.WhoAmIResponse{
 		Status: status.NewOK(ctx),
 		User:   u,
 	}
 	return res, nil
 }
 
-func (s *svc) findAuthProvider(ctx context.Context, authType string) (authproviderv0alphapb.AuthProviderServiceClient, error) {
+func (s *svc) findAuthProvider(ctx context.Context, authType string) (provider.ProviderAPIClient, error) {
 	c, err := pool.GetAuthRegistryServiceClient(s.c.AuthRegistryEndpoint)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting auth registry client")
 		return nil, err
 	}
 
-	res, err := c.GetAuthProvider(ctx, &authregistryv0alphapb.GetAuthProviderRequest{
+	res, err := c.GetAuthProvider(ctx, &registry.GetAuthProviderRequest{
 		Type: authType,
 	})
 
@@ -152,7 +166,7 @@ func (s *svc) findAuthProvider(ctx context.Context, authType string) (authprovid
 		return nil, err
 	}
 
-	if res.Status.Code == rpcpb.Code_CODE_OK && res.Provider != nil {
+	if res.Status.Code == rpc.Code_CODE_OK && res.Provider != nil {
 		// TODO(labkode): check for capabilities here
 		c, err := pool.GetAuthProviderServiceClient(res.Provider.Address)
 		if err != nil {
@@ -163,7 +177,7 @@ func (s *svc) findAuthProvider(ctx context.Context, authType string) (authprovid
 		return c, nil
 	}
 
-	if res.Status.Code == rpcpb.Code_CODE_NOT_FOUND {
+	if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
 		return nil, errtypes.NotFound("gateway: auth provider not found for type:" + authType)
 	}
 

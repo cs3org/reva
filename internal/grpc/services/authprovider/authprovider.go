@@ -21,9 +21,8 @@ package authprovider
 import (
 	"context"
 	"fmt"
-	"io"
 
-	authproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/authprovider/v0alpha"
+	provider "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
@@ -68,7 +67,7 @@ func getAuthManager(manager string, m map[string]map[string]interface{}) (auth.M
 }
 
 // New returns a new AuthProviderServiceServer.
-func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
+func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -80,7 +79,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 	}
 
 	svc := &service{conf: c, authmgr: authManager}
-	authproviderv0alphapb.RegisterAuthProviderServiceServer(ss, svc)
 
 	return svc, nil
 }
@@ -89,24 +87,32 @@ func (s *service) Close() error {
 	return nil
 }
 
-func (s *service) Authenticate(ctx context.Context, req *authproviderv0alphapb.AuthenticateRequest) (*authproviderv0alphapb.AuthenticateResponse, error) {
+func (s *service) UnprotectedEndpoints() []string {
+	return []string{"/cs3.auth.provider.v1beta1.ProviderAPI/Authenticate"}
+}
+
+func (s *service) Register(ss *grpc.Server) {
+	provider.RegisterProviderAPIServer(ss, s)
+}
+
+func (s *service) Authenticate(ctx context.Context, req *provider.AuthenticateRequest) (*provider.AuthenticateResponse, error) {
 	log := appctx.GetLogger(ctx)
 	username := req.ClientId
 	password := req.ClientSecret
 
-	uid, err := s.authmgr.Authenticate(ctx, username, password)
+	u, err := s.authmgr.Authenticate(ctx, username, password)
 	if err != nil {
 		err = errors.Wrap(err, "authsvc: error in Authenticate")
-		res := &authproviderv0alphapb.AuthenticateResponse{
+		res := &provider.AuthenticateResponse{
 			Status: status.NewUnauthenticated(ctx, err, "error authenticating user"),
 		}
 		return res, nil
 	}
 
-	log.Info().Msgf("user %s authenticated", uid.String())
-	res := &authproviderv0alphapb.AuthenticateResponse{
+	log.Info().Msgf("user %s authenticated", u.String())
+	res := &provider.AuthenticateResponse{
 		Status: status.NewOK(ctx),
-		UserId: uid,
+		User:   u,
 	}
 	return res, nil
 }

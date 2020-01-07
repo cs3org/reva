@@ -21,9 +21,8 @@ package authregistry
 import (
 	"context"
 	"fmt"
-	"io"
 
-	authregistryv0alphapb "github.com/cs3org/go-cs3apis/cs3/authregistry/v0alpha"
+	registrypb "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/registry/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
@@ -44,13 +43,24 @@ func (s *service) Close() error {
 	return nil
 }
 
+func (s *service) UnprotectedEndpoints() []string {
+	return []string{
+		"/cs3.auth.registry.v1beta1.RegistryAPI/GetAuthProvider",
+		"/cs3.auth.registry.v1beta1.RegistryAPI/ListAuthProviders",
+	}
+}
+
+func (s *service) Register(ss *grpc.Server) {
+	registrypb.RegisterRegistryAPIServer(ss, s)
+}
+
 type config struct {
 	Driver  string                            `mapstructure:"driver"`
 	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
 }
 
 // New creates a new AuthRegistry
-func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
+func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -65,7 +75,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 		reg: reg,
 	}
 
-	authregistryv0alphapb.RegisterAuthRegistryServiceServer(ss, service)
 	return service, nil
 }
 
@@ -84,30 +93,30 @@ func getRegistry(c *config) (auth.Registry, error) {
 	return nil, fmt.Errorf("authregistrysvc: driver not found: %s", c.Driver)
 }
 
-func (s *service) ListAuthProviders(ctx context.Context, req *authregistryv0alphapb.ListAuthProvidersRequest) (*authregistryv0alphapb.ListAuthProvidersResponse, error) {
+func (s *service) ListAuthProviders(ctx context.Context, req *registrypb.ListAuthProvidersRequest) (*registrypb.ListAuthProvidersResponse, error) {
 	pinfos, err := s.reg.ListProviders(ctx)
 	if err != nil {
-		return &authregistryv0alphapb.ListAuthProvidersResponse{
+		return &registrypb.ListAuthProvidersResponse{
 			Status: status.NewInternal(ctx, err, "error getting list of auth providers"),
 		}, nil
 	}
 
-	res := &authregistryv0alphapb.ListAuthProvidersResponse{
+	res := &registrypb.ListAuthProvidersResponse{
 		Status:    status.NewOK(ctx),
 		Providers: pinfos,
 	}
 	return res, nil
 }
 
-func (s *service) GetAuthProvider(ctx context.Context, req *authregistryv0alphapb.GetAuthProviderRequest) (*authregistryv0alphapb.GetAuthProviderResponse, error) {
+func (s *service) GetAuthProvider(ctx context.Context, req *registrypb.GetAuthProviderRequest) (*registrypb.GetAuthProviderResponse, error) {
 	pinfo, err := s.reg.GetProvider(ctx, req.Type)
 	if err != nil {
-		return &authregistryv0alphapb.GetAuthProviderResponse{
+		return &registrypb.GetAuthProviderResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth provider for type: "+req.Type),
 		}, nil
 	}
 
-	res := &authregistryv0alphapb.GetAuthProviderResponse{
+	res := &registrypb.GetAuthProviderResponse{
 		Status:   status.NewOK(ctx),
 		Provider: pinfo,
 	}
