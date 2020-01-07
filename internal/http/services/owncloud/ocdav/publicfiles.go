@@ -22,9 +22,9 @@ import (
 	"net/http"
 	"strings"
 
-	gatewayv0alphapb "github.com/cs3org/go-cs3apis/cs3/gateway/v0alpha"
-	publicshareproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/publicshareprovider/v0alpha"
-	storageproviderv0alphapb "github.com/cs3org/go-cs3apis/cs3/storageprovider/v0alpha"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	manager "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	"github.com/cs3org/reva/pkg/token"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/metadata"
@@ -68,7 +68,7 @@ func (p *PublicFilesHandler) Handler(s *svc) http.Handler {
 			}
 
 			// TODO(refs) authenticate request. use plain text user credentials temporarily, later on use resource owner credentials, and ideally not basic auth
-			authRequest := gatewayv0alphapb.AuthenticateRequest{
+			authRequest := gateway.AuthenticateRequest{
 				ClientId:     "einstein",
 				ClientSecret: "relativity",
 				Type:         "basic",
@@ -81,7 +81,7 @@ func (p *PublicFilesHandler) Handler(s *svc) http.Handler {
 				return
 			}
 
-			psRequestByToken := publicshareproviderv0alphapb.GetPublicShareByTokenRequest{
+			psRequestByToken := manager.GetPublicShareByTokenRequest{
 				Token: getRequestToken(r.URL.Path),
 			}
 
@@ -93,9 +93,9 @@ func (p *PublicFilesHandler) Handler(s *svc) http.Handler {
 			}
 
 			// now that we got the share we need to get the resource info
-			statReq := storageproviderv0alphapb.StatRequest{
-				Ref: &storageproviderv0alphapb.Reference{
-					Spec: &storageproviderv0alphapb.Reference_Id{
+			statReq := provider.StatRequest{
+				Ref: &provider.Reference{
+					Spec: &provider.Reference_Id{
 						Id: publicShareResponse.GetShare().ResourceId,
 					},
 				},
@@ -110,7 +110,7 @@ func (p *PublicFilesHandler) Handler(s *svc) http.Handler {
 				return
 			}
 
-			sInfo := []*storageproviderv0alphapb.ResourceInfo{statResponse.GetInfo()}
+			sInfo := []*provider.ResourceInfo{statResponse.GetInfo()}
 			// now prepare the dav response with the resource info
 			propRes, err := s.formatPropfind(ctx, &pf, sInfo, "")
 			if err != nil {
