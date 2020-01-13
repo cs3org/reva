@@ -81,7 +81,7 @@ func main() {
 		for _, o := range oses {
 			for _, arch := range archs {
 				out := fmt.Sprintf("./dist/%s_%s_%s_%s", bin, *version, o, arch)
-				args := []string{"build", "-mod=vendor", "-o", out, "-ldflags", ldFlags, "./cmd/" + bin}
+				args := []string{"build", "-o", out, "-ldflags", ldFlags, "./cmd/" + bin}
 				cmd := exec.Command("go", args...)
 				cmd.Env = os.Environ()
 				cmd.Env = append(cmd.Env, []string{"GOOS=" + o, "GOARCH=" + arch}...)
