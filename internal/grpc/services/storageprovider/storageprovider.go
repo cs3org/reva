@@ -46,16 +46,17 @@ func init() {
 }
 
 type config struct {
-	MountPath        string                            `mapstructure:"mount_path"`
-	MountID          string                            `mapstructure:"mount_id"`
-	Driver           string                            `mapstructure:"driver"`
-	Drivers          map[string]map[string]interface{} `mapstructure:"drivers"`
-	PathWrapper      string                            `mapstructure:"path_wrapper"`
-	PathWrappers     map[string]map[string]interface{} `mapstructure:"path_wrappers"`
-	TmpFolder        string                            `mapstructure:"tmp_folder"`
-	DataServerURL    string                            `mapstructure:"data_server_url"`
-	ExposeDataServer bool                              `mapstructure:"expose_data_server"` // if true the client will be able to upload/download directly to it
-	AvailableXS      map[string]uint32                 `mapstructure:"available_checksums"`
+	MountPath          string                            `mapstructure:"mount_path"`
+	MountID            string                            `mapstructure:"mount_id"`
+	Driver             string                            `mapstructure:"driver"`
+	Drivers            map[string]map[string]interface{} `mapstructure:"drivers"`
+	PathWrapper        string                            `mapstructure:"path_wrapper"`
+	PathWrappers       map[string]map[string]interface{} `mapstructure:"path_wrappers"`
+	TmpFolder          string                            `mapstructure:"tmp_folder"`
+	DataServerURL      string                            `mapstructure:"data_server_url"`
+	ExposeDataServer   bool                              `mapstructure:"expose_data_server"` // if true the client will be able to upload/download directly to it
+	EnableHomeCreation bool                              `mapstructure:"enable_home_creation"`
+	AvailableXS        map[string]uint32                 `mapstructure:"available_checksums"`
 }
 
 type service struct {
@@ -283,6 +284,14 @@ func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*p
 }
 
 func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
+	if !s.conf.EnableHomeCreation {
+		err := errtypes.NotSupported("storageprovider: create home directories not supported")
+		st := status.NewUnimplemented(ctx, err, "creating home directories is disabled")
+		return &provider.CreateHomeResponse{
+			Status: st,
+		}, nil
+
+	}
 	if err := s.storage.CreateHome(ctx); err != nil {
 		st := status.NewInternal(ctx, err, "error creating home")
 		return &provider.CreateHomeResponse{
