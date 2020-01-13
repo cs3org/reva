@@ -254,7 +254,7 @@ func (fs *s3FS) CreateReference(ctx context.Context, path string, targetURI *url
 }
 
 func (fs *s3FS) CreateHome(ctx context.Context) error {
-	return errtypes.NotSupported("eos: not supported")
+	return errtypes.NotSupported("s3fs: not supported")
 }
 
 func (fs *s3FS) CreateDir(ctx context.Context, fn string) error {
