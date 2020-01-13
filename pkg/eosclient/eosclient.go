@@ -518,7 +518,7 @@ func (c *Client) CreateDir(ctx context.Context, username, path string) error {
 		return err
 	}
 
-	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "mkdir", path)
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "mkdir", "-p", path)
 	_, _, err = c.executeEOS(ctx, cmd)
 	return err
 }

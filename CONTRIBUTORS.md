@@ -8,5 +8,6 @@
 - Ilja Neumann <ineumann@owncloud.com>
 - Jörn Friedrich Dreyer <jfd@butonic.de>
 - Michael D'Silva <md@aarnet.edu.au>
+- Michael D'Silva <michael.dsilva@aarnet.edu.au>
 - Mohitty <mohitt@iitk.ac.in>
 - Thomas Boerger <thomas@webhippie.de>
