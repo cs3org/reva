@@ -868,6 +868,9 @@ func (fs *ocFS) GetQuota(ctx context.Context) (int, int, error) {
 	return 0, 0, nil
 }
 
+func (fs *ocFS) CreateHome(ctx context.Context) error {
+	return errtypes.NotSupported("ocFS: not supported")
+}
 func (fs *ocFS) CreateDir(ctx context.Context, fn string) (err error) {
 	np := fs.getInternalPath(ctx, fn)
 	if err = os.Mkdir(np, 0700); err != nil {

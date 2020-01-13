@@ -169,6 +169,10 @@ func (fs *localFS) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Ref
 	return errtypes.NotSupported("local: operation not supported")
 }
 
+func (fs *localFS) CreateHome(ctx context.Context) error {
+	return errtypes.NotSupported("local: creating home not supported")
+}
+
 func (fs *localFS) CreateDir(ctx context.Context, fn string) error {
 	fn = fs.addRoot(fn)
 	err := os.Mkdir(fn, 0700)

@@ -410,8 +410,6 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 			}
 
 			// reference path is the home path + some name
-			// TODO(labkode): where shares should be created, here we can define the folder in the gateway
-			// so the target path on the home storage provider will be:
 			// CreateReferene(cs3://home/shares/x)
 			// CreateReference(cs3://eos/user/g/gonzalhu/.shares/x)
 			// CreateReference(cs3://eos/user/.hidden/g/gonzalhu/shares/x)
@@ -421,9 +419,12 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 			// It is the responsibility of the gateway to resolve these references and merge the response back
 			// from the main request.
 			// TODO(labkode): the name of the share should be the filename it points to by default.
-			refPath := path.Join(homeRes.Path, req.Ref.String())
+
+			// TODO(labkode): create share folder if it does not exist. Maybe at home directory creation time (login)?
+			refPath := path.Join(homeRes.Path, s.c.ShareFolder, req.Ref.String())
 			createRefReq := &provider.CreateReferenceRequest{
-				Path:      refPath,
+				Path: refPath,
+				// cs3 is the Scheme and %s/%s is the Opaque parts of a net.URL.
 				TargetUri: fmt.Sprintf("cs3:%s/%s", share.Share.ResourceId.GetStorageId(), share.Share.ResourceId.GetOpaqueId()),
 			}
 

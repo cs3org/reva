@@ -265,6 +265,10 @@ func (fs *eosStorage) getPath(ctx context.Context, u *userpb.User, id *provider.
 	return eosFileInfo.File, nil
 }
 
+func (fs *eosStorage) CreateHome(ctx context.Context) error {
+	return errtypes.NotSupported("eos: creating home not supported")
+}
+
 func (fs *eosStorage) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	u, err := getUser(ctx)
 	if err != nil {

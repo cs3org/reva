@@ -81,6 +81,11 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
+	// configure default share folder.
+	if c.ShareFolder == "" {
+		c.ShareFolder = "shares"
+	}
+
 	tokenManager, err := getTokenManager(c.TokenManager, c.TokenManagers)
 	if err != nil {
 		return nil, err

@@ -65,6 +65,36 @@ func (s *svc) sign(ctx context.Context, target string) (string, error) {
 	return tkn, nil
 }
 
+func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
+	homeReq := &registry.GetHomeRequest{}
+	homeRes, err := s.GetHome(ctx, homeReq)
+	if err != nil {
+		err := errors.Wrap(err, "gateway: error calling GetHome")
+		return &provider.CreateHomeResponse{
+			Status: status.NewInternal(ctx, err, "error creating home"),
+		}, nil
+	}
+
+	c, err := s.findByPath(ctx, homeRes.Path)
+	if err != nil {
+		if _, ok := err.(errtypes.IsNotFound); ok {
+			return &provider.CreateHomeResponse{
+				Status: status.NewNotFound(ctx, "storage provider not found"),
+			}, nil
+		}
+		return &provider.CreateHomeResponse{
+			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+		}, nil
+	}
+
+	res, err := c.CreateHome(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling Createhome")
+	}
+
+	return res, nil
+
+}
 func (s *svc) GetHome(ctx context.Context, ref *registry.GetHomeRequest) (*registry.GetHomeResponse, error) {
 	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
 	if err != nil {

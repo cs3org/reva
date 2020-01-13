@@ -29,6 +29,7 @@ import (
 
 // FS is the interface to implement access to the storage.
 type FS interface {
+	CreateHome(ctx context.Context) error
 	CreateDir(ctx context.Context, fn string) error
 	Delete(ctx context.Context, ref *provider.Reference) error
 	Move(ctx context.Context, oldRef, newRef *provider.Reference) error

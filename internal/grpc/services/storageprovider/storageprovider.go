@@ -282,6 +282,21 @@ func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*p
 	return res, nil
 }
 
+func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
+	if err := s.storage.CreateHome(ctx); err != nil {
+		st := status.NewInternal(ctx, err, "error creating home")
+		return &provider.CreateHomeResponse{
+			Status: st,
+		}, nil
+	}
+
+	res := &provider.CreateHomeResponse{
+		Status: status.NewOK(ctx),
+	}
+	return res, nil
+
+}
+
 func (s *service) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
