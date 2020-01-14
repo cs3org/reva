@@ -8,7 +8,7 @@ gatewaysvc = "localhost:19000"
 #   - / --------------- ocdav
 #   - /ocs ------------ ocs
 #   - /oauth2 --------- oidcprovider
-#   - /.well-known ----- wellknown service to announce openid-configuration
+#   - /.well-known ---- wellknown service to announce openid-configuration
 #   - TODO(diocas): ocm
 # - authenticates requests using oidc bearer auth and basic auth as fallback
 # - serves the grpc services on port 18002
