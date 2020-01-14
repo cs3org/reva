@@ -152,7 +152,6 @@ func init() {
 type config struct {
 	DataDirectory string `mapstructure:"datadirectory"`
 	Scan          bool   `mapstructure:"scan"`
-	Autocreate    bool   `mapstructure:"autocreate"`
 	Redis         string `mapstructure:"redis"`
 }
 
@@ -172,10 +171,6 @@ func (c *config) init(m map[string]interface{}) {
 	// default to scanning if not configured
 	if _, ok := m["scan"]; !ok {
 		c.Scan = true
-	}
-	// default to autocreate if not configured
-	if _, ok := m["autocreate"]; !ok {
-		c.Autocreate = true
 	}
 }
 
@@ -228,6 +223,15 @@ type ocFS struct {
 
 func (fs *ocFS) Shutdown(ctx context.Context) error {
 	return fs.pool.Close()
+}
+
+func getUser(ctx context.Context) (*userpb.User, error) {
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		err := errors.Wrap(errtypes.UserRequired(""), "owncloud: error getting user from ctx")
+		return nil, err
+	}
+	return u, nil
 }
 
 // scan files and add uuid to path mapping to kv store
@@ -460,29 +464,6 @@ func readOrCreateID(ctx context.Context, np string, conn redis.Conn) string {
 		return ""
 	}
 	return uid.String()
-}
-
-func (fs *ocFS) autocreate(ctx context.Context, fsfn string) {
-	if fs.c.Autocreate {
-		parts := strings.SplitN(fsfn, "/files", 2)
-		switch len(parts) {
-		case 1:
-			return // error? there is no files in here ...
-		case 2:
-			if parts[1] == "" {
-				// nothing to do, fsfn is the home
-			} else {
-				// only create home
-				fsfn = path.Join(parts[0], "files")
-			}
-			err := os.MkdirAll(fsfn, 0700)
-			if err != nil {
-				appctx.GetLogger(ctx).Debug().Err(err).
-					Str("fsfn", fsfn).
-					Msg("could not autocreate dir")
-			}
-		}
-	}
 }
 
 func (fs *ocFS) getPath(ctx context.Context, id *provider.ResourceId) (string, error) {
@@ -868,12 +849,41 @@ func (fs *ocFS) GetQuota(ctx context.Context) (int, int, error) {
 	return 0, 0, nil
 }
 
+func (fs *ocFS) getHomeForUser(u *userpb.User) string {
+	return path.Join("/", u.Username)
+}
+
 func (fs *ocFS) CreateHome(ctx context.Context) error {
-	return errtypes.NotSupported("ocFS: not supported")
+	u, err := getUser(ctx)
+	if err != nil {
+		return errors.Wrap(err, "eos: no user in ctx")
+	}
+
+	home := fs.getHomeForUser(u)
+
+	homePaths := []string{
+		path.Join(fs.c.DataDirectory, home, "files"),
+		path.Join(fs.c.DataDirectory, home, "files_trashbin"),
+		path.Join(fs.c.DataDirectory, home, "files_versions"),
+	}
+
+	for _, v := range homePaths {
+		if err = os.MkdirAll(v, 0700); err != nil {
+			return errors.Wrap(err, "ocFS: error creating home path: "+v)
+		}
+	}
+
+	return nil
 }
 
 func (fs *ocFS) GetHome(ctx context.Context) (string, error) {
-	return "", errtypes.NotSupported("ocFS: not supported")
+	u, err := getUser(ctx)
+	if err != nil {
+		return "", errors.Wrap(err, "eos: no user in ctx")
+	}
+
+	home := fs.getHomeForUser(u)
+	return home, nil
 }
 
 func (fs *ocFS) CreateDir(ctx context.Context, fn string) (err error) {
@@ -1172,8 +1182,6 @@ func (fs *ocFS) GetMD(ctx context.Context, ref *provider.Reference) (*provider.R
 		return nil, errors.Wrap(err, "ocFS: error resolving reference")
 	}
 
-	fs.autocreate(ctx, np)
-
 	md, err := os.Stat(np)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -1193,8 +1201,6 @@ func (fs *ocFS) ListFolder(ctx context.Context, ref *provider.Reference) ([]*pro
 	if err != nil {
 		return nil, errors.Wrap(err, "ocFS: error resolving reference")
 	}
-
-	fs.autocreate(ctx, np)
 
 	mds, err := ioutil.ReadDir(np)
 	if err != nil {
@@ -1312,8 +1318,6 @@ func (fs *ocFS) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*
 		return nil, errors.Wrap(err, "ocFS: error resolving reference")
 	}
 	vp := fs.getVersionsPath(ctx, np)
-
-	fs.autocreate(ctx, vp)
 
 	bn := path.Base(np)
 

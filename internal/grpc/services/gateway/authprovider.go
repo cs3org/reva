@@ -106,14 +106,17 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	}
 
 	// we need to pass the token to authenticate the CreateHome request.
+	ctx = context.Background()
 	ctx = tokenpkg.ContextSetToken(ctx, token)
 	ctx = metadata.AppendToOutgoingContext(ctx, tokenpkg.TokenHeader, token)
+
+	log.Info().Msgf("%+v %+v", ctx, token)
 
 	// create home directory
 	createHomeReq := &storageprovider.CreateHomeRequest{}
 	createHomeRes, err := s.CreateHome(ctx, createHomeReq)
 	if err != nil {
-		log.Err(err).Msg("user id is nil")
+		log.Err(err).Msg("error calling CreateHome")
 		return &gateway.AuthenticateResponse{
 			Status: status.NewInternal(ctx, err, "error creating user home"),
 		}, nil

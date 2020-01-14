@@ -1,10 +1,10 @@
 # This frontend.toml config file will start a reva service that:
 # - serves as the entrypoint for owncloud APIs.
 # - serves http endpoints on port 20080
-#   - /owncloud - ocdav
-#   - /ocs - ocs
-#   - /oauth2 - oidcprovider
-#   - /.well-known - wellknown service to announce openid-configuration
+#   - / --------------- ocdav
+#   - /ocs ------------ ocs
+#   - /oauth2 --------- oidcprovider
+#   - /.well-known ----- wellknown service to announce openid-configuration
 #   - TODO(diocas): ocm
 # - authenticates requests using oidc bearer auth and basic auth as fallback
 # - serves the grpc services on port 18002
@@ -95,7 +95,7 @@ public = true # force PKCS for public clients
 [http.services.ocdav]
 # serve ocdav on the root path
 prefix = ""
-chunk_folder = "/var/tmp/revad/chunks"
+chunk_folder = "/var/tmp/reva/chunks"
 # for user lookups
 gateway = "localhost:19000"
 # prefix the path of requests to /dav/files with this namespace
@@ -104,7 +104,7 @@ gateway = "localhost:19000"
 # can prefix the path to jail the requests to the correct CS3 namespace.
 # In this deployment we mounted the owncloud storage provider at /oc. It
 # expects a username as the first path segment.
-files_namespace = "/"
+files_namespace = "/oc"
 # currently, only the desktop client will use this endpoint, but only if
 # the dav.chunking capability is available
 # TODO implement a path wrapper that rewrites `<username>` into the path
@@ -116,7 +116,7 @@ files_namespace = "/"
 
 # similar to the dav/files endpoint we can configure a prefix for the old webdav endpoint
 # we use the old webdav endpoint to present the cs3 namespace
-webdav_namespace = "/"
+webdav_namespace = "/home"
 # note: this changes the tree that is rendered at remote.php/webdav from the users home to the cs3 namespace
 # use webdav_namespace = "/home" to use the old namespace that only exposes the users files
 # this endpoint should not affect the desktop client sync but will present different folders for the other clients:
@@ -147,8 +147,8 @@ webdav_root = "remote.php/webdav"
 installed = true
 maintenance = false
 needsDbUpgrade = false
-version = "10.0.11.5"
-versionstring = "10.0.11"
+version = "10.1.0.5"
+versionstring = "10.1.0"
 edition = "community"
 productname = "reva"
 hostname = ""
@@ -200,6 +200,6 @@ endpoints = ["list", "get", "delete"]
 [http.services.ocs.capabilities.version]
 edition = "reva"
 major = 10
-minor = 0
-micro = 11
-string = "10.0.11"
+minor = 1
+micro = 0
+string = "10.1.0"

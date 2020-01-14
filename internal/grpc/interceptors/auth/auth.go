@@ -88,10 +88,10 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 
 		span.AddAttributes(trace.BoolAttribute("auth_enabled", true))
 
-		tkn, _ := token.ContextGetToken(ctx)
+		tkn, ok := token.ContextGetToken(ctx)
 
-		if tkn == "" {
-			log.Warn().Msg("access token not found")
+		if !ok || tkn == "" {
+			log.Warn().Msg("access token not found or empty")
 			return nil, status.Errorf(codes.Unauthenticated, "auth: core access token not found")
 		}
 

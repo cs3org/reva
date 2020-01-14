@@ -75,6 +75,13 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 		}, nil
 	}
 
+	if homeRes.Status.Code != rpc.Code_CODE_OK {
+		err := status.NewErrorFromCode(homeRes.Status.Code, "gateway")
+		return &provider.CreateHomeResponse{
+			Status: status.NewInternal(ctx, err, "error calling GetHome"),
+		}, nil
+	}
+
 	c, err := s.findByPath(ctx, homeRes.Path)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
