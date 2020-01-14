@@ -48,6 +48,9 @@ bearer = "localhost:20099"
 [grpc.services.storageregistry]
 driver = "static"
 
+[grpc.services.storageregistry.drivers.static]
+home_provider = "/home"
+
 [grpc.services.storageregistry.drivers.static.rules]
 # this is the list of namespaces that build the cs3 namespace
 # - every storage as mounted in the root

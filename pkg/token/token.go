@@ -24,6 +24,8 @@ import (
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 )
 
+const TokenHeader = "x-access-token"
+
 type key int
 
 const tokenKey key = iota

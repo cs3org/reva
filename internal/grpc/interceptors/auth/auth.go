@@ -36,14 +36,9 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const (
-	defaultHeader = "x-access-token"
-)
-
 type config struct {
 	// TODO(labkode): access a map is more performant as uri as fixed in length
 	// for SkipMethods.
-	Header        string                            `mapstructure:"header"`
 	TokenManager  string                            `mapstructure:"token_manager"`
 	TokenManagers map[string]map[string]interface{} `mapstructure:"token_managers"`
 }
@@ -64,10 +59,6 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 	if err != nil {
 		err = errors.Wrap(err, "auth: error parsing config")
 		return nil, err
-	}
-
-	if conf.Header == "" {
-		conf.Header = defaultHeader
 	}
 
 	if conf.TokenManager == "" {
@@ -132,10 +123,6 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 	conf, err := parseConfig(m)
 	if err != nil {
 		return nil, err
-	}
-
-	if conf.Header == "" {
-		conf.Header = defaultHeader
 	}
 
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]

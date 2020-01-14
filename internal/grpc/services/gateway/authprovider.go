@@ -30,7 +30,9 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	tokenpkg "github.com/cs3org/reva/pkg/token"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc/metadata"
 )
 
 func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest) (*gateway.AuthenticateResponse, error) {
@@ -102,6 +104,10 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		}
 		return gwRes, nil
 	}
+
+	// we need to pass the token to authenticate the CreateHome request.
+	ctx = tokenpkg.ContextSetToken(ctx, token)
+	ctx = metadata.AppendToOutgoingContext(ctx, tokenpkg.TokenHeader, token)
 
 	// create home directory
 	createHomeReq := &storageprovider.CreateHomeRequest{}

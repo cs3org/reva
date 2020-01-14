@@ -42,10 +42,6 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-const (
-	defaultHeader = "x-access-token"
-)
-
 type config struct {
 	Priority   int    `mapstructure:"priority"`
 	GatewaySvc string `mapstructure:"gateway"`
@@ -224,7 +220,7 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 			// store user and core access token in context.
 			ctx = user.ContextSetUser(ctx, u)
 			ctx = token.ContextSetToken(ctx, tkn)
-			ctx = metadata.AppendToOutgoingContext(ctx, defaultHeader, tkn) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
+			ctx = metadata.AppendToOutgoingContext(ctx, token.TokenHeader, tkn) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
 
 			r = r.WithContext(ctx)
 			h.ServeHTTP(w, r)
