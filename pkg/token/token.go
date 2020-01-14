@@ -24,6 +24,8 @@ import (
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 )
 
+// TokenHeader is the header to be used across grpc and http services
+// to forward the access token.
 const TokenHeader = "x-access-token"
 
 type key int
