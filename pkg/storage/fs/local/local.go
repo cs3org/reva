@@ -169,6 +169,10 @@ func (fs *localFS) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Ref
 	return errtypes.NotSupported("local: operation not supported")
 }
 
+func (fs *localFS) GetHome(ctx context.Context) (string, error) {
+	return "", errtypes.NotSupported("local: creating home not supported")
+}
+
 func (fs *localFS) CreateHome(ctx context.Context) error {
 	return errtypes.NotSupported("local: creating home not supported")
 }

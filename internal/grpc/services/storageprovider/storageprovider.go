@@ -283,6 +283,31 @@ func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*p
 	return res, nil
 }
 
+func (s *service) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
+	if !s.conf.EnableHomeCreation {
+		err := errtypes.NotSupported("storageprovider: getting home directories not supported")
+		st := status.NewUnimplemented(ctx, err, "getting home directories is disabled")
+		return &provider.GetHomeResponse{
+			Status: st,
+		}, nil
+
+	}
+
+	home, err := s.storage.GetHome(ctx)
+	if err != nil {
+		st := status.NewInternal(ctx, err, "error getting home")
+		return &provider.GetHomeResponse{
+			Status: st,
+		}, nil
+	}
+
+	res := &provider.GetHomeResponse{
+		Status: status.NewOK(ctx),
+		Path:   home,
+	}
+	return res, nil
+}
+
 func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
 	if !s.conf.EnableHomeCreation {
 		err := errtypes.NotSupported("storageprovider: create home directories not supported")

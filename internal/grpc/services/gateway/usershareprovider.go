@@ -26,7 +26,6 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
@@ -389,19 +388,8 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 
 			share := getShareRes.Share
 
-			// get user home
-			storageRegClient, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
-			if err != nil {
-				log.Err(err).Msg("gateway: error getting storage registry client")
-				return &collaboration.UpdateReceivedShareResponse{
-					Status: &rpc.Status{
-						Code: rpc.Code_CODE_INTERNAL,
-					},
-				}, nil
-			}
-
-			homeReq := &registry.GetHomeRequest{}
-			homeRes, err := storageRegClient.GetHome(ctx, homeReq)
+			homeReq := &provider.GetHomeRequest{}
+			homeRes, err := s.GetHome(ctx, homeReq)
 			if err != nil {
 				err := errors.Wrap(err, "gateway: error calling GetHome")
 				return &collaboration.UpdateReceivedShareResponse{

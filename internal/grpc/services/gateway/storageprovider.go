@@ -66,7 +66,7 @@ func (s *svc) sign(ctx context.Context, target string) (string, error) {
 }
 
 func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
-	homeReq := &registry.GetHomeRequest{}
+	homeReq := &provider.GetHomeRequest{}
 	homeRes, err := s.GetHome(ctx, homeReq)
 	if err != nil {
 		err := errors.Wrap(err, "gateway: error calling GetHome")
@@ -95,20 +95,46 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 	return res, nil
 
 }
-func (s *svc) GetHome(ctx context.Context, ref *registry.GetHomeRequest) (*registry.GetHomeResponse, error) {
+func (s *svc) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
 	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting storage registry client")
-		return nil, err
+		return &provider.GetHomeResponse{
+			Status: status.NewInternal(ctx, err, "error finding storage registry"),
+		}, nil
 	}
 
 	res, err := c.GetHome(ctx, &registry.GetHomeRequest{})
-
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetHome")
-		return nil, err
+		return &provider.GetHomeResponse{
+			Status: status.NewInternal(ctx, err, "error calling GetHome"),
+		}, nil
 	}
-	return res, nil
+
+	if res.Status.Code != rpc.Code_CODE_OK {
+		err := status.NewErrorFromCode(res.Status.Code, "gateway")
+		return &provider.GetHomeResponse{
+			Status: status.NewInternal(ctx, err, "error calling GetHome"),
+		}, nil
+	}
+
+	storageClient, err := pool.GetStorageProviderServiceClient(res.Provider.Address)
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error getting storage provider client")
+		return &provider.GetHomeResponse{
+			Status: status.NewInternal(ctx, err, "error getting home"),
+		}, nil
+	}
+
+	homeRes, err := storageClient.GetHome(ctx, req)
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error getting GetHome from storage provider")
+		return &provider.GetHomeResponse{
+			Status: status.NewInternal(ctx, err, "error getting home"),
+		}, nil
+	}
+	return homeRes, nil
 }
 
 func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {

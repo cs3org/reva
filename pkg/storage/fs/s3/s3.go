@@ -253,6 +253,10 @@ func (fs *s3FS) CreateReference(ctx context.Context, path string, targetURI *url
 	return errtypes.NotSupported("s3: operation not supported")
 }
 
+func (fs *s3FS) GetHome(ctx context.Context) (string, error) {
+	return "", errtypes.NotSupported("eos: not supported")
+}
+
 func (fs *s3FS) CreateHome(ctx context.Context) error {
 	return errtypes.NotSupported("s3fs: not supported")
 }

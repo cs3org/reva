@@ -32,7 +32,6 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/internal/http/utils"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -161,7 +160,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
-	getHomeRes, err := gc.GetHome(ctx, &registry.GetHomeRequest{})
+	getHomeRes, err := gc.GetHome(ctx, &provider.GetHomeRequest{})
 	if err != nil {
 		log.Error().Err(err).Msg("error calling GetHomeProvider")
 		w.WriteHeader(http.StatusInternalServerError)

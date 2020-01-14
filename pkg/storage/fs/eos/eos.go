@@ -197,6 +197,13 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	return eosStorage, nil
 }
 
+func (fs *eosStorage) getHomeForUser(u *userpb.User) string {
+	// TODO(labkode): define home path layout in configuration
+	// like home: %letter%/%username% and then do string substitution.
+	home := path.Join(fs.mountpoint, u.Username)
+	return home
+}
+
 func (fs *eosStorage) Shutdown(ctx context.Context) error {
 	// TODO(labkode): in a grpc implementation we can close connections.
 	return nil
@@ -558,15 +565,24 @@ func (fs *eosStorage) GetQuota(ctx context.Context) (int, int, error) {
 	return fs.c.GetQuota(ctx, u.Username, fs.conf.Namespace)
 }
 
+func (fs *eosStorage) GetHome(ctx context.Context) (string, error) {
+	u, err := getUser(ctx)
+	if err != nil {
+		return "", errors.Wrap(err, "eos: no user in ctx")
+	}
+
+	home := fs.getHomeForUser(u)
+	return home, nil
+}
+
 func (fs *eosStorage) CreateHome(ctx context.Context) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
 	}
 
-	// TODO(labkode): define home path layout in configuration
-	// like home: %letter%/%username% and then do string substitution.
-	home := path.Join(fs.mountpoint, u.Username)
+	home := fs.getHomeForUser(u)
+
 	_, err = fs.c.GetFileInfoByPath(ctx, u.Username, home)
 	if err == nil { // home already exists
 		return nil

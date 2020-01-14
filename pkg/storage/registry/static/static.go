@@ -36,6 +36,7 @@ func init() {
 }
 
 type reg struct {
+	c     *config
 	rules map[string]string
 }
 
@@ -52,13 +53,16 @@ func (b *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, er
 
 // returns the the root path of the first provider in the list.
 // TODO(labkode): this is not production ready.
-func (b *reg) GetHome(ctx context.Context) (string, error) {
-	for k := range b.rules {
-		if strings.HasPrefix(k, "/") {
-			return k, nil
+func (b *reg) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error) {
+	for k, v := range b.rules {
+		if k == b.c.HomeProvider {
+			return &registrypb.ProviderInfo{
+				ProviderPath: k,
+				Address:      v,
+			}, nil
 		}
 	}
-	return "", errors.New("static: home not found")
+	return nil, errors.New("static: home not found")
 }
 
 func (b *reg) FindProvider(ctx context.Context, ref *provider.Reference) (*registrypb.ProviderInfo, error) {
@@ -101,7 +105,8 @@ func (b *reg) FindProvider(ctx context.Context, ref *provider.Reference) (*regis
 }
 
 type config struct {
-	Rules map[string]string `mapstructure:"rules"`
+	Rules        map[string]string `mapstructure:"rules"`
+	HomeProvider string            `mapstructure:"home_provider"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -119,5 +124,5 @@ func New(m map[string]interface{}) (storage.Registry, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &reg{rules: c.Rules}, nil
+	return &reg{rules: c.Rules, c: c}, nil
 }
