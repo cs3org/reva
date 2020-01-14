@@ -29,6 +29,7 @@ type conf struct {
 	GatewaySVC string `mapstructure:"gatewaysvc"`
 }
 
+// Decode decodes the configuration.
 func Decode(v interface{}) error {
 	if err := mapstructure.Decode(v, sharedConf); err != nil {
 		return err
@@ -37,6 +38,7 @@ func Decode(v interface{}) error {
 	return nil
 }
 
+// GetJWTSecret returns the package level configured jwt secret if not overwriten.
 func GetJWTSecret(val string) string {
 	if val == "" {
 		return sharedConf.JWTSecret
@@ -44,6 +46,7 @@ func GetJWTSecret(val string) string {
 	return val
 }
 
+// GetGatewaySVC returns the package level configured gateway service if not overwriten.
 func GetGatewaySVC(val string) string {
 	if val == "" {
 		return sharedConf.GatewaySVC
