@@ -16,20 +16,37 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocdav
+package sharedconf
 
 import (
-	"net/http"
+	"github.com/mitchellh/mapstructure"
 )
 
-func (s *svc) doOptions(w http.ResponseWriter, r *http.Request, ns string) {
-	allow := "OPTIONS, LOCK, GET, HEAD, POST, DELETE, PROPPATCH, COPY,"
-	allow += " MOVE, UNLOCK, PROPFIND, MKCOL, REPORT, SEARCH,"
-	allow += " PUT" // TODO(jfd): only for files ... but we cannot create the full path without a user ... which we only have when credentials are sent
+var sharedConf = &conf{}
 
-	w.Header().Set("Content-Type", "application/xml")
-	w.Header().Set("Allow", allow)
-	w.Header().Set("DAV", "1, 2")
-	w.Header().Set("MS-Author-Via", "DAV")
-	w.WriteHeader(http.StatusOK)
+type conf struct {
+	JWTSecret  string `mapstructure:"jwt_secret"`
+	GatewaySVC string `mapstructure:"gatewaysvc"`
+}
+
+func Decode(v interface{}) error {
+	if err := mapstructure.Decode(v, sharedConf); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func GetJWTSecret(val string) string {
+	if val == "" {
+		return sharedConf.JWTSecret
+	}
+	return val
+}
+
+func GetGatewaySVC(val string) string {
+	if val == "" {
+		return sharedConf.GatewaySVC
+	}
+	return val
 }

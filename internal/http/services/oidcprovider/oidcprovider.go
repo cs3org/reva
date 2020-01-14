@@ -24,18 +24,18 @@ import (
 	"net/http"
 	"time"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/mitchellh/mapstructure"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/compose"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/ory/fosite/storage"
 	"github.com/ory/fosite/token/jwt"
 	"github.com/pkg/errors"
-
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp/global"
-	"github.com/cs3org/reva/pkg/rhttp/router"
-	"github.com/mitchellh/mapstructure"
 )
 
 func init() {
@@ -44,7 +44,7 @@ func init() {
 
 type config struct {
 	Prefix          string                            `mapstructure:"prefix"`
-	GatewayEndpoint string                            `mapstructure:"gateway"`
+	GatewayEndpoint string                            `mapstructure:"gatewaysvc"`
 	Clients         map[string]map[string]interface{} `mapstructure:"clients"`
 	Issuer          string                            `mapstructure:"issuer"`
 }
@@ -79,6 +79,8 @@ func New(m map[string]interface{}) (global.Service, error) {
 	if c.Prefix == "" {
 		c.Prefix = "oauth2"
 	}
+
+	c.GatewayEndpoint = sharedconf.GetGatewaySVC(c.GatewayEndpoint)
 
 	clients, err := getClients(c.Clients)
 	if err != nil {

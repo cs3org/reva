@@ -72,6 +72,15 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
+	// set defaults
+	if c.ShareFolder == "" {
+		c.ShareFolder = "shares"
+	}
+
+	if c.TokenManager == "" {
+		c.TokenManager = "jwt"
+	}
+
 	// ensure DataGatewayEndpoint is a valid URI
 	if c.DataGatewayEndpoint == "" {
 		return nil, errors.New("datagateway is not defined")
@@ -80,11 +89,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	u, err := url.Parse(c.DataGatewayEndpoint)
 	if err != nil {
 		return nil, err
-	}
-
-	// configure default share folder.
-	if c.ShareFolder == "" {
-		c.ShareFolder = "shares"
 	}
 
 	tokenManager, err := getTokenManager(c.TokenManager, c.TokenManagers)

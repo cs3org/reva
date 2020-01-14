@@ -16,20 +16,49 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocdav
+package sharedconf
 
 import (
-	"net/http"
+	"testing"
 )
 
-func (s *svc) doOptions(w http.ResponseWriter, r *http.Request, ns string) {
-	allow := "OPTIONS, LOCK, GET, HEAD, POST, DELETE, PROPPATCH, COPY,"
-	allow += " MOVE, UNLOCK, PROPFIND, MKCOL, REPORT, SEARCH,"
-	allow += " PUT" // TODO(jfd): only for files ... but we cannot create the full path without a user ... which we only have when credentials are sent
+func Test(t *testing.T) {
+	conf := map[string]interface{}{
+		"jwt_secret": "",
+		"gateway":    "",
+	}
 
-	w.Header().Set("Content-Type", "application/xml")
-	w.Header().Set("Allow", allow)
-	w.Header().Set("DAV", "1, 2")
-	w.Header().Set("MS-Author-Via", "DAV")
-	w.WriteHeader(http.StatusOK)
+	err := Decode(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := GetJWTSecret("secret")
+	if got != "secret" {
+		t.Fatalf("expected %q got %q", "secret", got)
+	}
+
+	got = GetJWTSecret("")
+	if got != "" {
+		t.Fatalf("expected %q got %q", "", got)
+	}
+
+	conf = map[string]interface{}{
+		"jwt_secret": "dummy",
+	}
+
+	err = Decode(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got = GetJWTSecret("secret")
+	if got != "secret" {
+		t.Fatalf("expected %q got %q", "secret", got)
+	}
+
+	got = GetJWTSecret("")
+	if got != "dummy" {
+		t.Fatalf("expected %q got %q", "dummy", got)
+	}
 }

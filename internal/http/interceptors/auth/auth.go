@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/token"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
 	"github.com/cs3org/reva/pkg/user"
@@ -44,7 +45,7 @@ import (
 
 type config struct {
 	Priority   int    `mapstructure:"priority"`
-	GatewaySvc string `mapstructure:"gateway"`
+	GatewaySvc string `mapstructure:"gatewaysvc"`
 	// TODO(jdf): Realm is optional, will be filled with request host if not given?
 	Realm                string                            `mapstructure:"realm"`
 	CredentialChain      []string                          `mapstructure:"credential_chain"`
@@ -71,6 +72,25 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 	conf, err := parseConfig(m)
 	if err != nil {
 		return nil, err
+	}
+
+	conf.GatewaySvc = sharedconf.GetGatewaySVC(conf.GatewaySvc)
+
+	// set defaults
+	if conf.TokenStrategy == "" {
+		conf.TokenStrategy = "header"
+	}
+
+	if conf.TokenWriter == "" {
+		conf.TokenWriter = "header"
+	}
+
+	if conf.TokenManager == "" {
+		conf.TokenManager = "jwt"
+	}
+
+	if len(conf.CredentialChain) == 0 {
+		conf.CredentialChain = []string{"basic", "bearer"}
 	}
 
 	credChain := []auth.CredentialStrategy{}

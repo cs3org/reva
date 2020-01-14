@@ -62,9 +62,9 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 	}
 
 	if conf.TokenManager == "" {
-		err := errors.New("auth: token manager is not configured for interceptor")
-		return nil, err
+		conf.TokenManager = "jwt"
 	}
+
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
 	if !ok {
 		return nil, errors.New("auth: token manager does not exist: " + conf.TokenManager)
@@ -123,6 +123,10 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 	conf, err := parseConfig(m)
 	if err != nil {
 		return nil, err
+	}
+
+	if conf.TokenManager == "" {
+		conf.TokenManager = "jwt"
 	}
 
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]

@@ -112,6 +112,11 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
+	// set sane defaults
+	if len(c.AvailableXS) == 0 {
+		c.AvailableXS = map[string]uint32{"md5": 100, "unset": 1000}
+	}
+
 	// use os temporary folder if empty
 	tmpFolder := c.TmpFolder
 	if tmpFolder == "" {
@@ -284,15 +289,6 @@ func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*p
 }
 
 func (s *service) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
-	if !s.conf.EnableHomeCreation {
-		err := errtypes.NotSupported("storageprovider: getting home directories not supported")
-		st := status.NewUnimplemented(ctx, err, "getting home directories is disabled")
-		return &provider.GetHomeResponse{
-			Status: st,
-		}, nil
-
-	}
-
 	home, err := s.storage.GetHome(ctx)
 	if err != nil {
 		st := status.NewInternal(ctx, err, "error getting home")
@@ -300,6 +296,8 @@ func (s *service) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*p
 			Status: st,
 		}, nil
 	}
+
+	home = path.Join(s.mountPath, home)
 
 	res := &provider.GetHomeResponse{
 		Status: status.NewOK(ctx),
@@ -310,8 +308,8 @@ func (s *service) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*p
 
 func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
 	if !s.conf.EnableHomeCreation {
-		err := errtypes.NotSupported("storageprovider: create home directories not supported")
-		st := status.NewUnimplemented(ctx, err, "creating home directories is disabled")
+		err := errtypes.NotSupported("storageprovider: create home directories not enabled")
+		st := status.NewUnimplemented(ctx, err, "creating home directories is disabled by configuration")
 		return &provider.CreateHomeResponse{
 			Status: st,
 		}, nil

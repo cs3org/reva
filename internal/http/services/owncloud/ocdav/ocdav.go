@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -52,7 +53,7 @@ type Config struct {
 	FilesNamespace  string `mapstructure:"files_namespace"`
 	WebdavNamespace string `mapstructure:"webdav_namespace"`
 	ChunkFolder     string `mapstructure:"chunk_folder"`
-	GatewaySvc      string `mapstructure:"gateway"`
+	GatewaySvc      string `mapstructure:"gatewaysvc"`
 }
 
 type svc struct {
@@ -67,6 +68,8 @@ func New(m map[string]interface{}) (global.Service, error) {
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
 	}
+
+	conf.GatewaySvc = sharedconf.GetGatewaySVC(conf.GatewaySvc)
 
 	if conf.ChunkFolder == "" {
 		conf.ChunkFolder = os.TempDir()

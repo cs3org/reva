@@ -55,6 +55,10 @@ func New(m map[string]interface{}) (global.Service, error) {
 		return nil, err
 	}
 
+	if conf.Prefix == "" {
+		conf.Prefix = "data"
+	}
+
 	if conf.TmpFolder == "" {
 		conf.TmpFolder = os.TempDir()
 	}
