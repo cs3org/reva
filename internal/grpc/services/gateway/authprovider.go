@@ -106,11 +106,10 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	}
 
 	// we need to pass the token to authenticate the CreateHome request.
+	// TODO(labkode): appending to existing context will not pass the token.
 	ctx = context.Background()
 	ctx = tokenpkg.ContextSetToken(ctx, token)
 	ctx = metadata.AppendToOutgoingContext(ctx, tokenpkg.TokenHeader, token)
-
-	log.Info().Msgf("%+v %+v", ctx, token)
 
 	// create home directory
 	createHomeReq := &storageprovider.CreateHomeRequest{}
