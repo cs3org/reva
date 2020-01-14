@@ -15,9 +15,6 @@ gatewaysvc = "localhost:19000"
 [grpc]
 address = "0.0.0.0:12000"
 
-[grpc.interceptors.auth.token_managers.jwt]
-secret = "Pive-Fumkiu4"
-
 # This is a storage proider that grants direct acces to the wrapped storage
 # TODO same storage id as the /oc/ storage provider
 # if we have an id, we can directly go to that storage, no need to wrap paths
