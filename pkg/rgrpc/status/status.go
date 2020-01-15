@@ -109,7 +109,7 @@ func NewInvalidArg(ctx context.Context, msg string) *rpc.Status {
 
 // NewErrorFromCode returns a standardized Error for a given RPC code.
 func NewErrorFromCode(code rpc.Code, pkgname string) error {
-	return errors.New(pkgname + ": RPC failed with code " + code.String())
+	return errors.New(pkgname + ": grpc failed with code " + code.String())
 }
 
 // internal function to attach the trace to a context

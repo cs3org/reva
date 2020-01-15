@@ -27,6 +27,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -66,10 +67,12 @@ func (s *svc) sign(ctx context.Context, target string) (string, error) {
 }
 
 func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
+	log := appctx.GetLogger(ctx)
+
 	homeReq := &provider.GetHomeRequest{}
 	homeRes, err := s.GetHome(ctx, homeReq)
 	if err != nil {
-		err := errors.Wrap(err, "gateway: error calling GetHome")
+		log.Err(err).Msgf("gateway: error calling GetHome")
 		return &provider.CreateHomeResponse{
 			Status: status.NewInternal(ctx, err, "error creating home"),
 		}, nil
@@ -77,6 +80,7 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 
 	if homeRes.Status.Code != rpc.Code_CODE_OK {
 		err := status.NewErrorFromCode(homeRes.Status.Code, "gateway")
+		log.Err(err).Msg("gateway: bad grpc code")
 		return &provider.CreateHomeResponse{
 			Status: status.NewInternal(ctx, err, "error calling GetHome"),
 		}, nil
@@ -84,6 +88,7 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 
 	c, err := s.findByPath(ctx, homeRes.Path)
 	if err != nil {
+		log.Err(err).Msg("gateway: error finding storage provider")
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &provider.CreateHomeResponse{
 				Status: status.NewNotFound(ctx, "storage provider not found"),
@@ -96,7 +101,10 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 
 	res, err := c.CreateHome(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling Createhome")
+		log.Err(err).Msg("gateway: error creating home on storage provider")
+		return &provider.CreateHomeResponse{
+			Status: status.NewInternal(ctx, err, "error calling CreateHome"),
+		}, nil
 	}
 
 	return res, nil

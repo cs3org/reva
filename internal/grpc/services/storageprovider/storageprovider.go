@@ -307,8 +307,10 @@ func (s *service) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*p
 }
 
 func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
+	log := appctx.GetLogger(ctx)
 	if !s.conf.EnableHomeCreation {
 		err := errtypes.NotSupported("storageprovider: create home directories not enabled")
+		log.Err(err).Msg("storageprovider: home creation is disabled")
 		st := status.NewUnimplemented(ctx, err, "creating home directories is disabled by configuration")
 		return &provider.CreateHomeResponse{
 			Status: st,
@@ -317,6 +319,7 @@ func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeReques
 	}
 	if err := s.storage.CreateHome(ctx); err != nil {
 		st := status.NewInternal(ctx, err, "error creating home")
+		log.Err(err).Msg("storageprovider: error calling CreateHome of storage driver")
 		return &provider.CreateHomeResponse{
 			Status: st,
 		}, nil

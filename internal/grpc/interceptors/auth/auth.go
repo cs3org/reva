@@ -148,9 +148,9 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 			return handler(srv, ss)
 		}
 
-		tkn, _ := token.ContextGetToken(ctx)
+		tkn, ok := token.ContextGetToken(ctx)
 
-		if tkn == "" {
+		if !ok || tkn == "" {
 			log.Warn().Msg("access token not found")
 			return status.Errorf(codes.Unauthenticated, "auth: core access token not found")
 		}
