@@ -31,11 +31,13 @@ import (
 )
 
 type layoutTemplate struct {
-	Username    string
-	FirstLetter string
-	Provider    string
+	Username      string //the username
+	UsernameLower string //the username in lowercase
+	FirstLetter   string //first letter of username in lowercase
+	Provider      string //Provider/domain of user in lowercase
 }
 
+// Converts username into user's home path according to layout
 func GetUserHomePath(u *userpb.User, layout string) (string, error) {
 	if u.Username == "" {
 		return "", errors.Wrap(errtypes.UserRequired("userrequired"), "user has no username")
@@ -43,16 +45,17 @@ func GetUserHomePath(u *userpb.User, layout string) (string, error) {
 
 	usernameSplit := strings.Split(u.Username, "@")
 	if len(usernameSplit) == 1 {
-		usernameSplit = append(usernameSplit, "_Unknown")
+		usernameSplit = append(usernameSplit, "_unknown")
 	}
 	if usernameSplit[1] == "" {
-		usernameSplit[1] = "_Unknown"
+		usernameSplit[1] = "_unknown"
 	}
 
 	pathTemplate := layoutTemplate{
-		Username:    u.Username,
-		FirstLetter: strings.ToLower(string([]rune(usernameSplit[0])[0])),
-		Provider:    usernameSplit[1],
+		Username:      u.Username,
+		UsernameLower: strings.ToLower(u.Username),
+		FirstLetter:   strings.ToLower(string([]rune(usernameSplit[0])[0])),
+		Provider:      strings.ToLower(usernameSplit[1]),
 	}
 	tmpl, err := template.New("userhomepath").Parse(layout)
 	if err != nil {

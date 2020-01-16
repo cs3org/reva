@@ -860,7 +860,7 @@ func (fs *ocFS) getHomeForUser(u *userpb.User) (string, error) {
 		return "", err
 	}
 
-	return path.Join("/", userhome)
+	return path.Join("/", userhome), nil
 }
 
 func (fs *ocFS) CreateHome(ctx context.Context) error {
