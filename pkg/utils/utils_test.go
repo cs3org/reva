@@ -16,26 +16,29 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocs
+package utils
 
-import (
-	"net/http"
+import "testing"
 
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp/router"
-)
-
-// NotificationsHandler placeholder
-type NotificationsHandler struct {
+var skipTests = []struct {
+	name string
+	url  string
+	base []string
+	out  bool
+}{
+	{"valid subpath", "/a/b/c/d", []string{"/a/b/"}, true},
+	{"invalid subpath", "/a/b/c", []string{"/a/b/c/d"}, false},
+	{"equal values", "/a/b/c", []string{"/a/b/c"}, true},
 }
 
-func (h *NotificationsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log := appctx.GetLogger(r.Context())
-
-	var head string
-	head, r.URL.Path = router.ShiftPath(r.URL.Path)
-
-	log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
-
-	w.WriteHeader(http.StatusOK)
+func TestSkip(t *testing.T) {
+	for _, tt := range skipTests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			r := Skip(tt.url, tt.base)
+			if r != tt.out {
+				t.Errorf("expected %v, want %v", r, tt.out)
+			}
+		})
+	}
 }

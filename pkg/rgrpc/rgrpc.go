@@ -25,6 +25,7 @@ import (
 	"sort"
 
 	"github.com/cs3org/reva/internal/grpc/interceptors/appctx"
+	"github.com/cs3org/reva/internal/grpc/interceptors/auth"
 	"github.com/cs3org/reva/internal/grpc/interceptors/log"
 	"github.com/cs3org/reva/internal/grpc/interceptors/recovery"
 	"github.com/cs3org/reva/internal/grpc/interceptors/token"
@@ -68,7 +69,15 @@ func Register(name string, newFunc NewService) {
 }
 
 // NewService is the function that gRPC services need to register at init time.
-type NewService func(conf map[string]interface{}, ss *grpc.Server) (io.Closer, error)
+// It returns an io.Closer to close the service and a list of service endpoints that need to be unprotected.
+type NewService func(conf map[string]interface{}, ss *grpc.Server) (Service, error)
+
+// Service represents a grpc service.
+type Service interface {
+	Register(ss *grpc.Server)
+	io.Closer
+	UnprotectedEndpoints() []string
+}
 
 type unaryInterceptorTriple struct {
 	Name        string
@@ -83,14 +92,12 @@ type streamInterceptorTriple struct {
 }
 
 type config struct {
-	Network             string                            `mapstructure:"network"`
-	Address             string                            `mapstructure:"address"`
-	ShutdownDeadline    int                               `mapstructure:"shutdown_deadline"`
-	EnabledServices     []string                          `mapstructure:"enabled_services"`
-	Services            map[string]map[string]interface{} `mapstructure:"services"`
-	EnabledInterceptors []string                          `mapstructure:"enabled_interceptors"`
-	Interceptors        map[string]map[string]interface{} `mapstructure:"interceptors"`
-	EnableReflection    bool                              `mapstructure:"enable_reflection"`
+	Network          string                            `mapstructure:"network"`
+	Address          string                            `mapstructure:"address"`
+	ShutdownDeadline int                               `mapstructure:"shutdown_deadline"`
+	Services         map[string]map[string]interface{} `mapstructure:"services"`
+	Interceptors     map[string]map[string]interface{} `mapstructure:"interceptors"`
+	EnableReflection bool                              `mapstructure:"enable_reflection"`
 }
 
 // Server is a gRPC server.
@@ -99,7 +106,7 @@ type Server struct {
 	conf     *config
 	listener net.Listener
 	log      zerolog.Logger
-	closers  map[string]io.Closer
+	services map[string]Service
 }
 
 // NewServer returns a new Server.
@@ -118,20 +125,8 @@ func NewServer(m interface{}, log zerolog.Logger) (*Server, error) {
 		conf.Address = "localhost:9999"
 	}
 
-	server := &Server{conf: conf, log: log, closers: map[string]io.Closer{}}
-	opts, err := server.getInterceptors()
-	if err != nil {
-		return nil, err
-	}
-	opts = append(opts, grpc.StatsHandler(&ocgrpc.ServerHandler{}))
+	server := &Server{conf: conf, log: log, services: map[string]Service{}}
 
-	grpcServer := grpc.NewServer(opts...)
-	if conf.EnableReflection {
-		log.Info().Msg("grpc server reflection enabled")
-		reflection.Register(grpcServer)
-	}
-
-	server.s = grpcServer
 	return server, nil
 }
 
@@ -153,7 +148,7 @@ func (s *Server) Start(ln net.Listener) error {
 }
 
 func (s *Server) isInterceptorEnabled(name string) bool {
-	for _, k := range s.conf.EnabledInterceptors {
+	for k := range s.conf.Interceptors {
 		if k == name {
 			return true
 		}
@@ -161,7 +156,7 @@ func (s *Server) isInterceptorEnabled(name string) bool {
 	return false
 }
 
-func (s *Server) isService(svcName string) bool {
+func (s *Server) isServiceEnabled(svcName string) bool {
 	for key := range Services {
 		if key == svcName {
 			return true
@@ -171,27 +166,51 @@ func (s *Server) isService(svcName string) bool {
 }
 
 func (s *Server) registerServices() error {
-	for _, svcName := range s.conf.EnabledServices {
-		if s.isService(svcName) {
+	for svcName := range s.conf.Services {
+		if s.isServiceEnabled(svcName) {
 			newFunc := Services[svcName]
-			closer, err := newFunc(s.conf.Services[svcName], s.s)
+			svc, err := newFunc(s.conf.Services[svcName], s.s)
 			if err != nil {
-				return errors.Wrapf(err, "grpc service %s could not be started,", svcName)
+				return errors.Wrapf(err, "rgrpc: grpc service %s could not be started,", svcName)
 			}
-			s.closers[svcName] = closer
-			s.log.Info().Msgf("grpc service enabled: %s", svcName)
+			s.services[svcName] = svc
+			s.log.Info().Msgf("rgrpc: grpc service enabled: %s", svcName)
 		} else {
-			message := fmt.Sprintf("grpc service %s does not exist", svcName)
+			message := fmt.Sprintf("rgrpc: grpc service %s does not exist", svcName)
 			return errors.New(message)
 		}
 	}
+
+	// obtain list of unprotected endpoints
+	unprotected := []string{}
+	for _, svc := range s.services {
+		unprotected = append(unprotected, svc.UnprotectedEndpoints()...)
+	}
+
+	opts, err := s.getInterceptors(unprotected)
+	if err != nil {
+		return err
+	}
+	opts = append(opts, grpc.StatsHandler(&ocgrpc.ServerHandler{}))
+	grpcServer := grpc.NewServer(opts...)
+	if s.conf.EnableReflection {
+		s.log.Info().Msg("rgrpc: grpc server reflection enabled")
+		reflection.Register(grpcServer)
+	}
+
+	for _, svc := range s.services {
+		svc.Register(grpcServer)
+	}
+
+	s.s = grpcServer
+
 	return nil
 }
 
 // TODO(labkode): make closing with deadline.
 func (s *Server) cleanupServices() {
-	for name, closer := range s.closers {
-		if err := closer.Close(); err != nil {
+	for name, svc := range s.services {
+		if err := svc.Close(); err != nil {
 			s.log.Error().Err(err).Msgf("error closing service %q", name)
 		} else {
 			s.log.Info().Msgf("service %q correctly closed", name)
@@ -223,13 +242,13 @@ func (s *Server) Address() string {
 	return s.conf.Address
 }
 
-func (s *Server) getInterceptors() ([]grpc.ServerOption, error) {
+func (s *Server) getInterceptors(unprotected []string) ([]grpc.ServerOption, error) {
 	unaryTriples := []*unaryInterceptorTriple{}
 	for name, newFunc := range UnaryInterceptors {
 		if s.isInterceptorEnabled(name) {
 			inter, prio, err := newFunc(s.conf.Interceptors[name])
 			if err != nil {
-				err = errors.Wrapf(err, "error creating unary interceptor: %s,", name)
+				err = errors.Wrapf(err, "rgrpc: error creating unary interceptor: %s,", name)
 				return nil, err
 			}
 			triple := &unaryInterceptorTriple{
@@ -246,12 +265,23 @@ func (s *Server) getInterceptors() ([]grpc.ServerOption, error) {
 		return unaryTriples[i].Priority < unaryTriples[j].Priority
 	})
 
-	unaryInterceptors := []grpc.UnaryServerInterceptor{}
+	authUnary, err := auth.NewUnary(s.conf.Interceptors["auth"], unprotected)
+	if err != nil {
+		return nil, errors.Wrap(err, "rgrpc: error creating unary auth interceptor")
+	}
+
+	unaryInterceptors := []grpc.UnaryServerInterceptor{authUnary}
 	for _, t := range unaryTriples {
 		unaryInterceptors = append(unaryInterceptors, t.Interceptor)
-		s.log.Info().Msgf("chaining grpc unary interceptor %s with priority %d", t.Name, t.Priority)
+		s.log.Info().Msgf("rgrpc: chaining grpc unary interceptor %s with priority %d", t.Name, t.Priority)
 	}
-	unaryInterceptors = append([]grpc.UnaryServerInterceptor{appctx.NewUnary(s.log), token.NewUnary(), log.NewUnary(), recovery.NewUnary()}, unaryInterceptors...)
+
+	unaryInterceptors = append([]grpc.UnaryServerInterceptor{
+		appctx.NewUnary(s.log),
+		token.NewUnary(),
+		log.NewUnary(),
+		recovery.NewUnary(),
+	}, unaryInterceptors...)
 	unaryChain := grpc_middleware.ChainUnaryServer(unaryInterceptors...)
 
 	streamTriples := []*streamInterceptorTriple{}
@@ -259,7 +289,7 @@ func (s *Server) getInterceptors() ([]grpc.ServerOption, error) {
 		if s.isInterceptorEnabled(name) {
 			inter, prio, err := newFunc(s.conf.Interceptors[name])
 			if err != nil {
-				err = errors.Wrapf(err, "error creating streaming interceptor: %s,", name)
+				err = errors.Wrapf(err, "rgrpc: error creating streaming interceptor: %s,", name)
 				return nil, err
 			}
 			triple := &streamInterceptorTriple{
@@ -275,13 +305,24 @@ func (s *Server) getInterceptors() ([]grpc.ServerOption, error) {
 		return streamTriples[i].Priority < streamTriples[j].Priority
 	})
 
-	streamInterceptors := []grpc.StreamServerInterceptor{}
-	for _, t := range streamTriples {
-		streamInterceptors = append(streamInterceptors, t.Interceptor)
-		s.log.Info().Msgf("chainning grpc streaming interceptor %s with priority %d", t.Name, t.Priority)
+	authStream, err := auth.NewStream(s.conf.Interceptors["auth"], unprotected)
+	if err != nil {
+		return nil, errors.Wrap(err, "rgrpc: error creating stream auth interceptor")
 	}
 
-	streamInterceptors = append([]grpc.StreamServerInterceptor{appctx.NewStream(s.log), token.NewStream(), log.NewStream(), recovery.NewStream()}, streamInterceptors...)
+	streamInterceptors := []grpc.StreamServerInterceptor{authStream}
+	for _, t := range streamTriples {
+		streamInterceptors = append(streamInterceptors, t.Interceptor)
+		s.log.Info().Msgf("rgrpc: chainning grpc streaming interceptor %s with priority %d", t.Name, t.Priority)
+	}
+
+	streamInterceptors = append([]grpc.StreamServerInterceptor{
+		authStream,
+		appctx.NewStream(s.log),
+		token.NewStream(),
+		log.NewStream(),
+		recovery.NewStream(),
+	}, streamInterceptors...)
 	streamChain := grpc_middleware.ChainStreamServer(streamInterceptors...)
 
 	opts := []grpc.ServerOption{

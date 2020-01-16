@@ -29,7 +29,6 @@ import (
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/auth/manager/oidc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/token"
@@ -41,7 +40,7 @@ func (s *svc) doUserinfo(w http.ResponseWriter, r *http.Request) {
 
 	requiredScope := "openid"
 
-	_, ar, err := s.oauth2.IntrospectToken(ctx, fosite.AccessTokenFromRequest(r), fosite.AccessToken, s.emptySession(), requiredScope)
+	_, ar, err := s.oauth2.IntrospectToken(ctx, fosite.AccessTokenFromRequest(r), fosite.AccessToken, s.getEmptySession(), requiredScope)
 	if err != nil {
 		fmt.Fprintf(w, "<h1>An error occurred!</h1><p>Could not perform introspection: %v</p>", err)
 		return
@@ -110,7 +109,7 @@ func (s *svc) doUserinfo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := getUserRes.User
-	sc := &oidc.StandardClaims{
+	sc := &StandardClaims{
 		Sub: user.Id.OpaqueId,
 		// TODO(labkode): Iss is overwriten by config
 		Iss:               s.conf.Issuer,

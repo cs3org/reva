@@ -21,7 +21,6 @@ package storageprovider
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/url"
 	"os"
 	"path"
@@ -73,6 +72,12 @@ func (s *service) Close() error {
 	return s.storage.Shutdown(context.Background())
 }
 
+func (s *service) UnprotectedEndpoints() []string { return []string{} }
+
+func (s *service) Register(ss *grpc.Server) {
+	provider.RegisterProviderAPIServer(ss, s)
+}
+
 func parseXSTypes(xsTypes map[string]uint32) ([]*provider.ResourceChecksumPriority, error) {
 	var types = make([]*provider.ResourceChecksumPriority, 0, len(xsTypes))
 	for xs, prio := range xsTypes {
@@ -99,7 +104,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New creates a new storage provider svc
-func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
+func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 
 	c, err := parseConfig(m)
 	if err != nil {
@@ -155,7 +160,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 		availableXS:   xsTypes,
 	}
 
-	provider.RegisterProviderAPIServer(ss, service)
 	return service, nil
 }
 

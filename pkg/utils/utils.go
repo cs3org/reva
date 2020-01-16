@@ -16,26 +16,17 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocs
+package utils
 
-import (
-	"net/http"
+import "strings"
 
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp/router"
-)
-
-// NotificationsHandler placeholder
-type NotificationsHandler struct {
-}
-
-func (h *NotificationsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log := appctx.GetLogger(r.Context())
-
-	var head string
-	head, r.URL.Path = router.ShiftPath(r.URL.Path)
-
-	log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
-
-	w.WriteHeader(http.StatusOK)
+// Skip  evaluates whether a source endpoint contains any of the prefixes.
+// i.e: /a/b/c/d/e contains prefix /a/b/c
+func Skip(source string, prefixes []string) bool {
+	for i := range prefixes {
+		if strings.HasPrefix(source, prefixes[i]) {
+			return true
+		}
+	}
+	return false
 }

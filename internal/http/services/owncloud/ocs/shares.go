@@ -40,7 +40,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 )
 
 // SharesHandler implements the ownCloud sharing API
@@ -57,7 +57,7 @@ func (h *SharesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context())
 
 	var head string
-	head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+	head, r.URL.Path = router.ShiftPath(r.URL.Path)
 
 	log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
 

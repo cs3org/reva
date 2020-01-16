@@ -18,9 +18,4 @@
 
 package loader
 
-import (
-	// Load core interceptors.
-	_ "github.com/cs3org/reva/internal/grpc/interceptors/auth"
-	_ "github.com/cs3org/reva/internal/grpc/interceptors/log"
-	// Add your own.
-)
+// Add your own.

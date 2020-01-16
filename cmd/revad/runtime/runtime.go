@@ -61,6 +61,9 @@ type coreConf struct {
 func run(mainConf map[string]interface{}, coreConf *coreConf, logConf *logConf, filename string) {
 	logger := initLogger(logConf)
 
+	host, _ := os.Hostname()
+	logger.Info().Msgf("host info: %s", host)
+
 	initTracing(coreConf, logger)
 	initCPUCount(coreConf, logger)
 
@@ -181,6 +184,12 @@ func start(mainConf map[string]interface{}, servers map[string]grace.Server, lis
 }
 
 func newLogger(conf *logConf) (*zerolog.Logger, error) {
+	// TODO(labkode): use debug level rather than info as default until reaching a stable version.
+	// Helps having smaller development files.
+	if conf.Level == "" {
+		conf.Level = zerolog.DebugLevel.String()
+	}
+
 	var opts []logger.Option
 	opts = append(opts, logger.WithLevel(conf.Level))
 
@@ -356,8 +365,8 @@ func isEnabledGRPC(conf map[string]interface{}) bool {
 func isEnabled(key string, conf map[string]interface{}) bool {
 	if a, ok := conf[key]; ok {
 		if b, ok := a.(map[string]interface{}); ok {
-			if c, ok := b["enabled_services"]; ok {
-				if d, ok := c.([]interface{}); ok {
+			if c, ok := b["services"]; ok {
+				if d, ok := c.(map[string]interface{}); ok {
 					if len(d) > 0 {
 						return true
 					}

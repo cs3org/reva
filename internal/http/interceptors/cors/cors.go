@@ -19,7 +19,7 @@
 package cors
 
 import (
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/cors"
 )
@@ -29,7 +29,7 @@ const (
 )
 
 func init() {
-	rhttp.RegisterMiddleware("cors", New)
+	global.RegisterMiddleware("cors", New)
 }
 
 type config struct {
@@ -44,7 +44,7 @@ type config struct {
 }
 
 // New creates a new CORS middleware.
-func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
+func New(m map[string]interface{}) (global.Middleware, int, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, 0, err
