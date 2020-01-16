@@ -37,7 +37,7 @@ type layoutTemplate struct {
 	Provider      string //Provider/domain of user in lowercase
 }
 
-// Converts username into user's home path according to layout
+// GetUserHomePath converts username into user's home path according to layout
 func GetUserHomePath(u *userpb.User, layout string) (string, error) {
 	if u.Username == "" {
 		return "", errors.Wrap(errtypes.UserRequired("userrequired"), "user has no username")
