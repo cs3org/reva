@@ -1,4 +1,8 @@
 # This storage-home.toml config file will start a reva service that:
+[shared]
+jwt_secret = "Pive-Fumkiu4"
+gatewaysvc = "localhost:19000"
+
 # - authenticates grpc storage provider requests using the internal jwt token
 # - authenticates http upload and download requests requests using basic auth
 # - serves the home storage provider on grpc port 12000
@@ -8,66 +12,33 @@
 # The home storage will inject the username into the path and jail users into
 # their home directory
 
-[core]
-max_cpus = "2"
-
-[log]
-level = "debug"
-
 [grpc]
-network = "tcp"
 address = "0.0.0.0:12000"
-enabled_services = ["storageprovider"]
-enabled_interceptors = ["auth"]
 
 # This is a storage proider that grants direct acces to the wrapped storage
-[grpc.services.storageprovider]
-driver = "owncloud"
-# the context path wrapper reads tho username from the context and prefixes the relative storage path with it
-path_wrapper = "context"
-mount_path = "/home"
 # TODO same storage id as the /oc/ storage provider
 # if we have an id, we can directly go to that storage, no need to wrap paths
-mount_id = "123e4567-e89b-12d3-a456-426655440000"
 # we have a locally running dataprovider
-expose_data_server = true
 # this is where clients can find it
+# the context path wrapper reads tho username from the context and prefixes the relative storage path with it
+[grpc.services.storageprovider]
+driver = "owncloud"
+mount_path = "/home"
+mount_id = "123e4567-e89b-12d3-a456-426655440000"
+expose_data_server = true
+path_wrapper = "context"
 data_server_url = "http://localhost:12001/data"
-
-[grpc.services.storageprovider.available_checksums]
-md5   = 100
-unset = 1000
+enable_home_creation = true
 
 [grpc.services.storageprovider.drivers.owncloud]
 datadirectory = "/var/tmp/reva/data"
-
-[grpc.services.storageprovider.path_wrappers.context]
-prefix = ""
-
-[grpc.interceptors.auth]
-token_manager = "jwt"
-
-[grpc.interceptors.auth.token_managers.jwt]
-secret = "Pive-Fumkiu4"
+layout = "{{.FirstLetter}}/{{.UsernameLower}}"
 
 [http]
 address = "0.0.0.0:12001"
-enabled_services = ["dataprovider"]
-enabled_middlewares = ["auth"]
-
-[http.middlewares.auth]
-gatewaysvc = "localhost:19000"
-credential_chain = ["basic", "bearer"]
-token_strategy = "header"
-token_writer = "header"
-token_manager = "jwt"
-
-[http.middlewares.auth.token_managers.jwt]
-secret = "Pive-Fumkiu4"
 
 [http.services.dataprovider]
 driver = "owncloud"
-prefix = "data"
 temp_folder = "/var/tmp/"
 
 [http.services.dataprovider.drivers.owncloud]
