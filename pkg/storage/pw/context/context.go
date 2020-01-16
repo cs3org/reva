@@ -19,15 +19,14 @@
 package context
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"path"
 	"strings"
-	"text/template"
 
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage"
+	"github.com/cs3org/reva/pkg/storage/helper"
 	"github.com/cs3org/reva/pkg/storage/pw/registry"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
@@ -67,13 +66,9 @@ type pw struct {
 	layout string
 }
 
-type layoutTemplate struct {
-	Username    string
-	FirstLetter string
-	Provider    string
-}
+// Only works when a user is in context
+func (pw *pw) Unwrap(ctx context.Context, rp string) (string, error) {
 
-func (pw *pw) getUserHomePath(ctx context.Context) (string, error) {
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
 		return "", errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
@@ -81,46 +76,24 @@ func (pw *pw) getUserHomePath(ctx context.Context) (string, error) {
 	if u.Username == "" {
 		return "", errors.Wrap(errtypes.UserRequired("userrequired"), "user has no username")
 	}
-
-	usernameSplit := strings.Split(u.Username, "@")
-	if len(usernameSplit) == 1 {
-		usernameSplit = append(usernameSplit, "_Unknown")
-	}
-	if usernameSplit[1] == "" {
-		usernameSplit[1] = "_Unknown"
-	}
-
-	pathTemplate := layoutTemplate{
-		Username:    u.Username,
-		FirstLetter: string([]rune(usernameSplit[0])[1]),
-		Provider:    usernameSplit[1],
-	}
-	tmpl, err := template.New("userhomepath").Parse(pw.layout)
+	userhome, err := helper.GetUserHomePath(u, pw.layout)
 	if err != nil {
-		return "", errors.Wrap(errtypes.UserRequired("userrequired"), fmt.Sprintf("template parse error: %s", err.Error()))
+		return "", errors.Wrap(errtypes.UserRequired("userrequired"), fmt.Sprintf("template error: %s", err.Error()))
 	}
-	buf := new(bytes.Buffer)
-	err = tmpl.Execute(buf, pathTemplate)
-	if err != nil {
-		return "", errors.Wrap(errtypes.UserRequired("userrequired"), fmt.Sprintf("template execute error: %s", err.Error()))
-	}
-
-	return buf.String(), nil
-}
-
-// Only works when a user is in context
-func (pw *pw) Unwrap(ctx context.Context, rp string) (string, error) {
-	userHomePath, err := pw.getUserHomePath(ctx)
-	if err != nil {
-		return "", err
-	}
-	return path.Join("/", pw.prefix, userHomePath, rp), nil
+	return path.Join("/", pw.prefix, userhome, rp), nil
 }
 
 func (pw *pw) Wrap(ctx context.Context, rp string) (string, error) {
-	userHomePath, err := pw.getUserHomePath(ctx)
-	if err != nil {
-		return "", err
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		return "", errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
 	}
-	return strings.TrimPrefix(rp, path.Join("/", userHomePath)), nil
+	if u.Username == "" {
+		return "", errors.Wrap(errtypes.UserRequired("userrequired"), "user has no username")
+	}
+	userhome, err := helper.GetUserHomePath(u, pw.layout)
+	if err != nil {
+		return "", errors.Wrap(errtypes.UserRequired("userrequired"), fmt.Sprintf("template error: %s", err.Error()))
+	}
+	return strings.TrimPrefix(rp, path.Join("/", userhome)), nil
 }
