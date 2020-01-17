@@ -68,7 +68,7 @@ func (s *svc) doMove(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	urlPath := dstURL.Path
-	baseURI := r.Context().Value("baseuri").(string)
+	baseURI := r.Context().Value(ctxKeyBaseURI).(string)
 	log.Info().Str("url_path", urlPath).Str("base_uri", baseURI).Msg("move urls")
 	// TODO replace with HasPrefix:
 	i := strings.Index(urlPath, baseURI)

@@ -29,10 +29,6 @@ import (
 	"go.opencensus.io/plugin/ochttp"
 )
 
-const (
-	defaultAccessHeader = "X-Access-Token"
-)
-
 // GetHTTPClient returns an http client with open census tracing support.
 // TODO(labkode): harden it.
 // https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779
@@ -54,7 +50,7 @@ func NewRequest(ctx context.Context, method, url string, body io.Reader) (*http.
 	// TODO(labkode): make header / auth configurable
 	tkn, ok := token.ContextGetToken(ctx)
 	if ok {
-		httpReq.Header.Set(defaultAccessHeader, tkn)
+		httpReq.Header.Set(token.TokenHeader, tkn)
 	}
 
 	httpReq = httpReq.WithContext(ctx)

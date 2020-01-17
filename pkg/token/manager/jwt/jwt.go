@@ -24,6 +24,7 @@ import (
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/token"
 	"github.com/cs3org/reva/pkg/token/manager/registry"
 	"github.com/dgrijalva/jwt-go"
@@ -61,6 +62,8 @@ func New(value map[string]interface{}) (token.Manager, error) {
 	if c.Expires == 0 {
 		c.Expires = defaultExpiraton
 	}
+
+	c.Secret = sharedconf.GetJWTSecret(c.Secret)
 
 	if c.Secret == "" {
 		return nil, errors.New("jwt: secret for signing payloads is not defined in config")

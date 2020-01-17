@@ -1,3 +1,7 @@
+[shared]
+jwt_secret = "Pive-Fumkiu4"
+gatewaysvc = "localhost:19000"
+
 # This gateway.toml config file will start a reva service that:
 # - serves as a gateway for all requests
 # - looks up the storageprovider using a storageregistry
@@ -7,12 +11,6 @@
 #   - /data - datagateway: file up and download
 [grpc]
 address = "0.0.0.0:19000"
-
-[grpc.interceptors.auth]
-token_manager = "jwt"
-
-[grpc.interceptors.auth.token_managers.jwt]
-secret = "Pive-Fumkiu4"
 
 [grpc.services.gateway]
 # registries
@@ -31,55 +29,33 @@ commit_share_to_storage_grant = true
 datagateway = "http://localhost:19001/data"
 transfer_shared_secret = "replace-me-with-a-transfer-secret" # for direct uploads
 transfer_expires = 6 # give it a moment
-token_manager = "jwt"
-
-[grpc.services.gateway.token_managers.jwt]
-secret = "Pive-Fumkiu4"
+#disable_home_creation_on_login = true
 
 [grpc.services.authregistry]
 driver = "static"
 
 [grpc.services.authregistry.drivers.static.rules]
-# started with the users.toml
-basic = "localhost:18000"
-# started with the frontend.toml
-bearer = "localhost:20099"
+basic = "localhost:18000" # started with the users.toml
+bearer = "localhost:20099" # started with the frontend.toml
 
 [grpc.services.storageregistry]
 driver = "static"
 
-[grpc.services.storageregistry.drivers.static.rules]
-# this is the list of namespaces that build the cs3 namespace
-# - every storage as mounted in the root
+[grpc.services.storageregistry.drivers.static]
+home_provider = "/home"
 
+[grpc.services.storageregistry.drivers.static.rules]
 # mount a home storage provider that uses a context based path wrapper
 # to jail users into their home dir
 "/home" = "localhost:12000"
-# the home storage cannot be access by fileid, because it is 'virtual'
-# check the storage-home.toml. it uses the same storageid, so id based requests are routed to the next storage
 
-# mount a storage provider without a path wrapper for direct access to files
+# mount a storage provider without a path wrapper for direct access to users.
 "/oc" = "localhost:11000"
 "123e4567-e89b-12d3-a456-426655440000" = "localhost:11000"
-"/" = "localhost:11100"
-"123e4567-e89b-12d3-a456-426655440001" = "localhost:11100"
-
 # another mount point might be "/projects/" 
 
 [http]
 address = "0.0.0.0:19001"
 
 [http.services.datagateway]
-prefix = "data"
-gateway = "" # TODO not needed?
 transfer_shared_secret = "replace-me-with-a-transfer-secret"
-
-[http.middlewares.auth]
-gatewaysvc = "0.0.0.0:19000"
-credential_chain = ["basic", "bearer"]
-token_strategy = "header"
-token_writer = "header"
-token_manager = "jwt"
-
-[http.middlewares.auth.token_managers.jwt]
-secret = "Pive-Fumkiu4"

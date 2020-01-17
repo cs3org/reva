@@ -26,24 +26,21 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-const defaultHeader = "x-access-token"
-
 // NewUnary returns a new unary interceptor that adds
 // the token to the context.
 func NewUnary() grpc.UnaryServerInterceptor {
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		var tkn string
 		md, ok := metadata.FromIncomingContext(ctx)
 		if ok && md != nil {
-			if val, ok := md[defaultHeader]; ok {
+			if val, ok := md[token.TokenHeader]; ok {
 				if len(val) > 0 && val[0] != "" {
-					tkn = val[0]
+					tkn := val[0]
+					ctx = token.ContextSetToken(ctx, tkn)
+					ctx = metadata.AppendToOutgoingContext(ctx, token.TokenHeader, tkn)
 				}
 			}
 		}
 
-		ctx = metadata.AppendToOutgoingContext(ctx, defaultHeader, tkn)
-		ctx = token.ContextSetToken(ctx, tkn)
 		return handler(ctx, req)
 	}
 	return interceptor
@@ -55,18 +52,17 @@ func NewStream() grpc.StreamServerInterceptor {
 	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		ctx := ss.Context()
 
-		var tkn string
 		md, ok := metadata.FromIncomingContext(ss.Context())
 		if ok && md != nil {
-			if val, ok := md[defaultHeader]; ok {
+			if val, ok := md[token.TokenHeader]; ok {
 				if len(val) > 0 && val[0] != "" {
-					tkn = val[0]
+					tkn := val[0]
+					ctx = token.ContextSetToken(ctx, tkn)
+					ctx = metadata.AppendToOutgoingContext(ctx, token.TokenHeader, tkn)
 				}
 			}
 		}
 
-		ctx = metadata.AppendToOutgoingContext(ctx, defaultHeader, tkn)
-		ctx = token.ContextSetToken(ctx, tkn)
 		wrapped := newWrappedServerStream(ctx, ss)
 		return handler(srv, wrapped)
 	}

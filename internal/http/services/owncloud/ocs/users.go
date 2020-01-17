@@ -65,10 +65,13 @@ func (h *UsersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			DisplayName: u.DisplayName,
 			Email:       u.Mail,
 		})
+		return
 	case "groups":
 		WriteOCSSuccess(w, r, &GroupsData{})
+		return
 	default:
 		WriteOCSError(w, r, MetaNotFound.StatusCode, "Not found", nil)
+		return
 	}
 
 }

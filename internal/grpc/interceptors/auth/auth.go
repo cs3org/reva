@@ -36,14 +36,9 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const (
-	defaultHeader = "x-access-token"
-)
-
 type config struct {
 	// TODO(labkode): access a map is more performant as uri as fixed in length
 	// for SkipMethods.
-	Header        string                            `mapstructure:"header"`
 	TokenManager  string                            `mapstructure:"token_manager"`
 	TokenManagers map[string]map[string]interface{} `mapstructure:"token_managers"`
 }
@@ -66,14 +61,10 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 		return nil, err
 	}
 
-	if conf.Header == "" {
-		conf.Header = defaultHeader
+	if conf.TokenManager == "" {
+		conf.TokenManager = "jwt"
 	}
 
-	if conf.TokenManager == "" {
-		err := errors.New("auth: token manager is not configured for interceptor")
-		return nil, err
-	}
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
 	if !ok {
 		return nil, errors.New("auth: token manager does not exist: " + conf.TokenManager)
@@ -97,10 +88,10 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 
 		span.AddAttributes(trace.BoolAttribute("auth_enabled", true))
 
-		tkn, _ := token.ContextGetToken(ctx)
+		tkn, ok := token.ContextGetToken(ctx)
 
-		if tkn == "" {
-			log.Warn().Msg("access token not found")
+		if !ok || tkn == "" {
+			log.Warn().Msg("access token not found or empty")
 			return nil, status.Errorf(codes.Unauthenticated, "auth: core access token not found")
 		}
 
@@ -134,8 +125,8 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 		return nil, err
 	}
 
-	if conf.Header == "" {
-		conf.Header = defaultHeader
+	if conf.TokenManager == "" {
+		conf.TokenManager = "jwt"
 	}
 
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
@@ -157,9 +148,9 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 			return handler(srv, ss)
 		}
 
-		tkn, _ := token.ContextGetToken(ctx)
+		tkn, ok := token.ContextGetToken(ctx)
 
-		if tkn == "" {
+		if !ok || tkn == "" {
 			log.Warn().Msg("access token not found")
 			return status.Errorf(codes.Unauthenticated, "auth: core access token not found")
 		}

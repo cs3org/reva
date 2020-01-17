@@ -7,7 +7,7 @@ require (
 	github.com/aws/aws-sdk-go v1.28.2
 	github.com/cheggaaa/pb v1.0.28
 	github.com/coreos/go-oidc v2.1.0+incompatible
-	github.com/cs3org/go-cs3apis v0.0.0-20191128165347-19746c015c83
+	github.com/cs3org/go-cs3apis v0.0.0-20200115100126-824a5f718250
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/fatih/color v1.7.0 // indirect
 	github.com/go-openapi/strfmt v0.19.2 // indirect
@@ -24,6 +24,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/xattr v0.4.1
 	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect
+	github.com/prometheus/client_golang v0.9.3-0.20190127221311-3c4408c8b829 // indirect
 	github.com/rs/cors v1.7.0
 	github.com/rs/zerolog v1.17.2
 	go.opencensus.io v0.22.1

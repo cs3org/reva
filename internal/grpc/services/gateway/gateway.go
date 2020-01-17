@@ -47,6 +47,7 @@ type config struct {
 	UserProviderEndpoint        string `mapstructure:"userprovidersvc"`
 	CommitShareToStorageGrant   bool   `mapstructure:"commit_share_to_storage_grant"`
 	CommitShareToStorageRef     bool   `mapstructure:"commit_share_to_storage_ref"`
+	DisableHomeCreationOnLogin  bool   `mapstructure:"disable_home_creation_on_login"`
 	DataGatewayEndpoint         string `mapstructure:"datagateway"`
 	TransferSharedSecret        string `mapstructure:"transfer_shared_secret"`
 	TranserExpires              int64  `mapstructure:"transfer_expires"`
@@ -69,6 +70,15 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
+	}
+
+	// set defaults
+	if c.ShareFolder == "" {
+		c.ShareFolder = "shares"
+	}
+
+	if c.TokenManager == "" {
+		c.TokenManager = "jwt"
 	}
 
 	// ensure DataGatewayEndpoint is a valid URI

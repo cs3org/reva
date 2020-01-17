@@ -108,6 +108,9 @@ type config struct {
 	// UseKeyTabAuth changes will authenticate requests by using an EOS keytab.
 	UseKeytab bool `mapstrucuture:"use_keytab"`
 
+	// EnableHome enables the creation of home directories.
+	EnableHome bool `mapstructure:"enable_home"`
+
 	// SecProtocol specifies the xrootd security protocol to use between the server and EOS.
 	SecProtocol string `mapstructure:"sec_protocol"`
 
@@ -192,6 +195,13 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	}
 
 	return eosStorage, nil
+}
+
+func (fs *eosStorage) getHomeForUser(u *userpb.User) string {
+	// TODO(labkode): define home path layout in configuration
+	// like home: %letter%/%username% and then do string substitution.
+	home := path.Join(fs.mountpoint, u.Username)
+	return home
 }
 
 func (fs *eosStorage) Shutdown(ctx context.Context) error {
@@ -553,6 +563,82 @@ func (fs *eosStorage) GetQuota(ctx context.Context) (int, int, error) {
 		return 0, 0, errors.Wrap(err, "eos: no user in ctx")
 	}
 	return fs.c.GetQuota(ctx, u.Username, fs.conf.Namespace)
+}
+
+func (fs *eosStorage) GetHome(ctx context.Context) (string, error) {
+	u, err := getUser(ctx)
+	if err != nil {
+		return "", errors.Wrap(err, "eos: no user in ctx")
+	}
+
+	home := fs.getHomeForUser(u)
+	return home, nil
+}
+
+func (fs *eosStorage) CreateHome(ctx context.Context) error {
+	u, err := getUser(ctx)
+	if err != nil {
+		return errors.Wrap(err, "eos: no user in ctx")
+	}
+
+	home := fs.getHomeForUser(u)
+
+	_, err = fs.c.GetFileInfoByPath(ctx, "root", home)
+	if err == nil { // home already exists
+		return nil
+	}
+
+	// TODO(labkode): abort on any error that is not found
+	if _, ok := err.(errtypes.IsNotFound); !ok {
+		return errors.Wrap(err, "eos: error verifying if user home directory exists")
+	}
+
+	// TODO(labkode): only trigger creation on not found, copy from CERNBox logic.
+	err = fs.c.CreateDir(ctx, "root", home)
+	if err != nil {
+		// EOS will return success on mkdir over an existing directory.
+		return errors.Wrap(err, "eos: error creating dir")
+	}
+	err = fs.c.Chown(ctx, "root", u.Username, home)
+	if err != nil {
+		return errors.Wrap(err, "eos: error chowning directory")
+	}
+	err = fs.c.Chmod(ctx, "root", "2770", home)
+	if err != nil {
+		return errors.Wrap(err, "eos: error chmoding directory")
+	}
+
+	attrs := []*eosclient.Attribute{
+		&eosclient.Attribute{
+			Type: eosclient.SystemAttr,
+			Key:  "mask",
+			Val:  "700",
+		},
+		&eosclient.Attribute{
+			Type: eosclient.SystemAttr,
+			Key:  "allow.oc.sync",
+			Val:  "1",
+		},
+		&eosclient.Attribute{
+			Type: eosclient.SystemAttr,
+			Key:  "mtime.propagation",
+			Val:  "1",
+		},
+		&eosclient.Attribute{
+			Type: eosclient.SystemAttr,
+			Key:  "forced.atomic",
+			Val:  "1",
+		},
+	}
+
+	for _, attr := range attrs {
+		err = fs.c.SetAttr(ctx, "root", attr, home)
+		if err != nil {
+			return errors.Wrap(err, "eos: error setting attribute")
+		}
+
+	}
+	return nil
 }
 
 func (fs *eosStorage) CreateDir(ctx context.Context, fn string) error {

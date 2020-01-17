@@ -140,8 +140,8 @@ func (s *service) GetHome(ctx context.Context, req *registrypb.GetHomeRequest) (
 	}
 
 	res := &registrypb.GetHomeResponse{
-		Status: status.NewOK(ctx),
-		Path:   p,
+		Status:   status.NewOK(ctx),
+		Provider: p,
 	}
 	return res, nil
 }

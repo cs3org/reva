@@ -104,13 +104,6 @@ skip_methods = ["/status.php"]
 [http.middlewares.auth.token_managers.jwt]
 secret = "{{.TokenSecret}}"
 
-[http.middlewares.auth.token_strategies.header]
-header = "X-Access-Token"
-
-[http.middlewares.auth.token_writers.header]
-header = "X-Access-Token"
-
-
 # GRPC interceptors
 
 [grpc.interceptors.trace]
@@ -126,14 +119,10 @@ priority = 300
 [grpc.interceptors.auth]
 priority = 400
 # keys for grpc metadata are always lowercase, so interceptors headers need to use lowercase.
-header = "x-access-token"
 token_strategy = "header"
 token_manager = "jwt"
 # GenerateAccessToken contains the credentials in the payload. Skip auth, otherwise services cannot obtain a token.
 skip_methods = ["/cs3.authproviderv1beta1.AuthService/GenerateAccessToken"]
-
-[grpc.interceptors.auth.token_strategies.header]
-header = "X-Access-Token"
 
 [grpc.interceptors.auth.token_managers.jwt]
 secret = "{{.TokenSecret}}"

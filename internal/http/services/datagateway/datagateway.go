@@ -48,7 +48,6 @@ type transferClaims struct {
 }
 type config struct {
 	Prefix               string `mapstructure:"prefix"`
-	GatewayEndpoint      string `mapstructure:"gateway"`
 	TransferSharedSecret string `mapstructure:"transfer_shared_secret"`
 }
 
@@ -62,6 +61,10 @@ func New(m map[string]interface{}) (global.Service, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
+	}
+
+	if conf.Prefix == "" {
+		conf.Prefix = "data"
 	}
 
 	s := &svc{conf: conf}

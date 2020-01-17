@@ -24,6 +24,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -36,7 +37,7 @@ type Config struct {
 	Prefix       string           `mapstructure:"prefix"`
 	Config       ConfigData       `mapstructure:"config"`
 	Capabilities CapabilitiesData `mapstructure:"capabilities"`
-	GatewaySvc   string           `mapstructure:"gateway"`
+	GatewaySvc   string           `mapstructure:"gatewaysvc"`
 }
 
 type svc struct {
@@ -54,6 +55,8 @@ func New(m map[string]interface{}) (global.Service, error) {
 	if conf.Prefix == "" {
 		conf.Prefix = "ocs"
 	}
+
+	conf.GatewaySvc = sharedconf.GetGatewaySVC(conf.GatewaySvc)
 
 	s := &svc{
 		c:         conf,

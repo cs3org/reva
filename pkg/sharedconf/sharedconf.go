@@ -16,29 +16,40 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package header
+package sharedconf
 
 import (
-	"net/http"
-
-	"github.com/cs3org/reva/internal/http/interceptors/auth/tokenwriter/registry"
-	"github.com/cs3org/reva/pkg/auth"
-	"github.com/cs3org/reva/pkg/token"
+	"github.com/mitchellh/mapstructure"
 )
 
-func init() {
-	registry.Register("header", New)
+var sharedConf = &conf{}
+
+type conf struct {
+	JWTSecret  string `mapstructure:"jwt_secret"`
+	GatewaySVC string `mapstructure:"gatewaysvc"`
 }
 
-type strategy struct {
-	header string
+// Decode decodes the configuration.
+func Decode(v interface{}) error {
+	if err := mapstructure.Decode(v, sharedConf); err != nil {
+		return err
+	}
+
+	return nil
 }
 
-// New returns a new token writer strategy that stores token in a header.
-func New(m map[string]interface{}) (auth.TokenWriter, error) {
-	return &strategy{header: token.TokenHeader}, nil
+// GetJWTSecret returns the package level configured jwt secret if not overwriten.
+func GetJWTSecret(val string) string {
+	if val == "" {
+		return sharedConf.JWTSecret
+	}
+	return val
 }
 
-func (s *strategy) WriteToken(token string, w http.ResponseWriter) {
-	w.Header().Set(s.header, token)
+// GetGatewaySVC returns the package level configured gateway service if not overwriten.
+func GetGatewaySVC(val string) string {
+	if val == "" {
+		return sharedConf.GatewaySVC
+	}
+	return val
 }

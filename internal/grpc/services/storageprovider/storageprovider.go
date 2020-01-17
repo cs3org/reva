@@ -46,16 +46,17 @@ func init() {
 }
 
 type config struct {
-	MountPath        string                            `mapstructure:"mount_path"`
-	MountID          string                            `mapstructure:"mount_id"`
-	Driver           string                            `mapstructure:"driver"`
-	Drivers          map[string]map[string]interface{} `mapstructure:"drivers"`
-	PathWrapper      string                            `mapstructure:"path_wrapper"`
-	PathWrappers     map[string]map[string]interface{} `mapstructure:"path_wrappers"`
-	TmpFolder        string                            `mapstructure:"tmp_folder"`
-	DataServerURL    string                            `mapstructure:"data_server_url"`
-	ExposeDataServer bool                              `mapstructure:"expose_data_server"` // if true the client will be able to upload/download directly to it
-	AvailableXS      map[string]uint32                 `mapstructure:"available_checksums"`
+	MountPath          string                            `mapstructure:"mount_path"`
+	MountID            string                            `mapstructure:"mount_id"`
+	Driver             string                            `mapstructure:"driver"`
+	Drivers            map[string]map[string]interface{} `mapstructure:"drivers"`
+	PathWrapper        string                            `mapstructure:"path_wrapper"`
+	PathWrappers       map[string]map[string]interface{} `mapstructure:"path_wrappers"`
+	TmpFolder          string                            `mapstructure:"tmp_folder"`
+	DataServerURL      string                            `mapstructure:"data_server_url"`
+	ExposeDataServer   bool                              `mapstructure:"expose_data_server"` // if true the client will be able to upload/download directly to it
+	EnableHomeCreation bool                              `mapstructure:"enable_home_creation"`
+	AvailableXS        map[string]uint32                 `mapstructure:"available_checksums"`
 }
 
 type service struct {
@@ -109,6 +110,11 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
+	}
+
+	// set sane defaults
+	if len(c.AvailableXS) == 0 {
+		c.AvailableXS = map[string]uint32{"md5": 100, "unset": 1000}
 	}
 
 	// use os temporary folder if empty
@@ -280,6 +286,50 @@ func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*p
 		Status: status.NewOK(ctx),
 	}
 	return res, nil
+}
+
+func (s *service) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
+	home, err := s.storage.GetHome(ctx)
+	if err != nil {
+		st := status.NewInternal(ctx, err, "error getting home")
+		return &provider.GetHomeResponse{
+			Status: st,
+		}, nil
+	}
+
+	home = path.Join(s.mountPath, home)
+
+	res := &provider.GetHomeResponse{
+		Status: status.NewOK(ctx),
+		Path:   home,
+	}
+	return res, nil
+}
+
+func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
+	log := appctx.GetLogger(ctx)
+	if !s.conf.EnableHomeCreation {
+		err := errtypes.NotSupported("storageprovider: create home directories not enabled")
+		log.Err(err).Msg("storageprovider: home creation is disabled")
+		st := status.NewUnimplemented(ctx, err, "creating home directories is disabled by configuration")
+		return &provider.CreateHomeResponse{
+			Status: st,
+		}, nil
+
+	}
+	if err := s.storage.CreateHome(ctx); err != nil {
+		st := status.NewInternal(ctx, err, "error creating home")
+		log.Err(err).Msg("storageprovider: error calling CreateHome of storage driver")
+		return &provider.CreateHomeResponse{
+			Status: st,
+		}, nil
+	}
+
+	res := &provider.CreateHomeResponse{
+		Status: status.NewOK(ctx),
+	}
+	return res, nil
+
 }
 
 func (s *service) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {

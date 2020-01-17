@@ -35,73 +35,9 @@ func init() {
 	registry.Register("static", New)
 }
 
-type reg struct {
-	rules map[string]string
-}
-
-func (b *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, error) {
-	providers := []*registrypb.ProviderInfo{}
-	for k, v := range b.rules {
-		providers = append(providers, &registrypb.ProviderInfo{
-			Address:      v,
-			ProviderPath: k,
-		})
-	}
-	return providers, nil
-}
-
-// returns the the root path of the first provider in the list.
-// TODO(labkode): this is not production ready.
-func (b *reg) GetHome(ctx context.Context) (string, error) {
-	for k := range b.rules {
-		if strings.HasPrefix(k, "/") {
-			return k, nil
-		}
-	}
-	return "", errors.New("static: home not found")
-}
-
-func (b *reg) FindProvider(ctx context.Context, ref *provider.Reference) (*registrypb.ProviderInfo, error) {
-	// find longest match
-	var match string
-
-	// we try to find first by path as most storage operations will be done on path.
-	fn := ref.GetPath()
-	if fn != "" {
-		for prefix := range b.rules {
-			if strings.HasPrefix(fn, prefix) && len(prefix) > len(match) {
-				match = prefix
-			}
-		}
-	}
-
-	if match != "" {
-		return &registrypb.ProviderInfo{
-			ProviderPath: match,
-			Address:      b.rules[match],
-		}, nil
-	}
-
-	// we try with id
-	id := ref.GetId()
-	if id == nil {
-		return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())
-	}
-
-	for prefix := range b.rules {
-		if id.StorageId == prefix {
-			// TODO(labkode): fill path info based on provider id, if path and storage id points to same id, take that.
-			return &registrypb.ProviderInfo{
-				ProviderId: prefix,
-				Address:    b.rules[prefix],
-			}, nil
-		}
-	}
-	return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())
-}
-
 type config struct {
-	Rules map[string]string `mapstructure:"rules"`
+	Rules        map[string]string `mapstructure:"rules"`
+	HomeProvider string            `mapstructure:"home_provider"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -119,5 +55,73 @@ func New(m map[string]interface{}) (storage.Registry, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &reg{rules: c.Rules}, nil
+	return &reg{c: c}, nil
+}
+
+type reg struct {
+	c *config
+}
+
+func (b *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, error) {
+	providers := []*registrypb.ProviderInfo{}
+	for k, v := range b.c.Rules {
+		providers = append(providers, &registrypb.ProviderInfo{
+			Address:      v,
+			ProviderPath: k,
+		})
+	}
+	return providers, nil
+}
+
+// returns the the root path of the first provider in the list.
+// TODO(labkode): this is not production ready.
+func (b *reg) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error) {
+	for k, v := range b.c.Rules {
+		if k == b.c.HomeProvider {
+			return &registrypb.ProviderInfo{
+				ProviderPath: k,
+				Address:      v,
+			}, nil
+		}
+	}
+	return nil, errors.New("static: home not found")
+}
+
+func (b *reg) FindProvider(ctx context.Context, ref *provider.Reference) (*registrypb.ProviderInfo, error) {
+	// find longest match
+	var match string
+
+	// we try to find first by path as most storage operations will be done on path.
+	fn := ref.GetPath()
+	if fn != "" {
+		for prefix := range b.c.Rules {
+			if strings.HasPrefix(fn, prefix) && len(prefix) > len(match) {
+				match = prefix
+			}
+		}
+	}
+
+	if match != "" {
+		return &registrypb.ProviderInfo{
+			ProviderPath: match,
+			Address:      b.c.Rules[match],
+		}, nil
+	}
+
+	// we try with id
+	id := ref.GetId()
+	if id == nil {
+		return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())
+	}
+
+	for prefix := range b.c.Rules {
+		if id.StorageId == prefix {
+			// TODO(labkode): fill path info based on provider id, if path and storage id points to same id, take that.
+			return &registrypb.ProviderInfo{
+				ProviderId: prefix,
+				Address:    b.c.Rules[prefix],
+			}, nil
+		}
+	}
+	return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())
 }
