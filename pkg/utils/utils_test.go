@@ -16,29 +16,29 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package header
+package utils
 
-import (
-	"net/http"
+import "testing"
 
-	"github.com/cs3org/reva/internal/http/interceptors/auth/tokenwriter/registry"
-	"github.com/cs3org/reva/pkg/auth"
-	"github.com/cs3org/reva/pkg/token"
-)
-
-func init() {
-	registry.Register("header", New)
+var skipTests = []struct {
+	name string
+	url  string
+	base []string
+	out  bool
+}{
+	{"valid subpath", "/a/b/c/d", []string{"/a/b/"}, true},
+	{"invalid subpath", "/a/b/c", []string{"/a/b/c/d"}, false},
+	{"equal values", "/a/b/c", []string{"/a/b/c"}, true},
 }
 
-type strategy struct {
-	header string
-}
-
-// New returns a new token writer strategy that stores token in a header.
-func New(m map[string]interface{}) (auth.TokenWriter, error) {
-	return &strategy{header: token.TokenHeader}, nil
-}
-
-func (s *strategy) WriteToken(token string, w http.ResponseWriter) {
-	w.Header().Set(s.header, token)
+func TestSkip(t *testing.T) {
+	for _, tt := range skipTests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			r := Skip(tt.url, tt.base)
+			if r != tt.out {
+				t.Errorf("expected %v, want %v", r, tt.out)
+			}
+		})
+	}
 }

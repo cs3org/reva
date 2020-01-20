@@ -30,6 +30,14 @@ func (e NotFound) Error() string { return "error: not found: " + string(e) }
 // IsNotFound is the method to check for w
 func (e NotFound) IsNotFound() {}
 
+// PermissionDenied is the error to use when a resource cannot be access because of missing permissions.
+type PermissionDenied string
+
+func (e PermissionDenied) Error() string { return "error: permission denied: " + string(e) }
+
+// IsPermissionDenied is the method to check for w
+func (e PermissionDenied) IsPermissionDenied() {}
+
 // AlreadyExists is the error to use when a resource something is not found.
 type AlreadyExists string
 
@@ -90,4 +98,10 @@ type IsInvalidCredentials interface {
 // to specify that an action is not supported.
 type IsNotSupported interface {
 	IsNotSupported()
+}
+
+// IsPermissionDenied is the interface to implement
+// to specify that an action is not supported.
+type IsPermissionDenied interface {
+	IsPermissionDenied()
 }

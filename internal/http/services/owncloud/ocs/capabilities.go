@@ -96,7 +96,7 @@ func (h *CapabilitiesHandler) init(c *Config) {
 		h.c.Capabilities.Checksums = &CapabilitiesChecksums{}
 	}
 	if h.c.Capabilities.Checksums.SupportedTypes == nil {
-		h.c.Capabilities.Checksums.SupportedTypes = []string{"SHA1"}
+		h.c.Capabilities.Checksums.SupportedTypes = []string{"SHA256"}
 	}
 	if h.c.Capabilities.Checksums.PreferredUploadType == "" {
 		h.c.Capabilities.Checksums.PreferredUploadType = "SHA1"

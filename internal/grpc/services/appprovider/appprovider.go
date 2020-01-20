@@ -21,7 +21,6 @@ package appprovider
 import (
 	"context"
 	"fmt"
-	"io"
 
 	providerpb "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/app"
@@ -47,7 +46,7 @@ type config struct {
 }
 
 // New creates a new StorageRegistryService
-func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
+func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 
 	c, err := parseConfig(m)
 	if err != nil {
@@ -63,7 +62,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (io.Closer, error) {
 		provider: provider,
 	}
 
-	providerpb.RegisterProviderAPIServer(ss, service)
 	return service, nil
 }
 
@@ -79,6 +77,13 @@ func (s *service) Close() error {
 	return nil
 }
 
+func (s *service) UnprotectedEndpoints() []string {
+	return []string{}
+}
+
+func (s *service) Register(ss *grpc.Server) {
+	providerpb.RegisterProviderAPIServer(ss, s)
+}
 func getProvider(c *config) (app.Provider, error) {
 	switch c.Driver {
 	case "demo":

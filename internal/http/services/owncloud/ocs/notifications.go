@@ -22,7 +22,7 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 )
 
 // NotificationsHandler placeholder
@@ -33,7 +33,7 @@ func (h *NotificationsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	log := appctx.GetLogger(r.Context())
 
 	var head string
-	head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+	head, r.URL.Path = router.ShiftPath(r.URL.Path)
 
 	log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
 

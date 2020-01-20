@@ -22,12 +22,14 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
 )
 
 func init() {
-	rhttp.Register("ocs", New)
+	global.Register("ocs", New)
 }
 
 // Config holds the config options that need to be passed down to all ocs handlers
@@ -35,7 +37,7 @@ type Config struct {
 	Prefix       string           `mapstructure:"prefix"`
 	Config       ConfigData       `mapstructure:"config"`
 	Capabilities CapabilitiesData `mapstructure:"capabilities"`
-	GatewaySvc   string           `mapstructure:"gateway"`
+	GatewaySvc   string           `mapstructure:"gatewaysvc"`
 }
 
 type svc struct {
@@ -44,7 +46,7 @@ type svc struct {
 }
 
 // New returns a new capabilitiessvc
-func New(m map[string]interface{}) (rhttp.Service, error) {
+func New(m map[string]interface{}) (global.Service, error) {
 	conf := &Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
@@ -53,6 +55,8 @@ func New(m map[string]interface{}) (rhttp.Service, error) {
 	if conf.Prefix == "" {
 		conf.Prefix = "ocs"
 	}
+
+	conf.GatewaySvc = sharedconf.GetGatewaySVC(conf.GatewaySvc)
 
 	s := &svc{
 		c:         conf,
@@ -74,12 +78,17 @@ func (s *svc) Prefix() string {
 func (s *svc) Close() error {
 	return nil
 }
+
+func (s *svc) Unprotected() []string {
+	return []string{}
+}
+
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log := appctx.GetLogger(r.Context())
 
 		var head string
-		head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 
 		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("ocs routing")
 

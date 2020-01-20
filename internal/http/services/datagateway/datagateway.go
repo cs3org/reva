@@ -27,6 +27,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -37,7 +38,7 @@ const (
 )
 
 func init() {
-	rhttp.Register("datagateway", New)
+	global.Register("datagateway", New)
 }
 
 // transferClaims are custom claims for a JWT token to be used between the metadata and data gateways.
@@ -47,7 +48,6 @@ type transferClaims struct {
 }
 type config struct {
 	Prefix               string `mapstructure:"prefix"`
-	GatewayEndpoint      string `mapstructure:"gateway"`
 	TransferSharedSecret string `mapstructure:"transfer_shared_secret"`
 }
 
@@ -57,10 +57,14 @@ type svc struct {
 }
 
 // New returns a new datagateway
-func New(m map[string]interface{}) (rhttp.Service, error) {
+func New(m map[string]interface{}) (global.Service, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
+	}
+
+	if conf.Prefix == "" {
+		conf.Prefix = "data"
 	}
 
 	s := &svc{conf: conf}
@@ -79,6 +83,10 @@ func (s *svc) Prefix() string {
 
 func (s *svc) Handler() http.Handler {
 	return s.handler
+}
+
+func (s *svc) Unprotected() []string {
+	return []string{}
 }
 
 func (s *svc) setHandler() {

@@ -583,7 +583,6 @@ func (fs *eosStorage) GetHome(ctx context.Context) (string, error) {
 	}
 
 	home, err := fs.getHomeForUser(u)
-
 	if err != nil {
 		return "", err
 	}

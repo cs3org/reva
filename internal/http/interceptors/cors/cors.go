@@ -19,7 +19,7 @@
 package cors
 
 import (
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/cors"
 )
@@ -29,12 +29,13 @@ const (
 )
 
 func init() {
-	rhttp.RegisterMiddleware("cors", New)
+	global.RegisterMiddleware("cors", New)
 }
 
 type config struct {
 	AllowCredentials   bool     `mapstructure:"allow_credentials"`
 	OptionsPassthrough bool     `mapstructure:"options_passthrough"`
+	Debug              bool     `mapstructure:"debug"`
 	MaxAge             int      `mapstructure:"max_age"`
 	Priority           int      `mapstructure:"priority"`
 	AllowedMethods     []string `mapstructure:"allowed_methods"`
@@ -44,7 +45,7 @@ type config struct {
 }
 
 // New creates a new CORS middleware.
-func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
+func New(m map[string]interface{}) (global.Middleware, int, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, 0, err
@@ -64,9 +65,11 @@ func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
 	}
 
 	if len(conf.AllowedHeaders) == 0 {
-		conf.AllowedHeaders = []string{"Origin", "Accept", "Content-Type", "X-Requested-With", "Authorization", "Ocs-Apirequest", "If-None-Match"}
+		conf.AllowedHeaders = []string{"Origin", "Accept", "Content-Type", "Depth", "Authorization", "Ocs-Apirequest", "If-None-Match", "If-Match", "Destination", "Overwrite", "X-Request-Id", "X-Requested-With"}
 	}
 
+	// TODO(jfd): use log from request context, otherwise fmt will be used to log,
+	// preventing us from pinging the log to eg jq
 	c := cors.New(cors.Options{
 		AllowCredentials:   conf.AllowCredentials,
 		AllowedHeaders:     conf.AllowedHeaders,
@@ -75,9 +78,7 @@ func New(m map[string]interface{}) (rhttp.Middleware, int, error) {
 		ExposedHeaders:     conf.ExposedHeaders,
 		MaxAge:             conf.MaxAge,
 		OptionsPassthrough: conf.OptionsPassthrough,
-		Debug:              false,
-		// TODO(jfd): use log from request context, otherwise fmt will be used to log,
-		// preventing us from pinging the log to eg jq
+		Debug:              conf.Debug,
 	})
 
 	return c.Handler, conf.Priority, nil

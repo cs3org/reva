@@ -31,7 +31,9 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -42,7 +44,7 @@ const (
 )
 
 func init() {
-	rhttp.Register("ocdav", New)
+	global.Register("ocdav", New)
 }
 
 // Config holds the config options that need to be passed down to all ocdav handlers
@@ -51,7 +53,7 @@ type Config struct {
 	FilesNamespace  string `mapstructure:"files_namespace"`
 	WebdavNamespace string `mapstructure:"webdav_namespace"`
 	ChunkFolder     string `mapstructure:"chunk_folder"`
-	GatewaySvc      string `mapstructure:"gateway"`
+	GatewaySvc      string `mapstructure:"gatewaysvc"`
 }
 
 type svc struct {
@@ -61,11 +63,13 @@ type svc struct {
 }
 
 // New returns a new ocdav
-func New(m map[string]interface{}) (rhttp.Service, error) {
+func New(m map[string]interface{}) (global.Service, error) {
 	conf := &Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
 	}
+
+	conf.GatewaySvc = sharedconf.GetGatewaySVC(conf.GatewaySvc)
 
 	if conf.ChunkFolder == "" {
 		conf.ChunkFolder = os.TempDir()
@@ -98,6 +102,10 @@ func (s *svc) Close() error {
 	return nil
 }
 
+func (s *svc) Unprotected() []string {
+	return []string{"/status.php"}
+}
+
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -118,7 +126,7 @@ func (s *svc) Handler() http.Handler {
 		base := path.Join("/", s.Prefix())
 
 		var head string
-		head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
 		switch head {
 		case "status.php":
@@ -126,7 +134,7 @@ func (s *svc) Handler() http.Handler {
 			return
 		case "remote.php":
 			// skip optional "remote.php"
-			head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+			head, r.URL.Path = router.ShiftPath(r.URL.Path)
 
 			// yet, add it to baseURI
 			base = path.Join(base, "remote.php")

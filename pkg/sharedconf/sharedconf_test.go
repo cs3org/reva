@@ -16,29 +16,49 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package header
+package sharedconf
 
 import (
-	"net/http"
-
-	"github.com/cs3org/reva/internal/http/interceptors/auth/tokenwriter/registry"
-	"github.com/cs3org/reva/pkg/auth"
-	"github.com/cs3org/reva/pkg/token"
+	"testing"
 )
 
-func init() {
-	registry.Register("header", New)
-}
+func Test(t *testing.T) {
+	conf := map[string]interface{}{
+		"jwt_secret": "",
+		"gateway":    "",
+	}
 
-type strategy struct {
-	header string
-}
+	err := Decode(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-// New returns a new token writer strategy that stores token in a header.
-func New(m map[string]interface{}) (auth.TokenWriter, error) {
-	return &strategy{header: token.TokenHeader}, nil
-}
+	got := GetJWTSecret("secret")
+	if got != "secret" {
+		t.Fatalf("expected %q got %q", "secret", got)
+	}
 
-func (s *strategy) WriteToken(token string, w http.ResponseWriter) {
-	w.Header().Set(s.header, token)
+	got = GetJWTSecret("")
+	if got != "" {
+		t.Fatalf("expected %q got %q", "", got)
+	}
+
+	conf = map[string]interface{}{
+		"jwt_secret": "dummy",
+	}
+
+	err = Decode(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got = GetJWTSecret("secret")
+	if got != "secret" {
+		t.Fatalf("expected %q got %q", "secret", got)
+	}
+
+	got = GetJWTSecret("")
+	if got != "dummy" {
+		t.Fatalf("expected %q got %q", "dummy", got)
+	}
 }

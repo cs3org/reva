@@ -16,29 +16,17 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package header
+package utils
 
-import (
-	"net/http"
+import "strings"
 
-	"github.com/cs3org/reva/internal/http/interceptors/auth/tokenwriter/registry"
-	"github.com/cs3org/reva/pkg/auth"
-	"github.com/cs3org/reva/pkg/token"
-)
-
-func init() {
-	registry.Register("header", New)
-}
-
-type strategy struct {
-	header string
-}
-
-// New returns a new token writer strategy that stores token in a header.
-func New(m map[string]interface{}) (auth.TokenWriter, error) {
-	return &strategy{header: token.TokenHeader}, nil
-}
-
-func (s *strategy) WriteToken(token string, w http.ResponseWriter) {
-	w.Header().Set(s.header, token)
+// Skip  evaluates whether a source endpoint contains any of the prefixes.
+// i.e: /a/b/c/d/e contains prefix /a/b/c
+func Skip(source string, prefixes []string) bool {
+	for i := range prefixes {
+		if strings.HasPrefix(source, prefixes[i]) {
+			return true
+		}
+	}
+	return false
 }

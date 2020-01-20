@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 	ctxuser "github.com/cs3org/reva/pkg/user"
 )
 
@@ -34,7 +34,7 @@ func (h *UsersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var user string
-	user, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+	user, r.URL.Path = router.ShiftPath(r.URL.Path)
 
 	// FIXME use ldap to fetch user info
 	u, ok := ctxuser.ContextGetUser(ctx)
@@ -49,7 +49,7 @@ func (h *UsersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var head string
-	head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+	head, r.URL.Path = router.ShiftPath(r.URL.Path)
 	switch head {
 	case "":
 		WriteOCSSuccess(w, r, &UsersData{
@@ -65,10 +65,13 @@ func (h *UsersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			DisplayName: u.DisplayName,
 			Email:       u.Mail,
 		})
+		return
 	case "groups":
 		WriteOCSSuccess(w, r, &GroupsData{})
+		return
 	default:
 		WriteOCSError(w, r, MetaNotFound.StatusCode, "Not found", nil)
+		return
 	}
 
 }
