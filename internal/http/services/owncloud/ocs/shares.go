@@ -651,7 +651,10 @@ func (h *SharesHandler) listSharedWithMe(r *http.Request) []*collaboration.Recei
 
 	lrs := collaboration.ListReceivedSharesRequest{}
 	// TODO(refs) handle error...
-	shares, _ := c.ListReceivedShares(r.Context(), &lrs)
+	shares, err := c.ListReceivedShares(r.Context(), &lrs)
+	if err != nil {
+		panic(err)
+	}
 	return shares.GetShares()
 }
 
