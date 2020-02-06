@@ -32,6 +32,7 @@ import (
 	"strings"
 
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
+	"github.com/cs3org/reva/pkg/storage/helper"
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/eosclient"
@@ -119,6 +120,9 @@ type config struct {
 
 	// SingleUsername is the username to use when SingleUserMode is enabled
 	SingleUsername string `mapstructure:"single_username"`
+
+	// Layout
+	Layout string `mapstructure:"layout"`
 }
 
 func getUser(ctx context.Context) (*userpb.User, error) {
@@ -154,6 +158,10 @@ func (c *config) init() {
 
 	if c.CacheDirectory == "" {
 		c.CacheDirectory = os.TempDir()
+	}
+
+	if c.Layout == "" {
+		c.Layout = "{{.Username}}"
 	}
 }
 
@@ -197,11 +205,14 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	return eosStorage, nil
 }
 
-func (fs *eosStorage) getHomeForUser(u *userpb.User) string {
-	// TODO(labkode): define home path layout in configuration
-	// like home: %letter%/%username% and then do string substitution.
-	home := path.Join(fs.mountpoint, u.Username)
-	return home
+func (fs *eosStorage) getHomeForUser(u *userpb.User) (string, error) {
+	userhome, err := helper.GetUserHomePath(u, fs.conf.Layout)
+	if err != nil {
+		return "", err
+	}
+
+	home := path.Join(fs.mountpoint, userhome)
+	return home, nil
 }
 
 func (fs *eosStorage) Shutdown(ctx context.Context) error {
@@ -571,7 +582,11 @@ func (fs *eosStorage) GetHome(ctx context.Context) (string, error) {
 		return "", errors.Wrap(err, "eos: no user in ctx")
 	}
 
-	home := fs.getHomeForUser(u)
+	home, err := fs.getHomeForUser(u)
+	if err != nil {
+		return "", err
+	}
+
 	return home, nil
 }
 
@@ -581,7 +596,10 @@ func (fs *eosStorage) CreateHome(ctx context.Context) error {
 		return errors.Wrap(err, "eos: no user in ctx")
 	}
 
-	home := fs.getHomeForUser(u)
+	home, err := fs.getHomeForUser(u)
+	if err != nil {
+		return err
+	}
 
 	_, err = fs.c.GetFileInfoByPath(ctx, "root", home)
 	if err == nil { // home already exists
