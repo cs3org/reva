@@ -34,6 +34,10 @@ enable_home_creation = true
 datadirectory = "/var/tmp/reva/data"
 layout = "{{.UsernamePrefixCount.1}}/{{.UsernameLower}}"
 
+[grpc.services.storageprovider.path_wrappers.context]
+prefix = ""
+layout = "{{.UsernamePrefixCount.1}}/{{.UsernameLower}}"
+
 [http]
 address = "0.0.0.0:12001"
 
