@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
+	pwregistry "github.com/cs3org/reva/pkg/storage/pw/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
@@ -61,6 +62,7 @@ type config struct {
 type service struct {
 	conf               *config
 	storage            storage.FS
+	pathWrapper        storage.PathWrapper
 	mountPath, mountID string
 	tmpFolder          string
 	dataServerURL      *url.URL
@@ -132,6 +134,10 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	if err != nil {
 		return nil, err
 	}
+	pw, err := getPW(c)
+	if err != nil {
+		return nil, err
+	}
 
 	// parse data server url
 	u, err := url.Parse(c.DataServerURL)
@@ -152,6 +158,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	service := &service{
 		conf:          c,
 		storage:       fs,
+		pathWrapper:   pw,
 		tmpFolder:     tmpFolder,
 		mountPath:     mountPath,
 		mountID:       mountID,
@@ -782,6 +789,16 @@ func getFS(c *config) (storage.FS, error) {
 	return nil, fmt.Errorf("driver not found: %s", c.Driver)
 }
 
+func getPW(c *config) (storage.PathWrapper, error) {
+	if c.PathWrapper == "" {
+		return nil, nil
+	}
+	if f, ok := pwregistry.NewFuncs[c.PathWrapper]; ok {
+		return f(c.PathWrappers[c.PathWrapper])
+	}
+	return nil, fmt.Errorf("path wrapper not found: %s", c.Driver)
+}
+
 func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (*provider.Reference, error) {
 	if ref.GetId() != nil {
 		idRef := &provider.Reference{
@@ -807,6 +824,13 @@ func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (*provide
 		return nil, err
 	}
 
+	if s.pathWrapper != nil {
+		fsfn, err = s.pathWrapper.Unwrap(ctx, fsfn)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	pathRef := &provider.Reference{
 		Spec: &provider.Reference_Path{
 			Path: fsfn,
@@ -825,6 +849,15 @@ func (s *service) trimMountPrefix(fn string) (string, error) {
 
 func (s *service) wrap(ctx context.Context, ri *provider.ResourceInfo) error {
 	ri.Id.StorageId = s.mountID
+
+	if s.pathWrapper != nil {
+		var err error
+		ri.Path, err = s.pathWrapper.Wrap(ctx, ri.Path)
+		if err != nil {
+			return err
+		}
+	}
+
 	ri.Path = path.Join(s.mountPath, ri.Path)
 	return nil
 }
