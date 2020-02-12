@@ -151,7 +151,7 @@ func uploadCommand() *command {
 		}
 
 		if res2.Status.Code != rpc.Code_CODE_OK {
-			return formatError(res.Status)
+			return formatError(res2.Status)
 		}
 
 		info := res2.Info
