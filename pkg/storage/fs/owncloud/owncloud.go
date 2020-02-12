@@ -1,4 +1,4 @@
-// Copyright 2018-2019 CERN
+// Copyright 2018-2020 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,6 +41,7 @@ import (
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
+	"github.com/cs3org/reva/pkg/storage/helper"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/gofrs/uuid"
 	"github.com/gomodule/redigo/redis"
@@ -153,6 +154,7 @@ type config struct {
 	DataDirectory string `mapstructure:"datadirectory"`
 	Scan          bool   `mapstructure:"scan"`
 	Redis         string `mapstructure:"redis"`
+	Layout        string `mapstructure:"layout"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -167,6 +169,9 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 func (c *config) init(m map[string]interface{}) {
 	if c.Redis == "" {
 		c.Redis = ":6379"
+	}
+	if c.Layout == "" {
+		c.Layout = "{{.Username}}"
 	}
 	// default to scanning if not configured
 	if _, ok := m["scan"]; !ok {
@@ -849,17 +854,25 @@ func (fs *ocFS) GetQuota(ctx context.Context) (int, int, error) {
 	return 0, 0, nil
 }
 
-func (fs *ocFS) getHomeForUser(u *userpb.User) string {
-	return path.Join("/", u.Username)
+func (fs *ocFS) getHomeForUser(u *userpb.User) (string, error) {
+	userhome, err := helper.GetUserHomePath(u, fs.c.Layout)
+	if err != nil {
+		return "", err
+	}
+
+	return path.Join("/", userhome), nil
 }
 
 func (fs *ocFS) CreateHome(ctx context.Context) error {
 	u, err := getUser(ctx)
 	if err != nil {
-		return errors.Wrap(err, "eos: no user in ctx")
+		return errors.Wrap(err, "ocFS: no user in ctx")
 	}
 
-	home := fs.getHomeForUser(u)
+	home, err := fs.getHomeForUser(u)
+	if err != nil {
+		return err
+	}
 
 	homePaths := []string{
 		path.Join(fs.c.DataDirectory, home, "files"),
@@ -879,10 +892,13 @@ func (fs *ocFS) CreateHome(ctx context.Context) error {
 func (fs *ocFS) GetHome(ctx context.Context) (string, error) {
 	u, err := getUser(ctx)
 	if err != nil {
-		return "", errors.Wrap(err, "eos: no user in ctx")
+		return "", errors.Wrap(err, "ocFS: no user in ctx")
 	}
 
-	home := fs.getHomeForUser(u)
+	home, err := fs.getHomeForUser(u)
+	if err != nil {
+		return "", err
+	}
 	return home, nil
 }
 

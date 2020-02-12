@@ -1,4 +1,4 @@
-// Copyright 2018-2019 CERN
+// Copyright 2018-2020 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,11 +20,13 @@ package context
 
 import (
 	"context"
+	"fmt"
 	"path"
 	"strings"
 
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage"
+	"github.com/cs3org/reva/pkg/storage/helper"
 	"github.com/cs3org/reva/pkg/storage/pw/registry"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
@@ -37,10 +39,11 @@ func init() {
 
 type config struct {
 	Prefix string `mapstructure:"prefix"`
+	Layout string `mapstructure:"layout"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
+	c := &config{Layout: "{{.Username}}"}
 	if err := mapstructure.Decode(m, c); err != nil {
 		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
@@ -55,22 +58,16 @@ func New(m map[string]interface{}) (storage.PathWrapper, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &pw{prefix: c.Prefix}, nil
+	return &pw{prefix: c.Prefix, layout: c.Layout}, nil
 }
 
 type pw struct {
 	prefix string
+	layout string
 }
 
 // Only works when a user is in context
 func (pw *pw) Unwrap(ctx context.Context, rp string) (string, error) {
-
-	// TODO how do we get the users home path?
-	// - construct based on homedir prefix + username/userid?
-	// - look into context?
-	// - query preferences?
-	// - do nothing
-	// -> screams for a wrapper/unwrapper 'strategy'
 
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
@@ -79,9 +76,13 @@ func (pw *pw) Unwrap(ctx context.Context, rp string) (string, error) {
 	if u.Username == "" {
 		return "", errors.Wrap(errtypes.UserRequired("userrequired"), "user has no username")
 	}
-
-	return path.Join("/", pw.prefix, u.Username, rp), nil
+	userhome, err := helper.GetUserHomePath(u, pw.layout)
+	if err != nil {
+		return "", errors.Wrap(errtypes.UserRequired("userrequired"), fmt.Sprintf("template error: %s", err.Error()))
+	}
+	return path.Join("/", pw.prefix, userhome, rp), nil
 }
+
 func (pw *pw) Wrap(ctx context.Context, rp string) (string, error) {
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
@@ -90,5 +91,9 @@ func (pw *pw) Wrap(ctx context.Context, rp string) (string, error) {
 	if u.Username == "" {
 		return "", errors.Wrap(errtypes.UserRequired("userrequired"), "user has no username")
 	}
-	return strings.TrimPrefix(rp, path.Join("/", u.Username)), nil
+	userhome, err := helper.GetUserHomePath(u, pw.layout)
+	if err != nil {
+		return "", errors.Wrap(errtypes.UserRequired("userrequired"), fmt.Sprintf("template error: %s", err.Error()))
+	}
+	return strings.TrimPrefix(rp, path.Join("/", userhome)), nil
 }
