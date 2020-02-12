@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"os"
+	"path"
 	"reflect"
 	"sync"
 	"time"
@@ -50,6 +51,16 @@ func New(m map[string]interface{}) (share.Manager, error) {
 	if err != nil {
 		err = errors.Wrap(err, "error creating a new manager")
 		return nil, err
+	}
+
+	// if file is not set we use temporary file
+	if c.File == "" {
+		dir, err := ioutil.TempDir("", "")
+		if err != nil {
+			err = errors.Wrap(err, "error creating temporary directory for storing shares")
+			return nil, err
+		}
+		c.File = path.Join(dir, "shares.json")
 	}
 
 	// load or create file
