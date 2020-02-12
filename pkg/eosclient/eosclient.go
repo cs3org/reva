@@ -272,9 +272,12 @@ func (c *Client) AddACL(ctx context.Context, username, path string, a *acl.Entry
 	}
 
 	// since EOS Citrine ACLs are is stored with uid, we need to convert username to uid
-	a.Qualifier, err = getUID(a.Qualifier)
-	if err != nil {
-		return err
+	// only for users.
+	if a.Type == acl.TypeUser {
+		a.Qualifier, err = getUID(a.Qualifier)
+		if err != nil {
+			return err
+		}
 	}
 	err = acls.SetEntry(a.Type, a.Qualifier, a.Permissions)
 	if err != nil {
@@ -301,12 +304,14 @@ func (c *Client) RemoveACL(ctx context.Context, username, path string, aclType s
 		return err
 	}
 
-	// since EOS Citrine ACLs are is stored with uid, we need to convert username to uid
-	uid, err := getUID(recipient)
-	if err != nil {
-		return err
+	// since EOS Citrine ACLs are stored with uid, we need to convert username to uid
+	if aclType == acl.TypeUser {
+		recipient, err = getUID(recipient)
+		if err != nil {
+			return err
+		}
 	}
-	acls.DeleteEntry(aclType, uid)
+	acls.DeleteEntry(aclType, recipient)
 	sysACL := acls.Serialize()
 
 	// setting of the sys.acl is only possible from root user
