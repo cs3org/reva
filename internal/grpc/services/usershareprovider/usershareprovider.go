@@ -84,6 +84,11 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
+	// if driver is empty we default to json
+	if c.Driver == "" {
+		c.Driver = "json"
+	}
+
 	sm, err := getShareManager(c)
 	if err != nil {
 		return nil, err
