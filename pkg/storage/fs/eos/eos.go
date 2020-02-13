@@ -55,10 +55,8 @@ func init() {
 var hiddenReg = regexp.MustCompile(`\.sys\..#.`)
 
 type eosStorage struct {
-	c             *eosclient.Client
-	mountpoint    string
-	showHiddenSys bool
-	conf          *config
+	c    *eosclient.Client
+	conf *config
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -108,9 +106,6 @@ type config struct {
 	// UseKeyTabAuth changes will authenticate requests by using an EOS keytab.
 	UseKeytab bool `mapstrucuture:"use_keytab"`
 
-	// EnableHome enables the creation of home directories.
-	EnableHome bool `mapstructure:"enable_home"`
-
 	// SecProtocol specifies the xrootd security protocol to use between the server and EOS.
 	SecProtocol string `mapstructure:"sec_protocol"`
 
@@ -120,11 +115,14 @@ type config struct {
 	// SingleUsername is the username to use when SingleUserMode is enabled
 	SingleUsername string `mapstructure:"single_username"`
 
+	// EnableHome enables the creation of home directories.
+	EnableHome bool `mapstructure:"enable_home"`
+
 	// UserLayout wraps the internal path with user information.
-	// Example: if mountpoint is /eos/user and received path is /docs
+	// Example: if conf.Namespace is /eos/user and received path is /docs
 	// and the UserLayout is {{.Username}} the internal path will be:
 	// /eos/user/<username>/docs
-	UserLayout string `mapstructure:"layout"`
+	UserLayout string `mapstructure:"user_layout"`
 }
 
 func getUser(ctx context.Context) (*userpb.User, error) {
@@ -194,10 +192,8 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	eosClient := eosclient.New(eosClientOpts)
 
 	eosStorage := &eosStorage{
-		c:             eosClient,
-		mountpoint:    c.Namespace,
-		showHiddenSys: c.ShowHiddenSysFiles,
-		conf:          c,
+		c:    eosClient,
+		conf: c,
 	}
 
 	return eosStorage, nil
@@ -216,9 +212,9 @@ func (fs *eosStorage) wrap(ctx context.Context, fn string) (internal string) {
 			panic(err)
 		}
 		layout := templates.WithUser(u, fs.conf.UserLayout)
-		internal = path.Join(fs.mountpoint, layout, fn)
+		internal = path.Join(fs.conf.Namespace, layout, fn)
 	} else {
-		internal = path.Join(fs.mountpoint, fn)
+		internal = path.Join(fs.conf.Namespace, fn)
 	}
 	return
 }
@@ -231,10 +227,10 @@ func (fs *eosStorage) unwrap(ctx context.Context, np string) (external string) {
 			panic(err)
 		}
 		layout := templates.WithUser(u, fs.conf.UserLayout)
-		trim := path.Join(fs.mountpoint, layout)
+		trim := path.Join(fs.conf.Namespace, layout)
 		external = strings.TrimPrefix(np, trim)
 	} else {
-		external = strings.TrimPrefix(np, fs.mountpoint)
+		external = strings.TrimPrefix(np, fs.conf.Namespace)
 		if external == "" {
 			external = "/"
 		}
@@ -564,7 +560,7 @@ func (fs *eosStorage) ListFolder(ctx context.Context, ref *provider.Reference) (
 	finfos := []*provider.ResourceInfo{}
 	for _, eosFileInfo := range eosFileInfos {
 		// filter out sys files
-		if !fs.showHiddenSys {
+		if !fs.conf.ShowHiddenSysFiles {
 			base := path.Base(eosFileInfo.File)
 			if hiddenReg.MatchString(base) {
 				continue
@@ -862,7 +858,7 @@ func (fs *eosStorage) ListRecycle(ctx context.Context) ([]*provider.RecycleItem,
 	}
 	recycleEntries := []*provider.RecycleItem{}
 	for _, entry := range eosDeletedEntries {
-		if !fs.showHiddenSys {
+		if !fs.conf.ShowHiddenSysFiles {
 			base := path.Base(entry.RestorePath)
 			if hiddenReg.MatchString(base) {
 				continue
