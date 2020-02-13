@@ -92,6 +92,21 @@ type config struct {
 	// Defaults to os.TempDir()
 	CacheDirectory string `mapstructure:"cache_directory"`
 
+	// SecProtocol specifies the xrootd security protocol to use between the server and EOS.
+	SecProtocol string `mapstructure:"sec_protocol"`
+
+	// Keytab specifies the location of the keytab to use to authenticate to EOS.
+	Keytab string `mapstructure:"keytab"`
+
+	// SingleUsername is the username to use when SingleUserMode is enabled
+	SingleUsername string `mapstructure:"single_username"`
+
+	// UserLayout wraps the internal path with user information.
+	// Example: if conf.Namespace is /eos/user and received path is /docs
+	// and the UserLayout is {{.Username}} the internal path will be:
+	// /eos/user/<username>/docs
+	UserLayout string `mapstructure:"user_layout"`
+
 	// Enables logging of the commands executed
 	// Defaults to false
 	EnableLogging bool `mapstructure:"enable_logging"`
@@ -106,23 +121,8 @@ type config struct {
 	// UseKeyTabAuth changes will authenticate requests by using an EOS keytab.
 	UseKeytab bool `mapstrucuture:"use_keytab"`
 
-	// SecProtocol specifies the xrootd security protocol to use between the server and EOS.
-	SecProtocol string `mapstructure:"sec_protocol"`
-
-	// Keytab specifies the location of the keytab to use to authenticate to EOS.
-	Keytab string `mapstructure:"keytab"`
-
-	// SingleUsername is the username to use when SingleUserMode is enabled
-	SingleUsername string `mapstructure:"single_username"`
-
 	// EnableHome enables the creation of home directories.
 	EnableHome bool `mapstructure:"enable_home"`
-
-	// UserLayout wraps the internal path with user information.
-	// Example: if conf.Namespace is /eos/user and received path is /docs
-	// and the UserLayout is {{.Username}} the internal path will be:
-	// /eos/user/<username>/docs
-	UserLayout string `mapstructure:"user_layout"`
 }
 
 func getUser(ctx context.Context) (*userpb.User, error) {
