@@ -41,6 +41,7 @@ type UserData struct {
 	*userpb.User
 }
 
+// WithUser generates a layout based on user data.
 func WithUser(u *userpb.User, tpl string) string {
 	tpl = clean(tpl)
 	ut := newUserData(u)
