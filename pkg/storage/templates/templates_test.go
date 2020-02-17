@@ -62,6 +62,20 @@ var tests = []*testUnit{
 		},
 		template: "///{{.Username}}",
 	},
+	&testUnit{
+		expected: "michael",
+		user: &userpb.User{
+			Username: "MICHAEL",
+		},
+		template: "{{.UsernameLower}}",
+	},
+	&testUnit{
+		expected: "somewhere.com/michael@somewhere.com",
+		user: &userpb.User{
+			Username: "michael@somewhere.com",
+		},
+		template: "{{.Provider}}/{{.Username}}",
+	},
 }
 
 func TestLayout(t *testing.T) {
