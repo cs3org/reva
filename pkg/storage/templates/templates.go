@@ -28,6 +28,7 @@ import (
 	"bytes"
 	"fmt"
 	"path"
+	"strings"
 	"text/template"
 
 	"github.com/Masterminds/sprig"
@@ -39,8 +40,8 @@ import (
 // For example {{.Username}} or {{.Id.Idp}}
 type UserData struct {
 	*userpb.User
-        UsernameLower string
-        Provider      string	
+	UsernameLower string
+	Provider      string
 }
 
 // WithUser generates a layout based on user data.
@@ -74,8 +75,8 @@ func newUserData(u *userpb.User) *UserData {
 		User:          u,
 		UsernameLower: strings.ToLower(u.Username),
 		Provider:      usernameSplit[1],
-        }
-        return ut
+	}
+	return ut
 }
 
 func clean(a string) string {
