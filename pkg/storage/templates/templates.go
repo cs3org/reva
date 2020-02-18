@@ -40,8 +40,7 @@ import (
 // For example {{.Username}} or {{.Id.Idp}}
 type UserData struct {
 	*userpb.User
-	UsernameLower string
-	Provider      string
+	Provider string
 }
 
 // WithUser generates a layout based on user data.
@@ -72,9 +71,8 @@ func newUserData(u *userpb.User) *UserData {
 	}
 
 	ut := &UserData{
-		User:          u,
-		UsernameLower: strings.ToLower(u.Username),
-		Provider:      usernameSplit[1],
+		User:     u,
+		Provider: strings.ToLower(usernameSplit[1]),
 	}
 	return ut
 }
