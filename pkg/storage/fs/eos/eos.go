@@ -75,6 +75,10 @@ type config struct {
 	// ShadowNamespace for storing shadow data
 	ShadowNamespace string `mapstructure:"shadow_namespace"`
 
+	// ShadowShareFolder defines the name of the folder in the
+	// shadowed namespace. Ex: /eos/user/.shadow/h/hugo/MyShares
+	ShadowShareFolder string `mapstructure:"shadown_share_folder"`
+
 	// Location of the eos binary.
 	// Default is /usr/bin/eos.
 	EosBinary string `mapstructure:"eos_binary"`
@@ -145,6 +149,10 @@ func (c *config) init() {
 
 	if c.ShadowNamespace == "" {
 		c.ShadowNamespace = path.Join(c.Namespace, ".shadow")
+	}
+
+	if c.ShadowShareFolder == "" {
+		c.ShadowShareFolder = path.Join(c.ShadowNamespace, "MyShares")
 	}
 
 	if c.EosBinary == "" {
@@ -631,13 +639,8 @@ func (fs *eosStorage) GetHome(ctx context.Context) (string, error) {
 }
 
 func (fs *eosStorage) createShadowHome(ctx context.Context) error {
-	u, err := getUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "eos: no user in ctx")
-	}
-
 	home := fs.wrapShadow(ctx, "/")
-	_, err = fs.c.GetFileInfoByPath(ctx, "root", home)
+	_, err := fs.c.GetFileInfoByPath(ctx, "root", home)
 	if err == nil { // home already exists
 		return nil
 	}
@@ -653,10 +656,7 @@ func (fs *eosStorage) createShadowHome(ctx context.Context) error {
 		// EOS will return success on mkdir over an existing directory.
 		return errors.Wrap(err, "eos: error creating dir")
 	}
-	err = fs.c.Chown(ctx, "root", u.Username, home)
-	if err != nil {
-		return errors.Wrap(err, "eos: error chowning directory")
-	}
+
 	err = fs.c.Chmod(ctx, "root", "2770", home)
 	if err != nil {
 		return errors.Wrap(err, "eos: error chmoding directory")
@@ -692,6 +692,19 @@ func (fs *eosStorage) createShadowHome(ctx context.Context) error {
 		}
 
 	}
+
+	// create shadow folders
+	shadowFolders := []string{fs.conf.ShadowShareFolder}
+	for _, sf := range shadowFolders {
+		sf = path.Join(home, sf)
+		err = fs.c.CreateDir(ctx, "root", sf)
+		if err != nil {
+			// EOS will return success on mkdir over an existing directory.
+			return errors.Wrap(err, "eos: error creating dir")
+		}
+
+	}
+
 	return nil
 }
 
