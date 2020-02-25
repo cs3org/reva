@@ -72,6 +72,9 @@ type config struct {
 	// Namespace for metadata operations
 	Namespace string `mapstructure:"namespace"`
 
+	// ShadowNamespace for storing shadow data
+	ShadowNamespace string `mapstructure:"shadow_namespace"`
+
 	// Location of the eos binary.
 	// Default is /usr/bin/eos.
 	EosBinary string `mapstructure:"eos_binary"`
@@ -140,6 +143,10 @@ func (c *config) init() {
 		c.Namespace = "/"
 	}
 
+	if c.ShadowNamespace == "" {
+		c.ShadowNamespace = path.Join(c.Namespace, ".shadow")
+	}
+
 	if c.EosBinary == "" {
 		c.EosBinary = "/usr/bin/eos"
 	}
@@ -204,6 +211,21 @@ func (fs *eosStorage) Shutdown(ctx context.Context) error {
 	return nil
 }
 
+func (fs *eosStorage) wrapShadow(ctx context.Context, fn string) (internal string) {
+	if fs.conf.EnableHome && fs.conf.UserLayout != "" {
+		u, err := getUser(ctx)
+		if err != nil {
+			err = errors.Wrap(err, "eos: wrap: no user in ctx and home is enabled")
+			panic(err)
+		}
+		layout := templates.WithUser(u, fs.conf.UserLayout)
+		internal = path.Join(fs.conf.ShadowNamespace, layout, fn)
+	} else {
+		internal = path.Join(fs.conf.ShadowNamespace, fn)
+	}
+	return
+}
+
 func (fs *eosStorage) wrap(ctx context.Context, fn string) (internal string) {
 	if fs.conf.EnableHome && fs.conf.UserLayout != "" {
 		u, err := getUser(ctx)
@@ -215,6 +237,25 @@ func (fs *eosStorage) wrap(ctx context.Context, fn string) (internal string) {
 		internal = path.Join(fs.conf.Namespace, layout, fn)
 	} else {
 		internal = path.Join(fs.conf.Namespace, fn)
+	}
+	return
+}
+
+func (fs *eosStorage) unwrapShadow(ctx context.Context, np string) (external string) {
+	if fs.conf.EnableHome && fs.conf.UserLayout != "" {
+		u, err := getUser(ctx)
+		if err != nil {
+			err = errors.Wrap(err, "eos: unwrap: no user in ctx and home is enabled")
+			panic(err)
+		}
+		layout := templates.WithUser(u, fs.conf.UserLayout)
+		trim := path.Join(fs.conf.ShadowNamespace, layout)
+		external = strings.TrimPrefix(np, trim)
+	} else {
+		external = strings.TrimPrefix(np, fs.conf.ShadowNamespace)
+		if external == "" {
+			external = "/"
+		}
 	}
 	return
 }
@@ -589,21 +630,13 @@ func (fs *eosStorage) GetHome(ctx context.Context) (string, error) {
 	return home, nil
 }
 
-func (fs *eosStorage) CreateHome(ctx context.Context) error {
-	if !fs.conf.EnableHome {
-		return errtypes.NotSupported("eos: create home not supported")
-	}
-
+func (fs *eosStorage) createShadowHome(ctx context.Context) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
 	}
 
-	home := fs.wrap(ctx, "/")
-	if err != nil {
-		return err
-	}
-
+	home := fs.wrapShadow(ctx, "/")
 	_, err = fs.c.GetFileInfoByPath(ctx, "root", home)
 	if err == nil { // home already exists
 		return nil
@@ -659,6 +692,87 @@ func (fs *eosStorage) CreateHome(ctx context.Context) error {
 		}
 
 	}
+	return nil
+}
+
+func (fs *eosStorage) createNominalHome(ctx context.Context) error {
+	u, err := getUser(ctx)
+	if err != nil {
+		return errors.Wrap(err, "eos: no user in ctx")
+	}
+
+	home := fs.wrap(ctx, "/")
+	_, err = fs.c.GetFileInfoByPath(ctx, "root", home)
+	if err == nil { // home already exists
+		return nil
+	}
+
+	// TODO(labkode): abort on any error that is not found
+	if _, ok := err.(errtypes.IsNotFound); !ok {
+		return errors.Wrap(err, "eos: error verifying if user home directory exists")
+	}
+
+	// TODO(labkode): only trigger creation on not found, copy from CERNBox logic.
+	err = fs.c.CreateDir(ctx, "root", home)
+	if err != nil {
+		// EOS will return success on mkdir over an existing directory.
+		return errors.Wrap(err, "eos: error creating dir")
+	}
+	err = fs.c.Chown(ctx, "root", u.Username, home)
+	if err != nil {
+		return errors.Wrap(err, "eos: error chowning directory")
+	}
+	err = fs.c.Chmod(ctx, "root", "2770", home)
+	if err != nil {
+		return errors.Wrap(err, "eos: error chmoding directory")
+	}
+
+	attrs := []*eosclient.Attribute{
+		&eosclient.Attribute{
+			Type: eosclient.SystemAttr,
+			Key:  "mask",
+			Val:  "700",
+		},
+		&eosclient.Attribute{
+			Type: eosclient.SystemAttr,
+			Key:  "allow.oc.sync",
+			Val:  "1",
+		},
+		&eosclient.Attribute{
+			Type: eosclient.SystemAttr,
+			Key:  "mtime.propagation",
+			Val:  "1",
+		},
+		&eosclient.Attribute{
+			Type: eosclient.SystemAttr,
+			Key:  "forced.atomic",
+			Val:  "1",
+		},
+	}
+
+	for _, attr := range attrs {
+		err = fs.c.SetAttr(ctx, "root", attr, home)
+		if err != nil {
+			return errors.Wrap(err, "eos: error setting attribute")
+		}
+
+	}
+	return nil
+}
+
+func (fs *eosStorage) CreateHome(ctx context.Context) error {
+	if !fs.conf.EnableHome {
+		return errtypes.NotSupported("eos: create home not supported")
+	}
+
+	if err := fs.createNominalHome(ctx); err != nil {
+		return errors.Wrap(err, "eos: error creating nominal home")
+	}
+
+	if err := fs.createShadowHome(ctx); err != nil {
+		return errors.Wrap(err, "eos: error creating shadow home")
+	}
+
 	return nil
 }
 
