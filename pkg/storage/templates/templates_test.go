@@ -74,14 +74,21 @@ var tests = []*testUnit{
 		user: &userpb.User{
 			Username: "michael@somewhere.com",
 		},
-		template: "{{.Provider}}/{{.Username}}",
+		template: "{{.Email.Domain}}/{{.Username}}",
+	},
+	&testUnit{
+		expected: "somewhere.com/michael",
+		user: &userpb.User{
+			Username: "michael@somewhere.com",
+		},
+		template: "{{.Email.Domain}}/{{.Email.Local}}",
 	},
 	&testUnit{
 		expected: "_unknown/michael",
 		user: &userpb.User{
 			Username: "michael",
 		},
-		template: "{{.Provider}}/{{.Username}}",
+		template: "{{.Email.Domain}}/{{.Username}}",
 	},
 }
 
