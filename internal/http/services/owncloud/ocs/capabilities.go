@@ -132,10 +132,6 @@ func (h *CapabilitiesHandler) init(c *Config) {
 		h.c.Capabilities.Dav.Reports = []string{"search-files"}
 	}
 
-	if h.c.Capabilities.Dav.ChunkingParallelUploadDisabled {
-		h.c.Capabilities.Dav.ChunkingParallelUploadDisabled = true
-	}
-
 	// sharing
 
 	if h.c.Capabilities.FilesSharing == nil {
