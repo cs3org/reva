@@ -43,6 +43,9 @@ type UserData struct {
 	Email EmailData
 }
 
+// EmailData contains mail data
+// split into local and domain part.
+// It is extracted from spliting the username by @.
 type EmailData struct {
 	Local  string
 	Domain string
