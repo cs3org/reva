@@ -28,6 +28,7 @@ import (
 	"bytes"
 	"fmt"
 	"path"
+	"strings"
 	"text/template"
 
 	"github.com/Masterminds/sprig"
@@ -39,6 +40,12 @@ import (
 // For example {{.Username}} or {{.Id.Idp}}
 type UserData struct {
 	*userpb.User
+	Email EmailData
+}
+
+type EmailData struct {
+	Local  string
+	Domain string
 }
 
 // WithUser generates a layout based on user data.
@@ -52,7 +59,7 @@ func WithUser(u *userpb.User, tpl string) string {
 		panic(err)
 	}
 	b := bytes.Buffer{}
-	if err := t.Execute(&b, u); err != nil {
+	if err := t.Execute(&b, ut); err != nil {
 		err := errors.Wrap(err, fmt.Sprintf("error executing template: user_template:%+v tpl:%s", ut, tpl))
 		panic(err)
 	}
@@ -60,7 +67,21 @@ func WithUser(u *userpb.User, tpl string) string {
 }
 
 func newUserData(u *userpb.User) *UserData {
-	ut := &UserData{User: u}
+	usernameSplit := strings.Split(u.Username, "@")
+	if len(usernameSplit) == 1 {
+		usernameSplit = append(usernameSplit, "_unknown")
+	}
+	if usernameSplit[1] == "" {
+		usernameSplit[1] = "_unknown"
+	}
+
+	ut := &UserData{
+		User: u,
+		Email: EmailData{
+			Local:  strings.ToLower(usernameSplit[0]),
+			Domain: strings.ToLower(usernameSplit[1]),
+		},
+	}
 	return ut
 }
 
