@@ -309,22 +309,22 @@ func (fs *eosStorage) GetPathByID(ctx context.Context, id *provider.ResourceId) 
 	return fi.Path, nil
 }
 
-// resolve takes in a request path or request id and converts it to a internal path.
+// resolve takes in a request path or request id and returns the unwrapped path.
 func (fs *eosStorage) resolve(ctx context.Context, u *userpb.User, ref *provider.Reference) (string, error) {
 	if ref.GetPath() != "" {
-		return fs.wrap(ctx, ref.GetPath()), nil
+		return ref.GetPath(), nil
 	}
 
 	if ref.GetId() != nil {
-		fn, err := fs.getPath(ctx, u, ref.GetId())
+		p, err := fs.getPath(ctx, u, ref.GetId())
 		if err != nil {
 			return "", err
 		}
-		return fn, nil
+		return p, nil
 	}
 
 	// reference is invalid
-	return "", fmt.Errorf("invalid reference %+v", ref)
+	return "", fmt.Errorf("invalid reference %+v. id and path are missing", ref)
 }
 
 func (fs *eosStorage) getPath(ctx context.Context, u *userpb.User, id *provider.ResourceId) (string, error) {
@@ -332,11 +332,24 @@ func (fs *eosStorage) getPath(ctx context.Context, u *userpb.User, id *provider.
 	if err != nil {
 		return "", fmt.Errorf("error converting string to int for eos fileid: %s", id.OpaqueId)
 	}
+
 	eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, u.Username, fid)
 	if err != nil {
 		return "", errors.Wrap(err, "eos: error getting file info by inode")
 	}
-	return eosFileInfo.File, nil
+
+	if strings.HasPrefix(eosFileInfo.File, fs.conf.Namespace) {
+		return fs.unwrap(ctx, eosFileInfo.File), nil
+	}
+
+	if strings.HasPrefix(eosFileInfo.File, fs.conf.ShadowNamespace) {
+		return fs.unwrapShadow(ctx, eosFileInfo.File), nil
+	}
+
+	panic(fmt.Sprintf("eos: path does not belong to nominal=%s nor shadow=%s path=%s",
+		fs.conf.Namespace,
+		fs.conf.ShadowNamespace,
+		eosFileInfo.File))
 }
 
 func (fs *eosStorage) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
@@ -345,10 +358,12 @@ func (fs *eosStorage) AddGrant(ctx context.Context, ref *provider.Reference, g *
 		return errors.Wrap(err, "eos: no user in ctx")
 	}
 
-	fn, err := fs.resolve(ctx, u, ref)
+	p, err := fs.resolve(ctx, u, ref)
 	if err != nil {
 		return errors.Wrap(err, "eos: error resolving reference")
 	}
+
+	fn := fs.wrap(ctx, p)
 
 	eosACL, err := fs.getEosACL(g)
 	if err != nil {
@@ -436,10 +451,12 @@ func (fs *eosStorage) RemoveGrant(ctx context.Context, ref *provider.Reference, 
 		return err
 	}
 
-	fn, err := fs.resolve(ctx, u, ref)
+	p, err := fs.resolve(ctx, u, ref)
 	if err != nil {
 		return errors.Wrap(err, "eos: error resolving reference")
 	}
+
+	fn := fs.wrap(ctx, p)
 
 	err = fs.c.RemoveACL(ctx, u.Username, fn, eosACLType, g.Grantee.Id.OpaqueId)
 	if err != nil {
@@ -459,10 +476,11 @@ func (fs *eosStorage) UpdateGrant(ctx context.Context, ref *provider.Reference, 
 		return errors.Wrap(err, "eos: error mapping acl")
 	}
 
-	fn, err := fs.resolve(ctx, u, ref)
+	p, err := fs.resolve(ctx, u, ref)
 	if err != nil {
 		return errors.Wrap(err, "eos: error resolving reference")
 	}
+	fn := fs.wrap(ctx, p)
 
 	err = fs.c.AddACL(ctx, u.Username, fn, eosACL)
 	if err != nil {
@@ -477,10 +495,11 @@ func (fs *eosStorage) ListGrants(ctx context.Context, ref *provider.Reference) (
 		return nil, err
 	}
 
-	fn, err := fs.resolve(ctx, u, ref)
+	p, err := fs.resolve(ctx, u, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: error resolving reference")
 	}
+	fn := fs.wrap(ctx, p)
 
 	acls, err := fs.c.ListACLs(ctx, u.Username, fn)
 	if err != nil {
@@ -577,10 +596,12 @@ func (fs *eosStorage) GetMD(ctx context.Context, ref *provider.Reference) (*prov
 	if err != nil {
 		return nil, err
 	}
-	fn, err := fs.resolve(ctx, u, ref)
+
+	p, err := fs.resolve(ctx, u, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: error resolving reference")
 	}
+	fn := fs.wrap(ctx, p)
 
 	eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, u.Username, fn)
 	if err != nil {
@@ -596,10 +617,11 @@ func (fs *eosStorage) ListFolder(ctx context.Context, ref *provider.Reference) (
 		return nil, errors.Wrap(err, "eos: no user in ctx")
 	}
 
-	fn, err := fs.resolve(ctx, u, ref)
+	p, err := fs.resolve(ctx, u, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: error resolving reference")
 	}
+	fn := fs.wrap(ctx, p)
 
 	eosFileInfos, err := fs.c.List(ctx, u.Username, fn)
 	if err != nil {
@@ -806,16 +828,7 @@ func (fs *eosStorage) CreateReference(ctx context.Context, p string, targetURI *
 		return errors.Wrap(err, "eos: no user in ctx")
 	}
 
-	ref := &provider.Reference{
-		Spec: &provider.Reference_Path{
-			Path: p,
-		},
-	}
-
-	fn, err := fs.resolve(ctx, u, ref)
-	if err != nil {
-		return errors.Wrap(err, "eos: error resolving reference")
-	}
+	fn := fs.wrap(ctx, p)
 
 	// TODO(labkode): with grpc we can touch with xattrs.
 	// Current mechanism is: touch to hidden file, set xattr, rename.
@@ -853,10 +866,11 @@ func (fs *eosStorage) Delete(ctx context.Context, ref *provider.Reference) error
 		return errors.Wrap(err, "eos: no user in ctx")
 	}
 
-	fn, err := fs.resolve(ctx, u, ref)
+	p, err := fs.resolve(ctx, u, ref)
 	if err != nil {
 		return errors.Wrap(err, "eos: error resolving reference")
 	}
+	fn := fs.wrap(ctx, p)
 
 	return fs.c.Remove(ctx, u.Username, fn)
 }
@@ -866,6 +880,7 @@ func (fs *eosStorage) Move(ctx context.Context, oldRef, newRef *provider.Referen
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
 	}
+
 	oldPath, err := fs.resolve(ctx, u, oldRef)
 	if err != nil {
 		return errors.Wrap(err, "eos: error resolving reference")
@@ -876,7 +891,9 @@ func (fs *eosStorage) Move(ctx context.Context, oldRef, newRef *provider.Referen
 		return errors.Wrap(err, "eos: error resolving reference")
 	}
 
-	return fs.c.Rename(ctx, u.Username, oldPath, newPath)
+	oldFn := fs.wrap(ctx, oldPath)
+	newFn := fs.wrap(ctx, newPath)
+	return fs.c.Rename(ctx, u.Username, oldFn, newFn)
 }
 
 func (fs *eosStorage) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
