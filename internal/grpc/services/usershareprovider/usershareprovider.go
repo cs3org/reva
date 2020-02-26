@@ -28,6 +28,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/share"
 	"github.com/cs3org/reva/pkg/share/manager/registry"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -84,6 +85,11 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
+	// if driver is empty we default to json
+	if c.Driver == "" {
+		c.Driver = "json"
+	}
+
 	sm, err := getShareManager(c)
 	if err != nil {
 		return nil, err
@@ -98,10 +104,11 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 }
 
 func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.CreateShareResponse, error) {
+	u := user.ContextMustGetUser(ctx)
 	// TODO(labkode): validate input
-	// TODO(labkode): hack: use configured IDP or use hostname as default.
 	if req.Grant.Grantee.Id.Idp == "" {
-		req.Grant.Grantee.Id.Idp = "localhost"
+		// use logged in user Idp as default.
+		req.Grant.Grantee.Id.Idp = u.Id.Idp
 	}
 	share, err := s.sm.Share(ctx, req.ResourceInfo, req.Grant)
 	if err != nil {
