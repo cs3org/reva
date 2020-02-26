@@ -62,6 +62,34 @@ var tests = []*testUnit{
 		},
 		template: "///{{.Username}}",
 	},
+	&testUnit{
+		expected: "michael",
+		user: &userpb.User{
+			Username: "MICHAEL",
+		},
+		template: "{{lower .Username}}",
+	},
+	&testUnit{
+		expected: "somewhere.com/michael@somewhere.com",
+		user: &userpb.User{
+			Username: "michael@somewhere.com",
+		},
+		template: "{{.Email.Domain}}/{{.Username}}",
+	},
+	&testUnit{
+		expected: "somewhere.com/michael",
+		user: &userpb.User{
+			Username: "michael@somewhere.com",
+		},
+		template: "{{.Email.Domain}}/{{.Email.Local}}",
+	},
+	&testUnit{
+		expected: "_unknown/michael",
+		user: &userpb.User{
+			Username: "michael",
+		},
+		template: "{{.Email.Domain}}/{{.Username}}",
+	},
 }
 
 func TestLayout(t *testing.T) {

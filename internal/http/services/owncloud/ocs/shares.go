@@ -184,7 +184,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		var pint int
+		var permissions conversions.Permissions
 
 		role := r.FormValue("role")
 		// 2. if we don't have a role try to map the permissions
@@ -194,20 +194,25 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 				// by default only allow read permissions / assign viewer role
 				role = conversions.RoleViewer
 			} else {
-				pint, err = strconv.Atoi(pval)
+				pint, err := strconv.Atoi(pval)
 				if err != nil {
 					WriteOCSError(w, r, MetaBadRequest.StatusCode, "permissions must be an integer", nil)
 					return
 				}
-				role = h.permissions2Role(pint)
+				permissions, err = conversions.NewPermissions(pint)
+				if err != nil {
+					WriteOCSError(w, r, MetaBadRequest.StatusCode, err.Error(), nil)
+					return
+				}
+				role = conversions.Permissions2Role(permissions)
 			}
 		}
 
-		var permissions *provider.ResourcePermissions
-		permissions, err = h.role2CS3Permissions(role)
+		var resourcePermissions *provider.ResourcePermissions
+		resourcePermissions, err = h.role2CS3Permissions(role)
 		if err != nil {
 			log.Warn().Err(err).Msg("unknown role, mapping legacy permissions")
-			permissions = asCS3Permissions(pint, nil)
+			resourcePermissions = asCS3Permissions(permissions, nil)
 		}
 
 		roleMap := map[string]string{"name": role}
@@ -262,7 +267,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 					Id:   recipient.Id,
 				},
 				Permissions: &collaboration.SharePermissions{
-					Permissions: permissions,
+					Permissions: resourcePermissions,
 				},
 			},
 		}
@@ -351,12 +356,12 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 
 // TODO sort out mapping, this is just a first guess
 // TODO use roles to make this configurable
-func asCS3Permissions(p int, rp *provider.ResourcePermissions) *provider.ResourcePermissions {
+func asCS3Permissions(p conversions.Permissions, rp *provider.ResourcePermissions) *provider.ResourcePermissions {
 	if rp == nil {
 		rp = &provider.ResourcePermissions{}
 	}
 
-	if p&int(conversions.PermissionRead) != 0 {
+	if p.Contain(conversions.PermissionRead) {
 		rp.ListContainer = true
 		rp.ListGrants = true
 		rp.ListFileVersions = true
@@ -366,43 +371,29 @@ func asCS3Permissions(p int, rp *provider.ResourcePermissions) *provider.Resourc
 		rp.GetQuota = true
 		rp.InitiateFileDownload = true
 	}
-	if p&int(conversions.PermissionWrite) != 0 {
+	if p.Contain(conversions.PermissionWrite) {
 		rp.InitiateFileUpload = true
 		rp.RestoreFileVersion = true
 		rp.RestoreRecycleItem = true
 	}
-	if p&int(conversions.PermissionCreate) != 0 {
+	if p.Contain(conversions.PermissionCreate) {
 		rp.CreateContainer = true
 		// FIXME permissions mismatch: double check create vs write file
 		rp.InitiateFileUpload = true
-		if p&int(conversions.PermissionWrite) != 0 {
+		if p.Contain(conversions.PermissionWrite) {
 			rp.Move = true // TODO move only when create and write?
 		}
 	}
-	if p&int(conversions.PermissionDelete) != 0 {
+	if p.Contain(conversions.PermissionDelete) {
 		rp.Delete = true
 		rp.PurgeRecycle = true
 	}
-	if p&int(conversions.PermissionShare) != 0 {
+	if p.Contain(conversions.PermissionShare) {
 		rp.AddGrant = true
 		rp.RemoveGrant = true // TODO when are you able to unshare / delete
 		rp.UpdateGrant = true
 	}
 	return rp
-}
-
-func (h *SharesHandler) permissions2Role(p int) string {
-	role := conversions.RoleLegacy
-	if p == int(conversions.PermissionRead) {
-		role = conversions.RoleViewer
-	}
-	if p&int(conversions.PermissionWrite) == 1 {
-		role = conversions.RoleEditor
-	}
-	if p&int(conversions.PermissionShare) == 1 {
-		role = conversions.RoleCoowner
-	}
-	return role
 }
 
 func (h *SharesHandler) role2CS3Permissions(r string) (*provider.ResourcePermissions, error) {
@@ -474,9 +465,14 @@ func (h *SharesHandler) updateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	perm, err := strconv.Atoi(pval)
+	pint, err := strconv.Atoi(pval)
 	if err != nil {
 		WriteOCSError(w, r, MetaBadRequest.StatusCode, "permissions must be an integer", nil)
+		return
+	}
+	permissions, err := conversions.NewPermissions(pint)
+	if err != nil {
+		WriteOCSError(w, r, MetaBadRequest.StatusCode, err.Error(), nil)
 		return
 	}
 
@@ -501,7 +497,7 @@ func (h *SharesHandler) updateShare(w http.ResponseWriter, r *http.Request) {
 			Field: &collaboration.UpdateShareRequest_UpdateField_Permissions{
 				Permissions: &collaboration.SharePermissions{
 					// this completely overwrites the permissions for this user
-					Permissions: asCS3Permissions(perm, nil),
+					Permissions: asCS3Permissions(permissions, nil),
 				},
 			},
 		},
