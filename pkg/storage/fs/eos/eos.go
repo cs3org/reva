@@ -735,6 +735,7 @@ func (fs *eosStorage) createNominalHome(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "eos: error chowning directory")
 	}
+
 	err = fs.c.Chmod(ctx, "root", "2770", home)
 	if err != nil {
 		return errors.Wrap(err, "eos: error chmoding directory")
@@ -884,10 +885,11 @@ func (fs *eosStorage) Download(ctx context.Context, ref *provider.Reference) (io
 		return nil, errors.Wrap(err, "eos: no user in ctx")
 	}
 
-	fn, err := fs.resolve(ctx, u, ref)
+	p, err := fs.resolve(ctx, u, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: error resolving reference")
 	}
+	fn := fs.wrap(ctx, p)
 
 	return fs.c.Read(ctx, u.Username, fn)
 }
@@ -898,10 +900,11 @@ func (fs *eosStorage) Upload(ctx context.Context, ref *provider.Reference, r io.
 		return errors.Wrap(err, "eos: no user in ctx")
 	}
 
-	fn, err := fs.resolve(ctx, u, ref)
+	p, err := fs.resolve(ctx, u, ref)
 	if err != nil {
 		return errors.Wrap(err, "eos: error resolving reference")
 	}
+	fn := fs.wrap(ctx, p)
 
 	return fs.c.Write(ctx, u.Username, fn, r)
 }
@@ -912,10 +915,11 @@ func (fs *eosStorage) ListRevisions(ctx context.Context, ref *provider.Reference
 		return nil, errors.Wrap(err, "eos: no user in ctx")
 	}
 
-	fn, err := fs.resolve(ctx, u, ref)
+	p, err := fs.resolve(ctx, u, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: error resolving reference")
 	}
+	fn := fs.wrap(ctx, p)
 
 	eosRevisions, err := fs.c.ListVersions(ctx, u.Username, fn)
 	if err != nil {
@@ -935,10 +939,11 @@ func (fs *eosStorage) DownloadRevision(ctx context.Context, ref *provider.Refere
 		return nil, errors.Wrap(err, "eos: no user in ctx")
 	}
 
-	fn, err := fs.resolve(ctx, u, ref)
+	p, err := fs.resolve(ctx, u, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: error resolving reference")
 	}
+	fn := fs.wrap(ctx, p)
 
 	fn = fs.wrap(ctx, fn)
 	return fs.c.ReadVersion(ctx, u.Username, fn, revisionKey)
@@ -950,10 +955,11 @@ func (fs *eosStorage) RestoreRevision(ctx context.Context, ref *provider.Referen
 		return errors.Wrap(err, "eos: no user in ctx")
 	}
 
-	fn, err := fs.resolve(ctx, u, ref)
+	p, err := fs.resolve(ctx, u, ref)
 	if err != nil {
 		return errors.Wrap(err, "eos: error resolving reference")
 	}
+	fn := fs.wrap(ctx, p)
 
 	return fs.c.RollbackToVersion(ctx, u.Username, fn, revisionKey)
 }
