@@ -31,14 +31,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cs3org/reva/pkg/storage/fs/registry"
-	"github.com/cs3org/reva/pkg/storage/helper"
-
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/eosclient"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/acl"
+	"github.com/cs3org/reva/pkg/storage/fs/registry"
+	"github.com/cs3org/reva/pkg/storage/templates"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -56,10 +55,8 @@ func init() {
 var hiddenReg = regexp.MustCompile(`\.sys\..#.`)
 
 type eosStorage struct {
-	c             *eosclient.Client
-	mountpoint    string
-	showHiddenSys bool
-	conf          *config
+	c    *eosclient.Client
+	conf *config
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -95,6 +92,21 @@ type config struct {
 	// Defaults to os.TempDir()
 	CacheDirectory string `mapstructure:"cache_directory"`
 
+	// SecProtocol specifies the xrootd security protocol to use between the server and EOS.
+	SecProtocol string `mapstructure:"sec_protocol"`
+
+	// Keytab specifies the location of the keytab to use to authenticate to EOS.
+	Keytab string `mapstructure:"keytab"`
+
+	// SingleUsername is the username to use when SingleUserMode is enabled
+	SingleUsername string `mapstructure:"single_username"`
+
+	// UserLayout wraps the internal path with user information.
+	// Example: if conf.Namespace is /eos/user and received path is /docs
+	// and the UserLayout is {{.Username}} the internal path will be:
+	// /eos/user/<username>/docs
+	UserLayout string `mapstructure:"user_layout"`
+
 	// Enables logging of the commands executed
 	// Defaults to false
 	EnableLogging bool `mapstructure:"enable_logging"`
@@ -111,18 +123,6 @@ type config struct {
 
 	// EnableHome enables the creation of home directories.
 	EnableHome bool `mapstructure:"enable_home"`
-
-	// SecProtocol specifies the xrootd security protocol to use between the server and EOS.
-	SecProtocol string `mapstructure:"sec_protocol"`
-
-	// Keytab specifies the location of the keytab to use to authenticate to EOS.
-	Keytab string `mapstructure:"keytab"`
-
-	// SingleUsername is the username to use when SingleUserMode is enabled
-	SingleUsername string `mapstructure:"single_username"`
-
-	// Layout
-	Layout string `mapstructure:"layout"`
 }
 
 func getUser(ctx context.Context) (*userpb.User, error) {
@@ -159,10 +159,6 @@ func (c *config) init() {
 	if c.CacheDirectory == "" {
 		c.CacheDirectory = os.TempDir()
 	}
-
-	if c.Layout == "" {
-		c.Layout = "{{.Username}}"
-	}
 }
 
 // New returns a new implementation of the storage.FS interface that connects to EOS.
@@ -196,23 +192,11 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	eosClient := eosclient.New(eosClientOpts)
 
 	eosStorage := &eosStorage{
-		c:             eosClient,
-		mountpoint:    c.Namespace,
-		showHiddenSys: c.ShowHiddenSysFiles,
-		conf:          c,
+		c:    eosClient,
+		conf: c,
 	}
 
 	return eosStorage, nil
-}
-
-func (fs *eosStorage) getHomeForUser(u *userpb.User) (string, error) {
-	userhome, err := helper.GetUserHomePath(u, fs.conf.Layout)
-	if err != nil {
-		return "", err
-	}
-
-	home := path.Join(fs.mountpoint, userhome)
-	return home, nil
 }
 
 func (fs *eosStorage) Shutdown(ctx context.Context) error {
@@ -220,18 +204,38 @@ func (fs *eosStorage) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (fs *eosStorage) getInternalPath(ctx context.Context, fn string) string {
-	internalPath := path.Join(fs.mountpoint, fn)
-	return internalPath
+func (fs *eosStorage) wrap(ctx context.Context, fn string) (internal string) {
+	if fs.conf.EnableHome && fs.conf.UserLayout != "" {
+		u, err := getUser(ctx)
+		if err != nil {
+			err = errors.Wrap(err, "eos: wrap: no user in ctx and home is enabled")
+			panic(err)
+		}
+		layout := templates.WithUser(u, fs.conf.UserLayout)
+		internal = path.Join(fs.conf.Namespace, layout, fn)
+	} else {
+		internal = path.Join(fs.conf.Namespace, fn)
+	}
+	return
 }
 
-func (fs *eosStorage) removeNamespace(ctx context.Context, np string) string {
-	p := strings.TrimPrefix(np, fs.mountpoint)
-	if p == "" {
-		p = "/"
+func (fs *eosStorage) unwrap(ctx context.Context, np string) (external string) {
+	if fs.conf.EnableHome && fs.conf.UserLayout != "" {
+		u, err := getUser(ctx)
+		if err != nil {
+			err = errors.Wrap(err, "eos: unwrap: no user in ctx and home is enabled")
+			panic(err)
+		}
+		layout := templates.WithUser(u, fs.conf.UserLayout)
+		trim := path.Join(fs.conf.Namespace, layout)
+		external = strings.TrimPrefix(np, trim)
+	} else {
+		external = strings.TrimPrefix(np, fs.conf.Namespace)
+		if external == "" {
+			external = "/"
+		}
 	}
-
-	return p
+	return
 }
 
 func (fs *eosStorage) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
@@ -259,7 +263,7 @@ func (fs *eosStorage) GetPathByID(ctx context.Context, id *provider.ResourceId) 
 // resolve takes in a request path or request id and converts it to a internal path.
 func (fs *eosStorage) resolve(ctx context.Context, u *userpb.User, ref *provider.Reference) (string, error) {
 	if ref.GetPath() != "" {
-		return fs.getInternalPath(ctx, ref.GetPath()), nil
+		return fs.wrap(ctx, ref.GetPath()), nil
 	}
 
 	if ref.GetId() != nil {
@@ -556,7 +560,7 @@ func (fs *eosStorage) ListFolder(ctx context.Context, ref *provider.Reference) (
 	finfos := []*provider.ResourceInfo{}
 	for _, eosFileInfo := range eosFileInfos {
 		// filter out sys files
-		if !fs.showHiddenSys {
+		if !fs.conf.ShowHiddenSysFiles {
 			base := path.Base(eosFileInfo.File)
 			if hiddenReg.MatchString(base) {
 				continue
@@ -577,26 +581,25 @@ func (fs *eosStorage) GetQuota(ctx context.Context) (int, int, error) {
 }
 
 func (fs *eosStorage) GetHome(ctx context.Context) (string, error) {
-	u, err := getUser(ctx)
-	if err != nil {
-		return "", errors.Wrap(err, "eos: no user in ctx")
+	if !fs.conf.EnableHome {
+		return "", errtypes.NotSupported("eos: get home not supported")
 	}
 
-	home, err := fs.getHomeForUser(u)
-	if err != nil {
-		return "", err
-	}
-
+	home := fs.wrap(ctx, "/")
 	return home, nil
 }
 
 func (fs *eosStorage) CreateHome(ctx context.Context) error {
+	if !fs.conf.EnableHome {
+		return errtypes.NotSupported("eos: create home not supported")
+	}
+
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
 	}
 
-	home, err := fs.getHomeForUser(u)
+	home := fs.wrap(ctx, "/")
 	if err != nil {
 		return err
 	}
@@ -665,7 +668,7 @@ func (fs *eosStorage) CreateDir(ctx context.Context, fn string) error {
 		return errors.Wrap(err, "eos: no user in ctx")
 	}
 
-	fn = fs.getInternalPath(ctx, fn)
+	fn = fs.wrap(ctx, fn)
 	return fs.c.CreateDir(ctx, u.Username, fn)
 }
 
@@ -810,7 +813,7 @@ func (fs *eosStorage) DownloadRevision(ctx context.Context, ref *provider.Refere
 		return nil, errors.Wrap(err, "eos: error resolving reference")
 	}
 
-	fn = fs.getInternalPath(ctx, fn)
+	fn = fs.wrap(ctx, fn)
 	return fs.c.ReadVersion(ctx, u.Username, fn, revisionKey)
 }
 
@@ -855,7 +858,7 @@ func (fs *eosStorage) ListRecycle(ctx context.Context) ([]*provider.RecycleItem,
 	}
 	recycleEntries := []*provider.RecycleItem{}
 	for _, entry := range eosDeletedEntries {
-		if !fs.showHiddenSys {
+		if !fs.conf.ShowHiddenSysFiles {
 			base := path.Base(entry.RestorePath)
 			if hiddenReg.MatchString(base) {
 				continue
@@ -878,7 +881,7 @@ func (fs *eosStorage) RestoreRecycleItem(ctx context.Context, key string) error 
 
 func (fs *eosStorage) convertToRecycleItem(ctx context.Context, eosDeletedItem *eosclient.DeletedEntry) *provider.RecycleItem {
 	recycleItem := &provider.RecycleItem{
-		Path:         fs.removeNamespace(ctx, eosDeletedItem.RestorePath),
+		Path:         fs.unwrap(ctx, eosDeletedItem.RestorePath),
 		Key:          eosDeletedItem.RestoreKey,
 		Size:         eosDeletedItem.Size,
 		DeletionTime: &types.Timestamp{Seconds: eosDeletedItem.DeletionMTime / 1000}, // TODO(labkode): check if eos time is millis or nanos
@@ -903,7 +906,7 @@ func (fs *eosStorage) convertToRevision(ctx context.Context, eosFileInfo *eoscli
 }
 
 func (fs *eosStorage) convertToResourceInfo(ctx context.Context, eosFileInfo *eosclient.FileInfo) *provider.ResourceInfo {
-	path := fs.removeNamespace(ctx, eosFileInfo.File)
+	path := fs.unwrap(ctx, eosFileInfo.File)
 	size := eosFileInfo.Size
 	if eosFileInfo.IsDir {
 		size = eosFileInfo.TreeSize
