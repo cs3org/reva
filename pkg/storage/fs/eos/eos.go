@@ -75,9 +75,9 @@ type config struct {
 	// ShadowNamespace for storing shadow data
 	ShadowNamespace string `mapstructure:"shadow_namespace"`
 
-	// ShadowShareFolder defines the name of the folder in the
+	// ShareFolder defines the name of the folder in the
 	// shadowed namespace. Ex: /eos/user/.shadow/h/hugo/MyShares
-	ShadowShareFolder string `mapstructure:"shadown_share_folder"`
+	ShareFolder string `mapstructure:"share_folder"`
 
 	// Location of the eos binary.
 	// Default is /usr/bin/eos.
@@ -151,8 +151,8 @@ func (c *config) init() {
 		c.ShadowNamespace = path.Join(c.Namespace, ".shadow")
 	}
 
-	if c.ShadowShareFolder == "" {
-		c.ShadowShareFolder = path.Join(c.ShadowNamespace, "MyShares")
+	if c.ShareFolder == "" {
+		c.ShareFolder = "MyShares"
 	}
 
 	if c.EosBinary == "" {
@@ -694,7 +694,7 @@ func (fs *eosStorage) createShadowHome(ctx context.Context) error {
 	}
 
 	// create shadow folders
-	shadowFolders := []string{fs.conf.ShadowShareFolder}
+	shadowFolders := []string{fs.conf.ShareFolder}
 	for _, sf := range shadowFolders {
 		sf = path.Join(home, sf)
 		err = fs.c.CreateDir(ctx, "root", sf)
