@@ -57,7 +57,11 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request, ns string) {
 
 	if sRes.Status.Code != rpc.Code_CODE_OK {
 		log.Warn().Str("code", string(sRes.Status.Code)).Msg("grpc request failed")
-		w.WriteHeader(http.StatusInternalServerError)
+		statusCode := http.StatusInternalServerError
+		if sRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			statusCode = http.StatusNotFound
+		}
+		w.WriteHeader(statusCode)
 		return
 	}
 
