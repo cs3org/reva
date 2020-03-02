@@ -1,4 +1,4 @@
-// Copyright 2018-2019 CERN
+// Copyright 2018-2020 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,8 +30,6 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-const defaultHeader = "x-access-token"
-
 func getAuthContext() context.Context {
 	ctx := context.Background()
 	// read token from file
@@ -41,7 +39,7 @@ func getAuthContext() context.Context {
 		return ctx
 	}
 	ctx = token.ContextSetToken(ctx, t)
-	ctx = metadata.AppendToOutgoingContext(ctx, defaultHeader, t)
+	ctx = metadata.AppendToOutgoingContext(ctx, token.TokenHeader, t)
 	return ctx
 }
 

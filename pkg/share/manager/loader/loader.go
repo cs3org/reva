@@ -1,4 +1,4 @@
-// Copyright 2018-2019 CERN
+// Copyright 2018-2020 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ package loader
 
 import (
 	// Load core share manager drivers.
+	_ "github.com/cs3org/reva/pkg/share/manager/json"
 	_ "github.com/cs3org/reva/pkg/share/manager/memory"
 	// Add your own here
 )

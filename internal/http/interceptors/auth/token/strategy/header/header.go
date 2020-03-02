@@ -1,4 +1,4 @@
-// Copyright 2018-2019 CERN
+// Copyright 2018-2020 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,46 +23,20 @@ import (
 
 	"github.com/cs3org/reva/internal/http/interceptors/auth/token/registry"
 	"github.com/cs3org/reva/pkg/auth"
-	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
-)
-
-const (
-	defaultHeader = "X-Access-Token"
+	"github.com/cs3org/reva/pkg/token"
 )
 
 func init() {
 	registry.Register("header", New)
 }
 
-type config struct {
-	Header string `mapstructure:"header"`
-}
 type strategy struct {
 	header string
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
-		return nil, err
-	}
-
-	if c.Header == "" {
-		c.Header = defaultHeader
-	}
-
-	return c, nil
-}
-
 // New returns a new auth strategy that checks for basic auth.
 func New(m map[string]interface{}) (auth.TokenStrategy, error) {
-	conf, err := parseConfig(m)
-	if err != nil {
-		return nil, err
-	}
-	return &strategy{header: conf.Header}, nil
+	return &strategy{header: token.TokenHeader}, nil
 }
 
 func (s *strategy) GetToken(r *http.Request) string {

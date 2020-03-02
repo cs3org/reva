@@ -1,19 +1,13 @@
+[shared]
+jwt_secret = "Pive-Fumkiu4"
+
 # GRPC:
 # - serves user and public link shares
 [grpc]
 address = "0.0.0.0:17000"
-
-[grpc.interceptors.auth]
-token_manager = "jwt"
-skip_methods = [
-	"/cs3.publicshareproviderv0alpha.PublicShareProviderService/GetPublicShareByToken"
-]
 
 [grpc.services.usershareprovider]
 driver = "memory"
 
 [grpc.services.publicshareprovider]
 driver = "memory"
-
-[grpc.interceptors.auth.token_managers.jwt]
-secret = "Pive-Fumkiu4"

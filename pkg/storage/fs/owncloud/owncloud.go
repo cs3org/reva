@@ -1,4 +1,4 @@
-// Copyright 2018-2019 CERN
+// Copyright 2018-2020 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -152,8 +152,8 @@ func init() {
 type config struct {
 	DataDirectory string `mapstructure:"datadirectory"`
 	Scan          bool   `mapstructure:"scan"`
-	Autocreate    bool   `mapstructure:"autocreate"`
 	Redis         string `mapstructure:"redis"`
+	Layout        string `mapstructure:"layout"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -169,13 +169,12 @@ func (c *config) init(m map[string]interface{}) {
 	if c.Redis == "" {
 		c.Redis = ":6379"
 	}
+	if c.Layout == "" {
+		c.Layout = "{{.Username}}"
+	}
 	// default to scanning if not configured
 	if _, ok := m["scan"]; !ok {
 		c.Scan = true
-	}
-	// default to autocreate if not configured
-	if _, ok := m["autocreate"]; !ok {
-		c.Autocreate = true
 	}
 }
 
@@ -218,20 +217,20 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		},
 	}
 
-	return &ocFS{c: c, pool: pool}, nil
+	return &ocfs{c: c, pool: pool}, nil
 }
 
-type ocFS struct {
+type ocfs struct {
 	c    *config
 	pool *redis.Pool
 }
 
-func (fs *ocFS) Shutdown(ctx context.Context) error {
+func (fs *ocfs) Shutdown(ctx context.Context) error {
 	return fs.pool.Close()
 }
 
 // scan files and add uuid to path mapping to kv store
-func (fs *ocFS) scanFiles(ctx context.Context, conn redis.Conn) {
+func (fs *ocfs) scanFiles(ctx context.Context, conn redis.Conn) {
 	if fs.c.Scan {
 		fs.c.Scan = false // TODO ... in progress use mutex ?
 		log := appctx.GetLogger(ctx)
@@ -270,7 +269,7 @@ func (fs *ocFS) scanFiles(ctx context.Context, conn redis.Conn) {
 // the incoming path starts with /<username>, so we need to insert the files subfolder into the path
 // and prefix the datadirectory
 // TODO the path handed to a storage provider should not contain the username
-func (fs *ocFS) getInternalPath(ctx context.Context, fn string) string {
+func (fs *ocfs) wrap(ctx context.Context, fn string) string {
 	// trim all /
 	fn = strings.Trim(fn, "/")
 	// p = "" or
@@ -296,7 +295,7 @@ func (fs *ocFS) getInternalPath(ctx context.Context, fn string) string {
 // the incoming path starts with /<username>, so we need to insert the files subfolder into the path
 // and prefix the datadirectory
 // TODO the path handed to a storage provider should not contain the username
-func (fs *ocFS) getVersionsPath(ctx context.Context, np string) string {
+func (fs *ocfs) getVersionsPath(ctx context.Context, np string) string {
 	// np = /path/to/data/<username>/files/foo/bar.txt
 	// remove data dir
 	if fs.c.DataDirectory != "/" {
@@ -320,7 +319,7 @@ func (fs *ocFS) getVersionsPath(ctx context.Context, np string) string {
 }
 
 // ownloud stores trashed items in the files_trashbin subfolder of a users home
-func (fs *ocFS) getRecyclePath(ctx context.Context) (string, error) {
+func (fs *ocfs) getRecyclePath(ctx context.Context) (string, error) {
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
@@ -329,7 +328,7 @@ func (fs *ocFS) getRecyclePath(ctx context.Context) (string, error) {
 	return path.Join(fs.c.DataDirectory, u.GetUsername(), "files_trashbin/files"), nil
 }
 
-func (fs *ocFS) removeNamespace(ctx context.Context, np string) string {
+func (fs *ocfs) unwrap(ctx context.Context, np string) string {
 	// np = /data/<username>/files/foo/bar.txt
 	// remove data dir
 	if fs.c.DataDirectory != "/" {
@@ -361,9 +360,9 @@ func getOwner(fn string) string {
 	return ""
 }
 
-func (fs *ocFS) convertToResourceInfo(ctx context.Context, fi os.FileInfo, np string, c redis.Conn) *provider.ResourceInfo {
+func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, np string, c redis.Conn) *provider.ResourceInfo {
 	id := readOrCreateID(ctx, np, c)
-	fn := fs.removeNamespace(ctx, path.Join("/", np))
+	fn := fs.unwrap(ctx, path.Join("/", np))
 
 	etag := calcEtag(ctx, fi)
 
@@ -462,30 +461,7 @@ func readOrCreateID(ctx context.Context, np string, conn redis.Conn) string {
 	return uid.String()
 }
 
-func (fs *ocFS) autocreate(ctx context.Context, fsfn string) {
-	if fs.c.Autocreate {
-		parts := strings.SplitN(fsfn, "/files", 2)
-		switch len(parts) {
-		case 1:
-			return // error? there is no files in here ...
-		case 2:
-			if parts[1] == "" {
-				// nothing to do, fsfn is the home
-			} else {
-				// only create home
-				fsfn = path.Join(parts[0], "files")
-			}
-			err := os.MkdirAll(fsfn, 0700)
-			if err != nil {
-				appctx.GetLogger(ctx).Debug().Err(err).
-					Str("fsfn", fsfn).
-					Msg("could not autocreate dir")
-			}
-		}
-	}
-}
-
-func (fs *ocFS) getPath(ctx context.Context, id *provider.ResourceId) (string, error) {
+func (fs *ocfs) getPath(ctx context.Context, id *provider.ResourceId) (string, error) {
 	c := fs.pool.Get()
 	defer c.Close()
 	fs.scanFiles(ctx, c)
@@ -498,18 +474,18 @@ func (fs *ocFS) getPath(ctx context.Context, id *provider.ResourceId) (string, e
 }
 
 // GetPathByID returns the fn pointed by the file id, without the internal namespace
-func (fs *ocFS) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
+func (fs *ocfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
 	np, err := fs.getPath(ctx, id)
 	if err != nil {
 		return "", err
 	}
-	return fs.removeNamespace(ctx, np), nil
+	return fs.unwrap(ctx, np), nil
 }
 
 // resolve takes in a request path or request id and converts it to a internal path.
-func (fs *ocFS) resolve(ctx context.Context, ref *provider.Reference) (string, error) {
+func (fs *ocfs) resolve(ctx context.Context, ref *provider.Reference) (string, error) {
 	if ref.GetPath() != "" {
-		return fs.getInternalPath(ctx, ref.GetPath()), nil
+		return fs.wrap(ctx, ref.GetPath()), nil
 	}
 
 	if ref.GetId() != nil {
@@ -524,10 +500,10 @@ func (fs *ocFS) resolve(ctx context.Context, ref *provider.Reference) (string, e
 	return "", fmt.Errorf("invalid reference %+v", ref)
 }
 
-func (fs *ocFS) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+func (fs *ocfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return errors.Wrap(err, "ocFS: error resolving reference")
+		return errors.Wrap(err, "ocfs: error resolving reference")
 	}
 
 	e, err := fs.getACE(g)
@@ -605,7 +581,7 @@ func getACEPerm(set *provider.ResourcePermissions) (string, error) {
 	return b.String(), nil
 }
 
-func (fs *ocFS) getACE(g *provider.Grant) (*ace, error) {
+func (fs *ocfs) getACE(g *provider.Grant) (*ace, error) {
 	permissions, err := getACEPerm(g.Permissions)
 	if err != nil {
 		return nil, err
@@ -732,11 +708,11 @@ func getACEs(ctx context.Context, fsfn string, attrs []string) (entries []*ace, 
 	return entries, nil
 }
 
-func (fs *ocFS) ListGrants(ctx context.Context, ref *provider.Reference) (grants []*provider.Grant, err error) {
+func (fs *ocfs) ListGrants(ctx context.Context, ref *provider.Reference) (grants []*provider.Grant, err error) {
 	log := appctx.GetLogger(ctx)
 	var np string
 	if np, err = fs.resolve(ctx, ref); err != nil {
-		return nil, errors.Wrap(err, "ocFS: error resolving reference")
+		return nil, errors.Wrap(err, "ocfs: error resolving reference")
 	}
 	var attrs []string
 	if attrs, err = xattr.List(np); err != nil {
@@ -767,14 +743,14 @@ func (fs *ocFS) ListGrants(ctx context.Context, ref *provider.Reference) (grants
 	return grants, nil
 }
 
-func (fs *ocFS) getGranteeType(e *ace) provider.GranteeType {
+func (fs *ocfs) getGranteeType(e *ace) provider.GranteeType {
 	if strings.Contains(e.Flags, "g") {
 		return provider.GranteeType_GRANTEE_TYPE_GROUP
 	}
 	return provider.GranteeType_GRANTEE_TYPE_USER
 }
 
-func (fs *ocFS) getGrantPermissionSet(mode string) *provider.ResourcePermissions {
+func (fs *ocfs) getGrantPermissionSet(mode string) *provider.ResourcePermissions {
 	p := &provider.ResourcePermissions{}
 	// r
 	if strings.Contains(mode, "r") {
@@ -843,11 +819,11 @@ func (fs *ocFS) getGrantPermissionSet(mode string) *provider.ResourcePermissions
 	return p
 }
 
-func (fs *ocFS) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
+func (fs *ocfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
 
 	var np string
 	if np, err = fs.resolve(ctx, ref); err != nil {
-		return errors.Wrap(err, "ocFS: error resolving reference")
+		return errors.Wrap(err, "ocfs: error resolving reference")
 	}
 
 	var attr string
@@ -860,46 +836,69 @@ func (fs *ocFS) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pro
 	return xattr.Remove(np, attr)
 }
 
-func (fs *ocFS) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+func (fs *ocfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	return fs.AddGrant(ctx, ref, g)
 }
 
-func (fs *ocFS) GetQuota(ctx context.Context) (int, int, error) {
+func (fs *ocfs) GetQuota(ctx context.Context) (int, int, error) {
 	return 0, 0, nil
 }
 
-func (fs *ocFS) CreateDir(ctx context.Context, fn string) (err error) {
-	np := fs.getInternalPath(ctx, fn)
+func (fs *ocfs) CreateHome(ctx context.Context) error {
+	home := fs.wrap(ctx, "/")
+
+	homePaths := []string{
+		path.Join(fs.c.DataDirectory, home, "files"),
+		path.Join(fs.c.DataDirectory, home, "files_trashbin"),
+		path.Join(fs.c.DataDirectory, home, "files_versions"),
+	}
+
+	for _, v := range homePaths {
+		if err := os.MkdirAll(v, 0700); err != nil {
+			return errors.Wrap(err, "ocfs: error creating home path: "+v)
+		}
+	}
+
+	return nil
+}
+
+func (fs *ocfs) GetHome(ctx context.Context) (string, error) {
+	home := fs.wrap(ctx, "/")
+	return home, nil
+}
+
+func (fs *ocfs) CreateDir(ctx context.Context, fn string) (err error) {
+	np := fs.wrap(ctx, fn)
 	if err = os.Mkdir(np, 0700); err != nil {
 		if os.IsNotExist(err) {
 			return errtypes.NotFound(fn)
 		}
 		// FIXME we also need already exists error, webdav expects 405 MethodNotAllowed
-		return errors.Wrap(err, "ocFS: error creating dir "+np)
+		return errors.Wrap(err, "ocfs: error creating dir "+np)
 	}
 	return nil
 }
 
-func (fs *ocFS) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
+func (fs *ocfs) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
 	// TODO(jfd): implement
 	return errtypes.NotSupported("owncloud: operation not supported")
 }
 
-func (fs *ocFS) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) (err error) {
+func (fs *ocfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) (err error) {
 	log := appctx.GetLogger(ctx)
 
 	var np string
 	if np, err = fs.resolve(ctx, ref); err != nil {
-		return errors.Wrap(err, "ocFS: error resolving reference")
+		return errors.Wrap(err, "ocfs: error resolving reference")
 	}
 
 	var fi os.FileInfo
 	fi, err = os.Stat(np)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return errtypes.NotFound(fs.removeNamespace(ctx, np))
+			return errtypes.NotFound(fs.unwrap(ctx, np))
 		}
-		return errors.Wrap(err, "ocFS: error stating "+np)
+		return errors.Wrap(err, "ocfs: error stating "+np)
 	}
 
 	errs := []error{}
@@ -1027,20 +1026,20 @@ func parseMTime(v string) (t time.Time, err error) {
 	return time.Unix(sec, nsec), err
 }
 
-func (fs *ocFS) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) (err error) {
+func (fs *ocfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) (err error) {
 	log := appctx.GetLogger(ctx)
 
 	var np string
 	if np, err = fs.resolve(ctx, ref); err != nil {
-		return errors.Wrap(err, "ocFS: error resolving reference")
+		return errors.Wrap(err, "ocfs: error resolving reference")
 	}
 
 	_, err = os.Stat(np)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return errtypes.NotFound(fs.removeNamespace(ctx, np))
+			return errtypes.NotFound(fs.unwrap(ctx, np))
 		}
-		return errors.Wrap(err, "ocFS: error stating "+np)
+		return errors.Wrap(err, "ocfs: error stating "+np)
 	}
 
 	errs := []error{}
@@ -1096,24 +1095,24 @@ func (fs *ocFS) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 }
 
 // Delete is actually only a move to trash
-func (fs *ocFS) Delete(ctx context.Context, ref *provider.Reference) (err error) {
+func (fs *ocfs) Delete(ctx context.Context, ref *provider.Reference) (err error) {
 
 	var np string
 	if np, err = fs.resolve(ctx, ref); err != nil {
-		return errors.Wrap(err, "ocFS: error resolving reference")
+		return errors.Wrap(err, "ocfs: error resolving reference")
 	}
 
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
-		return errors.Wrap(err, "ocFS: error resolving recycle path")
+		return errors.Wrap(err, "ocfs: error resolving recycle path")
 	}
 
 	if err := os.MkdirAll(rp, 0700); err != nil {
-		return errors.Wrap(err, "ocFS: error creating trashbin dir "+rp)
+		return errors.Wrap(err, "ocfs: error creating trashbin dir "+rp)
 	}
 
 	// np is the path on disk ... we need only the path relative to root
-	origin := path.Dir(fs.removeNamespace(ctx, np))
+	origin := path.Dir(fs.unwrap(ctx, np))
 
 	// and we need to get rid of the user prefix
 	parts := strings.SplitN(origin, "/", 3)
@@ -1125,7 +1124,7 @@ func (fs *ocFS) Delete(ctx context.Context, ref *provider.Reference) (err error)
 	case 3:
 		fp = path.Join("/", parts[2])
 	default:
-		return errors.Wrap(err, "ocFS: error creating trashbin dir "+rp)
+		return errors.Wrap(err, "ocfs: error creating trashbin dir "+rp)
 	}
 
 	// set origin location in metadata
@@ -1136,42 +1135,40 @@ func (fs *ocFS) Delete(ctx context.Context, ref *provider.Reference) (err error)
 	// move to trash location
 	tgt := path.Join(rp, fmt.Sprintf("%s.d%d", path.Base(np), time.Now().Unix()))
 	if err := os.Rename(np, tgt); err != nil {
-		return errors.Wrap(err, "ocFS: could not restore item")
+		return errors.Wrap(err, "ocfs: could not restore item")
 	}
 
 	// TODO(jfd) move versions to trash
 	return nil
 }
 
-func (fs *ocFS) Move(ctx context.Context, oldRef, newRef *provider.Reference) (err error) {
+func (fs *ocfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (err error) {
 	var oldName string
 	if oldName, err = fs.resolve(ctx, oldRef); err != nil {
-		return errors.Wrap(err, "ocFS: error resolving reference")
+		return errors.Wrap(err, "ocfs: error resolving reference")
 	}
 	var newName string
 	if newName, err = fs.resolve(ctx, newRef); err != nil {
-		return errors.Wrap(err, "ocFS: error resolving reference")
+		return errors.Wrap(err, "ocfs: error resolving reference")
 	}
 	if err = os.Rename(oldName, newName); err != nil {
-		return errors.Wrap(err, "ocFS: error moving "+oldName+" to "+newName)
+		return errors.Wrap(err, "ocfs: error moving "+oldName+" to "+newName)
 	}
 	return nil
 }
 
-func (fs *ocFS) GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error) {
+func (fs *ocfs) GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error) {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return nil, errors.Wrap(err, "ocFS: error resolving reference")
+		return nil, errors.Wrap(err, "ocfs: error resolving reference")
 	}
-
-	fs.autocreate(ctx, np)
 
 	md, err := os.Stat(np)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, errtypes.NotFound(fs.removeNamespace(ctx, np))
+			return nil, errtypes.NotFound(fs.unwrap(ctx, np))
 		}
-		return nil, errors.Wrap(err, "ocFS: error stating "+np)
+		return nil, errors.Wrap(err, "ocfs: error stating "+np)
 	}
 	c := fs.pool.Get()
 	defer c.Close()
@@ -1180,20 +1177,18 @@ func (fs *ocFS) GetMD(ctx context.Context, ref *provider.Reference) (*provider.R
 	return m, nil
 }
 
-func (fs *ocFS) ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error) {
+func (fs *ocfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error) {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return nil, errors.Wrap(err, "ocFS: error resolving reference")
+		return nil, errors.Wrap(err, "ocfs: error resolving reference")
 	}
-
-	fs.autocreate(ctx, np)
 
 	mds, err := ioutil.ReadDir(np)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, errtypes.NotFound(fs.removeNamespace(ctx, np))
+			return nil, errtypes.NotFound(fs.unwrap(ctx, np))
 		}
-		return nil, errors.Wrap(err, "ocFS: error listing "+np)
+		return nil, errors.Wrap(err, "ocfs: error listing "+np)
 	}
 
 	finfos := make([]*provider.ResourceInfo, 0, len(mds))
@@ -1208,10 +1203,10 @@ func (fs *ocFS) ListFolder(ctx context.Context, ref *provider.Reference) ([]*pro
 	return finfos, nil
 }
 
-func (fs *ocFS) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
+func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return errors.Wrap(err, "ocFS: error resolving reference")
+		return errors.Wrap(err, "ocfs: error resolving reference")
 	}
 
 	// we cannot rely on /tmp as it can live in another partition and we can
@@ -1219,21 +1214,21 @@ func (fs *ocFS) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 	// the file is supposed to be written.
 	tmp, err := ioutil.TempFile(path.Dir(np), "._reva_atomic_upload")
 	if err != nil {
-		return errors.Wrap(err, "ocFS: error creating tmp fn at "+path.Dir(np))
+		return errors.Wrap(err, "ocfs: error creating tmp fn at "+path.Dir(np))
 	}
 	defer os.RemoveAll(tmp.Name())
 
 	_, err = io.Copy(tmp, r)
 	tmp.Close()
 	if err != nil {
-		return errors.Wrap(err, "ocFS: error writing to tmp file "+tmp.Name())
+		return errors.Wrap(err, "ocfs: error writing to tmp file "+tmp.Name())
 	}
 
 	// if destination exists
 	if _, err := os.Stat(np); err == nil {
 		// copy attributes of existing file to tmp file
 		if err := fs.copyMD(np, tmp.Name()); err != nil {
-			return errors.Wrap(err, "ocFS: error copying metadata from "+np+" to "+tmp.Name())
+			return errors.Wrap(err, "ocfs: error copying metadata from "+np+" to "+tmp.Name())
 		}
 		// create revision
 		if err := fs.archiveRevision(ctx, np); err != nil {
@@ -1243,28 +1238,28 @@ func (fs *ocFS) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 
 	// TODO(jfd): make sure rename is atomic, missing fsync ...
 	if err := os.Rename(tmp.Name(), np); err != nil {
-		return errors.Wrap(err, "ocFS: error renaming from "+tmp.Name()+" to "+np)
+		return errors.Wrap(err, "ocfs: error renaming from "+tmp.Name()+" to "+np)
 	}
 
 	return nil
 }
 
-func (fs *ocFS) archiveRevision(ctx context.Context, np string) error {
+func (fs *ocfs) archiveRevision(ctx context.Context, np string) error {
 	// move existing file to versions dir
 	vp := fmt.Sprintf("%s.v%d", fs.getVersionsPath(ctx, np), time.Now().Unix())
 	if err := os.MkdirAll(path.Dir(vp), 0700); err != nil {
-		return errors.Wrap(err, "ocFS: error creating versions dir "+vp)
+		return errors.Wrap(err, "ocfs: error creating versions dir "+vp)
 	}
 
 	// TODO(jfd): make sure rename is atomic, missing fsync ...
 	if err := os.Rename(np, vp); err != nil {
-		return errors.Wrap(err, "ocFS: error renaming from "+np+" to "+vp)
+		return errors.Wrap(err, "ocfs: error renaming from "+np+" to "+vp)
 	}
 
 	return nil
 }
 
-func (fs *ocFS) copyMD(s string, t string) (err error) {
+func (fs *ocfs) copyMD(s string, t string) (err error) {
 	var attrs []string
 	if attrs, err = xattr.List(s); err != nil {
 		return err
@@ -1283,36 +1278,34 @@ func (fs *ocFS) copyMD(s string, t string) (err error) {
 	return nil
 }
 
-func (fs *ocFS) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
+func (fs *ocfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return nil, errors.Wrap(err, "ocFS: error resolving reference")
+		return nil, errors.Wrap(err, "ocfs: error resolving reference")
 	}
 	r, err := os.Open(np)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, errtypes.NotFound(fs.removeNamespace(ctx, np))
+			return nil, errtypes.NotFound(fs.unwrap(ctx, np))
 		}
-		return nil, errors.Wrap(err, "ocFS: error reading "+np)
+		return nil, errors.Wrap(err, "ocfs: error reading "+np)
 	}
 	return r, nil
 }
 
-func (fs *ocFS) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {
+func (fs *ocfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return nil, errors.Wrap(err, "ocFS: error resolving reference")
+		return nil, errors.Wrap(err, "ocfs: error resolving reference")
 	}
 	vp := fs.getVersionsPath(ctx, np)
-
-	fs.autocreate(ctx, vp)
 
 	bn := path.Base(np)
 
 	revisions := []*provider.FileVersion{}
 	mds, err := ioutil.ReadDir(path.Dir(vp))
 	if err != nil {
-		return nil, errors.Wrap(err, "ocFS: error reading"+path.Dir(vp))
+		return nil, errors.Wrap(err, "ocfs: error reading"+path.Dir(vp))
 	}
 	for i := range mds {
 		rev := fs.filterAsRevision(ctx, bn, mds[i])
@@ -1324,7 +1317,7 @@ func (fs *ocFS) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*
 	return revisions, nil
 }
 
-func (fs *ocFS) filterAsRevision(ctx context.Context, bn string, md os.FileInfo) *provider.FileVersion {
+func (fs *ocfs) filterAsRevision(ctx context.Context, bn string, md os.FileInfo) *provider.FileVersion {
 	if strings.HasPrefix(md.Name(), bn) {
 		// versions have filename.ext.v12345678
 		version := md.Name()[len(bn)+2:] // truncate "<base filename>.v" to get version mtime
@@ -1344,14 +1337,14 @@ func (fs *ocFS) filterAsRevision(ctx context.Context, bn string, md os.FileInfo)
 	return nil
 }
 
-func (fs *ocFS) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (io.ReadCloser, error) {
+func (fs *ocfs) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (io.ReadCloser, error) {
 	return nil, errtypes.NotSupported("download revision")
 }
 
-func (fs *ocFS) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) error {
+func (fs *ocfs) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) error {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return errors.Wrap(err, "ocFS: error resolving reference")
+		return errors.Wrap(err, "ocfs: error resolving reference")
 	}
 	vp := fs.getVersionsPath(ctx, np)
 	rp := vp + ".v" + revisionKey
@@ -1389,43 +1382,43 @@ func (fs *ocFS) RestoreRevision(ctx context.Context, ref *provider.Reference, re
 	return err
 }
 
-func (fs *ocFS) PurgeRecycleItem(ctx context.Context, key string) error {
+func (fs *ocfs) PurgeRecycleItem(ctx context.Context, key string) error {
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
-		return errors.Wrap(err, "ocFS: error resolving recycle path")
+		return errors.Wrap(err, "ocfs: error resolving recycle path")
 	}
 	ip := path.Join(rp, path.Clean(key))
 
 	err = os.Remove(ip)
 	if err != nil {
-		return errors.Wrap(err, "ocFS: error deleting recycle item")
+		return errors.Wrap(err, "ocfs: error deleting recycle item")
 	}
 	err = os.RemoveAll(path.Join(path.Dir(rp), "versions", path.Clean(key)))
 	if err != nil {
-		return errors.Wrap(err, "ocFS: error deleting recycle item versions")
+		return errors.Wrap(err, "ocfs: error deleting recycle item versions")
 	}
 	// TODO delete keyfiles, keys, share-keys
 	return nil
 }
 
-func (fs *ocFS) EmptyRecycle(ctx context.Context) error {
+func (fs *ocfs) EmptyRecycle(ctx context.Context) error {
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
-		return errors.Wrap(err, "ocFS: error resolving recycle path")
+		return errors.Wrap(err, "ocfs: error resolving recycle path")
 	}
 	err = os.RemoveAll(rp)
 	if err != nil {
-		return errors.Wrap(err, "ocFS: error deleting recycle files")
+		return errors.Wrap(err, "ocfs: error deleting recycle files")
 	}
 	err = os.RemoveAll(path.Join(path.Dir(rp), "versions"))
 	if err != nil {
-		return errors.Wrap(err, "ocFS: error deleting recycle files versions")
+		return errors.Wrap(err, "ocfs: error deleting recycle files versions")
 	}
 	// TODO delete keyfiles, keys, share-keys ... or just everything?
 	return nil
 }
 
-func (fs *ocFS) convertToRecycleItem(ctx context.Context, rp string, md os.FileInfo) *provider.RecycleItem {
+func (fs *ocfs) convertToRecycleItem(ctx context.Context, rp string, md os.FileInfo) *provider.RecycleItem {
 	// trashbin items have filename.ext.d12345678
 	suffix := path.Ext(md.Name())
 	if len(suffix) == 0 || !strings.HasPrefix(suffix, ".d") {
@@ -1464,10 +1457,10 @@ func (fs *ocFS) convertToRecycleItem(ctx context.Context, rp string, md os.FileI
 	}
 }
 
-func (fs *ocFS) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error) {
+func (fs *ocfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error) {
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, "ocFS: error resolving recycle path")
+		return nil, errors.Wrap(err, "ocfs: error resolving recycle path")
 	}
 
 	// list files folder
@@ -1490,7 +1483,7 @@ func (fs *ocFS) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error
 	return items, nil
 }
 
-func (fs *ocFS) RestoreRecycleItem(ctx context.Context, key string) error {
+func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key string) error {
 	log := appctx.GetLogger(ctx)
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
@@ -1498,7 +1491,7 @@ func (fs *ocFS) RestoreRecycleItem(ctx context.Context, key string) error {
 	}
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
-		return errors.Wrap(err, "ocFS: error resolving recycle path")
+		return errors.Wrap(err, "ocfs: error resolving recycle path")
 	}
 	src := path.Join(rp, path.Clean(key))
 
@@ -1514,11 +1507,11 @@ func (fs *ocFS) RestoreRecycleItem(ctx context.Context, key string) error {
 	} else {
 		origin = path.Clean(string(v))
 	}
-	tgt := path.Join(fs.getInternalPath(ctx, path.Join("/", u.GetUsername(), origin)), strings.TrimSuffix(path.Base(src), suffix))
+	tgt := path.Join(fs.wrap(ctx, path.Join("/", u.GetUsername(), origin)), strings.TrimSuffix(path.Base(src), suffix))
 	// move back to original location
 	if err := os.Rename(src, tgt); err != nil {
 		log.Error().Err(err).Str("path", src).Msg("could not restore item")
-		return errors.Wrap(err, "ocFS: could not restore item")
+		return errors.Wrap(err, "ocfs: could not restore item")
 	}
 	// unset trash origin location in metadata
 	if err := xattr.Remove(tgt, trashOriginPrefix); err != nil {

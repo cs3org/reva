@@ -1,4 +1,4 @@
-// Copyright 2018-2019 CERN
+// Copyright 2018-2020 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -140,8 +140,8 @@ func (s *service) GetHome(ctx context.Context, req *registrypb.GetHomeRequest) (
 	}
 
 	res := &registrypb.GetHomeResponse{
-		Status: status.NewOK(ctx),
-		Path:   p,
+		Status:   status.NewOK(ctx),
+		Provider: p,
 	}
 	return res, nil
 }

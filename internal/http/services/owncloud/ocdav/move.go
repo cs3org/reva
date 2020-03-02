@@ -1,4 +1,4 @@
-// Copyright 2018-2019 CERN
+// Copyright 2018-2020 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -68,7 +68,7 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	urlPath := dstURL.Path
-	baseURI := r.Context().Value("baseuri").(string)
+	baseURI := r.Context().Value(ctxKeyBaseURI).(string)
 	log.Info().Str("url_path", urlPath).Str("base_uri", baseURI).Msg("move urls")
 	// TODO replace with HasPrefix:
 	i := strings.Index(urlPath, baseURI)

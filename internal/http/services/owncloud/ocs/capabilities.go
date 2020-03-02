@@ -1,4 +1,4 @@
-// Copyright 2018-2019 CERN
+// Copyright 2018-2020 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -96,7 +96,7 @@ func (h *CapabilitiesHandler) init(c *Config) {
 		h.c.Capabilities.Checksums = &CapabilitiesChecksums{}
 	}
 	if h.c.Capabilities.Checksums.SupportedTypes == nil {
-		h.c.Capabilities.Checksums.SupportedTypes = []string{"SHA1"}
+		h.c.Capabilities.Checksums.SupportedTypes = []string{"SHA256"}
 	}
 	if h.c.Capabilities.Checksums.PreferredUploadType == "" {
 		h.c.Capabilities.Checksums.PreferredUploadType = "SHA1"

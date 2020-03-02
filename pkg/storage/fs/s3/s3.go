@@ -1,4 +1,4 @@
-// Copyright 2018-2019 CERN
+// Copyright 2018-2020 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -251,6 +251,14 @@ func (fs *s3FS) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 func (fs *s3FS) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
 	// TODO(jfd):implement
 	return errtypes.NotSupported("s3: operation not supported")
+}
+
+func (fs *s3FS) GetHome(ctx context.Context) (string, error) {
+	return "", errtypes.NotSupported("eos: not supported")
+}
+
+func (fs *s3FS) CreateHome(ctx context.Context) error {
+	return errtypes.NotSupported("s3fs: not supported")
 }
 
 func (fs *s3FS) CreateDir(ctx context.Context, fn string) error {

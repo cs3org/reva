@@ -1,4 +1,4 @@
-// Copyright 2018-2019 CERN
+// Copyright 2018-2020 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,7 +34,6 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
-	pwregistry "github.com/cs3org/reva/pkg/storage/pw/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
@@ -46,16 +45,17 @@ func init() {
 }
 
 type config struct {
-	MountPath        string                            `mapstructure:"mount_path"`
-	MountID          string                            `mapstructure:"mount_id"`
-	Driver           string                            `mapstructure:"driver"`
-	Drivers          map[string]map[string]interface{} `mapstructure:"drivers"`
-	PathWrapper      string                            `mapstructure:"path_wrapper"`
-	PathWrappers     map[string]map[string]interface{} `mapstructure:"path_wrappers"`
-	TmpFolder        string                            `mapstructure:"tmp_folder"`
-	DataServerURL    string                            `mapstructure:"data_server_url"`
-	ExposeDataServer bool                              `mapstructure:"expose_data_server"` // if true the client will be able to upload/download directly to it
-	AvailableXS      map[string]uint32                 `mapstructure:"available_checksums"`
+	MountPath          string                            `mapstructure:"mount_path"`
+	MountID            string                            `mapstructure:"mount_id"`
+	Driver             string                            `mapstructure:"driver"`
+	Drivers            map[string]map[string]interface{} `mapstructure:"drivers"`
+	PathWrapper        string                            `mapstructure:"path_wrapper"`
+	PathWrappers       map[string]map[string]interface{} `mapstructure:"path_wrappers"`
+	TmpFolder          string                            `mapstructure:"tmp_folder"`
+	DataServerURL      string                            `mapstructure:"data_server_url"`
+	ExposeDataServer   bool                              `mapstructure:"expose_data_server"` // if true the client will be able to upload/download directly to it
+	EnableHomeCreation bool                              `mapstructure:"enable_home_creation"`
+	AvailableXS        map[string]uint32                 `mapstructure:"available_checksums"`
 }
 
 type service struct {
@@ -111,6 +111,11 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
+	// set sane defaults
+	if len(c.AvailableXS) == 0 {
+		c.AvailableXS = map[string]uint32{"md5": 100, "unset": 1000}
+	}
+
 	// use os temporary folder if empty
 	tmpFolder := c.TmpFolder
 	if tmpFolder == "" {
@@ -125,10 +130,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	mountID := c.MountID
 
 	fs, err := getFS(c)
-	if err != nil {
-		return nil, err
-	}
-	pw, err := getPW(c)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +153,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	service := &service{
 		conf:          c,
 		storage:       fs,
-		pathWrapper:   pw,
 		tmpFolder:     tmpFolder,
 		mountPath:     mountPath,
 		mountID:       mountID,
@@ -280,6 +280,50 @@ func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*p
 		Status: status.NewOK(ctx),
 	}
 	return res, nil
+}
+
+func (s *service) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
+	home, err := s.storage.GetHome(ctx)
+	if err != nil {
+		st := status.NewInternal(ctx, err, "error getting home")
+		return &provider.GetHomeResponse{
+			Status: st,
+		}, nil
+	}
+
+	home = path.Join(s.mountPath, home)
+
+	res := &provider.GetHomeResponse{
+		Status: status.NewOK(ctx),
+		Path:   home,
+	}
+	return res, nil
+}
+
+func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
+	log := appctx.GetLogger(ctx)
+	if !s.conf.EnableHomeCreation {
+		err := errtypes.NotSupported("storageprovider: create home directories not enabled")
+		log.Err(err).Msg("storageprovider: home creation is disabled")
+		st := status.NewUnimplemented(ctx, err, "creating home directories is disabled by configuration")
+		return &provider.CreateHomeResponse{
+			Status: st,
+		}, nil
+
+	}
+	if err := s.storage.CreateHome(ctx); err != nil {
+		st := status.NewInternal(ctx, err, "error creating home")
+		log.Err(err).Msg("storageprovider: error calling CreateHome of storage driver")
+		return &provider.CreateHomeResponse{
+			Status: st,
+		}, nil
+	}
+
+	res := &provider.CreateHomeResponse{
+		Status: status.NewOK(ctx),
+	}
+	return res, nil
+
 }
 
 func (s *service) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
@@ -737,16 +781,6 @@ func getFS(c *config) (storage.FS, error) {
 		return f(c.Drivers[c.Driver])
 	}
 	return nil, fmt.Errorf("driver not found: %s", c.Driver)
-}
-
-func getPW(c *config) (storage.PathWrapper, error) {
-	if c.PathWrapper == "" {
-		return nil, nil
-	}
-	if f, ok := pwregistry.NewFuncs[c.PathWrapper]; ok {
-		return f(c.PathWrappers[c.PathWrapper])
-	}
-	return nil, fmt.Errorf("path wrapper not found: %s", c.Driver)
 }
 
 func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (*provider.Reference, error) {

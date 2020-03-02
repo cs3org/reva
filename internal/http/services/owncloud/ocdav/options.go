@@ -1,4 +1,4 @@
-// Copyright 2018-2019 CERN
+// Copyright 2018-2020 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,13 +27,6 @@ func (s *svc) handleOptions(w http.ResponseWriter, r *http.Request, ns string) {
 	allow += " MOVE, UNLOCK, PROPFIND, MKCOL, REPORT, SEARCH,"
 	allow += " PUT" // TODO(jfd): only for files ... but we cannot create the full path without a user ... which we only have when credentials are sent
 
-	w.Header().Add("Vary", "Origin")
-	w.Header().Add("Vary", "Access-Control-Request-Method")
-	w.Header().Add("Vary", "Access-Control-Request-Headers")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Credentials", "true")
-	w.Header().Set("Access-Control-Allow-Methods", allow)
-	w.Header().Set("Access-Control-Allow-Headers", "Authorization, X-Requested-With, Content-Type, Depth, Ocs-Apirequest, If-Match, If-None-Match, Destination")
 	w.Header().Set("Content-Type", "application/xml")
 	w.Header().Set("Allow", allow)
 	w.Header().Set("DAV", "1, 2")

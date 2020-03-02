@@ -1,4 +1,4 @@
-// Copyright 2018-2019 CERN
+// Copyright 2018-2020 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -65,20 +66,90 @@ func (s *svc) sign(ctx context.Context, target string) (string, error) {
 	return tkn, nil
 }
 
-func (s *svc) GetHome(ctx context.Context, ref *registry.GetHomeRequest) (*registry.GetHomeResponse, error) {
+func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
+	log := appctx.GetLogger(ctx)
+
+	homeReq := &provider.GetHomeRequest{}
+	homeRes, err := s.GetHome(ctx, homeReq)
+	if err != nil {
+		log.Err(err).Msgf("gateway: error calling GetHome")
+		return &provider.CreateHomeResponse{
+			Status: status.NewInternal(ctx, err, "error creating home"),
+		}, nil
+	}
+
+	if homeRes.Status.Code != rpc.Code_CODE_OK {
+		err := status.NewErrorFromCode(homeRes.Status.Code, "gateway")
+		log.Err(err).Msg("gateway: bad grpc code")
+		return &provider.CreateHomeResponse{
+			Status: status.NewInternal(ctx, err, "error calling GetHome"),
+		}, nil
+	}
+
+	c, err := s.findByPath(ctx, homeRes.Path)
+	if err != nil {
+		log.Err(err).Msg("gateway: error finding storage provider")
+		if _, ok := err.(errtypes.IsNotFound); ok {
+			return &provider.CreateHomeResponse{
+				Status: status.NewNotFound(ctx, "storage provider not found"),
+			}, nil
+		}
+		return &provider.CreateHomeResponse{
+			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+		}, nil
+	}
+
+	res, err := c.CreateHome(ctx, req)
+	if err != nil {
+		log.Err(err).Msg("gateway: error creating home on storage provider")
+		return &provider.CreateHomeResponse{
+			Status: status.NewInternal(ctx, err, "error calling CreateHome"),
+		}, nil
+	}
+
+	return res, nil
+
+}
+func (s *svc) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
 	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting storage registry client")
-		return nil, err
+		return &provider.GetHomeResponse{
+			Status: status.NewInternal(ctx, err, "error finding storage registry"),
+		}, nil
 	}
 
 	res, err := c.GetHome(ctx, &registry.GetHomeRequest{})
-
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetHome")
-		return nil, err
+		return &provider.GetHomeResponse{
+			Status: status.NewInternal(ctx, err, "error calling GetHome"),
+		}, nil
 	}
-	return res, nil
+
+	if res.Status.Code != rpc.Code_CODE_OK {
+		err := status.NewErrorFromCode(res.Status.Code, "gateway")
+		return &provider.GetHomeResponse{
+			Status: status.NewInternal(ctx, err, "error calling GetHome"),
+		}, nil
+	}
+
+	storageClient, err := pool.GetStorageProviderServiceClient(res.Provider.Address)
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error getting storage provider client")
+		return &provider.GetHomeResponse{
+			Status: status.NewInternal(ctx, err, "error getting home"),
+		}, nil
+	}
+
+	homeRes, err := storageClient.GetHome(ctx, req)
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error getting GetHome from storage provider")
+		return &provider.GetHomeResponse{
+			Status: status.NewInternal(ctx, err, "error getting home"),
+		}, nil
+	}
+	return homeRes, nil
 }
 
 func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {

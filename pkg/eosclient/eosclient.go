@@ -1,4 +1,4 @@
-// Copyright 2018-2019 CERN
+// Copyright 2018-2020 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -74,7 +74,7 @@ type Attribute struct {
 }
 
 func (a *Attribute) serialize() string {
-	return fmt.Sprintf("%s.%s=%q", a.Type, a.Key, a.Key)
+	return fmt.Sprintf("%s.%s=%s", a.Type, a.Key, a.Val)
 }
 
 func (a *Attribute) isValid() bool {
@@ -200,9 +200,6 @@ func (c *Client) execute(ctx context.Context, cmd *exec.Cmd) (string, string, er
 				err = nil
 			case 2:
 				err = errtypes.NotFound(errBuf.String())
-			case 22:
-				// eos reports back error code 22 when the user is not allowed to enter the instance
-				err = errtypes.NotFound(errBuf.String())
 			}
 		}
 	}
@@ -212,13 +209,14 @@ func (c *Client) execute(ctx context.Context, cmd *exec.Cmd) (string, string, er
 	log.Info().Str("args", args).Str("env", env).Int("exit", exitStatus).Msg("eos cmd")
 
 	if err != nil && exitStatus != 2 { // don't wrap the errtypes.NotFoundError
-		err = errors.Wrap(err, "error while executing command")
+		err = errors.Wrap(err, "eosclient: error while executing command")
 	}
 
 	return outBuf.String(), errBuf.String(), err
 }
 
-// exec executes the command and returns the stdout, stderr and return code
+// exec executes only EOS commands the command and returns the stdout, stderr and return code.
+// execute() executes arbitrary commands.
 func (c *Client) executeEOS(ctx context.Context, cmd *exec.Cmd) (string, string, error) {
 	log := appctx.GetLogger(ctx)
 
@@ -250,7 +248,7 @@ func (c *Client) executeEOS(ctx context.Context, cmd *exec.Cmd) (string, string,
 				err = errtypes.NotFound(errBuf.String())
 			case 22:
 				// eos reports back error code 22 when the user is not allowed to enter the instance
-				err = errtypes.NotFound(errBuf.String())
+				err = errtypes.PermissionDenied(errBuf.String())
 			}
 		}
 	}
@@ -260,7 +258,7 @@ func (c *Client) executeEOS(ctx context.Context, cmd *exec.Cmd) (string, string,
 	log.Info().Str("args", args).Str("env", env).Int("exit", exitStatus).Str("err", errBuf.String()).Msg("eos cmd")
 
 	if err != nil && exitStatus != 2 { // don't wrap the errtypes.NotFoundError
-		err = errors.Wrap(err, "error while executing command")
+		err = errors.Wrap(err, "eosclient: error while executing command")
 	}
 
 	return outBuf.String(), errBuf.String(), err
@@ -274,9 +272,12 @@ func (c *Client) AddACL(ctx context.Context, username, path string, a *acl.Entry
 	}
 
 	// since EOS Citrine ACLs are is stored with uid, we need to convert username to uid
-	a.Qualifier, err = getUID(a.Qualifier)
-	if err != nil {
-		return err
+	// only for users.
+	if a.Type == acl.TypeUser {
+		a.Qualifier, err = getUID(a.Qualifier)
+		if err != nil {
+			return err
+		}
 	}
 	err = acls.SetEntry(a.Type, a.Qualifier, a.Permissions)
 	if err != nil {
@@ -303,12 +304,14 @@ func (c *Client) RemoveACL(ctx context.Context, username, path string, aclType s
 		return err
 	}
 
-	// since EOS Citrine ACLs are is stored with uid, we need to convert username to uid
-	uid, err := getUID(recipient)
-	if err != nil {
-		return err
+	// since EOS Citrine ACLs are stored with uid, we need to convert username to uid
+	if aclType == acl.TypeUser {
+		recipient, err = getUID(recipient)
+		if err != nil {
+			return err
+		}
 	}
-	acls.DeleteEntry(aclType, uid)
+	acls.DeleteEntry(aclType, recipient)
 	sysACL := acls.Serialize()
 
 	// setting of the sys.acl is only possible from root user
@@ -482,6 +485,35 @@ func (c *Client) Touch(ctx context.Context, username, path string) error {
 	return err
 }
 
+// Chown given path
+func (c *Client) Chown(ctx context.Context, username, chownUser, path string) error {
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return err
+	}
+
+	unixChownUser, err := c.getUnixUser(chownUser)
+	if err != nil {
+		return err
+	}
+
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "chown", unixChownUser.Uid+":"+unixChownUser.Gid, path)
+	_, _, err = c.executeEOS(ctx, cmd)
+	return err
+}
+
+// Chmod given path
+func (c *Client) Chmod(ctx context.Context, username, mode, path string) error {
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return err
+	}
+
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "chmod", mode, path)
+	_, _, err = c.executeEOS(ctx, cmd)
+	return err
+}
+
 // CreateDir creates a directory at the given path
 func (c *Client) CreateDir(ctx context.Context, username, path string) error {
 	unixUser, err := c.getUnixUser(username)
@@ -489,7 +521,7 @@ func (c *Client) CreateDir(ctx context.Context, username, path string) error {
 		return err
 	}
 
-	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "mkdir", path)
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "mkdir", "-p", path)
 	_, _, err = c.executeEOS(ctx, cmd)
 	return err
 }
@@ -525,7 +557,7 @@ func (c *Client) List(ctx context.Context, username, path string) ([]*FileInfo, 
 	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "find", "--fileinfo", "--maxdepth", "1", path)
 	stdout, _, err := c.executeEOS(ctx, cmd)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error listing fn=%s", path)
+		return nil, errors.Wrapf(err, "eosclient: error listing fn=%s", path)
 	}
 	return c.parseFind(path, stdout)
 }

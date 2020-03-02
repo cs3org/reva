@@ -1,4 +1,4 @@
-// Copyright 2018-2019 CERN
+// Copyright 2018-2020 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -68,9 +68,6 @@ func (rt ResourceType) String() (s string) {
 	}
 	return
 }
-
-// Permissions reflects the CRUD permissions used in the OCS sharing API
-type Permissions uint
 
 // ShareType denotes a type of share
 type ShareType int
@@ -345,21 +342,6 @@ func GetPublicShareManager(manager string, m map[string]map[string]interface{}) 
 	return nil, fmt.Errorf("driver %s not found for public shares manager", manager)
 }
 
-// Permissions2Role performs permission conversions
-func Permissions2Role(p int) string {
-	role := RoleLegacy
-	if p == int(PermissionRead) {
-		role = RoleViewer
-	}
-	if p&int(PermissionWrite) == 1 {
-		role = RoleEditor
-	}
-	if p&int(PermissionShare) == 1 {
-		role = RoleCoowner
-	}
-	return role
-}
-
 func publicSharePermissions2OCSPermissions(sp *link.PublicSharePermissions) Permissions {
 	if sp != nil {
 		return permissions2OCSPermissions(sp.GetPermissions())
@@ -405,21 +387,4 @@ const (
 	RoleEditor string = "editor"
 	// RoleCoowner grants owner permissions on a resource
 	RoleCoowner string = "coowner"
-)
-
-const (
-	// PermissionInvalid grants no permissions on a resource
-	PermissionInvalid Permissions = 0
-	// PermissionRead grants read permissions on a resource
-	PermissionRead Permissions = 1
-	// PermissionWrite grants write permissions on a resource
-	PermissionWrite Permissions = 2
-	// PermissionCreate grants create permissions on a resource
-	PermissionCreate Permissions = 4
-	// PermissionDelete grants delete permissions on a resource
-	PermissionDelete Permissions = 8
-	// PermissionShare grants share permissions on a resource
-	PermissionShare Permissions = 16
-	// PermissionAll grants all permissions on a resource
-	//PermissionAll     Permissions = 31
 )

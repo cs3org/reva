@@ -1,4 +1,4 @@
-// Copyright 2018-2019 CERN
+// Copyright 2018-2020 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,7 +32,6 @@ import (
 	_ "github.com/cs3org/reva/pkg/publicshare/manager/loader"
 	_ "github.com/cs3org/reva/pkg/share/manager/loader"
 	_ "github.com/cs3org/reva/pkg/storage/fs/loader"
-	_ "github.com/cs3org/reva/pkg/storage/pw/loader"
 	_ "github.com/cs3org/reva/pkg/storage/registry/loader"
 	_ "github.com/cs3org/reva/pkg/token/manager/loader"
 	_ "github.com/cs3org/reva/pkg/user/manager/loader"

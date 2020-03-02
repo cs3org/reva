@@ -1,4 +1,4 @@
-// Copyright 2018-2019 CERN
+// Copyright 2018-2020 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -44,6 +45,7 @@ import (
 
 // Run runs a reva server with the given config file and pid file.
 func Run(mainConf map[string]interface{}, pidFile string) {
+	parseSharedConfOrDie(mainConf["shared"])
 	coreConf := parseCoreConfOrDie(mainConf["core"])
 	logConf := parseLogConfOrDie(mainConf["log"])
 
@@ -331,6 +333,13 @@ func parseCoreConfOrDie(v interface{}) *coreConf {
 		os.Exit(1)
 	}
 	return c
+}
+
+func parseSharedConfOrDie(v interface{}) {
+	if err := sharedconf.Decode(v); err != nil {
+		fmt.Fprintf(os.Stderr, "error decoding shared config: %s\n", err.Error())
+		os.Exit(1)
+	}
 }
 
 func parseLogConfOrDie(v interface{}) *logConf {

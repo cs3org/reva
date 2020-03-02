@@ -1,4 +1,4 @@
-// Copyright 2018-2019 CERN
+// Copyright 2018-2020 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,6 +29,8 @@ import (
 
 // FS is the interface to implement access to the storage.
 type FS interface {
+	GetHome(ctx context.Context) (string, error)
+	CreateHome(ctx context.Context) error
 	CreateDir(ctx context.Context, fn string) error
 	Delete(ctx context.Context, ref *provider.Reference) error
 	Move(ctx context.Context, oldRef, newRef *provider.Reference) error
@@ -60,7 +62,7 @@ type FS interface {
 type Registry interface {
 	FindProvider(ctx context.Context, ref *provider.Reference) (*registry.ProviderInfo, error)
 	ListProviders(ctx context.Context) ([]*registry.ProviderInfo, error)
-	GetHome(ctx context.Context) (string, error)
+	GetHome(ctx context.Context) (*registry.ProviderInfo, error)
 }
 
 // PathWrapper is the interface to implement for path transformations

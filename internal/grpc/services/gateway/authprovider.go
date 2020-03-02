@@ -1,4 +1,4 @@
-// Copyright 2018-2019 CERN
+// Copyright 2018-2020 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,11 +25,14 @@ import (
 	registry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	tokenpkg "github.com/cs3org/reva/pkg/token"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc/metadata"
 )
 
 func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest) (*gateway.AuthenticateResponse, error) {
@@ -82,39 +85,6 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		}, nil
 	}
 
-	// TODO(labkode): we don't ned to call the user manager in the auth phase
-	// as the auth must provide a valid user. The mapping between user credentials and
-	// unique claims is done at the Authenticate logic an not here.
-	/*
-		userClient, err := pool.GetUserProviderServiceClient(s.c.UserProviderEndpoint)
-		if err != nil {
-			log.Err(err).Msg("error getting user provider client")
-			return &gateway.AuthenticateResponse{
-				Status: status.NewInternal(ctx, err, "error getting user provider service client"),
-			}, nil
-		}
-
-		getUserReq := &user.GetUserRequest{
-			UserId: uid,
-		}
-
-		getUserRes, err := userClient.GetUser(ctx, getUserReq)
-		if err != nil {
-			err = errors.Wrap(err, "authsvc: error in GetUser")
-			res := &gateway.AuthenticateResponse{
-				Status: status.NewUnauthenticated(ctx, err, "error getting user information"),
-			}
-			return res, nil
-		}
-
-		if getUserRes.Status.Code != rpc.Code_CODE_OK {
-			err := status.NewErrorFromCode(getUserRes.Status.Code, "authsvc")
-			return &gateway.AuthenticateResponse{
-				Status: status.NewUnauthenticated(ctx, err, "error getting user information"),
-			}, nil
-		}
-
-	*/
 	user := res.User
 
 	token, err := s.tokenmgr.MintToken(ctx, user)
@@ -124,6 +94,38 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 			Status: status.NewUnauthenticated(ctx, err, "error creating access token"),
 		}
 		return res, nil
+	}
+
+	if s.c.DisableHomeCreationOnLogin {
+		gwRes := &gateway.AuthenticateResponse{
+			Status: status.NewOK(ctx),
+			User:   res.User,
+			Token:  token,
+		}
+		return gwRes, nil
+	}
+
+	// we need to pass the token to authenticate the CreateHome request.
+	// TODO(labkode): appending to existing context will not pass the token.
+	ctx = tokenpkg.ContextSetToken(ctx, token)
+	ctx = metadata.AppendToOutgoingContext(ctx, tokenpkg.TokenHeader, token) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
+
+	// create home directory
+	createHomeReq := &storageprovider.CreateHomeRequest{}
+	createHomeRes, err := s.CreateHome(ctx, createHomeReq)
+	if err != nil {
+		log.Err(err).Msg("error calling CreateHome")
+		return &gateway.AuthenticateResponse{
+			Status: status.NewInternal(ctx, err, "error creating user home"),
+		}, nil
+	}
+
+	if createHomeRes.Status.Code != rpc.Code_CODE_OK {
+		err := status.NewErrorFromCode(createHomeRes.Status.Code, "gateway")
+		log.Err(err).Msg("error calling Createhome")
+		return &gateway.AuthenticateResponse{
+			Status: status.NewInternal(ctx, err, "error creating user home"),
+		}, nil
 	}
 
 	gwRes := &gateway.AuthenticateResponse{

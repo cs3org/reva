@@ -1,4 +1,4 @@
-// Copyright 2018-2019 CERN
+// Copyright 2018-2020 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -77,10 +77,6 @@ func readConfig() (*config, error) {
 }
 
 func writeConfig(c *config) error {
-	if c.AuthHeader == "" {
-		c.AuthHeader = "x-access-token"
-	}
-
 	data, err := json.Marshal(c)
 	if err != nil {
 		return err
@@ -89,8 +85,7 @@ func writeConfig(c *config) error {
 }
 
 type config struct {
-	Host       string `json:"host"`
-	AuthHeader string `json:"auth_header"`
+	Host string `json:"host"`
 }
 
 func read(r *bufio.Reader) (string, error) {

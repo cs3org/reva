@@ -1,5 +1,5 @@
 .PHONY: build
-default: build test lint vendor contrib
+default: build test lint contrib
 
 BUILD_DATE=`date +%FT%T%z`
 GIT_COMMIT=`git rev-parse --short HEAD`
@@ -20,26 +20,24 @@ imports: off
 	`go env GOPATH`/bin/goimports -w tools pkg internal cmd
 
 build: imports
-	go build -mod=vendor -o ./cmd/revad/revad ./cmd/revad
-	go build -mod=vendor -o ./cmd/reva/reva ./cmd/reva
+	go build -o ./cmd/revad/revad ./cmd/revad
+	go build -o ./cmd/reva/reva ./cmd/reva
 
 tidy:
 	go mod tidy
 
 build-revad: imports
-	go build -mod=vendor -o ./cmd/revad/revad ./cmd/revad
+	go build -o ./cmd/revad/revad ./cmd/revad
 
 build-reva: imports
-	go build -mod=vendor -o ./cmd/reva/reva ./cmd/reva
+	go build -o ./cmd/reva/reva ./cmd/reva
 
 test: off
-	go test -mod=vendor -race ./...
+	go test -race ./...
 
 lint:
 	go run tools/check-license/check-license.go
 	`go env GOPATH`/bin/golangci-lint run
-vendor:
-	go mod vendor
 
 contrib:
 	git shortlog -se | cut -c8- | sort -u | awk '{print "-", $$0}' | grep -v 'users.noreply.github.com' > CONTRIBUTORS.md
@@ -50,8 +48,8 @@ deps:
 	cd /tmp && go get golang.org/x/tools/cmd/goimports
 
 build-ci: off
-	go build -mod=vendor -o ./cmd/revad/revad ./cmd/revad
-	go build -mod=vendor -o ./cmd/reva/reva ./cmd/reva
+	go build -o ./cmd/revad/revad ./cmd/revad
+	go build -o ./cmd/reva/reva ./cmd/reva
 
 lint-ci:
 	go run tools/check-license/check-license.go
@@ -62,9 +60,9 @@ ci: build-ci test  lint-ci
 
 # to be run in Docker build
 build-revad-docker: off
-	go build -mod=vendor -o ./cmd/revad/revad ./cmd/revad
+	go build -o ./cmd/revad/revad ./cmd/revad
 build-reva-docker: off
-	go build -mod=vendor -o ./cmd/revad/reva ./cmd/reva
+	go build -o ./cmd/revad/reva ./cmd/reva
 clean:
 	rm -rf dist
 

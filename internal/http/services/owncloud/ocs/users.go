@@ -1,4 +1,4 @@
-// Copyright 2018-2019 CERN
+// Copyright 2018-2020 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -65,10 +65,13 @@ func (h *UsersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			DisplayName: u.DisplayName,
 			Email:       u.Mail,
 		})
+		return
 	case "groups":
 		WriteOCSSuccess(w, r, &GroupsData{})
+		return
 	default:
 		WriteOCSError(w, r, MetaNotFound.StatusCode, "Not found", nil)
+		return
 	}
 
 }

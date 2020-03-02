@@ -1,4 +1,4 @@
-// Copyright 2018-2019 CERN
+// Copyright 2018-2020 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -167,6 +167,14 @@ func (fs *localFS) SetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 
 func (fs *localFS) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error {
 	return errtypes.NotSupported("local: operation not supported")
+}
+
+func (fs *localFS) GetHome(ctx context.Context) (string, error) {
+	return "", errtypes.NotSupported("local: creating home not supported")
+}
+
+func (fs *localFS) CreateHome(ctx context.Context) error {
+	return errtypes.NotSupported("local: creating home not supported")
 }
 
 func (fs *localFS) CreateDir(ctx context.Context, fn string) error {

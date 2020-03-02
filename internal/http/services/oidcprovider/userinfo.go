@@ -1,4 +1,4 @@
-// Copyright 2018-2019 CERN
+// Copyright 2018-2020 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -58,7 +58,7 @@ func (s *svc) doUserinfo(w http.ResponseWriter, r *http.Request) {
 
 	internalToken := session.internalToken // To include in the context.
 	ctx = token.ContextSetToken(ctx, internalToken)
-	ctx = metadata.AppendToOutgoingContext(ctx, "x-access-token", internalToken) // TODO(labkode): this sucks.
+	ctx = metadata.AppendToOutgoingContext(ctx, token.TokenHeader, internalToken) // TODO(labkode): this sucks.
 	sub := session.GetSubject()
 
 	fmt.Printf("internal token: %s subject: %s session:%+v", internalToken, sub, session)
