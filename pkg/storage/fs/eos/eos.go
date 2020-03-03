@@ -54,7 +54,7 @@ func init() {
 
 var hiddenReg = regexp.MustCompile(`\.sys\..#.`)
 
-type eosStorage struct {
+type eosfs struct {
 	c    *eosclient.Client
 	conf *config
 }
@@ -152,8 +152,10 @@ func (c *config) init() {
 	}
 
 	if c.ShareFolder == "" {
-		c.ShareFolder = "MyShares"
+		c.ShareFolder = "/MyShares"
 	}
+	// ensure share folder always starts with slash
+	c.ShareFolder = path.Join("/", c.ShareFolder)
 
 	if c.EosBinary == "" {
 		c.EosBinary = "/usr/bin/eos"
@@ -206,20 +208,20 @@ func New(m map[string]interface{}) (storage.FS, error) {
 
 	eosClient := eosclient.New(eosClientOpts)
 
-	eosStorage := &eosStorage{
+	eosfs := &eosfs{
 		c:    eosClient,
 		conf: c,
 	}
 
-	return eosStorage, nil
+	return eosfs, nil
 }
 
-func (fs *eosStorage) Shutdown(ctx context.Context) error {
+func (fs *eosfs) Shutdown(ctx context.Context) error {
 	// TODO(labkode): in a grpc implementation we can close connections.
 	return nil
 }
 
-func (fs *eosStorage) wrapShadow(ctx context.Context, fn string) (internal string) {
+func (fs *eosfs) wrapShadow(ctx context.Context, fn string) (internal string) {
 	if fs.conf.EnableHome && fs.conf.UserLayout != "" {
 		u, err := getUser(ctx)
 		if err != nil {
@@ -234,7 +236,7 @@ func (fs *eosStorage) wrapShadow(ctx context.Context, fn string) (internal strin
 	return
 }
 
-func (fs *eosStorage) wrap(ctx context.Context, fn string) (internal string) {
+func (fs *eosfs) wrap(ctx context.Context, fn string) (internal string) {
 	if fs.conf.EnableHome && fs.conf.UserLayout != "" {
 		u, err := getUser(ctx)
 		if err != nil {
@@ -249,7 +251,7 @@ func (fs *eosStorage) wrap(ctx context.Context, fn string) (internal string) {
 	return
 }
 
-func (fs *eosStorage) unwrapShadow(ctx context.Context, np string) (external string) {
+func (fs *eosfs) unwrapShadow(ctx context.Context, np string) (external string) {
 	if fs.conf.EnableHome && fs.conf.UserLayout != "" {
 		u, err := getUser(ctx)
 		if err != nil {
@@ -268,7 +270,7 @@ func (fs *eosStorage) unwrapShadow(ctx context.Context, np string) (external str
 	return
 }
 
-func (fs *eosStorage) unwrap(ctx context.Context, np string) (external string) {
+func (fs *eosfs) unwrap(ctx context.Context, np string) (external string) {
 	if fs.conf.EnableHome && fs.conf.UserLayout != "" {
 		u, err := getUser(ctx)
 		if err != nil {
@@ -287,7 +289,7 @@ func (fs *eosStorage) unwrap(ctx context.Context, np string) (external string) {
 	return
 }
 
-func (fs *eosStorage) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
+func (fs *eosfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return "", errors.Wrap(err, "eos: no user in ctx")
@@ -310,7 +312,7 @@ func (fs *eosStorage) GetPathByID(ctx context.Context, id *provider.ResourceId) 
 }
 
 // resolve takes in a request path or request id and returns the unwrapped path.
-func (fs *eosStorage) resolve(ctx context.Context, u *userpb.User, ref *provider.Reference) (string, error) {
+func (fs *eosfs) resolve(ctx context.Context, u *userpb.User, ref *provider.Reference) (string, error) {
 	if ref.GetPath() != "" {
 		return ref.GetPath(), nil
 	}
@@ -327,7 +329,7 @@ func (fs *eosStorage) resolve(ctx context.Context, u *userpb.User, ref *provider
 	return "", fmt.Errorf("invalid reference %+v. id and path are missing", ref)
 }
 
-func (fs *eosStorage) getPath(ctx context.Context, u *userpb.User, id *provider.ResourceId) (string, error) {
+func (fs *eosfs) getPath(ctx context.Context, u *userpb.User, id *provider.ResourceId) (string, error) {
 	fid, err := strconv.ParseUint(id.OpaqueId, 10, 64)
 	if err != nil {
 		return "", fmt.Errorf("error converting string to int for eos fileid: %s", id.OpaqueId)
@@ -352,7 +354,7 @@ func (fs *eosStorage) getPath(ctx context.Context, u *userpb.User, id *provider.
 		eosFileInfo.File))
 }
 
-func (fs *eosStorage) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
@@ -415,7 +417,7 @@ func getEosACLPerm(set *provider.ResourcePermissions) (string, error) {
 	return b.String(), nil
 }
 
-func (fs *eosStorage) getEosACL(g *provider.Grant) (*acl.Entry, error) {
+func (fs *eosfs) getEosACL(g *provider.Grant) (*acl.Entry, error) {
 	permissions, err := getEosACLPerm(g.Permissions)
 	if err != nil {
 		return nil, err
@@ -432,15 +434,15 @@ func (fs *eosStorage) getEosACL(g *provider.Grant) (*acl.Entry, error) {
 	return eosACL, nil
 }
 
-func (fs *eosStorage) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
+func (fs *eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
 	return errtypes.NotSupported("eos: operation not supported")
 }
 
-func (fs *eosStorage) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error {
+func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error {
 	return errtypes.NotSupported("eos: operation not supported")
 }
 
-func (fs *eosStorage) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+func (fs *eosfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
@@ -465,7 +467,7 @@ func (fs *eosStorage) RemoveGrant(ctx context.Context, ref *provider.Reference, 
 	return nil
 }
 
-func (fs *eosStorage) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+func (fs *eosfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
@@ -489,7 +491,7 @@ func (fs *eosStorage) UpdateGrant(ctx context.Context, ref *provider.Reference, 
 	return nil
 }
 
-func (fs *eosStorage) ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error) {
+func (fs *eosfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, err
@@ -521,7 +523,7 @@ func (fs *eosStorage) ListGrants(ctx context.Context, ref *provider.Reference) (
 	return grants, nil
 }
 
-func (fs *eosStorage) getGranteeType(aclType string) provider.GranteeType {
+func (fs *eosfs) getGranteeType(aclType string) provider.GranteeType {
 	switch aclType {
 	case "u":
 		return provider.GranteeType_GRANTEE_TYPE_USER
@@ -537,7 +539,7 @@ func (fs *eosStorage) getGranteeType(aclType string) provider.GranteeType {
 // https://github.com/cern-eos/eos/blob/master/doc/configuration/permission.rst
 // TODO we need to evaluate all acls in the list at once to properly forbid (!) and overwrite (+) permissions
 // This is ugly, because those are actually negative permissions ...
-func (fs *eosStorage) getGrantPermissionSet(mode string) *provider.ResourcePermissions {
+func (fs *eosfs) getGrantPermissionSet(mode string) *provider.ResourcePermissions {
 
 	// TODO also check unix permissions for read access
 	p := &provider.ResourcePermissions{}
@@ -591,7 +593,7 @@ func (fs *eosStorage) getGrantPermissionSet(mode string) *provider.ResourcePermi
 	return p
 }
 
-func (fs *eosStorage) GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error) {
+func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, err
@@ -611,7 +613,7 @@ func (fs *eosStorage) GetMD(ctx context.Context, ref *provider.Reference) (*prov
 	return fi, nil
 }
 
-func (fs *eosStorage) ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error) {
+func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: no user in ctx")
@@ -643,7 +645,7 @@ func (fs *eosStorage) ListFolder(ctx context.Context, ref *provider.Reference) (
 	return finfos, nil
 }
 
-func (fs *eosStorage) GetQuota(ctx context.Context) (int, int, error) {
+func (fs *eosfs) GetQuota(ctx context.Context) (int, int, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return 0, 0, errors.Wrap(err, "eos: no user in ctx")
@@ -651,7 +653,7 @@ func (fs *eosStorage) GetQuota(ctx context.Context) (int, int, error) {
 	return fs.c.GetQuota(ctx, u.Username, fs.conf.Namespace)
 }
 
-func (fs *eosStorage) GetHome(ctx context.Context) (string, error) {
+func (fs *eosfs) GetHome(ctx context.Context) (string, error) {
 	if !fs.conf.EnableHome {
 		return "", errtypes.NotSupported("eos: get home not supported")
 	}
@@ -660,7 +662,7 @@ func (fs *eosStorage) GetHome(ctx context.Context) (string, error) {
 	return home, nil
 }
 
-func (fs *eosStorage) createShadowHome(ctx context.Context) error {
+func (fs *eosfs) createShadowHome(ctx context.Context) error {
 	home := fs.wrapShadow(ctx, "/")
 	_, err := fs.c.GetFileInfoByPath(ctx, "root", home)
 	if err == nil { // home already exists
@@ -730,7 +732,7 @@ func (fs *eosStorage) createShadowHome(ctx context.Context) error {
 	return nil
 }
 
-func (fs *eosStorage) createNominalHome(ctx context.Context) error {
+func (fs *eosfs) createNominalHome(ctx context.Context) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
@@ -796,7 +798,7 @@ func (fs *eosStorage) createNominalHome(ctx context.Context) error {
 	return nil
 }
 
-func (fs *eosStorage) CreateHome(ctx context.Context) error {
+func (fs *eosfs) CreateHome(ctx context.Context) error {
 	if !fs.conf.EnableHome {
 		return errtypes.NotSupported("eos: create home not supported")
 	}
@@ -812,20 +814,48 @@ func (fs *eosStorage) CreateHome(ctx context.Context) error {
 	return nil
 }
 
-func (fs *eosStorage) CreateDir(ctx context.Context, fn string) error {
+func (fs *eosfs) CreateDir(ctx context.Context, p string) error {
+	log := appctx.GetLogger(ctx)
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
 	}
 
-	fn = fs.wrap(ctx, fn)
+	log.Info().Msgf("eos: createdir: path=%s", p)
+
+	if fs.isShareFolder(ctx, p) {
+		return errtypes.PermissionDenied("eos: cannot create folder under the share folder")
+	}
+
+	fn := fs.wrap(ctx, p)
 	return fs.c.CreateDir(ctx, u.Username, fn)
 }
 
-func (fs *eosStorage) CreateReference(ctx context.Context, p string, targetURI *url.URL) error {
+func (fs *eosfs) isShareFolder(ctx context.Context, p string) bool {
+	return strings.HasPrefix(p, fs.conf.ShareFolder)
+}
+
+func (fs *eosfs) isShareFolderRoot(ctx context.Context, p string) bool {
+	return path.Clean(p) == fs.conf.ShareFolder
+}
+
+func (fs *eosfs) isShareFolderChild(ctx context.Context, p string) bool {
+	p = path.Clean(p)
+	vals := strings.Split(p, fs.conf.ShareFolder+"/")
+	return len(vals) > 1 && vals[1] != ""
+}
+
+func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.URL) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
+	}
+
+	// TODO(labkode): for the time being we only allow to create references
+	// on the virtual share folder to not pollute the nominal user tree.
+
+	if !fs.isShareFolder(ctx, p) {
+		return errtypes.PermissionDenied("eos: cannot create references outside the shadow namespace: shadow=" + fs.conf.ShadowNamespace + " path=" + p)
 	}
 
 	fn := fs.wrap(ctx, p)
@@ -860,7 +890,7 @@ func (fs *eosStorage) CreateReference(ctx context.Context, p string, targetURI *
 	return nil
 }
 
-func (fs *eosStorage) Delete(ctx context.Context, ref *provider.Reference) error {
+func (fs *eosfs) Delete(ctx context.Context, ref *provider.Reference) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
@@ -870,12 +900,34 @@ func (fs *eosStorage) Delete(ctx context.Context, ref *provider.Reference) error
 	if err != nil {
 		return errors.Wrap(err, "eos: error resolving reference")
 	}
+
+	if fs.isShareFolder(ctx, p) {
+		return fs.deleteShadow(ctx, p)
+	}
+
 	fn := fs.wrap(ctx, p)
 
 	return fs.c.Remove(ctx, u.Username, fn)
 }
 
-func (fs *eosStorage) Move(ctx context.Context, oldRef, newRef *provider.Reference) error {
+func (fs *eosfs) deleteShadow(ctx context.Context, p string) error {
+	if fs.isShareFolderRoot(ctx, p) {
+		return errtypes.PermissionDenied("eos: cannot delete the virtual share folder")
+	}
+
+	if fs.isShareFolderChild(ctx, p) {
+		u, err := getUser(ctx)
+		if err != nil {
+			return errors.Wrap(err, "eos: no user in ctx")
+		}
+		fn := fs.wrapShadow(ctx, p)
+		return fs.c.Remove(ctx, u.Username, fn)
+	}
+
+	panic("eos: shadow delete of share folder that is neither root nor child. path=" + p)
+}
+
+func (fs *eosfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
@@ -891,12 +943,39 @@ func (fs *eosStorage) Move(ctx context.Context, oldRef, newRef *provider.Referen
 		return errors.Wrap(err, "eos: error resolving reference")
 	}
 
+	if fs.isShareFolder(ctx, oldPath) || fs.isShareFolder(ctx, newPath) {
+		return fs.moveShadow(ctx, oldPath, newPath)
+	}
+
 	oldFn := fs.wrap(ctx, oldPath)
 	newFn := fs.wrap(ctx, newPath)
 	return fs.c.Rename(ctx, u.Username, oldFn, newFn)
 }
 
-func (fs *eosStorage) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
+func (fs *eosfs) moveShadow(ctx context.Context, oldPath, newPath string) error {
+	u, err := getUser(ctx)
+	if err != nil {
+		return errors.Wrap(err, "eos: no user in ctx")
+	}
+
+	if fs.isShareFolderRoot(ctx, oldPath) || fs.isShareFolderRoot(ctx, newPath) {
+		return errtypes.PermissionDenied("eos: cannot move/rename the virtual share folder")
+	}
+
+	// only rename of the reference is allowed, hence having the same basedir
+	bold, _ := path.Split(oldPath)
+	bnew, _ := path.Split(newPath)
+
+	if bold != bnew {
+		return errtypes.PermissionDenied("eos: cannot move references under the virtual share folder")
+	}
+
+	oldfn := fs.wrapShadow(ctx, oldPath)
+	newfn := fs.wrapShadow(ctx, newPath)
+	return fs.c.Rename(ctx, u.Username, oldfn, newfn)
+}
+
+func (fs *eosfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: no user in ctx")
@@ -906,12 +985,17 @@ func (fs *eosStorage) Download(ctx context.Context, ref *provider.Reference) (io
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: error resolving reference")
 	}
+
+	if fs.isShareFolder(ctx, p) {
+		return nil, errtypes.PermissionDenied("eos: cannot download under the virtual share folder")
+	}
+
 	fn := fs.wrap(ctx, p)
 
 	return fs.c.Read(ctx, u.Username, fn)
 }
 
-func (fs *eosStorage) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
+func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
@@ -921,12 +1005,17 @@ func (fs *eosStorage) Upload(ctx context.Context, ref *provider.Reference, r io.
 	if err != nil {
 		return errors.Wrap(err, "eos: error resolving reference")
 	}
+
+	if fs.isShareFolder(ctx, p) {
+		return errtypes.PermissionDenied("eos: cannot download under the virtual share folder")
+	}
+
 	fn := fs.wrap(ctx, p)
 
 	return fs.c.Write(ctx, u.Username, fn, r)
 }
 
-func (fs *eosStorage) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {
+func (fs *eosfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: no user in ctx")
@@ -936,6 +1025,11 @@ func (fs *eosStorage) ListRevisions(ctx context.Context, ref *provider.Reference
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: error resolving reference")
 	}
+
+	if fs.isShareFolder(ctx, p) {
+		return nil, errtypes.PermissionDenied("eos: cannot list revisions under the virtual share folder")
+	}
+
 	fn := fs.wrap(ctx, p)
 
 	eosRevisions, err := fs.c.ListVersions(ctx, u.Username, fn)
@@ -950,7 +1044,7 @@ func (fs *eosStorage) ListRevisions(ctx context.Context, ref *provider.Reference
 	return revisions, nil
 }
 
-func (fs *eosStorage) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (io.ReadCloser, error) {
+func (fs *eosfs) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (io.ReadCloser, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: no user in ctx")
@@ -960,13 +1054,18 @@ func (fs *eosStorage) DownloadRevision(ctx context.Context, ref *provider.Refere
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: error resolving reference")
 	}
+
+	if fs.isShareFolder(ctx, p) {
+		return nil, errtypes.PermissionDenied("eos: cannot download revision under the virtual share folder")
+	}
+
 	fn := fs.wrap(ctx, p)
 
 	fn = fs.wrap(ctx, fn)
 	return fs.c.ReadVersion(ctx, u.Username, fn, revisionKey)
 }
 
-func (fs *eosStorage) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) error {
+func (fs *eosfs) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
@@ -976,12 +1075,17 @@ func (fs *eosStorage) RestoreRevision(ctx context.Context, ref *provider.Referen
 	if err != nil {
 		return errors.Wrap(err, "eos: error resolving reference")
 	}
+
+	if fs.isShareFolder(ctx, p) {
+		return errtypes.PermissionDenied("eos: cannot restore revision under the virtual share folder")
+	}
+
 	fn := fs.wrap(ctx, p)
 
 	return fs.c.RollbackToVersion(ctx, u.Username, fn, revisionKey)
 }
 
-func (fs *eosStorage) PurgeRecycleItem(ctx context.Context, key string) error {
+func (fs *eosfs) PurgeRecycleItem(ctx context.Context, key string) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "storage_eos: no user in ctx")
@@ -989,7 +1093,7 @@ func (fs *eosStorage) PurgeRecycleItem(ctx context.Context, key string) error {
 	return fs.c.RestoreDeletedEntry(ctx, u.Username, key)
 }
 
-func (fs *eosStorage) EmptyRecycle(ctx context.Context) error {
+func (fs *eosfs) EmptyRecycle(ctx context.Context) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
@@ -997,7 +1101,7 @@ func (fs *eosStorage) EmptyRecycle(ctx context.Context) error {
 	return fs.c.PurgeDeletedEntries(ctx, u.Username)
 }
 
-func (fs *eosStorage) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error) {
+func (fs *eosfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: no user in ctx")
@@ -1021,7 +1125,7 @@ func (fs *eosStorage) ListRecycle(ctx context.Context) ([]*provider.RecycleItem,
 	return recycleEntries, nil
 }
 
-func (fs *eosStorage) RestoreRecycleItem(ctx context.Context, key string) error {
+func (fs *eosfs) RestoreRecycleItem(ctx context.Context, key string) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
@@ -1029,7 +1133,7 @@ func (fs *eosStorage) RestoreRecycleItem(ctx context.Context, key string) error 
 	return fs.c.RestoreDeletedEntry(ctx, u.Username, key)
 }
 
-func (fs *eosStorage) convertToRecycleItem(ctx context.Context, eosDeletedItem *eosclient.DeletedEntry) *provider.RecycleItem {
+func (fs *eosfs) convertToRecycleItem(ctx context.Context, eosDeletedItem *eosclient.DeletedEntry) *provider.RecycleItem {
 	recycleItem := &provider.RecycleItem{
 		Path:         fs.unwrap(ctx, eosDeletedItem.RestorePath),
 		Key:          eosDeletedItem.RestoreKey,
@@ -1045,7 +1149,7 @@ func (fs *eosStorage) convertToRecycleItem(ctx context.Context, eosDeletedItem *
 	return recycleItem
 }
 
-func (fs *eosStorage) convertToRevision(ctx context.Context, eosFileInfo *eosclient.FileInfo) *provider.FileVersion {
+func (fs *eosfs) convertToRevision(ctx context.Context, eosFileInfo *eosclient.FileInfo) *provider.FileVersion {
 	md := fs.convertToResourceInfo(ctx, eosFileInfo)
 	revision := &provider.FileVersion{
 		Key:   path.Base(md.Path),
@@ -1055,7 +1159,7 @@ func (fs *eosStorage) convertToRevision(ctx context.Context, eosFileInfo *eoscli
 	return revision
 }
 
-func (fs *eosStorage) convertToResourceInfo(ctx context.Context, eosFileInfo *eosclient.FileInfo) *provider.ResourceInfo {
+func (fs *eosfs) convertToResourceInfo(ctx context.Context, eosFileInfo *eosclient.FileInfo) *provider.ResourceInfo {
 	path := fs.unwrap(ctx, eosFileInfo.File)
 	size := eosFileInfo.Size
 	if eosFileInfo.IsDir {
@@ -1115,7 +1219,7 @@ type eosSysMetadata struct {
 	Instance  string `json:"instance"`
 }
 
-func (fs *eosStorage) getEosMetadata(finfo *eosclient.FileInfo) []byte {
+func (fs *eosfs) getEosMetadata(finfo *eosclient.FileInfo) []byte {
 	sys := &eosSysMetadata{
 		File:     finfo.File,
 		Instance: finfo.Instance,
