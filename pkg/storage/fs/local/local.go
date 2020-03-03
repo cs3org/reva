@@ -31,7 +31,6 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage"
@@ -331,13 +330,10 @@ func (fs *localfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*
 }
 
 func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
-	log := appctx.GetLogger(ctx)
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "error resolving ref")
 	}
-
-	log.Info().Msg(fn)
 
 	// we cannot rely on /tmp as it can live in another partition and we can
 	// hit invalid cross-device link errors, so we create the tmp file in the same directory
