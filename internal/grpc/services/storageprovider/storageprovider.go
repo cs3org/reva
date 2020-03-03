@@ -34,7 +34,6 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
-	pwregistry "github.com/cs3org/reva/pkg/storage/pw/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
@@ -134,10 +133,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	pw, err := getPW(c)
-	if err != nil {
-		return nil, err
-	}
 
 	// parse data server url
 	u, err := url.Parse(c.DataServerURL)
@@ -158,7 +153,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	service := &service{
 		conf:          c,
 		storage:       fs,
-		pathWrapper:   pw,
 		tmpFolder:     tmpFolder,
 		mountPath:     mountPath,
 		mountID:       mountID,
@@ -787,16 +781,6 @@ func getFS(c *config) (storage.FS, error) {
 		return f(c.Drivers[c.Driver])
 	}
 	return nil, fmt.Errorf("driver not found: %s", c.Driver)
-}
-
-func getPW(c *config) (storage.PathWrapper, error) {
-	if c.PathWrapper == "" {
-		return nil, nil
-	}
-	if f, ok := pwregistry.NewFuncs[c.PathWrapper]; ok {
-		return f(c.PathWrappers[c.PathWrapper])
-	}
-	return nil, fmt.Errorf("path wrapper not found: %s", c.Driver)
 }
 
 func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (*provider.Reference, error) {
