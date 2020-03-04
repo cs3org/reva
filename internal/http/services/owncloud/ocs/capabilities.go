@@ -287,9 +287,10 @@ type CapabilitiesFiles struct {
 
 // CapabilitiesDav holds dav endpoint config
 type CapabilitiesDav struct {
-	Chunking string   `json:"chunking" xml:"chunking"`
-	Trashbin string   `json:"trashbin" xml:"trashbin"`
-	Reports  []string `json:"reports" xml:"reports>element" mapstructure:"reports"`
+	Chunking                       string   `json:"chunking" xml:"chunking"`
+	Trashbin                       string   `json:"trashbin" xml:"trashbin"`
+	Reports                        []string `json:"reports" xml:"reports>element" mapstructure:"reports"`
+	ChunkingParallelUploadDisabled bool     `json:"chunkingParallelUploadDisabled" xml:"chunkingParallelUploadDisabled"`
 }
 
 // CapabilitiesFilesSharing TODO document
