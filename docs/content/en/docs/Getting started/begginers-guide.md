@@ -29,7 +29,7 @@ enabled_services = ["helloworld"]
 To start revad, run the executable file:
 
 ```
-revad -c revad.toml -p /var/tmp/revad.pid
+cmd/revad/revad -c revad.toml -p /var/tmp/revad.pid
 ```
 
 {{% alert title="The pid flag" color="warning" %}}
