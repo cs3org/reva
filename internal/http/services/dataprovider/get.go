@@ -38,7 +38,7 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 		fn = files[0]
 	}
 
-	fsfn := strings.TrimPrefix(fn, s.conf.ProviderPath)
+	fsfn := strings.TrimPrefix(fn, s.conf.Prefix)
 	ref := &provider.Reference{Spec: &provider.Reference_Path{Path: fsfn}}
 
 	rc, err := s.storage.Download(ctx, ref)
