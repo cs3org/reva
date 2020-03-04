@@ -63,7 +63,7 @@ ci: build-ci test  lint-ci
 build-revad-docker: off
 	go build -o ./cmd/revad/revad ./cmd/revad
 build-reva-docker: off
-	go build -o ./cmd/revad/reva ./cmd/reva
+	go build -o ./cmd/reva/reva ./cmd/reva
 clean:
 	rm -rf dist
 
