@@ -248,6 +248,8 @@ func (fs *eosfs) wrap(ctx context.Context, fn string) (internal string) {
 	} else {
 		internal = path.Join(fs.conf.Namespace, fn)
 	}
+	log := appctx.GetLogger(ctx)
+	log.Debug().Msg("eos: wrap external=" + fn + " internal=" + internal)
 	return
 }
 
@@ -271,14 +273,22 @@ func (fs *eosfs) unwrapShadow(ctx context.Context, np string) (external string) 
 }
 
 func (fs *eosfs) unwrap(ctx context.Context, np string) (external string) {
+	// TODO(labkod): enforce namespace protection
+	log := appctx.GetLogger(ctx)
 	if fs.conf.EnableHome && fs.conf.UserLayout != "" {
 		u, err := getUser(ctx)
 		if err != nil {
 			err = errors.Wrap(err, "eos: unwrap: no user in ctx and home is enabled")
 			panic(err)
 		}
+
 		layout := templates.WithUser(u, fs.conf.UserLayout)
 		trim := path.Join(fs.conf.Namespace, layout)
+		log.Debug().Msg("eos: unwrap user layout=" + layout + " trim=" + trim)
+		if !strings.HasPrefix(np, trim) {
+			panic("eos: resource is outside the home directory of the loged-in user: internal=" + np + " layout=" + layout + " trim=" + trim)
+		}
+
 		external = strings.TrimPrefix(np, trim)
 	} else {
 		external = strings.TrimPrefix(np, fs.conf.Namespace)
@@ -286,6 +296,8 @@ func (fs *eosfs) unwrap(ctx context.Context, np string) (external string) {
 			external = "/"
 		}
 	}
+
+	log.Debug().Msg("eos: unwrap internal=" + np + " external=" + external)
 	return
 }
 
@@ -322,6 +334,7 @@ func (fs *eosfs) resolve(ctx context.Context, u *userpb.User, ref *provider.Refe
 		if err != nil {
 			return "", err
 		}
+
 		return p, nil
 	}
 
@@ -599,6 +612,9 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference) (*provider.
 		return nil, err
 	}
 
+	log := appctx.GetLogger(ctx)
+	log.Info().Msg("eos: get md for ref:" + ref.String())
+
 	p, err := fs.resolve(ctx, u, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: error resolving reference")
@@ -658,8 +674,7 @@ func (fs *eosfs) GetHome(ctx context.Context) (string, error) {
 		return "", errtypes.NotSupported("eos: get home not supported")
 	}
 
-	home := fs.wrap(ctx, "/")
-	return home, nil
+	return "/", nil
 }
 
 func (fs *eosfs) createShadowHome(ctx context.Context) error {
@@ -710,7 +725,7 @@ func (fs *eosfs) createShadowHome(ctx context.Context) error {
 	}
 
 	for _, attr := range attrs {
-		err = fs.c.SetAttr(ctx, "root", attr, home)
+		err = fs.c.SetAttr(ctx, "root", attr, true, home)
 		if err != nil {
 			return errors.Wrap(err, "eos: error setting attribute")
 		}
@@ -789,7 +804,7 @@ func (fs *eosfs) createNominalHome(ctx context.Context) error {
 	}
 
 	for _, attr := range attrs {
-		err = fs.c.SetAttr(ctx, "root", attr, home)
+		err = fs.c.SetAttr(ctx, "root", attr, true, home)
 		if err != nil {
 			return errors.Wrap(err, "eos: error setting attribute")
 		}
@@ -846,25 +861,20 @@ func (fs *eosfs) isShareFolderChild(ctx context.Context, p string) bool {
 }
 
 func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.URL) error {
-	u, err := getUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "eos: no user in ctx")
-	}
-
 	// TODO(labkode): for the time being we only allow to create references
 	// on the virtual share folder to not pollute the nominal user tree.
 
 	if !fs.isShareFolder(ctx, p) {
-		return errtypes.PermissionDenied("eos: cannot create references outside the shadow namespace: shadow=" + fs.conf.ShadowNamespace + " path=" + p)
+		return errtypes.PermissionDenied("eos: cannot create references outside the share folder: share_folder=" + fs.conf.ShareFolder + " path=" + p)
 	}
 
-	fn := fs.wrap(ctx, p)
+	fn := fs.wrapShadow(ctx, p)
 
 	// TODO(labkode): with grpc we can touch with xattrs.
 	// Current mechanism is: touch to hidden file, set xattr, rename.
 	dir, base := path.Split(fn)
-	tmp := path.Join(dir, fmt.Sprintf(".sys.r#.%s", base))
-	if err := fs.c.Touch(ctx, u.Username, tmp); err != nil {
+	tmp := path.Join(dir, fmt.Sprintf(".sys.reva#.%s", base))
+	if err := fs.c.Touch(ctx, "root", tmp); err != nil {
 		err = errors.Wrapf(err, "eos: error creating temporary ref file")
 		return err
 	}
@@ -876,13 +886,13 @@ func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.U
 		Val:  targetURI.String(),
 	}
 
-	if err := fs.c.SetAttr(ctx, u.Username, attr, tmp); err != nil {
+	if err := fs.c.SetAttr(ctx, "root", attr, false, tmp); err != nil {
 		err = errors.Wrapf(err, "eos: error setting reva.ref attr on file: %q", tmp)
 		return err
 	}
 
 	// rename to have the file visible in user space.
-	if err := fs.c.Rename(ctx, u.Username, tmp, fn); err != nil {
+	if err := fs.c.Rename(ctx, "root", tmp, fn); err != nil {
 		err = errors.Wrapf(err, "eos: error renaming from: %q to %q", tmp, fn)
 		return err
 	}

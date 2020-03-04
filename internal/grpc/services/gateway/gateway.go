@@ -74,7 +74,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 
 	// set defaults
 	if c.ShareFolder == "" {
-		c.ShareFolder = "shares"
+		c.ShareFolder = "MyShares"
 	}
 
 	if c.TokenManager == "" {

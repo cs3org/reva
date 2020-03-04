@@ -134,6 +134,8 @@ func (s *svc) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*provi
 		}, nil
 	}
 
+	log.Info().Msg("gateway: home for user at provider=" + res.Provider.Address)
+
 	storageClient, err := pool.GetStorageProviderServiceClient(res.Provider.Address)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting storage provider client")

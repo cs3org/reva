@@ -198,7 +198,7 @@ func (s *service) ListReceivedShares(ctx context.Context, req *collaboration.Lis
 func (s *service) GetReceivedShare(ctx context.Context, req *collaboration.GetReceivedShareRequest) (*collaboration.GetReceivedShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 
-	_, err := s.sm.GetReceivedShare(ctx, req.Ref)
+	share, err := s.sm.GetReceivedShare(ctx, req.Ref)
 	if err != nil {
 		log.Err(err).Msg("error getting received share")
 		return &collaboration.GetReceivedShareResponse{
@@ -208,6 +208,7 @@ func (s *service) GetReceivedShare(ctx context.Context, req *collaboration.GetRe
 
 	res := &collaboration.GetReceivedShareResponse{
 		Status: status.NewOK(ctx),
+		Share:  share,
 	}
 	return res, nil
 }
