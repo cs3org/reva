@@ -35,11 +35,10 @@ func init() {
 }
 
 type config struct {
-	Prefix       string                            `mapstructure:"prefix"`
-	Driver       string                            `mapstructure:"driver"`
-	TmpFolder    string                            `mapstructure:"tmp_folder"`
-	Drivers      map[string]map[string]interface{} `mapstructure:"drivers"`
-	ProviderPath string                            `mapstructure:"provider_path"`
+	Prefix    string                            `mapstructure:"prefix"`
+	Driver    string                            `mapstructure:"driver"`
+	TmpFolder string                            `mapstructure:"tmp_folder"`
+	Drivers   map[string]map[string]interface{} `mapstructure:"drivers"`
 }
 
 type svc struct {
