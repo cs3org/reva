@@ -253,51 +253,59 @@ func (fs *eosfs) wrap(ctx context.Context, fn string) (internal string) {
 	return
 }
 
-func (fs *eosfs) unwrapShadow(ctx context.Context, np string) (external string) {
+func (fs *eosfs) unwrap(ctx context.Context, internal string) (external string) {
+	log := appctx.GetLogger(ctx)
+	layout := fs.getLayout(ctx)
+	ns := fs.getNsMatch(internal, []string{fs.conf.Namespace, fs.conf.ShadowNamespace})
+	external = fs.unwrapInternal(ctx, ns, internal, layout)
+	log.Debug().Msgf("eos: unwrap: internal=%s external=%s", internal, external)
+	return
+}
+
+func (fs *eosfs) getLayout(ctx context.Context) (layout string) {
 	if fs.conf.EnableHome && fs.conf.UserLayout != "" {
 		u, err := getUser(ctx)
 		if err != nil {
 			err = errors.Wrap(err, "eos: unwrap: no user in ctx and home is enabled")
 			panic(err)
 		}
-		layout := templates.WithUser(u, fs.conf.UserLayout)
-		trim := path.Join(fs.conf.ShadowNamespace, layout)
-		external = strings.TrimPrefix(np, trim)
-	} else {
-		external = strings.TrimPrefix(np, fs.conf.ShadowNamespace)
-		if external == "" {
-			external = "/"
-		}
+		layout = templates.WithUser(u, fs.conf.UserLayout)
 	}
 	return
 }
 
-func (fs *eosfs) unwrap(ctx context.Context, np string) (external string) {
-	// TODO(labkod): enforce namespace protection
-	log := appctx.GetLogger(ctx)
-	if fs.conf.EnableHome && fs.conf.UserLayout != "" {
-		u, err := getUser(ctx)
-		if err != nil {
-			err = errors.Wrap(err, "eos: unwrap: no user in ctx and home is enabled")
-			panic(err)
-		}
+func (fs *eosfs) getNsMatch(internal string, nss []string) string {
+	var match string
 
-		layout := templates.WithUser(u, fs.conf.UserLayout)
-		trim := path.Join(fs.conf.Namespace, layout)
-		log.Debug().Msg("eos: unwrap user layout=" + layout + " trim=" + trim)
-		if !strings.HasPrefix(np, trim) {
-			panic("eos: resource is outside the home directory of the loged-in user: internal=" + np + " layout=" + layout + " trim=" + trim)
-		}
-
-		external = strings.TrimPrefix(np, trim)
-	} else {
-		external = strings.TrimPrefix(np, fs.conf.Namespace)
-		if external == "" {
-			external = "/"
+	for _, ns := range nss {
+		if strings.HasPrefix(internal, ns) && len(ns) > len(match) {
+			match = ns
 		}
 	}
 
-	log.Debug().Msg("eos: unwrap internal=" + np + " external=" + external)
+	if match == "" {
+		panic(fmt.Sprintf("eos: path is outside namespaces: path=%s namespaces=%+v", internal, nss))
+	}
+
+	return match
+}
+
+func (fs *eosfs) unwrapInternal(ctx context.Context, ns, np, layout string) (external string) {
+	log := appctx.GetLogger(ctx)
+	trim := path.Join(ns, layout)
+
+	if !strings.HasPrefix(np, trim) {
+		panic("eos: resource is outside the directory of the logged-in user: internal=" + np + " trim=" + trim + " namespace=" + ns)
+	}
+
+	external = strings.TrimPrefix(np, trim)
+
+	if external == "" {
+		external = "/"
+	}
+
+	log.Debug().Msgf("eos: unwrapInternal: trim=%s external=%s ns=%s np=%s", trim, external, ns, np)
+
 	return
 }
 
@@ -323,7 +331,7 @@ func (fs *eosfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (stri
 	return fi.Path, nil
 }
 
-// resolve takes in a request path or request id and returns the unwrapped path.
+// resolve takes in a request path or request id and returns the unwrapNominalped path.
 func (fs *eosfs) resolve(ctx context.Context, u *userpb.User, ref *provider.Reference) (string, error) {
 	if ref.GetPath() != "" {
 		return ref.GetPath(), nil
@@ -353,18 +361,7 @@ func (fs *eosfs) getPath(ctx context.Context, u *userpb.User, id *provider.Resou
 		return "", errors.Wrap(err, "eos: error getting file info by inode")
 	}
 
-	if strings.HasPrefix(eosFileInfo.File, fs.conf.Namespace) {
-		return fs.unwrap(ctx, eosFileInfo.File), nil
-	}
-
-	if strings.HasPrefix(eosFileInfo.File, fs.conf.ShadowNamespace) {
-		return fs.unwrapShadow(ctx, eosFileInfo.File), nil
-	}
-
-	panic(fmt.Sprintf("eos: path does not belong to nominal=%s nor shadow=%s path=%s",
-		fs.conf.Namespace,
-		fs.conf.ShadowNamespace,
-		eosFileInfo.File))
+	return fs.unwrap(ctx, eosFileInfo.File), nil
 }
 
 func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
@@ -639,24 +636,43 @@ func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*pr
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: error resolving reference")
 	}
-	fn := fs.wrap(ctx, p)
 
-	eosFileInfos, err := fs.c.List(ctx, u.Username, fn)
-	if err != nil {
-		return nil, errors.Wrap(err, "eos: error listing")
+	var fns []string
+	// if path is home we need to add in the response any shadow folder in the shadown homedirectory.
+	if fs.conf.EnableHome {
+		home, err := fs.GetHome(ctx)
+		if err != nil {
+			err = errors.Wrap(err, "eos: error getting home")
+			return nil, err
+		}
+
+		if p == home {
+			fns = append(fns, fs.wrapShadow(ctx, p))
+			// merge shadow folders
+		}
 	}
 
-	finfos := []*provider.ResourceInfo{}
-	for _, eosFileInfo := range eosFileInfos {
-		// filter out sys files
-		if !fs.conf.ShowHiddenSysFiles {
-			base := path.Base(eosFileInfo.File)
-			if hiddenReg.MatchString(base) {
-				continue
-			}
+	fns = append(fns, fs.wrap(ctx, p))
 
+	finfos := []*provider.ResourceInfo{}
+	for _, fn := range fns {
+		eosFileInfos, err := fs.c.List(ctx, u.Username, fn)
+		if err != nil {
+			return nil, errors.Wrap(err, "eos: error listing")
 		}
-		finfos = append(finfos, fs.convertToResourceInfo(ctx, eosFileInfo))
+
+		for _, eosFileInfo := range eosFileInfos {
+			// filter out sys files
+			if !fs.conf.ShowHiddenSysFiles {
+				base := path.Base(eosFileInfo.File)
+				if hiddenReg.MatchString(base) {
+					continue
+				}
+
+			}
+			finfos = append(finfos, fs.convertToResourceInfo(ctx, eosFileInfo))
+		}
+
 	}
 	return finfos, nil
 }
@@ -678,8 +694,13 @@ func (fs *eosfs) GetHome(ctx context.Context) (string, error) {
 }
 
 func (fs *eosfs) createShadowHome(ctx context.Context) error {
+	u, err := getUser(ctx)
+	if err != nil {
+		return errors.Wrap(err, "eos: no user in ctx")
+	}
+
 	home := fs.wrapShadow(ctx, "/")
-	_, err := fs.c.GetFileInfoByPath(ctx, "root", home)
+	_, err = fs.c.GetFileInfoByPath(ctx, "root", home)
 	if err == nil { // home already exists
 		return nil
 	}
@@ -694,6 +715,11 @@ func (fs *eosfs) createShadowHome(ctx context.Context) error {
 	if err != nil {
 		// EOS will return success on mkdir over an existing directory.
 		return errors.Wrap(err, "eos: error creating dir")
+	}
+
+	err = fs.c.Chown(ctx, "root", u.Username, home)
+	if err != nil {
+		return errors.Wrap(err, "eos: error chowning directory")
 	}
 
 	err = fs.c.Chmod(ctx, "root", "2770", home)
@@ -1144,8 +1170,9 @@ func (fs *eosfs) RestoreRecycleItem(ctx context.Context, key string) error {
 }
 
 func (fs *eosfs) convertToRecycleItem(ctx context.Context, eosDeletedItem *eosclient.DeletedEntry) *provider.RecycleItem {
+	path := fs.unwrap(ctx, eosDeletedItem.RestorePath)
 	recycleItem := &provider.RecycleItem{
-		Path:         fs.unwrap(ctx, eosDeletedItem.RestorePath),
+		Path:         path,
 		Key:          eosDeletedItem.RestoreKey,
 		Size:         eosDeletedItem.Size,
 		DeletionTime: &types.Timestamp{Seconds: eosDeletedItem.DeletionMTime / 1000}, // TODO(labkode): check if eos time is millis or nanos
@@ -1243,3 +1270,65 @@ func (fs *eosfs) getEosMetadata(finfo *eosclient.FileInfo) []byte {
 	v, _ := json.Marshal(sys)
 	return v
 }
+
+/*
+	Merge shadow on requests for /home ?
+
+	No - GetHome(ctx context.Context) (string, error)
+	No -CreateHome(ctx context.Context) error
+	No - CreateDir(ctx context.Context, fn string) error
+	No -Delete(ctx context.Context, ref *provider.Reference) error
+	No -Move(ctx context.Context, oldRef, newRef *provider.Reference) error
+	No -GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error)
+	Yes -ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error)
+	No -Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error
+	No -Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error)
+	No -ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error)
+	No -DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error)
+	No -RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error
+	No ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error)
+	No RestoreRecycleItem(ctx context.Context, key string) error
+	No PurgeRecycleItem(ctx context.Context, key string) error
+	No EmptyRecycle(ctx context.Context) error
+	? GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error)
+	No AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
+	No RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
+	No UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
+	No ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error)
+	No GetQuota(ctx context.Context) (int, int, error)
+	No CreateReference(ctx context.Context, path string, targetURI *url.URL) error
+	No Shutdown(ctx context.Context) error
+	No SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error
+	No UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error
+*/
+
+/*
+	Merge shadow on requests for /home/MyShares ?
+
+	No - GetHome(ctx context.Context) (string, error)
+	No -CreateHome(ctx context.Context) error
+	No - CreateDir(ctx context.Context, fn string) error
+	Maybe -Delete(ctx context.Context, ref *provider.Reference) error
+	No -Move(ctx context.Context, oldRef, newRef *provider.Reference) error
+	Yes -GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error)
+	Yes -ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error)
+	No -Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error
+	No -Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error)
+	No -ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error)
+	No -DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error)
+	No -RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error
+	No ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error)
+	No RestoreRecycleItem(ctx context.Context, key string) error
+	No PurgeRecycleItem(ctx context.Context, key string) error
+	No EmptyRecycle(ctx context.Context) error
+	?  GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error)
+	No AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
+	No RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
+	No UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
+	No ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error)
+	No GetQuota(ctx context.Context) (int, int, error)
+	No CreateReference(ctx context.Context, path string, targetURI *url.URL) error
+	No Shutdown(ctx context.Context) error
+	No SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error
+	No UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error
+*/
