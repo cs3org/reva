@@ -1,6 +1,7 @@
 .PHONY: build
 default: build test lint contrib
 
+SHELL := /bin/bash
 BUILD_DATE=`date +%FT%T%z`
 GIT_COMMIT=`git rev-parse --short HEAD`
 GIT_BRANCH=`git rev-parse --symbolic-full-name --abbrev-ref HEAD`
@@ -62,7 +63,7 @@ ci: build-ci test  lint-ci
 build-revad-docker: off
 	go build -o ./cmd/revad/revad ./cmd/revad
 build-reva-docker: off
-	go build -o ./cmd/revad/reva ./cmd/reva
+	go build -o ./cmd/reva/reva ./cmd/reva
 clean:
 	rm -rf dist
 

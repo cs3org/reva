@@ -31,10 +31,8 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 )
 
 // transerClaims are custom claims for a JWT token to be used between the metadata and data gateways.
@@ -44,12 +42,10 @@ type transferClaims struct {
 }
 
 func (s *svc) sign(ctx context.Context, target string) (string, error) {
-	u := user.ContextMustGetUser(ctx)
 	ttl := time.Duration(s.c.TranserExpires) * time.Second
 	claims := transferClaims{
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(ttl).Unix(),
-			Issuer:    u.Id.Idp,
 			Audience:  "reva",
 			IssuedAt:  time.Now().Unix(),
 		},
@@ -155,6 +151,7 @@ func (s *svc) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*provi
 }
 
 func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {
+	log := appctx.GetLogger(ctx)
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
@@ -207,6 +204,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 }
 
 func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*gateway.InitiateFileUploadResponse, error) {
+	log := appctx.GetLogger(ctx)
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
@@ -232,7 +230,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 	}
 
 	if storageRes.Expose {
-		log.Info().Msg("download is routed directly to data server - skiping datagateway")
+		log.Info().Msg("upload is routed directly to data server - skiping datagateway")
 		return res, nil
 	}
 
