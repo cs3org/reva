@@ -654,9 +654,8 @@ func (fs *eosfs) getMDShareFolder(ctx context.Context, p string) (*provider.Reso
 
 	if fs.isShareFolderRoot(ctx, p) {
 		return fs.convertToResourceInfo(ctx, eosFileInfo), nil
-	} else {
-		return fs.convertToFileReference(ctx, eosFileInfo), nil
 	}
+	return fs.convertToFileReference(ctx, eosFileInfo), nil
 }
 
 func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error) {
@@ -686,7 +685,7 @@ func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*pr
 	return fs.listWithNominalHome(ctx, p)
 }
 
-func (fs *eosfs) listWithNominalHome(ctx context.Context, p string) ([]*provider.ResourceInfo, error) {
+func (fs *eosfs) listWithNominalHome(ctx context.Context, p string) (finfos []*provider.ResourceInfo, err error) {
 	log := appctx.GetLogger(ctx)
 
 	u, err := getUser(ctx)
@@ -701,7 +700,6 @@ func (fs *eosfs) listWithNominalHome(ctx context.Context, p string) ([]*provider
 		return nil, errors.Wrap(err, "eos: error listing")
 	}
 
-	var finfos []*provider.ResourceInfo
 	for _, eosFileInfo := range eosFileInfos {
 		// filter out sys files
 		if !fs.conf.ShowHiddenSysFiles {
@@ -766,7 +764,7 @@ func (fs *eosfs) listHome(ctx context.Context, home string) ([]*provider.Resourc
 	return finfos, nil
 }
 
-func (fs *eosfs) listShareFolderRoot(ctx context.Context, p string) ([]*provider.ResourceInfo, error) {
+func (fs *eosfs) listShareFolderRoot(ctx context.Context, p string) (finfos []*provider.ResourceInfo, err error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: no user in ctx")
@@ -779,7 +777,6 @@ func (fs *eosfs) listShareFolderRoot(ctx context.Context, p string) ([]*provider
 		return nil, errors.Wrap(err, "eos: error listing")
 	}
 
-	var finfos []*provider.ResourceInfo
 	for _, eosFileInfo := range eosFileInfos {
 		// filter out sys files
 		if !fs.conf.ShowHiddenSysFiles {
@@ -790,7 +787,6 @@ func (fs *eosfs) listShareFolderRoot(ctx context.Context, p string) ([]*provider
 		}
 
 		finfo := fs.convertToFileReference(ctx, eosFileInfo)
-		fmt.Printf("%+v\n", finfo)
 		finfos = append(finfos, finfo)
 	}
 
