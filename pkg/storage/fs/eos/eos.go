@@ -48,6 +48,10 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 )
 
+const (
+	refTargetAttrKey = "reva.target"
+)
+
 func init() {
 	registry.Register("eos", New)
 }
@@ -616,14 +620,43 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference) (*provider.
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: error resolving reference")
 	}
+
+	// if path is home we need to add in the response any shadow folder in the shadown homedirectory.
+	if fs.conf.EnableHome {
+		if fs.isShareFolder(ctx, p) {
+			return fs.getMDShareFolder(ctx, p)
+		}
+	}
+
 	fn := fs.wrap(ctx, p)
 
 	eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, u.Username, fn)
 	if err != nil {
 		return nil, err
 	}
+
 	fi := fs.convertToResourceInfo(ctx, eosFileInfo)
 	return fi, nil
+}
+
+func (fs *eosfs) getMDShareFolder(ctx context.Context, p string) (*provider.ResourceInfo, error) {
+	u, err := getUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	fn := fs.wrapShadow(ctx, p)
+	eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, u.Username, fn)
+	if err != nil {
+		return nil, err
+	}
+	// TODO(labkode): diff between root (dir) and children (ref)
+
+	if fs.isShareFolderRoot(ctx, p) {
+		return fs.convertToResourceInfo(ctx, eosFileInfo), nil
+	} else {
+		return fs.convertToFileReference(ctx, eosFileInfo), nil
+	}
 }
 
 func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error) {
@@ -637,7 +670,6 @@ func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*pr
 		return nil, errors.Wrap(err, "eos: error resolving reference")
 	}
 
-	var fns []string
 	// if path is home we need to add in the response any shadow folder in the shadown homedirectory.
 	if fs.conf.EnableHome {
 		home, err := fs.GetHome(ctx)
@@ -646,13 +678,70 @@ func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*pr
 			return nil, err
 		}
 
-		if p == home {
-			fns = append(fns, fs.wrapShadow(ctx, p))
-			// merge shadow folders
+		if strings.HasPrefix(p, home) {
+			return fs.listWithHome(ctx, home, p)
 		}
 	}
 
-	fns = append(fns, fs.wrap(ctx, p))
+	return fs.listWithNominalHome(ctx, p)
+}
+
+func (fs *eosfs) listWithNominalHome(ctx context.Context, p string) ([]*provider.ResourceInfo, error) {
+	log := appctx.GetLogger(ctx)
+
+	u, err := getUser(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "eos: no user in ctx")
+	}
+
+	fn := fs.wrap(ctx, p)
+
+	eosFileInfos, err := fs.c.List(ctx, u.Username, fn)
+	if err != nil {
+		return nil, errors.Wrap(err, "eos: error listing")
+	}
+
+	var finfos []*provider.ResourceInfo
+	for _, eosFileInfo := range eosFileInfos {
+		// filter out sys files
+		if !fs.conf.ShowHiddenSysFiles {
+			base := path.Base(eosFileInfo.File)
+			if hiddenReg.MatchString(base) {
+				log.Debug().Msgf("eos: path is filtered because is considered hidden: path=%s hiddenReg=%s", base, hiddenReg)
+				continue
+			}
+		}
+
+		finfos = append(finfos, fs.convertToResourceInfo(ctx, eosFileInfo))
+	}
+
+	return finfos, nil
+}
+
+func (fs *eosfs) listWithHome(ctx context.Context, home, p string) ([]*provider.ResourceInfo, error) {
+	if p == home {
+		return fs.listHome(ctx, home)
+	}
+
+	if fs.isShareFolderRoot(ctx, p) {
+		return fs.listShareFolderRoot(ctx, p)
+	}
+
+	if fs.isShareFolderChild(ctx, p) {
+		return nil, errtypes.PermissionDenied("eos: error listing folders inside the shared folder, only file references are stored inside")
+	}
+
+	// path points to a resource in the nominal home
+	return fs.listWithNominalHome(ctx, p)
+}
+
+func (fs *eosfs) listHome(ctx context.Context, home string) ([]*provider.ResourceInfo, error) {
+	u, err := getUser(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "eos: no user in ctx")
+	}
+
+	fns := []string{fs.wrap(ctx, home), fs.wrapShadow(ctx, home)}
 
 	finfos := []*provider.ResourceInfo{}
 	for _, fn := range fns {
@@ -674,6 +763,37 @@ func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*pr
 		}
 
 	}
+	return finfos, nil
+}
+
+func (fs *eosfs) listShareFolderRoot(ctx context.Context, p string) ([]*provider.ResourceInfo, error) {
+	u, err := getUser(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "eos: no user in ctx")
+	}
+
+	fn := fs.wrapShadow(ctx, p)
+
+	eosFileInfos, err := fs.c.List(ctx, u.Username, fn)
+	if err != nil {
+		return nil, errors.Wrap(err, "eos: error listing")
+	}
+
+	var finfos []*provider.ResourceInfo
+	for _, eosFileInfo := range eosFileInfos {
+		// filter out sys files
+		if !fs.conf.ShowHiddenSysFiles {
+			base := path.Base(eosFileInfo.File)
+			if hiddenReg.MatchString(base) {
+				continue
+			}
+		}
+
+		finfo := fs.convertToFileReference(ctx, eosFileInfo)
+		fmt.Printf("%+v\n", finfo)
+		finfos = append(finfos, finfo)
+	}
+
 	return finfos, nil
 }
 
@@ -896,11 +1016,11 @@ func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.U
 
 	fn := fs.wrapShadow(ctx, p)
 
-	// TODO(labkode): with grpc we can touch with xattrs.
-	// Current mechanism is: touch to hidden file, set xattr, rename.
+	// TODO(labkode): with grpc we can create a file touching with xattrs.
+	// Current mechanism is: touch to hidden dir, set xattr, rename.
 	dir, base := path.Split(fn)
 	tmp := path.Join(dir, fmt.Sprintf(".sys.reva#.%s", base))
-	if err := fs.c.Touch(ctx, "root", tmp); err != nil {
+	if err := fs.c.CreateDir(ctx, "root", tmp); err != nil {
 		err = errors.Wrapf(err, "eos: error creating temporary ref file")
 		return err
 	}
@@ -908,7 +1028,7 @@ func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.U
 	// set xattr on ref
 	attr := &eosclient.Attribute{
 		Type: eosclient.UserAttr,
-		Key:  "reva.ref",
+		Key:  refTargetAttrKey,
 		Val:  targetURI.String(),
 	}
 
@@ -1197,11 +1317,28 @@ func (fs *eosfs) convertToRevision(ctx context.Context, eosFileInfo *eosclient.F
 }
 
 func (fs *eosfs) convertToResourceInfo(ctx context.Context, eosFileInfo *eosclient.FileInfo) *provider.ResourceInfo {
+	return fs.convert(ctx, eosFileInfo)
+}
+
+func (fs *eosfs) convertToFileReference(ctx context.Context, eosFileInfo *eosclient.FileInfo) *provider.ResourceInfo {
+	info := fs.convert(ctx, eosFileInfo)
+	info.Type = provider.ResourceType_RESOURCE_TYPE_REFERENCE
+	val, ok := eosFileInfo.Attrs["user.reva.target"]
+	if !ok || val == "" {
+		panic("eos: reference does not contain target: target=" + val + " file=" + eosFileInfo.File)
+	}
+	info.Target = val
+	return info
+}
+
+func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) *provider.ResourceInfo {
 	path := fs.unwrap(ctx, eosFileInfo.File)
+
 	size := eosFileInfo.Size
 	if eosFileInfo.IsDir {
 		size = eosFileInfo.TreeSize
 	}
+
 	username, err := getUsername(eosFileInfo.UID)
 	if err != nil {
 		log := appctx.GetLogger(ctx)
@@ -1209,11 +1346,10 @@ func (fs *eosfs) convertToResourceInfo(ctx context.Context, eosFileInfo *eosclie
 		username = "" // TODO(labkode): should we abort here?
 	}
 
-	return &provider.ResourceInfo{
+	info := &provider.ResourceInfo{
 		Id:            &provider.ResourceId{OpaqueId: fmt.Sprintf("%d", eosFileInfo.Inode)},
 		Path:          path,
 		Owner:         &userpb.UserId{OpaqueId: username},
-		Type:          getResourceType(eosFileInfo.IsDir),
 		Etag:          eosFileInfo.ETag,
 		MimeType:      mime.Detect(eosFileInfo.IsDir, path),
 		Size:          size,
@@ -1231,6 +1367,9 @@ func (fs *eosfs) convertToResourceInfo(ctx context.Context, eosFileInfo *eosclie
 			},
 		},
 	}
+
+	info.Type = getResourceType(eosFileInfo.IsDir)
+	return info
 }
 
 func getResourceType(isDir bool) provider.ResourceType {
@@ -1331,4 +1470,35 @@ func (fs *eosfs) getEosMetadata(finfo *eosclient.FileInfo) []byte {
 	No Shutdown(ctx context.Context) error
 	No SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error
 	No UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error
+*/
+
+/*
+	Merge shadow on requests for /home/MyShares/file-reference ?
+
+	No - GetHome(ctx context.Context) (string, error)
+	No -CreateHome(ctx context.Context) error
+	No - CreateDir(ctx context.Context, fn string) error
+	Maybe -Delete(ctx context.Context, ref *provider.Reference) error
+	Yes -Move(ctx context.Context, oldRef, newRef *provider.Reference) error
+	Yes -GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error)
+	No -ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error)
+	No -Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error
+	No -Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error)
+	No -ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error)
+	No -DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error)
+	No -RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error
+	No ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error)
+	No RestoreRecycleItem(ctx context.Context, key string) error
+	No PurgeRecycleItem(ctx context.Context, key string) error
+	No EmptyRecycle(ctx context.Context) error
+	?  GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error)
+	No AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
+	No RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
+	No UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
+	No ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error)
+	No GetQuota(ctx context.Context) (int, int, error)
+	No CreateReference(ctx context.Context, path string, targetURI *url.URL) error
+	No Shutdown(ctx context.Context) error
+	Maybe SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error
+	Maybe UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error
 */
