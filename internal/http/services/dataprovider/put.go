@@ -31,7 +31,7 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(ctx)
 	fn := r.URL.Path
 
-	fsfn := strings.TrimPrefix(fn, s.conf.ProviderPath)
+	fsfn := strings.TrimPrefix(fn, s.conf.Prefix)
 	ref := &provider.Reference{Spec: &provider.Reference_Path{Path: fsfn}}
 
 	err := s.storage.Upload(ctx, ref, r.Body)

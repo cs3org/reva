@@ -296,6 +296,7 @@ func (s *svc) handlePutChunked(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	w.WriteHeader(http.StatusCreated)
 
 	// TODO(labkode): implement old chunking
 

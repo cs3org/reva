@@ -14,18 +14,15 @@ analyze:
     path: cmd/reva
     options:
       strategy: gomodules
-      modules-vendor: true
   - name: github.com/cs3org/reva/cmd/revad
     type: go
     target: github.com/cs3org/reva/cmd/revad
     path: cmd/revad
     options:
       strategy: gomodules
-      modules-vendor: true
   - name: github.com/cs3org/reva/tools/check-license
     type: go
     target: github.com/cs3org/reva/tools/check-license
     path: tools/check-license
     options:
       strategy: gomodules
-      modules-vendor: true
