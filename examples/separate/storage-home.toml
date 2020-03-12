@@ -32,11 +32,11 @@ enable_home_creation = true
 
 [grpc.services.storageprovider.drivers.owncloud]
 datadirectory = "/var/tmp/reva/data"
-layout = "{{.UsernamePrefixCount.1}}/{{.UsernameLower}}"
+layout = "{{.Username}}"
 
 [grpc.services.storageprovider.path_wrappers.context]
 prefix = ""
-layout = "{{.UsernamePrefixCount.1}}/{{.UsernameLower}}"
+layout = "{{.Username}}"
 
 [http]
 address = "0.0.0.0:12001"
