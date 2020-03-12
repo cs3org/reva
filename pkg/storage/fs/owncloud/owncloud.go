@@ -41,6 +41,7 @@ import (
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
+	"github.com/cs3org/reva/pkg/storage/templates"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/gofrs/uuid"
 	"github.com/gomodule/redigo/redis"
@@ -845,12 +846,16 @@ func (fs *ocfs) GetQuota(ctx context.Context) (int, int, error) {
 }
 
 func (fs *ocfs) CreateHome(ctx context.Context) error {
-	home := fs.wrap(ctx, "/")
+	u, err := getUser(ctx)
+	if err != nil {
+		err = errors.Wrap(err, "oc CreateHome: no user in ctx and home is enabled")
+	}
+	layout := templates.WithUser(u, fs.c.Layout)
 
 	homePaths := []string{
-		path.Join(fs.c.DataDirectory, home, "files"),
-		path.Join(fs.c.DataDirectory, home, "files_trashbin"),
-		path.Join(fs.c.DataDirectory, home, "files_versions"),
+		path.Join(fs.c.DataDirectory, layout, "files"),
+		path.Join(fs.c.DataDirectory, layout, "files_trashbin"),
+		path.Join(fs.c.DataDirectory, layout, "files_versions"),
 	}
 
 	for _, v := range homePaths {
@@ -862,8 +867,23 @@ func (fs *ocfs) CreateHome(ctx context.Context) error {
 	return nil
 }
 
+func getUser(ctx context.Context) (*userpb.User, error) {
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		err := errors.Wrap(errtypes.UserRequired(""), "oc: error getting user from ctx")
+		return nil, err
+	}
+	return u, nil
+}
+
 func (fs *ocfs) GetHome(ctx context.Context) (string, error) {
 	home := fs.wrap(ctx, "/")
+	u, err := getUser(ctx)
+	if err != nil {
+		err = errors.Wrap(err, "oc GetHome: no user in ctx and home is enabled")
+	}
+	layout := templates.WithUser(u, fs.c.Layout)
+	home = path.Join(fs.c.DataDirectory, layout, "/")
 	return home, nil
 }
 
