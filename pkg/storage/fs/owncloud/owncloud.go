@@ -877,13 +877,12 @@ func getUser(ctx context.Context) (*userpb.User, error) {
 }
 
 func (fs *ocfs) GetHome(ctx context.Context) (string, error) {
-	home := fs.wrap(ctx, "/")
 	u, err := getUser(ctx)
 	if err != nil {
 		err = errors.Wrap(err, "oc GetHome: no user in ctx and home is enabled")
 	}
 	layout := templates.WithUser(u, fs.c.Layout)
-	home = path.Join(fs.c.DataDirectory, layout, "/")
+	home := path.Join(fs.c.DataDirectory, layout, "/")
 	return home, nil
 }
 
