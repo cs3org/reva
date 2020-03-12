@@ -1,0 +1,39 @@
+[shared]
+jwt_secret = "Pive-Fumkiu4"
+gatewaysvc = "localhost:19000"
+
+[http]
+address = "0.0.0.0:20080"
+
+[http.services.dataprovider]
+driver = "local"
+temp_folder = "/var/tmp/"
+
+[http.services.dataprovider.drivers.local]
+namespace = "/var/tmp/reva/"
+user_layout = "{{.Username}}"
+enable_home = true
+
+[http.services.wellknown]
+issuer = "http://localhost:20080"
+authorization_endpoint = "http://localhost:20080/oauth2/auth"
+token_endpoint = "http://localhost:20080/oauth2/token" 
+revocation_endpoint = "http://localhost:20080/oauth2/auth"
+introspection_endpoint = "http://localhost:20080/oauth2/introspect"
+userinfo_endpoint = "http://localhost:20080/oauth2/userinfo"
+
+[http.services.oidcprovider]
+prefix = "oauth2"
+issuer = "http://localhost:20080"
+
+[http.services.oidcprovider.clients.phoenix]
+id = "phoenix"
+redirect_uris = ["http://localhost:8300/oidc-callback.html", "http://localhost:8300/"]
+grant_types = ["implicit", "refresh_token", "authorization_code", "password", "client_credentials"]
+response_types = ["code"] # use authorization code flow, see https://developer.okta.com/blog/2019/05/01/is-the-oauth-implicit-flow-dead for details
+scopes = ["openid", "profile", "email", "offline"]
+public = true # force PKCS for public clients
+
+[http.services.ocdav]
+files_namespace = "/"
+dav_namespace = "/"
