@@ -849,6 +849,7 @@ func (fs *ocfs) CreateHome(ctx context.Context) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		err = errors.Wrap(err, "oc CreateHome: no user in ctx and home is enabled")
+		panic(err)
 	}
 	layout := templates.WithUser(u, fs.c.Layout)
 
@@ -880,6 +881,7 @@ func (fs *ocfs) GetHome(ctx context.Context) (string, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		err = errors.Wrap(err, "oc GetHome: no user in ctx and home is enabled")
+		panic(err)
 	}
 	layout := templates.WithUser(u, fs.c.Layout)
 	home := path.Join(fs.c.DataDirectory, layout, "/")
