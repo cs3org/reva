@@ -28,6 +28,5 @@ import (
 	_ "github.com/cs3org/reva/pkg/storage/fs/ocis"
 	_ "github.com/cs3org/reva/pkg/storage/fs/owncloud"
 	_ "github.com/cs3org/reva/pkg/storage/fs/s3"
-	_ "github.com/cs3org/reva/pkg/storage/fs/stub"
 	// Add your own here
 )

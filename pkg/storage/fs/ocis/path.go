@@ -4,19 +4,20 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path"
+	"path/filepath"
 	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/storage/templates"
+	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/pkg/errors"
 )
 
+// Path implements transformations from filepath to node and back
 type Path struct {
 	// ocis fs works on top of a dir of uuid nodes
-	DataDirectory string `mapstructure:"data_directory"`
+	Root string `mapstructure:"root"`
 
 	// UserLayout wraps the internal path with user information.
 	// Example: if conf.Namespace is /ocis/user and received path is /docs
@@ -28,8 +29,8 @@ type Path struct {
 	EnableHome bool `mapstructure:"enable_home"`
 }
 
-// Resolve takes in a request path or request id and converts it to an internal path.
-func (pw *Path) Resolve(ctx context.Context, ref *provider.Reference) (string, error) {
+// Resolve takes in a request path or request id and converts it to a NodeInfo
+func (pw *Path) Resolve(ctx context.Context, ref *provider.Reference) (*NodeInfo, error) {
 	if ref.GetPath() != "" {
 		return pw.Wrap(ctx, ref.GetPath())
 	}
@@ -39,11 +40,12 @@ func (pw *Path) Resolve(ctx context.Context, ref *provider.Reference) (string, e
 	}
 
 	// reference is invalid
-	return "", fmt.Errorf("invalid reference %+v", ref)
+	return nil, fmt.Errorf("invalid reference %+v", ref)
 }
 
-func (pw *Path) Wrap(ctx context.Context, fn string) (internal string, err error) {
-	var link, nodeID, root string
+// Wrap converts a filename into a NodeInfo
+func (pw *Path) Wrap(ctx context.Context, fn string) (node *NodeInfo, err error) {
+	var link, root string
 	if fn == "" {
 		fn = "/"
 	}
@@ -58,33 +60,16 @@ func (pw *Path) Wrap(ctx context.Context, fn string) (internal string, err error
 		}
 
 		layout := templates.WithUser(u, pw.UserLayout)
-		root = path.Join(pw.DataDirectory, "users", layout)
+		root = filepath.Join(pw.Root, "users", layout)
 
 	} else {
 		// start at the storage root node
-		root = path.Join(pw.DataDirectory, "nodes", "root")
+		root = filepath.Join(pw.Root, "nodes/root")
 	}
 
+	node, err = pw.ReadRootLink(root)
 	// The symlink contains the nodeID
-	link, err = os.Readlink(root)
-	if os.IsNotExist(err) {
-		err = errtypes.NotFound(fn)
-		return
-	}
 	if err != nil {
-		err = errors.Wrap(err, "ocisfs: Wrap: readlink error")
-		return
-	}
-
-	// extract the nodeID
-	if strings.HasPrefix(link, "../nodes/") { // TODO does not take into account the template
-		nodeID = link[9:]
-		if strings.Contains(nodeID, "/") {
-			err = fmt.Errorf("ocisfs: node id must not contain / %+v", nodeID) // TODO allow this to distribute nodeids over multiple folders
-			return
-		}
-	} else {
-		err = fmt.Errorf("ocisfs: expected '../nodes/ prefix, got' %+v", link)
 		return
 	}
 
@@ -92,9 +77,20 @@ func (pw *Path) Wrap(ctx context.Context, fn string) (internal string, err error
 		// we need to walk the path
 		segments := strings.Split(strings.TrimLeft(fn, "/"), "/")
 		for i := range segments {
-			link, err = os.Readlink(path.Join(pw.DataDirectory, "nodes", nodeID, "children", segments[i]))
+			node.ParentID = node.ID
+			node.ID = ""
+			node.Name = segments[i]
+
+			link, err = os.Readlink(filepath.Join(pw.Root, "nodes", node.ParentID, "children", node.Name))
 			if os.IsNotExist(err) {
-				err = errtypes.NotFound(path.Join(pw.DataDirectory, "nodes", nodeID, "children", segments[i]))
+				node.Exists = false
+				// if this is the last segment we can use it as the node name
+				if i == len(segments)-1 {
+					err = nil
+					return
+				}
+
+				err = errtypes.NotFound(filepath.Join(pw.Root, "nodes", node.ParentID, "children", node.Name))
 				return
 			}
 			if err != nil {
@@ -102,11 +98,7 @@ func (pw *Path) Wrap(ctx context.Context, fn string) (internal string, err error
 				return
 			}
 			if strings.HasPrefix(link, "../../") {
-				nodeID = link[6:]
-				if strings.Contains(nodeID, "/") {
-					err = fmt.Errorf("ocisfs: node id must not contain / %+v", nodeID)
-					return
-				}
+				node.ID = filepath.Base(link)
 			} else {
 				err = fmt.Errorf("ocisfs: expected '../../ prefix, got' %+v", link)
 				return
@@ -114,55 +106,84 @@ func (pw *Path) Wrap(ctx context.Context, fn string) (internal string, err error
 		}
 	}
 
-	internal = path.Join(pw.DataDirectory, "nodes", nodeID)
 	return
 }
 
 // WrapID returns the internal path for the id
-func (pw *Path) WrapID(ctx context.Context, id *provider.ResourceId) (string, error) {
-	if id == nil || id.GetOpaqueId() == "" {
-		return "", fmt.Errorf("invalid resource id %+v", id)
+func (pw *Path) WrapID(ctx context.Context, id *provider.ResourceId) (*NodeInfo, error) {
+	if id == nil || id.OpaqueId == "" {
+		return nil, fmt.Errorf("invalid resource id %+v", id)
 	}
-	return path.Join(pw.DataDirectory, "nodes", id.GetOpaqueId()), nil
+	return &NodeInfo{ID: id.OpaqueId}, nil
 }
 
-func (pw *Path) Unwrap(ctx context.Context, internal string) (external string, err error) {
-	var link string
+func (pw *Path) Unwrap(ctx context.Context, ni *NodeInfo) (external string, err error) {
 	for err == nil {
-		link, err = os.Readlink(path.Join(internal, "parentname"))
+		err = pw.FillParentAndName(ni)
 		if os.IsNotExist(err) {
 			err = nil
 			return
 		}
 		if err != nil {
-			err = errors.Wrap(err, "ocisfs: getNode: readlink error")
+			err = errors.Wrap(err, "ocisfs: Unwrap: could not fill node")
 			return
 		}
-		parentID := path.Base(path.Dir(path.Dir(link)))
-		internal = path.Join(pw.DataDirectory, "nodes", parentID)
-		external = path.Join(path.Base(link), external)
+		external = filepath.Join(ni.Name, external)
+		ni.BecomeParent()
 	}
 	return
 }
 
-// ReadParentName reads the symbolic link and extracts the parnetNodeID and the name of the child
-func (pw *Path) ReadParentName(ctx context.Context, internal string) (parentNodeID string, name string, err error) {
+// FillParentAndName reads the symbolic link and extracts the parent ID and the name of the node if necessary
+func (pw *Path) FillParentAndName(node *NodeInfo) (err error) {
 
+	if node == nil || node.ID == "" {
+		err = fmt.Errorf("ocisfs: invalid node info '%+v'", node)
+	}
+
+	// check if node is already filled
+	if node.ParentID != "" && node.Name != "" {
+		return
+	}
+
+	var link string
 	// The parentname symlink looks like `../76455834-769e-412a-8a01-68f265365b79/children/myname.txt`
-	link, err := os.Readlink(path.Join(internal, "parentname"))
-	if os.IsNotExist(err) {
-		err = errtypes.NotFound(internal)
+	link, err = os.Readlink(filepath.Join(pw.Root, "nodes", node.ID, "parentname"))
+	if err != nil {
 		return
 	}
 
 	// check the link follows the correct schema
 	// TODO count slashes
 	if strings.HasPrefix(link, "../") {
-		name = path.Base(link)
-		parentNodeID = path.Base(path.Dir(path.Dir(link)))
+		node.Name = filepath.Base(link)
+		node.ParentID = filepath.Base(filepath.Dir(filepath.Dir(link)))
+		node.Exists = true
 	} else {
 		err = fmt.Errorf("ocisfs: expected '../' prefix, got '%+v'", link)
 		return
+	}
+	return
+}
+
+// ReadRootLink reads the symbolic link and extracts the node id
+func (pw *Path) ReadRootLink(root string) (node *NodeInfo, err error) {
+
+	// A root symlink looks like `../nodes/76455834-769e-412a-8a01-68f265365b79`
+	link, err := os.Readlink(root)
+	if os.IsNotExist(err) {
+		err = errtypes.NotFound(root)
+		return
+	}
+
+	// extract the nodeID
+	if strings.HasPrefix(link, "../nodes/") {
+		node = &NodeInfo{
+			ID:     filepath.Base(link),
+			Exists: true,
+		}
+	} else {
+		err = fmt.Errorf("ocisfs: expected '../nodes/ prefix, got' %+v", link)
 	}
 	return
 }
