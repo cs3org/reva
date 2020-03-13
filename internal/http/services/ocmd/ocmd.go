@@ -40,6 +40,10 @@ type svc struct {
 	ShareManager       *shareManager
 }
 
+func init() {
+	global.Register("ocmd", New)
+}
+
 // New returns a new ocmd object
 func New(m map[string]interface{}) (global.Service, error) {
 	conf := &Config{}

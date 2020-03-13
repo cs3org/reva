@@ -22,17 +22,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
-
-	"go.uber.org/zap"
 )
 
 type apiErrorCode string
 
 const (
-	apiErrorNotFound         apiErrorCode = "RESOURCE_NOT_FOUND"
-	apiErrorUnauthenticated  apiErrorCode = "UNAUTHENTICATED"
-	apiErrorUntrustedService apiErrorCode = "UNTRUSTED_SERVICE"
+	// apiErrorNotFound         apiErrorCode = "RESOURCE_NOT_FOUND"
+	// apiErrorUnauthenticated  apiErrorCode = "UNAUTHENTICATED"
+	// apiErrorUntrustedService apiErrorCode = "UNTRUSTED_SERVICE"
 	apiErrorUnimplemented    apiErrorCode = "FUNCTION_NOT_IMPLEMENTED"
 	apiErrorInvalidParameter apiErrorCode = "INVALID_PARAMETER"
 	apiErrorProviderError    apiErrorCode = "PROVIDER_ERROR"
@@ -94,9 +91,9 @@ type protocolOptions struct {
 	Permissions  string `json:"permissions,omitempty"`
 }
 
-type userManager interface {
-	UserExists(ctx context.Context, username string) error
-}
+// type userManager interface {
+// 	UserExists(ctx context.Context, username string) error
+// }
 
 type providerAuthorizer interface {
 	IsProviderAllowed(ctx context.Context, domain string) error
@@ -118,54 +115,43 @@ type shareManager interface {
 	GetExternalShare(ctx context.Context, sharedWith, id string) (*share, error)
 }
 
-type tokenManager interface {
-	IsValid(ctx context.Context, u *url.URL, token string) error
-}
+// type tokenManager interface {
+// 	IsValid(ctx context.Context, u *url.URL, token string) error
+// }
 
 // HAL mambo-jambo for the format of the responses.
-type halLinks struct {
-	Self *halRef `json:"self"`
-	Next *halRef `json:"next,omitempty"`
-}
-
-type halRef struct {
-	Href string `json:"href"`
-}
-
-type halEmbedded struct {
-	HALshares []*halSingleShareResponse `json:"shares"`
-}
-
-type halSingleShareResponse struct {
-	*share
-	*halLinks `json:"_links"`
-}
-
-func (ssr halSingleShareResponse) JSON() []byte {
-	b, _ := json.MarshalIndent(ssr, "", "   ")
-	return b
-}
-
-type halMultipleShareResponse struct {
-	Embbeded *halEmbedded `json:"_embbeded"`
-	Links    *halLinks    `json:"_links"`
-}
-
-func (msr halMultipleShareResponse) JSON() []byte {
-	b, _ := json.MarshalIndent(msr, "", "   ")
-	return b
-}
-
-type mySQLOptions struct {
-	Hostname string
-	Port     int
-	Username string
-	Password string
-	DB       string
-	Table    string
-
-	Logger *zap.Logger
-}
+// type halLinks struct {
+// 	Self *halRef `json:"self"`
+// 	Next *halRef `json:"next,omitempty"`
+// }
+//
+// type halRef struct {
+// 	Href string `json:"href"`
+// }
+//
+// type halEmbedded struct {
+// 	HALshares []*halSingleShareResponse `json:"shares"`
+// }
+//
+// type halSingleShareResponse struct {
+// 	*share
+// 	*halLinks `json:"_links"`
+// }
+//
+// func (ssr halSingleShareResponse) JSON() []byte {
+// 	b, _ := json.MarshalIndent(ssr, "", "   ")
+// 	return b
+// }
+//
+// type halMultipleShareResponse struct {
+// 	Embbeded *halEmbedded `json:"_embbeded"`
+// 	Links    *halLinks    `json:"_links"`
+// }
+//
+// func (msr halMultipleShareResponse) JSON() []byte {
+// 	b, _ := json.MarshalIndent(msr, "", "   ")
+// 	return b
+// }
 
 type apiInfo struct {
 	Enabled       bool            `json:"enabled"`

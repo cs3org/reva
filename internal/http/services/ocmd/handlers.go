@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/rand"
-	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -40,44 +39,44 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func (s *svc) trustedDomainCheck(logger *zerolog.Logger, providerAuthorizer providerAuthorizer, h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-
-		remoteAddress := r.RemoteAddr // ip:port
-		clientIP := strings.Split(remoteAddress, ":")[0]
-		domains, err := net.LookupAddr(clientIP)
-		if err != nil {
-			logger.Err(err).Msg("error getting domain for IP")
-			w.WriteHeader(http.StatusForbidden)
-			ae := newAPIError(apiErrorUntrustedService)
-			w.Write(ae.JSON())
-			return
-		}
-		logger.Debug().Str("ip", clientIP).Str("remote-address", remoteAddress).Str("domains", fmt.Sprintf("%+v", domains)).Msg("ip resolution")
-
-		allowedDomain := ""
-		for _, domain := range domains {
-			if err := providerAuthorizer.IsProviderAllowed(ctx, domain); err == nil {
-				allowedDomain = domain
-				break
-			}
-			logger.Debug().Str("domain", domain).Msg("domain not allowed")
-		}
-
-		if allowedDomain == "" {
-			logger.Err(errors.New("provider is not allowed to use the API")).Str("remote-address", remoteAddress)
-			w.WriteHeader(http.StatusForbidden)
-			ae := newAPIError(apiErrorUntrustedService)
-			w.Write(ae.JSON())
-			return
-		}
-
-		logger.Debug().Str("remote-address", remoteAddress).Str("domain", allowedDomain).Msg("provider is allowd to access the API")
-		mux.Vars(r)["domain"] = allowedDomain
-		h.ServeHTTP(w, r)
-	})
-}
+// func (s *svc) trustedDomainCheck(logger *zerolog.Logger, providerAuthorizer providerAuthorizer, h http.Handler) http.Handler {
+// 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// 		ctx := r.Context()
+//
+// 		remoteAddress := r.RemoteAddr // ip:port
+// 		clientIP := strings.Split(remoteAddress, ":")[0]
+// 		domains, err := net.LookupAddr(clientIP)
+// 		if err != nil {
+// 			logger.Err(err).Msg("error getting domain for IP")
+// 			w.WriteHeader(http.StatusForbidden)
+// 			ae := newAPIError(apiErrorUntrustedService)
+// 			w.Write(ae.JSON())
+// 			return
+// 		}
+// 		logger.Debug().Str("ip", clientIP).Str("remote-address", remoteAddress).Str("domains", fmt.Sprintf("%+v", domains)).Msg("ip resolution")
+//
+// 		allowedDomain := ""
+// 		for _, domain := range domains {
+// 			if err := providerAuthorizer.IsProviderAllowed(ctx, domain); err == nil {
+// 				allowedDomain = domain
+// 				break
+// 			}
+// 			logger.Debug().Str("domain", domain).Msg("domain not allowed")
+// 		}
+//
+// 		if allowedDomain == "" {
+// 			logger.Err(errors.New("provider is not allowed to use the API")).Str("remote-address", remoteAddress)
+// 			w.WriteHeader(http.StatusForbidden)
+// 			ae := newAPIError(apiErrorUntrustedService)
+// 			w.Write(ae.JSON())
+// 			return
+// 		}
+//
+// 		logger.Debug().Str("remote-address", remoteAddress).Str("domain", allowedDomain).Msg("provider is allowd to access the API")
+// 		mux.Vars(r)["domain"] = allowedDomain
+// 		h.ServeHTTP(w, r)
+// 	})
+// }
 
 func (s *svc) propagateInternalShare(logger *zerolog.Logger, sm shareManager, pa providerAuthorizer) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -91,7 +90,9 @@ func (s *svc) propagateInternalShare(logger *zerolog.Logger, sm shareManager, pa
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
 			ae := newAPIError(apiErrorInvalidParameter).WithMessage("Could not retrieve share ID")
-			w.Write(ae.JSON())
+			if _, err = w.Write(ae.JSON()); err != nil {
+				logger.Err(err).Msg("Error writing to ResponseWriter")
+			}
 			return
 		}
 
@@ -121,16 +122,22 @@ func (s *svc) propagateInternalShare(logger *zerolog.Logger, sm shareManager, pa
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
 			ae := newAPIError(apiErrorProviderError).WithMessage("Remote OCM endpoint not reachable")
-			w.Write(ae.JSON())
+			if _, err = w.Write(ae.JSON()); err != nil {
+				logger.Err(err).Msg("Error writing to ResponseWriter")
+			}
 			return
 		}
+		defer resp.Body.Close()
+
 		if resp.StatusCode != http.StatusCreated {
 			body, _ := ioutil.ReadAll(resp.Body)
 			logger.Err(errors.New("wrong status code from ocm endpoint")).Int("expected", http.StatusCreated).Int("got", resp.StatusCode).Str("body", string(body))
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
 			ae := newAPIError(apiErrorProviderError).WithMessage("Wrong status code from OCM endpoint")
-			w.Write(ae.JSON())
+			if _, err = w.Write(ae.JSON()); err != nil {
+				logger.Err(err).Msg("Error writing to ResponseWriter")
+			}
 			return
 
 		}
@@ -138,7 +145,9 @@ func (s *svc) propagateInternalShare(logger *zerolog.Logger, sm shareManager, pa
 		logger.Debug().Msg("consumer share has been created on the remote OCM instance")
 
 		w.WriteHeader(http.StatusCreated)
-		w.Write(share.JSON())
+		if _, err = w.Write(share.JSON()); err != nil {
+			logger.Err(err).Msg("Error writing to ResponseWriter")
+		}
 	})
 
 }
@@ -148,7 +157,9 @@ func (s *svc) notImplemented(logger *zerolog.Logger) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotImplemented)
 		apiErr := newAPIError(apiErrorUnimplemented)
-		w.Write(apiErr.JSON())
+		if _, err := w.Write(apiErr.JSON()); err != nil {
+			logger.Err(err).Msg("Error writing to ResponseWriter")
+		}
 	})
 
 }
@@ -171,7 +182,9 @@ func (s *svc) getOCMInfo(logger *zerolog.Logger, host string) http.Handler {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write(info.JSON())
+		if _, err := w.Write(info.JSON()); err != nil {
+			logger.Err(err).Msg("Error writing to ResponseWriter")
+		}
 		// w.Write([]byte("{\"enabled\":true,\"apiVersion\":\"1.0-proposal1\",\"endPoint\":\"https:\\/\\/cernbox.up2u.cern.ch\\/cernbox\\/ocm\",\"resourceTypes\":[{\"name\":\"file\",\"shareTypes\":[\"user\",\"group\"],\"protocols\":{\"webdav\":\"\\/cernbox\\/ocm_webdav\"}}]}"))
 
 	})
@@ -209,6 +222,7 @@ func (s *svc) addProvider(logger *zerolog.Logger, pa providerAuthorizer) http.Ha
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		defer res.Body.Close()
 
 		if res.StatusCode != http.StatusOK {
 			logger.Err(errors.New("Error getting provider info")).Int("status", res.StatusCode)
@@ -241,7 +255,9 @@ func (s *svc) addProvider(logger *zerolog.Logger, pa providerAuthorizer) http.Ha
 			WebdavEndPoint: domain + apiInfo.ResourceTypes[0].Protocols.Webdav, //TODO check this instead of hardcode + support for multiple webdav
 		}
 
-		pa.AddProvider(ctx, internalProvider)
+		if err = pa.AddProvider(ctx, internalProvider); err != nil {
+			logger.Err(err).Msg("error adding provider")
+		}
 		w.WriteHeader(http.StatusOK)
 
 	})
@@ -317,7 +333,9 @@ func (s *svc) addShare(logger *zerolog.Logger, sm shareManager, pa providerAutho
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
 			ae := newAPIError(apiErrorInvalidParameter).WithMessage("body is not json")
-			w.Write(ae.JSON())
+			if _, err := w.Write(ae.JSON()); err != nil {
+				logger.Err(err).Msg("Error writing to ResponseWriter")
+			}
 			return
 		}
 
@@ -339,7 +357,9 @@ func (s *svc) addShare(logger *zerolog.Logger, sm shareManager, pa providerAutho
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
 			ae := newAPIError(apiErrorInvalidParameter).WithMessage("owner must contain domain")
-			w.Write(ae.JSON())
+			if _, err := w.Write(ae.JSON()); err != nil {
+				logger.Err(err).Msg("Error writing to ResponseWriter")
+			}
 			return
 		}
 
@@ -350,7 +370,9 @@ func (s *svc) addShare(logger *zerolog.Logger, sm shareManager, pa providerAutho
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
 			ae := newAPIError(apiErrorInvalidParameter).WithMessage("owner domain is not allowed")
-			w.Write(ae.JSON())
+			if _, err := w.Write(ae.JSON()); err != nil {
+				logger.Err(err).Msg("Error writing to ResponseWriter")
+			}
 			return
 		}
 
@@ -365,7 +387,9 @@ func (s *svc) addShare(logger *zerolog.Logger, sm shareManager, pa providerAutho
 					logger.Err(err).Msg("invalid parameters provided for creating share")
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusBadRequest)
-					w.Write(ae.JSON())
+					if _, err := w.Write(ae.JSON()); err != nil {
+						logger.Err(err).Msg("Error writing to ResponseWriter")
+					}
 					return
 
 				}
@@ -375,7 +399,9 @@ func (s *svc) addShare(logger *zerolog.Logger, sm shareManager, pa providerAutho
 		}
 
 		w.WriteHeader(http.StatusCreated)
-		w.Write(newShare.JSON())
+		if _, err := w.Write(newShare.JSON()); err != nil {
+			logger.Err(err).Msg("Error writing to ResponseWriter")
+		}
 
 	})
 }
@@ -401,12 +427,12 @@ func (s *svc) proxyWebdav(logger *zerolog.Logger, sm shareManager, pa providerAu
 
 		if len(pathElements) == 0 {
 
-			if r.Method == "OPTIONS" {
-
+			switch r.Method {
+			case "OPTIONS":
 				w.Header().Set("dav", "1,2")
 				w.Header().Set("allow", "OPTIONS,PROPFIND")
 
-			} else if r.Method == "PROPFIND" {
+			case "PROPFIND":
 
 				bodyb, _ := ioutil.ReadAll(r.Body)
 				body := string(bodyb)
@@ -416,41 +442,41 @@ func (s *svc) proxyWebdav(logger *zerolog.Logger, sm shareManager, pa providerAu
 				toReturn := "<?xml version=\"1.0\" encoding=\"utf-8\"?>" +
 					"<d:multistatus xmlns:d=\"DAV:\" xmlns:oc=\"http://owncloud.org/ns\">"
 
-				toReturn = toReturn + "<d:response>" +
+				toReturn += "<d:response>" +
 					"<d:href>/cernbox/desktop/remote.php/webdav/ocm/</d:href>" +
 					"<d:propstat>" +
 					"<d:status>HTTP/1.1 200 OK</d:status>" +
 					"<d:prop>"
 
 				if strings.Contains(body, "getlastmodified") {
-					toReturn = toReturn + fmt.Sprintf("<d:getlastmodified>%s</d:getlastmodified>", time.Now().Format(time.RFC1123))
+					toReturn += fmt.Sprintf("<d:getlastmodified>%s</d:getlastmodified>", time.Now().Format(time.RFC1123))
 				}
 
 				if strings.Contains(body, "creationdate") {
-					toReturn = toReturn + "<d:creationdate>2018-12-18T00:00:00Z</d:creationdate>"
+					toReturn += "<d:creationdate>2018-12-18T00:00:00Z</d:creationdate>"
 				}
 
 				if strings.Contains(body, "getetag") {
-					toReturn = toReturn + fmt.Sprintf("<d:getetag>&quot;60:%s&quot;</d:getetag>", string(rand.Intn(100)))
+					toReturn += fmt.Sprintf("<d:getetag>&quot;60:%s&quot;</d:getetag>", string(rand.Intn(100)))
 				}
 
 				if strings.Contains(body, "oc:id") {
-					toReturn = toReturn + "<oc:id>0</oc:id>"
+					toReturn += "<oc:id>0</oc:id>"
 				}
 
 				if strings.Contains(body, "size") {
-					toReturn = toReturn + "<oc:size>2</oc:size>"
+					toReturn += "<oc:size>2</oc:size>"
 				}
 
 				if strings.Contains(body, "permissions") {
-					toReturn = toReturn + "<oc:permissions>RWCKNVD</oc:permissions>"
+					toReturn += "<oc:permissions>RWCKNVD</oc:permissions>"
 				}
 
 				if strings.Contains(body, "displayname") {
-					toReturn = toReturn + "<d:displayname>ocm</d:displayname>"
+					toReturn += "<d:displayname>ocm</d:displayname>"
 				}
 
-				toReturn = toReturn + "<d:resourcetype>" +
+				toReturn += "<d:resourcetype>" +
 					"<d:collection/>" +
 					"</d:resourcetype>" +
 					"</d:prop>" +
@@ -483,34 +509,34 @@ func (s *svc) proxyWebdav(logger *zerolog.Logger, sm shareManager, pa providerAu
 						"<d:prop>", name)
 
 					if strings.Contains(body, "getlastmodified") {
-						xml = xml + fmt.Sprintf("<d:getlastmodified>%s</d:getlastmodified>", time.Now().Format(time.RFC1123))
+						xml += fmt.Sprintf("<d:getlastmodified>%s</d:getlastmodified>", time.Now().Format(time.RFC1123))
 					}
 
 					if strings.Contains(body, "creationdate") {
-						xml = xml + fmt.Sprintf("<d:creationdate>%s</d:creationdate>", shares[i].CreatedAt)
+						xml += fmt.Sprintf("<d:creationdate>%s</d:creationdate>", shares[i].CreatedAt)
 					}
 
 					if strings.Contains(body, "getetag") {
-						xml = xml + fmt.Sprintf("<d:getetag>&quot;60:%s:%s&quot;</d:getetag>", shares[i].ID, string(rand.Intn(100)))
+						xml += fmt.Sprintf("<d:getetag>&quot;60:%s:%s&quot;</d:getetag>", shares[i].ID, string(rand.Intn(100)))
 					}
 
 					if strings.Contains(body, "oc:id") {
-						xml = xml + fmt.Sprintf("<oc:id>%s</oc:id>", shares[i].ID)
+						xml += fmt.Sprintf("<oc:id>%s</oc:id>", shares[i].ID)
 					}
 
 					if strings.Contains(body, "size") {
-						xml = xml + "<oc:size>2</oc:size>"
+						xml += "<oc:size>2</oc:size>"
 					}
 
 					if strings.Contains(body, "permissions") {
-						xml = xml + "<oc:permissions>RWCKNVD</oc:permissions>"
+						xml += "<oc:permissions>RWCKNVD</oc:permissions>"
 					}
 
 					if strings.Contains(body, "displayname") {
-						xml = xml + fmt.Sprintf("<d:displayname>%s</d:displayname>", name)
+						xml += fmt.Sprintf("<d:displayname>%s</d:displayname>", name)
 					}
 
-					xml = xml + "<d:resourcetype>" +
+					xml += "<d:resourcetype>" +
 						"<d:collection/>" +
 						"</d:resourcetype>" +
 						"</d:prop>" +
@@ -532,17 +558,19 @@ func (s *svc) proxyWebdav(logger *zerolog.Logger, sm shareManager, pa providerAu
 				})
 
 				for i := 0; i < len(sharesXML); i++ {
-					toReturn = toReturn + sharesXML[i].XML
+					toReturn += sharesXML[i].XML
 				}
 
-				toReturn = toReturn + "</d:multistatus>"
+				toReturn += "</d:multistatus>"
 				bToReturn := []byte(toReturn)
 				w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 				w.Header().Set("Content-Length", strconv.Itoa(len(bToReturn)))
 				w.WriteHeader(http.StatusMultiStatus)
-				w.Write(bToReturn)
+				if _, err := w.Write(bToReturn); err != nil {
+					logger.Err(err).Msg("Error writing to ResponseWriter")
+				}
 
-			} else {
+			default:
 				w.WriteHeader(http.StatusForbidden)
 			}
 
@@ -643,15 +671,14 @@ func rewriteHref(oldPath, newPath string) func(resp *http.Response) (err error) 
 		if err != nil {
 			return err
 		}
-		err = resp.Body.Close()
-		if err != nil {
-			return err
-		}
+		defer resp.Body.Close()
+
 		b = bytes.Replace(b, []byte(oldPath), []byte(newPath), -1) // replace html
 		body := ioutil.NopCloser(bytes.NewReader(b))
 		resp.Body = body
 		resp.ContentLength = int64(len(b))
 		resp.Header.Set("Content-Length", strconv.Itoa(len(b)))
+
 		return nil
 	}
 }
@@ -675,7 +702,9 @@ func logRequest(logger *zerolog.Logger, r *http.Request) {
 
 	// If this is a POST, add post data
 	if r.Method == "POST" {
-		r.ParseForm()
+		if err := r.ParseForm(); err != nil {
+			logger.Err(err).Msg("error parsing the request query")
+		}
 		request = append(request, "\n")
 		request = append(request, r.Form.Encode())
 	}
