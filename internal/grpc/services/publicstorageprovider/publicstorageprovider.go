@@ -46,14 +46,13 @@ func init() {
 
 type config struct {
 	MountPath   string `mapstructure:"mount_path"`
-	MountID     string `mapstructure:"mount_id"`
 	GatewayAddr string `mapstructure:"gateway_addr"`
 }
 
 type service struct {
-	conf               *config
-	mountPath, mountID string
-	gateway            gateway.GatewayAPIClient
+	conf      *config
+	mountPath string
+	gateway   gateway.GatewayAPIClient
 }
 
 func (s *service) Close() error {
@@ -85,7 +84,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	}
 
 	mountPath := c.MountPath
-	mountID := c.MountID
 
 	gateway, err := pool.GetGatewayServiceClient(c.GatewayAddr)
 	if err != nil {
@@ -95,7 +93,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	service := &service{
 		conf:      c,
 		mountPath: mountPath,
-		mountID:   mountID,
 		gateway:   gateway,
 	}
 

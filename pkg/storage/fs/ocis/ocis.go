@@ -20,12 +20,10 @@ package ocis
 
 import (
 	"context"
-	"fmt"
 	"io"
-	"io/ioutil"
 	"net/url"
 	"os"
-	"path"
+	"path/filepath"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -35,7 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
-	"github.com/cs3org/reva/pkg/storage/templates"
+	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/gofrs/uuid"
 	"github.com/mitchellh/mapstructure"
@@ -49,7 +47,7 @@ func init() {
 
 type config struct {
 	// ocis fs works on top of a dir of uuid nodes
-	DataDirectory string `mapstructure:"data_directory"`
+	Root string `mapstructure:"root"`
 
 	// UserLayout wraps the internal path with user information.
 	// Example: if conf.Namespace is /ocis/user and received path is /docs
@@ -72,10 +70,10 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 func (c *config) init(m map[string]interface{}) {
 	if c.UserLayout == "" {
-		c.UserLayout = "{{.Username}}"
+		c.UserLayout = "{{.Id.OpaqueId}}"
 	}
 	// c.DataDirectory should never end in / unless it is the root
-	c.DataDirectory = path.Clean(c.DataDirectory)
+	c.Root = filepath.Clean(c.Root)
 
 	// TODO we need a lot more mimetypes
 	mime.RegisterMime(".txt", "text/plain")
@@ -91,10 +89,13 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	c.init(m)
 
 	dataPaths := []string{
-		path.Join(c.DataDirectory, "users"),
-		path.Join(c.DataDirectory, "nodes"),
-		path.Join(c.DataDirectory, "trash/files"),
-		path.Join(c.DataDirectory, "trash/info"),
+		filepath.Join(c.Root, "users"),
+		filepath.Join(c.Root, "nodes"),
+		// notes contain symlinks from nodes/<u-u-i-d>/uploads/<uploadid> to ../../uploads/<uploadid>
+		// better to keep uploads on a fast / volatile storage before a workflow finally moves them to the nodes dir
+		filepath.Join(c.Root, "uploads"),
+		filepath.Join(c.Root, "trash/files"),
+		filepath.Join(c.Root, "trash/info"),
 	}
 	for _, v := range dataPaths {
 		if err := os.MkdirAll(v, 0700); err != nil {
@@ -105,12 +106,12 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	}
 
 	pw := &Path{
-		DataDirectory: c.DataDirectory,
-		EnableHome:    c.EnableHome,
-		UserLayout:    c.UserLayout,
+		Root:       c.Root,
+		EnableHome: c.EnableHome,
+		UserLayout: c.UserLayout,
 	}
 
-	tp, err := NewTree(pw, c.DataDirectory)
+	tp, err := NewTree(pw, c.Root)
 	if err != nil {
 		return nil, err
 	}
@@ -136,8 +137,7 @@ func (fs *ocisfs) GetQuota(ctx context.Context) (int, int, error) {
 	return 0, 0, nil
 }
 
-// Home discovery
-
+// CreateHome creates a new root node that has no parent id
 func (fs *ocisfs) CreateHome(ctx context.Context) error {
 	if !fs.conf.EnableHome || fs.conf.UserLayout == "" {
 		return errtypes.NotSupported("ocisfs: create home not supported")
@@ -149,7 +149,7 @@ func (fs *ocisfs) CreateHome(ctx context.Context) error {
 		return err
 	}
 	layout := templates.WithUser(u, fs.conf.UserLayout)
-	home := path.Join(fs.conf.DataDirectory, "users", layout)
+	home := filepath.Join(fs.conf.Root, "users", layout)
 
 	_, err = os.Stat(home)
 	if err == nil { // home already exists
@@ -157,7 +157,7 @@ func (fs *ocisfs) CreateHome(ctx context.Context) error {
 	}
 
 	// create the users dir
-	parent := path.Dir(home)
+	parent := filepath.Dir(home)
 	err = os.MkdirAll(parent, 0700)
 	if err != nil {
 		// MkdirAll will return success on mkdir over an existing directory.
@@ -166,7 +166,7 @@ func (fs *ocisfs) CreateHome(ctx context.Context) error {
 
 	// create a directory node (with children subfolder)
 	nodeID := uuid.Must(uuid.NewV4()).String()
-	err = os.MkdirAll(path.Join(fs.conf.DataDirectory, "nodes", nodeID, "children"), 0700)
+	err = os.MkdirAll(filepath.Join(fs.conf.Root, "nodes", nodeID, "children"), 0700)
 	if err != nil {
 		return errors.Wrap(err, "ocisfs: error node dir")
 	}
@@ -187,7 +187,7 @@ func (fs *ocisfs) GetHome(ctx context.Context) (string, error) {
 		return "", err
 	}
 	layout := templates.WithUser(u, fs.conf.UserLayout)
-	return path.Join(fs.conf.DataDirectory, layout), nil // TODO use a namespace?
+	return filepath.Join(fs.conf.Root, layout), nil // TODO use a namespace?
 }
 
 // Tree persistence
@@ -198,12 +198,11 @@ func (fs *ocisfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (str
 }
 
 func (fs *ocisfs) CreateDir(ctx context.Context, fn string) (err error) {
-	parent := path.Dir(fn)
-	var in string
-	if in, err = fs.pw.Wrap(ctx, parent); err != nil {
+	var node *NodeInfo
+	if node, err = fs.pw.Wrap(ctx, fn); err != nil {
 		return
 	}
-	return fs.tp.CreateDir(ctx, in, path.Base(fn))
+	return fs.tp.CreateDir(ctx, node)
 }
 
 func (fs *ocisfs) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
@@ -211,45 +210,51 @@ func (fs *ocisfs) CreateReference(ctx context.Context, path string, targetURI *u
 }
 
 func (fs *ocisfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (err error) {
-	var oldInternal, newInternal string
-	if oldInternal, err = fs.pw.Resolve(ctx, oldRef); err != nil {
+	var oldNode, newNode *NodeInfo
+	if oldNode, err = fs.pw.Resolve(ctx, oldRef); err != nil {
+		return
+	}
+	if !oldNode.Exists {
+		err = errtypes.NotFound(filepath.Join(oldNode.ParentID, oldNode.Name))
 		return
 	}
 
-	if newInternal, err = fs.pw.Resolve(ctx, newRef); err != nil {
-		// TODO might not exist ...
+	if newNode, err = fs.pw.Resolve(ctx, newRef); err != nil {
 		return
 	}
-	return fs.tp.Move(ctx, oldInternal, newInternal)
+	return fs.tp.Move(ctx, oldNode, newNode)
 }
 
-func (fs *ocisfs) GetMD(ctx context.Context, ref *provider.Reference) (ri *provider.ResourceInfo, err error) {
-	var in string
-	if in, err = fs.pw.Resolve(ctx, ref); err != nil {
+func (fs *ocisfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (ri *provider.ResourceInfo, err error) {
+	var node *NodeInfo
+	if node, err = fs.pw.Resolve(ctx, ref); err != nil {
 		return
 	}
-	var md os.FileInfo
-	md, err = fs.tp.GetMD(ctx, in)
-	if err != nil {
-		return nil, err
+	if !node.Exists {
+		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
+		return
 	}
-	return fs.normalize(ctx, md, in)
+	return fs.normalize(ctx, node)
 }
 
-func (fs *ocisfs) ListFolder(ctx context.Context, ref *provider.Reference) (finfos []*provider.ResourceInfo, err error) {
-	var in string
-	if in, err = fs.pw.Resolve(ctx, ref); err != nil {
+func (fs *ocisfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) (finfos []*provider.ResourceInfo, err error) {
+	var node *NodeInfo
+	if node, err = fs.pw.Resolve(ctx, ref); err != nil {
 		return
 	}
-	var mds []os.FileInfo
-	mds, err = fs.tp.ListFolder(ctx, in)
+	if !node.Exists {
+		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
+		return
+	}
+	var children []*NodeInfo
+	children, err = fs.tp.ListFolder(ctx, node)
 	if err != nil {
 		return
 	}
 
-	for _, md := range mds {
+	for _, child := range children {
 		var ri *provider.ResourceInfo
-		ri, err = fs.normalize(ctx, md, path.Join(in, "children", md.Name()))
+		ri, err = fs.normalize(ctx, child)
 		if err != nil {
 			return
 		}
@@ -259,11 +264,15 @@ func (fs *ocisfs) ListFolder(ctx context.Context, ref *provider.Reference) (finf
 }
 
 func (fs *ocisfs) Delete(ctx context.Context, ref *provider.Reference) (err error) {
-	var in string
-	if in, err = fs.pw.Resolve(ctx, ref); err != nil {
+	var node *NodeInfo
+	if node, err = fs.pw.Resolve(ctx, ref); err != nil {
 		return
 	}
-	return fs.tp.Delete(ctx, in)
+	if !node.Exists {
+		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
+		return
+	}
+	return fs.tp.Delete(ctx, node)
 }
 
 // arbitrary metadata persistence
@@ -278,92 +287,22 @@ func (fs *ocisfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refe
 
 // Data persistence
 
-func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
-	var in string // the internal path of the file node
-
-	p := ref.GetPath()
-	if p != "" {
-		if p == "/" {
-			return fmt.Errorf("cannot upload into folder node /")
-		}
-		parent := path.Dir(p)
-		name := path.Base(p)
-
-		inp, err := fs.pw.Wrap(ctx, parent)
-
-		if _, err := os.Stat(path.Join(inp, "children")); os.IsNotExist(err) {
-			// TODO double check if node is a file
-			return fmt.Errorf("cannot upload into folder node " + path.Join(inp, "children"))
-		}
-		childEntry := path.Join(inp, "children", name)
-
-		// try to determine nodeID by reading link
-		link, err := os.Readlink(childEntry)
-		if os.IsNotExist(err) {
-			// create a new file node
-			nodeID := uuid.Must(uuid.NewV4()).String()
-
-			in = path.Join(fs.conf.DataDirectory, "nodes", nodeID)
-
-			err = os.MkdirAll(in, 0700)
-			if err != nil {
-				return errors.Wrap(err, "ocisfs: could not create node dir")
-			}
-			// create back link
-			// we are not only linking back to the parent, but also to the filename
-			link = "../" + path.Base(inp) + "/children/" + name
-			err = os.Symlink(link, path.Join(in, "parentname"))
-			if err != nil {
-				return errors.Wrap(err, "ocisfs: could not symlink parent node")
-			}
-
-			// link child name to node
-			err = os.Symlink("../../"+nodeID, path.Join(inp, "children", name))
-			if err != nil {
-				return errors.Wrap(err, "ocisfs: could not symlink child entry")
-			}
-		} else {
-			// the nodeID is in the link
-			// TODO check if link has correct beginning?
-			nodeID := path.Base(link)
-			in = path.Join(fs.conf.DataDirectory, "nodes", nodeID)
-		}
-	} else if ref.GetId() != nil {
-		var err error
-		if in, err = fs.pw.WrapID(ctx, ref.GetId()); err != nil {
-			return err
-		}
-	} else {
-		return fmt.Errorf("invalid reference %+v", ref)
-	}
-
-	tmp, err := ioutil.TempFile(in, "._reva_atomic_upload")
-	if err != nil {
-		return errors.Wrap(err, "ocisfs: error creating tmp fn at "+in)
-	}
-
-	_, err = io.Copy(tmp, r)
-	if err != nil {
-		return errors.Wrap(err, "ocisfs: error writing to tmp file "+tmp.Name())
-	}
-
-	// TODO move old content to version
-	_ = os.RemoveAll(path.Join(in, "content"))
-
-	err = os.Rename(tmp.Name(), path.Join(in, "content"))
-	if err != nil {
-		return err
-	}
-	return fs.tp.Propagate(ctx, in)
+func (fs *ocisfs) ContentPath(node *NodeInfo) string {
+	return filepath.Join(fs.conf.Root, "nodes", node.ID, "content")
 }
 
 func (fs *ocisfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
-	in, err := fs.pw.Resolve(ctx, ref)
+	node, err := fs.pw.Resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "ocisfs: error resolving ref")
 	}
 
-	contentPath := path.Join(in, "content")
+	if !node.Exists {
+		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
+		return nil, err
+	}
+
+	contentPath := fs.ContentPath(node)
 
 	r, err := os.Open(contentPath)
 	if err != nil {
@@ -435,30 +374,33 @@ func getUser(ctx context.Context) (*userpb.User, error) {
 	return u, nil
 }
 
-func (fs *ocisfs) normalize(ctx context.Context, fi os.FileInfo, internal string) (ri *provider.ResourceInfo, err error) {
+func (fs *ocisfs) normalize(ctx context.Context, node *NodeInfo) (ri *provider.ResourceInfo, err error) {
 	var fn string
 
-	fn, err = fs.pw.Unwrap(ctx, path.Join("/", internal))
+	fn, err = fs.pw.Unwrap(ctx, node)
 	if err != nil {
 		return nil, err
 	}
-	// TODO GetMD should return the correct fileinfo
+	nodePath := filepath.Join(fs.conf.Root, "nodes", node.ID)
+
+	var fi os.FileInfo
 	nodeType := provider.ResourceType_RESOURCE_TYPE_INVALID
-	if fi, err = os.Stat(path.Join(internal, "content")); err == nil {
+	if fi, err = os.Stat(filepath.Join(nodePath, "content")); err == nil {
 		nodeType = provider.ResourceType_RESOURCE_TYPE_FILE
-	} else if fi, err = os.Stat(path.Join(internal, "children")); err == nil {
+	} else if fi, err = os.Stat(filepath.Join(nodePath, "children")); err == nil {
 		nodeType = provider.ResourceType_RESOURCE_TYPE_CONTAINER
-	} else if fi, err = os.Stat(path.Join(internal, "reference")); err == nil {
+	} else if fi, err = os.Stat(filepath.Join(nodePath, "reference")); err == nil {
 		// TODO handle references
 		nodeType = provider.ResourceType_RESOURCE_TYPE_REFERENCE
 	}
 
 	var etag []byte
-	if etag, err = xattr.Get(internal, "user.ocis.etag"); err != nil {
+	// TODO store etag in node folder or on content and child nodes?
+	if etag, err = xattr.Get(nodePath, "user.ocis.etag"); err != nil {
 		logger.New().Error().Err(err).Msg("could not read etag")
 	}
 	ri = &provider.ResourceInfo{
-		Id:       &provider.ResourceId{OpaqueId: path.Base(internal)},
+		Id:       &provider.ResourceId{OpaqueId: node.ID},
 		Path:     fn,
 		Type:     nodeType,
 		Etag:     string(etag),
