@@ -4,7 +4,6 @@
     "theme": "owncloud",
     "version": "0.1.0",
     "openIdConnect": {
-      "metadataUrl": "http://localhost:20080/.well-known/openid-configuration",
       "authority": "http://localhost:20080",
       "client_id": "phoenix",
       "response_type": "code",

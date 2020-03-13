@@ -1,9 +1,0 @@
-[grpc]
-address = "0.0.0.0:29000"
-
-[grpc.services.authprovider]
-auth_manager = "oidc"
-
-# If you want to use your own openid provider change this config
-[grpc.services.authprovider.auth_managers.oidc]
-issuer = "http://localhost:20080"
