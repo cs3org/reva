@@ -43,7 +43,7 @@ address = "0.0.0.0:12001"
 
 [http.services.dataprovider]
 driver = "owncloud"
-temp_folder = "/var/tmp/"
+temp_folder = "/var/tmp/reva/tmp"
 
 [http.services.dataprovider.drivers.owncloud]
 datadirectory = "/var/tmp/reva/data"

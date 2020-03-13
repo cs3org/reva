@@ -7,6 +7,7 @@
 - Hugo Gonzalez Labrador <github@hugo.labkode.com>
 - Ilja Neumann <ineumann@owncloud.com>
 - Jörn Friedrich Dreyer <jfd@butonic.de>
+- LovisaLugnegard <lovisa.lugnegard@gmail.com>
 - Michael D'Silva <md@aarnet.edu.au>
 - Michael D'Silva <michael.dsilva@aarnet.edu.au>
 - Mohitty <mohitt@iitk.ac.in>
