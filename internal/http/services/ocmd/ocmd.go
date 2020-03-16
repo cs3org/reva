@@ -19,14 +19,13 @@
 package ocmd
 
 import (
-	"fmt"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/mitchellh/mapstructure"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"net/http"
-
-	"github.com/cs3org/reva/pkg/rhttp/global"
-	"github.com/mitchellh/mapstructure"
+	"path"
 )
 
 // Config holds the config options that need to be passed down to all ocdav handlers
@@ -43,8 +42,6 @@ type svc struct {
 
 func init() {
 	global.Register("ocmd", New)
-
-	fmt.Println(">>>>>>>>>>>>>> Init OCMD")
 }
 
 // New returns a new ocmd object
@@ -56,8 +53,6 @@ func New(m map[string]interface{}) (global.Service, error) {
 	s := &svc{
 		Conf: conf,
 	}
-
-	fmt.Printf(">>>>>>>>>>>>>> Register NEW: %T \n", s)
 	return s, nil
 }
 
@@ -84,8 +79,9 @@ func (s *svc) Handler() http.Handler {
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 
 		method := r.Method
+		id := path.Base(r.URL.Path)
 
-		log.Debug().Str("head", head).Str("tail", r.URL.Path).Str("method", method).Msg("http routing")
+		log.Debug().Str("head", head).Str("tail", r.URL.Path).Str("method", method).Str("id", id).Msg("http routing")
 
 		switch head {
 		case "shares":
@@ -94,7 +90,11 @@ func (s *svc) Handler() http.Handler {
 				s.addShare(log, *s.ShareManager, *s.ProviderAuthorizer).ServeHTTP(w, r)
 				return
 			case "GET":
-				s.notImplemented(log).ServeHTTP(w, r)
+				if "/" != id {
+					s.notImplemented(log).ServeHTTP(w, r)
+				} else {
+					s.notImplemented(log).ServeHTTP(w, r)
+				}
 				return
 			default:
 				s.methodNotAllowed(log).ServeHTTP(w, r)
