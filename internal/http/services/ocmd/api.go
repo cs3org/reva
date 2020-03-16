@@ -33,6 +33,7 @@ const (
 	apiErrorUnimplemented    apiErrorCode = "FUNCTION_NOT_IMPLEMENTED"
 	apiErrorInvalidParameter apiErrorCode = "INVALID_PARAMETER"
 	apiErrorProviderError    apiErrorCode = "PROVIDER_ERROR"
+	apiErrorMethodNotAllowed apiErrorCode = "METHOD_NOT_ALLOWED"
 )
 
 func newAPIError(code apiErrorCode) *apiError {
