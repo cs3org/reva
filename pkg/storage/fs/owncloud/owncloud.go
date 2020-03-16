@@ -883,9 +883,8 @@ func (fs *ocfs) GetHome(ctx context.Context) (string, error) {
 		err = errors.Wrap(err, "oc GetHome: no user in ctx and home is enabled")
 		panic(err)
 	}
-	layout := templates.WithUser(u, fs.c.Layout)
-	home := path.Join(fs.c.DataDirectory, layout, "/")
-	return home, nil
+	relativeHome := templates.WithUser(u, fs.c.Layout)
+	return relativeHome, nil
 }
 
 func (fs *ocfs) CreateDir(ctx context.Context, fn string) (err error) {
