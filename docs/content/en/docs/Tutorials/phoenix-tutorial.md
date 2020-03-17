@@ -12,43 +12,61 @@ This is a guide on how you can run both Pheonix and Reva locally in a dev enviro
 
 Clone the phoenix repo from https://github.com/owncloud/phoenix 
 
-```git clone https://github.com/owncloud/phoenix```
+```
+git clone https://github.com/owncloud/phoenix
+```
 
 Clone the reva repo from https://github.com/cs3org/reva 
 
-```git clone https://github.com/cs3org/reva```
+```
+git clone https://github.com/cs3org/reva
+```
 
 ## 2. Build Reva
 Go to your Reva folder 
 
-```cd reva```
+```
+cd reva
+```
 
 Now you need to build Reva by running the following commands (you need to be in the reva folder)
 
-```make deps```
+```
+make deps
+```
 
-```make```
+```
+make
+```
 
 ## 3. Set up Phoenix
 Go to your Phoenix folder 
 
-```cd ../phoenix```
+```
+cd ../phoenix
+```
 
 Copy the config.sample.json file to config.json with the following command:
 
-```cp ../reva/examples/oc-phoenix/phoenix.oidc.config.json config.json```
+```
+cp ../reva/examples/oc-phoenix/phoenix.oidc.config.json config.json
+```
 
 
 ## 4. Run Phoenix and Reva
 Nu you need to run Phoenix and Revad (the Reva deamon). This is done with the following steps:
 In the Reva folder
 
-```cd examples/oc-phoenix/ && ../../cmd/revad/revad -dev-dir .``` 
+```
+cd examples/oc-phoenix/ && ../../cmd/revad/revad -dev-dir .
+``` 
 
 The Revad should now be running.
 In the Phoenix folder (open another terminal tab):
 
-```yarn watch-all``` 
+```
+yarn watch-all
+``` 
 
 ## 5. Open Phoenix 
 You should now have both Reva and Phoenix up. You can open Phoenix on localhost:8300.
