@@ -46,12 +46,19 @@ func init() {
 
 // New returns a new ocmd object
 func New(m map[string]interface{}) (global.Service, error) {
+
 	conf := &Config{}
+	providerAuthorizer := new(providerAuthorizer)
+	shareManager := new(shareManager)
+
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
 	}
+
 	s := &svc{
-		Conf: conf,
+		Conf:               conf,
+		ProviderAuthorizer: providerAuthorizer,
+		ShareManager:       shareManager,
 	}
 	return s, nil
 }
@@ -90,10 +97,10 @@ func (s *svc) Handler() http.Handler {
 				s.addShare(log, *s.ShareManager, *s.ProviderAuthorizer).ServeHTTP(w, r)
 				return
 			case "GET":
-				if "/" != id {
-					s.notImplemented(log).ServeHTTP(w, r)
+				if "/" == id {
+					s.listAllShares(log, *s.ShareManager, *s.ProviderAuthorizer).ServeHTTP(w, r)
 				} else {
-					s.notImplemented(log).ServeHTTP(w, r)
+					s.getShare(log, *s.ShareManager, *s.ProviderAuthorizer, id).ServeHTTP(w, r)
 				}
 				return
 			default:
