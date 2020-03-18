@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"go/build"
 	"io"
 	"io/ioutil"
 	"os"
@@ -206,7 +207,19 @@ func createTag(version string) {
 	run(cmd)
 }
 
+// from https://stackoverflow.com/questions/32649770/how-to-get-current-gopath-from-code
+func getGoPath() string {
+	gopath := os.Getenv("GOPATH")
+	if gopath == "" {
+		gopath = build.Default.GOPATH
+	}
+	return gopath
+}
+
 func run(cmd *exec.Cmd) {
+	gopath := getGoPath()
+	gobin := fmt.Sprintf("%s/bin", gopath)
+	cmd.Env = append(cmd.Env, gobin)
 	var b bytes.Buffer
 	mw := io.MultiWriter(os.Stdout, &b)
 	cmd.Stdout = mw
