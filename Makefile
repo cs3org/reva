@@ -1,5 +1,4 @@
 .PHONY: build
-default: build test lint contrib
 
 SHELL := /bin/bash
 BUILD_DATE=`date +%FT%T%z`
@@ -8,6 +7,9 @@ GIT_BRANCH=`git rev-parse --symbolic-full-name --abbrev-ref HEAD`
 GIT_DIRTY=`git diff-index --quiet HEAD -- || echo "dirty-"`
 VERSION=`git describe --always`
 GO_VERSION=`go version | awk '{print $$3}'`
+
+default: build test lint contrib
+release: deps build test lint
 
 off:
 	GORPOXY=off
