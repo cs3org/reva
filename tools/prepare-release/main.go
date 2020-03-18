@@ -22,7 +22,6 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"go/build"
 	"io"
 	"io/ioutil"
 	"os"
@@ -78,7 +77,7 @@ func main() {
 	run(cmd)
 
 	// create new changelog
-	cmd = exec.Command("calens", "-o", "CHANGELOG.md")
+	cmd = exec.Command(getGoBin("calens"), "-o", "CHANGELOG.md")
 	run(cmd)
 
 	// add new VERSION and BUILD_DATE
@@ -110,7 +109,7 @@ func main() {
 	run(cmd)
 
 	// create new changelog
-	cmd = exec.Command("calens", "-o", "changelog/NOTE.md", "-i", path.Join(tmp, "changelog"))
+	cmd = exec.Command(getGoBin("calens"), "-o", "changelog/NOTE.md", "-i", path.Join(tmp, "changelog"))
 	run(cmd)
 
 	// Generate changelog also in the documentation
@@ -207,19 +206,13 @@ func createTag(version string) {
 	run(cmd)
 }
 
-// from https://stackoverflow.com/questions/32649770/how-to-get-current-gopath-from-code
-func getGoPath() string {
-	gopath := os.Getenv("GOPATH")
-	if gopath == "" {
-		gopath = build.Default.GOPATH
-	}
-	return gopath
-}
-
-func run(cmd *exec.Cmd) {
-	gopath := getGoPath()
+func getGoBin(tool string) string {
+	cmd := exec.Command("go", "env", "GOPATH")
+	gopath := runAndGet(cmd)
 	gobin := fmt.Sprintf("%s/bin", gopath)
-	cmd.Env = append(cmd.Env, gobin)
+	return path.Join(gobin, tool)
+}
+func run(cmd *exec.Cmd) {
 	var b bytes.Buffer
 	mw := io.MultiWriter(os.Stdout, &b)
 	cmd.Stdout = mw
