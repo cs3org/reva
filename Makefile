@@ -41,7 +41,7 @@ lint:
 	`go env GOPATH`/bin/golangci-lint run
 
 contrib:
-	git shortlog -se | cut -c8- | sort -u | awk '{print "-", $$0}' | grep -v 'users.noreply.github.com' > CONTRIBUTORS.md
+	#git shortlog -se | cut -c8- | sort -u | awk '{print "-", $$0}' | grep -v 'users.noreply.github.com' > CONTRIBUTORS.md
 
 # for manual building only
 deps:
