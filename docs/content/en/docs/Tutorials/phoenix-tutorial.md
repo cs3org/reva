@@ -6,7 +6,8 @@ description: >
   Connect Phoenix and Reva locally
 ---
 
-This is a guide on how you can run both Pheonix and Reva locally in a dev environment. Phoenix is a frontend application connected to an open cloud backend server through the Reva platform.
+This is a guide on how you can run both Pheonix and Reva locally in a dev environment. 
+Phoenix is the new ownCloud frontend application and can be connected to Reva.
 
 ## 1. Clone the Phoenix and Reva repos
 
@@ -29,7 +30,7 @@ Go to your Reva folder
 cd reva
 ```
 
-Now you need to build Reva by running the following commands (you need to be in the reva folder)
+Now you need to build Reva by running the following commands (you need to be in the *reva* folder)
 
 ```
 make deps
@@ -46,7 +47,7 @@ Go to your Phoenix folder
 cd ../phoenix
 ```
 
-Copy the config.sample.json file to config.json with the following command:
+Copy the *config.sample.json* file to *config.json* with the following command:
 
 ```
 cp ../reva/examples/oc-phoenix/phoenix.oidc.config.json config.json
@@ -54,14 +55,15 @@ cp ../reva/examples/oc-phoenix/phoenix.oidc.config.json config.json
 
 
 ## 4. Run Phoenix and Reva
-Nu you need to run Phoenix and Revad (the Reva deamon). This is done with the following steps:
-In the Reva folder
+Now you need to run Phoenix and Revad (the Reva deamon). Follow these steps
+from the *reva* folder:
 
 ```
 cd examples/oc-phoenix/ && ../../cmd/revad/revad -dev-dir .
 ``` 
 
-The Revad should now be running.
+The Reva daemon (revad) should now be running.
+
 In the Phoenix folder (open another terminal tab):
 
 ```
@@ -69,10 +71,11 @@ yarn watch-all
 ``` 
 
 ## 5. Open Phoenix 
-You should now have both Reva and Phoenix up. You can open Phoenix on localhost:8300.
-Log in use username einstein and password relativity. 
+You should now have both Reva and Phoenix up and running. You can access Phoenix on ```http://localhost:8300```.
+Log in using username *einstein* and password *relativity*. 
 
 ## 6. Local changes
-If you now do changes in phoenix they will directly appear on localhost:8300. You can chekc this by e.g. change the name of one of the navItems in "default.js".
+If you now do changes in Phoenix they will live changed on the opened tab *http://localhost:8300*.
+You can check for example, change the name of one of the navItems in "default.js".
 
-## 7. Enjoy your new Reva and Pheonix set up!
+## 7. Enjoy your new Reva and Phoenix set up!
