@@ -6,6 +6,7 @@
 - Hannah von Reth <vonreth@kde.org>
 - Hugo Gonzalez Labrador <github@hugo.labkode.com>
 - Ilja Neumann <ineumann@owncloud.com>
+- Ishank Arora <ishank011@gmail.com>
 - Jörn Friedrich Dreyer <jfd@butonic.de>
 - LovisaLugnegard <lovisa.lugnegard@gmail.com>
 - Michael D'Silva <md@aarnet.edu.au>
