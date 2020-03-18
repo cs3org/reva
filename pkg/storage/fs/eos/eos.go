@@ -180,6 +180,10 @@ func (c *config) init() {
 	if c.CacheDirectory == "" {
 		c.CacheDirectory = os.TempDir()
 	}
+
+	if c.UserLayout == "" {
+		c.UserLayout = "{{.Username}}" // TODO set better layout
+	}
 }
 
 // New returns a new implementation of the storage.FS interface that connects to EOS.
@@ -226,7 +230,7 @@ func (fs *eosfs) Shutdown(ctx context.Context) error {
 }
 
 func (fs *eosfs) wrapShadow(ctx context.Context, fn string) (internal string) {
-	if fs.conf.EnableHome && fs.conf.UserLayout != "" {
+	if fs.conf.EnableHome {
 		u, err := getUser(ctx)
 		if err != nil {
 			err = errors.Wrap(err, "eos: wrap: no user in ctx and home is enabled")
@@ -241,13 +245,11 @@ func (fs *eosfs) wrapShadow(ctx context.Context, fn string) (internal string) {
 }
 
 func (fs *eosfs) wrap(ctx context.Context, fn string) (internal string) {
-	if fs.conf.EnableHome && fs.conf.UserLayout != "" {
-		u, err := getUser(ctx)
+	if fs.conf.EnableHome {
+		layout, err := fs.GetHome(ctx)
 		if err != nil {
-			err = errors.Wrap(err, "eos: wrap: no user in ctx and home is enabled")
 			panic(err)
 		}
-		layout := templates.WithUser(u, fs.conf.UserLayout)
 		internal = path.Join(fs.conf.Namespace, layout, fn)
 	} else {
 		internal = path.Join(fs.conf.Namespace, fn)
@@ -267,10 +269,9 @@ func (fs *eosfs) unwrap(ctx context.Context, internal string) (external string) 
 }
 
 func (fs *eosfs) getLayout(ctx context.Context) (layout string) {
-	if fs.conf.EnableHome && fs.conf.UserLayout != "" {
+	if fs.conf.EnableHome {
 		u, err := getUser(ctx)
 		if err != nil {
-			err = errors.Wrap(err, "eos: unwrap: no user in ctx and home is enabled")
 			panic(err)
 		}
 		layout = templates.WithUser(u, fs.conf.UserLayout)
@@ -806,7 +807,14 @@ func (fs *eosfs) GetHome(ctx context.Context) (string, error) {
 		return "", errtypes.NotSupported("eos: get home not supported")
 	}
 
-	return "/", nil
+	u, err := getUser(ctx)
+	if err != nil {
+		err = errors.Wrap(err, "local: wrap: no user in ctx and home is enabled")
+		return "", err
+	}
+	relativeHome := templates.WithUser(u, fs.conf.UserLayout)
+
+	return relativeHome, nil
 }
 
 func (fs *eosfs) createShadowHome(ctx context.Context) error {

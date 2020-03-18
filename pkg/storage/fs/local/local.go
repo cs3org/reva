@@ -46,7 +46,7 @@ func init() {
 }
 
 type config struct {
-	Namespace  string `mapstructure:"namespace"`
+	Root       string `mapstructure:"root"`
 	EnableHome bool   `mapstructure:"enable_home"`
 	UserLayout string `mapstructure:"user_layout"`
 }
@@ -68,17 +68,21 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		return nil, err
 	}
 
-	// defaults for Namespace
-	if c.Namespace == "" {
-		c.Namespace = "/var/tmp/reva/"
+	// defaults for Root
+	if c.Root == "" {
+		c.Root = "/var/tmp/reva/"
+	}
+
+	if c.UserLayout == "" {
+		c.UserLayout = "{{.Username}}"
 	}
 
 	// create namespace if it does not exist
-	if err = os.MkdirAll(c.Namespace, 0755); err != nil {
+	if err = os.MkdirAll(c.Root, 0755); err != nil {
 		return nil, errors.Wrap(err, "local: could not create namespace dir")
 	}
 
-	return &localfs{namespace: c.Namespace, conf: c}, nil
+	return &localfs{root: c.Root, conf: c}, nil
 }
 
 func (fs *localfs) Shutdown(ctx context.Context) error {
@@ -110,32 +114,28 @@ func getUser(ctx context.Context) (*userpb.User, error) {
 }
 
 func (fs *localfs) wrap(ctx context.Context, p string) (internal string) {
-	if fs.conf.EnableHome && fs.conf.UserLayout != "" {
-		u, err := getUser(ctx)
+	if fs.conf.EnableHome {
+		layout, err := fs.GetHome(ctx)
 		if err != nil {
-			err = errors.Wrap(err, "local: wrap: no user in ctx and home is enabled")
 			panic(err)
 		}
-		layout := templates.WithUser(u, fs.conf.UserLayout)
-		internal = path.Join(fs.conf.Namespace, layout, p)
+		internal = path.Join(fs.conf.Root, layout, p)
 	} else {
-		internal = path.Join(fs.conf.Namespace, p)
+		internal = path.Join(fs.conf.Root, p)
 	}
 	return
 }
 
 func (fs *localfs) unwrap(ctx context.Context, np string) (external string) {
-	if fs.conf.EnableHome && fs.conf.UserLayout != "" {
-		u, err := getUser(ctx)
+	if fs.conf.EnableHome {
+		layout, err := fs.GetHome(ctx)
 		if err != nil {
-			err = errors.Wrap(err, "local: unwrap: no user in ctx and home is enabled")
 			panic(err)
 		}
-		layout := templates.WithUser(u, fs.conf.UserLayout)
-		trim := path.Join(fs.conf.Namespace, layout)
+		trim := path.Join(fs.conf.Root, layout)
 		external = strings.TrimPrefix(np, trim)
 	} else {
-		external = strings.TrimPrefix(np, fs.conf.Namespace)
+		external = strings.TrimPrefix(np, fs.conf.Root)
 		if external == "" {
 			external = "/"
 		}
@@ -144,8 +144,8 @@ func (fs *localfs) unwrap(ctx context.Context, np string) (external string) {
 }
 
 type localfs struct {
-	namespace string
-	conf      *config
+	root string
+	conf *config
 }
 
 func (fs *localfs) normalize(ctx context.Context, fi os.FileInfo, fn string) *provider.ResourceInfo {
@@ -216,8 +216,14 @@ func (fs *localfs) GetHome(ctx context.Context) (string, error) {
 		return "", errtypes.NotSupported("local: get home not supported")
 	}
 
-	home := fs.wrap(ctx, "/")
-	return home, nil
+	u, err := getUser(ctx)
+	if err != nil {
+		err = errors.Wrap(err, "local: wrap: no user in ctx and home is enabled")
+		return "", err
+	}
+	relativeHome := templates.WithUser(u, fs.conf.UserLayout)
+
+	return relativeHome, nil
 }
 
 func (fs *localfs) CreateHome(ctx context.Context) error {
