@@ -55,7 +55,7 @@ func main() {
 	}
 
 	// also the build is okay
-	cmd := exec.Command("make", "all")
+	cmd := exec.Command("make", "release")
 	run(cmd)
 
 	fmt.Printf("Generating new release: version=%s\n", *version)
@@ -77,7 +77,7 @@ func main() {
 	run(cmd)
 
 	// create new changelog
-	cmd = exec.Command("calens", "-o", "CHANGELOG.md")
+	cmd = exec.Command(getGoBin("calens"), "-o", "CHANGELOG.md")
 	run(cmd)
 
 	// add new VERSION and BUILD_DATE
@@ -109,7 +109,7 @@ func main() {
 	run(cmd)
 
 	// create new changelog
-	cmd = exec.Command("calens", "-o", "changelog/NOTE.md", "-i", path.Join(tmp, "changelog"))
+	cmd = exec.Command(getGoBin("calens"), "-o", "changelog/NOTE.md", "-i", path.Join(tmp, "changelog"))
 	run(cmd)
 
 	// Generate changelog also in the documentation
@@ -206,6 +206,12 @@ func createTag(version string) {
 	run(cmd)
 }
 
+func getGoBin(tool string) string {
+	cmd := exec.Command("go", "env", "GOPATH")
+	gopath := runAndGet(cmd)
+	gobin := fmt.Sprintf("%s/bin", gopath)
+	return path.Join(gobin, tool)
+}
 func run(cmd *exec.Cmd) {
 	var b bytes.Buffer
 	mw := io.MultiWriter(os.Stdout, &b)

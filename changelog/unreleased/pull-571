@@ -1,0 +1,12 @@
+Enhancement:  support home storages
+
+Reva did not have any functionality to handle home storages.
+These PRs make that happen. 
+
+https://github.com/cs3org/reva/pull/562
+https://github.com/cs3org/reva/pull/510
+https://github.com/cs3org/reva/pull/493
+https://github.com/cs3org/reva/pull/476
+https://github.com/cs3org/reva/pull/469
+https://github.com/cs3org/reva/pull/436
+https://github.com/cs3org/reva/pull/571
