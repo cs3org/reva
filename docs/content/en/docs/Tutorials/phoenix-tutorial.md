@@ -7,7 +7,7 @@ description: >
 ---
 
 This is a guide on how you can run both Pheonix and Reva locally in a dev environment. 
-Phoenix is the new ownCloud frontend application and is can be connected to Reva.
+Phoenix is the new ownCloud frontend application and can be connected to Reva.
 
 ## 1. Clone the Phoenix and Reva repos
 
