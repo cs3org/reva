@@ -69,7 +69,7 @@ func lsCommand() *command {
 			}
 
 			if *longFlag {
-				fmt.Printf("%+v %d %d %v %s\n", info.PermissionSet, info.Mtime, info.Size, info.Id, p)
+				fmt.Printf("%s %d %d %v %s\n", info.Type, info.Mtime, info.Size, info.Id, p)
 			} else {
 				fmt.Println(p)
 			}
