@@ -159,6 +159,10 @@ func (c *config) init() {
 	if c.CacheDirectory == "" {
 		c.CacheDirectory = os.TempDir()
 	}
+
+	if c.UserLayout == "" {
+		c.UserLayout = "{{.Username}}" // TODO set better layout
+	}
 }
 
 // New returns a new implementation of the storage.FS interface that connects to EOS.
@@ -205,13 +209,11 @@ func (fs *eosStorage) Shutdown(ctx context.Context) error {
 }
 
 func (fs *eosStorage) wrap(ctx context.Context, fn string) (internal string) {
-	if fs.conf.EnableHome && fs.conf.UserLayout != "" {
-		u, err := getUser(ctx)
+	if fs.conf.EnableHome {
+		layout, err := fs.GetHome(ctx)
 		if err != nil {
-			err = errors.Wrap(err, "eos: wrap: no user in ctx and home is enabled")
 			panic(err)
 		}
-		layout := templates.WithUser(u, fs.conf.UserLayout)
 		internal = path.Join(fs.conf.Namespace, layout, fn)
 	} else {
 		internal = path.Join(fs.conf.Namespace, fn)
@@ -220,13 +222,11 @@ func (fs *eosStorage) wrap(ctx context.Context, fn string) (internal string) {
 }
 
 func (fs *eosStorage) unwrap(ctx context.Context, np string) (external string) {
-	if fs.conf.EnableHome && fs.conf.UserLayout != "" {
-		u, err := getUser(ctx)
+	if fs.conf.EnableHome {
+		layout, err := fs.GetHome(ctx)
 		if err != nil {
-			err = errors.Wrap(err, "eos: unwrap: no user in ctx and home is enabled")
 			panic(err)
 		}
-		layout := templates.WithUser(u, fs.conf.UserLayout)
 		trim := path.Join(fs.conf.Namespace, layout)
 		external = strings.TrimPrefix(np, trim)
 	} else {
@@ -585,8 +585,14 @@ func (fs *eosStorage) GetHome(ctx context.Context) (string, error) {
 		return "", errtypes.NotSupported("eos: get home not supported")
 	}
 
-	home := fs.wrap(ctx, "/")
-	return home, nil
+	u, err := getUser(ctx)
+	if err != nil {
+		err = errors.Wrap(err, "local: wrap: no user in ctx and home is enabled")
+		return "", err
+	}
+	relativeHome := templates.WithUser(u, fs.conf.UserLayout)
+
+	return relativeHome, nil
 }
 
 func (fs *eosStorage) CreateHome(ctx context.Context) error {
