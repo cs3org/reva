@@ -78,4 +78,4 @@ Log in using username *einstein* and password *relativity*.
 If you now do changes in Phoenix they will live changed on the opened tab *http://localhost:8300*.
 You can check for example, change the name of one of the navItems in "default.js".
 
-## 7. Enjoy your new Reva and Pheonix set up!
+## 7. Enjoy your new Reva and Phoenix set up!
