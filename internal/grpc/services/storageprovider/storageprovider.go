@@ -61,7 +61,6 @@ type config struct {
 type service struct {
 	conf               *config
 	storage            storage.FS
-	pathWrapper        storage.PathWrapper
 	mountPath, mountID string
 	tmpFolder          string
 	dataServerURL      *url.URL
@@ -297,6 +296,7 @@ func (s *service) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*p
 		Status: status.NewOK(ctx),
 		Path:   home,
 	}
+
 	return res, nil
 }
 
@@ -694,7 +694,20 @@ func (s *service) CreateReference(ctx context.Context, req *provider.CreateRefer
 		}, nil
 	}
 
-	if err := s.storage.CreateReference(ctx, req.Path, u); err != nil {
+	ref := &provider.Reference{
+		Spec: &provider.Reference_Path{
+			Path: req.Path,
+		},
+	}
+
+	newRef, err := s.unwrap(ctx, ref)
+	if err != nil {
+		return &provider.CreateReferenceResponse{
+			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+		}, nil
+	}
+
+	if err := s.storage.CreateReference(ctx, newRef.GetPath(), u); err != nil {
 		log.Err(err).Msg("error calling CreateReference")
 		return &provider.CreateReferenceResponse{
 			Status: status.NewInternal(ctx, err, "error creating reference"),
@@ -808,13 +821,6 @@ func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (*provide
 		return nil, err
 	}
 
-	if s.pathWrapper != nil {
-		fsfn, err = s.pathWrapper.Unwrap(ctx, fsfn)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	pathRef := &provider.Reference{
 		Spec: &provider.Reference_Path{
 			Path: fsfn,
@@ -833,15 +839,6 @@ func (s *service) trimMountPrefix(fn string) (string, error) {
 
 func (s *service) wrap(ctx context.Context, ri *provider.ResourceInfo) error {
 	ri.Id.StorageId = s.mountID
-
-	if s.pathWrapper != nil {
-		var err error
-		ri.Path, err = s.pathWrapper.Wrap(ctx, ri.Path)
-		if err != nil {
-			return err
-		}
-	}
-
 	ri.Path = path.Join(s.mountPath, ri.Path)
 	return nil
 }
