@@ -43,3 +43,4 @@ temp_folder = "/var/tmp/reva/tmp"
 
 [http.services.dataprovider.drivers.owncloud]
 datadirectory = "/var/tmp/reva/data"
+enable_home = true
