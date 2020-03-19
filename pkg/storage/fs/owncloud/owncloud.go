@@ -273,10 +273,8 @@ func (fs *ocfs) scanFiles(ctx context.Context, conn redis.Conn) {
 // TODO the path handed to a storage provider should not contain the username
 func (fs *ocfs) wrap(ctx context.Context, fn string) (internal string) {
 	if fs.c.EnableHome {
-		layout, err := fs.GetHome(ctx)
-		if err != nil {
-			panic(err)
-		}
+		u := user.ContextMustGetUser(ctx)
+		layout := templates.WithUser(u, fs.c.UserLayout)
 		internal = path.Join(fs.c.DataDirectory, layout, "files", fn)
 	} else {
 		// trim all /
@@ -340,24 +338,22 @@ func (fs *ocfs) getRecyclePath(ctx context.Context) (string, error) {
 	return path.Join(fs.c.DataDirectory, u.GetUsername(), "files_trashbin/files"), nil
 }
 
-func (fs *ocfs) unwrap(ctx context.Context, np string) (external string) {
+func (fs *ocfs) unwrap(ctx context.Context, internal string) (external string) {
 	if fs.c.EnableHome {
-		layout, err := fs.GetHome(ctx)
-		if err != nil {
-			panic(err)
-		}
+		u := user.ContextMustGetUser(ctx)
+		layout := templates.WithUser(u, fs.c.UserLayout)
 		trim := path.Join(fs.c.DataDirectory, layout, "files")
-		external = strings.TrimPrefix(np, trim)
+		external = strings.TrimPrefix(internal, trim)
 	} else {
 		// np = /data/<username>/files/foo/bar.txt
 		// remove data dir
 		if fs.c.DataDirectory != "/" {
 			// fs.c.DataDirectory is a clean path, so it never ends in /
-			np = strings.TrimPrefix(np, fs.c.DataDirectory)
+			internal = strings.TrimPrefix(internal, fs.c.DataDirectory)
 			// np = /<username>/files/foo/bar.txt
 		}
 
-		parts := strings.SplitN(np, "/", 4)
+		parts := strings.SplitN(internal, "/", 4)
 		// parts = "", "<username>", "files", "foo/bar.txt"
 		switch len(parts) {
 		case 1:
@@ -370,6 +366,8 @@ func (fs *ocfs) unwrap(ctx context.Context, np string) (external string) {
 			external = path.Join("/", parts[1], parts[3])
 		}
 	}
+	log := appctx.GetLogger(ctx)
+	log.Debug().Msgf("ocfs: unwrap: internal=%s external=%s", internal, external)
 	return
 }
 
@@ -867,10 +865,10 @@ func (fs *ocfs) GetQuota(ctx context.Context) (int, int, error) {
 }
 
 func (fs *ocfs) CreateHome(ctx context.Context) error {
-	u, err := getUser(ctx)
-	if err != nil {
-		err = errors.Wrap(err, "oc CreateHome: no user in ctx and home is enabled")
-		panic(err)
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
+		return err
 	}
 	layout := templates.WithUser(u, fs.c.UserLayout)
 
@@ -889,23 +887,12 @@ func (fs *ocfs) CreateHome(ctx context.Context) error {
 	return nil
 }
 
-func getUser(ctx context.Context) (*userpb.User, error) {
-	u, ok := user.ContextGetUser(ctx)
-	if !ok {
-		err := errors.Wrap(errtypes.UserRequired(""), "oc: error getting user from ctx")
-		return nil, err
-	}
-	return u, nil
-}
-
+// If home is enabled, the relative home is always the empty string
 func (fs *ocfs) GetHome(ctx context.Context) (string, error) {
-	u, err := getUser(ctx)
-	if err != nil {
-		err = errors.Wrap(err, "oc GetHome: no user in ctx and home is enabled")
-		panic(err)
+	if !fs.c.EnableHome {
+		return "", errtypes.NotSupported("ocfs: get home not supported")
 	}
-	relativeHome := templates.WithUser(u, fs.c.UserLayout)
-	return relativeHome, nil
+	return "", nil
 }
 
 func (fs *ocfs) CreateDir(ctx context.Context, fn string) (err error) {
@@ -922,7 +909,7 @@ func (fs *ocfs) CreateDir(ctx context.Context, fn string) (err error) {
 
 func (fs *ocfs) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
 	// TODO(jfd): implement
-	return errtypes.NotSupported("owncloud: operation not supported")
+	return errtypes.NotSupported("ocfs: operation not supported")
 }
 
 func (fs *ocfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) (err error) {
