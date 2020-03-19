@@ -19,25 +19,28 @@
 package ocmd
 
 import (
+	"net/http"
+
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"net/http"
-	"path"
 )
 
 // Config holds the config options that need to be passed down to all ocdav handlers
 type Config struct {
-	Prefix     string `mapstructure:"prefix"`
-	Host       string `mapstructure:"host"`
-	GatewaySvc string `mapstructure:"gatewaysvc"`
+	Prefix     string     `mapstructure:"prefix"`
+	Host       string     `mapstructure:"host"`
+	GatewaySvc string     `mapstructure:"gatewaysvc"`
+	Config     configData `mapstructure:"config"`
 }
 
 type svc struct {
-	Conf *Config
+	Conf                 *Config
+	SharesHandler        *sharesHandler
+	NotificationsHandler *notificationsHandler
+	ConfigHandler        *configHandler
 }
 
 func init() {
@@ -57,6 +60,12 @@ func New(m map[string]interface{}) (global.Service, error) {
 	s := &svc{
 		Conf: conf,
 	}
+	s.SharesHandler = new(sharesHandler)
+	s.NotificationsHandler = new(notificationsHandler)
+	s.ConfigHandler = new(configHandler)
+	s.SharesHandler.init(s.Conf)
+	s.NotificationsHandler.init(s.Conf)
+	s.ConfigHandler.init(s.Conf)
 	return s, nil
 }
 
@@ -74,7 +83,6 @@ func (s *svc) Unprotected() []string {
 }
 
 func (s *svc) Handler() http.Handler {
-
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		ctx := r.Context()
@@ -82,53 +90,21 @@ func (s *svc) Handler() http.Handler {
 
 		var head string
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
-
-		method := r.Method
-		id := path.Base(r.URL.Path)
-
-		log.Debug().Str("head", head).Str("tail", r.URL.Path).Str("method", method).Str("id", id).Msg("http routing")
+		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
 
 		switch head {
-		case "shares":
-			switch method {
-			case "POST":
-				// s.addShare(log, *s.ShareManager, *s.ProviderAuthorizer).ServeHTTP(w, r)
-				return
-			case "GET":
-				if "/" == id {
-					s.listAllShares(log).ServeHTTP(w, r)
-				} else {
-					s.getShare(log, id).ServeHTTP(w, r)
-				}
-				return
-			default:
-				s.methodNotAllowed(log).ServeHTTP(w, r)
-				return
-			}
 		case "ocm-provider":
-			s.getOCMInfo(log, s.Conf.Host).ServeHTTP(w, r)
+			s.ConfigHandler.Handler().ServeHTTP(w, r)
+			return
+		case "shares":
+			s.SharesHandler.Handler().ServeHTTP(w, r)
 			return
 		case "notifications":
-			s.notImplemented(log).ServeHTTP(w, r)
-			return
-		case "webdav":
-			s.notImplemented(log).ServeHTTP(w, r)
-			// s.proxyWebdav(log, *s.ShareManager, *s.ProviderAuthorizer).ServeHTTP(w, r)
-			return
-		case "internal/shares":
-			s.notImplemented(log).ServeHTTP(w, r)
-			// s.propagateInternalShare(log, *s.ShareManager, *s.ProviderAuthorizer).ServeHTTP(w, r)
-			return
-		case "internal/providers":
-			s.notImplemented(log).ServeHTTP(w, r)
-			// s.addProvider(log, *s.ProviderAuthorizer).ServeHTTP(w, r)
-			return
-		case "metrics":
-			promhttp.Handler().ServeHTTP(w, r)
+			s.NotificationsHandler.Handler().ServeHTTP(w, r)
 			return
 		}
+
 		log.Warn().Msg("resource not found")
 		w.WriteHeader(http.StatusNotFound)
-
 	})
 }
