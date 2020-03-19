@@ -147,8 +147,6 @@ func (s *svc) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*provi
 		}, nil
 	}
 
-	homeRes.Path = s.prefixProviderPath(res.GetProvider().GetProviderPath(), homeRes.GetPath())
-
 	return homeRes, nil
 }
 

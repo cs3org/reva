@@ -291,9 +291,11 @@ func (s *service) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*p
 		}, nil
 	}
 
+	home = path.Join(s.mountPath, path.Clean(relativeHome))
+
 	res := &provider.GetHomeResponse{
 		Status: status.NewOK(ctx),
-		Path:   relativeHome,
+		Path:   home,
 	}
 	return res, nil
 }
