@@ -22,6 +22,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"net/http"
@@ -30,14 +31,13 @@ import (
 
 // Config holds the config options that need to be passed down to all ocdav handlers
 type Config struct {
-	Prefix string `mapstructure:"prefix"`
-	Host   string `mapstructure:"host"`
+	Prefix     string `mapstructure:"prefix"`
+	Host       string `mapstructure:"host"`
+	GatewaySvc string `mapstructure:"gatewaysvc"`
 }
 
 type svc struct {
-	Conf               *Config
-	ProviderAuthorizer *providerAuthorizer
-	ShareManager       *shareManager
+	Conf *Config
 }
 
 func init() {
@@ -48,17 +48,14 @@ func init() {
 func New(m map[string]interface{}) (global.Service, error) {
 
 	conf := &Config{}
-	providerAuthorizer := new(providerAuthorizer)
-	shareManager := new(shareManager)
 
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
 	}
+	conf.GatewaySvc = sharedconf.GetGatewaySVC(conf.GatewaySvc)
 
 	s := &svc{
-		Conf:               conf,
-		ProviderAuthorizer: providerAuthorizer,
-		ShareManager:       shareManager,
+		Conf: conf,
 	}
 	return s, nil
 }
@@ -79,6 +76,7 @@ func (s *svc) Unprotected() []string {
 func (s *svc) Handler() http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
 		ctx := r.Context()
 		log := appctx.GetLogger(ctx)
 
@@ -94,13 +92,13 @@ func (s *svc) Handler() http.Handler {
 		case "shares":
 			switch method {
 			case "POST":
-				s.addShare(log, *s.ShareManager, *s.ProviderAuthorizer).ServeHTTP(w, r)
+				// s.addShare(log, *s.ShareManager, *s.ProviderAuthorizer).ServeHTTP(w, r)
 				return
 			case "GET":
 				if "/" == id {
-					s.listAllShares(log, *s.ShareManager, *s.ProviderAuthorizer).ServeHTTP(w, r)
+					s.listAllShares(log).ServeHTTP(w, r)
 				} else {
-					s.getShare(log, *s.ShareManager, *s.ProviderAuthorizer, id).ServeHTTP(w, r)
+					s.getShare(log, id).ServeHTTP(w, r)
 				}
 				return
 			default:
@@ -114,13 +112,16 @@ func (s *svc) Handler() http.Handler {
 			s.notImplemented(log).ServeHTTP(w, r)
 			return
 		case "webdav":
-			s.proxyWebdav(log, *s.ShareManager, *s.ProviderAuthorizer).ServeHTTP(w, r)
+			s.notImplemented(log).ServeHTTP(w, r)
+			// s.proxyWebdav(log, *s.ShareManager, *s.ProviderAuthorizer).ServeHTTP(w, r)
 			return
 		case "internal/shares":
-			s.propagateInternalShare(log, *s.ShareManager, *s.ProviderAuthorizer).ServeHTTP(w, r)
+			s.notImplemented(log).ServeHTTP(w, r)
+			// s.propagateInternalShare(log, *s.ShareManager, *s.ProviderAuthorizer).ServeHTTP(w, r)
 			return
 		case "internal/providers":
-			s.addProvider(log, *s.ProviderAuthorizer).ServeHTTP(w, r)
+			s.notImplemented(log).ServeHTTP(w, r)
+			// s.addProvider(log, *s.ProviderAuthorizer).ServeHTTP(w, r)
 			return
 		case "metrics":
 			promhttp.Handler().ServeHTTP(w, r)
