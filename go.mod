@@ -26,7 +26,7 @@ require (
 	github.com/mattn/go-isatty v0.0.4 // indirect
 	github.com/mattn/go-runewidth v0.0.4 // indirect
 	github.com/mitchellh/copystructure v1.0.0 // indirect
-	github.com/mitchellh/mapstructure v1.1.2
+	github.com/mitchellh/mapstructure v1.2.0
 	github.com/ory/fosite v0.30.4
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/xattr v0.4.1
