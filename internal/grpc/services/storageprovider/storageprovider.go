@@ -283,7 +283,7 @@ func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*p
 }
 
 func (s *service) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
-	home, err := s.storage.GetHome(ctx)
+	relativeHome, err := s.storage.GetHome(ctx)
 	if err != nil {
 		st := status.NewInternal(ctx, err, "error getting home")
 		return &provider.GetHomeResponse{
@@ -291,11 +291,9 @@ func (s *service) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*p
 		}, nil
 	}
 
-	home = path.Join(s.mountPath, home)
-
 	res := &provider.GetHomeResponse{
 		Status: status.NewOK(ctx),
-		Path:   home,
+		Path:   relativeHome,
 	}
 	return res, nil
 }
