@@ -148,6 +148,21 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	sClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	if err != nil {
+		WriteOCSError(w, r, MetaServerError.StatusCode, "error getting storage grpc client", err)
+		return
+	}
+
+	// prefix the path with the owners home, because ocs share requests are relative to the home dir
+	// TODO the path actually depends on the configured webdav_namespace
+	hRes, err := sClient.GetHome(ctx, &provider.GetHomeRequest{})
+	if err != nil {
+		WriteOCSError(w, r, MetaServerError.StatusCode, "error sending a grpc get home request", err)
+		return
+	}
+	prefix := hRes.GetPath()
+
 	if shareType == int(conversions.ShareTypeUser) {
 
 		// if user sharing is disabled
@@ -222,16 +237,10 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		sClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
-		if err != nil {
-			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting storage grpc client", err)
-			return
-		}
-
 		statReq := &provider.StatRequest{
 			Ref: &provider.Reference{
 				Spec: &provider.Reference_Path{
-					Path: r.FormValue("path"),
+					Path: path.Join(prefix, r.FormValue("path")),
 				},
 			},
 		}
@@ -309,7 +318,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		statReq := provider.StatRequest{
 			Ref: &provider.Reference{
 				Spec: &provider.Reference_Path{
-					Path: r.FormValue("path"),
+					Path: path.Join(prefix, r.FormValue("path")),
 				},
 			},
 		}
@@ -644,7 +653,21 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	// shared with others
 	p := r.URL.Query().Get("path")
 	if p != "" {
-		filters, err = h.addFilters(w, r)
+		sClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+		if err != nil {
+			WriteOCSError(w, r, MetaServerError.StatusCode, "error getting storage grpc client", err)
+			return
+		}
+
+		// prefix the path with the owners home, because ocs share requests are relative to the home dir
+		// TODO the path actually depends on the configured webdav_namespace
+		hRes, err := sClient.GetHome(r.Context(), &provider.GetHomeRequest{})
+		if err != nil {
+			WriteOCSError(w, r, MetaServerError.StatusCode, "error sending a grpc get home request", err)
+			return
+		}
+
+		filters, err = h.addFilters(w, r, hRes.GetPath())
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
 			return
@@ -743,7 +766,7 @@ func (h *SharesHandler) listPublicShares(r *http.Request) ([]*conversions.ShareD
 	return nil, errors.New("bad request")
 }
 
-func (h *SharesHandler) addFilters(w http.ResponseWriter, r *http.Request) ([]*collaboration.ListSharesRequest_Filter, error) {
+func (h *SharesHandler) addFilters(w http.ResponseWriter, r *http.Request, prefix string) ([]*collaboration.ListSharesRequest_Filter, error) {
 	filters := []*collaboration.ListSharesRequest_Filter{}
 	var info *provider.ResourceInfo
 	ctx := r.Context()
@@ -755,10 +778,12 @@ func (h *SharesHandler) addFilters(w http.ResponseWriter, r *http.Request) ([]*c
 		return nil, err
 	}
 
+	target := path.Join(prefix, r.FormValue("path"))
+
 	statReq := &provider.StatRequest{
 		Ref: &provider.Reference{
 			Spec: &provider.Reference_Path{
-				Path: r.FormValue("path"),
+				Path: target,
 			},
 		},
 	}
@@ -870,7 +895,7 @@ func (h *SharesHandler) addFileInfo(ctx context.Context, s *conversions.ShareDat
 		s.ItemSource = info.Id.OpaqueId
 		s.FileSource = info.Id.OpaqueId
 		s.FileTarget = path.Join("/", path.Base(info.Path))
-		s.Path = info.Path // TODO hm this might have to be relative to the users home ...
+		s.Path = info.Path // TODO hm this might have to be relative to the users home ... depends on the webdav_namespace config
 		// TODO FileParent:
 		// item type
 		s.ItemType = conversions.ResourceType(info.GetType()).String()
@@ -922,34 +947,71 @@ func (h *SharesHandler) userShare2ShareData(ctx context.Context, share *collabor
 		return nil, err
 	}
 
+	log := appctx.GetLogger(ctx)
+
 	if share.Creator != nil {
-		if creator, err := c.GetUser(ctx, &userpb.GetUserRequest{
+		creator, err := c.GetUser(ctx, &userpb.GetUserRequest{
 			UserId: share.Creator,
-		}); err == nil {
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		if creator.Status.Code == rpc.Code_CODE_OK {
 			// TODO the user from GetUser might not have an ID set, so we are using the one we have
 			sd.UIDOwner = UserIDToString(share.Creator)
 			sd.DisplaynameOwner = creator.GetUser().DisplayName
 		} else {
+			err := errors.New("could not look up creator")
+			log.Err(err).
+				Str("user_idp", share.Creator.GetIdp()).
+				Str("user_opaque_id", share.Creator.GetOpaqueId()).
+				Str("code", creator.Status.Code.String()).
+				Msg(creator.Status.Message)
 			return nil, err
 		}
 	}
 	if share.Owner != nil {
-		if owner, err := c.GetUser(ctx, &userpb.GetUserRequest{
+		owner, err := c.GetUser(ctx, &userpb.GetUserRequest{
 			UserId: share.Owner,
-		}); err == nil {
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		if owner.Status.Code == rpc.Code_CODE_OK {
+			// TODO the user from GetUser might not have an ID set, so we are using the one we have
 			sd.UIDFileOwner = UserIDToString(share.Owner)
 			sd.DisplaynameFileOwner = owner.GetUser().DisplayName
 		} else {
+			err := errors.New("could not look up creator")
+			log.Err(err).
+				Str("user_idp", share.Owner.GetIdp()).
+				Str("user_opaque_id", share.Owner.GetOpaqueId()).
+				Str("code", owner.Status.Code.String()).
+				Msg(owner.Status.Message)
 			return nil, err
 		}
 	}
 	if share.Grantee.Id != nil {
-		if grantee, err := c.GetUser(ctx, &userpb.GetUserRequest{
+		grantee, err := c.GetUser(ctx, &userpb.GetUserRequest{
 			UserId: share.Grantee.GetId(),
-		}); err == nil {
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		if grantee.Status.Code == rpc.Code_CODE_OK {
+			// TODO the user from GetUser might not have an ID set, so we are using the one we have
 			sd.ShareWith = UserIDToString(share.Grantee.Id)
 			sd.ShareWithDisplayname = grantee.GetUser().DisplayName
 		} else {
+			err := errors.New("could not look up creator")
+			log.Err(err).
+				Str("user_idp", share.Grantee.GetId().GetIdp()).
+				Str("user_opaque_id", share.Grantee.GetId().GetOpaqueId()).
+				Str("code", grantee.Status.Code.String()).
+				Msg(grantee.Status.Message)
 			return nil, err
 		}
 	}
