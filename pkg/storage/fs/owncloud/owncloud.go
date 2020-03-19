@@ -41,6 +41,7 @@ import (
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
+	"github.com/cs3org/reva/pkg/storage/templates"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/gofrs/uuid"
 	"github.com/gomodule/redigo/redis"
@@ -151,9 +152,10 @@ func init() {
 
 type config struct {
 	DataDirectory string `mapstructure:"datadirectory"`
-	Scan          bool   `mapstructure:"scan"`
+	UserLayout    string `mapstructure:"user_layout"`
 	Redis         string `mapstructure:"redis"`
-	Layout        string `mapstructure:"layout"`
+	EnableHome    bool   `mapstructure:"enable_home"`
+	Scan          bool   `mapstructure:"scan"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -169,8 +171,8 @@ func (c *config) init(m map[string]interface{}) {
 	if c.Redis == "" {
 		c.Redis = ":6379"
 	}
-	if c.Layout == "" {
-		c.Layout = "{{.Username}}"
+	if c.UserLayout == "" {
+		c.UserLayout = "{{.Username}}"
 	}
 	// default to scanning if not configured
 	if _, ok := m["scan"]; !ok {
@@ -269,26 +271,36 @@ func (fs *ocfs) scanFiles(ctx context.Context, conn redis.Conn) {
 // the incoming path starts with /<username>, so we need to insert the files subfolder into the path
 // and prefix the datadirectory
 // TODO the path handed to a storage provider should not contain the username
-func (fs *ocfs) wrap(ctx context.Context, fn string) string {
-	// trim all /
-	fn = strings.Trim(fn, "/")
-	// p = "" or
-	// p = <username> or
-	// p = <username>/foo/bar.txt
-	parts := strings.SplitN(fn, "/", 2)
-
-	switch len(parts) {
-	case 1:
-		// parts = "" or "<username>"
-		if parts[0] == "" {
-			return fs.c.DataDirectory
+func (fs *ocfs) wrap(ctx context.Context, fn string) (internal string) {
+	if fs.c.EnableHome {
+		layout, err := fs.GetHome(ctx)
+		if err != nil {
+			panic(err)
 		}
-		// parts = "<username>"
-		return path.Join(fs.c.DataDirectory, parts[0], "files")
-	default:
-		// parts = "<username>", "foo/bar.txt"
-		return path.Join(fs.c.DataDirectory, parts[0], "files", parts[1])
+		internal = path.Join(fs.c.DataDirectory, layout, "files", fn)
+	} else {
+		// trim all /
+		fn = strings.Trim(fn, "/")
+		// p = "" or
+		// p = <username> or
+		// p = <username>/foo/bar.txt
+		parts := strings.SplitN(fn, "/", 2)
+
+		switch len(parts) {
+		case 1:
+			// parts = "" or "<username>"
+			if parts[0] == "" {
+				internal = fs.c.DataDirectory
+				return
+			}
+			// parts = "<username>"
+			internal = path.Join(fs.c.DataDirectory, parts[0], "files")
+		default:
+			// parts = "<username>", "foo/bar.txt"
+			internal = path.Join(fs.c.DataDirectory, parts[0], "files", parts[1])
+		}
 	}
+	return
 }
 
 // ownloud stores versions in the files_versions subfolder
@@ -328,27 +340,37 @@ func (fs *ocfs) getRecyclePath(ctx context.Context) (string, error) {
 	return path.Join(fs.c.DataDirectory, u.GetUsername(), "files_trashbin/files"), nil
 }
 
-func (fs *ocfs) unwrap(ctx context.Context, np string) string {
-	// np = /data/<username>/files/foo/bar.txt
-	// remove data dir
-	if fs.c.DataDirectory != "/" {
-		// fs.c.DataDirectory is a clean puth, so it never ends in /
-		np = strings.TrimPrefix(np, fs.c.DataDirectory)
-		// np = /<username>/files/foo/bar.txt
-	}
+func (fs *ocfs) unwrap(ctx context.Context, np string) (external string) {
+	if fs.c.EnableHome {
+		layout, err := fs.GetHome(ctx)
+		if err != nil {
+			panic(err)
+		}
+		trim := path.Join(fs.c.DataDirectory, layout, "files")
+		external = strings.TrimPrefix(np, trim)
+	} else {
+		// np = /data/<username>/files/foo/bar.txt
+		// remove data dir
+		if fs.c.DataDirectory != "/" {
+			// fs.c.DataDirectory is a clean path, so it never ends in /
+			np = strings.TrimPrefix(np, fs.c.DataDirectory)
+			// np = /<username>/files/foo/bar.txt
+		}
 
-	parts := strings.SplitN(np, "/", 4)
-	// parts = "", "<username>", "files", "foo/bar.txt"
-	switch len(parts) {
-	case 1:
-		return "/"
-	case 2:
-		return path.Join("/", parts[1])
-	case 3:
-		return path.Join("/", parts[1])
-	default:
-		return path.Join("/", parts[1], parts[3])
+		parts := strings.SplitN(np, "/", 4)
+		// parts = "", "<username>", "files", "foo/bar.txt"
+		switch len(parts) {
+		case 1:
+			external = "/"
+		case 2:
+			external = path.Join("/", parts[1])
+		case 3:
+			external = path.Join("/", parts[1])
+		default:
+			external = path.Join("/", parts[1], parts[3])
+		}
 	}
+	return
 }
 
 func getOwner(fn string) string {
@@ -845,12 +867,17 @@ func (fs *ocfs) GetQuota(ctx context.Context) (int, int, error) {
 }
 
 func (fs *ocfs) CreateHome(ctx context.Context) error {
-	home := fs.wrap(ctx, "/")
+	u, err := getUser(ctx)
+	if err != nil {
+		err = errors.Wrap(err, "oc CreateHome: no user in ctx and home is enabled")
+		panic(err)
+	}
+	layout := templates.WithUser(u, fs.c.UserLayout)
 
 	homePaths := []string{
-		path.Join(fs.c.DataDirectory, home, "files"),
-		path.Join(fs.c.DataDirectory, home, "files_trashbin"),
-		path.Join(fs.c.DataDirectory, home, "files_versions"),
+		path.Join(fs.c.DataDirectory, layout, "files"),
+		path.Join(fs.c.DataDirectory, layout, "files_trashbin"),
+		path.Join(fs.c.DataDirectory, layout, "files_versions"),
 	}
 
 	for _, v := range homePaths {
@@ -862,9 +889,23 @@ func (fs *ocfs) CreateHome(ctx context.Context) error {
 	return nil
 }
 
+func getUser(ctx context.Context) (*userpb.User, error) {
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		err := errors.Wrap(errtypes.UserRequired(""), "oc: error getting user from ctx")
+		return nil, err
+	}
+	return u, nil
+}
+
 func (fs *ocfs) GetHome(ctx context.Context) (string, error) {
-	home := fs.wrap(ctx, "/")
-	return home, nil
+	u, err := getUser(ctx)
+	if err != nil {
+		err = errors.Wrap(err, "oc GetHome: no user in ctx and home is enabled")
+		panic(err)
+	}
+	relativeHome := templates.WithUser(u, fs.c.UserLayout)
+	return relativeHome, nil
 }
 
 func (fs *ocfs) CreateDir(ctx context.Context, fn string) (err error) {

@@ -1,0 +1,11 @@
+Enhancement: improve developer experience
+
+Reva provided the option to be run with a single configuration file by using the 
+-c config flag.
+
+This PR adds the flag -dev-dir than can point to a directory containing multiple config
+files. The reva daemon will launch a new process per configuration file.
+
+Kudos to @refs.
+
+https://github.com/cs3org/reva/pull/416

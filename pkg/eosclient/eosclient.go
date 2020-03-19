@@ -411,7 +411,7 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, username string, inode 
 }
 
 // SetAttr sets an extended attributes on a path.
-func (c *Client) SetAttr(ctx context.Context, username string, attr *Attribute, path string) error {
+func (c *Client) SetAttr(ctx context.Context, username string, attr *Attribute, recursive bool, path string) error {
 	if !attr.isValid() {
 		return errors.New("eos: attr is invalid: " + attr.serialize())
 	}
@@ -419,7 +419,13 @@ func (c *Client) SetAttr(ctx context.Context, username string, attr *Attribute, 
 	if err != nil {
 		return err
 	}
-	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "attr", "-r", "set", attr.serialize(), path)
+	var cmd *exec.Cmd
+	if recursive {
+		cmd = exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "attr", "-r", "set", attr.serialize(), path)
+	} else {
+		cmd = exec.CommandContext(ctx, "/usr/bin/eos", "-r", unixUser.Uid, unixUser.Gid, "attr", "set", attr.serialize(), path)
+	}
+
 	_, _, err = c.executeEOS(ctx, cmd)
 	if err != nil {
 		return err

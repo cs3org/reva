@@ -64,7 +64,7 @@ func New(m map[string]interface{}) (share.Manager, error) {
 	}
 
 	// load or create file
-	model, err := load(c.File)
+	model, err := loadOrCreate(c.File)
 	if err != nil {
 		err = errors.Wrap(err, "error loading the file containing the shares")
 		return nil, err
@@ -78,7 +78,15 @@ func New(m map[string]interface{}) (share.Manager, error) {
 	return mgr, nil
 }
 
-func load(file string) (*shareModel, error) {
+func loadOrCreate(file string) (*shareModel, error) {
+	_, err := os.Stat(file)
+	if os.IsNotExist(err) {
+		if err := ioutil.WriteFile(file, []byte("{}"), 0700); err != nil {
+			err = errors.Wrap(err, "error opening/creating the file: "+file)
+			return nil, err
+		}
+	}
+
 	fd, err := os.OpenFile(file, os.O_CREATE, 0644)
 	if err != nil {
 		err = errors.Wrap(err, "error opening/creating the file: "+file)
@@ -96,6 +104,10 @@ func load(file string) (*shareModel, error) {
 	if err := json.Unmarshal(data, m); err != nil {
 		err = errors.Wrap(err, "error decoding data to json")
 		return nil, err
+	}
+
+	if m.State == nil {
+		m.State = map[string]map[string]collaboration.ShareState{}
 	}
 
 	m.file = file
@@ -124,9 +136,9 @@ func (m *shareModel) Save() error {
 }
 
 type mgr struct {
-	c     *config
-	lock  *sync.Mutex // concurrent access to the file and loaded
-	model *shareModel
+	c          *config
+	sync.Mutex // concurrent access to the file and loaded
+	model      *shareModel
 }
 
 type config struct {
@@ -158,7 +170,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabora
 	// TODO(labkode): should not this be catched already at the gw level?
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER &&
 		g.Grantee.Id.Idp == user.Id.Idp && g.Grantee.Id.OpaqueId == user.Id.OpaqueId {
-		return nil, errors.New("memory: user and grantee are the same")
+		return nil, errors.New("json: user and grantee are the same")
 	}
 
 	// check if share already exists.
@@ -168,6 +180,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabora
 		Grantee:    g.Grantee,
 	}
 	_, err := m.getByKey(ctx, key)
+
 	// share already exists
 	if err == nil {
 		return nil, errtypes.AlreadyExists(key.String())
@@ -186,12 +199,21 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabora
 		Mtime:       ts,
 	}
 
+	m.Lock()
+	defer m.Unlock()
+
+	m.model.Shares = append(m.model.Shares, s)
+	if err := m.model.Save(); err != nil {
+		err = errors.Wrap(err, "error saving model")
+		return nil, err
+	}
+
 	return s, nil
 }
 
 func (m *mgr) getByID(ctx context.Context, id *collaboration.ShareId) (*collaboration.Share, error) {
-	m.lock.Lock()
-	defer m.lock.Unlock()
+	m.Lock()
+	defer m.Unlock()
 	for _, s := range m.model.Shares {
 		if s.GetId().OpaqueId == id.OpaqueId {
 			return s, nil
@@ -201,8 +223,8 @@ func (m *mgr) getByID(ctx context.Context, id *collaboration.ShareId) (*collabor
 }
 
 func (m *mgr) getByKey(ctx context.Context, key *collaboration.ShareKey) (*collaboration.Share, error) {
-	m.lock.Lock()
-	defer m.lock.Unlock()
+	m.Lock()
+	defer m.Unlock()
 	for _, s := range m.model.Shares {
 		if key.Owner.Idp == s.Owner.Idp && key.Owner.OpaqueId == s.Owner.OpaqueId &&
 			key.ResourceId.StorageId == s.ResourceId.StorageId && key.ResourceId.OpaqueId == s.ResourceId.OpaqueId &&
@@ -248,8 +270,8 @@ func (m *mgr) GetShare(ctx context.Context, ref *collaboration.ShareReference) (
 }
 
 func (m *mgr) Unshare(ctx context.Context, ref *collaboration.ShareReference) error {
-	m.lock.Lock()
-	defer m.lock.Unlock()
+	m.Lock()
+	defer m.Unlock()
 	user := user.ContextMustGetUser(ctx)
 	for i, s := range m.model.Shares {
 		if equal(ref, s) {
@@ -282,8 +304,8 @@ func equal(ref *collaboration.ShareReference, s *collaboration.Share) bool {
 }
 
 func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions) (*collaboration.Share, error) {
-	m.lock.Lock()
-	defer m.lock.Unlock()
+	m.Lock()
+	defer m.Unlock()
 	user := user.ContextMustGetUser(ctx)
 	for i, s := range m.model.Shares {
 		if equal(ref, s) {
@@ -307,8 +329,8 @@ func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference
 
 func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.ListSharesRequest_Filter) ([]*collaboration.Share, error) {
 	var ss []*collaboration.Share
-	m.lock.Lock()
-	defer m.lock.Unlock()
+	m.Lock()
+	defer m.Unlock()
 	user := user.ContextMustGetUser(ctx)
 	for _, s := range m.model.Shares {
 		// TODO(labkode): add check for creator.
@@ -335,8 +357,8 @@ func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.ListShare
 // we list the shares that are targeted to the user in context or to the user groups.
 func (m *mgr) ListReceivedShares(ctx context.Context) ([]*collaboration.ReceivedShare, error) {
 	var rss []*collaboration.ReceivedShare
-	m.lock.Lock()
-	defer m.lock.Unlock()
+	m.Lock()
+	defer m.Unlock()
 	user := user.ContextMustGetUser(ctx)
 	for _, s := range m.model.Shares {
 		if user.Id.Idp == s.Owner.Idp && user.Id.OpaqueId == s.Owner.OpaqueId {
@@ -381,8 +403,8 @@ func (m *mgr) GetReceivedShare(ctx context.Context, ref *collaboration.ShareRefe
 }
 
 func (m *mgr) getReceived(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error) {
-	m.lock.Lock()
-	defer m.lock.Unlock()
+	m.Lock()
+	defer m.Unlock()
 	user := user.ContextMustGetUser(ctx)
 	for _, s := range m.model.Shares {
 		if equal(ref, s) {
@@ -410,8 +432,8 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, ref *collaboration.ShareR
 	}
 
 	user := user.ContextMustGetUser(ctx)
-	m.lock.Lock()
-	defer m.lock.Unlock()
+	m.Lock()
+	defer m.Unlock()
 
 	if v, ok := m.model.State[user.Id.String()]; ok {
 		v[rs.Share.Id.String()] = f.GetState()

@@ -1,0 +1,10 @@
+Enhancement: build daily releases
+
+Reva was not building releases of commits to the master branch.
+Thanks to @zazola.
+
+Commit-based released are generated every time a PR is merged into master.
+These releases are available at:
+https://reva-releases.web.cern.ch
+
+https://github.com/cs3org/reva/pull/402

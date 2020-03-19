@@ -1,5 +1,4 @@
 .PHONY: build
-default: build test lint contrib
 
 SHELL := /bin/bash
 BUILD_DATE=`date +%FT%T%z`
@@ -8,6 +7,9 @@ GIT_BRANCH=`git rev-parse --symbolic-full-name --abbrev-ref HEAD`
 GIT_DIRTY=`git diff-index --quiet HEAD -- || echo "dirty-"`
 VERSION=`git describe --always`
 GO_VERSION=`go version | awk '{print $$3}'`
+
+default: build test lint contrib
+release: deps build test lint
 
 off:
 	GORPOXY=off
@@ -41,7 +43,7 @@ lint:
 	`go env GOPATH`/bin/golangci-lint run
 
 contrib:
-	git shortlog -se | cut -c8- | sort -u | awk '{print "-", $$0}' | grep -v 'users.noreply.github.com' > CONTRIBUTORS.md
+	#git shortlog -se | cut -c8- | sort -u | awk '{print "-", $$0}' | grep -v 'users.noreply.github.com' > CONTRIBUTORS.md
 
 # for manual building only
 deps:
@@ -70,7 +72,7 @@ clean:
 # for releasing you need to run: go run tools/prepare-release/main.go
 # $ go run tools/prepare-release/main.go -version 0.0.1 -commit -tag
 release-deps:
-	cd /tmp && go get github.com/restic/calens
+	cd /tmp && rm -rf calens &&  git clone --quiet -b 'v0.2.0' --single-branch --depth 1 https://github.com/restic/calens &> /dev/null && cd calens && go install
 
 # create local build versions
 dist: default

@@ -1,0 +1,9 @@
+Enhancement:  simplify configuration
+
+Reva configuration was difficul as many of the configuration
+parameters were not providing sane defaults.
+This PR and the related listed below simplify the configuration.
+
+https://github.com/cs3org/reva/pull/545
+https://github.com/cs3org/reva/pull/536
+https://github.com/cs3org/reva/pull/568
