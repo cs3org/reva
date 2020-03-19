@@ -1,49 +1,36 @@
-// Copyright 2018-2020 CERN
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// In applying this license, CERN does not waive the privileges and immunities
-// granted to it by virtue of its status as an Intergovernmental Organization
-// or submit itself to any jurisdiction.
-
 package ocmd
 
-import "net/http"
+import (
+	"fmt"
+	"github.com/rs/zerolog"
+	"net/http"
+)
 
-type sharesHandler struct {
-	gatewayAddr string
-}
+func (s *svc) listAllShares(logger *zerolog.Logger) http.Handler {
 
-func (h *sharesHandler) init(c *Config) error {
-	h.gatewayAddr = c.GatewaySvc
-	return nil
-}
-
-func (h *sharesHandler) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodPost:
-			h.createShare(w, r)
-		case http.MethodGet:
-			h.getShare(w, r)
-		default:
-			w.WriteHeader(http.StatusNotFound)
+
+		ctx := r.Context()
+		user := r.Header.Get("Remote-User")
+
+		logger.Debug().Str("ctx", fmt.Sprintf("%+v", ctx)).Str("user", user).Msg("listAllShares")
+		logger.Debug().Str("Variable: `s` type", fmt.Sprintf("%T", s)).Str("Variable: `s` value", fmt.Sprintf("%+v", s)).Msg("listAllShares")
+
+		shares, err := s.GetShares(logger, ctx, user)
+
+		logger.Debug().Str("err", fmt.Sprintf("%+v", err)).Str("shares", fmt.Sprintf("%+v", shares)).Msg("listAllShares")
+
+		if err != nil {
+			logger.Err(err).Msg("Error reading shares from manager")
+			w.WriteHeader(http.StatusNotImplemented)
+			return
 		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
 	})
 }
 
-func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
-}
-
-func (h *sharesHandler) getShare(w http.ResponseWriter, r *http.Request) {
+func (s *svc) getShare(logger *zerolog.Logger, shareId string) http.Handler {
+	return s.notImplemented(logger)
 }
