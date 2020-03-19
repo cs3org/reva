@@ -21,7 +21,6 @@ package gateway
 import (
 	"context"
 	"net/url"
-	"path"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
