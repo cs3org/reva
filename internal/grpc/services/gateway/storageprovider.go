@@ -21,7 +21,6 @@ package gateway
 import (
 	"context"
 	"net/url"
-	"path"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -151,14 +150,7 @@ func (s *svc) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*provi
 		}, nil
 	}
 
-	homeRes.Path = s.prefixProviderPath(res.GetProvider().GetProviderPath(), homeRes.GetPath())
-
 	return homeRes, nil
-}
-
-// prefixProviderPath prefixes the storage relative home path with the mount point of the storage provider to return a global home path
-func (s *svc) prefixProviderPath(providerPath string, storageRelativeExternalPath string) string {
-	return path.Join(providerPath, storageRelativeExternalPath)
 }
 
 func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {
