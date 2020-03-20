@@ -183,20 +183,17 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		res, err := gatewayClient.FindUsers(ctx, &userpb.FindUsersRequest{
-			Filter: shareWith,
+		userRes, err := gatewayClient.GetUser(ctx, &userpb.GetUserRequest{
+			UserId: &userpb.UserId{OpaqueId: shareWith},
 		})
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error searching recipient", err)
 			return
 		}
 
-		var recipient *userpb.User
-		for _, user := range res.GetUsers() {
-			if user.Username == shareWith {
-				recipient = user
-				break
-			}
+		if userRes.Status.Code != rpc.Code_CODE_OK {
+			WriteOCSError(w, r, MetaNotFound.StatusCode, "user not found", err)
+			return
 		}
 
 		var permissions conversions.Permissions
@@ -273,7 +270,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			Grant: &collaboration.ShareGrant{
 				Grantee: &provider.Grantee{
 					Type: provider.GranteeType_GRANTEE_TYPE_USER,
-					Id:   recipient.Id,
+					Id:   userRes.User.GetId(),
 				},
 				Permissions: &collaboration.SharePermissions{
 					Permissions: resourcePermissions,
