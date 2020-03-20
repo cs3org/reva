@@ -21,6 +21,7 @@ package gateway
 import (
 	"context"
 	"net/url"
+	"strings"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -394,7 +395,7 @@ func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArb
 	return res, nil
 }
 
-func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
+func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
 	// TODO(refs) do we need to append home to every stat request?
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
@@ -408,9 +409,24 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		}, nil
 	}
 
-	res, err := c.Stat(ctx, req)
+	return c.Stat(ctx, req)
+}
+
+func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
+	res, err := s.stat(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling Stat")
+		return &provider.StatResponse{
+			Status: status.NewInternal(ctx, err, "error calling stat"),
+		}, nil
+	}
+
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return res, nil
+
+	}
+
+	if res.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
+		return res, nil
 	}
 
 	ri, err := s.checkRef(ctx, res.Info)
@@ -428,8 +444,80 @@ func (s *svc) checkRef(ctx context.Context, ri *provider.ResourceInfo) (*provide
 	if ri.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
 		return ri, nil
 	}
-	err := errors.New("gateway: dereference of refs in not implemented")
-	return nil, err
+
+	// reference types MUST have a target resource id.
+	target := ri.Target
+	if target == "" {
+		err := errors.New("gateway: ref target is an empty uri")
+		return nil, err
+	}
+
+	newResourceInfo, err := s.handleRef(ctx, target)
+	if err != nil {
+		err := errors.Wrapf(err, "gateway: error handling ref target:%s", target)
+		return nil, err
+	}
+	return newResourceInfo, nil
+}
+
+func (s *svc) handleRef(ctx context.Context, targetURI string) (*provider.ResourceInfo, error) {
+	uri, err := url.Parse(targetURI)
+	if err != nil {
+		return nil, errors.Wrapf(err, "gateway: error parsing target uri:%s")
+	}
+
+	scheme := uri.Scheme
+
+	switch scheme {
+	case "cs3":
+		return s.handleCS3Ref(ctx, uri.Opaque)
+	default:
+		err := errors.New("gateway: no reference handler for scheme:" + scheme)
+		return nil, err
+	}
+}
+
+func (s *svc) handleCS3Ref(ctx context.Context, opaque string) (*provider.ResourceInfo, error) {
+	// a cs3 ref has the following layout: <storage_id>:<opaque_id>
+	parts := strings.Split(opaque, ":")
+	if len(parts) < 2 {
+		err := errors.New("gateway: cs3 ref does not follow the layout storageid:opaqueid:" + opaque)
+		return nil, err
+	}
+
+	storageid := parts[0]
+	opaqueid := strings.Join(parts[1:], ":")
+	id := &provider.ResourceId{
+		StorageId: storageid,
+		OpaqueId:  opaqueid,
+	}
+
+	ref := &provider.Reference{
+		Spec: &provider.Reference_Id{
+			Id: id,
+		},
+	}
+
+	// we could call here the Stat method again, but that is calling for problems in case
+	// there is a loop of targets pointing to targets, so better avoid it.
+
+	req := &provider.StatRequest{Ref: ref}
+	res, err := s.stat(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling stat")
+	}
+
+	if res.Status.Code != rpc.Code_CODE_OK {
+		err := errors.New("gateway: error stating target reference")
+		return nil, err
+	}
+
+	if res.Info.Type == provider.ResourceType_RESOURCE_TYPE_REFERENCE {
+		err := errors.New("gateway: error the target of a reference cannot be another reference")
+		return nil, err
+	}
+
+	return res.Info, nil
 }
 
 func (s *svc) ListContainerStream(req *provider.ListContainerStreamRequest, ss gateway.GatewayAPI_ListContainerStreamServer) error {
