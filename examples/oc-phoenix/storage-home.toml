@@ -26,24 +26,21 @@ driver = "owncloud"
 mount_path = "/home"
 mount_id = "123e4567-e89b-12d3-a456-426655440000"
 expose_data_server = true
-path_wrapper = "context"
 data_server_url = "http://localhost:12001/data"
 enable_home_creation = true
 
 [grpc.services.storageprovider.drivers.owncloud]
 datadirectory = "/var/tmp/reva/data"
-layout = "{{.UsernamePrefixCount.1}}/{{.UsernameLower}}"
+enable_home = true
 
-[grpc.services.storageprovider.path_wrappers.context]
-prefix = ""
-layout = "{{.UsernamePrefixCount.1}}/{{.UsernameLower}}"
 
 [http]
 address = "0.0.0.0:12001"
 
 [http.services.dataprovider]
 driver = "owncloud"
-temp_folder = "/var/tmp/"
+temp_folder = "/var/tmp/reva/tmp"
 
 [http.services.dataprovider.drivers.owncloud]
 datadirectory = "/var/tmp/reva/data"
+enable_home = true

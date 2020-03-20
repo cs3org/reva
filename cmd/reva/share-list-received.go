@@ -54,7 +54,7 @@ func shareListReceivedCommand() *command {
 		t.AppendHeader(table.Row{"#", "Owner.Idp", "Owner.OpaqueId", "ResourceId", "Permissions", "Type", "Grantee.Idp", "Grantee.OpaqueId", "Created", "Updated", "State"})
 		for _, s := range shareRes.Shares {
 			t.AppendRows([]table.Row{
-				{s.Share.Id.OpaqueId, s.Share.Owner.OpaqueId, s.Share.Owner.Idp, s.Share.Owner.OpaqueId, s.Share.ResourceId.String(), s.Share.Permissions.String(), s.Share.Grantee.Type.String(), s.Share.Grantee.Id.Idp, s.Share.Grantee.Id.OpaqueId, time.Unix(int64(s.Share.Ctime.Seconds), 0), time.Unix(int64(s.Share.Mtime.Seconds), 0), s.State.String()},
+				{s.Share.Id.OpaqueId, s.Share.Owner.Idp, s.Share.Owner.OpaqueId, s.Share.ResourceId.String(), s.Share.Permissions.String(), s.Share.Grantee.Type.String(), s.Share.Grantee.Id.Idp, s.Share.Grantee.Id.OpaqueId, time.Unix(int64(s.Share.Ctime.Seconds), 0), time.Unix(int64(s.Share.Mtime.Seconds), 0), s.State.String()},
 			})
 		}
 		t.Render()

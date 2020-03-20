@@ -320,9 +320,9 @@ func (s *svc) GetReceivedShare(ctx context.Context, req *collaboration.GetReceiv
 	return res, nil
 }
 
-// When updated a received share:
+// When updating a received share:
 // if the update contains update for displayName:
-//   1) if receives share is mounted: we also do a rename in the storage
+//   1) if received share is mounted: we also do a rename in the storage
 //   2) if received share is not mounted: we only rename in user share provider.
 func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.UpdateReceivedShareRequest) (*collaboration.UpdateReceivedShareResponse, error) {
 	log := appctx.GetLogger(ctx)
@@ -365,7 +365,6 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 	// share display name and storage filename.
 	if req.Field.GetState() != collaboration.ShareState_SHARE_STATE_INVALID {
 		if req.Field.GetState() == collaboration.ShareState_SHARE_STATE_ACCEPTED {
-			// get received share information to obtain the resource it points to.
 			getShareReq := &collaboration.GetReceivedShareRequest{Ref: req.Ref}
 			getShareRes, err := s.GetReceivedShare(ctx, getShareReq)
 			if err != nil {
@@ -387,6 +386,50 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 			}
 
 			share := getShareRes.Share
+			if share == nil {
+				panic("gateway: error updating a received share: the share is nil")
+			}
+
+			// get the metadata about the share
+			c, err := s.findByID(ctx, share.Share.ResourceId)
+			if err != nil {
+				if _, ok := err.(errtypes.IsNotFound); ok {
+					return &collaboration.UpdateReceivedShareResponse{
+						Status: status.NewNotFound(ctx, "storage provider not found"),
+					}, nil
+				}
+				return &collaboration.UpdateReceivedShareResponse{
+					Status: status.NewInternal(ctx, err, "error finding storage provider"),
+				}, nil
+			}
+
+			statReq := &provider.StatRequest{
+				Ref: &provider.Reference{
+					Spec: &provider.Reference_Id{
+						Id: share.Share.ResourceId,
+					},
+				},
+			}
+
+			statRes, err := c.Stat(ctx, statReq)
+			if err != nil {
+				log.Err(err).Msg("gateway: error calling Stat for the share resource id:" + share.Share.ResourceId.String())
+				return &collaboration.UpdateReceivedShareResponse{
+					Status: &rpc.Status{
+						Code: rpc.Code_CODE_INTERNAL,
+					},
+				}, nil
+			}
+
+			if statRes.Status.Code != rpc.Code_CODE_OK {
+				err := status.NewErrorFromCode(statRes.Status.GetCode(), "gateway")
+				log.Err(err).Msg("gateway: error calling Stat for the share resource id:" + share.Share.ResourceId.String())
+				return &collaboration.UpdateReceivedShareResponse{
+					Status: status.NewInternal(ctx, err, "error updating received share"),
+				}, nil
+			}
+
+			fileInfo := statRes.Info
 
 			homeReq := &provider.GetHomeRequest{}
 			homeRes, err := s.GetHome(ctx, homeReq)
@@ -398,25 +441,25 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 			}
 
 			// reference path is the home path + some name
-			// CreateReferene(cs3://home/shares/x)
-			// CreateReference(cs3://eos/user/g/gonzalhu/.shares/x)
-			// CreateReference(cs3://eos/user/.hidden/g/gonzalhu/shares/x)
+			// CreateReferene(cs3://home/MyShares/x)
+			// that can end up in the storage provider like:
+			// /eos/user/.shadow/g/gonzalhu/MyShares/x
 			// A reference can point to any place, for that reason the namespace starts with cs3://
 			// For example, a reference can point also to a dropbox resource:
 			// CreateReference(dropbox://x/y/z)
 			// It is the responsibility of the gateway to resolve these references and merge the response back
 			// from the main request.
 			// TODO(labkode): the name of the share should be the filename it points to by default.
+			refPath := path.Join(homeRes.Path, s.c.ShareFolder, path.Base(fileInfo.Path))
+			log.Info().Msg("mount path will be:" + refPath)
 
-			// TODO(labkode): create share folder if it does not exist. Maybe at home directory creation time (login)?
-			refPath := path.Join(homeRes.Path, s.c.ShareFolder, req.Ref.String())
 			createRefReq := &provider.CreateReferenceRequest{
 				Path: refPath,
 				// cs3 is the Scheme and %s/%s is the Opaque parts of a net.URL.
 				TargetUri: fmt.Sprintf("cs3:%s/%s", share.Share.ResourceId.GetStorageId(), share.Share.ResourceId.GetOpaqueId()),
 			}
 
-			c, err := s.findByPath(ctx, refPath)
+			c, err = s.findByPath(ctx, refPath)
 			if err != nil {
 				if _, ok := err.(errtypes.IsNotFound); ok {
 					return &collaboration.UpdateReceivedShareResponse{
@@ -454,6 +497,6 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 	// TODO(labkode): implementing updating display name
 	err = errors.New("gateway: update of display name is not yet implemented")
 	return &collaboration.UpdateReceivedShareResponse{
-		Status: status.NewUnimplemented(ctx, err, "error updaring received share"),
+		Status: status.NewUnimplemented(ctx, err, "error updating received share"),
 	}, nil
 }

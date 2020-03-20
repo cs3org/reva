@@ -41,6 +41,7 @@ import (
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
+	"github.com/cs3org/reva/pkg/storage/templates"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/gofrs/uuid"
 	"github.com/gomodule/redigo/redis"
@@ -151,9 +152,10 @@ func init() {
 
 type config struct {
 	DataDirectory string `mapstructure:"datadirectory"`
-	Scan          bool   `mapstructure:"scan"`
+	UserLayout    string `mapstructure:"user_layout"`
 	Redis         string `mapstructure:"redis"`
-	Layout        string `mapstructure:"layout"`
+	EnableHome    bool   `mapstructure:"enable_home"`
+	Scan          bool   `mapstructure:"scan"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -169,8 +171,8 @@ func (c *config) init(m map[string]interface{}) {
 	if c.Redis == "" {
 		c.Redis = ":6379"
 	}
-	if c.Layout == "" {
-		c.Layout = "{{.Username}}"
+	if c.UserLayout == "" {
+		c.UserLayout = "{{.Username}}"
 	}
 	// default to scanning if not configured
 	if _, ok := m["scan"]; !ok {
@@ -269,26 +271,34 @@ func (fs *ocfs) scanFiles(ctx context.Context, conn redis.Conn) {
 // the incoming path starts with /<username>, so we need to insert the files subfolder into the path
 // and prefix the datadirectory
 // TODO the path handed to a storage provider should not contain the username
-func (fs *ocfs) wrap(ctx context.Context, fn string) string {
-	// trim all /
-	fn = strings.Trim(fn, "/")
-	// p = "" or
-	// p = <username> or
-	// p = <username>/foo/bar.txt
-	parts := strings.SplitN(fn, "/", 2)
+func (fs *ocfs) wrap(ctx context.Context, fn string) (internal string) {
+	if fs.c.EnableHome {
+		u := user.ContextMustGetUser(ctx)
+		layout := templates.WithUser(u, fs.c.UserLayout)
+		internal = path.Join(fs.c.DataDirectory, layout, "files", fn)
+	} else {
+		// trim all /
+		fn = strings.Trim(fn, "/")
+		// p = "" or
+		// p = <username> or
+		// p = <username>/foo/bar.txt
+		parts := strings.SplitN(fn, "/", 2)
 
-	switch len(parts) {
-	case 1:
-		// parts = "" or "<username>"
-		if parts[0] == "" {
-			return fs.c.DataDirectory
+		switch len(parts) {
+		case 1:
+			// parts = "" or "<username>"
+			if parts[0] == "" {
+				internal = fs.c.DataDirectory
+				return
+			}
+			// parts = "<username>"
+			internal = path.Join(fs.c.DataDirectory, parts[0], "files")
+		default:
+			// parts = "<username>", "foo/bar.txt"
+			internal = path.Join(fs.c.DataDirectory, parts[0], "files", parts[1])
 		}
-		// parts = "<username>"
-		return path.Join(fs.c.DataDirectory, parts[0], "files")
-	default:
-		// parts = "<username>", "foo/bar.txt"
-		return path.Join(fs.c.DataDirectory, parts[0], "files", parts[1])
 	}
+	return
 }
 
 // ownloud stores versions in the files_versions subfolder
@@ -328,27 +338,37 @@ func (fs *ocfs) getRecyclePath(ctx context.Context) (string, error) {
 	return path.Join(fs.c.DataDirectory, u.GetUsername(), "files_trashbin/files"), nil
 }
 
-func (fs *ocfs) unwrap(ctx context.Context, np string) string {
-	// np = /data/<username>/files/foo/bar.txt
-	// remove data dir
-	if fs.c.DataDirectory != "/" {
-		// fs.c.DataDirectory is a clean puth, so it never ends in /
-		np = strings.TrimPrefix(np, fs.c.DataDirectory)
-		// np = /<username>/files/foo/bar.txt
-	}
+func (fs *ocfs) unwrap(ctx context.Context, internal string) (external string) {
+	if fs.c.EnableHome {
+		u := user.ContextMustGetUser(ctx)
+		layout := templates.WithUser(u, fs.c.UserLayout)
+		trim := path.Join(fs.c.DataDirectory, layout, "files")
+		external = strings.TrimPrefix(internal, trim)
+	} else {
+		// np = /data/<username>/files/foo/bar.txt
+		// remove data dir
+		if fs.c.DataDirectory != "/" {
+			// fs.c.DataDirectory is a clean path, so it never ends in /
+			internal = strings.TrimPrefix(internal, fs.c.DataDirectory)
+			// np = /<username>/files/foo/bar.txt
+		}
 
-	parts := strings.SplitN(np, "/", 4)
-	// parts = "", "<username>", "files", "foo/bar.txt"
-	switch len(parts) {
-	case 1:
-		return "/"
-	case 2:
-		return path.Join("/", parts[1])
-	case 3:
-		return path.Join("/", parts[1])
-	default:
-		return path.Join("/", parts[1], parts[3])
+		parts := strings.SplitN(internal, "/", 4)
+		// parts = "", "<username>", "files", "foo/bar.txt"
+		switch len(parts) {
+		case 1:
+			external = "/"
+		case 2:
+			external = path.Join("/", parts[1])
+		case 3:
+			external = path.Join("/", parts[1])
+		default:
+			external = path.Join("/", parts[1], parts[3])
+		}
 	}
+	log := appctx.GetLogger(ctx)
+	log.Debug().Msgf("ocfs: unwrap: internal=%s external=%s", internal, external)
+	return
 }
 
 func getOwner(fn string) string {
@@ -845,12 +865,17 @@ func (fs *ocfs) GetQuota(ctx context.Context) (int, int, error) {
 }
 
 func (fs *ocfs) CreateHome(ctx context.Context) error {
-	home := fs.wrap(ctx, "/")
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
+		return err
+	}
+	layout := templates.WithUser(u, fs.c.UserLayout)
 
 	homePaths := []string{
-		path.Join(fs.c.DataDirectory, home, "files"),
-		path.Join(fs.c.DataDirectory, home, "files_trashbin"),
-		path.Join(fs.c.DataDirectory, home, "files_versions"),
+		path.Join(fs.c.DataDirectory, layout, "files"),
+		path.Join(fs.c.DataDirectory, layout, "files_trashbin"),
+		path.Join(fs.c.DataDirectory, layout, "files_versions"),
 	}
 
 	for _, v := range homePaths {
@@ -862,9 +887,12 @@ func (fs *ocfs) CreateHome(ctx context.Context) error {
 	return nil
 }
 
+// If home is enabled, the relative home is always the empty string
 func (fs *ocfs) GetHome(ctx context.Context) (string, error) {
-	home := fs.wrap(ctx, "/")
-	return home, nil
+	if !fs.c.EnableHome {
+		return "", errtypes.NotSupported("ocfs: get home not supported")
+	}
+	return "", nil
 }
 
 func (fs *ocfs) CreateDir(ctx context.Context, fn string) (err error) {
@@ -881,7 +909,7 @@ func (fs *ocfs) CreateDir(ctx context.Context, fn string) (err error) {
 
 func (fs *ocfs) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
 	// TODO(jfd): implement
-	return errtypes.NotSupported("owncloud: operation not supported")
+	return errtypes.NotSupported("ocfs: operation not supported")
 }
 
 func (fs *ocfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) (err error) {
@@ -1100,6 +1128,14 @@ func (fs *ocfs) Delete(ctx context.Context, ref *provider.Reference) (err error)
 	var np string
 	if np, err = fs.resolve(ctx, ref); err != nil {
 		return errors.Wrap(err, "ocfs: error resolving reference")
+	}
+
+	_, err = os.Stat(np)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errtypes.NotFound(fs.unwrap(ctx, np))
+		}
+		return errors.Wrap(err, "ocfs: error stating "+np)
 	}
 
 	rp, err := fs.getRecyclePath(ctx)
