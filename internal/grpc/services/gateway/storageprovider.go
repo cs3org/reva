@@ -413,7 +413,23 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		return nil, errors.Wrap(err, "gateway: error calling Stat")
 	}
 
+	ri, err := s.checkRef(ctx, res.Info)
+	if err != nil {
+		return &provider.StatResponse{
+			Status: status.NewInternal(ctx, err, "error resolving reference"),
+		}, nil
+	}
+	res.Info = ri
+
 	return res, nil
+}
+
+func (s *svc) checkRef(ctx context.Context, ri *provider.ResourceInfo) (*provider.ResourceInfo, error) {
+	if ri.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
+		return ri, nil
+	}
+	err := errors.New("gateway: dereference of refs in not implemented")
+	return nil, err
 }
 
 func (s *svc) ListContainerStream(req *provider.ListContainerStreamRequest, ss gateway.GatewayAPI_ListContainerStreamServer) error {
