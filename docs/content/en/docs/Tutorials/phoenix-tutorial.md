@@ -54,8 +54,8 @@ cp ../reva/examples/oc-phoenix/phoenix.oidc.config.json config.json
 ```
 
 
-## 4. Run Phoenix and Reva
-Now you need to run Phoenix and Revad (the Reva deamon). Follow these steps
+## 4. Run Reva
+Now you need to run Revad (the Reva deamon). Follow these steps
 from the *reva* folder:
 
 ```
@@ -64,18 +64,32 @@ cd examples/oc-phoenix/ && ../../cmd/revad/revad -dev-dir .
 
 The Reva daemon (revad) should now be running.
 
-In the Phoenix folder (open another terminal tab):
+## 5. Run Phoenix
+
+Now you also need to run Phoenix, open another terminal tab and follow these steps from the *phoenix* folder.
+
+Install all packages and build the project (this you only need to do once):
+
+```
+yarn install
+```
+
+```
+yarn dist
+```
+
+Run Phoenix locally:
 
 ```
 yarn watch-all
 ``` 
 
-## 5. Open Phoenix 
+## 6. Open Phoenix 
 You should now have both Reva and Phoenix up and running. You can access Phoenix on ```http://localhost:8300```.
 Log in using username *einstein* and password *relativity*. 
 
-## 6. Local changes
+## 7. Local changes
 If you now do changes in Phoenix they will live changed on the opened tab *http://localhost:8300*.
 You can check for example, change the name of one of the navItems in "default.js".
 
-## 7. Enjoy your new Reva and Phoenix set up!
+## 8. Enjoy your new Reva and Phoenix set up!
