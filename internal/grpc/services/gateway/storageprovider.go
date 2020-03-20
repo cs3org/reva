@@ -463,7 +463,7 @@ func (s *svc) checkRef(ctx context.Context, ri *provider.ResourceInfo) (*provide
 func (s *svc) handleRef(ctx context.Context, targetURI string) (*provider.ResourceInfo, error) {
 	uri, err := url.Parse(targetURI)
 	if err != nil {
-		return nil, errors.Wrapf(err, "gateway: error parsing target uri:%s")
+		return nil, errors.Wrapf(err, "gateway: error parsing target uri:%s", targetURI)
 	}
 
 	scheme := uri.Scheme
