@@ -25,6 +25,7 @@ import (
 	"path"
 
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 )
 
 type share struct {
@@ -93,6 +94,15 @@ func (h *sharesHandler) Handler() http.Handler {
 }
 
 func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
+	sClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	if err != nil {
+		WriteOCSError(w, r, MetaServerError.StatusCode, "error getting storage grpc client", err)
+		return
+	}
+
 }
 
 func (h *sharesHandler) getShare(w http.ResponseWriter, r *http.Request, shareID string) {
