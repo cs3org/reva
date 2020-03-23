@@ -105,7 +105,7 @@ func TestMemoryProvider(t *testing.T) {
 	}
 
 	// test listing public shares
-	listPs, err := manager.ListPublicShares(context.Background(), &user, &rInfo)
+	listPs, err := manager.ListPublicShares(context.Background(), &user, nil, &rInfo)
 	if err != nil {
 		t.Error(err)
 	}
