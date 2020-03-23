@@ -19,13 +19,16 @@
 package ocmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"path"
 
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/rs/zerolog"
 )
 
 type share struct {
@@ -94,15 +97,6 @@ func (h *sharesHandler) Handler() http.Handler {
 }
 
 func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
-
-	sClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
-	if err != nil {
-		WriteOCSError(w, r, MetaServerError.StatusCode, "error getting storage grpc client", err)
-		return
-	}
-
 }
 
 func (h *sharesHandler) getShare(w http.ResponseWriter, r *http.Request, shareID string) {
@@ -128,4 +122,45 @@ func (h *sharesHandler) listAllShares(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+}
+
+func (h *sharesHandler) getShares(ctx context.Context, logger *zerolog.Logger, user string) ([]*share, error) {
+
+	gateway, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	filters := []*link.ListPublicSharesRequest_Filter{}
+	req := link.ListPublicSharesRequest{
+		Filters: filters,
+	}
+
+	logger.Debug().Str("gateway", fmt.Sprintf("%+v", gateway)).Str("req", fmt.Sprintf("%+v", req)).Msg("GetShares")
+
+	res, err := gateway.ListPublicShares(ctx, &req)
+
+	logger.Debug().Str("response", fmt.Sprintf("%+v", res)).Str("err", fmt.Sprintf("%+v", err)).Msg("GetShares")
+
+	if err != nil {
+		return nil, err
+	}
+
+	shares := make([]*share, 0)
+
+	for i, publicShare := range res.GetShare() {
+		logger.Debug().Str("idx", string(i)).Str("share", fmt.Sprintf("%+v", publicShare)).Msg("GetShares")
+
+		share := convertPublicShareToShare(publicShare)
+		shares = append(shares, share)
+	}
+
+	logger.Debug().Str("shares", fmt.Sprintf("%+v", shares)).Msg("GetShares")
+	return shares, nil
+}
+
+func convertPublicShareToShare(publicShare *link.PublicShare) *share {
+	return &share{
+		ID: publicShare.GetId().String(),
+	}
 }

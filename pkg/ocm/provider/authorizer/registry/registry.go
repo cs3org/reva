@@ -20,14 +20,14 @@ package registry
 
 import "github.com/cs3org/reva/pkg/ocm/provider"
 
-// NewFunc is the function that share managers
+// NewFunc is the function that provider authorizers
 // should register at init time.
 type NewFunc func(map[string]interface{}) (provider.Authorizer, error)
 
-// NewFuncs is a map containing all the registered share managers.
+// NewFuncs is a map containing all the registered provider authorizers.
 var NewFuncs = map[string]NewFunc{}
 
-// Register registers a new share manager new function.
+// Register registers a new provider authorizer's new function.
 // Not safe for concurrent use. Safe for use from package init.
 func Register(name string, f NewFunc) {
 	NewFuncs[name] = f
