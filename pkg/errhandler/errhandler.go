@@ -65,17 +65,17 @@ var MetaNotFound = &ResponseMeta{Status: "error", StatusCode: 998, Message: "Not
 // MetaUnknownError is used for unknown errers
 var MetaUnknownError = &ResponseMeta{Status: "error", StatusCode: 999, Message: "Unknown Error"}
 
-// WriteSuccess handles writing successful ocs response data
+// WriteSuccess handles writing successful response data
 func WriteSuccess(w http.ResponseWriter, r *http.Request, d interface{}) {
 	WriteData(w, r, MetaOK, d, nil)
 }
 
-// WriteError handles writing error ocs responses
+// WriteError handles writing error responses
 func WriteError(w http.ResponseWriter, r *http.Request, c int, m string, err error) {
 	WriteData(w, r, &ResponseMeta{Status: "error", StatusCode: c, Message: m}, nil, err)
 }
 
-// WriteData handles writing ocs data in json and xml
+// WriteData handles writing data in json and xml
 func WriteData(w http.ResponseWriter, r *http.Request, m *ResponseMeta, d interface{}, err error) {
 	WriteResponse(w, r, &Response{
 		Payload: &Payload{
@@ -85,7 +85,7 @@ func WriteData(w http.ResponseWriter, r *http.Request, m *ResponseMeta, d interf
 	}, err)
 }
 
-// WriteResponse handles writing ocs responses in json and xml
+// WriteResponse handles writing responses in json and xml
 func WriteResponse(w http.ResponseWriter, r *http.Request, res *Response, err error) {
 	var encoded []byte
 
@@ -107,7 +107,7 @@ func WriteResponse(w http.ResponseWriter, r *http.Request, res *Response, err er
 		encoded, err = xml.Marshal(res.Payload)
 	}
 	if err != nil {
-		appctx.GetLogger(r.Context()).Error().Err(err).Msg("error encoding ocs response")
+		appctx.GetLogger(r.Context()).Error().Err(err).Msg("error encoding response")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

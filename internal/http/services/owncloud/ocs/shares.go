@@ -858,7 +858,7 @@ func (h *SharesHandler) listUserShares(r *http.Request, filters []*collaboration
 
 func (h *SharesHandler) addFileInfo(ctx context.Context, s *conversions.ShareData, info *provider.ResourceInfo) error {
 	if info != nil {
-		// TODO The owner is not set in the storage stat errhandler.Metadata ...
+		// TODO The owner is not set in the storage stat metadata ...
 		s.MimeType = info.MimeType
 		// TODO STime:     &types.Timestamp{Seconds: info.Mtime.Seconds, Nanos: info.Mtime.Nanos},
 		s.StorageID = info.Id.StorageId
