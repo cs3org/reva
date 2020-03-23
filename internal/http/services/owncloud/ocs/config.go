@@ -20,6 +20,8 @@ package ocs
 
 import (
 	"net/http"
+
+	"github.com/cs3org/reva/pkg/errhandler"
 )
 
 // ConfigHandler renders the config endpoint
@@ -50,7 +52,7 @@ func (h *ConfigHandler) init(c *Config) {
 // Handler renders the config
 func (h *ConfigHandler) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		WriteOCSSuccess(w, r, h.c)
+		errhandler.WriteSuccess(w, r, h.c)
 	})
 }
 

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/cs3org/reva/pkg/errhandler"
 	"github.com/cs3org/reva/pkg/user"
 )
 
@@ -35,11 +36,11 @@ func (h *UserHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// TODO move user to handler parameter?
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
-		WriteOCSError(w, r, MetaServerError.StatusCode, "missing user in context", fmt.Errorf("missing user in context"))
+		errhandler.WriteError(w, r, errhandler.MetaServerError.StatusCode, "missing user in context", fmt.Errorf("missing user in context"))
 		return
 	}
 
-	WriteOCSSuccess(w, r, &UserData{
+	errhandler.WriteSuccess(w, r, &UserData{
 		ID:          u.Username,
 		DisplayName: u.DisplayName,
 		Email:       u.Mail,

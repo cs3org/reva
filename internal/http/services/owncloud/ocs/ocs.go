@@ -22,6 +22,7 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errhandler"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
@@ -99,6 +100,6 @@ func (s *svc) Handler() http.Handler {
 			return
 		}
 
-		WriteOCSError(w, r, MetaNotFound.StatusCode, "Not found", nil)
+		errhandler.WriteError(w, r, errhandler.MetaNotFound.StatusCode, "Not found", nil)
 	})
 }

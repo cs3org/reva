@@ -21,6 +21,8 @@ package ocs
 import (
 	"encoding/xml"
 	"net/http"
+
+	"github.com/cs3org/reva/pkg/errhandler"
 )
 
 // ocsBool implements the xml/json Marshaler interface. The OCS API inconsistency require us to parse boolean values
@@ -231,7 +233,7 @@ func (h *CapabilitiesHandler) init(c *Config) {
 // Handler renders the capabilities
 func (h *CapabilitiesHandler) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		WriteOCSSuccess(w, r, h.c)
+		errhandler.WriteSuccess(w, r, h.c)
 	})
 }
 

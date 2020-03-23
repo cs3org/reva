@@ -21,6 +21,7 @@ package ocs
 import (
 	"net/http"
 
+	"github.com/cs3org/reva/pkg/errhandler"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 )
 
@@ -56,7 +57,7 @@ func (h *V1Handler) Handler() http.Handler {
 		case "config":
 			h.ConfigHandler.Handler().ServeHTTP(w, r)
 		default:
-			WriteOCSError(w, r, MetaNotFound.StatusCode, "Not found", nil)
+			errhandler.WriteError(w, r, errhandler.MetaNotFound.StatusCode, "Not found", nil)
 		}
 	})
 }

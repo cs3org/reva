@@ -21,6 +21,7 @@ package ocs
 import (
 	"net/http"
 
+	"github.com/cs3org/reva/pkg/errhandler"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 )
 
@@ -50,7 +51,7 @@ func (h *AppsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		WriteOCSError(w, r, MetaNotFound.StatusCode, "Not found", nil)
+		errhandler.WriteError(w, r, errhandler.MetaNotFound.StatusCode, "Not found", nil)
 	case "notifications":
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 		if head == "api" {
@@ -60,8 +61,8 @@ func (h *AppsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		WriteOCSError(w, r, MetaNotFound.StatusCode, "Not found", nil)
+		errhandler.WriteError(w, r, errhandler.MetaNotFound.StatusCode, "Not found", nil)
 	default:
-		WriteOCSError(w, r, MetaNotFound.StatusCode, "Not found", nil)
+		errhandler.WriteError(w, r, errhandler.MetaNotFound.StatusCode, "Not found", nil)
 	}
 }
