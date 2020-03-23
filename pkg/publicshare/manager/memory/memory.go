@@ -135,10 +135,21 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 	return share, nil
 }
 
-func (m *manager) ListPublicShares(ctx context.Context, u *user.User, md *provider.ResourceInfo) ([]*link.PublicShare, error) {
+func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo) ([]*link.PublicShare, error) {
 	shares := []*link.PublicShare{}
 	m.shares.Range(func(k, v interface{}) bool {
-		shares = append(shares, v.(*link.PublicShare))
+		s := v.(*link.PublicShare)
+		if len(filters) == 0 {
+			shares = append(shares, s)
+		} else {
+			for _, f := range filters {
+				if f.Type == link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID {
+					if s.ResourceId.StorageId == f.GetResourceId().StorageId && s.ResourceId.OpaqueId == f.GetResourceId().OpaqueId {
+						shares = append(shares, s)
+					}
+				}
+			}
+		}
 		return true
 	})
 

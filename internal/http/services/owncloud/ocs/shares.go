@@ -35,6 +35,7 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/rs/zerolog/log"
 
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -315,7 +316,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		statReq := provider.StatRequest{
 			Ref: &provider.Reference{
 				Spec: &provider.Reference_Path{
-					Path: path.Join(prefix, r.FormValue("path")),
+					Path: path.Join(prefix, r.FormValue("path")), // TODO replace path with target
 				},
 			},
 		}
@@ -593,6 +594,7 @@ func (h *SharesHandler) updateShare(w http.ResponseWriter, r *http.Request) {
 func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 	shares := make([]*conversions.ShareData, 0)
 	filters := []*collaboration.ListSharesRequest_Filter{}
+	linkFilters := []*link.ListPublicSharesRequest_Filter{}
 	var err error
 
 	// do shared with me. Please abstract this piece, this reads like hell.
@@ -664,7 +666,7 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		filters, err = h.addFilters(w, r, hRes.GetPath())
+		filters, linkFilters, err = h.addFilters(w, r, hRes.GetPath())
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
 			return
@@ -677,7 +679,7 @@ func (h *SharesHandler) listShares(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	publicShares, err := h.listPublicShares(r)
+	publicShares, err := h.listPublicShares(r, linkFilters)
 	if err != nil {
 		WriteOCSError(w, r, MetaServerError.StatusCode, err.Error(), err)
 		return
@@ -699,7 +701,7 @@ func (h *SharesHandler) listSharedWithMe(r *http.Request) []*collaboration.Recei
 	return shares.GetShares()
 }
 
-func (h *SharesHandler) listPublicShares(r *http.Request) ([]*conversions.ShareData, error) {
+func (h *SharesHandler) listPublicShares(r *http.Request, filters []*link.ListPublicSharesRequest_Filter) ([]*conversions.ShareData, error) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -710,7 +712,6 @@ func (h *SharesHandler) listPublicShares(r *http.Request) ([]*conversions.ShareD
 			return nil, err
 		}
 
-		filters := []*link.ListPublicSharesRequest_Filter{}
 		req := link.ListPublicSharesRequest{
 			Filters: filters,
 		}
@@ -763,8 +764,9 @@ func (h *SharesHandler) listPublicShares(r *http.Request) ([]*conversions.ShareD
 	return nil, errors.New("bad request")
 }
 
-func (h *SharesHandler) addFilters(w http.ResponseWriter, r *http.Request, prefix string) ([]*collaboration.ListSharesRequest_Filter, error) {
-	filters := []*collaboration.ListSharesRequest_Filter{}
+func (h *SharesHandler) addFilters(w http.ResponseWriter, r *http.Request, prefix string) ([]*collaboration.ListSharesRequest_Filter, []*link.ListPublicSharesRequest_Filter, error) {
+	collaborationFilters := []*collaboration.ListSharesRequest_Filter{}
+	linkFilters := []*link.ListPublicSharesRequest_Filter{}
 	var info *provider.ResourceInfo
 	ctx := r.Context()
 
@@ -772,7 +774,7 @@ func (h *SharesHandler) addFilters(w http.ResponseWriter, r *http.Request, prefi
 	gwClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
 		WriteOCSError(w, r, MetaServerError.StatusCode, "error getting grpc storage provider client", err)
-		return nil, err
+		return nil, nil, err
 	}
 
 	target := path.Join(prefix, r.FormValue("path"))
@@ -788,28 +790,35 @@ func (h *SharesHandler) addFilters(w http.ResponseWriter, r *http.Request, prefi
 	res, err := gwClient.Stat(ctx, statReq)
 	if err != nil {
 		WriteOCSError(w, r, MetaServerError.StatusCode, "error sending a grpc stat request", err)
-		return nil, err
+		return nil, nil, err
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
 		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			WriteOCSError(w, r, MetaNotFound.StatusCode, "not found", nil)
-			return filters, errors.New("fixme")
+			return collaborationFilters, linkFilters, errors.New("fixme")
 		}
 		WriteOCSError(w, r, MetaServerError.StatusCode, "grpc stat request failed", err)
-		return filters, errors.New("fixme")
+		return collaborationFilters, linkFilters, errors.New("fixme")
 	}
 
 	info = res.Info
 
-	filters = append(filters, &collaboration.ListSharesRequest_Filter{
+	collaborationFilters = append(collaborationFilters, &collaboration.ListSharesRequest_Filter{
 		Type: collaboration.ListSharesRequest_Filter_TYPE_RESOURCE_ID,
 		Term: &collaboration.ListSharesRequest_Filter_ResourceId{
 			ResourceId: info.Id,
 		},
 	})
 
-	return filters, nil
+	linkFilters = append(linkFilters, &link.ListPublicSharesRequest_Filter{
+		Type: link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID,
+		Term: &link.ListPublicSharesRequest_Filter_ResourceId{
+			ResourceId: info.Id,
+		},
+	})
+
+	return collaborationFilters, linkFilters, nil
 }
 
 func (h *SharesHandler) listUserShares(r *http.Request, filters []*collaboration.ListSharesRequest_Filter) ([]*conversions.ShareData, error) {
@@ -902,8 +911,29 @@ func (h *SharesHandler) addFileInfo(ctx context.Context, s *conversions.ShareDat
 			return err
 		}
 
+		// owner, err := c.GetUser(ctx, &userpb.GetUserRequest{
+		// 	UserId: info.Owner,
+		// })
+		// if err != nil {
+		// 	return err
+		// }
+
+		// if owner.Status.Code == rpc.Code_CODE_OK {
+		// 	// TODO the user from GetUser might not have an ID set, so we are using the one we have
+		// 	s.DisplaynameFileOwner = owner.GetUser().DisplayName
+		// } else {
+		// 	err := errors.New("could not look up share owner")
+		// 	log.Err(err).
+		// 		Str("user_idp", info.Owner.GetIdp()).
+		// 		Str("user_opaque_id", info.Owner.GetOpaqueId()).
+		// 		Str("code", owner.Status.Code.String()).
+		// 		Msg(owner.Status.Message)
+		// 	return err
+		// }
+
 		// file owner might not yet be set. Use file info
 		if s.UIDFileOwner == "" {
+			// TODO we don't know if info.Owner is always set.
 			s.UIDFileOwner = UserIDToString(info.Owner)
 		}
 		if s.DisplaynameFileOwner == "" && info.Owner != nil {
@@ -913,20 +943,46 @@ func (h *SharesHandler) addFileInfo(ctx context.Context, s *conversions.ShareDat
 			if err != nil {
 				return err
 			}
-			s.DisplaynameFileOwner = owner.GetUser().DisplayName
+
+			if owner.Status.Code == rpc.Code_CODE_OK {
+				// TODO the user from GetUser might not have an ID set, so we are using the one we have
+				s.DisplaynameFileOwner = owner.GetUser().DisplayName
+			} else {
+				err := errors.New("could not look up share owner")
+				log.Err(err).
+					Str("user_idp", info.Owner.GetIdp()).
+					Str("user_opaque_id", info.Owner.GetOpaqueId()).
+					Str("code", owner.Status.Code.String()).
+					Msg(owner.Status.Message)
+				return err
+			}
 		}
 		// share owner might not yet be set. Use file info
 		if s.UIDOwner == "" {
+			// TODO we don't know if info.Owner is always set.
 			s.UIDOwner = UserIDToString(info.Owner)
 		}
 		if s.DisplaynameOwner == "" && info.Owner != nil {
 			owner, err := c.GetUser(ctx, &userpb.GetUserRequest{
 				UserId: info.Owner,
 			})
+
 			if err != nil {
 				return err
 			}
-			s.DisplaynameOwner = owner.GetUser().DisplayName
+
+			if owner.Status.Code == rpc.Code_CODE_OK {
+				// TODO the user from GetUser might not have an ID set, so we are using the one we have
+				s.DisplaynameOwner = owner.User.DisplayName
+			} else {
+				err := errors.New("could not look up file owner")
+				log.Err(err).
+					Str("user_idp", info.Owner.GetIdp()).
+					Str("user_opaque_id", info.Owner.GetOpaqueId()).
+					Str("code", owner.Status.Code.String()).
+					Msg(owner.Status.Message)
+				return err
+			}
 		}
 	}
 	return nil

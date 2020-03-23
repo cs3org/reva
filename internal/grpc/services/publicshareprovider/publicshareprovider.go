@@ -158,7 +158,7 @@ func (s *service) ListPublicShares(ctx context.Context, req *link.ListPublicShar
 	log.Info().Msg("list public share")
 	user, _ := user.ContextGetUser(ctx)
 
-	shares, err := s.sm.ListPublicShares(ctx, user, &provider.ResourceInfo{})
+	shares, err := s.sm.ListPublicShares(ctx, user, req.Filters, &provider.ResourceInfo{})
 	if err != nil {
 		log.Err(err).Msg("error listing shares")
 		return &link.ListPublicSharesResponse{

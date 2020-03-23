@@ -287,17 +287,17 @@ func PublicShare2ShareData(share *link.PublicShare, r *http.Request) *ShareData 
 		// TODO lookup user metadata
 		// DisplaynameOwner:     creator.DisplayName,
 		// TODO lookup user metadata
-		DisplaynameFileOwner: share.GetCreator().String(),
-		ID:                   share.Id.OpaqueId,
-		Permissions:          publicSharePermissions2OCSPermissions(share.GetPermissions()),
-		ShareType:            ShareTypePublicLink,
-		UIDOwner:             UserIDToString(share.Creator),
-		STime:                share.Ctime.Seconds, // TODO CS3 api birth time = btime
-		UIDFileOwner:         UserIDToString(share.Owner),
-		Token:                share.Token,
-		Expiration:           expiration,
-		MimeType:             share.Mtime.String(),
-		Name:                 r.FormValue("name"),
+		// DisplaynameFileOwner: share.GetCreator().String(),
+		ID:           share.Id.OpaqueId,
+		Permissions:  publicSharePermissions2OCSPermissions(share.GetPermissions()),
+		ShareType:    ShareTypePublicLink,
+		UIDOwner:     UserIDToString(share.Creator),
+		STime:        share.Ctime.Seconds, // TODO CS3 api birth time = btime
+		UIDFileOwner: UserIDToString(share.Owner),
+		Token:        share.Token,
+		Expiration:   expiration,
+		MimeType:     share.Mtime.String(),
+		Name:         r.FormValue("name"),
 		// URL:                  r.Host + "/#/s/" + share.Token, // this is broken. r.Host doesn't point to Phoenix
 		URL: "localhost:8300/#/s/" + share.Token,
 	}
