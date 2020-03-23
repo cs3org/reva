@@ -21,7 +21,6 @@ package ocs
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"path"
@@ -41,6 +40,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/pkg/errors"
 )
 
 // SharesHandler implements the ownCloud sharing API
@@ -132,7 +132,7 @@ func (h *SharesHandler) userAsMatch(u *userpb.User) *conversions.MatchData {
 		Value: &conversions.MatchValueData{
 			ShareType: int(conversions.ShareTypeUser),
 			// TODO(jfd) find more robust userid
-			// username might be ok as it is uniqe at a given point in time
+			// username might be ok as it is unique at a given point in time
 			ShareWith: u.Username,
 		},
 	}
@@ -183,20 +183,17 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		res, err := gatewayClient.FindUsers(ctx, &userpb.FindUsersRequest{
-			Filter: shareWith,
+		userRes, err := gatewayClient.GetUser(ctx, &userpb.GetUserRequest{
+			UserId: &userpb.UserId{OpaqueId: shareWith},
 		})
 		if err != nil {
 			WriteOCSError(w, r, MetaServerError.StatusCode, "error searching recipient", err)
 			return
 		}
 
-		var recipient *userpb.User
-		for _, user := range res.GetUsers() {
-			if user.Username == shareWith {
-				recipient = user
-				break
-			}
+		if userRes.Status.Code != rpc.Code_CODE_OK {
+			WriteOCSError(w, r, MetaNotFound.StatusCode, "user not found", err)
+			return
 		}
 
 		var permissions conversions.Permissions
@@ -273,7 +270,7 @@ func (h *SharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			Grant: &collaboration.ShareGrant{
 				Grantee: &provider.Grantee{
 					Type: provider.GranteeType_GRANTEE_TYPE_USER,
-					Id:   recipient.Id,
+					Id:   userRes.User.GetId(),
 				},
 				Permissions: &collaboration.SharePermissions{
 					Permissions: resourcePermissions,
@@ -962,8 +959,7 @@ func (h *SharesHandler) userShare2ShareData(ctx context.Context, share *collabor
 			sd.UIDOwner = UserIDToString(share.Creator)
 			sd.DisplaynameOwner = creator.GetUser().DisplayName
 		} else {
-			err := errors.New("could not look up creator")
-			log.Err(err).
+			log.Err(errors.Wrap(err, "could not look up creator")).
 				Str("user_idp", share.Creator.GetIdp()).
 				Str("user_opaque_id", share.Creator.GetOpaqueId()).
 				Str("code", creator.Status.Code.String()).
@@ -984,8 +980,7 @@ func (h *SharesHandler) userShare2ShareData(ctx context.Context, share *collabor
 			sd.UIDFileOwner = UserIDToString(share.Owner)
 			sd.DisplaynameFileOwner = owner.GetUser().DisplayName
 		} else {
-			err := errors.New("could not look up creator")
-			log.Err(err).
+			log.Err(errors.Wrap(err, "could not look up owner")).
 				Str("user_idp", share.Owner.GetIdp()).
 				Str("user_opaque_id", share.Owner.GetOpaqueId()).
 				Str("code", owner.Status.Code.String()).
@@ -1006,8 +1001,7 @@ func (h *SharesHandler) userShare2ShareData(ctx context.Context, share *collabor
 			sd.ShareWith = UserIDToString(share.Grantee.Id)
 			sd.ShareWithDisplayname = grantee.GetUser().DisplayName
 		} else {
-			err := errors.New("could not look up creator")
-			log.Err(err).
+			log.Err(errors.Wrap(err, "could not look up grantee")).
 				Str("user_idp", share.Grantee.GetId().GetIdp()).
 				Str("user_opaque_id", share.Grantee.GetId().GetOpaqueId()).
 				Str("code", grantee.Status.Code.String()).

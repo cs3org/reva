@@ -1130,6 +1130,14 @@ func (fs *ocfs) Delete(ctx context.Context, ref *provider.Reference) (err error)
 		return errors.Wrap(err, "ocfs: error resolving reference")
 	}
 
+	_, err = os.Stat(np)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errtypes.NotFound(fs.unwrap(ctx, np))
+		}
+		return errors.Wrap(err, "ocfs: error stating "+np)
+	}
+
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error resolving recycle path")
