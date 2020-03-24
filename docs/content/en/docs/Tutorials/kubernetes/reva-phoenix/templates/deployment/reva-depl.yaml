@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reva-deployment
+spec:
+  selector:
+    matchLabels:
+      app: reva
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: reva
+    spec:
+      containers:
+        - name: reva-container
+          image: reva
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 20080

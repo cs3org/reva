@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: phoenix-deployment
+spec:
+  selector:
+    matchLabels:
+      app: phoenix
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: phoenix
+    spec:
+      containers:
+        - name: phoenix-container
+          image: phoenix
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8300

@@ -1,0 +1,11 @@
+FROM node:13.10.1-alpine3.11
+
+WORKDIR /phoenix
+RUN apk add git
+RUN git clone https://github.com/owncloud/phoenix
+COPY examples/oc-phoenix/phoenix.oidc.config.json /phoenix/phoenix/config.json
+RUN apk add yarn
+RUN cd phoenix/
+EXPOSE 8300
+RUN cd phoenix/ && yarn install-all && yarn dist
+CMD cd phoenix/ && yarn watch-all

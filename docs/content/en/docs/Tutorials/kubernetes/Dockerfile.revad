@@ -1,0 +1,9 @@
+FROM golang:1.13
+
+WORKDIR /go/src/github/cs3org/reva
+COPY . .
+RUN make build-revad-docker
+EXPOSE 9998
+EXPOSE 9999
+EXPOSE 10000
+ENTRYPOINT cd examples/oc-phoenix && ../../cmd/revad/revad -dev-dir .
