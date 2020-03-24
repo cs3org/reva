@@ -68,9 +68,8 @@ type sharesHandler struct {
 	gatewayAddr string
 }
 
-func (h *sharesHandler) init(c *Config) error {
+func (h *sharesHandler) init(c *Config) {
 	h.gatewayAddr = c.GatewaySvc
-	return nil
 }
 
 func (h *sharesHandler) Handler() http.Handler {
