@@ -5,7 +5,6 @@ metadata:
 spec:
   ports:
     - port: 20080
-#      protocol: TCP
   selector:
     app: reva
   type: NodePort
