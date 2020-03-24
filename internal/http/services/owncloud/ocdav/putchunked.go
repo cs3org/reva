@@ -218,7 +218,7 @@ func (s *svc) saveChunk(ctx context.Context, path string, r io.ReadCloser) (bool
 	tempFileName := assembledFileName
 	return true, tempFileName, nil
 }
-func (s *svc) doPutChunked(w http.ResponseWriter, r *http.Request) {
+func (s *svc) handlePutChunked(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 

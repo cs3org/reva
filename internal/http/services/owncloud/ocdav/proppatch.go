@@ -35,7 +35,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (s *svc) doProppatch(w http.ResponseWriter, r *http.Request, ns string) {
+func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "proppatch")
 	defer span.End()

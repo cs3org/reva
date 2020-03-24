@@ -54,27 +54,39 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 	id := &link.PublicShareId{
 		OpaqueId: randString(12),
 	}
+
 	tkn := randString(12)
 	now := uint64(time.Now().Unix())
 
+	displayName, ok := rInfo.ArbitraryMetadata.Metadata["name"]
+	if !ok {
+		displayName = tkn
+	}
+
+	_, passwdOk := rInfo.ArbitraryMetadata.Metadata["password"]
+
+	ctime := &typespb.Timestamp{
+		Seconds: now,
+		Nanos:   uint32(now % 1000000000),
+	}
+
+	mtime := &typespb.Timestamp{
+		Seconds: now,
+		Nanos:   uint32(now % 1000000000),
+	}
+
 	newShare := link.PublicShare{
-		Id:          id,
-		Owner:       rInfo.GetOwner(),
-		Creator:     u.Id,
-		ResourceId:  rInfo.Id,
-		Token:       tkn,
-		Permissions: g.Permissions,
-		Ctime: &typespb.Timestamp{
-			Seconds: now,
-			Nanos:   uint32(now % 1000000000),
-		},
-		Mtime: &typespb.Timestamp{
-			Seconds: now,
-			Nanos:   uint32(now % 1000000000),
-		},
-		PasswordProtected: false,
+		Id:                id,
+		Owner:             rInfo.GetOwner(),
+		Creator:           u.Id,
+		ResourceId:        rInfo.Id,
+		Token:             tkn,
+		Permissions:       g.Permissions,
+		Ctime:             ctime,
+		Mtime:             mtime,
+		PasswordProtected: passwdOk,
 		Expiration:        g.Expiration,
-		DisplayName:       tkn,
+		DisplayName:       displayName,
 	}
 
 	m.shares.Store(newShare.Token, &newShare)
@@ -123,10 +135,21 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 	return share, nil
 }
 
-func (m *manager) ListPublicShares(ctx context.Context, u *user.User, md *provider.ResourceInfo) ([]*link.PublicShare, error) {
+func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo) ([]*link.PublicShare, error) {
 	shares := []*link.PublicShare{}
 	m.shares.Range(func(k, v interface{}) bool {
-		shares = append(shares, v.(*link.PublicShare))
+		s := v.(*link.PublicShare)
+		if len(filters) == 0 {
+			shares = append(shares, s)
+		} else {
+			for _, f := range filters {
+				if f.Type == link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID {
+					if s.ResourceId.StorageId == f.GetResourceId().StorageId && s.ResourceId.OpaqueId == f.GetResourceId().OpaqueId {
+						shares = append(shares, s)
+					}
+				}
+			}
+		}
 		return true
 	})
 

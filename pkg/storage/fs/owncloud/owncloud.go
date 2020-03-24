@@ -371,9 +371,10 @@ func (fs *ocfs) unwrap(ctx context.Context, internal string) (external string) {
 	return
 }
 
-func getOwner(fn string) string {
-	parts := strings.SplitN(fn, "/", 3)
-	// parts = "", "<username>", "files", "foo/bar.txt"
+// TODO the owner needs to come from a different place
+func (fs *ocfs) getOwner(internal string) string {
+	internal = strings.TrimPrefix(internal, fs.c.DataDirectory)
+	parts := strings.SplitN(internal, "/", 3)
 	if len(parts) > 1 {
 		return parts[1]
 	}
@@ -419,7 +420,7 @@ func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, np st
 	return &provider.ResourceInfo{
 		Id:            &provider.ResourceId{OpaqueId: id},
 		Path:          fn,
-		Owner:         &userpb.UserId{OpaqueId: getOwner(fn)},
+		Owner:         &userpb.UserId{OpaqueId: fs.getOwner(np)},
 		Type:          getResourceType(fi.IsDir()),
 		Etag:          etag,
 		MimeType:      mime.Detect(fi.IsDir(), fn),

@@ -28,7 +28,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 )
 
-func (s *svc) doMkcol(w http.ResponseWriter, r *http.Request, ns string) {
+func (s *svc) handleMkcol(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 	fn := path.Join(ns, r.URL.Path)
