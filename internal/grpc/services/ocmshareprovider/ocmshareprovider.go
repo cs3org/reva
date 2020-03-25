@@ -23,6 +23,7 @@ import (
 	"fmt"
 
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/ocm/share/manager/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
@@ -196,6 +197,24 @@ func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateRec
 
 	res := &ocm.UpdateReceivedOCMShareResponse{
 		Status: status.NewOK(ctx),
+	}
+	return res, nil
+}
+
+func (s *service) GetReceivedOCMShare(ctx context.Context, req *ocm.GetReceivedOCMShareRequest) (*ocm.GetReceivedOCMShareResponse, error) {
+	log := appctx.GetLogger(ctx)
+
+	share, err := s.sm.GetReceivedShare(ctx, req.Ref)
+	if err != nil {
+		log.Err(err).Msg("error getting received share")
+		return &ocm.GetReceivedOCMShareResponse{
+			Status: status.NewInternal(ctx, err, "error getting received share"),
+		}, nil
+	}
+
+	res := &ocm.GetReceivedOCMShareResponse{
+		Status: status.NewOK(ctx),
+		Share:  share,
 	}
 	return res, nil
 }
