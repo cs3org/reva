@@ -12,7 +12,7 @@ default: build test lint contrib
 release: deps build test lint
 
 off:
-	GORPOXY=off
+	GOPROXY=off
 	echo BUILD_DATE=${BUILD_DATE}
 	echo GIT_COMMIT=${GIT_COMMIT}
 	echo GIT_DIRTY=${GIT_DIRTY}
