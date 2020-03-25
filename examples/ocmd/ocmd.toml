@@ -37,6 +37,9 @@ home_provider = "/"
 [grpc.services.usershareprovider]
 driver = "memory"
 
+[grpc.services.ocmshareprovider]
+driver = "json"
+
 [grpc.services.publicshareprovider]
 driver = "memory"
 
@@ -66,6 +69,7 @@ driver = "json"
 users = "users.demo.json"
 
 [http]
+enabled_services = ["ocmd"]
 address = "0.0.0.0:19001"
 
 [http.services.dataprovider]
@@ -81,4 +85,4 @@ enable_home = true
 transfer_shared_secret = "replace-me-with-a-transfer-secret" # for direct uploads
 
 [http.services.ocmd]
-prefix = ""
+prefix = "ocm"
