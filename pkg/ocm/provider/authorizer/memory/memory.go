@@ -16,11 +16,38 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package memory
 
 import (
-	// Load core share manager drivers.
-	_ "github.com/cs3org/reva/pkg/ocm/provider/authorizer/json"
-	_ "github.com/cs3org/reva/pkg/ocm/provider/authorizer/memory"
-	// Add your own here
+	"context"
+
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	"github.com/cs3org/reva/pkg/ocm/provider"
+	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
 )
+
+func init() {
+	registry.Register("memory", New)
+}
+
+// New returns a new authorizer object.
+func New(m map[string]interface{}) (provider.Authorizer, error) {
+	auth := new(authorizer)
+	return auth, nil
+}
+
+type authorizer struct {
+}
+
+func (a *authorizer) IsProviderAllowed(ctx context.Context, domain string) error {
+	return nil
+}
+
+func (a *authorizer) GetProviderInfoByDomain(ctx context.Context, domain string) (*ocm.ProviderInfo, error) {
+	p := new(ocm.ProviderInfo)
+	return p, nil
+}
+
+func (a *authorizer) AddProvider(ctx context.Context, p *ocm.ProviderInfo) error {
+	return nil
+}

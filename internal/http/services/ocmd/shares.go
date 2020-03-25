@@ -106,7 +106,8 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	// TODO: Check if the user is allowed to share the file once the invitation workflow has been implemented.
+	// TODO (ishank011): Check if the user is allowed to share the file once the invitation workflow has been implemented.
+	// TODO (ishank011): Also check if the provider is authorized or not.
 	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting storage grpc client on addr: %v", h.gatewayAddr), err)
