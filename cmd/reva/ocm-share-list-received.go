@@ -19,42 +19,28 @@
 package main
 
 import (
-	"fmt"
 	"os"
+	"time"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	"github.com/jedib0t/go-pretty/table"
 )
 
-func shareRemoveCommand() *command {
-	cmd := newCommand("share-remove")
-	cmd.Description = func() string { return "remove a share" }
-	cmd.Usage = func() string { return "Usage: share-remove [-flags] <share_id>" }
+func ocmShareListReceivedCommand() *command {
+	cmd := newCommand("ocm-share-list-received")
+	cmd.Description = func() string { return "list OCM shares you have received" }
+	cmd.Usage = func() string { return "Usage: ocm-share-list-received [-flags]" }
 	cmd.Action = func() error {
-		if cmd.NArg() < 1 {
-			fmt.Println(cmd.Usage())
-			os.Exit(1)
-		}
-
-		id := cmd.Args()[0]
-
 		ctx := getAuthContext()
 		shareClient, err := getClient()
 		if err != nil {
 			return err
 		}
 
-		shareRequest := &collaboration.RemoveShareRequest{
-			Ref: &collaboration.ShareReference{
-				Spec: &collaboration.ShareReference_Id{
-					Id: &collaboration.ShareId{
-						OpaqueId: id,
-					},
-				},
-			},
-		}
+		shareRequest := &ocm.ListReceivedOCMSharesRequest{}
 
-		shareRes, err := shareClient.RemoveShare(ctx, shareRequest)
+		shareRes, err := shareClient.ListReceivedOCMShares(ctx, shareRequest)
 		if err != nil {
 			return err
 		}
@@ -63,7 +49,15 @@ func shareRemoveCommand() *command {
 			return formatError(shareRes.Status)
 		}
 
-		fmt.Println("OK")
+		t := table.NewWriter()
+		t.SetOutputMirror(os.Stdout)
+		t.AppendHeader(table.Row{"#", "Owner.Idp", "Owner.OpaqueId", "ResourceId", "Permissions", "Type", "Grantee.Idp", "Grantee.OpaqueId", "Created", "Updated", "State"})
+		for _, s := range shareRes.Shares {
+			t.AppendRows([]table.Row{
+				{s.Share.Id.OpaqueId, s.Share.Owner.Idp, s.Share.Owner.OpaqueId, s.Share.ResourceId.String(), s.Share.Permissions.String(), s.Share.Grantee.Type.String(), s.Share.Grantee.Id.Idp, s.Share.Grantee.Id.OpaqueId, time.Unix(int64(s.Share.Ctime.Seconds), 0), time.Unix(int64(s.Share.Mtime.Seconds), 0), s.State.String()},
+			})
+		}
+		t.Render()
 		return nil
 	}
 	return cmd
