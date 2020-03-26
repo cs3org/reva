@@ -39,6 +39,17 @@ const (
 	APIErrorServerError      APIErrorCode = "SERVER_ERROR"
 )
 
+// APIErrorCodeMapping stores the HTTP error code mapping for various APIErrorCodes
+var APIErrorCodeMapping = map[APIErrorCode]int{
+	APIErrorNotFound:         http.StatusNotFound,
+	APIErrorUnauthenticated:  http.StatusUnauthorized,
+	APIErrorUntrustedService: http.StatusForbidden,
+	APIErrorUnimplemented:    http.StatusNotImplemented,
+	APIErrorInvalidParameter: http.StatusBadRequest,
+	APIErrorProviderError:    http.StatusBadGateway,
+	APIErrorServerError:      http.StatusInternalServerError,
+}
+
 // APIError encompasses the error type and message
 type APIError struct {
 	Code    APIErrorCode `json:"code"`
@@ -61,6 +72,7 @@ func WriteError(w http.ResponseWriter, r *http.Request, code APIErrorCode, messa
 		return
 	}
 
+	w.WriteHeader(APIErrorCodeMapping[code])
 	_, err = w.Write(encoded)
 	if err != nil {
 		appctx.GetLogger(r.Context()).Error().Err(err).Msg("error writing response")
