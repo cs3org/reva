@@ -204,6 +204,61 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *sharesHandler) getShare(w http.ResponseWriter, r *http.Request, shareID string) {
+
+	// TODO Implement response with HAL schemating
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
+	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting storage grpc client on addr: %v", h.gatewayAddr), err)
+		log.Err(err).Msg(fmt.Sprintf("error getting storage grpc client on addr: %v", h.gatewayAddr))
+		return
+	}
+
+	listOCMSharesRequest := &ocm.GetOCMShareRequest{
+		Ref: &ocm.ShareReference{
+			Spec: &ocm.ShareReference_Id{
+				Id: &ocm.ShareId{
+					OpaqueId: shareID,
+				},
+			},
+		},
+	}
+
+	log.Debug().Str("listOCMSharesRequest", fmt.Sprintf("%+v", listOCMSharesRequest)).Msg("getShare")
+
+	ocmShareResponse, err := gatewayClient.GetOCMShare(ctx, listOCMSharesRequest)
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, "error sending a grpc get ocm share request", err)
+		log.Err(err).Msg("error sending a grpc get ocm share request.")
+		return
+	}
+	log.Debug().Str("ocmShareResponse", fmt.Sprintf("%+v", ocmShareResponse)).Msg("getShare")
+
+	share := ocmShareResponse.GetShare()
+	if share == nil {
+		WriteError(w, r, APIErrorNotFound, "share not found", nil)
+		return
+	}
+
+	bytes, err := json.Marshal(share)
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, "error marshal shares data", err)
+		log.Err(err).Msg("error marshal shares data.")
+		return
+	}
+
+	// Write response
+	_, err = w.Write(bytes)
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, "error writing shares data", err)
+		log.Err(err).Msg("error writing shares data.")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *sharesHandler) listAllShares(w http.ResponseWriter, r *http.Request) {
@@ -226,6 +281,10 @@ func (h *sharesHandler) listAllShares(w http.ResponseWriter, r *http.Request) {
 
 	// Create json response
 	shares := listOCMSharesResponse.GetShares()
+	if shares == nil {
+		shares = make([]*ocm.Share, 0)
+	}
+
 	bytes, err := json.Marshal(shares)
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error marshal shares data", err)
@@ -233,7 +292,12 @@ func (h *sharesHandler) listAllShares(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Write response
-	w.Write(bytes)
+	_, err = w.Write(bytes)
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, "error writing shares data", err)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 }
