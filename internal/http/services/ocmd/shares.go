@@ -19,7 +19,6 @@
 package ocmd
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -28,14 +27,12 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/rs/zerolog"
 )
 
 type share struct {
@@ -243,60 +240,37 @@ func (h *sharesHandler) getShare(w http.ResponseWriter, r *http.Request, shareID
 }
 
 func (h *sharesHandler) listAllShares(w http.ResponseWriter, r *http.Request) {
+
+	// TODO Implement pagination.
+	// TODO Implement response with HAL schemating
 	ctx := r.Context()
-	log := appctx.GetLogger(r.Context())
-	user := r.Header.Get("Remote-User")
 
-	log.Debug().Str("ctx", fmt.Sprintf("%+v", ctx)).Str("user", user).Msg("listAllShares")
-	log.Debug().Str("Variable: `h` type", fmt.Sprintf("%T", h)).Str("Variable: `h` value", fmt.Sprintf("%+v", h)).Msg("listAllShares")
-
-	shares, err := h.getShares(ctx, log, user)
-
-	log.Debug().Str("err", fmt.Sprintf("%+v", err)).Str("shares", fmt.Sprintf("%+v", shares)).Msg("listAllShares")
-
+	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
-		log.Err(err).Msg("Error reading shares from manager")
-		w.WriteHeader(http.StatusNotImplemented)
+		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting storage grpc client on addr: %v", h.gatewayAddr), err)
 		return
 	}
 
+	listOCMSharesRequest := &ocm.ListOCMSharesRequest{
+	}
+	listOCMSharesResponse, err := gatewayClient.ListOCMShares(ctx, listOCMSharesRequest)
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, "error sending a grpc list shares request", err)
+		return
+	}
+
+	// Create json response
+	shares := listOCMSharesResponse.GetShares()
+	bytes, err := json.Marshal(shares)
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, "error marshal shares data", err)
+		return
+	}
+
+	// Write response
+	w.Write(bytes)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-}
-
-func (h *sharesHandler) getShares(ctx context.Context, logger *zerolog.Logger, user string) ([]*share, error) {
-
-	gateway, err := pool.GetGatewayServiceClient(h.gatewayAddr)
-	if err != nil {
-		return nil, err
-	}
-
-	filters := []*link.ListPublicSharesRequest_Filter{}
-	req := link.ListPublicSharesRequest{
-		Filters: filters,
-	}
-
-	logger.Debug().Str("gateway", fmt.Sprintf("%+v", gateway)).Str("req", fmt.Sprintf("%+v", req)).Msg("GetShares")
-
-	res, err := gateway.ListPublicShares(ctx, &req)
-
-	logger.Debug().Str("response", fmt.Sprintf("%+v", res)).Str("err", fmt.Sprintf("%+v", err)).Msg("GetShares")
-
-	if err != nil {
-		return nil, err
-	}
-
-	shares := make([]*share, 0)
-
-	for i, publicShare := range res.GetShare() {
-		logger.Debug().Str("idx", string(i)).Str("share", fmt.Sprintf("%+v", publicShare)).Msg("GetShares")
-
-		share := convertPublicShareToShare(publicShare)
-		shares = append(shares, share)
-	}
-
-	logger.Debug().Str("shares", fmt.Sprintf("%+v", shares)).Msg("GetShares")
-	return shares, nil
 }
 
 func (h *sharesHandler) role2CS3Permissions(r string) (*provider.ResourcePermissions, error) {
@@ -356,11 +330,5 @@ func (h *sharesHandler) role2CS3Permissions(r string) (*provider.ResourcePermiss
 		}, nil
 	default:
 		return nil, fmt.Errorf("unknown role: %s", r)
-	}
-}
-
-func convertPublicShareToShare(publicShare *link.PublicShare) *share {
-	return &share{
-		ID: publicShare.GetId().String(),
 	}
 }
