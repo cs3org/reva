@@ -435,7 +435,15 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 			Status: status.NewInternal(ctx, err, "error resolving reference"),
 		}, nil
 	}
+
+	// we need to make sure we don't expose the reference target in the resource
+	// information. For example, if requests comes to: /home/MyShares/photos and photos
+	// is reference to /user/peter/Holidays/photos, we need to still return to the user
+	// /home/MyShares/photos
+
+	orgPath := res.Info.Path
 	res.Info = ri
+	res.Info.Path = orgPath
 
 	return res, nil
 }
