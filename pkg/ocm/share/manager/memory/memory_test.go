@@ -20,11 +20,12 @@ package memory
 
 import (
 	"context"
-	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
-	"github.com/cs3org/reva/pkg/ocm/share"
 	"reflect"
 	"sync"
 	"testing"
+
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	"github.com/cs3org/reva/pkg/ocm/share"
 )
 
 func TestNew(t *testing.T) {
@@ -99,7 +100,7 @@ func Test_mgr_GetShare(t *testing.T) {
 			// 		OpaqueId: "1234",
 			// 	},
 			// },
-			want: nil,
+			want:    nil,
 			wantErr: true,
 		},
 	}

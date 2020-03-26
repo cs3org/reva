@@ -35,39 +35,6 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 )
 
-type share struct {
-	ShareWith         string        `json:"shareWith"`
-	Name              string        `json:"name"`
-	Description       string        `json:"description"`
-	ProviderID        string        `json:"providerId"`
-	Owner             string        `json:"owner"`
-	Sender            string        `json:"sender"`
-	OwnerDisplayName  string        `json:"ownerDisplayName"`
-	SenderDisplayName string        `json:"senderDisplayName"`
-	ShareType         string        `json:"shareType"`
-	ResourceType      string        `json:"resourceType"`
-	Protocol          *protocolInfo `json:"protocol"`
-
-	ID        string `json:"id,omitempty"`
-	CreatedAt string `json:"createdAt,omitempty"`
-}
-
-type protocolInfo struct {
-	Name    string           `json:"name"`
-	Options *protocolOptions `json:"options"`
-}
-
-type protocolOptions struct {
-	SharedSecret string `json:"sharedSecret,omitempty"`
-	Permissions  string `json:"permissions,omitempty"`
-}
-
-func (s *share) JSON() []byte {
-	b, _ := json.MarshalIndent(s, "", "   ")
-	return b
-
-}
-
 type sharesHandler struct {
 	gatewayAddr string
 }
@@ -251,9 +218,7 @@ func (h *sharesHandler) listAllShares(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	listOCMSharesRequest := &ocm.ListOCMSharesRequest{
-	}
-	listOCMSharesResponse, err := gatewayClient.ListOCMShares(ctx, listOCMSharesRequest)
+	listOCMSharesResponse, err := gatewayClient.ListOCMShares(ctx, &ocm.ListOCMSharesRequest{})
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error sending a grpc list shares request", err)
 		return
