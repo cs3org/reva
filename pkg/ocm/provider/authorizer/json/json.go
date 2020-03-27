@@ -20,10 +20,15 @@ package json
 
 import (
 	"context"
+	"encoding/json"
+	"io/ioutil"
 
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/provider"
 	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
+	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
 )
 
 func init() {
@@ -32,22 +37,41 @@ func init() {
 
 // New returns a new authorizer object.
 func New(m map[string]interface{}) (provider.Authorizer, error) {
-	auth := new(authorizer)
-	return auth, nil
+	c := &config{}
+	if err := mapstructure.Decode(m, c); err != nil {
+		err = errors.Wrap(err, "error decoding conf")
+		return nil, err
+	}
+
+	f, err := ioutil.ReadFile(c.Providers)
+	if err != nil {
+		return nil, err
+	}
+	providers := []*ocm.ProviderInfo{}
+	err = json.Unmarshal(f, &providers)
+	if err != nil {
+		return nil, err
+	}
+
+	return &authorizer{
+		providers: providers,
+	}, nil
+}
+
+type config struct {
+	// Users holds a path to a file containing json conforming the Users struct
+	Providers string `mapstructure:"providers"`
 }
 
 type authorizer struct {
+	providers []*ocm.ProviderInfo
 }
 
 func (a *authorizer) IsProviderAllowed(ctx context.Context, domain string) error {
-	return nil
-}
-
-func (a *authorizer) GetProviderInfoByDomain(ctx context.Context, domain string) (*ocm.ProviderInfo, error) {
-	p := new(ocm.ProviderInfo)
-	return p, nil
-}
-
-func (a *authorizer) AddProvider(ctx context.Context, p *ocm.ProviderInfo) error {
-	return nil
+	for _, u := range a.providers {
+		if u.Domain == domain {
+			return nil
+		}
+	}
+	return errtypes.NotFound(domain)
 }

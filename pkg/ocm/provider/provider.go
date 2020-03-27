@@ -20,18 +20,10 @@ package provider
 
 import (
 	"context"
-
-	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 )
 
 // Authorizer provides provisions to verify and add sync'n'share system providers.
 type Authorizer interface {
 	// IsProviderAllowed checks if a given system provider is integrated into the OCM or not.
 	IsProviderAllowed(ctx context.Context, domain string) error
-
-	// GetProviderInfoByDomain retrieves details about the provider.
-	GetProviderInfoByDomain(ctx context.Context, domain string) (*ocm.ProviderInfo, error)
-
-	// AddProvider registers a provider into OCM.
-	AddProvider(ctx context.Context, p *ocm.ProviderInfo) error
 }

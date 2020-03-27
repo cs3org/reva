@@ -37,17 +37,9 @@ func New(m map[string]interface{}) (provider.Authorizer, error) {
 }
 
 type authorizer struct {
+	providers []*ocm.ProviderInfo
 }
 
 func (a *authorizer) IsProviderAllowed(ctx context.Context, domain string) error {
-	return nil
-}
-
-func (a *authorizer) GetProviderInfoByDomain(ctx context.Context, domain string) (*ocm.ProviderInfo, error) {
-	p := new(ocm.ProviderInfo)
-	return p, nil
-}
-
-func (a *authorizer) AddProvider(ctx context.Context, p *ocm.ProviderInfo) error {
 	return nil
 }
