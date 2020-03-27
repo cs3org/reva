@@ -21,7 +21,6 @@ package memory
 import (
 	"context"
 
-	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	"github.com/cs3org/reva/pkg/ocm/provider"
 	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
 )
@@ -37,7 +36,6 @@ func New(m map[string]interface{}) (provider.Authorizer, error) {
 }
 
 type authorizer struct {
-	providers []*ocm.ProviderInfo
 }
 
 func (a *authorizer) IsProviderAllowed(ctx context.Context, domain string) error {
