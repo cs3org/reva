@@ -32,7 +32,6 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
-	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -79,14 +78,14 @@ func New(m map[string]interface{}) (global.Middleware, int, error) {
 	handler := func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
+			ctx := r.Context()
+			log := appctx.GetLogger(ctx)
 			if head, _ := router.ShiftPath(r.URL.Path); head != conf.OCMPrefix {
 				log.Info().Msg("skipping provider authorizer check for: " + r.URL.Path)
 				h.ServeHTTP(w, r)
 				return
 			}
 
-			ctx := r.Context()
-			log := appctx.GetLogger(ctx)
 			username, _, ok := r.BasicAuth()
 			if !ok {
 				log.Error().Err(err).Msg("no basic auth provided")
@@ -105,27 +104,26 @@ func New(m map[string]interface{}) (global.Middleware, int, error) {
 				Filter: username,
 			})
 			if err != nil {
-				log.Error().Err(err).Msg("error searching recipient")
+				log.Error().Err(err).Msg("error searching for the user")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 
-			var recipient *userpb.User
+			var userAuth *userpb.User
 			for _, user := range userRes.GetUsers() {
 				if user.Username == username {
-					recipient = user
+					userAuth = user
 					break
 				}
 			}
-			user := strings.Split(recipient.Mail, "@")
-			if len(user) != 2 {
-				log.Error().Err(err).Msg("owner must contain domain")
+			domainSplit := strings.Split(userAuth.Mail, "@")
+			if len(domainSplit) != 2 {
+				log.Error().Err(err).Msg("user mail must contain domain")
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
 
-			domain := user[1]
-			err = authorizer.IsProviderAllowed(ctx, domain)
+			err = authorizer.IsProviderAllowed(ctx, domainSplit[1])
 			if err != nil {
 				log.Error().Err(err).Msg("provider not registered in OCM")
 				w.WriteHeader(http.StatusUnauthorized)
