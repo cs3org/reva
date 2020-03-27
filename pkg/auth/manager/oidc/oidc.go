@@ -113,6 +113,14 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		claims["email_verified"] = false
 	}
 
+	if claims["email"] == nil {
+		return nil, fmt.Errorf("no \"email\" attribute found in userinfo: maybe the client did not request the oidc \"email\"-scope")
+	}
+
+	if claims["preferred_username"] == nil || claims["name"] == nil {
+		return nil, fmt.Errorf("no \"preferred_username\" or \"name\" attribute found in userinfo: maybe the client did not request the oidc \"profile\"-scope")
+	}
+
 	u := &user.User{
 		Id: &user.UserId{
 			OpaqueId: claims[am.c.IDClaim].(string), // a stable non reassignable id
