@@ -19,105 +19,127 @@
 package memory
 
 import (
-	"context"
-	"reflect"
 	"sync"
 	"testing"
+	"time"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
-	"github.com/cs3org/reva/pkg/ocm/share"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 )
 
-func TestNew(t *testing.T) {
-	type args struct {
-		c map[string]interface{}
-	}
+func Test_mgr_SharesWorkflow(t *testing.T) {
 
-	var instance = new(mgr)
-
-	tests := []struct {
-		name    string
-		args    args
-		want    share.Manager
-		wantErr bool
-	}{
-		{
-			name: "create new instance",
-			args: args{
-				c: nil,
-			},
-			want:    instance,
-			wantErr: false,
+	managerWithData := createManagerWithData()
+	user := userpb.User{
+		Id: &userpb.UserId{
+			Idp:      "http://localhost:20080",
+			OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51",
 		},
+		Username:     "",
+		Mail:         "",
+		MailVerified: false,
+		DisplayName:  "",
+		Groups:       nil,
+		Opaque:       nil,
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := New(tt.args.c)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("New() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("New() got = %v, want %v", got, tt.want)
-			}
-		})
+	// ctx:=context.Background()
+
+	var filters []*ocm.ListOCMSharesRequest_Filter
+	share, err := managerWithData.listShares(&user, filters)
+	if err != nil {
+		t.Error(err)
+	}
+	if len(share) != 3 {
+		t.Errorf("ListShares invalid list size got = %v, want %v", len(share), 3)
 	}
 }
 
-func Test_mgr_GetShare(t *testing.T) {
-	type fields struct {
-		shares sync.Map
+func createManagerWithData() *mgr {
+	now := time.Now().UnixNano()
+	ts := &typespb.Timestamp{
+		Seconds: uint64(now / 1000000000),
+		Nanos:   uint32(now % 1000000000),
 	}
-	type args struct {
-		ctx context.Context
-		ref *ocm.ShareReference
-	}
-
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *ocm.Share
-		wantErr bool
-	}{
-		{
-			name: "Getting not exist share",
-			fields: fields{
-				shares: sync.Map{},
-			},
-			args: args{
-				ctx: nil,
-				ref: &ocm.ShareReference{
-					Spec: &ocm.ShareReference_Id{
-						Id: &ocm.ShareId{
-							OpaqueId: "1234",
-						},
-					},
-				},
-			},
-			// want: &ocm.Share{
-			// 	Id: &ocm.ShareId{
-			// 		OpaqueId: "1234",
-			// 	},
-			// },
-			want:    nil,
-			wantErr: true,
+	user := userpb.User{
+		Id: &userpb.UserId{
+			Idp:      "http://localhost:20080",
+			OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51",
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			m := &mgr{
-				shares: tt.fields.shares,
-			}
-
-			got, err := m.GetShare(tt.args.ctx, tt.args.ref)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("GetShare() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("GetShare() got = %v, want %v", got, tt.want)
-			}
-		})
+	g := &ocm.ShareGrant{
+		Grantee:     nil,
+		Permissions: &ocm.SharePermissions{},
 	}
+
+	s := &ocm.Share{
+		Id: &ocm.ShareId{
+			OpaqueId: "e45c5646-d202-4369-a21e-afe86985ea2a",
+		},
+		ResourceId: &provider.ResourceId{
+			StorageId: "123e4567-e89b-12d3-a456-426655440000",
+			OpaqueId:  "fileid-einstein/a.txt",
+		},
+		Permissions: g.Permissions,
+		Grantee:     g.Grantee,
+		Owner:       user.Id,
+		Creator:     user.Id,
+		Ctime:       ts,
+		Mtime:       ts,
+	}
+
+	s2 := &ocm.Share{
+		Id: &ocm.ShareId{
+			OpaqueId: "1a28c96e-34b2-480c-b14b-8799b3f411f6",
+		},
+		ResourceId: &provider.ResourceId{
+			StorageId: "123e4567-e89b-12d3-a456-426655440000",
+			OpaqueId:  "fileid-einstein/b.txt",
+		},
+		Permissions: g.Permissions,
+		Grantee:     g.Grantee,
+		Owner:       user.Id,
+		Creator:     user.Id,
+		Ctime:       ts,
+		Mtime:       ts,
+	}
+
+	s3 := &ocm.Share{
+		Id: &ocm.ShareId{
+			OpaqueId: "dd2ceead-852b-4d7c-8c89-73470c2a05ba",
+		},
+		ResourceId: &provider.ResourceId{
+			StorageId: "123e4567-e89b-12d3-a456-426655440000",
+			OpaqueId:  "fileid-einstein/c.txt",
+		},
+		Permissions: g.Permissions,
+		Grantee:     g.Grantee,
+		Owner:       user.Id,
+		Creator:     user.Id,
+		Ctime:       ts,
+		Mtime:       ts,
+	}
+
+	m := &mgr{
+		shares: sync.Map{},
+		state:  nil,
+	}
+
+	storeShare(m, s)
+	storeShare(m, s2)
+	storeShare(m, s3)
+
+	return m
+}
+
+func storeShare(m *mgr, s *ocm.Share) {
+
+	key := &ocm.ShareKey{
+		Owner:      s.Owner,
+		ResourceId: s.ResourceId,
+		Grantee:    s.Grantee,
+	}
+
+	m.shares.Store(key, s)
 }
