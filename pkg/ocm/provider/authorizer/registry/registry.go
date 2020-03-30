@@ -16,18 +16,19 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package registry
 
-import (
-	// Load core HTTP services
-	_ "github.com/cs3org/reva/internal/http/services/datagateway"
-	_ "github.com/cs3org/reva/internal/http/services/dataprovider"
-	_ "github.com/cs3org/reva/internal/http/services/helloworld"
-	_ "github.com/cs3org/reva/internal/http/services/ocmd"
-	_ "github.com/cs3org/reva/internal/http/services/oidcprovider"
-	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
-	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocs"
-	_ "github.com/cs3org/reva/internal/http/services/prometheus"
-	_ "github.com/cs3org/reva/internal/http/services/wellknown"
-	// Add your own service here
-)
+import "github.com/cs3org/reva/pkg/ocm/provider"
+
+// NewFunc is the function that provider authorizers
+// should register at init time.
+type NewFunc func(map[string]interface{}) (provider.Authorizer, error)
+
+// NewFuncs is a map containing all the registered provider authorizers.
+var NewFuncs = map[string]NewFunc{}
+
+// Register registers a new provider authorizer's new function.
+// Not safe for concurrent use. Safe for use from package init.
+func Register(name string, f NewFunc) {
+	NewFuncs[name] = f
+}

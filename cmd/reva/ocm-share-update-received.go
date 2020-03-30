@@ -23,14 +23,14 @@ import (
 	"os"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 )
 
-func shareUpdateCommand() *command {
-	cmd := newCommand("share-update")
-	cmd.Description = func() string { return "update a share" }
-	cmd.Usage = func() string { return "Usage: share-update [-flags] <share_id>" }
-	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor)")
+func ocmShareUpdateReceivedCommand() *command {
+	cmd := newCommand("ocm-share-update-received")
+	cmd.Description = func() string { return "update a received OCM share" }
+	cmd.Usage = func() string { return "Usage: ocm-share-update-received [-flags] <share_id>" }
+	state := cmd.String("state", "pending", "the state of the share (pending, accepted or rejected)")
 	cmd.Action = func() error {
 		if cmd.NArg() < 1 {
 			fmt.Println(cmd.Usage())
@@ -38,8 +38,8 @@ func shareUpdateCommand() *command {
 		}
 
 		// validate flags
-		if *rol != viewerPermission && *rol != editorPermission {
-			fmt.Println("invalid rol: rol must be viewer or editor")
+		if *state != "pending" && *state != "accepted" && *state != "rejected" {
+			fmt.Println("invalid state: state must be pending, accepted or rejected")
 			fmt.Println(cmd.Usage())
 			os.Exit(1)
 		}
@@ -52,27 +52,24 @@ func shareUpdateCommand() *command {
 			return err
 		}
 
-		perm, err := getSharePerm(*rol)
-		if err != nil {
-			return err
-		}
+		shareState := getOCMShareState(*state)
 
-		shareRequest := &collaboration.UpdateShareRequest{
-			Ref: &collaboration.ShareReference{
-				Spec: &collaboration.ShareReference_Id{
-					Id: &collaboration.ShareId{
+		shareRequest := &ocm.UpdateReceivedOCMShareRequest{
+			Ref: &ocm.ShareReference{
+				Spec: &ocm.ShareReference_Id{
+					Id: &ocm.ShareId{
 						OpaqueId: id,
 					},
 				},
 			},
-			Field: &collaboration.UpdateShareRequest_UpdateField{
-				Field: &collaboration.UpdateShareRequest_UpdateField_Permissions{
-					Permissions: perm,
+			Field: &ocm.UpdateReceivedOCMShareRequest_UpdateField{
+				Field: &ocm.UpdateReceivedOCMShareRequest_UpdateField_State{
+					State: shareState,
 				},
 			},
 		}
 
-		shareRes, err := shareClient.UpdateShare(ctx, shareRequest)
+		shareRes, err := shareClient.UpdateReceivedOCMShare(ctx, shareRequest)
 		if err != nil {
 			return err
 		}
@@ -85,4 +82,17 @@ func shareUpdateCommand() *command {
 		return nil
 	}
 	return cmd
+}
+
+func getOCMShareState(state string) ocm.ShareState {
+	switch state {
+	case "pending":
+		return ocm.ShareState_SHARE_STATE_PENDING
+	case "accepted":
+		return ocm.ShareState_SHARE_STATE_ACCEPTED
+	case "rejected":
+		return ocm.ShareState_SHARE_STATE_REJECTED
+	default:
+		return ocm.ShareState_SHARE_STATE_INVALID
+	}
 }

@@ -29,6 +29,11 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 )
 
+const (
+	viewerPermission string = "viewer"
+	editorPermission string = "editor"
+)
+
 func getConfigFile() string {
 	user, err := gouser.Current()
 	if err != nil {

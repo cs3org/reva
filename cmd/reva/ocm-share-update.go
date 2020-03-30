@@ -23,13 +23,13 @@ import (
 	"os"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 )
 
-func shareUpdateCommand() *command {
-	cmd := newCommand("share-update")
-	cmd.Description = func() string { return "update a share" }
-	cmd.Usage = func() string { return "Usage: share-update [-flags] <share_id>" }
+func ocmShareUpdateCommand() *command {
+	cmd := newCommand("ocm-share-update")
+	cmd.Description = func() string { return "update an OCM share" }
+	cmd.Usage = func() string { return "Usage: ocm-share-update [-flags] <share_id>" }
 	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor)")
 	cmd.Action = func() error {
 		if cmd.NArg() < 1 {
@@ -52,27 +52,27 @@ func shareUpdateCommand() *command {
 			return err
 		}
 
-		perm, err := getSharePerm(*rol)
+		perm, err := getOCMSharePerm(*rol)
 		if err != nil {
 			return err
 		}
 
-		shareRequest := &collaboration.UpdateShareRequest{
-			Ref: &collaboration.ShareReference{
-				Spec: &collaboration.ShareReference_Id{
-					Id: &collaboration.ShareId{
+		shareRequest := &ocm.UpdateOCMShareRequest{
+			Ref: &ocm.ShareReference{
+				Spec: &ocm.ShareReference_Id{
+					Id: &ocm.ShareId{
 						OpaqueId: id,
 					},
 				},
 			},
-			Field: &collaboration.UpdateShareRequest_UpdateField{
-				Field: &collaboration.UpdateShareRequest_UpdateField_Permissions{
+			Field: &ocm.UpdateOCMShareRequest_UpdateField{
+				Field: &ocm.UpdateOCMShareRequest_UpdateField_Permissions{
 					Permissions: perm,
 				},
 			},
 		}
 
-		shareRes, err := shareClient.UpdateShare(ctx, shareRequest)
+		shareRes, err := shareClient.UpdateOCMShare(ctx, shareRequest)
 		if err != nil {
 			return err
 		}

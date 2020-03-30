@@ -16,18 +16,28 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package memory
 
 import (
-	// Load core HTTP services
-	_ "github.com/cs3org/reva/internal/http/services/datagateway"
-	_ "github.com/cs3org/reva/internal/http/services/dataprovider"
-	_ "github.com/cs3org/reva/internal/http/services/helloworld"
-	_ "github.com/cs3org/reva/internal/http/services/ocmd"
-	_ "github.com/cs3org/reva/internal/http/services/oidcprovider"
-	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
-	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocs"
-	_ "github.com/cs3org/reva/internal/http/services/prometheus"
-	_ "github.com/cs3org/reva/internal/http/services/wellknown"
-	// Add your own service here
+	"context"
+
+	"github.com/cs3org/reva/pkg/ocm/provider"
+	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
 )
+
+func init() {
+	registry.Register("memory", New)
+}
+
+// New returns a new authorizer object.
+func New(m map[string]interface{}) (provider.Authorizer, error) {
+	auth := new(authorizer)
+	return auth, nil
+}
+
+type authorizer struct {
+}
+
+func (a *authorizer) IsProviderAllowed(ctx context.Context, domain string) error {
+	return nil
+}

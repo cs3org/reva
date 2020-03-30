@@ -25,16 +25,16 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/pkg/errors"
 )
 
-func shareCreateCommand() *command {
-	cmd := newCommand("share-create")
-	cmd.Description = func() string { return "create share to a user or group" }
-	cmd.Usage = func() string { return "Usage: share-create [-flags] <path>" }
+func ocmShareCreateCommand() *command {
+	cmd := newCommand("ocm-share-create")
+	cmd.Description = func() string { return "create OCM share to a user or group" }
+	cmd.Usage = func() string { return "Usage: ocm-share create [-flags] <path>" }
 	grantType := cmd.String("type", "user", "grantee type (user or group)")
 	grantee := cmd.String("grantee", "", "the grantee")
 	idp := cmd.String("idp", "", "the idp of the grantee, default to same idp as the user triggering the action")
@@ -74,14 +74,14 @@ func shareCreateCommand() *command {
 			return formatError(res.Status)
 		}
 
-		perm, err := getSharePerm(*rol)
+		perm, err := getOCMSharePerm(*rol)
 		if err != nil {
 			return err
 		}
 
 		gt := getGrantType(*grantType)
 
-		grant := &collaboration.ShareGrant{
+		grant := &ocm.ShareGrant{
 			Permissions: perm,
 			Grantee: &provider.Grantee{
 				Type: gt,
@@ -91,12 +91,12 @@ func shareCreateCommand() *command {
 				},
 			},
 		}
-		shareRequest := &collaboration.CreateShareRequest{
-			ResourceInfo: res.Info,
-			Grant:        grant,
+		shareRequest := &ocm.CreateOCMShareRequest{
+			ResourceId: res.Info.Id,
+			Grant:      grant,
 		}
 
-		shareRes, err := client.CreateShare(ctx, shareRequest)
+		shareRes, err := client.CreateOCMShare(ctx, shareRequest)
 		if err != nil {
 			return err
 		}
@@ -120,20 +120,9 @@ func shareCreateCommand() *command {
 	return cmd
 }
 
-func getGrantType(t string) provider.GranteeType {
-	switch t {
-	case "user":
-		return provider.GranteeType_GRANTEE_TYPE_USER
-	case "group":
-		return provider.GranteeType_GRANTEE_TYPE_GROUP
-	default:
-		return provider.GranteeType_GRANTEE_TYPE_INVALID
-	}
-}
-
-func getSharePerm(p string) (*collaboration.SharePermissions, error) {
+func getOCMSharePerm(p string) (*ocm.SharePermissions, error) {
 	if p == viewerPermission {
-		return &collaboration.SharePermissions{
+		return &ocm.SharePermissions{
 			Permissions: &provider.ResourcePermissions{
 				GetPath:              true,
 				InitiateFileDownload: true,
@@ -143,7 +132,7 @@ func getSharePerm(p string) (*collaboration.SharePermissions, error) {
 			},
 		}, nil
 	} else if p == editorPermission {
-		return &collaboration.SharePermissions{
+		return &ocm.SharePermissions{
 			Permissions: &provider.ResourcePermissions{
 				GetPath:              true,
 				InitiateFileDownload: true,
