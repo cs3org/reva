@@ -103,7 +103,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 		Mtime:       ts,
 	}
 
-	m.shares.Store(key, &s)
+	m.shares.Store(key, s)
 	return s, nil
 }
 
