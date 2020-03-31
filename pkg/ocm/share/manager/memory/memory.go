@@ -344,6 +344,7 @@ func (m *mgr) ListReceivedShares(ctx context.Context) ([]*ocm.ReceivedShare, err
 func (m *mgr) convert(ctx context.Context, s *ocm.Share) *ocm.ReceivedShare {
 	rs := &ocm.ReceivedShare{
 		Share: s,
+		State: ocm.ShareState_SHARE_STATE_PENDING,
 	}
 	user := user.ContextMustGetUser(ctx)
 	if v, ok := m.state[user.Id.String()]; ok {

@@ -388,6 +388,7 @@ func (m *mgr) ListReceivedShares(ctx context.Context) ([]*collaboration.Received
 func (m *mgr) convert(ctx context.Context, s *collaboration.Share) *collaboration.ReceivedShare {
 	rs := &collaboration.ReceivedShare{
 		Share: s,
+		State: collaboration.ShareState_SHARE_STATE_PENDING,
 	}
 	user := user.ContextMustGetUser(ctx)
 	if v, ok := m.model.State[user.Id.String()]; ok {
