@@ -21,6 +21,7 @@ package gateway
 import (
 	"context"
 	"net/url"
+	"path"
 	"strings"
 	"time"
 
@@ -108,49 +109,8 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 
 }
 func (s *svc) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
-	log := appctx.GetLogger(ctx)
-
-	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
-	if err != nil {
-		err = errors.Wrap(err, "gateway: error getting storage registry client")
-		return &provider.GetHomeResponse{
-			Status: status.NewInternal(ctx, err, "error finding storage registry"),
-		}, nil
-	}
-
-	res, err := c.GetHome(ctx, &registry.GetHomeRequest{})
-	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetHome")
-		return &provider.GetHomeResponse{
-			Status: status.NewInternal(ctx, err, "error calling GetHome"),
-		}, nil
-	}
-
-	if res.Status.Code != rpc.Code_CODE_OK {
-		err := status.NewErrorFromCode(res.Status.Code, "gateway")
-		return &provider.GetHomeResponse{
-			Status: status.NewInternal(ctx, err, "error calling GetHome"),
-		}, nil
-	}
-
-	log.Info().Msg("gateway: home for user at provider=" + res.Provider.Address)
-
-	storageClient, err := pool.GetStorageProviderServiceClient(res.Provider.Address)
-	if err != nil {
-		err = errors.Wrap(err, "gateway: error getting storage provider client")
-		return &provider.GetHomeResponse{
-			Status: status.NewInternal(ctx, err, "error getting home"),
-		}, nil
-	}
-
-	homeRes, err := storageClient.GetHome(ctx, req)
-	if err != nil {
-		err = errors.Wrap(err, "gateway: error getting GetHome from storage provider")
-		return &provider.GetHomeResponse{
-			Status: status.NewInternal(ctx, err, "error getting home"),
-		}, nil
-	}
-
+	// TODO(labkode): issue #601, /home will be hardcoded.
+	homeRes := &provider.GetHomeResponse{Path: "/home"}
 	return homeRes, nil
 }
 
@@ -269,6 +229,26 @@ func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provi
 }
 
 func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
+	path, err := s.getPath(ctx, req.Ref)
+	if err != nil {
+		return &provider.CreateContainerResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error gettng path for ref"),
+		}, nil
+	}
+
+	inside, err := s.isSharedRoot(ctx, path)
+	if err != nil {
+		return &provider.CreateContainerResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error gettng path for ref"),
+		}, nil
+	}
+
+	log := appctx.GetLogger(ctx)
+	log.Debug().Msgf("contains shared folder? %t strings.HasPrefix(path:%s,share-folder:%s)", inside, path, s.c.ShareFolder)
+
+	if inside {
+	}
+
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
@@ -532,7 +512,7 @@ func (s *svc) ListContainerStream(req *provider.ListContainerStreamRequest, ss g
 	return errors.New("Unimplemented")
 }
 
-func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
+func (s *svc) listContainerNominal(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
@@ -551,6 +531,64 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 	}
 
 	return res, nil
+}
+
+func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
+	return s.listContainerNominal(ctx, req)
+}
+
+func (s *svc) getPath(ctx context.Context, ref *provider.Reference) (string, error) {
+	if ref.GetPath() != "" {
+		return ref.GetPath(), nil
+	}
+
+	if ref.GetId() != nil {
+		req := &provider.StatRequest{Ref: ref}
+		res, err := s.stat(ctx, req)
+		if err != nil {
+			err = errors.Wrap(err, "gateway: error stating ref:"+ref.String())
+			return "", err
+		}
+
+		if res.Status.Code != rpc.Code_CODE_OK {
+			err := status.NewErrorFromCode(res.Status.Code, "gateway")
+			return "", err
+		}
+
+		return res.Info.Path, nil
+	}
+
+	return "", errors.New("gateway: ref is invalid:" + ref.String())
+}
+
+func (s *svc) isSharedRoot(ctx context.Context, path string) (bool, error) {
+	shareFolder, err := s.getSharedFolder(ctx)
+	if err != nil {
+		return false, errors.Wrap(err, "gateway: error getting share folder")
+	}
+
+	if strings.HasPrefix(path, shareFolder) {
+		return true, nil
+	}
+	return false, nil
+}
+
+func (s *svc) getSharedFolder(ctx context.Context) (string, error) {
+	// fetch the share folder path taking into account the home path
+	// path contains the share folder prefix?
+	homeReq := &provider.GetHomeRequest{}
+	homeRes, err := s.GetHome(ctx, homeReq)
+	if err != nil {
+		return "", errors.Wrap(err, "gateway: error getting home")
+	}
+
+	if homeRes.Status.Code != rpc.Code_CODE_OK {
+		err := status.NewErrorFromCode(homeRes.Status.Code, "gateway")
+		return "", err
+	}
+
+	shareFolder := path.Join(homeRes.Path, s.c.ShareFolder)
+	return shareFolder, nil
 }
 
 func (s *svc) ListFileVersions(ctx context.Context, req *provider.ListFileVersionsRequest) (*provider.ListFileVersionsResponse, error) {
@@ -744,3 +782,34 @@ func (s *svc) findProvider(ctx context.Context, ref *provider.Reference) (*regis
 
 	return res.Provider, nil
 }
+
+/*
+	Handle references?
+
+	No - GetHome(ctx context.Context) (string, error)
+	No -CreateHome(ctx context.Context) error
+	Yes - CreateDir(ctx context.Context, fn string) error
+	Yes -Delete(ctx context.Context, ref *provider.Reference) error
+	Yes -Move(ctx context.Context, oldRef, newRef *provider.Reference) error
+	Yes -GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error)
+	Yes -ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error)
+	Yes -Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error
+	Yes -Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error)
+	Yes -ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error)
+	Yes -DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error)
+	Yes -RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error
+	No ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error)
+	No RestoreRecycleItem(ctx context.Context, key string) error
+	No PurgeRecycleItem(ctx context.Context, key string) error
+	No EmptyRecycle(ctx context.Context) error
+	Yes  GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error)
+	No AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
+	No RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
+	No UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
+	No ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error)
+	No GetQuota(ctx context.Context) (int, int, error)
+	No CreateReference(ctx context.Context, path string, targetURI *url.URL) error
+	No Shutdown(ctx context.Context) error
+	Maybe SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error
+	Maybe UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error
+*/
