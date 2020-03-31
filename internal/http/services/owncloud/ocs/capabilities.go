@@ -145,7 +145,6 @@ func (h *CapabilitiesHandler) init(c *Config) {
 		h.c.Capabilities.FilesSharing.Public = &CapabilitiesFilesSharingPublic{}
 	}
 
-	fmt.Printf("\n\n\n HERE \n\n\n")
 	// h.c.Capabilities.FilesSharing.Public.Enabled is boolean
 	h.c.Capabilities.FilesSharing.Public.Enabled = true
 
