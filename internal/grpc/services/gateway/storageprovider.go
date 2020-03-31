@@ -225,6 +225,10 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 		}, nil
 	}
 
+	if !s.inSharedFolder(ctx, p) {
+		return s.createContainer(ctx, req)
+	}
+
 	log := appctx.GetLogger(ctx)
 	if s.isSharedFolder(ctx, p) || s.isShareName(ctx, p) {
 		log.Debug().Msgf("path:%s points to shared folder or share name", p)
@@ -288,24 +292,7 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 		return s.createContainer(ctx, req)
 	}
 
-	c, err := s.find(ctx, req.Ref)
-	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return &provider.CreateContainerResponse{
-				Status: status.NewNotFound(ctx, "storage provider not found"),
-			}, nil
-		}
-		return &provider.CreateContainerResponse{
-			Status: status.NewInternal(ctx, err, "error finding storage provider"),
-		}, nil
-	}
-
-	res, err := c.CreateContainer(ctx, req)
-	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling CreateContainer")
-	}
-
-	return res, nil
+	panic("gateway: create container on unknown path:" + p)
 }
 
 func (s *svc) createContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
@@ -329,12 +316,22 @@ func (s *svc) createContainer(ctx context.Context, req *provider.CreateContainer
 	return res, nil
 }
 
+// check if the path contains the prefix of the shared folder
+func (s *svc) inSharedFolder(ctx context.Context, p string) bool {
+	sharedFolder := s.getSharedFolder(ctx)
+	return strings.HasPrefix(p, sharedFolder)
+}
+
 func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
 	p, err := s.getPath(ctx, req.Ref)
 	if err != nil {
 		return &provider.DeleteResponse{
 			Status: status.NewInternal(ctx, err, "gateway: error gettng path for ref"),
 		}, nil
+	}
+
+	if !s.inSharedFolder(ctx, p) {
+		return s.delete(ctx, req)
 	}
 
 	log := appctx.GetLogger(ctx)
@@ -416,24 +413,7 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 		return s.delete(ctx, req)
 	}
 
-	c, err := s.find(ctx, req.Ref)
-	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return &provider.DeleteResponse{
-				Status: status.NewNotFound(ctx, "storage provider not found"),
-			}, nil
-		}
-		return &provider.DeleteResponse{
-			Status: status.NewInternal(ctx, err, "error finding storage provider"),
-		}, nil
-	}
-
-	res, err := c.Delete(ctx, req)
-	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling Delete")
-	}
-
-	return res, nil
+	panic("gateway: delete called on unknown path:" + p)
 }
 
 func (s *svc) delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
@@ -476,9 +456,7 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 		}, nil
 	}
 
-	// if both paths are not under shareFolder, continue with normal operation.
-	shareFolder := s.getSharedFolder(ctx)
-	if !strings.HasPrefix(p, shareFolder) && !strings.HasPrefix(dp, shareFolder) {
+	if !s.inSharedFolder(ctx, p) && !s.inSharedFolder(ctx, dp) {
 		return s.move(ctx, req)
 	}
 
@@ -557,13 +535,7 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 		return s.move(ctx, req)
 	}
 
-	// anything else is forbidden
-	err = errtypes.PermissionDenied(fmt.Sprintf("gateway: cannot move from/to because violates sharing behaviour: srcpath:%s dstpath:%s", p, dp))
-	log.Err(err).Msg("gateway: cannot move")
-	return &provider.MoveResponse{
-		Status: status.NewInvalidArg(ctx, "source or destination path points to share folder"),
-	}, nil
-
+	panic("gateway: move called on unknown path:" + p)
 }
 
 func (s *svc) move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
@@ -669,39 +641,108 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 }
 
 func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
-	res, err := s.stat(ctx, req)
+	p, err := s.getPath(ctx, req.Ref)
 	if err != nil {
 		return &provider.StatResponse{
-			Status: status.NewInternal(ctx, err, "error calling stat"),
+			Status: status.NewInternal(ctx, err, "gateway: error getting path for ref"),
 		}, nil
 	}
 
-	if res.Status.Code != rpc.Code_CODE_OK {
+	if !s.inSharedFolder(ctx, p) {
+		return s.stat(ctx, req)
+	}
+
+	// TODO(labkode): we need to generate a unique etag based on the contained share names.
+	if s.isSharedFolder(ctx, p) {
+		return s.stat(ctx, req)
+	}
+
+	log := appctx.GetLogger(ctx)
+
+	// we need to provide the info of the target, not the reference.
+	if s.isShareName(ctx, p) {
+		res, err := s.stat(ctx, req)
+		if err != nil {
+			return &provider.StatResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error stating"),
+			}, nil
+		}
+
+		if res.Status.Code != rpc.Code_CODE_OK {
+			err := status.NewErrorFromCode(res.Status.Code, "gateway")
+			log.Err(err).Msg("gateway: error stating")
+			return &provider.StatResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error stating"),
+			}, nil
+		}
+
+		if res.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
+			panic("gateway: a share name must be of type reference: ref:" + res.Info.Path)
+		}
+
+		ri, err := s.checkRef(ctx, res.Info)
+		if err != nil {
+			return &provider.StatResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error resolving reference:"+p),
+			}, nil
+		}
+
+		// we need to make sure we don't expose the reference target in the resource
+		// information. For example, if requests comes to: /home/MyShares/photos and photos
+		// is reference to /user/peter/Holidays/photos, we need to still return to the user
+		// /home/MyShares/photos
+		orgPath := res.Info.Path
+		res.Info = ri
+		res.Info.Path = orgPath
 		return res, nil
 
 	}
 
-	if res.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
-		return res, nil
+	if s.isShareChild(ctx, p) {
+		shareName, shareChild := s.splitShare(ctx, p)
+
+		ref := &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: shareName,
+			},
+		}
+
+		statReq := &provider.StatRequest{Ref: ref}
+		statRes, err := s.stat(ctx, statReq)
+		if err != nil {
+			return &provider.StatResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error stating"),
+			}, nil
+		}
+
+		if statRes.Status.Code != rpc.Code_CODE_OK {
+			err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
+			log.Err(err).Msg("gateway: error stating")
+			return &provider.StatResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error stating"),
+			}, nil
+		}
+
+		ri, err := s.checkRef(ctx, statRes.Info)
+		if err != nil {
+			log.Err(err).Msg("gateway: error resolving reference")
+			return &provider.StatResponse{
+				Status: status.NewInternal(ctx, err, "error stating"),
+			}, nil
+		}
+
+		// append child to target
+		target := path.Join(ri.Path, shareChild)
+		ref = &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: target,
+			},
+		}
+		req.Ref = ref
+		return s.stat(ctx, req)
 	}
 
-	ri, err := s.checkRef(ctx, res.Info)
-	if err != nil {
-		return &provider.StatResponse{
-			Status: status.NewInternal(ctx, err, "error resolving reference"),
-		}, nil
-	}
-
-	// we need to make sure we don't expose the reference target in the resource
-	// information. For example, if requests comes to: /home/MyShares/photos and photos
-	// is reference to /user/peter/Holidays/photos, we need to still return to the user
-	// /home/MyShares/photos
-
-	orgPath := res.Info.Path
-	res.Info = ri
-	res.Info.Path = orgPath
-
-	return res, nil
+	panic("gateway: stating an unknown path:" + p)
 }
 
 func (s *svc) checkRef(ctx context.Context, ri *provider.ResourceInfo) (*provider.ResourceInfo, error) {
@@ -1106,7 +1147,7 @@ func (s *svc) findProvider(ctx context.Context, ref *provider.Reference) (*regis
 x	Yes - CreateDir(ctx context.Context, fn string) error
 x	Yes -Delete(ctx context.Context, ref *provider.Reference) error
 x	Yes -Move(ctx context.Context, oldRef, newRef *provider.Reference) error
-	Yes -GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error)
+x	Yes -GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error)
 	Yes -ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error)
 	Yes -Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error
 	Yes -Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error)
