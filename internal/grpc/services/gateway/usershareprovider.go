@@ -456,7 +456,7 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 			createRefReq := &provider.CreateReferenceRequest{
 				Path: refPath,
 				// cs3 is the Scheme and %s/%s is the Opaque parts of a net.URL.
-				TargetUri: fmt.Sprintf("cs3:%s:%s", share.Share.ResourceId.GetStorageId(), share.Share.ResourceId.GetOpaqueId()),
+				TargetUri: fmt.Sprintf("cs3:%s/%s", share.Share.ResourceId.GetStorageId(), share.Share.ResourceId.GetOpaqueId()),
 			}
 
 			c, err = s.findByPath(ctx, refPath)

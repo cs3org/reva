@@ -783,15 +783,15 @@ func (s *svc) handleRef(ctx context.Context, targetURI string) (*provider.Resour
 }
 
 func (s *svc) handleCS3Ref(ctx context.Context, opaque string) (*provider.ResourceInfo, error) {
-	// a cs3 ref has the following layout: <storage_id>:<opaque_id>
-	parts := strings.Split(opaque, ":")
+	// a cs3 ref has the following layout: <storage_id>/<opaque_id>
+	parts := strings.SplitN(opaque, "/", 2)
 	if len(parts) < 2 {
-		err := errors.New("gateway: cs3 ref does not follow the layout storageid:opaqueid:" + opaque)
+		err := errors.New("gateway: cs3 ref does not follow the layout storageid/opaqueid:" + opaque)
 		return nil, err
 	}
 
 	storageid := parts[0]
-	opaqueid := strings.Join(parts[1:], ":")
+	opaqueid := parts[1]
 	id := &provider.ResourceId{
 		StorageId: storageid,
 		OpaqueId:  opaqueid,
@@ -829,7 +829,7 @@ func (s *svc) ListContainerStream(req *provider.ListContainerStreamRequest, ss g
 	return errors.New("Unimplemented")
 }
 
-func (s *svc) listContainerNominal(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
+func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
@@ -851,7 +851,178 @@ func (s *svc) listContainerNominal(ctx context.Context, req *provider.ListContai
 }
 
 func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
-	return s.listContainerNominal(ctx, req)
+	p, err := s.getPath(ctx, req.Ref)
+	if err != nil {
+		return &provider.ListContainerResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error getting path for ref"),
+		}, nil
+	}
+
+	if !s.inSharedFolder(ctx, p) {
+		return s.listContainer(ctx, req)
+	}
+
+	if s.isSharedFolder(ctx, p) {
+		// TODO(labkode): we need to generate a unique etag if any of the underlying share changes.
+		// the response will contain all the share names and we need to convert them to non resference types.
+		return s.listContainer(ctx, req)
+	}
+
+	log := appctx.GetLogger(ctx)
+
+	// we need to provide the info of the target, not the reference.
+	if s.isShareName(ctx, p) {
+		ref := &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: p,
+			},
+		}
+
+		statReq := &provider.StatRequest{Ref: ref}
+		res, err := s.stat(ctx, statReq)
+		if err != nil {
+			return &provider.ListContainerResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error stating"),
+			}, nil
+		}
+
+		if res.Status.Code != rpc.Code_CODE_OK {
+			err := status.NewErrorFromCode(res.Status.Code, "gateway")
+			log.Err(err).Msg("gateway: error stating")
+			return &provider.ListContainerResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error stating"),
+			}, nil
+		}
+
+		if res.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
+			panic("gateway: a share name must be of type reference: ref:" + res.Info.Path)
+		}
+
+		ri, err := s.checkRef(ctx, res.Info)
+		if err != nil {
+			return &provider.ListContainerResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error resolving reference:"+p),
+			}, nil
+		}
+
+		if ri.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+			err := errtypes.NotSupported("gateway: list container: cannot list non-container type:" + ri.Path)
+			log.Err(err).Msg("gateway: error listing")
+			return &provider.ListContainerResponse{
+				Status: status.NewInvalidArg(ctx, "resource is not a container"),
+			}, nil
+		}
+
+		ref = &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: ri.Path,
+			},
+		}
+
+		newReq := &provider.ListContainerRequest{Ref: ref}
+		newRes, err := s.listContainer(ctx, newReq)
+		if err != nil {
+			return &provider.ListContainerResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error listing"),
+			}, nil
+		}
+
+		if newRes.Status.Code != rpc.Code_CODE_OK {
+			err := status.NewErrorFromCode(newRes.Status.Code, "gateway")
+			log.Err(err).Msg("gateway: error listing")
+			return &provider.ListContainerResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error listing"),
+			}, nil
+		}
+
+		// paths needs to be converted
+		for _, info := range newRes.Infos {
+			base := path.Base(info.Path)
+			info.Path = path.Join(p, base)
+		}
+
+		return newRes, nil
+
+	}
+
+	if s.isShareChild(ctx, p) {
+		shareName, shareChild := s.splitShare(ctx, p)
+
+		ref := &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: shareName,
+			},
+		}
+
+		statReq := &provider.StatRequest{Ref: ref}
+		res, err := s.stat(ctx, statReq)
+		if err != nil {
+			return &provider.ListContainerResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error stating"),
+			}, nil
+		}
+
+		if res.Status.Code != rpc.Code_CODE_OK {
+			err := status.NewErrorFromCode(res.Status.Code, "gateway")
+			log.Err(err).Msg("gateway: error stating")
+			return &provider.ListContainerResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error stating"),
+			}, nil
+		}
+
+		if res.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
+			panic("gateway: a share name must be of type reference: ref:" + res.Info.Path)
+		}
+
+		ri, err := s.checkRef(ctx, res.Info)
+		if err != nil {
+			return &provider.ListContainerResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error resolving reference:"+p),
+			}, nil
+		}
+
+		if ri.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+			err := errtypes.NotSupported("gateway: list container: cannot list non-container type:" + ri.Path)
+			log.Err(err).Msg("gateway: error listing")
+			return &provider.ListContainerResponse{
+				Status: status.NewInvalidArg(ctx, "resource is not a container"),
+			}, nil
+		}
+
+		target := path.Join(ri.Path, shareChild)
+		ref = &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: target,
+			},
+		}
+
+		newReq := &provider.ListContainerRequest{Ref: ref}
+		newRes, err := s.listContainer(ctx, newReq)
+		if err != nil {
+			return &provider.ListContainerResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error listing"),
+			}, nil
+		}
+
+		if newRes.Status.Code != rpc.Code_CODE_OK {
+			err := status.NewErrorFromCode(newRes.Status.Code, "gateway")
+			log.Err(err).Msg("gateway: error listing")
+			return &provider.ListContainerResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error listing"),
+			}, nil
+		}
+
+		// paths needs to be converted
+		for _, info := range newRes.Infos {
+			base := path.Base(info.Path)
+			info.Path = path.Join(shareName, shareChild, base)
+		}
+
+		return newRes, nil
+
+	}
+
+	panic("gateway: stating an unknown path:" + p)
 }
 
 func (s *svc) getPath(ctx context.Context, ref *provider.Reference) (string, error) {
