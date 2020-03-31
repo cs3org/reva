@@ -104,6 +104,84 @@ func (s *svc) getHome(ctx context.Context) string {
 	return "/home"
 }
 func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {
+	p, err := s.getPath(ctx, req.Ref)
+	if err != nil {
+		return &gateway.InitiateFileDownloadResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error gettng path for ref"),
+		}, nil
+	}
+
+	if !s.inSharedFolder(ctx, p) {
+		return s.initiateFileDownload(ctx, req)
+	}
+
+	log := appctx.GetLogger(ctx)
+	if s.isSharedFolder(ctx, p) || s.isShareName(ctx, p) {
+		log.Debug().Msgf("path:%s points to shared folder or share name", p)
+		err := errtypes.PermissionDenied("gateway: cannot upload to share folder or share name: path=" + p)
+		log.Err(err).Msg("gateway: error downloading")
+		return &gateway.InitiateFileDownloadResponse{
+			Status: status.NewInvalidArg(ctx, "path points to share folder or share name"),
+		}, nil
+
+	}
+
+	if s.isShareChild(ctx, p) {
+		log.Debug().Msgf("shared child: %s", p)
+		shareName, shareChild := s.splitShare(ctx, p)
+
+		ref := &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: shareName,
+			},
+		}
+		statReq := &provider.StatRequest{Ref: ref}
+		statRes, err := s.stat(ctx, statReq)
+		if err != nil {
+			return &gateway.InitiateFileDownloadResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error creating container"),
+			}, nil
+		}
+
+		if statRes.Status.Code != rpc.Code_CODE_OK {
+			err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
+			log.Err(err).Msg("gateway: error creating container")
+			return &gateway.InitiateFileDownloadResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error creating container"),
+			}, nil
+		}
+
+		if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
+			err := errors.New(fmt.Sprintf("gateway: expected reference: got:%+v", statRes.Info))
+			log.Err(err).Msg("gateway: error creating container")
+			return &gateway.InitiateFileDownloadResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error creating container"),
+			}, nil
+		}
+
+		ri, err := s.checkRef(ctx, statRes.Info)
+		if err != nil {
+			log.Err(err).Msg("gateway: error resolving reference")
+			return &gateway.InitiateFileDownloadResponse{
+				Status: status.NewInternal(ctx, err, "error creating container"),
+			}, nil
+		}
+
+		// append child to target
+		target := path.Join(ri.Path, shareChild)
+		ref = &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: target,
+			},
+		}
+		req.Ref = ref
+		return s.initiateFileDownload(ctx, req)
+	}
+
+	panic("gateway: download: unknown path:" + p)
+}
+
+func (s *svc) initiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {
 	log := appctx.GetLogger(ctx)
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
@@ -157,6 +235,84 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 }
 
 func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*gateway.InitiateFileUploadResponse, error) {
+	p, err := s.getPath(ctx, req.Ref)
+	if err != nil {
+		return &gateway.InitiateFileUploadResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error gettng path for ref"),
+		}, nil
+	}
+
+	if !s.inSharedFolder(ctx, p) {
+		return s.initiateFileUpload(ctx, req)
+	}
+
+	log := appctx.GetLogger(ctx)
+	if s.isSharedFolder(ctx, p) || s.isShareName(ctx, p) {
+		log.Debug().Msgf("path:%s points to shared folder or share name", p)
+		err := errtypes.PermissionDenied("gateway: cannot upload to share folder or share name: path=" + p)
+		log.Err(err).Msg("gateway: error downloading")
+		return &gateway.InitiateFileUploadResponse{
+			Status: status.NewInvalidArg(ctx, "path points to share folder or share name"),
+		}, nil
+
+	}
+
+	if s.isShareChild(ctx, p) {
+		log.Debug().Msgf("shared child: %s", p)
+		shareName, shareChild := s.splitShare(ctx, p)
+
+		ref := &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: shareName,
+			},
+		}
+		statReq := &provider.StatRequest{Ref: ref}
+		statRes, err := s.stat(ctx, statReq)
+		if err != nil {
+			return &gateway.InitiateFileUploadResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error uploading"),
+			}, nil
+		}
+
+		if statRes.Status.Code != rpc.Code_CODE_OK {
+			err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
+			log.Err(err).Msg("gateway: error uploading")
+			return &gateway.InitiateFileUploadResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error uploading"),
+			}, nil
+		}
+
+		if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
+			err := errors.New(fmt.Sprintf("gateway: expected reference: got:%+v", statRes.Info))
+			log.Err(err).Msg("gateway: error creating container")
+			return &gateway.InitiateFileUploadResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error uploading"),
+			}, nil
+		}
+
+		ri, err := s.checkRef(ctx, statRes.Info)
+		if err != nil {
+			log.Err(err).Msg("gateway: error resolving reference")
+			return &gateway.InitiateFileUploadResponse{
+				Status: status.NewInternal(ctx, err, "error creating container"),
+			}, nil
+		}
+
+		// append child to target
+		target := path.Join(ri.Path, shareChild)
+		ref = &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: target,
+			},
+		}
+		req.Ref = ref
+		return s.initiateFileUpload(ctx, req)
+	}
+
+	panic("gateway: upload: unknown path:" + p)
+}
+
+func (s *svc) initiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*gateway.InitiateFileUploadResponse, error) {
 	log := appctx.GetLogger(ctx)
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
@@ -173,6 +329,15 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 	storageRes, err := c.InitiateFileUpload(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling InitiateFileUpload")
+	}
+
+	if storageRes.Status.Code != rpc.Code_CODE_OK {
+		err := status.NewErrorFromCode(storageRes.Status.Code, "gateway")
+		log.Err(err).Msg("gateway: upload: error uploading")
+		return &gateway.InitiateFileUploadResponse{
+			Status: status.NewInternal(ctx, err, "error initiating upload"),
+		}, nil
+
 	}
 
 	res := &gateway.InitiateFileUploadResponse{
@@ -1309,34 +1474,3 @@ func (s *svc) findProvider(ctx context.Context, ref *provider.Reference) (*regis
 
 	return res.Provider, nil
 }
-
-/*
-	Handle references?
-
-	No - GetHome(ctx context.Context) (string, error)
-	No -CreateHome(ctx context.Context) error
-x	Yes - CreateDir(ctx context.Context, fn string) error
-x	Yes -Delete(ctx context.Context, ref *provider.Reference) error
-x	Yes -Move(ctx context.Context, oldRef, newRef *provider.Reference) error
-x	Yes -GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error)
-	Yes -ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error)
-	Yes -Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error
-	Yes -Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error)
-	Yes -ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error)
-	Yes -DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error)
-	Yes -RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error
-	No ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error)
-	No RestoreRecycleItem(ctx context.Context, key string) error
-	No PurgeRecycleItem(ctx context.Context, key string) error
-	No EmptyRecycle(ctx context.Context) error
-	Yes  GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error)
-	No AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
-	No RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
-	No UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
-	No ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error)
-	No GetQuota(ctx context.Context) (int, int, error)
-	No CreateReference(ctx context.Context, path string, targetURI *url.URL) error
-	No Shutdown(ctx context.Context) error
-	Maybe SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error
-	Maybe UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error
-*/
