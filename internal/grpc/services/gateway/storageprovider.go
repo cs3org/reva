@@ -20,6 +20,7 @@ package gateway
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"path"
 	"strings"
@@ -67,24 +68,8 @@ func (s *svc) sign(ctx context.Context, target string) (string, error) {
 func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
 	log := appctx.GetLogger(ctx)
 
-	homeReq := &provider.GetHomeRequest{}
-	homeRes, err := s.GetHome(ctx, homeReq)
-	if err != nil {
-		log.Err(err).Msgf("gateway: error calling GetHome")
-		return &provider.CreateHomeResponse{
-			Status: status.NewInternal(ctx, err, "error creating home"),
-		}, nil
-	}
-
-	if homeRes.Status.Code != rpc.Code_CODE_OK {
-		err := status.NewErrorFromCode(homeRes.Status.Code, "gateway")
-		log.Err(err).Msg("gateway: bad grpc code")
-		return &provider.CreateHomeResponse{
-			Status: status.NewInternal(ctx, err, "error calling GetHome"),
-		}, nil
-	}
-
-	c, err := s.findByPath(ctx, homeRes.Path)
+	home := s.getHome(ctx)
+	c, err := s.findByPath(ctx, home)
 	if err != nil {
 		log.Err(err).Msg("gateway: error finding storage provider")
 		if _, ok := err.(errtypes.IsNotFound); ok {
@@ -109,11 +94,15 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 
 }
 func (s *svc) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
-	// TODO(labkode): issue #601, /home will be hardcoded.
-	homeRes := &provider.GetHomeResponse{Path: "/home"}
+	home := s.getHome(ctx)
+	homeRes := &provider.GetHomeResponse{Path: home}
 	return homeRes, nil
 }
 
+func (s *svc) getHome(ctx context.Context) string {
+	// TODO(labkode): issue #601, /home will be hardcoded.
+	return "/home"
+}
 func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {
 	log := appctx.GetLogger(ctx)
 	c, err := s.find(ctx, req.Ref)
@@ -229,14 +218,7 @@ func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provi
 }
 
 func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
-	path, err := s.getPath(ctx, req.Ref)
-	if err != nil {
-		return &provider.CreateContainerResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error gettng path for ref"),
-		}, nil
-	}
-
-	inside, err := s.isSharedRoot(ctx, path)
+	p, err := s.getPath(ctx, req.Ref)
 	if err != nil {
 		return &provider.CreateContainerResponse{
 			Status: status.NewInternal(ctx, err, "gateway: error gettng path for ref"),
@@ -244,10 +226,66 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 	}
 
 	log := appctx.GetLogger(ctx)
-	log.Debug().Msgf("contains shared folder? %t strings.HasPrefix(path:%s,share-folder:%s)", inside, path, s.c.ShareFolder)
+	if s.isSharedFolder(ctx, p) || s.isShareName(ctx, p) {
+		log.Debug().Msgf("path:%s points to shared folder or share name", p)
+		err := errtypes.PermissionDenied("gateway: cannot create container on share folder or share name: path=" + p)
+		log.Err(err).Msg("gateway: error creating container")
+		return &provider.CreateContainerResponse{
+			Status: status.NewInvalidArg(ctx, "path points to share folder or share name"),
+		}, nil
 
-	if inside {
-		// TODO(labkode):
+	}
+
+	if s.isShareChild(ctx, p) {
+		log.Debug().Msgf("shared child: %s", p)
+		shareName, shareChild := s.splitShare(ctx, p)
+
+		ref := &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: shareName,
+			},
+		}
+		statReq := &provider.StatRequest{Ref: ref}
+		statRes, err := s.stat(ctx, statReq)
+		if err != nil {
+			return &provider.CreateContainerResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error creating container"),
+			}, nil
+		}
+
+		if statRes.Status.Code != rpc.Code_CODE_OK {
+			err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
+			log.Err(err).Msg("gateway: error creating container")
+			return &provider.CreateContainerResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error creating container"),
+			}, nil
+		}
+
+		if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
+			err := errors.New(fmt.Sprintf("gateway: expected reference: got:%+v", statRes.Info))
+			log.Err(err).Msg("gateway: error creating container")
+			return &provider.CreateContainerResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error creating container"),
+			}, nil
+		}
+
+		ri, err := s.checkRef(ctx, statRes.Info)
+		if err != nil {
+			log.Err(err).Msg("gateway: error resolving reference")
+			return &provider.CreateContainerResponse{
+				Status: status.NewInternal(ctx, err, "error creating container"),
+			}, nil
+		}
+
+		// append child to target
+		target := path.Join(ri.Path, shareChild)
+		ref = &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: target,
+			},
+		}
+		req.Ref = ref
+		return s.createContainer(ctx, req)
 	}
 
 	c, err := s.find(ctx, req.Ref)
@@ -270,7 +308,135 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 	return res, nil
 }
 
+func (s *svc) createContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
+	c, err := s.find(ctx, req.Ref)
+	if err != nil {
+		if _, ok := err.(errtypes.IsNotFound); ok {
+			return &provider.CreateContainerResponse{
+				Status: status.NewNotFound(ctx, "storage provider not found"),
+			}, nil
+		}
+		return &provider.CreateContainerResponse{
+			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+		}, nil
+	}
+
+	res, err := c.CreateContainer(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling CreateContainer")
+	}
+
+	return res, nil
+}
+
 func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
+	p, err := s.getPath(ctx, req.Ref)
+	if err != nil {
+		return &provider.DeleteResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error gettng path for ref"),
+		}, nil
+	}
+
+	log := appctx.GetLogger(ctx)
+	if s.isSharedFolder(ctx, p) {
+		// TODO(labkode): deleting share names should be allowed, means unmounting.
+		log.Debug().Msgf("path:%s points to shared folder or share name", p)
+		err := errtypes.PermissionDenied("gateway: cannot delete share folder or share name: path=" + p)
+		log.Err(err).Msg("gateway: error creating container")
+		return &provider.DeleteResponse{
+			Status: status.NewInvalidArg(ctx, "path points to share folder or share name"),
+		}, nil
+
+	}
+
+	if s.isShareName(ctx, p) {
+		log.Debug().Msgf("path:%s points to share name", p)
+
+		ref := &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: p,
+			},
+		}
+
+		req.Ref = ref
+		return s.delete(ctx, req)
+	}
+
+	if s.isShareChild(ctx, p) {
+		shareName, shareChild := s.splitShare(ctx, p)
+		log.Debug().Msgf("path:%s sharename:%s sharechild: %s", p, shareName, shareChild)
+
+		ref := &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: shareName,
+			},
+		}
+
+		statReq := &provider.StatRequest{Ref: ref}
+		statRes, err := s.stat(ctx, statReq)
+		if err != nil {
+			return &provider.DeleteResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error deleting"),
+			}, nil
+		}
+
+		if statRes.Status.Code != rpc.Code_CODE_OK {
+			err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
+			log.Err(err).Msg("gateway: error deleting")
+			return &provider.DeleteResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error deleting"),
+			}, nil
+		}
+
+		if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
+			err := errors.New(fmt.Sprintf("gateway: expected reference: got:%+v", statRes.Info))
+			log.Err(err).Msg("gateway: error deleting")
+			return &provider.DeleteResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error deleting"),
+			}, nil
+		}
+
+		ri, err := s.checkRef(ctx, statRes.Info)
+		if err != nil {
+			log.Err(err).Msg("gateway: error resolving reference")
+			return &provider.DeleteResponse{
+				Status: status.NewInternal(ctx, err, "error creating container"),
+			}, nil
+		}
+
+		// append child to target
+		target := path.Join(ri.Path, shareChild)
+		ref = &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: target,
+			},
+		}
+
+		req.Ref = ref
+		return s.delete(ctx, req)
+	}
+
+	c, err := s.find(ctx, req.Ref)
+	if err != nil {
+		if _, ok := err.(errtypes.IsNotFound); ok {
+			return &provider.DeleteResponse{
+				Status: status.NewNotFound(ctx, "storage provider not found"),
+			}, nil
+		}
+		return &provider.DeleteResponse{
+			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+		}, nil
+	}
+
+	res, err := c.Delete(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling Delete")
+	}
+
+	return res, nil
+}
+
+func (s *svc) delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
@@ -292,6 +458,115 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 }
 
 func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
+	log := appctx.GetLogger(ctx)
+
+	p, err := s.getPath(ctx, req.Source)
+	if err != nil {
+		log.Err(err).Msg("gateway: error moving")
+		return &provider.MoveResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error gettng path for ref"),
+		}, nil
+	}
+
+	dp, err := s.getPath(ctx, req.Destination)
+	if err != nil {
+		log.Err(err).Msg("gateway: error moving")
+		return &provider.MoveResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error gettng path for ref"),
+		}, nil
+	}
+
+	// if both paths are not under shareFolder, continue with normal operation.
+	shareFolder := s.getSharedFolder(ctx)
+	if !strings.HasPrefix(p, shareFolder) && !strings.HasPrefix(dp, shareFolder) {
+		return s.move(ctx, req)
+	}
+
+	// allow renaming the share folder, the mount point, not the target.
+	if s.isShareName(ctx, p) && s.isShareName(ctx, dp) {
+		log.Info().Msgf("gateway: move: renaming share mountpoint: from:%s to:%s", p, dp)
+		return s.move(ctx, req)
+	}
+
+	// resolve references and check the ref points to the same base path, paranoia check.
+	if s.isShareChild(ctx, p) && s.isShareChild(ctx, dp) {
+		shareName, shareChild := s.splitShare(ctx, p)
+		dshareName, dshareChild := s.splitShare(ctx, dp)
+		log.Debug().Msgf("srcpath:%s dstpath:%s srcsharename:%s srcsharechild: %s dstsharename:%s dstsharechild:%s ", p, dp, shareName, shareChild, dshareName, dshareChild)
+
+		if shareName != dshareName {
+			err := errors.New("gateway: move: src and dst points to different targets")
+			return &provider.MoveResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error moving"),
+			}, nil
+
+		}
+
+		ref := &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: shareName,
+			},
+		}
+
+		statReq := &provider.StatRequest{Ref: ref}
+		statRes, err := s.stat(ctx, statReq)
+		if err != nil {
+			return &provider.MoveResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error moving"),
+			}, nil
+		}
+
+		if statRes.Status.Code != rpc.Code_CODE_OK {
+			err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
+			log.Err(err).Msg("gateway: error moving")
+			return &provider.MoveResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error moving"),
+			}, nil
+		}
+
+		if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
+			err := errors.New(fmt.Sprintf("gateway: expected reference: got:%+v", statRes.Info))
+			log.Err(err).Msg("gateway: error deleting")
+			return &provider.MoveResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error deleting"),
+			}, nil
+		}
+
+		ri, err := s.checkRef(ctx, statRes.Info)
+		if err != nil {
+			log.Err(err).Msg("gateway: error resolving reference")
+			return &provider.MoveResponse{
+				Status: status.NewInternal(ctx, err, "error moving"),
+			}, nil
+		}
+
+		src := &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: path.Join(ri.Path, shareChild),
+			},
+		}
+		dst := &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: path.Join(ri.Path, dshareChild),
+			},
+		}
+
+		req.Source = src
+		req.Destination = dst
+
+		return s.move(ctx, req)
+	}
+
+	// anything else is forbidden
+	err = errtypes.PermissionDenied(fmt.Sprintf("gateway: cannot move from/to because violates sharing behaviour: srcpath:%s dstpath:%s", p, dp))
+	log.Err(err).Msg("gateway: cannot move")
+	return &provider.MoveResponse{
+		Status: status.NewInvalidArg(ctx, "source or destination path points to share folder"),
+	}, nil
+
+}
+
+func (s *svc) move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
 	srcP, err := s.findProvider(ctx, req.Source)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
@@ -431,7 +706,7 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 
 func (s *svc) checkRef(ctx context.Context, ri *provider.ResourceInfo) (*provider.ResourceInfo, error) {
 	if ri.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
-		return ri, nil
+		panic("gateway: calling checkRef on a non reference type:" + ri.String())
 	}
 
 	// reference types MUST have a target resource id.
@@ -562,34 +837,73 @@ func (s *svc) getPath(ctx context.Context, ref *provider.Reference) (string, err
 	return "", errors.New("gateway: ref is invalid:" + ref.String())
 }
 
-func (s *svc) isSharedRoot(ctx context.Context, path string) (bool, error) {
-	shareFolder, err := s.getSharedFolder(ctx)
-	if err != nil {
-		return false, errors.Wrap(err, "gateway: error getting share folder")
-	}
-
-	if strings.HasPrefix(path, shareFolder) {
-		return true, nil
-	}
-	return false, nil
+// /home/MyShares/
+func (s *svc) isSharedFolder(ctx context.Context, p string) bool {
+	return s.split(ctx, p, 2)
 }
 
-func (s *svc) getSharedFolder(ctx context.Context) (string, error) {
-	// fetch the share folder path taking into account the home path
-	// path contains the share folder prefix?
-	homeReq := &provider.GetHomeRequest{}
-	homeRes, err := s.GetHome(ctx, homeReq)
-	if err != nil {
-		return "", errors.Wrap(err, "gateway: error getting home")
+// /home/MyShares/photos/
+func (s *svc) isShareName(ctx context.Context, p string) bool {
+	return s.split(ctx, p, 3)
+}
+
+// /home/MyShares/photos/Ibiza/beach.png
+func (s *svc) isShareChild(ctx context.Context, p string) bool {
+	return s.split(ctx, p, 4)
+}
+
+// always validate that the path contains the share folder
+// split cannot be called with i<2
+func (s *svc) split(ctx context.Context, p string, i int) bool {
+	log := appctx.GetLogger(ctx)
+	if i < 2 {
+		panic("split called with i < 2")
 	}
 
-	if homeRes.Status.Code != rpc.Code_CODE_OK {
-		err := status.NewErrorFromCode(homeRes.Status.Code, "gateway")
-		return "", err
+	parts := s.splitPath(ctx, p)
+
+	// validate that we have always at least two elements
+	if len(parts) < 2 {
+		panic(fmt.Sprintf("split: len(parts) < 2: path:%s parts:%+v", p, parts))
 	}
 
-	shareFolder := path.Join(homeRes.Path, s.c.ShareFolder)
-	return shareFolder, nil
+	// validate the share folder is always the second element, first element is always the hardcoded value of "home"
+	if parts[1] != s.c.ShareFolder {
+		log.Debug().Msgf("gateway: split: parts[1]:%+v != shareFolder:%+v", parts[1], s.c.ShareFolder)
+		return false
+	}
+
+	log.Debug().Msgf("gateway: split: path:%+v parts:%+v shareFolder:%+v", p, parts, s.c.ShareFolder)
+
+	if len(parts) == i && parts[i-1] != "" {
+		return true
+	}
+
+	return false
+}
+
+// path must contain a share path with share children, if not it will panic.
+// should be called after checking isShareChild == true
+func (s *svc) splitShare(ctx context.Context, p string) (string, string) {
+	parts := s.splitPath(ctx, p)
+	if len(parts) != 4 {
+		panic("gateway: path for splitShare does not contain 4 elements:" + p)
+	}
+
+	shareName := path.Join("/", parts[0], parts[1], parts[2])
+	shareChild := path.Join("/", parts[3])
+	return shareName, shareChild
+}
+
+func (s *svc) splitPath(ctx context.Context, p string) []string {
+	p = strings.Trim(p, "/")
+	return strings.SplitN(p, "/", 4) // ["home", "MyShares", "photos", "Ibiza/beach.png"]
+}
+
+func (s *svc) getSharedFolder(ctx context.Context) string {
+	home := s.getHome(ctx)
+	shareFolder := path.Join(home, s.c.ShareFolder)
+	return shareFolder
 }
 
 func (s *svc) ListFileVersions(ctx context.Context, req *provider.ListFileVersionsRequest) (*provider.ListFileVersionsResponse, error) {
@@ -789,9 +1103,9 @@ func (s *svc) findProvider(ctx context.Context, ref *provider.Reference) (*regis
 
 	No - GetHome(ctx context.Context) (string, error)
 	No -CreateHome(ctx context.Context) error
-	Yes - CreateDir(ctx context.Context, fn string) error
-	Yes -Delete(ctx context.Context, ref *provider.Reference) error
-	Yes -Move(ctx context.Context, oldRef, newRef *provider.Reference) error
+x	Yes - CreateDir(ctx context.Context, fn string) error
+x	Yes -Delete(ctx context.Context, ref *provider.Reference) error
+x	Yes -Move(ctx context.Context, oldRef, newRef *provider.Reference) error
 	Yes -GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error)
 	Yes -ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error)
 	Yes -Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error

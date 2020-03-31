@@ -21,6 +21,7 @@ package gateway
 import (
 	"fmt"
 	"net/url"
+	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 
@@ -74,8 +75,10 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 
 	// set defaults
 	if c.ShareFolder == "" {
-		c.ShareFolder = "/MyShares"
+		c.ShareFolder = "MyShares"
 	}
+
+	c.ShareFolder = strings.Trim(c.ShareFolder, "/")
 
 	if c.TokenManager == "" {
 		c.TokenManager = "jwt"
