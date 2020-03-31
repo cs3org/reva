@@ -20,7 +20,6 @@ package ocs
 
 import (
 	"encoding/xml"
-	"fmt"
 	"net/http"
 )
 
