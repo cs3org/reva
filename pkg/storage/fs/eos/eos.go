@@ -246,7 +246,7 @@ func (fs *eosfs) wrapShadow(ctx context.Context, fn string) (internal string) {
 
 func (fs *eosfs) wrap(ctx context.Context, fn string) (internal string) {
 	if fs.conf.EnableHome {
-		layout, err := fs.GetHome(ctx)
+		layout, err := fs.getInternalHome(ctx)
 		if err != nil {
 			panic(err)
 		}
@@ -336,7 +336,7 @@ func (fs *eosfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (stri
 	return fi.Path, nil
 }
 
-// resolve takes in a request path or request id and returns the unwrapNominalped path.
+// resolve takes in a request path or request id and returns the unwrappedNominal path.
 func (fs *eosfs) resolve(ctx context.Context, u *userpb.User, ref *provider.Reference) (string, error) {
 	if ref.GetPath() != "" {
 		return ref.GetPath(), nil
@@ -660,6 +660,7 @@ func (fs *eosfs) getMDShareFolder(ctx context.Context, p string) (*provider.Reso
 }
 
 func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error) {
+	log := appctx.GetLogger(ctx)
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: no user in ctx")
@@ -670,19 +671,17 @@ func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*pr
 		return nil, errors.Wrap(err, "eos: error resolving reference")
 	}
 
+	log.Debug().Msg("internal: " + p)
+
 	// if path is home we need to add in the response any shadow folder in the shadown homedirectory.
 	if fs.conf.EnableHome {
-		home, err := fs.GetHome(ctx)
-		if err != nil {
-			err = errors.Wrap(err, "eos: error getting home")
-			return nil, err
-		}
-
-		if strings.HasPrefix(p, home) {
-			return fs.listWithHome(ctx, home, p)
+		log.Debug().Msg("home enabled")
+		if strings.HasPrefix(p, "/") {
+			return fs.listWithHome(ctx, "/", p)
 		}
 	}
 
+	log.Debug().Msg("list with nominal home")
 	return fs.listWithNominalHome(ctx, p)
 }
 
@@ -718,11 +717,14 @@ func (fs *eosfs) listWithNominalHome(ctx context.Context, p string) (finfos []*p
 }
 
 func (fs *eosfs) listWithHome(ctx context.Context, home, p string) ([]*provider.ResourceInfo, error) {
+	log := appctx.GetLogger(ctx)
 	if p == home {
+		log.Debug().Msg("listing home")
 		return fs.listHome(ctx, home)
 	}
 
 	if fs.isShareFolderRoot(ctx, p) {
+		log.Debug().Msg("listing share root folder")
 		return fs.listShareFolderRoot(ctx, p)
 	}
 
@@ -731,6 +733,7 @@ func (fs *eosfs) listWithHome(ctx context.Context, home, p string) ([]*provider.
 	}
 
 	// path points to a resource in the nominal home
+	log.Debug().Msg("listting nominal home")
 	return fs.listWithNominalHome(ctx, p)
 }
 
@@ -802,7 +805,7 @@ func (fs *eosfs) GetQuota(ctx context.Context) (int, int, error) {
 	return fs.c.GetQuota(ctx, u.Username, fs.conf.Namespace)
 }
 
-func (fs *eosfs) GetHome(ctx context.Context) (string, error) {
+func (fs *eosfs) getInternalHome(ctx context.Context) (string, error) {
 	if !fs.conf.EnableHome {
 		return "", errtypes.NotSupported("eos: get home not supported")
 	}
@@ -812,9 +815,18 @@ func (fs *eosfs) GetHome(ctx context.Context) (string, error) {
 		err = errors.Wrap(err, "local: wrap: no user in ctx and home is enabled")
 		return "", err
 	}
-	relativeHome := templates.WithUser(u, fs.conf.UserLayout)
 
+	relativeHome := templates.WithUser(u, fs.conf.UserLayout)
 	return relativeHome, nil
+}
+
+func (fs *eosfs) GetHome(ctx context.Context) (string, error) {
+	if !fs.conf.EnableHome {
+		return "", errtypes.NotSupported("eos: get home not supported")
+	}
+
+	// eos drive for homes assumess root(/) points to the user home.
+	return "/", nil
 }
 
 func (fs *eosfs) createShadowHome(ctx context.Context) error {
