@@ -260,7 +260,7 @@ func (s *Server) getHandler() (http.Handler, error) {
 	handler := http.Handler(h)
 
 	for _, triple := range s.middlewares {
-		s.log.Info().Msgf("chainning http middleware %s with priority  %d", triple.Name, triple.Priority)
+		s.log.Info().Msgf("chaining http middleware %s with priority  %d", triple.Name, triple.Priority)
 		handler = triple.Middleware(traceHandler(triple.Name, handler))
 	}
 

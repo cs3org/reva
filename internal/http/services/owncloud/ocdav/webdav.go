@@ -38,31 +38,31 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "PROPFIND":
-			s.doPropfind(w, r, h.namespace)
-		case http.MethodOptions:
-			s.doOptions(w, r, h.namespace)
-		case http.MethodHead:
-			s.doHead(w, r, h.namespace)
-		case http.MethodGet:
-			s.doGet(w, r, h.namespace)
+			s.handlePropfind(w, r, h.namespace)
 		case "LOCK":
-			s.doLock(w, r, h.namespace)
+			s.handleLock(w, r, h.namespace)
 		case "UNLOCK":
-			s.doUnlock(w, r, h.namespace)
+			s.handleUnlock(w, r, h.namespace)
 		case "PROPPATCH":
-			s.doProppatch(w, r, h.namespace)
+			s.handleProppatch(w, r, h.namespace)
 		case "MKCOL":
-			s.doMkcol(w, r, h.namespace)
+			s.handleMkcol(w, r, h.namespace)
 		case "MOVE":
-			s.doMove(w, r, h.namespace)
+			s.handleMove(w, r, h.namespace)
 		case "COPY":
-			s.doCopy(w, r, h.namespace)
-		case http.MethodPut:
-			s.doPut(w, r, h.namespace)
-		case http.MethodDelete:
-			s.doDelete(w, r, h.namespace)
+			s.handleCopy(w, r, h.namespace)
 		case "REPORT":
-			s.doReport(w, r, h.namespace)
+			s.handleReport(w, r, h.namespace)
+		case http.MethodGet:
+			s.handleGet(w, r, h.namespace)
+		case http.MethodPut:
+			s.handlePut(w, r, h.namespace)
+		case http.MethodOptions:
+			s.handleOptions(w, r, h.namespace)
+		case http.MethodHead:
+			s.handleHead(w, r, h.namespace)
+		case http.MethodDelete:
+			s.handleDelete(w, r, h.namespace)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}

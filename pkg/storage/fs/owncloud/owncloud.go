@@ -371,9 +371,10 @@ func (fs *ocfs) unwrap(ctx context.Context, internal string) (external string) {
 	return
 }
 
-func getOwner(fn string) string {
-	parts := strings.SplitN(fn, "/", 3)
-	// parts = "", "<username>", "files", "foo/bar.txt"
+// TODO the owner needs to come from a different place
+func (fs *ocfs) getOwner(internal string) string {
+	internal = strings.TrimPrefix(internal, fs.c.DataDirectory)
+	parts := strings.SplitN(internal, "/", 3)
 	if len(parts) > 1 {
 		return parts[1]
 	}
@@ -419,7 +420,7 @@ func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, np st
 	return &provider.ResourceInfo{
 		Id:            &provider.ResourceId{OpaqueId: id},
 		Path:          fn,
-		Owner:         &userpb.UserId{OpaqueId: getOwner(fn)},
+		Owner:         &userpb.UserId{OpaqueId: fs.getOwner(np)},
 		Type:          getResourceType(fi.IsDir()),
 		Etag:          etag,
 		MimeType:      mime.Detect(fi.IsDir(), fn),
@@ -1128,6 +1129,14 @@ func (fs *ocfs) Delete(ctx context.Context, ref *provider.Reference) (err error)
 	var np string
 	if np, err = fs.resolve(ctx, ref); err != nil {
 		return errors.Wrap(err, "ocfs: error resolving reference")
+	}
+
+	_, err = os.Stat(np)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errtypes.NotFound(fs.unwrap(ctx, np))
+		}
+		return errors.Wrap(err, "ocfs: error stating "+np)
 	}
 
 	rp, err := fs.getRecyclePath(ctx)

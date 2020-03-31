@@ -28,8 +28,8 @@ import (
 
 func shareRemoveCommand() *command {
 	cmd := newCommand("share-remove")
-	cmd.Description = func() string { return "remove a shares" }
-	cmd.Usage = func() string { return "Usage: share remove [-flags] <share_id>" }
+	cmd.Description = func() string { return "remove a share" }
+	cmd.Usage = func() string { return "Usage: share-remove [-flags] <share_id>" }
 	cmd.Action = func() error {
 		if cmd.NArg() < 1 {
 			fmt.Println(cmd.Usage())

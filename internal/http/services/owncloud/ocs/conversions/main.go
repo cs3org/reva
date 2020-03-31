@@ -21,6 +21,7 @@ package conversions
 
 import (
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/cs3org/reva/pkg/publicshare"
@@ -120,13 +121,21 @@ type ShareData struct {
 	// The uid of the receiver of the file. This is either
 	// - a GID (group id) if it is being shared with a group or
 	// - a UID (user id) if the share is shared with a user.
-	ShareWith string `json:"share_with" xml:"share_with"`
+	ShareWith string `json:"share_with,omitempty" xml:"share_with,omitempty"`
 	// The display name of the receiver of the file.
-	ShareWithDisplayname string `json:"share_with_displayname" xml:"share_with_displayname"`
+	ShareWithDisplayname string `json:"share_with_displayname,omitempty" xml:"share_with_displayname,omitempty"`
 	// sharee Additional info
 	ShareWithAdditionalInfo string `json:"share_with_additional_info" xml:"share_with_additional_info"`
 	// Whether the recipient was notified, by mail, about the share being shared with them.
 	MailSend string `json:"mail_send" xml:"mail_send"`
+	// Name of the public share
+	Name string `json:"name,omitempty" xml:"name,omitempty"`
+	// URL of the public share
+	URL string `json:"url,omitempty" xml:"url,omitempty"`
+	// Attributes associated
+	Attributes string `json:"attributes,omitempty" xml:"attributes,omitempty"`
+	// PasswordProtected represents a public share is password protected
+	// PasswordProtected bool `json:"password_protected,omitempty" xml:"password_protected,omitempty"`
 }
 
 // ShareeData holds share recipient search results
@@ -262,14 +271,23 @@ func AsCS3Permissions(p int, rp *provider.ResourcePermissions) *provider.Resourc
 }
 
 // PublicShare2ShareData converts a cs3api public share into shareData data model
-func PublicShare2ShareData(share *link.PublicShare) *ShareData {
+// TODO(refs) this would be more accurate with a PublicShare as second argument and not the request
+func PublicShare2ShareData(share *link.PublicShare, r *http.Request) *ShareData {
+	var expiration string
+	if share.Expiration != nil {
+		expiration = timestampToExpiration(share.Expiration)
+	} else {
+		expiration = ""
+	}
+
 	return &ShareData{
+		// THERE BE DRAGONS
 		// TODO map share.resourceId to path and storage ... requires a stat call
 		// share.permissions ar mapped below
 		// TODO lookup user metadata
-		//DisplaynameOwner:     creator.DisplayName,
+		// DisplaynameOwner:     creator.DisplayName,
 		// TODO lookup user metadata
-		// DisplaynameFileOwner: owner.DisplayName,
+		// DisplaynameFileOwner: share.GetCreator().String(),
 		ID:           share.Id.OpaqueId,
 		Permissions:  publicSharePermissions2OCSPermissions(share.GetPermissions()),
 		ShareType:    ShareTypePublicLink,
@@ -277,7 +295,11 @@ func PublicShare2ShareData(share *link.PublicShare) *ShareData {
 		STime:        share.Ctime.Seconds, // TODO CS3 api birth time = btime
 		UIDFileOwner: UserIDToString(share.Owner),
 		Token:        share.Token,
-		Expiration:   timestampToExpiration(share.Expiration),
+		Expiration:   expiration,
+		MimeType:     share.Mtime.String(),
+		Name:         r.FormValue("name"),
+		// URL:                  r.Host + "/#/s/" + share.Token, // this is broken. r.Host doesn't point to Phoenix
+		URL: "localhost:8300/#/s/" + share.Token,
 	}
 	// actually clients should be able to GET and cache the user info themselves ...
 	// TODO check grantee type for user vs group

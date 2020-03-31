@@ -12,7 +12,7 @@ default: build test lint contrib
 release: deps build test lint
 
 off:
-	GORPOXY=off
+	GOPROXY=off
 	echo BUILD_DATE=${BUILD_DATE}
 	echo GIT_COMMIT=${GIT_COMMIT}
 	echo GIT_DIRTY=${GIT_DIRTY}
@@ -47,7 +47,7 @@ contrib:
 
 # for manual building only
 deps:
-	cd /tmp && rm -rf golangci-lint &&  git clone --quiet -b 'v1.21.0' --single-branch --depth 1 https://github.com/golangci/golangci-lint &> /dev/null && cd golangci-lint/cmd/golangci-lint && go install
+	cd /tmp && rm -rf golangci-lint &&  git clone --quiet -b 'v1.24.0' --single-branch --depth 1 https://github.com/golangci/golangci-lint &> /dev/null && cd golangci-lint/cmd/golangci-lint && go install
 	cd /tmp && go get golang.org/x/tools/cmd/goimports
 
 build-ci: off

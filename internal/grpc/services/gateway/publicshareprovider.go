@@ -58,21 +58,36 @@ func (s *svc) RemovePublicShare(ctx context.Context, req *link.RemovePublicShare
 
 func (s *svc) GetPublicShareByToken(ctx context.Context, req *link.GetPublicShareByTokenRequest) (*link.GetPublicShareByTokenResponse, error) {
 	log := appctx.GetLogger(ctx)
-	log.Info().Msg("remove public share")
+	log.Info().Msg("get public share by token")
 
-	return &link.GetPublicShareByTokenResponse{
-		Status: status.NewOK(ctx),
-	}, nil
+	pClient, err := pool.GetPublicShareProviderClient(s.c.PublicShareProviderEndpoint)
+	if err != nil {
+		log.Err(err).Msg("error connecting to a public share provider")
+		return &link.GetPublicShareByTokenResponse{
+			Status: &rpc.Status{
+				Code: rpc.Code_CODE_INTERNAL,
+			},
+		}, nil
+	}
+
+	return pClient.GetPublicShareByToken(ctx, req)
 }
 
 func (s *svc) GetPublicShare(ctx context.Context, req *link.GetPublicShareRequest) (*link.GetPublicShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("get public share")
 
-	return &link.GetPublicShareResponse{
-		Status: status.NewOK(ctx),
-		// Share:  share,
-	}, nil
+	pClient, err := pool.GetPublicShareProviderClient(s.c.PublicShareProviderEndpoint)
+	if err != nil {
+		log.Err(err).Msg("error connecting to a public share provider")
+		return &link.GetPublicShareResponse{
+			Status: &rpc.Status{
+				Code: rpc.Code_CODE_INTERNAL,
+			},
+		}, nil
+	}
+
+	return pClient.GetPublicShare(ctx, req)
 }
 
 func (s *svc) ListPublicShares(ctx context.Context, req *link.ListPublicSharesRequest) (*link.ListPublicSharesResponse, error) {
@@ -94,25 +109,6 @@ func (s *svc) ListPublicShares(ctx context.Context, req *link.ListPublicSharesRe
 		return nil, errors.Wrap(err, "error calling ListShares")
 	}
 
-	// res := &link.ListPublicSharesResponse{
-	// 	Status: status.NewOK(ctx),
-	// 	Share: []*link.PublicShare{
-	// &link.PublicShare{
-	// 	Id: &link.PublicShareId{
-	// 		OpaqueId: "some_publicly_shared_id",
-	// 	},
-	// 	Token:       "my_token",
-	// 	ResourceId:  &v1beta1.ResourceId{},
-	// 	Permissions: &link.PublicSharePermissions{},
-	// 	Owner:       &types.UserId{},
-	// 	Creator:     &types.UserId{},
-	// 	Ctime:       &types.Timestamp{},
-	// 	Expiration:  &types.Timestamp{},
-	// 	Mtime:       &types.Timestamp{},
-	// 	DisplayName: "some_public_share",
-	// },
-	// 	},
-	// }
 	return res, nil
 }
 

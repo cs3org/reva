@@ -130,10 +130,16 @@ func (s *service) RemovePublicShare(ctx context.Context, req *link.RemovePublicS
 
 func (s *service) GetPublicShareByToken(ctx context.Context, req *link.GetPublicShareByTokenRequest) (*link.GetPublicShareByTokenResponse, error) {
 	log := appctx.GetLogger(ctx)
-	log.Info().Msg("remove public share")
+	log.Info().Msg("getting public share by token")
+
+	found, err := s.sm.GetPublicShareByToken(ctx, req.GetToken())
+	if err != nil {
+		return nil, err
+	}
 
 	return &link.GetPublicShareByTokenResponse{
 		Status: status.NewOK(ctx),
+		Share:  found,
 	}, nil
 }
 
@@ -152,7 +158,7 @@ func (s *service) ListPublicShares(ctx context.Context, req *link.ListPublicShar
 	log.Info().Msg("list public share")
 	user, _ := user.ContextGetUser(ctx)
 
-	shares, err := s.sm.ListPublicShares(ctx, user, &provider.ResourceInfo{})
+	shares, err := s.sm.ListPublicShares(ctx, user, req.Filters, &provider.ResourceInfo{})
 	if err != nil {
 		log.Err(err).Msg("error listing shares")
 		return &link.ListPublicSharesResponse{

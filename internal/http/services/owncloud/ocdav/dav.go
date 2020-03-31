@@ -28,10 +28,11 @@ import (
 
 // DavHandler routes to the different sub handlers
 type DavHandler struct {
-	AvatarsHandler  *AvatarsHandler
-	FilesHandler    *WebDavHandler
-	MetaHandler     *MetaHandler
-	TrashbinHandler *TrashbinHandler
+	AvatarsHandler     *AvatarsHandler
+	FilesHandler       *WebDavHandler
+	MetaHandler        *MetaHandler
+	TrashbinHandler    *TrashbinHandler
+	PublicFilesHandler *PublicFilesHandler
 }
 
 func (h *DavHandler) init(c *Config) error {
@@ -48,6 +49,9 @@ func (h *DavHandler) init(c *Config) error {
 		return err
 	}
 	h.TrashbinHandler = new(TrashbinHandler)
+
+	h.PublicFilesHandler = &PublicFilesHandler{}
+
 	return h.TrashbinHandler.init(c)
 }
 
@@ -81,6 +85,8 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
 			r = r.WithContext(ctx)
 			h.TrashbinHandler.Handler(s).ServeHTTP(w, r)
+		case "public-files":
+			h.PublicFilesHandler.Handler(s).ServeHTTP(w, r)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}

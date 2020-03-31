@@ -34,7 +34,7 @@ import (
 func shareCreateCommand() *command {
 	cmd := newCommand("share-create")
 	cmd.Description = func() string { return "create share to a user or group" }
-	cmd.Usage = func() string { return "Usage: share create [-flags] <path>" }
+	cmd.Usage = func() string { return "Usage: share-create [-flags] <path>" }
 	grantType := cmd.String("type", "user", "grantee type (user or group)")
 	grantee := cmd.String("grantee", "", "the grantee")
 	idp := cmd.String("idp", "", "the idp of the grantee, default to same idp as the user triggering the action")
@@ -132,7 +132,7 @@ func getGrantType(t string) provider.GranteeType {
 }
 
 func getSharePerm(p string) (*collaboration.SharePermissions, error) {
-	if p == "viewer" {
+	if p == viewerPermission {
 		return &collaboration.SharePermissions{
 			Permissions: &provider.ResourcePermissions{
 				GetPath:              true,
@@ -142,7 +142,7 @@ func getSharePerm(p string) (*collaboration.SharePermissions, error) {
 				Stat:                 true,
 			},
 		}, nil
-	} else if p == "editor" {
+	} else if p == editorPermission {
 		return &collaboration.SharePermissions{
 			Permissions: &provider.ResourcePermissions{
 				GetPath:              true,
