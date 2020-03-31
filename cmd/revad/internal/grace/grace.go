@@ -283,7 +283,8 @@ func (w *Watcher) TrapSignals() {
 			w.log.Info().Msg("preparing for a graceful shutdown with deadline of 10 seconds")
 			go func() {
 				count := 10
-				for range time.Tick(time.Second) {
+				ticker := time.NewTicker(time.Second)
+				for ; true; <-ticker.C {
 					w.log.Info().Msgf("shuting down in %d seconds", count-1)
 					count--
 					if count <= 0 {
