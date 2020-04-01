@@ -853,6 +853,17 @@ func (fs *eosfs) createShadowHome(ctx context.Context) error {
 		return errors.Wrap(err, "eos: error creating dir")
 	}
 
+	// create shadow folders
+	shadowFolders := []string{fs.conf.ShareFolder}
+	for _, sf := range shadowFolders {
+		sf = path.Join(home, sf)
+		err = fs.c.CreateDir(ctx, "root", sf)
+		if err != nil {
+			// EOS will return success on mkdir over an existing directory.
+			return errors.Wrap(err, "eos: error creating dir")
+		}
+	}
+
 	err = fs.c.Chown(ctx, "root", u.Username, home)
 	if err != nil {
 		return errors.Wrap(err, "eos: error chowning directory")
@@ -890,18 +901,6 @@ func (fs *eosfs) createShadowHome(ctx context.Context) error {
 		err = fs.c.SetAttr(ctx, "root", attr, true, home)
 		if err != nil {
 			return errors.Wrap(err, "eos: error setting attribute")
-		}
-
-	}
-
-	// create shadow folders
-	shadowFolders := []string{fs.conf.ShareFolder}
-	for _, sf := range shadowFolders {
-		sf = path.Join(home, sf)
-		err = fs.c.CreateDir(ctx, "root", sf)
-		if err != nil {
-			// EOS will return success on mkdir over an existing directory.
-			return errors.Wrap(err, "eos: error creating dir")
 		}
 
 	}
