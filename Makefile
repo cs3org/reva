@@ -8,7 +8,7 @@ GIT_DIRTY=`git diff-index --quiet HEAD -- || echo "dirty-"`
 VERSION=`git describe --always`
 GO_VERSION=`go version | awk '{print $$3}'`
 
-default: build test lint contrib
+default: build test lint
 release: deps build test lint
 
 off:
@@ -43,7 +43,7 @@ lint:
 	`go env GOPATH`/bin/golangci-lint run
 
 contrib:
-	#git shortlog -se | cut -c8- | sort -u | awk '{print "-", $$0}' | grep -v 'users.noreply.github.com' > CONTRIBUTORS.md
+	git shortlog -se | cut -c8- | sort -u | awk '{print "-", $$0}' | grep -v 'users.noreply.github.com' > CONTRIBUTORS.md
 
 # for manual building only
 deps:
