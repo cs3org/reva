@@ -1,9 +1,9 @@
 ---
-title: "Try out the share functionality in Reva"
-linkTitle: "Share functionality"
+title: "Try out the ocm share functionality in Reva"
+linkTitle: "OCM share functionality"
 weight: 5
 description: >
-  Try the share functionality in Reva locally.
+  Try the ocm (Open Cloud Mesh) share functionality in Reva locally.
 ---
 
 This is a guide on how to try the share functionality in Reva in your local environment.
@@ -81,7 +81,7 @@ and use
 host: 127.0.0.1:19000
 ```
 
-Once configuered run:
+Once configured run:
 
 ```
 ./cmd/reva/reva login basic
@@ -94,7 +94,7 @@ login: einstein
 password: relativity
 ```
 
-## 7. Upload the exmaple.txt file
+## 7. Upload the example.txt file
 Create container folder:
 
 ```
@@ -114,14 +114,14 @@ Use curl:
 ```
 curl --request POST \
   --url 'http://127.0.0.1:19001/ocm/shares?path=example.txt&shareWith=f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c&=' \
-  --header 'authorization: Basic ZWluc3RlaW46cmVsYXRpdml0eQ=='
+  --user einstein:relativity
 ```
 
 Or use wget
 
 ```
 wget --method POST \
-  --header 'authorization: Basic ZWluc3RlaW46cmVsYXRpdml0eQ==' \
+  --user einstein:relativity \
   --output-document \
   - 'http://127.0.0.1:19001/ocm/shares?path=example.txt&shareWith=f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c&='
 ```
@@ -133,7 +133,7 @@ Use curl:
 ```
 curl --request GET \
   --url http://127.0.0.1:19001/ocm/shares \
-  --header 'authorization: Basic ZWluc3RlaW46cmVsYXRpdml0eQ=='
+  --user einstein:relativity
 ```  
 
 Or use wget:
@@ -141,7 +141,7 @@ Or use wget:
 ```
 wget --quiet \
   --method GET \
-  --header 'authorization: Basic ZWluc3RlaW46cmVsYXRpdml0eQ==' \
+  --user einstein:relativity \
   --output-document \
   - http://127.0.0.1:19001/ocm/shares
 ```
@@ -153,7 +153,7 @@ Use curl:
 ```
 curl --request GET \
   --url http://127.0.0.1:19001/ocm/shares/*opaque_id* \
-  --header 'authorization: Basic ZWluc3RlaW46cmVsYXRpdml0eQ=='
+  --user einstein:relativity
 ```
 
 Or use wget:
@@ -161,7 +161,7 @@ Or use wget:
 ```
 wget --quiet \
   --method GET \
-  --header 'authorization: Basic ZWluc3RlaW46cmVsYXRpdml0eQ==' \
+  --user einstein:relativity \
   --output-document \
   - http://127.0.0.1:19001/ocm/shares/*opaque_id*
 ```
