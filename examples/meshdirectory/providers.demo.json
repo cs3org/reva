@@ -1,0 +1,37 @@
+{
+  "providers": [
+    {
+      "id": "cernbox",
+      "org": "CERN",
+      "name": "CERNBox",
+      "description": "",
+      "domain": "cernbox.cern.ch",
+      "logo": "https://github.com/cernbox/branding/blob/master/cernbox-lrg.svg",
+      "homepage": "https://cernbox.cern.ch",
+      "ocm_api": "ocm/",
+      "api_version": "0.0.1"
+    },
+    {
+      "id": "oc-cesnet",
+      "org": "CESNET",
+      "name": "ownCloud@CESNET",
+      "description": "",
+      "domain": "owncloud.cesnet.cz",
+      "logo": "",
+      "homepage": "https://owncloud.cesnet.cz",
+      "ocm_api": "ocm/",
+      "api_version": "0.0.1"
+    },
+    {
+      "id": "catbox",
+      "org": "Erwin Schrödinger",
+      "name": "CatBox",
+      "description": "",
+      "domain": "catbox.example.org",
+      "logo": "",
+      "homepage": "https://catbox.example.org/dead",
+      "ocm_api": "alive/ocm/",
+      "api_version": "0.0.1"
+    }
+  ]
+}

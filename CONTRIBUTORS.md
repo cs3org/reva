@@ -16,3 +16,4 @@
 - Michael D'Silva <michael.dsilva@aarnet.edu.au>
 - Mohitty <mohitt@iitk.ac.in>
 - Thomas Boerger <thomas@webhippie.de>
+- Miroslav Bauer <bauer@cesnet.cz>

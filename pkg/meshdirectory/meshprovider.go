@@ -16,19 +16,16 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package meshdirectory
 
-import (
-	// Load core HTTP services
-	_ "github.com/cs3org/reva/internal/http/services/datagateway"
-	_ "github.com/cs3org/reva/internal/http/services/dataprovider"
-	_ "github.com/cs3org/reva/internal/http/services/helloworld"
-	_ "github.com/cs3org/reva/internal/http/services/meshdirectory"
-	_ "github.com/cs3org/reva/internal/http/services/ocmd"
-	_ "github.com/cs3org/reva/internal/http/services/oidcprovider"
-	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
-	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocs"
-	_ "github.com/cs3org/reva/internal/http/services/prometheus"
-	_ "github.com/cs3org/reva/internal/http/services/wellknown"
-	// Add your own service here
-)
+type MeshProvider struct {
+	ID          string `mapstructure:"id"`
+	Org         string `mapstructure:"org"`
+	Name        string `mapstructure:"name"`
+	Description string `mapstructure:"description"`
+	Domain      string `mapstructure:"domain"`
+	Logo        string `mapstructure:"logo"`
+	Homepage    string `mapstructure:"homepage"`
+	OCM         string `mapstructure:"ocm_api"`
+	Version     string `mapstructure:"api_version"`
+}
