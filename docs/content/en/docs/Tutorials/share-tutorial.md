@@ -98,13 +98,13 @@ password: relativity
 Create container folder:
 
 ```
-./cmd/reva/reva mkdir /einstein/
+./cmd/reva/reva mkdir /home/
 ```
 
 Upload the example file:
 
 ```
-./cmd/reva/reva upload example.txt /einstein/example.txt
+./cmd/reva/reva upload example.txt /home/example.txt
 ```
 
 ## 8. Share the file
@@ -121,7 +121,8 @@ Or use wget
 
 ```
 wget --method POST \
-  --user einstein:relativity \
+  --http-user=einstein \
+  --http-password=relativity \
   --output-document \
   - 'http://127.0.0.1:19001/ocm/shares?path=example.txt&shareWith=f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c&='
 ```
@@ -141,7 +142,8 @@ Or use wget:
 ```
 wget --quiet \
   --method GET \
-  --user einstein:relativity \
+  --http-user=einstein \
+  --http-password=relativity \
   --output-document \
   - http://127.0.0.1:19001/ocm/shares
 ```
@@ -161,7 +163,8 @@ Or use wget:
 ```
 wget --quiet \
   --method GET \
-  --user einstein:relativity \
+  --http-user=einstein \
+  --http-password=relativity \
   --output-document \
   - http://127.0.0.1:19001/ocm/shares/*opaque_id*
 ```
