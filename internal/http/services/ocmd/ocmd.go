@@ -41,6 +41,7 @@ type svc struct {
 	SharesHandler        *sharesHandler
 	NotificationsHandler *notificationsHandler
 	ConfigHandler        *configHandler
+	InvitesHandler       *invitesHandler
 }
 
 func init() {
@@ -63,9 +64,11 @@ func New(m map[string]interface{}) (global.Service, error) {
 	s.SharesHandler = new(sharesHandler)
 	s.NotificationsHandler = new(notificationsHandler)
 	s.ConfigHandler = new(configHandler)
+	s.InvitesHandler = new(invitesHandler)
 	s.SharesHandler.init(s.Conf)
 	s.NotificationsHandler.init(s.Conf)
 	s.ConfigHandler.init(s.Conf)
+	s.InvitesHandler.init(s.Conf)
 	return s, nil
 }
 
@@ -101,6 +104,9 @@ func (s *svc) Handler() http.Handler {
 			return
 		case "notifications":
 			s.NotificationsHandler.Handler().ServeHTTP(w, r)
+			return
+		case "invites":
+			s.InvitesHandler.Handler().ServeHTTP(w, r)
 			return
 		}
 
