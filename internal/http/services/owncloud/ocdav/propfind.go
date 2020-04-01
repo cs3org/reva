@@ -19,6 +19,7 @@
 package ocdav
 
 import (
+	"bytes"
 	"context"
 	"encoding/xml"
 	"fmt"
@@ -169,10 +170,12 @@ func (s *svc) formatPropfind(ctx context.Context, pf *propfindXML, mds []*provid
 }
 
 func (s *svc) newProp(key, val string) *propertyXML {
+	escaped := new(bytes.Buffer)
+	xml.Escape(escaped, []byte(val))
 	return &propertyXML{
 		XMLName:  xml.Name{Space: "", Local: key},
 		Lang:     "",
-		InnerXML: []byte(val),
+		InnerXML: escaped.Bytes(),
 	}
 }
 
