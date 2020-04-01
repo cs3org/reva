@@ -878,53 +878,8 @@ func (fs *eosfs) createNominalHome(ctx context.Context) error {
 		return errors.Wrap(err, "eos: error verifying if user home directory exists")
 	}
 
-	// TODO(labkode): only trigger creation on not found, copy from CERNBox logic.
-	err = fs.c.CreateDir(ctx, "root", home)
-	if err != nil {
-		// EOS will return success on mkdir over an existing directory.
-		return errors.Wrap(err, "eos: error creating dir")
-	}
-	err = fs.c.Chown(ctx, "root", u.Username, home)
-	if err != nil {
-		return errors.Wrap(err, "eos: error chowning directory")
-	}
-
-	err = fs.c.Chmod(ctx, "root", "2770", home)
-	if err != nil {
-		return errors.Wrap(err, "eos: error chmoding directory")
-	}
-
-	attrs := []*eosclient.Attribute{
-		&eosclient.Attribute{
-			Type: eosclient.SystemAttr,
-			Key:  "mask",
-			Val:  "700",
-		},
-		&eosclient.Attribute{
-			Type: eosclient.SystemAttr,
-			Key:  "allow.oc.sync",
-			Val:  "1",
-		},
-		&eosclient.Attribute{
-			Type: eosclient.SystemAttr,
-			Key:  "mtime.propagation",
-			Val:  "1",
-		},
-		&eosclient.Attribute{
-			Type: eosclient.SystemAttr,
-			Key:  "forced.atomic",
-			Val:  "1",
-		},
-	}
-
-	for _, attr := range attrs {
-		err = fs.c.SetAttr(ctx, "root", attr, true, home)
-		if err != nil {
-			return errors.Wrap(err, "eos: error setting attribute")
-		}
-
-	}
-	return nil
+	err = fs.createUserDir(ctx, u.Username, home)
+	return err
 }
 
 func (fs *eosfs) CreateHome(ctx context.Context) error {
