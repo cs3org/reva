@@ -130,7 +130,7 @@ type config struct {
 	ForceSingleUserMode bool `mapstructure:"force_single_user_mode"`
 
 	// UseKeyTabAuth changes will authenticate requests by using an EOS keytab.
-	UseKeytab bool `mapstrucuture:"use_keytab"`
+	UseKeytab bool `mapstructure:"use_keytab"`
 
 	// EnableHome enables the creation of home directories.
 	EnableHome bool `mapstructure:"enable_home"`
