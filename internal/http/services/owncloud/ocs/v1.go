@@ -22,18 +22,21 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/apps"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 )
 
 // V1Handler routes to the different sub handlers
 type V1Handler struct {
-	AppsHandler   *AppsHandler
+	AppsHandler   *apps.Handler
 	CloudHandler  *CloudHandler
 	ConfigHandler *ConfigHandler
 }
 
-func (h *V1Handler) init(c *Config) error {
-	h.AppsHandler = new(AppsHandler)
-	if err := h.AppsHandler.init(c); err != nil {
+func (h *V1Handler) init(c *config.Config) error {
+	h.AppsHandler = new(apps.Handler)
+	if err := h.AppsHandler.Init(c); err != nil {
 		return err
 	}
 	h.CloudHandler = new(CloudHandler)
@@ -56,7 +59,7 @@ func (h *V1Handler) Handler() http.Handler {
 		case "config":
 			h.ConfigHandler.Handler().ServeHTTP(w, r)
 		default:
-			WriteOCSError(w, r, MetaNotFound.StatusCode, "Not found", nil)
+			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "Not found", nil)
 		}
 	})
 }

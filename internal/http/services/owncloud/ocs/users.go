@@ -24,6 +24,7 @@ import (
 
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	ctxuser "github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 )
 
 // The UsersHandler renders user data for the user id given in the url path
@@ -39,12 +40,12 @@ func (h *UsersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// FIXME use ldap to fetch user info
 	u, ok := ctxuser.ContextGetUser(ctx)
 	if !ok {
-		WriteOCSError(w, r, MetaServerError.StatusCode, "missing user in context", fmt.Errorf("missing user in context"))
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "missing user in context", fmt.Errorf("missing user in context"))
 		return
 	}
 	if user != u.Username {
 		// FIXME allow fetching other users info?
-		WriteOCSError(w, r, http.StatusForbidden, "user id mismatch", fmt.Errorf("%s tried to acces %s user info endpoint", u.Id.OpaqueId, user))
+		response.WriteOCSError(w, r, http.StatusForbidden, "user id mismatch", fmt.Errorf("%s tried to acces %s user info endpoint", u.Id.OpaqueId, user))
 		return
 	}
 
@@ -52,7 +53,7 @@ func (h *UsersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	head, r.URL.Path = router.ShiftPath(r.URL.Path)
 	switch head {
 	case "":
-		WriteOCSSuccess(w, r, &UsersData{
+		response.WriteOCSSuccess(w, r, &UsersData{
 			// FIXME query storages? cache a summary?
 			// TODO use list of storages to allow clients to resolve quota status
 			Quota: &QuotaData{
@@ -67,10 +68,10 @@ func (h *UsersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	case "groups":
-		WriteOCSSuccess(w, r, &GroupsData{})
+		response.WriteOCSSuccess(w, r, &GroupsData{})
 		return
 	default:
-		WriteOCSError(w, r, MetaNotFound.StatusCode, "Not found", nil)
+		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "Not found", nil)
 		return
 	}
 

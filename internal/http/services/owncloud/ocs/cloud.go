@@ -22,6 +22,8 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 )
 
 // CloudHandler holds references to UserHandler and CapabilitiesHandler
@@ -31,7 +33,7 @@ type CloudHandler struct {
 	CapabilitiesHandler *CapabilitiesHandler
 }
 
-func (h *CloudHandler) init(c *Config) {
+func (h *CloudHandler) init(c *config.Config) {
 	h.UserHandler = new(UserHandler)
 	h.UsersHandler = new(UsersHandler)
 	h.CapabilitiesHandler = new(CapabilitiesHandler)
@@ -51,7 +53,7 @@ func (h *CloudHandler) Handler() http.Handler {
 		case "users":
 			h.UsersHandler.ServeHTTP(w, r)
 		default:
-			WriteOCSError(w, r, MetaNotFound.StatusCode, "Not found", nil)
+			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "Not found", nil)
 		}
 	})
 }

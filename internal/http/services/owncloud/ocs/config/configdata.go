@@ -16,26 +16,13 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocs
+package config
 
-import (
-	"net/http"
-
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp/router"
-)
-
-// NotificationsHandler placeholder
-type NotificationsHandler struct {
-}
-
-func (h *NotificationsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log := appctx.GetLogger(r.Context())
-
-	var head string
-	head, r.URL.Path = router.ShiftPath(r.URL.Path)
-
-	log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
-
-	w.WriteHeader(http.StatusOK)
+// ConfigData holds basic config
+type ConfigData struct {
+	Version string `json:"version" xml:"version"`
+	Website string `json:"website" xml:"website"`
+	Host    string `json:"host" xml:"host"`
+	Contact string `json:"contact" xml:"contact"`
+	SSL     string `json:"ssl" xml:"ssl"`
 }

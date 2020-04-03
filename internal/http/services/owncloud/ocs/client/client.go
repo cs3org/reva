@@ -16,41 +16,24 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocs
+package client
 
 import (
-	"fmt"
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/user"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 )
 
-// The UserHandler renders the user endpoint
-type UserHandler struct {
-}
-
-func (h *UserHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	// TODO move user to handler parameter?
-	u, ok := user.ContextGetUser(ctx)
-	if !ok {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "missing user in context", fmt.Errorf("missing user in context"))
-		return
+// MustGetGateway returns a client to the gateway service, returns an error otherwise
+func MustGetGateway(addr string, r *http.Request, w http.ResponseWriter) gateway.GatewayAPIClient {
+	client, err := pool.GetGatewayServiceClient(addr)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "no connection to gateway service", nil)
+		return nil
 	}
 
-	response.WriteOCSSuccess(w, r, &UserData{
-		ID:          u.Username,
-		DisplayName: u.DisplayName,
-		Email:       u.Mail,
-	})
-}
-
-// UserData holds user data
-type UserData struct {
-	// TODO needs better naming, clarify if we need a userid, a username or both
-	ID          string `json:"id" xml:"id"`
-	DisplayName string `json:"display-name" xml:"display-name"`
-	Email       string `json:"email" xml:"email"`
+	return client
 }

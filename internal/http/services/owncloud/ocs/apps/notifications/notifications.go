@@ -16,43 +16,26 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocs
+package notifications
 
 import (
 	"net/http"
 
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
+	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 )
 
-// ConfigHandler renders the config endpoint
-type ConfigHandler struct {
-	c config.ConfigData
+// Handler placeholder for notifications
+type Handler struct {
 }
 
-func (h *ConfigHandler) init(c *config.Config) {
-	h.c = c.Config
-	// config
-	if h.c.Version == "" {
-		h.c.Version = "1.7"
-	}
-	if h.c.Website == "" {
-		h.c.Website = "reva"
-	}
-	if h.c.Host == "" {
-		h.c.Host = "" // TODO get from context?
-	}
-	if h.c.Contact == "" {
-		h.c.Contact = ""
-	}
-	if h.c.SSL == "" {
-		h.c.SSL = "false" // TODO get from context?
-	}
-}
+func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	log := appctx.GetLogger(r.Context())
 
-// Handler renders the config
-func (h *ConfigHandler) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		response.WriteOCSSuccess(w, r, h.c)
-	})
+	var head string
+	head, r.URL.Path = router.ShiftPath(r.URL.Path)
+
+	log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
+
+	w.WriteHeader(http.StatusOK)
 }
