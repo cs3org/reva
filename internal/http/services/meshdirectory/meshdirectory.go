@@ -21,11 +21,12 @@ package meshdirectory
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
-
 	"github.com/cs3org/reva/pkg/meshdirectory"
 	"github.com/cs3org/reva/pkg/meshdirectory/manager/registry"
 	"github.com/pkg/errors"
+	"io/ioutil"
+	"net/http"
+	"path"
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
@@ -40,6 +41,7 @@ type config struct {
 	Driver  string                            `mapstructure:"driver"`
 	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
 	Prefix  string                            `mapstructure:"prefix"`
+	Static  string                            `mapstructure:"static"`
 }
 
 type svc struct {
@@ -78,6 +80,10 @@ func New(m map[string]interface{}) (global.Service, error) {
 		c.Driver = "json"
 	}
 
+	if c.Static == "" {
+		c.Static = "static"
+	}
+
 	mdm, err := getMeshDirManager(c)
 	if err != nil {
 		return nil, err
@@ -110,16 +116,50 @@ func (s *svc) MeshProviders() []*meshdirectory.MeshProvider {
 	return s.mdm.GetMeshProviders()
 }
 
+func (s *svc) renderIndex(w http.ResponseWriter) error {
+	file, err := ioutil.ReadFile(path.Clean(s.conf.Static + "/index.html"))
+	if err != nil {
+		return errors.Wrap(err, "error rendering index page")
+	}
+	if _, err := w.Write(file); err != nil {
+		return errors.Wrap(err, "error writing response")
+	}
+	return nil
+}
+
+func (s *svc) respondJSON(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+
+	res, err := json.Marshal(s.MeshProviders())
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return errors.Wrap(err, "failed to serialize providers to json")
+	}
+
+	if _, err := w.Write(res); err != nil {
+		return errors.Wrap(err, "error writing response")
+	}
+	return nil
+}
+
+func (s *svc) respondStatic(w http.ResponseWriter, r *http.Request) error {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	return s.renderIndex(w)
+}
+
 // HTTP service handler
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log := appctx.GetLogger(r.Context())
-		pb, err := json.Marshal(s.MeshProviders())
-		if err != nil {
-			log.Err(err).Msg("failed to serialize providers to json")
-		}
-		if _, err := w.Write(pb); err != nil {
-			log.Err(err).Msg("error writing response")
+
+		if r.Header.Get("Accept") == "application/json" {
+			if err := s.respondJSON(w); err != nil {
+				log.Error().Err(err)
+			}
+		} else {
+			if err := s.respondStatic(w, r); err != nil {
+				log.Error().Err(err)
+			}
 		}
 	})
 }

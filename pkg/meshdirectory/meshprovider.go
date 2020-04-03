@@ -18,14 +18,15 @@
 
 package meshdirectory
 
+// MeshProvider holds provider metadata
 type MeshProvider struct {
-	ID          string `mapstructure:"id"`
-	Org         string `mapstructure:"org"`
-	Name        string `mapstructure:"name"`
-	Description string `mapstructure:"description"`
-	Domain      string `mapstructure:"domain"`
-	Logo        string `mapstructure:"logo"`
-	Homepage    string `mapstructure:"homepage"`
-	OCM         string `mapstructure:"ocm_api"`
-	Version     string `mapstructure:"api_version"`
+	ID          string `json:"id" mapstructure:"id"`
+	Org         string `json:"org" mapstructure:"org"`
+	Name        string `json:"name" mapstructure:"description"`
+	Description string `json:"description" mapstructure:"description"`
+	Domain      string `json:"domain" mapstructure:"domain"`
+	Logo        string `json:"logo" mapstructure:"logo"`
+	Homepage    string `json:"homepage" mapstructure:"homepage"`
+	OCM         string `json:"ocm_api" mapstructure:"ocm_api"`
+	Version     string `json:"api_version" mapstructure:"api_version"`
 }
