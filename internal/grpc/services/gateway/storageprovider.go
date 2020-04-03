@@ -1030,7 +1030,29 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 	if s.isSharedFolder(ctx, p) {
 		// TODO(labkode): we need to generate a unique etag if any of the underlying share changes.
 		// the response will contain all the share names and we need to convert them to non resference types.
-		return s.listContainer(ctx, req)
+		lcr, err := s.listContainer(ctx, req)
+		if err != nil {
+			return &provider.ListContainerResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error listing shared folder"),
+			}, nil
+		}
+
+		for i, ref := range lcr.Infos {
+
+			info, err := s.checkRef(ctx, ref)
+			if err != nil {
+				return &provider.ListContainerResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error resolving reference:"+info.Path),
+				}, nil
+			}
+
+			base := path.Base(ref.Path)
+			info.Path = path.Join(p, base)
+
+			lcr.Infos[i] = info
+
+		}
+		return lcr, nil
 	}
 
 	log := appctx.GetLogger(ctx)
@@ -1047,7 +1069,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		res, err := s.stat(ctx, statReq)
 		if err != nil {
 			return &provider.ListContainerResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating"),
+				Status: status.NewInternal(ctx, err, "gateway: error stating share"),
 			}, nil
 		}
 
@@ -1055,12 +1077,8 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 			err := status.NewErrorFromCode(res.Status.Code, "gateway")
 			log.Err(err).Msg("gateway: error stating")
 			return &provider.ListContainerResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating"),
+				Status: status.NewInternal(ctx, err, "gateway: error stating share"),
 			}, nil
-		}
-
-		if res.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
-			panic("gateway: a share name must be of type reference: ref:" + res.Info.Path)
 		}
 
 		ri, err := s.checkRef(ctx, res.Info)
@@ -1123,7 +1141,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		res, err := s.stat(ctx, statReq)
 		if err != nil {
 			return &provider.ListContainerResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating"),
+				Status: status.NewInternal(ctx, err, "gateway: error stating share child"),
 			}, nil
 		}
 
@@ -1131,12 +1149,8 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 			err := status.NewErrorFromCode(res.Status.Code, "gateway")
 			log.Err(err).Msg("gateway: error stating")
 			return &provider.ListContainerResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating"),
+				Status: status.NewInternal(ctx, err, "gateway: error stating share child"),
 			}, nil
-		}
-
-		if res.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
-			panic("gateway: a share name must be of type reference: ref:" + res.Info.Path)
 		}
 
 		ri, err := s.checkRef(ctx, res.Info)
