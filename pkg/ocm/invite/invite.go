@@ -29,7 +29,7 @@ import (
 // Manager is the interface that is used to perform operations to invites.
 type Manager interface {
 	// GenerateToken creates a new token for the user with a specified validity.
-	GenerateToken(ctx context.Context, user *userpb.UserId) (*invitepb.InviteToken, error)
+	GenerateToken(ctx context.Context) (*invitepb.InviteToken, error)
 
 	// ForwardInvite forwards a received invite to the sync'n'share system provider.
 	ForwardInvite(ctx context.Context, invite *invitepb.InviteToken, originProvider *ocm.ProviderInfo) error

@@ -41,7 +41,7 @@ func New(m map[string]interface{}) (invite.Manager, error) {
 type manager struct {
 }
 
-func (m *manager) GenerateToken(ctx context.Context, user *userpb.UserId) (*invitepb.InviteToken, error) {
+func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, error) {
 	token := new(invitepb.InviteToken)
 	return token, nil
 }
