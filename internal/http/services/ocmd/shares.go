@@ -85,15 +85,19 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 	}
 	prefix := hRes.GetPath()
 
-	shareWith := r.FormValue("shareWith")
-	if shareWith == "" {
-		WriteError(w, r, APIErrorInvalidParameter, "missing shareWith", nil)
+	shareWithUser := r.FormValue("shareWithUser")
+	shareWithProvider := r.FormValue("shareWithProvider")
+
+	if shareWithUser == "" || shareWithProvider == "" {
+		WriteError(w, r, APIErrorInvalidParameter, "missing shareWith parameters", nil)
 		return
 	}
 
 	userRes, err := gatewayClient.GetUser(ctx, &userpb.GetUserRequest{
-		UserId: &userpb.UserId{OpaqueId: shareWith},
+		UserId: &userpb.UserId{OpaqueId: shareWithUser, Idp: shareWithProvider},
 	})
+
+	log.Info().Msg(fmt.Sprintf("userRes %+v", userRes))
 
 	if err != nil {
 		WriteError(w, r, APIErrorInvalidParameter, "error searching recipient", err)
