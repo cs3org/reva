@@ -81,8 +81,7 @@ func New(m map[string]interface{}) (user.Manager, error) {
 
 func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
 	for _, u := range m.users {
-		// TODO(jfd) we should also compare idp / iss? labkode: yes we should
-		if u.Id.GetOpaqueId() == uid.OpaqueId || u.Username == uid.OpaqueId {
+		if (u.Id.GetOpaqueId() == uid.OpaqueId || u.Username == uid.OpaqueId) && (uid.Idp == "" || uid.Idp == u.Id.GetIdp()) {
 			return u, nil
 		}
 	}
