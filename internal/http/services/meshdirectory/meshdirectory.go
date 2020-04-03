@@ -21,12 +21,13 @@ package meshdirectory
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/cs3org/reva/pkg/meshdirectory"
-	"github.com/cs3org/reva/pkg/meshdirectory/manager/registry"
-	"github.com/pkg/errors"
 	"io/ioutil"
 	"net/http"
 	"path"
+
+	"github.com/cs3org/reva/pkg/meshdirectory"
+	"github.com/cs3org/reva/pkg/meshdirectory/manager/registry"
+	"github.com/pkg/errors"
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
