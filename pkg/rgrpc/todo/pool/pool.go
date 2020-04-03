@@ -175,6 +175,7 @@ func GetOCMShareProviderClient(endpoint string) (ocm.OcmAPIClient, error) {
 	return ocmShareProviders[endpoint], nil
 }
 
+// GetOCMInviteManagerClient returns a new OCMInviteManagerClient.
 func GetOCMInviteManagerClient(endpoint string) (invitepb.InviteAPIClient, error) {
 	if val, ok := ocmInviteManagers[endpoint]; ok {
 		return val, nil
