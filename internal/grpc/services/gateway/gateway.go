@@ -45,6 +45,7 @@ type config struct {
 	UserShareProviderEndpoint   string `mapstructure:"usershareprovidersvc"`
 	PublicShareProviderEndpoint string `mapstructure:"publicshareprovidersvc"`
 	OCMShareProviderEndpoint    string `mapstructure:"ocmshareprovidersvc"`
+	OCMInviteManagerEndpoint    string `mapstructure:"ocminvitemanagersvc"`
 	UserProviderEndpoint        string `mapstructure:"userprovidersvc"`
 	CommitShareToStorageGrant   bool   `mapstructure:"commit_share_to_storage_grant"`
 	CommitShareToStorageRef     bool   `mapstructure:"commit_share_to_storage_ref"`

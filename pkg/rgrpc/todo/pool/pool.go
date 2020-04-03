@@ -25,6 +25,7 @@ import (
 	authregistry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	invitepb "github.com/cs3org/go-cs3apis/cs3/invite/v1beta1"
 	preferences "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -42,6 +43,7 @@ var authProviders = map[string]authprovider.ProviderAPIClient{}
 var authRegistries = map[string]authregistry.RegistryAPIClient{}
 var userShareProviders = map[string]collaboration.CollaborationAPIClient{}
 var ocmShareProviders = map[string]ocm.OcmAPIClient{}
+var ocmInviteManagers = map[string]invitepb.InviteAPIClient{}
 var publicShareProviders = map[string]link.LinkAPIClient{}
 var preferencesProviders = map[string]preferences.PreferencesAPIClient{}
 var appRegistries = map[string]appregistry.RegistryAPIClient{}
@@ -171,6 +173,22 @@ func GetOCMShareProviderClient(endpoint string) (ocm.OcmAPIClient, error) {
 	ocmShareProviders[endpoint] = ocm.NewOcmAPIClient(conn)
 
 	return ocmShareProviders[endpoint], nil
+}
+
+// GetOCMInviteManagerClient returns a new OCMInviteManagerClient.
+func GetOCMInviteManagerClient(endpoint string) (invitepb.InviteAPIClient, error) {
+	if val, ok := ocmInviteManagers[endpoint]; ok {
+		return val, nil
+	}
+
+	conn, err := NewConn(endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	ocmInviteManagers[endpoint] = invitepb.NewInviteAPIClient(conn)
+
+	return ocmInviteManagers[endpoint], nil
 }
 
 // GetPublicShareProviderClient returns a new PublicShareProviderClient.
