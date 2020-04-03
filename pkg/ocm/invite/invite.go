@@ -18,6 +18,22 @@
 
 package invite
 
-// Manager is the interface that is used to perform operatuons to invites.
+import (
+	"context"
+
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	invitepb "github.com/cs3org/go-cs3apis/cs3/invite/v1beta1"
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+)
+
+// Manager is the interface that is used to perform operations to invites.
 type Manager interface {
+	// GenerateToken creates a new token for the user with a specified validity.
+	GenerateToken(ctx context.Context, user *userpb.UserId) (*invitepb.InviteToken, error)
+
+	// ForwardInvite forwards a received invite to the sync'n'share system provider.
+	ForwardInvite(ctx context.Context, invite *invitepb.InviteToken, originProvider *ocm.ProviderInfo) error
+
+	// AcceptInvite completes an invitation acceptance.
+	AcceptInvite(ctx context.Context, invite *invitepb.InviteToken, user *userpb.UserId, recipientProvider *ocm.ProviderInfo) error
 }

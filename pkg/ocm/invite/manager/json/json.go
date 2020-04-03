@@ -19,6 +19,11 @@
 package json
 
 import (
+	"context"
+
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	invitepb "github.com/cs3org/go-cs3apis/cs3/invite/v1beta1"
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	"github.com/cs3org/reva/pkg/ocm/invite"
 	"github.com/cs3org/reva/pkg/ocm/invite/manager/registry"
 )
@@ -27,11 +32,24 @@ func init() {
 	registry.Register("json", New)
 }
 
-// New returns a new authorizer object.
+// New returns a new invite manager object.
 func New(m map[string]interface{}) (invite.Manager, error) {
 	mgr := new(manager)
 	return mgr, nil
 }
 
 type manager struct {
+}
+
+func (m *manager) GenerateToken(ctx context.Context, user *userpb.UserId) (*invitepb.InviteToken, error) {
+	token := new(invitepb.InviteToken)
+	return token, nil
+}
+
+func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToken, originProvider *ocm.ProviderInfo) error {
+	return nil
+}
+
+func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken, user *userpb.UserId, recipientProvider *ocm.ProviderInfo) error {
+	return nil
 }
