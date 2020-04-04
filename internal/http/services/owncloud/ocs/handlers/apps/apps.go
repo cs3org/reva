@@ -21,10 +21,10 @@ package apps
 import (
 	"net/http"
 
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/apps/sharing"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/apps/notifications"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/apps/notifications"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/apps/sharing"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 )
 
@@ -34,6 +34,7 @@ type Handler struct {
 	NotificationsHandler *notifications.Handler
 }
 
+// Init initializes this and any contained handlers
 func (h *Handler) Init(c *config.Config) error {
 	h.SharingHandler = new(sharing.Handler)
 	h.NotificationsHandler = new(notifications.Handler)

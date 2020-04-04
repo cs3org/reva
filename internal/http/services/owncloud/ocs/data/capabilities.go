@@ -16,11 +16,12 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package config
+package data
 
 import (
 	"encoding/xml"
 )
+
 // ocsBool implements the xml/json Marshaler interface. The OCS API inconsistency require us to parse boolean values
 // as native booleans for json requests but "truthy" 0/1 values for xml requests.
 type ocsBool bool

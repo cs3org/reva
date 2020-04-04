@@ -16,21 +16,21 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocs
+package user
 
 import (
 	"fmt"
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
+	"github.com/cs3org/reva/pkg/user"
 )
 
-// The UserHandler renders the user endpoint
-type UserHandler struct {
+// The Handler renders the user endpoint
+type Handler struct {
 }
 
-func (h *UserHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// TODO move user to handler parameter?
@@ -40,15 +40,15 @@ func (h *UserHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.WriteOCSSuccess(w, r, &UserData{
+	response.WriteOCSSuccess(w, r, &User{
 		ID:          u.Username,
 		DisplayName: u.DisplayName,
 		Email:       u.Mail,
 	})
 }
 
-// UserData holds user data
-type UserData struct {
+// User holds user data
+type User struct {
 	// TODO needs better naming, clarify if we need a userid, a username or both
 	ID          string `json:"id" xml:"id"`
 	DisplayName string `json:"display-name" xml:"display-name"`

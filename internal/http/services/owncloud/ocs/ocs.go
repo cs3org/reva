@@ -21,19 +21,18 @@ package ocs
 import (
 	"net/http"
 
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 )
 
 func init() {
 	global.Register("ocs", New)
 }
-
 
 type svc struct {
 	c         *config.Config

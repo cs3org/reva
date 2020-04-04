@@ -23,11 +23,11 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 )
 
@@ -36,6 +36,7 @@ type Handler struct {
 	gatewayAddr string
 }
 
+// Init initializes this and any contained handlers
 func (h *Handler) Init(c *config.Config) error {
 	h.gatewayAddr = c.GatewaySvc
 	return nil
@@ -50,7 +51,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
 
 	h.findSharees(w, r)
-	return
 }
 
 func (h *Handler) findSharees(w http.ResponseWriter, r *http.Request) {

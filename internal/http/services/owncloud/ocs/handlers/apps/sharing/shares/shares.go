@@ -25,7 +25,6 @@ import (
 	"net/http"
 	"path"
 	"strconv"
-	"strings"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -36,9 +35,9 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/rs/zerolog/log"
 
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
@@ -50,6 +49,7 @@ type Handler struct {
 	gatewayAddr string
 }
 
+// Init initializes this and any contained handlers
 func (h *Handler) Init(c *config.Config) error {
 	h.gatewayAddr = c.GatewaySvc
 	return nil
@@ -77,8 +77,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		case "POST":
 			h.createShare(w, r)
-		case "PUT":
-			h.updateShare(w, r) // TODO PUT is used with incomplete data to update a share 🤦
 		default:
 			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Only GET, POST and PUT are allowed", nil)
 		}
@@ -87,21 +85,16 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "Not implemented yet", nil)
 		return
 	default:
+		switch r.Method {
+		case "PUT":
+			h.updateShare(w, r, head) // TODO PUT is used with incomplete data to update a share
+		case "DELETE":
+			h.removeShare(w, r, head)
+		default:
+			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Only GET, POST and PUT are allowed", nil)
+		}
 		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "Not found", nil)
 		return
-	}
-}
-
-
-func (h *Handler) userAsMatch(u *userpb.User) *conversions.MatchData {
-	return &conversions.MatchData{
-		Label: u.DisplayName,
-		Value: &conversions.MatchValueData{
-			ShareType: int(conversions.ShareTypeUser),
-			// TODO(jfd) find more robust userid
-			// username might be ok as it is unique at a given point in time
-			ShareWith: u.Username,
-		},
 	}
 }
 
@@ -295,7 +288,11 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 
 		// TODO(refs) set permissions to what phoenix sends
 		// TODO(refs) error handling please
-		testPerm, _ := h.role2CS3Permissions(conversions.RoleViewer)
+		testPerm, err := h.role2CS3Permissions(conversions.RoleViewer)
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "invalid role", err)
+			return
+		}
 
 		req := link.CreatePublicShareRequest{
 			ResourceInfo: statRes.GetInfo(),
@@ -462,7 +459,7 @@ func (h *Handler) role2CS3Permissions(r string) (*provider.ResourcePermissions, 
 	}
 }
 
-func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID string) {
 	ctx := r.Context()
 
 	pval := r.FormValue("permissions")
@@ -481,9 +478,6 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request) {
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, err.Error(), nil)
 		return
 	}
-
-	shareID := strings.TrimLeft(r.URL.Path, "/")
-	// TODO we need to lookup the storage that is responsible for this share
 
 	uClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
@@ -556,6 +550,40 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request) {
 	response.WriteOCSSuccess(w, r, share)
 }
 
+func (h *Handler) removeShare(w http.ResponseWriter, r *http.Request, shareID string) {
+	ctx := r.Context()
+
+	uClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
+		return
+	}
+
+	uReq := &collaboration.RemoveShareRequest{
+		Ref: &collaboration.ShareReference{
+			Spec: &collaboration.ShareReference_Id{
+				Id: &collaboration.ShareId{
+					OpaqueId: shareID,
+				},
+			},
+		},
+	}
+	uRes, err := uClient.RemoveShare(ctx, uReq)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc delete share request", err)
+		return
+	}
+
+	if uRes.Status.Code != rpc.Code_CODE_OK {
+		if uRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
+			return
+		}
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc delete share request failed", err)
+		return
+	}
+	response.WriteOCSSuccess(w, r, nil)
+}
 
 func (h *Handler) isListSharesWithMe(w http.ResponseWriter, r *http.Request) (listSharedWithMe bool) {
 	if r.FormValue("shared_with_me") != "" {
@@ -577,7 +605,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	lrsReq := collaboration.ListReceivedSharesRequest{}
-	
+
 	lrsRes, err := gwc.ListReceivedShares(r.Context(), &lrsReq)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc ListReceivedShares request", err)
@@ -627,9 +655,8 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.WriteOCSSuccess(w, r, shares)
-	return
-
 }
+
 func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 	shares := make([]*conversions.ShareData, 0)
 	filters := []*collaboration.ListSharesRequest_Filter{}
@@ -673,7 +700,7 @@ func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 	}
 	shares = append(shares, append(userShares, publicShares...)...)
 
-	response.WriteOCSSuccess(w, r, &conversions.Element{Data: shares})
+	response.WriteOCSSuccess(w, r, shares)
 }
 
 func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSharesRequest_Filter) ([]*conversions.ShareData, error) {
@@ -820,7 +847,7 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.ListS
 		}
 
 		if lsUserSharesResponse.Status.Code != rpc.Code_CODE_OK {
-			return nil, err
+			return nil, errors.New("could not ListShares")
 		}
 
 		// build OCS response payload
@@ -851,10 +878,11 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.ListS
 			}
 
 			if statResponse.Status.Code != rpc.Code_CODE_OK {
-				return nil, err
+				return nil, errors.New("could not stat share target")
 			}
 
-			if h.addFileInfo(ctx, share, statResponse.Info) != nil {
+			err = h.addFileInfo(ctx, share, statResponse.Info)
+			if err != nil {
 				return nil, err
 			}
 

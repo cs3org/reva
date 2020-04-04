@@ -21,17 +21,19 @@ package ocs
 import (
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/rhttp/router"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/apps"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/apps"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/cloud"
+	configHandler "github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/config"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 )
 
 // V1Handler routes to the different sub handlers
 type V1Handler struct {
 	AppsHandler   *apps.Handler
-	CloudHandler  *CloudHandler
-	ConfigHandler *ConfigHandler
+	CloudHandler  *cloud.Handler
+	ConfigHandler *configHandler.Handler
 }
 
 func (h *V1Handler) init(c *config.Config) error {
@@ -39,10 +41,10 @@ func (h *V1Handler) init(c *config.Config) error {
 	if err := h.AppsHandler.Init(c); err != nil {
 		return err
 	}
-	h.CloudHandler = new(CloudHandler)
-	h.CloudHandler.init(c)
-	h.ConfigHandler = new(ConfigHandler)
-	h.ConfigHandler.init(c)
+	h.CloudHandler = new(cloud.Handler)
+	h.CloudHandler.Init(c)
+	h.ConfigHandler = new(configHandler.Handler)
+	h.ConfigHandler.Init(c)
 	return nil
 }
 

@@ -72,11 +72,6 @@ func (rt ResourceType) String() (s string) {
 // ShareType denotes a type of share
 type ShareType int
 
-// Element is a commodity type wraps members of any interface (as per Owncloud's OCS V1 Spec)
-type Element struct {
-	Data interface{} `json:"element" xml:"element"`
-}
-
 // ShareData represents https://doc.owncloud.com/server/developer_manual/core/ocs-share-api.html#response-attributes-1
 type ShareData struct {
 	// TODO int?

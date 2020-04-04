@@ -20,22 +20,23 @@ package sharing
 
 import (
 	"net/http"
-	
+
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/apps/sharing/sharees"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/apps/sharing/shares"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/router"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/apps/sharing/shares"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/apps/sharing/sharees"
 )
 
 // Handler implements the ownCloud sharing API
 type Handler struct {
-	gatewayAddr string
-	SharesHandler       *shares.Handler
-	ShareesHandler       *sharees.Handler
+	gatewayAddr    string
+	SharesHandler  *shares.Handler
+	ShareesHandler *sharees.Handler
 }
 
+// Init initializes this and any contained handlers
 func (h *Handler) Init(c *config.Config) error {
 	h.gatewayAddr = c.GatewaySvc
 	h.SharesHandler = new(shares.Handler)
@@ -45,7 +46,7 @@ func (h *Handler) Init(c *config.Config) error {
 	}
 
 	return h.ShareesHandler.Init(c)
-	
+
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {

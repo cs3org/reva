@@ -18,12 +18,14 @@
 
 package config
 
-
+import (
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/data"
+)
 
 // Config holds the config options that need to be passed down to all ocs handlers
 type Config struct {
-	Prefix       string           `mapstructure:"prefix"`
-	Config       ConfigData       `mapstructure:"config"`
-	Capabilities CapabilitiesData `mapstructure:"capabilities"`
-	GatewaySvc   string           `mapstructure:"gatewaysvc"`
+	Prefix       string                `mapstructure:"prefix"`
+	Config       data.ConfigData       `mapstructure:"config"`
+	Capabilities data.CapabilitiesData `mapstructure:"capabilities"`
+	GatewaySvc   string                `mapstructure:"gatewaysvc"`
 }

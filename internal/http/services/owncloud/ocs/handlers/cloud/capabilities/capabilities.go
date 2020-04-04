@@ -16,33 +16,34 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocs
+package capabilities
 
 import (
 	"net/http"
 
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/data"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 )
 
-
-// CapabilitiesHandler renders the capability endpoint
-type CapabilitiesHandler struct {
-	c config.CapabilitiesData
+// Handler renders the capability endpoint
+type Handler struct {
+	c data.CapabilitiesData
 }
 
-func (h *CapabilitiesHandler) init(c *config.Config) {
+// Init initializes this and any contained handlers
+func (h *Handler) Init(c *config.Config) {
 	h.c = c.Capabilities
 
 	// capabilities
 	if h.c.Capabilities == nil {
-		h.c.Capabilities = &config.Capabilities{}
+		h.c.Capabilities = &data.Capabilities{}
 	}
 
 	// core
 
 	if h.c.Capabilities.Core == nil {
-		h.c.Capabilities.Core = &config.CapabilitiesCore{}
+		h.c.Capabilities.Core = &data.CapabilitiesCore{}
 	}
 	if h.c.Capabilities.Core.PollInterval == 0 {
 		h.c.Capabilities.Core.PollInterval = 60
@@ -52,7 +53,7 @@ func (h *CapabilitiesHandler) init(c *config.Config) {
 	}
 
 	if h.c.Capabilities.Core.Status == nil {
-		h.c.Capabilities.Core.Status = &config.Status{}
+		h.c.Capabilities.Core.Status = &data.Status{}
 	}
 	// h.c.Capabilities.Core.Status.Installed is boolean
 	// h.c.Capabilities.Core.Status.Maintenance is boolean
@@ -76,7 +77,7 @@ func (h *CapabilitiesHandler) init(c *config.Config) {
 	// checksums
 
 	if h.c.Capabilities.Checksums == nil {
-		h.c.Capabilities.Checksums = &config.CapabilitiesChecksums{}
+		h.c.Capabilities.Checksums = &data.CapabilitiesChecksums{}
 	}
 	if h.c.Capabilities.Checksums.SupportedTypes == nil {
 		h.c.Capabilities.Checksums.SupportedTypes = []string{"SHA256"}
@@ -88,7 +89,7 @@ func (h *CapabilitiesHandler) init(c *config.Config) {
 	// files
 
 	if h.c.Capabilities.Files == nil {
-		h.c.Capabilities.Files = &config.CapabilitiesFiles{}
+		h.c.Capabilities.Files = &data.CapabilitiesFiles{}
 	}
 
 	// h.c.Capabilities.Files.PrivateLinks is boolean
@@ -103,7 +104,7 @@ func (h *CapabilitiesHandler) init(c *config.Config) {
 	// dav
 
 	if h.c.Capabilities.Dav == nil {
-		h.c.Capabilities.Dav = &config.CapabilitiesDav{}
+		h.c.Capabilities.Dav = &data.CapabilitiesDav{}
 	}
 	if h.c.Capabilities.Dav.Chunking == "" {
 		h.c.Capabilities.Dav.Chunking = "1.0"
@@ -118,24 +119,24 @@ func (h *CapabilitiesHandler) init(c *config.Config) {
 	// sharing
 
 	if h.c.Capabilities.FilesSharing == nil {
-		h.c.Capabilities.FilesSharing = &config.CapabilitiesFilesSharing{}
+		h.c.Capabilities.FilesSharing = &data.CapabilitiesFilesSharing{}
 	}
 
 	// h.c.Capabilities.FilesSharing.APIEnabled is boolean
 
 	if h.c.Capabilities.FilesSharing.Public == nil {
-		h.c.Capabilities.FilesSharing.Public = &config.CapabilitiesFilesSharingPublic{}
+		h.c.Capabilities.FilesSharing.Public = &data.CapabilitiesFilesSharingPublic{}
 	}
 
 	// h.c.Capabilities.FilesSharing.Public.Enabled is boolean
 	h.c.Capabilities.FilesSharing.Public.Enabled = true
 
 	if h.c.Capabilities.FilesSharing.Public.Password == nil {
-		h.c.Capabilities.FilesSharing.Public.Password = &config.CapabilitiesFilesSharingPublicPassword{}
+		h.c.Capabilities.FilesSharing.Public.Password = &data.CapabilitiesFilesSharingPublicPassword{}
 	}
 
 	if h.c.Capabilities.FilesSharing.Public.Password.EnforcedFor == nil {
-		h.c.Capabilities.FilesSharing.Public.Password.EnforcedFor = &config.CapabilitiesFilesSharingPublicPasswordEnforcedFor{}
+		h.c.Capabilities.FilesSharing.Public.Password.EnforcedFor = &data.CapabilitiesFilesSharingPublicPasswordEnforcedFor{}
 	}
 
 	// h.c.Capabilities.FilesSharing.Public.Password.EnforcedFor.ReadOnly is boolean
@@ -145,7 +146,7 @@ func (h *CapabilitiesHandler) init(c *config.Config) {
 	// h.c.Capabilities.FilesSharing.Public.Password.Enforced is boolean
 
 	if h.c.Capabilities.FilesSharing.Public.ExpireDate == nil {
-		h.c.Capabilities.FilesSharing.Public.ExpireDate = &config.CapabilitiesFilesSharingPublicExpireDate{}
+		h.c.Capabilities.FilesSharing.Public.ExpireDate = &data.CapabilitiesFilesSharingPublicExpireDate{}
 	}
 	// h.c.Capabilities.FilesSharing.Public.ExpireDate.Enabled is boolean
 
@@ -156,7 +157,7 @@ func (h *CapabilitiesHandler) init(c *config.Config) {
 	// h.c.Capabilities.FilesSharing.Public.SupportsUploadOnly is boolean
 
 	if h.c.Capabilities.FilesSharing.User == nil {
-		h.c.Capabilities.FilesSharing.User = &config.CapabilitiesFilesSharingUser{}
+		h.c.Capabilities.FilesSharing.User = &data.CapabilitiesFilesSharingUser{}
 	}
 
 	// h.c.Capabilities.FilesSharing.User.SendMail is boolean
@@ -168,7 +169,7 @@ func (h *CapabilitiesHandler) init(c *config.Config) {
 	// h.c.Capabilities.FilesSharing.ShareWithMembershipGroupsOnly is boolean
 
 	if h.c.Capabilities.FilesSharing.UserEnumeration == nil {
-		h.c.Capabilities.FilesSharing.UserEnumeration = &config.CapabilitiesFilesSharingUserEnumeration{}
+		h.c.Capabilities.FilesSharing.UserEnumeration = &data.CapabilitiesFilesSharingUserEnumeration{}
 	}
 
 	// h.c.Capabilities.FilesSharing.UserEnumeration.Enabled is boolean
@@ -178,7 +179,7 @@ func (h *CapabilitiesHandler) init(c *config.Config) {
 		h.c.Capabilities.FilesSharing.DefaultPermissions = 31
 	}
 	if h.c.Capabilities.FilesSharing.Federation == nil {
-		h.c.Capabilities.FilesSharing.Federation = &config.CapabilitiesFilesSharingFederation{}
+		h.c.Capabilities.FilesSharing.Federation = &data.CapabilitiesFilesSharingFederation{}
 	}
 
 	// h.c.Capabilities.FilesSharing.Federation.Outgoing is boolean
@@ -191,7 +192,7 @@ func (h *CapabilitiesHandler) init(c *config.Config) {
 	// notifications
 
 	if h.c.Capabilities.Notifications == nil {
-		h.c.Capabilities.Notifications = &config.CapabilitiesNotifications{}
+		h.c.Capabilities.Notifications = &data.CapabilitiesNotifications{}
 	}
 	if h.c.Capabilities.Notifications.Endpoints == nil {
 		h.c.Capabilities.Notifications.Endpoints = []string{"list", "get", "delete"}
@@ -200,7 +201,7 @@ func (h *CapabilitiesHandler) init(c *config.Config) {
 	// version
 
 	if h.c.Version == nil {
-		h.c.Version = &config.Version{
+		h.c.Version = &data.Version{
 			// TODO get from build env
 			Major:   10,
 			Minor:   0,
@@ -213,7 +214,7 @@ func (h *CapabilitiesHandler) init(c *config.Config) {
 }
 
 // Handler renders the capabilities
-func (h *CapabilitiesHandler) Handler() http.Handler {
+func (h *Handler) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		response.WriteOCSSuccess(w, r, h.c)
 	})

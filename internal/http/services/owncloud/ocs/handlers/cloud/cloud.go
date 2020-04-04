@@ -16,32 +16,36 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocs
+package cloud
 
 import (
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/cloud/capabilities"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/cloud/user"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/cloud/users"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 )
 
-// CloudHandler holds references to UserHandler and CapabilitiesHandler
-type CloudHandler struct {
-	UserHandler         *UserHandler
-	UsersHandler        *UsersHandler
-	CapabilitiesHandler *CapabilitiesHandler
+// Handler holds references to UserHandler and CapabilitiesHandler
+type Handler struct {
+	UserHandler         *user.Handler
+	UsersHandler        *users.Handler
+	CapabilitiesHandler *capabilities.Handler
 }
 
-func (h *CloudHandler) init(c *config.Config) {
-	h.UserHandler = new(UserHandler)
-	h.UsersHandler = new(UsersHandler)
-	h.CapabilitiesHandler = new(CapabilitiesHandler)
-	h.CapabilitiesHandler.init(c)
+// Init initializes this and any contained handlers
+func (h *Handler) Init(c *config.Config) {
+	h.UserHandler = new(user.Handler)
+	h.UsersHandler = new(users.Handler)
+	h.CapabilitiesHandler = new(capabilities.Handler)
+	h.CapabilitiesHandler.Init(c)
 }
 
 // Handler routes the cloud endpoints
-func (h *CloudHandler) Handler() http.Handler {
+func (h *Handler) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var head string
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)

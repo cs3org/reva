@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"net/http"
+	"reflect"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -34,13 +35,68 @@ type Response struct {
 
 // Payload combines response metadata and data
 type Payload struct {
-	XMLName struct{}      `json:"-" xml:"ocs"`
-	Meta    *ResponseMeta `json:"meta" xml:"meta"`
-	Data    interface{}   `json:"data,omitempty" xml:"data,omitempty"`
+	XMLName struct{}    `json:"-" xml:"ocs"`
+	Meta    *Meta       `json:"meta" xml:"meta"`
+	Data    interface{} `json:"data,omitempty" xml:"data,omitempty"`
 }
 
-// ResponseMeta holds response metadata
-type ResponseMeta struct {
+var (
+	metaStartElement = xml.StartElement{Name: xml.Name{Local: "meta"}}
+	dataName         = xml.Name{Local: "data"}
+	elementName      = xml.Name{Local: "element"}
+)
+
+// MarshalXML handles ocs specific wrapping of array members in 'element' tags for the data
+func (p Payload) MarshalXML(e *xml.Encoder, start xml.StartElement) (err error) {
+	// first the easy part
+	// use ocs as the surrounding tag
+	start.Name = xml.Name{Local: "ocs"}
+	if err = e.EncodeToken(start); err != nil {
+		return
+	}
+
+	// encode the meta tag
+	if err = e.EncodeElement(p.Meta, metaStartElement); err != nil {
+		return
+	}
+
+	// this is how to wrap theo data elements in their own <element> tag
+	render := func(v reflect.Value) {
+		if err = e.EncodeToken(dataName); err != nil {
+			return
+		}
+		for i := 0; i < v.Len(); i++ {
+			if err = e.EncodeElement(v.Index(i).Interface(), xml.StartElement{Name: elementName}); err != nil {
+				return
+			}
+		}
+		if err = e.EncodeToken(xml.EndElement{Name: dataName}); err != nil {
+			return
+		}
+	}
+
+	// we need to use reflection to determine if p.Data is an array or a slice
+	rt := reflect.TypeOf(p.Data)
+	switch rt.Kind() {
+	case reflect.Slice:
+		render(reflect.ValueOf(p.Data))
+	case reflect.Array:
+		render(reflect.ValueOf(p.Data))
+	default:
+		if err = e.EncodeElement(p.Data, xml.StartElement{Name: dataName}); err != nil {
+			return
+		}
+	}
+
+	// write the closing <ocs> tag
+	if err = e.EncodeToken(xml.EndElement{Name: start.Name}); err != nil {
+		return
+	}
+	return nil
+}
+
+// Meta holds response metadata
+type Meta struct {
 	Status       string `json:"status" xml:"status"`
 	StatusCode   int    `json:"statuscode" xml:"statuscode"`
 	Message      string `json:"message" xml:"message"`
@@ -49,22 +105,22 @@ type ResponseMeta struct {
 }
 
 // MetaOK is the default ok response
-var MetaOK = &ResponseMeta{Status: "ok", StatusCode: 100, Message: "OK"}
+var MetaOK = &Meta{Status: "ok", StatusCode: 100, Message: "OK"}
 
 // MetaBadRequest is used for unknown errers
-var MetaBadRequest = &ResponseMeta{Status: "error", StatusCode: 400, Message: "Bad Request"}
+var MetaBadRequest = &Meta{Status: "error", StatusCode: 400, Message: "Bad Request"}
 
 // MetaServerError is returned on server errors
-var MetaServerError = &ResponseMeta{Status: "error", StatusCode: 996, Message: "Server Error"}
+var MetaServerError = &Meta{Status: "error", StatusCode: 996, Message: "Server Error"}
 
 // MetaUnauthorized is returned on unauthorized requests
-var MetaUnauthorized = &ResponseMeta{Status: "error", StatusCode: 997, Message: "Unauthorised"}
+var MetaUnauthorized = &Meta{Status: "error", StatusCode: 997, Message: "Unauthorised"}
 
 // MetaNotFound is returned when trying to access not existing resources
-var MetaNotFound = &ResponseMeta{Status: "error", StatusCode: 998, Message: "Not Found"}
+var MetaNotFound = &Meta{Status: "error", StatusCode: 998, Message: "Not Found"}
 
 // MetaUnknownError is used for unknown errers
-var MetaUnknownError = &ResponseMeta{Status: "error", StatusCode: 999, Message: "Unknown Error"}
+var MetaUnknownError = &Meta{Status: "error", StatusCode: 999, Message: "Unknown Error"}
 
 // WriteOCSSuccess handles writing successful ocs response data
 func WriteOCSSuccess(w http.ResponseWriter, r *http.Request, d interface{}) {
@@ -73,11 +129,11 @@ func WriteOCSSuccess(w http.ResponseWriter, r *http.Request, d interface{}) {
 
 // WriteOCSError handles writing error ocs responses
 func WriteOCSError(w http.ResponseWriter, r *http.Request, c int, m string, err error) {
-	WriteOCSData(w, r, &ResponseMeta{Status: "error", StatusCode: c, Message: m}, nil, err)
+	WriteOCSData(w, r, &Meta{Status: "error", StatusCode: c, Message: m}, nil, err)
 }
 
 // WriteOCSData handles writing ocs data in json and xml
-func WriteOCSData(w http.ResponseWriter, r *http.Request, m *ResponseMeta, d interface{}, err error) {
+func WriteOCSData(w http.ResponseWriter, r *http.Request, m *Meta, d interface{}, err error) {
 	WriteOCSResponse(w, r, &Response{
 		OCS: &Payload{
 			Meta: m,

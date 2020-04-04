@@ -22,15 +22,17 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/data"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 )
 
-// ConfigHandler renders the config endpoint
-type ConfigHandler struct {
-	c config.ConfigData
+// Handler renders the config endpoint
+type Handler struct {
+	c data.ConfigData
 }
 
-func (h *ConfigHandler) init(c *config.Config) {
+// Init initializes this and any contained handlers
+func (h *Handler) Init(c *config.Config) {
 	h.c = c.Config
 	// config
 	if h.c.Version == "" {
@@ -51,7 +53,7 @@ func (h *ConfigHandler) init(c *config.Config) {
 }
 
 // Handler renders the config
-func (h *ConfigHandler) Handler() http.Handler {
+func (h *Handler) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		response.WriteOCSSuccess(w, r, h.c)
 	})
