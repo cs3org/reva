@@ -160,14 +160,23 @@ func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, err
 		return nil, errors.New("error getting user data from context")
 	}
 
-	inviteToken, err := token.CreateToken(m.config.Expiration, contexUser.GetId())
-	if err != nil {
-		return nil, err
-	}
-
 	// Create mutex lock
 	m.Lock()
 	defer m.Unlock()
+
+	// Creating a unique token
+	var inviteToken *invitepb.InviteToken
+	for ; ; {
+		tmpInviteToken, err := token.CreateToken(m.config.Expiration, contexUser.GetId())
+		if err != nil {
+			return nil, err
+		}
+		_, ok = m.model.Invites[tmpInviteToken.GetToken()]
+		if !ok {
+			inviteToken = tmpInviteToken
+			break
+		}
+	}
 
 	// Store token data
 	m.model.Invites[inviteToken.GetToken()] = inviteToken
