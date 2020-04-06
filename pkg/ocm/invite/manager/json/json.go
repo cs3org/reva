@@ -21,30 +21,32 @@ package json
 import (
 	"context"
 	"encoding/json"
+	"io/ioutil"
+	"os"
+	"path"
+	"sync"
+	"time"
+
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/invite/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/invite"
 	"github.com/cs3org/reva/pkg/ocm/invite/manager/registry"
-	"github.com/cs3org/reva/pkg/ocm/invite/manager/token"
+	"github.com/cs3org/reva/pkg/ocm/invite/token"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-	"io/ioutil"
-	"os"
-	"path"
-	"sync"
-	"time"
 )
 
 type inviteModel struct {
 	file    string
-	Invites map[string]*invitepb.InviteToken `json:"invites"` // map[username]map[share_id]boolean
+	Invites map[string]*invitepb.InviteToken `json:"invites"`
 }
 
 type manager struct {
 	config     *config
-	sync.Mutex // concurrent access to the file and loaded
+	sync.Mutex // concurrent access to the file
 	model      *inviteModel
 }
 
@@ -67,7 +69,7 @@ func New(m map[string]interface{}) (invite.Manager, error) {
 	}
 
 	if config.Expiration == "" {
-		config.Expiration = token.EXPIRATION_TIME
+		config.Expiration = token.DefaultExpirationTime
 	}
 
 	// if file is not set we use temporary file
@@ -153,7 +155,12 @@ func (model *inviteModel) Save() error {
 
 func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, error) {
 
-	inviteToken, err := token.GenerateToken(m.config.Expiration, ctx)
+	contexUser, ok := user.ContextGetUser(ctx)
+	if !ok {
+		return nil, errors.New("error getting user data from context")
+	}
+
+	inviteToken, err := token.GenerateToken(m.config.Expiration, contexUser.GetId())
 	if err != nil {
 		return nil, err
 	}

@@ -16,46 +16,42 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package memory
+package token
 
 import (
-	"context"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/invite/v1beta1"
-	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
-	"github.com/cs3org/reva/pkg/ocm/invite"
-	"github.com/cs3org/reva/pkg/ocm/invite/manager/registry"
-	"github.com/cs3org/reva/pkg/ocm/invite/token"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/google/uuid"
+	"github.com/pkg/errors"
 )
 
-func init() {
-	registry.Register("memory", New)
-}
+// DefaultExpirationTime is the expiration time to be used when unspecified in the config.
+const DefaultExpirationTime = "24h"
 
-// New returns a new invite manager object.
-func New(m map[string]interface{}) (invite.Manager, error) {
-	mgr := new(manager)
-	return mgr, nil
-}
+// GenerateToken creates a InviteToken object for the userID indicated by userID.
+func GenerateToken(expiration string, userID *userpb.UserId) (*invitepb.InviteToken, error) {
 
-type manager struct {
-}
-
-func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, error) {
-
-	token, err := token.GenerateToken(token.ExpirationTime, ctx)
+	// Parse time of expiration
+	duration, err := time.ParseDuration(expiration)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "error parsing time of expiration")
 	}
 
-	return token, nil
-}
+	tokenID := uuid.New().String()
+	now := time.Now()
+	expirationTime := now.Add(duration)
 
-func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToken, originProvider *ocm.ProviderInfo) error {
-	return nil
-}
+	token := invitepb.InviteToken{
+		Token:  tokenID,
+		UserId: userID,
+		Expiration: &typesv1beta1.Timestamp{
+			Seconds: uint64(expirationTime.Unix()),
+			Nanos:   0,
+		},
+	}
 
-func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken, user *userpb.UserId, recipientProvider *ocm.ProviderInfo) error {
-	return nil
+	return &token, nil
 }
