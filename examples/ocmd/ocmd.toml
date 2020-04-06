@@ -13,6 +13,7 @@ userprovidersvc = "localhost:19000"
 usershareprovidersvc = "localhost:19000"
 publicshareprovidersvc = "localhost:19000"
 ocmshareprovidersvc = "localhost:19000"
+ocminvitemanagersvc = "localhost:19000"
 commit_share_to_storage_grant = false
 datagateway = "http://localhost:19001/data"
 transfer_shared_secret = "replace-me-with-a-transfer-secret" # for direct uploads
@@ -35,6 +36,9 @@ home_provider = "/"
 "123e4567-e89b-12d3-a456-426655440000" = "localhost:19000"
 
 [grpc.services.usershareprovider]
+driver = "memory"
+
+[grpc.services.ocminvitemanager]
 driver = "memory"
 
 [grpc.services.ocmshareprovider]

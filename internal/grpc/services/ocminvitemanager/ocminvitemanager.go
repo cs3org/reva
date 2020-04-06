@@ -21,6 +21,7 @@ package ocminvitemanager
 import (
 	"context"
 	"fmt"
+	"log"
 
 	invitepb "github.com/cs3org/go-cs3apis/cs3/invite/v1beta1"
 	"github.com/cs3org/reva/pkg/ocm/invite"
@@ -33,6 +34,7 @@ import (
 )
 
 func init() {
+	log.Println("################## init  invite########")
 	rgrpc.Register("ocminvitemanager", New)
 }
 
@@ -47,7 +49,9 @@ type service struct {
 }
 
 func getInviteManager(c *config) (invite.Manager, error) {
+	log.Println("################## init  getinviteM########")
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
+		log.Println("################## init  OK########")
 		return f(c.Drivers[c.Driver])
 	}
 	return nil, fmt.Errorf("driver not found: %s", c.Driver)
@@ -77,8 +81,11 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 // New creates a new OCM invite manager svc
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 
+	log.Println("################## init  1########")
 	c, err := parseConfig(m)
 	if err != nil {
+
+		log.Println("################## init  2########")
 		return nil, err
 	}
 
@@ -87,8 +94,11 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		c.Driver = "json"
 	}
 
+	log.Println("################## init  3########")
 	im, err := getInviteManager(c)
 	if err != nil {
+
+		log.Println("################## init  4########")
 		return nil, err
 	}
 
@@ -97,6 +107,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		im:   im,
 	}
 
+	log.Println("################## init  5########")
 	return service, nil
 }
 

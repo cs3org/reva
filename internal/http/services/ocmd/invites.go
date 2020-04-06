@@ -44,7 +44,6 @@ func (h *invitesHandler) init(c *Config) {
 
 func (h *invitesHandler) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		log := appctx.GetLogger(r.Context())
 		var head string
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
@@ -57,7 +56,6 @@ func (h *invitesHandler) Handler() http.Handler {
 			h.forwardInvite(w, r)
 		case "":
 			h.generateInviteToken(w, r)
-
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -71,6 +69,8 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
+	log.Info().Msg("HOHOHOHOHO**********")
+
 	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting invite grpc client on addr: %v", h.gatewayAddr), err)
@@ -79,11 +79,11 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	expireTime := time.Now()
-	contextUser, ok := userPkg.ContextGetUser(ctx)
 
+	contextUser, _ := userPkg.ContextGetUser(ctx)
 	token := &invitepb.InviteToken{
-		Token:  r.token,
-		UserId: ccontextUser,
+		Token:  "",
+		UserId: contextUser.GetId(),
 		Expiration: &types.Timestamp{
 			Nanos:   uint32(expireTime.UnixNano()),
 			Seconds: uint64(expireTime.Unix()),
