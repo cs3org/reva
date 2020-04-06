@@ -42,12 +42,12 @@ func init() {
 }
 
 // New returns a new memory manager.
-func New(c map[string]interface{}) (share.Manager, error) {
+func New(m map[string]interface{}) (share.Manager, error) {
 
-	m := make(map[string]map[string]ocm.ShareState)
+	state := make(map[string]map[string]ocm.ShareState)
 	return &mgr{
 		shares: sync.Map{},
-		state:  m,
+		state:  state,
 	}, nil
 }
 

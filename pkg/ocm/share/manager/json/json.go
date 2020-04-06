@@ -125,7 +125,7 @@ type config struct {
 
 type mgr struct {
 	c          *config
-	sync.Mutex // concurrent access to the file and loaded
+	sync.Mutex // concurrent access to the file
 	model      *shareModel
 }
 

@@ -20,25 +20,45 @@ package memory
 
 import (
 	"context"
+	"sync"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/invite/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	"github.com/cs3org/reva/pkg/ocm/invite"
 	"github.com/cs3org/reva/pkg/ocm/invite/manager/registry"
+	"github.com/cs3org/reva/pkg/ocm/invite/token"
+	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
 )
 
 func init() {
 	registry.Register("memory", New)
 }
 
-// New returns a new invite manager object.
+// New returns a new invite manager.
 func New(m map[string]interface{}) (invite.Manager, error) {
-	mgr := new(manager)
-	return mgr, nil
+	c := &config{}
+	if err := mapstructure.Decode(m, c); err != nil {
+		err = errors.Wrap(err, "error creating a new manager")
+		return nil, err
+	}
+	if c.Expiration == "" {
+		c.Expiration = token.DefaultExpirationTime
+	}
+
+	return &manager{
+		invites: sync.Map{},
+	}, nil
 }
 
 type manager struct {
+	invites sync.Map
+	config  *config
+}
+
+type config struct {
+	Expiration string `mapstructure:"expiration"`
 }
 
 func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, error) {
