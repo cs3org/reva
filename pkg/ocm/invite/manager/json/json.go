@@ -158,7 +158,7 @@ func (model *inviteModel) Save() error {
 	return nil
 }
 
-func (m *manager) GenerateToken(ctx context.Context, user *userpb.UserId) (*invitepb.InviteToken, error) {
+func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, error) {
 
 	logger := appctx.GetLogger(ctx)
 
