@@ -24,29 +24,22 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/invite/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
-	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/invite"
 	"github.com/cs3org/reva/pkg/ocm/invite/manager/registry"
-	userPkg "github.com/cs3org/reva/pkg/user"
-	"github.com/google/uuid"
+	"github.com/cs3org/reva/pkg/ocm/invite/manager/token"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"io/ioutil"
-	"math/rand"
 	"os"
 	"path"
 	"sync"
 	"time"
 )
 
-const EXPIRATION_TIME = "20h10m10s"
-const TOKEN_LENGTH int = 64
-
 type inviteModel struct {
 	file    string
-	Invites map[string]invitepb.InviteToken `json:"invites"` // map[username]map[share_id]boolean
+	Invites map[string]*invitepb.InviteToken `json:"invites"` // map[username]map[share_id]boolean
 }
 
 type manager struct {
@@ -74,7 +67,7 @@ func New(m map[string]interface{}) (invite.Manager, error) {
 	}
 
 	if config.Expiration == "" {
-		config.Expiration = EXPIRATION_TIME
+		config.Expiration = token.EXPIRATION_TIME
 	}
 
 	// if file is not set we use temporary file
@@ -160,37 +153,9 @@ func (model *inviteModel) Save() error {
 
 func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, error) {
 
-	logger := appctx.GetLogger(ctx)
-
-	// Parse time duration
-	duration, err := time.ParseDuration(m.config.Expiration)
+	inviteToken, err := token.GenerateToken(m.config.Expiration, ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, "error parse duration")
-	}
-
-	contexUser, ok := userPkg.ContextGetUser(ctx)
-	if ok != false {
-		return nil, errors.New("error get user data from context")
-	}
-
-	// Generate token structure
-	// tokenId := generateRandomString(TOKEN_LENGTH)
-	tokenId := generateUID()
-	now := time.Now()
-	expiration := now.Add(duration)
-
-	logger.Debug().Str("tokenId", tokenId).Msg("GenerateToken")
-
-	token := invitepb.InviteToken{
-		Token: tokenId,
-		UserId: &userpb.UserId{
-			Idp:      contexUser.GetId().GetIdp(),
-			OpaqueId: contexUser.GetId().GetOpaqueId(),
-		},
-		Expiration: &typesv1beta1.Timestamp{
-			Seconds: uint64(expiration.Unix()),
-			Nanos:   0,
-		},
+		return nil, err
 	}
 
 	// Create mutex lock
@@ -198,13 +163,13 @@ func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, err
 	defer m.Unlock()
 
 	// Store token data
-	m.model.Invites[tokenId] = token
+	m.model.Invites[inviteToken.GetToken()] = inviteToken
 	if err := m.model.Save(); err != nil {
 		err = errors.Wrap(err, "error saving model")
 		return nil, err
 	}
 
-	return &token, nil
+	return inviteToken, nil
 }
 
 func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToken, originProvider *ocm.ProviderInfo) error {
@@ -232,19 +197,6 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 	}
 
 	return errtypes.NotFound(invite.Token)
-}
-
-func generateUID() string {
-	return uuid.New().String()
-}
-
-func generateRandomString(n int) string {
-	var l = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = l[rand.Intn(len(l))]
-	}
-	return string(b)
 }
 
 func checkTokenIsValid(m *manager, token *invitepb.InviteToken) bool {

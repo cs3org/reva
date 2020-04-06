@@ -20,6 +20,7 @@ package memory
 
 import (
 	"context"
+	"github.com/cs3org/reva/pkg/ocm/invite/manager/token"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/invite/v1beta1"
@@ -42,7 +43,12 @@ type manager struct {
 }
 
 func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, error) {
-	token := new(invitepb.InviteToken)
+
+	token, err := token.GenerateToken(token.EXPIRATION_TIME, ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	return token, nil
 }
 
