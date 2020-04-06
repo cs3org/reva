@@ -19,6 +19,7 @@
 package ocdav
 
 import (
+	"bytes"
 	"context"
 	"encoding/xml"
 	"fmt"
@@ -168,6 +169,12 @@ func (s *svc) formatPropfind(ctx context.Context, pf *propfindXML, mds []*provid
 	return msg, nil
 }
 
+func (s *svc) xmlEscaped(val string) string {
+	buf := new(bytes.Buffer)
+	xml.Escape(buf, []byte(val))
+	return buf.String()
+}
+
 func (s *svc) newProp(key, val string) *propertyXML {
 	return &propertyXML{
 		XMLName:  xml.Name{Space: "", Local: key},
@@ -304,7 +311,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:size", size))
 				case "owner-id": // phoenix only
 					if md.Owner != nil && md.Owner.OpaqueId != "" {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-id", md.Owner.OpaqueId))
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-id", s.xmlEscaped(md.Owner.OpaqueId)))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:owner-id", ""))
 					}
