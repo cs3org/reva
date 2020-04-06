@@ -19,9 +19,18 @@
 package ocmd
 
 import (
+	"fmt"
 	"net/http"
+	"time"
 
+	invitepb "github.com/cs3org/go-cs3apis/cs3/invite/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	userPkg "github.com/cs3org/reva/pkg/user"
+
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 )
 
@@ -59,6 +68,54 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
+	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting invite grpc client on addr: %v", h.gatewayAddr), err)
+		log.Err(err).Msg(fmt.Sprintf("error getting invite grpc client on addr: %v", h.gatewayAddr))
+		return
+	}
+
+	expireTime := time.Now()
+	contextUser, ok := userPkg.ContextGetUser(ctx)
+
+	token := &invitepb.InviteToken{
+		Token:  r.token,
+		UserId: ccontextUser,
+		Expiration: &types.Timestamp{
+			Nanos:   uint32(expireTime.UnixNano()),
+			Seconds: uint64(expireTime.Unix()),
+		},
+	}
+
+	forwardInviteReq := &invitepb.ForwardInviteRequest{
+		InviteToken: token,
+		OriginSystemProvider: &ocm.ProviderInfo{
+			Domain:         "",
+			ApiVersion:     "",
+			ApiEndpoint:    "",
+			WebdavEndpoint: "",
+		},
+	}
+
+	forwardInviteResponse, err := gatewayClient.ForwardInvite(ctx, forwardInviteReq)
+
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, "error sending a grpc forward invite request", err)
+		return
+	}
+	if forwardInviteResponse.Status.Code != rpc.Code_CODE_OK {
+		if forwardInviteResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			WriteError(w, r, APIErrorNotFound, "not found", nil)
+			return
+		}
+		WriteError(w, r, APIErrorServerError, "grpc forward invite request failed", err)
+		return
+	}
+
+	log.Info().Msg("Invited forwarded.")
 }
 
 func (h *invitesHandler) generateInviteToken(w http.ResponseWriter, r *http.Request) {
