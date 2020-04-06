@@ -160,7 +160,7 @@ func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, err
 		return nil, errors.New("error getting user data from context")
 	}
 
-	inviteToken, err := token.GenerateToken(m.config.Expiration, contexUser.GetId())
+	inviteToken, err := token.CreateToken(m.config.Expiration, contexUser.GetId())
 	if err != nil {
 		return nil, err
 	}
@@ -209,16 +209,12 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 func checkTokenIsValid(m *manager, token *invitepb.InviteToken) bool {
 
 	inviteToken, ok := m.model.Invites[token.Token]
-	if ok == false {
+	if !ok {
 		return false
 	}
 
 	now := uint64(time.Now().Unix())
-	if now > inviteToken.Expiration.Seconds {
-		return false
-	}
-
-	return true
+	return now <= inviteToken.Expiration.Seconds
 }
 
 func processTokenWithProvider(m *manager, token *invitepb.InviteToken, provider *ocm.ProviderInfo) {

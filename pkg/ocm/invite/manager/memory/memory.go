@@ -26,7 +26,6 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	"github.com/cs3org/reva/pkg/ocm/invite"
 	"github.com/cs3org/reva/pkg/ocm/invite/manager/registry"
-	"github.com/cs3org/reva/pkg/ocm/invite/token"
 )
 
 func init() {
@@ -43,13 +42,7 @@ type manager struct {
 }
 
 func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, error) {
-
-	token, err := token.GenerateToken(token.ExpirationTime, ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return token, nil
+	return nil, nil
 }
 
 func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToken, originProvider *ocm.ProviderInfo) error {

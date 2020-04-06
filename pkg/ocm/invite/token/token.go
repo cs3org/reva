@@ -31,8 +31,8 @@ import (
 // DefaultExpirationTime is the expiration time to be used when unspecified in the config.
 const DefaultExpirationTime = "24h"
 
-// GenerateToken creates a InviteToken object for the userID indicated by userID.
-func GenerateToken(expiration string, userID *userpb.UserId) (*invitepb.InviteToken, error) {
+// CreateToken creates a InviteToken object for the userID indicated by userID.
+func CreateToken(expiration string, userID *userpb.UserId) (*invitepb.InviteToken, error) {
 
 	// Parse time of expiration
 	duration, err := time.ParseDuration(expiration)
