@@ -20,6 +20,7 @@ package memory
 
 import (
 	"context"
+	"github.com/cs3org/reva/pkg/user"
 	"sync"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -62,7 +63,20 @@ type config struct {
 }
 
 func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, error) {
-	return nil, nil
+
+	ctxUser, ok := user.ContextGetUser(ctx)
+	if !ok {
+		return nil, errors.New("error getting user data from context")
+	}
+
+	inviteToken, err := token.CreateToken(m.config.Expiration, ctxUser.GetId())
+	if err != nil {
+		return nil, errors.Wrap(err, "error create token")
+	}
+
+	m.invites.Store(inviteToken.GetToken(), inviteToken)
+
+	return inviteToken, nil
 }
 
 func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToken, originProvider *ocm.ProviderInfo) error {
