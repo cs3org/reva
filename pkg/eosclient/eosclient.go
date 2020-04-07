@@ -974,6 +974,7 @@ type DeletedEntry struct {
 	IsDir         bool
 }
 
+// QuotaInfo reports the available bytes and inodes for a particular user.
 type QuotaInfo struct {
 	AvailableBytes, UsedBytes   int
 	AvailableInodes, UsedInodes int
