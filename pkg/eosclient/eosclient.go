@@ -470,16 +470,16 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, username, path string) (
 }
 
 // GetQuota gets the quota of a user on the quota node defined by path
-func (c *Client) GetQuota(ctx context.Context, username, path string) (int, int, error) {
+func (c *Client) GetQuota(ctx context.Context, username, path string) (*QuotaInfo, error) {
 	// setting of the sys.acl is only possible from root user
 	unixUser, err := c.getUnixUser(rootUser)
 	if err != nil {
-		return 0, 0, err
+		return nil, err
 	}
 	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "quota", "ls", "-u", username, "-m")
 	stdout, _, err := c.executeEOS(ctx, cmd)
 	if err != nil {
-		return 0, 0, err
+		return nil, err
 	}
 	return c.parseQuota(path, stdout)
 }
@@ -773,7 +773,7 @@ func (c Client) parseQuotaLine(line string) map[string]string {
 	m := getMap(partsBySpace)
 	return m
 }
-func (c *Client) parseQuota(path, raw string) (int, int, error) {
+func (c *Client) parseQuota(path, raw string) (*QuotaInfo, error) {
 	rawLines := strings.Split(raw, "\n")
 	for _, rl := range rawLines {
 		if rl == "" {
@@ -789,10 +789,22 @@ func (c *Client) parseQuota(path, raw string) (int, int, error) {
 			usedBytesString := m["usedlogicalbytes"]
 			maxBytes, _ := strconv.ParseInt(maxBytesString, 10, 64)
 			usedBytes, _ := strconv.ParseInt(usedBytesString, 10, 64)
-			return int(maxBytes), int(usedBytes), nil
+
+			maxInodesString := m["maxfiles"]
+			usedInodesString := m["usedfiles"]
+			maxInodes, _ := strconv.ParseInt(maxInodesString, 10, 64)
+			usedInodes, _ := strconv.ParseInt(usedInodesString, 10, 64)
+
+			qi := &QuotaInfo{
+				AvailableBytes:  int(maxBytes),
+				UsedBytes:       int(usedBytes),
+				AvailableInodes: int(maxInodes),
+				UsedInodes:      int(usedInodes),
+			}
+			return qi, nil
 		}
 	}
-	return 0, 0, nil
+	return &QuotaInfo{}, nil
 }
 
 // TODO(labkode): better API to access extended attributes.
@@ -960,4 +972,9 @@ type DeletedEntry struct {
 	Size          uint64
 	DeletionMTime uint64
 	IsDir         bool
+}
+
+type QuotaInfo struct {
+	AvailableBytes, UsedBytes   int
+	AvailableInodes, UsedInodes int
 }
