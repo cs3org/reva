@@ -198,12 +198,13 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 		"recipient_provider": {contexUser.GetId().GetIdp()},
 	}
 
-	_, err := http.PostForm(originProvider.GetApiEndpoint(), requestBody)
+	resp, err := http.PostForm(originProvider.GetApiEndpoint(), requestBody)
 	if err != nil {
 		err = errors.Wrap(err, "json: error sending post request")
 		return err
 	}
 
+	resp.Body.Close()
 	return nil
 }
 
