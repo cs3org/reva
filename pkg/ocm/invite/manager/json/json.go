@@ -234,6 +234,7 @@ func getTokenIfValid(m *manager, token *invitepb.InviteToken) (*invitepb.InviteT
 	if !ok {
 		return nil, errors.New("json: invalid token")
 	}
+
 	if uint64(time.Now().Unix()) <= inviteToken.Expiration.Seconds {
 		return nil, errors.New("json: token expired")
 	}

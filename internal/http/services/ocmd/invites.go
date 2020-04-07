@@ -134,4 +134,22 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
+	// ctx := r.Context()
+	// log := appctx.GetLogger(ctx)
+	//
+	// gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	// if err != nil {
+	// 	WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting storage grpc client on addr: %v", h.gatewayAddr), err)
+	// 	return
+	// }
+	//
+	// token, userID, recipient_provider := r.FormValue("userID"), r.FormValue("userID"), r.FormValue("recipient_provider")
+	// if token == "" || userID == "" || recipient_provider == "" {
+	// 	WriteError(w, r, APIErrorInvalidParameter, "missing parameters in request", nil)
+	// 	return
+	// }
+
+	// acceptInviteRequest := &invitepb.AcceptInviteRequest{
+	// 	invitepb.InviteToken
+	// }
 }

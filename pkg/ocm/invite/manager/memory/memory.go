@@ -121,11 +121,12 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 func getTokenIfValid(m *manager, token *invitepb.InviteToken) (*invitepb.InviteToken, error) {
 	tokenInterface, ok := m.Invites.Load(token.GetToken())
 	if !ok {
-		return nil, errors.New("json: invalid token")
+		return nil, errors.New("memory: invalid token")
 	}
+
 	inviteToken := tokenInterface.(*invitepb.InviteToken)
 	if uint64(time.Now().Unix()) <= inviteToken.Expiration.Seconds {
-		return nil, errors.New("json: token expired")
+		return nil, errors.New("memory: token expired")
 	}
 	return inviteToken, nil
 }
