@@ -21,7 +21,10 @@ package json
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
+	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"sync"
@@ -30,7 +33,6 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/invite/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
-	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/invite"
 	"github.com/cs3org/reva/pkg/ocm/invite/manager/registry"
 	"github.com/cs3org/reva/pkg/ocm/invite/token"
@@ -40,8 +42,9 @@ import (
 )
 
 type inviteModel struct {
-	file    string
-	Invites map[string]*invitepb.InviteToken `json:"invites"`
+	file          string
+	Invites       map[string]*invitepb.InviteToken `json:"invites"`
+	AcceptedUsers map[string][]*userpb.UserId      `json:"accepted_users"`
 }
 
 type manager struct {
@@ -85,7 +88,7 @@ func New(m map[string]interface{}) (invite.Manager, error) {
 	// load or create file
 	model, err := loadOrCreate(config.File)
 	if err != nil {
-		err = errors.Wrap(err, "error loading the file containing the shares")
+		err = errors.Wrap(err, "error loading the file containing the invites")
 		return nil, err
 	}
 
@@ -155,10 +158,7 @@ func (model *inviteModel) Save() error {
 
 func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, error) {
 
-	contexUser, ok := user.ContextGetUser(ctx)
-	if !ok {
-		return nil, errors.New("error getting user data from context")
-	}
+	contexUser := user.ContextMustGetUser(ctx)
 
 	// Create mutex lock
 	m.Lock()
@@ -166,12 +166,12 @@ func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, err
 
 	// Creating a unique token
 	var inviteToken *invitepb.InviteToken
-	for ; ; {
+	for {
 		tmpInviteToken, err := token.CreateToken(m.config.Expiration, contexUser.GetId())
 		if err != nil {
 			return nil, err
 		}
-		_, ok = m.model.Invites[tmpInviteToken.GetToken()]
+		_, ok := m.model.Invites[tmpInviteToken.GetToken()]
 		if !ok {
 			inviteToken = tmpInviteToken
 			break
@@ -190,42 +190,58 @@ func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, err
 
 func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToken, originProvider *ocm.ProviderInfo) error {
 
+	contexUser := user.ContextMustGetUser(ctx)
 	// Create mutex lock
 	m.Lock()
 	defer m.Unlock()
 
-	if checkTokenIsValid(m, invite) {
-		processTokenWithProvider(m, invite, originProvider)
-		return nil
+	requestBody := url.Values{
+		"token":              {invite.GetToken()},
+		"userID":             {contexUser.GetId().GetOpaqueId()},
+		"sender_provider":    {originProvider.GetDomain()},
+		"recipient_provider": {contexUser.GetId().GetIdp()},
 	}
 
-	return errtypes.NotFound(invite.Token)
+	_, err := http.PostForm(originProvider.GetApiEndpoint(), requestBody)
+	if err != nil {
+		err = errors.Wrap(err, "json: error sending post request")
+		return err
+	}
+
+	return nil
 }
 
-func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken, user *userpb.UserId, recipientProvider *ocm.ProviderInfo) error {
+func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken, userID *userpb.UserId) error {
 
 	// Create mutex lock
 	m.Lock()
 	defer m.Unlock()
 
-	if checkTokenIsValid(m, invite) {
-		return nil
+	if err := checkTokenIsValid(m, invite); err != nil {
+		return err
 	}
 
-	return errtypes.NotFound(invite.Token)
+	// Store token data
+	userKey := generateKey(invite.GetUserId())
+	m.model.AcceptedUsers[userKey] = append(m.model.AcceptedUsers[userKey], userID)
+	if err := m.model.Save(); err != nil {
+		err = errors.Wrap(err, "json: error saving model")
+		return err
+	}
+	return nil
 }
 
-func checkTokenIsValid(m *manager, token *invitepb.InviteToken) bool {
-
-	inviteToken, ok := m.model.Invites[token.Token]
+func checkTokenIsValid(m *manager, token *invitepb.InviteToken) error {
+	inviteToken, ok := m.model.Invites[token.GetToken()]
 	if !ok {
-		return false
+		return errors.New("json: invalid token")
 	}
-
-	now := uint64(time.Now().Unix())
-	return now <= inviteToken.Expiration.Seconds
+	if uint64(time.Now().Unix()) <= inviteToken.Expiration.Seconds {
+		return errors.New("json: token expired")
+	}
+	return nil
 }
 
-func processTokenWithProvider(m *manager, token *invitepb.InviteToken, provider *ocm.ProviderInfo) {
-	// ToDo: Implements process code
+func generateKey(user *userpb.UserId) string {
+	return fmt.Sprintf("%s_%s", user.GetOpaqueId(), user.GetIdp())
 }
