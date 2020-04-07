@@ -30,6 +30,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/invite/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/ocm/invite"
 	"github.com/cs3org/reva/pkg/ocm/invite/manager/registry"
 	"github.com/cs3org/reva/pkg/ocm/invite/token"
@@ -81,6 +82,7 @@ func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, err
 }
 
 func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToken, originProvider *ocm.ProviderInfo) error {
+
 	contexUser := user.ContextMustGetUser(ctx)
 	requestBody := url.Values{
 		"token":              {invite.GetToken()},
@@ -96,6 +98,10 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 	}
 
 	resp.Body.Close()
+
+	log := appctx.GetLogger(ctx)
+
+	log.Info().Msg("ocm/invite/manager/memory/memory")
 	return nil
 }
 

@@ -19,6 +19,8 @@
 package ocmd
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -66,11 +68,30 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
+	type Request struct {
+		Token        string
+		ProviderInfo string
+	}
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	log.Info().Msg("HOHOHOHOHO**********")
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(r.Body)
+	body := buf.String()
+	log.Info().Msg("ocmd/invites" + body)
 
+	var req Request
+
+	// Try to decode the request body into the struct. If there is an error,
+	// respond to the client with the error message and a 400 status code.
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		log.Info().Msg("ERROR" + err.Error())
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	log.Info().Msg("Token " + req.Token)
 	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting invite grpc client on addr: %v", h.gatewayAddr), err)
@@ -82,7 +103,7 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 
 	contextUser, _ := userPkg.ContextGetUser(ctx)
 	token := &invitepb.InviteToken{
-		Token:  "",
+		Token:  "blbl",
 		UserId: contextUser.GetId(),
 		Expiration: &types.Timestamp{
 			Nanos:   uint32(expireTime.UnixNano()),
@@ -93,7 +114,7 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 	forwardInviteReq := &invitepb.ForwardInviteRequest{
 		InviteToken: token,
 		OriginSystemProvider: &ocm.ProviderInfo{
-			Domain:         "",
+			Domain:         "domain",
 			ApiVersion:     "",
 			ApiEndpoint:    "",
 			WebdavEndpoint: "",
@@ -101,7 +122,7 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	forwardInviteResponse, err := gatewayClient.ForwardInvite(ctx, forwardInviteReq)
-
+	log.Info().Msg("Efter forwardInviteResponse.")
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error sending a grpc forward invite request", err)
 		return

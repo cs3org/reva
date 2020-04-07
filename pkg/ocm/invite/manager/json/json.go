@@ -33,6 +33,8 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/invite/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/ocm/invite"
 	"github.com/cs3org/reva/pkg/ocm/invite/manager/registry"
 	"github.com/cs3org/reva/pkg/ocm/invite/token"
@@ -209,7 +211,9 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 }
 
 func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken, userID *userpb.UserId) error {
+	log := appctx.GetLogger(ctx)
 
+	log.Info().Msg("ocm/invite/manager/json/json")
 	// Create mutex lock
 	m.Lock()
 	defer m.Unlock()

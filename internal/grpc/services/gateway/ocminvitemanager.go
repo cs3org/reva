@@ -48,7 +48,7 @@ func (s *svc) ForwardInvite(ctx context.Context, req *invitepb.ForwardInviteRequ
 
 	log := appctx.GetLogger(ctx)
 
-	log.Debug().Str("ocminvitemanager", fmt.Sprintf("blabla")).Msg("ocminvitemanager!")
+	log.Debug().Str("ocminvitemanager", fmt.Sprintf("blabla")).Msg("grpc/gateway/ocminvitemanager!" + string(req.InviteToken.Token) + string(req.OriginSystemProvider.Domain))
 	c, err := pool.GetOCMInviteManagerClient(s.c.OCMInviteManagerEndpoint)
 	if err != nil {
 		log.Debug().Str("ocminvitemanager", fmt.Sprintf("blabla")).Msg("ocminvitemanagerERROR!")

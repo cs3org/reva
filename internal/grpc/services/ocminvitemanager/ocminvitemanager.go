@@ -125,6 +125,7 @@ func (s *service) GenerateInviteToken(ctx context.Context, req *invitepb.Generat
 	}, nil
 }
 
+<<<<<<< HEAD
 func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInviteRequest) (*invitepb.ForwardInviteResponse, error) {
 	err := s.im.ForwardInvite(ctx, req.InviteToken, req.OriginSystemProvider)
 	if err != nil {
@@ -136,6 +137,26 @@ func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInvite
 	return &invitepb.ForwardInviteResponse{
 		Status: status.NewOK(ctx),
 	}, nil
+=======
+func (s *service) ForwardInvite(ctx context.Context, req *ocminvite.ForwardInviteRequest) (*ocminvite.ForwardInviteResponse, error) {
+	//Not yet implemented
+	log := appctx.GetLogger(ctx)
+	log.Info().Msg("grpc/ocminvitemanager/ForwardInviteManager**********")
+
+	token := req.InviteToken
+	originSystemProvider := req.OriginSystemProvider
+	err := s.im.ForwardInvite(ctx, token, originSystemProvider)
+	if err != nil {
+		return &ocminvite.ForwardInviteResponse{
+			Status: status.NewInternal(ctx, err, "error creating share"),
+		}, nil
+	}
+
+	res := &ocminvite.ForwardInviteResponse{
+		Status: status.NewOK(ctx),
+	}
+	return res, nil
+>>>>>>> WIP 2
 }
 
 func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRequest) (*invitepb.AcceptInviteResponse, error) {
