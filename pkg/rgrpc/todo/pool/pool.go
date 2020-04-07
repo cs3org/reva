@@ -30,6 +30,7 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	ocmauthorizer "" //TODO
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storageregistry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 
@@ -44,6 +45,7 @@ var authRegistries = map[string]authregistry.RegistryAPIClient{}
 var userShareProviders = map[string]collaboration.CollaborationAPIClient{}
 var ocmShareProviders = map[string]ocm.OcmAPIClient{}
 var ocmInviteManagers = map[string]invitepb.InviteAPIClient{}
+var ocmAuthorizeProviders = map[string]ocmauthorizer.InviteAPIClient{}
 var publicShareProviders = map[string]link.LinkAPIClient{}
 var preferencesProviders = map[string]preferences.PreferencesAPIClient{}
 var appRegistries = map[string]appregistry.RegistryAPIClient{}
@@ -269,4 +271,19 @@ func GetStorageRegistryClient(endpoint string) (storageregistry.RegistryAPIClien
 	storageRegistries[endpoint] = storageregistry.NewRegistryAPIClient(conn)
 
 	return storageRegistries[endpoint], nil
+}
+
+func GetOCMAuthorizerProviderClient(endpoint string) (invitepb.InviteAPIClient, error) {
+	if val, ok := ocmAuthorizeProviders[endpoint]; ok {
+		return val, nil
+	}
+
+	conn, err := NewConn(endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	ocmAuthorizeProviders[endpoint] = invitepb.NewInviteAPIClient(conn)
+
+	return ocmAuthorizeProviders[endpoint], nil
 }
