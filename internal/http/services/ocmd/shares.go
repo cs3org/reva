@@ -213,8 +213,6 @@ func (h *sharesHandler) getShare(w http.ResponseWriter, r *http.Request, shareID
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	log.Debug().Str("getShare", fmt.Sprintf("blabla")).Msg("here!")
-
 	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting storage grpc client on addr: %v", h.gatewayAddr), err)
@@ -240,7 +238,7 @@ func (h *sharesHandler) getShare(w http.ResponseWriter, r *http.Request, shareID
 		log.Err(err).Msg("error sending a grpc get ocm share request.")
 		return
 	}
-	log.Debug().Str("ocmShareResponse", fmt.Sprintf("%+v", ocmShareResponse)).Msg("getShareeeee")
+	log.Debug().Str("ocmShareResponse", fmt.Sprintf("%+v", ocmShareResponse)).Msg("getShare")
 
 	share := ocmShareResponse.GetShare()
 	if share == nil {
@@ -272,10 +270,6 @@ func (h *sharesHandler) listAllShares(w http.ResponseWriter, r *http.Request) {
 	// TODO Implement pagination.
 	// TODO Implement response with HAL schemating
 	ctx := r.Context()
-
-	log := appctx.GetLogger(ctx)
-
-	log.Debug().Str("listAllShared", fmt.Sprintf("%+v")).Msg("!!!!!!!!!!!!!!!!!!!!!!!!")
 
 	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {

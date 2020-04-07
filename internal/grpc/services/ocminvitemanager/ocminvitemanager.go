@@ -21,7 +21,6 @@ package ocminvitemanager
 import (
 	"context"
 	"fmt"
-	"log"
 
 	invitepb "github.com/cs3org/go-cs3apis/cs3/invite/v1beta1"
 	"github.com/cs3org/reva/pkg/ocm/invite"
@@ -34,7 +33,6 @@ import (
 )
 
 func init() {
-	log.Println("################## init  invite########")
 	rgrpc.Register("ocminvitemanager", New)
 }
 
@@ -49,9 +47,7 @@ type service struct {
 }
 
 func getInviteManager(c *config) (invite.Manager, error) {
-	log.Println("################## init  getinviteM########")
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		log.Println("################## init  OK########")
 		return f(c.Drivers[c.Driver])
 	}
 	return nil, fmt.Errorf("driver not found: %s", c.Driver)
@@ -81,11 +77,8 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 // New creates a new OCM invite manager svc
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 
-	log.Println("################## init  1########")
 	c, err := parseConfig(m)
 	if err != nil {
-
-		log.Println("################## init  2########")
 		return nil, err
 	}
 
@@ -94,11 +87,8 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		c.Driver = "json"
 	}
 
-	log.Println("################## init  3########")
 	im, err := getInviteManager(c)
 	if err != nil {
-
-		log.Println("################## init  4########")
 		return nil, err
 	}
 
@@ -106,8 +96,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		conf: c,
 		im:   im,
 	}
-
-	log.Println("################## init  5########")
 	return service, nil
 }
 
@@ -125,7 +113,6 @@ func (s *service) GenerateInviteToken(ctx context.Context, req *invitepb.Generat
 	}, nil
 }
 
-<<<<<<< HEAD
 func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInviteRequest) (*invitepb.ForwardInviteResponse, error) {
 	err := s.im.ForwardInvite(ctx, req.InviteToken, req.OriginSystemProvider)
 	if err != nil {
@@ -137,26 +124,6 @@ func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInvite
 	return &invitepb.ForwardInviteResponse{
 		Status: status.NewOK(ctx),
 	}, nil
-=======
-func (s *service) ForwardInvite(ctx context.Context, req *ocminvite.ForwardInviteRequest) (*ocminvite.ForwardInviteResponse, error) {
-	//Not yet implemented
-	log := appctx.GetLogger(ctx)
-	log.Info().Msg("grpc/ocminvitemanager/ForwardInviteManager**********")
-
-	token := req.InviteToken
-	originSystemProvider := req.OriginSystemProvider
-	err := s.im.ForwardInvite(ctx, token, originSystemProvider)
-	if err != nil {
-		return &ocminvite.ForwardInviteResponse{
-			Status: status.NewInternal(ctx, err, "error creating share"),
-		}, nil
-	}
-
-	res := &ocminvite.ForwardInviteResponse{
-		Status: status.NewOK(ctx),
-	}
-	return res, nil
->>>>>>> WIP 2
 }
 
 func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRequest) (*invitepb.AcceptInviteResponse, error) {

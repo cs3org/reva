@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os"
 	"sort"
 
 	"github.com/cs3org/reva/internal/grpc/interceptors/appctx"
@@ -66,8 +65,6 @@ var Services = map[string]NewService{}
 
 // Register registers a new gRPC service with name and new function.
 func Register(name string, newFunc NewService) {
-	zl := zerolog.New(os.Stderr).With().Timestamp().Caller().Logger()
-	zl.Info().Msg("Register hejehej" + name)
 	Services[name] = newFunc
 }
 

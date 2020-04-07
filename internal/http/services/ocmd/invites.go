@@ -19,7 +19,6 @@
 package ocmd
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -52,50 +51,47 @@ func (h *invitesHandler) Handler() http.Handler {
 		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
 
 		switch head {
-		case "accept":
-			h.acceptInvite(w, r)
-		case "forward":
-			h.forwardInvite(w, r)
 		case "":
 			h.generateInviteToken(w, r)
+		case "forward":
+			h.forwardInvite(w, r)
+		case "accept":
+			h.acceptInvite(w, r)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
 	})
 }
 
-func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
+func (h *invitesHandler) generateInviteToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	type Request struct {
 		Token        string
 		ProviderInfo string
 	}
-	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
 
-	buf := new(bytes.Buffer)
-	buf.ReadFrom(r.Body)
-	body := buf.String()
-	log.Info().Msg("ocmd/invites" + body)
-
+	if r.Body == nil {
+		http.Error(w, "Null body", 400)
+		return
+	}
 	var req Request
 
 	// Try to decode the request body into the struct. If there is an error,
 	// respond to the client with the error message and a 400 status code.
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		log.Info().Msg("ERROR" + err.Error())
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	log.Info().Msg("Token " + req.Token)
 	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	// response, err := gatewayClient.GetInfoByDomain(ctx, request)
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting invite grpc client on addr: %v", h.gatewayAddr), err)
-		log.Err(err).Msg(fmt.Sprintf("error getting invite grpc client on addr: %v", h.gatewayAddr))
 		return
 	}
 
@@ -111,18 +107,18 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
+	//TODO Update these values with values from GetInfoByDomain response
 	forwardInviteReq := &invitepb.ForwardInviteRequest{
 		InviteToken: token,
 		OriginSystemProvider: &ocm.ProviderInfo{
 			Domain:         "domain",
-			ApiVersion:     "",
-			ApiEndpoint:    "",
-			WebdavEndpoint: "",
+			ApiVersion:     "ApiVersion",
+			ApiEndpoint:    "APIEndPoint",
+			WebdavEndpoint: "WebdavEndpoint",
 		},
 	}
 
 	forwardInviteResponse, err := gatewayClient.ForwardInvite(ctx, forwardInviteReq)
-	log.Info().Msg("Efter forwardInviteResponse.")
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error sending a grpc forward invite request", err)
 		return
@@ -135,9 +131,7 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, APIErrorServerError, "grpc forward invite request failed", err)
 		return
 	}
-
-	log.Info().Msg("Invited forwarded.")
 }
 
-func (h *invitesHandler) generateInviteToken(w http.ResponseWriter, r *http.Request) {
+func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 }

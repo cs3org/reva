@@ -21,7 +21,6 @@ package ocmshareprovider
 import (
 	"context"
 	"fmt"
-	"log"
 
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	"github.com/cs3org/reva/pkg/ocm/share"
@@ -34,7 +33,6 @@ import (
 )
 
 func init() {
-	log.Println("################## init share ########")
 	rgrpc.Register("ocmshareprovider", New)
 }
 
