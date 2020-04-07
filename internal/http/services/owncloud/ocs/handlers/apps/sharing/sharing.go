@@ -60,7 +60,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch head {
 	case "shares":
 		h.SharesHandler.ServeHTTP(w, r)
-		return
 	case "sharees":
 		h.ShareesHandler.ServeHTTP(w, r)
 	default:

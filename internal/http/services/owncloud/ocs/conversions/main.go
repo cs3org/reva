@@ -97,9 +97,15 @@ type ShareData struct {
 	UIDFileOwner string `json:"uid_file_owner" xml:"uid_file_owner"`
 	// The display name of the user that owns the file or folder being shared.
 	DisplaynameFileOwner string `json:"displayname_file_owner" xml:"displayname_file_owner"`
+	// ?
+	AdditionalInfoOwner string `json:"additional_info_owner" xml:"additional_info_owner"`
+	// ?
+	AdditionalInfoFileOwner string `json:"additional_info_file_owner" xml:"additional_info_file_owner"`
+	// share state, 0 = accepted, 1 = pending, 2 = declined
+	State int `json:"state" xml:"state"`
 	// The path to the shared file or folder.
 	Path string `json:"path" xml:"path"`
-	// The type of the object being shared. This can be one of file or folder.
+	// The type of the object being shared. This can be one of 'file' or 'folder'.
 	ItemType string `json:"item_type" xml:"item_type"`
 	// The RFC2045-compliant mimetype of the file.
 	MimeType  string `json:"mimetype" xml:"mimetype"`
@@ -111,7 +117,7 @@ type ShareData struct {
 	FileSource string `json:"file_source" xml:"file_source"`
 	// The unique node id of the parent node of the item being shared.
 	FileParent string `json:"file_parent" xml:"file_parent"`
-	// The name of the shared file.
+	// The basename of the shared file.
 	FileTarget string `json:"file_target" xml:"file_target"`
 	// The uid of the receiver of the file. This is either
 	// - a GID (group id) if it is being shared with a group or

@@ -68,7 +68,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "OPTIONS":
 			w.WriteHeader(http.StatusOK)
-			return
 		case "GET":
 			if h.isListSharesWithMe(w, r) {
 				h.listSharesWithMe(w, r)
@@ -80,10 +79,20 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		default:
 			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Only GET, POST and PUT are allowed", nil)
 		}
-		return
 	case "pending":
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "Not implemented yet", nil)
-		return
+		var shareID string
+		shareID, r.URL.Path = router.ShiftPath(r.URL.Path)
+
+		log.Debug().Str("share_id", shareID).Str("tail", r.URL.Path).Msg("http routing")
+
+		switch r.Method {
+		case "POST":
+			h.acceptShare(w, r, shareID)
+		case "DELETE":
+			h.rejectShare(w, r, shareID)
+		default:
+			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Only POST and DELETE are allowed", nil)
+		}
 	default:
 		switch r.Method {
 		case "PUT":
@@ -93,8 +102,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		default:
 			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Only GET, POST and PUT are allowed", nil)
 		}
-		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "Not found", nil)
-		return
 	}
 }
 
@@ -596,7 +603,24 @@ func (h *Handler) isListSharesWithMe(w http.ResponseWriter, r *http.Request) (li
 	return
 }
 
+const ocsStateAccepted = 0
+const ocsStatePending = 1
+const ocsStateRejected = 2
+
 func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
+	// which pending state to list
+	switch r.FormValue("state") {
+	case "all":
+		// no filter
+	case "0": // accepted
+		// TODO implement accepted filter
+	case "1": // pending
+		// TODO implement pending filter
+	case "2": // rejected
+		// TODO implement rejected filter
+	default:
+		// TODO only list accepted shares
+	}
 
 	gwc, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
@@ -643,6 +667,17 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, err.Error(), err)
 			return
+		}
+
+		switch rs.GetState() {
+		case collaboration.ShareState_SHARE_STATE_PENDING:
+			data.State = ocsStatePending
+		case collaboration.ShareState_SHARE_STATE_ACCEPTED:
+			data.State = ocsStateAccepted
+		case collaboration.ShareState_SHARE_STATE_REJECTED:
+			data.State = ocsStateRejected
+		default:
+			data.State = -1
 		}
 
 		err = h.addFileInfo(r.Context(), data, statResponse.Info)
