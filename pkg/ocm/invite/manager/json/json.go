@@ -42,7 +42,7 @@ import (
 )
 
 type inviteModel struct {
-	file          string
+	File          string
 	Invites       map[string]*invitepb.InviteToken `json:"invites"`
 	AcceptedUsers map[string][]*userpb.UserId      `json:"accepted_users"`
 }
@@ -137,7 +137,7 @@ func loadOrCreate(file string) (*inviteModel, error) {
 		return nil, err
 	}
 
-	model.file = file
+	model.File = file
 	return model, nil
 }
 
@@ -148,8 +148,8 @@ func (model *inviteModel) Save() error {
 		return err
 	}
 
-	if err := ioutil.WriteFile(model.file, data, 0644); err != nil {
-		err = errors.Wrap(err, "error writing invite data to file: "+model.file)
+	if err := ioutil.WriteFile(model.File, data, 0644); err != nil {
+		err = errors.Wrap(err, "error writing invite data to file: "+model.File)
 		return err
 	}
 
@@ -191,10 +191,6 @@ func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, err
 func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToken, originProvider *ocm.ProviderInfo) error {
 
 	contexUser := user.ContextMustGetUser(ctx)
-	// Create mutex lock
-	m.Lock()
-	defer m.Unlock()
-
 	requestBody := url.Values{
 		"token":              {invite.GetToken()},
 		"userID":             {contexUser.GetId().GetOpaqueId()},
@@ -217,12 +213,13 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 	m.Lock()
 	defer m.Unlock()
 
-	if err := checkTokenIsValid(m, invite); err != nil {
+	inviteToken, err := getTokenIfValid(m, invite)
+	if err != nil {
 		return err
 	}
 
-	// Store token data
-	userKey := generateKey(invite.GetUserId())
+	// Add to the list of accepted users
+	userKey := generateKey(inviteToken.GetUserId())
 	m.model.AcceptedUsers[userKey] = append(m.model.AcceptedUsers[userKey], userID)
 	if err := m.model.Save(); err != nil {
 		err = errors.Wrap(err, "json: error saving model")
@@ -231,15 +228,15 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 	return nil
 }
 
-func checkTokenIsValid(m *manager, token *invitepb.InviteToken) error {
+func getTokenIfValid(m *manager, token *invitepb.InviteToken) (*invitepb.InviteToken, error) {
 	inviteToken, ok := m.model.Invites[token.GetToken()]
 	if !ok {
-		return errors.New("json: invalid token")
+		return nil, errors.New("json: invalid token")
 	}
 	if uint64(time.Now().Unix()) <= inviteToken.Expiration.Seconds {
-		return errors.New("json: token expired")
+		return nil, errors.New("json: token expired")
 	}
-	return nil
+	return inviteToken, nil
 }
 
 func generateKey(user *userpb.UserId) string {

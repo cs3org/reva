@@ -20,7 +20,10 @@ package memory
 
 import (
 	"context"
+	"net/http"
+	"net/url"
 	"sync"
+	"time"
 
 	"github.com/cs3org/reva/pkg/user"
 
@@ -50,14 +53,15 @@ func New(m map[string]interface{}) (invite.Manager, error) {
 	}
 
 	return &manager{
-		invites: sync.Map{},
-		config:  c,
+		Invites: sync.Map{},
+		Config:  c,
 	}, nil
 }
 
 type manager struct {
-	invites sync.Map
-	config  *config
+	Invites       sync.Map
+	AcceptedUsers sync.Map
+	Config        *config
 }
 
 type config struct {
@@ -67,20 +71,60 @@ type config struct {
 func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, error) {
 
 	ctxUser := user.ContextMustGetUser(ctx)
-	inviteToken, err := token.CreateToken(m.config.Expiration, ctxUser.GetId())
+	inviteToken, err := token.CreateToken(m.Config.Expiration, ctxUser.GetId())
 	if err != nil {
 		return nil, errors.Wrap(err, "error create token")
 	}
 
-	m.invites.Store(inviteToken.GetToken(), inviteToken)
-
+	m.Invites.Store(inviteToken.GetToken(), inviteToken)
 	return inviteToken, nil
 }
 
 func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToken, originProvider *ocm.ProviderInfo) error {
+	contexUser := user.ContextMustGetUser(ctx)
+	requestBody := url.Values{
+		"token":              {invite.GetToken()},
+		"userID":             {contexUser.GetId().GetOpaqueId()},
+		"sender_provider":    {originProvider.GetDomain()},
+		"recipient_provider": {contexUser.GetId().GetIdp()},
+	}
+
+	_, err := http.PostForm(originProvider.GetApiEndpoint(), requestBody)
+	if err != nil {
+		err = errors.Wrap(err, "json: error sending post request")
+		return err
+	}
+
 	return nil
 }
 
 func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken, userID *userpb.UserId) error {
+	inviteToken, err := getTokenIfValid(m, invite)
+	if err != nil {
+		return err
+	}
+
+	currUser := inviteToken.GetUserId()
+	usersList, ok := m.AcceptedUsers.Load(currUser)
+	if ok {
+		acceptedUsers := usersList.([]*userpb.UserId)
+		acceptedUsers = append(acceptedUsers, userID)
+		m.AcceptedUsers.Store(currUser, acceptedUsers)
+	} else {
+		acceptedUsers := []*userpb.UserId{userID}
+		m.AcceptedUsers.Store(currUser, acceptedUsers)
+	}
 	return nil
+}
+
+func getTokenIfValid(m *manager, token *invitepb.InviteToken) (*invitepb.InviteToken, error) {
+	tokenInterface, ok := m.Invites.Load(token.GetToken())
+	if !ok {
+		return nil, errors.New("json: invalid token")
+	}
+	inviteToken := tokenInterface.(*invitepb.InviteToken)
+	if uint64(time.Now().Unix()) <= inviteToken.Expiration.Seconds {
+		return nil, errors.New("json: token expired")
+	}
+	return inviteToken, nil
 }
