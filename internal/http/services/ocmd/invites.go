@@ -63,6 +63,43 @@ func (h *invitesHandler) Handler() http.Handler {
 }
 
 func (h *invitesHandler) generateInviteToken(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
+	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting storage grpc client on addr: %v", h.gatewayAddr), err)
+		log.Err(err).Msg(fmt.Sprintf("error getting storage grpc client on addr: %v", h.gatewayAddr))
+		return
+	}
+
+	inviteTokenRequest := &invitepb.GenerateInviteTokenRequest{}
+
+	token, err := gatewayClient.GenerateInviteToken(ctx, inviteTokenRequest)
+
+	if err != nil {
+		WriteError(w, r, APIErrorNotFound, "error generate token", err)
+		return
+	}
+
+	bytes, err := json.Marshal(token)
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, "error marshal token data", err)
+		log.Err(err).Msg("error marshal shares data.")
+		return
+	}
+
+	// Write response
+	_, err = w.Write(bytes)
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, "error writing token data", err)
+		log.Err(err).Msg("error writing shares data.")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {

@@ -137,6 +137,13 @@ func loadOrCreate(file string) (*inviteModel, error) {
 		return nil, err
 	}
 
+	if model.Invites == nil {
+		model.Invites = make(map[string]*invitepb.InviteToken)
+	}
+	if model.AcceptedUsers == nil {
+		model.AcceptedUsers = make(map[string][]*userpb.UserId)
+	}
+
 	model.File = file
 	return model, nil
 }
