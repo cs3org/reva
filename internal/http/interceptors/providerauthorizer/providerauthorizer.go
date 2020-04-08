@@ -21,6 +21,7 @@ package providerauthorizer
 import (
 	"fmt"
 	"net/http"
+	"path"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -42,10 +43,11 @@ func init() {
 }
 
 type config struct {
-	Driver     string                            `mapstructure:"driver"`
-	Drivers    map[string]map[string]interface{} `mapstructure:"drivers"`
-	OCMPrefix  string                            `mapstructure:"ocm_prefix"`
-	GatewaySvc string
+	Driver               string                            `mapstructure:"driver"`
+	Drivers              map[string]map[string]interface{} `mapstructure:"drivers"`
+	OCMPrefix            string                            `mapstructure:"ocm_prefix"`
+	AcceptInviteEndpoint string                            `mapstructure:"accept_invite_endpoint"`
+	GatewaySvc           string
 }
 
 func getDriver(c *config) (provider.Authorizer, error) {
@@ -68,6 +70,9 @@ func New(m map[string]interface{}) (global.Middleware, int, error) {
 	if conf.OCMPrefix == "" {
 		conf.OCMPrefix = "ocm"
 	}
+	if conf.AcceptInviteEndpoint == "" {
+		conf.AcceptInviteEndpoint = "/invites/accept"
+	}
 
 	authorizer, err := getDriver(conf)
 	if err != nil {
@@ -79,7 +84,8 @@ func New(m map[string]interface{}) (global.Middleware, int, error) {
 
 			ctx := r.Context()
 			log := appctx.GetLogger(ctx)
-			if head, _ := router.ShiftPath(r.URL.Path); head != conf.OCMPrefix {
+			acceptEndpoint := path.Join("/", conf.OCMPrefix, conf.AcceptInviteEndpoint)
+			if head, _ := router.ShiftPath(r.URL.Path); head != conf.OCMPrefix || r.URL.Path == acceptEndpoint {
 				log.Info().Msg("skipping provider authorizer check for: " + r.URL.Path)
 				h.ServeHTTP(w, r)
 				return
