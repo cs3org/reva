@@ -10,7 +10,6 @@ This is a guide on how you can run both Pheonix and Reva locally in a dev enviro
 Phoenix is the new ownCloud frontend application and can be connected to Reva.
 
 ## 1. Clone the Phoenix and Reva repos
-
 Clone the phoenix repo from https://github.com/owncloud/phoenix 
 
 ```
@@ -65,7 +64,6 @@ cd examples/oc-phoenix/ && ../../cmd/revad/revad -dev-dir .
 The Reva daemon (revad) should now be running.
 
 ## 5. Run Phoenix
-
 Now you also need to run Phoenix, open another terminal tab and follow these steps from the *phoenix* folder.
 
 Install all packages and build the project (this you only need to do once):

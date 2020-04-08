@@ -158,3 +158,20 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 	}
 	return res, nil
 }
+
+func (s *svc) GetReceivedOCMShare(ctx context.Context, req *ocm.GetReceivedOCMShareRequest) (*ocm.GetReceivedOCMShareResponse, error) {
+	c, err := pool.GetOCMShareProviderClient(s.c.OCMShareProviderEndpoint)
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
+		return &ocm.GetReceivedOCMShareResponse{
+			Status: status.NewInternal(ctx, err, "error getting share provider client"),
+		}, nil
+	}
+
+	res, err := c.GetReceivedOCMShare(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling GetReceivedShare")
+	}
+
+	return res, nil
+}

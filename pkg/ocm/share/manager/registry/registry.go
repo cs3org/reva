@@ -16,26 +16,19 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocs
+package registry
 
-import (
-	"net/http"
+import "github.com/cs3org/reva/pkg/ocm/share"
 
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp/router"
-)
+// NewFunc is the function that share managers
+// should register at init time.
+type NewFunc func(map[string]interface{}) (share.Manager, error)
 
-// NotificationsHandler placeholder
-type NotificationsHandler struct {
-}
+// NewFuncs is a map containing all the registered share managers.
+var NewFuncs = map[string]NewFunc{}
 
-func (h *NotificationsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log := appctx.GetLogger(r.Context())
-
-	var head string
-	head, r.URL.Path = router.ShiftPath(r.URL.Path)
-
-	log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
-
-	w.WriteHeader(http.StatusOK)
+// Register registers a new share manager new function.
+// Not safe for concurrent use. Safe for use from package init.
+func Register(name string, f NewFunc) {
+	NewFuncs[name] = f
 }

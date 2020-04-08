@@ -21,6 +21,7 @@ package gateway
 import (
 	"fmt"
 	"net/url"
+	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 
@@ -37,21 +38,23 @@ func init() {
 }
 
 type config struct {
-	AuthRegistryEndpoint        string `mapstructure:"authregistrysvc"`
-	StorageRegistryEndpoint     string `mapstructure:"storageregistrysvc"`
-	AppRegistryEndpoint         string `mapstructure:"appregistrysvc"`
-	PreferencesEndpoint         string `mapstructure:"preferencessvc"`
-	UserShareProviderEndpoint   string `mapstructure:"usershareprovidersvc"`
-	PublicShareProviderEndpoint string `mapstructure:"publicshareprovidersvc"`
-	OCMShareProviderEndpoint    string `mapstructure:"ocmshareprovidersvc"`
-	UserProviderEndpoint        string `mapstructure:"userprovidersvc"`
-	CommitShareToStorageGrant   bool   `mapstructure:"commit_share_to_storage_grant"`
-	CommitShareToStorageRef     bool   `mapstructure:"commit_share_to_storage_ref"`
-	DisableHomeCreationOnLogin  bool   `mapstructure:"disable_home_creation_on_login"`
-	DataGatewayEndpoint         string `mapstructure:"datagateway"`
-	TransferSharedSecret        string `mapstructure:"transfer_shared_secret"`
-	TranserExpires              int64  `mapstructure:"transfer_expires"`
-	TokenManager                string `mapstructure:"token_manager"`
+	AuthRegistryEndpoint          string `mapstructure:"authregistrysvc"`
+	StorageRegistryEndpoint       string `mapstructure:"storageregistrysvc"`
+	AppRegistryEndpoint           string `mapstructure:"appregistrysvc"`
+	PreferencesEndpoint           string `mapstructure:"preferencessvc"`
+	UserShareProviderEndpoint     string `mapstructure:"usershareprovidersvc"`
+	PublicShareProviderEndpoint   string `mapstructure:"publicshareprovidersvc"`
+	OCMShareProviderEndpoint      string `mapstructure:"ocmshareprovidersvc"`
+	OCMInviteManagerEndpoint      string `mapstructure:"ocminvitemanagersvc"`
+	OCMAuthorizerProviderEndpoint string `mapstructure:"ocmauthorizerprovidersvc"`
+	UserProviderEndpoint          string `mapstructure:"userprovidersvc"`
+	CommitShareToStorageGrant     bool   `mapstructure:"commit_share_to_storage_grant"`
+	CommitShareToStorageRef       bool   `mapstructure:"commit_share_to_storage_ref"`
+	DisableHomeCreationOnLogin    bool   `mapstructure:"disable_home_creation_on_login"`
+	DataGatewayEndpoint           string `mapstructure:"datagateway"`
+	TransferSharedSecret          string `mapstructure:"transfer_shared_secret"`
+	TranserExpires                int64  `mapstructure:"transfer_expires"`
+	TokenManager                  string `mapstructure:"token_manager"`
 	// ShareFolder is the location where to create shares in the recipient's storage provider.
 	ShareFolder   string                            `mapstructure:"share_folder"`
 	TokenManagers map[string]map[string]interface{} `mapstructure:"token_managers"`
@@ -76,6 +79,8 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	if c.ShareFolder == "" {
 		c.ShareFolder = "MyShares"
 	}
+
+	c.ShareFolder = strings.Trim(c.ShareFolder, "/")
 
 	if c.TokenManager == "" {
 		c.TokenManager = "jwt"

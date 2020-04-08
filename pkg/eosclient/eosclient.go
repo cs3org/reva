@@ -227,6 +227,11 @@ func (c *Client) executeEOS(ctx context.Context, cmd *exec.Cmd) (string, string,
 	cmd.Env = []string{
 		"EOS_MGM_URL=" + c.opt.URL,
 	}
+	if c.opt.UseKeytab {
+		cmd.Env = append(cmd.Env, "XrdSecPROTOCOL="+c.opt.SecProtocol)
+		cmd.Env = append(cmd.Env, "XrdSecSSSKT="+c.opt.Keytab)
+	}
+
 	trace := trace.FromContext(ctx).SpanContext().TraceID.String()
 	cmd.Args = append(cmd.Args, "--comment", trace)
 

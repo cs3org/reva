@@ -21,6 +21,8 @@ package ocs
 import (
 	"net/http"
 
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
@@ -32,22 +34,14 @@ func init() {
 	global.Register("ocs", New)
 }
 
-// Config holds the config options that need to be passed down to all ocs handlers
-type Config struct {
-	Prefix       string           `mapstructure:"prefix"`
-	Config       ConfigData       `mapstructure:"config"`
-	Capabilities CapabilitiesData `mapstructure:"capabilities"`
-	GatewaySvc   string           `mapstructure:"gatewaysvc"`
-}
-
 type svc struct {
-	c         *Config
+	c         *config.Config
 	V1Handler *V1Handler
 }
 
 // New returns a new capabilitiessvc
 func New(m map[string]interface{}) (global.Service, error) {
-	conf := &Config{}
+	conf := &config.Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
 	}
@@ -99,6 +93,6 @@ func (s *svc) Handler() http.Handler {
 			return
 		}
 
-		WriteOCSError(w, r, MetaNotFound.StatusCode, "Not found", nil)
+		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "Not found", nil)
 	})
 }

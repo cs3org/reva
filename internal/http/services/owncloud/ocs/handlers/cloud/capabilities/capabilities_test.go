@@ -16,18 +16,20 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocs
+package capabilities
 
 import (
 	"encoding/json"
 	"encoding/xml"
 	"testing"
+
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/data"
 )
 
 func TestMarshal(t *testing.T) {
-	cd := CapabilitiesData{
-		Capabilities: &Capabilities{
-			FilesSharing: &CapabilitiesFilesSharing{
+	cd := data.CapabilitiesData{
+		Capabilities: &data.Capabilities{
+			FilesSharing: &data.CapabilitiesFilesSharing{
 				APIEnabled: true,
 			},
 		},

@@ -1,6 +1,6 @@
 ---
-title: "Begginer's Guide"
-linkTitle: "Begginer's Guide"
+title: "Beginner's Guide"
+linkTitle: "Beginner's Guide"
 weight: 5
 description: >
   Start playing with Reva and its services

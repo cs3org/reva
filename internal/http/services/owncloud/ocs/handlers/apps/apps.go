@@ -16,28 +16,33 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocs
+package apps
 
 import (
 	"net/http"
 
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/apps/notifications"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/apps/sharing"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 )
 
-// AppsHandler holds references to individual app handlers
-type AppsHandler struct {
-	SharesHandler        *SharesHandler
-	NotificationsHandler *NotificationsHandler
+// Handler holds references to individual app handlers
+type Handler struct {
+	SharingHandler       *sharing.Handler
+	NotificationsHandler *notifications.Handler
 }
 
-func (h *AppsHandler) init(c *Config) error {
-	h.SharesHandler = new(SharesHandler)
-	h.NotificationsHandler = new(NotificationsHandler)
-	return h.SharesHandler.init(c)
+// Init initializes this and any contained handlers
+func (h *Handler) Init(c *config.Config) error {
+	h.SharingHandler = new(sharing.Handler)
+	h.NotificationsHandler = new(notifications.Handler)
+	return h.SharingHandler.Init(c)
 }
 
 // ServeHTTP routes the known apps
-func (h *AppsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var head string
 	head, r.URL.Path = router.ShiftPath(r.URL.Path)
 	switch head {
@@ -46,11 +51,11 @@ func (h *AppsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if head == "api" {
 			head, r.URL.Path = router.ShiftPath(r.URL.Path)
 			if head == "v1" {
-				h.SharesHandler.ServeHTTP(w, r)
+				h.SharingHandler.ServeHTTP(w, r)
 				return
 			}
 		}
-		WriteOCSError(w, r, MetaNotFound.StatusCode, "Not found", nil)
+		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "Not found", nil)
 	case "notifications":
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 		if head == "api" {
@@ -60,8 +65,8 @@ func (h *AppsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		WriteOCSError(w, r, MetaNotFound.StatusCode, "Not found", nil)
+		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "Not found", nil)
 	default:
-		WriteOCSError(w, r, MetaNotFound.StatusCode, "Not found", nil)
+		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "Not found", nil)
 	}
 }

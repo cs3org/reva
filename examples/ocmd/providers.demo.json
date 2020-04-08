@@ -1,0 +1,20 @@
+[
+	{
+		"domain": "cern.ch",
+		"api_version": "0.0.1",
+		"api_endpoint": "ocm/",
+		"webdav_endpoint": "ocm/webdav/"
+	},
+	{
+		"domain": "cesnet.cz",
+		"api_version": "0.0.1",
+		"api_endpoint": "ocm/",
+		"webdav_endpoint": "ocm/webdav/"
+	},
+	{
+		"domain": "example.org",
+		"api_version": "0.0.1",
+		"api_endpoint": "ocm/",
+		"webdav_endpoint": "ocm/webdav/"
+	}
+]

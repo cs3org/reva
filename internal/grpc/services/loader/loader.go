@@ -26,6 +26,7 @@ import (
 	_ "github.com/cs3org/reva/internal/grpc/services/authregistry"
 	_ "github.com/cs3org/reva/internal/grpc/services/gateway"
 	_ "github.com/cs3org/reva/internal/grpc/services/helloworld"
+	_ "github.com/cs3org/reva/internal/grpc/services/ocmshareprovider"
 	_ "github.com/cs3org/reva/internal/grpc/services/preferences"
 
 	_ "github.com/cs3org/reva/internal/grpc/services/publicshareprovider"

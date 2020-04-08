@@ -16,42 +16,30 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocs
+package ocmd
 
 import (
 	"net/http"
 
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 )
 
-// CloudHandler holds references to UserHandler and CapabilitiesHandler
-type CloudHandler struct {
-	UserHandler         *UserHandler
-	UsersHandler        *UsersHandler
-	CapabilitiesHandler *CapabilitiesHandler
+type notificationsHandler struct {
 }
 
-func (h *CloudHandler) init(c *Config) {
-	h.UserHandler = new(UserHandler)
-	h.UsersHandler = new(UsersHandler)
-	h.CapabilitiesHandler = new(CapabilitiesHandler)
-	h.CapabilitiesHandler.init(c)
+func (h *notificationsHandler) init(c *Config) {
 }
 
-// Handler routes the cloud endpoints
-func (h *CloudHandler) Handler() http.Handler {
+func (h *notificationsHandler) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log := appctx.GetLogger(r.Context())
+
 		var head string
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
-		switch head {
-		case "capabilities":
-			h.CapabilitiesHandler.Handler().ServeHTTP(w, r)
-		case "user":
-			h.UserHandler.ServeHTTP(w, r)
-		case "users":
-			h.UsersHandler.ServeHTTP(w, r)
-		default:
-			WriteOCSError(w, r, MetaNotFound.StatusCode, "Not found", nil)
-		}
+
+		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
+
+		w.WriteHeader(http.StatusOK)
 	})
 }
