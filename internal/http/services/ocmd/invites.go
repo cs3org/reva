@@ -172,7 +172,7 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	token, userID, recipientProvider := r.FormValue("token"), r.FormValue("userID"), r.FormValue("recipient_provider")
+	token, userID, recipientProvider := r.FormValue("token"), r.FormValue("user_id"), r.FormValue("recipient_provider")
 	if token == "" || userID == "" || recipientProvider == "" {
 		WriteError(w, r, APIErrorInvalidParameter, "missing parameters in request", nil)
 		return

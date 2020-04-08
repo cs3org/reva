@@ -84,8 +84,7 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 	contexUser := user.ContextMustGetUser(ctx)
 	requestBody := url.Values{
 		"token":              {invite.GetToken()},
-		"userID":             {contexUser.GetId().GetOpaqueId()},
-		"sender_provider":    {originProvider.GetDomain()},
+		"user_id":            {contexUser.GetId().GetOpaqueId()},
 		"recipient_provider": {contexUser.GetId().GetIdp()},
 	}
 
