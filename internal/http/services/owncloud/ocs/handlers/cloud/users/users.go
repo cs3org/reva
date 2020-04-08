@@ -16,21 +16,22 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocs
+package users
 
 import (
 	"fmt"
 	"net/http"
 
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	ctxuser "github.com/cs3org/reva/pkg/user"
 )
 
 // The UsersHandler renders user data for the user id given in the url path
-type UsersHandler struct {
+type Handler struct {
 }
 
-func (h *UsersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var user string
@@ -39,12 +40,12 @@ func (h *UsersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// FIXME use ldap to fetch user info
 	u, ok := ctxuser.ContextGetUser(ctx)
 	if !ok {
-		WriteOCSError(w, r, MetaServerError.StatusCode, "missing user in context", fmt.Errorf("missing user in context"))
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "missing user in context", fmt.Errorf("missing user in context"))
 		return
 	}
 	if user != u.Username {
 		// FIXME allow fetching other users info?
-		WriteOCSError(w, r, http.StatusForbidden, "user id mismatch", fmt.Errorf("%s tried to acces %s user info endpoint", u.Id.OpaqueId, user))
+		response.WriteOCSError(w, r, http.StatusForbidden, "user id mismatch", fmt.Errorf("%s tried to acces %s user info endpoint", u.Id.OpaqueId, user))
 		return
 	}
 
@@ -52,10 +53,10 @@ func (h *UsersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	head, r.URL.Path = router.ShiftPath(r.URL.Path)
 	switch head {
 	case "":
-		WriteOCSSuccess(w, r, &UsersData{
+		response.WriteOCSSuccess(w, r, &Users{
 			// FIXME query storages? cache a summary?
 			// TODO use list of storages to allow clients to resolve quota status
-			Quota: &QuotaData{
+			Quota: &Quota{
 				Free:       2840756224000,
 				Used:       5059416668,
 				Total:      2845815640668,
@@ -67,17 +68,17 @@ func (h *UsersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	case "groups":
-		WriteOCSSuccess(w, r, &GroupsData{})
+		response.WriteOCSSuccess(w, r, &Groups{})
 		return
 	default:
-		WriteOCSError(w, r, MetaNotFound.StatusCode, "Not found", nil)
+		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "Not found", nil)
 		return
 	}
 
 }
 
-// QuotaData holds quota information
-type QuotaData struct {
+// Quota holds quota information
+type Quota struct {
 	Free       int64   `json:"free" xml:"free"`
 	Used       int64   `json:"used" xml:"used"`
 	Total      int64   `json:"total" xml:"total"`
@@ -85,17 +86,17 @@ type QuotaData struct {
 	Definition string  `json:"definition" xml:"definition"`
 }
 
-// UsersData holds user data
-type UsersData struct {
-	Quota       *QuotaData `json:"quota" xml:"quota"`
-	Email       string     `json:"email" xml:"email"`
-	DisplayName string     `json:"displayname" xml:"displayname"`
+// Users holds users data
+type Users struct {
+	Quota       *Quota `json:"quota" xml:"quota"`
+	Email       string `json:"email" xml:"email"`
+	DisplayName string `json:"displayname" xml:"displayname"`
 	// FIXME home should never be exposed ... even in oc 10
 	//home
 	TwoFactorAuthEnabled bool `json:"two_factor_auth_enabled" xml:"two_factor_auth_enabled"`
 }
 
-// GroupsData holds group data
-type GroupsData struct {
+// Groups holds group data
+type Groups struct {
 	Groups []string `json:"groups" xml:"groups>element"`
 }

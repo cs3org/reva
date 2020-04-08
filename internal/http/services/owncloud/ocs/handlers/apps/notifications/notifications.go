@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocs
+package notifications
 
 import (
 	"net/http"
@@ -25,11 +25,11 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/router"
 )
 
-// NotificationsHandler placeholder
-type NotificationsHandler struct {
+// Handler placeholder for notifications
+type Handler struct {
 }
 
-func (h *NotificationsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context())
 
 	var head string

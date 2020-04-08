@@ -16,37 +16,16 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocdav
+package config
 
 import (
-	"encoding/json"
-	"net/http"
-
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/data"
-	"github.com/cs3org/reva/pkg/appctx"
 )
 
-func (s *svc) doStatus(w http.ResponseWriter, r *http.Request) {
-	log := appctx.GetLogger(r.Context())
-	status := &data.Status{
-		Installed:      true,
-		Maintenance:    false,
-		NeedsDBUpgrade: false,
-		Version:        "10.0.9.5", // TODO(jfd) make build/config determined
-		VersionString:  "10.0.9",
-		Edition:        "community",
-		ProductName:    "ownCloud",
-	}
-
-	statusJSON, err := json.MarshalIndent(status, "", "    ")
-	if err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Add("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write(statusJSON); err != nil {
-		log.Err(err).Msg("error writing response")
-	}
+// Config holds the config options that need to be passed down to all ocs handlers
+type Config struct {
+	Prefix       string                `mapstructure:"prefix"`
+	Config       data.ConfigData       `mapstructure:"config"`
+	Capabilities data.CapabilitiesData `mapstructure:"capabilities"`
+	GatewaySvc   string                `mapstructure:"gatewaysvc"`
 }

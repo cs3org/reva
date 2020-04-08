@@ -16,50 +16,46 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocs
+package cloud
 
 import (
 	"net/http"
 
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/apps"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/cloud"
-	configHandler "github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/config"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/cloud/capabilities"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/cloud/user"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/cloud/users"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 )
 
-// V1Handler routes to the different sub handlers
-type V1Handler struct {
-	AppsHandler   *apps.Handler
-	CloudHandler  *cloud.Handler
-	ConfigHandler *configHandler.Handler
+// Handler holds references to UserHandler and CapabilitiesHandler
+type Handler struct {
+	UserHandler         *user.Handler
+	UsersHandler        *users.Handler
+	CapabilitiesHandler *capabilities.Handler
 }
 
-func (h *V1Handler) init(c *config.Config) error {
-	h.AppsHandler = new(apps.Handler)
-	if err := h.AppsHandler.Init(c); err != nil {
-		return err
-	}
-	h.CloudHandler = new(cloud.Handler)
-	h.CloudHandler.Init(c)
-	h.ConfigHandler = new(configHandler.Handler)
-	h.ConfigHandler.Init(c)
-	return nil
+// Init initializes this and any contained handlers
+func (h *Handler) Init(c *config.Config) {
+	h.UserHandler = new(user.Handler)
+	h.UsersHandler = new(users.Handler)
+	h.CapabilitiesHandler = new(capabilities.Handler)
+	h.CapabilitiesHandler.Init(c)
 }
 
-// Handler handles requests
-func (h *V1Handler) Handler() http.Handler {
+// Handler routes the cloud endpoints
+func (h *Handler) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var head string
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 		switch head {
-		case "apps":
-			h.AppsHandler.ServeHTTP(w, r)
-		case "cloud":
-			h.CloudHandler.Handler().ServeHTTP(w, r)
-		case "config":
-			h.ConfigHandler.Handler().ServeHTTP(w, r)
+		case "capabilities":
+			h.CapabilitiesHandler.Handler().ServeHTTP(w, r)
+		case "user":
+			h.UserHandler.ServeHTTP(w, r)
+		case "users":
+			h.UsersHandler.ServeHTTP(w, r)
 		default:
 			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "Not found", nil)
 		}

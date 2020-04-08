@@ -21,37 +21,40 @@ package ocs
 import (
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/data"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 )
 
-// CloudHandler holds references to UserHandler and CapabilitiesHandler
-type CloudHandler struct {
-	UserHandler         *UserHandler
-	UsersHandler        *UsersHandler
-	CapabilitiesHandler *CapabilitiesHandler
+// Handler renders the config endpoint
+type Handler struct {
+	c data.ConfigData
 }
 
-func (h *CloudHandler) init(c *Config) {
-	h.UserHandler = new(UserHandler)
-	h.UsersHandler = new(UsersHandler)
-	h.CapabilitiesHandler = new(CapabilitiesHandler)
-	h.CapabilitiesHandler.init(c)
+// Init initializes this and any contained handlers
+func (h *Handler) Init(c *config.Config) {
+	h.c = c.Config
+	// config
+	if h.c.Version == "" {
+		h.c.Version = "1.7"
+	}
+	if h.c.Website == "" {
+		h.c.Website = "reva"
+	}
+	if h.c.Host == "" {
+		h.c.Host = "" // TODO get from context?
+	}
+	if h.c.Contact == "" {
+		h.c.Contact = ""
+	}
+	if h.c.SSL == "" {
+		h.c.SSL = "false" // TODO get from context?
+	}
 }
 
-// Handler routes the cloud endpoints
-func (h *CloudHandler) Handler() http.Handler {
+// Handler renders the config
+func (h *Handler) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var head string
-		head, r.URL.Path = router.ShiftPath(r.URL.Path)
-		switch head {
-		case "capabilities":
-			h.CapabilitiesHandler.Handler().ServeHTTP(w, r)
-		case "user":
-			h.UserHandler.ServeHTTP(w, r)
-		case "users":
-			h.UsersHandler.ServeHTTP(w, r)
-		default:
-			WriteOCSError(w, r, MetaNotFound.StatusCode, "Not found", nil)
-		}
+		response.WriteOCSSuccess(w, r, h.c)
 	})
 }
