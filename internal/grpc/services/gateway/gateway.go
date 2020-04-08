@@ -114,7 +114,7 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) UnprotectedEndpoints() []string {
-	return []string{"/cs3.gateway.v1beta1.GatewayAPI", "/cs3.gateway.v1beta1.GatewayAPI/GetUser", "/cs3.gateway.v1beta1.GatewayAPI/GetPublicShareByToken"}
+	return []string{"/cs3.gateway.v1beta1.GatewayAPI"}
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {

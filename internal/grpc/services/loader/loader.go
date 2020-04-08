@@ -27,7 +27,9 @@ import (
 	_ "github.com/cs3org/reva/internal/grpc/services/gateway"
 	_ "github.com/cs3org/reva/internal/grpc/services/helloworld"
 	_ "github.com/cs3org/reva/internal/grpc/services/preferences"
+
 	_ "github.com/cs3org/reva/internal/grpc/services/publicshareprovider"
+	_ "github.com/cs3org/reva/internal/grpc/services/publicstorageprovider"
 	_ "github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	_ "github.com/cs3org/reva/internal/grpc/services/storageregistry"
 	_ "github.com/cs3org/reva/internal/grpc/services/userprovider"
