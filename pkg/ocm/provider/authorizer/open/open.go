@@ -24,7 +24,7 @@ import (
 	"io/ioutil"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	ocmauthorizer "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/provider"
 	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
@@ -48,7 +48,7 @@ func New(m map[string]interface{}) (provider.Authorizer, error) {
 	if err != nil {
 		return nil, err
 	}
-	providers := []*ocmauthorizer.ProviderInfo{}
+	providers := []*ocmprovider.ProviderInfo{}
 	err = json.Unmarshal(f, &providers)
 	if err != nil {
 		return nil, err
@@ -65,10 +65,10 @@ type config struct {
 }
 
 type authorizer struct {
-	providers []*ocmauthorizer.ProviderInfo
+	providers []*ocmprovider.ProviderInfo
 }
 
-func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmauthorizer.ProviderInfo, error) {
+func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmprovider.ProviderInfo, error) {
 	for _, p := range a.providers {
 		if p.Domain == domain {
 			return p, nil
@@ -81,6 +81,6 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, user *userpb.User) e
 	return nil
 }
 
-func (a *authorizer) ListAllProviders(ctx context.Context) ([]*ocmauthorizer.ProviderInfo, error) {
+func (a *authorizer) ListAllProviders(ctx context.Context) ([]*ocmprovider.ProviderInfo, error) {
 	return a.providers, nil
 }

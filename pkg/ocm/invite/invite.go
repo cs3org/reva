@@ -23,7 +23,7 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
-	ocmauthorizer "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 )
 
 // Manager is the interface that is used to perform operations to invites.
@@ -32,7 +32,7 @@ type Manager interface {
 	GenerateToken(ctx context.Context) (*invitepb.InviteToken, error)
 
 	// ForwardInvite forwards a received invite to the sync'n'share system provider.
-	ForwardInvite(ctx context.Context, invite *invitepb.InviteToken, originProvider *ocmauthorizer.ProviderInfo) error
+	ForwardInvite(ctx context.Context, invite *invitepb.InviteToken, originProvider *ocmprovider.ProviderInfo) error
 
 	// AcceptInvite completes an invitation acceptance.
 	AcceptInvite(ctx context.Context, invite *invitepb.InviteToken, userID *userpb.UserId) error

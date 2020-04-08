@@ -26,7 +26,7 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
-	ocmauthorizer "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -145,7 +145,7 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 	//TODO Update these values with values from GetInfoByDomain response
 	forwardInviteReq := &invitepb.ForwardInviteRequest{
 		InviteToken: token,
-		OriginSystemProvider: &ocmauthorizer.ProviderInfo{
+		OriginSystemProvider: &ocmprovider.ProviderInfo{
 			Domain:         "domain",
 			ApiVersion:     "ApiVersion",
 			ApiEndpoint:    "APIEndPoint",
@@ -197,7 +197,7 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	providerAllowedResp, err := gatewayClient.IsProviderAllowed(ctx, &ocmauthorizer.IsProviderAllowedRequest{
+	providerAllowedResp, err := gatewayClient.IsProviderAllowed(ctx, &ocmprovider.IsProviderAllowedRequest{
 		User: userRes.User,
 	})
 	if err != nil {
