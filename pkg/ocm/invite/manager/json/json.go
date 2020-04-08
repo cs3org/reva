@@ -199,9 +199,9 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 
 	contexUser := user.ContextMustGetUser(ctx)
 	requestBody := url.Values{
-		"token":              {invite.GetToken()},
-		"user_id":            {contexUser.GetId().GetOpaqueId()},
-		"recipient_provider": {contexUser.GetId().GetIdp()},
+		"token":             {invite.GetToken()},
+		"userID":            {contexUser.GetId().GetOpaqueId()},
+		"recipientProvider": {contexUser.GetId().GetIdp()},
 	}
 
 	resp, err := http.PostForm(originProvider.GetApiEndpoint(), requestBody)
