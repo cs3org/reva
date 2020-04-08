@@ -25,7 +25,7 @@ import (
 	authregistry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	invitepb "github.com/cs3org/go-cs3apis/cs3/invite/v1beta1"
+	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmauthorizer "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	preferences "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -45,7 +45,7 @@ var authRegistries = map[string]authregistry.RegistryAPIClient{}
 var userShareProviders = map[string]collaboration.CollaborationAPIClient{}
 var ocmShareProviders = map[string]ocm.OcmAPIClient{}
 var ocmInviteManagers = map[string]invitepb.InviteAPIClient{}
-var ocmAuthorizeProviders = map[string]ocmauthorizer.InviteAPIClient{}
+var ocmAuthorizeProviders = map[string]ocmauthorizer.ProviderAPIClient{}
 var publicShareProviders = map[string]link.LinkAPIClient{}
 var preferencesProviders = map[string]preferences.PreferencesAPIClient{}
 var appRegistries = map[string]appregistry.RegistryAPIClient{}
@@ -274,7 +274,7 @@ func GetStorageRegistryClient(endpoint string) (storageregistry.RegistryAPIClien
 }
 
 // GetOCMAuthorizerProviderClient returns a new OCMAuthorizerProviderClient.
-func GetOCMAuthorizerProviderClient(endpoint string) (invitepb.InviteAPIClient, error) {
+func GetOCMAuthorizerProviderClient(endpoint string) (ocmauthorizer.ProviderAPIClient, error) {
 	if val, ok := ocmAuthorizeProviders[endpoint]; ok {
 		return val, nil
 	}
@@ -284,7 +284,7 @@ func GetOCMAuthorizerProviderClient(endpoint string) (invitepb.InviteAPIClient, 
 		return nil, err
 	}
 
-	ocmAuthorizeProviders[endpoint] = invitepb.NewInviteAPIClient(conn)
+	ocmAuthorizeProviders[endpoint] = ocmauthorizer.NewProviderAPIClient(conn)
 
 	return ocmAuthorizeProviders[endpoint], nil
 }
