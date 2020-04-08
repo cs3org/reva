@@ -28,7 +28,7 @@ import (
 )
 
 func (s *svc) IsProviderAllowed(ctx context.Context, req *ocmauthorizer.IsProviderAllowedRequest) (*ocmauthorizer.IsProviderAllowedResponse, error) {
-	c, err := pool.GetOCMAuthorizerProviderClient(s.c.OCMAuthorizerProviderEndpoint)
+	c, err := pool.GetOCMProviderAuthorizerClient(s.c.OCMProviderAuthorizerEndpoint)
 	if err != nil {
 		return &ocmauthorizer.IsProviderAllowedResponse{
 			Status: status.NewInternal(ctx, err, "error getting ocm authorizer provider client"),
@@ -44,7 +44,7 @@ func (s *svc) IsProviderAllowed(ctx context.Context, req *ocmauthorizer.IsProvid
 }
 
 func (s *svc) GetInfoByDomain(ctx context.Context, req *ocmauthorizer.GetInfoByDomainRequest) (*ocmauthorizer.GetInfoByDomainResponse, error) {
-	c, err := pool.GetOCMAuthorizerProviderClient(s.c.OCMAuthorizerProviderEndpoint)
+	c, err := pool.GetOCMProviderAuthorizerClient(s.c.OCMProviderAuthorizerEndpoint)
 	if err != nil {
 		return &ocmauthorizer.GetInfoByDomainResponse{
 			Status: status.NewInternal(ctx, err, "error getting ocm authorizer provider client"),
@@ -60,7 +60,7 @@ func (s *svc) GetInfoByDomain(ctx context.Context, req *ocmauthorizer.GetInfoByD
 }
 
 func (s *svc) ListAllProviders(ctx context.Context, req *ocmauthorizer.ListAllProvidersRequest) (*ocmauthorizer.ListAllProvidersResponse, error) {
-	c, err := pool.GetOCMAuthorizerProviderClient(s.c.OCMAuthorizerProviderEndpoint)
+	c, err := pool.GetOCMProviderAuthorizerClient(s.c.OCMProviderAuthorizerEndpoint)
 	if err != nil {
 		return &ocmauthorizer.ListAllProvidersResponse{
 			Status: status.NewInternal(ctx, err, "error getting ocm authorizer provider client"),

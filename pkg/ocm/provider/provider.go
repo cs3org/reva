@@ -20,10 +20,19 @@ package provider
 
 import (
 	"context"
+
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	ocmauthorizer "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 )
 
 // Authorizer provides provisions to verify and add sync'n'share system providers.
 type Authorizer interface {
+	// GetInfoByDomain returns the information of the provider identified by a specific domain.
+	GetInfoByDomain(ctx context.Context, domain string) (*ocmauthorizer.ProviderInfo, error)
+
 	// IsProviderAllowed checks if a given system provider is integrated into the OCM or not.
-	IsProviderAllowed(ctx context.Context, domain string) error
+	IsProviderAllowed(ctx context.Context, user *userpb.User) error
+
+	// ListAllProviders returns the information of all the providers registered in the mesh.
+	ListAllProviders(ctx context.Context) ([]*ocmauthorizer.ProviderInfo, error)
 }

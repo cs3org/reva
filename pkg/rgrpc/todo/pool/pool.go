@@ -45,7 +45,7 @@ var authRegistries = map[string]authregistry.RegistryAPIClient{}
 var userShareProviders = map[string]collaboration.CollaborationAPIClient{}
 var ocmShareProviders = map[string]ocm.OcmAPIClient{}
 var ocmInviteManagers = map[string]invitepb.InviteAPIClient{}
-var ocmAuthorizeProviders = map[string]ocmauthorizer.ProviderAPIClient{}
+var ocmProviderAuthorizers = map[string]ocmauthorizer.ProviderAPIClient{}
 var publicShareProviders = map[string]link.LinkAPIClient{}
 var preferencesProviders = map[string]preferences.PreferencesAPIClient{}
 var appRegistries = map[string]appregistry.RegistryAPIClient{}
@@ -274,9 +274,9 @@ func GetStorageRegistryClient(endpoint string) (storageregistry.RegistryAPIClien
 	return storageRegistries[endpoint], nil
 }
 
-// GetOCMAuthorizerProviderClient returns a new OCMAuthorizerProviderClient.
-func GetOCMAuthorizerProviderClient(endpoint string) (ocmauthorizer.ProviderAPIClient, error) {
-	if val, ok := ocmAuthorizeProviders[endpoint]; ok {
+// GetOCMProviderAuthorizerClient returns a new OCMProviderAuthorizerClient.
+func GetOCMProviderAuthorizerClient(endpoint string) (ocmauthorizer.ProviderAPIClient, error) {
+	if val, ok := ocmProviderAuthorizers[endpoint]; ok {
 		return val, nil
 	}
 
@@ -285,7 +285,7 @@ func GetOCMAuthorizerProviderClient(endpoint string) (ocmauthorizer.ProviderAPIC
 		return nil, err
 	}
 
-	ocmAuthorizeProviders[endpoint] = ocmauthorizer.NewProviderAPIClient(conn)
+	ocmProviderAuthorizers[endpoint] = ocmauthorizer.NewProviderAPIClient(conn)
 
-	return ocmAuthorizeProviders[endpoint], nil
+	return ocmProviderAuthorizers[endpoint], nil
 }

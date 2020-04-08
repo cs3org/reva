@@ -21,7 +21,6 @@ package providerauthorizer
 import (
 	"fmt"
 	"net/http"
-	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -116,14 +115,8 @@ func New(m map[string]interface{}) (global.Middleware, int, error) {
 					break
 				}
 			}
-			domainSplit := strings.Split(userAuth.Mail, "@")
-			if len(domainSplit) != 2 {
-				log.Error().Err(err).Msg("user mail must contain domain")
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
 
-			err = authorizer.IsProviderAllowed(ctx, domainSplit[1])
+			err = authorizer.IsProviderAllowed(ctx, userAuth)
 			if err != nil {
 				log.Error().Err(err).Msg("provider not registered in OCM")
 				w.WriteHeader(http.StatusUnauthorized)

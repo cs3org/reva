@@ -21,6 +21,8 @@ package memory
 import (
 	"context"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	ocmauthorizer "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/ocm/provider"
 	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
 )
@@ -38,6 +40,14 @@ func New(m map[string]interface{}) (provider.Authorizer, error) {
 type authorizer struct {
 }
 
-func (a *authorizer) IsProviderAllowed(ctx context.Context, domain string) error {
+func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmauthorizer.ProviderInfo, error) {
+	return nil, nil
+}
+
+func (a *authorizer) IsProviderAllowed(ctx context.Context, user *userpb.User) error {
 	return nil
+}
+
+func (a *authorizer) ListAllProviders(ctx context.Context) ([]*ocmauthorizer.ProviderInfo, error) {
+	return nil, nil
 }
