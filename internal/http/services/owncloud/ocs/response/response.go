@@ -41,16 +41,17 @@ type Payload struct {
 }
 
 var (
-	metaStartElement = xml.StartElement{Name: xml.Name{Local: "meta"}}
-	dataName         = xml.Name{Local: "data"}
-	elementName      = xml.Name{Local: "element"}
+	elementStartElement = xml.StartElement{Name: xml.Name{Local: "element"}}
+	metaStartElement    = xml.StartElement{Name: xml.Name{Local: "meta"}}
+	ocsName             = xml.Name{Local: "ocs"}
+	dataName            = xml.Name{Local: "data"}
 )
 
 // MarshalXML handles ocs specific wrapping of array members in 'element' tags for the data
 func (p Payload) MarshalXML(e *xml.Encoder, start xml.StartElement) (err error) {
 	// first the easy part
 	// use ocs as the surrounding tag
-	start.Name = xml.Name{Local: "ocs"}
+	start.Name = ocsName
 	if err = e.EncodeToken(start); err != nil {
 		return
 	}
@@ -60,39 +61,31 @@ func (p Payload) MarshalXML(e *xml.Encoder, start xml.StartElement) (err error) 
 		return
 	}
 
-	// this is how to wrap theo data elements in their own <element> tag
-	render := func(v reflect.Value) {
-		if err = e.EncodeToken(dataName); err != nil {
+	// we need to use reflection to determine if p.Data is an array or a slice
+	rt := reflect.TypeOf(p.Data)
+	if rt != nil && (rt.Kind() == reflect.Array || rt.Kind() == reflect.Slice) {
+		// this is how to wrap the data elements in their own <element> tag
+		v := reflect.ValueOf(p.Data)
+		if err = e.EncodeToken(xml.StartElement{Name: dataName}); err != nil {
 			return
 		}
 		for i := 0; i < v.Len(); i++ {
-			if err = e.EncodeElement(v.Index(i).Interface(), xml.StartElement{Name: elementName}); err != nil {
+			if err = e.EncodeElement(v.Index(i).Interface(), elementStartElement); err != nil {
 				return
 			}
 		}
 		if err = e.EncodeToken(xml.EndElement{Name: dataName}); err != nil {
 			return
 		}
-	}
-
-	// we need to use reflection to determine if p.Data is an array or a slice
-	rt := reflect.TypeOf(p.Data)
-	switch rt.Kind() {
-	case reflect.Slice:
-		render(reflect.ValueOf(p.Data))
-	case reflect.Array:
-		render(reflect.ValueOf(p.Data))
-	default:
-		if err = e.EncodeElement(p.Data, xml.StartElement{Name: dataName}); err != nil {
-			return
-		}
+	} else if err = e.EncodeElement(p.Data, xml.StartElement{Name: dataName}); err != nil {
+		return
 	}
 
 	// write the closing <ocs> tag
 	if err = e.EncodeToken(xml.EndElement{Name: start.Name}); err != nil {
 		return
 	}
-	return nil
+	return
 }
 
 // Meta holds response metadata
