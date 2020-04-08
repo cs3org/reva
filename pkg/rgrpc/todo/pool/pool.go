@@ -273,6 +273,7 @@ func GetStorageRegistryClient(endpoint string) (storageregistry.RegistryAPIClien
 	return storageRegistries[endpoint], nil
 }
 
+// GetOCMAuthorizerProviderClient returns a new OCMAuthorizerProviderClient.
 func GetOCMAuthorizerProviderClient(endpoint string) (invitepb.InviteAPIClient, error) {
 	if val, ok := ocmAuthorizeProviders[endpoint]; ok {
 		return val, nil
