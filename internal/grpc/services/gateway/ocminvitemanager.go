@@ -21,7 +21,7 @@ package gateway
 import (
 	"context"
 
-	invitepb "github.com/cs3org/go-cs3apis/cs3/invite/v1beta1"
+	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"

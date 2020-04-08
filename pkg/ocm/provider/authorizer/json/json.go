@@ -23,7 +23,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 
-	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	ocmauthorizer "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/provider"
 	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
@@ -47,7 +47,7 @@ func New(m map[string]interface{}) (provider.Authorizer, error) {
 	if err != nil {
 		return nil, err
 	}
-	providers := []*ocm.ProviderInfo{}
+	providers := []*ocmauthorizer.ProviderInfo{}
 	err = json.Unmarshal(f, &providers)
 	if err != nil {
 		return nil, err
@@ -64,7 +64,7 @@ type config struct {
 }
 
 type authorizer struct {
-	providers []*ocm.ProviderInfo
+	providers []*ocmauthorizer.ProviderInfo
 }
 
 func (a *authorizer) IsProviderAllowed(ctx context.Context, domain string) error {
