@@ -115,7 +115,7 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -123,7 +123,7 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 
 	// prefix the path with the owners home, because ocs share requests are relative to the home dir
 	// TODO the path actually depends on the configured webdav_namespace
-	hRes, err := sClient.GetHome(ctx, &provider.GetHomeRequest{})
+	hRes, err := c.GetHome(ctx, &provider.GetHomeRequest{})
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc get home request", err)
 		return
@@ -144,13 +144,7 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
-		if err != nil {
-			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
-			return
-		}
-
-		userRes, err := gatewayClient.GetUser(ctx, &userpb.GetUserRequest{
+		userRes, err := c.GetUser(ctx, &userpb.GetUserRequest{
 			UserId: &userpb.UserId{OpaqueId: shareWith},
 		})
 		if err != nil {
@@ -209,7 +203,7 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 			},
 		}
 
-		statRes, err := sClient.Stat(ctx, statReq)
+		statRes, err := c.Stat(ctx, statReq)
 		if err != nil {
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc stat request", err)
 			return
@@ -245,7 +239,7 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 			},
 		}
 
-		createShareResponse, err := gatewayClient.CreateShare(ctx, createShareReq)
+		createShareResponse, err := c.CreateShare(ctx, createShareReq)
 		if err != nil {
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc create share request", err)
 			return
@@ -271,12 +265,6 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 
 	// create a public link share
 	if shareType == int(conversions.ShareTypePublicLink) {
-		// get a connection to the public shares service
-		c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
-		if err != nil {
-			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
-			return
-		}
 
 		statReq := provider.StatRequest{
 			Ref: &provider.Reference{
@@ -701,7 +689,7 @@ func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 	// shared with others
 	p := r.URL.Query().Get("path")
 	if p != "" {
-		sClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+		c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 		if err != nil {
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting storage grpc client", err)
 			return
@@ -709,7 +697,7 @@ func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 
 		// prefix the path with the owners home, because ocs share requests are relative to the home dir
 		// TODO the path actually depends on the configured webdav_namespace
-		hRes, err := sClient.GetHome(r.Context(), &provider.GetHomeRequest{})
+		hRes, err := c.GetHome(r.Context(), &provider.GetHomeRequest{})
 		if err != nil {
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc get home request", err)
 			return
@@ -760,10 +748,6 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 
 		ocsDataPayload := make([]*conversions.ShareData, 0)
 		for _, share := range res.GetShare() {
-			sClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
-			if err != nil {
-				return nil, err
-			}
 
 			statRequest := &provider.StatRequest{
 				Ref: &provider.Reference{
@@ -773,7 +757,7 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 				},
 			}
 
-			statResponse, err := sClient.Stat(ctx, statRequest)
+			statResponse, err := c.Stat(ctx, statRequest)
 			if err != nil {
 				return nil, err
 			}
@@ -892,12 +876,6 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.ListS
 				return nil, err
 			}
 
-			// check if the resource exists
-			sClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
-			if err != nil {
-				return nil, err
-			}
-
 			// prepare the stat request
 			statReq := &provider.StatRequest{
 				// prepare the reference
@@ -907,7 +885,7 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.ListS
 				},
 			}
 
-			statResponse, err := sClient.Stat(ctx, statReq)
+			statResponse, err := c.Stat(ctx, statReq)
 			if err != nil {
 				return nil, err
 			}
