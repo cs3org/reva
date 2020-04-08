@@ -16,32 +16,65 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package memory
+package open
 
 import (
 	"context"
+	"encoding/json"
+	"io/ioutil"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmauthorizer "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/provider"
 	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
+	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
 )
 
 func init() {
-	registry.Register("memory", New)
+	registry.Register("open", New)
 }
 
 // New returns a new authorizer object.
 func New(m map[string]interface{}) (provider.Authorizer, error) {
-	auth := new(authorizer)
-	return auth, nil
+	c := &config{}
+	if err := mapstructure.Decode(m, c); err != nil {
+		err = errors.Wrap(err, "error decoding conf")
+		return nil, err
+	}
+
+	f, err := ioutil.ReadFile(c.Providers)
+	if err != nil {
+		return nil, err
+	}
+	providers := []*ocmauthorizer.ProviderInfo{}
+	err = json.Unmarshal(f, &providers)
+	if err != nil {
+		return nil, err
+	}
+
+	return &authorizer{
+		providers: providers,
+	}, nil
+}
+
+type config struct {
+	// Users holds a path to a file containing json conforming the Users struct
+	Providers string `mapstructure:"providers"`
 }
 
 type authorizer struct {
+	providers []*ocmauthorizer.ProviderInfo
 }
 
 func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmauthorizer.ProviderInfo, error) {
-	return nil, nil
+	for _, p := range a.providers {
+		if p.Domain == domain {
+			return p, nil
+		}
+	}
+	return nil, errtypes.NotFound(domain)
 }
 
 func (a *authorizer) IsProviderAllowed(ctx context.Context, user *userpb.User) error {
@@ -49,5 +82,5 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, user *userpb.User) e
 }
 
 func (a *authorizer) ListAllProviders(ctx context.Context) ([]*ocmauthorizer.ProviderInfo, error) {
-	return nil, nil
+	return a.providers, nil
 }

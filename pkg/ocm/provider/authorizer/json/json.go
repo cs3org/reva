@@ -22,9 +22,11 @@ import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
+	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmauthorizer "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/provider"
 	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
 	"github.com/mitchellh/mapstructure"
@@ -68,13 +70,29 @@ type authorizer struct {
 }
 
 func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmauthorizer.ProviderInfo, error) {
-	return nil, nil
+	for _, p := range a.providers {
+		if p.Domain == domain {
+			return p, nil
+		}
+	}
+	return nil, errtypes.NotFound(domain)
 }
 
 func (a *authorizer) IsProviderAllowed(ctx context.Context, user *userpb.User) error {
-	return nil
+	domainSplit := strings.Split(user.Mail, "@")
+	if len(domainSplit) != 2 {
+		return errtypes.NotSupported("Email " + user.Mail)
+	}
+
+	for _, p := range a.providers {
+		if p.Domain == domainSplit[1] {
+			return nil
+		}
+	}
+
+	return errtypes.NotFound(domainSplit[1])
 }
 
 func (a *authorizer) ListAllProviders(ctx context.Context) ([]*ocmauthorizer.ProviderInfo, error) {
-	return nil, nil
+	return a.providers, nil
 }
