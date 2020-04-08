@@ -802,7 +802,14 @@ func (fs *eosfs) GetQuota(ctx context.Context) (int, int, error) {
 	if err != nil {
 		return 0, 0, errors.Wrap(err, "eos: no user in ctx")
 	}
-	return fs.c.GetQuota(ctx, u.Username, fs.conf.Namespace)
+
+	qi, err := fs.c.GetQuota(ctx, u.Username, fs.conf.Namespace)
+	if err != nil {
+		err := errors.Wrap(err, "eosfs: error getting quota")
+		return 0, 0, err
+	}
+
+	return qi.AvailableBytes, qi.UsedBytes, nil
 }
 
 func (fs *eosfs) getInternalHome(ctx context.Context) (string, error) {
