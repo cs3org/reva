@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"time"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmauthorizer "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -74,19 +75,17 @@ func (h *invitesHandler) generateInviteToken(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	inviteTokenRequest := &invitepb.GenerateInviteTokenRequest{}
-
-	token, err := gatewayClient.GenerateInviteToken(ctx, inviteTokenRequest)
+	token, err := gatewayClient.GenerateInviteToken(ctx, &invitepb.GenerateInviteTokenRequest{})
 
 	if err != nil {
-		WriteError(w, r, APIErrorNotFound, "error generate token", err)
+		WriteError(w, r, APIErrorServerError, "error generating token", err)
 		return
 	}
 
 	bytes, err := json.Marshal(token)
 	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error marshal token data", err)
-		log.Err(err).Msg("error marshal shares data.")
+		WriteError(w, r, APIErrorServerError, "error marshalling token data", err)
+		log.Err(err).Msg("error marshal token data.")
 		return
 	}
 
@@ -170,22 +169,68 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
-	// ctx := r.Context()
-	// log := appctx.GetLogger(ctx)
-	//
-	// gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
-	// if err != nil {
-	// 	WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting storage grpc client on addr: %v", h.gatewayAddr), err)
-	// 	return
-	// }
-	//
-	// token, userID, recipient_provider := r.FormValue("userID"), r.FormValue("userID"), r.FormValue("recipient_provider")
-	// if token == "" || userID == "" || recipient_provider == "" {
-	// 	WriteError(w, r, APIErrorInvalidParameter, "missing parameters in request", nil)
-	// 	return
-	// }
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
 
-	// acceptInviteRequest := &invitepb.AcceptInviteRequest{
-	// 	invitepb.InviteToken
-	// }
+	token, userID, recipientProvider := r.FormValue("token"), r.FormValue("userID"), r.FormValue("recipient_provider")
+	if token == "" || userID == "" || recipientProvider == "" {
+		WriteError(w, r, APIErrorInvalidParameter, "missing parameters in request", nil)
+		return
+	}
+
+	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting storage grpc client on addr: %v", h.gatewayAddr), err)
+		return
+	}
+
+	userIDObject := &userpb.UserId{OpaqueId: userID, Idp: recipientProvider}
+	userRes, err := gatewayClient.GetUser(ctx, &userpb.GetUserRequest{
+		UserId: userIDObject,
+	})
+	if err != nil {
+		WriteError(w, r, APIErrorInvalidParameter, "error searching for user", err)
+		return
+	}
+	if userRes.Status.Code != rpc.Code_CODE_OK {
+		WriteError(w, r, APIErrorNotFound, "user not found", err)
+		return
+	}
+
+	providerAllowedResp, err := gatewayClient.IsProviderAllowed(ctx, &ocmauthorizer.IsProviderAllowedRequest{
+		User: userRes.User,
+	})
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, "error authorizing provider", err)
+		return
+	}
+	if providerAllowedResp.Status.Code != rpc.Code_CODE_OK {
+		WriteError(w, r, APIErrorUnauthenticated, "provider not authorized", err)
+		return
+	}
+
+	acceptInviteRequest := &invitepb.AcceptInviteRequest{
+		InviteToken: &invitepb.InviteToken{
+			Token: token,
+		},
+		UserId: &userpb.UserId{
+			OpaqueId: userID,
+			Idp:      recipientProvider,
+		},
+	}
+	acceptInviteResponse, err := gatewayClient.AcceptInvite(ctx, acceptInviteRequest)
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, "error sending a grpc accept invite request", err)
+		return
+	}
+	if acceptInviteResponse.Status.Code != rpc.Code_CODE_OK {
+		if acceptInviteResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			WriteError(w, r, APIErrorNotFound, "not found", nil)
+			return
+		}
+		WriteError(w, r, APIErrorServerError, "grpc accept invite request failed", err)
+		return
+	}
+
+	log.Info().Msg("User added to accepted users.")
 }

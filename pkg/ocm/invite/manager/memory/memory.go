@@ -73,7 +73,7 @@ func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, err
 	ctxUser := user.ContextMustGetUser(ctx)
 	inviteToken, err := token.CreateToken(m.Config.Expiration, ctxUser.GetId())
 	if err != nil {
-		return nil, errors.Wrap(err, "error create token")
+		return nil, errors.Wrap(err, "memory: error creating token")
 	}
 
 	m.Invites.Store(inviteToken.GetToken(), inviteToken)
@@ -91,7 +91,7 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 
 	resp, err := http.PostForm(originProvider.GetApiEndpoint(), requestBody)
 	if err != nil {
-		err = errors.Wrap(err, "json: error sending post request")
+		err = errors.Wrap(err, "memory: error sending post request")
 		return err
 	}
 
