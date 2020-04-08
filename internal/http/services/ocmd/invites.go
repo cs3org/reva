@@ -24,15 +24,14 @@ import (
 	"net/http"
 	"time"
 
-	invitepb "github.com/cs3org/go-cs3apis/cs3/invite/v1beta1"
+	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
+	ocmauthorizer "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	userPkg "github.com/cs3org/reva/pkg/user"
-
-	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/user"
 )
 
 type invitesHandler struct {
@@ -97,7 +96,7 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 
 	expireTime := time.Now()
 
-	contextUser, _ := userPkg.ContextGetUser(ctx)
+	contextUser, _ := user.ContextGetUser(ctx)
 	token := &invitepb.InviteToken{
 		Token:  "blbl",
 		UserId: contextUser.GetId(),
@@ -110,7 +109,7 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 	//TODO Update these values with values from GetInfoByDomain response
 	forwardInviteReq := &invitepb.ForwardInviteRequest{
 		InviteToken: token,
-		OriginSystemProvider: &ocm.ProviderInfo{
+		OriginSystemProvider: &ocmauthorizer.ProviderInfo{
 			Domain:         "domain",
 			ApiVersion:     "ApiVersion",
 			ApiEndpoint:    "APIEndPoint",

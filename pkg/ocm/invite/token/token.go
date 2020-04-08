@@ -22,7 +22,7 @@ import (
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	invitepb "github.com/cs3org/go-cs3apis/cs3/invite/v1beta1"
+	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"

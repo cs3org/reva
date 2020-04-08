@@ -22,7 +22,7 @@ import (
 	"context"
 	"fmt"
 
-	invitepb "github.com/cs3org/go-cs3apis/cs3/invite/v1beta1"
+	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	"github.com/cs3org/reva/pkg/ocm/invite"
 	"github.com/cs3org/reva/pkg/ocm/invite/manager/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"

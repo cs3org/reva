@@ -28,8 +28,8 @@ import (
 	"github.com/cs3org/reva/pkg/user"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	invitepb "github.com/cs3org/go-cs3apis/cs3/invite/v1beta1"
-	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
+	ocmauthorizer "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/ocm/invite"
 	"github.com/cs3org/reva/pkg/ocm/invite/manager/registry"
 	"github.com/cs3org/reva/pkg/ocm/invite/token"
@@ -80,7 +80,7 @@ func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, err
 	return inviteToken, nil
 }
 
-func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToken, originProvider *ocm.ProviderInfo) error {
+func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToken, originProvider *ocmauthorizer.ProviderInfo) error {
 	contexUser := user.ContextMustGetUser(ctx)
 	requestBody := url.Values{
 		"token":              {invite.GetToken()},
