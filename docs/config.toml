@@ -81,7 +81,7 @@ github_project_repo = "https://github.com/cs3org/reva"
 # github_subdir = ""
 
 # Google Custom Search Engine ID. Remove or comment out to disable search.
- gcs_engine_id = "011737558837375720776:fsdu1nryfng"
+ gcs_engine_id = "010913146518163072247:tinkle2veql"
 
 # Enable Algolia DocSearch
 algolia_docsearch = false
