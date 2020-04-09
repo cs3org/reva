@@ -1,0 +1,37 @@
+{
+  "providers": [
+    {
+      "id": "cernbox",
+      "org": "CERN",
+      "name": "CERNBox",
+      "description": "CERNBox provides cloud data storage to all CERN users.You can store your data,share it and synchronise it across devices - smartphones, tablets, laptops, desktops, the lot!",
+      "domain": "cernbox.cern.ch",
+      "logo": "https://github.com/cernbox/branding/blob/master/cernbox-lrg.svg",
+      "homepage": "https://cernbox.cern.ch",
+      "ocm_api": "ocm/",
+      "api_version": "0.0.1"
+    },
+    {
+      "id": "oc-cesnet",
+      "org": "CESNET",
+      "name": "ownCloud@CESNET",
+      "description": "OwnCloud has been designed for individual users. It enables automatic data synchronisation between various computers and mobile devices of the user. Data are also available through the web interface. Data can be easily shared with colleagues.",
+      "domain": "owncloud.cesnet.cz",
+      "logo": "",
+      "homepage": "https://owncloud.cesnet.cz",
+      "ocm_api": "ocm/",
+      "api_version": "0.0.1"
+    },
+    {
+      "id": "catbox",
+      "org": "Erwin Schrödinger",
+      "name": "CatBox",
+      "description": "A nondeterministic storage of cats.",
+      "domain": "catbox.example.org",
+      "logo": "",
+      "homepage": "https://catbox.example.org/dead",
+      "ocm_api": "alive/ocm/",
+      "api_version": "0.0.1"
+    }
+  ]
+}

@@ -16,19 +16,19 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package registry
 
-import (
-	// Load core HTTP services
-	_ "github.com/cs3org/reva/internal/http/services/datagateway"
-	_ "github.com/cs3org/reva/internal/http/services/dataprovider"
-	_ "github.com/cs3org/reva/internal/http/services/helloworld"
-	_ "github.com/cs3org/reva/internal/http/services/meshdirectory"
-	_ "github.com/cs3org/reva/internal/http/services/ocmd"
-	_ "github.com/cs3org/reva/internal/http/services/oidcprovider"
-	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
-	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocs"
-	_ "github.com/cs3org/reva/internal/http/services/prometheus"
-	_ "github.com/cs3org/reva/internal/http/services/wellknown"
-	// Add your own service here
-)
+import "github.com/cs3org/reva/pkg/meshdirectory"
+
+// NewFunc is the function that mesh directory managers
+// should register at init time.
+type NewFunc func(map[string]interface{}) (meshdirectory.Manager, error)
+
+// NewFuncs is a map containing all the registered mesh directory managers.
+var NewFuncs = map[string]NewFunc{}
+
+// Register registers a new mesh directory manager new function.
+// Not safe for concurrent use. Safe for use from package init.
+func Register(name string, f NewFunc) {
+	NewFuncs[name] = f
+}
