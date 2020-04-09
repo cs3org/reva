@@ -82,7 +82,7 @@ func (h *invitesHandler) generateInviteToken(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	bytes, err := json.Marshal(token)
+	jsonResponse, err := json.Marshal(token.InviteToken)
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error marshalling token data", err)
 		log.Err(err).Msg("error marshal token data.")
@@ -90,7 +90,7 @@ func (h *invitesHandler) generateInviteToken(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Write response
-	_, err = w.Write(bytes)
+	_, err = w.Write(jsonResponse)
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error writing token data", err)
 		log.Err(err).Msg("error writing shares data.")
@@ -196,7 +196,6 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, APIErrorNotFound, "user not found", err)
 		return
 	}
-	log.Info().Msg(fmt.Sprintf("userRes %+v", userRes))
 
 	providerAllowedResp, err := gatewayClient.IsProviderAllowed(ctx, &ocmprovider.IsProviderAllowedRequest{
 		User: userRes.User,
@@ -222,10 +221,6 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if acceptInviteResponse.Status.Code != rpc.Code_CODE_OK {
-		if acceptInviteResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			WriteError(w, r, APIErrorNotFound, "not found", nil)
-			return
-		}
 		WriteError(w, r, APIErrorServerError, "grpc accept invite request failed", err)
 		return
 	}
