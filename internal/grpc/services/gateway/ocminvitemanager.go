@@ -44,7 +44,6 @@ func (s *svc) GenerateInviteToken(ctx context.Context, req *invitepb.GenerateInv
 }
 
 func (s *svc) ForwardInvite(ctx context.Context, req *invitepb.ForwardInviteRequest) (*invitepb.ForwardInviteResponse, error) {
-
 	c, err := pool.GetOCMInviteManagerClient(s.c.OCMInviteManagerEndpoint)
 	if err != nil {
 		return &invitepb.ForwardInviteResponse{

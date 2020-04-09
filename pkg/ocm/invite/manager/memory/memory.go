@@ -81,16 +81,18 @@ func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, err
 }
 
 func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToken, originProvider *ocmprovider.ProviderInfo) error {
-	contexUser := user.ContextMustGetUser(ctx)
+	contextUser := user.ContextMustGetUser(ctx)
 	requestBody := url.Values{
 		"token":             {invite.GetToken()},
-		"userID":            {contexUser.GetId().GetOpaqueId()},
-		"recipientProvider": {contexUser.GetId().GetIdp()},
+		"userID":            {contextUser.GetId().GetOpaqueId()},
+		"recipientProvider": {contextUser.GetId().GetIdp()},
 	}
 
-	resp, err := http.PostForm(originProvider.GetApiEndpoint(), requestBody)
-	if err != nil {
-		err = errors.Wrap(err, "memory: error sending post request")
+	resp, err := http.PostForm(originProvider.GetApiEndpoint()+"/invites/accept", requestBody)
+
+	if resp.Status != "200" {
+		cause := errors.New(resp.Status)
+		err = errors.Wrap(cause, "memory: error sending accept post request")
 		return err
 	}
 

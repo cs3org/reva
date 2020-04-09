@@ -22,17 +22,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
-	"github.com/cs3org/reva/pkg/user"
 )
 
 type invitesHandler struct {
@@ -103,54 +100,36 @@ func (h *invitesHandler) generateInviteToken(w http.ResponseWriter, r *http.Requ
 
 func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
 
-	type Request struct {
-		Token        string
-		ProviderInfo string
-	}
-
-	if r.Body == nil {
-		http.Error(w, "Null body", 400)
-		return
-	}
-	var req Request
-
-	// Try to decode the request body into the struct. If there is an error,
-	// respond to the client with the error message and a 400 status code.
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if r.FormValue("token") == "" || r.FormValue("providerDomain") == "" {
+		WriteError(w, r, APIErrorInvalidParameter, "token and providerDomain must not be null", nil)
 		return
 	}
 
 	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
-	// response, err := gatewayClient.GetInfoByDomain(ctx, request)
+
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting invite grpc client on addr: %v", h.gatewayAddr), err)
 		return
 	}
 
-	expireTime := time.Now()
-
-	contextUser, _ := user.ContextGetUser(ctx)
 	token := &invitepb.InviteToken{
-		Token:  "blbl",
-		UserId: contextUser.GetId(),
-		Expiration: &types.Timestamp{
-			Nanos:   uint32(expireTime.UnixNano()),
-			Seconds: uint64(expireTime.Unix()),
-		},
+		Token: r.FormValue("token"),
 	}
 
-	//TODO Update these values with values from GetInfoByDomain response
+	providerInfo, err := gatewayClient.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
+		Domain: r.FormValue("providerDomain"),
+	})
+
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, "error sending a grpc get invite by domain info request", err)
+		return
+	}
+
 	forwardInviteReq := &invitepb.ForwardInviteRequest{
-		InviteToken: token,
-		OriginSystemProvider: &ocmprovider.ProviderInfo{
-			Domain:         "domain",
-			ApiVersion:     "ApiVersion",
-			ApiEndpoint:    "APIEndPoint",
-			WebdavEndpoint: "WebdavEndpoint",
-		},
+		InviteToken:          token,
+		OriginSystemProvider: providerInfo.ProviderInfo,
 	}
 
 	forwardInviteResponse, err := gatewayClient.ForwardInvite(ctx, forwardInviteReq)
@@ -166,6 +145,8 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, APIErrorServerError, "grpc forward invite request failed", err)
 		return
 	}
+
+	log.Info().Msg("Invite forwarded.")
 }
 
 func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
