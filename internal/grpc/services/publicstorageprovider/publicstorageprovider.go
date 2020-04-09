@@ -6,9 +6,11 @@ import (
 	"path"
 	"strings"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -23,17 +25,15 @@ func init() {
 }
 
 type config struct {
-	MountPath               string `mapstructure:"mount_path"`
-	MountID                 string `mapstructure:"mount_id"`
-	PublicShareProviderAddr string `mapstructure:"public_share_provider_addr"`
-	StorageProviderAddr     string `mapstructure:"storage_provider_addr"`
+	MountPath   string `mapstructure:"mount_path"`
+	MountID     string `mapstructure:"mount_id"`
+	GatewayAddr string `mapstructure:"gateway_addr"`
 }
 
 type service struct {
-	conf                 *config
-	mountPath, mountID   string
-	publicShareProviderC link.LinkAPIClient
-	storageProviderC     provider.ProviderAPIClient
+	conf               *config
+	mountPath, mountID string
+	gateway            gateway.GatewayAPIClient
 }
 
 func (s *service) Close() error {
@@ -57,7 +57,6 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 // New creates a new Public Storage Provider service.
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
-
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -65,22 +64,17 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 
 	mountPath := c.MountPath
 	mountID := c.MountID
-	psProvider, err := publicShareClient(c)
-	if err != nil {
-		return nil, err
-	}
 
-	storageProvider, err := storageProviderClient(c)
+	gateway, err := pool.GetGatewayServiceClient(c.GatewayAddr)
 	if err != nil {
 		return nil, err
 	}
 
 	service := &service{
-		conf:                 c,
-		mountPath:            mountPath,
-		mountID:              mountID,
-		publicShareProviderC: psProvider,
-		storageProviderC:     storageProvider,
+		conf:      c,
+		mountPath: mountPath,
+		mountID:   mountID,
+		gateway:   gateway,
 	}
 
 	return service, nil
@@ -139,7 +133,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		return nil, err
 	}
 
-	statResponse, err := s.storageProviderC.Stat(
+	statResponse, err := s.gateway.Stat(
 		ctx,
 		&provider.StatRequest{
 			Ref: refFromReq,
@@ -157,13 +151,12 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 }
 
 func (s *service) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
-	// A Stat request to translate the public link to the internal storage
 	statResponse, err := s.Stat(ctx, &provider.StatRequest{Ref: req.Ref})
 	if err != nil {
 		return nil, err
 	}
 
-	listContainerR, err := s.storageProviderC.ListContainer(
+	listContainerR, err := s.gateway.ListContainer(
 		ctx,
 		&provider.ListContainerRequest{
 			Ref: &provider.Reference{
@@ -267,24 +260,6 @@ func (s *service) wrap(ctx context.Context, ri *provider.ResourceInfo) error {
 	return nil
 }
 
-func publicShareClient(c *config) (link.LinkAPIClient, error) {
-	shareConn, err := grpc.Dial(c.PublicShareProviderAddr, grpc.WithInsecure())
-	if err != nil {
-		return nil, err
-	}
-
-	return link.NewLinkAPIClient(shareConn), nil
-}
-
-func storageProviderClient(c *config) (provider.ProviderAPIClient, error) {
-	conn, err := grpc.Dial(c.StorageProviderAddr, grpc.WithInsecure())
-	if err != nil {
-		return nil, err
-	}
-
-	return provider.NewProviderAPIClient(conn), nil
-}
-
 // refFromRequest returns a reference from a public share token.
 func (s *service) refFromRequest(ctx context.Context, req *provider.StatRequest) (*provider.Reference, error) {
 	ctx, span := trace.StartSpan(ctx, "refFromRequest")
@@ -299,7 +274,7 @@ func (s *service) refFromRequest(ctx context.Context, req *provider.StatRequest)
 		return nil, err
 	}
 
-	publicShareResponse, err := s.publicShareProviderC.GetPublicShareByToken(
+	publicShareResponse, err := s.gateway.GetPublicShareByToken(
 		ctx,
 		&link.GetPublicShareByTokenRequest{Token: token},
 	)
