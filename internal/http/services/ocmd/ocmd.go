@@ -82,7 +82,7 @@ func (s *svc) Prefix() string {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{}
+	return []string{"/invites/accept"}
 }
 
 func (s *svc) Handler() http.Handler {

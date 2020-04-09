@@ -14,6 +14,7 @@ usershareprovidersvc = "localhost:19000"
 publicshareprovidersvc = "localhost:19000"
 ocmshareprovidersvc = "localhost:19000"
 ocminvitemanagersvc = "localhost:19000"
+ocmproviderauthorizersvc = "localhost:19000"
 commit_share_to_storage_grant = false
 datagateway = "http://localhost:19001/data"
 transfer_shared_secret = "replace-me-with-a-transfer-secret" # for direct uploads
@@ -43,6 +44,12 @@ driver = "memory"
 
 [grpc.services.ocmshareprovider]
 driver = "json"
+
+[grpc.services.ocmproviderauthorizer]
+driver = "json"
+
+[grpc.services.ocmproviderauthorizer.drivers.json]
+providers = "providers.demo.json"
 
 [grpc.services.publicshareprovider]
 driver = "memory"

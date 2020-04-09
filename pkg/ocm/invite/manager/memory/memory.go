@@ -124,7 +124,7 @@ func getTokenIfValid(m *manager, token *invitepb.InviteToken) (*invitepb.InviteT
 	}
 
 	inviteToken := tokenInterface.(*invitepb.InviteToken)
-	if uint64(time.Now().Unix()) <= inviteToken.Expiration.Seconds {
+	if uint64(time.Now().Unix()) > inviteToken.Expiration.Seconds {
 		return nil, errors.New("memory: token expired")
 	}
 	return inviteToken, nil

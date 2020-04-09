@@ -196,6 +196,7 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, APIErrorNotFound, "user not found", err)
 		return
 	}
+	log.Info().Msg(fmt.Sprintf("userRes %+v", userRes))
 
 	providerAllowedResp, err := gatewayClient.IsProviderAllowed(ctx, &ocmprovider.IsProviderAllowedRequest{
 		User: userRes.User,
@@ -213,10 +214,7 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		InviteToken: &invitepb.InviteToken{
 			Token: token,
 		},
-		UserId: &userpb.UserId{
-			OpaqueId: userID,
-			Idp:      recipientProvider,
-		},
+		UserId: userIDObject,
 	}
 	acceptInviteResponse, err := gatewayClient.AcceptInvite(ctx, acceptInviteRequest)
 	if err != nil {

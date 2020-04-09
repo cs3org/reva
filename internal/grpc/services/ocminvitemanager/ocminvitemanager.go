@@ -58,7 +58,7 @@ func (s *service) Close() error {
 }
 
 func (s *service) UnprotectedEndpoints() []string {
-	return []string{}
+	return []string{"/cs3.ocm.invite.v1beta1.InviteAPI/AcceptInvite"}
 }
 
 func (s *service) Register(ss *grpc.Server) {
