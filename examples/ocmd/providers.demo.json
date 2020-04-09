@@ -2,25 +2,25 @@
 	{
 		"domain": "cern.ch",
 		"api_version": "0.0.1",
-		"api_endpoint": "ocm/",
-		"webdav_endpoint": "ocm/webdav/"
+		"api_endpoint": "http://127.0.0.1:19001/ocm/",
+		"webdav_endpoint": "http://127.0.0.1:19001/ocm/webdav/"
 	},
 	{
 		"domain": "cesnet.cz",
 		"api_version": "0.0.1",
-		"api_endpoint": "ocm/",
-		"webdav_endpoint": "ocm/webdav/"
+		"api_endpoint": "http://127.0.0.1:19001/ocm/",
+		"webdav_endpoint": "http://127.0.0.1:19001/ocm/webdav/"
 	},
 	{
 		"domain": "example.org",
 		"api_version": "0.0.1",
-		"api_endpoint": "ocm/",
-		"webdav_endpoint": "ocm/webdav/"
+		"api_endpoint": "http://127.0.0.1:19001/ocm/",
+		"webdav_endpoint": "http://127.0.0.1:19001/ocm/webdav/"
 	},
 	{
 		"domain": "test.org",
 		"api_version": "0.0.1",
 		"api_endpoint": "http://127.0.0.1:19001/ocm/",
-		"webdav_endpoint": "ocm/webdav/"
+		"webdav_endpoint": "http://127.0.0.1:19001/ocm/webdav/"
 	}
 ]

@@ -20,8 +20,10 @@ package memory
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
+	"path"
 	"sync"
 	"time"
 
@@ -36,6 +38,8 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
+
+const acceptInviteEndpoint = "invites/accept"
 
 func init() {
 	registry.Register("memory", New)
@@ -81,6 +85,7 @@ func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, err
 }
 
 func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToken, originProvider *ocmprovider.ProviderInfo) error {
+
 	contextUser := user.ContextMustGetUser(ctx)
 	requestBody := url.Values{
 		"token":             {invite.GetToken()},
@@ -88,15 +93,18 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 		"recipientProvider": {contextUser.GetId().GetIdp()},
 	}
 
-	resp, err := http.PostForm(originProvider.GetApiEndpoint()+"/invites/accept", requestBody)
-
-	if resp.Status != "200" {
-		cause := errors.New(resp.Status)
-		err = errors.Wrap(cause, "memory: error sending accept post request")
+	resp, err := http.PostForm(fmt.Sprintf("%s%s", originProvider.GetApiEndpoint(), acceptInviteEndpoint), requestBody)
+	if err != nil {
+		err = errors.Wrap(err, "memory: error sending post request, URL: "+path.Join(originProvider.GetApiEndpoint(), acceptInviteEndpoint))
 		return err
 	}
 
-	resp.Body.Close()
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		err = errors.Wrap(errors.New(resp.Status), "memory: error sending accept post request")
+		return err
+	}
+
 	return nil
 }
 

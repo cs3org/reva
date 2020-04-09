@@ -41,6 +41,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+const acceptInviteEndpoint = "invites/accept"
+
 type inviteModel struct {
 	File          string
 	Invites       map[string]*invitepb.InviteToken `json:"invites"`
@@ -204,13 +206,18 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 		"recipientProvider": {contexUser.GetId().GetIdp()},
 	}
 
-	resp, err := http.PostForm(originProvider.GetApiEndpoint(), requestBody)
+	resp, err := http.PostForm(fmt.Sprintf("%s%s", originProvider.GetApiEndpoint(), acceptInviteEndpoint), requestBody)
 	if err != nil {
 		err = errors.Wrap(err, "json: error sending post request")
 		return err
 	}
 
-	resp.Body.Close()
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		err = errors.Wrap(errors.New(resp.Status), "json: error sending accept post request")
+		return err
+	}
+
 	return nil
 }
 
