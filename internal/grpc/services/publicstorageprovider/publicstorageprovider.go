@@ -272,12 +272,6 @@ func (s *service) trimMountPrefix(fn string) (string, error) {
 	return "", errors.New(fmt.Sprintf("path=%q does not belong to this storage provider mount path=%q"+fn, s.mountPath))
 }
 
-func (s *service) wrap(ctx context.Context, ri *provider.ResourceInfo) error {
-	ri.Id.StorageId = s.mountID
-	ri.Path = path.Join(s.mountPath, ri.Path)
-	return nil
-}
-
 // refFromRequest returns a reference from a public share token.
 func (s *service) refFromRequest(ctx context.Context, req *provider.StatRequest) (*provider.Reference, error) {
 	ctx, span := trace.StartSpan(ctx, "refFromRequest")
