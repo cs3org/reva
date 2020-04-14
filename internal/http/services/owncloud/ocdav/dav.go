@@ -23,7 +23,12 @@ import (
 	"net/http"
 	"path"
 
+	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	tokenpkg "github.com/cs3org/reva/pkg/token"
+	"google.golang.org/grpc/metadata"
 )
 
 // DavHandler routes to the different sub handlers
@@ -32,7 +37,7 @@ type DavHandler struct {
 	FilesHandler       *WebDavHandler
 	MetaHandler        *MetaHandler
 	TrashbinHandler    *TrashbinHandler
-	PublicFilesHandler *PublicFilesHandler
+	PublicFilesHandler *WebDavHandler
 }
 
 func (h *DavHandler) init(c *Config) error {
@@ -50,7 +55,10 @@ func (h *DavHandler) init(c *Config) error {
 	}
 	h.TrashbinHandler = new(TrashbinHandler)
 
-	h.PublicFilesHandler = &PublicFilesHandler{}
+	h.PublicFilesHandler = new(WebDavHandler)
+	if err := h.PublicFilesHandler.init("public"); err != nil { // jail public file r equests to /public/ prefix
+		return err
+	}
 
 	return h.TrashbinHandler.init(c)
 }
@@ -86,6 +94,34 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			r = r.WithContext(ctx)
 			h.TrashbinHandler.Handler(s).ServeHTTP(w, r)
 		case "public-files":
+			// TODO(refs) can this logic all be moved to the handler instead?
+			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "public-files")
+			c, err := pool.GetGatewayServiceClient(s.c.GatewaySvc)
+			if err != nil {
+				w.WriteHeader(http.StatusNotFound)
+			}
+
+			authenticateRequest := gatewayv1beta1.AuthenticateRequest{
+				Type:     "publicshares",
+				ClientId: r.URL.Path,
+				Opaque: &typesv1beta1.Opaque{
+					Map: map[string]*typesv1beta1.OpaqueEntry{
+						"token": &typesv1beta1.OpaqueEntry{
+							Value: []byte(r.URL.Path),
+						},
+					},
+				},
+			}
+
+			res, err := c.Authenticate(r.Context(), &authenticateRequest)
+			if err != nil {
+				w.WriteHeader(http.StatusNotFound)
+			}
+
+			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+			ctx = tokenpkg.ContextSetToken(ctx, res.Token)
+			ctx = metadata.AppendToOutgoingContext(ctx, tokenpkg.TokenHeader, res.Token)
+			r = r.WithContext(ctx)
 			h.PublicFilesHandler.Handler(s).ServeHTTP(w, r)
 		default:
 			w.WriteHeader(http.StatusNotFound)

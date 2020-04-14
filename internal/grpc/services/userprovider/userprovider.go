@@ -84,7 +84,7 @@ func (s *service) Close() error {
 }
 
 func (s *service) UnprotectedEndpoints() []string {
-	return []string{}
+	return []string{"/cs3.identity.user.v1beta1.UserAPI/GetUser"}
 }
 
 func (s *service) Register(ss *grpc.Server) {
