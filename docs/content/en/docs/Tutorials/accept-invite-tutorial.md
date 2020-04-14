@@ -9,7 +9,7 @@ description: >
 This is a guide on how you can run the accept invite app together with Pheonix and Reva locally in a dev environment. If you already have Reva and Phoenix you don't need to clone them, but you will need to congigure Phoenix (step 4) and have Reva and Phoenix running.
 
 ## 1. Clone the Phoenix and Reva repos
-Clone the phoenix repo from https://github.com/owncloud/phoenix 
+Clone the phoenix repo from https://github.com/owncloud/phoenix (make sure to _not_ clone this into `/src/`, see https://github.com/owncloud/phoenix/issues/3338 for more information) 
 
 ```
 git clone https://github.com/owncloud/phoenix
