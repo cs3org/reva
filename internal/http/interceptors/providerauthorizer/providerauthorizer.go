@@ -21,7 +21,6 @@ package providerauthorizer
 import (
 	"fmt"
 	"net/http"
-	"path"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -31,23 +30,14 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 )
 
-const (
-	defaultPriority = 200
-)
-
-func init() {
-	global.RegisterMiddleware("providerauthorizer", New)
-}
-
 type config struct {
-	Driver               string                            `mapstructure:"driver"`
-	Drivers              map[string]map[string]interface{} `mapstructure:"drivers"`
-	OCMPrefix            string                            `mapstructure:"ocm_prefix"`
-	AcceptInviteEndpoint string                            `mapstructure:"accept_invite_endpoint"`
-	GatewaySvc           string
+	Driver     string                            `mapstructure:"driver"`
+	Drivers    map[string]map[string]interface{} `mapstructure:"drivers"`
+	GatewaySvc string
 }
 
 func getDriver(c *config) (provider.Authorizer, error) {
@@ -59,24 +49,18 @@ func getDriver(c *config) (provider.Authorizer, error) {
 }
 
 // New returns a new HTTP middleware that verifies that the provider is registered in OCM.
-func New(m map[string]interface{}) (global.Middleware, int, error) {
+func New(m map[string]interface{}, unprotected []string, ocmPrefix string) (global.Middleware, error) {
 
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
 	conf.GatewaySvc = sharedconf.GetGatewaySVC(conf.GatewaySvc)
-	if conf.OCMPrefix == "" {
-		conf.OCMPrefix = "ocm"
-	}
-	if conf.AcceptInviteEndpoint == "" {
-		conf.AcceptInviteEndpoint = "/invites/accept"
-	}
 
 	authorizer, err := getDriver(conf)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
 	handler := func(h http.Handler) http.Handler {
@@ -84,9 +68,14 @@ func New(m map[string]interface{}) (global.Middleware, int, error) {
 
 			ctx := r.Context()
 			log := appctx.GetLogger(ctx)
-			acceptEndpoint := path.Join("/", conf.OCMPrefix, conf.AcceptInviteEndpoint)
-			if head, _ := router.ShiftPath(r.URL.Path); head != conf.OCMPrefix || r.URL.Path == acceptEndpoint {
+			if head, _ := router.ShiftPath(r.URL.Path); head != ocmPrefix {
 				log.Info().Msg("skipping provider authorizer check for: " + r.URL.Path)
+				h.ServeHTTP(w, r)
+				return
+			}
+
+			if utils.Skip(r.URL.Path, unprotected) {
+				log.Info().Msg("skipping auth check for: " + r.URL.Path)
 				h.ServeHTTP(w, r)
 				return
 			}
@@ -133,6 +122,6 @@ func New(m map[string]interface{}) (global.Middleware, int, error) {
 		})
 	}
 
-	return handler, defaultPriority, nil
+	return handler, nil
 
 }
