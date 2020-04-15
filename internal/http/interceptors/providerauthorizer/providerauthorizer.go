@@ -22,14 +22,13 @@ import (
 	"fmt"
 	"net/http"
 
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/ocm/provider"
 	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 )
@@ -68,48 +67,15 @@ func New(m map[string]interface{}, unprotected []string, ocmPrefix string) (glob
 
 			ctx := r.Context()
 			log := appctx.GetLogger(ctx)
-			if head, _ := router.ShiftPath(r.URL.Path); head != ocmPrefix {
+			head, _ := router.ShiftPath(r.URL.Path)
+
+			if r.Method == "OPTIONS" || head != ocmPrefix || utils.Skip(r.URL.Path, unprotected) {
 				log.Info().Msg("skipping provider authorizer check for: " + r.URL.Path)
 				h.ServeHTTP(w, r)
 				return
 			}
 
-			if utils.Skip(r.URL.Path, unprotected) {
-				log.Info().Msg("skipping auth check for: " + r.URL.Path)
-				h.ServeHTTP(w, r)
-				return
-			}
-
-			username, _, ok := r.BasicAuth()
-			if !ok {
-				log.Error().Err(err).Msg("no basic auth provided")
-				w.WriteHeader(http.StatusUnauthorized)
-				return
-			}
-
-			gatewayClient, err := pool.GetGatewayServiceClient(conf.GatewaySvc)
-			if err != nil {
-				log.Error().Err(err).Msg("error getting the grpc client")
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-
-			userRes, err := gatewayClient.FindUsers(ctx, &userpb.FindUsersRequest{
-				Filter: username,
-			})
-			if err != nil {
-				log.Error().Err(err).Msg("error searching for the user")
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-
-			var userAuth *userpb.User
-			for _, user := range userRes.GetUsers() {
-				if user.Username == username {
-					userAuth = user
-					break
-				}
-			}
+			userAuth := user.ContextMustGetUser(ctx)
 
 			err = authorizer.IsProviderAllowed(ctx, userAuth)
 			if err != nil {
