@@ -27,16 +27,14 @@ import (
 	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
-	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 )
 
 type config struct {
-	Driver     string                            `mapstructure:"driver"`
-	Drivers    map[string]map[string]interface{} `mapstructure:"drivers"`
-	GatewaySvc string
+	Driver  string                            `mapstructure:"driver"`
+	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
 }
 
 func getDriver(c *config) (provider.Authorizer, error) {
@@ -54,8 +52,6 @@ func New(m map[string]interface{}, unprotected []string, ocmPrefix string) (glob
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
 	}
-
-	conf.GatewaySvc = sharedconf.GetGatewaySVC(conf.GatewaySvc)
 
 	authorizer, err := getDriver(conf)
 	if err != nil {
@@ -76,7 +72,6 @@ func New(m map[string]interface{}, unprotected []string, ocmPrefix string) (glob
 			}
 
 			userAuth := user.ContextMustGetUser(ctx)
-
 			err = authorizer.IsProviderAllowed(ctx, userAuth)
 			if err != nil {
 				log.Error().Err(err).Msg("provider not registered in OCM")

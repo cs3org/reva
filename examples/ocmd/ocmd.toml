@@ -93,14 +93,10 @@ namespace = "/var/tmp/reva/"
 user_layout = "{{.Username}}"
 enable_home = true
 
-#[http.services.datagateway]
-#transfer_shared_secret = "replace-me-with-a-transfer-secret" # for direct uploads
-
 [http.services.ocmd]
 prefix = "ocm"
 
 [http.middlewares.providerauthorizer]
-ocm_prefix = "ocm"
 driver = "json"
 
 [http.middlewares.providerauthorizer.drivers.json]
