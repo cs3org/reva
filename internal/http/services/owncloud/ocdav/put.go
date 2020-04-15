@@ -205,7 +205,13 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 
 	dataServerURL := uRes.UploadEndpoint
 	// TODO(labkode): do a protocol switch
-	httpReq, err := rhttp.NewRequest(ctx, "PUT", dataServerURL, r.Body)
+	// see http://tus.io for the protocol
+	httpReq, err := rhttp.NewRequest(ctx, "PATCH", dataServerURL, r.Body)
+	// tus headers:
+	httpReq.Header.Set("Tus-Resumable", "1.0.0")
+	httpReq.Header.Set("Content-Type", "application/offset+octet-stream")
+	httpReq.Header.Set("Upload-Offset", "0")
+	httpReq.Header.Set("Upload-Length", r.Header.Get("Content-Length"))
 	if err != nil {
 		log.Error().Err(err).Msg("error creating http request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -222,7 +228,9 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 	defer httpRes.Body.Close()
 
-	if httpRes.StatusCode != http.StatusOK {
+	// TODO support legacy PUT response
+	if httpRes.StatusCode != http.StatusNoContent {
+		log.Error().Err(err).Int("status", httpRes.StatusCode).Msg("expected 204 No Content")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

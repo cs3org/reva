@@ -328,6 +328,15 @@ func (fs *ocfs) getVersionsPath(ctx context.Context, np string) string {
 
 }
 
+func (fs *ocfs) getUploadPath(ctx context.Context, uploadID string) (string, error) {
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
+		return "", err
+	}
+	return path.Join(fs.c.DataDirectory, u.Username, "uploads", uploadID), nil
+}
+
 // ownloud stores trashed items in the files_trashbin subfolder of a users home
 func (fs *ocfs) getRecyclePath(ctx context.Context) (string, error) {
 	u, ok := user.ContextGetUser(ctx)
@@ -1240,6 +1249,7 @@ func (fs *ocfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*pro
 	return finfos, nil
 }
 
+/*
 func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
@@ -1280,10 +1290,11 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 
 	return nil
 }
+*/
 
-func (fs *ocfs) archiveRevision(ctx context.Context, np string) error {
+func (fs *ocfs) archiveRevision(ctx context.Context, vbp string, np string) error {
 	// move existing file to versions dir
-	vp := fmt.Sprintf("%s.v%d", fs.getVersionsPath(ctx, np), time.Now().Unix())
+	vp := fmt.Sprintf("%s.v%d", vbp, time.Now().Unix())
 	if err := os.MkdirAll(path.Dir(vp), 0700); err != nil {
 		return errors.Wrap(err, "ocfs: error creating versions dir "+vp)
 	}
@@ -1403,7 +1414,7 @@ func (fs *ocfs) RestoreRevision(ctx context.Context, ref *provider.Reference, re
 	defer source.Close()
 
 	// destination should be available, otherwise we could not have navigated to its revisions
-	if err := fs.archiveRevision(ctx, np); err != nil {
+	if err := fs.archiveRevision(ctx, fs.getVersionsPath(ctx, np),  np); err != nil {
 		return err
 	}
 
@@ -1558,3 +1569,6 @@ func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key string) error {
 	// TODO(jfd) restore versions
 	return nil
 }
+
+// TODO propagate etag and mtime or append event to history? propagate on disk ...
+// - but propagation is a separate task. only if upload was successful ...

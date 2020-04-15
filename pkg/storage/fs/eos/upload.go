@@ -16,33 +16,17 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package dataprovider
+package eos
 
 import (
-	"net/http"
-	"strings"
+	"context"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 )
 
-// TODO deprecated ... use tus
-func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
-	log.Warn().Msg("error dumb PUT requests are deprecated, make your storage drive implement tus.io")
-	fn := r.URL.Path
 
-	fsfn := strings.TrimPrefix(fn, s.conf.Prefix)
-	ref := &provider.Reference{Spec: &provider.Reference_Path{Path: fsfn}}
-
-	err := s.storage.Upload(ctx, ref, r.Body)
-	if err != nil {
-		log.Error().Err(err).Msg("error uploading file")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	r.Body.Close()
-	w.WriteHeader(http.StatusOK)
+// NewUpload returns an upload id that can be used for uploads with tus
+func (fs *eosfs) NewUpload(ctx context.Context, ref *provider.Reference, uploadLength int64) (uploadID string, err error) {
+	return "", errtypes.NotSupported("op not supported")
 }
