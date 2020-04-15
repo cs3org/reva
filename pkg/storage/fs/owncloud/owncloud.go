@@ -1414,7 +1414,7 @@ func (fs *ocfs) RestoreRevision(ctx context.Context, ref *provider.Reference, re
 	defer source.Close()
 
 	// destination should be available, otherwise we could not have navigated to its revisions
-	if err := fs.archiveRevision(ctx, fs.getVersionsPath(ctx, np),  np); err != nil {
+	if err := fs.archiveRevision(ctx, fs.getVersionsPath(ctx, np), np); err != nil {
 		return err
 	}
 

@@ -25,8 +25,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 )
 
-
-// NewUpload returns an upload id that can be used for uploads with tus
-func (fs *s3FS) NewUpload(ctx context.Context, ref *provider.Reference, uploadLength int64) (uploadID string, err error) {
+// InitiateUpload returns an upload id that can be used for uploads with tus
+func (fs *s3FS) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64) (uploadID string, err error) {
 	return "", errtypes.NotSupported("op not supported")
 }

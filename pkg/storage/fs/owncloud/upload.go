@@ -28,6 +28,7 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	tusd "github.com/cs3org/reva/internal/http/services/dataprovider/handler"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/gofrs/uuid"
 	"github.com/pkg/errors"
 )
@@ -79,13 +80,73 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 func (fs *ocfs) UseIn(composer *tusd.StoreComposer) {
 	composer.UseCore(fs)
 	composer.UseTerminater(fs)
+	composer.UseCreator(fs)
 	composer.UseConcater(fs)
 	composer.UseLengthDeferrer(fs)
 }
 
-// NewUpload returns an upload id that can be used for uploads with tus
+func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.Upload, err error) {
+
+	log := appctx.GetLogger(ctx)
+	log.Debug().Interface("info", info).Msg("ocfs: NewUpload")
+
+	fn := info.MetaData["filename"]
+	if fn == "" {
+		return nil, errors.New("ocfs: missing filename in metadata")
+	}
+	info.MetaData["filename"] = fs.wrap(ctx, fn)
+	log.Debug().Interface("info", info).Msg("ocfs: resolved filename")
+
+	// try generating a uuid
+	// TODO remember uploadID and use as versionid?
+	var newid uuid.UUID
+	if newid, err = uuid.NewV4(); err != nil {
+		return nil, errors.Wrap(err, "ocfs: error generating upload id")
+	}
+	info.ID = newid.String()
+	binPath, err := fs.getUploadPath(ctx, info.ID)
+	if err != nil {
+		return nil, errors.Wrap(err, "ocfs: error resolving upload path")
+	}
+	info.Storage = map[string]string{
+		"Type": "OwnCloudStore",
+		"Path": binPath,
+	}
+	// Create binary file with no content
+	file, err := os.OpenFile(binPath, os.O_CREATE|os.O_WRONLY, defaultFilePerm)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// try creating upload dir
+			// TODO refactor this to have a single method that creates all dirs instead of spreading this all over the code.
+			// the method should return a struct with all needed paths
+			ud := path.Dir(binPath)
+			if err := os.MkdirAll(ud, 0700); err != nil {
+				return nil, errors.Wrap(err, "ocfs: error creating upload dir "+ud)
+			}
+
+			// try creating upload file again
+			file, err = os.OpenFile(binPath, os.O_CREATE|os.O_WRONLY, defaultFilePerm)
+			if err != nil {
+				return nil, err
+			}
+
+		} else {
+			return nil, err
+		}
+	}
+	defer file.Close()
+
+	return &fileUpload{
+		info:     info,
+		binPath:  binPath,
+		infoPath: binPath + ".info",
+		fs:       fs,
+	}, nil
+}
+
+// InitiateUpload returns an upload id that can be used for uploads with tus
 // TODO read optional content for small files in this request
-func (fs *ocfs) NewUpload(ctx context.Context, ref *provider.Reference, uploadLength int64) (uploadID string, err error) {
+func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64) (uploadID string, err error) {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return "", errors.Wrap(err, "ocfs: error resolving reference")

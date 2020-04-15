@@ -22,13 +22,12 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/rhttp/global"
 	tusd "github.com/cs3org/reva/internal/http/services/dataprovider/handler"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
-
 )
 
 func init() {
@@ -36,9 +35,9 @@ func init() {
 }
 
 type config struct {
-	Prefix    string                            `mapstructure:"prefix"`
-	Driver    string                            `mapstructure:"driver"`
-	Drivers   map[string]map[string]interface{} `mapstructure:"drivers"`
+	Prefix  string                            `mapstructure:"prefix"`
+	Driver  string                            `mapstructure:"driver"`
+	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
 }
 
 type svc struct {
@@ -138,11 +137,11 @@ func (s *svc) setHandler() (err error) {
 			case "GET":
 				s.doGet(w, r)
 
-			// tus.id based upload
+			// tus.io based upload
 
 			// uploads are initiated using the CS3 APIs Initiate Download call
-			//case "POST":
-			//	handler.PostFile(w, r)
+			case "POST":
+				handler.PostFile(w, r)
 			case "HEAD":
 				handler.HeadFile(w, r)
 			case "PATCH":

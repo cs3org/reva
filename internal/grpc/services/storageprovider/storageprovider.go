@@ -260,7 +260,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 			}, nil
 		}
 	}
-	uploadID, err := s.storage.NewUpload(ctx, newRef, uploadLength)
+	uploadID, err := s.storage.InitiateUpload(ctx, newRef, uploadLength)
 	if err != nil {
 		return &provider.InitiateFileUploadResponse{
 			Status: status.NewInternal(ctx, err, "error getting upload id"),

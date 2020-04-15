@@ -26,8 +26,9 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 	ctxuser "github.com/cs3org/reva/pkg/user"
 )
 
@@ -47,17 +48,20 @@ func (h *UploadsHandler) Handler(s *svc) http.Handler {
 		ctx := r.Context()
 		log := appctx.GetLogger(ctx)
 
-		if r.Method == http.MethodOptions {
-			s.doOptions(w, r)
-			return
-		}
+		// TODO implement options https://tus.io/protocols/resumable-upload.html#options
+		/*
+			if r.Method == http.MethodOptions {
+				s.doOptions(w, r)
+				return
+			}
+		*/
 
 		// MKCOL /remote.php/dav/uploads/demo/web-file-upload-c8639c42235c9ec26749a804aba61396-1569849691529
 		// PUT   /remote.php/dav/uploads/demo/web-file-upload-c8639c42235c9ec26749a804aba61396-1569849691529/<offset>
 		// MOVE  /remote.php/dav/uploads/demo/web-file-upload-c8639c42235c9ec26749a804aba61396-1569849691529/.file
 
 		var username string
-		username, r.URL.Path = global.ShiftPath(r.URL.Path)
+		username, r.URL.Path = router.ShiftPath(r.URL.Path)
 
 		if username == "" {
 			// listing is disabled, no auth will change that
@@ -79,11 +83,14 @@ func (h *UploadsHandler) Handler(s *svc) http.Handler {
 		// uploadFolder is given by the client, eg: web-file-upload-c8639c42235c9ec26749a804aba61396-1569849691529
 		//
 		var uploadFolder string
-		uploadFolder, r.URL.Path = global.ShiftPath(r.URL.Path)
-		if r.Method == http.MethodOptions {
-			s.doOptions(w, r)
-			return
-		}
+		uploadFolder, r.URL.Path = router.ShiftPath(r.URL.Path)
+		// TODO implement options https://tus.io/protocols/resumable-upload.html#options
+		/*
+			if r.Method == http.MethodOptions {
+				s.doOptions(w, r)
+				return
+			}
+		*/
 
 		// we always need an upload folder
 		if uploadFolder == "" {
@@ -104,7 +111,7 @@ func (h *UploadsHandler) Handler(s *svc) http.Handler {
 			offset := r.Header.Get("OC-Chunk-Offset")
 			if offset == "" {
 				// try using the path name as offset
-				offset, r.URL.Path = global.ShiftPath(r.URL.Path)
+				offset, r.URL.Path = router.ShiftPath(r.URL.Path)
 			}
 			h.uploadChunk(w, r, s, u, uploadPath, offset)
 			return
@@ -206,7 +213,7 @@ func (h *UploadsHandler) uploadChunk(w http.ResponseWriter, r *http.Request, s *
 	dataServerURL := h.uploads[uploadPath]
 
 	// see http://tus.io for the protocol
-	httpReq, err := utils.NewRequest(ctx, "PATCH", dataServerURL, r.Body)
+	httpReq, err := rhttp.NewRequest(ctx, "PATCH", dataServerURL, r.Body)
 	// tus headers:
 	// TODO parallel uploads using tus Concatenation extension
 	httpReq.Header.Set("Tus-Resumable", "1.0.0")
@@ -218,7 +225,7 @@ func (h *UploadsHandler) uploadChunk(w http.ResponseWriter, r *http.Request, s *
 		return
 	}
 
-	httpClient := utils.GetHTTPClient(ctx)
+	httpClient := rhttp.GetHTTPClient(ctx)
 	httpRes, err := httpClient.Do(httpReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error doing http request")
@@ -236,7 +243,7 @@ func (h *UploadsHandler) uploadChunk(w http.ResponseWriter, r *http.Request, s *
 	w.WriteHeader(http.StatusCreated)
 }
 
-func (h *UploadsHandler) assembleUpload(w http.ResponseWriter, r *http.Request, s *svc, u *authv0alphapb.User, uploadPath string, dst string) {
+func (h *UploadsHandler) assembleUpload(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, uploadPath string, dst string) {
 
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
