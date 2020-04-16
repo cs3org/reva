@@ -35,6 +35,7 @@ import (
 type DavHandler struct {
 	AvatarsHandler     *AvatarsHandler
 	FilesHandler       *WebDavHandler
+	UploadsHandler     *UploadsHandler
 	MetaHandler        *MetaHandler
 	TrashbinHandler    *TrashbinHandler
 	PublicFilesHandler *WebDavHandler
@@ -47,6 +48,10 @@ func (h *DavHandler) init(c *Config) error {
 	}
 	h.FilesHandler = new(WebDavHandler)
 	if err := h.FilesHandler.init(c.FilesNamespace); err != nil {
+		return err
+	}
+	h.UploadsHandler = new(UploadsHandler)
+	if err := h.UploadsHandler.init(c); err != nil {
 		return err
 	}
 	h.MetaHandler = new(MetaHandler)
@@ -81,6 +86,12 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
 			r = r.WithContext(ctx)
 			h.FilesHandler.Handler(s).ServeHTTP(w, r)
+		case "uploads":
+			// to build correct href prop urls we need to keep track of the base path
+			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "uploads")
+			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+			r = r.WithContext(ctx)
+			h.UploadsHandler.Handler(s).ServeHTTP(w, r)
 		case "meta":
 			// to build correct href prop urls we need to keep track of the base path
 			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "meta")

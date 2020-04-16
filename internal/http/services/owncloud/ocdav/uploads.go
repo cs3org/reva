@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -99,7 +100,8 @@ func (h *UploadsHandler) Handler(s *svc) http.Handler {
 
 		}
 
-		uploadPath := path.Join("/", u.Username, "._reva_atomic_upload_"+uploadFolder)
+		// TODO determine final location? or wait until assembly?
+		uploadPath := path.Join("/home/._reva_atomic_upload_" + uploadFolder)
 
 		if r.Method == "MKCOL" && r.URL.Path == "/" {
 			h.createUpload(w, r, s, u, uploadPath)
@@ -141,12 +143,20 @@ func (h *UploadsHandler) Handler(s *svc) http.Handler {
 			r = r.WithContext(ctx)
 
 			log.Info().Str("url_path", urlPath).Str("base_uri", baseURI).Msg("move urls")
-			i := strings.Index(urlPath, baseURI)
-			if i == -1 {
+			if !strings.HasPrefix(urlPath, baseURI) {
+				// Destination must start with our base path
+				// TODO host port and protocol should be the same as well ...
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			dst := path.Clean(urlPath[len(baseURI):])
+			dst := path.Clean(strings.TrimPrefix(urlPath, baseURI))
+
+			// translate to cs3 namespace
+			// at this point dst is something like /einstein/testchunk-9d1c2a4e-b11c-40aa-8972-2b9edd6023ca.bin
+			// replace username with /home in the destination
+			dst = strings.TrimLeft(dst, "/")
+			parts := strings.SplitN(dst, "/", 2)
+			dst = path.Join("/home", parts[1])
 
 			h.assembleUpload(w, r, s, u, uploadPath, dst)
 			return
@@ -198,7 +208,7 @@ func (h *UploadsHandler) createUpload(w http.ResponseWriter, r *http.Request, s 
 		return
 	}
 
-	// TODO remember upload id in a distributed store
+	// TODO remember upload id in a distributed store ... or on disk? because we currently don't know where the bytes should go until the MOVE
 	h.uploads[uploadPath] = iuRes.UploadEndpoint
 
 	w.WriteHeader(http.StatusCreated)
@@ -280,6 +290,7 @@ func (h *UploadsHandler) assembleUpload(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
+	// the file must not exist
 	if sRes.Status.Code != rpc.Code_CODE_OK {
 		if sRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -294,6 +305,35 @@ func (h *UploadsHandler) assembleUpload(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
+	_, err = strconv.ParseUint(r.Header.Get("OC-Total-Length"), 10, 64)
+	if err != nil {
+		// we need the total length
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// finalize upload
+	dataServerURL := h.uploads[uploadPath]
+	httpReq, err := rhttp.NewRequest(ctx, "PATCH", dataServerURL, nil)
+	// tus headers:
+	httpReq.Header.Set("Tus-Resumable", "1.0.0")
+	httpReq.Header.Set("Content-Type", "application/offset+octet-stream")
+	httpReq.Header.Set("Upload-Length", r.Header.Get("OC-Total-Length"))
+	httpReq.Header.Set("Upload-Offset", r.Header.Get("OC-Total-Length"))
+	if err != nil {
+		log.Error().Err(err).Msg("error creating http request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	httpClient := rhttp.GetHTTPClient(ctx)
+	httpRes, err := httpClient.Do(httpReq)
+	if err != nil {
+		log.Error().Err(err).Msg("error doing http request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	defer httpRes.Body.Close()
 	// move temp file to dst
 
 	// TODO check if path is on same storage, return 502 on problems, see https://tools.ietf.org/html/rfc4918#section-9.9.4

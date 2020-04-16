@@ -94,7 +94,7 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 	if fn == "" {
 		return nil, errors.New("ocfs: missing filename in metadata")
 	}
-	info.MetaData["filename"] = fs.wrap(ctx, fn)
+	info.MetaData["filename"] = fs.wrap(ctx, fn) // TODO this leaks the internal path when a HEAD request is made
 	log.Debug().Interface("info", info).Msg("ocfs: resolved filename")
 
 	// try generating a uuid
@@ -168,7 +168,7 @@ func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, upl
 	}
 
 	if uploadLength == 0 {
-		info.SizeIsDeferred = true
+		info.SizeIsDeferred = true // initiate did not send length?
 	} else {
 		info.Size = uploadLength
 	}
