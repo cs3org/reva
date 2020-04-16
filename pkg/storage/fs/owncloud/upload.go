@@ -102,6 +102,8 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 	}
 	info.MetaData["dir"] = path.Clean(info.MetaData["dir"])
 
+	np := fs.wrap(ctx, path.Join(info.MetaData["dir"], info.MetaData["filename"]))
+
 	//info.MetaData["filename"] = fs.wrap(ctx, fn) // TODO this leaks the internal path when a HEAD request is made
 	log.Debug().Interface("info", info).Msg("ocfs: resolved filename")
 
@@ -119,6 +121,7 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 	info.Storage = map[string]string{
 		"Type": "OwnCloudStore",
 		"Path": binPath,
+		"Destination": np,
 	}
 	// Create binary file with no content
 	file, err := os.OpenFile(binPath, os.O_CREATE|os.O_WRONLY, defaultFilePerm)
@@ -191,6 +194,7 @@ func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, upl
 	info.Storage = map[string]string{
 		"Type": "OwnCloudStore",
 		"Path": binPath,
+		"Destination": np,
 	}
 
 	// Create binary file with no content
@@ -369,25 +373,25 @@ func (upload *fileUpload) writeInfo() error {
 // FinishUpload finishes an upload and moves the file to the target destination
 func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 
-	fn := path.Join(upload.info.MetaData["dir"], upload.info.MetaData["filename"])
+	np := upload.info.Storage["Destination"]
 
 	// if destination exists
 	// TODO this only works when the target lives on this storage, what if we uploaded to the users upload folder but now need to move to a different storage?
 	// can that happen? the storageprovider is tied to a tusdsvc ... and initiate upload should have been called on the parent folder ... which in theory already is the correct destination storage
 	//
-	if _, err := os.Stat(fn); err == nil {
+	if _, err := os.Stat(np); err == nil {
 		// copy attributes of existing file to tmp file
-		if err := upload.fs.copyMD(fn, upload.binPath); err != nil {
-			return errors.Wrap(err, "ocfs: error copying metadata from "+fn+" to "+upload.binPath)
+		if err := upload.fs.copyMD(np, upload.binPath); err != nil {
+			return errors.Wrap(err, "ocfs: error copying metadata from "+np+" to "+upload.binPath)
 		}
 		// create revision
-		if err := upload.fs.archiveRevision(ctx, upload.fs.getVersionsPath(ctx, fn), fn); err != nil {
+		if err := upload.fs.archiveRevision(ctx, upload.fs.getVersionsPath(ctx, np), np); err != nil {
 			return err
 		}
 	}
 
 	// TODO double check the metadata path exists
-	err := os.Rename(upload.binPath, fn)
+	err := os.Rename(upload.binPath, np)
 
 	// TODO trigger metadata propagation?
 	return err
