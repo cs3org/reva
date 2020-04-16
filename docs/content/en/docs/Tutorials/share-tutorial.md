@@ -113,7 +113,7 @@ Use curl:
 
 ```
 curl --request POST \
-  --url 'http://127.0.0.1:19001/ocm/shares?path=example.txt&shareWith=f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c&=' \
+  --url 'http://127.0.0.1:19001/ocm/shares?path=example.txt&shareWithUser=f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c&shareWithProvider=http://cesnet.cz' \
   --user einstein:relativity
 ```
 
@@ -124,7 +124,7 @@ wget --method POST \
   --http-user=einstein \
   --http-password=relativity \
   --output-document \
-  - 'http://127.0.0.1:19001/ocm/shares?path=example.txt&shareWith=f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c&='
+  - 'http://127.0.0.1:19001/ocm/shares?path=example.txt&shareWithUser=f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c&shareWithProvider=http://cesnet.cz'
 ```
 
 ## 9. List all shares resource
