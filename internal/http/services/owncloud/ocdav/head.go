@@ -66,5 +66,10 @@ func (s *svc) handleHead(w http.ResponseWriter, r *http.Request, ns string) {
 	t := utils.TSToTime(info.Mtime)
 	lastModifiedString := t.Format(time.RFC1123)
 	w.Header().Set("Last-Modified", lastModifiedString)
+	// all directories can be used to start a tus upload
+	if info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		w.Header().Set("Tus-Resumable", "1.0.0")
+		w.Header().Set("Tus-Extension", "creation")
+	}
 	w.WriteHeader(http.StatusOK)
 }

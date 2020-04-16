@@ -51,7 +51,7 @@ func (h *DavHandler) init(c *Config) error {
 		return err
 	}
 	h.UploadsHandler = new(UploadsHandler)
-	if err := h.UploadsHandler.init(c); err != nil {
+	if err := h.UploadsHandler.init("uploads"); err != nil {
 		return err
 	}
 	h.MetaHandler = new(MetaHandler)

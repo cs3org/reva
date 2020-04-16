@@ -53,6 +53,8 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 			s.handleCopy(w, r, h.namespace)
 		case "REPORT":
 			s.handleReport(w, r, h.namespace)
+		case http.MethodPost:
+			s.handleTusPost(w, r, h.namespace)
 		case http.MethodGet:
 			s.handleGet(w, r, h.namespace)
 		case http.MethodPut:

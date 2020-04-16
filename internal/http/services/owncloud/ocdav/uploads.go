@@ -35,10 +35,12 @@ import (
 
 // UploadsHandler handles chunked upload requests
 type UploadsHandler struct {
-	uploads map[string]string
+	namespace string
+	uploads   map[string]string
 }
 
-func (h *UploadsHandler) init(c *Config) error {
+func (h *UploadsHandler) init(ns string) error {
+	h.namespace = path.Join("/", ns)
 	h.uploads = make(map[string]string)
 	return nil
 }
@@ -50,12 +52,10 @@ func (h *UploadsHandler) Handler(s *svc) http.Handler {
 		log := appctx.GetLogger(ctx)
 
 		// TODO implement options https://tus.io/protocols/resumable-upload.html#options
-		/*
-			if r.Method == http.MethodOptions {
-				s.doOptions(w, r)
-				return
-			}
-		*/
+		if r.Method == http.MethodOptions {
+			s.handleOptions(w, r, h.namespace)
+			return
+		}
 
 		// MKCOL /remote.php/dav/uploads/demo/web-file-upload-c8639c42235c9ec26749a804aba61396-1569849691529
 		// PUT   /remote.php/dav/uploads/demo/web-file-upload-c8639c42235c9ec26749a804aba61396-1569849691529/<offset>
@@ -86,12 +86,11 @@ func (h *UploadsHandler) Handler(s *svc) http.Handler {
 		var uploadFolder string
 		uploadFolder, r.URL.Path = router.ShiftPath(r.URL.Path)
 		// TODO implement options https://tus.io/protocols/resumable-upload.html#options
-		/*
-			if r.Method == http.MethodOptions {
-				s.doOptions(w, r)
-				return
-			}
-		*/
+
+		if r.Method == http.MethodOptions {
+			s.handleOptions(w, r, h.namespace)
+			return
+		}
 
 		// we always need an upload folder
 		if uploadFolder == "" {
@@ -187,7 +186,7 @@ func (h *UploadsHandler) createUpload(w http.ResponseWriter, r *http.Request, s 
 	if totalLength != "" {
 		iuReq.Opaque = &typespb.Opaque{
 			Map: map[string]*typespb.OpaqueEntry{
-				"Upload-Length": &typespb.OpaqueEntry{
+				"Upload-Length": {
 					Decoder: "plain",
 					Value:   []byte(totalLength),
 				},

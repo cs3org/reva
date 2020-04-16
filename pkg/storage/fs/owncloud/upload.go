@@ -94,7 +94,15 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 	if fn == "" {
 		return nil, errors.New("ocfs: missing filename in metadata")
 	}
-	info.MetaData["filename"] = fs.wrap(ctx, fn) // TODO this leaks the internal path when a HEAD request is made
+	info.MetaData["filename"] = path.Clean(info.MetaData["filename"])
+
+	dir := info.MetaData["dir"]
+	if dir == "" {
+		return nil, errors.New("ocfs: missing dir in metadata")
+	}
+	info.MetaData["dir"] = path.Clean(info.MetaData["dir"])
+
+	//info.MetaData["filename"] = fs.wrap(ctx, fn) // TODO this leaks the internal path when a HEAD request is made
 	log.Debug().Interface("info", info).Msg("ocfs: resolved filename")
 
 	// try generating a uuid
@@ -160,10 +168,12 @@ func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, upl
 	}
 	uploadID = newid.String()
 
+	p := fs.unwrap(ctx, np)
+
 	info := tusd.FileInfo{
-		// store filename so tusdsvc can move there when finalizing the upload
 		MetaData: tusd.MetaData{
-			"filename": np,
+			"filename": path.Base(p),
+			"dir":      path.Dir(p),
 		},
 	}
 
@@ -359,7 +369,7 @@ func (upload *fileUpload) writeInfo() error {
 // FinishUpload finishes an upload and moves the file to the target destination
 func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 
-	fn := upload.info.MetaData["filename"]
+	fn := path.Join(upload.info.MetaData["dir"], upload.info.MetaData["filename"])
 
 	// if destination exists
 	// TODO this only works when the target lives on this storage, what if we uploaded to the users upload folder but now need to move to a different storage?
