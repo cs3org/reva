@@ -57,8 +57,9 @@ func New(m map[string]interface{}) (invite.Manager, error) {
 	}
 
 	return &manager{
-		Invites: sync.Map{},
-		Config:  c,
+		Invites:       sync.Map{},
+		AcceptedUsers: sync.Map{},
+		Config:        c,
 	}, nil
 }
 
@@ -118,6 +119,12 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 	usersList, ok := m.AcceptedUsers.Load(currUser)
 	if ok {
 		acceptedUsers := usersList.([]*userpb.UserId)
+		for _, acceptedUser := range acceptedUsers {
+			if userID.GetOpaqueId() == acceptedUser.OpaqueId && userID.GetIdp() == acceptedUser.Idp {
+				return errors.New("memory: user already added to accepted users")
+			}
+		}
+
 		acceptedUsers = append(acceptedUsers, userID)
 		m.AcceptedUsers.Store(currUser, acceptedUsers)
 	} else {

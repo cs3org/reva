@@ -234,6 +234,12 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 
 	// Add to the list of accepted users
 	userKey := generateKey(inviteToken.GetUserId())
+	for _, acceptedUser := range m.model.AcceptedUsers[userKey] {
+		if userID.GetOpaqueId() == acceptedUser.OpaqueId && userID.GetIdp() == acceptedUser.Idp {
+			return errors.New("json: user already added to accepted users")
+		}
+
+	}
 	m.model.AcceptedUsers[userKey] = append(m.model.AcceptedUsers[userKey], userID)
 	if err := m.model.Save(); err != nil {
 		err = errors.Wrap(err, "json: error saving model")
