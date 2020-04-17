@@ -98,7 +98,7 @@ type config struct {
 
 	// URI of the EOS MGM grpc server
 	// Default is empty
-	GrpcUri string `mapstructure:"master_grpc_uri"`
+	GrpcURI string `mapstructure:"master_grpc_uri"`
 
 	// URL of the Slave EOS MGM.
 	// Default is root://eos-example.org
@@ -214,7 +214,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	eosClientOpts := &eosclientgrpc.Options{
 		XrdcopyBinary:       c.XrdcopyBinary,
 		URL:                 c.MasterURL,
-		GrpcUri:             c.GrpcUri,
+		GrpcURI:             c.GrpcURI,
 		EosBinary:           c.EosBinary,
 		CacheDirectory:      c.CacheDirectory,
 		ForceSingleUserMode: c.ForceSingleUserMode,
