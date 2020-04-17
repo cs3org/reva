@@ -61,11 +61,58 @@ func New(m map[string]interface{}) (global.Middleware, int, error) {
 	}
 
 	if len(conf.AllowedMethods) == 0 {
-		conf.AllowedMethods = []string{"OPTIONS", "GET", "PUT", "POST", "DELETE", "MKCOL", "PROPFIND", "PROPPATCH", "MOVE", "COPY", "REPORT", "SEARCH"}
+		conf.AllowedMethods = []string{
+			"OPTIONS",
+			"GET",
+			"PUT",
+			"POST",
+			"DELETE",
+			"MKCOL",
+			"PROPFIND",
+			"PROPPATCH",
+			"MOVE",
+			"COPY",
+			"REPORT",
+			"SEARCH",
+			"HEAD",
+		}
 	}
 
 	if len(conf.AllowedHeaders) == 0 {
-		conf.AllowedHeaders = []string{"Origin", "Accept", "Content-Type", "Depth", "Authorization", "Ocs-Apirequest", "If-None-Match", "If-Match", "Destination", "Overwrite", "X-Request-Id", "X-Requested-With"}
+		conf.AllowedHeaders = []string{
+			"Origin",
+			"Accept",
+			"Content-Type",
+			"Depth",
+			"Authorization",
+			"Ocs-Apirequest",
+			"If-None-Match",
+			"If-Match",
+			"Destination",
+			"Overwrite",
+			"X-Request-Id",
+			"X-Requested-With",
+			"Tus-Version",
+			"Tus-Resumable",
+			"Tus-Extension",
+			"Tus-Max-Size",
+			"Tus-Checksum-Algorithm",
+			"Location",
+			"Upload-Concat",
+			"Upload-Length",
+			"Upload-Metadata",
+			"Upload-Defer-Length",
+			"Upload-Expires",
+			"Upload-Checksum",
+			"Upload-Offset",
+			"X-HTTP-Method-Override",
+		}
+	}
+
+	if len(conf.ExposedHeaders) == 0 {
+		conf.ExposedHeaders = []string{
+			"Location",
+		}
 	}
 
 	// TODO(jfd): use log from request context, otherwise fmt will be used to log,
