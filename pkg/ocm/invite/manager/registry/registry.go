@@ -16,28 +16,19 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package memory
+package registry
 
-import (
-	"context"
+import "github.com/cs3org/reva/pkg/ocm/invite"
 
-	"github.com/cs3org/reva/pkg/ocm/provider"
-	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
-)
+// NewFunc is the function that invite managers
+// should register at init time.
+type NewFunc func(map[string]interface{}) (invite.Manager, error)
 
-func init() {
-	registry.Register("memory", New)
-}
+// NewFuncs is a map containing all the registered invite managers.
+var NewFuncs = map[string]NewFunc{}
 
-// New returns a new authorizer object.
-func New(m map[string]interface{}) (provider.Authorizer, error) {
-	auth := new(authorizer)
-	return auth, nil
-}
-
-type authorizer struct {
-}
-
-func (a *authorizer) IsProviderAllowed(ctx context.Context, domain string) error {
-	return nil
+// Register registers a new invite manager new function.
+// Not safe for concurrent use. Safe for use from package init.
+func Register(name string, f NewFunc) {
+	NewFuncs[name] = f
 }

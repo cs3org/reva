@@ -97,8 +97,6 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		UserId: &userpb.UserId{OpaqueId: shareWithUser, Idp: shareWithProvider},
 	})
 
-	log.Info().Msg(fmt.Sprintf("userRes %+v", userRes))
-
 	if err != nil {
 		WriteError(w, r, APIErrorInvalidParameter, "error searching recipient", err)
 		return

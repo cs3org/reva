@@ -16,23 +16,11 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package provider
+package loader
 
 import (
-	"context"
-
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	// Load core share manager drivers.
+	_ "github.com/cs3org/reva/pkg/ocm/invite/manager/json"
+	_ "github.com/cs3org/reva/pkg/ocm/invite/manager/memory"
+	// Add your own here
 )
-
-// Authorizer provides provisions to verify and add sync'n'share system providers.
-type Authorizer interface {
-	// GetInfoByDomain returns the information of the provider identified by a specific domain.
-	GetInfoByDomain(ctx context.Context, domain string) (*ocmprovider.ProviderInfo, error)
-
-	// IsProviderAllowed checks if a given system provider is integrated into the OCM or not.
-	IsProviderAllowed(ctx context.Context, user *userpb.User) error
-
-	// ListAllProviders returns the information of all the providers registered in the mesh.
-	ListAllProviders(ctx context.Context) ([]*ocmprovider.ProviderInfo, error)
-}

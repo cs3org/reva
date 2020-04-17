@@ -23,7 +23,6 @@ import (
 	"fmt"
 
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/ocm/share/manager/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
@@ -173,7 +172,7 @@ func (s *service) UpdateOCMShare(ctx context.Context, req *ocm.UpdateOCMShareReq
 }
 
 func (s *service) ListReceivedOCMShares(ctx context.Context, req *ocm.ListReceivedOCMSharesRequest) (*ocm.ListReceivedOCMSharesResponse, error) {
-	shares, err := s.sm.ListReceivedShares(ctx) // TODO(labkode): check what to update
+	shares, err := s.sm.ListReceivedShares(ctx)
 	if err != nil {
 		return &ocm.ListReceivedOCMSharesResponse{
 			Status: status.NewInternal(ctx, err, "error listing received shares"),
@@ -202,11 +201,8 @@ func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateRec
 }
 
 func (s *service) GetReceivedOCMShare(ctx context.Context, req *ocm.GetReceivedOCMShareRequest) (*ocm.GetReceivedOCMShareResponse, error) {
-	log := appctx.GetLogger(ctx)
-
 	share, err := s.sm.GetReceivedShare(ctx, req.Ref)
 	if err != nil {
-		log.Err(err).Msg("error getting received share")
 		return &ocm.GetReceivedOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting received share"),
 		}, nil
