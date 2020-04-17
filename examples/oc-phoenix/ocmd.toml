@@ -26,10 +26,9 @@ address = "0.0.0.0:13001"
 prefix = "ocm"
 
 [http.middlewares.providerauthorizer]
-ocm_prefix = "ocm"
-driver = "open"
+driver = "json"
 
-[http.middlewares.providerauthorizer.drivers.open]
+[http.middlewares.providerauthorizer.drivers.json]
 providers = "providers.demo.json"
 
 [http.middlewares.cors]

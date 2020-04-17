@@ -89,7 +89,6 @@ enable_home = true
 prefix = "ocm"
 
 [http.middlewares.providerauthorizer]
-ocm_prefix = "ocm"
 driver = "json"
 
 [http.middlewares.providerauthorizer.drivers.json]
