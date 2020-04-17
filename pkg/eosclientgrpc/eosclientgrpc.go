@@ -107,7 +107,7 @@ type Options struct {
 	URL string
 
 	// URI of the EOS MGM grpc server
-	GrpcUri string
+	GrpcURI string
 
 	// Location on the local fs where to store reads.
 	// Defaults to os.TempDir()
@@ -152,27 +152,27 @@ func New(opt *Options) *Client {
 	c := new(Client)
 	c.opt = opt
 
-	fmt.Printf("--- Connecting to '%s'\n", opt.GrpcUri)
-	conn, err := grpc.Dial(opt.GrpcUri, grpc.WithInsecure())
+	fmt.Printf("--- Connecting to '%s'\n", opt.GrpcURI)
+	conn, err := grpc.Dial(opt.GrpcURI, grpc.WithInsecure())
 	if err != nil {
-		fmt.Printf("--- Ping to '%s' gave err '%s'\n", opt.GrpcUri, err)
+		fmt.Printf("--- Ping to '%s' gave err '%s'\n", opt.GrpcURI, err)
 		return nil
 	}
 
-	fmt.Printf("--- Going to ping to '%s'\n", opt.GrpcUri)
+	fmt.Printf("--- Going to ping to '%s'\n", opt.GrpcURI)
 	c.cl = erpc.NewEosClient(conn)
 
 	// If we can't ping... exit immediately... we will see if this has to be kept, for now it's practical
 	prq := new(erpc.PingRequest)
 	prq.Authkey = ""
-	prq.Message = []byte("hi this is a ping from Fabrizio")
+	prq.Message = []byte("hi this is a ping from reva")
 	prep, err := erpc.EosClient.Ping(c.cl, context.Background(), prq)
 	if err != nil {
-		fmt.Printf("--- Ping to '%s' failed with err '%s'\n", opt.GrpcUri, err)
+		fmt.Printf("--- Ping to '%s' failed with err '%s'\n", opt.GrpcURI, err)
 		return nil
 	}
 
-	fmt.Printf("--- Ping to '%s' gave prep '%s'\n", opt.GrpcUri, prep)
+	fmt.Printf("--- Ping to '%s' gave response '%s'\n", opt.GrpcURI, prep)
 	if prep != nil {
 		return c
 	}
@@ -253,7 +253,24 @@ func (c *Client) UnsetAttr(ctx context.Context, username string, attr *Attribute
 
 // GetFileInfoByPath returns the FilInfo at the given path
 func (c *Client) GetFileInfoByPath(ctx context.Context, username, path string) (*FileInfo, error) {
-	return nil, errtypes.NotFound(fmt.Sprintf("%s:%s", "acltype", path))
+
+	// Where do we stuff the filename, uid, gid here?!??
+	rq := new(erpc.NsStatRequest)
+	rq.Authkey = ""
+
+	resp, err := erpc.EosClient.NsStat(c.cl, context.Background(), rq)
+	if err != nil {
+		fmt.Printf("--- NSStat('%s') failed with err '%s'\n", path, err)
+		return nil, err
+	}
+
+	fmt.Printf("--- NSStat('%s') gave response '%s'\n", path, resp)
+	if resp == nil {
+		return nil, errtypes.NotFound(fmt.Sprintf("%s:%s", "acltype", path))
+	}
+
+	return c.grpcNsStatResponseToFileInfo(resp)
+
 }
 
 // GetQuota gets the quota of a user on the quota node defined by path
@@ -446,6 +463,10 @@ func (c *Client) parseQuota(path, raw string) (int, int, error) {
 		}
 	}
 	return 0, 0, nil
+}
+
+func (c *Client) grpcNsStatResponseToFileInfo(st *erpc.NsStatResponse) (*FileInfo, error) {
+	return nil, nil
 }
 
 // TODO(labkode): better API to access extended attributes.
