@@ -24,6 +24,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -243,14 +244,30 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 func (s *service) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*provider.InitiateFileUploadResponse, error) {
 	// TODO(labkode): same considerations as download
 	log := appctx.GetLogger(ctx)
-	url := *s.dataServerURL
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.InitiateFileUploadResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
 		}, nil
 	}
-	url.Path = path.Join("/", url.Path, newRef.GetPath())
+	var uploadLength int64
+	if req.Opaque != nil && req.Opaque.Map != nil && req.Opaque.Map["Upload-Length"] != nil {
+		var err error
+		uploadLength, err = strconv.ParseInt(string(req.Opaque.Map["Upload-Length"].Value), 10, 64)
+		if err != nil {
+			return &provider.InitiateFileUploadResponse{
+				Status: status.NewInternal(ctx, err, "error parsing upload length"),
+			}, nil
+		}
+	}
+	uploadID, err := s.storage.InitiateUpload(ctx, newRef, uploadLength)
+	if err != nil {
+		return &provider.InitiateFileUploadResponse{
+			Status: status.NewInternal(ctx, err, "error getting upload id"),
+		}, nil
+	}
+	url := *s.dataServerURL
+	url.Path = path.Join("/", url.Path, uploadID)
 	log.Info().Str("data-server", url.String()).
 		Str("fn", req.Ref.GetPath()).
 		Str("xs", fmt.Sprintf("%+v", s.conf.AvailableXS)).

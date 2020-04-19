@@ -22,12 +22,15 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"net/http"
 	"os"
+	"path/filepath"
 
 	"github.com/cheggaaa/pb"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+
+	"github.com/eventials/go-tus"
+	"github.com/eventials/go-tus/memorystore"
 
 	// TODO(labkode): this should not come from this package.
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
@@ -65,7 +68,7 @@ func uploadCommand() *command {
 
 		fmt.Printf("Local file size: %d bytes\n", md.Size())
 
-		client, err := getClient()
+		gwc, err := getClient()
 		if err != nil {
 			return err
 		}
@@ -78,7 +81,7 @@ func uploadCommand() *command {
 			},
 		}
 
-		res, err := client.InitiateFileUpload(ctx, req)
+		res, err := gwc.InitiateFileUpload(ctx, req)
 		if err != nil {
 			return err
 		}
@@ -113,30 +116,42 @@ func uploadCommand() *command {
 		bar.Start()
 		reader := bar.NewProxyReader(fd)
 
-		httpReq, err := rhttp.NewRequest(ctx, "PUT", dataServerURL, reader)
+		// create the tus client.
+		c := tus.DefaultConfig()
+		c.Resume = true
+		c.HttpClient = rhttp.GetHTTPClient(ctx)
+		c.Store, err = memorystore.NewMemoryStore()
+		if err != nil {
+			return err
+		}
+		c.Header.Add("X-Reva-Transfer", res.Token)
+		tusc, err := tus.NewClient(dataServerURL, c)
 		if err != nil {
 			return err
 		}
 
-		httpReq.Header.Set("X-Reva-Transfer", res.Token)
-		q := httpReq.URL.Query()
-		q.Add("xs", xs)
-		q.Add("xs_type", storageprovider.GRPC2PKGXS(xsType).String())
-		httpReq.URL.RawQuery = q.Encode()
+		metadata := map[string]string{
+			"filename": filepath.Base(target),
+			"dir":      filepath.Dir(target),
+			"checksum": fmt.Sprintf("%s %s", storageprovider.GRPC2PKGXS(xsType).String(), xs),
+		}
 
-		httpClient := rhttp.GetHTTPClient(ctx)
+		fingerprint := fmt.Sprintf("%s-%d-%s-%s", md.Name(), md.Size(), md.ModTime(), xs)
 
-		httpRes, err := httpClient.Do(httpReq)
+		// create an upload from a file.
+		upload := tus.NewUpload(reader, md.Size(), metadata, fingerprint)
+
+		// create the uploader.
+		c.Store.Set(upload.Fingerprint, dataServerURL)
+		uploader := tus.NewUploader(tusc, dataServerURL, upload, 0)
+
+		// start the uploading process.
+		err = uploader.Upload()
 		if err != nil {
 			return err
 		}
-		defer httpRes.Body.Close()
 
 		bar.Finish()
-
-		if httpRes.StatusCode != http.StatusOK {
-			return err
-		}
 
 		req2 := &provider.StatRequest{
 			Ref: &provider.Reference{
@@ -145,7 +160,7 @@ func uploadCommand() *command {
 				},
 			},
 		}
-		res2, err := client.Stat(ctx, req2)
+		res2, err := gwc.Stat(ctx, req2)
 		if err != nil {
 			return err
 		}
