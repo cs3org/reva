@@ -591,12 +591,8 @@ func (c *Client) Read(ctx context.Context, username, path string) (io.ReadCloser
 	return os.Open(localTarget)
 }
 
-// Write writes a file to the mgm
+// Write writes a stream to the mgm
 func (c *Client) Write(ctx context.Context, username, path string, stream io.ReadCloser) error {
-	unixUser, err := c.getUnixUser(username)
-	if err != nil {
-		return err
-	}
 	fd, err := ioutil.TempFile(c.opt.CacheDirectory, "eoswrite-")
 	if err != nil {
 		return err
@@ -609,8 +605,18 @@ func (c *Client) Write(ctx context.Context, username, path string, stream io.Rea
 	if err != nil {
 		return err
 	}
+
+	return c.WriteFile(ctx, username, path, fd.Name())
+}
+
+// WriteFile writes an existing file to the mgm
+func (c *Client) WriteFile(ctx context.Context, username, path, source string) error {
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return err
+	}
 	xrdPath := fmt.Sprintf("%s//%s", c.opt.URL, path)
-	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, "--nopbar", "--silent", "-f", fd.Name(), xrdPath, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s", unixUser.Uid, unixUser.Gid))
+	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, "--nopbar", "--silent", "-f", source, xrdPath, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s", unixUser.Uid, unixUser.Gid))
 	_, _, err = c.execute(ctx, cmd)
 	return err
 }
