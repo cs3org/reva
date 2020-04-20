@@ -31,13 +31,45 @@ func (s *svc) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCMCore
 	c, err := pool.GetOCMCoreClient(s.c.OCMCoreEndpoint)
 	if err != nil {
 		return &ocmcore.CreateOCMCoreShareResponse{
-			Status: status.NewInternal(ctx, err, "error getting ocm authorizer provider client"),
+			Status: status.NewInternal(ctx, err, "error getting ocm core client"),
 		}, nil
 	}
 
 	res, err := c.CreateOCMCoreShare(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling IsProviderAllowed")
+		return nil, errors.Wrap(err, "gateway: error calling CreateOCMCoreShare")
+	}
+
+	return res, nil
+}
+
+func (s *svc) GetOCMCoreShare(ctx context.Context, req *ocmcore.GetOCMCoreShareRequest) (*ocmcore.GetOCMCoreShareResponse, error) {
+	c, err := pool.GetOCMCoreClient(s.c.OCMCoreEndpoint)
+	if err != nil {
+		return &ocmcore.GetOCMCoreShareResponse{
+			Status: status.NewInternal(ctx, err, "error getting ocm core client"),
+		}, nil
+	}
+
+	res, err := c.GetOCMCoreShare(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling GetOCMCoreShare")
+	}
+
+	return res, nil
+}
+
+func (s *svc) ListOCMCoreShares(ctx context.Context, req *ocmcore.ListOCMCoreSharesRequest) (*ocmcore.ListOCMCoreSharesResponse, error) {
+	c, err := pool.GetOCMCoreClient(s.c.OCMCoreEndpoint)
+	if err != nil {
+		return &ocmcore.ListOCMCoreSharesResponse{
+			Status: status.NewInternal(ctx, err, "error getting ocm core client"),
+		}, nil
+	}
+
+	res, err := c.CreateOCMCoreShare(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling ListOCMCoreShares")
 	}
 
 	return res, nil
