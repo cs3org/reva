@@ -55,6 +55,14 @@ func (h *Handler) Init(c *config.Config) error {
 	return nil
 }
 
+// Maps oc10 permissions to roles
+var ocPermToRole = map[int]string{
+	1:  "viewer",
+	15: "coowner",
+	31: "editor",
+	// 5: contributor (?)
+}
+
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context())
 
@@ -281,9 +289,18 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// TODO(refs) set permissions to what phoenix sends
-		// TODO(refs) error handling please
-		testPerm, err := h.role2CS3Permissions(conversions.RoleViewer)
+		// phoenix sends: {"permissions": 15}. See ocPermToRole struct for mapping
+		permKey, err := strconv.Atoi(r.FormValue("permissions"))
+		if err != nil {
+			log.Error().Str("createShare", "shares").Msgf("invalid type: %T", permKey)
+		}
+
+		perm, ok := ocPermToRole[permKey]
+		if !ok {
+			log.Error().Str("createShare", "shares").Msgf("invalid oC permission: %v", perm)
+		}
+
+		testPerm, err := h.role2CS3Permissions(perm)
 		if err != nil {
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "invalid role", err)
 			return

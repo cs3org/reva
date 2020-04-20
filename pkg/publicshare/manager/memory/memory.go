@@ -48,9 +48,8 @@ type manager struct {
 	shares sync.Map
 }
 
-// CreatePublicShare safely adds a new entry to manager.shares
+// CreatePublicShare adds a new entry to manager.shares
 func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error) {
-	// where could this initialization go wrong and early return?
 	id := &link.PublicShareId{
 		OpaqueId: randString(12),
 	}
@@ -65,32 +64,32 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 
 	_, passwdOk := rInfo.ArbitraryMetadata.Metadata["password"]
 
-	ctime := &typespb.Timestamp{
+	createdAt := &typespb.Timestamp{
 		Seconds: now,
 		Nanos:   uint32(now % 1000000000),
 	}
 
-	mtime := &typespb.Timestamp{
+	modifiedAt := &typespb.Timestamp{
 		Seconds: now,
 		Nanos:   uint32(now % 1000000000),
 	}
 
-	newShare := link.PublicShare{
+	s := link.PublicShare{
 		Id:                id,
 		Owner:             rInfo.GetOwner(),
 		Creator:           u.Id,
 		ResourceId:        rInfo.Id,
 		Token:             tkn,
 		Permissions:       g.Permissions,
-		Ctime:             ctime,
-		Mtime:             mtime,
+		Ctime:             createdAt,
+		Mtime:             modifiedAt,
 		PasswordProtected: passwdOk,
 		Expiration:        g.Expiration,
 		DisplayName:       displayName,
 	}
 
-	m.shares.Store(newShare.Token, &newShare)
-	return &newShare, nil
+	m.shares.Store(s.Token, &s)
+	return &s, nil
 }
 
 // UpdatePublicShare updates the expiration date, permissions and Mtime
@@ -102,7 +101,6 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, ref *link
 
 	token := share.GetToken()
 
-	// thread unsafe. 2 goroutines can access to the same resource?
 	share.Permissions = g.Permissions
 	share.Expiration = g.Expiration
 	share.Mtime = &typespb.Timestamp{
@@ -120,7 +118,7 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 	if ref.GetToken() != "" {
 		share, err = m.GetPublicShareByToken(ctx, ref.GetToken())
 		if err != nil {
-			return nil, errors.New("there are no shares for the given reference")
+			return nil, errors.New("no shares found")
 		}
 	}
 
@@ -128,7 +126,7 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 	if ref.GetId() != nil {
 		share, err = m.getPublicShareByTokenID(ctx, *ref.GetId())
 		if err != nil {
-			return nil, errors.New("there are no shares for the given reference")
+			return nil, errors.New("no shares found")
 		}
 	}
 
