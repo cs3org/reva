@@ -31,5 +31,6 @@ func (s *svc) handleOptions(w http.ResponseWriter, r *http.Request, ns string) {
 	w.Header().Set("Allow", allow)
 	w.Header().Set("DAV", "1, 2")
 	w.Header().Set("MS-Author-Via", "DAV")
+	w.Header().Set("Tus-Version", "1.0.0") // TODO(jfd): only for dirs?
 	w.WriteHeader(http.StatusOK)
 }
