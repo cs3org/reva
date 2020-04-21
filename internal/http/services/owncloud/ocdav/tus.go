@@ -32,6 +32,10 @@ import (
 func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
+
+	w.Header().Add("Access-Control-Allow-Headers", "Tus-Resumable, Upload-Length, Upload-Metadata, If-Match")
+	w.Header().Add("Access-Control-Expose-Headers", "Tus-Resumable, Location")
+
 	// Test if the version sent by the client is supported
 	// GET methods are not checked since a browser may visit this URL and does
 	// not include this header. This request is not part of the specification.

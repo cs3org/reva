@@ -114,6 +114,7 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 	// let clients know this collection supports tus.io POST requests to start uploads
 	if info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		w.Header().Add("Access-Control-Expose-Headers", "Tus-Version, Tus-Extension")
 		w.Header().Set("Tus-Version", "1.0.0")
 		w.Header().Set("Tus-Extension", "creation")
 	}
