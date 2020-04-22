@@ -74,7 +74,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-// New creates a new user share provider svc
+// New creates a new ocm share provider svc
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 
 	c, err := parseConfig(m)

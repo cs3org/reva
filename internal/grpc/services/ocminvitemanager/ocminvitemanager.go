@@ -138,3 +138,7 @@ func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRe
 		Status: status.NewOK(ctx),
 	}, nil
 }
+
+func (s *service) GetRemoteUser(ctx context.Context, req *invitepb.GetRemoteUserRequest) (*invitepb.GetRemoteUserResponse, error) {
+	return nil, nil
+}

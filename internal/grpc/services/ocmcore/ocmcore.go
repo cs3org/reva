@@ -20,14 +20,15 @@ package ocmcore
 
 import (
 	"context"
+	"fmt"
 
 	ocmcore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
-	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/ocm/share"
+	"github.com/cs3org/reva/pkg/ocm/share/manager/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
 
@@ -36,11 +37,20 @@ func init() {
 }
 
 type config struct {
-	GatewaySvc string `mapstructure:"gatewaysvc"`
+	Driver  string                            `mapstructure:"driver"`
+	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
 }
 
 type service struct {
 	conf *config
+	sm   share.Manager
+}
+
+func getShareManager(c *config) (share.Manager, error) {
+	if f, ok := registry.NewFuncs[c.Driver]; ok {
+		return f(c.Drivers[c.Driver])
+	}
+	return nil, fmt.Errorf("driver not found: %s", c.Driver)
 }
 
 func (s *service) Close() error {
@@ -55,66 +65,43 @@ func (s *service) Register(ss *grpc.Server) {
 	ocmcore.RegisterOcmCoreAPIServer(ss, s)
 }
 
-// New creates a new user ocm core svc
+func parseConfig(m map[string]interface{}) (*config, error) {
+	c := &config{}
+	if err := mapstructure.Decode(m, c); err != nil {
+		err = errors.Wrap(err, "error decoding conf")
+		return nil, err
+	}
+	return c, nil
+}
+
+// New creates a new ocm core svc
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 
-	c := &config
-	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+	c, err := parseConfig(m)
+	if err != nil {
+		return nil, err
+	}
+
+	// if driver is empty we default to json
+	if c.Driver == "" {
+		c.Driver = "json"
+	}
+
+	sm, err := getShareManager(c)
+	if err != nil {
+		return nil, err
+	}
 
 	service := &service{
 		conf: c,
+		sm:   sm,
 	}
+
 	return service, nil
 }
 
-func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCMShareRequest) (*ocmcore.CreateOCMShareResponse, error) {
-
-	gatewayClient, err := pool.GetGatewayServiceClient(s.c.GatewaySvc)
-	if err != nil {
-		return &ocmcore.CreateOCMCoreShareResponse{
-			Status: status.NewInternal(ctx, err, "error getting grpc client"),
-		}, nil
-	}
-
-	createShareReq := &ocm.CreateOCMShareRequest{
-		ResourceId: &provider.ResourceId{
-			StorageId: req.ProviderId,
-			OpaqueId:  req.Name,
-		},
-		Grant: &ocm.ShareGrant{
-			Grantee: &provider.Grantee{
-				Type: provider.GranteeType_GRANTEE_TYPE_USER,
-				Id:   req.ShareWith,
-			},
-			Permissions: &ocm.SharePermissions{
-				Permissions: req.Protocol.Opaque.Map["permissions"],
-			},
-		},
-	}
-
-	createShareResponse, err := gatewayClient.CreateOCMShare(ctx, createShareReq)
-	if err != nil {
-		return &ocmcore.CreateOCMCoreShareResponse{
-			Status: status.NewInternal(ctx, err, "error creating share"),
-		}, nil
-	}
-
-	res := &ocmcore.CreateOCMCoreShareResponse{
-		Status:  status.NewOK(ctx),
-		Id:      createShareResponse.Share.Id,
-		Created: createShareResponse.Share.Ctime,
-	}
-	return res, nil
-}
-
-func (s *service) GetOCMCoreShare(ctx context.Context, req *ocmcore.GetOCMCoreShareRequest) (*ocmcore.GetOCMCoreShareResponse, error) {
-	return &ocmcore.GetOCMCoreShareResponse{
-		Status: status.NewOK(ctx),
-	}, nil
-}
-
-func (s *service) ListOCMCoreShares(ctx context.Context, req *ocmcore.ListOCMCoreSharesRequest) (*ocmcore.ListOCMCoreSharesResponse, error) {
-	return &ocmcore.ListOCMCoreSharesResponse{
+func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCMCoreShareRequest) (*ocmcore.CreateOCMCoreShareResponse, error) {
+	return &ocmcore.CreateOCMCoreShareResponse{
 		Status: status.NewOK(ctx),
 	}, nil
 }
