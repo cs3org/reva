@@ -35,5 +35,5 @@ type Manager interface {
 	ForwardInvite(ctx context.Context, invite *invitepb.InviteToken, originProvider *ocmprovider.ProviderInfo) error
 
 	// AcceptInvite completes an invitation acceptance.
-	AcceptInvite(ctx context.Context, invite *invitepb.InviteToken, userID *userpb.UserId) error
+	AcceptInvite(ctx context.Context, invite *invitepb.InviteToken, remoteUser *userpb.User) error
 }

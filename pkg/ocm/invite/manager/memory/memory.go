@@ -109,7 +109,7 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 	return nil
 }
 
-func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken, userID *userpb.UserId) error {
+func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken, remoteUser *userpb.User) error {
 	inviteToken, err := getTokenIfValid(m, invite)
 	if err != nil {
 		return err
@@ -118,17 +118,17 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 	currUser := inviteToken.GetUserId()
 	usersList, ok := m.AcceptedUsers.Load(currUser)
 	if ok {
-		acceptedUsers := usersList.([]*userpb.UserId)
+		acceptedUsers := usersList.([]*userpb.User)
 		for _, acceptedUser := range acceptedUsers {
-			if userID.GetOpaqueId() == acceptedUser.OpaqueId && userID.GetIdp() == acceptedUser.Idp {
+			if remoteUser.GetId().GetOpaqueId() == acceptedUser.Id.OpaqueId && remoteUser.GetId().GetIdp() == acceptedUser.Id.Idp {
 				return errors.New("memory: user already added to accepted users")
 			}
 		}
 
-		acceptedUsers = append(acceptedUsers, userID)
+		acceptedUsers = append(acceptedUsers, remoteUser)
 		m.AcceptedUsers.Store(currUser, acceptedUsers)
 	} else {
-		acceptedUsers := []*userpb.UserId{userID}
+		acceptedUsers := []*userpb.User{remoteUser}
 		m.AcceptedUsers.Store(currUser, acceptedUsers)
 	}
 	return nil

@@ -26,6 +26,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"google.golang.org/grpc"
 )
@@ -76,10 +77,10 @@ func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCM
 	}
 
 	createShareReq := &ocm.CreateOCMShareRequest{
-		ResourceId: &provider.ResourceInfo.Id{
+		ResourceId: &provider.ResourceId{
 			StorageId: req.ProviderId,
-			OpaqueId: req.Name,
-		}
+			OpaqueId:  req.Name,
+		},
 		Grant: &ocm.ShareGrant{
 			Grantee: &provider.Grantee{
 				Type: provider.GranteeType_GRANTEE_TYPE_USER,
@@ -99,9 +100,9 @@ func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCM
 	}
 
 	res := &ocmcore.CreateOCMCoreShareResponse{
-		Status: status.NewOK(ctx),
-		Id: createShareResponse.Share.Id,
-		Created:  createShareResponse.Share.Ctime,
+		Status:  status.NewOK(ctx),
+		Id:      createShareResponse.Share.Id,
+		Created: createShareResponse.Share.Ctime,
 	}
 	return res, nil
 }

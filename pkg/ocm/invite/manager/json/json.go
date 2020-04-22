@@ -46,7 +46,7 @@ const acceptInviteEndpoint = "invites/accept"
 type inviteModel struct {
 	File          string
 	Invites       map[string]*invitepb.InviteToken `json:"invites"`
-	AcceptedUsers map[string][]*userpb.UserId      `json:"accepted_users"`
+	AcceptedUsers map[string][]*userpb.User        `json:"accepted_users"`
 }
 
 type manager struct {
@@ -143,7 +143,7 @@ func loadOrCreate(file string) (*inviteModel, error) {
 		model.Invites = make(map[string]*invitepb.InviteToken)
 	}
 	if model.AcceptedUsers == nil {
-		model.AcceptedUsers = make(map[string][]*userpb.UserId)
+		model.AcceptedUsers = make(map[string][]*userpb.User)
 	}
 
 	model.File = file
@@ -221,7 +221,7 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 	return nil
 }
 
-func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken, userID *userpb.UserId) error {
+func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken, remoteUser *userpb.User) error {
 
 	// Create mutex lock
 	m.Lock()
@@ -235,12 +235,12 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 	// Add to the list of accepted users
 	userKey := generateKey(inviteToken.GetUserId())
 	for _, acceptedUser := range m.model.AcceptedUsers[userKey] {
-		if userID.GetOpaqueId() == acceptedUser.OpaqueId && userID.GetIdp() == acceptedUser.Idp {
+		if remoteUser.GetId().GetOpaqueId() == acceptedUser.Id.OpaqueId && remoteUser.GetId().GetIdp() == acceptedUser.Id.Idp {
 			return errors.New("json: user already added to accepted users")
 		}
 
 	}
-	m.model.AcceptedUsers[userKey] = append(m.model.AcceptedUsers[userKey], userID)
+	m.model.AcceptedUsers[userKey] = append(m.model.AcceptedUsers[userKey], remoteUser)
 	if err := m.model.Save(); err != nil {
 		err = errors.Wrap(err, "json: error saving model")
 		return err
