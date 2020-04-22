@@ -53,6 +53,10 @@ func New(m map[string]interface{}) (global.Service, error) {
 		return nil, err
 	}
 
+	if conf.Prefix == "" {
+		conf.Prefix = "data"
+	}
+
 	fs, err := getFS(conf)
 	if err != nil {
 		return nil, err
