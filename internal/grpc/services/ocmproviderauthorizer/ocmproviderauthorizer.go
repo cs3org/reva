@@ -103,7 +103,7 @@ func (s *service) GetInfoByDomain(ctx context.Context, req *providerpb.GetInfoBy
 	domainInfo, err := s.pa.GetInfoByDomain(ctx, req.Domain)
 	if err != nil {
 		return &providerpb.GetInfoByDomainResponse{
-			Status: status.NewInternal(ctx, err, "error generating invite token"),
+			Status: status.NewInternal(ctx, err, "error getting provider info"),
 		}, nil
 	}
 
@@ -117,7 +117,7 @@ func (s *service) IsProviderAllowed(ctx context.Context, req *providerpb.IsProvi
 	err := s.pa.IsProviderAllowed(ctx, req.User)
 	if err != nil {
 		return &providerpb.IsProviderAllowedResponse{
-			Status: status.NewInternal(ctx, err, "error forwarding invite"),
+			Status: status.NewInternal(ctx, err, "error verifying mesh provider"),
 		}, nil
 	}
 
@@ -130,7 +130,7 @@ func (s *service) ListAllProviders(ctx context.Context, req *providerpb.ListAllP
 	providers, err := s.pa.ListAllProviders(ctx)
 	if err != nil {
 		return &providerpb.ListAllProvidersResponse{
-			Status: status.NewInternal(ctx, err, "error accepting invite"),
+			Status: status.NewInternal(ctx, err, "error retrieving mesh providers"),
 		}, nil
 	}
 

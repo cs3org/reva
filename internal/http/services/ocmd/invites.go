@@ -150,7 +150,8 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	token, userID, email, recipientProvider := r.FormValue("token"), r.FormValue("userID"), r.FormValue("email"), r.FormValue("recipientProvider")
+	token, userID, recipientProvider := r.FormValue("token"), r.FormValue("userID"), r.FormValue("recipientProvider")
+	name, email := r.FormValue("name"), r.FormValue("email")
 	if token == "" || userID == "" || recipientProvider == "" || email == "" {
 		WriteError(w, r, APIErrorInvalidParameter, "missing parameters in request", nil)
 		return
@@ -167,7 +168,8 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 			OpaqueId: userID,
 			Idp:      recipientProvider,
 		},
-		Mail: email,
+		Mail:        email,
+		DisplayName: name,
 	}
 	providerAllowedResp, err := gatewayClient.IsProviderAllowed(ctx, &ocmprovider.IsProviderAllowedRequest{
 		User: userObj,

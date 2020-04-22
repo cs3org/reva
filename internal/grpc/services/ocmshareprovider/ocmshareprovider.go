@@ -101,7 +101,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 }
 
 func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareRequest) (*ocm.CreateOCMShareResponse, error) {
-	share, err := s.sm.Share(ctx, req.ResourceId, req.Grant)
+	share, err := s.sm.Share(ctx, req.ResourceId, req.Grant, req.RecipientMeshProvider, nil)
 	if err != nil {
 		return &ocm.CreateOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "error creating share"),

@@ -21,6 +21,8 @@ package share
 import (
 	"context"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
@@ -28,7 +30,7 @@ import (
 // Manager is the interface that manipulates the OCM shares.
 type Manager interface {
 	// Create a new share in fn with the given acl.
-	Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGrant) (*ocm.Share, error)
+	Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGrant, pi *ocmprovider.ProviderInfo, owner *userpb.UserId) (*ocm.Share, error)
 
 	// GetShare gets the information for a share by the given ref.
 	GetShare(ctx context.Context, ref *ocm.ShareReference) (*ocm.Share, error)

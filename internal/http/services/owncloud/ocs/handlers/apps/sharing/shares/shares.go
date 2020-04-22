@@ -29,6 +29,7 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
+	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -109,7 +110,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				h.getShare(w, r, shareID)
 			}
 		default:
-			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Only POST and DELETE are allowed", nil)
+			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Only GET method is allowed", nil)
 		}
 	default:
 		switch r.Method {
@@ -372,6 +373,14 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		providerInfo, err := c.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
+			Domain: shareWithProvider,
+		})
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc get invite by domain info request", err)
+			return
+		}
+
 		remoteUserRes, err := c.GetRemoteUser(ctx, &invitepb.GetRemoteUserRequest{
 			RemoteUserId: &userpb.UserId{OpaqueId: shareWithUser, Idp: shareWithProvider},
 		})
@@ -461,6 +470,7 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 					Permissions: resourcePermissions,
 				},
 			},
+			RecipientMeshProvider: providerInfo,
 		}
 
 		createShareResponse, err := c.CreateOCMShare(ctx, createShareReq)
