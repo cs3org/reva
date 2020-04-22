@@ -26,6 +26,7 @@ import (
 	"strconv"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -46,22 +47,11 @@ func (h *sharesHandler) init(c *Config) {
 func (h *sharesHandler) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		log := appctx.GetLogger(r.Context())
-		shareID := path.Base(r.URL.Path)
-		log.Debug().Str("method", r.Method).Str("shareID", shareID).Msg("sharesHandler")
-
 		switch r.Method {
 		case http.MethodPost:
 			h.createShare(w, r)
-		case http.MethodGet:
-			if shareID == "/" {
-				h.listAllShares(w, r)
-			} else {
-				h.getShare(w, r, shareID)
-			}
-
 		default:
-			w.WriteHeader(http.StatusNotFound)
+			WriteError(w, r, APIErrorInvalidParameter, "Only POST method is allowed", nil)
 		}
 	})
 }
@@ -70,11 +60,9 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	// TODO (ishank011): Check if the user is allowed to share the file once the invitation workflow has been implemented.
-	// TODO (ishank011): Also check if the provider is authorized or not.
 	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
-		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting storage grpc client on addr: %v", h.gatewayAddr), err)
+		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting grpc client on addr: %v", h.gatewayAddr), err)
 		return
 	}
 
@@ -93,8 +81,8 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userRes, err := gatewayClient.GetUser(ctx, &userpb.GetUserRequest{
-		UserId: &userpb.UserId{OpaqueId: shareWithUser, Idp: shareWithProvider},
+	remoteUserRes, err := gatewayClient.GetRemoteUser(ctx, &invitepb.GetRemoteUserRequest{
+		RemoteUserId: &userpb.UserId{OpaqueId: shareWithUser, Idp: shareWithProvider},
 	})
 
 	if err != nil {
@@ -102,7 +90,7 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if userRes.Status.Code != rpc.Code_CODE_OK {
+	if remoteUserRes.Status.Code != rpc.Code_CODE_OK {
 		WriteError(w, r, APIErrorNotFound, "user not found", err)
 		return
 	}
@@ -180,7 +168,7 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		Grant: &ocm.ShareGrant{
 			Grantee: &provider.Grantee{
 				Type: provider.GranteeType_GRANTEE_TYPE_USER,
-				Id:   userRes.User.GetId(),
+				Id:   remoteUserRes.RemoteUser.GetId(),
 			},
 			Permissions: &ocm.SharePermissions{
 				Permissions: resourcePermissions,
@@ -203,105 +191,6 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Info().Msg("Share created.")
-}
-
-func (h *sharesHandler) getShare(w http.ResponseWriter, r *http.Request, shareID string) {
-
-	// TODO Implement response with HAL schemating
-	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
-
-	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting storage grpc client on addr: %v", h.gatewayAddr), err)
-		log.Err(err).Msg(fmt.Sprintf("error getting storage grpc client on addr: %v", h.gatewayAddr))
-		return
-	}
-
-	listOCMSharesRequest := &ocm.GetOCMShareRequest{
-		Ref: &ocm.ShareReference{
-			Spec: &ocm.ShareReference_Id{
-				Id: &ocm.ShareId{
-					OpaqueId: shareID,
-				},
-			},
-		},
-	}
-
-	log.Debug().Str("listOCMSharesRequest", fmt.Sprintf("%+v", listOCMSharesRequest)).Msg("getShare")
-
-	ocmShareResponse, err := gatewayClient.GetOCMShare(ctx, listOCMSharesRequest)
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error sending a grpc get ocm share request", err)
-		log.Err(err).Msg("error sending a grpc get ocm share request.")
-		return
-	}
-	log.Debug().Str("ocmShareResponse", fmt.Sprintf("%+v", ocmShareResponse)).Msg("getShare")
-
-	share := ocmShareResponse.GetShare()
-	if share == nil {
-		WriteError(w, r, APIErrorNotFound, "share not found", nil)
-		return
-	}
-
-	bytes, err := json.Marshal(share)
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error marshal shares data", err)
-		log.Err(err).Msg("error marshal shares data.")
-		return
-	}
-
-	// Write response
-	_, err = w.Write(bytes)
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error writing shares data", err)
-		log.Err(err).Msg("error writing shares data.")
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-}
-
-func (h *sharesHandler) listAllShares(w http.ResponseWriter, r *http.Request) {
-
-	// TODO Implement pagination.
-	// TODO Implement response with HAL schemating
-	ctx := r.Context()
-
-	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting storage grpc client on addr: %v", h.gatewayAddr), err)
-		return
-	}
-
-	listOCMSharesResponse, err := gatewayClient.ListOCMShares(ctx, &ocm.ListOCMSharesRequest{})
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error sending a grpc list shares request", err)
-		return
-	}
-
-	// Create json response
-	shares := listOCMSharesResponse.GetShares()
-	if shares == nil {
-		shares = make([]*ocm.Share, 0)
-	}
-
-	bytes, err := json.Marshal(shares)
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error marshal shares data", err)
-		return
-	}
-
-	// Write response
-	_, err = w.Write(bytes)
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error writing shares data", err)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
 }
 
 func (h *sharesHandler) role2CS3Permissions(r string) (*provider.ResourcePermissions, error) {

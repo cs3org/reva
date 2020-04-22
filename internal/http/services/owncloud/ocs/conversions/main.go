@@ -44,10 +44,10 @@ const (
 	ShareTypePublicLink ShareType = 3
 
 	// ShareTypeGroup represents a group share
-	// ShareTypeGroup shareType = 1
+	// ShareTypeGroup ShareType = 1
 
 	// ShareTypeFederatedCloudShare represents a federated share
-	// ShareTypeFederatedCloudShare shareType = 6
+	ShareTypeFederatedCloudShare ShareType = 6
 )
 
 // ResourceType indicates the OCS type of the resource

@@ -28,9 +28,11 @@ import (
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/rs/zerolog/log"
@@ -90,6 +92,22 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.acceptShare(w, r, shareID)
 		case "DELETE":
 			h.rejectShare(w, r, shareID)
+		default:
+			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Only POST and DELETE are allowed", nil)
+		}
+	case "remote_shares":
+		var shareID string
+		shareID, r.URL.Path = router.ShiftPath(r.URL.Path)
+
+		log.Debug().Str("share_id", shareID).Str("tail", r.URL.Path).Msg("http routing")
+
+		switch r.Method {
+		case "GET":
+			if shareID == "" {
+				h.listAllShares(w, r)
+			} else {
+				h.getShare(w, r, shareID)
+			}
 		default:
 			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Only POST and DELETE are allowed", nil)
 		}
@@ -343,6 +361,123 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 
 		response.WriteOCSSuccess(w, r, s)
 
+		return
+	}
+
+	if shareType == int(conversions.ShareTypeFederatedCloudShare) {
+
+		shareWithUser, shareWithProvider := r.FormValue("shareWithUser"), r.FormValue("shareWithProvider")
+		if shareWithUser == "" || shareWithProvider == "" {
+			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "missing shareWith parameters", nil)
+			return
+		}
+
+		remoteUserRes, err := c.GetRemoteUser(ctx, &invitepb.GetRemoteUserRequest{
+			RemoteUserId: &userpb.UserId{OpaqueId: shareWithUser, Idp: shareWithProvider},
+		})
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error searching recipient", err)
+			return
+		}
+		if remoteUserRes.Status.Code != rpc.Code_CODE_OK {
+			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "user not found", err)
+			return
+		}
+
+		var permissions conversions.Permissions
+
+		role := r.FormValue("role")
+		if role == "" {
+			pval := r.FormValue("permissions")
+			if pval == "" {
+				// by default only allow read permissions / assign viewer role
+				role = conversions.RoleViewer
+			} else {
+				pint, err := strconv.Atoi(pval)
+				if err != nil {
+					response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "permissions must be an integer", nil)
+					return
+				}
+				permissions, err = conversions.NewPermissions(pint)
+				if err != nil {
+					response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, err.Error(), nil)
+					return
+				}
+				role = conversions.Permissions2Role(permissions)
+			}
+		}
+
+		var resourcePermissions *provider.ResourcePermissions
+		resourcePermissions, err = h.role2CS3Permissions(role)
+		if err != nil {
+			log.Warn().Err(err).Msg("unknown role, mapping legacy permissions")
+			resourcePermissions = asCS3Permissions(permissions, nil)
+		}
+
+		roleMap := map[string]string{"name": role}
+		val, err := json.Marshal(roleMap)
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "could not encode role", err)
+			return
+		}
+
+		statReq := &provider.StatRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{
+					Path: path.Join(prefix, r.FormValue("path")),
+				},
+			},
+		}
+		statRes, err := c.Stat(ctx, statReq)
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc stat request", err)
+			return
+		}
+		if statRes.Status.Code != rpc.Code_CODE_OK {
+			if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+				response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
+				return
+			}
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc stat request failed", err)
+			return
+		}
+
+		createShareReq := &ocm.CreateOCMShareRequest{
+			Opaque: &types.Opaque{
+				Map: map[string]*types.OpaqueEntry{
+					"role": &types.OpaqueEntry{
+						Decoder: "json",
+						Value:   val,
+					},
+				},
+			},
+			ResourceId: statRes.Info.Id,
+			Grant: &ocm.ShareGrant{
+				Grantee: &provider.Grantee{
+					Type: provider.GranteeType_GRANTEE_TYPE_USER,
+					Id:   remoteUserRes.RemoteUser.GetId(),
+				},
+				Permissions: &ocm.SharePermissions{
+					Permissions: resourcePermissions,
+				},
+			},
+		}
+
+		createShareResponse, err := c.CreateOCMShare(ctx, createShareReq)
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc create ocm share request", err)
+			return
+		}
+		if createShareResponse.Status.Code != rpc.Code_CODE_OK {
+			if createShareResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
+				response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
+				return
+			}
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc create ocm share request failed", err)
+			return
+		}
+
+		response.WriteOCSSuccess(w, r, "OCM Share created")
 		return
 	}
 
