@@ -140,5 +140,15 @@ func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRe
 }
 
 func (s *service) GetRemoteUser(ctx context.Context, req *invitepb.GetRemoteUserRequest) (*invitepb.GetRemoteUserResponse, error) {
-	return nil, nil
+	remoteUser, err := s.im.GetRemoteUser(ctx, req.RemoteUserId)
+	if err != nil {
+		return &invitepb.GetRemoteUserResponse{
+			Status: status.NewInternal(ctx, err, "error fetching remote user details"),
+		}, nil
+	}
+
+	return &invitepb.GetRemoteUserResponse{
+		Status:     status.NewOK(ctx),
+		RemoteUser: remoteUser,
+	}, nil
 }

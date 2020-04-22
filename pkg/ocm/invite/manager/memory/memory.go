@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/user"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -120,7 +121,7 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 	if ok {
 		acceptedUsers := usersList.([]*userpb.User)
 		for _, acceptedUser := range acceptedUsers {
-			if remoteUser.GetId().GetOpaqueId() == acceptedUser.Id.OpaqueId && remoteUser.GetId().GetIdp() == acceptedUser.Id.Idp {
+			if acceptedUser.Id.GetOpaqueId() == remoteUser.Id.OpaqueId && acceptedUser.Id.GetIdp() == remoteUser.Id.Idp {
 				return errors.New("memory: user already added to accepted users")
 			}
 		}
@@ -132,6 +133,24 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 		m.AcceptedUsers.Store(currUser, acceptedUsers)
 	}
 	return nil
+}
+
+func (m *manager) GetRemoteUser(ctx context.Context, remoteUserID *userpb.UserId) (*userpb.User, error) {
+
+	currUser := user.ContextMustGetUser(ctx)
+	usersList, ok := m.AcceptedUsers.Load(currUser)
+	if !ok {
+		return nil, errtypes.NotFound(remoteUserID.OpaqueId)
+	}
+
+	acceptedUsers := usersList.([]*userpb.User)
+	for _, acceptedUser := range acceptedUsers {
+		if (acceptedUser.Id.GetOpaqueId() == remoteUserID.OpaqueId) && (remoteUserID.Idp == "" || acceptedUser.Id.GetIdp() == remoteUserID.Idp) {
+			return acceptedUser, nil
+		}
+	}
+	return nil, errtypes.NotFound(remoteUserID.OpaqueId)
+
 }
 
 func getTokenIfValid(m *manager, token *invitepb.InviteToken) (*invitepb.InviteToken, error) {

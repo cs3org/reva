@@ -36,4 +36,7 @@ type Manager interface {
 
 	// AcceptInvite completes an invitation acceptance.
 	AcceptInvite(ctx context.Context, invite *invitepb.InviteToken, remoteUser *userpb.User) error
+
+	// GetRemoteUser retrieves details about a remote user who has accepted an invite to share.
+	GetRemoteUser(ctx context.Context, remoteUserID *userpb.UserId) (*userpb.User, error)
 }

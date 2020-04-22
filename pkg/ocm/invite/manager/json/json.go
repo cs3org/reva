@@ -33,6 +33,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/invite"
 	"github.com/cs3org/reva/pkg/ocm/invite/manager/registry"
 	"github.com/cs3org/reva/pkg/ocm/invite/token"
@@ -235,7 +236,7 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 	// Add to the list of accepted users
 	userKey := generateKey(inviteToken.GetUserId())
 	for _, acceptedUser := range m.model.AcceptedUsers[userKey] {
-		if remoteUser.GetId().GetOpaqueId() == acceptedUser.Id.OpaqueId && remoteUser.GetId().GetIdp() == acceptedUser.Id.Idp {
+		if acceptedUser.Id.GetOpaqueId() == remoteUser.Id.OpaqueId && acceptedUser.Id.GetIdp() == remoteUser.Id.Idp {
 			return errors.New("json: user already added to accepted users")
 		}
 
@@ -246,6 +247,17 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 		return err
 	}
 	return nil
+}
+
+func (m *manager) GetRemoteUser(ctx context.Context, remoteUserID *userpb.UserId) (*userpb.User, error) {
+
+	userKey := generateKey(user.ContextMustGetUser(ctx).GetId())
+	for _, acceptedUser := range m.model.AcceptedUsers[userKey] {
+		if (acceptedUser.Id.GetOpaqueId() == remoteUserID.OpaqueId) && (remoteUserID.Idp == "" || acceptedUser.Id.GetIdp() == remoteUserID.Idp) {
+			return acceptedUser, nil
+		}
+	}
+	return nil, errtypes.NotFound(remoteUserID.OpaqueId)
 }
 
 func getTokenIfValid(m *manager, token *invitepb.InviteToken) (*invitepb.InviteToken, error) {
