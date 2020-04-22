@@ -139,6 +139,10 @@ type config struct {
 
 	// EnableHome enables the creation of home directories.
 	EnableHome bool `mapstructure:"enable_home"`
+
+	// Authkey is the key that authorizes this client to connect to the GRPC service
+	// It's unclear whether this will be the final solution
+	Authkey string `mapstructure:"authkey"`
 }
 
 func getUser(ctx context.Context) (*userpb.User, error) {
@@ -221,6 +225,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		SingleUsername:      c.SingleUsername,
 		UseKeytab:           c.UseKeytab,
 		Keytab:              c.Keytab,
+		Authkey:             c.Authkey,
 	}
 
 	eosClient := eosclientgrpc.New(eosClientOpts)

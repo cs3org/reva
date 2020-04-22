@@ -28,11 +28,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cs3org/reva/pkg/appctx"
 	erpc "github.com/cs3org/reva/pkg/eosclientgrpc/eos_grpc"
-	"google.golang.org/grpc"
-
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/acl"
+	"github.com/pkg/errors"
+	"google.golang.org/grpc"
 )
 
 const (
@@ -115,6 +116,10 @@ type Options struct {
 
 	// Keytab is the location of the EOS keytab file.
 	Keytab string
+
+	// Authkey is the key that authorizes this client to connect to the GRPC service
+	// It's unclear whether this will be the final solution
+	Authkey string
 }
 
 func (opt *Options) init() {
@@ -164,7 +169,7 @@ func New(opt *Options) *Client {
 
 	// If we can't ping... exit immediately... we will see if this has to be kept, for now it's practical
 	prq := new(erpc.PingRequest)
-	prq.Authkey = ""
+	prq.Authkey = opt.Authkey
 	prq.Message = []byte("hi this is a ping from reva")
 	prep, err := erpc.EosClient.Ping(c.cl, context.Background(), prq)
 	if err != nil {
@@ -173,6 +178,23 @@ func New(opt *Options) *Client {
 	}
 
 	fmt.Printf("--- Ping to '%s' gave response '%s'\n", opt.GrpcURI, prep)
+
+	fmt.Printf("--- Going to stat '%s'\n", "/eos")
+	frep, err := c.GetFileInfoByPath(context.Background(), "furano", "/eos")
+	if err != nil {
+		fmt.Printf("--- GetFileInfoByPath '%s' failed with err '%s'\n", "/eos", err)
+		return nil
+	}
+	fmt.Printf("--- GetFileInfoByPath to '%s' gave response '%s'\n", "/eos", frep.File)
+
+	fmt.Printf("--- Going to list '%s'\n", "/eos")
+	lrep, err := c.List(context.Background(), "furano", "/eos")
+	if err != nil {
+		fmt.Printf("--- List '%s' failed with err '%s'\n", "/eos", err)
+		return nil
+	}
+	fmt.Printf("--- List to '%s' gave %d entries\n", "/eos", len(lrep))
+
 	if prep != nil {
 		return c
 	}
@@ -238,7 +260,50 @@ func (c *Client) getACLForPath(ctx context.Context, username, path string) (*acl
 
 // GetFileInfoByInode returns the FileInfo by the given inode
 func (c *Client) GetFileInfoByInode(ctx context.Context, username string, inode uint64) (*FileInfo, error) {
-	return nil, errtypes.NotFound(fmt.Sprintf("%s:%s", "username", username))
+
+	// Stuff filename, uid, gid into the MDRequest type
+	mdrq := new(erpc.MDRequest)
+	mdrq.Type = erpc.TYPE_STAT
+	mdrq.Id = new(erpc.MDId)
+	mdrq.Id.Ino = inode
+
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return nil, err
+	}
+	mdrq.Role = new(erpc.RoleId)
+
+	uid, err := strconv.ParseUint(unixUser.Uid, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	mdrq.Role.Uid = uid
+	gid, err := strconv.ParseUint(unixUser.Gid, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	mdrq.Role.Gid = gid
+
+	mdrq.Authkey = c.opt.Authkey
+
+	// Now send the req and see what happens
+	resp, err := erpc.EosClient.MD(c.cl, context.Background(), mdrq)
+	if err != nil {
+		fmt.Printf("--- MD('%d') failed with err '%s'\n", inode, err)
+		return nil, err
+	}
+	rsp, err := resp.Recv()
+	if err != nil {
+		fmt.Printf("--- Recv('%d') failed with err '%s'\n", inode, err)
+		return nil, err
+	}
+
+	fmt.Printf("--- MD('%d') gave response '%s'\n", inode, rsp)
+	if rsp == nil {
+		return nil, errtypes.NotFound(fmt.Sprintf("Inode: %d", inode))
+	}
+
+	return c.grpcMDResponseToFileInfo(rsp)
 }
 
 // SetAttr sets an extended attributes on a path.
@@ -253,23 +318,53 @@ func (c *Client) UnsetAttr(ctx context.Context, username string, attr *Attribute
 
 // GetFileInfoByPath returns the FilInfo at the given path
 func (c *Client) GetFileInfoByPath(ctx context.Context, username, path string) (*FileInfo, error) {
+	log := appctx.GetLogger(ctx)
 
-	// Where do we stuff the filename, uid, gid here?!??
-	rq := new(erpc.NsStatRequest)
-	rq.Authkey = ""
+	// Stuff filename, uid, gid into the MDRequest type
+	mdrq := new(erpc.MDRequest)
+	mdrq.Type = erpc.TYPE_STAT
+	mdrq.Id = new(erpc.MDId)
+	mdrq.Id.Path = []byte(path)
 
-	resp, err := erpc.EosClient.NsStat(c.cl, context.Background(), rq)
+	unixUser, err := c.getUnixUser(username)
 	if err != nil {
-		fmt.Printf("--- NSStat('%s') failed with err '%s'\n", path, err)
+		return nil, err
+	}
+	mdrq.Role = new(erpc.RoleId)
+
+	uid, err := strconv.ParseUint(unixUser.Uid, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	mdrq.Role.Uid = uid
+	gid, err := strconv.ParseUint(unixUser.Gid, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	mdrq.Role.Gid = gid
+
+	mdrq.Authkey = c.opt.Authkey
+
+	// Now send the req and see what happens
+	resp, err := erpc.EosClient.MD(c.cl, context.Background(), mdrq)
+	if err != nil {
+
+		fmt.Printf("--- MD('%s') failed with err '%s'\n", path, err)
+		return nil, err
+	}
+	rsp, err := resp.Recv()
+	if err != nil {
+		fmt.Printf("--- Recv('%s') failed with err '%s'\n", path, err)
 		return nil, err
 	}
 
-	fmt.Printf("--- NSStat('%s') gave response '%s'\n", path, resp)
-	if resp == nil {
+	fmt.Printf("--- MD('%s') gave response '%s'\n", path, rsp)
+	if rsp == nil {
 		return nil, errtypes.NotFound(fmt.Sprintf("%s:%s", "acltype", path))
 	}
 
-	return c.grpcNsStatResponseToFileInfo(resp)
+	log.Print("MD--------")
+	return c.grpcMDResponseToFileInfo(rsp)
 
 }
 
@@ -310,7 +405,67 @@ func (c *Client) Rename(ctx context.Context, username, oldPath, newPath string) 
 
 // List the contents of the directory given by path
 func (c *Client) List(ctx context.Context, username, path string) ([]*FileInfo, error) {
-	return nil, errtypes.NotFound(fmt.Sprintf("%s:%s", "acltype", path))
+
+	// Stuff filename, uid, gid into the MDRequest type
+	fdrq := new(erpc.FindRequest)
+	fdrq.Maxdepth = 1
+	fdrq.Type = erpc.TYPE_LISTING
+	fdrq.Id = new(erpc.MDId)
+	fdrq.Id.Path = []byte(path)
+
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return nil, err
+	}
+	fdrq.Role = new(erpc.RoleId)
+
+	uid, err := strconv.ParseUint(unixUser.Uid, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	fdrq.Role.Uid = uid
+	gid, err := strconv.ParseUint(unixUser.Gid, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	fdrq.Role.Gid = gid
+
+	fdrq.Authkey = c.opt.Authkey
+
+	// Now send the req and see what happens
+	resp, err := erpc.EosClient.Find(c.cl, context.Background(), fdrq)
+	if err != nil {
+		fmt.Printf("--- Find('%s') failed with err '%s'\n", path, err)
+		return nil, err
+	}
+
+	var mylst []*FileInfo
+
+	for {
+		rsp, err := resp.Recv()
+		if err != nil {
+			if err == io.EOF {
+				return mylst, nil
+			}
+
+			fmt.Printf("--- Recv('%s') failed with err '%s'\n", path, err)
+			return nil, err
+		}
+
+		fmt.Printf("--- Find('%s') gave response '%s'\n", path, rsp)
+		if rsp == nil {
+			return nil, errtypes.NotFound(fmt.Sprintf("%s", path))
+		}
+
+		myitem, err := c.grpcMDResponseToFileInfo(rsp)
+		if err != nil {
+			fmt.Printf("--- Could not convert item. err '%s'\n", err)
+			return nil, err
+		}
+		mylst = append(mylst, myitem)
+	}
+
+	return mylst, nil
 }
 
 // Read reads a file from the mgm
@@ -465,8 +620,52 @@ func (c *Client) parseQuota(path, raw string) (int, int, error) {
 	return 0, 0, nil
 }
 
-func (c *Client) grpcNsStatResponseToFileInfo(st *erpc.NsStatResponse) (*FileInfo, error) {
-	return nil, nil
+func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse) (*FileInfo, error) {
+	if st.Cmd == nil && st.Fmd == nil {
+		return nil, errors.Wrap(errtypes.NotSupported(""), "Invalid response (st.Cmd and st.Fmd are nil)")
+	}
+	fi := new(FileInfo)
+
+	if st.Type != 0 {
+		fi.IsDir = true
+	}
+	if st.Fmd != nil {
+		fi.Inode = st.Fmd.Id
+		fi.UID = st.Fmd.Uid
+		fi.GID = st.Fmd.Gid
+		fi.MTimeSec = st.Fmd.Mtime.Sec
+		fi.File = string(st.Fmd.Name)
+
+		for k, v := range st.Fmd.Xattrs {
+			if fi.Attrs == nil {
+				fi.Attrs = make(map[string]string)
+			}
+			fi.Attrs[k] = string(v)
+		}
+		fi.Size = st.Fmd.Size
+
+		fi.Size = st.Fmd.Size
+
+	} else {
+		fi.Inode = st.Cmd.Id
+		fi.UID = st.Cmd.Uid
+		fi.GID = st.Cmd.Gid
+		fi.MTimeSec = st.Cmd.Mtime.Sec
+		fi.File = string(st.Cmd.Name)
+
+		for k, v := range st.Cmd.Xattrs {
+			if fi.Attrs == nil {
+				fi.Attrs = make(map[string]string)
+			}
+			fi.Attrs[k] = string(v)
+		}
+
+		fi.Size = 0
+	}
+
+	fi.ETag = fi.Attrs["etag"]
+
+	return fi, nil
 }
 
 // TODO(labkode): better API to access extended attributes.
