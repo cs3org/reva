@@ -135,7 +135,7 @@ message ContainerMdProto {
   bytes path = 13;
 }
 
-enum TYPE { FILE = 0; CONTAINER = 1; LISTING = 2;}
+enum TYPE { FILE = 0; CONTAINER = 1; LISTING = 2; STAT = 3;}
 
 message RoleId {
   uint64 uid = 1;

@@ -118,6 +118,10 @@ type Options struct {
 	// Keytab is the location of the EOS keytab file.
 	Keytab string
 
+	// Authkey is the key that authorizes this client to connect to the GRPC service
+	// It's unclear whether this will be the final solution
+	Authkey string
+
 	// SecProtocol is the comma separated list of security protocols used by xrootd.
 	// For example: "sss, unix"
 	SecProtocol string
