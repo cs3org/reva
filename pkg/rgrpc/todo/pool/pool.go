@@ -47,7 +47,7 @@ var userShareProviders = map[string]collaboration.CollaborationAPIClient{}
 var ocmShareProviders = map[string]ocm.OcmAPIClient{}
 var ocmInviteManagers = map[string]invitepb.InviteAPIClient{}
 var ocmProviderAuthorizers = map[string]ocmprovider.ProviderAPIClient{}
-var ocmCores = map[string]ocmcore.OCMCoreClient{}
+var ocmCores = map[string]ocmcore.OcmCoreAPIClient{}
 var publicShareProviders = map[string]link.LinkAPIClient{}
 var preferencesProviders = map[string]preferences.PreferencesAPIClient{}
 var appRegistries = map[string]appregistry.RegistryAPIClient{}
@@ -293,7 +293,7 @@ func GetOCMProviderAuthorizerClient(endpoint string) (ocmprovider.ProviderAPICli
 }
 
 // GetOCMCoreClient returns a new OCMCoreClient.
-func GetOCMCoreClient(endpoint string) (ocmcore.ProviderAPIClient, error) {
+func GetOCMCoreClient(endpoint string) (ocmcore.OcmCoreAPIClient, error) {
 	if val, ok := ocmCores[endpoint]; ok {
 		return val, nil
 	}
@@ -303,7 +303,7 @@ func GetOCMCoreClient(endpoint string) (ocmcore.ProviderAPIClient, error) {
 		return nil, err
 	}
 
-	ocmCores[endpoint] = ocmcore.NewProviderAPIClient(conn)
+	ocmCores[endpoint] = ocmcore.NewOcmCoreAPIClient(conn)
 
 	return ocmCores[endpoint], nil
 }
