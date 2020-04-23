@@ -1,0 +1,279 @@
+// Copyright 2018-2020 CERN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// In applying this license, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
+package filesystem
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"math/rand"
+	"os"
+	"path"
+	"path/filepath"
+	"sync"
+	"time"
+
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/publicshare"
+	"github.com/cs3org/reva/pkg/publicshare/manager/registry"
+	"github.com/golang/protobuf/jsonpb"
+)
+
+func init() {
+	registry.Register("filesystem", New)
+}
+
+// New returns a new memory manager.
+func New(c map[string]interface{}) (publicshare.Manager, error) {
+	dir := ".publicshares"
+
+	return &manager{
+		m:           &sync.Mutex{},
+		marshaler:   jsonpb.Marshaler{},
+		unmarshaler: jsonpb.Unmarshaler{},
+		mount:       dir,
+	}, nil
+}
+
+type manager struct {
+	m *sync.Mutex
+	// mount is the directory where the share files are
+	mount string
+
+	marshaler   jsonpb.Marshaler
+	unmarshaler jsonpb.Unmarshaler
+}
+
+var (
+	passwordProtected bool
+)
+
+// CreatePublicShare adds a new entry to manager.shares
+func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error) {
+	id := &link.PublicShareId{
+		OpaqueId: randString(12),
+	}
+
+	tkn := randString(12)
+	now := uint64(time.Now().Unix())
+
+	displayName, ok := rInfo.ArbitraryMetadata.Metadata["name"]
+	if !ok {
+		displayName = tkn
+	}
+
+	if len(rInfo.ArbitraryMetadata.Metadata["password"]) > 0 {
+		// TODO hash the password!
+		g.Password, passwordProtected = rInfo.ArbitraryMetadata.Metadata["password"]
+	}
+
+	createdAt := &typespb.Timestamp{
+		Seconds: now,
+		Nanos:   uint32(now % 1000000000),
+	}
+
+	modifiedAt := &typespb.Timestamp{
+		Seconds: now,
+		Nanos:   uint32(now % 1000000000),
+	}
+
+	s := link.PublicShare{
+		Id:                id,
+		Owner:             rInfo.GetOwner(),
+		Creator:           u.Id,
+		ResourceId:        rInfo.Id,
+		Token:             tkn,
+		Permissions:       g.Permissions,
+		Ctime:             createdAt,
+		Mtime:             modifiedAt,
+		PasswordProtected: passwordProtected,
+		Expiration:        g.Expiration,
+		DisplayName:       displayName,
+	}
+
+	// this file could benefit of the strategy pattern. same with the memory.go driver. The only moving parts are where are the shares stored,
+	// but the logic of creating them remains the same.
+	filename := path.Join(m.mount, s.Id.OpaqueId)
+	// ioutil.WriteFile(filename, )
+	fd, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0700)
+	if err != nil {
+		return nil, err
+	}
+	if err := m.marshaler.Marshal(fd, &s); err != nil {
+		return nil, err
+	}
+
+	return &s, nil
+}
+
+// UpdatePublicShare updates the expiration date, permissions and Mtime
+func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link.UpdatePublicShareRequest, g *link.Grant) (*link.PublicShare, error) {
+	log := appctx.GetLogger(ctx)
+	share, err := m.GetPublicShare(ctx, u, req.Ref)
+	if err != nil {
+		return nil, errors.New("ref does not exist")
+	}
+
+	// token := share.GetToken()
+
+	switch req.GetUpdate().GetType() {
+	case link.UpdatePublicShareRequest_Update_TYPE_DISPLAYNAME:
+		log.Debug().Str("memory", "update display name").Msgf("from: `%v` to `%v`", share.DisplayName, req.Update.GetDisplayName())
+		share.DisplayName = req.Update.GetDisplayName()
+	case link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS:
+		old, _ := json.Marshal(share.Permissions)
+		new, _ := json.Marshal(req.Update.GetGrant().Permissions)
+		log.Debug().Str("memory", "update grants").Msgf("from: `%v`\nto\n`%v`", old, new)
+		share.Permissions = req.Update.GetGrant().GetPermissions()
+	case link.UpdatePublicShareRequest_Update_TYPE_EXPIRATION:
+		old, _ := json.Marshal(share.Expiration)
+		new, _ := json.Marshal(req.Update.GetGrant().Expiration)
+		log.Debug().Str("memory", "update expiration").Msgf("from: `%v`\nto\n`%v`", old, new)
+		share.Expiration = req.Update.GetGrant().Expiration
+	case link.UpdatePublicShareRequest_Update_TYPE_PASSWORD:
+		// TODO(refs) Do public shares need Grants? Struct is defined, just not used. Fill this once it's done.
+		fallthrough
+	default:
+		return nil, fmt.Errorf("invalid update type: %v", req.GetUpdate().GetType())
+	}
+
+	// share.Expiration = g.Expiration
+	share.Mtime = &typespb.Timestamp{
+		Seconds: uint64(time.Now().Unix()),
+		Nanos:   uint32(time.Now().Unix() % 1000000000),
+	}
+
+	// m.shares.Store(token, share)
+
+	return share, nil
+}
+
+func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) (share *link.PublicShare, err error) {
+	// Attempt to fetch public share by token
+	if ref.GetToken() != "" {
+		share, err = m.GetPublicShareByToken(ctx, ref.GetToken())
+		if err != nil {
+			return nil, errors.New("no shares found by token")
+		}
+	}
+
+	// Attempt to fetch public share by Id
+	if ref.GetId() != nil {
+		share, err = m.getPublicShareByTokenID(ctx, *ref.GetId())
+		if err != nil {
+			return nil, errors.New("no shares found by id")
+		}
+	}
+
+	return
+}
+
+func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo) ([]*link.PublicShare, error) {
+	// TODO(refs) filter out expired shares
+	shares := []*link.PublicShare{}
+
+	all := []string{}
+	err := filepath.Walk(m.mount, func(path string, info os.FileInfo, err error) error {
+		all = append(all, path)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	for _, v := range all {
+		fd, err := os.Open(path.Join(m.mount, v))
+		if err != nil {
+			return nil, err
+		}
+
+		ps := link.PublicShare{}
+		err = m.unmarshaler.Unmarshal(fd, &ps)
+		if err != nil {
+			return nil, err
+		}
+		if len(filters) == 0 {
+			shares = append(shares, &ps)
+		} else {
+			for _, f := range filters {
+				if f.Type == link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID {
+					if ps.ResourceId.StorageId == f.GetResourceId().StorageId && ps.ResourceId.OpaqueId == f.GetResourceId().OpaqueId {
+						shares = append(shares, &ps)
+					}
+				}
+			}
+		}
+	}
+	return shares, nil
+}
+
+func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, id string) (err error) {
+	// // check whether the referente exists
+	// if _, err := m.GetPublicShareByToken(ctx, id); err != nil {
+	// 	return errors.New("reference does not exist")
+	// }
+	// m.shares.Delete(id)
+	return
+}
+
+func (m *manager) GetPublicShareByToken(ctx context.Context, token string) (*link.PublicShare, error) {
+	fd, err := os.Open(path.Join(m.mount, token))
+	if err != nil {
+		return nil, err
+	}
+
+	share := link.PublicShare{}
+	if err := m.unmarshaler.Unmarshal(fd, &share); err != nil {
+		return nil, err
+	}
+
+	return &share, nil
+}
+
+func randString(n int) string {
+	var l = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = l[rand.Intn(len(l))]
+	}
+	return string(b)
+}
+
+func (m *manager) getPublicShareByTokenID(ctx context.Context, targetID link.PublicShareId) (*link.PublicShare, error) {
+	// var found *link.PublicShare
+	// m.shares.Range(func(k, v interface{}) bool {
+	// 	id := v.(*link.PublicShare).GetId()
+	// 	if targetID.String() == id.String() {
+	// 		found = v.(*link.PublicShare)
+	// 	}
+	// 	return true
+	// })
+
+	// if found != nil {
+	// 	return found, nil
+	// }
+	// return nil, errors.New("resource not found")
+
+	return nil, nil
+}
