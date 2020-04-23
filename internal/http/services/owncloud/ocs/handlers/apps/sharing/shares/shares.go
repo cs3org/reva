@@ -373,7 +373,7 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		providerInfo, err := c.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
+		providerInfoResp, err := c.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
 			Domain: shareWithProvider,
 		})
 		if err != nil {
@@ -394,26 +394,25 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var permissions conversions.Permissions
+		var role string
 
-		role := r.FormValue("role")
-		if role == "" {
-			pval := r.FormValue("permissions")
-			if pval == "" {
-				// by default only allow read permissions / assign viewer role
-				role = conversions.RoleViewer
-			} else {
-				pint, err := strconv.Atoi(pval)
-				if err != nil {
-					response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "permissions must be an integer", nil)
-					return
-				}
-				permissions, err = conversions.NewPermissions(pint)
-				if err != nil {
-					response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, err.Error(), nil)
-					return
-				}
-				role = conversions.Permissions2Role(permissions)
+		pval := r.FormValue("permissions")
+		if pval == "" {
+			// by default only allow read permissions / assign viewer role
+			permissions = conversions.PermissionRead
+			role = conversions.RoleViewer
+		} else {
+			pint, err := strconv.Atoi(pval)
+			if err != nil {
+				response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "permissions must be an integer", nil)
+				return
 			}
+			permissions, err = conversions.NewPermissions(pint)
+			if err != nil {
+				response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, err.Error(), nil)
+				return
+			}
+			role = conversions.Permissions2Role(permissions)
 		}
 
 		var resourcePermissions *provider.ResourcePermissions
@@ -423,8 +422,8 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 			resourcePermissions = asCS3Permissions(permissions, nil)
 		}
 
-		roleMap := map[string]string{"name": role}
-		val, err := json.Marshal(roleMap)
+		permissionMap := map[string]string{"name": string(permissions)}
+		val, err := json.Marshal(permissionMap)
 		if err != nil {
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "could not encode role", err)
 			return
@@ -454,7 +453,7 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 		createShareReq := &ocm.CreateOCMShareRequest{
 			Opaque: &types.Opaque{
 				Map: map[string]*types.OpaqueEntry{
-					"role": &types.OpaqueEntry{
+					"permissions": &types.OpaqueEntry{
 						Decoder: "json",
 						Value:   val,
 					},
@@ -470,7 +469,7 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 					Permissions: resourcePermissions,
 				},
 			},
-			RecipientMeshProvider: providerInfo,
+			RecipientMeshProvider: providerInfoResp.ProviderInfo,
 		}
 
 		createShareResponse, err := c.CreateOCMShare(ctx, createShareReq)

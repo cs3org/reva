@@ -20,6 +20,7 @@ package ocmshareprovider
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
@@ -101,7 +102,24 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 }
 
 func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareRequest) (*ocm.CreateOCMShareResponse, error) {
-	share, err := s.sm.Share(ctx, req.ResourceId, req.Grant, req.RecipientMeshProvider, nil)
+
+	opaqueObj := req.Opaque.Map["permissions"]
+	if opaqueObj.Decoder != "json" {
+		err := errors.New("opaque entry decoder is not json")
+		return &ocm.CreateOCMShareResponse{
+			Status: status.NewInternal(ctx, err, "invalid opaque entry decoder"),
+		}, nil
+	}
+
+	var permissions map[string]string
+	err := json.Unmarshal(opaqueObj.Value, &permissions)
+	if err != nil {
+		return &ocm.CreateOCMShareResponse{
+			Status: status.NewInternal(ctx, err, "error decoding resource permissions"),
+		}, nil
+	}
+
+	share, err := s.sm.Share(ctx, req.ResourceId, req.Grant, req.RecipientMeshProvider, permissions["name"], nil)
 	if err != nil {
 		return &ocm.CreateOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "error creating share"),

@@ -20,6 +20,7 @@ package memory
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -65,7 +66,7 @@ func genID() string {
 	return uuid.New().String()
 }
 
-func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGrant, pi *ocmprovider.ProviderInfo, owner *userpb.UserId) (*ocm.Share, error) {
+func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGrant, pi *ocmprovider.ProviderInfo, pm string, owner *userpb.UserId) (*ocm.Share, error) {
 
 	id := genID()
 	now := time.Now().UnixNano()
@@ -120,12 +121,26 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 	m.shares.Store(key, s)
 
 	if pi != nil {
+
+		protocol, err := json.Marshal(
+			map[string]interface{}{
+				"name": "webdav",
+				"options": map[string]string{
+					"permissions": pm,
+				},
+			},
+		)
+		if err != nil {
+			err = errors.Wrap(err, "error marshalling protocol data")
+			return nil, err
+		}
+
 		requestBody := url.Values{
 			"shareWith":    {g.Grantee.Id.OpaqueId},
 			"name":         {md.OpaqueId},
 			"providerId":   {md.StorageId},
 			"owner":        {userID.OpaqueId},
-			"protocol":     {userID.GetIdp()},
+			"protocol":     {string(protocol)},
 			"meshProvider": {"http://cernbox.cern.ch"},
 		}
 

@@ -118,7 +118,7 @@ func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCM
 	}
 
 	var resourcePermissions *provider.ResourcePermissions
-	err := json.Unmarshal(opaqueObj.Value, resourcePermissions)
+	err := json.Unmarshal(opaqueObj.Value, &resourcePermissions)
 	if err != nil {
 		return &ocmcore.CreateOCMCoreShareResponse{
 			Status: status.NewInternal(ctx, err, "error decoding resource permissions"),
@@ -135,7 +135,7 @@ func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCM
 		},
 	}
 
-	share, err := s.sm.Share(ctx, resource, grant, nil, req.Owner)
+	share, err := s.sm.Share(ctx, resource, grant, nil, "", req.Owner)
 	if err != nil {
 		return &ocmcore.CreateOCMCoreShareResponse{
 			Status: status.NewInternal(ctx, err, "error creating ocm core share"),
