@@ -25,8 +25,9 @@ import (
 	authregistry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	ocmcore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
-	ocmauthorizer "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	preferences "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -45,7 +46,8 @@ var authRegistries = map[string]authregistry.RegistryAPIClient{}
 var userShareProviders = map[string]collaboration.CollaborationAPIClient{}
 var ocmShareProviders = map[string]ocm.OcmAPIClient{}
 var ocmInviteManagers = map[string]invitepb.InviteAPIClient{}
-var ocmAuthorizeProviders = map[string]ocmauthorizer.ProviderAPIClient{}
+var ocmProviderAuthorizers = map[string]ocmprovider.ProviderAPIClient{}
+var ocmCores = map[string]ocmcore.OcmCoreAPIClient{}
 var publicShareProviders = map[string]link.LinkAPIClient{}
 var preferencesProviders = map[string]preferences.PreferencesAPIClient{}
 var appRegistries = map[string]appregistry.RegistryAPIClient{}
@@ -179,6 +181,7 @@ func GetOCMShareProviderClient(endpoint string) (ocm.OcmAPIClient, error) {
 
 // GetOCMInviteManagerClient returns a new OCMInviteManagerClient.
 func GetOCMInviteManagerClient(endpoint string) (invitepb.InviteAPIClient, error) {
+
 	if val, ok := ocmInviteManagers[endpoint]; ok {
 		return val, nil
 	}
@@ -273,9 +276,9 @@ func GetStorageRegistryClient(endpoint string) (storageregistry.RegistryAPIClien
 	return storageRegistries[endpoint], nil
 }
 
-// GetOCMAuthorizerProviderClient returns a new OCMAuthorizerProviderClient.
-func GetOCMAuthorizerProviderClient(endpoint string) (ocmauthorizer.ProviderAPIClient, error) {
-	if val, ok := ocmAuthorizeProviders[endpoint]; ok {
+// GetOCMProviderAuthorizerClient returns a new OCMProviderAuthorizerClient.
+func GetOCMProviderAuthorizerClient(endpoint string) (ocmprovider.ProviderAPIClient, error) {
+	if val, ok := ocmProviderAuthorizers[endpoint]; ok {
 		return val, nil
 	}
 
@@ -284,7 +287,23 @@ func GetOCMAuthorizerProviderClient(endpoint string) (ocmauthorizer.ProviderAPIC
 		return nil, err
 	}
 
-	ocmAuthorizeProviders[endpoint] = ocmauthorizer.NewProviderAPIClient(conn)
+	ocmProviderAuthorizers[endpoint] = ocmprovider.NewProviderAPIClient(conn)
 
-	return ocmAuthorizeProviders[endpoint], nil
+	return ocmProviderAuthorizers[endpoint], nil
+}
+
+// GetOCMCoreClient returns a new OCMCoreClient.
+func GetOCMCoreClient(endpoint string) (ocmcore.OcmCoreAPIClient, error) {
+	if val, ok := ocmCores[endpoint]; ok {
+		return val, nil
+	}
+
+	conn, err := NewConn(endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	ocmCores[endpoint] = ocmcore.NewOcmCoreAPIClient(conn)
+
+	return ocmCores[endpoint], nil
 }

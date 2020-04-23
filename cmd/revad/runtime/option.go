@@ -16,15 +16,34 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package runtime
 
 import (
-	// Load core authentication managers.
-	_ "github.com/cs3org/reva/pkg/auth/manager/demo"
-	_ "github.com/cs3org/reva/pkg/auth/manager/impersonator"
-	_ "github.com/cs3org/reva/pkg/auth/manager/json"
-	_ "github.com/cs3org/reva/pkg/auth/manager/ldap"
-	_ "github.com/cs3org/reva/pkg/auth/manager/oidc"
-	_ "github.com/cs3org/reva/pkg/auth/manager/publicshares"
-	// Add your own here
+	"github.com/rs/zerolog"
 )
+
+// Option defines a single option function.
+type Option func(o *Options)
+
+// Options defines the available options for this package.
+type Options struct {
+	Logger *zerolog.Logger
+}
+
+// newOptions intializes the available default options.
+func newOptions(opts ...Option) Options {
+	opt := Options{}
+
+	for _, o := range opts {
+		o(&opt)
+	}
+
+	return opt
+}
+
+// WithLogger provides a function to set the logger option.
+func WithLogger(logger *zerolog.Logger) Option {
+	return func(o *Options) {
+		o.Logger = logger
+	}
+}

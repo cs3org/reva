@@ -16,23 +16,24 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package provider
+package invite
 
 import (
 	"context"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 )
 
-// Authorizer provides provisions to verify and add sync'n'share system providers.
-type Authorizer interface {
-	// GetInfoByDomain returns the information of the provider identified by a specific domain.
-	GetInfoByDomain(ctx context.Context, domain string) (*ocmprovider.ProviderInfo, error)
+// Manager is the interface that is used to perform operations to invites.
+type Manager interface {
+	// GenerateToken creates a new token for the user with a specified validity.
+	GenerateToken(ctx context.Context) (*invitepb.InviteToken, error)
 
-	// IsProviderAllowed checks if a given system provider is integrated into the OCM or not.
-	IsProviderAllowed(ctx context.Context, user *userpb.User) error
+	// ForwardInvite forwards a received invite to the sync'n'share system provider.
+	ForwardInvite(ctx context.Context, invite *invitepb.InviteToken, originProvider *ocmprovider.ProviderInfo) error
 
-	// ListAllProviders returns the information of all the providers registered in the mesh.
-	ListAllProviders(ctx context.Context) ([]*ocmprovider.ProviderInfo, error)
+	// AcceptInvite completes an invitation acceptance.
+	AcceptInvite(ctx context.Context, invite *invitepb.InviteToken, userID *userpb.UserId) error
 }

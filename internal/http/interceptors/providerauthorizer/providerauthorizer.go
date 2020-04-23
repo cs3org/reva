@@ -21,32 +21,20 @@ package providerauthorizer
 import (
 	"fmt"
 	"net/http"
-	"strings"
 
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/ocm/provider"
 	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
-	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 )
 
-const (
-	defaultPriority = 200
-)
-
-func init() {
-	global.RegisterMiddleware("providerauthorizer", New)
-}
-
 type config struct {
-	Driver     string                            `mapstructure:"driver"`
-	Drivers    map[string]map[string]interface{} `mapstructure:"drivers"`
-	OCMPrefix  string                            `mapstructure:"ocm_prefix"`
-	GatewaySvc string
+	Driver  string                            `mapstructure:"driver"`
+	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
 }
 
 func getDriver(c *config) (provider.Authorizer, error) {
@@ -58,21 +46,16 @@ func getDriver(c *config) (provider.Authorizer, error) {
 }
 
 // New returns a new HTTP middleware that verifies that the provider is registered in OCM.
-func New(m map[string]interface{}) (global.Middleware, int, error) {
+func New(m map[string]interface{}, unprotected []string, ocmPrefix string) (global.Middleware, error) {
 
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
-		return nil, 0, err
-	}
-
-	conf.GatewaySvc = sharedconf.GetGatewaySVC(conf.GatewaySvc)
-	if conf.OCMPrefix == "" {
-		conf.OCMPrefix = "ocm"
+		return nil, err
 	}
 
 	authorizer, err := getDriver(conf)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
 	handler := func(h http.Handler) http.Handler {
@@ -80,50 +63,16 @@ func New(m map[string]interface{}) (global.Middleware, int, error) {
 
 			ctx := r.Context()
 			log := appctx.GetLogger(ctx)
-			if head, _ := router.ShiftPath(r.URL.Path); head != conf.OCMPrefix {
+			head, _ := router.ShiftPath(r.URL.Path)
+
+			if r.Method == "OPTIONS" || head != ocmPrefix || utils.Skip(r.URL.Path, unprotected) {
 				log.Info().Msg("skipping provider authorizer check for: " + r.URL.Path)
 				h.ServeHTTP(w, r)
 				return
 			}
 
-			username, _, ok := r.BasicAuth()
-			if !ok {
-				log.Error().Err(err).Msg("no basic auth provided")
-				w.WriteHeader(http.StatusUnauthorized)
-				return
-			}
-
-			gatewayClient, err := pool.GetGatewayServiceClient(conf.GatewaySvc)
-			if err != nil {
-				log.Error().Err(err).Msg("error getting the grpc client")
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-
-			userRes, err := gatewayClient.FindUsers(ctx, &userpb.FindUsersRequest{
-				Filter: username,
-			})
-			if err != nil {
-				log.Error().Err(err).Msg("error searching for the user")
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-
-			var userAuth *userpb.User
-			for _, user := range userRes.GetUsers() {
-				if user.Username == username {
-					userAuth = user
-					break
-				}
-			}
-			domainSplit := strings.Split(userAuth.Mail, "@")
-			if len(domainSplit) != 2 {
-				log.Error().Err(err).Msg("user mail must contain domain")
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-
-			err = authorizer.IsProviderAllowed(ctx, domainSplit[1])
+			userAuth := user.ContextMustGetUser(ctx)
+			err = authorizer.IsProviderAllowed(ctx, userAuth)
 			if err != nil {
 				log.Error().Err(err).Msg("provider not registered in OCM")
 				w.WriteHeader(http.StatusUnauthorized)
@@ -134,6 +83,6 @@ func New(m map[string]interface{}) (global.Middleware, int, error) {
 		})
 	}
 
-	return handler, defaultPriority, nil
+	return handler, nil
 
 }

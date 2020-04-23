@@ -272,7 +272,6 @@ func AsCS3Permissions(p int, rp *provider.ResourcePermissions) *provider.Resourc
 }
 
 // PublicShare2ShareData converts a cs3api public share into shareData data model
-// TODO(refs) this would be more accurate with a PublicShare as second argument and not the request
 func PublicShare2ShareData(share *link.PublicShare, r *http.Request) *ShareData {
 	var expiration string
 	if share.Expiration != nil {
@@ -282,25 +281,20 @@ func PublicShare2ShareData(share *link.PublicShare, r *http.Request) *ShareData 
 	}
 
 	return &ShareData{
-		// THERE BE DRAGONS
-		// TODO map share.resourceId to path and storage ... requires a stat call
 		// share.permissions ar mapped below
-		// TODO lookup user metadata
 		// DisplaynameOwner:     creator.DisplayName,
-		// TODO lookup user metadata
 		// DisplaynameFileOwner: share.GetCreator().String(),
 		ID:           share.Id.OpaqueId,
-		Permissions:  publicSharePermissions2OCSPermissions(share.GetPermissions()),
 		ShareType:    ShareTypePublicLink,
-		UIDOwner:     UserIDToString(share.Creator),
 		STime:        share.Ctime.Seconds, // TODO CS3 api birth time = btime
-		UIDFileOwner: UserIDToString(share.Owner),
 		Token:        share.Token,
 		Expiration:   expiration,
 		MimeType:     share.Mtime.String(),
 		Name:         r.FormValue("name"),
-		// URL:                  r.Host + "/#/s/" + share.Token, // this is broken. r.Host doesn't point to Phoenix
-		URL: "localhost:8300/#/s/" + share.Token,
+		URL:          r.Header.Get("Origin") + "/#/s/" + share.Token,
+		Permissions:  publicSharePermissions2OCSPermissions(share.GetPermissions()),
+		UIDOwner:     UserIDToString(share.Creator),
+		UIDFileOwner: UserIDToString(share.Owner),
 	}
 	// actually clients should be able to GET and cache the user info themselves ...
 	// TODO check grantee type for user vs group

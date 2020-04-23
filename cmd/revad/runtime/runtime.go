@@ -45,11 +45,18 @@ import (
 
 // Run runs a reva server with the given config file and pid file.
 func Run(mainConf map[string]interface{}, pidFile string) {
+	logConf := parseLogConfOrDie(mainConf["log"])
+	logger := initLogger(logConf)
+	RunWithOptions(mainConf, pidFile, WithLogger(logger))
+}
+
+// RunWithOptions runs a reva server with the given config file, pid file and options.
+func RunWithOptions(mainConf map[string]interface{}, pidFile string, opts ...Option) {
+	options := newOptions(opts...)
 	parseSharedConfOrDie(mainConf["shared"])
 	coreConf := parseCoreConfOrDie(mainConf["core"])
-	logConf := parseLogConfOrDie(mainConf["log"])
 
-	run(mainConf, coreConf, logConf, pidFile)
+	run(mainConf, coreConf, options.Logger, pidFile)
 }
 
 type coreConf struct {
@@ -60,9 +67,7 @@ type coreConf struct {
 	TracingServiceName string `mapstructure:"tracing_service_name"`
 }
 
-func run(mainConf map[string]interface{}, coreConf *coreConf, logConf *logConf, filename string) {
-	logger := initLogger(logConf)
-
+func run(mainConf map[string]interface{}, coreConf *coreConf, logger *zerolog.Logger, filename string) {
 	host, _ := os.Hostname()
 	logger.Info().Msgf("host info: %s", host)
 

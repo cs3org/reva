@@ -31,7 +31,7 @@ func (s *svc) GenerateInviteToken(ctx context.Context, req *invitepb.GenerateInv
 	c, err := pool.GetOCMInviteManagerClient(s.c.OCMInviteManagerEndpoint)
 	if err != nil {
 		return &invitepb.GenerateInviteTokenResponse{
-			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
+			Status: status.NewInternal(ctx, err, "error getting user invite provider client"),
 		}, nil
 	}
 
@@ -47,7 +47,7 @@ func (s *svc) ForwardInvite(ctx context.Context, req *invitepb.ForwardInviteRequ
 	c, err := pool.GetOCMInviteManagerClient(s.c.OCMInviteManagerEndpoint)
 	if err != nil {
 		return &invitepb.ForwardInviteResponse{
-			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
+			Status: status.NewInternal(ctx, err, "error getting user invite provider client"),
 		}, nil
 	}
 
@@ -63,7 +63,7 @@ func (s *svc) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteReques
 	c, err := pool.GetOCMInviteManagerClient(s.c.OCMInviteManagerEndpoint)
 	if err != nil {
 		return &invitepb.AcceptInviteResponse{
-			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
+			Status: status.NewInternal(ctx, err, "error getting user invite provider client"),
 		}, nil
 	}
 

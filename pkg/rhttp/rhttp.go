@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/internal/http/interceptors/appctx"
 	"github.com/cs3org/reva/internal/http/interceptors/auth"
 	"github.com/cs3org/reva/internal/http/interceptors/log"
+	"github.com/cs3org/reva/internal/http/interceptors/providerauthorizer"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/mitchellh/mapstructure"
@@ -180,12 +181,8 @@ func (s *Server) registerMiddlewares() error {
 }
 
 func (s *Server) isMiddlewareEnabled(name string) bool {
-	for key := range s.conf.Middlewares {
-		if key == name {
-			return true
-		}
-	}
-	return false
+	_, ok := s.conf.Middlewares[name]
+	return ok
 }
 
 func (s *Server) registerServices() error {
@@ -213,12 +210,8 @@ func (s *Server) registerServices() error {
 }
 
 func (s *Server) isServiceEnabled(svcName string) bool {
-	for key := range global.Services {
-		if key == svcName {
-			return true
-		}
-	}
-	return false
+	_, ok := global.Services[svcName]
+	return ok
 }
 
 // TODO(labkode): if the http server is exposed under a basename we need to prepend
@@ -275,6 +268,15 @@ func (s *Server) getHandler() (http.Handler, error) {
 	// add always the logctx middleware as most priority, this middleware is internal
 	// and cannot be configured from the configuration.
 	coreMiddlewares := []*middlewareTriple{}
+
+	providerAuthMiddle, err := addProviderAuthMiddleware(s.conf, s.unprotected)
+	if err != nil {
+		return nil, errors.Wrap(err, "rhttp: error creating providerauthorizer middleware")
+	}
+	if providerAuthMiddle != nil {
+		coreMiddlewares = append(coreMiddlewares, &middlewareTriple{Middleware: providerAuthMiddle, Name: "providerauthorizer"})
+	}
+
 	coreMiddlewares = append(coreMiddlewares, &middlewareTriple{Middleware: authMiddle, Name: "auth"})
 	coreMiddlewares = append(coreMiddlewares, &middlewareTriple{Middleware: log.New(), Name: "log"})
 	coreMiddlewares = append(coreMiddlewares, &middlewareTriple{Middleware: appctx.New(s.log), Name: "appctx"})
@@ -300,4 +302,13 @@ func traceHandler(name string, h http.Handler) http.Handler {
 		h.ServeHTTP(w, r)
 		span.End()
 	})
+}
+
+func addProviderAuthMiddleware(conf *config, unprotected []string) (global.Middleware, error) {
+	_, ocmdRegistered := global.Services["ocmd"]
+	_, ocmdEnabled := conf.Services["ocmd"]
+	if ocmdRegistered && ocmdEnabled {
+		return providerauthorizer.New(conf.Middlewares["providerauthorizer"], unprotected, conf.Services["ocmd"]["prefix"].(string))
+	}
+	return nil, nil
 }

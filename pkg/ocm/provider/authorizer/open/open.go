@@ -16,13 +16,12 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package json
+package open
 
 import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
-	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
@@ -34,7 +33,7 @@ import (
 )
 
 func init() {
-	registry.Register("json", New)
+	registry.Register("open", New)
 }
 
 // New returns a new authorizer object.
@@ -79,18 +78,7 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 }
 
 func (a *authorizer) IsProviderAllowed(ctx context.Context, user *userpb.User) error {
-	domainSplit := strings.Split(user.Mail, "@")
-	if len(domainSplit) != 2 {
-		return errtypes.NotSupported("Email " + user.Mail)
-	}
-
-	for _, p := range a.providers {
-		if p.Domain == domainSplit[1] {
-			return nil
-		}
-	}
-
-	return errtypes.NotFound(domainSplit[1])
+	return nil
 }
 
 func (a *authorizer) ListAllProviders(ctx context.Context) ([]*ocmprovider.ProviderInfo, error) {

@@ -61,7 +61,7 @@ func (s *service) Close() error {
 	return nil
 }
 func (s *service) UnprotectedEndpoints() []string {
-	return []string{}
+	return []string{"/cs3.sharing.link.v1beta1.LinkAPI/GetPublicShareByToken"}
 }
 
 func (s *service) Register(ss *grpc.Server) {

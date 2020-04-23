@@ -16,15 +16,29 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package gateway
 
 import (
-	// Load core authentication managers.
-	_ "github.com/cs3org/reva/pkg/auth/manager/demo"
-	_ "github.com/cs3org/reva/pkg/auth/manager/impersonator"
-	_ "github.com/cs3org/reva/pkg/auth/manager/json"
-	_ "github.com/cs3org/reva/pkg/auth/manager/ldap"
-	_ "github.com/cs3org/reva/pkg/auth/manager/oidc"
-	_ "github.com/cs3org/reva/pkg/auth/manager/publicshares"
-	// Add your own here
+	"context"
+
+	ocmcore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
+	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/pkg/errors"
 )
+
+func (s *svc) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCMCoreShareRequest) (*ocmcore.CreateOCMCoreShareResponse, error) {
+	c, err := pool.GetOCMCoreClient(s.c.OCMCoreEndpoint)
+	if err != nil {
+		return &ocmcore.CreateOCMCoreShareResponse{
+			Status: status.NewInternal(ctx, err, "error getting ocm core client"),
+		}, nil
+	}
+
+	res, err := c.CreateOCMCoreShare(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling CreateOCMCoreShare")
+	}
+
+	return res, nil
+}
