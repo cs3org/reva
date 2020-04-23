@@ -160,7 +160,6 @@ func (s *svc) setHandler() (err error) {
 		s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.Method {
 			case "HEAD":
-				addCorsHeader(w)
 				w.WriteHeader(http.StatusOK)
 				return
 			case "GET":
@@ -177,11 +176,4 @@ func (s *svc) setHandler() (err error) {
 	}
 
 	return err
-}
-
-func addCorsHeader(res http.ResponseWriter) {
-	headers := res.Header()
-	headers.Set("Access-Control-Allow-Origin", "*")
-	headers.Set("Access-Control-Allow-Headers", "Content-Type, Origin, Authorization")
-	headers.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, HEAD")
 }

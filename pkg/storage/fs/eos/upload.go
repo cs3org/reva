@@ -71,7 +71,7 @@ func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, up
 		return "", errors.Wrap(err, "eos: error resolving reference")
 	}
 
-	p := fs.unwrap(ctx, np)
+	p := fs.wrap(ctx, np)
 
 	info := tusd.FileInfo{
 		MetaData: tusd.MetaData{
@@ -117,8 +117,6 @@ func (fs *eosfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd
 	}
 	info.MetaData["dir"] = filepath.Clean(info.MetaData["dir"])
 
-	np := fs.wrap(ctx, filepath.Join(info.MetaData["dir"], info.MetaData["filename"]))
-
 	log.Debug().Interface("info", info).Msg("eos: resolved filename")
 
 	info.ID = uuid.New().String()
@@ -127,9 +125,13 @@ func (fs *eosfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: error resolving upload path")
 	}
+	user, err := getUser(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "eos: no user in ctx")
+	}
 	info.Storage = map[string]string{
-		"Type":                "EOSStore",
-		"InternalDestination": np,
+		"Type":     "EOSStore",
+		"Username": user.Username,
 	}
 	// Create binary file with no content
 
@@ -267,7 +269,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 
 		}
 	}
-	np := upload.info.Storage["InternalDestination"]
+	np := filepath.Join(upload.info.MetaData["dir"], upload.info.MetaData["filename"])
 
 	// TODO check etag with If-Match header
 	// if destination exists
@@ -276,11 +278,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 	// eos creates revisions internally
 	//}
 
-	u, err := getUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "eos: no user in ctx")
-	}
-	err = upload.fs.c.WriteFile(ctx, u.Username, np, upload.binPath)
+	err := upload.fs.c.WriteFile(ctx, upload.info.Storage["Username"], np, upload.binPath)
 
 	// only delete the upload if it was successfully written to eos
 	if err == nil {

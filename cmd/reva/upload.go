@@ -24,11 +24,14 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/cheggaaa/pb"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 
+	tokenpkg "github.com/cs3org/reva/pkg/token"
 	"github.com/eventials/go-tus"
 	"github.com/eventials/go-tus/memorystore"
 
@@ -79,6 +82,14 @@ func uploadCommand() *command {
 					Path: target,
 				},
 			},
+			Opaque: &typespb.Opaque{
+				Map: map[string]*typespb.OpaqueEntry{
+					"Upload-Length": {
+						Decoder: "plain",
+						Value:   []byte(strconv.FormatInt(md.Size(), 10)),
+					},
+				},
+			},
 		}
 
 		res, err := gwc.InitiateFileUpload(ctx, req)
@@ -112,9 +123,6 @@ func uploadCommand() *command {
 		}
 
 		dataServerURL := res.UploadEndpoint
-		bar := pb.New(int(md.Size())).SetUnits(pb.U_BYTES)
-		bar.Start()
-		reader := bar.NewProxyReader(fd)
 
 		// create the tus client.
 		c := tus.DefaultConfig()
@@ -124,7 +132,13 @@ func uploadCommand() *command {
 		if err != nil {
 			return err
 		}
-		c.Header.Add("X-Reva-Transfer", res.Token)
+		if res.Token != "" {
+			fmt.Printf("using X-Reva-Transfer header\n")
+			c.Header.Add("X-Reva-Transfer", res.Token)
+		} else if token, ok := tokenpkg.ContextGetToken(ctx); ok {
+			fmt.Printf("using %s header\n", tokenpkg.TokenHeader)
+			c.Header.Add(tokenpkg.TokenHeader, token)
+		}
 		tusc, err := tus.NewClient(dataServerURL, c)
 		if err != nil {
 			return err
@@ -137,6 +151,10 @@ func uploadCommand() *command {
 		}
 
 		fingerprint := fmt.Sprintf("%s-%d-%s-%s", md.Name(), md.Size(), md.ModTime(), xs)
+
+		bar := pb.New(int(md.Size())).SetUnits(pb.U_BYTES)
+		bar.Start()
+		reader := bar.NewProxyReader(fd)
 
 		// create an upload from a file.
 		upload := tus.NewUpload(reader, md.Size(), metadata, fingerprint)
