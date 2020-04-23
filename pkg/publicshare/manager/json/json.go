@@ -251,11 +251,8 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo) ([]*link.PublicShare, error) {
 	// TODO(refs) filter out expired shares
 	shares := []*link.PublicShare{}
-	ps := link.PublicShare{}
 
-	// load file contents onto contents
 	m.mutex.Lock()
-	defer m.mutex.Unlock()
 	db := map[string]interface{}{}
 	fileBytes, err := ioutil.ReadFile(m.file)
 	if err != nil {
@@ -268,22 +265,24 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 
 	for _, v := range db {
 		r := bytes.NewBuffer([]byte(v.(string)))
-		if err := m.unmarshaler.Unmarshal(r, &ps); err != nil {
+		local := &link.PublicShare{}
+		if err := m.unmarshaler.Unmarshal(r, local); err != nil {
 			return nil, err
 		}
 
 		if len(filters) == 0 {
-			shares = append(shares, &ps)
+			shares = append(shares, local)
 		} else {
 			for _, f := range filters {
 				if f.Type == link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID {
-					if ps.ResourceId.StorageId == f.GetResourceId().StorageId && ps.ResourceId.OpaqueId == f.GetResourceId().OpaqueId {
-						shares = append(shares, &ps)
+					if local.ResourceId.StorageId == f.GetResourceId().StorageId && local.ResourceId.OpaqueId == f.GetResourceId().OpaqueId {
+						shares = append(shares, local)
 					}
 				}
 			}
 		}
 	}
+	m.mutex.Unlock()
 
 	return shares, nil
 }
@@ -323,7 +322,6 @@ func randString(n int) string {
 func (m *manager) getPublicShareByTokenID(ctx context.Context, targetID link.PublicShareId) (*link.PublicShare, error) {
 	// load file contents onto contents
 	m.mutex.Lock()
-	defer m.mutex.Unlock()
 	db := map[string]interface{}{}
 	fileBytes, err := ioutil.ReadFile(m.file)
 	if err != nil {
@@ -343,6 +341,7 @@ func (m *manager) getPublicShareByTokenID(ctx context.Context, targetID link.Pub
 
 		return &ps, nil
 	}
+	m.mutex.Unlock()
 
 	return nil, nil
 }
