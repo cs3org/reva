@@ -74,6 +74,7 @@ func (s *svc) GetPublicShareByToken(ctx context.Context, req *link.GetPublicShar
 }
 
 func (s *svc) GetPublicShare(ctx context.Context, req *link.GetPublicShareRequest) (*link.GetPublicShareResponse, error) {
+	// TODO if the date is expired DO NOT return
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("get public share")
 
@@ -106,7 +107,7 @@ func (s *svc) ListPublicShares(ctx context.Context, req *link.ListPublicSharesRe
 
 	res, err := pClient.ListPublicShares(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "error calling ListShares")
+		return nil, errors.Wrap(err, "error listing shares")
 	}
 
 	return res, nil
@@ -114,10 +115,21 @@ func (s *svc) ListPublicShares(ctx context.Context, req *link.ListPublicSharesRe
 
 func (s *svc) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicShareRequest) (*link.UpdatePublicShareResponse, error) {
 	log := appctx.GetLogger(ctx)
-	log.Info().Msg("list public share")
+	log.Info().Msg("update public share")
 
-	res := &link.UpdatePublicShareResponse{
-		Status: status.NewOK(ctx),
+	pClient, err := pool.GetPublicShareProviderClient(s.c.PublicShareProviderEndpoint)
+	if err != nil {
+		log.Err(err).Msg("error connecting to a public share provider")
+		return &link.UpdatePublicShareResponse{
+			Status: &rpc.Status{
+				Code: rpc.Code_CODE_INTERNAL,
+			},
+		}, nil
+	}
+
+	res, err := pClient.UpdatePublicShare(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "error updating share")
 	}
 	return res, nil
 }

@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -103,14 +104,180 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	default:
 		switch r.Method {
-		case "PUT":
-			h.updateShare(w, r, head) // TODO PUT is used with incomplete data to update a share
+		case "PUT": // TODO this implementation does NOT differenciates between public vs user shares. A distinction has to be made.
+			// update share needs to make a distinction between public / user shares
+			if h.isPublicShare(r, strings.ReplaceAll(head, "/", "")) {
+				h.updatePublicShare(w, r, strings.ReplaceAll(head, "/", ""))
+			} else {
+				h.updateShare(w, r, head) // TODO PUT is used with incomplete data to update a share
+			}
 		case "DELETE":
+			// All CRUD operations on shares need to make a distinction between public shares and user shares.
 			h.removeShare(w, r, head)
 		default:
 			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Only GET, POST and PUT are allowed", nil)
 		}
 	}
+}
+
+func permissionFromRequest(r *http.Request, h *Handler) *provider.ResourcePermissions {
+	// phoenix sends: {"permissions": 15}. See ocPermToRole struct for mapping
+	permKey, err := strconv.Atoi(r.FormValue("permissions"))
+	if err != nil {
+		log.Error().Str("permissionFromRequest", "shares").Msgf("invalid type: %T", permKey)
+	}
+
+	perm, ok := ocPermToRole[permKey]
+	if !ok {
+		log.Error().Str("permissionFromRequest", "shares").Msgf("invalid oC permission: %v", perm)
+	}
+
+	p, err := h.role2CS3Permissions(perm)
+	if err != nil {
+	}
+
+	return p
+}
+
+func expirationTimestampFromRequest(r *http.Request, h *Handler) *types.Timestamp {
+	var expireTime time.Time
+	var err error
+
+	expireDate := r.FormValue("expireDate")
+	if expireDate != "" {
+		expireTime, err = time.Parse("2006-01-02T15:04:05Z0700", expireDate)
+		if err != nil {
+			log.Error().Str("expiration", "create public share").Msgf("date format invalid: %v", expireDate)
+		}
+	}
+	return &types.Timestamp{
+		Nanos:   uint32(expireTime.UnixNano()),
+		Seconds: uint64(expireTime.Unix()),
+	}
+}
+
+func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, token string) {
+	updates := []*link.UpdatePublicShareRequest_Update{}
+	shares := make([]*conversions.ShareData, 0)
+	logger := appctx.GetLogger(r.Context())
+
+	gwC, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	if err != nil {
+		log.Err(err).Str("updatePublicShare ref:", token).Msg("updating")
+		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "error getting a connection to the gateway service", nil)
+		return
+	}
+
+	before, err := gwC.GetPublicShare(r.Context(), &link.GetPublicShareRequest{
+		Ref: &link.PublicShareReference{
+			Spec: &link.PublicShareReference_Id{
+				Id: &link.PublicShareId{
+					OpaqueId: token,
+				},
+			},
+		},
+	})
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "failed to get public share", nil)
+		return
+	}
+
+	if r.FormValue("name") != before.GetShare().DisplayName {
+		updates = append(updates, &link.UpdatePublicShareRequest_Update{
+			Type:        link.UpdatePublicShareRequest_Update_TYPE_DISPLAYNAME,
+			DisplayName: r.FormValue("name"),
+		})
+	}
+
+	// Permissions
+	publicSharePermissions := &link.PublicSharePermissions{
+		Permissions: permissionFromRequest(r, h),
+	}
+	beforePerm, _ := json.Marshal(before.GetShare().Permissions)
+	afterPerm, _ := json.Marshal(publicSharePermissions)
+	if string(beforePerm) != string(afterPerm) {
+		logger.Info().Str("shares", "update").Msgf("updating permissions from %v to: %v", string(beforePerm), string(afterPerm))
+		updates = append(updates, &link.UpdatePublicShareRequest_Update{
+			Type: link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS,
+			Grant: &link.Grant{
+				Permissions: publicSharePermissions,
+			},
+		})
+	}
+
+	// ExpireDate
+	newExpiration := expirationTimestampFromRequest(r, h)
+	beforeExpiration, _ := json.Marshal(before.Share.Expiration)
+	afterExpiration, _ := json.Marshal(newExpiration)
+	if string(beforeExpiration) != string(afterExpiration) {
+		logger.Info().Str("shares", "update").Msgf("updating expire date from %v to: %v", string(beforeExpiration), string(afterExpiration))
+		updates = append(updates, &link.UpdatePublicShareRequest_Update{
+			Type: link.UpdatePublicShareRequest_Update_TYPE_EXPIRATION,
+			Grant: &link.Grant{
+				Expiration: newExpiration,
+			},
+		})
+	}
+
+	// Password
+	if len(r.FormValue("password")) > 0 {
+		logger.Info().Str("shares", "update").Msg("password updated")
+		updates = append(updates, &link.UpdatePublicShareRequest_Update{
+			Type: link.UpdatePublicShareRequest_Update_TYPE_PASSWORD,
+			Grant: &link.Grant{
+				Password: r.FormValue("password"),
+			},
+		})
+	}
+
+	// Updates are atomical. See: https://github.com/cs3org/cs3apis/pull/67#issuecomment-617651428 so in order to get the latest updated version
+	if len(updates) == 0 {
+		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "There is nothing to update.", nil) // TODO(refs) error? a simple noop might suffice
+		return
+	}
+
+	req := &link.UpdatePublicShareResponse{}
+	for k := range updates {
+		req, err = gwC.UpdatePublicShare(r.Context(), &link.UpdatePublicShareRequest{
+			Ref: &link.PublicShareReference{
+				Spec: &link.PublicShareReference_Id{
+					Id: &link.PublicShareId{
+						OpaqueId: token,
+					},
+				},
+			},
+			Update: updates[k],
+		})
+		if err != nil {
+			log.Err(err).Str("updatePublicShare ref:", token).Msg("sending update request to public link provider")
+		}
+	}
+
+	statReq := provider.StatRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Id{
+				Id: req.GetShare().GetResourceId(),
+			},
+		},
+	}
+
+	statRes, err := gwC.Stat(r.Context(), &statReq)
+	if err != nil {
+		log.Debug().Err(err).Str("shares", "update public share").Msg("error during stat")
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "missing resource information", fmt.Errorf("error getting resource information"))
+		return
+	}
+
+	s := conversions.PublicShare2ShareData(req.Share, r)
+	err = h.addFileInfo(r.Context(), s, statRes.Info)
+
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error enhancing response with share data", err)
+		return
+	}
+
+	shares = append(shares, s)
+	response.WriteOCSSuccess(w, r, shares)
 }
 
 func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
@@ -300,7 +467,7 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 			log.Error().Str("createShare", "shares").Msgf("invalid oC permission: %v", perm)
 		}
 
-		testPerm, err := h.role2CS3Permissions(perm)
+		p, err := h.role2CS3Permissions(perm)
 		if err != nil {
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "invalid role", err)
 			return
@@ -310,7 +477,7 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 			ResourceInfo: statRes.GetInfo(),
 			Grant: &link.Grant{
 				Permissions: &link.PublicSharePermissions{
-					Permissions: testPerm,
+					Permissions: p,
 				},
 			},
 		}
@@ -332,8 +499,8 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 		// set displayname and password protected as arbitrary metadata
 		req.ResourceInfo.ArbitraryMetadata = &provider.ArbitraryMetadata{
 			Metadata: map[string]string{
-				"name": r.FormValue("name"),
-				// "password": r.FormValue("password"),
+				"name":     r.FormValue("name"),
+				"password": r.FormValue("password"),
 			},
 		}
 
@@ -469,6 +636,52 @@ func (h *Handler) role2CS3Permissions(r string) (*provider.ResourcePermissions, 
 	default:
 		return nil, fmt.Errorf("unknown role: %s", r)
 	}
+}
+
+func (h *Handler) isPublicShare(r *http.Request, oid string) bool {
+	logger := appctx.GetLogger(r.Context())
+	client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	if err != nil {
+		logger.Err(err)
+	}
+
+	psRes, err := client.GetPublicShare(r.Context(), &link.GetPublicShareRequest{
+		Ref: &link.PublicShareReference{
+			Spec: &link.PublicShareReference_Id{
+				Id: &link.PublicShareId{
+					OpaqueId: oid,
+				},
+			},
+		},
+	})
+	if err != nil {
+		logger.Err(err)
+	}
+
+	if psRes.GetShare() != nil {
+		return true
+	}
+
+	// check if we have a user share
+	uRes, err := client.GetShare(r.Context(), &collaboration.GetShareRequest{
+		Ref: &collaboration.ShareReference{
+			Spec: &collaboration.ShareReference_Id{
+				Id: &collaboration.ShareId{
+					OpaqueId: oid,
+				},
+			},
+		},
+	})
+	if err != nil {
+		logger.Err(err)
+	}
+
+	if uRes.GetShare() != nil {
+		return false
+	}
+
+	// TODO token is neither a public or a user share.
+	return false
 }
 
 func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID string) {

@@ -78,6 +78,11 @@ func (m *manager) Authenticate(ctx context.Context, token string, secret string)
 		return nil, err
 	}
 
+	// how can basic auth flow be triggered from here?
+	if publicShareResponse.Share.GetPasswordProtected() {
+		return nil, errors.New("resource password protected, bearer token not found")
+	}
+
 	getUserResponse, err := gwConn.GetUser(ctx, &userprovider.GetUserRequest{
 		UserId: publicShareResponse.GetShare().GetCreator(),
 	})
