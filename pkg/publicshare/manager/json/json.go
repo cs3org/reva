@@ -19,14 +19,13 @@
 package filesystem
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
-	"os"
-	"path"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -41,25 +40,33 @@ import (
 )
 
 func init() {
-	registry.Register("filesystem", New)
+	registry.Register("json", New)
 }
 
-// New returns a new memory manager.
+// New returns a new filesystem public shares manager.
 func New(c map[string]interface{}) (publicshare.Manager, error) {
-	dir := ".publicshares"
 
-	return &manager{
-		m:           &sync.Mutex{},
+	m := manager{
+		mutex:       &sync.Mutex{},
 		marshaler:   jsonpb.Marshaler{},
 		unmarshaler: jsonpb.Unmarshaler{},
-		mount:       dir,
-	}, nil
+		file:        "/var/tmp/.publicshares",
+	}
+
+	fileContents, err := ioutil.ReadFile(m.file)
+	if err != nil {
+		return nil, err
+	}
+	if len(fileContents) == 0 {
+		ioutil.WriteFile(m.file, []byte("{}"), 0644)
+	}
+
+	return &m, nil
 }
 
 type manager struct {
-	m *sync.Mutex
-	// mount is the directory where the share files are
-	mount string
+	mutex *sync.Mutex
+	file  string
 
 	marshaler   jsonpb.Marshaler
 	unmarshaler jsonpb.Unmarshaler
@@ -114,16 +121,42 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 
 	// this file could benefit of the strategy pattern. same with the memory.go driver. The only moving parts are where are the shares stored,
 	// but the logic of creating them remains the same.
-	filename := path.Join(m.mount, s.Id.OpaqueId)
-	// ioutil.WriteFile(filename, )
-	fd, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0700)
-	if err != nil {
-		return nil, err
-	}
-	if err := m.marshaler.Marshal(fd, &s); err != nil {
+	// write to a random file
+	m.mutex.Lock()
+	buff := bytes.Buffer{}
+	if err := m.marshaler.Marshal(&buff, &s); err != nil {
 		return nil, err
 	}
 
+	// retrieve the contents of m.file as map[string]interface{}
+	dest := map[string]interface{}{}
+	fileContents, err := ioutil.ReadFile(m.file)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := json.Unmarshal(fileContents, &dest); err != nil {
+		return nil, err
+	}
+
+	// insert the new key.
+	if _, ok := dest[s.Id.GetOpaqueId()]; !ok {
+		dest[s.Id.GetOpaqueId()] = buff.String()
+	} else {
+		return nil, errors.New("key already exists")
+	}
+
+	// serialize dest back into JSON
+	destJSON, err := json.Marshal(dest)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := ioutil.WriteFile(m.file, destJSON, 0644); err != nil {
+		return nil, err
+	}
+
+	m.mutex.Unlock()
 	return &s, nil
 }
 
@@ -158,13 +191,39 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 		return nil, fmt.Errorf("invalid update type: %v", req.GetUpdate().GetType())
 	}
 
-	// share.Expiration = g.Expiration
 	share.Mtime = &typespb.Timestamp{
 		Seconds: uint64(time.Now().Unix()),
 		Nanos:   uint32(time.Now().Unix() % 1000000000),
 	}
 
-	// m.shares.Store(token, share)
+	// persist share update on file
+	m.mutex.Lock()
+	db := map[string]interface{}{}
+	fileBytes, err := ioutil.ReadFile(m.file)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := json.Unmarshal(fileBytes, &db); err != nil {
+		return nil, err
+	}
+
+	buff := bytes.Buffer{}
+	if err := m.marshaler.Marshal(&buff, share); err != nil {
+		return nil, err
+	}
+
+	// update db's old value with the updated one
+	db[share.GetId().OpaqueId] = buff.String()
+
+	// write the contents of db back to the file
+	dbAsJSON, err := json.Marshal(db)
+	if err != nil {
+		return nil, err
+	}
+
+	ioutil.WriteFile(m.file, dbAsJSON, 0644)
+	m.mutex.Unlock()
 
 	return share, nil
 }
@@ -192,27 +251,27 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo) ([]*link.PublicShare, error) {
 	// TODO(refs) filter out expired shares
 	shares := []*link.PublicShare{}
+	ps := link.PublicShare{}
 
-	all := []string{}
-	err := filepath.Walk(m.mount, func(path string, info os.FileInfo, err error) error {
-		all = append(all, path)
-		return nil
-	})
+	// load file contents onto contents
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	db := map[string]interface{}{}
+	fileBytes, err := ioutil.ReadFile(m.file)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, v := range all {
-		fd, err := os.Open(path.Join(m.mount, v))
-		if err != nil {
+	if err := json.Unmarshal(fileBytes, &db); err != nil {
+		return nil, err
+	}
+
+	for _, v := range db {
+		r := bytes.NewBuffer([]byte(v.(string)))
+		if err := m.unmarshaler.Unmarshal(r, &ps); err != nil {
 			return nil, err
 		}
 
-		ps := link.PublicShare{}
-		err = m.unmarshaler.Unmarshal(fd, &ps)
-		if err != nil {
-			return nil, err
-		}
 		if len(filters) == 0 {
 			shares = append(shares, &ps)
 		} else {
@@ -225,6 +284,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 			}
 		}
 	}
+
 	return shares, nil
 }
 
@@ -238,17 +298,17 @@ func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, id string
 }
 
 func (m *manager) GetPublicShareByToken(ctx context.Context, token string) (*link.PublicShare, error) {
-	fd, err := os.Open(path.Join(m.mount, token))
-	if err != nil {
-		return nil, err
-	}
+	// fd, err := os.Open(path.Join(m.file, token))
+	// if err != nil {
+	// 	return nil, err
+	// }
 
-	share := link.PublicShare{}
-	if err := m.unmarshaler.Unmarshal(fd, &share); err != nil {
-		return nil, err
-	}
+	// share := link.PublicShare{}
+	// if err := m.unmarshaler.Unmarshal(fd, &share); err != nil {
+	// 	return nil, err
+	// }
 
-	return &share, nil
+	return nil, nil
 }
 
 func randString(n int) string {
@@ -261,19 +321,28 @@ func randString(n int) string {
 }
 
 func (m *manager) getPublicShareByTokenID(ctx context.Context, targetID link.PublicShareId) (*link.PublicShare, error) {
-	// var found *link.PublicShare
-	// m.shares.Range(func(k, v interface{}) bool {
-	// 	id := v.(*link.PublicShare).GetId()
-	// 	if targetID.String() == id.String() {
-	// 		found = v.(*link.PublicShare)
-	// 	}
-	// 	return true
-	// })
+	// load file contents onto contents
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	db := map[string]interface{}{}
+	fileBytes, err := ioutil.ReadFile(m.file)
+	if err != nil {
+		return nil, err
+	}
 
-	// if found != nil {
-	// 	return found, nil
-	// }
-	// return nil, errors.New("resource not found")
+	if err := json.Unmarshal(fileBytes, &db); err != nil {
+		return nil, err
+	}
+
+	if found, ok := db[targetID.GetOpaqueId()]; ok {
+		ps := link.PublicShare{}
+		r := bytes.NewBuffer([]byte(found.(string)))
+		if err := m.unmarshaler.Unmarshal(r, &ps); err != nil {
+			return nil, err
+		}
+
+		return &ps, nil
+	}
 
 	return nil, nil
 }
