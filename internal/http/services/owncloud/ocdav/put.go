@@ -108,6 +108,9 @@ func isContentRange(r *http.Request) bool {
 func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
+
+	ns = applyLayout(ctx, ns)
+
 	fn := path.Join(ns, r.URL.Path)
 
 	if r.Body == nil {

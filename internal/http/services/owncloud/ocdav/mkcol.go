@@ -31,6 +31,9 @@ import (
 func (s *svc) handleMkcol(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
+
+	ns = applyLayout(ctx, ns)
+
 	fn := path.Join(ns, r.URL.Path)
 
 	buf := make([]byte, 1)

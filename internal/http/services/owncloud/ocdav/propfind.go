@@ -46,6 +46,8 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 	defer span.End()
 	log := appctx.GetLogger(ctx)
 
+	ns = applyLayout(ctx, ns)
+
 	fn := path.Join(ns, r.URL.Path)
 	listChildren := r.Header.Get("Depth") != "0"
 
