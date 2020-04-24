@@ -150,9 +150,12 @@ func expirationTimestampFromRequest(r *http.Request, h *Handler) *types.Timestam
 			log.Error().Str("expiration", "create public share").Msgf("date format invalid: %v", expireDate)
 		}
 	}
+
+	final := expireTime.UnixNano()
+
 	return &types.Timestamp{
-		Nanos:   uint32(expireTime.UnixNano()),
-		Seconds: uint64(expireTime.Unix()),
+		Seconds: uint64(final / 1000000000),
+		Nanos:   uint32(final % 1000000000),
 	}
 }
 
@@ -207,6 +210,7 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, toke
 
 	// ExpireDate
 	newExpiration := expirationTimestampFromRequest(r, h)
+	fmt.Printf("\n\n\n%+v\n\n\n", newExpiration)
 	beforeExpiration, _ := json.Marshal(before.Share.Expiration)
 	afterExpiration, _ := json.Marshal(newExpiration)
 	if string(beforeExpiration) != string(afterExpiration) {
@@ -482,19 +486,14 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 			},
 		}
 
-		var expireTime time.Time
 		expireDate := r.FormValue("expireDate")
 		if expireDate != "" {
-			expireTime, err = time.Parse("2006-01-02T15:04:05Z0700", expireDate)
 			if err != nil {
 				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "invalid date format", err)
 				return
 			}
-			req.Grant.Expiration = &types.Timestamp{
-				Nanos:   uint32(expireTime.UnixNano()),
-				Seconds: uint64(expireTime.Unix()),
-			}
 		}
+		req.Grant.Expiration = expirationTimestampFromRequest(r, h)
 
 		// set displayname and password protected as arbitrary metadata
 		req.ResourceInfo.ArbitraryMetadata = &provider.ArbitraryMetadata{
