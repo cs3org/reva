@@ -492,8 +492,8 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "invalid date format", err)
 				return
 			}
+			req.Grant.Expiration = expirationTimestampFromRequest(r, h)
 		}
-		req.Grant.Expiration = expirationTimestampFromRequest(r, h)
 
 		// set displayname and password protected as arbitrary metadata
 		req.ResourceInfo.ArbitraryMetadata = &provider.ArbitraryMetadata{
