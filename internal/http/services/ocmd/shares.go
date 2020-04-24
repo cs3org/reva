@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmcore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
@@ -164,6 +165,26 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, APIErrorServerError, "grpc create ocm core share request failed", err)
 		return
 	}
+
+	timeCreated := createShareResponse.Created
+	jsonOut, err := json.Marshal(
+		map[string]string{
+			"id":        createShareResponse.Id,
+			"createdAt": time.Unix(int64(timeCreated.Seconds), int64(timeCreated.Nanos)).String(),
+		},
+	)
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, "error marshalling share data", err)
+		return
+	}
+
+	_, err = w.Write(jsonOut)
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, "error writing shares data", err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 
 	log.Info().Msg("Share created.")
 }
