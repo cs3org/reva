@@ -43,20 +43,11 @@ driver = "memory"
 [grpc.services.ocmcore]
 driver = "json"
 
-[grpc.services.ocmcore.drivers.json]
-file = "/home/ishank011/core.json"
-
 [grpc.services.ocminvitemanager]
 driver = "json"
 
-[grpc.services.ocminvitemanager.drivers.json]
-file = "/home/ishank011/invites.json"
-
 [grpc.services.ocmshareprovider]
 driver = "json"
-
-[grpc.services.ocmshareprovider.drivers.json]
-file = "/home/ishank011/shares.json"
 
 [grpc.services.ocmproviderauthorizer]
 driver = "json"
