@@ -83,7 +83,7 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 	}
 
 	tkn := randString(12)
-	now := uint64(time.Now().Unix())
+	now := time.Now().UnixNano()
 
 	displayName, ok := rInfo.ArbitraryMetadata.Metadata["name"]
 	if !ok {
@@ -96,12 +96,12 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 	}
 
 	createdAt := &typespb.Timestamp{
-		Seconds: now,
+		Seconds: uint64(now / 1000000000),
 		Nanos:   uint32(now % 1000000000),
 	}
 
 	modifiedAt := &typespb.Timestamp{
-		Seconds: now,
+		Seconds: uint64(now / 1000000000),
 		Nanos:   uint32(now % 1000000000),
 	}
 
@@ -167,6 +167,8 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 		return nil, errors.New("ref does not exist")
 	}
 
+	now := time.Now().UnixNano()
+
 	// token := share.GetToken()
 
 	switch req.GetUpdate().GetType() {
@@ -191,8 +193,8 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 	}
 
 	share.Mtime = &typespb.Timestamp{
-		Seconds: uint64(time.Now().Unix()),
-		Nanos:   uint32(time.Now().Unix() % 1000000000),
+		Seconds: uint64(now / 1000000000),
+		Nanos:   uint32(now % 1000000000),
 	}
 
 	// persist share update on file
