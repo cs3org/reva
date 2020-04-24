@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmcore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
@@ -95,25 +96,27 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 
 	var permissions conversions.Permissions
 	var role string
-	options, ok := protocolDecoded["options"].(map[string]interface{})
-	if ok {
+	options, ok := protocolDecoded["options"].(map[string]string)
+	if !ok {
+		// by default only allow read permissions / assign viewer role
+		role = conversions.RoleViewer
+	} else {
 		pval, ok := options["permissions"]
-		if ok {
-			pint, isInt := pval.(int)
-			if !isInt {
-				WriteError(w, r, APIErrorInvalidParameter, "permissions must be an integer", nil)
+		if !ok {
+			role = conversions.RoleViewer
+		} else {
+			pint, err := strconv.Atoi(pval)
+			if err != nil {
+				WriteError(w, r, APIErrorInvalidParameter, "permissions must be an integer", err)
+				return
 			}
 			permissions, err = conversions.NewPermissions(pint)
 			if err != nil {
-				WriteError(w, r, APIErrorInvalidParameter, "permissions must be an integer", nil)
+				WriteError(w, r, APIErrorInvalidParameter, err.Error(), nil)
 				return
 			}
 			role = conversions.Permissions2Role(permissions)
-		} else {
-			role = conversions.RoleViewer
 		}
-	} else {
-		role = conversions.RoleViewer
 	}
 
 	var resourcePermissions *provider.ResourcePermissions
@@ -136,7 +139,7 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		},
 		ShareWith: userRes.User.GetId(),
 		Protocol: &ocmcore.Protocol{
-			Name: protocolDecoded["Name"].(string),
+			Name: protocolDecoded["name"].(string),
 			Opaque: &types.Opaque{
 				Map: map[string]*types.OpaqueEntry{
 					"permissions": &types.OpaqueEntry{

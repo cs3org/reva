@@ -422,7 +422,7 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 			resourcePermissions = asCS3Permissions(permissions, nil)
 		}
 
-		permissionMap := map[string]string{"name": string(permissions)}
+		permissionMap := map[string]string{"name": strconv.Itoa(int(permissions))}
 		val, err := json.Marshal(permissionMap)
 		if err != nil {
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "could not encode role", err)

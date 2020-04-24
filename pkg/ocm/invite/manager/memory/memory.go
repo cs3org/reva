@@ -93,6 +93,8 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 		"token":             {invite.GetToken()},
 		"userID":            {contextUser.GetId().GetOpaqueId()},
 		"recipientProvider": {contextUser.GetId().GetIdp()},
+		"email":             {contextUser.GetMail()},
+		"username":          {contextUser.GetUsername()},
 	}
 
 	resp, err := http.PostForm(fmt.Sprintf("%s%s", originProvider.GetApiEndpoint(), acceptInviteEndpoint), requestBody)
@@ -138,7 +140,7 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 func (m *manager) GetRemoteUser(ctx context.Context, remoteUserID *userpb.UserId) (*userpb.User, error) {
 
 	currUser := user.ContextMustGetUser(ctx)
-	usersList, ok := m.AcceptedUsers.Load(currUser)
+	usersList, ok := m.AcceptedUsers.Load(currUser.GetId())
 	if !ok {
 		return nil, errtypes.NotFound(remoteUserID.OpaqueId)
 	}

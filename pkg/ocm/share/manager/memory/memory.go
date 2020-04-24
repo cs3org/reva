@@ -141,7 +141,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 			"providerId":   {md.StorageId},
 			"owner":        {userID.OpaqueId},
 			"protocol":     {string(protocol)},
-			"meshProvider": {"http://cernbox.cern.ch"},
+			"meshProvider": {userID.Idp},
 		}
 
 		resp, err := http.PostForm(fmt.Sprintf("%s%s", pi.GetApiEndpoint(), createOCMCoreShareEndpoint), requestBody)

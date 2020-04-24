@@ -200,13 +200,14 @@ func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, err
 
 func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToken, originProvider *ocmprovider.ProviderInfo) error {
 
-	contexUser := user.ContextMustGetUser(ctx)
+	contextUser := user.ContextMustGetUser(ctx)
 	requestBody := url.Values{
 		"token":             {invite.GetToken()},
-		"userID":            {contexUser.GetId().GetOpaqueId()},
-		"recipientProvider": {contexUser.GetId().GetIdp()},
+		"userID":            {contextUser.GetId().GetOpaqueId()},
+		"recipientProvider": {contextUser.GetId().GetIdp()},
+		"email":             {contextUser.GetMail()},
+		"username":          {contextUser.GetUsername()},
 	}
-
 	resp, err := http.PostForm(fmt.Sprintf("%s%s", originProvider.GetApiEndpoint(), acceptInviteEndpoint), requestBody)
 	if err != nil {
 		err = errors.Wrap(err, "json: error sending post request")
