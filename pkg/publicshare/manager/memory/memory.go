@@ -145,6 +145,8 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 }
 
 func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) (share *link.PublicShare, err error) {
+	// TODO(refs) return an error if the share is expired.
+
 	// Attempt to fetch public share by token
 	if ref.GetToken() != "" {
 		share, err = m.GetPublicShareByToken(ctx, ref.GetToken())
