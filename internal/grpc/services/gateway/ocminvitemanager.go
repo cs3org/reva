@@ -74,3 +74,19 @@ func (s *svc) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteReques
 
 	return res, nil
 }
+
+func (s *svc) GetRemoteUser(ctx context.Context, req *invitepb.GetRemoteUserRequest) (*invitepb.GetRemoteUserResponse, error) {
+	c, err := pool.GetOCMInviteManagerClient(s.c.OCMInviteManagerEndpoint)
+	if err != nil {
+		return &invitepb.GetRemoteUserResponse{
+			Status: status.NewInternal(ctx, err, "error getting user invite provider client"),
+		}, nil
+	}
+
+	res, err := c.GetRemoteUser(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling AcceptInvite")
+	}
+
+	return res, nil
+}

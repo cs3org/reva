@@ -71,7 +71,7 @@ type authorizer struct {
 
 func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmprovider.ProviderInfo, error) {
 	for _, p := range a.providers {
-		if p.Domain == domain {
+		if strings.Contains(p.Domain, domain) {
 			return p, nil
 		}
 	}
@@ -85,7 +85,7 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, user *userpb.User) e
 	}
 
 	for _, p := range a.providers {
-		if p.Domain == domainSplit[1] {
+		if strings.Contains(p.Domain, domainSplit[1]) {
 			return nil
 		}
 	}

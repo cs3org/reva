@@ -53,7 +53,7 @@ func (s *svc) GetInfoByDomain(ctx context.Context, req *ocmprovider.GetInfoByDom
 
 	res, err := c.GetInfoByDomain(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling IsProviderAllowed")
+		return nil, errors.Wrap(err, "gateway: error calling GetInfoByDomain")
 	}
 
 	return res, nil
@@ -69,7 +69,7 @@ func (s *svc) ListAllProviders(ctx context.Context, req *ocmprovider.ListAllProv
 
 	res, err := c.ListAllProviders(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling IsProviderAllowed")
+		return nil, errors.Wrap(err, "gateway: error calling ListAllProviders")
 	}
 
 	return res, nil

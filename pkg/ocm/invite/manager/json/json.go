@@ -33,6 +33,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/invite"
 	"github.com/cs3org/reva/pkg/ocm/invite/manager/registry"
 	"github.com/cs3org/reva/pkg/ocm/invite/token"
@@ -46,7 +47,7 @@ const acceptInviteEndpoint = "invites/accept"
 type inviteModel struct {
 	File          string
 	Invites       map[string]*invitepb.InviteToken `json:"invites"`
-	AcceptedUsers map[string][]*userpb.UserId      `json:"accepted_users"`
+	AcceptedUsers map[string][]*userpb.User        `json:"accepted_users"`
 }
 
 type manager struct {
@@ -143,7 +144,7 @@ func loadOrCreate(file string) (*inviteModel, error) {
 		model.Invites = make(map[string]*invitepb.InviteToken)
 	}
 	if model.AcceptedUsers == nil {
-		model.AcceptedUsers = make(map[string][]*userpb.UserId)
+		model.AcceptedUsers = make(map[string][]*userpb.User)
 	}
 
 	model.File = file
@@ -199,13 +200,14 @@ func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, err
 
 func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToken, originProvider *ocmprovider.ProviderInfo) error {
 
-	contexUser := user.ContextMustGetUser(ctx)
+	contextUser := user.ContextMustGetUser(ctx)
 	requestBody := url.Values{
 		"token":             {invite.GetToken()},
-		"userID":            {contexUser.GetId().GetOpaqueId()},
-		"recipientProvider": {contexUser.GetId().GetIdp()},
+		"userID":            {contextUser.GetId().GetOpaqueId()},
+		"recipientProvider": {contextUser.GetId().GetIdp()},
+		"email":             {contextUser.GetMail()},
+		"username":          {contextUser.GetUsername()},
 	}
-
 	resp, err := http.PostForm(fmt.Sprintf("%s%s", originProvider.GetApiEndpoint(), acceptInviteEndpoint), requestBody)
 	if err != nil {
 		err = errors.Wrap(err, "json: error sending post request")
@@ -221,7 +223,7 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 	return nil
 }
 
-func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken, userID *userpb.UserId) error {
+func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken, remoteUser *userpb.User) error {
 
 	// Create mutex lock
 	m.Lock()
@@ -235,17 +237,28 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 	// Add to the list of accepted users
 	userKey := generateKey(inviteToken.GetUserId())
 	for _, acceptedUser := range m.model.AcceptedUsers[userKey] {
-		if userID.GetOpaqueId() == acceptedUser.OpaqueId && userID.GetIdp() == acceptedUser.Idp {
+		if acceptedUser.Id.GetOpaqueId() == remoteUser.Id.OpaqueId && acceptedUser.Id.GetIdp() == remoteUser.Id.Idp {
 			return errors.New("json: user already added to accepted users")
 		}
 
 	}
-	m.model.AcceptedUsers[userKey] = append(m.model.AcceptedUsers[userKey], userID)
+	m.model.AcceptedUsers[userKey] = append(m.model.AcceptedUsers[userKey], remoteUser)
 	if err := m.model.Save(); err != nil {
 		err = errors.Wrap(err, "json: error saving model")
 		return err
 	}
 	return nil
+}
+
+func (m *manager) GetRemoteUser(ctx context.Context, remoteUserID *userpb.UserId) (*userpb.User, error) {
+
+	userKey := generateKey(user.ContextMustGetUser(ctx).GetId())
+	for _, acceptedUser := range m.model.AcceptedUsers[userKey] {
+		if (acceptedUser.Id.GetOpaqueId() == remoteUserID.OpaqueId) && (remoteUserID.Idp == "" || acceptedUser.Id.GetIdp() == remoteUserID.Idp) {
+			return acceptedUser, nil
+		}
+	}
+	return nil, errtypes.NotFound(remoteUserID.OpaqueId)
 }
 
 func getTokenIfValid(m *manager, token *invitepb.InviteToken) (*invitepb.InviteToken, error) {
