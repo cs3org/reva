@@ -146,6 +146,7 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 	}
 	info.Storage = map[string]string{
 		"Type":                "OwnCloudStore",
+		"BinPath":             binPath,
 		"InternalDestination": np,
 	}
 	// Create binary file in the upload folder with no content
@@ -158,7 +159,7 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 	u := &fileUpload{
 		info:     info,
 		binPath:  binPath,
-		infoPath: binPath + ".info",
+		infoPath: filepath.Join(fs.c.UploadInfoDir, info.ID+".info"),
 		fs:       fs,
 	}
 
@@ -182,11 +183,8 @@ func (fs *ocfs) getUploadPath(ctx context.Context, uploadID string) (string, err
 
 // GetUpload returns the Upload for the given upload id
 func (fs *ocfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
-	binPath, err := fs.getUploadPath(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	infoPath := binPath + ".info"
+	infoPath := filepath.Join(fs.c.UploadInfoDir, id+".info")
+
 	info := tusd.FileInfo{}
 	data, err := ioutil.ReadFile(infoPath)
 	if err != nil {
@@ -196,7 +194,7 @@ func (fs *ocfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
 		return nil, err
 	}
 
-	stat, err := os.Stat(binPath)
+	stat, err := os.Stat(info.Storage["BinPath"])
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +203,7 @@ func (fs *ocfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
 
 	return &fileUpload{
 		info:     info,
-		binPath:  binPath,
+		binPath:  info.Storage["BinPath"],
 		infoPath: infoPath,
 		fs:       fs,
 	}, nil
@@ -298,7 +296,12 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 	}
 
 	err := os.Rename(upload.binPath, np)
-	// TODO else remove info? or leave as history?
+
+	// only delete the upload if it was successfully written to eos
+	if err := os.Remove(upload.infoPath); err != nil {
+		log := appctx.GetLogger(ctx)
+		log.Err(err).Interface("info", upload.info).Msg("eos: could not delete upload info")
+	}
 
 	// metadata propagation is left to the storage implementation
 	return err

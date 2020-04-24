@@ -265,6 +265,12 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 
 	err := os.Rename(upload.binPath, np)
 
+	// only delete the upload if it was successfully written to eos
+	if err := os.Remove(upload.infoPath); err != nil {
+		log := appctx.GetLogger(ctx)
+		log.Err(err).Interface("info", upload.info).Msg("eos: could not delete upload info")
+	}
+
 	// metadata propagation is left to the storage implementation
 	return err
 }

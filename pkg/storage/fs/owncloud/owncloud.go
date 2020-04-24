@@ -153,6 +153,7 @@ func init() {
 
 type config struct {
 	DataDirectory string `mapstructure:"datadirectory"`
+	UploadInfoDir string `mapstructure:"upload_info_dir"`
 	UserLayout    string `mapstructure:"user_layout"`
 	Redis         string `mapstructure:"redis"`
 	EnableHome    bool   `mapstructure:"enable_home"`
@@ -174,6 +175,9 @@ func (c *config) init(m map[string]interface{}) {
 	}
 	if c.UserLayout == "" {
 		c.UserLayout = "{{.Username}}"
+	}
+	if c.UploadInfoDir == "" {
+		c.UploadInfoDir = "/var/tmp/reva/uploadinfo"
 	}
 	// default to scanning if not configured
 	if _, ok := m["scan"]; !ok {
@@ -199,6 +203,13 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		logger.New().Error().Err(err).
 			Str("path", c.DataDirectory).
 			Msg("could not create datadir")
+	}
+
+	err = os.MkdirAll(c.UploadInfoDir, 0700)
+	if err != nil {
+		logger.New().Error().Err(err).
+			Str("path", c.UploadInfoDir).
+			Msg("could not create uploadinfo dir")
 	}
 
 	pool := &redis.Pool{
