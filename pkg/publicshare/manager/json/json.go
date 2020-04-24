@@ -123,6 +123,7 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 	// but the logic of creating them remains the same.
 	// write to a random file
 	m.mutex.Lock()
+	m.mutex.Unlock()
 	buff := bytes.Buffer{}
 	if err := m.marshaler.Marshal(&buff, &s); err != nil {
 		return nil, err
@@ -155,8 +156,6 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 	if err := ioutil.WriteFile(m.file, destJSON, 0644); err != nil {
 		return nil, err
 	}
-
-	m.mutex.Unlock()
 	return &s, nil
 }
 
@@ -198,6 +197,7 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 
 	// persist share update on file
 	m.mutex.Lock()
+	m.mutex.Unlock()
 	db := map[string]interface{}{}
 	fileBytes, err := ioutil.ReadFile(m.file)
 	if err != nil {
@@ -223,7 +223,6 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 	}
 
 	ioutil.WriteFile(m.file, dbAsJSON, 0644)
-	m.mutex.Unlock()
 
 	return share, nil
 }
@@ -253,6 +252,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 	shares := []*link.PublicShare{}
 
 	m.mutex.Lock()
+	m.mutex.Unlock()
 	db := map[string]interface{}{}
 	fileBytes, err := ioutil.ReadFile(m.file)
 	if err != nil {
@@ -282,7 +282,6 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 			}
 		}
 	}
-	m.mutex.Unlock()
 
 	return shares, nil
 }
@@ -322,6 +321,7 @@ func randString(n int) string {
 func (m *manager) getPublicShareByTokenID(ctx context.Context, targetID link.PublicShareId) (*link.PublicShare, error) {
 	// load file contents onto contents
 	m.mutex.Lock()
+	m.mutex.Unlock()
 	db := map[string]interface{}{}
 	fileBytes, err := ioutil.ReadFile(m.file)
 	if err != nil {
@@ -341,7 +341,6 @@ func (m *manager) getPublicShareByTokenID(ctx context.Context, targetID link.Pub
 
 		return &ps, nil
 	}
-	m.mutex.Unlock()
 
 	return nil, nil
 }
