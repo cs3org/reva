@@ -124,6 +124,7 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 	// write to a random file
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
+
 	buff := bytes.Buffer{}
 	if err := m.marshaler.Marshal(&buff, &s); err != nil {
 		return nil, err
@@ -199,6 +200,7 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
+
 	db := map[string]interface{}{}
 	fileBytes, err := ioutil.ReadFile(m.file)
 	if err != nil {
@@ -237,6 +239,7 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
+
 	db := map[string]interface{}{}
 	fileBytes, err := ioutil.ReadFile(m.file)
 	if err != nil {
@@ -261,12 +264,12 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 }
 
 func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo) ([]*link.PublicShare, error) {
-	// TODO(refs) filter out expired shares
 	shares := []*link.PublicShare{}
 	now := time.Now()
 
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
+
 	db := map[string]interface{}{}
 	readBytes, err := ioutil.ReadFile(m.file)
 	if err != nil {
@@ -306,13 +309,8 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 	return shares, nil
 }
 
-func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, id string) (err error) {
-	// // check whether the referente exists
-	// if _, err := m.GetPublicShareByToken(ctx, id); err != nil {
-	// 	return errors.New("reference does not exist")
-	// }
-	// m.shares.Delete(id)
-	return
+func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, id string) error {
+	return fmt.Errorf("RevokePublicShare method unimplemented")
 }
 
 func (m *manager) GetPublicShareByToken(ctx context.Context, token string) (*link.PublicShare, error) {
@@ -325,6 +323,9 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token string) (*lin
 	if err := json.Unmarshal(readBytes, &db); err != nil {
 		return nil, err
 	}
+
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 
 	for _, v := range db {
 		r := bytes.NewBuffer([]byte(v.(string)))
