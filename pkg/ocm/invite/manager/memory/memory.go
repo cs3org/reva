@@ -118,7 +118,7 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 		return err
 	}
 
-	currUser := inviteToken.GetUserId()
+	currUser := inviteToken.GetUserId().GetOpaqueId()
 	usersList, ok := m.AcceptedUsers.Load(currUser)
 	if ok {
 		acceptedUsers := usersList.([]*userpb.User)
@@ -139,8 +139,8 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 
 func (m *manager) GetRemoteUser(ctx context.Context, remoteUserID *userpb.UserId) (*userpb.User, error) {
 
-	currUser := user.ContextMustGetUser(ctx)
-	usersList, ok := m.AcceptedUsers.Load(currUser.GetId())
+	currUser := user.ContextMustGetUser(ctx).GetId().GetOpaqueId()
+	usersList, ok := m.AcceptedUsers.Load(currUser)
 	if !ok {
 		return nil, errtypes.NotFound(remoteUserID.OpaqueId)
 	}

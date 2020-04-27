@@ -49,6 +49,12 @@ driver = "json"
 [grpc.services.ocmshareprovider]
 driver = "json"
 
+[grpc.services.ocmcore.drivers.json]
+file = "/tmp/core_srv_1.json"
+
+[grpc.services.ocmshareprovider.drivers.json]
+received_shares_file = "/tmp/core_srv_1.json"
+
 [grpc.services.ocmproviderauthorizer]
 driver = "json"
 

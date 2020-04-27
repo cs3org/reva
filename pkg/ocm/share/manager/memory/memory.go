@@ -35,7 +35,6 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/share"
-	"github.com/cs3org/reva/pkg/ocm/share/manager/registry"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -44,7 +43,8 @@ import (
 const createOCMCoreShareEndpoint = "shares"
 
 func init() {
-	registry.Register("memory", New)
+	// Don't use memory driver as we can't retrieve received shares
+	// registry.Register("memory", New)
 }
 
 // New returns a new memory manager.

@@ -1,9 +1,10 @@
+
 ---
 title: "Try out the ocm share functionality in Reva"
 linkTitle: "OCM share functionality"
 weight: 5
 description: >
-  Try the ocm (Open Cloud Mesh) share functionality in Reva locally.
+  Try the OCM (Open Cloud Mesh) share functionality in Reva locally.
 ---
 
 This is a guide on how to try the share functionality in Reva in your local environment.
@@ -22,48 +23,66 @@ git clone https://github.com/cs3org/reva
 ```
 
 ## 2. Build Reva
-Go to your Reva folder 
+Go to the reva folder 
 
 ```
 cd reva
 ```
 
-Now you need to build Reva by running the following commands (you need to be in the *reva* folder)
+We'll now build reva by running the following commands (you need to be in the *reva* folder)
 
 ```
 make deps
 ```
 
 ```
-make build-reva
-```
-
-```
-make build-revad
+make
 ```
 
 ## 4. Run Reva
-Now you need to run Revad (the Reva deamon). Follow these steps
-from the *reva* folder:
+Now we need to start two Reva deamons corresponding to two different mesh providers, thus enabling sharing of files between users belonging to these two providers. For our example,  we consider the example of CERNBox deployed at localhost:19001 and the CESNET owncloud at localhost:17001. Follow these steps:
 
 ```
 cd examples/ocmd/
 ``` 
 
 ```
-../../cmd/revad/revad -dev-dir .
+../../cmd/revad/revad -c ocmd-server-1.toml & ../../cmd/revad/revad -c ocmd-server-1.toml &
 ``` 
 
-The Reva daemon (revad) should now be running.
+This should start two Reva daemon (revad) services at the aforementioned endpoints.
 
-## 5. Prepare an example file
-Open a new terminal and go to your reva folder.
+## 5. Invitation Workflow
+Before we start sharing files, we need to invite users belonging to different mesh providers so that file sharing can we initiated.
+### 5.1 Generate invite token
+Generate an invite token for user einstein on CERNBox:
+```
+curl --location --request GET 'localhost:19001/ocm/invites/' \
+--user einstein:relativity
+```
+You would get a response similar to
+```
+{"token":"2b51e7a3-7b19-482d-bbf6-b09e2375c0c2","user_id":{"idp":"http://cernbox.cern.ch","opaque_id":"4c510ada-c86b-4815-8820-42cdf82c3d51"},"expiration":{"seconds":1588069874}}
+```
+Each token is valid for 24 hours from the time of creation.
+### 5.2 Accept the token
+Now a user on a different mesh provider needs to accept this token in order to initiate file sharing. So we need to call the corresponding endpoint as user marie on CESNET.
+```
+curl --location --request POST \
+'localhost:17001/ocm/invites/forward?token=2b51e7a3-7b19-482d-bbf6-b09e2375c0c2&providerDomain=http://cernbox.cern.ch' \
+--user marie:radioactivity
+```
+An HTTP OK response indicates that the user marie has accepted an invite from einstein to receive shared files.
 
+## 6. Sharing functionality
+Creating shares at the origin is specific to each vendor and would have different implementations across providers. Thus, to skip the OCS HTTP implementation provided with reva, we would directly make calls to the exposed GRPC Gateway services through the reva CLI. 
+### 6.1 Create a share on the original user's provider
+#### 6.1.1 Create an example file
 ```
 echo "Example file" > example.txt
 ```
 
-## 6. Log in to reva
+#### 6.1.2 Log in to reva
 ```
 ./cmd/reva/reva login basic
 ```
@@ -78,7 +97,7 @@ Run:
 and use 
 
 ```
-host: 127.0.0.1:19000
+host: localhost:19000
 ```
 
 Once configured run:
@@ -93,8 +112,7 @@ And use the following log in credentials:
 login: einstein
 password: relativity
 ```
-
-## 7. Upload the example.txt file
+#### 6.1.3 Upload the example.txt file
 Create container folder:
 
 ```
@@ -106,65 +124,42 @@ Upload the example file:
 ```
 ./cmd/reva/reva upload example.txt /home/example.txt
 ```
-
-## 8. Share the file
-Create share resource (with this, f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c, id you’re sharing with “marie”, you can find all users in examples/ocmd/users.demo.json) :
-Use curl:
-
+#### 6.1.4 Create the share
+Call the ocm-share-create method with the required options. For now, we use the unique ID assigned to each user to identify the recipient of the share, but it can be easily modified to accept the email ID as well (`f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c` is the unique ID for the user marie; the list of all userscan be found at `examples/ocmd/users.demo.json`).
 ```
-curl --request POST \
-  --url 'http://127.0.0.1:19001/ocm/shares?path=example.txt&shareWithUser=f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c&shareWithProvider=http://cesnet.cz' \
-  --user einstein:relativity
+./cmd/reva/reva ocm-share-create -grantee f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c -idp http://cesnet.cz /home/example.txt
 ```
+This would create a local share on einstein's mesh provider and call the unprotected endpoint `/ocm/shares` on the recipient's provider to create a remote share.
+### 6.2 Accessing the share on the recipient's side
+The recipient can access the list of shares shared with them. Similar to the create shares functionality, this implementation is specific to each vendor, so for the demo, we can access it through the reva CLI.
 
-Or use wget
-
+#### 6.2.1 Log in to reva
+Reva CLI stores the configuration and authentication tokens in `.reva.config` and `.reva-token` files in the user's home directory. For now, this is not configurable so we need to set these again to access the platform as the user marie.
 ```
-wget --method POST \
-  --http-user=einstein \
-  --http-password=relativity \
-  --output-document \
-  - 'http://127.0.0.1:19001/ocm/shares?path=example.txt&shareWithUser=f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c&shareWithProvider=http://cesnet.cz'
+./cmd/reva/reva configure
 ```
 
-## 9. List all shares resource
-This will list all shared resources and give you some metadata
-Use curl:
+and use 
 
 ```
-curl --request GET \
-  --url http://127.0.0.1:19001/ocm/shares \
-  --user einstein:relativity
-```  
-
-Or use wget:
-
-```
-wget --quiet \
-  --method GET \
-  --http-user=einstein \
-  --http-password=relativity \
-  --output-document \
-  - http://127.0.0.1:19001/ocm/shares
+host: localhost:17000
 ```
 
-## 10.Get one share resource
-Use the share’s opaque_id you can see it in the response from “list all shares”
-Use curl:
+Once configured run:
 
 ```
-curl --request GET \
-  --url http://127.0.0.1:19001/ocm/shares/*opaque_id* \
-  --user einstein:relativity
+./cmd/reva/reva login basic
 ```
 
-Or use wget:
+And use the following log in credentials:
 
 ```
-wget --quiet \
-  --method GET \
-  --http-user=einstein \
-  --http-password=relativity \
-  --output-document \
-  - http://127.0.0.1:19001/ocm/shares/*opaque_id*
+login: marie
+password: radioactivity
 ```
+#### 6.2.2 Access the list of received shares
+Call the ocm-share-list-received method.
+```
+./cmd/reva/reva ocm-share-list-received
+```
+

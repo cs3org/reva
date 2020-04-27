@@ -103,19 +103,31 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 
 func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareRequest) (*ocm.CreateOCMShareResponse, error) {
 
-	opaqueObj := req.Opaque.Map["permissions"]
-	if opaqueObj.Decoder != "json" {
-		err := errors.New("opaque entry decoder is not json")
+	if req.Opaque == nil {
 		return &ocm.CreateOCMShareResponse{
-			Status: status.NewInternal(ctx, err, "invalid opaque entry decoder"),
+			Status: status.NewInternal(ctx, errors.New("can't find resource permissions"), ""),
+		}, nil
+	}
+
+	opaqueObj, ok := req.Opaque.Map["permissions"]
+	if !ok {
+		return &ocm.CreateOCMShareResponse{
+			Status: status.NewInternal(ctx, errors.New("resource permissions not set"), ""),
 		}, nil
 	}
 
 	var permissions map[string]string
-	err := json.Unmarshal(opaqueObj.Value, &permissions)
-	if err != nil {
+	if opaqueObj.Decoder == "json" {
+		err := json.Unmarshal(opaqueObj.Value, &permissions)
+		if err != nil {
+			return &ocm.CreateOCMShareResponse{
+				Status: status.NewInternal(ctx, err, "error decoding resource permissions"),
+			}, nil
+		}
+	} else {
+		err := errors.New("opaque entry decoder is not json")
 		return &ocm.CreateOCMShareResponse{
-			Status: status.NewInternal(ctx, err, "error decoding resource permissions"),
+			Status: status.NewInternal(ctx, err, "invalid opaque entry decoder"),
 		}, nil
 	}
 
