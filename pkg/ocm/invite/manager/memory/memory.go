@@ -94,7 +94,7 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 		"userID":            {contextUser.GetId().GetOpaqueId()},
 		"recipientProvider": {contextUser.GetId().GetIdp()},
 		"email":             {contextUser.GetMail()},
-		"username":          {contextUser.GetUsername()},
+		"name":              {contextUser.GetDisplayName()},
 	}
 
 	resp, err := http.PostForm(fmt.Sprintf("%s%s", originProvider.GetApiEndpoint(), acceptInviteEndpoint), requestBody)
