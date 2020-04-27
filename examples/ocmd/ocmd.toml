@@ -12,6 +12,7 @@ preferencessvc = "localhost:19000"
 userprovidersvc = "localhost:19000"
 usershareprovidersvc = "localhost:19000"
 publicshareprovidersvc = "localhost:19000"
+ocmcoresvc = "localhost:19000"
 ocmshareprovidersvc = "localhost:19000"
 ocminvitemanagersvc = "localhost:19000"
 ocmproviderauthorizersvc = "localhost:19000"
@@ -39,8 +40,11 @@ home_provider = "/"
 [grpc.services.usershareprovider]
 driver = "memory"
 
+[grpc.services.ocmcore]
+driver = "json"
+
 [grpc.services.ocminvitemanager]
-driver = "memory"
+driver = "json"
 
 [grpc.services.ocmshareprovider]
 driver = "json"
@@ -101,5 +105,8 @@ driver = "json"
 
 [http.middlewares.providerauthorizer.drivers.json]
 providers = "providers.demo.json"
+
+[http.services.ocs]
+prefix = "ocs"
 
 [http.middlewares.cors]

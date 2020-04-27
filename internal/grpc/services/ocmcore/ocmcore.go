@@ -16,15 +16,18 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocmproviderauthorizer
+package ocmcore
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
-	providerpb "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/ocm/provider"
-	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
+	ocmcore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/ocm/share"
+	"github.com/cs3org/reva/pkg/ocm/share/manager/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/mitchellh/mapstructure"
@@ -33,7 +36,7 @@ import (
 )
 
 func init() {
-	rgrpc.Register("ocmproviderauthorizer", New)
+	rgrpc.Register("ocmcore", New)
 }
 
 type config struct {
@@ -43,10 +46,10 @@ type config struct {
 
 type service struct {
 	conf *config
-	pa   provider.Authorizer
+	sm   share.Manager
 }
 
-func getProviderAuthorizer(c *config) (provider.Authorizer, error) {
+func getShareManager(c *config) (share.Manager, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		return f(c.Drivers[c.Driver])
 	}
@@ -58,11 +61,11 @@ func (s *service) Close() error {
 }
 
 func (s *service) UnprotectedEndpoints() []string {
-	return []string{"/cs3.ocm.provider.v1beta1.ProviderAPI/IsProviderAllowed"}
+	return []string{"/cs3.ocm.core.v1beta1.OcmCoreAPI/CreateOCMCoreShare"}
 }
 
 func (s *service) Register(ss *grpc.Server) {
-	providerpb.RegisterProviderAPIServer(ss, s)
+	ocmcore.RegisterOcmCoreAPIServer(ss, s)
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -74,7 +77,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-// New creates a new OCM provider authorizer svc
+// New creates a new ocm core svc
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 
 	c, err := parseConfig(m)
@@ -87,55 +90,62 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		c.Driver = "json"
 	}
 
-	pa, err := getProviderAuthorizer(c)
+	sm, err := getShareManager(c)
 	if err != nil {
 		return nil, err
 	}
 
 	service := &service{
 		conf: c,
-		pa:   pa,
+		sm:   sm,
 	}
+
 	return service, nil
 }
 
-func (s *service) GetInfoByDomain(ctx context.Context, req *providerpb.GetInfoByDomainRequest) (*providerpb.GetInfoByDomainResponse, error) {
-	domainInfo, err := s.pa.GetInfoByDomain(ctx, req.Domain)
-	if err != nil {
-		return &providerpb.GetInfoByDomainResponse{
-			Status: status.NewInternal(ctx, err, "error getting provider info"),
+func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCMCoreShareRequest) (*ocmcore.CreateOCMCoreShareResponse, error) {
+	resource := &provider.ResourceId{
+		StorageId: req.ProviderId,
+		OpaqueId:  req.Name,
+	}
+
+	opaqueObj := req.Protocol.Opaque.Map["permissions"]
+	if opaqueObj.Decoder != "json" {
+		err := errors.New("opaque entry decoder is not json")
+		return &ocmcore.CreateOCMCoreShareResponse{
+			Status: status.NewInternal(ctx, err, "invalid opaque entry decoder"),
 		}, nil
 	}
 
-	return &providerpb.GetInfoByDomainResponse{
-		Status:       status.NewOK(ctx),
-		ProviderInfo: domainInfo,
-	}, nil
-}
-
-func (s *service) IsProviderAllowed(ctx context.Context, req *providerpb.IsProviderAllowedRequest) (*providerpb.IsProviderAllowedResponse, error) {
-	err := s.pa.IsProviderAllowed(ctx, req.User)
+	var resourcePermissions *provider.ResourcePermissions
+	err := json.Unmarshal(opaqueObj.Value, &resourcePermissions)
 	if err != nil {
-		return &providerpb.IsProviderAllowedResponse{
-			Status: status.NewInternal(ctx, err, "error verifying mesh provider"),
+		return &ocmcore.CreateOCMCoreShareResponse{
+			Status: status.NewInternal(ctx, err, "error decoding resource permissions"),
 		}, nil
 	}
 
-	return &providerpb.IsProviderAllowedResponse{
-		Status: status.NewOK(ctx),
-	}, nil
-}
+	grant := &ocm.ShareGrant{
+		Grantee: &provider.Grantee{
+			Type: provider.GranteeType_GRANTEE_TYPE_USER,
+			Id:   req.ShareWith,
+		},
+		Permissions: &ocm.SharePermissions{
+			Permissions: resourcePermissions,
+		},
+	}
 
-func (s *service) ListAllProviders(ctx context.Context, req *providerpb.ListAllProvidersRequest) (*providerpb.ListAllProvidersResponse, error) {
-	providers, err := s.pa.ListAllProviders(ctx)
+	share, err := s.sm.Share(ctx, resource, grant, nil, "", req.Owner)
 	if err != nil {
-		return &providerpb.ListAllProvidersResponse{
-			Status: status.NewInternal(ctx, err, "error retrieving mesh providers"),
+		return &ocmcore.CreateOCMCoreShareResponse{
+			Status: status.NewInternal(ctx, err, "error creating ocm core share"),
 		}, nil
 	}
 
-	return &providerpb.ListAllProvidersResponse{
-		Status:    status.NewOK(ctx),
-		Providers: providers,
-	}, nil
+	res := &ocmcore.CreateOCMCoreShareResponse{
+		Status:  status.NewOK(ctx),
+		Id:      share.Id.OpaqueId,
+		Created: share.Ctime,
+	}
+	return res, nil
 }

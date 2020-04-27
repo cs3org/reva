@@ -7,10 +7,10 @@ require (
 	github.com/Masterminds/goutils v1.1.0 // indirect
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/Masterminds/sprig v2.22.0+incompatible
-	github.com/aws/aws-sdk-go v1.30.7
+	github.com/aws/aws-sdk-go v1.30.12
 	github.com/cheggaaa/pb v1.0.28
 	github.com/coreos/go-oidc v2.2.1+incompatible
-	github.com/cs3org/go-cs3apis v0.0.0-20200422090600-d9e5166bebfe
+	github.com/cs3org/go-cs3apis v0.0.0-20200423154403-462ce7762d4a
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/fatih/color v1.7.0 // indirect
 	github.com/go-openapi/strfmt v0.19.2 // indirect
@@ -37,7 +37,7 @@ require (
 	go.opencensus.io v0.22.3
 	golang.org/x/crypto v0.0.0-20190411191339-88737f569e3a
 	golang.org/x/oauth2 v0.0.0-20190226205417-e64efc72b421
-	google.golang.org/grpc v1.28.1
+	google.golang.org/grpc v1.29.0
 	gopkg.in/asn1-ber.v1 v1.0.0-20181015200546-f715ec2f112d // indirect
 	gopkg.in/cheggaaa/pb.v1 v1.0.27 // indirect
 	gopkg.in/ldap.v2 v2.5.1

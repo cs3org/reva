@@ -22,12 +22,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"path"
 	"strconv"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	ocmcore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
@@ -46,22 +46,11 @@ func (h *sharesHandler) init(c *Config) {
 func (h *sharesHandler) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		log := appctx.GetLogger(r.Context())
-		shareID := path.Base(r.URL.Path)
-		log.Debug().Str("method", r.Method).Str("shareID", shareID).Msg("sharesHandler")
-
 		switch r.Method {
 		case http.MethodPost:
 			h.createShare(w, r)
-		case http.MethodGet:
-			if shareID == "/" {
-				h.listAllShares(w, r)
-			} else {
-				h.getShare(w, r, shareID)
-			}
-
 		default:
-			w.WriteHeader(http.StatusNotFound)
+			WriteError(w, r, APIErrorInvalidParameter, "Only POST method is allowed", nil)
 		}
 	})
 }
@@ -70,50 +59,51 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	// TODO (ishank011): Check if the user is allowed to share the file once the invitation workflow has been implemented.
-	// TODO (ishank011): Also check if the provider is authorized or not.
 	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting storage grpc client on addr: %v", h.gatewayAddr), err)
 		return
 	}
 
-	hRes, err := gatewayClient.GetHome(ctx, &provider.GetHomeRequest{})
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error sending a grpc get home request", err)
+	shareWith, protocol, meshProvider := r.FormValue("shareWith"), r.FormValue("protocol"), r.FormValue("meshProvider")
+	resource, providerID, owner := r.FormValue("name"), r.FormValue("providerId"), r.FormValue("owner")
+
+	if resource == "" || providerID == "" || owner == "" {
+		WriteError(w, r, APIErrorInvalidParameter, "missing details about resource to be shared", nil)
 		return
 	}
-	prefix := hRes.GetPath()
-
-	shareWithUser := r.FormValue("shareWithUser")
-	shareWithProvider := r.FormValue("shareWithProvider")
-
-	if shareWithUser == "" || shareWithProvider == "" {
-		WriteError(w, r, APIErrorInvalidParameter, "missing shareWith parameters", nil)
+	if shareWith == "" || protocol == "" || meshProvider == "" {
+		WriteError(w, r, APIErrorInvalidParameter, "missing request parameters", nil)
 		return
 	}
 
 	userRes, err := gatewayClient.GetUser(ctx, &userpb.GetUserRequest{
-		UserId: &userpb.UserId{OpaqueId: shareWithUser, Idp: shareWithProvider},
+		UserId: &userpb.UserId{OpaqueId: shareWith},
 	})
-
 	if err != nil {
-		WriteError(w, r, APIErrorInvalidParameter, "error searching recipient", err)
+		WriteError(w, r, APIErrorServerError, "error searching recipient", err)
 		return
 	}
-
 	if userRes.Status.Code != rpc.Code_CODE_OK {
 		WriteError(w, r, APIErrorNotFound, "user not found", err)
 		return
 	}
 
-	var permissions conversions.Permissions
+	var protocolDecoded map[string]interface{}
+	err = json.Unmarshal([]byte(protocol), &protocolDecoded)
+	if err != nil {
+		WriteError(w, r, APIErrorInvalidParameter, "invalid protocol parameters", nil)
+	}
 
-	role := r.FormValue("role")
-	if role == "" {
-		pval := r.FormValue("permissions")
-		if pval == "" {
-			// by default only allow read permissions / assign viewer role
+	var permissions conversions.Permissions
+	var role string
+	options, ok := protocolDecoded["options"].(map[string]string)
+	if !ok {
+		// by default only allow read permissions / assign viewer role
+		role = conversions.RoleViewer
+	} else {
+		pval, ok := options["permissions"]
+		if !ok {
 			role = conversions.RoleViewer
 		} else {
 			pint, err := strconv.Atoi(pval)
@@ -131,66 +121,40 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var resourcePermissions *provider.ResourcePermissions
-	resourcePermissions, err = h.role2CS3Permissions(role)
+	resourcePermissions, err = conversions.Role2CS3Permissions(role)
 	if err != nil {
 		WriteError(w, r, APIErrorInvalidParameter, "unknown role", err)
-		return
 	}
-
-	roleMap := map[string]string{"name": role}
-	val, err := json.Marshal(roleMap)
+	val, err := json.Marshal(resourcePermissions)
 	if err != nil {
-		WriteError(w, r, APIErrorServerError, "could not encode role", err)
+		WriteError(w, r, APIErrorServerError, "could not encode role", nil)
 		return
 	}
 
-	statReq := &provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: path.Join(prefix, r.FormValue("path")),
-			},
+	createShareReq := &ocmcore.CreateOCMCoreShareRequest{
+		Name:       resource,
+		ProviderId: providerID,
+		Owner: &userpb.UserId{
+			OpaqueId: owner,
+			Idp:      meshProvider,
 		},
-	}
-
-	statRes, err := gatewayClient.Stat(ctx, statReq)
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error sending a grpc stat request", err)
-		return
-	}
-
-	if statRes.Status.Code != rpc.Code_CODE_OK {
-		if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			WriteError(w, r, APIErrorNotFound, "not found", nil)
-			return
-		}
-		WriteError(w, r, APIErrorServerError, "grpc stat request failed", err)
-		return
-	}
-
-	createShareReq := &ocm.CreateOCMShareRequest{
-		Opaque: &types.Opaque{
-			Map: map[string]*types.OpaqueEntry{
-				"role": &types.OpaqueEntry{
-					Decoder: "json",
-					Value:   val,
+		ShareWith: userRes.User.GetId(),
+		Protocol: &ocmcore.Protocol{
+			Name: protocolDecoded["name"].(string),
+			Opaque: &types.Opaque{
+				Map: map[string]*types.OpaqueEntry{
+					"permissions": &types.OpaqueEntry{
+						Decoder: "json",
+						Value:   val,
+					},
 				},
 			},
 		},
-		ResourceId: statRes.Info.Id,
-		Grant: &ocm.ShareGrant{
-			Grantee: &provider.Grantee{
-				Type: provider.GranteeType_GRANTEE_TYPE_USER,
-				Id:   userRes.User.GetId(),
-			},
-			Permissions: &ocm.SharePermissions{
-				Permissions: resourcePermissions,
-			},
-		},
 	}
 
-	createShareResponse, err := gatewayClient.CreateOCMShare(ctx, createShareReq)
+	createShareResponse, err := gatewayClient.CreateOCMCoreShare(ctx, createShareReq)
 	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error sending a grpc create share request", err)
+		WriteError(w, r, APIErrorServerError, "error sending a grpc create ocm core share request", err)
 		return
 	}
 	if createShareResponse.Status.Code != rpc.Code_CODE_OK {
@@ -198,168 +162,29 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, r, APIErrorNotFound, "not found", nil)
 			return
 		}
-		WriteError(w, r, APIErrorServerError, "grpc create share request failed", err)
+		WriteError(w, r, APIErrorServerError, "grpc create ocm core share request failed", err)
 		return
 	}
+
+	timeCreated := createShareResponse.Created
+	jsonOut, err := json.Marshal(
+		map[string]string{
+			"id":        createShareResponse.Id,
+			"createdAt": time.Unix(int64(timeCreated.Seconds), int64(timeCreated.Nanos)).String(),
+		},
+	)
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, "error marshalling share data", err)
+		return
+	}
+
+	_, err = w.Write(jsonOut)
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, "error writing shares data", err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 
 	log.Info().Msg("Share created.")
-}
-
-func (h *sharesHandler) getShare(w http.ResponseWriter, r *http.Request, shareID string) {
-
-	// TODO Implement response with HAL schemating
-	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
-
-	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting storage grpc client on addr: %v", h.gatewayAddr), err)
-		log.Err(err).Msg(fmt.Sprintf("error getting storage grpc client on addr: %v", h.gatewayAddr))
-		return
-	}
-
-	listOCMSharesRequest := &ocm.GetOCMShareRequest{
-		Ref: &ocm.ShareReference{
-			Spec: &ocm.ShareReference_Id{
-				Id: &ocm.ShareId{
-					OpaqueId: shareID,
-				},
-			},
-		},
-	}
-
-	log.Debug().Str("listOCMSharesRequest", fmt.Sprintf("%+v", listOCMSharesRequest)).Msg("getShare")
-
-	ocmShareResponse, err := gatewayClient.GetOCMShare(ctx, listOCMSharesRequest)
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error sending a grpc get ocm share request", err)
-		log.Err(err).Msg("error sending a grpc get ocm share request.")
-		return
-	}
-	log.Debug().Str("ocmShareResponse", fmt.Sprintf("%+v", ocmShareResponse)).Msg("getShare")
-
-	share := ocmShareResponse.GetShare()
-	if share == nil {
-		WriteError(w, r, APIErrorNotFound, "share not found", nil)
-		return
-	}
-
-	bytes, err := json.Marshal(share)
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error marshal shares data", err)
-		log.Err(err).Msg("error marshal shares data.")
-		return
-	}
-
-	// Write response
-	_, err = w.Write(bytes)
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error writing shares data", err)
-		log.Err(err).Msg("error writing shares data.")
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-}
-
-func (h *sharesHandler) listAllShares(w http.ResponseWriter, r *http.Request) {
-
-	// TODO Implement pagination.
-	// TODO Implement response with HAL schemating
-	ctx := r.Context()
-
-	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting storage grpc client on addr: %v", h.gatewayAddr), err)
-		return
-	}
-
-	listOCMSharesResponse, err := gatewayClient.ListOCMShares(ctx, &ocm.ListOCMSharesRequest{})
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error sending a grpc list shares request", err)
-		return
-	}
-
-	// Create json response
-	shares := listOCMSharesResponse.GetShares()
-	if shares == nil {
-		shares = make([]*ocm.Share, 0)
-	}
-
-	bytes, err := json.Marshal(shares)
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error marshal shares data", err)
-		return
-	}
-
-	// Write response
-	_, err = w.Write(bytes)
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error writing shares data", err)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-}
-
-func (h *sharesHandler) role2CS3Permissions(r string) (*provider.ResourcePermissions, error) {
-	switch r {
-	case conversions.RoleViewer:
-		return &provider.ResourcePermissions{
-			ListContainer:        true,
-			ListGrants:           true,
-			ListFileVersions:     true,
-			ListRecycle:          true,
-			Stat:                 true,
-			GetPath:              true,
-			GetQuota:             true,
-			InitiateFileDownload: true,
-		}, nil
-	case conversions.RoleEditor:
-		return &provider.ResourcePermissions{
-			ListContainer:        true,
-			ListGrants:           true,
-			ListFileVersions:     true,
-			ListRecycle:          true,
-			Stat:                 true,
-			GetPath:              true,
-			GetQuota:             true,
-			InitiateFileDownload: true,
-
-			Move:               true,
-			InitiateFileUpload: true,
-			RestoreFileVersion: true,
-			RestoreRecycleItem: true,
-			CreateContainer:    true,
-			Delete:             true,
-			PurgeRecycle:       true,
-		}, nil
-	case conversions.RoleCoowner:
-		return &provider.ResourcePermissions{
-			ListContainer:        true,
-			ListGrants:           true,
-			ListFileVersions:     true,
-			ListRecycle:          true,
-			Stat:                 true,
-			GetPath:              true,
-			GetQuota:             true,
-			InitiateFileDownload: true,
-
-			Move:               true,
-			InitiateFileUpload: true,
-			RestoreFileVersion: true,
-			RestoreRecycleItem: true,
-			CreateContainer:    true,
-			Delete:             true,
-			PurgeRecycle:       true,
-
-			AddGrant:    true,
-			RemoveGrant: true, // TODO when are you able to unshare / delete
-			UpdateGrant: true,
-		}, nil
-	default:
-		return nil, fmt.Errorf("unknown role: %s", r)
-	}
 }
