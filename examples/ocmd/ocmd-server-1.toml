@@ -50,10 +50,10 @@ driver = "json"
 driver = "json"
 
 [grpc.services.ocmcore.drivers.json]
-file = "/tmp/core_srv_1.json"
+file = "/tmp/reva/core_srv_1.json"
 
 [grpc.services.ocmshareprovider.drivers.json]
-received_shares_file = "/tmp/core_srv_1.json"
+received_shares_file = "/tmp/reva/core_srv_1.json"
 
 [grpc.services.ocmproviderauthorizer]
 driver = "json"
