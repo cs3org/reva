@@ -235,7 +235,7 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 	}
 
 	// Add to the list of accepted users
-	userKey := generateKey(inviteToken.GetUserId())
+	userKey := inviteToken.GetUserId().GetOpaqueId()
 	for _, acceptedUser := range m.model.AcceptedUsers[userKey] {
 		if acceptedUser.Id.GetOpaqueId() == remoteUser.Id.OpaqueId && acceptedUser.Id.GetIdp() == remoteUser.Id.Idp {
 			return errors.New("json: user already added to accepted users")
@@ -252,7 +252,7 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 
 func (m *manager) GetRemoteUser(ctx context.Context, remoteUserID *userpb.UserId) (*userpb.User, error) {
 
-	userKey := generateKey(user.ContextMustGetUser(ctx).GetId())
+	userKey := user.ContextMustGetUser(ctx).GetId().GetOpaqueId()
 	for _, acceptedUser := range m.model.AcceptedUsers[userKey] {
 		if (acceptedUser.Id.GetOpaqueId() == remoteUserID.OpaqueId) && (remoteUserID.Idp == "" || acceptedUser.Id.GetIdp() == remoteUserID.Idp) {
 			return acceptedUser, nil
@@ -271,8 +271,4 @@ func getTokenIfValid(m *manager, token *invitepb.InviteToken) (*invitepb.InviteT
 		return nil, errors.New("json: token expired")
 	}
 	return inviteToken, nil
-}
-
-func generateKey(user *userpb.UserId) string {
-	return fmt.Sprintf("%s_%s", user.GetOpaqueId(), user.GetIdp())
 }
