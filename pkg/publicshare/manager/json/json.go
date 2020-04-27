@@ -197,7 +197,6 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 		Nanos:   uint32(now % 1000000000),
 	}
 
-	// persist share update on file
 	m.mutex.Lock()
 	m.mutex.Unlock()
 	db := map[string]interface{}{}
@@ -215,10 +214,8 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 		return nil, err
 	}
 
-	// update db's old value with the updated one
 	db[share.GetId().OpaqueId] = buff.String()
 
-	// write the contents of db back to the file
 	dbAsJSON, err := json.Marshal(db)
 	if err != nil {
 		return nil, err
@@ -257,12 +254,12 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 	m.mutex.Lock()
 	m.mutex.Unlock()
 	db := map[string]interface{}{}
-	fileBytes, err := ioutil.ReadFile(m.file)
+	readBytes, err := ioutil.ReadFile(m.file)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := json.Unmarshal(fileBytes, &db); err != nil {
+	if err := json.Unmarshal(readBytes, &db); err != nil {
 		return nil, err
 	}
 
@@ -305,17 +302,29 @@ func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, id string
 }
 
 func (m *manager) GetPublicShareByToken(ctx context.Context, token string) (*link.PublicShare, error) {
-	// fd, err := os.Open(path.Join(m.file, token))
-	// if err != nil {
-	// 	return nil, err
-	// }
+	db := map[string]interface{}{}
+	readBytes, err := ioutil.ReadFile(m.file)
+	if err != nil {
+		return nil, err
+	}
 
-	// share := link.PublicShare{}
-	// if err := m.unmarshaler.Unmarshal(fd, &share); err != nil {
-	// 	return nil, err
-	// }
+	if err := json.Unmarshal(readBytes, &db); err != nil {
+		return nil, err
+	}
 
-	return nil, nil
+	for _, v := range db {
+		r := bytes.NewBuffer([]byte(v.(string)))
+		local := &link.PublicShare{}
+		if err := m.unmarshaler.Unmarshal(r, local); err != nil {
+			return nil, err
+		}
+
+		if local.Token == token {
+			return local, nil
+		}
+	}
+
+	return nil, fmt.Errorf("share with token: `%v` not found", token)
 }
 
 func randString(n int) string {
