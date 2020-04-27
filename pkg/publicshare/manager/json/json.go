@@ -119,9 +119,6 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 		DisplayName:       displayName,
 	}
 
-	// this file could benefit of the strategy pattern. same with the memory.go driver. The only moving parts are where are the shares stored,
-	// but the logic of creating them remains the same.
-	// write to a random file
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -130,26 +127,23 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 		return nil, err
 	}
 
-	// retrieve the contents of m.file as map[string]interface{}
-	dest := map[string]interface{}{}
+	db := map[string]interface{}{}
 	fileContents, err := ioutil.ReadFile(m.file)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := json.Unmarshal(fileContents, &dest); err != nil {
+	if err := json.Unmarshal(fileContents, &db); err != nil {
 		return nil, err
 	}
 
-	// insert the new key.
-	if _, ok := dest[s.Id.GetOpaqueId()]; !ok {
-		dest[s.Id.GetOpaqueId()] = buff.String()
+	if _, ok := db[s.Id.GetOpaqueId()]; !ok {
+		db[s.Id.GetOpaqueId()] = buff.String()
 	} else {
 		return nil, errors.New("key already exists")
 	}
 
-	// serialize dest back into JSON
-	destJSON, err := json.Marshal(dest)
+	destJSON, err := json.Marshal(db)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +154,7 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 	return &s, nil
 }
 
-// UpdatePublicShare updates the expiration date, permissions and Mtime
+// UpdatePublicShare updates the public share
 func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link.UpdatePublicShareRequest, g *link.Grant) (*link.PublicShare, error) {
 	log := appctx.GetLogger(ctx)
 	share, err := m.GetPublicShare(ctx, u, req.Ref)
@@ -169,8 +163,6 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 	}
 
 	now := time.Now().UnixNano()
-
-	// token := share.GetToken()
 
 	switch req.GetUpdate().GetType() {
 	case link.UpdatePublicShareRequest_Update_TYPE_DISPLAYNAME:
@@ -187,7 +179,6 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 		log.Debug().Str("memory", "update expiration").Msgf("from: `%v`\nto\n`%v`", old, new)
 		share.Expiration = req.Update.GetGrant().Expiration
 	case link.UpdatePublicShareRequest_Update_TYPE_PASSWORD:
-		// TODO(refs) Do public shares need Grants? Struct is defined, just not used. Fill this once it's done.
 		fallthrough
 	default:
 		return nil, fmt.Errorf("invalid update type: %v", req.GetUpdate().GetType())
@@ -228,8 +219,8 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 	return share, nil
 }
 
+// GetPublicShare gets a public share either by ID or Token.
 func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) (share *link.PublicShare, err error) {
-	// Attempt to fetch public share by token
 	if ref.GetToken() != "" {
 		share, err = m.GetPublicShareByToken(ctx, ref.GetToken())
 		if err != nil {
@@ -263,6 +254,7 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 	return
 }
 
+// ListPublicShares retrieves all the shares on the manager that are valid.
 func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo) ([]*link.PublicShare, error) {
 	shares := []*link.PublicShare{}
 	now := time.Now()
@@ -309,10 +301,12 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 	return shares, nil
 }
 
+// RevokePublicShare undocumented.
 func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, id string) error {
 	return fmt.Errorf("RevokePublicShare method unimplemented")
 }
 
+// GetPublicShareByToken gets a public share by its opaque token.
 func (m *manager) GetPublicShareByToken(ctx context.Context, token string) (*link.PublicShare, error) {
 	db := map[string]interface{}{}
 	readBytes, err := ioutil.ReadFile(m.file)
@@ -342,6 +336,7 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token string) (*lin
 	return nil, fmt.Errorf("share with token: `%v` not found", token)
 }
 
+// randString is a helper to create tokens. It could be a token manager instead.
 func randString(n int) string {
 	var l = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 	b := make([]rune, n)
