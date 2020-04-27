@@ -153,6 +153,7 @@ func permissionFromRequest(r *http.Request, h *Handler) *provider.ResourcePermis
 
 	p, err := h.role2CS3Permissions(perm)
 	if err != nil {
+		log.Error().Str("permissionFromRequest", "shares").Msgf("role to cs3permission %v", perm)
 	}
 
 	return p

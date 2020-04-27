@@ -50,7 +50,7 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 		mutex:       &sync.Mutex{},
 		marshaler:   jsonpb.Marshaler{},
 		unmarshaler: jsonpb.Unmarshaler{},
-		file:        "/var/tmp/.publicshares",
+		file:        "/var/tmp/.publicshares", // TODO MUST be configurable.
 	}
 
 	fileContents, err := ioutil.ReadFile(m.file)
@@ -58,7 +58,10 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 		return nil, err
 	}
 	if len(fileContents) == 0 {
-		ioutil.WriteFile(m.file, []byte("{}"), 0644)
+		err := ioutil.WriteFile(m.file, []byte("{}"), 0644)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &m, nil
@@ -214,7 +217,9 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 		return nil, err
 	}
 
-	ioutil.WriteFile(m.file, dbAsJSON, 0644)
+	if err := ioutil.WriteFile(m.file, dbAsJSON, 0644); err != nil {
+		return nil, err
+	}
 
 	return share, nil
 }
