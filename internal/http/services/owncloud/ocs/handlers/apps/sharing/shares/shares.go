@@ -105,9 +105,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":
 			if shareID == "" {
-				h.listAllShares(w, r)
+				h.listFederatedShares(w, r)
 			} else {
-				h.getShare(w, r, shareID)
+				h.getFederatedShare(w, r, shareID)
 			}
 		default:
 			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Only GET method is allowed", nil)

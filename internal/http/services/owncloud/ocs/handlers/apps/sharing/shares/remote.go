@@ -26,7 +26,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 )
 
-func (h *Handler) getShare(w http.ResponseWriter, r *http.Request, shareID string) {
+func (h *Handler) getFederatedShare(w http.ResponseWriter, r *http.Request, shareID string) {
 
 	// TODO: Implement response with HAL schemating
 	ctx := r.Context()
@@ -60,7 +60,7 @@ func (h *Handler) getShare(w http.ResponseWriter, r *http.Request, shareID strin
 	response.WriteOCSSuccess(w, r, share)
 }
 
-func (h *Handler) listAllShares(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) listFederatedShares(w http.ResponseWriter, r *http.Request) {
 
 	// TODO Implement pagination.
 	// TODO Implement response with HAL schemating
