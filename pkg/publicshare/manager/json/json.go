@@ -123,7 +123,7 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 	// but the logic of creating them remains the same.
 	// write to a random file
 	m.mutex.Lock()
-	m.mutex.Unlock()
+	defer m.mutex.Unlock()
 	buff := bytes.Buffer{}
 	if err := m.marshaler.Marshal(&buff, &s); err != nil {
 		return nil, err
@@ -198,7 +198,7 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 	}
 
 	m.mutex.Lock()
-	m.mutex.Unlock()
+	defer m.mutex.Unlock()
 	db := map[string]interface{}{}
 	fileBytes, err := ioutil.ReadFile(m.file)
 	if err != nil {
@@ -235,12 +235,26 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 		}
 	}
 
-	// Attempt to fetch public share by Id
-	if ref.GetId() != nil {
-		share, err = m.getPublicShareByTokenID(ctx, *ref.GetId())
-		if err != nil {
-			return nil, errors.New("no shares found by id")
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	db := map[string]interface{}{}
+	fileBytes, err := ioutil.ReadFile(m.file)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := json.Unmarshal(fileBytes, &db); err != nil {
+		return nil, err
+	}
+
+	if found, ok := db[ref.GetId().GetOpaqueId()]; ok {
+		ps := link.PublicShare{}
+		r := bytes.NewBuffer([]byte(found.(string)))
+		if err := m.unmarshaler.Unmarshal(r, &ps); err != nil {
+			return nil, err
 		}
+
+		return &ps, nil
 	}
 
 	return
@@ -252,7 +266,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 	now := time.Now()
 
 	m.mutex.Lock()
-	m.mutex.Unlock()
+	defer m.mutex.Unlock()
 	db := map[string]interface{}{}
 	readBytes, err := ioutil.ReadFile(m.file)
 	if err != nil {
@@ -334,31 +348,4 @@ func randString(n int) string {
 		b[i] = l[rand.Intn(len(l))]
 	}
 	return string(b)
-}
-
-func (m *manager) getPublicShareByTokenID(ctx context.Context, targetID link.PublicShareId) (*link.PublicShare, error) {
-	// load file contents onto contents
-	m.mutex.Lock()
-	m.mutex.Unlock()
-	db := map[string]interface{}{}
-	fileBytes, err := ioutil.ReadFile(m.file)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := json.Unmarshal(fileBytes, &db); err != nil {
-		return nil, err
-	}
-
-	if found, ok := db[targetID.GetOpaqueId()]; ok {
-		ps := link.PublicShare{}
-		r := bytes.NewBuffer([]byte(found.(string)))
-		if err := m.unmarshaler.Unmarshal(r, &ps); err != nil {
-			return nil, err
-		}
-
-		return &ps, nil
-	}
-
-	return nil, nil
 }
