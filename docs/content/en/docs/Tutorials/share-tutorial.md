@@ -53,7 +53,7 @@ cd examples/ocmd/
 This should start two Reva daemon (revad) services at the aforementioned endpoints.
 
 ## 5. Invitation Workflow
-Before we start sharing files, we need to invite users belonging to different mesh providers so that file sharing can we initiated.
+Before we start sharing files, we need to invite users belonging to different mesh providers so that file sharing can be initiated.
 ### 5.1 Generate invite token
 Generate an invite token for user einstein on CERNBox:
 ```
@@ -88,7 +88,6 @@ echo "Example file" > example.txt
 ```
 
 If you now get an error saying that you need to run reva configure, do as follows:
-Run:
 
 ```
 ./cmd/reva/reva configure
@@ -100,7 +99,7 @@ and use
 host: localhost:19000
 ```
 
-Once configured run:
+Once configured, run:
 
 ```
 ./cmd/reva/reva login basic
@@ -125,11 +124,18 @@ Upload the example file:
 ./cmd/reva/reva upload example.txt /home/example.txt
 ```
 #### 6.1.4 Create the share
-Call the ocm-share-create method with the required options. For now, we use the unique ID assigned to each user to identify the recipient of the share, but it can be easily modified to accept the email ID as well (`f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c` is the unique ID for the user marie; the list of all userscan be found at `examples/ocmd/users.demo.json`).
+Call the ocm-share-create method with the required options. For now, we use the unique ID assigned to each user to identify the recipient of the share, but it can be easily modified to accept the email ID as well (`f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c` is the unique ID for the user marie; the list of all users can be found at `examples/ocmd/users.demo.json`).
 ```
 ./cmd/reva/reva ocm-share-create -grantee f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c -idp http://cesnet.cz /home/example.txt
 ```
-This would create a local share on einstein's mesh provider and call the unprotected endpoint `/ocm/shares` on the recipient's provider to create a remote share.
+This would create a local share on einstein's mesh provider and call the unprotected endpoint `/ocm/shares` on the recipient's provider to create a remote share. The response would look like:
+```
++--------------------------------------+------------------------+--------------------------------------+----------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------+-------------------+------------------+--------------------------------------+--------------------------------+--------------------------------+
+| #                                    | OWNER.IDP              | OWNER.OPAQUEID                       | RESOURCEID                                                                             | PERMISSIONS                                                                                                     | TYPE              | GRANTEE.IDP      | GRANTEE.OPAQUEID                     | CREATED                        | UPDATED                        |
++--------------------------------------+------------------------+--------------------------------------+----------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------+-------------------+------------------+--------------------------------------+--------------------------------+--------------------------------+
+| c530f6b3-8eb7-4b68-af68-272ab8845bf8 | http://cernbox.cern.ch | 4c510ada-c86b-4815-8820-42cdf82c3d51 | storage_id:"123e4567-e89b-12d3-a456-426655440000" opaque_id:"fileid-home/example.txt"  | permissions:<get_path:true initiate_file_download:true list_container:true list_file_versions:true stat:true >  | GRANTEE_TYPE_USER | http://cesnet.cz | f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c | 2020-04-27 15:23:18 +0200 CEST | 2020-04-27 15:23:18 +0200 CEST |
++--------------------------------------+------------------------+--------------------------------------+----------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------+-------------------+------------------+--------------------------------------+--------------------------------+--------------------------------+
+```
 ### 6.2 Accessing the share on the recipient's side
 The recipient can access the list of shares shared with them. Similar to the create shares functionality, this implementation is specific to each vendor, so for the demo, we can access it through the reva CLI.
 
@@ -161,5 +167,12 @@ password: radioactivity
 Call the ocm-share-list-received method.
 ```
 ./cmd/reva/reva ocm-share-list-received
+```
+```
++--------------------------------------+------------------------+--------------------------------------+----------------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------------+------------------+--------------------------------------+--------------------------------+--------------------------------+---------------------+
+| #                                    | OWNER.IDP              | OWNER.OPAQUEID                       | RESOURCEID                                                                             | PERMISSIONS                                                                                                                                                       | TYPE              | GRANTEE.IDP      | GRANTEE.OPAQUEID                     | CREATED                        | UPDATED                        | STATE               |
++--------------------------------------+------------------------+--------------------------------------+----------------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------------+------------------+--------------------------------------+--------------------------------+--------------------------------+---------------------+
+| e327bf7d-cda7-4cdc-bb82-fbeef017dd16 | http://cernbox.cern.ch | 4c510ada-c86b-4815-8820-42cdf82c3d51 | storage_id:"123e4567-e89b-12d3-a456-426655440000" opaque_id:"fileid-home/example.txt"  | permissions:<get_path:true get_quota:true initiate_file_download:true list_grants:true list_container:true list_file_versions:true list_recycle:true stat:true >  | GRANTEE_TYPE_USER | http://cesnet.cz | f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c | 2020-04-27 15:23:18 +0200 CEST | 2020-04-27 15:23:18 +0200 CEST | SHARE_STATE_PENDING |
++--------------------------------------+------------------------+--------------------------------------+----------------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------------+------------------+--------------------------------------+--------------------------------+--------------------------------+---------------------+
 ```
 

@@ -444,14 +444,14 @@ func (m *mgr) ListReceivedShares(ctx context.Context) ([]*ocm.ReceivedShare, err
 		}
 		if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
 			if user.Id.Idp == s.Grantee.Id.Idp && user.Id.OpaqueId == s.Grantee.Id.OpaqueId {
-				rs := m.convert(ctx, s)
+				rs := convert(ctx, receivedSharesModel, s)
 				rss = append(rss, rs)
 			}
 		} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 			// check if all user groups match this share; TODO(labkode): filter shares created by us.
 			for _, g := range user.Groups {
 				if g == s.Grantee.Id.OpaqueId {
-					rs := m.convert(ctx, s)
+					rs := convert(ctx, receivedSharesModel, s)
 					rss = append(rss, rs)
 				}
 			}
@@ -460,14 +460,13 @@ func (m *mgr) ListReceivedShares(ctx context.Context) ([]*ocm.ReceivedShare, err
 	return rss, nil
 }
 
-// convert must be called in a lock-controlled block.
-func (m *mgr) convert(ctx context.Context, s *ocm.Share) *ocm.ReceivedShare {
+func convert(ctx context.Context, m *shareModel, s *ocm.Share) *ocm.ReceivedShare {
 	rs := &ocm.ReceivedShare{
 		Share: s,
 		State: ocm.ShareState_SHARE_STATE_PENDING,
 	}
 	user := user.ContextMustGetUser(ctx)
-	if v, ok := m.model.State[user.Id.String()]; ok {
+	if v, ok := m.State[user.Id.String()]; ok {
 		if state, ok := v[s.Id.String()]; ok {
 			rs.State = state
 		}
@@ -492,12 +491,12 @@ func (m *mgr) getReceived(ctx context.Context, ref *ocm.ShareReference) (*ocm.Re
 		if equal(ref, s) {
 			if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER &&
 				s.Grantee.Id.Idp == user.Id.Idp && s.Grantee.Id.OpaqueId == user.Id.OpaqueId {
-				rs := m.convert(ctx, s)
+				rs := convert(ctx, receivedSharesModel, s)
 				return rs, nil
 			} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 				for _, g := range user.Groups {
 					if s.Grantee.Id.OpaqueId == g {
-						rs := m.convert(ctx, s)
+						rs := convert(ctx, receivedSharesModel, s)
 						return rs, nil
 					}
 				}
