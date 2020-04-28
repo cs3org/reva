@@ -120,36 +120,15 @@ func loadOrCreate(file string) (*shareModel, error) {
 	return m, nil
 }
 
-func readFile(file string) (*shareModel, error) {
-	data, err := ioutil.ReadFile(file)
-	if err != nil {
-		err = errors.Wrap(err, "error reading the data")
-		return nil, err
-	}
-
-	m := &shareModel{}
-	if err := json.Unmarshal(data, m); err != nil {
-		err = errors.Wrap(err, "error decoding data to json")
-		return nil, err
-	}
-
-	if m.State == nil {
-		m.State = map[string]map[string]ocm.ShareState{}
-	}
-	m.file = file
-
-	return m, nil
-}
-
 type shareModel struct {
-	file   string
-	State  map[string]map[string]ocm.ShareState `json:"state"` // map[username]map[share_id]boolean
-	Shares []*ocm.Share                         `json:"shares"`
+	file           string
+	State          map[string]map[string]ocm.ShareState `json:"state"` // map[username]map[share_id]boolean
+	Shares         []*ocm.Share                         `json:"shares"`
+	ReceivedShares []*ocm.Share                         `json:"received_shares"`
 }
 
 type config struct {
-	File               string `mapstructure:"file"`
-	ReceivedSharesFile string `mapstructure:"received_shares_file"`
+	File string `mapstructure:"file"`
 }
 
 type mgr struct {
@@ -167,6 +146,21 @@ func (m *shareModel) Save() error {
 
 	if err := ioutil.WriteFile(m.file, data, 0644); err != nil {
 		err = errors.Wrap(err, "error writing to file: "+m.file)
+		return err
+	}
+
+	return nil
+}
+
+func (m *shareModel) ReadFile() error {
+	data, err := ioutil.ReadFile(m.file)
+	if err != nil {
+		err = errors.Wrap(err, "error reading the data")
+		return err
+	}
+
+	if err := json.Unmarshal(data, m); err != nil {
+		err = errors.Wrap(err, "error decoding data to json")
 		return err
 	}
 
@@ -236,13 +230,21 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 	}
 
 	m.Lock()
-	defer m.Unlock()
+	if err := m.model.ReadFile(); err != nil {
+		err = errors.Wrap(err, "error reading model")
+		return nil, err
+	}
+	if pi != nil {
+		m.model.Shares = append(m.model.Shares, s)
+	} else {
+		m.model.ReceivedShares = append(m.model.ReceivedShares, s)
+	}
 
-	m.model.Shares = append(m.model.Shares, s)
 	if err := m.model.Save(); err != nil {
 		err = errors.Wrap(err, "error saving model")
 		return nil, err
 	}
+	m.Unlock()
 
 	if pi != nil {
 
@@ -287,6 +289,12 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 func (m *mgr) getByID(ctx context.Context, id *ocm.ShareId) (*ocm.Share, error) {
 	m.Lock()
 	defer m.Unlock()
+
+	if err := m.model.ReadFile(); err != nil {
+		err = errors.Wrap(err, "error reading model")
+		return nil, err
+	}
+
 	for _, s := range m.model.Shares {
 		if s.GetId().OpaqueId == id.OpaqueId {
 			return s, nil
@@ -298,6 +306,12 @@ func (m *mgr) getByID(ctx context.Context, id *ocm.ShareId) (*ocm.Share, error) 
 func (m *mgr) getByKey(ctx context.Context, key *ocm.ShareKey) (*ocm.Share, error) {
 	m.Lock()
 	defer m.Unlock()
+
+	if err := m.model.ReadFile(); err != nil {
+		err = errors.Wrap(err, "error reading model")
+		return nil, err
+	}
+
 	for _, s := range m.model.Shares {
 		if key.Owner.Idp == s.Owner.Idp && key.Owner.OpaqueId == s.Owner.OpaqueId &&
 			key.ResourceId.StorageId == s.ResourceId.StorageId && key.ResourceId.OpaqueId == s.ResourceId.OpaqueId &&
@@ -345,6 +359,12 @@ func (m *mgr) GetShare(ctx context.Context, ref *ocm.ShareReference) (*ocm.Share
 func (m *mgr) Unshare(ctx context.Context, ref *ocm.ShareReference) error {
 	m.Lock()
 	defer m.Unlock()
+
+	if err := m.model.ReadFile(); err != nil {
+		err = errors.Wrap(err, "error reading model")
+		return err
+	}
+
 	user := user.ContextMustGetUser(ctx)
 	for i, s := range m.model.Shares {
 		if equal(ref, s) {
@@ -378,6 +398,12 @@ func equal(ref *ocm.ShareReference, s *ocm.Share) bool {
 func (m *mgr) UpdateShare(ctx context.Context, ref *ocm.ShareReference, p *ocm.SharePermissions) (*ocm.Share, error) {
 	m.Lock()
 	defer m.Unlock()
+
+	if err := m.model.ReadFile(); err != nil {
+		err = errors.Wrap(err, "error reading model")
+		return nil, err
+	}
+
 	user := user.ContextMustGetUser(ctx)
 	for i, s := range m.model.Shares {
 		if equal(ref, s) {
@@ -403,6 +429,12 @@ func (m *mgr) ListShares(ctx context.Context, filters []*ocm.ListOCMSharesReques
 	var ss []*ocm.Share
 	m.Lock()
 	defer m.Unlock()
+
+	if err := m.model.ReadFile(); err != nil {
+		err = errors.Wrap(err, "error reading model")
+		return nil, err
+	}
+
 	user := user.ContextMustGetUser(ctx)
 	for _, s := range m.model.Shares {
 		// TODO(labkode): add check for creator.
@@ -430,13 +462,14 @@ func (m *mgr) ListReceivedShares(ctx context.Context) ([]*ocm.ReceivedShare, err
 	var rss []*ocm.ReceivedShare
 	m.Lock()
 	defer m.Unlock()
-	receivedSharesModel, err := readFile(m.c.ReceivedSharesFile)
-	if err != nil {
-		err = errors.Wrap(err, "error loading the file containing received shares")
+
+	if err := m.model.ReadFile(); err != nil {
+		err = errors.Wrap(err, "error reading model")
 		return nil, err
 	}
+
 	user := user.ContextMustGetUser(ctx)
-	for _, s := range receivedSharesModel.Shares {
+	for _, s := range m.model.ReceivedShares {
 		if user.Id.Idp == s.Owner.Idp && user.Id.OpaqueId == s.Owner.OpaqueId {
 			// omit shares created by me
 			// TODO(labkode): apply check for s.Creator also.
@@ -444,15 +477,16 @@ func (m *mgr) ListReceivedShares(ctx context.Context) ([]*ocm.ReceivedShare, err
 		}
 		if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
 			if user.Id.Idp == s.Grantee.Id.Idp && user.Id.OpaqueId == s.Grantee.Id.OpaqueId {
-				rs := convert(ctx, receivedSharesModel, s)
+				rs := m.convert(ctx, s)
 				rss = append(rss, rs)
 			}
 		} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 			// check if all user groups match this share; TODO(labkode): filter shares created by us.
 			for _, g := range user.Groups {
 				if g == s.Grantee.Id.OpaqueId {
-					rs := convert(ctx, receivedSharesModel, s)
+					rs := m.convert(ctx, s)
 					rss = append(rss, rs)
+					break
 				}
 			}
 		}
@@ -460,13 +494,14 @@ func (m *mgr) ListReceivedShares(ctx context.Context) ([]*ocm.ReceivedShare, err
 	return rss, nil
 }
 
-func convert(ctx context.Context, m *shareModel, s *ocm.Share) *ocm.ReceivedShare {
+// convert must be called in a lock-controlled block.
+func (m *mgr) convert(ctx context.Context, s *ocm.Share) *ocm.ReceivedShare {
 	rs := &ocm.ReceivedShare{
 		Share: s,
 		State: ocm.ShareState_SHARE_STATE_PENDING,
 	}
 	user := user.ContextMustGetUser(ctx)
-	if v, ok := m.State[user.Id.String()]; ok {
+	if v, ok := m.model.State[user.Id.String()]; ok {
 		if state, ok := v[s.Id.String()]; ok {
 			rs.State = state
 		}
@@ -481,22 +516,23 @@ func (m *mgr) GetReceivedShare(ctx context.Context, ref *ocm.ShareReference) (*o
 func (m *mgr) getReceived(ctx context.Context, ref *ocm.ShareReference) (*ocm.ReceivedShare, error) {
 	m.Lock()
 	defer m.Unlock()
-	receivedSharesModel, err := readFile(m.c.ReceivedSharesFile)
-	if err != nil {
-		err = errors.Wrap(err, "error loading the file containing received shares")
+
+	if err := m.model.ReadFile(); err != nil {
+		err = errors.Wrap(err, "error reading model")
 		return nil, err
 	}
+
 	user := user.ContextMustGetUser(ctx)
-	for _, s := range receivedSharesModel.Shares {
+	for _, s := range m.model.ReceivedShares {
 		if equal(ref, s) {
 			if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER &&
 				s.Grantee.Id.Idp == user.Id.Idp && s.Grantee.Id.OpaqueId == user.Id.OpaqueId {
-				rs := convert(ctx, receivedSharesModel, s)
+				rs := m.convert(ctx, s)
 				return rs, nil
 			} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 				for _, g := range user.Groups {
 					if s.Grantee.Id.OpaqueId == g {
-						rs := convert(ctx, receivedSharesModel, s)
+						rs := m.convert(ctx, s)
 						return rs, nil
 					}
 				}
@@ -515,23 +551,23 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, ref *ocm.ShareReference, 
 	user := user.ContextMustGetUser(ctx)
 	m.Lock()
 	defer m.Unlock()
-	receivedSharesModel, err := readFile(m.c.ReceivedSharesFile)
-	if err != nil {
-		err = errors.Wrap(err, "error loading the file containing received shares")
+
+	if err := m.model.ReadFile(); err != nil {
+		err = errors.Wrap(err, "error reading model")
 		return nil, err
 	}
 
-	if v, ok := receivedSharesModel.State[user.Id.String()]; ok {
+	if v, ok := m.model.State[user.Id.String()]; ok {
 		v[rs.Share.Id.String()] = f.GetState()
-		receivedSharesModel.State[user.Id.String()] = v
+		m.model.State[user.Id.String()] = v
 	} else {
 		a := map[string]ocm.ShareState{
 			rs.Share.Id.String(): f.GetState(),
 		}
-		receivedSharesModel.State[user.Id.String()] = a
+		m.model.State[user.Id.String()] = a
 	}
 
-	if err := receivedSharesModel.Save(); err != nil {
+	if err := m.model.Save(); err != nil {
 		err = errors.Wrap(err, "error saving model")
 		return nil, err
 	}

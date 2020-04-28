@@ -43,17 +43,18 @@ driver = "memory"
 [grpc.services.ocmcore]
 driver = "json"
 
+# Note that ocmcore and ocmshareprovider should use the same file for storing the shares.
+[grpc.services.ocmcore.drivers.json]
+file = "/tmp/reva/shares_server_2.json"
+
 [grpc.services.ocminvitemanager]
 driver = "json"
 
 [grpc.services.ocmshareprovider]
 driver = "json"
 
-[grpc.services.ocmcore.drivers.json]
-file = "/tmp/reva/core_srv_2.json"
-
 [grpc.services.ocmshareprovider.drivers.json]
-received_shares_file = "/tmp/reva/core_srv_2.json"
+file = "/tmp/reva/shares_server_2.json"
 
 [grpc.services.ocmproviderauthorizer]
 driver = "json"
