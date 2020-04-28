@@ -11,11 +11,11 @@ Phoenix is the new ownCloud frontend application and can be connected to Reva.
 
 ## Prerequisites
 If you encounter strange problems, please check which version of the prerequisites you are running, it might be that you need to update/downgrade. For reference ask someone who already has reva and Phoenix running, they will have updated information on the versions.
-* golang
+* golang >= 1.12
 * make/automake
-* git
-* node 
-* yarn 
+* git >= 2
+* node (check engines information in phoenix/package.json)
+* yarn >= 1.0
 
 ## 1. Clone the Phoenix and Reva repos
 Clone the phoenix repo from https://github.com/owncloud/phoenix 
