@@ -47,7 +47,7 @@ cd examples/ocmd/
 ``` 
 
 ```
-../../cmd/revad/revad -c ocmd-server-1.toml & ../../cmd/revad/revad -c ocmd-server-1.toml &
+../../cmd/revad/revad -c ocmd-server-1.toml & ../../cmd/revad/revad -c ocmd-server-2.toml &
 ``` 
 
 This should start two Reva daemon (revad) services at the aforementioned endpoints.
