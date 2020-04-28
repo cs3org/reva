@@ -43,7 +43,7 @@ import (
 const createOCMCoreShareEndpoint = "shares"
 
 func init() {
-	// Don't use memory driver as we can't retrieve received shares
+	// Don't use memory driver as we can't retrieve received shares.
 	// registry.Register("memory", New)
 }
 
