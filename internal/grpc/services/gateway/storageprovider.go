@@ -376,10 +376,30 @@ func (s *svc) initiateFileUpload(ctx context.Context, req *provider.InitiateFile
 }
 
 func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provider.GetPathResponse, error) {
-	res := &provider.GetPathResponse{
-		Status: status.NewUnimplemented(ctx, nil, "GetPath not yet implemented"),
+	ref := &provider.Reference{
+		Spec: &provider.Reference_Id{
+			Id: req.ResourceId,
+		},
 	}
-	return res, nil
+
+	statReq := &provider.StatRequest{
+		Ref: ref,
+	}
+	res, err := s.stat(ctx, statReq)
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error stating ref:"+ref.String())
+		return nil, err
+	}
+
+	if res.Status.Code != rpc.Code_CODE_OK {
+		err := status.NewErrorFromCode(res.Status.Code, "gateway")
+		return nil, err
+	}
+
+	return &provider.GetPathResponse{
+		Status: res.Status,
+		Path:   res.GetInfo().GetPath(),
+	}, nil
 }
 
 func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {

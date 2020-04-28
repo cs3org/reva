@@ -146,7 +146,12 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		trace.StringAttribute("ref", req.Ref.String()),
 	)
 
-	refFromReq, err := s.refFromRequest(ctx, req)
+	tkn, relativePath, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		return nil, err
+	}
+
+	pathFromToken, err := s.pathFromToken(ctx, tkn)
 	if err != nil {
 		return nil, err
 	}
@@ -154,12 +159,25 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 	statResponse, err := s.gateway.Stat(
 		ctx,
 		&provider.StatRequest{
-			Ref: refFromReq,
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{
+					Path: path.Join("/", pathFromToken, relativePath),
+				},
+			},
 		})
 	if err != nil {
 		log.Error().Err(err).Msg("error during stat call")
 		return nil, err
 	}
+
+	// we don't want to leak the path
+	statResponse.Info.Path = path.Join("/", tkn, relativePath)
+
+	// if statResponse.Status.Code != rpc.Code_CODE_OK {
+	// 	if statResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
+	// 		// log.Warn().Str("path", refFromToken.GetPath()).Msgf("resource: `%v` not found", refFromToken.GetId())
+	// 	}
+	// }
 
 	return statResponse, nil
 }
@@ -169,7 +187,12 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 }
 
 func (s *service) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
-	statResponse, err := s.Stat(ctx, &provider.StatRequest{Ref: req.Ref})
+	tkn, relativePath, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		return nil, err
+	}
+
+	pathFromToken, err := s.pathFromToken(ctx, tkn)
 	if err != nil {
 		return nil, err
 	}
@@ -178,8 +201,8 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		ctx,
 		&provider.ListContainerRequest{
 			Ref: &provider.Reference{
-				Spec: &provider.Reference_Id{
-					Id: statResponse.GetInfo().GetId(),
+				Spec: &provider.Reference_Path{
+					Path: path.Join("/", pathFromToken, relativePath),
 				},
 			},
 		},
@@ -187,6 +210,11 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 	if err != nil {
 		return nil, err
 	}
+
+	for i := range listContainerR.Infos {
+		listContainerR.Infos[i].Path = path.Join("/", tkn, relativePath, path.Base(listContainerR.Infos[i].Path))
+	}
+
 	return listContainerR, nil
 }
 
@@ -272,31 +300,22 @@ func (s *service) trimMountPrefix(fn string) (string, error) {
 	return "", errors.New(fmt.Sprintf("path=%q does not belong to this storage provider mount path=%q"+fn, s.mountPath))
 }
 
-// refFromRequest returns a reference from a public share token.
-func (s *service) refFromRequest(ctx context.Context, req *provider.StatRequest) (*provider.Reference, error) {
-	ctx, span := trace.StartSpan(ctx, "refFromRequest")
-	defer span.End()
-
-	span.AddAttributes(
-		trace.StringAttribute("ref", req.Ref.String()),
-	)
-
-	token, _, err := s.unwrap(ctx, req.Ref)
-	if err != nil {
-		return nil, err
-	}
-
+// pathFromToken returns a reference from a public share token.
+func (s *service) pathFromToken(ctx context.Context, token string) (string, error) {
 	publicShareResponse, err := s.gateway.GetPublicShareByToken(
 		ctx,
 		&link.GetPublicShareByTokenRequest{Token: token},
 	)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	return &provider.Reference{
-		Spec: &provider.Reference_Id{
-			Id: publicShareResponse.GetShare().ResourceId,
-		},
-	}, nil
+	pathRes, err := s.gateway.GetPath(ctx, &provider.GetPathRequest{
+		ResourceId: publicShareResponse.GetShare().GetResourceId(),
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return pathRes.Path, nil
 }
