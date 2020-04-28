@@ -43,6 +43,61 @@ func (s *svc) CreatePublicShare(ctx context.Context, req *link.CreatePublicShare
 		return nil, err
 	}
 
+	// Grants are not accessible through a link.PublicShare, in order for a service to access a grant (link.Grant) this needs to be
+	// commited to the Storage, for later retrievals. The following intends to do just that.
+
+	// TODO(labkode): if both commits are enabled they could be done concurrently.
+	// if s.c.CommitShareToStorageGrant {
+	// 	raw, err := json.Marshal(req.Grant)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+
+	// 	grantReq := &provider.AddGrantRequest{
+	// 		Ref: &provider.Reference{
+	// 			Spec: &provider.Reference_Id{
+	// 				Id: req.ResourceInfo.Id,
+	// 			},
+	// 		},
+	// 		Grant: &provider.Grant{
+	// 			Permissions: req.Grant.Permissions.Permissions,
+	// 		},
+	// 		Opaque: &typesv1beta1.Opaque{
+	// 			Map: map[string]*typesv1beta1.OpaqueEntry{
+	// 				"grant": &typesv1beta1.OpaqueEntry{
+	// 					Decoder: "json",
+	// 					Value:   raw,
+	// 				},
+	// 			},
+	// 		},
+	// 	}
+
+	// 	log.Info().Interface("grantReq", grantReq).Msg("commiting share to storage grant")
+
+	// 	c, err := s.findByID(ctx, req.ResourceInfo.Id)
+	// 	if err != nil {
+	// 		if _, ok := err.(errtypes.IsNotFound); ok {
+	// 			return &link.CreatePublicShareResponse{
+	// 				Status: status.NewNotFound(ctx, "storage provider not found"),
+	// 			}, nil
+	// 		}
+	// 		return &link.CreatePublicShareResponse{
+	// 			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+	// 		}, nil
+	// 	}
+
+	// 	grantRes, err := c.AddGrant(ctx, grantReq)
+	// 	if err != nil {
+	// 		return nil, errors.Wrap(err, "gateway: error calling AddGrant")
+	// 	}
+	// 	if grantRes.Status.Code != rpc.Code_CODE_OK {
+	// 		return &link.CreatePublicShareResponse{
+	// 			Status: status.NewInternal(ctx, status.NewErrorFromCode(grantRes.Status.Code, "gateway"),
+	// 				"error committing share to storage grant"),
+	// 		}, nil
+	// 	}
+	// }
+
 	// TODO(refs) commit to storage if configured
 	return res, nil
 }

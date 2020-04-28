@@ -20,11 +20,11 @@ package publicshares
 
 import (
 	"context"
-	"strings"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	userprovider "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -66,20 +66,28 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 }
 
 func (m *manager) Authenticate(ctx context.Context, token string, secret string) (*user.User, error) {
-	parts := strings.Split(token, "/")
-
 	gwConn, err := pool.GetGatewayServiceClient(m.c.GatewayAddr)
 	if err != nil {
 		return nil, err
 	}
 
-	publicShareResponse, err := gwConn.GetPublicShareByToken(ctx, &link.GetPublicShareByTokenRequest{Token: parts[1]})
+	publicShareResponse, err := gwConn.GetPublicShareByToken(ctx, &link.GetPublicShareByTokenRequest{
+		Token: token,
+		Opaque: &typesv1beta1.Opaque{
+			Map: map[string]*typesv1beta1.OpaqueEntry{
+				"password": &typesv1beta1.OpaqueEntry{
+					Value: []byte(secret),
+				},
+			},
+		},
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	// how can basic auth flow be triggered from here?
 	if publicShareResponse.Share.GetPasswordProtected() {
+		// publicShareResponse.GetShare().
 		return nil, errors.New("resource password protected, bearer token not found")
 	}
 

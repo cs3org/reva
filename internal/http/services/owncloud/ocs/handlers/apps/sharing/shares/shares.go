@@ -169,14 +169,15 @@ func expirationTimestampFromRequest(r *http.Request, h *Handler) *types.Timestam
 		if err != nil {
 			log.Error().Str("expiration", "create public share").Msgf("date format invalid: %v", expireDate)
 		}
+		final := expireTime.UnixNano()
+
+		return &types.Timestamp{
+			Seconds: uint64(final / 1000000000),
+			Nanos:   uint32(final % 1000000000),
+		}
 	}
 
-	final := expireTime.UnixNano()
-
-	return &types.Timestamp{
-		Seconds: uint64(final / 1000000000),
-		Nanos:   uint32(final % 1000000000),
-	}
+	return nil
 }
 
 func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, token string) {
@@ -230,10 +231,9 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, toke
 
 	// ExpireDate
 	newExpiration := expirationTimestampFromRequest(r, h)
-	fmt.Printf("\n\n\n%+v\n\n\n", newExpiration)
 	beforeExpiration, _ := json.Marshal(before.Share.Expiration)
 	afterExpiration, _ := json.Marshal(newExpiration)
-	if string(beforeExpiration) != string(afterExpiration) {
+	if newExpiration != nil || (string(afterExpiration) != string(beforeExpiration)) {
 		logger.Info().Str("shares", "update").Msgf("updating expire date from %v to: %v", string(beforeExpiration), string(afterExpiration))
 		updates = append(updates, &link.UpdatePublicShareRequest_Update{
 			Type: link.UpdatePublicShareRequest_Update_TYPE_EXPIRATION,
@@ -503,6 +503,7 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 				Permissions: &link.PublicSharePermissions{
 					Permissions: p,
 				},
+				Password: r.FormValue("password"),
 			},
 		}
 

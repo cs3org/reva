@@ -24,7 +24,6 @@ import (
 	"path"
 
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	tokenpkg "github.com/cs3org/reva/pkg/token"
@@ -101,21 +100,18 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				w.WriteHeader(http.StatusNotFound)
 			}
 
+			_, pass, _ := r.BasicAuth()
+			token, _ := router.ShiftPath(r.URL.Path)
+
 			authenticateRequest := gatewayv1beta1.AuthenticateRequest{
-				Type:     "publicshares",
-				ClientId: r.URL.Path,
-				Opaque: &typesv1beta1.Opaque{
-					Map: map[string]*typesv1beta1.OpaqueEntry{
-						"token": &typesv1beta1.OpaqueEntry{
-							Value: []byte(r.URL.Path),
-						},
-					},
-				},
+				Type:         "publicshares",
+				ClientId:     token,
+				ClientSecret: pass,
 			}
 
 			res, err := c.Authenticate(r.Context(), &authenticateRequest)
-			if err != nil {
-				w.WriteHeader(http.StatusNotFound)
+			if err != nil { // TODO we might need to return not found. Do error assertion on err.
+				w.WriteHeader(http.StatusUnauthorized)
 			}
 
 			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)

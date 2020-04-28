@@ -165,6 +165,8 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 		return nil, errors.New("ref does not exist")
 	}
 
+	fmt.Printf("\n\n\nafter get:\n%+v\n\n\n", share.Expiration)
+
 	now := time.Now().UnixNano()
 
 	switch req.GetUpdate().GetType() {
@@ -177,6 +179,7 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 		log.Debug().Str("memory", "update grants").Msgf("from: `%v`\nto\n`%v`", old, new)
 		share.Permissions = req.Update.GetGrant().GetPermissions()
 	case link.UpdatePublicShareRequest_Update_TYPE_EXPIRATION:
+		fmt.Printf("\n\n\ngot expiration update type:\n%+v\n\n\n", req.Update.GetGrant().Expiration)
 		old, _ := json.Marshal(share.Expiration)
 		new, _ := json.Marshal(req.Update.GetGrant().Expiration)
 		log.Debug().Str("memory", "update expiration").Msgf("from: `%v`\nto\n`%v`", old, new)
@@ -209,6 +212,8 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 	if err := m.marshaler.Marshal(&buff, share); err != nil {
 		return nil, err
 	}
+
+	fmt.Printf("\n\n\n saving:\n%+v\n\n\n", share.Expiration)
 
 	db[share.GetId().OpaqueId] = buff.String()
 

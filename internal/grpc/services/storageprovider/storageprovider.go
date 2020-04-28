@@ -20,6 +20,7 @@ package storageprovider
 
 import (
 	"context"
+	// "encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -27,6 +28,7 @@ import (
 	"strings"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	// link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -657,18 +659,43 @@ func (s *service) ListGrants(ctx context.Context, req *provider.ListGrantsReques
 	return nil, nil
 }
 
-func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (*provider.AddGrantResponse, error) {
-	// check grantee type is valid
-	if req.Grant.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_INVALID {
-		return &provider.AddGrantResponse{
-			Status: status.NewInvalid(ctx, "grantee type is invalid"),
-		}, nil
-	}
+const (
+	ContextGrant = iota
+)
 
+func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (*provider.AddGrantResponse, error) {
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.AddGrantResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+		}, nil
+	}
+	// check if there is an opaque grant
+	// if req.GetOpaque() != nil {
+	// 	linkGrant := link.Grant{}
+	// 	val := req.GetOpaque().GetMap()
+	// 	if grantFromOpaque, ok := val["grant"]; ok {
+	// 		// TODO need to use map decoder.
+	// 		json.Unmarshal(grantFromOpaque.Value, &linkGrant)
+	// 	}
+
+	// 	err := s.storage.AddGrant(ctx, newRef, nil)
+	// 	if err != nil {
+	// 		return &provider.AddGrantResponse{
+	// 			Status: status.NewInternal(ctx, err, "error setting ACL"),
+	// 		}, nil
+	// 	}
+
+	// 	res := &provider.AddGrantResponse{
+	// 		Status: status.NewOK(ctx),
+	// 	}
+	// 	return res, nil
+	// }
+
+	// check grantee type is valid
+	if req.Grant.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_INVALID {
+		return &provider.AddGrantResponse{
+			Status: status.NewInvalid(ctx, "grantee type is invalid"),
 		}, nil
 	}
 

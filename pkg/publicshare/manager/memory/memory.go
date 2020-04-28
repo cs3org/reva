@@ -69,9 +69,8 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 		displayName = tkn
 	}
 
-	if len(rInfo.ArbitraryMetadata.Metadata["password"]) > 0 {
-		// TODO hash the password!
-		g.Password, passwordProtected = rInfo.ArbitraryMetadata.Metadata["password"]
+	if g.Password != "" {
+		passwordProtected = true
 	}
 
 	createdAt := &typespb.Timestamp{
@@ -201,6 +200,7 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token string) (*lin
 	if ps, ok := m.shares.Load(token); ok {
 		return ps.(*link.PublicShare), nil
 	}
+	fmt.Printf("\n\n\nHERE\n\n\n")
 	return nil, errors.New("invalid token")
 }
 
