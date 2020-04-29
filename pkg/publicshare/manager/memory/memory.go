@@ -200,7 +200,6 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token string) (*lin
 	if ps, ok := m.shares.Load(token); ok {
 		return ps.(*link.PublicShare), nil
 	}
-	fmt.Printf("\n\n\nHERE\n\n\n")
 	return nil, errors.New("invalid token")
 }
 
