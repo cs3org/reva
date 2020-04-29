@@ -21,6 +21,7 @@ package filesystem
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -102,8 +103,9 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 	}
 
 	if len(rInfo.ArbitraryMetadata.Metadata["password"]) > 0 {
-		// TODO hash the password!
-		g.Password, passwordProtected = rInfo.ArbitraryMetadata.Metadata["password"]
+		msg := "public:" + rInfo.ArbitraryMetadata.Metadata["password"]
+		g.Password = base64.StdEncoding.EncodeToString([]byte(msg))
+		passwordProtected = true
 	}
 
 	createdAt := &typespb.Timestamp{
