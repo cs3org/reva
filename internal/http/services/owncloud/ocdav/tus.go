@@ -153,6 +153,7 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+
 		httpReq.Header.Set("Content-Type", r.Header.Get("Content-Type"))
 		httpReq.Header.Set("Content-Length", r.Header.Get("Content-Length"))
 		httpReq.Header.Set("Upload-Offset", r.Header.Get("Upload-Offset"))
@@ -164,6 +165,7 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		defer httpRes.Body.Close()
 
 		httpRes.Header.Set("Upload-Offset", httpRes.Header.Get("Upload-Offset"))
 		httpRes.Header.Set("Tus-Resumable", httpRes.Header.Get("Tus-Resumable"))
