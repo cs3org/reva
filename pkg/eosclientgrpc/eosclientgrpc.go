@@ -295,78 +295,21 @@ func (c *Client) RemoveACL(ctx context.Context, username, path string, aclType s
 
 // UpdateACL updates the EOS acl.
 func (c *Client) UpdateACL(ctx context.Context, username, path string, a *acl.Entry) error {
-	acls, err := c.getACLForPath(ctx, username, path)
-	if err != nil {
-		return err
-	}
-
-	// since EOS Citrine ACLs are is stored with uid, we need to convert username to uid
-	// only for users.
-	if a.Type == acl.TypeUser {
-		a.Qualifier, err = getUID(a.Qualifier)
-		if err != nil {
-			return err
-		}
-	}
-	err = acls.SetEntry(a.Type, a.Qualifier, a.Permissions)
-	if err != nil {
-		return err
-	}
-	sysACL := acls.Serialize()
-
-	// Stuff filename, uid, gid into the MDRequest type
-	rq := new(erpc.NSRequest)
-
-	// setting of the sys.acl is only possible from root user
-	unixUser, err := c.getUnixUser(username)
-	if err != nil {
-		return err
-	}
-	rq.Role = new(erpc.RoleId)
-
-	uid, err := strconv.ParseUint(unixUser.Uid, 10, 64)
-	if err != nil {
-		return err
-	}
-	rq.Role.Uid = uid
-	gid, err := strconv.ParseUint(unixUser.Gid, 10, 64)
-	if err != nil {
-		return err
-	}
-	rq.Role.Gid = gid
-
-	rq.Authkey = c.opt.Authkey
-
-	msg := new(erpc.NSRequest_AclRequest)
-	msg.Cmd = erpc.NSRequest_AclRequest_ACL_COMMAND(erpc.NSRequest_AclRequest_ACL_COMMAND_value["MODIFY"])
-	msg.Type = erpc.NSRequest_AclRequest_ACL_TYPE(erpc.NSRequest_AclRequest_ACL_TYPE_value["SYS_ACL"])
-	msg.Recursive = true
-	msg.Rule = sysACL
-
-	msg.Id = new(erpc.MDId)
-	msg.Id.Path = []byte(path)
-
-	rq.Command = &erpc.NSRequest_Acl{msg}
-
-	// Now send the req and see what happens
-	resp, err := erpc.EosClient.Exec(c.cl, context.Background(), rq)
-	if err != nil {
-		fmt.Printf("--- Exec('%s') failed with err '%s'\n", path, err)
-		return err
-	}
-
-	fmt.Printf("--- MD('%s') gave response '%s'\n", path, resp)
-	if resp == nil {
-		return errtypes.NotFound(fmt.Sprintf("PAth: %s", path))
-	}
-
-	return err
-
+	return c.AddACL(ctx, username, path, a)
 }
 
 // GetACL for a file
 func (c *Client) GetACL(ctx context.Context, username, path, aclType, target string) (*acl.Entry, error) {
-	return nil, errtypes.NotFound(fmt.Sprintf("%s:%s", "acltype", path))
+	acls, err := c.ListACLs(ctx, username, path)
+	if err != nil {
+		return nil, err
+	}
+	for _, a := range acls {
+		if a.Type == aclType && a.Qualifier == target {
+			return a, nil
+		}
+	}
+	return nil, errtypes.NotFound(fmt.Sprintf("%s:%s", aclType, target))
 
 }
 
@@ -390,7 +333,25 @@ func getUID(username string) (string, error) {
 // EOS returns uids/gid for Citrine version and usernames for older versions.
 // For Citire we need to convert back the uid back to username.
 func (c *Client) ListACLs(ctx context.Context, username, path string) ([]*acl.Entry, error) {
-	return nil, errtypes.NotFound(fmt.Sprintf("%s:%s", "acltype", path))
+	log := appctx.GetLogger(ctx)
+
+	parsedACLs, err := c.getACLForPath(ctx, username, path)
+	if err != nil {
+		return nil, err
+	}
+
+	acls := []*acl.Entry{}
+	for _, acl := range parsedACLs.Entries {
+		// since EOS Citrine ACLs are is stored with uid, we need to convert uid to userame
+		// TODO map group names as well if acl.Type == "g" ...
+		acl.Qualifier, err = getUsername(acl.Qualifier)
+		if err != nil {
+			log.Warn().Err(err).Str("path", path).Str("username", username).Str("qualifier", acl.Qualifier).Msg("cannot map qualifier to name")
+			continue
+		}
+		acls = append(acls, acl)
+	}
+	return acls, nil
 }
 
 func (c *Client) getACLForPath(ctx context.Context, username, path string) (*acl.ACLs, error) {
