@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/rand"
+	"os"
 	"sync"
 	"time"
 
@@ -51,6 +52,13 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 		marshaler:   jsonpb.Marshaler{},
 		unmarshaler: jsonpb.Unmarshaler{},
 		file:        "/var/tmp/.publicshares", // TODO MUST be configurable.
+	}
+
+	// attempt to create the db file
+	if _, err := os.Stat(m.file); err != nil {
+		if _, err := os.Create(m.file); err != nil {
+			return nil, err
+		}
 	}
 
 	fileContents, err := ioutil.ReadFile(m.file)
