@@ -26,9 +26,11 @@ import (
 	"os"
 	"path/filepath"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -144,10 +146,17 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 	if err != nil {
 		return nil, errors.Wrap(err, "ocfs: error resolving upload path")
 	}
+	usr := user.ContextMustGetUser(ctx)
 	info.Storage = map[string]string{
 		"Type":                "OwnCloudStore",
 		"BinPath":             binPath,
 		"InternalDestination": np,
+
+		"Idp":      usr.Id.Idp,
+		"UserId":   usr.Id.OpaqueId,
+		"UserName": usr.Username,
+
+		"LogLevel": log.GetLevel().String(),
 	}
 	// Create binary file in the upload folder with no content
 	file, err := os.OpenFile(binPath, os.O_CREATE|os.O_WRONLY, defaultFilePerm)
@@ -201,11 +210,32 @@ func (fs *ocfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
 
 	info.Offset = stat.Size()
 
+	u := &userpb.User{
+		Id: &userpb.UserId{
+			Idp:      info.Storage["Idp"],
+			OpaqueId: info.Storage["UserId"],
+		},
+		Username: info.Storage["UserName"],
+	}
+
+	ctx = user.ContextSetUser(ctx, u)
+	// TODO configure the logger the same way ... store and add traceid in file info
+
+	var opts []logger.Option
+	opts = append(opts, logger.WithLevel(info.Storage["LogLevel"]))
+	opts = append(opts, logger.WithWriter(os.Stderr, logger.ConsoleMode))
+	l := logger.New(opts...)
+
+	sub := l.With().Int("pid", os.Getpid()).Logger()
+
+	ctx = appctx.WithLogger(ctx, &sub)
+
 	return &fileUpload{
 		info:     info,
 		binPath:  info.Storage["BinPath"],
 		infoPath: infoPath,
 		fs:       fs,
+		ctx:      ctx,
 	}, nil
 }
 
@@ -218,6 +248,9 @@ type fileUpload struct {
 	binPath string
 	// only fs knows how to handle metadata and versions
 	fs *ocfs
+	// a context with a user
+	// TODO add logger as well?
+	ctx context.Context
 }
 
 // GetInfo returns the FileInfo
@@ -290,7 +323,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 			return errors.Wrap(err, "ocfs: error copying metadata from "+np+" to "+upload.binPath)
 		}
 		// create revision
-		if err := upload.fs.archiveRevision(ctx, upload.fs.getVersionsPath(ctx, np), np); err != nil {
+		if err := upload.fs.archiveRevision(upload.ctx, upload.fs.getVersionsPath(upload.ctx, np), np); err != nil {
 			return err
 		}
 	}
@@ -299,11 +332,13 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 
 	// only delete the upload if it was successfully written to eos
 	if err := os.Remove(upload.infoPath); err != nil {
-		log := appctx.GetLogger(ctx)
+		log := appctx.GetLogger(upload.ctx)
 		log.Err(err).Interface("info", upload.info).Msg("eos: could not delete upload info")
 	}
 
-	// metadata propagation is left to the storage implementation
+	upload.fs.propagate(upload.ctx, np)
+
+	// FIXME metadata propagation is left to the storage implementation
 	return err
 }
 

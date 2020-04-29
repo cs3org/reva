@@ -551,7 +551,11 @@ func (fs *ocfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provid
 		attr = sharePrefix + "u:" + e.Principal
 	}
 
-	return xattr.Set(np, attr, getValue(e))
+	if err := xattr.Set(np, attr, getValue(e)); err != nil {
+		return err
+	}
+	fs.propagate(ctx, np)
+	return nil
 }
 
 func getValue(e *ace) []byte {
@@ -918,6 +922,7 @@ func (fs *ocfs) CreateDir(ctx context.Context, fn string) (err error) {
 		// FIXME we also need already exists error, webdav expects 405 MethodNotAllowed
 		return errors.Wrap(err, "ocfs: error creating dir "+np)
 	}
+	fs.propagate(ctx, np)
 	return nil
 }
 
@@ -1048,6 +1053,7 @@ func (fs *ocfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referenc
 	}
 	switch len(errs) {
 	case 0:
+		fs.propagate(ctx, np)
 		return nil
 	case 1:
 		return errs[0]
@@ -1127,6 +1133,7 @@ func (fs *ocfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 
 	switch len(errs) {
 	case 0:
+		fs.propagate(ctx, np)
 		return nil
 	case 1:
 		return errs[0]
@@ -1188,6 +1195,8 @@ func (fs *ocfs) Delete(ctx context.Context, ref *provider.Reference) (err error)
 		return errors.Wrap(err, "ocfs: could not restore item")
 	}
 
+	fs.propagate(ctx, path.Dir(np))
+
 	// TODO(jfd) move versions to trash
 	return nil
 }
@@ -1204,6 +1213,8 @@ func (fs *ocfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (e
 	if err = os.Rename(oldName, newName); err != nil {
 		return errors.Wrap(err, "ocfs: error moving "+oldName+" to "+newName)
 	}
+	fs.propagate(ctx, newName)
+	fs.propagate(ctx, oldName)
 	return nil
 }
 
@@ -1387,6 +1398,9 @@ func (fs *ocfs) RestoreRevision(ctx context.Context, ref *provider.Reference, re
 	defer destination.Close()
 
 	_, err = io.Copy(destination, source)
+
+	fs.propagate(ctx, np)
+
 	// TODO(jfd) bring back revision in case sth goes wrong?
 	return err
 }
@@ -1528,7 +1542,52 @@ func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key string) error {
 		log.Warn().Err(err).Str("path", tgt).Msg("could not unset origin")
 	}
 	// TODO(jfd) restore versions
+
+	fs.propagate(ctx, tgt)
+
 	return nil
+}
+
+func (fs *ocfs) propagate(ctx context.Context, leafPath string) {
+	u := user.ContextMustGetUser(ctx)
+	root := fs.wrap(ctx, path.Join("/", u.GetUsername()))
+	if !strings.HasPrefix(leafPath, root) {
+		appctx.GetLogger(ctx).Error().
+			Err(errors.New("internal path outside root")).
+			Str("leafPath", leafPath).
+			Str("root", root).
+			Msg("could not propagate change")
+		return
+	}
+
+	fi, err := os.Stat(leafPath)
+	if err != nil {
+		appctx.GetLogger(ctx).Error().
+			Err(err).
+			Str("leafPath", leafPath).
+			Str("root", root).
+			Msg("could not propagate change")
+	}
+
+	parts := strings.Split(strings.TrimPrefix(leafPath, root), "/")
+	// root never ents in / so the split returns an empty first element, which we can skip
+	// we do not need to chmod the last element because it is the leaf path (< and not <= comparison)
+	for i := 1; i < len(parts); i++ {
+		appctx.GetLogger(ctx).Debug().
+			Str("leafPath", leafPath).
+			Str("root", root).
+			Int("i", i).
+			Interface("parts", parts).
+			Msg("propagating change")
+		if err := os.Chtimes(path.Join(root), fi.ModTime(), fi.ModTime()); err != nil {
+			appctx.GetLogger(ctx).Error().
+				Err(err).
+				Str("leafPath", leafPath).
+				Str("root", root).
+				Msg("could not propagate change")
+		}
+		root = path.Join(root, parts[i])
+	}
 }
 
 // TODO propagate etag and mtime or append event to history? propagate on disk ...
