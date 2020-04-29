@@ -32,6 +32,8 @@ require (
 	github.com/pkg/xattr v0.4.1
 	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect
 	github.com/prometheus/client_golang v0.9.3-0.20190127221311-3c4408c8b829 // indirect
+	github.com/redefiance/go-find-references v0.0.0-20150329162538-0a36091585b7 // indirect
+	github.com/redefiance/ident v0.0.0-20150329162308-d7d467e70e5a // indirect
 	github.com/rs/cors v1.7.0
 	github.com/rs/zerolog v1.18.0
 	go.opencensus.io v0.22.3
