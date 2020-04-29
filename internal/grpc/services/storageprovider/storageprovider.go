@@ -339,9 +339,12 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 
 	if err := s.storage.CreateDir(ctx, newRef.GetPath()); err != nil {
 		var st *rpc.Status
-		if _, ok := err.(errtypes.IsNotFound); ok {
+		switch err.(type) {
+		case errtypes.IsNotFound:
 			st = status.NewNotFound(ctx, "path not found when creating container")
-		} else {
+		case errtypes.AlreadyExists:
+			st = status.NewInternal(ctx, err, "error: container already exists")
+		default:
 			st = status.NewInternal(ctx, err, "error creating container: "+req.Ref.String())
 		}
 		return &provider.CreateContainerResponse{

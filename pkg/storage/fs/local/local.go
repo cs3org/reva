@@ -249,12 +249,14 @@ func (fs *localfs) CreateHome(ctx context.Context) error {
 
 func (fs *localfs) CreateDir(ctx context.Context, fn string) error {
 	fn = fs.wrap(ctx, fn)
+	if _, err := os.Stat(fn); err == nil {
+		return errtypes.AlreadyExists(fn)
+	}
 	err := os.Mkdir(fn, 0700)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errtypes.NotFound(fn)
 		}
-		// TODO(jfd): we also need already exists error, webdav expects 405 MethodNotAllowed
 		return errors.Wrap(err, "localfs: error creating dir "+fn)
 	}
 	return nil
