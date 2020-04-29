@@ -119,7 +119,7 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 		w.Header().Add("Access-Control-Expose-Headers", "Tus-Resumable, Tus-Version, Tus-Extension")
 		w.Header().Set("Tus-Resumable", "1.0.0")
 		w.Header().Set("Tus-Version", "1.0.0")
-		w.Header().Set("Tus-Extension", "creation")
+		w.Header().Set("Tus-Extension", "creation,creation-with-upload")
 	}
 	w.WriteHeader(http.StatusMultiStatus)
 	if _, err := w.Write([]byte(propRes)); err != nil {

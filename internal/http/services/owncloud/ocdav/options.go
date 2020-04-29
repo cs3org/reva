@@ -36,6 +36,6 @@ func (s *svc) handleOptions(w http.ResponseWriter, r *http.Request, ns string) {
 	w.Header().Set("MS-Author-Via", "DAV")
 	w.Header().Set("Tus-Resumable", "1.0.0") // TODO(jfd): only for dirs?
 	w.Header().Set("Tus-Version", "1.0.0")
-	w.Header().Set("Tus-Extension", "creation")
+	w.Header().Set("Tus-Extension", "creation,creation-with-upload")
 	w.WriteHeader(http.StatusOK)
 }

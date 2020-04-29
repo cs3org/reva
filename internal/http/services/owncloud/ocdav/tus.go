@@ -26,6 +26,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/rhttp"
 	tusd "github.com/tus/tusd/pkg/handler"
 )
 
@@ -49,6 +50,7 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 		w.WriteHeader(http.StatusPreconditionFailed)
 		return
 	}
+	//TODO check Expect: 100-continue
 
 	// read filename from metadata
 	meta := tusd.ParseMetadataHeader(r.Header.Get("Upload-Metadata"))
@@ -139,5 +141,36 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	w.Header().Set("Location", uRes.UploadEndpoint)
+
+	// for creation-with-upload extension forward bytes to dataprovider
+	// TODO check this really streams
+	if r.Header.Get("Content-Type") == "application/offset+octet-stream" {
+
+		httpClient := rhttp.GetHTTPClient(ctx)
+		httpReq, err := rhttp.NewRequest(ctx, "PATCH", uRes.UploadEndpoint, r.Body)
+		if err != nil {
+			log.Err(err).Msg("wrong request")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		httpReq.Header.Set("Content-Type", r.Header.Get("Content-Type"))
+		httpReq.Header.Set("Content-Length", r.Header.Get("Content-Length"))
+		httpReq.Header.Set("Upload-Offset", r.Header.Get("Upload-Offset"))
+		httpReq.Header.Set("Tus-Resumable", r.Header.Get("Tus-Resumable"))
+
+		httpRes, err := httpClient.Do(httpReq)
+		if err != nil {
+			log.Err(err).Msg("error doing GET request to data service")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		httpRes.Header.Set("Upload-Offset", httpRes.Header.Get("Upload-Offset"))
+		httpRes.Header.Set("Tus-Resumable", httpRes.Header.Get("Tus-Resumable"))
+		if httpRes.StatusCode != http.StatusNoContent {
+			w.WriteHeader(httpRes.StatusCode)
+			return
+		}
+	}
 	w.WriteHeader(http.StatusCreated)
 }
