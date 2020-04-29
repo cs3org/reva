@@ -1549,8 +1549,13 @@ func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key string) error {
 }
 
 func (fs *ocfs) propagate(ctx context.Context, leafPath string) {
-	u := user.ContextMustGetUser(ctx)
-	root := fs.wrap(ctx, path.Join("/", u.GetUsername()))
+	var root string
+	if fs.c.EnableHome {
+		root = fs.wrap(ctx, "/")
+	} else {
+		u := user.ContextMustGetUser(ctx)
+		root = fs.wrap(ctx, path.Join("/", u.GetUsername()))
+	}
 	if !strings.HasPrefix(leafPath, root) {
 		appctx.GetLogger(ctx).Error().
 			Err(errors.New("internal path outside root")).
