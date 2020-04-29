@@ -36,6 +36,8 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 	w.Header().Add("Access-Control-Allow-Headers", "Tus-Resumable, Upload-Length, Upload-Metadata, If-Match")
 	w.Header().Add("Access-Control-Expose-Headers", "Tus-Resumable, Location")
 
+	w.Header().Set("Tus-Resumable", "1.0.0")
+
 	// Test if the version sent by the client is supported
 	// GET methods are not checked since a browser may visit this URL and does
 	// not include this header. This request is not part of the specification.
@@ -137,6 +139,5 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	w.Header().Set("Location", uRes.UploadEndpoint)
-	w.Header().Set("Tus-Resumable", "1.0.0")
 	w.WriteHeader(http.StatusCreated)
 }
