@@ -195,6 +195,14 @@ func New(opt *Options) *Client {
 	}
 	fmt.Printf("--- List to '%s' gave %d entries\n", "/eos", len(lrep))
 
+	fmt.Printf("--- Going to getACLForPath '%s'\n", "/eos/cms")
+	arep, err := c.getACLForPath(context.Background(), "furano", "/eos/cms")
+	if err != nil {
+		fmt.Printf("--- getACLForPath '%s' failed with err '%s'\n", "/eos/cms", err)
+		return nil
+	}
+	fmt.Printf("--- getACLForPath to '%s' gave ''%s'\n", "/eos/cms", arep.Entries)
+
 	if prep != nil {
 		return c
 	}
@@ -211,7 +219,72 @@ func (c *Client) getUnixUser(username string) (*gouser.User, error) {
 
 // AddACL adds an new acl to EOS with the given aclType.
 func (c *Client) AddACL(ctx context.Context, username, path string, a *acl.Entry) error {
-	return errtypes.NotFound(fmt.Sprintf("%s:%s", "acltype", path))
+	acls, err := c.getACLForPath(ctx, username, path)
+	if err != nil {
+		return err
+	}
+
+	// since EOS Citrine ACLs are is stored with uid, we need to convert username to uid
+	// only for users.
+	if a.Type == acl.TypeUser {
+		a.Qualifier, err = getUID(a.Qualifier)
+		if err != nil {
+			return err
+		}
+	}
+	err = acls.SetEntry(a.Type, a.Qualifier, a.Permissions)
+	if err != nil {
+		return err
+	}
+	sysACL := acls.Serialize()
+
+	// Stuff filename, uid, gid into the MDRequest type
+	rq := new(erpc.NSRequest)
+
+	// setting of the sys.acl is only possible from root user
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return err
+	}
+	rq.Role = new(erpc.RoleId)
+
+	uid, err := strconv.ParseUint(unixUser.Uid, 10, 64)
+	if err != nil {
+		return err
+	}
+	rq.Role.Uid = uid
+	gid, err := strconv.ParseUint(unixUser.Gid, 10, 64)
+	if err != nil {
+		return err
+	}
+	rq.Role.Gid = gid
+
+	rq.Authkey = c.opt.Authkey
+
+	msg := new(erpc.NSRequest_AclRequest)
+	msg.Cmd = erpc.NSRequest_AclRequest_ACL_COMMAND(erpc.NSRequest_AclRequest_ACL_COMMAND_value["MODIFY"])
+	msg.Type = erpc.NSRequest_AclRequest_ACL_TYPE(erpc.NSRequest_AclRequest_ACL_TYPE_value["SYS_ACL"])
+	msg.Recursive = true
+	msg.Rule = sysACL
+
+	msg.Id = new(erpc.MDId)
+	msg.Id.Path = []byte(path)
+
+	rq.Command = &erpc.NSRequest_Acl{msg}
+
+	// Now send the req and see what happens
+	resp, err := erpc.EosClient.Exec(c.cl, context.Background(), rq)
+	if err != nil {
+		fmt.Printf("--- Exec('%s') failed with err '%s'\n", path, err)
+		return err
+	}
+
+	fmt.Printf("--- MD('%s') gave response '%s'\n", path, resp)
+	if resp == nil {
+		return errtypes.NotFound(fmt.Sprintf("PAth: %s", path))
+	}
+
+	return err
 
 }
 
@@ -222,7 +295,73 @@ func (c *Client) RemoveACL(ctx context.Context, username, path string, aclType s
 
 // UpdateACL updates the EOS acl.
 func (c *Client) UpdateACL(ctx context.Context, username, path string, a *acl.Entry) error {
-	return c.AddACL(ctx, username, path, a)
+	acls, err := c.getACLForPath(ctx, username, path)
+	if err != nil {
+		return err
+	}
+
+	// since EOS Citrine ACLs are is stored with uid, we need to convert username to uid
+	// only for users.
+	if a.Type == acl.TypeUser {
+		a.Qualifier, err = getUID(a.Qualifier)
+		if err != nil {
+			return err
+		}
+	}
+	err = acls.SetEntry(a.Type, a.Qualifier, a.Permissions)
+	if err != nil {
+		return err
+	}
+	sysACL := acls.Serialize()
+
+	// Stuff filename, uid, gid into the MDRequest type
+	rq := new(erpc.NSRequest)
+
+	// setting of the sys.acl is only possible from root user
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return err
+	}
+	rq.Role = new(erpc.RoleId)
+
+	uid, err := strconv.ParseUint(unixUser.Uid, 10, 64)
+	if err != nil {
+		return err
+	}
+	rq.Role.Uid = uid
+	gid, err := strconv.ParseUint(unixUser.Gid, 10, 64)
+	if err != nil {
+		return err
+	}
+	rq.Role.Gid = gid
+
+	rq.Authkey = c.opt.Authkey
+
+	msg := new(erpc.NSRequest_AclRequest)
+	msg.Cmd = erpc.NSRequest_AclRequest_ACL_COMMAND(erpc.NSRequest_AclRequest_ACL_COMMAND_value["MODIFY"])
+	msg.Type = erpc.NSRequest_AclRequest_ACL_TYPE(erpc.NSRequest_AclRequest_ACL_TYPE_value["SYS_ACL"])
+	msg.Recursive = true
+	msg.Rule = sysACL
+
+	msg.Id = new(erpc.MDId)
+	msg.Id.Path = []byte(path)
+
+	rq.Command = &erpc.NSRequest_Acl{msg}
+
+	// Now send the req and see what happens
+	resp, err := erpc.EosClient.Exec(c.cl, context.Background(), rq)
+	if err != nil {
+		fmt.Printf("--- Exec('%s') failed with err '%s'\n", path, err)
+		return err
+	}
+
+	fmt.Printf("--- MD('%s') gave response '%s'\n", path, resp)
+	if resp == nil {
+		return errtypes.NotFound(fmt.Sprintf("PAth: %s", path))
+	}
+
+	return err
+
 }
 
 // GetACL for a file
@@ -255,7 +394,57 @@ func (c *Client) ListACLs(ctx context.Context, username, path string) ([]*acl.En
 }
 
 func (c *Client) getACLForPath(ctx context.Context, username, path string) (*acl.ACLs, error) {
-	return nil, errtypes.NotFound(fmt.Sprintf("%s:%s", "acltype", path))
+
+	// Stuff filename, uid, gid into the MDRequest type
+	rq := new(erpc.NSRequest)
+
+	// setting of the sys.acl is only possible from root user
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return nil, err
+	}
+	rq.Role = new(erpc.RoleId)
+
+	uid, err := strconv.ParseUint(unixUser.Uid, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	rq.Role.Uid = uid
+	gid, err := strconv.ParseUint(unixUser.Gid, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	rq.Role.Gid = gid
+
+	rq.Authkey = c.opt.Authkey
+
+	msg := new(erpc.NSRequest_AclRequest)
+	msg.Cmd = erpc.NSRequest_AclRequest_ACL_COMMAND(erpc.NSRequest_AclRequest_ACL_COMMAND_value["LIST"])
+	msg.Type = erpc.NSRequest_AclRequest_ACL_TYPE(erpc.NSRequest_AclRequest_ACL_TYPE_value["SYS_ACL"])
+	msg.Recursive = true
+
+	msg.Id = new(erpc.MDId)
+	msg.Id.Path = []byte(path)
+
+	rq.Command = &erpc.NSRequest_Acl{msg}
+
+	// Now send the req and see what happens
+	resp, err := erpc.EosClient.Exec(c.cl, context.Background(), rq)
+	if err != nil {
+		fmt.Printf("--- Exec('%s') failed with err '%s'\n", path, err)
+		return nil, err
+	}
+
+	fmt.Printf("--- MD('%s') gave response '%s'\n", path, resp)
+	if resp == nil {
+		return nil, errtypes.NotFound(fmt.Sprintf("PAth: %s", path))
+	}
+
+	aclret, err := acl.Parse(resp.Acl.Rule, acl.ShortTextForm)
+
+	// Now loop and build the correct return value
+
+	return aclret, err
 }
 
 // GetFileInfoByInode returns the FileInfo by the given inode
