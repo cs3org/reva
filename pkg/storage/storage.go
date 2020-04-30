@@ -36,6 +36,7 @@ type FS interface {
 	Move(ctx context.Context, oldRef, newRef *provider.Reference) error
 	GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error)
 	ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error)
+	InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64) (string, error)
 	Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error
 	Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error)
 	ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error)
