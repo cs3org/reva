@@ -19,6 +19,7 @@
 package ocdav
 
 import (
+	"fmt"
 	"net/http"
 	"path"
 	"time"
@@ -60,6 +61,11 @@ func (s *svc) handleHead(w http.ResponseWriter, r *http.Request, ns string) {
 
 	info := res.Info
 	w.Header().Set("Content-Type", info.MimeType)
+	if info.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		size := fmt.Sprintf("%d", info.Size)
+		w.Header().Set("Content-Length", size)
+		w.Header().Set("Accept-Ranges", "bytes")
+	}
 	w.Header().Set("ETag", info.Etag)
 	w.Header().Set("OC-FileId", wrapResourceID(info.Id))
 	w.Header().Set("OC-ETag", info.Etag)

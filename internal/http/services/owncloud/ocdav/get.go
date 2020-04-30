@@ -99,6 +99,10 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+
+	if r.Header.Get("Range") != "" {
+		httpReq.Header.Set("Range", r.Header.Get("Range"))
+	}
 	httpReq.Header.Set("X-Reva-Transfer", dRes.Token)
 	httpClient := rhttp.GetHTTPClient(ctx)
 
@@ -119,6 +123,12 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 	w.Header().Set("ETag", info.Etag)
 	w.Header().Set("OC-FileId", wrapResourceID(info.Id))
 	w.Header().Set("OC-ETag", info.Etag)
+	log.Debug().Msgf("##### status $i", httpRes.StatusCode)
+	if httpRes.StatusCode == http.StatusPartialContent {
+		w.Header().Set("Content-Range", httpRes.Header.Get("Content-Range"))
+		w.Header().Set("Content-Length", httpRes.Header.Get("Content-Length"))
+		w.WriteHeader(http.StatusPartialContent)
+	}
 	t := utils.TSToTime(info.Mtime)
 	lastModifiedString := t.Format(time.RFC1123)
 	w.Header().Set("Last-Modified", lastModifiedString)
