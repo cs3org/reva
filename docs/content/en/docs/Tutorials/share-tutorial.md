@@ -43,7 +43,7 @@ make
 Now we need to start two Reva deamons corresponding to two different mesh providers, thus enabling sharing of files between users belonging to these two providers. For our example,  we consider the example of CERNBox deployed at localhost:19001 and the CESNET owncloud at localhost:17001. Follow these steps:
 
 ```
-cd examples/ocmd/
+cd examples/ocmd/ && mkdir -p /tmp/reva
 ``` 
 
 ```
