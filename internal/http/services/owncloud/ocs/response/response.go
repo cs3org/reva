@@ -153,7 +153,7 @@ func WriteOCSResponse(w http.ResponseWriter, r *http.Request, res *Response, err
 		appctx.GetLogger(r.Context()).Error().Err(err).Msg(res.OCS.Meta.Message)
 	}
 
-	var encoder func(*Payload) ([]byte, error)
+	var encoder func(*Response) ([]byte, error)
 	if r.URL.Query().Get("format") == "json" {
 		w.Header().Set("Content-Type", "application/json")
 		encoder = encodeJSON
@@ -161,7 +161,7 @@ func WriteOCSResponse(w http.ResponseWriter, r *http.Request, res *Response, err
 		w.Header().Set("Content-Type", "application/xml")
 		encoder = encodeXML
 	}
-	encoded, err := encoder(res.OCS)
+	encoded, err := encoder(res)
 	if err != nil {
 		appctx.GetLogger(r.Context()).Error().Err(err).Msg("error encoding ocs response")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -190,8 +190,8 @@ func UserIDToString(userID *user.UserId) string {
 	return userID.OpaqueId + "@" + userID.Idp
 }
 
-func encodeXML(payload *Payload) ([]byte, error) {
-	marshalled, err := xml.Marshal(payload)
+func encodeXML(res *Response) ([]byte, error) {
+	marshalled, err := xml.Marshal(res.OCS)
 	if err != nil {
 		return nil, err
 	}
@@ -201,8 +201,8 @@ func encodeXML(payload *Payload) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-func encodeJSON(payload *Payload) ([]byte, error) {
-	return json.Marshal(payload)
+func encodeJSON(res *Response) ([]byte, error) {
+	return json.Marshal(res)
 }
 
 // OcsV1StatusCodes returns the http status codes for the OCS API v1.
