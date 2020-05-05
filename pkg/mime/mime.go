@@ -52,6 +52,10 @@ func Detect(isDir bool, fn string) string {
 		mimeType = gomime.TypeByExtension(ext)
 	}
 
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+
 	return mimeType
 }
 
