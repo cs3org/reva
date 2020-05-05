@@ -35,5 +35,8 @@ type Manager interface {
 	ForwardInvite(ctx context.Context, invite *invitepb.InviteToken, originProvider *ocmprovider.ProviderInfo) error
 
 	// AcceptInvite completes an invitation acceptance.
-	AcceptInvite(ctx context.Context, invite *invitepb.InviteToken, userID *userpb.UserId) error
+	AcceptInvite(ctx context.Context, invite *invitepb.InviteToken, remoteUser *userpb.User) error
+
+	// GetRemoteUser retrieves details about a remote user who has accepted an invite to share.
+	GetRemoteUser(ctx context.Context, remoteUserID *userpb.UserId) (*userpb.User, error)
 }

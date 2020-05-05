@@ -108,7 +108,6 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
-
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting invite grpc client on addr: %v", h.gatewayAddr), err)
 		return
@@ -121,7 +120,6 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 	providerInfo, err := gatewayClient.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
 		Domain: r.FormValue("providerDomain"),
 	})
-
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error sending a grpc get invite by domain info request", err)
 		return
@@ -131,7 +129,6 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 		InviteToken:          token,
 		OriginSystemProvider: providerInfo.ProviderInfo,
 	}
-
 	forwardInviteResponse, err := gatewayClient.ForwardInvite(ctx, forwardInviteReq)
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error sending a grpc forward invite request", err)
@@ -154,7 +151,8 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(ctx)
 
 	token, userID, recipientProvider := r.FormValue("token"), r.FormValue("userID"), r.FormValue("recipientProvider")
-	if token == "" || userID == "" || recipientProvider == "" {
+	name, email := r.FormValue("name"), r.FormValue("email")
+	if token == "" || userID == "" || recipientProvider == "" || email == "" {
 		WriteError(w, r, APIErrorInvalidParameter, "missing parameters in request", nil)
 		return
 	}
@@ -165,21 +163,16 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userIDObject := &userpb.UserId{OpaqueId: userID, Idp: recipientProvider}
-	userRes, err := gatewayClient.GetUser(ctx, &userpb.GetUserRequest{
-		UserId: userIDObject,
-	})
-	if err != nil {
-		WriteError(w, r, APIErrorInvalidParameter, "error searching for user", err)
-		return
+	userObj := &userpb.User{
+		Id: &userpb.UserId{
+			OpaqueId: userID,
+			Idp:      recipientProvider,
+		},
+		Mail:        email,
+		DisplayName: name,
 	}
-	if userRes.Status.Code != rpc.Code_CODE_OK {
-		WriteError(w, r, APIErrorNotFound, "user not found", err)
-		return
-	}
-
 	providerAllowedResp, err := gatewayClient.IsProviderAllowed(ctx, &ocmprovider.IsProviderAllowedRequest{
-		User: userRes.User,
+		User: userObj,
 	})
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error authorizing provider", err)
@@ -194,7 +187,7 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		InviteToken: &invitepb.InviteToken{
 			Token: token,
 		},
-		UserId: userIDObject,
+		RemoteUser: userObj,
 	}
 	acceptInviteResponse, err := gatewayClient.AcceptInvite(ctx, acceptInviteRequest)
 	if err != nil {

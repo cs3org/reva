@@ -20,16 +20,23 @@ Reva stores its configuration in a toml file, in this example we store the confi
 *revad.toml*.
 
 ```
-[http]
-enabled_services = ["helloworld"]
+[shared]
+jwt_secret = "mysecret"
+
+[http.services.helloworld]
 ```
+
+In this configuration we are telling Reva that for signing secrets we are going to use the secret "mysecret". Reva doesn't provide any default
+secret and will not allow you to run if you don't define a secret. Default secrets can open severe security breaches and by forcing you to define your own we improve the security of your installation.
+
+The line `[http.services.helloword]` enables a Hello World service.
 
 ## Reloading the config
 
 To start revad, run the executable file:
 
 ```
-cmd/revad/revad -c revad.toml -p /var/tmp/revad.pid
+revad -c revad.toml -p /var/tmp/revad.pid
 ```
 
 {{% alert title="The pid flag" color="warning" %}}
@@ -95,28 +102,31 @@ Reva is controlled by configuration directives that are divided into 4 sections:
 An example configuration file is the following:
 
 ```
-[http]
-enabled_services = ["helloworldsvc"]
+[shared]
+jwt_secret = "mysecret"
+
+[http.services.helloworld]
 ```
 
 Running revad, will output some lines similar to these:
 
 ```
-$ revad -c /etc/revad/revad.toml 
-
-1:22PM INF cmd/revad/main.go:94 > version=9cc0106 commit=dirty-9cc0106 branch=hugo-docs go_version=go1.12.9 build_date=2019-10-21T13:20:32+0200 build_platform=linux/amd64 pid=15369
-1:22PM INF cmd/revad/main.go:95 > running on 4 cpus pid=15369
-1:22PM INF cmd/revad/internal/grace/grace.go:181 > pidfile saved at: /tmp/revad-a23283b8-1e95-4bc1-987b-6e85452d0214.pid pid=15369 pkg=grace
-1:22PM INF pkg/rhttp/rhttp.go:232 > http service enabled: helloworld@/ pid=15369 pkg=rhttp
-1:22PM INF pkg/rhttp/rhttp.go:133 > http server listening at http://localhost:9998 pid=15369 pkg=rhttp
+revad -c revad.toml
+10:34AM INF Users/gonzalhu/Developer/reva/cmd/revad/runtime/runtime.go:72 > host info: red pid=59366
+10:34AM INF Users/gonzalhu/Developer/reva/cmd/revad/runtime/runtime.go:148 > running on 4 cpus pid=59366
+10:34AM INF Users/gonzalhu/Developer/reva/cmd/revad/internal/grace/grace.go:181 > pidfile saved at: /var/folders/72/r1bmgjg92p730hq9bpshxssr0000gn/T/revad-ae72db53-3954-4fea-bafb-2882dc4196c7.pid pid=59366 pkg=grace
+10:34AM INF Users/gonzalhu/Developer/reva/pkg/rhttp/rhttp.go:203 > http service enabled: helloworld@/ pid=59366 pkg=rhttp
+10:34AM INF Users/gonzalhu/Developer/reva/pkg/rhttp/rhttp.go:261 > unprotected URL: / pid=59366 pkg=rhttp
+10:34AM INF Users/gonzalhu/Developer/reva/pkg/rhttp/rhttp.go:108 > http server listening at http://localhost:9998 pid=59366 pkg=rhttp
 ```
 
 Let's analyze the output:
 
-* The first line tells us what version of Reva we run, in this case, a development version.
+* The first line tells us some information about the host running the process.
 * The second line tells us hown many CPUs are used by the process.
 * The  third line tells us where the pid file is stored.
-* The fourth line tells us  what HTTP service has been enabled and where is exposed, in this case the helloworld service is exposed at the root URL (/).
+* The fourth line tells us  that an HTTP service has been enabled and where is exposed, in this case the helloworld service is exposed at the root URL (/).
+* The fifth line tells us that the URL starting with / is not protected by authentication, meaning is publicly accesible.
 * The last line tells us where the HTTP server is listening.
 
 

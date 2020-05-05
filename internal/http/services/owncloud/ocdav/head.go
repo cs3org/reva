@@ -32,6 +32,9 @@ import (
 func (s *svc) handleHead(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
+
+	ns = applyLayout(ctx, ns)
+
 	fn := path.Join(ns, r.URL.Path)
 
 	client, err := s.getClient()

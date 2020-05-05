@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/user"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -92,6 +93,8 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 		"token":             {invite.GetToken()},
 		"userID":            {contextUser.GetId().GetOpaqueId()},
 		"recipientProvider": {contextUser.GetId().GetIdp()},
+		"email":             {contextUser.GetMail()},
+		"name":              {contextUser.GetDisplayName()},
 	}
 
 	resp, err := http.PostForm(fmt.Sprintf("%s%s", originProvider.GetApiEndpoint(), acceptInviteEndpoint), requestBody)
@@ -109,29 +112,47 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 	return nil
 }
 
-func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken, userID *userpb.UserId) error {
+func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken, remoteUser *userpb.User) error {
 	inviteToken, err := getTokenIfValid(m, invite)
 	if err != nil {
 		return err
 	}
 
-	currUser := inviteToken.GetUserId()
+	currUser := inviteToken.GetUserId().GetOpaqueId()
 	usersList, ok := m.AcceptedUsers.Load(currUser)
 	if ok {
-		acceptedUsers := usersList.([]*userpb.UserId)
+		acceptedUsers := usersList.([]*userpb.User)
 		for _, acceptedUser := range acceptedUsers {
-			if userID.GetOpaqueId() == acceptedUser.OpaqueId && userID.GetIdp() == acceptedUser.Idp {
+			if acceptedUser.Id.GetOpaqueId() == remoteUser.Id.OpaqueId && acceptedUser.Id.GetIdp() == remoteUser.Id.Idp {
 				return errors.New("memory: user already added to accepted users")
 			}
 		}
 
-		acceptedUsers = append(acceptedUsers, userID)
+		acceptedUsers = append(acceptedUsers, remoteUser)
 		m.AcceptedUsers.Store(currUser, acceptedUsers)
 	} else {
-		acceptedUsers := []*userpb.UserId{userID}
+		acceptedUsers := []*userpb.User{remoteUser}
 		m.AcceptedUsers.Store(currUser, acceptedUsers)
 	}
 	return nil
+}
+
+func (m *manager) GetRemoteUser(ctx context.Context, remoteUserID *userpb.UserId) (*userpb.User, error) {
+
+	currUser := user.ContextMustGetUser(ctx).GetId().GetOpaqueId()
+	usersList, ok := m.AcceptedUsers.Load(currUser)
+	if !ok {
+		return nil, errtypes.NotFound(remoteUserID.OpaqueId)
+	}
+
+	acceptedUsers := usersList.([]*userpb.User)
+	for _, acceptedUser := range acceptedUsers {
+		if (acceptedUser.Id.GetOpaqueId() == remoteUserID.OpaqueId) && (remoteUserID.Idp == "" || acceptedUser.Id.GetIdp() == remoteUserID.Idp) {
+			return acceptedUser, nil
+		}
+	}
+	return nil, errtypes.NotFound(remoteUserID.OpaqueId)
+
 }
 
 func getTokenIfValid(m *manager, token *invitepb.InviteToken) (*invitepb.InviteToken, error) {

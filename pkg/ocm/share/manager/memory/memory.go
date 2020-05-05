@@ -20,25 +20,31 @@ package memory
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/url"
 	"reflect"
 	"sync"
 	"time"
 
-	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/user"
-	"github.com/google/uuid"
-
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/share"
-	"github.com/cs3org/reva/pkg/ocm/share/manager/registry"
+	"github.com/cs3org/reva/pkg/user"
+	"github.com/google/uuid"
+	"github.com/pkg/errors"
 )
 
+const createOCMCoreShareEndpoint = "shares"
+
 func init() {
-	registry.Register("memory", New)
+	// Don't use memory driver as we can't retrieve received shares.
+	// registry.Register("memory", New)
 }
 
 // New returns a new memory manager.
@@ -60,25 +66,34 @@ func genID() string {
 	return uuid.New().String()
 }
 
-func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGrant) (*ocm.Share, error) {
+func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGrant, pi *ocmprovider.ProviderInfo, pm string, owner *userpb.UserId) (*ocm.Share, error) {
 
 	id := genID()
-	user := user.ContextMustGetUser(ctx)
 	now := time.Now().UnixNano()
 	ts := &typespb.Timestamp{
 		Seconds: uint64(now / 1000000000),
 		Nanos:   uint32(now % 1000000000),
 	}
 
+	var userID *userpb.UserId
+	if pi == nil {
+		if owner == nil {
+			return nil, errors.New("json: owner of resource not provided")
+		}
+		userID = owner
+	} else {
+		userID = user.ContextMustGetUser(ctx).GetId()
+	}
+
 	// do not allow share to myself if share is for a user
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER &&
-		g.Grantee.Id.Idp == user.Id.Idp && g.Grantee.Id.OpaqueId == user.Id.OpaqueId {
+		g.Grantee.Id.Idp == userID.Idp && g.Grantee.Id.OpaqueId == userID.OpaqueId {
 		return nil, errors.New("json: user and grantee are the same")
 	}
 
 	// check if share already exists.
 	key := &ocm.ShareKey{
-		Owner:      user.Id,
+		Owner:      userID,
 		ResourceId: md,
 		Grantee:    g.Grantee,
 	}
@@ -97,13 +112,51 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 		ResourceId:  md,
 		Permissions: g.Permissions,
 		Grantee:     g.Grantee,
-		Owner:       user.Id,
-		Creator:     user.Id,
+		Owner:       userID,
+		Creator:     userID,
 		Ctime:       ts,
 		Mtime:       ts,
 	}
 
 	m.shares.Store(key, s)
+
+	if pi != nil {
+
+		protocol, err := json.Marshal(
+			map[string]interface{}{
+				"name": "webdav",
+				"options": map[string]string{
+					"permissions": pm,
+				},
+			},
+		)
+		if err != nil {
+			err = errors.Wrap(err, "error marshalling protocol data")
+			return nil, err
+		}
+
+		requestBody := url.Values{
+			"shareWith":    {g.Grantee.Id.OpaqueId},
+			"name":         {md.OpaqueId},
+			"providerId":   {md.StorageId},
+			"owner":        {userID.OpaqueId},
+			"protocol":     {string(protocol)},
+			"meshProvider": {userID.Idp},
+		}
+
+		resp, err := http.PostForm(fmt.Sprintf("%s%s", pi.GetApiEndpoint(), createOCMCoreShareEndpoint), requestBody)
+		if err != nil {
+			err = errors.Wrap(err, "memory: error sending post request")
+			return nil, err
+		}
+
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			err = errors.Wrap(errors.New(resp.Status), "memory: error sending create ocm core share post request")
+			return nil, err
+		}
+	}
+
 	return s, nil
 }
 

@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
+	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
@@ -70,7 +71,7 @@ type authorizer struct {
 
 func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmprovider.ProviderInfo, error) {
 	for _, p := range a.providers {
-		if p.Domain == domain {
+		if strings.Contains(p.Domain, domain) {
 			return p, nil
 		}
 	}

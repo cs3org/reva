@@ -20,6 +20,7 @@ package ocmshareprovider
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
@@ -74,7 +75,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-// New creates a new user share provider svc
+// New creates a new ocm share provider svc
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 
 	c, err := parseConfig(m)
@@ -101,7 +102,36 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 }
 
 func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareRequest) (*ocm.CreateOCMShareResponse, error) {
-	share, err := s.sm.Share(ctx, req.ResourceId, req.Grant)
+
+	if req.Opaque == nil {
+		return &ocm.CreateOCMShareResponse{
+			Status: status.NewInternal(ctx, errors.New("can't find resource permissions"), ""),
+		}, nil
+	}
+
+	opaqueObj, ok := req.Opaque.Map["permissions"]
+	if !ok {
+		return &ocm.CreateOCMShareResponse{
+			Status: status.NewInternal(ctx, errors.New("resource permissions not set"), ""),
+		}, nil
+	}
+
+	var permissions map[string]string
+	if opaqueObj.Decoder == "json" {
+		err := json.Unmarshal(opaqueObj.Value, &permissions)
+		if err != nil {
+			return &ocm.CreateOCMShareResponse{
+				Status: status.NewInternal(ctx, err, "error decoding resource permissions"),
+			}, nil
+		}
+	} else {
+		err := errors.New("opaque entry decoder is not json")
+		return &ocm.CreateOCMShareResponse{
+			Status: status.NewInternal(ctx, err, "invalid opaque entry decoder"),
+		}, nil
+	}
+
+	share, err := s.sm.Share(ctx, req.ResourceId, req.Grant, req.RecipientMeshProvider, permissions["name"], nil)
 	if err != nil {
 		return &ocm.CreateOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "error creating share"),

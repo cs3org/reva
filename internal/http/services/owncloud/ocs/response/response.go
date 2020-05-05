@@ -19,6 +19,8 @@
 package response
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"encoding/xml"
 	"net/http"
@@ -26,6 +28,16 @@ import (
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+)
+
+type key int
+
+const (
+	apiVersionKey key = 1
+)
+
+var (
+	defaultStatusCodeMapper = OcsV2StatusCodes
 )
 
 // Response is the top level response structure
@@ -137,54 +149,28 @@ func WriteOCSData(w http.ResponseWriter, r *http.Request, m *Meta, d interface{}
 
 // WriteOCSResponse handles writing ocs responses in json and xml
 func WriteOCSResponse(w http.ResponseWriter, r *http.Request, res *Response, err error) {
-	var encoded []byte
-
 	if err != nil {
 		appctx.GetLogger(r.Context()).Error().Err(err).Msg(res.OCS.Meta.Message)
 	}
 
+	var encoder func(*Response) ([]byte, error)
 	if r.URL.Query().Get("format") == "json" {
 		w.Header().Set("Content-Type", "application/json")
-		encoded, err = json.Marshal(res)
+		encoder = encodeJSON
 	} else {
 		w.Header().Set("Content-Type", "application/xml")
-		_, err = w.Write([]byte(xml.Header))
-		if err != nil {
-			appctx.GetLogger(r.Context()).Error().Err(err).Msg("error writing xml header")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		encoded, err = xml.Marshal(res.OCS)
+		encoder = encodeXML
 	}
+	encoded, err := encoder(res)
 	if err != nil {
 		appctx.GetLogger(r.Context()).Error().Err(err).Msg("error encoding ocs response")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	// TODO map error for v2 only?
-	// see https://github.com/owncloud/core/commit/bacf1603ffd53b7a5f73854d1d0ceb4ae545ce9f#diff-262cbf0df26b45bad0cf00d947345d9c
-	switch res.OCS.Meta.StatusCode {
-	case MetaNotFound.StatusCode:
-		w.WriteHeader(http.StatusNotFound)
-	case MetaServerError.StatusCode:
-		w.WriteHeader(http.StatusInternalServerError)
-	case MetaUnknownError.StatusCode:
-		w.WriteHeader(http.StatusInternalServerError)
-	case MetaUnauthorized.StatusCode:
-		w.WriteHeader(http.StatusUnauthorized)
-	case 100:
-		w.WriteHeader(http.StatusOK)
-	case 104:
-		w.WriteHeader(http.StatusForbidden)
-	default:
-		// any 2xx, 4xx and 5xx will be used as is
-		if res.OCS.Meta.StatusCode >= 200 && res.OCS.Meta.StatusCode < 600 {
-			w.WriteHeader(res.OCS.Meta.StatusCode)
-		} else {
-			w.WriteHeader(http.StatusBadRequest)
-		}
-	}
+	m := statusCodeMapper(r.Context())
+	statusCode := m(res.OCS.Meta)
+	w.WriteHeader(statusCode)
 
 	_, err = w.Write(encoded)
 	if err != nil {
@@ -202,4 +188,81 @@ func UserIDToString(userID *user.UserId) string {
 		return userID.OpaqueId
 	}
 	return userID.OpaqueId + "@" + userID.Idp
+}
+
+func encodeXML(res *Response) ([]byte, error) {
+	marshalled, err := xml.Marshal(res.OCS)
+	if err != nil {
+		return nil, err
+	}
+	b := new(bytes.Buffer)
+	b.Write([]byte(xml.Header))
+	b.Write(marshalled)
+	return b.Bytes(), nil
+}
+
+func encodeJSON(res *Response) ([]byte, error) {
+	return json.Marshal(res)
+}
+
+// OcsV1StatusCodes returns the http status codes for the OCS API v1.
+func OcsV1StatusCodes(meta *Meta) int {
+	return http.StatusOK
+}
+
+// OcsV2StatusCodes maps the OCS codes to http status codes for the ocs API v2.
+func OcsV2StatusCodes(meta *Meta) int {
+	sc := meta.StatusCode
+	switch sc {
+	case MetaNotFound.StatusCode:
+		return http.StatusNotFound
+	case MetaUnknownError.StatusCode:
+		fallthrough
+	case MetaServerError.StatusCode:
+		return http.StatusInternalServerError
+	case MetaUnauthorized.StatusCode:
+		return http.StatusUnauthorized
+	case 100:
+		return http.StatusOK
+	}
+	// any 2xx, 4xx and 5xx will be used as is
+	if sc >= 200 && sc < 600 {
+		return sc
+	}
+
+	// any error codes > 100 are treated as client errors
+	if sc > 100 && sc < 200 {
+		return http.StatusBadRequest
+	}
+
+	// TODO change this status code?
+	return http.StatusOK
+}
+
+// WithAPIVersion puts the api version in the context.
+func WithAPIVersion(parent context.Context, version string) context.Context {
+	return context.WithValue(parent, apiVersionKey, version)
+}
+
+// APIVersion retrieves the api version from the context.
+func APIVersion(ctx context.Context) string {
+	value := ctx.Value(apiVersionKey)
+	if value != nil {
+		return value.(string)
+	}
+	return ""
+}
+
+func statusCodeMapper(ctx context.Context) func(*Meta) int {
+	version := APIVersion(ctx)
+	var mapper func(*Meta) int
+	switch version {
+	case "v1.php":
+		mapper = OcsV1StatusCodes
+	case "v2.php":
+		mapper = OcsV2StatusCodes
+	default:
+		mapper = defaultStatusCodeMapper
+	}
+	return mapper
 }

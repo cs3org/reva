@@ -127,7 +127,7 @@ func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInvite
 }
 
 func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRequest) (*invitepb.AcceptInviteResponse, error) {
-	err := s.im.AcceptInvite(ctx, req.InviteToken, req.UserId)
+	err := s.im.AcceptInvite(ctx, req.InviteToken, req.RemoteUser)
 	if err != nil {
 		return &invitepb.AcceptInviteResponse{
 			Status: status.NewInternal(ctx, err, "error accepting invite"),
@@ -136,5 +136,19 @@ func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRe
 
 	return &invitepb.AcceptInviteResponse{
 		Status: status.NewOK(ctx),
+	}, nil
+}
+
+func (s *service) GetRemoteUser(ctx context.Context, req *invitepb.GetRemoteUserRequest) (*invitepb.GetRemoteUserResponse, error) {
+	remoteUser, err := s.im.GetRemoteUser(ctx, req.RemoteUserId)
+	if err != nil {
+		return &invitepb.GetRemoteUserResponse{
+			Status: status.NewInternal(ctx, err, "error fetching remote user details"),
+		}, nil
+	}
+
+	return &invitepb.GetRemoteUserResponse{
+		Status:     status.NewOK(ctx),
+		RemoteUser: remoteUser,
 	}, nil
 }

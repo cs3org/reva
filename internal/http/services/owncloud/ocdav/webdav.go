@@ -57,6 +57,8 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 			s.handleGet(w, r, h.namespace)
 		case http.MethodPut:
 			s.handlePut(w, r, h.namespace)
+		case http.MethodPost:
+			s.handleTusPost(w, r, h.namespace)
 		case http.MethodOptions:
 			s.handleOptions(w, r, h.namespace)
 		case http.MethodHead:
