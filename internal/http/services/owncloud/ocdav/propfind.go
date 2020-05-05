@@ -246,11 +246,15 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				s.newProp("d:getcontenttype", "httpd/unix-directory"),
 				s.newProp("oc:size", size),
 			)
-		} else if md.MimeType != "" {
+		} else {
 			response.Propstat[0].Prop = append(response.Propstat[0].Prop,
-				s.newProp("d:getcontenttype", md.MimeType),
 				s.newProp("d:getcontentlength", size),
 			)
+			if md.MimeType != "" {
+				response.Propstat[0].Prop = append(response.Propstat[0].Prop,
+					s.newProp("d:getcontenttype", md.MimeType),
+				)
+			}
 		}
 		// Finder needs the the getLastModified property to work.
 		t := utils.TSToTime(md.Mtime).UTC()
