@@ -42,8 +42,13 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	src := path.Join(ns, r.URL.Path)
 	dstHeader := r.Header.Get("Destination")
 	overwrite := r.Header.Get("Overwrite")
+	depth := r.Header.Get("Depth")
+	if depth == "" {
+		depth = "infinity"
+	}
 
-	log.Info().Str("source", src).Str("destination", dstHeader).Str("overwrite", overwrite).Msg("copy")
+	log.Info().Str("source", src).Str("destination", dstHeader).
+		Str("overwrite", overwrite).Str("depth", depth).Msg("copy")
 
 	if dstHeader == "" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -56,6 +61,11 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	if overwrite != "T" && overwrite != "F" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if depth != "infinity" && depth != "0" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -153,7 +163,7 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 		// TODO what if intermediate is a file?
 	}
 
-	err = descend(ctx, client, srcStatRes.Info, dst)
+	err = descend(ctx, client, srcStatRes.Info, dst, depth == "infinity")
 	if err != nil {
 		log.Error().Err(err).Msg("error descending directory")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -162,7 +172,7 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	w.WriteHeader(successCode)
 }
 
-func descend(ctx context.Context, client gateway.GatewayAPIClient, src *provider.ResourceInfo, dst string) error {
+func descend(ctx context.Context, client gateway.GatewayAPIClient, src *provider.ResourceInfo, dst string, recurse bool) error {
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("src", src.Path).Str("dst", dst).Msg("descending")
 	if src.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
@@ -175,6 +185,12 @@ func descend(ctx context.Context, client gateway.GatewayAPIClient, src *provider
 		createRes, err := client.CreateContainer(ctx, createReq)
 		if err != nil || createRes.Status.Code != rpc.Code_CODE_OK {
 			return err
+		}
+
+		// TODO: also copy properties: https://tools.ietf.org/html/rfc4918#section-9.8.2
+
+		if !recurse {
+			return nil
 		}
 
 		// descend for children
@@ -193,7 +209,7 @@ func descend(ctx context.Context, client gateway.GatewayAPIClient, src *provider
 
 		for i := range res.Infos {
 			childDst := path.Join(dst, path.Base(res.Infos[i].Path))
-			err := descend(ctx, client, res.Infos[i], childDst)
+			err := descend(ctx, client, res.Infos[i], childDst, recurse)
 			if err != nil {
 				return err
 			}
@@ -257,6 +273,7 @@ func descend(ctx context.Context, client gateway.GatewayAPIClient, src *provider
 		// do upload
 		// TODO(jfd): check if large files are really streamed
 
+		// FIXME: need to use TUS uploader like in put.go, might need refactor in some common location
 		httpUploadReq, err := rhttp.NewRequest(ctx, "PUT", uRes.UploadEndpoint, httpDownloadRes.Body)
 		if err != nil {
 			return err
@@ -271,9 +288,10 @@ func descend(ctx context.Context, client gateway.GatewayAPIClient, src *provider
 		defer httpRes.Body.Close()
 
 		if httpRes.StatusCode != http.StatusOK {
-			return fmt.Errorf("status code %d", httpDownloadRes.StatusCode)
+			return fmt.Errorf("status code %d", httpRes.StatusCode)
 		}
 
+		// TODO: also copy properties: https://tools.ietf.org/html/rfc4918#section-9.8.2
 	}
 	return nil
 }
