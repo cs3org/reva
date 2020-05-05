@@ -15,7 +15,7 @@ require (
 	github.com/eventials/go-tus v0.0.0-20190617130015-9db47421f6a0
 	github.com/fatih/color v1.7.0 // indirect
 	github.com/go-openapi/strfmt v0.19.2 // indirect
-	github.com/gofrs/uuid v3.2.0+incompatible
+	github.com/gofrs/uuid v3.3.0+incompatible
 	github.com/golang/protobuf v1.3.5
 	github.com/gomodule/redigo v2.0.0+incompatible
 	github.com/google/uuid v1.1.1
