@@ -106,9 +106,6 @@ func (h *Handler) Init(c *config.Config) {
 	if h.c.Capabilities.Dav == nil {
 		h.c.Capabilities.Dav = &data.CapabilitiesDav{}
 	}
-	if h.c.Capabilities.Dav.Chunking == "" {
-		h.c.Capabilities.Dav.Chunking = "1.0"
-	}
 	if h.c.Capabilities.Dav.Trashbin == "" {
 		h.c.Capabilities.Dav.Trashbin = "1.0"
 	}

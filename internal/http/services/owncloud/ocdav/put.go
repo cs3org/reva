@@ -37,6 +37,7 @@ import (
 )
 
 func isChunked(fn string) (bool, error) {
+	// FIXME: also need to check whether the OC-Chunked header is set
 	return regexp.MatchString(`-chunking-\w+-[0-9]+-[0-9]+$`, fn)
 }
 
@@ -127,6 +128,15 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	if ok {
+		// TODO: disable if chunking capability is turned off in config
+		/**
+		if s.c.Capabilities.Dav.Chunking == "1.0" {
+			s.handlePutChunked(w, r)
+		} else {
+			log.Error().Err(err).Msg("chunking 1.0 is not enabled")
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		*/
 		s.handlePutChunked(w, r)
 		return
 	}
