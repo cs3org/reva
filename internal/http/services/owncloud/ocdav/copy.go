@@ -21,6 +21,7 @@ package ocdav
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"path"
@@ -29,8 +30,12 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
+	tokenpkg "github.com/cs3org/reva/pkg/token"
+	"github.com/eventials/go-tus"
+	"github.com/eventials/go-tus/memorystore"
 )
 
 func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
@@ -240,6 +245,15 @@ func descend(ctx context.Context, client gateway.GatewayAPIClient, src *provider
 			Ref: &provider.Reference{
 				Spec: &provider.Reference_Path{Path: dst},
 			},
+			Opaque: &typespb.Opaque{
+				Map: map[string]*typespb.OpaqueEntry{
+					"Upload-Length": {
+						Decoder: "plain",
+						// TODO: handle case where size is not known in advance
+						Value: []byte(fmt.Sprintf("%d", src.GetSize())),
+					},
+				},
+			},
 		}
 
 		uRes, err := client.InitiateFileUpload(ctx, uReq)
@@ -271,27 +285,60 @@ func descend(ctx context.Context, client gateway.GatewayAPIClient, src *provider
 		}
 
 		// do upload
-		// TODO(jfd): check if large files are really streamed
-
-		// FIXME: need to use TUS uploader like in put.go, might need refactor in some common location
-		httpUploadReq, err := rhttp.NewRequest(ctx, "PUT", uRes.UploadEndpoint, httpDownloadRes.Body)
+		err = tusUpload(ctx, uRes.UploadEndpoint, dst, httpDownloadRes.Body, src.GetSize())
 		if err != nil {
 			return err
 		}
+	}
+	return nil
+}
 
-		httpUploadClient := rhttp.GetHTTPClient(ctx)
+func tusUpload(ctx context.Context, dataServerURL string, fn string, body io.Reader, length uint64) error {
+	var err error
+	log := appctx.GetLogger(ctx)
 
-		httpRes, err := httpUploadClient.Do(httpUploadReq)
-		if err != nil {
-			return err
-		}
-		defer httpRes.Body.Close()
+	// create the tus client.
+	c := tus.DefaultConfig()
+	c.Resume = true
+	c.HttpClient = rhttp.GetHTTPClient(ctx)
+	c.Store, err = memorystore.NewMemoryStore()
+	if err != nil {
+		return err
+	}
 
-		if httpRes.StatusCode != http.StatusOK {
-			return fmt.Errorf("status code %d", httpRes.StatusCode)
-		}
+	log.Debug().
+		Str("header", tokenpkg.TokenHeader).
+		Str("token", tokenpkg.ContextMustGetToken(ctx)).
+		Msg("adding token to header")
+	c.Header.Set(tokenpkg.TokenHeader, tokenpkg.ContextMustGetToken(ctx))
 
-		// TODO: also copy properties: https://tools.ietf.org/html/rfc4918#section-9.8.2
+	tusc, err := tus.NewClient(dataServerURL, c)
+	if err != nil {
+		return nil
+	}
+
+	// TODO: also copy properties: https://tools.ietf.org/html/rfc4918#section-9.8.2
+	metadata := map[string]string{
+		"filename": path.Base(fn),
+		"dir":      path.Dir(fn),
+		//"checksum": fmt.Sprintf("%s %s", storageprovider.GRPC2PKGXS(xsType).String(), xs),
+	}
+	log.Debug().
+		Str("length", fmt.Sprintf("%d", length)).
+		Str("filename", path.Base(fn)).
+		Str("dir", path.Dir(fn)).
+		Msg("tus.NewUpload")
+
+	upload := tus.NewUpload(body, int64(length), metadata, "")
+
+	// create the uploader.
+	c.Store.Set(upload.Fingerprint, dataServerURL)
+	uploader := tus.NewUploader(tusc, dataServerURL, upload, 0)
+
+	// start the uploading process.
+	err = uploader.Upload()
+	if err != nil {
+		return err
 	}
 	return nil
 }
