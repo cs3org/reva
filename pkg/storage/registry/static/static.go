@@ -76,13 +76,12 @@ func (b *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, er
 // returns the the root path of the first provider in the list.
 // TODO(labkode): this is not production ready.
 func (b *reg) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error) {
-	for k, v := range b.c.Rules {
-		if k == b.c.HomeProvider {
-			return &registrypb.ProviderInfo{
-				ProviderPath: k,
-				Address:      v,
-			}, nil
-		}
+	address, ok := b.c.Rules[b.c.HomeProvider]
+	if ok {
+		return &registrypb.ProviderInfo{
+			ProviderPath: b.c.HomeProvider,
+			Address:      address,
+		}, nil
 	}
 	return nil, errors.New("static: home not found")
 }
@@ -113,15 +112,13 @@ func (b *reg) FindProvider(ctx context.Context, ref *provider.Reference) (*regis
 	if id == nil {
 		return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())
 	}
-
-	for prefix := range b.c.Rules {
-		if id.StorageId == prefix {
-			// TODO(labkode): fill path info based on provider id, if path and storage id points to same id, take that.
-			return &registrypb.ProviderInfo{
-				ProviderId: prefix,
-				Address:    b.c.Rules[prefix],
-			}, nil
-		}
+	address, ok := b.c.Rules[id.StorageId]
+	if ok {
+		// TODO(labkode): fill path info based on provider id, if path and storage id points to same id, take that.
+		return &registrypb.ProviderInfo{
+			ProviderId: id.StorageId,
+			Address:    address,
+		}, nil
 	}
 	return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())
 }

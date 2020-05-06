@@ -43,7 +43,7 @@ func calcEtag(ctx context.Context, fi os.FileInfo) string {
 	if err != nil {
 		log.Error().Err(err).Msg("error writing mtime")
 	}
-	// device and inode hale no meaning on windows
+	// device and inode have no meaning on windows
 	err = binary.Write(h, binary.BigEndian, fi.Size())
 	if err != nil {
 		log.Error().Err(err).Msg("error writing size")

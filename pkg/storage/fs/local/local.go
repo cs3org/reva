@@ -49,8 +49,12 @@ type config struct {
 	Root       string `mapstructure:"root"`
 	EnableHome bool   `mapstructure:"enable_home"`
 	UserLayout string `mapstructure:"user_layout"`
-	// Uploads fsolder should be on the same partition as root to make the final rename not fall back to a copy and delete
+	// Uploads folder should be on the same partition as root to make the final rename not fall back to a copy and delete
 	Uploads string `mapstructure:"uploads"`
+}
+
+type localfs struct {
+	conf *config
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -92,7 +96,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		return nil, errors.Wrap(err, "could not create uploads dir "+c.Uploads)
 	}
 
-	return &localfs{root: c.Root, conf: c}, nil
+	return &localfs{conf: c}, nil
 }
 
 func (fs *localfs) Shutdown(ctx context.Context) error {
@@ -123,7 +127,8 @@ func getUser(ctx context.Context) (*userpb.User, error) {
 	return u, nil
 }
 
-func (fs *localfs) wrap(ctx context.Context, p string) (internal string) {
+func (fs *localfs) wrap(ctx context.Context, p string) string {
+	var internal string
 	if fs.conf.EnableHome {
 		layout, err := fs.GetHome(ctx)
 		if err != nil {
@@ -133,10 +138,11 @@ func (fs *localfs) wrap(ctx context.Context, p string) (internal string) {
 	} else {
 		internal = path.Join(fs.conf.Root, p)
 	}
-	return
+	return internal
 }
 
-func (fs *localfs) unwrap(ctx context.Context, np string) (external string) {
+func (fs *localfs) unwrap(ctx context.Context, np string) string {
+	var external string
 	if fs.conf.EnableHome {
 		layout, err := fs.GetHome(ctx)
 		if err != nil {
@@ -150,12 +156,7 @@ func (fs *localfs) unwrap(ctx context.Context, np string) (external string) {
 			external = "/"
 		}
 	}
-	return
-}
-
-type localfs struct {
-	root string
-	conf *config
+	return external
 }
 
 func (fs *localfs) normalize(ctx context.Context, fi os.FileInfo, fn string) *provider.ResourceInfo {
