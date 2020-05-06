@@ -212,7 +212,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 	_, err := m.getByKey(ctx, key)
 
 	// share already exists
-	if err == nil {
+	if pi != nil && err == nil {
 		return nil, errtypes.AlreadyExists(key.String())
 	}
 
