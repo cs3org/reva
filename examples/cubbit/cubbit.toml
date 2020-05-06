@@ -1,0 +1,10 @@
+[shared]
+jwt_secret = "Pive-Fumkiu4"
+gatewaysvc = "localhost:19000"
+
+[grpc]
+address = "0.0.0.0:19000"
+
+[grpc.services.gateway]
+datagateway = "http://localhost:19001/data" # needs to be defined, is a bug
+ocmcoresvc = "your node js server"
