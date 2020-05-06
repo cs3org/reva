@@ -14,15 +14,6 @@ enabled_services = ["ocmd"]
 enabled_middlewares = ["providerauthorizer", "cors"]
 address = "0.0.0.0:19001"
 
-[http.services.dataprovider]
-driver = "local"
-temp_folder = "/var/tmp/"
-
-[http.services.dataprovider.drivers.local]
-namespace = "/var/tmp/reva/"
-user_layout = "{{.Username}}"
-enable_home = true
-
 [http.services.ocmd]
 prefix = "ocm"
 
