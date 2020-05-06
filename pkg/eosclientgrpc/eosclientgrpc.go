@@ -34,6 +34,8 @@ import (
 	"github.com/cs3org/reva/pkg/storage/acl"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
+
+	"github.com/cs3org/reva/pkg/logger"
 )
 
 const (
@@ -157,6 +159,10 @@ func New(opt *Options) *Client {
 	c := new(Client)
 	c.opt = opt
 
+	tlog := logger.New().With().Int("pid", os.Getpid()).Logger()
+	tctx := appctx.WithLogger(context.Background(), &tlog)
+	tlog.Log().Str("ffff", "ddddd").Msg("")
+
 	fmt.Printf("--- Connecting to '%s'\n", opt.GrpcURI)
 	conn, err := grpc.Dial(opt.GrpcURI, grpc.WithInsecure())
 	if err != nil {
@@ -171,7 +177,7 @@ func New(opt *Options) *Client {
 	prq := new(erpc.PingRequest)
 	prq.Authkey = opt.Authkey
 	prq.Message = []byte("hi this is a ping from reva")
-	prep, err := erpc.EosClient.Ping(c.cl, context.Background(), prq)
+	prep, err := erpc.EosClient.Ping(c.cl, tctx, prq)
 	if err != nil {
 		fmt.Printf("--- Ping to '%s' failed with err '%s'\n", opt.GrpcURI, err)
 		return nil
@@ -180,7 +186,7 @@ func New(opt *Options) *Client {
 	fmt.Printf("--- Ping to '%s' gave response '%s'\n", opt.GrpcURI, prep)
 
 	fmt.Printf("--- Going to stat '%s'\n", "/eos")
-	frep, err := c.GetFileInfoByPath(context.Background(), "furano", "/eos")
+	frep, err := c.GetFileInfoByPath(tctx, "furano", "/eos")
 	if err != nil {
 		fmt.Printf("--- GetFileInfoByPath '%s' failed with err '%s'\n", "/eos", err)
 		return nil
@@ -290,7 +296,72 @@ func (c *Client) AddACL(ctx context.Context, username, path string, a *acl.Entry
 
 // RemoveACL removes the acl from EOS.
 func (c *Client) RemoveACL(ctx context.Context, username, path string, aclType string, recipient string) error {
-	return errtypes.NotFound(fmt.Sprintf("%s:%s", "acltype", path))
+	acls, err := c.getACLForPath(ctx, username, path)
+	if err != nil {
+		return err
+	}
+
+	// since EOS Citrine ACLs are is stored with uid, we need to convert username to uid
+	// only for users.
+
+	// since EOS Citrine ACLs are stored with uid, we need to convert username to uid
+	if aclType == acl.TypeUser {
+		recipient, err = getUID(recipient)
+		if err != nil {
+			return err
+		}
+	}
+	acls.DeleteEntry(aclType, recipient)
+	sysACL := acls.Serialize()
+
+	// Stuff filename, uid, gid into the MDRequest type
+	rq := new(erpc.NSRequest)
+
+	// setting of the sys.acl is only possible from root user
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return err
+	}
+	rq.Role = new(erpc.RoleId)
+
+	uid, err := strconv.ParseUint(unixUser.Uid, 10, 64)
+	if err != nil {
+		return err
+	}
+	rq.Role.Uid = uid
+	gid, err := strconv.ParseUint(unixUser.Gid, 10, 64)
+	if err != nil {
+		return err
+	}
+	rq.Role.Gid = gid
+
+	rq.Authkey = c.opt.Authkey
+
+	msg := new(erpc.NSRequest_AclRequest)
+	msg.Cmd = erpc.NSRequest_AclRequest_ACL_COMMAND(erpc.NSRequest_AclRequest_ACL_COMMAND_value["MODIFY"])
+	msg.Type = erpc.NSRequest_AclRequest_ACL_TYPE(erpc.NSRequest_AclRequest_ACL_TYPE_value["SYS_ACL"])
+	msg.Recursive = true
+	msg.Rule = sysACL
+
+	msg.Id = new(erpc.MDId)
+	msg.Id.Path = []byte(path)
+
+	rq.Command = &erpc.NSRequest_Acl{msg}
+
+	// Now send the req and see what happens
+	resp, err := erpc.EosClient.Exec(c.cl, context.Background(), rq)
+	if err != nil {
+		fmt.Printf("--- Exec('%s') failed with err '%s'\n", path, err)
+		return err
+	}
+
+	fmt.Printf("--- MD('%s') gave response '%s'\n", path, resp)
+	if resp == nil {
+		return errtypes.NotFound(fmt.Sprintf("Path: %s", path))
+	}
+
+	return err
+
 }
 
 // UpdateACL updates the EOS acl.
@@ -355,6 +426,7 @@ func (c *Client) ListACLs(ctx context.Context, username, path string) ([]*acl.En
 }
 
 func (c *Client) getACLForPath(ctx context.Context, username, path string) (*acl.ACLs, error) {
+	log := appctx.GetLogger(ctx)
 
 	// Stuff filename, uid, gid into the MDRequest type
 	rq := new(erpc.NSRequest)
@@ -392,14 +464,15 @@ func (c *Client) getACLForPath(ctx context.Context, username, path string) (*acl
 	// Now send the req and see what happens
 	resp, err := erpc.EosClient.Exec(c.cl, context.Background(), rq)
 	if err != nil {
-		fmt.Printf("--- Exec('%s') failed with err '%s'\n", path, err)
+		log.Warn().Err(err).Str("username", username).Str("path", path).Str("err", err.Error())
 		return nil, err
 	}
 
-	fmt.Printf("--- MD('%s') gave response '%s'\n", path, resp)
 	if resp == nil {
-		return nil, errtypes.NotFound(fmt.Sprintf("PAth: %s", path))
+		return nil, errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' path: '%s'", username, path))
 	}
+
+	log.Info().Str("username", username).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
 
 	aclret, err := acl.Parse(resp.Acl.Rule, acl.ShortTextForm)
 
@@ -410,6 +483,7 @@ func (c *Client) getACLForPath(ctx context.Context, username, path string) (*acl
 
 // GetFileInfoByInode returns the FileInfo by the given inode
 func (c *Client) GetFileInfoByInode(ctx context.Context, username string, inode uint64) (*FileInfo, error) {
+	log := appctx.GetLogger(ctx)
 
 	// Stuff filename, uid, gid into the MDRequest type
 	mdrq := new(erpc.MDRequest)
@@ -439,31 +513,131 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, username string, inode 
 	// Now send the req and see what happens
 	resp, err := erpc.EosClient.MD(c.cl, context.Background(), mdrq)
 	if err != nil {
-		fmt.Printf("--- MD('%d') failed with err '%s'\n", inode, err)
+		log.Warn().Err(err).Uint64("inode", inode).Str("err", err.Error())
 		return nil, err
 	}
 	rsp, err := resp.Recv()
 	if err != nil {
-		fmt.Printf("--- Recv('%d') failed with err '%s'\n", inode, err)
+		log.Warn().Err(err).Uint64("inode", inode).Str("err", err.Error())
 		return nil, err
 	}
 
-	fmt.Printf("--- MD('%d') gave response '%s'\n", inode, rsp)
 	if rsp == nil {
-		return nil, errtypes.NotFound(fmt.Sprintf("Inode: %d", inode))
+		return nil, errtypes.InternalError(fmt.Sprintf("nil response for inode: '%d'", inode))
 	}
+
+	log.Info().Uint64("inode", inode).Msg("grpc response")
 
 	return c.grpcMDResponseToFileInfo(rsp)
 }
 
 // SetAttr sets an extended attributes on a path.
 func (c *Client) SetAttr(ctx context.Context, username string, attr *Attribute, recursive bool, path string) error {
-	return errtypes.NotFound(fmt.Sprintf("%s:%s", "acltype", path))
+	log := appctx.GetLogger(ctx)
+
+	// Stuff filename, uid, gid into the MDRequest type
+	rq := new(erpc.NSRequest)
+
+	// setting of the sys.acl is only possible from root user
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return err
+	}
+	rq.Role = new(erpc.RoleId)
+
+	uid, err := strconv.ParseUint(unixUser.Uid, 10, 64)
+	if err != nil {
+		return err
+	}
+	rq.Role.Uid = uid
+	gid, err := strconv.ParseUint(unixUser.Gid, 10, 64)
+	if err != nil {
+		return err
+	}
+	rq.Role.Gid = gid
+
+	rq.Authkey = c.opt.Authkey
+
+	msg := new(erpc.NSRequest_SetXAttrRequest)
+
+	var m = map[string][]byte{attr.Key: []byte(attr.Val)}
+	msg.Xattrs = m
+	msg.Recursive = recursive
+
+	msg.Id = new(erpc.MDId)
+	msg.Id.Path = []byte(path)
+
+	rq.Command = &erpc.NSRequest_Xattr{msg}
+
+	// Now send the req and see what happens
+	resp, err := erpc.EosClient.Exec(c.cl, ctx, rq)
+	if err != nil {
+		log.Warn().Err(err).Str("username", username).Str("path", path).Str("err", err.Error())
+		return err
+	}
+
+	log.Info().Str("username", username).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+
+	if resp == nil {
+		return errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' path: '%s'", username, path))
+	}
+
+	return err
+
 }
 
 // UnsetAttr unsets an extended attribute on a path.
 func (c *Client) UnsetAttr(ctx context.Context, username string, attr *Attribute, path string) error {
-	return errtypes.NotFound(fmt.Sprintf("%s:%s", "acltype", path))
+	log := appctx.GetLogger(ctx)
+
+	// Stuff filename, uid, gid into the MDRequest type
+	rq := new(erpc.NSRequest)
+
+	// setting of the sys.acl is only possible from root user
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return err
+	}
+	rq.Role = new(erpc.RoleId)
+
+	uid, err := strconv.ParseUint(unixUser.Uid, 10, 64)
+	if err != nil {
+		return err
+	}
+	rq.Role.Uid = uid
+	gid, err := strconv.ParseUint(unixUser.Gid, 10, 64)
+	if err != nil {
+		return err
+	}
+	rq.Role.Gid = gid
+
+	rq.Authkey = c.opt.Authkey
+
+	msg := new(erpc.NSRequest_SetXAttrRequest)
+
+	var ktd = []string{attr.Key}
+	msg.Keystodelete = ktd
+
+	msg.Id = new(erpc.MDId)
+	msg.Id.Path = []byte(path)
+
+	rq.Command = &erpc.NSRequest_Xattr{msg}
+
+	// Now send the req and see what happens
+	resp, err := erpc.EosClient.Exec(c.cl, ctx, rq)
+	if err != nil {
+		log.Warn().Err(err).Str("username", username).Str("path", path).Str("err", err.Error())
+		return err
+	}
+
+	log.Info().Str("username", username).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+
+	if resp == nil {
+		return errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' path: '%s'", username, path))
+	}
+
+	return err
+
 }
 
 // GetFileInfoByPath returns the FilInfo at the given path
@@ -496,7 +670,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, username, path string) (
 	mdrq.Authkey = c.opt.Authkey
 
 	// Now send the req and see what happens
-	resp, err := erpc.EosClient.MD(c.cl, context.Background(), mdrq)
+	resp, err := erpc.EosClient.MD(c.cl, ctx, mdrq)
 	if err != nil {
 
 		fmt.Printf("--- MD('%s') failed with err '%s'\n", path, err)
