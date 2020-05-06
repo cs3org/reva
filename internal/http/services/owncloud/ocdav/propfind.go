@@ -184,6 +184,14 @@ func (s *svc) xmlEscaped(val string) string {
 	return buf.String()
 }
 
+func (s *svc) newPropNS(namespace string, local string, val string) *propertyXML {
+	return &propertyXML{
+		XMLName:  xml.Name{Space: namespace, Local: local},
+		Lang:     "",
+		InnerXML: []byte(val),
+	}
+}
+
 func (s *svc) newProp(key, val string) *propertyXML {
 	return &propertyXML{
 		XMLName:  xml.Name{Space: "", Local: key},
@@ -419,11 +427,15 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:"+pf.Prop[i].Local, ""))
 				}
 			default:
-				// TODO (jfd) lookup shortname for unknown namespaces?
-				propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp(pf.Prop[i].Space+":"+pf.Prop[i].Local, ""))
+				propstatNotFound.Prop = append(propstatNotFound.Prop, s.newPropNS(pf.Prop[i].Space, pf.Prop[i].Local, ""))
 			}
 		}
-		response.Propstat = append(response.Propstat, propstatOK, propstatNotFound)
+		if len(propstatOK.Prop) > 0 {
+			response.Propstat = append(response.Propstat, propstatOK)
+		}
+		if len(propstatNotFound.Prop) > 0 {
+			response.Propstat = append(response.Propstat, propstatNotFound)
+		}
 	}
 
 	return &response, nil
