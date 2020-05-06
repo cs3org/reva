@@ -8,3 +8,31 @@ address = "0.0.0.0:19000"
 [grpc.services.gateway]
 datagateway = "http://localhost:19001/data" # needs to be defined, is a bug
 ocmcoresvc = "your node js server"
+
+[http]
+enabled_services = ["ocmd"]
+enabled_middlewares = ["providerauthorizer", "cors"]
+address = "0.0.0.0:19001"
+
+[http.services.dataprovider]
+driver = "local"
+temp_folder = "/var/tmp/"
+
+[http.services.dataprovider.drivers.local]
+namespace = "/var/tmp/reva/"
+user_layout = "{{.Username}}"
+enable_home = true
+
+[http.services.ocmd]
+prefix = "ocm"
+
+[http.middlewares.providerauthorizer]
+driver = "json"
+
+[http.middlewares.providerauthorizer.drivers.json]
+providers = "providers.demo.json"
+
+[http.services.ocs]
+prefix = "ocs"
+
+[http.middlewares.cors]
