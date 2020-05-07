@@ -429,6 +429,27 @@ func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, np st
 		appctx.GetLogger(ctx).Error().Err(errtypes.UserRequired("userrequired")).Msg("error getting user from ctx")
 	}
 
+	metadata := map[string]string{}
+	list, err := xattr.List(np)
+	if err == nil {
+		for _, entry := range list {
+			// filter out non-custom properties
+			if !strings.HasPrefix(entry, mdPrefix) {
+				continue
+			}
+			if val, err := xattr.Get(np, entry); err == nil {
+				metadata[entry[len(mdPrefix):]] = string(val)
+			} else {
+				appctx.GetLogger(ctx).Error().Err(err).
+					Str("entry", entry).
+					Msgf("error retrieving xattr metadata")
+			}
+		}
+	} else {
+		appctx.GetLogger(ctx).Error().Err(err).Msg("error getting list of extended attributes")
+	}
+
+	metadata["http://owncloud.org/ns/favorite"] = favorite
 	return &provider.ResourceInfo{
 		Id:            &provider.ResourceId{OpaqueId: id},
 		Path:          fn,
@@ -443,9 +464,7 @@ func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, np st
 			// TODO read nanos from where? Nanos:   fi.MTimeNanos,
 		},
 		ArbitraryMetadata: &provider.ArbitraryMetadata{
-			Metadata: map[string]string{
-				"http://owncloud.org/ns/favorite": favorite,
-			},
+			Metadata: metadata,
 		},
 	}
 }
