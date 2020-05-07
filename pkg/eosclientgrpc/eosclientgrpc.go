@@ -704,12 +704,121 @@ func (c *Client) Touch(ctx context.Context, username, path string) error {
 
 // Chown given path
 func (c *Client) Chown(ctx context.Context, username, chownUser, path string) error {
-	return errtypes.NotFound(fmt.Sprintf("%s:%s", "acltype", path))
+	log := appctx.GetLogger(ctx)
+
+	// Stuff filename, uid, gid into the MDRequest type
+	rq := new(erpc.NSRequest)
+
+	// setting of the sys.acl is only possible from root user
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return err
+	}
+	rq.Role = new(erpc.RoleId)
+
+	uid, err := strconv.ParseUint(unixUser.Uid, 10, 64)
+	if err != nil {
+		return err
+	}
+	rq.Role.Uid = uid
+	gid, err := strconv.ParseUint(unixUser.Gid, 10, 64)
+	if err != nil {
+		return err
+	}
+	rq.Role.Gid = gid
+
+	rq.Authkey = c.opt.Authkey
+
+	msg := new(erpc.NSRequest_ChownRequest)
+	msg.Owner = new(erpc.RoleId)
+
+	chownunixUser, err := c.getUnixUser(chownUser)
+	if err != nil {
+		return err
+	}
+
+	msg.Owner.Uid, err = strconv.ParseUint(chownunixUser.Uid, 10, 64)
+	if err != nil {
+		return err
+	}
+
+	msg.Id = new(erpc.MDId)
+	msg.Id.Path = []byte(path)
+
+	rq.Command = &erpc.NSRequest_Chown{msg}
+
+	// Now send the req and see what happens
+	resp, err := erpc.EosClient.Exec(c.cl, ctx, rq)
+	if err != nil {
+		log.Warn().Err(err).Str("username", username).Str("chownuser", chownUser).Str("path", path).Str("err", err.Error())
+		return err
+	}
+
+	log.Info().Str("username", username).Str("chownuser", chownUser).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+
+	if resp == nil {
+		return errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' chownuser: '%s' path: '%s'", username, chownUser, path))
+	}
+
+	return err
+
 }
 
 // Chmod given path
 func (c *Client) Chmod(ctx context.Context, username, mode, path string) error {
-	return errtypes.NotFound(fmt.Sprintf("%s:%s", "acltype", path))
+	log := appctx.GetLogger(ctx)
+
+	// Stuff filename, uid, gid into the MDRequest type
+	rq := new(erpc.NSRequest)
+
+	// setting of the sys.acl is only possible from root user
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return err
+	}
+	rq.Role = new(erpc.RoleId)
+
+	uid, err := strconv.ParseUint(unixUser.Uid, 10, 64)
+	if err != nil {
+		return err
+	}
+	rq.Role.Uid = uid
+	gid, err := strconv.ParseUint(unixUser.Gid, 10, 64)
+	if err != nil {
+		return err
+	}
+	rq.Role.Gid = gid
+
+	rq.Authkey = c.opt.Authkey
+
+	msg := new(erpc.NSRequest_ChmodRequest)
+
+	md, err := strconv.ParseUint(mode, 10, 64)
+	if err != nil {
+		return err
+	}
+	msg.Mode = int64(md)
+
+	msg.Id = new(erpc.MDId)
+	msg.Id.Path = []byte(path)
+
+	rq.Command = &erpc.NSRequest_Chmod{msg}
+
+	// Now send the req and see what happens
+	resp, err := erpc.EosClient.Exec(c.cl, ctx, rq)
+	if err != nil {
+		log.Warn().Err(err).Str("username", username).Str("mode", mode).Str("path", path).Str("err", err.Error())
+		return err
+	}
+
+	log.Info().Str("username", username).Str("mode", mode).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+
+	if resp == nil {
+		return errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' mode: '%s' path: '%s'", username, mode, path))
+	}
+
+	return err
+
 }
 
 // CreateDir creates a directory at the given path
