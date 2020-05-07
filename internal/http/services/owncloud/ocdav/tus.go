@@ -156,7 +156,11 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 
 		httpReq.Header.Set("Content-Type", r.Header.Get("Content-Type"))
 		httpReq.Header.Set("Content-Length", r.Header.Get("Content-Length"))
-		httpReq.Header.Set("Upload-Offset", r.Header.Get("Upload-Offset"))
+		if r.Header.Get("Upload-Offset") != "" {
+			httpReq.Header.Set("Upload-Offset", r.Header.Get("Upload-Offset"))
+		} else {
+			httpReq.Header.Set("Upload-Offset", "0")
+		}
 		httpReq.Header.Set("Tus-Resumable", r.Header.Get("Tus-Resumable"))
 
 		httpRes, err := httpClient.Do(httpReq)
@@ -167,8 +171,8 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 		}
 		defer httpRes.Body.Close()
 
-		httpRes.Header.Set("Upload-Offset", httpRes.Header.Get("Upload-Offset"))
-		httpRes.Header.Set("Tus-Resumable", httpRes.Header.Get("Tus-Resumable"))
+		w.Header().Set("Upload-Offset", httpRes.Header.Get("Upload-Offset"))
+		w.Header().Set("Tus-Resumable", httpRes.Header.Get("Tus-Resumable"))
 		if httpRes.StatusCode != http.StatusNoContent {
 			w.WriteHeader(httpRes.StatusCode)
 			return
