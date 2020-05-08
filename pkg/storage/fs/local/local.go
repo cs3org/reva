@@ -20,13 +20,16 @@ package local
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/url"
 	"os"
 	"path"
+	"strconv"
 	"strings"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -39,6 +42,9 @@ import (
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+
+	// Provides sqlite drivers
+	_ "github.com/mattn/go-sqlite3"
 )
 
 func init() {
@@ -49,12 +55,15 @@ type config struct {
 	Root       string `mapstructure:"root"`
 	EnableHome bool   `mapstructure:"enable_home"`
 	UserLayout string `mapstructure:"user_layout"`
-	// Uploads folder should be on the same partition as root to make the final rename not fall back to a copy and delete
-	Uploads string `mapstructure:"uploads"`
+	Uploads    string `mapstructure:"uploads"`
+	RecycleBin string `mapstructure:"recycle_bin"`
+	Versions   string `mapstructure:"versions"`
+	Shadow     string `mapstructure:"shadow"`
 }
 
 type localfs struct {
 	conf *config
+	db   *sql.DB
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -64,6 +73,24 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 		return nil, err
 	}
 	return c, nil
+}
+
+func initializeDB(root string) (*sql.DB, error) {
+	dbPath := path.Join(root, "localfs.db")
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		return nil, errors.Wrap(err, "localfs: error opening DB connection")
+	}
+
+	stmt, err := db.Prepare("CREATE TABLE IF NOT EXISTS recycled_entries (key TEXT PRIMARY KEY, path TEXT)")
+	if err != nil {
+		return nil, errors.Wrap(err, "localfs: error preparing statement")
+	}
+	_, err = stmt.Exec()
+	if err != nil {
+		return nil, errors.Wrap(err, "localfs: error executing create statement")
+	}
+	return db, nil
 }
 
 // New returns an implementation to of the storage.FS interface that talk to
@@ -83,20 +110,26 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		c.UserLayout = "{{.Username}}"
 	}
 
-	// create namespace if it does not exist
-	if err = os.MkdirAll(c.Root, 0755); err != nil {
-		return nil, errors.Wrap(err, "local: could not create namespace dir")
+	c.Uploads = path.Join(c.Root, ".uploads")
+	c.RecycleBin = path.Join(c.Root, ".recycle_bin")
+	c.Versions = path.Join(c.Root, ".versions")
+	c.Shadow = path.Join(c.Root, ".shadow")
+
+	namespaces := []string{c.Root, c.Uploads, c.RecycleBin, c.Versions, c.Shadow}
+
+	// create namespaces if they do not exist
+	for _, v := range namespaces {
+		if err := os.MkdirAll(v, 0755); err != nil {
+			return nil, errors.Wrap(err, "could not create home dir "+v)
+		}
 	}
 
-	if c.Uploads == "" {
-		c.Uploads = path.Join(c.Root, ".uploads")
+	db, err := initializeDB(c.Root)
+	if err != nil {
+		return nil, errors.Wrap(err, "localfs: error initializing db")
 	}
 
-	if err := os.MkdirAll(c.Uploads, 0700); err != nil {
-		return nil, errors.Wrap(err, "could not create uploads dir "+c.Uploads)
-	}
-
-	return &localfs{conf: c}, nil
+	return &localfs{conf: c, db: db}, nil
 }
 
 func (fs *localfs) Shutdown(ctx context.Context) error {
@@ -127,6 +160,30 @@ func getUser(ctx context.Context) (*userpb.User, error) {
 	return u, nil
 }
 
+func (fs *localfs) addToRecycledDB(ctx context.Context, key, fileName string) error {
+	stmt, err := fs.db.Prepare("INSERT INTO recycled_entries VALUES (?, ?)")
+	if err != nil {
+		return errors.Wrap(err, "localfs: error preparing statement")
+	}
+	_, err = stmt.Exec(key, fileName)
+	if err != nil {
+		return errors.Wrap(err, "localfs: error executing insert statement")
+	}
+	return nil
+}
+
+// func (fs *localfs) removeFromRecycledDB(ctx context.Context, key string) error {
+// 	stmt, err := fs.db.Prepare("DELETE FROM recycled_entries WHERE key=?")
+// 	if err != nil {
+// 		return errors.Wrap(err, "localfs: error preparing statement")
+// 	}
+// 	_, err = stmt.Exec(key)
+// 	if err != nil {
+// 		return errors.Wrap(err, "localfs: error executing delete statement")
+// 	}
+// 	return nil
+// }
+
 func (fs *localfs) wrap(ctx context.Context, p string) string {
 	var internal string
 	if fs.conf.EnableHome {
@@ -141,22 +198,79 @@ func (fs *localfs) wrap(ctx context.Context, p string) string {
 	return internal
 }
 
+func (fs *localfs) wrapRecycleBin(ctx context.Context, p string) string {
+	var internal string
+	if fs.conf.EnableHome {
+		layout, err := fs.GetHome(ctx)
+		if err != nil {
+			panic(err)
+		}
+		internal = path.Join(fs.conf.RecycleBin, layout, p)
+	} else {
+		internal = path.Join(fs.conf.RecycleBin, p)
+	}
+	return internal
+}
+
+func (fs *localfs) wrapShadow(ctx context.Context, p string) string {
+	var internal string
+	if fs.conf.EnableHome {
+		layout, err := fs.GetHome(ctx)
+		if err != nil {
+			panic(err)
+		}
+		internal = path.Join(fs.conf.Shadow, layout, p)
+	} else {
+		internal = path.Join(fs.conf.Shadow, p)
+	}
+	return internal
+}
+
+func (fs *localfs) wrapVersions(ctx context.Context, p string) string {
+	var internal string
+	if fs.conf.EnableHome {
+		layout, err := fs.GetHome(ctx)
+		if err != nil {
+			panic(err)
+		}
+		internal = path.Join(fs.conf.Versions, layout, p)
+	} else {
+		internal = path.Join(fs.conf.Versions, p)
+	}
+	return internal
+}
+
 func (fs *localfs) unwrap(ctx context.Context, np string) string {
+	ns := fs.getNsMatch(np, []string{fs.conf.Root, fs.conf.RecycleBin, fs.conf.Shadow, fs.conf.Versions})
 	var external string
 	if fs.conf.EnableHome {
 		layout, err := fs.GetHome(ctx)
 		if err != nil {
 			panic(err)
 		}
-		trim := path.Join(fs.conf.Root, layout)
+		trim := path.Join(ns, layout)
 		external = strings.TrimPrefix(np, trim)
 	} else {
-		external = strings.TrimPrefix(np, fs.conf.Root)
+		external = strings.TrimPrefix(np, ns)
 		if external == "" {
 			external = "/"
 		}
 	}
 	return external
+}
+
+func (fs *localfs) getNsMatch(internal string, nss []string) string {
+	var match string
+	for _, ns := range nss {
+		if strings.HasPrefix(internal, ns) && len(ns) > len(match) {
+			match = ns
+		}
+	}
+	if match == "" {
+		panic(fmt.Sprintf("local: path is outside namespaces: path=%s namespaces=%+v", internal, nss))
+	}
+
+	return match
 }
 
 func (fs *localfs) normalize(ctx context.Context, fi os.FileInfo, fn string) *provider.ResourceInfo {
@@ -174,7 +288,6 @@ func (fs *localfs) normalize(ctx context.Context, fi os.FileInfo, fn string) *pr
 		},
 	}
 
-	//logger.Println(context.Background(), "normalized: ", md)
 	return md
 }
 
@@ -242,18 +355,27 @@ func (fs *localfs) CreateHome(ctx context.Context) error {
 		return errtypes.NotSupported("eos: create home not supported")
 	}
 
-	home := fs.wrap(ctx, "/")
+	homePaths := []string{fs.wrap(ctx, "/"), fs.wrapRecycleBin(ctx, "/"), fs.wrapVersions(ctx, "/"), fs.wrapShadow(ctx, "/")}
 
-	_, err := os.Stat(home)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return errors.Wrap(err, "local: error stating home:"+home)
+	for _, v := range homePaths {
+		if err := fs.createHomeInternal(ctx, v); err != nil {
+			return errors.Wrap(err, "local: error creating home dir "+v)
 		}
 	}
 
-	err = os.MkdirAll(home, 0700)
+	return nil
+}
+
+func (fs *localfs) createHomeInternal(ctx context.Context, fn string) error {
+	_, err := os.Stat(fn)
 	if err != nil {
-		return errors.Wrap(err, "local: error creating home dir:"+home)
+		if !os.IsNotExist(err) {
+			return errors.Wrap(err, "local: error stating:"+fn)
+		}
+	}
+	err = os.MkdirAll(fn, 0700)
+	if err != nil {
+		return errors.Wrap(err, "local: error creating dir:"+fn)
 	}
 	return nil
 }
@@ -276,20 +398,28 @@ func (fs *localfs) CreateDir(ctx context.Context, fn string) error {
 func (fs *localfs) Delete(ctx context.Context, ref *provider.Reference) error {
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return errors.Wrap(err, "error resolving ref")
+		return errors.Wrap(err, "localfs: error resolving ref")
 	}
 
-	err = os.Remove(fn)
+	_, err = os.Stat(fn)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return errtypes.NotFound(fn)
+			return errtypes.NotFound(fs.unwrap(ctx, fn))
 		}
-		// try recursive delete
-		err = os.RemoveAll(fn)
-		if err != nil {
-			return errors.Wrap(err, "localfs: error deleting "+fn)
-		}
+		return errors.Wrap(err, "localfs: error stating "+fn)
 	}
+
+	fileName := fs.unwrap(ctx, fn)
+	key := fmt.Sprintf("%s.d%d", path.Base(fileName), time.Now().Unix())
+	if err := os.Rename(fn, fs.wrapRecycleBin(ctx, key)); err != nil {
+		return errors.Wrap(err, "localfs: could not delete item")
+	}
+
+	err = fs.addToRecycledDB(ctx, key, fileName)
+	if err != nil {
+		return errors.Wrap(err, "localfs: error adding entry to DB")
+	}
+
 	return nil
 }
 
@@ -384,8 +514,53 @@ func (fs *localfs) EmptyRecycle(ctx context.Context) error {
 	return errtypes.NotSupported("empty recycle")
 }
 
+func (fs *localfs) convertToRecycleItem(ctx context.Context, rp string, md os.FileInfo) *provider.RecycleItem {
+	// trashbin items have filename.ext.d12345678
+	suffix := path.Ext(md.Name())
+	if len(suffix) == 0 || !strings.HasPrefix(suffix, ".d") {
+		return nil
+	}
+
+	trashtime := suffix[2:]
+	ttime, err := strconv.Atoi(trashtime)
+	if err != nil {
+		return nil
+	}
+
+	var path string
+	err = fs.db.QueryRow("SELECT path FROM recycled_entries WHERE key=?", md.Name()).Scan(&path)
+	if err != nil {
+		return nil
+	}
+
+	return &provider.RecycleItem{
+		Type: getResourceType(md.IsDir()),
+		Key:  md.Name(),
+		Path: path,
+		Size: uint64(md.Size()),
+		DeletionTime: &types.Timestamp{
+			Seconds: uint64(ttime),
+		},
+	}
+}
+
 func (fs *localfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error) {
-	return nil, errtypes.NotSupported("list recycle")
+
+	rp := fs.wrapRecycleBin(ctx, "/")
+
+	// list files folder
+	mds, err := ioutil.ReadDir(rp)
+	if err != nil {
+		return nil, errors.Wrap(err, "localfs: error listing deleted files")
+	}
+	items := []*provider.RecycleItem{}
+	for i := range mds {
+		ri := fs.convertToRecycleItem(ctx, rp, mds[i])
+		if ri != nil {
+			items = append(items, ri)
+		}
+	}
+	return items, nil
 }
 
 func (fs *localfs) RestoreRecycleItem(ctx context.Context, restoreKey string) error {

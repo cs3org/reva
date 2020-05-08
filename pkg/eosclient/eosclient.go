@@ -706,14 +706,14 @@ func parseRecycleList(raw string) ([]*DeletedEntry, error) {
 }
 
 // parse entries like these:
-// recycle=ls  recycle-bin=/eos/backup/proc/recycle/ uid=gonzalhu gid=it size=0 deletion-time=1510823151 type=recursive-dir keylength.restore-path=45 restore-path=/eos/scratch/user/g/gonzalhu/.sys.v#.app.ico/ restore-key=0000000000a35100
-// recycle=ls  recycle-bin=/eos/backup/proc/recycle/ uid=gonzalhu gid=it size=381038 deletion-time=1510823151 type=file keylength.restore-path=36 restore-path=/eos/scratch/user/g/gonzalhu/app.ico restore-key=000000002544fdb3
+// recycle=ls recycle-bin=/eos/backup/proc/recycle/ uid=gonzalhu gid=it size=0 deletion-time=1510823151 type=recursive-dir keylength.restore-path=45 restore-path=/eos/scratch/user/g/gonzalhu/.sys.v#.app.ico/ restore-key=0000000000a35100
+// recycle=ls recycle-bin=/eos/backup/proc/recycle/ uid=gonzalhu gid=it size=381038 deletion-time=1510823151 type=file keylength.restore-path=36 restore-path=/eos/scratch/user/g/gonzalhu/app.ico restore-key=000000002544fdb3
 func parseRecycleEntry(raw string) (*DeletedEntry, error) {
 	partsBySpace := strings.Split(raw, " ")
 	restoreKeyPair, partsBySpace := partsBySpace[len(partsBySpace)-1], partsBySpace[:len(partsBySpace)-1]
-	restorePathPair := strings.Join(partsBySpace[9:], " ")
+	restorePathPair := strings.Join(partsBySpace[8:], " ")
 
-	partsBySpace = partsBySpace[:9]
+	partsBySpace = partsBySpace[:8]
 	partsBySpace = append(partsBySpace, restorePathPair)
 	partsBySpace = append(partsBySpace, restoreKeyPair)
 

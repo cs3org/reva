@@ -234,12 +234,10 @@ func (fs *eosfs) Shutdown(ctx context.Context) error {
 
 func (fs *eosfs) wrapShadow(ctx context.Context, fn string) (internal string) {
 	if fs.conf.EnableHome {
-		u, err := getUser(ctx)
+		layout, err := fs.getInternalHome(ctx)
 		if err != nil {
-			err = errors.Wrap(err, "eos: wrap: no user in ctx and home is enabled")
 			panic(err)
 		}
-		layout := templates.WithUser(u, fs.conf.UserLayout)
 		internal = path.Join(fs.conf.ShadowNamespace, layout, fn)
 	} else {
 		internal = path.Join(fs.conf.ShadowNamespace, fn)
@@ -625,7 +623,7 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference) (*provider.
 		return nil, errors.Wrap(err, "eos: error resolving reference")
 	}
 
-	// if path is home we need to add in the response any shadow folder in the shadown homedirectory.
+	// if path is home we need to add in the response any shadow folder in the shadow homedirectory.
 	if fs.conf.EnableHome {
 		if fs.isShareFolder(ctx, p) {
 			return fs.getMDShareFolder(ctx, p)
@@ -676,7 +674,7 @@ func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*pr
 
 	log.Debug().Msg("internal: " + p)
 
-	// if path is home we need to add in the response any shadow folder in the shadown homedirectory.
+	// if path is home we need to add in the response any shadow folder in the shadow homedirectory.
 	if fs.conf.EnableHome {
 		log.Debug().Msg("home enabled")
 		if strings.HasPrefix(p, "/") {

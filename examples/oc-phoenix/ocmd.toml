@@ -5,11 +5,21 @@ gatewaysvc = "localhost:19000"
 [grpc]
 address = "0.0.0.0:13000"
 
+[grpc.services.ocmcore]
+driver = "json"
+
+# Note that ocmcore and ocmshareprovider should use the same file for storing the shares.
+[grpc.services.ocmcore.drivers.json]
+file = "/tmp/reva/shares_server_1.json"
+
 [grpc.services.ocminvitemanager]
 driver = "memory"
 
 [grpc.services.ocmshareprovider]
 driver = "json"
+
+[grpc.services.ocmshareprovider.drivers.json]
+file = "/tmp/reva/shares_server_1.json"
 
 [grpc.services.ocmproviderauthorizer]
 driver = "json"
