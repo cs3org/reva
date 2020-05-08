@@ -172,17 +172,17 @@ func (fs *localfs) addToRecycledDB(ctx context.Context, key, fileName string) er
 	return nil
 }
 
-// func (fs *localfs) removeFromRecycledDB(ctx context.Context, key string) error {
-// 	stmt, err := fs.db.Prepare("DELETE FROM recycled_entries WHERE key=?")
-// 	if err != nil {
-// 		return errors.Wrap(err, "localfs: error preparing statement")
-// 	}
-// 	_, err = stmt.Exec(key)
-// 	if err != nil {
-// 		return errors.Wrap(err, "localfs: error executing delete statement")
-// 	}
-// 	return nil
-// }
+func (fs *localfs) removeFromRecycledDB(ctx context.Context, key string) error {
+	stmt, err := fs.db.Prepare("DELETE FROM recycled_entries WHERE key=?")
+	if err != nil {
+		return errors.Wrap(err, "localfs: error preparing statement")
+	}
+	_, err = stmt.Exec(key)
+	if err != nil {
+		return errors.Wrap(err, "localfs: error executing delete statement")
+	}
+	return nil
+}
 
 func (fs *localfs) wrap(ctx context.Context, p string) string {
 	var internal string
@@ -507,15 +507,28 @@ func (fs *localfs) RestoreRevision(ctx context.Context, ref *provider.Reference,
 }
 
 func (fs *localfs) PurgeRecycleItem(ctx context.Context, key string) error {
-	return errtypes.NotSupported("purge recycle item")
+	rp := fs.wrapRecycleBin(ctx, key)
+
+	if err := os.Remove(rp); err != nil {
+		return errors.Wrap(err, "localfs: error deleting recycle item")
+	}
+	return nil
 }
 
 func (fs *localfs) EmptyRecycle(ctx context.Context) error {
-	return errtypes.NotSupported("empty recycle")
+	rp := fs.wrapRecycleBin(ctx, "/")
+
+	if err := os.RemoveAll(rp); err != nil {
+		return errors.Wrap(err, "localfs: error deleting recycle files")
+	}
+	if err := fs.createHomeInternal(ctx, rp); err != nil {
+		return errors.Wrap(err, "localfs: error deleting recycle files")
+	}
+	return nil
 }
 
 func (fs *localfs) convertToRecycleItem(ctx context.Context, rp string, md os.FileInfo) *provider.RecycleItem {
-	// trashbin items have filename.ext.d12345678
+	// trashbin items have filename.txt.d12345678
 	suffix := path.Ext(md.Name())
 	if len(suffix) == 0 || !strings.HasPrefix(suffix, ".d") {
 		return nil
@@ -548,7 +561,6 @@ func (fs *localfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, er
 
 	rp := fs.wrapRecycleBin(ctx, "/")
 
-	// list files folder
 	mds, err := ioutil.ReadDir(rp)
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error listing deleted files")
@@ -564,5 +576,29 @@ func (fs *localfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, er
 }
 
 func (fs *localfs) RestoreRecycleItem(ctx context.Context, restoreKey string) error {
-	return errtypes.NotSupported("restore recycle")
+
+	suffix := path.Ext(restoreKey)
+	if len(suffix) == 0 || !strings.HasPrefix(suffix, ".d") {
+		return errors.New("localfs: invalid trash item suffix")
+	}
+
+	var path string
+	err := fs.db.QueryRow("SELECT path FROM recycled_entries WHERE key=?", restoreKey).Scan(&path)
+	if err != nil {
+		return errors.Wrap(err, "localfs: invalid key")
+	}
+
+	originalPath := fs.wrap(ctx, path)
+	rp := fs.wrapRecycleBin(ctx, restoreKey)
+
+	if err := os.Rename(rp, originalPath); err != nil {
+		return errors.Wrap(err, "ocfs: could not restore item")
+	}
+
+	err = fs.removeFromRecycledDB(ctx, restoreKey)
+	if err != nil {
+		return errors.Wrap(err, "localfs: error adding entry to DB")
+	}
+
+	return nil
 }
