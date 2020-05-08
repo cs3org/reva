@@ -425,9 +425,8 @@ func (c *Client) ListACLs(ctx context.Context, username, path string) ([]*acl.En
 	return acls, nil
 }
 
-func (c *Client) getACLForPath(ctx context.Context, username, path string) (*acl.ACLs, error) {
-	log := appctx.GetLogger(ctx)
-
+// Common code to create and initialize a NSRequest
+func (c *Client) initNSRequest(username string) (*erpc.NSRequest, error) {
 	// Stuff filename, uid, gid into the MDRequest type
 	rq := new(erpc.NSRequest)
 
@@ -450,6 +449,18 @@ func (c *Client) getACLForPath(ctx context.Context, username, path string) (*acl
 	rq.Role.Gid = gid
 
 	rq.Authkey = c.opt.Authkey
+
+	return rq, nil
+}
+
+func (c *Client) getACLForPath(ctx context.Context, username, path string) (*acl.ACLs, error) {
+	log := appctx.GetLogger(ctx)
+
+	// Initialize the common fields of the NSReq
+	rq, err := c.initNSRequest(username)
+	if err != nil {
+		return nil, err
+	}
 
 	msg := new(erpc.NSRequest_AclRequest)
 	msg.Cmd = erpc.NSRequest_AclRequest_ACL_COMMAND(erpc.NSRequest_AclRequest_ACL_COMMAND_value["LIST"])
@@ -535,28 +546,11 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, username string, inode 
 func (c *Client) SetAttr(ctx context.Context, username string, attr *Attribute, recursive bool, path string) error {
 	log := appctx.GetLogger(ctx)
 
-	// Stuff filename, uid, gid into the MDRequest type
-	rq := new(erpc.NSRequest)
-
-	// setting of the sys.acl is only possible from root user
-	unixUser, err := c.getUnixUser(username)
+	// Initialize the common fields of the NSReq
+	rq, err := c.initNSRequest(username)
 	if err != nil {
 		return err
 	}
-	rq.Role = new(erpc.RoleId)
-
-	uid, err := strconv.ParseUint(unixUser.Uid, 10, 64)
-	if err != nil {
-		return err
-	}
-	rq.Role.Uid = uid
-	gid, err := strconv.ParseUint(unixUser.Gid, 10, 64)
-	if err != nil {
-		return err
-	}
-	rq.Role.Gid = gid
-
-	rq.Authkey = c.opt.Authkey
 
 	msg := new(erpc.NSRequest_SetXAttrRequest)
 
@@ -590,28 +584,11 @@ func (c *Client) SetAttr(ctx context.Context, username string, attr *Attribute, 
 func (c *Client) UnsetAttr(ctx context.Context, username string, attr *Attribute, path string) error {
 	log := appctx.GetLogger(ctx)
 
-	// Stuff filename, uid, gid into the MDRequest type
-	rq := new(erpc.NSRequest)
-
-	// setting of the sys.acl is only possible from root user
-	unixUser, err := c.getUnixUser(username)
+	// Initialize the common fields of the NSReq
+	rq, err := c.initNSRequest(username)
 	if err != nil {
 		return err
 	}
-	rq.Role = new(erpc.RoleId)
-
-	uid, err := strconv.ParseUint(unixUser.Uid, 10, 64)
-	if err != nil {
-		return err
-	}
-	rq.Role.Uid = uid
-	gid, err := strconv.ParseUint(unixUser.Gid, 10, 64)
-	if err != nil {
-		return err
-	}
-	rq.Role.Gid = gid
-
-	rq.Authkey = c.opt.Authkey
 
 	msg := new(erpc.NSRequest_SetXAttrRequest)
 
@@ -706,28 +683,11 @@ func (c *Client) Touch(ctx context.Context, username, path string) error {
 func (c *Client) Chown(ctx context.Context, username, chownUser, path string) error {
 	log := appctx.GetLogger(ctx)
 
-	// Stuff filename, uid, gid into the MDRequest type
-	rq := new(erpc.NSRequest)
-
-	// setting of the sys.acl is only possible from root user
-	unixUser, err := c.getUnixUser(username)
+	// Initialize the common fields of the NSReq
+	rq, err := c.initNSRequest(username)
 	if err != nil {
 		return err
 	}
-	rq.Role = new(erpc.RoleId)
-
-	uid, err := strconv.ParseUint(unixUser.Uid, 10, 64)
-	if err != nil {
-		return err
-	}
-	rq.Role.Uid = uid
-	gid, err := strconv.ParseUint(unixUser.Gid, 10, 64)
-	if err != nil {
-		return err
-	}
-	rq.Role.Gid = gid
-
-	rq.Authkey = c.opt.Authkey
 
 	msg := new(erpc.NSRequest_ChownRequest)
 	msg.Owner = new(erpc.RoleId)
@@ -768,28 +728,11 @@ func (c *Client) Chown(ctx context.Context, username, chownUser, path string) er
 func (c *Client) Chmod(ctx context.Context, username, mode, path string) error {
 	log := appctx.GetLogger(ctx)
 
-	// Stuff filename, uid, gid into the MDRequest type
-	rq := new(erpc.NSRequest)
-
-	// setting of the sys.acl is only possible from root user
-	unixUser, err := c.getUnixUser(username)
+	// Initialize the common fields of the NSReq
+	rq, err := c.initNSRequest(username)
 	if err != nil {
 		return err
 	}
-	rq.Role = new(erpc.RoleId)
-
-	uid, err := strconv.ParseUint(unixUser.Uid, 10, 64)
-	if err != nil {
-		return err
-	}
-	rq.Role.Uid = uid
-	gid, err := strconv.ParseUint(unixUser.Gid, 10, 64)
-	if err != nil {
-		return err
-	}
-	rq.Role.Gid = gid
-
-	rq.Authkey = c.opt.Authkey
 
 	msg := new(erpc.NSRequest_ChmodRequest)
 
@@ -823,12 +766,125 @@ func (c *Client) Chmod(ctx context.Context, username, mode, path string) error {
 
 // CreateDir creates a directory at the given path
 func (c *Client) CreateDir(ctx context.Context, username, path string) error {
-	return errtypes.NotFound(fmt.Sprintf("%s:%s", "acltype", path))
+	log := appctx.GetLogger(ctx)
+
+	// Initialize the common fields of the NSReq
+	rq, err := c.initNSRequest(username)
+	if err != nil {
+		return err
+	}
+
+	msg := new(erpc.NSRequest_MkdirRequest)
+
+	// Let's put 750 as permissions, assuming that EOS will apply some mask
+	md, err := strconv.ParseUint("0o750", 10, 64)
+	if err != nil {
+		return err
+	}
+	msg.Mode = int64(md)
+	msg.Recursive = true
+	msg.Id = new(erpc.MDId)
+	msg.Id.Path = []byte(path)
+
+	rq.Command = &erpc.NSRequest_Mkdir{msg}
+
+	// Now send the req and see what happens
+	resp, err := erpc.EosClient.Exec(c.cl, ctx, rq)
+	if err != nil {
+		log.Warn().Err(err).Str("username", username).Str("path", path).Str("err", err.Error())
+		return err
+	}
+
+	log.Info().Str("username", username).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+
+	if resp == nil {
+		return errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' path: '%s'", username, path))
+	}
+
+	return err
+
+}
+
+func (c *Client) rm(ctx context.Context, username, path string) error {
+	log := appctx.GetLogger(ctx)
+
+	// Initialize the common fields of the NSReq
+	rq, err := c.initNSRequest(username)
+	if err != nil {
+		return err
+	}
+
+	msg := new(erpc.NSRequest_UnlinkRequest)
+
+	msg.Id = new(erpc.MDId)
+	msg.Id.Path = []byte(path)
+
+	rq.Command = &erpc.NSRequest_Unlink{msg}
+
+	// Now send the req and see what happens
+	resp, err := erpc.EosClient.Exec(c.cl, ctx, rq)
+	if err != nil {
+		log.Warn().Err(err).Str("username", username).Str("path", path).Str("err", err.Error())
+		return err
+	}
+
+	log.Info().Str("username", username).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+
+	if resp == nil {
+		return errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' path: '%s'", username, path))
+	}
+
+	return err
+
+}
+
+func (c *Client) rmdir(ctx context.Context, username, path string) error {
+	log := appctx.GetLogger(ctx)
+
+	// Initialize the common fields of the NSReq
+	rq, err := c.initNSRequest(username)
+	if err != nil {
+		return err
+	}
+
+	msg := new(erpc.NSRequest_RmdirRequest)
+
+	msg.Id = new(erpc.MDId)
+	msg.Id.Path = []byte(path)
+
+	rq.Command = &erpc.NSRequest_Rmdir{msg}
+
+	// Now send the req and see what happens
+	resp, err := erpc.EosClient.Exec(c.cl, ctx, rq)
+	if err != nil {
+		log.Warn().Err(err).Str("username", username).Str("path", path).Str("err", err.Error())
+		return err
+	}
+
+	log.Info().Str("username", username).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+
+	if resp == nil {
+		return errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' path: '%s'", username, path))
+	}
+
+	return err
 }
 
 // Remove removes the resource at the given path
 func (c *Client) Remove(ctx context.Context, username, path string) error {
-	return errtypes.NotFound(fmt.Sprintf("%s:%s", "acltype", path))
+	log := appctx.GetLogger(ctx)
+
+	nfo, err := c.GetFileInfoByPath(ctx, username, path)
+	if err != nil {
+		log.Warn().Err(err).Str("username", username).Str("path", path).Str("err", err.Error())
+		return err
+	}
+
+	if nfo.IsDir {
+		return c.rmdir(ctx, username, path)
+	}
+
+	return c.rm(ctx, username, path)
 }
 
 // Rename renames the resource referenced by oldPath to newPath
