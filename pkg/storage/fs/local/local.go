@@ -90,6 +90,16 @@ func initializeDB(root string) (*sql.DB, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error executing create statement")
 	}
+
+	stmt, err = db.Prepare("CREATE TABLE IF NOT EXISTS acl (resource TEXT, grantee TEXT, role TEXT) PRIMARY KEY (resource, grantee)")
+	if err != nil {
+		return nil, errors.Wrap(err, "localfs: error preparing statement")
+	}
+	_, err = stmt.Exec()
+	if err != nil {
+		return nil, errors.Wrap(err, "localfs: error executing create statement")
+	}
+
 	return db, nil
 }
 
@@ -133,6 +143,10 @@ func New(m map[string]interface{}) (storage.FS, error) {
 }
 
 func (fs *localfs) Shutdown(ctx context.Context) error {
+	err := fs.db.Close()
+	if err != nil {
+		return errors.Wrap(err, "localfs: error closing db connection")
+	}
 	return nil
 }
 
@@ -178,6 +192,30 @@ func (fs *localfs) removeFromRecycledDB(ctx context.Context, key string) error {
 		return errors.Wrap(err, "localfs: error preparing statement")
 	}
 	_, err = stmt.Exec(key)
+	if err != nil {
+		return errors.Wrap(err, "localfs: error executing delete statement")
+	}
+	return nil
+}
+
+func (fs *localfs) addToACLDB(ctx context.Context, resource, grantee, role string) error {
+	stmt, err := fs.db.Prepare("INSERT INTO acl (resource, grantee, role) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE role=?")
+	if err != nil {
+		return errors.Wrap(err, "localfs: error preparing statement")
+	}
+	_, err = stmt.Exec(resource, grantee, role, role)
+	if err != nil {
+		return errors.Wrap(err, "localfs: error executing insert statement")
+	}
+	return nil
+}
+
+func (fs *localfs) removeFromACLDB(ctx context.Context, resource, grantee string) error {
+	stmt, err := fs.db.Prepare("DELETE FROM acl WHERE resource=? AND grantee=?")
+	if err != nil {
+		return errors.Wrap(err, "localfs: error preparing statement")
+	}
+	_, err = stmt.Exec(resource, grantee)
 	if err != nil {
 		return errors.Wrap(err, "localfs: error executing delete statement")
 	}
@@ -248,13 +286,12 @@ func (fs *localfs) unwrap(ctx context.Context, np string) string {
 		if err != nil {
 			panic(err)
 		}
-		trim := path.Join(ns, layout)
-		external = strings.TrimPrefix(np, trim)
-	} else {
-		external = strings.TrimPrefix(np, ns)
-		if external == "" {
-			external = "/"
-		}
+		ns = path.Join(ns, layout)
+	}
+
+	external = strings.TrimPrefix(np, ns)
+	if external == "" {
+		external = "/"
 	}
 	return external
 }
@@ -305,19 +342,172 @@ func (fs *localfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (st
 	return path.Join("/", strings.TrimPrefix(id.OpaqueId, "fileid-")), nil
 }
 
+func Role2CS3Permissions(r string) (*provider.ResourcePermissions, error) {
+	switch r {
+	case "viewer":
+		return &provider.ResourcePermissions{
+			ListContainer:        true,
+			ListGrants:           true,
+			ListFileVersions:     true,
+			ListRecycle:          true,
+			Stat:                 true,
+			GetPath:              true,
+			GetQuota:             true,
+			InitiateFileDownload: true,
+		}, nil
+	case "editor":
+		return &provider.ResourcePermissions{
+			ListContainer:        true,
+			ListGrants:           true,
+			ListFileVersions:     true,
+			ListRecycle:          true,
+			Stat:                 true,
+			GetPath:              true,
+			GetQuota:             true,
+			InitiateFileDownload: true,
+
+			Move:               true,
+			InitiateFileUpload: true,
+			RestoreFileVersion: true,
+			RestoreRecycleItem: true,
+			CreateContainer:    true,
+			Delete:             true,
+			PurgeRecycle:       true,
+		}, nil
+	case "owner":
+		return &provider.ResourcePermissions{
+			ListContainer:        true,
+			ListGrants:           true,
+			ListFileVersions:     true,
+			ListRecycle:          true,
+			Stat:                 true,
+			GetPath:              true,
+			GetQuota:             true,
+			InitiateFileDownload: true,
+
+			Move:               true,
+			InitiateFileUpload: true,
+			RestoreFileVersion: true,
+			RestoreRecycleItem: true,
+			CreateContainer:    true,
+			Delete:             true,
+			PurgeRecycle:       true,
+
+			AddGrant:    true,
+			RemoveGrant: true, // TODO when are you able to unshare / delete
+			UpdateGrant: true,
+		}, nil
+	default:
+		return nil, errtypes.NotSupported("localfs: role not defined")
+	}
+}
+
+func CS3Permissions2Role(rp *provider.ResourcePermissions) (string, error) {
+	switch {
+	case rp.AddGrant:
+		return "owner", nil
+	case rp.Move:
+		return "editor", nil
+	case rp.ListContainer:
+		return "viewer", nil
+	default:
+		return "", errtypes.NotSupported("localfs: role not defined")
+	}
+}
+
 func (fs *localfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
-	return errtypes.NotSupported("local: operation not supported")
+	fn, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "localfs: error resolving ref")
+	}
+
+	role, err := CS3Permissions2Role(g.Permissions)
+	if err != nil {
+		return errors.Wrap(err, "localfs: unknown set permissions")
+	}
+
+	var grantee string
+	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
+		grantee = "g:" + g.Grantee.Id.OpaqueId
+	} else {
+		grantee = "u:" + g.Grantee.Id.OpaqueId
+	}
+
+	err = fs.addToACLDB(ctx, fn, grantee, role)
+	if err != nil {
+		return errors.Wrap(err, "localfs: error adding entry to DB")
+	}
+
+	return nil
 }
 
 func (fs *localfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error) {
-	return nil, errtypes.NotSupported("local: operation not supported")
+	fn, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return nil, errors.Wrap(err, "localfs: error resolving ref")
+	}
+
+	grants, err := fs.db.Query("SELECT grantee, role FROM acl WHERE resource=?", fn)
+	if err != nil {
+		return nil, errors.Wrap(err, "localfs: error listing grants")
+	}
+	var granteeID, role string
+	var grantList []*provider.Grant
+
+	for grants.Next() {
+		err = grants.Scan(&granteeID, &role)
+		if err != nil {
+			return nil, errors.Wrap(err, "localfs: error scanning db rows")
+		}
+		grantee := &provider.Grantee{
+			Id:   &userpb.UserId{OpaqueId: granteeID[2:]},
+			Type: fs.getGranteeType(string(granteeID[0])),
+		}
+
+		permissions, err := Role2CS3Permissions(role)
+		if err != nil {
+			return nil, errors.Wrap(err, "localfs: unknown role")
+		}
+
+		grantList = append(grantList, &provider.Grant{
+			Grantee:     grantee,
+			Permissions: permissions,
+		})
+	}
+	return grantList, nil
+
+}
+
+func (fs *localfs) getGranteeType(granteeType string) provider.GranteeType {
+	if granteeType == "g" {
+		return provider.GranteeType_GRANTEE_TYPE_GROUP
+	}
+	return provider.GranteeType_GRANTEE_TYPE_USER
 }
 
 func (fs *localfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
-	return errtypes.NotSupported("local: operation not supported")
+	fn, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "localfs: error resolving ref")
+	}
+
+	var grantee string
+	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
+		grantee = "g:" + g.Grantee.Id.OpaqueId
+	} else {
+		grantee = "u:" + g.Grantee.Id.OpaqueId
+	}
+
+	err = fs.removeFromACLDB(ctx, fn, grantee)
+	if err != nil {
+		return errors.Wrap(err, "localfs: error removing from DB")
+	}
+
+	return nil
 }
+
 func (fs *localfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
-	return errtypes.NotSupported("local: operation not supported")
+	return fs.AddGrant(ctx, ref, g)
 }
 
 func (fs *localfs) GetQuota(ctx context.Context) (int, int, error) {

@@ -279,7 +279,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 // - the storage needs to implement AsTerminatableUpload
 // - the upload needs to implement Terminate
 
-// AsTerminatableUpload returnsa a TerminatableUpload
+// AsTerminatableUpload returns a a TerminatableUpload
 func (fs *localfs) AsTerminatableUpload(upload tusd.Upload) tusd.TerminatableUpload {
 	return upload.(*fileUpload)
 }
