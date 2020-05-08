@@ -328,18 +328,23 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 		}
 	}
 
+	log := appctx.GetLogger(upload.ctx)
 	err := os.Rename(upload.binPath, np)
+	if err != nil {
+		log.Err(err).Interface("info", upload.info).
+			Str("binPath", upload.binPath).
+			Str("np", np).
+			Msg("ocfs: could not rename")
+		return err
+	}
 
 	// only delete the upload if it was successfully written to eos
 	if err := os.Remove(upload.infoPath); err != nil {
-		log := appctx.GetLogger(upload.ctx)
-		log.Err(err).Interface("info", upload.info).Msg("eos: could not delete upload info")
+		log.Err(err).Interface("info", upload.info).Msg("ocfs: could not delete upload info")
 	}
 
-	upload.fs.propagate(upload.ctx, np)
-
 	// FIXME metadata propagation is left to the storage implementation
-	return err
+	return upload.fs.propagate(upload.ctx, np)
 }
 
 // To implement the termination extension as specified in https://tus.io/protocols/resumable-upload.html#termination

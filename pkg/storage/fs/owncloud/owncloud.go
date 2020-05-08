@@ -1233,7 +1233,7 @@ func (fs *ocfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (e
 	if err := fs.propagate(ctx, newName); err != nil {
 		return err
 	}
-	if err := fs.propagate(ctx, oldName); err != nil {
+	if err := fs.propagate(ctx, path.Dir(oldName)); err != nil {
 		return err
 	}
 	return nil
@@ -1420,6 +1420,10 @@ func (fs *ocfs) RestoreRevision(ctx context.Context, ref *provider.Reference, re
 
 	_, err = io.Copy(destination, source)
 
+	if err != nil {
+		return err
+	}
+
 	// TODO(jfd) bring back revision in case sth goes wrong?
 	return fs.propagate(ctx, np)
 }
@@ -1566,9 +1570,6 @@ func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key string) error {
 }
 
 func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {
-	log := appctx.GetLogger(ctx)
-	log.Debug().Str("leafPath", leafPath).
-		Msg("propagate()")
 	var root string
 	if fs.c.EnableHome {
 		root = fs.wrap(ctx, "/")
@@ -1576,8 +1577,6 @@ func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {
 		u := user.ContextMustGetUser(ctx)
 		root = fs.wrap(ctx, path.Join("/", u.GetUsername()))
 	}
-	log.Debug().Str("leafPath", leafPath).Str("root", root).
-		Msg("propagate() found root")
 	if !strings.HasPrefix(leafPath, root) {
 		err := errors.New("internal path outside root")
 		appctx.GetLogger(ctx).Error().
