@@ -1,0 +1,4 @@
+[shared]
+jwt_secret = "mysecret"
+
+[http.services.prometheus]
