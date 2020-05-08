@@ -65,7 +65,7 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	}, nil
 }
 
-func (m *manager) Authenticate(ctx context.Context, token string, secret string) (*user.User, error) {
+func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user.User, error) {
 	gwConn, err := pool.GetGatewayServiceClient(m.c.GatewayAddr)
 	if err != nil {
 		return nil, err
@@ -75,7 +75,7 @@ func (m *manager) Authenticate(ctx context.Context, token string, secret string)
 		Token: token,
 		Opaque: &typesv1beta1.Opaque{
 			Map: map[string]*typesv1beta1.OpaqueEntry{
-				"password": &typesv1beta1.OpaqueEntry{
+				"password": {
 					Value: []byte(secret),
 				},
 			},
@@ -83,12 +83,6 @@ func (m *manager) Authenticate(ctx context.Context, token string, secret string)
 	})
 	if err != nil {
 		return nil, err
-	}
-
-	// how can basic auth flow be triggered from here?
-	if publicShareResponse.Share.GetPasswordProtected() {
-		// publicShareResponse.GetShare().
-		return nil, errors.New("resource password protected, bearer token not found")
 	}
 
 	getUserResponse, err := gwConn.GetUser(ctx, &userprovider.GetUserRequest{
@@ -100,3 +94,6 @@ func (m *manager) Authenticate(ctx context.Context, token string, secret string)
 
 	return getUserResponse.GetUser(), nil
 }
+
+// ErrPasswordNotProvided is returned when the public share is password protected, but there was no password on the request
+var ErrPasswordNotProvided = errors.New("public share is password protected, but password was not provided")

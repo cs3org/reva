@@ -27,6 +27,7 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/mitchellh/mapstructure"
@@ -58,7 +59,10 @@ func (s *service) Close() error {
 	return nil
 }
 
-func (s *service) UnprotectedEndpoints() []string { return []string{} }
+func (s *service) UnprotectedEndpoints() []string {
+	// return []string{"/cs3.sharing.link.v1beta1.LinkAPI/GetPublicShareByToken"}
+	return []string{}
+}
 
 func (s *service) Register(ss *grpc.Server) {
 	provider.RegisterProviderAPIServer(ss, s)
@@ -304,7 +308,16 @@ func (s *service) trimMountPrefix(fn string) (string, error) {
 func (s *service) pathFromToken(ctx context.Context, token string) (string, error) {
 	publicShareResponse, err := s.gateway.GetPublicShareByToken(
 		ctx,
-		&link.GetPublicShareByTokenRequest{Token: token},
+		&link.GetPublicShareByTokenRequest{
+			Token: token,
+			Opaque: &typesv1beta1.Opaque{
+				Map: map[string]*typesv1beta1.OpaqueEntry{
+					"source": {
+						Value: []byte("internal"),
+					},
+				},
+			},
+		},
 	)
 	if err != nil {
 		return "", err
