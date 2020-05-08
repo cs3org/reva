@@ -19,7 +19,6 @@
 package metrics
 
 func init() {
-	GetNumUsers()
 	// import prometheus and define metrics
 	// define your variables, like active users
 	// for the mockup: every 2 seconds, increase number of users.
