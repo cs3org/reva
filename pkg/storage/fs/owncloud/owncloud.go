@@ -1141,11 +1141,15 @@ func (fs *ocfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 			}
 		default:
 			if err = xattr.Remove(np, mdPrefix+k); err != nil {
-				log.Error().Err(err).
-					Str("np", np).
-					Str("key", k).
-					Msg("could not unset metadata")
-				errs = append(errs, errors.Wrap(err, "could not unset metadata"))
+				// a non-existing attribute will return an error, which we can ignore
+				// (using string compare because the error type is syscall.Errno and not wrapped/recognizable)
+				if e, ok := err.(*xattr.Error); !ok || e.Err.Error() != "no data available" {
+					log.Error().Err(err).
+						Str("np", np).
+						Str("key", k).
+						Msg("could not unset metadata")
+					errs = append(errs, errors.Wrap(err, "could not unset metadata"))
+				}
 			}
 		}
 	}
