@@ -19,20 +19,26 @@
 package eosclientgrpc
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
+	"os/exec"
 	gouser "os/user"
 	"path"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/cs3org/reva/pkg/appctx"
 	erpc "github.com/cs3org/reva/pkg/eosclientgrpc/eos_grpc"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/acl"
+	"github.com/gofrs/uuid"
 	"github.com/pkg/errors"
+	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
 
 	"github.com/cs3org/reva/pkg/logger"
@@ -122,6 +128,10 @@ type Options struct {
 	// Authkey is the key that authorizes this client to connect to the GRPC service
 	// It's unclear whether this will be the final solution
 	Authkey string
+
+	// SecProtocol is the comma separated list of security protocols used by xrootd.
+	// For example: "sss, unix"
+	SecProtocol string
 }
 
 func (opt *Options) init() {
@@ -207,8 +217,14 @@ func New(opt *Options) *Client {
 		fmt.Printf("--- getACLForPath '%s' failed with err '%s'\n", "/eos/cms", err)
 		return nil
 	}
-	fmt.Printf("--- getACLForPath to '%s' gave ''%s'\n", "/eos/cms", arep.Entries)
+	for i, s := range arep.Entries {
+		fmt.Printf("--- getACLForPath to '%s' gave %d:'%s'\n", "/eos/cms", i, s)
+	}
 
+	// Let's be successful if the ping was ok. This is an initialization phase
+	// and we enforce the server to be up
+	// TBD: some watchdog to automatically reconnect, yet it's not yet clear to me
+	//  the behaviour of grpc in the case of failing/restarting servers. To be tested!
 	if prep != nil {
 		return c
 	}
@@ -671,12 +687,41 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, username, path string) (
 
 // GetQuota gets the quota of a user on the quota node defined by path
 func (c *Client) GetQuota(ctx context.Context, username, path string) (int, int, error) {
-	return 0, 0, errtypes.NotFound(fmt.Sprintf("%s:%s", "acltype", path))
+	return 0, 0, errtypes.NotSupported(fmt.Sprintf("%s:%s", "acltype", path))
 }
 
 // Touch creates a 0-size,0-replica file in the EOS namespace.
 func (c *Client) Touch(ctx context.Context, username, path string) error {
-	return errtypes.NotFound(fmt.Sprintf("%s:%s", "acltype", path))
+	log := appctx.GetLogger(ctx)
+
+	// Initialize the common fields of the NSReq
+	rq, err := c.initNSRequest(username)
+	if err != nil {
+		return err
+	}
+
+	msg := new(erpc.NSRequest_TouchRequest)
+
+	msg.Id = new(erpc.MDId)
+	msg.Id.Path = []byte(path)
+
+	rq.Command = &erpc.NSRequest_Touch{msg}
+
+	// Now send the req and see what happens
+	resp, err := erpc.EosClient.Exec(c.cl, ctx, rq)
+	if err != nil {
+		log.Warn().Err(err).Str("username", username).Str("path", path).Str("err", err.Error())
+		return err
+	}
+
+	log.Info().Str("username", username).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+
+	if resp == nil {
+		return errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' path: '%s'", username, path))
+	}
+
+	return err
+
 }
 
 // Chown given path
@@ -959,42 +1004,112 @@ func (c *Client) List(ctx context.Context, username, path string) ([]*FileInfo, 
 
 // Read reads a file from the mgm
 func (c *Client) Read(ctx context.Context, username, path string) (io.ReadCloser, error) {
-	return nil, errtypes.NotFound(fmt.Sprintf("%s:%s", "acltype", path))
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return nil, err
+	}
+	uuid := uuid.Must(uuid.NewV4())
+	rand := "eosread-" + uuid.String()
+	localTarget := fmt.Sprintf("%s/%s", c.opt.CacheDirectory, rand)
+	xrdPath := fmt.Sprintf("%s//%s", c.opt.URL, path)
+	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, "--nopbar", "--silent", "-f", xrdPath, localTarget, fmt.Sprintf("-OSeos.ruid=%s&eos.rgid=%s", unixUser.Uid, unixUser.Gid))
+	_, _, err = c.execute(ctx, cmd)
+	if err != nil {
+		return nil, err
+	}
+	return os.Open(localTarget)
 }
 
 // Write writes a file to the mgm
 func (c *Client) Write(ctx context.Context, username, path string, stream io.ReadCloser) error {
-	return errtypes.NotFound(fmt.Sprintf("%s:%s", "acltype", path))
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return err
+	}
+	fd, err := ioutil.TempFile(c.opt.CacheDirectory, "eoswrite-")
+	if err != nil {
+		return err
+	}
+	defer fd.Close()
+	defer os.RemoveAll(fd.Name())
+
+	// copy stream to local temp file
+	_, err = io.Copy(fd, stream)
+	if err != nil {
+		return err
+	}
+	xrdPath := fmt.Sprintf("%s//%s", c.opt.URL, path)
+	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, "--nopbar", "--silent", "-f", fd.Name(), xrdPath, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s", unixUser.Uid, unixUser.Gid))
+	_, _, err = c.execute(ctx, cmd)
+	return err
 }
 
 // ListDeletedEntries returns a list of the deleted entries.
 func (c *Client) ListDeletedEntries(ctx context.Context, username string) ([]*DeletedEntry, error) {
-	return nil, errtypes.NotFound(fmt.Sprintf("%s:%s", "username", username))
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return nil, err
+	}
+	// TODO(labkode): add protection if slave is configured and alive to count how many files are in the trashbin before
+	// triggering the recycle ls call that could break the instance because of unavailable memory.
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "recycle", "ls", "-m")
+	stdout, _, err := c.executeEOS(ctx, cmd)
+	if err != nil {
+		return nil, err
+	}
+	return parseRecycleList(stdout)
 }
 
 // RestoreDeletedEntry restores a deleted entry.
 func (c *Client) RestoreDeletedEntry(ctx context.Context, username, key string) error {
-	return errtypes.NotFound(fmt.Sprintf("%s:%s", "key", key))
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return err
+	}
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "recycle", "restore", key)
+	_, _, err = c.executeEOS(ctx, cmd)
+	return err
 }
 
 // PurgeDeletedEntries purges all entries from the recycle bin.
 func (c *Client) PurgeDeletedEntries(ctx context.Context, username string) error {
-	return errtypes.NotFound(fmt.Sprintf("%s:%s", "acltype", username))
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return err
+	}
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "recycle", "purge")
+	_, _, err = c.executeEOS(ctx, cmd)
+	return err
 }
 
 // ListVersions list all the versions for a given file.
 func (c *Client) ListVersions(ctx context.Context, username, p string) ([]*FileInfo, error) {
-	return nil, errtypes.NotFound(fmt.Sprintf("%s:%s", "p", p))
+	basename := path.Base(p)
+	versionFolder := path.Join(path.Dir(p), versionPrefix+basename)
+	finfos, err := c.List(ctx, username, versionFolder)
+	if err != nil {
+		// we send back an empty list
+		return []*FileInfo{}, nil
+	}
+	return finfos, nil
 }
 
 // RollbackToVersion rollbacks a file to a previous version.
 func (c *Client) RollbackToVersion(ctx context.Context, username, path, version string) error {
-	return errtypes.NotFound(fmt.Sprintf("%s:%s", "acltype", path))
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return err
+	}
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "file", "versions", path, version)
+	_, _, err = c.executeEOS(ctx, cmd)
+	return err
 }
 
 // ReadVersion reads the version for the given file.
 func (c *Client) ReadVersion(ctx context.Context, username, p, version string) (io.ReadCloser, error) {
-	return nil, errtypes.NotFound(fmt.Sprintf("%s:%s", "acltype", version))
+	basename := path.Base(p)
+	versionFile := path.Join(path.Dir(p), versionPrefix+basename, version)
+	return c.Read(ctx, username, versionFile)
 }
 
 func parseRecycleList(raw string) ([]*DeletedEntry, error) {
@@ -1322,4 +1437,102 @@ type DeletedEntry struct {
 	Size          uint64
 	DeletionMTime uint64
 	IsDir         bool
+}
+
+// exec executes the command and returns the stdout, stderr and return code
+func (c *Client) execute(ctx context.Context, cmd *exec.Cmd) (string, string, error) {
+	log := appctx.GetLogger(ctx)
+
+	outBuf := &bytes.Buffer{}
+	errBuf := &bytes.Buffer{}
+	cmd.Stdout = outBuf
+	cmd.Stderr = errBuf
+	cmd.Env = []string{
+		"EOS_MGM_URL=" + c.opt.URL,
+	}
+
+	if c.opt.UseKeytab {
+		cmd.Env = append(cmd.Env, "XrdSecPROTOCOL="+c.opt.SecProtocol)
+		cmd.Env = append(cmd.Env, "XrdSecSSSKT="+c.opt.Keytab)
+	}
+
+	err := cmd.Run()
+
+	var exitStatus int
+	if exiterr, ok := err.(*exec.ExitError); ok {
+		// The program has exited with an exit code != 0
+		// This works on both Unix and Windows. Although package
+		// syscall is generally platform dependent, WaitStatus is
+		// defined for both Unix and Windows and in both cases has
+		// an ExitStatus() method with the same signature.
+		if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
+
+			exitStatus = status.ExitStatus()
+			switch exitStatus {
+			case 0:
+				err = nil
+			case 2:
+				err = errtypes.NotFound(errBuf.String())
+			}
+		}
+	}
+
+	args := fmt.Sprintf("%s", cmd.Args)
+	env := fmt.Sprintf("%s", cmd.Env)
+	log.Info().Str("args", args).Str("env", env).Int("exit", exitStatus).Msg("eos cmd")
+
+	if err != nil && exitStatus != 2 { // don't wrap the errtypes.NotFoundError
+		err = errors.Wrap(err, "eosclient: error while executing command")
+	}
+
+	return outBuf.String(), errBuf.String(), err
+}
+
+// exec executes only EOS commands the command and returns the stdout, stderr and return code.
+// execute() executes arbitrary commands.
+func (c *Client) executeEOS(ctx context.Context, cmd *exec.Cmd) (string, string, error) {
+	log := appctx.GetLogger(ctx)
+
+	outBuf := &bytes.Buffer{}
+	errBuf := &bytes.Buffer{}
+	cmd.Stdout = outBuf
+	cmd.Stderr = errBuf
+	cmd.Env = []string{
+		"EOS_MGM_URL=" + c.opt.URL,
+	}
+	trace := trace.FromContext(ctx).SpanContext().TraceID.String()
+	cmd.Args = append(cmd.Args, "--comment", trace)
+
+	err := cmd.Run()
+
+	var exitStatus int
+	if exiterr, ok := err.(*exec.ExitError); ok {
+		// The program has exited with an exit code != 0
+		// This works on both Unix and Windows. Although package
+		// syscall is generally platform dependent, WaitStatus is
+		// defined for both Unix and Windows and in both cases has
+		// an ExitStatus() method with the same signature.
+		if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
+			exitStatus = status.ExitStatus()
+			switch exitStatus {
+			case 0:
+				err = nil
+			case 2:
+				err = errtypes.NotFound(errBuf.String())
+			case 22:
+				// eos reports back error code 22 when the user is not allowed to enter the instance
+				err = errtypes.PermissionDenied(errBuf.String())
+			}
+		}
+	}
+
+	args := fmt.Sprintf("%s", cmd.Args)
+	env := fmt.Sprintf("%s", cmd.Env)
+	log.Info().Str("args", args).Str("env", env).Int("exit", exitStatus).Str("err", errBuf.String()).Msg("eos cmd")
+
+	if err != nil && exitStatus != 2 { // don't wrap the errtypes.NotFoundError
+		err = errors.Wrap(err, "eosclient: error while executing command")
+	}
+
+	return outBuf.String(), errBuf.String(), err
 }
