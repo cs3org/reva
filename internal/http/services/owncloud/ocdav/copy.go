@@ -21,6 +21,7 @@ package ocdav
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"path"
@@ -29,18 +30,30 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
+	tokenpkg "github.com/cs3org/reva/pkg/token"
+	"github.com/eventials/go-tus"
+	"github.com/eventials/go-tus/memorystore"
 )
 
 func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
+
+	ns = applyLayout(ctx, ns)
+
 	src := path.Join(ns, r.URL.Path)
 	dstHeader := r.Header.Get("Destination")
 	overwrite := r.Header.Get("Overwrite")
+	depth := r.Header.Get("Depth")
+	if depth == "" {
+		depth = "infinity"
+	}
 
-	log.Info().Str("source", src).Str("destination", dstHeader).Str("overwrite", overwrite).Msg("copy")
+	log.Info().Str("source", src).Str("destination", dstHeader).
+		Str("overwrite", overwrite).Str("depth", depth).Msg("copy")
 
 	if dstHeader == "" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -53,6 +66,11 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	if overwrite != "T" && overwrite != "F" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if depth != "infinity" && depth != "0" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -150,7 +168,7 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 		// TODO what if intermediate is a file?
 	}
 
-	err = descend(ctx, client, srcStatRes.Info, dst)
+	err = descend(ctx, client, srcStatRes.Info, dst, depth == "infinity")
 	if err != nil {
 		log.Error().Err(err).Msg("error descending directory")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -159,7 +177,7 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	w.WriteHeader(successCode)
 }
 
-func descend(ctx context.Context, client gateway.GatewayAPIClient, src *provider.ResourceInfo, dst string) error {
+func descend(ctx context.Context, client gateway.GatewayAPIClient, src *provider.ResourceInfo, dst string, recurse bool) error {
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("src", src.Path).Str("dst", dst).Msg("descending")
 	if src.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
@@ -172,6 +190,12 @@ func descend(ctx context.Context, client gateway.GatewayAPIClient, src *provider
 		createRes, err := client.CreateContainer(ctx, createReq)
 		if err != nil || createRes.Status.Code != rpc.Code_CODE_OK {
 			return err
+		}
+
+		// TODO: also copy properties: https://tools.ietf.org/html/rfc4918#section-9.8.2
+
+		if !recurse {
+			return nil
 		}
 
 		// descend for children
@@ -190,7 +214,7 @@ func descend(ctx context.Context, client gateway.GatewayAPIClient, src *provider
 
 		for i := range res.Infos {
 			childDst := path.Join(dst, path.Base(res.Infos[i].Path))
-			err := descend(ctx, client, res.Infos[i], childDst)
+			err := descend(ctx, client, res.Infos[i], childDst, recurse)
 			if err != nil {
 				return err
 			}
@@ -220,6 +244,15 @@ func descend(ctx context.Context, client gateway.GatewayAPIClient, src *provider
 		uReq := &provider.InitiateFileUploadRequest{
 			Ref: &provider.Reference{
 				Spec: &provider.Reference_Path{Path: dst},
+			},
+			Opaque: &typespb.Opaque{
+				Map: map[string]*typespb.OpaqueEntry{
+					"Upload-Length": {
+						Decoder: "plain",
+						// TODO: handle case where size is not known in advance
+						Value: []byte(fmt.Sprintf("%d", src.GetSize())),
+					},
+				},
 			},
 		}
 
@@ -252,25 +285,60 @@ func descend(ctx context.Context, client gateway.GatewayAPIClient, src *provider
 		}
 
 		// do upload
-		// TODO(jfd): check if large files are really streamed
-
-		httpUploadReq, err := rhttp.NewRequest(ctx, "PUT", uRes.UploadEndpoint, httpDownloadRes.Body)
+		err = tusUpload(ctx, uRes.UploadEndpoint, dst, httpDownloadRes.Body, src.GetSize())
 		if err != nil {
 			return err
 		}
+	}
+	return nil
+}
 
-		httpUploadClient := rhttp.GetHTTPClient(ctx)
+func tusUpload(ctx context.Context, dataServerURL string, fn string, body io.Reader, length uint64) error {
+	var err error
+	log := appctx.GetLogger(ctx)
 
-		httpRes, err := httpUploadClient.Do(httpUploadReq)
-		if err != nil {
-			return err
-		}
-		defer httpRes.Body.Close()
+	// create the tus client.
+	c := tus.DefaultConfig()
+	c.Resume = true
+	c.HttpClient = rhttp.GetHTTPClient(ctx)
+	c.Store, err = memorystore.NewMemoryStore()
+	if err != nil {
+		return err
+	}
 
-		if httpRes.StatusCode != http.StatusOK {
-			return fmt.Errorf("status code %d", httpDownloadRes.StatusCode)
-		}
+	log.Debug().
+		Str("header", tokenpkg.TokenHeader).
+		Str("token", tokenpkg.ContextMustGetToken(ctx)).
+		Msg("adding token to header")
+	c.Header.Set(tokenpkg.TokenHeader, tokenpkg.ContextMustGetToken(ctx))
 
+	tusc, err := tus.NewClient(dataServerURL, c)
+	if err != nil {
+		return nil
+	}
+
+	// TODO: also copy properties: https://tools.ietf.org/html/rfc4918#section-9.8.2
+	metadata := map[string]string{
+		"filename": path.Base(fn),
+		"dir":      path.Dir(fn),
+		//"checksum": fmt.Sprintf("%s %s", storageprovider.GRPC2PKGXS(xsType).String(), xs),
+	}
+	log.Debug().
+		Str("length", fmt.Sprintf("%d", length)).
+		Str("filename", path.Base(fn)).
+		Str("dir", path.Dir(fn)).
+		Msg("tus.NewUpload")
+
+	upload := tus.NewUpload(body, int64(length), metadata, "")
+
+	// create the uploader.
+	c.Store.Set(upload.Fingerprint, dataServerURL)
+	uploader := tus.NewUploader(tusc, dataServerURL, upload, 0)
+
+	// start the uploading process.
+	err = uploader.Upload()
+	if err != nil {
+		return err
 	}
 	return nil
 }

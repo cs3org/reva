@@ -173,7 +173,7 @@ blacklisted_files = ["foo"]
 undelete = true
 versioning = true
 [http.services.ocssvc.capabilities.capabilities.dav]
-chunking = "1.0"
+chunking = "" # set to "1.0" for experimental support
 [http.services.ocssvc.capabilities.capabilities.files_sharing]
 api_enabled = true
 resharing = true

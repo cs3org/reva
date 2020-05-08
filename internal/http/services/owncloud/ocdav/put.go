@@ -27,12 +27,17 @@ import (
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/utils"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
+	tokenpkg "github.com/cs3org/reva/pkg/token"
+	"github.com/eventials/go-tus"
+	"github.com/eventials/go-tus/memorystore"
 )
 
 func isChunked(fn string) (bool, error) {
+	// FIXME: also need to check whether the OC-Chunked header is set
 	return regexp.MatchString(`-chunking-\w+-[0-9]+-[0-9]+$`, fn)
 }
 
@@ -104,6 +109,9 @@ func isContentRange(r *http.Request) bool {
 func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
+
+	ns = applyLayout(ctx, ns)
+
 	fn := path.Join(ns, r.URL.Path)
 
 	if r.Body == nil {
@@ -120,6 +128,15 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	if ok {
+		// TODO: disable if chunking capability is turned off in config
+		/**
+		if s.c.Capabilities.Dav.Chunking == "1.0" {
+			s.handlePutChunked(w, r)
+		} else {
+			log.Error().Err(err).Msg("chunking 1.0 is not enabled")
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		*/
 		s.handlePutChunked(w, r)
 		return
 	}
@@ -184,9 +201,23 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 		}
 	}
 
+	length, err := strconv.ParseInt(r.Header.Get("Content-Length"), 10, 64)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
 	uReq := &provider.InitiateFileUploadRequest{
 		Ref: &provider.Reference{
 			Spec: &provider.Reference_Path{Path: fn},
+		},
+		Opaque: &typespb.Opaque{
+			Map: map[string]*typespb.OpaqueEntry{
+				"Upload-Length": {
+					Decoder: "plain",
+					Value:   []byte(r.Header.Get("Content-Length")),
+				},
+			},
 		},
 	}
 
@@ -204,25 +235,44 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	dataServerURL := uRes.UploadEndpoint
-	// TODO(labkode): do a protocol switch
-	httpReq, err := rhttp.NewRequest(ctx, "PUT", dataServerURL, r.Body)
+
+	// create the tus client.
+	c := tus.DefaultConfig()
+	c.Resume = true
+	c.HttpClient = rhttp.GetHTTPClient(ctx)
+	c.Store, err = memorystore.NewMemoryStore()
 	if err != nil {
-		log.Error().Err(err).Msg("error creating http request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	httpReq.Header.Set("X-Reva-Transfer", uRes.Token)
 
-	httpClient := rhttp.GetHTTPClient(ctx)
-	httpRes, err := httpClient.Do(httpReq)
+	log.Debug().
+		Str("header", tokenpkg.TokenHeader).
+		Str("token", tokenpkg.ContextMustGetToken(ctx)).
+		Msg("adding token to header")
+	c.Header.Set(tokenpkg.TokenHeader, tokenpkg.ContextMustGetToken(ctx))
+
+	tusc, err := tus.NewClient(dataServerURL, c)
 	if err != nil {
-		log.Error().Err(err).Msg("error doing http request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	defer httpRes.Body.Close()
 
-	if httpRes.StatusCode != http.StatusOK {
+	metadata := map[string]string{
+		"filename": path.Base(fn),
+		"dir":      path.Dir(fn),
+		//"checksum": fmt.Sprintf("%s %s", storageprovider.GRPC2PKGXS(xsType).String(), xs),
+	}
+
+	upload := tus.NewUpload(r.Body, length, metadata, "")
+
+	// create the uploader.
+	c.Store.Set(upload.Fingerprint, dataServerURL)
+	uploader := tus.NewUploader(tusc, dataServerURL, upload, 0)
+
+	// start the uploading process.
+	err = uploader.Upload()
+	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
