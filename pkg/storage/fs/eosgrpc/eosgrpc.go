@@ -226,6 +226,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		UseKeytab:           c.UseKeytab,
 		Keytab:              c.Keytab,
 		Authkey:             c.Authkey,
+		SecProtocol:         c.SecProtocol,
 	}
 
 	eosClient := eosclientgrpc.New(eosClientOpts)
