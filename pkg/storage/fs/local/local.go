@@ -754,7 +754,7 @@ func (fs *localfs) ListRevisions(ctx context.Context, ref *provider.Reference) (
 func (fs *localfs) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (io.ReadCloser, error) {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return errors.Wrap(err, "localfs: error resolving ref")
+		return nil, errors.Wrap(err, "localfs: error resolving ref")
 	}
 
 	versionsDir := fs.wrapVersions(ctx, fs.unwrap(ctx, np))
