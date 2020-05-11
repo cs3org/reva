@@ -461,9 +461,6 @@ func (fs *localfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 				if err := os.Chtimes(np, mtime, mtime); err != nil {
 					return errors.Wrap(err, "could not set mtime")
 				}
-				if err = fs.addToMtimeDB(ctx, np, mtime.String(), mtime.String()); err != nil {
-					return errors.Wrap(err, "localfs: error adding entry to DB")
-				}
 			} else {
 				return errors.Wrap(err, "could not parse mtime")
 			}
@@ -637,24 +634,29 @@ func (fs *localfs) Delete(ctx context.Context, ref *provider.Reference) error {
 func (fs *localfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) error {
 	oldName, err := fs.resolve(ctx, oldRef)
 	if err != nil {
-		return errors.Wrap(err, "error resolving ref")
+		return errors.Wrap(err, "localfs: error resolving ref")
 	}
 
 	newName, err := fs.resolve(ctx, newRef)
 	if err != nil {
-		return errors.Wrap(err, "error resolving ref")
+		return errors.Wrap(err, "localfs: error resolving ref")
 	}
 
 	if err := os.Rename(oldName, newName); err != nil {
 		return errors.Wrap(err, "localfs: error moving "+oldName+" to "+newName)
 	}
+
+	if err := fs.copyMD(oldName, newName); err != nil {
+		return errors.Wrap(err, "localfs: error copying metadata")
+	}
+
 	return nil
 }
 
 func (fs *localfs) GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error) {
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return nil, errors.Wrap(err, "error resolving ref")
+		return nil, errors.Wrap(err, "localfs: error resolving ref")
 	}
 
 	md, err := os.Stat(fn)
@@ -671,7 +673,7 @@ func (fs *localfs) GetMD(ctx context.Context, ref *provider.Reference) (*provide
 func (fs *localfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error) {
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return nil, errors.Wrap(err, "error resolving ref")
+		return nil, errors.Wrap(err, "localfs: error resolving ref")
 	}
 
 	mds, err := ioutil.ReadDir(fn)
@@ -705,8 +707,48 @@ func (fs *localfs) Download(ctx context.Context, ref *provider.Reference) (io.Re
 	return r, nil
 }
 
+func (fs *localfs) archiveRevision(ctx context.Context, np string) error {
+	versionsDir := fs.wrapVersions(ctx, fs.unwrap(ctx, np))
+	if err := os.MkdirAll(versionsDir, 0700); err != nil {
+		return errors.Wrap(err, "localfs: error creating file versions dir "+versionsDir)
+	}
+
+	vp := path.Join(versionsDir, fmt.Sprintf(".v%d", time.Now().Unix()))
+	if err := os.Rename(np, vp); err != nil {
+		return errors.Wrap(err, "localfs: error renaming from "+np+" to "+vp)
+	}
+
+	return nil
+}
+
 func (fs *localfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {
-	return nil, errtypes.NotSupported("list revisions")
+	np, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return nil, errors.Wrap(err, "localfs: error resolving ref")
+	}
+
+	versionsDir := fs.wrapVersions(ctx, fs.unwrap(ctx, np))
+	revisions := []*provider.FileVersion{}
+	mds, err := ioutil.ReadDir(versionsDir)
+	if err != nil {
+		return nil, errors.Wrap(err, "localfs: error reading"+versionsDir)
+	}
+
+	for i := range mds {
+		// versions resemble .v12345678
+		version := mds[i].Name()[2:]
+
+		mtime, err := strconv.Atoi(version)
+		if err != nil {
+			continue
+		}
+		revisions = append(revisions, &provider.FileVersion{
+			Key:   version,
+			Size:  uint64(mds[i].Size()),
+			Mtime: uint64(mtime),
+		})
+	}
+	return revisions, nil
 }
 
 func (fs *localfs) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (io.ReadCloser, error) {
@@ -714,7 +756,33 @@ func (fs *localfs) DownloadRevision(ctx context.Context, ref *provider.Reference
 }
 
 func (fs *localfs) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) error {
-	return errtypes.NotSupported("restore revision")
+	np, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "localfs: error resolving ref")
+	}
+
+	versionsDir := fs.wrapVersions(ctx, fs.unwrap(ctx, np))
+	vp := path.Join(versionsDir, fmt.Sprintf(".v%s", revisionKey))
+
+	// check revision exists
+	vs, err := os.Stat(vp)
+	if err != nil {
+		return err
+	}
+
+	if !vs.Mode().IsRegular() {
+		return fmt.Errorf("%s is not a regular file", vp)
+	}
+
+	if err := fs.archiveRevision(ctx, np); err != nil {
+		return err
+	}
+
+	if err := os.Rename(vp, np); err != nil {
+		return errors.Wrap(err, "localfs: error renaming from "+vp+" to "+np)
+	}
+
+	return err
 }
 
 func (fs *localfs) PurgeRecycleItem(ctx context.Context, key string) error {

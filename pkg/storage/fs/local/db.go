@@ -54,7 +54,7 @@ func initializeDB(root string) (*sql.DB, error) {
 		return nil, errors.Wrap(err, "localfs: error executing create statement")
 	}
 
-	stmt, err = db.Prepare("CREATE TABLE IF NOT EXISTS metadata (resource TEXT PRIMARY KEY, mtime TEXT DEFAULT '', atime TEXT DEFAULT '', etag TEXT DEFAULT '')")
+	stmt, err = db.Prepare("CREATE TABLE IF NOT EXISTS metadata (resource TEXT PRIMARY KEY, etag TEXT DEFAULT '')")
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error preparing statement")
 	}
@@ -150,18 +150,6 @@ func (fs *localfs) removeFromFavoritesDB(ctx context.Context, resource, grantee 
 	return nil
 }
 
-func (fs *localfs) addToMtimeDB(ctx context.Context, resource, mtime, atime string) error {
-	stmt, err := fs.db.Prepare("INSERT INTO metadata (resource, mtime, atime) VALUES (?, ?, ?) ON CONFLICT(resource) DO UPDATE SET mtime=?, atime=?")
-	if err != nil {
-		return errors.Wrap(err, "localfs: error preparing statement")
-	}
-	_, err = stmt.Exec(resource, mtime, atime, mtime, atime)
-	if err != nil {
-		return errors.Wrap(err, "localfs: error executing insert statement")
-	}
-	return nil
-}
-
 func (fs *localfs) addToEtagDB(ctx context.Context, resource, etag string) error {
 	stmt, err := fs.db.Prepare("INSERT INTO metadata (resource, etag) VALUES (?, ?) ON CONFLICT(resource) DO UPDATE SET etag=?")
 	if err != nil {
@@ -170,6 +158,27 @@ func (fs *localfs) addToEtagDB(ctx context.Context, resource, etag string) error
 	_, err = stmt.Exec(resource, etag, etag)
 	if err != nil {
 		return errors.Wrap(err, "localfs: error executing insert statement")
+	}
+	return nil
+}
+
+func (fs *localfs) copyMD(s string, t string) (err error) {
+	stmt, err := fs.db.Prepare("UPDATE user_interaction SET resource=? WHERE resource=?")
+	if err != nil {
+		return errors.Wrap(err, "localfs: error preparing statement")
+	}
+	_, err = stmt.Exec(t, s)
+	if err != nil {
+		return errors.Wrap(err, "localfs: error executing delete statement")
+	}
+
+	stmt, err = fs.db.Prepare("UPDATE metadata SET resource=? WHERE resource=?")
+	if err != nil {
+		return errors.Wrap(err, "localfs: error preparing statement")
+	}
+	_, err = stmt.Exec(t, s)
+	if err != nil {
+		return errors.Wrap(err, "localfs: error executing delete statement")
 	}
 	return nil
 }

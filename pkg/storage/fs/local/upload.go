@@ -55,6 +55,14 @@ func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.Rea
 		return errors.Wrap(err, "localfs: eror writing to tmp file "+tmp.Name())
 	}
 
+	// if destination exists
+	if _, err := os.Stat(fn); err == nil {
+		// create revision
+		if err := fs.archiveRevision(ctx, fn); err != nil {
+			return err
+		}
+	}
+
 	// TODO(labkode): make sure rename is atomic, missing fsync ...
 	if err := os.Rename(tmp.Name(), fn); err != nil {
 		return errors.Wrap(err, "localfs: error renaming from "+tmp.Name()+" to "+fn)
@@ -262,6 +270,14 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 	// the fileid is based on the path, so no we do not need to copy it to the new file
 	// the local storage does not track revisions
 	//}
+
+	// if destination exists
+	if _, err := os.Stat(np); err == nil {
+		// create revision
+		if err := upload.fs.archiveRevision(ctx, np); err != nil {
+			return err
+		}
+	}
 
 	err := os.Rename(upload.binPath, np)
 
