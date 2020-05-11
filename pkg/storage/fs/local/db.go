@@ -45,7 +45,7 @@ func initializeDB(root string) (*sql.DB, error) {
 		return nil, errors.Wrap(err, "localfs: error executing create statement")
 	}
 
-	stmt, err = db.Prepare("CREATE TABLE IF NOT EXISTS user_interaction (resource TEXT, grantee TEXT, role TEXT DEFAULT '', favorite INTEGER DEFAULT 0) PRIMARY KEY (resource, grantee)")
+	stmt, err = db.Prepare("CREATE TABLE IF NOT EXISTS user_interaction (resource TEXT, grantee TEXT, role TEXT DEFAULT '', favorite INTEGER DEFAULT 0, PRIMARY KEY (resource, grantee))")
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error preparing statement")
 	}
@@ -78,8 +78,13 @@ func (fs *localfs) addToRecycledDB(ctx context.Context, key, fileName string) er
 	return nil
 }
 
-func (fs *localfs) getRecycledEntry(ctx context.Context, key string, path *string) error {
-	return fs.db.QueryRow("SELECT path FROM recycled_entries WHERE key=?", key).Scan(*path)
+func (fs *localfs) getRecycledEntry(ctx context.Context, key string) (string, error) {
+	var filePath string
+	err := fs.db.QueryRow("SELECT path FROM recycled_entries WHERE key=?", key).Scan(&filePath)
+	if err != nil {
+		return "", err
+	}
+	return filePath, nil
 }
 
 func (fs *localfs) removeFromRecycledDB(ctx context.Context, key string) error {

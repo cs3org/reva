@@ -752,7 +752,23 @@ func (fs *localfs) ListRevisions(ctx context.Context, ref *provider.Reference) (
 }
 
 func (fs *localfs) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (io.ReadCloser, error) {
-	return nil, errtypes.NotSupported("download revision")
+	np, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "localfs: error resolving ref")
+	}
+
+	versionsDir := fs.wrapVersions(ctx, fs.unwrap(ctx, np))
+	vp := path.Join(versionsDir, fmt.Sprintf(".v%s", revisionKey))
+
+	r, err := os.Open(vp)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, errtypes.NotFound(vp)
+		}
+		return nil, errors.Wrap(err, "localfs: error reading "+vp)
+	}
+
+	return r, nil
 }
 
 func (fs *localfs) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) error {
@@ -819,8 +835,7 @@ func (fs *localfs) convertToRecycleItem(ctx context.Context, rp string, md os.Fi
 		return nil
 	}
 
-	var path string
-	err = fs.getRecycledEntry(ctx, md.Name(), &path)
+	filePath, err := fs.getRecycledEntry(ctx, md.Name())
 	if err != nil {
 		return nil
 	}
@@ -828,7 +843,7 @@ func (fs *localfs) convertToRecycleItem(ctx context.Context, rp string, md os.Fi
 	return &provider.RecycleItem{
 		Type: getResourceType(md.IsDir()),
 		Key:  md.Name(),
-		Path: path,
+		Path: filePath,
 		Size: uint64(md.Size()),
 		DeletionTime: &types.Timestamp{
 			Seconds: uint64(ttime),
@@ -861,13 +876,12 @@ func (fs *localfs) RestoreRecycleItem(ctx context.Context, restoreKey string) er
 		return errors.New("localfs: invalid trash item suffix")
 	}
 
-	var path string
-	err := fs.getRecycledEntry(ctx, restoreKey, &path)
+	filePath, err := fs.getRecycledEntry(ctx, restoreKey)
 	if err != nil {
 		return errors.Wrap(err, "localfs: invalid key")
 	}
 
-	originalPath := fs.wrap(ctx, path)
+	originalPath := fs.wrap(ctx, filePath)
 	rp := fs.wrapRecycleBin(ctx, restoreKey)
 
 	if err := os.Rename(rp, originalPath); err != nil {

@@ -26,8 +26,10 @@ import (
 	"os"
 	"path/filepath"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	tusd "github.com/tus/tusd/pkg/handler"
@@ -140,9 +142,17 @@ func (fs *localfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tu
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error resolving upload path")
 	}
+	usr := user.ContextMustGetUser(ctx)
 	info.Storage = map[string]string{
 		"Type":                "LocalStore",
+		"BinPath":             binPath,
 		"InternalDestination": np,
+
+		"Idp":      usr.Id.Idp,
+		"UserId":   usr.Id.OpaqueId,
+		"UserName": usr.Username,
+
+		"LogLevel": log.GetLevel().String(),
 	}
 	// Create binary file with no content
 	file, err := os.OpenFile(binPath, os.O_CREATE|os.O_WRONLY, defaultFilePerm)
@@ -194,11 +204,22 @@ func (fs *localfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error
 
 	info.Offset = stat.Size()
 
+	u := &userpb.User{
+		Id: &userpb.UserId{
+			Idp:      info.Storage["Idp"],
+			OpaqueId: info.Storage["UserId"],
+		},
+		Username: info.Storage["UserName"],
+	}
+
+	ctx = user.ContextSetUser(ctx, u)
+
 	return &fileUpload{
 		info:     info,
 		binPath:  binPath,
 		infoPath: infoPath,
 		fs:       fs,
+		ctx:      ctx,
 	}, nil
 }
 
@@ -211,6 +232,8 @@ type fileUpload struct {
 	binPath string
 	// only fs knows how to handle metadata and versions
 	fs *localfs
+	// a context with a user
+	ctx context.Context
 }
 
 // GetInfo returns the FileInfo
@@ -274,7 +297,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 	// if destination exists
 	if _, err := os.Stat(np); err == nil {
 		// create revision
-		if err := upload.fs.archiveRevision(ctx, np); err != nil {
+		if err := upload.fs.archiveRevision(upload.ctx, np); err != nil {
 			return err
 		}
 	}
