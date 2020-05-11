@@ -573,8 +573,7 @@ func (fs *ocfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provid
 	if err := xattr.Set(np, attr, getValue(e)); err != nil {
 		return err
 	}
-	fs.propagate(ctx, np)
-	return nil
+	return fs.propagate(ctx, np)
 }
 
 func getValue(e *ace) []byte {
@@ -941,8 +940,7 @@ func (fs *ocfs) CreateDir(ctx context.Context, fn string) (err error) {
 		// FIXME we also need already exists error, webdav expects 405 MethodNotAllowed
 		return errors.Wrap(err, "ocfs: error creating dir "+np)
 	}
-	fs.propagate(ctx, np)
-	return nil
+	return fs.propagate(ctx, np)
 }
 
 func (fs *ocfs) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
@@ -1072,8 +1070,7 @@ func (fs *ocfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referenc
 	}
 	switch len(errs) {
 	case 0:
-		fs.propagate(ctx, np)
-		return nil
+		return fs.propagate(ctx, np)
 	case 1:
 		return errs[0]
 	default:
@@ -1156,8 +1153,7 @@ func (fs *ocfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 
 	switch len(errs) {
 	case 0:
-		fs.propagate(ctx, np)
-		return nil
+		return fs.propagate(ctx, np)
 	case 1:
 		return errs[0]
 	default:
@@ -1226,10 +1222,8 @@ func (fs *ocfs) Delete(ctx context.Context, ref *provider.Reference) (err error)
 		}
 	}
 
-	fs.propagate(ctx, path.Dir(np))
-
 	// TODO(jfd) move versions to trash
-	return nil
+	return fs.propagate(ctx, path.Dir(np))
 }
 
 func (fs *ocfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (err error) {
@@ -1244,8 +1238,12 @@ func (fs *ocfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (e
 	if err = os.Rename(oldName, newName); err != nil {
 		return errors.Wrap(err, "ocfs: error moving "+oldName+" to "+newName)
 	}
-	fs.propagate(ctx, newName)
-	fs.propagate(ctx, oldName)
+	if err := fs.propagate(ctx, newName); err != nil {
+		return err
+	}
+	if err := fs.propagate(ctx, path.Dir(oldName)); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1430,10 +1428,12 @@ func (fs *ocfs) RestoreRevision(ctx context.Context, ref *provider.Reference, re
 
 	_, err = io.Copy(destination, source)
 
-	fs.propagate(ctx, np)
+	if err != nil {
+		return err
+	}
 
 	// TODO(jfd) bring back revision in case sth goes wrong?
-	return err
+	return fs.propagate(ctx, np)
 }
 
 func (fs *ocfs) PurgeRecycleItem(ctx context.Context, key string) error {
@@ -1574,12 +1574,10 @@ func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key string) error {
 	}
 	// TODO(jfd) restore versions
 
-	fs.propagate(ctx, tgt)
-
-	return nil
+	return fs.propagate(ctx, tgt)
 }
 
-func (fs *ocfs) propagate(ctx context.Context, leafPath string) {
+func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {
 	var root string
 	if fs.c.EnableHome {
 		root = fs.wrap(ctx, "/")
@@ -1588,12 +1586,13 @@ func (fs *ocfs) propagate(ctx context.Context, leafPath string) {
 		root = fs.wrap(ctx, path.Join("/", u.GetUsername()))
 	}
 	if !strings.HasPrefix(leafPath, root) {
+		err := errors.New("internal path outside root")
 		appctx.GetLogger(ctx).Error().
-			Err(errors.New("internal path outside root")).
+			Err(err).
 			Str("leafPath", leafPath).
 			Str("root", root).
 			Msg("could not propagate change")
-		return
+		return err
 	}
 
 	fi, err := os.Stat(leafPath)
@@ -1603,6 +1602,7 @@ func (fs *ocfs) propagate(ctx context.Context, leafPath string) {
 			Str("leafPath", leafPath).
 			Str("root", root).
 			Msg("could not propagate change")
+		return err
 	}
 
 	parts := strings.Split(strings.TrimPrefix(leafPath, root), "/")
@@ -1621,9 +1621,11 @@ func (fs *ocfs) propagate(ctx context.Context, leafPath string) {
 				Str("leafPath", leafPath).
 				Str("root", root).
 				Msg("could not propagate change")
+			return err
 		}
 		root = path.Join(root, parts[i])
 	}
+	return nil
 }
 
 // TODO propagate etag and mtime or append event to history? propagate on disk ...
