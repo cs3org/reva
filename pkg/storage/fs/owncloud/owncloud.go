@@ -1213,9 +1213,17 @@ func (fs *ocfs) Delete(ctx context.Context, ref *provider.Reference) (err error)
 	}
 
 	// move to trash location
-	tgt := path.Join(rp, fmt.Sprintf("%s.d%d", path.Base(np), time.Now().Unix()))
+	dtime := time.Now().Unix()
+	tgt := path.Join(rp, fmt.Sprintf("%s.d%d", path.Base(np), dtime))
 	if err := os.Rename(np, tgt); err != nil {
-		return errors.Wrap(err, "ocfs: could not restore item")
+		if os.IsExist(err) {
+			// timestamp collision, try again with higher value:
+			dtime++
+			tgt := path.Join(rp, fmt.Sprintf("%s.d%d", path.Base(np), dtime))
+			if err := os.Rename(np, tgt); err != nil {
+				return errors.Wrap(err, "ocfs: could not move item to trash")
+			}
+		}
 	}
 
 	fs.propagate(ctx, path.Dir(np))
