@@ -42,9 +42,7 @@ import (
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-
-	// Provides sqlite drivers
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/rs/zerolog/log"
 )
 
 func init() {
@@ -73,34 +71,6 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 		return nil, err
 	}
 	return c, nil
-}
-
-func initializeDB(root string) (*sql.DB, error) {
-	dbPath := path.Join(root, "localfs.db")
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		return nil, errors.Wrap(err, "localfs: error opening DB connection")
-	}
-
-	stmt, err := db.Prepare("CREATE TABLE IF NOT EXISTS recycled_entries (key TEXT PRIMARY KEY, path TEXT)")
-	if err != nil {
-		return nil, errors.Wrap(err, "localfs: error preparing statement")
-	}
-	_, err = stmt.Exec()
-	if err != nil {
-		return nil, errors.Wrap(err, "localfs: error executing create statement")
-	}
-
-	stmt, err = db.Prepare("CREATE TABLE IF NOT EXISTS acl (resource TEXT, grantee TEXT, role TEXT) PRIMARY KEY (resource, grantee)")
-	if err != nil {
-		return nil, errors.Wrap(err, "localfs: error preparing statement")
-	}
-	_, err = stmt.Exec()
-	if err != nil {
-		return nil, errors.Wrap(err, "localfs: error executing create statement")
-	}
-
-	return db, nil
 }
 
 // New returns an implementation to of the storage.FS interface that talk to
@@ -172,54 +142,6 @@ func getUser(ctx context.Context) (*userpb.User, error) {
 		return nil, err
 	}
 	return u, nil
-}
-
-func (fs *localfs) addToRecycledDB(ctx context.Context, key, fileName string) error {
-	stmt, err := fs.db.Prepare("INSERT INTO recycled_entries VALUES (?, ?)")
-	if err != nil {
-		return errors.Wrap(err, "localfs: error preparing statement")
-	}
-	_, err = stmt.Exec(key, fileName)
-	if err != nil {
-		return errors.Wrap(err, "localfs: error executing insert statement")
-	}
-	return nil
-}
-
-func (fs *localfs) removeFromRecycledDB(ctx context.Context, key string) error {
-	stmt, err := fs.db.Prepare("DELETE FROM recycled_entries WHERE key=?")
-	if err != nil {
-		return errors.Wrap(err, "localfs: error preparing statement")
-	}
-	_, err = stmt.Exec(key)
-	if err != nil {
-		return errors.Wrap(err, "localfs: error executing delete statement")
-	}
-	return nil
-}
-
-func (fs *localfs) addToACLDB(ctx context.Context, resource, grantee, role string) error {
-	stmt, err := fs.db.Prepare("INSERT INTO acl (resource, grantee, role) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE role=?")
-	if err != nil {
-		return errors.Wrap(err, "localfs: error preparing statement")
-	}
-	_, err = stmt.Exec(resource, grantee, role, role)
-	if err != nil {
-		return errors.Wrap(err, "localfs: error executing insert statement")
-	}
-	return nil
-}
-
-func (fs *localfs) removeFromACLDB(ctx context.Context, resource, grantee string) error {
-	stmt, err := fs.db.Prepare("DELETE FROM acl WHERE resource=? AND grantee=?")
-	if err != nil {
-		return errors.Wrap(err, "localfs: error preparing statement")
-	}
-	_, err = stmt.Exec(resource, grantee)
-	if err != nil {
-		return errors.Wrap(err, "localfs: error executing delete statement")
-	}
-	return nil
 }
 
 func (fs *localfs) wrap(ctx context.Context, p string) string {
@@ -342,7 +264,7 @@ func (fs *localfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (st
 	return path.Join("/", strings.TrimPrefix(id.OpaqueId, "fileid-")), nil
 }
 
-func Role2CS3Permissions(r string) (*provider.ResourcePermissions, error) {
+func role2CS3Permissions(r string) (*provider.ResourcePermissions, error) {
 	switch r {
 	case "viewer":
 		return &provider.ResourcePermissions{
@@ -402,7 +324,7 @@ func Role2CS3Permissions(r string) (*provider.ResourcePermissions, error) {
 	}
 }
 
-func CS3Permissions2Role(rp *provider.ResourcePermissions) (string, error) {
+func cs3Permissions2Role(rp *provider.ResourcePermissions) (string, error) {
 	switch {
 	case rp.AddGrant:
 		return "owner", nil
@@ -421,7 +343,7 @@ func (fs *localfs) AddGrant(ctx context.Context, ref *provider.Reference, g *pro
 		return errors.Wrap(err, "localfs: error resolving ref")
 	}
 
-	role, err := CS3Permissions2Role(g.Permissions)
+	role, err := cs3Permissions2Role(g.Permissions)
 	if err != nil {
 		return errors.Wrap(err, "localfs: unknown set permissions")
 	}
@@ -447,7 +369,7 @@ func (fs *localfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*
 		return nil, errors.Wrap(err, "localfs: error resolving ref")
 	}
 
-	grants, err := fs.db.Query("SELECT grantee, role FROM acl WHERE resource=?", fn)
+	grants, err := fs.getACLs(ctx, fn)
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error listing grants")
 	}
@@ -464,7 +386,7 @@ func (fs *localfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*
 			Type: fs.getGranteeType(string(granteeID[0])),
 		}
 
-		permissions, err := Role2CS3Permissions(role)
+		permissions, err := role2CS3Permissions(role)
 		if err != nil {
 			return nil, errors.Wrap(err, "localfs: unknown role")
 		}
@@ -493,9 +415,9 @@ func (fs *localfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *
 
 	var grantee string
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
-		grantee = "g:" + g.Grantee.Id.OpaqueId
+		grantee = fmt.Sprintf("g:%s@%s", g.Grantee.Id.OpaqueId, g.Grantee.Id.Idp)
 	} else {
-		grantee = "u:" + g.Grantee.Id.OpaqueId
+		grantee = fmt.Sprintf("u:%s@%s", g.Grantee.Id.OpaqueId, g.Grantee.Id.Idp)
 	}
 
 	err = fs.removeFromACLDB(ctx, fn, grantee)
@@ -518,11 +440,110 @@ func (fs *localfs) CreateReference(ctx context.Context, path string, targetURI *
 }
 
 func (fs *localfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
-	return errtypes.NotSupported("local: operation not supported")
+
+	np, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "localfs: error resolving ref")
+	}
+
+	fi, err := os.Stat(np)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errtypes.NotFound(fs.unwrap(ctx, np))
+		}
+		return errors.Wrap(err, "localfs: error stating "+np)
+	}
+
+	if md.Metadata != nil {
+		if val, ok := md.Metadata["mtime"]; ok {
+			if mtime, err := parseMTime(val); err == nil {
+				// updating mtime also updates atime
+				if err := os.Chtimes(np, mtime, mtime); err != nil {
+					return errors.Wrap(err, "could not set mtime")
+				}
+				if err = fs.addToMtimeDB(ctx, np, mtime.String(), mtime.String()); err != nil {
+					return errors.Wrap(err, "localfs: error adding entry to DB")
+				}
+			} else {
+				return errors.Wrap(err, "could not parse mtime")
+			}
+		}
+
+		if _, ok := md.Metadata["etag"]; ok {
+			etag := calcEtag(ctx, fi)
+			if etag == md.Metadata["etag"] {
+				log.Debug().Msg("ignoring request to update identical etag")
+			} else if err = fs.addToEtagDB(ctx, np, etag); err != nil {
+				return errors.Wrap(err, "localfs: error adding entry to DB")
+			}
+		}
+
+		if _, ok := md.Metadata["favorite"]; ok {
+			if u, err := getUser(ctx); err != nil {
+				if uid := u.GetId(); uid != nil {
+					usr := fmt.Sprintf("u:%s@%s", uid.GetOpaqueId(), uid.GetIdp())
+					if err = fs.addToFavoritesDB(ctx, np, usr); err != nil {
+						return errors.Wrap(err, "localfs: error adding entry to DB")
+					}
+				} else {
+					return errors.Wrap(errtypes.UserRequired("userrequired"), "user has no id")
+				}
+			} else {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func parseMTime(v string) (t time.Time, err error) {
+	p := strings.SplitN(v, ".", 2)
+	var sec, nsec int64
+	if sec, err = strconv.ParseInt(p[0], 10, 64); err == nil {
+		if len(p) > 1 {
+			nsec, err = strconv.ParseInt(p[1], 10, 64)
+		}
+	}
+	return time.Unix(sec, nsec), err
 }
 
 func (fs *localfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error {
-	return errtypes.NotSupported("local: operation not supported")
+
+	np, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "localfs: error resolving ref")
+	}
+
+	_, err = os.Stat(np)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errtypes.NotFound(fs.unwrap(ctx, np))
+		}
+		return errors.Wrap(err, "localfs: error stating "+np)
+	}
+
+	for _, k := range keys {
+		switch k {
+		case "favorite":
+			if u, err := getUser(ctx); err != nil {
+				if uid := u.GetId(); uid != nil {
+					usr := fmt.Sprintf("u:%s@%s", uid.GetOpaqueId(), uid.GetIdp())
+					if err = fs.removeFromFavoritesDB(ctx, np, usr); err != nil {
+						return errors.Wrap(err, "localfs: error removing entry from DB")
+					}
+				} else {
+					return errors.Wrap(errtypes.UserRequired("userrequired"), "user has no id")
+				}
+			} else {
+				return err
+			}
+		default:
+			return errors.Wrap(errtypes.NotSupported("metadata not supported"), "could not unset metadata")
+		}
+	}
+
+	return nil
 }
 
 func (fs *localfs) GetHome(ctx context.Context) (string, error) {
@@ -731,7 +752,7 @@ func (fs *localfs) convertToRecycleItem(ctx context.Context, rp string, md os.Fi
 	}
 
 	var path string
-	err = fs.db.QueryRow("SELECT path FROM recycled_entries WHERE key=?", md.Name()).Scan(&path)
+	err = fs.getRecycledEntry(ctx, md.Name(), &path)
 	if err != nil {
 		return nil
 	}
@@ -773,7 +794,7 @@ func (fs *localfs) RestoreRecycleItem(ctx context.Context, restoreKey string) er
 	}
 
 	var path string
-	err := fs.db.QueryRow("SELECT path FROM recycled_entries WHERE key=?", restoreKey).Scan(&path)
+	err := fs.getRecycledEntry(ctx, restoreKey, &path)
 	if err != nil {
 		return errors.Wrap(err, "localfs: invalid key")
 	}
