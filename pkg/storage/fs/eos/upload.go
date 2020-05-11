@@ -148,6 +148,16 @@ func (fs *eosfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd
 		fs:       fs,
 	}
 
+	if !info.SizeIsDeferred && info.Size == 0 {
+		log.Debug().Interface("info", info).Msg("eos: finishing upload for empty file")
+		// no need to create info file and finish directly
+		err := u.FinishUpload(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return u, nil
+	}
+
 	// writeInfo creates the file by itself if necessary
 	err = u.writeInfo()
 	if err != nil {
@@ -285,12 +295,16 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 		// cleanup in the background, delete might take a while and we don't need to wait for it to finish
 		go func() {
 			if err := os.Remove(upload.infoPath); err != nil {
-				log := appctx.GetLogger(ctx)
-				log.Err(err).Interface("info", upload.info).Msg("eos: could not delete upload info")
+				if !os.IsNotExist(err) {
+					log := appctx.GetLogger(ctx)
+					log.Err(err).Interface("info", upload.info).Msg("eos: could not delete upload info")
+				}
 			}
 			if err := os.Remove(upload.binPath); err != nil {
-				log := appctx.GetLogger(ctx)
-				log.Err(err).Interface("info", upload.info).Msg("eos: could not delete upload binary")
+				if !os.IsNotExist(err) {
+					log := appctx.GetLogger(ctx)
+					log.Err(err).Interface("info", upload.info).Msg("eos: could not delete upload binary")
+				}
 			}
 		}()
 	}
@@ -310,10 +324,14 @@ func (fs *eosfs) AsTerminatableUpload(upload tusd.Upload) tusd.TerminatableUploa
 // Terminate terminates the upload
 func (upload *fileUpload) Terminate(ctx context.Context) error {
 	if err := os.Remove(upload.infoPath); err != nil {
-		return err
+		if !os.IsNotExist(err) {
+			return err
+		}
 	}
 	if err := os.Remove(upload.binPath); err != nil {
-		return err
+		if !os.IsNotExist(err) {
+			return err
+		}
 	}
 	return nil
 }
