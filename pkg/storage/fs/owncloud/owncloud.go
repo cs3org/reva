@@ -1163,6 +1163,14 @@ func (fs *ocfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 }
 
 // Delete is actually only a move to trash
+//
+// This is a first optimistic approach.
+// When a file has versions and we want to delete the file it could happen that
+// the service crashes before all moves are finished.
+// That would result in invalid state like the main files was moved but the
+// versions were not.
+// We will live with that compromise since this storage driver will be
+// deprecated soon.
 func (fs *ocfs) Delete(ctx context.Context, ref *provider.Reference) (err error) {
 
 	var np string
@@ -1203,6 +1211,25 @@ func (fs *ocfs) Delete(ctx context.Context, ref *provider.Reference) (err error)
 		return errors.Wrap(err, "ocfs: error creating trashbin dir "+rp)
 	}
 
+	err = fs.trash(ctx, np, rp, fp)
+	if err != nil {
+		return errors.Wrap(err, "ocfs: error deleting file "+np)
+	}
+
+	vp := fs.getVersionsPath(ctx, np)
+
+	// Ignore error since the only possible error is malformed pattern.
+	versions, _ := filepath.Glob(vp + ".v*")
+	for _, v := range versions {
+		err := fs.trash(ctx, v, rp, fp)
+		if err != nil {
+			return errors.Wrap(err, "ocfs: error deleting file "+v)
+		}
+	}
+	return nil
+}
+
+func (fs *ocfs) trash(ctx context.Context, np string, rp string, fp string) error {
 	// set origin location in metadata
 	if err := xattr.Set(np, trashOriginPrefix, []byte(fp)); err != nil {
 		return err
@@ -1222,7 +1249,6 @@ func (fs *ocfs) Delete(ctx context.Context, ref *provider.Reference) (err error)
 		}
 	}
 
-	// TODO(jfd) move versions to trash
 	return fs.propagate(ctx, path.Dir(np))
 }
 
