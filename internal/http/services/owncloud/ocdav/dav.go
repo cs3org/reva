@@ -107,6 +107,9 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			}
 
 			res, err := c.Authenticate(r.Context(), &authenticateRequest)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+			}
 			if res.Status.Code == rpcv1beta1.Code_CODE_UNAUTHENTICATED {
 				w.WriteHeader(http.StatusUnauthorized)
 			}
