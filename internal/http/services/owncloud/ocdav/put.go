@@ -254,6 +254,7 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 
 	tusc, err := tus.NewClient(dataServerURL, c)
 	if err != nil {
+		log.Error().Err(err).Msg("Could not get TUS client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -273,10 +274,12 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 	// start the uploading process.
 	err = uploader.Upload()
 	if err != nil {
+		log.Error().Err(err).Msg("Could not start TUS upload")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
+	// stat again to check the new file's metadata
 	sRes, err = client.Stat(ctx, sReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending grpc stat request")
@@ -285,6 +288,7 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	if sRes.Status.Code != rpc.Code_CODE_OK {
+		log.Error().Err(err).Msgf("error status %d when sending grpc stat request", sRes.Status.Code)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
