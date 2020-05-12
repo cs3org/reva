@@ -46,6 +46,8 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 	defer span.End()
 	log := appctx.GetLogger(ctx)
 
+	ns = applyLayout(ctx, ns)
+
 	fn := path.Join(ns, r.URL.Path)
 	listChildren := r.Header.Get("Depth") != "0"
 
@@ -112,6 +114,13 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 	}
 	w.Header().Set("DAV", "1, 3, extended-mkcol")
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+	// let clients know this collection supports tus.io POST requests to start uploads
+	if info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		w.Header().Add("Access-Control-Expose-Headers", "Tus-Resumable, Tus-Version, Tus-Extension")
+		w.Header().Set("Tus-Resumable", "1.0.0")
+		w.Header().Set("Tus-Version", "1.0.0")
+		w.Header().Set("Tus-Extension", "creation,creation-with-upload")
+	}
 	w.WriteHeader(http.StatusMultiStatus)
 	if _, err := w.Write([]byte(propRes)); err != nil {
 		log.Err(err).Msg("error writing response")
@@ -173,6 +182,14 @@ func (s *svc) xmlEscaped(val string) string {
 	buf := new(bytes.Buffer)
 	xml.Escape(buf, []byte(val))
 	return buf.String()
+}
+
+func (s *svc) newPropNS(namespace string, local string, val string) *propertyXML {
+	return &propertyXML{
+		XMLName:  xml.Name{Space: namespace, Local: local},
+		Lang:     "",
+		InnerXML: []byte(val),
+	}
 }
 
 func (s *svc) newProp(key, val string) *propertyXML {
@@ -237,11 +254,15 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				s.newProp("d:getcontenttype", "httpd/unix-directory"),
 				s.newProp("oc:size", size),
 			)
-		} else if md.MimeType != "" {
+		} else {
 			response.Propstat[0].Prop = append(response.Propstat[0].Prop,
-				s.newProp("d:getcontenttype", md.MimeType),
 				s.newProp("d:getcontentlength", size),
 			)
+			if md.MimeType != "" {
+				response.Propstat[0].Prop = append(response.Propstat[0].Prop,
+					s.newProp("d:getcontenttype", md.MimeType),
+				)
+			}
 		}
 		// Finder needs the the getLastModified property to work.
 		t := utils.TSToTime(md.Mtime).UTC()
@@ -406,11 +427,24 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:"+pf.Prop[i].Local, ""))
 				}
 			default:
-				// TODO (jfd) lookup shortname for unknown namespaces?
-				propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp(pf.Prop[i].Space+":"+pf.Prop[i].Local, ""))
+				// handle custom properties
+				if k := md.GetArbitraryMetadata(); k == nil {
+					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newPropNS(pf.Prop[i].Space, pf.Prop[i].Local, ""))
+				} else if amd := k.GetMetadata(); amd == nil {
+					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newPropNS(pf.Prop[i].Space, pf.Prop[i].Local, ""))
+				} else if v, ok := amd[fmt.Sprintf("%s/%s", pf.Prop[i].Space, pf.Prop[i].Local)]; ok && v != "" {
+					propstatOK.Prop = append(propstatOK.Prop, s.newPropNS(pf.Prop[i].Space, pf.Prop[i].Local, v))
+				} else {
+					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newPropNS(pf.Prop[i].Space, pf.Prop[i].Local, ""))
+				}
 			}
 		}
-		response.Propstat = append(response.Propstat, propstatOK, propstatNotFound)
+		if len(propstatOK.Prop) > 0 {
+			response.Propstat = append(response.Propstat, propstatOK)
+		}
+		if len(propstatNotFound.Prop) > 0 {
+			response.Propstat = append(response.Propstat, propstatNotFound)
+		}
 	}
 
 	return &response, nil

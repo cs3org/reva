@@ -22,12 +22,18 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"net/http"
 	"os"
+	"path/filepath"
+	"strconv"
 
 	"github.com/cheggaaa/pb"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+
+	tokenpkg "github.com/cs3org/reva/pkg/token"
+	"github.com/eventials/go-tus"
+	"github.com/eventials/go-tus/memorystore"
 
 	// TODO(labkode): this should not come from this package.
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
@@ -65,7 +71,7 @@ func uploadCommand() *command {
 
 		fmt.Printf("Local file size: %d bytes\n", md.Size())
 
-		client, err := getClient()
+		gwc, err := getClient()
 		if err != nil {
 			return err
 		}
@@ -76,9 +82,17 @@ func uploadCommand() *command {
 					Path: target,
 				},
 			},
+			Opaque: &typespb.Opaque{
+				Map: map[string]*typespb.OpaqueEntry{
+					"Upload-Length": {
+						Decoder: "plain",
+						Value:   []byte(strconv.FormatInt(md.Size(), 10)),
+					},
+				},
+			},
 		}
 
-		res, err := client.InitiateFileUpload(ctx, req)
+		res, err := gwc.InitiateFileUpload(ctx, req)
 		if err != nil {
 			return err
 		}
@@ -109,34 +123,53 @@ func uploadCommand() *command {
 		}
 
 		dataServerURL := res.UploadEndpoint
+
+		// create the tus client.
+		c := tus.DefaultConfig()
+		c.Resume = true
+		c.HttpClient = rhttp.GetHTTPClient(ctx)
+		c.Store, err = memorystore.NewMemoryStore()
+		if err != nil {
+			return err
+		}
+		if res.Token != "" {
+			fmt.Printf("using X-Reva-Transfer header\n")
+			c.Header.Add("X-Reva-Transfer", res.Token)
+		} else if token, ok := tokenpkg.ContextGetToken(ctx); ok {
+			fmt.Printf("using %s header\n", tokenpkg.TokenHeader)
+			c.Header.Add(tokenpkg.TokenHeader, token)
+		}
+		tusc, err := tus.NewClient(dataServerURL, c)
+		if err != nil {
+			return err
+		}
+
+		metadata := map[string]string{
+			"filename": filepath.Base(target),
+			"dir":      filepath.Dir(target),
+			"checksum": fmt.Sprintf("%s %s", storageprovider.GRPC2PKGXS(xsType).String(), xs),
+		}
+
+		fingerprint := fmt.Sprintf("%s-%d-%s-%s", md.Name(), md.Size(), md.ModTime(), xs)
+
 		bar := pb.New(int(md.Size())).SetUnits(pb.U_BYTES)
 		bar.Start()
 		reader := bar.NewProxyReader(fd)
 
-		httpReq, err := rhttp.NewRequest(ctx, "PUT", dataServerURL, reader)
+		// create an upload from a file.
+		upload := tus.NewUpload(reader, md.Size(), metadata, fingerprint)
+
+		// create the uploader.
+		c.Store.Set(upload.Fingerprint, dataServerURL)
+		uploader := tus.NewUploader(tusc, dataServerURL, upload, 0)
+
+		// start the uploading process.
+		err = uploader.Upload()
 		if err != nil {
 			return err
 		}
-
-		httpReq.Header.Set("X-Reva-Transfer", res.Token)
-		q := httpReq.URL.Query()
-		q.Add("xs", xs)
-		q.Add("xs_type", storageprovider.GRPC2PKGXS(xsType).String())
-		httpReq.URL.RawQuery = q.Encode()
-
-		httpClient := rhttp.GetHTTPClient(ctx)
-
-		httpRes, err := httpClient.Do(httpReq)
-		if err != nil {
-			return err
-		}
-		defer httpRes.Body.Close()
 
 		bar.Finish()
-
-		if httpRes.StatusCode != http.StatusOK {
-			return err
-		}
 
 		req2 := &provider.StatRequest{
 			Ref: &provider.Reference{
@@ -145,7 +178,7 @@ func uploadCommand() *command {
 				},
 			},
 		}
-		res2, err := client.Stat(ctx, req2)
+		res2, err := gwc.Stat(ctx, req2)
 		if err != nil {
 			return err
 		}

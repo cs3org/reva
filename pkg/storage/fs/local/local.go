@@ -49,6 +49,12 @@ type config struct {
 	Root       string `mapstructure:"root"`
 	EnableHome bool   `mapstructure:"enable_home"`
 	UserLayout string `mapstructure:"user_layout"`
+	// Uploads folder should be on the same partition as root to make the final rename not fall back to a copy and delete
+	Uploads string `mapstructure:"uploads"`
+}
+
+type localfs struct {
+	conf *config
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -82,7 +88,15 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		return nil, errors.Wrap(err, "local: could not create namespace dir")
 	}
 
-	return &localfs{root: c.Root, conf: c}, nil
+	if c.Uploads == "" {
+		c.Uploads = path.Join(c.Root, ".uploads")
+	}
+
+	if err := os.MkdirAll(c.Uploads, 0700); err != nil {
+		return nil, errors.Wrap(err, "could not create uploads dir "+c.Uploads)
+	}
+
+	return &localfs{conf: c}, nil
 }
 
 func (fs *localfs) Shutdown(ctx context.Context) error {
@@ -113,7 +127,8 @@ func getUser(ctx context.Context) (*userpb.User, error) {
 	return u, nil
 }
 
-func (fs *localfs) wrap(ctx context.Context, p string) (internal string) {
+func (fs *localfs) wrap(ctx context.Context, p string) string {
+	var internal string
 	if fs.conf.EnableHome {
 		layout, err := fs.GetHome(ctx)
 		if err != nil {
@@ -123,10 +138,11 @@ func (fs *localfs) wrap(ctx context.Context, p string) (internal string) {
 	} else {
 		internal = path.Join(fs.conf.Root, p)
 	}
-	return
+	return internal
 }
 
-func (fs *localfs) unwrap(ctx context.Context, np string) (external string) {
+func (fs *localfs) unwrap(ctx context.Context, np string) string {
+	var external string
 	if fs.conf.EnableHome {
 		layout, err := fs.GetHome(ctx)
 		if err != nil {
@@ -140,12 +156,7 @@ func (fs *localfs) unwrap(ctx context.Context, np string) (external string) {
 			external = "/"
 		}
 	}
-	return
-}
-
-type localfs struct {
-	root string
-	conf *config
+	return external
 }
 
 func (fs *localfs) normalize(ctx context.Context, fi os.FileInfo, fn string) *provider.ResourceInfo {
@@ -249,12 +260,14 @@ func (fs *localfs) CreateHome(ctx context.Context) error {
 
 func (fs *localfs) CreateDir(ctx context.Context, fn string) error {
 	fn = fs.wrap(ctx, fn)
+	if _, err := os.Stat(fn); err == nil {
+		return errtypes.AlreadyExists(fn)
+	}
 	err := os.Mkdir(fn, 0700)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errtypes.NotFound(fn)
 		}
-		// TODO(jfd): we also need already exists error, webdav expects 405 MethodNotAllowed
 		return errors.Wrap(err, "localfs: error creating dir "+fn)
 	}
 	return nil
@@ -333,33 +346,6 @@ func (fs *localfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*
 		finfos = append(finfos, fs.normalize(ctx, md, path.Join(fn, md.Name())))
 	}
 	return finfos, nil
-}
-
-func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
-	fn, err := fs.resolve(ctx, ref)
-	if err != nil {
-		return errors.Wrap(err, "error resolving ref")
-	}
-
-	// we cannot rely on /tmp as it can live in another partition and we can
-	// hit invalid cross-device link errors, so we create the tmp file in the same directory
-	// the file is supposed to be written.
-	tmp, err := ioutil.TempFile(path.Dir(fn), "._reva_atomic_upload")
-	if err != nil {
-		return errors.Wrap(err, "localfs: error creating tmp fn at "+path.Dir(fn))
-	}
-
-	_, err = io.Copy(tmp, r)
-	if err != nil {
-		return errors.Wrap(err, "localfs: eror writing to tmp file "+tmp.Name())
-	}
-
-	// TODO(labkode): make sure rename is atomic, missing fsync ...
-	if err := os.Rename(tmp.Name(), fn); err != nil {
-		return errors.Wrap(err, "localfs: error renaming from "+tmp.Name()+" to "+fn)
-	}
-
-	return nil
 }
 
 func (fs *localfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {

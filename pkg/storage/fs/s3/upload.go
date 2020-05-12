@@ -16,37 +16,16 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// +build windows
-
-package local
+package s3
 
 import (
 	"context"
-	"crypto/md5"
-	"encoding/binary"
-	"fmt"
-	"os"
 
-	"github.com/cs3org/reva/pkg/appctx"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/errtypes"
 )
 
-// calcEtag will create an etag based on the md5 of
-// - mtime,
-// - inode (if available),
-// - device (if available) and
-// - size.
-// errors are logged, but an etag will still be returned
-func calcEtag(ctx context.Context, fi os.FileInfo) string {
-	log := appctx.GetLogger(ctx)
-	h := md5.New()
-	err := binary.Write(h, binary.BigEndian, fi.ModTime().Unix())
-	if err != nil {
-		log.Error().Err(err).Msg("error writing mtime")
-	}
-	// device and inode have no meaning on windows
-	err = binary.Write(h, binary.BigEndian, fi.Size())
-	if err != nil {
-		log.Error().Err(err).Msg("error writing size")
-	}
-	return fmt.Sprintf(`"%x"`, h.Sum(nil))
+// InitiateUpload returns an upload id that can be used for uploads with tus
+func (fs *s3FS) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64) (uploadID string, err error) {
+	return "", errtypes.NotSupported("op not supported")
 }

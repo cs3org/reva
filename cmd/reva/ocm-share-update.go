@@ -52,7 +52,7 @@ func ocmShareUpdateCommand() *command {
 			return err
 		}
 
-		perm, err := getOCMSharePerm(*rol)
+		perm, _, err := getOCMSharePerm(*rol)
 		if err != nil {
 			return err
 		}

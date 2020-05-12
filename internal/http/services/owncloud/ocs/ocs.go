@@ -30,6 +30,11 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
+const (
+	apiV1 = "v1.php"
+	apiV2 = "v2.php"
+)
+
 func init() {
 	global.Register("ocs", New)
 }
@@ -86,13 +91,11 @@ func (s *svc) Handler() http.Handler {
 
 		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("ocs routing")
 
-		// TODO v2 uses a status code mapper
-		// see https://github.com/owncloud/core/commit/bacf1603ffd53b7a5f73854d1d0ceb4ae545ce9f#diff-262cbf0df26b45bad0cf00d947345d9c
-		if head == "v1.php" || head == "v2.php" {
-			s.V1Handler.Handler().ServeHTTP(w, r)
+		if !(head == apiV1 || head == apiV2) {
+			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "Not found", nil)
 			return
 		}
-
-		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "Not found", nil)
+		ctx := response.WithAPIVersion(r.Context(), head)
+		s.V1Handler.Handler().ServeHTTP(w, r.WithContext(ctx))
 	})
 }

@@ -7,18 +7,19 @@ require (
 	github.com/Masterminds/goutils v1.1.0 // indirect
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/Masterminds/sprig v2.22.0+incompatible
-	github.com/aws/aws-sdk-go v1.30.12
+	github.com/aws/aws-sdk-go v1.30.25
 	github.com/cheggaaa/pb v1.0.28
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/cs3org/go-cs3apis v0.0.0-20200423154403-462ce7762d4a
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
+	github.com/eventials/go-tus v0.0.0-20190617130015-9db47421f6a0
 	github.com/fatih/color v1.7.0 // indirect
 	github.com/go-openapi/strfmt v0.19.2 // indirect
-	github.com/gofrs/uuid v3.2.0+incompatible
-	github.com/golang/protobuf v1.3.5
+	github.com/gofrs/uuid v3.3.0+incompatible
+	github.com/golang/protobuf v1.4.1
 	github.com/gomodule/redigo v2.0.0+incompatible
 	github.com/google/uuid v1.1.1
-	github.com/grpc-ecosystem/go-grpc-middleware v1.0.1-0.20190118093823-f849b5445de4
+	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0
 	github.com/huandu/xstrings v1.3.0 // indirect
 	github.com/imdario/mergo v0.3.8 // indirect
 	github.com/jedib0t/go-pretty v4.3.0+incompatible
@@ -35,6 +36,7 @@ require (
 	github.com/prometheus/client_golang v0.9.3 // indirect
 	github.com/rs/cors v1.7.0
 	github.com/rs/zerolog v1.18.0
+	github.com/tus/tusd v1.1.1-0.20200416115059-9deabf9d80c2
 	go.opencensus.io v0.22.3
 	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550
 	golang.org/x/net v0.0.0-20200226121028-0de0cce0169b // indirect
@@ -51,3 +53,5 @@ require (
 )
 
 go 1.13
+
+replace github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
