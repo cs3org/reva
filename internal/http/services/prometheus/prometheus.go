@@ -20,6 +20,7 @@ package prometheus
 
 import (
 	"net/http"
+	mtrcs "reva/pkg/metrics"
 
 	"contrib.go.opencensus.io/exporter/prometheus"
 	"github.com/cs3org/reva/pkg/rhttp/global"
@@ -31,6 +32,8 @@ import (
 
 func init() {
 	global.Register("prometheus", New)
+	m := mtrcs.New()
+	m.SayHello()
 }
 
 // New returns a new prometheus service
