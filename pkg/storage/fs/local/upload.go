@@ -43,6 +43,7 @@ func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.Rea
 	if err != nil {
 		return errors.Wrap(err, "error resolving ref")
 	}
+	fn = fs.wrap(ctx, fn)
 
 	// we cannot rely on /tmp as it can live in another partition and we can
 	// hit invalid cross-device link errors, so we create the tmp file in the same directory
@@ -84,12 +85,10 @@ func (fs *localfs) InitiateUpload(ctx context.Context, ref *provider.Reference, 
 		return "", errors.Wrap(err, "localfs: error resolving reference")
 	}
 
-	p := fs.unwrap(ctx, np)
-
 	info := tusd.FileInfo{
 		MetaData: tusd.MetaData{
-			"filename": filepath.Base(p),
-			"dir":      filepath.Dir(p),
+			"filename": filepath.Base(np),
+			"dir":      filepath.Dir(np),
 		},
 		Size: uploadLength,
 	}

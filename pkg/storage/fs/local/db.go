@@ -63,7 +63,7 @@ func initializeDB(root string) (*sql.DB, error) {
 		return nil, errors.Wrap(err, "localfs: error executing create statement")
 	}
 
-	stmt, err = db.Prepare("CREATE TABLE IF NOT EXISTS references (resource TEXT PRIMARY KEY, target TEXT)")
+	stmt, err = db.Prepare("CREATE TABLE IF NOT EXISTS share_references (resource TEXT PRIMARY KEY, target TEXT)")
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error preparing statement")
 	}
@@ -177,7 +177,7 @@ func (fs *localfs) addToEtagDB(ctx context.Context, resource, etag string) error
 }
 
 func (fs *localfs) addToReferencesDB(ctx context.Context, resource, target string) error {
-	stmt, err := fs.db.Prepare("INSERT INTO references (resource, target) VALUES (?, ?) ON CONFLICT(resource) DO UPDATE SET target=?")
+	stmt, err := fs.db.Prepare("INSERT INTO share_references (resource, target) VALUES (?, ?) ON CONFLICT(resource) DO UPDATE SET target=?")
 	if err != nil {
 		return errors.Wrap(err, "localfs: error preparing statement")
 	}
@@ -190,7 +190,7 @@ func (fs *localfs) addToReferencesDB(ctx context.Context, resource, target strin
 
 func (fs *localfs) getReferenceEntry(ctx context.Context, resource string) (string, error) {
 	var target string
-	err := fs.db.QueryRow("SELECT target FROM references WHERE resource=?", resource).Scan(&target)
+	err := fs.db.QueryRow("SELECT target FROM share_references WHERE resource=?", resource).Scan(&target)
 	if err != nil {
 		return "", err
 	}
@@ -208,6 +208,15 @@ func (fs *localfs) copyMD(s string, t string) (err error) {
 	}
 
 	stmt, err = fs.db.Prepare("UPDATE metadata SET resource=? WHERE resource=?")
+	if err != nil {
+		return errors.Wrap(err, "localfs: error preparing statement")
+	}
+	_, err = stmt.Exec(t, s)
+	if err != nil {
+		return errors.Wrap(err, "localfs: error executing delete statement")
+	}
+
+	stmt, err = fs.db.Prepare("UPDATE share_references SET resource=? WHERE resource=?")
 	if err != nil {
 		return errors.Wrap(err, "localfs: error preparing statement")
 	}

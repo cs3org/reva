@@ -42,7 +42,6 @@ import (
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 )
 
 func init() {
@@ -94,15 +93,16 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	if c.ShareFolder == "" {
 		c.ShareFolder = "/MyShares"
 	}
+
 	// ensure share folder always starts with slash
 	c.ShareFolder = path.Join("/", c.ShareFolder)
 
 	c.Uploads = path.Join(c.Root, ".uploads")
+	c.Shadow = path.Join(c.Root, ".shadow")
 	c.RecycleBin = path.Join(c.Root, ".recycle_bin")
 	c.Versions = path.Join(c.Root, ".versions")
-	c.Shadow = path.Join(c.Root, ".shadow", "home")
 
-	namespaces := []string{c.Root, c.Uploads, c.RecycleBin, c.Versions, path.Join(c.Shadow, c.ShareFolder)}
+	namespaces := []string{c.Root, c.Uploads, c.Shadow, c.RecycleBin, c.Versions}
 
 	// create namespaces if they do not exist
 	for _, v := range namespaces {
@@ -164,6 +164,20 @@ func (fs *localfs) wrap(ctx context.Context, p string) string {
 	return internal
 }
 
+func (fs *localfs) wrapShadow(ctx context.Context, p string) string {
+	var internal string
+	if fs.conf.EnableHome {
+		layout, err := fs.GetHome(ctx)
+		if err != nil {
+			panic(err)
+		}
+		internal = path.Join(fs.conf.Shadow, layout, "home", p)
+	} else {
+		internal = path.Join(fs.conf.Shadow, "home", p)
+	}
+	return internal
+}
+
 func (fs *localfs) wrapRecycleBin(ctx context.Context, p string) string {
 	var internal string
 	if fs.conf.EnableHome {
@@ -174,20 +188,6 @@ func (fs *localfs) wrapRecycleBin(ctx context.Context, p string) string {
 		internal = path.Join(fs.conf.RecycleBin, layout, p)
 	} else {
 		internal = path.Join(fs.conf.RecycleBin, p)
-	}
-	return internal
-}
-
-func (fs *localfs) wrapShadow(ctx context.Context, p string) string {
-	var internal string
-	if fs.conf.EnableHome {
-		layout, err := fs.GetHome(ctx)
-		if err != nil {
-			panic(err)
-		}
-		internal = path.Join(fs.conf.Shadow, layout, p)
-	} else {
-		internal = path.Join(fs.conf.Shadow, p)
 	}
 	return internal
 }
@@ -498,7 +498,16 @@ func (fs *localfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 	if err != nil {
 		return errors.Wrap(err, "localfs: error resolving ref")
 	}
-	np = fs.wrap(ctx, np)
+
+	if fs.isShareFolderRoot(ctx, np) {
+		return errtypes.PermissionDenied("localfs: cannot set metadata for the virtual share folder")
+	}
+
+	if fs.isShareFolderChild(ctx, np) {
+		np = fs.wrapShadow(ctx, np)
+	} else {
+		np = fs.wrap(ctx, np)
+	}
 
 	fi, err := os.Stat(np)
 	if err != nil {
@@ -522,10 +531,11 @@ func (fs *localfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 
 		if _, ok := md.Metadata["etag"]; ok {
 			etag := calcEtag(ctx, fi)
-			if etag == md.Metadata["etag"] {
-				log.Debug().Msg("ignoring request to update identical etag")
-			} else if err = fs.addToEtagDB(ctx, np, etag); err != nil {
-				return errors.Wrap(err, "localfs: error adding entry to DB")
+			if etag != md.Metadata["etag"] {
+				err = fs.addToEtagDB(ctx, np, etag)
+				if err != nil {
+					return errors.Wrap(err, "localfs: error adding entry to DB")
+				}
 			}
 		}
 
@@ -565,7 +575,16 @@ func (fs *localfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Ref
 	if err != nil {
 		return errors.Wrap(err, "localfs: error resolving ref")
 	}
-	np = fs.wrap(ctx, np)
+
+	if fs.isShareFolderRoot(ctx, np) {
+		return errtypes.PermissionDenied("localfs: cannot set metadata for the virtual share folder")
+	}
+
+	if fs.isShareFolderChild(ctx, np) {
+		np = fs.wrapShadow(ctx, np)
+	} else {
+		np = fs.wrap(ctx, np)
+	}
 
 	_, err = os.Stat(np)
 	if err != nil {
@@ -618,7 +637,7 @@ func (fs *localfs) CreateHome(ctx context.Context) error {
 		return errtypes.NotSupported("localfs: create home not supported")
 	}
 
-	homePaths := []string{fs.wrap(ctx, "/"), fs.wrapRecycleBin(ctx, "/"), fs.wrapVersions(ctx, "/"), fs.wrapShadow(ctx, "/")}
+	homePaths := []string{fs.wrap(ctx, "/"), fs.wrapRecycleBin(ctx, "/"), fs.wrapVersions(ctx, "/"), fs.wrapShadow(ctx, fs.conf.ShareFolder)}
 
 	for _, v := range homePaths {
 		if err := fs.createHomeInternal(ctx, v); err != nil {
@@ -829,6 +848,7 @@ func (fs *localfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*
 func (fs *localfs) listHome(ctx context.Context, home string) ([]*provider.ResourceInfo, error) {
 
 	fn := fs.wrap(ctx, home)
+
 	mds, err := ioutil.ReadDir(fn)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -847,6 +867,7 @@ func (fs *localfs) listHome(ctx context.Context, home string) ([]*provider.Resou
 func (fs *localfs) listShareFolderRoot(ctx context.Context, home string) ([]*provider.ResourceInfo, error) {
 
 	fn := fs.wrapShadow(ctx, home)
+
 	mds, err := ioutil.ReadDir(fn)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -857,7 +878,13 @@ func (fs *localfs) listShareFolderRoot(ctx context.Context, home string) ([]*pro
 
 	finfos := []*provider.ResourceInfo{}
 	for _, md := range mds {
-		finfos = append(finfos, fs.convertToFileReference(ctx, md, path.Join(fn, md.Name())))
+		var info *provider.ResourceInfo
+		if fs.isShareFolderRoot(ctx, path.Join("/", md.Name())) {
+			info = fs.normalize(ctx, md, path.Join(fn, md.Name()))
+		} else {
+			info = fs.convertToFileReference(ctx, md, path.Join(fn, md.Name()))
+		}
+		finfos = append(finfos, info)
 	}
 	return finfos, nil
 }
@@ -972,7 +999,10 @@ func (fs *localfs) RestoreRevision(ctx context.Context, ref *provider.Reference,
 	// check revision exists
 	vs, err := os.Stat(vp)
 	if err != nil {
-		return err
+		if os.IsNotExist(err) {
+			return errtypes.NotFound(revisionKey)
+		}
+		return errors.Wrap(err, "localfs: error stating "+vp)
 	}
 
 	if !vs.Mode().IsRegular() {
@@ -1076,8 +1106,17 @@ func (fs *localfs) RestoreRecycleItem(ctx context.Context, restoreKey string) er
 	} else {
 		originalPath = fs.wrap(ctx, filePath)
 	}
+	if _, err = os.Stat(originalPath); err == nil {
+		return errors.Wrap(err, "localfs: can't restore - file already exists at original path")
+	}
 
 	rp := fs.wrapRecycleBin(ctx, restoreKey)
+	if _, err = os.Stat(rp); err != nil {
+		if os.IsNotExist(err) {
+			return errtypes.NotFound(restoreKey)
+		}
+		return errors.Wrap(err, "localfs: error stating "+rp)
+	}
 
 	if err := os.Rename(rp, originalPath); err != nil {
 		return errors.Wrap(err, "ocfs: could not restore item")
