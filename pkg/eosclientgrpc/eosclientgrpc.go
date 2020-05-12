@@ -165,11 +165,13 @@ type Client struct {
 
 // New creates a new client with the given options.
 func New(opt *Options) *Client {
+	tlog := logger.New().With().Int("pid", os.Getpid()).Logger()
+
+	fmt.Printf("--- opt '%+v'\n", opt)
 	opt.init()
 	c := new(Client)
 	c.opt = opt
 
-	tlog := logger.New().With().Int("pid", os.Getpid()).Logger()
 	tctx := appctx.WithLogger(context.Background(), &tlog)
 	tlog.Log().Str("ffff", "ddddd").Msg("")
 
@@ -538,7 +540,7 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, username string, inode 
 	mdrq.Authkey = c.opt.Authkey
 
 	// Now send the req and see what happens
-	resp, err := erpc.EosClient.MD(c.cl, context.Background(), mdrq)
+	resp, err := c.cl.MD(context.Background(), mdrq)
 	if err != nil {
 		log.Warn().Err(err).Uint64("inode", inode).Str("err", err.Error())
 		return nil, err
@@ -663,7 +665,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, username, path string) (
 	mdrq.Authkey = c.opt.Authkey
 
 	// Now send the req and see what happens
-	resp, err := erpc.EosClient.MD(c.cl, ctx, mdrq)
+	resp, err := c.cl.MD(ctx, mdrq)
 	if err != nil {
 
 		fmt.Printf("--- MD('%s') failed with err '%s'\n", path, err)
