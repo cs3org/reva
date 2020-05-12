@@ -18,10 +18,8 @@
 
 package metrics
 
-// This package auto registers site metrics in prometheus
-
 import (
-	"math/rand"
+	"fmt"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -29,63 +27,38 @@ import (
 )
 
 func init() {
-	// trigger the actual metric provider functions
-	getNumUsers()
-	getNumGroups()
-	getStorageUsed()
+	// import prometheus and define metrics
+	// define your variables, like active users
+	// for the mockup: every 2 seconds, increase number of users.
+	recordMetrics()
 }
 
-func getNumUsers() {
-	// here we must request the actual number of users from the site
-	// for now this is a mockup: a number increasing over time
+// Metrics metrics struct
+type Metrics struct {
+}
+
+// SayHello says hello
+func (m *Metrics) SayHello() {
+	fmt.Printf("Hello from metrics pkg.\n")
+}
+
+// New returns a new Metrics
+func New() *Metrics {
+	return &Metrics{}
+}
+
+func recordMetrics() {
 	go func() {
 		for {
-			numUsersCounter.Add(float64(123))
+			opsProcessed.Inc()
 			time.Sleep(2 * time.Second)
 		}
 	}()
 }
 
 var (
-	numUsersCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "cs3_org_sciencemesh_site_total_num_users",
-		Help: "The total number of users within this site",
-	})
-)
-
-func getNumGroups() {
-	// here we must request the actual number of groups from the site
-	// for now this is a mockup: a random number changing over time
-	rand.Seed(time.Now().UnixNano())
-	go func() {
-		for {
-			numGroupsGauge.Set(float64(rand.Intn(100)))
-			time.Sleep(2 * time.Second)
-		}
-	}()
-}
-
-var (
-	numGroupsGauge = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "cs3_org_sciencemesh_site_total_num_groups",
-		Help: "The total number of groups within this site",
-	})
-)
-
-func getStorageUsed() {
-	// here we must request the actual amount of storage used within the site
-	// for now this is a mockup: a number increasing over time
-	go func() {
-		for {
-			amountStorageUsed.Add(float64(12345))
-			time.Sleep(2 * time.Second)
-		}
-	}()
-}
-
-var (
-	amountStorageUsed = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "cs3_org_sciencemesh_site_amount_storage_used",
-		Help: "The total amount of storage used within this site",
+	opsProcessed = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "myapp_processed_ops_total",
+		Help: "The total number of processed events",
 	})
 )
