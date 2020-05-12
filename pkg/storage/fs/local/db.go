@@ -63,6 +63,15 @@ func initializeDB(root string) (*sql.DB, error) {
 		return nil, errors.Wrap(err, "localfs: error executing create statement")
 	}
 
+	stmt, err = db.Prepare("CREATE TABLE IF NOT EXISTS references (resource TEXT PRIMARY KEY, target TEXT)")
+	if err != nil {
+		return nil, errors.Wrap(err, "localfs: error preparing statement")
+	}
+	_, err = stmt.Exec()
+	if err != nil {
+		return nil, errors.Wrap(err, "localfs: error executing create statement")
+	}
+
 	return db, nil
 }
 
@@ -165,6 +174,27 @@ func (fs *localfs) addToEtagDB(ctx context.Context, resource, etag string) error
 		return errors.Wrap(err, "localfs: error executing insert statement")
 	}
 	return nil
+}
+
+func (fs *localfs) addToReferencesDB(ctx context.Context, resource, target string) error {
+	stmt, err := fs.db.Prepare("INSERT INTO references (resource, target) VALUES (?, ?) ON CONFLICT(resource) DO UPDATE SET target=?")
+	if err != nil {
+		return errors.Wrap(err, "localfs: error preparing statement")
+	}
+	_, err = stmt.Exec(resource, target, target)
+	if err != nil {
+		return errors.Wrap(err, "localfs: error executing insert statement")
+	}
+	return nil
+}
+
+func (fs *localfs) getReferenceEntry(ctx context.Context, resource string) (string, error) {
+	var target string
+	err := fs.db.QueryRow("SELECT target FROM references WHERE resource=?", resource).Scan(&target)
+	if err != nil {
+		return "", err
+	}
+	return target, nil
 }
 
 func (fs *localfs) copyMD(s string, t string) (err error) {
