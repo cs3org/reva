@@ -189,7 +189,7 @@ func New(opt *Options) *Client {
 	prq := new(erpc.PingRequest)
 	prq.Authkey = opt.Authkey
 	prq.Message = []byte("hi this is a ping from reva")
-	prep, err := erpc.EosClient.Ping(c.cl, tctx, prq)
+	prep, err := c.cl.Ping(tctx, prq)
 	if err != nil {
 		fmt.Printf("--- Ping to '%s' failed with err '%s'\n", opt.GrpcURI, err)
 		return nil
@@ -297,7 +297,7 @@ func (c *Client) AddACL(ctx context.Context, username, path string, a *acl.Entry
 	rq.Command = &erpc.NSRequest_Acl{msg}
 
 	// Now send the req and see what happens
-	resp, err := erpc.EosClient.Exec(c.cl, context.Background(), rq)
+	resp, err := c.cl.Exec(context.Background(), rq)
 	if err != nil {
 		fmt.Printf("--- Exec('%s') failed with err '%s'\n", path, err)
 		return err
@@ -367,7 +367,7 @@ func (c *Client) RemoveACL(ctx context.Context, username, path string, aclType s
 	rq.Command = &erpc.NSRequest_Acl{msg}
 
 	// Now send the req and see what happens
-	resp, err := erpc.EosClient.Exec(c.cl, context.Background(), rq)
+	resp, err := c.cl.Exec(context.Background(), rq)
 	if err != nil {
 		fmt.Printf("--- Exec('%s') failed with err '%s'\n", path, err)
 		return err
@@ -491,7 +491,7 @@ func (c *Client) getACLForPath(ctx context.Context, username, path string) (*acl
 	rq.Command = &erpc.NSRequest_Acl{msg}
 
 	// Now send the req and see what happens
-	resp, err := erpc.EosClient.Exec(c.cl, context.Background(), rq)
+	resp, err := c.cl.Exec(context.Background(), rq)
 	if err != nil {
 		log.Warn().Err(err).Str("username", username).Str("path", path).Str("err", err.Error())
 		return nil, err
@@ -582,7 +582,7 @@ func (c *Client) SetAttr(ctx context.Context, username string, attr *Attribute, 
 	rq.Command = &erpc.NSRequest_Xattr{msg}
 
 	// Now send the req and see what happens
-	resp, err := erpc.EosClient.Exec(c.cl, ctx, rq)
+	resp, err := c.cl.Exec(ctx, rq)
 	if err != nil {
 		log.Warn().Err(err).Str("username", username).Str("path", path).Str("err", err.Error())
 		return err
@@ -619,7 +619,7 @@ func (c *Client) UnsetAttr(ctx context.Context, username string, attr *Attribute
 	rq.Command = &erpc.NSRequest_Xattr{msg}
 
 	// Now send the req and see what happens
-	resp, err := erpc.EosClient.Exec(c.cl, ctx, rq)
+	resp, err := c.cl.Exec(ctx, rq)
 	if err != nil {
 		log.Warn().Err(err).Str("username", username).Str("path", path).Str("err", err.Error())
 		return err
@@ -710,7 +710,7 @@ func (c *Client) Touch(ctx context.Context, username, path string) error {
 	rq.Command = &erpc.NSRequest_Touch{msg}
 
 	// Now send the req and see what happens
-	resp, err := erpc.EosClient.Exec(c.cl, ctx, rq)
+	resp, err := c.cl.Exec(ctx, rq)
 	if err != nil {
 		log.Warn().Err(err).Str("username", username).Str("path", path).Str("err", err.Error())
 		return err
@@ -755,7 +755,7 @@ func (c *Client) Chown(ctx context.Context, username, chownUser, path string) er
 	rq.Command = &erpc.NSRequest_Chown{msg}
 
 	// Now send the req and see what happens
-	resp, err := erpc.EosClient.Exec(c.cl, ctx, rq)
+	resp, err := c.cl.Exec(ctx, rq)
 	if err != nil {
 		log.Warn().Err(err).Str("username", username).Str("chownuser", chownUser).Str("path", path).Str("err", err.Error())
 		return err
@@ -795,7 +795,7 @@ func (c *Client) Chmod(ctx context.Context, username, mode, path string) error {
 	rq.Command = &erpc.NSRequest_Chmod{msg}
 
 	// Now send the req and see what happens
-	resp, err := erpc.EosClient.Exec(c.cl, ctx, rq)
+	resp, err := c.cl.Exec(ctx, rq)
 	if err != nil {
 		log.Warn().Err(err).Str("username", username).Str("mode", mode).Str("path", path).Str("err", err.Error())
 		return err
@@ -836,7 +836,7 @@ func (c *Client) CreateDir(ctx context.Context, username, path string) error {
 	rq.Command = &erpc.NSRequest_Mkdir{msg}
 
 	// Now send the req and see what happens
-	resp, err := erpc.EosClient.Exec(c.cl, ctx, rq)
+	resp, err := c.cl.Exec(ctx, rq)
 	if err != nil {
 		log.Warn().Err(err).Str("username", username).Str("path", path).Str("err", err.Error())
 		return err
@@ -869,7 +869,7 @@ func (c *Client) rm(ctx context.Context, username, path string) error {
 	rq.Command = &erpc.NSRequest_Unlink{msg}
 
 	// Now send the req and see what happens
-	resp, err := erpc.EosClient.Exec(c.cl, ctx, rq)
+	resp, err := c.cl.Exec(ctx, rq)
 	if err != nil {
 		log.Warn().Err(err).Str("username", username).Str("path", path).Str("err", err.Error())
 		return err
@@ -902,7 +902,7 @@ func (c *Client) rmdir(ctx context.Context, username, path string) error {
 	rq.Command = &erpc.NSRequest_Rmdir{msg}
 
 	// Now send the req and see what happens
-	resp, err := erpc.EosClient.Exec(c.cl, ctx, rq)
+	resp, err := c.cl.Exec(ctx, rq)
 	if err != nil {
 		log.Warn().Err(err).Str("username", username).Str("path", path).Str("err", err.Error())
 		return err
@@ -969,7 +969,7 @@ func (c *Client) List(ctx context.Context, username, path string) ([]*FileInfo, 
 	fdrq.Authkey = c.opt.Authkey
 
 	// Now send the req and see what happens
-	resp, err := erpc.EosClient.Find(c.cl, context.Background(), fdrq)
+	resp, err := c.cl.Find(context.Background(), fdrq)
 	if err != nil {
 		fmt.Printf("--- Find('%s') failed with err '%s'\n", path, err)
 		return nil, err
