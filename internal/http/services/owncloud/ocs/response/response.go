@@ -48,7 +48,7 @@ type Response struct {
 // Payload combines response metadata and data
 type Payload struct {
 	XMLName struct{}    `json:"-" xml:"ocs"`
-	Meta    *Meta       `json:"meta" xml:"meta"`
+	Meta    Meta        `json:"meta" xml:"meta"`
 	Data    interface{} `json:"data,omitempty" xml:"data,omitempty"`
 }
 
@@ -110,22 +110,22 @@ type Meta struct {
 }
 
 // MetaOK is the default ok response
-var MetaOK = &Meta{Status: "ok", StatusCode: 100, Message: "OK"}
+var MetaOK = Meta{Status: "ok", StatusCode: 100, Message: "OK"}
 
 // MetaBadRequest is used for unknown errers
-var MetaBadRequest = &Meta{Status: "error", StatusCode: 400, Message: "Bad Request"}
+var MetaBadRequest = Meta{Status: "error", StatusCode: 400, Message: "Bad Request"}
 
 // MetaServerError is returned on server errors
-var MetaServerError = &Meta{Status: "error", StatusCode: 996, Message: "Server Error"}
+var MetaServerError = Meta{Status: "error", StatusCode: 996, Message: "Server Error"}
 
 // MetaUnauthorized is returned on unauthorized requests
-var MetaUnauthorized = &Meta{Status: "error", StatusCode: 997, Message: "Unauthorised"}
+var MetaUnauthorized = Meta{Status: "error", StatusCode: 997, Message: "Unauthorised"}
 
 // MetaNotFound is returned when trying to access not existing resources
-var MetaNotFound = &Meta{Status: "error", StatusCode: 998, Message: "Not Found"}
+var MetaNotFound = Meta{Status: "error", StatusCode: 998, Message: "Not Found"}
 
 // MetaUnknownError is used for unknown errers
-var MetaUnknownError = &Meta{Status: "error", StatusCode: 999, Message: "Unknown Error"}
+var MetaUnknownError = Meta{Status: "error", StatusCode: 999, Message: "Unknown Error"}
 
 // WriteOCSSuccess handles writing successful ocs response data
 func WriteOCSSuccess(w http.ResponseWriter, r *http.Request, d interface{}) {
@@ -134,12 +134,12 @@ func WriteOCSSuccess(w http.ResponseWriter, r *http.Request, d interface{}) {
 
 // WriteOCSError handles writing error ocs responses
 func WriteOCSError(w http.ResponseWriter, r *http.Request, c int, m string, err error) {
-	WriteOCSData(w, r, &Meta{Status: "error", StatusCode: c, Message: m}, nil, err)
+	WriteOCSData(w, r, Meta{Status: "error", StatusCode: c, Message: m}, nil, err)
 }
 
 // WriteOCSData handles writing ocs data in json and xml
-func WriteOCSData(w http.ResponseWriter, r *http.Request, m *Meta, d interface{}, err error) {
-	WriteOCSResponse(w, r, &Response{
+func WriteOCSData(w http.ResponseWriter, r *http.Request, m Meta, d interface{}, err error) {
+	WriteOCSResponse(w, r, Response{
 		OCS: &Payload{
 			Meta: m,
 			Data: d,
@@ -148,12 +148,20 @@ func WriteOCSData(w http.ResponseWriter, r *http.Request, m *Meta, d interface{}
 }
 
 // WriteOCSResponse handles writing ocs responses in json and xml
-func WriteOCSResponse(w http.ResponseWriter, r *http.Request, res *Response, err error) {
+func WriteOCSResponse(w http.ResponseWriter, r *http.Request, res Response, err error) {
 	if err != nil {
 		appctx.GetLogger(r.Context()).Error().Err(err).Msg(res.OCS.Meta.Message)
 	}
 
-	var encoder func(*Response) ([]byte, error)
+	version := APIVersion(r.Context())
+	m := statusCodeMapper(version)
+	statusCode := m(res.OCS.Meta)
+	w.WriteHeader(statusCode)
+	if version == "v2.php" && statusCode == http.StatusOK {
+		res.OCS.Meta.StatusCode = statusCode
+	}
+
+	var encoder func(Response) ([]byte, error)
 	if r.URL.Query().Get("format") == "json" {
 		w.Header().Set("Content-Type", "application/json")
 		encoder = encodeJSON
@@ -167,10 +175,6 @@ func WriteOCSResponse(w http.ResponseWriter, r *http.Request, res *Response, err
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-
-	m := statusCodeMapper(r.Context())
-	statusCode := m(res.OCS.Meta)
-	w.WriteHeader(statusCode)
 
 	_, err = w.Write(encoded)
 	if err != nil {
@@ -190,7 +194,7 @@ func UserIDToString(userID *user.UserId) string {
 	return userID.OpaqueId + "@" + userID.Idp
 }
 
-func encodeXML(res *Response) ([]byte, error) {
+func encodeXML(res Response) ([]byte, error) {
 	marshalled, err := xml.Marshal(res.OCS)
 	if err != nil {
 		return nil, err
@@ -201,17 +205,17 @@ func encodeXML(res *Response) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-func encodeJSON(res *Response) ([]byte, error) {
+func encodeJSON(res Response) ([]byte, error) {
 	return json.Marshal(res)
 }
 
 // OcsV1StatusCodes returns the http status codes for the OCS API v1.
-func OcsV1StatusCodes(meta *Meta) int {
+func OcsV1StatusCodes(meta Meta) int {
 	return http.StatusOK
 }
 
 // OcsV2StatusCodes maps the OCS codes to http status codes for the ocs API v2.
-func OcsV2StatusCodes(meta *Meta) int {
+func OcsV2StatusCodes(meta Meta) int {
 	sc := meta.StatusCode
 	switch sc {
 	case MetaNotFound.StatusCode:
@@ -223,6 +227,7 @@ func OcsV2StatusCodes(meta *Meta) int {
 	case MetaUnauthorized.StatusCode:
 		return http.StatusUnauthorized
 	case 100:
+		meta.StatusCode = http.StatusOK
 		return http.StatusOK
 	}
 	// any 2xx, 4xx and 5xx will be used as is
@@ -253,9 +258,8 @@ func APIVersion(ctx context.Context) string {
 	return ""
 }
 
-func statusCodeMapper(ctx context.Context) func(*Meta) int {
-	version := APIVersion(ctx)
-	var mapper func(*Meta) int
+func statusCodeMapper(version string) func(Meta) int {
+	var mapper func(Meta) int
 	switch version {
 	case "v1.php":
 		mapper = OcsV1StatusCodes
