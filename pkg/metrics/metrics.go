@@ -20,6 +20,7 @@ package metrics
 
 import (
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -27,22 +28,45 @@ import (
 )
 
 func init() {
-	fmt.Printf("init metrics\n")
+	fmt.Printf("Init metrics\n")
 	getNumUsers()
+	getNumGroups()
 }
 
 func getNumUsers() {
+	// here we must request the actual number of users from the site
+	// for now this sets a random dummy value
+	rand.Seed(time.Now().UnixNano())
 	go func() {
 		for {
-			opsProcessed.Inc()
+			numUsersGauge.Set(float64(rand.Intn(10)))
 			time.Sleep(2 * time.Second)
 		}
 	}()
 }
 
 var (
-	opsProcessed = promauto.NewCounter(prometheus.CounterOpts{
+	numUsersGauge = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "cs3_org_sciencemesh_site_total_num_users",
 		Help: "The total number of users within this site",
+	})
+)
+
+func getNumGroups() {
+	// here we must request the actual number of groups from the site
+	// for now this sets a random dummy value
+	rand.Seed(time.Now().UnixNano())
+	go func() {
+		for {
+			numGroupsGauge.Set(float64(rand.Intn(10)))
+			time.Sleep(2 * time.Second)
+		}
+	}()
+}
+
+var (
+	numGroupsGauge = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "cs3_org_sciencemesh_site_total_num_groups",
+		Help: "The total number of groups within this site",
 	})
 )
