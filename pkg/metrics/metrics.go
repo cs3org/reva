@@ -18,8 +18,47 @@
 
 package metrics
 
+import (
+	"fmt"
+	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+)
+
 func init() {
 	// import prometheus and define metrics
 	// define your variables, like active users
 	// for the mockup: every 2 seconds, increase number of users.
+	recordMetrics()
 }
+
+// Metrics metrics struct
+type Metrics struct {
+}
+
+// SayHello says hello
+func (m *Metrics) SayHello() {
+	fmt.Printf("Hello from metrics pkg.\n")
+}
+
+// New returns a new Metrics
+func New() *Metrics {
+	return &Metrics{}
+}
+
+func recordMetrics() {
+	go func() {
+		for {
+			opsProcessed.Inc()
+			time.Sleep(2 * time.Second)
+		}
+	}()
+}
+
+var (
+	opsProcessed = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "myapp_processed_ops_total",
+		Help: "The total number of processed events",
+	})
+)
