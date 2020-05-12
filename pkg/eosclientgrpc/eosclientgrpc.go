@@ -192,7 +192,7 @@ func New(opt *Options) *Client {
 	prep, err := c.cl.Ping(tctx, prq)
 	if err != nil {
 		fmt.Printf("--- Ping to '%s' failed with err '%s'\n", opt.GrpcURI, err)
-		return nil
+		//	return nil
 	}
 
 	fmt.Printf("--- Ping to '%s' gave response '%s'\n", opt.GrpcURI, prep)
@@ -201,26 +201,29 @@ func New(opt *Options) *Client {
 	frep, err := c.GetFileInfoByPath(tctx, "furano", "/eos")
 	if err != nil {
 		fmt.Printf("--- GetFileInfoByPath '%s' failed with err '%s'\n", "/eos", err)
-		return nil
+		//	return nil
+	} else {
+		fmt.Printf("--- GetFileInfoByPath to '%s' gave response '%s'\n", "/eos", frep.File)
 	}
-	fmt.Printf("--- GetFileInfoByPath to '%s' gave response '%s'\n", "/eos", frep.File)
 
 	fmt.Printf("--- Going to list '%s'\n", "/eos")
 	lrep, err := c.List(context.Background(), "furano", "/eos")
 	if err != nil {
 		fmt.Printf("--- List '%s' failed with err '%s'\n", "/eos", err)
-		return nil
+		//	return nil
+	} else {
+		fmt.Printf("--- List to '%s' gave %d entries\n", "/eos", len(lrep))
 	}
-	fmt.Printf("--- List to '%s' gave %d entries\n", "/eos", len(lrep))
 
 	fmt.Printf("--- Going to getACLForPath '%s'\n", "/eos/cms")
 	arep, err := c.getACLForPath(context.Background(), "furano", "/eos/cms")
 	if err != nil {
 		fmt.Printf("--- getACLForPath '%s' failed with err '%s'\n", "/eos/cms", err)
-		return nil
-	}
-	for i, s := range arep.Entries {
-		fmt.Printf("--- getACLForPath to '%s' gave %d:'%s'\n", "/eos/cms", i, s)
+		//	return nil
+	} else {
+		for i, s := range arep.Entries {
+			fmt.Printf("--- getACLForPath to '%s' gave %d:'%s'\n", "/eos/cms", i, s)
+		}
 	}
 
 	// Let's be successful if the ping was ok. This is an initialization phase
@@ -499,6 +502,10 @@ func (c *Client) getACLForPath(ctx context.Context, username, path string) (*acl
 
 	if resp == nil {
 		return nil, errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' path: '%s'", username, path))
+	}
+
+	if resp.Acl == nil {
+		return nil, errtypes.InternalError(fmt.Sprintf("nil acl for username: '%s' path: '%s'", username, path))
 	}
 
 	log.Info().Str("username", username).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
