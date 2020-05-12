@@ -27,27 +27,11 @@ import (
 )
 
 func init() {
-	// import prometheus and define metrics
-	// define your variables, like active users
-	// for the mockup: every 2 seconds, increase number of users.
-	recordMetrics()
+	fmt.Printf("init metrics\n")
+	getNumUsers()
 }
 
-// Metrics metrics struct
-type Metrics struct {
-}
-
-// SayHello says hello
-func (m *Metrics) SayHello() {
-	fmt.Printf("Hello from metrics pkg.\n")
-}
-
-// New returns a new Metrics
-func New() *Metrics {
-	return &Metrics{}
-}
-
-func recordMetrics() {
+func getNumUsers() {
 	go func() {
 		for {
 			opsProcessed.Inc()
@@ -58,7 +42,7 @@ func recordMetrics() {
 
 var (
 	opsProcessed = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "myapp_processed_ops_total",
-		Help: "The total number of processed events",
+		Name: "cs3_org_sciencemesh_site_total_num_users",
+		Help: "The total number of users within this site",
 	})
 )
