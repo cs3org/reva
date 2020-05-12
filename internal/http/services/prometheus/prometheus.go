@@ -20,20 +20,14 @@ package prometheus
 
 import (
 	"net/http"
-	mtrcs "reva/pkg/metrics"
 
-	"contrib.go.opencensus.io/exporter/prometheus"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
-	"github.com/rs/zerolog"
-	"go.opencensus.io/stats/view"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func init() {
 	global.Register("prometheus", New)
-	m := mtrcs.New()
-	m.SayHello()
 }
 
 // New returns a new prometheus service
@@ -47,16 +41,18 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		conf.Prefix = "metrics"
 	}
 
-	pe, err := prometheus.NewExporter(prometheus.Options{
-		Namespace: "revad",
-	})
-	if err != nil {
-		return nil, errors.Wrap(err, "prometheus: error creating exporter")
-	}
+	// pe, err := prometheus.NewExporter(prometheus.Options{
+	// 	Namespace: "revad",
+	// })
+	// if err != nil {
+	// 	return nil, errors.Wrap(err, "prometheus: error creating exporter")
+	// }
 
-	view.RegisterExporter(pe)
+	// view.RegisterExporter(pe)
 
-	return &svc{prefix: conf.Prefix, h: pe}, nil
+	// return &svc{prefix: conf.Prefix, h: pe}, nil
+
+	return &svc{prefix: conf.Prefix, h: promhttp.Handler()}, nil
 }
 
 type config struct {
