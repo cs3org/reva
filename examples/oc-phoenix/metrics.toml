@@ -1,7 +1,0 @@
-[shared]
-jwt_secret = "Pive-Fumkiu4"
-
-[http.services.prometheus]
-
-[http]
-address = "localhost:5550"
