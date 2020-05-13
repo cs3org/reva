@@ -56,6 +56,7 @@ type config struct {
 	RecycleBin  string `mapstructure:"recycle_bin"`
 	Versions    string `mapstructure:"versions"`
 	Shadow      string `mapstructure:"shadow"`
+	References  string `mapstructure:"references"`
 	ShareFolder string `mapstructure:"share_folder"`
 }
 
@@ -99,10 +100,12 @@ func New(m map[string]interface{}) (storage.FS, error) {
 
 	c.Uploads = path.Join(c.Root, ".uploads")
 	c.Shadow = path.Join(c.Root, ".shadow")
-	c.RecycleBin = path.Join(c.Root, ".recycle_bin")
-	c.Versions = path.Join(c.Root, ".versions")
 
-	namespaces := []string{c.Root, c.Uploads, c.Shadow, c.RecycleBin, c.Versions}
+	c.References = path.Join(c.Shadow, "references")
+	c.RecycleBin = path.Join(c.Shadow, "recycle_bin")
+	c.Versions = path.Join(c.Shadow, "versions")
+
+	namespaces := []string{c.Root, c.Uploads, c.Shadow, c.References, c.RecycleBin, c.Versions}
 
 	// create namespaces if they do not exist
 	for _, v := range namespaces {
@@ -164,16 +167,16 @@ func (fs *localfs) wrap(ctx context.Context, p string) string {
 	return internal
 }
 
-func (fs *localfs) wrapShadow(ctx context.Context, p string) string {
+func (fs *localfs) wrapReferences(ctx context.Context, p string) string {
 	var internal string
 	if fs.conf.EnableHome {
 		layout, err := fs.GetHome(ctx)
 		if err != nil {
 			panic(err)
 		}
-		internal = path.Join(fs.conf.Shadow, layout, "home", p)
+		internal = path.Join(fs.conf.References, layout, "home", p)
 	} else {
-		internal = path.Join(fs.conf.Shadow, "home", p)
+		internal = path.Join(fs.conf.References, "home", p)
 	}
 	return internal
 }
@@ -207,7 +210,7 @@ func (fs *localfs) wrapVersions(ctx context.Context, p string) string {
 }
 
 func (fs *localfs) unwrap(ctx context.Context, np string) string {
-	ns := fs.getNsMatch(np, []string{fs.conf.Root, fs.conf.RecycleBin, fs.conf.Shadow, fs.conf.Versions})
+	ns := fs.getNsMatch(np, []string{fs.conf.Root, fs.conf.References, fs.conf.RecycleBin, fs.conf.Versions})
 	var external string
 	if fs.conf.EnableHome {
 		layout, err := fs.GetHome(ctx)
@@ -377,7 +380,7 @@ func (fs *localfs) AddGrant(ctx context.Context, ref *provider.Reference, g *pro
 		return errors.Wrap(err, "localfs: error adding entry to DB")
 	}
 
-	return nil
+	return fs.propagate(ctx, fn)
 }
 
 func (fs *localfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error) {
@@ -440,7 +443,7 @@ func (fs *localfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *
 		return errors.Wrap(err, "localfs: error removing from DB")
 	}
 
-	return nil
+	return fs.propagate(ctx, fn)
 }
 
 func (fs *localfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
@@ -456,7 +459,7 @@ func (fs *localfs) CreateReference(ctx context.Context, path string, targetURI *
 		return errtypes.PermissionDenied("localfs: cannot create references outside the share folder")
 	}
 
-	fn := fs.wrapShadow(ctx, path)
+	fn := fs.wrapReferences(ctx, path)
 
 	err := os.MkdirAll(fn, 0700)
 	if err != nil {
@@ -470,7 +473,7 @@ func (fs *localfs) CreateReference(ctx context.Context, path string, targetURI *
 		return errors.Wrap(err, "localfs: error adding entry to DB")
 	}
 
-	return nil
+	return fs.propagate(ctx, fn)
 }
 
 func (fs *localfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
@@ -485,7 +488,7 @@ func (fs *localfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 	}
 
 	if fs.isShareFolderChild(ctx, np) {
-		np = fs.wrapShadow(ctx, np)
+		np = fs.wrapReferences(ctx, np)
 	} else {
 		np = fs.wrap(ctx, np)
 	}
@@ -536,7 +539,7 @@ func (fs *localfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 		}
 	}
 
-	return nil
+	return fs.propagate(ctx, np)
 }
 
 func parseMTime(v string) (t time.Time, err error) {
@@ -562,7 +565,7 @@ func (fs *localfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Ref
 	}
 
 	if fs.isShareFolderChild(ctx, np) {
-		np = fs.wrapShadow(ctx, np)
+		np = fs.wrapReferences(ctx, np)
 	} else {
 		np = fs.wrap(ctx, np)
 	}
@@ -595,7 +598,7 @@ func (fs *localfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Ref
 		}
 	}
 
-	return nil
+	return fs.propagate(ctx, np)
 }
 
 func (fs *localfs) GetHome(ctx context.Context) (string, error) {
@@ -618,7 +621,7 @@ func (fs *localfs) CreateHome(ctx context.Context) error {
 		return errtypes.NotSupported("localfs: create home not supported")
 	}
 
-	homePaths := []string{fs.wrap(ctx, "/"), fs.wrapRecycleBin(ctx, "/"), fs.wrapVersions(ctx, "/"), fs.wrapShadow(ctx, fs.conf.ShareFolder)}
+	homePaths := []string{fs.wrap(ctx, "/"), fs.wrapRecycleBin(ctx, "/"), fs.wrapVersions(ctx, "/"), fs.wrapReferences(ctx, fs.conf.ShareFolder)}
 
 	for _, v := range homePaths {
 		if err := fs.createHomeInternal(ctx, v); err != nil {
@@ -675,7 +678,7 @@ func (fs *localfs) Delete(ctx context.Context, ref *provider.Reference) error {
 
 	var fp string
 	if fs.isShareFolderChild(ctx, fn) {
-		fp = fs.wrapShadow(ctx, fn)
+		fp = fs.wrapReferences(ctx, fn)
 	} else {
 		fp = fs.wrap(ctx, fn)
 	}
@@ -688,7 +691,7 @@ func (fs *localfs) Delete(ctx context.Context, ref *provider.Reference) error {
 		return errors.Wrap(err, "localfs: error stating "+fp)
 	}
 
-	key := fmt.Sprintf("%s.d%d", path.Base(fn), time.Now().Unix())
+	key := fmt.Sprintf("%s.d%d", path.Base(fn), time.Now().UnixNano()/int64(time.Millisecond))
 	if err := os.Rename(fp, fs.wrapRecycleBin(ctx, key)); err != nil {
 		return errors.Wrap(err, "localfs: could not delete item")
 	}
@@ -698,7 +701,7 @@ func (fs *localfs) Delete(ctx context.Context, ref *provider.Reference) error {
 		return errors.Wrap(err, "localfs: error adding entry to DB")
 	}
 
-	return nil
+	return fs.propagate(ctx, path.Dir(fn))
 }
 
 func (fs *localfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) error {
@@ -713,7 +716,7 @@ func (fs *localfs) Move(ctx context.Context, oldRef, newRef *provider.Reference)
 	}
 
 	if fs.isShareFolder(ctx, oldName) || fs.isShareFolder(ctx, newName) {
-		return fs.moveShadow(ctx, oldName, newName)
+		return fs.moveReferences(ctx, oldName, newName)
 	}
 
 	oldName = fs.wrap(ctx, oldName)
@@ -727,10 +730,17 @@ func (fs *localfs) Move(ctx context.Context, oldRef, newRef *provider.Reference)
 		return errors.Wrap(err, "localfs: error copying metadata")
 	}
 
+	if err := fs.propagate(ctx, newName); err != nil {
+		return err
+	}
+	if err := fs.propagate(ctx, path.Dir(oldName)); err != nil {
+		return err
+	}
+
 	return nil
 }
 
-func (fs *localfs) moveShadow(ctx context.Context, oldName, newName string) error {
+func (fs *localfs) moveReferences(ctx context.Context, oldName, newName string) error {
 
 	if fs.isShareFolderRoot(ctx, oldName) || fs.isShareFolderRoot(ctx, newName) {
 		return errtypes.PermissionDenied("localfs: cannot move/rename the virtual share folder")
@@ -744,8 +754,8 @@ func (fs *localfs) moveShadow(ctx context.Context, oldName, newName string) erro
 		return errtypes.PermissionDenied("localfs: cannot move references under the virtual share folder")
 	}
 
-	oldName = fs.wrapShadow(ctx, oldName)
-	newName = fs.wrapShadow(ctx, newName)
+	oldName = fs.wrapReferences(ctx, oldName)
+	newName = fs.wrapReferences(ctx, newName)
 
 	if err := os.Rename(oldName, newName); err != nil {
 		return errors.Wrap(err, "localfs: error moving "+oldName+" to "+newName)
@@ -753,6 +763,13 @@ func (fs *localfs) moveShadow(ctx context.Context, oldName, newName string) erro
 
 	if err := fs.copyMD(oldName, newName); err != nil {
 		return errors.Wrap(err, "localfs: error copying metadata")
+	}
+
+	if err := fs.propagate(ctx, newName); err != nil {
+		return err
+	}
+	if err := fs.propagate(ctx, path.Dir(oldName)); err != nil {
+		return err
 	}
 
 	return nil
@@ -782,7 +799,7 @@ func (fs *localfs) GetMD(ctx context.Context, ref *provider.Reference) (*provide
 
 func (fs *localfs) getMDShareFolder(ctx context.Context, p string) (*provider.ResourceInfo, error) {
 
-	fn := fs.wrapShadow(ctx, p)
+	fn := fs.wrapReferences(ctx, p)
 	md, err := os.Stat(fn)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -847,7 +864,7 @@ func (fs *localfs) listHome(ctx context.Context, home string) ([]*provider.Resou
 
 func (fs *localfs) listShareFolderRoot(ctx context.Context, home string) ([]*provider.ResourceInfo, error) {
 
-	fn := fs.wrapShadow(ctx, home)
+	fn := fs.wrapReferences(ctx, home)
 
 	mds, err := ioutil.ReadDir(fn)
 	if err != nil {
@@ -898,7 +915,7 @@ func (fs *localfs) archiveRevision(ctx context.Context, np string) error {
 		return errors.Wrap(err, "localfs: error creating file versions dir "+versionsDir)
 	}
 
-	vp := path.Join(versionsDir, fmt.Sprintf(".v%d", time.Now().Unix()))
+	vp := path.Join(versionsDir, fmt.Sprintf("v%d", time.Now().UnixNano()/int64(time.Millisecond)))
 	if err := os.Rename(np, vp); err != nil {
 		return errors.Wrap(err, "localfs: error renaming from "+np+" to "+vp)
 	}
@@ -924,8 +941,8 @@ func (fs *localfs) ListRevisions(ctx context.Context, ref *provider.Reference) (
 	}
 
 	for i := range mds {
-		// versions resemble .v12345678
-		version := mds[i].Name()[2:]
+		// versions resemble v12345678
+		version := mds[i].Name()[1:]
 
 		mtime, err := strconv.Atoi(version)
 		if err != nil {
@@ -998,7 +1015,7 @@ func (fs *localfs) RestoreRevision(ctx context.Context, ref *provider.Reference,
 		return errors.Wrap(err, "localfs: error renaming from "+vp+" to "+np)
 	}
 
-	return err
+	return fs.propagate(ctx, np)
 }
 
 func (fs *localfs) PurgeRecycleItem(ctx context.Context, key string) error {
@@ -1083,7 +1100,7 @@ func (fs *localfs) RestoreRecycleItem(ctx context.Context, restoreKey string) er
 
 	var originalPath string
 	if fs.isShareFolder(ctx, filePath) {
-		originalPath = fs.wrapShadow(ctx, filePath)
+		originalPath = fs.wrapReferences(ctx, filePath)
 	} else {
 		originalPath = fs.wrap(ctx, filePath)
 	}
@@ -1108,5 +1125,35 @@ func (fs *localfs) RestoreRecycleItem(ctx context.Context, restoreKey string) er
 		return errors.Wrap(err, "localfs: error adding entry to DB")
 	}
 
+	return fs.propagate(ctx, originalPath)
+}
+
+func (fs *localfs) propagate(ctx context.Context, leafPath string) error {
+
+	var root string
+	if fs.isShareFolderChild(ctx, leafPath) {
+		root = fs.wrapReferences(ctx, "/")
+	} else {
+		root = fs.wrap(ctx, "/")
+	}
+
+	if !strings.HasPrefix(leafPath, root) {
+		return errors.New("internal path outside root")
+	}
+
+	fi, err := os.Stat(leafPath)
+	if err != nil {
+		return err
+	}
+
+	parts := strings.Split(strings.TrimPrefix(leafPath, root), "/")
+	// root never ents in / so the split returns an empty first element, which we can skip
+	// we do not need to chmod the last element because it is the leaf path (< and not <= comparison)
+	for i := 1; i < len(parts); i++ {
+		if err := os.Chtimes(root, fi.ModTime(), fi.ModTime()); err != nil {
+			return err
+		}
+		root = path.Join(root, parts[i])
+	}
 	return nil
 }
