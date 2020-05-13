@@ -295,77 +295,62 @@ func (fs *localfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (st
 	return path.Join("/", strings.TrimPrefix(id.OpaqueId, "fileid-")), nil
 }
 
-func role2CS3Permissions(r string) (*provider.ResourcePermissions, error) {
-	switch r {
-	case "viewer":
-		return &provider.ResourcePermissions{
-			ListContainer:        true,
-			ListGrants:           true,
-			ListFileVersions:     true,
-			ListRecycle:          true,
-			Stat:                 true,
-			GetPath:              true,
-			GetQuota:             true,
-			InitiateFileDownload: true,
-		}, nil
-	case "editor":
-		return &provider.ResourcePermissions{
-			ListContainer:        true,
-			ListGrants:           true,
-			ListFileVersions:     true,
-			ListRecycle:          true,
-			Stat:                 true,
-			GetPath:              true,
-			GetQuota:             true,
-			InitiateFileDownload: true,
+func role2CS3Permissions(mode string) *provider.ResourcePermissions {
 
-			Move:               true,
-			InitiateFileUpload: true,
-			RestoreFileVersion: true,
-			RestoreRecycleItem: true,
-			CreateContainer:    true,
-			Delete:             true,
-			PurgeRecycle:       true,
-		}, nil
-	case "owner":
-		return &provider.ResourcePermissions{
-			ListContainer:        true,
-			ListGrants:           true,
-			ListFileVersions:     true,
-			ListRecycle:          true,
-			Stat:                 true,
-			GetPath:              true,
-			GetQuota:             true,
-			InitiateFileDownload: true,
-
-			Move:               true,
-			InitiateFileUpload: true,
-			RestoreFileVersion: true,
-			RestoreRecycleItem: true,
-			CreateContainer:    true,
-			Delete:             true,
-			PurgeRecycle:       true,
-
-			AddGrant:    true,
-			RemoveGrant: true, // TODO when are you able to unshare / delete
-			UpdateGrant: true,
-		}, nil
-	default:
-		return nil, errtypes.NotSupported("localfs: role not defined")
+	// TODO also check unix permissions for read access
+	p := &provider.ResourcePermissions{}
+	// r
+	if strings.Contains(mode, "r") {
+		p.Stat = true
+		p.InitiateFileDownload = true
 	}
+	// w
+	if strings.Contains(mode, "w") {
+		p.CreateContainer = true
+		p.InitiateFileUpload = true
+		p.Delete = true
+		if p.InitiateFileDownload {
+			p.Move = true
+		}
+	}
+	if strings.Contains(mode, "wo") {
+		p.CreateContainer = true
+		//	p.InitiateFileUpload = false // TODO only when the file exists
+		p.Delete = false
+	}
+	if strings.Contains(mode, "!d") {
+		p.Delete = false
+	} else if strings.Contains(mode, "+d") {
+		p.Delete = true
+	}
+	// x
+	if strings.Contains(mode, "x") {
+		p.ListContainer = true
+	}
+
+	return p
 }
 
-func cs3Permissions2Role(rp *provider.ResourcePermissions) (string, error) {
-	switch {
-	case rp.AddGrant:
-		return "owner", nil
-	case rp.Move:
-		return "editor", nil
-	case rp.ListContainer:
-		return "viewer", nil
-	default:
-		return "", errtypes.NotSupported("localfs: role not defined")
+func cs3Permissions2Role(set *provider.ResourcePermissions) (string, error) {
+	var b strings.Builder
+
+	if set.Stat || set.InitiateFileDownload {
+		b.WriteString("r")
 	}
+	if set.CreateContainer || set.InitiateFileUpload || set.Delete || set.Move {
+		b.WriteString("w")
+	}
+	if set.ListContainer {
+		b.WriteString("x")
+	}
+
+	if set.Delete {
+		b.WriteString("+d")
+	} else {
+		b.WriteString("!d")
+	}
+
+	return b.String(), nil
 }
 
 func (fs *localfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
@@ -382,9 +367,9 @@ func (fs *localfs) AddGrant(ctx context.Context, ref *provider.Reference, g *pro
 
 	var grantee string
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
-		grantee = "g:" + g.Grantee.Id.OpaqueId
+		grantee = fmt.Sprintf("g:%s@%s", g.Grantee.Id.OpaqueId, g.Grantee.Id.Idp)
 	} else {
-		grantee = "u:" + g.Grantee.Id.OpaqueId
+		grantee = fmt.Sprintf("u:%s@%s", g.Grantee.Id.OpaqueId, g.Grantee.Id.Idp)
 	}
 
 	err = fs.addToACLDB(ctx, fn, grantee, role)
@@ -418,11 +403,7 @@ func (fs *localfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*
 			Id:   &userpb.UserId{OpaqueId: granteeID[2:]},
 			Type: fs.getGranteeType(string(granteeID[0])),
 		}
-
-		permissions, err := role2CS3Permissions(role)
-		if err != nil {
-			return nil, errors.Wrap(err, "localfs: unknown role")
-		}
+		permissions := role2CS3Permissions(role)
 
 		grantList = append(grantList, &provider.Grant{
 			Grantee:     grantee,
