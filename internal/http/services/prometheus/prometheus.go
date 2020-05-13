@@ -21,9 +21,11 @@ package prometheus
 import (
 	"net/http"
 
+	"contrib.go.opencensus.io/exporter/prometheus"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/mitchellh/mapstructure"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/pkg/errors"
+	"go.opencensus.io/stats/view"
 )
 
 func init() {
@@ -41,18 +43,16 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		conf.Prefix = "metrics"
 	}
 
-	// pe, err := prometheus.NewExporter(prometheus.Options{
-	// 	Namespace: "revad",
-	// })
-	// if err != nil {
-	// 	return nil, errors.Wrap(err, "prometheus: error creating exporter")
-	// }
+	pe, err := prometheus.NewExporter(prometheus.Options{
+		Namespace: "revad",
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "prometheus: error creating exporter")
+	}
 
-	// view.RegisterExporter(pe)
+	view.RegisterExporter(pe)
 
-	// return &svc{prefix: conf.Prefix, h: pe}, nil
-
-	return &svc{prefix: conf.Prefix, h: promhttp.Handler()}, nil
+	return &svc{prefix: conf.Prefix, h: pe}, nil
 }
 
 type config struct {
