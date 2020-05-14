@@ -90,7 +90,7 @@ func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string)
 		Ref: &provider.Reference{
 			Spec: &provider.Reference_Path{Path: fn},
 		},
-		ArbitraryMetadataKeys: []string{},
+		ArbitraryMetadataKeys: []string{""},
 	}
 	sreq := &provider.SetArbitraryMetadataRequest{
 		Ref: &provider.Reference{
@@ -105,7 +105,7 @@ func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string)
 			continue
 		}
 		for j := range pp[i].Props {
-			propNameXml := pp[i].Props[j].XMLName
+			propNameXML := pp[i].Props[j].XMLName
 			// don't use path.Join. It removes the double slash! concatenate with a /
 			key := fmt.Sprintf("%s/%s", pp[i].Props[j].XMLName.Space, pp[i].Props[j].XMLName.Local)
 			value := string(pp[i].Props[j].InnerXML)
@@ -118,58 +118,54 @@ func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string)
 					remove = true
 				}
 			}
-			// FIXME: Webdav spec requires the operations to be executed in the order
+			// Webdav spec requires the operations to be executed in the order
 			// specified in the PROPPATCH request
 			// http://www.webdav.org/specs/rfc2518.html#rfc.section.8.2
+			// FIXME: batch this somehow
 			if remove {
-				rreq.ArbitraryMetadataKeys = append(rreq.ArbitraryMetadataKeys, key)
-				removedProps = append(removedProps, propNameXml)
+				rreq.ArbitraryMetadataKeys[0] = key
+				res, err := c.UnsetArbitraryMetadata(ctx, rreq)
+				if err != nil {
+					log.Error().Err(err).Msg("error sending a grpc UnsetArbitraryMetadata request")
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+
+				if res.Status.Code != rpc.Code_CODE_OK {
+					if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+						log.Warn().Str("path", fn).Msg("resource not found")
+						w.WriteHeader(http.StatusNotFound)
+						return
+					}
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				removedProps = append(removedProps, propNameXML)
 			} else {
-				acceptedProps = append(acceptedProps, propNameXml)
 				sreq.ArbitraryMetadata.Metadata[key] = value
+				res, err := c.SetArbitraryMetadata(ctx, sreq)
+				if err != nil {
+					log.Error().Err(err).Str("key", key).Str("value", value).Msg("error sending a grpc SetArbitraryMetadata request")
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+
+				if res.Status.Code != rpc.Code_CODE_OK {
+					if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+						log.Warn().Str("path", fn).Msg("resource not found")
+						w.WriteHeader(http.StatusNotFound)
+						return
+					}
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				acceptedProps = append(acceptedProps, propNameXML)
+				delete(sreq.ArbitraryMetadata.Metadata, key)
 			}
 		}
 		// FIXME: in case of error, need to set all properties back to the original state,
 		// and return the error in the matching propstat block, if applicable
 		// http://www.webdav.org/specs/rfc2518.html#rfc.section.8.2
-
-		// what do we need to unset
-		if len(rreq.ArbitraryMetadataKeys) > 0 {
-			res, err := c.UnsetArbitraryMetadata(ctx, rreq)
-			if err != nil {
-				log.Error().Err(err).Msg("error sending a grpc UnsetArbitraryMetadata request")
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-
-			if res.Status.Code != rpc.Code_CODE_OK {
-				if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
-					log.Warn().Str("path", fn).Msg("resource not found")
-					w.WriteHeader(http.StatusNotFound)
-					return
-				}
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-		}
-		if len(sreq.ArbitraryMetadata.Metadata) > 0 {
-			res, err := c.SetArbitraryMetadata(ctx, sreq)
-			if err != nil {
-				log.Error().Err(err).Msg("error sending a grpc SetArbitraryMetadata request")
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-
-			if res.Status.Code != rpc.Code_CODE_OK {
-				if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
-					log.Warn().Str("path", fn).Msg("resource not found")
-					w.WriteHeader(http.StatusNotFound)
-					return
-				}
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-		}
 	}
 
 	ref := strings.TrimPrefix(fn, ns)
