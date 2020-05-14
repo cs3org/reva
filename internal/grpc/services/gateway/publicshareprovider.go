@@ -68,30 +68,16 @@ func (s *svc) GetPublicShareByToken(ctx context.Context, req *link.GetPublicShar
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("get public share by token")
 
-	pClient, err := pool.GetPublicShareProviderClient(s.c.PublicShareProviderEndpoint)
+	driver, err := pool.GetPublicShareProviderClient(s.c.PublicShareProviderEndpoint)
 	if err != nil {
-		log.Err(err).Msg("error connecting to a public share provider")
-		return &link.GetPublicShareByTokenResponse{
-			Status: &rpc.Status{
-				Code: rpc.Code_CODE_INTERNAL,
-			},
-		}, nil
-	}
-
-	pass := string(req.Opaque.GetMap()["password"].GetValue())
-	res, err := pClient.GetPublicShareByToken(ctx, req)
-	if err != nil {
-		fmt.Printf("\n\nfailed at pClient.GetPublicShareByToken\n\n")
 		return nil, err
 	}
 
-	if req.Opaque.GetMap()["source"] != nil {
-		v := string(req.Opaque.GetMap()["source"].Value)
-		if v == "internal" {
-			// Filthy hack. I cannot find a way around using the gateway from the public shares storage,
-			// so requests coming from the storage are flagged as internal and hence skipping the password check.
-			return res, nil
-		}
+	// TODO(refs) once https://github.com/cs3org/cs3apis/pull/73 is merged, password will be present in the request, not on the opaque field.
+	pass := string(req.Opaque.GetMap()["password"].GetValue())
+	res, err := driver.GetPublicShareByToken(ctx, req)
+	if err != nil {
+		return nil, err
 	}
 
 	if res.Share.PasswordProtected && (grants[req.Token].Password != pass) {

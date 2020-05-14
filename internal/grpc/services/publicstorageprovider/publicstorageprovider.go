@@ -27,7 +27,6 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/mitchellh/mapstructure"
@@ -47,6 +46,7 @@ type config struct {
 	MountPath   string `mapstructure:"mount_path"`
 	MountID     string `mapstructure:"mount_id"`
 	GatewayAddr string `mapstructure:"gateway_addr"`
+	DriverAddr  string `mapstructure:"driver_addr"`
 }
 
 type service struct {
@@ -306,17 +306,15 @@ func (s *service) trimMountPrefix(fn string) (string, error) {
 
 // pathFromToken returns a reference from a public share token.
 func (s *service) pathFromToken(ctx context.Context, token string) (string, error) {
-	publicShareResponse, err := s.gateway.GetPublicShareByToken(
+	driver, err := pool.GetPublicShareProviderClient(s.conf.DriverAddr)
+	if err != nil {
+		return "", err
+	}
+
+	publicShareResponse, err := driver.GetPublicShareByToken(
 		ctx,
 		&link.GetPublicShareByTokenRequest{
 			Token: token,
-			Opaque: &typesv1beta1.Opaque{
-				Map: map[string]*typesv1beta1.OpaqueEntry{
-					"source": {
-						Value: []byte("internal"),
-					},
-				},
-			},
 		},
 	)
 	if err != nil {

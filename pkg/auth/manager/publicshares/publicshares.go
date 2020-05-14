@@ -73,6 +73,7 @@ func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user
 
 	publicShareResponse, err := gwConn.GetPublicShareByToken(ctx, &link.GetPublicShareByTokenRequest{
 		Token: token,
+		// TODO replace this with the new changes on the cs3apis
 		Opaque: &typesv1beta1.Opaque{
 			Map: map[string]*typesv1beta1.OpaqueEntry{
 				"password": {
