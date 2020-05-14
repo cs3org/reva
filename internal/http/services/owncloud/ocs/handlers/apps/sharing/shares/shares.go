@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"mime"
 	"net/http"
 	"path"
 	"strconv"
@@ -36,7 +37,6 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/rs/zerolog/log"
 
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
@@ -148,6 +148,7 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	prefix := hRes.GetPath()
+	sharepath := r.FormValue("path")
 
 	if shareType == int(conversions.ShareTypeUser) {
 
@@ -176,6 +177,12 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		statRes, err := h.stat(ctx, path.Join(prefix, sharepath))
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, fmt.Sprintf("stat on file %s failed", sharepath), err)
+			return
+		}
+
 		var permissions conversions.Permissions
 
 		role := r.FormValue("role")
@@ -183,8 +190,9 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 		if role == "" {
 			pval := r.FormValue("permissions")
 			if pval == "" {
-				// by default only allow read permissions / assign viewer role
-				role = conversions.RoleViewer
+				// default is all permissions / role coowner
+				permissions = conversions.PermissionAll
+				role = conversions.RoleCoowner
 			} else {
 				pint, err := strconv.Atoi(pval)
 				if err != nil {
@@ -204,31 +212,19 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		var resourcePermissions *provider.ResourcePermissions
-		resourcePermissions, err = h.role2CS3Permissions(role)
-		if err != nil {
-			log.Warn().Err(err).Msg("unknown role, mapping legacy permissions")
-			resourcePermissions = asCS3Permissions(permissions, nil)
+		if statRes.Info != nil && statRes.Info.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
+			// Single file shares should never have delete or create permissions
+			permissions = permissions &^ conversions.PermissionCreate
+			permissions = permissions &^ conversions.PermissionDelete
 		}
+
+		var resourcePermissions *provider.ResourcePermissions
+		resourcePermissions = asCS3Permissions(permissions, resourcePermissions)
 
 		roleMap := map[string]string{"name": role}
 		val, err := json.Marshal(roleMap)
 		if err != nil {
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "could not encode role", err)
-			return
-		}
-
-		statReq := &provider.StatRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: path.Join(prefix, r.FormValue("path")),
-				},
-			},
-		}
-
-		statRes, err := c.Stat(ctx, statReq)
-		if err != nil {
-			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc stat request", err)
 			return
 		}
 
@@ -280,7 +276,7 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
 			return
 		}
-		s.Path = r.FormValue("path") // use path without user prefix
+		h.addFileInfo(ctx, s, statRes.Info)
 		// s.MailSend = "0"
 		response.WriteOCSSuccess(w, r, s)
 		return
@@ -306,7 +302,7 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 
 		// TODO(refs) set permissions to what phoenix sends
 		// TODO(refs) error handling please
-		testPerm, err := h.role2CS3Permissions(conversions.RoleViewer)
+		testPerm, err := h.map2CS3Permissions(conversions.RoleViewer, conversions.PermissionRead)
 		if err != nil {
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "invalid role", err)
 			return
@@ -420,7 +416,7 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var resourcePermissions *provider.ResourcePermissions
-		resourcePermissions, err = h.role2CS3Permissions(role)
+		resourcePermissions, err = h.map2CS3Permissions(role, permissions)
 		if err != nil {
 			log.Warn().Err(err).Msg("unknown role, mapping legacy permissions")
 			resourcePermissions = asCS3Permissions(permissions, nil)
@@ -497,6 +493,26 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 	response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "unknown share type", nil)
 }
 
+func (h *Handler) stat(ctx context.Context, path string) (*provider.StatResponse, error) {
+	c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	if err != nil {
+		return nil, fmt.Errorf("error getting grpc gateway client: %s", err.Error())
+	}
+	statReq := &provider.StatRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: path,
+			},
+		},
+	}
+
+	statRes, err := c.Stat(ctx, statReq)
+	if err != nil {
+		return nil, fmt.Errorf("error sending a grpc stat request: %s", err.Error())
+	}
+	return statRes, nil
+}
+
 // PublicShareContextName represent cross boundaries context for the name of the public share
 type PublicShareContextName string
 
@@ -542,8 +558,8 @@ func asCS3Permissions(p conversions.Permissions, rp *provider.ResourcePermission
 	return rp
 }
 
-func (h *Handler) role2CS3Permissions(r string) (*provider.ResourcePermissions, error) {
-	switch r {
+func (h *Handler) map2CS3Permissions(role string, p conversions.Permissions) (*provider.ResourcePermissions, error) {
+	/*switch role {
 	case conversions.RoleViewer:
 		return &provider.ResourcePermissions{
 			ListContainer:        true,
@@ -575,31 +591,33 @@ func (h *Handler) role2CS3Permissions(r string) (*provider.ResourcePermissions, 
 			PurgeRecycle:       true,
 		}, nil
 	case conversions.RoleCoowner:
-		return &provider.ResourcePermissions{
-			ListContainer:        true,
-			ListGrants:           true,
-			ListFileVersions:     true,
-			ListRecycle:          true,
-			Stat:                 true,
-			GetPath:              true,
-			GetQuota:             true,
-			InitiateFileDownload: true,
+	*/
+	rp := &provider.ResourcePermissions{
+		ListContainer:        p.Contain(conversions.PermissionRead),
+		ListGrants:           p.Contain(conversions.PermissionRead),
+		ListFileVersions:     p.Contain(conversions.PermissionRead),
+		ListRecycle:          p.Contain(conversions.PermissionRead),
+		Stat:                 p.Contain(conversions.PermissionRead),
+		GetPath:              p.Contain(conversions.PermissionRead),
+		GetQuota:             p.Contain(conversions.PermissionRead),
+		InitiateFileDownload: p.Contain(conversions.PermissionRead),
 
-			Move:               true,
-			InitiateFileUpload: true,
-			RestoreFileVersion: true,
-			RestoreRecycleItem: true,
-			CreateContainer:    true,
-			Delete:             true,
-			PurgeRecycle:       true,
+		Move:               p.Contain(conversions.PermissionWrite),
+		InitiateFileUpload: p.Contain(conversions.PermissionWrite),
+		CreateContainer:    p.Contain(conversions.PermissionCreate),
+		Delete:             p.Contain(conversions.PermissionDelete),
+		RestoreFileVersion: p.Contain(conversions.PermissionWrite),
+		RestoreRecycleItem: p.Contain(conversions.PermissionWrite),
+		PurgeRecycle:       p.Contain(conversions.PermissionDelete),
 
-			AddGrant:    true,
-			RemoveGrant: true, // TODO when are you able to unshare / delete
-			UpdateGrant: true,
-		}, nil
-	default:
-		return nil, fmt.Errorf("unknown role: %s", r)
+		AddGrant:    p.Contain(conversions.PermissionShare),
+		RemoveGrant: p.Contain(conversions.PermissionShare), // TODO when are you able to unshare / delete
+		UpdateGrant: p.Contain(conversions.PermissionShare),
 	}
+	return rp, nil
+	// default:
+	// return nil, fmt.Errorf("unknown role: %s", role)
+	// }
 }
 
 func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID string) {
@@ -1056,16 +1074,22 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.ListS
 }
 
 func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, info *provider.ResourceInfo) error {
+	log := appctx.GetLogger(ctx)
 	if info != nil {
 		// TODO The owner is not set in the storage stat metadata ...
-		s.MimeType = info.MimeType
+		parsedMt, _, err := mime.ParseMediaType(info.MimeType)
+		if err != nil {
+			// Should never happen. We log anyways so that we know if it happens.
+			log.Warn().Err(err).Msg("failed to parse mimetype")
+		}
+		s.MimeType = parsedMt
 		// TODO STime:     &types.Timestamp{Seconds: info.Mtime.Seconds, Nanos: info.Mtime.Nanos},
 		s.StorageID = info.Id.StorageId
 		// TODO Storage: int
 		s.ItemSource = info.Id.OpaqueId
 		s.FileSource = info.Id.OpaqueId
 		s.FileTarget = path.Join("/", path.Base(info.Path))
-		s.Path = info.Path // TODO hm this might have to be relative to the users home ... depends on the webdav_namespace config
+		s.Path = path.Join("/", path.Base(info.Path)) // TODO hm this might have to be relative to the users home ... depends on the webdav_namespace config
 		// TODO FileParent:
 		// item type
 		s.ItemType = conversions.ResourceType(info.GetType()).String()

@@ -188,10 +188,7 @@ func UserIDToString(userID *user.UserId) string {
 	if userID == nil || userID.OpaqueId == "" {
 		return ""
 	}
-	if userID.Idp == "" {
-		return userID.OpaqueId
-	}
-	return userID.OpaqueId + "@" + userID.Idp
+	return userID.OpaqueId
 }
 
 func encodeXML(res Response) ([]byte, error) {
