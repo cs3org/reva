@@ -19,7 +19,6 @@
 package ocdav
 
 import (
-	"bytes"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -213,35 +212,6 @@ type Proppatch struct {
 	Props []propertyXML
 }
 
-type xmlValue []byte
-
-func (v *xmlValue) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	// The XML value of a property can be arbitrary, mixed-content XML.
-	// To make sure that the unmarshalled value contains all required
-	// namespaces, we encode all the property value XML tokens into a
-	// buffer. This forces the encoder to redeclare any used namespaces.
-	var b bytes.Buffer
-	e := xml.NewEncoder(&b)
-	for {
-		t, err := next(d)
-		if err != nil {
-			return err
-		}
-		if e, ok := t.(xml.EndElement); ok && e.Name == start.Name {
-			break
-		}
-		if err = e.EncodeToken(t); err != nil {
-			return err
-		}
-	}
-	err := e.Flush()
-	if err != nil {
-		return err
-	}
-	*v = b.Bytes()
-	return nil
-}
-
 // http://www.webdav.org/specs/rfc4918.html#ELEMENT_prop (for proppatch)
 type proppatchProps []propertyXML
 
@@ -267,14 +237,13 @@ func (ps *proppatchProps) UnmarshalXML(d *xml.Decoder, start xml.StartElement) e
 			}
 			return nil
 		case xml.StartElement:
-			p := propertyXML{
-				XMLName: t.(xml.StartElement).Name,
-				Lang:    xmlLang(t.(xml.StartElement), lang),
-			}
-			err = d.DecodeElement(((*xmlValue)(&p.InnerXML)), &elem)
+			p := propertyXML{}
+			err = d.DecodeElement(&p, &elem)
 			if err != nil {
 				return err
 			}
+			// special handling for the lang property
+			p.Lang = xmlLang(t.(xml.StartElement), lang)
 			*ps = append(*ps, p)
 		}
 	}
