@@ -1,0 +1,24 @@
+[shared]
+jwt_secret = "Ment1x-T0pS3cr3t"
+
+[http]
+address = "0.0.0.0:9600"
+enabled_services = ["mentix"]
+
+[http.services.mentix]
+connector = "gocdb"
+exporters = ["webapi"]
+# Enable the Prometheus File Service Discovery:
+# exporters = ["webapi", "prom-filesd"]
+update-interval = "15m"
+
+[http.services.mentix.gocdb]
+address = "http://sciencemesh-test.uni-muenster.de"
+
+[http.services.mentix.webapi]
+endpoint = "/"
+
+# Configure the Prometheus File Service Discovery:
+# [http.services.mentix.prom-filesd]
+# Prometheus must be configured to read the following file:
+# output-file = "/usr/share/prom/sciencemesh_services.json"

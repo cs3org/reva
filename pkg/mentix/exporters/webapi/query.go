@@ -16,20 +16,38 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package webapi
 
 import (
-	// Load core HTTP services
-	_ "github.com/cs3org/reva/internal/http/services/datagateway"
-	_ "github.com/cs3org/reva/internal/http/services/dataprovider"
-	_ "github.com/cs3org/reva/internal/http/services/helloworld"
-	_ "github.com/cs3org/reva/internal/http/services/mentix"
-	_ "github.com/cs3org/reva/internal/http/services/meshdirectory"
-	_ "github.com/cs3org/reva/internal/http/services/ocmd"
-	_ "github.com/cs3org/reva/internal/http/services/oidcprovider"
-	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
-	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocs"
-	_ "github.com/cs3org/reva/internal/http/services/prometheus"
-	_ "github.com/cs3org/reva/internal/http/services/wellknown"
-	// Add your own service here
+	"encoding/json"
+	"fmt"
+	"net/url"
+	"strings"
+
+	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
+
+const (
+	queryMethodDefault = ""
+)
+
+func HandleQuery(meshData *meshdata.MeshData, params url.Values) ([]byte, error) {
+	method := params.Get("method")
+	switch strings.ToLower(method) {
+	case queryMethodDefault:
+		return handleDefaultQuery(meshData, params)
+
+	default:
+		return []byte{}, fmt.Errorf("unknown API method '%v'", method)
+	}
+}
+
+func handleDefaultQuery(meshData *meshdata.MeshData, params url.Values) ([]byte, error) {
+	// Just return the plain, unfiltered data as JSON
+	data, err := json.MarshalIndent(meshData, "", "\t")
+	if err != nil {
+		return []byte{}, fmt.Errorf("unable to marshal the mesh data: %v", err)
+	}
+
+	return data, nil
+}

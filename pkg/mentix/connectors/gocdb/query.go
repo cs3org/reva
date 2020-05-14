@@ -16,20 +16,36 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package gocdb
 
 import (
-	// Load core HTTP services
-	_ "github.com/cs3org/reva/internal/http/services/datagateway"
-	_ "github.com/cs3org/reva/internal/http/services/dataprovider"
-	_ "github.com/cs3org/reva/internal/http/services/helloworld"
-	_ "github.com/cs3org/reva/internal/http/services/mentix"
-	_ "github.com/cs3org/reva/internal/http/services/meshdirectory"
-	_ "github.com/cs3org/reva/internal/http/services/ocmd"
-	_ "github.com/cs3org/reva/internal/http/services/oidcprovider"
-	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
-	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocs"
-	_ "github.com/cs3org/reva/internal/http/services/prometheus"
-	_ "github.com/cs3org/reva/internal/http/services/wellknown"
-	// Add your own service here
+	"fmt"
+
+	"github.com/cs3org/reva/pkg/mentix/network"
 )
+
+func QueryGOCDB(address string, method string, isPrivate bool, scope string, params network.URLParams) ([]byte, error) {
+	// The method must always be specified
+	params["method"] = method
+
+	// If a scope was specified, pass it to the endpoint as well
+	if len(scope) > 0 {
+		params["scope"] = scope
+	}
+
+	// GOCDB's public API is located at <gocdb-host>/gocdbpi/public, the private one at <gocdb-host>/gocdbpi/private
+	var path string
+	if isPrivate {
+		path = "/gocdbpi/private"
+	} else {
+		path = "/gocdbpi/public"
+	}
+
+	// Query the data from GOCDB
+	data, err := network.ReadEndpoint(address, path, params)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read GOCDB endpoint: %v", err)
+	}
+
+	return data, nil
+}

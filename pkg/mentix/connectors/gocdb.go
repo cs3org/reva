@@ -1,0 +1,201 @@
+// Copyright 2018-2020 CERN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// In applying this license, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
+package connectors
+
+import (
+	"encoding/xml"
+	"fmt"
+	"strings"
+
+	"github.com/cs3org/reva/pkg/mentix/config"
+	"github.com/cs3org/reva/pkg/mentix/connectors/gocdb"
+	"github.com/cs3org/reva/pkg/mentix/meshdata"
+	"github.com/cs3org/reva/pkg/mentix/network"
+)
+
+type GOCDBConnector struct {
+	BaseConnector
+
+	gocdbAddress string
+}
+
+func (connector *GOCDBConnector) Activate(conf *config.Configuration) error {
+	if err := connector.BaseConnector.Activate(conf); err != nil {
+		return err
+	}
+
+	// Check and store GOCDB specific settings
+	connector.gocdbAddress = conf.GOCDB.Address
+	if len(connector.gocdbAddress) == 0 {
+		return fmt.Errorf("no GOCDB address configured")
+	}
+
+	return nil
+}
+
+func (connector *GOCDBConnector) RetrieveMeshData() (*meshdata.MeshData, error) {
+	meshData := new(meshdata.MeshData)
+
+	// Query all data from GOCDB
+	if err := connector.queryServiceTypes(meshData); err != nil {
+		return nil, fmt.Errorf("could not query service types: %v", err)
+	}
+
+	if err := connector.querySites(meshData); err != nil {
+		return nil, fmt.Errorf("could not query sites: %v", err)
+	}
+
+	for _, site := range meshData.Sites {
+		// Get services associated with the current site
+		if err := connector.queryServices(meshData, site); err != nil {
+			return nil, fmt.Errorf("could not query services of site '%v': %v", site.Name, err)
+		}
+	}
+
+	return meshData, nil
+}
+
+func (connector *GOCDBConnector) query(v interface{}, method string, isPrivate bool, hasScope bool, params network.URLParams) error {
+	var scope string
+	if hasScope {
+		scope = connector.conf.GOCDB.Scope
+	}
+
+	// Get the data from GOCDB
+	data, err := gocdb.QueryGOCDB(connector.conf.GOCDB.Address, method, isPrivate, scope, params)
+	if err != nil {
+		return err
+	}
+
+	// Unmarshal it
+	if err := xml.Unmarshal(data, v); err != nil {
+		return fmt.Errorf("unable to unmarshal data: %v", err)
+	}
+
+	return nil
+}
+
+func (connector *GOCDBConnector) queryServiceTypes(meshData *meshdata.MeshData) error {
+	var serviceTypes gocdb.ServiceTypes
+	if err := connector.query(&serviceTypes, "get_service_types", false, false, network.URLParams{}); err != nil {
+		return err
+	}
+
+	// Copy retrieved data into the mesh data
+	meshData.ServiceTypes = nil
+	for _, serviceType := range serviceTypes.Types {
+		meshData.ServiceTypes = append(meshData.ServiceTypes, &meshdata.ServiceType{
+			Name:        serviceType.Name,
+			Description: serviceType.Description,
+		})
+	}
+
+	return nil
+}
+
+func (connector *GOCDBConnector) querySites(meshData *meshdata.MeshData) error {
+	var sites gocdb.Sites
+	if err := connector.query(&sites, "get_site", false, true, network.URLParams{}); err != nil {
+		return err
+	}
+
+	// Copy retrieved data into the mesh data
+	meshData.Sites = nil
+	for _, site := range sites.Sites {
+		meshsite := &meshdata.Site{
+			Name:         site.ShortName,
+			FullName:     site.OfficialName,
+			Organization: "",
+			Domain:       site.Domain,
+			Homepage:     site.Homepage,
+			Email:        site.Email,
+			Description:  site.Description,
+			Services:     nil,
+			Properties:   connector.extensionsToMap(&site.Extensions),
+		}
+		meshData.Sites = append(meshData.Sites, meshsite)
+	}
+
+	return nil
+}
+
+func (connector *GOCDBConnector) queryServices(meshData *meshdata.MeshData, site *meshdata.Site) error {
+	var services gocdb.Services
+	if err := connector.query(&services, "get_service", false, true, network.URLParams{"sitename": site.Name}); err != nil {
+		return err
+	}
+
+	// Copy retrieved data into the mesh data
+	site.Services = nil
+	for _, service := range services.Services {
+		// Assemble additional endpoints
+		var endpoints []*meshdata.ServiceEndpoint
+		for _, endpoint := range service.Endpoints.Endpoints {
+			endpoints = append(endpoints, &meshdata.ServiceEndpoint{
+				Type:        connector.findServiceType(meshData, endpoint.Type),
+				Name:        endpoint.Name,
+				Path:        endpoint.URL,
+				IsMonitored: strings.EqualFold(endpoint.IsMonitored, "Y"),
+				Properties:  connector.extensionsToMap(&endpoint.Extensions),
+			})
+		}
+
+		// Add the service to the site
+		site.Services = append(site.Services, &meshdata.Service{
+			ServiceEndpoint: meshdata.ServiceEndpoint{
+				Type:        connector.findServiceType(meshData, service.Type),
+				Name:        fmt.Sprintf("%v - %v", service.Host, service.Type),
+				Path:        "",
+				IsMonitored: strings.EqualFold(service.IsMonitored, "Y"),
+				Properties:  connector.extensionsToMap(&service.Extensions),
+			},
+			Host:                service.Host,
+			AdditionalEndpoints: endpoints,
+		})
+	}
+
+	return nil
+}
+
+func (connector *GOCDBConnector) findServiceType(meshData *meshdata.MeshData, name string) *meshdata.ServiceType {
+	for _, serviceType := range meshData.ServiceTypes {
+		if strings.EqualFold(serviceType.Name, name) {
+			return serviceType
+		}
+	}
+
+	// If the service type doesn't exist, create a default one
+	return &meshdata.ServiceType{Name: name, Description: ""}
+}
+
+func (connector *GOCDBConnector) extensionsToMap(extensions *gocdb.Extensions) map[string]string {
+	properties := make(map[string]string)
+	for _, ext := range extensions.Extensions {
+		properties[ext.Key] = ext.Value
+	}
+	return properties
+}
+
+func (connector *GOCDBConnector) GetName() string {
+	return "GOCDB"
+}
+
+func init() {
+	registerConnector(config.ConnectorID_GOCDB, &GOCDBConnector{})
+}
