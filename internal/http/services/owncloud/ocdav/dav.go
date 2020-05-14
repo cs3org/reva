@@ -28,6 +28,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	tokenpkg "github.com/cs3org/reva/pkg/token"
+	"github.com/cs3org/reva/pkg/user"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -109,13 +110,17 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			res, err := c.Authenticate(r.Context(), &authenticateRequest)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
+				return
 			}
 			if res.Status.Code == rpcv1beta1.Code_CODE_UNAUTHENTICATED {
 				w.WriteHeader(http.StatusUnauthorized)
+				return
 			}
 
 			ctx = tokenpkg.ContextSetToken(ctx, res.Token)
+			ctx = user.ContextSetUser(ctx, res.User)
 			ctx = metadata.AppendToOutgoingContext(ctx, tokenpkg.TokenHeader, res.Token)
+
 			r = r.WithContext(ctx)
 			h.PublicFilesHandler.Handler(s).ServeHTTP(w, r)
 
