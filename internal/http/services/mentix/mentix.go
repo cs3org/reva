@@ -19,10 +19,10 @@
 package mentix
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
 
 	"github.com/cs3org/reva/pkg/mentix"
 	"github.com/cs3org/reva/pkg/mentix/config"
@@ -75,7 +75,7 @@ func (s *svc) startBackgroundService() {
 func parseConfig(m map[string]interface{}) (*config.Configuration, error) {
 	cfg := defaultConfig()
 	if err := mapstructure.Decode(m, &cfg); err != nil {
-		return nil, errors.Wrap(err, "mentix: error decoding configuration")
+		return nil, fmt.Errorf("error decoding configuration: %v", err)
 	}
 	return cfg, nil
 }
@@ -106,7 +106,7 @@ func New(m map[string]interface{}) (global.Service, error) {
 	// Create the Mentix instance
 	mntx, err := mentix.New(conf)
 	if err != nil {
-		return nil, errors.Wrap(err, "mentix: error creating instance")
+		return nil, fmt.Errorf("error creating Mentix: %v", err)
 	}
 
 	// Create the service and start its background activity

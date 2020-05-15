@@ -23,7 +23,7 @@ type Configuration struct {
 
 	Connector      string   `mapstructure:"connector"`
 	Exporters      []string `mapstructure:"exporters"`
-	UpdateInterval string   `mapstructure:"update-interval"`
+	UpdateInterval string   `mapstructure:"update_interval"`
 
 	GOCDB struct {
 		Address string `mapstructure:"address"`
@@ -35,6 +35,6 @@ type Configuration struct {
 	} `yaml:"webapi"`
 
 	PrometheusFileSD struct {
-		OutputFile string `mapstructure:"output-file"`
-	} `mapstructure:"prom-filesd"`
+		OutputFile string `mapstructure:"output_file"`
+	} `mapstructure:"prom_filesd"`
 }

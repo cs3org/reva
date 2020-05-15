@@ -10,7 +10,7 @@ connector = "gocdb"
 exporters = ["webapi"]
 # Enable the Prometheus File Service Discovery:
 # exporters = ["webapi", "prom-filesd"]
-update-interval = "15m"
+update_interval = "15m"
 
 [http.services.mentix.gocdb]
 address = "http://sciencemesh-test.uni-muenster.de"
@@ -19,6 +19,6 @@ address = "http://sciencemesh-test.uni-muenster.de"
 endpoint = "/"
 
 # Configure the Prometheus File Service Discovery:
-# [http.services.mentix.prom-filesd]
+# [http.services.mentix.prom_filesd]
 # Prometheus must be configured to read the following file:
-# output-file = "/usr/share/prom/sciencemesh_services.json"
+# output_file = "/usr/share/prom/sciencemesh_services.json"
