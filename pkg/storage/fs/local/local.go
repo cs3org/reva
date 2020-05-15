@@ -257,6 +257,11 @@ func (fs *localfs) isShareFolderChild(ctx context.Context, p string) bool {
 
 func (fs *localfs) normalize(ctx context.Context, fi os.FileInfo, fn string) *provider.ResourceInfo {
 	fn = fs.unwrap(ctx, path.Join("/", fn))
+	owner, err := getUser(ctx)
+	if err != nil {
+		return nil
+	}
+
 	md := &provider.ResourceInfo{
 		Id:            &provider.ResourceId{OpaqueId: "fileid-" + strings.TrimPrefix(fn, "/")},
 		Path:          fn,
@@ -268,6 +273,7 @@ func (fs *localfs) normalize(ctx context.Context, fi os.FileInfo, fn string) *pr
 		Mtime: &types.Timestamp{
 			Seconds: uint64(fi.ModTime().Unix()),
 		},
+		Owner: owner.Id,
 	}
 
 	return md
