@@ -32,15 +32,19 @@ import (
 
 type svc struct {
 	conf *config.Configuration
-	ment *mentix.Mentix
+	mntx *mentix.Mentix
 
-	stop chan struct{}
+	stopSignal chan struct{}
 }
 
+const (
+	serviceName = "mentix"
+)
+
 func (s *svc) Close() error {
-	// Trigger and close the stop signal channel to stop Mentix
-	s.stop <- struct{}{}
-	close(s.stop)
+	// Trigger and close the stopSignal signal channel to stop Mentix
+	s.stopSignal <- struct{}{}
+	close(s.stopSignal)
 
 	return nil
 }
@@ -50,17 +54,22 @@ func (s *svc) Prefix() string {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{"/"}
+	// Get all endpoints exposed by the RequestExporters
+	var endpoints []string
+	for _, exporter := range s.mntx.GetRequestExporters() {
+		endpoints = append(endpoints, exporter.Endpoint())
+	}
+	return endpoints
 }
 
 func (s *svc) Handler() http.Handler {
-	// Forward requests to the engine
-	return http.HandlerFunc(s.ment.RequestHandler)
+	// Forward requests to Mentix
+	return http.HandlerFunc(s.mntx.RequestHandler)
 }
 
 func (s *svc) startBackgroundService() {
 	// Just run Mentix in the background
-	go s.ment.Run(s.stop)
+	go s.mntx.Run(s.stopSignal)
 }
 
 func parseConfig(m map[string]interface{}) (*config.Configuration, error) {
@@ -74,16 +83,13 @@ func parseConfig(m map[string]interface{}) (*config.Configuration, error) {
 func defaultConfig() *config.Configuration {
 	conf := &config.Configuration{}
 
-	// General settings
-	conf.Prefix = "mentix"
-	conf.Connector = config.ConnectorID_GOCDB
-	conf.Exporters = exporters.RegisteredExporterIDs()
-	conf.UpdateInterval = "1h"
+	conf.Prefix = serviceName
 
-	// GOCDB settings
-	conf.GOCDB.Scope = "SM"
+	conf.Connector = config.ConnectorID_GOCDB          // Use GOCDB
+	conf.Exporters = exporters.RegisteredExporterIDs() // Enable all exporters
+	conf.UpdateInterval = "1h"                         // Update once per hour
 
-	// WebAPI settings
+	conf.GOCDB.Scope = "SM" // TODO(Daniel-WWU-IT): This might change in the future
 	conf.WebAPI.Endpoint = "/"
 
 	return conf
@@ -98,21 +104,21 @@ func New(m map[string]interface{}) (global.Service, error) {
 	}
 
 	// Create the Mentix instance
-	ment, err := mentix.New(conf)
+	mntx, err := mentix.New(conf)
 	if err != nil {
 		return nil, errors.Wrap(err, "mentix: error creating instance")
 	}
 
 	// Create the service and start its background activity
 	s := &svc{
-		conf: conf,
-		ment: ment,
-		stop: make(chan struct{}),
+		conf:       conf,
+		mntx:       mntx,
+		stopSignal: make(chan struct{}),
 	}
 	s.startBackgroundService()
 	return s, nil
 }
 
 func init() {
-	global.Register("mentix", New)
+	global.Register(serviceName, New)
 }

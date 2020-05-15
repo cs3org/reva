@@ -26,6 +26,7 @@ import (
 type RequestExporter interface {
 	Exporter
 
+	Endpoint() string
 	WantsRequest(r *http.Request) bool
 	HandleRequest(resp http.ResponseWriter, req *http.Request) error
 }
@@ -36,12 +37,15 @@ type BaseRequestExporter struct {
 	endpoint string
 }
 
-func (exporter *BaseRequestExporter) WantsRequest(r *http.Request) bool {
-	// Make sure that the endpoint starts with a /
+func (exporter *BaseRequestExporter) Endpoint() string {
+	// Ensure that the endpoint starts with a /
 	endpoint := exporter.endpoint
 	if !strings.HasPrefix(endpoint, "/") {
 		endpoint = "/" + endpoint
 	}
+	return strings.TrimSpace(endpoint)
+}
 
-	return r.URL.Path == endpoint
+func (exporter *BaseRequestExporter) WantsRequest(r *http.Request) bool {
+	return r.URL.Path == exporter.Endpoint()
 }
