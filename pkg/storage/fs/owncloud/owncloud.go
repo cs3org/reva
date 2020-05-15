@@ -931,13 +931,47 @@ func (fs *ocfs) GetHome(ctx context.Context) (string, error) {
 	return "", nil
 }
 
+func (fs *ocfs) getRoot(ctx context.Context) (root string) {
+	if fs.c.EnableHome {
+		root = fs.wrap(ctx, "/")
+	} else {
+		u := user.ContextMustGetUser(ctx)
+		root = fs.wrap(ctx, path.Join("/", u.GetUsername()))
+	}
+	return root
+}
+
+func (fs *ocfs) assertPathInsideRoot(ctx context.Context, fn string) (root string, err error) {
+	root = fs.getRoot(ctx)
+
+	if !strings.HasPrefix(fn, root) {
+		err := errtypes.PermissionDenied(fn)
+		appctx.GetLogger(ctx).Error().
+			Err(err).
+			Str("fn", fn).
+			Str("root", root).
+			Msg("assertion failed: path must be inside root")
+		return "", err
+	}
+	return root, nil
+}
+
 func (fs *ocfs) CreateDir(ctx context.Context, fn string) (err error) {
 	np := fs.wrap(ctx, fn)
+	_, err = fs.assertPathInsideRoot(ctx, fn)
+	if err != nil {
+		return err
+	}
+
+	log := appctx.GetLogger(ctx)
+	log.Debug().Str("fn", fn).Str("np", np).Msg("ocfs: CreateDir")
 	if err = os.Mkdir(np, 0700); err != nil {
 		if os.IsNotExist(err) {
 			return errtypes.NotFound(fn)
 		}
-		// FIXME we also need already exists error, webdav expects 405 MethodNotAllowed
+		if os.IsExist(err) {
+			return errtypes.AlreadyExists(fn)
+		}
 		return errors.Wrap(err, "ocfs: error creating dir "+np)
 	}
 	return fs.propagate(ctx, np)
@@ -1604,20 +1638,8 @@ func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key string) error {
 }
 
 func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {
-	var root string
-	if fs.c.EnableHome {
-		root = fs.wrap(ctx, "/")
-	} else {
-		u := user.ContextMustGetUser(ctx)
-		root = fs.wrap(ctx, path.Join("/", u.GetUsername()))
-	}
-	if !strings.HasPrefix(leafPath, root) {
-		err := errors.New("internal path outside root")
-		appctx.GetLogger(ctx).Error().
-			Err(err).
-			Str("leafPath", leafPath).
-			Str("root", root).
-			Msg("could not propagate change")
+	root, err := fs.assertPathInsideRoot(ctx, leafPath)
+	if err != nil {
 		return err
 	}
 

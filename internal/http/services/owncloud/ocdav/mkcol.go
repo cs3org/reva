@@ -19,6 +19,7 @@
 package ocdav
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"path"
@@ -69,6 +70,8 @@ func (s *svc) handleMkcol(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
+	log.Debug().Msg("#### Before client.CreateContainer")
+
 	req := &provider.CreateContainerRequest{Ref: ref}
 	res, err := client.CreateContainer(ctx, req)
 	if err != nil {
@@ -77,8 +80,20 @@ func (s *svc) handleMkcol(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
+	log.Debug().Str("res.Status.Code", fmt.Sprintf("%d", res.Status.Code)).Msg("After client.CreateContainer")
+
 	if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
 		w.WriteHeader(http.StatusConflict)
+		return
+	}
+
+	if res.Status.Code == rpc.Code_CODE_ALREADY_EXISTS {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
+		w.WriteHeader(http.StatusForbidden)
 		return
 	}
 
