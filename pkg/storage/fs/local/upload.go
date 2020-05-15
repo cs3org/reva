@@ -26,8 +26,10 @@ import (
 	"os"
 	"path/filepath"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	tusd "github.com/tus/tusd/pkg/handler"
@@ -41,6 +43,7 @@ func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.Rea
 	if err != nil {
 		return errors.Wrap(err, "error resolving ref")
 	}
+	fn = fs.wrap(ctx, fn)
 
 	// we cannot rely on /tmp as it can live in another partition and we can
 	// hit invalid cross-device link errors, so we create the tmp file in the same directory
@@ -53,6 +56,14 @@ func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.Rea
 	_, err = io.Copy(tmp, r)
 	if err != nil {
 		return errors.Wrap(err, "localfs: eror writing to tmp file "+tmp.Name())
+	}
+
+	// if destination exists
+	if _, err := os.Stat(fn); err == nil {
+		// create revision
+		if err := fs.archiveRevision(ctx, fn); err != nil {
+			return err
+		}
 	}
 
 	// TODO(labkode): make sure rename is atomic, missing fsync ...
@@ -74,12 +85,10 @@ func (fs *localfs) InitiateUpload(ctx context.Context, ref *provider.Reference, 
 		return "", errors.Wrap(err, "localfs: error resolving reference")
 	}
 
-	p := fs.unwrap(ctx, np)
-
 	info := tusd.FileInfo{
 		MetaData: tusd.MetaData{
-			"filename": filepath.Base(p),
-			"dir":      filepath.Dir(p),
+			"filename": filepath.Base(np),
+			"dir":      filepath.Dir(np),
 		},
 		Size: uploadLength,
 	}
@@ -132,9 +141,17 @@ func (fs *localfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tu
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error resolving upload path")
 	}
+	usr := user.ContextMustGetUser(ctx)
 	info.Storage = map[string]string{
 		"Type":                "LocalStore",
+		"BinPath":             binPath,
 		"InternalDestination": np,
+
+		"Idp":      usr.Id.Idp,
+		"UserId":   usr.Id.OpaqueId,
+		"UserName": usr.Username,
+
+		"LogLevel": log.GetLevel().String(),
 	}
 	// Create binary file with no content
 	file, err := os.OpenFile(binPath, os.O_CREATE|os.O_WRONLY, defaultFilePerm)
@@ -186,11 +203,22 @@ func (fs *localfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error
 
 	info.Offset = stat.Size()
 
+	u := &userpb.User{
+		Id: &userpb.UserId{
+			Idp:      info.Storage["Idp"],
+			OpaqueId: info.Storage["UserId"],
+		},
+		Username: info.Storage["UserName"],
+	}
+
+	ctx = user.ContextSetUser(ctx, u)
+
 	return &fileUpload{
 		info:     info,
 		binPath:  binPath,
 		infoPath: infoPath,
 		fs:       fs,
+		ctx:      ctx,
 	}, nil
 }
 
@@ -203,6 +231,8 @@ type fileUpload struct {
 	binPath string
 	// only fs knows how to handle metadata and versions
 	fs *localfs
+	// a context with a user
+	ctx context.Context
 }
 
 // GetInfo returns the FileInfo
@@ -263,6 +293,14 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 	// the local storage does not track revisions
 	//}
 
+	// if destination exists
+	if _, err := os.Stat(np); err == nil {
+		// create revision
+		if err := upload.fs.archiveRevision(upload.ctx, np); err != nil {
+			return err
+		}
+	}
+
 	err := os.Rename(upload.binPath, np)
 
 	// only delete the upload if it was successfully written to eos
@@ -279,7 +317,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 // - the storage needs to implement AsTerminatableUpload
 // - the upload needs to implement Terminate
 
-// AsTerminatableUpload returnsa a TerminatableUpload
+// AsTerminatableUpload returns a a TerminatableUpload
 func (fs *localfs) AsTerminatableUpload(upload tusd.Upload) tusd.TerminatableUpload {
 	return upload.(*fileUpload)
 }
