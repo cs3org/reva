@@ -21,6 +21,7 @@ package rest
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/url"
@@ -51,8 +52,7 @@ type config struct {
 	ClientSecret string `mapstructure:"client_secret"`
 
 	OIDCTokenEndpoint string `mapstructure:"oidc_token_endpoint"`
-
-	TargetAPI string `mapstructure:"target_api"`
+	TargetAPI         string `mapstructure:"target_api"`
 
 	IDProvider string `mapstructure:"id_provider"`
 }
@@ -77,7 +77,7 @@ func New(m map[string]interface{}) (user.Manager, error) {
 	}
 
 	if c.TargetAPI == "" {
-		c.APIBaseURL = "authorization-service-api"
+		c.TargetAPI = "authorization-service-api"
 	}
 
 	if c.OIDCTokenEndpoint == "" {
@@ -150,7 +150,7 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 		return nil, err
 	}
 
-	url := fmt.Sprintf("%s/Identity/?filter=id:%s&field=upn&field=primaryAccountEmail&field=unconfirmedEmail&field=displayName", m.conf.APIBaseURL, uid.OpaqueId)
+	url := fmt.Sprintf("%s/Identity/?filter=id:%s&field=upn&field=primaryAccountEmail&field=displayName", m.conf.APIBaseURL, uid.OpaqueId)
 
 	httpClient := rhttp.GetHTTPClient(ctx)
 	httpReq, err := rhttp.NewRequest(ctx, "GET", url, nil)
@@ -169,25 +169,28 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 		return nil, err
 	}
 
-	var result map[string][]map[string]string
+	var result map[string]interface{}
 	err = json.Unmarshal(body, &result)
 	if err != nil {
 		return nil, err
 	}
 
-	userData := result["data"][0]
+	userData, ok := result["data"].([]interface{})[0].(map[string]interface{})
+	if !ok {
+		return nil, errors.New("rest: error in type assertion")
+	}
+
 	userGroups, err := m.GetUserGroups(ctx, uid)
 	if err != nil {
 		return nil, err
 	}
 
 	return &userpb.User{
-		Id:           uid,
-		Username:     userData["upn"],
-		Mail:         userData["primaryAccountEmail"],
-		MailVerified: userData["unconfirmedEmail"] == "False",
-		DisplayName:  userData["displayName"],
-		Groups:       userGroups,
+		Id:          uid,
+		Username:    userData["upn"].(string),
+		Mail:        userData["primaryAccountEmail"].(string),
+		DisplayName: userData["displayName"].(string),
+		Groups:      userGroups,
 	}, nil
 
 }
@@ -216,18 +219,27 @@ func (m *manager) findUsersByFilter(ctx context.Context, url string) ([]*userpb.
 		return nil, err
 	}
 
-	var result map[string][]map[string]string
+	var result map[string]interface{}
 	err = json.Unmarshal(body, &result)
 	if err != nil {
 		return nil, err
 	}
 
-	userData := result["data"]
+	userData, ok := result["data"].([]interface{})
+	if !ok {
+		return nil, errors.New("rest: error in type assertion")
+	}
+
 	users := []*userpb.User{}
 
 	for _, usr := range userData {
+		usrInfo, ok := usr.(map[string]interface{})
+		if !ok {
+			return nil, errors.New("rest: error in type assertion")
+		}
+
 		uid := &userpb.UserId{
-			OpaqueId: usr["id"],
+			OpaqueId: usrInfo["id"].(string),
 			Idp:      m.conf.IDProvider,
 		}
 
@@ -236,12 +248,11 @@ func (m *manager) findUsersByFilter(ctx context.Context, url string) ([]*userpb.
 			return nil, err
 		}
 		users = append(users, &userpb.User{
-			Id:           uid,
-			Username:     usr["upn"],
-			Mail:         usr["primaryAccountEmail"],
-			MailVerified: usr["unconfirmedEmail"] == "False",
-			DisplayName:  usr["displayName"],
-			Groups:       userGroups,
+			Id:          uid,
+			Username:    usrInfo["upn"].(string),
+			Mail:        usrInfo["primaryAccountEmail"].(string),
+			DisplayName: usrInfo["displayName"].(string),
+			Groups:      userGroups,
 		})
 	}
 
@@ -254,7 +265,7 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 	users := []*userpb.User{}
 
 	for _, f := range filters {
-		url := fmt.Sprintf("%s/Identity/?filter=%s:contains:%s&field=id&field=upn&field=primaryAccountEmail&field=unconfirmedEmail&field=displayName", m.conf.APIBaseURL, f, query)
+		url := fmt.Sprintf("%s/Identity/?filter=%s:contains:%s&field=id&field=upn&field=primaryAccountEmail&field=displayName", m.conf.APIBaseURL, f, query)
 		filteredUsers, err := m.findUsersByFilter(ctx, url)
 		if err != nil {
 			return nil, err
@@ -290,17 +301,26 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 		return nil, err
 	}
 
-	var result map[string][]map[string]string
+	var result map[string]interface{}
 	err = json.Unmarshal(body, &result)
 	if err != nil {
 		return nil, err
 	}
 
-	groupData := result["data"]
+	groupData, ok := result["data"].([]interface{})
+	if !ok {
+		return nil, errors.New("rest: error in type assertion")
+	}
+
 	groups := make([]string, len(groupData))
 
 	for _, g := range groupData {
-		groups = append(groups, g["displayName"])
+		groupInfo, ok := g.(map[string]interface{})
+		if !ok {
+			return nil, errors.New("rest: error in type assertion")
+		}
+
+		groups = append(groups, groupInfo["displayName"].(string))
 	}
 
 	return groups, nil
