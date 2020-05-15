@@ -55,7 +55,7 @@ func (s *svc) Unprotected() []string {
 
 func (s *svc) Handler() http.Handler {
 	// Forward requests to the engine
-	return http.HandlerFunc(s.ment.Engine().RequestHandler)
+	return http.HandlerFunc(s.ment.RequestHandler)
 }
 
 func (s *svc) startBackgroundService() {
