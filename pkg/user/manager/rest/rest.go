@@ -25,7 +25,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/url"
+	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cs3org/reva/pkg/rhttp"
@@ -40,8 +42,14 @@ func init() {
 	registry.Register("rest", New)
 }
 
+var (
+	emailRegex    = regexp.MustCompile(`^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$`)
+	usernameRegex = regexp.MustCompile(`^[ a-zA-Z0-9.-_]+$`)
+)
+
 type manager struct {
 	conf                *config
+	sync.Mutex          // concurrent access to the file and loaded
 	apiToken            string
 	tokenExpirationTime time.Time
 }
@@ -101,6 +109,10 @@ func (m *manager) renewAPIToken(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+
+		m.Lock()
+		defer m.Unlock()
+
 		m.apiToken = token
 		m.tokenExpirationTime = expiration
 	}
@@ -157,6 +169,10 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 	if err != nil {
 		return nil, err
 	}
+
+	// We don't need to take the lock when reading apiToken, because if we reach here,
+	// the token is valid at least for a couple of seconds. Even if another request modifies
+	// the token and expiration time while this request is in progress, the current token will still be valid.
 	httpReq.Header.Set("Authorization", "Bearer "+m.apiToken)
 
 	httpRes, err := httpClient.Do(httpReq)
@@ -261,7 +277,16 @@ func (m *manager) findUsersByFilter(ctx context.Context, url string) ([]*userpb.
 
 func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
 
-	filters := []string{"upn", "displayName", "primaryAccountEmail"}
+	var filters []string
+	switch {
+	case usernameRegex.MatchString(query):
+		filters = []string{"upn", "displayName", "primaryAccountEmail"}
+	case emailRegex.MatchString(query):
+		filters = []string{"primaryAccountEmail"}
+	default:
+		return nil, errors.New("rest: illegal characters present in query")
+	}
+
 	users := []*userpb.User{}
 
 	for _, f := range filters {
