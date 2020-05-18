@@ -59,7 +59,7 @@ type MentixErrorResponse struct {
 	Message string `json:"error"`
 }
 
-// MeshDirectoryResponse service response
+// Response service response
 type Response struct {
 	Status        int             `json:"status"`
 	StatusMessage string          `json:"message"`
