@@ -28,6 +28,7 @@ import (
 	"github.com/cs3org/reva/pkg/meshdirectory"
 	"github.com/cs3org/reva/pkg/meshdirectory/manager/registry"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
@@ -67,7 +68,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New returns a new Mesh Directory HTTP service
-func New(m map[string]interface{}) (global.Service, error) {
+func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err

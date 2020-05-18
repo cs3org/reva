@@ -36,6 +36,7 @@ import (
 	"github.com/ory/fosite/storage"
 	"github.com/ory/fosite/token/jwt"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 )
 
 func init() {
@@ -70,7 +71,7 @@ type svc struct {
 }
 
 // New returns a new oidcprovidersvc
-func New(m map[string]interface{}) (global.Service, error) {
+func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
 		return nil, err

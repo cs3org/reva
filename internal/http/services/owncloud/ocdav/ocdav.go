@@ -37,6 +37,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/templates"
 	ctxuser "github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
+	"github.com/rs/zerolog"
 )
 
 type ctxKey int
@@ -73,7 +74,7 @@ type svc struct {
 }
 
 // New returns a new ocdav
-func New(m map[string]interface{}) (global.Service, error) {
+func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	conf := &Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err

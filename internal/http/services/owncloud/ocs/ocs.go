@@ -28,6 +28,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
+	"github.com/rs/zerolog"
 )
 
 const (
@@ -45,7 +46,7 @@ type svc struct {
 }
 
 // New returns a new capabilitiessvc
-func New(m map[string]interface{}) (global.Service, error) {
+func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	conf := &config.Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
