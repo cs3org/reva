@@ -33,6 +33,7 @@ func init() {
 	registry.Register("mentix", New)
 }
 
+// Client is a Mentix API client
 type Client struct {
 	BaseURL    string
 	HTTPClient *http.Client
