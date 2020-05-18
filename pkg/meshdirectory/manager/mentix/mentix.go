@@ -19,14 +19,16 @@
 package mentix
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+
 	"github.com/cs3org/reva/pkg/meshdirectory"
 	"github.com/cs3org/reva/pkg/meshdirectory/manager/registry"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-	"net/http"
 )
 
 func init() {
@@ -47,13 +49,18 @@ func New(m map[string]interface{}) (meshdirectory.Manager, error) {
 		return nil, err
 	}
 
+	if c.URL == "" {
+		c.URL = "http://localhost:9600/"
+	}
+
 	client := &Client{
-		BaseURL:    c.URL,
-		HTTPClient: rhttp.GetHTTPClient(nil),
+		BaseURL: c.URL,
+		// TODO: pass/create context once it is required by GetHTTPClient
+		HTTPClient: rhttp.GetHTTPClient(context.TODO()),
 	}
 
 	mgr := &mgr{
-		cfg: c,
+		cfg:    c,
 		client: client,
 	}
 

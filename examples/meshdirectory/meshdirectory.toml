@@ -10,6 +10,6 @@ driver = "mentix"
 
 #[http.services.meshdirectory.drivers.json]
 #providers = "providers.demo.json"
-
-[http.services.meshdirectory.drivers.mentix]
-url = "http://localhost:9600/gocdb/"
+#
+#[http.services.meshdirectory.drivers.mentix]
+#url = "http://localhost:9600/"
