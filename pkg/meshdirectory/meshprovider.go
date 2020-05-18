@@ -18,15 +18,50 @@
 
 package meshdirectory
 
-// MeshProvider holds provider metadata
+// ServiceType describes a type of provided service
+type ServiceType struct {
+	Name        string `json:"Name"`
+	Description string `json:"Description"`
+}
+
+// Service holds a service definition
+type Service struct {
+	Type                ServiceType `json:"Type"`
+	Name                string      `json:"Name"`
+	Path                string      `json:"Path"`
+	IsMonitored         bool        `json:"IsMonitored"`
+	Properties          interface{} `json:"Properties"`
+	Host                string      `json:"Host"`
+	AdditionalEndpoints interface{} `json:"AdditionalEndpoints"`
+}
+
+// MeshProvider contains information about a mesh provider site
 type MeshProvider struct {
-	ID          string `json:"id" mapstructure:"id"`
-	Org         string `json:"org" mapstructure:"org"`
-	Name        string `json:"name" mapstructure:"description"`
-	Description string `json:"description" mapstructure:"description"`
-	Domain      string `json:"domain" mapstructure:"domain"`
-	Logo        string `json:"logo" mapstructure:"logo"`
-	Homepage    string `json:"homepage" mapstructure:"homepage"`
-	OCM         string `json:"ocm_api" mapstructure:"ocm_api"`
-	Version     string `json:"api_version" mapstructure:"api_version"`
+	Name         string      `json:"Name"`
+	FullName     string      `json:"FullName"`
+	Organization string      `json:"Organization"`
+	Domain       string      `json:"Domain"`
+	Homepage     string      `json:"Homepage"`
+	Email        string      `json:"Email"`
+	Description  string      `json:"Description"`
+	Services     []Service   `json:"Services"`
+	Properties   interface{} `json:"Properties"`
+}
+
+// MentixResponse holds Mentix API response
+type MentixResponse struct {
+	Sites        []MeshProvider `json:"Sites"`
+	ServiceTypes []ServiceType  `json:"ServiceTypes"`
+}
+
+// MentixErrorResponse holds Mentix API errors
+type MentixErrorResponse struct {
+	Message string `json:"error"`
+}
+
+// MeshDirectoryResponse service response
+type Response struct {
+	Status        int             `json:"status"`
+	StatusMessage string          `json:"message"`
+	Providers     *[]MeshProvider `json:"providers"`
 }
