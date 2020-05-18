@@ -80,6 +80,13 @@ func (mntx *Mentix) initialize(conf *config.Configuration, log *zerolog.Logger) 
 	// Create empty mesh data
 	mntx.meshData = meshdata.New()
 
+	// Log some infos
+	var exporterNames []string
+	for _, exporter := range mntx.exporters {
+		exporterNames = append(exporterNames, exporter.GetName())
+	}
+	log.Info().Msgf("mentix started with connector: %v; exporters: %v; update interval: %v", mntx.connector.GetName(), strings.Join(exporterNames, ","), duration)
+
 	return nil
 }
 
@@ -90,7 +97,6 @@ func (mntx *Mentix) initConnector() error {
 		return fmt.Errorf("the desired connector could be found: %v", err)
 	}
 	mntx.connector = connector
-	mntx.log.Info().Msgf("mentix connector: %v", connector.GetName())
 
 	// Activate the selected connector
 	if err := mntx.connector.Activate(mntx.conf, mntx.log); err != nil {
@@ -111,7 +117,6 @@ func (mntx *Mentix) initExporters() error {
 		names = append(names, exporter.GetName())
 	}
 	mntx.exporters = exporters
-	mntx.log.Info().Msgf("mentix exporters: %v", strings.Join(names, "; "))
 
 	// Activate all exporters
 	for _, exporter := range mntx.exporters {
