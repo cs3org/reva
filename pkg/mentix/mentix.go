@@ -21,7 +21,10 @@ package mentix
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
+
+	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/mentix/config"
@@ -32,6 +35,7 @@ import (
 
 type Mentix struct {
 	conf *config.Configuration
+	log  *zerolog.Logger
 
 	meshData  *meshdata.MeshData
 	connector connectors.Connector
@@ -44,11 +48,16 @@ const (
 	runLoopSleeptime = time.Millisecond * 500
 )
 
-func (mntx *Mentix) initialize(conf *config.Configuration) error {
+func (mntx *Mentix) initialize(conf *config.Configuration, log *zerolog.Logger) error {
 	if conf == nil {
 		return fmt.Errorf("no configuration provided")
 	}
 	mntx.conf = conf
+
+	if log == nil {
+		return fmt.Errorf("no logger provided")
+	}
+	mntx.log = log
 
 	// Initialize the connector that will be used to gather the mesh data
 	if err := mntx.initConnector(); err != nil {
@@ -81,9 +90,10 @@ func (mntx *Mentix) initConnector() error {
 		return fmt.Errorf("the desired connector could be found: %v", err)
 	}
 	mntx.connector = connector
+	mntx.log.Info().Msgf("mentix connector: %v", connector.GetName())
 
 	// Activate the selected connector
-	if err := mntx.connector.Activate(mntx.conf); err != nil {
+	if err := mntx.connector.Activate(mntx.conf, mntx.log); err != nil {
 		return fmt.Errorf("unable to activate connector: %v", err)
 	}
 
@@ -101,10 +111,11 @@ func (mntx *Mentix) initExporters() error {
 		names = append(names, exporter.GetName())
 	}
 	mntx.exporters = exporters
+	mntx.log.Info().Msgf("mentix exporters: %v", strings.Join(names, "; "))
 
 	// Activate all exporters
 	for _, exporter := range mntx.exporters {
-		if err := exporter.Activate(mntx.conf); err != nil {
+		if err := exporter.Activate(mntx.conf, mntx.log); err != nil {
 			return fmt.Errorf("unable to activate exporter '%v': %v", exporter.GetName(), err)
 		}
 	}
@@ -161,8 +172,10 @@ loop:
 			meshData, err := mntx.retrieveMeshData()
 			if err == nil {
 				if err := mntx.applyMeshData(meshData); err != nil {
+					mntx.log.Err(err).Msg("failed to apply mesh data")
 				}
 			} else {
+				mntx.log.Err(err).Msg("failed to retrieve mesh data")
 			}
 
 			updateTimestamp = time.Now()
@@ -184,6 +197,8 @@ func (mntx *Mentix) retrieveMeshData() (*meshdata.MeshData, error) {
 
 func (mntx *Mentix) applyMeshData(meshData *meshdata.MeshData) error {
 	if !meshData.Compare(mntx.meshData) {
+		mntx.log.Debug().Msg("mesh data changed, applying")
+
 		mntx.meshData = meshData
 
 		for _, exporter := range mntx.exporters {
@@ -220,9 +235,9 @@ func (mntx *Mentix) RequestHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func New(conf *config.Configuration) (*Mentix, error) {
+func New(conf *config.Configuration, log *zerolog.Logger) (*Mentix, error) {
 	mntx := new(Mentix)
-	if err := mntx.initialize(conf); err != nil {
+	if err := mntx.initialize(conf, log); err != nil {
 		return nil, fmt.Errorf("unable to initialize Mentix: %v", err)
 	}
 	return mntx, nil

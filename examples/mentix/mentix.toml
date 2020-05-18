@@ -9,7 +9,7 @@ enabled_services = ["mentix"]
 connector = "gocdb"
 exporters = ["webapi"]
 # Enable the Prometheus File Service Discovery:
-# exporters = ["webapi", "prom-filesd"]
+# exporters = ["webapi", "prom_filesd"]
 update_interval = "15m"
 
 [http.services.mentix.gocdb]

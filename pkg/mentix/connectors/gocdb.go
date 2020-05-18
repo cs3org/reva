@@ -23,6 +23,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/rs/zerolog"
+
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/connectors/gocdb"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
@@ -35,8 +37,8 @@ type GOCDBConnector struct {
 	gocdbAddress string
 }
 
-func (connector *GOCDBConnector) Activate(conf *config.Configuration) error {
-	if err := connector.BaseConnector.Activate(conf); err != nil {
+func (connector *GOCDBConnector) Activate(conf *config.Configuration, log *zerolog.Logger) error {
+	if err := connector.BaseConnector.Activate(conf, log); err != nil {
 		return err
 	}
 

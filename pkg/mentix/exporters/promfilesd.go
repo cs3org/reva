@@ -26,6 +26,8 @@ import (
 	"path"
 	"path/filepath"
 
+	"github.com/rs/zerolog"
+
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/exporters/prometheus"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
@@ -37,8 +39,8 @@ type PrometheusFileSDExporter struct {
 	outputFilename string
 }
 
-func (exporter *PrometheusFileSDExporter) Activate(conf *config.Configuration) error {
-	if err := exporter.BaseExporter.Activate(conf); err != nil {
+func (exporter *PrometheusFileSDExporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
+	if err := exporter.BaseExporter.Activate(conf, log); err != nil {
 		return err
 	}
 
@@ -71,6 +73,9 @@ func (exporter *PrometheusFileSDExporter) exportMeshData() {
 
 	scrapes := exporter.createScrapeConfigs()
 	if err := exporter.exportScrapeConfig(scrapes); err != nil {
+		exporter.log.Err(err).Str("file", exporter.outputFilename).Msg("error exporting Prometheus File SD")
+	} else {
+		exporter.log.Debug().Str("file", exporter.outputFilename).Msg("exported Prometheus File SD")
 	}
 }
 

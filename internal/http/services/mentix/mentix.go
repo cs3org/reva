@@ -19,10 +19,11 @@
 package mentix
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix"
 	"github.com/cs3org/reva/pkg/mentix/config"
@@ -30,9 +31,14 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/global"
 )
 
+func init() {
+	global.Register(serviceName, New)
+}
+
 type svc struct {
 	conf *config.Configuration
 	mntx *mentix.Mentix
+	log  *zerolog.Logger
 
 	stopSignal chan struct{}
 }
@@ -73,30 +79,44 @@ func (s *svc) startBackgroundService() {
 }
 
 func parseConfig(m map[string]interface{}) (*config.Configuration, error) {
-	cfg := defaultConfig()
+	cfg := &config.Configuration{}
 	if err := mapstructure.Decode(m, &cfg); err != nil {
-		return nil, fmt.Errorf("error decoding configuration: %v", err)
+		return nil, errors.Wrap(err, "mentix: error decoding configuration")
 	}
+	applyDefaultConfig(cfg)
 	return cfg, nil
 }
 
-func defaultConfig() *config.Configuration {
+func applyDefaultConfig(*config.Configuration) {
 	conf := &config.Configuration{}
 
-	conf.Prefix = serviceName
+	if conf.Prefix == "" {
+		conf.Prefix = serviceName
+	}
 
-	conf.Connector = config.ConnectorID_GOCDB          // Use GOCDB
-	conf.Exporters = exporters.RegisteredExporterIDs() // Enable all exporters
-	conf.UpdateInterval = "1h"                         // Update once per hour
+	if conf.Connector == "" {
+		conf.Connector = config.ConnectorID_GOCDB // Use GOCDB
+	}
 
-	conf.GOCDB.Scope = "SM" // TODO(Daniel-WWU-IT): This might change in the future
-	conf.WebAPI.Endpoint = "/"
+	if len(conf.Exporters) == 0 {
+		conf.Exporters = exporters.RegisteredExporterIDs() // Enable all exporters
+	}
 
-	return conf
+	if conf.UpdateInterval == "" {
+		conf.UpdateInterval = "1h" // Update once per hour
+	}
+
+	if conf.GOCDB.Scope == "" {
+		conf.GOCDB.Scope = "SM" // TODO(Daniel-WWU-IT): This might change in the future
+	}
+
+	if conf.WebAPI.Endpoint == "" {
+		conf.WebAPI.Endpoint = "/"
+	}
 }
 
 // New returns a new Mentix service
-func New(m map[string]interface{}) (global.Service, error) {
+func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	// Prepare the configuration
 	conf, err := parseConfig(m)
 	if err != nil {
@@ -104,21 +124,18 @@ func New(m map[string]interface{}) (global.Service, error) {
 	}
 
 	// Create the Mentix instance
-	mntx, err := mentix.New(conf)
+	mntx, err := mentix.New(conf, log)
 	if err != nil {
-		return nil, fmt.Errorf("error creating Mentix: %v", err)
+		return nil, errors.Wrap(err, "mentix: error creating Mentix")
 	}
 
 	// Create the service and start its background activity
 	s := &svc{
 		conf:       conf,
 		mntx:       mntx,
+		log:        log,
 		stopSignal: make(chan struct{}),
 	}
 	s.startBackgroundService()
 	return s, nil
-}
-
-func init() {
-	global.Register(serviceName, New)
 }

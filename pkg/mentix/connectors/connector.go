@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/rs/zerolog"
+
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
@@ -31,7 +33,7 @@ var (
 )
 
 type Connector interface {
-	Activate(conf *config.Configuration) error
+	Activate(conf *config.Configuration, log *zerolog.Logger) error
 	RetrieveMeshData() (*meshdata.MeshData, error)
 
 	GetName() string
@@ -39,13 +41,19 @@ type Connector interface {
 
 type BaseConnector struct {
 	conf *config.Configuration
+	log  *zerolog.Logger
 }
 
-func (connector *BaseConnector) Activate(conf *config.Configuration) error {
+func (connector *BaseConnector) Activate(conf *config.Configuration, log *zerolog.Logger) error {
 	if conf == nil {
 		return fmt.Errorf("no configuration provided")
 	}
 	connector.conf = conf
+
+	if log == nil {
+		return fmt.Errorf("no logger provided")
+	}
+	connector.log = log
 
 	return nil
 }

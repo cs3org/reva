@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/rs/zerolog"
+
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
@@ -31,7 +33,7 @@ var (
 )
 
 type Exporter interface {
-	Activate(conf *config.Configuration) error
+	Activate(conf *config.Configuration, log *zerolog.Logger) error
 	Start() error
 	Stop()
 
@@ -42,16 +44,22 @@ type Exporter interface {
 
 type BaseExporter struct {
 	conf *config.Configuration
+	log  *zerolog.Logger
 
 	meshData *meshdata.MeshData
 	locker   sync.RWMutex
 }
 
-func (exporter *BaseExporter) Activate(conf *config.Configuration) error {
+func (exporter *BaseExporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
 	if conf == nil {
 		return fmt.Errorf("no configuration provided")
 	}
 	exporter.conf = conf
+
+	if log == nil {
+		return fmt.Errorf("no logger provided")
+	}
+	exporter.log = log
 
 	return nil
 }

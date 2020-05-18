@@ -24,5 +24,5 @@ const (
 
 const (
 	ExporterID_WebAPI           = "webapi"
-	ExporterID_PrometheusFileSD = "prom-filesd"
+	ExporterID_PrometheusFileSD = "prom_filesd"
 )

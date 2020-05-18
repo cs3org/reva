@@ -56,6 +56,9 @@ func ReadEndpoint(host string, path string, params URLParams) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to get data from endpoint: %v", err)
 	}
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("invalid response received: %v", resp.Status)
+	}
 
 	defer resp.Body.Close()
 	body, _ := ioutil.ReadAll(resp.Body)

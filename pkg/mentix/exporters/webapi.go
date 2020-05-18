@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/rs/zerolog"
+
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/exporters/webapi"
 )
@@ -30,8 +32,8 @@ type WebAPIExporter struct {
 	BaseRequestExporter
 }
 
-func (exporter *WebAPIExporter) Activate(conf *config.Configuration) error {
-	if err := exporter.BaseExporter.Activate(conf); err != nil {
+func (exporter *WebAPIExporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
+	if err := exporter.BaseExporter.Activate(conf, log); err != nil {
 		return err
 	}
 
