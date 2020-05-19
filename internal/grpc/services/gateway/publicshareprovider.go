@@ -74,7 +74,7 @@ func (s *svc) GetPublicShareByToken(ctx context.Context, req *link.GetPublicShar
 	}
 
 	// TODO(refs) once https://github.com/cs3org/cs3apis/pull/73 is merged, password will be present in the request, not on the opaque field.
-	pass := string(req.Opaque.GetMap()["password"].GetValue())
+	pass := req.GetPassword()
 	res, err := driver.GetPublicShareByToken(ctx, req)
 	if err != nil {
 		return nil, err
