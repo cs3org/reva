@@ -51,7 +51,9 @@ func (exporter *PrometheusFileSDExporter) Activate(conf *config.Configuration, l
 	}
 
 	// Create the output directory
-	os.MkdirAll(filepath.Dir(exporter.outputFilename), os.ModePerm)
+	if err := os.MkdirAll(filepath.Dir(exporter.outputFilename), os.ModePerm); err != nil {
+		return fmt.Errorf("unable to create directory tree")
+	}
 
 	return nil
 }
@@ -138,5 +140,5 @@ func (exporter *PrometheusFileSDExporter) GetName() string {
 }
 
 func init() {
-	registerExporter(config.ExporterID_PrometheusFileSD, &PrometheusFileSDExporter{})
+	registerExporter(config.ExporterIDPrometheusFileSD, &PrometheusFileSDExporter{})
 }

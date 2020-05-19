@@ -19,10 +19,10 @@
 package config
 
 const (
-	ConnectorID_GOCDB = "gocdb"
+	ConnectorIDGOCDB = "gocdb"
 )
 
 const (
-	ExporterID_WebAPI           = "webapi"
-	ExporterID_PrometheusFileSD = "prom_filesd"
+	ExporterIDWebAPI           = "webapi"
+	ExporterIDPrometheusFileSD = "prom_filesd"
 )

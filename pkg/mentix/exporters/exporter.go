@@ -118,7 +118,7 @@ func AvailableExporters(conf *config.Configuration) ([]Exporter, error) {
 }
 
 func RegisteredExporterIDs() []string {
-	var keys []string
+	keys := make([]string, len(registeredExporters))
 	for k := range registeredExporters {
 		keys = append(keys, k)
 	}

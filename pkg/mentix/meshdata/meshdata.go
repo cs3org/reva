@@ -55,7 +55,10 @@ func (meshData *MeshData) Clone() *MeshData {
 	// To avoid any "deep copy" packages, use JSON en- and decoding instead
 	data, err := meshData.ToJSON()
 	if err == nil {
-		clone.FromJSON(data)
+		if err := clone.FromJSON(data); err != nil {
+			// In case of an error, clear the data
+			clone.Clear()
+		}
 	}
 
 	return clone

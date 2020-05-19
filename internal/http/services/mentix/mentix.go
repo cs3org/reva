@@ -61,8 +61,9 @@ func (s *svc) Prefix() string {
 
 func (s *svc) Unprotected() []string {
 	// Get all endpoints exposed by the RequestExporters
-	var endpoints []string
-	for _, exporter := range s.mntx.GetRequestExporters() {
+	exporters := s.mntx.GetRequestExporters()
+	endpoints := make([]string, len(exporters))
+	for _, exporter := range exporters {
 		endpoints = append(endpoints, exporter.Endpoint())
 	}
 	return endpoints
@@ -75,7 +76,11 @@ func (s *svc) Handler() http.Handler {
 
 func (s *svc) startBackgroundService() {
 	// Just run Mentix in the background
-	go s.mntx.Run(s.stopSignal)
+	go func() {
+		if err := s.mntx.Run(s.stopSignal); err != nil {
+			s.log.Err(err).Msg("error while running mentix")
+		}
+	}()
 }
 
 func parseConfig(m map[string]interface{}) (*config.Configuration, error) {
@@ -95,7 +100,7 @@ func applyDefaultConfig(*config.Configuration) {
 	}
 
 	if conf.Connector == "" {
-		conf.Connector = config.ConnectorID_GOCDB // Use GOCDB
+		conf.Connector = config.ConnectorIDGOCDB // Use GOCDB
 	}
 
 	if len(conf.Exporters) == 0 {

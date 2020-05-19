@@ -199,5 +199,5 @@ func (connector *GOCDBConnector) GetName() string {
 }
 
 func init() {
-	registerConnector(config.ConnectorID_GOCDB, &GOCDBConnector{})
+	registerConnector(config.ConnectorIDGOCDB, &GOCDBConnector{})
 }

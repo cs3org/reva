@@ -50,9 +50,10 @@ func (exporter *WebAPIExporter) HandleRequest(resp http.ResponseWriter, req *htt
 
 	data, err := webapi.HandleQuery(exporter.meshData, req.URL.Query())
 	if err == nil {
-		resp.Write(data)
+		if _, err := resp.Write(data); err != nil {
+			return fmt.Errorf("error writing the API request response: %v", err)
+		}
 	} else {
-		resp.Write([]byte(fmt.Sprintf("Error while serving API request: %v", err)))
 		return fmt.Errorf("error while serving API request: %v", err)
 	}
 
@@ -64,5 +65,5 @@ func (exporter *WebAPIExporter) GetName() string {
 }
 
 func init() {
-	registerExporter(config.ExporterID_WebAPI, &WebAPIExporter{})
+	registerExporter(config.ExporterIDWebAPI, &WebAPIExporter{})
 }

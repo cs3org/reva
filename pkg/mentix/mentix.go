@@ -81,7 +81,7 @@ func (mntx *Mentix) initialize(conf *config.Configuration, log *zerolog.Logger) 
 	mntx.meshData = meshdata.New()
 
 	// Log some infos
-	var exporterNames []string
+	exporterNames := make([]string, len(mntx.exporters))
 	for _, exporter := range mntx.exporters {
 		exporterNames = append(exporterNames, exporter.GetName())
 	}
@@ -111,10 +111,6 @@ func (mntx *Mentix) initExporters() error {
 	exporters, err := exporters.AvailableExporters(mntx.conf)
 	if err != nil {
 		return fmt.Errorf("unable to get registered exporters: %v", err)
-	}
-	var names []string
-	for _, exporter := range exporters {
-		names = append(names, exporter.GetName())
 	}
 	mntx.exporters = exporters
 
