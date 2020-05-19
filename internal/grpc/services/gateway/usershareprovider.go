@@ -60,9 +60,11 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 	// TODO(labkode): if both commits are enabled they could be done concurrently.
 	if s.c.CommitShareToStorageGrant {
 		addGrantStatus, err := s.addGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, req.Grant.Permissions.Permissions)
-		return &collaboration.CreateShareResponse{
-			Status: addGrantStatus,
-		}, err
+		if addGrantStatus.Code != rpc.Code_CODE_OK {
+			return &collaboration.CreateShareResponse{
+				Status: addGrantStatus,
+			}, err
+		}
 	}
 
 	return res, nil
@@ -110,9 +112,11 @@ func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareReq
 	// TODO(labkode): if both commits are enabled they could be done concurrently.
 	if s.c.CommitShareToStorageGrant {
 		removeGrantStatus, err := s.removeGrant(ctx, share.ResourceId, share.Grantee, share.Permissions.Permissions)
-		return &collaboration.RemoveShareResponse{
-			Status: removeGrantStatus,
-		}, err
+		if removeGrantStatus.Code != rpc.Code_CODE_OK {
+			return &collaboration.RemoveShareResponse{
+				Status: removeGrantStatus,
+			}, err
+		}
 	}
 
 	return res, nil

@@ -51,9 +51,11 @@ func (s *svc) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareRequest
 	// TODO(labkode): if both commits are enabled they could be done concurrently.
 	if s.c.CommitShareToStorageGrant {
 		addGrantStatus, err := s.addGrant(ctx, req.ResourceId, req.Grant.Grantee, req.Grant.Permissions.Permissions)
-		return &ocm.CreateOCMShareResponse{
-			Status: addGrantStatus,
-		}, err
+		if addGrantStatus.Code != rpc.Code_CODE_OK {
+			return &ocm.CreateOCMShareResponse{
+				Status: addGrantStatus,
+			}, err
+		}
 	}
 
 	return res, nil
@@ -98,9 +100,11 @@ func (s *svc) RemoveOCMShare(ctx context.Context, req *ocm.RemoveOCMShareRequest
 	// TODO(labkode): if both commits are enabled they could be done concurrently.
 	if s.c.CommitShareToStorageGrant {
 		removeGrantStatus, err := s.removeGrant(ctx, share.ResourceId, share.Grantee, share.Permissions.Permissions)
-		return &ocm.RemoveOCMShareResponse{
-			Status: removeGrantStatus,
-		}, err
+		if removeGrantStatus.Code != rpc.Code_CODE_OK {
+			return &ocm.RemoveOCMShareResponse{
+				Status: removeGrantStatus,
+			}, err
+		}
 	}
 
 	return res, nil
