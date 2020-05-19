@@ -348,6 +348,9 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 }
 
 func (s *svc) createReference(ctx context.Context, resourceID *provider.ResourceId) (*rpc.Status, error) {
+
+	log := appctx.GetLogger(ctx)
+
 	// get the metadata about the share
 	c, err := s.findByID(ctx, resourceID)
 	if err != nil {
