@@ -31,7 +31,6 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 )
 
 // TODO(labkode): add multi-phase commit logic when commit share or commit ref is enabled.
