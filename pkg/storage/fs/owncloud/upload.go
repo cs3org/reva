@@ -159,6 +159,7 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 		"LogLevel": log.GetLevel().String(),
 	}
 	// Create binary file in the upload folder with no content
+	log.Debug().Interface("info", info).Msg("ocfs: built storage info")
 	file, err := os.OpenFile(binPath, os.O_CREATE|os.O_WRONLY, defaultFilePerm)
 	if err != nil {
 		return nil, err
@@ -170,6 +171,17 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 		binPath:  binPath,
 		infoPath: filepath.Join(fs.c.UploadInfoDir, info.ID+".info"),
 		fs:       fs,
+		ctx:      ctx,
+	}
+
+	if !info.SizeIsDeferred && info.Size == 0 {
+		log.Debug().Interface("info", info).Msg("ocfs: finishing upload for empty file")
+		// no need to create info file and finish directly
+		err := u.FinishUpload(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return u, nil
 	}
 
 	// writeInfo creates the file by itself if necessary
@@ -340,10 +352,12 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 
 	// only delete the upload if it was successfully written to eos
 	if err := os.Remove(upload.infoPath); err != nil {
-		log.Err(err).Interface("info", upload.info).Msg("ocfs: could not delete upload info")
+		if !os.IsNotExist(err) {
+			log.Err(err).Interface("info", upload.info).Msg("ocfs: could not delete upload info")
+			return err
+		}
 	}
 
-	// FIXME metadata propagation is left to the storage implementation
 	return upload.fs.propagate(upload.ctx, np)
 }
 
@@ -359,10 +373,14 @@ func (fs *ocfs) AsTerminatableUpload(upload tusd.Upload) tusd.TerminatableUpload
 // Terminate terminates the upload
 func (upload *fileUpload) Terminate(ctx context.Context) error {
 	if err := os.Remove(upload.infoPath); err != nil {
-		return err
+		if !os.IsNotExist(err) {
+			return err
+		}
 	}
 	if err := os.Remove(upload.binPath); err != nil {
-		return err
+		if !os.IsNotExist(err) {
+			return err
+		}
 	}
 	return nil
 }

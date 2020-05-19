@@ -44,11 +44,22 @@ func recycleRestoreCommand() *command {
 			return err
 		}
 
+		ctx := getAuthContext()
+
+		getHomeRes, err := client.GetHome(ctx, &provider.GetHomeRequest{})
+		if err != nil {
+			return err
+		}
+
 		req := &provider.RestoreRecycleItemRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{
+					Path: getHomeRes.Path,
+				},
+			},
 			Key: key,
 		}
 
-		ctx := getAuthContext()
 		res, err := client.RestoreRecycleItem(ctx, req)
 		if err != nil {
 			return err

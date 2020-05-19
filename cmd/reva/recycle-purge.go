@@ -24,6 +24,7 @@ import (
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
 func recyclePurgeCommand() *command {
@@ -42,9 +43,21 @@ func recyclePurgeCommand() *command {
 			return err
 		}
 
-		req := &gateway.PurgeRecycleRequest{}
-
 		ctx := getAuthContext()
+
+		getHomeRes, err := client.GetHome(ctx, &provider.GetHomeRequest{})
+		if err != nil {
+			return err
+		}
+
+		req := &gateway.PurgeRecycleRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{
+					Path: getHomeRes.Path,
+				},
+			},
+		}
+
 		res, err := client.PurgeRecycle(ctx, req)
 		if err != nil {
 			return err

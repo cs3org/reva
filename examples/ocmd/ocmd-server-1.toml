@@ -45,7 +45,7 @@ driver = "json"
 
 # Note that ocmcore and ocmshareprovider should use the same file for storing the shares.
 [grpc.services.ocmcore.drivers.json]
-file = "/tmp/reva/shares_server_1.json"
+file = "/var/tmp/reva/shares_server_1.json"
 
 [grpc.services.ocminvitemanager]
 driver = "json"
@@ -54,7 +54,7 @@ driver = "json"
 driver = "json"
 
 [grpc.services.ocmshareprovider.drivers.json]
-file = "/tmp/reva/shares_server_1.json"
+file = "/var/tmp/reva/shares_server_1.json"
 
 [grpc.services.ocmproviderauthorizer]
 driver = "json"
