@@ -35,9 +35,10 @@ func init() {
 }
 
 type config struct {
-	Prefix  string                            `mapstructure:"prefix"`
-	Driver  string                            `mapstructure:"driver"`
-	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
+	Prefix     string                            `mapstructure:"prefix"`
+	Driver     string                            `mapstructure:"driver"`
+	Drivers    map[string]map[string]interface{} `mapstructure:"drivers"`
+	disableTus bool                              `mapstructure:"disable_tus"`
 }
 
 type svc struct {
@@ -107,7 +108,7 @@ type Composable interface {
 
 func (s *svc) setHandler() (err error) {
 	composable, ok := s.storage.(Composable)
-	if ok {
+	if ok && !s.conf.disableTus {
 		// A storage backend for tusd may consist of multiple different parts which
 		// handle upload creation, locking, termination and so on. The composer is a
 		// place where all those separated pieces are joined together. In this example
