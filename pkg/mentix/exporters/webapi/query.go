@@ -31,6 +31,7 @@ const (
 	queryMethodDefault = ""
 )
 
+// HandleQuery handles an HTTP request based on the provided 'method' parameter.
 func HandleQuery(meshData *meshdata.MeshData, params url.Values) ([]byte, error) {
 	method := params.Get("method")
 	switch strings.ToLower(method) {

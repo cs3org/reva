@@ -18,6 +18,7 @@
 
 package prometheus
 
+// ScrapeConfig represents a scrape configuration in Prometheus.
 type ScrapeConfig struct {
 	Targets []string          `json:"targets"`
 	Labels  map[string]string `json:"labels"`

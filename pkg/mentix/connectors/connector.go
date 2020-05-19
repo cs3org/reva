@@ -32,13 +32,18 @@ var (
 	registeredConnectors = map[string]Connector{}
 )
 
+// Connector is the interface that all connectors must implement.
 type Connector interface {
+	// Activate activates a connector.
 	Activate(conf *config.Configuration, log *zerolog.Logger) error
+	// RetrieveMeshData fetches new mesh data.
 	RetrieveMeshData() (*meshdata.MeshData, error)
 
+	// GetName returns the display name of the connector.
 	GetName() string
 }
 
+// BaseConnector implements basic connector functionality common to all connectors.
 type BaseConnector struct {
 	conf *config.Configuration
 	log  *zerolog.Logger

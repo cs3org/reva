@@ -18,6 +18,7 @@
 
 package config
 
+// Configuration holds the general Mentix configuration.
 type Configuration struct {
 	Prefix string `mapstructure:"prefix"`
 

@@ -147,6 +147,8 @@ func (mntx *Mentix) destroy() {
 	mntx.stopExporters()
 }
 
+// Run starts the Mentix service that will periodically pull the configured data source and publish this data
+// through the enabled exporters.
 func (mntx *Mentix) Run(stopSignal <-chan struct{}) error {
 	defer mntx.destroy()
 
@@ -212,6 +214,7 @@ func (mntx *Mentix) applyMeshData(meshData *meshdata.MeshData) error {
 	return nil
 }
 
+// GetRequestExporters returns all exporters that can handle HTTP requests.
 func (mntx *Mentix) GetRequestExporters() []exporters.RequestExporter {
 	// Return all exporters that implement the RequestExporter interface
 	var reqExporters []exporters.RequestExporter
@@ -223,6 +226,8 @@ func (mntx *Mentix) GetRequestExporters() []exporters.RequestExporter {
 	return reqExporters
 }
 
+// RequestHandler handles any incoming HTTP requests by asking each RequestExporter whether it wants to
+// handle the request (usually based on the relative URL path).
 func (mntx *Mentix) RequestHandler(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context())
 

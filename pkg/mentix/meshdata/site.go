@@ -18,6 +18,7 @@
 
 package meshdata
 
+// Site represents a single site managed by Mentix.
 type Site struct {
 	Name         string
 	FullName     string

@@ -24,6 +24,7 @@ import (
 	"github.com/cs3org/reva/pkg/mentix/network"
 )
 
+// QueryGOCDB retrieves data from one of GOCDB's endpoints.
 func QueryGOCDB(address string, method string, isPrivate bool, scope string, params network.URLParams) ([]byte, error) {
 	// The method must always be specified
 	params["method"] = method

@@ -23,16 +23,19 @@ import (
 	"fmt"
 )
 
+// MeshData holds the entire mesh data managed by Mentix.
 type MeshData struct {
 	Sites        []*Site
 	ServiceTypes []*ServiceType
 }
 
+// Clear removes all saved data, leaving an empty mesh.
 func (meshData *MeshData) Clear() {
 	meshData.Sites = nil
 	meshData.ServiceTypes = nil
 }
 
+// ToJSON converts the data to JSON.
 func (meshData *MeshData) ToJSON() (string, error) {
 	data, err := json.MarshalIndent(meshData, "", "\t")
 	if err != nil {
@@ -41,6 +44,7 @@ func (meshData *MeshData) ToJSON() (string, error) {
 	return string(data), nil
 }
 
+// FromJSON converts JSON data to mesh data.
 func (meshData *MeshData) FromJSON(data string) error {
 	meshData.Clear()
 	if err := json.Unmarshal([]byte(data), meshData); err != nil {
@@ -49,6 +53,7 @@ func (meshData *MeshData) FromJSON(data string) error {
 	return nil
 }
 
+// Clone creates an exact copy of the mesh data.
 func (meshData *MeshData) Clone() *MeshData {
 	clone := &MeshData{}
 
@@ -64,6 +69,7 @@ func (meshData *MeshData) Clone() *MeshData {
 	return clone
 }
 
+// Compare checks whether the stored data equals the data of another MeshData object.
 func (meshData *MeshData) Compare(other *MeshData) bool {
 	// To avoid cumbersome comparisons, just compare the JSON-encoded data
 	json1, _ := meshData.ToJSON()
@@ -71,6 +77,7 @@ func (meshData *MeshData) Compare(other *MeshData) bool {
 	return json1 == json2
 }
 
+// New returns a new (empty) MeshData object.
 func New() *MeshData {
 	meshData := &MeshData{}
 	meshData.Clear()

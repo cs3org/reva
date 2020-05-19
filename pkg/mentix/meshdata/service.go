@@ -18,6 +18,7 @@
 
 package meshdata
 
+// Service represents a service managed by Mentix.
 type Service struct {
 	ServiceEndpoint
 
@@ -25,11 +26,13 @@ type Service struct {
 	AdditionalEndpoints []*ServiceEndpoint
 }
 
+// ServiceType represents a service type managed by Mentix.
 type ServiceType struct {
 	Name        string
 	Description string
 }
 
+// ServiceEndpoint represents a service endpoint managed by Mentix.
 type ServiceEndpoint struct {
 	Type        *ServiceType
 	Name        string

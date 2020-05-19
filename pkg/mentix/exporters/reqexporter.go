@@ -23,14 +23,19 @@ import (
 	"strings"
 )
 
+// RequestExporter is the interface implemented by exporters that offer an HTTP endpoint.
 type RequestExporter interface {
 	Exporter
 
+	// Endpoint returns the (relative) endpoint of the exporter.
 	Endpoint() string
+	// WantsRequest returns whether the exporter wants to handle the incoming request.
 	WantsRequest(r *http.Request) bool
+	// HandleRequest handles the actual HTTP request.
 	HandleRequest(resp http.ResponseWriter, req *http.Request) error
 }
 
+// BaseRequestExporter implements basic exporter functionality common to all request exporters.
 type BaseRequestExporter struct {
 	BaseExporter
 

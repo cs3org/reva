@@ -18,24 +18,29 @@
 
 package gocdb
 
+// Extension represents Key-Value pairs in GOCDB.
 type Extension struct {
 	Key   string `xml:"KEY"`
 	Value string `xml:"VALUE"`
 }
 
+// Extensions is a list of Extension objects.
 type Extensions struct {
 	Extensions []*Extension `xml:"EXTENSION"`
 }
 
+// ServiceType represents a service type in GOCDB.
 type ServiceType struct {
 	Name        string `xml:"SERVICE_TYPE_NAME"`
 	Description string `xml:"SERVICE_TYPE_DESC"`
 }
 
+// ServiceTypes is a list of ServiceType objects.
 type ServiceTypes struct {
 	Types []*ServiceType `xml:"SERVICE_TYPE"`
 }
 
+// Site represents a site in GOCDB.
 type Site struct {
 	ShortName    string     `xml:"SHORT_NAME"`
 	OfficialName string     `xml:"OFFICIAL_NAME"`
@@ -46,10 +51,12 @@ type Site struct {
 	Extensions   Extensions `xml:"EXTENSIONS"`
 }
 
+// Sites is a list of Site objects.
 type Sites struct {
 	Sites []*Site `xml:"SITE"`
 }
 
+// ServiceEndpoint represents an additional service endpoint of a service in GOCDB.
 type ServiceEndpoint struct {
 	Name        string     `xml:"NAME"`
 	URL         string     `xml:"URL"`
@@ -58,10 +65,12 @@ type ServiceEndpoint struct {
 	Extensions  Extensions `xml:"EXTENSIONS"`
 }
 
+// ServiceEndpoints is a list of ServiceEndpoint objects.
 type ServiceEndpoints struct {
 	Endpoints []*ServiceEndpoint `xml:"ENDPOINT"`
 }
 
+// Service represents a service in GOCDB.
 type Service struct {
 	Host        string           `xml:"HOSTNAME"`
 	Type        string           `xml:"SERVICE_TYPE"`
@@ -71,6 +80,7 @@ type Service struct {
 	Extensions  Extensions       `xml:"EXTENSIONS"`
 }
 
+// Services is a list of Service objects.
 type Services struct {
 	Services []*Service `xml:"SERVICE_ENDPOINT"`
 }

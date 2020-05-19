@@ -120,7 +120,7 @@ func applyDefaultConfig(*config.Configuration) {
 	}
 }
 
-// New returns a new Mentix service
+// New returns a new Mentix service.
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	// Prepare the configuration
 	conf, err := parseConfig(m)

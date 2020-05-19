@@ -26,8 +26,10 @@ import (
 	p "path"
 )
 
+// URLParams holds Key-Value URL parameters; it is a simpler form of url.Values.
 type URLParams map[string]string
 
+// GenerateURL creates a URL object from a host, path and optional parameters.
 func GenerateURL(host string, path string, params URLParams) (*url.URL, error) {
 	fullURL, err := url.Parse(host)
 	if err != nil {
@@ -45,6 +47,7 @@ func GenerateURL(host string, path string, params URLParams) (*url.URL, error) {
 	return fullURL, nil
 }
 
+// ReadEndpoint reads data from an HTTP endpoint.
 func ReadEndpoint(host string, path string, params URLParams) ([]byte, error) {
 	endpointURL, err := GenerateURL(host, path, params)
 	if err != nil {

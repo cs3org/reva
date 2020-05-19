@@ -32,16 +32,23 @@ var (
 	registeredExporters = map[string]Exporter{}
 )
 
+// Exporter is the interface that all exporters must implement.
 type Exporter interface {
+	// Activate activates the exporter.
 	Activate(conf *config.Configuration, log *zerolog.Logger) error
+	// Start starts the exporter; only exporters which perform periodical background tasks should do something here.
 	Start() error
+	// Stop stops any running background activities of the exporter.
 	Stop()
 
+	// UpdateMeshData is called whenever the mesh data has changed to reflect these changes.
 	UpdateMeshData(*meshdata.MeshData) error
 
+	// GetName returns the display name of the exporter.
 	GetName() string
 }
 
+// BaseExporter implements basic exporter functionality common to all exporters.
 type BaseExporter struct {
 	conf *config.Configuration
 	log  *zerolog.Logger
@@ -98,6 +105,7 @@ func registerExporter(id string, exporter Exporter) {
 	registeredExporters[id] = exporter
 }
 
+// AvailableExporters returns a list of all exporters that are enabled in the configuration.
 func AvailableExporters(conf *config.Configuration) ([]Exporter, error) {
 	// Try to add all exporters configured in the environment
 	var exporters []Exporter
@@ -117,6 +125,7 @@ func AvailableExporters(conf *config.Configuration) ([]Exporter, error) {
 	return exporters, nil
 }
 
+// RegisteredExporterIDs returns a list of all registered exporter IDs.
 func RegisteredExporterIDs() []string {
 	keys := make([]string, len(registeredExporters))
 	for k := range registeredExporters {
