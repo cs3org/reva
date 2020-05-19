@@ -63,7 +63,6 @@ func ocmShareCreateCommand() *command {
 			os.Exit(1)
 		}
 
-
 		fn := cmd.Args()[0]
 
 		ctx := getAuthContext()
