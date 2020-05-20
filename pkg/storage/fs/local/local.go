@@ -517,31 +517,41 @@ func (fs *localfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 			} else {
 				return errors.Wrap(err, "could not parse mtime")
 			}
+			delete(md.Metadata, "mtime")
 		}
 
 		if _, ok := md.Metadata["etag"]; ok {
 			etag := calcEtag(ctx, fi)
 			if etag != md.Metadata["etag"] {
-				err = fs.addToEtagDB(ctx, np, etag)
+				err = fs.addToMetadataDB(ctx, np, "etag", etag)
 				if err != nil {
 					return errors.Wrap(err, "localfs: error adding entry to DB")
 				}
 			}
+			delete(md.Metadata, "etag")
 		}
 
 		if _, ok := md.Metadata["favorite"]; ok {
-			if u, err := getUser(ctx); err != nil {
-				if uid := u.GetId(); uid != nil {
-					usr := fmt.Sprintf("u:%s@%s", uid.GetOpaqueId(), uid.GetIdp())
-					if err = fs.addToFavoritesDB(ctx, np, usr); err != nil {
-						return errors.Wrap(err, "localfs: error adding entry to DB")
-					}
-				} else {
-					return errors.Wrap(errtypes.UserRequired("userrequired"), "user has no id")
-				}
-			} else {
+			u, err := getUser(ctx)
+			if err != nil {
 				return err
 			}
+			if uid := u.GetId(); uid != nil {
+				usr := fmt.Sprintf("u:%s@%s", uid.GetOpaqueId(), uid.GetIdp())
+				if err = fs.addToFavoritesDB(ctx, np, usr); err != nil {
+					return errors.Wrap(err, "localfs: error adding entry to DB")
+				}
+			} else {
+				return errors.Wrap(errtypes.UserRequired("userrequired"), "user has no id")
+			}
+			delete(md.Metadata, "favorite")
+		}
+	}
+
+	for k, v := range md.Metadata {
+		err = fs.addToMetadataDB(ctx, np, k, v)
+		if err != nil {
+			return errors.Wrap(err, "localfs: error adding entry to DB")
 		}
 	}
 
@@ -587,20 +597,27 @@ func (fs *localfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Ref
 	for _, k := range keys {
 		switch k {
 		case "favorite":
-			if u, err := getUser(ctx); err != nil {
-				if uid := u.GetId(); uid != nil {
-					usr := fmt.Sprintf("u:%s@%s", uid.GetOpaqueId(), uid.GetIdp())
-					if err = fs.removeFromFavoritesDB(ctx, np, usr); err != nil {
-						return errors.Wrap(err, "localfs: error removing entry from DB")
-					}
-				} else {
-					return errors.Wrap(errtypes.UserRequired("userrequired"), "user has no id")
-				}
-			} else {
+			u, err := getUser(ctx)
+			if err != nil {
 				return err
 			}
+			if uid := u.GetId(); uid != nil {
+				usr := fmt.Sprintf("u:%s@%s", uid.GetOpaqueId(), uid.GetIdp())
+				if err = fs.removeFromFavoritesDB(ctx, np, usr); err != nil {
+					return errors.Wrap(err, "localfs: error removing entry from DB")
+				}
+			} else {
+				return errors.Wrap(errtypes.UserRequired("userrequired"), "user has no id")
+			}
+		case "etag":
+			return errors.Wrap(errtypes.NotSupported("unsetting etag not supported"), "could not unset metadata")
+		case "mtime":
+			return errors.Wrap(errtypes.NotSupported("unsetting mtime not supported"), "could not unset metadata")
 		default:
-			return errors.Wrap(errtypes.NotSupported("metadata not supported"), "could not unset metadata")
+			err = fs.removeFromMetadataDB(ctx, np, k)
+			if err != nil {
+				return errors.Wrap(err, "localfs: error adding entry to DB")
+			}
 		}
 	}
 
@@ -707,7 +724,7 @@ func (fs *localfs) Delete(ctx context.Context, ref *provider.Reference) error {
 		return errors.Wrap(err, "localfs: error adding entry to DB")
 	}
 
-	return fs.propagate(ctx, path.Dir(fn))
+	return fs.propagate(ctx, path.Dir(fp))
 }
 
 func (fs *localfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) error {
@@ -974,7 +991,7 @@ func (fs *localfs) DownloadRevision(ctx context.Context, ref *provider.Reference
 	}
 
 	versionsDir := fs.wrapVersions(ctx, np)
-	vp := path.Join(versionsDir, fmt.Sprintf(".v%s", revisionKey))
+	vp := path.Join(versionsDir, revisionKey)
 
 	r, err := os.Open(vp)
 	if err != nil {
@@ -998,7 +1015,8 @@ func (fs *localfs) RestoreRevision(ctx context.Context, ref *provider.Reference,
 	}
 
 	versionsDir := fs.wrapVersions(ctx, np)
-	vp := path.Join(versionsDir, fmt.Sprintf(".v%s", revisionKey))
+	vp := path.Join(versionsDir, revisionKey)
+	np = fs.wrap(ctx, np)
 
 	// check revision exists
 	vs, err := os.Stat(vp)
@@ -1110,8 +1128,9 @@ func (fs *localfs) RestoreRecycleItem(ctx context.Context, restoreKey string) er
 	} else {
 		originalPath = fs.wrap(ctx, filePath)
 	}
+
 	if _, err = os.Stat(originalPath); err == nil {
-		return errors.Wrap(err, "localfs: can't restore - file already exists at original path")
+		return errors.New("localfs: can't restore - file already exists at original path")
 	}
 
 	rp := fs.wrapRecycleBin(ctx, restoreKey)

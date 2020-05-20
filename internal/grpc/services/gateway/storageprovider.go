@@ -1209,7 +1209,7 @@ func (s *svc) getPath(ctx context.Context, ref *provider.Reference) (string, err
 		return ref.GetPath(), nil
 	}
 
-	if ref.GetId() != nil {
+	if ref.GetId() != nil && ref.GetId().GetOpaqueId() != "" {
 		req := &provider.StatRequest{Ref: ref}
 		res, err := s.stat(ctx, req)
 		if err != nil {
