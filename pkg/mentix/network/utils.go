@@ -23,22 +23,11 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"strings"
+	p "path"
 )
 
 // URLParams holds Key-Value URL parameters; it is a simpler form of url.Values.
 type URLParams map[string]string
-
-func combineURLPath(base string, paths ...string) string {
-	fullPath := base
-	for _, path := range paths {
-		if !strings.HasSuffix(fullPath, "/") && !strings.HasPrefix(path, "/") {
-			fullPath += "/"
-		}
-		fullPath += path
-	}
-	return fullPath
-}
 
 // GenerateURL creates a URL object from a host, path and optional parameters.
 func GenerateURL(host string, path string, params URLParams) (*url.URL, error) {
@@ -47,7 +36,7 @@ func GenerateURL(host string, path string, params URLParams) (*url.URL, error) {
 		return nil, fmt.Errorf("unable to generate URL: base=%v, path=%v, params=%v", host, path, params)
 	}
 
-	fullURL.Path = combineURLPath(fullURL.Path, path)
+	fullURL.Path = p.Join(fullURL.Path, path)
 
 	query := make(url.Values)
 	for key, value := range params {
