@@ -256,24 +256,29 @@ func (fs *localfs) isShareFolderChild(ctx context.Context, p string) bool {
 }
 
 func (fs *localfs) normalize(ctx context.Context, fi os.FileInfo, fn string) *provider.ResourceInfo {
-	fn = fs.unwrap(ctx, path.Join("/", fn))
+	fp := fs.unwrap(ctx, path.Join("/", fn))
 	owner, err := getUser(ctx)
+	if err != nil {
+		return nil
+	}
+	metadata, err := fs.retrieveArbitraryMetadata(ctx, fn)
 	if err != nil {
 		return nil
 	}
 
 	md := &provider.ResourceInfo{
-		Id:            &provider.ResourceId{OpaqueId: "fileid-" + strings.TrimPrefix(fn, "/")},
-		Path:          fn,
+		Id:            &provider.ResourceId{OpaqueId: "fileid-" + strings.TrimPrefix(fp, "/")},
+		Path:          fp,
 		Type:          getResourceType(fi.IsDir()),
 		Etag:          calcEtag(ctx, fi),
-		MimeType:      mime.Detect(fi.IsDir(), fn),
+		MimeType:      mime.Detect(fi.IsDir(), fp),
 		Size:          uint64(fi.Size()),
 		PermissionSet: &provider.ResourcePermissions{ListContainer: true, CreateContainer: true},
 		Mtime: &types.Timestamp{
 			Seconds: uint64(fi.ModTime().Unix()),
 		},
-		Owner: owner.Id,
+		Owner:             owner.Id,
+		ArbitraryMetadata: metadata,
 	}
 
 	return md
@@ -295,6 +300,26 @@ func getResourceType(isDir bool) provider.ResourceType {
 		return provider.ResourceType_RESOURCE_TYPE_CONTAINER
 	}
 	return provider.ResourceType_RESOURCE_TYPE_FILE
+}
+
+func (fs *localfs) retrieveArbitraryMetadata(ctx context.Context, fn string) (*provider.ArbitraryMetadata, error) {
+	md, err := fs.getMetadata(ctx, fn)
+	if err != nil {
+		return nil, errors.Wrap(err, "localfs: error listing metadata")
+	}
+	var mdKey, mdVal string
+	metadata := provider.ArbitraryMetadata{
+		Metadata: map[string]string{},
+	}
+
+	for md.Next() {
+		err = md.Scan(&mdKey, &mdVal)
+		if err != nil {
+			return nil, errors.Wrap(err, "localfs: error scanning db rows")
+		}
+		metadata.Metadata[mdKey] = mdVal
+	}
+	return &metadata, nil
 }
 
 // GetPathByID returns the path pointed by the file id

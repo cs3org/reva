@@ -188,6 +188,14 @@ func (fs *localfs) removeFromMetadataDB(ctx context.Context, resource, key strin
 	return nil
 }
 
+func (fs *localfs) getMetadata(ctx context.Context, resource string) (*sql.Rows, error) {
+	grants, err := fs.db.Query("SELECT key, value FROM metadata WHERE resource=?", resource)
+	if err != nil {
+		return nil, err
+	}
+	return grants, nil
+}
+
 func (fs *localfs) addToReferencesDB(ctx context.Context, resource, target string) error {
 	stmt, err := fs.db.Prepare("INSERT INTO share_references (resource, target) VALUES (?, ?) ON CONFLICT(resource) DO UPDATE SET target=?")
 	if err != nil {
