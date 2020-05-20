@@ -16,20 +16,27 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package meshdata
 
-import (
-	// Load core HTTP services
-	_ "github.com/cs3org/reva/internal/http/services/datagateway"
-	_ "github.com/cs3org/reva/internal/http/services/dataprovider"
-	_ "github.com/cs3org/reva/internal/http/services/helloworld"
-	_ "github.com/cs3org/reva/internal/http/services/mentix"
-	_ "github.com/cs3org/reva/internal/http/services/meshdirectory"
-	_ "github.com/cs3org/reva/internal/http/services/ocmd"
-	_ "github.com/cs3org/reva/internal/http/services/oidcprovider"
-	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
-	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocs"
-	_ "github.com/cs3org/reva/internal/http/services/prometheus"
-	_ "github.com/cs3org/reva/internal/http/services/wellknown"
-	// Add your own service here
-)
+// Service represents a service managed by Mentix.
+type Service struct {
+	ServiceEndpoint
+
+	Host                string
+	AdditionalEndpoints []*ServiceEndpoint
+}
+
+// ServiceType represents a service type managed by Mentix.
+type ServiceType struct {
+	Name        string
+	Description string
+}
+
+// ServiceEndpoint represents a service endpoint managed by Mentix.
+type ServiceEndpoint struct {
+	Type        *ServiceType
+	Name        string
+	Path        string
+	IsMonitored bool
+	Properties  map[string]string
+}

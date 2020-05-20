@@ -26,6 +26,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
+	"github.com/rs/zerolog"
 )
 
 // Config holds the config options that need to be passed down to all ocdav handlers
@@ -49,7 +50,7 @@ func init() {
 }
 
 // New returns a new ocmd object
-func New(m map[string]interface{}) (global.Service, error) {
+func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 
 	conf := &Config{}
 
