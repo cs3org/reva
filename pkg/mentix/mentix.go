@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 
+// Mentix represents the main Mentix service object.
 type Mentix struct {
 	conf *config.Configuration
 	log  *zerolog.Logger
@@ -241,6 +242,7 @@ func (mntx *Mentix) RequestHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// New creates a new Mentix service instance.
 func New(conf *config.Configuration, log *zerolog.Logger) (*Mentix, error) {
 	mntx := new(Mentix)
 	if err := mntx.initialize(conf, log); err != nil {
