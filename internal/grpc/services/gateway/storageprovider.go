@@ -104,6 +104,25 @@ func (s *svc) getHome(ctx context.Context) string {
 	return "/home"
 }
 func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {
+	statReq := &provider.StatRequest{Ref: req.Ref}
+	statRes, err := s.stat(ctx, statReq)
+	if err != nil {
+		return &gateway.InitiateFileDownloadResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+req.Ref.String()),
+		}, nil
+	}
+	if statRes.Status.Code != rpc.Code_CODE_OK {
+		if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			return &gateway.InitiateFileDownloadResponse{
+				Status: status.NewNotFound(ctx, "gateway: file not found"),
+			}, nil
+		}
+		err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
+		return &gateway.InitiateFileDownloadResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error stating ref"),
+		}, nil
+	}
+
 	p, err := s.getPath(ctx, req.Ref)
 	if err != nil {
 		return &gateway.InitiateFileDownloadResponse{
