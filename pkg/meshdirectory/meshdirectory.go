@@ -21,5 +21,5 @@ package meshdirectory
 // Manager is the interface that manages the Sync'n'Share providers directory.
 type Manager interface {
 	// GetMeshProviders gets the available Sync'n'Share providers list.
-	GetMeshProviders() []*MeshProvider
+	GetMeshProviders() (*[]MeshProvider, error)
 }
