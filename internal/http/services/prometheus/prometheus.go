@@ -19,17 +19,21 @@
 package prometheus
 
 import (
+	"fmt"
 	"net/http"
+	"reva/pkg/metrics"
 
 	"contrib.go.opencensus.io/exporter/prometheus"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"go.opencensus.io/stats/view"
 )
 
 func init() {
 	global.Register("prometheus", New)
+	fmt.Printf("metrics - %v \n", metrics.NumUsersMeasure.Description())
 }
 
 // New returns a new prometheus service
@@ -51,6 +55,13 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	}
 
 	view.RegisterExporter(pe)
+
+	// register the desired measures' views
+	view.Register(
+		metrics.GetNumUsersView(),
+		metrics.GetNumGroupsView(),
+		metrics.GetAmountStorageView(),
+	)
 
 	return &svc{prefix: conf.Prefix, h: pe}, nil
 }
