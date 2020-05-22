@@ -18,55 +18,100 @@
 
 package metrics
 
+// This package defines site metrics measures and views based on opencensus.io
+
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
+	"go.opencensus.io/stats"
+	"go.opencensus.io/stats/view"
 )
 
 func init() {
-	fmt.Printf("Init metrics\n")
-	getNumUsers()
-	getNumGroups()
+	// trigger the actual metric provider functions
+	go func() {
+		rand.Seed(time.Now().UnixNano())
+		for {
+			getNumUsers()
+			getNumGroups()
+			getAmountStorage()
+			time.Sleep(4 * time.Second)
+		}
+	}()
 }
 
+// Create the measures
+var (
+	NumUsersMeasure      = stats.Int64("cs3_org_sciencemesh_site_total_num_users", "The total number of users within this site", stats.UnitDimensionless)
+	NumGroupsMeasure     = stats.Int64("cs3_org_sciencemesh_site_total_num_groups", "The total number of groups within this site", stats.UnitDimensionless)
+	AmountStorageMeasure = stats.Int64("cs3_org_sciencemesh_site_total_amount_storage", "The total amount of storage used within this site", stats.UnitDimensionless)
+)
+
+// initialize local dummy counters
+var (
+	numUsersCounter      = int64(0)
+	amountStorageCounter = int64(0)
+)
+
+// getNumberUsers links to the underlying number of site users provider
 func getNumUsers() {
-	// here we must request the actual number of users from the site
-	// for now this sets a random dummy value
-	rand.Seed(time.Now().UnixNano())
-	go func() {
-		for {
-			numUsersGauge.Set(float64(rand.Intn(10)))
-			time.Sleep(2 * time.Second)
-		}
-	}()
+	ctx := context.Background()
+	// here we must request the actual number of site users
+	// for now this is a mockup: a number increasing over time
+	numUsersCounter += int64(rand.Intn(100))
+	fmt.Printf("nrUsers = %v \n", numUsersCounter)
+	stats.Record(ctx, NumUsersMeasure.M(numUsersCounter))
 }
 
-var (
-	numUsersGauge = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "cs3_org_sciencemesh_site_total_num_users",
-		Help: "The total number of users within this site",
-	})
-)
+// GetNumUsersView returns the number of site users measure view
+func GetNumUsersView() *view.View {
+	return &view.View{
+		Name:        NumUsersMeasure.Name(),
+		Description: NumUsersMeasure.Description(),
+		Measure:     NumUsersMeasure,
+		Aggregation: view.LastValue(),
+	}
+}
 
+// getNumberGroups links to the underlying number of site groups provider
 func getNumGroups() {
-	// here we must request the actual number of groups from the site
-	// for now this sets a random dummy value
-	rand.Seed(time.Now().UnixNano())
-	go func() {
-		for {
-			numGroupsGauge.Set(float64(rand.Intn(10)))
-			time.Sleep(2 * time.Second)
-		}
-	}()
+	ctx := context.Background()
+	// here we must request the actual number of site groups
+	// for now this is a mockup: a number changing over time
+	var numGroupsCounter = int64(rand.Intn(100))
+	fmt.Printf("nrGroups = %v \n", numGroupsCounter)
+	stats.Record(ctx, NumGroupsMeasure.M(numGroupsCounter))
 }
 
-var (
-	numGroupsGauge = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "cs3_org_sciencemesh_site_total_num_groups",
-		Help: "The total number of groups within this site",
-	})
-)
+// GetNumGroupsView returns the number of site groups measure view
+func GetNumGroupsView() *view.View {
+	return &view.View{
+		Name:        NumGroupsMeasure.Name(),
+		Description: NumGroupsMeasure.Description(),
+		Measure:     NumGroupsMeasure,
+		Aggregation: view.LastValue(),
+	}
+}
+
+// getAmountStorage links to the underlying amount of storage provider
+func getAmountStorage() {
+	ctx := context.Background()
+	// here we must request the actual amount of storage used
+	// for now this is a mockup: a number increasing over time
+	amountStorageCounter += int64(rand.Intn(12865000))
+	fmt.Printf("amountStorage = %v \n", amountStorageCounter)
+	stats.Record(ctx, AmountStorageMeasure.M(amountStorageCounter))
+}
+
+// GetAmountStorageView returns the amount of site storage measure view
+func GetAmountStorageView() *view.View {
+	return &view.View{
+		Name:        AmountStorageMeasure.Name(),
+		Description: AmountStorageMeasure.Description(),
+		Measure:     AmountStorageMeasure,
+		Aggregation: view.LastValue(),
+	}
+}
