@@ -4,4 +4,4 @@ jwt_secret = "Pive-Fumkiu4"
 [http.services.prometheus]
 
 [http]
-address = "localhost:5550"
+address = "0.0.0.0:5550"
