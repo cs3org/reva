@@ -58,11 +58,13 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	view.RegisterExporter(pe)
 
 	// register the desired measures' views
-	view.Register(
+	if err = view.Register(
 		metrics.GetNumUsersView(),
 		metrics.GetNumGroupsView(),
 		metrics.GetAmountStorageView(),
-	)
+	); err != nil {
+		return nil, errors.Wrap(err, "prometheus: error registering exporter")
+	}
 
 	return &svc{prefix: conf.Prefix, h: pe}, nil
 }
