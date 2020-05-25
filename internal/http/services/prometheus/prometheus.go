@@ -19,7 +19,6 @@
 package prometheus
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/metrics"
@@ -34,7 +33,6 @@ import (
 
 func init() {
 	global.Register("prometheus", New)
-	fmt.Printf("metrics - %v \n", metrics.NumUsersMeasure.Description())
 }
 
 // New returns a new prometheus service
