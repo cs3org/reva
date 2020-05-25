@@ -153,6 +153,10 @@ func (s *svc) setHandler() (err error) {
 				handler.HeadFile(w, r)
 			case "PATCH":
 				handler.PatchFile(w, r)
+			// PUT provides a wrapper around the POST call, to save the caller from
+			// the trouble of configuring the tus client.
+			case "PUT":
+				s.doTusPut(w, r)
 			// TODO Only attach the DELETE handler if the Terminate() method is provided
 			case "DELETE":
 				handler.DelFile(w, r)

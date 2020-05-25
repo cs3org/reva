@@ -19,11 +19,18 @@
 package dataprovider
 
 import (
+	"fmt"
 	"net/http"
+	"path"
+	"strconv"
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/token"
+	"github.com/eventials/go-tus"
+	"github.com/eventials/go-tus/memorystore"
 )
 
 func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
@@ -42,5 +49,64 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 	}
 
 	r.Body.Close()
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *svc) doTusPut(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
+	fp := r.Header.Get("File-Path")
+	if fp == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	length, err := strconv.ParseInt(r.Header.Get("Content-Length"), 10, 64)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	dataServerURL := fmt.Sprintf("http://%s%s", r.Host, r.RequestURI)
+
+	// create the tus client.
+	c := tus.DefaultConfig()
+	c.Resume = true
+	c.HttpClient = rhttp.GetHTTPClient(ctx)
+	c.Store, err = memorystore.NewMemoryStore()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	c.Header.Set(token.TokenHeader, token.ContextMustGetToken(ctx))
+
+	tusc, err := tus.NewClient(dataServerURL, c)
+	if err != nil {
+		log.Error().Err(err).Msg("error starting TUS client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	metadata := map[string]string{
+		"filename": path.Base(fp),
+		"dir":      path.Dir(fp),
+	}
+
+	upload := tus.NewUpload(r.Body, length, metadata, "")
+	defer r.Body.Close()
+
+	// create the uploader.
+	c.Store.Set(upload.Fingerprint, dataServerURL)
+	uploader := tus.NewUploader(tusc, dataServerURL, upload, 0)
+
+	// start the uploading process.
+	err = uploader.Upload()
+	if err != nil {
+		log.Error().Err(err).Msg("Could not start TUS upload")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
 }
