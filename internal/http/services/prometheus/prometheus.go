@@ -21,7 +21,8 @@ package prometheus
 import (
 	"fmt"
 	"net/http"
-	"reva/pkg/metrics"
+
+	"github.com/cs3org/reva/pkg/metrics"
 
 	"contrib.go.opencensus.io/exporter/prometheus"
 	"github.com/cs3org/reva/pkg/rhttp/global"
