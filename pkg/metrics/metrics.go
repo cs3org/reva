@@ -22,7 +22,6 @@ package metrics
 
 import (
 	"context"
-	"fmt"
 	"math/rand"
 	"time"
 
@@ -62,7 +61,6 @@ func getNumUsers() {
 	// here we must request the actual number of site users
 	// for now this is a mockup: a number increasing over time
 	numUsersCounter += int64(rand.Intn(100))
-	fmt.Printf("nrUsers = %v \n", numUsersCounter)
 	stats.Record(ctx, NumUsersMeasure.M(numUsersCounter))
 }
 
@@ -82,7 +80,6 @@ func getNumGroups() {
 	// here we must request the actual number of site groups
 	// for now this is a mockup: a number changing over time
 	var numGroupsCounter = int64(rand.Intn(100))
-	fmt.Printf("nrGroups = %v \n", numGroupsCounter)
 	stats.Record(ctx, NumGroupsMeasure.M(numGroupsCounter))
 }
 
@@ -102,7 +99,6 @@ func getAmountStorage() {
 	// here we must request the actual amount of storage used
 	// for now this is a mockup: a number increasing over time
 	amountStorageCounter += int64(rand.Intn(12865000))
-	fmt.Printf("amountStorage = %v \n", amountStorageCounter)
 	stats.Record(ctx, AmountStorageMeasure.M(amountStorageCounter))
 }
 
