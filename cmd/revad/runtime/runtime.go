@@ -44,8 +44,8 @@ import (
 )
 
 // Run runs a reva server with the given config file and pid file.
-func Run(mainConf map[string]interface{}, pidFile string) {
-	logConf := parseLogConfOrDie(mainConf["log"])
+func Run(mainConf map[string]interface{}, pidFile, logLevel string) {
+	logConf := parseLogConfOrDie(mainConf["log"], logLevel)
 	logger := initLogger(logConf)
 	RunWithOptions(mainConf, pidFile, WithLogger(logger))
 }
@@ -347,7 +347,7 @@ func parseSharedConfOrDie(v interface{}) {
 	}
 }
 
-func parseLogConfOrDie(v interface{}) *logConf {
+func parseLogConfOrDie(v interface{}, logLevel string) *logConf {
 	c := &logConf{}
 	if err := mapstructure.Decode(v, c); err != nil {
 		fmt.Fprintf(os.Stderr, "error decoding log config: %s\n", err.Error())
@@ -357,6 +357,11 @@ func parseLogConfOrDie(v interface{}) *logConf {
 	// if mode is not set, we use console mode, easier for devs
 	if c.Mode == "" {
 		c.Mode = "console"
+	}
+
+	// Give priority to the log level passed through the command line.
+	if logLevel != "" {
+		c.Level = logLevel
 	}
 
 	return c
