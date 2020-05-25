@@ -46,7 +46,7 @@ func init() {
 var (
 	NumUsersMeasure      = stats.Int64("cs3_org_sciencemesh_site_total_num_users", "The total number of users within this site", stats.UnitDimensionless)
 	NumGroupsMeasure     = stats.Int64("cs3_org_sciencemesh_site_total_num_groups", "The total number of groups within this site", stats.UnitDimensionless)
-	AmountStorageMeasure = stats.Int64("cs3_org_sciencemesh_site_total_amount_storage", "The total amount of storage used within this site", stats.UnitDimensionless)
+	AmountStorageMeasure = stats.Int64("cs3_org_sciencemesh_site_total_amount_storage", "The total amount of storage used within this site", stats.UnitBytes)
 )
 
 // initialize local dummy counters
