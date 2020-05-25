@@ -31,7 +31,7 @@ import (
 )
 
 func init() {
-	// trigger the actual metric provider functions
+	// call the actual metric provider functions for the latest metrics every 4th second
 	go func() {
 		rand.Seed(time.Now().UnixNano())
 		for {
