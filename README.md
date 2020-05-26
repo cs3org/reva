@@ -43,6 +43,10 @@ See [https://hub.docker.com/r/cs3org/reva](https://hub.docker.com/r/cs3org/reva)
 
 Checkout the [Tutorials](https://reva.link/docs/tutorials/).
 
+## Troubleshooting
+If you see the error message "error querying database" from db.go try to remove the temporary db and restart reva, `rm /var/tmp/reva/localfs.db`.
+`rm /var/tmp/reva/` will delete everything related to reva if you need to do a clean restart.
+
 ## License
 
 To promote free and unrestricted adoption of [CS3 APIs](https://github.com/cs3org/cs3apis) and the reference

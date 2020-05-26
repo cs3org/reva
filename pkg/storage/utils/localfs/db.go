@@ -23,6 +23,7 @@ import (
 	"database/sql"
 	"path"
 
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/pkg/errors"
 
 	// Provides sqlite drivers
@@ -189,8 +190,10 @@ func (fs *localfs) removeFromMetadataDB(ctx context.Context, resource, key strin
 }
 
 func (fs *localfs) getMetadata(ctx context.Context, resource string) (*sql.Rows, error) {
+	log := appctx.GetLogger(ctx)
 	grants, err := fs.db.Query("SELECT key, value FROM metadata WHERE resource=?", resource)
 	if err != nil {
+		log.Err(err).Msg("error querying database")
 		return nil, err
 	}
 	return grants, nil
