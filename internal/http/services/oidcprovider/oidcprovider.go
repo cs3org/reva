@@ -197,7 +197,6 @@ func getStore(clients map[string]fosite.Client) *storage.MemoryStore {
 		IDSessions:             make(map[string]fosite.Requester),
 		Clients:                clients,
 		AuthorizeCodes:         map[string]storage.StoreAuthorizeCode{},
-		Implicit:               map[string]fosite.Requester{},
 		AccessTokens:           map[string]fosite.Requester{},
 		RefreshTokens:          map[string]fosite.Requester{},
 		PKCES:                  map[string]fosite.Requester{},

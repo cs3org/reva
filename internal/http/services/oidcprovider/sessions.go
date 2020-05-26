@@ -106,26 +106,6 @@ func (s *svc) doSessions(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	// Implicit
-	_, err = w.Write([]byte(`</ul><p>Implicit</p><ul>`))
-	if err != nil {
-		log.Error().Err(err).Msg("Error writing response")
-		return
-	}
-	for id, c := range s.store.Implicit {
-		c := c
-		_, err := w.Write([]byte(fmt.Sprintf(`
-			<li>
-				%s: %#v
-			</li>`,
-
-			id, c,
-		)))
-		if err != nil {
-			log.Error().Err(err).Msg("Error writing response")
-			return
-		}
-	}
 	// RefreshTokens
 	_, err = w.Write([]byte(`</ul><p>RefreshTokens</p><ul>`))
 	if err != nil {
