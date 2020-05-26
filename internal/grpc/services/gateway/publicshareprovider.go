@@ -19,16 +19,122 @@
 package gateway
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"sync"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/golang/protobuf/jsonpb"
 	"github.com/pkg/errors"
 )
+
+// GrantManager is a proof of concept that allows for having persistent link grants stored
+// on a map structure for convenient access.
+type GrantManager struct {
+	lock sync.Mutex
+	path string // path to db file.
+}
+
+// NewGrantManager initializes a new GrantManager.
+func NewGrantManager(path string) (*GrantManager, error) {
+	g := GrantManager{
+		lock: sync.Mutex{},
+		path: path,
+	}
+
+	_, err := os.Stat(g.path)
+	if os.IsNotExist(err) {
+		if err := ioutil.WriteFile(g.path, []byte("{}"), 0700); err != nil {
+			err = errors.Wrap(err, "error opening/creating the file: "+g.path)
+			return nil, err
+		}
+	}
+
+	fileContents, err := ioutil.ReadFile(g.path)
+	if err != nil {
+		return nil, err
+	}
+	if len(fileContents) == 0 {
+		err := ioutil.WriteFile(g.path, []byte("{}"), 0644)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &g, nil
+}
+
+// Write writes a grant to the database.
+func (g *GrantManager) Write(token string, l *link.Grant) error {
+	g.lock.Lock()
+	defer g.lock.Unlock()
+
+	// u := jsonpb.Unmarshaler{}
+	m := jsonpb.Marshaler{}
+
+	buff := bytes.Buffer{}
+	if err := m.Marshal(&buff, l); err != nil {
+		return err
+	}
+
+	db := map[string]interface{}{}
+	fileContents, err := ioutil.ReadFile(g.path)
+	if err != nil {
+		return err
+	}
+
+	if err := json.Unmarshal(fileContents, &db); err != nil {
+		return err
+	}
+
+	if _, ok := db[token]; !ok {
+		db[token] = buff.String()
+	} else {
+		return errors.New("duplicated entry")
+	}
+
+	destJSON, err := json.Marshal(db)
+	if err != nil {
+		return err
+	}
+
+	if err := ioutil.WriteFile(g.path, destJSON, 0644); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ReadFromToken gets a grant from token.
+func (g *GrantManager) ReadFromToken(token string) (*link.Grant, error) {
+	db := map[string]interface{}{}
+	u := jsonpb.Unmarshaler{}
+
+	fileContents, err := ioutil.ReadFile(g.path)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := json.Unmarshal(fileContents, &db); err != nil {
+		return nil, err
+	}
+
+	grant := link.Grant{}
+	r := bytes.NewBuffer([]byte(db[token].(string)))
+	if err := u.Unmarshal(r, &grant); err != nil {
+		return nil, err
+	}
+
+	return &grant, nil
+}
 
 var (
 	// maps public share tokens to its grants.
@@ -38,6 +144,15 @@ var (
 func (s *svc) CreatePublicShare(ctx context.Context, req *link.CreatePublicShareRequest) (*link.CreatePublicShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("create public share")
+
+	if s.c.LinkGrantsFile == "" {
+		return nil, fmt.Errorf("public manager used but no `link_grants_file` defined; define link_grants_file on the gateway in order to store link grants")
+	}
+
+	m, err := NewGrantManager(s.c.LinkGrantsFile)
+	if err != nil {
+		return nil, err
+	}
 
 	c, err := pool.GetPublicShareProviderClient(s.c.PublicShareProviderEndpoint)
 	if err != nil {
@@ -49,8 +164,9 @@ func (s *svc) CreatePublicShare(ctx context.Context, req *link.CreatePublicShare
 		return nil, err
 	}
 
-	// WIP store the grant in memory, as a proof of concept.
-	grants[res.Share.Token] = req.Grant
+	if err := m.Write(res.Share.Token, req.Grant); err != nil {
+		return nil, err
+	}
 
 	return res, nil
 }
@@ -79,7 +195,18 @@ func (s *svc) GetPublicShareByToken(ctx context.Context, req *link.GetPublicShar
 		return nil, err
 	}
 
-	if res.Share.PasswordProtected && (grants[req.Token].Password != pass) {
+	m, err := NewGrantManager(s.c.LinkGrantsFile)
+	if err != nil {
+		return nil, err
+	}
+
+	// here
+	gr, err := m.ReadFromToken(req.Token)
+	if err != nil {
+		return nil, err
+	}
+
+	if res.Share.PasswordProtected && (gr.Password != pass) {
 		return nil, fmt.Errorf("public share password missmatch")
 	}
 
