@@ -136,11 +136,6 @@ func (g *GrantManager) ReadFromToken(token string) (*link.Grant, error) {
 	return &grant, nil
 }
 
-var (
-	// maps public share tokens to its grants.
-	grants = map[string]*link.Grant{}
-)
-
 func (s *svc) CreatePublicShare(ctx context.Context, req *link.CreatePublicShareRequest) (*link.CreatePublicShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("create public share")

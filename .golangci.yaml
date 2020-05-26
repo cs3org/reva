@@ -8,6 +8,10 @@ issues:
       text: "SA1019:"
       linters:
         - staticcheck
+    - path: internal/grpc/services/gateway/publicshareprovider.go
+      text: "SA1019:"
+      linters:
+        - staticcheck
 linters:
   enable:
     - bodyclose
