@@ -28,6 +28,7 @@ import (
 	"github.com/cs3org/reva/pkg/meshdirectory"
 	"github.com/cs3org/reva/pkg/meshdirectory/manager/registry"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
@@ -67,7 +68,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New returns a new Mesh Directory HTTP service
-func New(m map[string]interface{}) (global.Service, error) {
+func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -113,7 +114,7 @@ func (s *svc) Close() error {
 }
 
 // List of enabled Providers
-func (s *svc) MeshProviders() []*meshdirectory.MeshProvider {
+func (s *svc) MeshProviders() (*[]meshdirectory.MeshProvider, error) {
 	return s.mdm.GetMeshProviders()
 }
 
@@ -131,13 +132,29 @@ func (s *svc) renderIndex(w http.ResponseWriter) error {
 func (s *svc) respondJSON(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 
-	res, err := json.Marshal(s.MeshProviders())
+	providers, err := s.MeshProviders()
+	var res meshdirectory.Response
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return errors.Wrap(err, "failed to serialize providers to json")
+		err = errors.Wrap(err, "meshdirectory: error fetching providers")
+		res = meshdirectory.Response{
+			Status:        http.StatusInternalServerError,
+			StatusMessage: err.Error(),
+			Providers:     nil,
+		}
+	} else {
+		res = meshdirectory.Response{
+			Status:    http.StatusOK,
+			Providers: providers,
+		}
 	}
 
-	if _, err := w.Write(res); err != nil {
+	jres, err := json.Marshal(res)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return errors.Wrap(err, "failed to serialize response to json")
+	}
+
+	if _, err := w.Write(jres); err != nil {
 		return errors.Wrap(err, "error writing response")
 	}
 	return nil

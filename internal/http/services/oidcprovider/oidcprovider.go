@@ -36,6 +36,7 @@ import (
 	"github.com/ory/fosite/storage"
 	"github.com/ory/fosite/token/jwt"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 )
 
 func init() {
@@ -70,7 +71,7 @@ type svc struct {
 }
 
 // New returns a new oidcprovidersvc
-func New(m map[string]interface{}) (global.Service, error) {
+func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
 		return nil, err
@@ -196,7 +197,6 @@ func getStore(clients map[string]fosite.Client) *storage.MemoryStore {
 		IDSessions:             make(map[string]fosite.Requester),
 		Clients:                clients,
 		AuthorizeCodes:         map[string]storage.StoreAuthorizeCode{},
-		Implicit:               map[string]fosite.Requester{},
 		AccessTokens:           map[string]fosite.Requester{},
 		RefreshTokens:          map[string]fosite.Requester{},
 		PKCES:                  map[string]fosite.Requester{},

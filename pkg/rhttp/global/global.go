@@ -18,7 +18,11 @@
 
 package global
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/rs/zerolog"
+)
 
 // NewMiddlewares contains all the registered new middleware functions.
 var NewMiddlewares = map[string]NewMiddleware{}
@@ -43,7 +47,7 @@ func Register(name string, newFunc NewService) {
 }
 
 // NewService is the function that HTTP services need to register at init time.
-type NewService func(conf map[string]interface{}) (Service, error)
+type NewService func(conf map[string]interface{}, log *zerolog.Logger) (Service, error)
 
 // Service represents a HTTP service.
 type Service interface {

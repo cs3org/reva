@@ -49,7 +49,16 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 	ns = applyLayout(ctx, ns)
 
 	fn := path.Join(ns, r.URL.Path)
-	listChildren := r.Header.Get("Depth") != "0"
+	depth := r.Header.Get("Depth")
+	if depth == "" {
+		depth = "1"
+	}
+	// see https://tools.ietf.org/html/rfc4918#section-10.2
+	if depth != "0" && depth != "1" && depth != "infinity" {
+		log.Error().Msgf("invalid Depth header value %s", depth)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
 	pf, status, err := readPropfind(r.Body)
 	if err != nil {
@@ -88,22 +97,49 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 
 	info := res.Info
 	infos := []*provider.ResourceInfo{info}
-	if info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && listChildren {
-		req := &provider.ListContainerRequest{
-			Ref: ref,
+	if info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth != "0" {
+		// use a stack to explore sub-containers breadth-first
+		stack := []string{info.Path}
+		for len(stack) > 0 {
+			// retrieve path on top of stack
+			path := stack[len(stack)-1]
+			ref = &provider.Reference{
+				Spec: &provider.Reference_Path{Path: path},
+			}
+			req := &provider.ListContainerRequest{
+				Ref: ref,
+			}
+			res, err := client.ListContainer(ctx, req)
+			if err != nil {
+				log.Error().Err(err).Str("path", path).Msg("error sending list container grpc request")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			if res.Status.Code != rpc.Code_CODE_OK {
+				log.Err(err).Str("path", path).Msg("error calling grpc list container")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			infos = append(infos, res.Infos...)
+
+			if depth != "infinity" {
+				break
+			}
+
+			// TODO: stream response to avoid storing too many results in memory
+
+			stack = stack[:len(stack)-1]
+
+			// check sub-containers in reverse order and add them to the stack
+			// the reversed order here will produce a more logical sorting of results
+			for i := len(res.Infos) - 1; i >= 0; i-- {
+				//for i := range res.Infos {
+				if res.Infos[i].Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+					stack = append(stack, res.Infos[i].Path)
+				}
+			}
 		}
-		res, err := client.ListContainer(ctx, req)
-		if err != nil {
-			log.Error().Err(err).Msg("error sending list container grpc request")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		if res.Status.Code != rpc.Code_CODE_OK {
-			log.Err(err).Msg("error calling grpc list container")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		infos = append(infos, res.Infos...)
 	}
 
 	propRes, err := s.formatPropfind(ctx, &pf, infos, ns)

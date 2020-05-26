@@ -57,6 +57,12 @@ func ocmShareCreateCommand() *command {
 			os.Exit(1)
 		}
 
+		if *idp == "" {
+			fmt.Println("idp cannot be empty: use -idp flag")
+			fmt.Println(cmd.Usage())
+			os.Exit(1)
+		}
+
 		fn := cmd.Args()[0]
 
 		ctx := getAuthContext()

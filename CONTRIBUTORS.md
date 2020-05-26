@@ -8,7 +8,6 @@
 - Hugo Gonzalez Labrador <github@hugo.labkode.com>
 - Ilja Neumann <ineumann@owncloud.com>
 - Ilja Neumann <node512@gmail.com>
-- Ishank Arora <ishank.arora@cern.ch>
 - Ishank Arora <ishank011@gmail.com>
 - Jörn Friedrich Dreyer <jfd@butonic.de>
 - LovisaLugnegard <lovisa.lugnegard@gmail.com>
@@ -17,3 +16,4 @@
 - Mohitty <mohitt@iitk.ac.in>
 - Thomas Boerger <thomas@webhippie.de>
 - Miroslav Bauer <bauer@cesnet.cz>
+- Daniel Mueller <daniel.mueller@uni-muenster.de>

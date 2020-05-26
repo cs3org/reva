@@ -54,7 +54,7 @@ func initializeDB(root string) (*sql.DB, error) {
 		return nil, errors.Wrap(err, "localfs: error executing create statement")
 	}
 
-	stmt, err = db.Prepare("CREATE TABLE IF NOT EXISTS metadata (resource TEXT PRIMARY KEY, etag TEXT DEFAULT '')")
+	stmt, err = db.Prepare("CREATE TABLE IF NOT EXISTS metadata (resource TEXT, key TEXT, value TEXT, PRIMARY KEY (resource, key))")
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error preparing statement")
 	}
@@ -164,16 +164,36 @@ func (fs *localfs) removeFromFavoritesDB(ctx context.Context, resource, grantee 
 	return nil
 }
 
-func (fs *localfs) addToEtagDB(ctx context.Context, resource, etag string) error {
-	stmt, err := fs.db.Prepare("INSERT INTO metadata (resource, etag) VALUES (?, ?) ON CONFLICT(resource) DO UPDATE SET etag=?")
+func (fs *localfs) addToMetadataDB(ctx context.Context, resource, key, value string) error {
+	stmt, err := fs.db.Prepare("INSERT INTO metadata (resource, key, value) VALUES (?, ?, ?) ON CONFLICT(resource, key) DO UPDATE SET value=?")
 	if err != nil {
 		return errors.Wrap(err, "localfs: error preparing statement")
 	}
-	_, err = stmt.Exec(resource, etag, etag)
+	_, err = stmt.Exec(resource, key, value, value)
 	if err != nil {
 		return errors.Wrap(err, "localfs: error executing insert statement")
 	}
 	return nil
+}
+
+func (fs *localfs) removeFromMetadataDB(ctx context.Context, resource, key string) error {
+	stmt, err := fs.db.Prepare("DELETE FROM metadata WHERE resource=? AND key=?")
+	if err != nil {
+		return errors.Wrap(err, "localfs: error preparing statement")
+	}
+	_, err = stmt.Exec(resource, key)
+	if err != nil {
+		return errors.Wrap(err, "localfs: error executing delete statement")
+	}
+	return nil
+}
+
+func (fs *localfs) getMetadata(ctx context.Context, resource string) (*sql.Rows, error) {
+	grants, err := fs.db.Query("SELECT key, value FROM metadata WHERE resource=?", resource)
+	if err != nil {
+		return nil, err
+	}
+	return grants, nil
 }
 
 func (fs *localfs) addToReferencesDB(ctx context.Context, resource, target string) error {

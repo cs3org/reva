@@ -27,6 +27,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
+	"github.com/rs/zerolog"
 	tusd "github.com/tus/tusd/pkg/handler"
 )
 
@@ -35,9 +36,10 @@ func init() {
 }
 
 type config struct {
-	Prefix  string                            `mapstructure:"prefix"`
-	Driver  string                            `mapstructure:"driver"`
-	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
+	Prefix     string                            `mapstructure:"prefix"`
+	Driver     string                            `mapstructure:"driver"`
+	Drivers    map[string]map[string]interface{} `mapstructure:"drivers"`
+	DisableTus bool                              `mapstructure:"disable_tus"`
 }
 
 type svc struct {
@@ -47,7 +49,7 @@ type svc struct {
 }
 
 // New returns a new datasvc
-func New(m map[string]interface{}) (global.Service, error) {
+func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
@@ -107,7 +109,7 @@ type Composable interface {
 
 func (s *svc) setHandler() (err error) {
 	composable, ok := s.storage.(Composable)
-	if ok {
+	if ok && !s.conf.DisableTus {
 		// A storage backend for tusd may consist of multiple different parts which
 		// handle upload creation, locking, termination and so on. The composer is a
 		// place where all those separated pieces are joined together. In this example
@@ -151,6 +153,10 @@ func (s *svc) setHandler() (err error) {
 				handler.HeadFile(w, r)
 			case "PATCH":
 				handler.PatchFile(w, r)
+			// PUT provides a wrapper around the POST call, to save the caller from
+			// the trouble of configuring the tus client.
+			case "PUT":
+				s.doTusPut(w, r)
 			// TODO Only attach the DELETE handler if the Terminate() method is provided
 			case "DELETE":
 				handler.DelFile(w, r)

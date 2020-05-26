@@ -44,15 +44,15 @@
     <div class="provider-container">
         <div class="input-group">
             <select v-model="selected" class="provider-list">
-                <option v-for="provider in providers" :value="provider.id" :key="provider.id">
-                    {{ provider.name }}
+                <option v-for="provider in providers" :value="provider.Name" :key="provider.Name">
+                    {{ provider.FullName }}
                 </option>
             </select>
             <div class="provider-details" v-if="selected">
                 <h5>Operator:</h5>
-                <span>{{ providerDetails.org }}</span>
+                <span>{{ providerDetails.Organization }}</span>
                 <h5>Service description:</h5>
-                <p>{{ providerDetails.description }}</p>
+                <p>{{ providerDetails.Description }}</p>
             </div>
             <div class="provider-navigate" v-if="selected">
                 <a class="provider-btn button"  :href="providerLink(providerDetails)">Go!</a>
@@ -76,13 +76,18 @@
         },
         methods: {
             providerLink(provider) {
-                return `https://${provider.domain}/${provider.ocm_api}?${this.queryParams}`;
+                return this.ocmService(provider).AdditionalEndpoints[0].Path
+            },
+            ocmService(provider) {
+                return provider.Services.find(s => {
+                    return s.Type.Name === 'OCM'
+                })
             }
         },
         computed: {
             providerDetails: function () {
                 return this.providers.find(p => {
-                    return p.id === this.selected
+                    return p.Name === this.selected
                 })
             },
             baseUrl: function () {
@@ -96,7 +101,10 @@
             axios
                 .get(this.baseUrl)
                 .then(response => {
-                    this.providers = response.data;
+                    this.providers = response.data.providers;
+                })
+                .catch(err => {
+                    console.log(err)
                 });
         }
     });

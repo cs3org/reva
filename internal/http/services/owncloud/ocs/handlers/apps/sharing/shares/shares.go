@@ -373,7 +373,7 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 				}
 				permissions, err = conversions.NewPermissions(pint)
 				if err != nil {
-					if err == conversions.ErrPermissionAboveRange {
+					if err == conversions.ErrPermissionNotInRange {
 						response.WriteOCSError(w, r, http.StatusNotFound, err.Error(), nil)
 					} else {
 						response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, err.Error(), nil)
