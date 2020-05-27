@@ -103,11 +103,6 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 		for len(stack) > 0 {
 			// retrieve path on top of stack
 			nextInfo := stack[len(stack)-1]
-			ref = &provider.Reference{
-				Spec: &provider.Reference_Id{
-					Id: nextInfo.Id,
-				},
-			}
 			req := &provider.ListContainerRequest{
 				Ref: ref,
 			}
@@ -121,6 +116,12 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 				log.Err(err).Str("path", nextInfo.Path).Msg("error calling grpc list container")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
+			}
+
+			ref = &provider.Reference{
+				Spec: &provider.Reference_Id{
+					Id: nextInfo.Id,
+				},
 			}
 
 			infos = append(infos, res.Infos...)
