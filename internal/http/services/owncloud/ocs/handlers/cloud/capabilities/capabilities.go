@@ -101,6 +101,18 @@ func (h *Handler) Init(c *config.Config) {
 	// h.c.Capabilities.Files.Undelete is boolean
 	// h.c.Capabilities.Files.Versioning is boolean
 
+	if h.c.Capabilities.Files.TusSupport == nil {
+		// these are global capabilities
+		// TODO: infer from various TUS handlers from all known storages
+		h.c.Capabilities.Files.TusSupport = &data.CapabilitiesFilesTusSupport{
+			Version:            "1.0.0",
+			Resumable:          "1.0.0",
+			Extension:          "creation,creation-with-upload",
+			MaxChunkSize:       0,
+			HTTPMethodOverride: "",
+		}
+	}
+
 	// dav
 
 	if h.c.Capabilities.Dav == nil {
