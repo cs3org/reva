@@ -97,7 +97,25 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 
 	info := res.Info
 	infos := []*provider.ResourceInfo{info}
-	if info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth != "0" {
+	if info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "1" {
+		req := &provider.ListContainerRequest{
+			Ref: ref,
+		}
+		res, err := client.ListContainer(ctx, req)
+		if err != nil {
+			log.Error().Err(err).Msg("error sending list container grpc request")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		if res.Status.Code != rpc.Code_CODE_OK {
+			log.Err(err).Msg("error calling grpc list container")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		infos = append(infos, res.Infos...)
+	} else if depth == "infinity" {
+		// FIXME: doesn't work cross-storage as the results will have the wrong paths!
 		// use a stack to explore sub-containers breadth-first
 		stack := []string{info.Path}
 		for len(stack) > 0 {
