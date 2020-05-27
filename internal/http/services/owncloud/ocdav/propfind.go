@@ -99,24 +99,26 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 	infos := []*provider.ResourceInfo{info}
 	if info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth != "0" {
 		// use a stack to explore sub-containers breadth-first
-		stack := []string{info.Path}
+		stack := []*provider.ResourceInfo{info}
 		for len(stack) > 0 {
 			// retrieve path on top of stack
-			path := stack[len(stack)-1]
+			nextInfo := stack[len(stack)-1]
 			ref = &provider.Reference{
-				Spec: &provider.Reference_Path{Path: path},
+				Spec: &provider.Reference_Id{
+					Id: nextInfo.Id,
+				},
 			}
 			req := &provider.ListContainerRequest{
 				Ref: ref,
 			}
 			res, err := client.ListContainer(ctx, req)
 			if err != nil {
-				log.Error().Err(err).Str("path", path).Msg("error sending list container grpc request")
+				log.Error().Err(err).Str("path", nextInfo.Path).Msg("error sending list container grpc request")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 			if res.Status.Code != rpc.Code_CODE_OK {
-				log.Err(err).Str("path", path).Msg("error calling grpc list container")
+				log.Err(err).Str("path", nextInfo.Path).Msg("error calling grpc list container")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -136,7 +138,7 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 			for i := len(res.Infos) - 1; i >= 0; i-- {
 				//for i := range res.Infos {
 				if res.Infos[i].Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-					stack = append(stack, res.Infos[i].Path)
+					stack = append(stack, res.Infos[i])
 				}
 			}
 		}
