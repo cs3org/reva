@@ -20,6 +20,7 @@ package storageprovider
 
 import (
 	"context"
+	// "encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -28,6 +29,7 @@ import (
 	"strings"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	// link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -684,17 +686,17 @@ func (s *service) ListGrants(ctx context.Context, req *provider.ListGrantsReques
 }
 
 func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (*provider.AddGrantResponse, error) {
-	// check grantee type is valid
-	if req.Grant.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_INVALID {
-		return &provider.AddGrantResponse{
-			Status: status.NewInvalid(ctx, "grantee type is invalid"),
-		}, nil
-	}
-
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.AddGrantResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+		}, nil
+	}
+
+	// check grantee type is valid
+	if req.Grant.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_INVALID {
+		return &provider.AddGrantResponse{
+			Status: status.NewInvalid(ctx, "grantee type is invalid"),
 		}, nil
 	}
 

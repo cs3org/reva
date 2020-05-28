@@ -24,10 +24,11 @@ import (
 	"path"
 
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	tokenpkg "github.com/cs3org/reva/pkg/token"
+	"github.com/cs3org/reva/pkg/user"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -73,56 +74,56 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 
 		switch head {
 		case "avatars":
-			// the avatars endpoint does not need a href prop ... yet
 			h.AvatarsHandler.Handler(s).ServeHTTP(w, r)
 		case "files":
-			// to build correct href prop urls we need to keep track of the base path
 			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files")
 			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
 			r = r.WithContext(ctx)
 			h.FilesHandler.Handler(s).ServeHTTP(w, r)
 		case "meta":
-			// to build correct href prop urls we need to keep track of the base path
 			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "meta")
 			ctx = context.WithValue(ctx, ctxKeyBaseURI, base)
 			r = r.WithContext(ctx)
 			h.MetaHandler.Handler(s).ServeHTTP(w, r)
 		case "trash-bin":
-			// to build correct href prop urls we need to keep track of the base path
 			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "trash-bin")
 			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
 			r = r.WithContext(ctx)
 			h.TrashbinHandler.Handler(s).ServeHTTP(w, r)
 		case "public-files":
-			// TODO(refs) can this logic all be moved to the handler instead?
 			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "public-files")
+			ctx = context.WithValue(ctx, ctxKeyBaseURI, base)
 			c, err := pool.GetGatewayServiceClient(s.c.GatewaySvc)
 			if err != nil {
 				w.WriteHeader(http.StatusNotFound)
 			}
 
+			_, pass, _ := r.BasicAuth()
+			token, _ := router.ShiftPath(r.URL.Path)
+
 			authenticateRequest := gatewayv1beta1.AuthenticateRequest{
-				Type:     "publicshares",
-				ClientId: r.URL.Path,
-				Opaque: &typesv1beta1.Opaque{
-					Map: map[string]*typesv1beta1.OpaqueEntry{
-						"token": &typesv1beta1.OpaqueEntry{
-							Value: []byte(r.URL.Path),
-						},
-					},
-				},
+				Type:         "publicshares",
+				ClientId:     token,
+				ClientSecret: pass,
 			}
 
 			res, err := c.Authenticate(r.Context(), &authenticateRequest)
 			if err != nil {
-				w.WriteHeader(http.StatusNotFound)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			if res.Status.Code == rpcv1beta1.Code_CODE_UNAUTHENTICATED {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
 			}
 
-			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
 			ctx = tokenpkg.ContextSetToken(ctx, res.Token)
+			ctx = user.ContextSetUser(ctx, res.User)
 			ctx = metadata.AppendToOutgoingContext(ctx, tokenpkg.TokenHeader, res.Token)
+
 			r = r.WithContext(ctx)
 			h.PublicFilesHandler.Handler(s).ServeHTTP(w, r)
+
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
