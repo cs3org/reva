@@ -141,8 +141,8 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	buff := bytes.Buffer{}
-	if err := m.marshaler.Marshal(&buff, ps); err != nil {
+	encShare := bytes.Buffer{}
+	if err := m.marshaler.Marshal(&encShare, &ps.PublicShare); err != nil {
 		return nil, err
 	}
 
@@ -157,7 +157,10 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 	}
 
 	if _, ok := db[s.Id.GetOpaqueId()]; !ok {
-		db[s.Id.GetOpaqueId()] = buff.String()
+		db[s.Id.GetOpaqueId()] = map[string]interface{}{
+			"share":    string(encShare.Bytes()),
+			"password": ps.Password,
+		}
 	} else {
 		return nil, errors.New("key already exists")
 	}
@@ -240,12 +243,13 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 	return share, nil
 }
 
-func (m *manager) getShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) (share *publicShare, err error) {
+func (m *manager) getShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) (*link.PublicShare, error) {
 	if ref.GetToken() != "" {
-		share, err = m.getByToken(ctx, ref.GetToken())
+		share, err := m.getByToken(ctx, ref.GetToken())
 		if err != nil {
 			return nil, errors.New("no shares found by token")
 		}
+		return share, nil
 	}
 
 	m.mutex.Lock()
@@ -261,9 +265,9 @@ func (m *manager) getShare(ctx context.Context, u *user.User, ref *link.PublicSh
 		return nil, err
 	}
 
-	if found, ok := db[ref.GetId().GetOpaqueId()]; ok {
-		ps := publicShare{}
-		r := bytes.NewBuffer([]byte(found.(string)))
+	if found, ok := db[ref.GetId().GetOpaqueId()].(map[string]string)["share"]; ok {
+		ps := link.PublicShare{}
+		r := bytes.NewBuffer([]byte(found))
 		if err := m.unmarshaler.Unmarshal(r, &ps); err != nil {
 			return nil, err
 		}
@@ -271,7 +275,7 @@ func (m *manager) getShare(ctx context.Context, u *user.User, ref *link.PublicSh
 		return &ps, nil
 	}
 
-	return
+	return nil, errors.New("no shares found")
 }
 
 // GetPublicShare gets a public share either by ID or Token.
@@ -280,9 +284,8 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 		ps, err := m.getByToken(ctx, ref.GetToken())
 		if err != nil {
 			return nil, errors.New("no shares found by token")
-		} else {
-			return &ps.PublicShare, nil
 		}
+		return ps, nil
 	}
 
 	m.mutex.Lock()
@@ -298,7 +301,7 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 		return nil, err
 	}
 
-	found, ok := db[ref.GetId().GetOpaqueId()]
+	found, ok := db[ref.GetId().GetOpaqueId()].(map[string]interface{})["share"]
 	if !ok {
 		return nil, errors.New("no shares found by id:" + ref.GetId().String())
 	}
@@ -332,9 +335,9 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 	}
 
 	for _, v := range db {
-		r := bytes.NewBuffer([]byte(v.(string)))
+		r := bytes.NewBuffer([]byte(v.(map[string]interface{})["share"].(string)))
 		local := &publicShare{}
-		if err := m.unmarshaler.Unmarshal(r, local); err != nil {
+		if err := m.unmarshaler.Unmarshal(r, &local.PublicShare); err != nil {
 			return nil, err
 		}
 
@@ -365,7 +368,7 @@ func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, id string
 	return fmt.Errorf("RevokePublicShare method unimplemented")
 }
 
-func (m *manager) getByToken(ctx context.Context, token string) (*publicShare, error) {
+func (m *manager) getByToken(ctx context.Context, token string) (*link.PublicShare, error) {
 	db := map[string]interface{}{}
 	readBytes, err := ioutil.ReadFile(m.file)
 	if err != nil {
@@ -380,8 +383,8 @@ func (m *manager) getByToken(ctx context.Context, token string) (*publicShare, e
 	defer m.mutex.Unlock()
 
 	for _, v := range db {
-		r := bytes.NewBuffer([]byte(v.(string)))
-		local := &publicShare{}
+		r := bytes.NewBuffer([]byte(v.(map[string]interface{})["share"].(string)))
+		local := &link.PublicShare{}
 		if err := m.unmarshaler.Unmarshal(r, local); err != nil {
 			return nil, err
 		}
@@ -410,8 +413,9 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token, password str
 	defer m.mutex.Unlock()
 
 	for _, v := range db {
-		r := bytes.NewBuffer([]byte(v.(string)))
-		local := &publicShare{}
+		r := bytes.NewBuffer([]byte(v.(map[string]interface{})["share"].(string)))
+		passDB := v.(map[string]interface{})["password"].(string)
+		local := &link.PublicShare{}
 		if err := m.unmarshaler.Unmarshal(r, local); err != nil {
 			return nil, err
 		}
@@ -421,15 +425,14 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token, password str
 			if local.PasswordProtected {
 				password = base64.StdEncoding.EncodeToString([]byte(password))
 				// check sent password matches stored one
-				if local.Password == password {
-					return &local.PublicShare, nil
-				} else {
-					// TODO(refs): custom permission denied error to catch up
-					// in uppper layers
-					return nil, errors.New("json: invalid password")
+				if passDB == password {
+					return local, nil
 				}
+				// TODO(refs): custom permission denied error to catch up
+				// in uppper layers
+				return nil, errors.New("json: invalid password")
 			}
-			return &local.PublicShare, nil
+			return local, nil
 		}
 	}
 

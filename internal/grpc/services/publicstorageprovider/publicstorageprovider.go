@@ -155,7 +155,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		return nil, err
 	}
 
-	pathFromToken, err := s.pathFromToken(ctx, tkn)
+	pathFromToken, err := s.pathFromToken(ctx, tkn, "")
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +196,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		return nil, err
 	}
 
-	pathFromToken, err := s.pathFromToken(ctx, tkn)
+	pathFromToken, err := s.pathFromToken(ctx, tkn, "")
 	if err != nil {
 		return nil, err
 	}
@@ -305,16 +305,20 @@ func (s *service) trimMountPrefix(fn string) (string, error) {
 }
 
 // pathFromToken returns a reference from a public share token.
-func (s *service) pathFromToken(ctx context.Context, token string) (string, error) {
+func (s *service) pathFromToken(ctx context.Context, token string, password string) (string, error) {
 	driver, err := pool.GetPublicShareProviderClient(s.conf.DriverAddr)
 	if err != nil {
 		return "", err
 	}
 
-	publicShareResponse, err := driver.GetPublicShareByToken(
+	publicShareResponse, err := driver.GetPublicShare(
 		ctx,
-		&link.GetPublicShareByTokenRequest{
-			Token: token,
+		&link.GetPublicShareRequest{
+			Ref: &link.PublicShareReference{
+				Spec: &link.PublicShareReference_Token{
+					Token: token,
+				},
+			},
 		},
 	)
 	if err != nil {
