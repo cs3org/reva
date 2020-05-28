@@ -95,7 +95,7 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 }
 func (s *svc) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
 	home := s.getHome(ctx)
-	homeRes := &provider.GetHomeResponse{Path: home}
+	homeRes := &provider.GetHomeResponse{Path: home, Status: status.NewOK(ctx)}
 	return homeRes, nil
 }
 
