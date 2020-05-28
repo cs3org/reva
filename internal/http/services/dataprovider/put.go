@@ -36,6 +36,7 @@ import (
 func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
+	log.Debug().Msg("dataprovider: doPut()")
 	fn := r.URL.Path
 
 	fsfn := strings.TrimPrefix(fn, s.conf.Prefix)
@@ -49,6 +50,7 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 	}
 
 	r.Body.Close()
+
 	w.WriteHeader(http.StatusOK)
 }
 

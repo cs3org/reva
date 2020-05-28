@@ -21,7 +21,11 @@ package dataprovider
 import (
 	"fmt"
 	"net/http"
+	"strings"
+	"time"
 
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/internal/http/utils"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/storage"
@@ -107,6 +111,34 @@ type Composable interface {
 	UseIn(composer *tusd.StoreComposer)
 }
 
+func (s *svc) writeFileInfoHeaders(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+	log.Debug().Msg("dataprovider: writeFileInfoHeaders()")
+	fn := r.URL.Path
+
+	fsfn := strings.TrimPrefix(fn, s.conf.Prefix)
+	//ref := &provider.Reference{Spec: &provider.Reference_Path{Path: fsfn}}
+	// TODO: try reading info data
+	ref := &provider.Reference{Spec: &provider.Reference_Path{Path: fsfn}}
+	sRes, err := s.storage.GetMD(ctx, ref)
+	if err != nil {
+		log.Error().Err(err).Msg("error sending grpc GetMD request after upload")
+		return err
+	}
+
+	w.Header().Add("Content-Type", sRes.GetMimeType())
+	w.Header().Set("ETag", sRes.GetEtag())
+	// FIXME: implement wrap on this layer
+	//w.Header().Set("OC-FileId", wrapResourceID(sRes.GetId()))
+	w.Header().Set("OC-ETag", sRes.GetEtag())
+	t := utils.TSToTime(sRes.GetMtime())
+	lastModifiedString := t.Format(time.RFC1123)
+	w.Header().Set("Last-Modified", lastModifiedString)
+	w.Header().Set("X-OC-MTime", "accepted")
+	return nil
+}
+
 func (s *svc) setHandler() (err error) {
 	composable, ok := s.storage.(Composable)
 	if ok && !s.conf.DisableTus {
@@ -159,10 +191,13 @@ func (s *svc) setHandler() (err error) {
 				handler.HeadFile(w, r)
 			case "PATCH":
 				handler.PatchFile(w, r)
+				// FIXME: we can't set additional headers on the already sent response
+				s.writeFileInfoHeaders(w, r)
 			// PUT provides a wrapper around the POST call, to save the caller from
 			// the trouble of configuring the tus client.
 			case "PUT":
 				s.doTusPut(w, r)
+				s.writeFileInfoHeaders(w, r)
 			// TODO Only attach the DELETE handler if the Terminate() method is provided
 			case "DELETE":
 				handler.DelFile(w, r)
