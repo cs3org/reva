@@ -46,8 +46,19 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 	defer span.End()
 	log := appctx.GetLogger(ctx)
 
+	ns = applyLayout(ctx, ns)
+
 	fn := path.Join(ns, r.URL.Path)
-	listChildren := r.Header.Get("Depth") != "0"
+	depth := r.Header.Get("Depth")
+	if depth == "" {
+		depth = "1"
+	}
+	// see https://tools.ietf.org/html/rfc4918#section-10.2
+	if depth != "0" && depth != "1" && depth != "infinity" {
+		log.Error().Msgf("invalid Depth header value %s", depth)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
 	pf, status, err := readPropfind(r.Body)
 	if err != nil {
@@ -86,7 +97,7 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 
 	info := res.Info
 	infos := []*provider.ResourceInfo{info}
-	if info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && listChildren {
+	if info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "1" {
 		req := &provider.ListContainerRequest{
 			Ref: ref,
 		}
@@ -96,12 +107,57 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+
 		if res.Status.Code != rpc.Code_CODE_OK {
 			log.Err(err).Msg("error calling grpc list container")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		infos = append(infos, res.Infos...)
+	} else if depth == "infinity" {
+		// FIXME: doesn't work cross-storage as the results will have the wrong paths!
+		// use a stack to explore sub-containers breadth-first
+		stack := []string{info.Path}
+		for len(stack) > 0 {
+			// retrieve path on top of stack
+			path := stack[len(stack)-1]
+			ref = &provider.Reference{
+				Spec: &provider.Reference_Path{Path: path},
+			}
+			req := &provider.ListContainerRequest{
+				Ref: ref,
+			}
+			res, err := client.ListContainer(ctx, req)
+			if err != nil {
+				log.Error().Err(err).Str("path", path).Msg("error sending list container grpc request")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			if res.Status.Code != rpc.Code_CODE_OK {
+				log.Err(err).Str("path", path).Msg("error calling grpc list container")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			infos = append(infos, res.Infos...)
+
+			if depth != "infinity" {
+				break
+			}
+
+			// TODO: stream response to avoid storing too many results in memory
+
+			stack = stack[:len(stack)-1]
+
+			// check sub-containers in reverse order and add them to the stack
+			// the reversed order here will produce a more logical sorting of results
+			for i := len(res.Infos) - 1; i >= 0; i-- {
+				//for i := range res.Infos {
+				if res.Infos[i].Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+					stack = append(stack, res.Infos[i].Path)
+				}
+			}
+		}
 	}
 
 	propRes, err := s.formatPropfind(ctx, &pf, infos, ns)
@@ -112,6 +168,13 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 	}
 	w.Header().Set("DAV", "1, 3, extended-mkcol")
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+	// let clients know this collection supports tus.io POST requests to start uploads
+	if info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		w.Header().Add("Access-Control-Expose-Headers", "Tus-Resumable, Tus-Version, Tus-Extension")
+		w.Header().Set("Tus-Resumable", "1.0.0")
+		w.Header().Set("Tus-Version", "1.0.0")
+		w.Header().Set("Tus-Extension", "creation,creation-with-upload")
+	}
 	w.WriteHeader(http.StatusMultiStatus)
 	if _, err := w.Write([]byte(propRes)); err != nil {
 		log.Err(err).Msg("error writing response")
@@ -173,6 +236,14 @@ func (s *svc) xmlEscaped(val string) string {
 	buf := new(bytes.Buffer)
 	xml.Escape(buf, []byte(val))
 	return buf.String()
+}
+
+func (s *svc) newPropNS(namespace string, local string, val string) *propertyXML {
+	return &propertyXML{
+		XMLName:  xml.Name{Space: namespace, Local: local},
+		Lang:     "",
+		InnerXML: []byte(val),
+	}
 }
 
 func (s *svc) newProp(key, val string) *propertyXML {
@@ -237,11 +308,15 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				s.newProp("d:getcontenttype", "httpd/unix-directory"),
 				s.newProp("oc:size", size),
 			)
-		} else if md.MimeType != "" {
+		} else {
 			response.Propstat[0].Prop = append(response.Propstat[0].Prop,
-				s.newProp("d:getcontenttype", md.MimeType),
 				s.newProp("d:getcontentlength", size),
 			)
+			if md.MimeType != "" {
+				response.Propstat[0].Prop = append(response.Propstat[0].Prop,
+					s.newProp("d:getcontenttype", md.MimeType),
+				)
+			}
 		}
 		// Finder needs the the getLastModified property to work.
 		t := utils.TSToTime(md.Mtime).UTC()
@@ -406,11 +481,24 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:"+pf.Prop[i].Local, ""))
 				}
 			default:
-				// TODO (jfd) lookup shortname for unknown namespaces?
-				propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp(pf.Prop[i].Space+":"+pf.Prop[i].Local, ""))
+				// handle custom properties
+				if k := md.GetArbitraryMetadata(); k == nil {
+					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newPropNS(pf.Prop[i].Space, pf.Prop[i].Local, ""))
+				} else if amd := k.GetMetadata(); amd == nil {
+					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newPropNS(pf.Prop[i].Space, pf.Prop[i].Local, ""))
+				} else if v, ok := amd[fmt.Sprintf("%s/%s", pf.Prop[i].Space, pf.Prop[i].Local)]; ok && v != "" {
+					propstatOK.Prop = append(propstatOK.Prop, s.newPropNS(pf.Prop[i].Space, pf.Prop[i].Local, v))
+				} else {
+					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newPropNS(pf.Prop[i].Space, pf.Prop[i].Local, ""))
+				}
 			}
 		}
-		response.Propstat = append(response.Propstat, propstatOK, propstatNotFound)
+		if len(propstatOK.Prop) > 0 {
+			response.Propstat = append(response.Propstat, propstatOK)
+		}
+		if len(propstatNotFound.Prop) > 0 {
+			response.Propstat = append(response.Propstat, propstatNotFound)
+		}
 	}
 
 	return &response, nil

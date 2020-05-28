@@ -28,6 +28,12 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
+	"github.com/rs/zerolog"
+)
+
+const (
+	apiV1 = "v1.php"
+	apiV2 = "v2.php"
 )
 
 func init() {
@@ -40,7 +46,7 @@ type svc struct {
 }
 
 // New returns a new capabilitiessvc
-func New(m map[string]interface{}) (global.Service, error) {
+func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	conf := &config.Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
@@ -86,13 +92,11 @@ func (s *svc) Handler() http.Handler {
 
 		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("ocs routing")
 
-		// TODO v2 uses a status code mapper
-		// see https://github.com/owncloud/core/commit/bacf1603ffd53b7a5f73854d1d0ceb4ae545ce9f#diff-262cbf0df26b45bad0cf00d947345d9c
-		if head == "v1.php" || head == "v2.php" {
-			s.V1Handler.Handler().ServeHTTP(w, r)
+		if !(head == apiV1 || head == apiV2) {
+			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "Not found", nil)
 			return
 		}
-
-		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "Not found", nil)
+		ctx := response.WithAPIVersion(r.Context(), head)
+		s.V1Handler.Handler().ServeHTTP(w, r.WithContext(ctx))
 	})
 }

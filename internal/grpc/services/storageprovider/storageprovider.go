@@ -24,6 +24,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -55,6 +56,7 @@ type config struct {
 	DataServerURL      string                            `mapstructure:"data_server_url"`
 	ExposeDataServer   bool                              `mapstructure:"expose_data_server"` // if true the client will be able to upload/download directly to it
 	EnableHomeCreation bool                              `mapstructure:"enable_home_creation"`
+	DisableTus         bool                              `mapstructure:"disable_tus"`
 	AvailableXS        map[string]uint32                 `mapstructure:"available_checksums"`
 }
 
@@ -243,14 +245,35 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 func (s *service) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*provider.InitiateFileUploadResponse, error) {
 	// TODO(labkode): same considerations as download
 	log := appctx.GetLogger(ctx)
-	url := *s.dataServerURL
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.InitiateFileUploadResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
 		}, nil
 	}
-	url.Path = path.Join("/", url.Path, newRef.GetPath())
+	url := *s.dataServerURL
+	if s.conf.DisableTus {
+		url.Path = path.Join("/", url.Path, newRef.GetPath())
+	} else {
+		var uploadLength int64
+		if req.Opaque != nil && req.Opaque.Map != nil && req.Opaque.Map["Upload-Length"] != nil {
+			var err error
+			uploadLength, err = strconv.ParseInt(string(req.Opaque.Map["Upload-Length"].Value), 10, 64)
+			if err != nil {
+				return &provider.InitiateFileUploadResponse{
+					Status: status.NewInternal(ctx, err, "error parsing upload length"),
+				}, nil
+			}
+		}
+		uploadID, err := s.storage.InitiateUpload(ctx, newRef, uploadLength)
+		if err != nil {
+			return &provider.InitiateFileUploadResponse{
+				Status: status.NewInternal(ctx, err, "error getting upload id"),
+			}, nil
+		}
+		url.Path = path.Join("/", url.Path, uploadID)
+	}
+
 	log.Info().Str("data-server", url.String()).
 		Str("fn", req.Ref.GetPath()).
 		Str("xs", fmt.Sprintf("%+v", s.conf.AvailableXS)).
@@ -339,9 +362,12 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 
 	if err := s.storage.CreateDir(ctx, newRef.GetPath()); err != nil {
 		var st *rpc.Status
-		if _, ok := err.(errtypes.IsNotFound); ok {
+		switch err.(type) {
+		case errtypes.IsNotFound:
 			st = status.NewNotFound(ctx, "path not found when creating container")
-		} else {
+		case errtypes.AlreadyExists:
+			st = status.NewInternal(ctx, err, "error: container already exists")
+		default:
 			st = status.NewInternal(ctx, err, "error creating container: "+req.Ref.String())
 		}
 		return &provider.CreateContainerResponse{

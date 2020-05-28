@@ -40,11 +40,18 @@ const (
 	PermissionAll Permissions = (1 << (iota - 1)) - 1
 )
 
+var (
+	// ErrPermissionNotInRange defines a permission specific error.
+	ErrPermissionNotInRange = fmt.Errorf("The provided permission is not between %d and %d", PermissionInvalid, PermissionAll)
+)
+
 // NewPermissions creates a new Permissions instanz.
 // The value must be in the valid range.
 func NewPermissions(val int) (Permissions, error) {
-	if val <= int(PermissionInvalid) || int(PermissionAll) < val {
+	if val == int(PermissionInvalid) {
 		return PermissionInvalid, fmt.Errorf("permissions %d out of range %d - %d", val, PermissionRead, PermissionAll)
+	} else if val < int(PermissionInvalid) || int(PermissionAll) < val {
+		return PermissionInvalid, ErrPermissionNotInRange
 	}
 	return Permissions(val), nil
 }

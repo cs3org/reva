@@ -34,7 +34,10 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/storage/templates"
+	ctxuser "github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
+	"github.com/rs/zerolog"
 )
 
 type ctxKey int
@@ -49,8 +52,16 @@ func init() {
 
 // Config holds the config options that need to be passed down to all ocdav handlers
 type Config struct {
-	Prefix          string `mapstructure:"prefix"`
-	FilesNamespace  string `mapstructure:"files_namespace"`
+	Prefix string `mapstructure:"prefix"`
+	// FilesNamespace prefixes the namespace, optionally with user information.
+	// Example: if FilesNamespace is /users/{{substr 0 1 .Username}}/{{.Username}}
+	// and received path is /docs the internal path will be:
+	// /users/<first char of username>/<username>/docs
+	FilesNamespace string `mapstructure:"files_namespace"`
+	// WebdavNamespace prefixes the namespace, optionally with user information.
+	// Example: if WebdavNamespace is /users/{{substr 0 1 .Username}}/{{.Username}}
+	// and received path is /docs the internal path will be:
+	// /users/<first char of username>/<username>/docs
 	WebdavNamespace string `mapstructure:"webdav_namespace"`
 	ChunkFolder     string `mapstructure:"chunk_folder"`
 	GatewaySvc      string `mapstructure:"gatewaysvc"`
@@ -63,7 +74,7 @@ type svc struct {
 }
 
 // New returns a new ocdav
-func New(m map[string]interface{}) (global.Service, error) {
+func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	conf := &Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
@@ -168,6 +179,10 @@ func (s *svc) Handler() http.Handler {
 
 func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
 	return pool.GetGatewayServiceClient(s.c.GatewaySvc)
+}
+
+func applyLayout(ctx context.Context, ns string) string {
+	return templates.WithUser(ctxuser.ContextMustGetUser(ctx), ns)
 }
 
 func wrapResourceID(r *provider.ResourceId) string {

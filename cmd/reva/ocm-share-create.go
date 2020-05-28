@@ -19,14 +19,19 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
+	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/pkg/errors"
 )
@@ -52,6 +57,12 @@ func ocmShareCreateCommand() *command {
 			os.Exit(1)
 		}
 
+		if *idp == "" {
+			fmt.Println("idp cannot be empty: use -idp flag")
+			fmt.Println(cmd.Usage())
+			os.Exit(1)
+		}
+
 		fn := cmd.Args()[0]
 
 		ctx := getAuthContext()
@@ -60,27 +71,41 @@ func ocmShareCreateCommand() *command {
 			return err
 		}
 
+		providerInfo, err := client.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
+			Domain: *idp,
+		})
+		if err != nil {
+			return err
+		}
+
+		remoteUserRes, err := client.GetRemoteUser(ctx, &invitepb.GetRemoteUserRequest{
+			RemoteUserId: &userpb.UserId{OpaqueId: *grantee, Idp: *idp},
+		})
+		if err != nil {
+			return err
+		}
+		if remoteUserRes.Status.Code != rpc.Code_CODE_OK {
+			return formatError(remoteUserRes.Status)
+		}
+
 		ref := &provider.Reference{
 			Spec: &provider.Reference_Path{Path: fn},
 		}
-
 		req := &provider.StatRequest{Ref: ref}
 		res, err := client.Stat(ctx, req)
 		if err != nil {
 			return err
 		}
-
 		if res.Status.Code != rpc.Code_CODE_OK {
 			return formatError(res.Status)
 		}
 
-		perm, err := getOCMSharePerm(*rol)
+		perm, pint, err := getOCMSharePerm(*rol)
 		if err != nil {
 			return err
 		}
 
 		gt := getGrantType(*grantType)
-
 		grant := &ocm.ShareGrant{
 			Permissions: perm,
 			Grantee: &provider.Grantee{
@@ -91,15 +116,33 @@ func ocmShareCreateCommand() *command {
 				},
 			},
 		}
+
+		permissionMap := map[string]string{"name": strconv.Itoa(pint)}
+		val, err := json.Marshal(permissionMap)
+		if err != nil {
+			return err
+		}
+		permOpaque := &types.Opaque{
+			Map: map[string]*types.OpaqueEntry{
+				"permissions": &types.OpaqueEntry{
+					Decoder: "json",
+					Value:   val,
+				},
+			},
+		}
+
 		shareRequest := &ocm.CreateOCMShareRequest{
-			ResourceId: res.Info.Id,
-			Grant:      grant,
+			Opaque:                permOpaque,
+			ResourceId:            res.Info.Id,
+			Grant:                 grant,
+			RecipientMeshProvider: providerInfo.ProviderInfo,
 		}
 
 		shareRes, err := client.CreateOCMShare(ctx, shareRequest)
 		if err != nil {
 			return err
 		}
+		fmt.Println("create share done")
 
 		if shareRes.Status.Code != rpc.Code_CODE_OK {
 			return formatError(shareRes.Status)
@@ -120,7 +163,7 @@ func ocmShareCreateCommand() *command {
 	return cmd
 }
 
-func getOCMSharePerm(p string) (*ocm.SharePermissions, error) {
+func getOCMSharePerm(p string) (*ocm.SharePermissions, int, error) {
 	if p == viewerPermission {
 		return &ocm.SharePermissions{
 			Permissions: &provider.ResourcePermissions{
@@ -130,7 +173,7 @@ func getOCMSharePerm(p string) (*ocm.SharePermissions, error) {
 				ListContainer:        true,
 				Stat:                 true,
 			},
-		}, nil
+		}, 1, nil
 	} else if p == editorPermission {
 		return &ocm.SharePermissions{
 			Permissions: &provider.ResourcePermissions{
@@ -145,7 +188,7 @@ func getOCMSharePerm(p string) (*ocm.SharePermissions, error) {
 				RestoreFileVersion:   true,
 				Move:                 true,
 			},
-		}, nil
+		}, 15, nil
 	}
-	return nil, errors.New("invalid rol: " + p)
+	return nil, 0, errors.New("invalid rol: " + p)
 }

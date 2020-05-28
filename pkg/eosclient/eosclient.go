@@ -591,12 +591,8 @@ func (c *Client) Read(ctx context.Context, username, path string) (io.ReadCloser
 	return os.Open(localTarget)
 }
 
-// Write writes a file to the mgm
+// Write writes a stream to the mgm
 func (c *Client) Write(ctx context.Context, username, path string, stream io.ReadCloser) error {
-	unixUser, err := c.getUnixUser(username)
-	if err != nil {
-		return err
-	}
 	fd, err := ioutil.TempFile(c.opt.CacheDirectory, "eoswrite-")
 	if err != nil {
 		return err
@@ -609,8 +605,18 @@ func (c *Client) Write(ctx context.Context, username, path string, stream io.Rea
 	if err != nil {
 		return err
 	}
+
+	return c.WriteFile(ctx, username, path, fd.Name())
+}
+
+// WriteFile writes an existing file to the mgm
+func (c *Client) WriteFile(ctx context.Context, username, path, source string) error {
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return err
+	}
 	xrdPath := fmt.Sprintf("%s//%s", c.opt.URL, path)
-	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, "--nopbar", "--silent", "-f", fd.Name(), xrdPath, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s", unixUser.Uid, unixUser.Gid))
+	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, "--nopbar", "--silent", "-f", source, xrdPath, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s", unixUser.Uid, unixUser.Gid))
 	_, _, err = c.execute(ctx, cmd)
 	return err
 }
@@ -700,14 +706,14 @@ func parseRecycleList(raw string) ([]*DeletedEntry, error) {
 }
 
 // parse entries like these:
-// recycle=ls  recycle-bin=/eos/backup/proc/recycle/ uid=gonzalhu gid=it size=0 deletion-time=1510823151 type=recursive-dir keylength.restore-path=45 restore-path=/eos/scratch/user/g/gonzalhu/.sys.v#.app.ico/ restore-key=0000000000a35100
-// recycle=ls  recycle-bin=/eos/backup/proc/recycle/ uid=gonzalhu gid=it size=381038 deletion-time=1510823151 type=file keylength.restore-path=36 restore-path=/eos/scratch/user/g/gonzalhu/app.ico restore-key=000000002544fdb3
+// recycle=ls recycle-bin=/eos/backup/proc/recycle/ uid=gonzalhu gid=it size=0 deletion-time=1510823151 type=recursive-dir keylength.restore-path=45 restore-path=/eos/scratch/user/g/gonzalhu/.sys.v#.app.ico/ restore-key=0000000000a35100
+// recycle=ls recycle-bin=/eos/backup/proc/recycle/ uid=gonzalhu gid=it size=381038 deletion-time=1510823151 type=file keylength.restore-path=36 restore-path=/eos/scratch/user/g/gonzalhu/app.ico restore-key=000000002544fdb3
 func parseRecycleEntry(raw string) (*DeletedEntry, error) {
 	partsBySpace := strings.Split(raw, " ")
 	restoreKeyPair, partsBySpace := partsBySpace[len(partsBySpace)-1], partsBySpace[:len(partsBySpace)-1]
-	restorePathPair := strings.Join(partsBySpace[9:], " ")
+	restorePathPair := strings.Join(partsBySpace[8:], " ")
 
-	partsBySpace = partsBySpace[:9]
+	partsBySpace = partsBySpace[:8]
 	partsBySpace = append(partsBySpace, restorePathPair)
 	partsBySpace = append(partsBySpace, restoreKeyPair)
 

@@ -21,13 +21,14 @@ package dataprovider
 import (
 	"fmt"
 	"net/http"
-	"os"
 
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
+	tusd "github.com/tus/tusd/pkg/handler"
 )
 
 func init() {
@@ -35,10 +36,10 @@ func init() {
 }
 
 type config struct {
-	Prefix    string                            `mapstructure:"prefix"`
-	Driver    string                            `mapstructure:"driver"`
-	TmpFolder string                            `mapstructure:"tmp_folder"`
-	Drivers   map[string]map[string]interface{} `mapstructure:"drivers"`
+	Prefix     string                            `mapstructure:"prefix"`
+	Driver     string                            `mapstructure:"driver"`
+	Drivers    map[string]map[string]interface{} `mapstructure:"drivers"`
+	DisableTus bool                              `mapstructure:"disable_tus"`
 }
 
 type svc struct {
@@ -48,7 +49,7 @@ type svc struct {
 }
 
 // New returns a new datasvc
-func New(m map[string]interface{}) (global.Service, error) {
+func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
@@ -56,14 +57,6 @@ func New(m map[string]interface{}) (global.Service, error) {
 
 	if conf.Prefix == "" {
 		conf.Prefix = "data"
-	}
-
-	if conf.TmpFolder == "" {
-		conf.TmpFolder = os.TempDir()
-	}
-
-	if err := os.MkdirAll(conf.TmpFolder, 0755); err != nil {
-		return nil, errors.Wrap(err, "could not create tmp dir")
 	}
 
 	fs, err := getFS(conf)
@@ -75,8 +68,8 @@ func New(m map[string]interface{}) (global.Service, error) {
 		storage: fs,
 		conf:    conf,
 	}
-	s.setHandler()
-	return s, nil
+	err = s.setHandler()
+	return s, err
 }
 
 // Close performs cleanup.
@@ -88,6 +81,12 @@ func (s *svc) Unprotected() []string {
 	return []string{}
 }
 
+// Create a new DataStore instance which is responsible for
+// storing the uploaded file on disk in the specified directory.
+// This path _must_ exist before tusd will store uploads in it.
+// If you want to save them on a different medium, for example
+// a remote FTP server, you can implement your own storage backend
+// by implementing the tusd.DataStore interface.
 func getFS(c *config) (storage.FS, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		return f(c.Drivers[c.Driver])
@@ -103,29 +102,84 @@ func (s *svc) Handler() http.Handler {
 	return s.handler
 }
 
-func (s *svc) setHandler() {
-	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "HEAD":
-			addCorsHeader(w)
-			w.WriteHeader(http.StatusOK)
-			return
-		case "GET":
-			s.doGet(w, r)
-			return
-		case "PUT":
-			s.doPut(w, r)
-			return
-		default:
-			w.WriteHeader(http.StatusNotImplemented)
-			return
-		}
-	})
+// Composable is the interface that a struct needs to implement to be composable by this composer
+type Composable interface {
+	UseIn(composer *tusd.StoreComposer)
 }
 
-func addCorsHeader(res http.ResponseWriter) {
-	headers := res.Header()
-	headers.Set("Access-Control-Allow-Origin", "*")
-	headers.Set("Access-Control-Allow-Headers", "Content-Type, Origin, Authorization")
-	headers.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, HEAD")
+func (s *svc) setHandler() (err error) {
+	composable, ok := s.storage.(Composable)
+	if ok && !s.conf.DisableTus {
+		// A storage backend for tusd may consist of multiple different parts which
+		// handle upload creation, locking, termination and so on. The composer is a
+		// place where all those separated pieces are joined together. In this example
+		// we only use the file store but you may plug in multiple.
+		composer := tusd.NewStoreComposer()
+
+		// let the composable storage tell tus which extensions it supports
+		composable.UseIn(composer)
+
+		config := tusd.Config{
+			BasePath:      s.conf.Prefix,
+			StoreComposer: composer,
+			//Logger:        logger, // TODO use logger
+		}
+
+		handler, err := tusd.NewUnroutedHandler(config)
+		if err != nil {
+			return err
+		}
+
+		s.handler = handler.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+			log := appctx.GetLogger(r.Context())
+			log.Info().Msgf("tusd routing: path=%s", r.URL.Path)
+
+			switch r.Method {
+			// old fashioned download.
+
+			// GET is not part of the tus.io protocol
+			// currently there is no way to GET an upload that is in progress
+			// TODO allow range based get requests? that end before the current offset
+			case "GET":
+				s.doGet(w, r)
+
+			// tus.io based upload
+
+			// uploads are initiated using the CS3 APIs Initiate Download call
+			case "POST":
+				handler.PostFile(w, r)
+			case "HEAD":
+				handler.HeadFile(w, r)
+			case "PATCH":
+				handler.PatchFile(w, r)
+			// PUT provides a wrapper around the POST call, to save the caller from
+			// the trouble of configuring the tus client.
+			case "PUT":
+				s.doTusPut(w, r)
+			// TODO Only attach the DELETE handler if the Terminate() method is provided
+			case "DELETE":
+				handler.DelFile(w, r)
+			}
+		}))
+	} else {
+		s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case "HEAD":
+				w.WriteHeader(http.StatusOK)
+				return
+			case "GET":
+				s.doGet(w, r)
+				return
+			case "PUT":
+				s.doPut(w, r)
+				return
+			default:
+				w.WriteHeader(http.StatusNotImplemented)
+				return
+			}
+		})
+	}
+
+	return err
 }

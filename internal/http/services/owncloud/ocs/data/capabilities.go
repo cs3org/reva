@@ -52,7 +52,7 @@ type CapabilitiesData struct {
 type Capabilities struct {
 	Core          *CapabilitiesCore          `json:"core" xml:"core"`
 	Checksums     *CapabilitiesChecksums     `json:"checksums" xml:"checksums"`
-	Files         *CapabilitiesFiles         `json:"files" xml:"files"`
+	Files         *CapabilitiesFiles         `json:"files" xml:"files" mapstructure:"files"`
 	Dav           *CapabilitiesDav           `json:"dav" xml:"dav"`
 	FilesSharing  *CapabilitiesFilesSharing  `json:"files_sharing" xml:"files_sharing" mapstructure:"files_sharing"`
 	Notifications *CapabilitiesNotifications `json:"notifications" xml:"notifications"`
@@ -83,13 +83,23 @@ type CapabilitiesChecksums struct {
 	PreferredUploadType string   `json:"preferredUploadType" xml:"preferredUploadType" mapstructure:"preferred_upload_type"`
 }
 
+// CapabilitiesFilesTusSupport TODO this must be a summry of storages
+type CapabilitiesFilesTusSupport struct {
+	Version            string `json:"version" xml:"version"`
+	Resumable          string `json:"resumable" xml:"resumable"`
+	Extension          string `json:"extension" xml:"extension"`
+	MaxChunkSize       int    `json:"max_chunk_size" xml:"max_chunk_size" mapstructure:"max_chunk_size"`
+	HTTPMethodOverride string `json:"http_method_override" xml:"http_method_override" mapstructure:"http_method_override"`
+}
+
 // CapabilitiesFiles TODO this is storage specific, not global. What effect do these options have on the clients?
 type CapabilitiesFiles struct {
-	PrivateLinks     ocsBool  `json:"privateLinks" xml:"privateLinks" mapstructure:"private_links"`
-	BigFileChunking  ocsBool  `json:"bigfilechunking" xml:"bigfilechunking"`
-	Undelete         ocsBool  `json:"undelete" xml:"undelete"`
-	Versioning       ocsBool  `json:"versioning" xml:"versioning"`
-	BlacklistedFiles []string `json:"blacklisted_files" xml:"blacklisted_files>element" mapstructure:"blacklisted_files"`
+	PrivateLinks     ocsBool                      `json:"privateLinks" xml:"privateLinks" mapstructure:"private_links"`
+	BigFileChunking  ocsBool                      `json:"bigfilechunking" xml:"bigfilechunking"`
+	Undelete         ocsBool                      `json:"undelete" xml:"undelete"`
+	Versioning       ocsBool                      `json:"versioning" xml:"versioning"`
+	BlacklistedFiles []string                     `json:"blacklisted_files" xml:"blacklisted_files>element" mapstructure:"blacklisted_files"`
+	TusSupport       *CapabilitiesFilesTusSupport `json:"tus_support" xml:"tus_support" mapstructure:"tus_support"`
 }
 
 // CapabilitiesDav holds dav endpoint config

@@ -79,6 +79,9 @@ type config struct {
 	// ShadowNamespace for storing shadow data
 	ShadowNamespace string `mapstructure:"shadow_namespace"`
 
+	// UploadsNamespace for storing upload data
+	UploadsNamespace string `mapstructure:"uploads_namespace"`
+
 	// ShareFolder defines the name of the folder in the
 	// shadowed namespace. Ex: /eos/user/.shadow/h/hugo/MyShares
 	ShareFolder string `mapstructure:"share_folder"`
@@ -231,12 +234,10 @@ func (fs *eosfs) Shutdown(ctx context.Context) error {
 
 func (fs *eosfs) wrapShadow(ctx context.Context, fn string) (internal string) {
 	if fs.conf.EnableHome {
-		u, err := getUser(ctx)
+		layout, err := fs.getInternalHome(ctx)
 		if err != nil {
-			err = errors.Wrap(err, "eos: wrap: no user in ctx and home is enabled")
 			panic(err)
 		}
-		layout := templates.WithUser(u, fs.conf.UserLayout)
 		internal = path.Join(fs.conf.ShadowNamespace, layout, fn)
 	} else {
 		internal = path.Join(fs.conf.ShadowNamespace, fn)
@@ -622,7 +623,7 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference) (*provider.
 		return nil, errors.Wrap(err, "eos: error resolving reference")
 	}
 
-	// if path is home we need to add in the response any shadow folder in the shadown homedirectory.
+	// if path is home we need to add in the response any shadow folder in the shadow homedirectory.
 	if fs.conf.EnableHome {
 		if fs.isShareFolder(ctx, p) {
 			return fs.getMDShareFolder(ctx, p)
@@ -673,7 +674,7 @@ func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*pr
 
 	log.Debug().Msg("internal: " + p)
 
-	// if path is home we need to add in the response any shadow folder in the shadown homedirectory.
+	// if path is home we need to add in the response any shadow folder in the shadow homedirectory.
 	if fs.conf.EnableHome {
 		log.Debug().Msg("home enabled")
 		if strings.HasPrefix(p, "/") {
@@ -1128,26 +1129,6 @@ func (fs *eosfs) Download(ctx context.Context, ref *provider.Reference) (io.Read
 	fn := fs.wrap(ctx, p)
 
 	return fs.c.Read(ctx, u.Username, fn)
-}
-
-func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
-	u, err := getUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "eos: no user in ctx")
-	}
-
-	p, err := fs.resolve(ctx, u, ref)
-	if err != nil {
-		return errors.Wrap(err, "eos: error resolving reference")
-	}
-
-	if fs.isShareFolder(ctx, p) {
-		return errtypes.PermissionDenied("eos: cannot download under the virtual share folder")
-	}
-
-	fn := fs.wrap(ctx, p)
-
-	return fs.c.Write(ctx, u.Username, fn, r)
 }
 
 func (fs *eosfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {

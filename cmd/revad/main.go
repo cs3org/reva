@@ -40,6 +40,7 @@ var (
 	signalFlag  = flag.String("s", "", "send signal to a master process: stop, quit, reload")
 	configFlag  = flag.String("c", "/etc/revad/revad.toml", "set configuration file")
 	pidFlag     = flag.String("p", "", "pid file. If empty defaults to a random file in the OS temporary directory")
+	logFlag     = flag.String("log", "", "log messages with the given severity or above. One of: [trace, debug, info, warn, error, fatal, panic]")
 	dirFlag     = flag.String("dev-dir", "", "runs any toml file in the specified directory. Intended for development use only")
 
 	// Compile time variables initialized with gcc flags.
@@ -202,7 +203,7 @@ func runSingle(conf map[string]interface{}) {
 		*pidFlag = getPidfile()
 	}
 
-	runtime.Run(conf, *pidFlag)
+	runtime.Run(conf, *pidFlag, *logFlag)
 }
 
 func getPidfile() string {
@@ -218,7 +219,7 @@ func runMultiple(confs []map[string]interface{}) {
 		wg.Add(1)
 		pidfile := getPidfile()
 		go func(wg *sync.WaitGroup, conf map[string]interface{}) {
-			runtime.Run(conf, pidfile)
+			runtime.Run(conf, pidfile, *logFlag)
 			wg.Done()
 		}(&wg, conf)
 	}

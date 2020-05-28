@@ -45,7 +45,7 @@ func New(m map[string]interface{}) (meshdirectory.Manager, error) {
 	// load mesh providers file
 	model, err := load(c.File)
 	if err != nil {
-		err = errors.Wrap(err, "error loading the file containing the shares")
+		err = errors.Wrap(err, "error loading the file containing the providers")
 		return nil, err
 	}
 
@@ -83,7 +83,7 @@ func load(file string) (*meshDirectoryModel, error) {
 
 type meshDirectoryModel struct {
 	file          string
-	MeshProviders []*meshdirectory.MeshProvider `json:"providers"`
+	MeshProviders *[]meshdirectory.MeshProvider `json:"providers"`
 }
 
 type config struct {
@@ -104,6 +104,6 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-func (m *mgr) GetMeshProviders() []*meshdirectory.MeshProvider {
-	return m.model.MeshProviders
+func (m *mgr) GetMeshProviders() (*[]meshdirectory.MeshProvider, error) {
+	return m.model.MeshProviders, nil
 }

@@ -24,6 +24,7 @@ import (
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
 func recycleListCommand() *command {
@@ -42,9 +43,20 @@ func recycleListCommand() *command {
 			return err
 		}
 
-		req := &gateway.ListRecycleRequest{}
-
 		ctx := getAuthContext()
+
+		getHomeRes, err := client.GetHome(ctx, &provider.GetHomeRequest{})
+		if err != nil {
+			return err
+		}
+
+		req := &gateway.ListRecycleRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{
+					Path: getHomeRes.Path,
+				},
+			},
+		}
 		res, err := client.ListRecycle(ctx, req)
 		if err != nil {
 			return err

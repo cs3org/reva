@@ -8,6 +8,14 @@ description: >
 
 This is a guide on how you can run the accept invite app together with Pheonix and Reva locally in a dev environment. If you already have Reva and Phoenix you don't need to clone them, but you will need to congigure Phoenix (step 4) and have Reva and Phoenix running.
 
+## Prerequisites
+If you encounter strange problems, please check which version of the prerequisites you are running, it might be that you need to update/downgrade. For reference ask someone who already has reva and Phoenix running, they will have updated information on the versions.
+* golang >= 1.12
+* make/automake
+* git >= 2
+* node (check engines information in phoenix/package.json)
+* yarn >= 1.0 
+
 ## 1. Clone the Phoenix and Reva repos
 Clone the phoenix repo from https://github.com/owncloud/phoenix 
 
