@@ -84,10 +84,6 @@ type manager struct {
 	unmarshaler jsonpb.Unmarshaler
 }
 
-var (
-	passwordProtected bool
-)
-
 // CreatePublicShare adds a new entry to manager.shares
 func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error) {
 	id := &link.PublicShareId{
@@ -158,7 +154,7 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 
 	if _, ok := db[s.Id.GetOpaqueId()]; !ok {
 		db[s.Id.GetOpaqueId()] = map[string]interface{}{
-			"share":    string(encShare.Bytes()),
+			"share":    encShare.String(),
 			"password": ps.Password,
 		}
 	} else {
@@ -241,41 +237,6 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 	}
 
 	return share, nil
-}
-
-func (m *manager) getShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) (*link.PublicShare, error) {
-	if ref.GetToken() != "" {
-		share, err := m.getByToken(ctx, ref.GetToken())
-		if err != nil {
-			return nil, errors.New("no shares found by token")
-		}
-		return share, nil
-	}
-
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
-	db := map[string]interface{}{}
-	fileBytes, err := ioutil.ReadFile(m.file)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := json.Unmarshal(fileBytes, &db); err != nil {
-		return nil, err
-	}
-
-	if found, ok := db[ref.GetId().GetOpaqueId()].(map[string]string)["share"]; ok {
-		ps := link.PublicShare{}
-		r := bytes.NewBuffer([]byte(found))
-		if err := m.unmarshaler.Unmarshal(r, &ps); err != nil {
-			return nil, err
-		}
-
-		return &ps, nil
-	}
-
-	return nil, errors.New("no shares found")
 }
 
 // GetPublicShare gets a public share either by ID or Token.
