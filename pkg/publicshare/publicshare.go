@@ -33,5 +33,5 @@ type Manager interface {
 	GetPublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) (*link.PublicShare, error)
 	ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo) ([]*link.PublicShare, error)
 	RevokePublicShare(ctx context.Context, u *user.User, id string) error
-	GetPublicShareByToken(ctx context.Context, token string) (*link.PublicShare, error)
+	GetPublicShareByToken(ctx context.Context, token, password string) (*link.PublicShare, error)
 }

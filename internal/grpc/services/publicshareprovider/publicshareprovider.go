@@ -132,7 +132,7 @@ func (s *service) GetPublicShareByToken(ctx context.Context, req *link.GetPublic
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("getting public share by token")
 
-	found, err := s.sm.GetPublicShareByToken(ctx, req.GetToken())
+	found, err := s.sm.GetPublicShareByToken(ctx, req.GetToken(), req.GetPassword())
 	if err != nil {
 		return nil, err
 	}
