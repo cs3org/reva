@@ -30,7 +30,6 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/xattr v0.4.1
 	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect
-	github.com/prometheus/tsdb v0.7.1 // indirect
 	github.com/rs/cors v1.7.0
 	github.com/rs/zerolog v1.18.0
 	github.com/tus/tusd v1.1.1-0.20200416115059-9deabf9d80c2

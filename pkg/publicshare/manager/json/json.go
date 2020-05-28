@@ -102,9 +102,10 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 		displayName = tkn
 	}
 
-	if len(rInfo.ArbitraryMetadata.Metadata["password"]) > 0 {
-		msg := "public:" + rInfo.ArbitraryMetadata.Metadata["password"]
-		g.Password = base64.StdEncoding.EncodeToString([]byte(msg))
+	var passwordProtected bool
+	password := g.Password
+	if len(password) > 0 {
+		password = base64.StdEncoding.EncodeToString([]byte(password))
 		passwordProtected = true
 	}
 
@@ -132,11 +133,16 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 		DisplayName:       displayName,
 	}
 
+	ps := &publicShare{
+		PublicShare: s,
+		Password:    password,
+	}
+
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
 	buff := bytes.Buffer{}
-	if err := m.marshaler.Marshal(&buff, &s); err != nil {
+	if err := m.marshaler.Marshal(&buff, ps); err != nil {
 		return nil, err
 	}
 
@@ -234,10 +240,9 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 	return share, nil
 }
 
-// GetPublicShare gets a public share either by ID or Token.
-func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) (share *link.PublicShare, err error) {
+func (m *manager) getShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) (share *publicShare, err error) {
 	if ref.GetToken() != "" {
-		share, err = m.GetPublicShareByToken(ctx, ref.GetToken())
+		share, err = m.getByToken(ctx, ref.GetToken())
 		if err != nil {
 			return nil, errors.New("no shares found by token")
 		}
@@ -257,7 +262,7 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 	}
 
 	if found, ok := db[ref.GetId().GetOpaqueId()]; ok {
-		ps := link.PublicShare{}
+		ps := publicShare{}
 		r := bytes.NewBuffer([]byte(found.(string)))
 		if err := m.unmarshaler.Unmarshal(r, &ps); err != nil {
 			return nil, err
@@ -267,6 +272,45 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 	}
 
 	return
+}
+
+// GetPublicShare gets a public share either by ID or Token.
+func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) (*link.PublicShare, error) {
+	if ref.GetToken() != "" {
+		ps, err := m.getByToken(ctx, ref.GetToken())
+		if err != nil {
+			return nil, errors.New("no shares found by token")
+		} else {
+			return &ps.PublicShare, nil
+		}
+	}
+
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	db := map[string]interface{}{}
+	fileBytes, err := ioutil.ReadFile(m.file)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := json.Unmarshal(fileBytes, &db); err != nil {
+		return nil, err
+	}
+
+	found, ok := db[ref.GetId().GetOpaqueId()]
+	if !ok {
+		return nil, errors.New("no shares found by id:" + ref.GetId().String())
+	}
+
+	ps := publicShare{}
+	r := bytes.NewBuffer([]byte(found.(string)))
+	if err := m.unmarshaler.Unmarshal(r, &ps); err != nil {
+		return nil, err
+	}
+
+	return &ps.PublicShare, nil
+
 }
 
 // ListPublicShares retrieves all the shares on the manager that are valid.
@@ -289,13 +333,13 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 
 	for _, v := range db {
 		r := bytes.NewBuffer([]byte(v.(string)))
-		local := &link.PublicShare{}
+		local := &publicShare{}
 		if err := m.unmarshaler.Unmarshal(r, local); err != nil {
 			return nil, err
 		}
 
 		if len(filters) == 0 {
-			shares = append(shares, local)
+			shares = append(shares, &local.PublicShare)
 		} else {
 			for _, f := range filters {
 				if f.Type == link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID {
@@ -305,7 +349,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 					}
 					if local.ResourceId.StorageId == f.GetResourceId().StorageId && local.ResourceId.OpaqueId == f.GetResourceId().OpaqueId {
 						if (local.Expiration != nil && t.After(now)) || local.Expiration == nil {
-							shares = append(shares, local)
+							shares = append(shares, &local.PublicShare)
 						}
 					}
 				}
@@ -321,8 +365,7 @@ func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, id string
 	return fmt.Errorf("RevokePublicShare method unimplemented")
 }
 
-// GetPublicShareByToken gets a public share by its opaque token.
-func (m *manager) GetPublicShareByToken(ctx context.Context, token string) (*link.PublicShare, error) {
+func (m *manager) getByToken(ctx context.Context, token string) (*publicShare, error) {
 	db := map[string]interface{}{}
 	readBytes, err := ioutil.ReadFile(m.file)
 	if err != nil {
@@ -338,13 +381,55 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token string) (*lin
 
 	for _, v := range db {
 		r := bytes.NewBuffer([]byte(v.(string)))
-		local := &link.PublicShare{}
+		local := &publicShare{}
 		if err := m.unmarshaler.Unmarshal(r, local); err != nil {
 			return nil, err
 		}
 
 		if local.Token == token {
 			return local, nil
+		}
+	}
+
+	return nil, fmt.Errorf("share with token: `%v` not found", token)
+}
+
+// GetPublicShareByToken gets a public share by its opaque token.
+func (m *manager) GetPublicShareByToken(ctx context.Context, token, password string) (*link.PublicShare, error) {
+	db := map[string]interface{}{}
+	readBytes, err := ioutil.ReadFile(m.file)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := json.Unmarshal(readBytes, &db); err != nil {
+		return nil, err
+	}
+
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	for _, v := range db {
+		r := bytes.NewBuffer([]byte(v.(string)))
+		local := &publicShare{}
+		if err := m.unmarshaler.Unmarshal(r, local); err != nil {
+			return nil, err
+		}
+
+		if local.Token == token {
+			// validate if it is password protected
+			if local.PasswordProtected {
+				password = base64.StdEncoding.EncodeToString([]byte(password))
+				// check sent password matches stored one
+				if local.Password == password {
+					return &local.PublicShare, nil
+				} else {
+					// TODO(refs): custom permission denied error to catch up
+					// in uppper layers
+					return nil, errors.New("json: invalid password")
+				}
+			}
+			return &local.PublicShare, nil
 		}
 	}
 
@@ -359,4 +444,9 @@ func randString(n int) string {
 		b[i] = l[rand.Intn(len(l))]
 	}
 	return string(b)
+}
+
+type publicShare struct {
+	link.PublicShare
+	Password string `json:"password"`
 }
