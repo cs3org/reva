@@ -20,7 +20,6 @@ package publicshares
 
 import (
 	"context"
-	"strings"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	userprovider "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -65,15 +64,16 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	}, nil
 }
 
-func (m *manager) Authenticate(ctx context.Context, token string, secret string) (*user.User, error) {
-	parts := strings.Split(token, "/")
-
+func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user.User, error) {
 	gwConn, err := pool.GetGatewayServiceClient(m.c.GatewayAddr)
 	if err != nil {
 		return nil, err
 	}
 
-	publicShareResponse, err := gwConn.GetPublicShareByToken(ctx, &link.GetPublicShareByTokenRequest{Token: parts[1]})
+	publicShareResponse, err := gwConn.GetPublicShareByToken(ctx, &link.GetPublicShareByTokenRequest{
+		Token:    token,
+		Password: secret,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -87,3 +87,6 @@ func (m *manager) Authenticate(ctx context.Context, token string, secret string)
 
 	return getUserResponse.GetUser(), nil
 }
+
+// ErrPasswordNotProvided is returned when the public share is password protected, but there was no password on the request
+var ErrPasswordNotProvided = errors.New("public share is password protected, but password was not provided")

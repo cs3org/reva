@@ -7,10 +7,10 @@ require (
 	github.com/Masterminds/goutils v1.1.0 // indirect
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/Masterminds/sprig v2.22.0+incompatible
-	github.com/aws/aws-sdk-go v1.31.4
+	github.com/aws/aws-sdk-go v1.31.6
 	github.com/cheggaaa/pb v1.0.28
 	github.com/coreos/go-oidc v2.2.1+incompatible
-	github.com/cs3org/go-cs3apis v0.0.0-20200423154403-462ce7762d4a
+	github.com/cs3org/go-cs3apis v0.0.0-20200515145316-7048e6a5a73d
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/eventials/go-tus v0.0.0-20190617130015-9db47421f6a0
 	github.com/go-openapi/strfmt v0.19.2 // indirect
@@ -38,6 +38,7 @@ require (
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	google.golang.org/grpc v1.29.1
 	gopkg.in/asn1-ber.v1 v1.0.0-20181015200546-f715ec2f112d // indirect
+	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	gopkg.in/cheggaaa/pb.v1 v1.0.27 // indirect
 	gopkg.in/ldap.v2 v2.5.1
 )
