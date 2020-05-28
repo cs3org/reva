@@ -57,9 +57,8 @@ type config struct {
 	TranserExpires                int64  `mapstructure:"transfer_expires"`
 	TokenManager                  string `mapstructure:"token_manager"`
 	// ShareFolder is the location where to create shares in the recipient's storage provider.
-	ShareFolder    string                            `mapstructure:"share_folder"`
-	TokenManagers  map[string]map[string]interface{} `mapstructure:"token_managers"`
-	LinkGrantsFile string                            `mapstructure:"link_grants_file"`
+	ShareFolder   string                            `mapstructure:"share_folder"`
+	TokenManagers map[string]map[string]interface{} `mapstructure:"token_managers"`
 }
 
 type svc struct {

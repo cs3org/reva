@@ -20,7 +20,6 @@ package gateway
 
 import (
 	"context"
-	"fmt"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -34,9 +33,6 @@ func (s *svc) CreatePublicShare(ctx context.Context, req *link.CreatePublicShare
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("create public share")
 
-	if s.c.LinkGrantsFile == "" {
-		return nil, fmt.Errorf("public manager used but no `link_grants_file` defined; define link_grants_file on the gateway in order to store link grants")
-	}
 	c, err := pool.GetPublicShareProviderClient(s.c.PublicShareProviderEndpoint)
 	if err != nil {
 		return nil, err
