@@ -46,7 +46,6 @@ type config struct {
 	MountPath   string `mapstructure:"mount_path"`
 	MountID     string `mapstructure:"mount_id"`
 	GatewayAddr string `mapstructure:"gateway_addr"`
-	DriverAddr  string `mapstructure:"driver_addr"`
 }
 
 type service struct {
@@ -60,7 +59,6 @@ func (s *service) Close() error {
 }
 
 func (s *service) UnprotectedEndpoints() []string {
-	// return []string{"/cs3.sharing.link.v1beta1.LinkAPI/GetPublicShareByToken"}
 	return []string{}
 }
 
@@ -306,7 +304,7 @@ func (s *service) trimMountPrefix(fn string) (string, error) {
 
 // pathFromToken returns a reference from a public share token.
 func (s *service) pathFromToken(ctx context.Context, token string) (string, error) {
-	driver, err := pool.GetPublicShareProviderClient(s.conf.DriverAddr)
+	driver, err := pool.GetGatewayServiceClient(s.conf.GatewayAddr)
 	if err != nil {
 		return "", err
 	}
