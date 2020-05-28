@@ -119,6 +119,8 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	w.Header().Set("Content-Type", info.MimeType)
+	w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''"+
+		path.Base(info.Path)+"; filename=\""+path.Base(info.Path)+"\"")
 	w.Header().Set("ETag", info.Etag)
 	w.Header().Set("OC-FileId", wrapResourceID(info.Id))
 	w.Header().Set("OC-ETag", info.Etag)
