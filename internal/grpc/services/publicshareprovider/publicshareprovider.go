@@ -25,6 +25,7 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/publicshare/manager/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
@@ -132,10 +133,17 @@ func (s *service) GetPublicShareByToken(ctx context.Context, req *link.GetPublic
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("getting public share by token")
 
-	// there are 2 passes here, and the second request has no password
 	found, err := s.sm.GetPublicShareByToken(ctx, req.GetToken(), req.GetPassword())
 	if err != nil {
-		return nil, err
+		log.Err(err).Msg("error getting public share by token")
+		if _, ok := err.(errtypes.PermissionDenied); ok {
+			return &link.GetPublicShareByTokenResponse{
+				Status: status.NewPermissionDenied(ctx, "password is invalid"),
+			}, nil
+		}
+		return &link.GetPublicShareByTokenResponse{
+			Status: status.NewInternal(ctx, err, "error getting public share by token"),
+		}, nil
 	}
 
 	return &link.GetPublicShareByTokenResponse{

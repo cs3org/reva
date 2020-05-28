@@ -303,13 +303,19 @@ func (s *service) trimMountPrefix(fn string) (string, error) {
 }
 
 // pathFromToken returns a reference from a public share token.
+// access to this storage provider is authenticated.
+// First of all, the user authenticates the public link by sending the token and optional\
+// password to the public share auth provider, that returns the identity of the owner of the link.
+// the gateway crafts an access token on behalf of the owner to access the underlying storage.
+// a request to this storage provider will be done on behalf of the owner, reason
+// we can call GetPublicShare method directly.
 func (s *service) pathFromToken(ctx context.Context, token string) (string, error) {
-	driver, err := pool.GetGatewayServiceClient(s.conf.GatewayAddr)
+	client, err := pool.GetGatewayServiceClient(s.conf.GatewayAddr)
 	if err != nil {
 		return "", err
 	}
 
-	publicShareResponse, err := driver.GetPublicShare(
+	publicShareResponse, err := client.GetPublicShare(
 		ctx,
 		&link.GetPublicShareRequest{
 			Ref: &link.PublicShareReference{

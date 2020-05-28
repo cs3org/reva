@@ -60,12 +60,12 @@ func (s *svc) GetPublicShareByToken(ctx context.Context, req *link.GetPublicShar
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("get public share by token")
 
-	driver, err := pool.GetPublicShareProviderClient(s.c.PublicShareProviderEndpoint)
+	client, err := pool.GetPublicShareProviderClient(s.c.PublicShareProviderEndpoint)
 	if err != nil {
 		return nil, err
 	}
 
-	res, err := driver.GetPublicShareByToken(ctx, req)
+	res, err := client.GetPublicShareByToken(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +77,7 @@ func (s *svc) GetPublicShare(ctx context.Context, req *link.GetPublicShareReques
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("get public share")
 
-	pClient, err := pool.GetPublicShareProviderClient(s.c.PublicShareProviderEndpoint)
+	client, err := pool.GetPublicShareProviderClient(s.c.PublicShareProviderEndpoint)
 	if err != nil {
 		log.Err(err).Msg("error connecting to a public share provider")
 		return &link.GetPublicShareResponse{
@@ -87,14 +87,14 @@ func (s *svc) GetPublicShare(ctx context.Context, req *link.GetPublicShareReques
 		}, nil
 	}
 
-	return pClient.GetPublicShare(ctx, req)
+	return client.GetPublicShare(ctx, req)
 }
 
 func (s *svc) ListPublicShares(ctx context.Context, req *link.ListPublicSharesRequest) (*link.ListPublicSharesResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("listing public shares")
 
-	pClient, err := pool.GetPublicShareProviderClient(s.c.PublicShareProviderEndpoint)
+	client, err := pool.GetPublicShareProviderClient(s.c.PublicShareProviderEndpoint)
 	if err != nil {
 		log.Err(err).Msg("error connecting to a public share provider")
 		return &link.ListPublicSharesResponse{
@@ -104,7 +104,7 @@ func (s *svc) ListPublicShares(ctx context.Context, req *link.ListPublicSharesRe
 		}, nil
 	}
 
-	res, err := pClient.ListPublicShares(ctx, req)
+	res, err := client.ListPublicShares(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "error listing shares")
 	}
@@ -116,7 +116,7 @@ func (s *svc) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicShare
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("update public share")
 
-	pClient, err := pool.GetPublicShareProviderClient(s.c.PublicShareProviderEndpoint)
+	client, err := pool.GetPublicShareProviderClient(s.c.PublicShareProviderEndpoint)
 	if err != nil {
 		log.Err(err).Msg("error connecting to a public share provider")
 		return &link.UpdatePublicShareResponse{
@@ -126,7 +126,7 @@ func (s *svc) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicShare
 		}, nil
 	}
 
-	res, err := pClient.UpdatePublicShare(ctx, req)
+	res, err := client.UpdatePublicShare(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "error updating share")
 	}

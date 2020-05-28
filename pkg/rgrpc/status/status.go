@@ -107,6 +107,14 @@ func NewInvalidArg(ctx context.Context, msg string) *rpc.Status {
 	}
 }
 
+// NewPermissionDenied returns a Status with CODE_PERMISSION_DENIED.
+func NewPermissionDenied(ctx context.Context, msg string) *rpc.Status {
+	return &rpc.Status{Code: rpc.Code_CODE_INVALID_ARGUMENT,
+		Message: msg,
+		Trace:   getTrace(ctx),
+	}
+}
+
 // NewErrorFromCode returns a standardized Error for a given RPC code.
 func NewErrorFromCode(code rpc.Code, pkgname string) error {
 	return errors.New(pkgname + ": grpc failed with code " + code.String())
