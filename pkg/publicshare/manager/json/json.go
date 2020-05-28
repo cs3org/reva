@@ -181,6 +181,7 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 	}
 
 	now := time.Now().UnixNano()
+	var p string
 
 	switch req.GetUpdate().GetType() {
 	case link.UpdatePublicShareRequest_Update_TYPE_DISPLAYNAME:
@@ -197,7 +198,8 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 		log.Debug().Str("memory", "update expiration").Msgf("from: `%v`\nto\n`%v`", old, new)
 		share.Expiration = req.Update.GetGrant().Expiration
 	case link.UpdatePublicShareRequest_Update_TYPE_PASSWORD:
-		fallthrough
+		p = base64.StdEncoding.EncodeToString([]byte(req.Update.GetGrant().Password))
+		share.PasswordProtected = true
 	default:
 		return nil, fmt.Errorf("invalid update type: %v", req.GetUpdate().GetType())
 	}
@@ -226,6 +228,11 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 	}
 
 	db[share.GetId().OpaqueId] = buff.String()
+
+	db[share.Id.GetOpaqueId()] = map[string]interface{}{
+		"share":    buff.String(),
+		"password": p,
+	}
 
 	dbAsJSON, err := json.Marshal(db)
 	if err != nil {
@@ -262,18 +269,37 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 		return nil, err
 	}
 
-	found, ok := db[ref.GetId().GetOpaqueId()].(map[string]interface{})["share"]
-	if !ok {
-		return nil, errors.New("no shares found by id:" + ref.GetId().String())
-	}
+	// compare ref opaque id with share opaqueid
+	for _, v := range db {
+		// db[ref.GetId().GetOpaqueId()].(map[string]interface{})["share"]
+		// fmt.Printf("\nHERE\n%v\n\n", v.(map[string]interface{})["share"])
+		d := v.(map[string]interface{})["share"]
 
-	ps := publicShare{}
-	r := bytes.NewBuffer([]byte(found.(string)))
-	if err := m.unmarshaler.Unmarshal(r, &ps); err != nil {
-		return nil, err
-	}
+		ps := &link.PublicShare{}
+		r := bytes.NewBuffer([]byte(d.(string)))
+		if err := m.unmarshaler.Unmarshal(r, ps); err != nil {
+			return nil, err
+		}
 
-	return &ps.PublicShare, nil
+		if ref.GetId().GetOpaqueId() == ps.Id.OpaqueId {
+			return ps, nil
+		}
+
+	}
+	return nil, errors.New("no shares found by id:" + ref.GetId().String())
+
+	// found, ok := db[ref.GetId().GetOpaqueId()].(map[string]interface{})["share"]
+	// if !ok {
+	// 	return nil, errors.New("no shares found by id:" + ref.GetId().String())
+	// }
+
+	// ps := publicShare{}
+	// r := bytes.NewBuffer([]byte(found.(string)))
+	// if err := m.unmarshaler.Unmarshal(r, &ps); err != nil {
+	// 	return nil, err
+	// }
+
+	// return &ps.PublicShare, nil
 
 }
 
