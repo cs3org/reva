@@ -147,7 +147,10 @@ func (am *mgr) getOAuthCtx(ctx context.Context) context.Context {
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: am.c.Insecure,
 		},
+		// Fixes connection fd leak which might be caused by provider-caching
+		DisableKeepAlives: true,
 	}
+
 	customHTTPClient := &http.Client{
 		Transport: tr,
 		Timeout:   time.Second * 10,
