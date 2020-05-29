@@ -1055,39 +1055,119 @@ func (c *Client) Write(ctx context.Context, username, path string, stream io.Rea
 
 // ListDeletedEntries returns a list of the deleted entries.
 func (c *Client) ListDeletedEntries(ctx context.Context, username string) ([]*DeletedEntry, error) {
-	unixUser, err := c.getUnixUser(username)
+	log := appctx.GetLogger(ctx)
+
+	// Initialize the common fields of the NSReq
+	rq, err := c.initNSRequest(username)
 	if err != nil {
 		return nil, err
 	}
+
+	msg := new(erpc.NSRequest_RecycleRequest)
+	msg.Cmd = erpc.NSRequest_RecycleRequest_RECYCLE_CMD(erpc.NSRequest_RecycleRequest_RECYCLE_CMD_value["LIST"])
+
+	rq.Command = &erpc.NSRequest_Recycle{msg}
+
+	// Now send the req and see what happens
+	resp, err := c.cl.Exec(context.Background(), rq)
+	if err != nil {
+		log.Warn().Err(err).Str("username", username).Str("err", err.Error())
+		return nil, err
+	}
+
+	if resp == nil {
+		return nil, errtypes.InternalError(fmt.Sprintf("nil response for username: '%s'", username))
+	}
+
+	log.Info().Str("username", username).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+
 	// TODO(labkode): add protection if slave is configured and alive to count how many files are in the trashbin before
 	// triggering the recycle ls call that could break the instance because of unavailable memory.
-	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "recycle", "ls", "-m")
-	stdout, _, err := c.executeEOS(ctx, cmd)
-	if err != nil {
-		return nil, err
+	// FF: I agree with labkode, if we think we may have memory problems then the semantics of the grpc call`and
+	// the semantics if this func will have to change. For now this is not foreseen
+
+	var ret []*DeletedEntry
+	for _, f := range resp.Recycle.Recycles {
+		if f == nil {
+			log.Info().Str("username", username).Msg("nil item in response")
+			continue
+		}
+
+		entry := &DeletedEntry{
+			RestorePath:   string(f.Id.Path),
+			RestoreKey:    f.Key,
+			Size:          f.Size,
+			DeletionMTime: f.Dtime.Sec,
+			IsDir:         (f.Type == erpc.NSResponse_RecycleResponse_RecycleInfo_TREE),
+		}
+
+		ret = append(ret, entry)
 	}
-	return parseRecycleList(stdout)
+
+	return ret, nil
 }
 
 // RestoreDeletedEntry restores a deleted entry.
 func (c *Client) RestoreDeletedEntry(ctx context.Context, username, key string) error {
-	unixUser, err := c.getUnixUser(username)
+	log := appctx.GetLogger(ctx)
+
+	// Initialize the common fields of the NSReq
+	rq, err := c.initNSRequest(username)
 	if err != nil {
 		return err
 	}
-	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "recycle", "restore", key)
-	_, _, err = c.executeEOS(ctx, cmd)
+
+	msg := new(erpc.NSRequest_RecycleRequest)
+	msg.Cmd = erpc.NSRequest_RecycleRequest_RECYCLE_CMD(erpc.NSRequest_RecycleRequest_RECYCLE_CMD_value["RESTORE"])
+
+	msg.Key = key
+
+	rq.Command = &erpc.NSRequest_Recycle{msg}
+
+	// Now send the req and see what happens
+	resp, err := c.cl.Exec(context.Background(), rq)
+	if err != nil {
+		log.Warn().Err(err).Str("username", username).Str("key", key).Str("err", err.Error())
+		return err
+	}
+
+	if resp == nil {
+		return errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' key: '%s'", username, key))
+	}
+
+	log.Info().Str("username", username).Str("key", key).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+
 	return err
 }
 
 // PurgeDeletedEntries purges all entries from the recycle bin.
 func (c *Client) PurgeDeletedEntries(ctx context.Context, username string) error {
-	unixUser, err := c.getUnixUser(username)
+	log := appctx.GetLogger(ctx)
+
+	// Initialize the common fields of the NSReq
+	rq, err := c.initNSRequest(username)
 	if err != nil {
 		return err
 	}
-	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "recycle", "purge")
-	_, _, err = c.executeEOS(ctx, cmd)
+
+	msg := new(erpc.NSRequest_RecycleRequest)
+	msg.Cmd = erpc.NSRequest_RecycleRequest_RECYCLE_CMD(erpc.NSRequest_RecycleRequest_RECYCLE_CMD_value["PURGE"])
+
+	rq.Command = &erpc.NSRequest_Recycle{msg}
+
+	// Now send the req and see what happens
+	resp, err := c.cl.Exec(context.Background(), rq)
+	if err != nil {
+		log.Warn().Err(err).Str("username", username).Str("err", err.Error())
+		return err
+	}
+
+	if resp == nil {
+		return errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' ", username))
+	}
+
+	log.Info().Str("username", username).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+
 	return err
 }
 
