@@ -120,10 +120,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if h.isPublicShare(r, strings.ReplaceAll(head, "/", "")) {
 				h.updatePublicShare(w, r, strings.ReplaceAll(head, "/", ""))
 				return
-			} else {
-				h.updateShare(w, r, head) // TODO PUT is used with incomplete data to update a share
-				return
 			}
+			h.updateShare(w, r, head) // TODO PUT is used with incomplete data to update a share
 		case "DELETE":
 			h.removeShare(w, r, head)
 		default:
