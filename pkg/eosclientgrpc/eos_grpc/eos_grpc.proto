@@ -14,10 +14,8 @@
 //                 You should have received a copy of the GNU General Public License
 //                 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
-// Cmopile for Go with:
+// NOTE: Compile for Go with:
 // protoc ./eos_grpc.proto --go_out=plugins=grpc:.
-
 
 syntax = "proto3";
 
@@ -31,13 +29,13 @@ option go_package = "eos_grpc";
 
 service Eos {
   // Replies to a ping
-  rpc Ping (PingRequest) returns (PingReply) {}
+  rpc Ping (PingRequest) returns (PingReply) {}  
 
   // ---------------------------------------------------------------------
   // NAMESPACE
   // ---------------------------------------------------------------------
 
-  // Replies to MD requests with a stream
+  // Replies to MD requests with a stream 
   rpc MD (MDRequest) returns (stream MDResponse) {}
 
   // Replies to Find requests with a stream
@@ -47,7 +45,7 @@ service Eos {
   rpc NsStat (NsStatRequest) returns (NsStatResponse) {}
 
   // Replies to an insert
-  rpc ContainerInsert (ContainerInsertRequest) returns (InsertReply) {}
+  rpc ContainerInsert (ContainerInsertRequest) returns (InsertReply) {}  
   rpc FileInsert (FileInsertRequest) returns (InsertReply) {}
 
   // Replies to a NsRequest operation
@@ -58,7 +56,7 @@ service Eos {
   // ---------------------------------------------------------------------
 
   // Manila Driver
-  rpc ManilaServerRequest (ManilaRequest) returns (ManilaResponse) {}
+  rpc ManilaServerRequest (ManilaRequest) returns (ManilaResponse) {}  
 }
 
 message PingRequest {
@@ -135,8 +133,26 @@ message ContainerMdProto {
   bytes path = 13;
 }
 
-enum TYPE { FILE = 0; CONTAINER = 1; LISTING = 2; STAT = 3;}
+enum TYPE { FILE = 0; CONTAINER = 1; LISTING = 2; STAT = 3;}  
 
+enum QUOTATYPE { USER = 0; GROUP = 2; PROJECT = 3; ALL = 4;}
+
+message QuotaProto { 
+  bytes path = 1;                // quota node path
+  string name = 2;               // associated name for the given type
+  QUOTATYPE type = 3;            // user,group,project or all quota
+  uint64 usedbytes = 4;          // bytes used physical
+  uint64 usedlogicalbytes = 5;   // bytes used logical 
+  uint64 usedfiles = 6;          // number of files used
+  uint64 maxbytes = 7;           // maximum number of bytes (volume quota)
+  uint64 maxlogicalbytes = 8;    // maximum number of logical bytes (logical volume quota)
+  uint64 maxfiles = 9;           // maximum number of files (inode quota)
+  float percentagusedbytes = 10; // percentage of volume quota used from 0 to 100
+  float percentagusedfiles = 11; // percentag of inode quota used from 0 to 100
+  string statusbytes = 12;       // status string for volume quota ok,warning,exceeded
+  string statusfiles = 13;       // status string for inode quota ok,warning,exceeded
+}
+  
 message RoleId {
   uint64 uid = 1;
   uint64 gid = 2;
@@ -197,7 +213,7 @@ message MDResponse {
 message FindRequest {
   TYPE type = 1;
   MDId id = 2;
-  RoleId role = 3;
+  RoleId role = 3;	
   string authkey = 4;
   uint64 maxdepth = 5;
   MDSelection selection = 6;
@@ -235,11 +251,11 @@ message NSRequest {
     bool recursive = 2;
     int64 mode = 3;
   }
-
+  
   message RmdirRequest {
     MDId id = 1;
   }
-
+ 
   message TouchRequest {
     MDId id = 1;
   }
@@ -277,7 +293,28 @@ message NSRequest {
   }
 
   message RecycleRequest {
-    MDId id = 1;
+    string key = 1; 
+    enum RECYCLE_CMD {
+      RESTORE = 0;
+      PURGE = 1;
+      LIST = 2;
+    }
+    RECYCLE_CMD cmd = 2;
+
+    message RestoreFlags {
+      bool force = 1;
+      bool mkpath = 2;
+      bool versions = 3;
+    }
+
+    message PurgeDate {
+      int32 year = 1;
+      int32 month = 2;
+      int32 day = 3;
+    }
+
+    RestoreFlags restoreflag = 3;
+    PurgeDate purgedate = 4;
   }
 
   message SetXAttrRequest {
@@ -289,7 +326,7 @@ message NSRequest {
 
   message ChownRequest {
     MDId id = 1;
-    RoleId owner = 2;
+    RoleId owner = 2;  
   }
 
   message ChmodRequest {
@@ -320,6 +357,11 @@ message NSRequest {
     ShareToken token = 1;
   }
 
+  message QuotaRequest {
+    bytes path = 1;
+    RoleId id = 2;
+  }
+
   string authkey = 1;
   RoleId role = 2;
   // Actual request data object
@@ -338,6 +380,7 @@ message NSRequest {
     ChmodRequest chmod       = 32;
     AclRequest acl           = 33;
     TokenRequest token       = 34;
+    QuotaRequest quota       = 35;
   }
 }
 
@@ -346,7 +389,7 @@ message NSRequest {
 message NSResponse {
   message ErrorResponse {
     int64 code = 1;
-    string msg = 2;
+    string msg = 2;	
   }
 
   message VersionResponse {
@@ -355,25 +398,44 @@ message NSResponse {
       Time   mtime = 2;
     }
     int64 code = 1;
-    string msg = 2;
+    string msg = 2;	
     repeated VersionInfo versions = 3;
   }
 
   message RecycleResponse {
     int64 code = 1;
-    string msg = 2;
+    string msg = 2;	
+    
+    message RecycleInfo {
+      enum DELETIONTYPE { FILE = 0;  TREE = 1; }
+      MDId   id = 1;
+      RoleId owner = 2;
+      Time   dtime = 3;
+      uint64 size = 4;
+      DELETIONTYPE type = 5;
+      string key = 6;
+    }   
+    
+    repeated RecycleInfo recycles = 3;
   }
 
   message AclResponse {
     int64 code = 1;
-    string msg = 2;
+    string msg = 2;	
     string rule = 3;
+  }
+
+  message QuotaResponse {
+    int64 code = 1;   
+    string msg = 2;   	
+    repeated QuotaProto quotanode = 3;
   }
 
   ErrorResponse       error = 1;
   VersionResponse     version = 2;
   RecycleResponse     recycle = 3;
   AclResponse         acl = 4;
+  QuotaResponse       quota = 5;
 }
 
 message NsStatRequest {
@@ -455,3 +517,5 @@ message ManilaResponse {
    string new_share_path = 6;
 
 }
+
+
