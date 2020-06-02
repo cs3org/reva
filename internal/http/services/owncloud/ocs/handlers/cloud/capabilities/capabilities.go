@@ -101,7 +101,7 @@ func (h *Handler) Init(c *config.Config) {
 	// h.c.Capabilities.Files.Undelete is boolean
 	// h.c.Capabilities.Files.Versioning is boolean
 
-	if h.c.Capabilities.Files.TusSupport == nil {
+	if h.c.Capabilities.Files.TusSupport == nil && !c.DisableTus {
 		// these are global capabilities
 		// TODO: infer from various TUS handlers from all known storages
 		h.c.Capabilities.Files.TusSupport = &data.CapabilitiesFilesTusSupport{

@@ -28,4 +28,5 @@ type Config struct {
 	Config       data.ConfigData       `mapstructure:"config"`
 	Capabilities data.CapabilitiesData `mapstructure:"capabilities"`
 	GatewaySvc   string                `mapstructure:"gatewaysvc"`
+	DisableTus   bool                  `mapstructure:"disable_tus"`
 }
