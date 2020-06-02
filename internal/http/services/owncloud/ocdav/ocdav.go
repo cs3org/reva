@@ -122,8 +122,7 @@ func (s *svc) Handler() http.Handler {
 		ctx := r.Context()
 		log := appctx.GetLogger(ctx)
 
-		// the webdav api is accessible from anywhere
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		addAccessHeaders(w, r)
 
 		// TODO(jfd): do we need this?
 		// fake litmus testing for empty namespace: see https://github.com/golang/net/blob/e514e69ffb8bc3c76a71ae40de0118d794855992/webdav/litmus_test_server.go#L58-L89
@@ -209,5 +208,29 @@ func unwrap(rid string) *provider.ResourceId {
 	return &provider.ResourceId{
 		StorageId: parts[0],
 		OpaqueId:  parts[1],
+	}
+}
+
+func addAccessHeaders(w http.ResponseWriter, r *http.Request) {
+	headers := w.Header()
+	// the webdav api is accessible from anywhere
+	headers.Set("Access-Control-Allow-Origin", "*")
+	// all resources served via the DAV endpoint should have the strictest possible as default
+	headers.Set("Content-Security-Policy", "default-src 'none';")
+	// disable sniffing the content type for IE
+	headers.Set("X-Content-Type-Options", "nosniff")
+	// https://msdn.microsoft.com/en-us/library/jj542450(v=vs.85).aspx
+	headers.Set("X-Download-Options", "noopen")
+	// Disallow iFraming from other domains
+	headers.Set("X-Frame-Options", "SAMEORIGIN")
+	// https://www.adobe.com/devnet/adobe-media-server/articles/cross-domain-xml-for-streaming.html
+	headers.Set("X-Permitted-Cross-Domain-Policies", "none")
+	// https://developers.google.com/webmasters/control-crawl-index/docs/robots_meta_tag
+	headers.Set("X-Robots-Tag", "none")
+	// enforce browser based XSS filters
+	headers.Set("X-XSS-Protection", "1; mode=block")
+
+	if r.TLS != nil {
+		headers.Set("Strict-Transport-Security", "max-age=63072000")
 	}
 }
