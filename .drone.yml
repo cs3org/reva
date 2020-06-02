@@ -50,7 +50,7 @@ steps:
     - make ci
 
 - name: lint
-  image: golangci/golangci-lint:1.26.0
+  image: golangci/golangci-lint:v1.26
   commands:
     - golangci-lint run
 
@@ -118,7 +118,7 @@ steps:
     - make ci
 
 - name: lint
-  image: golangci/golangci-lint:1.26.0
+  image: golangci/golangci-lint:v1.26
   commands:
     - golangci-lint run
 
