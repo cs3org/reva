@@ -118,7 +118,7 @@ steps:
     - make ci
 
 - name: lint
-  image: golangci/golangci-lint:latest
+  image: golangci/golangci-lint:1.26.0
   commands:
     - golangci-lint run
 
