@@ -136,8 +136,7 @@ func (fs *localfs) resolve(ctx context.Context, ref *provider.Reference) (string
 	}
 
 	if ref.GetId() != nil {
-		fn := path.Join("/", strings.TrimPrefix(ref.GetId().OpaqueId, "fileid-"))
-		return fn, nil
+		return fs.GetPathByID(ctx, ref.GetId())
 	}
 
 	// reference is invalid
@@ -266,8 +265,9 @@ func (fs *localfs) normalize(ctx context.Context, fi os.FileInfo, fn string) *pr
 		return nil
 	}
 
+	// A fileid is constructed like `fileid-url_encoded_path`. See GetPathByID for the inverse conversion
 	md := &provider.ResourceInfo{
-		Id:            &provider.ResourceId{OpaqueId: "fileid-" + strings.TrimPrefix(fp, "/")},
+		Id:            &provider.ResourceId{OpaqueId: "fileid-" + url.QueryEscape(fp)},
 		Path:          fp,
 		Type:          getResourceType(fi.IsDir()),
 		Etag:          calcEtag(ctx, fi),
@@ -323,10 +323,9 @@ func (fs *localfs) retrieveArbitraryMetadata(ctx context.Context, fn string) (*p
 }
 
 // GetPathByID returns the path pointed by the file id
-// In this implementation the file id is that path of the file without the first slash
-// thus the file id always points to the filename
+// In this implementation the file id is in the form `fileid-url_encoded_path`
 func (fs *localfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
-	return path.Join("/", strings.TrimPrefix(id.OpaqueId, "fileid-")), nil
+	return url.QueryUnescape(strings.TrimPrefix(id.OpaqueId, "fileid-"))
 }
 
 func role2CS3Permissions(mode string) *provider.ResourcePermissions {
