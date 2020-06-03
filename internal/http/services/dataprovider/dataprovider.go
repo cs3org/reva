@@ -135,7 +135,13 @@ func (s *svc) setHandler() (err error) {
 			log := appctx.GetLogger(r.Context())
 			log.Info().Msgf("tusd routing: path=%s", r.URL.Path)
 
-			switch r.Method {
+			method := r.Method
+			// https://github.com/tus/tus-resumable-upload-protocol/blob/master/protocol.md#x-http-method-override
+			if r.Header.Get("X-HTTP-Method-Override") != "" {
+				method = r.Header.Get("X-HTTP-Method-Override")
+			}
+
+			switch method {
 			// old fashioned download.
 
 			// GET is not part of the tus.io protocol
@@ -164,7 +170,13 @@ func (s *svc) setHandler() (err error) {
 		}))
 	} else {
 		s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			switch r.Method {
+			method := r.Method
+			// https://github.com/tus/tus-resumable-upload-protocol/blob/master/protocol.md#x-http-method-override
+			if r.Header.Get("X-HTTP-Method-Override") != "" {
+				method = r.Header.Get("X-HTTP-Method-Override")
+			}
+
+			switch method {
 			case "HEAD":
 				w.WriteHeader(http.StatusOK)
 				return
