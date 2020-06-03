@@ -65,6 +65,7 @@ type Config struct {
 	WebdavNamespace string `mapstructure:"webdav_namespace"`
 	ChunkFolder     string `mapstructure:"chunk_folder"`
 	GatewaySvc      string `mapstructure:"gatewaysvc"`
+	DisableTus      bool   `mapstructure:"disable_tus"`
 }
 
 type svc struct {
