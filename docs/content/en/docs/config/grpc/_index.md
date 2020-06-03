@@ -1,39 +1,39 @@
 ---
-title: "HTTP"
-linkTitle: "HTTP"
-weight: 10
+title: "GRPC"
+linkTitle: "GRPC"
+weight: 11
 description: >
-  Configuration reference for HTTP
+  Configuration reference for GRPC
 ---
 
 {{% dir name="network" type="string" default="tcp" %}}
-Specifies the network type.
+Specifies the network type. 
 {{< highlight toml >}}
-[http]
+[grpc]
 network = "tcp"
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="address" type="string" default="localhost" %}}
+{{% dir name="address" type="string" default="localhost:9999" %}}
 Specifies the bind address interface.
 {{< highlight toml >}}
-[http]
-address = "0.0.0.0"
+[grpc]
+address = "0.0.0.0:9999"
 {{< /highlight >}}
 {{% /dir %}}
 
 {{% dir name="enabled_services" type="[string]" default="[]" %}}
-List of HTTP services to be enabled.
+List of GRPC services to be enabled.
 {{< highlight toml >}}
-[http]
+[grpc]
 enabled_services = ["helloworld"]
 {{< /highlight >}}
 {{% /dir %}}
 
 {{% dir name="enabled_middlewares" type="[string]" default="[]" %}}
-List of HTTP middlewares to be enabled.
+List of GRPC middlewares to be enabled.
 {{< highlight toml >}}
-[http]
-enabled_middlewares = ["cors"]
+[grpc]
+enabled_interceptors = ["auth"]
 {{< /highlight >}}
 {{% /dir %}}
