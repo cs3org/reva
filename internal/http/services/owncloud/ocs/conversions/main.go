@@ -130,7 +130,7 @@ type ShareData struct {
 	// Whether the recipient was notified, by mail, about the share being shared with them.
 	MailSend string `json:"mail_send" xml:"mail_send"`
 	// Name of the public share
-	Name string `json:"name,omitempty" xml:"name,omitempty"`
+	Name string `json:"name" xml:"name"`
 	// URL of the public share
 	URL string `json:"url,omitempty" xml:"url,omitempty"`
 	// Attributes associated
