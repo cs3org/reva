@@ -332,10 +332,26 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// phoenix sends: {"permissions": 15}. See ocPermToRole struct for mapping
-	permKey, err := strconv.Atoi(r.FormValue("permissions"))
-	if err != nil {
-		log.Error().Str("createShare", "shares").Msgf("invalid type: %T", permKey)
+	if statRes.Status.Code != rpc.Code_CODE_OK {
+		if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "resource not found", fmt.Errorf("error creating share on non-existing resource"))
+			return
+		}
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error when querying resource", fmt.Errorf("error when querying resource information while creating share, status %d", statRes.Status.Code))
+		return
+	}
+
+	// TODO: handle legacy "publicUpload" arg that overrides permissions differently depending on the scenario
+	// https://github.com/owncloud/core/blob/v10.4.0/apps/files_sharing/lib/Controller/Share20OcsController.php#L447
+
+	// TODO: the default might change depending on allowed permissions and configs
+	permKey := 1
+	if r.FormValue("permissions") != "" {
+		// phoenix sends: {"permissions": 15}. See ocPermToRole struct for mapping
+		permKey, err := strconv.Atoi(r.FormValue("permissions"))
+		if err != nil {
+			log.Error().Str("createShare", "shares").Str("permissions", r.FormValue("permissions")).Msgf("invalid type: %T", permKey)
+		}
 	}
 
 	role, ok := ocPermToRole[permKey]
