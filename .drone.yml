@@ -50,7 +50,7 @@ steps:
     - make ci
 
 - name: lint
-  image: golangci/golangci-lint:latest
+  image: golangci/golangci-lint:v1.26
   commands:
     - golangci-lint run
 
@@ -118,9 +118,9 @@ steps:
     - make ci
 
 - name: lint
-  image: golangci/golangci-lint:latest
+  image: golangci/golangci-lint:v1.26
   commands:
-    - golangci-lint run
+    - golangci-lint run --timeout 2m0s
 
 - name: license-check
   image: golang:1.13
@@ -165,7 +165,7 @@ steps:
   # will slow down build slightly. In order to get jsonpb deprecation.
   image: golangci/golangci-lint:latest
   commands:
-    - golangci-lint run
+    - golangci-lint run --timeout 2m0s
 
 - name: license-check
   image: golang:1.13
