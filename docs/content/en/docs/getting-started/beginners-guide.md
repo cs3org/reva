@@ -8,7 +8,7 @@ description: >
 
 This guide gives a basic introduction to Reva and describes some simple tasks that can be done with it.
 This guide assumes that Reva is already installed on the reader's machine.
-If this isn't the case refer to [Install Reva]({{< relref "docs/Getting Started/install-reva" >}})
+If this isn't the case refer to [Install Reva]({{< relref "docs/getting-started/install-reva" >}})
 
 This guide describes how to start and stop the **Reva daemon (revad)**, and reload its configuration, explains the structure of the configuration
 file and describes how to set up revad to serve some basic services.
@@ -44,7 +44,7 @@ If you don't specify the pid file with the -p flag Reva will create one in the O
 You can always obtain the location of the file from the logs
 {{% /alert %}}
 
-Once revad is started, it can be controlled by invoking the executable with the -s parameter. Use the following syntax: 
+Once revad is started, it can be controlled by invoking the executable with the -s parameter. Use the following syntax:
 
 ```
 revad -s <signal> -p /var/tmp/revad.pid
@@ -56,7 +56,7 @@ Where signal may be one of the following:
 * quit — graceful shutdown
 * reload — reloading the configuration file (forks a new process)
 
- For example, to stop revad gracefully, the following command can be executed: 
+ For example, to stop revad gracefully, the following command can be executed:
 
 ```
 revad -s quit -p /var/tmp/revad.pid
@@ -66,7 +66,7 @@ revad -s quit -p /var/tmp/revad.pid
 This command should be executed under the same user that started the server.
 {{% /alert %}}
 
-Changes made in the configuration file will not be applied until the command to reload configuration is sent to revad. Let's reload the config: 
+Changes made in the configuration file will not be applied until the command to reload configuration is sent to revad. Let's reload the config:
 
 ```
 revad -s reload -p /var/tmp/revad.pid
@@ -74,19 +74,19 @@ revad -s reload -p /var/tmp/revad.pid
 
 Once the main process receives the signal to reload configuration, it checks the syntax validity of the new configuration file and tries to apply the configuration provided in it. If this is a success, the main process forks a new process. The new forked process will gracefully kill the parent process. During a period of time until all ongoing requests are served, both processes will share the same network socket, the old parent process will serve ongoing requests and the new process will serve only new requests. No requests are dropped during the reload. If the provided configuration is invalid, the forked process will die and the master process will continue serving requests.
 
-A signal may also be sent to the revad process with the help of Unix tools such as the *kill* utility. In this case a signal is sent directly to a process with a given process ID. The process ID of the revad master process is written to the pid file, as configured with the *-s* flag. For example, if the master process ID is 1610, to send the QUIT signal resulting in revad’s graceful shutdown, execute: 
+A signal may also be sent to the revad process with the help of Unix tools such as the *kill* utility. In this case a signal is sent directly to a process with a given process ID. The process ID of the revad master process is written to the pid file, as configured with the *-s* flag. For example, if the master process ID is 1610, to send the QUIT signal resulting in revad’s graceful shutdown, execute:
 
 ```
 kill -s QUIT 1610
 ```
 
-For getting the list of all running revad processes, the *ps* utility may be used, for example, in the following way: 
+For getting the list of all running revad processes, the *ps* utility may be used, for example, in the following way:
 
 ```
 ps -ax | grep revad
 ```
 
-For more information on sending signals to revad, see [Controlling Reva]({{< ref "docs/Getting Started/control-reva" >}}).
+For more information on sending signals to revad, see [Controlling Reva]({{< ref "docs/getting-started/control-reva" >}}).
 
 ## Running your first service
 
@@ -132,5 +132,4 @@ Let's analyze the output:
 
 **Congratulations, you've run your first Reva service!**
 
-You can head to [Tutorials]({{< ref "docs/Tutorials" >}}) to find more advanced guides.
-
+You can head to [Tutorials]({{< ref "docs/tutorials" >}}) to find more advanced guides.
