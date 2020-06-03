@@ -38,7 +38,7 @@ func init() {
 type config struct {
 	Prefix     string                            `mapstructure:"prefix" voltaire:"data;The prefix to be used for this HTTP service"`
 	Driver     string                            `mapstructure:"driver" voltaire:"json;The storage driver to be used."`
-	Drivers    map[string]map[string]interface{} `mapstructure:"drivers" voltaire:"[FS]({{< relref \"docs/config/packages/storage/fs/\" >}});The configuration for the storage driver"`
+	Drivers    map[string]map[string]interface{} `mapstructure:"drivers" voltaire:"url:docs/config/packages/storage/fs/;The configuration for the storage driver"`
 	DisableTus bool                              `mapstructure:"disable_tus" voltaire:"false;Whether to disable TUS uploads."`
 }
 
