@@ -14,11 +14,11 @@ driver = "json"
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="drivers" type="map[string]map[string]interface{}" default="docs/config/packages/storage/fs/" %}}
+{{% dir name="drivers" type="map[string]map[string]interface{}" default="/docs/config/packages/storage/fs/" %}}
 The configuration for the storage driver.
 {{< highlight toml >}}
 [grpc.services.storageprovider]
-drivers = "[drivers]({{< relref "docs/config/packages/storage/fs/" >}})"
+drivers = "[drivers]({{< ref "/docs/config/packages/storage/fs/" >}})"
 {{< /highlight >}}
 {{% /dir %}}
 
