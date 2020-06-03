@@ -48,16 +48,16 @@ func init() {
 type config struct {
 	MountPath          string                            `mapstructure:"mount_path"`
 	MountID            string                            `mapstructure:"mount_id"`
-	Driver             string                            `mapstructure:"driver"`
-	Drivers            map[string]map[string]interface{} `mapstructure:"drivers"`
-	PathWrapper        string                            `mapstructure:"path_wrapper"`
-	PathWrappers       map[string]map[string]interface{} `mapstructure:"path_wrappers"`
-	TmpFolder          string                            `mapstructure:"tmp_folder"`
-	DataServerURL      string                            `mapstructure:"data_server_url"`
-	ExposeDataServer   bool                              `mapstructure:"expose_data_server"` // if true the client will be able to upload/download directly to it
-	EnableHomeCreation bool                              `mapstructure:"enable_home_creation"`
-	DisableTus         bool                              `mapstructure:"disable_tus"`
-	AvailableXS        map[string]uint32                 `mapstructure:"available_checksums"`
+	Driver             string                            `mapstructure:"driver" voltaire:"json;The storage driver to be used."`
+	Drivers            map[string]map[string]interface{} `mapstructure:"drivers" voltaire:"[FS]({{< relref \"docs/config/packages/storage/fs/\" >}});The configuration for the storage driver."`
+	PathWrapper        string                            `mapstructure:"path_wrapper" voltaire:";;Path wrapper."`
+	PathWrappers       map[string]map[string]interface{} `mapstructure:"path_wrappers" voltaire:";;The configuration for the path wrapper."`
+	TmpFolder          string                            `mapstructure:"tmp_folder" voltaire:"/var/tmp;Path to temporary folder."`
+	DataServerURL      string                            `mapstructure:"data_server_url" voltaire:"http://localhost/data; The URL for the data server."`
+	ExposeDataServer   bool                              `mapstructure:"expose_data_server" voltaire:"false;Whether to expose data server."` // if true the client will be able to upload/download directly to it
+	EnableHomeCreation bool                              `mapstructure:"enable_home_creation" voltaire:"false;Whether to enable home creation."`
+	DisableTus         bool                              `mapstructure:"disable_tus" voltaire:"false;Whether to disable TUS uploads."`
+	AvailableXS        map[string]uint32                 `mapstructure:"available_checksums" voltaire:"false;List of available checksums."`
 }
 
 type service struct {

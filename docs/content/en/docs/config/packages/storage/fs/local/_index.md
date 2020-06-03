@@ -31,7 +31,7 @@ user_layout = "{{.Username}}"
 {{% /dir %}}
 
 {{% dir name="share_folder" type="string" default="/MyShares" %}}
- Path for storing share references.
+Path for storing share references.
 {{< highlight toml >}}
 [storage.fs.local]
 share_folder = "/MyShares"
