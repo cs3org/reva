@@ -83,8 +83,8 @@ func (mntx *Mentix) initialize(conf *config.Configuration, log *zerolog.Logger) 
 
 	// Log some infos
 	exporterNames := make([]string, len(mntx.exporters))
-	for _, exporter := range mntx.exporters {
-		exporterNames = append(exporterNames, exporter.GetName())
+	for idx, exporter := range mntx.exporters {
+		exporterNames[idx] = exporter.GetName()
 	}
 	log.Info().Msgf("mentix started with connector: %v; exporters: %v; update interval: %v", mntx.connector.GetName(), strings.Join(exporterNames, ","), duration)
 
