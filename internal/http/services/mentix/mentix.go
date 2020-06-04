@@ -92,9 +92,7 @@ func parseConfig(m map[string]interface{}) (*config.Configuration, error) {
 	return cfg, nil
 }
 
-func applyDefaultConfig(*config.Configuration) {
-	conf := &config.Configuration{}
-
+func applyDefaultConfig(conf *config.Configuration) {
 	if conf.Prefix == "" {
 		conf.Prefix = serviceName
 	}
