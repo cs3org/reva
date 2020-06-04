@@ -127,7 +127,7 @@ func AvailableExporters(conf *config.Configuration) ([]Exporter, error) {
 
 // RegisteredExporterIDs returns a list of all registered exporter IDs.
 func RegisteredExporterIDs() []string {
-	var keys []string
+	keys := make([]string, 0, len(registeredExporters))
 	for k := range registeredExporters {
 		keys = append(keys, k)
 	}
