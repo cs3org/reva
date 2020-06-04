@@ -48,7 +48,7 @@ func init() {
 type config struct {
 	MountPath          string                            `mapstructure:"mount_path"`
 	MountID            string                            `mapstructure:"mount_id"`
-	Driver             string                            `mapstructure:"driver" voltaire:"json;The storage driver to be used."`
+	Driver             string                            `mapstructure:"driver" voltaire:"local;The storage driver to be used."`
 	Drivers            map[string]map[string]interface{} `mapstructure:"drivers" voltaire:"url:docs/config/packages/storage/fs;The configuration for the storage driver."`
 	PathWrapper        string                            `mapstructure:"path_wrapper" voltaire:";;Path wrapper."`
 	PathWrappers       map[string]map[string]interface{} `mapstructure:"path_wrappers" voltaire:";;The configuration for the path wrapper."`

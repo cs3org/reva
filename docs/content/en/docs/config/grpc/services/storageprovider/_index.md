@@ -6,18 +6,18 @@ description: >
   Configuration for the Storage Provider service
 ---
 
-{{% dir name="driver" type="string" default="json" %}}
+{{% dir name="driver" type="string" default="local" %}}
 The storage driver to be used.
 {{< highlight toml >}}
 [grpc.services.storageprovider]
-driver = "json"
+driver = "local"
 {{< /highlight >}}
 {{% /dir %}}
 
 {{% dir name="drivers" type="map[string]map[string]interface{}" default="docs/config/packages/storage/fs" %}}
 The configuration for the storage driver.
 {{< highlight toml >}}
-[grpc.services.storageprovider]
+[grpc.services.storageprovider.drivers]
 "[docs/config/packages/storage/fs]({{< ref "docs/config/packages/storage/fs" >}})"
 {{< /highlight >}}
 {{% /dir %}}
