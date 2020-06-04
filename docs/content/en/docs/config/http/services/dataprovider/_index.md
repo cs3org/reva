@@ -26,7 +26,7 @@ driver = "json"
 The configuration for the storage driver
 {{< highlight toml >}}
 [http.services.dataprovider]
-drivers = "[drivers]({{< ref "docs/config/packages/storage/fs" >}})"
+[docs/config/packages/storage/fs]({{< ref "docs/config/packages/storage/fs" >}})
 {{< /highlight >}}
 {{% /dir %}}
 

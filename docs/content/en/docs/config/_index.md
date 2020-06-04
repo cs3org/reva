@@ -1,7 +1,7 @@
 ---
 title: "Configuration"
 linkTitle: "Configuration"
-weight: 3
+weight: 10
 description: >
   Configuration reference for all Reva directives
 ---

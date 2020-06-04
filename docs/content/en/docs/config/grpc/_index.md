@@ -1,7 +1,7 @@
 ---
 title: "GRPC"
 linkTitle: "GRPC"
-weight: 11
+weight: 10
 description: >
   Configuration reference for GRPC
 ---
