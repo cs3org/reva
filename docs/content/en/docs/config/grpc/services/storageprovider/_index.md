@@ -18,7 +18,7 @@ driver = "json"
 The configuration for the storage driver.
 {{< highlight toml >}}
 [grpc.services.storageprovider]
-"[fs]({{< ref "docs/config/packages/storage/fs" >}})"
+"[docs/config/packages/storage/fs]({{< ref "docs/config/packages/storage/fs" >}})"
 {{< /highlight >}}
 {{% /dir %}}
 
