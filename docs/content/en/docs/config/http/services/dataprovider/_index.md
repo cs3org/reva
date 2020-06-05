@@ -6,6 +6,8 @@ description: >
   Configuration for the DataProvider service
 ---
 
+struct config
+
 {{% dir name="prefix" type="string" default="data" %}}
 The prefix to be used for this HTTP service
 {{< highlight toml >}}

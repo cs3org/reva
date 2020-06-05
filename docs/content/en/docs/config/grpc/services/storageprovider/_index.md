@@ -6,6 +6,8 @@ description: >
   Configuration for the Storage Provider service
 ---
 
+struct config
+
 {{% dir name="driver" type="string" default="local" %}}
 The storage driver to be used.
 {{< highlight toml >}}

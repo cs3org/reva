@@ -6,6 +6,8 @@ description: >
   Configuration reference for Local Storage
 ---
 
+struct config
+
 {{% dir name="root" type="string" default="/var/tmp/reva/" %}}
 Path of root directory for user storage.
 {{< highlight toml >}}
