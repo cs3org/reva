@@ -320,7 +320,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		}
 		// Finder needs the the getLastModified property to work.
 		t := utils.TSToTime(md.Mtime).UTC()
-		lastModifiedString := t.Format(time.RFC1123)
+		lastModifiedString := t.Format(time.RFC1123Z)
 		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("d:getlastmodified", lastModifiedString))
 
 		if md.Checksum != nil {
@@ -475,7 +475,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				case "getlastmodified": // both
 					// TODO we cannot find out if md.Mtime is set or not because ints in go default to 0
 					t := utils.TSToTime(md.Mtime).UTC()
-					lastModifiedString := t.Format(time.RFC1123)
+					lastModifiedString := t.Format(time.RFC1123Z)
 					propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getlastmodified", lastModifiedString))
 				default:
 					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:"+pf.Prop[i].Local, ""))

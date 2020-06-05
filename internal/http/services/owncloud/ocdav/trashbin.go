@@ -286,7 +286,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, pf *pr
 	// TODO(jfd): if the path we list here is taken from the ListRecycle request we rely on the gateway to prefix it with the mount point
 
 	t := utils.TSToTime(item.DeletionTime).UTC()
-	dTime := t.Format(time.RFC1123)
+	dTime := t.Format(time.RFC1123Z)
 
 	// when allprops has been requested
 	if pf.Allprop != nil {
