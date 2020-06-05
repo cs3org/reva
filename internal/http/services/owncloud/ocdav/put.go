@@ -300,7 +300,7 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 	w.Header().Set("OC-FileId", wrapResourceID(info2.Id))
 	w.Header().Set("OC-ETag", info2.Etag)
 	t := utils.TSToTime(info2.Mtime)
-	lastModifiedString := t.Format(time.RFC1123)
+	lastModifiedString := t.Format(time.RFC1123Z)
 	w.Header().Set("Last-Modified", lastModifiedString)
 	w.Header().Set("X-OC-MTime", "accepted")
 

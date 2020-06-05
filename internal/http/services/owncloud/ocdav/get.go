@@ -125,7 +125,7 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 	w.Header().Set("OC-FileId", wrapResourceID(info.Id))
 	w.Header().Set("OC-ETag", info.Etag)
 	t := utils.TSToTime(info.Mtime)
-	lastModifiedString := t.Format(time.RFC1123)
+	lastModifiedString := t.Format(time.RFC1123Z)
 	w.Header().Set("Last-Modified", lastModifiedString)
 	/*
 		if md.Checksum != "" {

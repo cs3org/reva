@@ -403,7 +403,7 @@ func (s *svc) handlePutChunked(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("OC-FileId", md2.Id)
 		w.Header().Set("OC-ETag", md2.Etag)
 		t := time.Unix(int64(md2.Mtime), 0)
-		lastModifiedString := t.Format(time.RFC1123)
+		lastModifiedString := t.Format(time.RFC1123Z)
 		w.Header().Set("Last-Modified", lastModifiedString)
 		w.Header().Set("X-OC-MTime", "accepted")
 
