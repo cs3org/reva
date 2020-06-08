@@ -1,4 +1,3 @@
-
 ---
 title: "OCM share functionality in Reva"
 linkTitle: "OCM share functionality"
@@ -16,14 +15,14 @@ This is a guide on how to try the share functionality in Reva in your local envi
 * curl or wget
 
 ## 1. Clone the Reva repos
-Clone the reva repo from https://github.com/cs3org/reva 
+Clone the reva repo from https://github.com/cs3org/reva
 
 ```
 git clone https://github.com/cs3org/reva
 ```
 
 ## 2. Build Reva
-Go to the reva folder 
+Go to the reva folder
 
 ```
 cd reva
@@ -44,11 +43,11 @@ Now we need to start two Reva deamons corresponding to two different mesh provid
 
 ```
 cd examples/ocmd/ && mkdir -p /tmp/reva
-``` 
+```
 
 ```
 ../../cmd/revad/revad -c ocmd-server-1.toml & ../../cmd/revad/revad -c ocmd-server-2.toml &
-``` 
+```
 
 This should start two Reva daemon (revad) services at the aforementioned endpoints.
 
@@ -75,7 +74,7 @@ curl --location --request POST \
 An HTTP OK response indicates that the user marie has accepted an invite from einstein to receive shared files.
 
 ## 6. Sharing functionality
-Creating shares at the origin is specific to each vendor and would have different implementations across providers. Thus, to skip the OCS HTTP implementation provided with reva, we would directly make calls to the exposed GRPC Gateway services through the reva CLI. 
+Creating shares at the origin is specific to each vendor and would have different implementations across providers. Thus, to skip the OCS HTTP implementation provided with reva, we would directly make calls to the exposed GRPC Gateway services through the reva CLI.
 ### 6.1 Create a share on the original user's provider
 #### 6.1.1 Create an example file
 ```
@@ -93,7 +92,7 @@ If you now get an error saying that you need to run reva configure, do as follow
 ./cmd/reva/reva configure
 ```
 
-and use 
+and use
 
 ```
 host: localhost:19000
@@ -145,7 +144,7 @@ Reva CLI stores the configuration and authentication tokens in `.reva.config` an
 ./cmd/reva/reva configure
 ```
 
-and use 
+and use
 
 ```
 host: localhost:17000
@@ -175,4 +174,3 @@ Call the ocm-share-list-received method.
 | e327bf7d-cda7-4cdc-bb82-fbeef017dd16 | http://cernbox.cern.ch | 4c510ada-c86b-4815-8820-42cdf82c3d51 | storage_id:"123e4567-e89b-12d3-a456-426655440000" opaque_id:"fileid-home/example.txt"  | permissions:<get_path:true get_quota:true initiate_file_download:true list_grants:true list_container:true list_file_versions:true list_recycle:true stat:true >  | GRANTEE_TYPE_USER | http://cesnet.cz | f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c | 2020-04-27 15:23:18 +0200 CEST | 2020-04-27 15:23:18 +0200 CEST | SHARE_STATE_PENDING |
 +--------------------------------------+------------------------+--------------------------------------+----------------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------------+------------------+--------------------------------------+--------------------------------+--------------------------------+---------------------+
 ```
-

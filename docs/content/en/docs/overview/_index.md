@@ -11,12 +11,12 @@ description: >
 Reva is an open source platform developed in the Go programming language with two purposes:
 
 1. As an interoperability platform to link platforms with the storage and application providers.
-2. As the reference implementation of the CS3APIS. 
+2. As the reference implementation of the CS3APIS.
 
 #### The problem  we try to solve
 
 Today any cloud sync and share provider either closed-source (Dropbox, Google Drive, ...) or open source (ownCloud, Seafile, ...) have their own catalogue
-of integrations with many applicaition providers. The pitty about these integrations is that they are ad-hoc to the cloud vendor, making it impossible to port 
+of integrations with many applicaition providers. The pitty about these integrations is that they are ad-hoc to the cloud vendor, making it impossible to port
 anywhere else.
 
 {{< imgproc "overview.png" Fit "800x600" >}}
@@ -25,8 +25,8 @@ anywhere else.
 #### The goal
 
 Our ultimate goal is that any open source project and software vendor that provides either storage or applications to an EFSS platform
-will adopt the CS3APIS as the facto standard way to collaborate. Having all the partners using the same APIs will enable all of us for a new dimension 
-of portability of applications across vendors. 
+will adopt the CS3APIS as the facto standard way to collaborate. Having all the partners using the same APIs will enable all of us for a new dimension
+of portability of applications across vendors.
 
 {{< imgproc "final.png" Fit "800x600">}}
 {{< /imgproc >}}
@@ -38,7 +38,7 @@ In the mean time, we have another approach to make these systems talk to each ot
 #### The approach with Reva
 
 The motivation is to move out the ad-hoc APIs from the sync and share platform to Reva. As Reva is a vendor-neutral and open source
-project we expect that many institutions and application providers will contribute with their ad-hoc APIs to Reva, creating an inter-operability platform 
+project we expect that many institutions and application providers will contribute with their ad-hoc APIs to Reva, creating an inter-operability platform
 that could potencially connect to an eco-system of applications and storage catalogs as never seen before.
 
 The platform acts as middleware component in your current infrastructure, and by connecting your cloud to Reva you gain access
@@ -56,12 +56,11 @@ How many times have you been using an app that you lost when you switched cloud 
 and runs alongside your infrastructure.
 
 * **What is it *not yet* good for?**: Reva is still very young to be used in production. We are working hard to reach a stable version soon with decent integrations to storage
-and applications. We don't want to re-invent the wheel so we have in mind that Reva will provide integrations with [rclone](https://rclone.org/) for multiple-storage support and with other protocols out there like [WOPI](https://wopi.readthedocs.io/en/latest/) 
+and applications. We don't want to re-invent the wheel so we have in mind that Reva will provide integrations with [rclone](https://rclone.org/) for multiple-storage support and with other protocols out there like [WOPI](https://wopi.readthedocs.io/en/latest/)
 , [Learning Tools Interoperability](https://www.imsglobal.org/activity/learning-tools-interoperability) and
 [OpenCloudMesh](https://rawgit.com/GEANT/OCM-API/v1/docs.html) to enable seamless collaboration.
 
 ## Where should I go next?
 
-* [Getting Started]({{< ref "docs/Getting Started" >}}): Get started with the project
-* [Concepts]({{< ref "docs/Concepts" >}}): Deep-dive into the conceps behind Reva 
-
+* [Getting Started]({{< ref "docs/getting-started" >}}): Get started with the project
+* [Concepts]({{< ref "docs/concepts" >}}): Deep-dive into the conceps behind Reva
