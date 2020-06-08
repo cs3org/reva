@@ -24,6 +24,14 @@ client_id = "-"
 {{< /highlight >}}
 {{% /dir %}}
 
+{{% dir name="client_secret" type="string" default="-" %}}
+Client Secret [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/user/manager/rest/rest.go#L65)
+{{< highlight toml >}}
+[user.manager.rest]
+client_secret = "-"
+{{< /highlight >}}
+{{% /dir %}}
+
 {{% dir name="oidc_token_endpoint" type="string" default="https://keycloak-dev.cern.ch/auth/realms/cern/api-access/token" %}}
 Endpoint to generate token to access the API [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/user/manager/rest/rest.go#L66)
 {{< highlight toml >}}
