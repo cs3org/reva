@@ -46,18 +46,24 @@ func init() {
 }
 
 type config struct {
-	MountPath          string                            `mapstructure:"mount_path"`
-	MountID            string                            `mapstructure:"mount_id"`
-	Driver             string                            `mapstructure:"driver" voltaire:"local;The storage driver to be used."`
-	Drivers            map[string]map[string]interface{} `mapstructure:"drivers" voltaire:"url:docs/config/packages/storage/fs;The configuration for the storage driver."`
-	PathWrapper        string                            `mapstructure:"path_wrapper" voltaire:";;Path wrapper."`
-	PathWrappers       map[string]map[string]interface{} `mapstructure:"path_wrappers" voltaire:";;The configuration for the path wrapper."`
-	TmpFolder          string                            `mapstructure:"tmp_folder" voltaire:"/var/tmp;Path to temporary folder."`
-	DataServerURL      string                            `mapstructure:"data_server_url" voltaire:"http://localhost/data; The URL for the data server."`
-	ExposeDataServer   bool                              `mapstructure:"expose_data_server" voltaire:"false;Whether to expose data server."` // if true the client will be able to upload/download directly to it
-	EnableHomeCreation bool                              `mapstructure:"enable_home_creation" voltaire:"false;Whether to enable home creation."`
-	DisableTus         bool                              `mapstructure:"disable_tus" voltaire:"false;Whether to disable TUS uploads."`
-	AvailableXS        map[string]uint32                 `mapstructure:"available_checksums" voltaire:"false;List of available checksums."`
+	MountPath string `mapstructure:"mount_path"`
+	MountID   string `mapstructure:"mount_id"`
+	Driver    string `mapstructure:"driver" docs:"local;The storage driver to be used."`
+	// The configuration for the storage driver.
+	Drivers map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:docs/config/packages/storage/fs"`
+	// Path wrapper.
+	PathWrapper string `mapstructure:"path_wrapper" docs:"/var/tmp/reva/"`
+	// The configuration
+	// for the path wrapper.
+	PathWrappers     map[string]map[string]interface{} `mapstructure:"path_wrappers" docs:"nil"`
+	TmpFolder        string                            `mapstructure:"tmp_folder" docs:"/var/tmp;Path to temporary folder."`
+	DataServerURL    string                            `mapstructure:"data_server_url" docs:"http://localhost/data;The URL for the data server."`
+	ExposeDataServer bool                              `mapstructure:"expose_data_server" docs:"false;Whether to expose data server."` // if true the client will be able to upload/download directly to it
+	/* Whether to enable
+	home creation.*/
+	EnableHomeCreation bool              `mapstructure:"enable_home_creation" docs:"false;Whether to enable home creation."`
+	DisableTus         bool              `mapstructure:"disable_tus" docs:"false;Whether to disable TUS uploads."`
+	AvailableXS        map[string]uint32 `mapstructure:"available_checksums" docs:"nil;List of available checksums."`
 }
 
 type service struct {
