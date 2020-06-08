@@ -122,6 +122,8 @@ github.com/coreos/go-semver v0.2.0/go.mod h1:nnelYz7RCh+5ahJtPPxZlU+153eP4D4r3Ee
 github.com/coreos/go-systemd v0.0.0-20190321100706-95778dfbb74e/go.mod h1:F5haX7vjVVG0kc13fIWeqUViNPyEJxv/OmvnBo0Yme4=
 github.com/coreos/pkg v0.0.0-20180928190104-399ea9e2e55f/go.mod h1:E3G3o1h8I7cfcXa63jLwjI0eiQQMgzzUDFVpN/nH/eA=
 github.com/cpuguy83/go-md2man v1.0.10/go.mod h1:SmD6nW6nTyfqj6ABTjUi3V3JVMnlJmwcJI5acqYI6dE=
+github.com/cs3org/cato v0.0.0-20200608112415-2a19233975d8 h1:KZ2DgVt2zVQI15QRmjDo0/7cATtbySrfTsKripSPNKc=
+github.com/cs3org/cato v0.0.0-20200608112415-2a19233975d8/go.mod h1:6GOQIYvO+ZepxBKY9geuIAF7qfozDeDsTrX0BW9LZ0k=
 github.com/cs3org/go-cs3apis v0.0.0-20200422090600-d9e5166bebfe h1:gQgullcz2/nn1epVPhX3805nszWkSolM8m6CYLF9Y04=
 github.com/cs3org/go-cs3apis v0.0.0-20200422090600-d9e5166bebfe/go.mod h1:UXha4TguuB52H14EMoSsCqDj7k8a/t7g4gVP+bgY5LY=
 github.com/cs3org/go-cs3apis v0.0.0-20200422142632-c499f9c3d1a5 h1:a7CYnlPHnjASUB1l42KANyr+7ijnMdBo4akNTT2LNyY=
