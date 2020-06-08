@@ -206,6 +206,15 @@ func New(opt *Options) *Client {
 		fmt.Printf("--- GetFileInfoByPath to '%s' gave response '%s'\n", "/eos", frep.File)
 	}
 
+	fmt.Printf("--- Going to stat '%s'\n", "/eos-idonotexist")
+	frep1, err := c.GetFileInfoByPath(tctx, "furano", "/eos-idonotexist")
+	if err != nil {
+		fmt.Printf("--- GetFileInfoByPath '%s' failed with err '%s'\n", "/eos-idonotexist", err)
+		//	return nil
+	} else {
+		fmt.Printf("--- GetFileInfoByPath to '%s' gave response '%s'\n", "/eos-idonotexist", frep1.File)
+	}
+
 	fmt.Printf("--- Going to list '%s'\n", "/eos")
 	lrep, err := c.List(context.Background(), "furano", "/eos")
 	if err != nil {
@@ -508,7 +517,9 @@ func (c *Client) getACLForPath(ctx context.Context, username, path string) (*acl
 		return nil, errtypes.InternalError(fmt.Sprintf("nil acl for username: '%s' path: '%s'", username, path))
 	}
 
-	log.Info().Str("username", username).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+	if resp.GetError() != nil {
+		log.Info().Str("username", username).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+	}
 
 	aclret, err := acl.Parse(resp.Acl.Rule, acl.ShortTextForm)
 
@@ -680,8 +691,14 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, username, path string) (
 	}
 	rsp, err := resp.Recv()
 	if err != nil {
-		fmt.Printf("--- Recv('%s') failed with err '%s'\n", path, err)
-		return nil, err
+		fmt.Printf("--- Recv('%s') gave err '%s'\n", path, err)
+
+		// FIXME: this is very very bad and poisonous for the project!!!!!!!
+		// Apparently here we have to assume that an error in Recv() means "file not found"
+		// - "File not found is not an error", it's a legitimate result of a legitimate check
+		// - Assuming that any error means file not found is doubly poisonous
+		return nil, errtypes.NotFound(err.Error())
+		//return nil, nil
 	}
 
 	fmt.Printf("--- MD('%s') gave response '%s'\n", path, rsp)
@@ -831,7 +848,7 @@ func (c *Client) CreateDir(ctx context.Context, username, path string) error {
 	msg := new(erpc.NSRequest_MkdirRequest)
 
 	// Let's put 750 as permissions, assuming that EOS will apply some mask
-	md, err := strconv.ParseUint("0o750", 10, 64)
+	md, err := strconv.ParseUint("750", 8, 64)
 	if err != nil {
 		return err
 	}
