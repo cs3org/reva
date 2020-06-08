@@ -60,7 +60,7 @@ type config struct {
 	// Client ID needed to authenticate
 	ClientID string `mapstructure:"client_id" docs:"-"`
 	// Client Secret
-	ClientSecret string `mapstructure:"client_secret" docs:"-'`
+	ClientSecret string `mapstructure:"client_secret" docs:"-"`
 
 	// Endpoint to generate token to access the API
 	OIDCTokenEndpoint string `mapstructure:"oidc_token_endpoint" docs:"https://keycloak-dev.cern.ch/auth/realms/cern/api-access/token"`
