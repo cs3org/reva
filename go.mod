@@ -10,7 +10,7 @@ require (
 	github.com/aws/aws-sdk-go v1.31.13
 	github.com/cheggaaa/pb v1.0.28
 	github.com/coreos/go-oidc v2.2.1+incompatible
-	github.com/cs3org/cato v0.0.0-20200608112415-2a19233975d8
+	github.com/cs3org/cato v0.0.0-20200609102907-4116d2de0add
 	github.com/cs3org/go-cs3apis v0.0.0-20200515145316-7048e6a5a73d
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/eventials/go-tus v0.0.0-20190617130015-9db47421f6a0

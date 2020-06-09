@@ -49,15 +49,15 @@ func init() {
 }
 
 type config struct {
-	Root        string `mapstructure:"root"`
-	EnableHome  bool   `mapstructure:"enable_home"`
-	UserLayout  string `mapstructure:"user_layout"`
+	Root        string `mapstructure:"root" docs:"/var/tmp/reva/;Path of root directory for user storage."`
+	EnableHome  bool   `mapstructure:"enable_home" docs:"false;Whether to have individual home directories for users."`
+	UserLayout  string `mapstructure:"user_layout" docs:"{{.Username}};Template for user home directories"`
+	ShareFolder string `mapstructure:"share_folder" docs:"/MyShares;Path for storing share references."`
 	Uploads     string `mapstructure:"uploads"`
 	RecycleBin  string `mapstructure:"recycle_bin"`
 	Versions    string `mapstructure:"versions"`
 	Shadow      string `mapstructure:"shadow"`
 	References  string `mapstructure:"references"`
-	ShareFolder string `mapstructure:"share_folder"`
 }
 
 type localfs struct {

@@ -8,8 +8,8 @@ GIT_DIRTY=`git diff-index --quiet HEAD -- || echo "dirty-"`
 VERSION=`git describe --always`
 GO_VERSION=`go version | awk '{print $$3}'`
 
-default: build test lint
-release: deps build test lint
+default: build test lint gen-doc
+release: deps build test lint gen-doc
 
 off:
 	GOPROXY=off
@@ -57,6 +57,8 @@ build-ci: off
 lint-ci:
 	go run tools/check-license/check-license.go
 
+gen-doc:
+	go run tools/generate-documentation/main.go
 
 # to be run in CI platform
 ci: build-ci test  lint-ci
