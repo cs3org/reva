@@ -22,6 +22,7 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"strconv"
 	"time"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -127,6 +128,7 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 	t := utils.TSToTime(info.Mtime)
 	lastModifiedString := t.Format(time.RFC1123Z)
 	w.Header().Set("Last-Modified", lastModifiedString)
+	w.Header().Set("Content-Length", strconv.FormatUint(info.Size, 10))
 	/*
 		if md.Checksum != "" {
 			w.Header().Set("OC-Checksum", md.Checksum)
