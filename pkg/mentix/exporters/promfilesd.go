@@ -115,7 +115,7 @@ func (exporter *PrometheusFileSDExporter) createScrapeConfig(site *meshdata.Site
 		Targets: []string{path.Join(host, endpoint.Path)},
 		Labels: map[string]string{
 			"site":         site.Name,
-			"service-type": endpoint.Type.Name,
+			"service_type": endpoint.Type.Name,
 		},
 	}
 }
