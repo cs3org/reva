@@ -59,6 +59,10 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	}
 	conf.GatewaySvc = sharedconf.GetGatewaySVC(conf.GatewaySvc)
 
+	if conf.Prefix == "" {
+		conf.Prefix = "ocm"
+	}
+
 	s := &svc{
 		Conf: conf,
 	}
@@ -70,6 +74,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	s.NotificationsHandler.init(s.Conf)
 	s.ConfigHandler.init(s.Conf)
 	s.InvitesHandler.init(s.Conf)
+
 	return s, nil
 }
 
