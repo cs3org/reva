@@ -21,6 +21,7 @@ package ocdav
 import (
 	"net/http"
 	"path"
+	"strconv"
 	"time"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -70,4 +71,5 @@ func (s *svc) handleHead(w http.ResponseWriter, r *http.Request, ns string) {
 	lastModifiedString := t.Format(time.RFC1123Z)
 	w.Header().Set("Last-Modified", lastModifiedString)
 	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Length", strconv.FormatUint(info.Size, 10))
 }
