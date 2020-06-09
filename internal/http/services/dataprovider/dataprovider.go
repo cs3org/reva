@@ -52,19 +52,6 @@ type svc struct {
 	storage storage.FS
 }
 
-type WrappedTusHandler struct {
-	tusd.UnroutedHandler
-}
-
-func (handler *WrappedTusHandler) sendResp(w http.ResponseWriter, r *http.Request, status int) {
-	// TODO: inject extra response headers
-	w.Header().Add("X-Override-Hack", "WrappedTusHandler")
-	w.WriteHeader(status)
-
-	// FIXME: how to call parent log ?
-	//handler.UnroutedHandler.log("ResponseOutgoing", "status", strconv.Itoa(status), "method", r.Method, "path", r.URL.Path, "requestId", getRequestId(r))
-}
-
 type WrappedResponseWriter struct {
 	http.ResponseWriter
 	statusCode int
@@ -146,13 +133,15 @@ type Composable interface {
 	UseIn(composer *tusd.StoreComposer)
 }
 
-func (s *svc) writeFileInfoHeaders(w http.ResponseWriter, r *http.Request) error {
+func (s *svc) writeFileInfoHeaders(w http.ResponseWriter, r *http.Request, dest string) error {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 	log.Debug().Msg("dataprovider: writeFileInfoHeaders()")
-	fn := r.URL.Path
+	fn := dest
 
+	// FIXME: seems trim prefix doesn't trim anything
 	fsfn := strings.TrimPrefix(fn, s.conf.Prefix)
+	log.Debug().Str("dest", dest).Str("fsfn", fsfn).Msg("writeFileInfoHeaders")
 	//ref := &provider.Reference{Spec: &provider.Reference_Path{Path: fsfn}}
 	// TODO: try reading info data
 	ref := &provider.Reference{Spec: &provider.Reference_Path{Path: fsfn}}
@@ -162,6 +151,7 @@ func (s *svc) writeFileInfoHeaders(w http.ResponseWriter, r *http.Request) error
 		return err
 	}
 
+	log.Debug().Interface("fileid", sRes.GetId()).Msg("Got fileid")
 	w.Header().Add("Content-Type", sRes.GetMimeType())
 	w.Header().Set("ETag", sRes.GetEtag())
 	// FIXME: implement wrap on this layer
@@ -187,8 +177,9 @@ func (s *svc) setHandler() (err error) {
 		composable.UseIn(composer)
 
 		config := tusd.Config{
-			BasePath:      s.conf.Prefix,
-			StoreComposer: composer,
+			BasePath:              s.conf.Prefix,
+			StoreComposer:         composer,
+			NotifyCompleteUploads: true,
 			//Logger:        logger, // TODO use logger
 		}
 
@@ -227,17 +218,38 @@ func (s *svc) setHandler() (err error) {
 			case "PATCH":
 				// HACK: make it possible to send headers after the TUS handler has already sent the response
 				wrappedWriter := &WrappedResponseWriter{ResponseWriter: w}
-				handler.PatchFile(wrappedWriter, r)
 
-				//s.writeFileInfoHeaders(w, r)
-				//if w.Header().Get("Upload-Offset") == w.Header().Get("Upload-Length")
-				w.Header().Add("X-Test", "123")
+				var uploadStorage map[string]string
+
+				// HACK: need to get access to the upload info, which is only accessible
+				// through the events
+				quit := make(chan struct{})
+				go func() {
+					for {
+						select {
+						case info := <-handler.CompleteUploads:
+							if info.HTTPRequest.URI == r.RequestURI {
+								uploadStorage = info.Upload.Storage
+							}
+						case <-quit:
+							return
+						}
+					}
+				}()
+
+				handler.PatchFile(wrappedWriter, r)
+				close(quit)
+
+				if uploadStorage != nil {
+					log.Debug().Interface("uploadStorage", uploadStorage).Msg("Upload complete")
+					s.writeFileInfoHeaders(w, r, uploadStorage["InternalDestination"])
+				}
+
 				wrappedWriter.SendResponse()
 			// PUT provides a wrapper around the POST call, to save the caller from
 			// the trouble of configuring the tus client.
 			case "PUT":
 				s.doTusPut(w, r)
-				s.writeFileInfoHeaders(w, r)
 			// TODO Only attach the DELETE handler if the Terminate() method is provided
 			case "DELETE":
 				handler.DelFile(w, r)
