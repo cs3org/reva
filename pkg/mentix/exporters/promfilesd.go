@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
 
 	"github.com/rs/zerolog"
@@ -112,7 +111,7 @@ func (exporter *PrometheusFileSDExporter) createScrapeConfigs() []*prometheus.Sc
 
 func (exporter *PrometheusFileSDExporter) createScrapeConfig(site *meshdata.Site, host string, endpoint *meshdata.ServiceEndpoint) *prometheus.ScrapeConfig {
 	return &prometheus.ScrapeConfig{
-		Targets: []string{path.Join(host, endpoint.Path)},
+		Targets: []string{host},
 		Labels: map[string]string{
 			"site":         site.Name,
 			"service_type": endpoint.Type.Name,
