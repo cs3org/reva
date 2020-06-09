@@ -350,6 +350,15 @@ func (fs *ocfs) getRecyclePath(ctx context.Context) (string, error) {
 	return path.Join(fs.c.DataDirectory, u.GetUsername(), "files_trashbin/files"), nil
 }
 
+func (fs *ocfs) getVersionRecyclePath(ctx context.Context) (string, error) {
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
+		return "", err
+	}
+	return path.Join(fs.c.DataDirectory, u.GetUsername(), "files_trashbin/files_versions"), nil
+}
+
 func (fs *ocfs) unwrap(ctx context.Context, internal string) (external string) {
 	if fs.c.EnableHome {
 		u := user.ContextMustGetUser(ctx)
@@ -1198,40 +1207,20 @@ func (fs *ocfs) Delete(ctx context.Context, ref *provider.Reference) (err error)
 	// np is the path on disk ... we need only the path relative to root
 	origin := path.Dir(fs.unwrap(ctx, np))
 
-	// and we need to get rid of the user prefix
-	parts := strings.SplitN(origin, "/", 3)
-	fp := ""
-	// parts = "", "<username>", "foo/bar.txt"
-	switch len(parts) {
-	case 2:
-		fp = "/"
-	case 3:
-		fp = path.Join("/", parts[2])
-	default:
-		return errors.Wrap(err, "ocfs: error creating trashbin dir "+rp)
-	}
-
-	err = fs.trash(ctx, np, rp, fp)
+	err = fs.trash(ctx, np, rp, origin)
 	if err != nil {
-		return errors.Wrap(err, "ocfs: error deleting file "+np)
+		return errors.Wrapf(err, "ocfs: error deleting file %s", np)
 	}
-
-	vp := fs.getVersionsPath(ctx, np)
-
-	// Ignore error since the only possible error is malformed pattern.
-	versions, _ := filepath.Glob(vp + ".v*")
-	for _, v := range versions {
-		err := fs.trash(ctx, v, rp, fp)
-		if err != nil {
-			return errors.Wrap(err, "ocfs: error deleting file "+v)
-		}
+	err = fs.trashVersions(ctx, np, origin)
+	if err != nil {
+		return errors.Wrapf(err, "ocfs: error deleting versions of file %s", np)
 	}
 	return nil
 }
 
-func (fs *ocfs) trash(ctx context.Context, np string, rp string, fp string) error {
+func (fs *ocfs) trash(ctx context.Context, np string, rp string, origin string) error {
 	// set origin location in metadata
-	if err := xattr.Set(np, trashOriginPrefix, []byte(fp)); err != nil {
+	if err := xattr.Set(np, trashOriginPrefix, []byte(origin)); err != nil {
 		return err
 	}
 
@@ -1250,6 +1239,28 @@ func (fs *ocfs) trash(ctx context.Context, np string, rp string, fp string) erro
 	}
 
 	return fs.propagate(ctx, path.Dir(np))
+}
+
+func (fs *ocfs) trashVersions(ctx context.Context, np string, origin string) error {
+	vp := fs.getVersionsPath(ctx, np)
+	vrp, err := fs.getVersionRecyclePath(ctx)
+	if err != nil {
+		return errors.Wrap(err, "error resolving versions recycle path")
+	}
+
+	if err := os.MkdirAll(vrp, 0700); err != nil {
+		return errors.Wrap(err, "ocfs: error creating trashbin dir "+vrp)
+	}
+
+	// Ignore error since the only possible error is malformed pattern.
+	versions, _ := filepath.Glob(vp + ".v*")
+	for _, v := range versions {
+		err := fs.trash(ctx, v, vrp, origin)
+		if err != nil {
+			return errors.Wrap(err, "ocfs: error deleting file "+v)
+		}
+	}
+	return nil
 }
 
 func (fs *ocfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (err error) {
