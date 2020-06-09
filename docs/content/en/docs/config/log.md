@@ -1,7 +1,7 @@
 ---
 title: "Log"
 linkTitle: "Log"
-weight: 2
+weight: 5
 description: >
   Directives to configure the logging system
 ---

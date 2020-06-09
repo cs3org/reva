@@ -1,7 +1,7 @@
 ---
 title: "Core"
 linkTitle: "Core"
-weight: 1
+weight: 5
 description: >
   Directives to tweak the running Reva process.
 ---

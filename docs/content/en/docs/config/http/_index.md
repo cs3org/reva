@@ -7,7 +7,7 @@ description: >
 ---
 
 {{% dir name="network" type="string" default="tcp" %}}
-Specifies the network type. 
+Specifies the network type.
 {{< highlight toml >}}
 [http]
 network = "tcp"
