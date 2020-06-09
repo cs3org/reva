@@ -163,6 +163,38 @@ type Client struct {
 	cl  erpc.EosClient
 }
 
+// Create and connect a grpc eos Client
+func newgrpc(ctx context.Context, opt *Options) (erpc.EosClient, error) {
+	log := appctx.GetLogger(ctx)
+	log.Log().Str("Connecting to ", "'"+opt.GrpcURI+"'").Msg("")
+
+	conn, err := grpc.Dial(opt.GrpcURI, grpc.WithInsecure())
+	if err != nil {
+		log.Log().Str("Error connecting to ", "'"+opt.GrpcURI+"' ").Str("err:", err.Error()).Msg("")
+		return nil, err
+	}
+
+	log.Log().Str("Going to ping ", "'"+opt.GrpcURI+"' ").Msg("")
+	ecl := erpc.NewEosClient(conn)
+	// If we can't ping... treat it as an error... we will see if this has to be kept, for now it's practical
+	prq := new(erpc.PingRequest)
+	prq.Authkey = opt.Authkey
+	prq.Message = []byte("hi this is a ping from reva")
+	prep, err := ecl.Ping(ctx, prq)
+	if err != nil {
+		fmt.Printf("--- Ping to '%s' failed with err '%s'\n", opt.GrpcURI, err)
+		return nil, err
+	}
+
+	if prep == nil {
+		log.Log().Str("Ping to ", "'"+opt.GrpcURI+"' ").Str("gave nil response", "").Msg("")
+		return nil, errtypes.InternalError("nil response from ping")
+	}
+
+	log.Log().Str("Ping to ", "'"+opt.GrpcURI+"' ").Msg(" was successful")
+	return ecl, nil
+}
+
 // New creates a new client with the given options.
 func New(opt *Options) *Client {
 	tlog := logger.New().With().Int("pid", os.Getpid()).Logger()
@@ -173,29 +205,18 @@ func New(opt *Options) *Client {
 	c.opt = opt
 
 	tctx := appctx.WithLogger(context.Background(), &tlog)
-	tlog.Log().Str("ffff", "ddddd").Msg("")
 
-	fmt.Printf("--- Connecting to '%s'\n", opt.GrpcURI)
-	conn, err := grpc.Dial(opt.GrpcURI, grpc.WithInsecure())
+	// Let's be successful if the ping was ok. This is an initialization phase
+	// and we enforce the server to be up
+	// This will likely improve as soon as the behaviour of grpc is understood
+	// in the case of server restarts or failures
+	ccl, err := newgrpc(tctx, opt)
 	if err != nil {
-		fmt.Printf("--- Ping to '%s' gave err '%s'\n", opt.GrpcURI, err)
 		return nil
 	}
+	c.cl = ccl
 
-	fmt.Printf("--- Going to ping to '%s'\n", opt.GrpcURI)
-	c.cl = erpc.NewEosClient(conn)
-
-	// If we can't ping... exit immediately... we will see if this has to be kept, for now it's practical
-	prq := new(erpc.PingRequest)
-	prq.Authkey = opt.Authkey
-	prq.Message = []byte("hi this is a ping from reva")
-	prep, err := c.cl.Ping(tctx, prq)
-	if err != nil {
-		fmt.Printf("--- Ping to '%s' failed with err '%s'\n", opt.GrpcURI, err)
-		//	return nil
-	}
-
-	fmt.Printf("--- Ping to '%s' gave response '%s'\n", opt.GrpcURI, prep)
+	// Some connection tests, useful for logging in this dev phase
 
 	fmt.Printf("--- Going to stat '%s'\n", "/eos")
 	frep, err := c.GetFileInfoByPath(tctx, "furano", "/eos")
@@ -235,15 +256,7 @@ func New(opt *Options) *Client {
 		}
 	}
 
-	// Let's be successful if the ping was ok. This is an initialization phase
-	// and we enforce the server to be up
-	// TBD: some watchdog to automatically reconnect, yet it's not yet clear to me
-	//  the behaviour of grpc in the case of failing/restarting servers. To be tested!
-	if prep != nil {
-		return c
-	}
-
-	return nil
+	return c
 }
 
 func (c *Client) getUnixUser(username string) (*gouser.User, error) {
@@ -575,7 +588,7 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, username string, inode 
 
 	log.Info().Uint64("inode", inode).Msg("grpc response")
 
-	return c.grpcMDResponseToFileInfo(rsp)
+	return c.grpcMDResponseToFileInfo(rsp, "")
 }
 
 // SetAttr sets an extended attributes on a path.
@@ -707,7 +720,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, username, path string) (
 	}
 
 	log.Print("MD--------")
-	return c.grpcMDResponseToFileInfo(rsp)
+	return c.grpcMDResponseToFileInfo(rsp, "")
 
 }
 
@@ -807,7 +820,7 @@ func (c *Client) Chmod(ctx context.Context, username, mode, path string) error {
 
 	msg := new(erpc.NSRequest_ChmodRequest)
 
-	md, err := strconv.ParseUint(mode, 10, 64)
+	md, err := strconv.ParseUint(mode, 8, 64)
 	if err != nil {
 		return err
 	}
@@ -964,14 +977,15 @@ func (c *Client) Rename(ctx context.Context, username, oldPath, newPath string) 
 }
 
 // List the contents of the directory given by path
-func (c *Client) List(ctx context.Context, username, path string) ([]*FileInfo, error) {
+func (c *Client) List(ctx context.Context, username, dpath string) ([]*FileInfo, error) {
+	log := appctx.GetLogger(ctx)
 
 	// Stuff filename, uid, gid into the MDRequest type
 	fdrq := new(erpc.FindRequest)
 	fdrq.Maxdepth = 1
 	fdrq.Type = erpc.TYPE_LISTING
 	fdrq.Id = new(erpc.MDId)
-	fdrq.Id.Path = []byte(path)
+	fdrq.Id.Path = []byte(dpath)
 
 	unixUser, err := c.getUnixUser(username)
 	if err != nil {
@@ -995,12 +1009,13 @@ func (c *Client) List(ctx context.Context, username, path string) ([]*FileInfo, 
 	// Now send the req and see what happens
 	resp, err := c.cl.Find(context.Background(), fdrq)
 	if err != nil {
-		fmt.Printf("--- Find('%s') failed with err '%s'\n", path, err)
+		fmt.Printf("--- Find('%s') failed with err '%s'\n", dpath, err)
 		return nil, err
 	}
 
 	var mylst []*FileInfo
-
+	var i int
+	i = 0
 	for {
 		rsp, err := resp.Recv()
 		if err != nil {
@@ -1008,23 +1023,29 @@ func (c *Client) List(ctx context.Context, username, path string) ([]*FileInfo, 
 				return mylst, nil
 			}
 
-			fmt.Printf("--- Recv('%s') failed with err '%s'\n", path, err)
+			fmt.Printf("--- Recv('%s') failed with err '%s'\n", dpath, err)
 			return nil, err
 		}
 
-		fmt.Printf("--- Find('%s') gave response '%s'\n", path, rsp)
+		fmt.Printf("--- Find('%s') gave item '%s'\n", dpath, rsp)
 		if rsp == nil {
-			return nil, errtypes.NotFound(fmt.Sprintf("%s", path))
+			return nil, errtypes.NotFound(fmt.Sprintf("%s", dpath))
 		}
 
-		myitem, err := c.grpcMDResponseToFileInfo(rsp)
+		myitem, err := c.grpcMDResponseToFileInfo(rsp, dpath)
 		if err != nil {
 			fmt.Printf("--- Could not convert item. err '%s'\n", err)
 			return nil, err
 		}
+
+		i++
+		if i == 1 {
+			continue
+		}
 		mylst = append(mylst, myitem)
 	}
 
+	log.Info().Str("username", username).Str("path", dpath).Int("nitems", i-1).Msg("")
 	return mylst, nil
 }
 
@@ -1330,7 +1351,7 @@ func (c *Client) parseQuota(path, raw string) (int, int, error) {
 	return 0, 0, nil
 }
 
-func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse) (*FileInfo, error) {
+func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse, namepfx string) (*FileInfo, error) {
 	if st.Cmd == nil && st.Fmd == nil {
 		return nil, errors.Wrap(errtypes.NotSupported(""), "Invalid response (st.Cmd and st.Fmd are nil)")
 	}
@@ -1344,7 +1365,11 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse) (*FileInfo, error
 		fi.UID = st.Fmd.Uid
 		fi.GID = st.Fmd.Gid
 		fi.MTimeSec = st.Fmd.Mtime.Sec
-		fi.File = string(st.Fmd.Name)
+		if namepfx == "" {
+			fi.File = string(st.Fmd.Name)
+		} else {
+			fi.File = namepfx + "/" + string(st.Fmd.Name)
+		}
 
 		for k, v := range st.Fmd.Xattrs {
 			if fi.Attrs == nil {
@@ -1352,7 +1377,6 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse) (*FileInfo, error
 			}
 			fi.Attrs[k] = string(v)
 		}
-		fi.Size = st.Fmd.Size
 
 		fi.Size = st.Fmd.Size
 
@@ -1361,7 +1385,11 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse) (*FileInfo, error
 		fi.UID = st.Cmd.Uid
 		fi.GID = st.Cmd.Gid
 		fi.MTimeSec = st.Cmd.Mtime.Sec
-		fi.File = string(st.Cmd.Name)
+		if namepfx == "" {
+			fi.File = string(st.Cmd.Name)
+		} else {
+			fi.File = namepfx + "/" + string(st.Cmd.Name)
+		}
 
 		for k, v := range st.Cmd.Xattrs {
 			if fi.Attrs == nil {

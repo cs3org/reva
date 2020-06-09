@@ -861,7 +861,7 @@ func (fs *eosfs) createShadowHome(ctx context.Context) error {
 		return errors.Wrap(err, "eos: error chowning directory")
 	}
 
-	err = fs.c.Chmod(ctx, "root", "2770", home)
+	err = fs.c.Chmod(ctx, "root", "770", home)
 	if err != nil {
 		return errors.Wrap(err, "eos: error chmoding directory")
 	}
@@ -940,7 +940,7 @@ func (fs *eosfs) createNominalHome(ctx context.Context) error {
 		return errors.Wrap(err, "eos: error chowning directory")
 	}
 
-	err = fs.c.Chmod(ctx, "root", "2770", home)
+	err = fs.c.Chmod(ctx, "root", "770", home)
 	if err != nil {
 		return errors.Wrap(err, "eos: error chmoding directory")
 	}
