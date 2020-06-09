@@ -52,6 +52,41 @@ type svc struct {
 	storage storage.FS
 }
 
+type WrappedTusHandler struct {
+	tusd.UnroutedHandler
+}
+
+func (handler *WrappedTusHandler) sendResp(w http.ResponseWriter, r *http.Request, status int) {
+	// TODO: inject extra response headers
+	w.Header().Add("X-Override-Hack", "WrappedTusHandler")
+	w.WriteHeader(status)
+
+	// FIXME: how to call parent log ?
+	//handler.UnroutedHandler.log("ResponseOutgoing", "status", strconv.Itoa(status), "method", r.Method, "path", r.URL.Path, "requestId", getRequestId(r))
+}
+
+type WrappedResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (w *WrappedResponseWriter) WriteHeader(statusCode int) {
+	w.statusCode = statusCode
+	// delay this
+}
+
+func (w *WrappedResponseWriter) SendResponse() {
+	w.ResponseWriter.WriteHeader(w.statusCode)
+}
+
+func (w *WrappedResponseWriter) Header() http.Header {
+	return w.ResponseWriter.Header()
+}
+
+func (w *WrappedResponseWriter) Write(bytes []byte) (int, error) {
+	return w.ResponseWriter.Write(bytes)
+}
+
 // New returns a new datasvc
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	conf := &config{}
@@ -190,9 +225,14 @@ func (s *svc) setHandler() (err error) {
 			case "HEAD":
 				handler.HeadFile(w, r)
 			case "PATCH":
-				handler.PatchFile(w, r)
-				// FIXME: we can't set additional headers on the already sent response
-				s.writeFileInfoHeaders(w, r)
+				// HACK: make it possible to send headers after the TUS handler has already sent the response
+				wrappedWriter := &WrappedResponseWriter{ResponseWriter: w}
+				handler.PatchFile(wrappedWriter, r)
+
+				//s.writeFileInfoHeaders(w, r)
+				//if w.Header().Get("Upload-Offset") == w.Header().Get("Upload-Length")
+				w.Header().Add("X-Test", "123")
+				wrappedWriter.SendResponse()
 			// PUT provides a wrapper around the POST call, to save the caller from
 			// the trouble of configuring the tus client.
 			case "PUT":
