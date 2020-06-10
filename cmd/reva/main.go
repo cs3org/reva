@@ -76,9 +76,7 @@ func main() {
 	mainUsage := createMainUsage(cmds)
 
 	// Verify that a subcommand has been provided
-	// os.Arg[0] is the main command
-	// os.Arg[1] will be the subcommand
-	if len(os.Args) < 2 {
+	if len(flag.Args()) < 1 {
 		fmt.Println(mainUsage)
 		os.Exit(1)
 	}
@@ -86,18 +84,18 @@ func main() {
 	// Verify a configuration file exists.
 	// If if does not, create one
 	c, err := readConfig()
-	if err != nil && os.Args[1] != "configure" {
+	if err != nil && flag.Args()[0] != "configure" {
 		fmt.Println("reva is not initialized, run \"reva configure\"")
 		os.Exit(1)
-	} else if os.Args[1] != "configure" {
+	} else if flag.Args()[1] != "configure" {
 		conf = c
 	}
 
 	// Run command
-	action := os.Args[1]
+	action := flag.Args()[0]
 	for _, v := range cmds {
 		if v.Name == action {
-			if err := v.Parse(os.Args[2:]); err != nil {
+			if err := v.Parse(flag.Args()[1:]); err != nil {
 				fmt.Println(err)
 				os.Exit(1)
 			}
