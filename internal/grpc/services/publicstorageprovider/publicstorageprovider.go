@@ -198,14 +198,12 @@ func (s *service) initiateFileDownload(ctx context.Context, req *provider.Initia
 		return nil, err
 	}
 
-	res := &provider.InitiateFileDownloadResponse{
+	return &provider.InitiateFileDownloadResponse{
 		Opaque:           req.Opaque,
 		Status:           &rpc.Status{Code: rpc.Code_CODE_OK},
 		DownloadEndpoint: targetURL.String(),
 		Expose:           true,
-	}
-
-	return res, nil
+	}, nil
 }
 
 func isOCStorage(q string) bool {
