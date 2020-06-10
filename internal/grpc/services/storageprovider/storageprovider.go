@@ -48,16 +48,15 @@ func init() {
 }
 
 type config struct {
-	MountPath          string                            `mapstructure:"mount_path" docs:"/;The path where the file system would be mounted."`
-	MountID            string                            `mapstructure:"mount_id" docs:"-;The ID of the mounted file system."`
-	Driver             string                            `mapstructure:"driver" docs:"local;The storage driver to be used."`
-	Drivers            map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:docs/config/packages/storage/fs"`
-	TmpFolder          string                            `mapstructure:"tmp_folder" docs:"/var/tmp;Path to temporary folder."`
-	DataServerURL      string                            `mapstructure:"data_server_url" docs:"http://localhost/data;The URL for the data server."`
-	ExposeDataServer   bool                              `mapstructure:"expose_data_server" docs:"false;Whether to expose data server."` // if true the client will be able to upload/download directly to it
-	EnableHomeCreation bool                              `mapstructure:"enable_home_creation" docs:"false"`
-	DisableTus         bool                              `mapstructure:"disable_tus" docs:"false;Whether to disable TUS uploads."`
-	AvailableXS        map[string]uint32                 `mapstructure:"available_checksums" docs:"nil;List of available checksums."`
+	MountPath        string                            `mapstructure:"mount_path" docs:"/;The path where the file system would be mounted."`
+	MountID          string                            `mapstructure:"mount_id" docs:"-;The ID of the mounted file system."`
+	Driver           string                            `mapstructure:"driver" docs:"local;The storage driver to be used."`
+	Drivers          map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:docs/config/packages/storage/fs"`
+	TmpFolder        string                            `mapstructure:"tmp_folder" docs:"/var/tmp;Path to temporary folder."`
+	DataServerURL    string                            `mapstructure:"data_server_url" docs:"http://localhost/data;The URL for the data server."`
+	ExposeDataServer bool                              `mapstructure:"expose_data_server" docs:"false;Whether to expose data server."` // if true the client will be able to upload/download directly to it
+	DisableTus       bool                              `mapstructure:"disable_tus" docs:"false;Whether to disable TUS uploads."`
+	AvailableXS      map[string]uint32                 `mapstructure:"available_checksums" docs:"nil;List of available checksums."`
 }
 
 func (c *config) init() {
@@ -322,17 +321,6 @@ func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*p
 }
 
 func (s *service) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
-	/*
-		relativeHome, err := s.storage.GetHome(ctx)
-		if err != nil {
-			st := status.NewInternal(ctx, err, "error getting home")
-			return &provider.GetHomeResponse{
-				Status: st,
-			}, nil
-		}
-	*/
-
-	//home := path.Join(s.mountPath, path.Clean(relativeHome))
 	home := path.Join(s.mountPath)
 
 	res := &provider.GetHomeResponse{
@@ -345,15 +333,6 @@ func (s *service) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*p
 
 func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
 	log := appctx.GetLogger(ctx)
-	if !s.conf.EnableHomeCreation {
-		err := errtypes.NotSupported("storageprovider: create home directories not enabled")
-		log.Err(err).Msg("storageprovider: home creation is disabled")
-		st := status.NewUnimplemented(ctx, err, "creating home directories is disabled by configuration")
-		return &provider.CreateHomeResponse{
-			Status: st,
-		}, nil
-
-	}
 	if err := s.storage.CreateHome(ctx); err != nil {
 		st := status.NewInternal(ctx, err, "error creating home")
 		log.Err(err).Msg("storageprovider: error calling CreateHome of storage driver")

@@ -2,7 +2,6 @@
 [grpc.services.gateway]
 [grpc.services.storageregistry]
 [grpc.services.storageprovider]
-enable_home_creation = true
 [grpc.services.authprovider]
 [grpc.services.authregistry]
 [grpc.services.userprovider]
