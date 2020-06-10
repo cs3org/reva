@@ -64,16 +64,8 @@ expose_data_server = false
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="enable_home_creation" type="bool" default=false %}}
- [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L58)
-{{< highlight toml >}}
-[grpc.services.storageprovider]
-enable_home_creation = false
-{{< /highlight >}}
-{{% /dir %}}
-
 {{% dir name="disable_tus" type="bool" default=false %}}
-Whether to disable TUS uploads. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L59)
+Whether to disable TUS uploads. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L58)
 {{< highlight toml >}}
 [grpc.services.storageprovider]
 disable_tus = false
@@ -81,7 +73,7 @@ disable_tus = false
 {{% /dir %}}
 
 {{% dir name="available_checksums" type="map[string]uint32" default=nil %}}
-List of available checksums. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L60)
+List of available checksums. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L59)
 {{< highlight toml >}}
 [grpc.services.storageprovider]
 available_checksums = nil
