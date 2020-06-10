@@ -30,11 +30,12 @@ var (
 
 	gitCommit, buildDate, version, goVersion string
 
-	insecure bool
+	insecure, skipverify bool
 )
 
 func init() {
-	flag.BoolVar(&insecure, "insecure", false, "Disables grpc security transport")
+	flag.BoolVar(&insecure, "insecure", false, "disables grpc transport security")
+	flag.BoolVar(&skipverify, "skip-verify", false, "whether a client verifies the server's certificate chain and host name.")
 	flag.Parse()
 
 }
