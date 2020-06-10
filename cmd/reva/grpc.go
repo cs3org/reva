@@ -20,8 +20,11 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log"
+
+	"google.golang.org/grpc/credentials"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -52,7 +55,14 @@ func getClient() (gateway.GatewayAPIClient, error) {
 }
 
 func getConn() (*grpc.ClientConn, error) {
-	return grpc.Dial(conf.Host, grpc.WithInsecure())
+	if insecure {
+		return grpc.Dial(conf.Host, grpc.WithInsecure())
+	}
+	// TODO(labkode): if in the future we want client-side certificate validation,
+	// we need to load the client cert here
+	clientTLSConfig := &tls.Config{}
+	creds := credentials.NewTLS(clientTLSConfig)
+	return grpc.Dial(conf.Host, grpc.WithTransportCredentials(creds))
 }
 
 func formatError(status *rpc.Status) error {
