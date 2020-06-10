@@ -47,14 +47,7 @@ func New(m interface{}, l zerolog.Logger) (*Server, error) {
 		return nil, err
 	}
 
-	// apply defaults
-	if conf.Network == "" {
-		conf.Network = "tcp"
-	}
-
-	if conf.Address == "" {
-		conf.Address = "localhost:9998"
-	}
+	conf.init()
 
 	httpServer := &http.Server{}
 	s := &Server{
@@ -85,6 +78,17 @@ type config struct {
 	Address     string                            `mapstructure:"address"`
 	Services    map[string]map[string]interface{} `mapstructure:"services"`
 	Middlewares map[string]map[string]interface{} `mapstructure:"middlewares"`
+}
+
+func (c *config) init() {
+	// apply defaults
+	if c.Network == "" {
+		c.Network = "tcp"
+	}
+
+	if c.Address == "" {
+		c.Address = "0.0.0.0:19001"
+	}
 }
 
 // Start starts the server

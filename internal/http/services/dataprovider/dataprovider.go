@@ -42,6 +42,17 @@ type config struct {
 	DisableTus bool                              `mapstructure:"disable_tus" docs:"false;Whether to disable TUS uploads."`
 }
 
+func (c *config) init() {
+	if c.Prefix == "" {
+		c.Prefix = "data"
+	}
+
+	if c.Driver == "" {
+		c.Driver = "local"
+	}
+
+}
+
 type svc struct {
 	conf    *config
 	handler http.Handler
@@ -55,9 +66,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		return nil, err
 	}
 
-	if conf.Prefix == "" {
-		conf.Prefix = "data"
-	}
+	conf.init()
 
 	fs, err := getFS(conf)
 	if err != nil {

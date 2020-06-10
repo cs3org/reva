@@ -48,22 +48,42 @@ func init() {
 }
 
 type config struct {
-	MountPath string `mapstructure:"mount_path" docs:"/;The path where the file system would be mounted."`
-	MountID   string `mapstructure:"mount_id" docs:"-;The ID of the mounted file system."`
-	Driver    string `mapstructure:"driver" docs:"local;The storage driver to be used."`
-	// The configuration for the storage driver.
-	Drivers map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:docs/config/packages/storage/fs"`
-	// Path wrapper.
-	PathWrapper string `mapstructure:"path_wrapper" docs:"/var/tmp/reva/"`
-	// The configuration for the path wrapper.
-	PathWrappers     map[string]map[string]interface{} `mapstructure:"path_wrappers" docs:"nil"`
-	TmpFolder        string                            `mapstructure:"tmp_folder" docs:"/var/tmp;Path to temporary folder."`
-	DataServerURL    string                            `mapstructure:"data_server_url" docs:"http://localhost/data;The URL for the data server."`
-	ExposeDataServer bool                              `mapstructure:"expose_data_server" docs:"false;Whether to expose data server."` // if true the client will be able to upload/download directly to it
-	// Whether to enable home creation.
-	EnableHomeCreation bool              `mapstructure:"enable_home_creation" docs:"false"`
-	DisableTus         bool              `mapstructure:"disable_tus" docs:"false;Whether to disable TUS uploads."`
-	AvailableXS        map[string]uint32 `mapstructure:"available_checksums" docs:"nil;List of available checksums."`
+	MountPath          string                            `mapstructure:"mount_path" docs:"/;The path where the file system would be mounted."`
+	MountID            string                            `mapstructure:"mount_id" docs:"-;The ID of the mounted file system."`
+	Driver             string                            `mapstructure:"driver" docs:"local;The storage driver to be used."`
+	Drivers            map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:docs/config/packages/storage/fs"`
+	TmpFolder          string                            `mapstructure:"tmp_folder" docs:"/var/tmp;Path to temporary folder."`
+	DataServerURL      string                            `mapstructure:"data_server_url" docs:"http://localhost/data;The URL for the data server."`
+	ExposeDataServer   bool                              `mapstructure:"expose_data_server" docs:"false;Whether to expose data server."` // if true the client will be able to upload/download directly to it
+	EnableHomeCreation bool                              `mapstructure:"enable_home_creation" docs:"false"`
+	DisableTus         bool                              `mapstructure:"disable_tus" docs:"false;Whether to disable TUS uploads."`
+	AvailableXS        map[string]uint32                 `mapstructure:"available_checksums" docs:"nil;List of available checksums."`
+}
+
+func (c *config) init() {
+	if c.Driver == "" {
+		c.Driver = "local"
+	}
+
+	if c.MountPath == "" {
+		c.MountPath = "/"
+	}
+
+	if c.MountID == "" {
+		c.MountID = "00000000-0000-0000-0000-000000000000"
+	}
+
+	if c.TmpFolder == "" {
+		c.TmpFolder = "/var/tmp/reva/tmp"
+	}
+
+	if c.DataServerURL == "" {
+		c.DataServerURL = "http://0.0.0.0/data"
+	}
+	// set sane defaults
+	if len(c.AvailableXS) == 0 {
+		c.AvailableXS = map[string]uint32{"md5": 100, "unset": 1000}
+	}
 }
 
 type service struct {
@@ -118,18 +138,9 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	// set sane defaults
-	if len(c.AvailableXS) == 0 {
-		c.AvailableXS = map[string]uint32{"md5": 100, "unset": 1000}
-	}
+	c.init()
 
-	// use os temporary folder if empty
-	tmpFolder := c.TmpFolder
-	if tmpFolder == "" {
-		tmpFolder = os.TempDir()
-	}
-
-	if err := os.MkdirAll(tmpFolder, 0755); err != nil {
+	if err := os.MkdirAll(c.TmpFolder, 0755); err != nil {
 		return nil, err
 	}
 
@@ -160,7 +171,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	service := &service{
 		conf:          c,
 		storage:       fs,
-		tmpFolder:     tmpFolder,
+		tmpFolder:     c.TmpFolder,
 		mountPath:     mountPath,
 		mountID:       mountID,
 		dataServerURL: u,

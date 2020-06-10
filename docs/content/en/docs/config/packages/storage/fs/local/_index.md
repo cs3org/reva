@@ -16,11 +16,11 @@ root = "/var/tmp/reva/"
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="enable_home" type="bool" default=false %}}
-Whether to have individual home directories for users. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/local/local.go#L53)
+{{% dir name="disable_home" type="bool" default=false %}}
+Whether to not have individual home directories for users. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/local/local.go#L53)
 {{< highlight toml >}}
 [storage.fs.local]
-enable_home = false
+disable_home = false
 {{< /highlight >}}
 {{% /dir %}}
 
