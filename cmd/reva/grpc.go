@@ -58,6 +58,7 @@ func getConn() (*grpc.ClientConn, error) {
 	if insecure {
 		return grpc.Dial(conf.Host, grpc.WithInsecure())
 	}
+
 	// TODO(labkode): if in the future we want client-side certificate validation,
 	// we need to load the client cert here
 	clientTLSConfig := &tls.Config{}
