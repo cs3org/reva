@@ -28,6 +28,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -39,6 +40,7 @@ import (
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/publicshare/manager/registry"
 	"github.com/golang/protobuf/jsonpb"
+	"github.com/mitchellh/mapstructure"
 )
 
 func init() {
@@ -47,16 +49,24 @@ func init() {
 
 // New returns a new filesystem public shares manager.
 func New(c map[string]interface{}) (publicshare.Manager, error) {
+	conf := &config{}
+	if err := mapstructure.Decode(c, conf); err != nil {
+		return nil, err
+	}
 
 	m := manager{
 		mutex:       &sync.Mutex{},
 		marshaler:   jsonpb.Marshaler{},
 		unmarshaler: jsonpb.Unmarshaler{},
-		file:        "/var/tmp/.publicshares", // TODO MUST be configurable.
+		file:        conf.File,
 	}
 
 	// attempt to create the db file
-	if _, err := os.Stat(m.file); err != nil {
+	if _, err := os.Stat(m.file); os.IsNotExist(err) {
+		folder := filepath.Dir(m.file)
+		if err := os.MkdirAll(folder, 0755); err != nil {
+			return nil, err
+		}
 		if _, err := os.Create(m.file); err != nil {
 			return nil, err
 		}
@@ -74,6 +84,10 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 	}
 
 	return &m, nil
+}
+
+type config struct {
+	File string `mapstructure:"file"`
 }
 
 type manager struct {
