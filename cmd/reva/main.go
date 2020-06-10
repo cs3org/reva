@@ -88,7 +88,7 @@ func main() {
 	if err != nil && flag.Args()[0] != "configure" {
 		fmt.Println("reva is not initialized, run \"reva configure\"")
 		os.Exit(1)
-	} else if flag.Args()[1] != "configure" {
+	} else if flag.Args()[0] != "configure" {
 		conf = c
 	}
 
