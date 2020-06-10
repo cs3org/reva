@@ -21,13 +21,17 @@ package publicstorageprovider
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"path"
+	"path/filepath"
 	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc"
+	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -43,10 +47,12 @@ func init() {
 }
 
 type config struct {
-	MountPath   string `mapstructure:"mount_path"`
-	MountID     string `mapstructure:"mount_id"`
-	GatewayAddr string `mapstructure:"gateway_addr"`
-	DriverAddr  string `mapstructure:"driver_addr"`
+	MountPath        string `mapstructure:"mount_path"`
+	MountID          string `mapstructure:"mount_id"`
+	GatewayAddr      string `mapstructure:"gateway_addr"`
+	DriverAddr       string `mapstructure:"driver_addr"`
+	DataServerURL    string `mapstructure:"data_server_url"`
+	DataServerPrefix string `mapstructure:"data_server_prefix"`
 }
 
 type service struct {
@@ -60,7 +66,6 @@ func (s *service) Close() error {
 }
 
 func (s *service) UnprotectedEndpoints() []string {
-	// return []string{"/cs3.sharing.link.v1beta1.LinkAPI/GetPublicShareByToken"}
 	return []string{}
 }
 
@@ -111,7 +116,100 @@ func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.Unse
 }
 
 func (s *service) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*provider.InitiateFileDownloadResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+	statReq := &provider.StatRequest{Ref: req.Ref}
+	statRes, err := s.Stat(ctx, statReq)
+	if err != nil {
+		return &provider.InitiateFileDownloadResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+req.Ref.String()),
+		}, nil
+	}
+	if statRes.Status.Code != rpc.Code_CODE_OK {
+		if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			return &provider.InitiateFileDownloadResponse{
+				Status: status.NewNotFound(ctx, "gateway: file not found"),
+			}, nil
+		}
+		err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
+		return &provider.InitiateFileDownloadResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error stating ref"),
+		}, nil
+	}
+
+	req.Opaque = statRes.Info.Opaque
+	return s.initiateFileDownload(ctx, req)
+}
+
+// PathTranslator encapsulates behavior that requires translation between external paths into internal paths. Internal
+// path depend on the storage provider in use, hence a translation is needed. In the case of Public Links, the translation
+// goes beyond a simple path conversion but instead, the token needs to be "expanded" to an internal path. Essentially
+// transforming:
+// "YzUTlrKrpswo/foldera/folderb/file.txt"
+// into:
+// "shared-folder-path/internal-folder/foldera/folderb/file.txt".
+type PathTranslator struct {
+	dir   string
+	base  string
+	token string
+}
+
+// NewPathTranslator creates a new PathTranslator.
+func NewPathTranslator(p string) *PathTranslator {
+	return &PathTranslator{
+		dir:   filepath.Dir(p),
+		base:  filepath.Base(p),
+		token: strings.Split(p, "/")[2],
+	}
+}
+
+// Both, t.dir and tokenPath paths need to be merged:
+// tokenPath   = /oc/einstein/public-links
+// t.dir       = /public/ausGxuUePCOi/foldera/folderb/
+// res         = /public-links/foldera/folderb/
+// this `res` will get then expanded taking into account the authenticated user and the storage:
+// end         = /einstein/files/public-links/foldera/folderb/
+
+// TODO how would this behave with a storage other than owncloud?
+// the current OC namespace looks like "/oc/einstein/public-links"
+// and operations on it would be hardcoded string operations bound to
+// the storage path. Either we need clearly defined paths from each storage,
+// or else this would remain black magic.
+func (s *service) initiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*provider.InitiateFileDownloadResponse, error) {
+	t := NewPathTranslator(req.Ref.GetPath())
+	tokenPath, err := s.pathFromToken(ctx, t.token)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = pool.GetPublicShareProviderClient(s.conf.DriverAddr)
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error getting a storage provider client")
+		return nil, err
+	}
+
+	if isOCStorage(tokenPath) {
+		base := strings.Join(strings.Split(tokenPath, "/")[3:], "/")
+		request := strings.Join(strings.Split(t.dir, "/")[3:], "/")
+		t.dir = strings.Join([]string{base, request}, "/")
+	}
+
+	target := strings.Join([]string{s.conf.DataServerURL, s.conf.DataServerPrefix, t.dir, t.base}, "/")
+	targetURL, err := url.Parse(target)
+	if err != nil {
+		return nil, err
+	}
+
+	res := &provider.InitiateFileDownloadResponse{
+		Opaque:           req.Opaque,
+		Status:           &rpc.Status{Code: rpc.Code_CODE_OK},
+		DownloadEndpoint: targetURL.String(),
+		Expose:           true,
+	}
+
+	return res, nil
+}
+
+func isOCStorage(q string) bool {
+	return strings.HasPrefix(q, "/oc/")
 }
 
 func (s *service) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*provider.InitiateFileUploadResponse, error) {
@@ -304,7 +402,7 @@ func (s *service) trimMountPrefix(fn string) (string, error) {
 	return "", errors.New(fmt.Sprintf("path=%q does not belong to this storage provider mount path=%q"+fn, s.mountPath))
 }
 
-// pathFromToken returns a reference from a public share token.
+// pathFromToken returns the path for the publicly shared resource.
 func (s *service) pathFromToken(ctx context.Context, token string) (string, error) {
 	driver, err := pool.GetPublicShareProviderClient(s.conf.DriverAddr)
 	if err != nil {
