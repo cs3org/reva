@@ -19,6 +19,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -28,7 +29,15 @@ var (
 	conf *config
 
 	gitCommit, buildDate, version, goVersion string
+
+	insecure bool
 )
+
+func init() {
+	flag.BoolVar(&insecure, "insecure", false, "Disables grpc security transport")
+	flag.Parse()
+
+}
 
 func main() {
 
