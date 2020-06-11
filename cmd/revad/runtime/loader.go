@@ -35,6 +35,7 @@ import (
 	_ "github.com/cs3org/reva/pkg/ocm/provider/authorizer/loader"
 	_ "github.com/cs3org/reva/pkg/ocm/share/manager/loader"
 	_ "github.com/cs3org/reva/pkg/publicshare/manager/loader"
+	_ "github.com/cs3org/reva/pkg/rhttp/datatx/manager/loader"
 	_ "github.com/cs3org/reva/pkg/share/manager/loader"
 	_ "github.com/cs3org/reva/pkg/storage/fs/loader"
 	_ "github.com/cs3org/reva/pkg/storage/registry/loader"

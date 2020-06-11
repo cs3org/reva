@@ -135,5 +135,5 @@ func getDataTX(c *config) (datatx.DataTX, error) {
 	if f, ok := datatxregistry.NewFuncs[c.DataTX]; ok {
 		return f(c.DataTXs[c.DataTX])
 	}
-	return nil, fmt.Errorf("driver not found: %s", c.Driver)
+	return nil, fmt.Errorf("driver not found: %s", c.DataTX)
 }
