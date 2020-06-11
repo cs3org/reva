@@ -42,6 +42,7 @@ import (
 	"github.com/pkg/errors"
 )
 
+// Config holds the configuration details for the local fs.
 type Config struct {
 	Root        string `mapstructure:"root"`
 	DisableHome bool   `mapstructure:"disable_home"`
@@ -84,6 +85,8 @@ type localfs struct {
 	db   *sql.DB
 }
 
+// NewLocalFS returns a storage.FS interface implementation that controls then
+// local filesystem.
 func NewLocalFS(c *Config) (storage.FS, error) {
 	c.init()
 
@@ -814,8 +817,10 @@ func (fs *localfs) GetMD(ctx context.Context, ref *provider.Reference) (*provide
 		return nil, errors.Wrap(err, "localfs: error resolving ref")
 	}
 
-	if fs.isShareFolder(ctx, fn) {
-		return fs.getMDShareFolder(ctx, fn)
+	if !fs.conf.DisableHome {
+		if fs.isShareFolder(ctx, fn) {
+			return fs.getMDShareFolder(ctx, fn)
+		}
 	}
 
 	fn = fs.wrap(ctx, fn)
@@ -854,15 +859,18 @@ func (fs *localfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*
 	}
 
 	if fn == "/" {
-		homeFiles, err := fs.listHome(ctx, fn)
+		homeFiles, err := fs.listFolder(ctx, fn)
 		if err != nil {
 			return nil, err
 		}
-		sharedReferences, err := fs.listShareFolderRoot(ctx, fn)
-		if err != nil {
-			return nil, err
+		if fs.conf.DisableHome {
+			sharedReferences, err := fs.listShareFolderRoot(ctx, fn)
+			if err != nil {
+				return nil, err
+			}
+			homeFiles = append(homeFiles, sharedReferences...)
 		}
-		return append(homeFiles, sharedReferences...), nil
+		return homeFiles, nil
 	}
 
 	if fs.isShareFolderRoot(ctx, fn) {
@@ -873,12 +881,12 @@ func (fs *localfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*
 		return nil, errtypes.PermissionDenied("localfs: error listing folders inside the shared folder, only file references are stored inside")
 	}
 
-	return fs.listHome(ctx, fn)
+	return fs.listFolder(ctx, fn)
 }
 
-func (fs *localfs) listHome(ctx context.Context, home string) ([]*provider.ResourceInfo, error) {
+func (fs *localfs) listFolder(ctx context.Context, fn string) ([]*provider.ResourceInfo, error) {
 
-	fn := fs.wrap(ctx, home)
+	fn = fs.wrap(ctx, fn)
 
 	mds, err := ioutil.ReadDir(fn)
 	if err != nil {

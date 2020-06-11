@@ -46,7 +46,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New returns an implementation to of the storage.FS interface that talks to
-// a local filesystem.
+// a local filesystem with user homes.
 func New(m map[string]interface{}) (storage.FS, error) {
 	c, err := parseConfig(m)
 	if err != nil {
