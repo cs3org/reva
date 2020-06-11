@@ -38,6 +38,7 @@ import (
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/templates"
+	"github.com/cs3org/reva/pkg/storage/utils/grants"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/pkg/errors"
 )
@@ -319,64 +320,6 @@ func (fs *localfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (st
 	return url.QueryUnescape(strings.TrimPrefix(id.OpaqueId, "fileid-"))
 }
 
-func role2CS3Permissions(mode string) *provider.ResourcePermissions {
-
-	// TODO also check unix permissions for read access
-	p := &provider.ResourcePermissions{}
-	// r
-	if strings.Contains(mode, "r") {
-		p.Stat = true
-		p.InitiateFileDownload = true
-	}
-	// w
-	if strings.Contains(mode, "w") {
-		p.CreateContainer = true
-		p.InitiateFileUpload = true
-		p.Delete = true
-		if p.InitiateFileDownload {
-			p.Move = true
-		}
-	}
-	if strings.Contains(mode, "wo") {
-		p.CreateContainer = true
-		//	p.InitiateFileUpload = false // TODO only when the file exists
-		p.Delete = false
-	}
-	if strings.Contains(mode, "!d") {
-		p.Delete = false
-	} else if strings.Contains(mode, "+d") {
-		p.Delete = true
-	}
-	// x
-	if strings.Contains(mode, "x") {
-		p.ListContainer = true
-	}
-
-	return p
-}
-
-func cs3Permissions2Role(set *provider.ResourcePermissions) (string, error) {
-	var b strings.Builder
-
-	if set.Stat || set.InitiateFileDownload {
-		b.WriteString("r")
-	}
-	if set.CreateContainer || set.InitiateFileUpload || set.Delete || set.Move {
-		b.WriteString("w")
-	}
-	if set.ListContainer {
-		b.WriteString("x")
-	}
-
-	if set.Delete {
-		b.WriteString("+d")
-	} else {
-		b.WriteString("!d")
-	}
-
-	return b.String(), nil
-}
-
 func (fs *localfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
@@ -384,17 +327,16 @@ func (fs *localfs) AddGrant(ctx context.Context, ref *provider.Reference, g *pro
 	}
 	fn = fs.wrap(ctx, fn)
 
-	role, err := cs3Permissions2Role(g.Permissions)
+	role, err := grants.GetACLPerm(g.Permissions)
 	if err != nil {
 		return errors.Wrap(err, "localfs: unknown set permissions")
 	}
 
-	var grantee string
-	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
-		grantee = fmt.Sprintf("g:%s@%s", g.Grantee.Id.OpaqueId, g.Grantee.Id.Idp)
-	} else {
-		grantee = fmt.Sprintf("u:%s@%s", g.Grantee.Id.OpaqueId, g.Grantee.Id.Idp)
+	granteeType, err := grants.GetACLType(g.Grantee.Type)
+	if err != nil {
+		return errors.Wrap(err, "localfs: error getting grantee type")
 	}
+	grantee := fmt.Sprintf("%s:%s@%s", granteeType, g.Grantee.Id.OpaqueId, g.Grantee.Id.Idp)
 
 	err = fs.addToACLDB(ctx, fn, grantee, role)
 	if err != nil {
@@ -411,23 +353,23 @@ func (fs *localfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*
 	}
 	fn = fs.wrap(ctx, fn)
 
-	grants, err := fs.getACLs(ctx, fn)
+	g, err := fs.getACLs(ctx, fn)
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error listing grants")
 	}
 	var granteeID, role string
 	var grantList []*provider.Grant
 
-	for grants.Next() {
-		err = grants.Scan(&granteeID, &role)
+	for g.Next() {
+		err = g.Scan(&granteeID, &role)
 		if err != nil {
 			return nil, errors.Wrap(err, "localfs: error scanning db rows")
 		}
 		grantee := &provider.Grantee{
 			Id:   &userpb.UserId{OpaqueId: granteeID[2:]},
-			Type: fs.getGranteeType(string(granteeID[0])),
+			Type: grants.GetGranteeType(string(granteeID[0])),
 		}
-		permissions := role2CS3Permissions(role)
+		permissions := grants.GetGrantPermissionSet(role)
 
 		grantList = append(grantList, &provider.Grant{
 			Grantee:     grantee,
@@ -438,13 +380,6 @@ func (fs *localfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*
 
 }
 
-func (fs *localfs) getGranteeType(granteeType string) provider.GranteeType {
-	if granteeType == "g" {
-		return provider.GranteeType_GRANTEE_TYPE_GROUP
-	}
-	return provider.GranteeType_GRANTEE_TYPE_USER
-}
-
 func (fs *localfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
@@ -452,12 +387,11 @@ func (fs *localfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *
 	}
 	fn = fs.wrap(ctx, fn)
 
-	var grantee string
-	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
-		grantee = fmt.Sprintf("g:%s@%s", g.Grantee.Id.OpaqueId, g.Grantee.Id.Idp)
-	} else {
-		grantee = fmt.Sprintf("u:%s@%s", g.Grantee.Id.OpaqueId, g.Grantee.Id.Idp)
+	granteeType, err := grants.GetACLType(g.Grantee.Type)
+	if err != nil {
+		return errors.Wrap(err, "localfs: error getting grantee type")
 	}
+	grantee := fmt.Sprintf("%s:%s@%s", granteeType, g.Grantee.Id.OpaqueId, g.Grantee.Id.Idp)
 
 	err = fs.removeFromACLDB(ctx, fn, grantee)
 	if err != nil {
