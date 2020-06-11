@@ -32,11 +32,19 @@ The configuration for the storage driver [[Ref]](https://github.com/cs3org/reva/
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="disable_tus" type="bool" default=false %}}
-Whether to disable TUS uploads. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/dataprovider/dataprovider.go#L42)
+{{% dir name="datatx" type="string" default="simple" %}}
+The data transfer protocol to use [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/dataprovider/dataprovider.go#L42)
 {{< highlight toml >}}
 [http.services.dataprovider]
-disable_tus = false
+datatx = "simple"
+{{< /highlight >}}
+{{% /dir %}}
+
+{{% dir name="datatxs" type="map[string]map[string]interface{}" default="docs/config/packages/rhttp/datatx" %}}
+The data transfer protocol to use [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/dataprovider/dataprovider.go#L43)
+{{< highlight toml >}}
+[http.services.dataprovider.datatxs]
+"[docs/config/packages/rhttp/datatx]({{< ref "docs/config/packages/rhttp/datatx" >}})"
 {{< /highlight >}}
 {{% /dir %}}
 
