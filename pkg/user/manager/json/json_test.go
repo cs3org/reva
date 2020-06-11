@@ -39,24 +39,6 @@ func TestUserManager(t *testing.T) {
 	}
 	defer os.RemoveAll(tempdir)
 
-	// parseConfig - negative test
-	input := map[string]interface{}{
-		"users": true,
-	}
-	_, err = New(input)
-	if err == nil {
-		t.Fatalf("no error (but we expected one) while get manager")
-	}
-
-	// read file - negative test
-	input = map[string]interface{}{
-		"thisFailsSoHard": "TestingTesting",
-	}
-	_, err = New(input)
-	if err == nil {
-		t.Fatalf("no error (but we expected one) while get manager")
-	}
-
 	// corrupt json object with user meta data
 	userJSON := `[{`
 
@@ -73,7 +55,7 @@ func TestUserManager(t *testing.T) {
 	}
 
 	// get manager
-	input = map[string]interface{}{
+	input := map[string]interface{}{
 		"users": file.Name(),
 	}
 	_, err = New(input)

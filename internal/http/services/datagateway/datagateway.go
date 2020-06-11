@@ -28,6 +28,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -52,6 +53,14 @@ type config struct {
 	TransferSharedSecret string `mapstructure:"transfer_shared_secret"`
 }
 
+func (c *config) init() {
+	if c.Prefix == "" {
+		c.Prefix = "data"
+	}
+
+	c.TransferSharedSecret = sharedconf.GetJWTSecret(c.TransferSharedSecret)
+}
+
 type svc struct {
 	conf    *config
 	handler http.Handler
@@ -64,9 +73,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		return nil, err
 	}
 
-	if conf.Prefix == "" {
-		conf.Prefix = "data"
-	}
+	conf.init()
 
 	s := &svc{conf: conf}
 	s.setHandler()

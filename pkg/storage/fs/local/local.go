@@ -50,7 +50,7 @@ func init() {
 
 type config struct {
 	Root        string `mapstructure:"root" docs:"/var/tmp/reva/;Path of root directory for user storage."`
-	EnableHome  bool   `mapstructure:"enable_home" docs:"false;Whether to have individual home directories for users."`
+	DisableHome bool   `mapstructure:"disable_home" docs:"false;Whether to not have individual home directories for users."`
 	UserLayout  string `mapstructure:"user_layout" docs:"{{.Username}};Template for user home directories"`
 	ShareFolder string `mapstructure:"share_folder" docs:"/MyShares;Path for storing share references."`
 	Uploads     string `mapstructure:"uploads"`
@@ -58,6 +58,31 @@ type config struct {
 	Versions    string `mapstructure:"versions"`
 	Shadow      string `mapstructure:"shadow"`
 	References  string `mapstructure:"references"`
+}
+
+func (c *config) init() {
+	if c.Root == "" {
+		c.Root = "/var/tmp/reva/data"
+	}
+
+	if c.UserLayout == "" {
+		c.UserLayout = "{{.Username}}"
+	}
+
+	if c.ShareFolder == "" {
+		c.ShareFolder = "/MyShares"
+	}
+
+	// ensure share folder always starts with slash
+	c.ShareFolder = path.Join("/", c.ShareFolder)
+
+	c.Uploads = path.Join(c.Root, ".uploads")
+	c.Shadow = path.Join(c.Root, ".shadow")
+
+	c.References = path.Join(c.Shadow, "references")
+	c.RecycleBin = path.Join(c.Shadow, "recycle_bin")
+	c.Versions = path.Join(c.Shadow, "versions")
+
 }
 
 type localfs struct {
@@ -82,28 +107,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		return nil, err
 	}
 
-	// defaults for Root
-	if c.Root == "" {
-		c.Root = "/var/tmp/reva/"
-	}
-
-	if c.UserLayout == "" {
-		c.UserLayout = "{{.Username}}"
-	}
-
-	if c.ShareFolder == "" {
-		c.ShareFolder = "/MyShares"
-	}
-
-	// ensure share folder always starts with slash
-	c.ShareFolder = path.Join("/", c.ShareFolder)
-
-	c.Uploads = path.Join(c.Root, ".uploads")
-	c.Shadow = path.Join(c.Root, ".shadow")
-
-	c.References = path.Join(c.Shadow, "references")
-	c.RecycleBin = path.Join(c.Shadow, "recycle_bin")
-	c.Versions = path.Join(c.Shadow, "versions")
+	c.init()
 
 	namespaces := []string{c.Root, c.Uploads, c.Shadow, c.References, c.RecycleBin, c.Versions}
 
@@ -154,7 +158,7 @@ func getUser(ctx context.Context) (*userpb.User, error) {
 
 func (fs *localfs) wrap(ctx context.Context, p string) string {
 	var internal string
-	if fs.conf.EnableHome {
+	if !fs.conf.DisableHome {
 		layout, err := fs.GetHome(ctx)
 		if err != nil {
 			panic(err)
@@ -168,7 +172,7 @@ func (fs *localfs) wrap(ctx context.Context, p string) string {
 
 func (fs *localfs) wrapReferences(ctx context.Context, p string) string {
 	var internal string
-	if fs.conf.EnableHome {
+	if !fs.conf.DisableHome {
 		layout, err := fs.GetHome(ctx)
 		if err != nil {
 			panic(err)
@@ -182,7 +186,7 @@ func (fs *localfs) wrapReferences(ctx context.Context, p string) string {
 
 func (fs *localfs) wrapRecycleBin(ctx context.Context, p string) string {
 	var internal string
-	if fs.conf.EnableHome {
+	if !fs.conf.DisableHome {
 		layout, err := fs.GetHome(ctx)
 		if err != nil {
 			panic(err)
@@ -196,7 +200,7 @@ func (fs *localfs) wrapRecycleBin(ctx context.Context, p string) string {
 
 func (fs *localfs) wrapVersions(ctx context.Context, p string) string {
 	var internal string
-	if fs.conf.EnableHome {
+	if !fs.conf.DisableHome {
 		layout, err := fs.GetHome(ctx)
 		if err != nil {
 			panic(err)
@@ -211,7 +215,7 @@ func (fs *localfs) wrapVersions(ctx context.Context, p string) string {
 func (fs *localfs) unwrap(ctx context.Context, np string) string {
 	ns := fs.getNsMatch(np, []string{fs.conf.Root, fs.conf.References, fs.conf.RecycleBin, fs.conf.Versions})
 	var external string
-	if fs.conf.EnableHome {
+	if !fs.conf.DisableHome {
 		layout, err := fs.GetHome(ctx)
 		if err != nil {
 			panic(err)
@@ -649,7 +653,7 @@ func (fs *localfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Ref
 }
 
 func (fs *localfs) GetHome(ctx context.Context) (string, error) {
-	if !fs.conf.EnableHome {
+	if fs.conf.DisableHome {
 		return "", errtypes.NotSupported("local: get home not supported")
 	}
 
@@ -664,7 +668,7 @@ func (fs *localfs) GetHome(ctx context.Context) (string, error) {
 }
 
 func (fs *localfs) CreateHome(ctx context.Context) error {
-	if !fs.conf.EnableHome {
+	if fs.conf.DisableHome {
 		return errtypes.NotSupported("localfs: create home not supported")
 	}
 

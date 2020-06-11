@@ -126,6 +126,8 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		return nil, err
 	}
 
+	conf.Init()
+
 	// Create the Mentix instance
 	mntx, err := mentix.New(conf, log)
 	if err != nil {

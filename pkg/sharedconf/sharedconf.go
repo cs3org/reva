@@ -35,6 +35,17 @@ func Decode(v interface{}) error {
 		return err
 	}
 
+	// add some defaults
+	if sharedConf.GatewaySVC == "" {
+		sharedConf.GatewaySVC = "0.0.0.0:19000"
+	}
+
+	// TODO(labkode): would be cool to autogenerate one secret and print
+	// it on init time.
+	if sharedConf.JWTSecret == "" {
+		sharedConf.JWTSecret = "changemeplease"
+	}
+
 	return nil
 }
 

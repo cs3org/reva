@@ -68,6 +68,19 @@ type Config struct {
 	DisableTus      bool   `mapstructure:"disable_tus"`
 }
 
+func (c *Config) init() {
+	if c.Prefix == "" {
+		c.Prefix = "webdav"
+	}
+
+	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+
+	if c.ChunkFolder == "" {
+		c.ChunkFolder = "/var/tmp/reva/tmp/davchunks"
+	}
+
+}
+
 type svc struct {
 	c             *Config
 	webDavHandler *WebDavHandler
@@ -81,11 +94,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		return nil, err
 	}
 
-	conf.GatewaySvc = sharedconf.GetGatewaySVC(conf.GatewaySvc)
-
-	if conf.ChunkFolder == "" {
-		conf.ChunkFolder = os.TempDir()
-	}
+	conf.init()
 
 	if err := os.MkdirAll(conf.ChunkFolder, 0755); err != nil {
 		return nil, err

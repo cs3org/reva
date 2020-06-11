@@ -54,6 +54,8 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 		return nil, err
 	}
 
+	conf.init()
+
 	m := manager{
 		mutex:       &sync.Mutex{},
 		marshaler:   jsonpb.Marshaler{},
@@ -88,6 +90,12 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 
 type config struct {
 	File string `mapstructure:"file"`
+}
+
+func (c *config) init() {
+	if c.File == "" {
+		c.File = "/var/tmp/reva/publicshares"
+	}
 }
 
 type manager struct {
