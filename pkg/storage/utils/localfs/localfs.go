@@ -37,8 +37,8 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/storage/templates"
 	"github.com/cs3org/reva/pkg/storage/utils/grants"
+	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/pkg/errors"
 )
