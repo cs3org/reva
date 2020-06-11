@@ -44,12 +44,12 @@ func init() {
 
 var (
 	emailRegex    = regexp.MustCompile(`^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$`)
-	usernameRegex = regexp.MustCompile(`^[ a-zA-Z0-9.-_]+$`)
+	usernameRegex = regexp.MustCompile(`^[ a-zA-Z0-9._-]+$`)
 )
 
 type manager struct {
 	conf                *config
-	sync.Mutex          // concurrent access to the file and loaded
+	sync.Mutex          // concurrent access to apiToken and tokenExpirationTime
 	apiToken            string
 	tokenExpirationTime time.Time
 }

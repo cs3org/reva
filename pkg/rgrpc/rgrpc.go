@@ -197,13 +197,14 @@ func (s *Server) registerServices() error {
 	}
 	opts = append(opts, grpc.StatsHandler(&ocgrpc.ServerHandler{}))
 	grpcServer := grpc.NewServer(opts...)
-	if s.conf.EnableReflection {
-		s.log.Info().Msg("rgrpc: grpc server reflection enabled")
-		reflection.Register(grpcServer)
-	}
 
 	for _, svc := range s.services {
 		svc.Register(grpcServer)
+	}
+
+	if s.conf.EnableReflection {
+		s.log.Info().Msg("rgrpc: grpc server reflection enabled")
+		reflection.Register(grpcServer)
 	}
 
 	s.s = grpcServer
