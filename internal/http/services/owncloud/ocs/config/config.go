@@ -32,6 +32,7 @@ type Config struct {
 	DisableTus   bool                  `mapstructure:"disable_tus"`
 }
 
+// Init sets sane defaults
 func (c *Config) Init() {
 	if c.Prefix == "" {
 		c.Prefix = "ocs"

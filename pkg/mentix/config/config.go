@@ -40,6 +40,7 @@ type Configuration struct {
 	} `mapstructure:"prom_filesd"`
 }
 
+// Init sets sane defaults
 func (c *Configuration) Init() {
 	if c.Prefix == "" {
 		c.Prefix = "mentix"
