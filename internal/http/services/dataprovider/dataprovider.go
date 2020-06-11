@@ -43,6 +43,17 @@ type config struct {
 	DataTXs map[string]map[string]interface{} `mapstructure:"datatxs" docs:"url:docs/config/packages/rhttp/datatx;The data transfer protocol to use"`
 }
 
+func (c *config) init() {
+	if c.Prefix == "" {
+		c.Prefix = "data"
+	}
+
+	if c.Driver == "" {
+		c.Driver = "local"
+	}
+
+}
+
 type svc struct {
 	conf    *config
 	handler http.Handler
@@ -57,9 +68,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		return nil, err
 	}
 
-	if conf.Prefix == "" {
-		conf.Prefix = "data"
-	}
+	conf.init()
 
 	fs, err := getFS(conf)
 	if err != nil {

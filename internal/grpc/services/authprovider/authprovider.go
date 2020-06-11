@@ -42,6 +42,12 @@ type config struct {
 	AuthManagers map[string]map[string]interface{} `mapstructure:"auth_managers"`
 }
 
+func (c *config) init() {
+	if c.AuthManager == "" {
+		c.AuthManager = "json"
+	}
+}
+
 type service struct {
 	authmgr auth.Manager
 	conf    *config
@@ -53,6 +59,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
 	}
+	c.init()
 	return c, nil
 }
 
