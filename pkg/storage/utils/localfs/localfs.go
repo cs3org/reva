@@ -44,20 +44,21 @@ import (
 
 // Config holds the configuration details for the local fs.
 type Config struct {
-	Root        string `mapstructure:"root"`
-	DisableHome bool   `mapstructure:"disable_home"`
-	UserLayout  string `mapstructure:"user_layout"`
-	ShareFolder string `mapstructure:"share_folder"`
-	Uploads     string `mapstructure:"uploads"`
-	RecycleBin  string `mapstructure:"recycle_bin"`
-	Versions    string `mapstructure:"versions"`
-	Shadow      string `mapstructure:"shadow"`
-	References  string `mapstructure:"references"`
+	Root          string `mapstructure:"root"`
+	DisableHome   bool   `mapstructure:"disable_home"`
+	UserLayout    string `mapstructure:"user_layout"`
+	ShareFolder   string `mapstructure:"share_folder"`
+	Uploads       string `mapstructure:"uploads"`
+	DataDirectory string `mapstructure:"data_directory"`
+	RecycleBin    string `mapstructure:"recycle_bin"`
+	Versions      string `mapstructure:"versions"`
+	Shadow        string `mapstructure:"shadow"`
+	References    string `mapstructure:"references"`
 }
 
 func (c *Config) init() {
 	if c.Root == "" {
-		c.Root = "/var/tmp/reva/data"
+		c.Root = "/var/tmp/reva"
 	}
 
 	if c.UserLayout == "" {
@@ -71,6 +72,7 @@ func (c *Config) init() {
 	// ensure share folder always starts with slash
 	c.ShareFolder = path.Join("/", c.ShareFolder)
 
+	c.DataDirectory = path.Join(c.Root, "data")
 	c.Uploads = path.Join(c.Root, ".uploads")
 	c.Shadow = path.Join(c.Root, ".shadow")
 
@@ -91,7 +93,7 @@ func NewLocalFS(c *Config) (storage.FS, error) {
 	c.init()
 
 	// create namespaces if they do not exist
-	namespaces := []string{c.Root, c.Uploads, c.Shadow, c.References, c.RecycleBin, c.Versions}
+	namespaces := []string{c.DataDirectory, c.Uploads, c.Shadow, c.References, c.RecycleBin, c.Versions}
 	for _, v := range namespaces {
 		if err := os.MkdirAll(v, 0755); err != nil {
 			return nil, errors.Wrap(err, "could not create home dir "+v)
@@ -148,9 +150,9 @@ func (fs *localfs) wrap(ctx context.Context, p string) string {
 		if err != nil {
 			panic(err)
 		}
-		internal = path.Join(fs.conf.Root, layout, p)
+		internal = path.Join(fs.conf.DataDirectory, layout, p)
 	} else {
-		internal = path.Join(fs.conf.Root, p)
+		internal = path.Join(fs.conf.DataDirectory, p)
 	}
 	return internal
 }
@@ -198,7 +200,7 @@ func (fs *localfs) wrapVersions(ctx context.Context, p string) string {
 }
 
 func (fs *localfs) unwrap(ctx context.Context, np string) string {
-	ns := fs.getNsMatch(np, []string{fs.conf.Root, fs.conf.References, fs.conf.RecycleBin, fs.conf.Versions})
+	ns := fs.getNsMatch(np, []string{fs.conf.DataDirectory, fs.conf.References, fs.conf.RecycleBin, fs.conf.Versions})
 	var external string
 	if !fs.conf.DisableHome {
 		layout, err := fs.GetHome(ctx)
@@ -863,7 +865,7 @@ func (fs *localfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*
 		if err != nil {
 			return nil, err
 		}
-		if fs.conf.DisableHome {
+		if !fs.conf.DisableHome {
 			sharedReferences, err := fs.listShareFolderRoot(ctx, fn)
 			if err != nil {
 				return nil, err
