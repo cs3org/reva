@@ -66,17 +66,15 @@ providers = "providers.demo.json"
 driver = "memory"
 
 [grpc.services.storageprovider]
-driver = "local"
+driver = "localhome"
 mount_path = "/"
 mount_id = "123e4567-e89b-12d3-a456-426655440000"
 expose_data_server = true
 data_server_url = "http://localhost:19001/data"
 enable_home_creation = true
 
-[grpc.services.storageprovider.drivers.local]
-namespace = "/var/tmp/reva/"
+[grpc.services.storageprovider.drivers.localhome]
 user_layout = "{{.Username}}"
-enable_home = true
 
 [grpc.services.authprovider]
 auth_manager = "json"
@@ -96,13 +94,10 @@ enabled_middlewares = ["providerauthorizer", "cors"]
 address = "0.0.0.0:19001"
 
 [http.services.dataprovider]
-driver = "local"
-temp_folder = "/var/tmp/"
+driver = "localhome"
 
-[http.services.dataprovider.drivers.local]
-namespace = "/var/tmp/reva/"
+[http.services.dataprovider.drivers.localhome]
 user_layout = "{{.Username}}"
-enable_home = true
 
 [http.services.ocmd]
 prefix = "ocm"

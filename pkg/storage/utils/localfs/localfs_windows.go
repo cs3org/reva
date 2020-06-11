@@ -18,7 +18,7 @@
 
 // +build windows
 
-package local
+package localfs
 
 import (
 	"context"

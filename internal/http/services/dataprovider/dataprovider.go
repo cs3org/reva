@@ -37,7 +37,7 @@ func init() {
 
 type config struct {
 	Prefix     string                            `mapstructure:"prefix" docs:"data;The prefix to be used for this HTTP service"`
-	Driver     string                            `mapstructure:"driver" docs:"local;The storage driver to be used."`
+	Driver     string                            `mapstructure:"driver" docs:"localhome;The storage driver to be used."`
 	Drivers    map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:docs/config/packages/storage/fs;The configuration for the storage driver"`
 	DisableTus bool                              `mapstructure:"disable_tus" docs:"false;Whether to disable TUS uploads."`
 }
@@ -48,7 +48,7 @@ func (c *config) init() {
 	}
 
 	if c.Driver == "" {
-		c.Driver = "local"
+		c.Driver = "localhome"
 	}
 
 }

@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package local
+package localfs
 
 import (
 	"context"
@@ -29,8 +29,8 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func initializeDB(root string) (*sql.DB, error) {
-	dbPath := path.Join(root, "localfs.db")
+func initializeDB(root, dbName string) (*sql.DB, error) {
+	dbPath := path.Join(root, dbName)
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error opening DB connection")

@@ -50,7 +50,7 @@ func init() {
 type config struct {
 	MountPath        string                            `mapstructure:"mount_path" docs:"/;The path where the file system would be mounted."`
 	MountID          string                            `mapstructure:"mount_id" docs:"-;The ID of the mounted file system."`
-	Driver           string                            `mapstructure:"driver" docs:"local;The storage driver to be used."`
+	Driver           string                            `mapstructure:"driver" docs:"localhome;The storage driver to be used."`
 	Drivers          map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:docs/config/packages/storage/fs"`
 	TmpFolder        string                            `mapstructure:"tmp_folder" docs:"/var/tmp;Path to temporary folder."`
 	DataServerURL    string                            `mapstructure:"data_server_url" docs:"http://localhost/data;The URL for the data server."`
@@ -61,7 +61,7 @@ type config struct {
 
 func (c *config) init() {
 	if c.Driver == "" {
-		c.Driver = "local"
+		c.Driver = "localhome"
 	}
 
 	if c.MountPath == "" {
