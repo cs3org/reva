@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package local
+package localhome
 
 import (
 	"github.com/cs3org/reva/pkg/storage"
@@ -27,12 +27,13 @@ import (
 )
 
 func init() {
-	registry.Register("local", New)
+	registry.Register("localhome", New)
 }
 
 type config struct {
 	Root        string `mapstructure:"root" docs:"/var/tmp/reva/;Path of root directory for user storage."`
 	ShareFolder string `mapstructure:"share_folder" docs:"/MyShares;Path for storing share references."`
+	UserLayout  string `mapstructure:"user_layout" docs:"{{.Username}};Template for user home directories"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -55,7 +56,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	conf := localfs.Config{
 		Root:        c.Root,
 		ShareFolder: c.ShareFolder,
-		DisableHome: true,
+		UserLayout:  c.UserLayout,
 	}
 	return localfs.NewLocalFS(&conf)
 }

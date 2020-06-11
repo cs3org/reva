@@ -61,7 +61,7 @@ type config struct {
 
 func (c *config) init() {
 	if c.Driver == "" {
-		c.Driver = "local"
+		c.Driver = "localhome"
 	}
 
 	if c.MountPath == "" {
