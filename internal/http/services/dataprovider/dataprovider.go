@@ -77,6 +77,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		storage: fs,
 		conf:    conf,
 	}
+
 	err = s.setHandler()
 	return s, err
 }

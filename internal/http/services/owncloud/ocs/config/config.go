@@ -20,6 +20,7 @@ package config
 
 import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/data"
+	"github.com/cs3org/reva/pkg/sharedconf"
 )
 
 // Config holds the config options that need to be passed down to all ocs handlers
@@ -29,4 +30,12 @@ type Config struct {
 	Capabilities data.CapabilitiesData `mapstructure:"capabilities"`
 	GatewaySvc   string                `mapstructure:"gatewaysvc"`
 	DisableTus   bool                  `mapstructure:"disable_tus"`
+}
+
+func (c *Config) Init() {
+	if c.Prefix == "" {
+		c.Prefix = "ocs"
+	}
+
+	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
