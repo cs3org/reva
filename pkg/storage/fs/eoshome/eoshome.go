@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package eos
+package eoshome
 
 import (
 	"bytes"
@@ -30,7 +30,7 @@ import (
 )
 
 func init() {
-	registry.Register("eos", New)
+	registry.Register("eoshome", New)
 }
 
 type config struct {
@@ -76,6 +76,12 @@ type config struct {
 	// SingleUsername is the username to use when SingleUserMode is enabled
 	SingleUsername string `mapstructure:"single_username" docs:"-"`
 
+	// UserLayout wraps the internal path with user information.
+	// Example: if conf.Namespace is /eos/user and received path is /docs
+	// and the UserLayout is {{.Username}} the internal path will be:
+	// /eos/user/<username>/docs
+	UserLayout string `mapstructure:"user_layout" docs:"{{.Username}}"`
+
 	// Enables logging of the commands executed
 	// Defaults to false
 	EnableLogging bool `mapstructure:"enable_logging" docs:"false"`
@@ -117,6 +123,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	if err != nil {
 		return nil, err
 	}
+	conf.EnableHome = true
 
 	return eosfs.NewEOSFS(&conf)
 }

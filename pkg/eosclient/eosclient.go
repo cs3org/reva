@@ -34,7 +34,7 @@ import (
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/storage/acl"
+	"github.com/cs3org/reva/pkg/storage/utils/acl"
 	"github.com/gofrs/uuid"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
