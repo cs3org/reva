@@ -938,6 +938,37 @@ func (fs *localfs) listShareFolderRoot(ctx context.Context, home string) ([]*pro
 	return finfos, nil
 }
 
+func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
+	fn, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "error resolving ref")
+	}
+
+	// we cannot rely on /tmp as it can live in another partition and we can
+	// hit invalid cross-device link errors, so we create the tmp file in the same directory
+	// the file is supposed to be written.
+	tmp, err := ioutil.TempFile(path.Dir(fn), "._reva_atomic_upload")
+	if err != nil {
+		return errors.Wrap(err, "localfs: error creating tmp fn at "+path.Dir(fn))
+	}
+
+	_, err = io.Copy(tmp, r)
+	if err != nil {
+		return errors.Wrap(err, "localfs: eror writing to tmp file "+tmp.Name())
+	}
+
+	// TODO(labkode): make sure rename is atomic, missing fsync ...
+	if err := os.Rename(tmp.Name(), fn); err != nil {
+		return errors.Wrap(err, "localfs: error renaming from "+tmp.Name()+" to "+fn)
+	}
+
+	return nil
+}
+
+func (fs *localfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64) (uploadID string, err error) {
+	return "", errtypes.NotSupported("localfs: inititate file upload")
+}
+
 func (fs *localfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {

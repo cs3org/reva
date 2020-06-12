@@ -36,7 +36,6 @@ type FS interface {
 	Move(ctx context.Context, oldRef, newRef *provider.Reference) error
 	GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error)
 	ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error)
-	InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64) (string, error)
 	Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error
 	Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error)
 	ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error)
@@ -56,6 +55,15 @@ type FS interface {
 	Shutdown(ctx context.Context) error
 	SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error
 	UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error
+
+	// Optional interfaces to allow resumable uploads. Conceived to use with the TUS protocol, but
+	/*
+		// Upload session, for chunking/resumable uploads
+		UploadTxStart(ctx context.Context, ref *provider.Reference, arg *UploadTxStartArg) (string, error)
+		UploadTxInfo(ctx context.Context)
+		UploadTxAppend(ctx context.Context)
+		UploadTxFinish(ctx context.Context)
+	*/
 }
 
 // Registry is the interface that storage registries implement
@@ -66,8 +74,15 @@ type Registry interface {
 	GetHome(ctx context.Context) (*registry.ProviderInfo, error)
 }
 
-// PathWrapper is the interface to implement for path transformations
-type PathWrapper interface {
-	Unwrap(ctx context.Context, rp string) (string, error)
-	Wrap(ctx context.Context, rp string) (string, error)
+// UploadSessionStartArg specifies how the upload will be performed.
+// If no data is passed, i.e, Reader is nil, then only an upload id is given.
+// If data is already being sent, i.e, Reader is not nil, the Close parameter can be set to true
+// to close the actual session.
+/*
+type UploadSessionStartArg struct {
+	ID     string
+	Size   uint64
+	Close  bool
+	Reader io.Closer
 }
+*/

@@ -20,7 +20,6 @@ package storageprovider
 
 import (
 	"context"
-	// "encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -29,7 +28,6 @@ import (
 	"strings"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	// link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -53,10 +51,11 @@ type config struct {
 	Driver           string                            `mapstructure:"driver" docs:"local;The storage driver to be used."`
 	Drivers          map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:docs/config/packages/storage/fs"`
 	TmpFolder        string                            `mapstructure:"tmp_folder" docs:"/var/tmp;Path to temporary folder."`
-	DataServerURL    string                            `mapstructure:"data_server_url" docs:"http://localhost/data;The URL for the data server."`
+	DataServerURL    string                            `mapstructure:"data_server_url" docs:"simple://localhost/data;The URL for the data server."`
 	ExposeDataServer bool                              `mapstructure:"expose_data_server" docs:"false;Whether to expose data server."` // if true the client will be able to upload/download directly to it
 	DisableTus       bool                              `mapstructure:"disable_tus" docs:"false;Whether to disable TUS uploads."`
 	AvailableXS      map[string]uint32                 `mapstructure:"available_checksums" docs:"nil;List of available checksums."`
+	EnableUploadTx   bool                              `mapstructure:"enable_upload_tx" docs:"false;Enables upload transactions"`
 }
 
 func (c *config) init() {
@@ -268,7 +267,9 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		}, nil
 	}
 	url := *s.dataServerURL
-	if s.conf.DisableTus {
+
+	// No protocol specific code here.
+	if s.conf.EnableUploadTx {
 		url.Path = path.Join("/", url.Path, newRef.GetPath())
 	} else {
 		var uploadLength int64
