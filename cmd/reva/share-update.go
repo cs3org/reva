@@ -28,8 +28,8 @@ import (
 
 func shareUpdateCommand() *command {
 	cmd := newCommand("share-update")
-	cmd.Description = func() string { return "update share" }
-	cmd.Usage = func() string { return "Usage: share update [-flags] <share_id>" }
+	cmd.Description = func() string { return "update a share" }
+	cmd.Usage = func() string { return "Usage: share-update [-flags] <share_id>" }
 	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor)")
 	cmd.Action = func() error {
 		if cmd.NArg() < 1 {
@@ -38,7 +38,7 @@ func shareUpdateCommand() *command {
 		}
 
 		// validate flags
-		if *rol != "viewer" && *rol != "editor" {
+		if *rol != viewerPermission && *rol != editorPermission {
 			fmt.Println("invalid rol: rol must be viewer or editor")
 			fmt.Println(cmd.Usage())
 			os.Exit(1)

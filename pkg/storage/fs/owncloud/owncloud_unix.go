@@ -16,8 +16,6 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// +build !windows
-
 package owncloud
 
 import (
@@ -30,6 +28,8 @@ import (
 
 	"github.com/cs3org/reva/pkg/appctx"
 )
+
+// TODO(jfd) get rid of the differences between unix and windows. the inode and dev should never be used for the etag because it interferes with backups
 
 // calcEtag will create an etag based on the md5 of
 // - mtime,

@@ -59,12 +59,20 @@ type config struct {
 	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
 }
 
+func (c *config) init() {
+	if c.Driver == "" {
+		c.Driver = "static"
+	}
+}
+
 // New creates a new AuthRegistry
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
 	}
+
+	c.init()
 
 	reg, err := getRegistry(c)
 	if err != nil {

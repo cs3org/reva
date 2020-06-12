@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"os"
-	"path"
 	"reflect"
 	"sync"
 	"time"
@@ -53,15 +52,7 @@ func New(m map[string]interface{}) (share.Manager, error) {
 		return nil, err
 	}
 
-	// if file is not set we use temporary file
-	if c.File == "" {
-		dir, err := ioutil.TempDir("", "")
-		if err != nil {
-			err = errors.Wrap(err, "error creating temporary directory for storing shares")
-			return nil, err
-		}
-		c.File = path.Join(dir, "shares.json")
-	}
+	c.init()
 
 	// load or create file
 	model, err := loadOrCreate(c.File)
@@ -143,6 +134,12 @@ type mgr struct {
 
 type config struct {
 	File string `mapstructure:"file"`
+}
+
+func (c *config) init() {
+	if c.File == "" {
+		c.File = "/var/tmp/reva/shares.json"
+	}
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -388,6 +385,7 @@ func (m *mgr) ListReceivedShares(ctx context.Context) ([]*collaboration.Received
 func (m *mgr) convert(ctx context.Context, s *collaboration.Share) *collaboration.ReceivedShare {
 	rs := &collaboration.ReceivedShare{
 		Share: s,
+		State: collaboration.ShareState_SHARE_STATE_PENDING,
 	}
 	user := user.ContextMustGetUser(ctx)
 	if v, ok := m.model.State[user.Id.String()]; ok {

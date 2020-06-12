@@ -25,6 +25,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/registry/registry"
 	"github.com/mitchellh/mapstructure"
@@ -38,6 +39,19 @@ func init() {
 type config struct {
 	Rules        map[string]string `mapstructure:"rules"`
 	HomeProvider string            `mapstructure:"home_provider"`
+}
+
+func (c *config) init() {
+	if c.HomeProvider == "" {
+		c.HomeProvider = "/"
+	}
+
+	if len(c.Rules) == 0 {
+		c.Rules = map[string]string{
+			"/":                                    sharedconf.GetGatewaySVC(""),
+			"00000000-0000-0000-0000-000000000000": sharedconf.GetGatewaySVC(""),
+		}
+	}
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -55,6 +69,7 @@ func New(m map[string]interface{}) (storage.Registry, error) {
 	if err != nil {
 		return nil, err
 	}
+	c.init()
 	return &reg{c: c}, nil
 }
 
@@ -76,13 +91,12 @@ func (b *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, er
 // returns the the root path of the first provider in the list.
 // TODO(labkode): this is not production ready.
 func (b *reg) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error) {
-	for k, v := range b.c.Rules {
-		if k == b.c.HomeProvider {
-			return &registrypb.ProviderInfo{
-				ProviderPath: k,
-				Address:      v,
-			}, nil
-		}
+	address, ok := b.c.Rules[b.c.HomeProvider]
+	if ok {
+		return &registrypb.ProviderInfo{
+			ProviderPath: b.c.HomeProvider,
+			Address:      address,
+		}, nil
 	}
 	return nil, errors.New("static: home not found")
 }
@@ -113,15 +127,13 @@ func (b *reg) FindProvider(ctx context.Context, ref *provider.Reference) (*regis
 	if id == nil {
 		return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())
 	}
-
-	for prefix := range b.c.Rules {
-		if id.StorageId == prefix {
-			// TODO(labkode): fill path info based on provider id, if path and storage id points to same id, take that.
-			return &registrypb.ProviderInfo{
-				ProviderId: prefix,
-				Address:    b.c.Rules[prefix],
-			}, nil
-		}
+	address, ok := b.c.Rules[id.StorageId]
+	if ok {
+		// TODO(labkode): fill path info based on provider id, if path and storage id points to same id, take that.
+		return &registrypb.ProviderInfo{
+			ProviderId: id.StorageId,
+			Address:    address,
+		}, nil
 	}
 	return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())
 }

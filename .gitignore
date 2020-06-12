@@ -11,6 +11,9 @@
 # Visual Studio Code
 .vscode
 
+# GoLand
+.idea
+
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 
@@ -35,3 +38,4 @@ docs/tech-doc-hugo
 docs/themes/
 
 dist/
+bin/

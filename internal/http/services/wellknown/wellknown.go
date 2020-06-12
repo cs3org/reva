@@ -25,6 +25,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/mitchellh/mapstructure"
+	"github.com/rs/zerolog"
 )
 
 func init() {
@@ -43,21 +44,25 @@ type config struct {
 	EndSessionEndpoint    string `mapstructure:"end_session_endpoint"`
 }
 
+func (c *config) init() {
+	if c.Prefix == "" {
+		c.Prefix = ".well-known"
+	}
+}
+
 type svc struct {
 	conf    *config
 	handler http.Handler
 }
 
 // New returns a new webuisvc
-func New(m map[string]interface{}) (global.Service, error) {
+func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
 	}
 
-	if conf.Prefix == "" {
-		conf.Prefix = ".well-known"
-	}
+	conf.init()
 
 	s := &svc{
 		conf: conf,

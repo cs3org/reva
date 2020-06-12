@@ -44,10 +44,10 @@ const (
 	ShareTypePublicLink ShareType = 3
 
 	// ShareTypeGroup represents a group share
-	// ShareTypeGroup shareType = 1
+	// ShareTypeGroup ShareType = 1
 
 	// ShareTypeFederatedCloudShare represents a federated share
-	// ShareTypeFederatedCloudShare shareType = 6
+	ShareTypeFederatedCloudShare ShareType = 6
 )
 
 // ResourceType indicates the OCS type of the resource
@@ -71,11 +71,6 @@ func (rt ResourceType) String() (s string) {
 
 // ShareType denotes a type of share
 type ShareType int
-
-// Element is a commodity type wraps members of any interface (as per Owncloud's OCS V1 Spec)
-type Element struct {
-	Data interface{} `json:"element" xml:"element"`
-}
 
 // ShareData represents https://doc.owncloud.com/server/developer_manual/core/ocs-share-api.html#response-attributes-1
 type ShareData struct {
@@ -102,9 +97,15 @@ type ShareData struct {
 	UIDFileOwner string `json:"uid_file_owner" xml:"uid_file_owner"`
 	// The display name of the user that owns the file or folder being shared.
 	DisplaynameFileOwner string `json:"displayname_file_owner" xml:"displayname_file_owner"`
+	// ?
+	AdditionalInfoOwner string `json:"additional_info_owner" xml:"additional_info_owner"`
+	// ?
+	AdditionalInfoFileOwner string `json:"additional_info_file_owner" xml:"additional_info_file_owner"`
+	// share state, 0 = accepted, 1 = pending, 2 = declined
+	State int `json:"state" xml:"state"`
 	// The path to the shared file or folder.
 	Path string `json:"path" xml:"path"`
-	// The type of the object being shared. This can be one of file or folder.
+	// The type of the object being shared. This can be one of 'file' or 'folder'.
 	ItemType string `json:"item_type" xml:"item_type"`
 	// The RFC2045-compliant mimetype of the file.
 	MimeType  string `json:"mimetype" xml:"mimetype"`
@@ -116,7 +117,7 @@ type ShareData struct {
 	FileSource string `json:"file_source" xml:"file_source"`
 	// The unique node id of the parent node of the item being shared.
 	FileParent string `json:"file_parent" xml:"file_parent"`
-	// The name of the shared file.
+	// The basename of the shared file.
 	FileTarget string `json:"file_target" xml:"file_target"`
 	// The uid of the receiver of the file. This is either
 	// - a GID (group id) if it is being shared with a group or
@@ -129,7 +130,7 @@ type ShareData struct {
 	// Whether the recipient was notified, by mail, about the share being shared with them.
 	MailSend string `json:"mail_send" xml:"mail_send"`
 	// Name of the public share
-	Name string `json:"name,omitempty" xml:"name,omitempty"`
+	Name string `json:"name" xml:"name"`
 	// URL of the public share
 	URL string `json:"url,omitempty" xml:"url,omitempty"`
 	// Attributes associated
@@ -271,7 +272,6 @@ func AsCS3Permissions(p int, rp *provider.ResourcePermissions) *provider.Resourc
 }
 
 // PublicShare2ShareData converts a cs3api public share into shareData data model
-// TODO(refs) this would be more accurate with a PublicShare as second argument and not the request
 func PublicShare2ShareData(share *link.PublicShare, r *http.Request) *ShareData {
 	var expiration string
 	if share.Expiration != nil {
@@ -281,28 +281,31 @@ func PublicShare2ShareData(share *link.PublicShare, r *http.Request) *ShareData 
 	}
 
 	return &ShareData{
-		// THERE BE DRAGONS
-		// TODO map share.resourceId to path and storage ... requires a stat call
 		// share.permissions ar mapped below
-		// TODO lookup user metadata
 		// DisplaynameOwner:     creator.DisplayName,
-		// TODO lookup user metadata
 		// DisplaynameFileOwner: share.GetCreator().String(),
 		ID:           share.Id.OpaqueId,
-		Permissions:  publicSharePermissions2OCSPermissions(share.GetPermissions()),
 		ShareType:    ShareTypePublicLink,
-		UIDOwner:     UserIDToString(share.Creator),
 		STime:        share.Ctime.Seconds, // TODO CS3 api birth time = btime
-		UIDFileOwner: UserIDToString(share.Owner),
 		Token:        share.Token,
 		Expiration:   expiration,
 		MimeType:     share.Mtime.String(),
-		Name:         r.FormValue("name"),
-		// URL:                  r.Host + "/#/s/" + share.Token, // this is broken. r.Host doesn't point to Phoenix
-		URL: "localhost:8300/#/s/" + share.Token,
+		Name:         share.DisplayName,
+		URL:          r.Header.Get("Origin") + "/#/s/" + share.Token,
+		Permissions:  publicSharePermissions2OCSPermissions(share.GetPermissions()),
+		UIDOwner:     LocalUserIDToString(share.Creator),
+		UIDFileOwner: LocalUserIDToString(share.Owner),
 	}
 	// actually clients should be able to GET and cache the user info themselves ...
 	// TODO check grantee type for user vs group
+}
+
+// LocalUserIDToString transforms a cs3api user id into an ocs data model without domain name
+func LocalUserIDToString(userID *userpb.UserId) string {
+	if userID == nil || userID.OpaqueId == "" {
+		return ""
+	}
+	return userID.OpaqueId
 }
 
 // UserIDToString transforms a cs3api user id into an ocs data model

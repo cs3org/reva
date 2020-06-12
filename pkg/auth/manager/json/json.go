@@ -37,13 +37,13 @@ func init() {
 
 // Credentials holds a pair of secret and userid
 type Credentials struct {
-	ID           *user.UserId `mapstructure:"id"`
-	Username     string       `mapstructure:"username"`
-	Mail         string       `mapstructure:"mail"`
-	MailVerified bool         `mapstructure:"mail_verified"`
-	DisplayName  string       `mapstructure:"display_name"`
-	Secret       string       `mapstructure:"secret"`
-	Groups       []string     `mapstructure:"groups"`
+	ID           *user.UserId `mapstructure:"id" json:"id"`
+	Username     string       `mapstructure:"username" json:"username"`
+	Mail         string       `mapstructure:"mail" json:"mail"`
+	MailVerified bool         `mapstructure:"mail_verified" json:"mail_verified"`
+	DisplayName  string       `mapstructure:"display_name" json:"display_name"`
+	Secret       string       `mapstructure:"secret" json:"secret"`
+	Groups       []string     `mapstructure:"groups" json:"groups"`
 }
 
 type manager struct {
@@ -55,12 +55,19 @@ type config struct {
 	Users string `mapstructure:"users"`
 }
 
+func (c *config) init() {
+	if c.Users == "" {
+		c.Users = "/var/tmp/reva/users.json"
+	}
+}
+
 func parseConfig(m map[string]interface{}) (*config, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
 		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
 	}
+	c.init()
 	return c, nil
 }
 

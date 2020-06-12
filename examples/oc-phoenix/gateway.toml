@@ -23,7 +23,11 @@ userprovidersvc = "localhost:18000"
 # sharing
 usershareprovidersvc = "localhost:17000"
 publicshareprovidersvc = "localhost:17000"
-ocmshareprovidersvc = "localhost:17000"
+# ocm
+ocmcoresvc = "localhost:13000"
+ocmshareprovidersvc = "localhost:13000"
+ocminvitemanagersvc = "localhost:13000"
+ocmproviderauthorizersvc = "localhost:13000"
 # other
 commit_share_to_storage_grant = true
 datagateway = "http://localhost:19001/data"

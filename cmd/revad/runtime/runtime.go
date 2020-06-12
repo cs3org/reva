@@ -44,12 +44,19 @@ import (
 )
 
 // Run runs a reva server with the given config file and pid file.
-func Run(mainConf map[string]interface{}, pidFile string) {
+func Run(mainConf map[string]interface{}, pidFile, logLevel string) {
+	logConf := parseLogConfOrDie(mainConf["log"], logLevel)
+	logger := initLogger(logConf)
+	RunWithOptions(mainConf, pidFile, WithLogger(logger))
+}
+
+// RunWithOptions runs a reva server with the given config file, pid file and options.
+func RunWithOptions(mainConf map[string]interface{}, pidFile string, opts ...Option) {
+	options := newOptions(opts...)
 	parseSharedConfOrDie(mainConf["shared"])
 	coreConf := parseCoreConfOrDie(mainConf["core"])
-	logConf := parseLogConfOrDie(mainConf["log"])
 
-	run(mainConf, coreConf, logConf, pidFile)
+	run(mainConf, coreConf, options.Logger, pidFile)
 }
 
 type coreConf struct {
@@ -60,9 +67,7 @@ type coreConf struct {
 	TracingServiceName string `mapstructure:"tracing_service_name"`
 }
 
-func run(mainConf map[string]interface{}, coreConf *coreConf, logConf *logConf, filename string) {
-	logger := initLogger(logConf)
-
+func run(mainConf map[string]interface{}, coreConf *coreConf, logger *zerolog.Logger, filename string) {
 	host, _ := os.Hostname()
 	logger.Info().Msgf("host info: %s", host)
 
@@ -342,7 +347,7 @@ func parseSharedConfOrDie(v interface{}) {
 	}
 }
 
-func parseLogConfOrDie(v interface{}) *logConf {
+func parseLogConfOrDie(v interface{}, logLevel string) *logConf {
 	c := &logConf{}
 	if err := mapstructure.Decode(v, c); err != nil {
 		fmt.Fprintf(os.Stderr, "error decoding log config: %s\n", err.Error())
@@ -352,6 +357,11 @@ func parseLogConfOrDie(v interface{}) *logConf {
 	// if mode is not set, we use console mode, easier for devs
 	if c.Mode == "" {
 		c.Mode = "console"
+	}
+
+	// Give priority to the log level passed through the command line.
+	if logLevel != "" {
+		c.Level = logLevel
 	}
 
 	return c

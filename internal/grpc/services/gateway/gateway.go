@@ -21,10 +21,12 @@ package gateway
 import (
 	"fmt"
 	"net/url"
+	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 
 	"github.com/cs3org/reva/pkg/rgrpc"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/token"
 	"github.com/cs3org/reva/pkg/token/manager/registry"
 	"github.com/mitchellh/mapstructure"
@@ -37,24 +39,66 @@ func init() {
 }
 
 type config struct {
-	AuthRegistryEndpoint        string `mapstructure:"authregistrysvc"`
-	StorageRegistryEndpoint     string `mapstructure:"storageregistrysvc"`
-	AppRegistryEndpoint         string `mapstructure:"appregistrysvc"`
-	PreferencesEndpoint         string `mapstructure:"preferencessvc"`
-	UserShareProviderEndpoint   string `mapstructure:"usershareprovidersvc"`
-	PublicShareProviderEndpoint string `mapstructure:"publicshareprovidersvc"`
-	OCMShareProviderEndpoint    string `mapstructure:"ocmshareprovidersvc"`
-	UserProviderEndpoint        string `mapstructure:"userprovidersvc"`
-	CommitShareToStorageGrant   bool   `mapstructure:"commit_share_to_storage_grant"`
-	CommitShareToStorageRef     bool   `mapstructure:"commit_share_to_storage_ref"`
-	DisableHomeCreationOnLogin  bool   `mapstructure:"disable_home_creation_on_login"`
-	DataGatewayEndpoint         string `mapstructure:"datagateway"`
-	TransferSharedSecret        string `mapstructure:"transfer_shared_secret"`
-	TranserExpires              int64  `mapstructure:"transfer_expires"`
-	TokenManager                string `mapstructure:"token_manager"`
+	AuthRegistryEndpoint          string `mapstructure:"authregistrysvc"`
+	StorageRegistryEndpoint       string `mapstructure:"storageregistrysvc"`
+	AppRegistryEndpoint           string `mapstructure:"appregistrysvc"`
+	PreferencesEndpoint           string `mapstructure:"preferencessvc"`
+	UserShareProviderEndpoint     string `mapstructure:"usershareprovidersvc"`
+	PublicShareProviderEndpoint   string `mapstructure:"publicshareprovidersvc"`
+	OCMShareProviderEndpoint      string `mapstructure:"ocmshareprovidersvc"`
+	OCMInviteManagerEndpoint      string `mapstructure:"ocminvitemanagersvc"`
+	OCMProviderAuthorizerEndpoint string `mapstructure:"ocmproviderauthorizersvc"`
+	OCMCoreEndpoint               string `mapstructure:"ocmcoresvc"`
+	UserProviderEndpoint          string `mapstructure:"userprovidersvc"`
+	DataGatewayEndpoint           string `mapstructure:"datagateway"`
+	CommitShareToStorageGrant     bool   `mapstructure:"commit_share_to_storage_grant"`
+	CommitShareToStorageRef       bool   `mapstructure:"commit_share_to_storage_ref"`
+	DisableHomeCreationOnLogin    bool   `mapstructure:"disable_home_creation_on_login"`
+	TransferSharedSecret          string `mapstructure:"transfer_shared_secret"`
+	TransferExpires               int64  `mapstructure:"transfer_expires"`
+	TokenManager                  string `mapstructure:"token_manager"`
 	// ShareFolder is the location where to create shares in the recipient's storage provider.
 	ShareFolder   string                            `mapstructure:"share_folder"`
 	TokenManagers map[string]map[string]interface{} `mapstructure:"token_managers"`
+}
+
+// sets defaults
+func (c *config) init() {
+	if c.ShareFolder == "" {
+		c.ShareFolder = "MyShares"
+	}
+
+	c.ShareFolder = strings.Trim(c.ShareFolder, "/")
+
+	if c.TokenManager == "" {
+		c.TokenManager = "jwt"
+	}
+
+	// if services address are not specified we used the shared conf
+	// for the gatewaysvc to have dev setups very quickly.
+	c.AuthRegistryEndpoint = sharedconf.GetGatewaySVC(c.AuthRegistryEndpoint)
+	c.StorageRegistryEndpoint = sharedconf.GetGatewaySVC(c.AuthRegistryEndpoint)
+	c.AppRegistryEndpoint = sharedconf.GetGatewaySVC(c.StorageRegistryEndpoint)
+	c.PreferencesEndpoint = sharedconf.GetGatewaySVC(c.AppRegistryEndpoint)
+	c.UserShareProviderEndpoint = sharedconf.GetGatewaySVC(c.UserShareProviderEndpoint)
+	c.PublicShareProviderEndpoint = sharedconf.GetGatewaySVC(c.PublicShareProviderEndpoint)
+	c.OCMShareProviderEndpoint = sharedconf.GetGatewaySVC(c.OCMShareProviderEndpoint)
+	c.OCMInviteManagerEndpoint = sharedconf.GetGatewaySVC(c.OCMInviteManagerEndpoint)
+	c.OCMProviderAuthorizerEndpoint = sharedconf.GetGatewaySVC(c.OCMInviteManagerEndpoint)
+	c.OCMCoreEndpoint = sharedconf.GetGatewaySVC(c.OCMProviderAuthorizerEndpoint)
+	c.UserProviderEndpoint = sharedconf.GetGatewaySVC(c.OCMCoreEndpoint)
+
+	// we reuse the gateway configuration and add http as default data protocol.
+	c.DataGatewayEndpoint = sharedconf.GetGatewaySVC(c.DataGatewayEndpoint)
+	c.DataGatewayEndpoint = fmt.Sprintf("http://%s", c.DataGatewayEndpoint)
+
+	// use shared secret if not set
+	c.TransferSharedSecret = sharedconf.GetJWTSecret(c.TransferSharedSecret)
+
+	// if the transfer does not start in the next 10 seconds the session is expired.
+	if c.TransferExpires == 0 {
+		c.TransferExpires = 10
+	}
 }
 
 type svc struct {
@@ -72,20 +116,9 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	// set defaults
-	if c.ShareFolder == "" {
-		c.ShareFolder = "MyShares"
-	}
-
-	if c.TokenManager == "" {
-		c.TokenManager = "jwt"
-	}
+	c.init()
 
 	// ensure DataGatewayEndpoint is a valid URI
-	if c.DataGatewayEndpoint == "" {
-		return nil, errors.New("datagateway is not defined")
-	}
-
 	u, err := url.Parse(c.DataGatewayEndpoint)
 	if err != nil {
 		return nil, err

@@ -8,8 +8,8 @@ GIT_DIRTY=`git diff-index --quiet HEAD -- || echo "dirty-"`
 VERSION=`git describe --always`
 GO_VERSION=`go version | awk '{print $$3}'`
 
-default: build test lint contrib
-release: deps build test lint
+default: build test lint gen-doc
+release: deps build test lint gen-doc
 
 off:
 	GOPROXY=off
@@ -43,11 +43,11 @@ lint:
 	`go env GOPATH`/bin/golangci-lint run
 
 contrib:
-	#git shortlog -se | cut -c8- | sort -u | awk '{print "-", $$0}' | grep -v 'users.noreply.github.com' > CONTRIBUTORS.md
+	git shortlog -se | cut -c8- | sort -u | awk '{print "-", $$0}' | grep -v 'users.noreply.github.com' > CONTRIBUTORS.md
 
 # for manual building only
 deps:
-	cd /tmp && rm -rf golangci-lint &&  git clone --quiet -b 'v1.21.0' --single-branch --depth 1 https://github.com/golangci/golangci-lint &> /dev/null && cd golangci-lint/cmd/golangci-lint && go install
+	cd /tmp && rm -rf golangci-lint &&  git clone --quiet -b 'v1.26.0' --single-branch --depth 1 https://github.com/golangci/golangci-lint &> /dev/null && cd golangci-lint/cmd/golangci-lint && go install
 	cd /tmp && go get golang.org/x/tools/cmd/goimports
 
 build-ci: off
@@ -57,6 +57,8 @@ build-ci: off
 lint-ci:
 	go run tools/check-license/check-license.go
 
+gen-doc:
+	go run tools/generate-documentation/main.go
 
 # to be run in CI platform
 ci: build-ci test  lint-ci

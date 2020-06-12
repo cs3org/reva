@@ -34,7 +34,10 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/storage/utils/templates"
+	ctxuser "github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
+	"github.com/rs/zerolog"
 )
 
 type ctxKey int
@@ -49,11 +52,33 @@ func init() {
 
 // Config holds the config options that need to be passed down to all ocdav handlers
 type Config struct {
-	Prefix          string `mapstructure:"prefix"`
-	FilesNamespace  string `mapstructure:"files_namespace"`
+	Prefix string `mapstructure:"prefix"`
+	// FilesNamespace prefixes the namespace, optionally with user information.
+	// Example: if FilesNamespace is /users/{{substr 0 1 .Username}}/{{.Username}}
+	// and received path is /docs the internal path will be:
+	// /users/<first char of username>/<username>/docs
+	FilesNamespace string `mapstructure:"files_namespace"`
+	// WebdavNamespace prefixes the namespace, optionally with user information.
+	// Example: if WebdavNamespace is /users/{{substr 0 1 .Username}}/{{.Username}}
+	// and received path is /docs the internal path will be:
+	// /users/<first char of username>/<username>/docs
 	WebdavNamespace string `mapstructure:"webdav_namespace"`
 	ChunkFolder     string `mapstructure:"chunk_folder"`
 	GatewaySvc      string `mapstructure:"gatewaysvc"`
+	DisableTus      bool   `mapstructure:"disable_tus"`
+}
+
+func (c *Config) init() {
+	if c.Prefix == "" {
+		c.Prefix = "webdav"
+	}
+
+	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+
+	if c.ChunkFolder == "" {
+		c.ChunkFolder = "/var/tmp/reva/tmp/davchunks"
+	}
+
 }
 
 type svc struct {
@@ -63,17 +88,13 @@ type svc struct {
 }
 
 // New returns a new ocdav
-func New(m map[string]interface{}) (global.Service, error) {
+func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	conf := &Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
 	}
 
-	conf.GatewaySvc = sharedconf.GetGatewaySVC(conf.GatewaySvc)
-
-	if conf.ChunkFolder == "" {
-		conf.ChunkFolder = os.TempDir()
-	}
+	conf.init()
 
 	if err := os.MkdirAll(conf.ChunkFolder, 0755); err != nil {
 		return nil, err
@@ -103,7 +124,7 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{"/status.php"}
+	return []string{"/status.php", "/remote.php/dav/public-files/"}
 }
 
 func (s *svc) Handler() http.Handler {
@@ -111,8 +132,7 @@ func (s *svc) Handler() http.Handler {
 		ctx := r.Context()
 		log := appctx.GetLogger(ctx)
 
-		// the webdav api is accessible from anywhere
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		addAccessHeaders(w, r)
 
 		// TODO(jfd): do we need this?
 		// fake litmus testing for empty namespace: see https://github.com/golang/net/blob/e514e69ffb8bc3c76a71ae40de0118d794855992/webdav/litmus_test_server.go#L58-L89
@@ -170,6 +190,10 @@ func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
 	return pool.GetGatewayServiceClient(s.c.GatewaySvc)
 }
 
+func applyLayout(ctx context.Context, ns string) string {
+	return templates.WithUser(ctxuser.ContextMustGetUser(ctx), ns)
+}
+
 func wrapResourceID(r *provider.ResourceId) string {
 	return wrap(r.StorageId, r.OpaqueId)
 }
@@ -194,5 +218,29 @@ func unwrap(rid string) *provider.ResourceId {
 	return &provider.ResourceId{
 		StorageId: parts[0],
 		OpaqueId:  parts[1],
+	}
+}
+
+func addAccessHeaders(w http.ResponseWriter, r *http.Request) {
+	headers := w.Header()
+	// the webdav api is accessible from anywhere
+	headers.Set("Access-Control-Allow-Origin", "*")
+	// all resources served via the DAV endpoint should have the strictest possible as default
+	headers.Set("Content-Security-Policy", "default-src 'none';")
+	// disable sniffing the content type for IE
+	headers.Set("X-Content-Type-Options", "nosniff")
+	// https://msdn.microsoft.com/en-us/library/jj542450(v=vs.85).aspx
+	headers.Set("X-Download-Options", "noopen")
+	// Disallow iFraming from other domains
+	headers.Set("X-Frame-Options", "SAMEORIGIN")
+	// https://www.adobe.com/devnet/adobe-media-server/articles/cross-domain-xml-for-streaming.html
+	headers.Set("X-Permitted-Cross-Domain-Policies", "none")
+	// https://developers.google.com/webmasters/control-crawl-index/docs/robots_meta_tag
+	headers.Set("X-Robots-Tag", "none")
+	// enforce browser based XSS filters
+	headers.Set("X-XSS-Protection", "1; mode=block")
+
+	if r.TLS != nil {
+		headers.Set("Strict-Transport-Security", "max-age=63072000")
 	}
 }

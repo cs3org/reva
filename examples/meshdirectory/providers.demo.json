@@ -1,0 +1,103 @@
+{
+  "providers": [
+    {
+      "Name": "cernbox",
+      "FullName": "CERNBox",
+      "Organization": "CERN",
+      "Domain": "cernbox.cern.ch",
+      "Homepage": "https://cernbox.cern.ch",
+      "Description": "CERNBox provides cloud data storage to all CERN users.You can store your data,share it and synchronise it across devices - smartphones, tablets, laptops, desktops, the lot!",
+      "Services": [
+        {
+          "Type": {
+            "Name": "OCM",
+            "Description": "CERNBox Open Cloud Mesh API"
+          },
+          "Name": "CERNBox - OCM API",
+          "Path": "",
+          "IsMonitored": true,
+          "Properties": {},
+          "Host": "",
+          "AdditionalEndpoints": [
+            {
+              "IsMonitored": true,
+              "Name": "OCM API",
+              "Path": "https://cernbox.cern.ch/ocm",
+              "Properties": {},
+              "Type": {
+                "Description": "Open Cloud Mesh",
+                "Name": "OCM"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "oc-cesnet",
+      "FullName": "ownCloud@CESNET",
+      "Organization": "CESNET",
+      "Domain": "owncloud.cesnet.cz",
+      "Homepage": "https://owncloud.cesnet.cz",
+      "Description": "OwnCloud has been designed for individual users. It enables automatic data synchronisation between various computers and mobile devices of the user. Data are also available through the web interface. Data can be easily shared with colleagues.",
+      "Services": [
+        {
+          "Type": {
+            "Name": "OCM",
+            "Description": "CESNET Open Cloud Mesh API"
+          },
+          "Name": "CESNET - OCM API",
+          "Path": "",
+          "IsMonitored": true,
+          "Properties": {},
+          "Host": "",
+          "AdditionalEndpoints": [
+            {
+              "IsMonitored": true,
+              "Name": "OCM API",
+              "Path": "https://owncloud.cesnet.cz/ocm",
+              "Properties": {},
+              "Type": {
+                "Description": "Open Cloud Mesh",
+                "Name": "OCM"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "catbox",
+      "FullName": "CatBox",
+      "Organization": "Erwin Schrödinger",
+      "Domain": "catbox.example.org",
+      "Homepage": "https://catbox.example.org/dead",
+      "Description": "A nondeterministic storage of cats.",
+      "Services": [
+        {
+          "Type": {
+            "Name": "OCM",
+            "Description": "CatBox Open Cloud Mesh API"
+          },
+          "Name": "CatBox - OCM API",
+          "Path": "",
+          "IsMonitored": true,
+          "Properties": {},
+          "Host": "",
+          "AdditionalEndpoints": [
+            {
+              "IsMonitored": true,
+              "Name": "OCM API",
+              "Path": "https://catbox.example.org/alive/ocm",
+              "Properties": {},
+              "Type": {
+                "Description": "Open Cloud Mesh",
+                "Name": "OCM"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

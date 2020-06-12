@@ -78,10 +78,10 @@ github_repo = "https://github.com/cs3org/reva"
 github_project_repo = "https://github.com/cs3org/reva"
 
 # Specify a value here if your content directory is not in your repo's root directory
-# github_subdir = ""
+github_subdir = "docs"
 
 # Google Custom Search Engine ID. Remove or comment out to disable search.
- gcs_engine_id = "011737558837375720776:fsdu1nryfng"
+gcs_engine_id = "010913146518163072247:tinkle2veql"
 
 # Enable Algolia DocSearch
 algolia_docsearch = false
@@ -135,7 +135,7 @@ no = 'Sorry to hear that. Please <a href="https://github.com/USERNAME/REPOSITORY
 # Developer relevant links. These will show up on right side of footer and in the community page if you have one.
 [[params.links.developer]]
 	name = "GitHub"
-	url = "https://github.com/google/docsy"
+	url = "https://github.com/cs3org/reva"
 	icon = "fab fa-github"
         desc = "Development takes place here!"
 #[[params.links.developer]]

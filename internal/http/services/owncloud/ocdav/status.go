@@ -22,13 +22,13 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/data"
 	"github.com/cs3org/reva/pkg/appctx"
 )
 
 func (s *svc) doStatus(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context())
-	status := &ocs.Status{
+	status := &data.Status{
 		Installed:      true,
 		Maintenance:    false,
 		NeedsDBUpgrade: false,

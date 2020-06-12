@@ -172,8 +172,14 @@ bigfilechunking = true
 blacklisted_files = ["foo"]
 undelete = true
 versioning = true
+[http.services.ocssvc.capabilities.capabilities.files.tus_support]
+version = "1.0.0"
+resumable = "1.0.0"
+extension = "creation,creation-with-upload"
+http_method_override = ""
+max_chunk_size = 0
 [http.services.ocssvc.capabilities.capabilities.dav]
-chunking = "1.0"
+chunking = "" # set to "1.0" for experimental support
 [http.services.ocssvc.capabilities.capabilities.files_sharing]
 api_enabled = true
 resharing = true

@@ -22,6 +22,7 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"strconv"
 	"time"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -34,6 +35,9 @@ import (
 func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
+
+	ns = applyLayout(ctx, ns)
+
 	fn := path.Join(ns, r.URL.Path)
 
 	client, err := s.getClient()
@@ -116,12 +120,15 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	w.Header().Set("Content-Type", info.MimeType)
+	w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''"+
+		path.Base(info.Path)+"; filename=\""+path.Base(info.Path)+"\"")
 	w.Header().Set("ETag", info.Etag)
 	w.Header().Set("OC-FileId", wrapResourceID(info.Id))
 	w.Header().Set("OC-ETag", info.Etag)
 	t := utils.TSToTime(info.Mtime)
-	lastModifiedString := t.Format(time.RFC1123)
+	lastModifiedString := t.Format(time.RFC1123Z)
 	w.Header().Set("Last-Modified", lastModifiedString)
+	w.Header().Set("Content-Length", strconv.FormatUint(info.Size, 10))
 	/*
 		if md.Checksum != "" {
 			w.Header().Set("OC-Checksum", md.Checksum)

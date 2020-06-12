@@ -34,7 +34,7 @@ import (
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/storage/acl"
+	"github.com/cs3org/reva/pkg/storage/utils/acl"
 	"github.com/gofrs/uuid"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
@@ -231,6 +231,11 @@ func (c *Client) executeEOS(ctx context.Context, cmd *exec.Cmd) (string, string,
 	cmd.Env = []string{
 		"EOS_MGM_URL=" + c.opt.URL,
 	}
+	if c.opt.UseKeytab {
+		cmd.Env = append(cmd.Env, "XrdSecPROTOCOL="+c.opt.SecProtocol)
+		cmd.Env = append(cmd.Env, "XrdSecSSSKT="+c.opt.Keytab)
+	}
+
 	trace := trace.FromContext(ctx).SpanContext().TraceID.String()
 	cmd.Args = append(cmd.Args, "--comment", trace)
 
@@ -469,16 +474,16 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, username, path string) (
 }
 
 // GetQuota gets the quota of a user on the quota node defined by path
-func (c *Client) GetQuota(ctx context.Context, username, path string) (int, int, error) {
+func (c *Client) GetQuota(ctx context.Context, username, path string) (*QuotaInfo, error) {
 	// setting of the sys.acl is only possible from root user
 	unixUser, err := c.getUnixUser(rootUser)
 	if err != nil {
-		return 0, 0, err
+		return nil, err
 	}
 	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "quota", "ls", "-u", username, "-m")
 	stdout, _, err := c.executeEOS(ctx, cmd)
 	if err != nil {
-		return 0, 0, err
+		return nil, err
 	}
 	return c.parseQuota(path, stdout)
 }
@@ -590,12 +595,8 @@ func (c *Client) Read(ctx context.Context, username, path string) (io.ReadCloser
 	return os.Open(localTarget)
 }
 
-// Write writes a file to the mgm
+// Write writes a stream to the mgm
 func (c *Client) Write(ctx context.Context, username, path string, stream io.ReadCloser) error {
-	unixUser, err := c.getUnixUser(username)
-	if err != nil {
-		return err
-	}
 	fd, err := ioutil.TempFile(c.opt.CacheDirectory, "eoswrite-")
 	if err != nil {
 		return err
@@ -608,8 +609,18 @@ func (c *Client) Write(ctx context.Context, username, path string, stream io.Rea
 	if err != nil {
 		return err
 	}
+
+	return c.WriteFile(ctx, username, path, fd.Name())
+}
+
+// WriteFile writes an existing file to the mgm
+func (c *Client) WriteFile(ctx context.Context, username, path, source string) error {
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return err
+	}
 	xrdPath := fmt.Sprintf("%s//%s", c.opt.URL, path)
-	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, "--nopbar", "--silent", "-f", fd.Name(), xrdPath, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s", unixUser.Uid, unixUser.Gid))
+	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, "--nopbar", "--silent", "-f", source, xrdPath, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s", unixUser.Uid, unixUser.Gid))
 	_, _, err = c.execute(ctx, cmd)
 	return err
 }
@@ -699,14 +710,14 @@ func parseRecycleList(raw string) ([]*DeletedEntry, error) {
 }
 
 // parse entries like these:
-// recycle=ls  recycle-bin=/eos/backup/proc/recycle/ uid=gonzalhu gid=it size=0 deletion-time=1510823151 type=recursive-dir keylength.restore-path=45 restore-path=/eos/scratch/user/g/gonzalhu/.sys.v#.app.ico/ restore-key=0000000000a35100
-// recycle=ls  recycle-bin=/eos/backup/proc/recycle/ uid=gonzalhu gid=it size=381038 deletion-time=1510823151 type=file keylength.restore-path=36 restore-path=/eos/scratch/user/g/gonzalhu/app.ico restore-key=000000002544fdb3
+// recycle=ls recycle-bin=/eos/backup/proc/recycle/ uid=gonzalhu gid=it size=0 deletion-time=1510823151 type=recursive-dir keylength.restore-path=45 restore-path=/eos/scratch/user/g/gonzalhu/.sys.v#.app.ico/ restore-key=0000000000a35100
+// recycle=ls recycle-bin=/eos/backup/proc/recycle/ uid=gonzalhu gid=it size=381038 deletion-time=1510823151 type=file keylength.restore-path=36 restore-path=/eos/scratch/user/g/gonzalhu/app.ico restore-key=000000002544fdb3
 func parseRecycleEntry(raw string) (*DeletedEntry, error) {
 	partsBySpace := strings.Split(raw, " ")
 	restoreKeyPair, partsBySpace := partsBySpace[len(partsBySpace)-1], partsBySpace[:len(partsBySpace)-1]
-	restorePathPair := strings.Join(partsBySpace[9:], " ")
+	restorePathPair := strings.Join(partsBySpace[8:], " ")
 
-	partsBySpace = partsBySpace[:9]
+	partsBySpace = partsBySpace[:8]
 	partsBySpace = append(partsBySpace, restorePathPair)
 	partsBySpace = append(partsBySpace, restoreKeyPair)
 
@@ -772,7 +783,7 @@ func (c Client) parseQuotaLine(line string) map[string]string {
 	m := getMap(partsBySpace)
 	return m
 }
-func (c *Client) parseQuota(path, raw string) (int, int, error) {
+func (c *Client) parseQuota(path, raw string) (*QuotaInfo, error) {
 	rawLines := strings.Split(raw, "\n")
 	for _, rl := range rawLines {
 		if rl == "" {
@@ -788,10 +799,22 @@ func (c *Client) parseQuota(path, raw string) (int, int, error) {
 			usedBytesString := m["usedlogicalbytes"]
 			maxBytes, _ := strconv.ParseInt(maxBytesString, 10, 64)
 			usedBytes, _ := strconv.ParseInt(usedBytesString, 10, 64)
-			return int(maxBytes), int(usedBytes), nil
+
+			maxInodesString := m["maxfiles"]
+			usedInodesString := m["usedfiles"]
+			maxInodes, _ := strconv.ParseInt(maxInodesString, 10, 64)
+			usedInodes, _ := strconv.ParseInt(usedInodesString, 10, 64)
+
+			qi := &QuotaInfo{
+				AvailableBytes:  int(maxBytes),
+				UsedBytes:       int(usedBytes),
+				AvailableInodes: int(maxInodes),
+				UsedInodes:      int(usedInodes),
+			}
+			return qi, nil
 		}
 	}
-	return 0, 0, nil
+	return &QuotaInfo{}, nil
 }
 
 // TODO(labkode): better API to access extended attributes.
@@ -959,4 +982,10 @@ type DeletedEntry struct {
 	Size          uint64
 	DeletionMTime uint64
 	IsDir         bool
+}
+
+// QuotaInfo reports the available bytes and inodes for a particular user.
+type QuotaInfo struct {
+	AvailableBytes, UsedBytes   int
+	AvailableInodes, UsedInodes int
 }

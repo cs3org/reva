@@ -35,9 +35,9 @@ import (
 	"github.com/cs3org/reva/pkg/eosclientgrpc"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/storage/acl"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
-	"github.com/cs3org/reva/pkg/storage/templates"
+	"github.com/cs3org/reva/pkg/storage/utils/acl"
+	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -236,6 +236,10 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	}
 
 	return eosfs, nil
+}
+
+func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64) (string, error) {
+	return "", nil
 }
 
 func (fs *eosfs) Shutdown(ctx context.Context) error {

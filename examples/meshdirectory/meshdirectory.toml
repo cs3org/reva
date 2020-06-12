@@ -1,0 +1,15 @@
+[shared]
+jwt_secret = "Pive-Fumkiu4"
+
+[http]
+address = "0.0.0.0:19001"
+enabled_services = ["meshdirectory"]
+
+[http.services.meshdirectory]
+driver = "mentix"
+
+#[http.services.meshdirectory.drivers.json]
+#providers = "providers.demo.json"
+#
+#[http.services.meshdirectory.drivers.mentix]
+#url = "http://localhost:9600/"

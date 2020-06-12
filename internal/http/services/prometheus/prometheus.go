@@ -21,10 +21,13 @@ package prometheus
 import (
 	"net/http"
 
+	"github.com/cs3org/reva/pkg/metrics"
+
 	"contrib.go.opencensus.io/exporter/prometheus"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"go.opencensus.io/stats/view"
 )
 
@@ -33,15 +36,13 @@ func init() {
 }
 
 // New returns a new prometheus service
-func New(m map[string]interface{}) (global.Service, error) {
+func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
 	}
 
-	if conf.Prefix == "" {
-		conf.Prefix = "metrics"
-	}
+	conf.init()
 
 	pe, err := prometheus.NewExporter(prometheus.Options{
 		Namespace: "revad",
@@ -52,11 +53,26 @@ func New(m map[string]interface{}) (global.Service, error) {
 
 	view.RegisterExporter(pe)
 
+	// register the desired measures' views
+	if err = view.Register(
+		metrics.GetNumUsersView(),
+		metrics.GetNumGroupsView(),
+		metrics.GetAmountStorageView(),
+	); err != nil {
+		return nil, errors.Wrap(err, "prometheus: error registering exporter")
+	}
+
 	return &svc{prefix: conf.Prefix, h: pe}, nil
 }
 
 type config struct {
 	Prefix string `mapstructure:"prefix"`
+}
+
+func (c *config) init() {
+	if c.Prefix == "" {
+		c.Prefix = "metrics"
+	}
 }
 
 type svc struct {

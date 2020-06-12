@@ -23,5 +23,6 @@ import (
 	_ "github.com/cs3org/reva/pkg/user/manager/demo"
 	_ "github.com/cs3org/reva/pkg/user/manager/json"
 	_ "github.com/cs3org/reva/pkg/user/manager/ldap"
+	_ "github.com/cs3org/reva/pkg/user/manager/rest"
 	// Add your own here
 )

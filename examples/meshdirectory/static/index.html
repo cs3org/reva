@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Choose your CS3 Mesh service</title>
+    <style type="text/css">
+        #app {
+            flex-direction: column;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+        a.button {
+            -webkit-appearance: button;
+            -moz-appearance: button;
+            appearance: button;
+            text-decoration: none;
+            padding: 10px 20px 10px 20px;
+            color: white;
+            background-color: darkgreen;
+            text-align: center;
+        }
+        .input-group {
+            text-align: center;
+            max-width: 600px;
+        }
+        .provider-list {
+            padding: 10px 20px 10px 20px;
+        }
+        .provider-details {
+            padding-top: 25px;
+        }
+        .provider-navigate {
+            padding-top: 25px;
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="header">
+        <h1>Choose your CS3 Mesh service</h1>
+    </div>
+    <div class="provider-container">
+        <div class="input-group">
+            <select v-model="selected" class="provider-list">
+                <option v-for="provider in providers" :value="provider.Name" :key="provider.Name">
+                    {{ provider.FullName }}
+                </option>
+            </select>
+            <div class="provider-details" v-if="selected">
+                <h5>Operator:</h5>
+                <span>{{ providerDetails.Organization }}</span>
+                <h5>Service description:</h5>
+                <p>{{ providerDetails.Description }}</p>
+            </div>
+            <div class="provider-navigate" v-if="selected">
+                <a class="provider-btn button"  :href="providerLink(providerDetails)">Go!</a>
+            </div><br>
+            <hr />
+            <span v-if="selected"><i>Will redirect you to:<br>{{providerLink(providerDetails)}}</i></span>
+        </div>
+    </div>
+</div>
+<script src="https://unpkg.com/vue@2.6.11/dist/vue.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.19.2/axios.min.js"></script>
+<script type="application/javascript">
+    axios.defaults.headers.common['Accept'] = 'application/json';
+    new Vue({
+        el: '#app',
+        data() {
+            return {
+                selected: '',
+                providers: []
+            };
+        },
+        methods: {
+            providerLink(provider) {
+                return this.ocmService(provider).AdditionalEndpoints[0].Path
+            },
+            ocmService(provider) {
+                return provider.Services.find(s => {
+                    return s.Type.Name === 'OCM'
+                })
+            }
+        },
+        computed: {
+            providerDetails: function () {
+                return this.providers.find(p => {
+                    return p.Name === this.selected
+                })
+            },
+            baseUrl: function () {
+                return `${window.location.origin}/meshdir/`
+            },
+            queryParams: function () {
+                return new URLSearchParams(window.location.search);
+            }
+        },
+        created() {
+            axios
+                .get(this.baseUrl)
+                .then(response => {
+                    this.providers = response.data.providers;
+                })
+                .catch(err => {
+                    console.log(err)
+                });
+        }
+    });
+</script>
+</body>
+</html>
