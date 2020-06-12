@@ -37,7 +37,6 @@ import (
 	"github.com/cs3org/reva/pkg/storage/acl"
 	"github.com/gofrs/uuid"
 	"github.com/pkg/errors"
-	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
 
 	"github.com/cs3org/reva/pkg/logger"
@@ -89,10 +88,6 @@ type Options struct {
 	// Defaults to apache
 	SingleUsername string
 
-	// Location of the eos binary.
-	// Default is /usr/bin/eos.
-	EosBinary string
-
 	// Location of the xrdcopy binary.
 	// Default is /usr/bin/xrdcopy.
 	XrdcopyBinary string
@@ -125,10 +120,6 @@ func (opt *Options) init() {
 		opt.SingleUsername = "apache"
 	}
 
-	if opt.EosBinary == "" {
-		opt.EosBinary = "/usr/bin/eos"
-	}
-
 	if opt.XrdcopyBinary == "" {
 		opt.XrdcopyBinary = "/usr/bin/xrdcopy"
 	}
@@ -142,8 +133,8 @@ func (opt *Options) init() {
 	}
 }
 
-// Client performs actions against a EOS management node (MGM).
-// It requires the eos-client and xrootd-client packages installed to work.
+// Client performs actions against a EOS management node (MGM)
+// using the EOS GRPC interface.
 type Client struct {
 	opt *Options
 	cl  erpc.EosClient
@@ -152,15 +143,15 @@ type Client struct {
 // Create and connect a grpc eos Client
 func newgrpc(ctx context.Context, opt *Options) (erpc.EosClient, error) {
 	log := appctx.GetLogger(ctx)
-	log.Log().Str("Connecting to ", "'"+opt.GrpcURI+"'").Msg("")
+	log.Debug().Str("Connecting to ", "'"+opt.GrpcURI+"'").Msg("")
 
 	conn, err := grpc.Dial(opt.GrpcURI, grpc.WithInsecure())
 	if err != nil {
-		log.Log().Str("Error connecting to ", "'"+opt.GrpcURI+"' ").Str("err:", err.Error()).Msg("")
+		log.Debug().Str("Error connecting to ", "'"+opt.GrpcURI+"' ").Str("err:", err.Error()).Msg("")
 		return nil, err
 	}
 
-	log.Log().Str("Going to ping ", "'"+opt.GrpcURI+"' ").Msg("")
+	log.Debug().Str("Going to ping ", "'"+opt.GrpcURI+"' ").Msg("")
 	ecl := erpc.NewEosClient(conn)
 	// If we can't ping... treat it as an error... we will see if this has to be kept, for now it's practical
 	prq := new(erpc.PingRequest)
@@ -173,11 +164,11 @@ func newgrpc(ctx context.Context, opt *Options) (erpc.EosClient, error) {
 	}
 
 	if prep == nil {
-		log.Log().Str("Ping to ", "'"+opt.GrpcURI+"' ").Str("gave nil response", "").Msg("")
+		log.Debug().Str("Ping to ", "'"+opt.GrpcURI+"' ").Str("gave nil response", "").Msg("")
 		return nil, errtypes.InternalError("nil response from ping")
 	}
 
-	log.Log().Str("Ping to ", "'"+opt.GrpcURI+"' ").Msg(" was successful")
+	log.Debug().Str("Ping to ", "'"+opt.GrpcURI+"' ").Msg(" was successful")
 	return ecl, nil
 }
 
@@ -1203,13 +1194,17 @@ func (c *Client) ListVersions(ctx context.Context, username, p string) ([]*FileI
 
 // RollbackToVersion rollbacks a file to a previous version.
 func (c *Client) RollbackToVersion(ctx context.Context, username, path, version string) error {
-	unixUser, err := c.getUnixUser(username)
-	if err != nil {
+	// TODO(ffurano):
+	/*
+		unixUser, err := c.getUnixUser(username)
+		if err != nil {
+			return err
+		}
+		cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "file", "versions", path, version)
+		_, _, err = c.executeEOS(ctx, cmd)
 		return err
-	}
-	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "file", "versions", path, version)
-	_, _, err = c.executeEOS(ctx, cmd)
-	return err
+	*/
+	return errtypes.NotSupported("TODO")
 }
 
 // ReadVersion reads the version for the given file.
@@ -1343,55 +1338,6 @@ func (c *Client) execute(ctx context.Context, cmd *exec.Cmd) (string, string, er
 	args := fmt.Sprintf("%s", cmd.Args)
 	env := fmt.Sprintf("%s", cmd.Env)
 	log.Info().Str("args", args).Str("env", env).Int("exit", exitStatus).Msg("eos cmd")
-
-	if err != nil && exitStatus != 2 { // don't wrap the errtypes.NotFoundError
-		err = errors.Wrap(err, "eosclient: error while executing command")
-	}
-
-	return outBuf.String(), errBuf.String(), err
-}
-
-// exec executes only EOS commands the command and returns the stdout, stderr and return code.
-// execute() executes arbitrary commands.
-func (c *Client) executeEOS(ctx context.Context, cmd *exec.Cmd) (string, string, error) {
-	log := appctx.GetLogger(ctx)
-
-	outBuf := &bytes.Buffer{}
-	errBuf := &bytes.Buffer{}
-	cmd.Stdout = outBuf
-	cmd.Stderr = errBuf
-	cmd.Env = []string{
-		"EOS_MGM_URL=" + c.opt.URL,
-	}
-	trace := trace.FromContext(ctx).SpanContext().TraceID.String()
-	cmd.Args = append(cmd.Args, "--comment", trace)
-
-	err := cmd.Run()
-
-	var exitStatus int
-	if exiterr, ok := err.(*exec.ExitError); ok {
-		// The program has exited with an exit code != 0
-		// This works on both Unix and Windows. Although package
-		// syscall is generally platform dependent, WaitStatus is
-		// defined for both Unix and Windows and in both cases has
-		// an ExitStatus() method with the same signature.
-		if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
-			exitStatus = status.ExitStatus()
-			switch exitStatus {
-			case 0:
-				err = nil
-			case 2:
-				err = errtypes.NotFound(errBuf.String())
-			case 22:
-				// eos reports back error code 22 when the user is not allowed to enter the instance
-				err = errtypes.PermissionDenied(errBuf.String())
-			}
-		}
-	}
-
-	args := fmt.Sprintf("%s", cmd.Args)
-	env := fmt.Sprintf("%s", cmd.Env)
-	log.Info().Str("args", args).Str("env", env).Int("exit", exitStatus).Str("err", errBuf.String()).Msg("eos cmd")
 
 	if err != nil && exitStatus != 2 { // don't wrap the errtypes.NotFoundError
 		err = errors.Wrap(err, "eosclient: error while executing command")
