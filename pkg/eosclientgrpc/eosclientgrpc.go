@@ -44,7 +44,6 @@ import (
 )
 
 const (
-	rootUser      = "root"
 	versionPrefix = ".sys.v#."
 )
 
@@ -306,7 +305,7 @@ func (c *Client) AddACL(ctx context.Context, username, path string, a *acl.Entry
 	msg.Id = new(erpc.MDId)
 	msg.Id.Path = []byte(path)
 
-	rq.Command = &erpc.NSRequest_Acl{msg}
+	rq.Command = &erpc.NSRequest_Acl{Acl: msg}
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(context.Background(), rq)
@@ -376,7 +375,7 @@ func (c *Client) RemoveACL(ctx context.Context, username, path string, aclType s
 	msg.Id = new(erpc.MDId)
 	msg.Id.Path = []byte(path)
 
-	rq.Command = &erpc.NSRequest_Acl{msg}
+	rq.Command = &erpc.NSRequest_Acl{Acl: msg}
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(context.Background(), rq)
@@ -500,7 +499,7 @@ func (c *Client) getACLForPath(ctx context.Context, username, path string) (*acl
 	msg.Id = new(erpc.MDId)
 	msg.Id.Path = []byte(path)
 
-	rq.Command = &erpc.NSRequest_Acl{msg}
+	rq.Command = &erpc.NSRequest_Acl{Acl: msg}
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(context.Background(), rq)
@@ -597,7 +596,7 @@ func (c *Client) SetAttr(ctx context.Context, username string, attr *Attribute, 
 	msg.Id = new(erpc.MDId)
 	msg.Id.Path = []byte(path)
 
-	rq.Command = &erpc.NSRequest_Xattr{msg}
+	rq.Command = &erpc.NSRequest_Xattr{Xattr: msg}
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(ctx, rq)
@@ -634,7 +633,7 @@ func (c *Client) UnsetAttr(ctx context.Context, username string, attr *Attribute
 	msg.Id = new(erpc.MDId)
 	msg.Id.Path = []byte(path)
 
-	rq.Command = &erpc.NSRequest_Xattr{msg}
+	rq.Command = &erpc.NSRequest_Xattr{Xattr: msg}
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(ctx, rq)
@@ -731,7 +730,7 @@ func (c *Client) Touch(ctx context.Context, username, path string) error {
 	msg.Id = new(erpc.MDId)
 	msg.Id.Path = []byte(path)
 
-	rq.Command = &erpc.NSRequest_Touch{msg}
+	rq.Command = &erpc.NSRequest_Touch{Touch: msg}
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(ctx, rq)
@@ -776,7 +775,7 @@ func (c *Client) Chown(ctx context.Context, username, chownUser, path string) er
 	msg.Id = new(erpc.MDId)
 	msg.Id.Path = []byte(path)
 
-	rq.Command = &erpc.NSRequest_Chown{msg}
+	rq.Command = &erpc.NSRequest_Chown{Chown: msg}
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(ctx, rq)
@@ -816,7 +815,7 @@ func (c *Client) Chmod(ctx context.Context, username, mode, path string) error {
 	msg.Id = new(erpc.MDId)
 	msg.Id.Path = []byte(path)
 
-	rq.Command = &erpc.NSRequest_Chmod{msg}
+	rq.Command = &erpc.NSRequest_Chmod{Chmod: msg}
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(ctx, rq)
@@ -857,7 +856,7 @@ func (c *Client) CreateDir(ctx context.Context, username, path string) error {
 	msg.Id = new(erpc.MDId)
 	msg.Id.Path = []byte(path)
 
-	rq.Command = &erpc.NSRequest_Mkdir{msg}
+	rq.Command = &erpc.NSRequest_Mkdir{Mkdir: msg}
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(ctx, rq)
@@ -890,7 +889,7 @@ func (c *Client) rm(ctx context.Context, username, path string) error {
 	msg.Id = new(erpc.MDId)
 	msg.Id.Path = []byte(path)
 
-	rq.Command = &erpc.NSRequest_Unlink{msg}
+	rq.Command = &erpc.NSRequest_Unlink{Unlink: msg}
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(ctx, rq)
@@ -923,7 +922,7 @@ func (c *Client) rmdir(ctx context.Context, username, path string) error {
 	msg.Id = new(erpc.MDId)
 	msg.Id.Path = []byte(path)
 
-	rq.Command = &erpc.NSRequest_Rmdir{msg}
+	rq.Command = &erpc.NSRequest_Rmdir{Rmdir: msg}
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(ctx, rq)
@@ -965,8 +964,6 @@ func (c *Client) Rename(ctx context.Context, username, oldPath, newPath string) 
 
 // List the contents of the directory given by path
 func (c *Client) List(ctx context.Context, username, dpath string) ([]*FileInfo, error) {
-	log := appctx.GetLogger(ctx)
-
 	// Stuff filename, uid, gid into the MDRequest type
 	fdrq := new(erpc.FindRequest)
 	fdrq.Maxdepth = 1
@@ -1001,8 +998,7 @@ func (c *Client) List(ctx context.Context, username, dpath string) ([]*FileInfo,
 	}
 
 	var mylst []*FileInfo
-	var i int
-	i = 0
+	i := 0
 	for {
 		rsp, err := resp.Recv()
 		if err != nil {
@@ -1016,7 +1012,7 @@ func (c *Client) List(ctx context.Context, username, dpath string) ([]*FileInfo,
 
 		fmt.Printf("--- Find('%s') gave item '%s'\n", dpath, rsp)
 		if rsp == nil {
-			return nil, errtypes.NotFound(fmt.Sprintf("%s", dpath))
+			return nil, errtypes.NotFound(dpath)
 		}
 
 		myitem, err := c.grpcMDResponseToFileInfo(rsp, dpath)
@@ -1031,9 +1027,6 @@ func (c *Client) List(ctx context.Context, username, dpath string) ([]*FileInfo,
 		}
 		mylst = append(mylst, myitem)
 	}
-
-	log.Info().Str("username", username).Str("path", dpath).Int("nitems", i-1).Msg("")
-	return mylst, nil
 }
 
 // Read reads a file from the mgm
@@ -1091,7 +1084,7 @@ func (c *Client) ListDeletedEntries(ctx context.Context, username string) ([]*De
 	msg := new(erpc.NSRequest_RecycleRequest)
 	msg.Cmd = erpc.NSRequest_RecycleRequest_RECYCLE_CMD(erpc.NSRequest_RecycleRequest_RECYCLE_CMD_value["LIST"])
 
-	rq.Command = &erpc.NSRequest_Recycle{msg}
+	rq.Command = &erpc.NSRequest_Recycle{Recycle: msg}
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(context.Background(), rq)
@@ -1111,7 +1104,7 @@ func (c *Client) ListDeletedEntries(ctx context.Context, username string) ([]*De
 	// FF: I agree with labkode, if we think we may have memory problems then the semantics of the grpc call`and
 	// the semantics if this func will have to change. For now this is not foreseen
 
-	var ret []*DeletedEntry
+	ret := make([]*DeletedEntry, 0)
 	for _, f := range resp.Recycle.Recycles {
 		if f == nil {
 			log.Info().Str("username", username).Msg("nil item in response")
@@ -1147,7 +1140,7 @@ func (c *Client) RestoreDeletedEntry(ctx context.Context, username, key string) 
 
 	msg.Key = key
 
-	rq.Command = &erpc.NSRequest_Recycle{msg}
+	rq.Command = &erpc.NSRequest_Recycle{Recycle: msg}
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(context.Background(), rq)
@@ -1178,7 +1171,7 @@ func (c *Client) PurgeDeletedEntries(ctx context.Context, username string) error
 	msg := new(erpc.NSRequest_RecycleRequest)
 	msg.Cmd = erpc.NSRequest_RecycleRequest_RECYCLE_CMD(erpc.NSRequest_RecycleRequest_RECYCLE_CMD_value["PURGE"])
 
-	rq.Command = &erpc.NSRequest_Recycle{msg}
+	rq.Command = &erpc.NSRequest_Recycle{Recycle: msg}
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(context.Background(), rq)
