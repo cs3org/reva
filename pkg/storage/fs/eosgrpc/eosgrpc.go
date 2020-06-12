@@ -219,7 +219,6 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		XrdcopyBinary:       c.XrdcopyBinary,
 		URL:                 c.MasterURL,
 		GrpcURI:             c.GrpcURI,
-		EosBinary:           c.EosBinary,
 		CacheDirectory:      c.CacheDirectory,
 		ForceSingleUserMode: c.ForceSingleUserMode,
 		SingleUsername:      c.SingleUsername,
