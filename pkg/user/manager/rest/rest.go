@@ -161,14 +161,11 @@ func (m *manager) getAPIToken(ctx context.Context) (string, time.Time, error) {
 	return result["access_token"].(string), expirationTime, nil
 }
 
-func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
-
+func (m *manager) sendAPIRequest(ctx context.Context, url string) ([]interface{}, error) {
 	err := m.renewAPIToken(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	url := fmt.Sprintf("%s/Identity/?filter=id:%s&field=upn&field=primaryAccountEmail&field=displayName", m.conf.APIBaseURL, uid.OpaqueId)
 
 	httpClient := rhttp.GetHTTPClient(ctx)
 	httpReq, err := rhttp.NewRequest(ctx, "GET", url, nil)
@@ -197,16 +194,30 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 		return nil, err
 	}
 
-	userData, ok := result["data"].([]interface{})[0].(map[string]interface{})
+	responseData, ok := result["data"].([]interface{})
 	if !ok {
 		return nil, errors.New("rest: error in type assertion")
 	}
 
-	userGroups, err := m.GetUserGroups(ctx, uid)
+	return responseData, nil
+}
+
+func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
+
+	url := fmt.Sprintf("%s/Identity/?filter=id:%s&field=upn&field=primaryAccountEmail&field=displayName", m.conf.APIBaseURL, uid.OpaqueId)
+	responseData, err := m.sendAPIRequest(ctx, url)
 	if err != nil {
 		return nil, err
 	}
 
+	userData, ok := responseData[0].(map[string]interface{})
+	if !ok {
+		return nil, errors.New("rest: error in type assertion")
+	}
+	userGroups, err := m.GetUserGroups(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
 	return &userpb.User{
 		Id:          uid,
 		Username:    userData["upn"].(string),
@@ -219,37 +230,9 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 
 func (m *manager) findUsersByFilter(ctx context.Context, url string) ([]*userpb.User, error) {
 
-	err := m.renewAPIToken(ctx)
+	userData, err := m.sendAPIRequest(ctx, url)
 	if err != nil {
 		return nil, err
-	}
-
-	httpClient := rhttp.GetHTTPClient(ctx)
-	httpReq, err := rhttp.NewRequest(ctx, "GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-	httpReq.Header.Set("Authorization", "Bearer "+m.apiToken)
-
-	httpRes, err := httpClient.Do(httpReq)
-	if err != nil {
-		return nil, err
-	}
-
-	body, err := ioutil.ReadAll(httpRes.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	var result map[string]interface{}
-	err = json.Unmarshal(body, &result)
-	if err != nil {
-		return nil, err
-	}
-
-	userData, ok := result["data"].([]interface{})
-	if !ok {
-		return nil, errors.New("rest: error in type assertion")
 	}
 
 	users := []*userpb.User{}
@@ -264,7 +247,6 @@ func (m *manager) findUsersByFilter(ctx context.Context, url string) ([]*userpb.
 			OpaqueId: usrInfo["id"].(string),
 			Idp:      m.conf.IDProvider,
 		}
-
 		userGroups, err := m.GetUserGroups(ctx, uid)
 		if err != nil {
 			return nil, err
@@ -308,49 +290,19 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 
 func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
 
-	err := m.renewAPIToken(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	url := fmt.Sprintf("%s/Identity/%s/groups", m.conf.APIBaseURL, uid.OpaqueId)
-
-	httpClient := rhttp.GetHTTPClient(ctx)
-	httpReq, err := rhttp.NewRequest(ctx, "GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-	httpReq.Header.Set("Authorization", "Bearer "+m.apiToken)
-
-	httpRes, err := httpClient.Do(httpReq)
+	groupData, err := m.sendAPIRequest(ctx, url)
 	if err != nil {
 		return nil, err
 	}
 
-	body, err := ioutil.ReadAll(httpRes.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	var result map[string]interface{}
-	err = json.Unmarshal(body, &result)
-	if err != nil {
-		return nil, err
-	}
-
-	groupData, ok := result["data"].([]interface{})
-	if !ok {
-		return nil, errors.New("rest: error in type assertion")
-	}
-
-	groups := make([]string, len(groupData))
+	groups := []string{}
 
 	for _, g := range groupData {
 		groupInfo, ok := g.(map[string]interface{})
 		if !ok {
 			return nil, errors.New("rest: error in type assertion")
 		}
-
 		groups = append(groups, groupInfo["displayName"].(string))
 	}
 
