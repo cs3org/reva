@@ -159,7 +159,7 @@ func newgrpc(ctx context.Context, opt *Options) (erpc.EosClient, error) {
 	prq.Message = []byte("hi this is a ping from reva")
 	prep, err := ecl.Ping(ctx, prq)
 	if err != nil {
-		fmt.Printf("--- Ping to '%s' failed with err '%s'\n", opt.GrpcURI, err)
+		log.Error().Str("Ping to ", "'"+opt.GrpcURI+"' ").Str("err:", err.Error()).Msg("")
 		return nil, err
 	}
 
@@ -168,7 +168,7 @@ func newgrpc(ctx context.Context, opt *Options) (erpc.EosClient, error) {
 		return nil, errtypes.InternalError("nil response from ping")
 	}
 
-	log.Debug().Str("Ping to ", "'"+opt.GrpcURI+"' ").Msg(" was successful")
+	log.Info().Str("Ping to ", "'"+opt.GrpcURI+"' ").Msg(" was successful")
 	return ecl, nil
 }
 
@@ -176,7 +176,8 @@ func newgrpc(ctx context.Context, opt *Options) (erpc.EosClient, error) {
 func New(opt *Options) *Client {
 	tlog := logger.New().With().Int("pid", os.Getpid()).Logger()
 
-	fmt.Printf("--- opt '%+v'\n", opt)
+	tlog.Debug().Str("Creating new eosgrpc client. opt: ", "'"+fmt.Sprintf("%#v", opt)+"' ").Msg("")
+
 	opt.init()
 	c := new(Client)
 	c.opt = opt
@@ -194,43 +195,34 @@ func New(opt *Options) *Client {
 	c.cl = ccl
 
 	// Some connection tests, useful for logging in this dev phase
+	tlog.Debug().Str("Connection tests to: ", "'"+opt.GrpcURI+"' ").Msg("")
 
-	fmt.Printf("--- Going to stat '%s'\n", "/eos")
+	tlog.Debug().Str("Going to stat", "/eos").Msg("")
 	frep, err := c.GetFileInfoByPath(tctx, "furano", "/eos")
 	if err != nil {
-		fmt.Printf("--- GetFileInfoByPath '%s' failed with err '%s'\n", "/eos", err)
+		tlog.Error().Str("GetFileInfoByPath /eos to ", "'"+opt.GrpcURI+"' ").Str("err:", err.Error()).Msg("")
 		//	return nil
 	} else {
-		fmt.Printf("--- GetFileInfoByPath to '%s' gave response '%s'\n", "/eos", frep.File)
+		tlog.Info().Str("GetFileInfoByPath /eos to ", "'"+opt.GrpcURI+"' ").Str("resp:", frep.File).Msg("")
 	}
 
-	fmt.Printf("--- Going to stat '%s'\n", "/eos-idonotexist")
+	tlog.Debug().Str("Going to stat", "/eos-idonotexist").Msg("")
 	frep1, err := c.GetFileInfoByPath(tctx, "furano", "/eos-idonotexist")
 	if err != nil {
-		fmt.Printf("--- GetFileInfoByPath '%s' failed with err '%s'\n", "/eos-idonotexist", err)
+		tlog.Info().Str("GetFileInfoByPath /eos-idonotexist to ", "'"+opt.GrpcURI+"' ").Str("err:", err.Error()).Msg("")
+
 		//	return nil
 	} else {
-		fmt.Printf("--- GetFileInfoByPath to '%s' gave response '%s'\n", "/eos-idonotexist", frep1.File)
+		tlog.Error().Str("GetFileInfoByPath /eos-idonotexist to ", "'"+opt.GrpcURI+"' ").Str("wrong resp:", frep1.File).Msg("")
 	}
 
-	fmt.Printf("--- Going to list '%s'\n", "/eos")
+	tlog.Debug().Str("Going to list", "/eos").Msg("")
 	lrep, err := c.List(context.Background(), "furano", "/eos")
 	if err != nil {
-		fmt.Printf("--- List '%s' failed with err '%s'\n", "/eos", err)
+		tlog.Error().Str("List /eos to ", "'"+opt.GrpcURI+"' ").Str("err:", err.Error()).Msg("")
 		//	return nil
 	} else {
-		fmt.Printf("--- List to '%s' gave %d entries\n", "/eos", len(lrep))
-	}
-
-	fmt.Printf("--- Going to getACLForPath '%s'\n", "/eos/cms")
-	arep, err := c.getACLForPath(context.Background(), "furano", "/eos/cms")
-	if err != nil {
-		fmt.Printf("--- getACLForPath '%s' failed with err '%s'\n", "/eos/cms", err)
-		//	return nil
-	} else {
-		for i, s := range arep.Entries {
-			fmt.Printf("--- getACLForPath to '%s' gave %d:'%s'\n", "/eos/cms", i, s)
-		}
+		tlog.Info().Str("List /eos to ", "'"+opt.GrpcURI+"' ").Int("nentries:", len(lrep)).Msg("")
 	}
 
 	return c
@@ -245,6 +237,8 @@ func (c *Client) getUnixUser(username string) (*gouser.User, error) {
 
 // AddACL adds an new acl to EOS with the given aclType.
 func (c *Client) AddACL(ctx context.Context, username, path string, a *acl.Entry) error {
+	log := appctx.GetLogger(ctx)
+
 	acls, err := c.getACLForPath(ctx, username, path)
 	if err != nil {
 		return err
@@ -301,13 +295,13 @@ func (c *Client) AddACL(ctx context.Context, username, path string, a *acl.Entry
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(context.Background(), rq)
 	if err != nil {
-		fmt.Printf("--- Exec('%s') failed with err '%s'\n", path, err)
+		log.Error().Str("Exec ", "'"+path+"' ").Str("err:", err.Error()).Msg("")
 		return err
 	}
 
-	fmt.Printf("--- MD('%s') gave response '%s'\n", path, resp)
+	log.Debug().Str("Exec ", "'"+path+"' ").Str("resp:", fmt.Sprintf("%#v", resp)).Msg("")
 	if resp == nil {
-		return errtypes.NotFound(fmt.Sprintf("PAth: %s", path))
+		return errtypes.NotFound(fmt.Sprintf("Path: %s", path))
 	}
 
 	return err
@@ -316,6 +310,8 @@ func (c *Client) AddACL(ctx context.Context, username, path string, a *acl.Entry
 
 // RemoveACL removes the acl from EOS.
 func (c *Client) RemoveACL(ctx context.Context, username, path string, aclType string, recipient string) error {
+	log := appctx.GetLogger(ctx)
+
 	acls, err := c.getACLForPath(ctx, username, path)
 	if err != nil {
 		return err
@@ -371,11 +367,11 @@ func (c *Client) RemoveACL(ctx context.Context, username, path string, aclType s
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(context.Background(), rq)
 	if err != nil {
-		fmt.Printf("--- Exec('%s') failed with err '%s'\n", path, err)
+		log.Error().Str("Exec ", "'"+path+"' ").Str("err:", err.Error()).Msg("")
 		return err
 	}
 
-	fmt.Printf("--- MD('%s') gave response '%s'\n", path, resp)
+	log.Debug().Str("Exec ", "'"+path+"' ").Str("resp:", fmt.Sprintf("%#v", resp)).Msg("")
 	if resp == nil {
 		return errtypes.NotFound(fmt.Sprintf("Path: %s", path))
 	}
@@ -494,14 +490,17 @@ func (c *Client) getACLForPath(ctx context.Context, username, path string) (*acl
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(context.Background(), rq)
+
 	if err != nil {
-		log.Warn().Err(err).Str("username", username).Str("path", path).Str("err", err.Error())
+		log.Error().Err(err).Str("username", username).Str("path", path).Str("err", err.Error())
 		return nil, err
 	}
 
 	if resp == nil {
 		return nil, errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' path: '%s'", username, path))
 	}
+
+	log.Debug().Str("Exec ", "'"+path+"' ").Str("resp:", fmt.Sprintf("%#v", resp)).Msg("")
 
 	if resp.Acl == nil {
 		return nil, errtypes.InternalError(fmt.Sprintf("nil acl for username: '%s' path: '%s'", username, path))
@@ -550,12 +549,13 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, username string, inode 
 	// Now send the req and see what happens
 	resp, err := c.cl.MD(context.Background(), mdrq)
 	if err != nil {
-		log.Warn().Err(err).Uint64("inode", inode).Str("err", err.Error())
+		log.Error().Err(err).Uint64("inode", inode).Str("err", err.Error())
+
 		return nil, err
 	}
 	rsp, err := resp.Recv()
 	if err != nil {
-		log.Warn().Err(err).Uint64("inode", inode).Str("err", err.Error())
+		log.Error().Err(err).Uint64("inode", inode).Str("err", err.Error())
 		return nil, err
 	}
 
@@ -629,11 +629,9 @@ func (c *Client) UnsetAttr(ctx context.Context, username string, attr *Attribute
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(ctx, rq)
 	if err != nil {
-		log.Warn().Err(err).Str("username", username).Str("path", path).Str("err", err.Error())
+		log.Error().Err(err).Str("username", username).Str("path", path).Str("err", err.Error())
 		return err
 	}
-
-	log.Info().Str("username", username).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
 
 	if resp == nil {
 		return errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' path: '%s'", username, path))
@@ -675,13 +673,13 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, username, path string) (
 	// Now send the req and see what happens
 	resp, err := c.cl.MD(ctx, mdrq)
 	if err != nil {
+		log.Error().Err(err).Str("username", username).Str("path", path).Str("err", err.Error())
 
-		fmt.Printf("--- MD('%s') failed with err '%s'\n", path, err)
 		return nil, err
 	}
 	rsp, err := resp.Recv()
 	if err != nil {
-		fmt.Printf("--- Recv('%s') gave err '%s'\n", path, err)
+		log.Error().Err(err).Str("FIXME username", username).Str("path", path).Str("err", err.Error())
 
 		// FIXME: this is very very bad and poisonous for the project!!!!!!!
 		// Apparently here we have to assume that an error in Recv() means "file not found"
