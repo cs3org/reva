@@ -596,11 +596,11 @@ func (c *Client) SetAttr(ctx context.Context, username string, attr *Attribute, 
 		return err
 	}
 
-	log.Info().Str("username", username).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
-
 	if resp == nil {
 		return errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' path: '%s'", username, path))
 	}
+
+	log.Info().Str("username", username).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
 
 	return err
 
@@ -636,6 +636,8 @@ func (c *Client) UnsetAttr(ctx context.Context, username string, attr *Attribute
 	if resp == nil {
 		return errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' path: '%s'", username, path))
 	}
+
+	log.Info().Str("username", username).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
 
 	return err
 
@@ -689,12 +691,12 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, username, path string) (
 		//return nil, nil
 	}
 
-	fmt.Printf("--- MD('%s') gave response '%s'\n", path, rsp)
 	if rsp == nil {
 		return nil, errtypes.NotFound(fmt.Sprintf("%s:%s", "acltype", path))
 	}
 
-	log.Print("MD--------")
+	log.Info().Str("username", username).Str("path", path).Str("rsp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
+
 	return c.grpcMDResponseToFileInfo(rsp, "")
 
 }
@@ -728,11 +730,11 @@ func (c *Client) Touch(ctx context.Context, username, path string) error {
 		return err
 	}
 
-	log.Info().Str("username", username).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
-
 	if resp == nil {
 		return errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' path: '%s'", username, path))
 	}
+
+	log.Info().Str("username", username).Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 
 	return err
 
@@ -769,15 +771,15 @@ func (c *Client) Chown(ctx context.Context, username, chownUser, path string) er
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(ctx, rq)
 	if err != nil {
-		log.Warn().Err(err).Str("username", username).Str("chownuser", chownUser).Str("path", path).Str("err", err.Error())
+		log.Error().Err(err).Str("username", username).Str("chownuser", chownUser).Str("path", path).Str("err", err.Error())
 		return err
 	}
-
-	log.Info().Str("username", username).Str("chownuser", chownUser).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
 
 	if resp == nil {
 		return errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' chownuser: '%s' path: '%s'", username, chownUser, path))
 	}
+
+	log.Info().Str("username", username).Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 
 	return err
 
@@ -813,11 +815,11 @@ func (c *Client) Chmod(ctx context.Context, username, mode, path string) error {
 		return err
 	}
 
-	log.Info().Str("username", username).Str("mode", mode).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
-
 	if resp == nil {
 		return errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' mode: '%s' path: '%s'", username, mode, path))
 	}
+
+	log.Info().Str("username", username).Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 
 	return err
 
@@ -854,11 +856,11 @@ func (c *Client) CreateDir(ctx context.Context, username, path string) error {
 		return err
 	}
 
-	log.Info().Str("username", username).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
-
 	if resp == nil {
 		return errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' path: '%s'", username, path))
 	}
+
+	log.Info().Str("username", username).Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 
 	return err
 
@@ -887,11 +889,11 @@ func (c *Client) rm(ctx context.Context, username, path string) error {
 		return err
 	}
 
-	log.Info().Str("username", username).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
-
 	if resp == nil {
 		return errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' path: '%s'", username, path))
 	}
+
+	log.Info().Str("username", username).Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 
 	return err
 
@@ -920,11 +922,11 @@ func (c *Client) rmdir(ctx context.Context, username, path string) error {
 		return err
 	}
 
-	log.Info().Str("username", username).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
-
 	if resp == nil {
 		return errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' path: '%s'", username, path))
 	}
+
+	log.Info().Str("username", username).Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 
 	return err
 }
@@ -953,6 +955,8 @@ func (c *Client) Rename(ctx context.Context, username, oldPath, newPath string) 
 
 // List the contents of the directory given by path
 func (c *Client) List(ctx context.Context, username, dpath string) ([]*FileInfo, error) {
+	log := appctx.GetLogger(ctx)
+
 	// Stuff filename, uid, gid into the MDRequest type
 	fdrq := new(erpc.FindRequest)
 	fdrq.Maxdepth = 1
@@ -982,7 +986,8 @@ func (c *Client) List(ctx context.Context, username, dpath string) ([]*FileInfo,
 	// Now send the req and see what happens
 	resp, err := c.cl.Find(context.Background(), fdrq)
 	if err != nil {
-		fmt.Printf("--- Find('%s') failed with err '%s'\n", dpath, err)
+		log.Error().Err(err).Str("username", username).Str("path", dpath).Str("err", err.Error())
+
 		return nil, err
 	}
 
@@ -995,18 +1000,22 @@ func (c *Client) List(ctx context.Context, username, dpath string) ([]*FileInfo,
 				return mylst, nil
 			}
 
-			fmt.Printf("--- Recv('%s') failed with err '%s'\n", dpath, err)
+			log.Warn().Err(err).Str("username", username).Str("path", dpath).Str("err", err.Error())
+
 			return nil, err
 		}
 
-		fmt.Printf("--- Find('%s') gave item '%s'\n", dpath, rsp)
 		if rsp == nil {
+			log.Warn().Err(err).Str("username", username).Str("path", dpath).Str("err", "rsp is nil")
 			return nil, errtypes.NotFound(dpath)
 		}
 
+		log.Debug().Str("username", username).Str("path", dpath).Str("item resp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
+
 		myitem, err := c.grpcMDResponseToFileInfo(rsp, dpath)
 		if err != nil {
-			fmt.Printf("--- Could not convert item. err '%s'\n", err)
+			log.Warn().Err(err).Str("username", username).Str("path", dpath).Str("could not convert item:", fmt.Sprintf("%#v", rsp)).Str("err:", err.Error()).Msg("")
+
 			return nil, err
 		}
 
