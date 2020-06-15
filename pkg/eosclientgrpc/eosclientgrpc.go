@@ -228,6 +228,61 @@ func New(opt *Options) *Client {
 	return c
 }
 
+// Common code to create and initialize a NSRequest
+func (c *Client) initNSRequest(username string) (*erpc.NSRequest, error) {
+	// Stuff filename, uid, gid into the MDRequest type
+	rq := new(erpc.NSRequest)
+
+	// setting of the sys.acl is only possible from root user
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return nil, err
+	}
+	rq.Role = new(erpc.RoleId)
+
+	uid, err := strconv.ParseUint(unixUser.Uid, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	rq.Role.Uid = uid
+	gid, err := strconv.ParseUint(unixUser.Gid, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	rq.Role.Gid = gid
+
+	rq.Authkey = c.opt.Authkey
+
+	return rq, nil
+}
+
+// Common code to create and initialize a NSRequest
+func (c *Client) initMDRequest(username string) (*erpc.MDRequest, error) {
+	// Stuff filename, uid, gid into the MDRequest type
+	mdrq := new(erpc.MDRequest)
+
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return nil, err
+	}
+	mdrq.Role = new(erpc.RoleId)
+
+	uid, err := strconv.ParseUint(unixUser.Uid, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	mdrq.Role.Uid = uid
+	gid, err := strconv.ParseUint(unixUser.Gid, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	mdrq.Role.Gid = gid
+
+	mdrq.Authkey = c.opt.Authkey
+
+	return mdrq, nil
+}
+
 func (c *Client) getUnixUser(username string) (*gouser.User, error) {
 	if c.opt.ForceSingleUserMode {
 		username = c.opt.SingleUsername
@@ -258,28 +313,11 @@ func (c *Client) AddACL(ctx context.Context, username, path string, a *acl.Entry
 	}
 	sysACL := acls.Serialize()
 
-	// Stuff filename, uid, gid into the MDRequest type
-	rq := new(erpc.NSRequest)
-
-	// setting of the sys.acl is only possible from root user
-	unixUser, err := c.getUnixUser(username)
+	// Init a new NSRequest
+	rq, err := c.initNSRequest(username)
 	if err != nil {
 		return err
 	}
-	rq.Role = new(erpc.RoleId)
-
-	uid, err := strconv.ParseUint(unixUser.Uid, 10, 64)
-	if err != nil {
-		return err
-	}
-	rq.Role.Uid = uid
-	gid, err := strconv.ParseUint(unixUser.Gid, 10, 64)
-	if err != nil {
-		return err
-	}
-	rq.Role.Gid = gid
-
-	rq.Authkey = c.opt.Authkey
 
 	msg := new(erpc.NSRequest_AclRequest)
 	msg.Cmd = erpc.NSRequest_AclRequest_ACL_COMMAND(erpc.NSRequest_AclRequest_ACL_COMMAND_value["MODIFY"])
@@ -330,28 +368,11 @@ func (c *Client) RemoveACL(ctx context.Context, username, path string, aclType s
 	acls.DeleteEntry(aclType, recipient)
 	sysACL := acls.Serialize()
 
-	// Stuff filename, uid, gid into the MDRequest type
-	rq := new(erpc.NSRequest)
-
-	// setting of the sys.acl is only possible from root user
-	unixUser, err := c.getUnixUser(username)
+	// Init a new NSRequest
+	rq, err := c.initNSRequest(username)
 	if err != nil {
 		return err
 	}
-	rq.Role = new(erpc.RoleId)
-
-	uid, err := strconv.ParseUint(unixUser.Uid, 10, 64)
-	if err != nil {
-		return err
-	}
-	rq.Role.Uid = uid
-	gid, err := strconv.ParseUint(unixUser.Gid, 10, 64)
-	if err != nil {
-		return err
-	}
-	rq.Role.Gid = gid
-
-	rq.Authkey = c.opt.Authkey
 
 	msg := new(erpc.NSRequest_AclRequest)
 	msg.Cmd = erpc.NSRequest_AclRequest_ACL_COMMAND(erpc.NSRequest_AclRequest_ACL_COMMAND_value["MODIFY"])
@@ -441,34 +462,6 @@ func (c *Client) ListACLs(ctx context.Context, username, path string) ([]*acl.En
 	return acls, nil
 }
 
-// Common code to create and initialize a NSRequest
-func (c *Client) initNSRequest(username string) (*erpc.NSRequest, error) {
-	// Stuff filename, uid, gid into the MDRequest type
-	rq := new(erpc.NSRequest)
-
-	// setting of the sys.acl is only possible from root user
-	unixUser, err := c.getUnixUser(username)
-	if err != nil {
-		return nil, err
-	}
-	rq.Role = new(erpc.RoleId)
-
-	uid, err := strconv.ParseUint(unixUser.Uid, 10, 64)
-	if err != nil {
-		return nil, err
-	}
-	rq.Role.Uid = uid
-	gid, err := strconv.ParseUint(unixUser.Gid, 10, 64)
-	if err != nil {
-		return nil, err
-	}
-	rq.Role.Gid = gid
-
-	rq.Authkey = c.opt.Authkey
-
-	return rq, nil
-}
-
 func (c *Client) getACLForPath(ctx context.Context, username, path string) (*acl.ACLs, error) {
 	log := appctx.GetLogger(ctx)
 
@@ -521,30 +514,16 @@ func (c *Client) getACLForPath(ctx context.Context, username, path string) (*acl
 func (c *Client) GetFileInfoByInode(ctx context.Context, username string, inode uint64) (*FileInfo, error) {
 	log := appctx.GetLogger(ctx)
 
+	// Initialize the common fields of the MDReq
+	mdrq, err := c.initMDRequest(username)
+	if err != nil {
+		return nil, err
+	}
+
 	// Stuff filename, uid, gid into the MDRequest type
-	mdrq := new(erpc.MDRequest)
 	mdrq.Type = erpc.TYPE_STAT
 	mdrq.Id = new(erpc.MDId)
 	mdrq.Id.Ino = inode
-
-	unixUser, err := c.getUnixUser(username)
-	if err != nil {
-		return nil, err
-	}
-	mdrq.Role = new(erpc.RoleId)
-
-	uid, err := strconv.ParseUint(unixUser.Uid, 10, 64)
-	if err != nil {
-		return nil, err
-	}
-	mdrq.Role.Uid = uid
-	gid, err := strconv.ParseUint(unixUser.Gid, 10, 64)
-	if err != nil {
-		return nil, err
-	}
-	mdrq.Role.Gid = gid
-
-	mdrq.Authkey = c.opt.Authkey
 
 	// Now send the req and see what happens
 	resp, err := c.cl.MD(context.Background(), mdrq)
@@ -647,30 +626,15 @@ func (c *Client) UnsetAttr(ctx context.Context, username string, attr *Attribute
 func (c *Client) GetFileInfoByPath(ctx context.Context, username, path string) (*FileInfo, error) {
 	log := appctx.GetLogger(ctx)
 
-	// Stuff filename, uid, gid into the MDRequest type
-	mdrq := new(erpc.MDRequest)
+	// Initialize the common fields of the MDReq
+	mdrq, err := c.initMDRequest(username)
+	if err != nil {
+		return nil, err
+	}
+
 	mdrq.Type = erpc.TYPE_STAT
 	mdrq.Id = new(erpc.MDId)
 	mdrq.Id.Path = []byte(path)
-
-	unixUser, err := c.getUnixUser(username)
-	if err != nil {
-		return nil, err
-	}
-	mdrq.Role = new(erpc.RoleId)
-
-	uid, err := strconv.ParseUint(unixUser.Uid, 10, 64)
-	if err != nil {
-		return nil, err
-	}
-	mdrq.Role.Uid = uid
-	gid, err := strconv.ParseUint(unixUser.Gid, 10, 64)
-	if err != nil {
-		return nil, err
-	}
-	mdrq.Role.Gid = gid
-
-	mdrq.Authkey = c.opt.Authkey
 
 	// Now send the req and see what happens
 	resp, err := c.cl.MD(ctx, mdrq)
@@ -957,7 +921,7 @@ func (c *Client) Rename(ctx context.Context, username, oldPath, newPath string) 
 func (c *Client) List(ctx context.Context, username, dpath string) ([]*FileInfo, error) {
 	log := appctx.GetLogger(ctx)
 
-	// Stuff filename, uid, gid into the MDRequest type
+	// Stuff filename, uid, gid into the FindRequest type
 	fdrq := new(erpc.FindRequest)
 	fdrq.Maxdepth = 1
 	fdrq.Type = erpc.TYPE_LISTING
