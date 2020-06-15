@@ -53,7 +53,7 @@ const (
 )
 
 func init() {
-	fmt.Printf("-- Registering eosgrpc\n")
+
 	registry.Register("eosgrpc", New)
 }
 
@@ -75,41 +75,41 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 // Options are the configuration options to pass to the New function.
 type config struct {
 	// Namespace for metadata operations
-	Namespace string `mapstructure:"namespace"`
+	Namespace string `mapstructure:"namespace" docs:"/"`
 
 	// ShadowNamespace for storing shadow data
-	ShadowNamespace string `mapstructure:"shadow_namespace"`
+	ShadowNamespace string `mapstructure:"shadow_namespace" docs:"/.shadow"`
 
 	// ShareFolder defines the name of the folder in the
 	// shadowed namespace. Ex: /eos/user/.shadow/h/hugo/MyShares
-	ShareFolder string `mapstructure:"share_folder"`
+	ShareFolder string `mapstructure:"share_folder" docs:"/MyShares"`
 
 	// Location of the eos binary.
 	// Default is /usr/bin/eos.
-	EosBinary string `mapstructure:"eos_binary"`
+	EosBinary string `mapstructure:"eos_binary" docs:"/usr/bin/eos"`
 
 	// Location of the xrdcopy binary.
 	// Default is /usr/bin/xrdcopy.
-	XrdcopyBinary string `mapstructure:"xrdcopy_binary"`
+	XrdcopyBinary string `mapstructure:"xrdcopy_binary" docs:"/usr/bin/xrdcopy"`
 
 	// URL of the Master EOS MGM.
 	// Default is root://eos-example.org
-	MasterURL string `mapstructure:"master_url"`
+	MasterURL string `mapstructure:"master_url" docs:"root://eos-example.org"`
 
 	// URI of the EOS MGM grpc server
 	// Default is empty
-	GrpcURI string `mapstructure:"master_grpc_uri"`
+	GrpcURI string `mapstructure:"master_grpc_uri" docs:"root://eos-grpc-example.org"`
 
 	// URL of the Slave EOS MGM.
 	// Default is root://eos-example.org
-	SlaveURL string `mapstructure:"slave_url"`
+	SlaveURL string `mapstructure:"slave_url" docs:"root://eos-example.org"`
 
 	// Location on the local fs where to store reads.
 	// Defaults to os.TempDir()
-	CacheDirectory string `mapstructure:"cache_directory"`
+	CacheDirectory string `mapstructure:"cache_directory" docs:"/var/tmp/"`
 
 	// SecProtocol specifies the xrootd security protocol to use between the server and EOS.
-	SecProtocol string `mapstructure:"sec_protocol"`
+	SecProtocol string `mapstructure:"sec_protocol" docs:"-"`
 
 	// Keytab specifies the location of the keytab to use to authenticate to EOS.
 	Keytab string `mapstructure:"keytab"`
@@ -121,28 +121,28 @@ type config struct {
 	// Example: if conf.Namespace is /eos/user and received path is /docs
 	// and the UserLayout is {{.Username}} the internal path will be:
 	// /eos/user/<username>/docs
-	UserLayout string `mapstructure:"user_layout"`
+	UserLayout string `mapstructure:"user_layout" docs:"-""`
 
 	// Enables logging of the commands executed
 	// Defaults to false
-	EnableLogging bool `mapstructure:"enable_logging"`
+	EnableLogging bool `mapstructure:"enable_logging" docs:"false"`
 
 	// ShowHiddenSysFiles shows internal EOS files like
 	// .sys.v# and .sys.a# files.
-	ShowHiddenSysFiles bool `mapstructure:"show_hidden_sys_files"`
+	ShowHiddenSysFiles bool `mapstructure:"show_hidden_sys_files" docs: "-"`
 
 	// ForceSingleUserMode will force connections to EOS to use SingleUsername
-	ForceSingleUserMode bool `mapstructure:"force_single_user_mode"`
+	ForceSingleUserMode bool `mapstructure:"force_single_user_mode" docs: "false"`
 
 	// UseKeyTabAuth changes will authenticate requests by using an EOS keytab.
-	UseKeytab bool `mapstrucuture:"use_keytab"`
+	UseKeytab bool `mapstrucuture:"use_keytab" docs:"false"`
 
 	// EnableHome enables the creation of home directories.
-	EnableHome bool `mapstructure:"enable_home"`
+	EnableHome bool `mapstructure:"enable_home" docs:"false"`
 
 	// Authkey is the key that authorizes this client to connect to the GRPC service
 	// It's unclear whether this will be the final solution
-	Authkey string `mapstructure:"authkey"`
+	Authkey string `mapstructure:"authkey" docs:"-"`
 }
 
 func getUser(ctx context.Context) (*userpb.User, error) {
@@ -199,7 +199,6 @@ func (c *config) init() {
 
 // New returns a new implementation of the storage.FS interface that connects to EOS.
 func New(m map[string]interface{}) (storage.FS, error) {
-	fmt.Printf("-- Creating eosgrpc instance\n")
 
 	c, err := parseConfig(m)
 	if err != nil {
