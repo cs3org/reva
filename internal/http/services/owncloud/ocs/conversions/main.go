@@ -322,7 +322,7 @@ func UserIDToString(userID *userpb.UserId) string {
 // UserSharePermissions2OCSPermissions transforms cs3api permissions into OCS Permissions data model
 func UserSharePermissions2OCSPermissions(sp *collaboration.SharePermissions) Permissions {
 	if sp != nil {
-		return permissions2OCSPermissions(sp.GetPermissions())
+		return Permissions2OCSPermissions(sp.GetPermissions())
 	}
 	return PermissionInvalid
 }
@@ -347,13 +347,13 @@ func GetPublicShareManager(manager string, m map[string]map[string]interface{}) 
 
 func publicSharePermissions2OCSPermissions(sp *link.PublicSharePermissions) Permissions {
 	if sp != nil {
-		return permissions2OCSPermissions(sp.GetPermissions())
+		return Permissions2OCSPermissions(sp.GetPermissions())
 	}
 	return PermissionInvalid
 }
 
 // TODO sort out mapping, this is just a first guess
-func permissions2OCSPermissions(p *provider.ResourcePermissions) Permissions {
+func Permissions2OCSPermissions(p *provider.ResourcePermissions) Permissions {
 	permissions := PermissionInvalid
 	if p != nil {
 		if p.ListContainer {
