@@ -323,15 +323,11 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	info2 := sRes.Info
-
-	w.Header().Add("Content-Type", info2.MimeType)
-	w.Header().Set("ETag", info2.Etag)
-	w.Header().Set("OC-FileId", wrapResourceID(info2.Id))
-	w.Header().Set("OC-ETag", info2.Etag)
-	t := utils.TSToTime(info2.Mtime)
-	lastModifiedString := t.Format(time.RFC1123Z)
-	w.Header().Set("Last-Modified", lastModifiedString)
+	w.Header().Add("Content-Type", sRes.Info.MimeType)
+	w.Header().Set("ETag", sRes.Info.Etag)
+	w.Header().Set("OC-FileId", wrapResourceID(sRes.Info.Id))
+	w.Header().Set("OC-ETag", sRes.Info.Etag)
+	w.Header().Set("Last-Modified", utils.TSToTime(sRes.Info.Mtime).Format(time.RFC1123Z))
 
 	// file was new
 	if sRes.Info == nil {
