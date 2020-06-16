@@ -207,17 +207,30 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
+	opaqueMap := map[string]*typespb.OpaqueEntry{
+		"Upload-Length": {
+			Decoder: "plain",
+			Value:   []byte(r.Header.Get("Upload-Length")),
+		},
+	}
+
+	mtime := r.Header.Get("X-OC-Mtime")
+	if mtime != "" {
+		opaqueMap["X-OC-Mtime"] = &typespb.OpaqueEntry{
+			Decoder: "plain",
+			Value:   []byte(mtime),
+		}
+
+		// TODO: find a way to check if the storage really accepted the value
+		w.Header().Set("X-OC-Mtime", "accepted")
+	}
+
 	uReq := &provider.InitiateFileUploadRequest{
 		Ref: &provider.Reference{
 			Spec: &provider.Reference_Path{Path: fn},
 		},
 		Opaque: &typespb.Opaque{
-			Map: map[string]*typespb.OpaqueEntry{
-				"Upload-Length": {
-					Decoder: "plain",
-					Value:   []byte(r.Header.Get("Content-Length")),
-				},
-			},
+			Map: opaqueMap,
 		},
 	}
 
@@ -277,37 +290,6 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 		log.Error().Err(err).Msg("Could not start TUS upload")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
-	}
-
-	// apply mtime to the metadata if specified
-	if r.Header.Get("X-OC-Mtime") != "" {
-		sreq := &provider.SetArbitraryMetadataRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{Path: fn},
-			},
-			ArbitraryMetadata: &provider.ArbitraryMetadata{
-				Metadata: map[string]string{},
-			},
-		}
-		sreq.ArbitraryMetadata.Metadata["mtime"] = r.Header.Get("X-OC-Mtime")
-		res, err := client.SetArbitraryMetadata(ctx, sreq)
-		if err != nil {
-			log.Error().Err(err).
-				Str("mtime", r.Header.Get("X-OC-Mtime")).
-				Msg("error sending a grpc SetArbitraryMetadata request for setting mtime")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		if res.Status.Code != rpc.Code_CODE_OK {
-			log.Error().Err(err).
-				Str("mtime", r.Header.Get("X-OC-Mtime")).
-				Msgf("error sending a grpc SetArbitraryMetadata request for setting mtime, status %d", res.Status.Code)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("X-OC-Mtime", "accepted")
 	}
 
 	// stat again to check the new file's metadata

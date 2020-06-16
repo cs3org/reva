@@ -271,17 +271,23 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	if s.conf.DisableTus {
 		url.Path = path.Join("/", url.Path, newRef.GetPath())
 	} else {
+		metadata := map[string]string{}
 		var uploadLength int64
-		if req.Opaque != nil && req.Opaque.Map != nil && req.Opaque.Map["Upload-Length"] != nil {
-			var err error
-			uploadLength, err = strconv.ParseInt(string(req.Opaque.Map["Upload-Length"].Value), 10, 64)
-			if err != nil {
-				return &provider.InitiateFileUploadResponse{
-					Status: status.NewInternal(ctx, err, "error parsing upload length"),
-				}, nil
+		if req.Opaque != nil && req.Opaque.Map != nil {
+			if req.Opaque.Map["Upload-Length"] != nil {
+				var err error
+				uploadLength, err = strconv.ParseInt(string(req.Opaque.Map["Upload-Length"].Value), 10, 64)
+				if err != nil {
+					return &provider.InitiateFileUploadResponse{
+						Status: status.NewInternal(ctx, err, "error parsing upload length"),
+					}, nil
+				}
+			}
+			if req.Opaque.Map["X-OC-Mtime"] != nil {
+				metadata["mtime"] = string(req.Opaque.Map["X-OC-Mtime"].Value)
 			}
 		}
-		uploadID, err := s.storage.InitiateUpload(ctx, newRef, uploadLength)
+		uploadID, err := s.storage.InitiateUpload(ctx, newRef, uploadLength, metadata)
 		if err != nil {
 			return &provider.InitiateFileUploadResponse{
 				Status: status.NewInternal(ctx, err, "error getting upload id"),
