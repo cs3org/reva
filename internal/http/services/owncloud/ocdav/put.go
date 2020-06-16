@@ -182,16 +182,15 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 		}
 	}
 
-	info := sRes.Info
-	if info != nil && info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
-		log.Warn().Msg("resource is not a file")
-		w.WriteHeader(http.StatusConflict)
-		return
-	}
+	if sRes.Info != nil {
+		if sRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
+			log.Warn().Msg("resource is not a file")
+			w.WriteHeader(http.StatusConflict)
+			return
+		}
 
-	if info != nil {
 		clientETag := r.Header.Get("If-Match")
-		serverETag := info.Etag
+		serverETag := sRes.Info.Etag
 		if clientETag != "" {
 			if clientETag != serverETag {
 				log.Warn().Str("client-etag", clientETag).Str("server-etag", serverETag).Msg("etags mismatch")
@@ -279,6 +278,37 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
+	// apply mtime to the metadata if specified
+	if r.Header.Get("X-OC-Mtime") != "" {
+		sreq := &provider.SetArbitraryMetadataRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{Path: fn},
+			},
+			ArbitraryMetadata: &provider.ArbitraryMetadata{
+				Metadata: map[string]string{},
+			},
+		}
+		sreq.ArbitraryMetadata.Metadata["mtime"] = r.Header.Get("X-OC-Mtime")
+		res, err := client.SetArbitraryMetadata(ctx, sreq)
+		if err != nil {
+			log.Error().Err(err).
+				Str("mtime", r.Header.Get("X-OC-Mtime")).
+				Msg("error sending a grpc SetArbitraryMetadata request for setting mtime")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		if res.Status.Code != rpc.Code_CODE_OK {
+			log.Error().Err(err).
+				Str("mtime", r.Header.Get("X-OC-Mtime")).
+				Msgf("error sending a grpc SetArbitraryMetadata request for setting mtime, status %d", res.Status.Code)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("X-OC-Mtime", "accepted")
+	}
+
 	// stat again to check the new file's metadata
 	sRes, err = client.Stat(ctx, sReq)
 	if err != nil {
@@ -300,12 +330,11 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 	w.Header().Set("OC-FileId", wrapResourceID(info2.Id))
 	w.Header().Set("OC-ETag", info2.Etag)
 	t := utils.TSToTime(info2.Mtime)
-	lastModifiedString := t.Format(time.RFC1123)
+	lastModifiedString := t.Format(time.RFC1123Z)
 	w.Header().Set("Last-Modified", lastModifiedString)
-	w.Header().Set("X-OC-MTime", "accepted")
 
 	// file was new
-	if info == nil {
+	if sRes.Info == nil {
 		w.WriteHeader(http.StatusCreated)
 		return
 	}

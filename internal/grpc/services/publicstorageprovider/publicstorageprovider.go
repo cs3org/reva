@@ -24,18 +24,21 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/storage"
+	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
@@ -47,18 +50,21 @@ func init() {
 }
 
 type config struct {
-	MountPath        string `mapstructure:"mount_path"`
-	MountID          string `mapstructure:"mount_id"`
-	GatewayAddr      string `mapstructure:"gateway_addr"`
-	DriverAddr       string `mapstructure:"driver_addr"`
-	DataServerURL    string `mapstructure:"data_server_url"`
-	DataServerPrefix string `mapstructure:"data_server_prefix"`
+	MountPath        string                            `mapstructure:"mount_path"`
+	MountID          string                            `mapstructure:"mount_id"`
+	GatewayAddr      string                            `mapstructure:"gateway_addr"`
+	Driver           string                            `mapstructure:"driver"`
+	Drivers          map[string]map[string]interface{} `mapstructure:"drivers"`
+	DriverAddr       string                            `mapstructure:"driver_addr"`
+	DataServerURL    string                            `mapstructure:"data_server_url"`
+	DataServerPrefix string                            `mapstructure:"data_server_prefix"`
 }
 
 type service struct {
 	conf               *config
 	mountPath, mountID string
 	gateway            gateway.GatewayAPIClient
+	storage            storage.FS
 }
 
 func (s *service) Close() error {
@@ -92,6 +98,11 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	mountPath := c.MountPath
 	mountID := c.MountID
 
+	fs, err := getFS(c)
+	if err != nil {
+		return nil, err
+	}
+
 	gateway, err := pool.GetGatewayServiceClient(c.GatewayAddr)
 	if err != nil {
 		return nil, err
@@ -102,6 +113,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		mountPath: mountPath,
 		mountID:   mountID,
 		gateway:   gateway,
+		storage:   fs,
 	}
 
 	return service, nil
@@ -210,8 +222,82 @@ func isOCStorage(q string) bool {
 	return strings.HasPrefix(q, "/oc/")
 }
 
+func (s *service) dataURL() (*url.URL, error) {
+	target := strings.Join([]string{s.conf.DataServerURL, s.conf.DataServerPrefix}, "/")
+	targetURL, err := url.Parse(target)
+	if err != nil {
+		return nil, err
+	}
+
+	return targetURL, nil
+}
+
+func (s *service) uploadFullPath(ctx context.Context, refPath string) (string, error) {
+	var fullPath []string
+	// req.Ref.GetPath() = "/public/{token}/subfolderA/subfolderB/file.txt"
+	token := strings.Split(refPath, "/")[2]
+
+	ref, err := s.refFromToken(ctx, token)
+	if err != nil {
+		return "", err
+	}
+
+	sharedRootPath := strings.Split(ref.GetPath(), "/")[3:] // internal paths have the storage prefixed, i.e: "/oc/einstein/asdf/""
+	fullPath = append(sharedRootPath, strings.Split(refPath, "/")[3:]...)
+	// i.e: fullPath = /sharedFolder/subfolder/file.txt
+	return strings.Join(fullPath, "/"), nil
+}
+
 func (s *service) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*provider.InitiateFileUploadResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+	logger := appctx.GetLogger(ctx)
+
+	fullPath, err := s.uploadFullPath(ctx, req.Ref.GetPath())
+	if err != nil {
+		return nil, err
+	}
+
+	ref := &provider.Reference{
+		Spec: &provider.Reference_Path{
+			Path: fullPath,
+		},
+	}
+
+	targetURL, err := s.dataURL()
+	if err != nil {
+		return nil, err
+	}
+
+	var uploadLength int64
+	if req.Opaque != nil && req.Opaque.Map != nil && req.Opaque.Map["Upload-Length"] != nil {
+		var err error
+		uploadLength, err = strconv.ParseInt(string(req.Opaque.Map["Upload-Length"].Value), 10, 64)
+		if err != nil {
+			return &provider.InitiateFileUploadResponse{
+				Status: status.NewInternal(ctx, err, "error parsing upload length"),
+			}, nil
+		}
+	}
+
+	uploadID, err := s.storage.InitiateUpload(ctx, ref, uploadLength)
+	if err != nil {
+		return &provider.InitiateFileUploadResponse{
+			Status: status.NewInternal(ctx, err, "error getting upload id"),
+		}, nil
+	}
+	targetURL.Path = path.Join("/", targetURL.Path, uploadID)
+
+	logger.Info().Str("data-server", targetURL.String()).
+		Str("fn", req.Ref.GetPath()).
+		Str("xs", fmt.Sprintf("%+v", "false")).
+		Msg("file upload")
+	res := &provider.InitiateFileUploadResponse{
+		UploadEndpoint: targetURL.String(),
+		Status:         status.NewOK(ctx),
+		Expose:         true,
+		// AvailableChecksums: ,
+	}
+
+	return res, nil
 }
 
 func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provider.GetPathResponse, error) {
@@ -256,28 +342,21 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		return nil, err
 	}
 
-	statResponse, err := s.gateway.Stat(
-		ctx,
-		&provider.StatRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: path.Join("/", pathFromToken, relativePath),
-				},
+	// the call has to be made to the gateway instead of the storage.
+	statResponse, err := s.gateway.Stat(ctx, &provider.StatRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: path.Join("/", pathFromToken, relativePath),
 			},
-		})
+		},
+	})
 	if err != nil {
-		log.Error().Err(err).Msg("error during stat call")
 		return nil, err
 	}
 
-	// we don't want to leak the path
-	statResponse.Info.Path = path.Join("/", tkn, relativePath)
-
-	// if statResponse.Status.Code != rpc.Code_CODE_OK {
-	// 	if statResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
-	// 		// log.Warn().Str("path", refFromToken.GetPath()).Msgf("resource: `%v` not found", refFromToken.GetId())
-	// 	}
-	// }
+	if statResponse.Info != nil {
+		statResponse.Info.Path = path.Join("/", tkn, relativePath)
+	}
 
 	return statResponse, nil
 }
@@ -429,4 +508,46 @@ func (s *service) pathFromToken(ctx context.Context, token string) (string, erro
 	}
 
 	return pathRes.Path, nil
+}
+
+// refFromToken returns the path for the publicly shared resource.
+func (s *service) refFromToken(ctx context.Context, token string) (*provider.Reference, error) {
+	driver, err := pool.GetPublicShareProviderClient(s.conf.DriverAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	publicShareResponse, err := driver.GetPublicShare(
+		ctx,
+		&link.GetPublicShareRequest{
+			Ref: &link.PublicShareReference{
+				Spec: &link.PublicShareReference_Token{
+					Token: token,
+				},
+			},
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	pathRes, err := s.gateway.GetPath(ctx, &provider.GetPathRequest{
+		ResourceId: publicShareResponse.GetShare().GetResourceId(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &provider.Reference{
+		Spec: &provider.Reference_Path{
+			Path: pathRes.Path,
+		},
+	}, nil
+}
+
+func getFS(c *config) (storage.FS, error) {
+	if f, ok := registry.NewFuncs[c.Driver]; ok {
+		return f(c.Drivers[c.Driver])
+	}
+	return nil, fmt.Errorf("driver not found: %s", c.Driver)
 }
