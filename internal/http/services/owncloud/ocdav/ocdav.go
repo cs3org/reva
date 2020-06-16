@@ -69,9 +69,7 @@ type Config struct {
 }
 
 func (c *Config) init() {
-	if c.Prefix == "" {
-		c.Prefix = "webdav"
-	}
+	// note: default c.Prefix is an empty string
 
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 
