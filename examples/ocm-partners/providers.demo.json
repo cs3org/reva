@@ -2,37 +2,37 @@
 	{
 		"domain": "https://cern.ch",
 		"api_version": "0.0.1",
-		"api_endpoint": "https://sciencemesh.cernbox.cern.ch/datagateway/",
+		"api_endpoint": "https://sciencemesh.cernbox.cern.ch/datagateway/ocm/",
 		"webdav_endpoint": "https://sciencemesh.cernbox.cern.ch/datagateway/webdav/"
 	},
 	{
 		"domain": "https://cesnet.cz",
 		"api_version": "0.0.1",
-		"api_endpoint": "https://sciencemesh.cesnet.cz/",
+		"api_endpoint": "https://sciencemesh.cesnet.cz/ocm/",
 		"webdav_endpoint": "https://sciencemesh.cesnet.cz/webdav/"
 	},
 	{
 		"domain": "https://uni-muenster.de",
 		"api_version": "0.0.1",
-		"api_endpoint": "https://sciencemesh-test.uni-muenster.de/",
+		"api_endpoint": "https://sciencemesh-test.uni-muenster.de/ocm/",
 		"webdav_endpoint": "https://sciencemesh-test.uni-muenster.de/webdav/"
 	},
 	{
 		"domain": "https://cubbit.io",
 		"api_version": "0.0.1",
-		"api_endpoint": "https://ocm.cubbit.io/",
+		"api_endpoint": "https://ocm.cubbit.io/ocm/",
 		"webdav_endpoint": "https://ocm.cubbit.io/webdav/"
 	},
 	{
 		"domain": "https://ailleron.com",
 		"api_version": "0.0.1",
-		"api_endpoint": "http://cs3mesh.softwaremind.com:19000/",
+		"api_endpoint": "http://cs3mesh.softwaremind.com:19000/ocm/",
 		"webdav_endpoint": "http://cs3mesh.softwaremind.com:19000/webdav/"
 	},
 	{
 		"domain": "https://surfsara.nl",
 		"api_version": "0.0.1",
-		"api_endpoint": "https://app.cs3mesh-iop.k8s.surfsara.nl/",
+		"api_endpoint": "https://app.cs3mesh-iop.k8s.surfsara.nl/ocm/",
 		"webdav_endpoint": "https://app.cs3mesh-iop.k8s.surfsara.nl/webdav/"
 	}
 ]
