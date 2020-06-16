@@ -1,7 +1,7 @@
 [
 	{
 		"id": {
-			"opaque_id": "1234",
+			"opaque_id": "holger1234",
 			"idp": "http://localhost:20080"
 		},
 		"username": "holger",
@@ -12,7 +12,7 @@
 	},
 	{
 		"id": {
-			"opaque_id": "5678",
+			"opaque_id": "daniel5678",
 			"idp": "http://localhost:20080"
 		},
 		"username": "daniel",
