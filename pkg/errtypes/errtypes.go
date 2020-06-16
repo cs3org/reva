@@ -87,6 +87,12 @@ type IsAlreadyExists interface {
 	IsAlreadyExists()
 }
 
+// IsInternalError is the interface to implement
+// to specify that an a resource is not found.
+type IsInternalError interface {
+	IsInternalError()
+}
+
 // IsUserRequired is the interface to implement
 // to specify that a user is required.
 type IsUserRequired interface {
