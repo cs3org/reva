@@ -88,9 +88,7 @@ func (c *config) init() {
 	c.OCMCoreEndpoint = sharedconf.GetGatewaySVC(c.OCMProviderAuthorizerEndpoint)
 	c.UserProviderEndpoint = sharedconf.GetGatewaySVC(c.OCMCoreEndpoint)
 
-	// we reuse the gateway configuration and add http as default data protocol.
-	c.DataGatewayEndpoint = sharedconf.GetGatewaySVC(c.DataGatewayEndpoint)
-	c.DataGatewayEndpoint = fmt.Sprintf("http://%s", c.DataGatewayEndpoint)
+	c.DataGatewayEndpoint = sharedconf.GetDataGateway(c.DataGatewayEndpoint)
 
 	// use shared secret if not set
 	c.TransferSharedSecret = sharedconf.GetJWTSecret(c.TransferSharedSecret)
