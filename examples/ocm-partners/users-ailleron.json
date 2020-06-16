@@ -2,7 +2,7 @@
 	{
 		"id": {
 			"opaque_id": "jarek1234",
-			"idp": "http://localhost:20080"
+			"idp": "https://ailleron.com"
 		},
 		"username": "jarek",
 		"secret": "jarekpass",
@@ -13,7 +13,7 @@
 	{
 		"id": {
 			"opaque_id": "mateusz5678",
-			"idp": "http://localhost:20080"
+			"idp": "https://ailleron.com"
 		},
 		"username": "mateusz",
 		"secret": "mateuszpass",
@@ -24,7 +24,7 @@
 	{
 		"id": {
 			"opaque_id": "dawid9876",
-			"idp": "http://localhost:20080"
+			"idp": "https://ailleron.com"
 		},
 		"username": "dawid",
 		"secret": "dawidpass",

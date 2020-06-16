@@ -2,7 +2,7 @@
 	{
 		"id": {
 			"opaque_id": "ishank1234",
-			"idp": "http://localhost:20080"
+			"idp": "https://cern.ch"
 		},
 		"username": "ishank",
 		"secret": "ishankpass",
@@ -13,7 +13,7 @@
 	{
 		"id": {
 			"opaque_id": "hugo5678",
-			"idp": "http://localhost:20080"
+			"idp": "https://cern.ch"
 		},
 		"username": "hugo",
 		"secret": "hugopass",
@@ -24,7 +24,7 @@
 	{
 		"id": {
 			"opaque_id": "samuel9876",
-			"idp": "http://localhost:20080"
+			"idp": "https://cern.ch"
 		},
 		"username": "samuel",
 		"secret": "samuelpass",

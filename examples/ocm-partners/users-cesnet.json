@@ -2,7 +2,7 @@
 	{
 		"id": {
 			"opaque_id": "miroslav1234",
-			"idp": "http://localhost:20080"
+			"idp": "https://cesnet.cz"
 		},
 		"username": "miroslav",
 		"secret": "miroslavpass",
@@ -13,7 +13,7 @@
 	{
 		"id": {
 			"opaque_id": "milan5678",
-			"idp": "http://localhost:20080"
+			"idp": "https://cesnet.cz"
 		},
 		"username": "milan",
 		"secret": "milanpass",

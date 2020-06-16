@@ -2,7 +2,7 @@
 	{
 		"id": {
 			"opaque_id": "holger1234",
-			"idp": "http://localhost:20080"
+			"idp": "https://uni-muenster.de"
 		},
 		"username": "holger",
 		"secret": "holgerpass",
@@ -13,7 +13,7 @@
 	{
 		"id": {
 			"opaque_id": "daniel5678",
-			"idp": "http://localhost:20080"
+			"idp": "https://uni-muenster.de"
 		},
 		"username": "daniel",
 		"secret": "danielpass",

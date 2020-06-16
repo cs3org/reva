@@ -2,7 +2,7 @@
 	{
 		"id": {
 			"opaque_id": "allesandro1234",
-			"idp": "http://localhost:20080"
+			"idp": "https://cubbit.io"
 		},
 		"username": "allesandro",
 		"secret": "allesandropass",
@@ -13,7 +13,7 @@
 	{
 		"id": {
 			"opaque_id": "lorenzo5678",
-			"idp": "http://localhost:20080"
+			"idp": "https://cubbit.io"
 		},
 		"username": "lorenzo",
 		"secret": "lorenzopass",
