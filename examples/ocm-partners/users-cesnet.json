@@ -1,0 +1,24 @@
+[
+	{
+		"id": {
+			"opaque_id": "1234",
+			"idp": "http://localhost:20080"
+		},
+		"username": "miroslav",
+		"secret": "miroslavpass",
+		"mail": "miroslav@cesnet.cz",
+		"display_name": "Miroslav",
+		"groups": ["sailing-lovers", "violin-haters", "physics-lovers"]
+	},
+	{
+		"id": {
+			"opaque_id": "5678",
+			"idp": "http://localhost:20080"
+		},
+		"username": "milan",
+		"secret": "milanpass",
+		"mail": "milan@cesnet.cz",
+		"display_name": "Milan",
+		"groups": ["radium-lovers", "polonium-lovers", "physics-lovers"]
+	}
+]

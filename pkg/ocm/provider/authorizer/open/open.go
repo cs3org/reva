@@ -44,6 +44,7 @@ func New(m map[string]interface{}) (provider.Authorizer, error) {
 		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
 	}
+	c.init()
 
 	f, err := ioutil.ReadFile(c.Providers)
 	if err != nil {
@@ -63,6 +64,12 @@ func New(m map[string]interface{}) (provider.Authorizer, error) {
 type config struct {
 	// Users holds a path to a file containing json conforming the Users struct
 	Providers string `mapstructure:"providers"`
+}
+
+func (c *config) init() {
+	if c.Providers == "" {
+		c.Providers = "/var/tmp/reva/ocm-providers.json"
+	}
 }
 
 type authorizer struct {

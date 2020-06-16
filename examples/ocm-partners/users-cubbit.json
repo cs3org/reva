@@ -1,0 +1,24 @@
+[
+	{
+		"id": {
+			"opaque_id": "1234",
+			"idp": "http://localhost:20080"
+		},
+		"username": "allesandro",
+		"secret": "allesandropass",
+		"mail": "allesandro@cubbit.io",
+		"display_name": "Allesandro",
+		"groups": ["sailing-lovers", "violin-haters", "physics-lovers"]
+	},
+	{
+		"id": {
+			"opaque_id": "5678",
+			"idp": "http://localhost:20080"
+		},
+		"username": "lorenzo",
+		"secret": "lorenzopass",
+		"mail": "lorenzo@cubbit.io",
+		"display_name": "Lorenzo",
+		"groups": ["radium-lovers", "polonium-lovers", "physics-lovers"]
+	}
+]

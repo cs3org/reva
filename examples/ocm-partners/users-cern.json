@@ -1,0 +1,35 @@
+[
+	{
+		"id": {
+			"opaque_id": "1234",
+			"idp": "http://localhost:20080"
+		},
+		"username": "ishank",
+		"secret": "ishankpass",
+		"mail": "ishank@cern.ch",
+		"display_name": "Ishank Arora",
+		"groups": ["sailing-lovers", "violin-haters", "physics-lovers"]
+	},
+	{
+		"id": {
+			"opaque_id": "5678",
+			"idp": "http://localhost:20080"
+		},
+		"username": "hugo",
+		"secret": "hugopass",
+		"mail": "hugo@cern.ch",
+		"display_name": "Hugo Gonzalez Labrador",
+		"groups": ["radium-lovers", "polonium-lovers", "physics-lovers"]
+	},
+	{
+		"id": {
+			"opaque_id": "9876",
+			"idp": "http://localhost:20080"
+		},
+		"username": "samuel",
+		"secret": "samuelpass",
+		"mail": "samuel@cern.ch",
+		"display_name": "Samuel Alfageme Sainz",
+		"groups": ["quantum-lovers", "philosophy-haters", "physics-lovers"]
+	}
+]

@@ -311,8 +311,9 @@ func traceHandler(name string, h http.Handler) http.Handler {
 func addProviderAuthMiddleware(conf *config, unprotected []string) (global.Middleware, error) {
 	_, ocmdRegistered := global.Services["ocmd"]
 	_, ocmdEnabled := conf.Services["ocmd"]
+	ocmdPrefix, _ := conf.Services["ocmd"]["prefix"].(string)
 	if ocmdRegistered && ocmdEnabled {
-		return providerauthorizer.New(conf.Middlewares["providerauthorizer"], unprotected, conf.Services["ocmd"]["prefix"].(string))
+		return providerauthorizer.New(conf.Middlewares["providerauthorizer"], unprotected, ocmdPrefix)
 	}
 	return nil, nil
 }
