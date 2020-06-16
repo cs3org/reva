@@ -63,8 +63,8 @@ func (s *svc) Unprotected() []string {
 	// Get all endpoints exposed by the RequestExporters
 	exporters := s.mntx.GetRequestExporters()
 	endpoints := make([]string, len(exporters))
-	for _, exporter := range exporters {
-		endpoints = append(endpoints, exporter.Endpoint())
+	for idx, exporter := range exporters {
+		endpoints[idx] = exporter.Endpoint()
 	}
 	return endpoints
 }
@@ -92,9 +92,7 @@ func parseConfig(m map[string]interface{}) (*config.Configuration, error) {
 	return cfg, nil
 }
 
-func applyDefaultConfig(*config.Configuration) {
-	conf := &config.Configuration{}
-
+func applyDefaultConfig(conf *config.Configuration) {
 	if conf.Prefix == "" {
 		conf.Prefix = serviceName
 	}
@@ -127,6 +125,8 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	if err != nil {
 		return nil, err
 	}
+
+	conf.Init()
 
 	// Create the Mentix instance
 	mntx, err := mentix.New(conf, log)

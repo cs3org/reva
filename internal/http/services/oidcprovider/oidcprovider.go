@@ -50,6 +50,15 @@ type config struct {
 	Issuer          string                            `mapstructure:"issuer"`
 }
 
+func (c *config) init() {
+
+	if c.Prefix == "" {
+		c.Prefix = "oauth2"
+	}
+
+	c.GatewayEndpoint = sharedconf.GetGatewaySVC(c.GatewayEndpoint)
+}
+
 type client struct {
 	ID            string   `mapstructure:"id"`
 	Secret        string   `mapstructure:"client_secret,"`
@@ -77,11 +86,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		return nil, err
 	}
 
-	if c.Prefix == "" {
-		c.Prefix = "oauth2"
-	}
-
-	c.GatewayEndpoint = sharedconf.GetGatewaySVC(c.GatewayEndpoint)
+	c.init()
 
 	clients, err := getClients(c.Clients)
 	if err != nil {

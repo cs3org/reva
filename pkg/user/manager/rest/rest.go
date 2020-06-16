@@ -44,25 +44,31 @@ func init() {
 
 var (
 	emailRegex    = regexp.MustCompile(`^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$`)
-	usernameRegex = regexp.MustCompile(`^[ a-zA-Z0-9.-_]+$`)
+	usernameRegex = regexp.MustCompile(`^[ a-zA-Z0-9._-]+$`)
 )
 
 type manager struct {
 	conf                *config
-	sync.Mutex          // concurrent access to the file and loaded
+	sync.Mutex          // concurrent access to apiToken and tokenExpirationTime
 	apiToken            string
 	tokenExpirationTime time.Time
 }
 
 type config struct {
-	APIBaseURL   string `mapstructure:"api_base_url"`
-	ClientID     string `mapstructure:"client_id"`
-	ClientSecret string `mapstructure:"client_secret"`
+	// Base API Endpoint
+	APIBaseURL string `mapstructure:"api_base_url" docs:"https://authorization-service-api-dev.web.cern.ch/api/v1.0"`
+	// Client ID needed to authenticate
+	ClientID string `mapstructure:"client_id" docs:"-"`
+	// Client Secret
+	ClientSecret string `mapstructure:"client_secret" docs:"-"`
 
-	OIDCTokenEndpoint string `mapstructure:"oidc_token_endpoint"`
-	TargetAPI         string `mapstructure:"target_api"`
+	// Endpoint to generate token to access the API
+	OIDCTokenEndpoint string `mapstructure:"oidc_token_endpoint" docs:"https://keycloak-dev.cern.ch/auth/realms/cern/api-access/token"`
+	// The target application for which token needs to be generated
+	TargetAPI string `mapstructure:"target_api" docs:"authorization-service-api"`
 
-	IDProvider string `mapstructure:"id_provider"`
+	// The OIDC Provider
+	IDProvider string `mapstructure:"id_provider" docs:"http://cernbox.cern.ch"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {

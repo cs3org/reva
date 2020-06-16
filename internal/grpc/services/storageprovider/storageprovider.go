@@ -35,6 +35,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
@@ -48,18 +49,43 @@ func init() {
 }
 
 type config struct {
-	MountPath          string                            `mapstructure:"mount_path"`
-	MountID            string                            `mapstructure:"mount_id"`
-	Driver             string                            `mapstructure:"driver"`
-	Drivers            map[string]map[string]interface{} `mapstructure:"drivers"`
-	PathWrapper        string                            `mapstructure:"path_wrapper"`
-	PathWrappers       map[string]map[string]interface{} `mapstructure:"path_wrappers"`
-	TmpFolder          string                            `mapstructure:"tmp_folder"`
-	DataServerURL      string                            `mapstructure:"data_server_url"`
-	ExposeDataServer   bool                              `mapstructure:"expose_data_server"` // if true the client will be able to upload/download directly to it
-	EnableHomeCreation bool                              `mapstructure:"enable_home_creation"`
-	DisableTus         bool                              `mapstructure:"disable_tus"`
-	AvailableXS        map[string]uint32                 `mapstructure:"available_checksums"`
+	MountPath        string                            `mapstructure:"mount_path" docs:"/;The path where the file system would be mounted."`
+	MountID          string                            `mapstructure:"mount_id" docs:"-;The ID of the mounted file system."`
+	Driver           string                            `mapstructure:"driver" docs:"localhome;The storage driver to be used."`
+	Drivers          map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:docs/config/packages/storage/fs"`
+	TmpFolder        string                            `mapstructure:"tmp_folder" docs:"/var/tmp;Path to temporary folder."`
+	DataServerURL    string                            `mapstructure:"data_server_url" docs:"http://localhost/data;The URL for the data server."`
+	ExposeDataServer bool                              `mapstructure:"expose_data_server" docs:"false;Whether to expose data server."` // if true the client will be able to upload/download directly to it
+	DisableTus       bool                              `mapstructure:"disable_tus" docs:"false;Whether to disable TUS uploads."`
+	AvailableXS      map[string]uint32                 `mapstructure:"available_checksums" docs:"nil;List of available checksums."`
+}
+
+func (c *config) init() {
+	if c.Driver == "" {
+		c.Driver = "localhome"
+	}
+
+	if c.MountPath == "" {
+		c.MountPath = "/"
+	}
+
+	if c.MountID == "" {
+		c.MountID = "00000000-0000-0000-0000-000000000000"
+	}
+
+	if c.TmpFolder == "" {
+		c.TmpFolder = "/var/tmp/reva/tmp"
+	}
+
+	c.DataServerURL = sharedconf.GetDataGateway(c.DataServerURL)
+
+	// TODO: Uploads currently don't work when ExposeDataServer is false
+	c.ExposeDataServer = true
+
+	// set sane defaults
+	if len(c.AvailableXS) == 0 {
+		c.AvailableXS = map[string]uint32{"md5": 100, "unset": 1000}
+	}
 }
 
 type service struct {
@@ -114,18 +140,9 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	// set sane defaults
-	if len(c.AvailableXS) == 0 {
-		c.AvailableXS = map[string]uint32{"md5": 100, "unset": 1000}
-	}
+	c.init()
 
-	// use os temporary folder if empty
-	tmpFolder := c.TmpFolder
-	if tmpFolder == "" {
-		tmpFolder = os.TempDir()
-	}
-
-	if err := os.MkdirAll(tmpFolder, 0755); err != nil {
+	if err := os.MkdirAll(c.TmpFolder, 0755); err != nil {
 		return nil, err
 	}
 
@@ -156,7 +173,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	service := &service{
 		conf:          c,
 		storage:       fs,
-		tmpFolder:     tmpFolder,
+		tmpFolder:     c.TmpFolder,
 		mountPath:     mountPath,
 		mountID:       mountID,
 		dataServerURL: u,
@@ -307,17 +324,6 @@ func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*p
 }
 
 func (s *service) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
-	/*
-		relativeHome, err := s.storage.GetHome(ctx)
-		if err != nil {
-			st := status.NewInternal(ctx, err, "error getting home")
-			return &provider.GetHomeResponse{
-				Status: st,
-			}, nil
-		}
-	*/
-
-	//home := path.Join(s.mountPath, path.Clean(relativeHome))
 	home := path.Join(s.mountPath)
 
 	res := &provider.GetHomeResponse{
@@ -330,15 +336,6 @@ func (s *service) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*p
 
 func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
 	log := appctx.GetLogger(ctx)
-	if !s.conf.EnableHomeCreation {
-		err := errtypes.NotSupported("storageprovider: create home directories not enabled")
-		log.Err(err).Msg("storageprovider: home creation is disabled")
-		st := status.NewUnimplemented(ctx, err, "creating home directories is disabled by configuration")
-		return &provider.CreateHomeResponse{
-			Status: st,
-		}, nil
-
-	}
 	if err := s.storage.CreateHome(ctx); err != nil {
 		st := status.NewInternal(ctx, err, "error creating home")
 		log.Err(err).Msg("storageprovider: error calling CreateHome of storage driver")

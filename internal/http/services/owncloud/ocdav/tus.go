@@ -21,10 +21,12 @@ package ocdav
 import (
 	"net/http"
 	"path"
+	"time"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/internal/http/utils"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
 	tusd "github.com/tus/tusd/pkg/handler"
@@ -176,6 +178,69 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 		if httpRes.StatusCode != http.StatusNoContent {
 			w.WriteHeader(httpRes.StatusCode)
 			return
+		}
+
+		// check if upload was fully completed
+		if httpRes.Header.Get("Upload-Offset") == r.Header.Get("Upload-Length") {
+			// apply mtime to the metadata if specified
+			mtime := meta["mtime"]
+			if mtime != "" {
+				sreq := &provider.SetArbitraryMetadataRequest{
+					Ref: &provider.Reference{
+						Spec: &provider.Reference_Path{Path: fn},
+					},
+					ArbitraryMetadata: &provider.ArbitraryMetadata{
+						Metadata: map[string]string{},
+					},
+				}
+				sreq.ArbitraryMetadata.Metadata["mtime"] = mtime
+				res, err := client.SetArbitraryMetadata(ctx, sreq)
+				if err != nil {
+					log.Error().Err(err).
+						Str("mtime", mtime).
+						Msg("error sending a grpc SetArbitraryMetadata request for setting mtime")
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+
+				if res.Status.Code != rpc.Code_CODE_OK {
+					log.Error().Err(err).
+						Str("mtime", mtime).
+						Msgf("error sending a grpc SetArbitraryMetadata request for setting mtime, status %d", res.Status.Code)
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+			}
+
+			// get uploaded file metadata
+			sRes, err := client.Stat(ctx, sReq)
+			if err != nil {
+				log.Error().Err(err).Msg("error sending grpc stat request")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			if sRes.Status.Code != rpc.Code_CODE_OK {
+				if sRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+			}
+
+			info := sRes.Info
+			if info == nil {
+				log.Error().Str("fn", fn).Msg("No info found for uploaded file")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("Content-Type", info.MimeType)
+			w.Header().Set("OC-FileId", wrapResourceID(info.Id))
+			w.Header().Set("OC-ETag", info.Etag)
+			w.Header().Set("ETag", info.Etag)
+			t := utils.TSToTime(info.Mtime)
+			lastModifiedString := t.Format(time.RFC1123Z)
+			w.Header().Set("Last-Modified", lastModifiedString)
 		}
 	}
 	w.WriteHeader(http.StatusCreated)

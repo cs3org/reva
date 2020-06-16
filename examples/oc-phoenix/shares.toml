@@ -11,3 +11,6 @@ driver = "memory"
 
 [grpc.services.publicshareprovider]
 driver = "memory"
+
+[grpc.services.publicshareprovider.drivers.json]
+file = "/var/tmp/reva/publicshares.json"

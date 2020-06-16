@@ -46,12 +46,19 @@ type config struct {
 	Users string `mapstructure:"users"`
 }
 
+func (c *config) init() {
+	if c.Users == "" {
+		c.Users = "/var/tmp/reva/users.json"
+	}
+}
+
 func parseConfig(m map[string]interface{}) (*config, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
 		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
 	}
+	c.init()
 	return c, nil
 }
 

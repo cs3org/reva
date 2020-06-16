@@ -21,6 +21,7 @@ package connectors
 import (
 	"encoding/xml"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/rs/zerolog"
@@ -146,6 +147,17 @@ func (connector *GOCDBConnector) queryServices(meshData *meshdata.MeshData, site
 	// Copy retrieved data into the mesh data
 	site.Services = nil
 	for _, service := range services.Services {
+		host := service.Host
+
+		// If a URL is provided, extract the port from it and append it to the host
+		if len(service.URL) > 0 {
+			if hostURL, err := url.Parse(service.URL); err == nil {
+				if port := hostURL.Port(); len(port) > 0 {
+					host += ":" + port
+				}
+			}
+		}
+
 		// Assemble additional endpoints
 		var endpoints []*meshdata.ServiceEndpoint
 		for _, endpoint := range service.Endpoints.Endpoints {
@@ -167,7 +179,7 @@ func (connector *GOCDBConnector) queryServices(meshData *meshdata.MeshData, site
 				IsMonitored: strings.EqualFold(service.IsMonitored, "Y"),
 				Properties:  connector.extensionsToMap(&service.Extensions),
 			},
-			Host:                service.Host,
+			Host:                host,
 			AdditionalEndpoints: endpoints,
 		})
 	}

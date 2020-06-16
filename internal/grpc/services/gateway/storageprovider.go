@@ -45,7 +45,7 @@ type transferClaims struct {
 }
 
 func (s *svc) sign(ctx context.Context, target string) (string, error) {
-	ttl := time.Duration(s.c.TranserExpires) * time.Second
+	ttl := time.Duration(s.c.TransferExpires) * time.Second
 	claims := transferClaims{
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(ttl).Unix(),

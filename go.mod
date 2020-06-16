@@ -2,14 +2,15 @@ module github.com/cs3org/reva
 
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.2.0
-	contrib.go.opencensus.io/exporter/prometheus v0.1.0
+	contrib.go.opencensus.io/exporter/prometheus v0.2.0
 	github.com/BurntSushi/toml v0.3.1
 	github.com/Masterminds/goutils v1.1.0 // indirect
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/Masterminds/sprig v2.22.0+incompatible
-	github.com/aws/aws-sdk-go v1.31.7
+	github.com/aws/aws-sdk-go v1.32.2
 	github.com/cheggaaa/pb v1.0.28
 	github.com/coreos/go-oidc v2.2.1+incompatible
+	github.com/cs3org/cato v0.0.0-20200609102907-4116d2de0add
 	github.com/cs3org/go-cs3apis v0.0.0-20200515145316-7048e6a5a73d
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/eventials/go-tus v0.0.0-20190617130015-9db47421f6a0
@@ -25,13 +26,14 @@ require (
 	github.com/mattn/go-runewidth v0.0.4 // indirect
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible
 	github.com/mitchellh/copystructure v1.0.0 // indirect
-	github.com/mitchellh/mapstructure v1.3.1
-	github.com/ory/fosite v0.32.0
+	github.com/mitchellh/mapstructure v1.3.2
+	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
+	github.com/ory/fosite v0.32.1
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/xattr v0.4.1
 	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect
 	github.com/rs/cors v1.7.0
-	github.com/rs/zerolog v1.18.0
+	github.com/rs/zerolog v1.19.0
 	github.com/tus/tusd v1.1.1-0.20200416115059-9deabf9d80c2
 	go.opencensus.io v0.22.3
 	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550

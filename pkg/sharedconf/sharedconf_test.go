@@ -39,8 +39,8 @@ func Test(t *testing.T) {
 	}
 
 	got = GetJWTSecret("")
-	if got != "" {
-		t.Fatalf("expected %q got %q", "", got)
+	if got != "changemeplease" {
+		t.Fatalf("expected %q got %q", "changemeplease", got)
 	}
 
 	conf = map[string]interface{}{
