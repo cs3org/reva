@@ -210,7 +210,7 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 	opaqueMap := map[string]*typespb.OpaqueEntry{
 		"Upload-Length": {
 			Decoder: "plain",
-			Value:   []byte(r.Header.Get("Upload-Length")),
+			Value:   []byte(r.Header.Get("Content-Length")),
 		},
 	}
 
