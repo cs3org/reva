@@ -88,7 +88,7 @@ type IsAlreadyExists interface {
 }
 
 // IsInternalError is the interface to implement
-// to specify that an a resource is not found.
+// to specify that there was some internal error
 type IsInternalError interface {
 	IsInternalError()
 }
