@@ -35,7 +35,7 @@ require (
 	github.com/rs/cors v1.7.0
 	github.com/rs/zerolog v1.19.0
 	github.com/tus/tusd v1.1.1-0.20200416115059-9deabf9d80c2
-	go.opencensus.io v0.22.3
+	go.opencensus.io v0.22.4
 	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	google.golang.org/grpc v1.29.1
