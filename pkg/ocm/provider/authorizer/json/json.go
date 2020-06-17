@@ -68,7 +68,7 @@ type config struct {
 
 func (c *config) init() {
 	if c.Providers == "" {
-		c.Providers = "/var/tmp/reva/ocm-providers.json"
+		c.Providers = "/etc/revad/ocm-providers.json"
 	}
 }
 
