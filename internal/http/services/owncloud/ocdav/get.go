@@ -19,6 +19,7 @@
 package ocdav
 
 import (
+	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"io"
 	"net/http"
 	"path"
@@ -103,7 +104,7 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	httpReq.Header.Set("X-Reva-Transfer", dRes.Token)
+	httpReq.Header.Set(datagateway.TokenTransportHeader, dRes.Token)
 	httpClient := rhttp.GetHTTPClient(ctx)
 
 	httpRes, err := httpClient.Do(httpReq)

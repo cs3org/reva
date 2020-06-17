@@ -26,6 +26,8 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/cs3org/reva/internal/http/services/datagateway"
+
 	"github.com/cheggaaa/pb"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -134,7 +136,7 @@ func uploadCommand() *command {
 		}
 		if res.Token != "" {
 			fmt.Printf("using X-Reva-Transfer header\n")
-			c.Header.Add("X-Reva-Transfer", res.Token)
+			c.Header.Add(datagateway.TokenTransportHeader, res.Token)
 		} else if token, ok := tokenpkg.ContextGetToken(ctx); ok {
 			fmt.Printf("using %s header\n", tokenpkg.TokenHeader)
 			c.Header.Add(tokenpkg.TokenHeader, token)

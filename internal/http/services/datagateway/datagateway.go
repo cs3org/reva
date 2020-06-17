@@ -36,7 +36,8 @@ import (
 )
 
 const (
-	tokenTransportHeader = "X-Reva-Transfer"
+	// TokenTransportHeader holds the header key for the reva transfer token
+	TokenTransportHeader = "X-Reva-Transfer"
 )
 
 func init() {
@@ -145,7 +146,7 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	token := r.Header.Get(tokenTransportHeader)
+	token := r.Header.Get(TokenTransportHeader)
 	claims, err := s.verify(ctx, token)
 	if err != nil {
 		err = errors.Wrap(err, "datagateway: error validating transfer token")
@@ -188,7 +189,7 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	token := r.Header.Get(tokenTransportHeader)
+	token := r.Header.Get(TokenTransportHeader)
 	claims, err := s.verify(ctx, token)
 	if err != nil {
 		err = errors.Wrap(err, "datagateway: error validating transfer token")
