@@ -55,6 +55,7 @@ type manager struct {
 	oidcToken OIDCToken
 }
 
+// OIDCToken stores the OIDC token used to authenticate requests to the REST API service
 type OIDCToken struct {
 	sync.Mutex          // concurrent access to apiToken and tokenExpirationTime
 	apiToken            string

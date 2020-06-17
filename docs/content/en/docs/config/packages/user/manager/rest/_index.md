@@ -9,7 +9,7 @@ description: >
 # _struct: config_
 
 {{% dir name="redis" type="string" default=":6379" %}}
-The port on which the redis server is running [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/user/manager/rest/rest.go#L67)
+The port on which the redis server is running [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/user/manager/rest/rest.go#L68)
 {{< highlight toml >}}
 [user.manager.rest]
 redis = ":6379"
@@ -17,7 +17,7 @@ redis = ":6379"
 {{% /dir %}}
 
 {{% dir name="user_groups_cache_expiration" type="int" default=5 %}}
-The time in minutes for which the groups to which a user belongs would be cached [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/user/manager/rest/rest.go#L68)
+The time in minutes for which the groups to which a user belongs would be cached [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/user/manager/rest/rest.go#L69)
 {{< highlight toml >}}
 [user.manager.rest]
 user_groups_cache_expiration = 5
@@ -25,7 +25,7 @@ user_groups_cache_expiration = 5
 {{% /dir %}}
 
 {{% dir name="id_provider" type="string" default="http://cernbox.cern.ch" %}}
-The OIDC Provider [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/user/manager/rest/rest.go#L70)
+The OIDC Provider [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/user/manager/rest/rest.go#L71)
 {{< highlight toml >}}
 [user.manager.rest]
 id_provider = "http://cernbox.cern.ch"
@@ -33,7 +33,7 @@ id_provider = "http://cernbox.cern.ch"
 {{% /dir %}}
 
 {{% dir name="api_base_url" type="string" default="https://authorization-service-api-dev.web.cern.ch/api/v1.0" %}}
-Base API Endpoint [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/user/manager/rest/rest.go#L72)
+Base API Endpoint [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/user/manager/rest/rest.go#L73)
 {{< highlight toml >}}
 [user.manager.rest]
 api_base_url = "https://authorization-service-api-dev.web.cern.ch/api/v1.0"
@@ -41,7 +41,7 @@ api_base_url = "https://authorization-service-api-dev.web.cern.ch/api/v1.0"
 {{% /dir %}}
 
 {{% dir name="client_id" type="string" default="-" %}}
-Client ID needed to authenticate [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/user/manager/rest/rest.go#L76)
+Client ID needed to authenticate [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/user/manager/rest/rest.go#L77)
 {{< highlight toml >}}
 [user.manager.rest]
 client_id = "-"
@@ -49,7 +49,7 @@ client_id = "-"
 {{% /dir %}}
 
 {{% dir name="client_secret" type="string" default="-" %}}
-Client Secret [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/user/manager/rest/rest.go#L78)
+Client Secret [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/user/manager/rest/rest.go#L79)
 {{< highlight toml >}}
 [user.manager.rest]
 client_secret = "-"
@@ -57,7 +57,7 @@ client_secret = "-"
 {{% /dir %}}
 
 {{% dir name="oidc_token_endpoint" type="string" default="https://keycloak-dev.cern.ch/auth/realms/cern/api-access/token" %}}
-Endpoint to generate token to access the API [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/user/manager/rest/rest.go#L79)
+Endpoint to generate token to access the API [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/user/manager/rest/rest.go#L80)
 {{< highlight toml >}}
 [user.manager.rest]
 oidc_token_endpoint = "https://keycloak-dev.cern.ch/auth/realms/cern/api-access/token"
@@ -65,7 +65,7 @@ oidc_token_endpoint = "https://keycloak-dev.cern.ch/auth/realms/cern/api-access/
 {{% /dir %}}
 
 {{% dir name="target_api" type="string" default="authorization-service-api" %}}
-The target application for which token needs to be generated [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/user/manager/rest/rest.go#L84)
+The target application for which token needs to be generated [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/user/manager/rest/rest.go#L85)
 {{< highlight toml >}}
 [user.manager.rest]
 target_api = "authorization-service-api"
