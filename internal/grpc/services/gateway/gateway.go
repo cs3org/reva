@@ -77,16 +77,16 @@ func (c *config) init() {
 	// if services address are not specified we used the shared conf
 	// for the gatewaysvc to have dev setups very quickly.
 	c.AuthRegistryEndpoint = sharedconf.GetGatewaySVC(c.AuthRegistryEndpoint)
-	c.StorageRegistryEndpoint = sharedconf.GetGatewaySVC(c.AuthRegistryEndpoint)
-	c.AppRegistryEndpoint = sharedconf.GetGatewaySVC(c.StorageRegistryEndpoint)
-	c.PreferencesEndpoint = sharedconf.GetGatewaySVC(c.AppRegistryEndpoint)
+	c.StorageRegistryEndpoint = sharedconf.GetGatewaySVC(c.StorageRegistryEndpoint)
+	c.AppRegistryEndpoint = sharedconf.GetGatewaySVC(c.AppRegistryEndpoint)
+	c.PreferencesEndpoint = sharedconf.GetGatewaySVC(c.PreferencesEndpoint)
 	c.UserShareProviderEndpoint = sharedconf.GetGatewaySVC(c.UserShareProviderEndpoint)
 	c.PublicShareProviderEndpoint = sharedconf.GetGatewaySVC(c.PublicShareProviderEndpoint)
 	c.OCMShareProviderEndpoint = sharedconf.GetGatewaySVC(c.OCMShareProviderEndpoint)
 	c.OCMInviteManagerEndpoint = sharedconf.GetGatewaySVC(c.OCMInviteManagerEndpoint)
-	c.OCMProviderAuthorizerEndpoint = sharedconf.GetGatewaySVC(c.OCMInviteManagerEndpoint)
-	c.OCMCoreEndpoint = sharedconf.GetGatewaySVC(c.OCMProviderAuthorizerEndpoint)
-	c.UserProviderEndpoint = sharedconf.GetGatewaySVC(c.OCMCoreEndpoint)
+	c.OCMProviderAuthorizerEndpoint = sharedconf.GetGatewaySVC(c.OCMProviderAuthorizerEndpoint)
+	c.OCMCoreEndpoint = sharedconf.GetGatewaySVC(c.OCMCoreEndpoint)
+	c.UserProviderEndpoint = sharedconf.GetGatewaySVC(c.UserProviderEndpoint)
 
 	c.DataGatewayEndpoint = sharedconf.GetDataGateway(c.DataGatewayEndpoint)
 
