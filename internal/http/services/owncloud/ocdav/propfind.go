@@ -97,9 +97,9 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 		return
 	}
 
-	info := res.Info
-	infos := []*provider.ResourceInfo{info}
-	if info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "1" {
+	infos := []*provider.ResourceInfo{res.Info}
+
+	if res.Info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "1" {
 		req := &provider.ListContainerRequest{
 			Ref: ref,
 		}
@@ -116,10 +116,10 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 			return
 		}
 		infos = append(infos, res.Infos...)
-	} else if depth == "infinity" {
+	} else if res.Info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "infinity" {
 		// FIXME: doesn't work cross-storage as the results will have the wrong paths!
 		// use a stack to explore sub-containers breadth-first
-		stack := []string{info.Path}
+		stack := []string{res.Info.Path}
 		for len(stack) > 0 {
 			// retrieve path on top of stack
 			path := stack[len(stack)-1]
@@ -154,12 +154,20 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 			// check sub-containers in reverse order and add them to the stack
 			// the reversed order here will produce a more logical sorting of results
 			for i := len(res.Infos) - 1; i >= 0; i-- {
-				//for i := range res.Infos {
 				if res.Infos[i].Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 					stack = append(stack, res.Infos[i].Path)
 				}
 			}
 		}
+	} else if res.Info.Type == provider.ResourceType_RESOURCE_TYPE_FILE && strings.Contains(ctx.Value(ctxKeyBaseURI).(string), "public-files") {
+		infos = []*provider.ResourceInfo{}
+		// if the request is to a public link, we need to add yet another value for the file entry.
+		infos = append(infos, &provider.ResourceInfo{
+			// append the shared as a container. Annex to OC10 standards.
+			Type:  provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+			Mtime: res.Info.Mtime,
+		})
+		infos = append(infos, res.Info)
 	}
 
 	propRes, err := s.formatPropfind(ctx, &pf, infos, ns)
@@ -168,10 +176,11 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+
 	w.Header().Set("DAV", "1, 3, extended-mkcol")
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 	// let clients know this collection supports tus.io POST requests to start uploads
-	if info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && !s.c.DisableTus {
+	if res.Info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && !s.c.DisableTus {
 		w.Header().Add("Access-Control-Expose-Headers", "Tus-Resumable, Tus-Version, Tus-Extension")
 		w.Header().Set("Tus-Resumable", "1.0.0")
 		w.Header().Set("Tus-Version", "1.0.0")

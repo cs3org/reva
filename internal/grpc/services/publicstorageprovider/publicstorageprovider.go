@@ -192,28 +192,31 @@ func (s *service) initiateFileDownload(ctx context.Context, req *provider.Initia
 		return nil, err
 	}
 
-	_, err = pool.GetPublicShareProviderClient(s.conf.DriverAddr)
-	if err != nil {
-		err = errors.Wrap(err, "gateway: error getting a storage provider client")
-		return nil, err
-	}
+	var destURL *url.URL
 
-	if isOCStorage(tokenPath) {
+	// handle the case where a single file is shared publicly, for such case the url.Path might only be: "/public/ItYJjJNdiuEn"
+	// TODO the "/public" prefix might be configurable, although a prefix, nested paths should not be allowed, as in: `/public/level1/level2` values as prefix.
+	if len(strings.Split(req.Ref.GetPath(), "/")) == 3 {
+		base := strings.Join(strings.Split(tokenPath, "/")[3:], "/")
+		destURL, err = url.Parse(strings.Join([]string{s.conf.DataServerURL, s.conf.DataServerPrefix, base}, "/"))
+		if err != nil {
+			return nil, err
+		}
+	} else if isOCStorage(tokenPath) {
 		base := strings.Join(strings.Split(tokenPath, "/")[3:], "/")
 		request := strings.Join(strings.Split(t.dir, "/")[3:], "/")
 		t.dir = strings.Join([]string{base, request}, "/")
-	}
 
-	target := strings.Join([]string{s.conf.DataServerURL, s.conf.DataServerPrefix, t.dir, t.base}, "/")
-	targetURL, err := url.Parse(target)
-	if err != nil {
-		return nil, err
+		destURL, err = url.Parse(strings.Join([]string{s.conf.DataServerURL, s.conf.DataServerPrefix, t.dir, t.base}, "/"))
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &provider.InitiateFileDownloadResponse{
 		Opaque:           req.Opaque,
 		Status:           &rpc.Status{Code: rpc.Code_CODE_OK},
-		DownloadEndpoint: targetURL.String(),
+		DownloadEndpoint: destURL.String(),
 		Expose:           true,
 	}, nil
 }
