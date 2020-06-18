@@ -348,7 +348,7 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request) 
 	permKey := 1
 	if r.FormValue("permissions") != "" {
 		// phoenix sends: {"permissions": 15}. See ocPermToRole struct for mapping
-		permKey, err := strconv.Atoi(r.FormValue("permissions"))
+		permKey, err = strconv.Atoi(r.FormValue("permissions"))
 		if err != nil {
 			log.Error().Str("createShare", "shares").Str("permissions", r.FormValue("permissions")).Msgf("invalid type: %T", permKey)
 		}
