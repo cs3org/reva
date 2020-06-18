@@ -292,26 +292,26 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	// stat again to check the new file's metadata
-	sRes, err = client.Stat(ctx, sReq)
+	sRes2, err := client.Stat(ctx, sReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	if sRes.Status.Code != rpc.Code_CODE_OK {
-		log.Error().Err(err).Msgf("error status %d when sending grpc stat request", sRes.Status.Code)
+	if sRes2.Status.Code != rpc.Code_CODE_OK {
+		log.Error().Err(err).Msgf("error status %d when sending grpc stat request", sRes2.Status.Code)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Add("Content-Type", sRes.Info.MimeType)
-	w.Header().Set("ETag", sRes.Info.Etag)
-	w.Header().Set("OC-FileId", wrapResourceID(sRes.Info.Id))
-	w.Header().Set("OC-ETag", sRes.Info.Etag)
-	w.Header().Set("Last-Modified", utils.TSToTime(sRes.Info.Mtime).Format(time.RFC1123Z))
+	w.Header().Add("Content-Type", sRes2.Info.MimeType)
+	w.Header().Set("ETag", sRes2.Info.Etag)
+	w.Header().Set("OC-FileId", wrapResourceID(sRes2.Info.Id))
+	w.Header().Set("OC-ETag", sRes2.Info.Etag)
+	w.Header().Set("Last-Modified", utils.TSToTime(sRes2.Info.Mtime).Format(time.RFC1123Z))
 
-	// file was new
+	// file was new as it didn't exist during the first stat
 	if sRes.Info == nil {
 		w.WriteHeader(http.StatusCreated)
 		return
