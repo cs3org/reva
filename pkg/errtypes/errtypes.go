@@ -30,6 +30,11 @@ func (e NotFound) Error() string { return "error: not found: " + string(e) }
 // IsNotFound is the method to check for w
 func (e NotFound) IsNotFound() {}
 
+// InternalError is the error to use when we really don't know what happened. Use with care
+type InternalError string
+
+func (e InternalError) Error() string { return "internal error: " + string(e) }
+
 // PermissionDenied is the error to use when a resource cannot be access because of missing permissions.
 type PermissionDenied string
 
@@ -80,6 +85,12 @@ type IsNotFound interface {
 // to specify that an a resource is not found.
 type IsAlreadyExists interface {
 	IsAlreadyExists()
+}
+
+// IsInternalError is the interface to implement
+// to specify that there was some internal error
+type IsInternalError interface {
+	IsInternalError()
 }
 
 // IsUserRequired is the interface to implement
