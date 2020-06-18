@@ -56,6 +56,7 @@ steps:
 
 - name: license-check
   image: golang:1.13
+  failure: ignore
   environment:
     FOSSA_API_KEY:
       from_secret: fossa_api_key
@@ -124,6 +125,7 @@ steps:
 
 - name: license-check
   image: golang:1.13
+  failure: ignore
   environment:
     FOSSA_API_KEY:
       from_secret: fossa_api_key
@@ -169,6 +171,7 @@ steps:
 
 - name: license-check
   image: golang:1.13
+  failure: ignore
   environment:
     FOSSA_API_KEY:
       from_secret: fossa_api_key
