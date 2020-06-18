@@ -121,7 +121,7 @@ type config struct {
 	// Example: if conf.Namespace is /eos/user and received path is /docs
 	// and the UserLayout is {{.Username}} the internal path will be:
 	// /eos/user/<username>/docs
-	UserLayout string `mapstructure:"user_layout" docs:"-""`
+	UserLayout string `mapstructure:"user_layout" docs:"-"`
 
 	// Enables logging of the commands executed
 	// Defaults to false
@@ -129,10 +129,10 @@ type config struct {
 
 	// ShowHiddenSysFiles shows internal EOS files like
 	// .sys.v# and .sys.a# files.
-	ShowHiddenSysFiles bool `mapstructure:"show_hidden_sys_files" docs: "-"`
+	ShowHiddenSysFiles bool `mapstructure:"show_hidden_sys_files" docs:"-"`
 
 	// ForceSingleUserMode will force connections to EOS to use SingleUsername
-	ForceSingleUserMode bool `mapstructure:"force_single_user_mode" docs: "false"`
+	ForceSingleUserMode bool `mapstructure:"force_single_user_mode" docs:"false"`
 
 	// UseKeyTabAuth changes will authenticate requests by using an EOS keytab.
 	UseKeytab bool `mapstrucuture:"use_keytab" docs:"false"`
