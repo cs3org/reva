@@ -48,7 +48,7 @@ type config struct {
 
 func (c *config) init() {
 	if c.Users == "" {
-		c.Users = "/var/tmp/reva/users.json"
+		c.Users = "/etc/revad/users.json"
 	}
 }
 

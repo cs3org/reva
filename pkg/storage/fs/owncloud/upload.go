@@ -81,7 +81,7 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 
 // InitiateUpload returns an upload id that can be used for uploads with tus
 // TODO read optional content for small files in this request
-func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64) (uploadID string, err error) {
+func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (uploadID string, err error) {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return "", errors.Wrap(err, "ocfs: error resolving reference")
@@ -95,6 +95,10 @@ func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, upl
 			"dir":      filepath.Dir(p),
 		},
 		Size: uploadLength,
+	}
+
+	if metadata != nil && metadata["mtime"] != "" {
+		info.MetaData["mtime"] = metadata["mtime"]
 	}
 
 	upload, err := fs.NewUpload(ctx, info)
@@ -350,10 +354,18 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 		return err
 	}
 
-	// only delete the upload if it was successfully written to eos
+	// only delete the upload if it was successfully written to the storage
 	if err := os.Remove(upload.infoPath); err != nil {
 		if !os.IsNotExist(err) {
 			log.Err(err).Interface("info", upload.info).Msg("ocfs: could not delete upload info")
+			return err
+		}
+	}
+
+	if upload.info.MetaData["mtime"] != "" {
+		err := upload.fs.setMtime(ctx, np, upload.info.MetaData["mtime"])
+		if err != nil {
+			log.Err(err).Interface("info", upload.info).Msg("ocfs: could not set mtime metadata")
 			return err
 		}
 	}

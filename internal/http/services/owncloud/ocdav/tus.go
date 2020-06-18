@@ -114,19 +114,28 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 		}
 	}
 
-	// initiateUpload
+	opaqueMap := map[string]*typespb.OpaqueEntry{
+		"Upload-Length": {
+			Decoder: "plain",
+			Value:   []byte(r.Header.Get("Upload-Length")),
+		},
+	}
 
+	mtime := meta["mtime"]
+	if mtime != "" {
+		opaqueMap["X-OC-Mtime"] = &typespb.OpaqueEntry{
+			Decoder: "plain",
+			Value:   []byte(mtime),
+		}
+	}
+
+	// initiateUpload
 	uReq := &provider.InitiateFileUploadRequest{
 		Ref: &provider.Reference{
 			Spec: &provider.Reference_Path{Path: fn},
 		},
 		Opaque: &typespb.Opaque{
-			Map: map[string]*typespb.OpaqueEntry{
-				"Upload-Length": {
-					Decoder: "plain",
-					Value:   []byte(r.Header.Get("Upload-Length")),
-				},
-			},
+			Map: opaqueMap,
 		},
 	}
 
@@ -182,36 +191,6 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 
 		// check if upload was fully completed
 		if httpRes.Header.Get("Upload-Offset") == r.Header.Get("Upload-Length") {
-			// apply mtime to the metadata if specified
-			mtime := meta["mtime"]
-			if mtime != "" {
-				sreq := &provider.SetArbitraryMetadataRequest{
-					Ref: &provider.Reference{
-						Spec: &provider.Reference_Path{Path: fn},
-					},
-					ArbitraryMetadata: &provider.ArbitraryMetadata{
-						Metadata: map[string]string{},
-					},
-				}
-				sreq.ArbitraryMetadata.Metadata["mtime"] = mtime
-				res, err := client.SetArbitraryMetadata(ctx, sreq)
-				if err != nil {
-					log.Error().Err(err).
-						Str("mtime", mtime).
-						Msg("error sending a grpc SetArbitraryMetadata request for setting mtime")
-					w.WriteHeader(http.StatusInternalServerError)
-					return
-				}
-
-				if res.Status.Code != rpc.Code_CODE_OK {
-					log.Error().Err(err).
-						Str("mtime", mtime).
-						Msgf("error sending a grpc SetArbitraryMetadata request for setting mtime, status %d", res.Status.Code)
-					w.WriteHeader(http.StatusInternalServerError)
-					return
-				}
-			}
-
 			// get uploaded file metadata
 			sRes, err := client.Stat(ctx, sReq)
 			if err != nil {
@@ -232,6 +211,10 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 				log.Error().Str("fn", fn).Msg("No info found for uploaded file")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
+			}
+			if httpRes.Header.Get("X-OC-Mtime") != "" {
+				// set the "accepted" value if returned in the upload response headers
+				w.Header().Set("X-OC-Mtime", httpRes.Header.Get("X-OC-Mtime"))
 			}
 
 			w.Header().Set("Content-Type", info.MimeType)

@@ -26,7 +26,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"reflect"
 	"sync"
 	"time"
@@ -58,16 +57,7 @@ func New(m map[string]interface{}) (share.Manager, error) {
 		err = errors.Wrap(err, "error creating a new manager")
 		return nil, err
 	}
-
-	// if file is not set we use temporary file
-	if c.File == "" {
-		dir, err := ioutil.TempDir("", "")
-		if err != nil {
-			err = errors.Wrap(err, "error creating temporary directory for storing shares")
-			return nil, err
-		}
-		c.File = path.Join(dir, "shares.json")
-	}
+	c.init()
 
 	// load or create file
 	model, err := loadOrCreate(c.File)
@@ -129,6 +119,12 @@ type shareModel struct {
 
 type config struct {
 	File string `mapstructure:"file"`
+}
+
+func (c *config) init() {
+	if c.File == "" {
+		c.File = "/var/tmp/reva/ocm-shares.json"
+	}
 }
 
 type mgr struct {

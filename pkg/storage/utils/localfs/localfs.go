@@ -246,15 +246,15 @@ func (fs *localfs) isShareFolderChild(ctx context.Context, p string) bool {
 	return len(vals) > 1 && vals[1] != ""
 }
 
-func (fs *localfs) normalize(ctx context.Context, fi os.FileInfo, fn string) *provider.ResourceInfo {
+func (fs *localfs) normalize(ctx context.Context, fi os.FileInfo, fn string) (*provider.ResourceInfo, error) {
 	fp := fs.unwrap(ctx, path.Join("/", fn))
 	owner, err := getUser(ctx)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	metadata, err := fs.retrieveArbitraryMetadata(ctx, fn)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	// A fileid is constructed like `fileid-url_encoded_path`. See GetPathByID for the inverse conversion
@@ -273,18 +273,21 @@ func (fs *localfs) normalize(ctx context.Context, fi os.FileInfo, fn string) *pr
 		ArbitraryMetadata: metadata,
 	}
 
-	return md
+	return md, nil
 }
 
-func (fs *localfs) convertToFileReference(ctx context.Context, fi os.FileInfo, fn string) *provider.ResourceInfo {
-	info := fs.normalize(ctx, fi, fn)
+func (fs *localfs) convertToFileReference(ctx context.Context, fi os.FileInfo, fn string) (*provider.ResourceInfo, error) {
+	info, err := fs.normalize(ctx, fi, fn)
+	if err != nil {
+		return nil, err
+	}
 	info.Type = provider.ResourceType_RESOURCE_TYPE_REFERENCE
 	target, err := fs.getReferenceEntry(ctx, fn)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	info.Target = target
-	return info
+	return info, nil
 }
 
 func getResourceType(isDir bool) provider.ResourceType {
@@ -768,7 +771,7 @@ func (fs *localfs) GetMD(ctx context.Context, ref *provider.Reference) (*provide
 		return nil, errors.Wrap(err, "localfs: error stating "+fn)
 	}
 
-	return fs.normalize(ctx, md, fn), nil
+	return fs.normalize(ctx, md, fn)
 }
 
 func (fs *localfs) getMDShareFolder(ctx context.Context, p string) (*provider.ResourceInfo, error) {
@@ -783,9 +786,9 @@ func (fs *localfs) getMDShareFolder(ctx context.Context, p string) (*provider.Re
 	}
 
 	if fs.isShareFolderRoot(ctx, p) {
-		return fs.normalize(ctx, md, fn), nil
+		return fs.normalize(ctx, md, fn)
 	}
-	return fs.convertToFileReference(ctx, md, fn), nil
+	return fs.convertToFileReference(ctx, md, fn)
 }
 
 func (fs *localfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error) {
@@ -834,7 +837,10 @@ func (fs *localfs) listFolder(ctx context.Context, fn string) ([]*provider.Resou
 
 	finfos := []*provider.ResourceInfo{}
 	for _, md := range mds {
-		finfos = append(finfos, fs.normalize(ctx, md, path.Join(fn, md.Name())))
+		info, err := fs.normalize(ctx, md, path.Join(fn, md.Name()))
+		if err == nil {
+			finfos = append(finfos, info)
+		}
 	}
 	return finfos, nil
 }
@@ -854,12 +860,15 @@ func (fs *localfs) listShareFolderRoot(ctx context.Context, home string) ([]*pro
 	finfos := []*provider.ResourceInfo{}
 	for _, md := range mds {
 		var info *provider.ResourceInfo
+		var err error
 		if fs.isShareFolderRoot(ctx, path.Join("/", md.Name())) {
-			info = fs.normalize(ctx, md, path.Join(fn, md.Name()))
+			info, err = fs.normalize(ctx, md, path.Join(fn, md.Name()))
 		} else {
-			info = fs.convertToFileReference(ctx, md, path.Join(fn, md.Name()))
+			info, err = fs.convertToFileReference(ctx, md, path.Join(fn, md.Name()))
 		}
-		finfos = append(finfos, info)
+		if err == nil {
+			finfos = append(finfos, info)
+		}
 	}
 	return finfos, nil
 }

@@ -65,6 +65,23 @@ func init() {
 	registry.Register("json", New)
 }
 
+func (c *config) init() error {
+	// if file is not set we use temporary file
+	if c.File == "" {
+		dir, err := ioutil.TempDir("", "")
+		if err != nil {
+			err = errors.Wrap(err, "error creating temporary directory for json invite manager")
+			return err
+		}
+		c.File = path.Join(dir, "invites.json")
+	}
+
+	if c.Expiration == "" {
+		c.Expiration = token.DefaultExpirationTime
+	}
+	return nil
+}
+
 // New returns a new invite manager object.
 func New(m map[string]interface{}) (invite.Manager, error) {
 
@@ -73,19 +90,10 @@ func New(m map[string]interface{}) (invite.Manager, error) {
 		err = errors.Wrap(err, "error parse config for json invite manager")
 		return nil, err
 	}
-
-	if config.Expiration == "" {
-		config.Expiration = token.DefaultExpirationTime
-	}
-
-	// if file is not set we use temporary file
-	if config.File == "" {
-		dir, err := ioutil.TempDir("", "")
-		if err != nil {
-			err = errors.Wrap(err, "error creating temporary directory for json invite manager")
-			return nil, err
-		}
-		config.File = path.Join(dir, "invites.json")
+	err = config.init()
+	if err != nil {
+		err = errors.Wrap(err, "error setting config defaults for json invite manager")
+		return nil, err
 	}
 
 	// load or create file

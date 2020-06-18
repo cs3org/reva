@@ -79,7 +79,7 @@ func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.Rea
 // Currently requires the uploadLength to be set
 // TODO to implement LengthDeferrerDataStore make size optional
 // TODO read optional content for small files in this request
-func (fs *localfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64) (uploadID string, err error) {
+func (fs *localfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (uploadID string, err error) {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return "", errors.Wrap(err, "localfs: error resolving reference")
@@ -91,6 +91,10 @@ func (fs *localfs) InitiateUpload(ctx context.Context, ref *provider.Reference, 
 			"dir":      filepath.Dir(np),
 		},
 		Size: uploadLength,
+	}
+
+	if metadata != nil && metadata["mtime"] != "" {
+		info.MetaData["mtime"] = metadata["mtime"]
 	}
 
 	upload, err := fs.NewUpload(ctx, info)
@@ -308,6 +312,8 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 		log := appctx.GetLogger(ctx)
 		log.Err(err).Interface("info", upload.info).Msg("eos: could not delete upload info")
 	}
+
+	// TODO: set mtime if specified in metadata
 
 	// metadata propagation is left to the storage implementation
 	return err
