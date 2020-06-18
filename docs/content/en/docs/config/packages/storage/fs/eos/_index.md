@@ -81,7 +81,7 @@ cache_directory = "/var/tmp/"
 {{% /dir %}}
 
 {{% dir name="sec_protocol" type="string" default="-" %}}
-SecProtocol specifies the xrootd security protocol to use between the server and EOS. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/eos/eos.go#L73)
+SecProtocol specifies the xrootd security protocol to use between the server and EOS. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/eos/eos.go#L71)
 {{< highlight toml >}}
 [storage.fs.eos]
 sec_protocol = "-"
@@ -89,7 +89,7 @@ sec_protocol = "-"
 {{% /dir %}}
 
 {{% dir name="keytab" type="string" default="-" %}}
-Keytab specifies the location of the keytab to use to authenticate to EOS. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/eos/eos.go#L76)
+Keytab specifies the location of the keytab to use to authenticate to EOS. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/eos/eos.go#L74)
 {{< highlight toml >}}
 [storage.fs.eos]
 keytab = "-"
@@ -97,7 +97,7 @@ keytab = "-"
 {{% /dir %}}
 
 {{% dir name="single_username" type="string" default="-" %}}
-SingleUsername is the username to use when SingleUserMode is enabled [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/eos/eos.go#L79)
+SingleUsername is the username to use when SingleUserMode is enabled [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/eos/eos.go#L77)
 {{< highlight toml >}}
 [storage.fs.eos]
 single_username = "-"
@@ -105,7 +105,7 @@ single_username = "-"
 {{% /dir %}}
 
 {{% dir name="enable_logging" type="bool" default=false %}}
-Enables logging of the commands executed Defaults to false [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/eos/eos.go#L83)
+Enables logging of the commands executed Defaults to false [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/eos/eos.go#L81)
 {{< highlight toml >}}
 [storage.fs.eos]
 enable_logging = false
@@ -113,7 +113,7 @@ enable_logging = false
 {{% /dir %}}
 
 {{% dir name="show_hidden_sys_files" type="bool" default=false %}}
-ShowHiddenSysFiles shows internal EOS files like .sys.v# and .sys.a# files. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/eos/eos.go#L87)
+ShowHiddenSysFiles shows internal EOS files like .sys.v# and .sys.a# files. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/eos/eos.go#L85)
 {{< highlight toml >}}
 [storage.fs.eos]
 show_hidden_sys_files = false
@@ -121,7 +121,7 @@ show_hidden_sys_files = false
 {{% /dir %}}
 
 {{% dir name="force_single_user_mode" type="bool" default=false %}}
-ForceSingleUserMode will force connections to EOS to use SingleUsername [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/eos/eos.go#L90)
+ForceSingleUserMode will force connections to EOS to use SingleUsername [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/eos/eos.go#L88)
 {{< highlight toml >}}
 [storage.fs.eos]
 force_single_user_mode = false
@@ -129,7 +129,7 @@ force_single_user_mode = false
 {{% /dir %}}
 
 {{% dir name="use_keytab" type="bool" default=false %}}
-UseKeyTabAuth changes will authenticate requests by using an EOS keytab. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/eos/eos.go#L94)
+UseKeyTabAuth changes will authenticate requests by using an EOS keytab. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/eos/eos.go#L91)
 {{< highlight toml >}}
 [storage.fs.eos]
 use_keytab = false
