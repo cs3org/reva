@@ -60,7 +60,7 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 
 // InitiateUpload returns an upload id that can be used for uploads with tus
 // TODO read optional content for small files in this request
-func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64) (uploadID string, err error) {
+func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (uploadID string, err error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return "", errors.Wrap(err, "eos: no user in ctx")
@@ -79,6 +79,10 @@ func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, up
 			"dir":      filepath.Dir(p),
 		},
 		Size: uploadLength,
+	}
+
+	if metadata != nil && metadata["mtime"] != "" {
+		info.MetaData["mtime"] = metadata["mtime"]
 	}
 
 	upload, err := fs.NewUpload(ctx, info)
@@ -308,6 +312,9 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 			}
 		}()
 	}
+
+	// TODO: set mtime if specified in metadata
+
 	// metadata propagation is left to the storage implementation
 	return err
 }
