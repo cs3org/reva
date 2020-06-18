@@ -52,7 +52,7 @@ steps:
 - name: lint
   image: golangci/golangci-lint:v1.26
   commands:
-    - golangci-lint run
+    - golangci-lint run --timeout 2m0s
 
 - name: license-check
   image: golang:1.13
