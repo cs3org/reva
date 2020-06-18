@@ -46,6 +46,12 @@ func init() {
 	registry.Register("memory", New)
 }
 
+func (c *config) init() {
+	if c.Expiration == "" {
+		c.Expiration = token.DefaultExpirationTime
+	}
+}
+
 // New returns a new invite manager.
 func New(m map[string]interface{}) (invite.Manager, error) {
 	c := &config{}
@@ -53,9 +59,7 @@ func New(m map[string]interface{}) (invite.Manager, error) {
 		err = errors.Wrap(err, "error creating a new manager")
 		return nil, err
 	}
-	if c.Expiration == "" {
-		c.Expiration = token.DefaultExpirationTime
-	}
+	c.init()
 
 	return &manager{
 		Invites:       sync.Map{},

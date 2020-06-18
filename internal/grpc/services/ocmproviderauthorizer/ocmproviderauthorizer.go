@@ -46,23 +46,21 @@ type service struct {
 	pa   provider.Authorizer
 }
 
+func (c *config) init() {
+	if c.Driver == "" {
+		c.Driver = "json"
+	}
+}
+
+func (s *service) Register(ss *grpc.Server) {
+	providerpb.RegisterProviderAPIServer(ss, s)
+}
+
 func getProviderAuthorizer(c *config) (provider.Authorizer, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		return f(c.Drivers[c.Driver])
 	}
 	return nil, fmt.Errorf("driver not found: %s", c.Driver)
-}
-
-func (s *service) Close() error {
-	return nil
-}
-
-func (s *service) UnprotectedEndpoints() []string {
-	return []string{"/cs3.ocm.provider.v1beta1.ProviderAPI/IsProviderAllowed"}
-}
-
-func (s *service) Register(ss *grpc.Server) {
-	providerpb.RegisterProviderAPIServer(ss, s)
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -81,11 +79,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	// if driver is empty we default to json
-	if c.Driver == "" {
-		c.Driver = "json"
-	}
+	c.init()
 
 	pa, err := getProviderAuthorizer(c)
 	if err != nil {
@@ -97,6 +91,14 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		pa:   pa,
 	}
 	return service, nil
+}
+
+func (s *service) Close() error {
+	return nil
+}
+
+func (s *service) UnprotectedEndpoints() []string {
+	return []string{"/cs3.ocm.provider.v1beta1.ProviderAPI/IsProviderAllowed"}
 }
 
 func (s *service) GetInfoByDomain(ctx context.Context, req *providerpb.GetInfoByDomainRequest) (*providerpb.GetInfoByDomainResponse, error) {

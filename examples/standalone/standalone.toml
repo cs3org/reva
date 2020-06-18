@@ -7,7 +7,11 @@
 [grpc.services.userprovider]
 [grpc.services.usershareprovider]
 [grpc.services.publicshareprovider]
+[grpc.services.ocmcore]
+[grpc.services.ocmshareprovider]
+[grpc.services.ocminvitemanager]
+[grpc.services.ocmproviderauthorizer]
 
 [http.services.dataprovider]
 [http.services.prometheus]
-
+[http.services.ocmd]
