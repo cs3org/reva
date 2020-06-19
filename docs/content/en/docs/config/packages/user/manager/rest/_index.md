@@ -9,7 +9,7 @@ description: >
 # _struct: config_
 
 {{% dir name="redis" type="string" default=":6379" %}}
-The port on which the redis server is running [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/user/manager/rest/rest.go#L68)
+The port on which the redis server is running [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/user/manager/rest/rest.go#L67)
 {{< highlight toml >}}
 [user.manager.rest]
 redis = ":6379"
@@ -41,7 +41,7 @@ api_base_url = "https://authorization-service-api-dev.web.cern.ch/api/v1.0"
 {{% /dir %}}
 
 {{% dir name="client_id" type="string" default="-" %}}
-Client ID needed to authenticate [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/user/manager/rest/rest.go#L77)
+Client ID needed to authenticate [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/user/manager/rest/rest.go#L75)
 {{< highlight toml >}}
 [user.manager.rest]
 client_id = "-"
@@ -49,7 +49,7 @@ client_id = "-"
 {{% /dir %}}
 
 {{% dir name="client_secret" type="string" default="-" %}}
-Client Secret [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/user/manager/rest/rest.go#L79)
+Client Secret [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/user/manager/rest/rest.go#L77)
 {{< highlight toml >}}
 [user.manager.rest]
 client_secret = "-"
@@ -65,7 +65,7 @@ oidc_token_endpoint = "https://keycloak-dev.cern.ch/auth/realms/cern/api-access/
 {{% /dir %}}
 
 {{% dir name="target_api" type="string" default="authorization-service-api" %}}
-The target application for which token needs to be generated [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/user/manager/rest/rest.go#L85)
+The target application for which token needs to be generated [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/user/manager/rest/rest.go#L82)
 {{< highlight toml >}}
 [user.manager.rest]
 target_api = "authorization-service-api"

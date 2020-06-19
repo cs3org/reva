@@ -98,6 +98,8 @@ github.com/coreos/pkg v0.0.0-20180928190104-399ea9e2e55f/go.mod h1:E3G3o1h8I7cfc
 github.com/cpuguy83/go-md2man v1.0.10/go.mod h1:SmD6nW6nTyfqj6ABTjUi3V3JVMnlJmwcJI5acqYI6dE=
 github.com/cs3org/cato v0.0.0-20200609102907-4116d2de0add h1:2eglhjdEpiQctf30ROkkHspqjZosSA4mtb+MkBenyBA=
 github.com/cs3org/cato v0.0.0-20200609102907-4116d2de0add/go.mod h1:6GOQIYvO+ZepxBKY9geuIAF7qfozDeDsTrX0BW9LZ0k=
+github.com/cs3org/cato v0.0.0-20200618163134-e83dd323b17e h1:Q1MFCCyX1SrGISUzAUNE/o5rNUN2NbuHQt8Gx5wt8YI=
+github.com/cs3org/cato v0.0.0-20200618163134-e83dd323b17e/go.mod h1:6GOQIYvO+ZepxBKY9geuIAF7qfozDeDsTrX0BW9LZ0k=
 github.com/cs3org/go-cs3apis v0.0.0-20200515145316-7048e6a5a73d h1:toZvBLH1cbHT65kv6xYPd9QqwLUHwOAVHqe9j4obAq4=
 github.com/cs3org/go-cs3apis v0.0.0-20200515145316-7048e6a5a73d/go.mod h1:UXha4TguuB52H14EMoSsCqDj7k8a/t7g4gVP+bgY5LY=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
