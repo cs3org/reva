@@ -359,9 +359,8 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		},
 	})
 	if statResponse.Status.Code == rpc.Code_CODE_INTERNAL {
-		// attempt the shared resource is a file
-		// return the original error
-		// ovewrite statResponse
+		// the shared resource is a file, return the original error
+		// or ovewrite statResponse
 		if statResponse, ok = s.isSharedFile(ctx, pathFromToken); !ok {
 			return nil, err
 		}

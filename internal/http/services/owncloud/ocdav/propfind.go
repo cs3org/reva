@@ -172,6 +172,7 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 		})
 		infos = append(infos, res.Info)
 	} else if publiclySharedFile && depth == "0" {
+		// this logic runs when uploading a file on a publicly shared folder.
 		infos = []*provider.ResourceInfo{}
 		infos = append(infos, res.Info)
 	}
@@ -288,6 +289,8 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	}
 
 	base := ""
+	var response responseXML
+
 	if publiclySharedFile {
 		// do a stat request in order to get the file name and append it to the request
 		client, err := s.getClient()
@@ -302,11 +305,18 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 			return nil, err
 		}
 
-		base = filepath.Base(pathRes.Path)
+		// check whether md contains the basepath of the shared file
+		basePathRes := filepath.Base(pathRes.Path)
+		baseMD := filepath.Base(md.Path)
 
+		// append the filename only if base is missing
+		if basePathRes != baseMD {
+			base = "/" + filepath.Base(pathRes.Path)
+		}
 	}
-	response := responseXML{
-		Href:     (&url.URL{Path: ref + "/" + base}).EscapedPath(), // url encode response.Href
+
+	response = responseXML{
+		Href:     (&url.URL{Path: ref + base}).EscapedPath(), // url encode response.Href
 		Propstat: []propstatXML{},
 	}
 
