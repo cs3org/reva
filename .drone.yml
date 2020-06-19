@@ -165,7 +165,7 @@ steps:
 
 - name: lint
   # will slow down build slightly. In order to get jsonpb deprecation.
-  image: golangci/golangci-lint:latest
+  image: golangci/golangci-lint:v1.26.0
   commands:
     - golangci-lint run --timeout 2m0s
 
