@@ -249,7 +249,7 @@ func (s *service) uploadFullPath(ctx context.Context, refPath string) (string, e
 	}
 
 	sharedRootPath := strings.Split(ref.GetPath(), "/")[3:] // internal paths have the storage prefixed, i.e: "/oc/einstein/asdf/""
-	fullPath = append(sharedRootPath, strings.Split(refPath, "/")[3:]...)
+	fullPath = append(fullPath, append(sharedRootPath, strings.Split(refPath, "/")[3:]...)...)
 	// i.e: fullPath = /sharedFolder/subfolder/file.txt
 	return strings.Join(fullPath, "/"), nil
 }
