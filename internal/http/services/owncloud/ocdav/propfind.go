@@ -88,7 +88,7 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 		return
 	}
 
-	publiclySharedFile := res.Info.Type == provider.ResourceType_RESOURCE_TYPE_FILE && strings.Contains(ctx.Value(ctxKeyBaseURI).(string), "public-files")
+	publiclySharedFile := (res.Info.Type == provider.ResourceType_RESOURCE_TYPE_FILE && strings.Contains(ctx.Value(ctxKeyBaseURI).(string), "public-files"))
 
 	if res.Status.Code != rpc.Code_CODE_OK {
 		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
@@ -162,7 +162,7 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 				}
 			}
 		}
-	} else if publiclySharedFile {
+	} else if publiclySharedFile && depth == "1" {
 		infos = []*provider.ResourceInfo{}
 		// if the request is to a public link, we need to add yet another value for the file entry.
 		infos = append(infos, &provider.ResourceInfo{
@@ -170,6 +170,9 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 			Type:  provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 			Mtime: res.Info.Mtime,
 		})
+		infos = append(infos, res.Info)
+	} else if publiclySharedFile && depth == "0" {
+		infos = []*provider.ResourceInfo{}
 		infos = append(infos, res.Info)
 	}
 
