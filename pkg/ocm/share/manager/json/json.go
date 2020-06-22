@@ -192,8 +192,20 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 		Nanos:   uint32(now % 1000000000),
 	}
 
+	// Since both OCMCore and OCMShareProvider use the same package, we distinguish
+	// between calls received from them on the basis of whether they provide info
+	// about the remote provider on which the share is to be created.
+	// If this info is provided, this call is on the owner's mesh provider and so
+	// we call the CreateOCMCoreShare method on the remote provider as well,
+	// else this is received from another provider and we only create a local share.
+	var isOwnersMeshProvider bool
+	if pi != nil {
+		isOwnersMeshProvider = true
+	}
+
 	var userID *userpb.UserId
-	if pi == nil {
+	if !isOwnersMeshProvider {
+		// Since this call is on the remote provider, the owner of the resource is expected to be specified.
 		if owner == nil {
 			return nil, errors.New("json: owner of resource not provided")
 		}
@@ -217,7 +229,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 	_, err := m.getByKey(ctx, key)
 
 	// share already exists
-	if pi != nil && err == nil {
+	if isOwnersMeshProvider && err == nil {
 		return nil, errtypes.AlreadyExists(key.String())
 	}
 
@@ -239,7 +251,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 		err = errors.Wrap(err, "error reading model")
 		return nil, err
 	}
-	if pi != nil {
+	if isOwnersMeshProvider {
 		m.model.Shares = append(m.model.Shares, s)
 	} else {
 		m.model.ReceivedShares = append(m.model.ReceivedShares, s)
@@ -251,8 +263,9 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 	}
 	m.Unlock()
 
-	if pi != nil {
+	if isOwnersMeshProvider {
 
+		// Call the remote provider's CreateOCMCoreShare method
 		protocol, err := json.Marshal(
 			map[string]interface{}{
 				"name": "webdav",
