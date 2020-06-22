@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"path"
 	"sync"
 	"time"
 
@@ -100,10 +99,14 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 		"email":             {contextUser.GetMail()},
 		"name":              {contextUser.GetDisplayName()},
 	}
-
-	resp, err := http.PostForm(fmt.Sprintf("%s%s", originProvider.GetApiEndpoint(), acceptInviteEndpoint), requestBody)
+	ocmEndpoint, err := getOCMEndpoint(originProvider)
 	if err != nil {
-		err = errors.Wrap(err, "memory: error sending post request, URL: "+path.Join(originProvider.GetApiEndpoint(), acceptInviteEndpoint))
+		return err
+	}
+
+	resp, err := http.PostForm(fmt.Sprintf("%s%s", ocmEndpoint, acceptInviteEndpoint), requestBody)
+	if err != nil {
+		err = errors.Wrap(err, "memory: error sending post request")
 		return err
 	}
 
@@ -117,7 +120,7 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 }
 
 func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken, remoteUser *userpb.User) error {
-	inviteToken, err := getTokenIfValid(m, invite)
+	inviteToken, err := m.getTokenIfValid(invite)
 	if err != nil {
 		return err
 	}
@@ -159,7 +162,7 @@ func (m *manager) GetRemoteUser(ctx context.Context, remoteUserID *userpb.UserId
 
 }
 
-func getTokenIfValid(m *manager, token *invitepb.InviteToken) (*invitepb.InviteToken, error) {
+func (m *manager) getTokenIfValid(token *invitepb.InviteToken) (*invitepb.InviteToken, error) {
 	tokenInterface, ok := m.Invites.Load(token.GetToken())
 	if !ok {
 		return nil, errors.New("memory: invalid token")
@@ -170,4 +173,13 @@ func getTokenIfValid(m *manager, token *invitepb.InviteToken) (*invitepb.InviteT
 		return nil, errors.New("memory: token expired")
 	}
 	return inviteToken, nil
+}
+
+func getOCMEndpoint(originProvider *ocmprovider.ProviderInfo) (string, error) {
+	for _, s := range originProvider.Services {
+		if s.Endpoint.Type.Name == "OCM" {
+			return s.Endpoint.Path, nil
+		}
+	}
+	return "", errors.New("json: ocm endpoint not specified for mesh provider")
 }

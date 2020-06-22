@@ -178,25 +178,15 @@ func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, err
 
 	contexUser := user.ContextMustGetUser(ctx)
 
-	// Create mutex lock
-	m.Lock()
-	defer m.Unlock()
-
-	// Creating a unique token
-	var inviteToken *invitepb.InviteToken
-	for {
-		tmpInviteToken, err := token.CreateToken(m.config.Expiration, contexUser.GetId())
-		if err != nil {
-			return nil, err
-		}
-		_, ok := m.model.Invites[tmpInviteToken.GetToken()]
-		if !ok {
-			inviteToken = tmpInviteToken
-			break
-		}
+	inviteToken, err := token.CreateToken(m.config.Expiration, contexUser.GetId())
+	if err != nil {
+		return nil, err
 	}
 
 	// Store token data
+	m.Lock()
+	defer m.Unlock()
+
 	m.model.Invites[inviteToken.GetToken()] = inviteToken
 	if err := m.model.Save(); err != nil {
 		err = errors.Wrap(err, "error saving model")
@@ -216,7 +206,12 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 		"email":             {contextUser.GetMail()},
 		"name":              {contextUser.GetDisplayName()},
 	}
-	resp, err := http.PostForm(fmt.Sprintf("%s%s", originProvider.GetApiEndpoint(), acceptInviteEndpoint), requestBody)
+	ocmEndpoint, err := getOCMEndpoint(originProvider)
+	if err != nil {
+		return err
+	}
+
+	resp, err := http.PostForm(fmt.Sprintf("%s%s", ocmEndpoint, acceptInviteEndpoint), requestBody)
 	if err != nil {
 		err = errors.Wrap(err, "json: error sending post request")
 		return err
@@ -233,11 +228,10 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 
 func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken, remoteUser *userpb.User) error {
 
-	// Create mutex lock
 	m.Lock()
 	defer m.Unlock()
 
-	inviteToken, err := getTokenIfValid(m, invite)
+	inviteToken, err := m.getTokenIfValid(invite)
 	if err != nil {
 		return err
 	}
@@ -269,7 +263,7 @@ func (m *manager) GetRemoteUser(ctx context.Context, remoteUserID *userpb.UserId
 	return nil, errtypes.NotFound(remoteUserID.OpaqueId)
 }
 
-func getTokenIfValid(m *manager, token *invitepb.InviteToken) (*invitepb.InviteToken, error) {
+func (m *manager) getTokenIfValid(token *invitepb.InviteToken) (*invitepb.InviteToken, error) {
 	inviteToken, ok := m.model.Invites[token.GetToken()]
 	if !ok {
 		return nil, errors.New("json: invalid token")
@@ -279,4 +273,13 @@ func getTokenIfValid(m *manager, token *invitepb.InviteToken) (*invitepb.InviteT
 		return nil, errors.New("json: token expired")
 	}
 	return inviteToken, nil
+}
+
+func getOCMEndpoint(originProvider *ocmprovider.ProviderInfo) (string, error) {
+	for _, s := range originProvider.Services {
+		if s.Endpoint.Type.Name == "OCM" {
+			return s.Endpoint.Path, nil
+		}
+	}
+	return "", errors.New("json: ocm endpoint not specified for mesh provider")
 }

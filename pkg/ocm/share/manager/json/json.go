@@ -175,6 +175,15 @@ func genID() string {
 	return uuid.New().String()
 }
 
+func getOCMEndpoint(originProvider *ocmprovider.ProviderInfo) (string, error) {
+	for _, s := range originProvider.Services {
+		if s.Endpoint.Type.Name == "OCM" {
+			return s.Endpoint.Path, nil
+		}
+	}
+	return "", errors.New("json: ocm endpoint not specified for mesh provider")
+}
+
 func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGrant, pi *ocmprovider.ProviderInfo, pm string, owner *userpb.UserId) (*ocm.Share, error) {
 	id := genID()
 	now := time.Now().UnixNano()
@@ -265,8 +274,12 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 			"protocol":     {string(protocol)},
 			"meshProvider": {userID.Idp},
 		}
+		ocmEndpoint, err := getOCMEndpoint(pi)
+		if err != nil {
+			return nil, err
+		}
 
-		resp, err := http.PostForm(fmt.Sprintf("%s%s", pi.GetApiEndpoint(), createOCMCoreShareEndpoint), requestBody)
+		resp, err := http.PostForm(fmt.Sprintf("%s%s", ocmEndpoint, createOCMCoreShareEndpoint), requestBody)
 		if err != nil {
 			err = errors.Wrap(err, "json: error sending post request")
 			return nil, err

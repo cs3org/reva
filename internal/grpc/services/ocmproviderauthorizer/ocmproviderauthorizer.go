@@ -22,7 +22,7 @@ import (
 	"context"
 	"fmt"
 
-	providerpb "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/ocm/provider"
 	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
@@ -53,7 +53,7 @@ func (c *config) init() {
 }
 
 func (s *service) Register(ss *grpc.Server) {
-	providerpb.RegisterProviderAPIServer(ss, s)
+	ocmprovider.RegisterProviderAPIServer(ss, s)
 }
 
 func getProviderAuthorizer(c *config) (provider.Authorizer, error) {
@@ -101,42 +101,42 @@ func (s *service) UnprotectedEndpoints() []string {
 	return []string{"/cs3.ocm.provider.v1beta1.ProviderAPI/IsProviderAllowed"}
 }
 
-func (s *service) GetInfoByDomain(ctx context.Context, req *providerpb.GetInfoByDomainRequest) (*providerpb.GetInfoByDomainResponse, error) {
+func (s *service) GetInfoByDomain(ctx context.Context, req *ocmprovider.GetInfoByDomainRequest) (*ocmprovider.GetInfoByDomainResponse, error) {
 	domainInfo, err := s.pa.GetInfoByDomain(ctx, req.Domain)
 	if err != nil {
-		return &providerpb.GetInfoByDomainResponse{
+		return &ocmprovider.GetInfoByDomainResponse{
 			Status: status.NewInternal(ctx, err, "error getting provider info"),
 		}, nil
 	}
 
-	return &providerpb.GetInfoByDomainResponse{
+	return &ocmprovider.GetInfoByDomainResponse{
 		Status:       status.NewOK(ctx),
 		ProviderInfo: domainInfo,
 	}, nil
 }
 
-func (s *service) IsProviderAllowed(ctx context.Context, req *providerpb.IsProviderAllowedRequest) (*providerpb.IsProviderAllowedResponse, error) {
+func (s *service) IsProviderAllowed(ctx context.Context, req *ocmprovider.IsProviderAllowedRequest) (*ocmprovider.IsProviderAllowedResponse, error) {
 	err := s.pa.IsProviderAllowed(ctx, req.User)
 	if err != nil {
-		return &providerpb.IsProviderAllowedResponse{
+		return &ocmprovider.IsProviderAllowedResponse{
 			Status: status.NewInternal(ctx, err, "error verifying mesh provider"),
 		}, nil
 	}
 
-	return &providerpb.IsProviderAllowedResponse{
+	return &ocmprovider.IsProviderAllowedResponse{
 		Status: status.NewOK(ctx),
 	}, nil
 }
 
-func (s *service) ListAllProviders(ctx context.Context, req *providerpb.ListAllProvidersRequest) (*providerpb.ListAllProvidersResponse, error) {
+func (s *service) ListAllProviders(ctx context.Context, req *ocmprovider.ListAllProvidersRequest) (*ocmprovider.ListAllProvidersResponse, error) {
 	providers, err := s.pa.ListAllProviders(ctx)
 	if err != nil {
-		return &providerpb.ListAllProvidersResponse{
+		return &ocmprovider.ListAllProvidersResponse{
 			Status: status.NewInternal(ctx, err, "error retrieving mesh providers"),
 		}, nil
 	}
 
-	return &providerpb.ListAllProvidersResponse{
+	return &ocmprovider.ListAllProvidersResponse{
 		Status:    status.NewOK(ctx),
 		Providers: providers,
 	}, nil
