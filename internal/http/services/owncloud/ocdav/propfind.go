@@ -293,8 +293,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 			// etags must be enclosed in double quotes and cannot contain them.
 			// See https://tools.ietf.org/html/rfc7232#section-2.3 for details
 			// TODO(jfd) handle weak tags that start with 'W/'
-			etag := fmt.Sprintf("\"%s\"", strings.Trim(md.Etag, "\""))
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("d:getetag", etag))
+			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("d:getetag", md.Etag))
 		}
 
 		if md.PermissionSet != nil {

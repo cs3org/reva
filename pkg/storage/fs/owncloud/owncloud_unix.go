@@ -26,6 +26,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"strings"
 	"syscall"
 
 	"github.com/cs3org/reva/pkg/appctx"
@@ -62,5 +63,6 @@ func calcEtag(ctx context.Context, fi os.FileInfo) string {
 	if err != nil {
 		log.Error().Err(err).Msg("error writing size")
 	}
-	return fmt.Sprintf(`"%x"`, h.Sum(nil))
+	etag := fmt.Sprintf(`"%x"`, h.Sum(nil))
+	return fmt.Sprintf("\"%s\"", strings.Trim(etag, "\""))
 }
