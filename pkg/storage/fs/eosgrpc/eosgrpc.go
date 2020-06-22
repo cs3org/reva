@@ -1372,7 +1372,7 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclientgrpc.FileInf
 		Id:            &provider.ResourceId{OpaqueId: fmt.Sprintf("%d", eosFileInfo.Inode)},
 		Path:          path,
 		Owner:         &userpb.UserId{OpaqueId: username},
-		Etag:          eosFileInfo.ETag,
+		Etag:          fmt.Sprintf("\"%s\"", strings.Trim(eosFileInfo.ETag, "\"")),
 		MimeType:      mime.Detect(eosFileInfo.IsDir, path),
 		Size:          size,
 		PermissionSet: &provider.ResourcePermissions{ListContainer: true, CreateContainer: true},

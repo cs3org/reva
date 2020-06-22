@@ -1010,7 +1010,8 @@ func (fs *ocfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referenc
 		// TODO(jfd) any other metadata that is interesting? fileid?
 		if val, ok := md.Metadata["etag"]; ok {
 			etag := calcEtag(ctx, fi)
-			if etag == md.Metadata["etag"] {
+			val = fmt.Sprintf("\"%s\"", strings.Trim(val, "\""))
+			if etag == val {
 				log.Debug().
 					Str("np", np).
 					Str("etag", val).
