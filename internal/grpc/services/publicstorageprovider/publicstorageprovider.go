@@ -301,7 +301,60 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 }
 
 func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+	ctx, span := trace.StartSpan(ctx, "Move")
+	defer span.End()
+
+	span.AddAttributes(
+		trace.StringAttribute("source", req.Source.String()),
+		trace.StringAttribute("destination", req.Destination.String()),
+	)
+
+	tknSource, relativePathSource, err := s.unwrap(ctx, req.Source)
+	if err != nil {
+		return nil, err
+	}
+
+	tknDest, relativePathDest, err := s.unwrap(ctx, req.Destination)
+	if err != nil {
+		return nil, err
+	}
+
+	if tknSource != tknDest {
+		return &provider.MoveResponse{
+			Status: status.NewInvalidArg(ctx, "Source and destination token must be the same"),
+		}, nil
+	}
+
+	originalPathSource, err := s.pathFromToken(ctx, tknSource)
+	if err != nil {
+		return nil, err
+	}
+
+	// FIXME: maybe there's a shortcut possible here using the source path
+	originalPathDest, err := s.pathFromToken(ctx, tknDest)
+	if err != nil {
+		return nil, err
+	}
+
+	var res *provider.MoveResponse
+	// the call has to be made to the gateway instead of the storage.
+	res, err = s.gateway.Move(ctx, &provider.MoveRequest{
+		Source: &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: path.Join("/", originalPathSource, relativePathSource),
+			},
+		},
+		Destination: &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: path.Join("/", originalPathDest, relativePathDest),
+			},
+		},
+	})
+	if res.Status.Code == rpc.Code_CODE_INTERNAL {
+		return res, nil
+	}
+
+	return res, nil
 }
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
