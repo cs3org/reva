@@ -21,9 +21,7 @@ package publicstorageprovider
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"path"
-	"path/filepath"
 	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -46,11 +44,9 @@ func init() {
 }
 
 type config struct {
-	MountPath        string `mapstructure:"mount_path"`
-	MountID          string `mapstructure:"mount_id"`
-	GatewayAddr      string `mapstructure:"gateway_addr"`
-	DataServerURL    string `mapstructure:"data_server_url"`
-	DataServerPrefix string `mapstructure:"data_server_prefix"`
+	MountPath   string `mapstructure:"mount_path"`
+	MountID     string `mapstructure:"mount_id"`
+	GatewayAddr string `mapstructure:"gateway_addr"`
 }
 
 type service struct {
@@ -137,28 +133,6 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 	return s.initiateFileDownload(ctx, req)
 }
 
-// PathTranslator encapsulates behavior that requires translation between external paths into internal paths. Internal
-// path depend on the storage provider in use, hence a translation is needed. In the case of Public Links, the translation
-// goes beyond a simple path conversion but instead, the token needs to be "expanded" to an internal path. Essentially
-// transforming:
-// "YzUTlrKrpswo/foldera/folderb/file.txt"
-// into:
-// "shared-folder-path/internal-folder/foldera/folderb/file.txt".
-type PathTranslator struct {
-	dir   string
-	base  string
-	token string
-}
-
-// NewPathTranslator creates a new PathTranslator.
-func NewPathTranslator(p string) *PathTranslator {
-	return &PathTranslator{
-		dir:   filepath.Dir(p),
-		base:  filepath.Base(p),
-		token: strings.Split(p, "/")[2],
-	}
-}
-
 // Both, t.dir and tokenPath paths need to be merged:
 // tokenPath   = /oc/einstein/public-links
 // t.dir       = /public/ausGxuUePCOi/foldera/folderb/
@@ -202,16 +176,6 @@ func (s *service) initiateFileDownload(ctx context.Context, req *provider.Initia
 		DownloadEndpoint: dRes.DownloadEndpoint,
 		Expose:           true, // TODO set to false, leave data provider lookup to the datagateway
 	}, nil
-}
-
-func (s *service) dataURL() (*url.URL, error) {
-	target := strings.Join([]string{s.conf.DataServerURL, s.conf.DataServerPrefix}, "/")
-	targetURL, err := url.Parse(target)
-	if err != nil {
-		return nil, err
-	}
-
-	return targetURL, nil
 }
 
 func (s *service) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*provider.InitiateFileUploadResponse, error) {
