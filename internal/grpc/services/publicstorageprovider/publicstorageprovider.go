@@ -24,7 +24,6 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -35,8 +34,6 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
@@ -50,21 +47,17 @@ func init() {
 }
 
 type config struct {
-	MountPath        string                            `mapstructure:"mount_path"`
-	MountID          string                            `mapstructure:"mount_id"`
-	GatewayAddr      string                            `mapstructure:"gateway_addr"`
-	Driver           string                            `mapstructure:"driver"`
-	Drivers          map[string]map[string]interface{} `mapstructure:"drivers"`
-	DriverAddr       string                            `mapstructure:"driver_addr"`
-	DataServerURL    string                            `mapstructure:"data_server_url"`
-	DataServerPrefix string                            `mapstructure:"data_server_prefix"`
+	MountPath        string `mapstructure:"mount_path"`
+	MountID          string `mapstructure:"mount_id"`
+	GatewayAddr      string `mapstructure:"gateway_addr"`
+	DataServerURL    string `mapstructure:"data_server_url"`
+	DataServerPrefix string `mapstructure:"data_server_prefix"`
 }
 
 type service struct {
 	conf               *config
 	mountPath, mountID string
 	gateway            gateway.GatewayAPIClient
-	storage            storage.FS
 }
 
 func (s *service) Close() error {
@@ -98,11 +91,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	mountPath := c.MountPath
 	mountID := c.MountID
 
-	fs, err := getFS(c)
-	if err != nil {
-		return nil, err
-	}
-
 	gateway, err := pool.GetGatewayServiceClient(c.GatewayAddr)
 	if err != nil {
 		return nil, err
@@ -113,7 +101,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		mountPath: mountPath,
 		mountID:   mountID,
 		gateway:   gateway,
-		storage:   fs,
 	}
 
 	return service, nil
@@ -180,52 +167,42 @@ func NewPathTranslator(p string) *PathTranslator {
 // this `res` will get then expanded taking into account the authenticated user and the storage:
 // end         = /einstein/files/public-links/foldera/folderb/
 
-// TODO how would this behave with a storage other than owncloud?
-// the current OC namespace looks like "/oc/einstein/public-links"
-// and operations on it would be hardcoded string operations bound to
-// the storage path. Either we need clearly defined paths from each storage,
-// or else this would remain black magic.
 func (s *service) initiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*provider.InitiateFileDownloadResponse, error) {
-	t := NewPathTranslator(req.Ref.GetPath())
-	tokenPath, err := s.pathFromToken(ctx, t.token)
+	tkn, relativePath, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return nil, err
 	}
 
-	var destURL *url.URL
+	originalPath, err := s.pathFromToken(ctx, tkn)
+	if err != nil {
+		return nil, err
+	}
 
-	// handle the case where a single file is shared publicly, for such case the url.Path might only be: "/public/ItYJjJNdiuEn"
-	// TODO the "/public" prefix might be configurable, although a prefix, nested paths should not be allowed, as in: `/public/level1/level2` values as prefix.
+	dReq := &provider.InitiateFileDownloadRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Path{Path: path.Join("/", originalPath, relativePath)},
+		},
+	}
 
-	_, ok := s.isSharedFile(ctx, tokenPath)
-	// check if the ref exists, if not, perhaps it is a publicly shared file
-	if ok {
-		base := strings.Join(strings.Split(tokenPath, "/")[3:], "/")
-		destURL, err = url.Parse(strings.Join([]string{s.conf.DataServerURL, s.conf.DataServerPrefix, base}, "/"))
-		if err != nil {
-			return nil, err
-		}
-	} else if isOCStorage(tokenPath) {
-		base := strings.Join(strings.Split(tokenPath, "/")[3:], "/")
-		request := strings.Join(strings.Split(t.dir, "/")[3:], "/")
-		t.dir = strings.Join([]string{base, request}, "/")
+	dRes, err := s.gateway.InitiateFileDownload(ctx, dReq)
+	if err != nil {
+		return &provider.InitiateFileDownloadResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error calling InitiateFileDownload"),
+		}, nil
+	}
 
-		destURL, err = url.Parse(strings.Join([]string{s.conf.DataServerURL, s.conf.DataServerPrefix, t.dir, t.base}, "/"))
-		if err != nil {
-			return nil, err
-		}
+	if dRes.Status.Code != rpc.Code_CODE_OK {
+		return &provider.InitiateFileDownloadResponse{
+			Status: dRes.Status,
+		}, nil
 	}
 
 	return &provider.InitiateFileDownloadResponse{
 		Opaque:           req.Opaque,
-		Status:           &rpc.Status{Code: rpc.Code_CODE_OK},
-		DownloadEndpoint: destURL.String(),
-		Expose:           true,
+		Status:           dRes.Status,
+		DownloadEndpoint: dRes.DownloadEndpoint,
+		Expose:           true, // TODO set to false, leave data provider lookup to the datagateway
 	}, nil
-}
-
-func isOCStorage(q string) bool {
-	return strings.HasPrefix(q, "/oc/")
 }
 
 func (s *service) dataURL() (*url.URL, error) {
@@ -243,12 +220,12 @@ func (s *service) uploadFullPath(ctx context.Context, refPath string) (string, e
 	// req.Ref.GetPath() = "/public/{token}/subfolderA/subfolderB/file.txt"
 	token := strings.Split(refPath, "/")[2]
 
-	ref, err := s.refFromToken(ctx, token)
+	originalPath, err := s.pathFromToken(ctx, token)
 	if err != nil {
 		return "", err
 	}
 
-	sharedRootPath := strings.Split(ref.GetPath(), "/")[3:] // internal paths have the storage prefixed, i.e: "/oc/einstein/asdf/""
+	sharedRootPath := strings.Split(originalPath, "/")[3:] // internal paths have the storage prefixed, i.e: "/oc/einstein/asdf/""
 	fullPath = append(fullPath, append(sharedRootPath, strings.Split(refPath, "/")[3:]...)...)
 	// i.e: fullPath = /sharedFolder/subfolder/file.txt
 	return strings.Join(fullPath, "/"), nil
@@ -273,34 +250,35 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		return nil, err
 	}
 
-	var uploadLength int64
-	if req.Opaque != nil && req.Opaque.Map != nil && req.Opaque.Map["Upload-Length"] != nil {
-		var err error
-		uploadLength, err = strconv.ParseInt(string(req.Opaque.Map["Upload-Length"].Value), 10, 64)
-		if err != nil {
-			return &provider.InitiateFileUploadResponse{
-				Status: status.NewInternal(ctx, err, "error parsing upload length"),
-			}, nil
-		}
+	uReq := &provider.InitiateFileUploadRequest{
+		Ref:    ref,
+		Opaque: req.Opaque,
 	}
 
-	uploadID, err := s.storage.InitiateUpload(ctx, ref, uploadLength, nil)
+	uRes, err := s.gateway.InitiateFileUpload(ctx, uReq)
 	if err != nil {
 		return &provider.InitiateFileUploadResponse{
-			Status: status.NewInternal(ctx, err, "error getting upload id"),
+			Status: status.NewInternal(ctx, err, "gateway: error calling InitiateFileUpload"),
 		}, nil
 	}
-	targetURL.Path = path.Join("/", targetURL.Path, uploadID)
+
+	if uRes.Status.Code != rpc.Code_CODE_OK {
+		return &provider.InitiateFileUploadResponse{
+			Status: uRes.Status,
+		}, nil
+	}
 
 	logger.Info().Str("data-server", targetURL.String()).
 		Str("fn", req.Ref.GetPath()).
 		Str("xs", fmt.Sprintf("%+v", "false")).
 		Msg("file upload")
+
 	res := &provider.InitiateFileUploadResponse{
-		UploadEndpoint: targetURL.String(),
-		Status:         status.NewOK(ctx),
-		Expose:         true,
-		// AvailableChecksums: ,
+		UploadEndpoint:     uRes.UploadEndpoint,
+		Status:             uRes.Status,
+		AvailableChecksums: uRes.AvailableChecksums,
+		Opaque:             uRes.Opaque,
+		Expose:             true, // TODO set to false, leave data provider lookup to the datagateway
 	}
 
 	return res, nil
@@ -512,7 +490,7 @@ func (s *service) trimMountPrefix(fn string) (string, error) {
 
 // pathFromToken returns the path for the publicly shared resource.
 func (s *service) pathFromToken(ctx context.Context, token string) (string, error) {
-	driver, err := pool.GetPublicShareProviderClient(s.conf.DriverAddr)
+	driver, err := pool.GetGatewayServiceClient(s.conf.GatewayAddr)
 	if err != nil {
 		return "", err
 	}
@@ -539,46 +517,4 @@ func (s *service) pathFromToken(ctx context.Context, token string) (string, erro
 	}
 
 	return pathRes.Path, nil
-}
-
-// refFromToken returns the path for the publicly shared resource.
-func (s *service) refFromToken(ctx context.Context, token string) (*provider.Reference, error) {
-	driver, err := pool.GetPublicShareProviderClient(s.conf.DriverAddr)
-	if err != nil {
-		return nil, err
-	}
-
-	publicShareResponse, err := driver.GetPublicShare(
-		ctx,
-		&link.GetPublicShareRequest{
-			Ref: &link.PublicShareReference{
-				Spec: &link.PublicShareReference_Token{
-					Token: token,
-				},
-			},
-		},
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	pathRes, err := s.gateway.GetPath(ctx, &provider.GetPathRequest{
-		ResourceId: publicShareResponse.GetShare().GetResourceId(),
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return &provider.Reference{
-		Spec: &provider.Reference_Path{
-			Path: pathRes.Path,
-		},
-	}, nil
-}
-
-func getFS(c *config) (storage.FS, error) {
-	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		return f(c.Drivers[c.Driver])
-	}
-	return nil, fmt.Errorf("driver not found: %s", c.Driver)
 }
