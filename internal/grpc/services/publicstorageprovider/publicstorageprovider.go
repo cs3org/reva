@@ -233,7 +233,37 @@ func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeReques
 }
 
 func (s *service) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+	ctx, span := trace.StartSpan(ctx, "CreateContainer")
+	defer span.End()
+
+	span.AddAttributes(
+		trace.StringAttribute("ref", req.Ref.String()),
+	)
+
+	tkn, relativePath, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		return nil, err
+	}
+
+	pathFromToken, err := s.pathFromToken(ctx, tkn)
+	if err != nil {
+		return nil, err
+	}
+
+	var res *provider.CreateContainerResponse
+	// the call has to be made to the gateway instead of the storage.
+	res, err = s.gateway.CreateContainer(ctx, &provider.CreateContainerRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: path.Join("/", pathFromToken, relativePath),
+			},
+		},
+	})
+	if res.Status.Code == rpc.Code_CODE_INTERNAL {
+		return res, nil
+	}
+
+	return res, nil
 }
 
 func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
