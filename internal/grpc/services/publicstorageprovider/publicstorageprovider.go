@@ -30,7 +30,6 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -215,43 +214,21 @@ func (s *service) dataURL() (*url.URL, error) {
 	return targetURL, nil
 }
 
-func (s *service) uploadFullPath(ctx context.Context, refPath string) (string, error) {
-	var fullPath []string
-	// req.Ref.GetPath() = "/public/{token}/subfolderA/subfolderB/file.txt"
-	token := strings.Split(refPath, "/")[2]
-
-	originalPath, err := s.pathFromToken(ctx, token)
-	if err != nil {
-		return "", err
-	}
-
-	sharedRootPath := strings.Split(originalPath, "/")[3:] // internal paths have the storage prefixed, i.e: "/oc/einstein/asdf/""
-	fullPath = append(fullPath, append(sharedRootPath, strings.Split(refPath, "/")[3:]...)...)
-	// i.e: fullPath = /sharedFolder/subfolder/file.txt
-	return strings.Join(fullPath, "/"), nil
-}
-
 func (s *service) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*provider.InitiateFileUploadResponse, error) {
-	logger := appctx.GetLogger(ctx)
-
-	fullPath, err := s.uploadFullPath(ctx, req.Ref.GetPath())
+	tkn, relativePath, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return nil, err
 	}
 
-	ref := &provider.Reference{
-		Spec: &provider.Reference_Path{
-			Path: fullPath,
-		},
-	}
-
-	targetURL, err := s.dataURL()
+	originalPath, err := s.pathFromToken(ctx, tkn)
 	if err != nil {
 		return nil, err
 	}
 
 	uReq := &provider.InitiateFileUploadRequest{
-		Ref:    ref,
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Path{Path: path.Join("/", originalPath, relativePath)},
+		},
 		Opaque: req.Opaque,
 	}
 
@@ -267,11 +244,6 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 			Status: uRes.Status,
 		}, nil
 	}
-
-	logger.Info().Str("data-server", targetURL.String()).
-		Str("fn", req.Ref.GetPath()).
-		Str("xs", fmt.Sprintf("%+v", "false")).
-		Msg("file upload")
 
 	res := &provider.InitiateFileUploadResponse{
 		UploadEndpoint:     uRes.UploadEndpoint,
