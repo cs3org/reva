@@ -267,7 +267,37 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 }
 
 func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+	ctx, span := trace.StartSpan(ctx, "Delete")
+	defer span.End()
+
+	span.AddAttributes(
+		trace.StringAttribute("ref", req.Ref.String()),
+	)
+
+	tkn, relativePath, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		return nil, err
+	}
+
+	pathFromToken, err := s.pathFromToken(ctx, tkn)
+	if err != nil {
+		return nil, err
+	}
+
+	var res *provider.DeleteResponse
+	// the call has to be made to the gateway instead of the storage.
+	res, err = s.gateway.Delete(ctx, &provider.DeleteRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: path.Join("/", pathFromToken, relativePath),
+			},
+		},
+	})
+	if res.Status.Code == rpc.Code_CODE_INTERNAL {
+		return res, nil
+	}
+
+	return res, nil
 }
 
 func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
