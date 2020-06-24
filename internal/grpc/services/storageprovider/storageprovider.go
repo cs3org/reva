@@ -79,9 +79,6 @@ func (c *config) init() {
 
 	c.DataServerURL = sharedconf.GetDataGateway(c.DataServerURL)
 
-	// TODO: Uploads currently don't work when ExposeDataServer is false
-	c.ExposeDataServer = true
-
 	// set sane defaults
 	if len(c.AvailableXS) == 0 {
 		c.AvailableXS = map[string]uint32{"md5": 100, "unset": 1000}
