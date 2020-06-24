@@ -46,7 +46,6 @@ type config struct {
 	MountPath   string `mapstructure:"mount_path"`
 	MountID     string `mapstructure:"mount_id"`
 	GatewayAddr string `mapstructure:"gateway_addr"`
-	DriverAddr  string `mapstructure:"driver_addr"`
 }
 
 type service struct {
@@ -60,7 +59,6 @@ func (s *service) Close() error {
 }
 
 func (s *service) UnprotectedEndpoints() []string {
-	// return []string{"/cs3.sharing.link.v1beta1.LinkAPI/GetPublicShareByToken"}
 	return []string{}
 }
 
@@ -305,13 +303,19 @@ func (s *service) trimMountPrefix(fn string) (string, error) {
 }
 
 // pathFromToken returns a reference from a public share token.
+// access to this storage provider is authenticated.
+// First of all, the user authenticates the public link by sending the token and optional\
+// password to the public share auth provider, that returns the identity of the owner of the link.
+// the gateway crafts an access token on behalf of the owner to access the underlying storage.
+// a request to this storage provider will be done on behalf of the owner, reason
+// we can call GetPublicShare method directly.
 func (s *service) pathFromToken(ctx context.Context, token string) (string, error) {
-	driver, err := pool.GetPublicShareProviderClient(s.conf.DriverAddr)
+	client, err := pool.GetGatewayServiceClient(s.conf.GatewayAddr)
 	if err != nil {
 		return "", err
 	}
 
-	publicShareResponse, err := driver.GetPublicShare(
+	publicShareResponse, err := client.GetPublicShare(
 		ctx,
 		&link.GetPublicShareRequest{
 			Ref: &link.PublicShareReference{

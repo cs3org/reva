@@ -23,9 +23,11 @@ import (
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	userprovider "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -78,6 +80,13 @@ func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user
 		return nil, err
 	}
 
+	if publicShareResponse.Status.Code != rpc.Code_CODE_OK {
+		if publicShareResponse.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
+			return nil, errtypes.PermissionDenied("publicshare: invalid public link password")
+		}
+
+	}
+
 	getUserResponse, err := gwConn.GetUser(ctx, &userprovider.GetUserRequest{
 		UserId: publicShareResponse.GetShare().GetCreator(),
 	})
@@ -87,6 +96,3 @@ func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user
 
 	return getUserResponse.GetUser(), nil
 }
-
-// ErrPasswordNotProvided is returned when the public share is password protected, but there was no password on the request
-var ErrPasswordNotProvided = errors.New("public share is password protected, but password was not provided")
