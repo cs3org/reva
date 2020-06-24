@@ -19,6 +19,7 @@
 package ocdav
 
 import (
+	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"net/http"
 	"path"
 	"regexp"
@@ -264,6 +265,7 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 		Str("token", tokenpkg.ContextMustGetToken(ctx)).
 		Msg("adding token to header")
 	c.Header.Set(tokenpkg.TokenHeader, tokenpkg.ContextMustGetToken(ctx))
+	c.Header.Set(datagateway.TokenTransportHeader, uRes.Token)
 
 	tusc, err := tus.NewClient(dataServerURL, c)
 	if err != nil {
