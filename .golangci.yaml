@@ -12,10 +12,6 @@ issues:
       text: "SA1019:"
       linters:
         - staticcheck
-    - path: internal/http/services/owncloud/ocdav/propfind.go
-      text: "ifElseChain:"
-      linters:
-        - gocritic
 linters:
   enable:
     - bodyclose

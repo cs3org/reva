@@ -27,7 +27,6 @@ import (
 	"net/http"
 	"net/url"
 	"path"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -88,8 +87,6 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 		return
 	}
 
-	publiclySharedFile := (res.Info.Type == provider.ResourceType_RESOURCE_TYPE_FILE && strings.Contains(ctx.Value(ctxKeyBaseURI).(string), "public-files"))
-
 	if res.Status.Code != rpc.Code_CODE_OK {
 		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			log.Warn().Str("path", fn).Msg("resource not found")
@@ -100,9 +97,9 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 		return
 	}
 
-	infos := []*provider.ResourceInfo{res.Info}
-
-	if res.Info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "1" {
+	info := res.Info
+	infos := []*provider.ResourceInfo{info}
+	if info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "1" {
 		req := &provider.ListContainerRequest{
 			Ref: ref,
 		}
@@ -119,10 +116,10 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 			return
 		}
 		infos = append(infos, res.Infos...)
-	} else if res.Info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "infinity" {
+	} else if depth == "infinity" {
 		// FIXME: doesn't work cross-storage as the results will have the wrong paths!
 		// use a stack to explore sub-containers breadth-first
-		stack := []string{res.Info.Path}
+		stack := []string{info.Path}
 		for len(stack) > 0 {
 			// retrieve path on top of stack
 			path := stack[len(stack)-1]
@@ -157,37 +154,24 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 			// check sub-containers in reverse order and add them to the stack
 			// the reversed order here will produce a more logical sorting of results
 			for i := len(res.Infos) - 1; i >= 0; i-- {
+				//for i := range res.Infos {
 				if res.Infos[i].Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 					stack = append(stack, res.Infos[i].Path)
 				}
 			}
 		}
-	} else if publiclySharedFile && depth == "1" {
-		infos = []*provider.ResourceInfo{}
-		// if the request is to a public link, we need to add yet another value for the file entry.
-		infos = append(infos, &provider.ResourceInfo{
-			// append the shared as a container. Annex to OC10 standards.
-			Type:  provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-			Mtime: res.Info.Mtime,
-		})
-		infos = append(infos, res.Info)
-	} else if publiclySharedFile && depth == "0" {
-		// this logic runs when uploading a file on a publicly shared folder.
-		infos = []*provider.ResourceInfo{}
-		infos = append(infos, res.Info)
 	}
 
-	propRes, err := s.formatPropfind(ctx, &pf, infos, ns, publiclySharedFile)
+	propRes, err := s.formatPropfind(ctx, &pf, infos, ns)
 	if err != nil {
 		log.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-
 	w.Header().Set("DAV", "1, 3, extended-mkcol")
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 	// let clients know this collection supports tus.io POST requests to start uploads
-	if res.Info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && !s.c.DisableTus {
+	if info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && !s.c.DisableTus {
 		w.Header().Add("Access-Control-Expose-Headers", "Tus-Resumable, Tus-Version, Tus-Extension")
 		w.Header().Set("Tus-Resumable", "1.0.0")
 		w.Header().Set("Tus-Version", "1.0.0")
@@ -230,14 +214,10 @@ func readPropfind(r io.Reader) (pf propfindXML, status int, err error) {
 	return pf, 0, nil
 }
 
-func (s *svc) formatPropfind(ctx context.Context, pf *propfindXML, mds []*provider.ResourceInfo, ns string, publiclySharedFile bool) (string, error) {
+func (s *svc) formatPropfind(ctx context.Context, pf *propfindXML, mds []*provider.ResourceInfo, ns string) (string, error) {
 	responses := make([]*responseXML, 0, len(mds))
-	public := false
 	for i := range mds {
-		if publiclySharedFile && mds[i].Type == provider.ResourceType_RESOURCE_TYPE_FILE {
-			public = true
-		}
-		res, err := s.mdToPropResponse(ctx, pf, mds[i], ns, public)
+		res, err := s.mdToPropResponse(ctx, pf, mds[i], ns)
 		if err != nil {
 			return "", err
 		}
@@ -279,8 +259,10 @@ func (s *svc) newProp(key, val string) *propertyXML {
 // mdToPropResponse converts the CS3 metadata into a webdav propesponse
 // ns is the CS3 namespace that needs to be removed from the CS3 path before
 // prefixing it with the baseURI
-func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, ns string, publiclySharedFile bool) (*responseXML, error) {
+func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, ns string) (*responseXML, error) {
+
 	md.Path = strings.TrimPrefix(md.Path, ns)
+
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
 
 	ref := path.Join(baseURI, md.Path)
@@ -288,35 +270,8 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		ref += "/"
 	}
 
-	base := ""
-	var response responseXML
-
-	if publiclySharedFile {
-		// do a stat request in order to get the file name and append it to the request
-		client, err := s.getClient()
-		if err != nil {
-			return nil, err
-		}
-
-		pathRes, err := client.GetPath(ctx, &provider.GetPathRequest{
-			ResourceId: md.GetId(),
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		// check whether md contains the basepath of the shared file
-		basePathRes := filepath.Base(pathRes.Path)
-		baseMD := filepath.Base(md.Path)
-
-		// append the filename only if base is missing
-		if basePathRes != baseMD {
-			base = "/" + filepath.Base(pathRes.Path)
-		}
-	}
-
-	response = responseXML{
-		Href:     (&url.URL{Path: ref + base}).EscapedPath(), // url encode response.Href
+	response := responseXML{
+		Href:     (&url.URL{Path: ref}).EscapedPath(), // url encode response.Href
 		Propstat: []propstatXML{},
 	}
 

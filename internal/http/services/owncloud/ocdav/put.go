@@ -182,15 +182,16 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 		}
 	}
 
-	if sRes.Info != nil {
-		if sRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
-			log.Warn().Msg("resource is not a file")
-			w.WriteHeader(http.StatusConflict)
-			return
-		}
+	info := sRes.Info
+	if info != nil && info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
+		log.Warn().Msg("resource is not a file")
+		w.WriteHeader(http.StatusConflict)
+		return
+	}
 
+	if info != nil {
 		clientETag := r.Header.Get("If-Match")
-		serverETag := sRes.Info.Etag
+		serverETag := info.Etag
 		if clientETag != "" {
 			if clientETag != serverETag {
 				log.Warn().Str("client-etag", clientETag).Str("server-etag", serverETag).Msg("etags mismatch")
@@ -291,59 +292,32 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	// apply mtime to the metadata if specified
-	if r.Header.Get("X-OC-Mtime") != "" {
-		sreq := &provider.SetArbitraryMetadataRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{Path: fn},
-			},
-			ArbitraryMetadata: &provider.ArbitraryMetadata{
-				Metadata: map[string]string{},
-			},
-		}
-		sreq.ArbitraryMetadata.Metadata["mtime"] = r.Header.Get("X-OC-Mtime")
-		res, err := client.SetArbitraryMetadata(ctx, sreq)
-		if err != nil {
-			log.Error().Err(err).
-				Str("mtime", r.Header.Get("X-OC-Mtime")).
-				Msg("error sending a grpc SetArbitraryMetadata request for setting mtime")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		if res.Status.Code != rpc.Code_CODE_OK {
-			log.Error().Err(err).
-				Str("mtime", r.Header.Get("X-OC-Mtime")).
-				Msgf("error sending a grpc SetArbitraryMetadata request for setting mtime, status %d", res.Status.Code)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("X-OC-Mtime", "accepted")
-	}
-
 	// stat again to check the new file's metadata
-	sRes2, err := client.Stat(ctx, sReq)
+	sRes, err = client.Stat(ctx, sReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	if sRes2.Status.Code != rpc.Code_CODE_OK {
-		log.Error().Err(err).Msgf("error status %d when sending grpc stat request", sRes2.Status.Code)
+	if sRes.Status.Code != rpc.Code_CODE_OK {
+		log.Error().Err(err).Msgf("error status %d when sending grpc stat request", sRes.Status.Code)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Add("Content-Type", sRes2.Info.MimeType)
-	w.Header().Set("ETag", sRes2.Info.Etag)
-	w.Header().Set("OC-FileId", wrapResourceID(sRes2.Info.Id))
-	w.Header().Set("OC-ETag", sRes2.Info.Etag)
-	w.Header().Set("Last-Modified", utils.TSToTime(sRes2.Info.Mtime).Format(time.RFC1123Z))
+	info2 := sRes.Info
 
-	// file was new as it didn't exist during the first stat
-	if sRes.Info == nil {
+	w.Header().Add("Content-Type", info2.MimeType)
+	w.Header().Set("ETag", info2.Etag)
+	w.Header().Set("OC-FileId", wrapResourceID(info2.Id))
+	w.Header().Set("OC-ETag", info2.Etag)
+	t := utils.TSToTime(info2.Mtime)
+	lastModifiedString := t.Format(time.RFC1123Z)
+	w.Header().Set("Last-Modified", lastModifiedString)
+
+	// file was new
+	if info == nil {
 		w.WriteHeader(http.StatusCreated)
 		return
 	}

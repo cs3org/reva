@@ -358,18 +358,17 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		return nil, err
 	}
 
-	pathFromToken, err := s.pathFromToken(ctx, tkn)
+	originalPath, err := s.pathFromToken(ctx, tkn)
 	if err != nil {
 		return nil, err
 	}
 
 	var statResponse *provider.StatResponse
-	var ok bool
 	// the call has to be made to the gateway instead of the storage.
 	statResponse, err = s.gateway.Stat(ctx, &provider.StatRequest{
 		Ref: &provider.Reference{
 			Spec: &provider.Reference_Path{
-				Path: path.Join("/", pathFromToken, relativePath),
+				Path: path.Join("/", originalPath, relativePath),
 			},
 		},
 	})
@@ -378,13 +377,6 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 			Status: status.NewInternal(ctx, err, "gateway: error calling Stat for ref:"+req.Ref.String()),
 		}, nil
 	}
-	if statResponse.Status.Code == rpc.Code_CODE_INTERNAL {
-		// the shared resource is a file, return the original error
-		// or ovewrite statResponse
-		if statResponse, ok = s.isSharedFile(ctx, pathFromToken); !ok {
-			return nil, err
-		}
-	}
 
 	// prevent leaking internal paths
 	if statResponse.Info != nil {
@@ -392,24 +384,6 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 	}
 
 	return statResponse, nil
-}
-
-func (s *service) isSharedFile(ctx context.Context, loc string) (*provider.StatResponse, bool) {
-	statResponse, err := s.gateway.Stat(ctx, &provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: path.Join("/", loc),
-			},
-		},
-	})
-	if err != nil {
-		return nil, false
-	}
-	if statResponse.Info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-		return nil, false
-	}
-
-	return statResponse, true
 }
 
 func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, ss provider.ProviderAPI_ListContainerStreamServer) error {
