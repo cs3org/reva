@@ -46,6 +46,20 @@ type config struct {
 	Static  string                            `mapstructure:"static"`
 }
 
+func (c *config) init() {
+	if c.Prefix == "" {
+		c.Prefix = "meshdir"
+	}
+
+	if c.Driver == "" {
+		c.Driver = "json"
+	}
+
+	if c.Static == "" {
+		c.Static = "static"
+	}
+}
+
 type svc struct {
 	mdm  meshdirectory.Manager
 	conf *config
@@ -74,17 +88,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		return nil, err
 	}
 
-	if c.Prefix == "" {
-		c.Prefix = "meshdir"
-	}
-
-	if c.Driver == "" {
-		c.Driver = "json"
-	}
-
-	if c.Static == "" {
-		c.Static = "static"
-	}
+	c.init()
 
 	mdm, err := getMeshDirManager(c)
 	if err != nil {

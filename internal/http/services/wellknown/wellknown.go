@@ -44,6 +44,12 @@ type config struct {
 	EndSessionEndpoint    string `mapstructure:"end_session_endpoint"`
 }
 
+func (c *config) init() {
+	if c.Prefix == "" {
+		c.Prefix = ".well-known"
+	}
+}
+
 type svc struct {
 	conf    *config
 	handler http.Handler
@@ -56,9 +62,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		return nil, err
 	}
 
-	if conf.Prefix == "" {
-		conf.Prefix = ".well-known"
-	}
+	conf.init()
 
 	s := &svc{
 		conf: conf,

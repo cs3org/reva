@@ -1,77 +1,17 @@
-[shared]
-jwt_secret = "Pive-Fumkiu4"
-gatewaysvc = "localhost:19000"
-
-[grpc]
-address = "0.0.0.0:19000"
-
+# services to enable
 [grpc.services.gateway]
-authregistrysvc = "localhost:19000"
-storageregistrysvc = "localhost:19000"
-preferencessvc = "localhost:19000"
-userprovidersvc = "localhost:19000"
-usershareprovidersvc = "localhost:19000"
-publicshareprovidersvc = "localhost:19000"
-ocmshareprovidersvc = "localhost:19000"
-commit_share_to_storage_grant = false
-datagateway = "http://localhost:19001/data"
-transfer_shared_secret = "replace-me-with-a-transfer-secret" # for direct uploads
-transfer_expires = 6 # give it a moment
-
-[grpc.services.authregistry]
-driver = "static"
-[grpc.services.authregistry.drivers.static.rules]
-basic = "localhost:19000"
-
 [grpc.services.storageregistry]
-driver = "static"
-[grpc.services.storageregistry.drivers.static]
-home_provider = "/"
-[grpc.services.storageregistry.drivers.static.rules]
-"/" = "localhost:19000"
-"123e4567-e89b-12d3-a456-426655440000" = "localhost:19000"
-
-[grpc.services.usershareprovider]
-driver = "memory"
-
-[grpc.services.publicshareprovider]
-driver = "memory"
-
 [grpc.services.storageprovider]
-driver = "local"
-mount_path = "/"
-mount_id = "123e4567-e89b-12d3-a456-426655440000"
-expose_data_server = true
-data_server_url = "http://localhost:19001/data"
-enable_home_creation = true
-
-[grpc.services.storageprovider.drivers.local]
-namespace = "/var/tmp/reva/"
-user_layout = "{{.Username}}"
-enable_home = true
-
 [grpc.services.authprovider]
-auth_manager = "json"
-[grpc.services.authprovider.auth_managers.json]
-users = "users.demo.json"
-
+[grpc.services.authregistry]
 [grpc.services.userprovider]
-driver = "json"
-
-[grpc.services.userprovider.drivers.json]
-users = "users.demo.json"
-
-[http]
-address = "0.0.0.0:19001"
+[grpc.services.usershareprovider]
+[grpc.services.publicshareprovider]
+[grpc.services.ocmcore]
+[grpc.services.ocmshareprovider]
+[grpc.services.ocminvitemanager]
+[grpc.services.ocmproviderauthorizer]
 
 [http.services.dataprovider]
-driver = "local"
-temp_folder = "/var/tmp/"
-
-[http.services.dataprovider.drivers.local]
-namespace = "/var/tmp/reva/"
-user_layout = "{{.Username}}"
-enable_home = true
-
-#[http.services.datagateway]
-#transfer_shared_secret = "replace-me-with-a-transfer-secret" # for direct uploads
+[http.services.prometheus]
+[http.services.ocmd]

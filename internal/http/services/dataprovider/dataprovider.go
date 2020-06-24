@@ -36,10 +36,21 @@ func init() {
 }
 
 type config struct {
-	Prefix     string                            `mapstructure:"prefix"`
-	Driver     string                            `mapstructure:"driver"`
-	Drivers    map[string]map[string]interface{} `mapstructure:"drivers"`
-	DisableTus bool                              `mapstructure:"disable_tus"`
+	Prefix     string                            `mapstructure:"prefix" docs:"data;The prefix to be used for this HTTP service"`
+	Driver     string                            `mapstructure:"driver" docs:"localhome;The storage driver to be used."`
+	Drivers    map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:docs/config/packages/storage/fs;The configuration for the storage driver"`
+	DisableTus bool                              `mapstructure:"disable_tus" docs:"false;Whether to disable TUS uploads."`
+}
+
+func (c *config) init() {
+	if c.Prefix == "" {
+		c.Prefix = "data"
+	}
+
+	if c.Driver == "" {
+		c.Driver = "localhome"
+	}
+
 }
 
 type svc struct {
@@ -55,9 +66,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		return nil, err
 	}
 
-	if conf.Prefix == "" {
-		conf.Prefix = "data"
-	}
+	conf.init()
 
 	fs, err := getFS(conf)
 	if err != nil {
@@ -68,6 +77,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		storage: fs,
 		conf:    conf,
 	}
+
 	err = s.setHandler()
 	return s, err
 }

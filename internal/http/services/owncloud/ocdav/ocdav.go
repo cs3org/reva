@@ -34,7 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
-	"github.com/cs3org/reva/pkg/storage/templates"
+	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	ctxuser "github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
@@ -68,6 +68,17 @@ type Config struct {
 	DisableTus      bool   `mapstructure:"disable_tus"`
 }
 
+func (c *Config) init() {
+	// note: default c.Prefix is an empty string
+
+	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+
+	if c.ChunkFolder == "" {
+		c.ChunkFolder = "/var/tmp/reva/tmp/davchunks"
+	}
+
+}
+
 type svc struct {
 	c             *Config
 	webDavHandler *WebDavHandler
@@ -81,11 +92,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		return nil, err
 	}
 
-	conf.GatewaySvc = sharedconf.GetGatewaySVC(conf.GatewaySvc)
-
-	if conf.ChunkFolder == "" {
-		conf.ChunkFolder = os.TempDir()
-	}
+	conf.init()
 
 	if err := os.MkdirAll(conf.ChunkFolder, 0755); err != nil {
 		return nil, err

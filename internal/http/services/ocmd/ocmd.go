@@ -37,6 +37,14 @@ type Config struct {
 	Config     configData `mapstructure:"config"`
 }
 
+func (c *Config) init() {
+	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+
+	if c.Prefix == "" {
+		c.Prefix = "ocm"
+	}
+}
+
 type svc struct {
 	Conf                 *Config
 	SharesHandler        *sharesHandler
@@ -53,11 +61,10 @@ func init() {
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 
 	conf := &Config{}
-
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
 	}
-	conf.GatewaySvc = sharedconf.GetGatewaySVC(conf.GatewaySvc)
+	conf.init()
 
 	s := &svc{
 		Conf: conf,
@@ -70,6 +77,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	s.NotificationsHandler.init(s.Conf)
 	s.ConfigHandler.init(s.Conf)
 	s.InvitesHandler.init(s.Conf)
+
 	return s, nil
 }
 

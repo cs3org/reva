@@ -26,6 +26,6 @@ import (
 )
 
 // InitiateUpload returns an upload id that can be used for uploads with tus
-func (fs *s3FS) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64) (uploadID string, err error) {
+func (fs *s3FS) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (uploadID string, err error) {
 	return "", errtypes.NotSupported("op not supported")
 }

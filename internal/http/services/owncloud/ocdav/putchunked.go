@@ -288,7 +288,6 @@ func (s *svc) handlePutChunked(w http.ResponseWriter, r *http.Request) {
 		clientETag := r.Header.Get("If-Match")
 		serverETag := info.Etag
 		if clientETag != "" {
-			serverETag = fmt.Sprintf(`"%s"`, serverETag)
 			if clientETag != serverETag {
 				log.Warn().Str("client-etag", clientETag).Str("server-etag", serverETag).Msg("etags mismatch")
 				w.WriteHeader(http.StatusPreconditionFailed)

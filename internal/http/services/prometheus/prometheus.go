@@ -42,9 +42,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		return nil, err
 	}
 
-	if conf.Prefix == "" {
-		conf.Prefix = "metrics"
-	}
+	conf.init()
 
 	pe, err := prometheus.NewExporter(prometheus.Options{
 		Namespace: "revad",
@@ -69,6 +67,12 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 
 type config struct {
 	Prefix string `mapstructure:"prefix"`
+}
+
+func (c *config) init() {
+	if c.Prefix == "" {
+		c.Prefix = "metrics"
+	}
 }
 
 type svc struct {

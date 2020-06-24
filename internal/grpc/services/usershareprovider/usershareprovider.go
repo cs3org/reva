@@ -43,6 +43,12 @@ type config struct {
 	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
 }
 
+func (c *config) init() {
+	if c.Driver == "" {
+		c.Driver = "json"
+	}
+}
+
 type service struct {
 	conf *config
 	sm   share.Manager
@@ -85,10 +91,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	// if driver is empty we default to json
-	if c.Driver == "" {
-		c.Driver = "json"
-	}
+	c.init()
 
 	sm, err := getShareManager(c)
 	if err != nil {

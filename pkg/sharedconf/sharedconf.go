@@ -25,14 +25,31 @@ import (
 var sharedConf = &conf{}
 
 type conf struct {
-	JWTSecret  string `mapstructure:"jwt_secret"`
-	GatewaySVC string `mapstructure:"gatewaysvc"`
+	JWTSecret   string `mapstructure:"jwt_secret"`
+	GatewaySVC  string `mapstructure:"gatewaysvc"`
+	DataGateway string `mapstructure:"datagateway"`
 }
 
 // Decode decodes the configuration.
 func Decode(v interface{}) error {
 	if err := mapstructure.Decode(v, sharedConf); err != nil {
 		return err
+	}
+
+	// add some defaults
+	if sharedConf.GatewaySVC == "" {
+		sharedConf.GatewaySVC = "0.0.0.0:19000"
+	}
+
+	// this is the default address we use for starting HTTP services
+	if sharedConf.DataGateway == "" {
+		sharedConf.DataGateway = "http://localhost:19001/data"
+	}
+
+	// TODO(labkode): would be cool to autogenerate one secret and print
+	// it on init time.
+	if sharedConf.JWTSecret == "" {
+		sharedConf.JWTSecret = "changemeplease"
 	}
 
 	return nil
@@ -50,6 +67,14 @@ func GetJWTSecret(val string) string {
 func GetGatewaySVC(val string) string {
 	if val == "" {
 		return sharedConf.GatewaySVC
+	}
+	return val
+}
+
+// GetDataGateway returns the package level data gateway endpoint if not overwriten.
+func GetDataGateway(val string) string {
+	if val == "" {
+		return sharedConf.DataGateway
 	}
 	return val
 }

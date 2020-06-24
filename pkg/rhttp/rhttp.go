@@ -47,14 +47,7 @@ func New(m interface{}, l zerolog.Logger) (*Server, error) {
 		return nil, err
 	}
 
-	// apply defaults
-	if conf.Network == "" {
-		conf.Network = "tcp"
-	}
-
-	if conf.Address == "" {
-		conf.Address = "localhost:9998"
-	}
+	conf.init()
 
 	httpServer := &http.Server{}
 	s := &Server{
@@ -85,6 +78,17 @@ type config struct {
 	Address     string                            `mapstructure:"address"`
 	Services    map[string]map[string]interface{} `mapstructure:"services"`
 	Middlewares map[string]map[string]interface{} `mapstructure:"middlewares"`
+}
+
+func (c *config) init() {
+	// apply defaults
+	if c.Network == "" {
+		c.Network = "tcp"
+	}
+
+	if c.Address == "" {
+		c.Address = "0.0.0.0:19001"
+	}
 }
 
 // Start starts the server
@@ -307,8 +311,9 @@ func traceHandler(name string, h http.Handler) http.Handler {
 func addProviderAuthMiddleware(conf *config, unprotected []string) (global.Middleware, error) {
 	_, ocmdRegistered := global.Services["ocmd"]
 	_, ocmdEnabled := conf.Services["ocmd"]
+	ocmdPrefix, _ := conf.Services["ocmd"]["prefix"].(string)
 	if ocmdRegistered && ocmdEnabled {
-		return providerauthorizer.New(conf.Middlewares["providerauthorizer"], unprotected, conf.Services["ocmd"]["prefix"].(string))
+		return providerauthorizer.New(conf.Middlewares["providerauthorizer"], unprotected, ocmdPrefix)
 	}
 	return nil, nil
 }

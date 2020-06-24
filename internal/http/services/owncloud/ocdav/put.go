@@ -207,17 +207,30 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
+	opaqueMap := map[string]*typespb.OpaqueEntry{
+		"Upload-Length": {
+			Decoder: "plain",
+			Value:   []byte(r.Header.Get("Content-Length")),
+		},
+	}
+
+	mtime := r.Header.Get("X-OC-Mtime")
+	if mtime != "" {
+		opaqueMap["X-OC-Mtime"] = &typespb.OpaqueEntry{
+			Decoder: "plain",
+			Value:   []byte(mtime),
+		}
+
+		// TODO: find a way to check if the storage really accepted the value
+		w.Header().Set("X-OC-Mtime", "accepted")
+	}
+
 	uReq := &provider.InitiateFileUploadRequest{
 		Ref: &provider.Reference{
 			Spec: &provider.Reference_Path{Path: fn},
 		},
 		Opaque: &typespb.Opaque{
-			Map: map[string]*typespb.OpaqueEntry{
-				"Upload-Length": {
-					Decoder: "plain",
-					Value:   []byte(r.Header.Get("Content-Length")),
-				},
-			},
+			Map: opaqueMap,
 		},
 	}
 
@@ -302,7 +315,6 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 	t := utils.TSToTime(info2.Mtime)
 	lastModifiedString := t.Format(time.RFC1123Z)
 	w.Header().Set("Last-Modified", lastModifiedString)
-	w.Header().Set("X-OC-MTime", "accepted")
 
 	// file was new
 	if info == nil {

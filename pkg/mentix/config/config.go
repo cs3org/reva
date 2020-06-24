@@ -39,3 +39,11 @@ type Configuration struct {
 		OutputFile string `mapstructure:"output_file"`
 	} `mapstructure:"prom_filesd"`
 }
+
+// Init sets sane defaults
+func (c *Configuration) Init() {
+	if c.Prefix == "" {
+		c.Prefix = "mentix"
+	}
+	// TODO(daniel): add default that works out of the box
+}

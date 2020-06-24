@@ -1,0 +1,24 @@
+[
+	{
+		"id": {
+			"opaque_id": "ron1234",
+			"idp": "https://surfsara.nl"
+		},
+		"username": "ron",
+		"secret": "ronpass",
+		"mail": "ron@surfsara.nl",
+		"display_name": "Ron",
+		"groups": ["sailing-lovers", "violin-haters", "physics-lovers"]
+	},
+	{
+		"id": {
+			"opaque_id": "antoon5678",
+			"idp": "https://surfsara.nl"
+		},
+		"username": "antoon",
+		"secret": "antoonpass",
+		"mail": "antoon@surfsara.nl",
+		"display_name": "Antoon",
+		"groups": ["radium-lovers", "polonium-lovers", "physics-lovers"]
+	}
+]

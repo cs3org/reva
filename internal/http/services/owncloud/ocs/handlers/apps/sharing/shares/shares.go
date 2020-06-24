@@ -341,16 +341,31 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// TODO: handle legacy "publicUpload" arg that overrides permissions differently depending on the scenario
-	// https://github.com/owncloud/core/blob/v10.4.0/apps/files_sharing/lib/Controller/Share20OcsController.php#L447
-
 	// TODO: the default might change depending on allowed permissions and configs
 	permKey := 1
+
+	// handle legacy "publicUpload" arg that overrides permissions differently depending on the scenario
+	// https://github.com/owncloud/core/blob/v10.4.0/apps/files_sharing/lib/Controller/Share20OcsController.php#L447
+	if r.FormValue("publicUpload") != "" {
+		publicUploadFlag, err := strconv.ParseBool(r.FormValue("publicUpload"))
+		if err != nil {
+			log.Error().Err(err).Str("createShare", "shares").Str("publicUpload", r.FormValue("publicUpload")).Msg("could not parse publicUpload argument")
+			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "invalid argument value for \"publicUpload\"", err)
+			return
+		}
+
+		if publicUploadFlag {
+			// all perms except reshare
+			permKey = 15
+		}
+	}
+
+	// note: "permissions" value has higher priority than "publicUpload"
 	if r.FormValue("permissions") != "" {
 		// phoenix sends: {"permissions": 15}. See ocPermToRole struct for mapping
-		permKey, err := strconv.Atoi(r.FormValue("permissions"))
+		permKey, err = strconv.Atoi(r.FormValue("permissions"))
 		if err != nil {
-			log.Error().Str("createShare", "shares").Str("permissions", r.FormValue("permissions")).Msgf("invalid type: %T", permKey)
+			log.Error().Err(err).Str("createShare", "shares").Str("permissions", r.FormValue("permissions")).Msgf("invalid type: %T", permKey)
 		}
 	}
 

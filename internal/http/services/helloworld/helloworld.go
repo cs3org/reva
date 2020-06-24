@@ -37,9 +37,9 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
 	}
-	if conf.HelloMessage == "" {
-		conf.HelloMessage = "Hello World!"
-	}
+
+	conf.init()
+
 	return &svc{conf: conf}, nil
 }
 
@@ -51,6 +51,16 @@ func (s *svc) Close() error {
 type config struct {
 	Prefix       string `mapstructure:"prefix"`
 	HelloMessage string `mapstructure:"message"`
+}
+
+func (c *config) init() {
+	if c.HelloMessage == "" {
+		c.HelloMessage = "Hello World!"
+	}
+
+	if c.Prefix == "" {
+		c.Prefix = "helloworld"
+	}
 }
 
 type svc struct {
