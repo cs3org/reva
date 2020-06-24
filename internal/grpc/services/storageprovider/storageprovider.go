@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
@@ -48,19 +49,19 @@ func init() {
 type config struct {
 	MountPath        string                            `mapstructure:"mount_path" docs:"/;The path where the file system would be mounted."`
 	MountID          string                            `mapstructure:"mount_id" docs:"-;The ID of the mounted file system."`
-	Driver           string                            `mapstructure:"driver" docs:"local;The storage driver to be used."`
-	Drivers          map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:docs/config/packages/storage/fs"`
+	Driver           string                            `mapstructure:"driver" docs:"localhome;The storage driver to be used."`
 	TmpFolder        string                            `mapstructure:"tmp_folder" docs:"/var/tmp;Path to temporary folder."`
 	DataServerURL    string                            `mapstructure:"data_server_url" docs:"simple://localhost/data;The URL for the data server."`
 	ExposeDataServer bool                              `mapstructure:"expose_data_server" docs:"false;Whether to expose data server."` // if true the client will be able to upload/download directly to it
 	DisableTus       bool                              `mapstructure:"disable_tus" docs:"false;Whether to disable TUS uploads."`
-	AvailableXS      map[string]uint32                 `mapstructure:"available_checksums" docs:"nil;List of available checksums."`
 	EnableUploadTx   bool                              `mapstructure:"enable_upload_tx" docs:"false;Enables upload transactions"`
+	AvailableXS      map[string]uint32                 `mapstructure:"available_checksums" docs:"nil;List of available checksums."`
+	Drivers          map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:docs/config/packages/storage/fs"`
 }
 
 func (c *config) init() {
 	if c.Driver == "" {
-		c.Driver = "local"
+		c.Driver = "localhome"
 	}
 
 	if c.MountPath == "" {
@@ -75,9 +76,11 @@ func (c *config) init() {
 		c.TmpFolder = "/var/tmp/reva/tmp"
 	}
 
-	if c.DataServerURL == "" {
-		c.DataServerURL = "http://0.0.0.0/data"
-	}
+	c.DataServerURL = sharedconf.GetDataGateway(c.DataServerURL)
+
+	// TODO: Uploads currently don't work when ExposeDataServer is false
+	c.ExposeDataServer = true
+
 	// set sane defaults
 	if len(c.AvailableXS) == 0 {
 		c.AvailableXS = map[string]uint32{"md5": 100, "unset": 1000}
@@ -272,17 +275,23 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	if s.conf.EnableUploadTx {
 		url.Path = path.Join("/", url.Path, newRef.GetPath())
 	} else {
+		metadata := map[string]string{}
 		var uploadLength int64
-		if req.Opaque != nil && req.Opaque.Map != nil && req.Opaque.Map["Upload-Length"] != nil {
-			var err error
-			uploadLength, err = strconv.ParseInt(string(req.Opaque.Map["Upload-Length"].Value), 10, 64)
-			if err != nil {
-				return &provider.InitiateFileUploadResponse{
-					Status: status.NewInternal(ctx, err, "error parsing upload length"),
-				}, nil
+		if req.Opaque != nil && req.Opaque.Map != nil {
+			if req.Opaque.Map["Upload-Length"] != nil {
+				var err error
+				uploadLength, err = strconv.ParseInt(string(req.Opaque.Map["Upload-Length"].Value), 10, 64)
+				if err != nil {
+					return &provider.InitiateFileUploadResponse{
+						Status: status.NewInternal(ctx, err, "error parsing upload length"),
+					}, nil
+				}
+			}
+			if req.Opaque.Map["X-OC-Mtime"] != nil {
+				metadata["mtime"] = string(req.Opaque.Map["X-OC-Mtime"].Value)
 			}
 		}
-		uploadID, err := s.storage.InitiateUpload(ctx, newRef, uploadLength)
+		uploadID, err := s.storage.InitiateUpload(ctx, newRef, uploadLength, metadata)
 		if err != nil {
 			return &provider.InitiateFileUploadResponse{
 				Status: status.NewInternal(ctx, err, "error getting upload id"),

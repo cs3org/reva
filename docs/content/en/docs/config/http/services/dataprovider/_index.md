@@ -16,11 +16,11 @@ prefix = "data"
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="driver" type="string" default="local" %}}
+{{% dir name="driver" type="string" default="localhome" %}}
 The storage driver to be used. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/dataprovider/dataprovider.go#L40)
 {{< highlight toml >}}
 [http.services.dataprovider]
-driver = "local"
+driver = "localhome"
 {{< /highlight >}}
 {{% /dir %}}
 

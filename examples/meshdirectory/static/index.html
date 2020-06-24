@@ -76,7 +76,8 @@
         },
         methods: {
             providerLink(provider) {
-                return this.ocmService(provider).AdditionalEndpoints[0].Path
+                const query = this.queryParams.toString() ? `?${this.queryParams}` : ''
+                return `${this.ocmService(provider).AdditionalEndpoints[0].Path}${query}`
             },
             ocmService(provider) {
                 return provider.Services.find(s => {

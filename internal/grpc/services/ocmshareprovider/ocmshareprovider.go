@@ -47,23 +47,21 @@ type service struct {
 	sm   share.Manager
 }
 
+func (c *config) init() {
+	if c.Driver == "" {
+		c.Driver = "json"
+	}
+}
+
+func (s *service) Register(ss *grpc.Server) {
+	ocm.RegisterOcmAPIServer(ss, s)
+}
+
 func getShareManager(c *config) (share.Manager, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		return f(c.Drivers[c.Driver])
 	}
 	return nil, fmt.Errorf("driver not found: %s", c.Driver)
-}
-
-func (s *service) Close() error {
-	return nil
-}
-
-func (s *service) UnprotectedEndpoints() []string {
-	return []string{}
-}
-
-func (s *service) Register(ss *grpc.Server) {
-	ocm.RegisterOcmAPIServer(ss, s)
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -82,11 +80,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	// if driver is empty we default to json
-	if c.Driver == "" {
-		c.Driver = "json"
-	}
+	c.init()
 
 	sm, err := getShareManager(c)
 	if err != nil {
@@ -99,6 +93,14 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	}
 
 	return service, nil
+}
+
+func (s *service) Close() error {
+	return nil
+}
+
+func (s *service) UnprotectedEndpoints() []string {
+	return []string{}
 }
 
 func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareRequest) (*ocm.CreateOCMShareResponse, error) {

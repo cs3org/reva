@@ -49,15 +49,6 @@ func TestUserManager(t *testing.T) {
 		t.Fatalf("no error (but we expected one) while get manager")
 	}
 
-	// parseConfig - negative test - 2
-	input = map[string]interface{}{
-		"thisFailsSoHard": "TestingTesting",
-	}
-	_, err = New(input)
-	if err == nil {
-		t.Fatalf("no error (but we expected one) while get manager")
-	}
-
 	// corrupt json object with user meta data
 	userJSON := `[{`
 

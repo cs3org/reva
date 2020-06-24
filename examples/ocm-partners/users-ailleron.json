@@ -1,0 +1,35 @@
+[
+	{
+		"id": {
+			"opaque_id": "jarek1234",
+			"idp": "https://ailleron.com"
+		},
+		"username": "jarek",
+		"secret": "jarekpass",
+		"mail": "jarek@ailleron.com",
+		"display_name": "Jarek",
+		"groups": ["sailing-lovers", "violin-haters", "physics-lovers"]
+	},
+	{
+		"id": {
+			"opaque_id": "mateusz5678",
+			"idp": "https://ailleron.com"
+		},
+		"username": "mateusz",
+		"secret": "mateuszpass",
+		"mail": "mateusz@ailleron.com",
+		"display_name": "Mateusz",
+		"groups": ["radium-lovers", "polonium-lovers", "physics-lovers"]
+	},
+	{
+		"id": {
+			"opaque_id": "dawid9876",
+			"idp": "https://ailleron.com"
+		},
+		"username": "dawid",
+		"secret": "dawidpass",
+		"mail": "dawid@ailleron.com",
+		"display_name": "Dawid",
+		"groups": ["quantum-lovers", "philosophy-haters", "physics-lovers"]
+	}
+]

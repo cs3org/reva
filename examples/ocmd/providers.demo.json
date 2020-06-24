@@ -1,26 +1,94 @@
 [
 	{
+		"name": "cernbox",
+		"full_name": "CERNBox",
+		"organization": "CERN",
 		"domain": "http://cernbox.cern.ch",
-		"api_version": "0.0.1",
-		"api_endpoint": "http://127.0.0.1:19001/ocm/",
-		"webdav_endpoint": "http://127.0.0.1:19001/ocm/webdav/"
+		"homepage": "https://cernbox.web.cern.ch",
+		"description": "CERNBox provides cloud data storage to all CERN users.",
+		"services": [
+			{
+				"endpoint": {
+					"type": {
+						"name": "OCM",
+						"description": "CERNBox Open Cloud Mesh API"
+					},
+					"name": "CERNBox - OCM API",
+					"path": "http://127.0.0.1:19001/ocm/",
+					"isMonitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "http://127.0.0.1:19001/"
+			}
+		]
 	},
 	{
+		"name": "oc-cesnet",
+		"full_name": "ownCloud@CESNET",
+		"organization": "CESNET",
 		"domain": "http://cesnet.cz",
-		"api_version": "0.0.1",
-		"api_endpoint": "http://127.0.0.1:17001/ocm/",
-		"webdav_endpoint": "http://127.0.0.1:17001/ocm/webdav/"
+		"homepage": "https://owncloud.cesnet.cz",
+		"description": "OwnCloud has been designed for individual users.",
+		"services": [
+			{
+				"endpoint": {
+					"type": {
+						"name": "OCM",
+						"description": "CESNET Open Cloud Mesh API"
+					},
+					"name": "CESNET - OCM API",
+					"path": "http://127.0.0.1:17001/ocm/",
+					"isMonitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "http://127.0.0.1:17001/"
+			}
+		]
 	},
 	{
+		"name": "example",
+		"full_name": "ownCloud@Example",
+		"organization": "Example",
 		"domain": "http://example.org",
-		"api_version": "0.0.1",
-		"api_endpoint": "http://127.0.0.1:19001/ocm/",
-		"webdav_endpoint": "http://127.0.0.1:19001/ocm/webdav/"
+		"homepage": "http://example.org",
+		"description": "Example cloud storage.",
+		"services": [
+			{
+				"endpoint": {
+					"type": {
+						"name": "OCM",
+						"description": "Example Open Cloud Mesh API"
+					},
+					"name": "Example - OCM API",
+					"path": "http://127.0.0.1:19001/ocm/",
+					"isMonitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "http://127.0.0.1:19001/"
+			}
+		]
 	},
 	{
+		"name": "test",
+		"full_name": "ownCloud@Test",
+		"organization": "Test",
 		"domain": "http://test.org",
-		"api_version": "0.0.1",
-		"api_endpoint": "http://127.0.0.1:19001/ocm/",
-		"webdav_endpoint": "http://127.0.0.1:19001/ocm/webdav/"
+		"homepage": "http://test.org",
+		"description": "Test cloud storage.",
+		"services": [
+			{
+				"endpoint": {
+					"type": {
+						"name": "OCM",
+						"description": "Test Open Cloud Mesh API"
+					},
+					"name": "Test - OCM API",
+					"path": "http://127.0.0.1:19001/ocm/",
+					"isMonitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "http://127.0.0.1:19001/"
+			}
+		]
 	}
 ]

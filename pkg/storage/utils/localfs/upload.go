@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package eos
+package localfs
 
 import (
 	"context"
@@ -25,11 +25,11 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	tusd "github.com/tus/tusd/pkg/handler"
@@ -38,47 +38,63 @@ import (
 var defaultFilePerm = os.FileMode(0664)
 
 // TODO deprecated ... use tus
-func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
-	u, err := getUser(ctx)
+func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
+	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return errors.Wrap(err, "eos: no user in ctx")
+		return errors.Wrap(err, "error resolving ref")
 	}
+	fn = fs.wrap(ctx, fn)
 
-	p, err := fs.resolve(ctx, u, ref)
+	// we cannot rely on /tmp as it can live in another partition and we can
+	// hit invalid cross-device link errors, so we create the tmp file in the same directory
+	// the file is supposed to be written.
+	tmp, err := ioutil.TempFile(filepath.Dir(fn), "._reva_atomic_upload")
 	if err != nil {
-		return errors.Wrap(err, "eos: error resolving reference")
+		return errors.Wrap(err, "localfs: error creating tmp fn at "+filepath.Dir(fn))
 	}
 
-	if fs.isShareFolder(ctx, p) {
-		return errtypes.PermissionDenied("eos: cannot upload under the virtual share folder")
+	_, err = io.Copy(tmp, r)
+	if err != nil {
+		return errors.Wrap(err, "localfs: eror writing to tmp file "+tmp.Name())
 	}
 
-	fn := fs.wrap(ctx, p)
+	// if destination exists
+	if _, err := os.Stat(fn); err == nil {
+		// create revision
+		if err := fs.archiveRevision(ctx, fn); err != nil {
+			return err
+		}
+	}
 
-	return fs.c.Write(ctx, u.Username, fn, r)
+	// TODO(labkode): make sure rename is atomic, missing fsync ...
+	if err := os.Rename(tmp.Name(), fn); err != nil {
+		return errors.Wrap(err, "localfs: error renaming from "+tmp.Name()+" to "+fn)
+	}
+
+	return nil
 }
 
 // InitiateUpload returns an upload id that can be used for uploads with tus
+// It resolves the resurce and then reuses the NewUpload function
+// Currently requires the uploadLength to be set
+// TODO to implement LengthDeferrerDataStore make size optional
 // TODO read optional content for small files in this request
-func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64) (uploadID string, err error) {
-	u, err := getUser(ctx)
+func (fs *localfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (uploadID string, err error) {
+	np, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return "", errors.Wrap(err, "eos: no user in ctx")
+		return "", errors.Wrap(err, "localfs: error resolving reference")
 	}
-
-	np, err := fs.resolve(ctx, u, ref)
-	if err != nil {
-		return "", errors.Wrap(err, "eos: error resolving reference")
-	}
-
-	p := fs.wrap(ctx, np)
 
 	info := tusd.FileInfo{
 		MetaData: tusd.MetaData{
-			"filename": filepath.Base(p),
-			"dir":      filepath.Dir(p),
+			"filename": filepath.Base(np),
+			"dir":      filepath.Dir(np),
 		},
 		Size: uploadLength,
+	}
+
+	if metadata != nil && metadata["mtime"] != "" {
+		info.MetaData["mtime"] = metadata["mtime"]
 	}
 
 	upload, err := fs.NewUpload(ctx, info)
@@ -92,49 +108,56 @@ func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, up
 }
 
 // UseIn tells the tus upload middleware which extensions it supports.
-func (fs *eosfs) UseIn(composer *tusd.StoreComposer) {
+func (fs *localfs) UseIn(composer *tusd.StoreComposer) {
 	composer.UseCore(fs)
 	composer.UseTerminater(fs)
+	// TODO composer.UseConcater(fs)
+	// TODO composer.UseLengthDeferrer(fs)
 }
 
 // NewUpload creates a new upload using the size as the file's length. To determine where to write the binary data
 // the Fileinfo metadata must contain a dir and a filename.
 // returns a unique id which is used to identify the upload. The properties Size and MetaData will be filled.
-func (fs *eosfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.Upload, err error) {
+func (fs *localfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.Upload, err error) {
 
 	log := appctx.GetLogger(ctx)
-	log.Debug().Interface("info", info).Msg("eos: NewUpload")
+	log.Debug().Interface("info", info).Msg("localfs: NewUpload")
 
 	fn := info.MetaData["filename"]
 	if fn == "" {
-		return nil, errors.New("eos: missing filename in metadata")
+		return nil, errors.New("localfs: missing filename in metadata")
 	}
 	info.MetaData["filename"] = filepath.Clean(info.MetaData["filename"])
 
 	dir := info.MetaData["dir"]
 	if dir == "" {
-		return nil, errors.New("eos: missing dir in metadata")
+		return nil, errors.New("localfs: missing dir in metadata")
 	}
 	info.MetaData["dir"] = filepath.Clean(info.MetaData["dir"])
 
-	log.Debug().Interface("info", info).Msg("eos: resolved filename")
+	np := fs.wrap(ctx, filepath.Join(info.MetaData["dir"], info.MetaData["filename"]))
+
+	log.Debug().Interface("info", info).Msg("localfs: resolved filename")
 
 	info.ID = uuid.New().String()
 
 	binPath, err := fs.getUploadPath(ctx, info.ID)
 	if err != nil {
-		return nil, errors.Wrap(err, "eos: error resolving upload path")
+		return nil, errors.Wrap(err, "localfs: error resolving upload path")
 	}
-	user, err := getUser(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "eos: no user in ctx")
-	}
+	usr := user.ContextMustGetUser(ctx)
 	info.Storage = map[string]string{
-		"Type":     "EOSStore",
-		"Username": user.Username,
+		"Type":                "LocalStore",
+		"BinPath":             binPath,
+		"InternalDestination": np,
+
+		"Idp":      usr.Id.Idp,
+		"UserId":   usr.Id.OpaqueId,
+		"UserName": usr.Username,
+
+		"LogLevel": log.GetLevel().String(),
 	}
 	// Create binary file with no content
-
 	file, err := os.OpenFile(binPath, os.O_CREATE|os.O_WRONLY, defaultFilePerm)
 	if err != nil {
 		return nil, err
@@ -148,16 +171,6 @@ func (fs *eosfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd
 		fs:       fs,
 	}
 
-	if !info.SizeIsDeferred && info.Size == 0 {
-		log.Debug().Interface("info", info).Msg("eos: finishing upload for empty file")
-		// no need to create info file and finish directly
-		err := u.FinishUpload(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return u, nil
-	}
-
 	// writeInfo creates the file by itself if necessary
 	err = u.writeInfo()
 	if err != nil {
@@ -167,13 +180,12 @@ func (fs *eosfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd
 	return u, nil
 }
 
-// TODO use a subdirectory in the shadow tree
-func (fs *eosfs) getUploadPath(ctx context.Context, uploadID string) (string, error) {
-	return filepath.Join(fs.conf.CacheDirectory, uploadID), nil
+func (fs *localfs) getUploadPath(ctx context.Context, uploadID string) (string, error) {
+	return filepath.Join(fs.conf.Uploads, uploadID), nil
 }
 
 // GetUpload returns the Upload for the given upload id
-func (fs *eosfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
+func (fs *localfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
 	binPath, err := fs.getUploadPath(ctx, id)
 	if err != nil {
 		return nil, err
@@ -195,11 +207,22 @@ func (fs *eosfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) 
 
 	info.Offset = stat.Size()
 
+	u := &userpb.User{
+		Id: &userpb.UserId{
+			Idp:      info.Storage["Idp"],
+			OpaqueId: info.Storage["UserId"],
+		},
+		Username: info.Storage["UserName"],
+	}
+
+	ctx = user.ContextSetUser(ctx, u)
+
 	return &fileUpload{
 		info:     info,
 		binPath:  binPath,
 		infoPath: infoPath,
 		fs:       fs,
+		ctx:      ctx,
 	}, nil
 }
 
@@ -211,7 +234,9 @@ type fileUpload struct {
 	// binPath is the path to the binary file (which has no extension)
 	binPath string
 	// only fs knows how to handle metadata and versions
-	fs *eosfs
+	fs *localfs
+	// a context with a user
+	ctx context.Context
 }
 
 // GetInfo returns the FileInfo
@@ -225,7 +250,6 @@ func (upload *fileUpload) GetReader(ctx context.Context) (io.Reader, error) {
 }
 
 // WriteChunk writes the stream from the reader to the given offset of the upload
-// TODO use the grpc api to directly stream to a temporary uploads location in the eos shadow tree
 func (upload *fileUpload) WriteChunk(ctx context.Context, offset int64, src io.Reader) (int64, error) {
 	file, err := os.OpenFile(upload.binPath, os.O_WRONLY|os.O_APPEND, defaultFilePerm)
 	if err != nil {
@@ -263,51 +287,34 @@ func (upload *fileUpload) writeInfo() error {
 // FinishUpload finishes an upload and moves the file to the internal destination
 func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 
-	checksum := upload.info.MetaData["checksum"]
-	if checksum != "" {
-		// check checksum
-		s := strings.SplitN(checksum, " ", 2)
-		if len(s) == 2 {
-			alg, hash := s[0], s[1]
-
-			log := appctx.GetLogger(ctx)
-			log.Debug().
-				Interface("info", upload.info).
-				Str("alg", alg).
-				Str("hash", hash).
-				Msg("eos: TODO check checksum") // TODO this is done by eos if we write chunks to it directly
-
-		}
-	}
-	np := filepath.Join(upload.info.MetaData["dir"], upload.info.MetaData["filename"])
+	np := upload.info.Storage["InternalDestination"]
 
 	// TODO check etag with If-Match header
 	// if destination exists
 	//if _, err := os.Stat(np); err == nil {
-	// copy attributes of existing file to tmp file befor overwriting the target?
-	// eos creates revisions internally
+	// the local storage does not store metadata
+	// the fileid is based on the path, so no we do not need to copy it to the new file
+	// the local storage does not track revisions
 	//}
 
-	err := upload.fs.c.WriteFile(ctx, upload.info.Storage["Username"], np, upload.binPath)
+	// if destination exists
+	if _, err := os.Stat(np); err == nil {
+		// create revision
+		if err := upload.fs.archiveRevision(upload.ctx, np); err != nil {
+			return err
+		}
+	}
+
+	err := os.Rename(upload.binPath, np)
 
 	// only delete the upload if it was successfully written to eos
-	if err == nil {
-		// cleanup in the background, delete might take a while and we don't need to wait for it to finish
-		go func() {
-			if err := os.Remove(upload.infoPath); err != nil {
-				if !os.IsNotExist(err) {
-					log := appctx.GetLogger(ctx)
-					log.Err(err).Interface("info", upload.info).Msg("eos: could not delete upload info")
-				}
-			}
-			if err := os.Remove(upload.binPath); err != nil {
-				if !os.IsNotExist(err) {
-					log := appctx.GetLogger(ctx)
-					log.Err(err).Interface("info", upload.info).Msg("eos: could not delete upload binary")
-				}
-			}
-		}()
+	if err := os.Remove(upload.infoPath); err != nil {
+		log := appctx.GetLogger(ctx)
+		log.Err(err).Interface("info", upload.info).Msg("eos: could not delete upload info")
 	}
+
+	// TODO: set mtime if specified in metadata
+
 	// metadata propagation is left to the storage implementation
 	return err
 }
@@ -316,22 +323,18 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 // - the storage needs to implement AsTerminatableUpload
 // - the upload needs to implement Terminate
 
-// AsTerminatableUpload returnsa a TerminatableUpload
-func (fs *eosfs) AsTerminatableUpload(upload tusd.Upload) tusd.TerminatableUpload {
+// AsTerminatableUpload returns a a TerminatableUpload
+func (fs *localfs) AsTerminatableUpload(upload tusd.Upload) tusd.TerminatableUpload {
 	return upload.(*fileUpload)
 }
 
 // Terminate terminates the upload
 func (upload *fileUpload) Terminate(ctx context.Context) error {
 	if err := os.Remove(upload.infoPath); err != nil {
-		if !os.IsNotExist(err) {
-			return err
-		}
+		return err
 	}
 	if err := os.Remove(upload.binPath); err != nil {
-		if !os.IsNotExist(err) {
-			return err
-		}
+		return err
 	}
 	return nil
 }

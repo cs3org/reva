@@ -16,9 +16,9 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// +build windows
+// +build !windows
 
-package local
+package localfs
 
 import (
 	"context"
@@ -26,6 +26,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"strings"
+	"syscall"
 
 	"github.com/cs3org/reva/pkg/appctx"
 )
@@ -43,10 +45,22 @@ func calcEtag(ctx context.Context, fi os.FileInfo) string {
 	if err != nil {
 		log.Error().Err(err).Msg("error writing mtime")
 	}
-	// device and inode have no meaning on windows
+	stat, ok := fi.Sys().(*syscall.Stat_t)
+	if ok {
+		// take device and inode into account
+		err = binary.Write(h, binary.BigEndian, stat.Ino)
+		if err != nil {
+			log.Error().Err(err).Msg("error writing inode")
+		}
+		err = binary.Write(h, binary.BigEndian, stat.Dev)
+		if err != nil {
+			log.Error().Err(err).Msg("error writing device")
+		}
+	}
 	err = binary.Write(h, binary.BigEndian, fi.Size())
 	if err != nil {
 		log.Error().Err(err).Msg("error writing size")
 	}
-	return fmt.Sprintf(`"%x"`, h.Sum(nil))
+	etag := fmt.Sprintf(`"%x"`, h.Sum(nil))
+	return fmt.Sprintf("\"%s\"", strings.Trim(etag, "\""))
 }

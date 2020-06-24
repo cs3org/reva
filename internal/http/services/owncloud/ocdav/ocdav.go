@@ -34,7 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
-	"github.com/cs3org/reva/pkg/storage/templates"
+	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	ctxuser "github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
@@ -69,9 +69,7 @@ type Config struct {
 }
 
 func (c *Config) init() {
-	if c.Prefix == "" {
-		c.Prefix = "webdav"
-	}
+	// note: default c.Prefix is an empty string
 
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 

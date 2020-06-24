@@ -41,7 +41,7 @@ import (
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
-	"github.com/cs3org/reva/pkg/storage/templates"
+	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/gofrs/uuid"
 	"github.com/gomodule/redigo/redis"
@@ -957,6 +957,26 @@ func (fs *ocfs) CreateReference(ctx context.Context, path string, targetURI *url
 	return errtypes.NotSupported("ocfs: operation not supported")
 }
 
+func (fs *ocfs) setMtime(ctx context.Context, np string, mtimeString string) error {
+	log := appctx.GetLogger(ctx)
+	if mtime, err := parseMTime(mtimeString); err == nil {
+		// updating mtime also updates atime
+		if err := os.Chtimes(np, mtime, mtime); err != nil {
+			log.Error().Err(err).
+				Str("np", np).
+				Time("mtime", mtime).
+				Msg("could not set mtime")
+			return errors.Wrap(err, "could not set mtime")
+		}
+	} else {
+		log.Error().Err(err).
+			Str("np", np).
+			Str("mtimeString", mtimeString).
+			Msg("could not parse mtime")
+		return errors.Wrap(err, "could not parse mtime")
+	}
+	return nil
+}
 func (fs *ocfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) (err error) {
 	log := appctx.GetLogger(ctx)
 
@@ -978,21 +998,9 @@ func (fs *ocfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referenc
 
 	if md.Metadata != nil {
 		if val, ok := md.Metadata["mtime"]; ok {
-			if mtime, err := parseMTime(val); err == nil {
-				// updating mtime also updates atime
-				if err := os.Chtimes(np, mtime, mtime); err != nil {
-					log.Error().Err(err).
-						Str("np", np).
-						Time("mtime", mtime).
-						Msg("could not set mtime")
-					errs = append(errs, errors.Wrap(err, "could not set mtime"))
-				}
-			} else {
-				log.Error().Err(err).
-					Str("np", np).
-					Str("val", val).
-					Msg("could not parse mtime")
-				errs = append(errs, errors.Wrap(err, "could not parse mtime"))
+			err := fs.setMtime(ctx, np, val)
+			if err != nil {
+				errs = append(errs, errors.Wrap(err, "could not set mtime"))
 			}
 			// remove from metadata
 			delete(md.Metadata, "mtime")
@@ -1002,7 +1010,8 @@ func (fs *ocfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referenc
 		// TODO(jfd) any other metadata that is interesting? fileid?
 		if val, ok := md.Metadata["etag"]; ok {
 			etag := calcEtag(ctx, fi)
-			if etag == md.Metadata["etag"] {
+			val = fmt.Sprintf("\"%s\"", strings.Trim(val, "\""))
+			if etag == val {
 				log.Debug().
 					Str("np", np).
 					Str("etag", val).
