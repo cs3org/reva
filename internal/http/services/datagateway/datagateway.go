@@ -112,6 +112,9 @@ func (s *svc) setHandler() {
 		case "PUT":
 			s.doPut(w, r)
 			return
+		case "PATCH":
+			s.doPatch(w, r)
+			return
 		default:
 			w.WriteHeader(http.StatusNotImplemented)
 			return
@@ -243,5 +246,71 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 	_, err = io.Copy(w, httpRes.Body)
 	if err != nil {
 		log.Err(err).Msg("error writing body after header were set")
+	}
+}
+
+// TODO: put and post code is pretty much the same. Should be solved in a nicer way in the long run.
+func (s *svc) doPatch(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
+	claims, err := s.verify(ctx, r)
+	if err != nil {
+		err = errors.Wrap(err, "datagateway: error validating transfer token")
+		log.Err(err).Str("token", r.Header.Get(TokenTransportHeader)).Msg("invalid transfer token")
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
+	target := claims.Target
+	// add query params to target, clients can send checksums and other information.
+	targetURL, err := url.Parse(target)
+	if err != nil {
+		log.Err(err).Msg("datagateway: error parsing target url")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	targetURL.RawQuery = r.URL.RawQuery
+	target = targetURL.String()
+
+	log.Info().Str("target", claims.Target).Msg("sending request to internal data server")
+
+	httpClient := rhttp.GetHTTPClient(ctx)
+	httpReq, err := rhttp.NewRequest(ctx, "PATCH", target, r.Body)
+	if err != nil {
+		log.Err(err).Msg("wrong request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	httpReq.Header = r.Header
+
+	httpRes, err := httpClient.Do(httpReq)
+	if err != nil {
+		log.Err(err).Msg("error doing PATCH request to data service")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	copyHeader(w.Header(), httpRes.Header)
+
+	if httpRes.StatusCode != http.StatusOK {
+		w.WriteHeader(httpRes.StatusCode)
+		return
+	}
+
+	defer httpRes.Body.Close()
+	w.WriteHeader(http.StatusOK)
+	_, err = io.Copy(w, httpRes.Body)
+	if err != nil {
+		log.Err(err).Msg("error writing body after header were set")
+	}
+}
+
+func copyHeader(dst, src http.Header) {
+	for key, values := range src {
+		for i := range values {
+			dst.Add(key, values[i])
+		}
 	}
 }
