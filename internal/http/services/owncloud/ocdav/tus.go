@@ -156,9 +156,9 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 	// The DataGateway has to take care of pulling it back into the request header upon request arrival.
 	if uRes.Token != "" {
 		if !strings.HasSuffix(uRes.UploadEndpoint, "/") {
-			uRes.UploadEndpoint = uRes.UploadEndpoint + "/"
+			uRes.UploadEndpoint += "/"
 		}
-		uRes.UploadEndpoint = uRes.UploadEndpoint + uRes.Token
+		uRes.UploadEndpoint += uRes.Token
 	}
 
 	w.Header().Set("Location", uRes.UploadEndpoint)
