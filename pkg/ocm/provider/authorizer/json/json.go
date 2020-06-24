@@ -86,13 +86,17 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 }
 
 func (a *authorizer) IsProviderAllowed(ctx context.Context, user *userpb.User) error {
+
 	domainSplit := strings.Split(user.Mail, "@")
-	if len(domainSplit) != 2 {
-		return errtypes.NotSupported("Email " + user.Mail)
+	var userDomain string
+	if len(domainSplit) == 2 {
+		userDomain = domainSplit[1]
 	}
 
+	userIDP := user.Id.Idp
+
 	for _, p := range a.providers {
-		if strings.Contains(p.Domain, domainSplit[1]) {
+		if (userDomain != "" && strings.Contains(p.Domain, userDomain)) || (userIDP != "" && p.Domain == userIDP) {
 			return nil
 		}
 	}
