@@ -28,6 +28,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -133,6 +134,31 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 	return s.initiateFileDownload(ctx, req)
 }
 
+func (s *service) translatePublicRefToCS3Ref(ctx context.Context, ref *provider.Reference) (*provider.Reference, string, error) {
+	log := appctx.GetLogger(ctx)
+	tkn, relativePath, err := s.unwrap(ctx, ref)
+	if err != nil {
+		return nil, "", err
+	}
+
+	originalPath, err := s.pathFromToken(ctx, tkn)
+	if err != nil {
+		return nil, "", err
+	}
+
+	cs3Ref := &provider.Reference{
+		Spec: &provider.Reference_Path{Path: path.Join("/", originalPath, relativePath)},
+	}
+	log.Debug().
+		Interface("sourceRef", ref).
+		Interface("cs3Ref", cs3Ref).
+		Str("tkn", tkn).
+		Str("originalPath", originalPath).
+		Str("relativePath", relativePath).
+		Msg("translatePublicRefToCS3Ref")
+	return cs3Ref, tkn, nil
+}
+
 // Both, t.dir and tokenPath paths need to be merged:
 // tokenPath   = /oc/einstein/public-links
 // t.dir       = /public/ausGxuUePCOi/foldera/folderb/
@@ -141,20 +167,12 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 // end         = /einstein/files/public-links/foldera/folderb/
 
 func (s *service) initiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*provider.InitiateFileDownloadResponse, error) {
-	tkn, relativePath, err := s.unwrap(ctx, req.Ref)
+	cs3Ref, _, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
 	if err != nil {
 		return nil, err
 	}
-
-	originalPath, err := s.pathFromToken(ctx, tkn)
-	if err != nil {
-		return nil, err
-	}
-
 	dReq := &provider.InitiateFileDownloadRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{Path: path.Join("/", originalPath, relativePath)},
-		},
+		Ref: cs3Ref,
 	}
 
 	dRes, err := s.gateway.InitiateFileDownload(ctx, dReq)
@@ -179,20 +197,12 @@ func (s *service) initiateFileDownload(ctx context.Context, req *provider.Initia
 }
 
 func (s *service) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*provider.InitiateFileUploadResponse, error) {
-	tkn, relativePath, err := s.unwrap(ctx, req.Ref)
+	cs3Ref, _, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
 	if err != nil {
 		return nil, err
 	}
-
-	originalPath, err := s.pathFromToken(ctx, tkn)
-	if err != nil {
-		return nil, err
-	}
-
 	uReq := &provider.InitiateFileUploadRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{Path: path.Join("/", originalPath, relativePath)},
-		},
+		Ref:    cs3Ref,
 		Opaque: req.Opaque,
 	}
 
@@ -240,12 +250,7 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 		trace.StringAttribute("ref", req.Ref.String()),
 	)
 
-	tkn, relativePath, err := s.unwrap(ctx, req.Ref)
-	if err != nil {
-		return nil, err
-	}
-
-	pathFromToken, err := s.pathFromToken(ctx, tkn)
+	cs3Ref, _, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
 	if err != nil {
 		return nil, err
 	}
@@ -253,12 +258,13 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 	var res *provider.CreateContainerResponse
 	// the call has to be made to the gateway instead of the storage.
 	res, err = s.gateway.CreateContainer(ctx, &provider.CreateContainerRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: path.Join("/", pathFromToken, relativePath),
-			},
-		},
+		Ref: cs3Ref,
 	})
+	if err != nil {
+		return &provider.CreateContainerResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error calling CreateContainer for ref:"+req.Ref.String()),
+		}, nil
+	}
 	if res.Status.Code == rpc.Code_CODE_INTERNAL {
 		return res, nil
 	}
@@ -274,12 +280,7 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 		trace.StringAttribute("ref", req.Ref.String()),
 	)
 
-	tkn, relativePath, err := s.unwrap(ctx, req.Ref)
-	if err != nil {
-		return nil, err
-	}
-
-	pathFromToken, err := s.pathFromToken(ctx, tkn)
+	cs3Ref, _, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
 	if err != nil {
 		return nil, err
 	}
@@ -287,12 +288,13 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 	var res *provider.DeleteResponse
 	// the call has to be made to the gateway instead of the storage.
 	res, err = s.gateway.Delete(ctx, &provider.DeleteRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: path.Join("/", pathFromToken, relativePath),
-			},
-		},
+		Ref: cs3Ref,
 	})
+	if err != nil {
+		return &provider.DeleteResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error calling Delete for ref:"+req.Ref.String()),
+		}, nil
+	}
 	if res.Status.Code == rpc.Code_CODE_INTERNAL {
 		return res, nil
 	}
@@ -309,12 +311,12 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 		trace.StringAttribute("destination", req.Destination.String()),
 	)
 
-	tknSource, relativePathSource, err := s.unwrap(ctx, req.Source)
+	cs3RefSource, tknSource, err := s.translatePublicRefToCS3Ref(ctx, req.Source)
 	if err != nil {
 		return nil, err
 	}
-
-	tknDest, relativePathDest, err := s.unwrap(ctx, req.Destination)
+	// FIXME: maybe there's a shortcut possible here using the source path
+	cs3RefDestination, tknDest, err := s.translatePublicRefToCS3Ref(ctx, req.Destination)
 	if err != nil {
 		return nil, err
 	}
@@ -325,31 +327,17 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 		}, nil
 	}
 
-	originalPathSource, err := s.pathFromToken(ctx, tknSource)
-	if err != nil {
-		return nil, err
-	}
-
-	// FIXME: maybe there's a shortcut possible here using the source path
-	originalPathDest, err := s.pathFromToken(ctx, tknDest)
-	if err != nil {
-		return nil, err
-	}
-
 	var res *provider.MoveResponse
 	// the call has to be made to the gateway instead of the storage.
 	res, err = s.gateway.Move(ctx, &provider.MoveRequest{
-		Source: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: path.Join("/", originalPathSource, relativePathSource),
-			},
-		},
-		Destination: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: path.Join("/", originalPathDest, relativePathDest),
-			},
-		},
+		Source:      cs3RefSource,
+		Destination: cs3RefDestination,
 	})
+	if err != nil {
+		return &provider.MoveResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error calling Move for source ref "+req.Source.String()+" to destination ref "+req.Destination.String()),
+		}, nil
+	}
 	if res.Status.Code == rpc.Code_CODE_INTERNAL {
 		return res, nil
 	}
@@ -385,6 +373,11 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 			},
 		},
 	})
+	if err != nil {
+		return &provider.StatResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error calling Stat for ref:"+req.Ref.String()),
+		}, nil
+	}
 	if statResponse.Status.Code == rpc.Code_CODE_INTERNAL {
 		// the shared resource is a file, return the original error
 		// or ovewrite statResponse
@@ -445,7 +438,9 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		},
 	)
 	if err != nil {
-		return nil, err
+		return &provider.ListContainerResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error calling ListContainer for ref:"+req.Ref.String()),
+		}, nil
 	}
 
 	for i := range listContainerR.Infos {
