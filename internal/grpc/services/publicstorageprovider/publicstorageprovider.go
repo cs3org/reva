@@ -260,6 +260,11 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 	res, err = s.gateway.CreateContainer(ctx, &provider.CreateContainerRequest{
 		Ref: cs3Ref,
 	})
+	if err != nil {
+		return &provider.CreateContainerResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error calling CreateContainer for ref:"+req.Ref.String()),
+		}, nil
+	}
 	if res.Status.Code == rpc.Code_CODE_INTERNAL {
 		return res, nil
 	}
@@ -285,6 +290,11 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 	res, err = s.gateway.Delete(ctx, &provider.DeleteRequest{
 		Ref: cs3Ref,
 	})
+	if err != nil {
+		return &provider.DeleteResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error calling Delete for ref:"+req.Ref.String()),
+		}, nil
+	}
 	if res.Status.Code == rpc.Code_CODE_INTERNAL {
 		return res, nil
 	}
@@ -323,6 +333,11 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 		Source:      cs3RefSource,
 		Destination: cs3RefDestination,
 	})
+	if err != nil {
+		return &provider.MoveResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error calling Move for source ref "+req.Source.String()+" to destination ref "+req.Destination.String()),
+		}, nil
+	}
 	if res.Status.Code == rpc.Code_CODE_INTERNAL {
 		return res, nil
 	}
@@ -358,6 +373,11 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 			},
 		},
 	})
+	if err != nil {
+		return &provider.StatResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error calling Stat for ref:"+req.Ref.String()),
+		}, nil
+	}
 	if statResponse.Status.Code == rpc.Code_CODE_INTERNAL {
 		// the shared resource is a file, return the original error
 		// or ovewrite statResponse
@@ -418,7 +438,9 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		},
 	)
 	if err != nil {
-		return nil, err
+		return &provider.ListContainerResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error calling ListContainer for ref:"+req.Ref.String()),
+		}, nil
 	}
 
 	for i := range listContainerR.Infos {
