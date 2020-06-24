@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -125,7 +126,14 @@ func addCorsHeader(res http.ResponseWriter) {
 	headers.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, HEAD")
 }
 
-func (s *svc) verify(ctx context.Context, token string) (*transferClaims, error) {
+func (s *svc) verify(ctx context.Context, r *http.Request) (*transferClaims, error) {
+	// Extract transfer token from request header. If not existing, assume that it's the last path segment instead.
+	token := r.Header.Get(TokenTransportHeader)
+	if token == "" {
+		token = path.Base(r.URL.Path)
+		r.Header.Set(TokenTransportHeader, token)
+	}
+
 	j, err := jwt.ParseWithClaims(token, &transferClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(s.conf.TransferSharedSecret), nil
 	})
@@ -146,11 +154,10 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	token := r.Header.Get(TokenTransportHeader)
-	claims, err := s.verify(ctx, token)
+	claims, err := s.verify(ctx, r)
 	if err != nil {
 		err = errors.Wrap(err, "datagateway: error validating transfer token")
-		log.Err(err)
+		log.Err(err).Str("token", r.Header.Get(TokenTransportHeader)).Msg("invalid transfer token")
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
@@ -189,11 +196,10 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	token := r.Header.Get(TokenTransportHeader)
-	claims, err := s.verify(ctx, token)
+	claims, err := s.verify(ctx, r)
 	if err != nil {
 		err = errors.Wrap(err, "datagateway: error validating transfer token")
-		log.Err(err).Str("token", token).Msg("invalid token")
+		log.Err(err).Str("token", r.Header.Get(TokenTransportHeader)).Msg("invalid transfer token")
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
