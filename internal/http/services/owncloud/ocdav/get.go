@@ -19,12 +19,13 @@
 package ocdav
 
 import (
-	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"io"
 	"net/http"
 	"path"
 	"strconv"
 	"time"
+
+	"github.com/cs3org/reva/internal/http/services/datagateway"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
