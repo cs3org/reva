@@ -110,12 +110,19 @@ func (exporter *PrometheusFileSDExporter) createScrapeConfigs() []*prometheus.Sc
 }
 
 func (exporter *PrometheusFileSDExporter) createScrapeConfig(site *meshdata.Site, host string, endpoint *meshdata.ServiceEndpoint) *prometheus.ScrapeConfig {
+	labels := map[string]string{
+		"site":         site.Name,
+		"service_type": endpoint.Type.Name,
+	}
+
+	// If a metrics path was specified as a property, use that one by setting the corresponding label
+	if metricsPath := endpoint.GetPropertyValue(config.PropertyMetricsPath, ""); len(metricsPath) > 0 {
+		labels["__metrics_path__"] = metricsPath
+	}
+
 	return &prometheus.ScrapeConfig{
 		Targets: []string{host},
-		Labels: map[string]string{
-			"site":         site.Name,
-			"service_type": endpoint.Type.Name,
-		},
+		Labels:  labels,
 	}
 }
 
