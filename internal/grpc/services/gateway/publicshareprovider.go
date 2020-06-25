@@ -64,7 +64,6 @@ func (s *svc) GetPublicShareByToken(ctx context.Context, req *link.GetPublicShar
 		return nil, err
 	}
 
-	// TODO the double call is not here
 	res, err := driver.GetPublicShareByToken(ctx, req)
 	if err != nil {
 		return nil, err
