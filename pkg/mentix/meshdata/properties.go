@@ -16,22 +16,22 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package provider
+package meshdata
 
-import (
-	"context"
+import "strings"
 
-	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+const (
+	PropertyOrganization = "organization"
+	PropertyMetricsPath  = "metrics_path"
 )
 
-// Authorizer provides provisions to verify and add sync'n'share system providers.
-type Authorizer interface {
-	// GetInfoByDomain returns the information of the provider identified by a specific domain.
-	GetInfoByDomain(ctx context.Context, domain string) (*ocmprovider.ProviderInfo, error)
+// GetPropertyValue performs a case-insensitive search for the given property.
+func GetPropertyValue(props map[string]string, id string, defValue string) string {
+	for key := range props {
+		if strings.EqualFold(key, id) {
+			return props[key]
+		}
+	}
 
-	// IsProviderAllowed checks if a given system provider is integrated into the OCM or not.
-	IsProviderAllowed(ctx context.Context, provider *ocmprovider.ProviderInfo) error
-
-	// ListAllProviders returns the information of all the providers registered in the mesh.
-	ListAllProviders(ctx context.Context) ([]*ocmprovider.ProviderInfo, error)
+	return defValue
 }

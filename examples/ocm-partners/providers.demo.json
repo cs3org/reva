@@ -26,7 +26,7 @@
 		"name": "oc-cesnet",
 		"full_name": "ownCloud@CESNET",
 		"organization": "CESNET",
-		"domain": "http://cesnet.cz",
+		"domain": "https://cesnet.cz",
 		"homepage": "https://owncloud.cesnet.cz",
 		"description": "OwnCloud has been designed for individual users.",
 		"services": [

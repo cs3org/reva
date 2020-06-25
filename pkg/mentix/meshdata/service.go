@@ -36,7 +36,7 @@ type ServiceType struct {
 type ServiceEndpoint struct {
 	Type        *ServiceType
 	Name        string
-	Path        string
+	URL         string
 	IsMonitored bool
 	Properties  map[string]string
 }
