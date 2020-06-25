@@ -18,7 +18,11 @@
 
 package utils
 
-import "strings"
+import (
+	"net"
+	"net/http"
+	"strings"
+)
 
 // Skip  evaluates whether a source endpoint contains any of the prefixes.
 // i.e: /a/b/c/d/e contains prefix /a/b/c
@@ -29,4 +33,25 @@ func Skip(source string, prefixes []string) bool {
 		}
 	}
 	return false
+}
+
+// GetDomainsFromRequest retrieves the client IP from an incoming requests
+func GetDomainsFromRequest(r *http.Request) ([]string, error) {
+	var clientIP string
+	forwarded := r.Header.Get("X-FORWARDED-FOR")
+
+	if forwarded != "" {
+		clientIP = forwarded
+	} else {
+		ip, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			return []string{}, err
+		}
+		clientIP = ip
+	}
+	clientDomains, err := net.LookupAddr(clientIP)
+	if err != nil {
+		return []string{}, err
+	}
+	return clientDomains, nil
 }
