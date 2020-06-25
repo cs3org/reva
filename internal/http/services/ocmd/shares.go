@@ -27,6 +27,7 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmcore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
+	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -74,6 +75,20 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 	}
 	if shareWith == "" || protocol == "" || meshProvider == "" {
 		WriteError(w, r, APIErrorInvalidParameter, "missing request parameters", nil)
+		return
+	}
+
+	providerAllowedResp, err := gatewayClient.IsProviderAllowed(ctx, &ocmprovider.IsProviderAllowedRequest{
+		Provider: &ocmprovider.ProviderInfo{
+			Domain: meshProvider,
+		},
+	})
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, "error authorizing provider", err)
+		return
+	}
+	if providerAllowedResp.Status.Code != rpc.Code_CODE_OK {
+		WriteError(w, r, APIErrorUnauthenticated, "provider not authorized", err)
 		return
 	}
 
@@ -131,14 +146,15 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ownerID := &userpb.UserId{
+		OpaqueId: owner,
+		Idp:      meshProvider,
+	}
 	createShareReq := &ocmcore.CreateOCMCoreShareRequest{
 		Name:       resource,
 		ProviderId: providerID,
-		Owner: &userpb.UserId{
-			OpaqueId: owner,
-			Idp:      meshProvider,
-		},
-		ShareWith: userRes.User.GetId(),
+		Owner:      ownerID,
+		ShareWith:  userRes.User.GetId(),
 		Protocol: &ocmcore.Protocol{
 			Name: protocolDecoded["name"].(string),
 			Opaque: &types.Opaque{
