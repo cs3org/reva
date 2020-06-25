@@ -20,6 +20,7 @@ package rhttp
 
 import (
 	"context"
+	"crypto/tls"
 	"io"
 	"net/http"
 	"time"
@@ -34,8 +35,15 @@ import (
 // https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779
 func GetHTTPClient(ctx context.Context) *http.Client {
 	httpClient := &http.Client{
-		Timeout:   time.Second * 10,
-		Transport: &ochttp.Transport{},
+		Timeout: time.Second * 10,
+		Transport: &ochttp.Transport{
+			Base: &http.Transport{
+				// TODO: make TLS config configurable
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: true,
+				},
+			},
+		},
 	}
 	return httpClient
 }
