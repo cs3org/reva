@@ -18,8 +18,6 @@
 
 package meshdata
 
-import "strings"
-
 // Service represents a service managed by Mentix.
 type Service struct {
 	ServiceEndpoint
@@ -38,18 +36,7 @@ type ServiceType struct {
 type ServiceEndpoint struct {
 	Type        *ServiceType
 	Name        string
-	Path        string
+	URL         string
 	IsMonitored bool
 	Properties  map[string]string
-}
-
-// GetPropertyValue performs a case-insensitive search for the given property.
-func (endpoint *ServiceEndpoint) GetPropertyValue(id string, defValue string) string {
-	for key := range endpoint.Properties {
-		if strings.EqualFold(key, id) {
-			return endpoint.Properties[key]
-		}
-	}
-
-	return defValue
 }
