@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/utils"
 )
 
 type invitesHandler struct {
@@ -163,10 +164,23 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	clientDomains, err := utils.GetDomainsFromRequest(r)
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error looking up hostname for client IP"), err)
+		return
+	}
+
+	providerInfo := ocmprovider.ProviderInfo{
+		Domain: recipientProvider,
+	}
+	for _, domain := range clientDomains {
+		providerInfo.Services = append(providerInfo.Services, &ocmprovider.Service{
+			Host: domain,
+		})
+	}
+
 	providerAllowedResp, err := gatewayClient.IsProviderAllowed(ctx, &ocmprovider.IsProviderAllowedRequest{
-		Provider: &ocmprovider.ProviderInfo{
-			Domain: recipientProvider,
-		},
+		Provider: &providerInfo,
 	})
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error authorizing provider", err)

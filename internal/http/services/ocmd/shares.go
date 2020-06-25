@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/utils"
 )
 
 type sharesHandler struct {
@@ -60,12 +61,6 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting storage grpc client on addr: %v", h.gatewayAddr), err)
-		return
-	}
-
 	shareWith, protocol, meshProvider := r.FormValue("shareWith"), r.FormValue("protocol"), r.FormValue("meshProvider")
 	resource, providerID, owner := r.FormValue("name"), r.FormValue("providerId"), r.FormValue("owner")
 
@@ -78,10 +73,29 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting storage grpc client on addr: %v", h.gatewayAddr), err)
+		return
+	}
+
+	clientDomains, err := utils.GetDomainsFromRequest(r)
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error looking up hostname for client IP"), err)
+		return
+	}
+
+	providerInfo := ocmprovider.ProviderInfo{
+		Domain: meshProvider,
+	}
+	for _, domain := range clientDomains {
+		providerInfo.Services = append(providerInfo.Services, &ocmprovider.Service{
+			Host: domain,
+		})
+	}
+
 	providerAllowedResp, err := gatewayClient.IsProviderAllowed(ctx, &ocmprovider.IsProviderAllowedRequest{
-		Provider: &ocmprovider.ProviderInfo{
-			Domain: meshProvider,
-		},
+		Provider: &providerInfo,
 	})
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error authorizing provider", err)

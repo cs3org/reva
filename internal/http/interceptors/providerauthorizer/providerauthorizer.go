@@ -84,9 +84,21 @@ func New(m map[string]interface{}, unprotected []string, ocmPrefix string) (glob
 			}
 
 			userAuth := user.ContextMustGetUser(ctx)
-			err = authorizer.IsProviderAllowed(ctx, &ocmprovider.ProviderInfo{
+			clientDomains, err := utils.GetDomainsFromRequest(r)
+			if err != nil {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+
+			providerInfo := ocmprovider.ProviderInfo{
 				Domain: userAuth.Id.Idp,
-			})
+			}
+			for _, domain := range clientDomains {
+				providerInfo.Services = append(providerInfo.Services, &ocmprovider.Service{
+					Host: domain,
+				})
+			}
+			err = authorizer.IsProviderAllowed(ctx, &providerInfo)
 			if err != nil {
 				log.Error().Err(err).Msg("provider not registered in OCM")
 				w.WriteHeader(http.StatusUnauthorized)
