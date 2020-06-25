@@ -116,7 +116,7 @@ func (exporter *PrometheusFileSDExporter) createScrapeConfig(site *meshdata.Site
 	}
 
 	// If a metrics path was specified as a property, use that one by setting the corresponding label
-	if metricsPath := endpoint.GetPropertyValue(config.PropertyMetricsPath, ""); len(metricsPath) > 0 {
+	if metricsPath := meshdata.GetPropertyValue(endpoint.Properties, meshdata.PropertyMetricsPath, ""); len(metricsPath) > 0 {
 		labels["__metrics_path__"] = metricsPath
 	}
 

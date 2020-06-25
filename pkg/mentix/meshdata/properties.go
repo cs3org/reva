@@ -16,13 +16,22 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package config
+package meshdata
+
+import "strings"
 
 const (
-	ConnectorIDGOCDB = "gocdb"
+	PropertyOrganization = "organization"
+	PropertyMetricsPath  = "metrics_path"
 )
 
-const (
-	ExporterIDWebAPI           = "webapi"
-	ExporterIDPrometheusFileSD = "prom_filesd"
-)
+// GetPropertyValue performs a case-insensitive search for the given property.
+func GetPropertyValue(props map[string]string, id string, defValue string) string {
+	for key := range props {
+		if strings.EqualFold(key, id) {
+			return props[key]
+		}
+	}
+
+	return defValue
+}

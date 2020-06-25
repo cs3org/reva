@@ -121,16 +121,21 @@ func (connector *GOCDBConnector) querySites(meshData *meshdata.MeshData) error {
 	// Copy retrieved data into the mesh data
 	meshData.Sites = nil
 	for _, site := range sites.Sites {
+		properties := connector.extensionsToMap(&site.Extensions)
+
+		// See if an organization has been defined using properties; otherwise, use the official name
+		organization := meshdata.GetPropertyValue(properties, meshdata.PropertyOrganization, site.OfficialName)
+
 		meshsite := &meshdata.Site{
 			Name:         site.ShortName,
 			FullName:     site.OfficialName,
-			Organization: "",
+			Organization: organization,
 			Domain:       site.Domain,
 			Homepage:     site.Homepage,
 			Email:        site.Email,
 			Description:  site.Description,
 			Services:     nil,
-			Properties:   connector.extensionsToMap(&site.Extensions),
+			Properties:   properties,
 		}
 		meshData.Sites = append(meshData.Sites, meshsite)
 	}
