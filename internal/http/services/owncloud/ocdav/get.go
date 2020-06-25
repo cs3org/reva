@@ -25,6 +25,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/cs3org/reva/internal/http/services/datagateway"
+
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/utils"
@@ -103,7 +105,7 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	httpReq.Header.Set("X-Reva-Transfer", dRes.Token)
+	httpReq.Header.Set(datagateway.TokenTransportHeader, dRes.Token)
 	httpClient := rhttp.GetHTTPClient(ctx)
 
 	httpRes, err := httpClient.Do(httpReq)

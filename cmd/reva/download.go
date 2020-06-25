@@ -24,6 +24,8 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/cs3org/reva/internal/http/services/datagateway"
+
 	"github.com/cheggaaa/pb"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -89,7 +91,7 @@ func downloadCommand() *command {
 			return err
 		}
 
-		httpReq.Header.Set("X-Reva-Transfer", res.Token)
+		httpReq.Header.Set(datagateway.TokenTransportHeader, res.Token)
 		httpClient := rhttp.GetHTTPClient(ctx)
 
 		httpRes, err := httpClient.Do(httpReq)
