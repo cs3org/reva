@@ -163,16 +163,10 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userObj := &userpb.User{
-		Id: &userpb.UserId{
-			OpaqueId: userID,
-			Idp:      recipientProvider,
-		},
-		Mail:        email,
-		DisplayName: name,
-	}
 	providerAllowedResp, err := gatewayClient.IsProviderAllowed(ctx, &ocmprovider.IsProviderAllowedRequest{
-		User: userObj,
+		Provider: &ocmprovider.ProviderInfo{
+			Domain: recipientProvider,
+		},
 	})
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error authorizing provider", err)
@@ -183,6 +177,14 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userObj := &userpb.User{
+		Id: &userpb.UserId{
+			OpaqueId: userID,
+			Idp:      recipientProvider,
+		},
+		Mail:        email,
+		DisplayName: name,
+	}
 	acceptInviteRequest := &invitepb.AcceptInviteRequest{
 		InviteToken: &invitepb.InviteToken{
 			Token: token,

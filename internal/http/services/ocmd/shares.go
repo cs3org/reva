@@ -78,13 +78,9 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ownerID := &userpb.UserId{
-		OpaqueId: owner,
-		Idp:      meshProvider,
-	}
 	providerAllowedResp, err := gatewayClient.IsProviderAllowed(ctx, &ocmprovider.IsProviderAllowedRequest{
-		User: &userpb.User{
-			Id: ownerID,
+		Provider: &ocmprovider.ProviderInfo{
+			Domain: meshProvider,
 		},
 	})
 	if err != nil {
@@ -150,6 +146,10 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ownerID := &userpb.UserId{
+		OpaqueId: owner,
+		Idp:      meshProvider,
+	}
 	createShareReq := &ocmcore.CreateOCMCoreShareRequest{
 		Name:       resource,
 		ProviderId: providerID,

@@ -24,7 +24,6 @@ import (
 	"io/ioutil"
 	"strings"
 
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/provider"
@@ -85,23 +84,14 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 	return nil, errtypes.NotFound(domain)
 }
 
-func (a *authorizer) IsProviderAllowed(ctx context.Context, user *userpb.User) error {
-
-	domainSplit := strings.Split(user.Mail, "@")
-	var userDomain string
-	if len(domainSplit) == 2 {
-		userDomain = domainSplit[1]
-	}
-
-	userIDP := user.Id.Idp
+func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovider.ProviderInfo) error {
 
 	for _, p := range a.providers {
-		if (userDomain != "" && strings.Contains(p.Domain, userDomain)) || (userIDP != "" && p.Domain == userIDP) {
+		if p.Domain == provider.GetDomain() {
 			return nil
 		}
 	}
-
-	return errtypes.NotFound(domainSplit[1])
+	return errtypes.NotFound(provider.GetDomain())
 }
 
 func (a *authorizer) ListAllProviders(ctx context.Context) ([]*ocmprovider.ProviderInfo, error) {

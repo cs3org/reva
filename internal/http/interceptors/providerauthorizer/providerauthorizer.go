@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net/http"
 
+	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/ocm/provider"
 	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
@@ -83,7 +84,9 @@ func New(m map[string]interface{}, unprotected []string, ocmPrefix string) (glob
 			}
 
 			userAuth := user.ContextMustGetUser(ctx)
-			err = authorizer.IsProviderAllowed(ctx, userAuth)
+			err = authorizer.IsProviderAllowed(ctx, &ocmprovider.ProviderInfo{
+				Domain: userAuth.Id.Idp,
+			})
 			if err != nil {
 				log.Error().Err(err).Msg("provider not registered in OCM")
 				w.WriteHeader(http.StatusUnauthorized)

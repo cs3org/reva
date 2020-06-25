@@ -21,7 +21,6 @@ package provider
 import (
 	"context"
 
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 )
 
@@ -31,7 +30,7 @@ type Authorizer interface {
 	GetInfoByDomain(ctx context.Context, domain string) (*ocmprovider.ProviderInfo, error)
 
 	// IsProviderAllowed checks if a given system provider is integrated into the OCM or not.
-	IsProviderAllowed(ctx context.Context, user *userpb.User) error
+	IsProviderAllowed(ctx context.Context, provider *ocmprovider.ProviderInfo) error
 
 	// ListAllProviders returns the information of all the providers registered in the mesh.
 	ListAllProviders(ctx context.Context) ([]*ocmprovider.ProviderInfo, error)
