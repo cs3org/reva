@@ -18,25 +18,20 @@
 
 package meshdata
 
-// Service represents a service managed by Mentix.
-type Service struct {
-	ServiceEndpoint
+import "strings"
 
-	Host                string
-	AdditionalEndpoints []*ServiceEndpoint
-}
+const (
+	PropertyOrganization = "organization"
+	PropertyMetricsPath  = "metrics_path"
+)
 
-// ServiceType represents a service type managed by Mentix.
-type ServiceType struct {
-	Name        string
-	Description string
-}
+// GetPropertyValue performs a case-insensitive search for the given property.
+func GetPropertyValue(props map[string]string, id string, defValue string) string {
+	for key := range props {
+		if strings.EqualFold(key, id) {
+			return props[key]
+		}
+	}
 
-// ServiceEndpoint represents a service endpoint managed by Mentix.
-type ServiceEndpoint struct {
-	Type        *ServiceType
-	Name        string
-	URL         string
-	IsMonitored bool
-	Properties  map[string]string
+	return defValue
 }

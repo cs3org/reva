@@ -22,6 +22,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"net/url"
+	"path"
 	"strings"
 
 	"github.com/rs/zerolog"
@@ -121,16 +122,21 @@ func (connector *GOCDBConnector) querySites(meshData *meshdata.MeshData) error {
 	// Copy retrieved data into the mesh data
 	meshData.Sites = nil
 	for _, site := range sites.Sites {
+		properties := connector.extensionsToMap(&site.Extensions)
+
+		// See if an organization has been defined using properties; otherwise, use the official name
+		organization := meshdata.GetPropertyValue(properties, meshdata.PropertyOrganization, site.OfficialName)
+
 		meshsite := &meshdata.Site{
 			Name:         site.ShortName,
 			FullName:     site.OfficialName,
-			Organization: "",
+			Organization: organization,
 			Domain:       site.Domain,
 			Homepage:     site.Homepage,
 			Email:        site.Email,
 			Description:  site.Description,
 			Services:     nil,
-			Properties:   connector.extensionsToMap(&site.Extensions),
+			Properties:   properties,
 		}
 		meshData.Sites = append(meshData.Sites, meshsite)
 	}
@@ -142,6 +148,14 @@ func (connector *GOCDBConnector) queryServices(meshData *meshdata.MeshData, site
 	var services gocdb.Services
 	if err := connector.query(&services, "get_service", false, true, network.URLParams{"sitename": site.Name}); err != nil {
 		return err
+	}
+
+	getServiceURLString := func(service *gocdb.Service, endpoint *gocdb.ServiceEndpoint, host string) string {
+		urlstr := "https://" + host // Fall back to the provided hostname
+		if svcURL, err := connector.getServiceURL(service, endpoint); err == nil {
+			urlstr = svcURL.String()
+		}
+		return urlstr
 	}
 
 	// Copy retrieved data into the mesh data
@@ -164,7 +178,7 @@ func (connector *GOCDBConnector) queryServices(meshData *meshdata.MeshData, site
 			endpoints = append(endpoints, &meshdata.ServiceEndpoint{
 				Type:        connector.findServiceType(meshData, endpoint.Type),
 				Name:        endpoint.Name,
-				Path:        endpoint.URL,
+				URL:         getServiceURLString(service, endpoint, host),
 				IsMonitored: strings.EqualFold(endpoint.IsMonitored, "Y"),
 				Properties:  connector.extensionsToMap(&endpoint.Extensions),
 			})
@@ -175,7 +189,7 @@ func (connector *GOCDBConnector) queryServices(meshData *meshdata.MeshData, site
 			ServiceEndpoint: meshdata.ServiceEndpoint{
 				Type:        connector.findServiceType(meshData, service.Type),
 				Name:        fmt.Sprintf("%v - %v", service.Host, service.Type),
-				Path:        "",
+				URL:         getServiceURLString(service, nil, host),
 				IsMonitored: strings.EqualFold(service.IsMonitored, "Y"),
 				Properties:  connector.extensionsToMap(&service.Extensions),
 			},
@@ -204,6 +218,36 @@ func (connector *GOCDBConnector) extensionsToMap(extensions *gocdb.Extensions) m
 		properties[ext.Key] = ext.Value
 	}
 	return properties
+}
+
+func (connector *GOCDBConnector) getServiceURL(service *gocdb.Service, endpoint *gocdb.ServiceEndpoint) (*url.URL, error) {
+	urlstr := service.URL
+	if len(urlstr) == 0 {
+		// The URL defaults to the hostname using the HTTPS protocol
+		urlstr = "https://" + service.Host
+	}
+
+	svcURL, err := url.ParseRequestURI(urlstr)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse URL '%v': %v", urlstr, err)
+	}
+
+	// If an endpoint was provided, use its path
+	if endpoint != nil {
+		// If the endpoint URL is an absolute one, just use that; otherwise, make an absolute one out of it
+		if endpointURL, err := url.ParseRequestURI(endpoint.URL); err == nil && len(endpointURL.Scheme) > 0 {
+			svcURL = endpointURL
+		} else {
+			// Replace entire URL path if the relative path starts with a slash; otherwise, just append
+			if strings.HasPrefix(endpoint.URL, "/") {
+				svcURL.Path = endpoint.URL
+			} else {
+				svcURL.Path = path.Join(svcURL.Path, endpoint.URL)
+			}
+		}
+	}
+
+	return svcURL, nil
 }
 
 func (connector *GOCDBConnector) GetName() string {

@@ -26,7 +26,3 @@ const (
 	ExporterIDWebAPI           = "webapi"
 	ExporterIDPrometheusFileSD = "prom_filesd"
 )
-
-const (
-	PropertyMetricsPath = "metrics_path"
-)
