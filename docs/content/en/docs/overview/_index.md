@@ -16,7 +16,7 @@ Reva is an open source platform developed in the Go programming language with tw
 #### The problem  we try to solve
 
 Today any cloud sync and share provider either closed-source (Dropbox, Google Drive, ...) or open source (ownCloud, Seafile, ...) have their own catalogue
-of integrations with many applicaition providers. The pitty about these integrations is that they are ad-hoc to the cloud vendor, making it impossible to port
+of integrations with many application providers. The pity about these integrations is that they are ad-hoc to the cloud vendor, making it impossible to port
 anywhere else.
 
 {{< imgproc "overview.png" Fit "800x600" >}}
@@ -39,7 +39,7 @@ In the mean time, we have another approach to make these systems talk to each ot
 
 The motivation is to move out the ad-hoc APIs from the sync and share platform to Reva. As Reva is a vendor-neutral and open source
 project we expect that many institutions and application providers will contribute with their ad-hoc APIs to Reva, creating an inter-operability platform
-that could potencially connect to an eco-system of applications and storage catalogs as never seen before.
+that could potentially connect to an eco-system of applications and storage catalogs as never seen before.
 
 The platform acts as middleware component in your current infrastructure, and by connecting your cloud to Reva you gain access
 to multiple storage backends and multiple integrations with many application providers.
@@ -63,4 +63,4 @@ and applications. We don't want to re-invent the wheel so we have in mind that R
 ## Where should I go next?
 
 * [Getting Started]({{< ref "docs/getting-started" >}}): Get started with the project
-* [Concepts]({{< ref "docs/concepts" >}}): Deep-dive into the conceps behind Reva
+* [Concepts]({{< ref "docs/concepts" >}}): Deep-dive into the concepts behind Reva

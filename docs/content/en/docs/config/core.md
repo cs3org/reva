@@ -7,7 +7,7 @@ description: >
 ---
 
 {{% dir name="max_cpus" type="string" default="100%" %}}
-Set the number of cpus the running processs will use.
+Set the number of cpus the running process will use.
 You can use a percentage (70%) or a number of cpus (6) in the value.
 
 {{< highlight toml >}}

@@ -123,10 +123,10 @@ revad -c revad.toml
 Let's analyze the output:
 
 * The first line tells us some information about the host running the process.
-* The second line tells us hown many CPUs are used by the process.
+* The second line tells us how many CPUs are used by the process.
 * The  third line tells us where the pid file is stored.
-* The fourth line tells us  that an HTTP service has been enabled and where is exposed, in this case the helloworld service is exposed at the root URL (/).
-* The fifth line tells us that the URL starting with / is not protected by authentication, meaning is publicly accesible.
+* The fourth line tells us that an HTTP service has been enabled and where it is exposed, in this case the helloworld service is exposed at the root URL (/).
+* The fifth line tells us that the URL starting with / is not protected by authentication, meaning is publicly accessible.
 * The last line tells us where the HTTP server is listening.
 
 

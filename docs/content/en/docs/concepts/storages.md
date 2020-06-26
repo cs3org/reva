@@ -41,12 +41,12 @@ When the underlying storage technology supports it, the CS3 API also allows list
 The CS3 API uses grants to describe access permissions. Storage systems have a wide range of permissions granularity and not all grants may be supported by every storage driver. If the storage system does not support certain grant properties, eg. expiry, then the storage driver may choose to implement them in a different way. Expiries could be persisted in a different way and checked periodically to remove the grants. Again: every decision is a tradeoff.
 
 ### ETag propagation
-An important aspect when considering the CS3 API for synchronization is that there is no delta API, yet. A client can however discover changes by recursively descending the tree and comparing the ETag for every node. If the storage technology supports propagating ETag changes up the tree, only the root node of a tree needs to be checked to determine if a discovery needs to be started and and which nodes need to be traversed. This allows using the storage technology itself to persist all metadata that is necessary for sync, without additional services or caches.
+An important aspect when considering the CS3 API for synchronization is that there is no delta API, yet. A client can however discover changes by recursively descending the tree and comparing the ETag for every node. If the storage technology supports propagating ETag changes up the tree, only the root node of a tree needs to be checked to determine if a discovery needs to be started and which nodes need to be traversed. This allows using the storage technology itself to persist all metadata that is necessary for sync, without additional services or caches.
 
 ### Activity History
 Building an activity history requires tracking the different actions that have been performed, at least using the CS3 API, but preferably on the storage itself. This does not only include file changes but also metadata changes like renames and permission changes. Maybe even public link access.
 
-Since the majority of these actions is already persisted by the versions history it makes more sense to keep track of these events in an external append only data structure to efficiently add and query events, which is why an activity history is not part of the CS3 API.
+Since the majority of these actions are already persisted by the versions history it makes more sense to keep track of these events in an external append only data structure to efficiently add and query events, which is why an activity history is not part of the CS3 API.
 
 ## Storage driver implementations in reva
 
