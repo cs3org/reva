@@ -31,6 +31,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
 	tokenpkg "github.com/cs3org/reva/pkg/token"
@@ -271,6 +272,7 @@ func descend(ctx context.Context, client gateway.GatewayAPIClient, src *provider
 		if err != nil {
 			return err
 		}
+		httpDownloadReq.Header.Set(datagateway.TokenTransportHeader, dRes.Token)
 
 		httpDownloadClient := rhttp.GetHTTPClient(ctx)
 
@@ -285,7 +287,7 @@ func descend(ctx context.Context, client gateway.GatewayAPIClient, src *provider
 		}
 
 		// do upload
-		err = tusUpload(ctx, uRes.UploadEndpoint, dst, httpDownloadRes.Body, src.GetSize())
+		err = tusUpload(ctx, uRes.UploadEndpoint, uRes.Token, dst, httpDownloadRes.Body, src.GetSize())
 		if err != nil {
 			return err
 		}
@@ -293,7 +295,7 @@ func descend(ctx context.Context, client gateway.GatewayAPIClient, src *provider
 	return nil
 }
 
-func tusUpload(ctx context.Context, dataServerURL string, fn string, body io.Reader, length uint64) error {
+func tusUpload(ctx context.Context, dataServerURL string, transferToken string, fn string, body io.Reader, length uint64) error {
 	var err error
 	log := appctx.GetLogger(ctx)
 
@@ -311,6 +313,7 @@ func tusUpload(ctx context.Context, dataServerURL string, fn string, body io.Rea
 		Str("token", tokenpkg.ContextMustGetToken(ctx)).
 		Msg("adding token to header")
 	c.Header.Set(tokenpkg.TokenHeader, tokenpkg.ContextMustGetToken(ctx))
+	c.Header.Set(datagateway.TokenTransportHeader, transferToken)
 
 	tusc, err := tus.NewClient(dataServerURL, c)
 	if err != nil {
