@@ -345,7 +345,17 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 
 // RevokePublicShare undocumented.
 func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, id string) error {
-	return fmt.Errorf("RevokePublicShare method unimplemented")
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	db, err := m.readDb()
+	if err != nil {
+		return err
+	}
+
+	delete(db, id)
+
+	return m.writeDb(db)
 }
 
 func (m *manager) getByToken(ctx context.Context, token string) (*link.PublicShare, error) {
