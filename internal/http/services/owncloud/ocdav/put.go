@@ -261,9 +261,12 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	log.Debug().
-		Str("header", tokenpkg.TokenHeader).
-		Str("token", tokenpkg.ContextMustGetToken(ctx)).
-		Msg("adding token to header")
+		Str("upload-endpoint", dataServerURL).
+		Str("auth-header", tokenpkg.TokenHeader).
+		Str("auth-token", tokenpkg.ContextMustGetToken(ctx)).
+		Str("transfer-header", datagateway.TokenTransportHeader).
+		Str("transfer-token", uRes.Token).
+		Msg("adding tokens to headers")
 	c.Header.Set(tokenpkg.TokenHeader, tokenpkg.ContextMustGetToken(ctx))
 	c.Header.Set(datagateway.TokenTransportHeader, uRes.Token)
 
