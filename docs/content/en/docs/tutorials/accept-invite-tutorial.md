@@ -6,7 +6,7 @@ description: >
   Run and develop the accept invite Phoenix app locally together with Phoenix and Reva
 ---
 
-This is a guide on how you can run the accept invite app together with Pheonix and Reva locally in a dev environment. If you already have Reva and Phoenix you don't need to clone them, but you will need to congigure Phoenix (step 4) and have Reva and Phoenix running.
+This is a guide on how you can run the accept invite app together with Phoenix and Reva locally in a dev environment. If you already have Reva and Phoenix you don't need to clone them, but you will need to configure Phoenix (step 4) and have Reva and Phoenix running.
 
 ## Prerequisites
 If you encounter strange problems, please check which version of the prerequisites you are running, it might be that you need to update/downgrade. For reference ask someone who already has reva and Phoenix running, they will have updated information on the versions.
@@ -78,7 +78,7 @@ In the config.json file in the Phoenix repo add:
 ```
 
 ## 5. Run Reva
-Now you need to run Revad (the Reva deamon). Follow these steps
+Now you need to run Revad (the Reva daemon). Follow these steps
 from the *reva* folder:
 
 ```
