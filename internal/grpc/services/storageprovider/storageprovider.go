@@ -450,7 +450,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		}, nil
 	}
 
-	md, err := s.storage.GetMD(ctx, newRef)
+	md, err := s.storage.GetMD(ctx, newRef, req.ArbitraryMetadataKeys)
 	if err != nil {
 		var st *rpc.Status
 		if _, ok := err.(errtypes.IsNotFound); ok {
@@ -491,7 +491,7 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 		return nil
 	}
 
-	mds, err := s.storage.ListFolder(ctx, newRef)
+	mds, err := s.storage.ListFolder(ctx, newRef, req.ArbitraryMetadataKeys)
 	if err != nil {
 		res := &provider.ListContainerStreamResponse{
 			Status: status.NewInternal(ctx, err, "error listing folder"),
@@ -535,7 +535,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		}, nil
 	}
 
-	mds, err := s.storage.ListFolder(ctx, newRef)
+	mds, err := s.storage.ListFolder(ctx, newRef, req.ArbitraryMetadataKeys)
 	if err != nil {
 		return &provider.ListContainerResponse{
 			Status: status.NewInternal(ctx, err, "error listing folder"),
@@ -832,7 +832,7 @@ func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (*provide
 		idRef := &provider.Reference{
 			Spec: &provider.Reference_Id{
 				Id: &provider.ResourceId{
-					StorageId: "", // on purpose, we are unwrapping, bottom layers only need OpaqueId.
+					StorageId: "", // we are unwrapping on purpose, bottom layers only need OpaqueId.
 					OpaqueId:  ref.GetId().OpaqueId,
 				},
 			},

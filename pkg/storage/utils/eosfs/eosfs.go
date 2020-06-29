@@ -500,7 +500,7 @@ func (fs *eosfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*pr
 	return grantList, nil
 }
 
-func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error) {
+func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, err
@@ -517,7 +517,7 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference) (*provider.
 	// if path is home we need to add in the response any shadow folder in the shadow homedirectory.
 	if fs.conf.EnableHome {
 		if fs.isShareFolder(ctx, p) {
-			return fs.getMDShareFolder(ctx, p)
+			return fs.getMDShareFolder(ctx, p, mdKeys)
 		}
 	}
 
@@ -532,7 +532,7 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference) (*provider.
 	return fi, nil
 }
 
-func (fs *eosfs) getMDShareFolder(ctx context.Context, p string) (*provider.ResourceInfo, error) {
+func (fs *eosfs) getMDShareFolder(ctx context.Context, p string, mdKeys []string) (*provider.ResourceInfo, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, err
@@ -551,7 +551,7 @@ func (fs *eosfs) getMDShareFolder(ctx context.Context, p string) (*provider.Reso
 	return fs.convertToFileReference(ctx, eosFileInfo), nil
 }
 
-func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error) {
+func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
 	log := appctx.GetLogger(ctx)
 	u, err := getUser(ctx)
 	if err != nil {

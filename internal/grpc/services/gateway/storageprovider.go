@@ -123,7 +123,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 		}, nil
 	}
 
-	p, err := s.getPath(ctx, req.Ref)
+	p, err := s.getPath(ctx, req.Ref, []string{})
 	if err != nil {
 		return &gateway.InitiateFileDownloadResponse{
 			Status: status.NewInternal(ctx, err, "gateway: error gettng path for ref"),
@@ -254,7 +254,7 @@ func (s *svc) initiateFileDownload(ctx context.Context, req *provider.InitiateFi
 }
 
 func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*gateway.InitiateFileUploadResponse, error) {
-	p, err := s.getPath(ctx, req.Ref)
+	p, err := s.getPath(ctx, req.Ref, []string{})
 	if err != nil {
 		return &gateway.InitiateFileUploadResponse{
 			Status: status.NewInternal(ctx, err, "gateway: error gettng path for ref"),
@@ -422,7 +422,7 @@ func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provi
 }
 
 func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
-	p, err := s.getPath(ctx, req.Ref)
+	p, err := s.getPath(ctx, req.Ref, []string{})
 	if err != nil {
 		return &provider.CreateContainerResponse{
 			Status: status.NewInternal(ctx, err, "gateway: error gettng path for ref"),
@@ -527,7 +527,7 @@ func (s *svc) inSharedFolder(ctx context.Context, p string) bool {
 }
 
 func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
-	p, err := s.getPath(ctx, req.Ref)
+	p, err := s.getPath(ctx, req.Ref, []string{})
 	if err != nil {
 		return &provider.DeleteResponse{
 			Status: status.NewInternal(ctx, err, "gateway: error gettng path for ref"),
@@ -644,7 +644,7 @@ func (s *svc) delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
 	log := appctx.GetLogger(ctx)
 
-	p, err := s.getPath(ctx, req.Source)
+	p, err := s.getPath(ctx, req.Source, []string{})
 	if err != nil {
 		log.Err(err).Msg("gateway: error moving")
 		return &provider.MoveResponse{
@@ -652,7 +652,7 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 		}, nil
 	}
 
-	dp, err := s.getPath(ctx, req.Destination)
+	dp, err := s.getPath(ctx, req.Destination, []string{})
 	if err != nil {
 		log.Err(err).Msg("gateway: error moving")
 		return &provider.MoveResponse{
@@ -844,7 +844,7 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 }
 
 func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
-	p, err := s.getPath(ctx, req.Ref)
+	p, err := s.getPath(ctx, req.Ref, req.ArbitraryMetadataKeys)
 	if err != nil {
 		return &provider.StatResponse{
 			Status: status.NewInternal(ctx, err, "gateway: error getting path for ref"),
@@ -1054,7 +1054,7 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 }
 
 func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
-	p, err := s.getPath(ctx, req.Ref)
+	p, err := s.getPath(ctx, req.Ref, req.ArbitraryMetadataKeys)
 	if err != nil {
 		return &provider.ListContainerResponse{
 			Status: status.NewInternal(ctx, err, "gateway: error getting path for ref"),
@@ -1140,7 +1140,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 			},
 		}
 
-		newReq := &provider.ListContainerRequest{Ref: ref}
+		newReq := &provider.ListContainerRequest{Ref: ref, ArbitraryMetadataKeys: req.ArbitraryMetadataKeys}
 		newRes, err := s.listContainer(ctx, newReq)
 		if err != nil {
 			return &provider.ListContainerResponse{
@@ -1213,7 +1213,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 			},
 		}
 
-		newReq := &provider.ListContainerRequest{Ref: ref}
+		newReq := &provider.ListContainerRequest{Ref: ref, ArbitraryMetadataKeys: req.ArbitraryMetadataKeys}
 		newRes, err := s.listContainer(ctx, newReq)
 		if err != nil {
 			return &provider.ListContainerResponse{
@@ -1242,13 +1242,13 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 	panic("gateway: stating an unknown path:" + p)
 }
 
-func (s *svc) getPath(ctx context.Context, ref *provider.Reference) (string, error) {
+func (s *svc) getPath(ctx context.Context, ref *provider.Reference, mdKeys []string) (string, error) {
 	if ref.GetPath() != "" {
 		return ref.GetPath(), nil
 	}
 
 	if ref.GetId() != nil && ref.GetId().GetOpaqueId() != "" {
-		req := &provider.StatRequest{Ref: ref}
+		req := &provider.StatRequest{Ref: ref, ArbitraryMetadataKeys: mdKeys}
 		res, err := s.stat(ctx, req)
 		if err != nil {
 			err = errors.Wrap(err, "gateway: error stating ref:"+ref.String())
