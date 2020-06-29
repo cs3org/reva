@@ -21,14 +21,19 @@ package meshdirectory
 import (
 	"encoding/json"
 	"fmt"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/ocmd"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"io/ioutil"
 	"net/http"
 	"path"
 
-	"github.com/cs3org/reva/pkg/meshdirectory"
-	"github.com/cs3org/reva/pkg/meshdirectory/manager/registry"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
@@ -40,19 +45,18 @@ func init() {
 }
 
 type config struct {
-	Driver  string                            `mapstructure:"driver"`
-	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
-	Prefix  string                            `mapstructure:"prefix"`
-	Static  string                            `mapstructure:"static"`
+	Driver     string                            `mapstructure:"driver"`
+	Drivers    map[string]map[string]interface{} `mapstructure:"drivers"`
+	Prefix     string                            `mapstructure:"prefix"`
+	Static     string                            `mapstructure:"static"`
+	GatewaySvc string                            `mapstructure:"gatewaysvc"`
 }
 
 func (c *config) init() {
+	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+
 	if c.Prefix == "" {
 		c.Prefix = "meshdir"
-	}
-
-	if c.Driver == "" {
-		c.Driver = "json"
 	}
 
 	if c.Static == "" {
@@ -61,15 +65,7 @@ func (c *config) init() {
 }
 
 type svc struct {
-	mdm  meshdirectory.Manager
 	conf *config
-}
-
-func getMeshDirManager(c *config) (meshdirectory.Manager, error) {
-	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		return f(c.Drivers[c.Driver])
-	}
-	return nil, fmt.Errorf("driver not found: %s", c.Driver)
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -90,14 +86,8 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 
 	c.init()
 
-	mdm, err := getMeshDirManager(c)
-	if err != nil {
-		return nil, err
-	}
-
 	service := &svc{
 		conf: c,
-		mdm:  mdm,
 	}
 	return service, nil
 }
@@ -117,71 +107,95 @@ func (s *svc) Close() error {
 	return nil
 }
 
-// List of enabled Providers
-func (s *svc) MeshProviders() (*[]meshdirectory.MeshProvider, error) {
-	return s.mdm.GetMeshProviders()
+func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
+	return pool.GetGatewayServiceClient(s.conf.GatewaySvc)
 }
 
-func (s *svc) renderIndex(w http.ResponseWriter) error {
+func (s *svc) serveIndex(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
 	file, err := ioutil.ReadFile(path.Clean(s.conf.Static + "/index.html"))
 	if err != nil {
-		return errors.Wrap(err, "error rendering index page")
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error reading meshdirectory index page", err)
+		log.Err(err).Msg("error reading meshdirectory index page")
+		return
 	}
 	if _, err := w.Write(file); err != nil {
-		return errors.Wrap(err, "error writing response")
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error rendering meshdirectory index page", err)
+		log.Err(err).Msg("error rendering meshdirectory index page.")
+		return
 	}
-	return nil
 }
 
-func (s *svc) respondJSON(w http.ResponseWriter) error {
+// OCMProvidersOnly returns just the providers that provide the OCM Service Type endpoint
+func (s *svc) OCMProvidersOnly(pi []*providerv1beta1.ProviderInfo) (po []*providerv1beta1.ProviderInfo) {
+	for _, p := range pi {
+		for _, s := range p.Services {
+			if s.Endpoint.Type.Name == "OCM" {
+				po = append(po, p)
+				break
+			}
+		}
+	}
+	return
+}
+
+func (s *svc) serveJSON(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	providers, err := s.MeshProviders()
-	var res meshdirectory.Response
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
+	gatewayClient, err := s.getClient()
 	if err != nil {
-		err = errors.Wrap(err, "meshdirectory: error fetching providers")
-		res = meshdirectory.Response{
-			Status:        http.StatusInternalServerError,
-			StatusMessage: err.Error(),
-			Providers:     nil,
-		}
-	} else {
-		res = meshdirectory.Response{
-			Status:    http.StatusOK,
-			Providers: providers,
-		}
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError,
+			fmt.Sprintf("error getting grpc client on addr: %v", s.conf.GatewaySvc), err)
+		log.Err(err).Msg(fmt.Sprintf("error getting grpc client on addr: %v", s.conf.GatewaySvc))
+		return
 	}
 
-	jres, err := json.Marshal(res)
+	providers, err := gatewayClient.ListAllProviders(ctx, &providerv1beta1.ListAllProvidersRequest{})
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return errors.Wrap(err, "failed to serialize response to json")
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error listing all providers", err)
+		log.Err(err).Msg("error listing all mesh providers.")
+		return
 	}
 
-	if _, err := w.Write(jres); err != nil {
-		return errors.Wrap(err, "error writing response")
-	}
-	return nil
-}
+	s.OCMProvidersOnly(providers.Providers)
+	jsonResponse, err := json.Marshal(providers.Providers)
 
-func (s *svc) respondStatic(w http.ResponseWriter, r *http.Request) error {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	return s.renderIndex(w)
+	if err != nil {
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error marshalling providers data", err)
+		log.Err(err).Msg("error marshal providers data.")
+		return
+	}
+
+	// Write response
+	_, err = w.Write(jsonResponse)
+	if err != nil {
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error writing providers data", err)
+		log.Err(err).Msg("error writing providers data.")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 }
 
 // HTTP service handler
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log := appctx.GetLogger(r.Context())
+		var head string
+		head, r.URL.Path = router.ShiftPath(r.URL.Path)
+		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
 
-		if r.Header.Get("Accept") == "application/json" {
-			if err := s.respondJSON(w); err != nil {
-				log.Error().Err(err)
-			}
-		} else {
-			if err := s.respondStatic(w, r); err != nil {
-				log.Error().Err(err)
-			}
+		switch head {
+		case "":
+			s.serveIndex(w, r)
+			return
+		case "providers":
+			s.serveJSON(w, r)
+			return
 		}
 	})
 }

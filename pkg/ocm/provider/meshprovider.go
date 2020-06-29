@@ -16,7 +16,9 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package meshdirectory
+package provider
+
+// TODO(mirekys): remove this file when mentix service uses OCM API site structs
 
 // ServiceType describes a type of provided service
 type ServiceType struct {
@@ -28,7 +30,7 @@ type ServiceType struct {
 type Service struct {
 	Type                ServiceType `json:"Type"`
 	Name                string      `json:"Name"`
-	Path                string      `json:"Path"`
+	URL                 string      `json:"URL"`
 	IsMonitored         bool        `json:"IsMonitored"`
 	Properties          interface{} `json:"Properties"`
 	Host                string      `json:"Host"`
@@ -57,11 +59,4 @@ type MentixResponse struct {
 // MentixErrorResponse holds Mentix API errors
 type MentixErrorResponse struct {
 	Message string `json:"error"`
-}
-
-// Response service response
-type Response struct {
-	Status        int             `json:"status"`
-	StatusMessage string          `json:"message"`
-	Providers     *[]MeshProvider `json:"providers"`
 }

@@ -1,103 +1,140 @@
-{
-  "providers": [
-    {
-      "Name": "cernbox",
-      "FullName": "CERNBox",
-      "Organization": "CERN",
-      "Domain": "cernbox.cern.ch",
-      "Homepage": "https://cernbox.cern.ch",
-      "Description": "CERNBox provides cloud data storage to all CERN users.You can store your data,share it and synchronise it across devices - smartphones, tablets, laptops, desktops, the lot!",
-      "Services": [
-        {
-          "Type": {
-            "Name": "OCM",
-            "Description": "CERNBox Open Cloud Mesh API"
-          },
-          "Name": "CERNBox - OCM API",
-          "Path": "",
-          "IsMonitored": true,
-          "Properties": {},
-          "Host": "",
-          "AdditionalEndpoints": [
-            {
-              "IsMonitored": true,
-              "Name": "OCM API",
-              "Path": "https://cernbox.cern.ch/ocm",
-              "Properties": {},
-              "Type": {
-                "Description": "Open Cloud Mesh",
-                "Name": "OCM"
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "Name": "oc-cesnet",
-      "FullName": "ownCloud@CESNET",
-      "Organization": "CESNET",
-      "Domain": "owncloud.cesnet.cz",
-      "Homepage": "https://owncloud.cesnet.cz",
-      "Description": "OwnCloud has been designed for individual users. It enables automatic data synchronisation between various computers and mobile devices of the user. Data are also available through the web interface. Data can be easily shared with colleagues.",
-      "Services": [
-        {
-          "Type": {
-            "Name": "OCM",
-            "Description": "CESNET Open Cloud Mesh API"
-          },
-          "Name": "CESNET - OCM API",
-          "Path": "",
-          "IsMonitored": true,
-          "Properties": {},
-          "Host": "",
-          "AdditionalEndpoints": [
-            {
-              "IsMonitored": true,
-              "Name": "OCM API",
-              "Path": "https://owncloud.cesnet.cz/ocm",
-              "Properties": {},
-              "Type": {
-                "Description": "Open Cloud Mesh",
-                "Name": "OCM"
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "Name": "catbox",
-      "FullName": "CatBox",
-      "Organization": "Erwin Schrödinger",
-      "Domain": "catbox.example.org",
-      "Homepage": "https://catbox.example.org/dead",
-      "Description": "A nondeterministic storage of cats.",
-      "Services": [
-        {
-          "Type": {
-            "Name": "OCM",
-            "Description": "CatBox Open Cloud Mesh API"
-          },
-          "Name": "CatBox - OCM API",
-          "Path": "",
-          "IsMonitored": true,
-          "Properties": {},
-          "Host": "",
-          "AdditionalEndpoints": [
-            {
-              "IsMonitored": true,
-              "Name": "OCM API",
-              "Path": "https://catbox.example.org/alive/ocm",
-              "Properties": {},
-              "Type": {
-                "Description": "Open Cloud Mesh",
-                "Name": "OCM"
-              }
-            }
-          ]
-        }
-      ]
-    }
-  ]
-}
+[
+	{
+		"name": "cernbox",
+		"full_name": "CERNBox",
+		"organization": "CERN",
+		"domain": "https://cern.ch",
+		"homepage": "https://cernbox.web.cern.ch",
+		"description": "CERNBox provides cloud data storage to all CERN users.",
+		"services": [
+			{
+				"endpoint": {
+					"type": {
+						"name": "OCM",
+						"description": "CERNBox Open Cloud Mesh API"
+					},
+					"name": "CERNBox - OCM API",
+					"path": "https://sciencemesh.cernbox.cern.ch/iop/ocm/",
+					"isMonitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "https://sciencemesh.cernbox.cern.ch/"
+			}
+		]
+	},
+	{
+		"name": "oc-cesnet",
+		"full_name": "ownCloud@CESNET",
+		"organization": "CESNET",
+		"domain": "https://cesnet.cz",
+		"homepage": "https://owncloud.cesnet.cz",
+		"description": "OwnCloud has been designed for individual users.",
+		"services": [
+			{
+				"endpoint": {
+					"type": {
+						"name": "OCM",
+						"description": "CESNET Open Cloud Mesh API"
+					},
+					"name": "CESNET - OCM API",
+					"path": "https://sciencemesh.cesnet.cz/ocm/",
+					"isMonitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "https://sciencemesh.cesnet.cz/"
+			}
+		]
+	},
+	{
+		"name": "uni-muenster",
+		"full_name": "WWU University of Muenster",
+		"organization": "University of Muenster",
+		"domain": "https://uni-muenster.de",
+		"homepage": "https://uni-muenster.de",
+		"description": "WWU provides cloud storage to its students, faculty and researchers.",
+		"services": [
+			{
+				"endpoint": {
+					"type": {
+						"name": "OCM",
+						"description": "WWU Open Cloud Mesh API"
+					},
+					"name": "WWU - OCM API",
+					"path": "https://sciencemesh-test.uni-muenster.de/ocm/",
+					"isMonitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "https://sciencemesh-test.uni-muenster.de/"
+			}
+		]
+	},
+	{
+		"name": "cubbit",
+		"full_name": "Cubbit",
+		"organization": "Cubbit",
+		"domain": "https://cubbit.io",
+		"homepage": "https://cubbit.io",
+		"description": "Cubbit provides distributed storage over a P2P network.",
+		"services": [
+			{
+				"endpoint": {
+					"type": {
+						"name": "OCM",
+						"description": "Cubbit Open Cloud Mesh API"
+					},
+					"name": "Cubbit - OCM API",
+					"path": "https://ocm.cubbit.io/ocm/",
+					"isMonitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "https://ocm.cubbit.io/"
+			}
+		]
+	},
+	{
+		"name": "ailleron",
+		"full_name": "Ailleron - Software Mind",
+		"organization": "Ailleron",
+		"domain": "https://ailleron.com",
+		"homepage": "https://ailleron.com",
+		"description": "Ailleron is a Polish IT company providing software and storage solutions to its clients.",
+		"services": [
+			{
+				"endpoint": {
+					"type": {
+						"name": "OCM",
+						"description": "Ailleron Open Cloud Mesh API"
+					},
+					"name": "Ailleron - OCM API",
+					"path": "http://cs3mesh.softwaremind.com:19000/ocm/",
+					"isMonitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "http://cs3mesh.softwaremind.com:19000/"
+			}
+		]
+	},
+	{
+		"name": "surfsara",
+		"full_name": "Surfsara",
+		"organization": "Surfsara",
+		"domain": "https://surfsara.nl",
+		"homepage": "https://surfsara.nl",
+		"description": "OwnCloud has been designed for individual users.",
+		"services": [
+			{
+				"endpoint": {
+					"type": {
+						"name": "OCM",
+						"description": "Surfsara Open Cloud Mesh API"
+					},
+					"name": "Surfsara - OCM API",
+					"path": "https://app.cs3mesh-iop.k8s.surfsara.nl/ocm/",
+					"isMonitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "https://app.cs3mesh-iop.k8s.surfsara.nl/"
+			}
+		]
+	}
+]

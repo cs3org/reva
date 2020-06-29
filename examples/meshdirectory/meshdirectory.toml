@@ -1,12 +1,27 @@
 [shared]
 jwt_secret = "Pive-Fumkiu4"
+gatewaysvc = "localhost:17000"
+
+[grpc]
+address = "0.0.0.0:17000"
+
+[grpc.services.gateway]
+ocmproviderauthorizersvc = "localhost:17000"
+
+[grpc.services.ocmproviderauthorizer]
+driver = "json"
+
+[grpc.services.ocmproviderauthorizer.drivers.json]
+providers = "providers.demo.json"
+
+#[grpc.services.ocmproviderauthorizer.drivers.mentix]
+#url = "http://127.0.0.1:9600/mentix"
 
 [http]
-address = "0.0.0.0:19001"
+address = "0.0.0.0:9600"
 enabled_services = ["meshdirectory"]
 
 [http.services.meshdirectory]
-driver = "mentix"
 
 #[http.services.meshdirectory.drivers.json]
 #providers = "providers.demo.json"
