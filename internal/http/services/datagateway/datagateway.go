@@ -104,7 +104,7 @@ func (s *svc) setHandler() {
 		switch r.Method {
 		case "HEAD":
 			addCorsHeader(w)
-			w.WriteHeader(http.StatusOK)
+			s.doHead(w, r)
 			return
 		case "GET":
 			s.doGet(w, r)
@@ -151,6 +151,44 @@ func (s *svc) verify(ctx context.Context, r *http.Request) (*transferClaims, err
 
 	err = errtypes.InvalidCredentials("token invalid")
 	return nil, err
+}
+
+func (s *svc) doHead(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
+	claims, err := s.verify(ctx, r)
+	if err != nil {
+		err = errors.Wrap(err, "datagateway: error validating transfer token")
+		log.Err(err).Str("token", r.Header.Get(TokenTransportHeader)).Msg("invalid transfer token")
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
+	log.Info().Str("target", claims.Target).Msg("sending request to internal data server")
+
+	httpClient := rhttp.GetHTTPClient(ctx)
+	httpReq, err := rhttp.NewRequest(ctx, "HEAD", claims.Target, nil)
+	if err != nil {
+		log.Err(err).Msg("wrong request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	httpRes, err := httpClient.Do(httpReq)
+	if err != nil {
+		log.Err(err).Msg("error doing HEAD request to data service")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if httpRes.StatusCode != http.StatusOK {
+		w.WriteHeader(httpRes.StatusCode)
+		return
+	}
+
+	defer httpRes.Body.Close()
+	w.WriteHeader(http.StatusOK)
 }
 
 func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
