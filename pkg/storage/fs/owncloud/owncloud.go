@@ -53,9 +53,9 @@ import (
 const (
 	// Currently,extended file attributes have four separated
 	// namespaces (user, trusted, security and system) followed by a dot.
-	// A non ruut user can only manipulate the user. namespace, which is what
+	// A non root user can only manipulate the user. namespace, which is what
 	// we will use to store ownCloud specific metadata. To prevent name
-	// collisions with other apps We are going to introduca a sub namespace
+	// collisions with other apps We are going to introduce a sub namespace
 	// "user.oc."
 
 	// idAttribute is the name of the filesystem extended attribute that is used to store the uuid in
@@ -96,7 +96,7 @@ const (
 	//   - w write-data (files) / create-file (directories)
 	//   - a append-data (files) / create-subdirectory (directories)
 	//   - x execute (files) / change-directory (directories)
-	//   - d delete - delete the file/directory. Some servers will allow a delete to occur if either this permission is set in the file/directory or if the delete-child permission is set in its parent direcory.
+	//   - d delete - delete the file/directory. Some servers will allow a delete to occur if either this permission is set in the file/directory or if the delete-child permission is set in its parent directory.
 	//   - D delete-child - remove a file or subdirectory from within the given directory (directories only)
 	//   - t read-attributes - read the attributes of the file/directory.
 	//   - T write-attributes - write the attributes of the file/directory.
@@ -108,7 +108,7 @@ const (
 	//   - y synchronize - allow clients to use synchronous I/O with the server.
 	// TODO implement OWNER@ as "user.oc.acl.A::OWNER@:rwaDxtTnNcCy"
 	// attribute names are limited to 255 chars by the linux kernel vfs, values to 64 kb
-	// ext3 extended attributes must fit inside a signle filesystem block ... 4096 bytes
+	// ext3 extended attributes must fit inside a single filesystem block ... 4096 bytes
 	// that leaves us with "user.oc.acl.A::someonewithaslightlylongersubject@whateverissuer:rwaDxtTnNcCy" ~80 chars
 	// 4096/80 = 51 shares ... with luck we might move the actual permissions to the value, saving ~15 chars
 	// 4096/64 = 64 shares ... still meh ... we can do better by using ints instead of strings for principals
@@ -141,7 +141,7 @@ const (
 	// SharePrefix is the prefix for sharing related extended attributes
 	sharePrefix       string = "user.oc.acl."
 	trashOriginPrefix string = "user.oc.o"
-	mdPrefix          string = "user.oc.md."   // arbitrary metadada
+	mdPrefix          string = "user.oc.md."   // arbitrary metadata
 	favPrefix         string = "user.oc.fav."  // favorite flag, per user
 	etagPrefix        string = "user.oc.etag." // allow overriding a calculated etag with one from the extended attributes
 	//checksumPrefix    string = "user.oc.cs."   // TODO add checksum support
@@ -194,7 +194,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	}
 	c.init(m)
 
-	// c.DataDirectoryshould never end in / unless it is the root?
+	// c.DataDirectory should never end in / unless it is the root?
 	c.DataDirectory = path.Clean(c.DataDirectory)
 
 	// create datadir if it does not exist
@@ -279,9 +279,9 @@ func (fs *ocfs) scanFiles(ctx context.Context, conn redis.Conn) {
 	}
 }
 
-// ownloud stores files in the files subfolder
+// owncloud stores files in the files subfolder
 // the incoming path starts with /<username>, so we need to insert the files subfolder into the path
-// and prefix the datadirectory
+// and prefix the data directory
 // TODO the path handed to a storage provider should not contain the username
 func (fs *ocfs) wrap(ctx context.Context, fn string) (internal string) {
 	if fs.c.EnableHome {
@@ -313,15 +313,15 @@ func (fs *ocfs) wrap(ctx context.Context, fn string) (internal string) {
 	return
 }
 
-// ownloud stores versions in the files_versions subfolder
+// owncloud stores versions in the files_versions subfolder
 // the incoming path starts with /<username>, so we need to insert the files subfolder into the path
-// and prefix the datadirectory
+// and prefix the data directory
 // TODO the path handed to a storage provider should not contain the username
 func (fs *ocfs) getVersionsPath(ctx context.Context, np string) string {
 	// np = /path/to/data/<username>/files/foo/bar.txt
 	// remove data dir
 	if fs.c.DataDirectory != "/" {
-		// fs.c.DataDirectory is a clean puth, so it never ends in /
+		// fs.c.DataDirectory is a clean path, so it never ends in /
 		np = strings.TrimPrefix(np, fs.c.DataDirectory)
 	}
 	// np = /<username>/files/foo/bar.txt
@@ -340,7 +340,7 @@ func (fs *ocfs) getVersionsPath(ctx context.Context, np string) string {
 
 }
 
-// ownloud stores trashed items in the files_trashbin subfolder of a users home
+// owncloud stores trashed items in the files_trashbin subfolder of a users home
 func (fs *ocfs) getRecyclePath(ctx context.Context) (string, error) {
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
@@ -417,7 +417,7 @@ func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, np st
 		etag = string(val)
 	}
 
-	// TODO how do we tell the storage providen/driver which arbitrary metadata to retrieve? an analogy to webdav allprops or a list of requested properties
+	// TODO how do we tell the storage provider/driver which arbitrary metadata to retrieve? an analogy to webdav allprops or a list of requested properties
 	favorite := ""
 	if u, ok := user.ContextGetUser(ctx); ok {
 		// the favorite flag is specific to the user, so we need to incorporate the userid
@@ -589,7 +589,7 @@ func getValue(e *ace) []byte {
 	// first byte will be replaced after converting to byte array
 	val := fmt.Sprintf("_t=%s:f=%s:p=%s", e.Type, e.Flags, e.Permissions)
 	b := []byte(val)
-	b[0] = 0 // indicalte key value
+	b[0] = 0 // indicate key value
 	return b
 }
 
@@ -1034,7 +1034,7 @@ func (fs *ocfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referenc
 			// that cannot be mapped to extended attributes without leaking who has marked a file as a favorite
 			// it is a specific case of a tag, which is user individual as well
 			// TODO there are different types of tags
-			// 1. public that are maganed by everyone
+			// 1. public that are managed by everyone
 			// 2. private tags that are only visible to the user
 			// 3. system tags that are only visible to the system
 			// 4. group tags that are only visible to a group ...

@@ -215,7 +215,7 @@ func computeXS(t provider.ResourceChecksumType, r io.Reader) (string, error) {
 }
 
 func guessXS(xsFlag string, availableXS []*provider.ResourceChecksumPriority) (provider.ResourceChecksumType, error) {
-	// force use of cheksum if available server side.
+	// force use of checksum if available server side.
 	if xsFlag != "negotiate" {
 		wanted := storageprovider.PKG2GRPCXS(xsFlag)
 		if wanted == provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_INVALID {

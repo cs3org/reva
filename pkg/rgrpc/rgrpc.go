@@ -318,7 +318,7 @@ func (s *Server) getInterceptors(unprotected []string) ([]grpc.ServerOption, err
 	streamInterceptors := []grpc.StreamServerInterceptor{authStream}
 	for _, t := range streamTriples {
 		streamInterceptors = append(streamInterceptors, t.Interceptor)
-		s.log.Info().Msgf("rgrpc: chainning grpc streaming interceptor %s with priority %d", t.Name, t.Priority)
+		s.log.Info().Msgf("rgrpc: chaining grpc streaming interceptor %s with priority %d", t.Name, t.Priority)
 	}
 
 	streamInterceptors = append([]grpc.StreamServerInterceptor{

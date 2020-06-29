@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// Package errtypes contains definitons for common errors.
+// Package errtypes contains definitions for common errors.
 // It would have nice to call this package errors, err or error
 // but errors clashes with github.com/pkg/errors, err is used for any error variable
 // and error is a reserved word :)

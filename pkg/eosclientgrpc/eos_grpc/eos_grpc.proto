@@ -148,7 +148,7 @@ message QuotaProto {
   uint64 maxlogicalbytes = 8;    // maximum number of logical bytes (logical volume quota)
   uint64 maxfiles = 9;           // maximum number of files (inode quota)
   float percentagusedbytes = 10; // percentage of volume quota used from 0 to 100
-  float percentagusedfiles = 11; // percentag of inode quota used from 0 to 100
+  float percentagusedfiles = 11; // percentage of inode quota used from 0 to 100
   string statusbytes = 12;       // status string for volume quota ok,warning,exceeded
   string statusfiles = 13;       // status string for inode quota ok,warning,exceeded
 }

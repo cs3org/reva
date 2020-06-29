@@ -438,7 +438,7 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token, password str
 					return local, nil
 				}
 				// TODO(refs): custom permission denied error to catch up
-				// in uppper layers
+				// in upper layers
 				return nil, errors.New("json: invalid password")
 			}
 			return local, nil

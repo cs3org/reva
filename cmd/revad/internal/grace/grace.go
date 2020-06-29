@@ -79,8 +79,8 @@ func NewWatcher(opts ...Option) *Watcher {
 	return w
 }
 
-// Exit exists the current process cleaning up
-// exisiting pid files.
+// Exit exits the current process cleaning up
+// existing pid files.
 func (w *Watcher) Exit(errc int) {
 	err := w.clean()
 	if err != nil {
@@ -285,14 +285,14 @@ func (w *Watcher) TrapSignals() {
 				count := 10
 				ticker := time.NewTicker(time.Second)
 				for ; true; <-ticker.C {
-					w.log.Info().Msgf("shuting down in %d seconds", count-1)
+					w.log.Info().Msgf("shutting down in %d seconds", count-1)
 					count--
 					if count <= 0 {
-						w.log.Info().Msg("deadline reached before draining active conns, hard stoping ...")
+						w.log.Info().Msg("deadline reached before draining active conns, hard stopping ...")
 						for _, s := range w.ss {
 							err := s.Stop()
 							if err != nil {
-								w.log.Error().Err(err).Msg("error stoping server")
+								w.log.Error().Err(err).Msg("error stopping server")
 							}
 							w.log.Info().Msgf("fd to %s:%s abruptly closed", s.Network(), s.Address())
 						}
@@ -304,7 +304,7 @@ func (w *Watcher) TrapSignals() {
 				w.log.Info().Msgf("fd to %s:%s gracefully closed ", s.Network(), s.Address())
 				err := s.GracefulStop()
 				if err != nil {
-					w.log.Error().Err(err).Msg("error stoping server")
+					w.log.Error().Err(err).Msg("error stopping server")
 					w.log.Info().Msg("exit with error code 1")
 					w.Exit(1)
 				}
@@ -317,7 +317,7 @@ func (w *Watcher) TrapSignals() {
 				w.log.Info().Msgf("fd to %s:%s abruptly closed", s.Network(), s.Address())
 				err := s.Stop()
 				if err != nil {
-					w.log.Error().Err(err).Msg("error stoping server")
+					w.log.Error().Err(err).Msg("error stopping server")
 				}
 			}
 			w.Exit(0)

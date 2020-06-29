@@ -45,7 +45,7 @@ var (
 	ErrPermissionNotInRange = fmt.Errorf("The provided permission is not between %d and %d", PermissionInvalid, PermissionAll)
 )
 
-// NewPermissions creates a new Permissions instanz.
+// NewPermissions creates a new Permissions instance.
 // The value must be in the valid range.
 func NewPermissions(val int) (Permissions, error) {
 	if val == int(PermissionInvalid) {

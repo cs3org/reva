@@ -256,7 +256,7 @@ func (s *svc) newProp(key, val string) *propertyXML {
 	}
 }
 
-// mdToPropResponse converts the CS3 metadata into a webdav propesponse
+// mdToPropResponse converts the CS3 metadata into a webdav PropResponse
 // ns is the CS3 namespace that needs to be removed from the CS3 path before
 // prefixing it with the baseURI
 func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, ns string) (*responseXML, error) {

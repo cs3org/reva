@@ -300,7 +300,7 @@ func (upload *fileUpload) WriteChunk(ctx context.Context, offset int64, src io.R
 	return n, err
 }
 
-// GetReader returns an io.Readerfor the upload
+// GetReader returns an io.Reader for the upload
 func (upload *fileUpload) GetReader(ctx context.Context) (io.Reader, error) {
 	return os.Open(upload.binPath)
 }
@@ -377,7 +377,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 // - the storage needs to implement AsTerminatableUpload
 // - the upload needs to implement Terminate
 
-// AsTerminatableUpload returnsa a TerminatableUpload
+// AsTerminatableUpload returns a TerminatableUpload
 func (fs *ocfs) AsTerminatableUpload(upload tusd.Upload) tusd.TerminatableUpload {
 	return upload.(*fileUpload)
 }
@@ -401,7 +401,7 @@ func (upload *fileUpload) Terminate(ctx context.Context) error {
 // - the storage needs to implement AsLengthDeclarableUpload
 // - the upload needs to implement DeclareLength
 
-// AsLengthDeclarableUpload returnsa a LengthDeclarableUpload
+// AsLengthDeclarableUpload returns a LengthDeclarableUpload
 func (fs *ocfs) AsLengthDeclarableUpload(upload tusd.Upload) tusd.LengthDeclarableUpload {
 	return upload.(*fileUpload)
 }
@@ -417,7 +417,7 @@ func (upload *fileUpload) DeclareLength(ctx context.Context, length int64) error
 // - the storage needs to implement AsConcatableUpload
 // - the upload needs to implement ConcatUploads
 
-// AsConcatableUpload returnsa a ConcatableUpload
+// AsConcatableUpload returns a ConcatableUpload
 func (fs *ocfs) AsConcatableUpload(upload tusd.Upload) tusd.ConcatableUpload {
 	return upload.(*fileUpload)
 }

@@ -144,7 +144,7 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 		log := appctx.GetLogger(ctx)
 
 		if utils.Skip(info.FullMethod, unprotected) {
-			log.Debug().Str("method", info.FullMethod).Msg("skiping auth")
+			log.Debug().Str("method", info.FullMethod).Msg("skipping auth")
 			return handler(srv, ss)
 		}
 

@@ -197,7 +197,7 @@ func wrapResourceID(r *provider.ResourceId) string {
 }
 
 // The fileID must be encoded
-// - XML safe, because it is going to be used in the profind result
+// - XML safe, because it is going to be used in the propfind result
 // - url safe, because the id might be used in a url, eg. the /dav/meta nodes
 // which is why we base62 encode it
 func wrap(sid string, oid string) string {
