@@ -181,13 +181,13 @@ func (s *svc) doHead(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	defer httpRes.Body.Close()
 
 	if httpRes.StatusCode != http.StatusOK {
 		w.WriteHeader(httpRes.StatusCode)
 		return
 	}
 
-	defer httpRes.Body.Close()
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -219,13 +219,13 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	defer httpRes.Body.Close()
 
 	if httpRes.StatusCode != http.StatusOK {
 		w.WriteHeader(httpRes.StatusCode)
 		return
 	}
 
-	defer httpRes.Body.Close()
 	w.WriteHeader(http.StatusOK)
 	_, err = io.Copy(w, httpRes.Body)
 	if err != nil {
@@ -273,13 +273,13 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	defer httpRes.Body.Close()
 
 	if httpRes.StatusCode != http.StatusOK {
 		w.WriteHeader(httpRes.StatusCode)
 		return
 	}
 
-	defer httpRes.Body.Close()
 	w.WriteHeader(http.StatusOK)
 	_, err = io.Copy(w, httpRes.Body)
 	if err != nil {
@@ -329,6 +329,7 @@ func (s *svc) doPatch(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	defer httpRes.Body.Close()
 
 	copyHeader(w.Header(), httpRes.Header)
 
@@ -337,7 +338,6 @@ func (s *svc) doPatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	defer httpRes.Body.Close()
 	w.WriteHeader(http.StatusOK)
 	_, err = io.Copy(w, httpRes.Body)
 	if err != nil {
