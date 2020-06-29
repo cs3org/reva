@@ -123,7 +123,13 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			h.updateShare(w, r, head) // TODO PUT is used with incomplete data to update a share
 		case "DELETE":
-			h.removeShare(w, r, head)
+			shareID := strings.ReplaceAll(head, "/", "")
+			if h.isPublicShare(r, shareID) {
+				h.removePublicShare(w, r, shareID)
+				return
+			}
+
+			h.removeUserShare(w, r, head)
 		default:
 			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Only GET, POST and PUT are allowed", nil)
 		}
@@ -764,7 +770,43 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 	response.WriteOCSSuccess(w, r, share)
 }
 
-func (h *Handler) removeShare(w http.ResponseWriter, r *http.Request, shareID string) {
+func (h *Handler) removePublicShare(w http.ResponseWriter, r *http.Request, shareID string) {
+	ctx := r.Context()
+
+	c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
+		return
+	}
+
+	req := &link.RemovePublicShareRequest{
+		Ref: &link.PublicShareReference{
+			Spec: &link.PublicShareReference_Id{
+				Id: &link.PublicShareId{
+					OpaqueId: shareID,
+				},
+			},
+		},
+	}
+
+	res, err := c.RemovePublicShare(ctx, req)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc delete share request", err)
+		return
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
+			return
+		}
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc delete share request failed", err)
+		return
+	}
+
+	response.WriteOCSSuccess(w, r, nil)
+}
+
+func (h *Handler) removeUserShare(w http.ResponseWriter, r *http.Request, shareID string) {
 	ctx := r.Context()
 
 	uClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
