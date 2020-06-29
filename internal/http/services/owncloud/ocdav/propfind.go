@@ -283,11 +283,13 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 			Prop:   []*propertyXML{},
 		})
 
-		id := wrapResourceID(md.Id)
-		response.Propstat[0].Prop = append(response.Propstat[0].Prop,
-			s.newProp("oc:id", id),
-			s.newProp("oc:fileid", id),
-		)
+		if md.Id != nil {
+			id := wrapResourceID(md.Id)
+			response.Propstat[0].Prop = append(response.Propstat[0].Prop,
+				s.newProp("oc:id", id),
+				s.newProp("oc:fileid", id),
+			)
+		}
 
 		if md.Etag != "" {
 			// etags must be enclosed in double quotes and cannot contain them.
