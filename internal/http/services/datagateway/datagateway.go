@@ -165,7 +165,7 @@ func (s *svc) doHead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Info().Str("target", claims.Target).Msg("sending request to internal data server")
+	log.Debug().Str("target", claims.Target).Msg("sending request to internal data server")
 
 	httpClient := rhttp.GetHTTPClient(ctx)
 	httpReq, err := rhttp.NewRequest(ctx, "HEAD", claims.Target, nil)
@@ -203,7 +203,7 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Info().Str("target", claims.Target).Msg("sending request to internal data server")
+	log.Debug().Str("target", claims.Target).Msg("sending request to internal data server")
 
 	httpClient := rhttp.GetHTTPClient(ctx)
 	httpReq, err := rhttp.NewRequest(ctx, "GET", claims.Target, nil)
@@ -257,7 +257,7 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 	targetURL.RawQuery = r.URL.RawQuery
 	target = targetURL.String()
 
-	log.Info().Str("target", claims.Target).Msg("sending request to internal data server")
+	log.Debug().Str("target", claims.Target).Msg("sending request to internal data server")
 
 	httpClient := rhttp.GetHTTPClient(ctx)
 	httpReq, err := rhttp.NewRequest(ctx, "PUT", target, r.Body)
@@ -312,7 +312,7 @@ func (s *svc) doPatch(w http.ResponseWriter, r *http.Request) {
 	targetURL.RawQuery = r.URL.RawQuery
 	target = targetURL.String()
 
-	log.Info().Str("target", claims.Target).Msg("sending request to internal data server")
+	log.Debug().Str("target", claims.Target).Msg("sending request to internal data server")
 
 	httpClient := rhttp.GetHTTPClient(ctx)
 	httpReq, err := rhttp.NewRequest(ctx, "PATCH", target, r.Body)
