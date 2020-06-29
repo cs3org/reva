@@ -390,7 +390,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 
 	// prevent leaking internal paths
 	if statResponse.Info != nil {
-		statResponse.Info.Path = path.Join("/", tkn, relativePath)
+		statResponse.Info.Path = path.Join(s.mountPath, "/", tkn, relativePath)
 	}
 
 	return statResponse, nil
@@ -428,7 +428,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 	}
 
 	for i := range listContainerR.Infos {
-		listContainerR.Infos[i].Path = path.Join("/", tkn, relativePath, path.Base(listContainerR.Infos[i].Path))
+		listContainerR.Infos[i].Path = path.Join(s.mountPath, "/", tkn, relativePath, path.Base(listContainerR.Infos[i].Path))
 	}
 
 	return listContainerR, nil
