@@ -55,7 +55,7 @@ func Decode(v interface{}) error {
 	return nil
 }
 
-// GetJWTSecret returns the package level configured jwt secret if not overwriten.
+// GetJWTSecret returns the package level configured jwt secret if not overwritten.
 func GetJWTSecret(val string) string {
 	if val == "" {
 		return sharedConf.JWTSecret
@@ -63,7 +63,7 @@ func GetJWTSecret(val string) string {
 	return val
 }
 
-// GetGatewaySVC returns the package level configured gateway service if not overwriten.
+// GetGatewaySVC returns the package level configured gateway service if not overwritten.
 func GetGatewaySVC(val string) string {
 	if val == "" {
 		return sharedConf.GatewaySVC
@@ -71,7 +71,7 @@ func GetGatewaySVC(val string) string {
 	return val
 }
 
-// GetDataGateway returns the package level data gateway endpoint if not overwriten.
+// GetDataGateway returns the package level data gateway endpoint if not overwritten.
 func GetDataGateway(val string) string {
 	if val == "" {
 		return sharedConf.DataGateway

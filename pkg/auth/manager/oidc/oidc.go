@@ -128,7 +128,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		},
 		Username: claims["preferred_username"].(string),
 		// TODO(labkode) if we can get groups from the claim we need to give the possibility
-		// to the admin to chosse what claim provides the groups.
+		// to the admin to choose what claim provides the groups.
 		// TODO(labkode) ... use all claims from oidc?
 		// TODO(labkode): do like K8s does it: https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/apiserver/plugin/pkg/authenticator/token/oidc/oidc.go
 		Groups:       []string{},
@@ -165,7 +165,7 @@ func (am *mgr) getOIDCProvider(ctx context.Context) (*oidc.Provider, error) {
 	}
 
 	// Initialize a provider by specifying the issuer URL.
-	// Once initialized is a singleton that is reuser if further requests.
+	// Once initialized is a singleton that is reused if further requests.
 	// The provider is responsible to verify the token sent by the client
 	// against the security keys oftentimes available in the .well-known endpoint.
 	provider, err := oidc.NewProvider(ctx, am.c.Issuer)

@@ -175,7 +175,7 @@ func NewEOSFS(c *Config) (storage.FS, error) {
 	// bail out if keytab is not found.
 	if c.UseKeytab {
 		if _, err := os.Stat(c.Keytab); err != nil {
-			err = errors.Wrapf(err, "eos: keytab not accesible at location: %s", err)
+			err = errors.Wrapf(err, "eos: keytab not accessible at location: %s", err)
 			return nil, err
 		}
 	}
@@ -625,7 +625,7 @@ func (fs *eosfs) listWithHome(ctx context.Context, home, p string) ([]*provider.
 	}
 
 	// path points to a resource in the nominal home
-	log.Debug().Msg("listting nominal home")
+	log.Debug().Msg("listing nominal home")
 	return fs.listWithNominalHome(ctx, p)
 }
 
@@ -724,7 +724,7 @@ func (fs *eosfs) GetHome(ctx context.Context) (string, error) {
 		return "", errtypes.NotSupported("eos: get home not supported")
 	}
 
-	// eos drive for homes assumess root(/) points to the user home.
+	// eos drive for homes assumes root(/) points to the user home.
 	return "/", nil
 }
 

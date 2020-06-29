@@ -37,7 +37,7 @@ func NewUnary() grpc.UnaryServerInterceptor {
 	return interceptor
 }
 
-// NewStream returns a streaming server inteceptor that adds telemetry to
+// NewStream returns a streaming server interceptor that adds telemetry to
 // streaming grpc calls.
 func NewStream() grpc.StreamServerInterceptor {
 	interceptor := grpc_recovery.StreamServerInterceptor(grpc_recovery.WithRecoveryHandlerContext(recoveryFunc))

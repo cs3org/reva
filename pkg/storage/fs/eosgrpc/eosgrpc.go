@@ -209,7 +209,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	// bail out if keytab is not found.
 	if c.UseKeytab {
 		if _, err := os.Stat(c.Keytab); err != nil {
-			err = errors.Wrapf(err, "eos: keytab not accesible at location: %s", err)
+			err = errors.Wrapf(err, "eos: keytab not accessible at location: %s", err)
 			return nil, err
 		}
 	}
@@ -640,7 +640,7 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference) (*provider.
 		return nil, errors.Wrap(err, "eos: error resolving reference")
 	}
 
-	// if path is home we need to add in the response any shadow folder in the shadown homedirectory.
+	// if path is home we need to add in the response any shadow folder in the shadow homedirectory.
 	if fs.conf.EnableHome {
 		if fs.isShareFolder(ctx, p) {
 			return fs.getMDShareFolder(ctx, p)

@@ -19,7 +19,7 @@
 /*
 Package templates contains data-driven templates for path layouts.
 
-Templates can use functions from the gitbub.com/Masterminds/sprig library.
+Templates can use functions from the github.com/Masterminds/sprig library.
 All templates are cleaned with path.Clean().
 */
 package templates
@@ -45,7 +45,7 @@ type UserData struct {
 
 // EmailData contains mail data
 // split into local and domain part.
-// It is extracted from spliting the username by @.
+// It is extracted from splitting the username by @.
 type EmailData struct {
 	Local  string
 	Domain string

@@ -112,7 +112,7 @@ type Meta struct {
 // MetaOK is the default ok response
 var MetaOK = Meta{Status: "ok", StatusCode: 100, Message: "OK"}
 
-// MetaBadRequest is used for unknown errers
+// MetaBadRequest is used for unknown errors
 var MetaBadRequest = Meta{Status: "error", StatusCode: 400, Message: "Bad Request"}
 
 // MetaServerError is returned on server errors
@@ -124,7 +124,7 @@ var MetaUnauthorized = Meta{Status: "error", StatusCode: 997, Message: "Unauthor
 // MetaNotFound is returned when trying to access not existing resources
 var MetaNotFound = Meta{Status: "error", StatusCode: 998, Message: "Not Found"}
 
-// MetaUnknownError is used for unknown errers
+// MetaUnknownError is used for unknown errors
 var MetaUnknownError = Meta{Status: "error", StatusCode: 999, Message: "Unknown Error"}
 
 // WriteOCSSuccess handles writing successful ocs response data

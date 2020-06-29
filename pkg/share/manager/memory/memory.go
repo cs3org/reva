@@ -184,7 +184,7 @@ func (m *manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 	return errtypes.NotFound(ref.String())
 }
 
-// TODO(labkode): this is fragile, the check should be done on primitve types.
+// TODO(labkode): this is fragile, the check should be done on primitive types.
 func equal(ref *collaboration.ShareReference, s *collaboration.Share) bool {
 	if ref.GetId() != nil && s.Id != nil {
 		if ref.GetId().OpaqueId == s.Id.OpaqueId {
