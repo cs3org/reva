@@ -131,6 +131,13 @@ func (s *service) RemovePublicShare(ctx context.Context, req *link.RemovePublicS
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("publicshareprovider", "remove").Msg("remove public share")
 
+	user := user.ContextMustGetUser(ctx)
+	err := s.sm.RevokePublicShare(ctx, user, req.Ref.GetId().OpaqueId)
+	if err != nil {
+		return &link.RemovePublicShareResponse{
+			Status: status.NewInternal(ctx, err, "error deleting public share"),
+		}, err
+	}
 	return &link.RemovePublicShareResponse{
 		Status: status.NewOK(ctx),
 	}, nil
