@@ -468,11 +468,65 @@ func (fs *eosfs) getEosACL(g *provider.Grant) (*acl.Entry, error) {
 }
 
 func (fs *eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
-	return errtypes.NotSupported("eos: operation not supported")
+	u, err := getUser(ctx)
+	if err != nil {
+		return err
+	}
+
+	log := appctx.GetLogger(ctx)
+	log.Info().Msg("eos: set arbitrary md for ref:" + ref.String())
+
+	p, err := fs.resolve(ctx, u, ref)
+	if err != nil {
+		return errors.Wrap(err, "eos: error resolving reference")
+	}
+
+	fn := fs.wrap(ctx, p)
+
+	// Loop over the keyvalues of md.metadata and set them individually
+	for k, v := range md.Metadata {
+		var attr eosclientgrpc.Attribute
+		attr.Type = eosclientgrpc.SystemAttr
+		attr.Key = k
+		attr.Val = v
+		err = fs.c.SetAttr(ctx, u.Username, &attr, false, fn)
+		if err != nil {
+			return err
+		}
+
+	}
+	return nil
 }
 
 func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error {
-	return errtypes.NotSupported("eos: operation not supported")
+
+	u, err := getUser(ctx)
+	if err != nil {
+		return err
+	}
+
+	log := appctx.GetLogger(ctx)
+	log.Info().Msg("eos: set arbitrary md for ref:" + ref.String())
+
+	p, err := fs.resolve(ctx, u, ref)
+	if err != nil {
+		return errors.Wrap(err, "eos: error resolving reference")
+	}
+
+	fn := fs.wrap(ctx, p)
+
+	// Loop over the keys and unset them individually
+	for _, k := range keys {
+		var attr eosclientgrpc.Attribute
+		attr.Key = k
+
+		err = fs.c.UnsetAttr(ctx, u.Username, &attr, fn)
+		if err != nil {
+			return err
+		}
+
+	}
+	return nil
 }
 
 func (fs *eosfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
