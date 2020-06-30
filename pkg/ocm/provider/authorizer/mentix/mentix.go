@@ -21,10 +21,11 @@ package mentix
 import (
 	"context"
 	"encoding/json"
-	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	"github.com/cs3org/reva/pkg/rhttp"
 	"net/http"
 	"strings"
+
+	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	"github.com/cs3org/reva/pkg/rhttp"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -112,9 +113,9 @@ func (c *Client) fetchAllProviders() ([]*ocmprovider.ProviderInfo, error) {
 	}
 
 	// TODO(mirekys): following translation won't be needed after mentix exporter also uses ocmprovider struct
-	var providers []*ocmprovider.ProviderInfo
+	providers := make([]*ocmprovider.ProviderInfo, 0, len(res.Sites))
 	for _, si := range res.Sites {
-		var services []*ocmprovider.Service
+		services := make([]*ocmprovider.Service, 0, len(si.Services))
 		for _, se := range si.Services {
 			services = append(services, &ocmprovider.Service{
 				Host: se.Host,

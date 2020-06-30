@@ -21,6 +21,10 @@ package meshdirectory
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
+	"path"
+
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/ocmd"
@@ -29,9 +33,6 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"io/ioutil"
-	"net/http"
-	"path"
 
 	"github.com/pkg/errors"
 
@@ -161,7 +162,7 @@ func (s *svc) serveJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.OCMProvidersOnly(providers.Providers)
+	providers.Providers = s.OCMProvidersOnly(providers.Providers)
 	jsonResponse, err := json.Marshal(providers.Providers)
 
 	if err != nil {
