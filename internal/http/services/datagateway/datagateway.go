@@ -174,6 +174,7 @@ func (s *svc) doHead(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	httpReq.Header = r.Header
 
 	httpRes, err := httpClient.Do(httpReq)
 	if err != nil {
@@ -212,6 +213,7 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	httpReq.Header = r.Header
 
 	httpRes, err := httpClient.Do(httpReq)
 	if err != nil {
@@ -266,6 +268,7 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	httpReq.Header = r.Header
 
 	httpRes, err := httpClient.Do(httpReq)
 	if err != nil {
