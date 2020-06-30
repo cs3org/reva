@@ -22,9 +22,3 @@ address = "0.0.0.0:9600"
 enabled_services = ["meshdirectory"]
 
 [http.services.meshdirectory]
-
-#[http.services.meshdirectory.drivers.json]
-#providers = "providers.demo.json"
-#
-#[http.services.meshdirectory.drivers.mentix]
-#url = "http://localhost:9600/"
