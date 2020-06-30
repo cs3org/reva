@@ -280,21 +280,28 @@ func PublicShare2ShareData(share *link.PublicShare, r *http.Request) *ShareData 
 		expiration = ""
 	}
 
+	shareWith := ""
+	if share.PasswordProtected {
+		shareWith = "***redacted***"
+	}
+
 	return &ShareData{
 		// share.permissions ar mapped below
 		// DisplaynameOwner:     creator.DisplayName,
 		// DisplaynameFileOwner: share.GetCreator().String(),
-		ID:           share.Id.OpaqueId,
-		ShareType:    ShareTypePublicLink,
-		STime:        share.Ctime.Seconds, // TODO CS3 api birth time = btime
-		Token:        share.Token,
-		Expiration:   expiration,
-		MimeType:     share.Mtime.String(),
-		Name:         share.DisplayName,
-		URL:          r.Header.Get("Origin") + "/#/s/" + share.Token,
-		Permissions:  publicSharePermissions2OCSPermissions(share.GetPermissions()),
-		UIDOwner:     LocalUserIDToString(share.Creator),
-		UIDFileOwner: LocalUserIDToString(share.Owner),
+		ID:                   share.Id.OpaqueId,
+		ShareType:            ShareTypePublicLink,
+		ShareWith:            shareWith,
+		ShareWithDisplayname: shareWith,
+		STime:                share.Ctime.Seconds, // TODO CS3 api birth time = btime
+		Token:                share.Token,
+		Expiration:           expiration,
+		MimeType:             share.Mtime.String(),
+		Name:                 share.DisplayName,
+		URL:                  r.Header.Get("Origin") + "/#/s/" + share.Token,
+		Permissions:          publicSharePermissions2OCSPermissions(share.GetPermissions()),
+		UIDOwner:             LocalUserIDToString(share.Creator),
+		UIDFileOwner:         LocalUserIDToString(share.Owner),
 	}
 	// actually clients should be able to GET and cache the user info themselves ...
 	// TODO check grantee type for user vs group
