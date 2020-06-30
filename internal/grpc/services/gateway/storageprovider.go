@@ -844,7 +844,7 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 }
 
 func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
-	p, err := s.getPath(ctx, req.Ref)
+	p, err := s.getPath(ctx, req.Ref, req.ArbitraryMetadataKeys...)
 	if err != nil {
 		return &provider.StatResponse{
 			Status: status.NewInternal(ctx, err, "gateway: error getting path for ref"),
@@ -1054,7 +1054,7 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 }
 
 func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
-	p, err := s.getPath(ctx, req.Ref)
+	p, err := s.getPath(ctx, req.Ref, req.ArbitraryMetadataKeys...)
 	if err != nil {
 		return &provider.ListContainerResponse{
 			Status: status.NewInternal(ctx, err, "gateway: error getting path for ref"),
@@ -1140,7 +1140,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 			},
 		}
 
-		newReq := &provider.ListContainerRequest{Ref: ref}
+		newReq := &provider.ListContainerRequest{Ref: ref, ArbitraryMetadataKeys: req.ArbitraryMetadataKeys}
 		newRes, err := s.listContainer(ctx, newReq)
 		if err != nil {
 			return &provider.ListContainerResponse{
@@ -1213,7 +1213,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 			},
 		}
 
-		newReq := &provider.ListContainerRequest{Ref: ref}
+		newReq := &provider.ListContainerRequest{Ref: ref, ArbitraryMetadataKeys: req.ArbitraryMetadataKeys}
 		newRes, err := s.listContainer(ctx, newReq)
 		if err != nil {
 			return &provider.ListContainerResponse{
@@ -1242,13 +1242,13 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 	panic("gateway: stating an unknown path:" + p)
 }
 
-func (s *svc) getPath(ctx context.Context, ref *provider.Reference) (string, error) {
+func (s *svc) getPath(ctx context.Context, ref *provider.Reference, keys ...string) (string, error) {
 	if ref.GetPath() != "" {
 		return ref.GetPath(), nil
 	}
 
 	if ref.GetId() != nil && ref.GetId().GetOpaqueId() != "" {
-		req := &provider.StatRequest{Ref: ref}
+		req := &provider.StatRequest{Ref: ref, ArbitraryMetadataKeys: keys}
 		res, err := s.stat(ctx, req)
 		if err != nil {
 			err = errors.Wrap(err, "gateway: error stating ref:"+ref.String())

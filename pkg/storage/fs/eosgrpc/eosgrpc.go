@@ -626,7 +626,7 @@ func (fs *eosfs) getGrantPermissionSet(mode string) *provider.ResourcePermission
 	return p
 }
 
-func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error) {
+func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, err
@@ -643,7 +643,7 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference) (*provider.
 	// if path is home we need to add in the response any shadow folder in the shadow homedirectory.
 	if fs.conf.EnableHome {
 		if fs.isShareFolder(ctx, p) {
-			return fs.getMDShareFolder(ctx, p)
+			return fs.getMDShareFolder(ctx, p, mdKeys)
 		}
 	}
 
@@ -658,7 +658,7 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference) (*provider.
 	return fi, nil
 }
 
-func (fs *eosfs) getMDShareFolder(ctx context.Context, p string) (*provider.ResourceInfo, error) {
+func (fs *eosfs) getMDShareFolder(ctx context.Context, p string, mdKeys []string) (*provider.ResourceInfo, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, err
@@ -677,7 +677,7 @@ func (fs *eosfs) getMDShareFolder(ctx context.Context, p string) (*provider.Reso
 	return fs.convertToFileReference(ctx, eosFileInfo), nil
 }
 
-func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error) {
+func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: no user in ctx")
@@ -1440,7 +1440,7 @@ func (fs *eosfs) getEosMetadata(finfo *eosclientgrpc.FileInfo) []byte {
 	No - CreateDir(ctx context.Context, fn string) error
 	No -Delete(ctx context.Context, ref *provider.Reference) error
 	No -Move(ctx context.Context, oldRef, newRef *provider.Reference) error
-	No -GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error)
+	No -GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error)
 	Yes -ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error)
 	No -Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error
 	No -Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error)
@@ -1471,7 +1471,7 @@ func (fs *eosfs) getEosMetadata(finfo *eosclientgrpc.FileInfo) []byte {
 	No - CreateDir(ctx context.Context, fn string) error
 	Maybe -Delete(ctx context.Context, ref *provider.Reference) error
 	No -Move(ctx context.Context, oldRef, newRef *provider.Reference) error
-	Yes -GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error)
+	Yes -GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error)
 	Yes -ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error)
 	No -Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error
 	No -Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error)
@@ -1502,7 +1502,7 @@ func (fs *eosfs) getEosMetadata(finfo *eosclientgrpc.FileInfo) []byte {
 	No - CreateDir(ctx context.Context, fn string) error
 	Maybe -Delete(ctx context.Context, ref *provider.Reference) error
 	Yes -Move(ctx context.Context, oldRef, newRef *provider.Reference) error
-	Yes -GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error)
+	Yes -GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error)
 	No -ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error)
 	No -Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error
 	No -Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error)

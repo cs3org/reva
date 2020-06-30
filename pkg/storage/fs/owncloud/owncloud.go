@@ -402,7 +402,7 @@ func (fs *ocfs) getOwner(internal string) string {
 	return ""
 }
 
-func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, np string, c redis.Conn) *provider.ResourceInfo {
+func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, np string, c redis.Conn, mdKeys []string) *provider.ResourceInfo {
 	id := readOrCreateID(ctx, np, c)
 	fn := fs.unwrap(ctx, path.Join("/", np))
 
@@ -417,28 +417,42 @@ func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, np st
 		etag = string(val)
 	}
 
-	// TODO how do we tell the storage provider/driver which arbitrary metadata to retrieve? an analogy to webdav allprops or a list of requested properties
-	favorite := ""
-	if u, ok := user.ContextGetUser(ctx); ok {
-		// the favorite flag is specific to the user, so we need to incorporate the userid
-		if uid := u.GetId(); uid != nil {
-			fa := fmt.Sprintf("%s%s@%s", favPrefix, uid.GetOpaqueId(), uid.GetIdp())
-			if val, err := xattr.Get(np, fa); err == nil {
-				appctx.GetLogger(ctx).Debug().
-					Str("np", np).
-					Str("favorite", string(val)).
-					Str("username", u.GetUsername()).
-					Msg("found favorite flag")
-				favorite = string(val)
-			}
-		} else {
-			appctx.GetLogger(ctx).Error().Err(errtypes.UserRequired("userrequired")).Msg("user has no id")
-		}
-	} else {
-		appctx.GetLogger(ctx).Error().Err(errtypes.UserRequired("userrequired")).Msg("error getting user from ctx")
+	mdKeysMap := make(map[string]struct{})
+	for _, k := range mdKeys {
+		mdKeysMap[k] = struct{}{}
+	}
+
+	var returnAllKeys bool
+	if _, ok := mdKeysMap["*"]; len(mdKeys) == 0 || ok {
+		returnAllKeys = true
 	}
 
 	metadata := map[string]string{}
+
+	favoriteKey := "http://owncloud.org/ns/favorite"
+	if _, ok := mdKeysMap[favoriteKey]; returnAllKeys || ok {
+		favorite := ""
+		if u, ok := user.ContextGetUser(ctx); ok {
+			// the favorite flag is specific to the user, so we need to incorporate the userid
+			if uid := u.GetId(); uid != nil {
+				fa := fmt.Sprintf("%s%s@%s", favPrefix, uid.GetOpaqueId(), uid.GetIdp())
+				if val, err := xattr.Get(np, fa); err == nil {
+					appctx.GetLogger(ctx).Debug().
+						Str("np", np).
+						Str("favorite", string(val)).
+						Str("username", u.GetUsername()).
+						Msg("found favorite flag")
+					favorite = string(val)
+				}
+			} else {
+				appctx.GetLogger(ctx).Error().Err(errtypes.UserRequired("userrequired")).Msg("user has no id")
+			}
+		} else {
+			appctx.GetLogger(ctx).Error().Err(errtypes.UserRequired("userrequired")).Msg("error getting user from ctx")
+		}
+		metadata[favoriteKey] = favorite
+	}
+
 	list, err := xattr.List(np)
 	if err == nil {
 		for _, entry := range list {
@@ -447,7 +461,10 @@ func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, np st
 				continue
 			}
 			if val, err := xattr.Get(np, entry); err == nil {
-				metadata[entry[len(mdPrefix):]] = string(val)
+				k := entry[len(mdPrefix):]
+				if _, ok := mdKeysMap[k]; returnAllKeys || ok {
+					metadata[k] = string(val)
+				}
 			} else {
 				appctx.GetLogger(ctx).Error().Err(err).
 					Str("entry", entry).
@@ -458,7 +475,6 @@ func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, np st
 		appctx.GetLogger(ctx).Error().Err(err).Msg("error getting list of extended attributes")
 	}
 
-	metadata["http://owncloud.org/ns/favorite"] = favorite
 	return &provider.ResourceInfo{
 		Id:            &provider.ResourceId{OpaqueId: id},
 		Path:          fn,
@@ -1293,7 +1309,7 @@ func (fs *ocfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (e
 	return nil
 }
 
-func (fs *ocfs) GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error) {
+func (fs *ocfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "ocfs: error resolving reference")
@@ -1308,12 +1324,12 @@ func (fs *ocfs) GetMD(ctx context.Context, ref *provider.Reference) (*provider.R
 	}
 	c := fs.pool.Get()
 	defer c.Close()
-	m := fs.convertToResourceInfo(ctx, md, np, c)
+	m := fs.convertToResourceInfo(ctx, md, np, c, mdKeys)
 
 	return m, nil
 }
 
-func (fs *ocfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error) {
+func (fs *ocfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "ocfs: error resolving reference")
@@ -1333,7 +1349,7 @@ func (fs *ocfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*pro
 	defer c.Close()
 	for i := range mds {
 		p := path.Join(np, mds[i].Name())
-		m := fs.convertToResourceInfo(ctx, mds[i], p, c)
+		m := fs.convertToResourceInfo(ctx, mds[i], p, c, mdKeys)
 		finfos = append(finfos, m)
 	}
 	return finfos, nil
