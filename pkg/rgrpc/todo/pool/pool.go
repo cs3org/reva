@@ -41,26 +41,40 @@ import (
 	"google.golang.org/grpc"
 )
 
-var (
-	publicShareProviders = sync.Map{}
-	preferencesProviders = sync.Map{}
-	userShareProviders   = sync.Map{}
-	storageRegistries    = sync.Map{}
-	gatewayProviders     = sync.Map{}
-	storageProviders     = sync.Map{}
-	authRegistries       = sync.Map{}
-	authProviders        = sync.Map{}
-	appRegistries        = sync.Map{}
-	userProviders        = sync.Map{}
-	appProviders         = sync.Map{}
+type provider struct {
+	m    sync.Mutex
+	conn map[string]interface{}
+}
 
-	ocmProviderAuthorizers = sync.Map{}
-	ocmShareProviders      = sync.Map{}
-	ocmInviteManagers      = sync.Map{}
-	ocmCores               = sync.Map{}
+func newProvider() provider {
+	return provider{
+		sync.Mutex{},
+		make(map[string]interface{}),
+	}
+}
+
+// TODO(labkode): is concurrent access to the maps safe?
+// var storageProviders = map[string]storageprovider.ProviderAPIClient{}
+var (
+	storageProviders       = newProvider()
+	authProviders          = newProvider()
+	authRegistries         = newProvider()
+	userShareProviders     = newProvider()
+	ocmShareProviders      = newProvider()
+	ocmInviteManagers      = newProvider()
+	ocmProviderAuthorizers = newProvider()
+	ocmCores               = newProvider()
+	publicShareProviders   = newProvider()
+	preferencesProviders   = newProvider()
+	appRegistries          = newProvider()
+	appProviders           = newProvider()
+	storageRegistries      = newProvider()
+	gatewayProviders       = newProvider()
+	userProviders          = newProvider()
 )
 
-// NewConn creates a new connection to a grpc server with open census tracing support.
+// NewConn creates a new connection to a grpc server
+// with open census tracing support.
 // TODO(labkode): make grpc tls configurable.
 func NewConn(endpoint string) (*grpc.ClientConn, error) {
 	conn, err := grpc.Dial(endpoint, grpc.WithInsecure(), grpc.WithStatsHandler(&ocgrpc.ClientHandler{}))
@@ -73,8 +87,11 @@ func NewConn(endpoint string) (*grpc.ClientConn, error) {
 
 // GetGatewayServiceClient returns a GatewayServiceClient.
 func GetGatewayServiceClient(endpoint string) (gateway.GatewayAPIClient, error) {
-	if c, ok := gatewayProviders.Load(endpoint); ok {
-		return c.(gateway.GatewayAPIClient), nil
+	gatewayProviders.m.Lock()
+	defer gatewayProviders.m.Unlock()
+
+	if val, ok := gatewayProviders.conn[endpoint]; ok {
+		return val.(gateway.GatewayAPIClient), nil
 	}
 
 	conn, err := NewConn(endpoint)
@@ -83,14 +100,18 @@ func GetGatewayServiceClient(endpoint string) (gateway.GatewayAPIClient, error) 
 	}
 
 	v := gateway.NewGatewayAPIClient(conn)
-	gatewayProviders.Store(endpoint, v)
+	storageProviders.conn[endpoint] = v
+
 	return v, nil
 }
 
 // GetUserProviderServiceClient returns a UserProviderServiceClient.
 func GetUserProviderServiceClient(endpoint string) (user.UserAPIClient, error) {
-	if c, ok := userProviders.Load(endpoint); ok {
-		return c.(user.UserAPIClient), nil
+	userProviders.m.Lock()
+	defer userProviders.m.Unlock()
+
+	if val, ok := userProviders.conn[endpoint]; ok {
+		return val.(user.UserAPIClient), nil
 	}
 
 	conn, err := NewConn(endpoint)
@@ -99,13 +120,16 @@ func GetUserProviderServiceClient(endpoint string) (user.UserAPIClient, error) {
 	}
 
 	v := user.NewUserAPIClient(conn)
-	userProviders.Store(endpoint, v)
+	userProviders.conn[endpoint] = v
 	return v, nil
 }
 
 // GetStorageProviderServiceClient returns a StorageProviderServiceClient.
 func GetStorageProviderServiceClient(endpoint string) (storageprovider.ProviderAPIClient, error) {
-	if c, ok := storageProviders.Load(endpoint); ok {
+	storageProviders.m.Lock()
+	defer storageProviders.m.Unlock()
+
+	if c, ok := storageProviders.conn[endpoint]; ok {
 		return c.(storageprovider.ProviderAPIClient), nil
 	}
 
@@ -115,13 +139,16 @@ func GetStorageProviderServiceClient(endpoint string) (storageprovider.ProviderA
 	}
 
 	v := storageprovider.NewProviderAPIClient(conn)
-	storageProviders.Store(endpoint, v)
+	storageProviders.conn[endpoint] = v
 	return v, nil
 }
 
 // GetAuthRegistryServiceClient returns a new AuthRegistryServiceClient.
 func GetAuthRegistryServiceClient(endpoint string) (authregistry.RegistryAPIClient, error) {
-	if c, ok := authRegistries.Load(endpoint); ok {
+	authRegistries.m.Lock()
+	defer authRegistries.m.Unlock()
+
+	if c, ok := authRegistries.conn[endpoint]; ok {
 		return c.(authregistry.RegistryAPIClient), nil
 	}
 
@@ -131,13 +158,16 @@ func GetAuthRegistryServiceClient(endpoint string) (authregistry.RegistryAPIClie
 	}
 
 	v := authregistry.NewRegistryAPIClient(conn)
-	authRegistries.Store(endpoint, v)
+	authRegistries.conn[endpoint] = v
 	return v, nil
 }
 
 // GetAuthProviderServiceClient returns a new AuthProviderServiceClient.
 func GetAuthProviderServiceClient(endpoint string) (authprovider.ProviderAPIClient, error) {
-	if c, ok := authProviders.Load(endpoint); ok {
+	authProviders.m.Lock()
+	defer authProviders.m.Unlock()
+
+	if c, ok := authProviders.conn[endpoint]; ok {
 		return c.(authprovider.ProviderAPIClient), nil
 	}
 
@@ -147,13 +177,16 @@ func GetAuthProviderServiceClient(endpoint string) (authprovider.ProviderAPIClie
 	}
 
 	v := authprovider.NewProviderAPIClient(conn)
-	authProviders.Store(endpoint, v)
+	authProviders.conn[endpoint] = v
 	return v, nil
 }
 
 // GetUserShareProviderClient returns a new UserShareProviderClient.
 func GetUserShareProviderClient(endpoint string) (collaboration.CollaborationAPIClient, error) {
-	if c, ok := userShareProviders.Load(endpoint); ok {
+	userShareProviders.m.Lock()
+	defer userShareProviders.m.Unlock()
+
+	if c, ok := userShareProviders.conn[endpoint]; ok {
 		return c.(collaboration.CollaborationAPIClient), nil
 	}
 
@@ -163,13 +196,16 @@ func GetUserShareProviderClient(endpoint string) (collaboration.CollaborationAPI
 	}
 
 	v := collaboration.NewCollaborationAPIClient(conn)
-	userShareProviders.Store(endpoint, v)
+	userShareProviders.conn[endpoint] = v
 	return v, nil
 }
 
 // GetOCMShareProviderClient returns a new OCMShareProviderClient.
 func GetOCMShareProviderClient(endpoint string) (ocm.OcmAPIClient, error) {
-	if c, ok := ocmShareProviders.Load(endpoint); ok {
+	ocmShareProviders.m.Lock()
+	defer ocmShareProviders.m.Unlock()
+
+	if c, ok := ocmShareProviders.conn[endpoint]; ok {
 		return c.(ocm.OcmAPIClient), nil
 	}
 
@@ -179,13 +215,16 @@ func GetOCMShareProviderClient(endpoint string) (ocm.OcmAPIClient, error) {
 	}
 
 	v := ocm.NewOcmAPIClient(conn)
-	ocmShareProviders.Store(endpoint, v)
+	ocmShareProviders.conn[endpoint] = v
 	return v, nil
 }
 
 // GetOCMInviteManagerClient returns a new OCMInviteManagerClient.
 func GetOCMInviteManagerClient(endpoint string) (invitepb.InviteAPIClient, error) {
-	if c, ok := ocmInviteManagers.Load(endpoint); ok {
+	ocmInviteManagers.m.Lock()
+	defer ocmInviteManagers.m.Unlock()
+
+	if c, ok := ocmInviteManagers.conn[endpoint]; ok {
 		return c.(invitepb.InviteAPIClient), nil
 	}
 
@@ -195,13 +234,16 @@ func GetOCMInviteManagerClient(endpoint string) (invitepb.InviteAPIClient, error
 	}
 
 	v := invitepb.NewInviteAPIClient(conn)
-	ocmInviteManagers.Store(endpoint, v)
+	ocmInviteManagers.conn[endpoint] = v
 	return v, nil
 }
 
 // GetPublicShareProviderClient returns a new PublicShareProviderClient.
 func GetPublicShareProviderClient(endpoint string) (link.LinkAPIClient, error) {
-	if c, ok := publicShareProviders.Load(endpoint); ok {
+	publicShareProviders.m.Lock()
+	defer publicShareProviders.m.Unlock()
+
+	if c, ok := publicShareProviders.conn[endpoint]; ok {
 		return c.(link.LinkAPIClient), nil
 	}
 
@@ -211,13 +253,16 @@ func GetPublicShareProviderClient(endpoint string) (link.LinkAPIClient, error) {
 	}
 
 	v := link.NewLinkAPIClient(conn)
-	publicShareProviders.Store(endpoint, v)
+	publicShareProviders.conn[endpoint] = v
 	return v, nil
 }
 
 // GetPreferencesClient returns a new PreferencesClient.
 func GetPreferencesClient(endpoint string) (preferences.PreferencesAPIClient, error) {
-	if c, ok := preferencesProviders.Load(endpoint); ok {
+	preferencesProviders.m.Lock()
+	defer preferencesProviders.m.Unlock()
+
+	if c, ok := preferencesProviders.conn[endpoint]; ok {
 		return c.(preferences.PreferencesAPIClient), nil
 	}
 
@@ -227,13 +272,16 @@ func GetPreferencesClient(endpoint string) (preferences.PreferencesAPIClient, er
 	}
 
 	v := preferences.NewPreferencesAPIClient(conn)
-	preferencesProviders.Store(endpoint, v)
+	preferencesProviders.conn[endpoint] = v
 	return v, nil
 }
 
 // GetAppRegistryClient returns a new AppRegistryClient.
 func GetAppRegistryClient(endpoint string) (appregistry.RegistryAPIClient, error) {
-	if c, ok := appRegistries.Load(endpoint); ok {
+	appRegistries.m.Lock()
+	defer appRegistries.m.Unlock()
+
+	if c, ok := appRegistries.conn[endpoint]; ok {
 		return c.(appregistry.RegistryAPIClient), nil
 	}
 
@@ -243,13 +291,16 @@ func GetAppRegistryClient(endpoint string) (appregistry.RegistryAPIClient, error
 	}
 
 	v := appregistry.NewRegistryAPIClient(conn)
-	appRegistries.Store(endpoint, v)
+	appRegistries.conn[endpoint] = v
 	return v, nil
 }
 
 // GetAppProviderClient returns a new AppRegistryClient.
 func GetAppProviderClient(endpoint string) (appprovider.ProviderAPIClient, error) {
-	if c, ok := appProviders.Load(endpoint); ok {
+	appProviders.m.Lock()
+	defer appProviders.m.Unlock()
+
+	if c, ok := appProviders.conn[endpoint]; ok {
 		return c.(appprovider.ProviderAPIClient), nil
 	}
 
@@ -259,13 +310,16 @@ func GetAppProviderClient(endpoint string) (appprovider.ProviderAPIClient, error
 	}
 
 	v := appprovider.NewProviderAPIClient(conn)
-	appRegistries.Store(endpoint, v)
+	appProviders.conn[endpoint] = v
 	return v, nil
 }
 
 // GetStorageRegistryClient returns a new StorageRegistryClient.
 func GetStorageRegistryClient(endpoint string) (storageregistry.RegistryAPIClient, error) {
-	if c, ok := storageRegistries.Load(endpoint); ok {
+	storageRegistries.m.Lock()
+	defer storageRegistries.m.Unlock()
+
+	if c, ok := storageRegistries.conn[endpoint]; ok {
 		return c.(storageregistry.RegistryAPIClient), nil
 	}
 
@@ -275,13 +329,16 @@ func GetStorageRegistryClient(endpoint string) (storageregistry.RegistryAPIClien
 	}
 
 	v := storageregistry.NewRegistryAPIClient(conn)
-	appRegistries.Store(endpoint, v)
+	storageRegistries.conn[endpoint] = v
 	return v, nil
 }
 
 // GetOCMProviderAuthorizerClient returns a new OCMProviderAuthorizerClient.
 func GetOCMProviderAuthorizerClient(endpoint string) (ocmprovider.ProviderAPIClient, error) {
-	if c, ok := ocmProviderAuthorizers.Load(endpoint); ok {
+	ocmProviderAuthorizers.m.Lock()
+	defer ocmProviderAuthorizers.m.Unlock()
+
+	if c, ok := ocmProviderAuthorizers.conn[endpoint]; ok {
 		return c.(ocmprovider.ProviderAPIClient), nil
 	}
 
@@ -291,13 +348,16 @@ func GetOCMProviderAuthorizerClient(endpoint string) (ocmprovider.ProviderAPICli
 	}
 
 	v := ocmprovider.NewProviderAPIClient(conn)
-	ocmProviderAuthorizers.Store(endpoint, v)
+	ocmProviderAuthorizers.conn[endpoint] = v
 	return v, nil
 }
 
 // GetOCMCoreClient returns a new OCMCoreClient.
 func GetOCMCoreClient(endpoint string) (ocmcore.OcmCoreAPIClient, error) {
-	if c, ok := ocmCores.Load(endpoint); ok {
+	ocmCores.m.Lock()
+	defer ocmCores.m.Unlock()
+
+	if c, ok := ocmCores.conn[endpoint]; ok {
 		return c.(ocmcore.OcmCoreAPIClient), nil
 	}
 
@@ -307,6 +367,6 @@ func GetOCMCoreClient(endpoint string) (ocmcore.OcmCoreAPIClient, error) {
 	}
 
 	v := ocmcore.NewOcmCoreAPIClient(conn)
-	ocmProviderAuthorizers.Store(endpoint, v)
+	ocmCores.conn[endpoint] = v
 	return v, nil
 }
