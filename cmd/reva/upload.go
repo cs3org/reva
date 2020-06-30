@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -47,6 +48,7 @@ func uploadCommand() *command {
 	cmd := newCommand("upload")
 	cmd.Description = func() string { return "upload a local file to the remote server" }
 	cmd.Usage = func() string { return "Usage: upload [-flags] <file_name> <remote_target>" }
+	disabletusFlag := cmd.Bool("disable-tus", false, "whether to disable tus protocol")
 	xsFlag := cmd.String("xs", "negotiate", "compute checksum")
 	cmd.Action = func() error {
 		ctx := getAuthContext()
@@ -126,49 +128,73 @@ func uploadCommand() *command {
 
 		dataServerURL := res.UploadEndpoint
 
-		// create the tus client.
-		c := tus.DefaultConfig()
-		c.Resume = true
-		c.HttpClient = rhttp.GetHTTPClient(ctx)
-		c.Store, err = memorystore.NewMemoryStore()
-		if err != nil {
-			return err
-		}
-		if res.Token != "" {
-			fmt.Printf("using X-Reva-Transfer header\n")
-			c.Header.Add(datagateway.TokenTransportHeader, res.Token)
-		} else if token, ok := tokenpkg.ContextGetToken(ctx); ok {
-			fmt.Printf("using %s header\n", tokenpkg.TokenHeader)
-			c.Header.Add(tokenpkg.TokenHeader, token)
-		}
-		tusc, err := tus.NewClient(dataServerURL, c)
-		if err != nil {
-			return err
-		}
-
-		metadata := map[string]string{
-			"filename": filepath.Base(target),
-			"dir":      filepath.Dir(target),
-			"checksum": fmt.Sprintf("%s %s", storageprovider.GRPC2PKGXS(xsType).String(), xs),
-		}
-
-		fingerprint := fmt.Sprintf("%s-%d-%s-%s", md.Name(), md.Size(), md.ModTime(), xs)
-
 		bar := pb.New(int(md.Size())).SetUnits(pb.U_BYTES)
 		bar.Start()
 		reader := bar.NewProxyReader(fd)
 
-		// create an upload from a file.
-		upload := tus.NewUpload(reader, md.Size(), metadata, fingerprint)
+		if *disabletusFlag {
+			httpReq, err := rhttp.NewRequest(ctx, "PUT", dataServerURL, reader)
+			if err != nil {
+				return err
+			}
 
-		// create the uploader.
-		c.Store.Set(upload.Fingerprint, dataServerURL)
-		uploader := tus.NewUploader(tusc, dataServerURL, upload, 0)
+			httpReq.Header.Set("X-Reva-Transfer", res.Token)
+			q := httpReq.URL.Query()
+			q.Add("xs", xs)
+			q.Add("xs_type", storageprovider.GRPC2PKGXS(xsType).String())
+			httpReq.URL.RawQuery = q.Encode()
 
-		// start the uploading process.
-		err = uploader.Upload()
-		if err != nil {
-			return err
+			httpClient := rhttp.GetHTTPClient(ctx)
+
+			httpRes, err := httpClient.Do(httpReq)
+			if err != nil {
+				return err
+			}
+			defer httpRes.Body.Close()
+			if httpRes.StatusCode != http.StatusOK {
+				return err
+			}
+		} else {
+			// create the tus client.
+			c := tus.DefaultConfig()
+			c.Resume = true
+			c.HttpClient = rhttp.GetHTTPClient(ctx)
+			c.Store, err = memorystore.NewMemoryStore()
+			if err != nil {
+				return err
+			}
+			if res.Token != "" {
+				fmt.Printf("using X-Reva-Transfer header\n")
+				c.Header.Add(datagateway.TokenTransportHeader, res.Token)
+			} else if token, ok := tokenpkg.ContextGetToken(ctx); ok {
+				fmt.Printf("using %s header\n", tokenpkg.TokenHeader)
+				c.Header.Add(tokenpkg.TokenHeader, token)
+			}
+			tusc, err := tus.NewClient(dataServerURL, c)
+			if err != nil {
+				return err
+			}
+
+			metadata := map[string]string{
+				"filename": filepath.Base(target),
+				"dir":      filepath.Dir(target),
+				"checksum": fmt.Sprintf("%s %s", storageprovider.GRPC2PKGXS(xsType).String(), xs),
+			}
+
+			fingerprint := fmt.Sprintf("%s-%d-%s-%s", md.Name(), md.Size(), md.ModTime(), xs)
+
+			// create an upload from a file.
+			upload := tus.NewUpload(reader, md.Size(), metadata, fingerprint)
+
+			// create the uploader.
+			c.Store.Set(upload.Fingerprint, dataServerURL)
+			uploader := tus.NewUploader(tusc, dataServerURL, upload, 0)
+
+			// start the uploading process.
+			err = uploader.Upload()
+			if err != nil {
+				return err
+			}
 		}
 
 		bar.Finish()
