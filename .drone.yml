@@ -334,9 +334,9 @@ steps:
     image: owncloudci/php:7.2
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
-      - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
+      - git clone -b adjust-updateShare-179 --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout f9e67e8fc60e3154032ae32875f86485ade79b72
+      - git checkout 064357c898233c16802c319c2f2be17d6e67b70e
       - make test-acceptance-api
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
