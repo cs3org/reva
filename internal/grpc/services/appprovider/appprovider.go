@@ -105,7 +105,7 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 	wopiurl := "http://0.0.0.0:8880/" //TODO!
 	iopsecret := "testsecret"         //TODO!
 	eos := ""                         //TODO!
-	folderUrl := "foo"                //TODO!
+	folderURL := "foo"                //TODO!
 
 	httpClient := rhttp.GetHTTPClient(ctx)
 
@@ -115,7 +115,7 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 	q.Add("filename", req.Ref.GetPath())
 	q.Add("endpoint", eos)
 	q.Add("viewmode", req.ViewMode.String())
-	q.Add("folderurl", folderUrl)
+	q.Add("folderurl", folderURL)
 
 	httpReq.Header.Set("Authorization", "Bearer "+iopsecret)
 	httpReq.Header.Set("TokenHeader", req.AccessToken)
