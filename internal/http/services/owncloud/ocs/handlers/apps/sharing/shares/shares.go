@@ -1401,7 +1401,6 @@ func (h *Handler) isPublicShare(r *http.Request, oid string) bool {
 
 func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, token string) {
 	updates := []*link.UpdatePublicShareRequest_Update{}
-	shares := make([]*conversions.ShareData, 0)
 	logger := appctx.GetLogger(r.Context())
 
 	gwC, err := pool.GetGatewayServiceClient(h.gatewayAddr)
@@ -1522,8 +1521,7 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, toke
 		return
 	}
 
-	shares = append(shares, s)
-	response.WriteOCSSuccess(w, r, shares)
+	response.WriteOCSSuccess(w, r, s)
 }
 
 func expirationTimestampFromRequest(r *http.Request, h *Handler) (*types.Timestamp, error) {
