@@ -128,7 +128,7 @@ type ShareData struct {
 	// sharee Additional info
 	ShareWithAdditionalInfo string `json:"share_with_additional_info" xml:"share_with_additional_info"`
 	// Whether the recipient was notified, by mail, about the share being shared with them.
-	MailSend string `json:"mail_send" xml:"mail_send"`
+	MailSend int `json:"mail_send" xml:"mail_send"`
 	// Name of the public share
 	Name string `json:"name" xml:"name"`
 	// URL of the public share
@@ -298,6 +298,7 @@ func PublicShare2ShareData(share *link.PublicShare, r *http.Request) *ShareData 
 		Expiration:           expiration,
 		MimeType:             share.Mtime.String(),
 		Name:                 share.DisplayName,
+		MailSend:             0,
 		URL:                  r.Header.Get("Origin") + "/#/s/" + share.Token,
 		Permissions:          publicSharePermissions2OCSPermissions(share.GetPermissions()),
 		UIDOwner:             LocalUserIDToString(share.Creator),

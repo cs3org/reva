@@ -116,7 +116,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	default:
 		switch r.Method {
+		case "GET":
+			h.getShare(w, r, head)
 		case "PUT":
+			// FIXME: isPublicShare is already doing a GetShare and GetPublicShare,
+			// we should just reuse that object when doing updates
 			if h.isPublicShare(r, strings.ReplaceAll(head, "/", "")) {
 				h.updatePublicShare(w, r, strings.ReplaceAll(head, "/", ""))
 				return
@@ -671,6 +675,127 @@ func (h *Handler) map2CS3Permissions(role string, p conversions.Permissions) (*p
 		UpdateGrant: p.Contain(conversions.PermissionShare),
 	}
 	return rp, nil
+}
+
+func (h *Handler) getShare(w http.ResponseWriter, r *http.Request, shareID string) {
+	var share *conversions.ShareData
+	var resourceID *provider.ResourceId
+	ctx := r.Context()
+	logger := appctx.GetLogger(r.Context())
+	logger.Debug().Str("shareID", shareID).Msg("get share by id")
+	client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
+		return
+	}
+
+	logger.Debug().Str("shareID", shareID).Msg("get public share by id")
+	psRes, err := client.GetPublicShare(r.Context(), &link.GetPublicShareRequest{
+		Ref: &link.PublicShareReference{
+			Spec: &link.PublicShareReference_Id{
+				Id: &link.PublicShareId{
+					OpaqueId: shareID,
+				},
+			},
+		},
+	})
+
+	// FIXME: the backend is returning an err when the public share is not found
+	// the below code can be uncommented once error handling is normalized
+	// to return Code_CODE_NOT_FOUND when a public share was not found
+	/*
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error making GetPublicShare grpc request", err)
+			return
+		}
+
+		if psRes.Status.Code != rpc.Code_CODE_OK && psRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
+			logger.Error().Err(err).Msgf("grpc get public share request failed, code: %v", psRes.Status.Code.String)
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc get public share request failed", err)
+			return
+		}
+
+	*/
+
+	if err == nil && psRes.GetShare() != nil {
+		share = conversions.PublicShare2ShareData(psRes.Share, r)
+		resourceID = psRes.Share.ResourceId
+	}
+
+	if share == nil {
+		// check if we have a user share
+		logger.Debug().Str("shareID", shareID).Msg("get user share by id")
+		uRes, err := client.GetShare(r.Context(), &collaboration.GetShareRequest{
+			Ref: &collaboration.ShareReference{
+				Spec: &collaboration.ShareReference_Id{
+					Id: &collaboration.ShareId{
+						OpaqueId: shareID,
+					},
+				},
+			},
+		})
+
+		// FIXME: the backend is returning an err when the public share is not found
+		// the below code can be uncommented once error handling is normalized
+		// to return Code_CODE_NOT_FOUND when a public share was not found
+		/*
+			if err != nil {
+				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error making GetShare grpc request", err)
+				return
+			}
+
+			if uRes.Status.Code != rpc.Code_CODE_OK && uRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
+				logger.Error().Err(err).Msgf("grpc get user share request failed, code: %v", uRes.Status.Code)
+				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc get user share request failed", err)
+				return
+			}
+		*/
+
+		if err == nil && uRes.GetShare() != nil {
+			resourceID = uRes.Share.ResourceId
+			share, err = h.userShare2ShareData(ctx, uRes.Share)
+			if err != nil {
+				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
+				return
+			}
+		}
+	}
+
+	if share == nil {
+		logger.Debug().Str("shareID", shareID).Msg("no share found with this id")
+		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "share not found", nil)
+		return
+	}
+
+	// prepare the stat request
+	statReq := &provider.StatRequest{
+		// prepare the reference
+		Ref: &provider.Reference{
+			// using ResourceId from the share
+			Spec: &provider.Reference_Id{Id: resourceID},
+		},
+	}
+
+	statResponse, err := client.Stat(ctx, statReq)
+	if err != nil {
+		log.Error().Err(err).Msg("error mapping share data")
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
+		return
+	}
+
+	if statResponse.Status.Code != rpc.Code_CODE_OK {
+		log.Error().Err(err).Str("status", statResponse.Status.Code.String()).Msg("error mapping share data")
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
+		return
+	}
+
+	err = h.addFileInfo(ctx, share, statResponse.Info)
+	if err != nil {
+		log.Error().Err(err).Str("status", statResponse.Status.Code.String()).Msg("error mapping share data")
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
+	}
+
+	response.WriteOCSSuccess(w, r, []*conversions.ShareData{share})
 }
 
 func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID string) {
@@ -1399,13 +1524,13 @@ func (h *Handler) isPublicShare(r *http.Request, oid string) bool {
 	return false
 }
 
-func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, token string) {
+func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shareID string) {
 	updates := []*link.UpdatePublicShareRequest_Update{}
 	logger := appctx.GetLogger(r.Context())
 
 	gwC, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
-		log.Err(err).Str("updatePublicShare ref:", token).Msg("updating")
+		log.Err(err).Str("shareID", shareID).Msg("updatePublicShare")
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "error getting a connection to the gateway service", nil)
 		return
 	}
@@ -1414,7 +1539,7 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, toke
 		Ref: &link.PublicShareReference{
 			Spec: &link.PublicShareReference_Id{
 				Id: &link.PublicShareId{
-					OpaqueId: token,
+					OpaqueId: shareID,
 				},
 			},
 		},
@@ -1487,14 +1612,14 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, toke
 			Ref: &link.PublicShareReference{
 				Spec: &link.PublicShareReference_Id{
 					Id: &link.PublicShareId{
-						OpaqueId: token,
+						OpaqueId: shareID,
 					},
 				},
 			},
 			Update: updates[k],
 		})
 		if err != nil {
-			log.Err(err).Str("updatePublicShare ref:", token).Msg("sending update request to public link provider")
+			log.Err(err).Str("shareID", shareID).Msg("sending update request to public link provider")
 		}
 	}
 
