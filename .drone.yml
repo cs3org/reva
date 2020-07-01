@@ -336,7 +336,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout acd31e50e9db2208eb9a544f9fae2a05bfd14259
+      - git checkout f9e67e8fc60e3154032ae32875f86485ade79b72
       - make test-acceptance-api
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
@@ -345,7 +345,7 @@ steps:
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_OCIS: 'true'
-      BEHAT_FILTER_TAGS: '~@skipOnOcis&&~@skipOnOcis-OC-Storage&&~@skipOnLDAP&&@TestAlsoOnExternalUserBackend&&~@local_storage'
+      BEHAT_FILTER_TAGS: '~@skipOnOcis&&~@skipOnOcis-OC-Storage'
 
 services:
   - 'name': 'ldap'
