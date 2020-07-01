@@ -253,7 +253,11 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 	// create the tus client.
 	c := tus.DefaultConfig()
 	c.Resume = true
-	c.HttpClient = rhttp.GetHTTPClient(ctx)
+	c.HttpClient = rhttp.GetHTTPClient(
+		rhttp.Context(ctx),
+		rhttp.Timeout(time.Duration(s.c.Timeout*int64(time.Second))),
+		rhttp.Insecure(s.c.Insecure),
+	)
 	c.Store, err = memorystore.NewMemoryStore()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)

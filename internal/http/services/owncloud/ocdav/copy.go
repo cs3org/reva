@@ -26,6 +26,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -169,7 +170,7 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 		// TODO what if intermediate is a file?
 	}
 
-	err = descend(ctx, client, srcStatRes.Info, dst, depth == "infinity")
+	err = s.descend(ctx, client, srcStatRes.Info, dst, depth == "infinity")
 	if err != nil {
 		log.Error().Err(err).Msg("error descending directory")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -178,7 +179,7 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	w.WriteHeader(successCode)
 }
 
-func descend(ctx context.Context, client gateway.GatewayAPIClient, src *provider.ResourceInfo, dst string, recurse bool) error {
+func (s *svc) descend(ctx context.Context, client gateway.GatewayAPIClient, src *provider.ResourceInfo, dst string, recurse bool) error {
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("src", src.Path).Str("dst", dst).Msg("descending")
 	if src.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
@@ -215,7 +216,7 @@ func descend(ctx context.Context, client gateway.GatewayAPIClient, src *provider
 
 		for i := range res.Infos {
 			childDst := path.Join(dst, path.Base(res.Infos[i].Path))
-			err := descend(ctx, client, res.Infos[i], childDst, recurse)
+			err := s.descend(ctx, client, res.Infos[i], childDst, recurse)
 			if err != nil {
 				return err
 			}
@@ -274,7 +275,11 @@ func descend(ctx context.Context, client gateway.GatewayAPIClient, src *provider
 		}
 		httpDownloadReq.Header.Set(datagateway.TokenTransportHeader, dRes.Token)
 
-		httpDownloadClient := rhttp.GetHTTPClient(ctx)
+		httpDownloadClient := rhttp.GetHTTPClient(
+			rhttp.Context(ctx),
+			rhttp.Timeout(time.Duration(s.c.Timeout*int64(time.Second))),
+			rhttp.Insecure(s.c.Insecure),
+		)
 
 		httpDownloadRes, err := httpDownloadClient.Do(httpDownloadReq)
 		if err != nil {
@@ -287,7 +292,7 @@ func descend(ctx context.Context, client gateway.GatewayAPIClient, src *provider
 		}
 
 		// do upload
-		err = tusUpload(ctx, uRes.UploadEndpoint, uRes.Token, dst, httpDownloadRes.Body, src.GetSize())
+		err = s.tusUpload(ctx, uRes.UploadEndpoint, uRes.Token, dst, httpDownloadRes.Body, src.GetSize())
 		if err != nil {
 			return err
 		}
@@ -295,14 +300,18 @@ func descend(ctx context.Context, client gateway.GatewayAPIClient, src *provider
 	return nil
 }
 
-func tusUpload(ctx context.Context, dataServerURL string, transferToken string, fn string, body io.Reader, length uint64) error {
+func (s *svc) tusUpload(ctx context.Context, dataServerURL string, transferToken string, fn string, body io.Reader, length uint64) error {
 	var err error
 	log := appctx.GetLogger(ctx)
 
 	// create the tus client.
 	c := tus.DefaultConfig()
 	c.Resume = true
-	c.HttpClient = rhttp.GetHTTPClient(ctx)
+	c.HttpClient = rhttp.GetHTTPClient(
+		rhttp.Context(ctx),
+		rhttp.Timeout(time.Duration(s.c.Timeout*int64(time.Second))),
+		rhttp.Insecure(s.c.Insecure),
+	)
 	c.Store, err = memorystore.NewMemoryStore()
 	if err != nil {
 		return err

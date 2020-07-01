@@ -151,7 +151,7 @@ func (m *manager) getAPIToken(ctx context.Context) (string, time.Time, error) {
 		"audience":   {m.conf.TargetAPI},
 	}
 
-	httpClient := rhttp.GetHTTPClient(ctx)
+	httpClient := rhttp.GetHTTPClient(rhttp.Context(ctx), rhttp.Timeout(10*time.Second), rhttp.Insecure(true))
 	httpReq, err := rhttp.NewRequest(ctx, "POST", m.conf.OIDCTokenEndpoint, strings.NewReader(params.Encode()))
 	if err != nil {
 		return "", time.Time{}, err
@@ -186,7 +186,7 @@ func (m *manager) sendAPIRequest(ctx context.Context, url string) ([]interface{}
 		return nil, err
 	}
 
-	httpClient := rhttp.GetHTTPClient(ctx)
+	httpClient := rhttp.GetHTTPClient(rhttp.Context(ctx), rhttp.Timeout(10*time.Second), rhttp.Insecure(true))
 	httpReq, err := rhttp.NewRequest(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err

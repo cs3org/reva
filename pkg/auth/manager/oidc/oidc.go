@@ -22,15 +22,14 @@ package oidc
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
-	"net/http"
 	"time"
 
 	oidc "github.com/coreos/go-oidc"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -143,18 +142,13 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 func (am *mgr) getOAuthCtx(ctx context.Context) context.Context {
 	// Sometimes for testing we need to skip the TLS check, that's why we need a
 	// custom HTTP client.
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: am.c.Insecure,
-		},
+	customHTTPClient := rhttp.GetHTTPClient(
+		rhttp.Context(ctx),
+		rhttp.Timeout(time.Second*10),
+		rhttp.Insecure(am.c.Insecure),
 		// Fixes connection fd leak which might be caused by provider-caching
-		DisableKeepAlives: true,
-	}
-
-	customHTTPClient := &http.Client{
-		Transport: tr,
-		Timeout:   time.Second * 10,
-	}
+		rhttp.DisableKeepAlive(true),
+	)
 	ctx = context.WithValue(ctx, oauth2.HTTPClient, customHTTPClient)
 	return ctx
 }

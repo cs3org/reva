@@ -167,7 +167,11 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 	// TODO check this really streams
 	if r.Header.Get("Content-Type") == "application/offset+octet-stream" {
 
-		httpClient := rhttp.GetHTTPClient(ctx)
+		httpClient := rhttp.GetHTTPClient(
+			rhttp.Context(ctx),
+			rhttp.Timeout(time.Duration(s.c.Timeout*int64(time.Second))),
+			rhttp.Insecure(s.c.Insecure),
+		)
 		httpReq, err := rhttp.NewRequest(ctx, "PATCH", uRes.UploadEndpoint, r.Body)
 		if err != nil {
 			log.Err(err).Msg("wrong request")
