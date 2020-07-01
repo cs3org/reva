@@ -400,18 +400,12 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request) 
 		},
 	}
 
-	var expireTime time.Time
-	expireDate := r.FormValue("expireDate")
-	if expireDate != "" {
-		expireTime, err = time.Parse("2006-01-02T15:04:05Z0700", expireDate)
-		if err != nil {
-			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "invalid date format", err)
-			return
-		}
-		req.Grant.Expiration = &types.Timestamp{
-			Nanos:   uint32(expireTime.UnixNano()),
-			Seconds: uint64(expireTime.Unix()),
-		}
+	expireTime, err := expirationTimestampFromRequest(r, h)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "invalid date format", err)
+	}
+	if expireTime != nil {
+		req.Grant.Expiration = expireTime
 	}
 
 	// set displayname and password protected as arbitrary metadata
@@ -1455,11 +1449,14 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, toke
 	}
 
 	// ExpireDate
-	newExpiration := expirationTimestampFromRequest(r, h)
+	newExpiration, err := expirationTimestampFromRequest(r, h)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "invalid date format", err)
+	}
 	beforeExpiration, _ := json.Marshal(before.Share.Expiration)
 	afterExpiration, _ := json.Marshal(newExpiration)
 	if newExpiration != nil || (string(afterExpiration) != string(beforeExpiration)) {
-		logger.Info().Str("shares", "update").Msgf("updating expire date from %v to: %v", string(beforeExpiration), string(afterExpiration))
+		logger.Debug().Str("shares", "update").Msgf("updating expire date from %v to: %v", string(beforeExpiration), string(afterExpiration))
 		updates = append(updates, &link.UpdatePublicShareRequest_Update{
 			Type: link.UpdatePublicShareRequest_Update_TYPE_EXPIRATION,
 			Grant: &link.Grant{
@@ -1529,7 +1526,7 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, toke
 	response.WriteOCSSuccess(w, r, shares)
 }
 
-func expirationTimestampFromRequest(r *http.Request, h *Handler) *types.Timestamp {
+func expirationTimestampFromRequest(r *http.Request, h *Handler) (*types.Timestamp, error) {
 	var expireTime time.Time
 	var err error
 
@@ -1537,17 +1534,20 @@ func expirationTimestampFromRequest(r *http.Request, h *Handler) *types.Timestam
 	if expireDate != "" {
 		expireTime, err = time.Parse("2006-01-02T15:04:05Z0700", expireDate)
 		if err != nil {
-			log.Error().Str("expiration", "create public share").Msgf("date format invalid: %v", expireDate)
+			expireTime, err = time.Parse("2006-01-02", expireDate)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("date format invalid: %v", expireDate)
 		}
 		final := expireTime.UnixNano()
 
 		return &types.Timestamp{
 			Seconds: uint64(final / 1000000000),
 			Nanos:   uint32(final % 1000000000),
-		}
+		}, nil
 	}
 
-	return nil
+	return nil, nil
 }
 
 func permissionFromRequest(r *http.Request, h *Handler) *provider.ResourcePermissions {
