@@ -24,7 +24,6 @@ import (
 	"io/ioutil"
 	"strings"
 
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/provider"
@@ -58,12 +57,13 @@ func New(m map[string]interface{}) (provider.Authorizer, error) {
 
 	return &authorizer{
 		providers: providers,
+		conf:      c,
 	}, nil
 }
 
 type config struct {
-	// Users holds a path to a file containing json conforming the Users struct
-	Providers string `mapstructure:"providers"`
+	Providers             string `mapstructure:"providers"`
+	VerifyRequestHostname bool   `mapstructure:"verify_request_hostname"`
 }
 
 func (c *config) init() {
@@ -74,6 +74,7 @@ func (c *config) init() {
 
 type authorizer struct {
 	providers []*ocmprovider.ProviderInfo
+	conf      *config
 }
 
 func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmprovider.ProviderInfo, error) {
@@ -85,21 +86,49 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 	return nil, errtypes.NotFound(domain)
 }
 
-func (a *authorizer) IsProviderAllowed(ctx context.Context, user *userpb.User) error {
-	domainSplit := strings.Split(user.Mail, "@")
-	if len(domainSplit) != 2 {
-		return errtypes.NotSupported("Email " + user.Mail)
-	}
+func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovider.ProviderInfo) error {
 
+	var providerAuthorized bool
 	for _, p := range a.providers {
-		if strings.Contains(p.Domain, domainSplit[1]) {
-			return nil
+		if p.Domain == provider.GetDomain() {
+			providerAuthorized = true
 		}
 	}
 
-	return errtypes.NotFound(domainSplit[1])
+	if !providerAuthorized {
+		return errtypes.NotFound(provider.GetDomain())
+	} else if !a.conf.VerifyRequestHostname {
+		return nil
+	}
+
+	providerAuthorized = false
+	ocmHost, err := getOCMHost(provider)
+	if err != nil {
+		return errors.Wrap(err, "json: ocm host not specified for mesh provider")
+	}
+
+	for _, s := range provider.Services {
+		if s.Host == ocmHost {
+			providerAuthorized = true
+		}
+	}
+
+	if !providerAuthorized {
+		return errtypes.NotFound("OCM Host")
+	}
+
+	return nil
 }
 
 func (a *authorizer) ListAllProviders(ctx context.Context) ([]*ocmprovider.ProviderInfo, error) {
 	return a.providers, nil
+}
+
+func getOCMHost(originProvider *ocmprovider.ProviderInfo) (string, error) {
+	for _, s := range originProvider.Services {
+		if s.Endpoint.Type.Name == "OCM" {
+			return s.Host, nil
+		}
+	}
+	return "", errtypes.NotFound("OCM Host")
 }

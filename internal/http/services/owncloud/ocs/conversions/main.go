@@ -128,7 +128,7 @@ type ShareData struct {
 	// sharee Additional info
 	ShareWithAdditionalInfo string `json:"share_with_additional_info" xml:"share_with_additional_info"`
 	// Whether the recipient was notified, by mail, about the share being shared with them.
-	MailSend string `json:"mail_send" xml:"mail_send"`
+	MailSend int `json:"mail_send" xml:"mail_send"`
 	// Name of the public share
 	Name string `json:"name" xml:"name"`
 	// URL of the public share
@@ -280,21 +280,29 @@ func PublicShare2ShareData(share *link.PublicShare, r *http.Request) *ShareData 
 		expiration = ""
 	}
 
+	shareWith := ""
+	if share.PasswordProtected {
+		shareWith = "***redacted***"
+	}
+
 	return &ShareData{
 		// share.permissions ar mapped below
 		// DisplaynameOwner:     creator.DisplayName,
 		// DisplaynameFileOwner: share.GetCreator().String(),
-		ID:           share.Id.OpaqueId,
-		ShareType:    ShareTypePublicLink,
-		STime:        share.Ctime.Seconds, // TODO CS3 api birth time = btime
-		Token:        share.Token,
-		Expiration:   expiration,
-		MimeType:     share.Mtime.String(),
-		Name:         share.DisplayName,
-		URL:          r.Header.Get("Origin") + "/#/s/" + share.Token,
-		Permissions:  publicSharePermissions2OCSPermissions(share.GetPermissions()),
-		UIDOwner:     LocalUserIDToString(share.Creator),
-		UIDFileOwner: LocalUserIDToString(share.Owner),
+		ID:                   share.Id.OpaqueId,
+		ShareType:            ShareTypePublicLink,
+		ShareWith:            shareWith,
+		ShareWithDisplayname: shareWith,
+		STime:                share.Ctime.Seconds, // TODO CS3 api birth time = btime
+		Token:                share.Token,
+		Expiration:           expiration,
+		MimeType:             share.Mtime.String(),
+		Name:                 share.DisplayName,
+		MailSend:             0,
+		URL:                  r.Header.Get("Origin") + "/#/s/" + share.Token,
+		Permissions:          publicSharePermissions2OCSPermissions(share.GetPermissions()),
+		UIDOwner:             LocalUserIDToString(share.Creator),
+		UIDFileOwner:         LocalUserIDToString(share.Owner),
 	}
 	// actually clients should be able to GET and cache the user info themselves ...
 	// TODO check grantee type for user vs group

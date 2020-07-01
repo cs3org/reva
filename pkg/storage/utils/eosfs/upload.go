@@ -223,7 +223,7 @@ func (upload *fileUpload) GetInfo(ctx context.Context) (tusd.FileInfo, error) {
 	return upload.info, nil
 }
 
-// GetReader returns an io.Readerfor the upload
+// GetReader returns an io.Reader for the upload
 func (upload *fileUpload) GetReader(ctx context.Context) (io.Reader, error) {
 	return os.Open(upload.binPath)
 }
@@ -288,7 +288,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 	// TODO check etag with If-Match header
 	// if destination exists
 	//if _, err := os.Stat(np); err == nil {
-	// copy attributes of existing file to tmp file befor overwriting the target?
+	// copy attributes of existing file to tmp file before overwriting the target?
 	// eos creates revisions internally
 	//}
 
@@ -323,7 +323,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 // - the storage needs to implement AsTerminatableUpload
 // - the upload needs to implement Terminate
 
-// AsTerminatableUpload returnsa a TerminatableUpload
+// AsTerminatableUpload returns a TerminatableUpload
 func (fs *eosfs) AsTerminatableUpload(upload tusd.Upload) tusd.TerminatableUpload {
 	return upload.(*fileUpload)
 }

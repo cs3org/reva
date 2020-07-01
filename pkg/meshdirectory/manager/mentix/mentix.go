@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/cs3org/reva/pkg/meshdirectory"
 	"github.com/cs3org/reva/pkg/meshdirectory/manager/registry"
@@ -55,8 +56,12 @@ func New(m map[string]interface{}) (meshdirectory.Manager, error) {
 
 	client := &Client{
 		BaseURL: c.URL,
-		// TODO: pass/create context once it is required by GetHTTPClient
-		HTTPClient: rhttp.GetHTTPClient(context.TODO()),
+		HTTPClient: rhttp.GetHTTPClient(
+			// TODO: pass/create context once it is required by GetHTTPClient
+			rhttp.Context(context.TODO()),
+			rhttp.Insecure(c.Insecure),
+			rhttp.Timeout(time.Duration(c.Timeout*int64(time.Second))),
+		),
 	}
 
 	mgr := &mgr{
@@ -68,7 +73,9 @@ func New(m map[string]interface{}) (meshdirectory.Manager, error) {
 }
 
 type config struct {
-	URL string `mapstructure:"url"`
+	URL      string `mapstructure:"url"`
+	Timeout  int64  `mapstructure:"timeout"`
+	Insecure bool   `mapstructure:"insecure"`
 }
 
 type mgr struct {

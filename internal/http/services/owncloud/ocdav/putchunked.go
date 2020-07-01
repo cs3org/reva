@@ -157,7 +157,7 @@ func (s *svc) saveChunk(ctx context.Context, path string, r io.ReadCloser) (bool
 	//c.logger.Info().Log("msg", "chunkfolder readed", "nchunks", len(chunks))
 
 	// there is still some chunks to be uploaded.
-	// we return CodeUploadIsPartial to notify uper layers that the upload is still
+	// we return CodeUploadIsPartial to notify upper layers that the upload is still
 	// not complete and requires more actions.
 	// This code is needed to notify the owncloud webservice that the upload has not yet been
 	// completed and needs to continue uploading chunks.

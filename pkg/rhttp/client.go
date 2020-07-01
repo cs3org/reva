@@ -20,9 +20,9 @@ package rhttp
 
 import (
 	"context"
+	"crypto/tls"
 	"io"
 	"net/http"
-	"time"
 
 	"github.com/cs3org/reva/pkg/token"
 	"github.com/pkg/errors"
@@ -32,10 +32,19 @@ import (
 // GetHTTPClient returns an http client with open census tracing support.
 // TODO(labkode): harden it.
 // https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779
-func GetHTTPClient(ctx context.Context) *http.Client {
+func GetHTTPClient(opts ...Option) *http.Client {
+	options := newOptions(opts...)
+
 	httpClient := &http.Client{
-		Timeout:   time.Second * 10,
-		Transport: &ochttp.Transport{},
+		Timeout: options.Timeout,
+		Transport: &ochttp.Transport{
+			Base: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: options.Insecure,
+				},
+				DisableKeepAlives: options.DisableKeepAlive,
+			},
+		},
 	}
 	return httpClient
 }

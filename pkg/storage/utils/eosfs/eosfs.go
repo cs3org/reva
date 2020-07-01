@@ -175,7 +175,7 @@ func NewEOSFS(c *Config) (storage.FS, error) {
 	// bail out if keytab is not found.
 	if c.UseKeytab {
 		if _, err := os.Stat(c.Keytab); err != nil {
-			err = errors.Wrapf(err, "eos: keytab not accesible at location: %s", err)
+			err = errors.Wrapf(err, "eos: keytab not accessible at location: %s", err)
 			return nil, err
 		}
 	}
@@ -500,7 +500,7 @@ func (fs *eosfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*pr
 	return grantList, nil
 }
 
-func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error) {
+func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, err
@@ -517,7 +517,7 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference) (*provider.
 	// if path is home we need to add in the response any shadow folder in the shadow homedirectory.
 	if fs.conf.EnableHome {
 		if fs.isShareFolder(ctx, p) {
-			return fs.getMDShareFolder(ctx, p)
+			return fs.getMDShareFolder(ctx, p, mdKeys)
 		}
 	}
 
@@ -532,7 +532,7 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference) (*provider.
 	return fi, nil
 }
 
-func (fs *eosfs) getMDShareFolder(ctx context.Context, p string) (*provider.ResourceInfo, error) {
+func (fs *eosfs) getMDShareFolder(ctx context.Context, p string, mdKeys []string) (*provider.ResourceInfo, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, err
@@ -551,7 +551,7 @@ func (fs *eosfs) getMDShareFolder(ctx context.Context, p string) (*provider.Reso
 	return fs.convertToFileReference(ctx, eosFileInfo), nil
 }
 
-func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error) {
+func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
 	log := appctx.GetLogger(ctx)
 	u, err := getUser(ctx)
 	if err != nil {
@@ -625,7 +625,7 @@ func (fs *eosfs) listWithHome(ctx context.Context, home, p string) ([]*provider.
 	}
 
 	// path points to a resource in the nominal home
-	log.Debug().Msg("listting nominal home")
+	log.Debug().Msg("listing nominal home")
 	return fs.listWithNominalHome(ctx, p)
 }
 
@@ -724,7 +724,7 @@ func (fs *eosfs) GetHome(ctx context.Context) (string, error) {
 		return "", errtypes.NotSupported("eos: get home not supported")
 	}
 
-	// eos drive for homes assumess root(/) points to the user home.
+	// eos drive for homes assumes root(/) points to the user home.
 	return "/", nil
 }
 

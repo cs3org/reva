@@ -246,13 +246,13 @@ func (fs *localfs) isShareFolderChild(ctx context.Context, p string) bool {
 	return len(vals) > 1 && vals[1] != ""
 }
 
-func (fs *localfs) normalize(ctx context.Context, fi os.FileInfo, fn string) (*provider.ResourceInfo, error) {
+func (fs *localfs) normalize(ctx context.Context, fi os.FileInfo, fn string, mdKeys []string) (*provider.ResourceInfo, error) {
 	fp := fs.unwrap(ctx, path.Join("/", fn))
 	owner, err := getUser(ctx)
 	if err != nil {
 		return nil, err
 	}
-	metadata, err := fs.retrieveArbitraryMetadata(ctx, fn)
+	metadata, err := fs.retrieveArbitraryMetadata(ctx, fn, mdKeys)
 	if err != nil {
 		return nil, err
 	}
@@ -276,8 +276,8 @@ func (fs *localfs) normalize(ctx context.Context, fi os.FileInfo, fn string) (*p
 	return md, nil
 }
 
-func (fs *localfs) convertToFileReference(ctx context.Context, fi os.FileInfo, fn string) (*provider.ResourceInfo, error) {
-	info, err := fs.normalize(ctx, fi, fn)
+func (fs *localfs) convertToFileReference(ctx context.Context, fi os.FileInfo, fn string, mdKeys []string) (*provider.ResourceInfo, error) {
+	info, err := fs.normalize(ctx, fi, fn, mdKeys)
 	if err != nil {
 		return nil, err
 	}
@@ -297,14 +297,22 @@ func getResourceType(isDir bool) provider.ResourceType {
 	return provider.ResourceType_RESOURCE_TYPE_FILE
 }
 
-func (fs *localfs) retrieveArbitraryMetadata(ctx context.Context, fn string) (*provider.ArbitraryMetadata, error) {
+func (fs *localfs) retrieveArbitraryMetadata(ctx context.Context, fn string, mdKeys []string) (*provider.ArbitraryMetadata, error) {
 	md, err := fs.getMetadata(ctx, fn)
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error listing metadata")
 	}
 	var mdKey, mdVal string
-	metadata := provider.ArbitraryMetadata{
-		Metadata: map[string]string{},
+	metadata := map[string]string{}
+
+	mdKeysMap := make(map[string]struct{})
+	for _, k := range mdKeys {
+		mdKeysMap[k] = struct{}{}
+	}
+
+	var returnAllKeys bool
+	if _, ok := mdKeysMap["*"]; len(mdKeys) == 0 || ok {
+		returnAllKeys = true
 	}
 
 	for md.Next() {
@@ -312,9 +320,13 @@ func (fs *localfs) retrieveArbitraryMetadata(ctx context.Context, fn string) (*p
 		if err != nil {
 			return nil, errors.Wrap(err, "localfs: error scanning db rows")
 		}
-		metadata.Metadata[mdKey] = mdVal
+		if _, ok := mdKeysMap[mdKey]; returnAllKeys || ok {
+			metadata[mdKey] = mdVal
+		}
 	}
-	return &metadata, nil
+	return &provider.ArbitraryMetadata{
+		Metadata: metadata,
+	}, nil
 }
 
 // GetPathByID returns the path pointed by the file id
@@ -750,7 +762,7 @@ func (fs *localfs) moveReferences(ctx context.Context, oldName, newName string) 
 	return nil
 }
 
-func (fs *localfs) GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error) {
+func (fs *localfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error resolving ref")
@@ -758,7 +770,7 @@ func (fs *localfs) GetMD(ctx context.Context, ref *provider.Reference) (*provide
 
 	if !fs.conf.DisableHome {
 		if fs.isShareFolder(ctx, fn) {
-			return fs.getMDShareFolder(ctx, fn)
+			return fs.getMDShareFolder(ctx, fn, mdKeys)
 		}
 	}
 
@@ -771,10 +783,10 @@ func (fs *localfs) GetMD(ctx context.Context, ref *provider.Reference) (*provide
 		return nil, errors.Wrap(err, "localfs: error stating "+fn)
 	}
 
-	return fs.normalize(ctx, md, fn)
+	return fs.normalize(ctx, md, fn, mdKeys)
 }
 
-func (fs *localfs) getMDShareFolder(ctx context.Context, p string) (*provider.ResourceInfo, error) {
+func (fs *localfs) getMDShareFolder(ctx context.Context, p string, mdKeys []string) (*provider.ResourceInfo, error) {
 
 	fn := fs.wrapReferences(ctx, p)
 	md, err := os.Stat(fn)
@@ -786,24 +798,24 @@ func (fs *localfs) getMDShareFolder(ctx context.Context, p string) (*provider.Re
 	}
 
 	if fs.isShareFolderRoot(ctx, p) {
-		return fs.normalize(ctx, md, fn)
+		return fs.normalize(ctx, md, fn, mdKeys)
 	}
-	return fs.convertToFileReference(ctx, md, fn)
+	return fs.convertToFileReference(ctx, md, fn, mdKeys)
 }
 
-func (fs *localfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error) {
+func (fs *localfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error resolving ref")
 	}
 
 	if fn == "/" {
-		homeFiles, err := fs.listFolder(ctx, fn)
+		homeFiles, err := fs.listFolder(ctx, fn, mdKeys)
 		if err != nil {
 			return nil, err
 		}
 		if !fs.conf.DisableHome {
-			sharedReferences, err := fs.listShareFolderRoot(ctx, fn)
+			sharedReferences, err := fs.listShareFolderRoot(ctx, fn, mdKeys)
 			if err != nil {
 				return nil, err
 			}
@@ -813,17 +825,17 @@ func (fs *localfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*
 	}
 
 	if fs.isShareFolderRoot(ctx, fn) {
-		return fs.listShareFolderRoot(ctx, fn)
+		return fs.listShareFolderRoot(ctx, fn, mdKeys)
 	}
 
 	if fs.isShareFolderChild(ctx, fn) {
 		return nil, errtypes.PermissionDenied("localfs: error listing folders inside the shared folder, only file references are stored inside")
 	}
 
-	return fs.listFolder(ctx, fn)
+	return fs.listFolder(ctx, fn, mdKeys)
 }
 
-func (fs *localfs) listFolder(ctx context.Context, fn string) ([]*provider.ResourceInfo, error) {
+func (fs *localfs) listFolder(ctx context.Context, fn string, mdKeys []string) ([]*provider.ResourceInfo, error) {
 
 	fn = fs.wrap(ctx, fn)
 
@@ -837,7 +849,7 @@ func (fs *localfs) listFolder(ctx context.Context, fn string) ([]*provider.Resou
 
 	finfos := []*provider.ResourceInfo{}
 	for _, md := range mds {
-		info, err := fs.normalize(ctx, md, path.Join(fn, md.Name()))
+		info, err := fs.normalize(ctx, md, path.Join(fn, md.Name()), mdKeys)
 		if err == nil {
 			finfos = append(finfos, info)
 		}
@@ -845,7 +857,7 @@ func (fs *localfs) listFolder(ctx context.Context, fn string) ([]*provider.Resou
 	return finfos, nil
 }
 
-func (fs *localfs) listShareFolderRoot(ctx context.Context, home string) ([]*provider.ResourceInfo, error) {
+func (fs *localfs) listShareFolderRoot(ctx context.Context, home string, mdKeys []string) ([]*provider.ResourceInfo, error) {
 
 	fn := fs.wrapReferences(ctx, home)
 
@@ -862,9 +874,9 @@ func (fs *localfs) listShareFolderRoot(ctx context.Context, home string) ([]*pro
 		var info *provider.ResourceInfo
 		var err error
 		if fs.isShareFolderRoot(ctx, path.Join("/", md.Name())) {
-			info, err = fs.normalize(ctx, md, path.Join(fn, md.Name()))
+			info, err = fs.normalize(ctx, md, path.Join(fn, md.Name()), mdKeys)
 		} else {
-			info, err = fs.convertToFileReference(ctx, md, path.Join(fn, md.Name()))
+			info, err = fs.convertToFileReference(ctx, md, path.Join(fn, md.Name()), mdKeys)
 		}
 		if err == nil {
 			finfos = append(finfos, info)

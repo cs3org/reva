@@ -28,6 +28,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/internal/http/utils"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
@@ -252,7 +253,11 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 	// create the tus client.
 	c := tus.DefaultConfig()
 	c.Resume = true
-	c.HttpClient = rhttp.GetHTTPClient(ctx)
+	c.HttpClient = rhttp.GetHTTPClient(
+		rhttp.Context(ctx),
+		rhttp.Timeout(time.Duration(s.c.Timeout*int64(time.Second))),
+		rhttp.Insecure(s.c.Insecure),
+	)
 	c.Store, err = memorystore.NewMemoryStore()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -260,10 +265,14 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	log.Debug().
-		Str("header", tokenpkg.TokenHeader).
-		Str("token", tokenpkg.ContextMustGetToken(ctx)).
-		Msg("adding token to header")
+		Str("upload-endpoint", dataServerURL).
+		Str("auth-header", tokenpkg.TokenHeader).
+		Str("auth-token", tokenpkg.ContextMustGetToken(ctx)).
+		Str("transfer-header", datagateway.TokenTransportHeader).
+		Str("transfer-token", uRes.Token).
+		Msg("adding tokens to headers")
 	c.Header.Set(tokenpkg.TokenHeader, tokenpkg.ContextMustGetToken(ctx))
+	c.Header.Set(datagateway.TokenTransportHeader, uRes.Token)
 
 	tusc, err := tus.NewClient(dataServerURL, c)
 	if err != nil {

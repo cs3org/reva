@@ -188,11 +188,16 @@ func (s *service) initiateFileDownload(ctx context.Context, req *provider.Initia
 		}, nil
 	}
 
+	if !strings.HasSuffix(dRes.DownloadEndpoint, "/") {
+		dRes.DownloadEndpoint += "/"
+	}
+	dRes.DownloadEndpoint += dRes.Token
+
 	return &provider.InitiateFileDownloadResponse{
 		Opaque:           req.Opaque,
 		Status:           dRes.Status,
 		DownloadEndpoint: dRes.DownloadEndpoint,
-		Expose:           true, // TODO set to false, leave data provider lookup to the datagateway
+		Expose:           true, // the gateway already has encoded the upload endpoint
 	}, nil
 }
 
@@ -219,12 +224,17 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		}, nil
 	}
 
+	if !strings.HasSuffix(uRes.UploadEndpoint, "/") {
+		uRes.UploadEndpoint += "/"
+	}
+	uRes.UploadEndpoint += uRes.Token
+
 	res := &provider.InitiateFileUploadResponse{
 		UploadEndpoint:     uRes.UploadEndpoint,
 		Status:             uRes.Status,
 		AvailableChecksums: uRes.AvailableChecksums,
 		Opaque:             uRes.Opaque,
-		Expose:             true, // TODO set to false, leave data provider lookup to the datagateway
+		Expose:             true, // the gateway already has encoded the upload endpoint
 	}
 
 	return res, nil
@@ -380,7 +390,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 
 	// prevent leaking internal paths
 	if statResponse.Info != nil {
-		statResponse.Info.Path = path.Join("/", tkn, relativePath)
+		statResponse.Info.Path = path.Join(s.mountPath, "/", tkn, relativePath)
 	}
 
 	return statResponse, nil
@@ -418,7 +428,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 	}
 
 	for i := range listContainerR.Infos {
-		listContainerR.Infos[i].Path = path.Join("/", tkn, relativePath, path.Base(listContainerR.Infos[i].Path))
+		listContainerR.Infos[i].Path = path.Join(s.mountPath, "/", tkn, relativePath, path.Base(listContainerR.Infos[i].Path))
 	}
 
 	return listContainerR, nil

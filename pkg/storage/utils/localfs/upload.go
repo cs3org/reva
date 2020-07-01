@@ -55,7 +55,7 @@ func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.Rea
 
 	_, err = io.Copy(tmp, r)
 	if err != nil {
-		return errors.Wrap(err, "localfs: eror writing to tmp file "+tmp.Name())
+		return errors.Wrap(err, "localfs: error writing to tmp file "+tmp.Name())
 	}
 
 	// if destination exists
@@ -75,7 +75,7 @@ func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.Rea
 }
 
 // InitiateUpload returns an upload id that can be used for uploads with tus
-// It resolves the resurce and then reuses the NewUpload function
+// It resolves the resource and then reuses the NewUpload function
 // Currently requires the uploadLength to be set
 // TODO to implement LengthDeferrerDataStore make size optional
 // TODO read optional content for small files in this request
@@ -244,7 +244,7 @@ func (upload *fileUpload) GetInfo(ctx context.Context) (tusd.FileInfo, error) {
 	return upload.info, nil
 }
 
-// GetReader returns an io.Readerfor the upload
+// GetReader returns an io.Reader for the upload
 func (upload *fileUpload) GetReader(ctx context.Context) (io.Reader, error) {
 	return os.Open(upload.binPath)
 }

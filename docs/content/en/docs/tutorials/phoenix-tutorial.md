@@ -6,7 +6,7 @@ description: >
   Connect Phoenix and Reva locally
 ---
 
-This is a guide on how you can run both Pheonix and Reva locally in a dev environment. 
+This is a guide on how you can run both Phoenix and Reva locally in a dev environment. 
 Phoenix is the new ownCloud frontend application and can be connected to Reva.
 
 ## Prerequisites
@@ -62,7 +62,7 @@ cp ../reva/examples/oc-phoenix/phoenix.oidc.config.json config.json
 
 
 ## 4. Run Reva
-Now you need to run Revad (the Reva deamon). Follow these steps
+Now you need to run Revad (the Reva daemon). Follow these steps
 from the *reva* folder:
 
 ```

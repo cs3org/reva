@@ -21,6 +21,7 @@ package ocdav
 import (
 	"net/http"
 	"path"
+	"strings"
 	"time"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -151,13 +152,26 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
+	// TUS clients don't understand the reva transfer token. We need to append it to the upload endpoint.
+	// The DataGateway has to take care of pulling it back into the request header upon request arrival.
+	if uRes.Token != "" {
+		if !strings.HasSuffix(uRes.UploadEndpoint, "/") {
+			uRes.UploadEndpoint += "/"
+		}
+		uRes.UploadEndpoint += uRes.Token
+	}
+
 	w.Header().Set("Location", uRes.UploadEndpoint)
 
 	// for creation-with-upload extension forward bytes to dataprovider
 	// TODO check this really streams
 	if r.Header.Get("Content-Type") == "application/offset+octet-stream" {
 
-		httpClient := rhttp.GetHTTPClient(ctx)
+		httpClient := rhttp.GetHTTPClient(
+			rhttp.Context(ctx),
+			rhttp.Timeout(time.Duration(s.c.Timeout*int64(time.Second))),
+			rhttp.Insecure(s.c.Insecure),
+		)
 		httpReq, err := rhttp.NewRequest(ctx, "PATCH", uRes.UploadEndpoint, r.Body)
 		if err != nil {
 			log.Err(err).Msg("wrong request")

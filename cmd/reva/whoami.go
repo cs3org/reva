@@ -43,8 +43,8 @@ func whoamiCommand() *command {
 			// read token from file
 			t, err := readToken()
 			if err != nil {
-				fmt.Println("the token file cannot be readed from file ", getTokenFile())
-				fmt.Println("make sure you have login before with \"reva login\"")
+				fmt.Println("the token file cannot be read from file ", getTokenFile())
+				fmt.Println("make sure you have logged in before with \"reva login\"")
 				return err
 			}
 			token = t

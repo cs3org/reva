@@ -48,7 +48,7 @@ Details
 
  * Enhancement #468: remove vendor support
 
-   Because @dependabot cannot update in a clean way the vendor dependecies Reva removed support
+   Because @dependabot cannot update in a clean way the vendor dependencies Reva removed support
    for vendored dependencies inside the project.
 
    Dependencies will continue to be versioned but they will be downloaded when compiling the
@@ -59,7 +59,7 @@ Details
 
  * Enhancement #545: simplify configuration
 
-   Reva configuration was difficul as many of the configuration parameters were not providing
+   Reva configuration was difficult as many of the configuration parameters were not providing
    sane defaults. This PR and the related listed below simplify the configuration.
 
    https://github.com/cs3org/reva/pull/545

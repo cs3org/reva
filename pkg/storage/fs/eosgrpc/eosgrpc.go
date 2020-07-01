@@ -209,7 +209,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	// bail out if keytab is not found.
 	if c.UseKeytab {
 		if _, err := os.Stat(c.Keytab); err != nil {
-			err = errors.Wrapf(err, "eos: keytab not accesible at location: %s", err)
+			err = errors.Wrapf(err, "eos: keytab not accessible at location: %s", err)
 			return nil, err
 		}
 	}
@@ -468,11 +468,65 @@ func (fs *eosfs) getEosACL(g *provider.Grant) (*acl.Entry, error) {
 }
 
 func (fs *eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
-	return errtypes.NotSupported("eos: operation not supported")
+	u, err := getUser(ctx)
+	if err != nil {
+		return err
+	}
+
+	log := appctx.GetLogger(ctx)
+	log.Info().Msg("eos: set arbitrary md for ref:" + ref.String())
+
+	p, err := fs.resolve(ctx, u, ref)
+	if err != nil {
+		return errors.Wrap(err, "eos: error resolving reference")
+	}
+
+	fn := fs.wrap(ctx, p)
+
+	// Loop over the keyvalues of md.metadata and set them individually
+	for k, v := range md.Metadata {
+		var attr eosclientgrpc.Attribute
+		attr.Type = eosclientgrpc.SystemAttr
+		attr.Key = k
+		attr.Val = v
+		err = fs.c.SetAttr(ctx, u.Username, &attr, false, fn)
+		if err != nil {
+			return err
+		}
+
+	}
+	return nil
 }
 
 func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error {
-	return errtypes.NotSupported("eos: operation not supported")
+
+	u, err := getUser(ctx)
+	if err != nil {
+		return err
+	}
+
+	log := appctx.GetLogger(ctx)
+	log.Info().Msg("eos: set arbitrary md for ref:" + ref.String())
+
+	p, err := fs.resolve(ctx, u, ref)
+	if err != nil {
+		return errors.Wrap(err, "eos: error resolving reference")
+	}
+
+	fn := fs.wrap(ctx, p)
+
+	// Loop over the keys and unset them individually
+	for _, k := range keys {
+		var attr eosclientgrpc.Attribute
+		attr.Key = k
+
+		err = fs.c.UnsetAttr(ctx, u.Username, &attr, fn)
+		if err != nil {
+			return err
+		}
+
+	}
+	return nil
 }
 
 func (fs *eosfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
@@ -626,7 +680,7 @@ func (fs *eosfs) getGrantPermissionSet(mode string) *provider.ResourcePermission
 	return p
 }
 
-func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error) {
+func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, err
@@ -640,10 +694,10 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference) (*provider.
 		return nil, errors.Wrap(err, "eos: error resolving reference")
 	}
 
-	// if path is home we need to add in the response any shadow folder in the shadown homedirectory.
+	// if path is home we need to add in the response any shadow folder in the shadow homedirectory.
 	if fs.conf.EnableHome {
 		if fs.isShareFolder(ctx, p) {
-			return fs.getMDShareFolder(ctx, p)
+			return fs.getMDShareFolder(ctx, p, mdKeys)
 		}
 	}
 
@@ -658,7 +712,7 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference) (*provider.
 	return fi, nil
 }
 
-func (fs *eosfs) getMDShareFolder(ctx context.Context, p string) (*provider.ResourceInfo, error) {
+func (fs *eosfs) getMDShareFolder(ctx context.Context, p string, mdKeys []string) (*provider.ResourceInfo, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, err
@@ -677,7 +731,7 @@ func (fs *eosfs) getMDShareFolder(ctx context.Context, p string) (*provider.Reso
 	return fs.convertToFileReference(ctx, eosFileInfo), nil
 }
 
-func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error) {
+func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: no user in ctx")
@@ -1440,7 +1494,7 @@ func (fs *eosfs) getEosMetadata(finfo *eosclientgrpc.FileInfo) []byte {
 	No - CreateDir(ctx context.Context, fn string) error
 	No -Delete(ctx context.Context, ref *provider.Reference) error
 	No -Move(ctx context.Context, oldRef, newRef *provider.Reference) error
-	No -GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error)
+	No -GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error)
 	Yes -ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error)
 	No -Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error
 	No -Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error)
@@ -1471,7 +1525,7 @@ func (fs *eosfs) getEosMetadata(finfo *eosclientgrpc.FileInfo) []byte {
 	No - CreateDir(ctx context.Context, fn string) error
 	Maybe -Delete(ctx context.Context, ref *provider.Reference) error
 	No -Move(ctx context.Context, oldRef, newRef *provider.Reference) error
-	Yes -GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error)
+	Yes -GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error)
 	Yes -ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error)
 	No -Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error
 	No -Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error)
@@ -1502,7 +1556,7 @@ func (fs *eosfs) getEosMetadata(finfo *eosclientgrpc.FileInfo) []byte {
 	No - CreateDir(ctx context.Context, fn string) error
 	Maybe -Delete(ctx context.Context, ref *provider.Reference) error
 	Yes -Move(ctx context.Context, oldRef, newRef *provider.Reference) error
-	Yes -GetMD(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error)
+	Yes -GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error)
 	No -ListFolder(ctx context.Context, ref *provider.Reference) ([]*provider.ResourceInfo, error)
 	No -Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error
 	No -Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error)

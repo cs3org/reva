@@ -24,6 +24,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -73,7 +74,11 @@ func (s *svc) doTusPut(w http.ResponseWriter, r *http.Request) {
 	// create the tus client.
 	c := tus.DefaultConfig()
 	c.Resume = true
-	c.HttpClient = rhttp.GetHTTPClient(ctx)
+	c.HttpClient = rhttp.GetHTTPClient(
+		rhttp.Context(ctx),
+		rhttp.Timeout(time.Duration(s.conf.Timeout*int64(time.Second))),
+		rhttp.Insecure(s.conf.Insecure),
+	)
 	c.Store, err = memorystore.NewMemoryStore()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)

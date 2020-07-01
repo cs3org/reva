@@ -13,3 +13,5 @@ driver = "mentix"
 #
 #[http.services.meshdirectory.drivers.mentix]
 #url = "http://localhost:9600/"
+#insecure = true
+#timeout = 10

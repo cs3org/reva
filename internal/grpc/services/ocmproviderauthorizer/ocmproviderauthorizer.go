@@ -116,7 +116,7 @@ func (s *service) GetInfoByDomain(ctx context.Context, req *ocmprovider.GetInfoB
 }
 
 func (s *service) IsProviderAllowed(ctx context.Context, req *ocmprovider.IsProviderAllowedRequest) (*ocmprovider.IsProviderAllowedResponse, error) {
-	err := s.pa.IsProviderAllowed(ctx, req.User)
+	err := s.pa.IsProviderAllowed(ctx, req.Provider)
 	if err != nil {
 		return &ocmprovider.IsProviderAllowedResponse{
 			Status: status.NewInternal(ctx, err, "error verifying mesh provider"),
