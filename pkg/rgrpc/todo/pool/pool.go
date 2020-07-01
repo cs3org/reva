@@ -100,7 +100,7 @@ func GetGatewayServiceClient(endpoint string) (gateway.GatewayAPIClient, error) 
 	}
 
 	v := gateway.NewGatewayAPIClient(conn)
-	storageProviders.conn[endpoint] = v
+	gatewayProviders.conn[endpoint] = v
 
 	return v, nil
 }
