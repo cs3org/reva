@@ -40,8 +40,8 @@ steps:
       from_secret: fossa_api_key
   detach: true
   commands:
-    - wget -qO- https://github.com/fossas/fossa-cli/releases/download/v1.0.11/fossa-cli_1.0.11_linux_amd64.tar.gz | tar xvz -C /go/bin/ 
-    - /go/bin/fossa analyze 
+    - wget -qO- https://github.com/fossas/fossa-cli/releases/download/v1.0.11/fossa-cli_1.0.11_linux_amd64.tar.gz | tar xvz -C /go/bin/
+    - /go/bin/fossa analyze
 
 
 - name: build
@@ -61,7 +61,7 @@ steps:
     FOSSA_API_KEY:
       from_secret: fossa_api_key
   commands:
-    - wget -qO- https://github.com/fossas/fossa-cli/releases/download/v1.0.11/fossa-cli_1.0.11_linux_amd64.tar.gz | tar xvz -C /go/bin/ 
+    - wget -qO- https://github.com/fossas/fossa-cli/releases/download/v1.0.11/fossa-cli_1.0.11_linux_amd64.tar.gz | tar xvz -C /go/bin/
     - /go/bin/fossa test
 
 - name: publish-docker-reva-latest
@@ -110,8 +110,8 @@ steps:
       from_secret: fossa_api_key
   detach: true
   commands:
-    - wget -qO- https://github.com/fossas/fossa-cli/releases/download/v1.0.11/fossa-cli_1.0.11_linux_amd64.tar.gz | tar xvz -C /go/bin/ 
-    - /go/bin/fossa analyze 
+    - wget -qO- https://github.com/fossas/fossa-cli/releases/download/v1.0.11/fossa-cli_1.0.11_linux_amd64.tar.gz | tar xvz -C /go/bin/
+    - /go/bin/fossa analyze
 
 - name: build
   image: golang:1.13
@@ -130,7 +130,7 @@ steps:
     FOSSA_API_KEY:
       from_secret: fossa_api_key
   commands:
-    - wget -qO- https://github.com/fossas/fossa-cli/releases/download/v1.0.11/fossa-cli_1.0.11_linux_amd64.tar.gz | tar xvz -C /go/bin/ 
+    - wget -qO- https://github.com/fossas/fossa-cli/releases/download/v1.0.11/fossa-cli_1.0.11_linux_amd64.tar.gz | tar xvz -C /go/bin/
     - /go/bin/fossa test
 
 ---
@@ -155,8 +155,8 @@ steps:
       from_secret: fossa_api_key
   detach: true
   commands:
-    - wget -qO- https://github.com/fossas/fossa-cli/releases/download/v1.0.11/fossa-cli_1.0.11_linux_amd64.tar.gz | tar xvz -C /go/bin/ 
-    - /go/bin/fossa analyze 
+    - wget -qO- https://github.com/fossas/fossa-cli/releases/download/v1.0.11/fossa-cli_1.0.11_linux_amd64.tar.gz | tar xvz -C /go/bin/
+    - /go/bin/fossa analyze
 
 - name: build
   image: golang:1.13
@@ -176,7 +176,7 @@ steps:
     FOSSA_API_KEY:
       from_secret: fossa_api_key
   commands:
-    - wget -qO- https://github.com/fossas/fossa-cli/releases/download/v1.0.11/fossa-cli_1.0.11_linux_amd64.tar.gz | tar xvz -C /go/bin/ 
+    - wget -qO- https://github.com/fossas/fossa-cli/releases/download/v1.0.11/fossa-cli_1.0.11_linux_amd64.tar.gz | tar xvz -C /go/bin/
     - /go/bin/fossa test
 
 - name: create-dist
@@ -241,7 +241,7 @@ steps:
     image: golang:1.13
     detach: true
     commands:
-      - cd /drone/src/drone/oc-litmus/
+      - cd /drone/src/drone/oc-integration-tests/
       - /drone/src/cmd/revad/revad -c frontend.toml &
       - /drone/src/cmd/revad/revad -c gateway.toml &
       - /drone/src/cmd/revad/revad -c storage-home.toml &
@@ -281,7 +281,7 @@ steps:
     image: golang:1.13
     detach: true
     commands:
-      - cd /drone/src/drone/oc-litmus/
+      - cd /drone/src/drone/oc-integration-tests/
       - /drone/src/cmd/revad/revad -c frontend.toml &
       - /drone/src/cmd/revad/revad -c gateway.toml &
       - /drone/src/cmd/revad/revad -c storage-home.toml &
@@ -295,3 +295,71 @@ steps:
       LITMUS_USERNAME: einstein
       LITMUS_PASSWORD: relativity
       TESTS: basic http copymove props
+
+---
+kind: pipeline
+type: docker
+name: owncloud-integration-tests
+
+platform:
+  os: linux
+  arch: amd64
+
+trigger:
+  event:
+    include:
+      - pull_request
+      - tag
+
+steps:
+  - name: build
+    image: golang:1.13
+    commands:
+      - make build-ci
+
+  - name: revad-services
+    image: golang:1.13
+    detach: true
+    commands:
+      - cd /drone/src/drone/oc-integration-tests/
+      - /drone/src/cmd/revad/revad -c frontend.toml &
+      - /drone/src/cmd/revad/revad -c gateway.toml &
+      - /drone/src/cmd/revad/revad -c shares.toml &
+      - /drone/src/cmd/revad/revad -c storage-home.toml &
+      - /drone/src/cmd/revad/revad -c storage-oc.toml &
+      - /drone/src/cmd/revad/revad -c storage-publiclink.toml &
+      - /drone/src/cmd/revad/revad -c ldap-users.toml
+
+  - name: oC10APIAcceptanceTests
+    image: owncloudci/php:7.2
+    commands:
+      - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
+      - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
+      - cd /drone/src/tmp/testrunner
+      - git checkout a3cac3dad60348fc962d1d8743b202bc5f79596b
+      - make test-acceptance-api
+    environment:
+      TEST_SERVER_URL: 'http://revad-services:20080'
+      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/'
+      SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
+      TEST_EXTERNAL_USER_BACKENDS: 'true'
+      REVA_LDAP_HOSTNAME: 'ldap'
+      TEST_OCIS: 'true'
+      BEHAT_FILTER_TAGS: '~@skipOnOcis&&~@skipOnOcis-OC-Storage'
+
+services:
+  - 'name': 'ldap'
+    'image': 'osixia/openldap:1.3.0'
+    'pull': 'always'
+    'environment':
+      LDAP_DOMAIN: 'owncloud.com'
+      LDAP_ORGANISATION: 'ownCloud'
+      LDAP_ADMIN_PASSWORD: 'admin'
+      LDAP_TLS_VERIFY_CLIENT: 'never'
+      HOSTNAME: 'ldap'
+
+  - name: redis
+    image: webhippie/redis
+    'pull': 'always'
+    'environment':
+      REDIS_DATABASES: 1

@@ -31,7 +31,7 @@ allow_credentials = true
 [http.services.ocdav]
 # serve ocdav on the root path
 prefix = ""
-chunk_folder = "/var/tmp/reva/chunks"
+chunk_folder = "/drone/src/tmp/reva/chunks"
 # for user lookups
 # prefix the path of requests to /dav/files with this namespace
 # While owncloud has only listed usernames at this endpoint CERN has
@@ -61,3 +61,50 @@ files_namespace = "/oc"
 webdav_namespace = "/home"
 
 [http.services.ocs]
+
+[http.services.ocs.capabilities.capabilities.core.status]
+version = "10.0.11.5"
+versionstring = "10.0.11"
+
+[http.services.ocs.capabilities.capabilities.files_sharing]
+api_enabled = true
+resharing = true
+group_sharing = true
+auto_accept_share = true
+share_with_group_members_only = true
+share_with_membership_groups_only = true
+default_permissions = 22
+search_min_length = 3
+
+[http.services.ocs.capabilities.capabilities.files_sharing.public]
+enabled = true
+send_mail = true
+social_share = true
+upload = true
+multiple = true
+supports_upload_only = true
+
+[http.services.ocs.capabilities.capabilities.files_sharing.public.password]
+enforced = true
+
+[http.services.ocs.capabilities.capabilities.files_sharing.public.password.enforced_for]
+read_only = true
+read_write = true
+upload_only = true
+
+[http.services.ocs.capabilities.capabilities.files_sharing.public.expire_date]
+enabled = true
+
+[http.services.ocs.capabilities.capabilities.files_sharing.user]
+send_mail = true
+
+[http.services.ocs.capabilities.capabilities.files_sharing.user_enumeration]
+enabled = true
+group_members_only = true
+
+[http.services.ocs.capabilities.capabilities.files_sharing.federation]
+outgoing = true
+incoming = true
+
+[http.services.ocs.capabilities.capabilities.notifications]
+endpoints = ["disable"]

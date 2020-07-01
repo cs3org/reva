@@ -30,8 +30,9 @@ data_server_url = "http://localhost:12001/data"
 enable_home_creation = true
 
 [grpc.services.storageprovider.drivers.owncloud]
-datadirectory = "/var/tmp/reva/data"
+datadirectory = "/drone/src/tmp/reva/data"
 enable_home = true
+redis = "redis:6379"
 
 
 [http]
@@ -39,8 +40,9 @@ address = "0.0.0.0:12001"
 
 [http.services.dataprovider]
 driver = "owncloud"
-temp_folder = "/var/tmp/reva/tmp"
+temp_folder = "/drone/src/tmp/reva/tmp"
 
 [http.services.dataprovider.drivers.owncloud]
-datadirectory = "/var/tmp/reva/data"
+datadirectory = "/drone/src/tmp/reva/data"
 enable_home = true
+redis = "redis:6379"
