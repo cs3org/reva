@@ -21,6 +21,7 @@ package localfs
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -74,37 +75,28 @@ func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.Rea
 	return nil
 }
 
-// InitiateUpload returns an upload id that can be used for uploads with tus
-// It resolves the resurce and then reuses the NewUpload function
-// Currently requires the uploadLength to be set
-// TODO to implement LengthDeferrerDataStore make size optional
-// TODO read optional content for small files in this request
+// InitiateUpload returns an upload id that can be used for chunked uploads like with TUS protocol.
 func (fs *localfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (uploadID string, err error) {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return "", errors.Wrap(err, "localfs: error resolving reference")
 	}
 
-	info := tusd.FileInfo{
-		MetaData: tusd.MetaData{
-			"filename": filepath.Base(np),
-			"dir":      filepath.Dir(np),
-		},
-		Size: uploadLength,
-	}
+	// generate new id
+	id := uuid.New().String()
 
-	if metadata != nil && metadata["mtime"] != "" {
-		info.MetaData["mtime"] = metadata["mtime"]
-	}
+	metadata["filename"] = filepath.Base(np)
+	metadata["dir"] = filepath.Base(np)
+	metadata["id"] = id
+	metadata["size"] = fmt.Sprintf("%d", uploadLength)
 
-	upload, err := fs.NewUpload(ctx, info)
+	js, err := json.Marshal(metadata)
 	if err != nil {
-		return "", err
+		return errors.Wrap(err, "localfs: error when marshaling upload metadata")
 	}
 
-	info, _ = upload.GetInfo(ctx)
-
-	return info.ID, nil
+	// we need to persist this metadata
+	return id, nil
 }
 
 // UseIn tells the tus upload middleware which extensions it supports.
