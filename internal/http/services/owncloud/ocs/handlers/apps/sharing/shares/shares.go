@@ -351,65 +351,50 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// TODO: the default might change depending on allowed permissions and configs
-	permKey := 1
-
-	// handle legacy "publicUpload" arg that overrides permissions differently depending on the scenario
-	// https://github.com/owncloud/core/blob/v10.4.0/apps/files_sharing/lib/Controller/Share20OcsController.php#L447
-	if r.FormValue("publicUpload") != "" {
-		publicUploadFlag, err := strconv.ParseBool(r.FormValue("publicUpload"))
-		if err != nil {
-			log.Error().Err(err).Str("createShare", "shares").Str("publicUpload", r.FormValue("publicUpload")).Msg("could not parse publicUpload argument")
-			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "invalid argument value for \"publicUpload\"", err)
-			return
-		}
-
-		if publicUploadFlag {
-			// all perms except reshare
-			permKey = 15
-		}
-	}
-
-	// note: "permissions" value has higher priority than "publicUpload"
-	if r.FormValue("permissions") != "" {
-		// phoenix sends: {"permissions": 15}. See ocPermToRole struct for mapping
-		permKey, err = strconv.Atoi(r.FormValue("permissions"))
-		if err != nil {
-			log.Error().Err(err).Str("createShare", "shares").Str("permissions", r.FormValue("permissions")).Msgf("invalid type: %T", permKey)
-		}
-	}
-
-	role, ok := ocPermToRole[permKey]
-	if !ok {
-		log.Error().Str("permissionFromRequest", "shares").Msgf("invalid oC permission: %v", role)
-	}
-
-	perm, err := conversions.NewPermissions(permKey)
+	err = r.ParseForm()
 	if err != nil {
+		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Could not parse form from request", err)
 		return
 	}
 
-	p, err := h.map2CS3Permissions(role, perm)
+	newPermissions, err := permissionFromRequest(r, h)
 	if err != nil {
-		log.Error().Str("permissionFromRequest", "shares").Msgf("role to cs3permission %v", perm)
+		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Could not read permission from request", err)
+		return
+	}
+
+	if newPermissions == nil {
+		// default perms: read-only
+		// TODO: the default might change depending on allowed permissions and configs
+		newPermissions, err = ocPermToCs3(1, h)
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "Could not convert default permissions", err)
+			return
+		}
 	}
 
 	req := link.CreatePublicShareRequest{
 		ResourceInfo: statRes.GetInfo(),
 		Grant: &link.Grant{
 			Permissions: &link.PublicSharePermissions{
-				Permissions: p,
+				Permissions: newPermissions,
 			},
 			Password: r.FormValue("password"),
 		},
 	}
 
-	expireTime, err := expirationTimestampFromRequest(r, h)
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "invalid date format", err)
-	}
-	if expireTime != nil {
-		req.Grant.Expiration = expireTime
+	expireTimeString, ok := r.Form["expireDate"]
+	if ok {
+		if expireTimeString[0] != "" {
+			expireTime, err := parseTimestamp(expireTimeString[0])
+			if err != nil {
+				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "invalid datetime format", err)
+				return
+			}
+			if expireTime != nil {
+				req.Grant.Expiration = expireTime
+			}
+		}
 	}
 
 	// set displayname and password protected as arbitrary metadata
@@ -1549,84 +1534,128 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 		return
 	}
 
-	if r.FormValue("name") != before.GetShare().DisplayName {
-		updates = append(updates, &link.UpdatePublicShareRequest_Update{
-			Type:        link.UpdatePublicShareRequest_Update_TYPE_DISPLAYNAME,
-			DisplayName: r.FormValue("name"),
-		})
+	err = r.ParseForm()
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Could not parse form from request", err)
+		return
+	}
+
+	// indicates whether values to update were found,
+	// to check if the request was valid,
+	// not whether an actual update has been performed
+	updatesFound := false
+
+	newName, ok := r.Form["name"]
+	if ok {
+		updatesFound = true
+		if newName[0] != before.Share.DisplayName {
+			updates = append(updates, &link.UpdatePublicShareRequest_Update{
+				Type:        link.UpdatePublicShareRequest_Update_TYPE_DISPLAYNAME,
+				DisplayName: newName[0],
+			})
+		}
 	}
 
 	// Permissions
-	publicSharePermissions := &link.PublicSharePermissions{
-		Permissions: permissionFromRequest(r, h),
+	newPermissions, err := permissionFromRequest(r, h)
+	logger.Debug().Interface("newPermissions", newPermissions).Msg("Parsed permissions")
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "invalid permissions", err)
+		return
 	}
-	beforePerm, _ := json.Marshal(before.GetShare().Permissions)
-	afterPerm, _ := json.Marshal(publicSharePermissions)
-	if string(beforePerm) != string(afterPerm) {
-		logger.Info().Str("shares", "update").Msgf("updating permissions from %v to: %v", string(beforePerm), string(afterPerm))
-		updates = append(updates, &link.UpdatePublicShareRequest_Update{
-			Type: link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS,
-			Grant: &link.Grant{
-				Permissions: publicSharePermissions,
-			},
-		})
+
+	// update permissions if given
+	if newPermissions != nil {
+		updatesFound = true
+		publicSharePermissions := &link.PublicSharePermissions{
+			Permissions: newPermissions,
+		}
+		beforePerm, _ := json.Marshal(before.GetShare().Permissions)
+		afterPerm, _ := json.Marshal(publicSharePermissions)
+		if string(beforePerm) != string(afterPerm) {
+			logger.Info().Str("shares", "update").Msgf("updating permissions from %v to: %v", string(beforePerm), string(afterPerm))
+			updates = append(updates, &link.UpdatePublicShareRequest_Update{
+				Type: link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS,
+				Grant: &link.Grant{
+					Permissions: publicSharePermissions,
+				},
+			})
+		}
 	}
 
 	// ExpireDate
-	newExpiration, err := expirationTimestampFromRequest(r, h)
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "invalid date format", err)
-	}
-	beforeExpiration, _ := json.Marshal(before.Share.Expiration)
-	afterExpiration, _ := json.Marshal(newExpiration)
-	if newExpiration != nil || (string(afterExpiration) != string(beforeExpiration)) {
-		logger.Debug().Str("shares", "update").Msgf("updating expire date from %v to: %v", string(beforeExpiration), string(afterExpiration))
-		updates = append(updates, &link.UpdatePublicShareRequest_Update{
-			Type: link.UpdatePublicShareRequest_Update_TYPE_EXPIRATION,
-			Grant: &link.Grant{
-				Expiration: newExpiration,
-			},
-		})
+	expireTimeString, ok := r.Form["expireDate"]
+	// check if value is set and must be updated or cleared
+	if ok {
+		updatesFound = true
+		var newExpiration *types.Timestamp
+		if expireTimeString[0] != "" {
+			newExpiration, err = parseTimestamp(expireTimeString[0])
+			if err != nil {
+				response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "invalid datetime format", err)
+				return
+			}
+		}
+
+		beforeExpiration, _ := json.Marshal(before.Share.Expiration)
+		afterExpiration, _ := json.Marshal(newExpiration)
+		if string(afterExpiration) != string(beforeExpiration) {
+			logger.Debug().Str("shares", "update").Msgf("updating expire date from %v to: %v", string(beforeExpiration), string(afterExpiration))
+			updates = append(updates, &link.UpdatePublicShareRequest_Update{
+				Type: link.UpdatePublicShareRequest_Update_TYPE_EXPIRATION,
+				Grant: &link.Grant{
+					Expiration: newExpiration,
+				},
+			})
+		}
 	}
 
 	// Password
-	if len(r.FormValue("password")) > 0 {
+	newPassword, ok := r.Form["password"]
+	// update or clear password
+	if ok {
+		updatesFound = true
 		logger.Info().Str("shares", "update").Msg("password updated")
 		updates = append(updates, &link.UpdatePublicShareRequest_Update{
 			Type: link.UpdatePublicShareRequest_Update_TYPE_PASSWORD,
 			Grant: &link.Grant{
-				Password: r.FormValue("password"),
+				Password: newPassword[0],
 			},
 		})
 	}
+
+	publicShare := before.Share
 
 	// Updates are atomical. See: https://github.com/cs3org/cs3apis/pull/67#issuecomment-617651428 so in order to get the latest updated version
-	if len(updates) == 0 {
-		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "There is nothing to update.", nil) // TODO(refs) error? a simple noop might suffice
-		return
-	}
-
-	req := &link.UpdatePublicShareResponse{}
-	for k := range updates {
-		req, err = gwC.UpdatePublicShare(r.Context(), &link.UpdatePublicShareRequest{
-			Ref: &link.PublicShareReference{
-				Spec: &link.PublicShareReference_Id{
-					Id: &link.PublicShareId{
-						OpaqueId: shareID,
+	if len(updates) > 0 {
+		uRes := &link.UpdatePublicShareResponse{Share: before.Share}
+		for k := range updates {
+			uRes, err = gwC.UpdatePublicShare(r.Context(), &link.UpdatePublicShareRequest{
+				Ref: &link.PublicShareReference{
+					Spec: &link.PublicShareReference_Id{
+						Id: &link.PublicShareId{
+							OpaqueId: shareID,
+						},
 					},
 				},
-			},
-			Update: updates[k],
-		})
-		if err != nil {
-			log.Err(err).Str("shareID", shareID).Msg("sending update request to public link provider")
+				Update: updates[k],
+			})
+			if err != nil {
+				log.Err(err).Str("shareID", shareID).Msg("sending update request to public link provider")
+				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "Error sending update request to public link provider", err)
+				return
+			}
 		}
+		publicShare = uRes.Share
+	} else if !updatesFound {
+		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "No updates specified in request", nil)
+		return
 	}
 
 	statReq := provider.StatRequest{
 		Ref: &provider.Reference{
 			Spec: &provider.Reference_Id{
-				Id: req.GetShare().GetResourceId(),
+				Id: before.Share.ResourceId,
 			},
 		},
 	}
@@ -1638,7 +1667,7 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 		return
 	}
 
-	s := conversions.PublicShare2ShareData(req.Share, r)
+	s := conversions.PublicShare2ShareData(publicShare, r)
 	err = h.addFileInfo(r.Context(), s, statRes.Info)
 
 	if err != nil {
@@ -1649,53 +1678,83 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 	response.WriteOCSSuccess(w, r, s)
 }
 
-func expirationTimestampFromRequest(r *http.Request, h *Handler) (*types.Timestamp, error) {
-	var expireTime time.Time
-	var err error
-
-	expireDate := r.FormValue("expireDate")
-	if expireDate != "" {
-		expireTime, err = time.Parse("2006-01-02T15:04:05Z0700", expireDate)
-		if err != nil {
-			expireTime, err = time.Parse("2006-01-02", expireDate)
-		}
-		if err != nil {
-			return nil, fmt.Errorf("date format invalid: %v", expireDate)
-		}
-		final := expireTime.UnixNano()
-
-		return &types.Timestamp{
-			Seconds: uint64(final / 1000000000),
-			Nanos:   uint32(final % 1000000000),
-		}, nil
+func parseTimestamp(timestampString string) (*types.Timestamp, error) {
+	parsedTime, err := time.Parse("2006-01-02T15:04:05Z0700", timestampString)
+	if err != nil {
+		parsedTime, err = time.Parse("2006-01-02", timestampString)
 	}
+	if err != nil {
+		return nil, fmt.Errorf("datetime format invalid: %v", timestampString)
+	}
+	final := parsedTime.UnixNano()
 
-	return nil, nil
+	return &types.Timestamp{
+		Seconds: uint64(final / 1000000000),
+		Nanos:   uint32(final % 1000000000),
+	}, nil
 }
 
-func permissionFromRequest(r *http.Request, h *Handler) *provider.ResourcePermissions {
-	// phoenix sends: {"permissions": 15}. See ocPermToRole struct for mapping
-	permKey, err := strconv.Atoi(r.FormValue("permissions"))
-	if err != nil {
-		log.Error().Str("permissionFromRequest", "shares").Msgf("invalid type: %T", permKey)
-	}
-
+func ocPermToCs3(permKey int, h *Handler) (*provider.ResourcePermissions, error) {
 	role, ok := ocPermToRole[permKey]
 	if !ok {
-		log.Error().Str("permissionFromRequest", "shares").Msgf("invalid oC permission: %v", role)
+		log.Error().Str("ocPermToCs3", "shares").Msgf("invalid oC permission: %v", role)
+		return nil, fmt.Errorf("invalid oC permission: %v", role)
 	}
 
 	perm, err := conversions.NewPermissions(permKey)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	p, err := h.map2CS3Permissions(role, perm)
 	if err != nil {
 		log.Error().Str("permissionFromRequest", "shares").Msgf("role to cs3permission %v", perm)
+		return nil, fmt.Errorf("role to cs3permission failed: %v", perm)
 	}
 
-	return p
+	return p, nil
+}
+
+func permissionFromRequest(r *http.Request, h *Handler) (*provider.ResourcePermissions, error) {
+	// phoenix sends: {"permissions": 15}. See ocPermToRole struct for mapping
+
+	permKey := 1
+
+	// note: "permissions" value has higher priority than "publicUpload"
+
+	// handle legacy "publicUpload" arg that overrides permissions differently depending on the scenario
+	// https://github.com/owncloud/core/blob/v10.4.0/apps/files_sharing/lib/Controller/Share20OcsController.php#L447
+	publicUploadString, ok := r.Form["publicUpload"]
+	if ok {
+		publicUploadFlag, err := strconv.ParseBool(publicUploadString[0])
+		if err != nil {
+			log.Error().Err(err).Str("publicUpload", publicUploadString[0]).Msg("could not parse publicUpload argument")
+			return nil, err
+		}
+
+		if publicUploadFlag {
+			// all perms except reshare
+			permKey = 15
+		}
+	} else {
+		permissionsString, ok := r.Form["permissions"]
+		if !ok {
+			// no permission values given
+			return nil, nil
+		}
+
+		permKey, err := strconv.Atoi(permissionsString[0])
+		if err != nil {
+			log.Error().Str("permissionFromRequest", "shares").Msgf("invalid type: %T", permKey)
+			return nil, fmt.Errorf("invalid type: %T", permKey)
+		}
+	}
+
+	p, err := ocPermToCs3(permKey, h)
+	if err != nil {
+		return nil, err
+	}
+	return p, err
 }
 
 // Maps oc10 permissions to roles
