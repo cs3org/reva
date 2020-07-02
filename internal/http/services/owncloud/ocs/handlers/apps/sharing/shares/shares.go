@@ -366,7 +366,7 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request) 
 	if newPermissions == nil {
 		// default perms: read-only
 		// TODO: the default might change depending on allowed permissions and configs
-		newPermissions, err = ocPermToCs3(1, h)
+		newPermissions, err = ocPublicPermToCs3(1, h)
 		if err != nil {
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "Could not convert default permissions", err)
 			return
@@ -647,6 +647,7 @@ func (h *Handler) map2CS3Permissions(role string, p conversions.Permissions) (*p
 		GetQuota:             p.Contain(conversions.PermissionRead),
 		InitiateFileDownload: p.Contain(conversions.PermissionRead),
 
+		// FIXME: uploader role with only write permission can use InitiateFileUpload, not anything else
 		Move:               p.Contain(conversions.PermissionWrite),
 		InitiateFileUpload: p.Contain(conversions.PermissionWrite),
 		CreateContainer:    p.Contain(conversions.PermissionCreate),
@@ -1694,11 +1695,11 @@ func parseTimestamp(timestampString string) (*types.Timestamp, error) {
 	}, nil
 }
 
-func ocPermToCs3(permKey int, h *Handler) (*provider.ResourcePermissions, error) {
-	role, ok := ocPermToRole[permKey]
+func ocPublicPermToCs3(permKey int, h *Handler) (*provider.ResourcePermissions, error) {
+	role, ok := ocPublicPermToRole[permKey]
 	if !ok {
-		log.Error().Str("ocPermToCs3", "shares").Msgf("invalid oC permission: %v", role)
-		return nil, fmt.Errorf("invalid oC permission: %v", role)
+		log.Error().Str("ocPublicPermToCs3", "shares").Msgf("invalid oC permission: %s", role)
+		return nil, fmt.Errorf("invalid oC permission: %s", role)
 	}
 
 	perm, err := conversions.NewPermissions(permKey)
@@ -1717,7 +1718,7 @@ func ocPermToCs3(permKey int, h *Handler) (*provider.ResourcePermissions, error)
 
 func permissionFromRequest(r *http.Request, h *Handler) (*provider.ResourcePermissions, error) {
 	var err error
-	// phoenix sends: {"permissions": 15}. See ocPermToRole struct for mapping
+	// phoenix sends: {"permissions": 15}. See ocPublicPermToRole struct for mapping
 
 	permKey := 1
 
@@ -1751,17 +1752,23 @@ func permissionFromRequest(r *http.Request, h *Handler) (*provider.ResourcePermi
 		}
 	}
 
-	p, err := ocPermToCs3(permKey, h)
+	p, err := ocPublicPermToCs3(permKey, h)
 	if err != nil {
 		return nil, err
 	}
 	return p, err
 }
 
-// Maps oc10 permissions to roles
-var ocPermToRole = map[int]string{
-	1:  "viewer",
-	15: "coowner",
-	31: "editor",
-	// 5: contributor (?)
+// TODO: add mapping for user share permissions to role
+
+// Maps oc10 public link permissions to roles
+var ocPublicPermToRole = map[int]string{
+	// Recipients can view and download contents.
+	1: "viewer",
+	// Recipients can view, download, edit, delete and upload contents
+	15: "editor",
+	// Recipients can upload but existing contents are not revealed
+	4: "uploader",
+	// Recipients can view, download and upload contents
+	5: "contributor",
 }

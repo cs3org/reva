@@ -361,6 +361,7 @@ func publicSharePermissions2OCSPermissions(sp *link.PublicSharePermissions) Perm
 }
 
 // TODO sort out mapping, this is just a first guess
+// public link permissions to OCS permissions
 func Permissions2OCSPermissions(p *provider.ResourcePermissions) Permissions {
 	permissions := PermissionInvalid
 	if p != nil {
