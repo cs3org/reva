@@ -23,7 +23,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"path/filepath"
 	"strconv"
+	"time"
 
 	providerpb "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/app"
@@ -43,14 +45,20 @@ func init() {
 
 type service struct {
 	provider app.Provider
+	conf     *config
 }
 
 type config struct {
-	Driver string                 `mapstructure:"driver"`
-	Demo   map[string]interface{} `mapstructure:"demo"`
+	Driver          string                 `mapstructure:"driver"`
+	Demo            map[string]interface{} `mapstructure:"demo"`
+	IopSecret       string                 `mapstructure:"iopsecret" docs:"The iopsecret used to connect to the wopiserver."`
+	WopiURL         string                 `mapstructure:"wopiurl" docs:"The wopiserver's url."`
+	UIURL           string                 `mapstructure:"uirul" docs:"URL to application (eg collabora) URL."`
+	StorageEndpoint string                 `mapstructure:"storageendpoint" docs:"The storage endpoint used by the wopiserver 
+	to look up the file or storage id, defaults to "default" by the wopiserver if empty."`
 }
 
-// New creates a new StorageRegistryService
+// New creates a new AppProviderService
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 
 	c, err := parseConfig(m)
@@ -64,6 +72,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	}
 
 	service := &service{
+		conf:     c,
 		provider: provider,
 	}
 
@@ -102,18 +111,23 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 
 	log := appctx.GetLogger(ctx)
 
-	wopiurl := "http://0.0.0.0:8880/" //TODO!
-	iopsecret := "testsecret"         //TODO!
-	eos := ""                         //TODO!
-	folderURL := "foo"                //TODO!
+	wopiurl := s.conf.WopiURL
+	iopsecret := s.conf.IopSecret
+	storageEndpoint := s.conf.StorageEndpoint
+	folderURL := s.conf.UIURL + filepath.Dir(req.Ref.GetPath())
 
-	httpClient := rhttp.GetHTTPClient(ctx)
-
+	httpClient := rhttp.GetHTTPClient(
+		rhttp.Context(ctx),
+		// TODO make insecure configurable
+		rhttp.Insecure(true),
+		// TODO make timeout configurable
+		rhttp.Timeout(time.Duration(24*int64(time.Hour))),
+	)
 	httpReq, err := rhttp.NewRequest(ctx, "GET", wopiurl+"wopi/iop/open", nil)
 
 	q := httpReq.URL.Query()
 	q.Add("filename", req.Ref.GetPath())
-	q.Add("endpoint", eos)
+	q.Add("endpoint", storageEndpoint)
 	q.Add("viewmode", req.ViewMode.String())
 	q.Add("folderurl", folderURL)
 

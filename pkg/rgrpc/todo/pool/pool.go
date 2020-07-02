@@ -373,8 +373,10 @@ func GetOCMCoreClient(endpoint string) (ocmcore.OcmCoreAPIClient, error) {
 
 // GetOpenFileInAppProviderClient returns a new OpenFileInAppProviderClient.
 func GetOpenFileInAppProviderClient(endpoint string) (appprovider.ProviderAPIClient, error) {
-	if val, ok := appProviders[endpoint]; ok {
-		return val, nil
+	appProviders.m.Lock()
+	defer appProviders.m.Unlock()
+	if c, ok := appProviders.conn[endpoint]; ok {
+		return c.(appprovider.ProviderAPIClient), nil
 	}
 
 	conn, err := NewConn(endpoint)
@@ -382,7 +384,8 @@ func GetOpenFileInAppProviderClient(endpoint string) (appprovider.ProviderAPICli
 		return nil, err
 	}
 
-	appProviders[endpoint] = appprovider.NewProviderAPIClient(conn)
+	v := appprovider.NewProviderAPIClient(conn)
+	appProviders.conn[endpoint] = v
 
-	return appProviders[endpoint], nil
+	return v, nil
 }

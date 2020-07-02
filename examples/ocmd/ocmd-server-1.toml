@@ -69,6 +69,10 @@ driver = "memory"
 
 [grpc.services.appprovider]
 driver = "demo"
+iopsecret = "testsecret"
+wopiurl = "http://0.0.0.0:8880/"
+storageendpoint = ""
+uiurl = ""
 
 [grpc.services.appregistry]
 driver = "static"
