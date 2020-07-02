@@ -1716,6 +1716,7 @@ func ocPermToCs3(permKey int, h *Handler) (*provider.ResourcePermissions, error)
 }
 
 func permissionFromRequest(r *http.Request, h *Handler) (*provider.ResourcePermissions, error) {
+	var err error
 	// phoenix sends: {"permissions": 15}. See ocPermToRole struct for mapping
 
 	permKey := 1
@@ -1743,7 +1744,7 @@ func permissionFromRequest(r *http.Request, h *Handler) (*provider.ResourcePermi
 			return nil, nil
 		}
 
-		permKey, err := strconv.Atoi(permissionsString[0])
+		permKey, err = strconv.Atoi(permissionsString[0])
 		if err != nil {
 			log.Error().Str("permissionFromRequest", "shares").Msgf("invalid type: %T", permKey)
 			return nil, fmt.Errorf("invalid type: %T", permKey)
