@@ -107,10 +107,10 @@ type manager struct {
 // CreatePublicShare adds a new entry to manager.shares
 func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error) {
 	id := &link.PublicShareId{
-		OpaqueId: randString(12),
+		OpaqueId: randString(15),
 	}
 
-	tkn := randString(12)
+	tkn := randString(15)
 	now := time.Now().UnixNano()
 
 	displayName, ok := rInfo.ArbitraryMetadata.Metadata["name"]
