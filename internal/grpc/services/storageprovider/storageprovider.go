@@ -77,7 +77,12 @@ func (c *config) init() {
 	}
 
 	if c.DataServerURL == "" {
-		c.DataServerURL = "http://0.0.0.0:19001/data"
+		host, err := os.Hostname()
+		if err != nil || host == "" {
+			c.DataServerURL = "http://0.0.0.0:19001/data"
+		} else {
+			c.DataServerURL = fmt.Sprintf("http://%s:19001/data", host)
+		}
 	}
 
 	// set sane defaults
