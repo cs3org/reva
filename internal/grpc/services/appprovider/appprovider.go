@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -49,12 +50,12 @@ type service struct {
 }
 
 type config struct {
-	Driver          string                 `mapstructure:"driver"`
-	Demo            map[string]interface{} `mapstructure:"demo"`
-	IopSecret       string                 `mapstructure:"iopsecret" docs:"The iopsecret used to connect to the wopiserver."`
-	WopiURL         string                 `mapstructure:"wopiurl" docs:"The wopiserver's url."`
-	UIURL           string                 `mapstructure:"uirul" docs:"URL to application (eg collabora) URL."`
-	StorageEndpoint string                 `mapstructure:"storageendpoint" docs:"The storage endpoint used by the wopiserver 
+	Driver    string                 `mapstructure:"driver"`
+	Demo      map[string]interface{} `mapstructure:"demo"`
+	IopSecret string                 `mapstructure:"iopsecret" docs:"The iopsecret used to connect to the wopiserver."`
+	WopiURL   string                 `mapstructure:"wopiurl" docs:"The wopiserver's url."`
+	UIURL     string                 `mapstructure:"uirul" docs:"URL to application (eg collabora) URL."`
+	StorageID string                 `mapstructure:"storageid" docs:"The storage id used by the wopiserver 
 	to look up the file or storage id, defaults to "default" by the wopiserver if empty."`
 }
 
@@ -113,7 +114,7 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 
 	wopiurl := s.conf.WopiURL
 	iopsecret := s.conf.IopSecret
-	storageEndpoint := s.conf.StorageEndpoint
+	storageID := s.conf.StorageID
 	folderURL := s.conf.UIURL + filepath.Dir(req.Ref.GetPath())
 
 	httpClient := rhttp.GetHTTPClient(
@@ -127,9 +128,14 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 
 	q := httpReq.URL.Query()
 	q.Add("filename", req.Ref.GetPath())
-	q.Add("endpoint", storageEndpoint)
+	q.Add("endpoint", storageID)
 	q.Add("viewmode", req.ViewMode.String())
 	q.Add("folderurl", folderURL)
+	u, ok := user.ContextGetUser(ctx)
+
+	if ok == true {
+		q.Add("username", u.Username)
+	}
 
 	httpReq.Header.Set("Authorization", "Bearer "+iopsecret)
 	httpReq.Header.Set("TokenHeader", req.AccessToken)
