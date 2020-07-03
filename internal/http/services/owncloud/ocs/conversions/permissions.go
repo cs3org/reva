@@ -61,7 +61,7 @@ func (p Permissions) Contain(other Permissions) bool {
 	return p&other != 0
 }
 
-// Permissions2Role performs permission conversions
+// Permissions2Role performs permission conversions for user and federated shares
 func Permissions2Role(p Permissions) string {
 	role := RoleLegacy
 	if p.Contain(PermissionRead) {

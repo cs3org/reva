@@ -361,6 +361,7 @@ func publicSharePermissions2OCSPermissions(sp *link.PublicSharePermissions) Perm
 }
 
 // TODO sort out mapping, this is just a first guess
+// public link permissions to OCS permissions
 func Permissions2OCSPermissions(p *provider.ResourcePermissions) Permissions {
 	permissions := PermissionInvalid
 	if p != nil {
@@ -386,7 +387,7 @@ func Permissions2OCSPermissions(p *provider.ResourcePermissions) Permissions {
 // timestamp is assumed to be UTC ... just human readable ...
 // FIXME and ambiguous / error prone because there is no time zone ...
 func timestampToExpiration(t *types.Timestamp) string {
-	return time.Unix(int64(t.Seconds), int64(t.Nanos)).Format("2006-01-02 15:05:05")
+	return time.Unix(int64(t.Seconds), int64(t.Nanos)).UTC().Format("2006-01-02 15:05:05")
 }
 
 const (
