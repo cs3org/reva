@@ -18,96 +18,22 @@
 
 package metrics
 
-// This package defines site metrics measures and views based on opencensus.io
-
 import (
-	"context"
-	"math/rand"
-	"time"
-
-	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
 )
 
-func init() {
-	// call the actual metric provider functions for the latest metrics every 4th second
-	go func() {
-		rand.Seed(time.Now().UnixNano())
-		for {
-			getNumUsers()
-			getNumGroups()
-			getAmountStorage()
-			time.Sleep(4 * time.Second)
-		}
-	}()
-}
+// Reader is the interface that defines how the metrics will be read.
+type Reader interface {
 
-// Create the measures
-var (
-	NumUsersMeasure      = stats.Int64("cs3_org_sciencemesh_site_total_num_users", "The total number of users within this site", stats.UnitDimensionless)
-	NumGroupsMeasure     = stats.Int64("cs3_org_sciencemesh_site_total_num_groups", "The total number of groups within this site", stats.UnitDimensionless)
-	AmountStorageMeasure = stats.Int64("cs3_org_sciencemesh_site_total_amount_storage", "The total amount of storage used within this site", stats.UnitBytes)
-)
+	// GetNumUsersView returns an OpenCensus stats view which records the
+	// number of users registered in the mesh provider.
+	GetNumUsersView() *view.View
 
-// initialize local dummy counters
-var (
-	numUsersCounter      = int64(0)
-	amountStorageCounter = int64(0)
-)
+	// GetNumGroupsView returns an OpenCensus stats view which records the
+	// number of user groups registered in the mesh provider.
+	GetNumGroupsView() *view.View
 
-// getNumberUsers links to the underlying number of site users provider
-func getNumUsers() {
-	ctx := context.Background()
-	// here we must request the actual number of site users
-	// for now this is a mockup: a number increasing over time
-	numUsersCounter += int64(rand.Intn(100))
-	stats.Record(ctx, NumUsersMeasure.M(numUsersCounter))
-}
-
-// GetNumUsersView returns the number of site users measure view
-func GetNumUsersView() *view.View {
-	return &view.View{
-		Name:        NumUsersMeasure.Name(),
-		Description: NumUsersMeasure.Description(),
-		Measure:     NumUsersMeasure,
-		Aggregation: view.LastValue(),
-	}
-}
-
-// getNumberGroups links to the underlying number of site groups provider
-func getNumGroups() {
-	ctx := context.Background()
-	// here we must request the actual number of site groups
-	// for now this is a mockup: a number changing over time
-	var numGroupsCounter = int64(rand.Intn(100))
-	stats.Record(ctx, NumGroupsMeasure.M(numGroupsCounter))
-}
-
-// GetNumGroupsView returns the number of site groups measure view
-func GetNumGroupsView() *view.View {
-	return &view.View{
-		Name:        NumGroupsMeasure.Name(),
-		Description: NumGroupsMeasure.Description(),
-		Measure:     NumGroupsMeasure,
-		Aggregation: view.LastValue(),
-	}
-}
-
-// getAmountStorage links to the underlying amount of storage provider
-func getAmountStorage() {
-	ctx := context.Background()
-	// here we must request the actual amount of storage used
-	// for now this is a mockup: a number increasing over time
-	amountStorageCounter += int64(rand.Intn(12865000))
-	stats.Record(ctx, AmountStorageMeasure.M(amountStorageCounter))
-}
-
-// GetAmountStorageView returns the amount of site storage measure view
-func GetAmountStorageView() *view.View {
-	return &view.View{
-		Name:        AmountStorageMeasure.Name(),
-		Description: AmountStorageMeasure.Description(),
-		Measure:     AmountStorageMeasure,
-		Aggregation: view.LastValue(),
-	}
+	// GetAmountStorageView returns an OpenCensus stats view which records the
+	// amount of storage in the system.
+	GetAmountStorageView() *view.View
 }
