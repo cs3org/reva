@@ -41,9 +41,9 @@ func Decode(v interface{}) error {
 		sharedConf.GatewaySVC = "0.0.0.0:19000"
 	}
 
-	// this is the default address we use for starting HTTP services
+	// this is the default address we use for the data gateway HTTP service
 	if sharedConf.DataGateway == "" {
-		sharedConf.DataGateway = "http://localhost:19001/data"
+		sharedConf.DataGateway = "http://0.0.0.0:19001/datagateway"
 	}
 
 	// TODO(labkode): would be cool to autogenerate one secret and print
