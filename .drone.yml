@@ -62,7 +62,7 @@ steps:
       from_secret: fossa_api_key
   commands:
     - wget -qO- https://github.com/fossas/fossa-cli/releases/download/v1.0.11/fossa-cli_1.0.11_linux_amd64.tar.gz | tar xvz -C /go/bin/
-    - /go/bin/fossa test
+    - /go/bin/fossa test --timeout 900
 
 - name: publish-docker-reva-latest
   pull: always
@@ -131,7 +131,7 @@ steps:
       from_secret: fossa_api_key
   commands:
     - wget -qO- https://github.com/fossas/fossa-cli/releases/download/v1.0.11/fossa-cli_1.0.11_linux_amd64.tar.gz | tar xvz -C /go/bin/
-    - /go/bin/fossa test
+    - /go/bin/fossa test --timeout 900
 
 ---
 kind: pipeline
@@ -177,7 +177,7 @@ steps:
       from_secret: fossa_api_key
   commands:
     - wget -qO- https://github.com/fossas/fossa-cli/releases/download/v1.0.11/fossa-cli_1.0.11_linux_amd64.tar.gz | tar xvz -C /go/bin/
-    - /go/bin/fossa test
+    - /go/bin/fossa test --timeout 900
 
 - name: create-dist
   image: golang:1.13
