@@ -106,11 +106,11 @@
 						"description": "Ailleron Open Cloud Mesh API"
 					},
 					"name": "Ailleron - OCM API",
-					"path": "http://cs3mesh.softwaremind.com/iop/ocm/",
+					"path": "https://cs3mesh.softwaremind.com/iop/ocm/",
 					"isMonitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "http://cs3mesh.softwaremind.com/iop/"
+				"host": "https://cs3mesh.softwaremind.com/iop/"
 			}
 		]
 	},
