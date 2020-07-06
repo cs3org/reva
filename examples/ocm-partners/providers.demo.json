@@ -18,7 +18,7 @@
 					"isMonitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "https://sciencemesh.cernbox.cern.ch/"
+				"host": "https://sciencemesh.cernbox.cern.ch/iop/"
 			}
 		]
 	},
@@ -37,11 +37,11 @@
 						"description": "CESNET Open Cloud Mesh API"
 					},
 					"name": "CESNET - OCM API",
-					"path": "https://sciencemesh.cesnet.cz/ocm/",
+					"path": "https://sciencemesh.cesnet.cz/iop/ocm/",
 					"isMonitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "https://sciencemesh.cesnet.cz/"
+				"host": "https://sciencemesh.cesnet.cz/iop/"
 			}
 		]
 	},
@@ -60,11 +60,11 @@
 						"description": "WWU Open Cloud Mesh API"
 					},
 					"name": "WWU - OCM API",
-					"path": "https://sciencemesh-test.uni-muenster.de/ocm/",
+					"path": "https://sciencemesh-test.uni-muenster.de/api/ocm/",
 					"isMonitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "https://sciencemesh-test.uni-muenster.de/"
+				"host": "https://sciencemesh-test.uni-muenster.de/api/"
 			}
 		]
 	},
@@ -83,11 +83,11 @@
 						"description": "Cubbit Open Cloud Mesh API"
 					},
 					"name": "Cubbit - OCM API",
-					"path": "https://ocm.cubbit.io/ocm/",
+					"path": "https://sciencemesh.cubbit.io/ocm/",
 					"isMonitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "https://ocm.cubbit.io/"
+				"host": "https://sciencemesh.cubbit.io/"
 			}
 		]
 	},
@@ -106,11 +106,11 @@
 						"description": "Ailleron Open Cloud Mesh API"
 					},
 					"name": "Ailleron - OCM API",
-					"path": "http://cs3mesh.softwaremind.com:19000/ocm/",
+					"path": "http://cs3mesh.softwaremind.com/iop/ocm/",
 					"isMonitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "http://cs3mesh.softwaremind.com:19000/"
+				"host": "http://cs3mesh.softwaremind.com/iop/"
 			}
 		]
 	},
@@ -129,11 +129,11 @@
 						"description": "Surfsara Open Cloud Mesh API"
 					},
 					"name": "Surfsara - OCM API",
-					"path": "https://app.cs3mesh-iop.k8s.surfsara.nl/ocm/",
+					"path": "https://app.cs3mesh-iop.k8s.surfsara.nl/iop/ocm/",
 					"isMonitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "https://app.cs3mesh-iop.k8s.surfsara.nl/"
+				"host": "https://app.cs3mesh-iop.k8s.surfsara.nl/iop/"
 			}
 		]
 	}
