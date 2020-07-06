@@ -70,8 +70,8 @@ func New(m map[string]interface{}) (share.Manager, error) {
 }
 
 func loadOrCreate(file string) (*shareModel, error) {
-	_, err := os.Stat(file)
-	if os.IsNotExist(err) {
+	info, err := os.Stat(file)
+	if os.IsNotExist(err) || info.Size() == 0 {
 		if err := ioutil.WriteFile(file, []byte("{}"), 0700); err != nil {
 			err = errors.Wrap(err, "error opening/creating the file: "+file)
 			return nil, err
