@@ -25,6 +25,7 @@ import (
 	"github.com/pkg/errors"
 )
 
+// SMTPCredentials stores the credentials required to connect to an SMTP server.
 type SMTPCredentials struct {
 	SenderMail     string `mapstructure:"sender_mail"`
 	SenderPassword string `mapstructure:"sender_password"`
@@ -32,6 +33,7 @@ type SMTPCredentials struct {
 	SMTPPort       int    `mapstructure:"smtp_port"`
 }
 
+// SendMail allows sending mails using a set of client credentials.
 func (creds *SMTPCredentials) SendMail(recipient, subject, body string) error {
 
 	auth := smtp.PlainAuth("", creds.SenderMail, creds.SenderPassword, creds.SMTPServer)
