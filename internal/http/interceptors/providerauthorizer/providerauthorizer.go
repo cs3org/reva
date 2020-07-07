@@ -86,6 +86,7 @@ func New(m map[string]interface{}, unprotected []string, ocmPrefix string) (glob
 			userAuth := user.ContextMustGetUser(ctx)
 			clientDomains, err := utils.GetDomainsFromRequest(r)
 			if err != nil {
+				log.Error().Err(err).Msg("error looking up hostname for client IP")
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
