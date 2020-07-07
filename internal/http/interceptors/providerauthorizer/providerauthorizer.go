@@ -85,7 +85,7 @@ func New(m map[string]interface{}, unprotected []string, ocmPrefix string) (glob
 
 			clientIP, err := utils.GetClientIP(r)
 			if err != nil {
-				log.Error().Err(err).Msg("error retrieving client IP")
+				log.Error().Err(err).Msgf("error retrieving client IP from request: %s", r.RemoteAddr)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}

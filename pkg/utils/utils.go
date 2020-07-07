@@ -43,11 +43,15 @@ func GetClientIP(r *http.Request) (string, error) {
 	if forwarded != "" {
 		clientIP = forwarded
 	} else {
-		ip, _, err := net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
-			return "", err
+		if ip, _, err := net.SplitHostPort(r.RemoteAddr); err != nil {
+			ipObj := net.ParseIP(r.RemoteAddr)
+			if ipObj == nil {
+				return "", err
+			}
+			clientIP = ipObj.String()
+		} else {
+			clientIP = ip
 		}
-		clientIP = ip
 	}
 	return clientIP, nil
 }
