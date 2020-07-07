@@ -83,22 +83,9 @@ func New(m map[string]interface{}, unprotected []string, ocmPrefix string) (glob
 				return
 			}
 
-			clientIP, err := utils.GetClientIP(r)
-			if err != nil {
-				log.Error().Err(err).Msgf("error retrieving client IP from request: %s", r.RemoteAddr)
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-
-			providerInfo := ocmprovider.ProviderInfo{
+			err = authorizer.IsProviderAllowed(ctx, &ocmprovider.ProviderInfo{
 				Domain: user.ContextMustGetUser(ctx).Id.Idp,
-				Services: []*ocmprovider.Service{
-					&ocmprovider.Service{
-						Host: clientIP,
-					},
-				},
-			}
-			err = authorizer.IsProviderAllowed(ctx, &providerInfo)
+			})
 			if err != nil {
 				log.Error().Err(err).Msg("provider not registered in OCM")
 				w.WriteHeader(http.StatusUnauthorized)
