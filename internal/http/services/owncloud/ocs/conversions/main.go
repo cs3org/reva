@@ -22,6 +22,7 @@ package conversions
 import (
 	"fmt"
 	"net/http"
+	"path"
 	"time"
 
 	"github.com/cs3org/reva/pkg/publicshare"
@@ -272,7 +273,7 @@ func AsCS3Permissions(p int, rp *provider.ResourcePermissions) *provider.Resourc
 }
 
 // PublicShare2ShareData converts a cs3api public share into shareData data model
-func PublicShare2ShareData(share *link.PublicShare, r *http.Request) *ShareData {
+func PublicShare2ShareData(share *link.PublicShare, r *http.Request, publicURL string) *ShareData {
 	var expiration string
 	if share.Expiration != nil {
 		expiration = timestampToExpiration(share.Expiration)
@@ -299,7 +300,7 @@ func PublicShare2ShareData(share *link.PublicShare, r *http.Request) *ShareData 
 		MimeType:             share.Mtime.String(),
 		Name:                 share.DisplayName,
 		MailSend:             0,
-		URL:                  r.Header.Get("Origin") + "/#/s/" + share.Token,
+		URL:                  publicURL + path.Join("/", "#/s/"+share.Token),
 		Permissions:          publicSharePermissions2OCSPermissions(share.GetPermissions()),
 		UIDOwner:             LocalUserIDToString(share.Creator),
 		UIDFileOwner:         LocalUserIDToString(share.Owner),

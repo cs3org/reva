@@ -52,11 +52,13 @@ import (
 // Handler implements the shares part of the ownCloud sharing API
 type Handler struct {
 	gatewayAddr string
+	publicURL   string
 }
 
 // Init initializes this and any contained handlers
 func (h *Handler) Init(c *config.Config) error {
 	h.gatewayAddr = c.GatewaySvc
+	h.publicURL = c.Config.Host
 	return nil
 }
 
@@ -418,7 +420,7 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	s := conversions.PublicShare2ShareData(createRes.Share, r)
+	s := conversions.PublicShare2ShareData(createRes.Share, r, h.publicURL)
 	err = h.addFileInfo(ctx, s, statRes.Info)
 
 	if err != nil {
@@ -704,7 +706,7 @@ func (h *Handler) getShare(w http.ResponseWriter, r *http.Request, shareID strin
 	*/
 
 	if err == nil && psRes.GetShare() != nil {
-		share = conversions.PublicShare2ShareData(psRes.Share, r)
+		share = conversions.PublicShare2ShareData(psRes.Share, r, h.publicURL)
 		resourceID = psRes.Share.ResourceId
 	}
 
@@ -1128,7 +1130,7 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 				return nil, err
 			}
 
-			sData := conversions.PublicShare2ShareData(share, r)
+			sData := conversions.PublicShare2ShareData(share, r, h.publicURL)
 			if statResponse.Status.Code != rpc.Code_CODE_OK {
 				return nil, err
 			}
@@ -1668,7 +1670,7 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 		return
 	}
 
-	s := conversions.PublicShare2ShareData(publicShare, r)
+	s := conversions.PublicShare2ShareData(publicShare, r, h.publicURL)
 	err = h.addFileInfo(r.Context(), s, statRes.Info)
 
 	if err != nil {
