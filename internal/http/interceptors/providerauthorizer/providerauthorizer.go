@@ -83,20 +83,20 @@ func New(m map[string]interface{}, unprotected []string, ocmPrefix string) (glob
 				return
 			}
 
-			userAuth := user.ContextMustGetUser(ctx)
-			clientDomains, err := utils.GetDomainsFromRequest(r)
+			clientIP, err := utils.GetClientIP(r)
 			if err != nil {
-				w.WriteHeader(http.StatusUnauthorized)
+				log.Error().Err(err).Msg("error retrieving client IP")
+				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 
 			providerInfo := ocmprovider.ProviderInfo{
-				Domain: userAuth.Id.Idp,
-			}
-			for _, domain := range clientDomains {
-				providerInfo.Services = append(providerInfo.Services, &ocmprovider.Service{
-					Host: domain,
-				})
+				Domain: user.ContextMustGetUser(ctx).Id.Idp,
+				Services: []*ocmprovider.Service{
+					&ocmprovider.Service{
+						Host: clientIP,
+					},
+				},
 			}
 			err = authorizer.IsProviderAllowed(ctx, &providerInfo)
 			if err != nil {

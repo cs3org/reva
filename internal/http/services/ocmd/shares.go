@@ -79,19 +79,18 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	clientDomains, err := utils.GetDomainsFromRequest(r)
+	clientIP, err := utils.GetClientIP(r)
 	if err != nil {
-		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error looking up hostname for client IP"), err)
+		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error retrieving client IP"), err)
 		return
 	}
-
 	providerInfo := ocmprovider.ProviderInfo{
 		Domain: meshProvider,
-	}
-	for _, domain := range clientDomains {
-		providerInfo.Services = append(providerInfo.Services, &ocmprovider.Service{
-			Host: domain,
-		})
+		Services: []*ocmprovider.Service{
+			&ocmprovider.Service{
+				Host: clientIP,
+			},
+		},
 	}
 
 	providerAllowedResp, err := gatewayClient.IsProviderAllowed(ctx, &ocmprovider.IsProviderAllowedRequest{
