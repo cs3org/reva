@@ -64,7 +64,7 @@ func WriteError(w http.ResponseWriter, r *http.Request, code APIErrorCode, messa
 
 	var encoded []byte
 	w.Header().Set("Content-Type", "application/json")
-	encoded, err = json.MarshalIndent(APIError{Code: code, Message: message}, "", "    ")
+	encoded, err = json.MarshalIndent(APIError{Code: code, Message: message}, "", "  ")
 
 	if err != nil {
 		appctx.GetLogger(r.Context()).Error().Err(err).Msg("error encoding response")

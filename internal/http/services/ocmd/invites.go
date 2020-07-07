@@ -20,6 +20,7 @@ package ocmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -64,17 +65,14 @@ func (h *invitesHandler) Handler() http.Handler {
 func (h *invitesHandler) generateInviteToken(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
 
 	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
-		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting storage grpc client on addr: %v", h.gatewayAddr), err)
-		log.Err(err).Msg(fmt.Sprintf("error getting storage grpc client on addr: %v", h.gatewayAddr))
+		WriteError(w, r, APIErrorServerError, "error getting gateway grpc client", err)
 		return
 	}
 
 	token, err := gatewayClient.GenerateInviteToken(ctx, &invitepb.GenerateInviteTokenRequest{})
-
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error generating token", err)
 		return
@@ -83,7 +81,6 @@ func (h *invitesHandler) generateInviteToken(w http.ResponseWriter, r *http.Requ
 	jsonResponse, err := json.Marshal(token.InviteToken)
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error marshalling token data", err)
-		log.Err(err).Msg("error marshal token data.")
 		return
 	}
 
@@ -91,7 +88,6 @@ func (h *invitesHandler) generateInviteToken(w http.ResponseWriter, r *http.Requ
 	_, err = w.Write(jsonResponse)
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error writing token data", err)
-		log.Err(err).Msg("error writing shares data.")
 		return
 	}
 
@@ -110,7 +106,7 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 
 	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
-		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting invite grpc client on addr: %v", h.gatewayAddr), err)
+		WriteError(w, r, APIErrorServerError, "error getting gateway grpc client", err)
 		return
 	}
 
@@ -125,6 +121,10 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, APIErrorServerError, "error sending a grpc get invite by domain info request", err)
 		return
 	}
+	if providerInfo.Status.Code != rpc.Code_CODE_OK {
+		WriteError(w, r, APIErrorServerError, "grpc forward invite request failed", errors.New(providerInfo.Status.Message))
+		return
+	}
 
 	forwardInviteReq := &invitepb.ForwardInviteRequest{
 		InviteToken:          token,
@@ -136,15 +136,11 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if forwardInviteResponse.Status.Code != rpc.Code_CODE_OK {
-		if forwardInviteResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			WriteError(w, r, APIErrorNotFound, "not found", nil)
-			return
-		}
-		WriteError(w, r, APIErrorServerError, "grpc forward invite request failed", err)
+		WriteError(w, r, APIErrorServerError, "grpc forward invite request failed", errors.New(forwardInviteResponse.Status.Message))
 		return
 	}
 
-	log.Info().Msg("Invite forwarded.")
+	log.Info().Msgf("Invite forwarded to: %s", r.FormValue("providerDomain"))
 }
 
 func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
@@ -160,7 +156,7 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 
 	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
-		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting storage grpc client on addr: %v", h.gatewayAddr), err)
+		WriteError(w, r, APIErrorServerError, "error getting gateway grpc client", err)
 		return
 	}
 
@@ -182,11 +178,11 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		Provider: &providerInfo,
 	})
 	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error authorizing provider", err)
+		WriteError(w, r, APIErrorServerError, "error sending a grpc is provider allowed request", err)
 		return
 	}
 	if providerAllowedResp.Status.Code != rpc.Code_CODE_OK {
-		WriteError(w, r, APIErrorUnauthenticated, "provider not authorized", err)
+		WriteError(w, r, APIErrorUnauthenticated, "provider not authorized", errors.New(providerAllowedResp.Status.Message))
 		return
 	}
 
@@ -210,9 +206,9 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if acceptInviteResponse.Status.Code != rpc.Code_CODE_OK {
-		WriteError(w, r, APIErrorServerError, "grpc accept invite request failed", err)
+		WriteError(w, r, APIErrorServerError, "grpc accept invite request failed", errors.New(acceptInviteResponse.Status.Message))
 		return
 	}
 
-	log.Info().Msg("User added to accepted users.")
+	log.Info().Msgf("User: %+v added to accepted users.", userObj)
 }
