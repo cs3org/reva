@@ -21,8 +21,12 @@ package meshdata
 import "strings"
 
 const (
+	// PropertyOrganization identifies the organization property.
 	PropertyOrganization = "organization"
-	PropertyMetricsPath  = "metrics_path"
+	// PropertyMetricsPath identifies the metrics path property.
+	PropertyMetricsPath = "metrics_path"
+	// PropertyAPIVersion identifies the API version property.
+	PropertyAPIVersion = "api_version"
 )
 
 // GetPropertyValue performs a case-insensitive search for the given property.

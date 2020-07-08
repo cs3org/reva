@@ -28,10 +28,12 @@ import (
 	"github.com/cs3org/reva/pkg/mentix/exporters/cs3api"
 )
 
+// CS3APIExporter implements the CS3API exporter.
 type CS3APIExporter struct {
 	BaseRequestExporter
 }
 
+// Activate activates the exporter.
 func (exporter *CS3APIExporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
 	if err := exporter.BaseExporter.Activate(conf, log); err != nil {
 		return err
@@ -43,6 +45,7 @@ func (exporter *CS3APIExporter) Activate(conf *config.Configuration, log *zerolo
 	return nil
 }
 
+// HandleRequest handles the actual HTTP request.
 func (exporter *CS3APIExporter) HandleRequest(resp http.ResponseWriter, req *http.Request) error {
 	// Data is read, so acquire a read lock
 	exporter.locker.RLock()
@@ -60,6 +63,7 @@ func (exporter *CS3APIExporter) HandleRequest(resp http.ResponseWriter, req *htt
 	return nil
 }
 
+// GetName returns the display name of the exporter.
 func (exporter *CS3APIExporter) GetName() string {
 	return "CS3API"
 }

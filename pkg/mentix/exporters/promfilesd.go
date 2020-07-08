@@ -32,12 +32,14 @@ import (
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 
+// PrometheusFileSDExporter implements the File Service Discovery for Prometheus exporter.
 type PrometheusFileSDExporter struct {
 	BaseExporter
 
 	outputFilename string
 }
 
+// Activate activates the exporter.
 func (exporter *PrometheusFileSDExporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
 	if err := exporter.BaseExporter.Activate(conf, log); err != nil {
 		return err
@@ -57,6 +59,7 @@ func (exporter *PrometheusFileSDExporter) Activate(conf *config.Configuration, l
 	return nil
 }
 
+// UpdateMeshData is called whenever the mesh data has changed to reflect these changes.
 func (exporter *PrometheusFileSDExporter) UpdateMeshData(meshData *meshdata.MeshData) error {
 	if err := exporter.BaseExporter.UpdateMeshData(meshData); err != nil {
 		return err
@@ -142,6 +145,7 @@ func (exporter *PrometheusFileSDExporter) exportScrapeConfig(v interface{}) erro
 	return nil
 }
 
+// GetName returns the display name of the exporter.
 func (exporter *PrometheusFileSDExporter) GetName() string {
 	return "Prometheus File SD"
 }

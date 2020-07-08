@@ -78,7 +78,7 @@ func convertMeshDataToOCMData(meshData *meshdata.MeshData) ([]*ocmprovider.Provi
 				Host:                service.Host,
 				Endpoint:            convertServiceEndpointToOCMData(service.ServiceEndpoint),
 				AdditionalEndpoints: addEndpoints,
-				ApiVersion:          meshdata.GetPropertyValue(service.Properties, "API_VERSION", ""),
+				ApiVersion:          meshdata.GetPropertyValue(service.Properties, meshdata.PropertyAPIVersion, ""),
 			})
 		}
 
