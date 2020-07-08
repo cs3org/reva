@@ -25,7 +25,6 @@ import (
 	"strings"
 	"time"
 
-	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/rhttp"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
@@ -88,7 +87,11 @@ type authorizer struct {
 	conf   *config
 }
 
-func (c *Client) sendRequest(req *http.Request) (*provider.MentixResponse, error) {
+func (c *Client) fetchAllProviders() ([]*ocmprovider.ProviderInfo, error) {
+	req, err := http.NewRequest("GET", c.BaseURL, nil)
+	if err != nil {
+		return nil, err
+	}
 	req.Header.Set("Accept", "application/json; charset=utf-8")
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 
@@ -99,71 +102,11 @@ func (c *Client) sendRequest(req *http.Request) (*provider.MentixResponse, error
 
 	defer res.Body.Close()
 
-	// TODO(mirekys): use providerv1beta1.ListAllProvidersResponse directly after mentix service uses it
-	var mr provider.MentixResponse
-	if err = json.NewDecoder(res.Body).Decode(&mr); err != nil {
+	providers := make([]*ocmprovider.ProviderInfo, 0)
+	if err = json.NewDecoder(res.Body).Decode(&providers); err != nil {
 		return nil, err
 	}
-
-	return &mr, nil
-}
-
-func (c *Client) fetchAllProviders() ([]*ocmprovider.ProviderInfo, error) {
-	req, err := http.NewRequest("GET", c.BaseURL, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	res, err := c.sendRequest(req)
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO(mirekys): following translation won't be needed after mentix exporter also uses ocmprovider struct
-	providers := make([]*ocmprovider.ProviderInfo, 0, len(res.Sites))
-	for _, si := range res.Sites {
-		services := make([]*ocmprovider.Service, 0, len(si.Services))
-		for _, se := range si.Services {
-			services = append(services, &ocmprovider.Service{
-				Host: se.Host,
-				Endpoint: &ocmprovider.ServiceEndpoint{
-					Type: &ocmprovider.ServiceType{
-						Name:        se.Type.Name,
-						Description: se.Type.Description,
-					},
-					Name:        se.Name,
-					Path:        se.URL,
-					IsMonitored: se.IsMonitored,
-				},
-			})
-		}
-
-		providers = append(providers, &ocmprovider.ProviderInfo{
-			Name:         si.Name,
-			FullName:     si.FullName,
-			Description:  si.Description,
-			Organization: si.Organization,
-			Domain:       si.Domain,
-			Homepage:     si.Homepage,
-			Email:        si.Email,
-			Services:     services,
-		})
-	}
-
-	status := &rpcv1beta1.Status{
-		Code:    http.StatusOK,
-		Message: "",
-	}
-
-	pi := &ocmprovider.ListAllProvidersResponse{
-		Status:    status,
-		Providers: providers,
-	}
-
-	if pi.Providers == nil {
-		return nil, errtypes.InternalError(pi.Status.GetMessage())
-	}
-	return pi.Providers, nil
+	return providers, nil
 }
 
 func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmprovider.ProviderInfo, error) {
