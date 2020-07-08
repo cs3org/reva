@@ -1,13 +1,13 @@
 [
 	{
 		"id": {
-			"opaque_id": "allesandro1234",
+			"opaque_id": "alessandro1234",
 			"idp": "https://cubbit.io"
 		},
-		"username": "allesandro",
-		"secret": "allesandropass",
-		"mail": "allesandro@cubbit.io",
-		"display_name": "Allesandro",
+		"username": "alessandro",
+		"secret": "alessandropass",
+		"mail": "alessandro@cubbit.io",
+		"display_name": "Alessandro",
 		"groups": ["sailing-lovers", "violin-haters", "physics-lovers"]
 	},
 	{

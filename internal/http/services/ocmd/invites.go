@@ -31,15 +31,19 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/smtpclient"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
 )
 
 type invitesHandler struct {
-	gatewayAddr string
+	smtpCredentials *smtpclient.SMTPCredentials
+	gatewayAddr     string
 }
 
 func (h *invitesHandler) init(c *Config) {
 	h.gatewayAddr = c.GatewaySvc
+	h.smtpCredentials = c.SMTPCredentials
 }
 
 func (h *invitesHandler) Handler() http.Handler {
@@ -76,6 +80,26 @@ func (h *invitesHandler) generateInviteToken(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error generating token", err)
 		return
+	}
+
+	if r.FormValue("recipient") != "" && h.smtpCredentials != nil {
+		usr := user.ContextMustGetUser(ctx)
+		username := usr.DisplayName
+
+		// TODO: the message body needs to point to the meshdirectory service
+		subject := fmt.Sprintf("ScienceMesh: %s wants to collaborate with you", username)
+		body := "Hi,\n\n" +
+			username + " wants to start sharing OCM resources with you. " +
+			"To accept the invite, please use the following details:\n" +
+			"Token: " + token.InviteToken.Token + "\n" +
+			"ProviderDomain: " + usr.Id.Idp + "\n\n" +
+			"Best,\nThe ScienceMesh team"
+
+		err = h.smtpCredentials.SendMail(r.FormValue("recipient"), subject, body)
+		if err != nil {
+			WriteError(w, r, APIErrorServerError, "error sending token by mail", err)
+			return
+		}
 	}
 
 	jsonResponse, err := json.Marshal(token.InviteToken)
