@@ -19,6 +19,9 @@
 package sharedconf
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -41,9 +44,14 @@ func Decode(v interface{}) error {
 		sharedConf.GatewaySVC = "0.0.0.0:19000"
 	}
 
-	// this is the default address we use for starting HTTP services
+	// this is the default address we use for the data gateway HTTP service
 	if sharedConf.DataGateway == "" {
-		sharedConf.DataGateway = "http://localhost:19001/data"
+		host, err := os.Hostname()
+		if err != nil || host == "" {
+			sharedConf.DataGateway = "http://0.0.0.0:19001/datagateway"
+		} else {
+			sharedConf.DataGateway = fmt.Sprintf("http://%s:19001/datagateway", host)
+		}
 	}
 
 	// TODO(labkode): would be cool to autogenerate one secret and print

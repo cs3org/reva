@@ -139,7 +139,7 @@ func uploadCommand() *command {
 				return err
 			}
 
-			httpReq.Header.Set("X-Reva-Transfer", res.Token)
+			httpReq.Header.Set(datagateway.TokenTransportHeader, res.Token)
 			q := httpReq.URL.Query()
 			q.Add("xs", xs)
 			q.Add("xs_type", storageprovider.GRPC2PKGXS(xsType).String())
@@ -176,12 +176,11 @@ func uploadCommand() *command {
 			if err != nil {
 				return err
 			}
-			if res.Token != "" {
-				fmt.Printf("using X-Reva-Transfer header\n")
-				c.Header.Add(datagateway.TokenTransportHeader, res.Token)
-			} else if token, ok := tokenpkg.ContextGetToken(ctx); ok {
-				fmt.Printf("using %s header\n", tokenpkg.TokenHeader)
+			if token, ok := tokenpkg.ContextGetToken(ctx); ok {
 				c.Header.Add(tokenpkg.TokenHeader, token)
+			}
+			if res.Token != "" {
+				c.Header.Add(datagateway.TokenTransportHeader, res.Token)
 			}
 			tusc, err := tus.NewClient(dataServerURL, c)
 			if err != nil {

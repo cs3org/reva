@@ -26,7 +26,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"sync"
 	"time"
 
@@ -66,14 +65,8 @@ func init() {
 }
 
 func (c *config) init() error {
-	// if file is not set we use temporary file
 	if c.File == "" {
-		dir, err := ioutil.TempDir("", "")
-		if err != nil {
-			err = errors.Wrap(err, "error creating temporary directory for json invite manager")
-			return err
-		}
-		c.File = path.Join(dir, "invites.json")
+		c.File = "/var/tmp/reva/ocm-invites.json"
 	}
 
 	if c.Expiration == "" {
@@ -87,7 +80,7 @@ func New(m map[string]interface{}) (invite.Manager, error) {
 
 	config, err := parseConfig(m)
 	if err != nil {
-		err = errors.Wrap(err, "error parse config for json invite manager")
+		err = errors.Wrap(err, "error parsing config for json invite manager")
 		return nil, err
 	}
 	err = config.init()
@@ -124,14 +117,14 @@ func loadOrCreate(file string) (*inviteModel, error) {
 	_, err := os.Stat(file)
 	if os.IsNotExist(err) {
 		if err := ioutil.WriteFile(file, []byte("{}"), 0700); err != nil {
-			err = errors.Wrap(err, "error opening/creating the invite storage file: "+file)
+			err = errors.Wrap(err, "error creating the invite storage file: "+file)
 			return nil, err
 		}
 	}
 
 	fd, err := os.OpenFile(file, os.O_CREATE, 0644)
 	if err != nil {
-		err = errors.Wrap(err, "error opening/creating the invite storage file: "+file)
+		err = errors.Wrap(err, "error opening the invite storage file: "+file)
 		return nil, err
 	}
 	defer fd.Close()
@@ -177,7 +170,6 @@ func (model *inviteModel) Save() error {
 func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, error) {
 
 	contexUser := user.ContextMustGetUser(ctx)
-
 	inviteToken, err := token.CreateToken(m.config.Expiration, contexUser.GetId())
 	if err != nil {
 		return nil, err
@@ -219,7 +211,12 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		err = errors.Wrap(errors.New(resp.Status), "json: error sending accept post request")
+		respBody, e := ioutil.ReadAll(resp.Body)
+		if e != nil {
+			e = errors.Wrap(e, "json: error reading request body")
+			return e
+		}
+		err = errors.Wrap(errors.New(fmt.Sprintf("%s: %s", resp.Status, string(respBody))), "json: error sending accept post request")
 		return err
 	}
 

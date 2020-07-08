@@ -35,7 +35,6 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
@@ -77,7 +76,14 @@ func (c *config) init() {
 		c.TmpFolder = "/var/tmp/reva/tmp"
 	}
 
-	c.DataServerURL = sharedconf.GetDataGateway(c.DataServerURL)
+	if c.DataServerURL == "" {
+		host, err := os.Hostname()
+		if err != nil || host == "" {
+			c.DataServerURL = "http://0.0.0.0:19001/data"
+		} else {
+			c.DataServerURL = fmt.Sprintf("http://%s:19001/data", host)
+		}
+	}
 
 	// set sane defaults
 	if len(c.AvailableXS) == 0 {

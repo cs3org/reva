@@ -912,8 +912,8 @@ type QuotaProto struct {
 	Maxbytes             uint64    `protobuf:"varint,7,opt,name=maxbytes,proto3" json:"maxbytes,omitempty"`
 	Maxlogicalbytes      uint64    `protobuf:"varint,8,opt,name=maxlogicalbytes,proto3" json:"maxlogicalbytes,omitempty"`
 	Maxfiles             uint64    `protobuf:"varint,9,opt,name=maxfiles,proto3" json:"maxfiles,omitempty"`
-	Percentagusedbytes   float32   `protobuf:"fixed32,10,opt,name=percentagusedbytes,proto3" json:"percentagusedbytes,omitempty"`
-	Percentagusedfiles   float32   `protobuf:"fixed32,11,opt,name=percentagusedfiles,proto3" json:"percentagusedfiles,omitempty"`
+	Percentageusedbytes  float32   `protobuf:"fixed32,10,opt,name=percentageusedbytes,proto3" json:"percentageusedbytes,omitempty"`
+	Percentageusedfiles  float32   `protobuf:"fixed32,11,opt,name=percentageusedfiles,proto3" json:"percentageusedfiles,omitempty"`
 	Statusbytes          string    `protobuf:"bytes,12,opt,name=statusbytes,proto3" json:"statusbytes,omitempty"`
 	Statusfiles          string    `protobuf:"bytes,13,opt,name=statusfiles,proto3" json:"statusfiles,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}  `json:"-"`
@@ -1009,16 +1009,16 @@ func (m *QuotaProto) GetMaxfiles() uint64 {
 	return 0
 }
 
-func (m *QuotaProto) GetPercentagusedbytes() float32 {
+func (m *QuotaProto) GetPercentageusedbytes() float32 {
 	if m != nil {
-		return m.Percentagusedbytes
+		return m.Percentageusedbytes
 	}
 	return 0
 }
 
-func (m *QuotaProto) GetPercentagusedfiles() float32 {
+func (m *QuotaProto) GetPercentageusedfiles() float32 {
 	if m != nil {
-		return m.Percentagusedfiles
+		return m.Percentageusedfiles
 	}
 	return 0
 }

@@ -35,23 +35,23 @@ func Skip(source string, prefixes []string) bool {
 	return false
 }
 
-// GetDomainsFromRequest retrieves the client IP from an incoming requests
-func GetDomainsFromRequest(r *http.Request) ([]string, error) {
+// GetClientIP retrieves the client IP from incoming requests
+func GetClientIP(r *http.Request) (string, error) {
 	var clientIP string
 	forwarded := r.Header.Get("X-FORWARDED-FOR")
 
 	if forwarded != "" {
 		clientIP = forwarded
 	} else {
-		ip, _, err := net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
-			return []string{}, err
+		if ip, _, err := net.SplitHostPort(r.RemoteAddr); err != nil {
+			ipObj := net.ParseIP(r.RemoteAddr)
+			if ipObj == nil {
+				return "", err
+			}
+			clientIP = ipObj.String()
+		} else {
+			clientIP = ip
 		}
-		clientIP = ip
 	}
-	clientDomains, err := net.LookupAddr(clientIP)
-	if err != nil {
-		return []string{}, err
-	}
-	return clientDomains, nil
+	return clientIP, nil
 }

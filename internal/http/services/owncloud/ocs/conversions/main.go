@@ -22,6 +22,7 @@ package conversions
 import (
 	"fmt"
 	"net/http"
+	"path"
 	"time"
 
 	"github.com/cs3org/reva/pkg/publicshare"
@@ -272,7 +273,7 @@ func AsCS3Permissions(p int, rp *provider.ResourcePermissions) *provider.Resourc
 }
 
 // PublicShare2ShareData converts a cs3api public share into shareData data model
-func PublicShare2ShareData(share *link.PublicShare, r *http.Request) *ShareData {
+func PublicShare2ShareData(share *link.PublicShare, r *http.Request, publicURL string) *ShareData {
 	var expiration string
 	if share.Expiration != nil {
 		expiration = timestampToExpiration(share.Expiration)
@@ -299,7 +300,7 @@ func PublicShare2ShareData(share *link.PublicShare, r *http.Request) *ShareData 
 		MimeType:             share.Mtime.String(),
 		Name:                 share.DisplayName,
 		MailSend:             0,
-		URL:                  r.Header.Get("Origin") + "/#/s/" + share.Token,
+		URL:                  publicURL + path.Join("/", "#/s/"+share.Token),
 		Permissions:          publicSharePermissions2OCSPermissions(share.GetPermissions()),
 		UIDOwner:             LocalUserIDToString(share.Creator),
 		UIDFileOwner:         LocalUserIDToString(share.Owner),
@@ -361,6 +362,7 @@ func publicSharePermissions2OCSPermissions(sp *link.PublicSharePermissions) Perm
 }
 
 // TODO sort out mapping, this is just a first guess
+// public link permissions to OCS permissions
 func Permissions2OCSPermissions(p *provider.ResourcePermissions) Permissions {
 	permissions := PermissionInvalid
 	if p != nil {
@@ -386,7 +388,7 @@ func Permissions2OCSPermissions(p *provider.ResourcePermissions) Permissions {
 // timestamp is assumed to be UTC ... just human readable ...
 // FIXME and ambiguous / error prone because there is no time zone ...
 func timestampToExpiration(t *types.Timestamp) string {
-	return time.Unix(int64(t.Seconds), int64(t.Nanos)).Format("2006-01-02 15:05:05")
+	return time.Unix(int64(t.Seconds), int64(t.Nanos)).UTC().Format("2006-01-02 15:05:05")
 }
 
 const (

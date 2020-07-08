@@ -107,10 +107,10 @@ type manager struct {
 // CreatePublicShare adds a new entry to manager.shares
 func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error) {
 	id := &link.PublicShareId{
-		OpaqueId: randString(12),
+		OpaqueId: randString(15),
 	}
 
-	tkn := randString(12)
+	tkn := randString(15)
 	now := time.Now().UnixNano()
 
 	displayName, ok := rInfo.ArbitraryMetadata.Metadata["name"]
@@ -193,25 +193,32 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 	}
 
 	now := time.Now().UnixNano()
-	var p string
+	var newPasswordEncoded string
+	passwordChanged := false
 
 	switch req.GetUpdate().GetType() {
 	case link.UpdatePublicShareRequest_Update_TYPE_DISPLAYNAME:
-		log.Debug().Str("memory", "update display name").Msgf("from: `%v` to `%v`", share.DisplayName, req.Update.GetDisplayName())
+		log.Debug().Str("json", "update display name").Msgf("from: `%v` to `%v`", share.DisplayName, req.Update.GetDisplayName())
 		share.DisplayName = req.Update.GetDisplayName()
 	case link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS:
 		old, _ := json.Marshal(share.Permissions)
 		new, _ := json.Marshal(req.Update.GetGrant().Permissions)
-		log.Debug().Str("memory", "update grants").Msgf("from: `%v`\nto\n`%v`", old, new)
+		log.Debug().Str("json", "update grants").Msgf("from: `%v`\nto\n`%v`", old, new)
 		share.Permissions = req.Update.GetGrant().GetPermissions()
 	case link.UpdatePublicShareRequest_Update_TYPE_EXPIRATION:
 		old, _ := json.Marshal(share.Expiration)
 		new, _ := json.Marshal(req.Update.GetGrant().Expiration)
-		log.Debug().Str("memory", "update expiration").Msgf("from: `%v`\nto\n`%v`", old, new)
+		log.Debug().Str("json", "update expiration").Msgf("from: `%v`\nto\n`%v`", old, new)
 		share.Expiration = req.Update.GetGrant().Expiration
 	case link.UpdatePublicShareRequest_Update_TYPE_PASSWORD:
-		p = base64.StdEncoding.EncodeToString([]byte(req.Update.GetGrant().Password))
-		share.PasswordProtected = true
+		passwordChanged = true
+		if req.Update.GetGrant().Password == "" {
+			share.PasswordProtected = false
+			newPasswordEncoded = ""
+		} else {
+			newPasswordEncoded = base64.StdEncoding.EncodeToString([]byte(req.Update.GetGrant().Password))
+			share.PasswordProtected = true
+		}
 	default:
 		return nil, fmt.Errorf("invalid update type: %v", req.GetUpdate().GetType())
 	}
@@ -234,12 +241,17 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 		return nil, err
 	}
 
-	db[share.GetId().OpaqueId] = buff.String()
-
-	db[share.Id.GetOpaqueId()] = map[string]interface{}{
-		"share":    buff.String(),
-		"password": p,
+	data, ok := db[share.Id.OpaqueId].(map[string]interface{})
+	if !ok {
+		data = map[string]interface{}{}
 	}
+
+	if ok && passwordChanged {
+		data["password"] = newPasswordEncoded
+	}
+	data["share"] = buff.String()
+
+	db[share.Id.OpaqueId] = data
 
 	err = m.writeDb(db)
 	if err != nil {

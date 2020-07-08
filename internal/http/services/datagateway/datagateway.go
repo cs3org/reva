@@ -60,7 +60,7 @@ type config struct {
 
 func (c *config) init() {
 	if c.Prefix == "" {
-		c.Prefix = "data"
+		c.Prefix = "datagateway"
 	}
 
 	c.TransferSharedSecret = sharedconf.GetJWTSecret(c.TransferSharedSecret)
@@ -191,6 +191,8 @@ func (s *svc) doHead(w http.ResponseWriter, r *http.Request) {
 	}
 	defer httpRes.Body.Close()
 
+	copyHeader(w.Header(), httpRes.Header)
+
 	if httpRes.StatusCode != http.StatusOK {
 		w.WriteHeader(httpRes.StatusCode)
 		return
@@ -234,6 +236,7 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 	}
 	defer httpRes.Body.Close()
 
+	copyHeader(w.Header(), httpRes.Header)
 	if httpRes.StatusCode != http.StatusOK {
 		w.WriteHeader(httpRes.StatusCode)
 		return
@@ -293,6 +296,7 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 	}
 	defer httpRes.Body.Close()
 
+	copyHeader(w.Header(), httpRes.Header)
 	if httpRes.StatusCode != http.StatusOK {
 		w.WriteHeader(httpRes.StatusCode)
 		return

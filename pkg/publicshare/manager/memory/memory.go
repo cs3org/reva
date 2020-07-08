@@ -58,10 +58,10 @@ var (
 // CreatePublicShare adds a new entry to manager.shares
 func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error) {
 	id := &link.PublicShareId{
-		OpaqueId: randString(12),
+		OpaqueId: randString(15),
 	}
 
-	tkn := randString(12)
+	tkn := randString(15)
 	now := uint64(time.Now().Unix())
 
 	displayName, ok := rInfo.ArbitraryMetadata.Metadata["name"]
