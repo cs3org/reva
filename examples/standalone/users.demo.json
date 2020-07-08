@@ -21,17 +21,6 @@
 		"display_name": "Marie Curie",
 		"groups": ["radium-lovers", "polonium-lovers", "physics-lovers"]
 	},
-        {
-                "id": {
-                        "opaque_id": "263c9c30-8d20-4dfc-9151-a030a40a5d0a",
-                        "idp": "http://localhost:20080"
-                },
-                "username": "furano",
-                "secret": "furano",
-                "mail": "furano@example.org",
-                "display_name": "Fabrizio Furano",
-                "groups": ["radium-lovers", "polonium-lovers", "physics-lovers", "dteam"]
-        },
 	{
 		"id": {
 			"opaque_id": "932b4540-8d16-481e-8ef4-588e4b6b151c",
