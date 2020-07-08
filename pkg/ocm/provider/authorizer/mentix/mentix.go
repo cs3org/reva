@@ -71,10 +71,10 @@ func New(m map[string]interface{}) (provider.Authorizer, error) {
 }
 
 type config struct {
-	Timeout               int64  `mapstructure:"timeout"`
-	Insecure              bool   `mapstructure:"insecure"`
 	URL                   string `mapstructure:"url"`
+	Timeout               int64  `mapstructure:"timeout"`
 	VerifyRequestHostname bool   `mapstructure:"verify_request_hostname"`
+	Insecure              bool   `mapstructure:"insecure"`
 }
 
 func (c *config) init() {
