@@ -78,7 +78,7 @@ type config struct {
 
 func (c *config) init() {
 	if c.URL == "" {
-		c.URL = "http://localhost:9600/mentix"
+		c.URL = "http://localhost:9600/mentix/cs3"
 	}
 }
 
