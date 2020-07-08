@@ -19,12 +19,16 @@
 package appprovider
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"path"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	providerpb "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
@@ -124,7 +128,37 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 		// TODO make timeout configurable
 		rhttp.Timeout(time.Duration(24*int64(time.Hour))),
 	)
+
+	appsReq, err := rhttp.NewRequest(ctx, "GET", wopiurl+"wopi/cbox/endpoints", nil)
+	if err != nil {
+		return nil, err
+	}
+	appsRes, err := httpClient.Do(appsReq)
+	if err != nil {
+		log.Error().Err(err).Msg("error performing http request")
+		res := &providerpb.OpenFileInAppProviderResponse{
+			Status: status.NewInternal(ctx, err, "error performing http request"),
+		}
+		return res, nil
+	}
+	defer appsRes.Body.Close()
+	if appsRes.StatusCode != http.StatusOK {
+		log.Error().Err(err).Msg("error performing http request")
+		res := &providerpb.OpenFileInAppProviderResponse{
+			Status: status.NewInternal(ctx, err, "error performing http request, status code: "+strconv.Itoa(appsRes.StatusCode)),
+		}
+		return res, nil
+	}
+
+	appsBody, err := ioutil.ReadAll(appsRes.Body)
+	if err != nil {
+		return nil, err
+	}
+
 	httpReq, err := rhttp.NewRequest(ctx, "GET", wopiurl+"wopi/iop/open", nil)
+	if err != nil {
+		return nil, err
+	}
 
 	q := httpReq.URL.Query()
 	q.Add("filename", req.Ref.GetPath())
@@ -140,11 +174,9 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 	httpReq.Header.Set("Authorization", "Bearer "+iopsecret)
 	httpReq.Header.Set("TokenHeader", req.AccessToken)
 
-	if err != nil {
-		return nil, err
-	}
 	httpReq.URL.RawQuery = q.Encode()
-	httpRes, err := httpClient.Do(httpReq)
+
+	openRes, err := httpClient.Do(httpReq)
 
 	if err != nil {
 		log.Error().Err(err).Msg("error performing http request")
@@ -153,12 +185,12 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 		}
 		return res, nil
 	}
-	defer httpRes.Body.Close()
+	defer openRes.Body.Close()
 
-	if httpRes.StatusCode != http.StatusOK {
+	if openRes.StatusCode != http.StatusOK {
 		log.Error().Err(err).Msg("error performing http request")
 		res := &providerpb.OpenFileInAppProviderResponse{
-			Status: status.NewInternal(ctx, err, "error performing http request, status code: "+strconv.Itoa(httpRes.StatusCode)),
+			Status: status.NewInternal(ctx, err, "error performing http request, status code: "+strconv.Itoa(openRes.StatusCode)),
 		}
 		return res, nil
 	}
@@ -171,17 +203,42 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 		return res, nil
 	}
 
-	resBody, err := ioutil.ReadAll(httpRes.Body)
-	if err != nil {
-		err := errors.Wrap(err, "appprovidersvc: error reading reponse body")
-		res := &providerpb.OpenFileInAppProviderResponse{
-			Status: status.NewInternal(ctx, err, "error reading reponse body"),
-		}
-		return res, nil
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(openRes.Body)
+	openResBody := buf.String()
+
+	appsBodyMap := make(map[string]interface{})
+	err1 := json.Unmarshal(appsBody, &appsBodyMap)
+	if err1 != nil {
+		return nil, err1
 	}
+
+	fileExtension := path.Ext(req.Ref.GetPath())
+
+	viewOptions := appsBodyMap[fileExtension]
+
+	viewOptionsMap, ok := viewOptions.(map[string]interface{})
+
+	var viewmode string
+
+	if req.ViewMode == providerpb.OpenFileInAppProviderRequest_VIEW_MODE_READ_WRITE {
+		viewmode = "edit"
+	} else {
+		viewmode = "view"
+	}
+
+	providerURL := fmt.Sprintf("%v", viewOptionsMap[viewmode])
+
+	if strings.Contains(providerURL, "?") {
+		providerURL += "&"
+	} else {
+		providerURL += "?"
+	}
+
+	appProviderURL := fmt.Sprintf("App URL:\n%sWOPISrc=%s\n", providerURL, openResBody)
 
 	return &providerpb.OpenFileInAppProviderResponse{
 		Status:         status.NewOK(ctx),
-		AppProviderUrl: string(resBody),
+		AppProviderUrl: appProviderURL,
 	}, nil
 }
