@@ -21,6 +21,8 @@ package meshdirectory
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/ocmd"
@@ -29,7 +31,6 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"net/http"
 
 	"github.com/pkg/errors"
 
@@ -112,7 +113,6 @@ func (s *svc) serveIndex(w http.ResponseWriter, r *http.Request) {
 
 	fs := http.FileServer(http.Dir(s.conf.Static))
 	fs.ServeHTTP(w, r)
-	return
 }
 
 // OCMProvidersOnly returns just the providers that provide the OCM Service Type endpoint
