@@ -96,7 +96,7 @@ func (exporter *PrometheusFileSDExporter) createScrapeConfigs() []*prometheus.Sc
 			}
 
 			// Add the "main" service to the scrapes
-			addScrape(site, service.Host, &service.ServiceEndpoint)
+			addScrape(site, service.Host, service.ServiceEndpoint)
 
 			for _, endpoint := range service.AdditionalEndpoints {
 				if endpoint.IsMonitored {

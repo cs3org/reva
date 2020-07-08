@@ -188,7 +188,7 @@ func (connector *GOCDBConnector) queryServices(meshData *meshdata.MeshData, site
 
 		// Add the service to the site
 		site.Services = append(site.Services, &meshdata.Service{
-			ServiceEndpoint: meshdata.ServiceEndpoint{
+			ServiceEndpoint: &meshdata.ServiceEndpoint{
 				Type:        connector.findServiceType(meshData, service.Type),
 				Name:        fmt.Sprintf("%v - %v", service.Host, service.Type),
 				URL:         getServiceURLString(service, nil, host),
