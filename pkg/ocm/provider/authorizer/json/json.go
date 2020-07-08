@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net"
+	"net/url"
 	"strings"
 	"sync"
 
@@ -153,9 +154,11 @@ func (a *authorizer) getOCMHost(providerDomain string) (string, error) {
 		if p.Domain == providerDomain {
 			for _, s := range p.Services {
 				if s.Endpoint.Type.Name == "OCM" {
-					ocmHost := strings.TrimPrefix(s.Host, "https://")
-					ocmHost = strings.TrimPrefix(ocmHost, "http://")
-					return ocmHost, nil
+					ocmHost, err := url.Parse(s.Host)
+					if err != nil {
+						return "", errors.Wrap(err, "json: error parsing OCM host URL")
+					}
+					return ocmHost.Host, nil
 				}
 			}
 		}
