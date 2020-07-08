@@ -122,7 +122,7 @@ func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareReq
 }
 
 // TODO(labkode): we need to validate share state vs storage grant and storage ref
-// If there are any inconsitencies, the share needs to be flag as invalid and a background process
+// If there are any inconsistencies, the share needs to be flag as invalid and a background process
 // or active fix needs to be performed.
 func (s *svc) GetShare(ctx context.Context, req *collaboration.GetShareRequest) (*collaboration.GetShareResponse, error) {
 	return s.getShare(ctx, req)

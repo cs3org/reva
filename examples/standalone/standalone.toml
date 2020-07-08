@@ -12,6 +12,7 @@
 [grpc.services.ocminvitemanager]
 [grpc.services.ocmproviderauthorizer]
 
+[http.services.datagateway]
 [http.services.dataprovider]
 [http.services.prometheus]
 [http.services.ocmd]

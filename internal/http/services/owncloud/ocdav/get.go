@@ -98,7 +98,7 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 
 	dataServerURL := dRes.DownloadEndpoint
 
-	// TODO(labkode): perfrom protocol switch
+	// TODO(labkode): perform protocol switch
 	httpReq, err := rhttp.NewRequest(ctx, "GET", dataServerURL, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("error creating http request")
@@ -106,7 +106,11 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 	httpReq.Header.Set(datagateway.TokenTransportHeader, dRes.Token)
-	httpClient := rhttp.GetHTTPClient(ctx)
+	httpClient := rhttp.GetHTTPClient(
+		rhttp.Context(ctx),
+		rhttp.Timeout(time.Duration(s.c.Timeout*int64(time.Second))),
+		rhttp.Insecure(s.c.Insecure),
+	)
 
 	httpRes, err := httpClient.Do(httpReq)
 	if err != nil {

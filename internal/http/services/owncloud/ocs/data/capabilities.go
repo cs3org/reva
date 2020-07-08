@@ -83,7 +83,7 @@ type CapabilitiesChecksums struct {
 	PreferredUploadType string   `json:"preferredUploadType" xml:"preferredUploadType" mapstructure:"preferred_upload_type"`
 }
 
-// CapabilitiesFilesTusSupport TODO this must be a summry of storages
+// CapabilitiesFilesTusSupport TODO this must be a summary of storages
 type CapabilitiesFilesTusSupport struct {
 	Version            string `json:"version" xml:"version"`
 	Resumable          string `json:"resumable" xml:"resumable"`

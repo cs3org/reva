@@ -38,7 +38,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// transerClaims are custom claims for a JWT token to be used between the metadata and data gateways.
+// transferClaims are custom claims for a JWT token to be used between the metadata and data gateways.
 type transferClaims struct {
 	jwt.StandardClaims
 	Target string `json:"target"`
@@ -226,7 +226,7 @@ func (s *svc) initiateFileDownload(ctx context.Context, req *provider.InitiateFi
 	}
 
 	if storageRes.Expose {
-		log.Info().Msg("download is routed directly to data server - skiping datagateway")
+		log.Info().Msg("download is routed directly to data server - skipping data gateway")
 		return res, nil
 	}
 
@@ -367,7 +367,7 @@ func (s *svc) initiateFileUpload(ctx context.Context, req *provider.InitiateFile
 	}
 
 	if storageRes.Expose {
-		log.Info().Msg("upload is routed directly to data server - skiping datagateway")
+		log.Info().Msg("upload is routed directly to data server - skipping data gateway")
 		return res, nil
 	}
 
@@ -844,7 +844,7 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 }
 
 func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
-	p, err := s.getPath(ctx, req.Ref)
+	p, err := s.getPath(ctx, req.Ref, req.ArbitraryMetadataKeys...)
 	if err != nil {
 		return &provider.StatResponse{
 			Status: status.NewInternal(ctx, err, "gateway: error getting path for ref"),
@@ -1054,7 +1054,7 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 }
 
 func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
-	p, err := s.getPath(ctx, req.Ref)
+	p, err := s.getPath(ctx, req.Ref, req.ArbitraryMetadataKeys...)
 	if err != nil {
 		return &provider.ListContainerResponse{
 			Status: status.NewInternal(ctx, err, "gateway: error getting path for ref"),
@@ -1067,7 +1067,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 
 	if s.isSharedFolder(ctx, p) {
 		// TODO(labkode): we need to generate a unique etag if any of the underlying share changes.
-		// the response will contain all the share names and we need to convert them to non resference types.
+		// the response will contain all the share names and we need to convert them to non reference types.
 		lcr, err := s.listContainer(ctx, req)
 		if err != nil {
 			return &provider.ListContainerResponse{
@@ -1140,7 +1140,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 			},
 		}
 
-		newReq := &provider.ListContainerRequest{Ref: ref}
+		newReq := &provider.ListContainerRequest{Ref: ref, ArbitraryMetadataKeys: req.ArbitraryMetadataKeys}
 		newRes, err := s.listContainer(ctx, newReq)
 		if err != nil {
 			return &provider.ListContainerResponse{
@@ -1213,7 +1213,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 			},
 		}
 
-		newReq := &provider.ListContainerRequest{Ref: ref}
+		newReq := &provider.ListContainerRequest{Ref: ref, ArbitraryMetadataKeys: req.ArbitraryMetadataKeys}
 		newRes, err := s.listContainer(ctx, newReq)
 		if err != nil {
 			return &provider.ListContainerResponse{
@@ -1242,13 +1242,13 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 	panic("gateway: stating an unknown path:" + p)
 }
 
-func (s *svc) getPath(ctx context.Context, ref *provider.Reference) (string, error) {
+func (s *svc) getPath(ctx context.Context, ref *provider.Reference, keys ...string) (string, error) {
 	if ref.GetPath() != "" {
 		return ref.GetPath(), nil
 	}
 
 	if ref.GetId() != nil && ref.GetId().GetOpaqueId() != "" {
-		req := &provider.StatRequest{Ref: ref}
+		req := &provider.StatRequest{Ref: ref, ArbitraryMetadataKeys: keys}
 		res, err := s.stat(ctx, req)
 		if err != nil {
 			err = errors.Wrap(err, "gateway: error stating ref:"+ref.String())
@@ -1429,7 +1429,7 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 }
 
 func (s *svc) PurgeRecycle(ctx context.Context, req *gateway.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
-	// lookup storagy by treating the key as a path. It has been prefixed with the storage path in ListRecycle
+	// lookup storage by treating the key as a path. It has been prefixed with the storage path in ListRecycle
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {

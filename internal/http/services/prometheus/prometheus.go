@@ -21,14 +21,15 @@ package prometheus
 import (
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/metrics"
-
 	"contrib.go.opencensus.io/exporter/prometheus"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.opencensus.io/stats/view"
+
+	// Initializes goroutines which periodically update stats
+	_ "github.com/cs3org/reva/pkg/metrics/reader/dummy"
 )
 
 func init() {
@@ -52,16 +53,6 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	}
 
 	view.RegisterExporter(pe)
-
-	// register the desired measures' views
-	if err = view.Register(
-		metrics.GetNumUsersView(),
-		metrics.GetNumGroupsView(),
-		metrics.GetAmountStorageView(),
-	); err != nil {
-		return nil, errors.Wrap(err, "prometheus: error registering exporter")
-	}
-
 	return &svc{prefix: conf.Prefix, h: pe}, nil
 }
 

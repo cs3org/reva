@@ -20,6 +20,7 @@ package ocmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -75,34 +76,33 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 
 	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
-		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting storage grpc client on addr: %v", h.gatewayAddr), err)
+		WriteError(w, r, APIErrorServerError, "error getting storage grpc client", err)
 		return
 	}
 
-	clientDomains, err := utils.GetDomainsFromRequest(r)
+	clientIP, err := utils.GetClientIP(r)
 	if err != nil {
-		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error looking up hostname for client IP"), err)
+		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error retrieving client IP from request: %s", r.RemoteAddr), err)
 		return
 	}
-
 	providerInfo := ocmprovider.ProviderInfo{
 		Domain: meshProvider,
-	}
-	for _, domain := range clientDomains {
-		providerInfo.Services = append(providerInfo.Services, &ocmprovider.Service{
-			Host: domain,
-		})
+		Services: []*ocmprovider.Service{
+			&ocmprovider.Service{
+				Host: clientIP,
+			},
+		},
 	}
 
 	providerAllowedResp, err := gatewayClient.IsProviderAllowed(ctx, &ocmprovider.IsProviderAllowedRequest{
 		Provider: &providerInfo,
 	})
 	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error authorizing provider", err)
+		WriteError(w, r, APIErrorServerError, "error sending a grpc is provider allowed request", err)
 		return
 	}
 	if providerAllowedResp.Status.Code != rpc.Code_CODE_OK {
-		WriteError(w, r, APIErrorUnauthenticated, "provider not authorized", err)
+		WriteError(w, r, APIErrorUnauthenticated, "provider not authorized", errors.New(providerAllowedResp.Status.Message))
 		return
 	}
 
@@ -114,7 +114,7 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if userRes.Status.Code != rpc.Code_CODE_OK {
-		WriteError(w, r, APIErrorNotFound, "user not found", err)
+		WriteError(w, r, APIErrorNotFound, "user not found", errors.New(userRes.Status.Message))
 		return
 	}
 
@@ -192,7 +192,7 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, r, APIErrorNotFound, "not found", nil)
 			return
 		}
-		WriteError(w, r, APIErrorServerError, "grpc create ocm core share request failed", err)
+		WriteError(w, r, APIErrorServerError, "grpc create ocm core share request failed", errors.New(createShareResponse.Status.Message))
 		return
 	}
 

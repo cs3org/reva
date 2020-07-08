@@ -32,7 +32,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-const defaultExpiraton int64 = 3600 // 1 hour
+const defaultExpiration int64 = 3600 // 1 hour
 
 func init() {
 	registry.Register("jwt", New)
@@ -60,7 +60,7 @@ func New(value map[string]interface{}) (token.Manager, error) {
 	}
 
 	if c.Expires == 0 {
-		c.Expires = defaultExpiraton
+		c.Expires = defaultExpiration
 	}
 
 	c.Secret = sharedconf.GetJWTSecret(c.Secret)

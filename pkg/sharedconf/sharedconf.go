@@ -19,6 +19,9 @@
 package sharedconf
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -41,9 +44,14 @@ func Decode(v interface{}) error {
 		sharedConf.GatewaySVC = "0.0.0.0:19000"
 	}
 
-	// this is the default address we use for starting HTTP services
+	// this is the default address we use for the data gateway HTTP service
 	if sharedConf.DataGateway == "" {
-		sharedConf.DataGateway = "http://localhost:19001/data"
+		host, err := os.Hostname()
+		if err != nil || host == "" {
+			sharedConf.DataGateway = "http://0.0.0.0:19001/datagateway"
+		} else {
+			sharedConf.DataGateway = fmt.Sprintf("http://%s:19001/datagateway", host)
+		}
 	}
 
 	// TODO(labkode): would be cool to autogenerate one secret and print
@@ -55,7 +63,7 @@ func Decode(v interface{}) error {
 	return nil
 }
 
-// GetJWTSecret returns the package level configured jwt secret if not overwriten.
+// GetJWTSecret returns the package level configured jwt secret if not overwritten.
 func GetJWTSecret(val string) string {
 	if val == "" {
 		return sharedConf.JWTSecret
@@ -63,7 +71,7 @@ func GetJWTSecret(val string) string {
 	return val
 }
 
-// GetGatewaySVC returns the package level configured gateway service if not overwriten.
+// GetGatewaySVC returns the package level configured gateway service if not overwritten.
 func GetGatewaySVC(val string) string {
 	if val == "" {
 		return sharedConf.GatewaySVC
@@ -71,7 +79,7 @@ func GetGatewaySVC(val string) string {
 	return val
 }
 
-// GetDataGateway returns the package level data gateway endpoint if not overwriten.
+// GetDataGateway returns the package level data gateway endpoint if not overwritten.
 func GetDataGateway(val string) string {
 	if val == "" {
 		return sharedConf.DataGateway

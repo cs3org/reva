@@ -27,6 +27,9 @@ type Site struct {
 	Homepage     string
 	Email        string
 	Description  string
+	Country      string
+	CountryCode  string
+	Location     string
 
 	Services   []*Service
 	Properties map[string]string

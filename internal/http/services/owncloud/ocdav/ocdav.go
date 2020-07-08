@@ -65,6 +65,8 @@ type Config struct {
 	WebdavNamespace string `mapstructure:"webdav_namespace"`
 	ChunkFolder     string `mapstructure:"chunk_folder"`
 	GatewaySvc      string `mapstructure:"gatewaysvc"`
+	Timeout         int64  `mapstructure:"timeout"`
+	Insecure        bool   `mapstructure:"insecure"`
 	DisableTus      bool   `mapstructure:"disable_tus"`
 }
 
@@ -197,9 +199,9 @@ func wrapResourceID(r *provider.ResourceId) string {
 }
 
 // The fileID must be encoded
-// - XML safe, because it is going to be used in the profind result
+// - XML safe, because it is going to be used in the propfind result
 // - url safe, because the id might be used in a url, eg. the /dav/meta nodes
-// which is why we base62 encode it
+// which is why we base64 encode it
 func wrap(sid string, oid string) string {
 	return base64.URLEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", sid, oid)))
 }

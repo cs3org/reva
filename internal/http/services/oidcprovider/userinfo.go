@@ -74,7 +74,7 @@ func (s *svc) doUserinfo(w http.ResponseWriter, r *http.Request) {
 		// - only an oidc provider would be able to provide an iss
 		// - maybe for ldap the uidNumber attribute makes more sense as sub?
 		//    - this is still a tricky question. ms eg uses sid - security identifiers
-		//      but they change when a usename changes or he moves to a new node in the tree
+		//      but they change when a username changes or he moves to a new node in the tree
 		//      to mitigate this they keep track of past ids in the sidHistory attribute
 		//      so the filesystem might use an outdated sid in the permissions but the system
 		//      can still resolve the user using the sidhistory attribute
@@ -111,7 +111,7 @@ func (s *svc) doUserinfo(w http.ResponseWriter, r *http.Request) {
 	user := getUserRes.User
 	sc := &StandardClaims{
 		Sub: user.Id.OpaqueId,
-		// TODO(labkode): Iss is overwriten by config
+		// TODO(labkode): Iss is overwritten by config
 		Iss:               s.conf.Issuer,
 		PreferredUsername: user.Username,
 		Name:              user.DisplayName,

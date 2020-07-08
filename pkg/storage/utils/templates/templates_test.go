@@ -111,7 +111,7 @@ func TestUserPanic(t *testing.T) {
 
 // should panic
 func testBadLayout() {
-	layout := "{{ bad layout sintax"
+	layout := "{{ bad layout syntax"
 	user := &userpb.User{}
 	WithUser(user, layout)
 }

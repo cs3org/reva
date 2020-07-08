@@ -64,7 +64,9 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 	}
 
 	// attempt to create the db file
-	if _, err := os.Stat(m.file); os.IsNotExist(err) {
+	var fi os.FileInfo
+	var err error
+	if fi, err = os.Stat(m.file); os.IsNotExist(err) {
 		folder := filepath.Dir(m.file)
 		if err := os.MkdirAll(folder, 0755); err != nil {
 			return nil, err
@@ -74,11 +76,7 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 		}
 	}
 
-	fileContents, err := ioutil.ReadFile(m.file)
-	if err != nil {
-		return nil, err
-	}
-	if len(fileContents) == 0 {
+	if fi == nil || fi.Size() == 0 {
 		err := ioutil.WriteFile(m.file, []byte("{}"), 0644)
 		if err != nil {
 			return nil, err
@@ -109,10 +107,10 @@ type manager struct {
 // CreatePublicShare adds a new entry to manager.shares
 func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error) {
 	id := &link.PublicShareId{
-		OpaqueId: randString(12),
+		OpaqueId: randString(15),
 	}
 
-	tkn := randString(12)
+	tkn := randString(15)
 	now := time.Now().UnixNano()
 
 	displayName, ok := rInfo.ArbitraryMetadata.Metadata["name"]
@@ -164,13 +162,8 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 		return nil, err
 	}
 
-	db := map[string]interface{}{}
-	fileContents, err := ioutil.ReadFile(m.file)
+	db, err := m.readDb()
 	if err != nil {
-		return nil, err
-	}
-
-	if err := json.Unmarshal(fileContents, &db); err != nil {
 		return nil, err
 	}
 
@@ -183,14 +176,11 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 		return nil, errors.New("key already exists")
 	}
 
-	destJSON, err := json.Marshal(db)
+	err = m.writeDb(db)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := ioutil.WriteFile(m.file, destJSON, 0644); err != nil {
-		return nil, err
-	}
 	return &s, nil
 }
 
@@ -203,25 +193,32 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 	}
 
 	now := time.Now().UnixNano()
-	var p string
+	var newPasswordEncoded string
+	passwordChanged := false
 
 	switch req.GetUpdate().GetType() {
 	case link.UpdatePublicShareRequest_Update_TYPE_DISPLAYNAME:
-		log.Debug().Str("memory", "update display name").Msgf("from: `%v` to `%v`", share.DisplayName, req.Update.GetDisplayName())
+		log.Debug().Str("json", "update display name").Msgf("from: `%v` to `%v`", share.DisplayName, req.Update.GetDisplayName())
 		share.DisplayName = req.Update.GetDisplayName()
 	case link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS:
 		old, _ := json.Marshal(share.Permissions)
 		new, _ := json.Marshal(req.Update.GetGrant().Permissions)
-		log.Debug().Str("memory", "update grants").Msgf("from: `%v`\nto\n`%v`", old, new)
+		log.Debug().Str("json", "update grants").Msgf("from: `%v`\nto\n`%v`", old, new)
 		share.Permissions = req.Update.GetGrant().GetPermissions()
 	case link.UpdatePublicShareRequest_Update_TYPE_EXPIRATION:
 		old, _ := json.Marshal(share.Expiration)
 		new, _ := json.Marshal(req.Update.GetGrant().Expiration)
-		log.Debug().Str("memory", "update expiration").Msgf("from: `%v`\nto\n`%v`", old, new)
+		log.Debug().Str("json", "update expiration").Msgf("from: `%v`\nto\n`%v`", old, new)
 		share.Expiration = req.Update.GetGrant().Expiration
 	case link.UpdatePublicShareRequest_Update_TYPE_PASSWORD:
-		p = base64.StdEncoding.EncodeToString([]byte(req.Update.GetGrant().Password))
-		share.PasswordProtected = true
+		passwordChanged = true
+		if req.Update.GetGrant().Password == "" {
+			share.PasswordProtected = false
+			newPasswordEncoded = ""
+		} else {
+			newPasswordEncoded = base64.StdEncoding.EncodeToString([]byte(req.Update.GetGrant().Password))
+			share.PasswordProtected = true
+		}
 	default:
 		return nil, fmt.Errorf("invalid update type: %v", req.GetUpdate().GetType())
 	}
@@ -234,13 +231,8 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	db := map[string]interface{}{}
-	fileBytes, err := ioutil.ReadFile(m.file)
+	db, err := m.readDb()
 	if err != nil {
-		return nil, err
-	}
-
-	if err := json.Unmarshal(fileBytes, &db); err != nil {
 		return nil, err
 	}
 
@@ -249,19 +241,20 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 		return nil, err
 	}
 
-	db[share.GetId().OpaqueId] = buff.String()
-
-	db[share.Id.GetOpaqueId()] = map[string]interface{}{
-		"share":    buff.String(),
-		"password": p,
+	data, ok := db[share.Id.OpaqueId].(map[string]interface{})
+	if !ok {
+		data = map[string]interface{}{}
 	}
 
-	dbAsJSON, err := json.Marshal(db)
+	if ok && passwordChanged {
+		data["password"] = newPasswordEncoded
+	}
+	data["share"] = buff.String()
+
+	db[share.Id.OpaqueId] = data
+
+	err = m.writeDb(db)
 	if err != nil {
-		return nil, err
-	}
-
-	if err := ioutil.WriteFile(m.file, dbAsJSON, 0644); err != nil {
 		return nil, err
 	}
 
@@ -281,13 +274,8 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	db := map[string]interface{}{}
-	fileBytes, err := ioutil.ReadFile(m.file)
+	db, err := m.readDb()
 	if err != nil {
-		return nil, err
-	}
-
-	if err := json.Unmarshal(fileBytes, &db); err != nil {
 		return nil, err
 	}
 
@@ -333,13 +321,8 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	db := map[string]interface{}{}
-	readBytes, err := ioutil.ReadFile(m.file)
+	db, err := m.readDb()
 	if err != nil {
-		return nil, err
-	}
-
-	if err := json.Unmarshal(readBytes, &db); err != nil {
 		return nil, err
 	}
 
@@ -374,17 +357,22 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 
 // RevokePublicShare undocumented.
 func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, id string) error {
-	return fmt.Errorf("RevokePublicShare method unimplemented")
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	db, err := m.readDb()
+	if err != nil {
+		return err
+	}
+
+	delete(db, id)
+
+	return m.writeDb(db)
 }
 
 func (m *manager) getByToken(ctx context.Context, token string) (*link.PublicShare, error) {
-	db := map[string]interface{}{}
-	readBytes, err := ioutil.ReadFile(m.file)
+	db, err := m.readDb()
 	if err != nil {
-		return nil, err
-	}
-
-	if err := json.Unmarshal(readBytes, &db); err != nil {
 		return nil, err
 	}
 
@@ -408,13 +396,8 @@ func (m *manager) getByToken(ctx context.Context, token string) (*link.PublicSha
 
 // GetPublicShareByToken gets a public share by its opaque token.
 func (m *manager) GetPublicShareByToken(ctx context.Context, token, password string) (*link.PublicShare, error) {
-	db := map[string]interface{}{}
-	readBytes, err := ioutil.ReadFile(m.file)
+	db, err := m.readDb()
 	if err != nil {
-		return nil, err
-	}
-
-	if err := json.Unmarshal(readBytes, &db); err != nil {
 		return nil, err
 	}
 
@@ -438,7 +421,7 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token, password str
 					return local, nil
 				}
 				// TODO(refs): custom permission denied error to catch up
-				// in uppper layers
+				// in upper layers
 				return nil, errors.New("json: invalid password")
 			}
 			return local, nil
@@ -456,6 +439,31 @@ func randString(n int) string {
 		b[i] = l[rand.Intn(len(l))]
 	}
 	return string(b)
+}
+
+func (m *manager) readDb() (map[string]interface{}, error) {
+	db := map[string]interface{}{}
+	readBytes, err := ioutil.ReadFile(m.file)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(readBytes, &db); err != nil {
+		return nil, err
+	}
+	return db, nil
+}
+
+func (m *manager) writeDb(db map[string]interface{}) error {
+	dbAsJSON, err := json.Marshal(db)
+	if err != nil {
+		return err
+	}
+
+	if err := ioutil.WriteFile(m.file, dbAsJSON, 0644); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 type publicShare struct {

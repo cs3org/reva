@@ -58,10 +58,10 @@ var (
 // CreatePublicShare adds a new entry to manager.shares
 func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error) {
 	id := &link.PublicShareId{
-		OpaqueId: randString(12),
+		OpaqueId: randString(15),
 	}
 
-	tkn := randString(12)
+	tkn := randString(15)
 	now := uint64(time.Now().Unix())
 
 	displayName, ok := rInfo.ArbitraryMetadata.Metadata["name"]
@@ -188,7 +188,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 }
 
 func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, id string) (err error) {
-	// check whether the referente exists
+	// check whether the reference exists
 	if _, err := m.GetPublicShareByToken(ctx, id, ""); err != nil {
 		return errors.New("reference does not exist")
 	}

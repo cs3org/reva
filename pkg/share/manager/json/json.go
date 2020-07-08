@@ -70,8 +70,8 @@ func New(m map[string]interface{}) (share.Manager, error) {
 }
 
 func loadOrCreate(file string) (*shareModel, error) {
-	_, err := os.Stat(file)
-	if os.IsNotExist(err) {
+	info, err := os.Stat(file)
+	if os.IsNotExist(err) || info.Size() == 0 {
 		if err := ioutil.WriteFile(file, []byte("{}"), 0700); err != nil {
 			err = errors.Wrap(err, "error opening/creating the file: "+file)
 			return nil, err
@@ -164,7 +164,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabora
 	}
 
 	// do not allow share to myself if share is for a user
-	// TODO(labkode): should not this be catched already at the gw level?
+	// TODO(labkode): should not this be caught already at the gw level?
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER &&
 		g.Grantee.Id.Idp == user.Id.Idp && g.Grantee.Id.OpaqueId == user.Id.OpaqueId {
 		return nil, errors.New("json: user and grantee are the same")
@@ -286,7 +286,7 @@ func (m *mgr) Unshare(ctx context.Context, ref *collaboration.ShareReference) er
 	return errtypes.NotFound(ref.String())
 }
 
-// TODO(labkode): this is fragile, the check should be done on primitve types.
+// TODO(labkode): this is fragile, the check should be done on primitive types.
 func equal(ref *collaboration.ShareReference, s *collaboration.Share) bool {
 	if ref.GetId() != nil && s.Id != nil {
 		if ref.GetId().OpaqueId == s.Id.OpaqueId {

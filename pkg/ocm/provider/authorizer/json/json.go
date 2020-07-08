@@ -22,7 +22,9 @@ import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
+	"net"
 	"strings"
+	"sync"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -73,8 +75,9 @@ func (c *config) init() {
 }
 
 type authorizer struct {
-	providers []*ocmprovider.ProviderInfo
-	conf      *config
+	providers   []*ocmprovider.ProviderInfo
+	providerIPs *sync.Map
+	conf        *config
 }
 
 func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmprovider.ProviderInfo, error) {
@@ -89,30 +92,50 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovider.ProviderInfo) error {
 
 	var providerAuthorized bool
-	for _, p := range a.providers {
-		if p.Domain == provider.GetDomain() {
-			providerAuthorized = true
+	if provider.Domain != "" {
+		for _, p := range a.providers {
+			if p.Domain == provider.Domain {
+				providerAuthorized = true
+			}
 		}
+	} else {
+		providerAuthorized = true
 	}
 
-	if !providerAuthorized {
+	switch {
+	case !providerAuthorized:
 		return errtypes.NotFound(provider.GetDomain())
-	} else if !a.conf.VerifyRequestHostname {
+	case !a.conf.VerifyRequestHostname:
 		return nil
+	case len(provider.Services) == 0:
+		return errtypes.NotSupported("No IP provided")
 	}
 
-	providerAuthorized = false
 	ocmHost, err := getOCMHost(provider)
 	if err != nil {
 		return errors.Wrap(err, "json: ocm host not specified for mesh provider")
 	}
 
-	for _, s := range provider.Services {
-		if s.Host == ocmHost {
+	providerAuthorized = false
+	var ipList []string
+	if hostIPs, ok := a.providerIPs.Load(ocmHost); ok {
+		ipList = hostIPs.([]string)
+	} else {
+		addr, err := net.LookupIP(ocmHost)
+		if err != nil {
+			return errors.Wrap(err, "json: error looking up client IP")
+		}
+		for _, a := range addr {
+			ipList = append(ipList, a.String())
+		}
+		a.providerIPs.Store(ocmHost, ipList)
+	}
+
+	for _, ip := range ipList {
+		if ip == provider.Services[0].Host {
 			providerAuthorized = true
 		}
 	}
-
 	if !providerAuthorized {
 		return errtypes.NotFound("OCM Host")
 	}
@@ -127,7 +150,9 @@ func (a *authorizer) ListAllProviders(ctx context.Context) ([]*ocmprovider.Provi
 func getOCMHost(originProvider *ocmprovider.ProviderInfo) (string, error) {
 	for _, s := range originProvider.Services {
 		if s.Endpoint.Type.Name == "OCM" {
-			return s.Host, nil
+			ocmHost := strings.TrimPrefix(s.Host, "https://")
+			ocmHost = strings.TrimPrefix(ocmHost, "http://")
+			return ocmHost, nil
 		}
 	}
 	return "", errtypes.NotFound("OCM Host")

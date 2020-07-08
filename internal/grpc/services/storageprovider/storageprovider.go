@@ -35,7 +35,6 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
@@ -77,7 +76,14 @@ func (c *config) init() {
 		c.TmpFolder = "/var/tmp/reva/tmp"
 	}
 
-	c.DataServerURL = sharedconf.GetDataGateway(c.DataServerURL)
+	if c.DataServerURL == "" {
+		host, err := os.Hostname()
+		if err != nil || host == "" {
+			c.DataServerURL = "http://0.0.0.0:19001/data"
+		} else {
+			c.DataServerURL = fmt.Sprintf("http://%s:19001/data", host)
+		}
+	}
 
 	// set sane defaults
 	if len(c.AvailableXS) == 0 {
@@ -450,7 +456,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		}, nil
 	}
 
-	md, err := s.storage.GetMD(ctx, newRef)
+	md, err := s.storage.GetMD(ctx, newRef, req.ArbitraryMetadataKeys)
 	if err != nil {
 		var st *rpc.Status
 		if _, ok := err.(errtypes.IsNotFound); ok {
@@ -491,7 +497,7 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 		return nil
 	}
 
-	mds, err := s.storage.ListFolder(ctx, newRef)
+	mds, err := s.storage.ListFolder(ctx, newRef, req.ArbitraryMetadataKeys)
 	if err != nil {
 		res := &provider.ListContainerStreamResponse{
 			Status: status.NewInternal(ctx, err, "error listing folder"),
@@ -535,7 +541,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		}, nil
 	}
 
-	mds, err := s.storage.ListFolder(ctx, newRef)
+	mds, err := s.storage.ListFolder(ctx, newRef, req.ArbitraryMetadataKeys)
 	if err != nil {
 		return &provider.ListContainerResponse{
 			Status: status.NewInternal(ctx, err, "error listing folder"),
@@ -832,7 +838,7 @@ func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (*provide
 		idRef := &provider.Reference{
 			Spec: &provider.Reference_Id{
 				Id: &provider.ResourceId{
-					StorageId: "", // on purpose, we are unwrapping, bottom layers only need OpaqueId.
+					StorageId: "", // we are unwrapping on purpose, bottom layers only need OpaqueId.
 					OpaqueId:  ref.GetId().OpaqueId,
 				},
 			},

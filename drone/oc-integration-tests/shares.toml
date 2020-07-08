@@ -1,0 +1,19 @@
+[shared]
+jwt_secret = "Pive-Fumkiu4"
+
+# GRPC:
+# - serves user and public link shares
+[grpc]
+address = "0.0.0.0:17000"
+
+[grpc.services.usershareprovider]
+driver = "memory"
+
+[grpc.services.authprovider]
+auth_manager = "publicshares"
+
+[grpc.services.authprovider.auth_managers.publicshares]
+gateway_addr = "0.0.0.0:19000"
+
+[grpc.services.publicshareprovider.drivers.json]
+file = "/drone/src/tmp/reva/publicshares.json"

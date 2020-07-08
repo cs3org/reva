@@ -112,6 +112,7 @@ func (exporter *PrometheusFileSDExporter) createScrapeConfigs() []*prometheus.Sc
 func (exporter *PrometheusFileSDExporter) createScrapeConfig(site *meshdata.Site, host string, endpoint *meshdata.ServiceEndpoint) *prometheus.ScrapeConfig {
 	labels := map[string]string{
 		"site":         site.Name,
+		"country":      site.CountryCode,
 		"service_type": endpoint.Type.Name,
 	}
 

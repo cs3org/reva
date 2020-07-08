@@ -63,7 +63,7 @@ func TestUserManager(t *testing.T) {
 		t.Fatalf("expected DisplayName to be: %v, got %v", ldapDefaults.DN, c.Schema.DN)
 	}
 
-	// possitive tests for New
+	// positive tests for New
 	_, err = New(map[string]interface{}{})
 	if err != nil {
 		t.Fatalf(err.Error())

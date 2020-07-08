@@ -138,19 +138,19 @@ enum TYPE { FILE = 0; CONTAINER = 1; LISTING = 2; STAT = 3;}
 enum QUOTATYPE { USER = 0; GROUP = 2; PROJECT = 3; ALL = 4;}
 
 message QuotaProto { 
-  bytes path = 1;                // quota node path
-  string name = 2;               // associated name for the given type
-  QUOTATYPE type = 3;            // user,group,project or all quota
-  uint64 usedbytes = 4;          // bytes used physical
-  uint64 usedlogicalbytes = 5;   // bytes used logical 
-  uint64 usedfiles = 6;          // number of files used
-  uint64 maxbytes = 7;           // maximum number of bytes (volume quota)
-  uint64 maxlogicalbytes = 8;    // maximum number of logical bytes (logical volume quota)
-  uint64 maxfiles = 9;           // maximum number of files (inode quota)
-  float percentagusedbytes = 10; // percentage of volume quota used from 0 to 100
-  float percentagusedfiles = 11; // percentag of inode quota used from 0 to 100
-  string statusbytes = 12;       // status string for volume quota ok,warning,exceeded
-  string statusfiles = 13;       // status string for inode quota ok,warning,exceeded
+  bytes path = 1;                 // quota node path
+  string name = 2;                // associated name for the given type
+  QUOTATYPE type = 3;             // user,group,project or all quota
+  uint64 usedbytes = 4;           // bytes used physical
+  uint64 usedlogicalbytes = 5;    // bytes used logical
+  uint64 usedfiles = 6;           // number of files used
+  uint64 maxbytes = 7;            // maximum number of bytes (volume quota)
+  uint64 maxlogicalbytes = 8;     // maximum number of logical bytes (logical volume quota)
+  uint64 maxfiles = 9;            // maximum number of files (inode quota)
+  float percentageusedbytes = 10; // percentage of volume quota used from 0 to 100
+  float percentageusedfiles = 11; // percentage of inode quota used from 0 to 100
+  string statusbytes = 12;        // status string for volume quota ok,warning,exceeded
+  string statusfiles = 13;        // status string for inode quota ok,warning,exceeded
 }
   
 message RoleId {

@@ -25,16 +25,18 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/smtpclient"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 )
 
 // Config holds the config options that need to be passed down to all ocdav handlers
 type Config struct {
-	Prefix     string     `mapstructure:"prefix"`
-	Host       string     `mapstructure:"host"`
-	GatewaySvc string     `mapstructure:"gatewaysvc"`
-	Config     configData `mapstructure:"config"`
+	SMTPCredentials *smtpclient.SMTPCredentials `mapstructure:"smtp_credentials"`
+	Prefix          string                      `mapstructure:"prefix"`
+	Host            string                      `mapstructure:"host"`
+	GatewaySvc      string                      `mapstructure:"gatewaysvc"`
+	Config          configData                  `mapstructure:"config"`
 }
 
 func (c *Config) init() {

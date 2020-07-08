@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 
@@ -92,7 +93,13 @@ func downloadCommand() *command {
 		}
 
 		httpReq.Header.Set(datagateway.TokenTransportHeader, res.Token)
-		httpClient := rhttp.GetHTTPClient(ctx)
+		httpClient := rhttp.GetHTTPClient(
+			rhttp.Context(ctx),
+			// TODO make insecure configurable
+			rhttp.Insecure(true),
+			// TODO make timeout configurable
+			rhttp.Timeout(time.Duration(24*int64(time.Hour))),
+		)
 
 		httpRes, err := httpClient.Do(httpReq)
 		if err != nil {

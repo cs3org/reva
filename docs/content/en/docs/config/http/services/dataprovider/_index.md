@@ -33,7 +33,7 @@ The configuration for the storage driver [[Ref]](https://github.com/cs3org/reva/
 {{% /dir %}}
 
 {{% dir name="disable_tus" type="bool" default=false %}}
-Whether to disable TUS uploads. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/dataprovider/dataprovider.go#L42)
+Whether to disable TUS uploads. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/dataprovider/dataprovider.go#L44)
 {{< highlight toml >}}
 [http.services.dataprovider]
 disable_tus = false

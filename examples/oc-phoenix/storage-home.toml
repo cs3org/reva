@@ -15,7 +15,7 @@ gatewaysvc = "localhost:19000"
 [grpc]
 address = "0.0.0.0:12000"
 
-# This is a storage proider that grants direct acces to the wrapped storage
+# This is a storage provider that grants direct access to the wrapped storage
 # TODO same storage id as the /oc/ storage provider
 # if we have an id, we can directly go to that storage, no need to wrap paths
 # we have a locally running dataprovider

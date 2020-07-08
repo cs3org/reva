@@ -48,6 +48,8 @@ type Site struct {
 	Homepage     string     `xml:"HOME_URL"`
 	Email        string     `xml:"CONTACT_EMAIL"`
 	Domain       string     `xml:"DOMAIN>DOMAIN_NAME"`
+	Country      string     `xml:"COUNTRY"`
+	CountryCode  string     `xml:"COUNTRY_CODE"`
 	Extensions   Extensions `xml:"EXTENSIONS"`
 }
 
