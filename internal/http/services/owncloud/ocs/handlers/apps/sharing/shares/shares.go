@@ -20,6 +20,7 @@ package shares
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"mime"
@@ -1275,6 +1276,18 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.ListS
 	return ocsDataPayload, nil
 }
 
+func wrapResourceID(r *provider.ResourceId) string {
+	return wrap(r.StorageId, r.OpaqueId)
+}
+
+// The fileID must be encoded
+// - XML safe, because it is going to be used in the propfind result
+// - url safe, because the id might be used in a url, eg. the /dav/meta nodes
+// which is why we base64 encode it
+func wrap(sid string, oid string) string {
+	return base64.URLEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", sid, oid)))
+}
+
 func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, info *provider.ResourceInfo) error {
 	log := appctx.GetLogger(ctx)
 	if info != nil {
@@ -1288,8 +1301,8 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 		// TODO STime:     &types.Timestamp{Seconds: info.Mtime.Seconds, Nanos: info.Mtime.Nanos},
 		s.StorageID = info.Id.StorageId
 		// TODO Storage: int
-		s.ItemSource = info.Id.OpaqueId
-		s.FileSource = info.Id.OpaqueId
+		s.ItemSource = wrapResourceID(info.Id)
+		s.FileSource = s.ItemSource
 		s.FileTarget = path.Join("/", path.Base(info.Path))
 		s.Path = path.Join("/", path.Base(info.Path)) // TODO hm this might have to be relative to the users home ... depends on the webdav_namespace config
 		// TODO FileParent:
