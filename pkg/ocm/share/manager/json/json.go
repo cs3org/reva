@@ -78,14 +78,14 @@ func loadOrCreate(file string) (*shareModel, error) {
 	_, err := os.Stat(file)
 	if os.IsNotExist(err) {
 		if err := ioutil.WriteFile(file, []byte("{}"), 0700); err != nil {
-			err = errors.Wrap(err, "error opening/creating the file: "+file)
+			err = errors.Wrap(err, "error creating the file: "+file)
 			return nil, err
 		}
 	}
 
 	fd, err := os.OpenFile(file, os.O_CREATE, 0644)
 	if err != nil {
-		err = errors.Wrap(err, "error opening/creating the file: "+file)
+		err = errors.Wrap(err, "error opening the file: "+file)
 		return nil, err
 	}
 	defer fd.Close()
@@ -246,23 +246,6 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 		Mtime:       ts,
 	}
 
-	m.Lock()
-	if err := m.model.ReadFile(); err != nil {
-		err = errors.Wrap(err, "error reading model")
-		return nil, err
-	}
-	if isOwnersMeshProvider {
-		m.model.Shares = append(m.model.Shares, s)
-	} else {
-		m.model.ReceivedShares = append(m.model.ReceivedShares, s)
-	}
-
-	if err := m.model.Save(); err != nil {
-		err = errors.Wrap(err, "error saving model")
-		return nil, err
-	}
-	m.Unlock()
-
 	if isOwnersMeshProvider {
 
 		// Call the remote provider's CreateOCMCoreShare method
@@ -300,10 +283,32 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
-			err = errors.Wrap(errors.New(resp.Status), "json: error sending create ocm core share post request")
+			respBody, e := ioutil.ReadAll(resp.Body)
+			if e != nil {
+				e = errors.Wrap(e, "json: error reading request body")
+				return nil, e
+			}
+			err = errors.Wrap(errors.New(fmt.Sprintf("%s: %s", resp.Status, string(respBody))), "json: error sending create ocm core share post request")
 			return nil, err
 		}
 	}
+
+	m.Lock()
+	if err := m.model.ReadFile(); err != nil {
+		err = errors.Wrap(err, "error reading model")
+		return nil, err
+	}
+	if isOwnersMeshProvider {
+		m.model.Shares = append(m.model.Shares, s)
+	} else {
+		m.model.ReceivedShares = append(m.model.ReceivedShares, s)
+	}
+
+	if err := m.model.Save(); err != nil {
+		err = errors.Wrap(err, "error saving model")
+		return nil, err
+	}
+	m.Unlock()
 
 	return s, nil
 }
