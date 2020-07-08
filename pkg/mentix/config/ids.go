@@ -19,15 +19,15 @@
 package config
 
 const (
-	// Connector identifier for GOCDB.
+	// ConnectorIDGOCDB is the connector identifier for GOCDB.
 	ConnectorIDGOCDB = "gocdb"
 )
 
 const (
-	// Export identifier for the WebAPI exporter.
+	// ExporterIDWebAPI is the identifier for the WebAPI exporter.
 	ExporterIDWebAPI = "webapi"
-	// Export identifier for the CS3API exporter.
+	// ExporterIDCS3API is the identifier for the CS3API exporter.
 	ExporterIDCS3API = "cs3api"
-	// Export identifier for the Prometheus File SD exporter.
+	// ExporterIDPrometheusFileSD is the identifier for the Prometheus File SD exporter.
 	ExporterIDPrometheusFileSD = "prom_filesd"
 )
