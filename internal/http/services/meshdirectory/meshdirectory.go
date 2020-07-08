@@ -46,11 +46,9 @@ func init() {
 }
 
 type config struct {
-	Driver     string                            `mapstructure:"driver"`
-	Drivers    map[string]map[string]interface{} `mapstructure:"drivers"`
-	Prefix     string                            `mapstructure:"prefix"`
-	Static     string                            `mapstructure:"static"`
-	GatewaySvc string                            `mapstructure:"gatewaysvc"`
+	Prefix     string `mapstructure:"prefix"`
+	Static     string `mapstructure:"static"`
+	GatewaySvc string `mapstructure:"gatewaysvc"`
 }
 
 func (c *config) init() {
