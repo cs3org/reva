@@ -21,10 +21,6 @@ package meshdirectory
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"net/http"
-	"path"
-
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/ocmd"
@@ -33,6 +29,7 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"net/http"
 
 	"github.com/pkg/errors"
 
@@ -113,17 +110,9 @@ func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
 func (s *svc) serveIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-	file, err := ioutil.ReadFile(path.Clean(s.conf.Static + "/index.html"))
-	if err != nil {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error reading meshdirectory index page", err)
-		log.Err(err).Msg("error reading meshdirectory index page")
-		return
-	}
-	if _, err := w.Write(file); err != nil {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error rendering meshdirectory index page", err)
-		log.Err(err).Msg("error rendering meshdirectory index page.")
-		return
-	}
+	fs := http.FileServer(http.Dir(s.conf.Static))
+	fs.ServeHTTP(w, r)
+	return
 }
 
 // OCMProvidersOnly returns just the providers that provide the OCM Service Type endpoint
