@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/rhttp"
@@ -55,8 +56,12 @@ func New(m map[string]interface{}) (provider.Authorizer, error) {
 	c.init()
 
 	client := &Client{
-		BaseURL:    c.URL,
-		HTTPClient: rhttp.GetHTTPClient(context.Background()),
+		BaseURL: c.URL,
+		HTTPClient: rhttp.GetHTTPClient(
+			rhttp.Context(context.Background()),
+			rhttp.Timeout(time.Duration(c.Timeout*int64(time.Second))),
+			rhttp.Insecure(c.Insecure),
+		),
 	}
 
 	return &authorizer{
@@ -66,6 +71,8 @@ func New(m map[string]interface{}) (provider.Authorizer, error) {
 }
 
 type config struct {
+	Timeout               int64  `mapstructure:"timeout"`
+	Insecure              bool   `mapstructure:"insecure"`
 	URL                   string `mapstructure:"url"`
 	VerifyRequestHostname bool   `mapstructure:"verify_request_hostname"`
 }
