@@ -21,6 +21,7 @@ package json
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"reflect"
@@ -32,6 +33,7 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/share"
+	"github.com/fsnotify/fsnotify"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -61,9 +63,42 @@ func New(m map[string]interface{}) (share.Manager, error) {
 		return nil, err
 	}
 
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		err = fmt.Errorf("error starting watcher for file \"%s\"", c.File)
+		return nil, err
+	}
 	mgr := &mgr{
-		c:     c,
-		model: model,
+		watcher: watcher,
+		c:       c,
+		model:   model,
+	}
+
+	go func() {
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+				if event.Op&fsnotify.Write == fsnotify.Write ||
+					event.Op&fsnotify.Rename == fsnotify.Rename ||
+					event.Op&fsnotify.Remove == fsnotify.Remove {
+					// if the manager is locked it means the event we received
+					// is likely from our own save, so no need to reload
+					print("json.go: file changed on disk")
+					if !mgr.locked {
+						mgr.reload()
+					}
+				}
+			}
+		}
+	}()
+
+	err = watcher.Add(c.File)
+	if err != nil {
+		err = fmt.Errorf("error starting watcher for file \"%s\"", c.File)
+		return nil, err
 	}
 
 	return mgr, nil
@@ -130,6 +165,8 @@ type mgr struct {
 	c          *config
 	sync.Mutex // concurrent access to the file
 	model      *shareModel
+	watcher    *fsnotify.Watcher
+	locked     bool
 }
 
 type config struct {
@@ -152,6 +189,31 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 func genID() string {
 	return uuid.New().String()
+}
+
+func (m *mgr) reload() error {
+	fmt.Printf("json.go: reloading file \"%s\"", m.model.file)
+	// TODO: recreate the file based on share data from the storage
+	model, err := loadOrCreate(m.model.file)
+	if err != nil {
+		return errors.Wrap(err, "error loading the file containing the shares")
+	}
+	m.model = model
+	return nil
+}
+
+func (m *mgr) Lock() {
+	m.locked = true
+	m.Mutex.Lock()
+}
+
+func (m *mgr) Unlock() {
+	m.locked = false
+	m.Mutex.Unlock()
+}
+
+func (m *mgr) Close() {
+	m.watcher.Close()
 }
 
 func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {

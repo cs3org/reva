@@ -14,6 +14,7 @@ require (
 	github.com/cs3org/go-cs3apis v0.0.0-20200625121012-96e791152b14
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/eventials/go-tus v0.0.0-20190617130015-9db47421f6a0
+	github.com/fsnotify/fsnotify v1.4.7
 	github.com/go-openapi/strfmt v0.19.2 // indirect
 	github.com/gofrs/uuid v3.3.0+incompatible
 	github.com/golang/protobuf v1.4.2
