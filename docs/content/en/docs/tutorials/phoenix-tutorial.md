@@ -31,21 +31,8 @@ git clone https://github.com/cs3org/reva
 ```
 
 ## 2. Build Reva
-Go to your Reva folder 
-
-```
-cd reva
-```
-
-Now you need to build Reva by running the following commands (you need to be in the *reva* folder)
-
-```
-make deps
-```
-
-```
-make
-```
+Follow the instructions in https://reva.link/docs/getting-started/install-reva/ for how to build reva. If you will do local
+changes in reva, follow the "Build from sources" instructions.
 
 ## 3. Set up Phoenix
 Go to your Phoenix folder 

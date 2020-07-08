@@ -33,21 +33,8 @@ git clone https://github.com/cs3org/reva
 Add `disable_tus = true` under `[http.services.dataprovider]` and under `[grpc.services.storageprovider]` in the file `ocmd-server-1.toml`.
 
 ## 3. Build Reva
-Go to your Reva folder 
-
-```
-cd reva
-```
-
-Now you need to build Reva by running the following commands (you need to be in the *reva* folder)
-
-```
-make deps
-```
-
-```
-make build
-```
+Follow the instructions in https://reva.link/docs/getting-started/install-reva/ for how to build reva. If you will do local
+changes in reva, follow the "Build from sources" instructions.
 
 ## 4. Run Reva
 Now you need to run Revad (the Reva daemon). Follow these steps
