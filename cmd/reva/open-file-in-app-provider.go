@@ -35,34 +35,24 @@ func openFileInAppProviderCommand() *command {
 	cmd.Usage = func() string {
 		return "Usage: open-file-in-app-provider [-flags] <path> <viewMode (view, read, write)>"
 	}
+	viewMode := cmd.String("viewMode", "view", "the view permissions, defaults to view")
 
 	cmd.Action = func() error {
 		ctx := getAuthContext()
-		if cmd.NArg() < 2 {
+		if cmd.NArg() < 1 {
 			fmt.Println(cmd.Usage())
 			os.Exit(1)
 		}
 		path := cmd.Args()[0]
 
-		viewMode := getViewMode(cmd.Args()[1])
+		viewMode := getViewMode(*viewMode)
 
 		client, err := getClient()
 		if err != nil {
 			return err
 		}
-		ref := &provider.Reference{
-			Spec: &provider.Reference_Path{Path: path},
-		}
-		reqA := &provider.StatRequest{Ref: ref}
-		resA, err := client.Stat(ctx, reqA)
-		if err != nil {
-			return err
-		}
-		if resA.Status.Code != rpc.Code_CODE_OK {
-			return formatError(resA.Status)
-		}
 
-		ref1 := &provider.Reference{
+		ref := &provider.Reference{
 			Spec: &provider.Reference_Path{Path: path},
 		}
 		accessToken, ok := tokenpkg.ContextGetToken(ctx)
@@ -71,7 +61,7 @@ func openFileInAppProviderCommand() *command {
 			return err
 		}
 
-		openRequest := &providerpb.OpenFileInAppProviderRequest{Ref: ref1, AccessToken: accessToken, ViewMode: viewMode}
+		openRequest := &providerpb.OpenFileInAppProviderRequest{Ref: ref, AccessToken: accessToken, ViewMode: viewMode}
 
 		openRes, err := client.OpenFileInAppProvider(ctx, openRequest)
 		if err != nil {

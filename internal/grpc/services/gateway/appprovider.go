@@ -37,7 +37,7 @@ func (s *svc) OpenFileInAppProvider(ctx context.Context, req *providerpb.OpenFil
 
 	log := appctx.GetLogger(ctx)
 
-	c, err := s.findByPath(ctx, req.Ref.GetPath())
+	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return &providerpb.OpenFileInAppProviderResponse{

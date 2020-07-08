@@ -56,10 +56,10 @@ type service struct {
 type config struct {
 	Driver    string                 `mapstructure:"driver"`
 	Demo      map[string]interface{} `mapstructure:"demo"`
-	IopSecret string                 `mapstructure:"iopsecret" docs:"The iopsecret used to connect to the wopiserver."`
-	WopiURL   string                 `mapstructure:"wopiurl" docs:"The wopiserver's url."`
-	UIURL     string                 `mapstructure:"uirul" docs:"URL to application (eg collabora) URL."`
-	StorageID string                 `mapstructure:"storageid" docs:"The storage id used by the wopiserver 
+	IopSecret string                 `mapstructure:"iopsecret" docs:";The iopsecret used to connect to the wopiserver."`
+	WopiURL   string                 `mapstructure:"wopiurl" docs:";The wopiserver's url."`
+	UIURL     string                 `mapstructure:"uirul" docs:";URL to application (eg collabora) URL."`
+	StorageID string                 `mapstructure:"storageid" docs:";The storage id used by the wopiserver 
 	to look up the file or storage id, defaults to "default" by the wopiserver if empty."`
 }
 
