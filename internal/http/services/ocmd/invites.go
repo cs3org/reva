@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
@@ -44,6 +45,9 @@ type invitesHandler struct {
 func (h *invitesHandler) init(c *Config) {
 	h.gatewayAddr = c.GatewaySvc
 	h.smtpCredentials = c.SMTPCredentials
+	if h.smtpCredentials != nil && h.smtpCredentials.SenderPassword == "" {
+		h.smtpCredentials.SenderPassword = os.Getenv("REVA_OCMD_SMTP_SENDER_PASSWORD")
+	}
 }
 
 func (h *invitesHandler) Handler() http.Handler {
@@ -83,13 +87,13 @@ func (h *invitesHandler) generateInviteToken(w http.ResponseWriter, r *http.Requ
 	}
 
 	if r.FormValue("recipient") != "" && h.smtpCredentials != nil {
+
 		usr := user.ContextMustGetUser(ctx)
-		username := usr.DisplayName
 
 		// TODO: the message body needs to point to the meshdirectory service
-		subject := fmt.Sprintf("ScienceMesh: %s wants to collaborate with you", username)
+		subject := fmt.Sprintf("ScienceMesh: %s wants to collaborate with you", usr.DisplayName)
 		body := "Hi,\n\n" +
-			username + " wants to start sharing OCM resources with you. " +
+			usr.DisplayName + " (" + usr.Mail + ") wants to start sharing OCM resources with you. " +
 			"To accept the invite, please use the following details:\n" +
 			"Token: " + token.InviteToken.Token + "\n" +
 			"ProviderDomain: " + usr.Id.Idp + "\n\n" +
