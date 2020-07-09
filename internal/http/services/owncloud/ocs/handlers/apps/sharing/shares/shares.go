@@ -875,6 +875,37 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 		return
 	}
 
+	statReq := provider.StatRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Id{
+				Id: gRes.Share.ResourceId,
+			},
+		},
+	}
+
+	statRes, err := uClient.Stat(r.Context(), &statReq)
+	if err != nil {
+		log.Debug().Err(err).Str("shares", "update user share").Msg("error during stat")
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "missing resource information", fmt.Errorf("error getting resource information"))
+		return
+	}
+
+	if statRes.Status.Code != rpc.Code_CODE_OK {
+		if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "update user share: resource not found", err)
+			return
+		}
+
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc stat request failed for stat after updating user share", err)
+		return
+	}
+
+	err = h.addFileInfo(r.Context(), share, statRes.Info)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, err.Error(), err)
+		return
+	}
+
 	response.WriteOCSSuccess(w, r, share)
 }
 
