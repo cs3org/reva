@@ -19,7 +19,7 @@ providers = "providers.demo.json"
 #insecure = true
 #timeout = 10
 # refresh interval of the mesh provider list (in seconds)
-# when set to 0(default), the list is never refreshed
+# when set to 0(default), the list is refreshed on each request
 #refresh = 900
 
 [http]
