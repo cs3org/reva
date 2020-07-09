@@ -11,7 +11,7 @@ require (
 	github.com/cheggaaa/pb v1.0.28
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/cs3org/cato v0.0.0-20200618163134-e83dd323b17e
-	github.com/cs3org/go-cs3apis v0.0.0-20200625121012-96e791152b14
+	github.com/cs3org/go-cs3apis v0.0.0-20200709064917-d96c5f2a42ad
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/eventials/go-tus v0.0.0-20190617130015-9db47421f6a0
 	github.com/go-openapi/strfmt v0.19.2 // indirect
