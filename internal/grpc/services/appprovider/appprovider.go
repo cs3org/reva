@@ -59,8 +59,7 @@ type config struct {
 	IopSecret string                 `mapstructure:"iopsecret" docs:";The iopsecret used to connect to the wopiserver."`
 	WopiURL   string                 `mapstructure:"wopiurl" docs:";The wopiserver's url."`
 	UIURL     string                 `mapstructure:"uirul" docs:";URL to application (eg collabora) URL."`
-	StorageID string                 `mapstructure:"storageid" docs:";The storage id used by the wopiserver 
-	to look up the file or storage id, defaults to "default" by the wopiserver if empty."`
+	StorageID string                 `mapstructure:"storageid" docs:";The storage id used by the wopiserver to look up the file or storage id defaults to default by the wopiserver if empty."`
 }
 
 // New creates a new AppProviderService
@@ -167,7 +166,7 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 	q.Add("folderurl", folderURL)
 	u, ok := user.ContextGetUser(ctx)
 
-	if ok == true {
+	if ok {
 		q.Add("username", u.Username)
 	}
 
@@ -204,13 +203,17 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 	}
 
 	buf := new(bytes.Buffer)
-	buf.ReadFrom(openRes.Body)
+	_, err1 := buf.ReadFrom(openRes.Body)
+	if err1 != nil {
+		return nil, err1
+	}
+
 	openResBody := buf.String()
 
 	appsBodyMap := make(map[string]interface{})
-	err1 := json.Unmarshal(appsBody, &appsBodyMap)
-	if err1 != nil {
-		return nil, err1
+	err2 := json.Unmarshal(appsBody, &appsBodyMap)
+	if err2 != nil {
+		return nil, err2
 	}
 
 	fileExtension := path.Ext(req.Ref.GetPath())
@@ -218,6 +221,13 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 	viewOptions := appsBodyMap[fileExtension]
 
 	viewOptionsMap, ok := viewOptions.(map[string]interface{})
+	if !ok {
+		log.Error().Msg("error typecasting to map")
+		res := &providerpb.OpenFileInAppProviderResponse{
+			Status: status.NewInternal(ctx, nil, "error typecasting to map"),
+		}
+		return res, nil
+	}
 
 	var viewmode string
 

@@ -32,3 +32,11 @@ uirul = ""
 {{< /highlight >}}
 {{% /dir %}}
 
+{{% dir name="storageid" type="string" default="" %}}
+The storage id used by the wopiserver to look up the file or storage id defaults to default by the wopiserver if empty. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/appprovider/appprovider.go#L62)
+{{< highlight toml >}}
+[grpc.services.appprovider]
+storageid = ""
+{{< /highlight >}}
+{{% /dir %}}
+
