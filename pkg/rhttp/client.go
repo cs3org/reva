@@ -24,9 +24,10 @@ import (
 	"io"
 	"net/http"
 
+	"go.opencensus.io/plugin/ochttp"
+
 	"github.com/cs3org/reva/pkg/token"
 	"github.com/pkg/errors"
-	"go.opencensus.io/plugin/ochttp"
 )
 
 // GetHTTPClient returns an http client with open census tracing support.
@@ -35,17 +36,19 @@ import (
 func GetHTTPClient(opts ...Option) *http.Client {
 	options := newOptions(opts...)
 
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.DisableKeepAlives = options.DisableKeepAlive
+	tr.TLSClientConfig = &tls.Config{
+		InsecureSkipVerify: options.Insecure,
+	}
+
 	httpClient := &http.Client{
 		Timeout: options.Timeout,
 		Transport: &ochttp.Transport{
-			Base: &http.Transport{
-				TLSClientConfig: &tls.Config{
-					InsecureSkipVerify: options.Insecure,
-				},
-				DisableKeepAlives: options.DisableKeepAlive,
-			},
+			Base: tr,
 		},
 	}
+
 	return httpClient
 }
 
