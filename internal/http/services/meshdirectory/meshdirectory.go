@@ -19,6 +19,7 @@
 package meshdirectory
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -115,14 +116,18 @@ func (s *svc) serveIndex(w http.ResponseWriter, r *http.Request) {
 	fs.ServeHTTP(w, r)
 }
 
-// OCMProvidersOnly returns just the providers that provide the OCM Service Type endpoint
-func (s *svc) OCMProvidersOnly(pi []*providerv1beta1.ProviderInfo) (po []*providerv1beta1.ProviderInfo) {
+// allowedProvidersOnly returns just the providers that are a part of the OCM mesh
+func (s *svc) allowedProvidersOnly(
+	ctx context.Context,
+	gc gateway.GatewayAPIClient,
+	pi []*providerv1beta1.ProviderInfo) (po []*providerv1beta1.ProviderInfo) {
+
 	for _, p := range pi {
-		for _, s := range p.Services {
-			if s.Endpoint.Type.Name == "OCM" {
-				po = append(po, p)
-				break
-			}
+		_, err := gc.IsProviderAllowed(ctx, &providerv1beta1.IsProviderAllowedRequest{
+			Provider: p,
+		})
+		if err == nil {
+			po = append(po, p)
 		}
 	}
 	return
@@ -149,9 +154,8 @@ func (s *svc) serveJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	providers.Providers = s.OCMProvidersOnly(providers.Providers)
+	providers.Providers = s.allowedProvidersOnly(ctx, gatewayClient, providers.Providers)
 	jsonResponse, err := json.Marshal(providers.Providers)
-
 	if err != nil {
 		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error marshalling providers data", err)
 		log.Err(err).Msg("error marshal providers data.")

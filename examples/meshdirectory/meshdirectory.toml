@@ -18,6 +18,9 @@ providers = "providers.demo.json"
 #url = "http://127.0.0.1:9600/mentix/cs3"
 #insecure = true
 #timeout = 10
+# refresh interval of the mesh provider list (in seconds)
+# when set to 0(default), the list is never refreshed
+#refresh = 900
 
 [http]
 address = "0.0.0.0:9600"

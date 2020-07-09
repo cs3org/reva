@@ -21,8 +21,11 @@ package mentix
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cs3org/reva/pkg/rhttp"
@@ -72,6 +75,7 @@ func New(m map[string]interface{}) (provider.Authorizer, error) {
 type config struct {
 	URL                   string `mapstructure:"url"`
 	Timeout               int64  `mapstructure:"timeout"`
+	RefreshInterval       int64  `mapstructure:"refresh"`
 	VerifyRequestHostname bool   `mapstructure:"verify_request_hostname"`
 	Insecure              bool   `mapstructure:"insecure"`
 }
@@ -83,20 +87,29 @@ func (c *config) init() {
 }
 
 type authorizer struct {
-	client *Client
-	conf   *config
+	providers           []*ocmprovider.ProviderInfo
+	providersExpiration int64
+	client              *Client
+	providerIPs         *sync.Map
+	conf                *config
 }
 
-func (c *Client) fetchAllProviders() ([]*ocmprovider.ProviderInfo, error) {
-	req, err := http.NewRequest("GET", c.BaseURL, nil)
+func (a *authorizer) fetchAllProviders() ([]*ocmprovider.ProviderInfo, error) {
+	if (a.providers != nil) && (time.Now().Unix() < a.providersExpiration) {
+		return a.providers, nil
+	}
+
+	req, err := http.NewRequest("GET", a.client.BaseURL, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/json; charset=utf-8")
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 
-	res, err := c.HTTPClient.Do(req)
+	res, err := a.client.HTTPClient.Do(req)
 	if err != nil {
+		err = errors.Wrap(err,
+			fmt.Sprintf("error fetching provider list from: %s", a.client.BaseURL))
 		return nil, err
 	}
 
@@ -106,11 +119,16 @@ func (c *Client) fetchAllProviders() ([]*ocmprovider.ProviderInfo, error) {
 	if err = json.NewDecoder(res.Body).Decode(&providers); err != nil {
 		return nil, err
 	}
-	return providers, nil
+
+	a.providers = providers
+	if a.conf.RefreshInterval > 0 {
+		a.providersExpiration = time.Now().Unix() + a.conf.RefreshInterval
+	}
+	return a.providers, nil
 }
 
 func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmprovider.ProviderInfo, error) {
-	providers, err := a.client.fetchAllProviders()
+	providers, err := a.fetchAllProviders()
 	if err != nil {
 		return nil, err
 	}
@@ -124,36 +142,56 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 }
 
 func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovider.ProviderInfo) error {
-	providers, err := a.client.fetchAllProviders()
+	providers, err := a.fetchAllProviders()
 	if err != nil {
 		return err
 	}
 
 	var providerAuthorized bool
-	for _, p := range providers {
-		if p.Domain == provider.GetDomain() {
-			providerAuthorized = true
+	if provider.Domain != "" {
+		for _, p := range providers {
+			if p.Domain == provider.Domain {
+				providerAuthorized = true
+			}
 		}
+	} else {
+		providerAuthorized = true
 	}
 
-	if !providerAuthorized {
+	switch {
+	case !providerAuthorized:
 		return errtypes.NotFound(provider.GetDomain())
-	} else if !a.conf.VerifyRequestHostname {
+	case !a.conf.VerifyRequestHostname:
 		return nil
+	case len(provider.Services) == 0:
+		return errtypes.NotSupported("No IP provided")
 	}
 
-	providerAuthorized = false
 	ocmHost, err := getOCMHost(provider)
 	if err != nil {
 		return errors.Wrap(err, "json: ocm host not specified for mesh provider")
 	}
 
-	for _, s := range provider.Services {
-		if s.Host == ocmHost {
+	providerAuthorized = false
+	var ipList []string
+	if hostIPs, ok := a.providerIPs.Load(ocmHost); ok {
+		ipList = hostIPs.([]string)
+	} else {
+		addr, err := net.LookupIP(ocmHost)
+		if err != nil {
+			return errors.Wrap(err, "json: error looking up client IP")
+		}
+		for _, a := range addr {
+			ipList = append(ipList, a.String())
+		}
+		a.providerIPs.Store(ocmHost, ipList)
+	}
+
+	for _, ip := range ipList {
+		if ip == provider.Services[0].Host {
 			providerAuthorized = true
 		}
 	}
-
 	if !providerAuthorized {
 		return errtypes.NotFound("OCM Host")
 	}
@@ -162,17 +200,19 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovide
 }
 
 func (a *authorizer) ListAllProviders(ctx context.Context) ([]*ocmprovider.ProviderInfo, error) {
-	res, err := a.client.fetchAllProviders()
+	providers, err := a.fetchAllProviders()
 	if err != nil {
 		return nil, err
 	}
-	return res, nil
+	return providers, nil
 }
 
 func getOCMHost(originProvider *ocmprovider.ProviderInfo) (string, error) {
 	for _, s := range originProvider.Services {
 		if s.Endpoint.Type.Name == "OCM" {
-			return s.Host, nil
+			ocmHost := strings.TrimPrefix(s.Host, "https://")
+			ocmHost = strings.TrimPrefix(ocmHost, "http://")
+			return ocmHost, nil
 		}
 	}
 	return "", errtypes.NotFound("OCM Host")
