@@ -316,7 +316,6 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 // ListPublicShares retrieves all the shares on the manager that are valid.
 func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo) ([]*link.PublicShare, error) {
 	shares := []*link.PublicShare{}
-	now := time.Now()
 
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -338,14 +337,11 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 		} else {
 			for _, f := range filters {
 				if f.Type == link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID {
-					t := time.Unix(int64(local.Expiration.GetSeconds()), int64(local.Expiration.GetNanos()))
 					if err != nil {
 						return nil, err
 					}
 					if local.ResourceId.StorageId == f.GetResourceId().StorageId && local.ResourceId.OpaqueId == f.GetResourceId().OpaqueId {
-						if (local.Expiration != nil && t.After(now)) || local.Expiration == nil {
-							shares = append(shares, &local.PublicShare)
-						}
+						shares = append(shares, &local.PublicShare)
 					}
 				}
 			}

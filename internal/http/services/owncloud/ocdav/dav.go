@@ -23,10 +23,12 @@ import (
 	"fmt"
 	"net/http"
 	"path"
+	"time"
 
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	linkv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -142,6 +144,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				return
 			}
 			log.Debug().Interface("statInfo", statInfo).Msg("Stat info from public link token path")
+			cleanupExpired(ctx, s, token)
 			if statInfo.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 				ctx := context.WithValue(ctx, tokenStatInfoKey{}, statInfo)
 				r = r.WithContext(ctx)
@@ -154,6 +157,56 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			w.WriteHeader(http.StatusNotFound)
 		}
 	})
+}
+
+func cleanupExpired(ctx context.Context, s *svc, token string) {
+	log := appctx.GetLogger(ctx)
+	c, err := pool.GetGatewayServiceClient(s.c.GatewaySvc)
+	if err != nil {
+		log.Err(err).Str("delete", "expired share").Msg("gateway unavailable")
+		return
+	}
+
+	response, err := c.GetPublicShareByToken(ctx, &linkv1beta1.GetPublicShareByTokenRequest{
+		Token: token,
+	})
+	if err != nil {
+		log.Err(err).Str("delete", "expired share").Msg(err.Error())
+		return
+	}
+
+	if response.Status.Code != rpc.Code_CODE_OK {
+		log.Err(err).Str("delete", "expired share").Msg(response.Status.Message)
+		return
+	}
+
+	share := response.Share
+	t := time.Unix(int64(share.Expiration.GetSeconds()), int64(share.Expiration.GetNanos()))
+	if share.Expiration != nil && t.Before(time.Now()) {
+		req := &linkv1beta1.RemovePublicShareRequest{
+			Ref: &linkv1beta1.PublicShareReference{
+				Spec: &linkv1beta1.PublicShareReference_Id{
+					Id: &linkv1beta1.PublicShareId{
+						OpaqueId: share.Id.OpaqueId,
+					},
+				},
+			},
+		}
+
+		res, err := c.RemovePublicShare(ctx, req)
+		if err != nil {
+			log.Err(err).Str("delete", "expired share").Msg(err.Error())
+			return
+		}
+		if res.Status.Code != rpc.Code_CODE_OK {
+			if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+				log.Err(err).Str("delete", "expired share").Msgf("share with id %v was not found", share.Id.OpaqueId)
+				return
+			}
+			log.Err(err).Str("delete", "expired share").Msg(res.Status.Message)
+			return
+		}
+	}
 }
 
 func getTokenStatInfo(ctx context.Context, client gatewayv1beta1.GatewayAPIClient, token string) (*provider.ResourceInfo, error) {

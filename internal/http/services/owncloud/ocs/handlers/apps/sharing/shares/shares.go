@@ -29,6 +29,7 @@ import (
 	"strings"
 	"time"
 
+	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
@@ -1098,59 +1099,42 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	// TODO(refs) why is this guard needed? Are we moving towards a gateway only for service discovery? without a gateway this is dead code.
-	if h.gatewayAddr != "" {
-		c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
-		if err != nil {
-			return nil, err
-		}
-
-		req := link.ListPublicSharesRequest{
-			Filters: filters,
-		}
-
-		res, err := c.ListPublicShares(ctx, &req)
-		if err != nil {
-			return nil, err
-		}
-
-		ocsDataPayload := make([]*conversions.ShareData, 0)
-		for _, share := range res.GetShare() {
-
-			statRequest := &provider.StatRequest{
-				Ref: &provider.Reference{
-					Spec: &provider.Reference_Id{
-						Id: share.ResourceId,
-					},
-				},
-			}
-
-			statResponse, err := c.Stat(ctx, statRequest)
-			if err != nil {
-				return nil, err
-			}
-
-			sData := conversions.PublicShare2ShareData(share, r, h.publicURL)
-			if statResponse.Status.Code != rpc.Code_CODE_OK {
-				return nil, err
-			}
-
-			sData.Name = share.DisplayName
-
-			if h.addFileInfo(ctx, sData, statResponse.Info) != nil {
-				return nil, err
-			}
-
-			log.Debug().Interface("share", share).Interface("info", statResponse.Info).Interface("shareData", share).Msg("mapped")
-
-			ocsDataPayload = append(ocsDataPayload, sData)
-
-		}
-
-		return ocsDataPayload, nil
+	c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil, errors.New("bad request")
+	res, err := c.ListPublicShares(ctx, &link.ListPublicSharesRequest{Filters: filters})
+	if err != nil {
+		return nil, err
+	}
+	shares := cleanupExpired(ctx, res.Share, c)
+
+	ocsDataPayload := []*conversions.ShareData{}
+	for _, share := range shares {
+		statResponse, err := c.Stat(ctx, &provider.StatRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Id{
+					Id: share.ResourceId,
+				},
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		sData := conversions.PublicShare2ShareData(share, r, h.publicURL)
+		if statResponse.Status.Code != rpc.Code_CODE_OK {
+			return nil, err
+		}
+		sData.Name = share.DisplayName
+		if h.addFileInfo(ctx, sData, statResponse.Info) != nil {
+			return nil, err
+		}
+		log.Debug().Interface("share", share).Interface("info", statResponse.Info).Interface("shareData", share).Msg("mapped")
+		ocsDataPayload = append(ocsDataPayload, sData)
+	}
+
+	return ocsDataPayload, nil
 }
 
 func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, prefix string) ([]*collaboration.ListSharesRequest_Filter, []*link.ListPublicSharesRequest_Filter, error) {
@@ -1773,4 +1757,33 @@ var ocPublicPermToRole = map[int]string{
 	4: "uploader",
 	// Recipients can view, download and upload contents
 	5: "contributor",
+}
+
+func cleanupExpired(ctx context.Context, s []*link.PublicShare, c gatewayv1beta1.GatewayAPIClient) []*link.PublicShare {
+	log := appctx.GetLogger(ctx)
+	shares := []*link.PublicShare{}
+	for i := range s {
+		t := time.Unix(int64(s[i].Expiration.GetSeconds()), int64(s[i].Expiration.GetNanos()))
+		if s[i].Expiration != nil && t.Before(time.Now()) {
+			req := &link.RemovePublicShareRequest{
+				Ref: &link.PublicShareReference{
+					Spec: &link.PublicShareReference_Id{
+						Id: &link.PublicShareId{
+							OpaqueId: s[i].Id.OpaqueId,
+						},
+					},
+				},
+			}
+
+			log.Debug().Str("shares", "deleting expired share").Msgf("deleting public share. token: %v", s[i].Token)
+			if _, err := c.RemovePublicShare(ctx, req); err != nil {
+				log.Err(err).Msg(err.Error())
+			}
+			continue
+		}
+
+		shares = append(shares, s[i])
+	}
+
+	return shares
 }
