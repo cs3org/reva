@@ -20,7 +20,7 @@ package meshdata
 
 // Service represents a service managed by Mentix.
 type Service struct {
-	ServiceEndpoint
+	*ServiceEndpoint
 
 	Host                string
 	AdditionalEndpoints []*ServiceEndpoint

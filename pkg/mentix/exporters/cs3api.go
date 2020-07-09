@@ -25,33 +25,33 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
-	"github.com/cs3org/reva/pkg/mentix/exporters/webapi"
+	"github.com/cs3org/reva/pkg/mentix/exporters/cs3api"
 )
 
-// WebAPIExporter implements the generic Web API exporter.
-type WebAPIExporter struct {
+// CS3APIExporter implements the CS3API exporter.
+type CS3APIExporter struct {
 	BaseRequestExporter
 }
 
 // Activate activates the exporter.
-func (exporter *WebAPIExporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
+func (exporter *CS3APIExporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
 	if err := exporter.BaseExporter.Activate(conf, log); err != nil {
 		return err
 	}
 
-	// Store WebAPI specific settings
-	exporter.endpoint = conf.WebAPI.Endpoint
+	// Store CS3API specific settings
+	exporter.endpoint = conf.CS3API.Endpoint
 
 	return nil
 }
 
 // HandleRequest handles the actual HTTP request.
-func (exporter *WebAPIExporter) HandleRequest(resp http.ResponseWriter, req *http.Request) error {
+func (exporter *CS3APIExporter) HandleRequest(resp http.ResponseWriter, req *http.Request) error {
 	// Data is read, so acquire a read lock
 	exporter.locker.RLock()
 	defer exporter.locker.RUnlock()
 
-	data, err := webapi.HandleQuery(exporter.meshData, req.URL.Query())
+	data, err := cs3api.HandleQuery(exporter.meshData, req.URL.Query())
 	if err == nil {
 		if _, err := resp.Write(data); err != nil {
 			return fmt.Errorf("error writing the API request response: %v", err)
@@ -64,10 +64,10 @@ func (exporter *WebAPIExporter) HandleRequest(resp http.ResponseWriter, req *htt
 }
 
 // GetName returns the display name of the exporter.
-func (exporter *WebAPIExporter) GetName() string {
-	return "WebAPI"
+func (exporter *CS3APIExporter) GetName() string {
+	return "CS3API"
 }
 
 func init() {
-	registerExporter(config.ExporterIDWebAPI, &WebAPIExporter{})
+	registerExporter(config.ExporterIDCS3API, &CS3APIExporter{})
 }

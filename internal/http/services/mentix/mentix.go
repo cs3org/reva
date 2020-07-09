@@ -116,6 +116,10 @@ func applyDefaultConfig(conf *config.Configuration) {
 	if conf.WebAPI.Endpoint == "" {
 		conf.WebAPI.Endpoint = "/"
 	}
+
+	if conf.CS3API.Endpoint == "" {
+		conf.CS3API.Endpoint = "/cs3"
+	}
 }
 
 // New returns a new Mentix service.

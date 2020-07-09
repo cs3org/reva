@@ -49,6 +49,7 @@ type BaseConnector struct {
 	log  *zerolog.Logger
 }
 
+// Activate activates the connector.
 func (connector *BaseConnector) Activate(conf *config.Configuration, log *zerolog.Logger) error {
 	if conf == nil {
 		return fmt.Errorf("no configuration provided")
@@ -63,6 +64,7 @@ func (connector *BaseConnector) Activate(conf *config.Configuration, log *zerolo
 	return nil
 }
 
+// FindConnector searches for the given connector ID in all globally registered connectors.
 func FindConnector(connectorID string) (Connector, error) {
 	for id, connector := range registeredConnectors {
 		if strings.EqualFold(id, connectorID) {
