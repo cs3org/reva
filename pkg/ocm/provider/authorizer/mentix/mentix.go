@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -67,8 +68,9 @@ func New(m map[string]interface{}) (provider.Authorizer, error) {
 	}
 
 	return &authorizer{
-		client: client,
-		conf:   c,
+		client:      client,
+		providerIPs: sync.Map{},
+		conf:        c,
 	}, nil
 }
 
@@ -90,7 +92,7 @@ type authorizer struct {
 	providers           []*ocmprovider.ProviderInfo
 	providersExpiration int64
 	client              *Client
-	providerIPs         *sync.Map
+	providerIPs         sync.Map
 	conf                *config
 }
 
@@ -167,7 +169,7 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovide
 		return errtypes.NotSupported("No IP provided")
 	}
 
-	ocmHost, err := getOCMHost(provider)
+	ocmHost, err := a.getOCMHost(provider.Domain)
 	if err != nil {
 		return errors.Wrap(err, "json: ocm host not specified for mesh provider")
 	}
@@ -207,12 +209,22 @@ func (a *authorizer) ListAllProviders(ctx context.Context) ([]*ocmprovider.Provi
 	return providers, nil
 }
 
-func getOCMHost(originProvider *ocmprovider.ProviderInfo) (string, error) {
-	for _, s := range originProvider.Services {
-		if s.Endpoint.Type.Name == "OCM" {
-			ocmHost := strings.TrimPrefix(s.Host, "https://")
-			ocmHost = strings.TrimPrefix(ocmHost, "http://")
-			return ocmHost, nil
+func (a *authorizer) getOCMHost(providerDomain string) (string, error) {
+	providers, err := a.fetchAllProviders()
+	if err != nil {
+		return "", err
+	}
+	for _, p := range providers {
+		if p.Domain == providerDomain {
+			for _, s := range p.Services {
+				if s.Endpoint.Type.Name == "OCM" {
+					ocmHost, err := url.Parse(s.Host)
+					if err != nil {
+						return "", errors.Wrap(err, "json: error parsing OCM host URL")
+					}
+					return ocmHost.Host, nil
+				}
+			}
 		}
 	}
 	return "", errtypes.NotFound("OCM Host")
