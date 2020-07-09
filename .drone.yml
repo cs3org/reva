@@ -123,6 +123,12 @@ steps:
   commands:
     - golangci-lint run --timeout 2m0s
 
+- name: changelog
+  image: golang:1.13
+  commands:
+    - git diff-index --quiet HEAD changelog/unreleased/; echo $?
+
+
 - name: license-check
   image: golang:1.13
   failure: ignore
