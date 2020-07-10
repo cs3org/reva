@@ -41,7 +41,7 @@ func init() {
 }
 
 func main() {
-	cmd := exec.Command("git", "diff-index", "--quiet", "master", "--", "chanelog/unreleased")
+	cmd := exec.Command("git", "diff-index", "--quiet", "master", "--", "changelog/unreleased")
 	run(cmd)
 }
 
