@@ -8,8 +8,8 @@ GIT_DIRTY=`git diff-index --quiet HEAD -- || echo "dirty-"`
 VERSION=`git describe --always`
 GO_VERSION=`go version | awk '{print $$3}'`
 
-default: build test lint gen-doc
-release: deps build test lint gen-doc
+default: build test lint gen-doc check-changelog
+release: deps build test lint gen-doc check-changelog
 
 off:
 	GOPROXY=off
@@ -60,6 +60,9 @@ lint-ci:
 gen-doc:
 	go run tools/generate-documentation/main.go
 
+check-changelog:
+	go run tools/check-changelog/main.go
+
 # to be run in CI platform
 ci: build-ci test  lint-ci
 
@@ -80,5 +83,4 @@ release-deps:
 dist: default
 	go run tools/create-artifacts/main.go -version ${VERSION} -commit ${GIT_COMMIT} -goversion ${GO_VERSION}
 
-checkchangelog:
-	go run tools/check-file-changed/main.go 
+all: deps default

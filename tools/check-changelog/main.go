@@ -19,42 +19,18 @@
 package main
 
 import (
-	"bytes"
-	"flag"
-	"fmt"
-	"io"
-	"os"
+	"errors"
+	"log"
 	"os/exec"
 )
 
-/*
-var (
-	version = flag.String("version", "", "version to release: 0.0.1")
-	commit  = flag.Bool("commit", false, "creates a commit")
-	tag     = flag.Bool("tag", false, "creates a tag")
-)
-*/
-
-func init() {
-	flag.Parse()
-
-}
-
 func main() {
 	cmd := exec.Command("git", "diff-index", "master", "--", "changelog/unreleased")
-	run(cmd)
-}
-
-func run(cmd *exec.Cmd) {
-	var b bytes.Buffer
-	mw := io.MultiWriter(os.Stdout, &b)
-	cmd.Stdout = mw
-	cmd.Stderr = mw
-	err := cmd.Run()
-	fmt.Println(cmd.Dir, cmd.Args)
-	fmt.Println(b.String())
+	out, err := cmd.Output()
 	if err != nil {
-		fmt.Println("ERROR: ", err.Error())
-		os.Exit(1)
+		log.Fatal(err)
+	}
+	if string(out) == "" {
+		log.Fatal(errors.New("No changelog added. Please create a changelog item based on your changes"))
 	}
 }
