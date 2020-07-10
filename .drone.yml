@@ -103,41 +103,10 @@ trigger:
     - pull_request
 
 steps:
-- name: license-scan
-  image: golang:1.13
-  environment:
-    FOSSA_API_KEY:
-      from_secret: fossa_api_key
-  detach: true
-  commands:
-    - wget -qO- https://github.com/fossas/fossa-cli/releases/download/v1.0.11/fossa-cli_1.0.11_linux_amd64.tar.gz | tar xvz -C /go/bin/
-    - /go/bin/fossa analyze
-
-- name: build
-  image: golang:1.13
-  commands:
-    - make ci
-
-- name: lint
-  image: golangci/golangci-lint:v1.26
-  commands:
-    - golangci-lint run --timeout 2m0s
-
 - name: changelog
   image: golang:1.13
   commands:
     - make checkchangelog
-
-
-- name: license-check
-  image: golang:1.13
-  failure: ignore
-  environment:
-    FOSSA_API_KEY:
-      from_secret: fossa_api_key
-  commands:
-    - wget -qO- https://github.com/fossas/fossa-cli/releases/download/v1.0.11/fossa-cli_1.0.11_linux_amd64.tar.gz | tar xvz -C /go/bin/
-    - /go/bin/fossa test --timeout 900
 
 ---
 kind: pipeline
