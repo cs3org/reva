@@ -81,7 +81,6 @@ iopsecretfile = /etc/wopi/iopsecret
 [cs3]
 revahost = localhost:19000
 authtokenvalidity = 3600
-endpoint = 123e4567-e89b-12d3-a456-426655440000
 
 [io]
 # Size used for buffered xroot reads [bytes]
