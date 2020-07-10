@@ -7,6 +7,8 @@ address = "0.0.0.0:19000"
 
 [grpc.services.gateway]
 authregistrysvc = "localhost:19000"
+appprovidersvc = "localhost:19000"
+appregistry = "localhost:19000"
 storageregistrysvc = "localhost:19000"
 preferencessvc = "localhost:19000"
 userprovidersvc = "localhost:19000"
@@ -64,6 +66,19 @@ providers = "providers.demo.json"
 
 [grpc.services.publicshareprovider]
 driver = "memory"
+
+[grpc.services.appprovider]
+driver = "demo"
+iopsecret = "testsecret"
+wopiurl = "http://0.0.0.0:8880/"
+storageid = ""
+uiurl = ""
+
+[grpc.services.appregistry]
+driver = "static"
+
+[grpc.services.appregistry.drivers.static.rules]
+"text/plain" = "localhost:19000"
 
 [grpc.services.storageprovider]
 driver = "localhome"

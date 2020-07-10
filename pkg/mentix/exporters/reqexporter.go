@@ -42,6 +42,7 @@ type BaseRequestExporter struct {
 	endpoint string
 }
 
+// Endpoint returns the (relative) endpoint of the exporter.
 func (exporter *BaseRequestExporter) Endpoint() string {
 	// Ensure that the endpoint starts with a /
 	endpoint := exporter.endpoint
@@ -51,6 +52,7 @@ func (exporter *BaseRequestExporter) Endpoint() string {
 	return strings.TrimSpace(endpoint)
 }
 
+// WantsRequest returns whether the exporter wants to handle the incoming request.
 func (exporter *BaseRequestExporter) WantsRequest(r *http.Request) bool {
 	return r.URL.Path == exporter.Endpoint()
 }

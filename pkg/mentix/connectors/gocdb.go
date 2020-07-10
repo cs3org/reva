@@ -39,6 +39,7 @@ type GOCDBConnector struct {
 	gocdbAddress string
 }
 
+// Activate activates the connector.
 func (connector *GOCDBConnector) Activate(conf *config.Configuration, log *zerolog.Logger) error {
 	if err := connector.BaseConnector.Activate(conf, log); err != nil {
 		return err
@@ -53,6 +54,7 @@ func (connector *GOCDBConnector) Activate(conf *config.Configuration, log *zerol
 	return nil
 }
 
+// RetrieveMeshData fetches new mesh data.
 func (connector *GOCDBConnector) RetrieveMeshData() (*meshdata.MeshData, error) {
 	meshData := new(meshdata.MeshData)
 
@@ -188,7 +190,7 @@ func (connector *GOCDBConnector) queryServices(meshData *meshdata.MeshData, site
 
 		// Add the service to the site
 		site.Services = append(site.Services, &meshdata.Service{
-			ServiceEndpoint: meshdata.ServiceEndpoint{
+			ServiceEndpoint: &meshdata.ServiceEndpoint{
 				Type:        connector.findServiceType(meshData, service.Type),
 				Name:        fmt.Sprintf("%v - %v", service.Host, service.Type),
 				URL:         getServiceURLString(service, nil, host),
@@ -252,6 +254,7 @@ func (connector *GOCDBConnector) getServiceURL(service *gocdb.Service, endpoint 
 	return svcURL, nil
 }
 
+// GetName returns the display name of the connector.
 func (connector *GOCDBConnector) GetName() string {
 	return "GOCDB"
 }

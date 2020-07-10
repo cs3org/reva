@@ -101,6 +101,8 @@ github.com/cs3org/go-cs3apis v0.0.0-20200622121618-dc54dffb5e44 h1:NhZ3gaHKs1tHu
 github.com/cs3org/go-cs3apis v0.0.0-20200622121618-dc54dffb5e44/go.mod h1:UXha4TguuB52H14EMoSsCqDj7k8a/t7g4gVP+bgY5LY=
 github.com/cs3org/go-cs3apis v0.0.0-20200625121012-96e791152b14 h1:ORPIrxw/T33ALlpaon9IMRzf54ArJQWCYlcECZiRmEc=
 github.com/cs3org/go-cs3apis v0.0.0-20200625121012-96e791152b14/go.mod h1:UXha4TguuB52H14EMoSsCqDj7k8a/t7g4gVP+bgY5LY=
+github.com/cs3org/go-cs3apis v0.0.0-20200709064917-d96c5f2a42ad h1:XxB0h+UKILRKdr+WgPJaOfW8duVPeVKq/18aip5D/Ws=
+github.com/cs3org/go-cs3apis v0.0.0-20200709064917-d96c5f2a42ad/go.mod h1:UXha4TguuB52H14EMoSsCqDj7k8a/t7g4gVP+bgY5LY=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

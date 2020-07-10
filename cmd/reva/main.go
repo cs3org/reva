@@ -72,6 +72,7 @@ func main() {
 		shareUpdateCommand(),
 		shareListReceivedCommand(),
 		shareUpdateReceivedCommand(),
+		openFileInAppProviderCommand(),
 	}
 
 	mainUsage := createMainUsage(cmds)

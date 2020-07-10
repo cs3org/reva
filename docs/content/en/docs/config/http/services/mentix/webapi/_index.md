@@ -7,13 +7,13 @@ description: >
 ---
 
 {{% pageinfo %}}
-The WebAPI exporter supports multiple endpoints for exporting data. As there currently is only one such endpoint, the WebAPI settings should not be modified.
+The WebAPI exporter exposes the _plain_ Mentix data via an HTTP endpoint.
 {{% /pageinfo %}}
 
 {{% dir name="endpoint" type="string" default="/" %}}
 The endpoint where the mesh data can be queried.
 {{< highlight toml >}}
 [http.services.mentix.webapi]
-endpoint = "data"
+endpoint = "/data"
 {{< /highlight >}}
 {{% /dir %}}
