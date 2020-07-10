@@ -58,11 +58,13 @@ func New(m map[string]interface{}) (provider.Authorizer, error) {
 		return nil, err
 	}
 
-	return &authorizer{
-		providers:   providers,
+	a := &authorizer{
 		providerIPs: sync.Map{},
 		conf:        c,
-	}, nil
+	}
+	a.providers = a.getOCMProviders(providers)
+
+	return a, nil
 }
 
 type config struct {
@@ -98,6 +100,7 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovide
 		for _, p := range a.providers {
 			if p.Domain == provider.Domain {
 				providerAuthorized = true
+				break
 			}
 		}
 	} else {
@@ -113,8 +116,17 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovide
 		return errtypes.NotSupported("No IP provided")
 	}
 
-	ocmHost, err := a.getOCMHost(provider.Domain)
-	if err != nil {
+	var ocmHost string
+	var err error
+	for _, p := range a.providers {
+		if p.Domain == provider.Domain {
+			ocmHost, err = a.getOCMHost(p)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	if ocmHost == "" {
 		return errors.Wrap(err, "json: ocm host not specified for mesh provider")
 	}
 
@@ -149,18 +161,24 @@ func (a *authorizer) ListAllProviders(ctx context.Context) ([]*ocmprovider.Provi
 	return a.providers, nil
 }
 
-func (a *authorizer) getOCMHost(providerDomain string) (string, error) {
-	for _, p := range a.providers {
-		if p.Domain == providerDomain {
-			for _, s := range p.Services {
-				if s.Endpoint.Type.Name == "OCM" {
-					ocmHost, err := url.Parse(s.Host)
-					if err != nil {
-						return "", errors.Wrap(err, "json: error parsing OCM host URL")
-					}
-					return ocmHost.Host, nil
-				}
+func (a *authorizer) getOCMProviders(providers []*ocmprovider.ProviderInfo) (po []*ocmprovider.ProviderInfo) {
+	for _, p := range providers {
+		_, err := a.getOCMHost(p)
+		if err == nil {
+			po = append(po, p)
+		}
+	}
+	return
+}
+
+func (a *authorizer) getOCMHost(provider *ocmprovider.ProviderInfo) (string, error) {
+	for _, s := range provider.Services {
+		if s.Endpoint.Type.Name == "OCM" {
+			ocmHost, err := url.Parse(s.Host)
+			if err != nil {
+				return "", errors.Wrap(err, "json: error parsing OCM host URL")
 			}
+			return ocmHost.Host, nil
 		}
 	}
 	return "", errtypes.NotFound("OCM Host")

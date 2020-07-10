@@ -96,7 +96,7 @@ type authorizer struct {
 	conf                *config
 }
 
-func (a *authorizer) fetchAllProviders() ([]*ocmprovider.ProviderInfo, error) {
+func (a *authorizer) fetchProviders() ([]*ocmprovider.ProviderInfo, error) {
 	if (a.providers != nil) && (time.Now().Unix() < a.providersExpiration) {
 		return a.providers, nil
 	}
@@ -122,7 +122,7 @@ func (a *authorizer) fetchAllProviders() ([]*ocmprovider.ProviderInfo, error) {
 		return nil, err
 	}
 
-	a.providers = providers
+	a.providers = a.getOCMProviders(providers)
 	if a.conf.RefreshInterval > 0 {
 		a.providersExpiration = time.Now().Unix() + a.conf.RefreshInterval
 	}
@@ -130,7 +130,7 @@ func (a *authorizer) fetchAllProviders() ([]*ocmprovider.ProviderInfo, error) {
 }
 
 func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmprovider.ProviderInfo, error) {
-	providers, err := a.fetchAllProviders()
+	providers, err := a.fetchProviders()
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +144,7 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 }
 
 func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovider.ProviderInfo) error {
-	providers, err := a.fetchAllProviders()
+	providers, err := a.fetchProviders()
 	if err != nil {
 		return err
 	}
@@ -154,6 +154,7 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovide
 		for _, p := range providers {
 			if p.Domain == provider.Domain {
 				providerAuthorized = true
+				break
 			}
 		}
 	} else {
@@ -169,8 +170,16 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovide
 		return errtypes.NotSupported("No IP provided")
 	}
 
-	ocmHost, err := a.getOCMHost(provider.Domain)
-	if err != nil {
+	var ocmHost string
+	for _, p := range providers {
+		if p.Domain == provider.Domain {
+			ocmHost, err = a.getOCMHost(p)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	if ocmHost == "" {
 		return errors.Wrap(err, "json: ocm host not specified for mesh provider")
 	}
 
@@ -202,29 +211,31 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovide
 }
 
 func (a *authorizer) ListAllProviders(ctx context.Context) ([]*ocmprovider.ProviderInfo, error) {
-	providers, err := a.fetchAllProviders()
+	providers, err := a.fetchProviders()
 	if err != nil {
 		return nil, err
 	}
 	return providers, nil
 }
 
-func (a *authorizer) getOCMHost(providerDomain string) (string, error) {
-	providers, err := a.fetchAllProviders()
-	if err != nil {
-		return "", err
-	}
+func (a *authorizer) getOCMProviders(providers []*ocmprovider.ProviderInfo) (po []*ocmprovider.ProviderInfo) {
 	for _, p := range providers {
-		if p.Domain == providerDomain {
-			for _, s := range p.Services {
-				if s.Endpoint.Type.Name == "OCM" {
-					ocmHost, err := url.Parse(s.Host)
-					if err != nil {
-						return "", errors.Wrap(err, "json: error parsing OCM host URL")
-					}
-					return ocmHost.Host, nil
-				}
+		_, err := a.getOCMHost(p)
+		if err == nil {
+			po = append(po, p)
+		}
+	}
+	return
+}
+
+func (a *authorizer) getOCMHost(provider *ocmprovider.ProviderInfo) (string, error) {
+	for _, s := range provider.Services {
+		if s.Endpoint.Type.Name == "OCM" {
+			ocmHost, err := url.Parse(s.Host)
+			if err != nil {
+				return "", errors.Wrap(err, "json: error parsing OCM host URL")
 			}
+			return ocmHost.Host, nil
 		}
 	}
 	return "", errtypes.NotFound("OCM Host")

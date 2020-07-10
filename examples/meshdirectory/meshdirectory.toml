@@ -13,9 +13,11 @@ driver = "json"
 
 [grpc.services.ocmproviderauthorizer.drivers.json]
 providers = "providers.demo.json"
+verify_request_hostname = true
 
 #[grpc.services.ocmproviderauthorizer.drivers.mentix]
 #url = "http://127.0.0.1:9600/mentix/cs3"
+#verify_request_hostname = true
 #insecure = true
 #timeout = 10
 # refresh interval of the mesh provider list (in seconds)
