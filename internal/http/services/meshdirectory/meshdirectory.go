@@ -24,18 +24,16 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/rs/zerolog"
+
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/ocmd"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
-
 	"github.com/pkg/errors"
 
-	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/mitchellh/mapstructure"
 )
@@ -137,20 +135,17 @@ func (s *svc) serveJSON(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
 
 	gatewayClient, err := s.getClient()
 	if err != nil {
 		ocmd.WriteError(w, r, ocmd.APIErrorServerError,
 			fmt.Sprintf("error getting grpc client on addr: %v", s.conf.GatewaySvc), err)
-		log.Err(err).Msg(fmt.Sprintf("error getting grpc client on addr: %v", s.conf.GatewaySvc))
 		return
 	}
 
 	providers, err := gatewayClient.ListAllProviders(ctx, &providerv1beta1.ListAllProvidersRequest{})
 	if err != nil {
 		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error listing all providers", err)
-		log.Err(err).Msg("error listing all mesh providers.")
 		return
 	}
 
@@ -158,7 +153,6 @@ func (s *svc) serveJSON(w http.ResponseWriter, r *http.Request) {
 	jsonResponse, err := json.Marshal(providers.Providers)
 	if err != nil {
 		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error marshalling providers data", err)
-		log.Err(err).Msg("error marshal providers data.")
 		return
 	}
 
@@ -166,7 +160,6 @@ func (s *svc) serveJSON(w http.ResponseWriter, r *http.Request) {
 	_, err = w.Write(jsonResponse)
 	if err != nil {
 		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error writing providers data", err)
-		log.Err(err).Msg("error writing providers data.")
 		return
 	}
 
@@ -178,7 +171,6 @@ func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var head string
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
-		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
 
 		switch head {
 		case "":
