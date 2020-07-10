@@ -20,6 +20,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"os/exec"
 	"strings"
@@ -34,6 +35,7 @@ func main() {
 
 	var changelog bool
 	mods := strings.Split(string(out), "\n")
+	fmt.Printf("%+q\n", mods)
 
 	for _, m := range mods {
 		params := strings.Split(m, " ")
