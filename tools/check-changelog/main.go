@@ -21,7 +21,6 @@ package main
 import (
 	"errors"
 	"flag"
-	"fmt"
 	"log"
 	"os/exec"
 	"strings"
@@ -35,7 +34,6 @@ func main() {
 	if *repo != "" {
 		branch = *repo + "/master"
 	}
-	fmt.Println(branch)
 	cmd := exec.Command("git", "diff-index", branch, "--", "changelog/unreleased")
 	out, err := cmd.Output()
 	if err != nil {
@@ -44,7 +42,6 @@ func main() {
 
 	var changelog bool
 	mods := strings.Split(string(out), "\n")
-	fmt.Printf("%+q\n", mods)
 
 	for _, m := range mods {
 		params := strings.Split(m, " ")
