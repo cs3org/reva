@@ -1,4 +1,4 @@
-aBugfix: Fix initialization of json share manager
+Bugfix: Fix initialization of json share manager
 
 When an empty shares.json file existed the json share manager would fail while
 trying to unmarshal the empty file.
