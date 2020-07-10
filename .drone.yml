@@ -126,7 +126,7 @@ steps:
 - name: changelog
   image: golang:1.13
   commands:
-    - git diff-index --quiet HEAD changelog/unreleased/; echo $?
+    - make checkchangelog
 
 
 - name: license-check

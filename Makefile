@@ -80,4 +80,5 @@ release-deps:
 dist: default
 	go run tools/create-artifacts/main.go -version ${VERSION} -commit ${GIT_COMMIT} -goversion ${GO_VERSION}
 
-all: deps default
+checkchangelog:
+	go run tools/check-file-changed/main.go 
