@@ -22,6 +22,7 @@ import (
 	"errors"
 	"log"
 	"os/exec"
+	"strings"
 )
 
 func main() {
@@ -30,7 +31,19 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if string(out) == "" {
+
+	var changelog bool
+	mods := strings.Split(string(out), "\n")
+
+	for _, m := range mods {
+		params := strings.Split(m, " ")
+
+		// The fifth param in the output of diff-index is always the status followed by optional score number
+		if len(params) >= 5 && params[4][0] == 'A' {
+			changelog = true
+		}
+	}
+	if !changelog {
 		log.Fatal(errors.New("No changelog added. Please create a changelog item based on your changes"))
 	}
 }
