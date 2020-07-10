@@ -45,7 +45,7 @@ type invitesHandler struct {
 func (h *invitesHandler) init(c *Config) {
 	h.gatewayAddr = c.GatewaySvc
 	h.smtpCredentials = c.SMTPCredentials
-	if h.smtpCredentials != nil && h.smtpCredentials.SenderPassword == "" {
+	if h.smtpCredentials != nil && !h.smtpCredentials.DisableAuth && h.smtpCredentials.SenderPassword == "" {
 		h.smtpCredentials.SenderPassword = os.Getenv("REVA_OCMD_SMTP_SENDER_PASSWORD")
 	}
 }
