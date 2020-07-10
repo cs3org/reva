@@ -43,6 +43,7 @@ func main() {
 			changelog = true
 		}
 	}
+
 	if !changelog {
 		log.Fatal(errors.New("No changelog added. Please create a changelog item based on your changes"))
 	}
