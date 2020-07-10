@@ -20,6 +20,7 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"os/exec"
@@ -27,7 +28,13 @@ import (
 )
 
 func main() {
-	cmd := exec.Command("git", "diff-index", "master", "--", "changelog/unreleased")
+	repo := flag.String("repo", "", "the remote repo against which diff-index is to be derived")
+	branch := "master"
+	if *repo != "" {
+		branch += "/master"
+	}
+
+	cmd := exec.Command("git", "diff-index", branch, "--", "changelog/unreleased")
 	out, err := cmd.Output()
 	if err != nil {
 		log.Fatal(err)
@@ -39,7 +46,6 @@ func main() {
 
 	for _, m := range mods {
 		params := strings.Split(m, " ")
-
 		// The fifth param in the output of diff-index is always the status followed by optional score number
 		if len(params) >= 5 && params[4][0] == 'A' {
 			changelog = true

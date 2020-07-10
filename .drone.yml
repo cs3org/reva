@@ -125,7 +125,7 @@ steps:
 - name: changelog
   image: golang:1.13
   commands:
-    - make check-changelog
+    - make check-changelog-drone
 
 - name: license-check
   image: golang:1.13
