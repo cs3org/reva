@@ -39,7 +39,7 @@ func main() {
 			},
 		},
 	}
-	if err := cato.GenerateDocumentation(rootPath, conf); err != nil {
+	if _, err := cato.GenerateDocumentation(rootPath, conf); err != nil {
 		fmt.Println("Error: ", err.Error())
 	}
 }
