@@ -29,11 +29,13 @@ import (
 
 func main() {
 	repo := flag.String("repo", "", "the remote repo against which diff-index is to be derived")
+	flag.Parse()
+
 	branch := "master"
 	if *repo != "" {
-		branch += "/master"
+		branch = *repo + "/master"
 	}
-
+	fmt.Println(branch)
 	cmd := exec.Command("git", "diff-index", branch, "--", "changelog/unreleased")
 	out, err := cmd.Output()
 	if err != nil {
