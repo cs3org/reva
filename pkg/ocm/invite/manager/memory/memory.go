@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -35,6 +36,7 @@ import (
 	"github.com/cs3org/reva/pkg/ocm/invite"
 	"github.com/cs3org/reva/pkg/ocm/invite/manager/registry"
 	"github.com/cs3org/reva/pkg/ocm/invite/token"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -74,7 +76,8 @@ type manager struct {
 }
 
 type config struct {
-	Expiration string `mapstructure:"expiration"`
+	Expiration          string `mapstructure:"expiration"`
+	InsecureConnections bool   `mapstructure:"insecure_connections"`
 }
 
 func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, error) {
@@ -104,7 +107,15 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 		return err
 	}
 
-	resp, err := http.PostForm(fmt.Sprintf("%s%s", ocmEndpoint, acceptInviteEndpoint), requestBody)
+	client := rhttp.GetHTTPClient(rhttp.Insecure(m.Config.InsecureConnections))
+	recipientURL := fmt.Sprintf("%s%s", ocmEndpoint, acceptInviteEndpoint)
+	req, err := http.NewRequest("POST", recipientURL, strings.NewReader(requestBody.Encode()))
+	if err != nil {
+		return errors.Wrap(err, "json: error framing post request")
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
+
+	resp, err := client.Do(req)
 	if err != nil {
 		err = errors.Wrap(err, "memory: error sending post request")
 		return err

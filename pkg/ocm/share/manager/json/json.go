@@ -27,6 +27,7 @@ import (
 	"net/url"
 	"os"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -38,6 +39,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/ocm/share/manager/registry"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
@@ -118,7 +120,8 @@ type shareModel struct {
 }
 
 type config struct {
-	File string `mapstructure:"file"`
+	File                string `mapstructure:"file"`
+	InsecureConnections bool   `mapstructure:"insecure_connections"`
 }
 
 func (c *config) init() {
@@ -275,7 +278,15 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 			return nil, err
 		}
 
-		resp, err := http.PostForm(fmt.Sprintf("%s%s", ocmEndpoint, createOCMCoreShareEndpoint), requestBody)
+		client := rhttp.GetHTTPClient(rhttp.Insecure(m.c.InsecureConnections))
+		recipientURL := fmt.Sprintf("%s%s", ocmEndpoint, createOCMCoreShareEndpoint)
+		req, err := http.NewRequest("POST", recipientURL, strings.NewReader(requestBody.Encode()))
+		if err != nil {
+			return nil, errors.Wrap(err, "json: error framing post request")
+		}
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
+
+		resp, err := client.Do(req)
 		if err != nil {
 			err = errors.Wrap(err, "json: error sending post request")
 			return nil, err
