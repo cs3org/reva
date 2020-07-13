@@ -67,3 +67,4 @@ Semantic versioning will be added once v1.0.0 is reached.
 
 If you want to use it, vendor it. It is always OK to change things to make things better.
 The API is not 100% correct in the first commit.
+ 1
