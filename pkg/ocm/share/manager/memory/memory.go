@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -35,8 +36,10 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/share"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
+	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
 
@@ -49,17 +52,36 @@ func init() {
 
 // New returns a new memory manager.
 func New(m map[string]interface{}) (share.Manager, error) {
+	c, err := parseConfig(m)
+	if err != nil {
+		err = errors.Wrap(err, "error creating a new manager")
+		return nil, err
+	}
 
 	state := make(map[string]map[string]ocm.ShareState)
 	return &mgr{
+		c:      c,
 		shares: sync.Map{},
 		state:  state,
 	}, nil
 }
 
 type mgr struct {
+	c      *config
 	shares sync.Map
 	state  map[string]map[string]ocm.ShareState
+}
+
+type config struct {
+	InsecureConnections bool `mapstructure:"insecure_connections"`
+}
+
+func parseConfig(m map[string]interface{}) (*config, error) {
+	c := &config{}
+	if err := mapstructure.Decode(m, c); err != nil {
+		return nil, err
+	}
+	return c, nil
 }
 
 func genID() string {
@@ -167,7 +189,15 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 			return nil, err
 		}
 
-		resp, err := http.PostForm(fmt.Sprintf("%s%s", ocmEndpoint, createOCMCoreShareEndpoint), requestBody)
+		client := rhttp.GetHTTPClient(rhttp.Insecure(m.c.InsecureConnections))
+		recipientURL := fmt.Sprintf("%s%s", ocmEndpoint, createOCMCoreShareEndpoint)
+		req, err := http.NewRequest("POST", recipientURL, strings.NewReader(requestBody.Encode()))
+		if err != nil {
+			return nil, errors.Wrap(err, "json: error framing post request")
+		}
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
+
+		resp, err := client.Do(req)
 		if err != nil {
 			err = errors.Wrap(err, "memory: error sending post request")
 			return nil, err

@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,6 +37,7 @@ import (
 	"github.com/cs3org/reva/pkg/ocm/invite"
 	"github.com/cs3org/reva/pkg/ocm/invite/manager/registry"
 	"github.com/cs3org/reva/pkg/ocm/invite/token"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -56,8 +58,9 @@ type manager struct {
 }
 
 type config struct {
-	File       string `mapstructure:"file"`
-	Expiration string `mapstructure:"expiration"`
+	File                string `mapstructure:"file"`
+	Expiration          string `mapstructure:"expiration"`
+	InsecureConnections bool   `mapstructure:"insecure_connections"`
 }
 
 func init() {
@@ -203,7 +206,15 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 		return err
 	}
 
-	resp, err := http.PostForm(fmt.Sprintf("%s%s", ocmEndpoint, acceptInviteEndpoint), requestBody)
+	client := rhttp.GetHTTPClient(rhttp.Insecure(m.config.InsecureConnections))
+	recipientURL := fmt.Sprintf("%s%s", ocmEndpoint, acceptInviteEndpoint)
+	req, err := http.NewRequest("POST", recipientURL, strings.NewReader(requestBody.Encode()))
+	if err != nil {
+		return errors.Wrap(err, "json: error framing post request")
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
+
+	resp, err := client.Do(req)
 	if err != nil {
 		err = errors.Wrap(err, "json: error sending post request")
 		return err
@@ -213,11 +224,9 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 	if resp.StatusCode != http.StatusOK {
 		respBody, e := ioutil.ReadAll(resp.Body)
 		if e != nil {
-			e = errors.Wrap(e, "json: error reading request body")
-			return e
+			return errors.Wrap(e, "json: error reading request body")
 		}
-		err = errors.Wrap(errors.New(fmt.Sprintf("%s: %s", resp.Status, string(respBody))), "json: error sending accept post request")
-		return err
+		return errors.Wrap(errors.New(fmt.Sprintf("%s: %s", resp.Status, string(respBody))), "json: error sending accept post request")
 	}
 
 	return nil

@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
@@ -152,7 +153,7 @@ func (m *manager) getAPIToken(ctx context.Context) (string, time.Time, error) {
 	}
 
 	httpClient := rhttp.GetHTTPClient(rhttp.Context(ctx), rhttp.Timeout(10*time.Second), rhttp.Insecure(true))
-	httpReq, err := rhttp.NewRequest(ctx, "POST", m.conf.OIDCTokenEndpoint, strings.NewReader(params.Encode()))
+	httpReq, err := http.NewRequest("POST", m.conf.OIDCTokenEndpoint, strings.NewReader(params.Encode()))
 	if err != nil {
 		return "", time.Time{}, err
 	}
@@ -163,6 +164,7 @@ func (m *manager) getAPIToken(ctx context.Context) (string, time.Time, error) {
 	if err != nil {
 		return "", time.Time{}, err
 	}
+	defer httpRes.Body.Close()
 
 	body, err := ioutil.ReadAll(httpRes.Body)
 	if err != nil {
@@ -187,7 +189,7 @@ func (m *manager) sendAPIRequest(ctx context.Context, url string) ([]interface{}
 	}
 
 	httpClient := rhttp.GetHTTPClient(rhttp.Context(ctx), rhttp.Timeout(10*time.Second), rhttp.Insecure(true))
-	httpReq, err := rhttp.NewRequest(ctx, "GET", url, nil)
+	httpReq, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -201,6 +203,7 @@ func (m *manager) sendAPIRequest(ctx context.Context, url string) ([]interface{}
 	if err != nil {
 		return nil, err
 	}
+	defer httpRes.Body.Close()
 
 	body, err := ioutil.ReadAll(httpRes.Body)
 	if err != nil {
