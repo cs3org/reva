@@ -16,16 +16,20 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package json
+package mentix
 
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 	"strings"
 	"sync"
+	"time"
+
+	"github.com/cs3org/reva/pkg/rhttp"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -36,7 +40,13 @@ import (
 )
 
 func init() {
-	registry.Register("json", New)
+	registry.Register("mentix", New)
+}
+
+// Client is a Mentix API client
+type Client struct {
+	BaseURL    string
+	HTTPClient *http.Client
 }
 
 // New returns a new authorizer object.
@@ -48,44 +58,84 @@ func New(m map[string]interface{}) (provider.Authorizer, error) {
 	}
 	c.init()
 
-	f, err := ioutil.ReadFile(c.Providers)
-	if err != nil {
-		return nil, err
-	}
-	providers := []*ocmprovider.ProviderInfo{}
-	err = json.Unmarshal(f, &providers)
-	if err != nil {
-		return nil, err
+	client := &Client{
+		BaseURL: c.URL,
+		HTTPClient: rhttp.GetHTTPClient(
+			rhttp.Context(context.Background()),
+			rhttp.Timeout(time.Duration(c.Timeout*int64(time.Second))),
+			rhttp.Insecure(c.Insecure),
+		),
 	}
 
-	a := &authorizer{
+	return &authorizer{
+		client:      client,
 		providerIPs: sync.Map{},
 		conf:        c,
-	}
-	a.providers = a.getOCMProviders(providers)
-
-	return a, nil
+	}, nil
 }
 
 type config struct {
-	Providers             string `mapstructure:"providers"`
+	URL                   string `mapstructure:"url"`
+	Timeout               int64  `mapstructure:"timeout"`
+	RefreshInterval       int64  `mapstructure:"refresh"`
 	VerifyRequestHostname bool   `mapstructure:"verify_request_hostname"`
+	Insecure              bool   `mapstructure:"insecure"`
 }
 
 func (c *config) init() {
-	if c.Providers == "" {
-		c.Providers = "/etc/revad/ocm-providers.json"
+	if c.URL == "" {
+		c.URL = "http://localhost:9600/mentix/cs3"
 	}
 }
 
 type authorizer struct {
-	providers   []*ocmprovider.ProviderInfo
-	providerIPs sync.Map
-	conf        *config
+	providers           []*ocmprovider.ProviderInfo
+	providersExpiration int64
+	client              *Client
+	providerIPs         sync.Map
+	conf                *config
+}
+
+func (a *authorizer) fetchProviders() ([]*ocmprovider.ProviderInfo, error) {
+	if (a.providers != nil) && (time.Now().Unix() < a.providersExpiration) {
+		return a.providers, nil
+	}
+
+	req, err := http.NewRequest("GET", a.client.BaseURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json; charset=utf-8")
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+
+	res, err := a.client.HTTPClient.Do(req)
+	if err != nil {
+		err = errors.Wrap(err,
+			fmt.Sprintf("error fetching provider list from: %s", a.client.BaseURL))
+		return nil, err
+	}
+
+	defer res.Body.Close()
+
+	providers := make([]*ocmprovider.ProviderInfo, 0)
+	if err = json.NewDecoder(res.Body).Decode(&providers); err != nil {
+		return nil, err
+	}
+
+	a.providers = a.getOCMProviders(providers)
+	if a.conf.RefreshInterval > 0 {
+		a.providersExpiration = time.Now().Unix() + a.conf.RefreshInterval
+	}
+	return a.providers, nil
 }
 
 func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmprovider.ProviderInfo, error) {
-	for _, p := range a.providers {
+	providers, err := a.fetchProviders()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, p := range providers {
 		if strings.Contains(p.Domain, domain) {
 			return p, nil
 		}
@@ -94,10 +144,14 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 }
 
 func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovider.ProviderInfo) error {
+	providers, err := a.fetchProviders()
+	if err != nil {
+		return err
+	}
 
 	var providerAuthorized bool
 	if provider.Domain != "" {
-		for _, p := range a.providers {
+		for _, p := range providers {
 			if p.Domain == provider.Domain {
 				providerAuthorized = true
 				break
@@ -117,8 +171,7 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovide
 	}
 
 	var ocmHost string
-	var err error
-	for _, p := range a.providers {
+	for _, p := range providers {
 		if p.Domain == provider.Domain {
 			ocmHost, err = a.getOCMHost(p)
 			if err != nil {
@@ -158,7 +211,11 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovide
 }
 
 func (a *authorizer) ListAllProviders(ctx context.Context) ([]*ocmprovider.ProviderInfo, error) {
-	return a.providers, nil
+	providers, err := a.fetchProviders()
+	if err != nil {
+		return nil, err
+	}
+	return providers, nil
 }
 
 func (a *authorizer) getOCMProviders(providers []*ocmprovider.ProviderInfo) (po []*ocmprovider.ProviderInfo) {

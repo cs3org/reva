@@ -98,7 +98,10 @@ func (s *service) Close() error {
 }
 
 func (s *service) UnprotectedEndpoints() []string {
-	return []string{"/cs3.ocm.provider.v1beta1.ProviderAPI/IsProviderAllowed"}
+	return []string{
+		"/cs3.ocm.provider.v1beta1.ProviderAPI/IsProviderAllowed",
+		"/cs3.ocm.provider.v1beta1.ProviderAPI/ListAllProviders",
+	}
 }
 
 func (s *service) GetInfoByDomain(ctx context.Context, req *ocmprovider.GetInfoByDomainRequest) (*ocmprovider.GetInfoByDomainResponse, error) {
