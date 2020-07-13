@@ -20,9 +20,13 @@ package smtpclient
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"net/smtp"
+	"os"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 )
 
@@ -37,20 +41,33 @@ type SMTPCredentials struct {
 
 // SendMail allows sending mails using a set of client credentials.
 func (creds *SMTPCredentials) SendMail(recipient, subject, body string) error {
-	if creds.DisableAuth {
-		return creds.sendMailSMTP(recipient, subject, body)
+
+	header := map[string]string{
+		"From":                      creds.SenderMail,
+		"To":                        recipient,
+		"Subject":                   subject,
+		"Date":                      time.Now().Format(time.RFC1123Z),
+		"Message-ID":                uuid.New().String(),
+		"MIME-Version":              "1.0",
+		"Content-Type":              "text/plain; charset=\"utf-8\"",
+		"Content-Transfer-Encoding": "base64",
 	}
-	return creds.sendMailAuthSMTP(recipient, subject, body)
+
+	message := ""
+	for k, v := range header {
+		message += fmt.Sprintf("%s: %s\r\n", k, v)
+	}
+	message += "\r\n" + base64.StdEncoding.EncodeToString([]byte(body))
+
+	if creds.DisableAuth {
+		return creds.sendMailSMTP(recipient, subject, message)
+	}
+	return creds.sendMailAuthSMTP(recipient, subject, message)
 }
 
-func (creds *SMTPCredentials) sendMailAuthSMTP(recipient, subject, body string) error {
+func (creds *SMTPCredentials) sendMailAuthSMTP(recipient, subject, message string) error {
 
 	auth := smtp.PlainAuth("", creds.SenderMail, creds.SenderPassword, creds.SMTPServer)
-
-	message := "From: " + creds.SenderMail + "\n" +
-		"To: " + recipient + "\n" +
-		"Subject: " + subject + "\n\n" +
-		body
 
 	err := smtp.SendMail(
 		fmt.Sprintf("%s:%d", creds.SMTPServer, creds.SMTPPort),
@@ -67,13 +84,21 @@ func (creds *SMTPCredentials) sendMailAuthSMTP(recipient, subject, body string) 
 	return nil
 }
 
-func (creds *SMTPCredentials) sendMailSMTP(recipient, subject, body string) error {
+func (creds *SMTPCredentials) sendMailSMTP(recipient, subject, message string) error {
 
 	c, err := smtp.Dial(fmt.Sprintf("%s:%d", creds.SMTPServer, creds.SMTPPort))
 	if err != nil {
 		return err
 	}
 	defer c.Close()
+
+	host, err := os.Hostname()
+	if err != nil {
+		return err
+	}
+	if err = c.Hello(host); err != nil {
+		return err
+	}
 
 	if err = c.Mail(creds.SenderMail); err != nil {
 		return err
@@ -88,12 +113,7 @@ func (creds *SMTPCredentials) sendMailSMTP(recipient, subject, body string) erro
 	}
 	defer wc.Close()
 
-	message := "From: " + creds.SenderMail + "\n" +
-		"To: " + recipient + "\n" +
-		"Subject: " + subject + "\n\n" +
-		body
 	buf := bytes.NewBufferString(message)
-
 	if _, err = buf.WriteTo(wc); err != nil {
 		return err
 	}
