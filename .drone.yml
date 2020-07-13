@@ -43,7 +43,6 @@ steps:
     - wget -qO- https://github.com/fossas/fossa-cli/releases/download/v1.0.11/fossa-cli_1.0.11_linux_amd64.tar.gz | tar xvz -C /go/bin/
     - /go/bin/fossa analyze
 
-
 - name: build
   image: golang:1.13
   commands:
@@ -122,6 +121,11 @@ steps:
   image: golangci/golangci-lint:v1.26
   commands:
     - golangci-lint run --timeout 2m0s
+
+- name: changelog
+  image: golang:1.13
+  commands:
+    - make check-changelog-drone
 
 - name: license-check
   image: golang:1.13
@@ -336,7 +340,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 9687d7747ed42a64a77407d551fd0d8bfd320948
+      - git checkout 73023ed1e0009dc25a68d4cfd3ddf11b9c33d115
       - make test-acceptance-api
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
@@ -345,6 +349,7 @@ steps:
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_OCIS: 'true'
+      TEST_REVA: 'true'
       BEHAT_FILTER_TAGS: '~@skipOnOcis&&~@skipOnOcis-OC-Storage'
 
 services:

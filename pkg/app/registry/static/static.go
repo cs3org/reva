@@ -24,11 +24,20 @@ import (
 
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
 )
 
 type registry struct {
 	rules map[string]string
+}
+
+func (c *config) init() {
+	if len(c.Rules) == 0 {
+		c.Rules = map[string]string{
+			"text/plain": sharedconf.GetGatewaySVC(""),
+		}
+	}
 }
 
 func (b *registry) ListProviders(ctx context.Context) ([]*app.ProviderInfo, error) {
@@ -80,5 +89,6 @@ func New(m map[string]interface{}) (app.Registry, error) {
 	if err != nil {
 		return nil, err
 	}
+	c.init()
 	return &registry{rules: c.Rules}, nil
 }

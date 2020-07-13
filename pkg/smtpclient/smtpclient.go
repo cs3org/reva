@@ -19,6 +19,7 @@
 package smtpclient
 
 import (
+	"bytes"
 	"fmt"
 	"net/smtp"
 
@@ -31,10 +32,18 @@ type SMTPCredentials struct {
 	SenderPassword string `mapstructure:"sender_password"`
 	SMTPServer     string `mapstructure:"smtp_server"`
 	SMTPPort       int    `mapstructure:"smtp_port"`
+	DisableAuth    bool   `mapstructure:"disable_auth"`
 }
 
 // SendMail allows sending mails using a set of client credentials.
 func (creds *SMTPCredentials) SendMail(recipient, subject, body string) error {
+	if creds.DisableAuth {
+		return creds.sendMailSMTP(recipient, subject, body)
+	}
+	return creds.sendMailAuthSMTP(recipient, subject, body)
+}
+
+func (creds *SMTPCredentials) sendMailAuthSMTP(recipient, subject, body string) error {
 
 	auth := smtp.PlainAuth("", creds.SenderMail, creds.SenderPassword, creds.SMTPServer)
 
@@ -56,5 +65,38 @@ func (creds *SMTPCredentials) SendMail(recipient, subject, body string) error {
 	}
 
 	return nil
+}
 
+func (creds *SMTPCredentials) sendMailSMTP(recipient, subject, body string) error {
+
+	c, err := smtp.Dial(fmt.Sprintf("%s:%d", creds.SMTPServer, creds.SMTPPort))
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+
+	if err = c.Mail(creds.SenderMail); err != nil {
+		return err
+	}
+	if err = c.Rcpt(recipient); err != nil {
+		return err
+	}
+
+	wc, err := c.Data()
+	if err != nil {
+		return err
+	}
+	defer wc.Close()
+
+	message := "From: " + creds.SenderMail + "\n" +
+		"To: " + recipient + "\n" +
+		"Subject: " + subject + "\n\n" +
+		body
+	buf := bytes.NewBufferString(message)
+
+	if _, err = buf.WriteTo(wc); err != nil {
+		return err
+	}
+
+	return nil
 }

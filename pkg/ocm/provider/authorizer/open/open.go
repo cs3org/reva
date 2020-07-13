@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
+	"net/url"
 	"strings"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
@@ -55,9 +56,10 @@ func New(m map[string]interface{}) (provider.Authorizer, error) {
 		return nil, err
 	}
 
-	return &authorizer{
-		providers: providers,
-	}, nil
+	a := &authorizer{}
+	a.providers = a.getOCMProviders(providers)
+
+	return a, nil
 }
 
 type config struct {
@@ -90,4 +92,27 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovide
 
 func (a *authorizer) ListAllProviders(ctx context.Context) ([]*ocmprovider.ProviderInfo, error) {
 	return a.providers, nil
+}
+
+func (a *authorizer) getOCMProviders(providers []*ocmprovider.ProviderInfo) (po []*ocmprovider.ProviderInfo) {
+	for _, p := range providers {
+		_, err := a.getOCMHost(p)
+		if err == nil {
+			po = append(po, p)
+		}
+	}
+	return
+}
+
+func (a *authorizer) getOCMHost(provider *ocmprovider.ProviderInfo) (string, error) {
+	for _, s := range provider.Services {
+		if s.Endpoint.Type.Name == "OCM" {
+			ocmHost, err := url.Parse(s.Host)
+			if err != nil {
+				return "", errors.Wrap(err, "json: error parsing OCM host URL")
+			}
+			return ocmHost.Host, nil
+		}
+	}
+	return "", errtypes.NotFound("OCM Host")
 }

@@ -19,27 +19,39 @@
 package main
 
 import (
-	"fmt"
-
-	"github.com/cs3org/cato"
-	"github.com/cs3org/cato/resources"
+	"errors"
+	"flag"
+	"log"
+	"os/exec"
+	"strings"
 )
 
 func main() {
-	rootPath := "."
-	conf := &resources.CatoConfig{
-		Driver: "reva",
-		DriverConfig: map[string]map[string]interface{}{
-			"reva": map[string]interface{}{
-				"DocPaths": map[string]string{
-					"internal/": "docs/content/en/docs/config/",
-					"pkg/":      "docs/content/en/docs/config/packages/",
-				},
-				"ReferenceBase": "https://github.com/cs3org/reva/tree/master",
-			},
-		},
+	repo := flag.String("repo", "", "the remote repo against which diff-index is to be derived")
+	flag.Parse()
+
+	branch := "master"
+	if *repo != "" {
+		branch = *repo + "/master"
 	}
-	if _, err := cato.GenerateDocumentation(rootPath, conf); err != nil {
-		fmt.Println("Error: ", err.Error())
+	cmd := exec.Command("git", "diff-index", branch, "--", "changelog/unreleased")
+	out, err := cmd.Output()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var changelog bool
+	mods := strings.Split(string(out), "\n")
+
+	for _, m := range mods {
+		params := strings.Split(m, " ")
+		// The fifth param in the output of diff-index is always the status followed by optional score number
+		if len(params) >= 5 && params[4][0] == 'A' {
+			changelog = true
+		}
+	}
+
+	if !changelog {
+		log.Fatal(errors.New("No changelog added. Please create a changelog item based on your changes"))
 	}
 }
