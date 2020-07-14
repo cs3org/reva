@@ -19,9 +19,6 @@
 package exporters
 
 import (
-	"fmt"
-	"net/http"
-
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
@@ -39,26 +36,9 @@ func (exporter *SiteLocationsExporter) Activate(conf *config.Configuration, log 
 		return err
 	}
 
-	// Store SiteLocations specific settings
+	// Store SiteLocations specifics
 	exporter.endpoint = conf.SiteLocations.Endpoint
-
-	return nil
-}
-
-// HandleRequest handles the actual HTTP request.
-func (exporter *SiteLocationsExporter) HandleRequest(resp http.ResponseWriter, req *http.Request) error {
-	// Data is read, so acquire a read lock
-	exporter.locker.RLock()
-	defer exporter.locker.RUnlock()
-
-	data, err := siteloc.HandleQuery(exporter.meshData, req.URL.Query())
-	if err == nil {
-		if _, err := resp.Write(data); err != nil {
-			return fmt.Errorf("error writing the API request response: %v", err)
-		}
-	} else {
-		return fmt.Errorf("error while serving API request: %v", err)
-	}
+	exporter.defaultMethodHandler = siteloc.HandleDefaultQuery
 
 	return nil
 }

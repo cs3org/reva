@@ -19,9 +19,6 @@
 package exporters
 
 import (
-	"fmt"
-	"net/http"
-
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
@@ -39,26 +36,9 @@ func (exporter *CS3APIExporter) Activate(conf *config.Configuration, log *zerolo
 		return err
 	}
 
-	// Store CS3API specific settings
+	// Store CS3API specifics
 	exporter.endpoint = conf.CS3API.Endpoint
-
-	return nil
-}
-
-// HandleRequest handles the actual HTTP request.
-func (exporter *CS3APIExporter) HandleRequest(resp http.ResponseWriter, req *http.Request) error {
-	// Data is read, so acquire a read lock
-	exporter.locker.RLock()
-	defer exporter.locker.RUnlock()
-
-	data, err := cs3api.HandleQuery(exporter.meshData, req.URL.Query())
-	if err == nil {
-		if _, err := resp.Write(data); err != nil {
-			return fmt.Errorf("error writing the API request response: %v", err)
-		}
-	} else {
-		return fmt.Errorf("error while serving API request: %v", err)
-	}
+	exporter.defaultMethodHandler = cs3api.HandleDefaultQuery
 
 	return nil
 }

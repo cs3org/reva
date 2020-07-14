@@ -22,28 +22,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"strings"
 
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 
-const (
-	queryMethodDefault = ""
-)
-
-// HandleQuery handles an HTTP request based on the provided 'method' parameter.
-func HandleQuery(meshData *meshdata.MeshData, params url.Values) ([]byte, error) {
-	method := params.Get("method")
-	switch strings.ToLower(method) {
-	case queryMethodDefault:
-		return handleDefaultQuery(meshData, params)
-
-	default:
-		return []byte{}, fmt.Errorf("unknown API method '%v'", method)
-	}
-}
-
-func handleDefaultQuery(meshData *meshdata.MeshData, params url.Values) ([]byte, error) {
+// HandleDefaultQuery processes a basic query.
+func HandleDefaultQuery(meshData *meshdata.MeshData, params url.Values) ([]byte, error) {
 	// Just return the plain, unfiltered data as JSON
 	data, err := json.MarshalIndent(meshData, "", "\t")
 	if err != nil {
