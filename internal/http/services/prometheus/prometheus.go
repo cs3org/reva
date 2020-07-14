@@ -20,6 +20,9 @@ package prometheus
 
 import (
 	"net/http"
+	"reva/pkg/appctx"
+	"reva/pkg/metrics"
+	"reva/pkg/metrics/config"
 
 	"contrib.go.opencensus.io/exporter/prometheus"
 	"github.com/cs3org/reva/pkg/rhttp/global"
@@ -27,9 +30,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.opencensus.io/stats/view"
-
-	// Initializes goroutines which periodically update stats
-	_ "github.com/cs3org/reva/pkg/metrics/reader/dummy"
 )
 
 func init() {
@@ -38,32 +38,57 @@ func init() {
 
 // New returns a new prometheus service
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
-	conf := &config{}
+	conf := &config.Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
 	}
 
-	conf.init()
+	conf.Init()
 
+	metrics, err := metrics.New(conf)
+	if err != nil {
+		return nil, errors.Wrap(err, "prometheus: error creating metrics")
+	}
+
+	// prometheus handler
 	pe, err := prometheus.NewExporter(prometheus.Options{
 		Namespace: "revad",
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "prometheus: error creating exporter")
 	}
-
-	view.RegisterExporter(pe)
-	return &svc{prefix: conf.Prefix, h: pe}, nil
-}
-
-type config struct {
-	Prefix string `mapstructure:"prefix"`
-}
-
-func (c *config) init() {
-	if c.Prefix == "" {
-		c.Prefix = "metrics"
+	// metricsHandler wraps the prometheus handler
+	metricsHandler := &MetricsHandler{
+		pe:      pe,
+		metrics: metrics,
 	}
+	view.RegisterExporter(metricsHandler)
+
+	return &svc{prefix: conf.Prefix, h: metricsHandler}, nil
+}
+
+// MetricsHandler struct and methods (ServeHTTP, ExportView) is a wrapper for prometheus Exporter
+// so we can override (execute our own logic) before forwarding to the prometheus Exporter: see overriding method MetricsHandler.ServeHTTP()
+type MetricsHandler struct {
+	pe      *prometheus.Exporter
+	metrics *metrics.Metrics
+}
+
+// ServeHTTP override and forward to prometheus.Exporter ServeHTTP()
+func (h *MetricsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	log := appctx.GetLogger(r.Context())
+	// make sure the latest metrics data are recorded
+	if err := h.metrics.RecordMetrics(); err != nil {
+		log.Err(err).Msg("Unable to record metrics")
+	}
+	// proceed with regular flow
+	h.pe.ServeHTTP(w, r)
+}
+
+// ExportView must only be implemented to adhere to prometheus.Exporter signature; we simply forward to prometheus ExportView
+func (h *MetricsHandler) ExportView(vd *view.Data) {
+	// just proceed with regular flow
+	h.pe.ExportView(vd)
 }
 
 type svc struct {
