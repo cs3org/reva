@@ -41,7 +41,9 @@ type SMTPCredentials struct {
 	LocalName      string `mapstructure:"local_name" docs:";The host name to be used for unauthenticated SMTP."`
 }
 
-func (creds *SMTPCredentials) init() {
+func NewSMTPCredentials(c *SMTPCredentials) *SMTPCredentials {
+	creds := c
+
 	if creds.SMTPPort == 0 {
 		creds.SMTPPort = 587
 	}
@@ -52,12 +54,11 @@ func (creds *SMTPCredentials) init() {
 		tokens := strings.Split(creds.SenderMail, "@")
 		creds.LocalName = tokens[len(tokens)-1]
 	}
+	return creds
 }
 
 // SendMail allows sending mails using a set of client credentials.
 func (creds *SMTPCredentials) SendMail(recipient, subject, body string) error {
-
-	creds.init()
 
 	headers := map[string]string{
 		"From":                      creds.SenderMail,
