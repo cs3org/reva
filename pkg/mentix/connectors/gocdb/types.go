@@ -50,6 +50,8 @@ type Site struct {
 	Domain       string     `xml:"DOMAIN>DOMAIN_NAME"`
 	Country      string     `xml:"COUNTRY"`
 	CountryCode  string     `xml:"COUNTRY_CODE"`
+	Latitude     float32    `xml:"LATITUDE"`
+	Longitude    float32    `xml:"LONGITUDE"`
 	Extensions   Extensions `xml:"EXTENSIONS"`
 }
 

@@ -28,6 +28,8 @@ const (
 	ExporterIDWebAPI = "webapi"
 	// ExporterIDCS3API is the identifier for the CS3API exporter.
 	ExporterIDCS3API = "cs3api"
+	// ExporterIDSiteLocations is the identifier for the Site Locations exporter.
+	ExporterIDSiteLocations = "siteloc"
 	// ExporterIDPrometheusFileSD is the identifier for the Prometheus File SD exporter.
 	ExporterIDPrometheusFileSD = "prom_filesd"
 )

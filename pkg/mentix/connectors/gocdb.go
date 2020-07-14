@@ -139,6 +139,8 @@ func (connector *GOCDBConnector) querySites(meshData *meshdata.MeshData) error {
 			Description:  site.Description,
 			Country:      site.Country,
 			CountryCode:  site.CountryCode,
+			Longitude:    site.Longitude,
+			Latitude:     site.Latitude,
 			Services:     nil,
 			Properties:   properties,
 		}

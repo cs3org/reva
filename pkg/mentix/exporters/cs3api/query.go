@@ -55,7 +55,7 @@ func handleDefaultQuery(meshData *meshdata.MeshData, params url.Values) ([]byte,
 	// Marshal the OCM data as JSON
 	data, err := json.MarshalIndent(ocmData, "", "\t")
 	if err != nil {
-		return []byte{}, fmt.Errorf("unable to marshal the mesh data: %v", err)
+		return []byte{}, fmt.Errorf("unable to marshal the OCM data: %v", err)
 	}
 
 	return data, nil

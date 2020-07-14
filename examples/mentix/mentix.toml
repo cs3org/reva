@@ -7,9 +7,9 @@ enabled_services = ["mentix"]
 
 [http.services.mentix]
 connector = "gocdb"
-exporters = ["webapi", "cs3api"]
+exporters = ["webapi", "cs3api", "siteloc"]
 # Enable the Prometheus File Service Discovery:
-# exporters = ["webapi", "cs3api", "prom_filesd"]
+# exporters = ["webapi", "cs3api", "siteloc", "prom_filesd"]
 update_interval = "15m"
 
 [http.services.mentix.gocdb]
@@ -20,6 +20,9 @@ endpoint = "/"
 
 [http.services.mentix.cs3api]
 endpoint = "/cs3"
+
+[http.services.mentix.siteloc]
+endpoint = "/loc"
 
 # Configure the Prometheus File Service Discovery:
 # [http.services.mentix.prom_filesd]

@@ -16,23 +16,12 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package meshdata
+package siteloc
 
-// Site represents a single site managed by Mentix.
-type Site struct {
-	Name         string
-	FullName     string
-	Organization string
-	Domain       string
-	Homepage     string
-	Email        string
-	Description  string
-	Country      string
-	CountryCode  string
-	Location     string
-	Latitude     float32
-	Longitude    float32
-
-	Services   []*Service
-	Properties map[string]string
+// SiteLocation represents the location information of a site.
+type SiteLocation struct {
+	Site      string  `json:"key"`
+	FullName  string  `json:"name"`
+	Longitude float32 `json:"longitude"`
+	Latitude  float32 `json:"latitude"`
 }
