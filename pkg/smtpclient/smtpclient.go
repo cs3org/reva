@@ -41,8 +41,7 @@ type SMTPCredentials struct {
 	LocalName      string `mapstructure:"local_name" docs:";The host name to be used for unauthenticated SMTP."`
 }
 
-// NewSMTPCredentials creates a new SMTPCredentials object with the details of
-// the passed object with sane defaults.
+// NewSMTPCredentials creates a new SMTPCredentials object with the details of the passed object with sane defaults.
 func NewSMTPCredentials(c *SMTPCredentials) *SMTPCredentials {
 	creds := c
 
