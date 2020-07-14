@@ -78,15 +78,15 @@ type MetricsJSONDriver struct {
 
 // GetNumUsers returns the number of site users
 func (d *MetricsJSONDriver) GetNumUsers() int64 {
-	return int64(d.data.NumUsers)
+	return d.data.NumUsers
 }
 
 // GetNumGroups returns the number of site groups
 func (d *MetricsJSONDriver) GetNumGroups() int64 {
-	return int64(d.data.NumGroups)
+	return d.data.NumGroups
 }
 
 // GetAmountStorage returns the amount of site storage used
 func (d *MetricsJSONDriver) GetAmountStorage() int64 {
-	return int64(d.data.AmountStorage)
+	return d.data.AmountStorage
 }
