@@ -23,31 +23,31 @@ import (
 	"reva/pkg/metrics/config"
 )
 
-// New returns a new DummyDataDriver object.
-func New(config *config.Config) (*DummyDataDriver, error) {
-	driver := &DummyDataDriver{
+// New returns a new MetricsDummyDriver object.
+func New(config *config.Config) (*MetricsDummyDriver, error) {
+	driver := &MetricsDummyDriver{
 		config: config,
 	}
 
 	return driver, nil
 }
 
-// DummyDataDriver the DummyDataDriver struct
-type DummyDataDriver struct {
+// MetricsDummyDriver the MetricsDummyDriver struct
+type MetricsDummyDriver struct {
 	config *config.Config
 }
 
 // GetNumUsers returns the number of site users, it's a dummy number
-func (d *DummyDataDriver) GetNumUsers() int64 {
+func (d *MetricsDummyDriver) GetNumUsers() int64 {
 	return int64(rand.Intn(30000))
 }
 
 // GetNumGroups returns the number of site groups, it's a dummy number
-func (d *DummyDataDriver) GetNumGroups() int64 {
+func (d *MetricsDummyDriver) GetNumGroups() int64 {
 	return int64(rand.Intn(200))
 }
 
 // GetAmountStorage returns the amount of site storage used, it's a dummy amount
-func (d *DummyDataDriver) GetAmountStorage() int64 {
+func (d *MetricsDummyDriver) GetAmountStorage() int64 {
 	return int64(rand.Intn(70000000000))
 }
