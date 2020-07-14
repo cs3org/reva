@@ -22,8 +22,8 @@ import (
 	"context"
 	"errors"
 	"reva/pkg/metrics/config"
-	"reva/pkg/metrics/reader/driver/dummy"
-	"reva/pkg/metrics/reader/driver/json"
+	"reva/pkg/metrics/driver/dummy"
+	"reva/pkg/metrics/driver/json"
 
 	"github.com/rs/zerolog/log"
 	"go.opencensus.io/stats"
