@@ -28,8 +28,6 @@ import (
 	"go.opencensus.io/stats/view"
 
 	"github.com/cs3org/reva/pkg/rhttp/global"
-	// Initializes goroutines which periodically update stats
-	_ "github.com/cs3org/reva/pkg/metrics/reader/dummy"
 )
 
 func init() {
