@@ -20,7 +20,8 @@ package dummy
 
 import (
 	"math/rand"
-	"reva/pkg/metrics/config"
+
+	"github.com/cs3org/reva/pkg/metrics/config"
 )
 
 // New returns a new MetricsDummyDriver object.

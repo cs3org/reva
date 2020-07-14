@@ -20,9 +20,10 @@ package prometheus
 
 import (
 	"net/http"
-	"reva/pkg/appctx"
-	"reva/pkg/metrics"
-	"reva/pkg/metrics/config"
+
+	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/metrics"
+	"github.com/cs3org/reva/pkg/metrics/config"
 
 	"contrib.go.opencensus.io/exporter/prometheus"
 	"github.com/cs3org/reva/pkg/rhttp/global"

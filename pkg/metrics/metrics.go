@@ -21,9 +21,10 @@ package metrics
 import (
 	"context"
 	"errors"
-	"reva/pkg/metrics/config"
-	"reva/pkg/metrics/driver/dummy"
-	"reva/pkg/metrics/driver/json"
+
+	"github.com/cs3org/reva/pkg/metrics/config"
+	"github.com/cs3org/reva/pkg/metrics/driver/dummy"
+	"github.com/cs3org/reva/pkg/metrics/driver/json"
 
 	"github.com/rs/zerolog/log"
 	"go.opencensus.io/stats"
