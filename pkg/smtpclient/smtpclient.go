@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net/smtp"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,17 +33,33 @@ import (
 
 // SMTPCredentials stores the credentials required to connect to an SMTP server.
 type SMTPCredentials struct {
-	SenderMail     string `mapstructure:"sender_mail"`
-	SenderPassword string `mapstructure:"sender_password"`
-	SMTPServer     string `mapstructure:"smtp_server"`
-	SMTPPort       int    `mapstructure:"smtp_port"`
-	DisableAuth    bool   `mapstructure:"disable_auth"`
+	SenderMail     string `mapstructure:"sender_mail" docs:";The email to be used to send mails."`
+	SenderPassword string `mapstructure:"sender_password" docs:";The sender's password."`
+	SMTPServer     string `mapstructure:"smtp_server" docs:";The hostname of the SMTP server."`
+	SMTPPort       int    `mapstructure:"smtp_port" docs:"587;The port on which the SMTP daemon is running."`
+	DisableAuth    bool   `mapstructure:"disable_auth" docs:"false;Whether to disable SMTP auth."`
+	LocalName      string `mapstructure:"local_name" docs:";The host name to be used for unauthenticated SMTP."`
+}
+
+func (creds *SMTPCredentials) init() {
+	if creds.SMTPPort == 0 {
+		creds.SMTPPort = 587
+	}
+	if !creds.DisableAuth && creds.SenderPassword == "" {
+		creds.SenderPassword = os.Getenv("REVA_SMTP_SENDER_PASSWORD")
+	}
+	if creds.LocalName == "" {
+		tokens := strings.Split(creds.SenderMail, "@")
+		creds.LocalName = tokens[len(tokens)-1]
+	}
 }
 
 // SendMail allows sending mails using a set of client credentials.
 func (creds *SMTPCredentials) SendMail(recipient, subject, body string) error {
 
-	header := map[string]string{
+	creds.init()
+
+	headers := map[string]string{
 		"From":                      creds.SenderMail,
 		"To":                        recipient,
 		"Subject":                   subject,
@@ -54,7 +71,7 @@ func (creds *SMTPCredentials) SendMail(recipient, subject, body string) error {
 	}
 
 	message := ""
-	for k, v := range header {
+	for k, v := range headers {
 		message += fmt.Sprintf("%s: %s\r\n", k, v)
 	}
 	message += "\r\n" + base64.StdEncoding.EncodeToString([]byte(body))
