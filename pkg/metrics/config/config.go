@@ -32,6 +32,8 @@ func (c *Config) Init() {
 	}
 	if c.MetricsDataDriverType == "json" {
 		// default values
-		c.MetricsDataLocation = "/var/tmp/reva/metrics/metricsdata.json"
+		if c.MetricsDataLocation == "" {
+			c.MetricsDataLocation = "/var/tmp/reva/metrics/metricsdata.json"
+		}
 	}
 }
