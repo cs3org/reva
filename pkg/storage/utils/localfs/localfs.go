@@ -165,9 +165,9 @@ func (fs *localfs) wrapReferences(ctx context.Context, p string) string {
 		if err != nil {
 			panic(err)
 		}
-		internal = path.Join(fs.conf.References, layout, "home", p)
+		internal = path.Join(fs.conf.References, layout, p)
 	} else {
-		internal = path.Join(fs.conf.References, "home", p)
+		internal = path.Join(fs.conf.References, p)
 	}
 	return internal
 }
@@ -257,9 +257,17 @@ func (fs *localfs) normalize(ctx context.Context, fi os.FileInfo, fn string, mdK
 		return nil, err
 	}
 
+	var layout string
+	if !fs.conf.DisableHome {
+		layout, err = fs.GetHome(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// A fileid is constructed like `fileid-url_encoded_path`. See GetPathByID for the inverse conversion
 	md := &provider.ResourceInfo{
-		Id:            &provider.ResourceId{OpaqueId: "fileid-" + url.QueryEscape(fp)},
+		Id:            &provider.ResourceId{OpaqueId: "fileid-" + url.QueryEscape(path.Join(layout, fp))},
 		Path:          fp,
 		Type:          getResourceType(fi.IsDir()),
 		Etag:          calcEtag(ctx, fi),

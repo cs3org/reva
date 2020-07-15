@@ -332,7 +332,6 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 			if share == nil {
 				panic("gateway: error updating a received share: the share is nil")
 			}
-
 			createRefStatus, err := s.createReference(ctx, share.Share.ResourceId)
 			return &collaboration.UpdateReceivedShareResponse{
 				Status: createRefStatus,

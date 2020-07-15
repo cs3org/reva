@@ -248,7 +248,6 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 		if acceptedUser.Id.GetOpaqueId() == remoteUser.Id.OpaqueId && acceptedUser.Id.GetIdp() == remoteUser.Id.Idp {
 			return errors.New("json: user already added to accepted users")
 		}
-
 	}
 	m.model.AcceptedUsers[userKey] = append(m.model.AcceptedUsers[userKey], remoteUser)
 	if err := m.model.Save(); err != nil {

@@ -187,7 +187,9 @@ func getOCMEndpoint(originProvider *ocmprovider.ProviderInfo) (string, error) {
 	return "", errors.New("json: ocm endpoint not specified for mesh provider")
 }
 
-func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGrant, pi *ocmprovider.ProviderInfo, pm string, owner *userpb.UserId) (*ocm.Share, error) {
+func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGrant, name string,
+	pi *ocmprovider.ProviderInfo, pm string, owner *userpb.UserId) (*ocm.Share, error) {
+
 	id := genID()
 	now := time.Now().UnixNano()
 	ts := &typespb.Timestamp{
@@ -213,6 +215,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 			return nil, errors.New("json: owner of resource not provided")
 		}
 		userID = owner
+		id += ":" + name
 	} else {
 		userID = user.ContextMustGetUser(ctx).GetId()
 	}
@@ -267,8 +270,8 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 
 		requestBody := url.Values{
 			"shareWith":    {g.Grantee.Id.OpaqueId},
-			"name":         {md.OpaqueId},
-			"providerId":   {md.StorageId},
+			"name":         {name},
+			"providerId":   {fmt.Sprintf("%s:%s", md.StorageId, md.OpaqueId)},
 			"owner":        {userID.OpaqueId},
 			"protocol":     {string(protocol)},
 			"meshProvider": {userID.Idp},
