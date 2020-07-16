@@ -22,21 +22,8 @@ git clone https://github.com/cs3org/reva
 ```
 
 ## 2. Build Reva
-Go to the reva folder
-
-```
-cd reva
-```
-
-We'll now build reva by running the following commands (you need to be in the *reva* folder)
-
-```
-make deps
-```
-
-```
-make
-```
+Follow the instructions in https://reva.link/docs/getting-started/install-reva/ for how to build reva. If you will do local
+changes in reva, follow the "Build from sources" instructions.
 
 ## 4. Run Reva
 Now we need to start two Reva daemons corresponding to two different mesh providers, thus enabling sharing of files between users belonging to these two providers. For our example,  we consider the example of CERNBox deployed at localhost:19001 and the CESNET owncloud at localhost:17001. Follow these steps:
