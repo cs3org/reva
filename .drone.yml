@@ -125,7 +125,7 @@ steps:
 - name: changelog
   image: golang:1.13
   commands:
-    - make check-changelog-drone PR_CREATOR="$(git show -s --format='%cN' $DRONE_COMMIT)"
+    - make check-changelog-drone PR_CREATOR="$(git show -s --format='%aE' $DRONE_COMMIT)"
 
 - name: license-check
   image: golang:1.13
