@@ -33,7 +33,7 @@ func main() {
 
 	log.Print("PR created by: " + *user)
 	// Skip changelog check for PRs created by bots
-	if *user == "dependabot[bot]" {
+	if strings.Contains(*user, "dependabot") {
 		log.Print("Skipping changelog check")
 		return
 	}
