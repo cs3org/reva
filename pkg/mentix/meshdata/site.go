@@ -30,6 +30,8 @@ type Site struct {
 	Country      string
 	CountryCode  string
 	Location     string
+	Latitude     float32
+	Longitude    float32
 
 	Services   []*Service
 	Properties map[string]string

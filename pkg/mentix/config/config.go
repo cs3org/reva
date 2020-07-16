@@ -39,6 +39,10 @@ type Configuration struct {
 		Endpoint string `mapstructure:"endpoint"`
 	} `yaml:"cs3api"`
 
+	SiteLocations struct {
+		Endpoint string `mapstructure:"endpoint"`
+	} `yaml:"siteloc"`
+
 	PrometheusFileSD struct {
 		OutputFile string `mapstructure:"output_file"`
 	} `mapstructure:"prom_filesd"`

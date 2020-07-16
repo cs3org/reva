@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package webapi
+package siteloc
 
 import (
 	"encoding/json"
@@ -28,11 +28,32 @@ import (
 
 // HandleDefaultQuery processes a basic query.
 func HandleDefaultQuery(meshData *meshdata.MeshData, params url.Values) ([]byte, error) {
-	// Just return the plain, unfiltered data as JSON
-	data, err := json.MarshalIndent(meshData, "", "\t")
+	// Convert the mesh data
+	locData, err := convertMeshDataToLocationData(meshData)
 	if err != nil {
-		return []byte{}, fmt.Errorf("unable to marshal the mesh data: %v", err)
+		return []byte{}, fmt.Errorf("unable to convert the mesh data to location data: %v", err)
+	}
+
+	// Marshal the location data as JSON
+	data, err := json.MarshalIndent(locData, "", "\t")
+	if err != nil {
+		return []byte{}, fmt.Errorf("unable to marshal the location data: %v", err)
 	}
 
 	return data, nil
+}
+
+func convertMeshDataToLocationData(meshData *meshdata.MeshData) ([]*SiteLocation, error) {
+	// Gather the locations of all sites
+	locations := make([]*SiteLocation, 0, len(meshData.Sites))
+	for _, site := range meshData.Sites {
+		locations = append(locations, &SiteLocation{
+			Site:      site.Name,
+			FullName:  site.FullName,
+			Longitude: site.Longitude,
+			Latitude:  site.Latitude,
+		})
+	}
+
+	return locations, nil
 }

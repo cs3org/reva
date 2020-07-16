@@ -16,23 +16,12 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package webapi
+package siteloc
 
-import (
-	"encoding/json"
-	"fmt"
-	"net/url"
-
-	"github.com/cs3org/reva/pkg/mentix/meshdata"
-)
-
-// HandleDefaultQuery processes a basic query.
-func HandleDefaultQuery(meshData *meshdata.MeshData, params url.Values) ([]byte, error) {
-	// Just return the plain, unfiltered data as JSON
-	data, err := json.MarshalIndent(meshData, "", "\t")
-	if err != nil {
-		return []byte{}, fmt.Errorf("unable to marshal the mesh data: %v", err)
-	}
-
-	return data, nil
+// SiteLocation represents the location information of a site.
+type SiteLocation struct {
+	Site      string  `json:"key"`
+	FullName  string  `json:"name"`
+	Longitude float32 `json:"longitude"`
+	Latitude  float32 `json:"latitude"`
 }

@@ -39,7 +39,8 @@ Supported values are:
 
 - **webapi**
 Mentix exposes its data via an HTTP endpoint using the `webapi` exporter. Data can be retrieved at the configured relative endpoint (see [here](webapi)). The web API currently doesn't support any parameters but will most likely be extended in the future.
-- **cs3api** Similar to the WebAPI exporter, the `cs3api` exporter exposes its data via an HTTP endpoint. Data can be retrieved at the configured relative endpoint (see [here](cs3api)). The data is compliant with the CS3API `ProviderInfo` structure.  
+- **cs3api** Similar to the WebAPI exporter, the `cs3api` exporter exposes its data via an HTTP endpoint. Data can be retrieved at the configured relative endpoint (see [here](cs3api)). The data is compliant with the CS3API `ProviderInfo` structure.
+- **siteloc** The Site Locations exporter `siteloc` exposes location information of all sites to be consumed by Grafana at the configured relative endpoint (see [here](siteloc)).  
 - **prom_filesd**
 [Prometheus](https://prometheus.io/) supports discovering new services it should monitor via external configuration files (hence, this is called _file-based service discovery_). Mentix can create such files using the `prom_filesd` exporter. To use this exporter, you have to specify the target output file in the configuration (see [here](prom_filesd)). You also have to set up the discovery service in Prometheus by adding a scrape configuration like the following example to the Prometheus configuration (for more information, visit the official [Prometheus documentation](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#file_sd_config)):
   ``` scrape_configs:

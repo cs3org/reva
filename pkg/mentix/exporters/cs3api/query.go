@@ -22,30 +22,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"strings"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 
-const (
-	queryMethodDefault = ""
-)
-
-// HandleQuery handles an HTTP request based on the provided 'method' parameter.
-func HandleQuery(meshData *meshdata.MeshData, params url.Values) ([]byte, error) {
-	method := params.Get("method")
-	switch strings.ToLower(method) {
-	case queryMethodDefault:
-		return handleDefaultQuery(meshData, params)
-
-	default:
-		return []byte{}, fmt.Errorf("unknown API method '%v'", method)
-	}
-}
-
-func handleDefaultQuery(meshData *meshdata.MeshData, params url.Values) ([]byte, error) {
+// HandleDefaultQuery processes a basic query.
+func HandleDefaultQuery(meshData *meshdata.MeshData, params url.Values) ([]byte, error) {
 	// Convert the mesh data
 	ocmData, err := convertMeshDataToOCMData(meshData)
 	if err != nil {
@@ -55,7 +39,7 @@ func handleDefaultQuery(meshData *meshdata.MeshData, params url.Values) ([]byte,
 	// Marshal the OCM data as JSON
 	data, err := json.MarshalIndent(ocmData, "", "\t")
 	if err != nil {
-		return []byte{}, fmt.Errorf("unable to marshal the mesh data: %v", err)
+		return []byte{}, fmt.Errorf("unable to marshal the OCM data: %v", err)
 	}
 
 	return data, nil

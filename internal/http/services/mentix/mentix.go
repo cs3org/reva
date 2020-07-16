@@ -120,6 +120,10 @@ func applyDefaultConfig(conf *config.Configuration) {
 	if conf.CS3API.Endpoint == "" {
 		conf.CS3API.Endpoint = "/cs3"
 	}
+
+	if conf.SiteLocations.Endpoint == "" {
+		conf.SiteLocations.Endpoint = "/loc"
+	}
 }
 
 // New returns a new Mentix service.
