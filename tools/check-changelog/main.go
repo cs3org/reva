@@ -21,7 +21,6 @@ package main
 import (
 	"errors"
 	"flag"
-	"fmt"
 	"log"
 	"os/exec"
 	"strings"
@@ -31,8 +30,6 @@ func main() {
 	repo := flag.String("repo", "", "the remote repo against which diff-index is to be derived")
 	user := flag.String("user", "", "the user who created the PR")
 	flag.Parse()
-
-	fmt.Println("User: " + *user)
 
 	// Skip changelog check for PRs created by bots
 	if *user == "dependabot[bot]" {
