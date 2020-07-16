@@ -125,6 +125,7 @@ steps:
 - name: changelog
   image: golang:1.13
   commands:
+    - echo (git show -s --format='%cN' $DRONE_COMMIT)
     - make check-changelog-drone
 
 - name: license-check
