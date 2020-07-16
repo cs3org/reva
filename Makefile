@@ -64,7 +64,7 @@ check-changelog:
 	go run tools/check-changelog/main.go
 
 check-changelog-drone:
-	go run tools/check-changelog/main.go -repo origin
+	go run tools/check-changelog/main.go -repo origin -user "$(PR_CREATOR)"
 
 # to be run in CI platform
 ci: build-ci test  lint-ci
