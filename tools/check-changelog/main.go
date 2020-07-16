@@ -31,9 +31,10 @@ func main() {
 	user := flag.String("user", "", "the user who created the PR")
 	flag.Parse()
 
+	log.Print("PR created by: " + *user)
 	// Skip changelog check for PRs created by bots
 	if *user == "dependabot[bot]" {
-		log.Print("Skipping changelog check for PRs created by: " + *user)
+		log.Print("Skipping changelog check")
 		return
 	}
 
