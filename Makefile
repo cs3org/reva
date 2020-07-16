@@ -64,9 +64,8 @@ check-changelog:
 	go run tools/check-changelog/main.go
 
 check-changelog-drone:
-	user=$(git show -s --format='%cN' $DRONE_COMMIT)
-	echo $user
-	go run tools/check-changelog/main.go -repo origin -user $user
+	echo $(git show -s --format='%cN' $DRONE_COMMIT)
+	go run tools/check-changelog/main.go -repo origin -user "$(git show -s --format='%cN' $DRONE_COMMIT)"
 
 # to be run in CI platform
 ci: build-ci test  lint-ci
