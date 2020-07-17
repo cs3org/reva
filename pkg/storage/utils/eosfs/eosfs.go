@@ -364,8 +364,7 @@ func (fs *eosfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (stri
 		return "", errors.Wrap(err, "eos: error getting file info by inode")
 	}
 
-	fi := fs.convertToResourceInfo(ctx, eosFileInfo)
-	return fi.Path, nil
+	return fs.unwrap(ctx, eosFileInfo.File), nil
 }
 
 func (fs *eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {

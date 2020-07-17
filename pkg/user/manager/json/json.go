@@ -95,6 +95,10 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 	return nil, errtypes.NotFound(uid.OpaqueId)
 }
 
+func (m *manager) GetUserByUID(ctx context.Context, uid string) (*userpb.User, error) {
+	return nil, errtypes.NotSupported("json: looking up user by UID not supported")
+}
+
 // TODO(jfd) search Opaque? compare sub?
 func userContains(u *userpb.User, query string) bool {
 	return strings.Contains(u.Username, query) || strings.Contains(u.DisplayName, query) || strings.Contains(u.Mail, query) || strings.Contains(u.Id.OpaqueId, query)

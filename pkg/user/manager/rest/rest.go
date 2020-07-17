@@ -32,11 +32,11 @@ import (
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
-
 	"github.com/gomodule/redigo/redis"
 	"github.com/mitchellh/mapstructure"
 )
@@ -224,31 +224,87 @@ func (m *manager) sendAPIRequest(ctx context.Context, url string) ([]interface{}
 	return responseData, nil
 }
 
+func (m *manager) getUserByParam(ctx context.Context, param, val string) (map[string]interface{}, error) {
+	url := fmt.Sprintf("%s/Identity?filter=%s:%s&field=upn&field=primaryAccountEmail&field=displayName&field=uid&field=gid",
+		m.conf.APIBaseURL, param, val)
+	responseData, err := m.sendAPIRequest(ctx, url)
+	if err != nil {
+		return nil, err
+	}
+	userData, ok := responseData[0].(map[string]interface{})
+	if !ok {
+		return nil, errors.New("rest: error in type assertion")
+	}
+	return userData, nil
+}
+
+func (m *manager) getInternalUserID(ctx context.Context, uid *userpb.UserId) (string, error) {
+
+	internalID, err := m.fetchCachedInternalID(uid)
+	if err != nil {
+		userData, err := m.getUserByParam(ctx, "upn", uid.OpaqueId)
+		if err != nil {
+			return "", err
+		}
+		id, ok := userData["id"].(string)
+		if !ok {
+			return "", errors.New("rest: error in type assertion")
+		}
+
+		if err = m.cacheInternalID(uid, id); err != nil {
+			log := appctx.GetLogger(ctx)
+			log.Error().Err(err).Msg("rest: error caching user details")
+		}
+		return id, nil
+	}
+	return internalID, nil
+}
+
+func (m *manager) parseAndCacheUser(ctx context.Context, userData map[string]interface{}) *userpb.User {
+	userID := &userpb.UserId{
+		OpaqueId: userData["upn"].(string),
+		Idp:      m.conf.IDProvider,
+	}
+	u := &userpb.User{
+		Id:          userID,
+		Username:    userData["upn"].(string),
+		Mail:        userData["primaryAccountEmail"].(string),
+		DisplayName: userData["displayName"].(string),
+		Opaque: &types.Opaque{
+			Map: map[string]*types.OpaqueEntry{
+				"uid": &types.OpaqueEntry{
+					Decoder: "plain",
+					Value:   userData["uid"].([]byte),
+				},
+				"gid": &types.OpaqueEntry{
+					Decoder: "plain",
+					Value:   userData["gid"].([]byte),
+				},
+			},
+		},
+	}
+
+	if err := m.cacheUserDetails(u); err != nil {
+		log := appctx.GetLogger(ctx)
+		log.Error().Err(err).Msg("rest: error caching user details")
+	}
+	if err := m.cacheInternalID(userID, userData["id"].(string)); err != nil {
+		log := appctx.GetLogger(ctx)
+		log.Error().Err(err).Msg("rest: error caching user details")
+	}
+	return u
+
+}
+
 func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
 
 	u, err := m.fetchCachedUserDetails(uid)
 	if err != nil {
-		url := fmt.Sprintf("%s/Identity/?filter=id:%s&field=upn&field=primaryAccountEmail&field=displayName", m.conf.APIBaseURL, uid.OpaqueId)
-		responseData, err := m.sendAPIRequest(ctx, url)
+		userData, err := m.getUserByParam(ctx, "upn", uid.OpaqueId)
 		if err != nil {
 			return nil, err
 		}
-
-		userData, ok := responseData[0].(map[string]interface{})
-		if !ok {
-			return nil, errors.New("rest: error in type assertion")
-		}
-		u = &userpb.User{
-			Id:          uid,
-			Username:    userData["upn"].(string),
-			Mail:        userData["primaryAccountEmail"].(string),
-			DisplayName: userData["displayName"].(string),
-		}
-
-		if err = m.cacheUserDetails(u); err != nil {
-			log := appctx.GetLogger(ctx)
-			log.Error().Err(err).Msg("rest: error caching user details")
-		}
+		u = m.parseAndCacheUser(ctx, userData)
 	}
 
 	userGroups, err := m.GetUserGroups(ctx, uid)
@@ -258,6 +314,28 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 	u.Groups = userGroups
 
 	return u, nil
+}
+
+func (m *manager) GetUserByUID(ctx context.Context, uid string) (*userpb.User, error) {
+	opaqueID, err := m.fetchCachedUID(uid)
+	if err == nil {
+		return m.GetUser(ctx, &userpb.UserId{OpaqueId: opaqueID})
+	}
+
+	userData, err := m.getUserByParam(ctx, "uid", uid)
+	if err != nil {
+		return nil, err
+	}
+	u := m.parseAndCacheUser(ctx, userData)
+
+	userGroups, err := m.GetUserGroups(ctx, u.Id)
+	if err != nil {
+		return nil, err
+	}
+	u.Groups = userGroups
+
+	return u, nil
+
 }
 
 func (m *manager) findUsersByFilter(ctx context.Context, url string) ([]*userpb.User, error) {
@@ -289,6 +367,18 @@ func (m *manager) findUsersByFilter(ctx context.Context, url string) ([]*userpb.
 			Mail:        usrInfo["primaryAccountEmail"].(string),
 			DisplayName: usrInfo["displayName"].(string),
 			Groups:      userGroups,
+			Opaque: &types.Opaque{
+				Map: map[string]*types.OpaqueEntry{
+					"uid": &types.OpaqueEntry{
+						Decoder: "plain",
+						Value:   usrInfo["uid"].([]byte),
+					},
+					"gid": &types.OpaqueEntry{
+						Decoder: "plain",
+						Value:   usrInfo["gid"].([]byte),
+					},
+				},
+			},
 		})
 	}
 
@@ -310,7 +400,8 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 	users := []*userpb.User{}
 
 	for _, f := range filters {
-		url := fmt.Sprintf("%s/Identity/?filter=%s:contains:%s&field=id&field=upn&field=primaryAccountEmail&field=displayName", m.conf.APIBaseURL, f, query)
+		url := fmt.Sprintf("%s/Identity/?filter=%s:contains:%s&field=id&field=upn&field=primaryAccountEmail&field=displayName&field=uid&field=gid",
+			m.conf.APIBaseURL, f, query)
 		filteredUsers, err := m.findUsersByFilter(ctx, url)
 		if err != nil {
 			return nil, err
@@ -327,7 +418,11 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 		return groups, nil
 	}
 
-	url := fmt.Sprintf("%s/Identity/%s/groups", m.conf.APIBaseURL, uid.OpaqueId)
+	internalID, err := m.getInternalUserID(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+	url := fmt.Sprintf("%s/Identity/%s/groups", m.conf.APIBaseURL, internalID)
 	groupData, err := m.sendAPIRequest(ctx, url)
 	if err != nil {
 		return nil, err
@@ -363,4 +458,15 @@ func (m *manager) IsInGroup(ctx context.Context, uid *userpb.UserId, group strin
 		}
 	}
 	return false, nil
+}
+
+func extractUID(u *userpb.User) (string, error) {
+	if u.Opaque != nil && u.Opaque.Map != nil {
+		if uidObj, ok := u.Opaque.Map["uid"]; ok {
+			if uidObj.Decoder == "plain" {
+				return string(uidObj.Value), nil
+			}
+		}
+	}
+	return "", errors.New("rest: could not retrieve UID from user")
 }

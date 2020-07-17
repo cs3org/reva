@@ -179,6 +179,10 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 	return u, nil
 }
 
+func (m *manager) GetUserByUID(ctx context.Context, uid string) (*userpb.User, error) {
+	return nil, errtypes.NotSupported("ldap: looking up user by UID not supported")
+}
+
 func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
 	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.c.Hostname, m.c.Port), &tls.Config{InsecureSkipVerify: true})
 	if err != nil {
