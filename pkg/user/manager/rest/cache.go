@@ -28,8 +28,10 @@ import (
 )
 
 const (
-	userDetailsPrefix = "user:"
-	userGroupsPrefix  = "groups:"
+	userDetailsPrefix    = "user:"
+	userGroupsPrefix     = "groups:"
+	userInternalIDPrefix = "internal:"
+	userUIDPrefix        = "uid:"
 )
 
 func initRedisPool(port string) *redis.Pool {
@@ -54,68 +56,100 @@ func initRedisPool(port string) *redis.Pool {
 	}
 }
 
-func (m *manager) fetchCachedUserDetails(uid *userpb.UserId) (*userpb.User, error) {
+func (m *manager) setVal(key, val string, expiration int) error {
 	conn := m.redisPool.Get()
 	defer conn.Close()
 	if conn != nil {
-		user, err := redis.String(conn.Do("GET", userDetailsPrefix+uid.OpaqueId))
-		if err != nil {
-			return nil, err
+		if expiration != -1 {
+			if _, err := conn.Do("SET", key, val, "EX", expiration); err != nil {
+				return err
+			}
+		} else {
+			if _, err := conn.Do("SET", key, val); err != nil {
+				return err
+			}
 		}
-		u := userpb.User{}
-		if err = json.Unmarshal([]byte(user), &u); err != nil {
-			return nil, err
-		}
-		return &u, nil
+		return nil
 	}
-	return nil, errors.New("rest: unable to get connection from redis pool")
+	return errors.New("rest: unable to get connection from redis pool")
+}
+
+func (m *manager) getVal(key string) (string, error) {
+	conn := m.redisPool.Get()
+	defer conn.Close()
+	if conn != nil {
+		val, err := redis.String(conn.Do("GET", key))
+		if err != nil {
+			return "", err
+		}
+		return val, nil
+	}
+	return "", errors.New("rest: unable to get connection from redis pool")
+}
+
+func (m *manager) fetchCachedInternalID(uid *userpb.UserId) (string, error) {
+	return m.getVal(userInternalIDPrefix + uid.OpaqueId)
+}
+
+func (m *manager) cacheInternalID(uid *userpb.UserId, internalID string) error {
+	return m.setVal(userInternalIDPrefix+uid.OpaqueId, internalID, -1)
+}
+
+func (m *manager) fetchCachedUserDetails(uid *userpb.UserId) (*userpb.User, error) {
+	user, err := m.getVal(userDetailsPrefix + uid.OpaqueId)
+	if err != nil {
+		return nil, err
+	}
+
+	u := userpb.User{}
+	if err = json.Unmarshal([]byte(user), &u); err != nil {
+		return nil, err
+	}
+	return &u, nil
 }
 
 func (m *manager) cacheUserDetails(u *userpb.User) error {
-	conn := m.redisPool.Get()
-	defer conn.Close()
-	if conn != nil {
-		encodedUser, err := json.Marshal(&u)
-		if err != nil {
-			return err
-		}
-		if _, err = conn.Do("SET", userDetailsPrefix+u.Id.OpaqueId, string(encodedUser)); err != nil {
-			return err
-		}
-		return nil
+	encodedUser, err := json.Marshal(&u)
+	if err != nil {
+		return err
 	}
-	return errors.New("rest: unable to get connection from redis pool")
+	if err = m.setVal(userDetailsPrefix+u.Id.OpaqueId, string(encodedUser), -1); err != nil {
+		return err
+	}
+
+	uid, err := extractUID(u)
+	if err != nil {
+		return err
+	}
+	if err = m.setVal(userUIDPrefix+uid, u.Id.OpaqueId, -1); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (m *manager) fetchCachedUID(uid string) (string, error) {
+	return m.getVal(userUIDPrefix + uid)
 }
 
 func (m *manager) fetchCachedUserGroups(uid *userpb.UserId) ([]string, error) {
-	conn := m.redisPool.Get()
-	defer conn.Close()
-	if conn != nil {
-		groups, err := redis.String(conn.Do("GET", userGroupsPrefix+uid.OpaqueId))
-		if err != nil {
-			return nil, err
-		}
-		g := []string{}
-		if err = json.Unmarshal([]byte(groups), &g); err != nil {
-			return nil, err
-		}
-		return g, nil
+	groups, err := m.getVal(userGroupsPrefix + uid.OpaqueId)
+	if err != nil {
+		return nil, err
 	}
-	return nil, errors.New("rest: unable to get connection from redis pool")
+	g := []string{}
+	if err = json.Unmarshal([]byte(groups), &g); err != nil {
+		return nil, err
+	}
+	return g, nil
 }
 
 func (m *manager) cacheUserGroups(uid *userpb.UserId, groups []string) error {
-	conn := m.redisPool.Get()
-	defer conn.Close()
-	if conn != nil {
-		encodedGroups, err := json.Marshal(&groups)
-		if err != nil {
-			return err
-		}
-		if _, err = conn.Do("SET", userGroupsPrefix+uid.OpaqueId, string(encodedGroups), "EX", m.conf.UserGroupsCacheExpiration*60); err != nil {
-			return err
-		}
-		return nil
+	g, err := json.Marshal(&groups)
+	if err != nil {
+		return err
 	}
-	return errors.New("rest: unable to get connection from redis pool")
+	if err = m.setVal(userGroupsPrefix+uid.OpaqueId, string(g), m.conf.UserGroupsCacheExpiration*60); err != nil {
+		return err
+	}
+	return nil
 }

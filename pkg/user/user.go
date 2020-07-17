@@ -65,6 +65,7 @@ func ContextSetUserID(ctx context.Context, id *userpb.UserId) context.Context {
 // Manager is the interface to implement to manipulate users.
 type Manager interface {
 	GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error)
+	GetUserByUID(ctx context.Context, uid string) (*userpb.User, error)
 	GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error)
 	IsInGroup(ctx context.Context, uid *userpb.UserId, group string) (bool, error)
 	FindUsers(ctx context.Context, query string) ([]*userpb.User, error)
