@@ -43,6 +43,7 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
 	}
+	uid, gid := extractUIDAndGID(u)
 
 	p, err := fs.resolve(ctx, u, ref)
 	if err != nil {
@@ -55,7 +56,7 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 
 	fn := fs.wrap(ctx, p)
 
-	return fs.c.Write(ctx, u.Username, fn, r)
+	return fs.c.Write(ctx, uid, gid, fn, r)
 }
 
 // InitiateUpload returns an upload id that can be used for uploads with tus
@@ -133,9 +134,12 @@ func (fs *eosfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: no user in ctx")
 	}
+	uid, gid := extractUIDAndGID(user)
 	info.Storage = map[string]string{
 		"Type":     "EOSStore",
 		"Username": user.Username,
+		"UID":      uid,
+		"GID":      gid,
 	}
 	// Create binary file with no content
 
@@ -292,7 +296,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 	// eos creates revisions internally
 	//}
 
-	err := upload.fs.c.WriteFile(ctx, upload.info.Storage["Username"], np, upload.binPath)
+	err := upload.fs.c.WriteFile(ctx, upload.info.Storage["UID"], upload.info.Storage["GID"], np, upload.binPath)
 
 	// only delete the upload if it was successfully written to eos
 	if err == nil {
