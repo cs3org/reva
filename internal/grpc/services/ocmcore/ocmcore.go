@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	ocmcore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
@@ -106,9 +107,17 @@ func (s *service) UnprotectedEndpoints() []string {
 }
 
 func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCMCoreShareRequest) (*ocmcore.CreateOCMCoreShareResponse, error) {
+	parts := strings.Split(req.ProviderId, ":")
+	if len(parts) < 2 {
+		err := errors.New("resource ID does not follow the layout storageid:opaqueid " + req.ProviderId)
+		return &ocmcore.CreateOCMCoreShareResponse{
+			Status: status.NewInternal(ctx, err, "error decoding resource ID"),
+		}, nil
+	}
+
 	resource := &provider.ResourceId{
-		StorageId: req.ProviderId,
-		OpaqueId:  req.Name,
+		StorageId: parts[0],
+		OpaqueId:  parts[1],
 	}
 
 	opaqueObj := req.Protocol.Opaque.Map["permissions"]
@@ -137,7 +146,7 @@ func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCM
 		},
 	}
 
-	share, err := s.sm.Share(ctx, resource, grant, nil, "", req.Owner)
+	share, err := s.sm.Share(ctx, resource, grant, req.Name, nil, "", req.Owner)
 	if err != nil {
 		return &ocmcore.CreateOCMCoreShareResponse{
 			Status: status.NewInternal(ctx, err, "error creating ocm core share"),

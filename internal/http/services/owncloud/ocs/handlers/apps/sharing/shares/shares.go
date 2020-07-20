@@ -541,6 +541,10 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 					Decoder: "json",
 					Value:   val,
 				},
+				"name": &types.OpaqueEntry{
+					Decoder: "plain",
+					Value:   []byte(path.Base(statRes.Info.Path)),
+				},
 			},
 		},
 		ResourceId: statRes.Info.Id,

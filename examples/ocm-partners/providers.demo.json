@@ -19,6 +19,19 @@
 				},
 				"api_version": "0.0.1",
 				"host": "https://sciencemesh.cernbox.cern.ch/iop/"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Webdav",
+						"description": "CERNBox Webdav API"
+					},
+					"name": "CERNBox - Webdav API",
+					"path": "https://sciencemesh.cernbox.cern.ch/iop/webdav/",
+					"isMonitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "https://sciencemesh.cernbox.cern.ch/iop/"
 			}
 		]
 	},
@@ -38,6 +51,19 @@
 					},
 					"name": "CESNET - OCM API",
 					"path": "https://sciencemesh.cesnet.cz/iop/ocm/",
+					"isMonitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "https://sciencemesh.cesnet.cz/iop/"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Webdav",
+						"description": "CESNET Webdav API"
+					},
+					"name": "CESNET - Webdav API",
+					"path": "https://sciencemesh.cesnet.cz/iop/webdav/",
 					"isMonitored": true
 				},
 				"api_version": "0.0.1",
@@ -65,6 +91,19 @@
 				},
 				"api_version": "0.0.1",
 				"host": "https://sciencemesh-test.uni-muenster.de/api/"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Webdav",
+						"description": "WWU Webdav API"
+					},
+					"name": "WWU - Webdav API",
+					"path": "https://sciencemesh-test.uni-muenster.de/api/webdav/",
+					"isMonitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "https://sciencemesh-test.uni-muenster.de/api/"
 			}
 		]
 	},
@@ -84,6 +123,19 @@
 					},
 					"name": "Cubbit - OCM API",
 					"path": "https://sciencemesh.cubbit.io/ocm/",
+					"isMonitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "https://sciencemesh.cubbit.io/"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Webdav",
+						"description": "Cubbit Webdav API"
+					},
+					"name": "Cubbit - Webdav API",
+					"path": "https://sciencemesh.cubbit.io/webdav/",
 					"isMonitored": true
 				},
 				"api_version": "0.0.1",
@@ -111,6 +163,19 @@
 				},
 				"api_version": "0.0.1",
 				"host": "https://cs3mesh.softwaremind.com/iop/"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Webdav",
+						"description": "Ailleron Webdav API"
+					},
+					"name": "Ailleron - Webdav API",
+					"path": "https://cs3mesh.softwaremind.com/iop/webdav/",
+					"isMonitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "https://cs3mesh.softwaremind.com/iop/"
 			}
 		]
 	},
@@ -130,6 +195,19 @@
 					},
 					"name": "Surfsara - OCM API",
 					"path": "https://app.cs3mesh-iop.k8s.surfsara.nl/iop/ocm/",
+					"isMonitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "https://app.cs3mesh-iop.k8s.surfsara.nl/iop/"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Webdav",
+						"description": "Surfsara Webdav API"
+					},
+					"name": "Surfsara - Webdav API",
+					"path": "https://app.cs3mesh-iop.k8s.surfsara.nl/iop/webdav/",
 					"isMonitored": true
 				},
 				"api_version": "0.0.1",
