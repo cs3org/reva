@@ -26,7 +26,6 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	gouser "os/user"
 	"path"
 	"strconv"
 	"strings"
@@ -272,14 +271,6 @@ func (c *Client) AddACL(ctx context.Context, uid, gid, path string, a *acl.Entry
 		return err
 	}
 
-	// since EOS Citrine ACLs are is stored with uid, we need to convert username to uid
-	// only for users.
-	if a.Type == acl.TypeUser {
-		a.Qualifier, err = getUID(a.Qualifier)
-		if err != nil {
-			return err
-		}
-	}
 	err = acls.SetEntry(a.Type, a.Qualifier, a.Permissions)
 	if err != nil {
 		return err
@@ -302,13 +293,6 @@ func (c *Client) RemoveACL(ctx context.Context, uid, gid, path string, aclType s
 		return err
 	}
 
-	// since EOS Citrine ACLs are stored with uid, we need to convert username to uid
-	if aclType == acl.TypeUser {
-		recipient, err = getUID(recipient)
-		if err != nil {
-			return err
-		}
-	}
 	acls.DeleteEntry(aclType, recipient)
 	sysACL := acls.Serialize()
 
@@ -341,27 +325,10 @@ func (c *Client) GetACL(ctx context.Context, uid, gid, path, aclType, target str
 
 }
 
-func getUsername(uid string) (string, error) {
-	user, err := gouser.LookupId(uid)
-	if err != nil {
-		return "", err
-	}
-	return user.Username, nil
-}
-
-func getUID(username string) (string, error) {
-	user, err := gouser.Lookup(username)
-	if err != nil {
-		return "", err
-	}
-	return user.Uid, nil
-}
-
 // ListACLs returns the list of ACLs present under the given path.
 // EOS returns uids/gid for Citrine version and usernames for older versions.
 // For Citire we need to convert back the uid back to username.
 func (c *Client) ListACLs(ctx context.Context, uid, gid, path string) ([]*acl.Entry, error) {
-	log := appctx.GetLogger(ctx)
 
 	parsedACLs, err := c.getACLForPath(ctx, uid, gid, path)
 	if err != nil {
@@ -369,15 +336,13 @@ func (c *Client) ListACLs(ctx context.Context, uid, gid, path string) ([]*acl.En
 	}
 
 	acls := []*acl.Entry{}
-	for _, acl := range parsedACLs.Entries {
-		// since EOS Citrine ACLs are is stored with uid, we need to convert uid to username
-		// TODO map group names as well if acl.Type == "g" ...
-		acl.Qualifier, err = getUsername(acl.Qualifier)
-		if err != nil {
-			log.Warn().Err(err).Str("path", path).Str("uid", uid).Str("gid", gid).Str("qualifier", acl.Qualifier).Msg("cannot map qualifier to name")
-			continue
+	for _, a := range parsedACLs.Entries {
+		// since EOS Citrine ACLs are stored with uid, we need to append that info
+		// The UID will be resolved to the user opaque ID at the userprovider level.
+		if a.Type == acl.TypeUser {
+			a.Qualifier = "uid:" + a.Qualifier
 		}
-		acls = append(acls, acl)
+		acls = append(acls, a)
 	}
 	return acls, nil
 }

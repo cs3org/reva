@@ -412,8 +412,22 @@ func (fs *eosfs) getEosACL(g *provider.Grant) (*acl.Entry, error) {
 	if err != nil {
 		return nil, err
 	}
+	qualifier := g.Grantee.Id.OpaqueId
+
+	// since EOS Citrine ACLs are stored with uid, we need to convert username to
+	// uid only for users.
+	if t == acl.TypeUser {
+		if g.Grantee.Opaque != nil && g.Grantee.Opaque.Map != nil {
+			if uidObj, ok := g.Grantee.Opaque.Map["uid"]; ok {
+				if uidObj.Decoder == "plain" {
+					qualifier = string(uidObj.Value)
+				}
+			}
+		}
+	}
+
 	eosACL := &acl.Entry{
-		Qualifier:   g.Grantee.Id.OpaqueId,
+		Qualifier:   qualifier,
 		Permissions: permissions,
 		Type:        t,
 	}
@@ -430,6 +444,18 @@ func (fs *eosfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pr
 	if err != nil {
 		return err
 	}
+	recipient := g.Grantee.Id.OpaqueId
+
+	// since EOS Citrine ACLs are stored with uid, we need to convert username to uid
+	if eosACLType == acl.TypeUser {
+		if g.Grantee.Opaque != nil && g.Grantee.Opaque.Map != nil {
+			if uidObj, ok := g.Grantee.Opaque.Map["uid"]; ok {
+				if uidObj.Decoder == "plain" {
+					recipient = string(uidObj.Value)
+				}
+			}
+		}
+	}
 
 	p, err := fs.resolve(ctx, u, ref)
 	if err != nil {
@@ -439,7 +465,7 @@ func (fs *eosfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pr
 	fn := fs.wrap(ctx, p)
 
 	uid, gid := extractUIDAndGID(u)
-	err = fs.c.RemoveACL(ctx, uid, gid, fn, eosACLType, g.Grantee.Id.OpaqueId)
+	err = fs.c.RemoveACL(ctx, uid, gid, fn, eosACLType, recipient)
 	if err != nil {
 		return errors.Wrap(err, "eos: error removing acl")
 	}
