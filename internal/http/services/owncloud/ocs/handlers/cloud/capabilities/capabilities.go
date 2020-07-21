@@ -51,6 +51,7 @@ func (h *Handler) Init(c *config.Config) {
 	if h.c.Capabilities.Core.WebdavRoot == "" {
 		h.c.Capabilities.Core.WebdavRoot = "remote.php/webdav"
 	}
+	// h.c.Capabilities.Core.SupportURLSigning is boolean
 
 	if h.c.Capabilities.Core.Status == nil {
 		h.c.Capabilities.Core.Status = &data.Status{}
