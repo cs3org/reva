@@ -274,11 +274,11 @@ func (m *manager) parseAndCacheUser(ctx context.Context, userData map[string]int
 			Map: map[string]*types.OpaqueEntry{
 				"uid": &types.OpaqueEntry{
 					Decoder: "plain",
-					Value:   userData["uid"].([]byte),
+					Value:   []byte(fmt.Sprintf("%0.f", userData["uid"])),
 				},
 				"gid": &types.OpaqueEntry{
 					Decoder: "plain",
-					Value:   userData["gid"].([]byte),
+					Value:   []byte(fmt.Sprintf("%0.f", userData["gid"])),
 				},
 			},
 		},
