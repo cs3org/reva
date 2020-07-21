@@ -318,6 +318,9 @@ func (c *Client) GetACL(ctx context.Context, uid, gid, path, aclType, target str
 	}
 	for _, a := range acls {
 		if a.Type == aclType && a.Qualifier == target {
+			if a.Type == acl.TypeUser {
+				a.Qualifier = "uid:" + a.Qualifier
+			}
 			return a, nil
 		}
 	}

@@ -688,7 +688,29 @@ func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRe
 }
 
 func (s *service) ListGrants(ctx context.Context, req *provider.ListGrantsRequest) (*provider.ListGrantsResponse, error) {
-	return nil, nil
+	// In the grants returned from the storage packages, depending on the driver
+	// used, the grantees might have UIDs with the prefix "uid:" instead of the
+	// user IDs. Those need to be resolved to their original user IDs in the gateway layer.
+
+	newRef, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		return &provider.ListGrantsResponse{
+			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+		}, nil
+	}
+
+	grants, err := s.storage.ListGrants(ctx, newRef)
+	if err != nil {
+		return &provider.ListGrantsResponse{
+			Status: status.NewInternal(ctx, err, "error listing ACLs"),
+		}, nil
+	}
+
+	res := &provider.ListGrantsResponse{
+		Status: status.NewOK(ctx),
+		Grants: grants,
+	}
+	return res, nil
 }
 
 func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (*provider.AddGrantResponse, error) {

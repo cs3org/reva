@@ -473,28 +473,7 @@ func (fs *eosfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pr
 }
 
 func (fs *eosfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
-	u, err := getUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "eos: no user in ctx")
-	}
-
-	eosACL, err := fs.getEosACL(g)
-	if err != nil {
-		return errors.Wrap(err, "eos: error mapping acl")
-	}
-
-	p, err := fs.resolve(ctx, u, ref)
-	if err != nil {
-		return errors.Wrap(err, "eos: error resolving reference")
-	}
-	fn := fs.wrap(ctx, p)
-
-	uid, gid := extractUIDAndGID(u)
-	err = fs.c.AddACL(ctx, uid, gid, fn, eosACL)
-	if err != nil {
-		return errors.Wrap(err, "eos: error updating acl")
-	}
-	return nil
+	return fs.AddGrant(ctx, ref, g)
 }
 
 func (fs *eosfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error) {

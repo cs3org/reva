@@ -381,6 +381,11 @@ func (s *svc) createReference(ctx context.Context, resourceID *provider.Resource
 		return status.NewInternal(ctx, err, "error updating received share"), nil
 	}
 
+	statRes.Info.Owner, err = s.resolveUIDToUser(ctx, statRes.Info.Owner)
+	if err != nil {
+		return status.NewInternal(ctx, err, "error resolving UID to user ID"), nil
+	}
+
 	fileInfo := statRes.Info
 
 	homeReq := &provider.GetHomeRequest{}

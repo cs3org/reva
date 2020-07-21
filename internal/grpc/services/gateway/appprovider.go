@@ -54,19 +54,25 @@ func (s *svc) OpenFileInAppProvider(ctx context.Context, req *providerpb.OpenFil
 	}
 
 	statRes, err := c.Stat(ctx, statReq)
-
 	if err != nil {
 		log.Err(err).Msg("gateway: error calling Stat for the share resource path:" + req.Ref.GetPath())
 		return &providerpb.OpenFileInAppProviderResponse{
 			Status: status.NewInternal(ctx, err, "gateway: error calling Stat for the share resource id"),
 		}, nil
 	}
-
 	if statRes.Status.Code != rpc.Code_CODE_OK {
 		err := status.NewErrorFromCode(statRes.Status.GetCode(), "gateway")
 		log.Err(err).Msg("gateway: error calling Stat for the share resource id:" + req.Ref.GetPath())
 		return &providerpb.OpenFileInAppProviderResponse{
 			Status: status.NewInternal(ctx, err, "error updating received share"),
+		}, nil
+	}
+
+	statRes.Info.Owner, err = s.resolveUIDToUser(ctx, statRes.Info.Owner)
+	if err != nil {
+		log.Err(err).Msg("gateway: error resolving UID to user ID:" + statRes.Info.Owner.OpaqueId)
+		return &providerpb.OpenFileInAppProviderResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error resolving UID to user ID"),
 		}, nil
 	}
 
