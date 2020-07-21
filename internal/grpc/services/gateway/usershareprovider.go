@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"path"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -41,12 +42,10 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
 		}, nil
 	}
-
 	res, err := c.CreateShare(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling CreateShare")
 	}
-
 	if res.Status.Code != rpc.Code_CODE_OK {
 		return res, nil
 	}
@@ -442,6 +441,22 @@ func (s *svc) createReference(ctx context.Context, resourceID *provider.Resource
 
 func (s *svc) addGrant(ctx context.Context, id *provider.ResourceId, g *provider.Grantee, p *provider.ResourcePermissions) (*rpc.Status, error) {
 
+	// Get UID and GID of the user if available
+	userClient, err := pool.GetUserProviderServiceClient(s.c.UserProviderEndpoint)
+	if err != nil {
+		return status.NewInternal(ctx, err, "error getting user provider client"), nil
+	}
+	getUserRes, err := userClient.GetUser(ctx, &userpb.GetUserRequest{
+		UserId: g.Id,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling GetUser")
+	}
+	if getUserRes.Status.Code != rpc.Code_CODE_OK {
+		return getUserRes.Status, nil
+	}
+	g.Opaque = getUserRes.User.Opaque
+
 	grantReq := &provider.AddGrantRequest{
 		Ref: &provider.Reference{
 			Spec: &provider.Reference_Id{
@@ -475,6 +490,22 @@ func (s *svc) addGrant(ctx context.Context, id *provider.ResourceId, g *provider
 }
 
 func (s *svc) removeGrant(ctx context.Context, id *provider.ResourceId, g *provider.Grantee, p *provider.ResourcePermissions) (*rpc.Status, error) {
+
+	// Get UID and GID of the user if available
+	userClient, err := pool.GetUserProviderServiceClient(s.c.UserProviderEndpoint)
+	if err != nil {
+		return status.NewInternal(ctx, err, "error getting user provider client"), nil
+	}
+	getUserRes, err := userClient.GetUser(ctx, &userpb.GetUserRequest{
+		UserId: g.Id,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling GetUser")
+	}
+	if getUserRes.Status.Code != rpc.Code_CODE_OK {
+		return getUserRes.Status, nil
+	}
+	g.Opaque = getUserRes.User.Opaque
 
 	grantReq := &provider.RemoveGrantRequest{
 		Ref: &provider.Reference{
