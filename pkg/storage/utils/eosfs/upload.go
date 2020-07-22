@@ -30,6 +30,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	tusd "github.com/tus/tusd/pkg/handler"
@@ -107,7 +108,6 @@ func (fs *eosfs) UseIn(composer *tusd.StoreComposer) {
 func (fs *eosfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.Upload, err error) {
 
 	log := appctx.GetLogger(ctx)
-	log.Debug().Interface("info", info).Msg("eos: NewUpload")
 
 	fn := info.MetaData["filename"]
 	if fn == "" {
@@ -121,9 +121,12 @@ func (fs *eosfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd
 	}
 	info.MetaData["dir"] = filepath.Clean(info.MetaData["dir"])
 
-	log.Debug().Interface("info", info).Msg("eos: resolved filename")
-
 	info.ID = uuid.New().String()
+
+	info.Storage = map[string]string{
+		"Type":     "EOSStore",
+		"LogLevel": log.GetLevel().String(),
+	}
 
 	binPath, err := fs.getUploadPath(ctx, info.ID)
 	if err != nil {
@@ -133,10 +136,10 @@ func (fs *eosfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: no user in ctx")
 	}
-	info.Storage = map[string]string{
-		"Type":     "EOSStore",
-		"Username": user.Username,
-	}
+	info.Storage["Username"] = user.Username
+
+	log.Debug().Interface("info", info).Msg("eos: NewUpload")
+
 	// Create binary file with no content
 
 	file, err := os.OpenFile(binPath, os.O_CREATE|os.O_WRONLY, defaultFilePerm)
@@ -150,6 +153,7 @@ func (fs *eosfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd
 		binPath:  binPath,
 		infoPath: binPath + ".info",
 		fs:       fs,
+		ctx:      ctx,
 	}
 
 	if !info.SizeIsDeferred && info.Size == 0 {
@@ -199,11 +203,22 @@ func (fs *eosfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) 
 
 	info.Offset = stat.Size()
 
+	// TODO configure the logger the same way ... store and add traceid in file info
+	var opts []logger.Option
+	opts = append(opts, logger.WithLevel(info.Storage["LogLevel"]))
+	opts = append(opts, logger.WithWriter(os.Stderr, logger.ConsoleMode))
+	l := logger.New(opts...)
+
+	sub := l.With().Int("pid", os.Getpid()).Logger()
+
+	ctx = appctx.WithLogger(ctx, &sub)
+
 	return &fileUpload{
 		info:     info,
 		binPath:  binPath,
 		infoPath: infoPath,
 		fs:       fs,
+		ctx:      ctx,
 	}, nil
 }
 
@@ -216,6 +231,9 @@ type fileUpload struct {
 	binPath string
 	// only fs knows how to handle metadata and versions
 	fs *eosfs
+	// a context with a user
+	// TODO add logger as well?
+	ctx context.Context
 }
 
 // GetInfo returns the FileInfo
@@ -274,7 +292,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 		if len(s) == 2 {
 			alg, hash := s[0], s[1]
 
-			log := appctx.GetLogger(ctx)
+			log := appctx.GetLogger(upload.ctx)
 			log.Debug().
 				Interface("info", upload.info).
 				Str("alg", alg).
@@ -292,7 +310,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 	// eos creates revisions internally
 	//}
 
-	err := upload.fs.c.WriteFile(ctx, upload.info.Storage["Username"], np, upload.binPath)
+	err := upload.fs.c.WriteFile(upload.ctx, upload.info.Storage["Username"], np, upload.binPath)
 
 	// only delete the upload if it was successfully written to eos
 	if err == nil {
@@ -300,13 +318,13 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 		go func() {
 			if err := os.Remove(upload.infoPath); err != nil {
 				if !os.IsNotExist(err) {
-					log := appctx.GetLogger(ctx)
+					log := appctx.GetLogger(upload.ctx)
 					log.Err(err).Interface("info", upload.info).Msg("eos: could not delete upload info")
 				}
 			}
 			if err := os.Remove(upload.binPath); err != nil {
 				if !os.IsNotExist(err) {
-					log := appctx.GetLogger(ctx)
+					log := appctx.GetLogger(upload.ctx)
 					log.Err(err).Interface("info", upload.info).Msg("eos: could not delete upload binary")
 				}
 			}
