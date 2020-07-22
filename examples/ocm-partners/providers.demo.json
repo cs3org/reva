@@ -158,11 +158,11 @@
 						"description": "Ailleron Open Cloud Mesh API"
 					},
 					"name": "Ailleron - OCM API",
-					"path": "https://cs3mesh.softwaremind.com/iop/ocm/",
+					"path": "https://sciencemesh.softwaremind.com/iop/ocm/",
 					"isMonitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "https://cs3mesh.softwaremind.com/iop/"
+				"host": "https://sciencemesh.softwaremind.com/iop/"
 			},
 			{
 				"endpoint": {
@@ -171,11 +171,11 @@
 						"description": "Ailleron Webdav API"
 					},
 					"name": "Ailleron - Webdav API",
-					"path": "https://cs3mesh.softwaremind.com/iop/webdav/",
+					"path": "https://sciencemesh.softwaremind.com/iop/webdav/",
 					"isMonitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "https://cs3mesh.softwaremind.com/iop/"
+				"host": "https://sciencemesh.softwaremind.com/iop/"
 			}
 		]
 	},
