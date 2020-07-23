@@ -1209,7 +1209,7 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) *
 	}
 
 	// The UID will be resolved to the user opaque ID at the userprovider level.
-	username := "uid:" + string(eosFileInfo.UID)
+	username := "uid:" + strconv.FormatUint(eosFileInfo.UID, 10)
 
 	info := &provider.ResourceInfo{
 		Id:            &provider.ResourceId{OpaqueId: fmt.Sprintf("%d", eosFileInfo.Inode)},
