@@ -157,10 +157,6 @@ func New(opt *Options) *Client {
 	return c
 }
 
-func getRootUIDAndGID() (string, string) {
-	return "0", "0"
-}
-
 // exec executes the command and returns the stdout, stderr and return code
 func (c *Client) execute(ctx context.Context, cmd *exec.Cmd) (string, string, error) {
 	log := appctx.GetLogger(ctx)
@@ -265,7 +261,7 @@ func (c *Client) executeEOS(ctx context.Context, cmd *exec.Cmd) (string, string,
 }
 
 // AddACL adds an new acl to EOS with the given aclType.
-func (c *Client) AddACL(ctx context.Context, uid, gid, path string, a *acl.Entry) error {
+func (c *Client) AddACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, a *acl.Entry) error {
 	acls, err := c.getACLForPath(ctx, uid, gid, path)
 	if err != nil {
 		return err
@@ -277,9 +273,6 @@ func (c *Client) AddACL(ctx context.Context, uid, gid, path string, a *acl.Entry
 	}
 	sysACL := acls.Serialize()
 
-	// setting of the sys.acl is only possible from root user
-	rootUID, rootGID := getRootUIDAndGID()
-
 	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", rootUID, rootGID, "attr", "-r", "set", fmt.Sprintf("sys.acl=%s", sysACL), path)
 	_, _, err = c.executeEOS(ctx, cmd)
 	return err
@@ -287,7 +280,7 @@ func (c *Client) AddACL(ctx context.Context, uid, gid, path string, a *acl.Entry
 }
 
 // RemoveACL removes the acl from EOS.
-func (c *Client) RemoveACL(ctx context.Context, uid, gid, path string, aclType string, recipient string) error {
+func (c *Client) RemoveACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, aclType string, recipient string) error {
 	acls, err := c.getACLForPath(ctx, uid, gid, path)
 	if err != nil {
 		return err
@@ -296,9 +289,6 @@ func (c *Client) RemoveACL(ctx context.Context, uid, gid, path string, aclType s
 	acls.DeleteEntry(aclType, recipient)
 	sysACL := acls.Serialize()
 
-	// setting of the sys.acl is only possible from root user
-	rootUID, rootGID := getRootUIDAndGID()
-
 	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", rootUID, rootGID, "attr", "-r", "set", fmt.Sprintf("sys.acl=%s", sysACL), path)
 	_, _, err = c.executeEOS(ctx, cmd)
 	return err
@@ -306,8 +296,8 @@ func (c *Client) RemoveACL(ctx context.Context, uid, gid, path string, aclType s
 }
 
 // UpdateACL updates the EOS acl.
-func (c *Client) UpdateACL(ctx context.Context, uid, gid, path string, a *acl.Entry) error {
-	return c.AddACL(ctx, uid, gid, path, a)
+func (c *Client) UpdateACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, a *acl.Entry) error {
+	return c.AddACL(ctx, uid, gid, rootUID, rootGID, path, a)
 }
 
 // GetACL for a file
@@ -402,9 +392,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, uid, gid, path string) (
 }
 
 // GetQuota gets the quota of a user on the quota node defined by path
-func (c *Client) GetQuota(ctx context.Context, username, path string) (*QuotaInfo, error) {
-	// getting the quota is only possible from root user
-	rootUID, rootGID := getRootUIDAndGID()
+func (c *Client) GetQuota(ctx context.Context, username, rootUID, rootGID, path string) (*QuotaInfo, error) {
 	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", rootUID, rootGID, "quota", "ls", "-u", username, "-m")
 	stdout, _, err := c.executeEOS(ctx, cmd)
 	if err != nil {

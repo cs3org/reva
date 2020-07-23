@@ -416,7 +416,12 @@ func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provi
 		return err
 	}
 
-	err = fs.c.AddACL(ctx, uid, gid, fn, eosACL)
+	rootUID, rootGID, err := fs.getRootUIDAndGID(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = fs.c.AddACL(ctx, uid, gid, rootUID, rootGID, fn, eosACL)
 	if err != nil {
 		return errors.Wrap(err, "eos: error adding acl")
 	}
@@ -484,7 +489,12 @@ func (fs *eosfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pr
 		return err
 	}
 
-	err = fs.c.RemoveACL(ctx, uid, gid, fn, eosACLType, recipient)
+	rootUID, rootGID, err := fs.getRootUIDAndGID(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = fs.c.RemoveACL(ctx, uid, gid, rootUID, rootGID, fn, eosACLType, recipient)
 	if err != nil {
 		return errors.Wrap(err, "eos: error removing acl")
 	}
@@ -762,7 +772,12 @@ func (fs *eosfs) GetQuota(ctx context.Context) (int, int, error) {
 		return 0, 0, errors.Wrap(err, "eos: no user in ctx")
 	}
 
-	qi, err := fs.c.GetQuota(ctx, u.Username, fs.conf.Namespace)
+	rootUID, rootGID, err := fs.getRootUIDAndGID(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	qi, err := fs.c.GetQuota(ctx, u.Username, rootUID, rootGID, fs.conf.Namespace)
 	if err != nil {
 		err := errors.Wrap(err, "eosfs: error getting quota")
 		return 0, 0, err
