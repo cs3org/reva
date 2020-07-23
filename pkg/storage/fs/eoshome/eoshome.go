@@ -95,6 +95,9 @@ type config struct {
 
 	// UseKeyTabAuth changes will authenticate requests by using an EOS keytab.
 	UseKeytab bool `mapstructure:"use_keytab" docs:"false"`
+
+	// GatewaySvc stores the endpoint at which the GRPC gateway is exposed.
+	GatewaySvc string `mapstructure:"gatewaysvc"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {

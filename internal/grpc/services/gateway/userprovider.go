@@ -20,11 +20,8 @@ package gateway
 
 import (
 	"context"
-	"strings"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
@@ -92,30 +89,4 @@ func (s *svc) IsInGroup(ctx context.Context, req *user.IsInGroupRequest) (*user.
 	}
 
 	return res, nil
-}
-
-func (s *svc) resolveUIDToUser(ctx context.Context, uid *user.UserId) (*user.UserId, error) {
-	if !strings.HasPrefix(uid.OpaqueId, "uid:") {
-		return uid, nil
-	}
-	id := strings.TrimPrefix(uid.OpaqueId, "uid:")
-	getUserReq := &user.GetUserRequest{
-		Opaque: &types.Opaque{
-			Map: map[string]*types.OpaqueEntry{
-				"uid": &types.OpaqueEntry{
-					Decoder: "plain",
-					Value:   []byte(id),
-				},
-			},
-		},
-	}
-	getUserRes, err := s.GetUser(ctx, getUserReq)
-	if err != nil {
-		return nil, err
-	}
-	if getUserRes.Status.Code != rpc.Code_CODE_OK {
-		return nil, errors.New("error resolving UID to user ID")
-	}
-
-	return getUserRes.User.Id, nil
 }

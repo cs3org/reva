@@ -43,7 +43,10 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
 	}
-	uid, gid := extractUIDAndGID(u)
+	uid, gid, err := fs.getUserUIDAndGID(ctx, u)
+	if err != nil {
+		return err
+	}
 
 	p, err := fs.resolve(ctx, u, ref)
 	if err != nil {
@@ -134,7 +137,11 @@ func (fs *eosfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: no user in ctx")
 	}
-	uid, gid := extractUIDAndGID(user)
+	uid, gid, err := fs.getUserUIDAndGID(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+
 	info.Storage = map[string]string{
 		"Type":     "EOSStore",
 		"Username": user.Username,

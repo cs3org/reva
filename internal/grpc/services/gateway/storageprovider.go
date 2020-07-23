@@ -840,22 +840,7 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		}, nil
 	}
 
-	statRes, err := c.Stat(ctx, req)
-	if err != nil {
-		return &provider.StatResponse{
-			Status: status.NewInternal(ctx, err, "error statting resource"),
-		}, nil
-	}
-
-	if statRes != nil && statRes.Info != nil {
-		statRes.Info.Owner, err = s.resolveUIDToUser(ctx, statRes.Info.Owner)
-		if err != nil {
-			return &provider.StatResponse{
-				Status: status.NewInternal(ctx, err, "error resolving UID to user ID"),
-			}, nil
-		}
-	}
-	return statRes, nil
+	return c.Stat(ctx, req)
 }
 
 func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
@@ -1071,17 +1056,6 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 	res, err := c.ListContainer(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling ListContainer")
-	}
-
-	for i := range res.Infos {
-		if res.Infos[i] != nil {
-			res.Infos[i].Owner, err = s.resolveUIDToUser(ctx, res.Infos[i].Owner)
-			if err != nil {
-				return &provider.ListContainerResponse{
-					Status: status.NewInternal(ctx, err, "error resolving UID to user ID"),
-				}, nil
-			}
-		}
 	}
 
 	return res, nil

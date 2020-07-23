@@ -68,16 +68,6 @@ func (s *svc) OpenFileInAppProvider(ctx context.Context, req *providerpb.OpenFil
 		}, nil
 	}
 
-	if statRes != nil && statRes.Info != nil {
-		statRes.Info.Owner, err = s.resolveUIDToUser(ctx, statRes.Info.Owner)
-		if err != nil {
-			log.Err(err).Msg("gateway: error resolving UID to user ID:" + statRes.Info.Owner.OpaqueId)
-			return &providerpb.OpenFileInAppProviderResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error resolving UID to user ID"),
-			}, nil
-		}
-	}
-
 	fileInfo := statRes.Info
 
 	provider, err := s.findAppProvider(ctx, fileInfo)

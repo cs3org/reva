@@ -318,9 +318,6 @@ func (c *Client) GetACL(ctx context.Context, uid, gid, path, aclType, target str
 	}
 	for _, a := range acls {
 		if a.Type == aclType && a.Qualifier == target {
-			if a.Type == acl.TypeUser {
-				a.Qualifier = "uid:" + a.Qualifier
-			}
 			return a, nil
 		}
 	}
@@ -338,16 +335,9 @@ func (c *Client) ListACLs(ctx context.Context, uid, gid, path string) ([]*acl.En
 		return nil, err
 	}
 
-	acls := []*acl.Entry{}
-	for _, a := range parsedACLs.Entries {
-		// since EOS Citrine ACLs are stored with uid, we need to append that info
-		// The UID will be resolved to the user opaque ID at the userprovider level.
-		if a.Type == acl.TypeUser {
-			a.Qualifier = "uid:" + a.Qualifier
-		}
-		acls = append(acls, a)
-	}
-	return acls, nil
+	// EOS Citrine ACLs are stored with uid. The UID will be resolved to the
+	// user opaque ID at the eosfs level.
+	return parsedACLs.Entries, nil
 }
 
 func (c *Client) getACLForPath(ctx context.Context, uid, gid, path string) (*acl.ACLs, error) {
