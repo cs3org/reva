@@ -19,10 +19,14 @@
 package ldap
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"fmt"
+	"strings"
+	"text/template"
 
+	"github.com/Masterminds/sprig"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -41,8 +45,9 @@ type manager struct {
 	hostname     string
 	port         int
 	baseDN       string
-	userfilter   string
-	groupfilter  string
+	userfilter   *template.Template
+	findfilter   string
+	groupfilter  *template.Template
 	bindUsername string
 	bindPassword string
 	idp          string
@@ -54,6 +59,7 @@ type config struct {
 	Port         int        `mapstructure:"port"`
 	BaseDN       string     `mapstructure:"base_dn"`
 	UserFilter   string     `mapstructure:"userfilter"`
+	FindFilter   string     `mapstructure:"findfilter"`
 	GroupFilter  string     `mapstructure:"groupfilter"`
 	BindUsername string     `mapstructure:"bind_username"`
 	BindPassword string     `mapstructure:"bind_password"`
@@ -71,8 +77,9 @@ type attributes struct {
 
 // Default attributes (Active Directory)
 var ldapDefaults = attributes{
-	Mail:        "mail",
-	UID:         "objectGUID",
+	Mail: "mail",
+	// An immutable user id, see https://docs.microsoft.com/en-us/azure/active-directory/hybrid/plan-connect-design-concepts
+	UID:         "ms-DS-ConsistencyGuid", // you can fall back to objectguid or even samaccountname but you will run into trouble when user names change. You have been warned.
 	DisplayName: "displayName",
 	DN:          "dn",
 	CN:          "cn",
@@ -97,17 +104,36 @@ func New(m map[string]interface{}) (user.Manager, error) {
 		return nil, err
 	}
 
-	return &manager{
+	// backwards compatibility
+	c.UserFilter = strings.ReplaceAll(c.UserFilter, "%s", "{{.OpaqueId}}")
+	if c.FindFilter == "" {
+		c.FindFilter = c.UserFilter
+	}
+	c.GroupFilter = strings.ReplaceAll(c.GroupFilter, "%s", "{{.OpaqueId}}")
+
+	mgr := &manager{
 		hostname:     c.Hostname,
 		port:         c.Port,
 		baseDN:       c.BaseDN,
-		userfilter:   c.UserFilter,
-		groupfilter:  c.GroupFilter,
+		findfilter:   c.FindFilter,
 		bindUsername: c.BindUsername,
 		bindPassword: c.BindPassword,
 		idp:          c.Idp,
 		schema:       c.Schema,
-	}, nil
+	}
+
+	mgr.userfilter, err = template.New("uf").Funcs(sprig.TxtFuncMap()).Parse(c.UserFilter)
+	if err != nil {
+		err := errors.Wrap(err, fmt.Sprintf("error parsing userfilter tpl:%s", c.UserFilter))
+		panic(err)
+	}
+	mgr.groupfilter, err = template.New("gf").Funcs(sprig.TxtFuncMap()).Parse(c.GroupFilter)
+	if err != nil {
+		err := errors.Wrap(err, fmt.Sprintf("error parsing groupfilter tpl:%s", c.GroupFilter))
+		panic(err)
+	}
+
+	return mgr, nil
 }
 
 func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
@@ -128,8 +154,8 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 	searchRequest := ldap.NewSearchRequest(
 		m.baseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-		fmt.Sprintf(m.userfilter, uid.OpaqueId), // TODO this is screaming for errors if filter contains >1 %s
-		[]string{m.schema.DN, m.schema.UID, m.schema.Mail, m.schema.DisplayName},
+		m.getUserFilter(uid),
+		[]string{m.schema.DN, m.schema.CN, m.schema.UID, m.schema.Mail, m.schema.DisplayName},
 		nil,
 	)
 
@@ -154,7 +180,7 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 	}
 	u := &userpb.User{
 		Id:          id,
-		Username:    sr.Entries[0].GetAttributeValue(m.schema.UID),
+		Username:    sr.Entries[0].GetAttributeValue(m.schema.CN),
 		Groups:      groups,
 		Mail:        sr.Entries[0].GetAttributeValue(m.schema.Mail),
 		DisplayName: sr.Entries[0].GetAttributeValue(m.schema.DisplayName),
@@ -180,8 +206,8 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 	searchRequest := ldap.NewSearchRequest(
 		m.baseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-		fmt.Sprintf(m.userfilter, query), // TODO this is screaming for errors if filter contains >1 %s
-		[]string{m.schema.DN, m.schema.UID, m.schema.Mail, m.schema.DisplayName},
+		m.getFindFilter(query),
+		[]string{m.schema.DN, m.schema.CN, m.schema.UID, m.schema.Mail, m.schema.DisplayName},
 		nil,
 	)
 
@@ -203,7 +229,7 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 		}
 		user := &userpb.User{
 			Id:          id,
-			Username:    entry.GetAttributeValue(m.schema.UID),
+			Username:    entry.GetAttributeValue(m.schema.CN),
 			Groups:      groups,
 			Mail:        entry.GetAttributeValue(m.schema.Mail),
 			DisplayName: entry.GetAttributeValue(m.schema.DisplayName),
@@ -231,8 +257,8 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 	searchRequest := ldap.NewSearchRequest(
 		m.baseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-		fmt.Sprintf(m.groupfilter, uid.OpaqueId), // TODO this is screaming for errors if filter contains >1 %s
-		[]string{m.schema.CN},
+		m.getGroupFilter(uid),
+		[]string{m.schema.CN}, // TODO use DN to look up group id
 		nil,
 	)
 
@@ -244,6 +270,9 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 	groups := []string{}
 
 	for _, entry := range sr.Entries {
+		// FIXME this makes the users groups use the cn, not an immutable id
+		// FIXME 1. use the memberof or members attribute of a user to get the groups
+		// FIXME 2. ook up the id for each group
 		groups = append(groups, entry.GetAttributeValue(m.schema.CN))
 	}
 
@@ -251,6 +280,7 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 }
 
 func (m *manager) IsInGroup(ctx context.Context, uid *userpb.UserId, group string) (bool, error) {
+	// TODO implement with dedicated ldap query
 	groups, err := m.GetUserGroups(ctx, uid)
 	if err != nil {
 		return false, err
@@ -263,4 +293,26 @@ func (m *manager) IsInGroup(ctx context.Context, uid *userpb.UserId, group strin
 	}
 
 	return false, nil
+}
+
+func (m *manager) getUserFilter(uid *userpb.UserId) string {
+	b := bytes.Buffer{}
+	if err := m.userfilter.Execute(&b, uid); err != nil {
+		err := errors.Wrap(err, fmt.Sprintf("error executing user template: userid:%+v", uid))
+		panic(err)
+	}
+	return b.String()
+}
+
+func (m *manager) getFindFilter(query string) string {
+	return strings.ReplaceAll(m.findfilter, "{{query}}", query)
+}
+
+func (m *manager) getGroupFilter(uid *userpb.UserId) string {
+	b := bytes.Buffer{}
+	if err := m.groupfilter.Execute(&b, uid); err != nil {
+		err := errors.Wrap(err, fmt.Sprintf("error executing group template: userid:%+v", uid))
+		panic(err)
+	}
+	return b.String()
 }
