@@ -354,28 +354,23 @@ func (m *manager) findUsersByFilter(ctx context.Context, url string) ([]*userpb.
 		}
 
 		uid := &userpb.UserId{
-			OpaqueId: usrInfo["id"].(string),
+			OpaqueId: usrInfo["upn"].(string),
 			Idp:      m.conf.IDProvider,
-		}
-		userGroups, err := m.GetUserGroups(ctx, uid)
-		if err != nil {
-			return nil, err
 		}
 		users = append(users, &userpb.User{
 			Id:          uid,
 			Username:    usrInfo["upn"].(string),
 			Mail:        usrInfo["primaryAccountEmail"].(string),
 			DisplayName: usrInfo["displayName"].(string),
-			Groups:      userGroups,
 			Opaque: &types.Opaque{
 				Map: map[string]*types.OpaqueEntry{
 					"uid": &types.OpaqueEntry{
 						Decoder: "plain",
-						Value:   usrInfo["uid"].([]byte),
+						Value:   []byte(fmt.Sprintf("%0.f", usrInfo["uid"])),
 					},
 					"gid": &types.OpaqueEntry{
 						Decoder: "plain",
-						Value:   usrInfo["gid"].([]byte),
+						Value:   []byte(fmt.Sprintf("%0.f", usrInfo["gid"])),
 					},
 				},
 			},
