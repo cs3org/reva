@@ -64,8 +64,12 @@ type OIDCToken struct {
 }
 
 type config struct {
-	// The port on which the redis server is running
-	Redis string `mapstructure:"redis" docs:":6379"`
+	// The address at which the redis server is running
+	RedisAddress string `mapstructure:"redis_address" docs:"localhost:6379"`
+	// The username for connecting to the redis server
+	RedisUsername string `mapstructure:"redis_username" docs:""`
+	// The password for connecting to the redis server
+	RedisPassword string `mapstructure:"redis_password" docs:""`
 	// The time in minutes for which the groups to which a user belongs would be cached
 	UserGroupsCacheExpiration int `mapstructure:"user_groups_cache_expiration" docs:"5"`
 	// The OIDC Provider
@@ -87,8 +91,8 @@ func (c *config) init() {
 	if c.UserGroupsCacheExpiration == 0 {
 		c.UserGroupsCacheExpiration = 5
 	}
-	if c.Redis == "" {
-		c.Redis = ":6379"
+	if c.RedisAddress == "" {
+		c.RedisAddress = ":6379"
 	}
 	if c.APIBaseURL == "" {
 		c.APIBaseURL = "https://authorization-service-api-dev.web.cern.ch/api/v1.0"
@@ -120,7 +124,7 @@ func New(m map[string]interface{}) (user.Manager, error) {
 	}
 	c.init()
 
-	redisPool := initRedisPool(c.Redis)
+	redisPool := initRedisPool(c.RedisAddress, c.RedisUsername, c.RedisPassword)
 	return &manager{
 		conf:      c,
 		redisPool: redisPool,

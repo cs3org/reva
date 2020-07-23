@@ -91,7 +91,7 @@ type config struct {
 	UseKeytab bool `mapstructure:"use_keytab" docs:"false"`
 
 	// GatewaySvc stores the endpoint at which the GRPC gateway is exposed.
-	GatewaySvc string `mapstructure:"gatewaysvc"`
+	GatewaySvc string `mapstructure:"gatewaysvc" docs:"0.0.0.0:19000"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {

@@ -34,7 +34,7 @@ const (
 	userUIDPrefix        = "uid:"
 )
 
-func initRedisPool(port string) *redis.Pool {
+func initRedisPool(address, username, password string) *redis.Pool {
 	return &redis.Pool{
 
 		MaxIdle:     50,
@@ -42,7 +42,22 @@ func initRedisPool(port string) *redis.Pool {
 		IdleTimeout: 240 * time.Second,
 
 		Dial: func() (redis.Conn, error) {
-			c, err := redis.Dial("tcp", port)
+			var c redis.Conn
+			var err error
+			switch {
+			case username != "":
+				c, err = redis.Dial("tcp", address,
+					redis.DialUsername(username),
+					redis.DialPassword(password),
+				)
+			case password != "":
+				c, err = redis.Dial("tcp", address,
+					redis.DialPassword(password),
+				)
+			default:
+				c, err = redis.Dial("tcp", address)
+			}
+
 			if err != nil {
 				return nil, err
 			}
