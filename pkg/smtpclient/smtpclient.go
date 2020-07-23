@@ -111,14 +111,9 @@ func (creds *SMTPCredentials) sendMailSMTP(recipient, subject, message string) e
 	}
 	defer c.Close()
 
-	host, err := os.Hostname()
-	if err != nil {
+	if err = c.Hello(creds.LocalName); err != nil {
 		return err
 	}
-	if err = c.Hello(host); err != nil {
-		return err
-	}
-
 	if err = c.Mail(creds.SenderMail); err != nil {
 		return err
 	}
