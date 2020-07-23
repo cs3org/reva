@@ -15,6 +15,7 @@ require (
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/eventials/go-tus v0.0.0-20190617130015-9db47421f6a0
 	github.com/go-ldap/ldap/v3 v3.2.3
+	github.com/go-openapi/errors v0.19.2
 	github.com/go-openapi/strfmt v0.19.2 // indirect
 	github.com/gofrs/uuid v3.3.0+incompatible
 	github.com/golang/protobuf v1.4.2
@@ -37,6 +38,7 @@ require (
 	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect
 	github.com/rs/cors v1.7.0
 	github.com/rs/zerolog v1.19.0
+	github.com/stretchr/testify v1.5.1
 	github.com/tus/tusd v1.1.1-0.20200416115059-9deabf9d80c2
 	go.opencensus.io v0.22.4
 	golang.org/x/crypto v0.0.0-20200604202706-70a84ac30bf9
