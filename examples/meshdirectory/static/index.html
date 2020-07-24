@@ -77,6 +77,7 @@
         methods: {
             providerLink(provider) {
                 const query = this.queryParams.toString() ? `?${this.queryParams}` : '';
+                // TODO(mirekys): sanitize possible double slash
                 const inviteApi = `${this.ocmService(provider).endpoint.path}/invites/forward`;
                 return `${inviteApi}${query}`;
             },
