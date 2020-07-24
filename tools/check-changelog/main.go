@@ -31,6 +31,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
+// Case-insensitive list of PRs for which changelog enforcement needs to be skipped
 var skipTags = []string{"[tests-only]", "[build-deps]"}
 
 func skipPR(prID int) bool {
