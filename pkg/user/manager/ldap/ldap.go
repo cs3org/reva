@@ -32,9 +32,9 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
+	"github.com/go-ldap/ldap/v3"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-	"gopkg.in/ldap.v2"
 )
 
 func init() {
@@ -162,7 +162,7 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 
 	id := &userpb.UserId{
 		Idp:      m.c.Idp,
-		OpaqueId: sr.Entries[0].GetAttributeValue(m.c.Schema.UID),
+		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UID),
 	}
 	groups, err := m.GetUserGroups(ctx, id)
 	if err != nil {
@@ -170,10 +170,10 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 	}
 	u := &userpb.User{
 		Id:          id,
-		Username:    sr.Entries[0].GetAttributeValue(m.c.Schema.CN),
+		Username:    sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.CN),
 		Groups:      groups,
-		Mail:        sr.Entries[0].GetAttributeValue(m.c.Schema.Mail),
-		DisplayName: sr.Entries[0].GetAttributeValue(m.c.Schema.DisplayName),
+		Mail:        sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.Mail),
+		DisplayName: sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.DisplayName),
 	}
 
 	return u, nil
@@ -211,7 +211,7 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 	for _, entry := range sr.Entries {
 		id := &userpb.UserId{
 			Idp:      m.c.Idp,
-			OpaqueId: entry.GetAttributeValue(m.c.Schema.UID),
+			OpaqueId: entry.GetEqualFoldAttributeValue(m.c.Schema.UID),
 		}
 		groups, err := m.GetUserGroups(ctx, id)
 		if err != nil {
@@ -219,10 +219,10 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 		}
 		user := &userpb.User{
 			Id:          id,
-			Username:    entry.GetAttributeValue(m.c.Schema.CN),
+			Username:    entry.GetEqualFoldAttributeValue(m.c.Schema.CN),
 			Groups:      groups,
-			Mail:        entry.GetAttributeValue(m.c.Schema.Mail),
-			DisplayName: entry.GetAttributeValue(m.c.Schema.DisplayName),
+			Mail:        entry.GetEqualFoldAttributeValue(m.c.Schema.Mail),
+			DisplayName: entry.GetEqualFoldAttributeValue(m.c.Schema.DisplayName),
 		}
 		users = append(users, user)
 	}
@@ -263,7 +263,7 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 		// FIXME this makes the users groups use the cn, not an immutable id
 		// FIXME 1. use the memberof or members attribute of a user to get the groups
 		// FIXME 2. ook up the id for each group
-		groups = append(groups, entry.GetAttributeValue(m.c.Schema.CN))
+		groups = append(groups, entry.GetEqualFoldAttributeValue(m.c.Schema.CN))
 	}
 
 	return groups, nil
