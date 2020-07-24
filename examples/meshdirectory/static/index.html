@@ -76,12 +76,13 @@
         },
         methods: {
             providerLink(provider) {
-                const query = this.queryParams.toString() ? `?${this.queryParams}` : ''
-                return `${this.ocmService(provider).endpoint.path}${query}`
+                const query = this.queryParams.toString() ? `?${this.queryParams}` : '';
+                const inviteApi = `${this.ocmService(provider).endpoint.path}/invites/forward`;
+                return `${inviteApi}${query}`;
             },
             ocmService(provider) {
                 return provider.services.find(s => {
-                    return s.endpoint.type.name === 'OCM'
+                    return s.endpoint.type.name === 'OCM';
                 })
             }
         },
@@ -92,7 +93,7 @@
                 })
             },
             baseUrl: function () {
-                return `${window.location.href}`
+                return `${window.location.pathname}`;
             },
             queryParams: function () {
                 return new URLSearchParams(window.location.search);
@@ -105,7 +106,7 @@
                     this.providers = response.data;
                 })
                 .catch(err => {
-                    console.log(err)
+                    console.log(err);
                 });
         }
     });
