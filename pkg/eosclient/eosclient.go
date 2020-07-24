@@ -382,6 +382,7 @@ func (c *Client) ListACLs(ctx context.Context, username, path string) ([]*acl.En
 	for _, acl := range parsedACLs.Entries {
 		// since EOS Citrine ACLs are is stored with uid, we need to convert uid to username
 		// TODO map group names as well if acl.Type == "g" ...
+		// TODO look up the actual userid at the user provider, maybe even by uidnumber and gidnumber
 		acl.Qualifier, err = getUsername(acl.Qualifier)
 		if err != nil {
 			log.Warn().Err(err).Str("path", path).Str("username", username).Str("qualifier", acl.Qualifier).Msg("cannot map qualifier to name")

@@ -488,6 +488,12 @@ func (fs *eosfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*pr
 	grantList := []*provider.Grant{}
 	for _, a := range acls {
 		grantee := &provider.Grantee{
+			// TODO a.Qualifier is a username, but OpaqueID should be the immutable userid
+			// so we need to look up the actual userid at the user provider
+			// options:
+			// - a new API call: getUserByUsername (proper solution)
+			// - configure ldap to search both: uid and cn, hoping there will never be collisions (short term option)
+			// - use FindUser, but this is not en exact search (not really an option)
 			Id:   &userpb.UserId{OpaqueId: a.Qualifier},
 			Type: grants.GetGranteeType(a.Type),
 		}
@@ -1184,8 +1190,14 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) *
 	}
 
 	info := &provider.ResourceInfo{
-		Id:            &provider.ResourceId{OpaqueId: fmt.Sprintf("%d", eosFileInfo.Inode)},
-		Path:          path,
+		Id:   &provider.ResourceId{OpaqueId: fmt.Sprintf("%d", eosFileInfo.Inode)},
+		Path: path,
+		// TODO a.Qualifier is a username, but OpaqueID should be the immutable userid
+		// so we need to look up the actual userid at the user provider
+		// options:
+		// - a new API call: getUserByUsername (proper solution)
+		// - configure ldap to search both: uid and cn, hoping there will never be collisions (short term option)
+		// - use FindUser, but this is not en exact search (not really an option)
 		Owner:         &userpb.UserId{OpaqueId: username},
 		Etag:          fmt.Sprintf("\"%s\"", strings.Trim(eosFileInfo.ETag, "\"")),
 		MimeType:      mime.Detect(eosFileInfo.IsDir, path),

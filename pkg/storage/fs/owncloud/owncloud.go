@@ -141,9 +141,12 @@ const (
 	// SharePrefix is the prefix for sharing related extended attributes
 	sharePrefix       string = "user.oc.acl."
 	trashOriginPrefix string = "user.oc.o"
-	mdPrefix          string = "user.oc.md."   // arbitrary metadata
-	favPrefix         string = "user.oc.fav."  // favorite flag, per user
-	etagPrefix        string = "user.oc.etag." // allow overriding a calculated etag with one from the extended attributes
+	// TODO store the owners uuid on the root folder to store the uuid of the user, see getOwner
+	// but we also need to use the uuid in acls
+	userPrefix string = "user.oc.u"
+	mdPrefix   string = "user.oc.md."   // arbitrary metadata
+	favPrefix  string = "user.oc.fav."  // favorite flag, per user
+	etagPrefix string = "user.oc.etag." // allow overriding a calculated etag with one from the extended attributes
 	//checksumPrefix    string = "user.oc.cs."   // TODO add checksum support
 )
 
@@ -464,6 +467,7 @@ func (fs *ocfs) unwrapShadow(ctx context.Context, internal string) (external str
 }
 
 // TODO the owner needs to come from a different place
+// read from the extended attributes?
 func (fs *ocfs) getOwner(internal string) string {
 	internal = strings.TrimPrefix(internal, fs.c.DataDirectory)
 	parts := strings.SplitN(internal, "/", 3)
