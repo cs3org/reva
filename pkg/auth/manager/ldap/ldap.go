@@ -22,12 +22,14 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"strings"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/logger"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"gopkg.in/ldap.v2"
@@ -46,6 +48,7 @@ type config struct {
 	Port         int        `mapstructure:"port"`
 	BaseDN       string     `mapstructure:"base_dn"`
 	UserFilter   string     `mapstructure:"userfilter"`
+	LoginFilter  string     `mapstructure:"loginfilter"`
 	BindUsername string     `mapstructure:"bind_username"`
 	BindPassword string     `mapstructure:"bind_password"`
 	Idp          string     `mapstructure:"idp"`
@@ -53,18 +56,25 @@ type config struct {
 }
 
 type attributes struct {
-	DN          string `mapstructure:"dn"`
-	UID         string `mapstructure:"uid"`
-	Mail        string `mapstructure:"mail"`
+	// DN is the distinguished name in ldap, e.g. `cn=einstein,ou=users,dc=example,dc=org`
+	DN string `mapstructure:"dn"`
+	// UID is an immutable user id, see https://docs.microsoft.com/en-us/azure/active-directory/hybrid/plan-connect-design-concepts
+	UID string `mapstructure:"uid"`
+	// CN is the username, typically `cn`, `uid` or `samaccountname`
+	CN string `mapstructure:"cn"`
+	// Mail is the email address of a user
+	Mail string `mapstructure:"mail"`
+	// Displayname is the Human readable name, e.g. `Albert Einstein`
 	DisplayName string `mapstructure:"displayName"`
 }
 
 // Default attributes (Active Directory)
 var ldapDefaults = attributes{
-	Mail:        "mail",
-	UID:         "objectGUID",
-	DisplayName: "displayName",
 	DN:          "dn",
+	UID:         "ms-DS-ConsistencyGuid", // you can fall back to objectguid or even samaccountname but you will run into trouble when user names change. You have been warned.
+	CN:          "cn",
+	Mail:        "mail",
+	DisplayName: "displayName",
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -83,6 +93,15 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
+	}
+
+	// backwards compatibility
+	if c.UserFilter != "" {
+		logger.New().Warn().Msg("userfilter is deprecated, use a loginfilter like `(&(objectclass=posixAccount)(|(cn={{login}}))(mail={{login}}))`")
+	}
+	if c.LoginFilter == "" {
+		c.LoginFilter = c.UserFilter
+		c.LoginFilter = strings.ReplaceAll(c.LoginFilter, "%s", "{{login}}")
 	}
 
 	return &mgr{
@@ -109,9 +128,8 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	searchRequest := ldap.NewSearchRequest(
 		am.c.BaseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-		fmt.Sprintf(am.c.UserFilter, clientID),
-		// TODO(jfd): objectguid, entryuuid etc ... make configurable
-		[]string{am.c.Schema.DN, am.c.Schema.UID, am.c.Schema.Mail, am.c.Schema.DisplayName},
+		am.getLoginFilter(clientID),
+		[]string{am.c.Schema.DN, am.c.Schema.UID, am.c.Schema.CN, am.c.Schema.Mail, am.c.Schema.DisplayName},
 		nil,
 	)
 
@@ -140,7 +158,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 			OpaqueId: sr.Entries[0].GetAttributeValue(am.c.Schema.UID),
 		},
 		// TODO add more claims from the StandardClaims, eg EmailVerified
-		Username: sr.Entries[0].GetAttributeValue(am.c.Schema.UID),
+		Username: sr.Entries[0].GetAttributeValue(am.c.Schema.CN),
 		// TODO groups
 		Groups:      []string{},
 		Mail:        sr.Entries[0].GetAttributeValue(am.c.Schema.Mail),
@@ -149,4 +167,8 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 
 	return u, nil
 
+}
+
+func (am *mgr) getLoginFilter(login string) string {
+	return strings.ReplaceAll(am.c.LoginFilter, "{{login}}", login)
 }
