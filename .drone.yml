@@ -126,6 +126,9 @@ steps:
   image: golang:1.13
   commands:
     - make check-changelog-drone PR=$DRONE_PULL_REQUEST
+  environment:
+    GITHUB_API_TOKEN:
+      from_secret: github_token
 
 - name: license-check
   image: golang:1.13

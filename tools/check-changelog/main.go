@@ -36,7 +36,7 @@ var skipTags = []string{"[tests-only]", "[build-deps]"}
 func skipPR(prID int) bool {
 	ctx := context.Background()
 	ts := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: os.Getenv("REVA_GITHUB_API_TOKEN")},
+		&oauth2.Token{AccessToken: os.Getenv("GITHUB_API_TOKEN")},
 	)
 	tc := oauth2.NewClient(ctx, ts)
 	client := github.NewClient(tc)
