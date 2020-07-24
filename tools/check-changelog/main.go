@@ -19,23 +19,52 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"log"
+	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/google/go-github/github"
+	"golang.org/x/oauth2"
 )
+
+var skipTags = []string{"[tests-only]", "[build-deps]"}
+
+func skipPR(prID int) bool {
+	ctx := context.Background()
+	ts := oauth2.StaticTokenSource(
+		&oauth2.Token{AccessToken: os.Getenv("REVA_GITHUB_API_TOKEN")},
+	)
+	tc := oauth2.NewClient(ctx, ts)
+	client := github.NewClient(tc)
+
+	pr, _, err := client.PullRequests.Get(ctx, "cs3org", "reva", prID)
+	if err != nil {
+		log.Panic(err)
+	}
+	prTitle := strings.ToLower(pr.GetTitle())
+
+	for _, tag := range skipTags {
+		if strings.HasPrefix(prTitle, tag) {
+			log.Print("Skipping changelog check for tag: " + tag)
+			return true
+		}
+	}
+	return false
+}
 
 func main() {
 	repo := flag.String("repo", "", "the remote repo against which diff-index is to be derived")
-	user := flag.String("user", "", "the user who created the PR")
+	prID := flag.Int("pr", 0, "the ID of the PR")
 	flag.Parse()
 
-	log.Print("PR created by: " + *user)
-	// Skip changelog check for PRs created by bots
-	if strings.Contains(*user, "dependabot") {
-		log.Print("Skipping changelog check")
-		return
+	if *prID > 0 {
+		if skipPR(*prID) {
+			return
+		}
 	}
 
 	branch := "master"
@@ -48,18 +77,14 @@ func main() {
 		log.Fatal(err)
 	}
 
-	var changelog bool
 	mods := strings.Split(string(out), "\n")
-
 	for _, m := range mods {
 		params := strings.Split(m, " ")
 		// The fifth param in the output of diff-index is always the status followed by optional score number
-		if len(params) >= 5 && params[4][0] == 'A' {
-			changelog = true
+		if len(params) >= 5 && (params[4][0] == 'A' || params[4][0] == 'M') {
+			return
 		}
 	}
 
-	if !changelog {
-		log.Fatal(errors.New("No changelog added. Please create a changelog item based on your changes"))
-	}
+	log.Fatal(errors.New("No changelog added. Please create a changelog item based on your changes"))
 }
