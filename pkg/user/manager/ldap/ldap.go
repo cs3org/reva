@@ -42,16 +42,9 @@ func init() {
 }
 
 type manager struct {
-	hostname     string
-	port         int
-	baseDN       string
-	userfilter   *template.Template
-	findfilter   string
-	groupfilter  *template.Template
-	bindUsername string
-	bindPassword string
-	idp          string
-	schema       attributes
+	c           *config
+	userfilter  *template.Template
+	groupfilter *template.Template
 }
 
 type config struct {
@@ -68,21 +61,25 @@ type config struct {
 }
 
 type attributes struct {
-	Mail        string `mapstructure:"mail"`
-	UID         string `mapstructure:"uid"`
+	// DN is the distinguished name in ldap, e.g. `cn=einstein,ou=users,dc=example,dc=org`
+	DN string `mapstructure:"dn"`
+	// UID is an immutable user id, see https://docs.microsoft.com/en-us/azure/active-directory/hybrid/plan-connect-design-concepts
+	UID string `mapstructure:"uid"`
+	// CN is the username, typically `cn`, `uid` or `samaccountname`
+	CN string `mapstructure:"cn"`
+	// Mail is the email address of a user
+	Mail string `mapstructure:"mail"`
+	// Displayname is the Human readable name, e.g. `Albert Einstein`
 	DisplayName string `mapstructure:"displayName"`
-	DN          string `mapstructure:"dn"`
-	CN          string `mapstructure:"cn"`
 }
 
 // Default attributes (Active Directory)
 var ldapDefaults = attributes{
-	Mail: "mail",
-	// An immutable user id, see https://docs.microsoft.com/en-us/azure/active-directory/hybrid/plan-connect-design-concepts
-	UID:         "ms-DS-ConsistencyGuid", // you can fall back to objectguid or even samaccountname but you will run into trouble when user names change. You have been warned.
-	DisplayName: "displayName",
 	DN:          "dn",
+	UID:         "ms-DS-ConsistencyGuid", // you can fall back to objectguid or even samaccountname but you will run into trouble when user names change. You have been warned.
 	CN:          "cn",
+	Mail:        "mail",
+	DisplayName: "displayName",
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -112,14 +109,7 @@ func New(m map[string]interface{}) (user.Manager, error) {
 	c.GroupFilter = strings.ReplaceAll(c.GroupFilter, "%s", "{{.OpaqueId}}")
 
 	mgr := &manager{
-		hostname:     c.Hostname,
-		port:         c.Port,
-		baseDN:       c.BaseDN,
-		findfilter:   c.FindFilter,
-		bindUsername: c.BindUsername,
-		bindPassword: c.BindPassword,
-		idp:          c.Idp,
-		schema:       c.Schema,
+		c: c,
 	}
 
 	mgr.userfilter, err = template.New("uf").Funcs(sprig.TxtFuncMap()).Parse(c.UserFilter)
@@ -138,24 +128,24 @@ func New(m map[string]interface{}) (user.Manager, error) {
 
 func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
 	log := appctx.GetLogger(ctx)
-	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.hostname, m.port), &tls.Config{InsecureSkipVerify: true})
+	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.c.Hostname, m.c.Port), &tls.Config{InsecureSkipVerify: true})
 	if err != nil {
 		return nil, err
 	}
 	defer l.Close()
 
 	// First bind with a read only user
-	err = l.Bind(m.bindUsername, m.bindPassword)
+	err = l.Bind(m.c.BindUsername, m.c.BindPassword)
 	if err != nil {
 		return nil, err
 	}
 
 	// Search for the given clientID
 	searchRequest := ldap.NewSearchRequest(
-		m.baseDN,
+		m.c.BaseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		m.getUserFilter(uid),
-		[]string{m.schema.DN, m.schema.CN, m.schema.UID, m.schema.Mail, m.schema.DisplayName},
+		[]string{m.c.Schema.DN, m.c.Schema.UID, m.c.Schema.CN, m.c.Schema.Mail, m.c.Schema.DisplayName},
 		nil,
 	)
 
@@ -171,8 +161,8 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 	log.Debug().Interface("entries", sr.Entries).Msg("entries")
 
 	id := &userpb.UserId{
-		Idp:      m.idp,
-		OpaqueId: sr.Entries[0].GetAttributeValue(m.schema.UID),
+		Idp:      m.c.Idp,
+		OpaqueId: sr.Entries[0].GetAttributeValue(m.c.Schema.UID),
 	}
 	groups, err := m.GetUserGroups(ctx, id)
 	if err != nil {
@@ -180,34 +170,34 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 	}
 	u := &userpb.User{
 		Id:          id,
-		Username:    sr.Entries[0].GetAttributeValue(m.schema.CN),
+		Username:    sr.Entries[0].GetAttributeValue(m.c.Schema.CN),
 		Groups:      groups,
-		Mail:        sr.Entries[0].GetAttributeValue(m.schema.Mail),
-		DisplayName: sr.Entries[0].GetAttributeValue(m.schema.DisplayName),
+		Mail:        sr.Entries[0].GetAttributeValue(m.c.Schema.Mail),
+		DisplayName: sr.Entries[0].GetAttributeValue(m.c.Schema.DisplayName),
 	}
 
 	return u, nil
 }
 
 func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
-	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.hostname, m.port), &tls.Config{InsecureSkipVerify: true})
+	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.c.Hostname, m.c.Port), &tls.Config{InsecureSkipVerify: true})
 	if err != nil {
 		return nil, err
 	}
 	defer l.Close()
 
 	// First bind with a read only user
-	err = l.Bind(m.bindUsername, m.bindPassword)
+	err = l.Bind(m.c.BindUsername, m.c.BindPassword)
 	if err != nil {
 		return nil, err
 	}
 
 	// Search for the given clientID
 	searchRequest := ldap.NewSearchRequest(
-		m.baseDN,
+		m.c.BaseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		m.getFindFilter(query),
-		[]string{m.schema.DN, m.schema.CN, m.schema.UID, m.schema.Mail, m.schema.DisplayName},
+		[]string{m.c.Schema.DN, m.c.Schema.UID, m.c.Schema.CN, m.c.Schema.Mail, m.c.Schema.DisplayName},
 		nil,
 	)
 
@@ -220,8 +210,8 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 
 	for _, entry := range sr.Entries {
 		id := &userpb.UserId{
-			Idp:      m.idp,
-			OpaqueId: entry.GetAttributeValue(m.schema.UID),
+			Idp:      m.c.Idp,
+			OpaqueId: entry.GetAttributeValue(m.c.Schema.UID),
 		}
 		groups, err := m.GetUserGroups(ctx, id)
 		if err != nil {
@@ -229,10 +219,10 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 		}
 		user := &userpb.User{
 			Id:          id,
-			Username:    entry.GetAttributeValue(m.schema.CN),
+			Username:    entry.GetAttributeValue(m.c.Schema.CN),
 			Groups:      groups,
-			Mail:        entry.GetAttributeValue(m.schema.Mail),
-			DisplayName: entry.GetAttributeValue(m.schema.DisplayName),
+			Mail:        entry.GetAttributeValue(m.c.Schema.Mail),
+			DisplayName: entry.GetAttributeValue(m.c.Schema.DisplayName),
 		}
 		users = append(users, user)
 	}
@@ -241,24 +231,24 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 }
 
 func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
-	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.hostname, m.port), &tls.Config{InsecureSkipVerify: true})
+	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.c.Hostname, m.c.Port), &tls.Config{InsecureSkipVerify: true})
 	if err != nil {
 		return []string{}, err
 	}
 	defer l.Close()
 
 	// First bind with a read only user
-	err = l.Bind(m.bindUsername, m.bindPassword)
+	err = l.Bind(m.c.BindUsername, m.c.BindPassword)
 	if err != nil {
 		return []string{}, err
 	}
 
 	// Search for the given clientID
 	searchRequest := ldap.NewSearchRequest(
-		m.baseDN,
+		m.c.BaseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		m.getGroupFilter(uid),
-		[]string{m.schema.CN}, // TODO use DN to look up group id
+		[]string{m.c.Schema.CN}, // TODO use DN to look up group id
 		nil,
 	)
 
@@ -273,7 +263,7 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 		// FIXME this makes the users groups use the cn, not an immutable id
 		// FIXME 1. use the memberof or members attribute of a user to get the groups
 		// FIXME 2. ook up the id for each group
-		groups = append(groups, entry.GetAttributeValue(m.schema.CN))
+		groups = append(groups, entry.GetAttributeValue(m.c.Schema.CN))
 	}
 
 	return groups, nil
@@ -305,7 +295,7 @@ func (m *manager) getUserFilter(uid *userpb.UserId) string {
 }
 
 func (m *manager) getFindFilter(query string) string {
-	return strings.ReplaceAll(m.findfilter, "{{query}}", query)
+	return strings.ReplaceAll(m.c.FindFilter, "{{query}}", query)
 }
 
 func (m *manager) getGroupFilter(uid *userpb.UserId) string {
