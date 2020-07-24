@@ -1,0 +1,39 @@
+default:
+  autoload:
+     '': '%paths.base%/../features/bootstrap'
+
+  suites:
+    apiSpecial1:
+      paths:
+        - '%paths.base%/../features/apiSpecial1'
+      context: &common_ldap_suite_context
+        parameters:
+          ldapAdminPassword: admin
+          ldapUsersOU: TestUsers
+          ldapGroupsOU: TestGroups
+          ldapInitialUserFilePath: /../../config/ldap-users.ldif
+      contexts:
+        - RevaContext:
+        - OccContext:
+        - FeatureContext: &common_feature_context_params
+            baseUrl:  http://localhost:8080
+            adminUsername: admin
+            adminPassword: admin
+            regularUserPassword: 123456
+            ocPath: apps/testing/api/v1/occ
+
+    apiSpecial2:
+      paths:
+        - '%paths.base%/../features/apiSpecial2'
+      context: *common_ldap_suite_context
+      contexts:
+        - RevaContext:
+        - OccContext:
+        - FeatureContext: *common_feature_context_params
+        - FavoritesContext:
+        - WebDavPropertiesContext:
+
+  extensions:
+      jarnaiz\JUnitFormatter\JUnitFormatterExtension:
+          filename: report.xml
+          outputDir: '%paths.base%/../output/'

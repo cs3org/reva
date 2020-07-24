@@ -353,7 +353,7 @@ steps:
       TEST_OCIS: 'true'
       TEST_REVA: 'true'
       BEHAT_FILTER_TAGS: '~@skipOnOcis&&~@skipOnOcis-OC-Storage'
-      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures.txt'
+      PATH_TO_CORE: '/drone/src/tmp/testrunner'
 
   - name: oC10APIAcceptanceTests
     image: owncloudci/php:7.2
@@ -369,6 +369,7 @@ steps:
       TEST_OCIS: 'true'
       TEST_REVA: 'true'
       BEHAT_FILTER_TAGS: '~@skipOnOcis&&~@skipOnOcis-OC-Storage'
+      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures.txt'
 
 services:
   - 'name': 'ldap'
