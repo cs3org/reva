@@ -20,37 +20,73 @@ package smtpclient
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"net/smtp"
+	"os"
+	"strings"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 )
 
 // SMTPCredentials stores the credentials required to connect to an SMTP server.
 type SMTPCredentials struct {
-	SenderMail     string `mapstructure:"sender_mail"`
-	SenderPassword string `mapstructure:"sender_password"`
-	SMTPServer     string `mapstructure:"smtp_server"`
-	SMTPPort       int    `mapstructure:"smtp_port"`
-	DisableAuth    bool   `mapstructure:"disable_auth"`
+	SenderMail     string `mapstructure:"sender_mail" docs:";The email to be used to send mails."`
+	SenderPassword string `mapstructure:"sender_password" docs:";The sender's password."`
+	SMTPServer     string `mapstructure:"smtp_server" docs:";The hostname of the SMTP server."`
+	SMTPPort       int    `mapstructure:"smtp_port" docs:"587;The port on which the SMTP daemon is running."`
+	DisableAuth    bool   `mapstructure:"disable_auth" docs:"false;Whether to disable SMTP auth."`
+	LocalName      string `mapstructure:"local_name" docs:";The host name to be used for unauthenticated SMTP."`
+}
+
+// NewSMTPCredentials creates a new SMTPCredentials object with the details of the passed object with sane defaults.
+func NewSMTPCredentials(c *SMTPCredentials) *SMTPCredentials {
+	creds := c
+
+	if creds.SMTPPort == 0 {
+		creds.SMTPPort = 587
+	}
+	if !creds.DisableAuth && creds.SenderPassword == "" {
+		creds.SenderPassword = os.Getenv("REVA_SMTP_SENDER_PASSWORD")
+	}
+	if creds.LocalName == "" {
+		tokens := strings.Split(creds.SenderMail, "@")
+		creds.LocalName = tokens[len(tokens)-1]
+	}
+	return creds
 }
 
 // SendMail allows sending mails using a set of client credentials.
 func (creds *SMTPCredentials) SendMail(recipient, subject, body string) error {
-	if creds.DisableAuth {
-		return creds.sendMailSMTP(recipient, subject, body)
+
+	headers := map[string]string{
+		"From":                      creds.SenderMail,
+		"To":                        recipient,
+		"Subject":                   subject,
+		"Date":                      time.Now().Format(time.RFC1123Z),
+		"Message-ID":                uuid.New().String(),
+		"MIME-Version":              "1.0",
+		"Content-Type":              "text/plain; charset=\"utf-8\"",
+		"Content-Transfer-Encoding": "base64",
 	}
-	return creds.sendMailAuthSMTP(recipient, subject, body)
+
+	message := ""
+	for k, v := range headers {
+		message += fmt.Sprintf("%s: %s\r\n", k, v)
+	}
+	message += "\r\n" + base64.StdEncoding.EncodeToString([]byte(body))
+
+	if creds.DisableAuth {
+		return creds.sendMailSMTP(recipient, subject, message)
+	}
+	return creds.sendMailAuthSMTP(recipient, subject, message)
 }
 
-func (creds *SMTPCredentials) sendMailAuthSMTP(recipient, subject, body string) error {
+func (creds *SMTPCredentials) sendMailAuthSMTP(recipient, subject, message string) error {
 
 	auth := smtp.PlainAuth("", creds.SenderMail, creds.SenderPassword, creds.SMTPServer)
-
-	message := "From: " + creds.SenderMail + "\n" +
-		"To: " + recipient + "\n" +
-		"Subject: " + subject + "\n\n" +
-		body
 
 	err := smtp.SendMail(
 		fmt.Sprintf("%s:%d", creds.SMTPServer, creds.SMTPPort),
@@ -67,7 +103,7 @@ func (creds *SMTPCredentials) sendMailAuthSMTP(recipient, subject, body string) 
 	return nil
 }
 
-func (creds *SMTPCredentials) sendMailSMTP(recipient, subject, body string) error {
+func (creds *SMTPCredentials) sendMailSMTP(recipient, subject, message string) error {
 
 	c, err := smtp.Dial(fmt.Sprintf("%s:%d", creds.SMTPServer, creds.SMTPPort))
 	if err != nil {
@@ -75,6 +111,9 @@ func (creds *SMTPCredentials) sendMailSMTP(recipient, subject, body string) erro
 	}
 	defer c.Close()
 
+	if err = c.Hello(creds.LocalName); err != nil {
+		return err
+	}
 	if err = c.Mail(creds.SenderMail); err != nil {
 		return err
 	}
@@ -88,12 +127,7 @@ func (creds *SMTPCredentials) sendMailSMTP(recipient, subject, body string) erro
 	}
 	defer wc.Close()
 
-	message := "From: " + creds.SenderMail + "\n" +
-		"To: " + recipient + "\n" +
-		"Subject: " + subject + "\n\n" +
-		body
 	buf := bytes.NewBufferString(message)
-
 	if _, err = buf.WriteTo(wc); err != nil {
 		return err
 	}

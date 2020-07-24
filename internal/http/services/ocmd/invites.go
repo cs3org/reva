@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
@@ -44,10 +43,7 @@ type invitesHandler struct {
 
 func (h *invitesHandler) init(c *Config) {
 	h.gatewayAddr = c.GatewaySvc
-	h.smtpCredentials = c.SMTPCredentials
-	if h.smtpCredentials != nil && !h.smtpCredentials.DisableAuth && h.smtpCredentials.SenderPassword == "" {
-		h.smtpCredentials.SenderPassword = os.Getenv("REVA_OCMD_SMTP_SENDER_PASSWORD")
-	}
+	h.smtpCredentials = smtpclient.NewSMTPCredentials(c.SMTPCredentials)
 }
 
 func (h *invitesHandler) Handler() http.Handler {
