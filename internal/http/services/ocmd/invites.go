@@ -37,13 +37,15 @@ import (
 )
 
 type invitesHandler struct {
-	smtpCredentials *smtpclient.SMTPCredentials
-	gatewayAddr     string
+	smtpCredentials  *smtpclient.SMTPCredentials
+	gatewayAddr      string
+	meshDirectoryURL string
 }
 
 func (h *invitesHandler) init(c *Config) {
 	h.gatewayAddr = c.GatewaySvc
 	h.smtpCredentials = smtpclient.NewSMTPCredentials(c.SMTPCredentials)
+	h.meshDirectoryURL = c.MeshDirectoryURL
 }
 
 func (h *invitesHandler) Handler() http.Handler {
@@ -90,7 +92,9 @@ func (h *invitesHandler) generateInviteToken(w http.ResponseWriter, r *http.Requ
 		subject := fmt.Sprintf("ScienceMesh: %s wants to collaborate with you", usr.DisplayName)
 		body := "Hi,\n\n" +
 			usr.DisplayName + " (" + usr.Mail + ") wants to start sharing OCM resources with you. " +
-			"To accept the invite, please use the following details:\n" +
+			"To accept the invite, please visit the following URL:\n" +
+			h.meshDirectoryURL + "?token=" + token.InviteToken.Token + "&providerDomain=" + usr.Id.Idp + "\n\n" +
+			"Alternatively, you can visit your mesh provider and use the following details:\n" +
 			"Token: " + token.InviteToken.Token + "\n" +
 			"ProviderDomain: " + usr.Id.Idp + "\n\n" +
 			"Best,\nThe ScienceMesh team"
@@ -163,6 +167,13 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, APIErrorServerError, "grpc forward invite request failed", errors.New(forwardInviteResponse.Status.Message))
 		return
 	}
+
+	_, err = w.Write([]byte("Accepted invite from: " + r.FormValue("providerDomain")))
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, "error writing token data", err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 
 	log.Info().Msgf("Invite forwarded to: %s", r.FormValue("providerDomain"))
 }
