@@ -44,7 +44,9 @@ type invitesHandler struct {
 
 func (h *invitesHandler) init(c *Config) {
 	h.gatewayAddr = c.GatewaySvc
-	h.smtpCredentials = smtpclient.NewSMTPCredentials(c.SMTPCredentials)
+	if c.SMTPCredentials != nil {
+		h.smtpCredentials = smtpclient.NewSMTPCredentials(c.SMTPCredentials)
+	}
 	h.meshDirectoryURL = c.MeshDirectoryURL
 }
 
