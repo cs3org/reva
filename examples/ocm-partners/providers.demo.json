@@ -15,7 +15,7 @@
 					},
 					"name": "CERNBox - OCM API",
 					"path": "https://sciencemesh.cernbox.cern.ch/iop/ocm/",
-					"isMonitored": true
+					"is_monitored": true
 				},
 				"api_version": "0.0.1",
 				"host": "https://sciencemesh.cernbox.cern.ch/iop/"
@@ -28,7 +28,7 @@
 					},
 					"name": "CERNBox - Webdav API",
 					"path": "https://sciencemesh.cernbox.cern.ch/iop/webdav/",
-					"isMonitored": true
+					"is_monitored": true
 				},
 				"api_version": "0.0.1",
 				"host": "https://sciencemesh.cernbox.cern.ch/iop/"
@@ -51,7 +51,7 @@
 					},
 					"name": "CESNET - OCM API",
 					"path": "https://sciencemesh.cesnet.cz/iop/ocm/",
-					"isMonitored": true
+					"is_monitored": true
 				},
 				"api_version": "0.0.1",
 				"host": "https://sciencemesh.cesnet.cz/iop/"
@@ -64,7 +64,7 @@
 					},
 					"name": "CESNET - Webdav API",
 					"path": "https://sciencemesh.cesnet.cz/iop/webdav/",
-					"isMonitored": true
+					"is_monitored": true
 				},
 				"api_version": "0.0.1",
 				"host": "https://sciencemesh.cesnet.cz/iop/"
@@ -87,7 +87,7 @@
 					},
 					"name": "WWU - OCM API",
 					"path": "https://sciencemesh-test.uni-muenster.de/api/ocm/",
-					"isMonitored": true
+					"is_monitored": true
 				},
 				"api_version": "0.0.1",
 				"host": "https://sciencemesh-test.uni-muenster.de/api/"
@@ -100,7 +100,7 @@
 					},
 					"name": "WWU - Webdav API",
 					"path": "https://sciencemesh-test.uni-muenster.de/api/webdav/",
-					"isMonitored": true
+					"is_monitored": true
 				},
 				"api_version": "0.0.1",
 				"host": "https://sciencemesh-test.uni-muenster.de/api/"
@@ -123,7 +123,7 @@
 					},
 					"name": "Cubbit - OCM API",
 					"path": "https://sciencemesh.cubbit.io/ocm/",
-					"isMonitored": true
+					"is_monitored": true
 				},
 				"api_version": "0.0.1",
 				"host": "https://sciencemesh.cubbit.io/"
@@ -136,7 +136,7 @@
 					},
 					"name": "Cubbit - Webdav API",
 					"path": "https://sciencemesh.cubbit.io/webdav/",
-					"isMonitored": true
+					"is_monitored": true
 				},
 				"api_version": "0.0.1",
 				"host": "https://sciencemesh.cubbit.io/"
@@ -147,8 +147,8 @@
 		"name": "ailleron",
 		"full_name": "Ailleron - Software Mind",
 		"organization": "Ailleron",
-		"domain": "ailleron.com",
-		"homepage": "https://ailleron.com",
+		"domain": "softwaremind.com",
+		"homepage": "https://softwaremind.com",
 		"description": "Ailleron is a Polish IT company providing software and storage solutions to its clients.",
 		"services": [
 			{
@@ -159,7 +159,7 @@
 					},
 					"name": "Ailleron - OCM API",
 					"path": "https://sciencemesh.softwaremind.com/iop/ocm/",
-					"isMonitored": true
+					"is_monitored": true
 				},
 				"api_version": "0.0.1",
 				"host": "https://sciencemesh.softwaremind.com/iop/"
@@ -172,7 +172,7 @@
 					},
 					"name": "Ailleron - Webdav API",
 					"path": "https://sciencemesh.softwaremind.com/iop/webdav/",
-					"isMonitored": true
+					"is_monitored": true
 				},
 				"api_version": "0.0.1",
 				"host": "https://sciencemesh.softwaremind.com/iop/"
@@ -195,7 +195,7 @@
 					},
 					"name": "Surfsara - OCM API",
 					"path": "https://app.cs3mesh-iop.k8s.surfsara.nl/iop/ocm/",
-					"isMonitored": true
+					"is_monitored": true
 				},
 				"api_version": "0.0.1",
 				"host": "https://app.cs3mesh-iop.k8s.surfsara.nl/iop/"
@@ -208,7 +208,7 @@
 					},
 					"name": "Surfsara - Webdav API",
 					"path": "https://app.cs3mesh-iop.k8s.surfsara.nl/iop/webdav/",
-					"isMonitored": true
+					"is_monitored": true
 				},
 				"api_version": "0.0.1",
 				"host": "https://app.cs3mesh-iop.k8s.surfsara.nl/iop/"

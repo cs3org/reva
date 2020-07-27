@@ -315,7 +315,7 @@ func (s *svc) createWebdavReference(ctx context.Context, share *ocm.Share) (*rpc
 	}
 
 	// reference path is the home path + some name on the corresponding
-	// mesh provider (webdav:webdav_endpoint:/home/MyShares/x)
+	// mesh provider (webdav:/home/MyShares/x@webdav_endpoint)
 	// It is the responsibility of the gateway to resolve these references and merge the response back
 	// from the main request.
 	// TODO(labkode): the name of the share should be the filename it points to by default.
@@ -324,7 +324,7 @@ func (s *svc) createWebdavReference(ctx context.Context, share *ocm.Share) (*rpc
 
 	createRefReq := &provider.CreateReferenceRequest{
 		Path: refPath,
-		// webdav is the Scheme and %s/%s is the Opaque parts of a net.URL.
+		// webdav is the Scheme and <storage_id>/<opaque_id>@webdav_endpoint are the Opaque parts of the URL.
 		TargetUri: fmt.Sprintf("webdav:%s/%s@%s", share.ResourceId.GetStorageId(), share.ResourceId.GetOpaqueId(), webdavEndpoint),
 	}
 

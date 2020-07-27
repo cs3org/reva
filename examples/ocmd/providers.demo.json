@@ -15,7 +15,7 @@
 					},
 					"name": "CERNBox - OCM API",
 					"path": "http://127.0.0.1:19001/ocm/",
-					"isMonitored": true
+					"is_monitored": true
 				},
 				"api_version": "0.0.1",
 				"host": "http://127.0.0.1:19001/"
@@ -28,7 +28,7 @@
 					},
 					"name": "CERNBox - Webdav API",
 					"path": "http://127.0.0.1:19001/webdav/",
-					"isMonitored": true
+					"is_monitored": true
 				},
 				"api_version": "0.0.1",
 				"host": "http://127.0.0.1:19001/"
@@ -51,7 +51,7 @@
 					},
 					"name": "CESNET - OCM API",
 					"path": "http://127.0.0.1:17001/ocm/",
-					"isMonitored": true
+					"is_monitored": true
 				},
 				"api_version": "0.0.1",
 				"host": "http://127.0.0.1:17001/"
@@ -64,7 +64,7 @@
 					},
 					"name": "CESNET - Webdav API",
 					"path": "http://127.0.0.1:17001/webdav/",
-					"isMonitored": true
+					"is_monitored": true
 				},
 				"api_version": "0.0.1",
 				"host": "http://127.0.0.1:17001/"
@@ -87,7 +87,7 @@
 					},
 					"name": "Example - OCM API",
 					"path": "http://127.0.0.1:19001/ocm/",
-					"isMonitored": true
+					"is_monitored": true
 				},
 				"api_version": "0.0.1",
 				"host": "http://127.0.0.1:19001/"
@@ -100,7 +100,7 @@
 					},
 					"name": "Example - Webdav API",
 					"path": "http://127.0.0.1:19001/webdav/",
-					"isMonitored": true
+					"is_monitored": true
 				},
 				"api_version": "0.0.1",
 				"host": "http://127.0.0.1:19001/"
@@ -123,7 +123,7 @@
 					},
 					"name": "Test - OCM API",
 					"path": "http://127.0.0.1:19001/ocm/",
-					"isMonitored": true
+					"is_monitored": true
 				},
 				"api_version": "0.0.1",
 				"host": "http://127.0.0.1:19001/"
@@ -136,7 +136,7 @@
 					},
 					"name": "Test - Webdav API",
 					"path": "http://127.0.0.1:19001/webdav/",
-					"isMonitored": true
+					"is_monitored": true
 				},
 				"api_version": "0.0.1",
 				"host": "http://127.0.0.1:19001/"
