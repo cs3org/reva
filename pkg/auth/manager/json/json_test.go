@@ -22,12 +22,7 @@ import (
 	"context"
 	"io/ioutil"
 	"os"
-
-	//"reflect"
-	//"fmt"
 	"testing"
-	//user "github.com/cs3org/go-cs3apis/cs3/types"
-	//"github.com/cs3org/reva/pkg/errtypes"
 )
 
 var ctx = context.Background()
