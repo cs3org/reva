@@ -320,13 +320,24 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 	return u, nil
 }
 
-func (m *manager) GetUserByUID(ctx context.Context, uid string) (*userpb.User, error) {
-	opaqueID, err := m.fetchCachedUID(uid)
+func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
+	opaqueID, err := m.fetchCachedParam(claim, value)
 	if err == nil {
 		return m.GetUser(ctx, &userpb.UserId{OpaqueId: opaqueID})
 	}
 
-	userData, err := m.getUserByParam(ctx, "uid", uid)
+	switch claim {
+	case "mail":
+		claim = "primaryAccountEmail"
+	case "uid":
+		claim = "uid"
+	case "username":
+		claim = "upn"
+	default:
+		return nil, errors.New("rest: invalid field")
+	}
+
+	userData, err := m.getUserByParam(ctx, claim, value)
 	if err != nil {
 		return nil, err
 	}

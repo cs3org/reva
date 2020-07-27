@@ -179,8 +179,8 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 	return u, nil
 }
 
-func (m *manager) GetUserByUID(ctx context.Context, uid string) (*userpb.User, error) {
-	return nil, errtypes.NotSupported("ldap: looking up user by UID not supported")
+func (m *manager) GetUserByClaim(ctx context.Context, field, claim string) (*userpb.User, error) {
+	return nil, errtypes.NotSupported("ldap: looking up user by specific field not supported")
 }
 
 func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {

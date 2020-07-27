@@ -65,17 +65,23 @@ func TestUserManager(t *testing.T) {
 		t.Fatalf("user not found error differs: expected='%v' got='%v'", expectedErr, err)
 	}
 
-	// positive test GetUserByUID
-	resUserByUID, _ := manager.GetUserByUID(ctx, "123")
+	// positive test GetUserByClaim by uid
+	resUserByUID, _ := manager.GetUserByClaim(ctx, "uid", "123")
 	if !reflect.DeepEqual(resUserByUID, userEinstein) {
 		t.Fatalf("user differs: expected=%v got=%v", userEinstein, resUserByUID)
 	}
 
-	// negative test GetUserByUID
+	// negative test GetUserByClaim by uid
 	expectedErr = errtypes.NotFound("789")
-	_, err = manager.GetUserByUID(ctx, "789")
+	_, err = manager.GetUserByClaim(ctx, "uid", "789")
 	if !reflect.DeepEqual(err, expectedErr) {
 		t.Fatalf("user not found error differs: expected='%v' got='%v'", expectedErr, err)
+	}
+
+	// positive test GetUserByClaim by mail
+	resUserByEmail, _ := manager.GetUserByClaim(ctx, "mail", "einstein@example.org")
+	if !reflect.DeepEqual(resUserByEmail, userEinstein) {
+		t.Fatalf("user differs: expected=%v got=%v", userEinstein, resUserByEmail)
 	}
 
 	// test FindUsers

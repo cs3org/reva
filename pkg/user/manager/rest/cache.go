@@ -31,7 +31,6 @@ const (
 	userDetailsPrefix    = "user:"
 	userGroupsPrefix     = "groups:"
 	userInternalIDPrefix = "internal:"
-	userUIDPrefix        = "uid:"
 )
 
 func initRedisPool(address, username, password string) *redis.Pool {
@@ -136,14 +135,21 @@ func (m *manager) cacheUserDetails(u *userpb.User) error {
 	if err != nil {
 		return err
 	}
-	if err = m.setVal(userUIDPrefix+uid, u.Id.OpaqueId, -1); err != nil {
+
+	if err = m.setVal("uid:"+uid, u.Id.OpaqueId, -1); err != nil {
+		return err
+	}
+	if err = m.setVal("mail:"+u.Mail, u.Id.OpaqueId, -1); err != nil {
+		return err
+	}
+	if err = m.setVal("username:"+u.Username, u.Id.OpaqueId, -1); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (m *manager) fetchCachedUID(uid string) (string, error) {
-	return m.getVal(userUIDPrefix + uid)
+func (m *manager) fetchCachedParam(field, claim string) (string, error) {
+	return m.getVal(field + ":" + claim)
 }
 
 func (m *manager) fetchCachedUserGroups(uid *userpb.UserId) ([]string, error) {

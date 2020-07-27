@@ -23,7 +23,6 @@ import (
 	"fmt"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/user"
@@ -100,36 +99,37 @@ func (s *service) Register(ss *grpc.Server) {
 }
 
 func (s *service) GetUser(ctx context.Context, req *userpb.GetUserRequest) (*userpb.GetUserResponse, error) {
-
-	// Check if we need to retrieve user from UID or not
-	uid, err := extractUID(req.Opaque)
-
-	var usr *userpb.User
-	if err == nil {
-		usr, err = s.usermgr.GetUserByUID(ctx, uid)
-		if err != nil {
-			// TODO(labkode): check for not found.
-			err = errors.Wrap(err, "userprovidersvc: error getting user")
-			res := &userpb.GetUserResponse{
-				Status: status.NewInternal(ctx, err, "error authenticating user"),
-			}
-			return res, nil
+	user, err := s.usermgr.GetUser(ctx, req.UserId)
+	if err != nil {
+		// TODO(labkode): check for not found.
+		err = errors.Wrap(err, "userprovidersvc: error getting user")
+		res := &userpb.GetUserResponse{
+			Status: status.NewInternal(ctx, err, "error getting user"),
 		}
-	} else {
-		usr, err = s.usermgr.GetUser(ctx, req.UserId)
-		if err != nil {
-			// TODO(labkode): check for not found.
-			err = errors.Wrap(err, "userprovidersvc: error getting user")
-			res := &userpb.GetUserResponse{
-				Status: status.NewInternal(ctx, err, "error authenticating user"),
-			}
-			return res, nil
-		}
+		return res, nil
 	}
 
 	res := &userpb.GetUserResponse{
 		Status: status.NewOK(ctx),
-		User:   usr,
+		User:   user,
+	}
+	return res, nil
+}
+
+func (s *service) GetUserByClaim(ctx context.Context, req *userpb.GetUserByClaimRequest) (*userpb.GetUserByClaimResponse, error) {
+	user, err := s.usermgr.GetUserByClaim(ctx, req.Claim, req.Value)
+	if err != nil {
+		// TODO(labkode): check for not found.
+		err = errors.Wrap(err, "userprovidersvc: error getting user by claim")
+		res := &userpb.GetUserByClaimResponse{
+			Status: status.NewInternal(ctx, err, "error getting user by claim"),
+		}
+		return res, nil
+	}
+
+	res := &userpb.GetUserByClaim{
+		Status: status.NewOK(ctx),
+		User:   user,
 	}
 	return res, nil
 }
@@ -184,15 +184,4 @@ func (s *service) IsInGroup(ctx context.Context, req *userpb.IsInGroupRequest) (
 	}
 
 	return res, nil
-}
-
-func extractUID(opaqueObj *types.Opaque) (string, error) {
-	if opaqueObj != nil && opaqueObj.Map != nil {
-		if uidObj, ok := opaqueObj.Map["uid"]; ok {
-			if uidObj.Decoder == "plain" {
-				return string(uidObj.Value), nil
-			}
-		}
-	}
-	return "", errors.New("could not retrieve UID from opaque object")
 }
