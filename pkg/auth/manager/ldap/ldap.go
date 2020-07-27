@@ -121,6 +121,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	// First bind with a read only user
 	err = l.Bind(am.c.BindUsername, am.c.BindPassword)
 	if err != nil {
+		log.Error().Err(err).Msg("bind with system user failed")
 		return nil, err
 	}
 
@@ -142,13 +143,12 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, errtypes.NotFound(clientID)
 	}
 
-	log.Debug().Interface("entries", sr.Entries).Msg("entries")
-
 	userdn := sr.Entries[0].DN
 
 	// Bind as the user to verify their password
 	err = l.Bind(userdn, clientSecret)
 	if err != nil {
+		log.Debug().Err(err).Interface("userdn", userdn).Msg("bind with user credentials failed")
 		return nil, err
 	}
 
@@ -164,7 +164,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		Mail:        sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.Mail),
 		DisplayName: sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.DisplayName),
 	}
-	fmt.Printf("\n\n\n%+v\n\n\n", u)
+	log.Debug().Interface("entry", sr.Entries[0]).Interface("user", u).Msg("authenticated user")
 
 	return u, nil
 
