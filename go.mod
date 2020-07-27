@@ -13,7 +13,7 @@ require (
 	github.com/cs3org/cato v0.0.0-20200626150132-28a40e643719
 	github.com/cs3org/go-cs3apis v0.0.0-20200709064917-d96c5f2a42ad
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
-	github.com/eventials/go-tus v0.0.0-20190617130015-9db47421f6a0
+	github.com/eventials/go-tus v0.0.0-20200718001131-45c7ec8f5d59
 	github.com/go-ldap/ldap/v3 v3.2.3
 	github.com/go-openapi/strfmt v0.19.2 // indirect
 	github.com/gofrs/uuid v3.3.0+incompatible
