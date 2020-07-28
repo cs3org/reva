@@ -20,6 +20,7 @@ package json
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -31,7 +32,7 @@ func TestUserManager(t *testing.T) {
 	// add tempdir
 	tempdir, err := ioutil.TempDir("", "json_test")
 	if err != nil {
-		t.Fatalf("error while create temp dir: %v", err)
+		t.Fatalf("Error while creating temp dir: %v", err)
 	}
 	defer os.RemoveAll(tempdir)
 
@@ -41,15 +42,16 @@ func TestUserManager(t *testing.T) {
 	}
 	_, err = New(input)
 	if err == nil {
-		t.Fatalf("no error (but we expected one) while get manager")
+		t.Fatalf("Expected error while getting manager but found none.")
 	}
 
 	tests := []struct {
-		name          string
-		user          string
-		clientID      string
-		clientSecret  string
-		expectManager bool
+		name                       string
+		user                       string
+		clientID                   string
+		clientSecret               string
+		expectManager              bool
+		expectAuthenticated bool
 	}{
 		{
 			"Corrupt JSON object with user metadata",
@@ -57,12 +59,22 @@ func TestUserManager(t *testing.T) {
 			"nil",
 			"nil",
 			false,
+			false,
 		},
 		{
-			"JSON object with user metadata",
+			"JSON object with incorrect user metadata",
 			`[{"username":"einstein","secret":"albert"}]`,
 			"einstein",
 			"NotARealPassword",
+			true,
+			false,
+		},
+		{
+			"JSON object with correct user metadata",
+			`[{"username":"einstein","secret":"albert"}]`,
+			"einstein",
+			"albert",
+			true,
 			true,
 		},
 	}
@@ -90,9 +102,16 @@ func TestUserManager(t *testing.T) {
 					t.Fatalf("Expected error while getting manager but found none.")
 				}
 			} else if manager != nil && tt.expectManager {
-				_, err = manager.Authenticate(ctx, tt.clientID, tt.clientSecret)
-				if err == nil {
-					t.Fatalf("Expected error while authenticate about bad credentials, but found none.")
+				authenticated, err := manager.Authenticate(ctx, tt.clientID, tt.clientSecret)
+				fmt.Println(authenticated, err)
+				if !tt.expectAuthenticated {
+					if authenticated != nil && err == nil {
+						t.Fatalf("Expected error while authenticate about bad credentials, but found none.")
+					}
+				} else if tt.expectAuthenticated {
+					if authenticated == nil && err != nil {
+						t.Fatalf("Expected authenitacated manager, but not found.")
+					}
 				}
 			}
 			// cleanup
