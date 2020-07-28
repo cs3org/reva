@@ -1,4 +1,3 @@
-
 Enhancement: Do not enforce changelog on release
 
 While releasing a new version of Reva, make release was failing because it was 
