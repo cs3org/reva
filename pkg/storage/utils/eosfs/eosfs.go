@@ -477,6 +477,11 @@ func (fs *eosfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pr
 		}
 	}
 
+	eosACL := &acl.Entry{
+		Qualifier: recipient,
+		Type:      eosACLType,
+	}
+
 	p, err := fs.resolve(ctx, u, ref)
 	if err != nil {
 		return errors.Wrap(err, "eos: error resolving reference")
@@ -494,7 +499,7 @@ func (fs *eosfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pr
 		return err
 	}
 
-	err = fs.c.RemoveACL(ctx, uid, gid, rootUID, rootGID, fn, eosACLType, recipient)
+	err = fs.c.RemoveACL(ctx, uid, gid, rootUID, rootGID, fn, eosACL)
 	if err != nil {
 		return errors.Wrap(err, "eos: error removing acl")
 	}

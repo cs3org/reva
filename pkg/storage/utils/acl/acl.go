@@ -82,15 +82,6 @@ func (m *ACLs) Serialize() string {
 	return strings.Join(sysACL, ShortTextForm)
 }
 
-// CitrineSerialize serializes ACLs for citrine EOS ACLs
-func (m *ACLs) CitrineSerialize() string {
-	sysACL := []string{}
-	for _, e := range m.Entries {
-		sysACL = append(sysACL, e.citrineSerialize())
-	}
-	return strings.Join(sysACL, ShortTextForm)
-}
-
 // DeleteEntry removes an entry uniquely identified by acl type and qualifier
 func (m *ACLs) DeleteEntry(aclType string, qualifier string) {
 	aclType = getShortType(aclType)
@@ -141,6 +132,11 @@ func ParseEntry(singleSysACL string) (*Entry, error) {
 	}, nil
 }
 
+// CitrineSerialize serializes an ACL entry for citrine EOS ACLs
+func (a *Entry) CitrineSerialize() string {
+	return fmt.Sprintf("%s:%s=%s", a.Type, a.Qualifier, a.Permissions)
+}
+
 func getShortType(aclType string) string {
 	switch aclType[:1] {
 	case TypeUser:
@@ -154,8 +150,4 @@ func getShortType(aclType string) string {
 
 func (a *Entry) serialize() string {
 	return strings.Join([]string{a.Type, a.Qualifier, a.Permissions}, ":")
-}
-
-func (a *Entry) citrineSerialize() string {
-	return fmt.Sprintf("%s:%s=%s", a.Type, a.Qualifier, a.Permissions)
 }

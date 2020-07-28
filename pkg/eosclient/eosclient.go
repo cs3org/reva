@@ -295,16 +295,6 @@ func (c *Client) parseVersion(ctx context.Context, raw string) eosVersion {
 
 // AddACL adds an new acl to EOS with the given aclType.
 func (c *Client) AddACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, a *acl.Entry) error {
-	acls, err := c.getACLForPath(ctx, uid, gid, path)
-	if err != nil {
-		return err
-	}
-
-	err = acls.SetEntry(a.Type, a.Qualifier, a.Permissions)
-	if err != nil {
-		return err
-	}
-
 	version, err := c.getVersion(ctx, rootUID, rootGID)
 	if err != nil {
 		return err
@@ -312,9 +302,18 @@ func (c *Client) AddACL(ctx context.Context, uid, gid, rootUID, rootGID, path st
 
 	var cmd *exec.Cmd
 	if version == versionCitrine {
-		sysACL := acls.CitrineSerialize()
+		sysACL := a.CitrineSerialize()
 		cmd = exec.CommandContext(ctx, c.opt.EosBinary, "-r", rootUID, rootGID, "acl", "--sys", "--recursive", sysACL, path)
 	} else {
+		acls, err := c.getACLForPath(ctx, uid, gid, path)
+		if err != nil {
+			return err
+		}
+
+		err = acls.SetEntry(a.Type, a.Qualifier, a.Permissions)
+		if err != nil {
+			return err
+		}
 		sysACL := acls.Serialize()
 		cmd = exec.CommandContext(ctx, c.opt.EosBinary, "-r", rootUID, rootGID, "attr", "-r", "set", fmt.Sprintf("sys.acl=%s", sysACL), path)
 	}
@@ -325,24 +324,23 @@ func (c *Client) AddACL(ctx context.Context, uid, gid, rootUID, rootGID, path st
 }
 
 // RemoveACL removes the acl from EOS.
-func (c *Client) RemoveACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, aclType string, recipient string) error {
+func (c *Client) RemoveACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, a *acl.Entry) error {
 	version, err := c.getVersion(ctx, rootUID, rootGID)
 	if err != nil {
 		return err
 	}
 
-	acls, err := c.getACLForPath(ctx, uid, gid, path)
-	if err != nil {
-		return err
-	}
-
-	acls.DeleteEntry(aclType, recipient)
-
 	var cmd *exec.Cmd
 	if version == versionCitrine {
-		sysACL := acls.CitrineSerialize()
+		sysACL := a.CitrineSerialize()
 		cmd = exec.CommandContext(ctx, c.opt.EosBinary, "-r", rootUID, rootGID, "acl", "--sys", "--recursive", sysACL, path)
 	} else {
+		acls, err := c.getACLForPath(ctx, uid, gid, path)
+		if err != nil {
+			return err
+		}
+
+		acls.DeleteEntry(a.Type, a.Qualifier)
 		sysACL := acls.Serialize()
 		cmd = exec.CommandContext(ctx, c.opt.EosBinary, "-r", rootUID, rootGID, "attr", "-r", "set", fmt.Sprintf("sys.acl=%s", sysACL), path)
 	}
