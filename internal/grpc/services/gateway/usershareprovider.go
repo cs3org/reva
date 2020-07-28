@@ -41,12 +41,10 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
 		}, nil
 	}
-
 	res, err := c.CreateShare(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling CreateShare")
 	}
-
 	if res.Status.Code != rpc.Code_CODE_OK {
 		return res, nil
 	}

@@ -20,6 +20,7 @@ package acl
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 )
 
@@ -129,6 +130,11 @@ func ParseEntry(singleSysACL string) (*Entry, error) {
 		Qualifier:   tokens[1],
 		Permissions: tokens[2],
 	}, nil
+}
+
+// CitrineSerialize serializes an ACL entry for citrine EOS ACLs
+func (a *Entry) CitrineSerialize() string {
+	return fmt.Sprintf("%s:%s=%s", a.Type, a.Qualifier, a.Permissions)
 }
 
 func getShortType(aclType string) string {

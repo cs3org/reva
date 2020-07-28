@@ -688,7 +688,25 @@ func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRe
 }
 
 func (s *service) ListGrants(ctx context.Context, req *provider.ListGrantsRequest) (*provider.ListGrantsResponse, error) {
-	return nil, nil
+	newRef, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		return &provider.ListGrantsResponse{
+			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+		}, nil
+	}
+
+	grants, err := s.storage.ListGrants(ctx, newRef)
+	if err != nil {
+		return &provider.ListGrantsResponse{
+			Status: status.NewInternal(ctx, err, "error listing ACLs"),
+		}, nil
+	}
+
+	res := &provider.ListGrantsResponse{
+		Status: status.NewOK(ctx),
+		Grants: grants,
+	}
+	return res, nil
 }
 
 func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (*provider.AddGrantResponse, error) {

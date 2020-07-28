@@ -144,3 +144,11 @@ use_keytab = false
 {{< /highlight >}}
 {{% /dir %}}
 
+{{% dir name="gatewaysvc" type="string" default="0.0.0.0:19000" %}}
+GatewaySvc stores the endpoint at which the GRPC gateway is exposed. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/eoshome/eoshome.go#L100)
+{{< highlight toml >}}
+[storage.fs.eoshome]
+gatewaysvc = "0.0.0.0:19000"
+{{< /highlight >}}
+{{% /dir %}}
+

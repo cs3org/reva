@@ -104,12 +104,30 @@ func (s *service) GetUser(ctx context.Context, req *userpb.GetUserRequest) (*use
 		// TODO(labkode): check for not found.
 		err = errors.Wrap(err, "userprovidersvc: error getting user")
 		res := &userpb.GetUserResponse{
-			Status: status.NewInternal(ctx, err, "error authenticating user"),
+			Status: status.NewInternal(ctx, err, "error getting user"),
 		}
 		return res, nil
 	}
 
 	res := &userpb.GetUserResponse{
+		Status: status.NewOK(ctx),
+		User:   user,
+	}
+	return res, nil
+}
+
+func (s *service) GetUserByClaim(ctx context.Context, req *userpb.GetUserByClaimRequest) (*userpb.GetUserByClaimResponse, error) {
+	user, err := s.usermgr.GetUserByClaim(ctx, req.Claim, req.Value)
+	if err != nil {
+		// TODO(labkode): check for not found.
+		err = errors.Wrap(err, "userprovidersvc: error getting user by claim")
+		res := &userpb.GetUserByClaimResponse{
+			Status: status.NewInternal(ctx, err, "error getting user by claim"),
+		}
+		return res, nil
+	}
+
+	res := &userpb.GetUserByClaimResponse{
 		Status: status.NewOK(ctx),
 		User:   user,
 	}

@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 )
 
@@ -41,6 +42,12 @@ func TestUserManager(t *testing.T) {
 		Groups:      []string{"sailing-lovers", "violin-haters", "physics-lovers"},
 		Mail:        "einstein@example.org",
 		DisplayName: "Albert Einstein",
+		Opaque: &types.Opaque{
+			Map: map[string]*types.OpaqueEntry{
+				"uid": &types.OpaqueEntry{Decoder: "plain", Value: []byte("123")},
+				"gid": &types.OpaqueEntry{Decoder: "plain", Value: []byte("987")},
+			},
+		},
 	}
 	uidFake := &userpb.UserId{Idp: "nonesense", OpaqueId: "fakeUser"}
 	groupsEinstein := []string{"sailing-lovers", "violin-haters", "physics-lovers"}
@@ -48,20 +55,39 @@ func TestUserManager(t *testing.T) {
 	// positive test GetUserGroups
 	resGroups, _ := manager.GetUserGroups(ctx, uidEinstein)
 	if !reflect.DeepEqual(resGroups, groupsEinstein) {
-		t.Fatalf("groups differ: expected=%v got=%v", resGroups, groupsEinstein)
+		t.Fatalf("groups differ: expected=%v got=%v", groupsEinstein, resGroups)
 	}
 
 	// negative test GetUserGroups
 	expectedErr := errtypes.NotFound(uidFake.OpaqueId)
 	_, err := manager.GetUserGroups(ctx, uidFake)
 	if !reflect.DeepEqual(err, expectedErr) {
-		t.Fatalf("user not found error differ: expected='%v' got='%v'", expectedErr, err)
+		t.Fatalf("user not found error differs: expected='%v' got='%v'", expectedErr, err)
+	}
+
+	// positive test GetUserByClaim by uid
+	resUserByUID, _ := manager.GetUserByClaim(ctx, "uid", "123")
+	if !reflect.DeepEqual(resUserByUID, userEinstein) {
+		t.Fatalf("user differs: expected=%v got=%v", userEinstein, resUserByUID)
+	}
+
+	// negative test GetUserByClaim by uid
+	expectedErr = errtypes.NotFound("789")
+	_, err = manager.GetUserByClaim(ctx, "uid", "789")
+	if !reflect.DeepEqual(err, expectedErr) {
+		t.Fatalf("user not found error differs: expected='%v' got='%v'", expectedErr, err)
+	}
+
+	// positive test GetUserByClaim by mail
+	resUserByEmail, _ := manager.GetUserByClaim(ctx, "mail", "einstein@example.org")
+	if !reflect.DeepEqual(resUserByEmail, userEinstein) {
+		t.Fatalf("user differs: expected=%v got=%v", userEinstein, resUserByEmail)
 	}
 
 	// test FindUsers
 	resUser, _ := manager.FindUsers(ctx, "einstein")
 	if !reflect.DeepEqual(resUser, []*userpb.User{userEinstein}) {
-		t.Fatalf("user differ: expected=%v got=%v", []*userpb.User{userEinstein}, resUser)
+		t.Fatalf("user differs: expected=%v got=%v", []*userpb.User{userEinstein}, resUser)
 	}
 
 	// negative test FindUsers
@@ -86,9 +112,9 @@ func TestUserManager(t *testing.T) {
 	expectedErr = errtypes.NotFound(uidFake.OpaqueId)
 	resInGroup, err = manager.IsInGroup(ctx, uidFake, "physics-lovers")
 	if !reflect.DeepEqual(err, expectedErr) {
-		t.Fatalf("user not in group error differ: expected='%v' got='%v'", expectedErr, err)
+		t.Fatalf("user not in group error differs: expected='%v' got='%v'", expectedErr, err)
 	}
 	if resInGroup {
-		t.Fatalf("user not in group bool differ: expected='%v' got='%v'", false, resInGroup)
+		t.Fatalf("user not in group bool differs: expected='%v' got='%v'", false, resInGroup)
 	}
 }

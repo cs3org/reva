@@ -27,6 +27,7 @@ import (
 
 	oidc "github.com/coreos/go-oidc"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/rhttp"
@@ -46,9 +47,11 @@ type mgr struct {
 }
 
 type config struct {
-	Insecure bool   `mapstructure:"insecure"`
-	Issuer   string `mapstructure:"issuer"`
-	IDClaim  string `mapstructure:"id_claim"`
+	Insecure bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
+	Issuer   string `mapstructure:"issuer" docs:";The issuer of the OIDC token."`
+	IDClaim  string `mapstructure:"id_claim" docs:"sub;The claim containing the ID of the user."`
+	UIDClaim string `mapstructure:"uid_claim" docs:";The claim containing the UID of the user."`
+	GIDClaim string `mapstructure:"gid_claim" docs:";The claim containing the GID of the user."`
 }
 
 func (c *config) init() {
@@ -120,6 +123,28 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, fmt.Errorf("no \"preferred_username\" or \"name\" attribute found in userinfo: maybe the client did not request the oidc \"profile\"-scope")
 	}
 
+	opaqueObj := &types.Opaque{
+		Map: map[string]*types.OpaqueEntry{},
+	}
+	if am.c.UIDClaim != "" {
+		uid, ok := claims[am.c.UIDClaim]
+		if ok {
+			opaqueObj.Map["uid"] = &types.OpaqueEntry{
+				Decoder: "plain",
+				Value:   []byte(fmt.Sprintf("%0.f", uid)),
+			}
+		}
+	}
+	if am.c.GIDClaim != "" {
+		gid, ok := claims[am.c.GIDClaim]
+		if ok {
+			opaqueObj.Map["gid"] = &types.OpaqueEntry{
+				Decoder: "plain",
+				Value:   []byte(fmt.Sprintf("%0.f", gid)),
+			}
+		}
+	}
+
 	u := &user.User{
 		Id: &user.UserId{
 			OpaqueId: claims[am.c.IDClaim].(string), // a stable non reassignable id
@@ -134,6 +159,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		Mail:         claims["email"].(string),
 		MailVerified: claims["email_verified"].(bool),
 		DisplayName:  claims["name"].(string),
+		Opaque:       opaqueObj,
 	}
 
 	return u, nil

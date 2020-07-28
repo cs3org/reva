@@ -95,6 +95,33 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 	return nil, errtypes.NotFound(uid.OpaqueId)
 }
 
+func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
+	for _, u := range m.users {
+		if userClaim, err := extractClaim(u, claim); err == nil && value == userClaim {
+			return u, nil
+		}
+	}
+	return nil, errtypes.NotFound(value)
+}
+
+func extractClaim(u *userpb.User, claim string) (string, error) {
+	switch claim {
+	case "mail":
+		return u.Mail, nil
+	case "username":
+		return u.Username, nil
+	case "uid":
+		if u.Opaque != nil && u.Opaque.Map != nil {
+			if uidObj, ok := u.Opaque.Map["uid"]; ok {
+				if uidObj.Decoder == "plain" {
+					return string(uidObj.Value), nil
+				}
+			}
+		}
+	}
+	return "", errors.New("json: invalid field")
+}
+
 // TODO(jfd) search Opaque? compare sub?
 func userContains(u *userpb.User, query string) bool {
 	return strings.Contains(u.Username, query) || strings.Contains(u.DisplayName, query) || strings.Contains(u.Mail, query) || strings.Contains(u.Id.OpaqueId, query)

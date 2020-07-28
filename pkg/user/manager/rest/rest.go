@@ -32,11 +32,11 @@ import (
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
-
 	"github.com/gomodule/redigo/redis"
 	"github.com/mitchellh/mapstructure"
 )
@@ -64,8 +64,12 @@ type OIDCToken struct {
 }
 
 type config struct {
-	// The port on which the redis server is running
-	Redis string `mapstructure:"redis" docs:":6379"`
+	// The address at which the redis server is running
+	RedisAddress string `mapstructure:"redis_address" docs:"localhost:6379"`
+	// The username for connecting to the redis server
+	RedisUsername string `mapstructure:"redis_username" docs:""`
+	// The password for connecting to the redis server
+	RedisPassword string `mapstructure:"redis_password" docs:""`
 	// The time in minutes for which the groups to which a user belongs would be cached
 	UserGroupsCacheExpiration int `mapstructure:"user_groups_cache_expiration" docs:"5"`
 	// The OIDC Provider
@@ -87,8 +91,8 @@ func (c *config) init() {
 	if c.UserGroupsCacheExpiration == 0 {
 		c.UserGroupsCacheExpiration = 5
 	}
-	if c.Redis == "" {
-		c.Redis = ":6379"
+	if c.RedisAddress == "" {
+		c.RedisAddress = ":6379"
 	}
 	if c.APIBaseURL == "" {
 		c.APIBaseURL = "https://authorization-service-api-dev.web.cern.ch/api/v1.0"
@@ -120,7 +124,7 @@ func New(m map[string]interface{}) (user.Manager, error) {
 	}
 	c.init()
 
-	redisPool := initRedisPool(c.Redis)
+	redisPool := initRedisPool(c.RedisAddress, c.RedisUsername, c.RedisPassword)
 	return &manager{
 		conf:      c,
 		redisPool: redisPool,
@@ -224,31 +228,87 @@ func (m *manager) sendAPIRequest(ctx context.Context, url string) ([]interface{}
 	return responseData, nil
 }
 
+func (m *manager) getUserByParam(ctx context.Context, param, val string) (map[string]interface{}, error) {
+	url := fmt.Sprintf("%s/Identity?filter=%s:%s&field=upn&field=primaryAccountEmail&field=displayName&field=uid&field=gid",
+		m.conf.APIBaseURL, param, val)
+	responseData, err := m.sendAPIRequest(ctx, url)
+	if err != nil {
+		return nil, err
+	}
+	userData, ok := responseData[0].(map[string]interface{})
+	if !ok {
+		return nil, errors.New("rest: error in type assertion")
+	}
+	return userData, nil
+}
+
+func (m *manager) getInternalUserID(ctx context.Context, uid *userpb.UserId) (string, error) {
+
+	internalID, err := m.fetchCachedInternalID(uid)
+	if err != nil {
+		userData, err := m.getUserByParam(ctx, "upn", uid.OpaqueId)
+		if err != nil {
+			return "", err
+		}
+		id, ok := userData["id"].(string)
+		if !ok {
+			return "", errors.New("rest: error in type assertion")
+		}
+
+		if err = m.cacheInternalID(uid, id); err != nil {
+			log := appctx.GetLogger(ctx)
+			log.Error().Err(err).Msg("rest: error caching user details")
+		}
+		return id, nil
+	}
+	return internalID, nil
+}
+
+func (m *manager) parseAndCacheUser(ctx context.Context, userData map[string]interface{}) *userpb.User {
+	userID := &userpb.UserId{
+		OpaqueId: userData["upn"].(string),
+		Idp:      m.conf.IDProvider,
+	}
+	u := &userpb.User{
+		Id:          userID,
+		Username:    userData["upn"].(string),
+		Mail:        userData["primaryAccountEmail"].(string),
+		DisplayName: userData["displayName"].(string),
+		Opaque: &types.Opaque{
+			Map: map[string]*types.OpaqueEntry{
+				"uid": &types.OpaqueEntry{
+					Decoder: "plain",
+					Value:   []byte(fmt.Sprintf("%0.f", userData["uid"])),
+				},
+				"gid": &types.OpaqueEntry{
+					Decoder: "plain",
+					Value:   []byte(fmt.Sprintf("%0.f", userData["gid"])),
+				},
+			},
+		},
+	}
+
+	if err := m.cacheUserDetails(u); err != nil {
+		log := appctx.GetLogger(ctx)
+		log.Error().Err(err).Msg("rest: error caching user details")
+	}
+	if err := m.cacheInternalID(userID, userData["id"].(string)); err != nil {
+		log := appctx.GetLogger(ctx)
+		log.Error().Err(err).Msg("rest: error caching user details")
+	}
+	return u
+
+}
+
 func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
 
 	u, err := m.fetchCachedUserDetails(uid)
 	if err != nil {
-		url := fmt.Sprintf("%s/Identity/?filter=id:%s&field=upn&field=primaryAccountEmail&field=displayName", m.conf.APIBaseURL, uid.OpaqueId)
-		responseData, err := m.sendAPIRequest(ctx, url)
+		userData, err := m.getUserByParam(ctx, "upn", uid.OpaqueId)
 		if err != nil {
 			return nil, err
 		}
-
-		userData, ok := responseData[0].(map[string]interface{})
-		if !ok {
-			return nil, errors.New("rest: error in type assertion")
-		}
-		u = &userpb.User{
-			Id:          uid,
-			Username:    userData["upn"].(string),
-			Mail:        userData["primaryAccountEmail"].(string),
-			DisplayName: userData["displayName"].(string),
-		}
-
-		if err = m.cacheUserDetails(u); err != nil {
-			log := appctx.GetLogger(ctx)
-			log.Error().Err(err).Msg("rest: error caching user details")
-		}
+		u = m.parseAndCacheUser(ctx, userData)
 	}
 
 	userGroups, err := m.GetUserGroups(ctx, uid)
@@ -258,6 +318,39 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 	u.Groups = userGroups
 
 	return u, nil
+}
+
+func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
+	opaqueID, err := m.fetchCachedParam(claim, value)
+	if err == nil {
+		return m.GetUser(ctx, &userpb.UserId{OpaqueId: opaqueID})
+	}
+
+	switch claim {
+	case "mail":
+		claim = "primaryAccountEmail"
+	case "uid":
+		claim = "uid"
+	case "username":
+		claim = "upn"
+	default:
+		return nil, errors.New("rest: invalid field")
+	}
+
+	userData, err := m.getUserByParam(ctx, claim, value)
+	if err != nil {
+		return nil, err
+	}
+	u := m.parseAndCacheUser(ctx, userData)
+
+	userGroups, err := m.GetUserGroups(ctx, u.Id)
+	if err != nil {
+		return nil, err
+	}
+	u.Groups = userGroups
+
+	return u, nil
+
 }
 
 func (m *manager) findUsersByFilter(ctx context.Context, url string) ([]*userpb.User, error) {
@@ -276,19 +369,26 @@ func (m *manager) findUsersByFilter(ctx context.Context, url string) ([]*userpb.
 		}
 
 		uid := &userpb.UserId{
-			OpaqueId: usrInfo["id"].(string),
+			OpaqueId: usrInfo["upn"].(string),
 			Idp:      m.conf.IDProvider,
-		}
-		userGroups, err := m.GetUserGroups(ctx, uid)
-		if err != nil {
-			return nil, err
 		}
 		users = append(users, &userpb.User{
 			Id:          uid,
 			Username:    usrInfo["upn"].(string),
 			Mail:        usrInfo["primaryAccountEmail"].(string),
 			DisplayName: usrInfo["displayName"].(string),
-			Groups:      userGroups,
+			Opaque: &types.Opaque{
+				Map: map[string]*types.OpaqueEntry{
+					"uid": &types.OpaqueEntry{
+						Decoder: "plain",
+						Value:   []byte(fmt.Sprintf("%0.f", usrInfo["uid"])),
+					},
+					"gid": &types.OpaqueEntry{
+						Decoder: "plain",
+						Value:   []byte(fmt.Sprintf("%0.f", usrInfo["gid"])),
+					},
+				},
+			},
 		})
 	}
 
@@ -310,7 +410,8 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 	users := []*userpb.User{}
 
 	for _, f := range filters {
-		url := fmt.Sprintf("%s/Identity/?filter=%s:contains:%s&field=id&field=upn&field=primaryAccountEmail&field=displayName", m.conf.APIBaseURL, f, query)
+		url := fmt.Sprintf("%s/Identity/?filter=%s:contains:%s&field=id&field=upn&field=primaryAccountEmail&field=displayName&field=uid&field=gid",
+			m.conf.APIBaseURL, f, query)
 		filteredUsers, err := m.findUsersByFilter(ctx, url)
 		if err != nil {
 			return nil, err
@@ -327,7 +428,11 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 		return groups, nil
 	}
 
-	url := fmt.Sprintf("%s/Identity/%s/groups", m.conf.APIBaseURL, uid.OpaqueId)
+	internalID, err := m.getInternalUserID(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+	url := fmt.Sprintf("%s/Identity/%s/groups", m.conf.APIBaseURL, internalID)
 	groupData, err := m.sendAPIRequest(ctx, url)
 	if err != nil {
 		return nil, err
@@ -363,4 +468,15 @@ func (m *manager) IsInGroup(ctx context.Context, uid *userpb.UserId, group strin
 		}
 	}
 	return false, nil
+}
+
+func extractUID(u *userpb.User) (string, error) {
+	if u.Opaque != nil && u.Opaque.Map != nil {
+		if uidObj, ok := u.Opaque.Map["uid"]; ok {
+			if uidObj.Decoder == "plain" {
+				return string(uidObj.Value), nil
+			}
+		}
+	}
+	return "", errors.New("rest: could not retrieve UID from user")
 }

@@ -11,7 +11,7 @@ require (
 	github.com/cheggaaa/pb v1.0.28
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/cs3org/cato v0.0.0-20200626150132-28a40e643719
-	github.com/cs3org/go-cs3apis v0.0.0-20200709064917-d96c5f2a42ad
+	github.com/cs3org/go-cs3apis v0.0.0-20200728114537-4efa23660dbe
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/eventials/go-tus v0.0.0-20200718001131-45c7ec8f5d59
 	github.com/go-ldap/ldap/v3 v3.2.3
@@ -19,7 +19,7 @@ require (
 	github.com/go-openapi/strfmt v0.19.2 // indirect
 	github.com/gofrs/uuid v3.3.0+incompatible
 	github.com/golang/protobuf v1.4.2
-	github.com/gomodule/redigo v2.0.0+incompatible
+	github.com/gomodule/redigo v1.8.2
 	github.com/google/go-github v17.0.0+incompatible
 	github.com/google/go-querystring v1.0.0 // indirect
 	github.com/google/uuid v1.1.1

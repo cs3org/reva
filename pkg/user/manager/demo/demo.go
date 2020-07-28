@@ -20,9 +20,11 @@ package demo
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
@@ -47,6 +49,33 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 		return user, nil
 	}
 	return nil, errtypes.NotFound(uid.OpaqueId)
+}
+
+func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
+	for _, u := range m.catalog {
+		if userClaim, err := extractClaim(u, claim); err == nil && value == userClaim {
+			return u, nil
+		}
+	}
+	return nil, errtypes.NotFound(value)
+}
+
+func extractClaim(u *userpb.User, claim string) (string, error) {
+	switch claim {
+	case "mail":
+		return u.Mail, nil
+	case "username":
+		return u.Username, nil
+	case "uid":
+		if u.Opaque != nil && u.Opaque.Map != nil {
+			if uidObj, ok := u.Opaque.Map["uid"]; ok {
+				if uidObj.Decoder == "plain" {
+					return string(uidObj.Value), nil
+				}
+			}
+		}
+	}
+	return "", errors.New("demo: invalid field")
 }
 
 // TODO(jfd) search Opaque? compare sub?
@@ -97,6 +126,18 @@ func getUsers() map[string]*userpb.User {
 			Groups:      []string{"sailing-lovers", "violin-haters", "physics-lovers"},
 			Mail:        "einstein@example.org",
 			DisplayName: "Albert Einstein",
+			Opaque: &types.Opaque{
+				Map: map[string]*types.OpaqueEntry{
+					"uid": &types.OpaqueEntry{
+						Decoder: "plain",
+						Value:   []byte("123"),
+					},
+					"gid": &types.OpaqueEntry{
+						Decoder: "plain",
+						Value:   []byte("987"),
+					},
+				},
+			},
 		},
 		"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c": &userpb.User{
 			Id: &userpb.UserId{
@@ -107,6 +148,18 @@ func getUsers() map[string]*userpb.User {
 			Groups:      []string{"radium-lovers", "polonium-lovers", "physics-lovers"},
 			Mail:        "marie@example.org",
 			DisplayName: "Marie Curie",
+			Opaque: &types.Opaque{
+				Map: map[string]*types.OpaqueEntry{
+					"uid": &types.OpaqueEntry{
+						Decoder: "plain",
+						Value:   []byte("456"),
+					},
+					"gid": &types.OpaqueEntry{
+						Decoder: "plain",
+						Value:   []byte("987"),
+					},
+				},
+			},
 		},
 		"932b4540-8d16-481e-8ef4-588e4b6b151c": &userpb.User{
 			Id: &userpb.UserId{
