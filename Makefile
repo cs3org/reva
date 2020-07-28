@@ -9,7 +9,7 @@ VERSION=`git describe --always`
 GO_VERSION=`go version | awk '{print $$3}'`
 
 default: build test lint gen-doc check-changelog
-release: deps build test lint gen-doc check-changelog
+release: deps build test lint gen-doc
 
 off:
 	GOPROXY=off
