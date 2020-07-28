@@ -2,7 +2,7 @@
 	{
 		"id": {
 			"opaque_id": "alessandro1234",
-			"idp": "https://cubbit.io"
+			"idp": "cubbit.io"
 		},
 		"username": "alessandro",
 		"secret": "alessandropass",
@@ -13,7 +13,7 @@
 	{
 		"id": {
 			"opaque_id": "lorenzo5678",
-			"idp": "https://cubbit.io"
+			"idp": "cubbit.io"
 		},
 		"username": "lorenzo",
 		"secret": "lorenzopass",
