@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -201,13 +202,20 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 		"email":             {contextUser.GetMail()},
 		"name":              {contextUser.GetDisplayName()},
 	}
+
 	ocmEndpoint, err := getOCMEndpoint(originProvider)
 	if err != nil {
 		return err
 	}
+	u, err := url.Parse(ocmEndpoint)
+	if err != nil {
+		return err
+	}
+	u.Path = path.Join(u.Path, acceptInviteEndpoint)
+	recipientURL := u.String()
 
 	client := rhttp.GetHTTPClient(rhttp.Insecure(m.config.InsecureConnections))
-	recipientURL := fmt.Sprintf("%s%s", ocmEndpoint, acceptInviteEndpoint)
+
 	req, err := http.NewRequest("POST", recipientURL, strings.NewReader(requestBody.Encode()))
 	if err != nil {
 		return errors.Wrap(err, "json: error framing post request")

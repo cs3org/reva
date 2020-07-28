@@ -297,7 +297,7 @@ func (s *svc) createWebdavReference(ctx context.Context, share *ocm.Share) (*rpc
 	}
 	var webdavEndpoint string
 	for _, s := range meshProvider.ProviderInfo.Services {
-		if s.Endpoint.Type.Name == "Webdav" {
+		if strings.ToLower(s.Endpoint.Type.Name) == "webdav" {
 			webdavEndpoint = s.Endpoint.Path
 		}
 	}

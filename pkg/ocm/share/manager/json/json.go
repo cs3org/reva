@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"reflect"
 	"strings"
 	"sync"
@@ -276,13 +277,20 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 			"protocol":     {string(protocol)},
 			"meshProvider": {userID.Idp},
 		}
+
 		ocmEndpoint, err := getOCMEndpoint(pi)
 		if err != nil {
 			return nil, err
 		}
+		u, err := url.Parse(ocmEndpoint)
+		if err != nil {
+			return nil, err
+		}
+		u.Path = path.Join(u.Path, createOCMCoreShareEndpoint)
+		recipientURL := u.String()
 
 		client := rhttp.GetHTTPClient(rhttp.Insecure(m.c.InsecureConnections))
-		recipientURL := fmt.Sprintf("%s%s", ocmEndpoint, createOCMCoreShareEndpoint)
+
 		req, err := http.NewRequest("POST", recipientURL, strings.NewReader(requestBody.Encode()))
 		if err != nil {
 			return nil, errors.Wrap(err, "json: error framing post request")

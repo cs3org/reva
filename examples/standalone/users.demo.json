@@ -2,7 +2,7 @@
 	{
 		"id": {
 			"opaque_id": "4c510ada-c86b-4815-8820-42cdf82c3d51",
-			"idp": "http://localhost:20080"
+			"idp": "localhost:20080"
 		},
 		"username": "einstein",
 		"secret": "relativity",
@@ -13,7 +13,7 @@
 	{
 		"id": {
 			"opaque_id": "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-			"idp": "http://localhost:20080"
+			"idp": "localhost:20080"
 		},
 		"username": "marie",
 		"secret": "radioactivity",
@@ -24,7 +24,7 @@
 	{
 		"id": {
 			"opaque_id": "932b4540-8d16-481e-8ef4-588e4b6b151c",
-			"idp": "http://localhost:20080"
+			"idp": "localhost:20080"
 		},
 		"username": "richard",
 		"secret": "superfluidity",
