@@ -44,64 +44,59 @@ func TestUserManager(t *testing.T) {
 		t.Fatalf("no error (but we expected one) while get manager")
 	}
 
-	// corrupt json object with user meta data
-	userJSON := `[{`
-
-	// get file handler for temporary file
-	file, err := ioutil.TempFile(tempdir, "json_test")
-	if err != nil {
-		t.Fatalf("error while open temp file: %v", err)
+	tests := []struct {
+		name          string
+		user          string
+		clientID      string
+		clientSecret  string
+		expectManager bool
+	}{
+		{
+			"Corrupt JSON object with user metadata",
+			`[{`,
+			"nil",
+			"nil",
+			false,
+		},
+		{
+			"JSON object with user metadata",
+			`[{"username":"einstein","secret":"albert"}]`,
+			"einstein",
+			"NotARealPassword",
+			true,
+		},
 	}
 
-	// write json object to tempdir
-	_, err = file.WriteString(userJSON)
-	if err != nil {
-		t.Fatalf("error while writing temp file: %v", err)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// get file handler for temporary file
+			tempFile, err := ioutil.TempFile(tempdir, "json_test")
+			if err != nil {
+				t.Fatalf("Error while opening temp file: %v", err)
+			}
+			// write json object to tempdir
+			_, err = tempFile.WriteString(tt.user)
+			if err != nil {
+				t.Fatalf("Error while writing temp file: %v", err)
+			}
 
-	// get manager
-	input = map[string]interface{}{
-		"users": file.Name(),
-	}
-	_, err = New(input)
-	if err == nil {
-		t.Fatalf("no error (but we expected one) while get manager")
-	}
-
-	// clean up
-	os.Remove(file.Name())
-
-	// json object with user meta data
-	userJSON = `[{"username":"einstein","secret":"albert"}]`
-
-	// get file handler for temporary file
-	file, err = ioutil.TempFile(tempdir, "json_test")
-	if err != nil {
-		t.Fatalf("error while open temp file: %v", err)
-	}
-	defer os.Remove(file.Name())
-
-	// write json object to tempdir
-	_, err = file.WriteString(userJSON)
-	if err != nil {
-		t.Fatalf("error while writing temp file: %v", err)
-	}
-
-	// get manager - positive test
-	input = map[string]interface{}{
-		"users": file.Name(),
-	}
-	manager, _ := New(input)
-
-	// Authenticate - positive test
-	_, err = manager.Authenticate(ctx, "einstein", "albert")
-	if err != nil {
-		t.Fatalf("error while authenticate with correct credentials")
-	}
-
-	// Authenticate - negative test
-	_, err = manager.Authenticate(ctx, "einstein", "NotARealPassword")
-	if err == nil {
-		t.Fatalf("no error (but we expected one) while authenticate with bad credentials")
+			// get manager
+			input = map[string]interface{}{
+				"users": tempFile.Name(),
+			}
+			manager, err := New(input)
+			if manager == nil && !tt.expectManager {
+				if err == nil {
+					t.Fatalf("Expected error while getting manager but found none.")
+				}
+			} else if manager != nil && tt.expectManager {
+				_, err = manager.Authenticate(ctx, tt.clientID, tt.clientSecret)
+				if err == nil {
+					t.Fatalf("Expected error while authenticate about bad credentials, but found none.")
+				}
+			}
+			// cleanup
+			os.Remove(tempFile.Name())
+		})
 	}
 }
