@@ -20,10 +20,11 @@ package json
 
 import (
 	"context"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var ctx = context.Background()
@@ -46,11 +47,11 @@ func TestUserManager(t *testing.T) {
 	}
 
 	tests := []struct {
-		name                       string
-		user                       string
-		clientID                   string
-		clientSecret               string
-		expectManager              bool
+		name                string
+		user                string
+		username            string
+		secret              string
+		expectManager       bool
 		expectAuthenticated bool
 	}{
 		{
@@ -86,6 +87,7 @@ func TestUserManager(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Error while opening temp file: %v", err)
 			}
+
 			// write json object to tempdir
 			_, err = tempFile.WriteString(tt.user)
 			if err != nil {
@@ -97,21 +99,18 @@ func TestUserManager(t *testing.T) {
 				"users": tempFile.Name(),
 			}
 			manager, err := New(input)
-			if manager == nil && !tt.expectManager {
-				if err == nil {
-					t.Fatalf("Expected error while getting manager but found none.")
-				}
+			if !tt.expectManager {
+				assert.Equalf(t, nil, manager, "Expected no manager but found: %v", manager)
+				assert.NotEqual(t, nil, err, "Expected error while getting manager but found none.")
 			} else if manager != nil && tt.expectManager {
-				authenticated, err := manager.Authenticate(ctx, tt.clientID, tt.clientSecret)
-				fmt.Println(authenticated, err)
+				authenticated, err := manager.Authenticate(ctx, tt.username, tt.secret)
 				if !tt.expectAuthenticated {
-					if authenticated != nil && err == nil {
-						t.Fatalf("Expected error while authenticate about bad credentials, but found none.")
-					}
+					assert.NotEqual(t, nil, authenticated, "Expected manager but found none.")
+					assert.NotEqual(t, nil, err, "Expected error while authenticate about bad credentials, but found none.")
 				} else if tt.expectAuthenticated {
-					if authenticated == nil && err != nil {
-						t.Fatalf("Expected authenitacated manager, but not found.")
-					}
+					assert.NotEqual(t, nil, authenticated, "Expected an authenticated manager but found none.")
+					assert.Equalf(t, nil, err, "Error: %v", err)
+					assert.Equal(t, tt.username, authenticated.Username)
 				}
 			}
 			// cleanup
