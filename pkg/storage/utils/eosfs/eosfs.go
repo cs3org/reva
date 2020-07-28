@@ -1434,15 +1434,9 @@ func (fs *eosfs) getUserIDGateway(ctx context.Context, uid string) (*userpb.User
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: error getting gateway grpc client")
 	}
-	getUserResp, err := client.GetUser(ctx, &userpb.GetUserRequest{
-		Opaque: &types.Opaque{
-			Map: map[string]*types.OpaqueEntry{
-				"uid": &types.OpaqueEntry{
-					Decoder: "plain",
-					Value:   []byte(uid),
-				},
-			},
-		},
+	getUserResp, err := client.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
+		Claim: "uid",
+		Value: uid,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: error getting user")
