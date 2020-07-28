@@ -1,4 +1,4 @@
-Enhancement: Pass the link to the meshdirectory service in token mail.
+Enhancement: Pass the link to the meshdirectory service in token mail
 
 Currently, we just forward the token and the original user's domain when
 forwarding an OCM invite token and expect the user to frame the forward invite
