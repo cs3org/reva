@@ -127,7 +127,7 @@ func (s *service) GetUserByClaim(ctx context.Context, req *userpb.GetUserByClaim
 		return res, nil
 	}
 
-	res := &userpb.GetUserByClaim{
+	res := &userpb.GetUserByClaimResponse{
 		Status: status.NewOK(ctx),
 		User:   user,
 	}

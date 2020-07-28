@@ -41,11 +41,16 @@ import (
 
 const (
 	versionPrefix = ".sys.v#."
+
+	versionAquamarine = eosVersion("aquamarine")
+	versionCitrine    = eosVersion("citrine")
 )
 
 // AttrType is the type of extended attribute,
 // either system (sys) or user (user).
 type AttrType uint32
+
+type eosVersion string
 
 const (
 	// SystemAttr is the system extended attribute.
@@ -260,6 +265,34 @@ func (c *Client) executeEOS(ctx context.Context, cmd *exec.Cmd) (string, string,
 	return outBuf.String(), errBuf.String(), err
 }
 
+func (c *Client) getVersion(ctx context.Context, rootUID, rootGID string) (eosVersion, error) {
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", rootUID, rootGID, "version")
+	stdout, _, err := c.executeEOS(ctx, cmd)
+	if err != nil {
+		return "", err
+	}
+	return c.parseVersion(ctx, stdout), nil
+}
+
+func (c *Client) parseVersion(ctx context.Context, raw string) eosVersion {
+	var serverVersion string
+	rawLines := strings.Split(raw, "\n")
+	for _, rl := range rawLines {
+		if rl == "" {
+			continue
+		}
+		if strings.HasPrefix(rl, "EOS_SERVER_VERSION") {
+			serverVersion = strings.Split(strings.Split(rl, " ")[0], "=")[1]
+			break
+		}
+	}
+
+	if strings.HasPrefix(serverVersion, "4.") {
+		return versionCitrine
+	}
+	return versionAquamarine
+}
+
 // AddACL adds an new acl to EOS with the given aclType.
 func (c *Client) AddACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, a *acl.Entry) error {
 	acls, err := c.getACLForPath(ctx, uid, gid, path)
@@ -271,9 +304,21 @@ func (c *Client) AddACL(ctx context.Context, uid, gid, rootUID, rootGID, path st
 	if err != nil {
 		return err
 	}
-	sysACL := acls.Serialize()
 
-	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", rootUID, rootGID, "attr", "-r", "set", fmt.Sprintf("sys.acl=%s", sysACL), path)
+	version, err := c.getVersion(ctx, rootUID, rootGID)
+	if err != nil {
+		return err
+	}
+
+	var cmd *exec.Cmd
+	if version == versionCitrine {
+		sysACL := acls.CitrineSerialize()
+		cmd = exec.CommandContext(ctx, c.opt.EosBinary, "-r", rootUID, rootGID, "acl", "--sys", "--recursive", sysACL, path)
+	} else {
+		sysACL := acls.Serialize()
+		cmd = exec.CommandContext(ctx, c.opt.EosBinary, "-r", rootUID, rootGID, "attr", "-r", "set", fmt.Sprintf("sys.acl=%s", sysACL), path)
+	}
+
 	_, _, err = c.executeEOS(ctx, cmd)
 	return err
 
@@ -281,15 +326,27 @@ func (c *Client) AddACL(ctx context.Context, uid, gid, rootUID, rootGID, path st
 
 // RemoveACL removes the acl from EOS.
 func (c *Client) RemoveACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, aclType string, recipient string) error {
+	version, err := c.getVersion(ctx, rootUID, rootGID)
+	if err != nil {
+		return err
+	}
+
 	acls, err := c.getACLForPath(ctx, uid, gid, path)
 	if err != nil {
 		return err
 	}
 
 	acls.DeleteEntry(aclType, recipient)
-	sysACL := acls.Serialize()
 
-	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", rootUID, rootGID, "attr", "-r", "set", fmt.Sprintf("sys.acl=%s", sysACL), path)
+	var cmd *exec.Cmd
+	if version == versionCitrine {
+		sysACL := acls.CitrineSerialize()
+		cmd = exec.CommandContext(ctx, c.opt.EosBinary, "-r", rootUID, rootGID, "acl", "--sys", "--recursive", sysACL, path)
+	} else {
+		sysACL := acls.Serialize()
+		cmd = exec.CommandContext(ctx, c.opt.EosBinary, "-r", rootUID, rootGID, "attr", "-r", "set", fmt.Sprintf("sys.acl=%s", sysACL), path)
+	}
+
 	_, _, err = c.executeEOS(ctx, cmd)
 	return err
 

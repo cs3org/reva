@@ -46,7 +46,7 @@ func (s *svc) GetUser(ctx context.Context, req *user.GetUserRequest) (*user.GetU
 func (s *svc) GetUserByClaim(ctx context.Context, req *user.GetUserByClaimRequest) (*user.GetUserByClaimResponse, error) {
 	c, err := pool.GetUserProviderServiceClient(s.c.UserProviderEndpoint)
 	if err != nil {
-		return &user.GetUserGetUserByClaimResponse{
+		return &user.GetUserByClaimResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth client"),
 		}, nil
 	}

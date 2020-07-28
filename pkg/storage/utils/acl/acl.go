@@ -20,6 +20,7 @@ package acl
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 )
 
@@ -77,6 +78,15 @@ func (m *ACLs) Serialize() string {
 	sysACL := []string{}
 	for _, e := range m.Entries {
 		sysACL = append(sysACL, e.serialize())
+	}
+	return strings.Join(sysACL, ShortTextForm)
+}
+
+// CitrineSerialize serializes ACLs for citrine EOS ACLs
+func (m *ACLs) CitrineSerialize() string {
+	sysACL := []string{}
+	for _, e := range m.Entries {
+		sysACL = append(sysACL, e.citrineSerialize())
 	}
 	return strings.Join(sysACL, ShortTextForm)
 }
@@ -144,4 +154,8 @@ func getShortType(aclType string) string {
 
 func (a *Entry) serialize() string {
 	return strings.Join([]string{a.Type, a.Qualifier, a.Permissions}, ":")
+}
+
+func (a *Entry) citrineSerialize() string {
+	return fmt.Sprintf("%s:%s=%s", a.Type, a.Qualifier, a.Permissions)
 }

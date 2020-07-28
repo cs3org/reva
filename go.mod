@@ -11,7 +11,7 @@ require (
 	github.com/cheggaaa/pb v1.0.28
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/cs3org/cato v0.0.0-20200626150132-28a40e643719
-	github.com/cs3org/go-cs3apis v0.0.0-20200720081540-0d96aec81a2e
+	github.com/cs3org/go-cs3apis v0.0.0-20200728114537-4efa23660dbe
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/eventials/go-tus v0.0.0-20200718001131-45c7ec8f5d59
 	github.com/go-ldap/ldap/v3 v3.2.3
