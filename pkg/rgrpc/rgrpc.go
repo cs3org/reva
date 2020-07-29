@@ -29,6 +29,7 @@ import (
 	"github.com/cs3org/reva/internal/grpc/interceptors/log"
 	"github.com/cs3org/reva/internal/grpc/interceptors/recovery"
 	"github.com/cs3org/reva/internal/grpc/interceptors/token"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -100,6 +101,16 @@ type config struct {
 	EnableReflection bool                              `mapstructure:"enable_reflection"`
 }
 
+func (c *config) init() {
+	if c.Network == "" {
+		c.Network = "tcp"
+	}
+
+	if c.Address == "" {
+		c.Address = sharedconf.GetGatewaySVC("0.0.0.0:19000")
+	}
+}
+
 // Server is a gRPC server.
 type Server struct {
 	s        *grpc.Server
@@ -116,14 +127,7 @@ func NewServer(m interface{}, log zerolog.Logger) (*Server, error) {
 		return nil, err
 	}
 
-	// apply defaults
-	if conf.Network == "" {
-		conf.Network = "tcp"
-	}
-
-	if conf.Address == "" {
-		conf.Address = "localhost:9999"
-	}
+	conf.init()
 
 	server := &Server{conf: conf, log: log, services: map[string]Service{}}
 
@@ -193,13 +197,14 @@ func (s *Server) registerServices() error {
 	}
 	opts = append(opts, grpc.StatsHandler(&ocgrpc.ServerHandler{}))
 	grpcServer := grpc.NewServer(opts...)
-	if s.conf.EnableReflection {
-		s.log.Info().Msg("rgrpc: grpc server reflection enabled")
-		reflection.Register(grpcServer)
-	}
 
 	for _, svc := range s.services {
 		svc.Register(grpcServer)
+	}
+
+	if s.conf.EnableReflection {
+		s.log.Info().Msg("rgrpc: grpc server reflection enabled")
+		reflection.Register(grpcServer)
 	}
 
 	s.s = grpcServer
@@ -313,7 +318,7 @@ func (s *Server) getInterceptors(unprotected []string) ([]grpc.ServerOption, err
 	streamInterceptors := []grpc.StreamServerInterceptor{authStream}
 	for _, t := range streamTriples {
 		streamInterceptors = append(streamInterceptors, t.Interceptor)
-		s.log.Info().Msgf("rgrpc: chainning grpc streaming interceptor %s with priority %d", t.Name, t.Priority)
+		s.log.Info().Msgf("rgrpc: chaining grpc streaming interceptor %s with priority %d", t.Name, t.Priority)
 	}
 
 	streamInterceptors = append([]grpc.StreamServerInterceptor{

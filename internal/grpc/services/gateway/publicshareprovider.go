@@ -24,7 +24,6 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
 )
@@ -50,9 +49,15 @@ func (s *svc) RemovePublicShare(ctx context.Context, req *link.RemovePublicShare
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("remove public share")
 
-	return &link.RemovePublicShareResponse{
-		Status: status.NewOK(ctx),
-	}, nil
+	driver, err := pool.GetPublicShareProviderClient(s.c.PublicShareProviderEndpoint)
+	if err != nil {
+		return nil, err
+	}
+	res, err := driver.RemovePublicShare(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 func (s *svc) GetPublicShareByToken(ctx context.Context, req *link.GetPublicShareByTokenRequest) (*link.GetPublicShareByTokenResponse, error) {
@@ -64,7 +69,6 @@ func (s *svc) GetPublicShareByToken(ctx context.Context, req *link.GetPublicShar
 		return nil, err
 	}
 
-	// TODO the double call is not here
 	res, err := driver.GetPublicShareByToken(ctx, req)
 	if err != nil {
 		return nil, err

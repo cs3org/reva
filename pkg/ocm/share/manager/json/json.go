@@ -28,6 +28,7 @@ import (
 	"os"
 	"path"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -39,6 +40,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/ocm/share/manager/registry"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
@@ -58,16 +60,7 @@ func New(m map[string]interface{}) (share.Manager, error) {
 		err = errors.Wrap(err, "error creating a new manager")
 		return nil, err
 	}
-
-	// if file is not set we use temporary file
-	if c.File == "" {
-		dir, err := ioutil.TempDir("", "")
-		if err != nil {
-			err = errors.Wrap(err, "error creating temporary directory for storing shares")
-			return nil, err
-		}
-		c.File = path.Join(dir, "shares.json")
-	}
+	c.init()
 
 	// load or create file
 	model, err := loadOrCreate(c.File)
@@ -88,14 +81,14 @@ func loadOrCreate(file string) (*shareModel, error) {
 	_, err := os.Stat(file)
 	if os.IsNotExist(err) {
 		if err := ioutil.WriteFile(file, []byte("{}"), 0700); err != nil {
-			err = errors.Wrap(err, "error opening/creating the file: "+file)
+			err = errors.Wrap(err, "error creating the file: "+file)
 			return nil, err
 		}
 	}
 
 	fd, err := os.OpenFile(file, os.O_CREATE, 0644)
 	if err != nil {
-		err = errors.Wrap(err, "error opening/creating the file: "+file)
+		err = errors.Wrap(err, "error opening the file: "+file)
 		return nil, err
 	}
 	defer fd.Close()
@@ -128,7 +121,14 @@ type shareModel struct {
 }
 
 type config struct {
-	File string `mapstructure:"file"`
+	File                string `mapstructure:"file"`
+	InsecureConnections bool   `mapstructure:"insecure_connections"`
+}
+
+func (c *config) init() {
+	if c.File == "" {
+		c.File = "/var/tmp/reva/ocm-shares.json"
+	}
 }
 
 type mgr struct {
@@ -179,7 +179,18 @@ func genID() string {
 	return uuid.New().String()
 }
 
-func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGrant, pi *ocmprovider.ProviderInfo, pm string, owner *userpb.UserId) (*ocm.Share, error) {
+func getOCMEndpoint(originProvider *ocmprovider.ProviderInfo) (string, error) {
+	for _, s := range originProvider.Services {
+		if s.Endpoint.Type.Name == "OCM" {
+			return s.Endpoint.Path, nil
+		}
+	}
+	return "", errors.New("json: ocm endpoint not specified for mesh provider")
+}
+
+func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGrant, name string,
+	pi *ocmprovider.ProviderInfo, pm string, owner *userpb.UserId) (*ocm.Share, error) {
+
 	id := genID()
 	now := time.Now().UnixNano()
 	ts := &typespb.Timestamp{
@@ -187,12 +198,25 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 		Nanos:   uint32(now % 1000000000),
 	}
 
+	// Since both OCMCore and OCMShareProvider use the same package, we distinguish
+	// between calls received from them on the basis of whether they provide info
+	// about the remote provider on which the share is to be created.
+	// If this info is provided, this call is on the owner's mesh provider and so
+	// we call the CreateOCMCoreShare method on the remote provider as well,
+	// else this is received from another provider and we only create a local share.
+	var isOwnersMeshProvider bool
+	if pi != nil {
+		isOwnersMeshProvider = true
+	}
+
 	var userID *userpb.UserId
-	if pi == nil {
+	if !isOwnersMeshProvider {
+		// Since this call is on the remote provider, the owner of the resource is expected to be specified.
 		if owner == nil {
 			return nil, errors.New("json: owner of resource not provided")
 		}
 		userID = owner
+		id += ":" + name
 	} else {
 		userID = user.ContextMustGetUser(ctx).GetId()
 	}
@@ -212,7 +236,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 	_, err := m.getByKey(ctx, key)
 
 	// share already exists
-	if pi != nil && err == nil {
+	if isOwnersMeshProvider && err == nil {
 		return nil, errtypes.AlreadyExists(key.String())
 	}
 
@@ -229,25 +253,9 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 		Mtime:       ts,
 	}
 
-	m.Lock()
-	if err := m.model.ReadFile(); err != nil {
-		err = errors.Wrap(err, "error reading model")
-		return nil, err
-	}
-	if pi != nil {
-		m.model.Shares = append(m.model.Shares, s)
-	} else {
-		m.model.ReceivedShares = append(m.model.ReceivedShares, s)
-	}
+	if isOwnersMeshProvider {
 
-	if err := m.model.Save(); err != nil {
-		err = errors.Wrap(err, "error saving model")
-		return nil, err
-	}
-	m.Unlock()
-
-	if pi != nil {
-
+		// Call the remote provider's CreateOCMCoreShare method
 		protocol, err := json.Marshal(
 			map[string]interface{}{
 				"name": "webdav",
@@ -263,14 +271,33 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 
 		requestBody := url.Values{
 			"shareWith":    {g.Grantee.Id.OpaqueId},
-			"name":         {md.OpaqueId},
-			"providerId":   {md.StorageId},
+			"name":         {name},
+			"providerId":   {fmt.Sprintf("%s:%s", md.StorageId, md.OpaqueId)},
 			"owner":        {userID.OpaqueId},
 			"protocol":     {string(protocol)},
 			"meshProvider": {userID.Idp},
 		}
 
-		resp, err := http.PostForm(fmt.Sprintf("%s%s", pi.GetApiEndpoint(), createOCMCoreShareEndpoint), requestBody)
+		ocmEndpoint, err := getOCMEndpoint(pi)
+		if err != nil {
+			return nil, err
+		}
+		u, err := url.Parse(ocmEndpoint)
+		if err != nil {
+			return nil, err
+		}
+		u.Path = path.Join(u.Path, createOCMCoreShareEndpoint)
+		recipientURL := u.String()
+
+		client := rhttp.GetHTTPClient(rhttp.Insecure(m.c.InsecureConnections))
+
+		req, err := http.NewRequest("POST", recipientURL, strings.NewReader(requestBody.Encode()))
+		if err != nil {
+			return nil, errors.Wrap(err, "json: error framing post request")
+		}
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
+
+		resp, err := client.Do(req)
 		if err != nil {
 			err = errors.Wrap(err, "json: error sending post request")
 			return nil, err
@@ -278,10 +305,32 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
-			err = errors.Wrap(errors.New(resp.Status), "json: error sending create ocm core share post request")
+			respBody, e := ioutil.ReadAll(resp.Body)
+			if e != nil {
+				e = errors.Wrap(e, "json: error reading request body")
+				return nil, e
+			}
+			err = errors.Wrap(errors.New(fmt.Sprintf("%s: %s", resp.Status, string(respBody))), "json: error sending create ocm core share post request")
 			return nil, err
 		}
 	}
+
+	m.Lock()
+	if err := m.model.ReadFile(); err != nil {
+		err = errors.Wrap(err, "error reading model")
+		return nil, err
+	}
+	if isOwnersMeshProvider {
+		m.model.Shares = append(m.model.Shares, s)
+	} else {
+		m.model.ReceivedShares = append(m.model.ReceivedShares, s)
+	}
+
+	if err := m.model.Save(); err != nil {
+		err = errors.Wrap(err, "error saving model")
+		return nil, err
+	}
+	m.Unlock()
 
 	return s, nil
 }

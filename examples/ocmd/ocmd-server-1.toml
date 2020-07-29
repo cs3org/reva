@@ -7,6 +7,8 @@ address = "0.0.0.0:19000"
 
 [grpc.services.gateway]
 authregistrysvc = "localhost:19000"
+appprovidersvc = "localhost:19000"
+appregistry = "localhost:19000"
 storageregistrysvc = "localhost:19000"
 preferencessvc = "localhost:19000"
 userprovidersvc = "localhost:19000"
@@ -65,18 +67,29 @@ providers = "providers.demo.json"
 [grpc.services.publicshareprovider]
 driver = "memory"
 
+[grpc.services.appprovider]
+driver = "demo"
+iopsecret = "testsecret"
+wopiurl = "http://0.0.0.0:8880/"
+storageid = ""
+uiurl = ""
+
+[grpc.services.appregistry]
+driver = "static"
+
+[grpc.services.appregistry.drivers.static.rules]
+"text/plain" = "localhost:19000"
+
 [grpc.services.storageprovider]
-driver = "local"
+driver = "localhome"
 mount_path = "/"
 mount_id = "123e4567-e89b-12d3-a456-426655440000"
 expose_data_server = true
 data_server_url = "http://localhost:19001/data"
 enable_home_creation = true
 
-[grpc.services.storageprovider.drivers.local]
-namespace = "/var/tmp/reva/"
+[grpc.services.storageprovider.drivers.localhome]
 user_layout = "{{.Username}}"
-enable_home = true
 
 [grpc.services.authprovider]
 auth_manager = "json"
@@ -96,13 +109,10 @@ enabled_middlewares = ["providerauthorizer", "cors"]
 address = "0.0.0.0:19001"
 
 [http.services.dataprovider]
-driver = "local"
-temp_folder = "/var/tmp/"
+driver = "localhome"
 
-[http.services.dataprovider.drivers.local]
-namespace = "/var/tmp/reva/"
+[http.services.dataprovider.drivers.localhome]
 user_layout = "{{.Username}}"
-enable_home = true
 
 [http.services.ocmd]
 prefix = "ocm"

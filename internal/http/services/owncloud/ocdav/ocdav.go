@@ -34,7 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
-	"github.com/cs3org/reva/pkg/storage/templates"
+	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	ctxuser "github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
@@ -65,7 +65,20 @@ type Config struct {
 	WebdavNamespace string `mapstructure:"webdav_namespace"`
 	ChunkFolder     string `mapstructure:"chunk_folder"`
 	GatewaySvc      string `mapstructure:"gatewaysvc"`
+	Timeout         int64  `mapstructure:"timeout"`
+	Insecure        bool   `mapstructure:"insecure"`
 	DisableTus      bool   `mapstructure:"disable_tus"`
+}
+
+func (c *Config) init() {
+	// note: default c.Prefix is an empty string
+
+	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+
+	if c.ChunkFolder == "" {
+		c.ChunkFolder = "/var/tmp/reva/tmp/davchunks"
+	}
+
 }
 
 type svc struct {
@@ -81,11 +94,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		return nil, err
 	}
 
-	conf.GatewaySvc = sharedconf.GetGatewaySVC(conf.GatewaySvc)
-
-	if conf.ChunkFolder == "" {
-		conf.ChunkFolder = os.TempDir()
-	}
+	conf.init()
 
 	if err := os.MkdirAll(conf.ChunkFolder, 0755); err != nil {
 		return nil, err
@@ -190,9 +199,9 @@ func wrapResourceID(r *provider.ResourceId) string {
 }
 
 // The fileID must be encoded
-// - XML safe, because it is going to be used in the profind result
+// - XML safe, because it is going to be used in the propfind result
 // - url safe, because the id might be used in a url, eg. the /dav/meta nodes
-// which is why we base62 encode it
+// which is why we base64 encode it
 func wrap(sid string, oid string) string {
 	return base64.URLEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", sid, oid)))
 }

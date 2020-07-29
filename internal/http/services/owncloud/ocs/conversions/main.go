@@ -22,6 +22,7 @@ package conversions
 import (
 	"fmt"
 	"net/http"
+	"path"
 	"time"
 
 	"github.com/cs3org/reva/pkg/publicshare"
@@ -128,7 +129,7 @@ type ShareData struct {
 	// sharee Additional info
 	ShareWithAdditionalInfo string `json:"share_with_additional_info" xml:"share_with_additional_info"`
 	// Whether the recipient was notified, by mail, about the share being shared with them.
-	MailSend string `json:"mail_send" xml:"mail_send"`
+	MailSend int `json:"mail_send" xml:"mail_send"`
 	// Name of the public share
 	Name string `json:"name" xml:"name"`
 	// URL of the public share
@@ -272,7 +273,7 @@ func AsCS3Permissions(p int, rp *provider.ResourcePermissions) *provider.Resourc
 }
 
 // PublicShare2ShareData converts a cs3api public share into shareData data model
-func PublicShare2ShareData(share *link.PublicShare, r *http.Request) *ShareData {
+func PublicShare2ShareData(share *link.PublicShare, r *http.Request, publicURL string) *ShareData {
 	var expiration string
 	if share.Expiration != nil {
 		expiration = timestampToExpiration(share.Expiration)
@@ -280,21 +281,29 @@ func PublicShare2ShareData(share *link.PublicShare, r *http.Request) *ShareData 
 		expiration = ""
 	}
 
+	shareWith := ""
+	if share.PasswordProtected {
+		shareWith = "***redacted***"
+	}
+
 	return &ShareData{
 		// share.permissions ar mapped below
 		// DisplaynameOwner:     creator.DisplayName,
 		// DisplaynameFileOwner: share.GetCreator().String(),
-		ID:           share.Id.OpaqueId,
-		ShareType:    ShareTypePublicLink,
-		STime:        share.Ctime.Seconds, // TODO CS3 api birth time = btime
-		Token:        share.Token,
-		Expiration:   expiration,
-		MimeType:     share.Mtime.String(),
-		Name:         share.DisplayName,
-		URL:          r.Header.Get("Origin") + "/#/s/" + share.Token,
-		Permissions:  publicSharePermissions2OCSPermissions(share.GetPermissions()),
-		UIDOwner:     LocalUserIDToString(share.Creator),
-		UIDFileOwner: LocalUserIDToString(share.Owner),
+		ID:                   share.Id.OpaqueId,
+		ShareType:            ShareTypePublicLink,
+		ShareWith:            shareWith,
+		ShareWithDisplayname: shareWith,
+		STime:                share.Ctime.Seconds, // TODO CS3 api birth time = btime
+		Token:                share.Token,
+		Expiration:           expiration,
+		MimeType:             share.Mtime.String(),
+		Name:                 share.DisplayName,
+		MailSend:             0,
+		URL:                  publicURL + path.Join("/", "#/s/"+share.Token),
+		Permissions:          publicSharePermissions2OCSPermissions(share.GetPermissions()),
+		UIDOwner:             LocalUserIDToString(share.Creator),
+		UIDFileOwner:         LocalUserIDToString(share.Owner),
 	}
 	// actually clients should be able to GET and cache the user info themselves ...
 	// TODO check grantee type for user vs group
@@ -322,7 +331,7 @@ func UserIDToString(userID *userpb.UserId) string {
 // UserSharePermissions2OCSPermissions transforms cs3api permissions into OCS Permissions data model
 func UserSharePermissions2OCSPermissions(sp *collaboration.SharePermissions) Permissions {
 	if sp != nil {
-		return permissions2OCSPermissions(sp.GetPermissions())
+		return Permissions2OCSPermissions(sp.GetPermissions())
 	}
 	return PermissionInvalid
 }
@@ -347,13 +356,14 @@ func GetPublicShareManager(manager string, m map[string]map[string]interface{}) 
 
 func publicSharePermissions2OCSPermissions(sp *link.PublicSharePermissions) Permissions {
 	if sp != nil {
-		return permissions2OCSPermissions(sp.GetPermissions())
+		return Permissions2OCSPermissions(sp.GetPermissions())
 	}
 	return PermissionInvalid
 }
 
 // TODO sort out mapping, this is just a first guess
-func permissions2OCSPermissions(p *provider.ResourcePermissions) Permissions {
+// public link permissions to OCS permissions
+func Permissions2OCSPermissions(p *provider.ResourcePermissions) Permissions {
 	permissions := PermissionInvalid
 	if p != nil {
 		if p.ListContainer {
@@ -378,7 +388,7 @@ func permissions2OCSPermissions(p *provider.ResourcePermissions) Permissions {
 // timestamp is assumed to be UTC ... just human readable ...
 // FIXME and ambiguous / error prone because there is no time zone ...
 func timestampToExpiration(t *types.Timestamp) string {
-	return time.Unix(int64(t.Seconds), int64(t.Nanos)).Format("2006-01-02 15:05:05")
+	return time.Unix(int64(t.Seconds), int64(t.Nanos)).UTC().Format("2006-01-02 15:05:05")
 }
 
 const (

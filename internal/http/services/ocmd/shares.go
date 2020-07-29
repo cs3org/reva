@@ -20,6 +20,7 @@ package ocmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -27,12 +28,14 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmcore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
+	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/utils"
 )
 
 type sharesHandler struct {
@@ -59,12 +62,6 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting storage grpc client on addr: %v", h.gatewayAddr), err)
-		return
-	}
-
 	shareWith, protocol, meshProvider := r.FormValue("shareWith"), r.FormValue("protocol"), r.FormValue("meshProvider")
 	resource, providerID, owner := r.FormValue("name"), r.FormValue("providerId"), r.FormValue("owner")
 
@@ -77,6 +74,38 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, "error getting storage grpc client", err)
+		return
+	}
+
+	clientIP, err := utils.GetClientIP(r)
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error retrieving client IP from request: %s", r.RemoteAddr), err)
+		return
+	}
+	providerInfo := ocmprovider.ProviderInfo{
+		Domain: meshProvider,
+		Services: []*ocmprovider.Service{
+			&ocmprovider.Service{
+				Host: clientIP,
+			},
+		},
+	}
+
+	providerAllowedResp, err := gatewayClient.IsProviderAllowed(ctx, &ocmprovider.IsProviderAllowedRequest{
+		Provider: &providerInfo,
+	})
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, "error sending a grpc is provider allowed request", err)
+		return
+	}
+	if providerAllowedResp.Status.Code != rpc.Code_CODE_OK {
+		WriteError(w, r, APIErrorUnauthenticated, "provider not authorized", errors.New(providerAllowedResp.Status.Message))
+		return
+	}
+
 	userRes, err := gatewayClient.GetUser(ctx, &userpb.GetUserRequest{
 		UserId: &userpb.UserId{OpaqueId: shareWith},
 	})
@@ -85,7 +114,7 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if userRes.Status.Code != rpc.Code_CODE_OK {
-		WriteError(w, r, APIErrorNotFound, "user not found", err)
+		WriteError(w, r, APIErrorNotFound, "user not found", errors.New(userRes.Status.Message))
 		return
 	}
 
@@ -131,14 +160,15 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ownerID := &userpb.UserId{
+		OpaqueId: owner,
+		Idp:      meshProvider,
+	}
 	createShareReq := &ocmcore.CreateOCMCoreShareRequest{
 		Name:       resource,
 		ProviderId: providerID,
-		Owner: &userpb.UserId{
-			OpaqueId: owner,
-			Idp:      meshProvider,
-		},
-		ShareWith: userRes.User.GetId(),
+		Owner:      ownerID,
+		ShareWith:  userRes.User.GetId(),
 		Protocol: &ocmcore.Protocol{
 			Name: protocolDecoded["name"].(string),
 			Opaque: &types.Opaque{
@@ -162,7 +192,7 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, r, APIErrorNotFound, "not found", nil)
 			return
 		}
-		WriteError(w, r, APIErrorServerError, "grpc create ocm core share request failed", err)
+		WriteError(w, r, APIErrorServerError, "grpc create ocm core share request failed", errors.New(createShareResponse.Status.Message))
 		return
 	}
 

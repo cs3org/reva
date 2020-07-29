@@ -47,23 +47,21 @@ type service struct {
 	sm   share.Manager
 }
 
+func (c *config) init() {
+	if c.Driver == "" {
+		c.Driver = "json"
+	}
+}
+
+func (s *service) Register(ss *grpc.Server) {
+	ocm.RegisterOcmAPIServer(ss, s)
+}
+
 func getShareManager(c *config) (share.Manager, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		return f(c.Drivers[c.Driver])
 	}
 	return nil, fmt.Errorf("driver not found: %s", c.Driver)
-}
-
-func (s *service) Close() error {
-	return nil
-}
-
-func (s *service) UnprotectedEndpoints() []string {
-	return []string{}
-}
-
-func (s *service) Register(ss *grpc.Server) {
-	ocm.RegisterOcmAPIServer(ss, s)
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -82,11 +80,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	// if driver is empty we default to json
-	if c.Driver == "" {
-		c.Driver = "json"
-	}
+	c.init()
 
 	sm, err := getShareManager(c)
 	if err != nil {
@@ -101,6 +95,14 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	return service, nil
 }
 
+func (s *service) Close() error {
+	return nil
+}
+
+func (s *service) UnprotectedEndpoints() []string {
+	return []string{}
+}
+
 func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareRequest) (*ocm.CreateOCMShareResponse, error) {
 
 	if req.Opaque == nil {
@@ -109,29 +111,46 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		}, nil
 	}
 
-	opaqueObj, ok := req.Opaque.Map["permissions"]
+	permOpaque, ok := req.Opaque.Map["permissions"]
 	if !ok {
 		return &ocm.CreateOCMShareResponse{
 			Status: status.NewInternal(ctx, errors.New("resource permissions not set"), ""),
 		}, nil
 	}
-
 	var permissions map[string]string
-	if opaqueObj.Decoder == "json" {
-		err := json.Unmarshal(opaqueObj.Value, &permissions)
+	switch permOpaque.Decoder {
+	case "json":
+		err := json.Unmarshal(permOpaque.Value, &permissions)
 		if err != nil {
 			return &ocm.CreateOCMShareResponse{
 				Status: status.NewInternal(ctx, err, "error decoding resource permissions"),
 			}, nil
 		}
-	} else {
-		err := errors.New("opaque entry decoder is not json")
+	default:
+		err := errors.New("opaque entry decoder not recognized")
 		return &ocm.CreateOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "invalid opaque entry decoder"),
 		}, nil
 	}
 
-	share, err := s.sm.Share(ctx, req.ResourceId, req.Grant, req.RecipientMeshProvider, permissions["name"], nil)
+	nameOpaque, ok := req.Opaque.Map["name"]
+	if !ok {
+		return &ocm.CreateOCMShareResponse{
+			Status: status.NewInternal(ctx, errors.New("resource name not set"), ""),
+		}, nil
+	}
+	var name string
+	switch nameOpaque.Decoder {
+	case "plain":
+		name = string(nameOpaque.Value)
+	default:
+		err := errors.New("opaque entry decoder not recognized: " + nameOpaque.Decoder)
+		return &ocm.CreateOCMShareResponse{
+			Status: status.NewInternal(ctx, err, "invalid opaque entry decoder"),
+		}, nil
+	}
+
+	share, err := s.sm.Share(ctx, req.ResourceId, req.Grant, name, req.RecipientMeshProvider, permissions["name"], nil)
 	if err != nil {
 		return &ocm.CreateOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "error creating share"),

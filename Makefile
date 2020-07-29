@@ -8,8 +8,8 @@ GIT_DIRTY=`git diff-index --quiet HEAD -- || echo "dirty-"`
 VERSION=`git describe --always`
 GO_VERSION=`go version | awk '{print $$3}'`
 
-default: build test lint
-release: deps build test lint
+default: build test lint gen-doc check-changelog
+release: deps build test lint gen-doc
 
 off:
 	GOPROXY=off
@@ -40,7 +40,7 @@ test: off
 
 lint:
 	go run tools/check-license/check-license.go
-	`go env GOPATH`/bin/golangci-lint run
+	`go env GOPATH`/bin/golangci-lint run --timeout 2m0s
 
 contrib:
 	git shortlog -se | cut -c8- | sort -u | awk '{print "-", $$0}' | grep -v 'users.noreply.github.com' > CONTRIBUTORS.md
@@ -57,6 +57,14 @@ build-ci: off
 lint-ci:
 	go run tools/check-license/check-license.go
 
+gen-doc:
+	go run tools/generate-documentation/main.go
+
+check-changelog:
+	go run tools/check-changelog/main.go
+
+check-changelog-drone:
+	go run tools/check-changelog/main.go -repo origin -pr "$(PR)"
 
 # to be run in CI platform
 ci: build-ci test  lint-ci

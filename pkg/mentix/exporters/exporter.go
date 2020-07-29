@@ -57,6 +57,7 @@ type BaseExporter struct {
 	locker   sync.RWMutex
 }
 
+// Activate activates the exporter.
 func (exporter *BaseExporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
 	if conf == nil {
 		return fmt.Errorf("no configuration provided")
@@ -71,14 +72,17 @@ func (exporter *BaseExporter) Activate(conf *config.Configuration, log *zerolog.
 	return nil
 }
 
+// Start starts the exporter; only exporters which perform periodical background tasks should do something here.
 func (exporter *BaseExporter) Start() error {
 	return nil
 }
 
+// Stop stops any running background activities of the exporter.
 func (exporter *BaseExporter) Stop() {
 
 }
 
+// UpdateMeshData is called whenever the mesh data has changed to reflect these changes.
 func (exporter *BaseExporter) UpdateMeshData(meshData *meshdata.MeshData) error {
 	// Update the stored mesh data
 	if err := exporter.storeMeshData(meshData); err != nil {

@@ -25,6 +25,7 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 )
 
 func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
@@ -43,8 +44,13 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 
 	rc, err := s.storage.Download(ctx, ref)
 	if err != nil {
-		log.Err(err).Msg("datasvc: error downloading file")
-		w.WriteHeader(http.StatusInternalServerError)
+		if _, ok := err.(errtypes.IsNotFound); ok {
+			log.Err(err).Msg("datasvc: file not found")
+			w.WriteHeader(http.StatusNotFound)
+		} else {
+			log.Err(err).Msg("datasvc: error downloading file")
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 		return
 	}
 

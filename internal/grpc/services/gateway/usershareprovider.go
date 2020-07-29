@@ -41,12 +41,10 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
 		}, nil
 	}
-
 	res, err := c.CreateShare(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling CreateShare")
 	}
-
 	if res.Status.Code != rpc.Code_CODE_OK {
 		return res, nil
 	}
@@ -122,7 +120,7 @@ func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareReq
 }
 
 // TODO(labkode): we need to validate share state vs storage grant and storage ref
-// If there are any inconsitencies, the share needs to be flag as invalid and a background process
+// If there are any inconsistencies, the share needs to be flag as invalid and a background process
 // or active fix needs to be performed.
 func (s *svc) GetShare(ctx context.Context, req *collaboration.GetShareRequest) (*collaboration.GetShareResponse, error) {
 	return s.getShare(ctx, req)
@@ -332,7 +330,6 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 			if share == nil {
 				panic("gateway: error updating a received share: the share is nil")
 			}
-
 			createRefStatus, err := s.createReference(ctx, share.Share.ResourceId)
 			return &collaboration.UpdateReceivedShareResponse{
 				Status: createRefStatus,

@@ -20,10 +20,16 @@ package gateway
 
 import (
 	"context"
+	"fmt"
+	"path"
+	"strings"
 
+	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
@@ -247,7 +253,7 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 				panic("gateway: error updating a received share: the share is nil")
 			}
 
-			createRefStatus, err := s.createReference(ctx, share.Share.ResourceId)
+			createRefStatus, err := s.createWebdavReference(ctx, share.Share)
 			return &ocm.UpdateReceivedOCMShareResponse{
 				Status: createRefStatus,
 			}, err
@@ -276,4 +282,72 @@ func (s *svc) GetReceivedOCMShare(ctx context.Context, req *ocm.GetReceivedOCMSh
 	}
 
 	return res, nil
+}
+
+func (s *svc) createWebdavReference(ctx context.Context, share *ocm.Share) (*rpc.Status, error) {
+
+	log := appctx.GetLogger(ctx)
+
+	meshProvider, err := s.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
+		Domain: share.Creator.Idp,
+	})
+	if err != nil {
+		err := errors.Wrap(err, "gateway: error calling GetInfoByDomain")
+		return status.NewInternal(ctx, err, "error updating received share"), nil
+	}
+	var webdavEndpoint string
+	for _, s := range meshProvider.ProviderInfo.Services {
+		if strings.ToLower(s.Endpoint.Type.Name) == "webdav" {
+			webdavEndpoint = s.Endpoint.Path
+		}
+	}
+
+	homeRes, err := s.GetHome(ctx, &provider.GetHomeRequest{})
+	if err != nil {
+		err := errors.Wrap(err, "gateway: error calling GetHome")
+		return status.NewInternal(ctx, err, "error updating received share"), nil
+	}
+
+	parts := strings.Split(share.Id.OpaqueId, ":")
+	if len(parts) < 2 {
+		err := errors.New("resource ID does not follow the layout id:name ")
+		return status.NewInternal(ctx, err, "error decoding resource ID"), nil
+	}
+
+	// reference path is the home path + some name on the corresponding
+	// mesh provider (webdav:/home/MyShares/x@webdav_endpoint)
+	// It is the responsibility of the gateway to resolve these references and merge the response back
+	// from the main request.
+	// TODO(labkode): the name of the share should be the filename it points to by default.
+	refPath := path.Join(homeRes.Path, s.c.ShareFolder, path.Base(parts[1]))
+	log.Info().Msg("mount path will be:" + refPath)
+
+	createRefReq := &provider.CreateReferenceRequest{
+		Path: refPath,
+		// webdav is the Scheme and <storage_id>/<opaque_id>@webdav_endpoint are the Opaque parts of the URL.
+		TargetUri: fmt.Sprintf("webdav:%s/%s@%s", share.ResourceId.GetStorageId(), share.ResourceId.GetOpaqueId(), webdavEndpoint),
+	}
+
+	c, err := s.findByPath(ctx, refPath)
+	if err != nil {
+		if _, ok := err.(errtypes.IsNotFound); ok {
+			return status.NewNotFound(ctx, "storage provider not found"), nil
+		}
+		return status.NewInternal(ctx, err, "error finding storage provider"), nil
+	}
+
+	createRefRes, err := c.CreateReference(ctx, createRefReq)
+	if err != nil {
+		log.Err(err).Msg("gateway: error calling GetHome")
+		return &rpc.Status{
+			Code: rpc.Code_CODE_INTERNAL,
+		}, nil
+	}
+
+	if createRefRes.Status.Code != rpc.Code_CODE_OK {
+		err := status.NewErrorFromCode(createRefRes.Status.GetCode(), "gateway")
+		return status.NewInternal(ctx, err, "error updating received share"), nil
+	}
+
+	return status.NewOK(ctx), nil
 }

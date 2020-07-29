@@ -46,23 +46,21 @@ type service struct {
 	im   invite.Manager
 }
 
+func (c *config) init() {
+	if c.Driver == "" {
+		c.Driver = "json"
+	}
+}
+
+func (s *service) Register(ss *grpc.Server) {
+	invitepb.RegisterInviteAPIServer(ss, s)
+}
+
 func getInviteManager(c *config) (invite.Manager, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		return f(c.Drivers[c.Driver])
 	}
 	return nil, fmt.Errorf("driver not found: %s", c.Driver)
-}
-
-func (s *service) Close() error {
-	return nil
-}
-
-func (s *service) UnprotectedEndpoints() []string {
-	return []string{"/cs3.ocm.invite.v1beta1.InviteAPI/AcceptInvite"}
-}
-
-func (s *service) Register(ss *grpc.Server) {
-	invitepb.RegisterInviteAPIServer(ss, s)
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -81,11 +79,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	// if driver is empty we default to json
-	if c.Driver == "" {
-		c.Driver = "json"
-	}
+	c.init()
 
 	im, err := getInviteManager(c)
 	if err != nil {
@@ -97,6 +91,14 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		im:   im,
 	}
 	return service, nil
+}
+
+func (s *service) Close() error {
+	return nil
+}
+
+func (s *service) UnprotectedEndpoints() []string {
+	return []string{"/cs3.ocm.invite.v1beta1.InviteAPI/AcceptInvite"}
 }
 
 func (s *service) GenerateInviteToken(ctx context.Context, req *invitepb.GenerateInviteTokenRequest) (*invitepb.GenerateInviteTokenResponse, error) {

@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
 
 	"github.com/rs/zerolog"
@@ -33,12 +32,14 @@ import (
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 
+// PrometheusFileSDExporter implements the File Service Discovery for Prometheus exporter.
 type PrometheusFileSDExporter struct {
 	BaseExporter
 
 	outputFilename string
 }
 
+// Activate activates the exporter.
 func (exporter *PrometheusFileSDExporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
 	if err := exporter.BaseExporter.Activate(conf, log); err != nil {
 		return err
@@ -58,6 +59,7 @@ func (exporter *PrometheusFileSDExporter) Activate(conf *config.Configuration, l
 	return nil
 }
 
+// UpdateMeshData is called whenever the mesh data has changed to reflect these changes.
 func (exporter *PrometheusFileSDExporter) UpdateMeshData(meshData *meshdata.MeshData) error {
 	if err := exporter.BaseExporter.UpdateMeshData(meshData); err != nil {
 		return err
@@ -97,7 +99,7 @@ func (exporter *PrometheusFileSDExporter) createScrapeConfigs() []*prometheus.Sc
 			}
 
 			// Add the "main" service to the scrapes
-			addScrape(site, service.Host, &service.ServiceEndpoint)
+			addScrape(site, service.Host, service.ServiceEndpoint)
 
 			for _, endpoint := range service.AdditionalEndpoints {
 				if endpoint.IsMonitored {
@@ -111,12 +113,20 @@ func (exporter *PrometheusFileSDExporter) createScrapeConfigs() []*prometheus.Sc
 }
 
 func (exporter *PrometheusFileSDExporter) createScrapeConfig(site *meshdata.Site, host string, endpoint *meshdata.ServiceEndpoint) *prometheus.ScrapeConfig {
+	labels := map[string]string{
+		"site":         site.Name,
+		"country":      site.CountryCode,
+		"service_type": endpoint.Type.Name,
+	}
+
+	// If a metrics path was specified as a property, use that one by setting the corresponding label
+	if metricsPath := meshdata.GetPropertyValue(endpoint.Properties, meshdata.PropertyMetricsPath, ""); len(metricsPath) > 0 {
+		labels["__metrics_path__"] = metricsPath
+	}
+
 	return &prometheus.ScrapeConfig{
-		Targets: []string{path.Join(host, endpoint.Path)},
-		Labels: map[string]string{
-			"site":         site.Name,
-			"service-type": endpoint.Type.Name,
-		},
+		Targets: []string{host},
+		Labels:  labels,
 	}
 }
 
@@ -135,6 +145,7 @@ func (exporter *PrometheusFileSDExporter) exportScrapeConfig(v interface{}) erro
 	return nil
 }
 
+// GetName returns the display name of the exporter.
 func (exporter *PrometheusFileSDExporter) GetName() string {
 	return "Prometheus File SD"
 }

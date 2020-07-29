@@ -1,0 +1,24 @@
+[
+	{
+		"id": {
+			"opaque_id": "holger1234",
+			"idp": "uni-muenster.de"
+		},
+		"username": "holger",
+		"secret": "holgerpass",
+		"mail": "holger@uni-muenster.de",
+		"display_name": "Holger",
+		"groups": ["sailing-lovers", "violin-haters", "physics-lovers"]
+	},
+	{
+		"id": {
+			"opaque_id": "daniel5678",
+			"idp": "uni-muenster.de"
+		},
+		"username": "daniel",
+		"secret": "danielpass",
+		"mail": "daniel@uni-muenster.de",
+		"display_name": "Daniel",
+		"groups": ["radium-lovers", "polonium-lovers", "physics-lovers"]
+	}
+]

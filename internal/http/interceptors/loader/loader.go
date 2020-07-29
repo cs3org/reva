@@ -22,5 +22,5 @@ import (
 	// Load core HTTP middlewares.
 	_ "github.com/cs3org/reva/internal/http/interceptors/cors"
 	_ "github.com/cs3org/reva/internal/http/interceptors/providerauthorizer"
-	// Add your own middlware.
+	// Add your own middleware.
 )

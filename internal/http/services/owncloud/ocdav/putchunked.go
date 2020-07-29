@@ -157,7 +157,7 @@ func (s *svc) saveChunk(ctx context.Context, path string, r io.ReadCloser) (bool
 	//c.logger.Info().Log("msg", "chunkfolder readed", "nchunks", len(chunks))
 
 	// there is still some chunks to be uploaded.
-	// we return CodeUploadIsPartial to notify uper layers that the upload is still
+	// we return CodeUploadIsPartial to notify upper layers that the upload is still
 	// not complete and requires more actions.
 	// This code is needed to notify the owncloud webservice that the upload has not yet been
 	// completed and needs to continue uploading chunks.
@@ -288,7 +288,6 @@ func (s *svc) handlePutChunked(w http.ResponseWriter, r *http.Request) {
 		clientETag := r.Header.Get("If-Match")
 		serverETag := info.Etag
 		if clientETag != "" {
-			serverETag = fmt.Sprintf(`"%s"`, serverETag)
 			if clientETag != serverETag {
 				log.Warn().Str("client-etag", clientETag).Str("server-etag", serverETag).Msg("etags mismatch")
 				w.WriteHeader(http.StatusPreconditionFailed)

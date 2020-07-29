@@ -1,0 +1,218 @@
+[
+	{
+		"name": "cernbox",
+		"full_name": "CERNBox",
+		"organization": "CERN",
+		"domain": "cern.ch",
+		"homepage": "https://cernbox.web.cern.ch",
+		"description": "CERNBox provides cloud data storage to all CERN users.",
+		"services": [
+			{
+				"endpoint": {
+					"type": {
+						"name": "OCM",
+						"description": "CERNBox Open Cloud Mesh API"
+					},
+					"name": "CERNBox - OCM API",
+					"path": "https://sciencemesh.cernbox.cern.ch/iop/ocm/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "https://sciencemesh.cernbox.cern.ch/iop/"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Webdav",
+						"description": "CERNBox Webdav API"
+					},
+					"name": "CERNBox - Webdav API",
+					"path": "https://sciencemesh.cernbox.cern.ch/iop/webdav/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "https://sciencemesh.cernbox.cern.ch/iop/"
+			}
+		]
+	},
+	{
+		"name": "oc-cesnet",
+		"full_name": "ownCloud@CESNET",
+		"organization": "CESNET",
+		"domain": "cesnet.cz",
+		"homepage": "https://owncloud.cesnet.cz",
+		"description": "OwnCloud has been designed for individual users.",
+		"services": [
+			{
+				"endpoint": {
+					"type": {
+						"name": "OCM",
+						"description": "CESNET Open Cloud Mesh API"
+					},
+					"name": "CESNET - OCM API",
+					"path": "https://sciencemesh.cesnet.cz/iop/ocm/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "https://sciencemesh.cesnet.cz/iop/"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Webdav",
+						"description": "CESNET Webdav API"
+					},
+					"name": "CESNET - Webdav API",
+					"path": "https://sciencemesh.cesnet.cz/iop/webdav/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "https://sciencemesh.cesnet.cz/iop/"
+			}
+		]
+	},
+	{
+		"name": "uni-muenster",
+		"full_name": "WWU University of Muenster",
+		"organization": "University of Muenster",
+		"domain": "uni-muenster.de",
+		"homepage": "https://uni-muenster.de",
+		"description": "WWU provides cloud storage to its students, faculty and researchers.",
+		"services": [
+			{
+				"endpoint": {
+					"type": {
+						"name": "OCM",
+						"description": "WWU Open Cloud Mesh API"
+					},
+					"name": "WWU - OCM API",
+					"path": "https://sciencemesh-test.uni-muenster.de/api/ocm/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "https://sciencemesh-test.uni-muenster.de/api/"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Webdav",
+						"description": "WWU Webdav API"
+					},
+					"name": "WWU - Webdav API",
+					"path": "https://sciencemesh-test.uni-muenster.de/api/webdav/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "https://sciencemesh-test.uni-muenster.de/api/"
+			}
+		]
+	},
+	{
+		"name": "cubbit",
+		"full_name": "Cubbit",
+		"organization": "Cubbit",
+		"domain": "cubbit.io",
+		"homepage": "https://cubbit.io",
+		"description": "Cubbit provides distributed storage over a P2P network.",
+		"services": [
+			{
+				"endpoint": {
+					"type": {
+						"name": "OCM",
+						"description": "Cubbit Open Cloud Mesh API"
+					},
+					"name": "Cubbit - OCM API",
+					"path": "https://sciencemesh.cubbit.io/ocm/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "https://sciencemesh.cubbit.io/"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Webdav",
+						"description": "Cubbit Webdav API"
+					},
+					"name": "Cubbit - Webdav API",
+					"path": "https://sciencemesh.cubbit.io/webdav/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "https://sciencemesh.cubbit.io/"
+			}
+		]
+	},
+	{
+		"name": "ailleron",
+		"full_name": "Ailleron - Software Mind",
+		"organization": "Ailleron",
+		"domain": "softwaremind.com",
+		"homepage": "https://softwaremind.com",
+		"description": "Ailleron is a Polish IT company providing software and storage solutions to its clients.",
+		"services": [
+			{
+				"endpoint": {
+					"type": {
+						"name": "OCM",
+						"description": "Ailleron Open Cloud Mesh API"
+					},
+					"name": "Ailleron - OCM API",
+					"path": "https://sciencemesh.softwaremind.com/iop/ocm/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "https://sciencemesh.softwaremind.com/iop/"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Webdav",
+						"description": "Ailleron Webdav API"
+					},
+					"name": "Ailleron - Webdav API",
+					"path": "https://sciencemesh.softwaremind.com/iop/webdav/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "https://sciencemesh.softwaremind.com/iop/"
+			}
+		]
+	},
+	{
+		"name": "surfsara",
+		"full_name": "Surfsara",
+		"organization": "Surfsara",
+		"domain": "surfsara.nl",
+		"homepage": "https://surfsara.nl",
+		"description": "OwnCloud has been designed for individual users.",
+		"services": [
+			{
+				"endpoint": {
+					"type": {
+						"name": "OCM",
+						"description": "Surfsara Open Cloud Mesh API"
+					},
+					"name": "Surfsara - OCM API",
+					"path": "https://app.cs3mesh-iop.k8s.surfsara.nl/iop/ocm/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "https://app.cs3mesh-iop.k8s.surfsara.nl/iop/"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Webdav",
+						"description": "Surfsara Webdav API"
+					},
+					"name": "Surfsara - Webdav API",
+					"path": "https://app.cs3mesh-iop.k8s.surfsara.nl/iop/webdav/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "https://app.cs3mesh-iop.k8s.surfsara.nl/iop/"
+			}
+		]
+	}
+]

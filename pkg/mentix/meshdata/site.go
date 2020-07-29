@@ -27,6 +27,11 @@ type Site struct {
 	Homepage     string
 	Email        string
 	Description  string
+	Country      string
+	CountryCode  string
+	Location     string
+	Latitude     float32
+	Longitude    float32
 
 	Services   []*Service
 	Properties map[string]string

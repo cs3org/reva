@@ -26,7 +26,6 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
-	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 )
@@ -52,11 +51,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		return nil, err
 	}
 
-	if conf.Prefix == "" {
-		conf.Prefix = "ocs"
-	}
-
-	conf.GatewaySvc = sharedconf.GetGatewaySVC(conf.GatewaySvc)
+	conf.Init()
 
 	s := &svc{
 		c:         conf,

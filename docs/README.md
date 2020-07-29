@@ -22,6 +22,6 @@ The documentation is based on the [Docsy](https://github.com/google/docsy) theme
 In the [Docsy User Guide](https://www.docsy.dev/docs/getting-started/) to get started.
 
 
-## Continous Deployment
-If you don't want to build locally, once you create a Pull Request to the repo, a Continous Integration
+## Continuous Deployment
+If you don't want to build locally, once you create a Pull Request to the repo, a Continuous Integration
 step will take care of deploying your changes to Netlify for previewing your changes to the documentation.

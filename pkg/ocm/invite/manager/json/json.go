@@ -27,6 +27,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,6 +38,7 @@ import (
 	"github.com/cs3org/reva/pkg/ocm/invite"
 	"github.com/cs3org/reva/pkg/ocm/invite/manager/registry"
 	"github.com/cs3org/reva/pkg/ocm/invite/token"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -57,12 +59,24 @@ type manager struct {
 }
 
 type config struct {
-	File       string `mapstructure:"file"`
-	Expiration string `mapstructure:"expiration"`
+	File                string `mapstructure:"file"`
+	Expiration          string `mapstructure:"expiration"`
+	InsecureConnections bool   `mapstructure:"insecure_connections"`
 }
 
 func init() {
 	registry.Register("json", New)
+}
+
+func (c *config) init() error {
+	if c.File == "" {
+		c.File = "/var/tmp/reva/ocm-invites.json"
+	}
+
+	if c.Expiration == "" {
+		c.Expiration = token.DefaultExpirationTime
+	}
+	return nil
 }
 
 // New returns a new invite manager object.
@@ -70,22 +84,13 @@ func New(m map[string]interface{}) (invite.Manager, error) {
 
 	config, err := parseConfig(m)
 	if err != nil {
-		err = errors.Wrap(err, "error parse config for json invite manager")
+		err = errors.Wrap(err, "error parsing config for json invite manager")
 		return nil, err
 	}
-
-	if config.Expiration == "" {
-		config.Expiration = token.DefaultExpirationTime
-	}
-
-	// if file is not set we use temporary file
-	if config.File == "" {
-		dir, err := ioutil.TempDir("", "")
-		if err != nil {
-			err = errors.Wrap(err, "error creating temporary directory for json invite manager")
-			return nil, err
-		}
-		config.File = path.Join(dir, "invites.json")
+	err = config.init()
+	if err != nil {
+		err = errors.Wrap(err, "error setting config defaults for json invite manager")
+		return nil, err
 	}
 
 	// load or create file
@@ -116,14 +121,14 @@ func loadOrCreate(file string) (*inviteModel, error) {
 	_, err := os.Stat(file)
 	if os.IsNotExist(err) {
 		if err := ioutil.WriteFile(file, []byte("{}"), 0700); err != nil {
-			err = errors.Wrap(err, "error opening/creating the invite storage file: "+file)
+			err = errors.Wrap(err, "error creating the invite storage file: "+file)
 			return nil, err
 		}
 	}
 
 	fd, err := os.OpenFile(file, os.O_CREATE, 0644)
 	if err != nil {
-		err = errors.Wrap(err, "error opening/creating the invite storage file: "+file)
+		err = errors.Wrap(err, "error opening the invite storage file: "+file)
 		return nil, err
 	}
 	defer fd.Close()
@@ -169,26 +174,15 @@ func (model *inviteModel) Save() error {
 func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, error) {
 
 	contexUser := user.ContextMustGetUser(ctx)
-
-	// Create mutex lock
-	m.Lock()
-	defer m.Unlock()
-
-	// Creating a unique token
-	var inviteToken *invitepb.InviteToken
-	for {
-		tmpInviteToken, err := token.CreateToken(m.config.Expiration, contexUser.GetId())
-		if err != nil {
-			return nil, err
-		}
-		_, ok := m.model.Invites[tmpInviteToken.GetToken()]
-		if !ok {
-			inviteToken = tmpInviteToken
-			break
-		}
+	inviteToken, err := token.CreateToken(m.config.Expiration, contexUser.GetId())
+	if err != nil {
+		return nil, err
 	}
 
 	// Store token data
+	m.Lock()
+	defer m.Unlock()
+
 	m.model.Invites[inviteToken.GetToken()] = inviteToken
 	if err := m.model.Save(); err != nil {
 		err = errors.Wrap(err, "error saving model")
@@ -208,7 +202,27 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 		"email":             {contextUser.GetMail()},
 		"name":              {contextUser.GetDisplayName()},
 	}
-	resp, err := http.PostForm(fmt.Sprintf("%s%s", originProvider.GetApiEndpoint(), acceptInviteEndpoint), requestBody)
+
+	ocmEndpoint, err := getOCMEndpoint(originProvider)
+	if err != nil {
+		return err
+	}
+	u, err := url.Parse(ocmEndpoint)
+	if err != nil {
+		return err
+	}
+	u.Path = path.Join(u.Path, acceptInviteEndpoint)
+	recipientURL := u.String()
+
+	client := rhttp.GetHTTPClient(rhttp.Insecure(m.config.InsecureConnections))
+
+	req, err := http.NewRequest("POST", recipientURL, strings.NewReader(requestBody.Encode()))
+	if err != nil {
+		return errors.Wrap(err, "json: error framing post request")
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
+
+	resp, err := client.Do(req)
 	if err != nil {
 		err = errors.Wrap(err, "json: error sending post request")
 		return err
@@ -216,8 +230,11 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		err = errors.Wrap(errors.New(resp.Status), "json: error sending accept post request")
-		return err
+		respBody, e := ioutil.ReadAll(resp.Body)
+		if e != nil {
+			return errors.Wrap(e, "json: error reading request body")
+		}
+		return errors.Wrap(errors.New(fmt.Sprintf("%s: %s", resp.Status, string(respBody))), "json: error sending accept post request")
 	}
 
 	return nil
@@ -225,11 +242,10 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 
 func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken, remoteUser *userpb.User) error {
 
-	// Create mutex lock
 	m.Lock()
 	defer m.Unlock()
 
-	inviteToken, err := getTokenIfValid(m, invite)
+	inviteToken, err := m.getTokenIfValid(invite)
 	if err != nil {
 		return err
 	}
@@ -240,7 +256,6 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 		if acceptedUser.Id.GetOpaqueId() == remoteUser.Id.OpaqueId && acceptedUser.Id.GetIdp() == remoteUser.Id.Idp {
 			return errors.New("json: user already added to accepted users")
 		}
-
 	}
 	m.model.AcceptedUsers[userKey] = append(m.model.AcceptedUsers[userKey], remoteUser)
 	if err := m.model.Save(); err != nil {
@@ -261,7 +276,7 @@ func (m *manager) GetRemoteUser(ctx context.Context, remoteUserID *userpb.UserId
 	return nil, errtypes.NotFound(remoteUserID.OpaqueId)
 }
 
-func getTokenIfValid(m *manager, token *invitepb.InviteToken) (*invitepb.InviteToken, error) {
+func (m *manager) getTokenIfValid(token *invitepb.InviteToken) (*invitepb.InviteToken, error) {
 	inviteToken, ok := m.model.Invites[token.GetToken()]
 	if !ok {
 		return nil, errors.New("json: invalid token")
@@ -271,4 +286,13 @@ func getTokenIfValid(m *manager, token *invitepb.InviteToken) (*invitepb.InviteT
 		return nil, errors.New("json: token expired")
 	}
 	return inviteToken, nil
+}
+
+func getOCMEndpoint(originProvider *ocmprovider.ProviderInfo) (string, error) {
+	for _, s := range originProvider.Services {
+		if s.Endpoint.Type.Name == "OCM" {
+			return s.Endpoint.Path, nil
+		}
+	}
+	return "", errors.New("json: ocm endpoint not specified for mesh provider")
 }

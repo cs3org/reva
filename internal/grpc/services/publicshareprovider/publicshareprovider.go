@@ -44,6 +44,12 @@ type config struct {
 	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
 }
 
+func (c *config) init() {
+	if c.Driver == "" {
+		c.Driver = "json"
+	}
+}
+
 type service struct {
 	conf *config
 	sm   publicshare.Manager
@@ -85,6 +91,8 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
+	c.init()
+
 	sm, err := getShareManager(c)
 	if err != nil {
 		return nil, err
@@ -123,6 +131,13 @@ func (s *service) RemovePublicShare(ctx context.Context, req *link.RemovePublicS
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("publicshareprovider", "remove").Msg("remove public share")
 
+	user := user.ContextMustGetUser(ctx)
+	err := s.sm.RevokePublicShare(ctx, user, req.Ref.GetId().OpaqueId)
+	if err != nil {
+		return &link.RemovePublicShareResponse{
+			Status: status.NewInternal(ctx, err, "error deleting public share"),
+		}, err
+	}
 	return &link.RemovePublicShareResponse{
 		Status: status.NewOK(ctx),
 	}, nil

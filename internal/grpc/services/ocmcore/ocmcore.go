@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	ocmcore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
@@ -49,23 +50,21 @@ type service struct {
 	sm   share.Manager
 }
 
+func (c *config) init() {
+	if c.Driver == "" {
+		c.Driver = "json"
+	}
+}
+
+func (s *service) Register(ss *grpc.Server) {
+	ocmcore.RegisterOcmCoreAPIServer(ss, s)
+}
+
 func getShareManager(c *config) (share.Manager, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		return f(c.Drivers[c.Driver])
 	}
 	return nil, fmt.Errorf("driver not found: %s", c.Driver)
-}
-
-func (s *service) Close() error {
-	return nil
-}
-
-func (s *service) UnprotectedEndpoints() []string {
-	return []string{"/cs3.ocm.core.v1beta1.OcmCoreAPI/CreateOCMCoreShare"}
-}
-
-func (s *service) Register(ss *grpc.Server) {
-	ocmcore.RegisterOcmCoreAPIServer(ss, s)
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -84,11 +83,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	// if driver is empty we default to json
-	if c.Driver == "" {
-		c.Driver = "json"
-	}
+	c.init()
 
 	sm, err := getShareManager(c)
 	if err != nil {
@@ -103,10 +98,26 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	return service, nil
 }
 
+func (s *service) Close() error {
+	return nil
+}
+
+func (s *service) UnprotectedEndpoints() []string {
+	return []string{"/cs3.ocm.core.v1beta1.OcmCoreAPI/CreateOCMCoreShare"}
+}
+
 func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCMCoreShareRequest) (*ocmcore.CreateOCMCoreShareResponse, error) {
+	parts := strings.Split(req.ProviderId, ":")
+	if len(parts) < 2 {
+		err := errors.New("resource ID does not follow the layout storageid:opaqueid " + req.ProviderId)
+		return &ocmcore.CreateOCMCoreShareResponse{
+			Status: status.NewInternal(ctx, err, "error decoding resource ID"),
+		}, nil
+	}
+
 	resource := &provider.ResourceId{
-		StorageId: req.ProviderId,
-		OpaqueId:  req.Name,
+		StorageId: parts[0],
+		OpaqueId:  parts[1],
 	}
 
 	opaqueObj := req.Protocol.Opaque.Map["permissions"]
@@ -135,7 +146,7 @@ func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCM
 		},
 	}
 
-	share, err := s.sm.Share(ctx, resource, grant, nil, "", req.Owner)
+	share, err := s.sm.Share(ctx, resource, grant, req.Name, nil, "", req.Owner)
 	if err != nil {
 		return &ocmcore.CreateOCMCoreShareResponse{
 			Status: status.NewInternal(ctx, err, "error creating ocm core share"),

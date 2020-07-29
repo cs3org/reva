@@ -81,7 +81,7 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 
 // InitiateUpload returns an upload id that can be used for uploads with tus
 // TODO read optional content for small files in this request
-func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64) (uploadID string, err error) {
+func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (uploadID string, err error) {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return "", errors.Wrap(err, "ocfs: error resolving reference")
@@ -95,6 +95,10 @@ func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, upl
 			"dir":      filepath.Dir(p),
 		},
 		Size: uploadLength,
+	}
+
+	if metadata != nil && metadata["mtime"] != "" {
+		info.MetaData["mtime"] = metadata["mtime"]
 	}
 
 	upload, err := fs.NewUpload(ctx, info)
@@ -296,7 +300,7 @@ func (upload *fileUpload) WriteChunk(ctx context.Context, offset int64, src io.R
 	return n, err
 }
 
-// GetReader returns an io.Readerfor the upload
+// GetReader returns an io.Reader for the upload
 func (upload *fileUpload) GetReader(ctx context.Context) (io.Reader, error) {
 	return os.Open(upload.binPath)
 }
@@ -350,10 +354,18 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 		return err
 	}
 
-	// only delete the upload if it was successfully written to eos
+	// only delete the upload if it was successfully written to the storage
 	if err := os.Remove(upload.infoPath); err != nil {
 		if !os.IsNotExist(err) {
 			log.Err(err).Interface("info", upload.info).Msg("ocfs: could not delete upload info")
+			return err
+		}
+	}
+
+	if upload.info.MetaData["mtime"] != "" {
+		err := upload.fs.setMtime(ctx, np, upload.info.MetaData["mtime"])
+		if err != nil {
+			log.Err(err).Interface("info", upload.info).Msg("ocfs: could not set mtime metadata")
 			return err
 		}
 	}
@@ -365,7 +377,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 // - the storage needs to implement AsTerminatableUpload
 // - the upload needs to implement Terminate
 
-// AsTerminatableUpload returnsa a TerminatableUpload
+// AsTerminatableUpload returns a TerminatableUpload
 func (fs *ocfs) AsTerminatableUpload(upload tusd.Upload) tusd.TerminatableUpload {
 	return upload.(*fileUpload)
 }
@@ -389,7 +401,7 @@ func (upload *fileUpload) Terminate(ctx context.Context) error {
 // - the storage needs to implement AsLengthDeclarableUpload
 // - the upload needs to implement DeclareLength
 
-// AsLengthDeclarableUpload returnsa a LengthDeclarableUpload
+// AsLengthDeclarableUpload returns a LengthDeclarableUpload
 func (fs *ocfs) AsLengthDeclarableUpload(upload tusd.Upload) tusd.LengthDeclarableUpload {
 	return upload.(*fileUpload)
 }
@@ -405,7 +417,7 @@ func (upload *fileUpload) DeclareLength(ctx context.Context, length int64) error
 // - the storage needs to implement AsConcatableUpload
 // - the upload needs to implement ConcatUploads
 
-// AsConcatableUpload returnsa a ConcatableUpload
+// AsConcatableUpload returns a ConcatableUpload
 func (fs *ocfs) AsConcatableUpload(upload tusd.Upload) tusd.ConcatableUpload {
 	return upload.(*fileUpload)
 }

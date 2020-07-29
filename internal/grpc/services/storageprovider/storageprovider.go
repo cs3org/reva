@@ -48,18 +48,47 @@ func init() {
 }
 
 type config struct {
-	MountPath          string                            `mapstructure:"mount_path"`
-	MountID            string                            `mapstructure:"mount_id"`
-	Driver             string                            `mapstructure:"driver"`
-	Drivers            map[string]map[string]interface{} `mapstructure:"drivers"`
-	PathWrapper        string                            `mapstructure:"path_wrapper"`
-	PathWrappers       map[string]map[string]interface{} `mapstructure:"path_wrappers"`
-	TmpFolder          string                            `mapstructure:"tmp_folder"`
-	DataServerURL      string                            `mapstructure:"data_server_url"`
-	ExposeDataServer   bool                              `mapstructure:"expose_data_server"` // if true the client will be able to upload/download directly to it
-	EnableHomeCreation bool                              `mapstructure:"enable_home_creation"`
-	DisableTus         bool                              `mapstructure:"disable_tus"`
-	AvailableXS        map[string]uint32                 `mapstructure:"available_checksums"`
+	MountPath        string                            `mapstructure:"mount_path" docs:"/;The path where the file system would be mounted."`
+	MountID          string                            `mapstructure:"mount_id" docs:"-;The ID of the mounted file system."`
+	Driver           string                            `mapstructure:"driver" docs:"localhome;The storage driver to be used."`
+	Drivers          map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:docs/config/packages/storage/fs"`
+	TmpFolder        string                            `mapstructure:"tmp_folder" docs:"/var/tmp;Path to temporary folder."`
+	DataServerURL    string                            `mapstructure:"data_server_url" docs:"http://localhost/data;The URL for the data server."`
+	ExposeDataServer bool                              `mapstructure:"expose_data_server" docs:"false;Whether to expose data server."` // if true the client will be able to upload/download directly to it
+	DisableTus       bool                              `mapstructure:"disable_tus" docs:"false;Whether to disable TUS uploads."`
+	AvailableXS      map[string]uint32                 `mapstructure:"available_checksums" docs:"nil;List of available checksums."`
+}
+
+func (c *config) init() {
+	if c.Driver == "" {
+		c.Driver = "localhome"
+	}
+
+	if c.MountPath == "" {
+		c.MountPath = "/"
+	}
+
+	if c.MountID == "" {
+		c.MountID = "00000000-0000-0000-0000-000000000000"
+	}
+
+	if c.TmpFolder == "" {
+		c.TmpFolder = "/var/tmp/reva/tmp"
+	}
+
+	if c.DataServerURL == "" {
+		host, err := os.Hostname()
+		if err != nil || host == "" {
+			c.DataServerURL = "http://0.0.0.0:19001/data"
+		} else {
+			c.DataServerURL = fmt.Sprintf("http://%s:19001/data", host)
+		}
+	}
+
+	// set sane defaults
+	if len(c.AvailableXS) == 0 {
+		c.AvailableXS = map[string]uint32{"md5": 100, "unset": 1000}
+	}
 }
 
 type service struct {
@@ -114,18 +143,9 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	// set sane defaults
-	if len(c.AvailableXS) == 0 {
-		c.AvailableXS = map[string]uint32{"md5": 100, "unset": 1000}
-	}
+	c.init()
 
-	// use os temporary folder if empty
-	tmpFolder := c.TmpFolder
-	if tmpFolder == "" {
-		tmpFolder = os.TempDir()
-	}
-
-	if err := os.MkdirAll(tmpFolder, 0755); err != nil {
+	if err := os.MkdirAll(c.TmpFolder, 0755); err != nil {
 		return nil, err
 	}
 
@@ -156,7 +176,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	service := &service{
 		conf:          c,
 		storage:       fs,
-		tmpFolder:     tmpFolder,
+		tmpFolder:     c.TmpFolder,
 		mountPath:     mountPath,
 		mountID:       mountID,
 		dataServerURL: u,
@@ -257,17 +277,23 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	if s.conf.DisableTus {
 		url.Path = path.Join("/", url.Path, newRef.GetPath())
 	} else {
+		metadata := map[string]string{}
 		var uploadLength int64
-		if req.Opaque != nil && req.Opaque.Map != nil && req.Opaque.Map["Upload-Length"] != nil {
-			var err error
-			uploadLength, err = strconv.ParseInt(string(req.Opaque.Map["Upload-Length"].Value), 10, 64)
-			if err != nil {
-				return &provider.InitiateFileUploadResponse{
-					Status: status.NewInternal(ctx, err, "error parsing upload length"),
-				}, nil
+		if req.Opaque != nil && req.Opaque.Map != nil {
+			if req.Opaque.Map["Upload-Length"] != nil {
+				var err error
+				uploadLength, err = strconv.ParseInt(string(req.Opaque.Map["Upload-Length"].Value), 10, 64)
+				if err != nil {
+					return &provider.InitiateFileUploadResponse{
+						Status: status.NewInternal(ctx, err, "error parsing upload length"),
+					}, nil
+				}
+			}
+			if req.Opaque.Map["X-OC-Mtime"] != nil {
+				metadata["mtime"] = string(req.Opaque.Map["X-OC-Mtime"].Value)
 			}
 		}
-		uploadID, err := s.storage.InitiateUpload(ctx, newRef, uploadLength)
+		uploadID, err := s.storage.InitiateUpload(ctx, newRef, uploadLength, metadata)
 		if err != nil {
 			return &provider.InitiateFileUploadResponse{
 				Status: status.NewInternal(ctx, err, "error getting upload id"),
@@ -307,17 +333,6 @@ func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*p
 }
 
 func (s *service) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
-	/*
-		relativeHome, err := s.storage.GetHome(ctx)
-		if err != nil {
-			st := status.NewInternal(ctx, err, "error getting home")
-			return &provider.GetHomeResponse{
-				Status: st,
-			}, nil
-		}
-	*/
-
-	//home := path.Join(s.mountPath, path.Clean(relativeHome))
 	home := path.Join(s.mountPath)
 
 	res := &provider.GetHomeResponse{
@@ -330,15 +345,6 @@ func (s *service) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*p
 
 func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
 	log := appctx.GetLogger(ctx)
-	if !s.conf.EnableHomeCreation {
-		err := errtypes.NotSupported("storageprovider: create home directories not enabled")
-		log.Err(err).Msg("storageprovider: home creation is disabled")
-		st := status.NewUnimplemented(ctx, err, "creating home directories is disabled by configuration")
-		return &provider.CreateHomeResponse{
-			Status: st,
-		}, nil
-
-	}
 	if err := s.storage.CreateHome(ctx); err != nil {
 		st := status.NewInternal(ctx, err, "error creating home")
 		log.Err(err).Msg("storageprovider: error calling CreateHome of storage driver")
@@ -450,7 +456,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		}, nil
 	}
 
-	md, err := s.storage.GetMD(ctx, newRef)
+	md, err := s.storage.GetMD(ctx, newRef, req.ArbitraryMetadataKeys)
 	if err != nil {
 		var st *rpc.Status
 		if _, ok := err.(errtypes.IsNotFound); ok {
@@ -491,7 +497,7 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 		return nil
 	}
 
-	mds, err := s.storage.ListFolder(ctx, newRef)
+	mds, err := s.storage.ListFolder(ctx, newRef, req.ArbitraryMetadataKeys)
 	if err != nil {
 		res := &provider.ListContainerStreamResponse{
 			Status: status.NewInternal(ctx, err, "error listing folder"),
@@ -535,7 +541,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		}, nil
 	}
 
-	mds, err := s.storage.ListFolder(ctx, newRef)
+	mds, err := s.storage.ListFolder(ctx, newRef, req.ArbitraryMetadataKeys)
 	if err != nil {
 		return &provider.ListContainerResponse{
 			Status: status.NewInternal(ctx, err, "error listing folder"),
@@ -682,7 +688,25 @@ func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRe
 }
 
 func (s *service) ListGrants(ctx context.Context, req *provider.ListGrantsRequest) (*provider.ListGrantsResponse, error) {
-	return nil, nil
+	newRef, err := s.unwrap(ctx, req.Ref)
+	if err != nil {
+		return &provider.ListGrantsResponse{
+			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+		}, nil
+	}
+
+	grants, err := s.storage.ListGrants(ctx, newRef)
+	if err != nil {
+		return &provider.ListGrantsResponse{
+			Status: status.NewInternal(ctx, err, "error listing ACLs"),
+		}, nil
+	}
+
+	res := &provider.ListGrantsResponse{
+		Status: status.NewOK(ctx),
+		Grants: grants,
+	}
+	return res, nil
 }
 
 func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (*provider.AddGrantResponse, error) {
@@ -832,7 +856,7 @@ func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (*provide
 		idRef := &provider.Reference{
 			Spec: &provider.Reference_Id{
 				Id: &provider.ResourceId{
-					StorageId: "", // on purpose, we are unwrapping, bottom layers only need OpaqueId.
+					StorageId: "", // we are unwrapping on purpose, bottom layers only need OpaqueId.
 					OpaqueId:  ref.GetId().OpaqueId,
 				},
 			},

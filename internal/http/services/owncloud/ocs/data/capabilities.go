@@ -60,9 +60,10 @@ type Capabilities struct {
 
 // CapabilitiesCore holds webdav config
 type CapabilitiesCore struct {
-	PollInterval int     `json:"pollinterval" xml:"pollinterval" mapstructure:"poll_interval"`
-	WebdavRoot   string  `json:"webdav-root,omitempty" xml:"webdav-root,omitempty" mapstructure:"webdav_root"`
-	Status       *Status `json:"status" xml:"status"`
+	PollInterval      int     `json:"pollinterval" xml:"pollinterval" mapstructure:"poll_interval"`
+	WebdavRoot        string  `json:"webdav-root,omitempty" xml:"webdav-root,omitempty" mapstructure:"webdav_root"`
+	Status            *Status `json:"status" xml:"status"`
+	SupportURLSigning ocsBool `json:"support-url-signing" xml:"support-url-signing" mapstructure:"support_url_signing"`
 }
 
 // Status holds basic status information
@@ -83,7 +84,7 @@ type CapabilitiesChecksums struct {
 	PreferredUploadType string   `json:"preferredUploadType" xml:"preferredUploadType" mapstructure:"preferred_upload_type"`
 }
 
-// CapabilitiesFilesTusSupport TODO this must be a summry of storages
+// CapabilitiesFilesTusSupport TODO this must be a summary of storages
 type CapabilitiesFilesTusSupport struct {
 	Version            string `json:"version" xml:"version"`
 	Resumable          string `json:"resumable" xml:"resumable"`

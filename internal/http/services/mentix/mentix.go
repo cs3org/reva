@@ -116,6 +116,14 @@ func applyDefaultConfig(conf *config.Configuration) {
 	if conf.WebAPI.Endpoint == "" {
 		conf.WebAPI.Endpoint = "/"
 	}
+
+	if conf.CS3API.Endpoint == "" {
+		conf.CS3API.Endpoint = "/cs3"
+	}
+
+	if conf.SiteLocations.Endpoint == "" {
+		conf.SiteLocations.Endpoint = "/loc"
+	}
 }
 
 // New returns a new Mentix service.
@@ -125,6 +133,8 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	if err != nil {
 		return nil, err
 	}
+
+	conf.Init()
 
 	// Create the Mentix instance
 	mntx, err := mentix.New(conf, log)

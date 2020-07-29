@@ -33,7 +33,7 @@ import (
 )
 
 var (
-	dev       = flag.Bool("dev", false, "if devs is set to true creates dev builds with commit and build date")
+	dev       = flag.Bool("dev", false, "if dev is set to true creates dev builds with commit and build date")
 	commit    = flag.String("commit", "", "sets git commit")
 	version   = flag.String("version", "", "sets git version")
 	goVersion = flag.String("goversion", "", "sets go version")

@@ -20,6 +20,7 @@ package ocmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -30,14 +31,23 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/smtpclient"
+	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/utils"
 )
 
 type invitesHandler struct {
-	gatewayAddr string
+	smtpCredentials  *smtpclient.SMTPCredentials
+	gatewayAddr      string
+	meshDirectoryURL string
 }
 
 func (h *invitesHandler) init(c *Config) {
 	h.gatewayAddr = c.GatewaySvc
+	if c.SMTPCredentials != nil {
+		h.smtpCredentials = smtpclient.NewSMTPCredentials(c.SMTPCredentials)
+	}
+	h.meshDirectoryURL = c.MeshDirectoryURL
 }
 
 func (h *invitesHandler) Handler() http.Handler {
@@ -63,26 +73,44 @@ func (h *invitesHandler) Handler() http.Handler {
 func (h *invitesHandler) generateInviteToken(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
 
 	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
-		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting storage grpc client on addr: %v", h.gatewayAddr), err)
-		log.Err(err).Msg(fmt.Sprintf("error getting storage grpc client on addr: %v", h.gatewayAddr))
+		WriteError(w, r, APIErrorServerError, "error getting gateway grpc client", err)
 		return
 	}
 
 	token, err := gatewayClient.GenerateInviteToken(ctx, &invitepb.GenerateInviteTokenRequest{})
-
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error generating token", err)
 		return
 	}
 
+	if r.FormValue("recipient") != "" && h.smtpCredentials != nil {
+
+		usr := user.ContextMustGetUser(ctx)
+
+		// TODO: the message body needs to point to the meshdirectory service
+		subject := fmt.Sprintf("ScienceMesh: %s wants to collaborate with you", usr.DisplayName)
+		body := "Hi,\n\n" +
+			usr.DisplayName + " (" + usr.Mail + ") wants to start sharing OCM resources with you. " +
+			"To accept the invite, please visit the following URL:\n" +
+			h.meshDirectoryURL + "?token=" + token.InviteToken.Token + "&providerDomain=" + usr.Id.Idp + "\n\n" +
+			"Alternatively, you can visit your mesh provider and use the following details:\n" +
+			"Token: " + token.InviteToken.Token + "\n" +
+			"ProviderDomain: " + usr.Id.Idp + "\n\n" +
+			"Best,\nThe ScienceMesh team"
+
+		err = h.smtpCredentials.SendMail(r.FormValue("recipient"), subject, body)
+		if err != nil {
+			WriteError(w, r, APIErrorServerError, "error sending token by mail", err)
+			return
+		}
+	}
+
 	jsonResponse, err := json.Marshal(token.InviteToken)
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error marshalling token data", err)
-		log.Err(err).Msg("error marshal token data.")
 		return
 	}
 
@@ -90,7 +118,6 @@ func (h *invitesHandler) generateInviteToken(w http.ResponseWriter, r *http.Requ
 	_, err = w.Write(jsonResponse)
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error writing token data", err)
-		log.Err(err).Msg("error writing shares data.")
 		return
 	}
 
@@ -109,7 +136,7 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 
 	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
-		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting invite grpc client on addr: %v", h.gatewayAddr), err)
+		WriteError(w, r, APIErrorServerError, "error getting gateway grpc client", err)
 		return
 	}
 
@@ -124,6 +151,10 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, APIErrorServerError, "error sending a grpc get invite by domain info request", err)
 		return
 	}
+	if providerInfo.Status.Code != rpc.Code_CODE_OK {
+		WriteError(w, r, APIErrorServerError, "grpc forward invite request failed", errors.New(providerInfo.Status.Message))
+		return
+	}
 
 	forwardInviteReq := &invitepb.ForwardInviteRequest{
 		InviteToken:          token,
@@ -135,15 +166,18 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if forwardInviteResponse.Status.Code != rpc.Code_CODE_OK {
-		if forwardInviteResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			WriteError(w, r, APIErrorNotFound, "not found", nil)
-			return
-		}
-		WriteError(w, r, APIErrorServerError, "grpc forward invite request failed", err)
+		WriteError(w, r, APIErrorServerError, "grpc forward invite request failed", errors.New(forwardInviteResponse.Status.Message))
 		return
 	}
 
-	log.Info().Msg("Invite forwarded.")
+	_, err = w.Write([]byte("Accepted invite from: " + r.FormValue("providerDomain")))
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, "error writing token data", err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+
+	log.Info().Msgf("Invite forwarded to: %s", r.FormValue("providerDomain"))
 }
 
 func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
@@ -159,7 +193,33 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 
 	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
-		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error getting storage grpc client on addr: %v", h.gatewayAddr), err)
+		WriteError(w, r, APIErrorServerError, "error getting gateway grpc client", err)
+		return
+	}
+
+	clientIP, err := utils.GetClientIP(r)
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error retrieving client IP from request: %s", r.RemoteAddr), err)
+		return
+	}
+	providerInfo := ocmprovider.ProviderInfo{
+		Domain: recipientProvider,
+		Services: []*ocmprovider.Service{
+			&ocmprovider.Service{
+				Host: clientIP,
+			},
+		},
+	}
+
+	providerAllowedResp, err := gatewayClient.IsProviderAllowed(ctx, &ocmprovider.IsProviderAllowedRequest{
+		Provider: &providerInfo,
+	})
+	if err != nil {
+		WriteError(w, r, APIErrorServerError, "error sending a grpc is provider allowed request", err)
+		return
+	}
+	if providerAllowedResp.Status.Code != rpc.Code_CODE_OK {
+		WriteError(w, r, APIErrorUnauthenticated, "provider not authorized", errors.New(providerAllowedResp.Status.Message))
 		return
 	}
 
@@ -171,18 +231,6 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		Mail:        email,
 		DisplayName: name,
 	}
-	providerAllowedResp, err := gatewayClient.IsProviderAllowed(ctx, &ocmprovider.IsProviderAllowedRequest{
-		User: userObj,
-	})
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error authorizing provider", err)
-		return
-	}
-	if providerAllowedResp.Status.Code != rpc.Code_CODE_OK {
-		WriteError(w, r, APIErrorUnauthenticated, "provider not authorized", err)
-		return
-	}
-
 	acceptInviteRequest := &invitepb.AcceptInviteRequest{
 		InviteToken: &invitepb.InviteToken{
 			Token: token,
@@ -195,9 +243,9 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if acceptInviteResponse.Status.Code != rpc.Code_CODE_OK {
-		WriteError(w, r, APIErrorServerError, "grpc accept invite request failed", err)
+		WriteError(w, r, APIErrorServerError, "grpc accept invite request failed", errors.New(acceptInviteResponse.Status.Message))
 		return
 	}
 
-	log.Info().Msg("User added to accepted users.")
+	log.Info().Msgf("User: %+v added to accepted users.", userObj)
 }

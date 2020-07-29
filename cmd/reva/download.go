@@ -23,6 +23,9 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
+
+	"github.com/cs3org/reva/internal/http/services/datagateway"
 
 	"github.com/cheggaaa/pb"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -89,8 +92,14 @@ func downloadCommand() *command {
 			return err
 		}
 
-		httpReq.Header.Set("X-Reva-Transfer", res.Token)
-		httpClient := rhttp.GetHTTPClient(ctx)
+		httpReq.Header.Set(datagateway.TokenTransportHeader, res.Token)
+		httpClient := rhttp.GetHTTPClient(
+			rhttp.Context(ctx),
+			// TODO make insecure configurable
+			rhttp.Insecure(true),
+			// TODO make timeout configurable
+			rhttp.Timeout(time.Duration(24*int64(time.Hour))),
+		)
 
 		httpRes, err := httpClient.Do(httpReq)
 		if err != nil {

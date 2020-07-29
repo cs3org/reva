@@ -25,16 +25,27 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/smtpclient"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 )
 
 // Config holds the config options that need to be passed down to all ocdav handlers
 type Config struct {
-	Prefix     string     `mapstructure:"prefix"`
-	Host       string     `mapstructure:"host"`
-	GatewaySvc string     `mapstructure:"gatewaysvc"`
-	Config     configData `mapstructure:"config"`
+	SMTPCredentials  *smtpclient.SMTPCredentials `mapstructure:"smtp_credentials"`
+	Prefix           string                      `mapstructure:"prefix"`
+	Host             string                      `mapstructure:"host"`
+	GatewaySvc       string                      `mapstructure:"gatewaysvc"`
+	MeshDirectoryURL string                      `mapstructure:"mesh_directory_url"`
+	Config           configData                  `mapstructure:"config"`
+}
+
+func (c *Config) init() {
+	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+
+	if c.Prefix == "" {
+		c.Prefix = "ocm"
+	}
 }
 
 type svc struct {
@@ -53,11 +64,10 @@ func init() {
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 
 	conf := &Config{}
-
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
 	}
-	conf.GatewaySvc = sharedconf.GetGatewaySVC(conf.GatewaySvc)
+	conf.init()
 
 	s := &svc{
 		Conf: conf,
@@ -70,6 +80,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	s.NotificationsHandler.init(s.Conf)
 	s.ConfigHandler.init(s.Conf)
 	s.InvitesHandler.init(s.Conf)
+
 	return s, nil
 }
 

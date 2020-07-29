@@ -20,10 +20,10 @@ package memory
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,6 +36,7 @@ import (
 	"github.com/cs3org/reva/pkg/ocm/invite"
 	"github.com/cs3org/reva/pkg/ocm/invite/manager/registry"
 	"github.com/cs3org/reva/pkg/ocm/invite/token"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -46,6 +47,12 @@ func init() {
 	registry.Register("memory", New)
 }
 
+func (c *config) init() {
+	if c.Expiration == "" {
+		c.Expiration = token.DefaultExpirationTime
+	}
+}
+
 // New returns a new invite manager.
 func New(m map[string]interface{}) (invite.Manager, error) {
 	c := &config{}
@@ -53,9 +60,7 @@ func New(m map[string]interface{}) (invite.Manager, error) {
 		err = errors.Wrap(err, "error creating a new manager")
 		return nil, err
 	}
-	if c.Expiration == "" {
-		c.Expiration = token.DefaultExpirationTime
-	}
+	c.init()
 
 	return &manager{
 		Invites:       sync.Map{},
@@ -71,7 +76,8 @@ type manager struct {
 }
 
 type config struct {
-	Expiration string `mapstructure:"expiration"`
+	Expiration          string `mapstructure:"expiration"`
+	InsecureConnections bool   `mapstructure:"insecure_connections"`
 }
 
 func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, error) {
@@ -97,9 +103,28 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 		"name":              {contextUser.GetDisplayName()},
 	}
 
-	resp, err := http.PostForm(fmt.Sprintf("%s%s", originProvider.GetApiEndpoint(), acceptInviteEndpoint), requestBody)
+	ocmEndpoint, err := getOCMEndpoint(originProvider)
 	if err != nil {
-		err = errors.Wrap(err, "memory: error sending post request, URL: "+path.Join(originProvider.GetApiEndpoint(), acceptInviteEndpoint))
+		return err
+	}
+	u, err := url.Parse(ocmEndpoint)
+	if err != nil {
+		return err
+	}
+	u.Path = path.Join(u.Path, acceptInviteEndpoint)
+	recipientURL := u.String()
+
+	client := rhttp.GetHTTPClient(rhttp.Insecure(m.Config.InsecureConnections))
+
+	req, err := http.NewRequest("POST", recipientURL, strings.NewReader(requestBody.Encode()))
+	if err != nil {
+		return errors.Wrap(err, "json: error framing post request")
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		err = errors.Wrap(err, "memory: error sending post request")
 		return err
 	}
 
@@ -113,7 +138,7 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 }
 
 func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken, remoteUser *userpb.User) error {
-	inviteToken, err := getTokenIfValid(m, invite)
+	inviteToken, err := m.getTokenIfValid(invite)
 	if err != nil {
 		return err
 	}
@@ -155,7 +180,7 @@ func (m *manager) GetRemoteUser(ctx context.Context, remoteUserID *userpb.UserId
 
 }
 
-func getTokenIfValid(m *manager, token *invitepb.InviteToken) (*invitepb.InviteToken, error) {
+func (m *manager) getTokenIfValid(token *invitepb.InviteToken) (*invitepb.InviteToken, error) {
 	tokenInterface, ok := m.Invites.Load(token.GetToken())
 	if !ok {
 		return nil, errors.New("memory: invalid token")
@@ -166,4 +191,13 @@ func getTokenIfValid(m *manager, token *invitepb.InviteToken) (*invitepb.InviteT
 		return nil, errors.New("memory: token expired")
 	}
 	return inviteToken, nil
+}
+
+func getOCMEndpoint(originProvider *ocmprovider.ProviderInfo) (string, error) {
+	for _, s := range originProvider.Services {
+		if s.Endpoint.Type.Name == "OCM" {
+			return s.Endpoint.Path, nil
+		}
+	}
+	return "", errors.New("json: ocm endpoint not specified for mesh provider")
 }

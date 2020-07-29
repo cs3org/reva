@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net/http"
 
+	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/ocm/provider"
 	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
@@ -37,6 +38,12 @@ type config struct {
 	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
 }
 
+func (c *config) init() {
+	if c.Driver == "" {
+		c.Driver = "json"
+	}
+}
+
 func getDriver(c *config) (provider.Authorizer, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		return f(c.Drivers[c.Driver])
@@ -48,10 +55,15 @@ func getDriver(c *config) (provider.Authorizer, error) {
 // New returns a new HTTP middleware that verifies that the provider is registered in OCM.
 func New(m map[string]interface{}, unprotected []string, ocmPrefix string) (global.Middleware, error) {
 
+	if ocmPrefix == "" {
+		ocmPrefix = "ocm"
+	}
+
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
 	}
+	conf.init()
 
 	authorizer, err := getDriver(conf)
 	if err != nil {
@@ -71,8 +83,9 @@ func New(m map[string]interface{}, unprotected []string, ocmPrefix string) (glob
 				return
 			}
 
-			userAuth := user.ContextMustGetUser(ctx)
-			err = authorizer.IsProviderAllowed(ctx, userAuth)
+			err = authorizer.IsProviderAllowed(ctx, &ocmprovider.ProviderInfo{
+				Domain: user.ContextMustGetUser(ctx).Id.Idp,
+			})
 			if err != nil {
 				log.Error().Err(err).Msg("provider not registered in OCM")
 				w.WriteHeader(http.StatusUnauthorized)

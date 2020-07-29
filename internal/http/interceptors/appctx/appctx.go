@@ -43,7 +43,7 @@ func handler(log zerolog.Logger, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
-		// trace is set on the httpserver.go file as the outermost wraper handler.
+		// trace is set on the httpserver.go file as the outermost wrapper handler.
 		span := trace.FromContext(ctx)
 		sub := log.With().Str("traceid", span.SpanContext().TraceID.String()).Logger()
 		ctx = appctx.WithLogger(ctx, &sub)

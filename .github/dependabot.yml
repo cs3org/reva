@@ -1,0 +1,13 @@
+version: 2
+updates:
+- package-ecosystem: gomod
+  directory: "/"
+  schedule:
+    interval: daily
+  commit-message:
+    prefix: "[Build-deps]"
+  open-pull-requests-limit: 10
+  reviewers:
+  - ishank011
+  - LovisaLugnegard
+  - SamuAlfageme

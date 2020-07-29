@@ -25,6 +25,7 @@ import (
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/registry/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -34,6 +35,14 @@ func init() {
 
 type config struct {
 	Rules map[string]string `mapstructure:"rules"`
+}
+
+func (c *config) init() {
+	if len(c.Rules) == 0 {
+		c.Rules = map[string]string{
+			"basic": sharedconf.GetGatewaySVC(""),
+		}
+	}
 }
 
 type reg struct {
@@ -77,5 +86,6 @@ func New(m map[string]interface{}) (auth.Registry, error) {
 	if err != nil {
 		return nil, err
 	}
+	c.init()
 	return &reg{rules: c.Rules}, nil
 }

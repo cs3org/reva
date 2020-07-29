@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path"
 	"strconv"
 	"time"
 
@@ -122,17 +123,21 @@ func ocmShareCreateCommand() *command {
 		if err != nil {
 			return err
 		}
-		permOpaque := &types.Opaque{
+		opaqueObj := &types.Opaque{
 			Map: map[string]*types.OpaqueEntry{
 				"permissions": &types.OpaqueEntry{
 					Decoder: "json",
 					Value:   val,
 				},
+				"name": &types.OpaqueEntry{
+					Decoder: "plain",
+					Value:   []byte(path.Base(res.Info.Path)),
+				},
 			},
 		}
 
 		shareRequest := &ocm.CreateOCMShareRequest{
-			Opaque:                permOpaque,
+			Opaque:                opaqueObj,
 			ResourceId:            res.Info.Id,
 			Grant:                 grant,
 			RecipientMeshProvider: providerInfo.ProviderInfo,

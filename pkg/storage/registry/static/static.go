@@ -25,6 +25,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/registry/registry"
 	"github.com/mitchellh/mapstructure"
@@ -38,6 +39,19 @@ func init() {
 type config struct {
 	Rules        map[string]string `mapstructure:"rules"`
 	HomeProvider string            `mapstructure:"home_provider"`
+}
+
+func (c *config) init() {
+	if c.HomeProvider == "" {
+		c.HomeProvider = "/"
+	}
+
+	if len(c.Rules) == 0 {
+		c.Rules = map[string]string{
+			"/":                                    sharedconf.GetGatewaySVC(""),
+			"00000000-0000-0000-0000-000000000000": sharedconf.GetGatewaySVC(""),
+		}
+	}
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -55,6 +69,7 @@ func New(m map[string]interface{}) (storage.Registry, error) {
 	if err != nil {
 		return nil, err
 	}
+	c.init()
 	return &reg{c: c}, nil
 }
 

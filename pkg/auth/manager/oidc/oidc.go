@@ -22,15 +22,15 @@ package oidc
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
-	"net/http"
 	"time"
 
 	oidc "github.com/coreos/go-oidc"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -47,9 +47,11 @@ type mgr struct {
 }
 
 type config struct {
-	Insecure bool   `mapstructure:"insecure"`
-	Issuer   string `mapstructure:"issuer"`
-	IDClaim  string `mapstructure:"id_claim"`
+	Insecure bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
+	Issuer   string `mapstructure:"issuer" docs:";The issuer of the OIDC token."`
+	IDClaim  string `mapstructure:"id_claim" docs:"sub;The claim containing the ID of the user."`
+	UIDClaim string `mapstructure:"uid_claim" docs:";The claim containing the UID of the user."`
+	GIDClaim string `mapstructure:"gid_claim" docs:";The claim containing the GID of the user."`
 }
 
 func (c *config) init() {
@@ -121,6 +123,28 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, fmt.Errorf("no \"preferred_username\" or \"name\" attribute found in userinfo: maybe the client did not request the oidc \"profile\"-scope")
 	}
 
+	opaqueObj := &types.Opaque{
+		Map: map[string]*types.OpaqueEntry{},
+	}
+	if am.c.UIDClaim != "" {
+		uid, ok := claims[am.c.UIDClaim]
+		if ok {
+			opaqueObj.Map["uid"] = &types.OpaqueEntry{
+				Decoder: "plain",
+				Value:   []byte(fmt.Sprintf("%0.f", uid)),
+			}
+		}
+	}
+	if am.c.GIDClaim != "" {
+		gid, ok := claims[am.c.GIDClaim]
+		if ok {
+			opaqueObj.Map["gid"] = &types.OpaqueEntry{
+				Decoder: "plain",
+				Value:   []byte(fmt.Sprintf("%0.f", gid)),
+			}
+		}
+	}
+
 	u := &user.User{
 		Id: &user.UserId{
 			OpaqueId: claims[am.c.IDClaim].(string), // a stable non reassignable id
@@ -128,13 +152,14 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		},
 		Username: claims["preferred_username"].(string),
 		// TODO(labkode) if we can get groups from the claim we need to give the possibility
-		// to the admin to chosse what claim provides the groups.
+		// to the admin to choose what claim provides the groups.
 		// TODO(labkode) ... use all claims from oidc?
 		// TODO(labkode): do like K8s does it: https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/apiserver/plugin/pkg/authenticator/token/oidc/oidc.go
 		Groups:       []string{},
 		Mail:         claims["email"].(string),
 		MailVerified: claims["email_verified"].(bool),
 		DisplayName:  claims["name"].(string),
+		Opaque:       opaqueObj,
 	}
 
 	return u, nil
@@ -143,18 +168,13 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 func (am *mgr) getOAuthCtx(ctx context.Context) context.Context {
 	// Sometimes for testing we need to skip the TLS check, that's why we need a
 	// custom HTTP client.
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: am.c.Insecure,
-		},
+	customHTTPClient := rhttp.GetHTTPClient(
+		rhttp.Context(ctx),
+		rhttp.Timeout(time.Second*10),
+		rhttp.Insecure(am.c.Insecure),
 		// Fixes connection fd leak which might be caused by provider-caching
-		DisableKeepAlives: true,
-	}
-
-	customHTTPClient := &http.Client{
-		Transport: tr,
-		Timeout:   time.Second * 10,
-	}
+		rhttp.DisableKeepAlive(true),
+	)
 	ctx = context.WithValue(ctx, oauth2.HTTPClient, customHTTPClient)
 	return ctx
 }
@@ -165,7 +185,7 @@ func (am *mgr) getOIDCProvider(ctx context.Context) (*oidc.Provider, error) {
 	}
 
 	// Initialize a provider by specifying the issuer URL.
-	// Once initialized is a singleton that is reuser if further requests.
+	// Once initialized is a singleton that is reused if further requests.
 	// The provider is responsible to verify the token sent by the client
 	// against the security keys oftentimes available in the .well-known endpoint.
 	provider, err := oidc.NewProvider(ctx, am.c.Issuer)

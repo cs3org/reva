@@ -21,7 +21,10 @@ package loader
 import (
 	// Load core storage filesystem backends.
 	_ "github.com/cs3org/reva/pkg/storage/fs/eos"
+	_ "github.com/cs3org/reva/pkg/storage/fs/eosgrpc"
+	_ "github.com/cs3org/reva/pkg/storage/fs/eoshome"
 	_ "github.com/cs3org/reva/pkg/storage/fs/local"
+	_ "github.com/cs3org/reva/pkg/storage/fs/localhome"
 	_ "github.com/cs3org/reva/pkg/storage/fs/owncloud"
 	_ "github.com/cs3org/reva/pkg/storage/fs/s3"
 	// Add your own here

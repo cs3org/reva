@@ -20,6 +20,7 @@ package ocdav
 
 import (
 	"net/http"
+	"strings"
 )
 
 func (s *svc) handleOptions(w http.ResponseWriter, r *http.Request, ns string) {
@@ -27,11 +28,13 @@ func (s *svc) handleOptions(w http.ResponseWriter, r *http.Request, ns string) {
 	allow += " MOVE, UNLOCK, PROPFIND, MKCOL, REPORT, SEARCH,"
 	allow += " PUT" // TODO(jfd): only for files ... but we cannot create the full path without a user ... which we only have when credentials are sent
 
+	isPublic := strings.Contains(r.Context().Value(ctxKeyBaseURI).(string), "public-files")
+
 	w.Header().Set("Content-Type", "application/xml")
 	w.Header().Set("Allow", allow)
 	w.Header().Set("DAV", "1, 2")
 	w.Header().Set("MS-Author-Via", "DAV")
-	if !s.c.DisableTus {
+	if !s.c.DisableTus && !isPublic {
 		w.Header().Add("Access-Control-Allow-Headers", "Tus-Resumable")
 		w.Header().Add("Access-Control-Expose-Headers", "Tus-Resumable, Tus-Version, Tus-Extension")
 		w.Header().Set("Tus-Resumable", "1.0.0") // TODO(jfd): only for dirs?

@@ -1,0 +1,45 @@
+[shared]
+jwt_secret = "Pive-Fumkiu4"
+
+# This users.toml config file will start a reva service that:
+# - handles user metadata and user preferences
+# - serves the grpc services on port 18000
+[grpc]
+address = "0.0.0.0:18000"
+
+[grpc.services.authprovider]
+auth_manager = "ldap"
+
+[grpc.services.authprovider.auth_managers.ldap]
+hostname="ldap"
+port=636
+base_dn="dc=owncloud,dc=com"
+userfilter="(&(objectclass=posixAccount)(cn=%s*))"
+groupfilter="(&(objectclass=posixGroup)(cn=%s*))"
+bind_username="cn=admin,dc=owncloud,dc=com"
+bind_password="admin"
+idp="http://localhost:18000"
+[grpc.services.authprovider.auth_managers.ldap.schema]
+uid="uid"
+displayName="displayName"
+dn="dn"
+cn="cn"
+
+[grpc.services.userprovider]
+driver = "ldap"
+
+[grpc.services.userprovider.drivers.ldap]
+hostname="ldap"
+port=636
+base_dn="dc=owncloud,dc=com"
+userfilter="(&(objectclass=posixAccount)(cn=%s*))"
+groupfilter="(&(objectclass=posixGroup)(cn=%s*))"
+bind_username="cn=admin,dc=owncloud,dc=com"
+bind_password="admin"
+idp="http://localhost:18000"
+
+[grpc.services.userprovider.drivers.ldap.schema]
+uid="uid"
+displayName="displayName"
+dn="dn"
+cn="cn"

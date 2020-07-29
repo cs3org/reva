@@ -22,9 +22,9 @@ import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
+	"net/url"
 	"strings"
 
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/provider"
@@ -44,6 +44,7 @@ func New(m map[string]interface{}) (provider.Authorizer, error) {
 		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
 	}
+	c.init()
 
 	f, err := ioutil.ReadFile(c.Providers)
 	if err != nil {
@@ -55,14 +56,21 @@ func New(m map[string]interface{}) (provider.Authorizer, error) {
 		return nil, err
 	}
 
-	return &authorizer{
-		providers: providers,
-	}, nil
+	a := &authorizer{}
+	a.providers = a.getOCMProviders(providers)
+
+	return a, nil
 }
 
 type config struct {
 	// Users holds a path to a file containing json conforming the Users struct
 	Providers string `mapstructure:"providers"`
+}
+
+func (c *config) init() {
+	if c.Providers == "" {
+		c.Providers = "/etc/revad/ocm-providers.json"
+	}
 }
 
 type authorizer struct {
@@ -78,10 +86,33 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 	return nil, errtypes.NotFound(domain)
 }
 
-func (a *authorizer) IsProviderAllowed(ctx context.Context, user *userpb.User) error {
+func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovider.ProviderInfo) error {
 	return nil
 }
 
 func (a *authorizer) ListAllProviders(ctx context.Context) ([]*ocmprovider.ProviderInfo, error) {
 	return a.providers, nil
+}
+
+func (a *authorizer) getOCMProviders(providers []*ocmprovider.ProviderInfo) (po []*ocmprovider.ProviderInfo) {
+	for _, p := range providers {
+		_, err := a.getOCMHost(p)
+		if err == nil {
+			po = append(po, p)
+		}
+	}
+	return
+}
+
+func (a *authorizer) getOCMHost(provider *ocmprovider.ProviderInfo) (string, error) {
+	for _, s := range provider.Services {
+		if s.Endpoint.Type.Name == "OCM" {
+			ocmHost, err := url.Parse(s.Host)
+			if err != nil {
+				return "", errors.Wrap(err, "json: error parsing OCM host URL")
+			}
+			return ocmHost.Host, nil
+		}
+	}
+	return "", errtypes.NotFound("OCM Host")
 }
