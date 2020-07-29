@@ -26,17 +26,14 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
+	tokenpkg "github.com/cs3org/reva/pkg/token"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
 )
 
-func (s *svc) OpenFileInAppProvider(ctx context.Context, req *providerpb.OpenFileInAppProviderRequest) (*providerpb.OpenFileInAppProviderResponse, error) {
-
-	log := appctx.GetLogger(ctx)
-
+func (s *svc) OpenFileInAppProvider(ctx context.Context, req *gateway.OpenFileInAppProviderRequest) (*providerpb.OpenFileInAppProviderResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
@@ -49,22 +46,27 @@ func (s *svc) OpenFileInAppProvider(ctx context.Context, req *providerpb.OpenFil
 		}, nil
 	}
 
+	accessToken, ok := tokenpkg.ContextGetToken(ctx)
+	if !ok || accessToken == "" {
+		return &providerpb.OpenFileInAppProviderResponse{
+			Status: status.NewUnauthenticated(ctx, err, "Access token is invalid or empty"),
+		}, nil
+	}
+
 	statReq := &provider.StatRequest{
 		Ref: req.Ref,
 	}
 
 	statRes, err := c.Stat(ctx, statReq)
 	if err != nil {
-		log.Err(err).Msg("gateway: error calling Stat for the share resource path:" + req.Ref.GetPath())
 		return &providerpb.OpenFileInAppProviderResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error calling Stat for the share resource id"),
+			Status: status.NewInternal(ctx, err, "gateway: error calling Stat on the resource path for the app provider: "+req.Ref.GetPath()),
 		}, nil
 	}
 	if statRes.Status.Code != rpc.Code_CODE_OK {
 		err := status.NewErrorFromCode(statRes.Status.GetCode(), "gateway")
-		log.Err(err).Msg("gateway: error calling Stat for the share resource id:" + req.Ref.GetPath())
 		return &providerpb.OpenFileInAppProviderResponse{
-			Status: status.NewInternal(ctx, err, "error updating received share"),
+			Status: status.NewInternal(ctx, err, "Stat failed on the resource path for the app provider: "+req.Ref.GetPath()),
 		}, nil
 	}
 
@@ -92,9 +94,16 @@ func (s *svc) OpenFileInAppProvider(ctx context.Context, req *providerpb.OpenFil
 		}, nil
 	}
 
-	res, err := appProviderClient.OpenFileInAppProvider(ctx, req)
+    // build the appProvider specific request with the required extra info that has been obtained
+	appProviderReq := &providerpb.OpenFileInAppProviderRequest{
+		ResourceInfo: fileInfo,
+		ViewMode: req.ViewMode,
+		AccessToken: accessToken
+	}
+
+	res, err := appProviderClient.OpenFileInAppProvider(ctx, appProviderReq)
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling c.Open")
+		return nil, errors.Wrap(err, "gateway: error calling OpenFileInAppProvider")
 	}
 
 	return res, nil

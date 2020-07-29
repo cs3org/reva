@@ -25,8 +25,6 @@ import (
 	providerpb "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	tokenpkg "github.com/cs3org/reva/pkg/token"
-	"github.com/pkg/errors"
 )
 
 func openFileInAppProviderCommand() *command {
@@ -55,13 +53,8 @@ func openFileInAppProviderCommand() *command {
 		ref := &provider.Reference{
 			Spec: &provider.Reference_Path{Path: path},
 		}
-		accessToken, ok := tokenpkg.ContextGetToken(ctx)
-		if !ok || accessToken == "" {
-			err := errors.New("Access token is invalid or empty")
-			return err
-		}
 
-		openRequest := &providerpb.OpenFileInAppProviderRequest{Ref: ref, AccessToken: accessToken, ViewMode: viewMode}
+		openRequest := &providerpb.OpenFileInAppProviderRequest{Ref: ref, ViewMode: viewMode}
 
 		openRes, err := client.OpenFileInAppProvider(ctx, openRequest)
 		if err != nil {
