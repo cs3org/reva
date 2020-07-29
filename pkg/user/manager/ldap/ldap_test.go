@@ -22,11 +22,58 @@ import (
 	"testing"
 )
 
+type TestCasesStruc struct {
+	name          string
+	input         map[string]interface{}
+}
+
+var testCasesNegative = []TestCasesStruc{
+	{"Negative",map[string]interface{}{"hostname": 42}},
+	{"Negative", map[string]interface{}{"hostname": 2.6}},
+	{"Negative",map[string]interface{}{"hostname": 40, "dn":"dn"}},
+	{"Negative", map[string]interface{}{"user": 42,"hostname": 40}},
+	{"Negative", map[string]interface{}{"port": "xyz"}},
+	{"Negative", map[string]interface{}{"bind_username": 5678999}},
+	{"Negative", map[string]interface{}{"bind_password":123456789}},
+	{"Negative", map[string]interface{}{"base_dn": 99}},
+	{"Negative", map[string]interface{}{"idp": 99}},
+	{"Negative", map[string]interface{}{"userfilter": 99}},
+	{"Negative", map[string]interface{}{"findfilter": 99}},
+	{"Negative", map[string]interface{}{"groupfilter": 99}},
+	}
+
+var testCasesPositive = []TestCasesStruc{
+	{"Positive", map[string]interface{}{"user": 42}},
+	{"Positive", map[string]interface{}{}},
+	{"Positive",map[string]interface{}{"hostname":""}},
+	{"Positive",map[string]interface{}{"hostname": "host", "dn":"dn"}},
+	{"Negative", map[string]interface{}{"port": 9090}},
+	{"Negative", map[string]interface{}{"bind_username": "5678999"}},
+	{"Negative", map[string]interface{}{"bind_password":"123456789"}},
+	{"Negative", map[string]interface{}{"base_dn": "dn"}},
+	{"Negative", map[string]interface{}{"idp": "idp"}},
+	{"Negative", map[string]interface{}{"userfilter": "username"}},
+	{"Negative", map[string]interface{}{"findfilter": "filter"}},
+	{"Negative", map[string]interface{}{"groupfilter": "group"}},
+}
+
 func TestUserManager(t *testing.T) {
-	// negative test for parseConfig
-	_, err := New(map[string]interface{}{"hostname": 42})
-	if err == nil {
-		t.Fatal("expected error but got none")
+	for _,testCase := range testCasesNegative{
+		t.Run(testCase.name, func(t *testing.T){
+			_, err := New(testCase.input)
+			if err == nil {
+				t.Fatal("expected error but got none")
+			}
+		})
+	}
+
+	for _,testCase := range testCasesPositive{
+		t.Run(testCase.name, func(t *testing.T){
+			_, err := New(testCase.input)
+			if err != nil {
+				t.Fatalf(err.Error())
+			}
+		})
 	}
 
 	internal := map[string]interface{}{
@@ -61,11 +108,5 @@ func TestUserManager(t *testing.T) {
 	// DN provided in config file
 	if c.Schema.DN != ldapDefaults.DN {
 		t.Fatalf("expected DisplayName to be: %v, got %v", ldapDefaults.DN, c.Schema.DN)
-	}
-
-	// positive tests for New
-	_, err = New(map[string]interface{}{})
-	if err != nil {
-		t.Fatalf(err.Error())
 	}
 }
