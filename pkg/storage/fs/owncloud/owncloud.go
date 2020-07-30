@@ -33,12 +33,14 @@ import (
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/mime"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
@@ -300,19 +302,49 @@ func (fs *ocfs) wrap(ctx context.Context, fn string) (internal string) {
 		// p = <username>/foo/bar.txt
 		parts := strings.SplitN(fn, "/", 2)
 
-		switch len(parts) {
-		case 1:
-			// parts = "" or "<username>"
-			if parts[0] == "" {
-				internal = fs.c.DataDirectory
-				return
-			}
-			// parts = "<username>"
-			internal = path.Join(fs.c.DataDirectory, parts[0], "files")
-		default:
-			// parts = "<username>", "foo/bar.txt"
-			internal = path.Join(fs.c.DataDirectory, parts[0], "files", parts[1])
+		if len(parts) == 1 && parts[0] == "" {
+			internal = fs.c.DataDirectory
+			return
 		}
+
+		// parts[0] contains the username or userid. use  user service to look up id
+		c, err := pool.GetUserProviderServiceClient("localhost:9144")
+		if err != nil {
+			logger.New().Error().Err(err).
+				Msg("could not get user provider client")
+			// TODO return invalid internal path?
+			return
+		}
+		res, err := c.GetUser(ctx, &userpb.GetUserRequest{
+			UserId: &userpb.UserId{OpaqueId: parts[0]},
+		})
+		if err != nil {
+			logger.New().Error().Err(err).Msg("error performing delete grpc request")
+			// TODO return invalid internal path?
+			return
+		}
+
+		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			logger.New().Error().Str("code", string(res.Status.Code)).Msg("user not found")
+			// TODO return invalid internal path?
+			return
+		}
+
+		if res.Status.Code != rpc.Code_CODE_OK {
+			logger.New().Error().Str("code", string(res.Status.Code)).Msg("grpc request failed")
+			// TODO return invalid internal path?
+			return
+		}
+		layout := templates.WithUser(res.User, fs.c.UserLayout)
+
+		if len(parts) == 1 {
+			// parts = "<username>"
+			internal = path.Join(fs.c.DataDirectory, layout, "files")
+		} else {
+			// parts = "<username>", "foo/bar.txt"
+			internal = path.Join(fs.c.DataDirectory, layout, "files", parts[1])
+		}
+
 	}
 	return
 }
@@ -330,18 +362,47 @@ func (fs *ocfs) wrapShadow(ctx context.Context, fn string) (internal string) {
 		// p = <username>/foo/bar.txt
 		parts := strings.SplitN(fn, "/", 2)
 
-		switch len(parts) {
-		case 1:
-			// parts = "" or "<username>"
-			if parts[0] == "" {
-				internal = fs.c.DataDirectory
-				return
-			}
+		if len(parts) == 1 && parts[0] == "" {
+			internal = fs.c.DataDirectory
+			return
+		}
+
+		// parts[0] contains the username or userid. use  user service to look up id
+		c, err := pool.GetUserProviderServiceClient("localhost:9144")
+		if err != nil {
+			logger.New().Error().Err(err).
+				Msg("could not get user provider client")
+			// TODO return invalid internal path?
+			return
+		}
+		res, err := c.GetUser(ctx, &userpb.GetUserRequest{
+			UserId: &userpb.UserId{OpaqueId: parts[0]},
+		})
+		if err != nil {
+			logger.New().Error().Err(err).Msg("error performing delete grpc request")
+			// TODO return invalid internal path?
+			return
+		}
+
+		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			logger.New().Error().Str("code", string(res.Status.Code)).Msg("user not found")
+			// TODO return invalid internal path?
+			return
+		}
+
+		if res.Status.Code != rpc.Code_CODE_OK {
+			logger.New().Error().Str("code", string(res.Status.Code)).Msg("grpc request failed")
+			// TODO return invalid internal path?
+			return
+		}
+		layout := templates.WithUser(res.User, fs.c.UserLayout)
+
+		if len(parts) == 1 {
 			// parts = "<username>"
-			internal = path.Join(fs.c.DataDirectory, parts[0], "shadow_files")
-		default:
+			internal = path.Join(fs.c.DataDirectory, layout, "shadow_files")
+		} else {
 			// parts = "<username>", "foo/bar.txt"
-			internal = path.Join(fs.c.DataDirectory, parts[0], "shadow_files", parts[1])
+			internal = path.Join(fs.c.DataDirectory, layout, "shadow_files", parts[1])
 		}
 	}
 	return
@@ -881,6 +942,7 @@ func (fs *ocfs) ListGrants(ctx context.Context, ref *provider.Reference) (grants
 	grants = make([]*provider.Grant, 0, len(aces))
 	for i := range aces {
 		grantee := &provider.Grantee{
+			// TODO lookup uid from principal
 			Id:   &userpb.UserId{OpaqueId: aces[i].Principal},
 			Type: fs.getGranteeType(aces[i]),
 		}
