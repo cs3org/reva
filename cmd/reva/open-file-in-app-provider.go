@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"os"
 
-	providerpb "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
@@ -54,7 +54,7 @@ func openFileInAppProviderCommand() *command {
 			Spec: &provider.Reference_Path{Path: path},
 		}
 
-		openRequest := &providerpb.OpenFileInAppProviderRequest{Ref: ref, ViewMode: viewMode}
+		openRequest := &gateway.OpenFileInAppProviderRequest{Ref: ref, ViewMode: viewMode}
 
 		openRes, err := client.OpenFileInAppProvider(ctx, openRequest)
 		if err != nil {
@@ -72,15 +72,15 @@ func openFileInAppProviderCommand() *command {
 	return cmd
 }
 
-func getViewMode(viewMode string) providerpb.OpenFileInAppProviderRequest_ViewMode {
+func getViewMode(viewMode string) gateway.OpenFileInAppProviderRequest_ViewMode {
 	switch viewMode {
 	case "view":
-		return providerpb.OpenFileInAppProviderRequest_VIEW_MODE_VIEW_ONLY
+		return gateway.OpenFileInAppProviderRequest_VIEW_MODE_VIEW_ONLY
 	case "read":
-		return providerpb.OpenFileInAppProviderRequest_VIEW_MODE_READ_ONLY
+		return gateway.OpenFileInAppProviderRequest_VIEW_MODE_READ_ONLY
 	case "write":
-		return providerpb.OpenFileInAppProviderRequest_VIEW_MODE_READ_WRITE
+		return gateway.OpenFileInAppProviderRequest_VIEW_MODE_READ_WRITE
 	default:
-		return providerpb.OpenFileInAppProviderRequest_VIEW_MODE_INVALID
+		return gateway.OpenFileInAppProviderRequest_VIEW_MODE_INVALID
 	}
 }
