@@ -41,6 +41,7 @@ import (
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
@@ -154,13 +155,14 @@ func init() {
 }
 
 type config struct {
-	DataDirectory  string `mapstructure:"datadirectory"`
-	UploadInfoDir  string `mapstructure:"upload_info_dir"`
-	ShareDirectory string `mapstructure:"sharedirectory"`
-	UserLayout     string `mapstructure:"user_layout"`
-	Redis          string `mapstructure:"redis"`
-	EnableHome     bool   `mapstructure:"enable_home"`
-	Scan           bool   `mapstructure:"scan"`
+	DataDirectory             string `mapstructure:"datadirectory"`
+	UploadInfoDir             string `mapstructure:"upload_info_dir"`
+	ShareDirectory            string `mapstructure:"sharedirectory"`
+	UserLayout                string `mapstructure:"user_layout"`
+	Redis                     string `mapstructure:"redis"`
+	EnableHome                bool   `mapstructure:"enable_home"`
+	Scan                      bool   `mapstructure:"scan"`
+	UserShareProviderEndpoint string `mapstructure:"usershareprovidersvc"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -189,6 +191,7 @@ func (c *config) init(m map[string]interface{}) {
 	if _, ok := m["scan"]; !ok {
 		c.Scan = true
 	}
+	c.UserShareProviderEndpoint = sharedconf.GetGatewaySVC(c.UserShareProviderEndpoint)
 }
 
 // New returns an implementation to of the storage.FS interface that talk to
@@ -307,35 +310,15 @@ func (fs *ocfs) wrap(ctx context.Context, fn string) (internal string) {
 			return
 		}
 
-		// parts[0] contains the username or userid. use  user service to look up id
-		c, err := pool.GetUserProviderServiceClient("localhost:9144")
+		// parts[0] contains the username or userid.
+		u, err := fs.getUser(ctx, parts[0])
 		if err != nil {
 			logger.New().Error().Err(err).
-				Msg("could not get user provider client")
+				Msg("could not get user")
 			// TODO return invalid internal path?
 			return
 		}
-		res, err := c.GetUser(ctx, &userpb.GetUserRequest{
-			UserId: &userpb.UserId{OpaqueId: parts[0]},
-		})
-		if err != nil {
-			logger.New().Error().Err(err).Msg("error performing delete grpc request")
-			// TODO return invalid internal path?
-			return
-		}
-
-		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			logger.New().Error().Str("code", string(res.Status.Code)).Msg("user not found")
-			// TODO return invalid internal path?
-			return
-		}
-
-		if res.Status.Code != rpc.Code_CODE_OK {
-			logger.New().Error().Str("code", string(res.Status.Code)).Msg("grpc request failed")
-			// TODO return invalid internal path?
-			return
-		}
-		layout := templates.WithUser(res.User, fs.c.UserLayout)
+		layout := templates.WithUser(u, fs.c.UserLayout)
 
 		if len(parts) == 1 {
 			// parts = "<username>"
@@ -367,35 +350,15 @@ func (fs *ocfs) wrapShadow(ctx context.Context, fn string) (internal string) {
 			return
 		}
 
-		// parts[0] contains the username or userid. use  user service to look up id
-		c, err := pool.GetUserProviderServiceClient("localhost:9144")
+		// parts[0] contains the username or userid.
+		u, err := fs.getUser(ctx, parts[0])
 		if err != nil {
 			logger.New().Error().Err(err).
-				Msg("could not get user provider client")
+				Msg("could not get user")
 			// TODO return invalid internal path?
 			return
 		}
-		res, err := c.GetUser(ctx, &userpb.GetUserRequest{
-			UserId: &userpb.UserId{OpaqueId: parts[0]},
-		})
-		if err != nil {
-			logger.New().Error().Err(err).Msg("error performing delete grpc request")
-			// TODO return invalid internal path?
-			return
-		}
-
-		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			logger.New().Error().Str("code", string(res.Status.Code)).Msg("user not found")
-			// TODO return invalid internal path?
-			return
-		}
-
-		if res.Status.Code != rpc.Code_CODE_OK {
-			logger.New().Error().Str("code", string(res.Status.Code)).Msg("grpc request failed")
-			// TODO return invalid internal path?
-			return
-		}
-		layout := templates.WithUser(res.User, fs.c.UserLayout)
+		layout := templates.WithUser(u, fs.c.UserLayout)
 
 		if len(parts) == 1 {
 			// parts = "<username>"
@@ -422,13 +385,23 @@ func (fs *ocfs) getVersionsPath(ctx context.Context, np string) string {
 	// np = /<username>/files/foo/bar.txt
 	parts := strings.SplitN(np, "/", 4)
 
+	// parts[1] contains the username or userid.
+	u, err := fs.getUser(ctx, parts[1])
+	if err != nil {
+		logger.New().Error().Err(err).
+			Msg("could not get user")
+		// TODO return invalid internal path?
+		return ""
+	}
+	layout := templates.WithUser(u, fs.c.UserLayout)
+
 	switch len(parts) {
 	case 3:
 		// parts = "", "<username>"
-		return path.Join(fs.c.DataDirectory, parts[1], "files_versions")
+		return path.Join(fs.c.DataDirectory, layout, "files_versions")
 	case 4:
 		// parts = "", "<username>", "foo/bar.txt"
-		return path.Join(fs.c.DataDirectory, parts[1], "files_versions", parts[3])
+		return path.Join(fs.c.DataDirectory, layout, "files_versions", parts[3])
 	default:
 		return "" // TODO Must not happen?
 	}
@@ -442,7 +415,8 @@ func (fs *ocfs) getRecyclePath(ctx context.Context) (string, error) {
 		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
 		return "", err
 	}
-	return path.Join(fs.c.DataDirectory, u.GetUsername(), "files_trashbin/files"), nil
+	layout := templates.WithUser(u, fs.c.UserLayout)
+	return path.Join(fs.c.DataDirectory, layout, "files_trashbin/files"), nil
 }
 
 func (fs *ocfs) getVersionRecyclePath(ctx context.Context) (string, error) {
@@ -451,7 +425,8 @@ func (fs *ocfs) getVersionRecyclePath(ctx context.Context) (string, error) {
 		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
 		return "", err
 	}
-	return path.Join(fs.c.DataDirectory, u.GetUsername(), "files_trashbin/files_versions"), nil
+	layout := templates.WithUser(u, fs.c.UserLayout)
+	return path.Join(fs.c.DataDirectory, layout, "files_trashbin/files_versions"), nil
 }
 
 func (fs *ocfs) unwrap(ctx context.Context, internal string) (external string) {
@@ -534,6 +509,42 @@ func (fs *ocfs) getOwner(internal string) string {
 	return ""
 }
 
+func (fs *ocfs) getUser(ctx context.Context, usernameOrID string) (id *userpb.User, err error) {
+	u := user.ContextMustGetUser(ctx)
+	// check if username matches and id is set
+	if u.Username == usernameOrID && u.Id != nil && u.Id.OpaqueId != "" {
+		return u, nil
+	}
+	// check if userid matches and username is set
+	if u.Id != nil && u.Id.OpaqueId == usernameOrID && u.Username != "" {
+		return u, nil
+	}
+	// look up at the userprovider
+
+	// parts[0] contains the username or userid. use  user service to look up id
+	c, err := pool.GetUserProviderServiceClient(fs.c.UserShareProviderEndpoint)
+	if err != nil {
+		return nil, err
+	}
+	res, err := c.GetUser(ctx, &userpb.GetUserRequest{
+		UserId: &userpb.UserId{OpaqueId: usernameOrID},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+		logger.New().Error().Str("code", string(res.Status.Code)).Msg("user not found")
+		return nil, fmt.Errorf("user not found")
+	}
+
+	if res.Status.Code != rpc.Code_CODE_OK {
+		logger.New().Error().Str("code", string(res.Status.Code)).Msg("user lookup failed")
+		return nil, fmt.Errorf("user lookup failed")
+	}
+	return res.User, nil
+}
+
 func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, np string, fn string, c redis.Conn, mdKeys []string) *provider.ResourceInfo {
 	id := readOrCreateID(ctx, np, c)
 
@@ -606,10 +617,9 @@ func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, np st
 		appctx.GetLogger(ctx).Error().Err(err).Msg("error getting list of extended attributes")
 	}
 
-	return &provider.ResourceInfo{
+	ri := &provider.ResourceInfo{
 		Id:            &provider.ResourceId{OpaqueId: id},
 		Path:          fn,
-		Owner:         &userpb.UserId{OpaqueId: fs.getOwner(np)},
 		Type:          getResourceType(fi.IsDir()),
 		Etag:          etag,
 		MimeType:      mime.Detect(fi.IsDir(), fn),
@@ -623,6 +633,14 @@ func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, np st
 			Metadata: metadata,
 		},
 	}
+
+	if owner, err := fs.getUser(ctx, fs.getOwner(np)); err == nil {
+		ri.Owner = owner.Id
+	} else {
+		appctx.GetLogger(ctx).Error().Err(err).Msg("error getting owner")
+	}
+
+	return ri
 }
 func getResourceType(isDir bool) provider.ResourceType {
 	if isDir {
@@ -1914,7 +1932,8 @@ func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key string) error {
 	} else {
 		origin = path.Clean(string(v))
 	}
-	tgt := path.Join(fs.wrap(ctx, path.Join("/", u.GetUsername(), origin)), strings.TrimSuffix(path.Base(src), suffix))
+	layout := templates.WithUser(u, fs.c.UserLayout)
+	tgt := path.Join(fs.wrap(ctx, path.Join("/", layout, origin)), strings.TrimSuffix(path.Base(src), suffix))
 	// move back to original location
 	if err := os.Rename(src, tgt); err != nil {
 		log.Error().Err(err).Str("path", src).Msg("could not restore item")
@@ -1935,8 +1954,8 @@ func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {
 	if fs.c.EnableHome {
 		root = fs.wrap(ctx, "/")
 	} else {
-		u := user.ContextMustGetUser(ctx)
-		root = fs.wrap(ctx, path.Join("/", u.GetUsername()))
+		owner := fs.getOwner(leafPath)
+		root = fs.wrap(ctx, owner)
 	}
 	if !strings.HasPrefix(leafPath, root) {
 		err := errors.New("internal path outside root")
@@ -1959,7 +1978,7 @@ func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {
 	}
 
 	parts := strings.Split(strings.TrimPrefix(leafPath, root), "/")
-	// root never ents in / so the split returns an empty first element, which we can skip
+	// root never ends in / so the split returns an empty first element, which we can skip
 	// we do not need to chmod the last element because it is the leaf path (< and not <= comparison)
 	for i := 1; i < len(parts); i++ {
 		appctx.GetLogger(ctx).Debug().
