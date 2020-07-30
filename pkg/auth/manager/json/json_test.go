@@ -20,16 +20,106 @@ package json
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
 
+	"github.com/cs3org/reva/pkg/auth"
 	"github.com/stretchr/testify/assert"
 )
 
 var ctx = context.Background()
 
-func TestUserManager(t *testing.T) {
+func TestGetManager(t *testing.T) {
+	var input map[string]interface{}
+	tests := []struct {
+		name          string
+		user          string
+		expectManager bool
+	}{
+		{
+			"Boolean in user",
+			"t", // later use as boolean
+			false,
+		},
+		{
+			"Invalid JSON object",
+			"[{",
+			false,
+		},
+		{
+			"JSON object with incorrect user metadata",
+			`[{"abc": "albert", "def": "einstein"}]`,
+			true,
+		},
+		{
+			"JSON object with incorrect user metadata",
+			`[{"username":"einstein","secret":"albert"}]`,
+			true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var tmpFile *os.File
+			if tt.user == "t" {
+				input = map[string]interface{}{
+					"users": true,
+				}
+
+			} else {
+				// add tempdir
+				tmpDir, err := ioutil.TempDir("", "json_test")
+				if err != nil {
+					t.Fatalf("Error while creating temp dir: %v", err)
+				}
+				defer os.RemoveAll(tmpDir)
+
+				// get file handler for temporary file
+				tmpFile, err = ioutil.TempFile(tmpDir, "json_test")
+				if err != nil {
+					t.Fatalf("Error while opening temp file: %v", err)
+				}
+
+				// write json object to tempdir
+				_, err = tmpFile.WriteString(tt.user)
+				if err != nil {
+					t.Fatalf("Error while writing temp file: %v", err)
+				}
+				// get manager
+				input = map[string]interface{}{
+					"users": tmpFile.Name(),
+				}
+			}
+
+			manager, err := New(input)
+
+			if tt.expectManager {
+				_, ok := manager.(auth.Manager)
+				if !ok {
+					t.Fatal("Expected response of type auth.Manager but found something else.")
+				}
+				assert.Equal(t, nil, err)
+			} else if !tt.expectManager {
+				if tt.user == "t" {
+					assert.Equal(t, nil, manager)
+					assert.EqualError(t, err, "error decoding conf: 1 error(s) decoding:\n\n* "+
+						"'users' expected type 'string', got unconvertible type 'bool'")
+				} else {
+					assert.Equal(t, nil, manager)
+					assert.EqualError(t, err, "unexpected end of JSON input")
+				}
+			}
+			// cleanup
+			if tt.user != "t" {
+				os.Remove(tmpFile.Name())
+			}
+		})
+	}
+}
+
+func TestGetAuthenticatedManager(t *testing.T) {
 	// add tempdir
 	tempdir, err := ioutil.TempDir("", "json_test")
 	if err != nil {
@@ -37,37 +127,18 @@ func TestUserManager(t *testing.T) {
 	}
 	defer os.RemoveAll(tempdir)
 
-	// parseConfig - negative test - 1
-	input := map[string]interface{}{
-		"users": true,
-	}
-	_, err = New(input)
-	if err == nil {
-		t.Fatalf("Expected error while getting manager but found none.")
-	}
-
 	tests := []struct {
 		name                string
 		user                string
 		username            string
 		secret              string
-		expectManager       bool
 		expectAuthenticated bool
 	}{
-		{
-			"Corrupt JSON object with user metadata",
-			`[{`,
-			"nil",
-			"nil",
-			false,
-			false,
-		},
 		{
 			"JSON object with incorrect user metadata",
 			`[{"username":"einstein","secret":"albert"}]`,
 			"einstein",
 			"NotARealPassword",
-			true,
 			false,
 		},
 		{
@@ -75,7 +146,6 @@ func TestUserManager(t *testing.T) {
 			`[{"username":"einstein","secret":"albert"}]`,
 			"einstein",
 			"albert",
-			true,
 			true,
 		},
 	}
@@ -95,23 +165,19 @@ func TestUserManager(t *testing.T) {
 			}
 
 			// get manager
-			input = map[string]interface{}{
+			input := map[string]interface{}{
 				"users": tempFile.Name(),
 			}
-			manager, err := New(input)
-			if !tt.expectManager {
-				assert.Equalf(t, nil, manager, "Expected no manager but found: %v", manager)
-				assert.NotEqual(t, nil, err, "Expected error while getting manager but found none.")
-			} else if manager != nil && tt.expectManager {
-				authenticated, err := manager.Authenticate(ctx, tt.username, tt.secret)
-				if !tt.expectAuthenticated {
-					assert.NotEqual(t, nil, authenticated, "Expected manager but found none.")
-					assert.NotEqual(t, nil, err, "Expected error while authenticate about bad credentials, but found none.")
-				} else if tt.expectAuthenticated {
-					assert.NotEqual(t, nil, authenticated, "Expected an authenticated manager but found none.")
-					assert.Equalf(t, nil, err, "Error: %v", err)
-					assert.Equal(t, tt.username, authenticated.Username)
-				}
+			manager, _ := New(input)
+			authenticated, e := manager.Authenticate(ctx, tt.username, tt.secret)
+			if !tt.expectAuthenticated {
+				assert.NotEqual(t, nil, authenticated, "Expected manager but found none.")
+				errMsg := fmt.Sprintf("error: invalid credentials: %s", tt.username)
+				assert.EqualError(t, e, errMsg, e)
+			} else if tt.expectAuthenticated {
+				assert.NotEqual(t, nil, authenticated, "Expected an authenticated manager but found none.")
+				assert.Equalf(t, nil, e, "%v", e)
+				assert.Equal(t, tt.username, authenticated.Username)
 			}
 			// cleanup
 			os.Remove(tempFile.Name())
