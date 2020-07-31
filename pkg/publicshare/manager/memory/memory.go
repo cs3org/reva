@@ -172,7 +172,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 		s := v.(*link.PublicShare)
 
 		// Skip if the share isn't created by the current user
-		if s.Creator == u.Id {
+		if s.Creator.GetOpaqueId() == u.Id.OpaqueId && (s.Creator.GetIdp() == "" || u.Id.Idp == s.Creator.GetIdp()) {
 			if len(filters) == 0 {
 				shares = append(shares, s)
 			} else {

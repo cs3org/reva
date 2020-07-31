@@ -334,7 +334,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 		}
 
 		// Skip if the share isn't created by the current user
-		if local.Creator != u.Id {
+		if local.Creator.GetOpaqueId() != u.Id.OpaqueId || (local.Creator.GetIdp() != "" && u.Id.Idp != local.Creator.GetIdp()) {
 			continue
 		}
 
