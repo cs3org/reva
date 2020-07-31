@@ -75,8 +75,12 @@ wopiurl = "http://0.0.0.0:8880/"
 [grpc.services.appregistry]
 driver = "static"
 
-[grpc.services.appregistry.drivers.static.rules]
+[grpc.services.appregistry.static.rules]
 "text/plain" = "localhost:19000"
+"text/markdown" = "localhost:19000"
+"application/vnd.oasis.opendocument.text" = "localhost:19000"
+"application/vnd.oasis.opendocument.spreadsheet" = "localhost:19000"
+"application/vnd.oasis.opendocument.presentation" = "localhost:19000"
 
 [grpc.services.storageprovider]
 driver = "localhome"
