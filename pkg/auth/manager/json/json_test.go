@@ -37,26 +37,38 @@ func TestGetManager(t *testing.T) {
 		name          string
 		user          string
 		expectManager bool
+		hasError      string
 	}{
 		{
 			"Boolean in user",
-			"t", // later use as boolean
+			"t", // later converted to boolean value
 			false,
+			"error decoding conf: 1 error(s) decoding:\n\n* "+
+				"'users' expected type 'string', got unconvertible type 'bool'",
+		},
+		{
+			"Nil in user",
+			"nil", // later converted to nil value
+			false,
+			"open /etc/revad/users.json: no such file or directory",
 		},
 		{
 			"Invalid JSON object",
 			"[{",
 			false,
+			"unexpected end of JSON input",
 		},
 		{
 			"JSON object with incorrect user metadata",
 			`[{"abc": "albert", "def": "einstein"}]`,
 			true,
+			"nil",
 		},
 		{
 			"JSON object with incorrect user metadata",
 			`[{"username":"einstein","secret":"albert"}]`,
 			true,
+			"nil",
 		},
 	}
 
@@ -68,6 +80,10 @@ func TestGetManager(t *testing.T) {
 					"users": true,
 				}
 
+			} else if tt.user == "nil" {
+				input = map[string]interface{}{
+					"users": nil,
+				}
 			} else {
 				// add tempdir
 				tmpDir, err := ioutil.TempDir("", "json_test")
@@ -102,17 +118,11 @@ func TestGetManager(t *testing.T) {
 				}
 				assert.Equal(t, nil, err)
 			} else if !tt.expectManager {
-				if tt.user == "t" {
-					assert.Equal(t, nil, manager)
-					assert.EqualError(t, err, "error decoding conf: 1 error(s) decoding:\n\n* "+
-						"'users' expected type 'string', got unconvertible type 'bool'")
-				} else {
-					assert.Equal(t, nil, manager)
-					assert.EqualError(t, err, "unexpected end of JSON input")
-				}
+				assert.Empty(t, manager)
+				assert.EqualError(t, err, tt.hasError)
 			}
 			// cleanup
-			if tt.user != "t" {
+			if tt.user != "t" && tt.user != "nil" {
 				os.Remove(tmpFile.Name())
 			}
 		})
