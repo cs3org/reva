@@ -20,7 +20,7 @@ package json
 
 import (
 	"context"
-	"fmt"
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -143,6 +143,7 @@ func TestGetAuthenticatedManager(t *testing.T) {
 		username            string
 		secret              string
 		expectAuthenticated bool
+		hasError string
 	}{
 		{
 			"JSON object with incorrect user metadata",
@@ -150,6 +151,8 @@ func TestGetAuthenticatedManager(t *testing.T) {
 			"einstein",
 			"NotARealPassword",
 			false,
+			"error: invalid credentials: einstein",
+
 		},
 		{
 			"JSON object with correct user metadata",
@@ -157,6 +160,7 @@ func TestGetAuthenticatedManager(t *testing.T) {
 			"einstein",
 			"albert",
 			true,
+			"nil",
 		},
 	}
 
@@ -179,14 +183,15 @@ func TestGetAuthenticatedManager(t *testing.T) {
 				"users": tempFile.Name(),
 			}
 			manager, _ := New(input)
-			authenticated, e := manager.Authenticate(ctx, tt.username, tt.secret)
+			authenticated, er := manager.Authenticate(ctx, tt.username, tt.secret)
 			if !tt.expectAuthenticated {
-				assert.NotEqual(t, nil, authenticated, "Expected manager but found none.")
-				errMsg := fmt.Sprintf("error: invalid credentials: %s", tt.username)
-				assert.EqualError(t, e, errMsg, e)
+				assert.Empty(t, authenticated)
+				assert.NotEmpty(t, er, "Expected manager but found none.")
+				assert.EqualError(t, er, tt.hasError)
 			} else if tt.expectAuthenticated {
-				assert.NotEqual(t, nil, authenticated, "Expected an authenticated manager but found none.")
-				assert.Equalf(t, nil, e, "%v", e)
+				assert.IsType(t, &user.User{}, authenticated)
+				assert.NotEmpty(t, authenticated, "Expected an authenticated manager but found none.")
+				assert.Empty(t, er)
 				assert.Equal(t, tt.username, authenticated.Username)
 			}
 			// cleanup
