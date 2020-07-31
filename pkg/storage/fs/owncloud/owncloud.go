@@ -155,14 +155,14 @@ func init() {
 }
 
 type config struct {
-	DataDirectory             string `mapstructure:"datadirectory"`
-	UploadInfoDir             string `mapstructure:"upload_info_dir"`
-	ShareDirectory            string `mapstructure:"sharedirectory"`
-	UserLayout                string `mapstructure:"user_layout"`
-	Redis                     string `mapstructure:"redis"`
-	EnableHome                bool   `mapstructure:"enable_home"`
-	Scan                      bool   `mapstructure:"scan"`
-	UserShareProviderEndpoint string `mapstructure:"usershareprovidersvc"`
+	DataDirectory        string `mapstructure:"datadirectory"`
+	UploadInfoDir        string `mapstructure:"upload_info_dir"`
+	ShareDirectory       string `mapstructure:"sharedirectory"`
+	UserLayout           string `mapstructure:"user_layout"`
+	Redis                string `mapstructure:"redis"`
+	EnableHome           bool   `mapstructure:"enable_home"`
+	Scan                 bool   `mapstructure:"scan"`
+	UserProviderEndpoint string `mapstructure:"userprovidersvc"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -191,7 +191,7 @@ func (c *config) init(m map[string]interface{}) {
 	if _, ok := m["scan"]; !ok {
 		c.Scan = true
 	}
-	c.UserShareProviderEndpoint = sharedconf.GetGatewaySVC(c.UserShareProviderEndpoint)
+	c.UserProviderEndpoint = sharedconf.GetGatewaySVC(c.UserProviderEndpoint)
 }
 
 // New returns an implementation to of the storage.FS interface that talk to
@@ -522,7 +522,7 @@ func (fs *ocfs) getUser(ctx context.Context, usernameOrID string) (id *userpb.Us
 	// look up at the userprovider
 
 	// parts[0] contains the username or userid. use  user service to look up id
-	c, err := pool.GetUserProviderServiceClient(fs.c.UserShareProviderEndpoint)
+	c, err := pool.GetUserProviderServiceClient(fs.c.UserProviderEndpoint)
 	if err != nil {
 		return nil, err
 	}
