@@ -45,8 +45,8 @@ func NewStream() grpc.StreamServerInterceptor {
 }
 
 func recoveryFunc(ctx context.Context, p interface{}) (err error) {
-	stack := debug.Stack()
+	debug.PrintStack()
 	log := appctx.GetLogger(ctx)
-	log.Error().Str("stack", string(stack)).Msgf("%+v", p)
+	log.Error().Msgf("%+v", p)
 	return status.Errorf(codes.Internal, "%s", p)
 }

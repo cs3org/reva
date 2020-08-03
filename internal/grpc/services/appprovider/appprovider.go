@@ -182,7 +182,7 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 
 	if openRes.StatusCode != http.StatusOK {
 		res := &providerpb.OpenFileInAppProviderResponse{
-			Status: status.NewInternal(ctx, err, "appprovider: error performing open request to WOPI, status code: "+strconv.Itoa(openRes.StatusCode)),
+			Status: status.NewInvalid(ctx, "appprovider: error performing open request to WOPI, status code: "+strconv.Itoa(openRes.StatusCode)),
 		}
 		return res, nil
 	}
