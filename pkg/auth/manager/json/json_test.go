@@ -59,13 +59,7 @@ func TestGetManager(t *testing.T) {
 			"unexpected end of JSON input",
 		},
 		{
-			"JSON object with incorrect user metadata",
-			`[{"abc": "albert", "def": "einstein"}]`,
-			true,
-			"nil",
-		},
-		{
-			"JSON object with incorrect user metadata",
+			"JSON object with correct user metadata",
 			`[{"username":"einstein","secret":"albert"}]`,
 			true,
 			"nil",
@@ -140,23 +134,20 @@ func TestGetAuthenticatedManager(t *testing.T) {
 
 	tests := []struct {
 		name                string
-		user                string
 		username            string
 		secret              string
 		expectAuthenticated bool
 		hasError            string
 	}{
 		{
-			"JSON object with incorrect user metadata",
-			`[{"username":"einstein","secret":"albert"}]`,
+			"Authenticate with incorrect user password",
 			"einstein",
 			"NotARealPassword",
 			false,
 			"error: invalid credentials: einstein",
 		},
 		{
-			"JSON object with correct user metadata",
-			`[{"username":"einstein","secret":"albert"}]`,
+			"Authenticate with correct user auth credentials",
 			"einstein",
 			"albert",
 			true,
@@ -173,7 +164,7 @@ func TestGetAuthenticatedManager(t *testing.T) {
 			}
 
 			// write json object to tempdir
-			_, err = tempFile.WriteString(tt.user)
+			_, err = tempFile.WriteString(`[{"username":"einstein","secret":"albert"}]`)
 			if err != nil {
 				t.Fatalf("Error while writing temp file: %v", err)
 			}
@@ -183,15 +174,15 @@ func TestGetAuthenticatedManager(t *testing.T) {
 				"users": tempFile.Name(),
 			}
 			manager, _ := New(input)
-			authenticated, er := manager.Authenticate(ctx, tt.username, tt.secret)
+			authenticated, err := manager.Authenticate(ctx, tt.username, tt.secret)
 			if !tt.expectAuthenticated {
 				assert.Empty(t, authenticated)
-				assert.NotEmpty(t, er, "Expected manager but found none.")
-				assert.EqualError(t, er, tt.hasError)
+				assert.NotEmpty(t, err, "Expected manager but found none.")
+				assert.EqualError(t, err, tt.hasError)
 			} else if tt.expectAuthenticated {
 				assert.IsType(t, &user.User{}, authenticated)
 				assert.NotEmpty(t, authenticated, "Expected an authenticated manager but found none.")
-				assert.Empty(t, er)
+				assert.Empty(t, err)
 				assert.Equal(t, tt.username, authenticated.Username)
 			}
 			// cleanup
