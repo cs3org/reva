@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -48,8 +49,9 @@ func init() {
 }
 
 type service struct {
-	provider app.Provider
-	conf     *config
+	provider   app.Provider
+	conf       *config
+	appsURLMap map[string]interface{}
 }
 
 type config struct {
@@ -109,48 +111,70 @@ func getProvider(c *config) (app.Provider, error) {
 	}
 }
 
-func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.OpenFileInAppProviderRequest) (*providerpb.OpenFileInAppProviderResponse, error) {
-
-	log := appctx.GetLogger(ctx)
-
+func (s *service) getWopiAppEndpoints(ctx context.Context) error {
 	httpClient := rhttp.GetHTTPClient(
 		rhttp.Context(ctx),
-		// these calls are expected to take a very short time, 5s (though hardcoded) ought to be far enough
+		// calls to WOPI are expected to take a very short time, 5s (though hardcoded) ought to be far enough
 		rhttp.Timeout(time.Duration(5*int64(time.Second))),
 	)
 
-	// TODO this query will eventually be served by Reva. For the time being it is a remnant of the CERNBox-specific WOPI server,
-	// which justifies the /cbox path in the URL. Also, it could be executed every ~1 day or week, not at each request.
+	// TODO this query will eventually be served by Reva.
+	// For the time being it is a remnant of the CERNBox-specific WOPI server, which justifies the /cbox path in the URL.
 	wopiurl, err := url.Parse(s.conf.WopiURL)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	wopiurl.Path = path.Join(wopiurl.Path, "/wopi/cbox/endpoints")
 	appsReq, err := rhttp.NewRequest(ctx, "GET", wopiurl.String(), nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	appsRes, err := httpClient.Do(appsReq)
 	if err != nil {
-		res := &providerpb.OpenFileInAppProviderResponse{
-			Status: status.NewInternal(ctx, err, "error performing http request"),
-		}
-		return res, nil
+		return err
 	}
 	defer appsRes.Body.Close()
 	if appsRes.StatusCode != http.StatusOK {
-		res := &providerpb.OpenFileInAppProviderResponse{
-			Status: status.NewInternal(ctx, err, "error performing http request, status code: "+strconv.Itoa(appsRes.StatusCode)),
-		}
-		return res, nil
+		return errors.New("Request to WOPI server returned " + string(appsRes.StatusCode))
 	}
-
 	appsBody, err := ioutil.ReadAll(appsRes.Body)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	wopiurl, err = url.Parse(s.conf.WopiURL)
+	s.appsURLMap = make(map[string]interface{})
+	err = json.Unmarshal(appsBody, &s.appsURLMap)
+	if err != nil {
+		return err
+	}
+
+	log := appctx.GetLogger(ctx)
+	log.Info().Msg(fmt.Sprintf("Successfully retrieved %d WOPI app endpoints", len(s.appsURLMap)))
+	return nil
+}
+
+func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.OpenFileInAppProviderRequest) (*providerpb.OpenFileInAppProviderResponse, error) {
+
+	log := appctx.GetLogger(ctx)
+
+	if s.appsURLMap == nil {
+		// TODO refresh after e.g. a day or a week
+		err := s.getWopiAppEndpoints(ctx)
+		if err != nil {
+			res := &providerpb.OpenFileInAppProviderResponse{
+				Status: status.NewInternal(ctx, err, "appprovider: getWopiAppEndpoints failed"),
+			}
+			return res, nil
+		}
+	}
+
+	httpClient := rhttp.GetHTTPClient(
+		rhttp.Context(ctx),
+		// calls to WOPI are expected to take a very short time, 5s (though hardcoded) ought to be far enough
+		rhttp.Timeout(time.Duration(5*int64(time.Second))),
+	)
+
+	wopiurl, err := url.Parse(s.conf.WopiURL)
 	if err != nil {
 		return nil, err
 	}
@@ -195,24 +219,13 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 	}
 
 	buf := new(bytes.Buffer)
-	_, err1 := buf.ReadFrom(openRes.Body)
-	if err1 != nil {
-		return nil, err1
+	_, err = buf.ReadFrom(openRes.Body)
+	if err != nil {
+		return nil, err
 	}
-
 	openResBody := buf.String()
 
-	// TODO follow up from TODO above
-	appsBodyMap := make(map[string]interface{})
-	err2 := json.Unmarshal(appsBody, &appsBodyMap)
-	if err2 != nil {
-		return nil, err2
-	}
-
-	fileExtension := path.Ext(req.ResourceInfo.GetPath())
-
-	viewOptions := appsBodyMap[fileExtension]
-
+	viewOptions := s.appsURLMap[path.Ext(req.ResourceInfo.GetPath())]
 	viewOptionsMap, ok := viewOptions.(map[string]interface{})
 	if !ok {
 		res := &providerpb.OpenFileInAppProviderResponse{
