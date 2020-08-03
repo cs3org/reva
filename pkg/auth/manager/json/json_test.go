@@ -20,11 +20,11 @@ package json
 
 import (
 	"context"
-	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"io/ioutil"
 	"os"
 	"testing"
 
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/stretchr/testify/assert"
 )
@@ -43,7 +43,7 @@ func TestGetManager(t *testing.T) {
 			"Boolean in user",
 			"t", // later converted to boolean value
 			false,
-			"error decoding conf: 1 error(s) decoding:\n\n* "+
+			"error decoding conf: 1 error(s) decoding:\n\n* " +
 				"'users' expected type 'string', got unconvertible type 'bool'",
 		},
 		{
@@ -75,16 +75,17 @@ func TestGetManager(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var tmpFile *os.File
-			if tt.user == "t" {
+
+			switch {
+			case tt.user == "t":
 				input = map[string]interface{}{
 					"users": true,
 				}
-
-			} else if tt.user == "nil" {
+			case tt.user == "nil":
 				input = map[string]interface{}{
 					"users": nil,
 				}
-			} else {
+			default:
 				// add tempdir
 				tmpDir, err := ioutil.TempDir("", "json_test")
 				if err != nil {
@@ -143,7 +144,7 @@ func TestGetAuthenticatedManager(t *testing.T) {
 		username            string
 		secret              string
 		expectAuthenticated bool
-		hasError string
+		hasError            string
 	}{
 		{
 			"JSON object with incorrect user metadata",
@@ -152,7 +153,6 @@ func TestGetAuthenticatedManager(t *testing.T) {
 			"NotARealPassword",
 			false,
 			"error: invalid credentials: einstein",
-
 		},
 		{
 			"JSON object with correct user metadata",
