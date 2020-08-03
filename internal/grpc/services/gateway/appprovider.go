@@ -20,6 +20,7 @@ package gateway
 
 import (
 	"context"
+	"fmt"
 
 	providerpb "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
@@ -27,6 +28,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -96,6 +98,10 @@ func (s *svc) OpenFileInAppProvider(ctx context.Context, req *gateway.OpenFileIn
 	}
 
 	// build the appProvider specific request with the required extra info that has been obtained
+
+	log := appctx.GetLogger(ctx)
+	log.Debug().Msg(fmt.Sprintf("request: %s", req))
+
 	appProviderReq := &providerpb.OpenFileInAppProviderRequest{
 		ResourceInfo: fileInfo,
 		ViewMode:     providerpb.OpenFileInAppProviderRequest_ViewMode(req.ViewMode),

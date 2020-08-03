@@ -128,7 +128,6 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 	}
 	appsRes, err := httpClient.Do(appsReq)
 	if err != nil {
-		log.Error().Err(err).Msg("error performing http request")
 		res := &providerpb.OpenFileInAppProviderResponse{
 			Status: status.NewInternal(ctx, err, "error performing http request"),
 		}
@@ -136,7 +135,6 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 	}
 	defer appsRes.Body.Close()
 	if appsRes.StatusCode != http.StatusOK {
-		log.Error().Err(err).Msg("error performing http request")
 		res := &providerpb.OpenFileInAppProviderResponse{
 			Status: status.NewInternal(ctx, err, "error performing http request, status code: "+strconv.Itoa(appsRes.StatusCode)),
 		}
@@ -195,6 +193,7 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 
 	openResBody := buf.String()
 
+	// TODO this could be done once every ~week, no need to do it at every request
 	appsBodyMap := make(map[string]interface{})
 	err2 := json.Unmarshal(appsBody, &appsBodyMap)
 	if err2 != nil {
@@ -207,30 +206,27 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 
 	viewOptionsMap, ok := viewOptions.(map[string]interface{})
 	if !ok {
-		log.Error().Msg("error typecasting to map")
 		res := &providerpb.OpenFileInAppProviderResponse{
-			Status: status.NewInternal(ctx, nil, "error typecasting to map"),
+			Status: status.NewInvalid(ctx, "Incorrect parsing of the App URLs map from the WOPI server"),
 		}
 		return res, nil
 	}
 
 	var viewmode string
-
 	if req.ViewMode == providerpb.OpenFileInAppProviderRequest_VIEW_MODE_READ_WRITE {
 		viewmode = "edit"
 	} else {
 		viewmode = "view"
 	}
 
-	providerURL := fmt.Sprintf("%v", viewOptionsMap[viewmode])
-
-	if strings.Contains(providerURL, "?") {
-		providerURL += "&"
+	appProviderURL := fmt.Sprintf("%v", viewOptionsMap[viewmode])
+	if strings.Contains(appProviderURL, "?") {
+		appProviderURL += "&"
 	} else {
-		providerURL += "?"
+		appProviderURL += "?"
 	}
-
-	appProviderURL := fmt.Sprintf("%sWOPISrc=%s\n", providerURL, openResBody)
+	appProviderURL = fmt.Sprintf("%sWOPISrc=%s", appProviderURL, openResBody)
+	log.Info().Msg(fmt.Sprintf("Returning app provider URL %s", appProviderURL))
 
 	return &providerpb.OpenFileInAppProviderResponse{
 		Status:         status.NewOK(ctx),

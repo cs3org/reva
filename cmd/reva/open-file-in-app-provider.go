@@ -31,9 +31,9 @@ func openFileInAppProviderCommand() *command {
 	cmd := newCommand("open-file-in-app-provider")
 	cmd.Description = func() string { return "Open a file in an external app provider" }
 	cmd.Usage = func() string {
-		return "Usage: open-file-in-app-provider [-flags] <path> <viewMode (view, read, write)>"
+		return "Usage: open-file-in-app-provider [-flags] [-viewmode view|read|write] <path>"
 	}
-	viewMode := cmd.String("viewMode", "view", "the view permissions, defaults to view")
+	viewMode := cmd.String("viewmode", "view", "the view permissions, defaults to view")
 
 	cmd.Action = func() error {
 		ctx := getAuthContext()
@@ -43,7 +43,7 @@ func openFileInAppProviderCommand() *command {
 		}
 		path := cmd.Args()[0]
 
-		viewMode := getViewMode(*viewMode)
+		vm := getViewMode(*viewMode)
 
 		client, err := getClient()
 		if err != nil {
@@ -54,7 +54,7 @@ func openFileInAppProviderCommand() *command {
 			Spec: &provider.Reference_Path{Path: path},
 		}
 
-		openRequest := &gateway.OpenFileInAppProviderRequest{Ref: ref, ViewMode: viewMode}
+		openRequest := &gateway.OpenFileInAppProviderRequest{Ref: ref, ViewMode: vm}
 
 		openRes, err := client.OpenFileInAppProvider(ctx, openRequest)
 		if err != nil {
