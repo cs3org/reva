@@ -104,25 +104,6 @@ func (s *svc) getHome(ctx context.Context) string {
 	return "/home"
 }
 func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {
-	statReq := &provider.StatRequest{Ref: req.Ref}
-	statRes, err := s.stat(ctx, statReq)
-	if err != nil {
-		return &gateway.InitiateFileDownloadResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+req.Ref.String()),
-		}, nil
-	}
-	if statRes.Status.Code != rpc.Code_CODE_OK {
-		if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			return &gateway.InitiateFileDownloadResponse{
-				Status: status.NewNotFound(ctx, "gateway: file not found"),
-			}, nil
-		}
-		err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
-		return &gateway.InitiateFileDownloadResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error stating ref"),
-		}, nil
-	}
-
 	p, err := s.getPath(ctx, req.Ref)
 	if err != nil {
 		return &gateway.InitiateFileDownloadResponse{
@@ -131,13 +112,31 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 	}
 
 	if !s.inSharedFolder(ctx, p) {
+		statReq := &provider.StatRequest{Ref: req.Ref}
+		statRes, err := s.stat(ctx, statReq)
+		if err != nil {
+			return &gateway.InitiateFileDownloadResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+req.Ref.String()),
+			}, nil
+		}
+		if statRes.Status.Code != rpc.Code_CODE_OK {
+			if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+				return &gateway.InitiateFileDownloadResponse{
+					Status: status.NewNotFound(ctx, "gateway: file not found"),
+				}, nil
+			}
+			err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
+			return &gateway.InitiateFileDownloadResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref"),
+			}, nil
+		}
 		return s.initiateFileDownload(ctx, req)
 	}
 
 	log := appctx.GetLogger(ctx)
 	if s.isSharedFolder(ctx, p) || s.isShareName(ctx, p) {
 		log.Debug().Msgf("path:%s points to shared folder or share name", p)
-		err := errtypes.PermissionDenied("gateway: cannot upload to share folder or share name: path=" + p)
+		err := errtypes.PermissionDenied("gateway: cannot download share folder or share name: path=" + p)
 		log.Err(err).Msg("gateway: error downloading")
 		return &gateway.InitiateFileDownloadResponse{
 			Status: status.NewInvalidArg(ctx, "path points to share folder or share name"),
@@ -194,6 +193,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 			},
 		}
 		req.Ref = ref
+		log.Debug().Msg("download path: " + target)
 		return s.initiateFileDownload(ctx, req)
 	}
 

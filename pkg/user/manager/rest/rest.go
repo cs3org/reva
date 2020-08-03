@@ -353,26 +353,24 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 
 }
 
-func (m *manager) findUsersByFilter(ctx context.Context, url string) ([]*userpb.User, error) {
+func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[string]*userpb.User) error {
 
 	userData, err := m.sendAPIRequest(ctx, url)
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	users := []*userpb.User{}
 
 	for _, usr := range userData {
 		usrInfo, ok := usr.(map[string]interface{})
 		if !ok {
-			return nil, errors.New("rest: error in type assertion")
+			return errors.New("rest: error in type assertion")
 		}
 
 		uid := &userpb.UserId{
 			OpaqueId: usrInfo["upn"].(string),
 			Idp:      m.conf.IDProvider,
 		}
-		users = append(users, &userpb.User{
+		users[uid.OpaqueId] = &userpb.User{
 			Id:          uid,
 			Username:    usrInfo["upn"].(string),
 			Mail:        usrInfo["primaryAccountEmail"].(string),
@@ -389,10 +387,10 @@ func (m *manager) findUsersByFilter(ctx context.Context, url string) ([]*userpb.
 					},
 				},
 			},
-		})
+		}
 	}
 
-	return users, nil
+	return nil
 }
 
 func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
@@ -407,18 +405,23 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 		return nil, errors.New("rest: illegal characters present in query")
 	}
 
-	users := []*userpb.User{}
+	users := make(map[string]*userpb.User)
 
 	for _, f := range filters {
 		url := fmt.Sprintf("%s/Identity/?filter=%s:contains:%s&field=id&field=upn&field=primaryAccountEmail&field=displayName&field=uid&field=gid",
 			m.conf.APIBaseURL, f, query)
-		filteredUsers, err := m.findUsersByFilter(ctx, url)
+		err := m.findUsersByFilter(ctx, url, users)
 		if err != nil {
 			return nil, err
 		}
-		users = append(users, filteredUsers...)
 	}
-	return users, nil
+
+	userSlice := make([]*userpb.User, len(users))
+	for _, v := range users {
+		userSlice = append(userSlice, v)
+	}
+
+	return userSlice, nil
 }
 
 func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
