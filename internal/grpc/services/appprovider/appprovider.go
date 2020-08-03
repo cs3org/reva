@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"path"
 	"strconv"
 	"strings"
@@ -114,15 +115,18 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 
 	httpClient := rhttp.GetHTTPClient(
 		rhttp.Context(ctx),
-		// TODO make insecure configurable
-		rhttp.Insecure(true),
-		// TODO make timeout configurable
-		rhttp.Timeout(time.Duration(24*int64(time.Hour))),
+		// these calls are expected to take a very short time, 5s (though hardcoded) ought to be far enough
+		rhttp.Timeout(time.Duration(5*int64(time.Second))),
 	)
 
 	// TODO this query will eventually be served by Reva. For the time being it is a remnant of the CERNBox-specific WOPI server,
-	// which justifies the /cbox path in the URL.
-	appsReq, err := rhttp.NewRequest(ctx, "GET", s.conf.WopiURL+"wopi/cbox/endpoints", nil)
+	// which justifies the /cbox path in the URL. Also, it could be executed every ~1 day or week, not at each request.
+	wopiurl, err := url.Parse(s.conf.WopiURL)
+	if err != nil {
+		return nil, err
+	}
+	wopiurl.Path = path.Join(wopiurl.Path, "/wopi/cbox/endpoints")
+	appsReq, err := rhttp.NewRequest(ctx, "GET", wopiurl.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +150,12 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 		return nil, err
 	}
 
-	httpReq, err := rhttp.NewRequest(ctx, "GET", s.conf.WopiURL+"wopi/iop/open", nil)
+	wopiurl, err = url.Parse(s.conf.WopiURL)
+	if err != nil {
+		return nil, err
+	}
+	wopiurl.Path = path.Join(wopiurl.Path, "/wopi/iop/open")
+	httpReq, err := rhttp.NewRequest(ctx, "GET", wopiurl.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +202,7 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 
 	openResBody := buf.String()
 
-	// TODO this could be done once every ~week, no need to do it at every request
+	// TODO follow up from TODO above
 	appsBodyMap := make(map[string]interface{})
 	err2 := json.Unmarshal(appsBody, &appsBodyMap)
 	if err2 != nil {
