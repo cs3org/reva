@@ -170,13 +170,17 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 	shares := []*link.PublicShare{}
 	m.shares.Range(func(k, v interface{}) bool {
 		s := v.(*link.PublicShare)
-		if len(filters) == 0 {
-			shares = append(shares, s)
-		} else {
-			for _, f := range filters {
-				if f.Type == link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID {
-					if s.ResourceId.StorageId == f.GetResourceId().StorageId && s.ResourceId.OpaqueId == f.GetResourceId().OpaqueId {
-						shares = append(shares, s)
+
+		// Skip if the share isn't created by the current user
+		if s.Creator.GetOpaqueId() == u.Id.OpaqueId && (s.Creator.GetIdp() == "" || u.Id.Idp == s.Creator.GetIdp()) {
+			if len(filters) == 0 {
+				shares = append(shares, s)
+			} else {
+				for _, f := range filters {
+					if f.Type == link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID {
+						if s.ResourceId.StorageId == f.GetResourceId().StorageId && s.ResourceId.OpaqueId == f.GetResourceId().OpaqueId {
+							shares = append(shares, s)
+						}
 					}
 				}
 			}
