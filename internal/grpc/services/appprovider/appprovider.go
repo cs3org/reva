@@ -49,9 +49,8 @@ func init() {
 }
 
 type service struct {
-	provider   app.Provider
-	conf       *config
-	appsURLMap map[string]interface{}
+	provider app.Provider
+	conf     *config
 }
 
 type config struct {
@@ -111,7 +110,7 @@ func getProvider(c *config) (app.Provider, error) {
 	}
 }
 
-func (s *service) getWopiAppEndpoints(ctx context.Context) error {
+func (s *service) getWopiAppEndpoints(ctx context.Context) (map[string]interface{}, error) {
 	httpClient := rhttp.GetHTTPClient(
 		rhttp.Context(ctx),
 		// calls to WOPI are expected to take a very short time, 5s (though hardcoded) ought to be far enough
@@ -122,51 +121,40 @@ func (s *service) getWopiAppEndpoints(ctx context.Context) error {
 	// For the time being it is a remnant of the CERNBox-specific WOPI server, which justifies the /cbox path in the URL.
 	wopiurl, err := url.Parse(s.conf.WopiURL)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	wopiurl.Path = path.Join(wopiurl.Path, "/wopi/cbox/endpoints")
 	appsReq, err := rhttp.NewRequest(ctx, "GET", wopiurl.String(), nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	appsRes, err := httpClient.Do(appsReq)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer appsRes.Body.Close()
 	if appsRes.StatusCode != http.StatusOK {
-		return errors.New("Request to WOPI server returned " + string(appsRes.StatusCode))
+		return nil, errors.New("Request to WOPI server returned " + string(appsRes.StatusCode))
 	}
 	appsBody, err := ioutil.ReadAll(appsRes.Body)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	s.appsURLMap = make(map[string]interface{})
-	err = json.Unmarshal(appsBody, &s.appsURLMap)
+	appsURLMap := make(map[string]interface{})
+	err = json.Unmarshal(appsBody, &appsURLMap)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	log := appctx.GetLogger(ctx)
-	log.Info().Msg(fmt.Sprintf("Successfully retrieved %d WOPI app endpoints", len(s.appsURLMap)))
-	return nil
+	log.Info().Msg(fmt.Sprintf("Successfully retrieved %d WOPI app endpoints", len(appsURLMap)))
+	return appsURLMap, nil
 }
 
 func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.OpenFileInAppProviderRequest) (*providerpb.OpenFileInAppProviderResponse, error) {
 
 	log := appctx.GetLogger(ctx)
-
-	if s.appsURLMap == nil {
-		// TODO refresh after e.g. a day or a week
-		err := s.getWopiAppEndpoints(ctx)
-		if err != nil {
-			res := &providerpb.OpenFileInAppProviderResponse{
-				Status: status.NewInternal(ctx, err, "appprovider: getWopiAppEndpoints failed"),
-			}
-			return res, nil
-		}
-	}
 
 	httpClient := rhttp.GetHTTPClient(
 		rhttp.Context(ctx),
@@ -225,7 +213,15 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 	}
 	openResBody := buf.String()
 
-	viewOptions := s.appsURLMap[path.Ext(req.ResourceInfo.GetPath())]
+	// TODO call this e.g. once a day or a week, and cache the content in a shared map protected by a multi-reader Lock
+	appsURLMap, err := s.getWopiAppEndpoints(ctx)
+	if err != nil {
+		res := &providerpb.OpenFileInAppProviderResponse{
+			Status: status.NewInternal(ctx, err, "appprovider: getWopiAppEndpoints failed"),
+		}
+		return res, nil
+	}
+	viewOptions := appsURLMap[path.Ext(req.ResourceInfo.GetPath())]
 	viewOptionsMap, ok := viewOptions.(map[string]interface{})
 	if !ok {
 		res := &providerpb.OpenFileInAppProviderResponse{
