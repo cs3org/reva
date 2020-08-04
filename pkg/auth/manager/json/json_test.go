@@ -37,7 +37,7 @@ func TestGetManager(t *testing.T) {
 		name          string
 		user          string
 		expectManager bool
-		hasError      string
+		expectedError string
 	}{
 		{
 			"Boolean in user",
@@ -114,7 +114,7 @@ func TestGetManager(t *testing.T) {
 				assert.Equal(t, nil, err)
 			} else if !tt.expectManager {
 				assert.Empty(t, manager)
-				assert.EqualError(t, err, tt.hasError)
+				assert.EqualError(t, err, tt.expectedError)
 			}
 			// cleanup
 			if tt.user != "t" && tt.user != "nil" {
@@ -125,19 +125,12 @@ func TestGetManager(t *testing.T) {
 }
 
 func TestGetAuthenticatedManager(t *testing.T) {
-	// add tempdir
-	tempdir, err := ioutil.TempDir("", "json_test")
-	if err != nil {
-		t.Fatalf("Error while creating temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempdir)
-
 	tests := []struct {
 		name                string
 		username            string
 		secret              string
 		expectAuthenticated bool
-		hasError            string
+		expectedError       string
 	}{
 		{
 			"Authenticate with incorrect user password",
@@ -155,33 +148,39 @@ func TestGetAuthenticatedManager(t *testing.T) {
 		},
 	}
 
+	// add tempdir
+	tempdir, err := ioutil.TempDir("", "json_test")
+	if err != nil {
+		t.Fatalf("Error while creating temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempdir)
+
+	// get file handler for temporary file
+	tempFile, err := ioutil.TempFile(tempdir, "json_test")
+	if err != nil {
+		t.Fatalf("Error while opening temp file: %v", err)
+	}
+
+	// write json object to tempdir
+	_, err = tempFile.WriteString(`[{"username":"einstein","secret":"albert"}]`)
+	if err != nil {
+		t.Fatalf("Error while writing temp file: %v", err)
+	}
+
+	// get manager
+	input := map[string]interface{}{
+		"users": tempFile.Name(),
+	}
+	manager, _ := New(input)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// get file handler for temporary file
-			tempFile, err := ioutil.TempFile(tempdir, "json_test")
-			if err != nil {
-				t.Fatalf("Error while opening temp file: %v", err)
-			}
-
-			// write json object to tempdir
-			_, err = tempFile.WriteString(`[{"username":"einstein","secret":"albert"}]`)
-			if err != nil {
-				t.Fatalf("Error while writing temp file: %v", err)
-			}
-
-			// get manager
-			input := map[string]interface{}{
-				"users": tempFile.Name(),
-			}
-			manager, _ := New(input)
 			authenticated, err := manager.Authenticate(ctx, tt.username, tt.secret)
 			if !tt.expectAuthenticated {
 				assert.Empty(t, authenticated)
-				assert.NotEmpty(t, err, "Expected manager but found none.")
-				assert.EqualError(t, err, tt.hasError)
-			} else if tt.expectAuthenticated {
+				assert.EqualError(t, err, tt.expectedError)
+			} else {
 				assert.IsType(t, &user.User{}, authenticated)
-				assert.NotEmpty(t, authenticated, "Expected an authenticated manager but found none.")
 				assert.Empty(t, err)
 				assert.Equal(t, tt.username, authenticated.Username)
 			}
