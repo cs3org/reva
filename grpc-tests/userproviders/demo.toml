@@ -1,0 +1,5 @@
+[grpc]
+address = "0.0.0.0:19000"
+
+[grpc.services.userprovider]
+driver = "demo"
