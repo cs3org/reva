@@ -343,7 +343,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
 
-  - name: localAPIAcceptanceTests
+  - name: localAPIAcceptanceTestsOcStorage
     image: owncloudci/php:7.2
     commands:
       - make test-acceptance-api
@@ -355,6 +355,7 @@ steps:
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_OCIS: 'true'
       TEST_REVA: 'true'
+      BEHAT_FILTER_TAGS: '~@skipOnOcis-OC-Storage'
       PATH_TO_CORE: '/drone/src/tmp/testrunner'
 
   - name: oC10APIAcceptanceTests
