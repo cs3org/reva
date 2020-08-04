@@ -343,7 +343,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 9416491281aa5315b630e02e3c7e8ca76689505a
+      - git checkout 1bee9ca8bc5ca37d3ceeb1f22f89ff8fb9690d83
       - make test-acceptance-api
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
