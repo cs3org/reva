@@ -179,7 +179,7 @@ func (c *config) init(m map[string]interface{}) {
 		c.Redis = ":6379"
 	}
 	if c.UserLayout == "" {
-		c.UserLayout = "{{.Username}}"
+		c.UserLayout = "{{.Id.OpaqueId}}"
 	}
 	if c.UploadInfoDir == "" {
 		c.UploadInfoDir = "/var/tmp/reva/uploadinfo"
