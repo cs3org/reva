@@ -81,6 +81,13 @@ func (m *manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 		return nil, errors.New("memory: user and grantee are the same")
 	}
 
+	// don't share with the owner of the resource. This won't be caught by the
+	// next check
+	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER &&
+		g.Grantee.Id.Idp == md.Owner.Idp && g.Grantee.Id.OpaqueId == md.Owner.OpaqueId {
+		return nil, errors.New("json: grantee is the owner of the resource")
+	}
+
 	// check if share already exists.
 	key := &collaboration.ShareKey{
 		Owner:      user.Id,
@@ -100,7 +107,7 @@ func (m *manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 		ResourceId:  md.Id,
 		Permissions: g.Permissions,
 		Grantee:     g.Grantee,
-		Owner:       user.Id,
+		Owner:       md.Owner,
 		Creator:     user.Id,
 		Ctime:       ts,
 		Mtime:       ts,
