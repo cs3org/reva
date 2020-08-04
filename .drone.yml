@@ -362,7 +362,7 @@ steps:
     image: owncloudci/php:7.2
     commands:
       - cd /drone/src/tmp/testrunner
-      - git checkout 9416491281aa5315b630e02e3c7e8ca76689505a
+      - git checkout 1bee9ca8bc5ca37d3ceeb1f22f89ff8fb9690d83
       - make test-acceptance-api
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
