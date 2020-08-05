@@ -941,8 +941,26 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 				Path: target,
 			},
 		}
+
 		req.Ref = ref
-		return s.stat(ctx, req)
+		res, err := s.stat(ctx, req)
+		if err != nil {
+			return &provider.StatResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error stating"),
+			}, nil
+		}
+		if res.Status.Code != rpc.Code_CODE_OK {
+			err := status.NewErrorFromCode(res.Status.Code, "gateway")
+			log.Err(err).Msg("gateway: error stating")
+			return &provider.StatResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error stating"),
+			}, nil
+		}
+
+		// we need to make sure we don't expose the reference target in the resource
+		// information.
+		res.Info.Path = p
+		return res, nil
 	}
 
 	panic("gateway: stating an unknown path:" + p)

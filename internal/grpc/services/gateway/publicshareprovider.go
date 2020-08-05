@@ -29,6 +29,10 @@ import (
 )
 
 func (s *svc) CreatePublicShare(ctx context.Context, req *link.CreatePublicShareRequest) (*link.CreatePublicShareResponse, error) {
+	if s.isSharedFolder(ctx, req.ResourceInfo.GetPath()) {
+		return nil, errors.New("gateway: can't create a public share of the share folder itself")
+	}
+
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("create public share")
 
