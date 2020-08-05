@@ -46,7 +46,9 @@ func New(m map[string]interface{}) (user.Manager, error) {
 
 func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
 	if user, ok := m.catalog[uid.OpaqueId]; ok {
-		return user, nil
+		if uid.Idp == "" || user.Id.Idp == uid.Idp {
+			return user, nil
+		}
 	}
 	return nil, errtypes.NotFound(uid.OpaqueId)
 }
