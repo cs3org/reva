@@ -172,10 +172,10 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabora
 
 	// don't share with the owner of the resource. This won't be caught by the
 	// next check
-	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER &&
-		g.Grantee.Id.Idp == md.Owner.Idp && g.Grantee.Id.OpaqueId == md.Owner.OpaqueId {
-		return nil, errors.New("json: grantee is the owner of the resource")
-	}
+	// if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER &&
+	// 	g.Grantee.Id.Idp == md.Owner.Idp && g.Grantee.Id.OpaqueId == md.Owner.OpaqueId {
+	// 	return nil, errors.New("json: grantee is the owner of the resource")
+	// }
 
 	// check if share already exists.
 	key := &collaboration.ShareKey{
