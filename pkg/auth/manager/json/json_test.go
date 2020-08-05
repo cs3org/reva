@@ -31,77 +31,92 @@ import (
 
 var ctx = context.Background()
 
-func TestGetManager(t *testing.T) {
-	var input map[string]interface{}
+var input map[string]interface{}
+
+type ExpectedError struct {
+	message string
+}
+
+func TestGetManagerWithInvalidUser(t *testing.T) {
 	tests := []struct {
 		name          string
-		user          string
-		expectManager bool
+		user          interface{}
 		expectedError string
 	}{
 		{
 			"Boolean in user",
-			"t", // later converted to boolean value
 			false,
 			"error decoding conf: 1 error(s) decoding:\n\n* " +
 				"'users' expected type 'string', got unconvertible type 'bool'",
 		},
 		{
 			"Nil in user",
-			"nil", // later converted to nil value
-			false,
+			nil,
 			"open /etc/revad/users.json: no such file or directory",
-		},
-		{
-			"Invalid JSON object",
-			"[{",
-			false,
-			"unexpected end of JSON input",
-		},
-		{
-			"JSON object with correct user metadata",
-			`[{"username":"einstein","secret":"albert"}]`,
-			true,
-			"nil",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var tmpFile *os.File
+			input = map[string]interface{}{
+				"users": tt.user,
+			}
 
-			switch {
-			case tt.user == "t":
-				input = map[string]interface{}{
-					"users": true,
-				}
-			case tt.user == "nil":
-				input = map[string]interface{}{
-					"users": nil,
-				}
-			default:
-				// add tempdir
-				tmpDir, err := ioutil.TempDir("", "json_test")
-				if err != nil {
-					t.Fatalf("Error while creating temp dir: %v", err)
-				}
-				defer os.RemoveAll(tmpDir)
+			manager, err := New(input)
 
-				// get file handler for temporary file
-				tmpFile, err = ioutil.TempFile(tmpDir, "json_test")
-				if err != nil {
-					t.Fatalf("Error while opening temp file: %v", err)
-				}
+			assert.Empty(t, manager)
+			assert.EqualError(t, err, tt.expectedError)
+		})
+	}
+}
 
-				// write json object to tempdir
-				_, err = tmpFile.WriteString(tt.user)
-				if err != nil {
-					t.Fatalf("Error while writing temp file: %v", err)
-				}
-				// get manager
-				input = map[string]interface{}{
-					"users": tmpFile.Name(),
-				}
+func TestGetManagerWithJSONObject(t *testing.T) {
+	tests := []struct {
+		name          string
+		user          string
+		expectManager bool
+		expectedError *ExpectedError
+	}{
+		{
+			"Invalid JSON object",
+			"[{",
+			false,
+			&ExpectedError{"unexpected end of JSON input"},
+		},
+		{
+			"JSON object with correct user metadata",
+			`[{"username":"einstein","secret":"albert"}]`,
+			true,
+			nil,
+		},
+	}
+
+	var tmpFile *os.File
+
+	// add tempdir
+	tmpDir, err := ioutil.TempDir("", "json_test")
+	if err != nil {
+		t.Fatalf("Error while creating temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	for _, tt := range tests {
+		// get file handler for temporary file
+		tmpFile, err = ioutil.TempFile(tmpDir, "json_test")
+		if err != nil {
+			t.Fatalf("Error while opening temp file: %v", err)
+		}
+
+		// write json object to tempdir
+		_, err = tmpFile.WriteString(tt.user)
+		if err != nil {
+			t.Fatalf("Error while writing temp file: %v", err)
+		}
+
+		t.Run(tt.name, func(t *testing.T) {
+			// get manager
+			input = map[string]interface{}{
+				"users": tmpFile.Name(),
 			}
 
 			manager, err := New(input)
@@ -114,13 +129,11 @@ func TestGetManager(t *testing.T) {
 				assert.Equal(t, nil, err)
 			} else if !tt.expectManager {
 				assert.Empty(t, manager)
-				assert.EqualError(t, err, tt.expectedError)
-			}
-			// cleanup
-			if tt.user != "t" && tt.user != "nil" {
-				os.Remove(tmpFile.Name())
+				assert.EqualError(t, err, tt.expectedError.message)
 			}
 		})
+		//cleanup
+		os.Remove(tmpFile.Name())
 	}
 }
 
@@ -130,21 +143,23 @@ func TestGetAuthenticatedManager(t *testing.T) {
 		username            string
 		secret              string
 		expectAuthenticated bool
-		expectedError       string
+		expectedError       *ExpectedError
 	}{
 		{
 			"Authenticate with incorrect user password",
 			"einstein",
 			"NotARealPassword",
 			false,
-			"error: invalid credentials: einstein",
+			&ExpectedError{
+				"error: invalid credentials: einstein",
+			},
 		},
 		{
 			"Authenticate with correct user auth credentials",
 			"einstein",
 			"albert",
 			true,
-			"nil",
+			nil,
 		},
 	}
 
@@ -178,7 +193,7 @@ func TestGetAuthenticatedManager(t *testing.T) {
 			authenticated, err := manager.Authenticate(ctx, tt.username, tt.secret)
 			if !tt.expectAuthenticated {
 				assert.Empty(t, authenticated)
-				assert.EqualError(t, err, tt.expectedError)
+				assert.EqualError(t, err, tt.expectedError.message)
 			} else {
 				assert.IsType(t, &user.User{}, authenticated)
 				assert.Empty(t, err)
