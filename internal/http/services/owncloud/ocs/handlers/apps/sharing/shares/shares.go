@@ -1295,7 +1295,13 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.ListS
 			}
 
 			if statResponse.Status.Code != rpc.Code_CODE_OK {
-				return nil, errors.New("could not stat share target")
+				if statResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
+					// TODO share target was not found, we should not error here.
+					// return nil, errors.New(fmt.Sprintf("could not stat share target: %v, code: %v", s.ResourceId, statResponse.Status))
+					continue
+				}
+
+				return nil, errors.New(fmt.Sprintf("could not stat share target: %v, code: %v", s.ResourceId, statResponse.Status))
 			}
 
 			err = h.addFileInfo(ctx, share, statResponse.Info)
