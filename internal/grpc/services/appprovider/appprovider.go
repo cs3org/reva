@@ -22,11 +22,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"path"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -40,7 +41,6 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
 
@@ -57,9 +57,7 @@ type config struct {
 	Driver    string                 `mapstructure:"driver"`
 	Demo      map[string]interface{} `mapstructure:"demo"`
 	IopSecret string                 `mapstructure:"iopsecret" docs:";The iopsecret used to connect to the wopiserver."`
-	WopiURL   string                 `mapstructure:"wopiurl" docs:";The wopiserver's url."`
-	UIURL     string                 `mapstructure:"uirul" docs:";URL to application (eg collabora) URL."`
-	StorageID string                 `mapstructure:"storageid" docs:";The storage id used by the wopiserver to look up the file or storage id defaults to default by the wopiserver if empty."`
+	WopiURL   string                 `mapstructure:"wopiurl" docs:";The wopiserver's URL."`
 }
 
 // New creates a new AppProviderService
@@ -102,6 +100,7 @@ func (s *service) UnprotectedEndpoints() []string {
 func (s *service) Register(ss *grpc.Server) {
 	providerpb.RegisterProviderAPIServer(ss, s)
 }
+
 func getProvider(c *config) (app.Provider, error) {
 	switch c.Driver {
 	case "demo":
@@ -111,66 +110,81 @@ func getProvider(c *config) (app.Provider, error) {
 	}
 }
 
-func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.OpenFileInAppProviderRequest) (*providerpb.OpenFileInAppProviderResponse, error) {
-
-	log := appctx.GetLogger(ctx)
-
-	wopiurl := s.conf.WopiURL
-	iopsecret := s.conf.IopSecret
-	storageID := s.conf.StorageID
-	folderURL := s.conf.UIURL + filepath.Dir(req.Ref.GetPath())
-
+func (s *service) getWopiAppEndpoints(ctx context.Context) (map[string]interface{}, error) {
 	httpClient := rhttp.GetHTTPClient(
 		rhttp.Context(ctx),
-		// TODO make insecure configurable
-		rhttp.Insecure(true),
-		// TODO make timeout configurable
-		rhttp.Timeout(time.Duration(24*int64(time.Hour))),
+		// calls to WOPI are expected to take a very short time, 5s (though hardcoded) ought to be far enough
+		rhttp.Timeout(time.Duration(5*int64(time.Second))),
 	)
 
-	appsReq, err := rhttp.NewRequest(ctx, "GET", wopiurl+"wopi/cbox/endpoints", nil)
+	// TODO this query will eventually be served by Reva.
+	// For the time being it is a remnant of the CERNBox-specific WOPI server, which justifies the /cbox path in the URL.
+	wopiurl, err := url.Parse(s.conf.WopiURL)
+	if err != nil {
+		return nil, err
+	}
+	wopiurl.Path = path.Join(wopiurl.Path, "/wopi/cbox/endpoints")
+	appsReq, err := rhttp.NewRequest(ctx, "GET", wopiurl.String(), nil)
 	if err != nil {
 		return nil, err
 	}
 	appsRes, err := httpClient.Do(appsReq)
 	if err != nil {
-		log.Error().Err(err).Msg("error performing http request")
-		res := &providerpb.OpenFileInAppProviderResponse{
-			Status: status.NewInternal(ctx, err, "error performing http request"),
-		}
-		return res, nil
+		return nil, err
 	}
 	defer appsRes.Body.Close()
 	if appsRes.StatusCode != http.StatusOK {
-		log.Error().Err(err).Msg("error performing http request")
-		res := &providerpb.OpenFileInAppProviderResponse{
-			Status: status.NewInternal(ctx, err, "error performing http request, status code: "+strconv.Itoa(appsRes.StatusCode)),
-		}
-		return res, nil
+		return nil, errors.New("Request to WOPI server returned " + string(appsRes.StatusCode))
 	}
-
 	appsBody, err := ioutil.ReadAll(appsRes.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	httpReq, err := rhttp.NewRequest(ctx, "GET", wopiurl+"wopi/iop/open", nil)
+	appsURLMap := make(map[string]interface{})
+	err = json.Unmarshal(appsBody, &appsURLMap)
+	if err != nil {
+		return nil, err
+	}
+
+	log := appctx.GetLogger(ctx)
+	log.Info().Msg(fmt.Sprintf("Successfully retrieved %d WOPI app endpoints", len(appsURLMap)))
+	return appsURLMap, nil
+}
+
+func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.OpenFileInAppProviderRequest) (*providerpb.OpenFileInAppProviderResponse, error) {
+
+	log := appctx.GetLogger(ctx)
+
+	httpClient := rhttp.GetHTTPClient(
+		rhttp.Context(ctx),
+		// calls to WOPI are expected to take a very short time, 5s (though hardcoded) ought to be far enough
+		rhttp.Timeout(time.Duration(5*int64(time.Second))),
+	)
+
+	wopiurl, err := url.Parse(s.conf.WopiURL)
+	if err != nil {
+		return nil, err
+	}
+	wopiurl.Path = path.Join(wopiurl.Path, "/wopi/iop/open")
+	httpReq, err := rhttp.NewRequest(ctx, "GET", wopiurl.String(), nil)
 	if err != nil {
 		return nil, err
 	}
 
 	q := httpReq.URL.Query()
-	q.Add("filename", req.Ref.GetPath())
-	q.Add("endpoint", storageID)
+	q.Add("fileid", req.ResourceInfo.GetId().OpaqueId)
+	q.Add("endpoint", req.ResourceInfo.GetId().StorageId)
 	q.Add("viewmode", req.ViewMode.String())
-	q.Add("folderurl", folderURL)
+	// TODO the folder URL should be resolved as e.g. `'https://cernbox.cern.ch/index.php/apps/files/?dir=' + filepath.Dir(req.Ref.GetPath())`
+	// or should be deprecated/removed altogether, needs discussion and decision.
+	q.Add("folderurl", "undefined")
 	u, ok := user.ContextGetUser(ctx)
-
 	if ok {
 		q.Add("username", u.Username)
 	}
-
-	httpReq.Header.Set("Authorization", "Bearer "+iopsecret)
+	// else defaults to "Anonymous Guest"
+	httpReq.Header.Set("Authorization", "Bearer "+s.conf.IopSecret)
 	httpReq.Header.Set("TokenHeader", req.AccessToken)
 
 	httpReq.URL.RawQuery = q.Encode()
@@ -178,74 +192,59 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 	openRes, err := httpClient.Do(httpReq)
 
 	if err != nil {
-		log.Error().Err(err).Msg("error performing http request")
 		res := &providerpb.OpenFileInAppProviderResponse{
-			Status: status.NewInternal(ctx, err, "error performing http request"),
+			Status: status.NewInternal(ctx, err, "appprovider: error performing open request to WOPI"),
 		}
 		return res, nil
 	}
 	defer openRes.Body.Close()
 
 	if openRes.StatusCode != http.StatusOK {
-		log.Error().Err(err).Msg("error performing http request")
 		res := &providerpb.OpenFileInAppProviderResponse{
-			Status: status.NewInternal(ctx, err, "error performing http request, status code: "+strconv.Itoa(openRes.StatusCode)),
-		}
-		return res, nil
-	}
-
-	if err != nil {
-		err := errors.Wrap(err, "appprovidersvc: error calling GetIFrame")
-		res := &providerpb.OpenFileInAppProviderResponse{
-			Status: status.NewInternal(ctx, err, "error getting app's iframe"),
+			Status: status.NewInvalid(ctx, "appprovider: error performing open request to WOPI, status code: "+strconv.Itoa(openRes.StatusCode)),
 		}
 		return res, nil
 	}
 
 	buf := new(bytes.Buffer)
-	_, err1 := buf.ReadFrom(openRes.Body)
-	if err1 != nil {
-		return nil, err1
+	_, err = buf.ReadFrom(openRes.Body)
+	if err != nil {
+		return nil, err
 	}
-
 	openResBody := buf.String()
 
-	appsBodyMap := make(map[string]interface{})
-	err2 := json.Unmarshal(appsBody, &appsBodyMap)
-	if err2 != nil {
-		return nil, err2
+	// TODO call this e.g. once a day or a week, and cache the content in a shared map protected by a multi-reader Lock
+	appsURLMap, err := s.getWopiAppEndpoints(ctx)
+	if err != nil {
+		res := &providerpb.OpenFileInAppProviderResponse{
+			Status: status.NewInternal(ctx, err, "appprovider: getWopiAppEndpoints failed"),
+		}
+		return res, nil
 	}
-
-	fileExtension := path.Ext(req.Ref.GetPath())
-
-	viewOptions := appsBodyMap[fileExtension]
-
+	viewOptions := appsURLMap[path.Ext(req.ResourceInfo.GetPath())]
 	viewOptionsMap, ok := viewOptions.(map[string]interface{})
 	if !ok {
-		log.Error().Msg("error typecasting to map")
 		res := &providerpb.OpenFileInAppProviderResponse{
-			Status: status.NewInternal(ctx, nil, "error typecasting to map"),
+			Status: status.NewInvalid(ctx, "Incorrect parsing of the App URLs map from the WOPI server"),
 		}
 		return res, nil
 	}
 
 	var viewmode string
-
 	if req.ViewMode == providerpb.OpenFileInAppProviderRequest_VIEW_MODE_READ_WRITE {
 		viewmode = "edit"
 	} else {
 		viewmode = "view"
 	}
 
-	providerURL := fmt.Sprintf("%v", viewOptionsMap[viewmode])
-
-	if strings.Contains(providerURL, "?") {
-		providerURL += "&"
+	appProviderURL := fmt.Sprintf("%v", viewOptionsMap[viewmode])
+	if strings.Contains(appProviderURL, "?") {
+		appProviderURL += "&"
 	} else {
-		providerURL += "?"
+		appProviderURL += "?"
 	}
-
-	appProviderURL := fmt.Sprintf("App URL:\n%sWOPISrc=%s\n", providerURL, openResBody)
+	appProviderURL = fmt.Sprintf("%sWOPISrc=%s", appProviderURL, openResBody)
+	log.Info().Msg(fmt.Sprintf("Returning app provider URL %s", appProviderURL))
 
 	return &providerpb.OpenFileInAppProviderResponse{
 		Status:         status.NewOK(ctx),

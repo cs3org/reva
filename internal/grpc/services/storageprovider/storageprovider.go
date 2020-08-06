@@ -273,6 +273,11 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
 		}, nil
 	}
+	if newRef.GetPath() == "/" {
+		return &provider.InitiateFileUploadResponse{
+			Status: status.NewInternal(ctx, errors.New("can't upload to mount path"), ""),
+		}, nil
+	}
 	url := *s.dataServerURL
 	if s.conf.DisableTus {
 		url.Path = path.Join("/", url.Path, newRef.GetPath())

@@ -340,7 +340,15 @@ func (fs *localfs) retrieveArbitraryMetadata(ctx context.Context, fn string, mdK
 // GetPathByID returns the path pointed by the file id
 // In this implementation the file id is in the form `fileid-url_encoded_path`
 func (fs *localfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
-	return url.QueryUnescape(strings.TrimPrefix(id.OpaqueId, "fileid-"))
+	var layout string
+	if !fs.conf.DisableHome {
+		var err error
+		layout, err = fs.GetHome(ctx)
+		if err != nil {
+			return "", err
+		}
+	}
+	return url.QueryUnescape(strings.TrimPrefix(id.OpaqueId, "fileid-"+layout))
 }
 
 func (fs *localfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {

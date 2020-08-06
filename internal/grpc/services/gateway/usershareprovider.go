@@ -35,6 +35,11 @@ import (
 
 // TODO(labkode): add multi-phase commit logic when commit share or commit ref is enabled.
 func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.CreateShareResponse, error) {
+
+	if s.isSharedFolder(ctx, req.ResourceInfo.GetPath()) {
+		return nil, errors.New("gateway: can't share the share folder itself")
+	}
+
 	c, err := pool.GetUserShareProviderClient(s.c.UserShareProviderEndpoint)
 	if err != nil {
 		return &collaboration.CreateShareResponse{
@@ -367,15 +372,12 @@ func (s *svc) createReference(ctx context.Context, resourceID *provider.Resource
 
 	statRes, err := c.Stat(ctx, statReq)
 	if err != nil {
-		log.Err(err).Msg("gateway: error calling Stat for the share resource id:" + resourceID.String())
-		return &rpc.Status{
-			Code: rpc.Code_CODE_INTERNAL,
-		}, nil
+		return status.NewInternal(ctx, err, "gateway: error calling Stat for the share resource id: "+resourceID.String()), nil
 	}
 
 	if statRes.Status.Code != rpc.Code_CODE_OK {
 		err := status.NewErrorFromCode(statRes.Status.GetCode(), "gateway")
-		log.Err(err).Msg("gateway: error calling Stat for the share resource id:" + resourceID.String())
+		log.Err(err).Msg("gateway: Stat failed on the share resource id: " + resourceID.String())
 		return status.NewInternal(ctx, err, "error updating received share"), nil
 	}
 

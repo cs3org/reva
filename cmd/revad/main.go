@@ -31,6 +31,8 @@ import (
 	"github.com/cs3org/reva/cmd/revad/internal/config"
 	"github.com/cs3org/reva/cmd/revad/internal/grace"
 	"github.com/cs3org/reva/cmd/revad/runtime"
+	"github.com/cs3org/reva/pkg/sysinfo"
+
 	"github.com/gofrs/uuid"
 )
 
@@ -49,6 +51,9 @@ var (
 
 func main() {
 	flag.Parse()
+
+	// initiliaze the global system information
+	sysinfo.InitSystemInfo(&sysinfo.RevaVersion{Version: version, BuildDate: buildDate, GitCommit: gitCommit, GoVersion: goVersion})
 
 	handleVersionFlag()
 	handleSignalFlag()

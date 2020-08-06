@@ -30,7 +30,7 @@ import (
 func (s *svc) GetAppProviders(ctx context.Context, req *registry.GetAppProvidersRequest) (*registry.GetAppProvidersResponse, error) {
 	c, err := pool.GetAppRegistryClient(s.c.AppRegistryEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
+		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
 		return &registry.GetAppProvidersResponse{
 			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
 		}, nil
@@ -47,7 +47,7 @@ func (s *svc) GetAppProviders(ctx context.Context, req *registry.GetAppProviders
 func (s *svc) ListAppProviders(ctx context.Context, req *registry.ListAppProvidersRequest) (*registry.ListAppProvidersResponse, error) {
 	c, err := pool.GetAppRegistryClient(s.c.AppRegistryEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
+		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
 		return &registry.ListAppProvidersResponse{
 			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
 		}, nil

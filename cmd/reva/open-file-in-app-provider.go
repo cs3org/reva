@@ -22,20 +22,18 @@ import (
 	"fmt"
 	"os"
 
-	providerpb "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	tokenpkg "github.com/cs3org/reva/pkg/token"
-	"github.com/pkg/errors"
 )
 
 func openFileInAppProviderCommand() *command {
 	cmd := newCommand("open-file-in-app-provider")
 	cmd.Description = func() string { return "Open a file in an external app provider" }
 	cmd.Usage = func() string {
-		return "Usage: open-file-in-app-provider [-flags] <path> <viewMode (view, read, write)>"
+		return "Usage: open-file-in-app-provider [-flags] [-viewmode view|read|write] <path>"
 	}
-	viewMode := cmd.String("viewMode", "view", "the view permissions, defaults to view")
+	viewMode := cmd.String("viewmode", "view", "the view permissions, defaults to view")
 
 	cmd.Action = func() error {
 		ctx := getAuthContext()
@@ -45,7 +43,7 @@ func openFileInAppProviderCommand() *command {
 		}
 		path := cmd.Args()[0]
 
-		viewMode := getViewMode(*viewMode)
+		vm := getViewMode(*viewMode)
 
 		client, err := getClient()
 		if err != nil {
@@ -55,13 +53,8 @@ func openFileInAppProviderCommand() *command {
 		ref := &provider.Reference{
 			Spec: &provider.Reference_Path{Path: path},
 		}
-		accessToken, ok := tokenpkg.ContextGetToken(ctx)
-		if !ok || accessToken == "" {
-			err := errors.New("Access token is invalid or empty")
-			return err
-		}
 
-		openRequest := &providerpb.OpenFileInAppProviderRequest{Ref: ref, AccessToken: accessToken, ViewMode: viewMode}
+		openRequest := &gateway.OpenFileInAppProviderRequest{Ref: ref, ViewMode: vm}
 
 		openRes, err := client.OpenFileInAppProvider(ctx, openRequest)
 		if err != nil {
@@ -79,15 +72,15 @@ func openFileInAppProviderCommand() *command {
 	return cmd
 }
 
-func getViewMode(viewMode string) providerpb.OpenFileInAppProviderRequest_ViewMode {
+func getViewMode(viewMode string) gateway.OpenFileInAppProviderRequest_ViewMode {
 	switch viewMode {
 	case "view":
-		return providerpb.OpenFileInAppProviderRequest_VIEW_MODE_VIEW_ONLY
+		return gateway.OpenFileInAppProviderRequest_VIEW_MODE_VIEW_ONLY
 	case "read":
-		return providerpb.OpenFileInAppProviderRequest_VIEW_MODE_READ_ONLY
+		return gateway.OpenFileInAppProviderRequest_VIEW_MODE_READ_ONLY
 	case "write":
-		return providerpb.OpenFileInAppProviderRequest_VIEW_MODE_READ_WRITE
+		return gateway.OpenFileInAppProviderRequest_VIEW_MODE_READ_WRITE
 	default:
-		return providerpb.OpenFileInAppProviderRequest_VIEW_MODE_INVALID
+		return gateway.OpenFileInAppProviderRequest_VIEW_MODE_INVALID
 	}
 }

@@ -124,20 +124,38 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 	}
 
 	p, st := s.getPath(ctx, req.Ref)
-	if err != nil {
+	if st.Code != rpc.Code_CODE_OK {
 		return &gateway.InitiateFileDownloadResponse{
 			Status: st,
 		}, nil
 	}
 
 	if !s.inSharedFolder(ctx, p) {
+		statReq := &provider.StatRequest{Ref: req.Ref}
+		statRes, err := s.stat(ctx, statReq)
+		if err != nil {
+			return &gateway.InitiateFileDownloadResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+req.Ref.String()),
+			}, nil
+		}
+		if statRes.Status.Code != rpc.Code_CODE_OK {
+			if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+				return &gateway.InitiateFileDownloadResponse{
+					Status: status.NewNotFound(ctx, "gateway: file not found"),
+				}, nil
+			}
+			err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
+			return &gateway.InitiateFileDownloadResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref"),
+			}, nil
+		}
 		return s.initiateFileDownload(ctx, req)
 	}
 
 	log := appctx.GetLogger(ctx)
 	if s.isSharedFolder(ctx, p) || s.isShareName(ctx, p) {
 		log.Debug().Msgf("path:%s points to shared folder or share name", p)
-		err := errtypes.PermissionDenied("gateway: cannot upload to share folder or share name: path=" + p)
+		err := errtypes.PermissionDenied("gateway: cannot download share folder or share name: path=" + p)
 		log.Err(err).Msg("gateway: error downloading")
 		return &gateway.InitiateFileDownloadResponse{
 			// Status: status.NewInvalidArg(ctx, "path points to share folder or share name"),
@@ -195,6 +213,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 			},
 		}
 		req.Ref = ref
+		log.Debug().Msg("download path: " + target)
 		return s.initiateFileDownload(ctx, req)
 	}
 
@@ -530,9 +549,6 @@ func (s *svc) inSharedFolder(ctx context.Context, p string) bool {
 func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
-		return &provider.DeleteResponse{
-			Status: st,
-		}, nil
 	}
 
 	if !s.inSharedFolder(ctx, p) {
@@ -943,8 +959,26 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 				Path: target,
 			},
 		}
+
 		req.Ref = ref
-		return s.stat(ctx, req)
+		res, err := s.stat(ctx, req)
+		if err != nil {
+			return &provider.StatResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error stating"),
+			}, nil
+		}
+		if res.Status.Code != rpc.Code_CODE_OK {
+			err := status.NewErrorFromCode(res.Status.Code, "gateway")
+			log.Err(err).Msg("gateway: error stating")
+			return &provider.StatResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error stating"),
+			}, nil
+		}
+
+		// we need to make sure we don't expose the reference target in the resource
+		// information.
+		res.Info.Path = p
+		return res, nil
 	}
 
 	panic("gateway: stating an unknown path:" + p)

@@ -30,6 +30,7 @@ import (
 	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
 	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocs"
 	_ "github.com/cs3org/reva/internal/http/services/prometheus"
+	_ "github.com/cs3org/reva/internal/http/services/sysinfo"
 	_ "github.com/cs3org/reva/internal/http/services/wellknown"
 	// Add your own service here
 )

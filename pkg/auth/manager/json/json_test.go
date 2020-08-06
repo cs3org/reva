@@ -22,91 +22,185 @@ import (
 	"context"
 	"io/ioutil"
 	"os"
-
-	//"reflect"
-	//"fmt"
 	"testing"
-	//user "github.com/cs3org/go-cs3apis/cs3/types"
-	//"github.com/cs3org/reva/pkg/errtypes"
+
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	"github.com/cs3org/reva/pkg/auth"
+	"github.com/stretchr/testify/assert"
 )
 
 var ctx = context.Background()
 
-func TestUserManager(t *testing.T) {
+var input map[string]interface{}
+
+type ExpectedError struct {
+	message string
+}
+
+func TestGetManagerWithInvalidUser(t *testing.T) {
+	tests := []struct {
+		name          string
+		user          interface{}
+		expectedError string
+	}{
+		{
+			"Boolean in user",
+			false,
+			"error decoding conf: 1 error(s) decoding:\n\n* " +
+				"'users' expected type 'string', got unconvertible type 'bool'",
+		},
+		{
+			"Nil in user",
+			nil,
+			"open /etc/revad/users.json: no such file or directory",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			input = map[string]interface{}{
+				"users": tt.user,
+			}
+
+			manager, err := New(input)
+
+			assert.Empty(t, manager)
+			assert.EqualError(t, err, tt.expectedError)
+		})
+	}
+}
+
+func TestGetManagerWithJSONObject(t *testing.T) {
+	tests := []struct {
+		name          string
+		user          string
+		expectManager bool
+		expectedError *ExpectedError
+	}{
+		{
+			"Invalid JSON object",
+			"[{",
+			false,
+			&ExpectedError{"unexpected end of JSON input"},
+		},
+		{
+			"JSON object with correct user metadata",
+			`[{"username":"einstein","secret":"albert"}]`,
+			true,
+			nil,
+		},
+	}
+
+	var tmpFile *os.File
+
+	// add tempdir
+	tmpDir, err := ioutil.TempDir("", "json_test")
+	if err != nil {
+		t.Fatalf("Error while creating temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	for _, tt := range tests {
+		// get file handler for temporary file
+		tmpFile, err = ioutil.TempFile(tmpDir, "json_test")
+		if err != nil {
+			t.Fatalf("Error while opening temp file: %v", err)
+		}
+
+		// write json object to tempdir
+		_, err = tmpFile.WriteString(tt.user)
+		if err != nil {
+			t.Fatalf("Error while writing temp file: %v", err)
+		}
+
+		t.Run(tt.name, func(t *testing.T) {
+			// get manager
+			input = map[string]interface{}{
+				"users": tmpFile.Name(),
+			}
+
+			manager, err := New(input)
+
+			if tt.expectManager {
+				_, ok := manager.(auth.Manager)
+				if !ok {
+					t.Fatal("Expected response of type auth.Manager but found something else.")
+				}
+				assert.Equal(t, nil, err)
+			} else if !tt.expectManager {
+				assert.Empty(t, manager)
+				assert.EqualError(t, err, tt.expectedError.message)
+			}
+		})
+		//cleanup
+		os.Remove(tmpFile.Name())
+	}
+}
+
+func TestGetAuthenticatedManager(t *testing.T) {
+	tests := []struct {
+		name                string
+		username            string
+		secret              string
+		expectAuthenticated bool
+		expectedError       *ExpectedError
+	}{
+		{
+			"Authenticate with incorrect user password",
+			"einstein",
+			"NotARealPassword",
+			false,
+			&ExpectedError{
+				"error: invalid credentials: einstein",
+			},
+		},
+		{
+			"Authenticate with correct user auth credentials",
+			"einstein",
+			"albert",
+			true,
+			nil,
+		},
+	}
+
 	// add tempdir
 	tempdir, err := ioutil.TempDir("", "json_test")
 	if err != nil {
-		t.Fatalf("error while create temp dir: %v", err)
+		t.Fatalf("Error while creating temp dir: %v", err)
 	}
 	defer os.RemoveAll(tempdir)
 
-	// parseConfig - negative test - 1
-	input := map[string]interface{}{
-		"users": true,
-	}
-	_, err = New(input)
-	if err == nil {
-		t.Fatalf("no error (but we expected one) while get manager")
-	}
-
-	// corrupt json object with user meta data
-	userJSON := `[{`
-
 	// get file handler for temporary file
-	file, err := ioutil.TempFile(tempdir, "json_test")
+	tempFile, err := ioutil.TempFile(tempdir, "json_test")
 	if err != nil {
-		t.Fatalf("error while open temp file: %v", err)
+		t.Fatalf("Error while opening temp file: %v", err)
 	}
 
 	// write json object to tempdir
-	_, err = file.WriteString(userJSON)
+	_, err = tempFile.WriteString(`[{"username":"einstein","secret":"albert"}]`)
 	if err != nil {
-		t.Fatalf("error while writing temp file: %v", err)
+		t.Fatalf("Error while writing temp file: %v", err)
 	}
 
 	// get manager
-	input = map[string]interface{}{
-		"users": file.Name(),
-	}
-	_, err = New(input)
-	if err == nil {
-		t.Fatalf("no error (but we expected one) while get manager")
-	}
-
-	// clean up
-	os.Remove(file.Name())
-
-	// json object with user meta data
-	userJSON = `[{"username":"einstein","secret":"albert"}]`
-
-	// get file handler for temporary file
-	file, err = ioutil.TempFile(tempdir, "json_test")
-	if err != nil {
-		t.Fatalf("error while open temp file: %v", err)
-	}
-	defer os.Remove(file.Name())
-
-	// write json object to tempdir
-	_, err = file.WriteString(userJSON)
-	if err != nil {
-		t.Fatalf("error while writing temp file: %v", err)
-	}
-
-	// get manager - positive test
-	input = map[string]interface{}{
-		"users": file.Name(),
+	input := map[string]interface{}{
+		"users": tempFile.Name(),
 	}
 	manager, _ := New(input)
 
-	// Authenticate - positive test
-	_, err = manager.Authenticate(ctx, "einstein", "albert")
-	if err != nil {
-		t.Fatalf("error while authenticate with correct credentials")
-	}
-
-	// Authenticate - negative test
-	_, err = manager.Authenticate(ctx, "einstein", "NotARealPassword")
-	if err == nil {
-		t.Fatalf("no error (but we expected one) while authenticate with bad credentials")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			authenticated, err := manager.Authenticate(ctx, tt.username, tt.secret)
+			if !tt.expectAuthenticated {
+				assert.Empty(t, authenticated)
+				assert.EqualError(t, err, tt.expectedError.message)
+			} else {
+				assert.IsType(t, &user.User{}, authenticated)
+				assert.Empty(t, err)
+				assert.Equal(t, tt.username, authenticated.Username)
+			}
+			// cleanup
+			os.Remove(tempFile.Name())
+		})
 	}
 }
