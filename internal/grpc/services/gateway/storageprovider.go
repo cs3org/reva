@@ -44,7 +44,7 @@ type transferClaims struct {
 	Target string `json:"target"`
 }
 
-func (s *svc) sign(ctx context.Context, target string) (string, error) {
+func (s *svc) sign(_ context.Context, target string) (string, error) {
 	ttl := time.Duration(s.c.TransferExpires) * time.Second
 	claims := transferClaims{
 		StandardClaims: jwt.StandardClaims{
@@ -93,13 +93,13 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 	return res, nil
 
 }
-func (s *svc) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
+func (s *svc) GetHome(ctx context.Context, _ *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
 	home := s.getHome(ctx)
 	homeRes := &provider.GetHomeResponse{Path: home, Status: status.NewOK(ctx)}
 	return homeRes, nil
 }
 
-func (s *svc) getHome(ctx context.Context) string {
+func (s *svc) getHome(_ context.Context) string {
 	// TODO(labkode): issue #601, /home will be hardcoded.
 	return "/home"
 }
@@ -135,7 +135,6 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 		}
 		return s.initiateFileDownload(ctx, req)
 	}
-
 
 	if s.isSharedFolder(ctx, p) || s.isShareName(ctx, p) {
 		log.Debug().Msgf("path:%s points to shared folder or share name", p)
@@ -663,7 +662,6 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 
 	dp, err := s.getPath(ctx, req.Destination)
 	if err != nil {
-		// log.Err(err).Msg("gateway: error moving")
 		return &provider.MoveResponse{
 			Status: st,
 		}, nil
@@ -1058,13 +1056,13 @@ func (s *svc) handleCS3Ref(ctx context.Context, opaque string) (*provider.Resour
 	return res.Info, nil
 }
 
-func (s *svc) handleWebdavRef(ctx context.Context, ri *provider.ResourceInfo) (*provider.ResourceInfo, error) {
+func (s *svc) handleWebdavRef(_ context.Context, ri *provider.ResourceInfo) (*provider.ResourceInfo, error) {
 	// A webdav ref has the following layout: <storage_id>/<opaque_id>@webdav_endpoint
 	// TODO: Once file transfer functionalities have been added.
 	return ri, nil
 }
 
-func (s *svc) ListContainerStream(req *provider.ListContainerStreamRequest, ss gateway.GatewayAPI_ListContainerStreamServer) error {
+func (s *svc) ListContainerStream(_ *provider.ListContainerStreamRequest, _ gateway.GatewayAPI_ListContainerStreamServer) error {
 	return errors.New("Unimplemented")
 }
 
@@ -1115,23 +1113,18 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		}
 
 		for i, ref := range lcr.Infos {
-
 			info, err := s.checkRef(ctx, ref)
 			if err != nil {
 				return &provider.ListContainerResponse{
-					Status: status.NewInternal(ctx, err, "gateway: error resolving reference:"+info.Path),
+					Status: status.NewInternal(ctx, err, "gateway: error resolving reference:"+ref.Path),
 				}, nil
 			}
-
 			base := path.Base(ref.Path)
 			info.Path = path.Join(p, base)
-
 			lcr.Infos[i] = info
-
 		}
 		return lcr, nil
 	}
-
 
 	// we need to provide the info of the target, not the reference.
 	if s.isShareName(ctx, p) {
@@ -1288,7 +1281,7 @@ func (s *svc) getPath(ctx context.Context, ref *provider.Reference, keys ...stri
 	if ref.GetId() != nil && ref.GetId().GetOpaqueId() != "" {
 		req := &provider.StatRequest{Ref: ref, ArbitraryMetadataKeys: keys}
 		res, err := s.stat(ctx, req)
-		if res.Status.Code != rpc.Code_CODE_OK || err != nil {
+		if (res != nil && res.Status.Code != rpc.Code_CODE_OK) || err != nil {
 			return "", res.Status
 		}
 
@@ -1356,7 +1349,7 @@ func (s *svc) splitShare(ctx context.Context, p string) (string, string) {
 	return shareName, shareChild
 }
 
-func (s *svc) splitPath(ctx context.Context, p string) []string {
+func (s *svc) splitPath(_ context.Context, p string) []string {
 	p = strings.Trim(p, "/")
 	return strings.SplitN(p, "/", 4) // ["home", "MyShares", "photos", "Ibiza/beach.png"]
 }
@@ -1409,7 +1402,7 @@ func (s *svc) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileV
 	return res, nil
 }
 
-func (s *svc) ListRecycleStream(req *gateway.ListRecycleStreamRequest, ss gateway.GatewayAPI_ListRecycleStreamServer) error {
+func (s *svc) ListRecycleStream(_ *gateway.ListRecycleStreamRequest, _ gateway.GatewayAPI_ListRecycleStreamServer) error {
 	return errors.New("Unimplemented")
 }
 
@@ -1484,7 +1477,7 @@ func (s *svc) PurgeRecycle(ctx context.Context, req *gateway.PurgeRecycleRequest
 	return res, nil
 }
 
-func (s *svc) GetQuota(ctx context.Context, req *gateway.GetQuotaRequest) (*provider.GetQuotaResponse, error) {
+func (s *svc) GetQuota(ctx context.Context, _ *gateway.GetQuotaRequest) (*provider.GetQuotaResponse, error) {
 	res := &provider.GetQuotaResponse{
 		Status: status.NewUnimplemented(ctx, nil, "GetQuota not yet implemented"),
 	}
@@ -1517,7 +1510,7 @@ func (s *svc) find(ctx context.Context, ref *provider.Reference) (provider.Provi
 	return s.getStorageProviderClient(ctx, p)
 }
 
-func (s *svc) getStorageProviderClient(ctx context.Context, p *registry.ProviderInfo) (provider.ProviderAPIClient, error) {
+func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderInfo) (provider.ProviderAPIClient, error) {
 	c, err := pool.GetStorageProviderServiceClient(p.Address)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting a storage provider client")
