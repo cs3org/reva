@@ -104,8 +104,11 @@ func (s *svc) getHome(ctx context.Context) string {
 	return "/home"
 }
 func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {
+	log := appctx.GetLogger(ctx)
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
+		log.Error().Str("rpc_code", st.Code.String()).
+			Msgf("error initiating file download id: %v", req.Ref.GetId())
 		return &gateway.InitiateFileDownloadResponse{
 			Status: st,
 		}, nil
@@ -133,7 +136,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 		return s.initiateFileDownload(ctx, req)
 	}
 
-	log := appctx.GetLogger(ctx)
+
 	if s.isSharedFolder(ctx, p) || s.isShareName(ctx, p) {
 		log.Debug().Msgf("path:%s points to shared folder or share name", p)
 		err := errtypes.PermissionDenied("gateway: cannot download share folder or share name: path=" + p)
@@ -254,8 +257,11 @@ func (s *svc) initiateFileDownload(ctx context.Context, req *provider.InitiateFi
 }
 
 func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*gateway.InitiateFileUploadResponse, error) {
+	log := appctx.GetLogger(ctx)
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
+		log.Error().Str("rpc_code", st.Code.String()).
+			Msgf("error initiating file upload id: %v", req.Ref.GetId())
 		return &gateway.InitiateFileUploadResponse{
 			Status: st,
 		}, nil
@@ -265,7 +271,6 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 		return s.initiateFileUpload(ctx, req)
 	}
 
-	log := appctx.GetLogger(ctx)
 	if s.isSharedFolder(ctx, p) || s.isShareName(ctx, p) {
 		log.Debug().Msgf("path:%s points to shared folder or share name", p)
 		err := errtypes.PermissionDenied("gateway: cannot upload to share folder or share name: path=" + p)
@@ -422,8 +427,11 @@ func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provi
 }
 
 func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
+	log := appctx.GetLogger(ctx)
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
+		log.Error().Str("rpc_code", st.Code.String()).
+			Msgf("error creating container on reference id: %v", req.Ref.GetId())
 		return &provider.CreateContainerResponse{
 			Status: st,
 		}, nil
@@ -433,7 +441,6 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 		return s.createContainer(ctx, req)
 	}
 
-	log := appctx.GetLogger(ctx)
 	if s.isSharedFolder(ctx, p) || s.isShareName(ctx, p) {
 		log.Debug().Msgf("path:%s points to shared folder or share name", p)
 		err := errtypes.PermissionDenied("gateway: cannot create container on share folder or share name: path=" + p)
@@ -527,15 +534,20 @@ func (s *svc) inSharedFolder(ctx context.Context, p string) bool {
 }
 
 func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
+	log := appctx.GetLogger(ctx)
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
+		log.Error().Str("rpc_code", st.Code.String()).
+			Msgf("error deleting reference id: %v", req.Ref.GetId())
+		return &provider.DeleteResponse{
+			Status: st,
+		}, nil
 	}
 
 	if !s.inSharedFolder(ctx, p) {
 		return s.delete(ctx, req)
 	}
 
-	log := appctx.GetLogger(ctx)
 	if s.isSharedFolder(ctx, p) {
 		// TODO(labkode): deleting share names should be allowed, means unmounting.
 		log.Debug().Msgf("path:%s points to shared folder or share name", p)
@@ -640,10 +652,10 @@ func (s *svc) delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 
 func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
 	log := appctx.GetLogger(ctx)
-
 	p, st := s.getPath(ctx, req.Source)
 	if st.Code != rpc.Code_CODE_OK {
-		// log.Err(err).Msg("gateway: error moving")
+		log.Error().Str("rpc_code", st.Code.String()).
+			Msgf("error moving reference id: %v to `%v`", req.Source.GetId(), req.Destination.String())
 		return &provider.MoveResponse{
 			Status: st,
 		}, nil
@@ -841,10 +853,12 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 }
 
 func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
+	log := appctx.GetLogger(ctx)
 	p, st := s.getPath(ctx, req.Ref, req.ArbitraryMetadataKeys...)
 	if st.Code != rpc.Code_CODE_OK {
+		log.Error().Str("rpc_code", st.Code.String()).
+			Msgf("error during STAT id: %v", req.Ref.GetId())
 		return &provider.StatResponse{
-			// Status: status.NewInternal(ctx, "", "gateway: error getting path for ref"),
 			Status: st,
 		}, nil
 	}
@@ -857,8 +871,6 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 	if s.isSharedFolder(ctx, p) {
 		return s.stat(ctx, req)
 	}
-
-	log := appctx.GetLogger(ctx)
 
 	// we need to provide the info of the target, not the reference.
 	if s.isShareName(ctx, p) {
@@ -1078,10 +1090,12 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 }
 
 func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
+	log := appctx.GetLogger(ctx)
 	p, st := s.getPath(ctx, req.Ref, req.ArbitraryMetadataKeys...)
 	if st.Code != rpc.Code_CODE_OK {
+		log.Error().Str("rpc_code", st.Code.String()).
+			Msgf("error listing directory id: %v", req.Ref.GetId())
 		return &provider.ListContainerResponse{
-			// Status: status.NewInternal(ctx, err, "gateway: error getting path for ref"),
 			Status: st,
 		}, nil
 	}
@@ -1118,7 +1132,6 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		return lcr, nil
 	}
 
-	log := appctx.GetLogger(ctx)
 
 	// we need to provide the info of the target, not the reference.
 	if s.isShareName(ctx, p) {
