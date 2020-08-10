@@ -139,6 +139,7 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 
 		// TODO return a forbidden status if read only?
 		if delRes.Status.Code != rpc.Code_CODE_OK {
+			log.Error().Err(err).Str("move_request", delRes.Status.Code.String()).Msg("error handling delete request")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -179,9 +180,11 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	if mRes.Status.Code != rpc.Code_CODE_OK {
+		log.Error().Err(err).Str("move_request", mRes.Status.Code.String()).Msg("error handling move request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	log.Info().Str("move", mRes.Status.Code.String()).Msg("move request status")
 
 	dstStatRes, err = client.Stat(ctx, dstStatReq)
 	if err != nil {
@@ -191,6 +194,7 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	if dstStatRes.Status.Code != rpc.Code_CODE_OK {
+		log.Error().Err(err).Str("status", dstStatRes.Status.Code.String()).Msg("error doing stat")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

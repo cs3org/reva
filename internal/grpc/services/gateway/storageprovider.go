@@ -660,8 +660,8 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 		}, nil
 	}
 
-	dp, err := s.getPath(ctx, req.Destination)
-	if err != nil {
+	dp, st2 := s.getPath(ctx, req.Destination)
+	if st2.Code != rpc.Code_CODE_OK {
 		return &provider.MoveResponse{
 			Status: st,
 		}, nil
