@@ -20,22 +20,22 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
-	"github.com/cs3org/reva/cmd/reva/command"
 	"github.com/cs3org/reva/cmd/reva/gen"
 )
 
-var genUsersSubCommand = func() *command.Command {
-	cmd := command.NewCommand("users")
+var genUsersSubCommand = func() *command {
+	cmd := newCommand("users")
 	cmd.Description = func() string { return "will create a users.json file with demo users" }
-	cmd.Usage = func() string { return "Usage: gen users" }
+	cmd.Usage = func() string { return "Usage: gen users [-flags]" }
 
 	forceFlag := cmd.Bool("f", false, "force")
 	usersFlag := cmd.String("c", "./users.json", "path to the usersfile")
 
-	cmd.Action = func() error {
+	cmd.Action = func(w ...io.Writer) error {
 		if !*forceFlag {
 			if _, err := os.Stat(*usersFlag); err == nil {
 				// file exists, overwrite?

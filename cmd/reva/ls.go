@@ -19,23 +19,24 @@
 package main
 
 import (
+	"encoding/gob"
 	"fmt"
+	"io"
 	"path"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/cmd/reva/command"
 	"github.com/pkg/errors"
 )
 
-func lsCommand() *command.Command {
-	cmd := command.NewCommand("ls")
+func lsCommand() *command {
+	cmd := newCommand("ls")
 	cmd.Description = func() string { return "list a container contents" }
 	cmd.Usage = func() string { return "Usage: ls [-flags] <container_name>" }
 	longFlag := cmd.Bool("l", false, "long listing")
 	fullFlag := cmd.Bool("f", false, "shows full path")
 
-	cmd.Action = func() error {
+	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
 			return errors.New("Invalid arguments: " + cmd.Usage())
 		}
@@ -67,13 +68,22 @@ func lsCommand() *command.Command {
 			if !*fullFlag {
 				p = path.Base(info.Path)
 			}
-
-			if *longFlag {
-				fmt.Printf("%s %d %d %v %s\n", info.Type, info.Mtime, info.Size, info.Id, p)
-			} else {
-				fmt.Println(p)
+			if len(w) == 0 {
+				if *longFlag {
+					fmt.Printf("%s %d %d %v %s\n", info.Type, info.Mtime, info.Size, info.Id, p)
+				} else {
+					fmt.Println(p)
+				}
 			}
 		}
+
+		if len(w) != 0 {
+			enc := gob.NewEncoder(w[0])
+			if err := enc.Encode(infos); err != nil {
+				return err
+			}
+		}
+
 		return nil
 	}
 	return cmd

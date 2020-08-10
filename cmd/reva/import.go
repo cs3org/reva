@@ -19,22 +19,22 @@
 package main
 
 import (
+	"io"
 	"log"
 	"path"
 
-	"github.com/cs3org/reva/cmd/reva/command"
 	"github.com/cs3org/reva/pkg/storage/migrate"
 	"github.com/pkg/errors"
 )
 
-func importCommand() *command.Command {
-	cmd := command.NewCommand("import")
+func importCommand() *command {
+	cmd := newCommand("import")
 	cmd.Description = func() string { return "import metadata" }
 	cmd.Usage = func() string { return "Usage: import [-flags] <user export folder>" }
 
 	namespaceFlag := cmd.String("n", "/", "CS3 namespace prefix")
 
-	cmd.Action = func() error {
+	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
 			return errors.New("Invalid arguments: " + cmd.Usage())
 		}

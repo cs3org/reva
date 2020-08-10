@@ -19,6 +19,7 @@
 package main
 
 import (
+	"io"
 	"os"
 	"time"
 
@@ -26,20 +27,19 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/cmd/reva/command"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/pkg/errors"
 )
 
-func shareCreateCommand() *command.Command {
-	cmd := command.NewCommand("share-create")
+func shareCreateCommand() *command {
+	cmd := newCommand("share-create")
 	cmd.Description = func() string { return "create share to a user or group" }
 	cmd.Usage = func() string { return "Usage: share-create [-flags] <path>" }
 	grantType := cmd.String("type", "user", "grantee type (user or group)")
 	grantee := cmd.String("grantee", "", "the grantee")
 	idp := cmd.String("idp", "", "the idp of the grantee, default to same idp as the user triggering the action")
 	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor)")
-	cmd.Action = func() error {
+	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
 			return errors.New("Invalid arguments: " + cmd.Usage())
 		}

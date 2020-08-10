@@ -20,18 +20,18 @@ package main
 
 import (
 	"fmt"
+	"io"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	"github.com/cs3org/reva/cmd/reva/command"
 )
 
-func whoamiCommand() *command.Command {
-	cmd := command.NewCommand("whoami")
+func whoamiCommand() *command {
+	cmd := newCommand("whoami")
 	cmd.Description = func() string { return "tells who you are" }
 	tokenFlag := cmd.String("token", "", "access token to use")
 
-	cmd.Action = func() error {
+	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() != 0 {
 			cmd.PrintDefaults()
 			return nil

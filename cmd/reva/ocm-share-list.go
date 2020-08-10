@@ -20,6 +20,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -27,16 +28,15 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/cmd/reva/command"
 	"github.com/jedib0t/go-pretty/table"
 )
 
-func ocmShareListCommand() *command.Command {
-	cmd := command.NewCommand("ocm-share-list")
+func ocmShareListCommand() *command {
+	cmd := newCommand("ocm-share-list")
 	cmd.Description = func() string { return "list OCM shares you manage" }
 	cmd.Usage = func() string { return "Usage: ocm-share-list [-flags]" }
 	resID := cmd.String("by-resource-id", "", "filter by resource id (storage_id:opaque_id)")
-	cmd.Action = func() error {
+	cmd.Action = func(w ...io.Writer) error {
 		ctx := getAuthContext()
 		shareClient, err := getClient()
 		if err != nil {

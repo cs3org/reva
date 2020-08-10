@@ -20,19 +20,19 @@ package main
 
 import (
 	"fmt"
+	"io"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
-	"github.com/cs3org/reva/cmd/reva/command"
 	"github.com/pkg/errors"
 )
 
-func ocmShareUpdateCommand() *command.Command {
-	cmd := command.NewCommand("ocm-share-update")
+func ocmShareUpdateCommand() *command {
+	cmd := newCommand("ocm-share-update")
 	cmd.Description = func() string { return "update an OCM share" }
 	cmd.Usage = func() string { return "Usage: ocm-share-update [-flags] <share_id>" }
 	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor)")
-	cmd.Action = func() error {
+	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
 			return errors.New("Invalid arguments: " + cmd.Usage())
 		}

@@ -19,21 +19,36 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io"
 )
 
-var versionCommand = func() *command {
-	cmd := newCommand("version")
-	cmd.Description = func() string { return "prints version information for this tool" }
-	cmd.Action = func(w ...io.Writer) error {
-		msg := "version=%s "
-		msg += "commit=%s "
-		msg += "go_version=%s "
-		msg += "build_date=%s\n"
+// Command is the representation to create commands
+type command struct {
+	*flag.FlagSet
+	Name        string
+	Action      func(w ...io.Writer) error
+	Usage       func() string
+	Description func() string
+}
 
-		fmt.Printf(msg, version, gitCommit, goVersion, buildDate)
-		return nil
+// newCommand creates a new command
+func newCommand(name string) *command {
+	fs := flag.NewFlagSet(name, flag.ExitOnError)
+	cmd := &command{
+		Name: name,
+		Usage: func() string {
+			return fmt.Sprintf("Usage: %s", name)
+		},
+		Action: func(w ...io.Writer) error {
+			fmt.Println("Hello REVA")
+			return nil
+		},
+		Description: func() string {
+			return "TODO description"
+		},
+		FlagSet: fs,
 	}
 	return cmd
 }

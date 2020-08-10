@@ -20,18 +20,18 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
-	"github.com/cs3org/reva/cmd/reva/command"
 	"github.com/cs3org/reva/cmd/reva/gen"
 	"github.com/pkg/errors"
 )
 
-var genConfigSubCommand = func() *command.Command {
-	cmd := command.NewCommand("config")
+var genConfigSubCommand = func() *command {
+	cmd := newCommand("config")
 	cmd.Description = func() string { return "will create a revad.toml file" }
-	cmd.Usage = func() string { return "Usage: gen config" }
+	cmd.Usage = func() string { return "Usage: gen config [-flags]" }
 
 	forceFlag := cmd.Bool("f", false, "force")
 	configFlag := cmd.String("c", "./revad.toml", "path to the config file")
@@ -39,7 +39,7 @@ var genConfigSubCommand = func() *command.Command {
 	dataDriverFlag := cmd.String("dd", "local", "'local' or 'owncloud', ('s3' or 'eos' are supported when providing a custom config)")
 	dataPathFlag := cmd.String("dp", "./data", "path to the data folder")
 
-	cmd.Action = func() error {
+	cmd.Action = func(w ...io.Writer) error {
 		if !*forceFlag {
 			if _, err := os.Stat(*configFlag); err == nil {
 				// file exists, overwrite?

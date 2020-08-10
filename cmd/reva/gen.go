@@ -20,23 +20,23 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"strings"
 
-	"github.com/cs3org/reva/cmd/reva/command"
 	"github.com/pkg/errors"
 )
 
-var genCommand = func() *command.Command {
-	cmd := command.NewCommand("gen")
+var genCommand = func() *command {
+	cmd := newCommand("gen")
 	cmd.Description = func() string { return "generates files for configuration" }
 	cmd.Usage = func() string { return "Usage: gen <subcommand>" }
 
-	subcmds := []*command.Command{
+	subcmds := []*command{
 		genConfigSubCommand(),
 		genUsersSubCommand(),
 	}
 
-	cmd.Action = func() error {
+	cmd.Action = func(w ...io.Writer) error {
 		// Verify that a subcommand has been provided
 		// cmd.Args()[0] is the subcommand command
 		// cmd.Args()[1] will be the subcommands arguments
@@ -58,7 +58,7 @@ var genCommand = func() *command.Command {
 	return cmd
 }
 
-func createGenUsage(cmds []*command.Command) string {
+func createGenUsage(cmds []*command) string {
 	n := 0
 	for _, cmd := range cmds {
 		l := len(cmd.Name)

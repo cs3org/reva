@@ -28,18 +28,17 @@ import (
 	"github.com/cheggaaa/pb"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/cmd/reva/command"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 )
 
-func downloadCommand() *command.Command {
-	cmd := command.NewCommand("download")
-	cmd.Description = func() string { return "download a remote file into the local filesystem" }
+func downloadCommand() *command {
+	cmd := newCommand("download")
+	cmd.Description = func() string { return "download a remote file to the local filesystem" }
 	cmd.Usage = func() string { return "Usage: download [-flags] <remote_file> <local_file>" }
-	cmd.Action = func() error {
+	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 2 {
 			return errors.New("Invalid arguments: " + cmd.Usage())
 		}

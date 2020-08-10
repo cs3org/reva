@@ -19,17 +19,18 @@
 package main
 
 import (
+	"io"
+
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/cmd/reva/command"
 	"github.com/pkg/errors"
 )
 
-func moveCommand() *command.Command {
-	cmd := command.NewCommand("mv")
+func moveCommand() *command {
+	cmd := newCommand("mv")
 	cmd.Description = func() string { return "moves/rename a file/folder" }
 	cmd.Usage = func() string { return "Usage: mv [-flags] <source> <destination>" }
-	cmd.Action = func() error {
+	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 2 {
 			return errors.New("Invalid arguments: " + cmd.Usage())
 		}

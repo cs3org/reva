@@ -21,6 +21,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"strconv"
@@ -33,20 +34,19 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/cmd/reva/command"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/pkg/errors"
 )
 
-func ocmShareCreateCommand() *command.Command {
-	cmd := command.NewCommand("ocm-share-create")
+func ocmShareCreateCommand() *command {
+	cmd := newCommand("ocm-share-create")
 	cmd.Description = func() string { return "create OCM share to a user or group" }
 	cmd.Usage = func() string { return "Usage: ocm-share create [-flags] <path>" }
 	grantType := cmd.String("type", "user", "grantee type (user or group)")
 	grantee := cmd.String("grantee", "", "the grantee")
 	idp := cmd.String("idp", "", "the idp of the grantee, default to same idp as the user triggering the action")
 	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor)")
-	cmd.Action = func() error {
+	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
 			return errors.New("Invalid arguments: " + cmd.Usage())
 		}

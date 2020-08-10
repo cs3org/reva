@@ -16,32 +16,27 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package prompt
+package main
 
 import (
 	"fmt"
 	"os"
 	"strings"
-
-	"github.com/cs3org/reva/cmd/reva/command"
 )
 
 // Executor provides exec command handler
 type Executor struct {
-	Commands []*command.Command
+	Commands []*command
 }
 
-// Do provide completion to prompt
-func (e *Executor) Do(s string) {
+// Execute provides execute commands
+func (e *Executor) Execute(s string) {
 	s = strings.TrimSpace(s)
 	switch s {
 	case "":
 		return
 	case "exit", "quit":
 		os.Exit(0)
-	case "help":
-		e.helpExecutor()
-		return
 	}
 
 	args := strings.Split(s, " ")
@@ -53,6 +48,7 @@ func (e *Executor) Do(s string) {
 				fmt.Println(err)
 				return
 			}
+			defer v.Parse([]string{"-list=false"})
 			err := v.Action()
 			if err != nil {
 				fmt.Println(err)
@@ -62,22 +58,4 @@ func (e *Executor) Do(s string) {
 	}
 
 	fmt.Println("Invalid command")
-}
-
-func (e *Executor) helpExecutor() {
-	n := 0
-	for _, cmd := range e.Commands {
-		l := len(cmd.Name)
-		if l > n {
-			n = l
-		}
-	}
-
-	usage := "Command line interface to REVA:\n"
-	for _, cmd := range e.Commands {
-		usage += fmt.Sprintf("%s%s%s\n", cmd.Name, strings.Repeat(" ", 4+(n-len(cmd.Name))), cmd.Description())
-	}
-	usage += fmt.Sprintf("%s%s%s\n", "help", strings.Repeat(" ", n), "help for using reva CLI")
-	usage += "\nThe REVA authors"
-	fmt.Println(usage)
 }

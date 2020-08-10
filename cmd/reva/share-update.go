@@ -20,19 +20,19 @@ package main
 
 import (
 	"fmt"
+	"io"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
-	"github.com/cs3org/reva/cmd/reva/command"
 	"github.com/pkg/errors"
 )
 
-func shareUpdateCommand() *command.Command {
-	cmd := command.NewCommand("share-update")
+func shareUpdateCommand() *command {
+	cmd := newCommand("share-update")
 	cmd.Description = func() string { return "update a share" }
 	cmd.Usage = func() string { return "Usage: share-update [-flags] <share_id>" }
 	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor)")
-	cmd.Action = func() error {
+	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
 			return errors.New("Invalid arguments: " + cmd.Usage())
 		}

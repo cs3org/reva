@@ -24,8 +24,6 @@ import (
 	"os"
 
 	"github.com/c-bata/go-prompt"
-	"github.com/cs3org/reva/cmd/reva/command"
-	revaprompt "github.com/cs3org/reva/cmd/reva/prompt"
 )
 
 var (
@@ -35,7 +33,7 @@ var (
 
 	gitCommit, buildDate, version, goVersion string
 
-	commands = []*command.Command{
+	commands = []*command{
 		versionCommand(),
 		loginCommand(),
 		whoamiCommand(),
@@ -83,7 +81,7 @@ func main() {
 	if host == "" {
 		c, err := readConfig()
 		if err != nil {
-			fmt.Println("reva is not configured, please pass the \"host\" flag")
+			fmt.Println("reva is not configured, please pass the \"-host\" flag")
 			os.Exit(1)
 		}
 		conf = c
@@ -95,12 +93,12 @@ func main() {
 		}
 	}
 
-	executor := revaprompt.Executor{Commands: commands}
-	completer := revaprompt.Completer{Commands: commands}
+	executor := Executor{Commands: commands}
+	completer := Completer{Commands: commands}
 
 	p := prompt.New(
-		executor.Do,
-		completer.Do,
+		executor.Execute,
+		completer.Complete,
 		prompt.OptionTitle("reva-cli"),
 		prompt.OptionPrefix(">> "),
 	)

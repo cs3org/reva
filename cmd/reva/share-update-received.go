@@ -20,19 +20,19 @@ package main
 
 import (
 	"fmt"
+	"io"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
-	"github.com/cs3org/reva/cmd/reva/command"
 	"github.com/pkg/errors"
 )
 
-func shareUpdateReceivedCommand() *command.Command {
-	cmd := command.NewCommand("share-update-received")
+func shareUpdateReceivedCommand() *command {
+	cmd := newCommand("share-update-received")
 	cmd.Description = func() string { return "update a received share" }
 	cmd.Usage = func() string { return "Usage: share-update-received [-flags] <share_id>" }
 	state := cmd.String("state", "pending", "the state of the share (pending, accepted or rejected)")
-	cmd.Action = func() error {
+	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
 			return errors.New("Invalid arguments: " + cmd.Usage())
 		}

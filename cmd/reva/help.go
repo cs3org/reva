@@ -16,38 +16,34 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package command
+package main
 
 import (
-	"flag"
 	"fmt"
+	"io"
+	"strings"
 )
 
-// Command is the representation to create commands
-type Command struct {
-	*flag.FlagSet
-	Name        string
-	Action      func() error
-	Usage       func() string
-	Description func() string
-}
+var helpCommand = func() *command {
+	cmd := newCommand("help")
+	cmd.Description = func() string { return "help for using reva CLI" }
+	cmd.Action = func(w ...io.Writer) error {
+		n := 0
+		for _, cmd := range commands {
+			l := len(cmd.Name)
+			if l > n {
+				n = l
+			}
+		}
 
-// NewCommand creates a new command
-func NewCommand(name string) *Command {
-	fs := flag.NewFlagSet(name, flag.ExitOnError)
-	cmd := &Command{
-		Name: name,
-		Usage: func() string {
-			return fmt.Sprintf("Usage: %s", name)
-		},
-		Action: func() error {
-			fmt.Println("Hello REVA")
-			return nil
-		},
-		Description: func() string {
-			return "TODO description"
-		},
-		FlagSet: fs,
+		usage := "Command line interface to REVA:\n"
+		for _, cmd := range commands {
+			usage += fmt.Sprintf("%s%s%s\n", cmd.Name, strings.Repeat(" ", 4+(n-len(cmd.Name))), cmd.Description())
+		}
+		usage += fmt.Sprintf("%s%s%s\n", "help", strings.Repeat(" ", n), "help for using reva CLI")
+		usage += "\nThe REVA authors"
+		fmt.Println(usage)
+		return nil
 	}
 	return cmd
 }

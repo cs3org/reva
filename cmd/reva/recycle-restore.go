@@ -19,18 +19,19 @@
 package main
 
 import (
+	"io"
+
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/cmd/reva/command"
 	"github.com/pkg/errors"
 )
 
-func recycleRestoreCommand() *command.Command {
-	cmd := command.NewCommand("recycle-restore")
+func recycleRestoreCommand() *command {
+	cmd := newCommand("recycle-restore")
 	cmd.Description = func() string { return "restore a recycle bin item" }
 	cmd.Usage = func() string { return "Usage: recycle-restore [-flags] key" }
 
-	cmd.Action = func() error {
+	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
 			return errors.New("Invalid arguments: " + cmd.Usage())
 		}

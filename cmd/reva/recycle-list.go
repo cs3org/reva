@@ -20,19 +20,19 @@ package main
 
 import (
 	"fmt"
+	"io"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/cmd/reva/command"
 )
 
-func recycleListCommand() *command.Command {
-	cmd := command.NewCommand("recycle-list")
+func recycleListCommand() *command {
+	cmd := newCommand("recycle-list")
 	cmd.Description = func() string { return "list a recycle bin" }
 	cmd.Usage = func() string { return "Usage: recycle-list [-flags] " }
 
-	cmd.Action = func() error {
+	cmd.Action = func(w ...io.Writer) error {
 		client, err := getClient()
 		if err != nil {
 			return err

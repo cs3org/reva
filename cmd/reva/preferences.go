@@ -20,19 +20,19 @@ package main
 
 import (
 	"fmt"
+	"io"
 
 	preferences "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	"github.com/cs3org/reva/cmd/reva/command"
 	"github.com/pkg/errors"
 )
 
-var preferencesCommand = func() *command.Command {
-	cmd := command.NewCommand("preferences")
+var preferencesCommand = func() *command {
+	cmd := newCommand("preferences")
 	cmd.Description = func() string { return "set and get user preferences" }
 	cmd.Usage = func() string { return "Usage: preferences set <key> <value> or preferences get <key>" }
 
-	cmd.Action = func() error {
+	cmd.Action = func(w ...io.Writer) error {
 
 		if cmd.NArg() < 2 {
 			return errors.New("Invalid arguments: " + cmd.Usage())

@@ -19,17 +19,18 @@
 package main
 
 import (
+	"io"
+
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	storageproviderv1beta1pb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/cmd/reva/command"
 	"github.com/pkg/errors"
 )
 
-func rmCommand() *command.Command {
-	cmd := command.NewCommand("rm")
+func rmCommand() *command {
+	cmd := newCommand("rm")
 	cmd.Description = func() string { return "removes a file or folder" }
 	cmd.Usage = func() string { return "Usage: rm [-flags] <file_name>" }
-	cmd.Action = func() error {
+	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
 			return errors.New("Invalid arguments: " + cmd.Usage())
 		}

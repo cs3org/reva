@@ -19,20 +19,20 @@
 package main
 
 import (
+	"io"
 	"os"
 	"time"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
-	"github.com/cs3org/reva/cmd/reva/command"
 	"github.com/jedib0t/go-pretty/table"
 )
 
-func shareListReceivedCommand() *command.Command {
-	cmd := command.NewCommand("share-list-received")
+func shareListReceivedCommand() *command {
+	cmd := newCommand("share-list-received")
 	cmd.Description = func() string { return "list shares you have received" }
 	cmd.Usage = func() string { return "Usage: share-list-received [-flags]" }
-	cmd.Action = func() error {
+	cmd.Action = func(w ...io.Writer) error {
 		ctx := getAuthContext()
 		shareClient, err := getClient()
 		if err != nil {

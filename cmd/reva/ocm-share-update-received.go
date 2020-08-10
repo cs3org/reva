@@ -20,19 +20,19 @@ package main
 
 import (
 	"fmt"
+	"io"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
-	"github.com/cs3org/reva/cmd/reva/command"
 	"github.com/pkg/errors"
 )
 
-func ocmShareUpdateReceivedCommand() *command.Command {
-	cmd := command.NewCommand("ocm-share-update-received")
+func ocmShareUpdateReceivedCommand() *command {
+	cmd := newCommand("ocm-share-update-received")
 	cmd.Description = func() string { return "update a received OCM share" }
 	cmd.Usage = func() string { return "Usage: ocm-share-update-received [-flags] <share_id>" }
 	state := cmd.String("state", "pending", "the state of the share (pending, accepted or rejected)")
-	cmd.Action = func() error {
+	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
 			return errors.New("Invalid arguments: " + cmd.Usage())
 		}
