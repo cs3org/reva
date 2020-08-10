@@ -20,46 +20,41 @@ package sysinfo
 
 import (
 	"fmt"
-	"net/http"
 	"reflect"
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/cs3org/reva/pkg/sysinfo"
 	"github.com/cs3org/reva/pkg/utils"
 )
 
-type prometheusSysInfoHandler struct {
+// PrometheusExporter exports system information via Prometheus.
+type PrometheusExporter struct {
 	registry      *prometheus.Registry
 	sysInfoMetric prometheus.GaugeFunc
-
-	httpHandler http.Handler
 }
 
-func (psysinfo *prometheusSysInfoHandler) init() error {
+func (psysinfo *PrometheusExporter) init(registry *prometheus.Registry) error {
 	// Create all necessary Prometheus objects
-	psysinfo.registry = prometheus.NewRegistry()
+	psysinfo.registry = registry
 	psysinfo.sysInfoMetric = prometheus.NewGaugeFunc(
 		prometheus.GaugeOpts{
 			Namespace:   "revad",
 			Name:        "sys_info",
 			Help:        "A metric with a constant '1' value labeled by various system information elements",
-			ConstLabels: psysinfo.getLabels("", sysinfo.SysInfo),
+			ConstLabels: psysinfo.getLabels("", SysInfo),
 		},
 		func() float64 { return 1 },
 	)
-	psysinfo.httpHandler = promhttp.HandlerFor(psysinfo.registry, promhttp.HandlerOpts{})
 
 	if err := psysinfo.registry.Register(psysinfo.sysInfoMetric); err != nil {
-		return fmt.Errorf("unable to register the system information metric: %v", err)
+		return fmt.Errorf("unable to register the system information metrics: %v", err)
 	}
 
 	return nil
 }
 
-func (psysinfo *prometheusSysInfoHandler) getLabels(root string, i interface{}) prometheus.Labels {
+func (psysinfo *PrometheusExporter) getLabels(root string, i interface{}) prometheus.Labels {
 	labels := prometheus.Labels{}
 
 	// Iterate over each field of the given interface, recursively collecting the values as labels
@@ -91,4 +86,18 @@ func (psysinfo *prometheusSysInfoHandler) getLabels(root string, i interface{}) 
 	}
 
 	return labels
+}
+
+// NewPrometheusExporter creates a new Prometheus system information exporter.
+func NewPrometheusExporter(registry *prometheus.Registry) (*PrometheusExporter, error) {
+	if registry == nil {
+		return nil, fmt.Errorf("no registry provided")
+	}
+
+	exporter := &PrometheusExporter{}
+	if err := exporter.init(registry); err != nil {
+		return nil, err
+	}
+
+	return exporter, nil
 }
