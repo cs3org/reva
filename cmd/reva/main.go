@@ -23,8 +23,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-
-	"github.com/cs3org/reva/pkg/sysinfo"
 )
 
 var (
@@ -43,8 +41,6 @@ func init() {
 }
 
 func main() {
-	// initiliaze the global system information
-	sysinfo.InitSystemInfo(&sysinfo.RevaVersion{Version: version, BuildDate: buildDate, GitCommit: gitCommit, GoVersion: goVersion})
 
 	cmds := []*command{
 		versionCommand(),

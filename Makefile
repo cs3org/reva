@@ -7,6 +7,7 @@ GIT_BRANCH=`git rev-parse --symbolic-full-name --abbrev-ref HEAD`
 GIT_DIRTY=`git diff-index --quiet HEAD -- || echo "dirty-"`
 VERSION=`git describe --always`
 GO_VERSION=`go version | awk '{print $$3}'`
+BUILD_FLAGS="-X main.gitCommit=${GIT_COMMIT} -X main.version=${VERSION} -X main.goVersion=${GO_VERSION} -X main.buildDate=${BUILD_DATE}"
 
 default: build test lint gen-doc check-changelog
 release: deps build test lint gen-doc
@@ -23,17 +24,17 @@ imports: off
 	`go env GOPATH`/bin/goimports -w tools pkg internal cmd
 
 build: imports
-	go build -o ./cmd/revad/revad ./cmd/revad
-	go build -o ./cmd/reva/reva ./cmd/reva
+	go build -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
+	go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
 
 tidy:
 	go mod tidy
 
 build-revad: imports
-	go build -o ./cmd/revad/revad ./cmd/revad
+	go build -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
 
 build-reva: imports
-	go build -o ./cmd/reva/reva ./cmd/reva
+	go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
 
 test: off
 	go test -race ./...
@@ -51,8 +52,8 @@ deps:
 	cd /tmp && go get golang.org/x/tools/cmd/goimports
 
 build-ci: off
-	go build -o ./cmd/revad/revad ./cmd/revad
-	go build -o ./cmd/reva/reva ./cmd/reva
+	go build -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
+	go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
 
 lint-ci:
 	go run tools/check-license/check-license.go
@@ -71,9 +72,9 @@ ci: build-ci test  lint-ci
 
 # to be run in Docker build
 build-revad-docker: off
-	go build -o ./cmd/revad/revad ./cmd/revad
+	go build -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
 build-reva-docker: off
-	go build -o ./cmd/reva/reva ./cmd/reva
+	go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
 clean:
 	rm -rf dist
 

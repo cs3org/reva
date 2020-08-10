@@ -52,7 +52,7 @@ var (
 func main() {
 	flag.Parse()
 
-	// initiliaze the global system information
+	// initialize the global system information
 	sysinfo.InitSystemInfo(&sysinfo.RevaVersion{Version: version, BuildDate: buildDate, GitCommit: gitCommit, GoVersion: goVersion})
 
 	handleVersionFlag()
