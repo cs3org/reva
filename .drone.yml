@@ -298,7 +298,8 @@ steps:
   - name: litmus-oc-new-webdav
     image: owncloud/litmus:latest
     environment:
-      LITMUS_URL: http://revad-services:20080/remote.php/dav/files/einstein
+      # UUID is einstein user, see https://github.com/owncloud/ocis-accounts/blob/8de0530f31ed5ffb0bbb7f7f3471f87f429cb2ea/pkg/service/v0/service.go#L45
+      LITMUS_URL: http://revad-services:20080/remote.php/dav/files/4c510ada-c86b-4815-8820-42cdf82c3d51
       LITMUS_USERNAME: einstein
       LITMUS_PASSWORD: relativity
       TESTS: basic http copymove props

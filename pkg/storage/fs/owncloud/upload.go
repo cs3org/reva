@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
+	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -203,7 +204,8 @@ func (fs *ocfs) getUploadPath(ctx context.Context, uploadID string) (string, err
 		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
 		return "", err
 	}
-	return filepath.Join(fs.c.DataDirectory, u.Username, "uploads", uploadID), nil
+	layout := templates.WithUser(u, fs.c.UserLayout)
+	return filepath.Join(fs.c.DataDirectory, layout, "uploads", uploadID), nil
 }
 
 // GetUpload returns the Upload for the given upload id

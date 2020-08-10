@@ -96,6 +96,9 @@ address = "0.0.0.0:17001"
 [http.services.dataprovider]
 driver = "localhome"
 
+[http.services.prometheus]
+[http.services.sysinfo]
+
 [http.services.dataprovider.drivers.localhome]
 user_layout = "{{.Username}}"
 
