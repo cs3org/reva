@@ -71,6 +71,7 @@ func ToSnakeCase(str string) string {
 	return strings.ToLower(snake)
 }
 
+// ResolvePath converts relative local paths to absolute paths
 func ResolvePath(path string) (string, error) {
 	usr, err := user.Current()
 	if err != nil {

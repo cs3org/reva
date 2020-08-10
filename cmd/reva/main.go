@@ -76,6 +76,10 @@ func init() {
 }
 
 func main() {
+
+	fmt.Printf("reva-cli %s (rev-%s)\n", version, gitCommit)
+	fmt.Println("Please use `exit` or `Ctrl-D` to exit this program.")
+
 	if host == "" {
 		c, err := readConfig()
 		if err != nil {
@@ -84,7 +88,7 @@ func main() {
 		}
 		conf = c
 	} else {
-		conf.Host = host
+		conf = &config{host}
 		if err := writeConfig(conf); err != nil {
 			fmt.Println("error writing to config file")
 			os.Exit(1)
@@ -97,6 +101,8 @@ func main() {
 	p := prompt.New(
 		executor.Do,
 		completer.Do,
+		prompt.OptionTitle("reva-cli"),
+		prompt.OptionPrefix(">> "),
 	)
 	p.Run()
 }
