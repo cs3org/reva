@@ -34,6 +34,10 @@ const (
 	editorPermission string = "editor"
 )
 
+type config struct {
+	Host string `json:"host"`
+}
+
 func getConfigFile() string {
 	user, err := gouser.Current()
 	if err != nil {
@@ -41,30 +45,6 @@ func getConfigFile() string {
 	}
 
 	return path.Join(user.HomeDir, ".reva.config")
-}
-
-func getTokenFile() string {
-	user, err := gouser.Current()
-	if err != nil {
-		panic(err)
-	}
-
-	return path.Join(user.HomeDir, ".reva-token")
-}
-
-func writeToken(token string) {
-	err := ioutil.WriteFile(getTokenFile(), []byte(token), 0600)
-	if err != nil {
-		panic(err)
-	}
-}
-
-func readToken() (string, error) {
-	data, err := ioutil.ReadFile(getTokenFile())
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
 }
 
 func readConfig() (*config, error) {
@@ -89,8 +69,28 @@ func writeConfig(c *config) error {
 	return ioutil.WriteFile(getConfigFile(), data, 0600)
 }
 
-type config struct {
-	Host string `json:"host"`
+func getTokenFile() string {
+	user, err := gouser.Current()
+	if err != nil {
+		panic(err)
+	}
+
+	return path.Join(user.HomeDir, ".reva-token")
+}
+
+func readToken() (string, error) {
+	data, err := ioutil.ReadFile(getTokenFile())
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+func writeToken(token string) {
+	err := ioutil.WriteFile(getTokenFile(), []byte(token), 0600)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func read(r *bufio.Reader) (string, error) {

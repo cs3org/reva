@@ -19,25 +19,18 @@
 package main
 
 import (
-	"fmt"
-	"os"
-
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/cmd/reva/command"
 )
 
-func recyclePurgeCommand() *command {
-	cmd := newCommand("recycle-purge")
+func recyclePurgeCommand() *command.Command {
+	cmd := command.NewCommand("recycle-purge")
 	cmd.Description = func() string { return "purge a recycle bin" }
 	cmd.Usage = func() string { return "Usage: recycle-purge [-flags] " }
 
 	cmd.Action = func() error {
-		if cmd.NArg() < 0 {
-			fmt.Println(cmd.Usage())
-			os.Exit(1)
-		}
-
 		client, err := getClient()
 		if err != nil {
 			return err

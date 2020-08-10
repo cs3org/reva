@@ -23,11 +23,12 @@ import (
 	"os"
 	"strings"
 
+	"github.com/cs3org/reva/cmd/reva/command"
 	"github.com/cs3org/reva/cmd/reva/gen"
 )
 
-var genUsersSubCommand = func() *command {
-	cmd := newCommand("users")
+var genUsersSubCommand = func() *command.Command {
+	cmd := command.NewCommand("users")
 	cmd.Description = func() string { return "will create a users.json file with demo users" }
 	cmd.Usage = func() string { return "Usage: gen users" }
 
@@ -42,14 +43,10 @@ var genUsersSubCommand = func() *command {
 				var r string
 				_, err := fmt.Scanln(&r)
 				if err != nil || "y" != strings.ToLower(r[:1]) {
-					fmt.Fprintf(os.Stderr, "aborting\n")
-					os.Exit(1)
+					return err
 				}
-			} else if os.IsNotExist(err) {
-				// file does not exist, go on
-			} else {
-				fmt.Fprintf(os.Stderr, "io error %v\n", err)
-				os.Exit(1)
+			} else if !os.IsNotExist(err) {
+				return err
 			}
 		}
 		if _, err := os.Stat(*usersFlag); os.IsNotExist(err) {

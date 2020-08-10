@@ -19,16 +19,16 @@
 package main
 
 import (
-	"fmt"
 	"log"
-	"os"
 	"path"
 
+	"github.com/cs3org/reva/cmd/reva/command"
 	"github.com/cs3org/reva/pkg/storage/migrate"
+	"github.com/pkg/errors"
 )
 
-func importCommand() *command {
-	cmd := newCommand("import")
+func importCommand() *command.Command {
+	cmd := command.NewCommand("import")
 	cmd.Description = func() string { return "import metadata" }
 	cmd.Usage = func() string { return "Usage: import [-flags] <user export folder>" }
 
@@ -36,8 +36,7 @@ func importCommand() *command {
 
 	cmd.Action = func() error {
 		if cmd.NArg() < 1 {
-			fmt.Println(cmd.Usage())
-			os.Exit(1)
+			return errors.New("Invalid arguments: " + cmd.Usage())
 		}
 		exportPath := cmd.Args()[0]
 

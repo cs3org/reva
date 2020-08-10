@@ -21,6 +21,8 @@ package utils
 import (
 	"net"
 	"net/http"
+	"os/user"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -67,4 +69,25 @@ func ToSnakeCase(str string) string {
 	snake := matchFirstCap.ReplaceAllString(str, "${1}_${2}")
 	snake = matchAllCap.ReplaceAllString(snake, "${1}_${2}")
 	return strings.ToLower(snake)
+}
+
+func ResolvePath(path string) (string, error) {
+	usr, err := user.Current()
+	if err != nil {
+		return "", err
+	}
+	homeDir := usr.HomeDir
+
+	if path == "~" {
+		path = homeDir
+	} else if strings.HasPrefix(path, "~/") {
+		path = filepath.Join(homeDir, path[2:])
+	}
+
+	path, err = filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+
+	return path, nil
 }

@@ -27,10 +27,12 @@ import (
 	registry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	"github.com/cs3org/reva/cmd/reva/command"
+	"github.com/pkg/errors"
 )
 
-var loginCommand = func() *command {
-	cmd := newCommand("login")
+var loginCommand = func() *command.Command {
+	cmd := command.NewCommand("login")
 	cmd.Description = func() string { return "login into the reva server" }
 	cmd.Usage = func() string { return "Usage: login <type>" }
 	listFlag := cmd.Bool("list", false, "list available login methods")
@@ -63,8 +65,7 @@ var loginCommand = func() *command {
 
 		var authType, username, password string
 		if cmd.NArg() != 1 {
-			fmt.Println(cmd.Usage())
-			os.Exit(1)
+			return errors.New("Invalid arguments: " + cmd.Usage())
 		} else {
 			authType = cmd.Args()[0]
 			reader := bufio.NewReader(os.Stdin)

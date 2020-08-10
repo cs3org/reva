@@ -20,10 +20,12 @@ package main
 
 import (
 	"fmt"
+
+	"github.com/cs3org/reva/cmd/reva/command"
 )
 
-var versionCommand = func() *command {
-	cmd := newCommand("version")
+var versionCommand = func() *command.Command {
+	cmd := command.NewCommand("version")
 	cmd.Description = func() string { return "prints version information for this tool" }
 	cmd.Action = func() error {
 		msg := "version=%s "

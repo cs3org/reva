@@ -27,11 +27,12 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/cmd/reva/command"
 	"github.com/jedib0t/go-pretty/table"
 )
 
-func shareListCommand() *command {
-	cmd := newCommand("share-list")
+func shareListCommand() *command.Command {
+	cmd := command.NewCommand("share-list")
 	cmd.Description = func() string { return "list shares you manage" }
 	cmd.Usage = func() string { return "Usage: share-list [-flags]" }
 	resID := cmd.String("by-resource-id", "", "filter by resource id (storage_id:opaque_id)")

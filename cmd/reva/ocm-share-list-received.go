@@ -24,11 +24,12 @@ import (
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	"github.com/cs3org/reva/cmd/reva/command"
 	"github.com/jedib0t/go-pretty/table"
 )
 
-func ocmShareListReceivedCommand() *command {
-	cmd := newCommand("ocm-share-list-received")
+func ocmShareListReceivedCommand() *command.Command {
+	cmd := command.NewCommand("ocm-share-list-received")
 	cmd.Description = func() string { return "list OCM shares you have received" }
 	cmd.Usage = func() string { return "Usage: ocm-share-list-received [-flags]" }
 	cmd.Action = func() error {

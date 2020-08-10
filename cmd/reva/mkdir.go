@@ -19,21 +19,19 @@
 package main
 
 import (
-	"fmt"
-	"os"
-
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/cmd/reva/command"
+	"github.com/pkg/errors"
 )
 
-func mkdirCommand() *command {
-	cmd := newCommand("mkdir")
+func mkdirCommand() *command.Command {
+	cmd := command.NewCommand("mkdir")
 	cmd.Description = func() string { return "creates a container" }
 	cmd.Usage = func() string { return "Usage: mkdir [-flags] <container_name>" }
 	cmd.Action = func() error {
 		if cmd.NArg() < 1 {
-			fmt.Println(cmd.Usage())
-			os.Exit(1)
+			return errors.New("Invalid arguments: " + cmd.Usage())
 		}
 
 		fn := cmd.Args()[0]

@@ -16,31 +16,38 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package main
+package command
 
 import (
-	"bufio"
+	"flag"
 	"fmt"
-	"os"
 )
 
-var configureCommand = func() *command {
-	cmd := newCommand("configure")
-	cmd.Description = func() string { return "configure the reva client" }
-	cmd.Action = func() error {
-		reader := bufio.NewReader(os.Stdin)
-		fmt.Print("host: ")
-		text, err := read(reader)
-		if err != nil {
-			return err
-		}
+// Command is the representation to create commands
+type Command struct {
+	*flag.FlagSet
+	Name        string
+	Action      func() error
+	Usage       func() string
+	Description func() string
+}
 
-		c := &config{Host: text}
-		if err := writeConfig(c); err != nil {
-			panic(err)
-		}
-		fmt.Println("config saved in ", getConfigFile())
-		return nil
+// NewCommand creates a new command
+func NewCommand(name string) *Command {
+	fs := flag.NewFlagSet(name, flag.ExitOnError)
+	cmd := &Command{
+		Name: name,
+		Usage: func() string {
+			return fmt.Sprintf("Usage: %s", name)
+		},
+		Action: func() error {
+			fmt.Println("Hello REVA")
+			return nil
+		},
+		Description: func() string {
+			return "TODO description"
+		},
+		FlagSet: fs,
 	}
 	return cmd
 }

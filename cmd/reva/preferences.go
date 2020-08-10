@@ -20,22 +20,22 @@ package main
 
 import (
 	"fmt"
-	"os"
 
 	preferences "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	"github.com/cs3org/reva/cmd/reva/command"
+	"github.com/pkg/errors"
 )
 
-var preferencesCommand = func() *command {
-	cmd := newCommand("preferences")
+var preferencesCommand = func() *command.Command {
+	cmd := command.NewCommand("preferences")
 	cmd.Description = func() string { return "set and get user preferences" }
 	cmd.Usage = func() string { return "Usage: preferences set <key> <value> or preferences get <key>" }
 
 	cmd.Action = func() error {
 
 		if cmd.NArg() < 2 {
-			fmt.Println(cmd.Usage())
-			os.Exit(1)
+			return errors.New("Invalid arguments: " + cmd.Usage())
 		}
 
 		subcommand := cmd.Args()[0]
@@ -51,8 +51,7 @@ var preferencesCommand = func() *command {
 		switch subcommand {
 		case "set":
 			if cmd.NArg() < 3 {
-				fmt.Println(cmd.Usage())
-				os.Exit(1)
+				return errors.New("Invalid arguments: " + cmd.Usage())
 			}
 			value := cmd.Args()[2]
 			req := &preferences.SetKeyRequest{
@@ -86,8 +85,7 @@ var preferencesCommand = func() *command {
 			fmt.Println(res.Val)
 
 		default:
-			fmt.Println(cmd.Usage())
-			os.Exit(1)
+			return errors.New("Invalid arguments: " + cmd.Usage())
 		}
 		return nil
 	}

@@ -33,12 +33,13 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/cmd/reva/command"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/pkg/errors"
 )
 
-func ocmShareCreateCommand() *command {
-	cmd := newCommand("ocm-share-create")
+func ocmShareCreateCommand() *command.Command {
+	cmd := command.NewCommand("ocm-share-create")
 	cmd.Description = func() string { return "create OCM share to a user or group" }
 	cmd.Usage = func() string { return "Usage: ocm-share create [-flags] <path>" }
 	grantType := cmd.String("type", "user", "grantee type (user or group)")
@@ -47,21 +48,16 @@ func ocmShareCreateCommand() *command {
 	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor)")
 	cmd.Action = func() error {
 		if cmd.NArg() < 1 {
-			fmt.Println(cmd.Usage())
-			os.Exit(1)
+			return errors.New("Invalid arguments: " + cmd.Usage())
 		}
 
 		// validate flags
 		if *grantee == "" {
-			fmt.Println("grantee cannot be empty: use -grantee flag")
-			fmt.Println(cmd.Usage())
-			os.Exit(1)
+			return errors.New("Grantee cannot be empty: use -grantee flag\n" + cmd.Usage())
 		}
 
 		if *idp == "" {
-			fmt.Println("idp cannot be empty: use -idp flag")
-			fmt.Println(cmd.Usage())
-			os.Exit(1)
+			return errors.New("IdP cannot be empty: use -idp flag\n" + cmd.Usage())
 		}
 
 		fn := cmd.Args()[0]

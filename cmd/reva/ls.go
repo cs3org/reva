@@ -20,15 +20,16 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"path"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/cmd/reva/command"
+	"github.com/pkg/errors"
 )
 
-func lsCommand() *command {
-	cmd := newCommand("ls")
+func lsCommand() *command.Command {
+	cmd := command.NewCommand("ls")
 	cmd.Description = func() string { return "list a container contents" }
 	cmd.Usage = func() string { return "Usage: ls [-flags] <container_name>" }
 	longFlag := cmd.Bool("l", false, "long listing")
@@ -36,8 +37,7 @@ func lsCommand() *command {
 
 	cmd.Action = func() error {
 		if cmd.NArg() < 1 {
-			fmt.Println(cmd.Usage())
-			os.Exit(1)
+			return errors.New("Invalid arguments: " + cmd.Usage())
 		}
 
 		fn := cmd.Args()[0]
