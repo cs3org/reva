@@ -76,7 +76,7 @@ func init() {
 	flag.BoolVar(&insecure, "insecure", false, "disables grpc transport security")
 	flag.BoolVar(&skipverify, "skip-verify", false, "whether a client verifies the server's certificate chain and host name.")
 	flag.BoolVar(&disableargprompt, "disable-arg-prompt", false, "whether to disable prompts for command arguments.")
-	flag.IntVar(&timeout, "timout", 3, "the timeout in seconds for executing the commands.")
+	flag.IntVar(&timeout, "timout", -1, "the timeout in seconds for executing the commands, -1 means no timeout")
 	flag.Parse()
 }
 

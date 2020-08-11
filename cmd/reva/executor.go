@@ -19,8 +19,11 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
+	"os/signal"
 	"strings"
 	"time"
 )
@@ -45,35 +48,58 @@ func (e *Executor) Execute(s string) {
 	action := args[0]
 	for _, v := range commands {
 		if v.Name == action {
-			var err error
-			if err = v.Parse(args[1:]); err != nil {
+			if err := v.Parse(args[1:]); err != nil {
 				fmt.Println(err)
 				return
 			}
 			defer v.ResetFlags()
 
-			// Provide a longer timeout for login as it requires user input
-			timeout := e.Timeout
-			if action == "login" {
-				timeout = 12
-			}
-
-			c := make(chan error, 1)
-			go func() {
-				c <- v.Action()
+			ctx := context.Background()
+			ctx, cancel := context.WithCancel(ctx)
+			signalChan := make(chan os.Signal, 1)
+			signal.Notify(signalChan, os.Interrupt)
+			defer func() {
+				signal.Stop(signalChan)
+				cancel()
 			}()
 
-			select {
-			case err = <-c:
-				if err != nil {
-					fmt.Println(err)
+			go func() {
+				if e.Timeout > 0 {
+					select {
+					case <-signalChan:
+						cancel()
+					case <-time.After(time.Duration(e.Timeout * int(time.Second))):
+						cancel()
+					case <-ctx.Done():
+					}
+				} else {
+					select {
+					case <-signalChan:
+						cancel()
+					case <-ctx.Done():
+					}
 				}
-			case <-time.After(time.Duration(timeout * int(time.Second))):
-				fmt.Println("Error: executing the command timed out.")
+			}()
+
+			if err := executeWithContext(ctx, v); err != nil {
+				fmt.Println(err.Error())
 			}
 			return
 		}
 	}
 
 	fmt.Println("Invalid command. Use \"help\" to list the available commands.")
+}
+
+func executeWithContext(ctx context.Context, cmd *command) error {
+	c := make(chan error, 1)
+	go func() {
+		c <- cmd.Action()
+	}()
+	select {
+	case <-ctx.Done():
+		return errors.New("Cancelled by user")
+	case err := <-c:
+		return err
+	}
 }

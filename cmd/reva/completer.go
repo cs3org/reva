@@ -91,49 +91,49 @@ func (c *Completer) argumentCompleter(args ...string) []prompt.Suggest {
 
 	case "login":
 		if len(args) == 2 {
-			return prompt.FilterHasPrefix(c.loginArgumentCompleter(args), args[1], true)
+			return prompt.FilterHasPrefix(c.loginArgumentCompleter(), args[1], true)
 		}
 
 	case "ls", "mkdir":
 		if len(args) == 2 {
-			return prompt.FilterHasPrefix(c.lsArgumentCompleter(args, true), args[1], true)
+			return prompt.FilterHasPrefix(c.lsArgumentCompleter(true), args[1], true)
 		}
 
 	case "mv":
 		if len(args) == 2 {
-			return prompt.FilterHasPrefix(c.lsArgumentCompleter(args, false), args[1], true)
+			return prompt.FilterHasPrefix(c.lsArgumentCompleter(false), args[1], true)
 		} else if len(args) == 3 {
-			return prompt.FilterHasPrefix(c.lsArgumentCompleter(args, false), args[2], true)
+			return prompt.FilterHasPrefix(c.lsArgumentCompleter(false), args[2], true)
 		}
 
 	case "rm", "stat", "share-create", "ocm-share-create", "open-file-in-app-provider", "download":
 		if len(args) == 2 {
-			return prompt.FilterHasPrefix(c.lsArgumentCompleter(args, false), args[1], true)
+			return prompt.FilterHasPrefix(c.lsArgumentCompleter(false), args[1], true)
 		}
 
 	case "upload":
 		if len(args) == 3 {
-			return prompt.FilterHasPrefix(c.lsArgumentCompleter(args, false), args[2], true)
+			return prompt.FilterHasPrefix(c.lsArgumentCompleter(false), args[2], true)
 		}
 
 	case "ocm-share-remove", "ocm-share-update":
 		if len(args) == 2 {
-			return prompt.FilterHasPrefix(c.ocmShareArgumentCompleter(args), args[1], true)
+			return prompt.FilterHasPrefix(c.ocmShareArgumentCompleter(), args[1], true)
 		}
 
 	case "ocm-share-update-received":
 		if len(args) == 2 {
-			return prompt.FilterHasPrefix(c.ocmShareReceivedArgumentCompleter(args), args[1], true)
+			return prompt.FilterHasPrefix(c.ocmShareReceivedArgumentCompleter(), args[1], true)
 		}
 
 	case "share-remove", "share-update":
 		if len(args) == 2 {
-			return prompt.FilterHasPrefix(c.shareArgumentCompleter(args), args[1], true)
+			return prompt.FilterHasPrefix(c.shareArgumentCompleter(), args[1], true)
 		}
 
 	case "share-update-received":
 		if len(args) == 2 {
-			return prompt.FilterHasPrefix(c.shareReceivedArgumentCompleter(args), args[1], true)
+			return prompt.FilterHasPrefix(c.shareReceivedArgumentCompleter(), args[1], true)
 		}
 	}
 

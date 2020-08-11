@@ -37,33 +37,31 @@ type argumentCompleter struct {
 	sync.RWMutex
 }
 
-func (c *Completer) loginArgumentCompleter(args []string) []prompt.Suggest {
+func (c *Completer) loginArgumentCompleter() []prompt.Suggest {
 	if s, ok := checkCache(c.loginArguments); ok {
 		return s
 	}
 
-	var types []string
+	types := []string{}
+	suggests := []prompt.Suggest{}
+
 	b, err := executeCommand(loginCommand(), "-list")
-	if err != nil {
-		if err.Error() == "timeout" {
-			cacheSuggestions(c.loginArguments, []prompt.Suggest{})
+	if err == nil {
+		dec := gob.NewDecoder(&b)
+		if err := dec.Decode(&types); err != nil {
+			return []prompt.Suggest{}
 		}
-		return []prompt.Suggest{}
-	}
-	dec := gob.NewDecoder(&b)
-	if err := dec.Decode(&types); err != nil {
-		return []prompt.Suggest{}
+
+		for _, t := range types {
+			suggests = append(suggests, prompt.Suggest{Text: t})
+		}
 	}
 
-	suggests := make([]prompt.Suggest, len(types))
-	for _, t := range types {
-		suggests = append(suggests, prompt.Suggest{Text: t})
-	}
 	cacheSuggestions(c.loginArguments, suggests)
 	return suggests
 }
 
-func (c *Completer) lsArgumentCompleter(args []string, onlyDirs bool) []prompt.Suggest {
+func (c *Completer) lsArgumentCompleter(onlyDirs bool) []prompt.Suggest {
 	if onlyDirs {
 		if s, ok := checkCache(c.lsDirArguments); ok {
 			return s
@@ -74,27 +72,21 @@ func (c *Completer) lsArgumentCompleter(args []string, onlyDirs bool) []prompt.S
 		}
 	}
 
-	var info []*provider.ResourceInfo
-	b, err := executeCommand(lsCommand(), "/home")
-	if err != nil {
-		if err.Error() == "timeout" {
-			if onlyDirs {
-				cacheSuggestions(c.lsDirArguments, []prompt.Suggest{})
-			} else {
-				cacheSuggestions(c.lsArguments, []prompt.Suggest{})
-			}
-		}
-		return []prompt.Suggest{}
-	}
-	dec := gob.NewDecoder(&b)
-	if err := dec.Decode(&info); err != nil {
-		return []prompt.Suggest{}
-	}
+	info := []*provider.ResourceInfo{}
+	suggests := []prompt.Suggest{}
 
-	suggests := []prompt.Suggest{prompt.Suggest{Text: "/home"}}
-	for _, r := range info {
-		if !onlyDirs || r.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-			suggests = append(suggests, prompt.Suggest{Text: r.Path})
+	b, err := executeCommand(lsCommand(), "/home")
+	if err == nil {
+		dec := gob.NewDecoder(&b)
+		if err := dec.Decode(&info); err != nil {
+			return []prompt.Suggest{}
+		}
+
+		suggests = append(suggests, prompt.Suggest{Text: "/home"})
+		for _, r := range info {
+			if !onlyDirs || r.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+				suggests = append(suggests, prompt.Suggest{Text: r.Path})
+			}
 		}
 	}
 
@@ -106,106 +98,98 @@ func (c *Completer) lsArgumentCompleter(args []string, onlyDirs bool) []prompt.S
 	return suggests
 }
 
-func (c *Completer) ocmShareArgumentCompleter(args []string) []prompt.Suggest {
+func (c *Completer) ocmShareArgumentCompleter() []prompt.Suggest {
 	if s, ok := checkCache(c.ocmShareArguments); ok {
 		return s
 	}
 
-	var info []*ocm.Share
+	info := []*ocm.Share{}
+	suggests := []prompt.Suggest{}
+
 	b, err := executeCommand(ocmShareListCommand())
-	if err != nil {
-		if err.Error() == "timeout" {
-			cacheSuggestions(c.ocmShareArguments, []prompt.Suggest{})
+	if err == nil {
+		dec := gob.NewDecoder(&b)
+		if err := dec.Decode(&info); err != nil {
+			return []prompt.Suggest{}
 		}
-		return []prompt.Suggest{}
-	}
-	dec := gob.NewDecoder(&b)
-	if err := dec.Decode(&info); err != nil {
-		return []prompt.Suggest{}
+
+		for _, r := range info {
+			suggests = append(suggests, prompt.Suggest{Text: r.Id.OpaqueId})
+		}
 	}
 
-	suggests := make([]prompt.Suggest, len(info))
-	for _, r := range info {
-		suggests = append(suggests, prompt.Suggest{Text: r.Id.OpaqueId})
-	}
 	cacheSuggestions(c.ocmShareArguments, suggests)
 	return suggests
 }
 
-func (c *Completer) ocmShareReceivedArgumentCompleter(args []string) []prompt.Suggest {
+func (c *Completer) ocmShareReceivedArgumentCompleter() []prompt.Suggest {
 	if s, ok := checkCache(c.ocmShareReceivedArguments); ok {
 		return s
 	}
 
-	var info []*ocm.ReceivedShare
+	info := []*ocm.ReceivedShare{}
+	suggests := []prompt.Suggest{}
+
 	b, err := executeCommand(ocmShareListReceivedCommand())
-	if err != nil {
-		if err.Error() == "timeout" {
-			cacheSuggestions(c.ocmShareReceivedArguments, []prompt.Suggest{})
+	if err == nil {
+		dec := gob.NewDecoder(&b)
+		if err := dec.Decode(&info); err != nil {
+			return []prompt.Suggest{}
 		}
-		return []prompt.Suggest{}
-	}
-	dec := gob.NewDecoder(&b)
-	if err := dec.Decode(&info); err != nil {
-		return []prompt.Suggest{}
+
+		for _, r := range info {
+			suggests = append(suggests, prompt.Suggest{Text: r.Share.Id.OpaqueId})
+		}
 	}
 
-	suggests := make([]prompt.Suggest, len(info))
-	for _, r := range info {
-		suggests = append(suggests, prompt.Suggest{Text: r.Share.Id.OpaqueId})
-	}
 	cacheSuggestions(c.ocmShareReceivedArguments, suggests)
 	return suggests
 }
 
-func (c *Completer) shareArgumentCompleter(args []string) []prompt.Suggest {
+func (c *Completer) shareArgumentCompleter() []prompt.Suggest {
 	if s, ok := checkCache(c.shareArguments); ok {
 		return s
 	}
 
-	var info []*collaboration.Share
+	info := []*collaboration.Share{}
+	suggests := []prompt.Suggest{}
+
 	b, err := executeCommand(shareListCommand())
-	if err != nil {
-		if err.Error() == "timeout" {
-			cacheSuggestions(c.shareArguments, []prompt.Suggest{})
+	if err == nil {
+		dec := gob.NewDecoder(&b)
+		if err := dec.Decode(&info); err != nil {
+			return []prompt.Suggest{}
 		}
-		return []prompt.Suggest{}
-	}
-	dec := gob.NewDecoder(&b)
-	if err := dec.Decode(&info); err != nil {
-		return []prompt.Suggest{}
+
+		for _, r := range info {
+			suggests = append(suggests, prompt.Suggest{Text: r.Id.OpaqueId})
+		}
 	}
 
-	suggests := make([]prompt.Suggest, len(info))
-	for _, r := range info {
-		suggests = append(suggests, prompt.Suggest{Text: r.Id.OpaqueId})
-	}
 	cacheSuggestions(c.shareArguments, suggests)
 	return suggests
 }
 
-func (c *Completer) shareReceivedArgumentCompleter(args []string) []prompt.Suggest {
+func (c *Completer) shareReceivedArgumentCompleter() []prompt.Suggest {
 	if s, ok := checkCache(c.shareReceivedArguments); ok {
 		return s
 	}
 
-	var info []*collaboration.ReceivedShare
+	info := []*collaboration.ReceivedShare{}
+	suggests := []prompt.Suggest{}
+
 	b, err := executeCommand(shareListReceivedCommand())
-	if err != nil {
-		if err.Error() == "timeout" {
-			cacheSuggestions(c.shareReceivedArguments, []prompt.Suggest{})
+	if err == nil {
+		dec := gob.NewDecoder(&b)
+		if err := dec.Decode(&info); err != nil {
+			return []prompt.Suggest{}
 		}
-		return []prompt.Suggest{}
-	}
-	dec := gob.NewDecoder(&b)
-	if err := dec.Decode(&info); err != nil {
-		return []prompt.Suggest{}
+
+		for _, r := range info {
+			suggests = append(suggests, prompt.Suggest{Text: r.Share.Id.OpaqueId})
+		}
 	}
 
-	suggests := make([]prompt.Suggest, len(info))
-	for _, r := range info {
-		suggests = append(suggests, prompt.Suggest{Text: r.Share.Id.OpaqueId})
-	}
 	cacheSuggestions(c.shareReceivedArguments, suggests)
 	return suggests
 }
@@ -229,7 +213,7 @@ func executeCommand(cmd *command, args ...string) (bytes.Buffer, error) {
 			return b, err
 		}
 	case <-time.After(500 * time.Millisecond):
-		return b, errors.New("timeout")
+		return b, errors.New("command timed out")
 	}
 	return b, nil
 }
