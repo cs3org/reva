@@ -125,6 +125,7 @@ steps:
 - name: changelog
   image: golang:1.13
   commands:
+    - make release-deps && /go/bin/calens
     - make check-changelog-drone PR=$DRONE_PULL_REQUEST
   environment:
     GITHUB_API_TOKEN:
