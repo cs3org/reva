@@ -146,7 +146,7 @@ func (c *Completer) optionCompleter(args ...string) []prompt.Suggest {
 	}
 
 	var suggests []prompt.Suggest
-	for _, cmd := range c.Commands {
+	for _, cmd := range commands {
 		if cmd.Name == args[0] {
 			cmd.VisitAll(func(fl *flag.Flag) {
 				suggests = append(suggests, prompt.Suggest{Text: "-" + fl.Name, Description: fl.Usage})
@@ -241,7 +241,7 @@ func excludeOptions(args []string) ([]string, bool) {
 }
 
 func (c *Completer) getAllSuggests() []prompt.Suggest {
-	return convertCmdToSuggests(c.Commands)
+	return convertCmdToSuggests(commands)
 }
 
 func convertCmdToSuggests(cmds []*command) []prompt.Suggest {

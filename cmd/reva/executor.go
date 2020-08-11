@@ -22,11 +22,12 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 )
 
 // Executor provides exec command handler
 type Executor struct {
-	Commands []*command
+	Timeout int
 }
 
 // Execute provides execute commands
@@ -42,16 +43,33 @@ func (e *Executor) Execute(s string) {
 	args := strings.Split(s, " ")
 
 	action := args[0]
-	for _, v := range e.Commands {
+	for _, v := range commands {
 		if v.Name == action {
-			if err := v.Parse(args[1:]); err != nil {
+			var err error
+			if err = v.Parse(args[1:]); err != nil {
 				fmt.Println(err)
 				return
 			}
 			defer v.ResetFlags()
-			err := v.Action()
-			if err != nil {
-				fmt.Println(err)
+
+			// Provide a longer timeout for login as it requires user input
+			timeout := e.Timeout
+			if action == "login" {
+				timeout = 12
+			}
+
+			c := make(chan error, 1)
+			go func() {
+				c <- v.Action()
+			}()
+
+			select {
+			case err = <-c:
+				if err != nil {
+					fmt.Println(err)
+				}
+			case <-time.After(time.Duration(timeout * int(time.Second))):
+				fmt.Println("Error: executing the command timed out.")
 			}
 			return
 		}

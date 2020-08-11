@@ -31,6 +31,7 @@ var (
 	conf                                   *config
 	host                                   string
 	insecure, skipverify, disableargprompt bool
+	timeout                                int
 
 	helpCommandOutput string
 
@@ -75,6 +76,7 @@ func init() {
 	flag.BoolVar(&insecure, "insecure", false, "disables grpc transport security")
 	flag.BoolVar(&skipverify, "skip-verify", false, "whether a client verifies the server's certificate chain and host name.")
 	flag.BoolVar(&disableargprompt, "disable-arg-prompt", false, "whether to disable prompts for command arguments.")
+	flag.IntVar(&timeout, "timout", 3, "the timeout in seconds for executing the commands.")
 	flag.Parse()
 }
 
@@ -96,8 +98,8 @@ func main() {
 	}
 
 	generateMainUsage()
-	executor := Executor{Commands: commands}
-	completer := Completer{Commands: commands, DisableArgPrompt: disableargprompt}
+	executor := Executor{Timeout: timeout}
+	completer := Completer{DisableArgPrompt: disableargprompt}
 	completer.init()
 
 	if len(flag.Args()) > 0 {

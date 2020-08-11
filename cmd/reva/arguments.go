@@ -21,6 +21,7 @@ package main
 import (
 	"bytes"
 	"encoding/gob"
+	"errors"
 	"sync"
 	"time"
 
@@ -44,6 +45,9 @@ func (c *Completer) loginArgumentCompleter(args []string) []prompt.Suggest {
 	var types []string
 	b, err := executeCommand(loginCommand(), "-list")
 	if err != nil {
+		if err.Error() == "timeout" {
+			cacheSuggestions(c.loginArguments, []prompt.Suggest{})
+		}
 		return []prompt.Suggest{}
 	}
 	dec := gob.NewDecoder(&b)
@@ -73,6 +77,13 @@ func (c *Completer) lsArgumentCompleter(args []string, onlyDirs bool) []prompt.S
 	var info []*provider.ResourceInfo
 	b, err := executeCommand(lsCommand(), "/home")
 	if err != nil {
+		if err.Error() == "timeout" {
+			if onlyDirs {
+				cacheSuggestions(c.lsDirArguments, []prompt.Suggest{})
+			} else {
+				cacheSuggestions(c.lsArguments, []prompt.Suggest{})
+			}
+		}
 		return []prompt.Suggest{}
 	}
 	dec := gob.NewDecoder(&b)
@@ -103,6 +114,9 @@ func (c *Completer) ocmShareArgumentCompleter(args []string) []prompt.Suggest {
 	var info []*ocm.Share
 	b, err := executeCommand(ocmShareListCommand())
 	if err != nil {
+		if err.Error() == "timeout" {
+			cacheSuggestions(c.ocmShareArguments, []prompt.Suggest{})
+		}
 		return []prompt.Suggest{}
 	}
 	dec := gob.NewDecoder(&b)
@@ -126,6 +140,9 @@ func (c *Completer) ocmShareReceivedArgumentCompleter(args []string) []prompt.Su
 	var info []*ocm.ReceivedShare
 	b, err := executeCommand(ocmShareListReceivedCommand())
 	if err != nil {
+		if err.Error() == "timeout" {
+			cacheSuggestions(c.ocmShareReceivedArguments, []prompt.Suggest{})
+		}
 		return []prompt.Suggest{}
 	}
 	dec := gob.NewDecoder(&b)
@@ -149,6 +166,9 @@ func (c *Completer) shareArgumentCompleter(args []string) []prompt.Suggest {
 	var info []*collaboration.Share
 	b, err := executeCommand(shareListCommand())
 	if err != nil {
+		if err.Error() == "timeout" {
+			cacheSuggestions(c.shareArguments, []prompt.Suggest{})
+		}
 		return []prompt.Suggest{}
 	}
 	dec := gob.NewDecoder(&b)
@@ -172,6 +192,9 @@ func (c *Completer) shareReceivedArgumentCompleter(args []string) []prompt.Sugge
 	var info []*collaboration.ReceivedShare
 	b, err := executeCommand(shareListReceivedCommand())
 	if err != nil {
+		if err.Error() == "timeout" {
+			cacheSuggestions(c.shareReceivedArguments, []prompt.Suggest{})
+		}
 		return []prompt.Suggest{}
 	}
 	dec := gob.NewDecoder(&b)
@@ -189,12 +212,24 @@ func (c *Completer) shareReceivedArgumentCompleter(args []string) []prompt.Sugge
 
 func executeCommand(cmd *command, args ...string) (bytes.Buffer, error) {
 	var b bytes.Buffer
-	if err := cmd.Parse(args); err != nil {
+	var err error
+	if err = cmd.Parse(args); err != nil {
 		return b, err
 	}
 	defer cmd.ResetFlags()
-	if err := cmd.Action(&b); err != nil {
-		return b, err
+
+	c := make(chan error, 1)
+	go func() {
+		c <- cmd.Action(&b)
+	}()
+
+	select {
+	case err = <-c:
+		if err != nil {
+			return b, err
+		}
+	case <-time.After(500 * time.Millisecond):
+		return b, errors.New("timeout")
 	}
 	return b, nil
 }
