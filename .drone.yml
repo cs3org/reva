@@ -338,13 +338,17 @@ steps:
       - /drone/src/cmd/revad/revad -c storage-publiclink.toml &
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
-  - name: oC10APIAcceptanceTests
+  - name: clone-oC10-test-repos
     image: owncloudci/php:7.2
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 03c68e17ebab61da2ebb0a9f541a6cffac0908ac
+      - git checkout 5d8d76600f451b985662024f730cee1a40444c7f
+
+  - name: localAPIAcceptanceTestsOcStorage
+    image: owncloudci/php:7.2
+    commands:
       - make test-acceptance-api
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
@@ -354,7 +358,24 @@ steps:
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_OCIS: 'true'
       TEST_REVA: 'true'
-      BEHAT_FILTER_TAGS: '~@skipOnOcis&&~@skipOnOcis-OC-Storage&&~@preview-extension-required'
+      BEHAT_FILTER_TAGS: '~@skipOnOcis-OC-Storage'
+      PATH_TO_CORE: '/drone/src/tmp/testrunner'
+
+  - name: oC10APIAcceptanceTests
+    image: owncloudci/php:7.2
+    commands:
+      - cd /drone/src/tmp/testrunner
+      - make test-acceptance-api
+    environment:
+      TEST_SERVER_URL: 'http://revad-services:20080'
+      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/'
+      SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
+      TEST_EXTERNAL_USER_BACKENDS: 'true'
+      REVA_LDAP_HOSTNAME: 'ldap'
+      TEST_OCIS: 'true'
+      TEST_REVA: 'true'
+      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~@preview-extension-required'
+      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures.txt'
 
 services:
   - 'name': 'ldap'
