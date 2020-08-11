@@ -48,7 +48,7 @@ func (e *Executor) Execute(s string) {
 				fmt.Println(err)
 				return
 			}
-			defer v.Parse([]string{"-list=false"})
+			defer v.ResetFlags()
 			err := v.Action()
 			if err != nil {
 				fmt.Println(err)

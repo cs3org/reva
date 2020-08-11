@@ -31,6 +31,7 @@ type command struct {
 	Action      func(w ...io.Writer) error
 	Usage       func() string
 	Description func() string
+	ResetFlags  func()
 }
 
 // newCommand creates a new command
@@ -48,7 +49,8 @@ func newCommand(name string) *command {
 		Description: func() string {
 			return "TODO description"
 		},
-		FlagSet: fs,
+		FlagSet:    fs,
+		ResetFlags: func() {},
 	}
 	return cmd
 }

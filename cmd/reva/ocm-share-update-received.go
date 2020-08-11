@@ -32,6 +32,11 @@ func ocmShareUpdateReceivedCommand() *command {
 	cmd.Description = func() string { return "update a received OCM share" }
 	cmd.Usage = func() string { return "Usage: ocm-share-update-received [-flags] <share_id>" }
 	state := cmd.String("state", "pending", "the state of the share (pending, accepted or rejected)")
+
+	cmd.ResetFlags = func() {
+		*state = "pending"
+	}
+
 	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
 			return errors.New("Invalid arguments: " + cmd.Usage())

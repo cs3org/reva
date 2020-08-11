@@ -27,7 +27,6 @@ import (
 )
 
 func (c *Completer) loginArgumentCompleter(args []string) []prompt.Suggest {
-	var suggests []prompt.Suggest
 	var b bytes.Buffer
 	var types []string
 
@@ -35,7 +34,7 @@ func (c *Completer) loginArgumentCompleter(args []string) []prompt.Suggest {
 	if err := cmd.Parse([]string{"-list"}); err != nil {
 		return []prompt.Suggest{}
 	}
-	defer cmd.Parse([]string{})
+	defer cmd.ResetFlags()
 
 	if err := cmd.Action(&b); err != nil {
 		return []prompt.Suggest{}
@@ -46,6 +45,7 @@ func (c *Completer) loginArgumentCompleter(args []string) []prompt.Suggest {
 		return []prompt.Suggest{}
 	}
 
+	var suggests []prompt.Suggest
 	for _, t := range types {
 		suggests = append(suggests, prompt.Suggest{Text: t})
 	}
@@ -53,7 +53,6 @@ func (c *Completer) loginArgumentCompleter(args []string) []prompt.Suggest {
 }
 
 func (c *Completer) lsArgumentCompleter(args []string, onlyDirs bool) []prompt.Suggest {
-	var suggests []prompt.Suggest
 	var b bytes.Buffer
 	var info []*provider.ResourceInfo
 
@@ -70,6 +69,7 @@ func (c *Completer) lsArgumentCompleter(args []string, onlyDirs bool) []prompt.S
 		return []prompt.Suggest{}
 	}
 
+	suggests := []prompt.Suggest{prompt.Suggest{Text: "/home"}}
 	for _, r := range info {
 		if !onlyDirs || r.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 			suggests = append(suggests, prompt.Suggest{Text: r.Path})

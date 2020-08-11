@@ -31,6 +31,10 @@ func whoamiCommand() *command {
 	cmd.Description = func() string { return "tells who you are" }
 	tokenFlag := cmd.String("token", "", "access token to use")
 
+	cmd.ResetFlags = func() {
+		*tokenFlag = ""
+	}
+
 	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() != 0 {
 			cmd.PrintDefaults()

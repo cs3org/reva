@@ -22,6 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/c-bata/go-prompt"
 )
@@ -75,9 +76,6 @@ func init() {
 
 func main() {
 
-	fmt.Printf("reva-cli %s (rev-%s)\n", version, gitCommit)
-	fmt.Println("Please use `exit` or `Ctrl-D` to exit this program.")
-
 	if host == "" {
 		c, err := readConfig()
 		if err != nil {
@@ -95,6 +93,14 @@ func main() {
 
 	executor := Executor{Commands: commands}
 	completer := Completer{Commands: commands}
+
+	if len(flag.Args()) > 0 {
+		executor.Execute(strings.Join(flag.Args(), " "))
+		return
+	}
+
+	fmt.Printf("reva-cli %s (rev-%s)\n", version, gitCommit)
+	fmt.Println("Please use `exit` or `Ctrl-D` to exit this program.")
 
 	p := prompt.New(
 		executor.Execute,

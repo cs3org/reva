@@ -31,8 +31,11 @@ func importCommand() *command {
 	cmd := newCommand("import")
 	cmd.Description = func() string { return "import metadata" }
 	cmd.Usage = func() string { return "Usage: import [-flags] <user export folder>" }
-
 	namespaceFlag := cmd.String("n", "/", "CS3 namespace prefix")
+
+	cmd.ResetFlags = func() {
+		*namespaceFlag = "/"
+	}
 
 	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {

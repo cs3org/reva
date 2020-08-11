@@ -37,6 +37,11 @@ var loginCommand = func() *command {
 	cmd.Description = func() string { return "login into the reva server" }
 	cmd.Usage = func() string { return "Usage: login <type>" }
 	listFlag := cmd.Bool("list", false, "list available login methods")
+
+	cmd.ResetFlags = func() {
+		*listFlag = false
+	}
+
 	cmd.Action = func(w ...io.Writer) error {
 		if *listFlag {
 			// list available login methods

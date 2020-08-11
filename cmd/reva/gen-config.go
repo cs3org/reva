@@ -39,6 +39,11 @@ var genConfigSubCommand = func() *command {
 	dataDriverFlag := cmd.String("dd", "local", "'local' or 'owncloud', ('s3' or 'eos' are supported when providing a custom config)")
 	dataPathFlag := cmd.String("dp", "./data", "path to the data folder")
 
+	cmd.ResetFlags = func() {
+		*forceFlag, *configFlag, *credentialsStrategyFlag = false, "./revad.toml", "basic"
+		*dataDriverFlag, *dataPathFlag = "local", "./data"
+	}
+
 	cmd.Action = func(w ...io.Writer) error {
 		if !*forceFlag {
 			if _, err := os.Stat(*configFlag); err == nil {

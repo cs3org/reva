@@ -166,7 +166,11 @@ func (c *Completer) completeOptionArguments(d prompt.Document) ([]prompt.Suggest
 	case "-viewmode":
 		suggests = []prompt.Suggest{prompt.Suggest{Text: "view"}, prompt.Suggest{Text: "read"}, prompt.Suggest{Text: "write"}}
 	}
-	return prompt.FilterHasPrefix(suggests, d.GetWordBeforeCursor(), true), true
+
+	if len(suggests) > 0 {
+		return prompt.FilterHasPrefix(suggests, d.GetWordBeforeCursor(), true), true
+	}
+	return []prompt.Suggest{}, false
 }
 
 func getPreviousOption(d prompt.Document) (cmd, option string, ok bool) {

@@ -35,6 +35,10 @@ var genUsersSubCommand = func() *command {
 	forceFlag := cmd.Bool("f", false, "force")
 	usersFlag := cmd.String("c", "./users.json", "path to the usersfile")
 
+	cmd.ResetFlags = func() {
+		*forceFlag, *usersFlag = false, "./users.json"
+	}
+
 	cmd.Action = func(w ...io.Writer) error {
 		if !*forceFlag {
 			if _, err := os.Stat(*usersFlag); err == nil {

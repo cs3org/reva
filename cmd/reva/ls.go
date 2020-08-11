@@ -36,6 +36,10 @@ func lsCommand() *command {
 	longFlag := cmd.Bool("l", false, "long listing")
 	fullFlag := cmd.Bool("f", false, "shows full path")
 
+	cmd.ResetFlags = func() {
+		*longFlag, *fullFlag = false, false
+	}
+
 	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
 			return errors.New("Invalid arguments: " + cmd.Usage())

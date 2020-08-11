@@ -32,6 +32,10 @@ func shareUpdateCommand() *command {
 	cmd.Description = func() string { return "update a share" }
 	cmd.Usage = func() string { return "Usage: share-update [-flags] <share_id>" }
 	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor)")
+
+	cmd.ResetFlags = func() {
+		*rol = "viewer"
+	}
 	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
 			return errors.New("Invalid arguments: " + cmd.Usage())

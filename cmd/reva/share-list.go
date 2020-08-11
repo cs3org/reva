@@ -36,6 +36,11 @@ func shareListCommand() *command {
 	cmd.Description = func() string { return "list shares you manage" }
 	cmd.Usage = func() string { return "Usage: share-list [-flags]" }
 	resID := cmd.String("by-resource-id", "", "filter by resource id (storage_id:opaque_id)")
+
+	cmd.ResetFlags = func() {
+		*resID = ""
+	}
+
 	cmd.Action = func(w ...io.Writer) error {
 		ctx := getAuthContext()
 		shareClient, err := getClient()

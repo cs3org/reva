@@ -36,6 +36,10 @@ func openFileInAppProviderCommand() *command {
 	}
 	viewMode := cmd.String("viewmode", "view", "the view permissions, defaults to view")
 
+	cmd.ResetFlags = func() {
+		*viewMode = "view"
+	}
+
 	cmd.Action = func(w ...io.Writer) error {
 		ctx := getAuthContext()
 		if cmd.NArg() < 1 {

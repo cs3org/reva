@@ -39,6 +39,11 @@ func shareCreateCommand() *command {
 	grantee := cmd.String("grantee", "", "the grantee")
 	idp := cmd.String("idp", "", "the idp of the grantee, default to same idp as the user triggering the action")
 	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor)")
+
+	cmd.ResetFlags = func() {
+		*grantType, *grantee, *idp, *rol = "user", "", "", "viewer"
+	}
+
 	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
 			return errors.New("Invalid arguments: " + cmd.Usage())

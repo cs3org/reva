@@ -53,6 +53,11 @@ func uploadCommand() *command {
 	cmd.Usage = func() string { return "Usage: upload [-flags] <file_name> <remote_target>" }
 	disabletusFlag := cmd.Bool("disable-tus", false, "whether to disable tus protocol")
 	xsFlag := cmd.String("xs", "negotiate", "compute checksum")
+
+	cmd.ResetFlags = func() {
+		*disabletusFlag, *xsFlag = false, "negotiate"
+	}
+
 	cmd.Action = func(w ...io.Writer) error {
 		ctx := getAuthContext()
 
