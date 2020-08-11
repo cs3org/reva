@@ -23,29 +23,23 @@ import (
 	"encoding/gob"
 
 	"github.com/c-bata/go-prompt"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
 func (c *Completer) loginArgumentCompleter(args []string) []prompt.Suggest {
-	var b bytes.Buffer
 	var types []string
-
-	cmd := loginCommand()
-	if err := cmd.Parse([]string{"-list"}); err != nil {
+	b, err := executeCommand(loginCommand(), "-list")
+	if err != nil {
 		return []prompt.Suggest{}
 	}
-	defer cmd.ResetFlags()
-
-	if err := cmd.Action(&b); err != nil {
-		return []prompt.Suggest{}
-	}
-
 	dec := gob.NewDecoder(&b)
 	if err := dec.Decode(&types); err != nil {
 		return []prompt.Suggest{}
 	}
 
-	var suggests []prompt.Suggest
+	suggests := make([]prompt.Suggest, len(types))
 	for _, t := range types {
 		suggests = append(suggests, prompt.Suggest{Text: t})
 	}
@@ -53,17 +47,11 @@ func (c *Completer) loginArgumentCompleter(args []string) []prompt.Suggest {
 }
 
 func (c *Completer) lsArgumentCompleter(args []string, onlyDirs bool) []prompt.Suggest {
-	var b bytes.Buffer
 	var info []*provider.ResourceInfo
-
-	cmd := lsCommand()
-	if err := cmd.Parse([]string{"/home"}); err != nil {
+	b, err := executeCommand(lsCommand(), "/home")
+	if err != nil {
 		return []prompt.Suggest{}
 	}
-	if err := cmd.Action(&b); err != nil {
-		return []prompt.Suggest{}
-	}
-
 	dec := gob.NewDecoder(&b)
 	if err := dec.Decode(&info); err != nil {
 		return []prompt.Suggest{}
@@ -76,4 +64,88 @@ func (c *Completer) lsArgumentCompleter(args []string, onlyDirs bool) []prompt.S
 		}
 	}
 	return suggests
+}
+
+func (c *Completer) ocmShareArgumentCompleter(args []string) []prompt.Suggest {
+	var info []*ocm.Share
+	b, err := executeCommand(ocmShareListCommand())
+	if err != nil {
+		return []prompt.Suggest{}
+	}
+	dec := gob.NewDecoder(&b)
+	if err := dec.Decode(&info); err != nil {
+		return []prompt.Suggest{}
+	}
+
+	suggests := make([]prompt.Suggest, len(info))
+	for _, r := range info {
+		suggests = append(suggests, prompt.Suggest{Text: r.Id.OpaqueId})
+	}
+	return suggests
+}
+
+func (c *Completer) ocmShareReceivedArgumentCompleter(args []string) []prompt.Suggest {
+	var info []*ocm.ReceivedShare
+	b, err := executeCommand(ocmShareListReceivedCommand())
+	if err != nil {
+		return []prompt.Suggest{}
+	}
+	dec := gob.NewDecoder(&b)
+	if err := dec.Decode(&info); err != nil {
+		return []prompt.Suggest{}
+	}
+
+	suggests := make([]prompt.Suggest, len(info))
+	for _, r := range info {
+		suggests = append(suggests, prompt.Suggest{Text: r.Share.Id.OpaqueId})
+	}
+	return suggests
+}
+
+func (c *Completer) shareArgumentCompleter(args []string) []prompt.Suggest {
+	var info []*collaboration.Share
+	b, err := executeCommand(shareListCommand())
+	if err != nil {
+		return []prompt.Suggest{}
+	}
+	dec := gob.NewDecoder(&b)
+	if err := dec.Decode(&info); err != nil {
+		return []prompt.Suggest{}
+	}
+
+	suggests := make([]prompt.Suggest, len(info))
+	for _, r := range info {
+		suggests = append(suggests, prompt.Suggest{Text: r.Id.OpaqueId})
+	}
+	return suggests
+}
+
+func (c *Completer) shareReceivedArgumentCompleter(args []string) []prompt.Suggest {
+	var info []*collaboration.ReceivedShare
+	b, err := executeCommand(shareListReceivedCommand())
+	if err != nil {
+		return []prompt.Suggest{}
+	}
+	dec := gob.NewDecoder(&b)
+	if err := dec.Decode(&info); err != nil {
+		return []prompt.Suggest{}
+	}
+
+	suggests := make([]prompt.Suggest, len(info))
+	for _, r := range info {
+		suggests = append(suggests, prompt.Suggest{Text: r.Share.Id.OpaqueId})
+	}
+	return suggests
+}
+
+func executeCommand(cmd *command, args ...string) (bytes.Buffer, error) {
+	var b bytes.Buffer
+	if err := cmd.Parse(args); err != nil {
+		return b, err
+	}
+	defer cmd.ResetFlags()
+	if err := cmd.Action(&b); err != nil {
+		return b, err
+	}
+	return b, nil
 }

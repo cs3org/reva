@@ -21,28 +21,13 @@ package main
 import (
 	"fmt"
 	"io"
-	"strings"
 )
 
 var helpCommand = func() *command {
 	cmd := newCommand("help")
 	cmd.Description = func() string { return "help for using reva CLI" }
 	cmd.Action = func(w ...io.Writer) error {
-		n := 0
-		for _, cmd := range commands {
-			l := len(cmd.Name)
-			if l > n {
-				n = l
-			}
-		}
-
-		usage := "Command line interface to REVA:\n"
-		for _, cmd := range commands {
-			usage += fmt.Sprintf("%s%s%s\n", cmd.Name, strings.Repeat(" ", 4+(n-len(cmd.Name))), cmd.Description())
-		}
-		usage += fmt.Sprintf("%s%s%s\n", "help", strings.Repeat(" ", n), "help for using reva CLI")
-		usage += "\nThe REVA authors"
-		fmt.Println(usage)
+		fmt.Println(helpCommandOutput)
 		return nil
 	}
 	return cmd

@@ -100,27 +100,23 @@ func (c *Completer) argumentCompleter(args ...string) []prompt.Suggest {
 		}
 
 	case "ocm-share-remove", "ocm-share-update":
-		if len(args) == 1 {
-			suggests = []prompt.Suggest{prompt.Suggest{Text: "/home"}, prompt.Suggest{Text: "/a.txt"}}
-			return prompt.FilterHasPrefix(suggests, args[1], true)
+		if len(args) == 2 {
+			return prompt.FilterHasPrefix(c.ocmShareArgumentCompleter(args), args[1], true)
 		}
 
 	case "ocm-share-update-received":
-		if len(args) == 1 {
-			suggests = []prompt.Suggest{prompt.Suggest{Text: "/home"}, prompt.Suggest{Text: "/a.txt"}}
-			return prompt.FilterHasPrefix(suggests, args[1], true)
+		if len(args) == 2 {
+			return prompt.FilterHasPrefix(c.ocmShareReceivedArgumentCompleter(args), args[1], true)
 		}
 
 	case "share-remove", "share-update":
-		if len(args) == 1 {
-			suggests = []prompt.Suggest{prompt.Suggest{Text: "/home"}, prompt.Suggest{Text: "/a.txt"}}
-			return prompt.FilterHasPrefix(suggests, args[1], true)
+		if len(args) == 2 {
+			return prompt.FilterHasPrefix(c.shareArgumentCompleter(args), args[1], true)
 		}
 
 	case "share-update-received":
-		if len(args) == 1 {
-			suggests = []prompt.Suggest{prompt.Suggest{Text: "/home"}, prompt.Suggest{Text: "/a.txt"}}
-			return prompt.FilterHasPrefix(suggests, args[1], true)
+		if len(args) == 2 {
+			return prompt.FilterHasPrefix(c.shareReceivedArgumentCompleter(args), args[1], true)
 		}
 	}
 
@@ -152,25 +148,30 @@ func (c *Completer) completeOptionArguments(d prompt.Document) ([]prompt.Suggest
 	}
 
 	var suggests []prompt.Suggest
+	var match bool
 	switch option {
 	case "-cs":
 		suggests = []prompt.Suggest{prompt.Suggest{Text: "basic"}, prompt.Suggest{Text: "oidc"}}
+		match = true
 	case "-dd":
 		suggests = []prompt.Suggest{prompt.Suggest{Text: "local"}, prompt.Suggest{Text: "owncloud"}}
+		match = true
 	case "-type":
 		suggests = []prompt.Suggest{prompt.Suggest{Text: "user"}, prompt.Suggest{Text: "group"}}
+		match = true
 	case "-rol":
 		suggests = []prompt.Suggest{prompt.Suggest{Text: "viewer"}, prompt.Suggest{Text: "editor"}}
+		match = true
 	case "-state":
 		suggests = []prompt.Suggest{prompt.Suggest{Text: "pending"}, prompt.Suggest{Text: "accepted"}, prompt.Suggest{Text: "rejected"}}
+		match = true
 	case "-viewmode":
 		suggests = []prompt.Suggest{prompt.Suggest{Text: "view"}, prompt.Suggest{Text: "read"}, prompt.Suggest{Text: "write"}}
+		match = true
+	case "-c", "-grantee", "-idp", "-by-resource-id", "-xs", "-token":
+		match = true
 	}
-
-	if len(suggests) > 0 {
-		return prompt.FilterHasPrefix(suggests, d.GetWordBeforeCursor(), true), true
-	}
-	return []prompt.Suggest{}, false
+	return prompt.FilterHasPrefix(suggests, d.GetWordBeforeCursor(), true), match
 }
 
 func getPreviousOption(d prompt.Document) (cmd, option string, ok bool) {

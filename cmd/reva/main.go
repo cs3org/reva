@@ -32,6 +32,8 @@ var (
 	host                 string
 	insecure, skipverify bool
 
+	helpCommandOutput string
+
 	gitCommit, buildDate, version, goVersion string
 
 	commands = []*command{
@@ -64,6 +66,7 @@ var (
 		shareListReceivedCommand(),
 		shareUpdateReceivedCommand(),
 		openFileInAppProviderCommand(),
+		helpCommand(),
 	}
 )
 
@@ -91,6 +94,7 @@ func main() {
 		}
 	}
 
+	generateMainUsage()
 	executor := Executor{Commands: commands}
 	completer := Completer{Commands: commands}
 
@@ -109,4 +113,19 @@ func main() {
 		prompt.OptionPrefix(">> "),
 	)
 	p.Run()
+}
+
+func generateMainUsage() {
+	n := 0
+	for _, cmd := range commands {
+		l := len(cmd.Name)
+		if l > n {
+			n = l
+		}
+	}
+
+	helpCommandOutput = "Command line interface to REVA:\n"
+	for _, cmd := range commands {
+		helpCommandOutput += fmt.Sprintf("%s%s%s\n", cmd.Name, strings.Repeat(" ", 4+(n-len(cmd.Name))), cmd.Description())
+	}
 }
