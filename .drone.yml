@@ -248,7 +248,7 @@ steps:
     image: golang:1.13
     detach: true
     commands:
-      - cd /drone/src/drone/oc-integration-tests/
+      - cd /drone/src/tests/oc-integration-tests/drone/
       - /drone/src/cmd/revad/revad -c frontend.toml &
       - /drone/src/cmd/revad/revad -c gateway.toml &
       - /drone/src/cmd/revad/revad -c storage-home.toml &
@@ -288,7 +288,7 @@ steps:
     image: golang:1.13
     detach: true
     commands:
-      - cd /drone/src/drone/oc-integration-tests/
+      - cd /drone/src/tests/oc-integration-tests/drone/
       - /drone/src/cmd/revad/revad -c frontend.toml &
       - /drone/src/cmd/revad/revad -c gateway.toml &
       - /drone/src/cmd/revad/revad -c storage-home.toml &
@@ -329,7 +329,7 @@ steps:
     image: golang:1.13
     detach: true
     commands:
-      - cd /drone/src/drone/oc-integration-tests/
+      - cd /drone/src/tests/oc-integration-tests/drone/
       - /drone/src/cmd/revad/revad -c frontend.toml &
       - /drone/src/cmd/revad/revad -c gateway.toml &
       - /drone/src/cmd/revad/revad -c shares.toml &
