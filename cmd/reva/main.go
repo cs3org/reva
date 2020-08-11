@@ -28,9 +28,9 @@ import (
 )
 
 var (
-	conf                 *config
-	host                 string
-	insecure, skipverify bool
+	conf                                   *config
+	host                                   string
+	insecure, skipverify, disableargprompt bool
 
 	helpCommandOutput string
 
@@ -74,6 +74,7 @@ func init() {
 	flag.StringVar(&host, "host", "", "address of the GRPC gateway host")
 	flag.BoolVar(&insecure, "insecure", false, "disables grpc transport security")
 	flag.BoolVar(&skipverify, "skip-verify", false, "whether a client verifies the server's certificate chain and host name.")
+	flag.BoolVar(&disableargprompt, "disable-arg-prompt", false, "whether to disable prompts for command arguments.")
 	flag.Parse()
 }
 
@@ -96,7 +97,8 @@ func main() {
 
 	generateMainUsage()
 	executor := Executor{Commands: commands}
-	completer := Completer{Commands: commands}
+	completer := Completer{Commands: commands, DisableArgPrompt: disableargprompt}
+	completer.init()
 
 	if len(flag.Args()) > 0 {
 		executor.Execute(strings.Join(flag.Args(), " "))

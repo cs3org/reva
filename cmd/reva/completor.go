@@ -27,7 +27,22 @@ import (
 
 // Completer provides completion command handler
 type Completer struct {
-	Commands []*command
+	Commands                  []*command
+	DisableArgPrompt          bool
+	loginArguments            *argumentCompleter
+	lsArguments               *argumentCompleter
+	lsDirArguments            *argumentCompleter
+	ocmShareArguments         *argumentCompleter
+	ocmShareReceivedArguments *argumentCompleter
+	shareArguments            *argumentCompleter
+	shareReceivedArguments    *argumentCompleter
+}
+
+func (c *Completer) init() {
+	c.loginArguments, c.lsArguments = new(argumentCompleter), new(argumentCompleter)
+	c.ocmShareArguments, c.ocmShareReceivedArguments = new(argumentCompleter), new(argumentCompleter)
+	c.shareArguments, c.shareReceivedArguments = new(argumentCompleter), new(argumentCompleter)
+	c.lsDirArguments = new(argumentCompleter)
 }
 
 // Complete provides completion to prompt
@@ -53,18 +68,20 @@ func (c *Completer) Complete(d prompt.Document) []prompt.Suggest {
 		return []prompt.Suggest{}
 	}
 
+	// TODO(ishank011): check if we can reuse the results from these calls in executor
 	return c.argumentCompleter(commandArgs...)
 }
 
 func (c *Completer) argumentCompleter(args ...string) []prompt.Suggest {
 	if len(args) <= 1 {
 		return prompt.FilterHasPrefix(c.getAllSuggests(), args[0], true)
+	} else if c.DisableArgPrompt {
+		return []prompt.Suggest{}
 	}
 
-	action := args[0]
 	var suggests []prompt.Suggest
 
-	switch action {
+	switch args[0] {
 	case "gen":
 		suggests = convertCmdToSuggests([]*command{
 			genConfigSubCommand(),

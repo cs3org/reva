@@ -57,5 +57,5 @@ func (e *Executor) Execute(s string) {
 		}
 	}
 
-	fmt.Println("Invalid command")
+	fmt.Println("Invalid command. Use \"help\" to list the available commands.")
 }

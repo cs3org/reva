@@ -21,6 +21,8 @@ package main
 import (
 	"bytes"
 	"encoding/gob"
+	"sync"
+	"time"
 
 	"github.com/c-bata/go-prompt"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -28,7 +30,17 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
+type argumentCompleter struct {
+	suggestions []prompt.Suggest
+	expiration  time.Time
+	sync.RWMutex
+}
+
 func (c *Completer) loginArgumentCompleter(args []string) []prompt.Suggest {
+	if s, ok := checkCache(c.loginArguments); ok {
+		return s
+	}
+
 	var types []string
 	b, err := executeCommand(loginCommand(), "-list")
 	if err != nil {
@@ -43,10 +55,21 @@ func (c *Completer) loginArgumentCompleter(args []string) []prompt.Suggest {
 	for _, t := range types {
 		suggests = append(suggests, prompt.Suggest{Text: t})
 	}
+	cacheSuggestions(c.loginArguments, suggests)
 	return suggests
 }
 
 func (c *Completer) lsArgumentCompleter(args []string, onlyDirs bool) []prompt.Suggest {
+	if onlyDirs {
+		if s, ok := checkCache(c.lsDirArguments); ok {
+			return s
+		}
+	} else {
+		if s, ok := checkCache(c.lsArguments); ok {
+			return s
+		}
+	}
+
 	var info []*provider.ResourceInfo
 	b, err := executeCommand(lsCommand(), "/home")
 	if err != nil {
@@ -63,10 +86,20 @@ func (c *Completer) lsArgumentCompleter(args []string, onlyDirs bool) []prompt.S
 			suggests = append(suggests, prompt.Suggest{Text: r.Path})
 		}
 	}
+
+	if onlyDirs {
+		cacheSuggestions(c.lsDirArguments, suggests)
+	} else {
+		cacheSuggestions(c.lsArguments, suggests)
+	}
 	return suggests
 }
 
 func (c *Completer) ocmShareArgumentCompleter(args []string) []prompt.Suggest {
+	if s, ok := checkCache(c.ocmShareArguments); ok {
+		return s
+	}
+
 	var info []*ocm.Share
 	b, err := executeCommand(ocmShareListCommand())
 	if err != nil {
@@ -81,10 +114,15 @@ func (c *Completer) ocmShareArgumentCompleter(args []string) []prompt.Suggest {
 	for _, r := range info {
 		suggests = append(suggests, prompt.Suggest{Text: r.Id.OpaqueId})
 	}
+	cacheSuggestions(c.ocmShareArguments, suggests)
 	return suggests
 }
 
 func (c *Completer) ocmShareReceivedArgumentCompleter(args []string) []prompt.Suggest {
+	if s, ok := checkCache(c.ocmShareReceivedArguments); ok {
+		return s
+	}
+
 	var info []*ocm.ReceivedShare
 	b, err := executeCommand(ocmShareListReceivedCommand())
 	if err != nil {
@@ -99,10 +137,15 @@ func (c *Completer) ocmShareReceivedArgumentCompleter(args []string) []prompt.Su
 	for _, r := range info {
 		suggests = append(suggests, prompt.Suggest{Text: r.Share.Id.OpaqueId})
 	}
+	cacheSuggestions(c.ocmShareReceivedArguments, suggests)
 	return suggests
 }
 
 func (c *Completer) shareArgumentCompleter(args []string) []prompt.Suggest {
+	if s, ok := checkCache(c.shareArguments); ok {
+		return s
+	}
+
 	var info []*collaboration.Share
 	b, err := executeCommand(shareListCommand())
 	if err != nil {
@@ -117,10 +160,15 @@ func (c *Completer) shareArgumentCompleter(args []string) []prompt.Suggest {
 	for _, r := range info {
 		suggests = append(suggests, prompt.Suggest{Text: r.Id.OpaqueId})
 	}
+	cacheSuggestions(c.shareArguments, suggests)
 	return suggests
 }
 
 func (c *Completer) shareReceivedArgumentCompleter(args []string) []prompt.Suggest {
+	if s, ok := checkCache(c.shareReceivedArguments); ok {
+		return s
+	}
+
 	var info []*collaboration.ReceivedShare
 	b, err := executeCommand(shareListReceivedCommand())
 	if err != nil {
@@ -135,6 +183,7 @@ func (c *Completer) shareReceivedArgumentCompleter(args []string) []prompt.Sugge
 	for _, r := range info {
 		suggests = append(suggests, prompt.Suggest{Text: r.Share.Id.OpaqueId})
 	}
+	cacheSuggestions(c.shareReceivedArguments, suggests)
 	return suggests
 }
 
@@ -148,4 +197,20 @@ func executeCommand(cmd *command, args ...string) (bytes.Buffer, error) {
 		return b, err
 	}
 	return b, nil
+}
+
+func checkCache(a *argumentCompleter) ([]prompt.Suggest, bool) {
+	a.RLock()
+	defer a.RUnlock()
+	if time.Now().Before(a.expiration) {
+		return a.suggestions, true
+	}
+	return nil, false
+}
+
+func cacheSuggestions(a *argumentCompleter, suggests []prompt.Suggest) {
+	a.Lock()
+	a.suggestions = suggests
+	a.expiration = time.Now().Add(time.Second * 10)
+	a.Unlock()
 }
