@@ -344,7 +344,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 5d8d76600f451b985662024f730cee1a40444c7f
+      - git checkout ee50968dbf7dee50737cd3f4e67a527a1e2fbc94
 
   - name: localAPIAcceptanceTestsOcStorage
     image: owncloudci/php:7.2
