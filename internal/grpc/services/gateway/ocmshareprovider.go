@@ -308,18 +308,12 @@ func (s *svc) createWebdavReference(ctx context.Context, share *ocm.Share) (*rpc
 		return status.NewInternal(ctx, err, "error updating received share"), nil
 	}
 
-	parts := strings.Split(share.Id.OpaqueId, ":")
-	if len(parts) < 2 {
-		err := errors.New("resource ID does not follow the layout id:name ")
-		return status.NewInternal(ctx, err, "error decoding resource ID"), nil
-	}
-
 	// reference path is the home path + some name on the corresponding
 	// mesh provider (webdav:/home/MyShares/x@webdav_endpoint)
 	// It is the responsibility of the gateway to resolve these references and merge the response back
 	// from the main request.
 	// TODO(labkode): the name of the share should be the filename it points to by default.
-	refPath := path.Join(homeRes.Path, s.c.ShareFolder, path.Base(parts[1]))
+	refPath := path.Join(homeRes.Path, s.c.ShareFolder, share.Name)
 	log.Info().Msg("mount path will be:" + refPath)
 
 	createRefReq := &provider.CreateReferenceRequest{

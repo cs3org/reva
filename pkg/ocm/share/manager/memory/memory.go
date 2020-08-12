@@ -124,7 +124,6 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 			return nil, errors.New("json: owner of resource not provided")
 		}
 		userID = owner
-		id += ":" + name
 	} else {
 		userID = user.ContextMustGetUser(ctx).GetId()
 	}
@@ -153,6 +152,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 		Id: &ocm.ShareId{
 			OpaqueId: id,
 		},
+		Name:        name,
 		ResourceId:  md,
 		Permissions: g.Permissions,
 		Grantee:     g.Grantee,

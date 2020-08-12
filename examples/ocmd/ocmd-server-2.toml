@@ -1,5 +1,4 @@
 [shared]
-jwt_secret = "Pive-Fumkiu4"
 gatewaysvc = "localhost:17000"
 
 [grpc]
@@ -18,7 +17,6 @@ ocminvitemanagersvc = "localhost:17000"
 ocmproviderauthorizersvc = "localhost:17000"
 commit_share_to_storage_grant = false
 datagateway = "http://localhost:17001/data"
-transfer_shared_secret = "replace-me-with-a-transfer-secret" # for direct uploads
 transfer_expires = 6 # give it a moment
 
 [grpc.services.authregistry]

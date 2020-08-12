@@ -59,12 +59,14 @@ func (s *svc) doTusPut(w http.ResponseWriter, r *http.Request) {
 
 	fp := r.Header.Get("File-Path")
 	if fp == "" {
+		log.Error().Msg("File-Path header not present")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	length, err := strconv.ParseInt(r.Header.Get("Content-Length"), 10, 64)
+	length, err := strconv.ParseInt(r.Header.Get("File-Size"), 10, 64)
 	if err != nil {
+		log.Error().Msg("File-Size header not present")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
