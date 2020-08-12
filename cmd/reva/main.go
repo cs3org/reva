@@ -23,28 +23,22 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/c-bata/go-prompt"
 )
 
 var (
-	conf *config
+	conf                                   *config
+	host                                   string
+	insecure, skipverify, disableargprompt bool
+	timeout                                int
+
+	helpCommandOutput string
 
 	gitCommit, buildDate, version, goVersion string
 
-	insecure, skipverify bool
-)
-
-func init() {
-	flag.BoolVar(&insecure, "insecure", false, "disables grpc transport security")
-	flag.BoolVar(&skipverify, "skip-verify", false, "whether a client verifies the server's certificate chain and host name.")
-	flag.Parse()
-
-}
-
-func main() {
-
-	cmds := []*command{
+	commands = []*command{
 		versionCommand(),
-		configureCommand(),
 		loginCommand(),
 		whoamiCommand(),
 		importCommand(),
@@ -73,60 +67,69 @@ func main() {
 		shareListReceivedCommand(),
 		shareUpdateReceivedCommand(),
 		openFileInAppProviderCommand(),
+		helpCommand(),
 	}
+)
 
-	mainUsage := createMainUsage(cmds)
+func init() {
+	flag.StringVar(&host, "host", "", "address of the GRPC gateway host")
+	flag.BoolVar(&insecure, "insecure", false, "disables grpc transport security")
+	flag.BoolVar(&skipverify, "skip-verify", false, "whether a client verifies the server's certificate chain and host name.")
+	flag.BoolVar(&disableargprompt, "disable-arg-prompt", false, "whether to disable prompts for command arguments.")
+	flag.IntVar(&timeout, "timout", -1, "the timeout in seconds for executing the commands, -1 means no timeout")
+	flag.Parse()
+}
 
-	// Verify that a subcommand has been provided
-	if len(flag.Args()) < 1 {
-		fmt.Println(mainUsage)
-		os.Exit(1)
-	}
+func main() {
 
-	// Verify a configuration file exists.
-	// If if does not, create one
-	c, err := readConfig()
-	if err != nil && flag.Args()[0] != "configure" {
-		fmt.Println("reva is not initialized, run \"reva configure\"")
-		os.Exit(1)
-	} else if flag.Args()[0] != "configure" {
+	if host == "" {
+		c, err := readConfig()
+		if err != nil {
+			fmt.Println("reva is not configured, please pass the \"-host\" flag")
+			os.Exit(1)
+		}
 		conf = c
-	}
-
-	// Run command
-	action := flag.Args()[0]
-	for _, v := range cmds {
-		if v.Name == action {
-			if err := v.Parse(flag.Args()[1:]); err != nil {
-				fmt.Println(err)
-				os.Exit(1)
-			}
-			err := v.Action()
-			if err != nil {
-				fmt.Println(err)
-				os.Exit(1)
-			}
-			os.Exit(0)
+	} else {
+		conf = &config{host}
+		if err := writeConfig(conf); err != nil {
+			fmt.Println("error writing to config file")
+			os.Exit(1)
 		}
 	}
 
-	fmt.Println(mainUsage)
-	os.Exit(1)
+	generateMainUsage()
+	executor := Executor{Timeout: timeout}
+	completer := Completer{DisableArgPrompt: disableargprompt}
+	completer.init()
+
+	if len(flag.Args()) > 0 {
+		executor.Execute(strings.Join(flag.Args(), " "))
+		return
+	}
+
+	fmt.Printf("reva-cli %s (rev-%s)\n", version, gitCommit)
+	fmt.Println("Please use `exit` or `Ctrl-D` to exit this program.")
+
+	p := prompt.New(
+		executor.Execute,
+		completer.Complete,
+		prompt.OptionTitle("reva-cli"),
+		prompt.OptionPrefix(">> "),
+	)
+	p.Run()
 }
 
-func createMainUsage(cmds []*command) string {
+func generateMainUsage() {
 	n := 0
-	for _, cmd := range cmds {
+	for _, cmd := range commands {
 		l := len(cmd.Name)
 		if l > n {
 			n = l
 		}
 	}
 
-	usage := "Command line interface to REVA\n\n"
-	for _, cmd := range cmds {
-		usage += fmt.Sprintf("%s%s%s\n", cmd.Name, strings.Repeat(" ", 4+(n-len(cmd.Name))), cmd.Description())
+	helpCommandOutput = "Command line interface to REVA:\n"
+	for _, cmd := range commands {
+		helpCommandOutput += fmt.Sprintf("%s%s%s\n", cmd.Name, strings.Repeat(" ", 4+(n-len(cmd.Name))), cmd.Description())
 	}
-	usage += "\nThe REVA authors"
-	return usage
 }

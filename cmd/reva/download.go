@@ -25,22 +25,22 @@ import (
 	"os"
 	"time"
 
-	"github.com/cs3org/reva/internal/http/services/datagateway"
-
 	"github.com/cheggaaa/pb"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/utils"
+	"github.com/pkg/errors"
 )
 
 func downloadCommand() *command {
 	cmd := newCommand("download")
-	cmd.Description = func() string { return "download a remote file into the local filesystem" }
+	cmd.Description = func() string { return "download a remote file to the local filesystem" }
 	cmd.Usage = func() string { return "Usage: download [-flags] <remote_file> <local_file>" }
-	cmd.Action = func() error {
+	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 2 {
-			fmt.Println(cmd.Usage())
-			os.Exit(1)
+			return errors.New("Invalid arguments: " + cmd.Usage())
 		}
 
 		remote := cmd.Args()[0]
@@ -111,7 +111,12 @@ func downloadCommand() *command {
 			return err
 		}
 
-		fd, err := os.OpenFile(local, os.O_CREATE|os.O_WRONLY, 0644)
+		absPath, err := utils.ResolvePath(local)
+		if err != nil {
+			return err
+		}
+
+		fd, err := os.OpenFile(absPath, os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			return err
 		}

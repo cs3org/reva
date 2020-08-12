@@ -20,12 +20,13 @@ package main
 
 import (
 	"fmt"
+	"io"
 )
 
 var versionCommand = func() *command {
 	cmd := newCommand("version")
 	cmd.Description = func() string { return "prints version information for this tool" }
-	cmd.Action = func() error {
+	cmd.Action = func(w ...io.Writer) error {
 		msg := "version=%s "
 		msg += "commit=%s "
 		msg += "go_version=%s "

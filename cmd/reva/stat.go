@@ -20,20 +20,20 @@ package main
 
 import (
 	"fmt"
-	"os"
+	"io"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/pkg/errors"
 )
 
 func statCommand() *command {
 	cmd := newCommand("stat")
 	cmd.Description = func() string { return "get the metadata for a file or folder" }
 	cmd.Usage = func() string { return "Usage: stat [-flags] <file_name>" }
-	cmd.Action = func() error {
+	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
-			fmt.Println(cmd.Usage())
-			os.Exit(1)
+			return errors.New("Invalid arguments: " + cmd.Usage())
 		}
 
 		fn := cmd.Args()[0]

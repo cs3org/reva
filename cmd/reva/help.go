@@ -19,27 +19,15 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
-	"os"
+	"io"
 )
 
-var configureCommand = func() *command {
-	cmd := newCommand("configure")
-	cmd.Description = func() string { return "configure the reva client" }
-	cmd.Action = func() error {
-		reader := bufio.NewReader(os.Stdin)
-		fmt.Print("host: ")
-		text, err := read(reader)
-		if err != nil {
-			return err
-		}
-
-		c := &config{Host: text}
-		if err := writeConfig(c); err != nil {
-			panic(err)
-		}
-		fmt.Println("config saved in ", getConfigFile())
+var helpCommand = func() *command {
+	cmd := newCommand("help")
+	cmd.Description = func() string { return "help for using reva CLI" }
+	cmd.Action = func(w ...io.Writer) error {
+		fmt.Println(helpCommandOutput)
 		return nil
 	}
 	return cmd

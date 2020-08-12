@@ -19,6 +19,8 @@
 package main
 
 import (
+	"encoding/gob"
+	"io"
 	"os"
 	"time"
 
@@ -31,7 +33,7 @@ func ocmShareListReceivedCommand() *command {
 	cmd := newCommand("ocm-share-list-received")
 	cmd.Description = func() string { return "list OCM shares you have received" }
 	cmd.Usage = func() string { return "Usage: ocm-share-list-received [-flags]" }
-	cmd.Action = func() error {
+	cmd.Action = func(w ...io.Writer) error {
 		ctx := getAuthContext()
 		shareClient, err := getClient()
 		if err != nil {
@@ -49,15 +51,22 @@ func ocmShareListReceivedCommand() *command {
 			return formatError(shareRes.Status)
 		}
 
-		t := table.NewWriter()
-		t.SetOutputMirror(os.Stdout)
-		t.AppendHeader(table.Row{"#", "Owner.Idp", "Owner.OpaqueId", "ResourceId", "Permissions", "Type", "Grantee.Idp", "Grantee.OpaqueId", "Created", "Updated", "State"})
-		for _, s := range shareRes.Shares {
-			t.AppendRows([]table.Row{
-				{s.Share.Id.OpaqueId, s.Share.Owner.Idp, s.Share.Owner.OpaqueId, s.Share.ResourceId.String(), s.Share.Permissions.String(), s.Share.Grantee.Type.String(), s.Share.Grantee.Id.Idp, s.Share.Grantee.Id.OpaqueId, time.Unix(int64(s.Share.Ctime.Seconds), 0), time.Unix(int64(s.Share.Mtime.Seconds), 0), s.State.String()},
-			})
+		if len(w) == 0 {
+			t := table.NewWriter()
+			t.SetOutputMirror(os.Stdout)
+			t.AppendHeader(table.Row{"#", "Owner.Idp", "Owner.OpaqueId", "ResourceId", "Permissions", "Type", "Grantee.Idp", "Grantee.OpaqueId", "Created", "Updated", "State"})
+			for _, s := range shareRes.Shares {
+				t.AppendRows([]table.Row{
+					{s.Share.Id.OpaqueId, s.Share.Owner.Idp, s.Share.Owner.OpaqueId, s.Share.ResourceId.String(), s.Share.Permissions.String(), s.Share.Grantee.Type.String(), s.Share.Grantee.Id.Idp, s.Share.Grantee.Id.OpaqueId, time.Unix(int64(s.Share.Ctime.Seconds), 0), time.Unix(int64(s.Share.Mtime.Seconds), 0), s.State.String()},
+				})
+			}
+			t.Render()
+		} else {
+			enc := gob.NewEncoder(w[0])
+			if err := enc.Encode(shareRes.Shares); err != nil {
+				return err
+			}
 		}
-		t.Render()
 		return nil
 	}
 	return cmd
