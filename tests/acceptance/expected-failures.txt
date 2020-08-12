@@ -900,7 +900,7 @@ apiWebdavUpload2/uploadFileUsingNewChunking.feature:137
 apiWebdavUpload2/uploadFileUsingNewChunking.feature:157
 apiWebdavUpload2/uploadFileUsingNewChunking.feature:158
 #
-# https://github.com/owncloud/ocis-reva/issues/17  uploading with old-chunking does not work
+# https://github.com/owncloud/ocis-reva/issues/17 uploading with old-chunking does not work
 apiWebdavUpload2/uploadFileUsingOldChunking.feature:13
 apiWebdavUpload2/uploadFileUsingOldChunking.feature:26
 apiWebdavUpload2/uploadFileUsingOldChunking.feature:35

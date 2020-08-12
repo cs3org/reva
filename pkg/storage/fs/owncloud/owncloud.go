@@ -688,14 +688,32 @@ func readOrCreateID(ctx context.Context, np string, conn redis.Conn) string {
 }
 
 func (fs *ocfs) getPath(ctx context.Context, id *provider.ResourceId) (string, error) {
+	log := appctx.GetLogger(ctx)
 	c := fs.pool.Get()
 	defer c.Close()
 	fs.scanFiles(ctx, c)
 	np, err := redis.String(c.Do("GET", id.OpaqueId))
 	if err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).Interface("id", id).Msg("error looking up fileid")
-		return "", err
+		return "", errtypes.NotFound(id.OpaqueId)
 	}
+
+	idFromXattr, err := xattr.Get(np, idAttribute)
+	if err != nil {
+		return "", errtypes.NotFound(id.OpaqueId)
+	}
+
+	uid, err := uuid.FromBytes(idFromXattr)
+	if err != nil {
+		log.Error().Err(err).Msg("error parsing uuid")
+	}
+
+	if uid.String() != id.OpaqueId {
+		if _, err := c.Do("DEL", id.OpaqueId); err != nil {
+			return "", err
+		}
+		return "", errtypes.NotFound(id.OpaqueId)
+	}
+
 	return np, nil
 }
 
@@ -1490,6 +1508,9 @@ func (fs *ocfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (e
 func (fs *ocfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
+		if _, ok := err.(errtypes.IsNotFound); ok {
+			return nil, err
+		}
 		return nil, errors.Wrap(err, "ocfs: error resolving reference")
 	}
 	p := fs.unwrap(ctx, np)
