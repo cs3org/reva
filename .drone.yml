@@ -125,6 +125,7 @@ steps:
 - name: changelog
   image: golang:1.13
   commands:
+    - make release-deps && /go/bin/calens > /dev/null
     - make check-changelog-drone PR=$DRONE_PULL_REQUEST
   environment:
     GITHUB_API_TOKEN:
@@ -344,7 +345,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 5d8d76600f451b985662024f730cee1a40444c7f
+      - git checkout aa87e9c07c5558387c37921d850e8d8e99d6cd45
 
   - name: localAPIAcceptanceTestsOcStorage
     image: owncloudci/php:7.2

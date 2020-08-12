@@ -20,6 +20,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -29,12 +30,16 @@ import (
 var genUsersSubCommand = func() *command {
 	cmd := newCommand("users")
 	cmd.Description = func() string { return "will create a users.json file with demo users" }
-	cmd.Usage = func() string { return "Usage: gen users" }
+	cmd.Usage = func() string { return "Usage: gen users [-flags]" }
 
 	forceFlag := cmd.Bool("f", false, "force")
 	usersFlag := cmd.String("c", "./users.json", "path to the usersfile")
 
-	cmd.Action = func() error {
+	cmd.ResetFlags = func() {
+		*forceFlag, *usersFlag = false, "./users.json"
+	}
+
+	cmd.Action = func(w ...io.Writer) error {
 		if !*forceFlag {
 			if _, err := os.Stat(*usersFlag); err == nil {
 				// file exists, overwrite?
@@ -42,14 +47,10 @@ var genUsersSubCommand = func() *command {
 				var r string
 				_, err := fmt.Scanln(&r)
 				if err != nil || "y" != strings.ToLower(r[:1]) {
-					fmt.Fprintf(os.Stderr, "aborting\n")
-					os.Exit(1)
+					return err
 				}
-			} else if os.IsNotExist(err) {
-				// file does not exist, go on
-			} else {
-				fmt.Fprintf(os.Stderr, "io error %v\n", err)
-				os.Exit(1)
+			} else if !os.IsNotExist(err) {
+				return err
 			}
 		}
 		if _, err := os.Stat(*usersFlag); os.IsNotExist(err) {

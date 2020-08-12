@@ -19,12 +19,14 @@
 package main
 
 import (
+	"encoding/gob"
 	"fmt"
-	"os"
+	"io"
 	"path"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/pkg/errors"
 )
 
 func lsCommand() *command {
@@ -34,10 +36,13 @@ func lsCommand() *command {
 	longFlag := cmd.Bool("l", false, "long listing")
 	fullFlag := cmd.Bool("f", false, "shows full path")
 
-	cmd.Action = func() error {
+	cmd.ResetFlags = func() {
+		*longFlag, *fullFlag = false, false
+	}
+
+	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
-			fmt.Println(cmd.Usage())
-			os.Exit(1)
+			return errors.New("Invalid arguments: " + cmd.Usage())
 		}
 
 		fn := cmd.Args()[0]
@@ -67,13 +72,22 @@ func lsCommand() *command {
 			if !*fullFlag {
 				p = path.Base(info.Path)
 			}
-
-			if *longFlag {
-				fmt.Printf("%s %d %d %v %s\n", info.Type, info.Mtime, info.Size, info.Id, p)
-			} else {
-				fmt.Println(p)
+			if len(w) == 0 {
+				if *longFlag {
+					fmt.Printf("%s %d %d %v %s\n", info.Type, info.Mtime, info.Size, info.Id, p)
+				} else {
+					fmt.Println(p)
+				}
 			}
 		}
+
+		if len(w) != 0 {
+			enc := gob.NewEncoder(w[0])
+			if err := enc.Encode(infos); err != nil {
+				return err
+			}
+		}
+
 		return nil
 	}
 	return cmd

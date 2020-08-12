@@ -404,6 +404,16 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, uid, gid string, inode 
 	return c.parseFileInfo(stdout)
 }
 
+// GetFileInfoByFXID returns the FileInfo by the given file id in hexadecimal
+func (c *Client) GetFileInfoByFXID(ctx context.Context, uid, gid string, fxid string) (*FileInfo, error) {
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", uid, gid, "file", "info", fmt.Sprintf("fxid:%s", fxid), "-m")
+	stdout, _, err := c.executeEOS(ctx, cmd)
+	if err != nil {
+		return nil, err
+	}
+	return c.parseFileInfo(stdout)
+}
+
 // SetAttr sets an extended attributes on a path.
 func (c *Client) SetAttr(ctx context.Context, uid, gid string, attr *Attribute, recursive bool, path string) error {
 	if !attr.isValid() {

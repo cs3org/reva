@@ -19,11 +19,11 @@
 package main
 
 import (
-	"fmt"
-	"os"
+	"io"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/pkg/errors"
 )
 
 func recycleRestoreCommand() *command {
@@ -31,10 +31,9 @@ func recycleRestoreCommand() *command {
 	cmd.Description = func() string { return "restore a recycle bin item" }
 	cmd.Usage = func() string { return "Usage: recycle-restore [-flags] key" }
 
-	cmd.Action = func() error {
+	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
-			fmt.Println(cmd.Usage())
-			os.Exit(1)
+			return errors.New("Invalid arguments: " + cmd.Usage())
 		}
 
 		key := cmd.Args()[0]

@@ -33,10 +33,10 @@ basic = "localhost:19000"
 driver = "static"
 
 [grpc.services.storageregistry.drivers.static]
-home_provider = "/"
+home_provider = "/home"
 
 [grpc.services.storageregistry.drivers.static.rules]
-"/" = "localhost:19000"
+"/home" = "localhost:19000"
 "123e4567-e89b-12d3-a456-426655440000" = "localhost:19000"
 
 [grpc.services.usershareprovider]
@@ -84,7 +84,7 @@ driver = "static"
 
 [grpc.services.storageprovider]
 driver = "localhome"
-mount_path = "/"
+mount_path = "/home"
 mount_id = "123e4567-e89b-12d3-a456-426655440000"
 expose_data_server = true
 data_server_url = "http://localhost:19001/data"

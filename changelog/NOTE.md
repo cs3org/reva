@@ -1,194 +1,132 @@
-Changelog for reva 1.0.0 (2020-07-28)
+Changelog for reva 1.1.0 (2020-08-11)
 =======================================
 
-The following sections list the changes in reva 1.0.0 relevant to
+The following sections list the changes in reva 1.1.0 relevant to
 reva users. The changes are ordered by importance.
 
 Summary
 -------
 
- * Fix #941: Fix initialization of json share manager
- * Fix #1006: Check if SMTP credentials are nil
- * Chg #965: Remove protocol from partner domains to match gocdb config
- * Enh #986: Added signing key capability
- * Enh #922: Add tutorial for deploying WOPI and Reva locally
- * Enh #979: Skip changelog enforcement for bot PRs
- * Enh #965: Enforce adding changelog in make and CI
- * Enh #1016: Do not enforce changelog on release
- * Enh #969: Allow requests to hosts with unverified certificates
- * Enh #914: Make httpclient configurable
- * Enh #972: Added a site locations exporter to Mentix
- * Enh #1000: Forward share invites to the provider selected in meshdirectory
- * Enh #1002: Pass the link to the meshdirectory service in token mail
- * Enh #1008: Use proper logging for ldap auth requests
- * Enh #970: Add required headers to SMTP client to prevent being tagged as spam
- * Enh #996: Split LDAP user filters
- * Enh #1007: Update go-tus version
- * Enh #1004: Update github.com/go-ldap/ldap to v3
- * Enh #974: Add functionality to create webdav references for OCM shares
+ * Fix #1069: Pass build time variables while compiling
+ * Fix #1047: Fix missing idp check in GetUser of demo userprovider
+ * Fix #1038: Do not stat shared resources when downloading
+ * Fix #1034: Fixed some error reporting strings and corresponding logs
+ * Fix #1046: Fixed resolution of fileid in GetPathByID
+ * Fix #1052: Ocfs: Lookup user to render template properly
+ * Fix #1024: Take care of trailing slashes in OCM package
+ * Fix #1025: Use lower-case name for changelog directory
+ * Fix #1042: List public shares only created by the current user
+ * Fix #1051: Disallow sharing the shares directory
+ * Enh #1035: Refactor AppProvider workflow
+ * Enh #1059: Improve timestamp precision while logging
+ * Enh #1037: System information HTTP service
+ * Enh #995: Add UID and GID to the user object from user package
 
 Details
 -------
 
- * Bugfix #941: Fix initialization of json share manager
+ * Bugfix #1069: Pass build time variables while compiling
 
-   When an empty shares.json file existed the json share manager would fail while trying to
-   unmarshal the empty file.
+   We provide the option of viewing various configuration and version options in both reva CLI as
+   well as the reva daemon, but we didn't actually have these values in the first place. This PR adds
+   that info at compile time.
 
-   https://github.com/cs3org/reva/issues/941
-   https://github.com/cs3org/reva/pull/940
+   https://github.com/cs3org/reva/pull/1069
 
- * Bugfix #1006: Check if SMTP credentials are nil
+ * Bugfix #1047: Fix missing idp check in GetUser of demo userprovider
 
-   Check if SMTP credentials are nil before passing them to the SMTPClient, causing it to crash.
+   We've added a check for matching idp in the GetUser function of the demo userprovider
 
-   https://github.com/cs3org/reva/pull/1006
+   https://github.com/cs3org/reva/issues/1047
 
- * Change #965: Remove protocol from partner domains to match gocdb config
+ * Bugfix #1038: Do not stat shared resources when downloading
 
-   Minor changes for OCM cross-partner testing.
+   Previously, we statted the resources in all download requests resulting in failures when
+   downloading references. This PR fixes that by statting only in case the resource is not present
+   in the shares folder. It also fixes a bug where we allowed uploading to the mount path, resulting
+   in overwriting the user home directory.
 
-   https://github.com/cs3org/reva/pull/965
+   https://github.com/cs3org/reva/pull/1038
 
- * Enhancement #986: Added signing key capability
+ * Bugfix #1034: Fixed some error reporting strings and corresponding logs
 
-   The ocs capabilities can now hold the boolean flag to indicate url signing endpoint and
-   middleware are available
+   https://github.com/cs3org/reva/pull/1034
 
-   https://github.com/cs3org/reva/pull/986
+ * Bugfix #1046: Fixed resolution of fileid in GetPathByID
 
- * Enhancement #922: Add tutorial for deploying WOPI and Reva locally
+   Following refactoring of fileid generations in the local storage provider, this ensures
+   fileid to path resolution works again.
 
-   Add a new tutorial on how to run Reva and Wopiserver together locally
+   https://github.com/cs3org/reva/pull/1046
 
-   https://github.com/cs3org/reva/pull/922
+ * Bugfix #1052: Ocfs: Lookup user to render template properly
 
- * Enhancement #979: Skip changelog enforcement for bot PRs
+   Currently, the username is used to construct paths, which breaks when mounting the `owncloud`
+   storage driver at `/oc` and then expecting paths that use the username like
+   `/oc/einstein/foo` to work, because they will mismatch the path that is used from propagation
+   which uses `/oc/u-u-i-d` as the root, giving an `internal path outside root` error
 
-   Skip changelog enforcement for bot PRs.
+   https://github.com/cs3org/reva/pull/1052
 
-   https://github.com/cs3org/reva/pull/979
+ * Bugfix #1024: Take care of trailing slashes in OCM package
 
- * Enhancement #965: Enforce adding changelog in make and CI
+   Previously, we assumed that the OCM endpoints would have trailing slashes, failing in case
+   they didn't. This PR fixes that.
 
-   When adding a feature or fixing a bug, a changelog needs to be specified, failing which the build
-   wouldn't pass.
+   https://github.com/cs3org/reva/pull/1024
 
-   https://github.com/cs3org/reva/pull/965
+ * Bugfix #1025: Use lower-case name for changelog directory
 
- * Enhancement #1016: Do not enforce changelog on release
+   When preparing a new release, the changelog entries need to be copied to the changelog folder
+   under docs. In a previous change, all these folders were made to have lower case names,
+   resulting in creation of a separate folder.
 
-   While releasing a new version of Reva, make release was failing because it was enforcing a
-   changelog entry.
+   https://github.com/cs3org/reva/pull/1025
 
-   https://github.com/cs3org/reva/pull/1016
+ * Bugfix #1042: List public shares only created by the current user
 
- * Enhancement #969: Allow requests to hosts with unverified certificates
+   When running ocis, the public links created by a user are visible to all the users under the
+   'Shared with others' tab. This PR fixes that by returning only those links which are created by a
+   user themselves.
 
-   Allow OCM to send requests to other mesh providers with the option of skipping certificate
-   verification.
+   https://github.com/cs3org/reva/pull/1042
 
-   https://github.com/cs3org/reva/pull/969
+ * Bugfix #1051: Disallow sharing the shares directory
 
- * Enhancement #914: Make httpclient configurable
+   Previously, it was possible to create public links for and share the shares directory itself.
+   However, when the recipient tried to accept the share, it failed. This PR prevents the creation
+   of such shares in the first place.
 
-   - Introduce Options for the httpclient (#914)
+   https://github.com/cs3org/reva/pull/1051
 
-   https://github.com/cs3org/reva/pull/914
+ * Enhancement #1035: Refactor AppProvider workflow
 
- * Enhancement #972: Added a site locations exporter to Mentix
+   Simplified the app-provider configuration: storageID is worked out automatically and UIURL
+   is suppressed for now. Implemented the new gRPC protocol from the gateway to the appprovider.
 
-   Mentix now offers an endpoint that exposes location information of all sites in the mesh. This
-   can be used in Grafana's world map view to show the exact location of every site.
+   https://github.com/cs3org/reva/pull/1035
 
-   https://github.com/cs3org/reva/pull/972
+ * Enhancement #1059: Improve timestamp precision while logging
 
- * Enhancement #1000: Forward share invites to the provider selected in meshdirectory
+   Previously, the timestamp associated with a log just had the hour and minute, which made
+   debugging quite difficult. This PR increases the precision of the associated timestamp.
 
-   Added a share invite forward OCM endpoint to the provider links (generated when a user picks a
-   target provider in the meshdirectory service web interface), together with an invitation
-   token and originating provider domain passed to the service via query params.
+   https://github.com/cs3org/reva/pull/1059
 
-   https://github.com/sciencemesh/sciencemesh/issues/139
-   https://github.com/cs3org/reva/pull/1000
+ * Enhancement #1037: System information HTTP service
 
- * Enhancement #1002: Pass the link to the meshdirectory service in token mail
+   This service exposes system information via an HTTP endpoint. This currently only includes
+   Reva version information but can be extended easily. The information are exposed in the form of
+   Prometheus metrics so that we can gather these in a streamlined way.
 
-   Currently, we just forward the token and the original user's domain when forwarding an OCM
-   invite token and expect the user to frame the forward invite URL. This PR instead passes the link
-   to the meshdirectory service, from where the user can pick the provider they want to accept the
-   invite with.
+   https://github.com/cs3org/reva/pull/1037
 
-   https://github.com/sciencemesh/sciencemesh/issues/139
-   https://github.com/cs3org/reva/pull/1002
+ * Enhancement #995: Add UID and GID to the user object from user package
 
- * Enhancement #1008: Use proper logging for ldap auth requests
+   Currently, the UID and GID for users need to be read from the local system which requires local
+   users to be present. This change retrieves that information from the user and auth packages and
+   adds methods to retrieve it.
 
-   Instead of logging to stdout we now log using debug level logging or error level logging in case
-   the configured system user cannot bind to LDAP.
-
-   https://github.com/cs3org/reva/pull/1008
-
- * Enhancement #970: Add required headers to SMTP client to prevent being tagged as spam
-
-   Mails being sent through the client, specially through unauthenticated SMTP were being
-   tagged as spam due to missing headers.
-
-   https://github.com/cs3org/reva/pull/970
-
- * Enhancement #996: Split LDAP user filters
-
-   The current LDAP user and auth filters only allow a single `%s` to be replaced with the relevant
-   string. The current `userfilter` is used to lookup a single user, search for share recipients
-   and for login. To make each use case more flexible we split this in three and introduced
-   templates.
-
-   For the `userfilter` we moved to filter templates that can use the CS3 user id properties
-   `{{.OpaqueId}}` and `{{.Idp}}`: ``` userfilter =
-   "(&(objectclass=posixAccount)(|(ownclouduuid={{.OpaqueId}})(cn={{.OpaqueId}})))"
-   ```
-
-   We introduced a new `findfilter` that is used when searching for users. Use it like this: ```
-   findfilter =
-   "(&(objectclass=posixAccount)(|(cn={{query}}*)(displayname={{query}}*)(mail={{query}}*)))"
-   ```
-
-   Furthermore, we also introduced a dedicated login filter for the LDAP auth manager: ```
-   loginfilter = "(&(objectclass=posixAccount)(|(cn={{login}})(mail={{login}})))" ```
-
-   These filter changes are backward compatible: `findfilter` and `loginfilter` will be
-   derived from the `userfilter` by replacing `%s` with `{{query}}` and `{{login}}`
-   respectively. The `userfilter` replaces `%s` with `{{.OpaqueId}}`
-
-   Finally, we changed the default attribute for the immutable uid of a user to
-   `ms-DS-ConsistencyGuid`. See
-   https://docs.microsoft.com/en-us/azure/active-directory/hybrid/plan-connect-design-concepts
-   for the background. You can fall back to `objectguid` or even `samaccountname` but you will run
-   into trouble when user names change. You have been warned.
-
-   https://github.com/cs3org/reva/pull/996
-
- * Enhancement #1007: Update go-tus version
-
-   The lib now uses go mod which should help golang to sort out dependencies when running `go mod
-   tidy`.
-
-   https://github.com/cs3org/reva/pull/1007
-
- * Enhancement #1004: Update github.com/go-ldap/ldap to v3
-
-   In the current version of the ldap lib attribute comparisons are case sensitive. With v3
-   `GetEqualFoldAttributeValue` is introduced, which allows a case insensitive comparison.
-   Which AFAICT is what the spec says: see
-   https://github.com/go-ldap/ldap/issues/129#issuecomment-333744641
-
-   https://github.com/cs3org/reva/pull/1004
-
- * Enhancement #974: Add functionality to create webdav references for OCM shares
-
-   Webdav references will now be created in users' shares directory with the target set to the
-   original resource's location in their mesh provider.
-
-   https://github.com/cs3org/reva/pull/974
+   https://github.com/cs3org/reva/pull/995
 
 

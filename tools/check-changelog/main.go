@@ -62,10 +62,8 @@ func main() {
 	prID := flag.Int("pr", 0, "the ID of the PR")
 	flag.Parse()
 
-	if *prID > 0 {
-		if skipPR(*prID) {
-			return
-		}
+	if *prID > 0 && skipPR(*prID) {
+		return
 	}
 
 	branch := "master"

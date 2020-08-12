@@ -20,8 +20,10 @@ package main
 
 import (
 	"fmt"
-	"os"
+	"io"
 	"strings"
+
+	"github.com/pkg/errors"
 )
 
 var genCommand = func() *command {
@@ -34,15 +36,12 @@ var genCommand = func() *command {
 		genUsersSubCommand(),
 	}
 
-	genUsage := createGenUsage(subcmds)
-
-	cmd.Action = func() error {
+	cmd.Action = func(w ...io.Writer) error {
 		// Verify that a subcommand has been provided
 		// cmd.Args()[0] is the subcommand command
 		// cmd.Args()[1] will be the subcommands arguments
 		if len(cmd.Args()) < 1 {
-			fmt.Println(genUsage)
-			os.Exit(1)
+			return errors.New("Invalid arguments. " + createGenUsage(subcmds))
 		}
 		subcommand := cmd.Args()[0]
 		for _, v := range subcmds {
@@ -54,9 +53,7 @@ var genCommand = func() *command {
 				return v.Action()
 			}
 		}
-		fmt.Println(genUsage)
-		os.Exit(1)
-		return nil
+		return errors.New("Invalid arguments. " + cmd.Usage())
 	}
 	return cmd
 }
