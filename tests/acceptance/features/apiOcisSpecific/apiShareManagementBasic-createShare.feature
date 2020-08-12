@@ -84,6 +84,7 @@ Feature: sharing
       | 2               | 200             |
 
   @issue-ocis-reva-372 @issue-ocis-reva-243
+  # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario Outline: sharing subfolder of already shared folder, GET result is correct
     Given using OCS API version "<ocs_api_version>"
     And these users have been created with default attributes and without skeleton files:
