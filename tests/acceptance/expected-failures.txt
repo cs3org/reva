@@ -912,7 +912,3 @@ apiWebdavUpload2/uploadFileUsingOldChunking.feature:98
 apiWebdavUpload2/uploadFileUsingOldChunking.feature:99
 apiWebdavUpload2/uploadFileUsingOldChunking.feature:100
 apiWebdavUpload2/uploadFileUsingOldChunking.feature:101
-#
-# https://github.com/owncloud/ocis-reva/issues/372 Listing shares via ocs API does not show path for parent folders
-apiShareManagementBasic/createShare.feature:269
-apiShareManagementBasic/createShare.feature:270
