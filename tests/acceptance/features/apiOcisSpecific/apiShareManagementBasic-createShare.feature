@@ -103,11 +103,13 @@ Feature: sharing
     And the HTTP status code should be "200"
     And the response should contain 4 entries
     And folder "/folder1" should be included as path in the response
-    And folder "/folder1/folder2" should be included as path in the response
+    # And folder "/folder1/folder2" should be included as path in the response
+    And folder "/folder2" should be included as path in the response
     And user "Alice" sends HTTP method "GET" to OCS API endpoint "/apps/files_sharing/api/v1/shares?path=/folder1/folder2"
     And the response should contain 2 entries
     And folder "/folder1" should not be included as path in the response
-    And folder "/folder1/folder2" should be included as path in the response
+    # And folder "/folder1/folder2" should be included as path in the response
+    And folder "/folder2" should be included as path in the response
     Examples:
       | ocs_api_version | ocs_status_code |
       | 1               | 100             |
