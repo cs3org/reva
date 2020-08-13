@@ -1162,14 +1162,14 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 			}
 
 			statResponse, err := c.Stat(ctx, statRequest)
-			if err != nil {
-				return nil, err
+			if statResponse.Status.Code != rpc.Code_CODE_OK {
+				if statResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
+					// TODO share target was not found, we should not error here.
+					continue
+				}
 			}
 
 			sData := conversions.PublicShare2ShareData(share, r, h.publicURL)
-			if statResponse.Status.Code != rpc.Code_CODE_OK {
-				return nil, err
-			}
 
 			sData.Name = share.DisplayName
 
