@@ -60,10 +60,10 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 			return
 		}
 
-		var username string
-		username, r.URL.Path = router.ShiftPath(r.URL.Path)
+		var userid string
+		userid, r.URL.Path = router.ShiftPath(r.URL.Path)
 
-		if username == "" {
+		if userid == "" {
 			// listing is disabled, no auth will change that
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
@@ -74,7 +74,8 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		if u.Username != username {
+		if u.Id.OpaqueId != userid {
+			log.Debug().Str("userid", userid).Interface("user", u).Msg("trying to read another users trash")
 			// listing other users trash is forbidden, no auth will change that
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
@@ -114,7 +115,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 
 			// find path in url relative to trash base
 			trashBase := ctx.Value(ctxKeyBaseURI).(string)
-			baseURI := path.Join(path.Dir(trashBase), "files", username)
+			baseURI := path.Join(path.Dir(trashBase), "files", userid)
 			ctx = context.WithValue(ctx, ctxKeyBaseURI, baseURI)
 			r = r.WithContext(ctx)
 
