@@ -39,6 +39,7 @@ var (
 
 	commands = []*command{
 		versionCommand(),
+		configureCommand(),
 		loginCommand(),
 		whoamiCommand(),
 		importCommand(),
@@ -82,14 +83,7 @@ func init() {
 
 func main() {
 
-	if host == "" {
-		c, err := readConfig()
-		if err != nil {
-			fmt.Println("reva is not configured, please pass the \"-host\" flag")
-			os.Exit(1)
-		}
-		conf = c
-	} else {
+	if host != "" {
 		conf = &config{host}
 		if err := writeConfig(conf); err != nil {
 			fmt.Println("error writing to config file")
