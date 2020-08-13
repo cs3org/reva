@@ -28,6 +28,7 @@ import (
 
 	"github.com/Masterminds/sprig"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/user"
@@ -48,16 +49,17 @@ type manager struct {
 }
 
 type config struct {
-	Hostname     string     `mapstructure:"hostname"`
-	Port         int        `mapstructure:"port"`
-	BaseDN       string     `mapstructure:"base_dn"`
-	UserFilter   string     `mapstructure:"userfilter"`
-	FindFilter   string     `mapstructure:"findfilter"`
-	GroupFilter  string     `mapstructure:"groupfilter"`
-	BindUsername string     `mapstructure:"bind_username"`
-	BindPassword string     `mapstructure:"bind_password"`
-	Idp          string     `mapstructure:"idp"`
-	Schema       attributes `mapstructure:"schema"`
+	Hostname        string     `mapstructure:"hostname"`
+	Port            int        `mapstructure:"port"`
+	BaseDN          string     `mapstructure:"base_dn"`
+	UserFilter      string     `mapstructure:"userfilter"`
+	AttributeFilter string     `mapstructure:"attributefilter"`
+	FindFilter      string     `mapstructure:"findfilter"`
+	GroupFilter     string     `mapstructure:"groupfilter"`
+	BindUsername    string     `mapstructure:"bind_username"`
+	BindPassword    string     `mapstructure:"bind_password"`
+	Idp             string     `mapstructure:"idp"`
+	Schema          attributes `mapstructure:"schema"`
 }
 
 type attributes struct {
@@ -71,6 +73,10 @@ type attributes struct {
 	Mail string `mapstructure:"mail"`
 	// Displayname is the Human readable name, e.g. `Albert Einstein`
 	DisplayName string `mapstructure:"displayName"`
+	// UIDNumber is a numeric id that maps to a filesystem uid, eg. 123546
+	UIDNumber string `mapstructure:"uidNumber"`
+	// GIDNumber is a numeric id that maps to a filesystem gid, eg. 654321
+	GIDNumber string `mapstructure:"gidNumber"`
 }
 
 // Default attributes (Active Directory)
@@ -80,6 +86,8 @@ var ldapDefaults = attributes{
 	CN:          "cn",
 	Mail:        "mail",
 	DisplayName: "displayName",
+	UIDNumber:   "uidNumber",
+	GIDNumber:   "gidNumber",
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -145,7 +153,7 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 		m.c.BaseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		m.getUserFilter(uid),
-		[]string{m.c.Schema.DN, m.c.Schema.UID, m.c.Schema.CN, m.c.Schema.Mail, m.c.Schema.DisplayName},
+		[]string{m.c.Schema.DN, m.c.Schema.UID, m.c.Schema.CN, m.c.Schema.Mail, m.c.Schema.DisplayName, m.c.Schema.UIDNumber, m.c.Schema.GIDNumber},
 		nil,
 	)
 
@@ -174,13 +182,103 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 		Groups:      groups,
 		Mail:        sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.Mail),
 		DisplayName: sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.DisplayName),
+		Opaque: &types.Opaque{
+			Map: map[string]*types.OpaqueEntry{
+				"uid": {
+					Decoder: "plain",
+					Value:   []byte(sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UIDNumber)),
+				},
+				"gid": {
+					Decoder: "plain",
+					Value:   []byte(sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GIDNumber)),
+				},
+			},
+		},
 	}
 
 	return u, nil
 }
 
-func (m *manager) GetUserByClaim(ctx context.Context, field, claim string) (*userpb.User, error) {
-	return nil, errtypes.NotSupported("ldap: looking up user by specific field not supported")
+func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
+	// TODO align supported claims with rest driver and the others, maybe refactor into common mapping
+	switch claim {
+	case "mail":
+		claim = m.c.Schema.Mail
+	case "uid":
+		claim = m.c.Schema.UIDNumber
+	case "gid":
+		claim = m.c.Schema.GIDNumber
+	case "username":
+		claim = m.c.Schema.CN
+	case "userid":
+		claim = m.c.Schema.UID
+	default:
+		return nil, errors.New("ldap: invalid field " + claim)
+	}
+
+	log := appctx.GetLogger(ctx)
+	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.c.Hostname, m.c.Port), &tls.Config{InsecureSkipVerify: true})
+	if err != nil {
+		return nil, err
+	}
+	defer l.Close()
+
+	// First bind with a read only user
+	err = l.Bind(m.c.BindUsername, m.c.BindPassword)
+	if err != nil {
+		return nil, err
+	}
+
+	// Search for the given clientID
+	searchRequest := ldap.NewSearchRequest(
+		m.c.BaseDN,
+		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
+		m.getAttributeFilter(claim, value),
+		[]string{m.c.Schema.DN, m.c.Schema.UID, m.c.Schema.CN, m.c.Schema.Mail, m.c.Schema.DisplayName, m.c.Schema.UIDNumber, m.c.Schema.GIDNumber},
+		nil,
+	)
+
+	sr, err := l.Search(searchRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(sr.Entries) != 1 {
+		return nil, errtypes.NotFound(claim + ":" + value)
+	}
+
+	log.Debug().Interface("entries", sr.Entries).Msg("entries")
+
+	id := &userpb.UserId{
+		Idp:      m.c.Idp,
+		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UID),
+	}
+	groups, err := m.GetUserGroups(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	u := &userpb.User{
+		Id:          id,
+		Username:    sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.CN),
+		Groups:      groups,
+		Mail:        sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.Mail),
+		DisplayName: sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.DisplayName),
+		Opaque: &types.Opaque{
+			Map: map[string]*types.OpaqueEntry{
+				"uid": {
+					Decoder: "plain",
+					Value:   []byte(sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UIDNumber)),
+				},
+				"gid": {
+					Decoder: "plain",
+					Value:   []byte(sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GIDNumber)),
+				},
+			},
+		},
+	}
+
+	return u, nil
+
 }
 
 func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
@@ -201,7 +299,7 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 		m.c.BaseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		m.getFindFilter(query),
-		[]string{m.c.Schema.DN, m.c.Schema.UID, m.c.Schema.CN, m.c.Schema.Mail, m.c.Schema.DisplayName},
+		[]string{m.c.Schema.DN, m.c.Schema.UID, m.c.Schema.CN, m.c.Schema.Mail, m.c.Schema.DisplayName, m.c.Schema.UIDNumber, m.c.Schema.GIDNumber},
 		nil,
 	)
 
@@ -227,6 +325,18 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 			Groups:      groups,
 			Mail:        entry.GetEqualFoldAttributeValue(m.c.Schema.Mail),
 			DisplayName: entry.GetEqualFoldAttributeValue(m.c.Schema.DisplayName),
+			Opaque: &types.Opaque{
+				Map: map[string]*types.OpaqueEntry{
+					"uid": {
+						Decoder: "plain",
+						Value:   []byte(entry.GetEqualFoldAttributeValue(m.c.Schema.UIDNumber)),
+					},
+					"gid": {
+						Decoder: "plain",
+						Value:   []byte(entry.GetEqualFoldAttributeValue(m.c.Schema.GIDNumber)),
+					},
+				},
+			},
 		}
 		users = append(users, user)
 	}
@@ -296,6 +406,11 @@ func (m *manager) getUserFilter(uid *userpb.UserId) string {
 		panic(err)
 	}
 	return b.String()
+}
+
+func (m *manager) getAttributeFilter(attribute, value string) string {
+	attr := strings.ReplaceAll(m.c.AttributeFilter, "{{attr}}", attribute)
+	return strings.ReplaceAll(attr, "{{value}}", value)
 }
 
 func (m *manager) getFindFilter(query string) string {
