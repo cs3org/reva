@@ -1162,11 +1162,15 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 			}
 
 			statResponse, err := c.Stat(ctx, statRequest)
+			if err != nil {
+				return nil, err
+			}
 			if statResponse.Status.Code != rpc.Code_CODE_OK {
 				if statResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
-					// TODO share target was not found, we should not error here.
 					continue
 				}
+
+				return nil, errors.New(fmt.Sprintf("could not stat share target: %v, code: %v", share.ResourceId, statResponse.Status))
 			}
 
 			sData := conversions.PublicShare2ShareData(share, r, h.publicURL)
