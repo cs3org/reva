@@ -20,8 +20,7 @@ package demo
 
 import (
 	"context"
-	"encoding/json"
-	"io/ioutil"
+	"errors"
 	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -29,7 +28,6 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
-	"github.com/pkg/errors"
 )
 
 func init() {
@@ -43,16 +41,6 @@ type manager struct {
 // New returns a new user manager.
 func New(m map[string]interface{}) (user.Manager, error) {
 	cat := getUsers()
-	data, err := json.Marshal(cat)
-	if err != nil {
-		err = errors.Wrap(err, "error encoding to json")
-		return nil, err
-	}
-
-	if err := ioutil.WriteFile("/var/tmp/reva/users.json", data, 0644); err != nil {
-		err = errors.Wrap(err, "error writing to file")
-		return nil, err
-	}
 	return &manager{catalog: cat}, nil
 }
 
@@ -184,18 +172,6 @@ func getUsers() map[string]*userpb.User {
 			Groups:      []string{"quantum-lovers", "philosophy-haters", "physics-lovers"},
 			Mail:        "richard@example.org",
 			DisplayName: "Richard Feynman",
-			Opaque: &types.Opaque{
-				Map: map[string]*types.OpaqueEntry{
-					"uid": &types.OpaqueEntry{
-						Decoder: "plain",
-						Value:   []byte("468"),
-					},
-					"gid": &types.OpaqueEntry{
-						Decoder: "plain",
-						Value:   []byte("135"),
-					},
-				},
-			},
 		},
 	}
 }
