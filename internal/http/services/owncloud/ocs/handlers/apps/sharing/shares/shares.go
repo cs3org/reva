@@ -506,13 +506,6 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 		resourcePermissions = asCS3Permissions(permissions, nil)
 	}
 
-	permissionMap := map[string]string{"name": strconv.Itoa(int(permissions))}
-	val, err := json.Marshal(permissionMap)
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "could not encode role", err)
-		return
-	}
-
 	statReq := &provider.StatRequest{
 		Ref: &provider.Reference{
 			Spec: &provider.Reference_Path{
@@ -538,12 +531,12 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 		Opaque: &types.Opaque{
 			Map: map[string]*types.OpaqueEntry{
 				"permissions": &types.OpaqueEntry{
-					Decoder: "json",
-					Value:   val,
+					Decoder: "plain",
+					Value:   []byte(strconv.Itoa(int(permissions))),
 				},
 				"name": &types.OpaqueEntry{
 					Decoder: "plain",
-					Value:   []byte(path.Base(statRes.Info.Path)),
+					Value:   []byte(statRes.Info.Path),
 				},
 			},
 		},

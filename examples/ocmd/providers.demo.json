@@ -27,7 +27,7 @@
 						"description": "CERNBox Webdav API"
 					},
 					"name": "CERNBox - Webdav API",
-					"path": "http://127.0.0.1:19001/webdav/",
+					"path": "http://127.0.0.1:19001/remote.php/webdav/",
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
@@ -63,7 +63,7 @@
 						"description": "CESNET Webdav API"
 					},
 					"name": "CESNET - Webdav API",
-					"path": "http://127.0.0.1:17001/webdav/",
+					"path": "http://127.0.0.1:17001/remote.php/webdav/",
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
@@ -99,7 +99,7 @@
 						"description": "Example Webdav API"
 					},
 					"name": "Example - Webdav API",
-					"path": "http://127.0.0.1:19001/webdav/",
+					"path": "http://127.0.0.1:19001/remote.php/webdav/",
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
@@ -135,7 +135,7 @@
 						"description": "Test Webdav API"
 					},
 					"name": "Test - Webdav API",
-					"path": "http://127.0.0.1:19001/webdav/",
+					"path": "http://127.0.0.1:19001/remote.php/webdav/",
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",

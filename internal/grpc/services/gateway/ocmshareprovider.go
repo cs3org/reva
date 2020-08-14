@@ -302,30 +302,36 @@ func (s *svc) createWebdavReference(ctx context.Context, share *ocm.Share) (*rpc
 		}
 	}
 
+	var token string
+	tokenOpaque, ok := share.Grantee.Opaque.Map["token"]
+	if !ok {
+		return status.NewNotFound(ctx, "token not found"), nil
+	}
+	switch tokenOpaque.Decoder {
+	case "plain":
+		token = string(tokenOpaque.Value)
+	default:
+		err := errors.New("opaque entry decoder not recognized: " + tokenOpaque.Decoder)
+		return status.NewInternal(ctx, err, "invalid opaque entry decoder"), nil
+	}
+
 	homeRes, err := s.GetHome(ctx, &provider.GetHomeRequest{})
 	if err != nil {
 		err := errors.Wrap(err, "gateway: error calling GetHome")
 		return status.NewInternal(ctx, err, "error updating received share"), nil
 	}
 
-	parts := strings.Split(share.Id.OpaqueId, ":")
-	if len(parts) < 2 {
-		err := errors.New("resource ID does not follow the layout id:name ")
-		return status.NewInternal(ctx, err, "error decoding resource ID"), nil
-	}
-
 	// reference path is the home path + some name on the corresponding
-	// mesh provider (webdav:/home/MyShares/x@webdav_endpoint)
+	// mesh provider (/home/MyShares/x)
 	// It is the responsibility of the gateway to resolve these references and merge the response back
 	// from the main request.
-	// TODO(labkode): the name of the share should be the filename it points to by default.
-	refPath := path.Join(homeRes.Path, s.c.ShareFolder, path.Base(parts[1]))
+	refPath := path.Join(homeRes.Path, s.c.ShareFolder, path.Base(share.Name))
 	log.Info().Msg("mount path will be:" + refPath)
 
 	createRefReq := &provider.CreateReferenceRequest{
 		Path: refPath,
-		// webdav is the Scheme and <storage_id>/<opaque_id>@webdav_endpoint are the Opaque parts of the URL.
-		TargetUri: fmt.Sprintf("webdav:%s/%s@%s", share.ResourceId.GetStorageId(), share.ResourceId.GetOpaqueId(), webdavEndpoint),
+		// webdav is the scheme, token@webdav_endpoint the opaque part and the share name the query of the URL.
+		TargetUri: fmt.Sprintf("webdav:%s@%s?name=%s", token, webdavEndpoint, share.Name),
 	}
 
 	c, err := s.findByPath(ctx, refPath)

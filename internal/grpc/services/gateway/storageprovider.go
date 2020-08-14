@@ -891,11 +891,20 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 			panic("gateway: a share name must be of type reference: ref:" + res.Info.Path)
 		}
 
-		ri, err := s.checkRef(ctx, res.Info)
+		ri, err := s.handleWebdavRefStat(ctx, res.Info)
 		if err != nil {
-			return &provider.StatResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error resolving reference:"+p),
-			}, nil
+			if _, ok := err.(errtypes.IsNotSupported); !ok {
+				return &provider.StatResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error resolving webdav reference: "+p),
+				}, nil
+			} else {
+				ri, err = s.checkRef(ctx, res.Info)
+				if err != nil {
+					return &provider.StatResponse{
+						Status: status.NewInternal(ctx, err, "gateway: error resolving reference: "+p),
+					}, nil
+				}
+			}
 		}
 
 		// we need to make sure we don't expose the reference target in the resource
@@ -980,35 +989,21 @@ func (s *svc) checkRef(ctx context.Context, ri *provider.ResourceInfo) (*provide
 	}
 
 	// reference types MUST have a target resource id.
-	target := ri.Target
-	if target == "" {
+	if ri.Target == "" {
 		err := errors.New("gateway: ref target is an empty uri")
 		return nil, err
 	}
 
-	newResourceInfo, err := s.handleRef(ctx, ri)
-	if err != nil {
-		err := errors.Wrapf(err, "gateway: error handling ref target:%s", target)
-		return nil, err
-	}
-	return newResourceInfo, nil
-}
-
-func (s *svc) handleRef(ctx context.Context, ri *provider.ResourceInfo) (*provider.ResourceInfo, error) {
 	uri, err := url.Parse(ri.Target)
 	if err != nil {
-		return nil, errors.Wrapf(err, "gateway: error parsing target uri:%s", ri.Target)
+		return nil, errors.Wrapf(err, "gateway: error parsing target uri: %s", ri.Target)
 	}
 
-	scheme := uri.Scheme
-
-	switch scheme {
+	switch uri.Scheme {
 	case "cs3":
 		return s.handleCS3Ref(ctx, uri.Opaque)
-	case "webdav":
-		return s.handleWebdavRef(ctx, ri)
 	default:
-		err := errors.New("gateway: no reference handler for scheme:" + scheme)
+		err := errors.New("gateway: no reference handler for scheme: " + uri.Scheme)
 		return nil, err
 	}
 }
@@ -1021,16 +1016,12 @@ func (s *svc) handleCS3Ref(ctx context.Context, opaque string) (*provider.Resour
 		return nil, err
 	}
 
-	storageid := parts[0]
-	opaqueid := parts[1]
-	id := &provider.ResourceId{
-		StorageId: storageid,
-		OpaqueId:  opaqueid,
-	}
-
 	ref := &provider.Reference{
 		Spec: &provider.Reference_Id{
-			Id: id,
+			Id: &provider.ResourceId{
+				StorageId: parts[0],
+				OpaqueId:  parts[1],
+			},
 		},
 	}
 
@@ -1054,12 +1045,6 @@ func (s *svc) handleCS3Ref(ctx context.Context, opaque string) (*provider.Resour
 	}
 
 	return res.Info, nil
-}
-
-func (s *svc) handleWebdavRef(_ context.Context, ri *provider.ResourceInfo) (*provider.ResourceInfo, error) {
-	// A webdav ref has the following layout: <storage_id>/<opaque_id>@webdav_endpoint
-	// TODO: Once file transfer functionalities have been added.
-	return ri, nil
 }
 
 func (s *svc) ListContainerStream(_ *provider.ListContainerStreamRequest, _ gateway.GatewayAPI_ListContainerStreamServer) error {
