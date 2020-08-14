@@ -897,13 +897,12 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 				return &provider.StatResponse{
 					Status: status.NewInternal(ctx, err, "gateway: error resolving webdav reference: "+p),
 				}, nil
-			} else {
-				ri, err = s.checkRef(ctx, res.Info)
-				if err != nil {
-					return &provider.StatResponse{
-						Status: status.NewInternal(ctx, err, "gateway: error resolving reference: "+p),
-					}, nil
-				}
+			}
+			ri, err = s.checkRef(ctx, res.Info)
+			if err != nil {
+				return &provider.StatResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error resolving reference: "+p),
+				}, nil
 			}
 		}
 
