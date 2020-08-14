@@ -1107,6 +1107,10 @@ func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		if hRes.Status.Code != rpc.Code_CODE_OK {
+			log.Error().Interface("status", hRes.Status).Msg("error fetching user home")
+		}
+
 		filters, linkFilters, err = h.addFilters(w, r, hRes.GetPath())
 		if err != nil {
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, err.Error(), err)
