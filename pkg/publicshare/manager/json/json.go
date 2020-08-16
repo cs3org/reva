@@ -317,6 +317,7 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo) ([]*link.PublicShare, error) {
 	shares := []*link.PublicShare{}
 	now := time.Now()
+	log := appctx.GetLogger(ctx)
 
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -325,6 +326,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 	if err != nil {
 		return nil, err
 	}
+	log.Debug().Interface("shares", db).Int("total", len(db)).Msg("reading stored public shares") // TODO used for CI testing. This should NOT get to production.
 
 	for _, v := range db {
 		r := bytes.NewBuffer([]byte(v.(map[string]interface{})["share"].(string)))
@@ -357,6 +359,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 		}
 	}
 
+	log.Debug().Interface("shares", shares).Int("total", len(shares)).Msg("shares post filter analysis")
 	return shares, nil
 }
 
