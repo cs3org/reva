@@ -341,16 +341,26 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 		}
 
 		if len(filters) == 0 {
+			log.Debug().Msg("listing public shares unfiltered")
 			shares = append(shares, &local.PublicShare)
 		} else {
+			log.Debug().Interface("filters", filters).Msg("listing public shares filtered")
 			for _, f := range filters {
+				log.Debug().Interface("current filter", f).Msg("filter step")
 				if f.Type == link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID {
+					log.Debug().Interface("resourceID filter", f).Msg("filter by resource ID")
 					t := time.Unix(int64(local.Expiration.GetSeconds()), int64(local.Expiration.GetNanos()))
-					if err != nil {
-						return nil, err
-					}
+					log.Debug().
+						Interface("storage id from db", local.ResourceId.StorageId).
+						Interface("storage id from filter", f.GetResourceId().StorageId).
+						Interface("opaque id from db", local.ResourceId.OpaqueId).
+						Interface("opaque id from filter", f.GetResourceId().OpaqueId).
+						Interface("expired?", (local.Expiration != nil && t.After(now)) || local.Expiration == nil).
+						Msg("filter evaluation")
 					if local.ResourceId.StorageId == f.GetResourceId().StorageId && local.ResourceId.OpaqueId == f.GetResourceId().OpaqueId {
 						if (local.Expiration != nil && t.After(now)) || local.Expiration == nil {
+							log.Debug().Interface("expiration from db", local.Expiration).Msg("from db")
+							log.Debug().Interface("current time", now).Msg("present time")
 							shares = append(shares, &local.PublicShare)
 						}
 					}
