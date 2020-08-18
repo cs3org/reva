@@ -80,8 +80,7 @@ func (s *svc) webdavRefLs(ctx context.Context, targetURL string, nameQueries ...
 		return nil, errors.Wrap(err, "gateway: error calling stat at the webdav endpoint: "+ep.endpoint)
 	}
 
-	var mds []*provider.ResourceInfo
-	mds = make([]*provider.ResourceInfo, len(infos))
+	mds := []*provider.ResourceInfo{}
 	for _, fi := range infos {
 		info := fi.(gowebdav.File)
 		mds = append(mds, normalize(&info))
