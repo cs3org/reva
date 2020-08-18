@@ -1147,14 +1147,14 @@ func (fs *localfs) RestoreRecycleItem(ctx context.Context, restoreKey string) er
 func (fs *localfs) propagate(ctx context.Context, leafPath string) error {
 
 	var root string
-	if fs.isShareFolderChild(ctx, leafPath) {
+	if fs.isShareFolderChild(ctx, leafPath) || strings.HasSuffix(path.Clean(leafPath), fs.conf.ShareFolder) {
 		root = fs.wrapReferences(ctx, "/")
 	} else {
 		root = fs.wrap(ctx, "/")
 	}
 
 	if !strings.HasPrefix(leafPath, root) {
-		return errors.New("internal path outside root")
+		return errors.New("internal path: " + leafPath + " outside root: " + root)
 	}
 
 	fi, err := os.Stat(leafPath)

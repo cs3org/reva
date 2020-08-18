@@ -202,7 +202,7 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 		}
 	}
 
-	length, err := strconv.ParseInt(r.Header.Get("Content-Length"), 10, 64)
+	length, err := strconv.ParseInt(r.Header.Get("Upload-Length"), 10, 64)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -211,7 +211,7 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 	opaqueMap := map[string]*typespb.OpaqueEntry{
 		"Upload-Length": {
 			Decoder: "plain",
-			Value:   []byte(r.Header.Get("Content-Length")),
+			Value:   []byte(r.Header.Get("Upload-Length")),
 		},
 	}
 

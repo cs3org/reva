@@ -3,6 +3,9 @@
 commit_share_to_storage_grant = true
 commit_share_to_storage_ref = true
 
+[grpc.services.gateway.token_managers.jwt]
+expires = 86400
+
 [grpc.services.storageregistry]
 [grpc.services.storageregistry.drivers.static]
 home_provider = "/home"
