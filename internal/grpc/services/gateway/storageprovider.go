@@ -193,7 +193,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 			ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target, shareChild)
 			if err != nil {
 				return &gateway.InitiateFileDownloadResponse{
-					Status: status.NewInternal(ctx, err, "gateway: error creating container on webdav host: "+p),
+					Status: status.NewInternal(ctx, err, "gateway: error downloading from webdav host: "+p),
 				}, nil
 			}
 			return &gateway.InitiateFileDownloadResponse{
@@ -343,7 +343,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 			ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target, shareChild)
 			if err != nil {
 				return &gateway.InitiateFileUploadResponse{
-					Status: status.NewInternal(ctx, err, "gateway: error resolving webdav host: "+p),
+					Status: status.NewInternal(ctx, err, "gateway: error uploading to webdav host: "+p),
 				}, nil
 			}
 			return &gateway.InitiateFileUploadResponse{

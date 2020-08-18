@@ -20,6 +20,7 @@ package gateway
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"path"
 	"strings"
@@ -55,7 +56,7 @@ func (s *svc) webdavRefStat(ctx context.Context, targetURL string, nameQueries .
 	// ownloud-specific fields to get the resource ID and permissions.
 	info, err := c.Stat(ep.filePath)
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling stat at the webdav endpoint: "+ep.endpoint)
+		return nil, errors.Wrap(err, fmt.Sprintf("gateway: error statting %s at the webdav endpoint: %s", ep.filePath, ep.endpoint))
 	}
 	return normalize(info.(*gowebdav.File)), nil
 }
@@ -77,7 +78,7 @@ func (s *svc) webdavRefLs(ctx context.Context, targetURL string, nameQueries ...
 	// ownloud-specific fields to get the resource ID and permissions.
 	infos, err := c.ReadDir(ep.filePath)
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling stat at the webdav endpoint: "+ep.endpoint)
+		return nil, errors.Wrap(err, fmt.Sprintf("gateway: error listing %s at the webdav endpoint: %s", ep.filePath, ep.endpoint))
 	}
 
 	mds := []*provider.ResourceInfo{}
@@ -103,7 +104,7 @@ func (s *svc) webdavRefMkdir(ctx context.Context, targetURL string, nameQueries 
 
 	err = c.Mkdir(ep.filePath, 0700)
 	if err != nil {
-		return errors.Wrap(err, "gateway: error calling mkdir at the webdav endpoint: "+ep.endpoint)
+		return errors.Wrap(err, fmt.Sprintf("gateway: error creating dir %s at the webdav endpoint: %s", ep.filePath, ep.endpoint))
 	}
 	return nil
 }
@@ -132,7 +133,7 @@ func (s *svc) webdavRefMove(ctx context.Context, targetURL, src, destination str
 
 	err = c.Rename(srcEP.filePath, destEP.filePath, true)
 	if err != nil {
-		return errors.Wrap(err, "gateway: error calling rename at the webdav endpoint: "+srcEP.endpoint)
+		return errors.Wrap(err, fmt.Sprintf("gateway: error renaming %s to %s at the webdav endpoint: %s", srcEP.filePath, destEP.filePath, srcEP.endpoint))
 	}
 	return nil
 }
@@ -152,7 +153,7 @@ func (s *svc) webdavRefDelete(ctx context.Context, targetURL string, nameQueries
 
 	err = c.Remove(ep.filePath)
 	if err != nil {
-		return errors.Wrap(err, "gateway: error calling remove at the webdav endpoint: "+ep.endpoint)
+		return errors.Wrap(err, fmt.Sprintf("gateway: error removing %s at the webdav endpoint: %s", ep.filePath, ep.endpoint))
 	}
 	return nil
 }
