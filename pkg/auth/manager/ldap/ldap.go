@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
@@ -66,6 +67,10 @@ type attributes struct {
 	Mail string `mapstructure:"mail"`
 	// Displayname is the Human readable name, e.g. `Albert Einstein`
 	DisplayName string `mapstructure:"displayName"`
+	// UIDNumber is a numeric id that maps to a filesystem uid, eg. 123546
+	UIDNumber string `mapstructure:"uidNumber"`
+	// GIDNumber is a numeric id that maps to a filesystem gid, eg. 654321
+	GIDNumber string `mapstructure:"gidNumber"`
 }
 
 // Default attributes (Active Directory)
@@ -75,6 +80,8 @@ var ldapDefaults = attributes{
 	CN:          "cn",
 	Mail:        "mail",
 	DisplayName: "displayName",
+	UIDNumber:   "uidNumber",
+	GIDNumber:   "gidNumber",
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -130,7 +137,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		am.c.BaseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		am.getLoginFilter(clientID),
-		[]string{am.c.Schema.DN, am.c.Schema.UID, am.c.Schema.CN, am.c.Schema.Mail, am.c.Schema.DisplayName},
+		[]string{am.c.Schema.DN, am.c.Schema.UID, am.c.Schema.CN, am.c.Schema.Mail, am.c.Schema.DisplayName, am.c.Schema.UIDNumber, am.c.Schema.GIDNumber},
 		nil,
 	)
 
@@ -163,6 +170,18 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		Groups:      []string{},
 		Mail:        sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.Mail),
 		DisplayName: sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.DisplayName),
+		Opaque: &types.Opaque{
+			Map: map[string]*types.OpaqueEntry{
+				"uid": {
+					Decoder: "plain",
+					Value:   []byte(sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.UIDNumber)),
+				},
+				"gid": {
+					Decoder: "plain",
+					Value:   []byte(sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.GIDNumber)),
+				},
+			},
+		},
 	}
 	log.Debug().Interface("entry", sr.Entries[0]).Interface("user", u).Msg("authenticated user")
 
