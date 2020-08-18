@@ -376,7 +376,7 @@ steps:
       TEST_OCIS: 'true'
       TEST_REVA: 'true'
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~@preview-extension-required'
-      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures.txt'
+      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OC-storage.txt'
 
 services:
   - 'name': 'ldap'
