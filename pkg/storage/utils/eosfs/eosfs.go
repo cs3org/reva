@@ -1234,17 +1234,7 @@ func (fs *eosfs) RestoreRevision(ctx context.Context, ref *provider.Reference, r
 }
 
 func (fs *eosfs) PurgeRecycleItem(ctx context.Context, key string) error {
-	u, err := getUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "storage_eos: no user in ctx")
-	}
-
-	uid, gid, err := fs.getUserUIDAndGID(ctx, u)
-	if err != nil {
-		return err
-	}
-
-	return fs.c.RestoreDeletedEntry(ctx, uid, gid, key)
+	return errtypes.NotSupported("eos: operation not supported")
 }
 
 func (fs *eosfs) EmptyRecycle(ctx context.Context) error {
