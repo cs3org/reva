@@ -184,10 +184,6 @@ apiShareManagementBasic/deleteShare.feature:36
 apiShareManagementBasic/deleteShare.feature:37
 #
 # https://github.com/owncloud/ocis-reva/issues/260 Sharee retrieves the information about a share -but gets response containing all the shares
-apiShareOperations/accessToShare.feature:20
-apiShareOperations/accessToShare.feature:21
-apiShareOperations/accessToShare.feature:34
-apiShareOperations/accessToShare.feature:35
 apiShareOperations/accessToShare.feature:48
 apiShareOperations/accessToShare.feature:49
 #
