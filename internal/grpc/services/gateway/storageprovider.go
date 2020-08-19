@@ -1406,7 +1406,7 @@ func (s *svc) ListRecycleStream(_ *gateway.ListRecycleStreamRequest, _ gateway.G
 	return errors.New("Unimplemented")
 }
 
-// TODO use the ListRecycleRequest.Ref to only list the trish of a specific storage
+// TODO use the ListRecycleRequest.Ref to only list the trash of a specific storage
 func (s *svc) ListRecycle(ctx context.Context, req *gateway.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
 	c, err := s.find(ctx, req.GetRef())
 	if err != nil {
