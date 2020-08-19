@@ -31,6 +31,86 @@ $ ../../cmd/revad/revad -dev-dir .
 
 You can also read the [build from sources guide](https://reva.link/docs/getting-started/build-reva/).
 
+## Run tests
+
+### unit tests / GRPC tests
+`make test`
+
+### litmus tests
+1. start the needed services
+   ```
+   cd tests/oc-integration-tests/local
+   ../../../cmd/revad/revad -c frontend.toml &
+   ../../../cmd/revad/revad -c gateway.toml &
+   ../../../cmd/revad/revad -c storage-home.toml &
+   ../../../cmd/revad/revad -c storage-oc.toml &
+   ../../../cmd/revad/revad -c users.toml
+   ```
+
+2. run litmus tests:
+   ```
+   docker run --rm --network=host\
+       -e LITMUS_URL=http://localhost:20080/remote.php/webdav \
+       -e LITMUS_USERNAME=einstein \
+       -e LITMUS_PASSWORD=relativity \
+       owncloud/litmus:latest
+   ```
+
+   - add `TESTS` env. variable to test only a subset of tests e.g `-e TESTS="basic http copymove props"`
+   - change `LITMUS_URL` for other tests e.g. `-e LITMUS_URL=http://localhost:20080/remote.php/dav/files/einstein` or to a public-share link
+
+### ownCloud legacy integration tests
+1. start an LDAP server
+    ```
+    docker run --rm --hostname ldap.my-company.com \
+        -e LDAP_TLS_VERIFY_CLIENT=never \
+        -e LDAP_DOMAIN=owncloud.com \
+        -e LDAP_ORGANISATION=ownCloud \
+        -e LDAP_ADMIN_PASSWORD=admin \
+        --name docker-slapd \
+        -p 127.0.0.1:389:389 \
+        -p 636:636 -d osixia/openldap
+    ```
+2. start a REDIS server
+    ```
+    docker run --rm -e REDIS_DATABASES=1 -p 6379:6379 -d webhippie/redis:latest
+    ```
+3. start the needed services
+    ```
+    cd tests/oc-integration-tests/local
+    ../../../cmd/revad/revad -c frontend.toml &
+    ../../../cmd/revad/revad -c gateway.toml &
+    ../../../cmd/revad/revad -c shares.toml &
+    ../../../cmd/revad/revad -c storage-home.toml &
+    ../../../cmd/revad/revad -c storage-oc.toml &
+    ../../../cmd/revad/revad -c storage-publiclink.toml &
+    ../../../cmd/revad/revad -c ldap-users.toml
+    ```
+
+4. clone ownCloud 10
+    `git clone https://github.com/owncloud/core.git ./testrunner`
+
+5. clone the testing app
+    `git clone https://github.com/owncloud/testing.git ./testrunner/apps/testing`
+
+6. run the tests
+    ```
+    cd testrunner
+    TEST_SERVER_URL='http://localhost:20080' \
+    OCIS_REVA_DATA_ROOT='/var/tmp/reva/' \
+    SKELETON_DIR='./apps/testing/data/apiSkeleton' \
+    TEST_EXTERNAL_USER_BACKENDS='true' \
+    REVA_LDAP_HOSTNAME='localhost' \
+    TEST_OCIS='true' \
+    TEST_REVA='true' \
+    BEHAT_FILTER_TAGS='~@skipOnOcis&&~@skipOnOcis-OC-Storage' \
+    make test-acceptance-api
+    ```
+
+    This will run all tests that are relevant to reva.
+
+    To run a single test add BEHAT_FEATURE=<feature file> and specify the path to the feature file and an optional line number. For example: BEHAT_FEATURE='tests/acceptance/features/apiWebdavUpload1/uploadFile.feature:12'
+
 ## Daily releases
 On every commit on the master branch (including merged Pull Requests) a new release will be created and 
 available at [daily releases](https://reva-releases.web.cern.ch/reva-releases).

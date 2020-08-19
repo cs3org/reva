@@ -1,0 +1,13 @@
+[
+	{
+		"id": {
+			"opaque_id": "4c510ada-c86b-4815-8820-42cdf82c3d51",
+			"idp": "http://localhost:20080"
+		},
+		"username": "einstein",
+		"secret": "relativity",
+		"mail": "einstein@example.org",
+		"display_name": "Albert Einstein",
+		"groups": []
+	}
+]
