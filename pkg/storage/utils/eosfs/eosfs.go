@@ -1399,6 +1399,9 @@ func (fs *eosfs) extractUIDAndGID(u *userpb.User) (string, string, error) {
 			}
 		}
 	}
+	if uid == "" || gid == "" {
+		return "", "", errors.New("eos: uid or gid missing for user")
+	}
 	return uid, gid, nil
 }
 
