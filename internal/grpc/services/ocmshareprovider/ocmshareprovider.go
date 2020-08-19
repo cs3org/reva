@@ -20,7 +20,6 @@ package ocmshareprovider
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
@@ -111,35 +110,30 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		}, nil
 	}
 
+	var permissions string
 	permOpaque, ok := req.Opaque.Map["permissions"]
 	if !ok {
 		return &ocm.CreateOCMShareResponse{
 			Status: status.NewInternal(ctx, errors.New("resource permissions not set"), ""),
 		}, nil
 	}
-	var permissions map[string]string
 	switch permOpaque.Decoder {
-	case "json":
-		err := json.Unmarshal(permOpaque.Value, &permissions)
-		if err != nil {
-			return &ocm.CreateOCMShareResponse{
-				Status: status.NewInternal(ctx, err, "error decoding resource permissions"),
-			}, nil
-		}
+	case "plain":
+		permissions = string(permOpaque.Value)
 	default:
-		err := errors.New("opaque entry decoder not recognized")
+		err := errors.New("opaque entry decoder not recognized: " + permOpaque.Decoder)
 		return &ocm.CreateOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "invalid opaque entry decoder"),
 		}, nil
 	}
 
+	var name string
 	nameOpaque, ok := req.Opaque.Map["name"]
 	if !ok {
 		return &ocm.CreateOCMShareResponse{
 			Status: status.NewInternal(ctx, errors.New("resource name not set"), ""),
 		}, nil
 	}
-	var name string
 	switch nameOpaque.Decoder {
 	case "plain":
 		name = string(nameOpaque.Value)
@@ -150,7 +144,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		}, nil
 	}
 
-	share, err := s.sm.Share(ctx, req.ResourceId, req.Grant, name, req.RecipientMeshProvider, permissions["name"], nil)
+	share, err := s.sm.Share(ctx, req.ResourceId, req.Grant, name, req.RecipientMeshProvider, permissions, nil, "")
 	if err != nil {
 		return &ocm.CreateOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "error creating share"),

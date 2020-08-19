@@ -179,11 +179,27 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 			}, nil
 		}
 
-		ri, err := s.checkRef(ctx, statRes.Info)
+		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
 			log.Err(err).Msg("gateway: error resolving reference")
 			return &gateway.InitiateFileDownloadResponse{
 				Status: status.NewInternal(ctx, err, "error creating container"),
+			}, nil
+		}
+
+		if protocol == "webdav" {
+			// TODO(ishank011): pass this through the datagateway service
+			// for now, we just expose the file server to the user
+			ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target, shareChild)
+			if err != nil {
+				return &gateway.InitiateFileDownloadResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error downloading from webdav host: "+p),
+				}, nil
+			}
+			return &gateway.InitiateFileDownloadResponse{
+				Opaque:           opaque,
+				Status:           status.NewOK(ctx),
+				DownloadEndpoint: ep,
 			}, nil
 		}
 
@@ -313,11 +329,27 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 			}, nil
 		}
 
-		ri, err := s.checkRef(ctx, statRes.Info)
+		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
 			log.Err(err).Msg("gateway: error resolving reference")
 			return &gateway.InitiateFileUploadResponse{
 				Status: status.NewInternal(ctx, err, "error creating container"),
+			}, nil
+		}
+
+		if protocol == "webdav" {
+			// TODO(ishank011): pass this through the datagateway service
+			// for now, we just expose the file server to the user
+			ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target, shareChild)
+			if err != nil {
+				return &gateway.InitiateFileUploadResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error uploading to webdav host: "+p),
+				}, nil
+			}
+			return &gateway.InitiateFileUploadResponse{
+				Opaque:         opaque,
+				Status:         status.NewOK(ctx),
+				UploadEndpoint: ep,
 			}, nil
 		}
 
@@ -483,11 +515,23 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 			}, nil
 		}
 
-		ri, err := s.checkRef(ctx, statRes.Info)
+		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
 			log.Err(err).Msg("gateway: error resolving reference")
 			return &provider.CreateContainerResponse{
 				Status: status.NewInternal(ctx, err, "error creating container"),
+			}, nil
+		}
+
+		if protocol == "webdav" {
+			err = s.webdavRefMkdir(ctx, statRes.Info.Target, shareChild)
+			if err != nil {
+				return &provider.CreateContainerResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error creating container on webdav host: "+p),
+				}, nil
+			}
+			return &provider.CreateContainerResponse{
+				Status: status.NewOK(ctx),
 			}, nil
 		}
 
@@ -605,11 +649,23 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 			}, nil
 		}
 
-		ri, err := s.checkRef(ctx, statRes.Info)
+		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
 			log.Err(err).Msg("gateway: error resolving reference")
 			return &provider.DeleteResponse{
 				Status: status.NewInternal(ctx, err, "error creating container"),
+			}, nil
+		}
+
+		if protocol == "webdav" {
+			err = s.webdavRefDelete(ctx, statRes.Info.Target, shareChild)
+			if err != nil {
+				return &provider.DeleteResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error deleting resource on webdav host: "+p),
+				}, nil
+			}
+			return &provider.DeleteResponse{
+				Status: status.NewOK(ctx),
 			}, nil
 		}
 
@@ -721,11 +777,23 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 			}, nil
 		}
 
-		ri, err := s.checkRef(ctx, statRes.Info)
+		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
 			log.Err(err).Msg("gateway: error resolving reference")
 			return &provider.MoveResponse{
 				Status: status.NewInternal(ctx, err, "error moving"),
+			}, nil
+		}
+
+		if protocol == "webdav" {
+			err = s.webdavRefMove(ctx, statRes.Info.Target, shareChild, dshareChild)
+			if err != nil {
+				return &provider.MoveResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error moving resource on webdav host: "+p),
+				}, nil
+			}
+			return &provider.MoveResponse{
+				Status: status.NewOK(ctx),
 			}, nil
 		}
 
@@ -746,7 +814,9 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 		return s.move(ctx, req)
 	}
 
-	panic("gateway: move called on unknown path:" + p)
+	return &provider.MoveResponse{
+		Status: status.NewInternal(ctx, errors.New("gateway: move called on unknown path: "+p), ""),
+	}, nil
 }
 
 func (s *svc) move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
@@ -891,11 +961,20 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 			panic("gateway: a share name must be of type reference: ref:" + res.Info.Path)
 		}
 
-		ri, err := s.checkRef(ctx, res.Info)
+		ri, protocol, err := s.checkRef(ctx, res.Info)
 		if err != nil {
 			return &provider.StatResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error resolving reference:"+p),
+				Status: status.NewInternal(ctx, err, "gateway: error resolving reference: "+p),
 			}, nil
+		}
+
+		if protocol == "webdav" {
+			ri, err = s.webdavRefStat(ctx, res.Info.Target)
+			if err != nil {
+				return &provider.StatResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error resolving webdav reference: "+p),
+				}, nil
+			}
 		}
 
 		// we need to make sure we don't expose the reference target in the resource
@@ -934,11 +1013,25 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 			}, nil
 		}
 
-		ri, err := s.checkRef(ctx, statRes.Info)
+		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
 			log.Err(err).Msg("gateway: error resolving reference")
 			return &provider.StatResponse{
 				Status: status.NewInternal(ctx, err, "error stating"),
+			}, nil
+		}
+
+		if protocol == "webdav" {
+			ri, err = s.webdavRefStat(ctx, statRes.Info.Target, shareChild)
+			if err != nil {
+				return &provider.StatResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error resolving webdav reference: "+p),
+				}, nil
+			}
+			ri.Path = p
+			return &provider.StatResponse{
+				Status: status.NewOK(ctx),
+				Info:   ri,
 			}, nil
 		}
 
@@ -974,42 +1067,31 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 	panic("gateway: stating an unknown path:" + p)
 }
 
-func (s *svc) checkRef(ctx context.Context, ri *provider.ResourceInfo) (*provider.ResourceInfo, error) {
+func (s *svc) checkRef(ctx context.Context, ri *provider.ResourceInfo) (*provider.ResourceInfo, string, error) {
 	if ri.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
 		panic("gateway: calling checkRef on a non reference type:" + ri.String())
 	}
 
 	// reference types MUST have a target resource id.
-	target := ri.Target
-	if target == "" {
+	if ri.Target == "" {
 		err := errors.New("gateway: ref target is an empty uri")
-		return nil, err
+		return nil, "", err
 	}
 
-	newResourceInfo, err := s.handleRef(ctx, ri)
-	if err != nil {
-		err := errors.Wrapf(err, "gateway: error handling ref target:%s", target)
-		return nil, err
-	}
-	return newResourceInfo, nil
-}
-
-func (s *svc) handleRef(ctx context.Context, ri *provider.ResourceInfo) (*provider.ResourceInfo, error) {
 	uri, err := url.Parse(ri.Target)
 	if err != nil {
-		return nil, errors.Wrapf(err, "gateway: error parsing target uri:%s", ri.Target)
+		return nil, "", errors.Wrapf(err, "gateway: error parsing target uri: %s", ri.Target)
 	}
 
-	scheme := uri.Scheme
-
-	switch scheme {
+	switch uri.Scheme {
 	case "cs3":
-		return s.handleCS3Ref(ctx, uri.Opaque)
+		ref, err := s.handleCS3Ref(ctx, uri.Opaque)
+		return ref, "cs3", err
 	case "webdav":
-		return s.handleWebdavRef(ctx, ri)
+		return nil, "webdav", nil
 	default:
-		err := errors.New("gateway: no reference handler for scheme:" + scheme)
-		return nil, err
+		err := errors.New("gateway: no reference handler for scheme: " + uri.Scheme)
+		return nil, "", err
 	}
 }
 
@@ -1021,16 +1103,12 @@ func (s *svc) handleCS3Ref(ctx context.Context, opaque string) (*provider.Resour
 		return nil, err
 	}
 
-	storageid := parts[0]
-	opaqueid := parts[1]
-	id := &provider.ResourceId{
-		StorageId: storageid,
-		OpaqueId:  opaqueid,
-	}
-
 	ref := &provider.Reference{
 		Spec: &provider.Reference_Id{
-			Id: id,
+			Id: &provider.ResourceId{
+				StorageId: parts[0],
+				OpaqueId:  parts[1],
+			},
 		},
 	}
 
@@ -1054,12 +1132,6 @@ func (s *svc) handleCS3Ref(ctx context.Context, opaque string) (*provider.Resour
 	}
 
 	return res.Info, nil
-}
-
-func (s *svc) handleWebdavRef(_ context.Context, ri *provider.ResourceInfo) (*provider.ResourceInfo, error) {
-	// A webdav ref has the following layout: <storage_id>/<opaque_id>@webdav_endpoint
-	// TODO: Once file transfer functionalities have been added.
-	return ri, nil
 }
 
 func (s *svc) ListContainerStream(_ *provider.ListContainerStreamRequest, _ gateway.GatewayAPI_ListContainerStreamServer) error {
@@ -1113,12 +1185,22 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		}
 
 		for i, ref := range lcr.Infos {
-			info, err := s.checkRef(ctx, ref)
+			info, protocol, err := s.checkRef(ctx, ref)
 			if err != nil {
 				return &provider.ListContainerResponse{
 					Status: status.NewInternal(ctx, err, "gateway: error resolving reference:"+ref.Path),
 				}, nil
 			}
+
+			if protocol == "webdav" {
+				info, err = s.webdavRefStat(ctx, ref.Target)
+				if err != nil {
+					return &provider.ListContainerResponse{
+						Status: status.NewInternal(ctx, err, "gateway: error resolving webdav reference: "+ref.Target),
+					}, nil
+				}
+			}
+
 			base := path.Base(ref.Path)
 			info.Path = path.Join(p, base)
 			lcr.Infos[i] = info
@@ -1150,10 +1232,28 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 			}, nil
 		}
 
-		ri, err := s.checkRef(ctx, res.Info)
+		ri, protocol, err := s.checkRef(ctx, res.Info)
 		if err != nil {
 			return &provider.ListContainerResponse{
 				Status: status.NewInternal(ctx, err, "gateway: error resolving reference:"+p),
+			}, nil
+		}
+
+		if protocol == "webdav" {
+			infos, err := s.webdavRefLs(ctx, res.Info.Target)
+			if err != nil {
+				return &provider.ListContainerResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error listing webdav reference: "+p),
+				}, nil
+			}
+
+			for _, info := range infos {
+				base := path.Base(info.Path)
+				info.Path = path.Join(p, base)
+			}
+			return &provider.ListContainerResponse{
+				Status: status.NewOK(ctx),
+				Infos:  infos,
 			}, nil
 		}
 
@@ -1222,10 +1322,28 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 			}, nil
 		}
 
-		ri, err := s.checkRef(ctx, res.Info)
+		ri, protocol, err := s.checkRef(ctx, res.Info)
 		if err != nil {
 			return &provider.ListContainerResponse{
 				Status: status.NewInternal(ctx, err, "gateway: error resolving reference:"+p),
+			}, nil
+		}
+
+		if protocol == "webdav" {
+			infos, err := s.webdavRefLs(ctx, res.Info.Target, shareChild)
+			if err != nil {
+				return &provider.ListContainerResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error listing webdav reference: "+p),
+				}, nil
+			}
+
+			for _, info := range infos {
+				base := path.Base(info.Path)
+				info.Path = path.Join(shareName, shareChild, base)
+			}
+			return &provider.ListContainerResponse{
+				Status: status.NewOK(ctx),
+				Infos:  infos,
 			}, nil
 		}
 

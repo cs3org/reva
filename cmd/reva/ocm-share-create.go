@@ -19,11 +19,9 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"strconv"
 	"time"
 
@@ -119,20 +117,17 @@ func ocmShareCreateCommand() *command {
 			},
 		}
 
-		permissionMap := map[string]string{"name": strconv.Itoa(pint)}
-		val, err := json.Marshal(permissionMap)
-		if err != nil {
-			return err
-		}
+		fmt.Println("res.Info.Path" + res.Info.Path)
+
 		opaqueObj := &types.Opaque{
 			Map: map[string]*types.OpaqueEntry{
 				"permissions": &types.OpaqueEntry{
-					Decoder: "json",
-					Value:   val,
+					Decoder: "plain",
+					Value:   []byte(strconv.Itoa(pint)),
 				},
 				"name": &types.OpaqueEntry{
 					Decoder: "plain",
-					Value:   []byte(path.Base(res.Info.Path)),
+					Value:   []byte(res.Info.Path),
 				},
 			},
 		}
@@ -148,12 +143,12 @@ func ocmShareCreateCommand() *command {
 		if err != nil {
 			return err
 		}
-		fmt.Println("create share done")
 
 		if shareRes.Status.Code != rpc.Code_CODE_OK {
 			return formatError(shareRes.Status)
 		}
 
+		fmt.Println("create share done")
 		t := table.NewWriter()
 		t.SetOutputMirror(os.Stdout)
 		t.AppendHeader(table.Row{"#", "Owner.Idp", "Owner.OpaqueId", "ResourceId", "Permissions", "Type", "Grantee.Idp", "Grantee.OpaqueId", "Created", "Updated"})

@@ -38,6 +38,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/rhttp"
+	tokenpkg "github.com/cs3org/reva/pkg/token"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
@@ -99,7 +100,7 @@ func getOCMEndpoint(originProvider *ocmprovider.ProviderInfo) (string, error) {
 }
 
 func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGrant, name string,
-	pi *ocmprovider.ProviderInfo, pm string, owner *userpb.UserId) (*ocm.Share, error) {
+	pi *ocmprovider.ProviderInfo, pm string, owner *userpb.UserId, token string) (*ocm.Share, error) {
 
 	id := genID()
 	now := time.Now().UnixNano()
@@ -124,7 +125,14 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 			return nil, errors.New("json: owner of resource not provided")
 		}
 		userID = owner
-		id += ":" + name
+		g.Grantee.Opaque = &typespb.Opaque{
+			Map: map[string]*typespb.OpaqueEntry{
+				"token": &typespb.OpaqueEntry{
+					Decoder: "plain",
+					Value:   []byte(token),
+				},
+			},
+		}
 	} else {
 		userID = user.ContextMustGetUser(ctx).GetId()
 	}
@@ -153,6 +161,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 		Id: &ocm.ShareId{
 			OpaqueId: id,
 		},
+		Name:        name,
 		ResourceId:  md,
 		Permissions: g.Permissions,
 		Grantee:     g.Grantee,
@@ -171,6 +180,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 				"name": "webdav",
 				"options": map[string]string{
 					"permissions": pm,
+					"token":       tokenpkg.ContextMustGetToken(ctx),
 				},
 			},
 		)

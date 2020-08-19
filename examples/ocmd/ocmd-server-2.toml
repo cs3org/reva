@@ -112,4 +112,6 @@ providers = "providers.demo.json"
 [http.services.ocs]
 prefix = "ocs"
 
+[http.services.ocdav]
+
 [http.middlewares.cors]
