@@ -33,6 +33,7 @@ import (
 
 // SMTPCredentials stores the credentials required to connect to an SMTP server.
 type SMTPCredentials struct {
+	SenderLogin    string `mapstructure:"sender_login" docs:";The login to be used by sender."`
 	SenderMail     string `mapstructure:"sender_mail" docs:";The email to be used to send mails."`
 	SenderPassword string `mapstructure:"sender_password" docs:";The sender's password."`
 	SMTPServer     string `mapstructure:"smtp_server" docs:";The hostname of the SMTP server."`
@@ -54,6 +55,9 @@ func NewSMTPCredentials(c *SMTPCredentials) *SMTPCredentials {
 	if creds.LocalName == "" {
 		tokens := strings.Split(creds.SenderMail, "@")
 		creds.LocalName = tokens[len(tokens)-1]
+	}
+	if creds.SenderLogin == "" {
+		creds.SenderLogin = creds.SenderMail
 	}
 	return creds
 }
@@ -86,7 +90,7 @@ func (creds *SMTPCredentials) SendMail(recipient, subject, body string) error {
 
 func (creds *SMTPCredentials) sendMailAuthSMTP(recipient, subject, message string) error {
 
-	auth := smtp.PlainAuth("", creds.SenderMail, creds.SenderPassword, creds.SMTPServer)
+	auth := smtp.PlainAuth("", creds.SenderLogin, creds.SenderPassword, creds.SMTPServer)
 
 	err := smtp.SendMail(
 		fmt.Sprintf("%s:%d", creds.SMTPServer, creds.SMTPPort),
