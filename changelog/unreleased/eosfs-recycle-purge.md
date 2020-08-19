@@ -1,4 +1,4 @@
-Bugfix: do not restore recycle entry on purge.
+Bugfix: do not restore recycle entry on purge
 
 
 This PR fixes a bug in the EOSFS driver that was restoring a deleted entry
