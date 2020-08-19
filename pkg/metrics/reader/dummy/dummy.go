@@ -28,6 +28,7 @@ import (
 	"github.com/cs3org/reva/pkg/metrics"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
+	"go.opencensus.io/tag"
 )
 
 func init() {
@@ -47,15 +48,34 @@ func init() {
 		return
 	}
 
+	revaVersionKey := tag.MustNewKey("reva_version")
+	buildDateKey := tag.MustNewKey("build_date")
+
+	sysInfo := stats.Int64("new_sys_info", "A metric with a constant '1' value labeled by various system information elements", stats.UnitDimensionless)
+	sysInfoView := &view.View{
+		Name:        sysInfo.Name(),
+		Description: sysInfo.Description(),
+		Measure:     sysInfo,
+		TagKeys:     []tag.Key{revaVersionKey, buildDateKey},
+		Aggregation: view.LastValue(),
+	}
+
 	// register the desired measures' views
 	if err := view.Register(
 		m.GetNumUsersView(),
 		m.GetNumGroupsView(),
 		m.GetAmountStorageView(),
+		sysInfoView,
 	); err != nil {
 		log.Error().Err(err).Msg("error registering views with opencensus exporter")
 		return
 	}
+
+	ctx, _ := tag.New(context.Background(),
+		tag.Insert(revaVersionKey, "1.1.0"),
+		tag.Insert(buildDateKey, "19-08-2020"),
+	)
+	stats.Record(ctx, sysInfo.M(1))
 
 	// call the actual metric provider functions for the latest metrics every 4th second
 	go func() {
