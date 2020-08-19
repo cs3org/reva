@@ -61,7 +61,8 @@ lint-ci:
 gen-doc:
 	go run tools/generate-documentation/main.go
 
-check-changelog:
+check-changelog: release-deps
+	`go env GOPATH`/bin/calens > /dev/null
 	go run tools/check-changelog/main.go
 
 check-changelog-drone:
