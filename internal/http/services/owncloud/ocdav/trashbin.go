@@ -126,7 +126,14 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			dst := path.Clean(urlPath[len(baseURI):])
+
+			urlSplit := strings.Split(urlPath, baseURI)
+			if len(urlSplit) != 2 {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+
+			dst := path.Clean(urlSplit[1])
 
 			h.restore(w, r, s, u, dst, key)
 			return
