@@ -345,7 +345,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 33c64ea3d56ec20e5d0cbc0f745ed2c04589b7f8
+      - git checkout 3f127eaf24ed539fd9effbc82db9b57df38e3157
 
   - name: localAPIAcceptanceTestsOcStorage
     image: owncloudci/php:7.2
@@ -404,7 +404,7 @@ steps:
     image: golang:1.13
     detach: true
     commands:
-      - cd /drone/src/drone/oc-integration-tests/
+      - cd /drone/src/tests/oc-integration-tests/drone/
       - /drone/src/cmd/revad/revad -c frontend.toml &
       - /drone/src/cmd/revad/revad -c gateway.toml &
       - /drone/src/cmd/revad/revad -c shares.toml &
@@ -419,7 +419,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 33c64ea3d56ec20e5d0cbc0f745ed2c04589b7f8
+      - git checkout 3f127eaf24ed539fd9effbc82db9b57df38e3157
 
   - name: oC10APIAcceptanceTests
     image: owncloudci/php:7.2
