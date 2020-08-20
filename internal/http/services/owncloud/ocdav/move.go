@@ -103,8 +103,14 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	// TODO check if path is on same storage, return 502 on problems, see https://tools.ietf.org/html/rfc4918#section-9.9.4
+	// The base URI might contain redirection prefixes which need to be handled
+	urlSplit := strings.Split(urlPath, baseURI)
+	if len(urlSplit) != 2 {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 	// prefix to namespace
-	dst := path.Join(ns, urlPath[len(baseURI):])
+	dst := path.Join(ns, urlSplit[1])
 
 	// check dst exists
 	dstStatRef := &provider.Reference{

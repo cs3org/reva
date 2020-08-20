@@ -171,6 +171,16 @@ func (fs *localfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tu
 		fs:       fs,
 	}
 
+	if !info.SizeIsDeferred && info.Size == 0 {
+		log.Debug().Interface("info", info).Msg("localfs: finishing upload for empty file")
+		// no need to create info file and finish directly
+		err := u.FinishUpload(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return u, nil
+	}
+
 	// writeInfo creates the file by itself if necessary
 	err = u.writeInfo()
 	if err != nil {
@@ -307,10 +317,10 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 
 	err := os.Rename(upload.binPath, np)
 
-	// only delete the upload if it was successfully written to eos
+	// only delete the upload if it was successfully written to the fs
 	if err := os.Remove(upload.infoPath); err != nil {
 		log := appctx.GetLogger(ctx)
-		log.Err(err).Interface("info", upload.info).Msg("eos: could not delete upload info")
+		log.Err(err).Interface("info", upload.info).Msg("localfs: could not delete upload info")
 	}
 
 	// TODO: set mtime if specified in metadata
