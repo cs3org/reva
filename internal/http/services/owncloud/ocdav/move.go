@@ -20,7 +20,6 @@ package ocdav
 
 import (
 	"net/http"
-	"net/url"
 	"path"
 	"strings"
 
@@ -39,12 +38,14 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 	dstHeader := r.Header.Get("Destination")
 	overwrite := r.Header.Get("Overwrite")
 
-	log.Info().Str("src", src).Str("dst", dstHeader).Str("overwrite", overwrite).Msg("move")
-
-	if dstHeader == "" {
+	dst, err := extractDestination(dstHeader, r.Context().Value(ctxKeyBaseURI).(string))
+	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	dst = path.Join(ns, dst)
+
+	log.Info().Str("src", src).Str("dst", dst).Str("overwrite", overwrite).Msg("move")
 
 	overwrite = strings.ToUpper(overwrite)
 	if overwrite == "" {
@@ -60,23 +61,6 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	// strip baseURL from destination
-	dstURL, err := url.ParseRequestURI(dstHeader)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	urlPath := dstURL.Path
-	baseURI := r.Context().Value(ctxKeyBaseURI).(string)
-	log.Info().Str("url_path", urlPath).Str("base_uri", baseURI).Msg("move urls")
-	// TODO replace with HasPrefix:
-	i := strings.Index(urlPath, baseURI)
-	if i == -1 {
-		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
@@ -101,16 +85,6 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-
-	// TODO check if path is on same storage, return 502 on problems, see https://tools.ietf.org/html/rfc4918#section-9.9.4
-	// The base URI might contain redirection prefixes which need to be handled
-	urlSplit := strings.Split(urlPath, baseURI)
-	if len(urlSplit) != 2 {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	// prefix to namespace
-	dst := path.Join(ns, urlSplit[1])
 
 	// check dst exists
 	dstStatRef := &provider.Reference{

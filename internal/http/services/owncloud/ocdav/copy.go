@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"path"
 	"strings"
 	"time"
@@ -54,13 +53,15 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 		depth = "infinity"
 	}
 
-	log.Info().Str("source", src).Str("destination", dstHeader).
-		Str("overwrite", overwrite).Str("depth", depth).Msg("copy")
-
-	if dstHeader == "" {
+	dst, err := extractDestination(dstHeader, r.Context().Value(ctxKeyBaseURI).(string))
+	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	dst = path.Join(ns, dst)
+
+	log.Info().Str("source", src).Str("destination", dst).
+		Str("overwrite", overwrite).Str("depth", depth).Msg("copy")
 
 	overwrite = strings.ToUpper(overwrite)
 	if overwrite == "" {
@@ -84,23 +85,6 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	// strip baseURL from destination
-	dstURL, err := url.ParseRequestURI(dstHeader)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	urlPath := dstURL.Path
-	baseURI := r.Context().Value(ctxKeyBaseURI).(string)
-	log.Info().Str("url-path", urlPath).Str("base-uri", baseURI).Msg("copy")
-	// TODO replace with HasPrefix:
-	i := strings.Index(urlPath, baseURI)
-	if i == -1 {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
 	// check src exists
 	ref := &provider.Reference{
 		Spec: &provider.Reference_Path{Path: src},
@@ -121,16 +105,6 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-
-	// TODO check if path is on same storage, return 502 on problems, see https://tools.ietf.org/html/rfc4918#section-9.9.4
-	// The base URI might contain redirection prefixes which need to be handled
-	urlSplit := strings.Split(urlPath, baseURI)
-	if len(urlSplit) != 2 {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	// prefix to namespace
-	dst := path.Join(ns, urlSplit[1])
 
 	// check dst exists
 	ref = &provider.Reference{
