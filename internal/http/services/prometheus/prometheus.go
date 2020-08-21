@@ -24,7 +24,6 @@ import (
 	"contrib.go.opencensus.io/exporter/prometheus"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-	promclient "github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 	"go.opencensus.io/stats/view"
 
@@ -48,23 +47,21 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 
 	conf.init()
 
-	registry := promclient.NewRegistry() // A Prometheus registry shared by OpenCensus and SysInfo
 	pe, err := prometheus.NewExporter(prometheus.Options{
 		Namespace: "revad",
-		Registry:  registry,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "prometheus: error creating exporter")
 	}
 
 	// Initialize the SysInfo Prometheus exporter
-	sysinfo, err := sysinfo.NewPrometheusExporter(registry)
-	if err != nil {
-		return nil, errors.Wrap(err, "prometheus: unable to create system info exporter")
+	// TODO: Centralize registration of new metrics
+	if err := sysinfo.RegisterSystemInfoMetrics(); err != nil {
+		return nil, errors.Wrap(err, "prometheus: unable to create system info metrics")
 	}
 
 	view.RegisterExporter(pe)
-	return &svc{prefix: conf.Prefix, h: pe, sysinfo: sysinfo}, nil
+	return &svc{prefix: conf.Prefix, h: pe}, nil
 }
 
 type config struct {
@@ -80,8 +77,6 @@ func (c *config) init() {
 type svc struct {
 	prefix string
 	h      http.Handler
-
-	sysinfo *sysinfo.PrometheusExporter
 }
 
 func (s *svc) Prefix() string {
