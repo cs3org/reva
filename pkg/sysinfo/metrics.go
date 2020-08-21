@@ -51,8 +51,8 @@ func (m *sysInfoMetrics) init() error {
 	m.labels = m.getLabels("", SysInfo)
 
 	// Collect all labels and their values; the values are stored as mutators
-	var tagKeys []tag.Key
-	var mutators []tag.Mutator
+	tagKeys := make([]tag.Key, 0, len(m.labels))
+	mutators := make([]tag.Mutator, 0, len(m.labels))
 	for key, value := range m.labels {
 		tagKeys = append(tagKeys, key)
 		mutators = append(mutators, tag.Insert(key, value))
