@@ -60,10 +60,10 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 			return
 		}
 
-		var username string
-		username, r.URL.Path = router.ShiftPath(r.URL.Path)
+		var userid string
+		userid, r.URL.Path = router.ShiftPath(r.URL.Path)
 
-		if username == "" {
+		if userid == "" {
 			// listing is disabled, no auth will change that
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
@@ -74,7 +74,8 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		if u.Username != username {
+		if u.Id.OpaqueId != userid {
+			log.Debug().Str("userid", userid).Interface("user", u).Msg("trying to read another users trash")
 			// listing other users trash is forbidden, no auth will change that
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
@@ -97,7 +98,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 		if key != "" && r.Method == "MOVE" {
 			dstHeader := r.Header.Get("Destination")
 
-			log.Info().Str("key", key).Str("dst", dstHeader).Msg("restore")
+			log.Debug().Str("key", key).Str("dst", dstHeader).Msg("restore")
 
 			if dstHeader == "" {
 				w.WriteHeader(http.StatusBadRequest)
@@ -114,11 +115,11 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 
 			// find path in url relative to trash base
 			trashBase := ctx.Value(ctxKeyBaseURI).(string)
-			baseURI := path.Join(path.Dir(trashBase), "files", username)
+			baseURI := path.Join(path.Dir(trashBase), "files", userid)
 			ctx = context.WithValue(ctx, ctxKeyBaseURI, baseURI)
 			r = r.WithContext(ctx)
 
-			log.Info().Str("url_path", urlPath).Str("base_uri", baseURI).Msg("move urls")
+			log.Debug().Str("url_path", urlPath).Str("base_uri", baseURI).Msg("move urls")
 			// TODO make request.php optional in destination header
 			i := strings.Index(urlPath, baseURI)
 			if i == -1 {
@@ -213,13 +214,13 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *us
 	responses = append(responses, &responseXML{
 		Href: (&url.URL{Path: ctx.Value(ctxKeyBaseURI).(string) + "/"}).EscapedPath(), // url encode response.Href TODO (jfd) really? /should be ok ... we may actually only need to escape the username
 		Propstat: []propstatXML{
-			propstatXML{
+			{
 				Status: "HTTP/1.1 200 OK",
 				Prop: []*propertyXML{
 					s.newProp("d:resourcetype", "<d:collection/>"),
 				},
 			},
-			propstatXML{
+			{
 				Status: "HTTP/1.1 404 Not Found",
 				Prop: []*propertyXML{
 					s.newProp("oc:trashbin-original-filename", ""),
@@ -230,28 +231,7 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *us
 			},
 		},
 	})
-	/*
-		for i := range items {
-			vi := &provider.ResourceInfo{
-				// TODO(jfd) we cannot access version content, this will be a problem when trying to fetch version thumbnails
-				//Opaque
-				Type: provider.ResourceType_RESOURCE_TYPE_FILE,
-				Id: &provider.ResourceId{
-					StorageId: "trashbin", // this is a virtual storage
-					OpaqueId:  path.Join("trash-bin", u.Username, items[i].GetKey()),
-				},
-				//Checksum
-				//Etag: v.ETag,
-				//MimeType
-				Mtime: items[i].DeletionTime,
-				Path:  items[i].Key,
-				//PermissionSet
-				Size:  items[i].Size,
-				Owner: u.Id,
-			}
-			infos = append(infos, vi)
-		}
-	*/
+
 	for i := range items {
 		res, err := h.itemToPropResponse(ctx, s, pf, items[i])
 		if err != nil {
@@ -270,6 +250,9 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *us
 	return msg, nil
 }
 
+// itemToPropResponse needs to create a listing that contains a key and destination
+// the key is the name of an entry in the trash listing
+// for now we need to limit trash to the users home, so we can expect all trash keys to have the home storage as the opaque id
 func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, pf *propfindXML, item *provider.RecycleItem) (*responseXML, error) {
 
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
@@ -376,6 +359,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, pf *pr
 	return &response, nil
 }
 
+// restore has a destination and a key
 func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, dst string, key string) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
@@ -387,18 +371,28 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		return
 	}
 
-	rid := unwrap(key)
+	getHomeRes, err := client.GetHome(ctx, &provider.GetHomeRequest{})
+	if err != nil {
+		log.Error().Err(err).Msg("error calling GetHomeProvider")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if getHomeRes.Status.Code != rpc.Code_CODE_OK {
+		log.Error().Int32("code", int32(getHomeRes.Status.Code)).Str("trace", getHomeRes.Status.Trace).Msg(getHomeRes.Status.Message)
+		w.WriteHeader(http.StatusInternalServerError)
+	}
 
 	req := &provider.RestoreRecycleItemRequest{
 		// use the target path to find the storage provider
 		// this means we can only undelete on the same storage, not to a different folder
 		// use the key which is prefixed with the StoragePath to lookup the correct storage ...
+		// TODO currently limited to the home storage
 		Ref: &provider.Reference{
-			Spec: &provider.Reference_Id{
-				Id: rid,
+			Spec: &provider.Reference_Path{
+				Path: getHomeRes.Path,
 			},
 		},
-		Key:         rid.GetOpaqueId(),
+		Key:         key,
 		RestorePath: dst,
 	}
 
@@ -419,6 +413,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// delete has only a key
 func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, key string) {
 
 	ctx := r.Context()
@@ -431,12 +426,43 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 		return
 	}
 
-	rid := unwrap(key)
+	getHomeRes, err := client.GetHome(ctx, &provider.GetHomeRequest{})
+	if err != nil {
+		log.Error().Err(err).Msg("error calling GetHomeProvider")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if getHomeRes.Status.Code != rpc.Code_CODE_OK {
+		log.Error().Int32("code", int32(getHomeRes.Status.Code)).Str("trace", getHomeRes.Status.Trace).Msg(getHomeRes.Status.Message)
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+	sRes, err := client.Stat(ctx, &provider.StatRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: getHomeRes.Path,
+			},
+		},
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("error calling Stat")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if sRes.Status.Code != rpc.Code_CODE_OK {
+		log.Error().Int32("code", int32(sRes.Status.Code)).Str("trace", sRes.Status.Trace).Msg(sRes.Status.Message)
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+
+	// set key as opaque id, the storageprovider will use it as the key for the
+	// storage drives  PurgeRecycleItem key call
 
 	req := &gateway.PurgeRecycleRequest{
 		Ref: &provider.Reference{
 			Spec: &provider.Reference_Id{
-				Id: rid,
+				Id: &provider.ResourceId{
+					OpaqueId:  key,
+					StorageId: sRes.Info.Id.StorageId,
+				},
 			},
 		},
 	}

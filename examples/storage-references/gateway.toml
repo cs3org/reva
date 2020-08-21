@@ -25,3 +25,4 @@ home_provider = "/home"
 [http.services.datagateway]
 [http.services.prometheus]
 [http.services.ocmd]
+[http.services.ocdav]

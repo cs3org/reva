@@ -506,13 +506,6 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 		resourcePermissions = asCS3Permissions(permissions, nil)
 	}
 
-	permissionMap := map[string]string{"name": strconv.Itoa(int(permissions))}
-	val, err := json.Marshal(permissionMap)
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "could not encode role", err)
-		return
-	}
-
 	statReq := &provider.StatRequest{
 		Ref: &provider.Reference{
 			Spec: &provider.Reference_Path{
@@ -538,12 +531,12 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 		Opaque: &types.Opaque{
 			Map: map[string]*types.OpaqueEntry{
 				"permissions": &types.OpaqueEntry{
-					Decoder: "json",
-					Value:   val,
+					Decoder: "plain",
+					Value:   []byte(strconv.Itoa(int(permissions))),
 				},
 				"name": &types.OpaqueEntry{
 					Decoder: "plain",
-					Value:   []byte(path.Base(statRes.Info.Path)),
+					Value:   []byte(statRes.Info.Path),
 				},
 			},
 		},
@@ -1165,11 +1158,15 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 			if err != nil {
 				return nil, err
 			}
+			if statResponse.Status.Code != rpc.Code_CODE_OK {
+				if statResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
+					continue
+				}
+
+				return nil, errors.New(fmt.Sprintf("could not stat share target: %v, code: %v", share.ResourceId, statResponse.Status))
+			}
 
 			sData := conversions.PublicShare2ShareData(share, r, h.publicURL)
-			if statResponse.Status.Code != rpc.Code_CODE_OK {
-				return nil, err
-			}
 
 			sData.Name = share.DisplayName
 
@@ -1295,7 +1292,13 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.ListS
 			}
 
 			if statResponse.Status.Code != rpc.Code_CODE_OK {
-				return nil, errors.New("could not stat share target")
+				if statResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
+					// TODO share target was not found, we should not error here.
+					// return nil, errors.New(fmt.Sprintf("could not stat share target: %v, code: %v", s.ResourceId, statResponse.Status))
+					continue
+				}
+
+				return nil, errors.New(fmt.Sprintf("could not stat share target: %v, code: %v", s.ResourceId, statResponse.Status))
 			}
 
 			err = h.addFileInfo(ctx, share, statResponse.Info)

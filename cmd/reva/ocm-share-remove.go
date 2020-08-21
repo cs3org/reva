@@ -20,20 +20,20 @@ package main
 
 import (
 	"fmt"
-	"os"
+	"io"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	"github.com/pkg/errors"
 )
 
 func ocmShareRemoveCommand() *command {
 	cmd := newCommand("ocm-share-remove")
 	cmd.Description = func() string { return "remove an OCM share" }
 	cmd.Usage = func() string { return "Usage: ocm-share-remove [-flags] <share_id>" }
-	cmd.Action = func() error {
+	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
-			fmt.Println(cmd.Usage())
-			os.Exit(1)
+			return errors.New("Invalid arguments: " + cmd.Usage())
 		}
 
 		id := cmd.Args()[0]

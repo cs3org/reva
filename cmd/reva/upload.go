@@ -29,40 +29,52 @@ import (
 	"time"
 
 	"github.com/cs3org/reva/internal/http/services/datagateway"
+	"github.com/pkg/errors"
 
 	"github.com/cheggaaa/pb"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-
+	"github.com/cs3org/reva/pkg/errtypes"
 	tokenpkg "github.com/cs3org/reva/pkg/token"
 	"github.com/eventials/go-tus"
 	"github.com/eventials/go-tus/memorystore"
+	"github.com/studio-b12/gowebdav"
 
 	// TODO(labkode): this should not come from this package.
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/pkg/crypto"
 	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/utils"
 )
 
 func uploadCommand() *command {
 	cmd := newCommand("upload")
 	cmd.Description = func() string { return "upload a local file to the remote server" }
 	cmd.Usage = func() string { return "Usage: upload [-flags] <file_name> <remote_target>" }
-	disabletusFlag := cmd.Bool("disable-tus", false, "whether to disable tus protocol")
+	disableTusFlag := cmd.Bool("disable-tus", false, "whether to disable tus protocol")
 	xsFlag := cmd.String("xs", "negotiate", "compute checksum")
-	cmd.Action = func() error {
+
+	cmd.ResetFlags = func() {
+		*disableTusFlag, *xsFlag = false, "negotiate"
+	}
+
+	cmd.Action = func(w ...io.Writer) error {
 		ctx := getAuthContext()
 
 		if cmd.NArg() < 2 {
-			fmt.Println(cmd.Usage())
-			os.Exit(1)
+			return errors.New("Invalid arguments: " + cmd.Usage())
 		}
 
 		fn := cmd.Args()[0]
 		target := cmd.Args()[1]
 
-		fd, err := os.Open(fn)
+		absPath, err := utils.ResolvePath(fn)
+		if err != nil {
+			return err
+		}
+
+		fd, err := os.Open(absPath)
 		if err != nil {
 			return err
 		}
@@ -110,6 +122,14 @@ func uploadCommand() *command {
 		fmt.Printf("Data server: %s\n", res.UploadEndpoint)
 		fmt.Printf("Allowed checksums: %+v\n", res.AvailableChecksums)
 
+		if err = checkUploadWebdavRef(res.UploadEndpoint, res.Opaque, md, fd); err != nil {
+			if _, ok := err.(errtypes.IsNotSupported); !ok {
+				return err
+			}
+		} else {
+			return nil
+		}
+
 		xsType, err := guessXS(*xsFlag, res.AvailableChecksums)
 		if err != nil {
 			return err
@@ -133,9 +153,10 @@ func uploadCommand() *command {
 		bar.Start()
 		reader := bar.NewProxyReader(fd)
 
-		if *disabletusFlag {
+		if *disableTusFlag {
 			httpReq, err := rhttp.NewRequest(ctx, "PUT", dataServerURL, reader)
 			if err != nil {
+				bar.Finish()
 				return err
 			}
 
@@ -155,10 +176,12 @@ func uploadCommand() *command {
 
 			httpRes, err := httpClient.Do(httpReq)
 			if err != nil {
+				bar.Finish()
 				return err
 			}
 			defer httpRes.Body.Close()
 			if httpRes.StatusCode != http.StatusOK {
+				bar.Finish()
 				return err
 			}
 		} else {
@@ -174,6 +197,7 @@ func uploadCommand() *command {
 			)
 			c.Store, err = memorystore.NewMemoryStore()
 			if err != nil {
+				bar.Finish()
 				return err
 			}
 			if token, ok := tokenpkg.ContextGetToken(ctx); ok {
@@ -184,6 +208,7 @@ func uploadCommand() *command {
 			}
 			tusc, err := tus.NewClient(dataServerURL, c)
 			if err != nil {
+				bar.Finish()
 				return err
 			}
 
@@ -205,6 +230,7 @@ func uploadCommand() *command {
 			// start the uploading process.
 			err = uploader.Upload()
 			if err != nil {
+				bar.Finish()
 				return err
 			}
 		}
@@ -234,6 +260,54 @@ func uploadCommand() *command {
 		return nil
 	}
 	return cmd
+}
+
+func checkUploadWebdavRef(endpoint string, opaque *typespb.Opaque, md os.FileInfo, fd *os.File) error {
+	if opaque == nil {
+		return errtypes.NotSupported("opaque object not defined")
+	}
+
+	var token string
+	tokenOpaque, ok := opaque.Map["webdav-token"]
+	if !ok {
+		return errtypes.NotSupported("webdav token not defined")
+	}
+	switch tokenOpaque.Decoder {
+	case "plain":
+		token = string(tokenOpaque.Value)
+	default:
+		return errors.New("opaque entry decoder not recognized: " + tokenOpaque.Decoder)
+	}
+
+	var filePath string
+	fileOpaque, ok := opaque.Map["webdav-file-path"]
+	if !ok {
+		return errtypes.NotSupported("webdav file path not defined")
+	}
+	switch fileOpaque.Decoder {
+	case "plain":
+		filePath = string(fileOpaque.Value)
+	default:
+		return errors.New("opaque entry decoder not recognized: " + fileOpaque.Decoder)
+	}
+
+	bar := pb.New(int(md.Size())).SetUnits(pb.U_BYTES)
+	bar.Start()
+	reader := bar.NewProxyReader(fd)
+
+	c := gowebdav.NewClient(endpoint, "", "")
+	c.SetHeader(tokenpkg.TokenHeader, token)
+	c.SetHeader("Upload-Length", strconv.FormatInt(md.Size(), 10))
+
+	err := c.WriteStream(filePath, reader, 0700)
+	if err != nil {
+		bar.Finish()
+		return err
+	}
+
+	bar.Finish()
+	fmt.Println("File uploaded")
+	return nil
 }
 
 func computeXS(t provider.ResourceChecksumType, r io.Reader) (string, error) {

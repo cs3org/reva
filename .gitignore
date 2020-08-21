@@ -39,3 +39,10 @@ docs/themes/
 
 dist/
 bin/
+
+# API acceptance tests
+composer.lock
+/vendor
+vendor-bin/**/vendor
+vendor-bin/**/composer.lock
+tests/acceptance/output

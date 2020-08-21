@@ -1,4 +1,4 @@
-Bugfix: Fixed resolution of fileid in GetPathByID.
+Bugfix: Fixed resolution of fileid in GetPathByID
 
 Following refactoring of fileid generations in the
 local storage provider, this ensures fileid to path

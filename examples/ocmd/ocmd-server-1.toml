@@ -1,5 +1,4 @@
 [shared]
-jwt_secret = "Pive-Fumkiu4"
 gatewaysvc = "localhost:19000"
 
 [grpc]
@@ -20,7 +19,6 @@ ocminvitemanagersvc = "localhost:19000"
 ocmproviderauthorizersvc = "localhost:19000"
 commit_share_to_storage_grant = false
 datagateway = "http://localhost:19001/data"
-transfer_shared_secret = "replace-me-with-a-transfer-secret" # for direct uploads
 transfer_expires = 6 # give it a moment
 
 [grpc.services.authregistry]
@@ -33,10 +31,10 @@ basic = "localhost:19000"
 driver = "static"
 
 [grpc.services.storageregistry.drivers.static]
-home_provider = "/"
+home_provider = "/home"
 
 [grpc.services.storageregistry.drivers.static.rules]
-"/" = "localhost:19000"
+"/home" = "localhost:19000"
 "123e4567-e89b-12d3-a456-426655440000" = "localhost:19000"
 
 [grpc.services.usershareprovider]
@@ -84,7 +82,7 @@ driver = "static"
 
 [grpc.services.storageprovider]
 driver = "localhome"
-mount_path = "/"
+mount_path = "/home"
 mount_id = "123e4567-e89b-12d3-a456-426655440000"
 expose_data_server = true
 data_server_url = "http://localhost:19001/data"
@@ -130,5 +128,7 @@ providers = "providers.demo.json"
 
 [http.services.ocs]
 prefix = "ocs"
+
+[http.services.ocdav]
 
 [http.middlewares.cors]

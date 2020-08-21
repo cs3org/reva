@@ -60,7 +60,7 @@ network = "tcp"
 address = "0.0.0.0:9999"
 access_log = "stderr"
 
-# Order and configuration of http middleware any grpc interceptors 
+# Order and configuration of http middleware any grpc interceptors
 
 # HTTP middlewares
 
@@ -82,11 +82,11 @@ token_manager = "jwt"
 skip_methods = [
     "/status.php",
     "/oauth2",
-    "/oauth2/auth", 
-    "/oauth2/token", 
+    "/oauth2/auth",
+    "/oauth2/token",
     "/oauth2/introspect",
-    "/oauth2/userinfo", 
-    "/oauth2/sessions", 
+    "/oauth2/userinfo",
+    "/oauth2/sessions",
     "/.well-known/openid-configuration"
 ]
 
@@ -335,7 +335,7 @@ func genSecret(l int) string {
 	_, err := rand.Read(buff)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error reading random: %v\n", err)
-		os.Exit(1)
+		return ""
 	}
 	return base64.StdEncoding.EncodeToString(buff)[:l]
 
@@ -354,16 +354,16 @@ func WriteConfig(p string, cs string, dd string, dp string) {
 	tmpl, err := template.New("config").Parse(baseTemplate)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error parsing config template: %v\n", err)
-		os.Exit(1)
+		return
 	}
 	f, err := os.Create(p)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error creating config file: %v\n", err)
-		os.Exit(1)
+		return
 	}
 	if err := tmpl.Execute(f, v); err != nil {
 		fmt.Fprintf(os.Stderr, "error writing config file: %v\n", err)
-		os.Exit(1)
+		return
 	}
 	fmt.Fprintf(os.Stdout, "wrote %s\n", p)
 }
@@ -445,7 +445,7 @@ func WriteUsers(p string, users []*userpb.User) {
 				_, err := hasher.Write([]byte(user.Username))
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "error hashing username: %v\n", err)
-					os.Exit(1)
+					return
 				}
 				u.Sub = hex.EncodeToString(hasher.Sum(nil))
 			}
@@ -456,16 +456,16 @@ func WriteUsers(p string, users []*userpb.User) {
 	tmpl, err := template.New("users").Parse(usersTemplate)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error parsing config template: %v\n", err)
-		os.Exit(1)
+		return
 	}
 	f, err := os.Create(p)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error creating config file: %v\n", err)
-		os.Exit(1)
+		return
 	}
 	if err := tmpl.Execute(f, uservars); err != nil {
 		fmt.Fprintf(os.Stderr, "error writing config file: %v\n", err)
-		os.Exit(1)
+		return
 	}
 	fmt.Fprintf(os.Stdout, "wrote %s\n", p)
 }

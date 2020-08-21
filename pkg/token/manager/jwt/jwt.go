@@ -32,7 +32,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-const defaultExpiration int64 = 3600 // 1 hour
+const defaultExpiration int64 = 86400 // 1 day
 
 func init() {
 	registry.Register("jwt", New)

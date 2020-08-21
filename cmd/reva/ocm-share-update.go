@@ -20,10 +20,11 @@ package main
 
 import (
 	"fmt"
-	"os"
+	"io"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	"github.com/pkg/errors"
 )
 
 func ocmShareUpdateCommand() *command {
@@ -31,17 +32,18 @@ func ocmShareUpdateCommand() *command {
 	cmd.Description = func() string { return "update an OCM share" }
 	cmd.Usage = func() string { return "Usage: ocm-share-update [-flags] <share_id>" }
 	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor)")
-	cmd.Action = func() error {
+
+	cmd.ResetFlags = func() {
+		*rol = "viewer"
+	}
+	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
-			fmt.Println(cmd.Usage())
-			os.Exit(1)
+			return errors.New("Invalid arguments: " + cmd.Usage())
 		}
 
 		// validate flags
 		if *rol != viewerPermission && *rol != editorPermission {
-			fmt.Println("invalid rol: rol must be viewer or editor")
-			fmt.Println(cmd.Usage())
-			os.Exit(1)
+			return errors.New("Invalid rol: rol must be viewer or editor\n" + cmd.Usage())
 		}
 
 		id := cmd.Args()[0]

@@ -688,14 +688,32 @@ func readOrCreateID(ctx context.Context, np string, conn redis.Conn) string {
 }
 
 func (fs *ocfs) getPath(ctx context.Context, id *provider.ResourceId) (string, error) {
+	log := appctx.GetLogger(ctx)
 	c := fs.pool.Get()
 	defer c.Close()
 	fs.scanFiles(ctx, c)
 	np, err := redis.String(c.Do("GET", id.OpaqueId))
 	if err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).Interface("id", id).Msg("error looking up fileid")
-		return "", err
+		return "", errtypes.NotFound(id.OpaqueId)
 	}
+
+	idFromXattr, err := xattr.Get(np, idAttribute)
+	if err != nil {
+		return "", errtypes.NotFound(id.OpaqueId)
+	}
+
+	uid, err := uuid.FromBytes(idFromXattr)
+	if err != nil {
+		log.Error().Err(err).Msg("error parsing uuid")
+	}
+
+	if uid.String() != id.OpaqueId {
+		if _, err := c.Do("DEL", id.OpaqueId); err != nil {
+			return "", err
+		}
+		return "", errtypes.NotFound(id.OpaqueId)
+	}
+
 	return np, nil
 }
 
@@ -1490,6 +1508,9 @@ func (fs *ocfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (e
 func (fs *ocfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
+		if _, ok := err.(errtypes.IsNotFound); ok {
+			return nil, err
+		}
 		return nil, errors.Wrap(err, "ocfs: error resolving reference")
 	}
 	p := fs.unwrap(ctx, np)
@@ -1910,10 +1931,6 @@ func (fs *ocfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error
 
 func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key string) error {
 	log := appctx.GetLogger(ctx)
-	u, ok := user.ContextGetUser(ctx)
-	if !ok {
-		return errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
-	}
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error resolving recycle path")
@@ -1922,27 +1939,26 @@ func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key string) error {
 
 	suffix := path.Ext(src)
 	if len(suffix) == 0 || !strings.HasPrefix(suffix, ".d") {
-		log.Error().Str("path", src).Msg("invalid trash item suffix")
+		log.Error().Str("key", key).Str("path", src).Msg("invalid trash item suffix")
 		return nil
 	}
 
 	origin := "/"
 	if v, err := xattr.Get(src, trashOriginPrefix); err != nil {
-		log.Error().Err(err).Str("path", src).Msg("could not read origin")
+		log.Error().Err(err).Str("key", key).Str("path", src).Msg("could not read origin")
 	} else {
 		origin = path.Clean(string(v))
 	}
-	layout := templates.WithUser(u, fs.c.UserLayout)
-	tgt := path.Join(fs.wrap(ctx, path.Join("/", layout, origin)), strings.TrimSuffix(path.Base(src), suffix))
+	tgt := fs.wrap(ctx, path.Join("/", origin, strings.TrimSuffix(path.Base(src), suffix)))
 	// move back to original location
 	if err := os.Rename(src, tgt); err != nil {
-		log.Error().Err(err).Str("path", src).Msg("could not restore item")
+		log.Error().Err(err).Str("key", key).Str("origin", origin).Str("src", src).Str("tgt", tgt).Msg("could not restore item")
 		return errors.Wrap(err, "ocfs: could not restore item")
 	}
 	// unset trash origin location in metadata
 	if err := xattr.Remove(tgt, trashOriginPrefix); err != nil {
 		// just a warning, will be overwritten next time it is deleted
-		log.Warn().Err(err).Str("path", tgt).Msg("could not unset origin")
+		log.Warn().Err(err).Str("key", key).Str("tgt", tgt).Msg("could not unset origin")
 	}
 	// TODO(jfd) restore versions
 

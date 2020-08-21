@@ -20,26 +20,30 @@ package main
 
 import (
 	"fmt"
-	"os"
+	"io"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/pkg/errors"
 )
 
 func openFileInAppProviderCommand() *command {
 	cmd := newCommand("open-file-in-app-provider")
-	cmd.Description = func() string { return "Open a file in an external app provider" }
+	cmd.Description = func() string { return "open a file in an external app provider" }
 	cmd.Usage = func() string {
 		return "Usage: open-file-in-app-provider [-flags] [-viewmode view|read|write] <path>"
 	}
 	viewMode := cmd.String("viewmode", "view", "the view permissions, defaults to view")
 
-	cmd.Action = func() error {
+	cmd.ResetFlags = func() {
+		*viewMode = "view"
+	}
+
+	cmd.Action = func(w ...io.Writer) error {
 		ctx := getAuthContext()
 		if cmd.NArg() < 1 {
-			fmt.Println(cmd.Usage())
-			os.Exit(1)
+			return errors.New("Invalid arguments: " + cmd.Usage())
 		}
 		path := cmd.Args()[0]
 

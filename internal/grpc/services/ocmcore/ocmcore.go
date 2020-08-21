@@ -120,19 +120,42 @@ func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCM
 		OpaqueId:  parts[1],
 	}
 
-	opaqueObj := req.Protocol.Opaque.Map["permissions"]
-	if opaqueObj.Decoder != "json" {
-		err := errors.New("opaque entry decoder is not json")
+	var resourcePermissions *provider.ResourcePermissions
+	permOpaque, ok := req.Protocol.Opaque.Map["permissions"]
+	if !ok {
+		return &ocmcore.CreateOCMCoreShareResponse{
+			Status: status.NewInternal(ctx, errors.New("resource permissions not set"), ""),
+		}, nil
+	}
+	switch permOpaque.Decoder {
+	case "json":
+		err := json.Unmarshal(permOpaque.Value, &resourcePermissions)
+		if err != nil {
+			return &ocmcore.CreateOCMCoreShareResponse{
+				Status: status.NewInternal(ctx, err, "error decoding resource permissions"),
+			}, nil
+		}
+	default:
+		err := errors.New("opaque entry decoder not recognized")
 		return &ocmcore.CreateOCMCoreShareResponse{
 			Status: status.NewInternal(ctx, err, "invalid opaque entry decoder"),
 		}, nil
 	}
 
-	var resourcePermissions *provider.ResourcePermissions
-	err := json.Unmarshal(opaqueObj.Value, &resourcePermissions)
-	if err != nil {
+	var token string
+	tokenOpaque, ok := req.Protocol.Opaque.Map["token"]
+	if !ok {
 		return &ocmcore.CreateOCMCoreShareResponse{
-			Status: status.NewInternal(ctx, err, "error decoding resource permissions"),
+			Status: status.NewInternal(ctx, errors.New("token not set"), ""),
+		}, nil
+	}
+	switch tokenOpaque.Decoder {
+	case "plain":
+		token = string(tokenOpaque.Value)
+	default:
+		err := errors.New("opaque entry decoder not recognized: " + tokenOpaque.Decoder)
+		return &ocmcore.CreateOCMCoreShareResponse{
+			Status: status.NewInternal(ctx, err, "invalid opaque entry decoder"),
 		}, nil
 	}
 
@@ -146,7 +169,7 @@ func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCM
 		},
 	}
 
-	share, err := s.sm.Share(ctx, resource, grant, req.Name, nil, "", req.Owner)
+	share, err := s.sm.Share(ctx, resource, grant, req.Name, nil, "", req.Owner, token)
 	if err != nil {
 		return &ocmcore.CreateOCMCoreShareResponse{
 			Status: status.NewInternal(ctx, err, "error creating ocm core share"),

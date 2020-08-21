@@ -21,12 +21,15 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/gob"
 	"fmt"
+	"io"
 	"os"
 
 	registry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	"github.com/pkg/errors"
 )
 
 var loginCommand = func() *command {
@@ -34,7 +37,12 @@ var loginCommand = func() *command {
 	cmd.Description = func() string { return "login into the reva server" }
 	cmd.Usage = func() string { return "Usage: login <type>" }
 	listFlag := cmd.Bool("list", false, "list available login methods")
-	cmd.Action = func() error {
+
+	cmd.ResetFlags = func() {
+		*listFlag = false
+	}
+
+	cmd.Action = func(w ...io.Writer) error {
 		if *listFlag {
 			// list available login methods
 			client, err := getClient()
@@ -54,34 +62,36 @@ var loginCommand = func() *command {
 				return formatError(res.Status)
 			}
 
-			fmt.Println("Available login methods:")
-			for _, v := range res.Types {
-				fmt.Printf("- %s\n", v)
+			if len(w) == 0 {
+				fmt.Println("Available login methods:")
+				for _, v := range res.Types {
+					fmt.Printf("- %s\n", v)
+				}
+			} else {
+				enc := gob.NewEncoder(w[0])
+				if err := enc.Encode(res.Types); err != nil {
+					return err
+				}
 			}
 			return nil
 		}
 
-		var authType, username, password string
 		if cmd.NArg() != 1 {
-			fmt.Println(cmd.Usage())
-			os.Exit(1)
-		} else {
-			authType = cmd.Args()[0]
-			reader := bufio.NewReader(os.Stdin)
-			fmt.Print("username: ")
-			usernameInput, err := read(reader)
-			if err != nil {
-				return err
-			}
+			return errors.New("Invalid arguments: " + cmd.Usage())
+		}
 
-			fmt.Print("password: ")
-			passwordInput, err := readPassword(0)
-			if err != nil {
-				return err
-			}
+		authType := cmd.Args()[0]
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Print("username: ")
+		username, err := read(reader)
+		if err != nil {
+			return err
+		}
 
-			username = usernameInput
-			password = passwordInput
+		fmt.Print("password: ")
+		password, err := readPassword(0)
+		if err != nil {
+			return err
 		}
 
 		client, err := getClient()

@@ -20,7 +20,6 @@ package sysinfo
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -41,8 +40,6 @@ type config struct {
 
 type svc struct {
 	conf *config
-
-	promHandler *prometheusSysInfoHandler
 }
 
 const (
@@ -67,24 +64,9 @@ func (s *svc) Unprotected() []string {
 // Handler serves all HTTP requests.
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt := strings.ToLower(r.URL.Query().Get("format"))
-		if len(fmt) == 0 {
-			// No format was specified, so let Prometheus handle the request
-			s.promHandler.httpHandler.ServeHTTP(w, r)
-		} else {
-			// Otherwise, provide the system information in the requested format
-			data := ""
-			switch fmt {
-			case "json":
-				data = s.getJSONData()
-			default:
-				data = "Unsupported format"
-			}
-
-			log := appctx.GetLogger(r.Context())
-			if _, err := w.Write([]byte(data)); err != nil {
-				log.Err(err).Msg("error writing SysInfo response")
-			}
+		log := appctx.GetLogger(r.Context())
+		if _, err := w.Write([]byte(s.getJSONData())); err != nil {
+			log.Err(err).Msg("error writing SysInfo response")
 		}
 	})
 }
@@ -120,16 +102,9 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		return nil, err
 	}
 
-	// Create the Prometheus system information handler
-	promHandler := &prometheusSysInfoHandler{}
-	if err := promHandler.init(); err != nil {
-		return nil, err
-	}
-
 	// Create the service
 	s := &svc{
-		conf:        conf,
-		promHandler: promHandler,
+		conf: conf,
 	}
 	return s, nil
 }

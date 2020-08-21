@@ -19,10 +19,9 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
+	"io"
 	"os"
-	"path"
 	"strconv"
 	"time"
 
@@ -45,23 +44,23 @@ func ocmShareCreateCommand() *command {
 	grantee := cmd.String("grantee", "", "the grantee")
 	idp := cmd.String("idp", "", "the idp of the grantee, default to same idp as the user triggering the action")
 	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor)")
-	cmd.Action = func() error {
+
+	cmd.ResetFlags = func() {
+		*grantType, *grantee, *idp, *rol = "user", "", "", "viewer"
+	}
+
+	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
-			fmt.Println(cmd.Usage())
-			os.Exit(1)
+			return errors.New("Invalid arguments: " + cmd.Usage())
 		}
 
 		// validate flags
 		if *grantee == "" {
-			fmt.Println("grantee cannot be empty: use -grantee flag")
-			fmt.Println(cmd.Usage())
-			os.Exit(1)
+			return errors.New("Grantee cannot be empty: use -grantee flag\n" + cmd.Usage())
 		}
 
 		if *idp == "" {
-			fmt.Println("idp cannot be empty: use -idp flag")
-			fmt.Println(cmd.Usage())
-			os.Exit(1)
+			return errors.New("IdP cannot be empty: use -idp flag\n" + cmd.Usage())
 		}
 
 		fn := cmd.Args()[0]
@@ -118,20 +117,17 @@ func ocmShareCreateCommand() *command {
 			},
 		}
 
-		permissionMap := map[string]string{"name": strconv.Itoa(pint)}
-		val, err := json.Marshal(permissionMap)
-		if err != nil {
-			return err
-		}
+		fmt.Println("res.Info.Path" + res.Info.Path)
+
 		opaqueObj := &types.Opaque{
 			Map: map[string]*types.OpaqueEntry{
 				"permissions": &types.OpaqueEntry{
-					Decoder: "json",
-					Value:   val,
+					Decoder: "plain",
+					Value:   []byte(strconv.Itoa(pint)),
 				},
 				"name": &types.OpaqueEntry{
 					Decoder: "plain",
-					Value:   []byte(path.Base(res.Info.Path)),
+					Value:   []byte(res.Info.Path),
 				},
 			},
 		}
@@ -147,12 +143,12 @@ func ocmShareCreateCommand() *command {
 		if err != nil {
 			return err
 		}
-		fmt.Println("create share done")
 
 		if shareRes.Status.Code != rpc.Code_CODE_OK {
 			return formatError(shareRes.Status)
 		}
 
+		fmt.Println("create share done")
 		t := table.NewWriter()
 		t.SetOutputMirror(os.Stdout)
 		t.AppendHeader(table.Row{"#", "Owner.Idp", "Owner.OpaqueId", "ResourceId", "Permissions", "Type", "Grantee.Idp", "Grantee.OpaqueId", "Created", "Updated"})

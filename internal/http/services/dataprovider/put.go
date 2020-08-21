@@ -65,8 +65,12 @@ func (s *svc) doTusPut(w http.ResponseWriter, r *http.Request) {
 
 	length, err := strconv.ParseInt(r.Header.Get("Content-Length"), 10, 64)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
+		// Fallback to Upload-Length
+		length, err = strconv.ParseInt(r.Header.Get("Upload-Length"), 10, 64)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 	}
 
 	dataServerURL := fmt.Sprintf("http://%s%s", r.Host, r.RequestURI)

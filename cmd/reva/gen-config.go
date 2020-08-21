@@ -20,16 +20,18 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
 	"github.com/cs3org/reva/cmd/reva/gen"
+	"github.com/pkg/errors"
 )
 
 var genConfigSubCommand = func() *command {
 	cmd := newCommand("config")
 	cmd.Description = func() string { return "will create a revad.toml file" }
-	cmd.Usage = func() string { return "Usage: gen config" }
+	cmd.Usage = func() string { return "Usage: gen config [-flags]" }
 
 	forceFlag := cmd.Bool("f", false, "force")
 	configFlag := cmd.String("c", "./revad.toml", "path to the config file")
@@ -37,7 +39,12 @@ var genConfigSubCommand = func() *command {
 	dataDriverFlag := cmd.String("dd", "local", "'local' or 'owncloud', ('s3' or 'eos' are supported when providing a custom config)")
 	dataPathFlag := cmd.String("dp", "./data", "path to the data folder")
 
-	cmd.Action = func() error {
+	cmd.ResetFlags = func() {
+		*forceFlag, *configFlag, *credentialsStrategyFlag = false, "./revad.toml", "basic"
+		*dataDriverFlag, *dataPathFlag = "local", "./data"
+	}
+
+	cmd.Action = func(w ...io.Writer) error {
 		if !*forceFlag {
 			if _, err := os.Stat(*configFlag); err == nil {
 				// file exists, overwrite?
@@ -45,19 +52,14 @@ var genConfigSubCommand = func() *command {
 				var r string
 				_, err := fmt.Scanln(&r)
 				if err != nil || "y" != strings.ToLower(r[:1]) {
-					fmt.Fprintf(os.Stderr, "aborting\n")
-					os.Exit(1)
+					return err
 				}
-			} else if os.IsNotExist(err) {
-				// file does not exist, go on
-			} else {
-				fmt.Fprintf(os.Stderr, "io error %v\n", err)
-				os.Exit(1)
+			} else if !os.IsNotExist(err) {
+				return err
 			}
 		}
 		if *credentialsStrategyFlag != "basic" && *credentialsStrategyFlag != "oidc" {
-			fmt.Fprintf(os.Stderr, "unknown credentials strategy %s\n", *credentialsStrategyFlag)
-			os.Exit(1)
+			return errors.New(fmt.Sprintf("unknown credentials strategy %s\n", *credentialsStrategyFlag))
 		}
 		if *dataDriverFlag == "local" || *dataDriverFlag == "owncloud" {
 			gen.WriteConfig(*configFlag, *credentialsStrategyFlag, *dataDriverFlag, *dataPathFlag)
@@ -67,14 +69,11 @@ var genConfigSubCommand = func() *command {
 			if *dataDriverFlag == "owncloud" {
 				fmt.Fprintf(os.Stdout, "make sure to start a local redis server\n")
 			}
-			os.Exit(0)
+			return nil
 		} else if *dataDriverFlag == "eos" || *dataDriverFlag == "s3" {
-			fmt.Fprintf(os.Stderr, "initializing %s configuration is not yet implemented\n", *dataDriverFlag)
-			os.Exit(1)
+			return errors.New(fmt.Sprintf("initializing %s configuration is not yet implemented\n", *dataDriverFlag))
 		}
-		fmt.Fprintf(os.Stderr, "unknown data driver %s\n", *dataDriverFlag)
-		os.Exit(1)
-		return nil
+		return errors.New(fmt.Sprintf("unknown data driver %s\n", *dataDriverFlag))
 	}
 	return cmd
 }

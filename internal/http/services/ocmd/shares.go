@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -125,28 +124,29 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var permissions conversions.Permissions
-	var role string
-	options, ok := protocolDecoded["options"].(map[string]string)
+	var role, token string
+	options, ok := protocolDecoded["options"].(map[string]interface{})
 	if !ok {
-		// by default only allow read permissions / assign viewer role
+		WriteError(w, r, APIErrorInvalidParameter, "protocol: webdav token not provided", nil)
+		return
+	}
+
+	token, ok = options["token"].(string)
+	if !ok {
+		WriteError(w, r, APIErrorInvalidParameter, "protocol: webdav token not provided", nil)
+		return
+	}
+
+	pval, ok := options["permissions"].(int)
+	if !ok {
 		role = conversions.RoleViewer
 	} else {
-		pval, ok := options["permissions"]
-		if !ok {
-			role = conversions.RoleViewer
-		} else {
-			pint, err := strconv.Atoi(pval)
-			if err != nil {
-				WriteError(w, r, APIErrorInvalidParameter, "permissions must be an integer", err)
-				return
-			}
-			permissions, err = conversions.NewPermissions(pint)
-			if err != nil {
-				WriteError(w, r, APIErrorInvalidParameter, err.Error(), nil)
-				return
-			}
-			role = conversions.Permissions2Role(permissions)
+		permissions, err = conversions.NewPermissions(pval)
+		if err != nil {
+			WriteError(w, r, APIErrorInvalidParameter, err.Error(), nil)
+			return
 		}
+		role = conversions.Permissions2Role(permissions)
 	}
 
 	var resourcePermissions *provider.ResourcePermissions
@@ -176,6 +176,10 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 					"permissions": &types.OpaqueEntry{
 						Decoder: "json",
 						Value:   val,
+					},
+					"token": &types.OpaqueEntry{
+						Decoder: "plain",
+						Value:   []byte(token),
 					},
 				},
 			},

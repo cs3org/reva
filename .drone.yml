@@ -125,6 +125,7 @@ steps:
 - name: changelog
   image: golang:1.13
   commands:
+    - make release-deps && /go/bin/calens > /dev/null
     - make check-changelog-drone PR=$DRONE_PULL_REQUEST
   environment:
     GITHUB_API_TOKEN:
@@ -248,7 +249,7 @@ steps:
     image: golang:1.13
     detach: true
     commands:
-      - cd /drone/src/drone/oc-integration-tests/
+      - cd /drone/src/tests/oc-integration-tests/drone/
       - /drone/src/cmd/revad/revad -c frontend.toml &
       - /drone/src/cmd/revad/revad -c gateway.toml &
       - /drone/src/cmd/revad/revad -c storage-home.toml &
@@ -288,7 +289,7 @@ steps:
     image: golang:1.13
     detach: true
     commands:
-      - cd /drone/src/drone/oc-integration-tests/
+      - cd /drone/src/tests/oc-integration-tests/drone/
       - /drone/src/cmd/revad/revad -c frontend.toml &
       - /drone/src/cmd/revad/revad -c gateway.toml &
       - /drone/src/cmd/revad/revad -c storage-home.toml &
@@ -303,6 +304,80 @@ steps:
       LITMUS_USERNAME: einstein
       LITMUS_PASSWORD: relativity
       TESTS: basic http copymove props
+
+---
+kind: pipeline
+type: docker
+name: local-integration-tests
+
+platform:
+  os: linux
+  arch: amd64
+
+trigger:
+  event:
+    include:
+      - pull_request
+      - tag
+
+steps:
+  - name: build
+    image: golang:1.13
+    commands:
+      - make build-ci
+
+  - name: revad-services
+    image: golang:1.13
+    detach: true
+    commands:
+      - cd /drone/src/tests/oc-integration-tests/drone/
+      - /drone/src/cmd/revad/revad -c frontend.toml &
+      - /drone/src/cmd/revad/revad -c gateway.toml &
+      - /drone/src/cmd/revad/revad -c shares.toml &
+      - /drone/src/cmd/revad/revad -c storage-home.toml &
+      - /drone/src/cmd/revad/revad -c storage-oc.toml &
+      - /drone/src/cmd/revad/revad -c storage-publiclink.toml &
+      - /drone/src/cmd/revad/revad -c ldap-users.toml
+
+  - name: clone-oC10-test-repos
+    image: owncloudci/php:7.2
+    commands:
+      - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
+      - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
+      - cd /drone/src/tmp/testrunner
+      - git checkout 3f127eaf24ed539fd9effbc82db9b57df38e3157
+
+  - name: localAPIAcceptanceTestsOcStorage
+    image: owncloudci/php:7.2
+    commands:
+      - make test-acceptance-api
+    environment:
+      TEST_SERVER_URL: 'http://revad-services:20080'
+      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/'
+      SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
+      TEST_EXTERNAL_USER_BACKENDS: 'true'
+      REVA_LDAP_HOSTNAME: 'ldap'
+      TEST_OCIS: 'true'
+      TEST_REVA: 'true'
+      BEHAT_FILTER_TAGS: '~@skipOnOcis-OC-Storage'
+      PATH_TO_CORE: '/drone/src/tmp/testrunner'
+
+services:
+  - 'name': 'ldap'
+    'image': 'osixia/openldap:1.3.0'
+    'pull': 'always'
+    'environment':
+      LDAP_DOMAIN: 'owncloud.com'
+      LDAP_ORGANISATION: 'ownCloud'
+      LDAP_ADMIN_PASSWORD: 'admin'
+      LDAP_TLS_VERIFY_CLIENT: 'never'
+      HOSTNAME: 'ldap'
+
+  - name: redis
+    image: webhippie/redis
+    'pull': 'always'
+    'environment':
+      REDIS_DATABASES: 1
 
 ---
 kind: pipeline
@@ -329,7 +404,7 @@ steps:
     image: golang:1.13
     detach: true
     commands:
-      - cd /drone/src/drone/oc-integration-tests/
+      - cd /drone/src/tests/oc-integration-tests/drone/
       - /drone/src/cmd/revad/revad -c frontend.toml &
       - /drone/src/cmd/revad/revad -c gateway.toml &
       - /drone/src/cmd/revad/revad -c shares.toml &
@@ -338,13 +413,18 @@ steps:
       - /drone/src/cmd/revad/revad -c storage-publiclink.toml &
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
-  - name: oC10APIAcceptanceTests
+  - name: clone-oC10-test-repos
     image: owncloudci/php:7.2
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 03c68e17ebab61da2ebb0a9f541a6cffac0908ac
+      - git checkout 3f127eaf24ed539fd9effbc82db9b57df38e3157
+
+  - name: oC10APIAcceptanceTests
+    image: owncloudci/php:7.2
+    commands:
+      - cd /drone/src/tmp/testrunner
       - make test-acceptance-api
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
@@ -354,7 +434,8 @@ steps:
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_OCIS: 'true'
       TEST_REVA: 'true'
-      BEHAT_FILTER_TAGS: '~@skipOnOcis&&~@skipOnOcis-OC-Storage&&~@preview-extension-required'
+      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~@preview-extension-required'
+      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OC-storage.txt'
 
 services:
   - 'name': 'ldap'

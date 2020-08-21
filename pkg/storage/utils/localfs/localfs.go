@@ -1147,14 +1147,14 @@ func (fs *localfs) RestoreRecycleItem(ctx context.Context, restoreKey string) er
 func (fs *localfs) propagate(ctx context.Context, leafPath string) error {
 
 	var root string
-	if fs.isShareFolderChild(ctx, leafPath) {
+	if fs.isShareFolderChild(ctx, leafPath) || strings.HasSuffix(path.Clean(leafPath), fs.conf.ShareFolder) {
 		root = fs.wrapReferences(ctx, "/")
 	} else {
 		root = fs.wrap(ctx, "/")
 	}
 
 	if !strings.HasPrefix(leafPath, root) {
-		return errors.New("internal path outside root")
+		return errors.New("internal path: " + leafPath + " outside root: " + root)
 	}
 
 	fi, err := os.Stat(leafPath)
@@ -1163,7 +1163,7 @@ func (fs *localfs) propagate(ctx context.Context, leafPath string) error {
 	}
 
 	parts := strings.Split(strings.TrimPrefix(leafPath, root), "/")
-	// root never ents in / so the split returns an empty first element, which we can skip
+	// root never ends in / so the split returns an empty first element, which we can skip
 	// we do not need to chmod the last element because it is the leaf path (< and not <= comparison)
 	for i := 1; i < len(parts); i++ {
 		if err := os.Chtimes(root, fi.ModTime(), fi.ModTime()); err != nil {
