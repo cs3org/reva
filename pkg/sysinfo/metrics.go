@@ -122,8 +122,7 @@ func (m *sysInfoMetrics) record() {
 	stats.Record(m.ctx, m.sysInfoStats.M(1))
 }
 
-// RegisterSystemInfoMetrics initializes and registers the system info metrics.
-func RegisterSystemInfoMetrics() error {
+func registerSystemInfoMetrics() error {
 	// Create and initialize the local system info metrics object
 	metrics = &sysInfoMetrics{}
 	if err := metrics.init(); err != nil {

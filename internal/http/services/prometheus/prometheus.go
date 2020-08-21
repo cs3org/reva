@@ -28,8 +28,6 @@ import (
 	"go.opencensus.io/stats/view"
 
 	"github.com/cs3org/reva/pkg/rhttp/global"
-	"github.com/cs3org/reva/pkg/sysinfo"
-
 	// Initializes goroutines which periodically update stats
 	_ "github.com/cs3org/reva/pkg/metrics/reader/dummy"
 )
@@ -52,12 +50,6 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "prometheus: error creating exporter")
-	}
-
-	// Initialize the SysInfo Prometheus exporter
-	// TODO: Centralize registration of new metrics
-	if err := sysinfo.RegisterSystemInfoMetrics(); err != nil {
-		return nil, errors.Wrap(err, "prometheus: unable to create system info metrics")
 	}
 
 	view.RegisterExporter(pe)
