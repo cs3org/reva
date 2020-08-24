@@ -117,8 +117,6 @@ func ocmShareCreateCommand() *command {
 			},
 		}
 
-		fmt.Println("res.Info.Path" + res.Info.Path)
-
 		opaqueObj := &types.Opaque{
 			Map: map[string]*types.OpaqueEntry{
 				"permissions": &types.OpaqueEntry{

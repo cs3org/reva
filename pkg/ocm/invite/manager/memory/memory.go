@@ -143,10 +143,16 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 		return err
 	}
 
-	currUser := inviteToken.GetUserId().GetOpaqueId()
+	currUser := inviteToken.GetUserId()
+
+	// do not allow the user who created the token to accept it
+	if remoteUser.Id.Idp == currUser.Idp && remoteUser.Id.OpaqueId == currUser.OpaqueId {
+		return errors.New("memory: token creator and recipient are the same")
+	}
+
 	usersList, ok := m.AcceptedUsers.Load(currUser)
+	acceptedUsers := usersList.([]*userpb.User)
 	if ok {
-		acceptedUsers := usersList.([]*userpb.User)
 		for _, acceptedUser := range acceptedUsers {
 			if acceptedUser.Id.GetOpaqueId() == remoteUser.Id.OpaqueId && acceptedUser.Id.GetIdp() == remoteUser.Id.Idp {
 				return errors.New("memory: user already added to accepted users")
@@ -154,10 +160,10 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 		}
 
 		acceptedUsers = append(acceptedUsers, remoteUser)
-		m.AcceptedUsers.Store(currUser, acceptedUsers)
+		m.AcceptedUsers.Store(currUser.GetOpaqueId(), acceptedUsers)
 	} else {
 		acceptedUsers := []*userpb.User{remoteUser}
-		m.AcceptedUsers.Store(currUser, acceptedUsers)
+		m.AcceptedUsers.Store(currUser.GetOpaqueId(), acceptedUsers)
 	}
 	return nil
 }

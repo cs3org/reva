@@ -250,14 +250,19 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 		return err
 	}
 
-	// Add to the list of accepted users
-	userKey := inviteToken.GetUserId().GetOpaqueId()
-	for _, acceptedUser := range m.model.AcceptedUsers[userKey] {
+	currUser := inviteToken.GetUserId()
+
+	// do not allow the user who created the token to accept it
+	if remoteUser.Id.Idp == currUser.Idp && remoteUser.Id.OpaqueId == currUser.OpaqueId {
+		return errors.New("json: token creator and recipient are the same")
+	}
+
+	for _, acceptedUser := range m.model.AcceptedUsers[currUser.GetOpaqueId()] {
 		if acceptedUser.Id.GetOpaqueId() == remoteUser.Id.OpaqueId && acceptedUser.Id.GetIdp() == remoteUser.Id.Idp {
 			return errors.New("json: user already added to accepted users")
 		}
 	}
-	m.model.AcceptedUsers[userKey] = append(m.model.AcceptedUsers[userKey], remoteUser)
+	m.model.AcceptedUsers[currUser.GetOpaqueId()] = append(m.model.AcceptedUsers[currUser.GetOpaqueId()], remoteUser)
 	if err := m.model.Save(); err != nil {
 		err = errors.Wrap(err, "json: error saving model")
 		return err

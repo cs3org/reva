@@ -96,37 +96,22 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 			return
 		}
 		if key != "" && r.Method == "MOVE" {
-			dstHeader := r.Header.Get("Destination")
-
-			log.Debug().Str("key", key).Str("dst", dstHeader).Msg("restore")
-
-			if dstHeader == "" {
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-			// strip baseURL from destination
-			dstURL, err := url.ParseRequestURI(dstHeader)
-			if err != nil {
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-
-			urlPath := dstURL.Path
-
 			// find path in url relative to trash base
 			trashBase := ctx.Value(ctxKeyBaseURI).(string)
 			baseURI := path.Join(path.Dir(trashBase), "files", userid)
 			ctx = context.WithValue(ctx, ctxKeyBaseURI, baseURI)
 			r = r.WithContext(ctx)
 
-			log.Debug().Str("url_path", urlPath).Str("base_uri", baseURI).Msg("move urls")
 			// TODO make request.php optional in destination header
-			i := strings.Index(urlPath, baseURI)
-			if i == -1 {
+			dstHeader := r.Header.Get("Destination")
+			dst, err := extractDestination(dstHeader, baseURI)
+			if err != nil {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			dst := path.Clean(urlPath[len(baseURI):])
+			dst = path.Clean(dst)
+
+			log.Debug().Str("key", key).Str("dst", dst).Msg("restore")
 
 			h.restore(w, r, s, u, dst, key)
 			return

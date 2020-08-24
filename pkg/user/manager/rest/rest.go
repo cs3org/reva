@@ -235,6 +235,10 @@ func (m *manager) getUserByParam(ctx context.Context, param, val string) (map[st
 	if err != nil {
 		return nil, err
 	}
+	if len(responseData) == 0 {
+		return nil, errors.New("rest: no user found")
+	}
+
 	userData, ok := responseData[0].(map[string]interface{})
 	if !ok {
 		return nil, errors.New("rest: error in type assertion")

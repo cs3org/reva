@@ -23,6 +23,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"strings"
@@ -37,6 +38,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	ctxuser "github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
@@ -243,4 +245,23 @@ func addAccessHeaders(w http.ResponseWriter, r *http.Request) {
 	if r.TLS != nil {
 		headers.Set("Strict-Transport-Security", "max-age=63072000")
 	}
+}
+
+func extractDestination(dstHeader, baseURI string) (string, error) {
+	if dstHeader == "" {
+		return "", errors.New("destination header is empty")
+	}
+	dstURL, err := url.ParseRequestURI(dstHeader)
+	if err != nil {
+		return "", err
+	}
+
+	// TODO check if path is on same storage, return 502 on problems, see https://tools.ietf.org/html/rfc4918#section-9.9.4
+	// Strip the base URI from the destination. The destination might contain redirection prefixes which need to be handled
+	urlSplit := strings.Split(dstURL.Path, baseURI)
+	if len(urlSplit) != 2 {
+		return "", errors.New("destination path does not contain base URI")
+	}
+
+	return urlSplit[1], nil
 }
