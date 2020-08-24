@@ -195,8 +195,14 @@ func (c *Completer) shareReceivedArgumentCompleter() []prompt.Suggest {
 }
 
 func executeCommand(cmd *command, args ...string) (bytes.Buffer, error) {
+
 	var b bytes.Buffer
 	var err error
+
+	if conf == nil || conf.Host == "" {
+		return b, errors.New("reva not configured")
+	}
+
 	if err = cmd.Parse(args); err != nil {
 		return b, err
 	}
