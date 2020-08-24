@@ -1081,7 +1081,11 @@ func (fs *ocfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pro
 		attr = sharePrefix + "u:" + g.Grantee.Id.OpaqueId
 	}
 
-	return xattr.Remove(np, attr)
+	if err = xattr.Remove(np, attr); err != nil {
+		return
+	}
+
+	return fs.propagate(ctx, np)
 }
 
 func (fs *ocfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
