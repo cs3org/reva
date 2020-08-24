@@ -46,10 +46,10 @@ func (e *Executor) Execute(s string) {
 	args := strings.Split(s, " ")
 
 	// Verify that the configuration is set, either in memory or in a file.
-	if conf.Host == "" {
+	if conf == nil || conf.Host == "" {
 		c, err := readConfig()
 		if err != nil && args[0] != "configure" {
-			fmt.Println("reva is not configured, please run the configure command")
+			fmt.Println("reva is not configured, please pass the -host flag or run the configure command")
 			return
 		} else if args[0] != "configure" {
 			conf = c
