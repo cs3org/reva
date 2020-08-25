@@ -28,9 +28,11 @@ import (
 var sharedConf = &conf{}
 
 type conf struct {
-	JWTSecret   string `mapstructure:"jwt_secret"`
-	GatewaySVC  string `mapstructure:"gatewaysvc"`
-	DataGateway string `mapstructure:"datagateway"`
+	JWTSecret             string `mapstructure:"jwt_secret"`
+	GatewaySVC            string `mapstructure:"gatewaysvc"`
+	DataGateway           string `mapstructure:"datagateway"`
+	MetricsDataDriverType string `mapstructure:"metrics_data_driver_type"`
+	MetricsDataLocation   string `mapstructure:"metrics_data_location"`
 }
 
 // Decode decodes the configuration.
@@ -60,6 +62,14 @@ func Decode(v interface{}) error {
 		sharedConf.JWTSecret = "changemeplease"
 	}
 
+	if sharedConf.MetricsDataDriverType == "" {
+		sharedConf.MetricsDataDriverType = "dummy"
+	}
+
+	if sharedConf.MetricsDataLocation == "" {
+		sharedConf.MetricsDataLocation = "/var/tmp/reva/metrics/metricsdata.json"
+	}
+
 	return nil
 }
 
@@ -85,4 +95,14 @@ func GetDataGateway(val string) string {
 		return sharedConf.DataGateway
 	}
 	return val
+}
+
+// GetMetricsDataDriverType returns the package level metrics data driver
+func GetMetricsDataDriverType() string {
+	return sharedConf.MetricsDataDriverType
+}
+
+// GetMetricsDataLocation returns the package level metrics data location
+func GetMetricsDataLocation() string {
+	return sharedConf.MetricsDataLocation
 }
