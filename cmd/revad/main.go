@@ -53,7 +53,10 @@ func main() {
 	flag.Parse()
 
 	// initialize the global system information
-	sysinfo.InitSystemInfo(&sysinfo.RevaVersion{Version: version, BuildDate: buildDate, GitCommit: gitCommit, GoVersion: goVersion})
+	if err := sysinfo.InitSystemInfo(&sysinfo.RevaVersion{Version: version, BuildDate: buildDate, GitCommit: gitCommit, GoVersion: goVersion}); err != nil {
+		fmt.Fprintf(os.Stderr, "error initializing system info: %s\n", err.Error())
+		// This is not really a fatal error, so don't panic
+	}
 
 	handleVersionFlag()
 	handleSignalFlag()

@@ -22,6 +22,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+
+	"github.com/pkg/errors"
 )
 
 // SystemInformation stores general information about Reva and the system it's running on.
@@ -44,16 +46,6 @@ func (sysInfo *SystemInformation) ToJSON() (string, error) {
 	return string(data), nil
 }
 
-// InitSystemInfo initializes the global system information object.
-func InitSystemInfo(revaVersion *RevaVersion) {
-	SysInfo = &SystemInformation{
-		Reva: revaVersion,
-	}
-
-	// Replace any empty values in the system information by more meaningful ones
-	replaceEmptyInfoValues(SysInfo)
-}
-
 func replaceEmptyInfoValues(i interface{}) {
 	// Iterate over each field of the given interface and search for "empty" values
 	v := reflect.ValueOf(i).Elem()
@@ -70,4 +62,21 @@ func replaceEmptyInfoValues(i interface{}) {
 			}
 		}
 	}
+}
+
+// InitSystemInfo initializes the global system information object and also registers the corresponding metrics.
+func InitSystemInfo(revaVersion *RevaVersion) error {
+	SysInfo = &SystemInformation{
+		Reva: revaVersion,
+	}
+
+	// Replace any empty values in the system information by more meaningful ones
+	replaceEmptyInfoValues(SysInfo)
+
+	// Register the system information metrics, as the necessary system info object has been filled out
+	if err := registerSystemInfoMetrics(); err != nil {
+		return errors.Wrap(err, "unable to register the system info metrics")
+	}
+
+	return nil
 }

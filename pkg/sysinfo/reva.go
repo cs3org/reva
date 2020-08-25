@@ -21,7 +21,7 @@ package sysinfo
 // RevaVersion stores version information about Reva.
 type RevaVersion struct {
 	Version   string `json:"version"`
-	BuildDate string `json:"build_date" sysinfo:"omitlabel"`
+	BuildDate string `json:"build_date"`
 	GitCommit string `json:"git_commit" sysinfo:"omitlabel"`
 	GoVersion string `json:"go_version" sysinfo:"omitlabel"`
 }

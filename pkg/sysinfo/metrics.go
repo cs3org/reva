@@ -19,43 +19,59 @@
 package sysinfo
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
 
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/pkg/errors"
+	"go.opencensus.io/stats"
+	"go.opencensus.io/stats/view"
+	"go.opencensus.io/tag"
 
 	"github.com/cs3org/reva/pkg/utils"
 )
 
-// PrometheusExporter exports system information via Prometheus.
-type PrometheusExporter struct {
-	registry      *prometheus.Registry
-	sysInfoMetric prometheus.GaugeFunc
-}
+type sysInfoMetricsLabels = map[tag.Key]string
 
-func (psysinfo *PrometheusExporter) init(registry *prometheus.Registry) error {
-	// Create all necessary Prometheus objects
-	psysinfo.registry = registry
-	psysinfo.sysInfoMetric = prometheus.NewGaugeFunc(
-		prometheus.GaugeOpts{
-			Namespace:   "revad",
-			Name:        "sys_info",
-			Help:        "A metric with a constant '1' value labeled by various system information elements",
-			ConstLabels: psysinfo.getLabels("", SysInfo),
-		},
-		func() float64 { return 1 },
-	)
+func registerSystemInfoMetrics() error {
+	labels := getSystemInfoMetricsLabels("", SysInfo)
 
-	if err := psysinfo.registry.Register(psysinfo.sysInfoMetric); err != nil {
-		return fmt.Errorf("unable to register the system information metrics: %v", err)
+	// Collect all labels and their values; the values are stored as mutators
+	tagKeys := make([]tag.Key, 0, len(labels))
+	mutators := make([]tag.Mutator, 0, len(labels))
+	for key, value := range labels {
+		tagKeys = append(tagKeys, key)
+		mutators = append(mutators, tag.Insert(key, value))
+	}
+
+	// Create the OpenCensus statistics and a corresponding view
+	sysInfoStats := stats.Int64("sys_info", "A metric with a constant '1' value labeled by various system information elements", stats.UnitDimensionless)
+	sysInfoView := &view.View{
+		Name:        sysInfoStats.Name(),
+		Description: sysInfoStats.Description(),
+		Measure:     sysInfoStats,
+		TagKeys:     tagKeys,
+		Aggregation: view.LastValue(),
+	}
+
+	if err := view.Register(sysInfoView); err != nil {
+		return errors.Wrap(err, "unable to register the system info metrics view")
+	}
+
+	// Create a new context to serve the metrics
+	if ctx, err := tag.New(context.Background(), mutators...); err == nil {
+		// Just record a simple hardcoded '1' to expose the system info as a metric
+		stats.Record(ctx, sysInfoStats.M(1))
+	} else {
+		return errors.Wrap(err, "unable to create a context for the system info metrics")
 	}
 
 	return nil
 }
 
-func (psysinfo *PrometheusExporter) getLabels(root string, i interface{}) prometheus.Labels {
-	labels := prometheus.Labels{}
+func getSystemInfoMetricsLabels(root string, i interface{}) sysInfoMetricsLabels {
+	labels := sysInfoMetricsLabels{}
 
 	// Iterate over each field of the given interface, recursively collecting the values as labels
 	v := reflect.ValueOf(i).Elem()
@@ -77,27 +93,14 @@ func (psysinfo *PrometheusExporter) getLabels(root string, i interface{}) promet
 		f := v.Field(i)
 		if f.Kind() == reflect.Struct || (f.Kind() == reflect.Ptr && f.Elem().Kind() == reflect.Struct) {
 			// Merge labels recursively
-			for key, val := range psysinfo.getLabels(fieldName, f.Interface()) {
+			for key, val := range getSystemInfoMetricsLabels(fieldName, f.Interface()) {
 				labels[key] = val
 			}
 		} else { // Store the value of the field in the labels
-			labels[fieldName] = fmt.Sprintf("%v", f)
+			key := tag.MustNewKey(fieldName)
+			labels[key] = fmt.Sprintf("%v", f)
 		}
 	}
 
 	return labels
-}
-
-// NewPrometheusExporter creates a new Prometheus system information exporter.
-func NewPrometheusExporter(registry *prometheus.Registry) (*PrometheusExporter, error) {
-	if registry == nil {
-		return nil, fmt.Errorf("no registry provided")
-	}
-
-	exporter := &PrometheusExporter{}
-	if err := exporter.init(registry); err != nil {
-		return nil, err
-	}
-
-	return exporter, nil
 }
