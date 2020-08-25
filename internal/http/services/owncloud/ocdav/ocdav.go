@@ -177,9 +177,36 @@ func (s *svc) Handler() http.Handler {
 			// oc uses /dav/files/$user -> /$home/$user/...
 			// for oc we need to prepend the path to user homes
 			// or we take the path starting at /dav and allow rewriting it?
+
+			parts := strings.SplitN(strings.Trim(r.URL.Path, "/"), "/", 3)
+			log.Debug().Interface("pathParts", parts).Msg("Checking user from path")
+			if len(parts) >= 2 && parts[0] == "files" && parts[1] != "" {
+				requestUrlUserID := parts[1]
+				contextUser := ctxuser.ContextMustGetUser(ctx)
+				log.Debug().Str("contextUserId", contextUser.Id.OpaqueId).
+					Str("requestUrlUserId", requestUrlUserID).
+					Msg("Checking user from URL")
+
+				if contextUser.Id.OpaqueId == requestUrlUserID {
+					if len(parts) > 2 {
+						r.URL.Path = parts[2]
+					} else {
+						r.URL.Path = ""
+					}
+					log.Debug().Str("urlPath", r.URL.Path).Msg("Using webDavHandler")
+					// use webdav handler instead to mimic the "/webdav" endpoint
+					base = path.Join(base, "webdav")
+					ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+					r = r.WithContext(ctx)
+					s.webDavHandler.Handler(s).ServeHTTP(w, r)
+					return
+				}
+			}
+
 			base = path.Join(base, "dav")
 			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
 			r = r.WithContext(ctx)
+			log.Debug().Msg("Using davHandler")
 			s.davHandler.Handler(s).ServeHTTP(w, r)
 			return
 		}
