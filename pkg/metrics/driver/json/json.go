@@ -23,34 +23,35 @@ import (
 	"errors"
 	"io/ioutil"
 
-	"github.com/cs3org/reva/pkg/metrics/config"
+	"github.com/cs3org/reva/pkg/sharedconf"
 )
 
 // New returns a new MetricsJSONDriver object.
 // It reads the data file from the specified config.MetricsDataLocation upon initializing.
 // It does not reload the data file for each metric.
-func New(config *config.Config) (*MetricsJSONDriver, error) {
+func New() (*MetricsJSONDriver, error) {
 	// the json driver reads the data metrics file upon initializing
-	metricsData, err := readJSON(config)
+	metricsData, err := readJSON()
 	if err != nil {
 		return nil, err
 	}
 
 	driver := &MetricsJSONDriver{
-		config: config,
-		data:   metricsData,
+		data: metricsData,
 	}
 
 	return driver, nil
 }
 
-func readJSON(config *config.Config) (*data, error) {
-	if config.MetricsDataLocation == "" {
+func readJSON() (*data, error) {
+	metricsDataLocation := sharedconf.GetMetricsDataLocation()
+
+	if metricsDataLocation == "" {
 		err := errors.New("Unable to initialize a metrics data driver, has the data location (metrics_data_location) been configured?")
 		return nil, err
 	}
 
-	file, err := ioutil.ReadFile(config.MetricsDataLocation)
+	file, err := ioutil.ReadFile(metricsDataLocation)
 	if err != nil {
 		return nil, err
 	}
@@ -72,8 +73,7 @@ type data struct {
 
 // MetricsJSONDriver the JsonDriver struct that also holds the data
 type MetricsJSONDriver struct {
-	config *config.Config
-	data   *data
+	data *data
 }
 
 // GetNumUsers returns the number of site users
