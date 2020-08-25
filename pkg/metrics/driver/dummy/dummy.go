@@ -20,35 +20,29 @@ package dummy
 
 import (
 	"math/rand"
-
-	"github.com/cs3org/reva/pkg/metrics/config"
 )
 
 // New returns a new MetricsDummyDriver object.
-func New(config *config.Config) (*MetricsDummyDriver, error) {
-	driver := &MetricsDummyDriver{
-		config: config,
-	}
-
+func New() (*MetricsDummyDriver, error) {
+	driver := &MetricsDummyDriver{}
 	return driver, nil
 }
 
 // MetricsDummyDriver the MetricsDummyDriver struct
 type MetricsDummyDriver struct {
-	config *config.Config
 }
 
-// GetNumUsers returns the number of site users, it's a dummy number
+// GetNumUsers returns the number of site users; it's a random number
 func (d *MetricsDummyDriver) GetNumUsers() int64 {
 	return int64(rand.Intn(30000))
 }
 
-// GetNumGroups returns the number of site groups, it's a dummy number
+// GetNumGroups returns the number of site groups; it's a random number
 func (d *MetricsDummyDriver) GetNumGroups() int64 {
 	return int64(rand.Intn(200))
 }
 
-// GetAmountStorage returns the amount of site storage used, it's a dummy amount
+// GetAmountStorage returns the amount of site storage used; it's a random amount
 func (d *MetricsDummyDriver) GetAmountStorage() int64 {
 	return int64(rand.Intn(70000000000))
 }
