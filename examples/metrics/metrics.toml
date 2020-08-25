@@ -1,5 +1,7 @@
 [shared]
-metrics_data_driver_type = "json"
+# one of dummy, json.
+metrics_data_driver_type = "dummy"
+# if left unspecified location /var/tmp/reva/metrics/metricsdata.json is used (for driver type json).
 metrics_data_location = ""
 
 [http.services.prometheus]
