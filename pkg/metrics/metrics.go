@@ -58,7 +58,9 @@ func init() {
 	// periodic record metrics data call; every 5 seconds
 	go func() {
 		for {
-			m.recordMetrics()
+			if err := m.recordMetrics(); err != nil {
+				log.Error().Err(err).Msg("Metrics recording failed.")
+			}
 			<-time.After(time.Millisecond * time.Duration(5000))
 		}
 	}()
