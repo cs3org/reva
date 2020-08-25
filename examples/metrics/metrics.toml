@@ -1,10 +1,8 @@
 [shared]
-jwt_secret = "Pive-Fumkiu4"
+metrics_data_driver_type = "json"
+metrics_data_location = ""
 
 [http.services.prometheus]
-# metrics_data_driver_type, one of: dummy, json
-metrics_data_driver_type = "dummy"
-metrics_data_location = ""
 
 [http]
 address = "0.0.0.0:5550"
