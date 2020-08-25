@@ -18,11 +18,18 @@
 
 package metrics
 
+/*
+Metrics registers OpenCensus data views of the metrics.
+The Reader interface defines the available metrics which are implemented in the drivers that read the metrics data.
+Metrics initializes the correct driver as specified in the configuration.
+*/
 import (
 	"context"
 	"errors"
+	"time"
 
-	"github.com/cs3org/reva/pkg/metrics/config"
+	"github.com/cs3org/reva/pkg/sharedconf"
+
 	"github.com/cs3org/reva/pkg/metrics/driver/dummy"
 	"github.com/cs3org/reva/pkg/metrics/driver/json"
 
@@ -31,13 +38,9 @@ import (
 	"go.opencensus.io/stats/view"
 )
 
-// New returns a Metrics object
-func New(c *config.Config) (*Metrics, error) {
+func init() {
 	m := &Metrics{
-		dataDriverType:       "",
-		dataLocation:         "",
 		dataDriver:           nil,
-		config:               c,
 		NumUsersMeasure:      stats.Int64("cs3_org_sciencemesh_site_total_num_users", "The total number of users within this site", stats.UnitDimensionless),
 		NumGroupsMeasure:     stats.Int64("cs3_org_sciencemesh_site_total_num_groups", "The total number of groups within this site", stats.UnitDimensionless),
 		AmountStorageMeasure: stats.Int64("cs3_org_sciencemesh_site_total_amount_storage", "The total amount of storage used within this site", stats.UnitBytes),
@@ -50,25 +53,27 @@ func New(c *config.Config) (*Metrics, error) {
 		m.getAmountStorageView(),
 	); err != nil {
 		log.Error().Err(err).Msg("error registering the driver's views with opencensus exporter")
-		return nil, err
 	}
 
-	return m, nil
+	// periodic record metrics data call; every 5 seconds
+	go func() {
+		for {
+			m.recordMetrics()
+			<-time.After(time.Millisecond * time.Duration(5000))
+		}
+	}()
 }
 
 // Metrics the metrics struct
 type Metrics struct {
-	dataDriverType       string
-	dataLocation         string
 	dataDriver           Reader // the metrics data driver is an implemention of Reader
-	config               *config.Config
 	NumUsersMeasure      *stats.Int64Measure
 	NumGroupsMeasure     *stats.Int64Measure
 	AmountStorageMeasure *stats.Int64Measure
 }
 
 // RecordMetrics records the latest metrics from the metrics data source as OpenCensus stats views.
-func (m *Metrics) RecordMetrics() error {
+func (m *Metrics) recordMetrics() error {
 	if err := initDataDriver(m); err != nil {
 		log.Error().Err(err).Msg("Could not set a driver")
 		return err
@@ -83,19 +88,12 @@ func (m *Metrics) RecordMetrics() error {
 
 // initDataDriver initializes a data driver and sets it to be the Metrics.dataDriver
 func initDataDriver(m *Metrics) error {
-	// find out what driver to use
-	if m.config.MetricsDataDriverType == "" {
-		err := errors.New("Unable to initialize a metrics data driver, has a driver type (metrics_data_driver_type) been configured?")
-		return err
-	}
-	m.dataLocation = m.config.MetricsDataLocation
+	driverType := sharedconf.GetMetricsDataDriverType()
 
 	// create/init a driver depending on driver type
-	if m.config.MetricsDataDriverType == "json" {
-		// Because the json metrics data file is only read on json driver creation
-		// a json driver must be re-created to make sure we have the current/latest metrics data.
-		// Other drivers may need creation only once.
-		jsonDriver, err := json.New(m.config)
+	if driverType == "json" {
+		// create a json driver
+		jsonDriver, err := json.New()
 		if err != nil {
 			log.Error().Err(err)
 			return err
@@ -103,9 +101,9 @@ func initDataDriver(m *Metrics) error {
 		m.dataDriver = jsonDriver
 		log.Debug().Msgf("Metrics uses json driver")
 	}
-	if m.config.MetricsDataDriverType == "dummy" && m.dataDriver == nil {
-		// the dummy driver does not need to be initialized every time
-		dummyDriver, err := dummy.New(m.config)
+	if driverType == "dummy" && m.dataDriver == nil {
+		// create the dummy driver
+		dummyDriver, err := dummy.New()
 		if err != nil {
 			log.Error().Err(err)
 			return err
