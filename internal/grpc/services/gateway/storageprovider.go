@@ -107,6 +107,11 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 	log := appctx.GetLogger(ctx)
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
+		if st.Code == rpc.Code_CODE_NOT_FOUND {
+			return &gateway.InitiateFileDownloadResponse{
+				Status: status.NewNotFound(ctx, "gateway: file not found:"+req.Ref.String()),
+			}, nil
+		}
 		log.Error().Str("rpc_code", st.Code.String()).
 			Msgf("error initiating file download id: %v", req.Ref.GetId())
 		return &gateway.InitiateFileDownloadResponse{
@@ -119,18 +124,18 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 		statRes, err := s.stat(ctx, statReq)
 		if err != nil {
 			return &gateway.InitiateFileDownloadResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+req.Ref.String()),
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
 			}, nil
 		}
 		if statRes.Status.Code != rpc.Code_CODE_OK {
 			if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 				return &gateway.InitiateFileDownloadResponse{
-					Status: status.NewNotFound(ctx, "gateway: file not found"),
+					Status: status.NewNotFound(ctx, "gateway: file not found:"+statReq.Ref.String()),
 				}, nil
 			}
 			err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
 			return &gateway.InitiateFileDownloadResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating ref"),
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
 			}, nil
 		}
 		return s.initiateFileDownload(ctx, req)
@@ -150,24 +155,30 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 		log.Debug().Msgf("shared child: %s", p)
 		shareName, shareChild := s.splitShare(ctx, p)
 
-		ref := &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: shareName,
+		statReq := &provider.StatRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{
+					Path: shareName,
+				},
 			},
 		}
-		statReq := &provider.StatRequest{Ref: ref}
 		statRes, err := s.stat(ctx, statReq)
 		if err != nil {
 			return &gateway.InitiateFileDownloadResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error creating container"),
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
 			}, nil
 		}
 
 		if statRes.Status.Code != rpc.Code_CODE_OK {
+			if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+				return &gateway.InitiateFileDownloadResponse{
+					Status: status.NewNotFound(ctx, "gateway: file not found:"+statReq.Ref.String()),
+				}, nil
+			}
 			err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
 			log.Err(err).Msg("gateway: error creating container")
 			return &gateway.InitiateFileDownloadResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error creating container"),
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
 			}, nil
 		}
 
@@ -181,6 +192,11 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 
 		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
+			if _, ok := err.(errtypes.IsNotFound); ok {
+				return &gateway.InitiateFileDownloadResponse{
+					Status: status.NewNotFound(ctx, "gateway: reference not found:"+statRes.Info.Target),
+				}, nil
+			}
 			log.Err(err).Msg("gateway: error resolving reference")
 			return &gateway.InitiateFileDownloadResponse{
 				Status: status.NewInternal(ctx, err, "error creating container"),
@@ -205,12 +221,11 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 
 		// append child to target
 		target := path.Join(ri.Path, shareChild)
-		ref = &provider.Reference{
+		req.Ref = &provider.Reference{
 			Spec: &provider.Reference_Path{
 				Path: target,
 			},
 		}
-		req.Ref = ref
 		log.Debug().Msg("download path: " + target)
 		return s.initiateFileDownload(ctx, req)
 	}
@@ -275,6 +290,11 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 	log := appctx.GetLogger(ctx)
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
+		if st.Code == rpc.Code_CODE_NOT_FOUND {
+			return &gateway.InitiateFileUploadResponse{
+				Status: status.NewNotFound(ctx, "gateway: file not found:"+req.Ref.String()),
+			}, nil
+		}
 		log.Error().Str("rpc_code", st.Code.String()).
 			Msgf("error initiating file upload id: %v", req.Ref.GetId())
 		return &gateway.InitiateFileUploadResponse{
@@ -300,24 +320,30 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 		log.Debug().Msgf("shared child: %s", p)
 		shareName, shareChild := s.splitShare(ctx, p)
 
-		ref := &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: shareName,
+		statReq := &provider.StatRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{
+					Path: shareName,
+				},
 			},
 		}
-		statReq := &provider.StatRequest{Ref: ref}
 		statRes, err := s.stat(ctx, statReq)
 		if err != nil {
 			return &gateway.InitiateFileUploadResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error uploading"),
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
 			}, nil
 		}
 
 		if statRes.Status.Code != rpc.Code_CODE_OK {
+			if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+				return &gateway.InitiateFileUploadResponse{
+					Status: status.NewNotFound(ctx, "gateway: file not found:"+statReq.Ref.String()),
+				}, nil
+			}
 			err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
 			log.Err(err).Msg("gateway: error uploading")
 			return &gateway.InitiateFileUploadResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error uploading"),
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
 			}, nil
 		}
 
@@ -331,6 +357,11 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 
 		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
+			if _, ok := err.(errtypes.IsNotFound); ok {
+				return &gateway.InitiateFileUploadResponse{
+					Status: status.NewNotFound(ctx, "gateway: reference not found:"+statRes.Info.Target),
+				}, nil
+			}
 			log.Err(err).Msg("gateway: error resolving reference")
 			return &gateway.InitiateFileUploadResponse{
 				Status: status.NewInternal(ctx, err, "error creating container"),
@@ -355,12 +386,11 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 
 		// append child to target
 		target := path.Join(ri.Path, shareChild)
-		ref = &provider.Reference{
+		req.Ref = &provider.Reference{
 			Spec: &provider.Reference_Path{
 				Path: target,
 			},
 		}
-		req.Ref = ref
 		return s.initiateFileUpload(ctx, req)
 	}
 
@@ -387,6 +417,11 @@ func (s *svc) initiateFileUpload(ctx context.Context, req *provider.InitiateFile
 	}
 
 	if storageRes.Status.Code != rpc.Code_CODE_OK {
+		if storageRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			return &gateway.InitiateFileUploadResponse{
+				Status: status.NewNotFound(ctx, "gateway: file not found:"+req.Ref.String()),
+			}, nil
+		}
 		err := status.NewErrorFromCode(storageRes.Status.Code, "gateway")
 		log.Err(err).Msg("gateway: upload: error uploading")
 		return &gateway.InitiateFileUploadResponse{
@@ -431,29 +466,34 @@ func (s *svc) initiateFileUpload(ctx context.Context, req *provider.InitiateFile
 }
 
 func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provider.GetPathResponse, error) {
-	ref := &provider.Reference{
-		Spec: &provider.Reference_Id{
-			Id: req.ResourceId,
+	statReq := &provider.StatRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Id{
+				Id: req.ResourceId,
+			},
 		},
 	}
-
-	statReq := &provider.StatRequest{
-		Ref: ref,
-	}
-	res, err := s.stat(ctx, statReq)
+	statRes, err := s.stat(ctx, statReq)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error stating ref:"+ref.String())
+		err = errors.Wrap(err, "gateway: error stating ref:"+statReq.Ref.String())
 		return nil, err
 	}
 
-	if res.Status.Code != rpc.Code_CODE_OK {
-		err := status.NewErrorFromCode(res.Status.Code, "gateway")
-		return nil, err
+	if statRes.Status.Code != rpc.Code_CODE_OK {
+		if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			return &provider.GetPathResponse{
+				Status: status.NewNotFound(ctx, "gateway: file not found:"+statReq.Ref.String()),
+			}, nil
+		}
+		err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
+		return &provider.GetPathResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
+		}, nil
 	}
 
 	return &provider.GetPathResponse{
-		Status: res.Status,
-		Path:   res.GetInfo().GetPath(),
+		Status: statRes.Status,
+		Path:   statRes.GetInfo().GetPath(),
 	}, nil
 }
 
@@ -461,6 +501,11 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 	log := appctx.GetLogger(ctx)
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
+		if st.Code == rpc.Code_CODE_NOT_FOUND {
+			return &provider.CreateContainerResponse{
+				Status: status.NewNotFound(ctx, "gateway: container not found:"+req.Ref.String()),
+			}, nil
+		}
 		log.Error().Str("rpc_code", st.Code.String()).
 			Msgf("error creating container on reference id: %v", req.Ref.GetId())
 		return &provider.CreateContainerResponse{
@@ -486,24 +531,30 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 		log.Debug().Msgf("shared child: %s", p)
 		shareName, shareChild := s.splitShare(ctx, p)
 
-		ref := &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: shareName,
+		statReq := &provider.StatRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{
+					Path: shareName,
+				},
 			},
 		}
-		statReq := &provider.StatRequest{Ref: ref}
 		statRes, err := s.stat(ctx, statReq)
 		if err != nil {
 			return &provider.CreateContainerResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error creating container"),
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
 			}, nil
 		}
 
 		if statRes.Status.Code != rpc.Code_CODE_OK {
+			if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+				return &provider.CreateContainerResponse{
+					Status: status.NewNotFound(ctx, "gateway: container not found:"+statReq.Ref.String()),
+				}, nil
+			}
 			err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
 			log.Err(err).Msg("gateway: error creating container")
 			return &provider.CreateContainerResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error creating container"),
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
 			}, nil
 		}
 
@@ -517,6 +568,11 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 
 		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
+			if _, ok := err.(errtypes.IsNotFound); ok {
+				return &provider.CreateContainerResponse{
+					Status: status.NewNotFound(ctx, "gateway: reference not found:"+statRes.Info.Target),
+				}, nil
+			}
 			log.Err(err).Msg("gateway: error resolving reference")
 			return &provider.CreateContainerResponse{
 				Status: status.NewInternal(ctx, err, "error creating container"),
@@ -537,12 +593,11 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 
 		// append child to target
 		target := path.Join(ri.Path, shareChild)
-		ref = &provider.Reference{
+		req.Ref = &provider.Reference{
 			Spec: &provider.Reference_Path{
 				Path: target,
 			},
 		}
-		req.Ref = ref
 		return s.createContainer(ctx, req)
 	}
 
@@ -580,6 +635,11 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 	log := appctx.GetLogger(ctx)
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
+		if st.Code == rpc.Code_CODE_NOT_FOUND {
+			return &provider.DeleteResponse{
+				Status: status.NewNotFound(ctx, "gateway: file not found:"+req.Ref.String()),
+			}, nil
+		}
 		log.Error().Str("rpc_code", st.Code.String()).
 			Msgf("error deleting reference id: %v", req.Ref.GetId())
 		return &provider.DeleteResponse{
@@ -629,15 +689,20 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 		statRes, err := s.stat(ctx, statReq)
 		if err != nil {
 			return &provider.DeleteResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error deleting"),
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
 			}, nil
 		}
 
 		if statRes.Status.Code != rpc.Code_CODE_OK {
+			if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+				return &provider.DeleteResponse{
+					Status: status.NewNotFound(ctx, "gateway: file not found:"+statReq.Ref.String()),
+				}, nil
+			}
 			err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
 			log.Err(err).Msg("gateway: error deleting")
 			return &provider.DeleteResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error deleting"),
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
 			}, nil
 		}
 
@@ -651,6 +716,11 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 
 		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
+			if _, ok := err.(errtypes.IsNotFound); ok {
+				return &provider.DeleteResponse{
+					Status: status.NewNotFound(ctx, "gateway: not found"),
+				}, nil
+			}
 			log.Err(err).Msg("gateway: error resolving reference")
 			return &provider.DeleteResponse{
 				Status: status.NewInternal(ctx, err, "error creating container"),
@@ -709,6 +779,11 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 	log := appctx.GetLogger(ctx)
 	p, st := s.getPath(ctx, req.Source)
 	if st.Code != rpc.Code_CODE_OK {
+		if st.Code == rpc.Code_CODE_NOT_FOUND {
+			return &provider.MoveResponse{
+				Status: status.NewNotFound(ctx, "gateway: file not found:"+req.Source.String()),
+			}, nil
+		}
 		log.Error().Str("rpc_code", st.Code.String()).
 			Msgf("error moving reference id: %v to `%v`", req.Source.GetId(), req.Destination.String())
 		return &provider.MoveResponse{
@@ -717,7 +792,7 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 	}
 
 	dp, st2 := s.getPath(ctx, req.Destination)
-	if st2.Code != rpc.Code_CODE_OK {
+	if st2.Code != rpc.Code_CODE_OK && st2.Code != rpc.Code_CODE_NOT_FOUND {
 		return &provider.MoveResponse{
 			Status: st,
 		}, nil
@@ -747,25 +822,30 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 
 		}
 
-		ref := &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: shareName,
+		statReq := &provider.StatRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{
+					Path: shareName,
+				},
 			},
 		}
-
-		statReq := &provider.StatRequest{Ref: ref}
 		statRes, err := s.stat(ctx, statReq)
 		if err != nil {
 			return &provider.MoveResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error moving"),
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
 			}, nil
 		}
 
 		if statRes.Status.Code != rpc.Code_CODE_OK {
+			if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+				return &provider.MoveResponse{
+					Status: status.NewNotFound(ctx, "gateway: file not found:"+statReq.Ref.String()),
+				}, nil
+			}
 			err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
 			log.Err(err).Msg("gateway: error moving")
 			return &provider.MoveResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error moving"),
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
 			}, nil
 		}
 
@@ -779,6 +859,11 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 
 		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
+			if _, ok := err.(errtypes.IsNotFound); ok {
+				return &provider.MoveResponse{
+					Status: status.NewNotFound(ctx, "gateway: reference not found:"+statRes.Info.Target),
+				}, nil
+			}
 			log.Err(err).Msg("gateway: error resolving reference")
 			return &provider.MoveResponse{
 				Status: status.NewInternal(ctx, err, "error moving"),
@@ -924,6 +1009,11 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 	log := appctx.GetLogger(ctx)
 	p, st := s.getPath(ctx, req.Ref, req.ArbitraryMetadataKeys...)
 	if st.Code != rpc.Code_CODE_OK {
+		if st.Code == rpc.Code_CODE_NOT_FOUND {
+			return &provider.StatResponse{
+				Status: status.NewNotFound(ctx, "gateway: file not found:"+req.Ref.String()),
+			}, nil
+		}
 		log.Error().Str("rpc_code", st.Code.String()).
 			Msgf("error during STAT id: %v", req.Ref.GetId())
 		return &provider.StatResponse{
@@ -942,34 +1032,44 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 
 	// we need to provide the info of the target, not the reference.
 	if s.isShareName(ctx, p) {
-		res, err := s.stat(ctx, req)
+		statRes, err := s.stat(ctx, req)
 		if err != nil {
 			return &provider.StatResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating"),
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+req.Ref.String()),
 			}, nil
 		}
 
-		if res.Status.Code != rpc.Code_CODE_OK {
-			err := status.NewErrorFromCode(res.Status.Code, "gateway")
+		if statRes.Status.Code != rpc.Code_CODE_OK {
+			if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+				return &provider.StatResponse{
+					Status: status.NewNotFound(ctx, "gateway: file not found:"+req.Ref.String()),
+				}, nil
+			}
+			err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
 			log.Err(err).Msg("gateway: error stating")
 			return &provider.StatResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating"),
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+req.Ref.String()),
 			}, nil
 		}
 
-		if res.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
-			panic("gateway: a share name must be of type reference: ref:" + res.Info.Path)
+		if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
+			panic("gateway: a share name must be of type reference: ref:" + statRes.Info.Path)
 		}
 
-		ri, protocol, err := s.checkRef(ctx, res.Info)
+		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
+			if _, ok := err.(errtypes.IsNotFound); ok {
+				return &provider.StatResponse{
+					Status: status.NewNotFound(ctx, "gateway: reference not found:"+statRes.Info.Target),
+				}, nil
+			}
 			return &provider.StatResponse{
 				Status: status.NewInternal(ctx, err, "gateway: error resolving reference: "+p),
 			}, nil
 		}
 
 		if protocol == "webdav" {
-			ri, err = s.webdavRefStat(ctx, res.Info.Target)
+			ri, err = s.webdavRefStat(ctx, statRes.Info.Target)
 			if err != nil {
 				return &provider.StatResponse{
 					Status: status.NewInternal(ctx, err, "gateway: error resolving webdav reference: "+p),
@@ -981,40 +1081,50 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		// information. For example, if requests comes to: /home/MyShares/photos and photos
 		// is reference to /user/peter/Holidays/photos, we need to still return to the user
 		// /home/MyShares/photos
-		orgPath := res.Info.Path
-		res.Info = ri
-		res.Info.Path = orgPath
-		return res, nil
+		orgPath := statRes.Info.Path
+		statRes.Info = ri
+		statRes.Info.Path = orgPath
+		return statRes, nil
 
 	}
 
 	if s.isShareChild(ctx, p) {
 		shareName, shareChild := s.splitShare(ctx, p)
 
-		ref := &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: shareName,
+		statReq := &provider.StatRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{
+					Path: shareName,
+				},
 			},
 		}
-
-		statReq := &provider.StatRequest{Ref: ref}
 		statRes, err := s.stat(ctx, statReq)
 		if err != nil {
 			return &provider.StatResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating"),
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
 			}, nil
 		}
 
 		if statRes.Status.Code != rpc.Code_CODE_OK {
+			if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+				return &provider.StatResponse{
+					Status: status.NewNotFound(ctx, "gateway: file not found:"+statReq.Ref.String()),
+				}, nil
+			}
 			err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
 			log.Err(err).Msg("gateway: error stating")
 			return &provider.StatResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating"),
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
 			}, nil
 		}
 
 		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
+			if _, ok := err.(errtypes.IsNotFound); ok {
+				return &provider.StatResponse{
+					Status: status.NewNotFound(ctx, "gateway: reference not found:"+statRes.Info.Target),
+				}, nil
+			}
 			log.Err(err).Msg("gateway: error resolving reference")
 			return &provider.StatResponse{
 				Status: status.NewInternal(ctx, err, "error stating"),
@@ -1036,25 +1146,27 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		}
 
 		// append child to target
-		target := path.Join(ri.Path, shareChild)
-		ref = &provider.Reference{
+		req.Ref = &provider.Reference{
 			Spec: &provider.Reference_Path{
-				Path: target,
+				Path: path.Join(ri.Path, shareChild),
 			},
 		}
-
-		req.Ref = ref
 		res, err := s.stat(ctx, req)
 		if err != nil {
 			return &provider.StatResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating"),
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+req.Ref.String()),
 			}, nil
 		}
 		if res.Status.Code != rpc.Code_CODE_OK {
+			if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+				return &provider.StatResponse{
+					Status: status.NewNotFound(ctx, "gateway: file not found:"+req.Ref.String()),
+				}, nil
+			}
 			err := status.NewErrorFromCode(res.Status.Code, "gateway")
 			log.Err(err).Msg("gateway: error stating")
 			return &provider.StatResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating"),
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+req.Ref.String()),
 			}, nil
 		}
 
@@ -1103,25 +1215,28 @@ func (s *svc) handleCS3Ref(ctx context.Context, opaque string) (*provider.Resour
 		return nil, err
 	}
 
-	ref := &provider.Reference{
-		Spec: &provider.Reference_Id{
-			Id: &provider.ResourceId{
-				StorageId: parts[0],
-				OpaqueId:  parts[1],
-			},
-		},
-	}
-
 	// we could call here the Stat method again, but that is calling for problems in case
 	// there is a loop of targets pointing to targets, so better avoid it.
 
-	req := &provider.StatRequest{Ref: ref}
+	req := &provider.StatRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Id{
+				Id: &provider.ResourceId{
+					StorageId: parts[0],
+					OpaqueId:  parts[1],
+				},
+			},
+		},
+	}
 	res, err := s.stat(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling stat")
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
+		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			return nil, errtypes.NotFound(req.Ref.String())
+		}
 		err := errors.New("gateway: error stating target reference")
 		return nil, err
 	}
@@ -1163,6 +1278,11 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 	log := appctx.GetLogger(ctx)
 	p, st := s.getPath(ctx, req.Ref, req.ArbitraryMetadataKeys...)
 	if st.Code != rpc.Code_CODE_OK {
+		if st.Code == rpc.Code_CODE_NOT_FOUND {
+			return &provider.ListContainerResponse{
+				Status: status.NewNotFound(ctx, "gateway: file not found:"+req.Ref.String()),
+			}, nil
+		}
 		log.Error().Str("rpc_code", st.Code.String()).
 			Msgf("error listing directory id: %v", req.Ref.GetId())
 		return &provider.ListContainerResponse{
@@ -1180,13 +1300,18 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		lcr, err := s.listContainer(ctx, req)
 		if err != nil {
 			return &provider.ListContainerResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error listing shared folder"),
+				Status: status.NewInternal(ctx, err, "gateway: error listing shared folder:"+req.Ref.String()),
 			}, nil
 		}
 
 		for i, ref := range lcr.Infos {
 			info, protocol, err := s.checkRef(ctx, ref)
 			if err != nil {
+				if _, ok := err.(errtypes.IsNotFound); ok {
+					return &provider.ListContainerResponse{
+						Status: status.NewNotFound(ctx, "gateway: reference not found:"+ref.Target),
+					}, nil
+				}
 				return &provider.ListContainerResponse{
 					Status: status.NewInternal(ctx, err, "gateway: error resolving reference:"+ref.Path),
 				}, nil
@@ -1210,37 +1335,47 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 
 	// we need to provide the info of the target, not the reference.
 	if s.isShareName(ctx, p) {
-		ref := &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: p,
+		statReq := &provider.StatRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{
+					Path: p,
+				},
 			},
 		}
-
-		statReq := &provider.StatRequest{Ref: ref}
-		res, err := s.stat(ctx, statReq)
+		statRes, err := s.stat(ctx, statReq)
 		if err != nil {
 			return &provider.ListContainerResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating share"),
+				Status: status.NewInternal(ctx, err, "gateway: error stating share:"+statReq.Ref.String()),
 			}, nil
 		}
 
-		if res.Status.Code != rpc.Code_CODE_OK {
-			err := status.NewErrorFromCode(res.Status.Code, "gateway")
+		if statRes.Status.Code != rpc.Code_CODE_OK {
+			if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+				return &provider.ListContainerResponse{
+					Status: status.NewNotFound(ctx, "gateway: file not found:"+statReq.Ref.String()),
+				}, nil
+			}
+			err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
 			log.Err(err).Msg("gateway: error stating")
 			return &provider.ListContainerResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating share"),
+				Status: status.NewInternal(ctx, err, "gateway: error stating share:"+statReq.Ref.String()),
 			}, nil
 		}
 
-		ri, protocol, err := s.checkRef(ctx, res.Info)
+		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
+			if _, ok := err.(errtypes.IsNotFound); ok {
+				return &provider.ListContainerResponse{
+					Status: status.NewNotFound(ctx, "gateway: reference not found:"+statRes.Info.Target),
+				}, nil
+			}
 			return &provider.ListContainerResponse{
 				Status: status.NewInternal(ctx, err, "gateway: error resolving reference:"+p),
 			}, nil
 		}
 
 		if protocol == "webdav" {
-			infos, err := s.webdavRefLs(ctx, res.Info.Target)
+			infos, err := s.webdavRefLs(ctx, statRes.Info.Target)
 			if err != nil {
 				return &provider.ListContainerResponse{
 					Status: status.NewInternal(ctx, err, "gateway: error listing webdav reference: "+p),
@@ -1265,25 +1400,31 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 			}, nil
 		}
 
-		ref = &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: ri.Path,
+		newReq := &provider.ListContainerRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{
+					Path: ri.Path,
+				},
 			},
+			ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
 		}
-
-		newReq := &provider.ListContainerRequest{Ref: ref, ArbitraryMetadataKeys: req.ArbitraryMetadataKeys}
 		newRes, err := s.listContainer(ctx, newReq)
 		if err != nil {
 			return &provider.ListContainerResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error listing"),
+				Status: status.NewInternal(ctx, err, "gateway: error listing "+newReq.Ref.String()),
 			}, nil
 		}
 
 		if newRes.Status.Code != rpc.Code_CODE_OK {
+			if newRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+				return &provider.ListContainerResponse{
+					Status: status.NewNotFound(ctx, "gateway: container not found:"+newReq.Ref.String()),
+				}, nil
+			}
 			err := status.NewErrorFromCode(newRes.Status.Code, "gateway")
 			log.Err(err).Msg("gateway: error listing")
 			return &provider.ListContainerResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error listing"),
+				Status: status.NewInternal(ctx, err, "gateway: error listing "+newReq.Ref.String()),
 			}, nil
 		}
 
@@ -1300,37 +1441,47 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 	if s.isShareChild(ctx, p) {
 		shareName, shareChild := s.splitShare(ctx, p)
 
-		ref := &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: shareName,
+		statReq := &provider.StatRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{
+					Path: shareName,
+				},
 			},
 		}
-
-		statReq := &provider.StatRequest{Ref: ref}
-		res, err := s.stat(ctx, statReq)
+		statRes, err := s.stat(ctx, statReq)
 		if err != nil {
 			return &provider.ListContainerResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating share child"),
+				Status: status.NewInternal(ctx, err, "gateway: error stating share child "+statReq.Ref.String()),
 			}, nil
 		}
 
-		if res.Status.Code != rpc.Code_CODE_OK {
-			err := status.NewErrorFromCode(res.Status.Code, "gateway")
-			log.Err(err).Msg("gateway: error stating")
+		if statRes.Status.Code != rpc.Code_CODE_OK {
+			if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+				return &provider.ListContainerResponse{
+					Status: status.NewNotFound(ctx, "gateway: container not found:"+statReq.Ref.String()),
+				}, nil
+			}
+			err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
+			log.Err(err).Msg("gateway: error listing")
 			return &provider.ListContainerResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating share child"),
+				Status: status.NewInternal(ctx, err, "gateway: error stating share child "+statReq.Ref.String()),
 			}, nil
 		}
 
-		ri, protocol, err := s.checkRef(ctx, res.Info)
+		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
+			if _, ok := err.(errtypes.IsNotFound); ok {
+				return &provider.ListContainerResponse{
+					Status: status.NewNotFound(ctx, "gateway: reference not found:"+statReq.Ref.String()),
+				}, nil
+			}
 			return &provider.ListContainerResponse{
 				Status: status.NewInternal(ctx, err, "gateway: error resolving reference:"+p),
 			}, nil
 		}
 
 		if protocol == "webdav" {
-			infos, err := s.webdavRefLs(ctx, res.Info.Target, shareChild)
+			infos, err := s.webdavRefLs(ctx, statRes.Info.Target, shareChild)
 			if err != nil {
 				return &provider.ListContainerResponse{
 					Status: status.NewInternal(ctx, err, "gateway: error listing webdav reference: "+p),
@@ -1355,26 +1506,31 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 			}, nil
 		}
 
-		target := path.Join(ri.Path, shareChild)
-		ref = &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: target,
+		newReq := &provider.ListContainerRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{
+					Path: path.Join(ri.Path, shareChild),
+				},
 			},
+			ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
 		}
-
-		newReq := &provider.ListContainerRequest{Ref: ref, ArbitraryMetadataKeys: req.ArbitraryMetadataKeys}
 		newRes, err := s.listContainer(ctx, newReq)
 		if err != nil {
 			return &provider.ListContainerResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error listing"),
+				Status: status.NewInternal(ctx, err, "gateway: error listing "+newReq.Ref.String()),
 			}, nil
 		}
 
 		if newRes.Status.Code != rpc.Code_CODE_OK {
+			if newRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+				return &provider.ListContainerResponse{
+					Status: status.NewNotFound(ctx, "gateway: container not found:"+newReq.Ref.String()),
+				}, nil
+			}
 			err := status.NewErrorFromCode(newRes.Status.Code, "gateway")
 			log.Err(err).Msg("gateway: error listing")
 			return &provider.ListContainerResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error listing"),
+				Status: status.NewInternal(ctx, err, "gateway: error listing "+newReq.Ref.String()),
 			}, nil
 		}
 
