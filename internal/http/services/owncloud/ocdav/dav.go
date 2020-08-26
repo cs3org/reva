@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	tokenpkg "github.com/cs3org/reva/pkg/token"
 	"github.com/cs3org/reva/pkg/user"
+	ctxuser "github.com/cs3org/reva/pkg/user"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -42,6 +43,7 @@ type tokenStatInfoKey struct{}
 type DavHandler struct {
 	AvatarsHandler      *AvatarsHandler
 	FilesHandler        *WebDavHandler
+	FilesHomeHandler    *WebDavHandler
 	MetaHandler         *MetaHandler
 	TrashbinHandler     *TrashbinHandler
 	PublicFolderHandler *WebDavHandler
@@ -55,6 +57,10 @@ func (h *DavHandler) init(c *Config) error {
 	}
 	h.FilesHandler = new(WebDavHandler)
 	if err := h.FilesHandler.init(c.FilesNamespace); err != nil {
+		return err
+	}
+	h.FilesHomeHandler = new(WebDavHandler)
+	if err := h.FilesHomeHandler.init(c.WebdavNamespace); err != nil {
 		return err
 	}
 	h.MetaHandler = new(MetaHandler)
@@ -89,10 +95,29 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 		case "avatars":
 			h.AvatarsHandler.Handler(s).ServeHTTP(w, r)
 		case "files":
-			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files")
-			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
-			r = r.WithContext(ctx)
-			h.FilesHandler.Handler(s).ServeHTTP(w, r)
+			var requestUserID string
+			var oldPath = r.URL.Path
+
+			// detect and check current user in URL
+			requestUserID, r.URL.Path = router.ShiftPath(r.URL.Path)
+
+			// note: some requests like OPTIONS don't forward the user
+			contextUser, ok := ctxuser.ContextGetUser(ctx)
+			if ok && requestUserID != "" && requestUserID == contextUser.Id.OpaqueId {
+				// use home storage handler when user was detected
+				base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files", requestUserID)
+				ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+				r = r.WithContext(ctx)
+
+				h.FilesHomeHandler.Handler(s).ServeHTTP(w, r)
+			} else {
+				r.URL.Path = oldPath
+				base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files")
+				ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+				r = r.WithContext(ctx)
+
+				h.FilesHandler.Handler(s).ServeHTTP(w, r)
+			}
 		case "meta":
 			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "meta")
 			ctx = context.WithValue(ctx, ctxKeyBaseURI, base)
