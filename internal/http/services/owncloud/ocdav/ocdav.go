@@ -181,13 +181,13 @@ func (s *svc) Handler() http.Handler {
 			parts := strings.SplitN(strings.Trim(r.URL.Path, "/"), "/", 3)
 			log.Debug().Interface("pathParts", parts).Msg("Checking user from path")
 			if len(parts) >= 2 && parts[0] == "files" && parts[1] != "" {
-				requestUrlUserID := parts[1]
+				requestURLUserID := parts[1]
 				contextUser := ctxuser.ContextMustGetUser(ctx)
 				log.Debug().Str("contextUserId", contextUser.Id.OpaqueId).
-					Str("requestUrlUserId", requestUrlUserID).
+					Str("requestUrlUserId", requestURLUserID).
 					Msg("Checking user from URL")
 
-				if contextUser.Id.OpaqueId == requestUrlUserID {
+				if contextUser.Id.OpaqueId == requestURLUserID {
 					if len(parts) > 2 {
 						r.URL.Path = parts[2]
 					} else {
