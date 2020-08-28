@@ -32,11 +32,14 @@ driver = "localhome"
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="drivers" type="map[string]map[string]interface{}" default="pkg/storage/fs/localhome/localhome.go" %}}
+{{% dir name="drivers" type="map[string]map[string]interface{}" default="localhome" %}}
  [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L54)
 {{< highlight toml >}}
-[grpc.services.storageprovider.drivers]
-"[pkg/storage/fs/localhome/localhome.go]({{< ref "pkg/storage/fs/localhome/localhome.go" >}})"
+[grpc.services.storageprovider.drivers.localhome]
+root = "/var/tmp/reva/"
+share_folder = "/MyShares"
+user_layout = "{{.Username}}"
+
 {{< /highlight >}}
 {{% /dir %}}
 
