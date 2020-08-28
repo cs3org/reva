@@ -38,7 +38,7 @@ func init() {
 type config struct {
 	Prefix     string                            `mapstructure:"prefix" docs:"data;The prefix to be used for this HTTP service"`
 	Driver     string                            `mapstructure:"driver" docs:"localhome;The storage driver to be used."`
-	Drivers    map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:docs/config/packages/storage/fs;The configuration for the storage driver"`
+	Drivers    map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:pkg/storage/fs/localhome/localhome.go;The configuration for the storage driver"`
 	Timeout    int64                             `mapstructure:"timeout"`
 	Insecure   bool                              `mapstructure:"insecure"`
 	DisableTus bool                              `mapstructure:"disable_tus" docs:"false;Whether to disable TUS uploads."`

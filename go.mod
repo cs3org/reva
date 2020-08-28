@@ -11,7 +11,7 @@ require (
 	github.com/c-bata/go-prompt v0.2.3
 	github.com/cheggaaa/pb v1.0.29
 	github.com/coreos/go-oidc v2.2.1+incompatible
-	github.com/cs3org/cato v0.0.0-20200626150132-28a40e643719
+	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
 	github.com/cs3org/go-cs3apis v0.0.0-20200810113633-b00aca449666
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/eventials/go-tus v0.0.0-20200718001131-45c7ec8f5d59
