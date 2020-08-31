@@ -27,7 +27,7 @@
 						"description": "CERNBox Webdav API"
 					},
 					"name": "CERNBox - Webdav API",
-					"path": "https://sciencemesh.cernbox.cern.ch/iop/webdav/",
+					"path": "https://sciencemesh.cernbox.cern.ch/iop/remote.php/webdav/",
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
@@ -63,7 +63,7 @@
 						"description": "CESNET Webdav API"
 					},
 					"name": "CESNET - Webdav API",
-					"path": "https://sciencemesh.cesnet.cz/iop/webdav/",
+					"path": "https://sciencemesh.cesnet.cz/iop/remote.php/webdav/",
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
@@ -99,7 +99,7 @@
 						"description": "WWU Webdav API"
 					},
 					"name": "WWU - Webdav API",
-					"path": "https://sciencemesh-test.uni-muenster.de/api/webdav/",
+					"path": "https://sciencemesh-test.uni-muenster.de/api/remote.php/webdav/",
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
@@ -135,7 +135,7 @@
 						"description": "Cubbit Webdav API"
 					},
 					"name": "Cubbit - Webdav API",
-					"path": "https://sciencemesh.cubbit.io/webdav/",
+					"path": "https://sciencemesh.cubbit.io/remote.php/webdav/",
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
@@ -171,7 +171,7 @@
 						"description": "Ailleron Webdav API"
 					},
 					"name": "Ailleron - Webdav API",
-					"path": "https://sciencemesh.softwaremind.com/iop/webdav/",
+					"path": "https://sciencemesh.softwaremind.com/iop/remote.php/webdav/",
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
@@ -207,7 +207,7 @@
 						"description": "Surfsara Webdav API"
 					},
 					"name": "Surfsara - Webdav API",
-					"path": "https://app.cs3mesh-iop.k8s.surfsara.nl/iop/webdav/",
+					"path": "https://app.cs3mesh-iop.k8s.surfsara.nl/iop/remote.php/webdav/",
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
@@ -243,13 +243,12 @@
 						"description": "SWITCH Webdav API"
 					},
 					"name": "SWITCH - Webdav API",
-					"path": "https://sciencemesh-test.switch.ch/api/webdav/",
+					"path": "https://sciencemesh-test.switch.ch/api/remote.php/webdav/",
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
 				"host": "https://sciencemesh-test.switch.ch/api/"
 			}
 		]
-	}
-	
+	}	
 ]
