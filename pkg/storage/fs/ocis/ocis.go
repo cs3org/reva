@@ -252,13 +252,10 @@ func (fs *ocisfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 		return
 	}
 
-	for _, child := range children {
-		var ri *provider.ResourceInfo
-		ri, err = fs.normalize(ctx, child)
-		if err != nil {
-			return
+	for i := range children {
+		if ri, err := fs.normalize(ctx, children[i]); err == nil {
+			finfos = append(finfos, ri)
 		}
-		finfos = append(finfos, ri)
 	}
 	return
 }
@@ -377,10 +374,6 @@ func getUser(ctx context.Context) (*userpb.User, error) {
 func (fs *ocisfs) normalize(ctx context.Context, node *NodeInfo) (ri *provider.ResourceInfo, err error) {
 	var fn string
 
-	fn, err = fs.pw.Unwrap(ctx, node)
-	if err != nil {
-		return nil, err
-	}
 	nodePath := filepath.Join(fs.conf.Root, "nodes", node.ID)
 
 	var fi os.FileInfo
@@ -399,8 +392,15 @@ func (fs *ocisfs) normalize(ctx context.Context, node *NodeInfo) (ri *provider.R
 	if etag, err = xattr.Get(nodePath, "user.ocis.etag"); err != nil {
 		logger.New().Error().Err(err).Msg("could not read etag")
 	}
+
+	id := &provider.ResourceId{OpaqueId: node.ID}
+	// Unwrap changes the node because it traverses the tree
+	fn, err = fs.pw.Unwrap(ctx, node)
+	if err != nil {
+		return nil, err
+	}
 	ri = &provider.ResourceInfo{
-		Id:       &provider.ResourceId{OpaqueId: node.ID},
+		Id:       id,
 		Path:     fn,
 		Type:     nodeType,
 		Etag:     string(etag),
