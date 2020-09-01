@@ -136,5 +136,29 @@
 				"host": "https://app.cs3mesh-iop.k8s.surfsara.nl/"
 			}
 		]
-	}
+	},
+	{
+                "name": "switch",
+                "full_name": "SWITCH",
+                "organization": "SWITCH",
+                "domain": "switch.ch",
+                "homepage": "https://switch.ch",
+                "description": "SWITCHdrive cloud storage to its students, faculty and researchers.",
+                "services": [
+                        {
+                                "endpoint": {
+                                        "type": {
+                                                "name": "OCM",
+                                                "description": "SWITCH Open Cloud Mesh API"
+                                        },
+                                        "name": "SWITCH - OCM API",
+                                        "path": "https://sciencemesh-test.switch.ch/ocm/",
+                                        "is_monitored": true
+                                },
+                                "api_version": "0.0.1",
+                                "host": "https://sciencemesh-test.switch.ch/"
+                        }
+                ]
+        }
+
 ]

@@ -1,0 +1,35 @@
+[
+	{
+		"id": {
+			"opaque_id": "kerins1234",
+			"idp": "switch.ch"
+		},
+		"username": "kerins",
+		"secret": "kerinspass",
+		"mail": "fergus.kerins@switch.ch",
+		"display_name": "Fergus Kerins",
+		"groups": ["sailing-lovers", "violin-haters", "physics-lovers"]
+	},
+	{
+		"id": {
+			"opaque_id": "furter5678",
+			"idp": "switch.ch"
+		},
+		"username": "furter",
+		"secret": "furterpass",
+		"mail": "renato.furter@switch.ch",
+		"display_name": "Renato Furter",
+		"groups": ["radium-lovers", "polonium-lovers", "physics-lovers"]
+	},
+	{
+		"id": {
+			"opaque_id": "schmid9876",
+			"idp": "switch.ch"
+		},
+		"username": "schmid",
+		"secret": "schmidpass",
+		"mail": "urs.schmid@switch.ch",
+		"display_name": "Urs Schmid",
+		"groups": ["quantum-lovers", "philosophy-haters", "physics-lovers"]
+	}
+]
