@@ -434,7 +434,7 @@ steps:
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_OCIS: 'true'
       TEST_REVA: 'true'
-      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~@preview-extension-required&&~@local_storage'
+      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage'
       EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OC-storage.txt'
 
 services:
