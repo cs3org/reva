@@ -37,22 +37,11 @@ import (
 )
 
 func (s *svc) OpenFileInAppProvider(ctx context.Context, req *gateway.OpenFileInAppProviderRequest) (*providerpb.OpenFileInAppProviderResponse, error) {
-	c, err := s.find(ctx, req.Ref)
-	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return &providerpb.OpenFileInAppProviderResponse{
-				Status: status.NewInternal(ctx, err, "storage provider not found"),
-			}, nil
-		}
-		return &providerpb.OpenFileInAppProviderResponse{
-			Status: status.NewInternal(ctx, err, "error finding storage provider"),
-		}, nil
-	}
 
 	accessToken, ok := tokenpkg.ContextGetToken(ctx)
 	if !ok || accessToken == "" {
 		return &providerpb.OpenFileInAppProviderResponse{
-			Status: status.NewUnauthenticated(ctx, err, "Access token is invalid or empty"),
+			Status: status.NewUnauthenticated(ctx, errors.New("Access token is invalid or empty"), ""),
 		}, nil
 	}
 
@@ -60,7 +49,7 @@ func (s *svc) OpenFileInAppProvider(ctx context.Context, req *gateway.OpenFileIn
 		Ref: req.Ref,
 	}
 
-	statRes, err := c.Stat(ctx, statReq)
+	statRes, err := s.Stat(ctx, statReq)
 	if err != nil {
 		return &providerpb.OpenFileInAppProviderResponse{
 			Status: status.NewInternal(ctx, err, "gateway: error calling Stat on the resource path for the app provider: "+req.Ref.GetPath()),
