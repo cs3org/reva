@@ -23,14 +23,15 @@ type TreePersistence interface {
 
 // PathWrapper is used to encapsulate path transformations
 type PathWrapper interface {
-	Resolve(ctx context.Context, ref *provider.Reference) (node *NodeInfo, err error)
-	WrapID(ctx context.Context, id *provider.ResourceId) (node *NodeInfo, err error)
+	NodeFromResource(ctx context.Context, ref *provider.Reference) (node *NodeInfo, err error)
+	NodeFromID(ctx context.Context, id *provider.ResourceId) (node *NodeInfo, err error)
 
 	// Wrap returns a NodeInfo object:
 	// - if the node exists with the node id, name and parent
 	// - if only the parent exists, the node id is empty
-	Wrap(ctx context.Context, fn string) (node *NodeInfo, err error)
-	Unwrap(ctx context.Context, node *NodeInfo) (external string, err error)
+	NodeFromPath(ctx context.Context, fn string) (node *NodeInfo, err error)
+	Path(ctx context.Context, node *NodeInfo) (path string, err error)
+
 	FillParentAndName(node *NodeInfo) (err error) // Tree persistence?
-	ReadRootLink(root string) (node *NodeInfo, err error)
+	RootNode(ctx context.Context) (node *NodeInfo, err error)
 }

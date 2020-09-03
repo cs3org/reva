@@ -31,8 +31,8 @@ func NewTree(pw PathWrapper, dataDirectory string) (TreePersistence, error) {
 }
 
 // GetMD returns the metadata of a node in the tree
-func (fs *Tree) GetMD(ctx context.Context, node *NodeInfo) (os.FileInfo, error) {
-	md, err := os.Stat(filepath.Join(fs.DataDirectory, "nodes", node.ID))
+func (t *Tree) GetMD(ctx context.Context, node *NodeInfo) (os.FileInfo, error) {
+	md, err := os.Stat(filepath.Join(t.DataDirectory, "nodes", node.ID))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, errtypes.NotFound(node.ID)
@@ -44,19 +44,19 @@ func (fs *Tree) GetMD(ctx context.Context, node *NodeInfo) (os.FileInfo, error) 
 }
 
 // GetPathByID returns the fn pointed by the file id, without the internal namespace
-func (fs *Tree) GetPathByID(ctx context.Context, id *provider.ResourceId) (relativeExternalPath string, err error) {
+func (t *Tree) GetPathByID(ctx context.Context, id *provider.ResourceId) (relativeExternalPath string, err error) {
 	var node *NodeInfo
-	node, err = fs.pw.WrapID(ctx, id)
+	node, err = t.pw.NodeFromID(ctx, id)
 	if err != nil {
 		return
 	}
 
-	relativeExternalPath, err = fs.pw.Unwrap(ctx, node)
+	relativeExternalPath, err = t.pw.Path(ctx, node)
 	return
 }
 
 // CreateDir creates a new directory entry in the tree
-func (fs *Tree) CreateDir(ctx context.Context, node *NodeInfo) (err error) {
+func (t *Tree) CreateDir(ctx context.Context, node *NodeInfo) (err error) {
 
 	// TODO always try to fill node?
 	if node.Exists || node.ID != "" { // child already exists
@@ -66,7 +66,7 @@ func (fs *Tree) CreateDir(ctx context.Context, node *NodeInfo) (err error) {
 	// create a directory node
 	node.ID = uuid.New().String()
 
-	newPath := filepath.Join(fs.DataDirectory, "nodes", node.ID)
+	newPath := filepath.Join(t.DataDirectory, "nodes", node.ID)
 
 	err = os.MkdirAll(newPath, 0700)
 	if err != nil {
@@ -81,21 +81,21 @@ func (fs *Tree) CreateDir(ctx context.Context, node *NodeInfo) (err error) {
 	}
 
 	// make child appear in listings
-	err = os.Symlink("../"+node.ID, filepath.Join(fs.DataDirectory, "nodes", node.ParentID, node.Name))
+	err = os.Symlink("../"+node.ID, filepath.Join(t.DataDirectory, "nodes", node.ParentID, node.Name))
 	if err != nil {
 		return
 	}
-	return fs.Propagate(ctx, node)
+	return t.Propagate(ctx, node)
 }
 
 // CreateReference creates a new reference entry in the tree
-func (fs *Tree) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
+func (t *Tree) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
 	return errtypes.NotSupported("operation not supported: CreateReference")
 }
 
 // Move replaces the target with the source
-func (fs *Tree) Move(ctx context.Context, oldNode *NodeInfo, newNode *NodeInfo) (err error) {
-	err = fs.pw.FillParentAndName(newNode)
+func (t *Tree) Move(ctx context.Context, oldNode *NodeInfo, newNode *NodeInfo) (err error) {
+	err = t.pw.FillParentAndName(newNode)
 	if os.IsNotExist(err) {
 		err = nil
 		return
@@ -103,20 +103,20 @@ func (fs *Tree) Move(ctx context.Context, oldNode *NodeInfo, newNode *NodeInfo) 
 
 	// if target exists delete it without trashing it
 	if newNode.Exists {
-		err = fs.pw.FillParentAndName(newNode)
+		err = t.pw.FillParentAndName(newNode)
 		if os.IsNotExist(err) {
 			err = nil
 			return
 		}
 		// TODO make sure all children are deleted
-		if err := os.RemoveAll(filepath.Join(fs.DataDirectory, "nodes", newNode.ID)); err != nil {
+		if err := os.RemoveAll(filepath.Join(t.DataDirectory, "nodes", newNode.ID)); err != nil {
 			return errors.Wrap(err, "ocisfs: Move: error deleting target node "+newNode.ID)
 		}
 	}
 	// are we renaming?
 	if oldNode.ParentID == newNode.ParentID {
 
-		parentPath := filepath.Join(fs.DataDirectory, "nodes", oldNode.ParentID)
+		parentPath := filepath.Join(t.DataDirectory, "nodes", oldNode.ParentID)
 
 		// rename child
 		err = os.Rename(
@@ -127,14 +127,14 @@ func (fs *Tree) Move(ctx context.Context, oldNode *NodeInfo, newNode *NodeInfo) 
 			return errors.Wrap(err, "ocisfs: could not rename child")
 		}
 
-		tgtPath := filepath.Join(fs.DataDirectory, "nodes", newNode.ID)
+		tgtPath := filepath.Join(t.DataDirectory, "nodes", newNode.ID)
 
 		// update name attribute
 		if err := xattr.Set(tgtPath, "user.ocis.name", []byte(newNode.Name)); err != nil {
 			return errors.Wrap(err, "ocisfs: could not set name attribute")
 		}
 
-		return fs.Propagate(ctx, newNode)
+		return t.Propagate(ctx, newNode)
 	}
 
 	// we are moving the node to a new parent, any target has been removed
@@ -142,14 +142,14 @@ func (fs *Tree) Move(ctx context.Context, oldNode *NodeInfo, newNode *NodeInfo) 
 
 	// rename child
 	err = os.Rename(
-		filepath.Join(fs.DataDirectory, "nodes", oldNode.ParentID, oldNode.Name),
-		filepath.Join(fs.DataDirectory, "nodes", newNode.ParentID, newNode.Name),
+		filepath.Join(t.DataDirectory, "nodes", oldNode.ParentID, oldNode.Name),
+		filepath.Join(t.DataDirectory, "nodes", newNode.ParentID, newNode.Name),
 	)
 	if err != nil {
 		return errors.Wrap(err, "ocisfs: could not move child")
 	}
 
-	tgtPath := filepath.Join(fs.DataDirectory, "nodes", newNode.ID)
+	tgtPath := filepath.Join(t.DataDirectory, "nodes", newNode.ID)
 
 	if err := xattr.Set(tgtPath, "user.ocis.parentid", []byte(newNode.ParentID)); err != nil {
 		return errors.Wrap(err, "ocisfs: could not set parentid attribute")
@@ -162,11 +162,11 @@ func (fs *Tree) Move(ctx context.Context, oldNode *NodeInfo, newNode *NodeInfo) 
 	// collect in a list, then only stat each node once
 	// also do this in a go routine ... webdav should check the etag async
 
-	err = fs.Propagate(ctx, oldNode)
+	err = t.Propagate(ctx, oldNode)
 	if err != nil {
 		return errors.Wrap(err, "ocisfs: Move: could not propagate old node")
 	}
-	err = fs.Propagate(ctx, newNode)
+	err = t.Propagate(ctx, newNode)
 	if err != nil {
 		return errors.Wrap(err, "ocisfs: Move: could not propagate new node")
 	}
@@ -174,9 +174,9 @@ func (fs *Tree) Move(ctx context.Context, oldNode *NodeInfo, newNode *NodeInfo) 
 }
 
 // ListFolder lists the content of a folder node
-func (fs *Tree) ListFolder(ctx context.Context, node *NodeInfo) ([]*NodeInfo, error) {
+func (t *Tree) ListFolder(ctx context.Context, node *NodeInfo) ([]*NodeInfo, error) {
 
-	dir := filepath.Join(fs.DataDirectory, "nodes", node.ID)
+	dir := filepath.Join(t.DataDirectory, "nodes", node.ID)
 	f, err := os.Open(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -206,8 +206,8 @@ func (fs *Tree) ListFolder(ctx context.Context, node *NodeInfo) ([]*NodeInfo, er
 }
 
 // Delete deletes a node in the tree
-func (fs *Tree) Delete(ctx context.Context, node *NodeInfo) (err error) {
-	err = fs.pw.FillParentAndName(node)
+func (t *Tree) Delete(ctx context.Context, node *NodeInfo) (err error) {
+	err = t.pw.FillParentAndName(node)
 	if os.IsNotExist(err) {
 		err = nil
 		return
@@ -217,7 +217,7 @@ func (fs *Tree) Delete(ctx context.Context, node *NodeInfo) (err error) {
 		return
 	}
 
-	src := filepath.Join(fs.DataDirectory, "nodes", node.ParentID, node.Name)
+	src := filepath.Join(t.DataDirectory, "nodes", node.ParentID, node.Name)
 	err = os.Remove(src)
 	if err != nil {
 		return
@@ -225,17 +225,17 @@ func (fs *Tree) Delete(ctx context.Context, node *NodeInfo) (err error) {
 
 	// make node appear in trash
 	// parent id and name are stored as extended attributes in the node itself
-	trashpath := filepath.Join(fs.DataDirectory, "trash", node.ID)
+	trashpath := filepath.Join(t.DataDirectory, "trash", node.ID)
 	err = os.Symlink("../nodes/"+node.ID, trashpath)
 	if err != nil {
 		return
 	}
 
-	return fs.Propagate(ctx, &NodeInfo{ID: node.ParentID})
+	return t.Propagate(ctx, &NodeInfo{ID: node.ParentID})
 }
 
 // Propagate propagates changes to the root of the tree
-func (fs *Tree) Propagate(ctx context.Context, node *NodeInfo) (err error) {
+func (t *Tree) Propagate(ctx context.Context, node *NodeInfo) (err error) {
 	// generate an etag
 	bytes := make([]byte, 16)
 	if _, err := rand.Read(bytes); err != nil {
@@ -244,10 +244,12 @@ func (fs *Tree) Propagate(ctx context.Context, node *NodeInfo) (err error) {
 	// store in extended attribute
 	etag := hex.EncodeToString(bytes)
 	for err == nil {
-		if err := xattr.Set(filepath.Join(fs.DataDirectory, "nodes", node.ID), "user.ocis.etag", []byte(etag)); err != nil {
+		if err := xattr.Set(filepath.Join(t.DataDirectory, "nodes", node.ID), "user.ocis.etag", []byte(etag)); err != nil {
 			log.Error().Err(err).Msg("error storing file id")
 		}
-		err = fs.pw.FillParentAndName(node)
+		// TODO propagate mtime
+		// TODO size accounting
+		err = t.pw.FillParentAndName(node)
 		if os.IsNotExist(err) || node.ParentID == "root" {
 			err = nil
 			return
