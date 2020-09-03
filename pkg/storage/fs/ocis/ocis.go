@@ -74,9 +74,6 @@ func (c *config) init(m map[string]interface{}) {
 	}
 	// c.DataDirectory should never end in / unless it is the root
 	c.Root = filepath.Clean(c.Root)
-
-	// TODO we need a lot more mimetypes
-	mime.RegisterMime(".txt", "text/plain")
 }
 
 // New returns an implementation to of the storage.FS interface that talk to
