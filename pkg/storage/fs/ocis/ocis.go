@@ -25,9 +25,9 @@ import (
 	"os"
 	"path/filepath"
 
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/mime"
@@ -94,8 +94,8 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		// notes contain symlinks from nodes/<u-u-i-d>/uploads/<uploadid> to ../../uploads/<uploadid>
 		// better to keep uploads on a fast / volatile storage before a workflow finally moves them to the nodes dir
 		filepath.Join(c.Root, "uploads"),
-		filepath.Join(c.Root, "trash/files"),
-		filepath.Join(c.Root, "trash/info"),
+		filepath.Join(c.Root, "trash"),
+		filepath.Join(c.Root, "versions"),
 	}
 	for _, v := range dataPaths {
 		if err := os.MkdirAll(v, 0700); err != nil {
@@ -143,15 +143,11 @@ func (fs *ocisfs) CreateHome(ctx context.Context) error {
 		return errtypes.NotSupported("ocisfs: create home not supported")
 	}
 
-	u, err := getUser(ctx)
-	if err != nil {
-		err = errors.Wrap(err, "ocisfs: wrap: no user in ctx and home is enabled")
-		return err
-	}
+	u := user.ContextMustGetUser(ctx)
 	layout := templates.WithUser(u, fs.conf.UserLayout)
 	home := filepath.Join(fs.conf.Root, "users", layout)
 
-	_, err = os.Stat(home)
+	_, err := os.Stat(home)
 	if err == nil { // home already exists
 		return nil
 	}
@@ -164,11 +160,19 @@ func (fs *ocisfs) CreateHome(ctx context.Context) error {
 		return errors.Wrap(err, "ocisfs: error creating dir")
 	}
 
-	// create a directory node (with children subfolder)
+	// create a directory node
 	nodeID := uuid.New().String()
-	err = os.MkdirAll(filepath.Join(fs.conf.Root, "nodes", nodeID, "children"), 0700)
+	nodePath := filepath.Join(fs.conf.Root, "nodes", nodeID)
+	err = os.MkdirAll(nodePath, 0700)
 	if err != nil {
-		return errors.Wrap(err, "ocisfs: error node dir")
+		return errors.Wrap(err, "ocisfs: error creating node dir")
+	}
+
+	if err := xattr.Set(nodePath, "user.ocis.parentid", []byte("root")); err != nil {
+		return errors.Wrap(err, "ocisfs: could not set parentid attribute")
+	}
+	if err := xattr.Set(nodePath, "user.ocis.name", []byte("")); err != nil {
+		return errors.Wrap(err, "ocisfs: could not set name attribute")
 	}
 
 	// link users home to node
@@ -181,11 +185,7 @@ func (fs *ocisfs) GetHome(ctx context.Context) (string, error) {
 	if !fs.conf.EnableHome || fs.conf.UserLayout == "" {
 		return "", errtypes.NotSupported("ocisfs: get home not supported")
 	}
-	u, err := getUser(ctx)
-	if err != nil {
-		err = errors.Wrap(err, "ocisfs: wrap: no user in ctx and home is enabled")
-		return "", err
-	}
+	u := user.ContextMustGetUser(ctx)
 	layout := templates.WithUser(u, fs.conf.UserLayout)
 	return filepath.Join(fs.conf.Root, layout), nil // TODO use a namespace?
 }
@@ -285,7 +285,7 @@ func (fs *ocisfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refe
 // Data persistence
 
 func (fs *ocisfs) ContentPath(node *NodeInfo) string {
-	return filepath.Join(fs.conf.Root, "nodes", node.ID, "content")
+	return filepath.Join(fs.conf.Root, "nodes", node.ID)
 }
 
 func (fs *ocisfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
@@ -362,35 +362,32 @@ func (fs *ocisfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *p
 
 // supporting functions
 
-func getUser(ctx context.Context) (*userpb.User, error) {
-	u, ok := user.ContextGetUser(ctx)
-	if !ok {
-		err := errors.Wrap(errtypes.UserRequired(""), "ocisfs: error getting user from ctx")
-		return nil, err
-	}
-	return u, nil
-}
-
 func (fs *ocisfs) normalize(ctx context.Context, node *NodeInfo) (ri *provider.ResourceInfo, err error) {
 	var fn string
 
 	nodePath := filepath.Join(fs.conf.Root, "nodes", node.ID)
 
 	var fi os.FileInfo
+
 	nodeType := provider.ResourceType_RESOURCE_TYPE_INVALID
-	if fi, err = os.Stat(filepath.Join(nodePath, "content")); err == nil {
-		nodeType = provider.ResourceType_RESOURCE_TYPE_FILE
-	} else if fi, err = os.Stat(filepath.Join(nodePath, "children")); err == nil {
+	if fi, err = os.Lstat(nodePath); err != nil {
+		return
+	}
+	if fi.IsDir() {
 		nodeType = provider.ResourceType_RESOURCE_TYPE_CONTAINER
-	} else if fi, err = os.Stat(filepath.Join(nodePath, "reference")); err == nil {
-		// TODO handle references
-		nodeType = provider.ResourceType_RESOURCE_TYPE_REFERENCE
+	} else if fi.Mode().IsRegular() {
+		nodeType = provider.ResourceType_RESOURCE_TYPE_FILE
+	} else if fi.Mode()&os.ModeSymlink != 0 {
+		nodeType = provider.ResourceType_RESOURCE_TYPE_SYMLINK
+		// TODO reference using ext attr on a symlink
+		// nodeType = provider.ResourceType_RESOURCE_TYPE_REFERENCE
 	}
 
 	var etag []byte
-	// TODO store etag in node folder or on content and child nodes?
+	// TODO optionally store etag in new `root/attributes/<uuid>` file
 	if etag, err = xattr.Get(nodePath, "user.ocis.etag"); err != nil {
-		logger.New().Error().Err(err).Msg("could not read etag")
+		log := appctx.GetLogger(ctx)
+		log.Debug().Err(err).Msg("could not read etag")
 	}
 
 	id := &provider.ResourceId{OpaqueId: node.ID}
@@ -413,7 +410,8 @@ func (fs *ocisfs) normalize(ctx context.Context, node *NodeInfo) (ri *provider.R
 		},
 	}
 
-	logger.New().Debug().
+	log := appctx.GetLogger(ctx)
+	log.Debug().
 		Interface("ri", ri).
 		Msg("normalized")
 

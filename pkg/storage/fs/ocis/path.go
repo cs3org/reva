@@ -7,11 +7,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/pkg/errors"
+	"github.com/pkg/xattr"
 )
 
 // Path implements transformations from filepath to node and back
@@ -51,14 +52,7 @@ func (pw *Path) Wrap(ctx context.Context, fn string) (node *NodeInfo, err error)
 	}
 	if pw.EnableHome && pw.UserLayout != "" {
 		// start at the users root node
-		var u *userpb.User
-
-		u, err = getUser(ctx)
-		if err != nil {
-			err = errors.Wrap(err, "ocisfs: Wrap: no user in ctx and home is enabled")
-			return
-		}
-
+		u := user.ContextMustGetUser(ctx)
 		layout := templates.WithUser(u, pw.UserLayout)
 		root = filepath.Join(pw.Root, "users", layout)
 
@@ -81,7 +75,7 @@ func (pw *Path) Wrap(ctx context.Context, fn string) (node *NodeInfo, err error)
 			node.ID = ""
 			node.Name = segments[i]
 
-			link, err = os.Readlink(filepath.Join(pw.Root, "nodes", node.ParentID, "children", node.Name))
+			link, err = os.Readlink(filepath.Join(pw.Root, "nodes", node.ParentID, node.Name))
 			if os.IsNotExist(err) {
 				node.Exists = false
 				// if this is the last segment we can use it as the node name
@@ -90,17 +84,17 @@ func (pw *Path) Wrap(ctx context.Context, fn string) (node *NodeInfo, err error)
 					return
 				}
 
-				err = errtypes.NotFound(filepath.Join(pw.Root, "nodes", node.ParentID, "children", node.Name))
+				err = errtypes.NotFound(filepath.Join(pw.Root, "nodes", node.ParentID, node.Name))
 				return
 			}
 			if err != nil {
 				err = errors.Wrap(err, "ocisfs: Wrap: readlink error")
 				return
 			}
-			if strings.HasPrefix(link, "../../") {
+			if strings.HasPrefix(link, "../") {
 				node.ID = filepath.Base(link)
 			} else {
-				err = fmt.Errorf("ocisfs: expected '../../ prefix, got' %+v", link)
+				err = fmt.Errorf("ocisfs: expected '../ prefix, got' %+v", link)
 				return
 			}
 		}
@@ -118,9 +112,14 @@ func (pw *Path) WrapID(ctx context.Context, id *provider.ResourceId) (*NodeInfo,
 }
 
 func (pw *Path) Unwrap(ctx context.Context, ni *NodeInfo) (external string, err error) {
+	// check if this a not yet existing node
+	if ni.ID == "" && ni.Name != "" && ni.ParentID != "" {
+		external = ni.Name
+		ni.BecomeParent()
+	}
 	for err == nil {
 		err = pw.FillParentAndName(ni)
-		if os.IsNotExist(err) {
+		if os.IsNotExist(err) || ni.ParentID == "root" {
 			err = nil
 			return
 		}
@@ -146,23 +145,23 @@ func (pw *Path) FillParentAndName(node *NodeInfo) (err error) {
 		return
 	}
 
-	var link string
-	// The parentname symlink looks like `../76455834-769e-412a-8a01-68f265365b79/children/myname.txt`
-	link, err = os.Readlink(filepath.Join(pw.Root, "nodes", node.ID, "parentname"))
-	if err != nil {
-		return
+	nodePath := filepath.Join(pw.Root, "nodes", node.ID)
+
+	var attrBytes []byte
+	if attrBytes, err = xattr.Get(nodePath, "user.ocis.parentid"); err == nil {
+		node.ParentID = string(attrBytes)
+	}
+	// no error if it is empty -> root node
+	// TODO better identify a root node, eg by using `root` as the parentid? or `root:userid`?
+
+	if attrBytes, err = xattr.Get(nodePath, "user.ocis.name"); err == nil {
+		node.Name = string(attrBytes)
 	}
 
-	// check the link follows the correct schema
-	// TODO count slashes
-	if strings.HasPrefix(link, "../") {
-		node.Name = filepath.Base(link)
-		node.ParentID = filepath.Base(filepath.Dir(filepath.Dir(link)))
-		node.Exists = true
-	} else {
-		err = fmt.Errorf("ocisfs: expected '../' prefix, got '%+v'", link)
-		return
-	}
+	// no error if it is empty -> root node
+	// TODO better identify a root node?
+
+	node.Exists = true
 	return
 }
 
