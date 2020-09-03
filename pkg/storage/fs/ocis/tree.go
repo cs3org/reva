@@ -12,7 +12,7 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/gofrs/uuid"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 	"github.com/rs/zerolog/log"
@@ -66,7 +66,7 @@ func (fs *Tree) CreateDir(ctx context.Context, node *NodeInfo) (err error) {
 	}
 
 	// create a directory node (with children subfolder)
-	node.ID = uuid.Must(uuid.NewV4()).String()
+	node.ID = uuid.New().String()
 
 	newPath := filepath.Join(fs.DataDirectory, "nodes", node.ID)
 
