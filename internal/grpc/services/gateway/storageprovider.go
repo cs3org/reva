@@ -1320,9 +1320,8 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 			if protocol == "webdav" {
 				info, err = s.webdavRefStat(ctx, ref.Target)
 				if err != nil {
-					return &provider.ListContainerResponse{
-						Status: status.NewInternal(ctx, err, "gateway: error resolving webdav reference: "+ref.Target),
-					}, nil
+					// Might be the case that the webdav token has expired. In that case, use the reference's info
+					info = ref
 				}
 			}
 
