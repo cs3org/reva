@@ -30,22 +30,22 @@ type Path struct {
 	EnableHome bool `mapstructure:"enable_home"`
 }
 
-// Resolve takes in a request path or request id and converts it to a NodeInfo
-func (pw *Path) Resolve(ctx context.Context, ref *provider.Reference) (*NodeInfo, error) {
+// NodeFromResource takes in a request path or request id and converts it to a NodeInfo
+func (pw *Path) NodeFromResource(ctx context.Context, ref *provider.Reference) (*NodeInfo, error) {
 	if ref.GetPath() != "" {
-		return pw.Wrap(ctx, ref.GetPath())
+		return pw.NodeFromPath(ctx, ref.GetPath())
 	}
 
 	if ref.GetId() != nil {
-		return pw.WrapID(ctx, ref.GetId())
+		return pw.NodeFromID(ctx, ref.GetId())
 	}
 
 	// reference is invalid
 	return nil, fmt.Errorf("invalid reference %+v", ref)
 }
 
-// Wrap converts a filename into a NodeInfo
-func (pw *Path) Wrap(ctx context.Context, fn string) (node *NodeInfo, err error) {
+// NodeFromPath converts a filename into a NodeInfo
+func (pw *Path) NodeFromPath(ctx context.Context, fn string) (node *NodeInfo, err error) {
 	var link, root string
 	if fn == "" {
 		fn = "/"
@@ -61,7 +61,7 @@ func (pw *Path) Wrap(ctx context.Context, fn string) (node *NodeInfo, err error)
 		root = filepath.Join(pw.Root, "nodes/root")
 	}
 
-	node, err = pw.ReadRootLink(root)
+	node, err = pw.readRootLink(root)
 	// The symlink contains the nodeID
 	if err != nil {
 		return
@@ -103,15 +103,15 @@ func (pw *Path) Wrap(ctx context.Context, fn string) (node *NodeInfo, err error)
 	return
 }
 
-// WrapID returns the internal path for the id
-func (pw *Path) WrapID(ctx context.Context, id *provider.ResourceId) (*NodeInfo, error) {
+// NodeFromID returns the internal path for the id
+func (pw *Path) NodeFromID(ctx context.Context, id *provider.ResourceId) (*NodeInfo, error) {
 	if id == nil || id.OpaqueId == "" {
 		return nil, fmt.Errorf("invalid resource id %+v", id)
 	}
 	return &NodeInfo{ID: id.OpaqueId}, nil
 }
 
-func (pw *Path) Unwrap(ctx context.Context, ni *NodeInfo) (external string, err error) {
+func (pw *Path) Path(ctx context.Context, ni *NodeInfo) (external string, err error) {
 	// check if this a not yet existing node
 	if ni.ID == "" && ni.Name != "" && ni.ParentID != "" {
 		external = ni.Name
@@ -165,9 +165,8 @@ func (pw *Path) FillParentAndName(node *NodeInfo) (err error) {
 	return
 }
 
-// ReadRootLink reads the symbolic link and extracts the node id
-func (pw *Path) ReadRootLink(root string) (node *NodeInfo, err error) {
-
+// readRootLink reads the symbolic link and extracts the node id
+func (pw *Path) readRootLink(root string) (node *NodeInfo, err error) {
 	// A root symlink looks like `../nodes/76455834-769e-412a-8a01-68f265365b79`
 	link, err := os.Readlink(root)
 	if os.IsNotExist(err) {
@@ -183,6 +182,29 @@ func (pw *Path) ReadRootLink(root string) (node *NodeInfo, err error) {
 		}
 	} else {
 		err = fmt.Errorf("ocisfs: expected '../nodes/ prefix, got' %+v", link)
+	}
+	return
+}
+
+// RootNode returns the root node of a tree,
+// taking into account the user layout if EnableHome is true
+func (pw *Path) RootNode(ctx context.Context) (node *NodeInfo, err error) {
+	var root string
+	if pw.EnableHome && pw.UserLayout != "" {
+		// start at the users root node
+		u := user.ContextMustGetUser(ctx)
+		layout := templates.WithUser(u, pw.UserLayout)
+		root = filepath.Join(pw.Root, "users", layout)
+
+	} else {
+		// start at the storage root node
+		root = filepath.Join(pw.Root, "nodes/root")
+	}
+
+	// The symlink contains the nodeID
+	node, err = pw.readRootLink(root)
+	if err != nil {
+		return
 	}
 	return
 }

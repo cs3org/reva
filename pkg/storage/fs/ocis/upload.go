@@ -34,6 +34,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
+	"github.com/rs/zerolog/log"
 	tusd "github.com/tus/tusd/pkg/handler"
 )
 
@@ -43,7 +44,7 @@ var defaultFilePerm = os.FileMode(0664)
 
 func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
 
-	node, err := fs.pw.Resolve(ctx, ref)
+	node, err := fs.pw.NodeFromResource(ctx, ref)
 	if err != nil {
 		return err
 	}
@@ -83,12 +84,12 @@ func (fs *ocisfs) InitiateUpload(ctx context.Context, ref *provider.Reference, u
 
 	var relative string // the internal path of the file node
 
-	node, err := fs.pw.Resolve(ctx, ref)
+	node, err := fs.pw.NodeFromResource(ctx, ref)
 	if err != nil {
 		return "", err
 	}
 
-	relative, err = fs.pw.Unwrap(ctx, node)
+	relative, err = fs.pw.Path(ctx, node)
 	if err != nil {
 		return "", err
 	}
@@ -146,7 +147,7 @@ func (fs *ocisfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tus
 	}
 	info.MetaData["dir"] = filepath.Clean(info.MetaData["dir"])
 
-	node, err := fs.pw.Wrap(ctx, filepath.Join(info.MetaData["dir"], info.MetaData["filename"]))
+	node, err := fs.pw.NodeFromPath(ctx, filepath.Join(info.MetaData["dir"], info.MetaData["filename"]))
 	if err != nil {
 		return nil, errors.Wrap(err, "ocisfs: error wrapping filename")
 	}
@@ -359,12 +360,12 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 	}
 
 	// only delete the upload if it was successfully written to the storage
-	/*if err := os.Remove(upload.infoPath); err != nil {
+	if err := os.Remove(upload.infoPath); err != nil {
 		if !os.IsNotExist(err) {
 			log.Err(err).Interface("info", upload.info).Msg("ocisfs: could not delete upload info")
 			return err
 		}
-	}*/
+	}
 	// use set arbitrary metadata?
 	/*if upload.info.MetaData["mtime"] != "" {
 		err := upload.fs.SetMtime(ctx, np, upload.info.MetaData["mtime"])

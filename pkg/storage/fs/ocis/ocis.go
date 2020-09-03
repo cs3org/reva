@@ -196,7 +196,7 @@ func (fs *ocisfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (str
 
 func (fs *ocisfs) CreateDir(ctx context.Context, fn string) (err error) {
 	var node *NodeInfo
-	if node, err = fs.pw.Wrap(ctx, fn); err != nil {
+	if node, err = fs.pw.NodeFromPath(ctx, fn); err != nil {
 		return
 	}
 	return fs.tp.CreateDir(ctx, node)
@@ -208,7 +208,7 @@ func (fs *ocisfs) CreateReference(ctx context.Context, path string, targetURI *u
 
 func (fs *ocisfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (err error) {
 	var oldNode, newNode *NodeInfo
-	if oldNode, err = fs.pw.Resolve(ctx, oldRef); err != nil {
+	if oldNode, err = fs.pw.NodeFromResource(ctx, oldRef); err != nil {
 		return
 	}
 	if !oldNode.Exists {
@@ -216,7 +216,7 @@ func (fs *ocisfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) 
 		return
 	}
 
-	if newNode, err = fs.pw.Resolve(ctx, newRef); err != nil {
+	if newNode, err = fs.pw.NodeFromResource(ctx, newRef); err != nil {
 		return
 	}
 	return fs.tp.Move(ctx, oldNode, newNode)
@@ -224,7 +224,7 @@ func (fs *ocisfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) 
 
 func (fs *ocisfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (ri *provider.ResourceInfo, err error) {
 	var node *NodeInfo
-	if node, err = fs.pw.Resolve(ctx, ref); err != nil {
+	if node, err = fs.pw.NodeFromResource(ctx, ref); err != nil {
 		return
 	}
 	if !node.Exists {
@@ -236,7 +236,7 @@ func (fs *ocisfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 
 func (fs *ocisfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) (finfos []*provider.ResourceInfo, err error) {
 	var node *NodeInfo
-	if node, err = fs.pw.Resolve(ctx, ref); err != nil {
+	if node, err = fs.pw.NodeFromResource(ctx, ref); err != nil {
 		return
 	}
 	if !node.Exists {
@@ -259,7 +259,7 @@ func (fs *ocisfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 
 func (fs *ocisfs) Delete(ctx context.Context, ref *provider.Reference) (err error) {
 	var node *NodeInfo
-	if node, err = fs.pw.Resolve(ctx, ref); err != nil {
+	if node, err = fs.pw.NodeFromResource(ctx, ref); err != nil {
 		return
 	}
 	if !node.Exists {
@@ -286,7 +286,7 @@ func (fs *ocisfs) ContentPath(node *NodeInfo) string {
 }
 
 func (fs *ocisfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
-	node, err := fs.pw.Resolve(ctx, ref)
+	node, err := fs.pw.NodeFromResource(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "ocisfs: error resolving ref")
 	}
@@ -388,8 +388,8 @@ func (fs *ocisfs) normalize(ctx context.Context, node *NodeInfo) (ri *provider.R
 	}
 
 	id := &provider.ResourceId{OpaqueId: node.ID}
-	// Unwrap changes the node because it traverses the tree
-	fn, err = fs.pw.Unwrap(ctx, node)
+	// Path changes the node because it traverses the tree
+	fn, err = fs.pw.Path(ctx, node)
 	if err != nil {
 		return nil, err
 	}
