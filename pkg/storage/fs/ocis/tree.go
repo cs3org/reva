@@ -3,12 +3,10 @@ package ocis
 import (
 	"context"
 	"encoding/hex"
-	"io/ioutil"
 	"math/rand"
 	"net/url"
 	"os"
 	"path/filepath"
-	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -60,30 +58,30 @@ func (fs *Tree) GetPathByID(ctx context.Context, id *provider.ResourceId) (relat
 // CreateDir creates a new directory entry in the tree
 func (fs *Tree) CreateDir(ctx context.Context, node *NodeInfo) (err error) {
 
-	// TODO always try to  fill node?
+	// TODO always try to fill node?
 	if node.Exists || node.ID != "" { // child already exists
 		return
 	}
 
-	// create a directory node (with children subfolder)
+	// create a directory node
 	node.ID = uuid.New().String()
 
 	newPath := filepath.Join(fs.DataDirectory, "nodes", node.ID)
 
-	err = os.MkdirAll(filepath.Join(newPath, "children"), 0700)
+	err = os.MkdirAll(newPath, 0700)
 	if err != nil {
 		return errors.Wrap(err, "ocisfs: could not create node dir")
 	}
 
-	// create back link
-	// we are not only linking back to the parent, but also to the filename
-	err = os.Symlink("../"+node.ParentID+"/children/"+node.Name, filepath.Join(newPath, "parentname"))
-	if err != nil {
-		return errors.Wrap(err, "ocisfs: could not symlink parent node")
+	if err := xattr.Set(newPath, "user.ocis.parentid", []byte(node.ParentID)); err != nil {
+		return errors.Wrap(err, "ocisfs: could not set parentid attribute")
+	}
+	if err := xattr.Set(newPath, "user.ocis.name", []byte(node.Name)); err != nil {
+		return errors.Wrap(err, "ocisfs: could not set name attribute")
 	}
 
 	// make child appear in listings
-	err = os.Symlink("../../"+node.ID, filepath.Join(fs.DataDirectory, "nodes", node.ParentID, "children", node.Name))
+	err = os.Symlink("../"+node.ID, filepath.Join(fs.DataDirectory, "nodes", node.ParentID, node.Name))
 	if err != nil {
 		return
 	}
@@ -110,6 +108,7 @@ func (fs *Tree) Move(ctx context.Context, oldNode *NodeInfo, newNode *NodeInfo) 
 			err = nil
 			return
 		}
+		// TODO make sure all children are deleted
 		if err := os.RemoveAll(filepath.Join(fs.DataDirectory, "nodes", newNode.ID)); err != nil {
 			return errors.Wrap(err, "ocisfs: Move: error deleting target node "+newNode.ID)
 		}
@@ -117,90 +116,79 @@ func (fs *Tree) Move(ctx context.Context, oldNode *NodeInfo, newNode *NodeInfo) 
 	// are we renaming?
 	if oldNode.ParentID == newNode.ParentID {
 
-		nodePath := filepath.Join(fs.DataDirectory, "nodes", oldNode.ID)
-
-		// update back link
-		// we are not only linking back to the parent, but also to the filename
-		err = os.Remove(filepath.Join(nodePath, "parentname"))
-		if err != nil {
-			return errors.Wrap(err, "ocisfs: could not remove parent link")
-		}
-		err = os.Symlink("../"+oldNode.ParentID+"/children/"+newNode.Name, filepath.Join(nodePath, "parentname"))
-		if err != nil {
-			return errors.Wrap(err, "ocisfs: could not symlink parent")
-		}
+		parentPath := filepath.Join(fs.DataDirectory, "nodes", oldNode.ParentID)
 
 		// rename child
 		err = os.Rename(
-			filepath.Join(fs.DataDirectory, "nodes", oldNode.ParentID, "children", oldNode.Name),
-			filepath.Join(fs.DataDirectory, "nodes", oldNode.ParentID, "children", newNode.Name),
+			filepath.Join(parentPath, oldNode.Name),
+			filepath.Join(parentPath, newNode.Name),
 		)
 		if err != nil {
-			return errors.Wrap(err, "ocisfs: could not rename symlink")
+			return errors.Wrap(err, "ocisfs: could not rename child")
 		}
-		return fs.Propagate(ctx, oldNode)
+
+		tgtPath := filepath.Join(fs.DataDirectory, "nodes", newNode.ID)
+
+		// update name attribute
+		if err := xattr.Set(tgtPath, "user.ocis.name", []byte(newNode.Name)); err != nil {
+			return errors.Wrap(err, "ocisfs: could not set name attribute")
+		}
+
+		return fs.Propagate(ctx, newNode)
 	}
+
 	// we are moving the node to a new parent, any target has been removed
 	// bring old node to the new parent
 
-	nodePath := filepath.Join(fs.DataDirectory, "nodes", oldNode.ID)
-
-	// update back link
-	// we are not only linking back to the parent, but also to the filename
-	err = os.Remove(filepath.Join(nodePath, "parentname"))
-	if err != nil {
-		return errors.Wrap(err, "ocisfs: could not remove parent link")
-	}
-	err = os.Symlink("../"+newNode.ParentID+"/children/"+newNode.Name, filepath.Join(nodePath, "parentname"))
-	if err != nil {
-		return errors.Wrap(err, "ocisfs: could not symlink parent")
-	}
-
 	// rename child
 	err = os.Rename(
-		filepath.Join(fs.DataDirectory, "nodes", oldNode.ParentID, "children", oldNode.Name),
-		filepath.Join(fs.DataDirectory, "nodes", newNode.ParentID, "children", newNode.Name),
+		filepath.Join(fs.DataDirectory, "nodes", oldNode.ParentID, oldNode.Name),
+		filepath.Join(fs.DataDirectory, "nodes", newNode.ParentID, newNode.Name),
 	)
 	if err != nil {
-		return errors.Wrap(err, "ocisfs: could not rename symlink")
+		return errors.Wrap(err, "ocisfs: could not move child")
+	}
+
+	tgtPath := filepath.Join(fs.DataDirectory, "nodes", newNode.ID)
+
+	if err := xattr.Set(tgtPath, "user.ocis.parentid", []byte(newNode.ParentID)); err != nil {
+		return errors.Wrap(err, "ocisfs: could not set parentid attribute")
+	}
+	if err := xattr.Set(tgtPath, "user.ocis.name", []byte(newNode.Name)); err != nil {
+		return errors.Wrap(err, "ocisfs: could not set name attribute")
 	}
 
 	// TODO inefficient because we might update several nodes twice, only propagate unchanged nodes?
 	// collect in a list, then only stat each node once
 	// also do this in a go routine ... webdav should check the etag async
+
 	err = fs.Propagate(ctx, oldNode)
 	if err != nil {
 		return errors.Wrap(err, "ocisfs: Move: could not propagate old node")
 	}
 	err = fs.Propagate(ctx, newNode)
 	if err != nil {
-		return errors.Wrap(err, "ocisfs: Move: could not propagate old node")
+		return errors.Wrap(err, "ocisfs: Move: could not propagate new node")
 	}
 	return nil
 }
 
-// ChildrenPath returns the absolute path to childrens in a node
-// TODO move to node?
-func (fs *Tree) ChildrenPath(node *NodeInfo) string {
-	return filepath.Join(fs.DataDirectory, "nodes", node.ID, "children")
-}
-
-// ListFolder lists the children inside a folder
+// ListFolder lists the content of a folder node
 func (fs *Tree) ListFolder(ctx context.Context, node *NodeInfo) ([]*NodeInfo, error) {
 
-	children := fs.ChildrenPath(node)
-	f, err := os.Open(children)
+	dir := filepath.Join(fs.DataDirectory, "nodes", node.ID)
+	f, err := os.Open(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, errtypes.NotFound(children)
+			return nil, errtypes.NotFound(dir)
 		}
-		return nil, errors.Wrap(err, "tree: error listing "+children)
+		return nil, errors.Wrap(err, "tree: error listing "+dir)
 	}
 
 	names, err := f.Readdirnames(0)
 	nodes := []*NodeInfo{}
 	for i := range names {
-		link, err := os.Readlink(filepath.Join(children, names[i]))
+		link, err := os.Readlink(filepath.Join(dir, names[i]))
 		if err != nil {
 			// TODO log
 			continue
@@ -229,23 +217,16 @@ func (fs *Tree) Delete(ctx context.Context, node *NodeInfo) (err error) {
 		return
 	}
 
-	// remove child entry from dir
-
-	os.Remove(filepath.Join(fs.DataDirectory, "nodes", node.ParentID, "children", node.Name))
-
-	src := filepath.Join(fs.DataDirectory, "nodes", node.ID)
-	trashpath := filepath.Join(fs.DataDirectory, "trash/files", node.ID)
-	err = os.Rename(src, trashpath)
+	src := filepath.Join(fs.DataDirectory, "nodes", node.ParentID, node.Name)
+	err = os.Remove(src)
 	if err != nil {
 		return
 	}
 
-	// write a trash info ... slightly violating the freedesktop trash spec
-	t := time.Now()
-	// TODO store the original Path
-	info := []byte("[Trash Info]\nParentID=" + node.ParentID + "\nDeletionDate=" + t.Format(time.RFC3339))
-	infoPath := filepath.Join(fs.DataDirectory, "trash/info", node.ID+".trashinfo")
-	err = ioutil.WriteFile(infoPath, info, 0700)
+	// make node appear in trash
+	// parent id and name are stored as extended attributes in the node itself
+	trashpath := filepath.Join(fs.DataDirectory, "trash", node.ID)
+	err = os.Symlink("../nodes/"+node.ID, trashpath)
 	if err != nil {
 		return
 	}
@@ -267,7 +248,7 @@ func (fs *Tree) Propagate(ctx context.Context, node *NodeInfo) (err error) {
 			log.Error().Err(err).Msg("error storing file id")
 		}
 		err = fs.pw.FillParentAndName(node)
-		if os.IsNotExist(err) {
+		if os.IsNotExist(err) || node.ParentID == "root" {
 			err = nil
 			return
 		}

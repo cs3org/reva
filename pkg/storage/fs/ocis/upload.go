@@ -29,12 +29,11 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
-	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"github.com/pkg/xattr"
 	tusd "github.com/tus/tusd/pkg/handler"
 )
 
@@ -49,12 +48,10 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 		return err
 	}
 
-	if !node.Exists {
-		err = node.Create(fs.conf.Root)
-		if err != nil {
-			return errors.Wrap(err, "ocisfs: could not create node")
-		}
+	if node.ID == "" {
+		node.ID = uuid.New().String()
 	}
+
 	nodePath := filepath.Join(fs.conf.Root, "nodes", node.ID)
 
 	tmp, err := ioutil.TempFile(nodePath, "._reva_atomic_upload")
@@ -70,7 +67,7 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 	// TODO move old content to version
 	//_ = os.RemoveAll(path.Join(nodePath, "content"))
 
-	err = os.Rename(tmp.Name(), filepath.Join(nodePath, "content"))
+	err = os.Rename(tmp.Name(), nodePath)
 	if err != nil {
 		return err
 	}
@@ -81,17 +78,24 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 // InitiateUpload returns an upload id that can be used for uploads with tus
 // TODO read optional content for small files in this request
 func (fs *ocisfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (uploadID string, err error) {
+
+	log := appctx.GetLogger(ctx)
+
 	var relative string // the internal path of the file node
 
 	node, err := fs.pw.Resolve(ctx, ref)
 	if err != nil {
 		return "", err
 	}
+
 	relative, err = fs.pw.Unwrap(ctx, node)
+	if err != nil {
+		return "", err
+	}
 
 	info := tusd.FileInfo{
 		MetaData: tusd.MetaData{
-			"filename": node.Name,
+			"filename": filepath.Base(relative),
 			"dir":      filepath.Dir(relative),
 		},
 		Size: uploadLength,
@@ -100,6 +104,8 @@ func (fs *ocisfs) InitiateUpload(ctx context.Context, ref *provider.Reference, u
 	if metadata != nil && metadata["mtime"] != "" {
 		info.MetaData["mtime"] = metadata["mtime"]
 	}
+
+	log.Debug().Interface("info", info).Interface("node", node).Interface("metadata", metadata).Msg("ocisfs: resolved filename")
 
 	upload, err := fs.NewUpload(ctx, info)
 	if err != nil {
@@ -141,6 +147,9 @@ func (fs *ocisfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tus
 	info.MetaData["dir"] = filepath.Clean(info.MetaData["dir"])
 
 	node, err := fs.pw.Wrap(ctx, filepath.Join(info.MetaData["dir"], info.MetaData["filename"]))
+	if err != nil {
+		return nil, errors.Wrap(err, "ocisfs: error wrapping filename")
+	}
 
 	log.Debug().Interface("info", info).Interface("node", node).Msg("ocisfs: resolved filename")
 
@@ -201,13 +210,7 @@ func (fs *ocisfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tus
 }
 
 func (fs *ocisfs) getUploadPath(ctx context.Context, uploadID string) (string, error) {
-	u, ok := user.ContextGetUser(ctx)
-	if !ok {
-		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
-		return "", err
-	}
-	layout := templates.WithUser(u, fs.conf.UserLayout)
-	return filepath.Join(fs.conf.Root, layout, "uploads", uploadID), nil
+	return filepath.Join(fs.conf.Root, "uploads", uploadID), nil
 }
 
 // GetUpload returns the Upload for the given upload id
@@ -290,7 +293,7 @@ func (upload *fileUpload) WriteChunk(ctx context.Context, offset int64, src io.R
 
 	// If the HTTP PATCH request gets interrupted in the middle (e.g. because
 	// the user wants to pause the upload), Go's net/http returns an io.ErrUnexpectedEOF.
-	// However, for OwnCloudStore it's not important whether the stream has ended
+	// However, for the ocis driver it's not important whether the stream has ended
 	// on purpose or accidentally.
 	if err != nil {
 		if err != io.ErrUnexpectedEOF {
@@ -321,37 +324,47 @@ func (upload *fileUpload) writeInfo() error {
 // FinishUpload finishes an upload and moves the file to the internal destination
 func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 
-	node := &NodeInfo{
+	n := &NodeInfo{
 		ID:       upload.info.Storage["NodeId"],
 		ParentID: upload.info.Storage["NodeParentId"],
 		Name:     upload.info.Storage["NodeName"],
 	}
 
-	if node.ID == "" {
-		err := node.Create(upload.fs.conf.Root)
-		if err != nil {
-			return errors.Wrap(err, "ocisfs: could not create node")
-		}
+	if n.ID == "" {
+		n.ID = uuid.New().String()
 	}
-	contentPath := filepath.Join(upload.fs.conf.Root, "nodes", node.ID, "content")
+	targetPath := filepath.Join(upload.fs.conf.Root, "nodes", n.ID)
 
-	log := appctx.GetLogger(upload.ctx)
-	err := os.Rename(upload.binPath, contentPath)
+	err := os.Rename(upload.binPath, targetPath)
 	if err != nil {
+		log := appctx.GetLogger(upload.ctx)
 		log.Err(err).Interface("info", upload.info).
 			Str("binPath", upload.binPath).
-			Str("contentPath", contentPath).
+			Str("targetPath", targetPath).
 			Msg("ocisfs: could not rename")
 		return err
 	}
 
+	if err := xattr.Set(targetPath, "user.ocis.parentid", []byte(n.ParentID)); err != nil {
+		return errors.Wrap(err, "ocisfs: could not set parentid attribute")
+	}
+	if err := xattr.Set(targetPath, "user.ocis.name", []byte(n.Name)); err != nil {
+		return errors.Wrap(err, "ocisfs: could not set name attribute")
+	}
+
+	// link child name to parent
+	err = os.Symlink("../"+n.ID, filepath.Join(upload.fs.conf.Root, "nodes", n.ParentID, n.Name))
+	if err != nil {
+		return errors.Wrap(err, "ocisfs: could not symlink child entry")
+	}
+
 	// only delete the upload if it was successfully written to the storage
-	if err := os.Remove(upload.infoPath); err != nil {
+	/*if err := os.Remove(upload.infoPath); err != nil {
 		if !os.IsNotExist(err) {
 			log.Err(err).Interface("info", upload.info).Msg("ocisfs: could not delete upload info")
 			return err
 		}
-	}
+	}*/
 	// use set arbitrary metadata?
 	/*if upload.info.MetaData["mtime"] != "" {
 		err := upload.fs.SetMtime(ctx, np, upload.info.MetaData["mtime"])
@@ -361,7 +374,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 		}
 	}*/
 
-	return upload.fs.tp.Propagate(upload.ctx, node)
+	return upload.fs.tp.Propagate(upload.ctx, n)
 }
 
 // To implement the termination extension as specified in https://tus.io/protocols/resumable-upload.html#termination
