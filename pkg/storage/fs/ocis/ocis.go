@@ -35,7 +35,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/user"
-	"github.com/gofrs/uuid"
+	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
@@ -165,7 +165,7 @@ func (fs *ocisfs) CreateHome(ctx context.Context) error {
 	}
 
 	// create a directory node (with children subfolder)
-	nodeID := uuid.Must(uuid.NewV4()).String()
+	nodeID := uuid.New().String()
 	err = os.MkdirAll(filepath.Join(fs.conf.Root, "nodes", nodeID, "children"), 0700)
 	if err != nil {
 		return errors.Wrap(err, "ocisfs: error node dir")
