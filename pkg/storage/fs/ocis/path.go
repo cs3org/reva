@@ -109,9 +109,10 @@ func (pw *Path) readRootLink(root string) (node *NodeInfo, err error) {
 	// extract the nodeID
 	if strings.HasPrefix(link, "../nodes/") {
 		node = &NodeInfo{
-			pw:     pw,
-			ID:     filepath.Base(link),
-			Exists: true,
+			pw:       pw,
+			ID:       filepath.Base(link),
+			ParentID: "root",
+			Exists:   true,
 		}
 	} else {
 		err = fmt.Errorf("ocisfs: expected '../nodes/ prefix, got' %+v", link)

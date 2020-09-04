@@ -25,6 +25,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -337,8 +338,25 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 	}
 	targetPath := filepath.Join(upload.fs.conf.Root, "nodes", n.ID)
 
-	err := os.Rename(upload.binPath, targetPath)
-	if err != nil {
+	// if target exists create new version
+	if fi, err := os.Stat(targetPath); err == nil {
+		// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
+		versionsPath := filepath.Join(upload.fs.conf.Root, "nodes", n.ID+"."+fi.ModTime().UTC().Format(time.RFC3339Nano))
+
+		if err := os.Rename(targetPath, versionsPath); err != nil {
+			log := appctx.GetLogger(upload.ctx)
+			log.Err(err).Interface("info", upload.info).
+				Str("binPath", upload.binPath).
+				Str("targetPath", targetPath).
+				Msg("ocisfs: could not create version")
+			return err
+		}
+	}
+
+	// now rename the upload to the target path
+	// TODO put uploads on the same underlying storage as the destination dir?
+	// TODO trigger a workflow as the final rename might eg involve antivirus scanning
+	if err := os.Rename(upload.binPath, targetPath); err != nil {
 		log := appctx.GetLogger(upload.ctx)
 		log.Err(err).Interface("info", upload.info).
 			Str("binPath", upload.binPath).
@@ -354,10 +372,26 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 		return errors.Wrap(err, "ocisfs: could not set name attribute")
 	}
 
-	// link child name to parent
-	err = os.Symlink("../"+n.ID, filepath.Join(upload.fs.conf.Root, "nodes", n.ParentID, n.Name))
-	if err != nil {
-		return errors.Wrap(err, "ocisfs: could not symlink child entry")
+	// link child name to parent if it is new
+	childNameLink := filepath.Join(upload.fs.conf.Root, "nodes", n.ParentID, n.Name)
+	link, err := os.Readlink(childNameLink)
+	if err == nil && link != "../"+n.ID {
+		log.Err(err).
+			Interface("info", upload.info).
+			Interface("node", n).
+			Str("targetPath", targetPath).
+			Str("childNameLink", childNameLink).
+			Str("link", link).
+			Msg("ocisfs: child name link has wrong target id, repairing")
+
+		if err := os.Remove(childNameLink); err != nil {
+			return errors.Wrap(err, "ocisfs: could not remove symlink child entry")
+		}
+	}
+	if os.IsNotExist(err) || link != "../"+n.ID {
+		if err = os.Symlink("../"+n.ID, childNameLink); err != nil {
+			return errors.Wrap(err, "ocisfs: could not symlink child entry")
+		}
 	}
 
 	// only delete the upload if it was successfully written to the storage
@@ -375,6 +409,8 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 			return err
 		}
 	}*/
+
+	n.Exists = true
 
 	return upload.fs.tp.Propagate(upload.ctx, n)
 }

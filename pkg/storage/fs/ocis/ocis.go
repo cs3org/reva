@@ -92,7 +92,6 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		// better to keep uploads on a fast / volatile storage before a workflow finally moves them to the nodes dir
 		filepath.Join(c.Root, "uploads"),
 		filepath.Join(c.Root, "trash"),
-		filepath.Join(c.Root, "versions"),
 	}
 	for _, v := range dataPaths {
 		if err := os.MkdirAll(v, 0700); err != nil {
