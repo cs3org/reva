@@ -22,47 +22,41 @@ import (
 	"encoding/json"
 	"errors"
 	"io/ioutil"
+	"os"
 
-	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/metrics/driver/registry"
+
+	"github.com/cs3org/reva/pkg/logger"
+	"github.com/cs3org/reva/pkg/metrics/config"
+	"github.com/rs/zerolog"
 )
 
-// New returns a new MetricsJSONDriver object.
-// It reads the data file from the specified config.MetricsDataLocation upon initializing.
-// It does not reload the data file for each metric.
-func New() (*MetricsJSONDriver, error) {
-	// the json driver reads the data metrics file upon initializing
-	metricsData, err := readJSON()
-	if err != nil {
-		return nil, err
-	}
+var log zerolog.Logger
 
-	driver := &MetricsJSONDriver{
-		data: metricsData,
-	}
-
-	return driver, nil
+func init() {
+	log = logger.New().With().Int("pid", os.Getpid()).Logger()
+	driver := &MetricsJSONDriver{}
+	registry.Register(driverName(), driver)
 }
 
-func readJSON() (*data, error) {
-	metricsDataLocation := sharedconf.GetMetricsDataLocation()
+func driverName() string {
+	return "json"
+}
 
-	if metricsDataLocation == "" {
-		err := errors.New("Unable to initialize a metrics data driver, has the data location (metrics_data_location) been configured?")
-		return nil, err
-	}
-
-	file, err := ioutil.ReadFile(metricsDataLocation)
-	if err != nil {
-		return nil, err
-	}
-
+// readJSON always returns a data object but logs the error in case reading the json fails.
+func readJSON(driver *MetricsJSONDriver) *data {
 	data := &data{}
+
+	file, err := ioutil.ReadFile(driver.metricsDataLocation)
+	if err != nil {
+		log.Error().Err(err).Str("location", driver.metricsDataLocation).Msg("Unable to read json file from location.")
+	}
 	err = json.Unmarshal(file, data)
 	if err != nil {
-		return nil, err
+		log.Error().Err(err).Msg("Unable to unmarshall json file.")
 	}
 
-	return data, nil
+	return data
 }
 
 type data struct {
@@ -71,22 +65,34 @@ type data struct {
 	AmountStorage int64 `json:"cs3_org_sciencemesh_site_total_amount_storage"`
 }
 
-// MetricsJSONDriver the JsonDriver struct that also holds the data
+// MetricsJSONDriver the JsonDriver struct
 type MetricsJSONDriver struct {
-	data *data
+	metricsDataLocation string
+}
+
+// Configure configures this driver
+func (d *MetricsJSONDriver) Configure(c *config.Config) error {
+	if c.MetricsDataLocation == "" {
+		err := errors.New("Unable to initialize a metrics data driver, has the data location (metrics_data_location) been configured?")
+		return err
+	}
+
+	d.metricsDataLocation = c.MetricsDataLocation
+
+	return nil
 }
 
 // GetNumUsers returns the number of site users
 func (d *MetricsJSONDriver) GetNumUsers() int64 {
-	return d.data.NumUsers
+	return readJSON(d).NumUsers
 }
 
 // GetNumGroups returns the number of site groups
 func (d *MetricsJSONDriver) GetNumGroups() int64 {
-	return d.data.NumGroups
+	return readJSON(d).NumGroups
 }
 
 // GetAmountStorage returns the amount of site storage used
 func (d *MetricsJSONDriver) GetAmountStorage() int64 {
-	return d.data.AmountStorage
+	return readJSON(d).AmountStorage
 }

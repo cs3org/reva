@@ -20,16 +20,28 @@ package dummy
 
 import (
 	"math/rand"
+
+	"github.com/cs3org/reva/pkg/metrics/config"
+	"github.com/cs3org/reva/pkg/metrics/driver/registry"
 )
 
-// New returns a new MetricsDummyDriver object.
-func New() (*MetricsDummyDriver, error) {
+func init() {
 	driver := &MetricsDummyDriver{}
-	return driver, nil
+	registry.Register(driverName(), driver)
+}
+
+func driverName() string {
+	return "dummy"
 }
 
 // MetricsDummyDriver the MetricsDummyDriver struct
 type MetricsDummyDriver struct {
+}
+
+// Configure configures this driver
+func (d *MetricsDummyDriver) Configure(c *config.Config) error {
+	// no configuration necessary
+	return nil
 }
 
 // GetNumUsers returns the number of site users; it's a random number
