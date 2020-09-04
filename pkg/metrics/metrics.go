@@ -37,42 +37,49 @@ import (
 )
 
 // Init intializes metrics according to the specified configuration
-func Init(conf *config.Config) {
+func Init(conf *config.Config) error {
 	log := logger.New().With().Int("pid", os.Getpid()).Logger()
 
 	driver := registry.GetDriver(conf.MetricsDataDriverType)
 
-	if driver != nil {
-		// configure the driver
-		driver.Configure(conf)
-
-		m := &Metrics{
-			dataDriver:           driver,
-			NumUsersMeasure:      stats.Int64("cs3_org_sciencemesh_site_total_num_users", "The total number of users within this site", stats.UnitDimensionless),
-			NumGroupsMeasure:     stats.Int64("cs3_org_sciencemesh_site_total_num_groups", "The total number of groups within this site", stats.UnitDimensionless),
-			AmountStorageMeasure: stats.Int64("cs3_org_sciencemesh_site_total_amount_storage", "The total amount of storage used within this site", stats.UnitBytes),
-		}
-
-		if err := view.Register(
-			m.getNumUsersView(),
-			m.getNumGroupsView(),
-			m.getAmountStorageView(),
-		); err != nil {
-			log.Error().Msg("error registering the driver's views with opencensus exporter")
-		}
-
-		// periodically record metrics data
-		go func() {
-			for {
-				if err := m.recordMetrics(); err != nil {
-					log.Error().Err(err).Msg("Metrics recording failed.")
-				}
-				<-time.After(time.Millisecond * time.Duration(conf.MetricsRecordInterval))
-			}
-		}()
-	} else {
+	if driver == nil {
 		log.Info().Msg("No metrics are being recorded.")
+		// No error but just don't proceed with metrics
+		return nil
 	}
+
+	// configure the driver
+	err := driver.Configure(conf)
+	if err != nil {
+		return err
+	}
+
+	m := &Metrics{
+		dataDriver:           driver,
+		NumUsersMeasure:      stats.Int64("cs3_org_sciencemesh_site_total_num_users", "The total number of users within this site", stats.UnitDimensionless),
+		NumGroupsMeasure:     stats.Int64("cs3_org_sciencemesh_site_total_num_groups", "The total number of groups within this site", stats.UnitDimensionless),
+		AmountStorageMeasure: stats.Int64("cs3_org_sciencemesh_site_total_amount_storage", "The total amount of storage used within this site", stats.UnitBytes),
+	}
+
+	if err := view.Register(
+		m.getNumUsersView(),
+		m.getNumGroupsView(),
+		m.getAmountStorageView(),
+	); err != nil {
+		return err
+	}
+
+	// periodically record metrics data
+	go func() {
+		for {
+			if err := m.recordMetrics(); err != nil {
+				log.Error().Err(err).Msg("Metrics recording failed.")
+			}
+			<-time.After(time.Millisecond * time.Duration(conf.MetricsRecordInterval))
+		}
+	}()
+
+	return nil
 }
 
 // Metrics the metrics struct
