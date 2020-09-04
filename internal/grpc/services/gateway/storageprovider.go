@@ -34,6 +34,8 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/storage/utils/templates"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/pkg/errors"
 )
@@ -1799,6 +1801,21 @@ func (s *svc) findProvider(ctx context.Context, ref *provider.Reference) (*regis
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting storage registry client")
 		return nil, err
+	}
+
+	if s.c.HomeMapping != "" {
+		if u, ok := user.ContextGetUser(ctx); ok {
+			layout := templates.WithUser(u, s.c.HomeMapping)
+			home, err := s.GetHome(ctx, &provider.GetHomeRequest{})
+			if err != nil {
+				return nil, err
+			}
+			ref = &provider.Reference{
+				Spec: &provider.Reference_Path{
+					Path: path.Join(layout, strings.TrimPrefix(ref.GetPath(), home.Path)),
+				},
+			}
+		}
 	}
 
 	res, err := c.GetStorageProvider(ctx, &registry.GetStorageProviderRequest{

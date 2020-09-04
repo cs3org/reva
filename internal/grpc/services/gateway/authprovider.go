@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	tokenpkg "github.com/cs3org/reva/pkg/token"
+	userpkg "github.com/cs3org/reva/pkg/user"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
 )
@@ -108,11 +109,11 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	// we need to pass the token to authenticate the CreateHome request.
 	// TODO(labkode): appending to existing context will not pass the token.
 	ctx = tokenpkg.ContextSetToken(ctx, token)
+	ctx = userpkg.ContextSetUser(ctx, user)
 	ctx = metadata.AppendToOutgoingContext(ctx, tokenpkg.TokenHeader, token) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
 
 	// create home directory
-	createHomeReq := &storageprovider.CreateHomeRequest{}
-	createHomeRes, err := s.CreateHome(ctx, createHomeReq)
+	createHomeRes, err := s.CreateHome(ctx, &storageprovider.CreateHomeRequest{})
 	if err != nil {
 		log.Err(err).Msg("error calling CreateHome")
 		return &gateway.AuthenticateResponse{

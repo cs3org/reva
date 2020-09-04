@@ -59,6 +59,7 @@ type config struct {
 	TokenManager                  string `mapstructure:"token_manager"`
 	// ShareFolder is the location where to create shares in the recipient's storage provider.
 	ShareFolder   string                            `mapstructure:"share_folder"`
+	HomeMapping   string                            `mapstructure:"home_mapping"`
 	TokenManagers map[string]map[string]interface{} `mapstructure:"token_managers"`
 }
 
