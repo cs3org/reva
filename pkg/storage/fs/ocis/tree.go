@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -203,15 +204,25 @@ func (t *Tree) Delete(ctx context.Context, node *NodeInfo) (err error) {
 		return
 	}
 
-	// make node appear in trash
-	// parent id and name are stored as extended attributes in the node itself
-	trashpath := filepath.Join(t.DataDirectory, "trash", node.ID)
-	err = os.Symlink("../nodes/"+node.ID, trashpath)
+	nodePath := filepath.Join(t.DataDirectory, "nodes", node.ID)
+	trashPath := nodePath + ".T." + time.Now().UTC().Format(time.RFC3339Nano)
+	err = os.Rename(nodePath, trashPath)
 	if err != nil {
 		return
 	}
 
-	return t.Propagate(ctx, &NodeInfo{pw: t.pw, ID: node.ParentID})
+	// make node appear in trash
+	// parent id and name are stored as extended attributes in the node itself
+	trashLink := filepath.Join(t.DataDirectory, "trash", node.ID)
+	err = os.Symlink("../nodes/"+node.ID+".T."+time.Now().UTC().Format(time.RFC3339Nano), trashLink)
+	if err != nil {
+		return
+	}
+	p, err := node.Parent()
+	if err != nil {
+		return
+	}
+	return t.Propagate(ctx, p)
 }
 
 // Propagate propagates changes to the root of the tree
