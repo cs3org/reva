@@ -103,7 +103,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	}
 
 	pw := &Path{
-		Root:       c.Root,
+		root:       c.Root,
 		EnableHome: c.EnableHome,
 		UserLayout: c.UserLayout,
 	}

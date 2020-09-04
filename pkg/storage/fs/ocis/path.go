@@ -8,17 +8,16 @@ import (
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/user"
-	"github.com/pkg/errors"
-	"github.com/pkg/xattr"
 )
 
 // Path implements transformations from filepath to node and back
 type Path struct {
 	// ocis fs works on top of a dir of uuid nodes
-	Root string `mapstructure:"root"`
+	root string `mapstructure:"root"`
 
 	// UserLayout wraps the internal path with user information.
 	// Example: if conf.Namespace is /ocis/user and received path is /docs
@@ -46,122 +45,55 @@ func (pw *Path) NodeFromResource(ctx context.Context, ref *provider.Reference) (
 
 // NodeFromPath converts a filename into a NodeInfo
 func (pw *Path) NodeFromPath(ctx context.Context, fn string) (node *NodeInfo, err error) {
-	var link, root string
-	if fn == "" {
-		fn = "/"
-	}
-	if pw.EnableHome && pw.UserLayout != "" {
-		// start at the users root node
-		u := user.ContextMustGetUser(ctx)
-		layout := templates.WithUser(u, pw.UserLayout)
-		root = filepath.Join(pw.Root, "users", layout)
-
-	} else {
-		// start at the storage root node
-		root = filepath.Join(pw.Root, "nodes/root")
-	}
-
-	node, err = pw.readRootLink(root)
-	// The symlink contains the nodeID
-	if err != nil {
-		return
-	}
+	log := appctx.GetLogger(ctx)
+	log.Debug().Interface("fn", fn).Msg("NodeFromPath()")
+	node, err = pw.RootNode(ctx)
 
 	if fn != "/" {
-		// we need to walk the path
+		// walk the path
 		segments := strings.Split(strings.TrimLeft(fn, "/"), "/")
 		for i := range segments {
-			node.ParentID = node.ID
-			node.ID = ""
-			node.Name = segments[i]
-
-			link, err = os.Readlink(filepath.Join(pw.Root, "nodes", node.ParentID, node.Name))
-			if os.IsNotExist(err) {
-				node.Exists = false
-				// if this is the last segment we can use it as the node name
-				if i == len(segments)-1 {
-					err = nil
-					return
-				}
-
-				err = errtypes.NotFound(filepath.Join(pw.Root, "nodes", node.ParentID, node.Name))
-				return
+			if node, err = node.Child(segments[i]); err != nil {
+				break
 			}
-			if err != nil {
-				err = errors.Wrap(err, "ocisfs: Wrap: readlink error")
-				return
-			}
-			if strings.HasPrefix(link, "../") {
-				node.ID = filepath.Base(link)
-			} else {
-				err = fmt.Errorf("ocisfs: expected '../ prefix, got' %+v", link)
-				return
-			}
+			log.Debug().Interface("node", node).Str("segment", segments[i]).Msg("NodeFromPath()")
 		}
+	}
+
+	// if a node does not exist that is fine
+	if os.IsNotExist(err) {
+		err = nil
 	}
 
 	return
 }
 
 // NodeFromID returns the internal path for the id
-func (pw *Path) NodeFromID(ctx context.Context, id *provider.ResourceId) (*NodeInfo, error) {
+func (pw *Path) NodeFromID(ctx context.Context, id *provider.ResourceId) (n *NodeInfo, err error) {
 	if id == nil || id.OpaqueId == "" {
 		return nil, fmt.Errorf("invalid resource id %+v", id)
 	}
-	return &NodeInfo{ID: id.OpaqueId}, nil
+	return NewNode(pw, id.OpaqueId)
 }
 
-func (pw *Path) Path(ctx context.Context, ni *NodeInfo) (external string, err error) {
-	// check if this a not yet existing node
-	if ni.ID == "" && ni.Name != "" && ni.ParentID != "" {
-		external = ni.Name
-		ni.BecomeParent()
-	}
-	for err == nil {
-		err = pw.FillParentAndName(ni)
-		if os.IsNotExist(err) || ni.ParentID == "root" {
-			err = nil
+// Path returns the path for node
+func (pw *Path) Path(ctx context.Context, n *NodeInfo) (p string, err error) {
+	log := appctx.GetLogger(ctx)
+	log.Debug().Interface("node", n).Msg("Path()")
+	/*
+		// check if this a not yet existing node
+		if n.ID == "" && n.Name != "" && n.ParentID != "" {
+			path = n.Name
+			n, err = n.Parent()
+		}
+	*/
+	for !n.IsRoot() {
+		p = filepath.Join(n.Name, p)
+		if n, err = n.Parent(); err != nil {
+			log.Error().Err(err).Str("path", p).Interface("node", n).Msg("Path()")
 			return
 		}
-		if err != nil {
-			err = errors.Wrap(err, "ocisfs: Unwrap: could not fill node")
-			return
-		}
-		external = filepath.Join(ni.Name, external)
-		ni.BecomeParent()
 	}
-	return
-}
-
-// FillParentAndName reads the symbolic link and extracts the parent ID and the name of the node if necessary
-func (pw *Path) FillParentAndName(node *NodeInfo) (err error) {
-
-	if node == nil || node.ID == "" {
-		err = fmt.Errorf("ocisfs: invalid node info '%+v'", node)
-	}
-
-	// check if node is already filled
-	if node.ParentID != "" && node.Name != "" {
-		return
-	}
-
-	nodePath := filepath.Join(pw.Root, "nodes", node.ID)
-
-	var attrBytes []byte
-	if attrBytes, err = xattr.Get(nodePath, "user.ocis.parentid"); err == nil {
-		node.ParentID = string(attrBytes)
-	}
-	// no error if it is empty -> root node
-	// TODO better identify a root node, eg by using `root` as the parentid? or `root:userid`?
-
-	if attrBytes, err = xattr.Get(nodePath, "user.ocis.name"); err == nil {
-		node.Name = string(attrBytes)
-	}
-
-	// no error if it is empty -> root node
-	// TODO better identify a root node?
-
-	node.Exists = true
 	return
 }
 
@@ -177,6 +109,7 @@ func (pw *Path) readRootLink(root string) (node *NodeInfo, err error) {
 	// extract the nodeID
 	if strings.HasPrefix(link, "../nodes/") {
 		node = &NodeInfo{
+			pw:     pw,
 			ID:     filepath.Base(link),
 			Exists: true,
 		}
@@ -194,11 +127,11 @@ func (pw *Path) RootNode(ctx context.Context) (node *NodeInfo, err error) {
 		// start at the users root node
 		u := user.ContextMustGetUser(ctx)
 		layout := templates.WithUser(u, pw.UserLayout)
-		root = filepath.Join(pw.Root, "users", layout)
+		root = filepath.Join(pw.Root(), "users", layout)
 
 	} else {
 		// start at the storage root node
-		root = filepath.Join(pw.Root, "nodes/root")
+		root = filepath.Join(pw.Root(), "nodes/root")
 	}
 
 	// The symlink contains the nodeID
@@ -207,4 +140,9 @@ func (pw *Path) RootNode(ctx context.Context) (node *NodeInfo, err error) {
 		return
 	}
 	return
+}
+
+// Root returns the root of the storags
+func (pw *Path) Root() string {
+	return pw.root
 }

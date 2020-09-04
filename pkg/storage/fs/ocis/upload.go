@@ -326,6 +326,7 @@ func (upload *fileUpload) writeInfo() error {
 func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 
 	n := &NodeInfo{
+		pw:       upload.fs.pw,
 		ID:       upload.info.Storage["NodeId"],
 		ParentID: upload.info.Storage["NodeParentId"],
 		Name:     upload.info.Storage["NodeName"],

@@ -95,19 +95,8 @@ func (t *Tree) CreateReference(ctx context.Context, path string, targetURI *url.
 
 // Move replaces the target with the source
 func (t *Tree) Move(ctx context.Context, oldNode *NodeInfo, newNode *NodeInfo) (err error) {
-	err = t.pw.FillParentAndName(newNode)
-	if os.IsNotExist(err) {
-		err = nil
-		return
-	}
-
 	// if target exists delete it without trashing it
 	if newNode.Exists {
-		err = t.pw.FillParentAndName(newNode)
-		if os.IsNotExist(err) {
-			err = nil
-			return
-		}
 		// TODO make sure all children are deleted
 		if err := os.RemoveAll(filepath.Join(t.DataDirectory, "nodes", newNode.ID)); err != nil {
 			return errors.Wrap(err, "ocisfs: Move: error deleting target node "+newNode.ID)
@@ -194,6 +183,7 @@ func (t *Tree) ListFolder(ctx context.Context, node *NodeInfo) ([]*NodeInfo, err
 			continue
 		}
 		n := &NodeInfo{
+			pw:       t.pw,
 			ParentID: node.ID,
 			ID:       filepath.Base(link),
 			Name:     names[i],
@@ -207,16 +197,6 @@ func (t *Tree) ListFolder(ctx context.Context, node *NodeInfo) ([]*NodeInfo, err
 
 // Delete deletes a node in the tree
 func (t *Tree) Delete(ctx context.Context, node *NodeInfo) (err error) {
-	err = t.pw.FillParentAndName(node)
-	if os.IsNotExist(err) {
-		err = nil
-		return
-	}
-	if err != nil {
-		err = errors.Wrap(err, "ocisfs: Delete: FillParentAndName error")
-		return
-	}
-
 	src := filepath.Join(t.DataDirectory, "nodes", node.ParentID, node.Name)
 	err = os.Remove(src)
 	if err != nil {
@@ -231,7 +211,7 @@ func (t *Tree) Delete(ctx context.Context, node *NodeInfo) (err error) {
 		return
 	}
 
-	return t.Propagate(ctx, &NodeInfo{ID: node.ParentID})
+	return t.Propagate(ctx, &NodeInfo{pw: t.pw, ID: node.ParentID})
 }
 
 // Propagate propagates changes to the root of the tree
@@ -243,23 +223,19 @@ func (t *Tree) Propagate(ctx context.Context, node *NodeInfo) (err error) {
 	}
 	// store in extended attribute
 	etag := hex.EncodeToString(bytes)
-	for err == nil {
+	for err == nil && !node.IsRoot() {
 		if err := xattr.Set(filepath.Join(t.DataDirectory, "nodes", node.ID), "user.ocis.etag", []byte(etag)); err != nil {
 			log.Error().Err(err).Msg("error storing file id")
 		}
 		// TODO propagate mtime
 		// TODO size accounting
-		err = t.pw.FillParentAndName(node)
-		if os.IsNotExist(err) || node.ParentID == "root" {
-			err = nil
-			return
-		}
+
 		if err != nil {
 			err = errors.Wrap(err, "ocisfs: Propagate: readlink error")
 			return
 		}
 
-		node.BecomeParent()
+		node, err = node.Parent()
 	}
 	return
 }
