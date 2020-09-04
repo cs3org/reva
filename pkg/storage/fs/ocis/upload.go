@@ -341,7 +341,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 	// if target exists create new version
 	if fi, err := os.Stat(targetPath); err == nil {
 		// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
-		versionsPath := filepath.Join(upload.fs.conf.Root, "nodes", n.ID+"."+fi.ModTime().UTC().Format(time.RFC3339Nano))
+		versionsPath := filepath.Join(upload.fs.conf.Root, "nodes", n.ID+".REV."+fi.ModTime().UTC().Format(time.RFC3339Nano))
 
 		if err := os.Rename(targetPath, versionsPath); err != nil {
 			log := appctx.GetLogger(upload.ctx)
