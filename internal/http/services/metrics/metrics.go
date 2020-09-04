@@ -78,7 +78,10 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	conf.Init()
 
 	// initialize metrics using the configuration
-	metrics.Init(conf)
+	err := metrics.Init(conf)
+	if err != nil {
+		return nil, err
+	}
 
 	// Create the service
 	s := &svc{
