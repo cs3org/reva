@@ -32,6 +32,7 @@ type PathWrapper interface {
 	NodeFromPath(ctx context.Context, fn string) (node *NodeInfo, err error)
 	Path(ctx context.Context, node *NodeInfo) (path string, err error)
 
-	FillParentAndName(node *NodeInfo) (err error) // Tree persistence?
 	RootNode(ctx context.Context) (node *NodeInfo, err error)
+	// Root returns the internal root of the storage
+	Root() string
 }
