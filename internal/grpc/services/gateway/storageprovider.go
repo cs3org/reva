@@ -1797,12 +1797,6 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 }
 
 func (s *svc) findProvider(ctx context.Context, ref *provider.Reference) (*registry.ProviderInfo, error) {
-	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
-	if err != nil {
-		err = errors.Wrap(err, "gateway: error getting storage registry client")
-		return nil, err
-	}
-
 	if s.c.HomeMapping != "" {
 		if u, ok := user.ContextGetUser(ctx); ok {
 			layout := templates.WithUser(u, s.c.HomeMapping)
@@ -1810,12 +1804,29 @@ func (s *svc) findProvider(ctx context.Context, ref *provider.Reference) (*regis
 			if err != nil {
 				return nil, err
 			}
-			ref = &provider.Reference{
+			newRef := &provider.Reference{
 				Spec: &provider.Reference_Path{
 					Path: path.Join(layout, strings.TrimPrefix(ref.GetPath(), home.Path)),
 				},
 			}
+			res, err := s.getStorageProvider(ctx, newRef)
+			if err != nil {
+				// if we get a NotFound error, default to the original reference
+				if _, ok := err.(errtypes.IsNotFound); !ok {
+					return nil, err
+				}
+			} else {
+				return res, nil
+			}
 		}
+	}
+	return s.getStorageProvider(ctx, ref)
+}
+
+func (s *svc) getStorageProvider(ctx context.Context, ref *provider.Reference) (*registry.ProviderInfo, error) {
+	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}
 
 	res, err := c.GetStorageProvider(ctx, &registry.GetStorageProviderRequest{
@@ -1823,21 +1834,18 @@ func (s *svc) findProvider(ctx context.Context, ref *provider.Reference) (*regis
 	})
 
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetStorageProvider")
-		return nil, err
+		return nil, errors.Wrap(err, "gateway: error calling GetStorageProvider")
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
 		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			return nil, errtypes.NotFound("gateway: storage provider not found for reference:" + ref.String())
 		}
-		err := status.NewErrorFromCode(res.Status.Code, "gateway")
-		return nil, err
+		return nil, status.NewErrorFromCode(res.Status.Code, "gateway")
 	}
 
 	if res.Provider == nil {
-		err := errors.New("gateway: provider is nil")
-		return nil, err
+		return nil, errors.New("gateway: provider is nil")
 	}
 
 	return res.Provider, nil
