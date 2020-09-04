@@ -368,16 +368,6 @@ func (fs *ocisfs) Delete(ctx context.Context, ref *provider.Reference) (err erro
 	return fs.tp.Delete(ctx, node)
 }
 
-// arbitrary metadata persistence
-
-func (fs *ocisfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) (err error) {
-	return errtypes.NotSupported("operation not supported: SetArbitraryMetadata")
-}
-
-func (fs *ocisfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) (err error) {
-	return errtypes.NotSupported("operation not supported: UnsetArbitraryMetadata")
-}
-
 // Data persistence
 
 func (fs *ocisfs) ContentPath(node *NodeInfo) string {
@@ -407,38 +397,13 @@ func (fs *ocisfs) Download(ctx context.Context, ref *provider.Reference) (io.Rea
 	return r, nil
 }
 
-// Version persistence
+// arbitrary metadata persistence in metadata.go
 
-func (fs *ocisfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {
-	return nil, errtypes.NotSupported("operation not supported: ListRevisions")
-}
-func (fs *ocisfs) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (io.ReadCloser, error) {
-	return nil, errtypes.NotSupported("operation not supported: DownloadRevision")
-}
+// Version persistence in revisions.go
 
-func (fs *ocisfs) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) error {
-	return errtypes.NotSupported("operation not supported: RestoreRevision")
-}
+// Trash persistence in recycle.go
 
-// Trash persistence
-
-func (fs *ocisfs) PurgeRecycleItem(ctx context.Context, key string) error {
-	return errtypes.NotSupported("operation not supported: PurgeRecycleItem")
-}
-
-func (fs *ocisfs) EmptyRecycle(ctx context.Context) error {
-	return errtypes.NotSupported("operation not supported: EmptyRecycle")
-}
-
-func (fs *ocisfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error) {
-	return nil, errtypes.NotSupported("operation not supported: ListRecycle")
-}
-
-func (fs *ocisfs) RestoreRecycleItem(ctx context.Context, key string) error {
-	return errtypes.NotSupported("operation not supported: RestoreRecycleItem")
-}
-
-// share persistence is grants.go
+// share persistence in grants.go
 
 // supporting functions
 
