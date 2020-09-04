@@ -371,6 +371,16 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 	if err := xattr.Set(targetPath, "user.ocis.name", []byte(n.Name)); err != nil {
 		return errors.Wrap(err, "ocisfs: could not set name attribute")
 	}
+	if u, ok := user.ContextGetUser(ctx); ok {
+		if err := xattr.Set(targetPath, "user.ocis.owner.id", []byte(u.Id.OpaqueId)); err != nil {
+			return errors.Wrap(err, "ocisfs: could not set owner id attribute")
+		}
+		if err := xattr.Set(targetPath, "user.ocis.owner.idp", []byte(u.Id.Idp)); err != nil {
+			return errors.Wrap(err, "ocisfs: could not set owner idp attribute")
+		}
+	} else {
+		// TODO no user in context, log as error when home enabled
+	}
 
 	// link child name to parent if it is new
 	childNameLink := filepath.Join(upload.fs.conf.Root, "nodes", n.ParentID, n.Name)

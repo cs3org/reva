@@ -11,6 +11,7 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
@@ -79,6 +80,16 @@ func (t *Tree) CreateDir(ctx context.Context, node *NodeInfo) (err error) {
 	}
 	if err := xattr.Set(newPath, "user.ocis.name", []byte(node.Name)); err != nil {
 		return errors.Wrap(err, "ocisfs: could not set name attribute")
+	}
+	if u, ok := user.ContextGetUser(ctx); ok {
+		if err := xattr.Set(newPath, "user.ocis.owner.id", []byte(u.Id.OpaqueId)); err != nil {
+			return errors.Wrap(err, "ocisfs: could not set owner id attribute")
+		}
+		if err := xattr.Set(newPath, "user.ocis.owner.idp", []byte(u.Id.Idp)); err != nil {
+			return errors.Wrap(err, "ocisfs: could not set owner idp attribute")
+		}
+	} else {
+		// TODO no user in context, log as error when home enabled
 	}
 
 	// make child appear in listings
