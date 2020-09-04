@@ -16,13 +16,15 @@ type NodeInfo struct {
 	ParentID string
 	ID       string
 	Name     string
+	ownerID  string
+	ownerIDP string
 	Exists   bool
 }
 
 // NewNode creates a new instance and checks if it exists
 func NewNode(pw PathWrapper, id string) (n *NodeInfo, err error) {
 	n = &NodeInfo{
-		pw: n.pw,
+		pw: pw,
 		ID: id,
 	}
 
@@ -128,4 +130,28 @@ func (n *NodeInfo) Parent() (p *NodeInfo, err error) {
 		p.Exists = true
 	}
 	return
+}
+
+// Owner returns the cached owner id or reads it from the extended attributes
+func (n *NodeInfo) Owner() (id string, idp string, err error) {
+	if n.ownerID != "" && n.ownerIDP != "" {
+		return n.ownerID, n.ownerIDP, nil
+	}
+
+	nodePath := filepath.Join(n.pw.Root(), "nodes", n.ParentID)
+	// lookup parent id in extended attributes
+	var attrBytes []byte
+	// lookup name in extended attributes
+	if attrBytes, err = xattr.Get(nodePath, "user.ocis.owner.id"); err == nil {
+		n.ownerID = string(attrBytes)
+	} else {
+		// TODO log error
+	}
+	// lookup name in extended attributes
+	if attrBytes, err = xattr.Get(nodePath, "user.ocis.owner.idp"); err == nil {
+		n.ownerIDP = string(attrBytes)
+	} else {
+		// TODO log error
+	}
+	return n.ownerID, n.ownerIDP, err
 }
