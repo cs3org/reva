@@ -50,14 +50,19 @@ func (s *svc) webdavRefStat(ctx context.Context, targetURL string, nameQueries .
 	if err != nil {
 		return nil, err
 	}
-	c := gowebdav.NewClient(ep.endpoint, "", "")
+	webdavEP, err := s.getWebdavEndpoint(ctx, ep.endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	c := gowebdav.NewClient(webdavEP, "", "")
 	c.SetHeader(token.TokenHeader, ep.token)
 
 	// TODO(ishank011): We need to call PROPFIND ourselves as we need to retrieve
 	// ownloud-specific fields to get the resource ID and permissions.
 	info, err := c.Stat(ep.filePath)
 	if err != nil {
-		return nil, errors.Wrap(err, fmt.Sprintf("gateway: error statting %s at the webdav endpoint: %s", ep.filePath, ep.endpoint))
+		return nil, errors.Wrap(err, fmt.Sprintf("gateway: error statting %s at the webdav endpoint: %s", ep.filePath, webdavEP))
 	}
 	return normalize(info.(*gowebdav.File)), nil
 }
@@ -72,14 +77,19 @@ func (s *svc) webdavRefLs(ctx context.Context, targetURL string, nameQueries ...
 	if err != nil {
 		return nil, err
 	}
-	c := gowebdav.NewClient(ep.endpoint, "", "")
+	webdavEP, err := s.getWebdavEndpoint(ctx, ep.endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	c := gowebdav.NewClient(webdavEP, "", "")
 	c.SetHeader(token.TokenHeader, ep.token)
 
 	// TODO(ishank011): We need to call PROPFIND ourselves as we need to retrieve
 	// ownloud-specific fields to get the resource ID and permissions.
 	infos, err := c.ReadDir(ep.filePath)
 	if err != nil {
-		return nil, errors.Wrap(err, fmt.Sprintf("gateway: error listing %s at the webdav endpoint: %s", ep.filePath, ep.endpoint))
+		return nil, errors.Wrap(err, fmt.Sprintf("gateway: error listing %s at the webdav endpoint: %s", ep.filePath, webdavEP))
 	}
 
 	mds := []*provider.ResourceInfo{}
@@ -100,12 +110,17 @@ func (s *svc) webdavRefMkdir(ctx context.Context, targetURL string, nameQueries 
 	if err != nil {
 		return err
 	}
-	c := gowebdav.NewClient(ep.endpoint, "", "")
+	webdavEP, err := s.getWebdavEndpoint(ctx, ep.endpoint)
+	if err != nil {
+		return err
+	}
+
+	c := gowebdav.NewClient(webdavEP, "", "")
 	c.SetHeader(token.TokenHeader, ep.token)
 
 	err = c.Mkdir(ep.filePath, 0700)
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("gateway: error creating dir %s at the webdav endpoint: %s", ep.filePath, ep.endpoint))
+		return errors.Wrap(err, fmt.Sprintf("gateway: error creating dir %s at the webdav endpoint: %s", ep.filePath, webdavEP))
 	}
 	return nil
 }
@@ -119,6 +134,10 @@ func (s *svc) webdavRefMove(ctx context.Context, targetURL, src, destination str
 	if err != nil {
 		return err
 	}
+	srcWebdavEP, err := s.getWebdavEndpoint(ctx, srcEP.endpoint)
+	if err != nil {
+		return err
+	}
 
 	destURL, err := appendNameQuery(targetURL, destination)
 	if err != nil {
@@ -129,12 +148,12 @@ func (s *svc) webdavRefMove(ctx context.Context, targetURL, src, destination str
 		return err
 	}
 
-	c := gowebdav.NewClient(srcEP.endpoint, "", "")
+	c := gowebdav.NewClient(srcWebdavEP, "", "")
 	c.SetHeader(token.TokenHeader, srcEP.token)
 
 	err = c.Rename(srcEP.filePath, destEP.filePath, true)
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("gateway: error renaming %s to %s at the webdav endpoint: %s", srcEP.filePath, destEP.filePath, srcEP.endpoint))
+		return errors.Wrap(err, fmt.Sprintf("gateway: error renaming %s to %s at the webdav endpoint: %s", srcEP.filePath, destEP.filePath, srcWebdavEP))
 	}
 	return nil
 }
@@ -149,12 +168,17 @@ func (s *svc) webdavRefDelete(ctx context.Context, targetURL string, nameQueries
 	if err != nil {
 		return err
 	}
-	c := gowebdav.NewClient(ep.endpoint, "", "")
+	webdavEP, err := s.getWebdavEndpoint(ctx, ep.endpoint)
+	if err != nil {
+		return err
+	}
+
+	c := gowebdav.NewClient(webdavEP, "", "")
 	c.SetHeader(token.TokenHeader, ep.token)
 
 	err = c.Remove(ep.filePath)
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("gateway: error removing %s at the webdav endpoint: %s", ep.filePath, ep.endpoint))
+		return errors.Wrap(err, fmt.Sprintf("gateway: error removing %s at the webdav endpoint: %s", ep.filePath, webdavEP))
 	}
 	return nil
 }
@@ -169,8 +193,12 @@ func (s *svc) webdavRefTransferEndpoint(ctx context.Context, targetURL string, n
 	if err != nil {
 		return "", nil, err
 	}
+	webdavEP, err := s.getWebdavEndpoint(ctx, ep.endpoint)
+	if err != nil {
+		return "", nil, err
+	}
 
-	return ep.endpoint, &types.Opaque{
+	return webdavEP, &types.Opaque{
 		Map: map[string]*types.OpaqueEntry{
 			"webdav-file-path": {
 				Decoder: "plain",
@@ -197,19 +225,6 @@ func (s *svc) extractEndpointInfo(ctx context.Context, targetURL string) (*webda
 		return nil, errtypes.NotSupported("ref target does not have the webdav scheme")
 	}
 
-	meshProvider, err := s.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
-		Domain: uri.Host,
-	})
-	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling GetInfoByDomain")
-	}
-	var webdavEP string
-	for _, s := range meshProvider.ProviderInfo.Services {
-		if strings.ToLower(s.Endpoint.Type.Name) == "webdav" {
-			webdavEP = s.Endpoint.Path
-		}
-	}
-
 	m, err := url.ParseQuery(uri.RawQuery)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error parsing target resource name")
@@ -217,9 +232,24 @@ func (s *svc) extractEndpointInfo(ctx context.Context, targetURL string) (*webda
 
 	return &webdavEndpoint{
 		filePath: m["name"][0],
-		endpoint: webdavEP,
+		endpoint: uri.Host,
 		token:    uri.User.String(),
 	}, nil
+}
+
+func (s *svc) getWebdavEndpoint(ctx context.Context, domain string) (string, error) {
+	meshProvider, err := s.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
+		Domain: domain,
+	})
+	if err != nil {
+		return "", errors.Wrap(err, "gateway: error calling GetInfoByDomain")
+	}
+	for _, s := range meshProvider.ProviderInfo.Services {
+		if strings.ToLower(s.Endpoint.Type.Name) == "webdav" {
+			return s.Endpoint.Path, nil
+		}
+	}
+	return "", errtypes.NotFound(domain)
 }
 
 func normalize(info *gowebdav.File) *provider.ResourceInfo {
