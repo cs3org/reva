@@ -20,15 +20,15 @@ package gateway
 
 import (
 	"context"
-	"fmt"
+	"net/url"
+	"strings"
 
 	providerpb "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -37,19 +37,36 @@ import (
 )
 
 func (s *svc) OpenFileInAppProvider(ctx context.Context, req *gateway.OpenFileInAppProviderRequest) (*providerpb.OpenFileInAppProviderResponse, error) {
-
-	accessToken, ok := tokenpkg.ContextGetToken(ctx)
-	if !ok || accessToken == "" {
+	p, st := s.getPath(ctx, req.Ref)
+	if st.Code != rpc.Code_CODE_OK {
+		if st.Code == rpc.Code_CODE_NOT_FOUND {
+			return &providerpb.OpenFileInAppProviderResponse{
+				Status: status.NewNotFound(ctx, "gateway: file not found:"+req.Ref.String()),
+			}, nil
+		}
 		return &providerpb.OpenFileInAppProviderResponse{
-			Status: status.NewUnauthenticated(ctx, errors.New("Access token is invalid or empty"), ""),
+			Status: st,
 		}, nil
 	}
 
-	statReq := &provider.StatRequest{
-		Ref: req.Ref,
+	if s.isSharedFolder(ctx, p) {
+		return &providerpb.OpenFileInAppProviderResponse{
+			Status: status.NewInvalid(ctx, "gateway: can't open shares folder"),
+		}, nil
 	}
 
-	statRes, err := s.Stat(ctx, statReq)
+	resName, resChild := p, ""
+	if s.isShareChild(ctx, p) {
+		resName, resChild = s.splitShare(ctx, p)
+	}
+
+	statRes, err := s.stat(ctx, &storageprovider.StatRequest{
+		Ref: &storageprovider.Reference{
+			Spec: &storageprovider.Reference_Path{
+				Path: resName,
+			},
+		},
+	})
 	if err != nil {
 		return &providerpb.OpenFileInAppProviderResponse{
 			Status: status.NewInternal(ctx, err, "gateway: error calling Stat on the resource path for the app provider: "+req.Ref.GetPath()),
@@ -64,7 +81,98 @@ func (s *svc) OpenFileInAppProvider(ctx context.Context, req *gateway.OpenFileIn
 
 	fileInfo := statRes.Info
 
-	provider, err := s.findAppProvider(ctx, fileInfo)
+	// The file is a share
+	if fileInfo.Type == storageprovider.ResourceType_RESOURCE_TYPE_REFERENCE {
+		uri, err := url.Parse(fileInfo.Target)
+		if err != nil {
+			return &providerpb.OpenFileInAppProviderResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error parsing target uri: "+fileInfo.Target),
+			}, nil
+		}
+		if uri.Scheme == "webdav" {
+			return s.openFederatedShares(ctx, fileInfo.Target, req.ViewMode, resChild)
+		}
+
+		res, err := s.Stat(ctx, &storageprovider.StatRequest{
+			Ref: req.Ref,
+		})
+		if err != nil {
+			return &providerpb.OpenFileInAppProviderResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error calling Stat on the resource path for the app provider: "+req.Ref.GetPath()),
+			}, nil
+		}
+		if res.Status.Code != rpc.Code_CODE_OK {
+			err := status.NewErrorFromCode(res.Status.GetCode(), "gateway")
+			return &providerpb.OpenFileInAppProviderResponse{
+				Status: status.NewInternal(ctx, err, "Stat failed on the resource path for the app provider: "+req.Ref.GetPath()),
+			}, nil
+		}
+		fileInfo = res.Info
+	}
+	return s.openLocalResources(ctx, fileInfo, req.ViewMode)
+}
+
+func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gateway.OpenFileInAppProviderRequest_ViewMode,
+	nameQueries ...string) (*providerpb.OpenFileInAppProviderResponse, error) {
+	targetURL, err := appendNameQuery(targetURL, nameQueries...)
+	if err != nil {
+		return nil, err
+	}
+	ep, err := s.extractEndpointInfo(ctx, targetURL)
+	if err != nil {
+		return nil, err
+	}
+
+	ref := &storageprovider.Reference{
+		Spec: &storageprovider.Reference_Path{
+			Path: ep.filePath,
+		},
+	}
+	appProviderReq := &gateway.OpenFileInAppProviderRequest{
+		Ref:      ref,
+		ViewMode: vm,
+	}
+
+	meshProvider, err := s.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
+		Domain: ep.endpoint,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling GetInfoByDomain")
+	}
+	var gatewayEP string
+	for _, s := range meshProvider.ProviderInfo.Services {
+		if strings.ToLower(s.Endpoint.Type.Name) == "gateway" {
+			gatewayEP = s.Endpoint.Path
+		}
+	}
+
+	gatewayClient, err := pool.GetGatewayServiceClient(gatewayEP)
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error calling GetGatewayClient")
+		return &providerpb.OpenFileInAppProviderResponse{
+			Status: status.NewInternal(ctx, err, "error getting gateway client"),
+		}, nil
+	}
+
+	ctx = tokenpkg.ContextSetToken(ctx, ep.token)
+	res, err := gatewayClient.OpenFileInAppProvider(ctx, appProviderReq)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling OpenFileInAppProvider")
+	}
+	return res, nil
+}
+
+func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.ResourceInfo,
+	vm gateway.OpenFileInAppProviderRequest_ViewMode) (*providerpb.OpenFileInAppProviderResponse, error) {
+
+	accessToken, ok := tokenpkg.ContextGetToken(ctx)
+	if !ok || accessToken == "" {
+		return &providerpb.OpenFileInAppProviderResponse{
+			Status: status.NewUnauthenticated(ctx, errors.New("Access token is invalid or empty"), ""),
+		}, nil
+	}
+
+	provider, err := s.findAppProvider(ctx, ri)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling findAppProvider")
 		var st *rpc.Status
@@ -86,14 +194,9 @@ func (s *svc) OpenFileInAppProvider(ctx context.Context, req *gateway.OpenFileIn
 		}, nil
 	}
 
-	// build the appProvider specific request with the required extra info that has been obtained
-
-	log := appctx.GetLogger(ctx)
-	log.Debug().Msg(fmt.Sprintf("request: %s", req))
-
 	appProviderReq := &providerpb.OpenFileInAppProviderRequest{
-		ResourceInfo: fileInfo,
-		ViewMode:     providerpb.OpenFileInAppProviderRequest_ViewMode(req.ViewMode),
+		ResourceInfo: ri,
+		ViewMode:     providerpb.OpenFileInAppProviderRequest_ViewMode(vm),
 		AccessToken:  accessToken,
 	}
 

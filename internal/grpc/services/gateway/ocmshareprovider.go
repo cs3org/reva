@@ -22,9 +22,7 @@ import (
 	"context"
 	"fmt"
 	"path"
-	"strings"
 
-	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -288,20 +286,6 @@ func (s *svc) createWebdavReference(ctx context.Context, share *ocm.Share) (*rpc
 
 	log := appctx.GetLogger(ctx)
 
-	meshProvider, err := s.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
-		Domain: share.Creator.Idp,
-	})
-	if err != nil {
-		err := errors.Wrap(err, "gateway: error calling GetInfoByDomain")
-		return status.NewInternal(ctx, err, "error updating received share"), nil
-	}
-	var webdavEndpoint string
-	for _, s := range meshProvider.ProviderInfo.Services {
-		if strings.ToLower(s.Endpoint.Type.Name) == "webdav" {
-			webdavEndpoint = s.Endpoint.Path
-		}
-	}
-
 	var token string
 	tokenOpaque, ok := share.Grantee.Opaque.Map["token"]
 	if !ok {
@@ -330,8 +314,8 @@ func (s *svc) createWebdavReference(ctx context.Context, share *ocm.Share) (*rpc
 
 	createRefReq := &provider.CreateReferenceRequest{
 		Path: refPath,
-		// webdav is the scheme, token@webdav_endpoint the opaque part and the share name the query of the URL.
-		TargetUri: fmt.Sprintf("webdav:%s@%s?name=%s", token, webdavEndpoint, share.Name),
+		// webdav is the scheme, token@host the opaque part and the share name the query of the URL.
+		TargetUri: fmt.Sprintf("webdav://%s@%s?name=%s", token, share.Creator.Idp, share.Name),
 	}
 
 	c, err := s.findByPath(ctx, refPath)

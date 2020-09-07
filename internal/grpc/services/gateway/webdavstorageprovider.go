@@ -25,6 +25,7 @@ import (
 	"path"
 	"strings"
 
+	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -45,7 +46,7 @@ func (s *svc) webdavRefStat(ctx context.Context, targetURL string, nameQueries .
 		return nil, err
 	}
 
-	ep, err := extractEndpointInfo(targetURL)
+	ep, err := s.extractEndpointInfo(ctx, targetURL)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +68,7 @@ func (s *svc) webdavRefLs(ctx context.Context, targetURL string, nameQueries ...
 		return nil, err
 	}
 
-	ep, err := extractEndpointInfo(targetURL)
+	ep, err := s.extractEndpointInfo(ctx, targetURL)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +96,7 @@ func (s *svc) webdavRefMkdir(ctx context.Context, targetURL string, nameQueries 
 		return err
 	}
 
-	ep, err := extractEndpointInfo(targetURL)
+	ep, err := s.extractEndpointInfo(ctx, targetURL)
 	if err != nil {
 		return err
 	}
@@ -114,7 +115,7 @@ func (s *svc) webdavRefMove(ctx context.Context, targetURL, src, destination str
 	if err != nil {
 		return err
 	}
-	srcEP, err := extractEndpointInfo(srcURL)
+	srcEP, err := s.extractEndpointInfo(ctx, srcURL)
 	if err != nil {
 		return err
 	}
@@ -123,7 +124,7 @@ func (s *svc) webdavRefMove(ctx context.Context, targetURL, src, destination str
 	if err != nil {
 		return err
 	}
-	destEP, err := extractEndpointInfo(destURL)
+	destEP, err := s.extractEndpointInfo(ctx, destURL)
 	if err != nil {
 		return err
 	}
@@ -144,7 +145,7 @@ func (s *svc) webdavRefDelete(ctx context.Context, targetURL string, nameQueries
 		return err
 	}
 
-	ep, err := extractEndpointInfo(targetURL)
+	ep, err := s.extractEndpointInfo(ctx, targetURL)
 	if err != nil {
 		return err
 	}
@@ -164,7 +165,7 @@ func (s *svc) webdavRefTransferEndpoint(ctx context.Context, targetURL string, n
 		return "", nil, err
 	}
 
-	ep, err := extractEndpointInfo(targetURL)
+	ep, err := s.extractEndpointInfo(ctx, targetURL)
 	if err != nil {
 		return "", nil, err
 	}
@@ -183,21 +184,7 @@ func (s *svc) webdavRefTransferEndpoint(ctx context.Context, targetURL string, n
 	}, nil
 }
 
-func normalize(info *gowebdav.File) *provider.ResourceInfo {
-	return &provider.ResourceInfo{
-		// TODO(ishank011): Add Id, PermissionSet, Owner
-		Path:     info.Path(),
-		Type:     getResourceType(info.IsDir()),
-		Etag:     info.ETag(),
-		MimeType: info.ContentType(),
-		Size:     uint64(info.Size()),
-		Mtime: &types.Timestamp{
-			Seconds: uint64(info.ModTime().Unix()),
-		},
-	}
-}
-
-func extractEndpointInfo(targetURL string) (*webdavEndpoint, error) {
+func (s *svc) extractEndpointInfo(ctx context.Context, targetURL string) (*webdavEndpoint, error) {
 	if targetURL == "" {
 		return nil, errors.New("gateway: ref target is an empty uri")
 	}
@@ -210,11 +197,19 @@ func extractEndpointInfo(targetURL string) (*webdavEndpoint, error) {
 		return nil, errtypes.NotSupported("ref target does not have the webdav scheme")
 	}
 
-	parts := strings.SplitN(uri.Opaque, "@", 2)
-	if len(parts) < 2 {
-		err := errors.New("gateway: webdav ref does not follow the layout token@webdav_endpoint?name " + targetURL)
-		return nil, err
+	meshProvider, err := s.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
+		Domain: uri.Host,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling GetInfoByDomain")
 	}
+	var webdavEP string
+	for _, s := range meshProvider.ProviderInfo.Services {
+		if strings.ToLower(s.Endpoint.Type.Name) == "webdav" {
+			webdavEP = s.Endpoint.Path
+		}
+	}
+
 	m, err := url.ParseQuery(uri.RawQuery)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error parsing target resource name")
@@ -222,9 +217,23 @@ func extractEndpointInfo(targetURL string) (*webdavEndpoint, error) {
 
 	return &webdavEndpoint{
 		filePath: m["name"][0],
-		endpoint: parts[1],
-		token:    parts[0],
+		endpoint: webdavEP,
+		token:    uri.User.String(),
 	}, nil
+}
+
+func normalize(info *gowebdav.File) *provider.ResourceInfo {
+	return &provider.ResourceInfo{
+		// TODO(ishank011): Add Id, PermissionSet, Owner
+		Path:     info.Path(),
+		Type:     getResourceType(info.IsDir()),
+		Etag:     info.ETag(),
+		MimeType: info.ContentType(),
+		Size:     uint64(info.Size()),
+		Mtime: &types.Timestamp{
+			Seconds: uint64(info.ModTime().Unix()),
+		},
+	}
 }
 
 func getResourceType(isDir bool) provider.ResourceType {
