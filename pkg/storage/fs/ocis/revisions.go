@@ -11,7 +11,7 @@ import (
 )
 
 func (fs *ocisfs) ListRevisions(ctx context.Context, ref *provider.Reference) (revisions []*provider.FileVersion, err error) {
-	var node *NodeInfo
+	var node *Node
 	if node, err = fs.pw.NodeFromResource(ctx, ref); err != nil {
 		return
 	}

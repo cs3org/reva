@@ -25,13 +25,9 @@ import (
 	"os"
 	"path/filepath"
 
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
-	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
@@ -294,7 +290,7 @@ func (fs *ocisfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (str
 }
 
 func (fs *ocisfs) CreateDir(ctx context.Context, fn string) (err error) {
-	var node *NodeInfo
+	var node *Node
 	if node, err = fs.pw.NodeFromPath(ctx, fn); err != nil {
 		return
 	}
@@ -306,7 +302,7 @@ func (fs *ocisfs) CreateReference(ctx context.Context, path string, targetURI *u
 }
 
 func (fs *ocisfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (err error) {
-	var oldNode, newNode *NodeInfo
+	var oldNode, newNode *Node
 	if oldNode, err = fs.pw.NodeFromResource(ctx, oldRef); err != nil {
 		return
 	}
@@ -322,7 +318,7 @@ func (fs *ocisfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) 
 }
 
 func (fs *ocisfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (ri *provider.ResourceInfo, err error) {
-	var node *NodeInfo
+	var node *Node
 	if node, err = fs.pw.NodeFromResource(ctx, ref); err != nil {
 		return
 	}
@@ -330,11 +326,11 @@ func (fs *ocisfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
 		return
 	}
-	return fs.normalize(ctx, node)
+	return node.AsResourceInfo(ctx)
 }
 
 func (fs *ocisfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) (finfos []*provider.ResourceInfo, err error) {
-	var node *NodeInfo
+	var node *Node
 	if node, err = fs.pw.NodeFromResource(ctx, ref); err != nil {
 		return
 	}
@@ -342,14 +338,14 @@ func (fs *ocisfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
 		return
 	}
-	var children []*NodeInfo
+	var children []*Node
 	children, err = fs.tp.ListFolder(ctx, node)
 	if err != nil {
 		return
 	}
 
 	for i := range children {
-		if ri, err := fs.normalize(ctx, children[i]); err == nil {
+		if ri, err := children[i].AsResourceInfo(ctx); err == nil {
 			finfos = append(finfos, ri)
 		}
 	}
@@ -357,7 +353,7 @@ func (fs *ocisfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 }
 
 func (fs *ocisfs) Delete(ctx context.Context, ref *provider.Reference) (err error) {
-	var node *NodeInfo
+	var node *Node
 	if node, err = fs.pw.NodeFromResource(ctx, ref); err != nil {
 		return
 	}
@@ -370,7 +366,7 @@ func (fs *ocisfs) Delete(ctx context.Context, ref *provider.Reference) (err erro
 
 // Data persistence
 
-func (fs *ocisfs) ContentPath(node *NodeInfo) string {
+func (fs *ocisfs) ContentPath(node *Node) string {
 	return filepath.Join(fs.conf.Root, "nodes", node.ID)
 }
 
@@ -404,68 +400,3 @@ func (fs *ocisfs) Download(ctx context.Context, ref *provider.Reference) (io.Rea
 // Trash persistence in recycle.go
 
 // share persistence in grants.go
-
-// supporting functions
-
-func (fs *ocisfs) normalize(ctx context.Context, node *NodeInfo) (ri *provider.ResourceInfo, err error) {
-	var fn string
-
-	nodePath := filepath.Join(fs.conf.Root, "nodes", node.ID)
-
-	var fi os.FileInfo
-
-	nodeType := provider.ResourceType_RESOURCE_TYPE_INVALID
-	if fi, err = os.Lstat(nodePath); err != nil {
-		return
-	}
-	if fi.IsDir() {
-		nodeType = provider.ResourceType_RESOURCE_TYPE_CONTAINER
-	} else if fi.Mode().IsRegular() {
-		nodeType = provider.ResourceType_RESOURCE_TYPE_FILE
-	} else if fi.Mode()&os.ModeSymlink != 0 {
-		nodeType = provider.ResourceType_RESOURCE_TYPE_SYMLINK
-		// TODO reference using ext attr on a symlink
-		// nodeType = provider.ResourceType_RESOURCE_TYPE_REFERENCE
-	}
-
-	var etag []byte
-	// TODO optionally store etag in new `root/attributes/<uuid>` file
-	if etag, err = xattr.Get(nodePath, "user.ocis.etag"); err != nil {
-		log := appctx.GetLogger(ctx)
-		log.Debug().Err(err).Msg("could not read etag")
-	}
-
-	id := &provider.ResourceId{OpaqueId: node.ID}
-	// Path changes the node because it traverses the tree
-	fn, err = fs.pw.Path(ctx, node)
-	if err != nil {
-		return nil, err
-	}
-	ri = &provider.ResourceInfo{
-		Id:       id,
-		Path:     fn,
-		Type:     nodeType,
-		Etag:     string(etag),
-		MimeType: mime.Detect(nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER, fn),
-		Size:     uint64(fi.Size()),
-		// TODO fix permissions
-		PermissionSet: &provider.ResourcePermissions{ListContainer: true, CreateContainer: true},
-		Mtime: &types.Timestamp{
-			Seconds: uint64(fi.ModTime().Unix()),
-			// TODO read nanos from where? Nanos:   fi.MTimeNanos,
-		},
-	}
-
-	if owner, idp, err := node.Owner(); err == nil {
-		ri.Owner = &userpb.UserId{
-			Idp:      idp,
-			OpaqueId: owner,
-		}
-	}
-	log := appctx.GetLogger(ctx)
-	log.Debug().
-		Interface("ri", ri).
-		Msg("normalized")
-
-	return ri, nil
-}

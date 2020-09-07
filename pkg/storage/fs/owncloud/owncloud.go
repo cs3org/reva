@@ -20,7 +20,6 @@ package owncloud
 
 import (
 	"context"
-	"encoding/csv"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -44,6 +43,7 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
+	"github.com/cs3org/reva/pkg/storage/utils/ace"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/gofrs/uuid"
@@ -64,83 +64,6 @@ const (
 	// idAttribute is the name of the filesystem extended attribute that is used to store the uuid in
 	idAttribute string = "user.oc.id"
 
-	// shares are persisted using extended attributes. We are going to mimic
-	// NFS4 ACLs, with one extended attribute per share, following Access
-	// Control Entries (ACEs). The following is taken from the nfs4_acl man page,
-	// see https://linux.die.net/man/5/nfs4_acl:
-	// the extended attributes will look like this
-	// "user.oc.acl.<type>:<flags>:<principal>:<permissions>"
-	// - *type* will be limited to A for now
-	//     A: Allow - allow *principal* to perform actions requiring *permissions*
-	//   In the future we can use:
-	//     U: aUdit - log any attempted access by principal which requires
-	//                permissions.
-	//     L: aLarm - generate a system alarm at any attempted access by
-	//                principal which requires permissions
-	//   D for deny is not recommended
-	// - *flags* for now empty or g for group, no inheritance yet
-	//   - d directory-inherit - newly-created subdirectories will inherit the
-	//                           ACE.
-	//   - f file-inherit - newly-created files will inherit the ACE, minus its
-	//                      inheritance flags. Newly-created subdirectories
-	//                      will inherit the ACE; if directory-inherit is not
-	//                      also specified in the parent ACE, inherit-only will
-	//                      be added to the inherited ACE.
-	//   - n no-propagate-inherit - newly-created subdirectories will inherit
-	//                              the ACE, minus its inheritance flags.
-	//   - i inherit-only - the ACE is not considered in permissions checks,
-	//                      but it is heritable; however, the inherit-only
-	//                      flag is stripped from inherited ACEs.
-	// - *principal* a named user, group or special principal
-	//   - the oidc sub@iss maps nicely to this
-	//   - 'OWNER@', 'GROUP@', and 'EVERYONE@', which are, respectively, analogous to the POSIX user/group/other
-	// - *permissions*
-	//   - r read-data (files) / list-directory (directories)
-	//   - w write-data (files) / create-file (directories)
-	//   - a append-data (files) / create-subdirectory (directories)
-	//   - x execute (files) / change-directory (directories)
-	//   - d delete - delete the file/directory. Some servers will allow a delete to occur if either this permission is set in the file/directory or if the delete-child permission is set in its parent directory.
-	//   - D delete-child - remove a file or subdirectory from within the given directory (directories only)
-	//   - t read-attributes - read the attributes of the file/directory.
-	//   - T write-attributes - write the attributes of the file/directory.
-	//   - n read-named-attributes - read the named attributes of the file/directory.
-	//   - N write-named-attributes - write the named attributes of the file/directory.
-	//   - c read-ACL - read the file/directory NFSv4 ACL.
-	//   - C write-ACL - write the file/directory NFSv4 ACL.
-	//   - o write-owner - change ownership of the file/directory.
-	//   - y synchronize - allow clients to use synchronous I/O with the server.
-	// TODO implement OWNER@ as "user.oc.acl.A::OWNER@:rwaDxtTnNcCy"
-	// attribute names are limited to 255 chars by the linux kernel vfs, values to 64 kb
-	// ext3 extended attributes must fit inside a single filesystem block ... 4096 bytes
-	// that leaves us with "user.oc.acl.A::someonewithaslightlylongersubject@whateverissuer:rwaDxtTnNcCy" ~80 chars
-	// 4096/80 = 51 shares ... with luck we might move the actual permissions to the value, saving ~15 chars
-	// 4096/64 = 64 shares ... still meh ... we can do better by using ints instead of strings for principals
-	//   "user.oc.acl.u:100000" is pretty neat, but we can still do better: base64 encode the int
-	//   "user.oc.acl.u:6Jqg" but base64 always has at least 4 chars, maybe hex is better for smaller numbers
-	//   well use 4 chars in addition to the ace: "user.oc.acl.u:////" = 65535 -> 18 chars
-	// 4096/18 = 227 shares
-	// still ... ext attrs for this are not infinite scale ...
-	// so .. attach shares via fileid.
-	// <userhome>/metadata/<fileid>/shares, similar to <userhome>/files
-	// <userhome>/metadata/<fileid>/shares/u/<issuer>/<subject>/A:fdi:rwaDxtTnNcCy permissions as filename to keep them in the stat cache?
-	//
-	// whatever ... 50 shares is good enough. If more is needed we can delegate to the metadata
-	// if "user.oc.acl.M" is present look inside the metadata app.
-	// - if we cannot set an ace we might get an io error.
-	//   in that case convert all shares to metadata and try to set "user.oc.acl.m"
-	//
-	// what about metadata like share creator, share time, expiry?
-	// - creator is same as owner, but can be set
-	// - share date, or abbreviated st is a unix timestamp
-	// - expiry is a unix timestamp
-	// - can be put inside the value
-	// - we need to reorder the fields:
-	// "user.oc.acl.<u|g|o>:<principal>" -> "kv:t=<type>:f=<flags>:p=<permissions>:st=<share time>:c=<creator>:e=<expiry>:pw=<password>:n=<name>"
-	// "user.oc.acl.<u|g|o>:<principal>" -> "v1:<type>:<flags>:<permissions>:<share time>:<creator>:<expiry>:<password>:<name>"
-	// or the first byte determines the format
-	// 0x00 = key value
-	// 0x01 = v1 ...
-	//
 	// SharePrefix is the prefix for sharing related extended attributes
 	sharePrefix       string = "user.oc.acl."
 	trashOriginPrefix string = "user.oc.o"
@@ -750,209 +673,36 @@ func (fs *ocfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provid
 		return errors.Wrap(err, "ocfs: error resolving reference")
 	}
 
-	e, err := fs.getACE(g)
-	if err != nil {
-		return err
-	}
-
-	var attr string
-	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
-		attr = sharePrefix + "g:" + e.Principal
-	} else {
-		attr = sharePrefix + "u:" + e.Principal
-	}
-
-	if err := xattr.Set(np, attr, getValue(e)); err != nil {
+	e := ace.FromGrant(g)
+	principal, value := e.Marshal()
+	if err := xattr.Set(np, sharePrefix+principal, value); err != nil {
 		return err
 	}
 	return fs.propagate(ctx, np)
 }
 
-func getValue(e *ace) []byte {
-	// first byte will be replaced after converting to byte array
-	val := fmt.Sprintf("_t=%s:f=%s:p=%s", e.Type, e.Flags, e.Permissions)
-	b := []byte(val)
-	b[0] = 0 // indicate key value
-	return b
-}
-
-func getACEPerm(set *provider.ResourcePermissions) (string, error) {
-	var b strings.Builder
-
-	if set.Stat || set.InitiateFileDownload || set.ListContainer {
-		b.WriteString("r")
-	}
-	if set.InitiateFileUpload || set.Move {
-		b.WriteString("w")
-	}
-	if set.CreateContainer {
-		b.WriteString("a")
-	}
-	if set.Delete {
-		b.WriteString("d")
-	}
-
-	// sharing
-	if set.AddGrant || set.RemoveGrant || set.UpdateGrant {
-		b.WriteString("C")
-	}
-	if set.ListGrants {
-		b.WriteString("c")
-	}
-
-	// trash
-	if set.ListRecycle {
-		b.WriteString("u")
-	}
-	if set.RestoreRecycleItem {
-		b.WriteString("U")
-	}
-	if set.PurgeRecycle {
-		b.WriteString("P")
-	}
-
-	// versions
-	if set.ListFileVersions {
-		b.WriteString("v")
-	}
-	if set.RestoreFileVersion {
-		b.WriteString("V")
-	}
-
-	// quota
-	if set.GetQuota {
-		b.WriteString("q")
-	}
-	// TODO set quota permission?
-	// TODO GetPath
-	return b.String(), nil
-}
-
-func (fs *ocfs) getACE(g *provider.Grant) (*ace, error) {
-	permissions, err := getACEPerm(g.Permissions)
-	if err != nil {
-		return nil, err
-	}
-	e := &ace{
-		Principal:   g.Grantee.Id.OpaqueId,
-		Permissions: permissions,
-		// TODO creator ...
-		Type: "A",
-	}
-	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
-		e.Flags = "g"
-	}
-	return e, nil
-}
-
-type ace struct {
-	//NFSv4 acls
-	Type        string // t
-	Flags       string // f
-	Principal   string // im key
-	Permissions string // p
-
-	// sharing specific
-	ShareTime int    // s
-	Creator   string // c
-	Expires   int    // e
-	Password  string // w passWord TODO h = hash
-	Label     string // l
-}
-
-func unmarshalACE(v []byte) (*ace, error) {
-	// first byte indicates type of value
-	switch v[0] {
-	case 0: // = ':' separated key=value pairs
-		s := string(v[1:])
-		return unmarshalKV(s)
-	default:
-		return nil, fmt.Errorf("unknown ace encoding")
-	}
-}
-
-func unmarshalKV(s string) (*ace, error) {
-	e := &ace{}
-	r := csv.NewReader(strings.NewReader(s))
-	r.Comma = ':'
-	r.Comment = 0
-	r.FieldsPerRecord = -1
-	r.LazyQuotes = false
-	r.TrimLeadingSpace = false
-	records, err := r.ReadAll()
-	if err != nil {
-		return nil, err
-	}
-	if len(records) != 1 {
-		return nil, fmt.Errorf("more than one row of ace kvs")
-	}
-	for i := range records[0] {
-		kv := strings.Split(records[0][i], "=")
-		switch kv[0] {
-		case "t":
-			e.Type = kv[1]
-		case "f":
-			e.Flags = kv[1]
-		case "p":
-			e.Permissions = kv[1]
-		case "s":
-			v, err := strconv.Atoi(kv[1])
-			if err != nil {
-				return nil, err
-			}
-			e.ShareTime = v
-		case "c":
-			e.Creator = kv[1]
-		case "e":
-			v, err := strconv.Atoi(kv[1])
-			if err != nil {
-				return nil, err
-			}
-			e.Expires = v
-		case "w":
-			e.Password = kv[1]
-		case "l":
-			e.Label = kv[1]
-			// TODO default ... log unknown keys? or add as opaque? hm we need that for tagged shares ...
-		}
-	}
-	return e, nil
-}
-
-// Parse parses an acl string with the given delimiter (LongTextForm or ShortTextForm)
-func getACEs(ctx context.Context, fsfn string, attrs []string) (entries []*ace, err error) {
+// extractACEsFromAttrs reads ACEs in the list of attrs from the file
+func extractACEsFromAttrs(ctx context.Context, fsfn string, attrs []string) (entries []*ace.ACE) {
 	log := appctx.GetLogger(ctx)
-	entries = []*ace{}
+	entries = []*ace.ACE{}
 	for i := range attrs {
 		if strings.HasPrefix(attrs[i], sharePrefix) {
-			principal := attrs[i][len(sharePrefix):]
 			var value []byte
+			var err error
 			if value, err = xattr.Get(fsfn, attrs[i]); err != nil {
 				log.Error().Err(err).Str("attr", attrs[i]).Msg("could not read attribute")
 				continue
 			}
-			var e *ace
-			if e, err = unmarshalACE(value); err != nil {
-				log.Error().Err(err).Str("attr", attrs[i]).Msg("could unmarshal ace")
+			var e *ace.ACE
+			principal := attrs[i][len(sharePrefix):]
+			if e, err = ace.Unmarshal(principal, value); err != nil {
+				log.Error().Err(err).Str("principal", principal).Str("attr", attrs[i]).Msg("could not unmarshal ace")
 				continue
-			}
-			e.Principal = principal[2:]
-			// check consistency of Flags and principal type
-			if strings.Contains(e.Flags, "g") {
-				if principal[:1] != "g" {
-					log.Error().Str("attr", attrs[i]).Interface("ace", e).Msg("inconsistent ace: expected group")
-					continue
-				}
-			} else {
-				if principal[:1] != "u" {
-					log.Error().Str("attr", attrs[i]).Interface("ace", e).Msg("inconsistent ace: expected user")
-					continue
-				}
 			}
 			entries = append(entries, e)
 		}
 	}
-	return entries, nil
+	return
 }
 
 func (fs *ocfs) ListGrants(ctx context.Context, ref *provider.Reference) (grants []*provider.Grant, err error) {
@@ -968,103 +718,15 @@ func (fs *ocfs) ListGrants(ctx context.Context, ref *provider.Reference) (grants
 	}
 
 	log.Debug().Interface("attrs", attrs).Msg("read attributes")
-	// filter attributes
-	var aces []*ace
-	if aces, err = getACEs(ctx, np, attrs); err != nil {
-		log.Error().Err(err).Msg("error getting aces")
-		return nil, err
-	}
+
+	aces := extractACEsFromAttrs(ctx, np, attrs)
 
 	grants = make([]*provider.Grant, 0, len(aces))
 	for i := range aces {
-		grantee := &provider.Grantee{
-			// TODO lookup uid from principal
-			Id:   &userpb.UserId{OpaqueId: aces[i].Principal},
-			Type: fs.getGranteeType(aces[i]),
-		}
-		grants = append(grants, &provider.Grant{
-			Grantee:     grantee,
-			Permissions: fs.getGrantPermissionSet(aces[i].Permissions),
-		})
+		grants = append(grants, aces[i].Grant())
 	}
 
 	return grants, nil
-}
-
-func (fs *ocfs) getGranteeType(e *ace) provider.GranteeType {
-	if strings.Contains(e.Flags, "g") {
-		return provider.GranteeType_GRANTEE_TYPE_GROUP
-	}
-	return provider.GranteeType_GRANTEE_TYPE_USER
-}
-
-func (fs *ocfs) getGrantPermissionSet(mode string) *provider.ResourcePermissions {
-	p := &provider.ResourcePermissions{}
-	// r
-	if strings.Contains(mode, "r") {
-		p.Stat = true
-		p.InitiateFileDownload = true
-		p.ListContainer = true
-	}
-	// w
-	if strings.Contains(mode, "w") {
-		p.InitiateFileUpload = true
-		if p.InitiateFileDownload {
-			p.Move = true
-		}
-	}
-	//a
-	if strings.Contains(mode, "a") {
-		// TODO append data to file permission?
-		p.CreateContainer = true
-	}
-	//x
-	//if strings.Contains(mode, "x") {
-	// TODO execute file permission?
-	// TODO change directory permission?
-	//}
-	//d
-	if strings.Contains(mode, "d") {
-		p.Delete = true
-	}
-	//D ?
-
-	// sharing
-	if strings.Contains(mode, "C") {
-		p.AddGrant = true
-		p.RemoveGrant = true
-		p.UpdateGrant = true
-	}
-	if strings.Contains(mode, "c") {
-		p.ListGrants = true
-	}
-
-	// trash
-	if strings.Contains(mode, "u") { // u = undelete
-		p.ListRecycle = true
-	}
-	if strings.Contains(mode, "U") {
-		p.RestoreRecycleItem = true
-	}
-	if strings.Contains(mode, "P") {
-		p.PurgeRecycle = true
-	}
-
-	// versions
-	if strings.Contains(mode, "v") {
-		p.ListFileVersions = true
-	}
-	if strings.Contains(mode, "V") {
-		p.RestoreFileVersion = true
-	}
-
-	// ?
-	// TODO GetPath
-	if strings.Contains(mode, "q") {
-		p.GetQuota = true
-	}
-	// TODO set quota permission?
-	return p
 }
 
 func (fs *ocfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
