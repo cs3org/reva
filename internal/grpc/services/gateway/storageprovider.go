@@ -1797,13 +1797,13 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 }
 
 func (s *svc) findProvider(ctx context.Context, ref *provider.Reference) (*registry.ProviderInfo, error) {
-	if s.c.HomeMapping != "" {
+	home, err := s.GetHome(ctx, &provider.GetHomeRequest{})
+	if err != nil {
+		return nil, err
+	}
+	if strings.HasPrefix(ref.GetPath(), home.Path) && s.c.HomeMapping != "" {
 		if u, ok := user.ContextGetUser(ctx); ok {
 			layout := templates.WithUser(u, s.c.HomeMapping)
-			home, err := s.GetHome(ctx, &provider.GetHomeRequest{})
-			if err != nil {
-				return nil, err
-			}
 			newRef := &provider.Reference{
 				Spec: &provider.Reference_Path{
 					Path: path.Join(layout, strings.TrimPrefix(ref.GetPath(), home.Path)),
