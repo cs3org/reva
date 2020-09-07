@@ -35,7 +35,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-	"github.com/pkg/xattr"
 )
 
 const (
@@ -248,24 +247,8 @@ func (fs *ocisfs) CreateHome(ctx context.Context) error {
 
 	// create a directory node
 	nodeID := uuid.New().String()
-	nodePath := filepath.Join(fs.conf.Root, "nodes", nodeID)
-	err = os.MkdirAll(nodePath, 0700)
-	if err != nil {
-		return errors.Wrap(err, "ocisfs: error creating node dir")
-	}
 
-	if err := xattr.Set(nodePath, "user.ocis.parentid", []byte("root")); err != nil {
-		return errors.Wrap(err, "ocisfs: could not set parentid attribute")
-	}
-	if err := xattr.Set(nodePath, "user.ocis.name", []byte("")); err != nil {
-		return errors.Wrap(err, "ocisfs: could not set name attribute")
-	}
-	if err := xattr.Set(nodePath, "user.ocis.owner.id", []byte(u.Id.OpaqueId)); err != nil {
-		return errors.Wrap(err, "ocisfs: could not set owner id attribute")
-	}
-	if err := xattr.Set(nodePath, "user.ocis.owner.idp", []byte(u.Id.Idp)); err != nil {
-		return errors.Wrap(err, "ocisfs: could not set owner idp attribute")
-	}
+	fs.tp.CreateRoot(nodeID, u.Id)
 
 	// link users home to node
 	return os.Symlink("../nodes/"+nodeID, home)

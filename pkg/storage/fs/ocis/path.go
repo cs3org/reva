@@ -72,7 +72,7 @@ func (pw *Path) NodeFromID(ctx context.Context, id *provider.ResourceId) (n *Nod
 	if id == nil || id.OpaqueId == "" {
 		return nil, fmt.Errorf("invalid resource id %+v", id)
 	}
-	return NewNode(pw, id.OpaqueId)
+	return ReadNode(pw, id.OpaqueId)
 }
 
 // Path returns the path for node

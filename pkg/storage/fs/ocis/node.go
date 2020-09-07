@@ -12,6 +12,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/mime"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 )
@@ -22,13 +23,54 @@ type Node struct {
 	ParentID string
 	ID       string
 	Name     string
-	ownerID  string
-	ownerIDP string
+	ownerID  string // used to cache the owner id
+	ownerIDP string // used to cache the owner idp
 	Exists   bool
 }
 
-// NewNode creates a new instance and checks if it exists
-func NewNode(pw PathWrapper, id string) (n *Node, err error) {
+// CreateDir creates a new child directory node with a new id and the given name
+// owner is optional
+// TODO use in tree CreateDir
+func (n *Node) CreateDir(pw PathWrapper, name string, owner *userpb.UserId) (c *Node, err error) {
+	c = &Node{
+		pw:       pw,
+		ParentID: n.ID,
+		ID:       uuid.New().String(),
+		Name:     name,
+	}
+
+	// create a directory node
+	nodePath := filepath.Join(pw.Root(), "nodes", c.ID)
+	if err = os.MkdirAll(nodePath, 0700); err != nil {
+		return nil, errors.Wrap(err, "ocisfs: error creating node child dir")
+	}
+
+	c.writeMetadata(nodePath, owner)
+
+	c.Exists = true
+	return
+}
+
+func (n *Node) writeMetadata(nodePath string, owner *userpb.UserId) (err error) {
+	if err = xattr.Set(nodePath, "user.ocis.parentid", []byte(n.ParentID)); err != nil {
+		return errors.Wrap(err, "ocisfs: could not set parentid attribute")
+	}
+	if err = xattr.Set(nodePath, "user.ocis.name", []byte(n.Name)); err != nil {
+		return errors.Wrap(err, "ocisfs: could not set name attribute")
+	}
+	if owner != nil {
+		if err = xattr.Set(nodePath, "user.ocis.owner.id", []byte(owner.OpaqueId)); err != nil {
+			return errors.Wrap(err, "ocisfs: could not set owner id attribute")
+		}
+		if err = xattr.Set(nodePath, "user.ocis.owner.idp", []byte(owner.Idp)); err != nil {
+			return errors.Wrap(err, "ocisfs: could not set owner idp attribute")
+		}
+	}
+	return
+}
+
+// ReadNode creates a new instance from an id and checks if it exists
+func ReadNode(pw PathWrapper, id string) (n *Node, err error) {
 	n = &Node{
 		pw: pw,
 		ID: id,
@@ -135,6 +177,7 @@ func (n *Node) Parent() (p *Node, err error) {
 }
 
 // Owner returns the cached owner id or reads it from the extended attributes
+// TODO can be private as only the AsResourceInfo uses it
 func (n *Node) Owner() (id string, idp string, err error) {
 	if n.ownerID != "" && n.ownerIDP != "" {
 		return n.ownerID, n.ownerIDP, nil

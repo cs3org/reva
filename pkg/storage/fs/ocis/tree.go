@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/user"
@@ -20,21 +21,21 @@ import (
 
 // Tree manages a hierarchical tree
 type Tree struct {
-	pw            PathWrapper
-	DataDirectory string
+	pw   PathWrapper
+	Root string
 }
 
 // NewTree creates a new Tree instance
-func NewTree(pw PathWrapper, dataDirectory string) (TreePersistence, error) {
+func NewTree(pw PathWrapper, Root string) (TreePersistence, error) {
 	return &Tree{
-		pw:            pw,
-		DataDirectory: dataDirectory,
+		pw:   pw,
+		Root: Root,
 	}, nil
 }
 
 // GetMD returns the metadata of a node in the tree
 func (t *Tree) GetMD(ctx context.Context, node *Node) (os.FileInfo, error) {
-	md, err := os.Stat(filepath.Join(t.DataDirectory, "nodes", node.ID))
+	md, err := os.Stat(filepath.Join(t.Root, "nodes", node.ID))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, errtypes.NotFound(node.ID)
@@ -57,18 +58,38 @@ func (t *Tree) GetPathByID(ctx context.Context, id *provider.ResourceId) (relati
 	return
 }
 
+// CreateRoot creates a new root node with parentid = "root"
+func (t *Tree) CreateRoot(id string, owner *userpb.UserId) (n *Node, err error) {
+	n = &Node{
+		ParentID: "root",
+		pw:       t.pw,
+		ID:       id,
+	}
+
+	// create a directory node
+	nodePath := filepath.Join(t.Root, "nodes", n.ID)
+	if err = os.MkdirAll(nodePath, 0700); err != nil {
+		return nil, errors.Wrap(err, "ocisfs: error creating root node dir")
+	}
+
+	n.writeMetadata(nodePath, owner)
+
+	n.Exists = true
+	return
+}
+
 // CreateDir creates a new directory entry in the tree
+// TODO use parentnode and name instead of node? would make the exists stuff clearer? maybe obsolete?
 func (t *Tree) CreateDir(ctx context.Context, node *Node) (err error) {
 
-	// TODO always try to fill node?
-	if node.Exists || node.ID != "" { // child already exists
-		return
+	if node.Exists || node.ID != "" {
+		return errtypes.AlreadyExists(node.ID) // path?
 	}
 
 	// create a directory node
 	node.ID = uuid.New().String()
 
-	newPath := filepath.Join(t.DataDirectory, "nodes", node.ID)
+	newPath := filepath.Join(t.Root, "nodes", node.ID)
 
 	err = os.MkdirAll(newPath, 0700)
 	if err != nil {
@@ -93,7 +114,7 @@ func (t *Tree) CreateDir(ctx context.Context, node *Node) (err error) {
 	}
 
 	// make child appear in listings
-	err = os.Symlink("../"+node.ID, filepath.Join(t.DataDirectory, "nodes", node.ParentID, node.Name))
+	err = os.Symlink("../"+node.ID, filepath.Join(t.Root, "nodes", node.ParentID, node.Name))
 	if err != nil {
 		return
 	}
@@ -111,14 +132,14 @@ func (t *Tree) Move(ctx context.Context, oldNode *Node, newNode *Node) (err erro
 	// if target exists delete it without trashing it
 	if newNode.Exists {
 		// TODO make sure all children are deleted
-		if err := os.RemoveAll(filepath.Join(t.DataDirectory, "nodes", newNode.ID)); err != nil {
+		if err := os.RemoveAll(filepath.Join(t.Root, "nodes", newNode.ID)); err != nil {
 			return errors.Wrap(err, "ocisfs: Move: error deleting target node "+newNode.ID)
 		}
 	}
-	// are we renaming?
+	// are we just renaming (parent stays the same)?
 	if oldNode.ParentID == newNode.ParentID {
 
-		parentPath := filepath.Join(t.DataDirectory, "nodes", oldNode.ParentID)
+		parentPath := filepath.Join(t.Root, "nodes", oldNode.ParentID)
 
 		// rename child
 		err = os.Rename(
@@ -129,7 +150,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *Node, newNode *Node) (err erro
 			return errors.Wrap(err, "ocisfs: could not rename child")
 		}
 
-		tgtPath := filepath.Join(t.DataDirectory, "nodes", newNode.ID)
+		tgtPath := filepath.Join(t.Root, "nodes", newNode.ID)
 
 		// update name attribute
 		if err := xattr.Set(tgtPath, "user.ocis.name", []byte(newNode.Name)); err != nil {
@@ -144,14 +165,15 @@ func (t *Tree) Move(ctx context.Context, oldNode *Node, newNode *Node) (err erro
 
 	// rename child
 	err = os.Rename(
-		filepath.Join(t.DataDirectory, "nodes", oldNode.ParentID, oldNode.Name),
-		filepath.Join(t.DataDirectory, "nodes", newNode.ParentID, newNode.Name),
+		filepath.Join(t.Root, "nodes", oldNode.ParentID, oldNode.Name),
+		filepath.Join(t.Root, "nodes", newNode.ParentID, newNode.Name),
 	)
 	if err != nil {
 		return errors.Wrap(err, "ocisfs: could not move child")
 	}
 
-	tgtPath := filepath.Join(t.DataDirectory, "nodes", newNode.ID)
+	// update parentid and name
+	tgtPath := filepath.Join(t.Root, "nodes", newNode.ID)
 
 	if err := xattr.Set(tgtPath, "user.ocis.parentid", []byte(newNode.ParentID)); err != nil {
 		return errors.Wrap(err, "ocisfs: could not set parentid attribute")
@@ -178,7 +200,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *Node, newNode *Node) (err erro
 // ListFolder lists the content of a folder node
 func (t *Tree) ListFolder(ctx context.Context, node *Node) ([]*Node, error) {
 
-	dir := filepath.Join(t.DataDirectory, "nodes", node.ID)
+	dir := filepath.Join(t.Root, "nodes", node.ID)
 	f, err := os.Open(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -210,13 +232,13 @@ func (t *Tree) ListFolder(ctx context.Context, node *Node) ([]*Node, error) {
 
 // Delete deletes a node in the tree
 func (t *Tree) Delete(ctx context.Context, node *Node) (err error) {
-	src := filepath.Join(t.DataDirectory, "nodes", node.ParentID, node.Name)
+	src := filepath.Join(t.Root, "nodes", node.ParentID, node.Name)
 	err = os.Remove(src)
 	if err != nil {
 		return
 	}
 
-	nodePath := filepath.Join(t.DataDirectory, "nodes", node.ID)
+	nodePath := filepath.Join(t.Root, "nodes", node.ID)
 	trashPath := nodePath + ".T." + time.Now().UTC().Format(time.RFC3339Nano)
 	err = os.Rename(nodePath, trashPath)
 	if err != nil {
@@ -225,7 +247,7 @@ func (t *Tree) Delete(ctx context.Context, node *Node) (err error) {
 
 	// make node appear in trash
 	// parent id and name are stored as extended attributes in the node itself
-	trashLink := filepath.Join(t.DataDirectory, "trash", node.ID)
+	trashLink := filepath.Join(t.Root, "trash", node.ID)
 	err = os.Symlink("../nodes/"+node.ID+".T."+time.Now().UTC().Format(time.RFC3339Nano), trashLink)
 	if err != nil {
 		return
@@ -247,7 +269,7 @@ func (t *Tree) Propagate(ctx context.Context, node *Node) (err error) {
 	// store in extended attribute
 	etag := hex.EncodeToString(bytes)
 	for err == nil && !node.IsRoot() {
-		if err := xattr.Set(filepath.Join(t.DataDirectory, "nodes", node.ID), "user.ocis.etag", []byte(etag)); err != nil {
+		if err := xattr.Set(filepath.Join(t.Root, "nodes", node.ID), "user.ocis.etag", []byte(etag)); err != nil {
 			log.Error().Err(err).Msg("error storing file id")
 		}
 		// TODO propagate mtime
