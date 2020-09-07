@@ -33,7 +33,7 @@ func NewTree(pw PathWrapper, dataDirectory string) (TreePersistence, error) {
 }
 
 // GetMD returns the metadata of a node in the tree
-func (t *Tree) GetMD(ctx context.Context, node *NodeInfo) (os.FileInfo, error) {
+func (t *Tree) GetMD(ctx context.Context, node *Node) (os.FileInfo, error) {
 	md, err := os.Stat(filepath.Join(t.DataDirectory, "nodes", node.ID))
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -47,7 +47,7 @@ func (t *Tree) GetMD(ctx context.Context, node *NodeInfo) (os.FileInfo, error) {
 
 // GetPathByID returns the fn pointed by the file id, without the internal namespace
 func (t *Tree) GetPathByID(ctx context.Context, id *provider.ResourceId) (relativeExternalPath string, err error) {
-	var node *NodeInfo
+	var node *Node
 	node, err = t.pw.NodeFromID(ctx, id)
 	if err != nil {
 		return
@@ -58,7 +58,7 @@ func (t *Tree) GetPathByID(ctx context.Context, id *provider.ResourceId) (relati
 }
 
 // CreateDir creates a new directory entry in the tree
-func (t *Tree) CreateDir(ctx context.Context, node *NodeInfo) (err error) {
+func (t *Tree) CreateDir(ctx context.Context, node *Node) (err error) {
 
 	// TODO always try to fill node?
 	if node.Exists || node.ID != "" { // child already exists
@@ -102,11 +102,12 @@ func (t *Tree) CreateDir(ctx context.Context, node *NodeInfo) (err error) {
 
 // CreateReference creates a new reference entry in the tree
 func (t *Tree) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
+	// TODO use symlink, but set extended attribute on link (not on target)
 	return errtypes.NotSupported("operation not supported: CreateReference")
 }
 
 // Move replaces the target with the source
-func (t *Tree) Move(ctx context.Context, oldNode *NodeInfo, newNode *NodeInfo) (err error) {
+func (t *Tree) Move(ctx context.Context, oldNode *Node, newNode *Node) (err error) {
 	// if target exists delete it without trashing it
 	if newNode.Exists {
 		// TODO make sure all children are deleted
@@ -175,7 +176,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *NodeInfo, newNode *NodeInfo) (
 }
 
 // ListFolder lists the content of a folder node
-func (t *Tree) ListFolder(ctx context.Context, node *NodeInfo) ([]*NodeInfo, error) {
+func (t *Tree) ListFolder(ctx context.Context, node *Node) ([]*Node, error) {
 
 	dir := filepath.Join(t.DataDirectory, "nodes", node.ID)
 	f, err := os.Open(dir)
@@ -187,14 +188,14 @@ func (t *Tree) ListFolder(ctx context.Context, node *NodeInfo) ([]*NodeInfo, err
 	}
 
 	names, err := f.Readdirnames(0)
-	nodes := []*NodeInfo{}
+	nodes := []*Node{}
 	for i := range names {
 		link, err := os.Readlink(filepath.Join(dir, names[i]))
 		if err != nil {
 			// TODO log
 			continue
 		}
-		n := &NodeInfo{
+		n := &Node{
 			pw:       t.pw,
 			ParentID: node.ID,
 			ID:       filepath.Base(link),
@@ -208,7 +209,7 @@ func (t *Tree) ListFolder(ctx context.Context, node *NodeInfo) ([]*NodeInfo, err
 }
 
 // Delete deletes a node in the tree
-func (t *Tree) Delete(ctx context.Context, node *NodeInfo) (err error) {
+func (t *Tree) Delete(ctx context.Context, node *Node) (err error) {
 	src := filepath.Join(t.DataDirectory, "nodes", node.ParentID, node.Name)
 	err = os.Remove(src)
 	if err != nil {
@@ -237,7 +238,7 @@ func (t *Tree) Delete(ctx context.Context, node *NodeInfo) (err error) {
 }
 
 // Propagate propagates changes to the root of the tree
-func (t *Tree) Propagate(ctx context.Context, node *NodeInfo) (err error) {
+func (t *Tree) Propagate(ctx context.Context, node *Node) (err error) {
 	// generate an etag
 	bytes := make([]byte, 16)
 	if _, err := rand.Read(bytes); err != nil {

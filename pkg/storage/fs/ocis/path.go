@@ -19,18 +19,17 @@ type Path struct {
 	// ocis fs works on top of a dir of uuid nodes
 	root string `mapstructure:"root"`
 
-	// UserLayout wraps the internal path with user information.
-	// Example: if conf.Namespace is /ocis/user and received path is /docs
-	// and the UserLayout is {{.Username}} the internal path will be:
-	// /ocis/user/<username>/docs
+	// UserLayout wraps the internal path in the users folder with user information.
 	UserLayout string `mapstructure:"user_layout"`
+
+	// TODO NodeLayout option to save nodes as eg. nodes/1d/d8/1dd84abf-9466-4e14-bb86-02fc4ea3abcf
 
 	// EnableHome enables the creation of home directories.
 	EnableHome bool `mapstructure:"enable_home"`
 }
 
-// NodeFromResource takes in a request path or request id and converts it to a NodeInfo
-func (pw *Path) NodeFromResource(ctx context.Context, ref *provider.Reference) (*NodeInfo, error) {
+// NodeFromResource takes in a request path or request id and converts it to a Node
+func (pw *Path) NodeFromResource(ctx context.Context, ref *provider.Reference) (*Node, error) {
 	if ref.GetPath() != "" {
 		return pw.NodeFromPath(ctx, ref.GetPath())
 	}
@@ -43,8 +42,8 @@ func (pw *Path) NodeFromResource(ctx context.Context, ref *provider.Reference) (
 	return nil, fmt.Errorf("invalid reference %+v", ref)
 }
 
-// NodeFromPath converts a filename into a NodeInfo
-func (pw *Path) NodeFromPath(ctx context.Context, fn string) (node *NodeInfo, err error) {
+// NodeFromPath converts a filename into a Node
+func (pw *Path) NodeFromPath(ctx context.Context, fn string) (node *Node, err error) {
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("fn", fn).Msg("NodeFromPath()")
 	node, err = pw.RootNode(ctx)
@@ -69,7 +68,7 @@ func (pw *Path) NodeFromPath(ctx context.Context, fn string) (node *NodeInfo, er
 }
 
 // NodeFromID returns the internal path for the id
-func (pw *Path) NodeFromID(ctx context.Context, id *provider.ResourceId) (n *NodeInfo, err error) {
+func (pw *Path) NodeFromID(ctx context.Context, id *provider.ResourceId) (n *Node, err error) {
 	if id == nil || id.OpaqueId == "" {
 		return nil, fmt.Errorf("invalid resource id %+v", id)
 	}
@@ -77,20 +76,15 @@ func (pw *Path) NodeFromID(ctx context.Context, id *provider.ResourceId) (n *Nod
 }
 
 // Path returns the path for node
-func (pw *Path) Path(ctx context.Context, n *NodeInfo) (p string, err error) {
-	log := appctx.GetLogger(ctx)
-	log.Debug().Interface("node", n).Msg("Path()")
-	/*
-		// check if this a not yet existing node
-		if n.ID == "" && n.Name != "" && n.ParentID != "" {
-			path = n.Name
-			n, err = n.Parent()
-		}
-	*/
+func (pw *Path) Path(ctx context.Context, n *Node) (p string, err error) {
 	for !n.IsRoot() {
 		p = filepath.Join(n.Name, p)
 		if n, err = n.Parent(); err != nil {
-			log.Error().Err(err).Str("path", p).Interface("node", n).Msg("Path()")
+			appctx.GetLogger(ctx).
+				Error().Err(err).
+				Str("path", p).
+				Interface("node", n).
+				Msg("Path()")
 			return
 		}
 	}
@@ -98,7 +92,7 @@ func (pw *Path) Path(ctx context.Context, n *NodeInfo) (p string, err error) {
 }
 
 // readRootLink reads the symbolic link and extracts the node id
-func (pw *Path) readRootLink(root string) (node *NodeInfo, err error) {
+func (pw *Path) readRootLink(root string) (node *Node, err error) {
 	// A root symlink looks like `../nodes/76455834-769e-412a-8a01-68f265365b79`
 	link, err := os.Readlink(root)
 	if os.IsNotExist(err) {
@@ -108,7 +102,7 @@ func (pw *Path) readRootLink(root string) (node *NodeInfo, err error) {
 
 	// extract the nodeID
 	if strings.HasPrefix(link, "../nodes/") {
-		node = &NodeInfo{
+		node = &Node{
 			pw:       pw,
 			ID:       filepath.Base(link),
 			ParentID: "root",
@@ -122,7 +116,7 @@ func (pw *Path) readRootLink(root string) (node *NodeInfo, err error) {
 
 // RootNode returns the root node of a tree,
 // taking into account the user layout if EnableHome is true
-func (pw *Path) RootNode(ctx context.Context) (node *NodeInfo, err error) {
+func (pw *Path) RootNode(ctx context.Context) (node *Node, err error) {
 	var root string
 	if pw.EnableHome && pw.UserLayout != "" {
 		// start at the users root node

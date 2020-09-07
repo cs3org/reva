@@ -326,7 +326,7 @@ func (upload *fileUpload) writeInfo() error {
 // FinishUpload finishes an upload and moves the file to the internal destination
 func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 
-	n := &NodeInfo{
+	n := &Node{
 		pw:       upload.fs.pw,
 		ID:       upload.info.Storage["NodeId"],
 		ParentID: upload.info.Storage["NodeParentId"],
