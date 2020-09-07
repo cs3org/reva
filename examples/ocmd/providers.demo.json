@@ -32,6 +32,19 @@
 				},
 				"api_version": "0.0.1",
 				"host": "http://127.0.0.1:19001/"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Gateway",
+						"description": "CERNBox GRPC Gateway"
+					},
+					"name": "CERNBox - GRPC Gateway",
+					"path": "127.0.0.1:19000",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "127.0.0.1:19000"
 			}
 		]
 	},
@@ -68,6 +81,19 @@
 				},
 				"api_version": "0.0.1",
 				"host": "http://127.0.0.1:17001/"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Gateway",
+						"description": "CESNET GRPC Gateway"
+					},
+					"name": "CESNET - GRPC Gateway",
+					"path": "127.0.0.1:17000",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "127.0.0.1:17000"
 			}
 		]
 	},
@@ -104,6 +130,19 @@
 				},
 				"api_version": "0.0.1",
 				"host": "http://127.0.0.1:19001/"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Gateway",
+						"description": "Example GRPC Gateway"
+					},
+					"name": "Example - GRPC Gateway",
+					"path": "127.0.0.1:19000",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "127.0.0.1:19000"
 			}
 		]
 	},
@@ -140,6 +179,19 @@
 				},
 				"api_version": "0.0.1",
 				"host": "http://127.0.0.1:19001/"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Gateway",
+						"description": "Test GRPC Gateway"
+					},
+					"name": "Test - GRPC Gateway",
+					"path": "127.0.0.1:19000",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "127.0.0.1:19000"
 			}
 		]
 	}

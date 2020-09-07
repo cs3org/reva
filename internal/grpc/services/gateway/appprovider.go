@@ -32,8 +32,9 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	tokenpkg "github.com/cs3org/reva/pkg/token"
+	"github.com/cs3org/reva/pkg/token"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc/metadata"
 )
 
 func (s *svc) OpenFileInAppProvider(ctx context.Context, req *gateway.OpenFileInAppProviderRequest) (*providerpb.OpenFileInAppProviderResponse, error) {
@@ -154,8 +155,9 @@ func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gate
 		}, nil
 	}
 
-	ctx = tokenpkg.ContextSetToken(ctx, ep.token)
-	res, err := gatewayClient.OpenFileInAppProvider(ctx, appProviderReq)
+	remoteCtx := token.ContextSetToken(context.Background(), ep.token)
+	remoteCtx = metadata.AppendToOutgoingContext(remoteCtx, token.TokenHeader, ep.token)
+	res, err := gatewayClient.OpenFileInAppProvider(remoteCtx, appProviderReq)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling OpenFileInAppProvider")
 	}
@@ -165,7 +167,7 @@ func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gate
 func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.ResourceInfo,
 	vm gateway.OpenFileInAppProviderRequest_ViewMode) (*providerpb.OpenFileInAppProviderResponse, error) {
 
-	accessToken, ok := tokenpkg.ContextGetToken(ctx)
+	accessToken, ok := token.ContextGetToken(ctx)
 	if !ok || accessToken == "" {
 		return &providerpb.OpenFileInAppProviderResponse{
 			Status: status.NewUnauthenticated(ctx, errors.New("Access token is invalid or empty"), ""),
