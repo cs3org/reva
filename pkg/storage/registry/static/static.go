@@ -24,6 +24,7 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
@@ -102,11 +103,13 @@ func (b *reg) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error) {
 }
 
 func (b *reg) FindProvider(ctx context.Context, ref *provider.Reference) (*registrypb.ProviderInfo, error) {
+	log := appctx.GetLogger(ctx)
 	// find longest match
 	var match string
 
 	// we try to find first by path as most storage operations will be done on path.
 	fn := ref.GetPath()
+	log.Debug().Str("fn", fn).Interface("rules", b.c.Rules).Msg("FindProvider by path")
 	if fn != "" {
 		for prefix := range b.c.Rules {
 			if strings.HasPrefix(fn, prefix) && len(prefix) > len(match) {
@@ -124,11 +127,13 @@ func (b *reg) FindProvider(ctx context.Context, ref *provider.Reference) (*regis
 
 	// we try with id
 	id := ref.GetId()
+	log.Debug().Str("id", id.String()).Interface("rules", b.c.Rules).Msg("FindProvider by id")
 	if id == nil {
 		return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())
 	}
 	address, ok := b.c.Rules[id.StorageId]
 	if ok {
+		log.Debug().Str("address", address).Str("providerId", id.StorageId).Msg("FindProvider result")
 		// TODO(labkode): fill path info based on provider id, if path and storage id points to same id, take that.
 		return &registrypb.ProviderInfo{
 			ProviderId: id.StorageId,

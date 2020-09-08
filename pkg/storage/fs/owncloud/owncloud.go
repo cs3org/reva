@@ -293,6 +293,8 @@ func (fs *ocfs) scanFiles(ctx context.Context, conn redis.Conn) {
 // and prefix the data directory
 // TODO the path handed to a storage provider should not contain the username
 func (fs *ocfs) wrap(ctx context.Context, fn string) (internal string) {
+	log := appctx.GetLogger(ctx)
+	log.Debug().Bool("EnableHome", fs.c.EnableHome).Str("internal", internal).Msg("ocfs: wrap begin")
 	if fs.c.EnableHome {
 		u := user.ContextMustGetUser(ctx)
 		layout := templates.WithUser(u, fs.c.UserLayout)
@@ -329,6 +331,9 @@ func (fs *ocfs) wrap(ctx context.Context, fn string) (internal string) {
 		}
 
 	}
+	log.Debug().Str("internal", internal).
+		Str("fn", fn).
+		Msg("ocfs: wrap end")
 	return
 }
 
@@ -430,11 +435,23 @@ func (fs *ocfs) getVersionRecyclePath(ctx context.Context) (string, error) {
 }
 
 func (fs *ocfs) unwrap(ctx context.Context, internal string) (external string) {
+	log := appctx.GetLogger(ctx)
+	log.Debug().Bool("EnableHome", fs.c.EnableHome).Msgf("ocfs: unwrap")
 	if fs.c.EnableHome {
 		u := user.ContextMustGetUser(ctx)
 		layout := templates.WithUser(u, fs.c.UserLayout)
 		trim := path.Join(fs.c.DataDirectory, layout, "files")
+		if !strings.HasPrefix(internal, trim) {
+			log.Warn().Str("internal", internal).Str("trim", trim).
+				Str("user", u.Id.String()).
+				Msg("ocfs: resource is outside the directory of the logged-in user")
+			//panic("ocfs: resource is outside the directory of the logged-in user: internal=" + internal + " trim=" + trim + " internal=" + internal)
+		}
 		external = strings.TrimPrefix(internal, trim)
+		log.Debug().Str("external", external).Str("internal", internal).
+			Str("user", u.Id.OpaqueId).
+			Str("trim", trim).
+			Msgf("ocfs: unwrap home")
 		// root directory
 		if external == "" {
 			external = "/"
@@ -460,8 +477,8 @@ func (fs *ocfs) unwrap(ctx context.Context, internal string) (external string) {
 		default:
 			external = path.Join("/", parts[1], parts[3])
 		}
+		log.Debug().Interface("parts", parts).Str("external", external).Str("internal", internal).Msgf("ocfs: unwrap non-home")
 	}
-	log := appctx.GetLogger(ctx)
 	log.Debug().Msgf("ocfs: unwrap: internal=%s external=%s", internal, external)
 	return
 }
@@ -728,6 +745,8 @@ func (fs *ocfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (strin
 
 // resolve takes in a request path or request id and converts it to a internal path.
 func (fs *ocfs) resolve(ctx context.Context, ref *provider.Reference) (string, error) {
+	log := appctx.GetLogger(ctx)
+	log.Debug().Str("ref", ref.String()).Msg("ocfs: resolve")
 	if ref.GetPath() != "" {
 		return fs.wrap(ctx, ref.GetPath()), nil
 	}
@@ -1130,6 +1149,8 @@ func (fs *ocfs) GetHome(ctx context.Context) (string, error) {
 }
 
 func (fs *ocfs) CreateDir(ctx context.Context, fn string) (err error) {
+	log := appctx.GetLogger(ctx)
+	log.Debug().Str("fn", fn).Msg("ocfs: CreateDir")
 	np := fs.wrap(ctx, fn)
 	if err = os.Mkdir(np, 0700); err != nil {
 		if os.IsNotExist(err) {
@@ -1571,24 +1592,27 @@ func (fs *ocfs) getMDShareFolder(ctx context.Context, p string, mdKeys []string)
 func (fs *ocfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
 	log := appctx.GetLogger(ctx)
 
+	log.Debug().Str("ref", ref.String()).Msg("ocfs: ListFolder")
 	np, err := fs.resolve(ctx, ref)
+	log.Debug().Str("np", np).Str("ref", ref.String()).Msg("ocfs: ListFolder after resolve")
 	if err != nil {
 		return nil, errors.Wrap(err, "ocfs: error resolving reference")
 	}
 	p := fs.unwrap(ctx, np)
 
 	if fs.c.EnableHome {
-		log.Debug().Msg("home enabled")
+		log.Debug().Str("p", p).Msg("ocfs: ListFolder: home enabled")
 		if strings.HasPrefix(p, "/") {
 			return fs.listWithHome(ctx, "/", p, mdKeys)
 		}
 	}
 
-	log.Debug().Msg("list with nominal home")
+	log.Debug().Msg("ocfs: ListFolder: list with nominal home")
 	return fs.listWithNominalHome(ctx, p, mdKeys)
 }
 
 func (fs *ocfs) listWithNominalHome(ctx context.Context, p string, mdKeys []string) ([]*provider.ResourceInfo, error) {
+	log := appctx.GetLogger(ctx)
 	fn := p
 	// If a user wants to list a folder shared with him the path will already
 	// be wrapped with the files directory path of the share owner.
@@ -1596,6 +1620,7 @@ func (fs *ocfs) listWithNominalHome(ctx context.Context, p string, mdKeys []stri
 	if !strings.HasPrefix(p, fs.c.DataDirectory) {
 		fn = fs.wrap(ctx, p)
 	}
+	log.Debug().Str("p", p).Str("fn", fn).Msg("ocfs: listWithNominalHome")
 	mds, err := ioutil.ReadDir(fn)
 	if err != nil {
 		return nil, errors.Wrapf(err, "ocfs: error listing %s", fn)
@@ -1613,8 +1638,9 @@ func (fs *ocfs) listWithNominalHome(ctx context.Context, p string, mdKeys []stri
 
 func (fs *ocfs) listWithHome(ctx context.Context, home, p string, mdKeys []string) ([]*provider.ResourceInfo, error) {
 	log := appctx.GetLogger(ctx)
+	log.Debug().Str("p", p).Msg("ocfs: listWithHome")
 	if p == home {
-		log.Debug().Msg("listing home")
+		log.Debug().Str("p", p).Msg("listWithHome: listing home")
 		return fs.listHome(ctx, home, mdKeys)
 	}
 
@@ -1627,11 +1653,14 @@ func (fs *ocfs) listWithHome(ctx context.Context, home, p string, mdKeys []strin
 		return nil, errtypes.PermissionDenied("ocfs: error listing folders inside the shared folder, only file references are stored inside")
 	}
 
-	log.Debug().Msg("listing nominal home")
+	log.Debug().Msg("listWithHome: listing nominal home")
 	return fs.listWithNominalHome(ctx, p, mdKeys)
 }
 
 func (fs *ocfs) listHome(ctx context.Context, home string, mdKeys []string) ([]*provider.ResourceInfo, error) {
+	log := appctx.GetLogger(ctx)
+	log.Debug().Str("home", home).Msg("ocfs: listHome")
+
 	// list files
 	fn := fs.wrap(ctx, home)
 	mds, err := ioutil.ReadDir(fn)

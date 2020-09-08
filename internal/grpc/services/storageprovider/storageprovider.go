@@ -366,7 +366,9 @@ func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeReques
 }
 
 func (s *service) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
+	log := appctx.GetLogger(ctx)
 	newRef, err := s.unwrap(ctx, req.Ref)
+	log.Debug().Str("ref", req.Ref.String()).Str("newRef", newRef.String()).Msg("storageprovider: CreateContainer after unwrap")
 	if err != nil {
 		return &provider.CreateContainerResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
@@ -539,7 +541,9 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 }
 
 func (s *service) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
+	log := appctx.GetLogger(ctx)
 	newRef, err := s.unwrap(ctx, req.Ref)
+	log.Debug().Str("ref", req.Ref.String()).Str("newRef", newRef.String()).Msg("storageprovider: ListContainer after unwrap")
 	if err != nil {
 		return &provider.ListContainerResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
@@ -857,6 +861,9 @@ func getFS(c *config) (storage.FS, error) {
 }
 
 func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (*provider.Reference, error) {
+	log := appctx.GetLogger(ctx)
+	log.Debug().Str("ref", ref.String()).Msg("storageprovider: unwrap")
+
 	if ref.GetId() != nil {
 		idRef := &provider.Reference{
 			Spec: &provider.Reference_Id{
@@ -877,6 +884,7 @@ func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (*provide
 
 	fn := ref.GetPath()
 	fsfn, err := s.trimMountPrefix(fn)
+	log.Debug().Str("mountPrefix", s.mountPath).Str("fn", fn).Str("fsfn", fsfn).Msg("storageprovider: unwrap: after trimMountPrefix")
 	if err != nil {
 		return nil, err
 	}

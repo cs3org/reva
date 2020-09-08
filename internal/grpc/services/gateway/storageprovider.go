@@ -500,6 +500,7 @@ func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provi
 func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
 	log := appctx.GetLogger(ctx)
 	p, st := s.getPath(ctx, req.Ref)
+	log.Debug().Str("p", p).Msg("storageprovider: CreateContainer")
 	if st.Code != rpc.Code_CODE_OK {
 		if st.Code == rpc.Code_CODE_NOT_FOUND {
 			return &provider.CreateContainerResponse{
@@ -531,6 +532,7 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 		log.Debug().Msgf("shared child: %s", p)
 		shareName, shareChild := s.splitShare(ctx, p)
 
+		// check if the parent exists
 		statReq := &provider.StatRequest{
 			Ref: &provider.Reference{
 				Spec: &provider.Reference_Path{
@@ -540,11 +542,13 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 		}
 		statRes, err := s.stat(ctx, statReq)
 		if err != nil {
+			log.Error().Err(err).Str("ref", statReq.Ref.String()).Msgf("storageprovider: CreateContainer: error stating ref")
 			return &provider.CreateContainerResponse{
 				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
 			}, nil
 		}
 
+		log.Debug().Str("code", statRes.Status.Code.String()).Msgf("storageprovider: CreateContainer: after stat")
 		if statRes.Status.Code != rpc.Code_CODE_OK {
 			if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 				return &provider.CreateContainerResponse{
@@ -566,8 +570,10 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 			}, nil
 		}
 
+		log.Debug().Interface("statRes.Info", statRes.Info).Msg("storageprovider: CreateContainer: before checkRef")
 		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
+			log.Error().Err(err).Msg("storageprovider: CreateContainer: after checkRef")
 			if _, ok := err.(errtypes.IsNotFound); ok {
 				return &provider.CreateContainerResponse{
 					Status: status.NewNotFound(ctx, "gateway: reference not found:"+statRes.Info.Target),
@@ -578,6 +584,7 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 				Status: status.NewInternal(ctx, err, "error creating container"),
 			}, nil
 		}
+		log.Debug().Interface("ri", ri).Msg("storageprovider: CreateContainer: after checkRef")
 
 		if protocol == "webdav" {
 			err = s.webdavRefMkdir(ctx, statRes.Info.Target, shareChild)
@@ -598,6 +605,8 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 				Path: target,
 			},
 		}
+
+		log.Debug().Str("target", target).Msg("storageprovider: CreateContainer: before createContainer")
 		return s.createContainer(ctx, req)
 	}
 
@@ -605,6 +614,7 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 }
 
 func (s *svc) createContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
+	log := appctx.GetLogger(ctx)
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
@@ -617,6 +627,7 @@ func (s *svc) createContainer(ctx context.Context, req *provider.CreateContainer
 		}, nil
 	}
 
+	log.Debug().Interface("c", c).Msg("storageprovider: CreateContainer: before final c.CreateContainer")
 	res, err := c.CreateContainer(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling CreateContainer")
@@ -990,6 +1001,8 @@ func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArb
 }
 
 func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
+	log := appctx.GetLogger(ctx)
+	log.Debug().Interface("req", req).Msg("storageprovider: stat")
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
@@ -1277,6 +1290,7 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
 	log := appctx.GetLogger(ctx)
 	p, st := s.getPath(ctx, req.Ref, req.ArbitraryMetadataKeys...)
+	log.Debug().Str("p", p).Msg("storageprovider: ListContainer")
 	if st.Code != rpc.Code_CODE_OK {
 		if st.Code == rpc.Code_CODE_NOT_FOUND {
 			return &provider.ListContainerResponse{

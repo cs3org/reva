@@ -290,6 +290,7 @@ func (fs *eosfs) getNsMatch(internal string, nss []string) string {
 
 func (fs *eosfs) unwrapInternal(ctx context.Context, ns, np, layout string) (external string) {
 	log := appctx.GetLogger(ctx)
+	log.Debug().Str("ns", ns).Str("np", np).Str("layout", layout).Msg("eos: unwrapInternal")
 	trim := path.Join(ns, layout)
 
 	if !strings.HasPrefix(np, trim) {
