@@ -29,11 +29,13 @@ import (
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/token"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -115,6 +117,7 @@ func (s *svc) OpenFileInAppProvider(ctx context.Context, req *gateway.OpenFileIn
 
 func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gateway.OpenFileInAppProviderRequest_ViewMode,
 	nameQueries ...string) (*providerpb.OpenFileInAppProviderResponse, error) {
+	log := appctx.GetLogger(ctx)
 	targetURL, err := appendNameQuery(targetURL, nameQueries...)
 	if err != nil {
 		return nil, err
@@ -146,19 +149,22 @@ func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gate
 			gatewayEP = s.Endpoint.Path
 		}
 	}
+	log.Debug().Msgf("Forwarding OpenFileInAppProvider request to: %s", gatewayEP)
 
-	gatewayClient, err := pool.GetGatewayServiceClient(gatewayEP)
+	conn, err := grpc.Dial(gatewayEP)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetGatewayClient")
+		err = errors.Wrap(err, "gateway: error connecting to remote reva")
 		return &providerpb.OpenFileInAppProviderResponse{
-			Status: status.NewInternal(ctx, err, "error getting gateway client"),
+			Status: status.NewInternal(ctx, err, "error error connecting to remote reva"),
 		}, nil
 	}
+	gatewayClient := gateway.NewGatewayAPIClient(conn)
 
 	remoteCtx := token.ContextSetToken(context.Background(), ep.token)
 	remoteCtx = metadata.AppendToOutgoingContext(remoteCtx, token.TokenHeader, ep.token)
 	res, err := gatewayClient.OpenFileInAppProvider(remoteCtx, appProviderReq)
 	if err != nil {
+		log.Err(err).Msg("error reaching remote reva")
 		return nil, errors.Wrap(err, "gateway: error calling OpenFileInAppProvider")
 	}
 	return res, nil
