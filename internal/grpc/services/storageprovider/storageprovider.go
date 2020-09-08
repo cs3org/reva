@@ -275,7 +275,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	}
 	if newRef.GetPath() == "/" {
 		return &provider.InitiateFileUploadResponse{
-			Status: status.NewInternal(ctx, errors.New("can't upload to mount path"), ""),
+			Status: status.NewInternal(ctx, errors.New("can't upload to mount path"), "can't upload to mount path"),
 		}, nil
 	}
 	url := *s.dataServerURL
@@ -399,6 +399,11 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 	if err != nil {
 		return &provider.DeleteResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+		}, nil
+	}
+	if newRef.GetPath() == "/" {
+		return &provider.DeleteResponse{
+			Status: status.NewInternal(ctx, errors.New("can't delete mount path"), "can't delete mount path"),
 		}, nil
 	}
 
