@@ -27,6 +27,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -184,6 +185,11 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 		q.Add("username", u.Username)
 	}
 	// else defaults to "Anonymous Guest"
+
+	if s.conf.IopSecret == "" {
+		s.conf.IopSecret = os.Getenv("REVA_APPPROVIDER_IOPSECRET")
+	}
+
 	httpReq.Header.Set("Authorization", "Bearer "+s.conf.IopSecret)
 	httpReq.Header.Set("TokenHeader", req.AccessToken)
 
