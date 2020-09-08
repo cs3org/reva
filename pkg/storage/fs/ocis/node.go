@@ -63,7 +63,7 @@ func (n *Node) CreateDir(pw PathWrapper, name string, owner *userpb.UserId) (c *
 		return nil, errors.Wrap(err, "ocisfs: error creating node child dir")
 	}
 
-	c.writeMetadata(nodePath, owner)
+	err = c.writeMetadata(nodePath, owner)
 
 	c.Exists = true
 	return
@@ -231,11 +231,12 @@ func (n *Node) AsResourceInfo(ctx context.Context) (ri *provider.ResourceInfo, e
 	if fi, err = os.Lstat(nodePath); err != nil {
 		return
 	}
-	if fi.IsDir() {
+	switch {
+	case fi.IsDir():
 		nodeType = provider.ResourceType_RESOURCE_TYPE_CONTAINER
-	} else if fi.Mode().IsRegular() {
+	case fi.Mode().IsRegular():
 		nodeType = provider.ResourceType_RESOURCE_TYPE_FILE
-	} else if fi.Mode()&os.ModeSymlink != 0 {
+	case fi.Mode()&os.ModeSymlink != 0:
 		nodeType = provider.ResourceType_RESOURCE_TYPE_SYMLINK
 		// TODO reference using ext attr on a symlink
 		// nodeType = provider.ResourceType_RESOURCE_TYPE_REFERENCE

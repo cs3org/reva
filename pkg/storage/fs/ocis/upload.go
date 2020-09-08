@@ -379,7 +379,8 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 			return errors.Wrap(err, "ocisfs: could not set owner idp attribute")
 		}
 	} else {
-		// TODO no user in context, log as error when home enabled
+		log := appctx.GetLogger(upload.ctx)
+		log.Error().Msg("home enabled but no user in context")
 	}
 
 	// link child name to parent if it is new

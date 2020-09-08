@@ -48,8 +48,10 @@ const (
 
 	// SharePrefix is the prefix for sharing related extended attributes
 	sharePrefix string = "user.ocis.acl."
-	favPrefix   string = "user.ocis.fav."  // favorite flag, per user
-	etagPrefix  string = "user.ocis.etag." // allow overriding a calculated etag with one from the extended attributes
+	// TODO implement favorites metadata flag
+	//favPrefix   string = "user.ocis.fav."  // favorite flag, per user
+	// TODO use etag prefix instead of single etag property
+	//etagPrefix  string = "user.ocis.etag." // allow overriding a calculated etag with one from the extended attributes
 	//checksumPrefix    string = "user.ocis.cs."   // TODO add checksum support
 )
 
@@ -171,7 +173,9 @@ func (fs *ocisfs) CreateHome(ctx context.Context) error {
 	// create a directory node
 	nodeID := uuid.New().String()
 
-	fs.tp.CreateRoot(nodeID, u.Id)
+	if _, err = fs.tp.CreateRoot(nodeID, u.Id); err != nil {
+		return err
+	}
 
 	// link users home to node
 	return os.Symlink("../nodes/"+nodeID, home)
