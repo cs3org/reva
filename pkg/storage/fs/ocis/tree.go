@@ -29,12 +29,12 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
-	"github.com/rs/zerolog/log"
 )
 
 // Tree manages a hierarchical tree
@@ -44,10 +44,10 @@ type Tree struct {
 }
 
 // NewTree creates a new Tree instance
-func NewTree(pw PathWrapper, Root string) (TreePersistence, error) {
+func NewTree(pw PathWrapper, root string) (TreePersistence, error) {
 	return &Tree{
 		pw:   pw,
-		Root: Root,
+		Root: root,
 	}, nil
 }
 
@@ -90,7 +90,7 @@ func (t *Tree) CreateRoot(id string, owner *userpb.UserId) (n *Node, err error) 
 		return nil, errors.Wrap(err, "ocisfs: error creating root node dir")
 	}
 
-	n.writeMetadata(nodePath, owner)
+	err = n.writeMetadata(nodePath, owner)
 
 	n.Exists = true
 	return
@@ -128,7 +128,8 @@ func (t *Tree) CreateDir(ctx context.Context, node *Node) (err error) {
 			return errors.Wrap(err, "ocisfs: could not set owner idp attribute")
 		}
 	} else {
-		// TODO no user in context, log as error when home enabled
+		log := appctx.GetLogger(ctx)
+		log.Error().Msg("home enabled but no user in context")
 	}
 
 	// make child appear in listings
@@ -228,6 +229,9 @@ func (t *Tree) ListFolder(ctx context.Context, node *Node) ([]*Node, error) {
 	}
 
 	names, err := f.Readdirnames(0)
+	if err != nil {
+		return nil, err
+	}
 	nodes := []*Node{}
 	for i := range names {
 		link, err := os.Readlink(filepath.Join(dir, names[i]))
@@ -288,6 +292,7 @@ func (t *Tree) Propagate(ctx context.Context, node *Node) (err error) {
 	etag := hex.EncodeToString(bytes)
 	for err == nil && !node.IsRoot() {
 		if err := xattr.Set(filepath.Join(t.Root, "nodes", node.ID), "user.ocis.etag", []byte(etag)); err != nil {
+			log := appctx.GetLogger(ctx)
 			log.Error().Err(err).Msg("error storing file id")
 		}
 		// TODO propagate mtime
