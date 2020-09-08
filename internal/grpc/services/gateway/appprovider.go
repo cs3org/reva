@@ -20,6 +20,7 @@ package gateway
 
 import (
 	"context"
+	"crypto/tls"
 	"net/url"
 	"strings"
 
@@ -29,6 +30,7 @@ import (
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
@@ -36,6 +38,7 @@ import (
 	"github.com/cs3org/reva/pkg/token"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -93,7 +96,8 @@ func (s *svc) OpenFileInAppProvider(ctx context.Context, req *gateway.OpenFileIn
 			}, nil
 		}
 		if uri.Scheme == "webdav" {
-			return s.openFederatedShares(ctx, fileInfo.Target, req.ViewMode, resChild)
+			insecure, skipVerify := getGRPCConfig(req.Opaque)
+			return s.openFederatedShares(ctx, fileInfo.Target, req.ViewMode, insecure, skipVerify, resChild)
 		}
 
 		res, err := s.Stat(ctx, &storageprovider.StatRequest{
@@ -116,7 +120,7 @@ func (s *svc) OpenFileInAppProvider(ctx context.Context, req *gateway.OpenFileIn
 }
 
 func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gateway.OpenFileInAppProviderRequest_ViewMode,
-	nameQueries ...string) (*providerpb.OpenFileInAppProviderResponse, error) {
+	insecure, skipVerify bool, nameQueries ...string) (*providerpb.OpenFileInAppProviderResponse, error) {
 	log := appctx.GetLogger(ctx)
 	targetURL, err := appendNameQuery(targetURL, nameQueries...)
 	if err != nil {
@@ -151,17 +155,18 @@ func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gate
 	}
 	log.Debug().Msgf("Forwarding OpenFileInAppProvider request to: %s", gatewayEP)
 
-	conn, err := grpc.Dial(gatewayEP)
+	conn, err := getConn(gatewayEP, insecure, skipVerify)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error connecting to remote reva")
 		return &providerpb.OpenFileInAppProviderResponse{
 			Status: status.NewInternal(ctx, err, "error error connecting to remote reva"),
 		}, nil
 	}
-	gatewayClient := gateway.NewGatewayAPIClient(conn)
 
+	gatewayClient := gateway.NewGatewayAPIClient(conn)
 	remoteCtx := token.ContextSetToken(context.Background(), ep.token)
 	remoteCtx = metadata.AppendToOutgoingContext(remoteCtx, token.TokenHeader, ep.token)
+
 	res, err := gatewayClient.OpenFileInAppProvider(remoteCtx, appProviderReq)
 	if err != nil {
 		log.Err(err).Msg("error reaching remote reva")
@@ -242,4 +247,25 @@ func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceI
 	}
 
 	return nil, errors.New("gateway: error finding a storage provider")
+}
+
+func getGRPCConfig(opaque *typespb.Opaque) (bool, bool) {
+	if opaque == nil {
+		return false, false
+	}
+	_, insecure := opaque.Map["insecure"]
+	_, skipVerify := opaque.Map["skip-verify"]
+	return insecure, skipVerify
+}
+
+func getConn(host string, insecure, skipverify bool) (*grpc.ClientConn, error) {
+	if insecure {
+		return grpc.Dial(host, grpc.WithInsecure())
+	}
+
+	// TODO(labkode): if in the future we want client-side certificate validation,
+	// we need to load the client cert here
+	tlsconf := &tls.Config{InsecureSkipVerify: skipverify}
+	creds := credentials.NewTLS(tlsconf)
+	return grpc.Dial(host, grpc.WithTransportCredentials(creds))
 }
