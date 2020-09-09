@@ -256,6 +256,11 @@ steps:
       - /drone/src/cmd/revad/revad -c storage-oc.toml &
       - /drone/src/cmd/revad/revad -c users.toml
 
+  - name: sleep-for-revad-start
+    image: golang:1.13
+    commands:
+      - sleep 5
+
   - name: litmus-oc-old-webdav
     image: owncloud/litmus:latest
     environment:
@@ -295,6 +300,11 @@ steps:
       - /drone/src/cmd/revad/revad -c storage-home.toml &
       - /drone/src/cmd/revad/revad -c storage-oc.toml &
       - /drone/src/cmd/revad/revad -c users.toml
+
+  - name: sleep-for-revad-start
+    image: golang:1.13
+    commands:
+      - sleep 5
 
   - name: litmus-oc-new-webdav
     image: owncloud/litmus:latest
