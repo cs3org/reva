@@ -19,33 +19,17 @@
 package registry
 
 import (
-	"os"
-
-	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/metrics/reader"
-	"github.com/rs/zerolog"
 )
 
-var log zerolog.Logger
-
 var drivers map[string]reader.Reader // map key is driver type name
-
-func init() {
-	log = logger.New().With().Int("pid", os.Getpid()).Logger()
-}
 
 // Register register a driver
 func Register(driverName string, r reader.Reader) {
 	if drivers == nil {
 		drivers = make(map[string]reader.Reader)
 	}
-	_, found := drivers[driverName]
-	if found {
-		log.Debug().Str("driverName", driverName).Msg("Metrics driver already registered.")
-	} else {
-		drivers[driverName] = r
-		log.Debug().Str("driverName", driverName).Msg("Metrics driver registered.")
-	}
+	drivers[driverName] = r
 }
 
 // GetDriver returns the registered driver for the specified driver name, or nil if it is not registered
@@ -54,6 +38,5 @@ func GetDriver(driverName string) reader.Reader {
 	if found {
 		return driver
 	}
-	log.Debug().Str("driverName", driverName).Msg("Metrics driver not found in metrics driver registry.")
 	return nil
 }
