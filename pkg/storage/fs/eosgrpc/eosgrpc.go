@@ -237,10 +237,10 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	return eosfs, nil
 }
 
-// InitiateUpload returns upload ids corresponding to different protocols it supports
-func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
-	return nil, errtypes.NotSupported("op not supported")
-}
+// InitiateUpload returns an upload id that can be used for uploads with tus
+//func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (uploadID string, err error) {
+//	return "", errtypes.NotSupported("op not supported")
+//}
 
 func (fs *eosfs) Shutdown(ctx context.Context) error {
 	// TODO(labkode): in a grpc implementation we can close connections.
@@ -301,6 +301,7 @@ func (fs *eosfs) getNsMatch(internal string, nss []string) string {
 	var match string
 
 	for _, ns := range nss {
+
 		if strings.HasPrefix(internal, ns) && len(ns) > len(match) {
 			match = ns
 		}
@@ -1227,25 +1228,25 @@ func (fs *eosfs) Download(ctx context.Context, ref *provider.Reference) (io.Read
 	return fs.c.Read(ctx, u.Username, fn)
 }
 
-func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
-	u, err := getUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "eos: no user in ctx")
-	}
-
-	p, err := fs.resolve(ctx, u, ref)
-	if err != nil {
-		return errors.Wrap(err, "eos: error resolving reference")
-	}
-
-	if fs.isShareFolder(ctx, p) {
-		return errtypes.PermissionDenied("eos: cannot download under the virtual share folder")
-	}
-
-	fn := fs.wrap(ctx, p)
-
-	return fs.c.Write(ctx, u.Username, fn, r)
-}
+//func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
+//	u, err := getUser(ctx)
+//	if err != nil {
+//		return errors.Wrap(err, "eos: no user in ctx")
+//	}
+//
+//	p, err := fs.resolve(ctx, u, ref)
+//	if err != nil {
+//		return errors.Wrap(err, "eos: error resolving reference")
+//	}
+//
+//	if fs.isShareFolder(ctx, p) {
+//		return errtypes.PermissionDenied("eos: cannot download under the virtual share folder")
+//	}
+//
+//	fn := fs.wrap(ctx, p)
+//
+//	return fs.c.Write(ctx, u.Username, fn, r)
+//}
 
 func (fs *eosfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {
 	u, err := getUser(ctx)
