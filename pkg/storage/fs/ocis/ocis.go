@@ -23,7 +23,6 @@ import (
 	"io"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 
@@ -152,20 +151,14 @@ func (fs *ocisfs) CreateHome(ctx context.Context) (err error) {
 	if n, err = fs.pw.RootNode(ctx); err != nil {
 		return
 	}
-	u := user.ContextMustGetUser(ctx)
-	layout := templates.WithUser(u, fs.pw.UserLayout)
-
-	segments := strings.Split(layout, "/")
-	for i := range segments {
-		if n, err = n.Child(segments[i]); err != nil {
-			return
-		}
+	_, err = fs.pw.WalkPath(ctx, n, fs.pw.mustGetUserLayout(ctx), func(ctx context.Context, n *Node) error {
 		if !n.Exists {
-			if err = fs.tp.CreateDir(ctx, n); err != nil {
-				return
+			if err := fs.tp.CreateDir(ctx, n); err != nil {
+				return err
 			}
 		}
-	}
+		return nil
+	})
 	return
 }
 
@@ -195,43 +188,11 @@ func (fs *ocisfs) CreateDir(ctx context.Context, fn string) (err error) {
 	return fs.tp.CreateDir(ctx, node)
 }
 
-// The share folder, aka "/Shares", is a virtual thing.
-func (fs *ocisfs) isShareFolder(ctx context.Context, p string) bool {
-	// TODO what about a folder '/Sharesabc' ... would also match
-	return strings.HasPrefix(p, fs.pw.ShareFolder)
-}
-
-func (fs *ocisfs) isShareFolderRoot(ctx context.Context, p string) bool {
-	return path.Clean(p) == fs.pw.ShareFolder
-}
-
-func (fs *ocisfs) isShareFolderChild(ctx context.Context, p string) bool {
-	p = path.Clean(p)
-	vals := strings.Split(p, fs.pw.ShareFolder+"/")
-	return len(vals) > 1 && vals[1] != ""
-}
-func (fs *ocisfs) getInternalHome(ctx context.Context) (string, error) {
-	if !fs.pw.EnableHome {
-		return "", errtypes.NotSupported("ocisfs: get home not enabled")
-	}
-
-	u, ok := user.ContextGetUser(ctx)
-	if !ok {
-		return "", errtypes.InternalError("ocisfs: wrap: no user in ctx and home is enabled")
-	}
-
-	relativeHome := templates.WithUser(u, fs.pw.UserLayout)
-	return relativeHome, nil
-}
-
-// TODO there really is no difference between the /Shares folder and normal nodes
-// we can store it is a node
-// but when home is enabled the "/Shares" folder should not be listed ...
-// so when listing home we need to check that flag and add the shared node
-
-// /Shares/mounted1
-// /Shares/mounted1/foo/bar
-// references should go into a Shares folder
+// CreateReference creates a reference as a node folder with the target stored in extended attributes
+// There is no difference between the /Shares folder and normal nodes because the storage is not supposed to be accessible without the storage provider.
+// In effect everything is a shadow namespace.
+// To mimic the eos end owncloud driver we only allow references as children of the "/Shares" folder
+// TODO when home support is enabled should the "/Shares" folder still be listed?
 func (fs *ocisfs) CreateReference(ctx context.Context, p string, targetURI *url.URL) (err error) {
 
 	p = strings.Trim(p, "/")
@@ -260,6 +221,7 @@ func (fs *ocisfs) CreateReference(ctx context.Context, p string, targetURI *url.
 	}
 
 	if n.Exists {
+		// TODO append increasing number to mountpoint name
 		return errtypes.AlreadyExists(p)
 	}
 
@@ -269,7 +231,7 @@ func (fs *ocisfs) CreateReference(ctx context.Context, p string, targetURI *url.
 
 	internal := filepath.Join(fs.pw.Root, "nodes", n.ID)
 	if err = xattr.Set(internal, referenceAttr, []byte(targetURI.String())); err != nil {
-		return errors.Wrapf(err, "ocfs: error setting the target %s on the reference file %s", targetURI.String(), internal)
+		return errors.Wrapf(err, "ocisfs: error setting the target %s on the reference file %s", targetURI.String(), internal)
 	}
 	return nil
 }

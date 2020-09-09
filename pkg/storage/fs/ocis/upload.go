@@ -30,11 +30,11 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"github.com/pkg/xattr"
 	"github.com/rs/zerolog/log"
 	tusd "github.com/tus/tusd/pkg/handler"
 )
@@ -324,7 +324,7 @@ func (upload *fileUpload) writeInfo() error {
 }
 
 // FinishUpload finishes an upload and moves the file to the internal destination
-func (upload *fileUpload) FinishUpload(ctx context.Context) error {
+func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 
 	n := &Node{
 		pw:       upload.fs.pw,
@@ -339,53 +339,51 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 	targetPath := filepath.Join(upload.fs.pw.Root, "nodes", n.ID)
 
 	// if target exists create new version
-	if fi, err := os.Stat(targetPath); err == nil {
+	var fi os.FileInfo
+	if fi, err = os.Stat(targetPath); err == nil {
 		// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
 		versionsPath := filepath.Join(upload.fs.pw.Root, "nodes", n.ID+".REV."+fi.ModTime().UTC().Format(time.RFC3339Nano))
 
-		if err := os.Rename(targetPath, versionsPath); err != nil {
+		if err = os.Rename(targetPath, versionsPath); err != nil {
 			log := appctx.GetLogger(upload.ctx)
 			log.Err(err).Interface("info", upload.info).
 				Str("binPath", upload.binPath).
 				Str("targetPath", targetPath).
 				Msg("ocisfs: could not create version")
-			return err
+			return
 		}
 	}
 
 	// now rename the upload to the target path
 	// TODO put uploads on the same underlying storage as the destination dir?
 	// TODO trigger a workflow as the final rename might eg involve antivirus scanning
-	if err := os.Rename(upload.binPath, targetPath); err != nil {
+	if err = os.Rename(upload.binPath, targetPath); err != nil {
 		log := appctx.GetLogger(upload.ctx)
 		log.Err(err).Interface("info", upload.info).
 			Str("binPath", upload.binPath).
 			Str("targetPath", targetPath).
 			Msg("ocisfs: could not rename")
-		return err
+		return
 	}
-
-	if err := xattr.Set(targetPath, "user.ocis.parentid", []byte(n.ParentID)); err != nil {
-		return errors.Wrap(err, "ocisfs: could not set parentid attribute")
-	}
-	if err := xattr.Set(targetPath, "user.ocis.name", []byte(n.Name)); err != nil {
-		return errors.Wrap(err, "ocisfs: could not set name attribute")
-	}
-	if u, ok := user.ContextGetUser(ctx); ok {
-		if err := xattr.Set(targetPath, "user.ocis.owner.id", []byte(u.Id.OpaqueId)); err != nil {
-			return errors.Wrap(err, "ocisfs: could not set owner id attribute")
-		}
-		if err := xattr.Set(targetPath, "user.ocis.owner.idp", []byte(u.Id.Idp)); err != nil {
-			return errors.Wrap(err, "ocisfs: could not set owner idp attribute")
+	if n.pw.EnableHome {
+		if u, ok := user.ContextGetUser(ctx); ok {
+			err = n.writeMetadata(u.Id)
+		} else {
+			log := appctx.GetLogger(ctx)
+			log.Error().Msg("home support enabled but no user in context")
+			err = errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
 		}
 	} else {
-		log := appctx.GetLogger(upload.ctx)
-		log.Error().Msg("home enabled but no user in context")
+		err = n.writeMetadata(nil)
+	}
+	if err != nil {
+		return
 	}
 
 	// link child name to parent if it is new
 	childNameLink := filepath.Join(upload.fs.pw.Root, "nodes", n.ParentID, n.Name)
-	link, err := os.Readlink(childNameLink)
+	var link string
+	link, err = os.Readlink(childNameLink)
 	if err == nil && link != "../"+n.ID {
 		log.Err(err).
 			Interface("info", upload.info).
@@ -395,7 +393,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 			Str("link", link).
 			Msg("ocisfs: child name link has wrong target id, repairing")
 
-		if err := os.Remove(childNameLink); err != nil {
+		if err = os.Remove(childNameLink); err != nil {
 			return errors.Wrap(err, "ocisfs: could not remove symlink child entry")
 		}
 	}
@@ -406,10 +404,10 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 	}
 
 	// only delete the upload if it was successfully written to the storage
-	if err := os.Remove(upload.infoPath); err != nil {
+	if err = os.Remove(upload.infoPath); err != nil {
 		if !os.IsNotExist(err) {
 			log.Err(err).Interface("info", upload.info).Msg("ocisfs: could not delete upload info")
-			return err
+			return
 		}
 	}
 	// use set arbitrary metadata?

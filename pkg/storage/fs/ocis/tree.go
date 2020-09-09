@@ -22,7 +22,6 @@ import (
 	"context"
 	"encoding/hex"
 	"math/rand"
-	"net/url"
 	"os"
 	"path/filepath"
 	"time"
@@ -74,22 +73,6 @@ func (t *Tree) GetPathByID(ctx context.Context, id *provider.ResourceId) (relati
 	return
 }
 
-// createRoot creates a new root node
-func (t *Tree) createRoot() (n *Node, err error) {
-	n = &Node{
-		pw:       t.pw,
-		ID:       "root",
-		Name:     "", // the root node has an empty name, or use `.` ?
-		ParentID: "", // the root node has no parent, or use `root` ?
-	}
-
-	if err = createNode(n, nil); err == nil {
-		n.Exists = true
-	}
-
-	return
-}
-
 // does not take care of linking back to parent
 // TODO check if node exists?
 func createNode(n *Node, owner *userpb.UserId) (err error) {
@@ -99,11 +82,10 @@ func createNode(n *Node, owner *userpb.UserId) (err error) {
 		return errors.Wrap(err, "ocisfs: error creating node")
 	}
 
-	return n.writeMetadata(nodePath, owner)
+	return n.writeMetadata(owner)
 }
 
 // CreateDir creates a new directory entry in the tree
-// TODO use parentnode and name instead of node? would make the exists stuff clearer? maybe obsolete?
 func (t *Tree) CreateDir(ctx context.Context, node *Node) (err error) {
 
 	if node.Exists || node.ID != "" {
@@ -115,13 +97,17 @@ func (t *Tree) CreateDir(ctx context.Context, node *Node) (err error) {
 
 	if t.pw.EnableHome {
 		if u, ok := user.ContextGetUser(ctx); ok {
-			createNode(node, u.Id)
+			err = createNode(node, u.Id)
 		} else {
 			log := appctx.GetLogger(ctx)
-			log.Error().Msg("home enabled but no user in context")
+			log.Error().Msg("home support enabled but no user in context")
+			err = errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
 		}
 	} else {
-		createNode(node, nil)
+		err = createNode(node, nil)
+	}
+	if err != nil {
+		return nil
 	}
 
 	// make child appear in listings
@@ -130,12 +116,6 @@ func (t *Tree) CreateDir(ctx context.Context, node *Node) (err error) {
 		return
 	}
 	return t.Propagate(ctx, node)
-}
-
-// CreateReference creates a new reference entry in the tree
-// TODO the
-func (t *Tree) CreateReference(ctx context.Context, node *Node, targetURI *url.URL) error {
-	return errtypes.NotSupported("operation not supported: CreateReference")
 }
 
 // Move replaces the target with the source
@@ -283,12 +263,8 @@ func (t *Tree) Propagate(ctx context.Context, node *Node) (err error) {
 	// store in extended attribute
 	etag := hex.EncodeToString(bytes)
 	var root *Node
-	if t.pw.EnableHome {
-		root, err = t.pw.HomeNode(ctx)
-	} else {
-		root, err = t.pw.RootNode(ctx)
-	}
-	if err != nil {
+
+	if root, err = t.pw.HomeOrRootNode(ctx); err != nil {
 		return
 	}
 	for err == nil && node.ID != root.ID { // TODO propagate up to where?

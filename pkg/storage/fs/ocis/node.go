@@ -30,7 +30,6 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/mime"
-	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 )
@@ -46,32 +45,8 @@ type Node struct {
 	Exists   bool
 }
 
-// CreateDir creates a new child directory node with a new id and the given name
-// owner is optional
-// TODO use in tree CreateDir
-// TODO beware the below implementation allows creating two nodes with the same name
-// TODO also create link to parent
-func (n *Node) CreateDir(pw *Path, name string, owner *userpb.UserId) (c *Node, err error) {
-	c = &Node{
-		pw:       pw,
-		ParentID: n.ID,
-		ID:       uuid.New().String(),
-		Name:     name,
-	}
-
-	// create a directory node
-	nodePath := filepath.Join(pw.Root, "nodes", c.ID)
-	if err = os.MkdirAll(nodePath, 0700); err != nil {
-		return nil, errors.Wrap(err, "ocisfs: error creating node child dir")
-	}
-
-	err = c.writeMetadata(nodePath, owner)
-
-	c.Exists = true
-	return
-}
-
-func (n *Node) writeMetadata(nodePath string, owner *userpb.UserId) (err error) {
+func (n *Node) writeMetadata(owner *userpb.UserId) (err error) {
+	nodePath := filepath.Join(n.pw.Root, "nodes", n.ID)
 	if err = xattr.Set(nodePath, "user.ocis.parentid", []byte(n.ParentID)); err != nil {
 		return errors.Wrap(err, "ocisfs: could not set parentid attribute")
 	}
@@ -113,12 +88,7 @@ func ReadNode(ctx context.Context, pw *Path, id string) (n *Node, err error) {
 	}
 
 	var root *Node
-	if pw.EnableHome {
-		root, err = pw.HomeNode(ctx)
-	} else {
-		root, err = pw.RootNode(ctx)
-	}
-	if err != nil {
+	if root, err = pw.HomeOrRootNode(ctx); err != nil {
 		return
 	}
 	parentID := n.ParentID

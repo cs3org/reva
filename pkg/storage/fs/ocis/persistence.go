@@ -20,7 +20,6 @@ package ocis
 
 import (
 	"context"
-	"net/url"
 	"os"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -33,7 +32,7 @@ type TreePersistence interface {
 	ListFolder(ctx context.Context, node *Node) ([]*Node, error)
 	//CreateHome(owner *userpb.UserId) (n *Node, err error)
 	CreateDir(ctx context.Context, node *Node) (err error)
-	CreateReference(ctx context.Context, node *Node, targetURI *url.URL) error
+	//CreateReference(ctx context.Context, node *Node, targetURI *url.URL) error
 	Move(ctx context.Context, oldNode *Node, newNode *Node) (err error)
 	Delete(ctx context.Context, node *Node) (err error)
 
@@ -47,7 +46,14 @@ type PathWrapper interface {
 	NodeFromPath(ctx context.Context, fn string) (node *Node, err error)
 	Path(ctx context.Context, node *Node) (path string, err error)
 
+	// HomeNode returns the currently logged in users home node
+	// requires EnableHome to be true
+	HomeNode(ctx context.Context) (node *Node, err error)
+
+	// RootNode returns the storage root node
 	RootNode(ctx context.Context) (node *Node, err error)
-	// Root returns the internal root of the storage
-	Root() string
+
+	// HomeOrRootNode returns the users home node when home support is enabled.
+	// it returns the storages root node otherwise
+	HomeOrRootNode(ctx context.Context) (node *Node, err error)
 }

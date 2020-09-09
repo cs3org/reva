@@ -21,7 +21,6 @@ package ocis
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -37,7 +36,7 @@ type Path struct {
 	// ocis fs works on top of a dir of uuid nodes
 	Root string `mapstructure:"root"`
 
-	// UserLayout describles the relative path from the storages root node to the users home node.
+	// UserLayout describes the relative path from the storage's root node to the users home node.
 	UserLayout string `mapstructure:"user_layout"`
 
 	// TODO NodeLayout option to save nodes as eg. nodes/1d/d8/1dd84abf-9466-4e14-bb86-02fc4ea3abcf
@@ -65,25 +64,16 @@ func (pw *Path) NodeFromResource(ctx context.Context, ref *provider.Reference) (
 func (pw *Path) NodeFromPath(ctx context.Context, fn string) (node *Node, err error) {
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("fn", fn).Msg("NodeFromPath()")
-	if pw.EnableHome {
-		node, err = pw.HomeNode(ctx)
-	} else {
-		node, err = pw.RootNode(ctx)
-	}
-	if err != nil {
+
+	if node, err = pw.HomeOrRootNode(ctx); err != nil {
 		return
 	}
 
 	if fn != "/" {
-		// walk the path
-		segments := strings.Split(strings.TrimLeft(fn, "/"), "/")
-		for i := range segments {
-			if node, err = node.Child(segments[i]); err != nil {
-				log.Error().Err(err).Interface("node", node).Str("segment", segments[i]).Msg("NodeFromPath()")
-				break
-			}
-			log.Debug().Interface("node", node).Str("segment", segments[i]).Msg("NodeFromPath()")
-		}
+		node, err = pw.WalkPath(ctx, node, fn, func(ctx context.Context, n *Node) error {
+			log.Debug().Interface("node", node).Msg("NodeFromPath() walk")
+			return nil
+		})
 	}
 
 	return
@@ -100,12 +90,7 @@ func (pw *Path) NodeFromID(ctx context.Context, id *provider.ResourceId) (n *Nod
 // Path returns the path for node
 func (pw *Path) Path(ctx context.Context, n *Node) (p string, err error) {
 	var root *Node
-	if pw.EnableHome {
-		root, err = pw.HomeNode(ctx)
-	} else {
-		root, err = pw.RootNode(ctx)
-	}
-	if err != nil {
+	if root, err = pw.HomeOrRootNode(ctx); err != nil {
 		return
 	}
 	for n.ID != root.ID {
@@ -122,30 +107,7 @@ func (pw *Path) Path(ctx context.Context, n *Node) (p string, err error) {
 	return
 }
 
-// readRootLink reads the symbolic link and extracts the node id
-func (pw *Path) readRootLink(root string) (node *Node, err error) {
-	// A root symlink looks like `../nodes/76455834-769e-412a-8a01-68f265365b79`
-	link, err := os.Readlink(root)
-	if os.IsNotExist(err) {
-		err = errtypes.NotFound(root)
-		return
-	}
-
-	// extract the nodeID
-	if strings.HasPrefix(link, "../nodes/") {
-		node = &Node{
-			pw:       pw,
-			ID:       filepath.Base(link),
-			ParentID: "root",
-			Exists:   true,
-		}
-	} else {
-		err = fmt.Errorf("ocisfs: expected '../nodes/ prefix, got' %+v", link)
-	}
-	return
-}
-
-// RootNode returns the root node of a tree
+// RootNode returns the root node of the storage
 func (pw *Path) RootNode(ctx context.Context) (node *Node, err error) {
 	return &Node{
 		pw:       pw,
@@ -165,14 +127,38 @@ func (pw *Path) HomeNode(ctx context.Context) (node *Node, err error) {
 	if node, err = pw.RootNode(ctx); err != nil {
 		return
 	}
-	u := user.ContextMustGetUser(ctx)
-	layout := templates.WithUser(u, pw.UserLayout)
+	node, err = pw.WalkPath(ctx, node, pw.mustGetUserLayout(ctx), nil)
+	return
+}
 
-	segments := strings.Split(layout, "/")
+// WalkPath calls n.Child(segment) on every path segment in p starting at the node r
+// If a function f is given it will be executed for every segment node, but not the root node r
+func (pw *Path) WalkPath(ctx context.Context, r *Node, p string, f func(ctx context.Context, n *Node) error) (*Node, error) {
+	segments := strings.Split(strings.Trim(p, "/"), "/")
+	var err error
 	for i := range segments {
-		if node, err = node.Child(segments[i]); err != nil {
-			return
+		if r, err = r.Child(segments[i]); err != nil {
+			return r, err
+		}
+		if f != nil {
+			if err = f(ctx, r); err != nil {
+				return r, err
+			}
 		}
 	}
-	return
+	return r, nil
+}
+
+// HomeOrRootNode returns the users home node when home support is enabled.
+// it returns the storages root node otherwise
+func (pw *Path) HomeOrRootNode(ctx context.Context) (node *Node, err error) {
+	if pw.EnableHome {
+		return pw.HomeNode(ctx)
+	}
+	return pw.RootNode(ctx)
+}
+
+func (pw *Path) mustGetUserLayout(ctx context.Context) string {
+	u := user.ContextMustGetUser(ctx)
+	return templates.WithUser(u, pw.UserLayout)
 }
