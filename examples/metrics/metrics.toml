@@ -1,4 +1,6 @@
 [shared]
+
+[http.services.metrics]
 # one of dummy, json.
 metrics_data_driver_type = "dummy"
 # if left unspecified location /var/tmp/reva/metrics/metricsdata.json is used (for driver type json).
