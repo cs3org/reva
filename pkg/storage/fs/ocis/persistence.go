@@ -23,7 +23,6 @@ import (
 	"net/url"
 	"os"
 
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
@@ -32,9 +31,9 @@ type TreePersistence interface {
 	GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error)
 	GetMD(ctx context.Context, node *Node) (os.FileInfo, error)
 	ListFolder(ctx context.Context, node *Node) ([]*Node, error)
-	CreateRoot(id string, owner *userpb.UserId) (n *Node, err error)
+	//CreateHome(owner *userpb.UserId) (n *Node, err error)
 	CreateDir(ctx context.Context, node *Node) (err error)
-	CreateReference(ctx context.Context, path string, targetURI *url.URL) error
+	CreateReference(ctx context.Context, node *Node, targetURI *url.URL) error
 	Move(ctx context.Context, oldNode *Node, newNode *Node) (err error)
 	Delete(ctx context.Context, node *Node) (err error)
 

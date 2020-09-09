@@ -42,7 +42,7 @@ func (fs *ocisfs) AddGrant(ctx context.Context, ref *provider.Reference, g *prov
 		return
 	}
 
-	np := filepath.Join(fs.pw.Root(), "nodes", node.ID)
+	np := filepath.Join(fs.pw.Root, "nodes", node.ID)
 	e := ace.FromGrant(g)
 	principal, value := e.Marshal()
 	if err := xattr.Set(np, sharePrefix+principal, value); err != nil {
@@ -61,7 +61,7 @@ func (fs *ocisfs) ListGrants(ctx context.Context, ref *provider.Reference) (gran
 		return
 	}
 	log := appctx.GetLogger(ctx)
-	np := filepath.Join(fs.pw.Root(), "nodes", node.ID)
+	np := filepath.Join(fs.pw.Root, "nodes", node.ID)
 	var attrs []string
 	if attrs, err = xattr.List(np); err != nil {
 		log.Error().Err(err).Msg("error listing attributes")
@@ -97,7 +97,7 @@ func (fs *ocisfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *p
 		attr = sharePrefix + "u:" + g.Grantee.Id.OpaqueId
 	}
 
-	np := filepath.Join(fs.pw.Root(), "nodes", node.ID)
+	np := filepath.Join(fs.pw.Root, "nodes", node.ID)
 	if err = xattr.Remove(np, attr); err != nil {
 		return
 	}

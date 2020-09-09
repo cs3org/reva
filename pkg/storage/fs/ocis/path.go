@@ -35,15 +35,16 @@ import (
 // Path implements transformations from filepath to node and back
 type Path struct {
 	// ocis fs works on top of a dir of uuid nodes
-	root string `mapstructure:"root"`
+	Root string `mapstructure:"root"`
 
-	// UserLayout wraps the internal path in the users folder with user information.
+	// UserLayout describles the relative path from the storages root node to the users home node.
 	UserLayout string `mapstructure:"user_layout"`
 
 	// TODO NodeLayout option to save nodes as eg. nodes/1d/d8/1dd84abf-9466-4e14-bb86-02fc4ea3abcf
 
 	// EnableHome enables the creation of home directories.
-	EnableHome bool `mapstructure:"enable_home"`
+	EnableHome  bool   `mapstructure:"enable_home"`
+	ShareFolder string `mapstructure:"share_folder"`
 }
 
 // NodeFromResource takes in a request path or request id and converts it to a Node
@@ -64,22 +65,25 @@ func (pw *Path) NodeFromResource(ctx context.Context, ref *provider.Reference) (
 func (pw *Path) NodeFromPath(ctx context.Context, fn string) (node *Node, err error) {
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("fn", fn).Msg("NodeFromPath()")
-	node, err = pw.RootNode(ctx)
+	if pw.EnableHome {
+		node, err = pw.HomeNode(ctx)
+	} else {
+		node, err = pw.RootNode(ctx)
+	}
+	if err != nil {
+		return
+	}
 
 	if fn != "/" {
 		// walk the path
 		segments := strings.Split(strings.TrimLeft(fn, "/"), "/")
 		for i := range segments {
 			if node, err = node.Child(segments[i]); err != nil {
+				log.Error().Err(err).Interface("node", node).Str("segment", segments[i]).Msg("NodeFromPath()")
 				break
 			}
 			log.Debug().Interface("node", node).Str("segment", segments[i]).Msg("NodeFromPath()")
 		}
-	}
-
-	// if a node does not exist that is fine
-	if os.IsNotExist(err) {
-		err = nil
 	}
 
 	return
@@ -90,12 +94,21 @@ func (pw *Path) NodeFromID(ctx context.Context, id *provider.ResourceId) (n *Nod
 	if id == nil || id.OpaqueId == "" {
 		return nil, fmt.Errorf("invalid resource id %+v", id)
 	}
-	return ReadNode(pw, id.OpaqueId)
+	return ReadNode(ctx, pw, id.OpaqueId)
 }
 
 // Path returns the path for node
 func (pw *Path) Path(ctx context.Context, n *Node) (p string, err error) {
-	for !n.IsRoot() {
+	var root *Node
+	if pw.EnableHome {
+		root, err = pw.HomeNode(ctx)
+	} else {
+		root, err = pw.RootNode(ctx)
+	}
+	if err != nil {
+		return
+	}
+	for n.ID != root.ID {
 		p = filepath.Join(n.Name, p)
 		if n, err = n.Parent(); err != nil {
 			appctx.GetLogger(ctx).
@@ -132,30 +145,34 @@ func (pw *Path) readRootLink(root string) (node *Node, err error) {
 	return
 }
 
-// RootNode returns the root node of a tree,
-// taking into account the user layout if EnableHome is true
+// RootNode returns the root node of a tree
 func (pw *Path) RootNode(ctx context.Context) (node *Node, err error) {
-	var root string
-	if pw.EnableHome && pw.UserLayout != "" {
-		// start at the users root node
-		u := user.ContextMustGetUser(ctx)
-		layout := templates.WithUser(u, pw.UserLayout)
-		root = filepath.Join(pw.Root(), "users", layout)
-
-	} else {
-		// start at the storage root node
-		root = filepath.Join(pw.Root(), "nodes/root")
-	}
-
-	// The symlink contains the nodeID
-	node, err = pw.readRootLink(root)
-	if err != nil {
-		return
-	}
-	return
+	return &Node{
+		pw:       pw,
+		ID:       "root",
+		Name:     "",
+		ParentID: "",
+		Exists:   true,
+	}, nil
 }
 
-// Root returns the root of the storags
-func (pw *Path) Root() string {
-	return pw.root
+// HomeNode returns the home node of a user
+func (pw *Path) HomeNode(ctx context.Context) (node *Node, err error) {
+	if !pw.EnableHome {
+		return nil, errtypes.NotSupported("ocisfs: home supported disabled")
+	}
+
+	if node, err = pw.RootNode(ctx); err != nil {
+		return
+	}
+	u := user.ContextMustGetUser(ctx)
+	layout := templates.WithUser(u, pw.UserLayout)
+
+	segments := strings.Split(layout, "/")
+	for i := range segments {
+		if node, err = node.Child(segments[i]); err != nil {
+			return
+		}
+	}
+	return
 }

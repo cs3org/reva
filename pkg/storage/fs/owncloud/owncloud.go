@@ -78,14 +78,15 @@ func init() {
 }
 
 type config struct {
-	DataDirectory        string `mapstructure:"datadirectory"`
-	UploadInfoDir        string `mapstructure:"upload_info_dir"`
-	ShareDirectory       string `mapstructure:"sharedirectory"`
-	UserLayout           string `mapstructure:"user_layout"`
-	Redis                string `mapstructure:"redis"`
-	EnableHome           bool   `mapstructure:"enable_home"`
-	Scan                 bool   `mapstructure:"scan"`
-	UserProviderEndpoint string `mapstructure:"userprovidersvc"`
+	DataDirectory            string `mapstructure:"datadirectory"`
+	UploadInfoDir            string `mapstructure:"upload_info_dir"`
+	DeprecatedShareDirectory string `mapstructure:"sharedirectory"`
+	ShareFolder              string `mapstructure:"share_folder"`
+	UserLayout               string `mapstructure:"user_layout"`
+	Redis                    string `mapstructure:"redis"`
+	EnableHome               bool   `mapstructure:"enable_home"`
+	Scan                     bool   `mapstructure:"scan"`
+	UserProviderEndpoint     string `mapstructure:"userprovidersvc"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -107,9 +108,16 @@ func (c *config) init(m map[string]interface{}) {
 	if c.UploadInfoDir == "" {
 		c.UploadInfoDir = "/var/tmp/reva/uploadinfo"
 	}
-	if c.ShareDirectory == "" {
-		c.ShareDirectory = "/Shares"
+	// fallback for old config
+	if c.DeprecatedShareDirectory != "" {
+		c.ShareFolder = c.DeprecatedShareDirectory
 	}
+	if c.ShareFolder == "" {
+		c.ShareFolder = "/Shares"
+	}
+	// ensure share folder always starts with slash
+	c.ShareFolder = filepath.Join("/", c.ShareFolder)
+
 	// default to scanning if not configured
 	if _, ok := m["scan"]; !ok {
 		c.Scan = true
@@ -804,11 +812,11 @@ func (fs *ocfs) CreateDir(ctx context.Context, fn string) (err error) {
 }
 
 func (fs *ocfs) isShareFolderChild(p string) bool {
-	return strings.HasPrefix(p, fs.c.ShareDirectory)
+	return strings.HasPrefix(p, fs.c.ShareFolder)
 }
 
 func (fs *ocfs) isShareFolderRoot(p string) bool {
-	return p == fs.c.ShareDirectory
+	return p == fs.c.ShareFolder
 }
 
 func (fs *ocfs) CreateReference(ctx context.Context, p string, targetURI *url.URL) error {

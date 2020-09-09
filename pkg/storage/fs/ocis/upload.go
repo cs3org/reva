@@ -54,7 +54,7 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 		node.ID = uuid.New().String()
 	}
 
-	nodePath := filepath.Join(fs.conf.Root, "nodes", node.ID)
+	nodePath := filepath.Join(fs.pw.Root, "nodes", node.ID)
 
 	tmp, err := ioutil.TempFile(nodePath, "._reva_atomic_upload")
 	if err != nil {
@@ -187,7 +187,7 @@ func (fs *ocisfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tus
 	u := &fileUpload{
 		info:     info,
 		binPath:  binPath,
-		infoPath: filepath.Join(fs.conf.Root, "uploads", info.ID+".info"),
+		infoPath: filepath.Join(fs.pw.Root, "uploads", info.ID+".info"),
 		fs:       fs,
 		ctx:      ctx,
 	}
@@ -212,12 +212,12 @@ func (fs *ocisfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tus
 }
 
 func (fs *ocisfs) getUploadPath(ctx context.Context, uploadID string) (string, error) {
-	return filepath.Join(fs.conf.Root, "uploads", uploadID), nil
+	return filepath.Join(fs.pw.Root, "uploads", uploadID), nil
 }
 
 // GetUpload returns the Upload for the given upload id
 func (fs *ocisfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
-	infoPath := filepath.Join(fs.conf.Root, "uploads", id+".info")
+	infoPath := filepath.Join(fs.pw.Root, "uploads", id+".info")
 
 	info := tusd.FileInfo{}
 	data, err := ioutil.ReadFile(infoPath)
@@ -336,12 +336,12 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 	if n.ID == "" {
 		n.ID = uuid.New().String()
 	}
-	targetPath := filepath.Join(upload.fs.conf.Root, "nodes", n.ID)
+	targetPath := filepath.Join(upload.fs.pw.Root, "nodes", n.ID)
 
 	// if target exists create new version
 	if fi, err := os.Stat(targetPath); err == nil {
 		// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
-		versionsPath := filepath.Join(upload.fs.conf.Root, "nodes", n.ID+".REV."+fi.ModTime().UTC().Format(time.RFC3339Nano))
+		versionsPath := filepath.Join(upload.fs.pw.Root, "nodes", n.ID+".REV."+fi.ModTime().UTC().Format(time.RFC3339Nano))
 
 		if err := os.Rename(targetPath, versionsPath); err != nil {
 			log := appctx.GetLogger(upload.ctx)
@@ -384,7 +384,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 	}
 
 	// link child name to parent if it is new
-	childNameLink := filepath.Join(upload.fs.conf.Root, "nodes", n.ParentID, n.Name)
+	childNameLink := filepath.Join(upload.fs.pw.Root, "nodes", n.ParentID, n.Name)
 	link, err := os.Readlink(childNameLink)
 	if err == nil && link != "../"+n.ID {
 		log.Err(err).

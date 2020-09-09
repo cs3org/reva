@@ -47,7 +47,7 @@ func (fs *ocisfs) ListRevisions(ctx context.Context, ref *provider.Reference) (r
 	}
 
 	revisions = []*provider.FileVersion{}
-	nodePath := filepath.Join(fs.pw.Root(), "nodes", node.ID)
+	nodePath := filepath.Join(fs.pw.Root, "nodes", node.ID)
 	if items, err := filepath.Glob(nodePath + ".REV.*"); err == nil {
 		for i := range items {
 			if fi, err := os.Stat(items[i]); err == nil {

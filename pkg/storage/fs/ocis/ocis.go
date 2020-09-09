@@ -23,7 +23,9 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
+	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -32,9 +34,9 @@ import (
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/user"
-	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"github.com/pkg/xattr"
 )
 
 const (
@@ -52,6 +54,7 @@ const (
 	//favPrefix   string = "user.ocis.fav."  // favorite flag, per user
 	// TODO use etag prefix instead of single etag property
 	//etagPrefix  string = "user.ocis.etag." // allow overriding a calculated etag with one from the extended attributes
+	referenceAttr string = "user.ocis.cs3.ref" // arbitrary metadata
 	//checksumPrefix    string = "user.ocis.cs."   // TODO add checksum support
 )
 
@@ -59,53 +62,47 @@ func init() {
 	registry.Register("ocis", New)
 }
 
-type config struct {
-	// ocis fs works on top of a dir of uuid nodes
-	Root string `mapstructure:"root"`
-
-	// UserLayout wraps the internal path with user information.
-	// Example: if conf.Namespace is /ocis/user and received path is /docs
-	// and the UserLayout is {{.Username}} the internal path will be:
-	// /ocis/user/<username>/docs
-	UserLayout string `mapstructure:"user_layout"`
-
-	// EnableHome enables the creation of home directories.
-	EnableHome bool `mapstructure:"enable_home"`
-}
-
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
+func parseConfig(m map[string]interface{}) (*Path, error) {
+	pw := &Path{}
+	if err := mapstructure.Decode(m, pw); err != nil {
 		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
 	}
-	return c, nil
+	return pw, nil
 }
 
-func (c *config) init(m map[string]interface{}) {
-	if c.UserLayout == "" {
-		c.UserLayout = "{{.Id.OpaqueId}}"
+func (pw *Path) init(m map[string]interface{}) {
+	if pw.UserLayout == "" {
+		pw.UserLayout = "{{.Id.OpaqueId}}"
 	}
+	// ensure user layout has no starting or trailing /
+	pw.UserLayout = strings.Trim(pw.UserLayout, "/")
+
+	if pw.ShareFolder == "" {
+		pw.ShareFolder = "/Shares"
+	}
+	// ensure share folder always starts with slash
+	pw.ShareFolder = filepath.Join("/", pw.ShareFolder)
+
 	// c.DataDirectory should never end in / unless it is the root
-	c.Root = filepath.Clean(c.Root)
+	pw.Root = filepath.Clean(pw.Root)
 }
 
 // New returns an implementation to of the storage.FS interface that talk to
 // a local filesystem.
 func New(m map[string]interface{}) (storage.FS, error) {
-	c, err := parseConfig(m)
+	pw, err := parseConfig(m)
 	if err != nil {
 		return nil, err
 	}
-	c.init(m)
+	pw.init(m)
 
 	dataPaths := []string{
-		filepath.Join(c.Root, "users"),
-		filepath.Join(c.Root, "nodes"),
+		filepath.Join(pw.Root, "nodes"),
 		// notes contain symlinks from nodes/<u-u-i-d>/uploads/<uploadid> to ../../uploads/<uploadid>
 		// better to keep uploads on a fast / volatile storage before a workflow finally moves them to the nodes dir
-		filepath.Join(c.Root, "uploads"),
-		filepath.Join(c.Root, "trash"),
+		filepath.Join(pw.Root, "uploads"),
+		filepath.Join(pw.Root, "trash"),
 	}
 	for _, v := range dataPaths {
 		if err := os.MkdirAll(v, 0700); err != nil {
@@ -115,28 +112,26 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		}
 	}
 
-	pw := &Path{
-		root:       c.Root,
-		EnableHome: c.EnableHome,
-		UserLayout: c.UserLayout,
+	// the root node has an empty name, or use `.` ?
+	// the root node has no parent, or use `root` ?
+	if err = createNode(&Node{pw: pw, ID: "root"}, nil); err != nil {
+		return nil, err
 	}
 
-	tp, err := NewTree(pw, c.Root)
+	tp, err := NewTree(pw)
 	if err != nil {
 		return nil, err
 	}
 
 	return &ocisfs{
-		conf: c,
-		tp:   tp,
-		pw:   pw,
+		tp: tp,
+		pw: pw,
 	}, nil
 }
 
 type ocisfs struct {
-	conf *config
-	tp   TreePersistence
-	pw   PathWrapper
+	tp TreePersistence
+	pw *Path
 }
 
 func (fs *ocisfs) Shutdown(ctx context.Context) error {
@@ -148,48 +143,41 @@ func (fs *ocisfs) GetQuota(ctx context.Context) (int, int, error) {
 }
 
 // CreateHome creates a new root node that has no parent id
-func (fs *ocisfs) CreateHome(ctx context.Context) error {
-	if !fs.conf.EnableHome || fs.conf.UserLayout == "" {
-		return errtypes.NotSupported("ocisfs: create home not supported")
+func (fs *ocisfs) CreateHome(ctx context.Context) (err error) {
+	if !fs.pw.EnableHome || fs.pw.UserLayout == "" {
+		return errtypes.NotSupported("ocisfs: CreateHome() home supported disabled")
 	}
 
+	var n *Node
+	if n, err = fs.pw.RootNode(ctx); err != nil {
+		return
+	}
 	u := user.ContextMustGetUser(ctx)
-	layout := templates.WithUser(u, fs.conf.UserLayout)
-	home := filepath.Join(fs.conf.Root, "users", layout)
+	layout := templates.WithUser(u, fs.pw.UserLayout)
 
-	_, err := os.Stat(home)
-	if err == nil { // home already exists
-		return nil
+	segments := strings.Split(layout, "/")
+	for i := range segments {
+		if n, err = n.Child(segments[i]); err != nil {
+			return
+		}
+		if !n.Exists {
+			if err = fs.tp.CreateDir(ctx, n); err != nil {
+				return
+			}
+		}
 	}
-
-	// create the users dir
-	parent := filepath.Dir(home)
-	err = os.MkdirAll(parent, 0700)
-	if err != nil {
-		// MkdirAll will return success on mkdir over an existing directory.
-		return errors.Wrap(err, "ocisfs: error creating dir")
-	}
-
-	// create a directory node
-	nodeID := uuid.New().String()
-
-	if _, err = fs.tp.CreateRoot(nodeID, u.Id); err != nil {
-		return err
-	}
-
-	// link users home to node
-	return os.Symlink("../nodes/"+nodeID, home)
+	return
 }
 
 // GetHome is called to look up the home path for a user
 // It is NOT supposed to return the internal path but the external path
 func (fs *ocisfs) GetHome(ctx context.Context) (string, error) {
-	if !fs.conf.EnableHome || fs.conf.UserLayout == "" {
-		return "", errtypes.NotSupported("ocisfs: get home not supported")
+	if !fs.pw.EnableHome || fs.pw.UserLayout == "" {
+		return "", errtypes.NotSupported("ocisfs: GetHome() home supported disabled")
 	}
 	u := user.ContextMustGetUser(ctx)
-	layout := templates.WithUser(u, fs.conf.UserLayout)
-	return filepath.Join(fs.conf.Root, layout), nil // TODO use a namespace?
+	layout := templates.WithUser(u, fs.pw.UserLayout)
+	return filepath.Join(fs.pw.Root, layout), nil // TODO use a namespace?
 }
 
 // Tree persistence
@@ -207,8 +195,83 @@ func (fs *ocisfs) CreateDir(ctx context.Context, fn string) (err error) {
 	return fs.tp.CreateDir(ctx, node)
 }
 
-func (fs *ocisfs) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
-	return fs.tp.CreateReference(ctx, path, targetURI)
+// The share folder, aka "/Shares", is a virtual thing.
+func (fs *ocisfs) isShareFolder(ctx context.Context, p string) bool {
+	// TODO what about a folder '/Sharesabc' ... would also match
+	return strings.HasPrefix(p, fs.pw.ShareFolder)
+}
+
+func (fs *ocisfs) isShareFolderRoot(ctx context.Context, p string) bool {
+	return path.Clean(p) == fs.pw.ShareFolder
+}
+
+func (fs *ocisfs) isShareFolderChild(ctx context.Context, p string) bool {
+	p = path.Clean(p)
+	vals := strings.Split(p, fs.pw.ShareFolder+"/")
+	return len(vals) > 1 && vals[1] != ""
+}
+func (fs *ocisfs) getInternalHome(ctx context.Context) (string, error) {
+	if !fs.pw.EnableHome {
+		return "", errtypes.NotSupported("ocisfs: get home not enabled")
+	}
+
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		return "", errtypes.InternalError("ocisfs: wrap: no user in ctx and home is enabled")
+	}
+
+	relativeHome := templates.WithUser(u, fs.pw.UserLayout)
+	return relativeHome, nil
+}
+
+// TODO there really is no difference between the /Shares folder and normal nodes
+// we can store it is a node
+// but when home is enabled the "/Shares" folder should not be listed ...
+// so when listing home we need to check that flag and add the shared node
+
+// /Shares/mounted1
+// /Shares/mounted1/foo/bar
+// references should go into a Shares folder
+func (fs *ocisfs) CreateReference(ctx context.Context, p string, targetURI *url.URL) (err error) {
+
+	p = strings.Trim(p, "/")
+	parts := strings.Split(p, "/")
+
+	if len(parts) != 2 {
+		return errtypes.PermissionDenied("ocisfs: references must be a child of the share folder: share_folder=" + fs.pw.ShareFolder + " path=" + p)
+	}
+
+	if parts[0] != strings.Trim(fs.pw.ShareFolder, "/") {
+		return errtypes.PermissionDenied("ocisfs: cannot create references outside the share folder: share_folder=" + fs.pw.ShareFolder + " path=" + p)
+	}
+
+	// create Shares folder if it does not exist
+	var n *Node
+	if n, err = fs.pw.NodeFromPath(ctx, fs.pw.ShareFolder); err != nil {
+		return errtypes.InternalError(err.Error())
+	} else if !n.Exists {
+		if err = fs.tp.CreateDir(ctx, n); err != nil {
+			return
+		}
+	}
+
+	if n, err = n.Child(parts[1]); err != nil {
+		return errtypes.InternalError(err.Error())
+	}
+
+	if n.Exists {
+		return errtypes.AlreadyExists(p)
+	}
+
+	if err = fs.tp.CreateDir(ctx, n); err != nil {
+		return
+	}
+
+	internal := filepath.Join(fs.pw.Root, "nodes", n.ID)
+	if err = xattr.Set(internal, referenceAttr, []byte(targetURI.String())); err != nil {
+		return errors.Wrapf(err, "ocfs: error setting the target %s on the reference file %s", targetURI.String(), internal)
+	}
+	return nil
 }
 
 func (fs *ocisfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (err error) {
@@ -277,7 +340,7 @@ func (fs *ocisfs) Delete(ctx context.Context, ref *provider.Reference) (err erro
 // Data persistence
 
 func (fs *ocisfs) ContentPath(node *Node) string {
-	return filepath.Join(fs.conf.Root, "nodes", node.ID)
+	return filepath.Join(fs.pw.Root, "nodes", node.ID)
 }
 
 func (fs *ocisfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {

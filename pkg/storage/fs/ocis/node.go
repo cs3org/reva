@@ -37,7 +37,7 @@ import (
 
 // Node represents a node in the tree and provides methods to get a Parent or Child instance
 type Node struct {
-	pw       PathWrapper
+	pw       *Path
 	ParentID string
 	ID       string
 	Name     string
@@ -49,7 +49,9 @@ type Node struct {
 // CreateDir creates a new child directory node with a new id and the given name
 // owner is optional
 // TODO use in tree CreateDir
-func (n *Node) CreateDir(pw PathWrapper, name string, owner *userpb.UserId) (c *Node, err error) {
+// TODO beware the below implementation allows creating two nodes with the same name
+// TODO also create link to parent
+func (n *Node) CreateDir(pw *Path, name string, owner *userpb.UserId) (c *Node, err error) {
 	c = &Node{
 		pw:       pw,
 		ParentID: n.ID,
@@ -58,7 +60,7 @@ func (n *Node) CreateDir(pw PathWrapper, name string, owner *userpb.UserId) (c *
 	}
 
 	// create a directory node
-	nodePath := filepath.Join(pw.Root(), "nodes", c.ID)
+	nodePath := filepath.Join(pw.Root, "nodes", c.ID)
 	if err = os.MkdirAll(nodePath, 0700); err != nil {
 		return nil, errors.Wrap(err, "ocisfs: error creating node child dir")
 	}
@@ -88,13 +90,13 @@ func (n *Node) writeMetadata(nodePath string, owner *userpb.UserId) (err error) 
 }
 
 // ReadNode creates a new instance from an id and checks if it exists
-func ReadNode(pw PathWrapper, id string) (n *Node, err error) {
+func ReadNode(ctx context.Context, pw *Path, id string) (n *Node, err error) {
 	n = &Node{
 		pw: pw,
 		ID: id,
 	}
 
-	nodePath := filepath.Join(n.pw.Root(), "nodes", n.ID)
+	nodePath := filepath.Join(n.pw.Root, "nodes", n.ID)
 
 	// lookup parent id in extended attributes
 	var attrBytes []byte
@@ -110,15 +112,28 @@ func ReadNode(pw PathWrapper, id string) (n *Node, err error) {
 		return
 	}
 
+	var root *Node
+	if pw.EnableHome {
+		root, err = pw.HomeNode(ctx)
+	} else {
+		root, err = pw.RootNode(ctx)
+	}
+	if err != nil {
+		return
+	}
 	parentID := n.ParentID
 
-	for parentID != "root" {
+	log := appctx.GetLogger(ctx)
+	for parentID != root.ID {
+		log.Debug().Interface("node", n).Str("root.ID", root.ID).Msg("ReadNode()")
 		// walk to root to check node is not part of a deleted subtree
-		parentPath := filepath.Join(n.pw.Root(), "nodes", parentID)
+		parentPath := filepath.Join(n.pw.Root, "nodes", parentID)
 
 		if attrBytes, err = xattr.Get(parentPath, "user.ocis.parentid"); err == nil {
 			parentID = string(attrBytes)
+			log.Debug().Interface("node", n).Str("root.ID", root.ID).Str("parentID", parentID).Msg("ReadNode() found parent")
 		} else {
+			log.Error().Err(err).Interface("node", n).Str("root.ID", root.ID).Msg("ReadNode()")
 			if os.IsNotExist(err) {
 				return
 			}
@@ -127,6 +142,7 @@ func ReadNode(pw PathWrapper, id string) (n *Node, err error) {
 	}
 
 	n.Exists = true
+	log.Debug().Interface("node", n).Msg("ReadNode() found node")
 
 	return
 }
@@ -139,8 +155,8 @@ func (n *Node) Child(name string) (c *Node, err error) {
 		Name:     name,
 	}
 	var link string
-	link, err = os.Readlink(filepath.Join(n.pw.Root(), "nodes", n.ID, name))
-	if os.IsNotExist(err) {
+	if link, err = os.Readlink(filepath.Join(n.pw.Root, "nodes", n.ID, name)); os.IsNotExist(err) {
+		err = nil // if the file does not exist we return a node that has Exists = false
 		return
 	}
 	if err != nil {
@@ -156,14 +172,9 @@ func (n *Node) Child(name string) (c *Node, err error) {
 	return
 }
 
-// IsRoot returns true when the node is the root of a tree
-func (n *Node) IsRoot() bool {
-	return n.ParentID == "root"
-}
-
 // Parent returns the parent node
 func (n *Node) Parent() (p *Node, err error) {
-	if n.ParentID == "root" {
+	if n.ParentID == "" {
 		return nil, fmt.Errorf("ocisfs: root has no parent")
 	}
 	p = &Node{
@@ -171,7 +182,7 @@ func (n *Node) Parent() (p *Node, err error) {
 		ID: n.ParentID,
 	}
 
-	parentPath := filepath.Join(n.pw.Root(), "nodes", n.ParentID)
+	parentPath := filepath.Join(n.pw.Root, "nodes", n.ParentID)
 
 	// lookup parent id in extended attributes
 	var attrBytes []byte
@@ -201,7 +212,7 @@ func (n *Node) Owner() (id string, idp string, err error) {
 		return n.ownerID, n.ownerIDP, nil
 	}
 
-	nodePath := filepath.Join(n.pw.Root(), "nodes", n.ParentID)
+	nodePath := filepath.Join(n.pw.Root, "nodes", n.ParentID)
 	// lookup parent id in extended attributes
 	var attrBytes []byte
 	// lookup name in extended attributes
@@ -223,7 +234,7 @@ func (n *Node) Owner() (id string, idp string, err error) {
 func (n *Node) AsResourceInfo(ctx context.Context) (ri *provider.ResourceInfo, err error) {
 	var fn string
 
-	nodePath := filepath.Join(n.pw.Root(), "nodes", n.ID)
+	nodePath := filepath.Join(n.pw.Root, "nodes", n.ID)
 
 	var fi os.FileInfo
 
@@ -231,9 +242,15 @@ func (n *Node) AsResourceInfo(ctx context.Context) (ri *provider.ResourceInfo, e
 	if fi, err = os.Lstat(nodePath); err != nil {
 		return
 	}
+
+	var target []byte
 	switch {
 	case fi.IsDir():
-		nodeType = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+		if target, err = xattr.Get(nodePath, referenceAttr); err == nil {
+			nodeType = provider.ResourceType_RESOURCE_TYPE_REFERENCE
+		} else {
+			nodeType = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+		}
 	case fi.Mode().IsRegular():
 		nodeType = provider.ResourceType_RESOURCE_TYPE_FILE
 	case fi.Mode()&os.ModeSymlink != 0:
@@ -268,6 +285,7 @@ func (n *Node) AsResourceInfo(ctx context.Context) (ri *provider.ResourceInfo, e
 			Seconds: uint64(fi.ModTime().Unix()),
 			// TODO read nanos from where? Nanos:   fi.MTimeNanos,
 		},
+		Target: string(target),
 	}
 
 	if owner, idp, err := n.Owner(); err == nil {
