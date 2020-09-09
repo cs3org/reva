@@ -89,5 +89,4 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 }
 
 type svc struct {
-	prefix string
 }
