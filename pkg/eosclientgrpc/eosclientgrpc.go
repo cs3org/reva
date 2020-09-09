@@ -28,6 +28,7 @@ import (
 	"os/exec"
 	gouser "os/user"
 	"path"
+	"path/filepath"
 	"strconv"
 	"syscall"
 
@@ -661,7 +662,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, username, path string) (
 
 	log.Info().Str("username", username).Str("path", path).Str("rsp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
 
-	return c.grpcMDResponseToFileInfo(rsp, "")
+	return c.grpcMDResponseToFileInfo(rsp, filepath.Dir(path))
 
 }
 
@@ -1030,6 +1031,18 @@ func (c *Client) Write(ctx context.Context, username, path string, stream io.Rea
 	}
 	xrdPath := fmt.Sprintf("%s//%s", c.opt.URL, path)
 	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, "--nopbar", "--silent", "-f", fd.Name(), xrdPath, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s", unixUser.Uid, unixUser.Gid))
+	_, _, err = c.execute(ctx, cmd)
+	return err
+}
+
+// WriteFile writes an existing file to the mgm
+func (c *Client) WriteFile(ctx context.Context, username, path, source string) error {
+	unixUser, err := c.getUnixUser(username)
+	if err != nil {
+		return err
+	}
+	xrdPath := fmt.Sprintf("%s//%s", c.opt.URL, path)
+	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, "--nopbar", "--silent", "-f", source, xrdPath, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s", unixUser.Uid, unixUser.Gid))
 	_, _, err = c.execute(ctx, cmd)
 	return err
 }
