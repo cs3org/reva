@@ -20,7 +20,6 @@ package config
 
 // Config holds the config options that need to be passed down to the metrics reader(driver)
 type Config struct {
-	Prefix                string `mapstructure:"prefix"`
 	MetricsDataDriverType string `mapstructure:"metrics_data_driver_type"`
 	MetricsDataLocation   string `mapstructure:"metrics_data_location"`
 	MetricsRecordInterval int    `mapstructure:"metrics_record_interval"`
@@ -28,9 +27,6 @@ type Config struct {
 
 // Init sets sane defaults
 func (c *Config) Init() {
-	if c.Prefix == "" {
-		c.Prefix = "metrics"
-	}
 	if c.MetricsDataDriverType == "json" {
 		// default values
 		if c.MetricsDataLocation == "" {

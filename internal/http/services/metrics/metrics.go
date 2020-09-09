@@ -49,12 +49,12 @@ func (s *svc) Close() error {
 
 // Prefix returns the main endpoint of this service.
 func (s *svc) Prefix() string {
-	return s.prefix
+	return ""
 }
 
 // Unprotected returns all endpoints that can be queried without prior authorization.
 func (s *svc) Unprotected() []string {
-	return []string{"/"}
+	return []string{}
 }
 
 // Handler serves all HTTP requests.
@@ -84,9 +84,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	}
 
 	// Create the service
-	s := &svc{
-		prefix: conf.Prefix,
-	}
+	s := &svc{}
 	return s, nil
 }
 
