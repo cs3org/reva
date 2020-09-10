@@ -186,7 +186,7 @@ func (fs *ocisfs) PurgeRecycleItem(ctx context.Context, key string) (err error) 
 
 	kp := strings.SplitN(key, ":", 2)
 	if len(kp) != 2 {
-		log.Error().Err(err).Str("key", key).Msg("malformed key")
+		log.Error().Str("key", key).Msg("malformed key")
 		return
 	}
 	trashItem := filepath.Join(fs.pw.Root, "trash", kp[0], kp[1])
