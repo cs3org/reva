@@ -29,6 +29,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/pkg/errors"
 )
 
 // Revision entries are stored inside the node folder and start with the same uuid as the current version.
@@ -65,8 +66,37 @@ func (fs *ocisfs) ListRevisions(ctx context.Context, ref *provider.Reference) (r
 	}
 	return
 }
+
 func (fs *ocisfs) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (io.ReadCloser, error) {
-	return nil, errtypes.NotSupported("operation not supported: DownloadRevision")
+	log := appctx.GetLogger(ctx)
+
+	// verify revision key format
+	kp := strings.SplitN(revisionKey, ".REV.", 2)
+	if len(kp) != 2 {
+		log.Error().Str("revisionKey", revisionKey).Msg("malformed revisionKey")
+		return nil, errtypes.NotFound(revisionKey)
+	}
+	log.Debug().Str("revisionKey", revisionKey).Msg("DownloadRevision")
+
+	// check if the node is available and has not been deleted
+	nodePath := filepath.Join(fs.pw.Root, "nodes", kp[0])
+	if _, err := os.Stat(nodePath); err != nil {
+		if os.IsNotExist(err) {
+			return nil, errtypes.NotFound(nodePath)
+		}
+		return nil, errors.Wrap(err, "ocisfs: error stating node "+kp[0])
+	}
+
+	contentPath := filepath.Join(fs.pw.Root, "nodes", revisionKey)
+
+	r, err := os.Open(contentPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, errtypes.NotFound(contentPath)
+		}
+		return nil, errors.Wrap(err, "ocisfs: error opening revision "+revisionKey)
+	}
+	return r, nil
 }
 
 func (fs *ocisfs) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (err error) {
