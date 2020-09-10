@@ -366,10 +366,10 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		return
 	}
 	if n.pw.EnableHome {
-		if u, ok := user.ContextGetUser(ctx); ok {
+		if u, ok := user.ContextGetUser(upload.ctx); ok {
 			err = n.writeMetadata(u.Id)
 		} else {
-			log := appctx.GetLogger(ctx)
+			log := appctx.GetLogger(upload.ctx)
 			log.Error().Msg("home support enabled but no user in context")
 			err = errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
 		}
