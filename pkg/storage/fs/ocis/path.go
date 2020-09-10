@@ -71,7 +71,7 @@ func (pw *Path) NodeFromPath(ctx context.Context, fn string) (node *Node, err er
 
 	if fn != "/" {
 		node, err = pw.WalkPath(ctx, node, fn, func(ctx context.Context, n *Node) error {
-			log.Debug().Interface("node", node).Msg("NodeFromPath() walk")
+			log.Debug().Interface("node", n).Msg("NodeFromPath() walk")
 			return nil
 		})
 	}
@@ -139,6 +139,10 @@ func (pw *Path) WalkPath(ctx context.Context, r *Node, p string, f func(ctx cont
 	for i := range segments {
 		if r, err = r.Child(segments[i]); err != nil {
 			return r, err
+		}
+		// if an intermediate node is missing return not found
+		if !r.Exists && i < len(segments)-1 {
+			return r, errtypes.NotFound(segments[i])
 		}
 		if f != nil {
 			if err = f(ctx, r); err != nil {

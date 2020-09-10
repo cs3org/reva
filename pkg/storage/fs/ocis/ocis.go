@@ -186,6 +186,9 @@ func (fs *ocisfs) CreateDir(ctx context.Context, fn string) (err error) {
 	if node, err = fs.pw.NodeFromPath(ctx, fn); err != nil {
 		return
 	}
+	if node.Exists {
+		return errtypes.AlreadyExists(fn)
+	}
 	return fs.tp.CreateDir(ctx, node)
 }
 
