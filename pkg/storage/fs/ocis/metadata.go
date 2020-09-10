@@ -20,15 +20,50 @@ package ocis
 
 import (
 	"context"
+	"path/filepath"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/pkg/errors"
+	"github.com/pkg/xattr"
 )
 
 func (fs *ocisfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) (err error) {
-	return errtypes.NotSupported("operation not supported: SetArbitraryMetadata")
+	n, err := fs.pw.NodeFromResource(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "ocisfs: error resolving ref")
+	}
+
+	if !n.Exists {
+		err = errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
+		return err
+	}
+	nodePath := filepath.Join(fs.pw.Root, "nodes", n.ID)
+	for k, v := range md.Metadata {
+		attrName := metadataPrefix + k
+		if err = xattr.Set(nodePath, attrName, []byte(v)); err != nil {
+			return errors.Wrap(err, "ocisfs: could not set metadata attribute "+attrName+" to "+k)
+		}
+	}
+	return
 }
 
 func (fs *ocisfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) (err error) {
-	return errtypes.NotSupported("operation not supported: UnsetArbitraryMetadata")
+	n, err := fs.pw.NodeFromResource(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "ocisfs: error resolving ref")
+	}
+
+	if !n.Exists {
+		err = errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
+		return err
+	}
+	nodePath := filepath.Join(fs.pw.Root, "nodes", n.ID)
+	for i := range keys {
+		attrName := metadataPrefix + keys[i]
+		if err = xattr.Remove(nodePath, attrName); err != nil {
+			return errors.Wrap(err, "ocisfs: could not remove metadata attribute "+attrName)
+		}
+	}
+	return
 }

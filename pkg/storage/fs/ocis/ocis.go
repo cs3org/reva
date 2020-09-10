@@ -48,7 +48,8 @@ const (
 	// "user.ocis."
 
 	// SharePrefix is the prefix for sharing related extended attributes
-	sharePrefix string = "user.ocis.acl."
+	sharePrefix    string = "user.ocis.acl."
+	metadataPrefix string = "user.ocis.md."
 	// TODO implement favorites metadata flag
 	//favPrefix   string = "user.ocis.fav."  // favorite flag, per user
 	// TODO use etag prefix instead of single etag property
