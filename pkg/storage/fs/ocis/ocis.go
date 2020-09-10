@@ -336,3 +336,22 @@ func (fs *ocisfs) Download(ctx context.Context, ref *provider.Reference) (io.Rea
 // Trash persistence in recycle.go
 
 // share persistence in grants.go
+
+func (fs *ocisfs) copyMD(s string, t string) (err error) {
+	var attrs []string
+	if attrs, err = xattr.List(s); err != nil {
+		return err
+	}
+	for i := range attrs {
+		if strings.HasPrefix(attrs[i], "user.ocis.") {
+			var d []byte
+			if d, err = xattr.Get(s, attrs[i]); err != nil {
+				return err
+			}
+			if err = xattr.Set(t, attrs[i], d); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}

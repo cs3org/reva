@@ -23,8 +23,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 )
 
@@ -66,6 +69,51 @@ func (fs *ocisfs) DownloadRevision(ctx context.Context, ref *provider.Reference,
 	return nil, errtypes.NotSupported("operation not supported: DownloadRevision")
 }
 
-func (fs *ocisfs) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) error {
-	return errtypes.NotSupported("operation not supported: RestoreRevision")
+func (fs *ocisfs) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (err error) {
+	log := appctx.GetLogger(ctx)
+
+	// verify revision key format
+	kp := strings.SplitN(revisionKey, ".REV.", 2)
+	if len(kp) != 2 {
+		log.Error().Str("revisionKey", revisionKey).Msg("malformed revisionKey")
+		return errtypes.NotFound(revisionKey)
+	}
+
+	// move current version to new revision
+	nodePath := filepath.Join(fs.pw.Root, "nodes", kp[0])
+	var fi os.FileInfo
+	if fi, err = os.Stat(nodePath); err == nil {
+		// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
+		versionsPath := filepath.Join(fs.pw.Root, "nodes", kp[0]+".REV."+fi.ModTime().UTC().Format(time.RFC3339Nano))
+
+		err = os.Rename(nodePath, versionsPath)
+		if err != nil {
+			return
+		}
+
+		// copy old revision to current location
+
+		revisionPath := filepath.Join(fs.pw.Root, "nodes", revisionKey)
+		var revision, destination *os.File
+		revision, err = os.Open(revisionPath)
+		if err != nil {
+			return
+		}
+		defer revision.Close()
+
+		destination, err = os.OpenFile(nodePath, os.O_CREATE|os.O_WRONLY, defaultFilePerm)
+		if err != nil {
+			return
+		}
+		defer destination.Close()
+		_, err = io.Copy(destination, revision)
+		if err != nil {
+			return
+		}
+
+		return fs.copyMD(revisionPath, nodePath)
+	}
+
+	log.Error().Err(err).Interface("ref", ref).Str("revisionKey", revisionKey).Msg("original node does not exist")
+	return
 }
