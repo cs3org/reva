@@ -226,23 +226,54 @@ func (t *Tree) ListFolder(ctx context.Context, node *Node) ([]*Node, error) {
 
 // Delete deletes a node in the tree
 func (t *Tree) Delete(ctx context.Context, node *Node) (err error) {
+
+	// Prepare the trash
+	// TODO use layout?, but it requires resolving the owners user if the username is used instead of the id.
+	// the node knows the owner id so we use that for now
+	ownerid, _, err := node.Owner()
+	if err != nil {
+		return
+	}
+	if ownerid == "" {
+		// fall back to root trash
+		ownerid = "root"
+	}
+	err = os.MkdirAll(filepath.Join(t.pw.Root, "trash", ownerid), 0700)
+	if err != nil {
+		return
+	}
+
+	// get the original path
+	origin, err := t.pw.Path(ctx, node)
+	if err != nil {
+		return
+	}
+
+	// remove the entry from the parent dir
+
 	src := filepath.Join(t.pw.Root, "nodes", node.ParentID, node.Name)
 	err = os.Remove(src)
 	if err != nil {
 		return
 	}
 
+	// rename the trashed node so it is not picked up when traversing up the tree
 	nodePath := filepath.Join(t.pw.Root, "nodes", node.ID)
-	trashPath := nodePath + ".T." + time.Now().UTC().Format(time.RFC3339Nano)
+	deletionTime := time.Now().UTC().Format(time.RFC3339Nano)
+	trashPath := nodePath + ".T." + deletionTime
 	err = os.Rename(nodePath, trashPath)
 	if err != nil {
 		return
 	}
+	// set origin location in metadata
+	if err := xattr.Set(trashPath, trashOriginAttr, []byte(origin)); err != nil {
+		return err
+	}
 
-	// make node appear in trash
+	// make node appear in the owners (or root) trash
 	// parent id and name are stored as extended attributes in the node itself
-	trashLink := filepath.Join(t.pw.Root, "trash", node.ID)
-	err = os.Symlink("../nodes/"+node.ID+".T."+time.Now().UTC().Format(time.RFC3339Nano), trashLink)
+	trashLink := filepath.Join(t.pw.Root, "trash", ownerid, node.ID)
+	err = os.Symlink("../nodes/"+node.ID+".T."+deletionTime, trashLink)
 	if err != nil {
 		return
 	}

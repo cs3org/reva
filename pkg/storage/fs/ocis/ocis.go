@@ -55,6 +55,7 @@ const (
 	//etagPrefix  string = "user.ocis.etag." // allow overriding a calculated etag with one from the extended attributes
 	referenceAttr string = "user.ocis.cs3.ref" // arbitrary metadata
 	//checksumPrefix    string = "user.ocis.cs."   // TODO add checksum support
+	trashOriginAttr string = "user.ocis.o" // trash origin
 )
 
 func init() {

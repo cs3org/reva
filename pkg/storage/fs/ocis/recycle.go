@@ -20,9 +20,18 @@ package ocis
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/user"
+	"github.com/pkg/errors"
+	"github.com/pkg/xattr"
 )
 
 // Recycle items are stored inside the node folder and start with the uuid of the deleted node.
@@ -41,10 +50,93 @@ func (fs *ocisfs) EmptyRecycle(ctx context.Context) error {
 	return errtypes.NotSupported("operation not supported: EmptyRecycle")
 }
 
-func (fs *ocisfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error) {
-	return nil, errtypes.NotSupported("operation not supported: ListRecycle")
+func (fs *ocisfs) ListRecycle(ctx context.Context) (items []*provider.RecycleItem, err error) {
+	log := appctx.GetLogger(ctx)
+
+	var trashRoot string
+	if fs.pw.EnableHome {
+		u := user.ContextMustGetUser(ctx)
+		// TODO use layout, see Tree.Delete() for problem
+		trashRoot = filepath.Join(fs.pw.Root, "trash", u.Id.OpaqueId)
+	} else {
+		trashRoot = filepath.Join(fs.pw.Root, "trash", "root")
+	}
+
+	items = make([]*provider.RecycleItem, 0)
+
+	f, err := os.Open(trashRoot)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return items, nil
+		}
+		return nil, errors.Wrap(err, "tree: error listing "+trashRoot)
+	}
+
+	names, err := f.Readdirnames(0)
+	if err != nil {
+		return nil, err
+	}
+	for i := range names {
+		var link string
+		link, err = os.Readlink(filepath.Join(trashRoot, names[i]))
+		if err != nil {
+			log.Error().Err(err).Str("trashRoot", trashRoot).Str("name", names[i]).Msg("error reading trash link, skipping")
+			err = nil
+			continue
+		}
+		parts := strings.SplitN(link, ".T.", 2)
+		if len(parts) != 2 {
+			log.Error().Err(err).Str("trashRoot", trashRoot).Str("name", names[i]).Str("link", link).Interface("parts", parts).Msg("malformed trash link, skipping")
+			continue
+		}
+
+		nodePath := filepath.Join(fs.pw.Root, "nodes", filepath.Base(link))
+		md, err := os.Stat(nodePath)
+		if err != nil {
+			log.Error().Err(err).Str("trashRoot", trashRoot).Str("name", names[i]).Str("link", link).Interface("parts", parts).Msg("could not stat trash item, skipping")
+			continue
+		}
+		item := &provider.RecycleItem{
+			Type: getResourceType(md.IsDir()),
+			Size: uint64(md.Size()),
+		}
+		if deletionTime, err := time.Parse(time.RFC3339Nano, parts[1]); err == nil {
+			item.DeletionTime = &types.Timestamp{
+				Seconds: uint64(deletionTime.Unix()),
+				// TODO nanos
+			}
+		} else {
+			log.Error().Err(err).Str("trashRoot", trashRoot).Str("name", names[i]).Str("link", link).Interface("parts", parts).Msg("could parse time format, ignoring")
+		}
+
+		// lookup parent id in extended attributes
+		var attrBytes []byte
+		if attrBytes, err = xattr.Get(nodePath, trashOriginAttr); err == nil {
+			item.Path = string(attrBytes)
+		} else {
+			log.Error().Err(err).Str("trashRoot", trashRoot).Str("name", names[i]).Str("link", link).Interface("parts", parts).Msg("could not read parent id, skipping")
+			continue
+		}
+		// lookup name in extended attributes
+		if attrBytes, err = xattr.Get(nodePath, "user.ocis.name"); err == nil {
+			item.Key = string(attrBytes)
+		} else {
+			log.Error().Err(err).Str("trashRoot", trashRoot).Str("name", names[i]).Str("link", link).Interface("parts", parts).Msg("could not read parent id, skipping")
+			continue
+		}
+
+		items = append(items, item)
+	}
+	return
 }
 
 func (fs *ocisfs) RestoreRecycleItem(ctx context.Context, key string) error {
 	return errtypes.NotSupported("operation not supported: RestoreRecycleItem")
+}
+
+func getResourceType(isDir bool) provider.ResourceType {
+	if isDir {
+		return provider.ResourceType_RESOURCE_TYPE_CONTAINER
+	}
+	return provider.ResourceType_RESOURCE_TYPE_FILE
 }
