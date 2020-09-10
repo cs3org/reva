@@ -99,6 +99,7 @@ func (fs *ocisfs) ListRecycle(ctx context.Context) (items []*provider.RecycleIte
 		item := &provider.RecycleItem{
 			Type: getResourceType(md.IsDir()),
 			Size: uint64(md.Size()),
+			Key:  parts[0],
 		}
 		if deletionTime, err := time.Parse(time.RFC3339Nano, parts[1]); err == nil {
 			item.DeletionTime = &types.Timestamp{
@@ -114,24 +115,95 @@ func (fs *ocisfs) ListRecycle(ctx context.Context) (items []*provider.RecycleIte
 		if attrBytes, err = xattr.Get(nodePath, trashOriginAttr); err == nil {
 			item.Path = string(attrBytes)
 		} else {
-			log.Error().Err(err).Str("trashRoot", trashRoot).Str("name", names[i]).Str("link", link).Interface("parts", parts).Msg("could not read parent id, skipping")
+			log.Error().Err(err).Str("trashRoot", trashRoot).Str("name", names[i]).Str("link", link).Msg("could not read origin path, skipping")
 			continue
 		}
 		// lookup name in extended attributes
-		if attrBytes, err = xattr.Get(nodePath, "user.ocis.name"); err == nil {
-			item.Key = string(attrBytes)
-		} else {
-			log.Error().Err(err).Str("trashRoot", trashRoot).Str("name", names[i]).Str("link", link).Interface("parts", parts).Msg("could not read parent id, skipping")
-			continue
-		}
+		/*
+			if attrBytes, err = xattr.Get(nodePath, "user.ocis.name"); err == nil {
+				item.Key = string(attrBytes)
+			} else {
+				log.Error().Err(err).Str("trashRoot", trashRoot).Str("name", names[i]).Str("link", link).Msg("could not read name, skipping")
+				continue
+			}
+		*/
 
 		items = append(items, item)
 	}
 	return
 }
 
-func (fs *ocisfs) RestoreRecycleItem(ctx context.Context, key string) error {
-	return errtypes.NotSupported("operation not supported: RestoreRecycleItem")
+func (fs *ocisfs) RestoreRecycleItem(ctx context.Context, key string) (err error) {
+	log := appctx.GetLogger(ctx)
+
+	if key == "" {
+		return errtypes.InternalError("key is empty")
+	}
+
+	var trashItem string
+	if fs.pw.EnableHome {
+		u := user.ContextMustGetUser(ctx)
+		// TODO use layout, see Tree.Delete() for problem
+		trashItem = filepath.Join(fs.pw.Root, "trash", u.Id.OpaqueId, key)
+	} else {
+		trashItem = filepath.Join(fs.pw.Root, "trash", "root", key)
+	}
+
+	var link string
+	link, err = os.Readlink(trashItem)
+	if err != nil {
+		log.Error().Err(err).Str("trashItem", trashItem).Msg("error reading trash link")
+		return
+	}
+	parts := strings.SplitN(link, ".T.", 2)
+	if len(parts) != 2 {
+		log.Error().Err(err).Str("trashItem", trashItem).Interface("parts", parts).Msg("malformed trash link")
+		return
+	}
+
+	deletedNodePath := filepath.Join(fs.pw.Root, "nodes", filepath.Base(link))
+
+	// get origin node
+	origin := "/"
+
+	// lookup parent id in extended attributes
+	var attrBytes []byte
+	if attrBytes, err = xattr.Get(deletedNodePath, trashOriginAttr); err == nil {
+		origin = string(attrBytes)
+	} else {
+		log.Error().Err(err).Str("trashItem", trashItem).Str("link", link).Str("deletedNodePath", deletedNodePath).Msg("could not read origin path, restoring to /")
+	}
+
+	// link to origin
+	var n *Node
+	n, err = fs.pw.NodeFromPath(ctx, origin)
+	if err != nil {
+		return
+	}
+
+	if n.Exists {
+		return errtypes.AlreadyExists("origin already exists")
+	}
+
+	// rename to node only name, so it is picked up by id
+	nodePath := filepath.Join(fs.pw.Root, "nodes", parts[0])
+	err = os.Rename(deletedNodePath, nodePath)
+	if err != nil {
+		return
+	}
+
+	// add the entry for the parent dir
+	err = os.Symlink("../"+parts[0], filepath.Join(fs.pw.Root, "nodes", n.ParentID, n.Name))
+	if err != nil {
+		return
+	}
+	n.Exists = true
+
+	if err = os.Remove(trashItem); err != nil {
+		log.Error().Err(err).Str("trashItem", trashItem).Msg("error deleting trashitem")
+	}
+	return fs.tp.Propagate(ctx, n)
+
 }
 
 func getResourceType(isDir bool) provider.ResourceType {
