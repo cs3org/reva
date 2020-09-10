@@ -202,8 +202,9 @@ func (n *Node) Owner() (id string, idp string, err error) {
 
 // AsResourceInfo return the node as CS3 ResourceInfo
 func (n *Node) AsResourceInfo(ctx context.Context) (ri *provider.ResourceInfo, err error) {
-	var fn string
+	log := appctx.GetLogger(ctx)
 
+	var fn string
 	nodePath := filepath.Join(n.pw.Root, "nodes", n.ID)
 
 	var fi os.FileInfo
@@ -232,7 +233,6 @@ func (n *Node) AsResourceInfo(ctx context.Context) (ri *provider.ResourceInfo, e
 	var etag []byte
 	// TODO optionally store etag in new `root/attributes/<uuid>` file
 	if etag, err = xattr.Get(nodePath, "user.ocis.etag"); err != nil {
-		log := appctx.GetLogger(ctx)
 		log.Error().Err(err).Interface("node", n).Msg("could not read etag")
 	}
 
@@ -264,7 +264,26 @@ func (n *Node) AsResourceInfo(ctx context.Context) (ri *provider.ResourceInfo, e
 			OpaqueId: owner,
 		}
 	}
-	log := appctx.GetLogger(ctx)
+
+	// TODO only read the requested metadata attributes
+	if attrs, err := xattr.List(nodePath); err == nil {
+		ri.ArbitraryMetadata = &provider.ArbitraryMetadata{
+			Metadata: map[string]string{},
+		}
+		for i := range attrs {
+			if strings.HasPrefix(attrs[i], metadataPrefix) {
+				k := strings.TrimPrefix(attrs[i], metadataPrefix)
+				if v, err := xattr.Get(nodePath, attrs[i]); err == nil {
+					ri.ArbitraryMetadata.Metadata[k] = string(v)
+				} else {
+					log.Error().Err(err).Interface("node", n).Str("attr", attrs[i]).Msg("could not get attribute value")
+				}
+			}
+		}
+	} else {
+		log.Error().Err(err).Interface("node", n).Msg("could not list attributes")
+	}
+
 	log.Debug().
 		Interface("ri", ri).
 		Msg("AsResourceInfo")
