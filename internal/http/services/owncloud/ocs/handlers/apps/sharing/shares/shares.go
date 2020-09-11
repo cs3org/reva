@@ -30,6 +30,7 @@ import (
 	"strings"
 	"time"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
@@ -54,12 +55,14 @@ import (
 type Handler struct {
 	gatewayAddr string
 	publicURL   string
+	ttlcache    *TTLMap
 }
 
 // Init initializes this and any contained handlers
 func (h *Handler) Init(c *config.Config) error {
 	h.gatewayAddr = c.GatewaySvc
 	h.publicURL = c.Config.Host
+	h.ttlcache = New(1000, 60)
 	return nil
 }
 
@@ -298,7 +301,7 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request) {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc create share request failed", err)
 		return
 	}
-	s, err := h.userShare2ShareData(ctx, createShareResponse.Share)
+	s, err := conversions.UserShare2ShareData(ctx, createShareResponse.Share)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
 		return
@@ -308,6 +311,7 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request) {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error adding fileinfo to share", err)
 		return
 	}
+	h.addDisplaynames(ctx, c, s)
 	response.WriteOCSSuccess(w, r, s)
 }
 
@@ -739,7 +743,7 @@ func (h *Handler) getShare(w http.ResponseWriter, r *http.Request, shareID strin
 
 		if err == nil && uRes.GetShare() != nil {
 			resourceID = uRes.Share.ResourceId
-			share, err = h.userShare2ShareData(ctx, uRes.Share)
+			share, err = conversions.UserShare2ShareData(ctx, uRes.Share)
 			if err != nil {
 				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
 				return
@@ -781,6 +785,7 @@ func (h *Handler) getShare(w http.ResponseWriter, r *http.Request, shareID strin
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
 	}
 
+	h.addDisplaynames(ctx, client, share)
 	response.WriteOCSSuccess(w, r, []*conversions.ShareData{share})
 }
 
@@ -866,7 +871,7 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 		return
 	}
 
-	share, err := h.userShare2ShareData(ctx, gRes.Share)
+	share, err := conversions.UserShare2ShareData(ctx, gRes.Share)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
 		return
@@ -903,6 +908,7 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 		return
 	}
 
+	h.addDisplaynames(ctx, uClient, share)
 	response.WriteOCSSuccess(w, r, share)
 }
 
@@ -1048,7 +1054,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		data, err := h.userShare2ShareData(r.Context(), rs.Share)
+		data, err := conversions.UserShare2ShareData(r.Context(), rs.Share)
 		if err != nil {
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, err.Error(), err)
 			return
@@ -1071,6 +1077,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		h.addDisplaynames(r.Context(), gwc, data)
 		shares = append(shares, data)
 	}
 
@@ -1272,7 +1279,7 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.ListS
 
 		// build OCS response payload
 		for _, s := range lsUserSharesResponse.Shares {
-			share, err := h.userShare2ShareData(ctx, s)
+			share, err := conversions.UserShare2ShareData(ctx, s)
 			if err != nil {
 				return nil, err
 			}
@@ -1305,6 +1312,7 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.ListS
 			if err != nil {
 				return nil, err
 			}
+			h.addDisplaynames(ctx, c, share)
 
 			log.Debug().Interface("share", s).Interface("info", rInfo).Interface("shareData", share).Msg("mapped")
 			ocsDataPayload = append(ocsDataPayload, share)
@@ -1347,174 +1355,70 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 		// item type
 		s.ItemType = conversions.ResourceType(info.GetType()).String()
 
-		c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
-		if err != nil {
-			return err
-		}
-
-		// owner, err := c.GetUser(ctx, &userpb.GetUserRequest{
-		// 	UserId: info.Owner,
-		// })
-		// if err != nil {
-		// 	return err
-		// }
-
-		// if owner.Status.Code == rpc.Code_CODE_OK {
-		// 	// TODO the user from GetUser might not have an ID set, so we are using the one we have
-		// 	s.DisplaynameFileOwner = owner.GetUser().DisplayName
-		// } else {
-		// 	err := errors.New("could not look up share owner")
-		// 	log.Err(err).
-		// 		Str("user_idp", info.Owner.GetIdp()).
-		// 		Str("user_opaque_id", info.Owner.GetOpaqueId()).
-		// 		Str("code", owner.Status.Code.String()).
-		// 		Msg(owner.Status.Message)
-		// 	return err
-		// }
-
 		// file owner might not yet be set. Use file info
 		if s.UIDFileOwner == "" {
-			// TODO we don't know if info.Owner is always set.
-			s.UIDFileOwner = response.UserIDToString(info.Owner)
-		}
-		if s.DisplaynameFileOwner == "" && info.Owner != nil {
-			owner, err := c.GetUser(ctx, &userpb.GetUserRequest{
-				UserId: info.Owner,
-			})
-			if err != nil {
-				return err
-			}
-
-			if owner.Status.Code == rpc.Code_CODE_OK {
-				// TODO the user from GetUser might not have an ID set, so we are using the one we have
-				s.DisplaynameFileOwner = owner.GetUser().DisplayName
-			} else {
-				err := errors.New("could not look up share owner")
-				log.Err(err).
-					Str("user_idp", info.Owner.GetIdp()).
-					Str("user_opaque_id", info.Owner.GetOpaqueId()).
-					Str("code", owner.Status.Code.String()).
-					Msg(owner.Status.Message)
-				return err
-			}
+			s.UIDFileOwner = info.GetOwner().GetOpaqueId()
 		}
 		// share owner might not yet be set. Use file info
 		if s.UIDOwner == "" {
-			// TODO we don't know if info.Owner is always set.
-			s.UIDOwner = response.UserIDToString(info.Owner)
-		}
-		if s.DisplaynameOwner == "" && info.Owner != nil {
-			owner, err := c.GetUser(ctx, &userpb.GetUserRequest{
-				UserId: info.Owner,
-			})
-
-			if err != nil {
-				return err
-			}
-
-			if owner.Status.Code == rpc.Code_CODE_OK {
-				// TODO the user from GetUser might not have an ID set, so we are using the one we have
-				s.DisplaynameOwner = owner.User.DisplayName
-			} else {
-				err := errors.New("could not look up file owner")
-				log.Err(err).
-					Str("user_idp", info.Owner.GetIdp()).
-					Str("user_opaque_id", info.Owner.GetOpaqueId()).
-					Str("code", owner.Status.Code.String()).
-					Msg(owner.Status.Message)
-				return err
-			}
+			s.UIDOwner = info.GetOwner().GetOpaqueId()
 		}
 	}
 	return nil
 }
 
-// TODO(jfd) merge userShare2ShareData with publicShare2ShareData
-func (h *Handler) userShare2ShareData(ctx context.Context, share *collaboration.Share) (*conversions.ShareData, error) {
-	sd := &conversions.ShareData{
-		Permissions: conversions.UserSharePermissions2OCSPermissions(share.GetPermissions()),
-		ShareType:   conversions.ShareTypeUser,
-	}
-
-	c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
-	if err != nil {
-		return nil, err
-	}
-
+func (h *Handler) getDisplayname(ctx context.Context, c gateway.GatewayAPIClient, userid string) string {
 	log := appctx.GetLogger(ctx)
+	if dn := h.ttlcache.Get(userid); dn != "" {
+		log.Debug().Str("userid", userid).Msg("cache hit")
+		return dn
+	}
+	log.Debug().Str("userid", userid).Msg("cache miss")
+	res, err := c.GetUser(ctx, &userpb.GetUserRequest{
+		UserId: &userpb.UserId{
+			OpaqueId: userid,
+		},
+	})
+	if err != nil {
+		log.Err(err).
+			Str("userid", userid).
+			Msg("could not look up user")
+		return ""
+	}
+	if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
+		log.Err(err).
+			Str("opaque_id", userid).
+			Int32("code", int32(res.GetStatus().GetCode())).
+			Str("message", res.GetStatus().GetMessage()).
+			Msg("get user call failed")
+		return ""
+	}
+	if res.User == nil {
+		log.Debug().
+			Str("opaque_id", userid).
+			Int32("code", int32(res.GetStatus().GetCode())).
+			Str("message", res.GetStatus().GetMessage()).
+			Msg("user not found")
+		return ""
+	}
+	if res.User.DisplayName == "" {
+		log.Debug().
+			Str("opaque_id", userid).
+			Int32("code", int32(res.GetStatus().GetCode())).
+			Str("message", res.GetStatus().GetMessage()).
+			Msg("Displayname empty")
+		return ""
+	}
 
-	if share.Creator != nil {
-		creator, err := c.GetUser(ctx, &userpb.GetUserRequest{
-			UserId: share.Creator,
-		})
-		if err != nil {
-			return nil, err
-		}
+	h.ttlcache.Put(userid, res.User.DisplayName)
+	log.Debug().Str("userid", userid).Msg("cache update")
+	return res.User.DisplayName
+}
 
-		if creator.Status.Code == rpc.Code_CODE_OK {
-			// TODO the user from GetUser might not have an ID set, so we are using the one we have
-			sd.UIDOwner = response.UserIDToString(share.Creator)
-			sd.DisplaynameOwner = creator.GetUser().DisplayName
-		} else {
-			log.Err(errors.Wrap(err, "could not look up creator")).
-				Str("user_idp", share.Creator.GetIdp()).
-				Str("user_opaque_id", share.Creator.GetOpaqueId()).
-				Str("code", creator.Status.Code.String()).
-				Msg(creator.Status.Message)
-			return nil, err
-		}
-	}
-	if share.Owner != nil {
-		owner, err := c.GetUser(ctx, &userpb.GetUserRequest{
-			UserId: share.Owner,
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		if owner.Status.Code == rpc.Code_CODE_OK {
-			// TODO the user from GetUser might not have an ID set, so we are using the one we have
-			sd.UIDFileOwner = response.UserIDToString(share.Owner)
-			sd.DisplaynameFileOwner = owner.GetUser().DisplayName
-		} else {
-			log.Err(errors.Wrap(err, "could not look up owner")).
-				Str("user_idp", share.Owner.GetIdp()).
-				Str("user_opaque_id", share.Owner.GetOpaqueId()).
-				Str("code", owner.Status.Code.String()).
-				Msg(owner.Status.Message)
-			return nil, err
-		}
-	}
-	if share.Grantee.Id != nil {
-		grantee, err := c.GetUser(ctx, &userpb.GetUserRequest{
-			UserId: share.Grantee.GetId(),
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		if grantee.Status.Code == rpc.Code_CODE_OK {
-			// TODO the user from GetUser might not have an ID set, so we are using the one we have
-			sd.ShareWith = response.UserIDToString(share.Grantee.Id)
-			sd.ShareWithDisplayname = grantee.GetUser().DisplayName
-		} else {
-			log.Err(errors.Wrap(err, "could not look up grantee")).
-				Str("user_idp", share.Grantee.GetId().GetIdp()).
-				Str("user_opaque_id", share.Grantee.GetId().GetOpaqueId()).
-				Str("code", grantee.Status.Code.String()).
-				Msg(grantee.Status.Message)
-			return nil, err
-		}
-	}
-	if share.Id != nil && share.Id.OpaqueId != "" {
-		sd.ID = share.Id.OpaqueId
-	}
-	if share.Ctime != nil {
-		sd.STime = share.Ctime.Seconds // TODO CS3 api birth time = btime
-	}
-	// actually clients should be able to GET and cache the user info themselves ...
-	// TODO check grantee type for user vs group
-	return sd, nil
+func (h *Handler) addDisplaynames(ctx context.Context, c gateway.GatewayAPIClient, s *conversions.ShareData) {
+	s.DisplaynameOwner = h.getDisplayname(ctx, c, s.UIDOwner)
+	s.DisplaynameFileOwner = h.getDisplayname(ctx, c, s.UIDFileOwner)
+	s.ShareWithDisplayname = h.getDisplayname(ctx, c, s.ShareWith)
 }
 
 func (h *Handler) isPublicShare(r *http.Request, oid string) bool {
