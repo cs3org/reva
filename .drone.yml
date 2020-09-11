@@ -355,7 +355,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout ecd1e3f70d32f89c497ebaa20aaaf139bb4c6a89
+      - git checkout 1f5506549cbebdc910b6d24681278e9a210f6d82
 
   - name: localAPIAcceptanceTestsOcStorage
     image: owncloudci/php:7.2
@@ -429,7 +429,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout ecd1e3f70d32f89c497ebaa20aaaf139bb4c6a89
+      - git checkout 1f5506549cbebdc910b6d24681278e9a210f6d82
 
   - name: oC10APIAcceptanceTests
     image: owncloudci/php:7.2
@@ -444,7 +444,7 @@ steps:
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_OCIS: 'true'
       TEST_REVA: 'true'
-      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage'
+      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage'
       EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OC-storage.txt'
 
 services:
