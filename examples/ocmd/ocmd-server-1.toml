@@ -76,6 +76,7 @@ driver = "static"
 [grpc.services.appregistry.static.rules]
 "text/plain" = "localhost:19000"
 "text/markdown" = "localhost:19000"
+"application/compressed-markdown" = "localhost:19000"
 "application/vnd.oasis.opendocument.text" = "localhost:19000"
 "application/vnd.oasis.opendocument.spreadsheet" = "localhost:19000"
 "application/vnd.oasis.opendocument.presentation" = "localhost:19000"
@@ -132,3 +133,6 @@ prefix = "ocs"
 [http.services.ocdav]
 
 [http.middlewares.cors]
+
+[mime.mapping]
+".zmd" = "application/compressed-markdown"
