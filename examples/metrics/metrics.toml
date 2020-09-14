@@ -1,5 +1,12 @@
 [shared]
-jwt_secret = "Pive-Fumkiu4"
+
+[http.services.metrics]
+# one of dummy, json.
+metrics_data_driver_type = "dummy"
+# if left unspecified location /var/tmp/reva/metrics/metricsdata.json is used (for driver type json).
+metrics_data_location = ""
+# metrics recording interval in milliseconds
+metrics_record_interval = 5000
 
 [http.services.prometheus]
 

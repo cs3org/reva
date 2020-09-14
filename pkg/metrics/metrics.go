@@ -18,22 +18,130 @@
 
 package metrics
 
+/*
+Metrics registers OpenCensus data views of the metrics.
+Metrics initializes the driver as specified in the configuration.
+*/
 import (
+	"context"
+	"os"
+	"time"
+
+	"github.com/cs3org/reva/pkg/metrics/config"
+	"github.com/cs3org/reva/pkg/metrics/driver/registry"
+	"github.com/cs3org/reva/pkg/metrics/reader"
+
+	"github.com/cs3org/reva/pkg/logger"
+	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
 )
 
-// Reader is the interface that defines how the metrics will be read.
-type Reader interface {
+// Init intializes metrics according to the specified configuration
+func Init(conf *config.Config) error {
+	log := logger.New().With().Int("pid", os.Getpid()).Logger()
 
-	// GetNumUsersView returns an OpenCensus stats view which records the
-	// number of users registered in the mesh provider.
-	GetNumUsersView() *view.View
+	driver := registry.GetDriver(conf.MetricsDataDriverType)
 
-	// GetNumGroupsView returns an OpenCensus stats view which records the
-	// number of user groups registered in the mesh provider.
-	GetNumGroupsView() *view.View
+	if driver == nil {
+		log.Info().Msg("No metrics are being recorded.")
+		// No error but just don't proceed with metrics
+		return nil
+	}
 
-	// GetAmountStorageView returns an OpenCensus stats view which records the
-	// amount of storage in the system.
-	GetAmountStorageView() *view.View
+	// configure the driver
+	err := driver.Configure(conf)
+	if err != nil {
+		return err
+	}
+
+	m := &Metrics{
+		dataDriver:           driver,
+		NumUsersMeasure:      stats.Int64("cs3_org_sciencemesh_site_total_num_users", "The total number of users within this site", stats.UnitDimensionless),
+		NumGroupsMeasure:     stats.Int64("cs3_org_sciencemesh_site_total_num_groups", "The total number of groups within this site", stats.UnitDimensionless),
+		AmountStorageMeasure: stats.Int64("cs3_org_sciencemesh_site_total_amount_storage", "The total amount of storage used within this site", stats.UnitBytes),
+	}
+
+	if err := view.Register(
+		m.getNumUsersView(),
+		m.getNumGroupsView(),
+		m.getAmountStorageView(),
+	); err != nil {
+		return err
+	}
+
+	// periodically record metrics data
+	go func() {
+		for {
+			if err := m.recordMetrics(); err != nil {
+				log.Error().Err(err).Msg("Metrics recording failed.")
+			}
+			<-time.After(time.Millisecond * time.Duration(conf.MetricsRecordInterval))
+		}
+	}()
+
+	return nil
+}
+
+// Metrics the metrics struct
+type Metrics struct {
+	dataDriver           reader.Reader // the metrics data driver is an implemention of Reader
+	NumUsersMeasure      *stats.Int64Measure
+	NumGroupsMeasure     *stats.Int64Measure
+	AmountStorageMeasure *stats.Int64Measure
+}
+
+// RecordMetrics records the latest metrics from the metrics data source as OpenCensus stats views.
+func (m *Metrics) recordMetrics() error {
+	// record all latest metrics
+	if m.dataDriver != nil {
+		m.recordNumUsers()
+		m.recordNumGroups()
+		m.recordAmountStorage()
+	}
+	return nil
+}
+
+// recordNumUsers records the latest number of site users figure
+func (m *Metrics) recordNumUsers() {
+	ctx := context.Background()
+	stats.Record(ctx, m.NumUsersMeasure.M(m.dataDriver.GetNumUsers()))
+}
+
+func (m *Metrics) getNumUsersView() *view.View {
+	return &view.View{
+		Name:        m.NumUsersMeasure.Name(),
+		Description: m.NumUsersMeasure.Description(),
+		Measure:     m.NumUsersMeasure,
+		Aggregation: view.LastValue(),
+	}
+}
+
+// recordNumGroups records the latest number of site groups figure
+func (m *Metrics) recordNumGroups() {
+	ctx := context.Background()
+	stats.Record(ctx, m.NumGroupsMeasure.M(m.dataDriver.GetNumGroups()))
+}
+
+func (m *Metrics) getNumGroupsView() *view.View {
+	return &view.View{
+		Name:        m.NumGroupsMeasure.Name(),
+		Description: m.NumGroupsMeasure.Description(),
+		Measure:     m.NumGroupsMeasure,
+		Aggregation: view.LastValue(),
+	}
+}
+
+// recordAmountStorage records the latest amount storage figure
+func (m *Metrics) recordAmountStorage() {
+	ctx := context.Background()
+	stats.Record(ctx, m.AmountStorageMeasure.M(m.dataDriver.GetAmountStorage()))
+}
+
+func (m *Metrics) getAmountStorageView() *view.View {
+	return &view.View{
+		Name:        m.AmountStorageMeasure.Name(),
+		Description: m.AmountStorageMeasure.Description(),
+		Measure:     m.AmountStorageMeasure,
+		Aggregation: view.LastValue(),
+	}
 }
