@@ -557,7 +557,7 @@ services:
 ---
 kind: pipeline
 type: docker
-name: owncloud-integration-tests-1
+name: owncloud-integration-tests-owncloud-storage-1
 
 platform:
   os: linux
@@ -612,7 +612,7 @@ steps:
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 1
-      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OC-storage.txt'
+      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.txt'
 
 services:
   - 'name': 'ldap'
@@ -634,7 +634,7 @@ services:
 ---
 kind: pipeline
 type: docker
-name: owncloud-integration-tests-2
+name: owncloud-integration-tests-owncloud-storage-2
 
 platform:
   os: linux
@@ -689,7 +689,7 @@ steps:
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 2
-      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OC-storage.txt'
+      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.txt'
 
 services:
   - 'name': 'ldap'
@@ -711,7 +711,7 @@ services:
 ---
 kind: pipeline
 type: docker
-name: owncloud-integration-tests-3
+name: owncloud-integration-tests-owncloud-storage-3
 
 platform:
   os: linux
@@ -766,7 +766,7 @@ steps:
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 3
-      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OC-storage.txt'
+      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.txt'
 
 services:
   - 'name': 'ldap'
@@ -788,7 +788,7 @@ services:
 ---
 kind: pipeline
 type: docker
-name: owncloud-integration-tests-4
+name: owncloud-integration-tests-owncloud-storage-4
 
 platform:
   os: linux
@@ -843,7 +843,7 @@ steps:
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 4
-      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OC-storage.txt'
+      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.txt'
 
 services:
   - 'name': 'ldap'
@@ -865,7 +865,7 @@ services:
 ---
 kind: pipeline
 type: docker
-name: owncloud-integration-tests-5
+name: owncloud-integration-tests-owncloud-storage-5
 
 platform:
   os: linux
@@ -920,7 +920,7 @@ steps:
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 5
-      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OC-storage.txt'
+      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.txt'
 
 services:
   - 'name': 'ldap'
@@ -942,7 +942,7 @@ services:
 ---
 kind: pipeline
 type: docker
-name: owncloud-integration-tests-6
+name: owncloud-integration-tests-owncloud-storage-6
 
 platform:
   os: linux
@@ -997,7 +997,7 @@ steps:
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 6
-      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OC-storage.txt'
+      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.txt'
 
 services:
   - 'name': 'ldap'
