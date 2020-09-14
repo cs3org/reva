@@ -5,7 +5,7 @@ Feature: upload to a public link share
   Background:
     Given user "Alice" has been created with default attributes and skeleton files
 
-  @issue-ocis-reva-290
+  @issue-ocis-reva-290 @skipOnOcis-OCIS-Storage
   # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario: Uploading file to a public upload-only share that was deleted does not work
     Given the administrator has enabled DAV tech_preview

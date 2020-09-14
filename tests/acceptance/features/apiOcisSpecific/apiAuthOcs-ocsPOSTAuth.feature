@@ -5,6 +5,7 @@ Feature: auth
     Given user "Alice" has been created with default attributes and skeleton files
 
   @issue-ocis-reva-30
+  @skipOnOcis-OCIS-Storage
   # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario: send POST requests to OCS endpoints as normal user with wrong password
     When user "Alice" requests these endpoints with "POST" including body "doesnotmatter" using password "invalid" about user "Alice"

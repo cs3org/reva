@@ -11,6 +11,7 @@ Feature: LOCK file/folder
     And user "Brian" has been created with default attributes and without skeleton files
 
   @issue-ocis-reva-9
+  @skipOnOcis-OCIS-Storage
   # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario: send LOCK requests to another user's webDav endpoints as normal user
     When user "Brian" requests these endpoints with "LOCK" to get property "d:shared" about user "Alice"

@@ -8,7 +8,7 @@ Feature: sharing
       | Alice    |
       | Brian    |
 
-  @issue-ocis-reva-47
+  @issue-ocis-reva-47 @skipOnOcis-OCIS-Storage
   # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario Outline: Empty webdav share-permissions for owned file
     Given using <dav-path> DAV path

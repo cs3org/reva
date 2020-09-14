@@ -22,7 +22,7 @@ Feature: sharing
       | 1               | 200              |
       | 2               | 404              |
 
-  @issue-ocis-reva-372
+  @issue-ocis-reva-372 @skipOnOcis-OCIS-Storage
   # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario Outline: getting all the shares inside the folder
     Given using OCS API version "<ocs_api_version>"

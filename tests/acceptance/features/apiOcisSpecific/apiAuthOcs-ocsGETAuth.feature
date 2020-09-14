@@ -38,6 +38,7 @@ Feature: auth
   @issue-ocis-reva-33
   @issue-ocis-reva-34
   @issue-ocis-reva-35
+  @skipOnOcis-OCIS-Storage
   # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario: using OCS with non-admin basic auth
     When the user "Alice" requests these endpoints with "GET" with basic auth
@@ -86,6 +87,7 @@ Feature: auth
 
   @issue-ocis-reva-29
   @issue-ocis-reva-30
+  @skipOnOcis-OCIS-Storage
   # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario: using OCS as normal user with wrong password
     When user "Alice" requests these endpoints with "GET" using password "invalid"

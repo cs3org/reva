@@ -54,7 +54,7 @@ Feature: dav-versions
 #    And the content of file "/sharefile.txt" for user "Brian" should be "First content"
 
   @files_sharing-app-required
-  @issue-ocis-reva-243 @issue-ocis-reva-386
+  @issue-ocis-reva-243 @issue-ocis-reva-386 @skipOnOcis-OCIS-Storage
   # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario Outline: Moving a file (with versions) into a shared folder as the sharee and as the sharer (old DAV path)
     Given using <dav_version> DAV path

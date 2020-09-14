@@ -7,7 +7,7 @@ Feature: sharing
       | Alice    |
       | Brian    |
 
-  @issue-ocis-reva-260
+  @issue-ocis-reva-260 @skipOnOcis-OCIS-Storage
   # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario Outline: Sharee can't see the share that is filtered out
     Given using OCS API version "<ocs_api_version>"

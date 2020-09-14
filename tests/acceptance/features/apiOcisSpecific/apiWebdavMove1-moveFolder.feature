@@ -8,7 +8,7 @@ Feature: move (rename) folder
     Given using OCS API version "1"
     And user "Alice" has been created with default attributes and without skeleton files
 
-  @issue-ocis-reva-211
+  @issue-ocis-reva-211 @skipOnOcis-OCIS-Storage
   # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario Outline: Renaming a folder to a backslash is allowed
     Given using <dav_version> DAV path
@@ -30,7 +30,7 @@ Feature: move (rename) folder
       | dav_version |
       | new         |
 
-  @issue-ocis-reva-211
+  @issue-ocis-reva-211 @skipOnOcis-OCIS-Storage
   # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario Outline: Renaming a folder beginning with a backslash is allowed
     Given using <dav_version> DAV path
@@ -52,7 +52,7 @@ Feature: move (rename) folder
       | dav_version |
       | new         |
 
-  @issue-ocis-reva-211
+  @issue-ocis-reva-211 @skipOnOcis-OCIS-Storage
   # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario Outline: Renaming a folder including a backslash encoded is allowed
     Given using <dav_version> DAV path

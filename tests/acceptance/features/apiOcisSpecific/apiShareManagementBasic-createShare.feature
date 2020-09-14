@@ -41,7 +41,7 @@ Feature: sharing
       | 1               | 2                     | 2                   | 100             |
       | 2               | 2                     | 2                   | 200             |
 
-  @issue-ocis-reva-243
+  @issue-ocis-reva-243 @skipOnOcis-OCIS-Storage
   # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario Outline: more tests to demonstrate different ocis-reva issue 243 behaviours (OCS API v1)
     Given using OCS API version "<ocs_api_version>"

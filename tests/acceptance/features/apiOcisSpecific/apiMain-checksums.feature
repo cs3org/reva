@@ -29,7 +29,7 @@ Feature: checksums
       | header      |
       | OC-Checksum |
 
-  @issue-ocis-reva-99
+  @issue-ocis-reva-99 @skipOnOcis-OCIS-Storage
   # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario: Upload a file where checksum does not match (old DAV path)
     Given using old DAV path
