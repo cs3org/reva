@@ -143,14 +143,91 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 		return s.initiateFileDownload(ctx, req)
 	}
 
-	if s.isSharedFolder(ctx, p) || s.isShareName(ctx, p) {
-		log.Debug().Msgf("path:%s points to shared folder or share name", p)
-		err := errtypes.PermissionDenied("gateway: cannot download share folder or share name: path=" + p)
+	if s.isSharedFolder(ctx, p) {
+		log.Debug().Msgf("path:%s points to shared folder", p)
+		err := errtypes.PermissionDenied("gateway: cannot download share folder: path=" + p)
 		log.Err(err).Msg("gateway: error downloading")
 		return &gateway.InitiateFileDownloadResponse{
-			Status: status.NewInvalidArg(ctx, "path points to share folder or share name"),
+			Status: status.NewInvalidArg(ctx, "path points to share folder"),
 		}, nil
 
+	}
+
+	if s.isShareName(ctx, p) {
+		statReq := &provider.StatRequest{Ref: req.Ref}
+		statRes, err := s.stat(ctx, statReq)
+		if err != nil {
+			return &gateway.InitiateFileDownloadResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
+			}, nil
+		}
+		if statRes.Status.Code != rpc.Code_CODE_OK {
+			if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+				return &gateway.InitiateFileDownloadResponse{
+					Status: status.NewNotFound(ctx, "gateway: file not found:"+statReq.Ref.String()),
+				}, nil
+			}
+			err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
+			return &gateway.InitiateFileDownloadResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
+			}, nil
+		}
+
+		if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
+			err := errors.New(fmt.Sprintf("gateway: expected reference: got:%+v", statRes.Info))
+			log.Err(err).Msg("gateway: error stating share name")
+			return &gateway.InitiateFileDownloadResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error initiating download"),
+			}, nil
+		}
+
+		ri, protocol, err := s.checkRef(ctx, statRes.Info)
+		if err != nil {
+			if _, ok := err.(errtypes.IsNotFound); ok {
+				return &gateway.InitiateFileDownloadResponse{
+					Status: status.NewNotFound(ctx, "gateway: reference not found:"+statRes.Info.Target),
+				}, nil
+			}
+			log.Err(err).Msg("gateway: error resolving reference")
+			return &gateway.InitiateFileDownloadResponse{
+				Status: status.NewInternal(ctx, err, "error initiating download"),
+			}, nil
+		}
+		// if it is a file allow download
+		if ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
+			log.Debug().Str("path", p).Interface("ri", ri).Msg("path points to share name file")
+
+			if protocol == "webdav" {
+				// TODO(ishank011): pass this through the datagateway service
+				// for now, we just expose the file server to the user
+				ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target)
+				if err != nil {
+					return &gateway.InitiateFileDownloadResponse{
+						Status: status.NewInternal(ctx, err, "gateway: error downloading from webdav host: "+p),
+					}, nil
+				}
+				return &gateway.InitiateFileDownloadResponse{
+					Opaque:           opaque,
+					Status:           status.NewOK(ctx),
+					DownloadEndpoint: ep,
+				}, nil
+			}
+
+			req.Ref = &provider.Reference{
+				Spec: &provider.Reference_Path{
+					Path: ri.Path,
+				},
+			}
+			log.Debug().Msg("download path: " + ri.Path)
+			return s.initiateFileDownload(ctx, req)
+
+		}
+		log.Debug().Str("path", p).Interface("statRes", statRes).Msg("path:%s points to share name")
+		err = errtypes.PermissionDenied("gateway: cannot download share name: path=" + p)
+		log.Err(err).Str("path", p).Msg("gateway: error downloading")
+		return &gateway.InitiateFileDownloadResponse{
+			Status: status.NewInvalidArg(ctx, "path points to share name"),
+		}, nil
 	}
 
 	if s.isShareChild(ctx, p) {
@@ -300,12 +377,92 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 		return s.initiateFileUpload(ctx, req)
 	}
 
-	if s.isSharedFolder(ctx, p) || s.isShareName(ctx, p) {
-		log.Debug().Msgf("path:%s points to shared folder or share name", p)
-		err := errtypes.PermissionDenied("gateway: cannot upload to share folder or share name: path=" + p)
+	if s.isSharedFolder(ctx, p) {
+		log.Debug().Str("path", p).Msg("path points to shared folder")
+		err := errtypes.PermissionDenied("gateway: cannot upload to share folder: path=" + p)
 		log.Err(err).Msg("gateway: error downloading")
 		return &gateway.InitiateFileUploadResponse{
-			Status: status.NewInvalidArg(ctx, "path points to share folder or share name"),
+			Status: status.NewInvalidArg(ctx, "path points to share folder"),
+		}, nil
+
+	}
+
+	if s.isShareName(ctx, p) {
+		log.Debug().Str("path", p).Msg("path points to share name")
+		statReq := &provider.StatRequest{Ref: req.Ref}
+		statRes, err := s.stat(ctx, statReq)
+		if err != nil {
+			return &gateway.InitiateFileUploadResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
+			}, nil
+		}
+		if statRes.Status.Code != rpc.Code_CODE_OK {
+			if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+				err = errtypes.PermissionDenied("gateway: cannot upload to share name: path=" + p)
+				log.Err(err).Msg("gateway: error uploading")
+				return &gateway.InitiateFileUploadResponse{
+					Status: status.NewInvalidArg(ctx, "path points to non existing share name"),
+				}, nil
+			}
+			err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
+			return &gateway.InitiateFileUploadResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
+			}, nil
+		}
+
+		if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
+			err := errors.New(fmt.Sprintf("gateway: expected reference: got:%+v", statRes.Info))
+			log.Err(err).Msg("gateway: error stating share name")
+			return &gateway.InitiateFileUploadResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error initiating upload"),
+			}, nil
+		}
+
+		ri, protocol, err := s.checkRef(ctx, statRes.Info)
+		if err != nil {
+			if _, ok := err.(errtypes.IsNotFound); ok {
+				return &gateway.InitiateFileUploadResponse{
+					Status: status.NewNotFound(ctx, "gateway: reference not found:"+statRes.Info.Target),
+				}, nil
+			}
+			log.Err(err).Msg("gateway: error resolving reference")
+			return &gateway.InitiateFileUploadResponse{
+				Status: status.NewInternal(ctx, err, "error initiating upload"),
+			}, nil
+		}
+		// if it is a file allow upload
+		if ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
+			log.Debug().Str("path", p).Interface("ri", ri).Msg("path points to share name file")
+
+			if protocol == "webdav" {
+				// TODO(ishank011): pass this through the datagateway service
+				// for now, we just expose the file server to the user
+				ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target)
+				if err != nil {
+					return &gateway.InitiateFileUploadResponse{
+						Status: status.NewInternal(ctx, err, "gateway: error downloading from webdav host: "+p),
+					}, nil
+				}
+				return &gateway.InitiateFileUploadResponse{
+					Opaque:         opaque,
+					Status:         status.NewOK(ctx),
+					UploadEndpoint: ep,
+				}, nil
+			}
+
+			req.Ref = &provider.Reference{
+				Spec: &provider.Reference_Path{
+					Path: ri.Path,
+				},
+			}
+			log.Debug().Msg("upload path: " + ri.Path)
+			return s.initiateFileUpload(ctx, req)
+
+		}
+		err = errtypes.PermissionDenied("gateway: cannot upload to share name: path=" + p)
+		log.Err(err).Msg("gateway: error uploading")
+		return &gateway.InitiateFileUploadResponse{
+			Status: status.NewInvalidArg(ctx, "path points to share name"),
 		}, nil
 
 	}
