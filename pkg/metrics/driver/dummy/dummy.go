@@ -56,5 +56,5 @@ func (d *MetricsDummyDriver) GetNumGroups() int64 {
 
 // GetAmountStorage returns the amount of site storage used; it's a random amount
 func (d *MetricsDummyDriver) GetAmountStorage() int64 {
-	return int64(rand.Intn(70000000000))
+	return rand.Int63n(70000000000)
 }
