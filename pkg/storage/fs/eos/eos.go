@@ -90,6 +90,10 @@ type config struct {
 	// UseKeyTabAuth changes will authenticate requests by using an EOS keytab.
 	UseKeytab bool `mapstructure:"use_keytab" docs:"false"`
 
+	// Whether to maintain the same inode across various versions of a file.
+	// Requires extra metadata operations if set to true
+	VersionInvariant bool `mapstructure:"version_invariant" docs:"true"`
+
 	// GatewaySvc stores the endpoint at which the GRPC gateway is exposed.
 	GatewaySvc string `mapstructure:"gatewaysvc" docs:"0.0.0.0:19000"`
 }
@@ -100,6 +104,12 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
 	}
+
+	// default to version invariance if not configured
+	if _, ok := m["version_invariant"]; !ok {
+		c.VersionInvariant = true
+	}
+
 	return c, nil
 }
 

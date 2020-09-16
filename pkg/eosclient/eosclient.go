@@ -98,6 +98,10 @@ type Options struct {
 	// UseKeyTabAuth changes will authenticate requests by using an EOS keytab.
 	UseKeytab bool
 
+	// Whether to maintain the same inode across various versions of a file.
+	// Requires extra metadata operations if set to true
+	VersionInvariant bool
+
 	// SingleUsername is the username to use when connecting to EOS.
 	// Defaults to apache
 	SingleUsername string
@@ -401,7 +405,20 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, uid, gid string, inode 
 	if err != nil {
 		return nil, err
 	}
-	return c.parseFileInfo(stdout)
+	info, err := c.parseFileInfo(stdout)
+	if err != nil {
+		return nil, err
+	}
+
+	if c.opt.VersionInvariant {
+		info, err = c.getFileInfoFromVersion(ctx, uid, gid, info.File)
+		if err != nil {
+			return nil, err
+		}
+		info.Inode = inode
+	}
+
+	return info, nil
 }
 
 // GetFileInfoByFXID returns the FileInfo by the given file id in hexadecimal
@@ -453,7 +470,20 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, uid, gid, path string) (
 	if err != nil {
 		return nil, err
 	}
-	return c.parseFileInfo(stdout)
+	info, err := c.parseFileInfo(stdout)
+	if err != nil {
+		return nil, err
+	}
+
+	if c.opt.VersionInvariant {
+		inode, err := c.getVersionFolderInode(ctx, uid, gid, path)
+		if err != nil {
+			return nil, err
+		}
+		info.Inode = inode
+	}
+
+	return info, nil
 }
 
 // GetQuota gets the quota of a user on the quota node defined by path
@@ -586,8 +616,7 @@ func (c *Client) PurgeDeletedEntries(ctx context.Context, uid, gid string) error
 
 // ListVersions list all the versions for a given file.
 func (c *Client) ListVersions(ctx context.Context, uid, gid, p string) ([]*FileInfo, error) {
-	basename := path.Base(p)
-	versionFolder := path.Join(path.Dir(p), versionPrefix+basename)
+	versionFolder := getVersionFolder(p)
 	finfos, err := c.List(ctx, uid, gid, versionFolder)
 	if err != nil {
 		// we send back an empty list
@@ -605,9 +634,40 @@ func (c *Client) RollbackToVersion(ctx context.Context, uid, gid, path, version 
 
 // ReadVersion reads the version for the given file.
 func (c *Client) ReadVersion(ctx context.Context, uid, gid, p, version string) (io.ReadCloser, error) {
-	basename := path.Base(p)
-	versionFile := path.Join(path.Dir(p), versionPrefix+basename, version)
+	versionFile := path.Join(getVersionFolder(p), version)
 	return c.Read(ctx, uid, gid, versionFile)
+}
+
+func (c *Client) getVersionFolderInode(ctx context.Context, uid, gid, p string) (uint64, error) {
+	versionFolder := getVersionFolder(p)
+	md, err := c.GetFileInfoByPath(ctx, uid, gid, versionFolder)
+	if err != nil {
+		if err = c.CreateDir(ctx, uid, gid, versionFolder); err != nil {
+			return 0, err
+		}
+		md, err = c.GetFileInfoByPath(ctx, uid, gid, versionFolder)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return md.Inode, nil
+}
+
+func (c *Client) getFileInfoFromVersion(ctx context.Context, uid, gid, p string) (*FileInfo, error) {
+	file := getFileFromVersionFolder(p)
+	md, err := c.GetFileInfoByPath(ctx, uid, gid, file)
+	if err != nil {
+		return nil, err
+	}
+	return md, nil
+}
+
+func getVersionFolder(p string) string {
+	return path.Join(path.Dir(p), versionPrefix+path.Base(p))
+}
+
+func getFileFromVersionFolder(p string) string {
+	return path.Join(path.Dir(p), strings.TrimPrefix(path.Base(p), versionPrefix))
 }
 
 func parseRecycleList(raw string) ([]*DeletedEntry, error) {

@@ -121,6 +121,10 @@ type Config struct {
 	// EnableHome enables the creation of home directories.
 	EnableHome bool `mapstructure:"enable_home"`
 
+	// Whether to maintain the same inode across various versions of a file.
+	// Requires extra metadata operations if set to true
+	VersionInvariant bool `mapstructure:"version_invariant"`
+
 	// GatewaySvc stores the endpoint at which the GRPC gateway is exposed.
 	GatewaySvc string `mapstructure:"gatewaysvc"`
 }
@@ -198,6 +202,7 @@ func NewEOSFS(c *Config) (storage.FS, error) {
 		UseKeytab:           c.UseKeytab,
 		Keytab:              c.Keytab,
 		SecProtocol:         c.SecProtocol,
+		VersionInvariant:    c.VersionInvariant,
 	}
 
 	eosClient := eosclient.New(eosClientOpts)
