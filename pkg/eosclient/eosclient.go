@@ -410,7 +410,7 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, uid, gid string, inode 
 		return nil, err
 	}
 
-	if c.opt.VersionInvariant {
+	if c.opt.VersionInvariant && isVersionFolder(info.File) {
 		info, err = c.getFileInfoFromVersion(ctx, uid, gid, info.File)
 		if err != nil {
 			return nil, err
@@ -475,7 +475,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, uid, gid, path string) (
 		return nil, err
 	}
 
-	if c.opt.VersionInvariant {
+	if c.opt.VersionInvariant && !isVersionFolder(path) {
 		inode, err := c.getVersionFolderInode(ctx, uid, gid, path)
 		if err != nil {
 			return nil, err
@@ -660,6 +660,10 @@ func (c *Client) getFileInfoFromVersion(ctx context.Context, uid, gid, p string)
 		return nil, err
 	}
 	return md, nil
+}
+
+func isVersionFolder(p string) bool {
+	return strings.HasPrefix(path.Base(p), versionPrefix)
 }
 
 func getVersionFolder(p string) string {
