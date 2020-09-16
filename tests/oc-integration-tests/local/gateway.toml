@@ -30,6 +30,7 @@ ocminvitemanagersvc = "localhost:13000"
 ocmproviderauthorizersvc = "localhost:13000"
 # other
 commit_share_to_storage_grant = true
+commit_share_to_storage_ref = true
 datagateway = "http://localhost:19001/data"
 transfer_shared_secret = "replace-me-with-a-transfer-secret" # for direct uploads
 transfer_expires = 6 # give it a moment
