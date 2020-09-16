@@ -35,3 +35,4 @@ temp_folder = "/var/tmp/reva/tmp"
 [http.services.dataprovider.drivers.owncloud]
 datadirectory = "/var/tmp/reva/data"
 redis = "localhost:6379"
+userprovidersvc = "localhost:18000"

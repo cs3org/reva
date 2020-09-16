@@ -35,3 +35,4 @@ temp_folder = "/drone/src/tmp/reva/tmp"
 [http.services.dataprovider.drivers.owncloud]
 datadirectory = "/drone/src/tmp/reva/data"
 redis = "redis:6379"
+userprovidersvc = "localhost:18000"
