@@ -179,10 +179,6 @@ apiShareManagement/acceptShares.feature:582
 apiShareManagement/acceptShares.feature:652
 apiShareManagement/acceptShares.feature:696
 #
-# https://github.com/owncloud/product/issues/208 After accepting a share data in the received file cannot be downloaded
-apiShareManagement/acceptSharesToSharesFolder.feature:15
-apiShareManagement/acceptSharesToSharesFolder.feature:22
-#
 # https://github.com/owncloud/product/issues/207 Response is empty when accepting a share
 apiShareManagement/acceptSharesToSharesFolder.feature:30
 apiShareManagement/acceptSharesToSharesFolder.feature:52
@@ -265,12 +261,6 @@ apiShareToSharesManagementBasic/excludeGroupFromReceivingSharesToSharesFolder.fe
 apiShareToSharesManagementBasic/excludeGroupFromReceivingSharesToSharesFolder.feature:98
 apiShareToSharesManagementBasic/excludeGroupFromReceivingSharesToSharesFolder.feature:135
 apiShareToSharesManagementBasic/excludeGroupFromReceivingSharesToSharesFolder.feature:136
-#
-# These currently pass in owncloud/ocis-reva and fail in cs3org/reva
-apiShareToSharesManagementBasic/excludeGroupFromReceivingSharesToSharesFolder.feature:115
-apiShareToSharesManagementBasic/excludeGroupFromReceivingSharesToSharesFolder.feature:116
-apiShareToSharesManagementBasic/excludeGroupFromReceivingSharesToSharesFolder.feature:153
-apiShareToSharesManagementBasic/excludeGroupFromReceivingSharesToSharesFolder.feature:154
 #
 # https://github.com/owncloud/ocis-reva/issues/260 Sharee retrieves the information about a share -but gets response containing all the shares
 apiShareOperations/accessToShare.feature:48
@@ -670,14 +660,8 @@ apiShareReshareToShares2/reShareWhenShareWithOnlyMembershipGroups.feature:41
 apiShareReshareToShares2/reShareWhenShareWithOnlyMembershipGroups.feature:42
 apiShareReshareToShares3/reShareUpdate.feature:25
 apiShareReshareToShares3/reShareUpdate.feature:26
-apiShareReshareToShares3/reShareUpdate.feature:42
-apiShareReshareToShares3/reShareUpdate.feature:43
 apiShareReshareToShares3/reShareUpdate.feature:59
 apiShareReshareToShares3/reShareUpdate.feature:60
-apiShareReshareToShares3/reShareUpdate.feature:76
-apiShareReshareToShares3/reShareUpdate.feature:77
-apiShareReshareToShares3/reShareUpdate.feature:93
-apiShareReshareToShares3/reShareUpdate.feature:94
 apiShareReshareToShares3/reShareUpdate.feature:112
 apiShareReshareToShares3/reShareUpdate.feature:113
 apiShareReshareToShares3/reShareUpdate.feature:131
