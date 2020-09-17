@@ -35,6 +35,7 @@ import (
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"github.com/pkg/xattr"
 	"github.com/rs/zerolog/log"
 	tusd "github.com/tus/tusd/pkg/handler"
 )
@@ -73,6 +74,30 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 	if err != nil {
 		return err
 	}
+
+	if fs.pw.EnableHome {
+		if u, ok := user.ContextGetUser(ctx); ok {
+			err = node.writeMetadata(u.Id)
+		} else {
+			log := appctx.GetLogger(ctx)
+			log.Error().Msg("home support enabled but no user in context")
+			err = errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
+		}
+	} else {
+		err = node.writeMetadata(nil)
+	}
+	if err != nil {
+		return err
+	}
+
+	if fs.pw.TreeTimeAccounting {
+		// mark the home node as the end of propagation q
+		if err = xattr.Set(nodePath, propagationAttr, []byte("1")); err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Interface("node", node).Msg("could not mark node to propagate")
+			return err
+		}
+	}
+
 	return fs.tp.Propagate(ctx, node)
 
 }
@@ -378,6 +403,13 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	}
 	if err != nil {
 		return
+	}
+	if n.pw.TreeTimeAccounting {
+		// mark the home node as the end of propagation q
+		if err = xattr.Set(targetPath, propagationAttr, []byte("1")); err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not mark node to propagate")
+			return
+		}
 	}
 
 	// link child name to parent if it is new

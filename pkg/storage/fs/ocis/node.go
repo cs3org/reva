@@ -20,10 +20,13 @@ package ocis
 
 import (
 	"context"
+	"crypto/md5"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -47,17 +50,17 @@ type Node struct {
 
 func (n *Node) writeMetadata(owner *userpb.UserId) (err error) {
 	nodePath := filepath.Join(n.pw.Root, "nodes", n.ID)
-	if err = xattr.Set(nodePath, "user.ocis.parentid", []byte(n.ParentID)); err != nil {
+	if err = xattr.Set(nodePath, parentidAttr, []byte(n.ParentID)); err != nil {
 		return errors.Wrap(err, "ocisfs: could not set parentid attribute")
 	}
-	if err = xattr.Set(nodePath, "user.ocis.name", []byte(n.Name)); err != nil {
+	if err = xattr.Set(nodePath, nameAttr, []byte(n.Name)); err != nil {
 		return errors.Wrap(err, "ocisfs: could not set name attribute")
 	}
 	if owner != nil {
-		if err = xattr.Set(nodePath, "user.ocis.owner.id", []byte(owner.OpaqueId)); err != nil {
+		if err = xattr.Set(nodePath, ownerIDAttr, []byte(owner.OpaqueId)); err != nil {
 			return errors.Wrap(err, "ocisfs: could not set owner id attribute")
 		}
-		if err = xattr.Set(nodePath, "user.ocis.owner.idp", []byte(owner.Idp)); err != nil {
+		if err = xattr.Set(nodePath, ownerIDPAttr, []byte(owner.Idp)); err != nil {
 			return errors.Wrap(err, "ocisfs: could not set owner idp attribute")
 		}
 	}
@@ -75,13 +78,13 @@ func ReadNode(ctx context.Context, pw *Path, id string) (n *Node, err error) {
 
 	// lookup parent id in extended attributes
 	var attrBytes []byte
-	if attrBytes, err = xattr.Get(nodePath, "user.ocis.parentid"); err == nil {
+	if attrBytes, err = xattr.Get(nodePath, parentidAttr); err == nil {
 		n.ParentID = string(attrBytes)
 	} else {
 		return
 	}
 	// lookup name in extended attributes
-	if attrBytes, err = xattr.Get(nodePath, "user.ocis.name"); err == nil {
+	if attrBytes, err = xattr.Get(nodePath, nameAttr); err == nil {
 		n.Name = string(attrBytes)
 	} else {
 		return
@@ -99,7 +102,7 @@ func ReadNode(ctx context.Context, pw *Path, id string) (n *Node, err error) {
 		// walk to root to check node is not part of a deleted subtree
 		parentPath := filepath.Join(n.pw.Root, "nodes", parentID)
 
-		if attrBytes, err = xattr.Get(parentPath, "user.ocis.parentid"); err == nil {
+		if attrBytes, err = xattr.Get(parentPath, parentidAttr); err == nil {
 			parentID = string(attrBytes)
 			log.Debug().Interface("node", n).Str("root.ID", root.ID).Str("parentID", parentID).Msg("ReadNode() found parent")
 		} else {
@@ -156,13 +159,13 @@ func (n *Node) Parent() (p *Node, err error) {
 
 	// lookup parent id in extended attributes
 	var attrBytes []byte
-	if attrBytes, err = xattr.Get(parentPath, "user.ocis.parentid"); err == nil {
+	if attrBytes, err = xattr.Get(parentPath, parentidAttr); err == nil {
 		p.ParentID = string(attrBytes)
 	} else {
 		return
 	}
 	// lookup name in extended attributes
-	if attrBytes, err = xattr.Get(parentPath, "user.ocis.name"); err == nil {
+	if attrBytes, err = xattr.Get(parentPath, nameAttr); err == nil {
 		p.Name = string(attrBytes)
 	} else {
 		return
@@ -186,13 +189,13 @@ func (n *Node) Owner() (id string, idp string, err error) {
 	// lookup parent id in extended attributes
 	var attrBytes []byte
 	// lookup name in extended attributes
-	if attrBytes, err = xattr.Get(nodePath, "user.ocis.owner.id"); err == nil {
+	if attrBytes, err = xattr.Get(nodePath, ownerIDAttr); err == nil {
 		n.ownerID = string(attrBytes)
 	} else {
 		return
 	}
 	// lookup name in extended attributes
-	if attrBytes, err = xattr.Get(nodePath, "user.ocis.owner.idp"); err == nil {
+	if attrBytes, err = xattr.Get(nodePath, ownerIDPAttr); err == nil {
 		n.ownerIDP = string(attrBytes)
 	} else {
 		return
@@ -230,32 +233,22 @@ func (n *Node) AsResourceInfo(ctx context.Context) (ri *provider.ResourceInfo, e
 		// nodeType = provider.ResourceType_RESOURCE_TYPE_REFERENCE
 	}
 
-	var etag []byte
-	// TODO optionally store etag in new `root/attributes/<uuid>` file
-	if etag, err = xattr.Get(nodePath, "user.ocis.etag"); err != nil {
-		log.Error().Err(err).Interface("node", n).Msg("could not read etag")
-	}
-
 	id := &provider.ResourceId{OpaqueId: n.ID}
 
 	fn, err = n.pw.Path(ctx, n)
 	if err != nil {
 		return nil, err
 	}
+
 	ri = &provider.ResourceInfo{
 		Id:       id,
 		Path:     fn,
 		Type:     nodeType,
-		Etag:     string(etag),
 		MimeType: mime.Detect(nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER, fn),
 		Size:     uint64(fi.Size()),
 		// TODO fix permissions
 		PermissionSet: &provider.ResourcePermissions{ListContainer: true, CreateContainer: true},
-		Mtime: &types.Timestamp{
-			Seconds: uint64(fi.ModTime().Unix()),
-			// TODO read nanos from where? Nanos:   fi.MTimeNanos,
-		},
-		Target: string(target),
+		Target:        string(target),
 	}
 
 	if owner, idp, err := n.Owner(); err == nil {
@@ -263,6 +256,48 @@ func (n *Node) AsResourceInfo(ctx context.Context) (ri *provider.ResourceInfo, e
 			Idp:      idp,
 			OpaqueId: owner,
 		}
+	}
+
+	// etag currently is a hash of fileid + tmtime (or mtime)
+	// TODO make etag of files use fileid and checksum
+	// TODO implment adding temporery etag in an attribute to restore backups
+	h := md5.New()
+	if _, err := io.WriteString(h, n.ID); err != nil {
+		return nil, err
+	}
+	var b []byte
+	var tmTime time.Time
+	if b, err = xattr.Get(nodePath, treeMTimeAttr); err == nil {
+		if tmTime, err = time.Parse(time.RFC3339Nano, string(b)); err != nil {
+			// invalid format, overwrite
+			log.Error().Err(err).Interface("node", n).Str("tmtime", string(b)).Msg("invalid format, ignoring")
+			tmTime = fi.ModTime()
+		}
+	} else {
+		// no tmtime, use mtime
+		tmTime = fi.ModTime()
+	}
+	if tb, err := tmTime.UTC().MarshalBinary(); err == nil {
+		if _, err := h.Write(tb); err != nil {
+			return nil, err
+		}
+	} else {
+		return nil, err
+	}
+
+	// use temporary etag if it is set
+	if b, err := xattr.Get(nodePath, tmpEtagAttr); err == nil {
+		ri.Etag = string(b)
+	} else {
+		ri.Etag = fmt.Sprintf("%x", h.Sum(nil))
+	}
+
+	// mtime uses tmtime if present
+	// TODO expose mtime and tmtime separately?
+	un := tmTime.UnixNano()
+	ri.Mtime = &types.Timestamp{
+		Seconds: uint64(un / 1000000000),
+		Nanos:   uint32(un % 1000000000),
 	}
 
 	// TODO only read the requested metadata attributes

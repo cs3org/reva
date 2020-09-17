@@ -41,6 +41,7 @@ func (fs *ocisfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 	}
 	nodePath := filepath.Join(fs.pw.Root, "nodes", n.ID)
 	for k, v := range md.Metadata {
+		// TODO set etag as temporary etag tmpEtagAttr
 		attrName := metadataPrefix + k
 		if err = xattr.Set(nodePath, attrName, []byte(v)); err != nil {
 			return errors.Wrap(err, "ocisfs: could not set metadata attribute "+attrName+" to "+k)
