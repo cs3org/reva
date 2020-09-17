@@ -141,7 +141,8 @@ func (t *Tree) Move(ctx context.Context, oldNode *Node, newNode *Node) (err erro
 			return errors.Wrap(err, "ocisfs: could not rename child")
 		}
 
-		tgtPath := filepath.Join(t.pw.Root, "nodes", newNode.ID)
+		// the new node id might be different, so we need to use the old nodes id
+		tgtPath := filepath.Join(t.pw.Root, "nodes", oldNode.ID)
 
 		// update name attribute
 		if err := xattr.Set(tgtPath, "user.ocis.name", []byte(newNode.Name)); err != nil {
