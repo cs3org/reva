@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
@@ -62,7 +63,16 @@ func (fs *ocisfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refe
 	for i := range keys {
 		attrName := metadataPrefix + keys[i]
 		if err = xattr.Remove(nodePath, attrName); err != nil {
-			return errors.Wrap(err, "ocisfs: could not remove metadata attribute "+attrName)
+			// a non-existing attribute will return an error, which we can ignore
+			// (using string compare because the error type is syscall.Errno and not wrapped/recognizable)
+			if e, ok := err.(*xattr.Error); !ok || e.Err.Error() != "no data available" {
+				appctx.GetLogger(ctx).Error().Err(err).
+					Interface("node", n).
+					Str("key", keys[i]).
+					Msg("could not unset metadata")
+			} else {
+				err = nil
+			}
 		}
 	}
 	return
