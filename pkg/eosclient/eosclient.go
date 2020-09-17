@@ -475,7 +475,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, uid, gid, path string) (
 		return nil, err
 	}
 
-	if c.opt.VersionInvariant && !isVersionFolder(path) {
+	if c.opt.VersionInvariant && !isVersionFolder(path) && !info.IsDir {
 		inode, err := c.getVersionFolderInode(ctx, uid, gid, path)
 		if err != nil {
 			return nil, err
