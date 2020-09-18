@@ -46,6 +46,10 @@ type Configuration struct {
 	PrometheusFileSD struct {
 		OutputFile string `mapstructure:"output_file"`
 	} `mapstructure:"prom_filesd"`
+
+	PrometheusBlackboxSD struct {
+		OutputFile string `mapstructure:"output_file"`
+	} `mapstructure:"prom_blackboxsd"`
 }
 
 // Init sets sane defaults

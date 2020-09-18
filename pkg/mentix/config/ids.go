@@ -32,4 +32,6 @@ const (
 	ExporterIDSiteLocations = "siteloc"
 	// ExporterIDPrometheusFileSD is the identifier for the Prometheus File SD exporter.
 	ExporterIDPrometheusFileSD = "prom_filesd"
+	// ExporterIDPrometheusBlackboxSD is the identifier for the Prometheus Blackbox SD exporter.
+	ExporterIDPrometheusBlackboxSD = "prom_blackboxsd"
 )

@@ -26,29 +26,30 @@ import (
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 
-// PrometheusFileSDExporter implements the File Service Discovery for Prometheus exporter.
-type PrometheusFileSDExporter struct {
+// PrometheusBlackboxSDExporter implements the Service Discovery for the Prometheus blackbox exporter.
+type PrometheusBlackboxSDExporter struct {
 	prometheusSDExporter
 }
 
 // Activate activates the exporter.
-func (exporter *PrometheusFileSDExporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
-	// Store Prometheus File SD specific settings
-	exporter.outputFilename = conf.PrometheusFileSD.OutputFile
+func (exporter *PrometheusBlackboxSDExporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
+	// Store Prometheus blackbox SD specific settings
+	exporter.outputFilename = conf.PrometheusBlackboxSD.OutputFile
 
 	return exporter.prometheusSDExporter.Activate(conf, log)
 }
 
-func createFileSDScrapeConfig(site *meshdata.Site, host string, endpoint *meshdata.ServiceEndpoint) *prometheus.ScrapeConfig {
+func createBlackboxSDScrapeConfig(site *meshdata.Site, host string, endpoint *meshdata.ServiceEndpoint) *prometheus.ScrapeConfig {
+	// The URL of the service must be configured properly
+	host = endpoint.URL
+	if host == "" {
+		return nil
+	}
+
 	labels := map[string]string{
 		"site":         site.Name,
 		"country":      site.CountryCode,
 		"service_type": endpoint.Type.Name,
-	}
-
-	// If a metrics path was specified as a property, use that one by setting the corresponding label
-	if metricsPath := meshdata.GetPropertyValue(endpoint.Properties, meshdata.PropertyMetricsPath, ""); len(metricsPath) > 0 {
-		labels["__metrics_path__"] = metricsPath
 	}
 
 	return &prometheus.ScrapeConfig{
@@ -58,7 +59,7 @@ func createFileSDScrapeConfig(site *meshdata.Site, host string, endpoint *meshda
 }
 
 func init() {
-	exporter := &PrometheusFileSDExporter{}
-	initPrometheusSDExporter(&exporter.prometheusSDExporter, "Prometheus File SD", createFileSDScrapeConfig)
-	registerExporter(config.ExporterIDPrometheusFileSD, exporter)
+	exporter := &PrometheusBlackboxSDExporter{}
+	initPrometheusSDExporter(&exporter.prometheusSDExporter, "Prometheus Blackbox SD", createBlackboxSDScrapeConfig)
+	registerExporter(config.ExporterIDPrometheusBlackboxSD, exporter)
 }
