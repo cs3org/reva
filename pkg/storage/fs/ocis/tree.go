@@ -312,70 +312,52 @@ func (t *Tree) Propagate(ctx context.Context, n *Node) (err error) {
 	for err == nil && n.ID != root.ID {
 		log.Debug().Interface("node", n).Msg("propagating")
 
-		parentPath := filepath.Join(t.pw.Root, "nodes", n.ParentID)
+		if n, err = n.Parent(); err != nil {
+			break
+		}
 
 		// TODO none, sync and async?
-		var propagation string
-		if b, err = xattr.Get(parentPath, propagationAttr); err != nil {
-			if e, ok := err.(*xattr.Error); ok && e.Err.Error() == "no data available" {
-				log.Debug().Interface("node", n).Str("attr", propagationAttr).Msg("propagation attribute not set, not propagating")
-				// if the attribute is not set treat it as false / none / no propagation
-				return nil
-			}
-			log.Error().Interface("node", n).Msg("error reading propagation attribute")
-			return err
-		}
-		propagation = string(b)
-		if propagation != "1" {
-			log.Debug().Interface("node", n).Msg("propagation for the parent node disabled")
-			// propagation for this node disabled
+		if !n.HasPropagation() {
+			log.Debug().Interface("node", n).Str("attr", propagationAttr).Msg("propagation attribute not set or unreadable, not propagating")
+			// if the attribute is not set treat it as false / none / no propagation
 			return nil
 		}
 
 		if t.pw.TreeTimeAccounting {
 			// update the parent tree time if it is older than the nodes mtime
 			updateSyncTime := false
-			if b, err = xattr.Get(parentPath, treeMTimeAttr); err != nil {
-				if e, ok := err.(*xattr.Error); ok && e.Err.Error() == "no data available" {
-					//  attribute is not set, write it
-					log.Debug().Interface("node", n).Str("attr", treeMTimeAttr).Msg("tmtime attribute is not set, writing it")
-					err = nil
-					updateSyncTime = true
-				} else {
-					return err
-				}
-			} else {
-				if tmTime, err := time.Parse(time.RFC3339Nano, string(b)); err != nil {
-					// invalid format, overwrite
-					log.Error().Err(err).Interface("node", n).Str("tmtime", string(b)).Msg("invalid format, overwriting")
-					updateSyncTime = true
-				} else if tmTime.Before(fi.ModTime()) {
-					log.Debug().Interface("node", n).Str("tmtime", string(b)).Str("mtime", fi.ModTime().UTC().Format(time.RFC3339Nano)).Msg("parent tmtime is older than node mtime, updating")
-					updateSyncTime = true
-				} else {
-					log.Debug().Interface("node", n).Str("tmtime", string(b)).Str("mtime", fi.ModTime().UTC().Format(time.RFC3339Nano)).Msg("parent tmtime is younger than node mtime, not updating")
-				}
+
+			var tmTime time.Time
+			tmTime, err = n.GetTMTime()
+			switch {
+			case err != nil:
+				// missing attribute, or invalid format, overwrite
+				log.Error().Err(err).Interface("node", n).Msg("could not read tmtime attribute, overwriting")
+				updateSyncTime = true
+			case tmTime.Before(fi.ModTime()):
+				log.Debug().Interface("node", n).Str("tmtime", string(b)).Str("mtime", fi.ModTime().UTC().Format(time.RFC3339Nano)).Msg("parent tmtime is older than node mtime, updating")
+				updateSyncTime = true
+			default:
+				log.Debug().Interface("node", n).Str("tmtime", string(b)).Str("mtime", fi.ModTime().UTC().Format(time.RFC3339Nano)).Msg("parent tmtime is younger than node mtime, not updating")
 			}
+
 			if updateSyncTime {
 				// update the tree time of the parent node
-				if err = xattr.Set(parentPath, treeMTimeAttr, []byte(fi.ModTime().UTC().Format(time.RFC3339Nano))); err != nil {
+				if err = n.SetTMTime(fi.ModTime()); err != nil {
 					log.Error().Err(err).Interface("node", n).Time("tmtime", fi.ModTime().UTC()).Msg("could not update tmtime of parent node")
 					return
 				}
 				log.Debug().Interface("node", n).Time("tmtime", fi.ModTime().UTC()).Msg("updated tmtime of parent node")
 			}
 
-			if err := xattr.Remove(parentPath, tmpEtagAttr); err != nil {
-				if e, ok := err.(*xattr.Error); ok && e.Err.Error() != "no data available" {
-					log.Error().Interface("node", n).Str("attr", treeMTimeAttr).Msg("could not remove temporary etag attribute")
-				}
+			if err := n.UnsetTempEtag(); err != nil {
+				log.Error().Err(err).Interface("node", n).Msg("could not remove temporary etag attribute")
 			}
 
 		}
 
 		// TODO size accounting
 
-		n, err = n.Parent()
 	}
 	if err != nil {
 		log.Error().Err(err).Interface("node", n).Msg("error propagating")

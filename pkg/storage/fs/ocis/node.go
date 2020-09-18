@@ -265,15 +265,8 @@ func (n *Node) AsResourceInfo(ctx context.Context) (ri *provider.ResourceInfo, e
 	if _, err := io.WriteString(h, n.ID); err != nil {
 		return nil, err
 	}
-	var b []byte
 	var tmTime time.Time
-	if b, err = xattr.Get(nodePath, treeMTimeAttr); err == nil {
-		if tmTime, err = time.Parse(time.RFC3339Nano, string(b)); err != nil {
-			// invalid format, overwrite
-			log.Error().Err(err).Interface("node", n).Str("tmtime", string(b)).Msg("invalid format, ignoring")
-			tmTime = fi.ModTime()
-		}
-	} else {
+	if tmTime, err = n.GetTMTime(); err != nil {
 		// no tmtime, use mtime
 		tmTime = fi.ModTime()
 	}
@@ -324,4 +317,40 @@ func (n *Node) AsResourceInfo(ctx context.Context) (ri *provider.ResourceInfo, e
 		Msg("AsResourceInfo")
 
 	return ri, nil
+}
+
+// HasPropagation checks if the propagation attribute exists and is set to "1"
+func (n *Node) HasPropagation() (propagation bool) {
+	nodePath := filepath.Join(n.pw.Root, "nodes", n.ID)
+	if b, err := xattr.Get(nodePath, propagationAttr); err == nil {
+		return string(b) == "1"
+	}
+	return false
+}
+
+// GetTMTime reads the tmtime from the extended attributes
+func (n *Node) GetTMTime() (tmTime time.Time, err error) {
+	nodePath := filepath.Join(n.pw.Root, "nodes", n.ID)
+	var b []byte
+	if b, err = xattr.Get(nodePath, treeMTimeAttr); err != nil {
+		return
+	}
+	return time.Parse(time.RFC3339Nano, string(b))
+}
+
+// SetTMTime writes the tmtime to the extended attributes
+func (n *Node) SetTMTime(t time.Time) (err error) {
+	nodePath := filepath.Join(n.pw.Root, "nodes", n.ID)
+	return xattr.Set(nodePath, treeMTimeAttr, []byte(t.UTC().Format(time.RFC3339Nano)))
+}
+
+// UnsetTempEtag removes the temporary etag attribute
+func (n *Node) UnsetTempEtag() (err error) {
+	nodePath := filepath.Join(n.pw.Root, "nodes", n.ID)
+	if err = xattr.Remove(nodePath, tmpEtagAttr); err != nil {
+		if e, ok := err.(*xattr.Error); ok && e.Err.Error() == "no data available" {
+			return nil
+		}
+	}
+	return err
 }
