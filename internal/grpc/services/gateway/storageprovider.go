@@ -34,6 +34,8 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/storage/utils/templates"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/pkg/errors"
 )
@@ -1795,10 +1797,36 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 }
 
 func (s *svc) findProvider(ctx context.Context, ref *provider.Reference) (*registry.ProviderInfo, error) {
+	home, err := s.GetHome(ctx, &provider.GetHomeRequest{})
+	if err != nil {
+		return nil, err
+	}
+	if strings.HasPrefix(ref.GetPath(), home.Path) && s.c.HomeMapping != "" {
+		if u, ok := user.ContextGetUser(ctx); ok {
+			layout := templates.WithUser(u, s.c.HomeMapping)
+			newRef := &provider.Reference{
+				Spec: &provider.Reference_Path{
+					Path: path.Join(layout, strings.TrimPrefix(ref.GetPath(), home.Path)),
+				},
+			}
+			res, err := s.getStorageProvider(ctx, newRef)
+			if err != nil {
+				// if we get a NotFound error, default to the original reference
+				if _, ok := err.(errtypes.IsNotFound); !ok {
+					return nil, err
+				}
+			} else {
+				return res, nil
+			}
+		}
+	}
+	return s.getStorageProvider(ctx, ref)
+}
+
+func (s *svc) getStorageProvider(ctx context.Context, ref *provider.Reference) (*registry.ProviderInfo, error) {
 	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error getting storage registry client")
-		return nil, err
+		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}
 
 	res, err := c.GetStorageProvider(ctx, &registry.GetStorageProviderRequest{
@@ -1806,21 +1834,18 @@ func (s *svc) findProvider(ctx context.Context, ref *provider.Reference) (*regis
 	})
 
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetStorageProvider")
-		return nil, err
+		return nil, errors.Wrap(err, "gateway: error calling GetStorageProvider")
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
 		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			return nil, errtypes.NotFound("gateway: storage provider not found for reference:" + ref.String())
 		}
-		err := status.NewErrorFromCode(res.Status.Code, "gateway")
-		return nil, err
+		return nil, status.NewErrorFromCode(res.Status.Code, "gateway")
 	}
 
 	if res.Provider == nil {
-		err := errors.New("gateway: provider is nil")
-		return nil, err
+		return nil, errors.New("gateway: provider is nil")
 	}
 
 	return res.Provider, nil

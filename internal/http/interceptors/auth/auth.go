@@ -169,8 +169,7 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 						log.Debug().Err(err).Msg("error retrieving credentials")
 					}
 					if creds != nil {
-						log.Debug().Msgf("credentials obtained from credential strategy: %+v", creds)
-
+						log.Debug().Msgf("credentials obtained from credential strategy: type: %s, client_id: %s", creds.Type, creds.ClientID)
 						break
 					}
 				}
@@ -191,7 +190,7 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 					ClientSecret: creds.ClientSecret,
 				}
 
-				log.Debug().Msgf("AuthenticateRequest: %+v against %s", req, conf.GatewaySvc)
+				log.Debug().Msgf("AuthenticateRequest: type: %s, client_id: %s against %s", req.Type, req.ClientId, conf.GatewaySvc)
 
 				client, err := pool.GetGatewayServiceClient(conf.GatewaySvc)
 				if err != nil {

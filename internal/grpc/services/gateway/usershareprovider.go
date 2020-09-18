@@ -381,10 +381,7 @@ func (s *svc) createReference(ctx context.Context, resourceID *provider.Resource
 		return status.NewInternal(ctx, err, "error updating received share"), nil
 	}
 
-	fileInfo := statRes.Info
-
-	homeReq := &provider.GetHomeRequest{}
-	homeRes, err := s.GetHome(ctx, homeReq)
+	homeRes, err := s.GetHome(ctx, &provider.GetHomeRequest{})
 	if err != nil {
 		err := errors.Wrap(err, "gateway: error calling GetHome")
 		return status.NewInternal(ctx, err, "error updating received share"), nil
@@ -400,7 +397,7 @@ func (s *svc) createReference(ctx context.Context, resourceID *provider.Resource
 	// It is the responsibility of the gateway to resolve these references and merge the response back
 	// from the main request.
 	// TODO(labkode): the name of the share should be the filename it points to by default.
-	refPath := path.Join(homeRes.Path, s.c.ShareFolder, path.Base(fileInfo.Path))
+	refPath := path.Join(homeRes.Path, s.c.ShareFolder, path.Base(statRes.Info.Path))
 	log.Info().Msg("mount path will be:" + refPath)
 
 	createRefReq := &provider.CreateReferenceRequest{
