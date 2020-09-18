@@ -247,7 +247,7 @@ func (c *Client) executeEOS(ctx context.Context, cmd *exec.Cmd) (string, string,
 				err = nil
 			case 2:
 				err = errtypes.NotFound(errBuf.String())
-			case 22:
+			case 1, 22:
 				// eos reports back error code 22 when the user is not allowed to enter the instance
 				err = errtypes.PermissionDenied(errBuf.String())
 			}
