@@ -24,11 +24,14 @@ driver = "localhome"
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="drivers" type="map[string]map[string]interface{}" default="docs/config/packages/storage/fs" %}}
+{{% dir name="drivers" type="map[string]map[string]interface{}" default="localhome" %}}
 The configuration for the storage driver [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/dataprovider/dataprovider.go#L41)
 {{< highlight toml >}}
-[http.services.dataprovider.drivers]
-"[docs/config/packages/storage/fs]({{< ref "docs/config/packages/storage/fs" >}})"
+[http.services.dataprovider.drivers.localhome]
+root = "/var/tmp/reva/"
+share_folder = "/MyShares"
+user_layout = "{{.Username}}"
+
 {{< /highlight >}}
 {{% /dir %}}
 
