@@ -22,14 +22,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
-	"strconv"
 	"strings"
 	"time"
 
@@ -135,7 +133,7 @@ func (s *service) getWopiAppEndpoints(ctx context.Context) (map[string]interface
 	}
 	defer appsRes.Body.Close()
 	if appsRes.StatusCode != http.StatusOK {
-		return nil, errors.New("Request to WOPI server returned " + string(appsRes.StatusCode))
+		return nil, fmt.Errorf("Request to WOPI server returned %d", appsRes.StatusCode)
 	}
 	appsBody, err := ioutil.ReadAll(appsRes.Body)
 	if err != nil {
@@ -207,7 +205,7 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 
 	if openRes.StatusCode != http.StatusOK {
 		res := &providerpb.OpenFileInAppProviderResponse{
-			Status: status.NewInvalid(ctx, "appprovider: error performing open request to WOPI, status code: "+strconv.Itoa(openRes.StatusCode)),
+			Status: status.NewInvalid(ctx, fmt.Sprintf("appprovider: error performing open request to WOPI, status code: %d", openRes.StatusCode)),
 		}
 		return res, nil
 	}

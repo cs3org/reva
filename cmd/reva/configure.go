@@ -36,8 +36,8 @@ var configureCommand = func() *command {
 			return err
 		}
 
-		c := &config{Host: text}
-		if err := writeConfig(c); err != nil {
+		conf = &config{Host: text}
+		if err := writeConfig(conf); err != nil {
 			return err
 		}
 		fmt.Println("config saved at ", getConfigFile())

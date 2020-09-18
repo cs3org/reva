@@ -184,14 +184,6 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 			}, nil
 		}
 
-		if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
-			err := errors.New(fmt.Sprintf("gateway: expected reference: got:%+v", statRes.Info))
-			log.Err(err).Msg("gateway: error creating container")
-			return &gateway.InitiateFileDownloadResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error creating container"),
-			}, nil
-		}
-
 		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
 			if _, ok := err.(errtypes.IsNotFound); ok {
@@ -346,14 +338,6 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 			log.Err(err).Msg("gateway: error uploading")
 			return &gateway.InitiateFileUploadResponse{
 				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
-			}, nil
-		}
-
-		if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
-			err := errors.New(fmt.Sprintf("gateway: expected reference: got:%+v", statRes.Info))
-			log.Err(err).Msg("gateway: error creating container")
-			return &gateway.InitiateFileUploadResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error uploading"),
 			}, nil
 		}
 
@@ -560,14 +544,6 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 			}, nil
 		}
 
-		if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
-			err := errors.New(fmt.Sprintf("gateway: expected reference: got:%+v", statRes.Info))
-			log.Err(err).Msg("gateway: error creating container")
-			return &provider.CreateContainerResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error creating container"),
-			}, nil
-		}
-
 		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
 			if _, ok := err.(errtypes.IsNotFound); ok {
@@ -708,14 +684,6 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 			}, nil
 		}
 
-		if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
-			err := errors.New(fmt.Sprintf("gateway: expected reference: got:%+v", statRes.Info))
-			log.Err(err).Msg("gateway: error deleting")
-			return &provider.DeleteResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error deleting"),
-			}, nil
-		}
-
 		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
 			if _, ok := err.(errtypes.IsNotFound); ok {
@@ -848,14 +816,6 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 			log.Err(err).Msg("gateway: error moving")
 			return &provider.MoveResponse{
 				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
-			}, nil
-		}
-
-		if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
-			err := errors.New(fmt.Sprintf("gateway: expected reference: got:%+v", statRes.Info))
-			log.Err(err).Msg("gateway: error deleting")
-			return &provider.MoveResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error deleting"),
 			}, nil
 		}
 
@@ -1052,10 +1012,6 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 			return &provider.StatResponse{
 				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+req.Ref.String()),
 			}, nil
-		}
-
-		if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
-			panic("gateway: a share name must be of type reference: ref:" + statRes.Info.Path)
 		}
 
 		ri, protocol, err := s.checkRef(ctx, statRes.Info)
@@ -1322,9 +1278,8 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 			if protocol == "webdav" {
 				info, err = s.webdavRefStat(ctx, ref.Target)
 				if err != nil {
-					return &provider.ListContainerResponse{
-						Status: status.NewInternal(ctx, err, "gateway: error resolving webdav reference: "+ref.Target),
-					}, nil
+					// Might be the case that the webdav token has expired. In that case, use the reference's info
+					info = ref
 				}
 			}
 
