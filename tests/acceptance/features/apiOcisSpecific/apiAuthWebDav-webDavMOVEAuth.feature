@@ -9,7 +9,7 @@ Feature: MOVE file/folder
     And user "Alice" has uploaded file with content "some data" to "/PARENT/parent.txt"
     And user "Brian" has been created with default attributes and without skeleton files
 
-  @issue-ocis-reva-14
+  @issue-ocis-reva-14 @skipOnOcis-OCIS-Storage
   # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario: send MOVE requests to another user's webDav endpoints as normal user
     When user "Brian" requests these endpoints with "MOVE" including body "doesnotmatter" about user "Alice"

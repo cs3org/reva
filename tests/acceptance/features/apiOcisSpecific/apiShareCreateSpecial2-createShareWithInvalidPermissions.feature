@@ -6,7 +6,7 @@ Feature: cannot share resources with invalid permissions
     And user "Alice" has uploaded file with content "some data" to "/textfile0.txt"
     And user "Alice" has created folder "/PARENT"
 
-  @issue-ocis-reva-45 @issue-ocis-reva-243
+  @issue-ocis-reva-45 @issue-ocis-reva-243 @skipOnOcis-OCIS-Storage
   # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario Outline: Cannot create a share of a file with a user with only create permission
     Given using OCS API version "<ocs_api_version>"
@@ -24,7 +24,7 @@ Feature: cannot share resources with invalid permissions
       | 1               | 100               | 996               | 200                | 500                |
       | 2               | 200               | 996               | 200                | 500                |
 
-  @issue-ocis-reva-45 @issue-ocis-reva-243
+  @issue-ocis-reva-45 @issue-ocis-reva-243 @skipOnOcis-OCIS-Storage
   # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario Outline: Cannot create a share of a file with a user with only (create,delete) permission
     Given using OCS API version "<ocs_api_version>"

@@ -1,7 +1,7 @@
 @api @files_sharing-app-required @issue-ocis-reva-243
 Feature: sharing
 
-  @issue-ocis-reva-356
+  @issue-ocis-reva-356 @skipOnOcis-OCIS-Storage
   # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario Outline: delete a share
     Given user "Alice" has been created with default attributes and skeleton files

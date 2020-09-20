@@ -31,16 +31,21 @@ Feature: checksums
 
   @issue-ocis-reva-99
   # after fixing all issues delete this Scenario and use the one from oC10 core
-  Scenario Outline: Upload a file where checksum does not match
-    Given using <dav_version> DAV path
+  Scenario: Upload a file where checksum does not match (old DAV path)
+    Given using old DAV path
     When user "Alice" uploads file with checksum "SHA1:f005ba11" and content "Some Text" to "/chksumtst.txt" using the WebDAV API
     Then the HTTP status code should be "201"
     And user "Alice" should see the following elements
       | /chksumtst.txt |
-    Examples:
-      | dav_version |
-      | old         |
-      | new         |
+
+  @issue-ocis-reva-99 @skipOnOcis-OCIS-Storage
+  # after fixing all issues delete this Scenario and use the one from oC10 core
+  Scenario: Upload a file where checksum does not match (new DAV path)
+    Given using new DAV path
+    When user "Alice" uploads file with checksum "SHA1:f005ba11" and content "Some Text" to "/chksumtst.txt" using the WebDAV API
+    Then the HTTP status code should be "201"
+    And user "Alice" should see the following elements
+      | /chksumtst.txt |
 
   @issue-ocis-reva-99
   # after fixing all issues delete this Scenario and use the one from oC10 core
