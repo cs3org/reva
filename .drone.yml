@@ -437,7 +437,7 @@ steps:
       - /drone/src/cmd/revad/revad -c shares.toml &
       - /drone/src/cmd/revad/revad -c storage-home-owncloud.toml &
       - /drone/src/cmd/revad/revad -c storage-oc-owncloud.toml &
-      - /drone/src/cmd/revad/revad -c storage-publiclink.toml &
+      - /drone/src/cmd/revad/revad -c storage-publiclink-owncloud.toml &
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
@@ -511,7 +511,7 @@ steps:
       - /drone/src/cmd/revad/revad -c shares.toml &
       - /drone/src/cmd/revad/revad -c storage-home-owncloud.toml &
       - /drone/src/cmd/revad/revad -c storage-oc-owncloud.toml &
-      - /drone/src/cmd/revad/revad -c storage-publiclink.toml &
+      - /drone/src/cmd/revad/revad -c storage-publiclink-owncloud.toml &
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
@@ -588,7 +588,7 @@ steps:
       - /drone/src/cmd/revad/revad -c shares.toml &
       - /drone/src/cmd/revad/revad -c storage-home-owncloud.toml &
       - /drone/src/cmd/revad/revad -c storage-oc-owncloud.toml &
-      - /drone/src/cmd/revad/revad -c storage-publiclink.toml &
+      - /drone/src/cmd/revad/revad -c storage-publiclink-owncloud.toml &
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
@@ -665,7 +665,7 @@ steps:
       - /drone/src/cmd/revad/revad -c shares.toml &
       - /drone/src/cmd/revad/revad -c storage-home-owncloud.toml &
       - /drone/src/cmd/revad/revad -c storage-oc-owncloud.toml &
-      - /drone/src/cmd/revad/revad -c storage-publiclink.toml &
+      - /drone/src/cmd/revad/revad -c storage-publiclink-owncloud.toml &
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
@@ -742,7 +742,7 @@ steps:
       - /drone/src/cmd/revad/revad -c shares.toml &
       - /drone/src/cmd/revad/revad -c storage-home-owncloud.toml &
       - /drone/src/cmd/revad/revad -c storage-oc-owncloud.toml &
-      - /drone/src/cmd/revad/revad -c storage-publiclink.toml &
+      - /drone/src/cmd/revad/revad -c storage-publiclink-owncloud.toml &
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
@@ -819,7 +819,7 @@ steps:
       - /drone/src/cmd/revad/revad -c shares.toml &
       - /drone/src/cmd/revad/revad -c storage-home-owncloud.toml &
       - /drone/src/cmd/revad/revad -c storage-oc-owncloud.toml &
-      - /drone/src/cmd/revad/revad -c storage-publiclink.toml &
+      - /drone/src/cmd/revad/revad -c storage-publiclink-owncloud.toml &
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
@@ -896,7 +896,7 @@ steps:
       - /drone/src/cmd/revad/revad -c shares.toml &
       - /drone/src/cmd/revad/revad -c storage-home-owncloud.toml &
       - /drone/src/cmd/revad/revad -c storage-oc-owncloud.toml &
-      - /drone/src/cmd/revad/revad -c storage-publiclink.toml &
+      - /drone/src/cmd/revad/revad -c storage-publiclink-owncloud.toml &
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
