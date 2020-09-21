@@ -305,30 +305,29 @@ func PublicShare2ShareData(share *link.PublicShare, r *http.Request, publicURL s
 		expiration = ""
 	}
 
-	shareWith := ""
-	if share.PasswordProtected {
-		shareWith = "***redacted***"
+	sd := &ShareData{
+		// share.permissions are mapped below
+		// Displaynames are added later
+		ID:           share.Id.OpaqueId,
+		ShareType:    ShareTypePublicLink,
+		STime:        share.Ctime.Seconds, // TODO CS3 api birth time = btime
+		Token:        share.Token,
+		Expiration:   expiration,
+		MimeType:     share.Mtime.String(),
+		Name:         share.DisplayName,
+		MailSend:     0,
+		URL:          publicURL + path.Join("/", "#/s/"+share.Token),
+		Permissions:  publicSharePermissions2OCSPermissions(share.GetPermissions()),
+		UIDOwner:     LocalUserIDToString(share.Creator),
+		UIDFileOwner: LocalUserIDToString(share.Owner),
 	}
 
-	return &ShareData{
-		// share.permissions ar mapped below
-		// DisplaynameOwner:     creator.DisplayName,
-		// DisplaynameFileOwner: share.GetCreator().String(),
-		ID:                   share.Id.OpaqueId,
-		ShareType:            ShareTypePublicLink,
-		ShareWith:            shareWith,
-		ShareWithDisplayname: shareWith,
-		STime:                share.Ctime.Seconds, // TODO CS3 api birth time = btime
-		Token:                share.Token,
-		Expiration:           expiration,
-		MimeType:             share.Mtime.String(),
-		Name:                 share.DisplayName,
-		MailSend:             0,
-		URL:                  publicURL + path.Join("/", "#/s/"+share.Token),
-		Permissions:          publicSharePermissions2OCSPermissions(share.GetPermissions()),
-		UIDOwner:             LocalUserIDToString(share.Creator),
-		UIDFileOwner:         LocalUserIDToString(share.Owner),
+	if share.PasswordProtected {
+		sd.ShareWith = "***redacted***"
+		sd.ShareWithDisplayname = "***redacted***"
 	}
+
+	return sd
 	// actually clients should be able to GET and cache the user info themselves ...
 	// TODO check grantee type for user vs group
 }

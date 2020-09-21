@@ -16,24 +16,26 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package shares
+package ttlmap
 
 import (
 	"sync"
 	"time"
 )
 
-// below code copied from https://stackoverflow.com/a/25487392
-type item struct {
-	value      string
-	lastAccess int64
-}
-
+// TTLMap is a simple kv cache, based on https://stackoverflow.com/a/25487392
+// The ttl of an item will be reset whenever it is read or written.
 type TTLMap struct {
 	m map[string]*item
 	l sync.Mutex
 }
 
+type item struct {
+	value      string
+	lastAccess int64
+}
+
+// New creates a new ttl cache, preallocating space for ln items and the given maxttl
 func New(ln int, maxTTL int) (m *TTLMap) {
 	m = &TTLMap{m: make(map[string]*item, ln)}
 	go func() {
@@ -50,10 +52,12 @@ func New(ln int, maxTTL int) (m *TTLMap) {
 	return
 }
 
+// Len returns the current number of items in the cache
 func (m *TTLMap) Len() int {
 	return len(m.m)
 }
 
+// Put sets or overwrites an item, resetting the ttl
 func (m *TTLMap) Put(k, v string) {
 	m.l.Lock()
 	it, ok := m.m[k]
@@ -65,6 +69,7 @@ func (m *TTLMap) Put(k, v string) {
 	m.l.Unlock()
 }
 
+// Get retrieves an item from the cache, resetting the ttl
 func (m *TTLMap) Get(k string) (v string) {
 	m.l.Lock()
 	if it, ok := m.m[k]; ok {

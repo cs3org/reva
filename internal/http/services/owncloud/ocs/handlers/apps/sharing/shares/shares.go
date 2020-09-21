@@ -48,21 +48,22 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/ttlmap"
 	"github.com/pkg/errors"
 )
 
 // Handler implements the shares part of the ownCloud sharing API
 type Handler struct {
-	gatewayAddr string
-	publicURL   string
-	ttlcache    *TTLMap
+	gatewayAddr      string
+	publicURL        string
+	displayNameCache *ttlmap.TTLMap
 }
 
 // Init initializes this and any contained handlers
 func (h *Handler) Init(c *config.Config) error {
 	h.gatewayAddr = c.GatewaySvc
 	h.publicURL = c.Config.Host
-	h.ttlcache = New(1000, 60)
+	h.displayNameCache = ttlmap.New(1000, 60)
 	return nil
 }
 
@@ -312,6 +313,7 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.addDisplaynames(ctx, c, s)
+
 	response.WriteOCSSuccess(w, r, s)
 }
 
@@ -427,11 +429,11 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request) 
 
 	s := conversions.PublicShare2ShareData(createRes.Share, r, h.publicURL)
 	err = h.addFileInfo(ctx, s, statRes.Info)
-
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error enhancing response with share data", err)
 		return
 	}
+	h.addDisplaynames(ctx, c, s)
 
 	response.WriteOCSSuccess(w, r, s)
 }
@@ -784,8 +786,8 @@ func (h *Handler) getShare(w http.ResponseWriter, r *http.Request, shareID strin
 		log.Error().Err(err).Str("status", statResponse.Status.Code.String()).Msg("error mapping share data")
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
 	}
-
 	h.addDisplaynames(ctx, client, share)
+
 	response.WriteOCSSuccess(w, r, []*conversions.ShareData{share})
 }
 
@@ -907,8 +909,8 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, err.Error(), err)
 		return
 	}
-
 	h.addDisplaynames(ctx, uClient, share)
+
 	response.WriteOCSSuccess(w, r, share)
 }
 
@@ -1076,8 +1078,8 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, err.Error(), err)
 			return
 		}
-
 		h.addDisplaynames(r.Context(), gwc, data)
+
 		shares = append(shares, data)
 	}
 
@@ -1180,6 +1182,7 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 			if h.addFileInfo(ctx, sData, statResponse.Info) != nil {
 				return nil, err
 			}
+			h.addDisplaynames(ctx, c, sData)
 
 			log.Debug().Interface("share", share).Interface("info", statResponse.Info).Interface("shareData", share).Msg("mapped")
 
@@ -1369,7 +1372,10 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 
 func (h *Handler) getDisplayname(ctx context.Context, c gateway.GatewayAPIClient, userid string) string {
 	log := appctx.GetLogger(ctx)
-	if dn := h.ttlcache.Get(userid); dn != "" {
+	if userid == "" {
+		return ""
+	}
+	if dn := h.displayNameCache.Get(userid); dn != "" {
 		log.Debug().Str("userid", userid).Msg("cache hit")
 		return dn
 	}
@@ -1410,15 +1416,21 @@ func (h *Handler) getDisplayname(ctx context.Context, c gateway.GatewayAPIClient
 		return ""
 	}
 
-	h.ttlcache.Put(userid, res.User.DisplayName)
+	h.displayNameCache.Put(userid, res.User.DisplayName)
 	log.Debug().Str("userid", userid).Msg("cache update")
 	return res.User.DisplayName
 }
 
 func (h *Handler) addDisplaynames(ctx context.Context, c gateway.GatewayAPIClient, s *conversions.ShareData) {
-	s.DisplaynameOwner = h.getDisplayname(ctx, c, s.UIDOwner)
-	s.DisplaynameFileOwner = h.getDisplayname(ctx, c, s.UIDFileOwner)
-	s.ShareWithDisplayname = h.getDisplayname(ctx, c, s.ShareWith)
+	if s.DisplaynameOwner == "" {
+		s.DisplaynameOwner = h.getDisplayname(ctx, c, s.UIDOwner)
+	}
+	if s.DisplaynameFileOwner == "" {
+		s.DisplaynameFileOwner = h.getDisplayname(ctx, c, s.UIDFileOwner)
+	}
+	if s.ShareWithDisplayname == "" {
+		s.ShareWithDisplayname = h.getDisplayname(ctx, c, s.ShareWith)
+	}
 }
 
 func (h *Handler) isPublicShare(r *http.Request, oid string) bool {
@@ -1627,11 +1639,11 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 
 	s := conversions.PublicShare2ShareData(publicShare, r, h.publicURL)
 	err = h.addFileInfo(r.Context(), s, statRes.Info)
-
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error enhancing response with share data", err)
 		return
 	}
+	h.addDisplaynames(r.Context(), gwC, s)
 
 	response.WriteOCSSuccess(w, r, s)
 }
