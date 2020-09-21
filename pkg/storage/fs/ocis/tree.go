@@ -20,8 +20,6 @@ package ocis
 
 import (
 	"context"
-	"encoding/hex"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"time"
@@ -34,6 +32,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
+	"github.com/rs/zerolog/log"
 )
 
 // Tree manages a hierarchical tree
@@ -145,7 +144,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *Node, newNode *Node) (err erro
 		tgtPath := filepath.Join(t.pw.Root, "nodes", oldNode.ID)
 
 		// update name attribute
-		if err := xattr.Set(tgtPath, "user.ocis.name", []byte(newNode.Name)); err != nil {
+		if err := xattr.Set(tgtPath, nameAttr, []byte(newNode.Name)); err != nil {
 			return errors.Wrap(err, "ocisfs: could not set name attribute")
 		}
 
@@ -167,10 +166,10 @@ func (t *Tree) Move(ctx context.Context, oldNode *Node, newNode *Node) (err erro
 	// update parentid and name
 	tgtPath := filepath.Join(t.pw.Root, "nodes", newNode.ID)
 
-	if err := xattr.Set(tgtPath, "user.ocis.parentid", []byte(newNode.ParentID)); err != nil {
+	if err := xattr.Set(tgtPath, parentidAttr, []byte(newNode.ParentID)); err != nil {
 		return errors.Wrap(err, "ocisfs: could not set parentid attribute")
 	}
-	if err := xattr.Set(tgtPath, "user.ocis.name", []byte(newNode.Name)); err != nil {
+	if err := xattr.Set(tgtPath, nameAttr, []byte(newNode.Name)); err != nil {
 		return errors.Wrap(err, "ocisfs: could not set name attribute")
 	}
 
@@ -286,33 +285,83 @@ func (t *Tree) Delete(ctx context.Context, node *Node) (err error) {
 }
 
 // Propagate propagates changes to the root of the tree
-func (t *Tree) Propagate(ctx context.Context, node *Node) (err error) {
-	// generate an etag
-	bytes := make([]byte, 16)
-	if _, err := rand.Read(bytes); err != nil {
-		return err
+func (t *Tree) Propagate(ctx context.Context, n *Node) (err error) {
+	if !t.pw.TreeTimeAccounting && !t.pw.TreeSizeAccounting {
+		// no propagation enabled
+		log.Debug().Msg("propagation disabled")
+		return
 	}
-	// store in extended attribute
-	etag := hex.EncodeToString(bytes)
-	var root *Node
+	log := appctx.GetLogger(ctx)
 
+	nodePath := filepath.Join(t.pw.Root, "nodes", n.ID)
+
+	// is propagation enabled for the parent node?
+
+	var root *Node
 	if root, err = t.pw.HomeOrRootNode(ctx); err != nil {
 		return
 	}
-	for err == nil && node.ID != root.ID { // TODO propagate up to where?
-		if err := xattr.Set(filepath.Join(t.pw.Root, "nodes", node.ID), "user.ocis.etag", []byte(etag)); err != nil {
-			log := appctx.GetLogger(ctx)
-			log.Error().Err(err).Msg("error storing file id")
+
+	var fi os.FileInfo
+	if fi, err = os.Stat(nodePath); err != nil {
+		return err
+	}
+
+	var b []byte
+
+	for err == nil && n.ID != root.ID {
+		log.Debug().Interface("node", n).Msg("propagating")
+
+		if n, err = n.Parent(); err != nil {
+			break
 		}
-		// TODO propagate mtime
+
+		// TODO none, sync and async?
+		if !n.HasPropagation() {
+			log.Debug().Interface("node", n).Str("attr", propagationAttr).Msg("propagation attribute not set or unreadable, not propagating")
+			// if the attribute is not set treat it as false / none / no propagation
+			return nil
+		}
+
+		if t.pw.TreeTimeAccounting {
+			// update the parent tree time if it is older than the nodes mtime
+			updateSyncTime := false
+
+			var tmTime time.Time
+			tmTime, err = n.GetTMTime()
+			switch {
+			case err != nil:
+				// missing attribute, or invalid format, overwrite
+				log.Error().Err(err).Interface("node", n).Msg("could not read tmtime attribute, overwriting")
+				updateSyncTime = true
+			case tmTime.Before(fi.ModTime()):
+				log.Debug().Interface("node", n).Str("tmtime", string(b)).Str("mtime", fi.ModTime().UTC().Format(time.RFC3339Nano)).Msg("parent tmtime is older than node mtime, updating")
+				updateSyncTime = true
+			default:
+				log.Debug().Interface("node", n).Str("tmtime", string(b)).Str("mtime", fi.ModTime().UTC().Format(time.RFC3339Nano)).Msg("parent tmtime is younger than node mtime, not updating")
+			}
+
+			if updateSyncTime {
+				// update the tree time of the parent node
+				if err = n.SetTMTime(fi.ModTime()); err != nil {
+					log.Error().Err(err).Interface("node", n).Time("tmtime", fi.ModTime().UTC()).Msg("could not update tmtime of parent node")
+					return
+				}
+				log.Debug().Interface("node", n).Time("tmtime", fi.ModTime().UTC()).Msg("updated tmtime of parent node")
+			}
+
+			if err := n.UnsetTempEtag(); err != nil {
+				log.Error().Err(err).Interface("node", n).Msg("could not remove temporary etag attribute")
+			}
+
+		}
+
 		// TODO size accounting
 
-		if err != nil {
-			err = errors.Wrap(err, "ocisfs: Propagate: readlink error")
-			return
-		}
-
-		node, err = node.Parent()
+	}
+	if err != nil {
+		log.Error().Err(err).Interface("node", n).Msg("error propagating")
+		return
 	}
 	return
 }

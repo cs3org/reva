@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/storage"
@@ -47,16 +48,39 @@ const (
 	// collisions with other apps We are going to introduce a sub namespace
 	// "user.ocis."
 
+	ocisPrefix   string = "user.ocis."
+	parentidAttr string = ocisPrefix + "parentid"
+	ownerIDAttr  string = ocisPrefix + "owner.id"
+	ownerIDPAttr string = ocisPrefix + "owner.idp"
+	// the base name of the node
+	// updated when the file is renamed or moved
+	nameAttr string = ocisPrefix + "name"
+
 	// SharePrefix is the prefix for sharing related extended attributes
-	sharePrefix    string = "user.ocis.acl."
-	metadataPrefix string = "user.ocis.md."
+	sharePrefix    string = ocisPrefix + "acl."
+	metadataPrefix string = ocisPrefix + "md."
 	// TODO implement favorites metadata flag
-	//favPrefix   string = "user.ocis.fav."  // favorite flag, per user
-	// TODO use etag prefix instead of single etag property
-	//etagPrefix  string = "user.ocis.etag." // allow overriding a calculated etag with one from the extended attributes
-	referenceAttr string = "user.ocis.cs3.ref" // arbitrary metadata
-	//checksumPrefix    string = "user.ocis.cs."   // TODO add checksum support
-	trashOriginAttr string = "user.ocis.trash.origin" // trash origin
+	//favPrefix   string = ocisPrefix + "fav."  // favorite flag, per user
+
+	// a temporary etag for a folder that is removed when the mtime propagation happens
+	tmpEtagAttr   string = ocisPrefix + "tmp.etag"
+	referenceAttr string = ocisPrefix + "cs3.ref" // arbitrary metadata
+	//checksumPrefix    string = ocisPrefix + "cs."   // TODO add checksum support
+	trashOriginAttr string = ocisPrefix + "trash.origin" // trash origin
+
+	// we use a single attribute to enable or disable propagation of both: synctime and treesize
+	propagationAttr string = ocisPrefix + "propagation"
+
+	// the tree modification time of the tree below this node,
+	// propagated when synctime_accounting is true and
+	// user.ocis.propagation=1 is set
+	// stored as a readable time.RFC3339Nano
+	treeMTimeAttr string = ocisPrefix + "tmtime"
+
+	// the size of the tree below this node,
+	// propagated when treesize_accounting is true and
+	// user.ocis.propagation=1 is set
+	//treesizeAttr string = ocisPrefix + "treesize"
 )
 
 func init() {
@@ -149,11 +173,11 @@ func (fs *ocisfs) CreateHome(ctx context.Context) (err error) {
 		return errtypes.NotSupported("ocisfs: CreateHome() home supported disabled")
 	}
 
-	var n *Node
+	var n, h *Node
 	if n, err = fs.pw.RootNode(ctx); err != nil {
 		return
 	}
-	_, err = fs.pw.WalkPath(ctx, n, fs.pw.mustGetUserLayout(ctx), func(ctx context.Context, n *Node) error {
+	h, err = fs.pw.WalkPath(ctx, n, fs.pw.mustGetUserLayout(ctx), func(ctx context.Context, n *Node) error {
 		if !n.Exists {
 			if err := fs.tp.CreateDir(ctx, n); err != nil {
 				return err
@@ -161,6 +185,15 @@ func (fs *ocisfs) CreateHome(ctx context.Context) (err error) {
 		}
 		return nil
 	})
+
+	if fs.pw.TreeTimeAccounting {
+		homePath := filepath.Join(fs.pw.Root, "nodes", h.ID)
+		// mark the home node as the end of propagation
+		if err = xattr.Set(homePath, propagationAttr, []byte("1")); err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Interface("node", h).Msg("could not mark home as propagation root")
+			return
+		}
+	}
 	return
 }
 
@@ -190,7 +223,17 @@ func (fs *ocisfs) CreateDir(ctx context.Context, fn string) (err error) {
 	if node.Exists {
 		return errtypes.AlreadyExists(fn)
 	}
-	return fs.tp.CreateDir(ctx, node)
+	err = fs.tp.CreateDir(ctx, node)
+
+	if fs.pw.TreeTimeAccounting {
+		nodePath := filepath.Join(fs.pw.Root, "nodes", node.ID)
+		// mark the home node as the end of propagation
+		if err = xattr.Set(nodePath, propagationAttr, []byte("1")); err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Interface("node", node).Msg("could not mark node to propagate")
+			return
+		}
+	}
+	return
 }
 
 // CreateReference creates a reference as a node folder with the target stored in extended attributes
@@ -347,7 +390,7 @@ func (fs *ocisfs) copyMD(s string, t string) (err error) {
 		return err
 	}
 	for i := range attrs {
-		if strings.HasPrefix(attrs[i], "user.ocis.") {
+		if strings.HasPrefix(attrs[i], ocisPrefix) {
 			var d []byte
 			if d, err = xattr.Get(s, attrs[i]); err != nil {
 				return err
