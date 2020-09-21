@@ -43,13 +43,10 @@ type Configuration struct {
 		Endpoint string `mapstructure:"endpoint"`
 	} `yaml:"siteloc"`
 
-	PrometheusFileSD struct {
-		OutputFile string `mapstructure:"output_file"`
-	} `mapstructure:"prom_filesd"`
-
-	PrometheusBlackboxSD struct {
-		OutputFile string `mapstructure:"output_file"`
-	} `mapstructure:"prom_blackboxsd"`
+	PrometheusSD struct {
+		MetricsOutputFile  string `mapstructure:"metrics_output_file"`
+		BlackboxOutputFile string `mapstructure:"blackbox_output_file"`
+	} `mapstructure:"promsd"`
 }
 
 // Init sets sane defaults
