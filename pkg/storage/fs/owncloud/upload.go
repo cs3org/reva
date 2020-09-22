@@ -47,6 +47,27 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 		return errors.Wrap(err, "ocfs: error resolving reference")
 	}
 
+	var perm *provider.ResourcePermissions
+	var perr error
+	// if destination exists
+	if _, err := os.Stat(np); err == nil {
+		// check permissions of file to be overwritten
+		perm, perr = fs.readPermissions(ctx, np)
+	} else {
+		// check permissions
+		perm, perr = fs.readPermissions(ctx, filepath.Base(np))
+	}
+	if perr == nil {
+		if !perm.InitiateFileUpload {
+			return errtypes.PermissionDenied("")
+		}
+	} else {
+		if os.IsNotExist(err) {
+			return errtypes.NotFound(fs.unwrap(ctx, filepath.Dir(np)))
+		}
+		return errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
 	// we cannot rely on /tmp as it can live in another partition and we can
 	// hit invalid cross-device link errors, so we create the tmp file in the same directory
 	// the file is supposed to be written.
@@ -86,6 +107,28 @@ func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, upl
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return "", errors.Wrap(err, "ocfs: error resolving reference")
+	}
+
+	// check permissions
+	var perm *provider.ResourcePermissions
+	var perr error
+	// if destination exists
+	if _, err := os.Stat(np); err == nil {
+		// check permissions of file to be overwritten
+		perm, perr = fs.readPermissions(ctx, np)
+	} else {
+		// check permissions
+		perm, perr = fs.readPermissions(ctx, filepath.Base(np))
+	}
+	if perr == nil {
+		if !perm.InitiateFileUpload {
+			return "", errtypes.PermissionDenied("")
+		}
+	} else {
+		if os.IsNotExist(err) {
+			return "", errtypes.NotFound(fs.unwrap(ctx, filepath.Dir(np)))
+		}
+		return "", errors.Wrap(err, "ocfs: error reading permissions")
 	}
 
 	p := fs.unwrap(ctx, np)
@@ -142,6 +185,28 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 	info.MetaData["dir"] = filepath.Clean(info.MetaData["dir"])
 
 	np := fs.wrap(ctx, filepath.Join(info.MetaData["dir"], info.MetaData["filename"]))
+
+	// check permissions
+	var perm *provider.ResourcePermissions
+	var perr error
+	// if destination exists
+	if _, err := os.Stat(np); err == nil {
+		// check permissions of file to be overwritten
+		perm, perr = fs.readPermissions(ctx, np)
+	} else {
+		// check permissions
+		perm, perr = fs.readPermissions(ctx, filepath.Base(np))
+	}
+	if perr == nil {
+		if !perm.InitiateFileUpload {
+			return nil, errtypes.PermissionDenied("")
+		}
+	} else {
+		if os.IsNotExist(err) {
+			return nil, errtypes.NotFound(fs.unwrap(ctx, filepath.Dir(np)))
+		}
+		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+	}
 
 	log.Debug().Interface("info", info).Msg("ocfs: resolved filename")
 

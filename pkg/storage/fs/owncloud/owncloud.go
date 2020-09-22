@@ -29,6 +29,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -71,7 +72,33 @@ const (
 	favPrefix         string = "user.oc.fav."  // favorite flag, per user
 	etagPrefix        string = "user.oc.etag." // allow overriding a calculated etag with one from the extended attributes
 	//checksumPrefix    string = "user.oc.cs."   // TODO add checksum support
+
 )
+
+var defaultPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{
+	// no permissions
+}
+var ownerPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{
+	// all permissions
+	AddGrant:             true,
+	CreateContainer:      true,
+	Delete:               true,
+	GetPath:              true,
+	GetQuota:             true,
+	InitiateFileDownload: true,
+	InitiateFileUpload:   true,
+	ListContainer:        true,
+	ListFileVersions:     true,
+	ListGrants:           true,
+	ListRecycle:          true,
+	Move:                 true,
+	PurgeRecycle:         true,
+	RemoveGrant:          true,
+	RestoreFileVersion:   true,
+	RestoreRecycleItem:   true,
+	Stat:                 true,
+	UpdateGrant:          true,
+}
 
 func init() {
 	registry.Register("owncloud", New)
@@ -667,6 +694,19 @@ func (fs *ocfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (strin
 	if err != nil {
 		return "", err
 	}
+
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, np); err == nil {
+		if !perm.GetPath {
+			return "", errtypes.PermissionDenied("")
+		}
+	} else {
+		if os.IsNotExist(err) {
+			return "", errtypes.NotFound(fs.unwrap(ctx, np))
+		}
+		return "", errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
 	return fs.unwrap(ctx, np), nil
 }
 
@@ -692,6 +732,18 @@ func (fs *ocfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provid
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error resolving reference")
+	}
+
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, np); err == nil {
+		if !perm.AddGrant {
+			return errtypes.PermissionDenied("")
+		}
+	} else {
+		if os.IsNotExist(err) {
+			return errtypes.NotFound(fs.unwrap(ctx, np))
+		}
+		return errors.Wrap(err, "ocfs: error reading permissions")
 	}
 
 	e := ace.FromGrant(g)
@@ -726,12 +778,114 @@ func extractACEsFromAttrs(ctx context.Context, fsfn string, attrs []string) (ent
 	return
 }
 
+// TODO if user is owner but no acls found he can do everything?
+// The owncloud driver does not integrate with the os so, for now, the owner can do everything, see ownerPermissions.
+// Should this change we can store an acl for the owner in every node.
+// We could also add default acls that can only the admin can set, eg for a read only storage?
+// Someone needs to write to provide the content that should be read only, so this would likely be an acl for a group anyway.
+func (fs *ocfs) readPermissions(ctx context.Context, np string) (p *provider.ResourcePermissions, err error) {
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		appctx.GetLogger(ctx).Debug().Str("np", np).Msg("no user in context, returning default permissions")
+		return defaultPermissions, nil
+	}
+	// check if the current user is the owner
+	if fs.getOwner(np) == u.Id.OpaqueId {
+		appctx.GetLogger(ctx).Debug().Str("np", np).Msg("user is owner, returning owner permissions")
+		return ownerPermissions, nil
+	}
+	aggregatedPermissions := &provider.ResourcePermissions{}
+	// add default permissions
+	addPermissions(aggregatedPermissions, defaultPermissions)
+	var e *ace.ACE
+	e, err = fs.readACE(ctx, np, "u:"+u.Id.OpaqueId)
+	if err == nil {
+		addPermissions(aggregatedPermissions, e.Grant().GetPermissions())
+	} else if isNoData(err) {
+		err = nil
+	} else {
+		appctx.GetLogger(ctx).Error().Err(err).Str("np", np).Str("principal", "u:"+u.Id.OpaqueId).Msg("error reading user permissions")
+		return nil, err
+	}
+	// check all groups the user is a member of
+	for i := range u.Groups {
+		// groups are just strings ... groupnames ... or group ids ??? AAARGH !!!
+		e, err = fs.readACE(ctx, np, "g:"+u.Groups[i])
+		if err == nil {
+			addPermissions(aggregatedPermissions, e.Grant().GetPermissions())
+		} else if isNoData(err) {
+			err = nil
+		} else {
+			appctx.GetLogger(ctx).Error().Err(err).Str("np", np).Str("principal", "g:"+u.Groups[i]).Msg("error reading group permissions")
+			return nil, err
+		}
+	}
+	// TODO we need to read all parents ... until we find a matching ace?
+	appctx.GetLogger(ctx).Debug().Interface("permissions", aggregatedPermissions).Str("np", np).Msg("returning aggregated permissions")
+	return aggregatedPermissions, nil
+}
+
+func isNoData(err error) bool {
+	if xerr, ok := err.(*xattr.Error); ok {
+		if serr, ok2 := xerr.Err.(syscall.Errno); ok2 {
+			return serr == syscall.ENODATA
+		}
+	}
+	return false
+}
+
+func (fs *ocfs) readACE(ctx context.Context, np string, principal string) (e *ace.ACE, err error) {
+	var b []byte
+	if b, err = xattr.Get(np, sharePrefix+principal); err != nil {
+		return nil, err
+	}
+	if e, err = ace.Unmarshal(principal, b); err != nil {
+		return nil, err
+	}
+	return
+}
+
+// additive merging of permissions only
+func addPermissions(p1 *provider.ResourcePermissions, p2 *provider.ResourcePermissions) {
+	p1.AddGrant = p1.AddGrant || p2.AddGrant
+	p1.CreateContainer = p1.CreateContainer || p2.CreateContainer
+	p1.Delete = p1.Delete || p2.Delete
+	p1.GetPath = p1.GetPath || p2.GetPath
+	p1.GetQuota = p1.GetQuota || p2.GetQuota
+	p1.InitiateFileDownload = p1.InitiateFileDownload || p2.InitiateFileDownload
+	p1.InitiateFileUpload = p1.InitiateFileUpload || p2.InitiateFileUpload
+	p1.ListContainer = p1.ListContainer || p2.ListContainer
+	p1.ListFileVersions = p1.ListFileVersions || p2.ListFileVersions
+	p1.ListGrants = p1.ListGrants || p2.ListGrants
+	p1.ListRecycle = p1.ListRecycle || p2.ListRecycle
+	p1.Move = p1.Move || p2.Move
+	p1.PurgeRecycle = p1.PurgeRecycle || p2.PurgeRecycle
+	p1.RemoveGrant = p1.RemoveGrant || p2.RemoveGrant
+	p1.RestoreFileVersion = p1.RestoreFileVersion || p2.RestoreFileVersion
+	p1.RestoreRecycleItem = p1.RestoreRecycleItem || p2.RestoreRecycleItem
+	p1.Stat = p1.Stat || p2.Stat
+	p1.UpdateGrant = p1.UpdateGrant || p2.UpdateGrant
+}
+
 func (fs *ocfs) ListGrants(ctx context.Context, ref *provider.Reference) (grants []*provider.Grant, err error) {
 	log := appctx.GetLogger(ctx)
 	var np string
 	if np, err = fs.resolve(ctx, ref); err != nil {
 		return nil, errors.Wrap(err, "ocfs: error resolving reference")
 	}
+
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, np); err == nil {
+		if !perm.ListGrants {
+			return nil, errtypes.PermissionDenied("")
+		}
+	} else {
+		if os.IsNotExist(err) {
+			return nil, errtypes.NotFound(fs.unwrap(ctx, np))
+		}
+		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
 	var attrs []string
 	if attrs, err = xattr.List(np); err != nil {
 		log.Error().Err(err).Msg("error listing attributes")
@@ -757,6 +911,18 @@ func (fs *ocfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pro
 		return errors.Wrap(err, "ocfs: error resolving reference")
 	}
 
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, np); err == nil {
+		if !perm.ListContainer {
+			return errtypes.PermissionDenied("")
+		}
+	} else {
+		if os.IsNotExist(err) {
+			return errtypes.NotFound(fs.unwrap(ctx, np))
+		}
+		return errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
 	var attr string
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 		attr = sharePrefix + "g:" + g.Grantee.Id.OpaqueId
@@ -772,7 +938,29 @@ func (fs *ocfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pro
 }
 
 func (fs *ocfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
-	return fs.AddGrant(ctx, ref, g)
+	np, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "ocfs: error resolving reference")
+	}
+
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, np); err == nil {
+		if !perm.UpdateGrant {
+			return errtypes.PermissionDenied("")
+		}
+	} else {
+		if os.IsNotExist(err) {
+			return errtypes.NotFound(fs.unwrap(ctx, np))
+		}
+		return errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
+	e := ace.FromGrant(g)
+	principal, value := e.Marshal()
+	if err := xattr.Set(np, sharePrefix+principal, value); err != nil {
+		return err
+	}
+	return fs.propagate(ctx, np)
 }
 
 func (fs *ocfs) GetQuota(ctx context.Context) (int, int, error) {
@@ -814,6 +1002,19 @@ func (fs *ocfs) GetHome(ctx context.Context) (string, error) {
 
 func (fs *ocfs) CreateDir(ctx context.Context, fn string) (err error) {
 	np := fs.wrap(ctx, fn)
+
+	// check permissions of parent dir
+	if perm, err := fs.readPermissions(ctx, filepath.Dir(np)); err == nil {
+		if !perm.CreateContainer {
+			return errtypes.PermissionDenied("")
+		}
+	} else {
+		if os.IsNotExist(err) {
+			return errtypes.NotFound(fs.unwrap(ctx, filepath.Dir(np)))
+		}
+		return errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
 	if err = os.Mkdir(np, 0700); err != nil {
 		if os.IsNotExist(err) {
 			return errtypes.NotFound(fn)
@@ -838,6 +1039,7 @@ func (fs *ocfs) CreateReference(ctx context.Context, p string, targetURI *url.UR
 	}
 
 	fn := fs.wrapShadow(ctx, p)
+	// TODO check permission?
 
 	dir, _ := path.Split(fn)
 	if err := os.MkdirAll(dir, 0700); err != nil {
@@ -882,6 +1084,18 @@ func (fs *ocfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referenc
 	var np string
 	if np, err = fs.resolve(ctx, ref); err != nil {
 		return errors.Wrap(err, "ocfs: error resolving reference")
+	}
+
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, np); err == nil {
+		if !perm.InitiateFileUpload { // TODO add dedicated permission?
+			return errtypes.PermissionDenied("")
+		}
+	} else {
+		if os.IsNotExist(err) {
+			return errtypes.NotFound(fs.unwrap(ctx, filepath.Dir(np)))
+		}
+		return errors.Wrap(err, "ocfs: error reading permissions")
 	}
 
 	var fi os.FileInfo
@@ -1015,6 +1229,18 @@ func (fs *ocfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 		return errors.Wrap(err, "ocfs: error resolving reference")
 	}
 
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, np); err == nil {
+		if !perm.InitiateFileUpload { // TODO add dedicated permission?
+			return errtypes.PermissionDenied("")
+		}
+	} else {
+		if os.IsNotExist(err) {
+			return errtypes.NotFound(fs.unwrap(ctx, np))
+		}
+		return errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
 	_, err = os.Stat(np)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -1089,10 +1315,21 @@ func (fs *ocfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 // We will live with that compromise since this storage driver will be
 // deprecated soon.
 func (fs *ocfs) Delete(ctx context.Context, ref *provider.Reference) (err error) {
-
 	var np string
 	if np, err = fs.resolve(ctx, ref); err != nil {
 		return errors.Wrap(err, "ocfs: error resolving reference")
+	}
+
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, np); err == nil {
+		if !perm.Delete {
+			return errtypes.PermissionDenied("")
+		}
+	} else {
+		if os.IsNotExist(err) {
+			return errtypes.NotFound(fs.unwrap(ctx, filepath.Dir(np)))
+		}
+		return errors.Wrap(err, "ocfs: error reading permissions")
 	}
 
 	_, err = os.Stat(np)
@@ -1176,10 +1413,26 @@ func (fs *ocfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (e
 	if oldName, err = fs.resolve(ctx, oldRef); err != nil {
 		return errors.Wrap(err, "ocfs: error resolving reference")
 	}
+
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, oldName); err == nil {
+		if !perm.Move { // TODO add dedicated permission?
+			return errtypes.PermissionDenied("")
+		}
+	} else {
+		if os.IsNotExist(err) {
+			return errtypes.NotFound(fs.unwrap(ctx, filepath.Dir(oldName)))
+		}
+		return errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
 	var newName string
 	if newName, err = fs.resolve(ctx, newRef); err != nil {
 		return errors.Wrap(err, "ocfs: error resolving reference")
 	}
+
+	// TODO check target permissions ... if it exists
+
 	if err = os.Rename(oldName, newName); err != nil {
 		return errors.Wrap(err, "ocfs: error moving "+oldName+" to "+newName)
 	}
@@ -1213,6 +1466,18 @@ func (fs *ocfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []str
 	if strings.HasPrefix(p, fs.c.DataDirectory) {
 		np = p
 	}
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, np); err == nil {
+		if !perm.Stat {
+			return nil, errtypes.PermissionDenied("")
+		}
+	} else {
+		if os.IsNotExist(err) {
+			return nil, errtypes.NotFound(fs.unwrap(ctx, filepath.Dir(np)))
+		}
+		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
 	md, err := os.Stat(np)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -1228,20 +1493,33 @@ func (fs *ocfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []str
 }
 
 func (fs *ocfs) getMDShareFolder(ctx context.Context, p string, mdKeys []string) (*provider.ResourceInfo, error) {
-	fn := fs.wrapShadow(ctx, p)
-	md, err := os.Stat(fn)
+	np := fs.wrapShadow(ctx, p)
+
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, np); err == nil {
+		if !perm.Stat {
+			return nil, errtypes.PermissionDenied("")
+		}
+	} else {
+		if os.IsNotExist(err) {
+			return nil, errtypes.NotFound(fs.unwrap(ctx, filepath.Dir(np)))
+		}
+		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
+	md, err := os.Stat(np)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, errtypes.NotFound(fs.unwrapShadow(ctx, fn))
+			return nil, errtypes.NotFound(fs.unwrapShadow(ctx, np))
 		}
-		return nil, errors.Wrapf(err, "ocfs: error stating %s", fn)
+		return nil, errors.Wrapf(err, "ocfs: error stating %s", np)
 	}
 	c := fs.pool.Get()
 	defer c.Close()
-	m := fs.convertToResourceInfo(ctx, md, fn, fs.unwrapShadow(ctx, fn), c, mdKeys)
+	m := fs.convertToResourceInfo(ctx, md, np, fs.unwrapShadow(ctx, np), c, mdKeys)
 	if !fs.isShareFolderRoot(p) {
 		m.Type = provider.ResourceType_RESOURCE_TYPE_REFERENCE
-		ref, err := xattr.Get(fn, mdPrefix+"target")
+		ref, err := xattr.Get(np, mdPrefix+"target")
 		if err != nil {
 			return nil, err
 		}
@@ -1263,31 +1541,46 @@ func (fs *ocfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys 
 	if fs.c.EnableHome {
 		log.Debug().Msg("home enabled")
 		if strings.HasPrefix(p, "/") {
+			// permissions checked in listWithHome
 			return fs.listWithHome(ctx, "/", p, mdKeys)
 		}
 	}
 
 	log.Debug().Msg("list with nominal home")
+	// permissions checked in listWithNominalHome
 	return fs.listWithNominalHome(ctx, p, mdKeys)
 }
 
 func (fs *ocfs) listWithNominalHome(ctx context.Context, p string, mdKeys []string) ([]*provider.ResourceInfo, error) {
-	fn := p
+	np := p
 	// If a user wants to list a folder shared with him the path will already
 	// be wrapped with the files directory path of the share owner.
 	// In that case we don't want to wrap the path again.
 	if !strings.HasPrefix(p, fs.c.DataDirectory) {
-		fn = fs.wrap(ctx, p)
+		np = fs.wrap(ctx, p)
 	}
-	mds, err := ioutil.ReadDir(fn)
+
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, np); err == nil {
+		if !perm.ListContainer {
+			return nil, errtypes.PermissionDenied("")
+		}
+	} else {
+		if os.IsNotExist(err) {
+			return nil, errtypes.NotFound(fs.unwrap(ctx, filepath.Dir(np)))
+		}
+		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
+	mds, err := ioutil.ReadDir(np)
 	if err != nil {
-		return nil, errors.Wrapf(err, "ocfs: error listing %s", fn)
+		return nil, errors.Wrapf(err, "ocfs: error listing %s", np)
 	}
 	c := fs.pool.Get()
 	defer c.Close()
 	finfos := []*provider.ResourceInfo{}
 	for _, md := range mds {
-		p := path.Join(fn, md.Name())
+		p := path.Join(np, md.Name())
 		m := fs.convertToResourceInfo(ctx, md, p, fs.unwrap(ctx, p), c, mdKeys)
 		finfos = append(finfos, m)
 	}
@@ -1316,8 +1609,21 @@ func (fs *ocfs) listWithHome(ctx context.Context, home, p string, mdKeys []strin
 
 func (fs *ocfs) listHome(ctx context.Context, home string, mdKeys []string) ([]*provider.ResourceInfo, error) {
 	// list files
-	fn := fs.wrap(ctx, home)
-	mds, err := ioutil.ReadDir(fn)
+	np := fs.wrap(ctx, home)
+
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, np); err == nil {
+		if !perm.ListContainer {
+			return nil, errtypes.PermissionDenied("")
+		}
+	} else {
+		if os.IsNotExist(err) {
+			return nil, errtypes.NotFound(fs.unwrap(ctx, filepath.Dir(np)))
+		}
+		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
+	mds, err := ioutil.ReadDir(np)
 	if err != nil {
 		return nil, errors.Wrap(err, "ocfs: error listing files")
 	}
@@ -1327,19 +1633,19 @@ func (fs *ocfs) listHome(ctx context.Context, home string, mdKeys []string) ([]*
 
 	finfos := []*provider.ResourceInfo{}
 	for _, md := range mds {
-		p := path.Join(fn, md.Name())
+		p := path.Join(np, md.Name())
 		m := fs.convertToResourceInfo(ctx, md, p, fs.unwrap(ctx, p), c, mdKeys)
 		finfos = append(finfos, m)
 	}
 
 	// list shadow_files
-	fn = fs.wrapShadow(ctx, home)
-	mds, err = ioutil.ReadDir(fn)
+	np = fs.wrapShadow(ctx, home)
+	mds, err = ioutil.ReadDir(np)
 	if err != nil {
 		return nil, errors.Wrap(err, "ocfs: error listing shadow_files")
 	}
 	for _, md := range mds {
-		p := path.Join(fn, md.Name())
+		p := path.Join(np, md.Name())
 		m := fs.convertToResourceInfo(ctx, md, p, fs.unwrapShadow(ctx, p), c, mdKeys)
 		finfos = append(finfos, m)
 	}
@@ -1347,8 +1653,21 @@ func (fs *ocfs) listHome(ctx context.Context, home string, mdKeys []string) ([]*
 }
 
 func (fs *ocfs) listShareFolderRoot(ctx context.Context, p string, mdKeys []string) ([]*provider.ResourceInfo, error) {
-	fn := fs.wrapShadow(ctx, p)
-	mds, err := ioutil.ReadDir(fn)
+	np := fs.wrapShadow(ctx, p)
+
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, np); err == nil {
+		if !perm.ListContainer {
+			return nil, errtypes.PermissionDenied("")
+		}
+	} else {
+		if os.IsNotExist(err) {
+			return nil, errtypes.NotFound(fs.unwrap(ctx, filepath.Dir(np)))
+		}
+		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
+	mds, err := ioutil.ReadDir(np)
 	if err != nil {
 		return nil, errors.Wrap(err, "ocfs: error listing shadow_files")
 	}
@@ -1358,7 +1677,7 @@ func (fs *ocfs) listShareFolderRoot(ctx context.Context, p string, mdKeys []stri
 
 	finfos := []*provider.ResourceInfo{}
 	for _, md := range mds {
-		p := path.Join(fn, md.Name())
+		p := path.Join(np, md.Name())
 		m := fs.convertToResourceInfo(ctx, md, p, fs.unwrapShadow(ctx, p), c, mdKeys)
 		m.Type = provider.ResourceType_RESOURCE_TYPE_REFERENCE
 		ref, err := xattr.Get(p, mdPrefix+"target")
@@ -1411,6 +1730,19 @@ func (fs *ocfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadC
 	if err != nil {
 		return nil, errors.Wrap(err, "ocfs: error resolving reference")
 	}
+
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, np); err == nil {
+		if !perm.InitiateFileDownload {
+			return nil, errtypes.PermissionDenied("")
+		}
+	} else {
+		if os.IsNotExist(err) {
+			return nil, errtypes.NotFound(fs.unwrap(ctx, filepath.Dir(np)))
+		}
+		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
 	r, err := os.Open(np)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -1426,6 +1758,19 @@ func (fs *ocfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*
 	if err != nil {
 		return nil, errors.Wrap(err, "ocfs: error resolving reference")
 	}
+
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, np); err == nil {
+		if !perm.ListFileVersions {
+			return nil, errtypes.PermissionDenied("")
+		}
+	} else {
+		if os.IsNotExist(err) {
+			return nil, errtypes.NotFound(fs.unwrap(ctx, filepath.Dir(np)))
+		}
+		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
 	vp := fs.getVersionsPath(ctx, np)
 
 	bn := path.Base(np)
@@ -1474,6 +1819,19 @@ func (fs *ocfs) RestoreRevision(ctx context.Context, ref *provider.Reference, re
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error resolving reference")
 	}
+
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, np); err == nil {
+		if !perm.RestoreFileVersion {
+			return errtypes.PermissionDenied("")
+		}
+	} else {
+		if os.IsNotExist(err) {
+			return errtypes.NotFound(fs.unwrap(ctx, filepath.Dir(np)))
+		}
+		return errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
 	vp := fs.getVersionsPath(ctx, np)
 	rp := vp + ".v" + revisionKey
 
@@ -1521,6 +1879,21 @@ func (fs *ocfs) PurgeRecycleItem(ctx context.Context, key string) error {
 		return errors.Wrap(err, "ocfs: error resolving recycle path")
 	}
 	ip := path.Join(rp, path.Clean(key))
+	// TODO check permission?
+
+	// check permissions
+	/* are they stored in the trash?
+	if perm, err := fs.readPermissions(ctx, fn); err == nil {
+		if !perm.ListContainer {
+			return nil, errtypes.PermissionDenied("")
+		}
+	} else {
+		if os.IsNotExist(err) {
+			return nil, errtypes.NotFound(fs.unwrap(ctx, filepath.Dir(np)))
+		}
+		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+	}
+	*/
 
 	err = os.Remove(ip)
 	if err != nil {
@@ -1535,6 +1908,7 @@ func (fs *ocfs) PurgeRecycleItem(ctx context.Context, key string) error {
 }
 
 func (fs *ocfs) EmptyRecycle(ctx context.Context) error {
+	// TODO check permission? on what? user must be the owner
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error resolving recycle path")
@@ -1591,6 +1965,7 @@ func (fs *ocfs) convertToRecycleItem(ctx context.Context, rp string, md os.FileI
 }
 
 func (fs *ocfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error) {
+	// TODO check permission? on what? user must be the owner?
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "ocfs: error resolving recycle path")
@@ -1617,6 +1992,7 @@ func (fs *ocfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error
 }
 
 func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key string) error {
+	// TODO check permission? on what? user must be the owner?
 	log := appctx.GetLogger(ctx)
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
