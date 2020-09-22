@@ -8,8 +8,8 @@ enabled_services = ["mentix"]
 [http.services.mentix]
 connector = "gocdb"
 exporters = ["webapi", "cs3api", "siteloc"]
-# Enable the Prometheus File Service Discovery:
-# exporters = ["webapi", "cs3api", "siteloc", "prom_filesd"]
+# Enable the Prometheus Service Discovery:
+# exporters = ["webapi", "cs3api", "siteloc", "promsd"]
 update_interval = "15m"
 
 [http.services.mentix.gocdb]
@@ -24,7 +24,9 @@ endpoint = "/cs3"
 [http.services.mentix.siteloc]
 endpoint = "/loc"
 
-# Configure the Prometheus File Service Discovery:
-# [http.services.mentix.prom_filesd]
-# Prometheus must be configured to read the following file:
-# output_file = "/usr/share/prom/sciencemesh_services.json"
+# Configure the Prometheus Service Discovery:
+# [http.services.mentix.promsd]
+# The following files must be made available to Prometheus.
+# They can then be used as the file_sd source of a job.
+# metrics_output_file = "/usr/share/prom/sciencemesh_metrics.json"
+# blackbox_output_file = "/usr/share/prom/sciencemesh_blackbox.json"

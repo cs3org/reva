@@ -64,9 +64,9 @@ func createMetricsSDScrapeConfig(site *meshdata.Site, host string, endpoint *mes
 }
 
 func createBlackboxSDScrapeConfig(site *meshdata.Site, host string, endpoint *meshdata.ServiceEndpoint) *prometheus.ScrapeConfig {
-	// The URL of the service must be configured properly
-	host = endpoint.URL
-	if host == "" {
+	// The URL of the service is used as the actual target; it must be configured properly
+	target := endpoint.URL
+	if target == "" {
 		return nil
 	}
 
@@ -77,7 +77,7 @@ func createBlackboxSDScrapeConfig(site *meshdata.Site, host string, endpoint *me
 	}
 
 	return &prometheus.ScrapeConfig{
-		Targets: []string{host},
+		Targets: []string{target},
 		Labels:  labels,
 	}
 }
