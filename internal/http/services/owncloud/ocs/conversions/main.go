@@ -20,6 +20,7 @@
 package conversions
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"path"
@@ -272,6 +273,29 @@ func AsCS3Permissions(p int, rp *provider.ResourcePermissions) *provider.Resourc
 	return rp
 }
 
+// UserShare2ShareData converts a cs3api user share into shareData data model
+// TODO(jfd) merge userShare2ShareData with publicShare2ShareData
+func UserShare2ShareData(ctx context.Context, share *collaboration.Share) (*ShareData, error) {
+	sd := &ShareData{
+		Permissions:  UserSharePermissions2OCSPermissions(share.GetPermissions()),
+		ShareType:    ShareTypeUser,
+		UIDOwner:     LocalUserIDToString(share.GetCreator()),
+		UIDFileOwner: LocalUserIDToString(share.GetOwner()),
+		ShareWith:    LocalUserIDToString(share.GetGrantee().GetId()),
+	}
+
+	if share.Id != nil && share.Id.OpaqueId != "" {
+		sd.ID = share.Id.OpaqueId
+	}
+	if share.Ctime != nil {
+		sd.STime = share.Ctime.Seconds // TODO CS3 api birth time = btime
+	}
+	// actually clients should be able to GET and cache the user info themselves ...
+	// TODO only return the userid, let the clientso look up the displayname
+	// TODO check grantee type for user vs group
+	return sd, nil
+}
+
 // PublicShare2ShareData converts a cs3api public share into shareData data model
 func PublicShare2ShareData(share *link.PublicShare, r *http.Request, publicURL string) *ShareData {
 	var expiration string
@@ -281,30 +305,29 @@ func PublicShare2ShareData(share *link.PublicShare, r *http.Request, publicURL s
 		expiration = ""
 	}
 
-	shareWith := ""
-	if share.PasswordProtected {
-		shareWith = "***redacted***"
+	sd := &ShareData{
+		// share.permissions are mapped below
+		// Displaynames are added later
+		ID:           share.Id.OpaqueId,
+		ShareType:    ShareTypePublicLink,
+		STime:        share.Ctime.Seconds, // TODO CS3 api birth time = btime
+		Token:        share.Token,
+		Expiration:   expiration,
+		MimeType:     share.Mtime.String(),
+		Name:         share.DisplayName,
+		MailSend:     0,
+		URL:          publicURL + path.Join("/", "#/s/"+share.Token),
+		Permissions:  publicSharePermissions2OCSPermissions(share.GetPermissions()),
+		UIDOwner:     LocalUserIDToString(share.Creator),
+		UIDFileOwner: LocalUserIDToString(share.Owner),
 	}
 
-	return &ShareData{
-		// share.permissions ar mapped below
-		// DisplaynameOwner:     creator.DisplayName,
-		// DisplaynameFileOwner: share.GetCreator().String(),
-		ID:                   share.Id.OpaqueId,
-		ShareType:            ShareTypePublicLink,
-		ShareWith:            shareWith,
-		ShareWithDisplayname: shareWith,
-		STime:                share.Ctime.Seconds, // TODO CS3 api birth time = btime
-		Token:                share.Token,
-		Expiration:           expiration,
-		MimeType:             share.Mtime.String(),
-		Name:                 share.DisplayName,
-		MailSend:             0,
-		URL:                  publicURL + path.Join("/", "#/s/"+share.Token),
-		Permissions:          publicSharePermissions2OCSPermissions(share.GetPermissions()),
-		UIDOwner:             LocalUserIDToString(share.Creator),
-		UIDFileOwner:         LocalUserIDToString(share.Owner),
+	if share.PasswordProtected {
+		sd.ShareWith = "***redacted***"
+		sd.ShareWithDisplayname = "***redacted***"
 	}
+
+	return sd
 	// actually clients should be able to GET and cache the user info themselves ...
 	// TODO check grantee type for user vs group
 }
@@ -318,6 +341,8 @@ func LocalUserIDToString(userID *userpb.UserId) string {
 }
 
 // UserIDToString transforms a cs3api user id into an ocs data model
+// TODO This should be used instead of LocalUserIDToString bit it requires interpreting an @ on the client side
+// TODO An alternative would be to send the idp / iss as an additional attribute. might be less intrusive
 func UserIDToString(userID *userpb.UserId) string {
 	if userID == nil || userID.OpaqueId == "" {
 		return ""
