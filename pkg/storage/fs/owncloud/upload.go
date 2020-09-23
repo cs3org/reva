@@ -42,7 +42,7 @@ var defaultFilePerm = os.FileMode(0664)
 
 // TODO deprecated ... use tus
 func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
-	np, err := fs.resolve(ctx, ref)
+	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error resolving reference")
 	}
@@ -50,12 +50,12 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 	var perm *provider.ResourcePermissions
 	var perr error
 	// if destination exists
-	if _, err := os.Stat(np); err == nil {
+	if _, err := os.Stat(ip); err == nil {
 		// check permissions of file to be overwritten
-		perm, perr = fs.readPermissions(ctx, np)
+		perm, perr = fs.readPermissions(ctx, ip)
 	} else {
 		// check permissions
-		perm, perr = fs.readPermissions(ctx, filepath.Base(np))
+		perm, perr = fs.readPermissions(ctx, filepath.Base(ip))
 	}
 	if perr == nil {
 		if !perm.InitiateFileUpload {
@@ -63,7 +63,7 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 		}
 	} else {
 		if os.IsNotExist(err) {
-			return errtypes.NotFound(fs.unwrap(ctx, filepath.Dir(np)))
+			return errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
 		return errors.Wrap(err, "ocfs: error reading permissions")
 	}
@@ -71,9 +71,9 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 	// we cannot rely on /tmp as it can live in another partition and we can
 	// hit invalid cross-device link errors, so we create the tmp file in the same directory
 	// the file is supposed to be written.
-	tmp, err := ioutil.TempFile(filepath.Dir(np), "._reva_atomic_upload")
+	tmp, err := ioutil.TempFile(filepath.Dir(ip), "._reva_atomic_upload")
 	if err != nil {
-		return errors.Wrap(err, "ocfs: error creating tmp fn at "+filepath.Dir(np))
+		return errors.Wrap(err, "ocfs: error creating tmp file at "+filepath.Dir(ip))
 	}
 
 	_, err = io.Copy(tmp, r)
@@ -82,20 +82,20 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 	}
 
 	// if destination exists
-	if _, err := os.Stat(np); err == nil {
+	if _, err := os.Stat(ip); err == nil {
 		// copy attributes of existing file to tmp file
-		if err := fs.copyMD(np, tmp.Name()); err != nil {
-			return errors.Wrap(err, "ocfs: error copying metadata from "+np+" to "+tmp.Name())
+		if err := fs.copyMD(ip, tmp.Name()); err != nil {
+			return errors.Wrap(err, "ocfs: error copying metadata from "+ip+" to "+tmp.Name())
 		}
 		// create revision
-		if err := fs.archiveRevision(ctx, fs.getVersionsPath(ctx, np), np); err != nil {
+		if err := fs.archiveRevision(ctx, fs.getVersionsPath(ctx, ip), ip); err != nil {
 			return err
 		}
 	}
 
 	// TODO(jfd): make sure rename is atomic, missing fsync ...
-	if err := os.Rename(tmp.Name(), np); err != nil {
-		return errors.Wrap(err, "ocfs: error renaming from "+tmp.Name()+" to "+np)
+	if err := os.Rename(tmp.Name(), ip); err != nil {
+		return errors.Wrap(err, "ocfs: error renaming from "+tmp.Name()+" to "+ip)
 	}
 
 	return nil
@@ -104,7 +104,7 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 // InitiateUpload returns an upload id that can be used for uploads with tus
 // TODO read optional content for small files in this request
 func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (uploadID string, err error) {
-	np, err := fs.resolve(ctx, ref)
+	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return "", errors.Wrap(err, "ocfs: error resolving reference")
 	}
@@ -113,12 +113,12 @@ func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, upl
 	var perm *provider.ResourcePermissions
 	var perr error
 	// if destination exists
-	if _, err := os.Stat(np); err == nil {
+	if _, err := os.Stat(ip); err == nil {
 		// check permissions of file to be overwritten
-		perm, perr = fs.readPermissions(ctx, np)
+		perm, perr = fs.readPermissions(ctx, ip)
 	} else {
 		// check permissions
-		perm, perr = fs.readPermissions(ctx, filepath.Base(np))
+		perm, perr = fs.readPermissions(ctx, filepath.Base(ip))
 	}
 	if perr == nil {
 		if !perm.InitiateFileUpload {
@@ -126,12 +126,12 @@ func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, upl
 		}
 	} else {
 		if os.IsNotExist(err) {
-			return "", errtypes.NotFound(fs.unwrap(ctx, filepath.Dir(np)))
+			return "", errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
 		return "", errors.Wrap(err, "ocfs: error reading permissions")
 	}
 
-	p := fs.unwrap(ctx, np)
+	p := fs.toStoragePath(ctx, ip)
 
 	info := tusd.FileInfo{
 		MetaData: tusd.MetaData{
@@ -172,8 +172,7 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("info", info).Msg("ocfs: NewUpload")
 
-	fn := info.MetaData["filename"]
-	if fn == "" {
+	if info.MetaData["filename"] == "" {
 		return nil, errors.New("ocfs: missing filename in metadata")
 	}
 	info.MetaData["filename"] = filepath.Clean(info.MetaData["filename"])
@@ -184,18 +183,18 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 	}
 	info.MetaData["dir"] = filepath.Clean(info.MetaData["dir"])
 
-	np := fs.wrap(ctx, filepath.Join(info.MetaData["dir"], info.MetaData["filename"]))
+	ip := fs.toInternalPath(ctx, filepath.Join(info.MetaData["dir"], info.MetaData["filename"]))
 
 	// check permissions
 	var perm *provider.ResourcePermissions
 	var perr error
 	// if destination exists
-	if _, err := os.Stat(np); err == nil {
+	if _, err := os.Stat(ip); err == nil {
 		// check permissions of file to be overwritten
-		perm, perr = fs.readPermissions(ctx, np)
+		perm, perr = fs.readPermissions(ctx, ip)
 	} else {
 		// check permissions
-		perm, perr = fs.readPermissions(ctx, filepath.Base(np))
+		perm, perr = fs.readPermissions(ctx, filepath.Base(ip))
 	}
 	if perr == nil {
 		if !perm.InitiateFileUpload {
@@ -203,7 +202,7 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 		}
 	} else {
 		if os.IsNotExist(err) {
-			return nil, errtypes.NotFound(fs.unwrap(ctx, filepath.Dir(np)))
+			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
 		return nil, errors.Wrap(err, "ocfs: error reading permissions")
 	}
@@ -220,7 +219,7 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 	info.Storage = map[string]string{
 		"Type":                "OwnCloudStore",
 		"BinPath":             binPath,
-		"InternalDestination": np,
+		"InternalDestination": ip,
 
 		"Idp":      usr.Id.Idp,
 		"UserId":   usr.Id.OpaqueId,
@@ -396,27 +395,27 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 		}
 	*/
 
-	np := upload.info.Storage["InternalDestination"]
+	ip := upload.info.Storage["InternalDestination"]
 
 	// if destination exists
 	// TODO check etag with If-Match header
-	if _, err := os.Stat(np); err == nil {
+	if _, err := os.Stat(ip); err == nil {
 		// copy attributes of existing file to tmp file
-		if err := upload.fs.copyMD(np, upload.binPath); err != nil {
-			return errors.Wrap(err, "ocfs: error copying metadata from "+np+" to "+upload.binPath)
+		if err := upload.fs.copyMD(ip, upload.binPath); err != nil {
+			return errors.Wrap(err, "ocfs: error copying metadata from "+ip+" to "+upload.binPath)
 		}
 		// create revision
-		if err := upload.fs.archiveRevision(upload.ctx, upload.fs.getVersionsPath(upload.ctx, np), np); err != nil {
+		if err := upload.fs.archiveRevision(upload.ctx, upload.fs.getVersionsPath(upload.ctx, ip), ip); err != nil {
 			return err
 		}
 	}
 
 	log := appctx.GetLogger(upload.ctx)
-	err := os.Rename(upload.binPath, np)
+	err := os.Rename(upload.binPath, ip)
 	if err != nil {
 		log.Err(err).Interface("info", upload.info).
 			Str("binPath", upload.binPath).
-			Str("np", np).
+			Str("ipath", ip).
 			Msg("ocfs: could not rename")
 		return err
 	}
@@ -430,14 +429,14 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 	}
 
 	if upload.info.MetaData["mtime"] != "" {
-		err := upload.fs.setMtime(ctx, np, upload.info.MetaData["mtime"])
+		err := upload.fs.setMtime(ctx, ip, upload.info.MetaData["mtime"])
 		if err != nil {
 			log.Err(err).Interface("info", upload.info).Msg("ocfs: could not set mtime metadata")
 			return err
 		}
 	}
 
-	return upload.fs.propagate(upload.ctx, np)
+	return upload.fs.propagate(upload.ctx, ip)
 }
 
 // To implement the termination extension as specified in https://tus.io/protocols/resumable-upload.html#termination
