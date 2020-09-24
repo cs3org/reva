@@ -169,6 +169,7 @@ func (fs *localfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tu
 		binPath:  binPath,
 		infoPath: binPath + ".info",
 		fs:       fs,
+		ctx:      ctx,
 	}
 
 	if !info.SizeIsDeferred && info.Size == 0 {
@@ -316,6 +317,9 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 	}
 
 	err := os.Rename(upload.binPath, np)
+	if err != nil {
+		return err
+	}
 
 	// only delete the upload if it was successfully written to the fs
 	if err := os.Remove(upload.infoPath); err != nil {
