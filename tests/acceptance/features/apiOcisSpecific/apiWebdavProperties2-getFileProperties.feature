@@ -8,7 +8,7 @@ Feature: get file properties
     Given using OCS API version "1"
     And user "Alice" has been created with default attributes and without skeleton files
 
-  @issue-ocis-reva-214
+  @issue-ocis-reva-214 @skipOnOcis-OCIS-Storage
   # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario Outline: Do a PROPFIND of various file names
     Given using <dav_version> DAV path
@@ -25,7 +25,7 @@ Feature: get file properties
       | new         | /file #2.txt  | dav\/files\/%username%\/file%20%232\.txt  |
       | new         | /file &2.txt  | dav\/files\/%username%\/file%20&2\.txt    |
 
-  @issue-ocis-reva-214 @issue-ocis-reva-265 @skipOnOcis-EOS-Storage
+  @issue-ocis-reva-214 @issue-ocis-reva-265 @skipOnOcis-EOS-Storage @skipOnOcis-OCIS-Storage
   # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario Outline: Do a PROPFIND of various file names
     Given using <dav_version> DAV path
@@ -38,7 +38,7 @@ Feature: get file properties
       | old         | /file ?2.txt | webdav\/file%20%3F2\.txt                 |
       | new         | /file ?2.txt | dav\/files\/%username%\/file%20%3F2\.txt |
 
-  @skipOnOcis-OC-Storage @issue-ocis-reva-265
+  @skipOnOcis-OC-Storage @issue-ocis-reva-265 @skipOnOcis-OCIS-Storage
   # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario Outline: upload a file to content
     Given using <dav_version> DAV path
@@ -49,7 +49,7 @@ Feature: get file properties
       | old         | /file ?2.txt  |
       | new         | /file ?2.txt  |
 
-  @issue-ocis-reva-214
+  @issue-ocis-reva-214 @skipOnOcis-OCIS-Storage
   # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario Outline: Do a PROPFIND of various folder names
     Given using <dav_version> DAV path
@@ -68,6 +68,20 @@ Feature: get file properties
       | old         | /नेपाली         | webdav\/%E0%A4%A8%E0%A5%87%E0%A4%AA%E0%A4%BE%E0%A4%B2%E0%A5%80            |
       | old         | /folder #2.txt  | webdav\/folder%20%232\.txt                                                |
       | old         | /folder &2.txt  | webdav\/folder%20&2\.txt                                                  |
+
+  @issue-ocis-reva-214 @skipOnOcis-OCIS-Storage
+  # after fixing all issues delete this Scenario and use the one from oC10 core
+  Scenario Outline: Do a PROPFIND of various folder names
+    Given using <dav_version> DAV path
+    And user "Alice" has created folder "<folder_name>"
+    And user "Alice" has uploaded file with content "uploaded content" to "<folder_name>/file1.txt"
+    And user "Alice" has uploaded file with content "uploaded content" to "<folder_name>/file2.txt"
+    When user "Alice" gets the properties of folder "<folder_name>" with depth 1 using the WebDAV API
+    Then the value of the item "//d:response[1]/d:href" in the response to user "Alice" should match "/remote\.php\/<expected_href>\//"
+    And the value of the item "//d:response[2]/d:href" in the response to user "Alice" should match "/remote\.php\/<expected_href>\/file1.txt/"
+    And the value of the item "//d:response[3]/d:href" in the response to user "Alice" should match "/remote\.php\/<expected_href>\/file2.txt/"
+    Examples:
+      | dav_version | folder_name     | expected_href                                                             |
       | new         | /upload         | dav\/files\/%username%\/upload                                                 |
       | new         | /strängé folder | dav\/files\/%username%\/str%C3%A4ng%C3%A9%20folder                             |
       | new         | /C++ folder     | dav\/files\/%username%\/C\+\+%20folder                                           |
@@ -75,7 +89,7 @@ Feature: get file properties
       | new         | /folder #2.txt  | dav\/files\/%username%\/folder%20%232\.txt                                     |
       | new         | /folder &2.txt  | dav\/files\/%username%\/folder%20&2\.txt                                       |
 
-  @issue-ocis-reva-214 @skipOnOcis-EOS-Storage @issue-ocis-reva-265
+  @issue-ocis-reva-214 @skipOnOcis-EOS-Storage @issue-ocis-reva-265 @skipOnOcis-OCIS-Storage
   # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario Outline: Do a PROPFIND of various folder names
     Given using <dav_version> DAV path
@@ -91,7 +105,7 @@ Feature: get file properties
       | old         | /folder ?2.txt  | webdav\/folder%20%3F2\.txt                                                |
       | new         | /folder ?2.txt  | dav\/files\/%username%\/folder%20%3F2\.txt                                     |
 
-  @skipOnOcis-OC-Storage @issue-ocis-reva-265
+  @skipOnOcis-OC-Storage @issue-ocis-reva-265 @skipOnOcis-OCIS-Storage
   # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario Outline: Do a PROPFIND of various folder names
     Given using <dav_version> DAV path
