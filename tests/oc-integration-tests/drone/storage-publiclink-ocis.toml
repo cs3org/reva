@@ -17,6 +17,6 @@ data_server_url = "http://localhost:13001/data"
 gateway_addr = "0.0.0.0:19000"
 enable_home_creation = true
 
-[grpc.services.publicstorageprovider.drivers.owncloud]
+[grpc.services.publicstorageprovider.drivers.ocis]
 datadirectory = "/drone/src/tmp/reva/data"
 enable_home = true
