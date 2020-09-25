@@ -791,6 +791,7 @@ func extractACEsFromAttrs(ctx context.Context, ip string, attrs []string) (entri
 // We need the storage relative path so we can calculate the permissions
 // for the node based on all acls in the tree up to the root
 func (fs *ocfs) readPermissions(ctx context.Context, ip string) (p *provider.ResourcePermissions, err error) {
+
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
 		appctx.GetLogger(ctx).Debug().Str("ipath", ip).Msg("no user in context, returning default permissions")
@@ -801,32 +802,85 @@ func (fs *ocfs) readPermissions(ctx context.Context, ip string) (p *provider.Res
 		appctx.GetLogger(ctx).Debug().Str("ipath", ip).Msg("user is owner, returning owner permissions")
 		return ownerPermissions, nil
 	}
+
+	// for non owners this is a little more complicated:
 	aggregatedPermissions := &provider.ResourcePermissions{}
 	// add default permissions
 	addPermissions(aggregatedPermissions, defaultPermissions)
-	var e *ace.ACE
-	e, err = fs.readACE(ctx, ip, "u:"+u.Id.OpaqueId)
-	if err == nil {
-		addPermissions(aggregatedPermissions, e.Grant().GetPermissions())
-	} else if isNoData(err) {
-		err = nil
-	} else {
-		appctx.GetLogger(ctx).Error().Err(err).Str("ipath", ip).Str("principal", "u:"+u.Id.OpaqueId).Msg("error reading user permissions")
-		return nil, err
-	}
-	// check all groups the user is a member of
+
+	// determine root
+	rp := fs.toInternalPath(ctx, "")
+	// TODO rp will be the datadir ... be we don't want to go up that high. The users home is far enough
+	np := ip
+
+	// for an efficient group lookup convert the list of groups to a map
+	// groups are just strings ... groupnames ... or group ids ??? AAARGH !!!
+	groupsMap := make(map[string]bool, len(u.Groups))
 	for i := range u.Groups {
-		// groups are just strings ... groupnames ... or group ids ??? AAARGH !!!
-		e, err = fs.readACE(ctx, ip, "g:"+u.Groups[i])
-		if err == nil {
-			addPermissions(aggregatedPermissions, e.Grant().GetPermissions())
-		} else if isNoData(err) {
-			err = nil
-		} else {
-			appctx.GetLogger(ctx).Error().Err(err).Str("ipath", ip).Str("principal", "g:"+u.Groups[i]).Msg("error reading group permissions")
+		groupsMap[u.Groups[i]] = true
+	}
+
+	var e *ace.ACE
+	// for all segments, starting at the leaf
+	for np != rp {
+
+		var attrs []string
+		if attrs, err = xattr.List(ip); err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Str("ipath", np).Msg("error listing attributes")
 			return nil, err
 		}
+
+		userace := sharePrefix + "u:" + u.Id.OpaqueId
+		userFound := false
+		for i := range attrs {
+			// we only need the find the user once per node
+			if !userFound && attrs[i] == userace {
+				e, err = fs.readACE(ctx, np, "u:"+u.Id.OpaqueId)
+			} else if strings.HasPrefix(attrs[i], sharePrefix+"g:") {
+				g := strings.TrimPrefix(attrs[i], sharePrefix+"g:")
+				if groupsMap[g] {
+					e, err = fs.readACE(ctx, np, "g:"+g)
+				} else {
+					// no need to check attribute
+					continue
+				}
+			} else {
+				// no need to check attribute
+				continue
+			}
+			if err == nil {
+				addPermissions(aggregatedPermissions, e.Grant().GetPermissions())
+				appctx.GetLogger(ctx).Debug().Str("ipath", np).Str("principal", strings.TrimPrefix(attrs[i], sharePrefix)).Interface("permissions", aggregatedPermissions).Msg("adding permissions")
+			} else if isNoData(err) {
+				err = nil
+				appctx.GetLogger(ctx).Error().Str("ipath", np).Str("principal", strings.TrimPrefix(attrs[i], sharePrefix)).Interface("attrs", attrs).Msg("no permissions found on node, but they were listed")
+			} else {
+				appctx.GetLogger(ctx).Error().Err(err).Str("ipath", np).Str("principal", strings.TrimPrefix(attrs[i], sharePrefix)).Msg("error reading permissions")
+				return nil, err
+			}
+		}
+
+		np = filepath.Dir(np)
 	}
+
+	// 3. read user permissions until one is found?
+	//   what if, when checking /a/b/c/d, /a/b has write permission, but /a/b/c has not?
+	//      those are two shares one read only, and a higher one rw,
+	//       should the higher one be used?
+	//       or, since we did find a matching ace in a lower node use that because it matches the principal?
+	//		this would allow ai user to share a folder rm but take away the write capability for eg a docs folder inside it.
+	// 4. read group permissions until all groups of the user are matched?
+	//    same as for user permission, but we need to keep going further up the tree until all groups of the user were matched.
+	//    what if a user has thousands of groups?
+	//      we will always have to walk to the root.
+	//      but the same problem occurs for a user with 2 groups but where only one group was used to share.
+	//      in any case we need to iterate the aces, not the number of groups of the user.
+	//        listing the aces can be used to match the principals, we do not need to fully real all aces
+	//   what if, when checking /a/b/c/d, /a/b has write permission for group g, but /a/b/c has an ace for another group h the user is also a member of?
+	//     it would allow restricting a users permissions by resharing something with him with lower permission?
+	//     so if you have reshare permissons you could accidentially restrict users access to a subfolder of a rw share to ro by sharing it to another group as ro when they are part of both groups
+	//       it makes more sense to have explicit negative permissions
+
 	// TODO we need to read all parents ... until we find a matching ace?
 	appctx.GetLogger(ctx).Debug().Interface("permissions", aggregatedPermissions).Str("ipath", ip).Msg("returning aggregated permissions")
 	return aggregatedPermissions, nil

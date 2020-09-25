@@ -41,7 +41,7 @@ import (
 //                permissions.
 //     L: aLarm - generate a system alarm at any attempted access by
 //                principal which requires permissions
-//   D for deny is not recommended
+//     D: for Deny is not recommended
 // - *flags* for now empty or g for group, no inheritance yet
 //   - d directory-inherit - newly-created subdirectories will inherit the
 //                           ACE.
