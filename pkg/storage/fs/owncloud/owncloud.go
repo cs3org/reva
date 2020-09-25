@@ -787,6 +787,7 @@ func extractACEsFromAttrs(ctx context.Context, ip string, attrs []string) (entri
 // We need the storage relative path so we can calculate the permissions
 // for the node based on all acls in the tree up to the root
 func (fs *ocfs) readPermissions(ctx context.Context, ip string) (p *provider.ResourcePermissions, err error) {
+
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
 		appctx.GetLogger(ctx).Debug().Str("ipath", ip).Msg("no user in context, returning default permissions")
