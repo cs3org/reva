@@ -1066,6 +1066,7 @@ steps:
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
       OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/'
+      DELETE_USER_DATA_CMD: 'rm -rf /drone/src/tmp/ocis/root/nodes/root/*'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
@@ -1143,6 +1144,7 @@ steps:
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
       OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/'
+      DELETE_USER_DATA_CMD: 'rm -rf /drone/src/tmp/ocis/root/nodes/root/*'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
@@ -1220,6 +1222,7 @@ steps:
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
       OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/'
+      DELETE_USER_DATA_CMD: 'rm -rf /drone/src/tmp/ocis/root/nodes/root/*'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
@@ -1297,6 +1300,7 @@ steps:
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
       OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/'
+      DELETE_USER_DATA_CMD: 'rm -rf /drone/src/tmp/ocis/root/nodes/root/*'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
@@ -1374,6 +1378,7 @@ steps:
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
       OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/'
+      DELETE_USER_DATA_CMD: 'rm -rf /drone/src/tmp/ocis/root/nodes/root/*'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
@@ -1451,6 +1456,7 @@ steps:
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
       OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/'
+      DELETE_USER_DATA_CMD: 'rm -rf /drone/src/tmp/ocis/root/nodes/root/*'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
