@@ -30,7 +30,7 @@ data_server_url = "http://localhost:12001/data"
 enable_home_creation = true
 
 [grpc.services.storageprovider.drivers.ocis]
-datadirectory = "/drone/src/tmp/reva/data"
+datadirectory = "/drone/src/tmp/ocis/data"
 enable_home = true
 redis = "redis:6379"
 
