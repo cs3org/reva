@@ -825,7 +825,7 @@ func (fs *ocfs) readPermissions(ctx context.Context, ip string) (p *provider.Res
 	for np != rp {
 
 		var attrs []string
-		if attrs, err = xattr.List(ip); err != nil {
+		if attrs, err = xattr.List(np); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Str("ipath", np).Msg("error listing attributes")
 			return nil, err
 		}
@@ -949,6 +949,7 @@ func (fs *ocfs) ListGrants(ctx context.Context, ref *provider.Reference) (grants
 
 	var attrs []string
 	if attrs, err = xattr.List(ip); err != nil {
+		// TODO err might be a not exists
 		log.Error().Err(err).Msg("error listing attributes")
 		return nil, err
 	}

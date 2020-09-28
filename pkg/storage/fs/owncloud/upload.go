@@ -55,7 +55,7 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 		perm, perr = fs.readPermissions(ctx, ip)
 	} else {
 		// check permissions
-		perm, perr = fs.readPermissions(ctx, filepath.Base(ip))
+		perm, perr = fs.readPermissions(ctx, filepath.Dir(ip))
 	}
 	if perr == nil {
 		if !perm.InitiateFileUpload {
@@ -118,7 +118,7 @@ func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, upl
 		perm, perr = fs.readPermissions(ctx, ip)
 	} else {
 		// check permissions
-		perm, perr = fs.readPermissions(ctx, filepath.Base(ip))
+		perm, perr = fs.readPermissions(ctx, filepath.Dir(ip))
 	}
 	if perr == nil {
 		if !perm.InitiateFileUpload {
@@ -193,8 +193,8 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 		// check permissions of file to be overwritten
 		perm, perr = fs.readPermissions(ctx, ip)
 	} else {
-		// check permissions
-		perm, perr = fs.readPermissions(ctx, filepath.Base(ip))
+		// check permissions of parent folder
+		perm, perr = fs.readPermissions(ctx, filepath.Dir(ip))
 	}
 	if perr == nil {
 		if !perm.InitiateFileUpload {
