@@ -176,11 +176,16 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	if sRes.Status.Code != rpc.Code_CODE_OK {
-		if sRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
+	if sRes.Status.Code != rpc.Code_CODE_OK && sRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
+		switch sRes.Status.Code {
+		case rpc.Code_CODE_PERMISSION_DENIED:
+			log.Debug().Str("path", fn).Interface("status", sRes.Status).Msg("permission denied")
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			log.Error().Str("path", fn).Interface("status", sRes.Status).Msg("grpc stat request failed")
 			w.WriteHeader(http.StatusInternalServerError)
-			return
 		}
+		return
 	}
 
 	info := sRes.Info
@@ -248,7 +253,17 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	if uRes.Status.Code != rpc.Code_CODE_OK {
-		w.WriteHeader(http.StatusInternalServerError)
+		switch uRes.Status.Code {
+		case rpc.Code_CODE_NOT_FOUND:
+			log.Debug().Str("path", fn).Interface("status", uRes.Status).Msg("resource not found")
+			w.WriteHeader(http.StatusNotFound)
+		case rpc.Code_CODE_PERMISSION_DENIED:
+			log.Debug().Str("path", fn).Interface("status", uRes.Status).Msg("permission denied")
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			log.Error().Str("path", fn).Interface("status", uRes.Status).Msg("grpc initiate file upload request failed")
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -314,8 +329,17 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	if sRes.Status.Code != rpc.Code_CODE_OK {
-		log.Error().Err(err).Msgf("error status %d when sending grpc stat request", sRes.Status.Code)
-		w.WriteHeader(http.StatusInternalServerError)
+		switch sRes.Status.Code {
+		case rpc.Code_CODE_NOT_FOUND:
+			log.Debug().Str("path", fn).Interface("status", sRes.Status).Msg("resource not found")
+			w.WriteHeader(http.StatusNotFound)
+		case rpc.Code_CODE_PERMISSION_DENIED:
+			log.Debug().Str("path", fn).Interface("status", sRes.Status).Msg("permission denied")
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			log.Error().Str("path", fn).Interface("status", sRes.Status).Msg("grpc stat request failed")
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 		return
 	}
 

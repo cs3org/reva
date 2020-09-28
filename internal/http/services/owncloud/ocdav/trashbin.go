@@ -148,13 +148,23 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 
 	getHomeRes, err := gc.GetHome(ctx, &provider.GetHomeRequest{})
 	if err != nil {
-		log.Error().Err(err).Msg("error calling GetHomeProvider")
+		log.Error().Err(err).Msg("error calling GetHome")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	if getHomeRes.Status.Code != rpc.Code_CODE_OK {
-		log.Error().Int32("code", int32(getHomeRes.Status.Code)).Str("trace", getHomeRes.Status.Trace).Msg(getHomeRes.Status.Message)
-		w.WriteHeader(http.StatusInternalServerError)
+		switch getHomeRes.Status.Code {
+		case rpc.Code_CODE_NOT_FOUND:
+			log.Debug().Str("path", getHomeRes.Path).Interface("status", getHomeRes.Status).Msg("resource not found")
+			w.WriteHeader(http.StatusNotFound)
+		case rpc.Code_CODE_PERMISSION_DENIED:
+			log.Debug().Str("path", getHomeRes.Path).Interface("status", getHomeRes.Status).Msg("permission denied")
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			log.Error().Str("path", getHomeRes.Path).Interface("status", getHomeRes.Status).Msg("grpc get home request failed")
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		return
 	}
 
 	// ask gateway for recycle items
@@ -172,9 +182,20 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+
 	if getRecycleRes.Status.Code != rpc.Code_CODE_OK {
-		log.Error().Int32("code", int32(getRecycleRes.Status.Code)).Str("trace", getRecycleRes.Status.Trace).Msg(getRecycleRes.Status.Message)
-		w.WriteHeader(http.StatusInternalServerError)
+		switch getRecycleRes.Status.Code {
+		case rpc.Code_CODE_NOT_FOUND:
+			log.Debug().Str("path", getHomeRes.Path).Interface("status", getRecycleRes.Status).Msg("resource not found")
+			w.WriteHeader(http.StatusNotFound)
+		case rpc.Code_CODE_PERMISSION_DENIED:
+			log.Debug().Str("path", getHomeRes.Path).Interface("status", getRecycleRes.Status).Msg("permission denied")
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			log.Error().Str("path", getHomeRes.Path).Interface("status", getRecycleRes.Status).Msg("grpc list recycle request failed")
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		return
 	}
 
 	propRes, err := h.formatTrashPropfind(ctx, s, u, &pf, getRecycleRes.RecycleItems)
@@ -358,13 +379,23 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 
 	getHomeRes, err := client.GetHome(ctx, &provider.GetHomeRequest{})
 	if err != nil {
-		log.Error().Err(err).Msg("error calling GetHomeProvider")
+		log.Error().Err(err).Msg("error calling GetHome")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	if getHomeRes.Status.Code != rpc.Code_CODE_OK {
-		log.Error().Int32("code", int32(getHomeRes.Status.Code)).Str("trace", getHomeRes.Status.Trace).Msg(getHomeRes.Status.Message)
-		w.WriteHeader(http.StatusInternalServerError)
+		switch getHomeRes.Status.Code {
+		case rpc.Code_CODE_NOT_FOUND:
+			log.Debug().Str("path", getHomeRes.Path).Interface("status", getHomeRes.Status).Msg("resource not found")
+			w.WriteHeader(http.StatusNotFound)
+		case rpc.Code_CODE_PERMISSION_DENIED:
+			log.Debug().Str("path", getHomeRes.Path).Interface("status", getHomeRes.Status).Msg("permission denied")
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			log.Error().Str("path", getHomeRes.Path).Interface("status", getHomeRes.Status).Msg("grpc get home request failed")
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		return
 	}
 
 	req := &provider.RestoreRecycleItemRequest{
@@ -387,15 +418,20 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	if res.Status.Code != rpc.Code_CODE_OK {
-		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
+
+	switch res.Status.Code {
+	case rpc.Code_CODE_OK:
+		w.WriteHeader(http.StatusNoContent)
+	case rpc.Code_CODE_NOT_FOUND:
+		log.Debug().Str("key", key).Str("dst", dst).Interface("status", res.Status).Msg("resource not found")
+		w.WriteHeader(http.StatusNotFound)
+	case rpc.Code_CODE_PERMISSION_DENIED:
+		log.Debug().Str("key", key).Str("dst", dst).Interface("status", res.Status).Msg("permission denied")
+		w.WriteHeader(http.StatusForbidden)
+	default:
+		log.Error().Str("key", key).Str("dst", dst).Interface("status", res.Status).Msg("grpc restore recycle item request failed")
 		w.WriteHeader(http.StatusInternalServerError)
-		return
 	}
-	w.WriteHeader(http.StatusNoContent)
 }
 
 // delete has only a key
@@ -418,8 +454,18 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 		return
 	}
 	if getHomeRes.Status.Code != rpc.Code_CODE_OK {
-		log.Error().Int32("code", int32(getHomeRes.Status.Code)).Str("trace", getHomeRes.Status.Trace).Msg(getHomeRes.Status.Message)
-		w.WriteHeader(http.StatusInternalServerError)
+		switch getHomeRes.Status.Code {
+		case rpc.Code_CODE_NOT_FOUND:
+			log.Debug().Str("path", getHomeRes.Path).Interface("status", getHomeRes.Status).Msg("resource not found")
+			w.WriteHeader(http.StatusNotFound)
+		case rpc.Code_CODE_PERMISSION_DENIED:
+			log.Debug().Str("path", getHomeRes.Path).Interface("status", getHomeRes.Status).Msg("permission denied")
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			log.Error().Str("path", getHomeRes.Path).Interface("status", getHomeRes.Status).Msg("grpc get home request failed")
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		return
 	}
 	sRes, err := client.Stat(ctx, &provider.StatRequest{
 		Ref: &provider.Reference{
@@ -434,8 +480,18 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 		return
 	}
 	if sRes.Status.Code != rpc.Code_CODE_OK {
-		log.Error().Int32("code", int32(sRes.Status.Code)).Str("trace", sRes.Status.Trace).Msg(sRes.Status.Message)
-		w.WriteHeader(http.StatusInternalServerError)
+		switch sRes.Status.Code {
+		case rpc.Code_CODE_NOT_FOUND:
+			log.Debug().Str("path", getHomeRes.Path).Interface("status", sRes.Status).Msg("resource not found")
+			w.WriteHeader(http.StatusNotFound)
+		case rpc.Code_CODE_PERMISSION_DENIED:
+			log.Debug().Str("path", getHomeRes.Path).Interface("status", sRes.Status).Msg("permission denied")
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			log.Error().Str("path", getHomeRes.Path).Interface("status", sRes.Status).Msg("grpc stat request failed")
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		return
 	}
 
 	// set key as opaque id, the storageprovider will use it as the key for the
@@ -458,13 +514,17 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	if res.Status.Code != rpc.Code_CODE_OK {
-		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
+	switch res.Status.Code {
+	case rpc.Code_CODE_OK:
+		w.WriteHeader(http.StatusNoContent)
+	case rpc.Code_CODE_NOT_FOUND:
+		log.Debug().Str("storageid", sRes.Info.Id.StorageId).Str("key", key).Interface("status", res.Status).Msg("resource not found")
+		w.WriteHeader(http.StatusConflict)
+	case rpc.Code_CODE_PERMISSION_DENIED:
+		log.Debug().Str("storageid", sRes.Info.Id.StorageId).Str("key", key).Interface("status", res.Status).Msg("permission denied")
+		w.WriteHeader(http.StatusForbidden)
+	default:
+		log.Error().Str("storageid", sRes.Info.Id.StorageId).Str("key", key).Interface("status", res.Status).Msg("grpc purge recycle request failed")
 		w.WriteHeader(http.StatusInternalServerError)
-		return
 	}
-	w.WriteHeader(http.StatusNoContent)
 }

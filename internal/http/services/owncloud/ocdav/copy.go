@@ -98,11 +98,17 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	if srcStatRes.Status.Code != rpc.Code_CODE_OK {
-		if srcStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+		switch srcStatRes.Status.Code {
+		case rpc.Code_CODE_NOT_FOUND:
+			log.Debug().Str("src", src).Interface("status", srcStatRes.Status).Msg("resource not found")
 			w.WriteHeader(http.StatusNotFound)
-			return
+		case rpc.Code_CODE_PERMISSION_DENIED:
+			log.Debug().Str("src", src).Interface("status", srcStatRes.Status).Msg("permission denied")
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			log.Error().Str("src", src).Interface("status", srcStatRes.Status).Msg("grpc stat request failed")
+			w.WriteHeader(http.StatusInternalServerError)
 		}
-		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
@@ -115,6 +121,17 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	if err != nil {
 		log.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if dstStatRes.Status.Code != rpc.Code_CODE_OK && dstStatRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
+		switch dstStatRes.Status.Code {
+		case rpc.Code_CODE_PERMISSION_DENIED:
+			log.Debug().Str("dst", dst).Interface("status", dstStatRes.Status).Msg("permission denied")
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			log.Error().Str("dst", dst).Interface("status", dstStatRes.Status).Msg("grpc stat request failed")
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -143,8 +160,18 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		if intStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			w.WriteHeader(http.StatusConflict) // 409 if intermediate dir is missing, see https://tools.ietf.org/html/rfc4918#section-9.8.5
+		if intStatRes.Status.Code != rpc.Code_CODE_OK {
+			switch intStatRes.Status.Code {
+			case rpc.Code_CODE_NOT_FOUND:
+				// 409 if intermediate dir is missing, see https://tools.ietf.org/html/rfc4918#section-9.8.5
+				w.WriteHeader(http.StatusConflict)
+			case rpc.Code_CODE_PERMISSION_DENIED:
+				log.Debug().Str("dst", dst).Interface("status", intStatRes.Status).Msg("permission denied")
+				w.WriteHeader(http.StatusForbidden)
+			default:
+				log.Error().Str("dst", dst).Interface("status", intStatRes.Status).Msg("grpc stat request failed")
+				w.WriteHeader(http.StatusInternalServerError)
+			}
 			return
 		}
 		// TODO what if intermediate is a file?

@@ -63,9 +63,17 @@ func (s *svc) handleMkcol(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	if statRes.Status.Code == rpc.Code_CODE_OK {
-		log.Warn().Msg("resource already exists")
-		w.WriteHeader(http.StatusMethodNotAllowed) // 405 if it already exists
+	if statRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
+		switch statRes.Status.Code {
+		case rpc.Code_CODE_OK:
+			w.WriteHeader(http.StatusMethodNotAllowed) // 405 if it already exists
+		case rpc.Code_CODE_PERMISSION_DENIED:
+			log.Debug().Str("path", fn).Interface("status", statRes.Status).Msg("permission denied")
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			log.Error().Str("path", fn).Interface("status", statRes.Status).Msg("grpc stat request failed")
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -77,15 +85,17 @@ func (s *svc) handleMkcol(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+	switch res.Status.Code {
+	case rpc.Code_CODE_OK:
+		w.WriteHeader(http.StatusCreated)
+	case rpc.Code_CODE_NOT_FOUND:
+		log.Debug().Str("path", fn).Interface("status", statRes.Status).Msg("resource not found")
 		w.WriteHeader(http.StatusConflict)
-		return
-	}
-
-	if res.Status.Code != rpc.Code_CODE_OK {
+	case rpc.Code_CODE_PERMISSION_DENIED:
+		log.Debug().Str("path", fn).Interface("status", statRes.Status).Msg("permission denied")
+		w.WriteHeader(http.StatusForbidden)
+	default:
+		log.Error().Str("path", fn).Interface("status", statRes.Status).Msg("grpc create container request failed")
 		w.WriteHeader(http.StatusInternalServerError)
-		return
 	}
-
-	w.WriteHeader(http.StatusCreated)
 }

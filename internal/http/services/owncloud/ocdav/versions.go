@@ -101,11 +101,17 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
-		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+		switch res.Status.Code {
+		case rpc.Code_CODE_NOT_FOUND:
+			log.Debug().Interface("resourceid", rid).Interface("status", res.Status).Msg("resource not found")
 			w.WriteHeader(http.StatusNotFound)
-			return
+		case rpc.Code_CODE_PERMISSION_DENIED:
+			log.Debug().Interface("resourceid", rid).Interface("status", res.Status).Msg("permission denied")
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			log.Error().Interface("resourceid", rid).Interface("status", res.Status).Msg("grpc stat request failed")
+			w.WriteHeader(http.StatusInternalServerError)
 		}
-		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
@@ -121,9 +127,20 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	if lvRes.Status.Code != rpc.Code_CODE_OK {
-		w.WriteHeader(http.StatusInternalServerError)
+		switch lvRes.Status.Code {
+		case rpc.Code_CODE_NOT_FOUND:
+			log.Debug().Interface("resourceid", rid).Interface("status", lvRes.Status).Msg("resource not found")
+			w.WriteHeader(http.StatusNotFound)
+		case rpc.Code_CODE_PERMISSION_DENIED:
+			log.Debug().Interface("resourceid", rid).Interface("status", lvRes.Status).Msg("permission denied")
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			log.Error().Interface("resourceid", rid).Interface("status", lvRes.Status).Msg("grpc list file revisions request failed")
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 		return
 	}
+
 	versions := lvRes.GetVersions()
 	infos := make([]*provider.ResourceInfo, 0, len(versions)+1)
 	// add version dir . entry, derived from file info
@@ -207,13 +224,17 @@ func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *s
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	if res.Status.Code != rpc.Code_CODE_OK {
-		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
+	switch res.Status.Code {
+	case rpc.Code_CODE_OK:
+		w.WriteHeader(http.StatusNoContent)
+	case rpc.Code_CODE_NOT_FOUND:
+		log.Debug().Interface("resourceid", rid).Str("key", key).Interface("status", res.Status).Msg("resource not found")
+		w.WriteHeader(http.StatusNotFound)
+	case rpc.Code_CODE_PERMISSION_DENIED:
+		log.Debug().Interface("resourceid", rid).Str("key", key).Interface("status", res.Status).Msg("permission denied")
+		w.WriteHeader(http.StatusForbidden)
+	default:
+		log.Error().Interface("resourceid", rid).Str("key", key).Interface("status", res.Status).Msg("grpc restore file revision request failed")
 		w.WriteHeader(http.StatusInternalServerError)
-		return
 	}
-	w.WriteHeader(http.StatusNoContent)
 }
