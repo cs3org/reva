@@ -23,6 +23,10 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"strconv"
+	"time"
+
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
 var (
@@ -42,11 +46,28 @@ var (
 // maintain the same format as the original etags. This is needed as different
 // clients such as S3 expect these to follow the specified format.
 
-func CombineEtags(etags []string) string {
+// GenerateEtagFromResources creates a unique etag for the root folder deriving
+// information from its multiple children
+func GenerateEtagFromResources(root *provider.ResourceInfo, children []*provider.ResourceInfo) string {
+	if m := getEtagParams(eosChecksumEtag, root.Etag); len(m) > 0 {
+		mtime := time.Unix(int64(root.Mtime.Seconds), int64(root.Mtime.Nanos))
+		for _, r := range children {
+			m := time.Unix(int64(r.Mtime.Seconds), int64(r.Mtime.Nanos))
+			if m.After(mtime) {
+				mtime = m
+			}
+		}
+		return fmt.Sprintf("\"%s:%d.%s\"", m["inode"], mtime.Unix(), strconv.FormatInt(mtime.UnixNano(), 10)[:3])
+	}
+
+	return combineEtags(children)
+}
+
+func combineEtags(resources []*provider.ResourceInfo) string {
 	h := md5.New()
 	var mtime string
-	for _, e := range etags {
-		m := findEtagMatch(e)
+	for _, r := range resources {
+		m := findEtagMatch(r.Etag)
 		if m["inode"] != "" {
 			_, _ = io.WriteString(h, m["inode"])
 		}
@@ -65,17 +86,6 @@ func CombineEtags(etags []string) string {
 	return fmt.Sprintf("\"%s\"", etag)
 }
 
-func getEtagParams(regEx *regexp.Regexp, etag string) map[string]string {
-	m := make(map[string]string)
-	match := regEx.FindStringSubmatch(etag)
-	for i, name := range regEx.SubexpNames() {
-		if i > 0 && i < len(match) {
-			m[name] = match[i]
-		}
-	}
-	return m
-}
-
 func findEtagMatch(etag string) map[string]string {
 	if m := getEtagParams(eosChecksumEtag, etag); len(m) > 0 {
 		return m
@@ -86,4 +96,15 @@ func findEtagMatch(etag string) map[string]string {
 		m["checksum"] = etag
 		return m
 	}
+}
+
+func getEtagParams(regEx *regexp.Regexp, etag string) map[string]string {
+	m := make(map[string]string)
+	match := regEx.FindStringSubmatch(etag)
+	for i, name := range regEx.SubexpNames() {
+		if i > 0 && i < len(match) {
+			m[name] = match[i]
+		}
+	}
+	return m
 }
