@@ -834,9 +834,10 @@ func (fs *ocfs) readPermissions(ctx context.Context, ip string) (p *provider.Res
 		userFound := false
 		for i := range attrs {
 			// we only need the find the user once per node
-			if !userFound && attrs[i] == userace {
+			switch {
+			case !userFound && attrs[i] == userace:
 				e, err = fs.readACE(ctx, np, "u:"+u.Id.OpaqueId)
-			} else if strings.HasPrefix(attrs[i], sharePrefix+"g:") {
+			case strings.HasPrefix(attrs[i], sharePrefix+"g:"):
 				g := strings.TrimPrefix(attrs[i], sharePrefix+"g:")
 				if groupsMap[g] {
 					e, err = fs.readACE(ctx, np, "g:"+g)
@@ -844,17 +845,19 @@ func (fs *ocfs) readPermissions(ctx context.Context, ip string) (p *provider.Res
 					// no need to check attribute
 					continue
 				}
-			} else {
+			default:
 				// no need to check attribute
 				continue
 			}
-			if err == nil {
+
+			switch {
+			case err == nil:
 				addPermissions(aggregatedPermissions, e.Grant().GetPermissions())
 				appctx.GetLogger(ctx).Debug().Str("ipath", np).Str("principal", strings.TrimPrefix(attrs[i], sharePrefix)).Interface("permissions", aggregatedPermissions).Msg("adding permissions")
-			} else if isNoData(err) {
+			case isNoData(err):
 				err = nil
 				appctx.GetLogger(ctx).Error().Str("ipath", np).Str("principal", strings.TrimPrefix(attrs[i], sharePrefix)).Interface("attrs", attrs).Msg("no permissions found on node, but they were listed")
-			} else {
+			default:
 				appctx.GetLogger(ctx).Error().Err(err).Str("ipath", np).Str("principal", strings.TrimPrefix(attrs[i], sharePrefix)).Msg("error reading permissions")
 				return nil, err
 			}
@@ -878,7 +881,7 @@ func (fs *ocfs) readPermissions(ctx context.Context, ip string) (p *provider.Res
 	//        listing the aces can be used to match the principals, we do not need to fully real all aces
 	//   what if, when checking /a/b/c/d, /a/b has write permission for group g, but /a/b/c has an ace for another group h the user is also a member of?
 	//     it would allow restricting a users permissions by resharing something with him with lower permission?
-	//     so if you have reshare permissons you could accidentially restrict users access to a subfolder of a rw share to ro by sharing it to another group as ro when they are part of both groups
+	//     so if you have reshare permissions you could accidentially restrict users access to a subfolder of a rw share to ro by sharing it to another group as ro when they are part of both groups
 	//       it makes more sense to have explicit negative permissions
 
 	// TODO we need to read all parents ... until we find a matching ace?
