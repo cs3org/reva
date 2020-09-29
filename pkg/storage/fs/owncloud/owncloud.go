@@ -244,8 +244,6 @@ func (fs *ocfs) wrap(ctx context.Context, fn string) (internal string) {
 		// parts[0] contains the username or userid.
 		u, err := fs.getUser(ctx, parts[0])
 		if err != nil {
-			logger.New().Error().Err(err).
-				Msg("could not get user")
 			// TODO return invalid internal path?
 			return
 		}
@@ -284,8 +282,6 @@ func (fs *ocfs) wrapShadow(ctx context.Context, fn string) (internal string) {
 		// parts[0] contains the username or userid.
 		u, err := fs.getUser(ctx, parts[0])
 		if err != nil {
-			logger.New().Error().Err(err).
-				Msg("could not get user")
 			// TODO return invalid internal path?
 			return
 		}
@@ -319,8 +315,6 @@ func (fs *ocfs) getVersionsPath(ctx context.Context, np string) string {
 	// parts[1] contains the username or userid.
 	u, err := fs.getUser(ctx, parts[1])
 	if err != nil {
-		logger.New().Error().Err(err).
-			Msg("could not get user")
 		// TODO return invalid internal path?
 		return ""
 	}
@@ -392,8 +386,7 @@ func (fs *ocfs) unwrap(ctx context.Context, internal string) (external string) {
 			external = path.Join("/", parts[1], parts[3])
 		}
 	}
-	log := appctx.GetLogger(ctx)
-	log.Debug().Msgf("ocfs: unwrap: internal=%s external=%s", internal, external)
+	appctx.GetLogger(ctx).Debug().Str("internal", internal).Str("external", external).Msg("ocfs: unwrap")
 	return
 }
 
@@ -425,8 +418,7 @@ func (fs *ocfs) unwrapShadow(ctx context.Context, internal string) (external str
 			external = path.Join("/", parts[1], parts[3])
 		}
 	}
-	log := appctx.GetLogger(ctx)
-	log.Debug().Msgf("ocfs: unwrapShadow: internal=%s external=%s", internal, external)
+	appctx.GetLogger(ctx).Debug().Str("internal", internal).Str("external", external).Msg("ocfs: unwrapShadow")
 	return
 }
 
@@ -440,6 +432,7 @@ func (fs *ocfs) getOwner(internal string) string {
 	return ""
 }
 
+// TODO cache user lookup
 func (fs *ocfs) getUser(ctx context.Context, usernameOrID string) (id *userpb.User, err error) {
 	u := user.ContextMustGetUser(ctx)
 	// check if username matches and id is set
@@ -455,22 +448,42 @@ func (fs *ocfs) getUser(ctx context.Context, usernameOrID string) (id *userpb.Us
 	// parts[0] contains the username or userid. use  user service to look up id
 	c, err := pool.GetUserProviderServiceClient(fs.c.UserProviderEndpoint)
 	if err != nil {
+		appctx.GetLogger(ctx).
+			Error().Err(err).
+			Str("userprovidersvc", fs.c.UserProviderEndpoint).
+			Str("usernameOrID", usernameOrID).
+			Msg("could not get user provider client")
 		return nil, err
 	}
 	res, err := c.GetUser(ctx, &userpb.GetUserRequest{
 		UserId: &userpb.UserId{OpaqueId: usernameOrID},
 	})
 	if err != nil {
+		appctx.GetLogger(ctx).
+			Error().Err(err).
+			Str("userprovidersvc", fs.c.UserProviderEndpoint).
+			Str("usernameOrID", usernameOrID).
+			Msg("could not get user")
 		return nil, err
 	}
 
 	if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
-		logger.New().Error().Str("code", string(res.Status.Code)).Msg("user not found")
+		appctx.GetLogger(ctx).
+			Error().
+			Str("userprovidersvc", fs.c.UserProviderEndpoint).
+			Str("usernameOrID", usernameOrID).
+			Interface("status", res.Status).
+			Msg("user not found")
 		return nil, fmt.Errorf("user not found")
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
-		logger.New().Error().Str("code", string(res.Status.Code)).Msg("user lookup failed")
+		appctx.GetLogger(ctx).
+			Error().
+			Str("userprovidersvc", fs.c.UserProviderEndpoint).
+			Str("usernameOrID", usernameOrID).
+			Interface("status", res.Status).
+			Msg("user lookup failed")
 		return nil, fmt.Errorf("user lookup failed")
 	}
 	return res.User, nil
@@ -541,7 +554,7 @@ func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, np st
 			} else {
 				appctx.GetLogger(ctx).Error().Err(err).
 					Str("entry", entry).
-					Msgf("error retrieving xattr metadata")
+					Msg("error retrieving xattr metadata")
 			}
 		}
 	} else {
