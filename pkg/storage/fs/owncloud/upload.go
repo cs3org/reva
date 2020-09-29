@@ -62,10 +62,10 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 			return errtypes.PermissionDenied("")
 		}
 	} else {
-		if os.IsNotExist(err) {
+		if isNotFound(perr) {
 			return errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
-		return errors.Wrap(err, "ocfs: error reading permissions")
+		return errors.Wrap(perr, "ocfs: error reading permissions")
 	}
 
 	// we cannot rely on /tmp as it can live in another partition and we can
@@ -117,7 +117,7 @@ func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, upl
 		// check permissions of file to be overwritten
 		perm, perr = fs.readPermissions(ctx, ip)
 	} else {
-		// check permissions
+		// check permissions of parent
 		perm, perr = fs.readPermissions(ctx, filepath.Dir(ip))
 	}
 	if perr == nil {
@@ -125,10 +125,10 @@ func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, upl
 			return "", errtypes.PermissionDenied("")
 		}
 	} else {
-		if os.IsNotExist(err) {
+		if isNotFound(perr) {
 			return "", errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
-		return "", errors.Wrap(err, "ocfs: error reading permissions")
+		return "", errors.Wrap(perr, "ocfs: error reading permissions")
 	}
 
 	p := fs.toStoragePath(ctx, ip)
