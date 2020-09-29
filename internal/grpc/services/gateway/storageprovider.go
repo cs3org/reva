@@ -1142,10 +1142,9 @@ func (s *svc) statHome(ctx context.Context) (*provider.StatResponse, error) {
 		}, nil
 	}
 	if statSharedFolder.Status.Code != rpc.Code_CODE_OK {
+		// If shares folder is not found, skip updating the etag
 		if statSharedFolder.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			return &provider.StatResponse{
-				Status: status.NewNotFound(ctx, "gateway: shares folder not found"),
-			}, nil
+			return statRes, nil
 		}
 		err := status.NewErrorFromCode(statSharedFolder.Status.Code, "gateway")
 		return &provider.StatResponse{
@@ -1482,26 +1481,25 @@ func (s *svc) listHome(ctx context.Context) (*provider.ListContainerResponse, er
 		}, nil
 	}
 
-	statSharedFolder, err := s.statSharesFolder(ctx)
-	if err != nil {
-		return &provider.ListContainerResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error stating shares folder"),
-		}, nil
-	}
-	if statSharedFolder.Status.Code != rpc.Code_CODE_OK {
-		if statSharedFolder.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			return &provider.ListContainerResponse{
-				Status: status.NewNotFound(ctx, "gateway: shares folder not found"),
-			}, nil
-		}
-		err := status.NewErrorFromCode(statSharedFolder.Status.Code, "gateway")
-		return &provider.ListContainerResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error stating shares folder"),
-		}, nil
-	}
-
 	for i := range lcr.Infos {
 		if s.isSharedFolder(ctx, lcr.Infos[i].Path) {
+			statSharedFolder, err := s.statSharesFolder(ctx)
+			if err != nil {
+				return &provider.ListContainerResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error stating shares folder"),
+				}, nil
+			}
+			if statSharedFolder.Status.Code != rpc.Code_CODE_OK {
+				if statSharedFolder.Status.Code == rpc.Code_CODE_NOT_FOUND {
+					return &provider.ListContainerResponse{
+						Status: status.NewNotFound(ctx, "gateway: shares folder not found"),
+					}, nil
+				}
+				err := status.NewErrorFromCode(statSharedFolder.Status.Code, "gateway")
+				return &provider.ListContainerResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error stating shares folder"),
+				}, nil
+			}
 			lcr.Infos[i] = statSharedFolder.Info
 			break
 		}
