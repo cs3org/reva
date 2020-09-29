@@ -445,12 +445,8 @@ func (fs *ocfs) toStorageShadowPath(ctx context.Context, ip string) (sp string) 
 			sp = filepath.Join("/", segments[1], segments[3])
 		}
 	}
-<<<<<<< HEAD
-	appctx.GetLogger(ctx).Debug().Str("internal", internal).Str("external", external).Msg("ocfs: unwrapShadow")
-=======
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("driver", "ocfs").Str("ipath", ip).Str("spath", sp).Msg("toStorageShadowPath")
->>>>>>> e431462... clarify ocfs path vars and wrap functions
 	return
 }
 
