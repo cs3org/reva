@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/storage/utils/etag"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/dgrijalva/jwt-go"
@@ -1108,6 +1109,96 @@ func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArb
 	return res, nil
 }
 
+func (s *svc) statHome(ctx context.Context) (*provider.StatResponse, error) {
+	statRes, err := s.stat(ctx, &provider.StatRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: s.getHome(ctx),
+			},
+		},
+	})
+	if err != nil {
+		return &provider.StatResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error stating home"),
+		}, nil
+	}
+
+	if statRes.Status.Code != rpc.Code_CODE_OK {
+		if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			return &provider.StatResponse{
+				Status: status.NewNotFound(ctx, "gateway: home not found"),
+			}, nil
+		}
+		err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
+		return &provider.StatResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error stating home"),
+		}, nil
+	}
+
+	statSharedFolder, err := s.statSharesFolder(ctx)
+	if err != nil {
+		return &provider.StatResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error stating shares folder"),
+		}, nil
+	}
+	if statSharedFolder.Status.Code != rpc.Code_CODE_OK {
+		if statSharedFolder.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			return &provider.StatResponse{
+				Status: status.NewNotFound(ctx, "gateway: shares folder not found"),
+			}, nil
+		}
+		err := status.NewErrorFromCode(statSharedFolder.Status.Code, "gateway")
+		return &provider.StatResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error stating shares folder"),
+		}, nil
+	}
+
+	statRes.Info.Etag = etag.GenerateEtagFromResources(statRes.Info, []*provider.ResourceInfo{statSharedFolder.Info})
+	return statRes, nil
+}
+
+func (s *svc) statSharesFolder(ctx context.Context) (*provider.StatResponse, error) {
+	statRes, err := s.stat(ctx, &provider.StatRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: s.getSharedFolder(ctx),
+			},
+		},
+	})
+	if err != nil {
+		return &provider.StatResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error stating shares folder"),
+		}, nil
+	}
+
+	if statRes.Status.Code != rpc.Code_CODE_OK {
+		if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			return &provider.StatResponse{
+				Status: status.NewNotFound(ctx, "gateway: shares folder not found"),
+			}, nil
+		}
+		err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
+		return &provider.StatResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error stating shares folder"),
+		}, nil
+	}
+
+	lsRes, err := s.listSharesFolder(ctx)
+	if err != nil {
+		return &provider.StatResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error listing shares folder"),
+		}, nil
+	}
+	if lsRes.Status.Code != rpc.Code_CODE_OK {
+		err := status.NewErrorFromCode(lsRes.Status.Code, "gateway")
+		return &provider.StatResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error stating shares folder"),
+		}, nil
+	}
+	statRes.Info.Etag = etag.GenerateEtagFromResources(statRes.Info, lsRes.Infos)
+	return statRes, nil
+}
+
 func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
@@ -1140,12 +1231,15 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		}, nil
 	}
 
-	if !s.inSharedFolder(ctx, p) {
-		return s.stat(ctx, req)
+	if path.Clean(p) == s.getHome(ctx) {
+		return s.statHome(ctx)
 	}
 
-	// TODO(labkode): we need to generate a unique etag based on the contained share names.
 	if s.isSharedFolder(ctx, p) {
+		return s.statSharesFolder(ctx)
+	}
+
+	if !s.inSharedFolder(ctx, p) {
 		return s.stat(ctx, req)
 	}
 
@@ -1368,6 +1462,103 @@ func (s *svc) ListContainerStream(_ *provider.ListContainerStreamRequest, _ gate
 	return errors.New("Unimplemented")
 }
 
+func (s *svc) listHome(ctx context.Context) (*provider.ListContainerResponse, error) {
+	lcr, err := s.listContainer(ctx, &provider.ListContainerRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: s.getHome(ctx),
+			},
+		},
+	})
+	if err != nil {
+		return &provider.ListContainerResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error listing home"),
+		}, nil
+	}
+	if lcr.Status.Code != rpc.Code_CODE_OK {
+		err := status.NewErrorFromCode(lcr.Status.Code, "gateway")
+		return &provider.ListContainerResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error listing home"),
+		}, nil
+	}
+
+	statSharedFolder, err := s.statSharesFolder(ctx)
+	if err != nil {
+		return &provider.ListContainerResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error stating shares folder"),
+		}, nil
+	}
+	if statSharedFolder.Status.Code != rpc.Code_CODE_OK {
+		if statSharedFolder.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			return &provider.ListContainerResponse{
+				Status: status.NewNotFound(ctx, "gateway: shares folder not found"),
+			}, nil
+		}
+		err := status.NewErrorFromCode(statSharedFolder.Status.Code, "gateway")
+		return &provider.ListContainerResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error stating shares folder"),
+		}, nil
+	}
+
+	for i := range lcr.Infos {
+		if s.isSharedFolder(ctx, lcr.Infos[i].Path) {
+			lcr.Infos[i] = statSharedFolder.Info
+			break
+		}
+	}
+
+	return lcr, nil
+}
+
+func (s *svc) listSharesFolder(ctx context.Context) (*provider.ListContainerResponse, error) {
+	lcr, err := s.listContainer(ctx, &provider.ListContainerRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: s.getSharedFolder(ctx),
+			},
+		},
+	})
+	if err != nil {
+		return &provider.ListContainerResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error listing shared folder"),
+		}, nil
+	}
+	if lcr.Status.Code != rpc.Code_CODE_OK {
+		err := status.NewErrorFromCode(lcr.Status.Code, "gateway")
+		return &provider.ListContainerResponse{
+			Status: status.NewInternal(ctx, err, "gateway: error listing shared folder"),
+		}, nil
+	}
+
+	for i, ref := range lcr.Infos {
+		info, protocol, err := s.checkRef(ctx, ref)
+		if err != nil {
+			if _, ok := err.(errtypes.IsNotFound); ok {
+				return &provider.ListContainerResponse{
+					Status: status.NewNotFound(ctx, "gateway: reference not found:"+ref.Target),
+				}, nil
+			}
+			return &provider.ListContainerResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error resolving reference:"+ref.Path),
+			}, nil
+		}
+
+		if protocol == "webdav" {
+			info, err = s.webdavRefStat(ctx, ref.Target)
+			if err != nil {
+				// Might be the case that the webdav token has expired. In that case, use the reference's info
+				info = ref
+			}
+		}
+
+		base := path.Base(ref.Path)
+		info.Path = path.Join(ref.GetPath(), base)
+		lcr.Infos[i] = info
+	}
+
+	return lcr, nil
+}
+
 func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
@@ -1405,46 +1596,16 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		}, nil
 	}
 
-	if !s.inSharedFolder(ctx, p) {
-		return s.listContainer(ctx, req)
+	if path.Clean(p) == s.getHome(ctx) {
+		return s.listHome(ctx)
 	}
 
 	if s.isSharedFolder(ctx, p) {
-		// TODO(labkode): we need to generate a unique etag if any of the underlying share changes.
-		// the response will contain all the share names and we need to convert them to non reference types.
-		lcr, err := s.listContainer(ctx, req)
-		if err != nil {
-			return &provider.ListContainerResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error listing shared folder:"+req.Ref.String()),
-			}, nil
-		}
+		return s.listSharesFolder(ctx)
+	}
 
-		for i, ref := range lcr.Infos {
-			info, protocol, err := s.checkRef(ctx, ref)
-			if err != nil {
-				if _, ok := err.(errtypes.IsNotFound); ok {
-					return &provider.ListContainerResponse{
-						Status: status.NewNotFound(ctx, "gateway: reference not found:"+ref.Target),
-					}, nil
-				}
-				return &provider.ListContainerResponse{
-					Status: status.NewInternal(ctx, err, "gateway: error resolving reference:"+ref.Path),
-				}, nil
-			}
-
-			if protocol == "webdav" {
-				info, err = s.webdavRefStat(ctx, ref.Target)
-				if err != nil {
-					// Might be the case that the webdav token has expired. In that case, use the reference's info
-					info = ref
-				}
-			}
-
-			base := path.Base(ref.Path)
-			info.Path = path.Join(p, base)
-			lcr.Infos[i] = info
-		}
-		return lcr, nil
+	if !s.inSharedFolder(ctx, p) {
+		return s.listContainer(ctx, req)
 	}
 
 	// we need to provide the info of the target, not the reference.
@@ -1909,16 +2070,13 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 }
 
 func (s *svc) findProvider(ctx context.Context, ref *provider.Reference) (*registry.ProviderInfo, error) {
-	home, err := s.GetHome(ctx, &provider.GetHomeRequest{})
-	if err != nil {
-		return nil, err
-	}
-	if strings.HasPrefix(ref.GetPath(), home.Path) && s.c.HomeMapping != "" {
+	home := s.getHome(ctx)
+	if strings.HasPrefix(ref.GetPath(), home) && s.c.HomeMapping != "" {
 		if u, ok := user.ContextGetUser(ctx); ok {
 			layout := templates.WithUser(u, s.c.HomeMapping)
 			newRef := &provider.Reference{
 				Spec: &provider.Reference_Path{
-					Path: path.Join(layout, strings.TrimPrefix(ref.GetPath(), home.Path)),
+					Path: path.Join(layout, strings.TrimPrefix(ref.GetPath(), home)),
 				},
 			}
 			res, err := s.getStorageProvider(ctx, newRef)
