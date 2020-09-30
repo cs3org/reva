@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"sort"
 	"strconv"
 	"time"
 
@@ -37,7 +38,7 @@ var (
 // This function handles multiple types of etags returned by EOS and other storage
 // drivers. These can have the following formats:
 // (https://github.com/cern-eos/eos/blob/master/namespace/utils/Etag.cc)
-// - EOS directories: directory-id:mtime_sec:mtime_nanosec
+// - EOS directories: directory-id:mtime_sec.mtime_nanosec
 // - EOS files: inode:checksum-length-8 or inode:mtime_sec or md5 checksum
 // - Other drivers: md5 checksum
 //
@@ -49,7 +50,7 @@ var (
 // GenerateEtagFromResources creates a unique etag for the root folder deriving
 // information from its multiple children
 func GenerateEtagFromResources(root *provider.ResourceInfo, children []*provider.ResourceInfo) string {
-	if m := getEtagParams(eosChecksumEtag, root.Etag); len(m) > 0 {
+	if m := getEtagParams(eosMtimeEtag, root.Etag); len(m) > 0 {
 		mtime := time.Unix(int64(root.Mtime.Seconds), int64(root.Mtime.Nanos))
 		for _, r := range children {
 			m := time.Unix(int64(r.Mtime.Seconds), int64(r.Mtime.Nanos))
@@ -64,6 +65,10 @@ func GenerateEtagFromResources(root *provider.ResourceInfo, children []*provider
 }
 
 func combineEtags(resources []*provider.ResourceInfo) string {
+	sort.SliceStable(resources, func(i, j int) bool {
+		return resources[i].Etag < resources[j].Etag
+	})
+
 	h := md5.New()
 	var mtime string
 	for _, r := range resources {
