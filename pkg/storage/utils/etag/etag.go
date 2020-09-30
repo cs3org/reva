@@ -25,6 +25,7 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -105,7 +106,7 @@ func findEtagMatch(etag string) map[string]string {
 
 func getEtagParams(regEx *regexp.Regexp, etag string) map[string]string {
 	m := make(map[string]string)
-	match := regEx.FindStringSubmatch(etag)
+	match := regEx.FindStringSubmatch(strings.Trim(etag, "\""))
 	for i, name := range regEx.SubexpNames() {
 		if i > 0 && i < len(match) {
 			m[name] = match[i]
