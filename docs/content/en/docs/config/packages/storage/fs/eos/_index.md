@@ -136,8 +136,16 @@ use_keytab = false
 {{< /highlight >}}
 {{% /dir %}}
 
+{{% dir name="version_invariant" type="bool" default=true %}}
+Whether to maintain the same inode across various versions of a file. Requires extra metadata operations if set to true [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/eos/eos.go#L95)
+{{< highlight toml >}}
+[storage.fs.eos]
+version_invariant = true
+{{< /highlight >}}
+{{% /dir %}}
+
 {{% dir name="gatewaysvc" type="string" default="0.0.0.0:19000" %}}
-GatewaySvc stores the endpoint at which the GRPC gateway is exposed. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/eos/eos.go#L94)
+GatewaySvc stores the endpoint at which the GRPC gateway is exposed. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/storage/fs/eos/eos.go#L98)
 {{< highlight toml >}}
 [storage.fs.eos]
 gatewaysvc = "0.0.0.0:19000"

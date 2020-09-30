@@ -21,6 +21,7 @@ package ocdav
 import (
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -182,44 +183,57 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 	// TODO check this really streams
 	if r.Header.Get("Content-Type") == "application/offset+octet-stream" {
 
-		httpClient := rhttp.GetHTTPClient(
-			rhttp.Context(ctx),
-			rhttp.Timeout(time.Duration(s.c.Timeout*int64(time.Second))),
-			rhttp.Insecure(s.c.Insecure),
-		)
-		httpReq, err := rhttp.NewRequest(ctx, "PATCH", uRes.UploadEndpoint, r.Body)
+		length, err := strconv.ParseInt(r.Header.Get("Content-Length"), 10, 64)
 		if err != nil {
 			log.Err(err).Msg("wrong request")
-			w.WriteHeader(http.StatusInternalServerError)
+			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
-		httpReq.Header.Set("Content-Type", r.Header.Get("Content-Type"))
-		httpReq.Header.Set("Content-Length", r.Header.Get("Content-Length"))
-		if r.Header.Get("Upload-Offset") != "" {
-			httpReq.Header.Set("Upload-Offset", r.Header.Get("Upload-Offset"))
+		var httpRes *http.Response
+
+		if length != 0 {
+			httpClient := rhttp.GetHTTPClient(
+				rhttp.Context(ctx),
+				rhttp.Timeout(time.Duration(s.c.Timeout*int64(time.Second))),
+				rhttp.Insecure(s.c.Insecure),
+			)
+			httpReq, err := rhttp.NewRequest(ctx, "PATCH", uRes.UploadEndpoint, r.Body)
+			if err != nil {
+				log.Err(err).Msg("wrong request")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			httpReq.Header.Set("Content-Type", r.Header.Get("Content-Type"))
+			httpReq.Header.Set("Content-Length", r.Header.Get("Content-Length"))
+			if r.Header.Get("Upload-Offset") != "" {
+				httpReq.Header.Set("Upload-Offset", r.Header.Get("Upload-Offset"))
+			} else {
+				httpReq.Header.Set("Upload-Offset", "0")
+			}
+			httpReq.Header.Set("Tus-Resumable", r.Header.Get("Tus-Resumable"))
+
+			httpRes, err = httpClient.Do(httpReq)
+			if err != nil {
+				log.Err(err).Msg("error doing GET request to data service")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			defer httpRes.Body.Close()
+
+			w.Header().Set("Upload-Offset", httpRes.Header.Get("Upload-Offset"))
+			w.Header().Set("Tus-Resumable", httpRes.Header.Get("Tus-Resumable"))
+			if httpRes.StatusCode != http.StatusNoContent {
+				w.WriteHeader(httpRes.StatusCode)
+				return
+			}
 		} else {
-			httpReq.Header.Set("Upload-Offset", "0")
-		}
-		httpReq.Header.Set("Tus-Resumable", r.Header.Get("Tus-Resumable"))
-
-		httpRes, err := httpClient.Do(httpReq)
-		if err != nil {
-			log.Err(err).Msg("error doing GET request to data service")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		defer httpRes.Body.Close()
-
-		w.Header().Set("Upload-Offset", httpRes.Header.Get("Upload-Offset"))
-		w.Header().Set("Tus-Resumable", httpRes.Header.Get("Tus-Resumable"))
-		if httpRes.StatusCode != http.StatusNoContent {
-			w.WriteHeader(httpRes.StatusCode)
-			return
+			log.Info().Msg("Skipping sending a Patch request as body is empty")
 		}
 
 		// check if upload was fully completed
-		if httpRes.Header.Get("Upload-Offset") == r.Header.Get("Upload-Length") {
+		if length == 0 || httpRes.Header.Get("Upload-Offset") == r.Header.Get("Upload-Length") {
 			// get uploaded file metadata
 			sRes, err := client.Stat(ctx, sReq)
 			if err != nil {
@@ -246,7 +260,7 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-			if httpRes.Header.Get("X-OC-Mtime") != "" {
+			if httpRes != nil && httpRes.Header != nil && httpRes.Header.Get("X-OC-Mtime") != "" {
 				// set the "accepted" value if returned in the upload response headers
 				w.Header().Set("X-OC-Mtime", httpRes.Header.Get("X-OC-Mtime"))
 			}

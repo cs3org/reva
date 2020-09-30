@@ -307,21 +307,18 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 
 	// only delete the upload if it was successfully written to eos
 	if err == nil {
-		// cleanup in the background, delete might take a while and we don't need to wait for it to finish
-		go func() {
-			if err := os.Remove(upload.infoPath); err != nil {
-				if !os.IsNotExist(err) {
-					log := appctx.GetLogger(ctx)
-					log.Err(err).Interface("info", upload.info).Msg("eos: could not delete upload info")
-				}
+		if err := os.Remove(upload.infoPath); err != nil {
+			if !os.IsNotExist(err) {
+				log := appctx.GetLogger(ctx)
+				log.Err(err).Interface("info", upload.info).Msg("eos: could not delete upload info")
 			}
-			if err := os.Remove(upload.binPath); err != nil {
-				if !os.IsNotExist(err) {
-					log := appctx.GetLogger(ctx)
-					log.Err(err).Interface("info", upload.info).Msg("eos: could not delete upload binary")
-				}
+		}
+		if err := os.Remove(upload.binPath); err != nil {
+			if !os.IsNotExist(err) {
+				log := appctx.GetLogger(ctx)
+				log.Err(err).Interface("info", upload.info).Msg("eos: could not delete upload binary")
 			}
-		}()
+		}
 	}
 
 	// TODO: set mtime if specified in metadata
