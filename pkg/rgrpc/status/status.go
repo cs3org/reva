@@ -88,6 +88,18 @@ func NewUnauthenticated(ctx context.Context, err error, msg string) *rpc.Status 
 	}
 }
 
+// NewPermissionDenied returns a Status with PERMISSION_DENIED and logs the msg.
+func NewPermissionDenied(ctx context.Context, err error, msg string) *rpc.Status {
+	log := appctx.GetLogger(ctx).With().CallerWithSkipFrameCount(3).Logger()
+	log.Err(err).Msg(msg)
+
+	return &rpc.Status{
+		Code:    rpc.Code_CODE_PERMISSION_DENIED,
+		Message: msg,
+		Trace:   getTrace(ctx),
+	}
+}
+
 // NewUnimplemented returns a Status with CODE_UNIMPLEMENTED and logs the msg.
 func NewUnimplemented(ctx context.Context, err error, msg string) *rpc.Status {
 	log := appctx.GetLogger(ctx).With().CallerWithSkipFrameCount(3).Logger()

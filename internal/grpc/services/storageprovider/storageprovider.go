@@ -197,9 +197,12 @@ func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArb
 
 	if err := s.storage.SetArbitraryMetadata(ctx, newRef, req.ArbitraryMetadata); err != nil {
 		var st *rpc.Status
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			st = status.NewNotFound(ctx, "ref not found when setting arbitrary metadata")
-		} else {
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when setting arbitrary metadata")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
 			st = status.NewInternal(ctx, err, "error setting arbitrary metadata: "+req.Ref.String())
 		}
 		return &provider.SetArbitraryMetadataResponse{
@@ -224,9 +227,12 @@ func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.Unse
 
 	if err := s.storage.UnsetArbitraryMetadata(ctx, newRef, req.ArbitraryMetadataKeys); err != nil {
 		var st *rpc.Status
-		if _, ok := err.(errtypes.IsNotFound); ok {
+		switch err.(type) {
+		case errtypes.IsNotFound:
 			st = status.NewNotFound(ctx, "path not found when unsetting arbitrary metadata")
-		} else {
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
 			st = status.NewInternal(ctx, err, "error unsetting arbitrary metadata: "+req.Ref.String())
 		}
 		return &provider.UnsetArbitraryMetadataResponse{
@@ -241,7 +247,7 @@ func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.Unse
 }
 
 func (s *service) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*provider.InitiateFileDownloadResponse, error) {
-	// TODO(labkode): maybe add some checks before download starts?
+	// TODO(labkode): maybe add some checks before download starts? eg. check permissions?
 	// TODO(labkode): maybe add short-lived token?
 	// We now simply point the client to the data server.
 	// For example, https://data-server.example.org/home/docs/myfile.txt
@@ -300,8 +306,17 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		}
 		uploadID, err := s.storage.InitiateUpload(ctx, newRef, uploadLength, metadata)
 		if err != nil {
+			var st *rpc.Status
+			switch err.(type) {
+			case errtypes.IsNotFound:
+				st = status.NewNotFound(ctx, "path not found when initiating upload")
+			case errtypes.PermissionDenied:
+				st = status.NewPermissionDenied(ctx, err, "permission denied")
+			default:
+				st = status.NewInternal(ctx, err, "error getting upload id: "+req.Ref.String())
+			}
 			return &provider.InitiateFileUploadResponse{
-				Status: status.NewInternal(ctx, err, "error getting upload id"),
+				Status: st,
 			}, nil
 		}
 		url.Path = path.Join("/", url.Path, uploadID)
@@ -380,6 +395,8 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 			st = status.NewNotFound(ctx, "path not found when creating container")
 		case errtypes.AlreadyExists:
 			st = status.NewInternal(ctx, err, "error: container already exists")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
 			st = status.NewInternal(ctx, err, "error creating container: "+req.Ref.String())
 		}
@@ -409,9 +426,12 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 
 	if err := s.storage.Delete(ctx, newRef); err != nil {
 		var st *rpc.Status
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			st = status.NewNotFound(ctx, "file not found")
-		} else {
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when creating container")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
 			st = status.NewInternal(ctx, err, "error deleting file: "+req.Ref.String())
 		}
 		return &provider.DeleteResponse{
@@ -440,8 +460,17 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 	}
 
 	if err := s.storage.Move(ctx, sourceRef, targetRef); err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when moving")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error moving: "+sourceRef.String())
+		}
 		return &provider.MoveResponse{
-			Status: status.NewInternal(ctx, err, "error moving file"),
+			Status: st,
 		}, nil
 	}
 
@@ -469,10 +498,13 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 	md, err := s.storage.GetMD(ctx, newRef, req.ArbitraryMetadataKeys)
 	if err != nil {
 		var st *rpc.Status
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			st = status.NewNotFound(ctx, "file not found")
-		} else {
-			st = status.NewInternal(ctx, err, "error stating file: "+req.Ref.String())
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when stating")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error stating: "+req.Ref.String())
 		}
 		return &provider.StatResponse{
 			Status: st,
@@ -509,8 +541,17 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 
 	mds, err := s.storage.ListFolder(ctx, newRef, req.ArbitraryMetadataKeys)
 	if err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when listing container")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error listing container: "+req.Ref.String())
+		}
 		res := &provider.ListContainerStreamResponse{
-			Status: status.NewInternal(ctx, err, "error listing folder"),
+			Status: st,
 		}
 		if err := ss.Send(res); err != nil {
 			log.Error().Err(err).Msg("ListContainerStream: error sending response")
@@ -553,8 +594,17 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 
 	mds, err := s.storage.ListFolder(ctx, newRef, req.ArbitraryMetadataKeys)
 	if err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when listing container")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error listing container: "+req.Ref.String())
+		}
 		return &provider.ListContainerResponse{
-			Status: status.NewInternal(ctx, err, "error listing folder"),
+			Status: st,
 		}, nil
 	}
 
@@ -584,8 +634,17 @@ func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVe
 
 	revs, err := s.storage.ListRevisions(ctx, newRef)
 	if err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when listing file versions")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error listing file versions: "+req.Ref.String())
+		}
 		return &provider.ListFileVersionsResponse{
-			Status: status.NewInternal(ctx, err, "error listing file versions"),
+			Status: st,
 		}, nil
 	}
 
@@ -605,8 +664,17 @@ func (s *service) RestoreFileVersion(ctx context.Context, req *provider.RestoreF
 	}
 
 	if err := s.storage.RestoreRevision(ctx, newRef, req.Key); err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when restoring file versions")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error restoring version: "+req.Ref.String())
+		}
 		return &provider.RestoreFileVersionResponse{
-			Status: status.NewInternal(ctx, err, "error restoring version"),
+			Status: st,
 		}, nil
 	}
 
@@ -622,8 +690,17 @@ func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss p
 
 	items, err := s.storage.ListRecycle(ctx)
 	if err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when listing recycle stream")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error listing recycle stream")
+		}
 		res := &provider.ListRecycleStreamResponse{
-			Status: status.NewInternal(ctx, err, "error listing recycle"),
+			Status: st,
 		}
 		if err := ss.Send(res); err != nil {
 			log.Error().Err(err).Msg("ListRecycleStream: error sending response")
@@ -650,8 +727,17 @@ func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequ
 	items, err := s.storage.ListRecycle(ctx)
 	// TODO(labkode): CRITICAL: fill recycle info with storage provider.
 	if err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when listing recycle")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error listing recycle")
+		}
 		return &provider.ListRecycleResponse{
-			Status: status.NewInternal(ctx, err, "error listing recycle bin"),
+			Status: st,
 		}, nil
 	}
 
@@ -665,8 +751,17 @@ func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequ
 func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecycleItemRequest) (*provider.RestoreRecycleItemResponse, error) {
 	// TODO(labkode): CRITICAL: fill recycle info with storage provider.
 	if err := s.storage.RestoreRecycleItem(ctx, req.Key); err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when restoring recycle bin item")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error restoring recycle bin item")
+		}
 		return &provider.RestoreRecycleItemResponse{
-			Status: status.NewInternal(ctx, err, "error restoring recycle bin item"),
+			Status: st,
 		}, nil
 	}
 
@@ -680,14 +775,32 @@ func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRe
 	// if a key was sent as opacque id purge only that item
 	if req.GetRef().GetId() != nil && req.GetRef().GetId().GetOpaqueId() != "" {
 		if err := s.storage.PurgeRecycleItem(ctx, req.GetRef().GetId().GetOpaqueId()); err != nil {
+			var st *rpc.Status
+			switch err.(type) {
+			case errtypes.IsNotFound:
+				st = status.NewNotFound(ctx, "path not found when purging recycle item")
+			case errtypes.PermissionDenied:
+				st = status.NewPermissionDenied(ctx, err, "permission denied")
+			default:
+				st = status.NewInternal(ctx, err, "error restoring recycle item")
+			}
 			return &provider.PurgeRecycleResponse{
-				Status: status.NewInternal(ctx, err, "error purging recycle item"),
+				Status: st,
 			}, nil
 		}
 	} else if err := s.storage.EmptyRecycle(ctx); err != nil {
 		// otherwise try emptying the whole recycle bin
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when purging recycle bin")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error restoring recycle bin")
+		}
 		return &provider.PurgeRecycleResponse{
-			Status: status.NewInternal(ctx, err, "error emptying recycle bin"),
+			Status: st,
 		}, nil
 	}
 
@@ -707,8 +820,17 @@ func (s *service) ListGrants(ctx context.Context, req *provider.ListGrantsReques
 
 	grants, err := s.storage.ListGrants(ctx, newRef)
 	if err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when listing grants")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error listing grants")
+		}
 		return &provider.ListGrantsResponse{
-			Status: status.NewInternal(ctx, err, "error listing ACLs"),
+			Status: st,
 		}, nil
 	}
 
@@ -736,8 +858,17 @@ func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (
 
 	err = s.storage.AddGrant(ctx, newRef, req.Grant)
 	if err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when setting grants")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error setting grants")
+		}
 		return &provider.AddGrantResponse{
-			Status: status.NewInternal(ctx, err, "error setting ACL"),
+			Status: st,
 		}, nil
 	}
 
@@ -774,8 +905,17 @@ func (s *service) CreateReference(ctx context.Context, req *provider.CreateRefer
 
 	if err := s.storage.CreateReference(ctx, newRef.GetPath(), u); err != nil {
 		log.Err(err).Msg("error calling CreateReference")
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when creating reference")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error creating reference")
+		}
 		return &provider.CreateReferenceResponse{
-			Status: status.NewInternal(ctx, err, "error creating reference"),
+			Status: st,
 		}, nil
 	}
 
@@ -800,8 +940,17 @@ func (s *service) UpdateGrant(ctx context.Context, req *provider.UpdateGrantRequ
 	}
 
 	if err := s.storage.UpdateGrant(ctx, newRef, req.Grant); err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when updating grant")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error updating grant")
+		}
 		return &provider.UpdateGrantResponse{
-			Status: status.NewInternal(ctx, err, "error updating ACL"),
+			Status: st,
 		}, nil
 	}
 
@@ -827,8 +976,17 @@ func (s *service) RemoveGrant(ctx context.Context, req *provider.RemoveGrantRequ
 	}
 
 	if err := s.storage.RemoveGrant(ctx, newRef, req.Grant); err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when removing grant")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error removing grant")
+		}
 		return &provider.RemoveGrantResponse{
-			Status: status.NewInternal(ctx, err, "error removing ACL"),
+			Status: st,
 		}, nil
 	}
 
@@ -841,8 +999,17 @@ func (s *service) RemoveGrant(ctx context.Context, req *provider.RemoveGrantRequ
 func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (*provider.GetQuotaResponse, error) {
 	total, used, err := s.storage.GetQuota(ctx)
 	if err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when getting quota")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error getting quota")
+		}
 		return &provider.GetQuotaResponse{
-			Status: status.NewInternal(ctx, err, "error getting quota"),
+			Status: st,
 		}, nil
 	}
 
