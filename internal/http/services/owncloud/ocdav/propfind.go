@@ -88,12 +88,17 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
-		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			log.Warn().Str("path", fn).Msg("resource not found")
+		switch res.Status.Code {
+		case rpc.Code_CODE_NOT_FOUND:
+			log.Debug().Str("path", fn).Interface("status", res.Status).Msg("resource not found")
 			w.WriteHeader(http.StatusNotFound)
-			return
+		case rpc.Code_CODE_PERMISSION_DENIED:
+			log.Debug().Str("path", fn).Interface("status", res.Status).Msg("permission denied")
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			log.Error().Str("path", fn).Interface("status", res.Status).Msg("grpc stat request failed")
+			w.WriteHeader(http.StatusInternalServerError)
 		}
-		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
@@ -111,8 +116,17 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 		}
 
 		if res.Status.Code != rpc.Code_CODE_OK {
-			log.Err(err).Msg("error calling grpc list container")
-			w.WriteHeader(http.StatusInternalServerError)
+			switch res.Status.Code {
+			case rpc.Code_CODE_NOT_FOUND:
+				log.Debug().Str("path", fn).Interface("status", res.Status).Msg("resource not found")
+				w.WriteHeader(http.StatusNotFound)
+			case rpc.Code_CODE_PERMISSION_DENIED:
+				log.Debug().Str("path", fn).Interface("status", res.Status).Msg("permission denied")
+				w.WriteHeader(http.StatusForbidden)
+			default:
+				log.Error().Str("path", fn).Interface("status", res.Status).Msg("grpc list container request failed")
+				w.WriteHeader(http.StatusInternalServerError)
+			}
 			return
 		}
 		infos = append(infos, res.Infos...)
@@ -136,8 +150,17 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 				return
 			}
 			if res.Status.Code != rpc.Code_CODE_OK {
-				log.Err(err).Str("path", path).Msg("error calling grpc list container")
-				w.WriteHeader(http.StatusInternalServerError)
+				switch res.Status.Code {
+				case rpc.Code_CODE_NOT_FOUND:
+					log.Debug().Str("path", fn).Interface("status", res.Status).Msg("resource not found")
+					w.WriteHeader(http.StatusNotFound)
+				case rpc.Code_CODE_PERMISSION_DENIED:
+					log.Debug().Str("path", fn).Interface("status", res.Status).Msg("permission denied")
+					w.WriteHeader(http.StatusForbidden)
+				default:
+					log.Error().Str("path", fn).Interface("status", res.Status).Msg("grpc list container request failed")
+					w.WriteHeader(http.StatusInternalServerError)
+				}
 				return
 			}
 

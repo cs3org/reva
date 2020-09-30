@@ -20,7 +20,6 @@ package ocdav
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"path"
 	"strings"
@@ -167,14 +166,30 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 
 			r = r.WithContext(ctx)
 
-			statInfo, err := getTokenStatInfo(ctx, c, token)
+			sRes, err := getTokenStatInfo(ctx, c, token)
 			if err != nil {
+				log.Error().Err(err).Msg("error sending grpc stat request")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-			log.Debug().Interface("statInfo", statInfo).Msg("Stat info from public link token path")
-			if statInfo.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-				ctx := context.WithValue(ctx, tokenStatInfoKey{}, statInfo)
+			if sRes.Status.Code != rpc.Code_CODE_OK {
+				switch sRes.Status.Code {
+				case rpc.Code_CODE_NOT_FOUND:
+					log.Debug().Str("token", token).Interface("status", res.Status).Msg("resource not found")
+					w.WriteHeader(http.StatusNotFound)
+				case rpc.Code_CODE_PERMISSION_DENIED:
+					log.Debug().Str("token", token).Interface("status", res.Status).Msg("permission denied")
+					w.WriteHeader(http.StatusForbidden)
+				default:
+					log.Error().Str("token", token).Interface("status", res.Status).Msg("grpc stat request failed")
+					w.WriteHeader(http.StatusInternalServerError)
+				}
+				return
+			}
+			log.Debug().Interface("statInfo", sRes.Info).Msg("Stat info from public link token path")
+
+			if sRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+				ctx := context.WithValue(ctx, tokenStatInfoKey{}, sRes.Info)
 				r = r.WithContext(ctx)
 				h.PublicFileHandler.Handler(s).ServeHTTP(w, r)
 			} else {
@@ -187,7 +202,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 	})
 }
 
-func getTokenStatInfo(ctx context.Context, client gatewayv1beta1.GatewayAPIClient, token string) (*provider.ResourceInfo, error) {
+func getTokenStatInfo(ctx context.Context, client gatewayv1beta1.GatewayAPIClient, token string) (*provider.StatResponse, error) {
 	ns := "/public"
 
 	fn := path.Join(ns, token)
@@ -195,18 +210,5 @@ func getTokenStatInfo(ctx context.Context, client gatewayv1beta1.GatewayAPIClien
 		Spec: &provider.Reference_Path{Path: fn},
 	}
 	req := &provider.StatRequest{Ref: ref}
-	res, err := client.Stat(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	if res.Status.Code != rpc.Code_CODE_OK {
-		return nil, fmt.Errorf("Failed to stat, status code %d: %s", res.Status.Code, res.Status.Message)
-	}
-
-	if res.Info == nil {
-		return nil, fmt.Errorf("Failed to stat, info is nil")
-	}
-
-	return res.Info, nil
+	return client.Stat(ctx, req)
 }

@@ -270,11 +270,16 @@ func (s *svc) handlePutChunked(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if res.Status.Code != rpc.Code_CODE_OK {
-		if res.Status.Code != rpc.Code_CODE_NOT_FOUND {
+	if res.Status.Code != rpc.Code_CODE_OK && res.Status.Code != rpc.Code_CODE_NOT_FOUND {
+		switch res.Status.Code {
+		case rpc.Code_CODE_PERMISSION_DENIED:
+			log.Debug().Str("path", fn).Interface("status", res.Status).Msg("permission denied")
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			log.Error().Str("path", fn).Interface("status", res.Status).Msg("grpc stat request failed")
 			w.WriteHeader(http.StatusInternalServerError)
-			return
 		}
+		return
 	}
 
 	info := res.Info

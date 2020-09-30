@@ -57,8 +57,17 @@ func (s *svc) handleHead(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
-		log.Error().Msgf("error calling grpc: %s", res.Status.String())
-		w.WriteHeader(http.StatusInternalServerError)
+		switch res.Status.Code {
+		case rpc.Code_CODE_NOT_FOUND:
+			log.Debug().Str("path", fn).Interface("status", res.Status).Msg("resource not found")
+			w.WriteHeader(http.StatusNotFound)
+		case rpc.Code_CODE_PERMISSION_DENIED:
+			log.Debug().Str("path", fn).Interface("status", res.Status).Msg("permission denied")
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			log.Error().Str("path", fn).Interface("status", res.Status).Msg("grpc stat request failed")
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 		return
 	}
 
