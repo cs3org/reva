@@ -60,17 +60,18 @@ const (
 	// we will use to store ownCloud specific metadata. To prevent name
 	// collisions with other apps We are going to introduce a sub namespace
 	// "user.oc."
+	ocPrefix string = "user.oc."
 
 	// idAttribute is the name of the filesystem extended attribute that is used to store the uuid in
-	idAttribute string = "user.oc.id"
+	idAttribute string = ocPrefix + "id"
 
 	// SharePrefix is the prefix for sharing related extended attributes
-	sharePrefix       string = "user.oc.acl." // TODO rename to user.oc.grant. because acl != grant
-	trashOriginPrefix string = "user.oc.o"
-	mdPrefix          string = "user.oc.md."   // arbitrary metadata
-	favPrefix         string = "user.oc.fav."  // favorite flag, per user
-	etagPrefix        string = "user.oc.etag." // allow overriding a calculated etag with one from the extended attributes
-	//checksumPrefix    string = "user.oc.cs."   // TODO add checksum support
+	sharePrefix       string = ocPrefix + "grant." // grants are similar to acls, but they are not propagated down the tree when being changed
+	trashOriginPrefix string = ocPrefix + "o"
+	mdPrefix          string = ocPrefix + "md."   // arbitrary metadata
+	favPrefix         string = ocPrefix + "fav."  // favorite flag, per user
+	etagPrefix        string = ocPrefix + "etag." // allow overriding a calculated etag with one from the extended attributes
+	//checksumPrefix    string = ocPrefix + "cs."   // TODO add checksum support
 
 )
 
@@ -1788,7 +1789,7 @@ func (fs *ocfs) copyMD(s string, t string) (err error) {
 		return err
 	}
 	for i := range attrs {
-		if strings.HasPrefix(attrs[i], "user.oc.") {
+		if strings.HasPrefix(attrs[i], ocPrefix) {
 			var d []byte
 			if d, err = xattr.Get(s, attrs[i]); err != nil {
 				return err
