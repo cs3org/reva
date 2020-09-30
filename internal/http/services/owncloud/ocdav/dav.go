@@ -23,8 +23,10 @@ import (
 	"fmt"
 	"net/http"
 	"path"
+	"strings"
 
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -82,6 +84,10 @@ func (h *DavHandler) init(c *Config) error {
 	return h.TrashbinHandler.init(c)
 }
 
+func isOwner(userIDorName string, user *userv1beta1.User) bool {
+	return userIDorName != "" && (userIDorName == user.Id.OpaqueId || strings.EqualFold(userIDorName, user.Username))
+}
+
 // Handler handles requests
 func (h *DavHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -103,7 +109,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 
 			// note: some requests like OPTIONS don't forward the user
 			contextUser, ok := ctxuser.ContextGetUser(ctx)
-			if ok && requestUserID != "" && requestUserID == contextUser.Id.OpaqueId {
+			if ok && isOwner(requestUserID, contextUser) {
 				// use home storage handler when user was detected
 				base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files", requestUserID)
 				ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
