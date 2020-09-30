@@ -65,7 +65,7 @@ const (
 	idAttribute string = "user.oc.id"
 
 	// SharePrefix is the prefix for sharing related extended attributes
-	sharePrefix       string = "user.oc.acl."
+	sharePrefix       string = "user.oc.acl." // TODO rename to user.oc.grant. because acl != grant
 	trashOriginPrefix string = "user.oc.o"
 	mdPrefix          string = "user.oc.md."   // arbitrary metadata
 	favPrefix         string = "user.oc.fav."  // favorite flag, per user
