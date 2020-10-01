@@ -75,7 +75,7 @@ func (fs *ocisfs) ListRecycle(ctx context.Context) (items []*provider.RecycleIte
 			continue
 		}
 
-		nodePath := filepath.Join(fs.pw.Root, "nodes", filepath.Base(link))
+		nodePath := fs.lu.toInternalPath(filepath.Base(link))
 		md, err := os.Stat(nodePath)
 		if err != nil {
 			log.Error().Err(err).Str("trashRoot", trashRoot).Str("name", names[i]).Str("link", link).Interface("parts", parts).Msg("could not stat trash item, skipping")
@@ -121,7 +121,7 @@ func (fs *ocisfs) RestoreRecycleItem(ctx context.Context, key string) (err error
 		log.Error().Err(err).Str("key", key).Msg("malformed key")
 		return
 	}
-	trashItem := filepath.Join(fs.pw.Root, "trash", kp[0], kp[1])
+	trashItem := filepath.Join(fs.o.Root, "trash", kp[0], kp[1])
 
 	var link string
 	link, err = os.Readlink(trashItem)
@@ -135,7 +135,7 @@ func (fs *ocisfs) RestoreRecycleItem(ctx context.Context, key string) (err error
 		return
 	}
 
-	deletedNodePath := filepath.Join(fs.pw.Root, "nodes", filepath.Base(link))
+	deletedNodePath := fs.lu.toInternalPath(filepath.Base(link))
 
 	// get origin node
 	origin := "/"
@@ -150,7 +150,7 @@ func (fs *ocisfs) RestoreRecycleItem(ctx context.Context, key string) (err error
 
 	// link to origin
 	var n *Node
-	n, err = fs.pw.NodeFromPath(ctx, origin)
+	n, err = fs.lu.NodeFromPath(ctx, origin)
 	if err != nil {
 		return
 	}
@@ -160,14 +160,14 @@ func (fs *ocisfs) RestoreRecycleItem(ctx context.Context, key string) (err error
 	}
 
 	// rename to node only name, so it is picked up by id
-	nodePath := filepath.Join(fs.pw.Root, "nodes", parts[0])
+	nodePath := fs.lu.toInternalPath(parts[0])
 	err = os.Rename(deletedNodePath, nodePath)
 	if err != nil {
 		return
 	}
 
 	// add the entry for the parent dir
-	err = os.Symlink("../"+parts[0], filepath.Join(fs.pw.Root, "nodes", n.ParentID, n.Name))
+	err = os.Symlink("../"+parts[0], filepath.Join(fs.lu.toInternalPath(n.ParentID), n.Name))
 	if err != nil {
 		return
 	}
@@ -189,7 +189,7 @@ func (fs *ocisfs) PurgeRecycleItem(ctx context.Context, key string) (err error) 
 		log.Error().Str("key", key).Msg("malformed key")
 		return
 	}
-	trashItem := filepath.Join(fs.pw.Root, "trash", kp[0], kp[1])
+	trashItem := filepath.Join(fs.o.Root, "trash", kp[0], kp[1])
 
 	var link string
 	link, err = os.Readlink(trashItem)
@@ -199,7 +199,7 @@ func (fs *ocisfs) PurgeRecycleItem(ctx context.Context, key string) (err error) 
 	}
 
 	// delete trash node link in nodes dir
-	deletedNodePath := filepath.Join(fs.pw.Root, "nodes", filepath.Base(link))
+	deletedNodePath := fs.lu.toInternalPath(filepath.Base(link))
 	if err = os.Remove(deletedNodePath); err != nil {
 		log.Error().Err(err).Str("deletedNodePath", deletedNodePath).Msg("error deleting trash node")
 		return
@@ -224,10 +224,10 @@ func getResourceType(isDir bool) provider.ResourceType {
 }
 
 func (fs *ocisfs) getRecycleRoot(ctx context.Context) string {
-	if fs.pw.EnableHome {
+	if fs.o.EnableHome {
 		u := user.ContextMustGetUser(ctx)
 		// TODO use layout, see Tree.Delete() for problem
-		return filepath.Join(fs.pw.Root, "trash", u.Id.OpaqueId)
+		return filepath.Join(fs.o.Root, "trash", u.Id.OpaqueId)
 	}
-	return filepath.Join(fs.pw.Root, "trash", "root")
+	return filepath.Join(fs.o.Root, "trash", "root")
 }

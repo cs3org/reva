@@ -42,7 +42,7 @@ import (
 
 func (fs *ocisfs) ListRevisions(ctx context.Context, ref *provider.Reference) (revisions []*provider.FileVersion, err error) {
 	var node *Node
-	if node, err = fs.pw.NodeFromResource(ctx, ref); err != nil {
+	if node, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
 		return
 	}
 	if !node.Exists {
@@ -51,7 +51,7 @@ func (fs *ocisfs) ListRevisions(ctx context.Context, ref *provider.Reference) (r
 	}
 
 	revisions = []*provider.FileVersion{}
-	nodePath := filepath.Join(fs.pw.Root, "nodes", node.ID)
+	nodePath := fs.lu.toInternalPath(node.ID)
 	if items, err := filepath.Glob(nodePath + ".REV.*"); err == nil {
 		for i := range items {
 			if fi, err := os.Stat(items[i]); err == nil {
@@ -79,7 +79,7 @@ func (fs *ocisfs) DownloadRevision(ctx context.Context, ref *provider.Reference,
 	log.Debug().Str("revisionKey", revisionKey).Msg("DownloadRevision")
 
 	// check if the node is available and has not been deleted
-	nodePath := filepath.Join(fs.pw.Root, "nodes", kp[0])
+	nodePath := fs.lu.toInternalPath(kp[0])
 	if _, err := os.Stat(nodePath); err != nil {
 		if os.IsNotExist(err) {
 			return nil, errtypes.NotFound(nodePath)
@@ -87,7 +87,7 @@ func (fs *ocisfs) DownloadRevision(ctx context.Context, ref *provider.Reference,
 		return nil, errors.Wrap(err, "ocisfs: error stating node "+kp[0])
 	}
 
-	contentPath := filepath.Join(fs.pw.Root, "nodes", revisionKey)
+	contentPath := fs.lu.toInternalPath(revisionKey)
 
 	r, err := os.Open(contentPath)
 	if err != nil {
@@ -110,11 +110,11 @@ func (fs *ocisfs) RestoreRevision(ctx context.Context, ref *provider.Reference, 
 	}
 
 	// move current version to new revision
-	nodePath := filepath.Join(fs.pw.Root, "nodes", kp[0])
+	nodePath := fs.lu.toInternalPath(kp[0])
 	var fi os.FileInfo
 	if fi, err = os.Stat(nodePath); err == nil {
 		// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
-		versionsPath := filepath.Join(fs.pw.Root, "nodes", kp[0]+".REV."+fi.ModTime().UTC().Format(time.RFC3339Nano))
+		versionsPath := fs.lu.toInternalPath(kp[0] + ".REV." + fi.ModTime().UTC().Format(time.RFC3339Nano))
 
 		err = os.Rename(nodePath, versionsPath)
 		if err != nil {
@@ -123,7 +123,7 @@ func (fs *ocisfs) RestoreRevision(ctx context.Context, ref *provider.Reference, 
 
 		// copy old revision to current location
 
-		revisionPath := filepath.Join(fs.pw.Root, "nodes", revisionKey)
+		revisionPath := fs.lu.toInternalPath(revisionKey)
 		var revision, destination *os.File
 		revision, err = os.Open(revisionPath)
 		if err != nil {

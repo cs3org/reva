@@ -46,7 +46,7 @@ var defaultFilePerm = os.FileMode(0664)
 
 func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
 
-	node, err := fs.pw.NodeFromResource(ctx, ref)
+	node, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
 		return err
 	}
@@ -55,7 +55,7 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 		node.ID = uuid.New().String()
 	}
 
-	nodePath := filepath.Join(fs.pw.Root, "nodes", node.ID)
+	nodePath := fs.lu.toInternalPath(node.ID)
 
 	tmp, err := ioutil.TempFile(nodePath, "._reva_atomic_upload")
 	if err != nil {
@@ -75,7 +75,7 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 		return err
 	}
 
-	if fs.pw.EnableHome {
+	if fs.o.EnableHome {
 		if u, ok := user.ContextGetUser(ctx); ok {
 			err = node.writeMetadata(u.Id)
 		} else {
@@ -90,7 +90,7 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 		return err
 	}
 
-	if fs.pw.TreeTimeAccounting {
+	if fs.o.TreeTimeAccounting {
 		// mark the home node as the end of propagation q
 		if err = xattr.Set(nodePath, propagationAttr, []byte("1")); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("node", node).Msg("could not mark node to propagate")
@@ -110,12 +110,12 @@ func (fs *ocisfs) InitiateUpload(ctx context.Context, ref *provider.Reference, u
 
 	var relative string // the internal path of the file node
 
-	node, err := fs.pw.NodeFromResource(ctx, ref)
+	node, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
 		return "", err
 	}
 
-	relative, err = fs.pw.Path(ctx, node)
+	relative, err = fs.lu.Path(ctx, node)
 	if err != nil {
 		return "", err
 	}
@@ -173,7 +173,7 @@ func (fs *ocisfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tus
 	}
 	info.MetaData["dir"] = filepath.Clean(info.MetaData["dir"])
 
-	node, err := fs.pw.NodeFromPath(ctx, filepath.Join(info.MetaData["dir"], info.MetaData["filename"]))
+	node, err := fs.lu.NodeFromPath(ctx, filepath.Join(info.MetaData["dir"], info.MetaData["filename"]))
 	if err != nil {
 		return nil, errors.Wrap(err, "ocisfs: error wrapping filename")
 	}
@@ -212,7 +212,7 @@ func (fs *ocisfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tus
 	u := &fileUpload{
 		info:     info,
 		binPath:  binPath,
-		infoPath: filepath.Join(fs.pw.Root, "uploads", info.ID+".info"),
+		infoPath: filepath.Join(fs.o.Root, "uploads", info.ID+".info"),
 		fs:       fs,
 		ctx:      ctx,
 	}
@@ -237,12 +237,12 @@ func (fs *ocisfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tus
 }
 
 func (fs *ocisfs) getUploadPath(ctx context.Context, uploadID string) (string, error) {
-	return filepath.Join(fs.pw.Root, "uploads", uploadID), nil
+	return filepath.Join(fs.o.Root, "uploads", uploadID), nil
 }
 
 // GetUpload returns the Upload for the given upload id
 func (fs *ocisfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
-	infoPath := filepath.Join(fs.pw.Root, "uploads", id+".info")
+	infoPath := filepath.Join(fs.o.Root, "uploads", id+".info")
 
 	info := tusd.FileInfo{}
 	data, err := ioutil.ReadFile(infoPath)
@@ -352,7 +352,7 @@ func (upload *fileUpload) writeInfo() error {
 func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 
 	n := &Node{
-		pw:       upload.fs.pw,
+		lu:       upload.fs.lu,
 		ID:       upload.info.Storage["NodeId"],
 		ParentID: upload.info.Storage["NodeParentId"],
 		Name:     upload.info.Storage["NodeName"],
@@ -361,13 +361,13 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	if n.ID == "" {
 		n.ID = uuid.New().String()
 	}
-	targetPath := filepath.Join(upload.fs.pw.Root, "nodes", n.ID)
+	targetPath := upload.fs.lu.toInternalPath(n.ID)
 
 	// if target exists create new version
 	var fi os.FileInfo
 	if fi, err = os.Stat(targetPath); err == nil {
 		// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
-		versionsPath := filepath.Join(upload.fs.pw.Root, "nodes", n.ID+".REV."+fi.ModTime().UTC().Format(time.RFC3339Nano))
+		versionsPath := upload.fs.lu.toInternalPath(n.ID + ".REV." + fi.ModTime().UTC().Format(time.RFC3339Nano))
 
 		if err = os.Rename(targetPath, versionsPath); err != nil {
 			log := appctx.GetLogger(upload.ctx)
@@ -390,7 +390,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 			Msg("ocisfs: could not rename")
 		return
 	}
-	if n.pw.EnableHome {
+	if upload.fs.o.EnableHome {
 		if u, ok := user.ContextGetUser(upload.ctx); ok {
 			err = n.writeMetadata(u.Id)
 		} else {
@@ -404,7 +404,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	if err != nil {
 		return
 	}
-	if n.pw.TreeTimeAccounting {
+	if upload.fs.o.TreeTimeAccounting {
 		// mark the home node as the end of propagation q
 		if err = xattr.Set(targetPath, propagationAttr, []byte("1")); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not mark node to propagate")
@@ -413,7 +413,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	}
 
 	// link child name to parent if it is new
-	childNameLink := filepath.Join(upload.fs.pw.Root, "nodes", n.ParentID, n.Name)
+	childNameLink := filepath.Join(upload.fs.lu.toInternalPath(n.ParentID), n.Name)
 	var link string
 	link, err = os.Readlink(childNameLink)
 	if err == nil && link != "../"+n.ID {

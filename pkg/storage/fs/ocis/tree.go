@@ -37,19 +37,19 @@ import (
 
 // Tree manages a hierarchical tree
 type Tree struct {
-	pw *Path
+	lu *Lookup
 }
 
 // NewTree creates a new Tree instance
-func NewTree(pw *Path) (TreePersistence, error) {
+func NewTree(lu *Lookup) (TreePersistence, error) {
 	return &Tree{
-		pw: pw,
+		lu: lu,
 	}, nil
 }
 
 // GetMD returns the metadata of a node in the tree
 func (t *Tree) GetMD(ctx context.Context, node *Node) (os.FileInfo, error) {
-	md, err := os.Stat(filepath.Join(t.pw.Root, "nodes", node.ID))
+	md, err := os.Stat(t.lu.toInternalPath(node.ID))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, errtypes.NotFound(node.ID)
@@ -63,12 +63,12 @@ func (t *Tree) GetMD(ctx context.Context, node *Node) (os.FileInfo, error) {
 // GetPathByID returns the fn pointed by the file id, without the internal namespace
 func (t *Tree) GetPathByID(ctx context.Context, id *provider.ResourceId) (relativeExternalPath string, err error) {
 	var node *Node
-	node, err = t.pw.NodeFromID(ctx, id)
+	node, err = t.lu.NodeFromID(ctx, id)
 	if err != nil {
 		return
 	}
 
-	relativeExternalPath, err = t.pw.Path(ctx, node)
+	relativeExternalPath, err = t.lu.Path(ctx, node)
 	return
 }
 
@@ -76,7 +76,7 @@ func (t *Tree) GetPathByID(ctx context.Context, id *provider.ResourceId) (relati
 // TODO check if node exists?
 func createNode(n *Node, owner *userpb.UserId) (err error) {
 	// create a directory node
-	nodePath := filepath.Join(n.pw.Root, "nodes", n.ID)
+	nodePath := n.lu.toInternalPath(n.ID)
 	if err = os.MkdirAll(nodePath, 0700); err != nil {
 		return errors.Wrap(err, "ocisfs: error creating node")
 	}
@@ -94,7 +94,7 @@ func (t *Tree) CreateDir(ctx context.Context, node *Node) (err error) {
 	// create a directory node
 	node.ID = uuid.New().String()
 
-	if t.pw.EnableHome {
+	if t.lu.Options.EnableHome {
 		if u, ok := user.ContextGetUser(ctx); ok {
 			err = createNode(node, u.Id)
 		} else {
@@ -110,7 +110,7 @@ func (t *Tree) CreateDir(ctx context.Context, node *Node) (err error) {
 	}
 
 	// make child appear in listings
-	err = os.Symlink("../"+node.ID, filepath.Join(t.pw.Root, "nodes", node.ParentID, node.Name))
+	err = os.Symlink("../"+node.ID, filepath.Join(t.lu.toInternalPath(node.ParentID), node.Name))
 	if err != nil {
 		return
 	}
@@ -122,14 +122,14 @@ func (t *Tree) Move(ctx context.Context, oldNode *Node, newNode *Node) (err erro
 	// if target exists delete it without trashing it
 	if newNode.Exists {
 		// TODO make sure all children are deleted
-		if err := os.RemoveAll(filepath.Join(t.pw.Root, "nodes", newNode.ID)); err != nil {
+		if err := os.RemoveAll(t.lu.toInternalPath(newNode.ID)); err != nil {
 			return errors.Wrap(err, "ocisfs: Move: error deleting target node "+newNode.ID)
 		}
 	}
 	// are we just renaming (parent stays the same)?
 	if oldNode.ParentID == newNode.ParentID {
 
-		parentPath := filepath.Join(t.pw.Root, "nodes", oldNode.ParentID)
+		parentPath := t.lu.toInternalPath(oldNode.ParentID)
 
 		// rename child
 		err = os.Rename(
@@ -141,7 +141,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *Node, newNode *Node) (err erro
 		}
 
 		// the new node id might be different, so we need to use the old nodes id
-		tgtPath := filepath.Join(t.pw.Root, "nodes", oldNode.ID)
+		tgtPath := t.lu.toInternalPath(oldNode.ID)
 
 		// update name attribute
 		if err := xattr.Set(tgtPath, nameAttr, []byte(newNode.Name)); err != nil {
@@ -156,15 +156,15 @@ func (t *Tree) Move(ctx context.Context, oldNode *Node, newNode *Node) (err erro
 
 	// rename child
 	err = os.Rename(
-		filepath.Join(t.pw.Root, "nodes", oldNode.ParentID, oldNode.Name),
-		filepath.Join(t.pw.Root, "nodes", newNode.ParentID, newNode.Name),
+		filepath.Join(t.lu.toInternalPath(oldNode.ParentID), oldNode.Name),
+		filepath.Join(t.lu.toInternalPath(newNode.ParentID), newNode.Name),
 	)
 	if err != nil {
 		return errors.Wrap(err, "ocisfs: could not move child")
 	}
 
 	// update parentid and name
-	tgtPath := filepath.Join(t.pw.Root, "nodes", newNode.ID)
+	tgtPath := t.lu.toInternalPath(newNode.ID)
 
 	if err := xattr.Set(tgtPath, parentidAttr, []byte(newNode.ParentID)); err != nil {
 		return errors.Wrap(err, "ocisfs: could not set parentid attribute")
@@ -191,7 +191,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *Node, newNode *Node) (err erro
 // ListFolder lists the content of a folder node
 func (t *Tree) ListFolder(ctx context.Context, node *Node) ([]*Node, error) {
 
-	dir := filepath.Join(t.pw.Root, "nodes", node.ID)
+	dir := t.lu.toInternalPath(node.ID)
 	f, err := os.Open(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -212,7 +212,7 @@ func (t *Tree) ListFolder(ctx context.Context, node *Node) ([]*Node, error) {
 			continue
 		}
 		n := &Node{
-			pw:       t.pw,
+			lu:       t.lu,
 			ParentID: node.ID,
 			ID:       filepath.Base(link),
 			Name:     names[i],
@@ -238,27 +238,27 @@ func (t *Tree) Delete(ctx context.Context, node *Node) (err error) {
 		// fall back to root trash
 		ownerid = "root"
 	}
-	err = os.MkdirAll(filepath.Join(t.pw.Root, "trash", ownerid), 0700)
+	err = os.MkdirAll(filepath.Join(t.lu.Options.Root, "trash", ownerid), 0700)
 	if err != nil {
 		return
 	}
 
 	// get the original path
-	origin, err := t.pw.Path(ctx, node)
+	origin, err := t.lu.Path(ctx, node)
 	if err != nil {
 		return
 	}
 
 	// remove the entry from the parent dir
 
-	src := filepath.Join(t.pw.Root, "nodes", node.ParentID, node.Name)
+	src := filepath.Join(t.lu.toInternalPath(node.ParentID), node.Name)
 	err = os.Remove(src)
 	if err != nil {
 		return
 	}
 
 	// rename the trashed node so it is not picked up when traversing up the tree
-	nodePath := filepath.Join(t.pw.Root, "nodes", node.ID)
+	nodePath := t.lu.toInternalPath(node.ID)
 	deletionTime := time.Now().UTC().Format(time.RFC3339Nano)
 	trashPath := nodePath + ".T." + deletionTime
 	err = os.Rename(nodePath, trashPath)
@@ -272,7 +272,7 @@ func (t *Tree) Delete(ctx context.Context, node *Node) (err error) {
 
 	// make node appear in the owners (or root) trash
 	// parent id and name are stored as extended attributes in the node itself
-	trashLink := filepath.Join(t.pw.Root, "trash", ownerid, node.ID)
+	trashLink := filepath.Join(t.lu.Options.Root, "trash", ownerid, node.ID)
 	err = os.Symlink("../nodes/"+node.ID+".T."+deletionTime, trashLink)
 	if err != nil {
 		return
@@ -286,19 +286,19 @@ func (t *Tree) Delete(ctx context.Context, node *Node) (err error) {
 
 // Propagate propagates changes to the root of the tree
 func (t *Tree) Propagate(ctx context.Context, n *Node) (err error) {
-	if !t.pw.TreeTimeAccounting && !t.pw.TreeSizeAccounting {
+	if !t.lu.Options.TreeTimeAccounting && !t.lu.Options.TreeSizeAccounting {
 		// no propagation enabled
 		log.Debug().Msg("propagation disabled")
 		return
 	}
 	log := appctx.GetLogger(ctx)
 
-	nodePath := filepath.Join(t.pw.Root, "nodes", n.ID)
+	nodePath := t.lu.toInternalPath(n.ID)
 
 	// is propagation enabled for the parent node?
 
 	var root *Node
-	if root, err = t.pw.HomeOrRootNode(ctx); err != nil {
+	if root, err = t.lu.HomeOrRootNode(ctx); err != nil {
 		return
 	}
 
@@ -323,7 +323,7 @@ func (t *Tree) Propagate(ctx context.Context, n *Node) (err error) {
 			return nil
 		}
 
-		if t.pw.TreeTimeAccounting {
+		if t.lu.Options.TreeTimeAccounting {
 			// update the parent tree time if it is older than the nodes mtime
 			updateSyncTime := false
 

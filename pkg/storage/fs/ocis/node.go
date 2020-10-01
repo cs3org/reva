@@ -39,7 +39,7 @@ import (
 
 // Node represents a node in the tree and provides methods to get a Parent or Child instance
 type Node struct {
-	pw       *Path
+	lu       *Lookup
 	ParentID string
 	ID       string
 	Name     string
@@ -49,7 +49,7 @@ type Node struct {
 }
 
 func (n *Node) writeMetadata(owner *userpb.UserId) (err error) {
-	nodePath := filepath.Join(n.pw.Root, "nodes", n.ID)
+	nodePath := n.lu.toInternalPath(n.ID)
 	if err = xattr.Set(nodePath, parentidAttr, []byte(n.ParentID)); err != nil {
 		return errors.Wrap(err, "ocisfs: could not set parentid attribute")
 	}
@@ -68,13 +68,13 @@ func (n *Node) writeMetadata(owner *userpb.UserId) (err error) {
 }
 
 // ReadNode creates a new instance from an id and checks if it exists
-func ReadNode(ctx context.Context, pw *Path, id string) (n *Node, err error) {
+func ReadNode(ctx context.Context, lu *Lookup, id string) (n *Node, err error) {
 	n = &Node{
-		pw: pw,
+		lu: lu,
 		ID: id,
 	}
 
-	nodePath := filepath.Join(n.pw.Root, "nodes", n.ID)
+	nodePath := lu.toInternalPath(n.ID)
 
 	// lookup parent id in extended attributes
 	var attrBytes []byte
@@ -91,7 +91,7 @@ func ReadNode(ctx context.Context, pw *Path, id string) (n *Node, err error) {
 	}
 
 	var root *Node
-	if root, err = pw.HomeOrRootNode(ctx); err != nil {
+	if root, err = lu.HomeOrRootNode(ctx); err != nil {
 		return
 	}
 	parentID := n.ParentID
@@ -100,7 +100,7 @@ func ReadNode(ctx context.Context, pw *Path, id string) (n *Node, err error) {
 	for parentID != root.ID {
 		log.Debug().Interface("node", n).Str("root.ID", root.ID).Msg("ReadNode()")
 		// walk to root to check node is not part of a deleted subtree
-		parentPath := filepath.Join(n.pw.Root, "nodes", parentID)
+		parentPath := lu.toInternalPath(parentID)
 
 		if attrBytes, err = xattr.Get(parentPath, parentidAttr); err == nil {
 			parentID = string(attrBytes)
@@ -123,12 +123,12 @@ func ReadNode(ctx context.Context, pw *Path, id string) (n *Node, err error) {
 // Child returns the child node with the given name
 func (n *Node) Child(name string) (c *Node, err error) {
 	c = &Node{
-		pw:       n.pw,
+		lu:       n.lu,
 		ParentID: n.ID,
 		Name:     name,
 	}
 	var link string
-	if link, err = os.Readlink(filepath.Join(n.pw.Root, "nodes", n.ID, name)); os.IsNotExist(err) {
+	if link, err = os.Readlink(filepath.Join(n.lu.toInternalPath(n.ID), name)); os.IsNotExist(err) {
 		err = nil // if the file does not exist we return a node that has Exists = false
 		return
 	}
@@ -151,11 +151,11 @@ func (n *Node) Parent() (p *Node, err error) {
 		return nil, fmt.Errorf("ocisfs: root has no parent")
 	}
 	p = &Node{
-		pw: n.pw,
+		lu: n.lu,
 		ID: n.ParentID,
 	}
 
-	parentPath := filepath.Join(n.pw.Root, "nodes", n.ParentID)
+	parentPath := n.lu.toInternalPath(n.ParentID)
 
 	// lookup parent id in extended attributes
 	var attrBytes []byte
@@ -185,7 +185,7 @@ func (n *Node) Owner() (id string, idp string, err error) {
 		return n.ownerID, n.ownerIDP, nil
 	}
 
-	nodePath := filepath.Join(n.pw.Root, "nodes", n.ParentID)
+	nodePath := n.lu.toInternalPath(n.ParentID)
 	// lookup parent id in extended attributes
 	var attrBytes []byte
 	// lookup name in extended attributes
@@ -208,7 +208,7 @@ func (n *Node) AsResourceInfo(ctx context.Context) (ri *provider.ResourceInfo, e
 	log := appctx.GetLogger(ctx)
 
 	var fn string
-	nodePath := filepath.Join(n.pw.Root, "nodes", n.ID)
+	nodePath := n.lu.toInternalPath(n.ID)
 
 	var fi os.FileInfo
 
@@ -235,7 +235,7 @@ func (n *Node) AsResourceInfo(ctx context.Context) (ri *provider.ResourceInfo, e
 
 	id := &provider.ResourceId{OpaqueId: n.ID}
 
-	fn, err = n.pw.Path(ctx, n)
+	fn, err = n.lu.Path(ctx, n)
 	if err != nil {
 		return nil, err
 	}
@@ -321,7 +321,7 @@ func (n *Node) AsResourceInfo(ctx context.Context) (ri *provider.ResourceInfo, e
 
 // HasPropagation checks if the propagation attribute exists and is set to "1"
 func (n *Node) HasPropagation() (propagation bool) {
-	nodePath := filepath.Join(n.pw.Root, "nodes", n.ID)
+	nodePath := n.lu.toInternalPath(n.ID)
 	if b, err := xattr.Get(nodePath, propagationAttr); err == nil {
 		return string(b) == "1"
 	}
@@ -330,7 +330,7 @@ func (n *Node) HasPropagation() (propagation bool) {
 
 // GetTMTime reads the tmtime from the extended attributes
 func (n *Node) GetTMTime() (tmTime time.Time, err error) {
-	nodePath := filepath.Join(n.pw.Root, "nodes", n.ID)
+	nodePath := n.lu.toInternalPath(n.ID)
 	var b []byte
 	if b, err = xattr.Get(nodePath, treeMTimeAttr); err != nil {
 		return
@@ -340,13 +340,13 @@ func (n *Node) GetTMTime() (tmTime time.Time, err error) {
 
 // SetTMTime writes the tmtime to the extended attributes
 func (n *Node) SetTMTime(t time.Time) (err error) {
-	nodePath := filepath.Join(n.pw.Root, "nodes", n.ID)
+	nodePath := n.lu.toInternalPath(n.ID)
 	return xattr.Set(nodePath, treeMTimeAttr, []byte(t.UTC().Format(time.RFC3339Nano)))
 }
 
 // UnsetTempEtag removes the temporary etag attribute
 func (n *Node) UnsetTempEtag() (err error) {
-	nodePath := filepath.Join(n.pw.Root, "nodes", n.ID)
+	nodePath := n.lu.toInternalPath(n.ID)
 	if err = xattr.Remove(nodePath, tmpEtagAttr); err != nil {
 		if e, ok := err.(*xattr.Error); ok && e.Err.Error() == "no data available" {
 			return nil

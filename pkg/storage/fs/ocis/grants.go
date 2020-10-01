@@ -34,7 +34,7 @@ func (fs *ocisfs) AddGrant(ctx context.Context, ref *provider.Reference, g *prov
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("ref", ref).Interface("grant", g).Msg("AddGrant()")
 	var node *Node
-	if node, err = fs.pw.NodeFromResource(ctx, ref); err != nil {
+	if node, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
 		return
 	}
 	if !node.Exists {
@@ -42,7 +42,7 @@ func (fs *ocisfs) AddGrant(ctx context.Context, ref *provider.Reference, g *prov
 		return
 	}
 
-	np := filepath.Join(fs.pw.Root, "nodes", node.ID)
+	np := fs.lu.toInternalPath(node.ID)
 	e := ace.FromGrant(g)
 	principal, value := e.Marshal()
 	if err := xattr.Set(np, sharePrefix+principal, value); err != nil {
@@ -53,7 +53,7 @@ func (fs *ocisfs) AddGrant(ctx context.Context, ref *provider.Reference, g *prov
 
 func (fs *ocisfs) ListGrants(ctx context.Context, ref *provider.Reference) (grants []*provider.Grant, err error) {
 	var node *Node
-	if node, err = fs.pw.NodeFromResource(ctx, ref); err != nil {
+	if node, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
 		return
 	}
 	if !node.Exists {
@@ -61,7 +61,7 @@ func (fs *ocisfs) ListGrants(ctx context.Context, ref *provider.Reference) (gran
 		return
 	}
 	log := appctx.GetLogger(ctx)
-	np := filepath.Join(fs.pw.Root, "nodes", node.ID)
+	np := fs.lu.toInternalPath(node.ID)
 	var attrs []string
 	if attrs, err = xattr.List(np); err != nil {
 		log.Error().Err(err).Msg("error listing attributes")
@@ -82,7 +82,7 @@ func (fs *ocisfs) ListGrants(ctx context.Context, ref *provider.Reference) (gran
 
 func (fs *ocisfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
 	var node *Node
-	if node, err = fs.pw.NodeFromResource(ctx, ref); err != nil {
+	if node, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
 		return
 	}
 	if !node.Exists {
@@ -97,7 +97,7 @@ func (fs *ocisfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *p
 		attr = sharePrefix + "u:" + g.Grantee.Id.OpaqueId
 	}
 
-	np := filepath.Join(fs.pw.Root, "nodes", node.ID)
+	np := fs.lu.toInternalPath(node.ID)
 	if err = xattr.Remove(np, attr); err != nil {
 		return
 	}
