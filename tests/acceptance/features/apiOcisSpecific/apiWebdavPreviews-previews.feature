@@ -69,14 +69,6 @@ Feature: previews of files downloaded through the webdav API
     Then the HTTP status code should be "200"
     And the downloaded image should be "1240" pixels wide and "648" pixels high
 
-  @issue-ocis-191 @skipOnOcis-EOS-Storage @issue-ocis-reva-308 @skipOnOcis-OCIS-Storage
-  # after fixing all issues delete this Scenario and use the one from oC10 core
-  Scenario: download previews of other users files
-    Given user "Brian" has been created with default attributes and without skeleton files
-    And user "Alice" has uploaded file "filesForUpload/lorem.txt" to "/parent.txt"
-    When user "Brian" downloads the preview of "/parent.txt" of "Alice" with width "32" and height "32" using the WebDAV API
-    Then the HTTP status code should be "200"
-
   @issue-ocis-190
   # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario: download previews of folders

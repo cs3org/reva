@@ -25,10 +25,10 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -60,18 +60,45 @@ const (
 	// we will use to store ownCloud specific metadata. To prevent name
 	// collisions with other apps We are going to introduce a sub namespace
 	// "user.oc."
+	ocPrefix string = "user.oc."
 
 	// idAttribute is the name of the filesystem extended attribute that is used to store the uuid in
-	idAttribute string = "user.oc.id"
+	idAttribute string = ocPrefix + "id"
 
 	// SharePrefix is the prefix for sharing related extended attributes
-	sharePrefix       string = "user.oc.acl."
-	trashOriginPrefix string = "user.oc.o"
-	mdPrefix          string = "user.oc.md."   // arbitrary metadata
-	favPrefix         string = "user.oc.fav."  // favorite flag, per user
-	etagPrefix        string = "user.oc.etag." // allow overriding a calculated etag with one from the extended attributes
-	//checksumPrefix    string = "user.oc.cs."   // TODO add checksum support
+	sharePrefix       string = ocPrefix + "grant." // grants are similar to acls, but they are not propagated down the tree when being changed
+	trashOriginPrefix string = ocPrefix + "o"
+	mdPrefix          string = ocPrefix + "md."   // arbitrary metadata
+	favPrefix         string = ocPrefix + "fav."  // favorite flag, per user
+	etagPrefix        string = ocPrefix + "etag." // allow overriding a calculated etag with one from the extended attributes
+	//checksumPrefix    string = ocPrefix + "cs."   // TODO add checksum support
+
 )
+
+var defaultPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{
+	// no permissions
+}
+var ownerPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{
+	// all permissions
+	AddGrant:             true,
+	CreateContainer:      true,
+	Delete:               true,
+	GetPath:              true,
+	GetQuota:             true,
+	InitiateFileDownload: true,
+	InitiateFileUpload:   true,
+	ListContainer:        true,
+	ListFileVersions:     true,
+	ListGrants:           true,
+	ListRecycle:          true,
+	Move:                 true,
+	PurgeRecycle:         true,
+	RemoveGrant:          true,
+	RestoreFileVersion:   true,
+	RestoreRecycleItem:   true,
+	Stat:                 true,
+	UpdateGrant:          true,
+}
 
 func init() {
 	registry.Register("owncloud", New)
@@ -135,7 +162,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	c.init(m)
 
 	// c.DataDirectory should never end in / unless it is the root?
-	c.DataDirectory = path.Clean(c.DataDirectory)
+	c.DataDirectory = filepath.Clean(c.DataDirectory)
 
 	// create datadir if it does not exist
 	err = os.MkdirAll(c.DataDirectory, 0700)
@@ -223,76 +250,76 @@ func (fs *ocfs) scanFiles(ctx context.Context, conn redis.Conn) {
 // the incoming path starts with /<username>, so we need to insert the files subfolder into the path
 // and prefix the data directory
 // TODO the path handed to a storage provider should not contain the username
-func (fs *ocfs) wrap(ctx context.Context, fn string) (internal string) {
+func (fs *ocfs) toInternalPath(ctx context.Context, sp string) (ip string) {
 	if fs.c.EnableHome {
 		u := user.ContextMustGetUser(ctx)
 		layout := templates.WithUser(u, fs.c.UserLayout)
-		internal = path.Join(fs.c.DataDirectory, layout, "files", fn)
+		ip = filepath.Join(fs.c.DataDirectory, layout, "files", sp)
 	} else {
 		// trim all /
-		fn = strings.Trim(fn, "/")
+		sp = strings.Trim(sp, "/")
 		// p = "" or
 		// p = <username> or
 		// p = <username>/foo/bar.txt
-		parts := strings.SplitN(fn, "/", 2)
+		segments := strings.SplitN(sp, "/", 2)
 
-		if len(parts) == 1 && parts[0] == "" {
-			internal = fs.c.DataDirectory
+		if len(segments) == 1 && segments[0] == "" {
+			ip = fs.c.DataDirectory
 			return
 		}
 
 		// parts[0] contains the username or userid.
-		u, err := fs.getUser(ctx, parts[0])
+		u, err := fs.getUser(ctx, segments[0])
 		if err != nil {
 			// TODO return invalid internal path?
 			return
 		}
 		layout := templates.WithUser(u, fs.c.UserLayout)
 
-		if len(parts) == 1 {
+		if len(segments) == 1 {
 			// parts = "<username>"
-			internal = path.Join(fs.c.DataDirectory, layout, "files")
+			ip = filepath.Join(fs.c.DataDirectory, layout, "files")
 		} else {
 			// parts = "<username>", "foo/bar.txt"
-			internal = path.Join(fs.c.DataDirectory, layout, "files", parts[1])
+			ip = filepath.Join(fs.c.DataDirectory, layout, "files", segments[1])
 		}
 
 	}
 	return
 }
 
-func (fs *ocfs) wrapShadow(ctx context.Context, fn string) (internal string) {
+func (fs *ocfs) toInternalShadowPath(ctx context.Context, sp string) (internal string) {
 	if fs.c.EnableHome {
 		u := user.ContextMustGetUser(ctx)
 		layout := templates.WithUser(u, fs.c.UserLayout)
-		internal = path.Join(fs.c.DataDirectory, layout, "shadow_files", fn)
+		internal = filepath.Join(fs.c.DataDirectory, layout, "shadow_files", sp)
 	} else {
 		// trim all /
-		fn = strings.Trim(fn, "/")
+		sp = strings.Trim(sp, "/")
 		// p = "" or
 		// p = <username> or
 		// p = <username>/foo/bar.txt
-		parts := strings.SplitN(fn, "/", 2)
+		segments := strings.SplitN(sp, "/", 2)
 
-		if len(parts) == 1 && parts[0] == "" {
+		if len(segments) == 1 && segments[0] == "" {
 			internal = fs.c.DataDirectory
 			return
 		}
 
 		// parts[0] contains the username or userid.
-		u, err := fs.getUser(ctx, parts[0])
+		u, err := fs.getUser(ctx, segments[0])
 		if err != nil {
 			// TODO return invalid internal path?
 			return
 		}
 		layout := templates.WithUser(u, fs.c.UserLayout)
 
-		if len(parts) == 1 {
+		if len(segments) == 1 {
 			// parts = "<username>"
-			internal = path.Join(fs.c.DataDirectory, layout, "shadow_files")
+			internal = filepath.Join(fs.c.DataDirectory, layout, "shadow_files")
 		} else {
 			// parts = "<username>", "foo/bar.txt"
-			internal = path.Join(fs.c.DataDirectory, layout, "shadow_files", parts[1])
+			internal = filepath.Join(fs.c.DataDirectory, layout, "shadow_files", segments[1])
 		}
 	}
 	return
@@ -302,15 +329,15 @@ func (fs *ocfs) wrapShadow(ctx context.Context, fn string) (internal string) {
 // the incoming path starts with /<username>, so we need to insert the files subfolder into the path
 // and prefix the data directory
 // TODO the path handed to a storage provider should not contain the username
-func (fs *ocfs) getVersionsPath(ctx context.Context, np string) string {
-	// np = /path/to/data/<username>/files/foo/bar.txt
+func (fs *ocfs) getVersionsPath(ctx context.Context, ip string) string {
+	// ip = /path/to/data/<username>/files/foo/bar.txt
 	// remove data dir
 	if fs.c.DataDirectory != "/" {
 		// fs.c.DataDirectory is a clean path, so it never ends in /
-		np = strings.TrimPrefix(np, fs.c.DataDirectory)
+		ip = strings.TrimPrefix(ip, fs.c.DataDirectory)
 	}
-	// np = /<username>/files/foo/bar.txt
-	parts := strings.SplitN(np, "/", 4)
+	// ip = /<username>/files/foo/bar.txt
+	parts := strings.SplitN(ip, "/", 4)
 
 	// parts[1] contains the username or userid.
 	u, err := fs.getUser(ctx, parts[1])
@@ -323,10 +350,10 @@ func (fs *ocfs) getVersionsPath(ctx context.Context, np string) string {
 	switch len(parts) {
 	case 3:
 		// parts = "", "<username>"
-		return path.Join(fs.c.DataDirectory, layout, "files_versions")
+		return filepath.Join(fs.c.DataDirectory, layout, "files_versions")
 	case 4:
 		// parts = "", "<username>", "foo/bar.txt"
-		return path.Join(fs.c.DataDirectory, layout, "files_versions", parts[3])
+		return filepath.Join(fs.c.DataDirectory, layout, "files_versions", parts[3])
 	default:
 		return "" // TODO Must not happen?
 	}
@@ -341,7 +368,7 @@ func (fs *ocfs) getRecyclePath(ctx context.Context) (string, error) {
 		return "", err
 	}
 	layout := templates.WithUser(u, fs.c.UserLayout)
-	return path.Join(fs.c.DataDirectory, layout, "files_trashbin/files"), nil
+	return filepath.Join(fs.c.DataDirectory, layout, "files_trashbin/files"), nil
 }
 
 func (fs *ocfs) getVersionRecyclePath(ctx context.Context) (string, error) {
@@ -351,81 +378,83 @@ func (fs *ocfs) getVersionRecyclePath(ctx context.Context) (string, error) {
 		return "", err
 	}
 	layout := templates.WithUser(u, fs.c.UserLayout)
-	return path.Join(fs.c.DataDirectory, layout, "files_trashbin/files_versions"), nil
+	return filepath.Join(fs.c.DataDirectory, layout, "files_trashbin/files_versions"), nil
 }
 
-func (fs *ocfs) unwrap(ctx context.Context, internal string) (external string) {
+func (fs *ocfs) toStoragePath(ctx context.Context, ip string) (sp string) {
 	if fs.c.EnableHome {
 		u := user.ContextMustGetUser(ctx)
 		layout := templates.WithUser(u, fs.c.UserLayout)
-		trim := path.Join(fs.c.DataDirectory, layout, "files")
-		external = strings.TrimPrefix(internal, trim)
+		trim := filepath.Join(fs.c.DataDirectory, layout, "files")
+		sp = strings.TrimPrefix(ip, trim)
 		// root directory
-		if external == "" {
-			external = "/"
+		if sp == "" {
+			sp = "/"
 		}
 	} else {
-		// np = /data/<username>/files/foo/bar.txt
+		// ip = /data/<username>/files/foo/bar.txt
 		// remove data dir
 		if fs.c.DataDirectory != "/" {
 			// fs.c.DataDirectory is a clean path, so it never ends in /
-			internal = strings.TrimPrefix(internal, fs.c.DataDirectory)
-			// np = /<username>/files/foo/bar.txt
+			ip = strings.TrimPrefix(ip, fs.c.DataDirectory)
+			// ip = /<username>/files/foo/bar.txt
 		}
 
-		parts := strings.SplitN(internal, "/", 4)
+		segments := strings.SplitN(ip, "/", 4)
 		// parts = "", "<username>", "files", "foo/bar.txt"
-		switch len(parts) {
+		switch len(segments) {
 		case 1:
-			external = "/"
+			sp = "/"
 		case 2:
-			external = path.Join("/", parts[1])
+			sp = filepath.Join("/", segments[1])
 		case 3:
-			external = path.Join("/", parts[1])
+			sp = filepath.Join("/", segments[1])
 		default:
-			external = path.Join("/", parts[1], parts[3])
+			sp = filepath.Join("/", segments[1], segments[3])
 		}
 	}
-	appctx.GetLogger(ctx).Debug().Str("internal", internal).Str("external", external).Msg("ocfs: unwrap")
+	log := appctx.GetLogger(ctx)
+	log.Debug().Str("driver", "ocfs").Str("ipath", ip).Str("spath", sp).Msg("toStoragePath")
 	return
 }
 
-func (fs *ocfs) unwrapShadow(ctx context.Context, internal string) (external string) {
+func (fs *ocfs) toStorageShadowPath(ctx context.Context, ip string) (sp string) {
 	if fs.c.EnableHome {
 		u := user.ContextMustGetUser(ctx)
 		layout := templates.WithUser(u, fs.c.UserLayout)
-		trim := path.Join(fs.c.DataDirectory, layout, "shadow_files")
-		external = strings.TrimPrefix(internal, trim)
+		trim := filepath.Join(fs.c.DataDirectory, layout, "shadow_files")
+		sp = strings.TrimPrefix(ip, trim)
 	} else {
-		// np = /data/<username>/shadow_files/foo/bar.txt
+		// ip = /data/<username>/shadow_files/foo/bar.txt
 		// remove data dir
 		if fs.c.DataDirectory != "/" {
 			// fs.c.DataDirectory is a clean path, so it never ends in /
-			internal = strings.TrimPrefix(internal, fs.c.DataDirectory)
-			// np = /<username>/shadow_files/foo/bar.txt
+			ip = strings.TrimPrefix(ip, fs.c.DataDirectory)
+			// ip = /<username>/shadow_files/foo/bar.txt
 		}
 
-		parts := strings.SplitN(internal, "/", 4)
+		segments := strings.SplitN(ip, "/", 4)
 		// parts = "", "<username>", "shadow_files", "foo/bar.txt"
-		switch len(parts) {
+		switch len(segments) {
 		case 1:
-			external = "/"
+			sp = "/"
 		case 2:
-			external = path.Join("/", parts[1])
+			sp = filepath.Join("/", segments[1])
 		case 3:
-			external = path.Join("/", parts[1])
+			sp = filepath.Join("/", segments[1])
 		default:
-			external = path.Join("/", parts[1], parts[3])
+			sp = filepath.Join("/", segments[1], segments[3])
 		}
 	}
-	appctx.GetLogger(ctx).Debug().Str("internal", internal).Str("external", external).Msg("ocfs: unwrapShadow")
+	log := appctx.GetLogger(ctx)
+	log.Debug().Str("driver", "ocfs").Str("ipath", ip).Str("spath", sp).Msg("toStorageShadowPath")
 	return
 }
 
 // TODO the owner needs to come from a different place
-func (fs *ocfs) getOwner(internal string) string {
-	internal = strings.TrimPrefix(internal, fs.c.DataDirectory)
-	parts := strings.SplitN(internal, "/", 3)
+func (fs *ocfs) getOwner(ip string) string {
+	ip = strings.TrimPrefix(ip, fs.c.DataDirectory)
+	parts := strings.SplitN(ip, "/", 3)
 	if len(parts) > 1 {
 		return parts[1]
 	}
@@ -489,14 +518,14 @@ func (fs *ocfs) getUser(ctx context.Context, usernameOrID string) (id *userpb.Us
 	return res.User, nil
 }
 
-func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, np string, fn string, c redis.Conn, mdKeys []string) *provider.ResourceInfo {
-	id := readOrCreateID(ctx, np, c)
+func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, ip string, sp string, c redis.Conn, mdKeys []string) *provider.ResourceInfo {
+	id := readOrCreateID(ctx, ip, c)
 
 	etag := calcEtag(ctx, fi)
 
-	if val, err := xattr.Get(np, etagPrefix+etag); err == nil {
+	if val, err := xattr.Get(ip, etagPrefix+etag); err == nil {
 		appctx.GetLogger(ctx).Debug().
-			Str("np", np).
+			Str("ipath", ip).
 			Str("calcetag", etag).
 			Str("etag", string(val)).
 			Msg("overriding calculated etag")
@@ -522,9 +551,9 @@ func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, np st
 			// the favorite flag is specific to the user, so we need to incorporate the userid
 			if uid := u.GetId(); uid != nil {
 				fa := fmt.Sprintf("%s%s@%s", favPrefix, uid.GetOpaqueId(), uid.GetIdp())
-				if val, err := xattr.Get(np, fa); err == nil {
+				if val, err := xattr.Get(ip, fa); err == nil {
 					appctx.GetLogger(ctx).Debug().
-						Str("np", np).
+						Str("ipath", ip).
 						Str("favorite", string(val)).
 						Str("username", u.GetUsername()).
 						Msg("found favorite flag")
@@ -539,14 +568,14 @@ func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, np st
 		metadata[favoriteKey] = favorite
 	}
 
-	list, err := xattr.List(np)
+	list, err := xattr.List(ip)
 	if err == nil {
 		for _, entry := range list {
 			// filter out non-custom properties
 			if !strings.HasPrefix(entry, mdPrefix) {
 				continue
 			}
-			if val, err := xattr.Get(np, entry); err == nil {
+			if val, err := xattr.Get(ip, entry); err == nil {
 				k := entry[len(mdPrefix):]
 				if _, ok := mdKeysMap[k]; returnAllKeys || ok {
 					metadata[k] = string(val)
@@ -563,10 +592,10 @@ func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, np st
 
 	ri := &provider.ResourceInfo{
 		Id:            &provider.ResourceId{OpaqueId: id},
-		Path:          fn,
+		Path:          sp,
 		Type:          getResourceType(fi.IsDir()),
 		Etag:          etag,
-		MimeType:      mime.Detect(fi.IsDir(), fn),
+		MimeType:      mime.Detect(fi.IsDir(), ip),
 		Size:          uint64(fi.Size()),
 		PermissionSet: &provider.ResourcePermissions{ListContainer: true, CreateContainer: true},
 		Mtime: &types.Timestamp{
@@ -578,7 +607,7 @@ func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, np st
 		},
 	}
 
-	if owner, err := fs.getUser(ctx, fs.getOwner(np)); err == nil {
+	if owner, err := fs.getUser(ctx, fs.getOwner(ip)); err == nil {
 		ri.Owner = owner.Id
 	} else {
 		appctx.GetLogger(ctx).Error().Err(err).Msg("error getting owner")
@@ -593,30 +622,30 @@ func getResourceType(isDir bool) provider.ResourceType {
 	return provider.ResourceType_RESOURCE_TYPE_FILE
 }
 
-func readOrCreateID(ctx context.Context, np string, conn redis.Conn) string {
+func readOrCreateID(ctx context.Context, ip string, conn redis.Conn) string {
 	log := appctx.GetLogger(ctx)
 
 	// read extended file attribute for id
 	//generate if not present
 	var id []byte
 	var err error
-	if id, err = xattr.Get(np, idAttribute); err != nil {
-		log.Warn().Err(err).Msg("error reading file id")
+	if id, err = xattr.Get(ip, idAttribute); err != nil {
+		log.Warn().Err(err).Str("driver", "owncloud").Str("ipath", ip).Msg("error reading file id")
 		// try generating a uuid
 		if uuid, err := uuid.NewV4(); err != nil {
-			log.Error().Err(err).Msg("error generating fileid")
+			log.Error().Err(err).Str("driver", "owncloud").Str("ipath", ip).Msg("error generating fileid")
 		} else {
 			// store uuid
 			id = uuid.Bytes()
-			if err := xattr.Set(np, idAttribute, id); err != nil {
-				log.Error().Err(err).Msg("error storing file id")
+			if err := xattr.Set(ip, idAttribute, id); err != nil {
+				log.Error().Err(err).Str("driver", "owncloud").Str("ipath", ip).Msg("error storing file id")
 			}
 			// TODO cache path for uuid in redis
 			// TODO reuse conn?
 			if conn != nil {
-				_, err := conn.Do("SET", uuid.String(), np)
+				_, err := conn.Do("SET", uuid.String(), ip)
 				if err != nil {
-					log.Error().Str("path", np).Err(err).Msg("error caching id")
+					log.Error().Err(err).Str("driver", "owncloud").Str("ipath", ip).Msg("error caching id")
 					// continue
 				}
 			}
@@ -636,12 +665,12 @@ func (fs *ocfs) getPath(ctx context.Context, id *provider.ResourceId) (string, e
 	c := fs.pool.Get()
 	defer c.Close()
 	fs.scanFiles(ctx, c)
-	np, err := redis.String(c.Do("GET", id.OpaqueId))
+	ip, err := redis.String(c.Do("GET", id.OpaqueId))
 	if err != nil {
 		return "", errtypes.NotFound(id.OpaqueId)
 	}
 
-	idFromXattr, err := xattr.Get(np, idAttribute)
+	idFromXattr, err := xattr.Get(ip, idAttribute)
 	if err != nil {
 		return "", errtypes.NotFound(id.OpaqueId)
 	}
@@ -658,30 +687,43 @@ func (fs *ocfs) getPath(ctx context.Context, id *provider.ResourceId) (string, e
 		return "", errtypes.NotFound(id.OpaqueId)
 	}
 
-	return np, nil
+	return ip, nil
 }
 
-// GetPathByID returns the fn pointed by the file id, without the internal namespace
+// GetPathByID returns the storage relative path for the file id, without the internal namespace
 func (fs *ocfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
-	np, err := fs.getPath(ctx, id)
+	ip, err := fs.getPath(ctx, id)
 	if err != nil {
 		return "", err
 	}
-	return fs.unwrap(ctx, np), nil
+
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, ip); err == nil {
+		if !perm.GetPath {
+			return "", errtypes.PermissionDenied("")
+		}
+	} else {
+		if isNotFound(err) {
+			return "", errtypes.NotFound(fs.toStoragePath(ctx, ip))
+		}
+		return "", errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
+	return fs.toStoragePath(ctx, ip), nil
 }
 
-// resolve takes in a request path or request id and converts it to a internal path.
+// resolve takes in a request path or request id and converts it to an internal path.
 func (fs *ocfs) resolve(ctx context.Context, ref *provider.Reference) (string, error) {
 	if ref.GetPath() != "" {
-		return fs.wrap(ctx, ref.GetPath()), nil
+		return fs.toInternalPath(ctx, ref.GetPath()), nil
 	}
 
 	if ref.GetId() != nil {
-		np, err := fs.getPath(ctx, ref.GetId())
+		ip, err := fs.getPath(ctx, ref.GetId())
 		if err != nil {
 			return "", err
 		}
-		return np, nil
+		return ip, nil
 	}
 
 	// reference is invalid
@@ -689,28 +731,40 @@ func (fs *ocfs) resolve(ctx context.Context, ref *provider.Reference) (string, e
 }
 
 func (fs *ocfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
-	np, err := fs.resolve(ctx, ref)
+	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error resolving reference")
 	}
 
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, ip); err == nil {
+		if !perm.AddGrant {
+			return errtypes.PermissionDenied("")
+		}
+	} else {
+		if isNotFound(err) {
+			return errtypes.NotFound(fs.toStoragePath(ctx, ip))
+		}
+		return errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
 	e := ace.FromGrant(g)
 	principal, value := e.Marshal()
-	if err := xattr.Set(np, sharePrefix+principal, value); err != nil {
+	if err := xattr.Set(ip, sharePrefix+principal, value); err != nil {
 		return err
 	}
-	return fs.propagate(ctx, np)
+	return fs.propagate(ctx, ip)
 }
 
 // extractACEsFromAttrs reads ACEs in the list of attrs from the file
-func extractACEsFromAttrs(ctx context.Context, fsfn string, attrs []string) (entries []*ace.ACE) {
+func extractACEsFromAttrs(ctx context.Context, ip string, attrs []string) (entries []*ace.ACE) {
 	log := appctx.GetLogger(ctx)
 	entries = []*ace.ACE{}
 	for i := range attrs {
 		if strings.HasPrefix(attrs[i], sharePrefix) {
 			var value []byte
 			var err error
-			if value, err = xattr.Get(fsfn, attrs[i]); err != nil {
+			if value, err = xattr.Get(ip, attrs[i]); err != nil {
 				log.Error().Err(err).Str("attr", attrs[i]).Msg("could not read attribute")
 				continue
 			}
@@ -726,21 +780,194 @@ func extractACEsFromAttrs(ctx context.Context, fsfn string, attrs []string) (ent
 	return
 }
 
+// TODO if user is owner but no acls found he can do everything?
+// The owncloud driver does not integrate with the os so, for now, the owner can do everything, see ownerPermissions.
+// Should this change we can store an acl for the owner in every node.
+// We could also add default acls that can only the admin can set, eg for a read only storage?
+// Someone needs to write to provide the content that should be read only, so this would likely be an acl for a group anyway.
+// We need the storage relative path so we can calculate the permissions
+// for the node based on all acls in the tree up to the root
+func (fs *ocfs) readPermissions(ctx context.Context, ip string) (p *provider.ResourcePermissions, err error) {
+
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		appctx.GetLogger(ctx).Debug().Str("ipath", ip).Msg("no user in context, returning default permissions")
+		return defaultPermissions, nil
+	}
+	// check if the current user is the owner
+	if fs.getOwner(ip) == u.Id.OpaqueId {
+		appctx.GetLogger(ctx).Debug().Str("ipath", ip).Msg("user is owner, returning owner permissions")
+		return ownerPermissions, nil
+	}
+
+	// for non owners this is a little more complicated:
+	aggregatedPermissions := &provider.ResourcePermissions{}
+	// add default permissions
+	addPermissions(aggregatedPermissions, defaultPermissions)
+
+	// determine root
+	rp := fs.toInternalPath(ctx, "")
+	// TODO rp will be the datadir ... be we don't want to go up that high. The users home is far enough
+	np := ip
+
+	// for an efficient group lookup convert the list of groups to a map
+	// groups are just strings ... groupnames ... or group ids ??? AAARGH !!!
+	groupsMap := make(map[string]bool, len(u.Groups))
+	for i := range u.Groups {
+		groupsMap[u.Groups[i]] = true
+	}
+
+	var e *ace.ACE
+	// for all segments, starting at the leaf
+	for np != rp {
+
+		var attrs []string
+		if attrs, err = xattr.List(np); err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Str("ipath", np).Msg("error listing attributes")
+			return nil, err
+		}
+
+		userace := sharePrefix + "u:" + u.Id.OpaqueId
+		userFound := false
+		for i := range attrs {
+			// we only need the find the user once per node
+			switch {
+			case !userFound && attrs[i] == userace:
+				e, err = fs.readACE(ctx, np, "u:"+u.Id.OpaqueId)
+			case strings.HasPrefix(attrs[i], sharePrefix+"g:"):
+				g := strings.TrimPrefix(attrs[i], sharePrefix+"g:")
+				if groupsMap[g] {
+					e, err = fs.readACE(ctx, np, "g:"+g)
+				} else {
+					// no need to check attribute
+					continue
+				}
+			default:
+				// no need to check attribute
+				continue
+			}
+
+			switch {
+			case err == nil:
+				addPermissions(aggregatedPermissions, e.Grant().GetPermissions())
+				appctx.GetLogger(ctx).Debug().Str("ipath", np).Str("principal", strings.TrimPrefix(attrs[i], sharePrefix)).Interface("permissions", aggregatedPermissions).Msg("adding permissions")
+			case isNoData(err):
+				err = nil
+				appctx.GetLogger(ctx).Error().Str("ipath", np).Str("principal", strings.TrimPrefix(attrs[i], sharePrefix)).Interface("attrs", attrs).Msg("no permissions found on node, but they were listed")
+			default:
+				appctx.GetLogger(ctx).Error().Err(err).Str("ipath", np).Str("principal", strings.TrimPrefix(attrs[i], sharePrefix)).Msg("error reading permissions")
+				return nil, err
+			}
+		}
+
+		np = filepath.Dir(np)
+	}
+
+	// 3. read user permissions until one is found?
+	//   what if, when checking /a/b/c/d, /a/b has write permission, but /a/b/c has not?
+	//      those are two shares one read only, and a higher one rw,
+	//       should the higher one be used?
+	//       or, since we did find a matching ace in a lower node use that because it matches the principal?
+	//		this would allow ai user to share a folder rm but take away the write capability for eg a docs folder inside it.
+	// 4. read group permissions until all groups of the user are matched?
+	//    same as for user permission, but we need to keep going further up the tree until all groups of the user were matched.
+	//    what if a user has thousands of groups?
+	//      we will always have to walk to the root.
+	//      but the same problem occurs for a user with 2 groups but where only one group was used to share.
+	//      in any case we need to iterate the aces, not the number of groups of the user.
+	//        listing the aces can be used to match the principals, we do not need to fully real all aces
+	//   what if, when checking /a/b/c/d, /a/b has write permission for group g, but /a/b/c has an ace for another group h the user is also a member of?
+	//     it would allow restricting a users permissions by resharing something with him with lower permission?
+	//     so if you have reshare permissions you could accidentially restrict users access to a subfolder of a rw share to ro by sharing it to another group as ro when they are part of both groups
+	//       it makes more sense to have explicit negative permissions
+
+	// TODO we need to read all parents ... until we find a matching ace?
+	appctx.GetLogger(ctx).Debug().Interface("permissions", aggregatedPermissions).Str("ipath", ip).Msg("returning aggregated permissions")
+	return aggregatedPermissions, nil
+}
+
+func isNoData(err error) bool {
+	if xerr, ok := err.(*xattr.Error); ok {
+		if serr, ok2 := xerr.Err.(syscall.Errno); ok2 {
+			return serr == syscall.ENODATA
+		}
+	}
+	return false
+}
+
+// The os not exists error is buried inside the xattr error,
+// so we cannot just use os.IsNotExists().
+func isNotFound(err error) bool {
+	if xerr, ok := err.(*xattr.Error); ok {
+		if serr, ok2 := xerr.Err.(syscall.Errno); ok2 {
+			return serr == syscall.ENOENT
+		}
+	}
+	return false
+}
+
+func (fs *ocfs) readACE(ctx context.Context, ip string, principal string) (e *ace.ACE, err error) {
+	var b []byte
+	if b, err = xattr.Get(ip, sharePrefix+principal); err != nil {
+		return nil, err
+	}
+	if e, err = ace.Unmarshal(principal, b); err != nil {
+		return nil, err
+	}
+	return
+}
+
+// additive merging of permissions only
+func addPermissions(p1 *provider.ResourcePermissions, p2 *provider.ResourcePermissions) {
+	p1.AddGrant = p1.AddGrant || p2.AddGrant
+	p1.CreateContainer = p1.CreateContainer || p2.CreateContainer
+	p1.Delete = p1.Delete || p2.Delete
+	p1.GetPath = p1.GetPath || p2.GetPath
+	p1.GetQuota = p1.GetQuota || p2.GetQuota
+	p1.InitiateFileDownload = p1.InitiateFileDownload || p2.InitiateFileDownload
+	p1.InitiateFileUpload = p1.InitiateFileUpload || p2.InitiateFileUpload
+	p1.ListContainer = p1.ListContainer || p2.ListContainer
+	p1.ListFileVersions = p1.ListFileVersions || p2.ListFileVersions
+	p1.ListGrants = p1.ListGrants || p2.ListGrants
+	p1.ListRecycle = p1.ListRecycle || p2.ListRecycle
+	p1.Move = p1.Move || p2.Move
+	p1.PurgeRecycle = p1.PurgeRecycle || p2.PurgeRecycle
+	p1.RemoveGrant = p1.RemoveGrant || p2.RemoveGrant
+	p1.RestoreFileVersion = p1.RestoreFileVersion || p2.RestoreFileVersion
+	p1.RestoreRecycleItem = p1.RestoreRecycleItem || p2.RestoreRecycleItem
+	p1.Stat = p1.Stat || p2.Stat
+	p1.UpdateGrant = p1.UpdateGrant || p2.UpdateGrant
+}
+
 func (fs *ocfs) ListGrants(ctx context.Context, ref *provider.Reference) (grants []*provider.Grant, err error) {
 	log := appctx.GetLogger(ctx)
-	var np string
-	if np, err = fs.resolve(ctx, ref); err != nil {
+	var ip string
+	if ip, err = fs.resolve(ctx, ref); err != nil {
 		return nil, errors.Wrap(err, "ocfs: error resolving reference")
 	}
+
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, ip); err == nil {
+		if !perm.ListGrants {
+			return nil, errtypes.PermissionDenied("")
+		}
+	} else {
+		if isNotFound(err) {
+			return nil, errtypes.NotFound(fs.toStoragePath(ctx, ip))
+		}
+		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
 	var attrs []string
-	if attrs, err = xattr.List(np); err != nil {
+	if attrs, err = xattr.List(ip); err != nil {
+		// TODO err might be a not exists
 		log.Error().Err(err).Msg("error listing attributes")
 		return nil, err
 	}
 
 	log.Debug().Interface("attrs", attrs).Msg("read attributes")
 
-	aces := extractACEsFromAttrs(ctx, np, attrs)
+	aces := extractACEsFromAttrs(ctx, ip, attrs)
 
 	grants = make([]*provider.Grant, 0, len(aces))
 	for i := range aces {
@@ -752,9 +979,21 @@ func (fs *ocfs) ListGrants(ctx context.Context, ref *provider.Reference) (grants
 
 func (fs *ocfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
 
-	var np string
-	if np, err = fs.resolve(ctx, ref); err != nil {
+	var ip string
+	if ip, err = fs.resolve(ctx, ref); err != nil {
 		return errors.Wrap(err, "ocfs: error resolving reference")
+	}
+
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, ip); err == nil {
+		if !perm.ListContainer {
+			return errtypes.PermissionDenied("")
+		}
+	} else {
+		if isNotFound(err) {
+			return errtypes.NotFound(fs.toStoragePath(ctx, ip))
+		}
+		return errors.Wrap(err, "ocfs: error reading permissions")
 	}
 
 	var attr string
@@ -764,15 +1003,37 @@ func (fs *ocfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pro
 		attr = sharePrefix + "u:" + g.Grantee.Id.OpaqueId
 	}
 
-	if err = xattr.Remove(np, attr); err != nil {
+	if err = xattr.Remove(ip, attr); err != nil {
 		return
 	}
 
-	return fs.propagate(ctx, np)
+	return fs.propagate(ctx, ip)
 }
 
 func (fs *ocfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
-	return fs.AddGrant(ctx, ref, g)
+	ip, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return errors.Wrap(err, "ocfs: error resolving reference")
+	}
+
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, ip); err == nil {
+		if !perm.UpdateGrant {
+			return errtypes.PermissionDenied("")
+		}
+	} else {
+		if isNotFound(err) {
+			return errtypes.NotFound(fs.toStoragePath(ctx, ip))
+		}
+		return errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
+	e := ace.FromGrant(g)
+	principal, value := e.Marshal()
+	if err := xattr.Set(ip, sharePrefix+principal, value); err != nil {
+		return err
+	}
+	return fs.propagate(ctx, ip)
 }
 
 func (fs *ocfs) GetQuota(ctx context.Context) (int, int, error) {
@@ -788,11 +1049,11 @@ func (fs *ocfs) CreateHome(ctx context.Context) error {
 	layout := templates.WithUser(u, fs.c.UserLayout)
 
 	homePaths := []string{
-		path.Join(fs.c.DataDirectory, layout, "files"),
-		path.Join(fs.c.DataDirectory, layout, "files_trashbin"),
-		path.Join(fs.c.DataDirectory, layout, "files_versions"),
-		path.Join(fs.c.DataDirectory, layout, "uploads"),
-		path.Join(fs.c.DataDirectory, layout, "shadow_files"),
+		filepath.Join(fs.c.DataDirectory, layout, "files"),
+		filepath.Join(fs.c.DataDirectory, layout, "files_trashbin"),
+		filepath.Join(fs.c.DataDirectory, layout, "files_versions"),
+		filepath.Join(fs.c.DataDirectory, layout, "uploads"),
+		filepath.Join(fs.c.DataDirectory, layout, "shadow_files"),
 	}
 
 	for _, v := range homePaths {
@@ -812,65 +1073,79 @@ func (fs *ocfs) GetHome(ctx context.Context) (string, error) {
 	return "", nil
 }
 
-func (fs *ocfs) CreateDir(ctx context.Context, fn string) (err error) {
-	np := fs.wrap(ctx, fn)
-	if err = os.Mkdir(np, 0700); err != nil {
+func (fs *ocfs) CreateDir(ctx context.Context, sp string) (err error) {
+	ip := fs.toInternalPath(ctx, sp)
+
+	// check permissions of parent dir
+	if perm, err := fs.readPermissions(ctx, filepath.Dir(ip)); err == nil {
+		if !perm.CreateContainer {
+			return errtypes.PermissionDenied("")
+		}
+	} else {
+		if isNotFound(err) {
+			return errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
+		}
+		return errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
+	if err = os.Mkdir(ip, 0700); err != nil {
 		if os.IsNotExist(err) {
-			return errtypes.NotFound(fn)
+			return errtypes.NotFound(sp)
 		}
 		// FIXME we also need already exists error, webdav expects 405 MethodNotAllowed
-		return errors.Wrap(err, "ocfs: error creating dir "+np)
+		return errors.Wrap(err, "ocfs: error creating dir "+ip)
 	}
-	return fs.propagate(ctx, np)
+	return fs.propagate(ctx, ip)
 }
 
-func (fs *ocfs) isShareFolderChild(p string) bool {
-	return strings.HasPrefix(p, fs.c.ShareFolder)
+func (fs *ocfs) isShareFolderChild(sp string) bool {
+	return strings.HasPrefix(sp, fs.c.ShareFolder)
 }
 
-func (fs *ocfs) isShareFolderRoot(p string) bool {
-	return p == fs.c.ShareFolder
+func (fs *ocfs) isShareFolderRoot(sp string) bool {
+	return sp == fs.c.ShareFolder
 }
 
-func (fs *ocfs) CreateReference(ctx context.Context, p string, targetURI *url.URL) error {
-	if !fs.isShareFolderChild(p) {
-		return errtypes.PermissionDenied("ocfs: cannot create references outside the share folder: share_folder=" + "/Shares" + " path=" + p)
+func (fs *ocfs) CreateReference(ctx context.Context, sp string, targetURI *url.URL) error {
+	if !fs.isShareFolderChild(sp) {
+		return errtypes.PermissionDenied("ocfs: cannot create references outside the share folder: share_folder=" + "/Shares" + " path=" + sp)
 	}
 
-	fn := fs.wrapShadow(ctx, p)
+	ip := fs.toInternalShadowPath(ctx, sp)
+	// TODO check permission?
 
-	dir, _ := path.Split(fn)
+	dir, _ := filepath.Split(ip)
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return errors.Wrapf(err, "ocfs: error creating shadow path %s", dir)
 	}
 
-	f, err := os.Create(fn)
+	f, err := os.Create(ip)
 	if err != nil {
-		return errors.Wrapf(err, "ocfs: error creating shadow file %s", fn)
+		return errors.Wrapf(err, "ocfs: error creating shadow file %s", ip)
 	}
 
 	err = xattr.FSet(f, mdPrefix+"target", []byte(targetURI.String()))
 	if err != nil {
-		return errors.Wrapf(err, "ocfs: error setting the target %s on the shadow file %s", targetURI.String(), fn)
+		return errors.Wrapf(err, "ocfs: error setting the target %s on the shadow file %s", targetURI.String(), ip)
 	}
 	return nil
 }
 
-func (fs *ocfs) setMtime(ctx context.Context, np string, mtimeString string) error {
+func (fs *ocfs) setMtime(ctx context.Context, ip string, mtime string) error {
 	log := appctx.GetLogger(ctx)
-	if mtime, err := parseMTime(mtimeString); err == nil {
+	if mt, err := parseMTime(mtime); err == nil {
 		// updating mtime also updates atime
-		if err := os.Chtimes(np, mtime, mtime); err != nil {
+		if err := os.Chtimes(ip, mt, mt); err != nil {
 			log.Error().Err(err).
-				Str("np", np).
-				Time("mtime", mtime).
+				Str("ipath", ip).
+				Time("mtime", mt).
 				Msg("could not set mtime")
 			return errors.Wrap(err, "could not set mtime")
 		}
 	} else {
 		log.Error().Err(err).
-			Str("np", np).
-			Str("mtimeString", mtimeString).
+			Str("ipath", ip).
+			Str("mtime", mtime).
 			Msg("could not parse mtime")
 		return errors.Wrap(err, "could not parse mtime")
 	}
@@ -879,25 +1154,37 @@ func (fs *ocfs) setMtime(ctx context.Context, np string, mtimeString string) err
 func (fs *ocfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) (err error) {
 	log := appctx.GetLogger(ctx)
 
-	var np string
-	if np, err = fs.resolve(ctx, ref); err != nil {
+	var ip string
+	if ip, err = fs.resolve(ctx, ref); err != nil {
 		return errors.Wrap(err, "ocfs: error resolving reference")
 	}
 
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, ip); err == nil {
+		if !perm.InitiateFileUpload { // TODO add dedicated permission?
+			return errtypes.PermissionDenied("")
+		}
+	} else {
+		if isNotFound(err) {
+			return errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
+		}
+		return errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
 	var fi os.FileInfo
-	fi, err = os.Stat(np)
+	fi, err = os.Stat(ip)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return errtypes.NotFound(fs.unwrap(ctx, np))
+			return errtypes.NotFound(fs.toStoragePath(ctx, ip))
 		}
-		return errors.Wrap(err, "ocfs: error stating "+np)
+		return errors.Wrap(err, "ocfs: error stating "+ip)
 	}
 
 	errs := []error{}
 
 	if md.Metadata != nil {
 		if val, ok := md.Metadata["mtime"]; ok {
-			err := fs.setMtime(ctx, np, val)
+			err := fs.setMtime(ctx, ip, val)
 			if err != nil {
 				errs = append(errs, errors.Wrap(err, "could not set mtime"))
 			}
@@ -912,15 +1199,15 @@ func (fs *ocfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referenc
 			val = fmt.Sprintf("\"%s\"", strings.Trim(val, "\""))
 			if etag == val {
 				log.Debug().
-					Str("np", np).
+					Str("ipath", ip).
 					Str("etag", val).
 					Msg("ignoring request to update identical etag")
 			} else
 			// etag is only valid until the calculated etag changes
 			// TODO(jfd) cleanup in a batch job
-			if err := xattr.Set(np, etagPrefix+etag, []byte(val)); err != nil {
+			if err := xattr.Set(ip, etagPrefix+etag, []byte(val)); err != nil {
 				log.Error().Err(err).
-					Str("np", np).
+					Str("ipath", ip).
 					Str("calcetag", etag).
 					Str("etag", val).
 					Msg("could not set etag")
@@ -949,9 +1236,9 @@ func (fs *ocfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referenc
 				// the favorite flag is specific to the user, so we need to incorporate the userid
 				if uid := u.GetId(); uid != nil {
 					fa := fmt.Sprintf("%s%s@%s", favPrefix, uid.GetOpaqueId(), uid.GetIdp())
-					if err := xattr.Set(np, fa, []byte(val)); err != nil {
+					if err := xattr.Set(ip, fa, []byte(val)); err != nil {
 						log.Error().Err(err).
-							Str("np", np).
+							Str("ipath", ip).
 							Interface("user", u).
 							Str("key", fa).
 							Msg("could not set favorite flag")
@@ -959,14 +1246,14 @@ func (fs *ocfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referenc
 					}
 				} else {
 					log.Error().
-						Str("np", np).
+						Str("ipath", ip).
 						Interface("user", u).
 						Msg("user has no id")
 					errs = append(errs, errors.Wrap(errtypes.UserRequired("userrequired"), "user has no id"))
 				}
 			} else {
 				log.Error().
-					Str("np", np).
+					Str("ipath", ip).
 					Interface("user", u).
 					Msg("error getting user from ctx")
 				errs = append(errs, errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx"))
@@ -976,9 +1263,9 @@ func (fs *ocfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referenc
 		}
 	}
 	for k, v := range md.Metadata {
-		if err := xattr.Set(np, mdPrefix+k, []byte(v)); err != nil {
+		if err := xattr.Set(ip, mdPrefix+k, []byte(v)); err != nil {
 			log.Error().Err(err).
-				Str("np", np).
+				Str("ipath", ip).
 				Str("key", k).
 				Str("val", v).
 				Msg("could not set metadata")
@@ -987,7 +1274,7 @@ func (fs *ocfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referenc
 	}
 	switch len(errs) {
 	case 0:
-		return fs.propagate(ctx, np)
+		return fs.propagate(ctx, ip)
 	case 1:
 		return errs[0]
 	default:
@@ -1010,17 +1297,29 @@ func parseMTime(v string) (t time.Time, err error) {
 func (fs *ocfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) (err error) {
 	log := appctx.GetLogger(ctx)
 
-	var np string
-	if np, err = fs.resolve(ctx, ref); err != nil {
+	var ip string
+	if ip, err = fs.resolve(ctx, ref); err != nil {
 		return errors.Wrap(err, "ocfs: error resolving reference")
 	}
 
-	_, err = os.Stat(np)
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, ip); err == nil {
+		if !perm.InitiateFileUpload { // TODO add dedicated permission?
+			return errtypes.PermissionDenied("")
+		}
+	} else {
+		if isNotFound(err) {
+			return errtypes.NotFound(fs.toStoragePath(ctx, ip))
+		}
+		return errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
+	_, err = os.Stat(ip)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return errtypes.NotFound(fs.unwrap(ctx, np))
+			return errtypes.NotFound(fs.toStoragePath(ctx, ip))
 		}
-		return errors.Wrap(err, "ocfs: error stating "+np)
+		return errors.Wrap(err, "ocfs: error stating "+ip)
 	}
 
 	errs := []error{}
@@ -1031,9 +1330,9 @@ func (fs *ocfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 				// the favorite flag is specific to the user, so we need to incorporate the userid
 				if uid := u.GetId(); uid != nil {
 					fa := fmt.Sprintf("%s%s@%s", favPrefix, uid.GetOpaqueId(), uid.GetIdp())
-					if err := xattr.Remove(np, fa); err != nil {
+					if err := xattr.Remove(ip, fa); err != nil {
 						log.Error().Err(err).
-							Str("np", np).
+							Str("ipath", ip).
 							Interface("user", u).
 							Str("key", fa).
 							Msg("could not unset favorite flag")
@@ -1041,25 +1340,25 @@ func (fs *ocfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 					}
 				} else {
 					log.Error().
-						Str("np", np).
+						Str("ipath", ip).
 						Interface("user", u).
 						Msg("user has no id")
 					errs = append(errs, errors.Wrap(errtypes.UserRequired("userrequired"), "user has no id"))
 				}
 			} else {
 				log.Error().
-					Str("np", np).
+					Str("ipath", ip).
 					Interface("user", u).
 					Msg("error getting user from ctx")
 				errs = append(errs, errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx"))
 			}
 		default:
-			if err = xattr.Remove(np, mdPrefix+k); err != nil {
+			if err = xattr.Remove(ip, mdPrefix+k); err != nil {
 				// a non-existing attribute will return an error, which we can ignore
 				// (using string compare because the error type is syscall.Errno and not wrapped/recognizable)
 				if e, ok := err.(*xattr.Error); !ok || e.Err.Error() != "no data available" {
 					log.Error().Err(err).
-						Str("np", np).
+						Str("ipath", ip).
 						Str("key", k).
 						Msg("could not unset metadata")
 					errs = append(errs, errors.Wrap(err, "could not unset metadata"))
@@ -1070,7 +1369,7 @@ func (fs *ocfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 
 	switch len(errs) {
 	case 0:
-		return fs.propagate(ctx, np)
+		return fs.propagate(ctx, ip)
 	case 1:
 		return errs[0]
 	default:
@@ -1089,18 +1388,29 @@ func (fs *ocfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 // We will live with that compromise since this storage driver will be
 // deprecated soon.
 func (fs *ocfs) Delete(ctx context.Context, ref *provider.Reference) (err error) {
-
-	var np string
-	if np, err = fs.resolve(ctx, ref); err != nil {
+	var ip string
+	if ip, err = fs.resolve(ctx, ref); err != nil {
 		return errors.Wrap(err, "ocfs: error resolving reference")
 	}
 
-	_, err = os.Stat(np)
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, ip); err == nil {
+		if !perm.Delete {
+			return errtypes.PermissionDenied("")
+		}
+	} else {
+		if isNotFound(err) {
+			return errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
+		}
+		return errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
+	_, err = os.Stat(ip)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return errtypes.NotFound(fs.unwrap(ctx, np))
+			return errtypes.NotFound(fs.toStoragePath(ctx, ip))
 		}
-		return errors.Wrap(err, "ocfs: error stating "+np)
+		return errors.Wrap(err, "ocfs: error stating "+ip)
 	}
 
 	rp, err := fs.getRecyclePath(ctx)
@@ -1112,45 +1422,45 @@ func (fs *ocfs) Delete(ctx context.Context, ref *provider.Reference) (err error)
 		return errors.Wrap(err, "ocfs: error creating trashbin dir "+rp)
 	}
 
-	// np is the path on disk ... we need only the path relative to root
-	origin := path.Dir(fs.unwrap(ctx, np))
+	// ip is the path on disk ... we need only the path relative to root
+	origin := filepath.Dir(fs.toStoragePath(ctx, ip))
 
-	err = fs.trash(ctx, np, rp, origin)
+	err = fs.trash(ctx, ip, rp, origin)
 	if err != nil {
-		return errors.Wrapf(err, "ocfs: error deleting file %s", np)
+		return errors.Wrapf(err, "ocfs: error deleting file %s", ip)
 	}
-	err = fs.trashVersions(ctx, np, origin)
+	err = fs.trashVersions(ctx, ip, origin)
 	if err != nil {
-		return errors.Wrapf(err, "ocfs: error deleting versions of file %s", np)
+		return errors.Wrapf(err, "ocfs: error deleting versions of file %s", ip)
 	}
 	return nil
 }
 
-func (fs *ocfs) trash(ctx context.Context, np string, rp string, origin string) error {
+func (fs *ocfs) trash(ctx context.Context, ip string, rp string, origin string) error {
 	// set origin location in metadata
-	if err := xattr.Set(np, trashOriginPrefix, []byte(origin)); err != nil {
+	if err := xattr.Set(ip, trashOriginPrefix, []byte(origin)); err != nil {
 		return err
 	}
 
 	// move to trash location
 	dtime := time.Now().Unix()
-	tgt := path.Join(rp, fmt.Sprintf("%s.d%d", path.Base(np), dtime))
-	if err := os.Rename(np, tgt); err != nil {
+	tgt := filepath.Join(rp, fmt.Sprintf("%s.d%d", filepath.Base(ip), dtime))
+	if err := os.Rename(ip, tgt); err != nil {
 		if os.IsExist(err) {
 			// timestamp collision, try again with higher value:
 			dtime++
-			tgt := path.Join(rp, fmt.Sprintf("%s.d%d", path.Base(np), dtime))
-			if err := os.Rename(np, tgt); err != nil {
+			tgt := filepath.Join(rp, fmt.Sprintf("%s.d%d", filepath.Base(ip), dtime))
+			if err := os.Rename(ip, tgt); err != nil {
 				return errors.Wrap(err, "ocfs: could not move item to trash")
 			}
 		}
 	}
 
-	return fs.propagate(ctx, path.Dir(np))
+	return fs.propagate(ctx, filepath.Dir(ip))
 }
 
-func (fs *ocfs) trashVersions(ctx context.Context, np string, origin string) error {
-	vp := fs.getVersionsPath(ctx, np)
+func (fs *ocfs) trashVersions(ctx context.Context, ip string, origin string) error {
+	vp := fs.getVersionsPath(ctx, ip)
 	vrp, err := fs.getVersionRecyclePath(ctx)
 	if err != nil {
 		return errors.Wrap(err, "error resolving versions recycle path")
@@ -1172,35 +1482,52 @@ func (fs *ocfs) trashVersions(ctx context.Context, np string, origin string) err
 }
 
 func (fs *ocfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (err error) {
-	var oldName string
-	if oldName, err = fs.resolve(ctx, oldRef); err != nil {
+	var oldIP string
+	if oldIP, err = fs.resolve(ctx, oldRef); err != nil {
 		return errors.Wrap(err, "ocfs: error resolving reference")
 	}
-	var newName string
-	if newName, err = fs.resolve(ctx, newRef); err != nil {
+
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, oldIP); err == nil {
+		if !perm.Move { // TODO add dedicated permission?
+			return errtypes.PermissionDenied("")
+		}
+	} else {
+		if isNotFound(err) {
+			return errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(oldIP)))
+		}
+		return errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
+	var newIP string
+	if newIP, err = fs.resolve(ctx, newRef); err != nil {
 		return errors.Wrap(err, "ocfs: error resolving reference")
 	}
-	if err = os.Rename(oldName, newName); err != nil {
-		return errors.Wrap(err, "ocfs: error moving "+oldName+" to "+newName)
+
+	// TODO check target permissions ... if it exists
+
+	if err = os.Rename(oldIP, newIP); err != nil {
+		return errors.Wrap(err, "ocfs: error moving "+oldIP+" to "+newIP)
 	}
-	if err := fs.propagate(ctx, newName); err != nil {
+	if err := fs.propagate(ctx, newIP); err != nil {
 		return err
 	}
-	if err := fs.propagate(ctx, path.Dir(oldName)); err != nil {
+	if err := fs.propagate(ctx, filepath.Dir(oldIP)); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (fs *ocfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
-	np, err := fs.resolve(ctx, ref)
+	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
+		// TODO return correct errtype
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return nil, err
 		}
 		return nil, errors.Wrap(err, "ocfs: error resolving reference")
 	}
-	p := fs.unwrap(ctx, np)
+	p := fs.toStoragePath(ctx, ip)
 
 	if fs.c.EnableHome {
 		if fs.isShareFolderChild(p) {
@@ -1211,38 +1538,66 @@ func (fs *ocfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []str
 	// If GetMD is called for a path shared with the user then the path is
 	// already wrapped. (fs.resolve wraps the path)
 	if strings.HasPrefix(p, fs.c.DataDirectory) {
-		np = p
+		ip = p
 	}
-	md, err := os.Stat(np)
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, ip); err == nil {
+		if !perm.Stat {
+			return nil, errtypes.PermissionDenied("")
+		}
+	} else {
+		if isNotFound(err) {
+			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
+		}
+		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
+	md, err := os.Stat(ip)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, errtypes.NotFound(fs.unwrap(ctx, np))
+			return nil, errtypes.NotFound(fs.toStoragePath(ctx, ip))
 		}
-		return nil, errors.Wrap(err, "ocfs: error stating "+np)
+		return nil, errors.Wrap(err, "ocfs: error stating "+ip)
 	}
 	c := fs.pool.Get()
 	defer c.Close()
-	m := fs.convertToResourceInfo(ctx, md, np, fs.unwrap(ctx, np), c, mdKeys)
+	m := fs.convertToResourceInfo(ctx, md, ip, fs.toStoragePath(ctx, ip), c, mdKeys)
 
 	return m, nil
 }
 
-func (fs *ocfs) getMDShareFolder(ctx context.Context, p string, mdKeys []string) (*provider.ResourceInfo, error) {
-	fn := fs.wrapShadow(ctx, p)
-	md, err := os.Stat(fn)
+func (fs *ocfs) getMDShareFolder(ctx context.Context, sp string, mdKeys []string) (*provider.ResourceInfo, error) {
+	ip := fs.toInternalShadowPath(ctx, sp)
+
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, ip); err == nil {
+		if !perm.Stat {
+			return nil, errtypes.PermissionDenied("")
+		}
+	} else {
+		if isNotFound(err) {
+			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
+		}
+		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
+	md, err := os.Stat(ip)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, errtypes.NotFound(fs.unwrapShadow(ctx, fn))
+			return nil, errtypes.NotFound(fs.toStorageShadowPath(ctx, ip))
 		}
-		return nil, errors.Wrapf(err, "ocfs: error stating %s", fn)
+		return nil, errors.Wrapf(err, "ocfs: error stating %s", ip)
 	}
 	c := fs.pool.Get()
 	defer c.Close()
-	m := fs.convertToResourceInfo(ctx, md, fn, fs.unwrapShadow(ctx, fn), c, mdKeys)
-	if !fs.isShareFolderRoot(p) {
+	m := fs.convertToResourceInfo(ctx, md, ip, fs.toStorageShadowPath(ctx, ip), c, mdKeys)
+	if !fs.isShareFolderRoot(sp) {
 		m.Type = provider.ResourceType_RESOURCE_TYPE_REFERENCE
-		ref, err := xattr.Get(fn, mdPrefix+"target")
+		ref, err := xattr.Get(ip, mdPrefix+"target")
 		if err != nil {
+			if isNotFound(err) {
+				return nil, errtypes.NotFound(fs.toStorageShadowPath(ctx, ip))
+			}
 			return nil, err
 		}
 		m.Target = string(ref)
@@ -1254,41 +1609,56 @@ func (fs *ocfs) getMDShareFolder(ctx context.Context, p string, mdKeys []string)
 func (fs *ocfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
 	log := appctx.GetLogger(ctx)
 
-	np, err := fs.resolve(ctx, ref)
+	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "ocfs: error resolving reference")
 	}
-	p := fs.unwrap(ctx, np)
+	sp := fs.toStoragePath(ctx, ip)
 
 	if fs.c.EnableHome {
 		log.Debug().Msg("home enabled")
-		if strings.HasPrefix(p, "/") {
-			return fs.listWithHome(ctx, "/", p, mdKeys)
+		if strings.HasPrefix(sp, "/") {
+			// permissions checked in listWithHome
+			return fs.listWithHome(ctx, "/", sp, mdKeys)
 		}
 	}
 
 	log.Debug().Msg("list with nominal home")
-	return fs.listWithNominalHome(ctx, p, mdKeys)
+	// permissions checked in listWithNominalHome
+	return fs.listWithNominalHome(ctx, sp, mdKeys)
 }
 
-func (fs *ocfs) listWithNominalHome(ctx context.Context, p string, mdKeys []string) ([]*provider.ResourceInfo, error) {
-	fn := p
+func (fs *ocfs) listWithNominalHome(ctx context.Context, ip string, mdKeys []string) ([]*provider.ResourceInfo, error) {
+
 	// If a user wants to list a folder shared with him the path will already
 	// be wrapped with the files directory path of the share owner.
 	// In that case we don't want to wrap the path again.
-	if !strings.HasPrefix(p, fs.c.DataDirectory) {
-		fn = fs.wrap(ctx, p)
+	if !strings.HasPrefix(ip, fs.c.DataDirectory) {
+		ip = fs.toInternalPath(ctx, ip)
 	}
-	mds, err := ioutil.ReadDir(fn)
+
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, ip); err == nil {
+		if !perm.ListContainer {
+			return nil, errtypes.PermissionDenied("")
+		}
+	} else {
+		if isNotFound(err) {
+			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
+		}
+		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
+	mds, err := ioutil.ReadDir(ip)
 	if err != nil {
-		return nil, errors.Wrapf(err, "ocfs: error listing %s", fn)
+		return nil, errors.Wrapf(err, "ocfs: error listing %s", ip)
 	}
 	c := fs.pool.Get()
 	defer c.Close()
 	finfos := []*provider.ResourceInfo{}
 	for _, md := range mds {
-		p := path.Join(fn, md.Name())
-		m := fs.convertToResourceInfo(ctx, md, p, fs.unwrap(ctx, p), c, mdKeys)
+		cp := filepath.Join(ip, md.Name())
+		m := fs.convertToResourceInfo(ctx, md, cp, fs.toStoragePath(ctx, cp), c, mdKeys)
 		finfos = append(finfos, m)
 	}
 	return finfos, nil
@@ -1316,8 +1686,21 @@ func (fs *ocfs) listWithHome(ctx context.Context, home, p string, mdKeys []strin
 
 func (fs *ocfs) listHome(ctx context.Context, home string, mdKeys []string) ([]*provider.ResourceInfo, error) {
 	// list files
-	fn := fs.wrap(ctx, home)
-	mds, err := ioutil.ReadDir(fn)
+	ip := fs.toInternalPath(ctx, home)
+
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, ip); err == nil {
+		if !perm.ListContainer {
+			return nil, errtypes.PermissionDenied("")
+		}
+	} else {
+		if isNotFound(err) {
+			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
+		}
+		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
+	mds, err := ioutil.ReadDir(ip)
 	if err != nil {
 		return nil, errors.Wrap(err, "ocfs: error listing files")
 	}
@@ -1327,28 +1710,41 @@ func (fs *ocfs) listHome(ctx context.Context, home string, mdKeys []string) ([]*
 
 	finfos := []*provider.ResourceInfo{}
 	for _, md := range mds {
-		p := path.Join(fn, md.Name())
-		m := fs.convertToResourceInfo(ctx, md, p, fs.unwrap(ctx, p), c, mdKeys)
+		cp := filepath.Join(ip, md.Name())
+		m := fs.convertToResourceInfo(ctx, md, cp, fs.toStoragePath(ctx, cp), c, mdKeys)
 		finfos = append(finfos, m)
 	}
 
 	// list shadow_files
-	fn = fs.wrapShadow(ctx, home)
-	mds, err = ioutil.ReadDir(fn)
+	ip = fs.toInternalShadowPath(ctx, home)
+	mds, err = ioutil.ReadDir(ip)
 	if err != nil {
 		return nil, errors.Wrap(err, "ocfs: error listing shadow_files")
 	}
 	for _, md := range mds {
-		p := path.Join(fn, md.Name())
-		m := fs.convertToResourceInfo(ctx, md, p, fs.unwrapShadow(ctx, p), c, mdKeys)
+		cp := filepath.Join(ip, md.Name())
+		m := fs.convertToResourceInfo(ctx, md, cp, fs.toStorageShadowPath(ctx, cp), c, mdKeys)
 		finfos = append(finfos, m)
 	}
 	return finfos, nil
 }
 
-func (fs *ocfs) listShareFolderRoot(ctx context.Context, p string, mdKeys []string) ([]*provider.ResourceInfo, error) {
-	fn := fs.wrapShadow(ctx, p)
-	mds, err := ioutil.ReadDir(fn)
+func (fs *ocfs) listShareFolderRoot(ctx context.Context, sp string, mdKeys []string) ([]*provider.ResourceInfo, error) {
+	ip := fs.toInternalShadowPath(ctx, sp)
+
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, ip); err == nil {
+		if !perm.ListContainer {
+			return nil, errtypes.PermissionDenied("")
+		}
+	} else {
+		if isNotFound(err) {
+			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
+		}
+		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
+	mds, err := ioutil.ReadDir(ip)
 	if err != nil {
 		return nil, errors.Wrap(err, "ocfs: error listing shadow_files")
 	}
@@ -1358,10 +1754,10 @@ func (fs *ocfs) listShareFolderRoot(ctx context.Context, p string, mdKeys []stri
 
 	finfos := []*provider.ResourceInfo{}
 	for _, md := range mds {
-		p := path.Join(fn, md.Name())
-		m := fs.convertToResourceInfo(ctx, md, p, fs.unwrapShadow(ctx, p), c, mdKeys)
+		cp := filepath.Join(ip, md.Name())
+		m := fs.convertToResourceInfo(ctx, md, cp, fs.toStorageShadowPath(ctx, cp), c, mdKeys)
 		m.Type = provider.ResourceType_RESOURCE_TYPE_REFERENCE
-		ref, err := xattr.Get(p, mdPrefix+"target")
+		ref, err := xattr.Get(cp, mdPrefix+"target")
 		if err != nil {
 			return nil, err
 		}
@@ -1372,16 +1768,16 @@ func (fs *ocfs) listShareFolderRoot(ctx context.Context, p string, mdKeys []stri
 	return finfos, nil
 }
 
-func (fs *ocfs) archiveRevision(ctx context.Context, vbp string, np string) error {
+func (fs *ocfs) archiveRevision(ctx context.Context, vbp string, ip string) error {
 	// move existing file to versions dir
 	vp := fmt.Sprintf("%s.v%d", vbp, time.Now().Unix())
-	if err := os.MkdirAll(path.Dir(vp), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(vp), 0700); err != nil {
 		return errors.Wrap(err, "ocfs: error creating versions dir "+vp)
 	}
 
 	// TODO(jfd): make sure rename is atomic, missing fsync ...
-	if err := os.Rename(np, vp); err != nil {
-		return errors.Wrap(err, "ocfs: error renaming from "+np+" to "+vp)
+	if err := os.Rename(ip, vp); err != nil {
+		return errors.Wrap(err, "ocfs: error renaming from "+ip+" to "+vp)
 	}
 
 	return nil
@@ -1393,7 +1789,7 @@ func (fs *ocfs) copyMD(s string, t string) (err error) {
 		return err
 	}
 	for i := range attrs {
-		if strings.HasPrefix(attrs[i], "user.oc.") {
+		if strings.HasPrefix(attrs[i], ocPrefix) {
 			var d []byte
 			if d, err = xattr.Get(s, attrs[i]); err != nil {
 				return err
@@ -1407,33 +1803,59 @@ func (fs *ocfs) copyMD(s string, t string) (err error) {
 }
 
 func (fs *ocfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
-	np, err := fs.resolve(ctx, ref)
+	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "ocfs: error resolving reference")
 	}
-	r, err := os.Open(np)
+
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, ip); err == nil {
+		if !perm.InitiateFileDownload {
+			return nil, errtypes.PermissionDenied("")
+		}
+	} else {
+		if isNotFound(err) {
+			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
+		}
+		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
+	r, err := os.Open(ip)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, errtypes.NotFound(fs.unwrap(ctx, np))
+			return nil, errtypes.NotFound(fs.toStoragePath(ctx, ip))
 		}
-		return nil, errors.Wrap(err, "ocfs: error reading "+np)
+		return nil, errors.Wrap(err, "ocfs: error reading "+ip)
 	}
 	return r, nil
 }
 
 func (fs *ocfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {
-	np, err := fs.resolve(ctx, ref)
+	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "ocfs: error resolving reference")
 	}
-	vp := fs.getVersionsPath(ctx, np)
 
-	bn := path.Base(np)
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, ip); err == nil {
+		if !perm.ListFileVersions {
+			return nil, errtypes.PermissionDenied("")
+		}
+	} else {
+		if isNotFound(err) {
+			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
+		}
+		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
+	vp := fs.getVersionsPath(ctx, ip)
+
+	bn := filepath.Base(ip)
 
 	revisions := []*provider.FileVersion{}
-	mds, err := ioutil.ReadDir(path.Dir(vp))
+	mds, err := ioutil.ReadDir(filepath.Dir(vp))
 	if err != nil {
-		return nil, errors.Wrap(err, "ocfs: error reading"+path.Dir(vp))
+		return nil, errors.Wrap(err, "ocfs: error reading"+filepath.Dir(vp))
 	}
 	for i := range mds {
 		rev := fs.filterAsRevision(ctx, bn, mds[i])
@@ -1470,11 +1892,24 @@ func (fs *ocfs) DownloadRevision(ctx context.Context, ref *provider.Reference, r
 }
 
 func (fs *ocfs) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) error {
-	np, err := fs.resolve(ctx, ref)
+	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error resolving reference")
 	}
-	vp := fs.getVersionsPath(ctx, np)
+
+	// check permissions
+	if perm, err := fs.readPermissions(ctx, ip); err == nil {
+		if !perm.RestoreFileVersion {
+			return errtypes.PermissionDenied("")
+		}
+	} else {
+		if isNotFound(err) {
+			return errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
+		}
+		return errors.Wrap(err, "ocfs: error reading permissions")
+	}
+
+	vp := fs.getVersionsPath(ctx, ip)
 	rp := vp + ".v" + revisionKey
 
 	// check revision exists
@@ -1494,11 +1929,11 @@ func (fs *ocfs) RestoreRevision(ctx context.Context, ref *provider.Reference, re
 	defer source.Close()
 
 	// destination should be available, otherwise we could not have navigated to its revisions
-	if err := fs.archiveRevision(ctx, fs.getVersionsPath(ctx, np), np); err != nil {
+	if err := fs.archiveRevision(ctx, fs.getVersionsPath(ctx, ip), ip); err != nil {
 		return err
 	}
 
-	destination, err := os.Create(np)
+	destination, err := os.Create(ip)
 	if err != nil {
 		// TODO(jfd) bring back revision in case sth goes wrong?
 		return err
@@ -1512,7 +1947,7 @@ func (fs *ocfs) RestoreRevision(ctx context.Context, ref *provider.Reference, re
 	}
 
 	// TODO(jfd) bring back revision in case sth goes wrong?
-	return fs.propagate(ctx, np)
+	return fs.propagate(ctx, ip)
 }
 
 func (fs *ocfs) PurgeRecycleItem(ctx context.Context, key string) error {
@@ -1520,13 +1955,28 @@ func (fs *ocfs) PurgeRecycleItem(ctx context.Context, key string) error {
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error resolving recycle path")
 	}
-	ip := path.Join(rp, path.Clean(key))
+	ip := filepath.Join(rp, filepath.Clean(key))
+	// TODO check permission?
+
+	// check permissions
+	/* are they stored in the trash?
+	if perm, err := fs.readPermissions(ctx, ip); err == nil {
+		if !perm.ListContainer {
+			return nil, errtypes.PermissionDenied("")
+		}
+	} else {
+		if isNotFound(err) {
+			return nil, errtypes.NotFound(fs.unwrap(ctx, filepath.Dir(ip)))
+		}
+		return nil, errors.Wrap(err, "ocfs: error reading permissions")
+	}
+	*/
 
 	err = os.Remove(ip)
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error deleting recycle item")
 	}
-	err = os.RemoveAll(path.Join(path.Dir(rp), "versions", path.Clean(key)))
+	err = os.RemoveAll(filepath.Join(filepath.Dir(rp), "versions", filepath.Clean(key)))
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error deleting recycle item versions")
 	}
@@ -1535,6 +1985,7 @@ func (fs *ocfs) PurgeRecycleItem(ctx context.Context, key string) error {
 }
 
 func (fs *ocfs) EmptyRecycle(ctx context.Context) error {
+	// TODO check permission? on what? user must be the owner
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error resolving recycle path")
@@ -1543,7 +1994,7 @@ func (fs *ocfs) EmptyRecycle(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error deleting recycle files")
 	}
-	err = os.RemoveAll(path.Join(path.Dir(rp), "versions"))
+	err = os.RemoveAll(filepath.Join(filepath.Dir(rp), "versions"))
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error deleting recycle files versions")
 	}
@@ -1553,7 +2004,7 @@ func (fs *ocfs) EmptyRecycle(ctx context.Context) error {
 
 func (fs *ocfs) convertToRecycleItem(ctx context.Context, rp string, md os.FileInfo) *provider.RecycleItem {
 	// trashbin items have filename.ext.d12345678
-	suffix := path.Ext(md.Name())
+	suffix := filepath.Ext(md.Name())
 	if len(suffix) == 0 || !strings.HasPrefix(suffix, ".d") {
 		log := appctx.GetLogger(ctx)
 		log.Error().Str("path", md.Name()).Msg("invalid trash item suffix")
@@ -1567,7 +2018,7 @@ func (fs *ocfs) convertToRecycleItem(ctx context.Context, rp string, md os.FileI
 		return nil
 	}
 	var v []byte
-	if v, err = xattr.Get(path.Join(rp, md.Name()), trashOriginPrefix); err != nil {
+	if v, err = xattr.Get(filepath.Join(rp, md.Name()), trashOriginPrefix); err != nil {
 		log := appctx.GetLogger(ctx)
 		log.Error().Err(err).Str("path", md.Name()).Msg("could not read origin")
 		return nil
@@ -1575,7 +2026,7 @@ func (fs *ocfs) convertToRecycleItem(ctx context.Context, rp string, md os.FileI
 	// ownCloud 10 stores the parent dir of the deleted item as the location in the oc_files_trashbin table
 	// we use extended attributes for original location, but also only the parent location, which is why
 	// we need to join and trim the path when listing it
-	originalPath := path.Join(string(v), strings.TrimSuffix(path.Base(md.Name()), suffix))
+	originalPath := filepath.Join(string(v), strings.TrimSuffix(filepath.Base(md.Name()), suffix))
 
 	return &provider.RecycleItem{
 		Type: getResourceType(md.IsDir()),
@@ -1591,6 +2042,7 @@ func (fs *ocfs) convertToRecycleItem(ctx context.Context, rp string, md os.FileI
 }
 
 func (fs *ocfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error) {
+	// TODO check permission? on what? user must be the owner?
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "ocfs: error resolving recycle path")
@@ -1617,14 +2069,15 @@ func (fs *ocfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error
 }
 
 func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key string) error {
+	// TODO check permission? on what? user must be the owner?
 	log := appctx.GetLogger(ctx)
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error resolving recycle path")
 	}
-	src := path.Join(rp, path.Clean(key))
+	src := filepath.Join(rp, filepath.Clean(key))
 
-	suffix := path.Ext(src)
+	suffix := filepath.Ext(src)
 	if len(suffix) == 0 || !strings.HasPrefix(suffix, ".d") {
 		log.Error().Str("key", key).Str("path", src).Msg("invalid trash item suffix")
 		return nil
@@ -1634,9 +2087,9 @@ func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key string) error {
 	if v, err := xattr.Get(src, trashOriginPrefix); err != nil {
 		log.Error().Err(err).Str("key", key).Str("path", src).Msg("could not read origin")
 	} else {
-		origin = path.Clean(string(v))
+		origin = filepath.Clean(string(v))
 	}
-	tgt := fs.wrap(ctx, path.Join("/", origin, strings.TrimSuffix(path.Base(src), suffix)))
+	tgt := fs.toInternalPath(ctx, filepath.Join("/", origin, strings.TrimSuffix(filepath.Base(src), suffix)))
 	// move back to original location
 	if err := os.Rename(src, tgt); err != nil {
 		log.Error().Err(err).Str("key", key).Str("origin", origin).Str("src", src).Str("tgt", tgt).Msg("could not restore item")
@@ -1655,10 +2108,10 @@ func (fs *ocfs) RestoreRecycleItem(ctx context.Context, key string) error {
 func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {
 	var root string
 	if fs.c.EnableHome {
-		root = fs.wrap(ctx, "/")
+		root = fs.toInternalPath(ctx, "/")
 	} else {
 		owner := fs.getOwner(leafPath)
-		root = fs.wrap(ctx, owner)
+		root = fs.toInternalPath(ctx, owner)
 	}
 	if !strings.HasPrefix(leafPath, root) {
 		err := errors.New("internal path outside root")
@@ -1690,7 +2143,7 @@ func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {
 			Int("i", i).
 			Interface("parts", parts).
 			Msg("propagating change")
-		if err := os.Chtimes(path.Join(root), fi.ModTime(), fi.ModTime()); err != nil {
+		if err := os.Chtimes(filepath.Join(root), fi.ModTime(), fi.ModTime()); err != nil {
 			appctx.GetLogger(ctx).Error().
 				Err(err).
 				Str("leafPath", leafPath).
@@ -1698,7 +2151,7 @@ func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {
 				Msg("could not propagate change")
 			return err
 		}
-		root = path.Join(root, parts[i])
+		root = filepath.Join(root, parts[i])
 	}
 	return nil
 }

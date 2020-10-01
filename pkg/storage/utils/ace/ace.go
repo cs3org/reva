@@ -29,11 +29,15 @@ import (
 )
 
 // ACE represents an Access Control Entry, mimicing NFSv4 ACLs
+// The difference is tht grant ACEs are not propagated down the tree when being set on a dir.
+// The tradeoff is that every read has to check the permissions of all path segments up to the root,
+// to determine the permissions. But reads can be scaled better than writes, so here we are.
+// See https://github.com/cs3org/reva/pull/1170#issuecomment-700526118 for more details.
 //
 // The following is taken from the nfs4_acl man page,
 // see https://linux.die.net/man/5/nfs4_acl:
 // the extended attributes will look like this
-// "user.oc.acl.<type>:<flags>:<principal>:<permissions>"
+// "user.oc.grant.<type>:<flags>:<principal>:<permissions>"
 // - *type* will be limited to A for now
 //     A: Allow - allow *principal* to perform actions requiring *permissions*
 //   In the future we can use:
@@ -41,7 +45,7 @@ import (
 //                permissions.
 //     L: aLarm - generate a system alarm at any attempted access by
 //                principal which requires permissions
-//   D for deny is not recommended
+//     D: for Deny is not recommended
 // - *flags* for now empty or g for group, no inheritance yet
 //   - d directory-inherit - newly-created subdirectories will inherit the
 //                           ACE.
@@ -73,15 +77,15 @@ import (
 //   - C write-ACL - write the file/directory NFSv4 ACL.
 //   - o write-owner - change ownership of the file/directory.
 //   - y synchronize - allow clients to use synchronous I/O with the server.
-// TODO implement OWNER@ as "user.oc.acl.A::OWNER@:rwaDxtTnNcCy"
+// TODO implement OWNER@ as "user.oc.grant.A::OWNER@:rwaDxtTnNcCy"
 // attribute names are limited to 255 chars by the linux kernel vfs, values to 64 kb
 // ext3 extended attributes must fit inside a single filesystem block ... 4096 bytes
-// that leaves us with "user.oc.acl.A::someonewithaslightlylongersubject@whateverissuer:rwaDxtTnNcCy" ~80 chars
+// that leaves us with "user.oc.grant.A::someonewithaslightlylongersubject@whateverissuer:rwaDxtTnNcCy" ~80 chars
 // 4096/80 = 51 shares ... with luck we might move the actual permissions to the value, saving ~15 chars
 // 4096/64 = 64 shares ... still meh ... we can do better by using ints instead of strings for principals
-//   "user.oc.acl.u:100000" is pretty neat, but we can still do better: base64 encode the int
-//   "user.oc.acl.u:6Jqg" but base64 always has at least 4 chars, maybe hex is better for smaller numbers
-//   well use 4 chars in addition to the ace: "user.oc.acl.u:////" = 65535 -> 18 chars
+//   "user.oc.grant.u:100000" is pretty neat, but we can still do better: base64 encode the int
+//   "user.oc.grant.u:6Jqg" but base64 always has at least 4 chars, maybe hex is better for smaller numbers
+//   well use 4 chars in addition to the ace: "user.oc.grant.u:////" = 65535 -> 18 chars
 // 4096/18 = 227 shares
 // still ... ext attrs for this are not infinite scale ...
 // so .. attach shares via fileid.
@@ -89,9 +93,9 @@ import (
 // <userhome>/metadata/<fileid>/shares/u/<issuer>/<subject>/A:fdi:rwaDxtTnNcCy permissions as filename to keep them in the stat cache?
 //
 // whatever ... 50 shares is good enough. If more is needed we can delegate to the metadata
-// if "user.oc.acl.M" is present look inside the metadata app.
+// if "user.oc.grant.M" is present look inside the metadata app.
 // - if we cannot set an ace we might get an io error.
-//   in that case convert all shares to metadata and try to set "user.oc.acl.m"
+//   in that case convert all shares to metadata and try to set "user.oc.grant.m"
 //
 // what about metadata like share creator, share time, expiry?
 // - creator is same as owner, but can be set
@@ -99,8 +103,8 @@ import (
 // - expiry is a unix timestamp
 // - can be put inside the value
 // - we need to reorder the fields:
-// "user.oc.acl.<u|g|o>:<principal>" -> "kv:t=<type>:f=<flags>:p=<permissions>:st=<share time>:c=<creator>:e=<expiry>:pw=<password>:n=<name>"
-// "user.oc.acl.<u|g|o>:<principal>" -> "v1:<type>:<flags>:<permissions>:<share time>:<creator>:<expiry>:<password>:<name>"
+// "user.oc.grant.<u|g|o>:<principal>" -> "kv:t=<type>:f=<flags>:p=<permissions>:st=<share time>:c=<creator>:e=<expiry>:pw=<password>:n=<name>"
+// "user.oc.grant.<u|g|o>:<principal>" -> "v1:<type>:<flags>:<permissions>:<share time>:<creator>:<expiry>:<password>:<name>"
 // or the first byte determines the format
 // 0x00 = key value
 // 0x01 = v1 ...
