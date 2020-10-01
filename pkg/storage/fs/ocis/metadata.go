@@ -39,6 +39,18 @@ func (fs *ocisfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 		err = errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
 		return err
 	}
+
+	ok, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
+		// TODO add explicit SetArbitraryMetadata grant to CS3 api
+		return rp.InitiateFileUpload
+	})
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !ok:
+		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
+	}
+
 	nodePath := n.lu.toInternalPath(n.ID)
 	for k, v := range md.Metadata {
 		// TODO set etag as temporary etag tmpEtagAttr
@@ -60,6 +72,18 @@ func (fs *ocisfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refe
 		err = errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
 		return err
 	}
+
+	ok, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
+		// TODO add explicit UnsetArbitraryMetadata grant to CS3 api
+		return rp.InitiateFileUpload
+	})
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !ok:
+		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
+	}
+
 	nodePath := n.lu.toInternalPath(n.ID)
 	for i := range keys {
 		attrName := metadataPrefix + keys[i]

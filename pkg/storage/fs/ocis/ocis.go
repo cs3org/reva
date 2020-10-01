@@ -56,8 +56,8 @@ const (
 	// updated when the file is renamed or moved
 	nameAttr string = ocisPrefix + "name"
 
-	// SharePrefix is the prefix for sharing related extended attributes
-	sharePrefix    string = ocisPrefix + "grant."
+	// grantPrefix is the prefix for sharing related extended attributes
+	grantPrefix    string = ocisPrefix + "grant."
 	metadataPrefix string = ocisPrefix + "md."
 	// TODO implement favorites metadata flag
 	//favPrefix   string = ocisPrefix + "fav."  // favorite flag, per user
@@ -156,6 +156,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		tp: tp,
 		lu: lu,
 		o:  o,
+		p:  &Permissions{lu: lu},
 	}, nil
 }
 
@@ -163,6 +164,7 @@ type ocisfs struct {
 	tp TreePersistence
 	lu *Lookup
 	o  *Options
+	p  *Permissions
 }
 
 func (fs *ocisfs) Shutdown(ctx context.Context) error {
@@ -193,7 +195,7 @@ func (fs *ocisfs) CreateHome(ctx context.Context) (err error) {
 	})
 
 	if fs.o.TreeTimeAccounting {
-		homePath := filepath.Join(fs.o.Root, "nodes", h.ID)
+		homePath := h.lu.toInternalPath(h.ID)
 		// mark the home node as the end of propagation
 		if err = xattr.Set(homePath, propagationAttr, []byte("1")); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("node", h).Msg("could not mark home as propagation root")
@@ -226,13 +228,26 @@ func (fs *ocisfs) CreateDir(ctx context.Context, fn string) (err error) {
 	if node, err = fs.lu.NodeFromPath(ctx, fn); err != nil {
 		return
 	}
+
 	if node.Exists {
 		return errtypes.AlreadyExists(fn)
 	}
+
+	pn, err := node.Parent()
+	ok, err := fs.p.HasPermission(ctx, pn, func(rp *provider.ResourcePermissions) bool {
+		return rp.CreateContainer
+	})
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !ok:
+		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+	}
+
 	err = fs.tp.CreateDir(ctx, node)
 
 	if fs.o.TreeTimeAccounting {
-		nodePath := filepath.Join(fs.o.Root, "nodes", node.ID)
+		nodePath := node.lu.toInternalPath(node.ID)
 		// mark the home node as the end of propagation
 		if err = xattr.Set(nodePath, propagationAttr, []byte("1")); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("node", node).Msg("could not mark node to propagate")
@@ -283,7 +298,7 @@ func (fs *ocisfs) CreateReference(ctx context.Context, p string, targetURI *url.
 		return
 	}
 
-	internal := filepath.Join(fs.o.Root, "nodes", n.ID)
+	internal := n.lu.toInternalPath(n.ID)
 	if err = xattr.Set(internal, referenceAttr, []byte(targetURI.String())); err != nil {
 		return errors.Wrapf(err, "ocisfs: error setting the target %s on the reference file %s", targetURI.String(), internal)
 	}
@@ -295,14 +310,30 @@ func (fs *ocisfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) 
 	if oldNode, err = fs.lu.NodeFromResource(ctx, oldRef); err != nil {
 		return
 	}
+
 	if !oldNode.Exists {
 		err = errtypes.NotFound(filepath.Join(oldNode.ParentID, oldNode.Name))
 		return
 	}
 
+	ok, err := fs.p.HasPermission(ctx, oldNode, func(rp *provider.ResourcePermissions) bool {
+		return rp.Move
+	})
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !ok:
+		return errtypes.PermissionDenied(oldNode.ID)
+	}
+
 	if newNode, err = fs.lu.NodeFromResource(ctx, newRef); err != nil {
 		return
 	}
+	if newNode.Exists {
+		err = errtypes.AlreadyExists(filepath.Join(newNode.ParentID, newNode.Name))
+		return
+	}
+
 	return fs.tp.Move(ctx, oldNode, newNode)
 }
 
@@ -311,21 +342,22 @@ func (fs *ocisfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 	if node, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
 		return
 	}
+
 	if !node.Exists {
 		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
 		return
 	}
-	// check permissions
-	/*if perm, err := fs.readPermissions(ctx, ip); err == nil {
-		if !perm.Stat {
-			return nil, errtypes.PermissionDenied("")
-		}
-	} else {
-		if isNotFound(err) {
-			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
-		}
-		return nil, errors.Wrap(err, "ocfs: error reading permissions")
-	}*/
+
+	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
+		return rp.Stat
+	})
+	switch {
+	case err != nil:
+		return nil, errtypes.InternalError(err.Error())
+	case !ok:
+		return nil, errtypes.PermissionDenied(node.ID)
+	}
+
 	return node.AsResourceInfo(ctx)
 }
 
@@ -334,10 +366,22 @@ func (fs *ocisfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 	if node, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
 		return
 	}
+
 	if !node.Exists {
 		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
 		return
 	}
+
+	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
+		return rp.ListContainer
+	})
+	switch {
+	case err != nil:
+		return nil, errtypes.InternalError(err.Error())
+	case !ok:
+		return nil, errtypes.PermissionDenied(node.ID)
+	}
+
 	var children []*Node
 	children, err = fs.tp.ListFolder(ctx, node)
 	if err != nil {
@@ -361,13 +405,24 @@ func (fs *ocisfs) Delete(ctx context.Context, ref *provider.Reference) (err erro
 		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
 		return
 	}
+
+	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
+		return rp.Delete
+	})
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !ok:
+		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+	}
+
 	return fs.tp.Delete(ctx, node)
 }
 
 // Data persistence
 
-func (fs *ocisfs) ContentPath(node *Node) string {
-	return filepath.Join(fs.o.Root, "nodes", node.ID)
+func (fs *ocisfs) ContentPath(n *Node) string {
+	return n.lu.toInternalPath(n.ID)
 }
 
 func (fs *ocisfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
@@ -379,6 +434,16 @@ func (fs *ocisfs) Download(ctx context.Context, ref *provider.Reference) (io.Rea
 	if !node.Exists {
 		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
 		return nil, err
+	}
+
+	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
+		return rp.InitiateFileDownload
+	})
+	switch {
+	case err != nil:
+		return nil, errtypes.InternalError(err.Error())
+	case !ok:
+		return nil, errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 
 	contentPath := fs.ContentPath(node)

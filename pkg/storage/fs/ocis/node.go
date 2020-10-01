@@ -33,6 +33,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/mime"
+	"github.com/cs3org/reva/pkg/storage/utils/ace"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 )
@@ -56,7 +57,14 @@ func (n *Node) writeMetadata(owner *userpb.UserId) (err error) {
 	if err = xattr.Set(nodePath, nameAttr, []byte(n.Name)); err != nil {
 		return errors.Wrap(err, "ocisfs: could not set name attribute")
 	}
-	if owner != nil {
+	if owner == nil {
+		if err = xattr.Set(nodePath, ownerIDAttr, []byte("")); err != nil {
+			return errors.Wrap(err, "ocisfs: could not set empty owner id attribute")
+		}
+		if err = xattr.Set(nodePath, ownerIDPAttr, []byte("")); err != nil {
+			return errors.Wrap(err, "ocisfs: could not set empty owner idp attribute")
+		}
+	} else {
 		if err = xattr.Set(nodePath, ownerIDAttr, []byte(owner.OpaqueId)); err != nil {
 			return errors.Wrap(err, "ocisfs: could not set owner id attribute")
 		}
@@ -100,9 +108,8 @@ func ReadNode(ctx context.Context, lu *Lookup, id string) (n *Node, err error) {
 	for parentID != root.ID {
 		log.Debug().Interface("node", n).Str("root.ID", root.ID).Msg("ReadNode()")
 		// walk to root to check node is not part of a deleted subtree
-		parentPath := lu.toInternalPath(parentID)
 
-		if attrBytes, err = xattr.Get(parentPath, parentidAttr); err == nil {
+		if attrBytes, err = xattr.Get(lu.toInternalPath(parentID), parentidAttr); err == nil {
 			parentID = string(attrBytes)
 			log.Debug().Interface("node", n).Str("root.ID", root.ID).Str("parentID", parentID).Msg("ReadNode() found parent")
 		} else {
@@ -185,7 +192,7 @@ func (n *Node) Owner() (id string, idp string, err error) {
 		return n.ownerID, n.ownerIDP, nil
 	}
 
-	nodePath := n.lu.toInternalPath(n.ParentID)
+	nodePath := n.lu.toInternalPath(n.ID)
 	// lookup parent id in extended attributes
 	var attrBytes []byte
 	// lookup name in extended attributes
@@ -321,8 +328,7 @@ func (n *Node) AsResourceInfo(ctx context.Context) (ri *provider.ResourceInfo, e
 
 // HasPropagation checks if the propagation attribute exists and is set to "1"
 func (n *Node) HasPropagation() (propagation bool) {
-	nodePath := n.lu.toInternalPath(n.ID)
-	if b, err := xattr.Get(nodePath, propagationAttr); err == nil {
+	if b, err := xattr.Get(n.lu.toInternalPath(n.ID), propagationAttr); err == nil {
 		return string(b) == "1"
 	}
 	return false
@@ -330,9 +336,8 @@ func (n *Node) HasPropagation() (propagation bool) {
 
 // GetTMTime reads the tmtime from the extended attributes
 func (n *Node) GetTMTime() (tmTime time.Time, err error) {
-	nodePath := n.lu.toInternalPath(n.ID)
 	var b []byte
-	if b, err = xattr.Get(nodePath, treeMTimeAttr); err != nil {
+	if b, err = xattr.Get(n.lu.toInternalPath(n.ID), treeMTimeAttr); err != nil {
 		return
 	}
 	return time.Parse(time.RFC3339Nano, string(b))
@@ -340,17 +345,44 @@ func (n *Node) GetTMTime() (tmTime time.Time, err error) {
 
 // SetTMTime writes the tmtime to the extended attributes
 func (n *Node) SetTMTime(t time.Time) (err error) {
-	nodePath := n.lu.toInternalPath(n.ID)
-	return xattr.Set(nodePath, treeMTimeAttr, []byte(t.UTC().Format(time.RFC3339Nano)))
+	return xattr.Set(n.lu.toInternalPath(n.ID), treeMTimeAttr, []byte(t.UTC().Format(time.RFC3339Nano)))
 }
 
 // UnsetTempEtag removes the temporary etag attribute
 func (n *Node) UnsetTempEtag() (err error) {
-	nodePath := n.lu.toInternalPath(n.ID)
-	if err = xattr.Remove(nodePath, tmpEtagAttr); err != nil {
+	if err = xattr.Remove(n.lu.toInternalPath(n.ID), tmpEtagAttr); err != nil {
 		if e, ok := err.(*xattr.Error); ok && e.Err.Error() == "no data available" {
 			return nil
 		}
 	}
 	return err
+}
+
+// ListGrantees lists the grantees of the current node
+// We don't want to wast time and memory by creating grantee objects.
+// The function will return a list of opaque strings that can be used to make a ReadGrant call
+func (n *Node) ListGrantees(ctx context.Context) (grantees []string, err error) {
+	var attrs []string
+	if attrs, err = xattr.List(n.lu.toInternalPath(n.ID)); err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("error listing attributes")
+		return nil, err
+	}
+	for i := range attrs {
+		if strings.HasPrefix(attrs[i], grantPrefix) {
+			grantees = append(grantees, attrs[i])
+		}
+	}
+	return
+}
+
+func (n *Node) ReadGrant(ctx context.Context, grantee string) (g *provider.Grant, err error) {
+	var b []byte
+	if b, err = xattr.Get(n.lu.toInternalPath(n.ID), grantee); err != nil {
+		return nil, err
+	}
+	var e *ace.ACE
+	if e, err = ace.Unmarshal(strings.TrimPrefix(grantee, grantPrefix), b); err != nil {
+		return nil, err
+	}
+	return e.Grant(), nil
 }

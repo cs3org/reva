@@ -42,10 +42,21 @@ func (fs *ocisfs) AddGrant(ctx context.Context, ref *provider.Reference, g *prov
 		return
 	}
 
+	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
+		// TODO remove AddGrant or UpdateGrant grant from CS3 api, redundant?
+		return rp.AddGrant || rp.UpdateGrant
+	})
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !ok:
+		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+	}
+
 	np := fs.lu.toInternalPath(node.ID)
 	e := ace.FromGrant(g)
 	principal, value := e.Marshal()
-	if err := xattr.Set(np, sharePrefix+principal, value); err != nil {
+	if err := xattr.Set(np, grantPrefix+principal, value); err != nil {
 		return err
 	}
 	return fs.tp.Propagate(ctx, node)
@@ -60,6 +71,17 @@ func (fs *ocisfs) ListGrants(ctx context.Context, ref *provider.Reference) (gran
 		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
 		return
 	}
+
+	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
+		return rp.ListGrants
+	})
+	switch {
+	case err != nil:
+		return nil, errtypes.InternalError(err.Error())
+	case !ok:
+		return nil, errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+	}
+
 	log := appctx.GetLogger(ctx)
 	np := fs.lu.toInternalPath(node.ID)
 	var attrs []string
@@ -90,11 +112,21 @@ func (fs *ocisfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *p
 		return
 	}
 
+	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
+		return rp.RemoveGrant
+	})
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !ok:
+		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+	}
+
 	var attr string
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
-		attr = sharePrefix + "g:" + g.Grantee.Id.OpaqueId
+		attr = grantPrefix + "g:" + g.Grantee.Id.OpaqueId
 	} else {
-		attr = sharePrefix + "u:" + g.Grantee.Id.OpaqueId
+		attr = grantPrefix + "u:" + g.Grantee.Id.OpaqueId
 	}
 
 	np := fs.lu.toInternalPath(node.ID)
@@ -114,7 +146,7 @@ func extractACEsFromAttrs(ctx context.Context, fsfn string, attrs []string) (ent
 	log := appctx.GetLogger(ctx)
 	entries = []*ace.ACE{}
 	for i := range attrs {
-		if strings.HasPrefix(attrs[i], sharePrefix) {
+		if strings.HasPrefix(attrs[i], grantPrefix) {
 			var value []byte
 			var err error
 			if value, err = xattr.Get(fsfn, attrs[i]); err != nil {
@@ -122,7 +154,7 @@ func extractACEsFromAttrs(ctx context.Context, fsfn string, attrs []string) (ent
 				continue
 			}
 			var e *ace.ACE
-			principal := attrs[i][len(sharePrefix):]
+			principal := attrs[i][len(grantPrefix):]
 			if e, err = ace.Unmarshal(principal, value); err != nil {
 				log.Error().Err(err).Str("principal", principal).Str("attr", attrs[i]).Msg("could unmarshal ace")
 				continue

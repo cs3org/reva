@@ -213,6 +213,7 @@ func (fs *ocisfs) PurgeRecycleItem(ctx context.Context, key string) (err error) 
 }
 
 func (fs *ocisfs) EmptyRecycle(ctx context.Context) error {
+	// TODO check if owner
 	return os.RemoveAll(fs.getRecycleRoot(ctx))
 }
 
