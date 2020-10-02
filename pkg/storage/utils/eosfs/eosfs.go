@@ -684,7 +684,7 @@ func (fs *eosfs) listWithNominalHome(ctx context.Context, p string) (finfos []*p
 			}
 		}
 
-		if finfo, err := fs.convertToResourceInfo(ctx, eosFileInfo); err != nil {
+		if finfo, err := fs.convertToResourceInfo(ctx, eosFileInfo); err == nil {
 			finfos = append(finfos, finfo)
 		}
 	}
@@ -742,7 +742,7 @@ func (fs *eosfs) listHome(ctx context.Context, home string) ([]*provider.Resourc
 				}
 			}
 
-			if finfo, err := fs.convertToResourceInfo(ctx, eosFileInfo); err != nil {
+			if finfo, err := fs.convertToResourceInfo(ctx, eosFileInfo); err == nil {
 				finfos = append(finfos, finfo)
 			}
 		}
@@ -778,7 +778,7 @@ func (fs *eosfs) listShareFolderRoot(ctx context.Context, p string) (finfos []*p
 			}
 		}
 
-		if finfo, err := fs.convertToFileReference(ctx, eosFileInfo); err != nil {
+		if finfo, err := fs.convertToFileReference(ctx, eosFileInfo); err == nil {
 			finfos = append(finfos, finfo)
 		}
 	}
@@ -1191,7 +1191,7 @@ func (fs *eosfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]
 	}
 	revisions := []*provider.FileVersion{}
 	for _, eosRev := range eosRevisions {
-		if rev, err := fs.convertToRevision(ctx, eosRev); err != nil {
+		if rev, err := fs.convertToRevision(ctx, eosRev); err == nil {
 			revisions = append(revisions, rev)
 		}
 	}
@@ -1291,7 +1291,7 @@ func (fs *eosfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, erro
 			}
 
 		}
-		if recycleItem, err := fs.convertToRecycleItem(ctx, entry); err != nil {
+		if recycleItem, err := fs.convertToRecycleItem(ctx, entry); err == nil {
 			recycleEntries = append(recycleEntries, recycleItem)
 		}
 	}
