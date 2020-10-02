@@ -155,7 +155,7 @@ func ReadNode(ctx context.Context, lu *Lookup, id string) (n *Node, err error) {
 	case isNoData(err):
 		return nil, errtypes.InternalError(err.Error())
 	case isNotFound(err):
-		return nil, errtypes.NotFound(n.ID)
+		return n, nil // swallow not found, the node defaults to exists = false
 	default:
 		return nil, errtypes.InternalError(err.Error())
 	}
@@ -182,7 +182,7 @@ func ReadNode(ctx context.Context, lu *Lookup, id string) (n *Node, err error) {
 			log.Debug().Interface("node", n).Str("root.ID", root.ID).Str("parentID", parentID).Msg("ReadNode() found parent")
 		} else {
 			log.Error().Err(err).Interface("node", n).Str("root.ID", root.ID).Msg("ReadNode()")
-			if os.IsNotExist(err) {
+			if isNotFound(err) {
 				return
 			}
 			return
