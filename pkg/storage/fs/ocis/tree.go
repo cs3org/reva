@@ -249,34 +249,47 @@ func (t *Tree) Delete(ctx context.Context, node *Node) (err error) {
 		return
 	}
 
-	// remove the entry from the parent dir
-
-	src := filepath.Join(t.lu.toInternalPath(node.ParentID), node.Name)
-	err = os.Remove(src)
-	if err != nil {
-		return
-	}
-
-	// rename the trashed node so it is not picked up when traversing up the tree
-	nodePath := t.lu.toInternalPath(node.ID)
-	deletionTime := time.Now().UTC().Format(time.RFC3339Nano)
-	trashPath := nodePath + ".T." + deletionTime
-	err = os.Rename(nodePath, trashPath)
-	if err != nil {
-		return
-	}
 	// set origin location in metadata
-	if err := xattr.Set(trashPath, trashOriginAttr, []byte(origin)); err != nil {
+	nodePath := t.lu.toInternalPath(node.ID)
+	if err := xattr.Set(nodePath, trashOriginAttr, []byte(origin)); err != nil {
 		return err
 	}
 
-	// make node appear in the owners (or root) trash
+	deletionTime := time.Now().UTC().Format(time.RFC3339Nano)
+
+	// first make node appear in the owners (or root) trash
 	// parent id and name are stored as extended attributes in the node itself
 	trashLink := filepath.Join(t.lu.Options.Root, "trash", ownerid, node.ID)
 	err = os.Symlink("../nodes/"+node.ID+".T."+deletionTime, trashLink)
 	if err != nil {
+		// To roll back changes
+		// TODO unset trashOriginAttr
 		return
 	}
+
+	// at this point we have a symlink pointing to a non existing destination, which is fine
+
+	// rename the trashed node so it is not picked up when traversing up the tree and matches the symlink
+	trashPath := nodePath + ".T." + deletionTime
+	err = os.Rename(nodePath, trashPath)
+	if err != nil {
+		// To roll back changes
+		// TODO remove symlink
+		// TODO unset trashOriginAttr
+		return
+	}
+
+	// finally remove the entry from the parent dir
+	src := filepath.Join(t.lu.toInternalPath(node.ParentID), node.Name)
+	err = os.Remove(src)
+	if err != nil {
+		// To roll back changes
+		// TODO revert the rename
+		// TODO remove symlink
+		// TODO unset trashOriginAttr
+		return
+	}
+
 	p, err := node.Parent()
 	if err != nil {
 		return

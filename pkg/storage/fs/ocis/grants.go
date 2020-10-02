@@ -43,7 +43,7 @@ func (fs *ocisfs) AddGrant(ctx context.Context, ref *provider.Reference, g *prov
 	}
 
 	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
-		// TODO remove AddGrant or UpdateGrant grant from CS3 api, redundant?
+		// TODO remove AddGrant or UpdateGrant grant from CS3 api, redundant? tracked in https://github.com/cs3org/cs3apis/issues/92
 		return rp.AddGrant || rp.UpdateGrant
 	})
 	switch {
@@ -138,6 +138,7 @@ func (fs *ocisfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *p
 }
 
 func (fs *ocisfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+	// TODO remove AddGrant or UpdateGrant grant from CS3 api, redundant? tracked in https://github.com/cs3org/cs3apis/issues/92
 	return fs.AddGrant(ctx, ref, g)
 }
 

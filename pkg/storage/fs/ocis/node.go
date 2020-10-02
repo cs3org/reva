@@ -32,10 +32,12 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage/utils/ace"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
+	"github.com/rs/zerolog/log"
 )
 
 // Node represents a node in the tree and provides methods to get a Parent or Child instance
@@ -71,6 +73,66 @@ func (n *Node) writeMetadata(owner *userpb.UserId) (err error) {
 		if err = xattr.Set(nodePath, ownerIDPAttr, []byte(owner.Idp)); err != nil {
 			return errors.Wrap(err, "ocisfs: could not set owner idp attribute")
 		}
+	}
+	return
+}
+
+// ReadRecycleItem reads a recycle item as a node
+// TODO refactor the returned params into Node properties? would make all the path transformations go away...
+func ReadRecycleItem(ctx context.Context, lu *Lookup, key string) (n *Node, trashItem string, deletedNodePath string, origin string, err error) {
+
+	if key == "" {
+		return nil, "", "", "", errtypes.InternalError("key is empty")
+	}
+
+	kp := strings.SplitN(key, ":", 2)
+	if len(kp) != 2 {
+		appctx.GetLogger(ctx).Error().Err(err).Str("key", key).Msg("malformed key")
+		return
+	}
+	trashItem = filepath.Join(lu.Options.Root, "trash", kp[0], kp[1])
+
+	var link string
+	link, err = os.Readlink(trashItem)
+	if err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Str("trashItem", trashItem).Msg("error reading trash link")
+		return
+	}
+	parts := strings.SplitN(filepath.Base(link), ".T.", 2)
+	if len(parts) != 2 {
+		appctx.GetLogger(ctx).Error().Err(err).Str("trashItem", trashItem).Interface("parts", parts).Msg("malformed trash link")
+		return
+	}
+
+	n = &Node{
+		lu: lu,
+		ID: parts[0],
+	}
+
+	deletedNodePath = lu.toInternalPath(filepath.Base(link))
+
+	// lookup parent id in extended attributes
+	var attrBytes []byte
+	if attrBytes, err = xattr.Get(deletedNodePath, parentidAttr); err == nil {
+		n.ParentID = string(attrBytes)
+	} else {
+		return
+	}
+	// lookup name in extended attributes
+	if attrBytes, err = xattr.Get(deletedNodePath, nameAttr); err == nil {
+		n.Name = string(attrBytes)
+	} else {
+		return
+	}
+
+	// get origin node
+	origin = "/"
+
+	// lookup origin path in extended attributes
+	if attrBytes, err = xattr.Get(deletedNodePath, trashOriginAttr); err == nil {
+		origin = string(attrBytes)
+	} else {
+		log.Error().Err(err).Str("trashItem", trashItem).Str("link", link).Str("deletedNodePath", deletedNodePath).Msg("could not read origin path, restoring to /")
 	}
 	return
 }
@@ -375,6 +437,7 @@ func (n *Node) ListGrantees(ctx context.Context) (grantees []string, err error) 
 	return
 }
 
+// ReadGrant reads a CS3 grant
 func (n *Node) ReadGrant(ctx context.Context, grantee string) (g *provider.Grant, err error) {
 	var b []byte
 	if b, err = xattr.Get(n.lu.toInternalPath(n.ID), grantee); err != nil {

@@ -41,7 +41,7 @@ func (fs *ocisfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 	}
 
 	ok, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
-		// TODO add explicit SetArbitraryMetadata grant to CS3 api
+		// TODO add explicit SetArbitraryMetadata grant to CS3 api, tracked in https://github.com/cs3org/cs3apis/issues/91
 		return rp.InitiateFileUpload
 	})
 	switch {
@@ -74,7 +74,7 @@ func (fs *ocisfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refe
 	}
 
 	ok, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
-		// TODO add explicit UnsetArbitraryMetadata grant to CS3 api
+		// TODO use  SetArbitraryMetadata grant to CS3 api, tracked in https://github.com/cs3org/cs3apis/issues/91
 		return rp.InitiateFileUpload
 	})
 	switch {

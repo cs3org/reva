@@ -46,16 +46,41 @@ var defaultFilePerm = os.FileMode(0664)
 
 func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
 
-	node, err := fs.lu.NodeFromResource(ctx, ref)
+	n, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
 		return err
 	}
 
-	if node.ID == "" {
-		node.ID = uuid.New().String()
+	// check permissions
+	var ok bool
+	if n.Exists {
+		// check permissions of file to be overwritten
+		ok, err = fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
+			return rp.InitiateFileUpload
+		})
+	} else {
+		// check permissions of parent
+		p, err := n.Parent()
+		if err != nil {
+			return errors.Wrap(err, "ocisfs: error getting parent "+n.ParentID)
+		}
+
+		ok, err = fs.p.HasPermission(ctx, p, func(rp *provider.ResourcePermissions) bool {
+			return rp.InitiateFileUpload
+		})
+	}
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !ok:
+		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
 	}
 
-	nodePath := fs.lu.toInternalPath(node.ID)
+	if n.ID == "" {
+		n.ID = uuid.New().String()
+	}
+
+	nodePath := fs.lu.toInternalPath(n.ID)
 
 	tmp, err := ioutil.TempFile(nodePath, "._reva_atomic_upload")
 	if err != nil {
@@ -69,6 +94,7 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 
 	// TODO move old content to version
 	//_ = os.RemoveAll(path.Join(nodePath, "content"))
+	appctx.GetLogger(ctx).Warn().Msg("TODO move old content to version")
 
 	err = os.Rename(tmp.Name(), nodePath)
 	if err != nil {
@@ -77,14 +103,14 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 
 	if fs.o.EnableHome {
 		if u, ok := user.ContextGetUser(ctx); ok {
-			err = node.writeMetadata(u.Id)
+			err = n.writeMetadata(u.Id)
 		} else {
 			log := appctx.GetLogger(ctx)
 			log.Error().Msg("home support enabled but no user in context")
 			err = errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
 		}
 	} else {
-		err = node.writeMetadata(nil)
+		err = n.writeMetadata(nil)
 	}
 	if err != nil {
 		return err
@@ -93,12 +119,12 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 	if fs.o.TreeTimeAccounting {
 		// mark the home node as the end of propagation q
 		if err = xattr.Set(nodePath, propagationAttr, []byte("1")); err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Interface("node", node).Msg("could not mark node to propagate")
+			appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not mark node to propagate")
 			return err
 		}
 	}
 
-	return fs.tp.Propagate(ctx, node)
+	return fs.tp.Propagate(ctx, n)
 
 }
 
@@ -110,12 +136,14 @@ func (fs *ocisfs) InitiateUpload(ctx context.Context, ref *provider.Reference, u
 
 	var relative string // the internal path of the file node
 
-	node, err := fs.lu.NodeFromResource(ctx, ref)
+	n, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
 		return "", err
 	}
 
-	relative, err = fs.lu.Path(ctx, node)
+	// permissions are checked in NewUpload below
+
+	relative, err = fs.lu.Path(ctx, n)
 	if err != nil {
 		return "", err
 	}
@@ -132,7 +160,7 @@ func (fs *ocisfs) InitiateUpload(ctx context.Context, ref *provider.Reference, u
 		info.MetaData["mtime"] = metadata["mtime"]
 	}
 
-	log.Debug().Interface("info", info).Interface("node", node).Interface("metadata", metadata).Msg("ocisfs: resolved filename")
+	log.Debug().Interface("info", info).Interface("node", n).Interface("metadata", metadata).Msg("ocisfs: resolved filename")
 
 	upload, err := fs.NewUpload(ctx, info)
 	if err != nil {
@@ -173,12 +201,37 @@ func (fs *ocisfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tus
 	}
 	info.MetaData["dir"] = filepath.Clean(info.MetaData["dir"])
 
-	node, err := fs.lu.NodeFromPath(ctx, filepath.Join(info.MetaData["dir"], info.MetaData["filename"]))
+	n, err := fs.lu.NodeFromPath(ctx, filepath.Join(info.MetaData["dir"], info.MetaData["filename"]))
 	if err != nil {
 		return nil, errors.Wrap(err, "ocisfs: error wrapping filename")
 	}
 
-	log.Debug().Interface("info", info).Interface("node", node).Msg("ocisfs: resolved filename")
+	log.Debug().Interface("info", info).Interface("node", n).Msg("ocisfs: resolved filename")
+
+	// check permissions
+	var ok bool
+	if n.Exists {
+		// check permissions of file to be overwritten
+		ok, err = fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
+			return rp.InitiateFileUpload
+		})
+	} else {
+		// check permissions of parent
+		p, err := n.Parent()
+		if err != nil {
+			return nil, errors.Wrap(err, "ocisfs: error getting parent "+n.ParentID)
+		}
+
+		ok, err = fs.p.HasPermission(ctx, p, func(rp *provider.ResourcePermissions) bool {
+			return rp.InitiateFileUpload
+		})
+	}
+	switch {
+	case err != nil:
+		return nil, errtypes.InternalError(err.Error())
+	case !ok:
+		return nil, errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
+	}
 
 	info.ID = uuid.New().String()
 
@@ -191,9 +244,9 @@ func (fs *ocisfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tus
 		"Type":    "OCISStore",
 		"BinPath": binPath,
 
-		"NodeId":       node.ID,
-		"NodeParentId": node.ParentID,
-		"NodeName":     node.Name,
+		"NodeId":       n.ID,
+		"NodeParentId": n.ParentID,
+		"NodeName":     n.Name,
 
 		"Idp":      usr.Id.Idp,
 		"UserId":   usr.Id.OpaqueId,

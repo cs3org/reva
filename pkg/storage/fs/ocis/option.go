@@ -35,7 +35,7 @@ func newOptions(opts ...Option) Options {
 	return opt
 }
 
-// Name provides a function to set the root option.
+// Root provides a function to set the root option.
 func Root(val string) Option {
 	return func(o *Options) {
 		o.Root = val
