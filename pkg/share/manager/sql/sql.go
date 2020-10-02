@@ -16,15 +16,15 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package json
+package sql
 
 import (
 	"context"
-	"encoding/json"
-	"io/ioutil"
-	"os"
+	"database/sql"
+	"fmt"
+	"path"
 	"reflect"
-	"sync"
+	"strconv"
 	"time"
 
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -32,7 +32,7 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/share"
-	"github.com/google/uuid"
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 
@@ -44,8 +44,36 @@ func init() {
 	registry.Register("json", New)
 }
 
+type config struct {
+	dbUsername string `mapstructure:"db_username"`
+	dbPassword string `mapstructure:"db_password"`
+	dbHost     string `mapstructure:"db_host"`
+	dbPort     string `mapstructure:"db_port"`
+	dbName     string `mapstructure:"db_name"`
+}
+
+type mgr struct {
+	c  *config
+	db *sql.DB
+}
+
+type dbShare struct {
+	ID           int
+	UIDOwner     string
+	UIDInitiator string
+	Prefix       string
+	ItemSource   string
+	ShareWith    string
+	Permissions  int
+	ShareType    int
+	STime        int
+	FileTarget   string
+	State        int
+}
+
 // New returns a new mgr.
 func New(m map[string]interface{}) (share.Manager, error) {
+
 	c, err := parseConfig(m)
 	if err != nil {
 		err = errors.Wrap(err, "error creating a new manager")
@@ -54,90 +82,18 @@ func New(m map[string]interface{}) (share.Manager, error) {
 
 	c.init()
 
-	// load or create file
-	model, err := loadOrCreate(c.File)
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", c.dbUsername, c.dbPassword, c.dbHost, c.dbPort, c.dbName))
 	if err != nil {
-		err = errors.Wrap(err, "error loading the file containing the shares")
 		return nil, err
 	}
 
 	return &mgr{
-		c:     c,
-		model: model,
+		c:  c,
+		db: db,
 	}, nil
 }
 
-func loadOrCreate(file string) (*shareModel, error) {
-	info, err := os.Stat(file)
-	if os.IsNotExist(err) || info.Size() == 0 {
-		if err := ioutil.WriteFile(file, []byte("{}"), 0700); err != nil {
-			err = errors.Wrap(err, "error opening/creating the file: "+file)
-			return nil, err
-		}
-	}
-
-	fd, err := os.OpenFile(file, os.O_CREATE, 0644)
-	if err != nil {
-		err = errors.Wrap(err, "error opening/creating the file: "+file)
-		return nil, err
-	}
-	defer fd.Close()
-
-	data, err := ioutil.ReadAll(fd)
-	if err != nil {
-		err = errors.Wrap(err, "error reading the data")
-		return nil, err
-	}
-
-	m := &shareModel{}
-	if err := json.Unmarshal(data, m); err != nil {
-		err = errors.Wrap(err, "error decoding data to json")
-		return nil, err
-	}
-
-	if m.State == nil {
-		m.State = map[string]map[string]collaboration.ShareState{}
-	}
-
-	m.file = file
-	return m, nil
-}
-
-type shareModel struct {
-	file   string
-	State  map[string]map[string]collaboration.ShareState `json:"state"` // map[username]map[share_id]boolean
-	Shares []*collaboration.Share                         `json:"shares"`
-}
-
-func (m *shareModel) Save() error {
-	data, err := json.Marshal(m)
-	if err != nil {
-		err = errors.Wrap(err, "error encoding to json")
-		return err
-	}
-
-	if err := ioutil.WriteFile(m.file, data, 0644); err != nil {
-		err = errors.Wrap(err, "error writing to file: "+m.file)
-		return err
-	}
-
-	return nil
-}
-
-type mgr struct {
-	c          *config
-	sync.Mutex // concurrent access to the file
-	model      *shareModel
-}
-
-type config struct {
-	File string `mapstructure:"file"`
-}
-
 func (c *config) init() {
-	if c.File == "" {
-		c.File = "/var/tmp/reva/shares.json"
-	}
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -148,18 +104,8 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-func genID() string {
-	return uuid.New().String()
-}
-
 func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {
-	id := genID()
 	user := user.ContextMustGetUser(ctx)
-	now := time.Now().UnixNano()
-	ts := &typespb.Timestamp{
-		Seconds: uint64(now / 1000000000),
-		Nanos:   uint32(now % 1000000000),
-	}
 
 	// do not allow share to myself or the owner if share is for a user
 	// TODO(labkode): should not this be caught already at the gw level?
@@ -182,9 +128,41 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabora
 		return nil, errtypes.AlreadyExists(key.String())
 	}
 
-	s := &collaboration.Share{
+	now := time.Now().Unix()
+	ts := &typespb.Timestamp{
+		Seconds: uint64(now),
+	}
+
+	shareType := granteeTypeToInt(g.Grantee.Type)
+	itemType := resourceTypeToItem(md.Type)
+	targetPath := path.Join("/", path.Base(md.Path))
+	permissions := sharePermToInt(g.Permissions.Permissions)
+	prefix := md.Id.StorageId
+	itemSource := md.Id.OpaqueId
+	fileSource, err := strconv.ParseUint(itemSource, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	stmtString := "insert into oc_share set share_type=?,uid_owner=?,uid_initiator=?,item_type=?,fileid_prefix=?,item_source=?,file_source=?,permissions=?,stime=?,share_with=?,file_target=?"
+	stmtValues := []interface{}{shareType, formatUserID(md.Owner), formatUserID(user.Id), itemType, prefix, itemSource, fileSource, permissions, now, formatUserID(g.Grantee.Id), targetPath}
+
+	stmt, err := m.db.Prepare(stmtString)
+	if err != nil {
+		return nil, err
+	}
+	result, err := stmt.Exec(stmtValues...)
+	if err != nil {
+		return nil, err
+	}
+	lastId, err := result.LastInsertId()
+	if err != nil {
+		return nil, err
+	}
+
+	return &collaboration.Share{
 		Id: &collaboration.ShareId{
-			OpaqueId: id,
+			OpaqueId: strconv.FormatInt(lastId, 10),
 		},
 		ResourceId:  md.Id,
 		Permissions: g.Permissions,
@@ -193,43 +171,36 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabora
 		Creator:     user.Id,
 		Ctime:       ts,
 		Mtime:       ts,
-	}
-
-	m.Lock()
-	defer m.Unlock()
-
-	m.model.Shares = append(m.model.Shares, s)
-	if err := m.model.Save(); err != nil {
-		err = errors.Wrap(err, "error saving model")
-		return nil, err
-	}
-
-	return s, nil
+	}, nil
 }
 
 func (m *mgr) getByID(ctx context.Context, id *collaboration.ShareId) (*collaboration.Share, error) {
-	m.Lock()
-	defer m.Unlock()
-	for _, s := range m.model.Shares {
-		if s.GetId().OpaqueId == id.OpaqueId {
-			return s, nil
-		}
+	intID, err := strconv.ParseInt(id.OpaqueId, 10, 64)
+	if err != nil {
+		return nil, err
 	}
-	return nil, errtypes.NotFound(id.String())
+
+	s := dbShare{ID: int(intID)}
+	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, stime, permissions, share_type FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND id=?"
+	if err := m.db.QueryRow(query, id.OpaqueId).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.STime, &s.Permissions, &s.ShareType); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, errtypes.NotFound(id.OpaqueId)
+		}
+		return nil, err
+	}
+	return convertToCS3Share(s), nil
 }
 
 func (m *mgr) getByKey(ctx context.Context, key *collaboration.ShareKey) (*collaboration.Share, error) {
-	m.Lock()
-	defer m.Unlock()
-	for _, s := range m.model.Shares {
-		if ((key.Owner.Idp == s.Owner.Idp && key.Owner.OpaqueId == s.Owner.OpaqueId) ||
-			(key.Owner.Idp == s.Creator.Idp && key.Owner.OpaqueId == s.Creator.OpaqueId)) &&
-			key.ResourceId.StorageId == s.ResourceId.StorageId && key.ResourceId.OpaqueId == s.ResourceId.OpaqueId &&
-			key.Grantee.Type == s.Grantee.Type && key.Grantee.Id.Idp == s.Grantee.Id.Idp && key.Grantee.Id.OpaqueId == s.Grantee.Id.OpaqueId {
-			return s, nil
+	s := dbShare{}
+	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, id, stime, permissions, share_type FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND (uid_owner=? or uid_initiator=?) AND fileid_prefix=? AND item_source=? AND share_type=? AND share_with=?"
+	if err := m.db.QueryRow(query, formatUserID(key.Owner), formatUserID(key.Owner), key.ResourceId.StorageId, key.ResourceId.OpaqueId, granteeTypeToInt(key.Grantee.Type), formatUserID(key.Grantee.Id)).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ID, &s.STime, &s.Permissions, &s.ShareType); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, errtypes.NotFound(key.String())
 		}
+		return nil, err
 	}
-	return nil, errtypes.NotFound(key.String())
+	return convertToCS3Share(s), nil
 }
 
 func (m *mgr) get(ctx context.Context, ref *collaboration.ShareReference) (s *collaboration.Share, err error) {
@@ -267,24 +238,42 @@ func (m *mgr) GetShare(ctx context.Context, ref *collaboration.ShareReference) (
 }
 
 func (m *mgr) Unshare(ctx context.Context, ref *collaboration.ShareReference) error {
-	m.Lock()
-	defer m.Unlock()
 	user := user.ContextMustGetUser(ctx)
-	for i, s := range m.model.Shares {
-		if equal(ref, s) {
-			if (user.Id.Idp == s.Owner.Idp && user.Id.OpaqueId == s.Owner.OpaqueId) ||
-				(user.Id.Idp == s.Creator.Idp && user.Id.OpaqueId == s.Creator.OpaqueId) {
-				m.model.Shares[len(m.model.Shares)-1], m.model.Shares[i] = m.model.Shares[i], m.model.Shares[len(m.model.Shares)-1]
-				m.model.Shares = m.model.Shares[:len(m.model.Shares)-1]
-				if err := m.model.Save(); err != nil {
-					err = errors.Wrap(err, "error saving model")
-					return err
-				}
-				return nil
-			}
+
+	var query string
+	params := []interface{}{}
+	switch {
+	case ref.GetId() != nil:
+		query = "delete from oc_share where id=? AND (uid_owner=? or uid_initiator=?)"
+		params = append(params, ref.GetId().OpaqueId, formatUserID(user.Id), formatUserID(user.Id))
+	case ref.GetKey() != nil:
+		key := ref.GetKey()
+		if key.Owner != user.Id {
+			return errtypes.PermissionDenied(ref.String())
 		}
+		query = "delete from oc_share where (uid_owner=? or uid_initiator=?) AND fileid_prefix=? AND item_source=? AND share_type=? AND share_with=?"
+		params = append(params, formatUserID(key.Owner), formatUserID(key.Owner), key.ResourceId.StorageId, key.ResourceId.OpaqueId, granteeTypeToInt(key.Grantee.Type), formatUserID(key.Grantee.Id))
+	default:
+		return errtypes.NotFound(ref.String())
 	}
-	return errtypes.NotFound(ref.String())
+
+	stmt, err := m.db.Prepare(query)
+	if err != nil {
+		return err
+	}
+	res, err := stmt.Exec(params...)
+	if err != nil {
+		return err
+	}
+
+	rowCnt, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowCnt == 0 {
+		return errtypes.NotFound(ref.String())
+	}
+	return nil
 }
 
 // TODO(labkode): this is fragile, the check should be done on primitive types.
@@ -303,56 +292,72 @@ func equal(ref *collaboration.ShareReference, s *collaboration.Share) bool {
 }
 
 func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions) (*collaboration.Share, error) {
-	m.Lock()
-	defer m.Unlock()
 	user := user.ContextMustGetUser(ctx)
-	for i, s := range m.model.Shares {
-		if equal(ref, s) {
-			if (user.Id.Idp == s.Owner.Idp && user.Id.OpaqueId == s.Owner.OpaqueId) ||
-				(user.Id.Idp == s.Creator.Idp && user.Id.OpaqueId == s.Creator.OpaqueId) {
-				now := time.Now().UnixNano()
-				m.model.Shares[i].Permissions = p
-				m.model.Shares[i].Mtime = &typespb.Timestamp{
-					Seconds: uint64(now / 1000000000),
-					Nanos:   uint32(now % 1000000000),
-				}
-				if err := m.model.Save(); err != nil {
-					err = errors.Wrap(err, "error saving model")
-					return nil, err
-				}
-				return m.model.Shares[i], nil
-			}
+
+	var query string
+	params := []interface{}{}
+	switch {
+	case ref.GetId() != nil:
+		query = "update oc_share set permissions=?,stime=? where id=? AND (uid_owner=? or uid_initiator=?)"
+		params = append(params, ref.GetId().OpaqueId, formatUserID(user.Id), formatUserID(user.Id))
+	case ref.GetKey() != nil:
+		key := ref.GetKey()
+		if key.Owner != user.Id {
+			return nil, errtypes.PermissionDenied(ref.String())
 		}
+		query = "update oc_share set permissions=?,stime=? where (uid_owner=? or uid_initiator=?) AND fileid_prefix=? AND item_source=? AND share_type=? AND share_with=?"
+		params = append(params, formatUserID(key.Owner), formatUserID(key.Owner), key.ResourceId.StorageId, key.ResourceId.OpaqueId, granteeTypeToInt(key.Grantee.Type), formatUserID(key.Grantee.Id))
+	default:
+		return nil, errtypes.NotFound(ref.String())
 	}
-	return nil, errtypes.NotFound(ref.String())
+
+	stmt, err := m.db.Prepare(query)
+	if err != nil {
+		return nil, err
+	}
+	if _, err = stmt.Exec(params...); err != nil {
+		return nil, err
+	}
+
+	return m.GetShare(ctx, ref)
 }
 
 func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.ListSharesRequest_Filter) ([]*collaboration.Share, error) {
-	var ss []*collaboration.Share
-	m.Lock()
-	defer m.Unlock()
-	user := user.ContextMustGetUser(ctx)
-	for _, s := range m.model.Shares {
-		// TODO(labkode): add check for creator.
-		if (user.Id.Idp == s.Owner.Idp && user.Id.OpaqueId == s.Owner.OpaqueId) ||
-			(user.Id.Idp == s.Creator.Idp && user.Id.OpaqueId == s.Creator.OpaqueId) {
-			// no filter we return earlier
-			if len(filters) == 0 {
-				ss = append(ss, s)
-			} else {
-				// check filters
-				// TODO(labkode): add the rest of filters.
-				for _, f := range filters {
-					if f.Type == collaboration.ListSharesRequest_Filter_TYPE_RESOURCE_ID {
-						if s.ResourceId.StorageId == f.GetResourceId().StorageId && s.ResourceId.OpaqueId == f.GetResourceId().OpaqueId {
-							ss = append(ss, s)
-						}
-					}
-				}
+	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, id, stime, permissions, share_type FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND (uid_owner=? or uid_initiator=?) AND (share_type=? OR share_type=?)"
+	var filterQuery string
+	params := []interface{}{formatUserID(user.ContextMustGetUser(ctx).Id), 0, 1}
+	for i, f := range filters {
+		if f.Type == collaboration.ListSharesRequest_Filter_TYPE_RESOURCE_ID {
+			filterQuery += "(fileid_prefix=? AND item_source=?)"
+			if i != len(filters)-1 {
+				filterQuery += " OR "
 			}
+			params = append(params, f.GetResourceId().StorageId, f.GetResourceId().OpaqueId)
 		}
 	}
-	return ss, nil
+	if filterQuery != "" {
+		query = fmt.Sprintf("%s AND (%s)", query, filterQuery)
+	}
+
+	rows, err := m.db.Query(query, params...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var s dbShare
+	shares := []*collaboration.Share{}
+	for rows.Next() {
+		if err := rows.Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ID, &s.STime, &s.Permissions, &s.ShareType); err != nil {
+			continue
+		}
+		shares = append(shares, convertToCS3Share(s))
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return shares, nil
 }
 
 // we list the shares that are targeted to the user in context or to the user groups.
