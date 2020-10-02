@@ -676,7 +676,9 @@ func getFileFromVersionFolder(p string) string {
 
 func parseRecycleList(raw string) ([]*DeletedEntry, error) {
 	entries := []*DeletedEntry{}
-	rawLines := strings.Split(raw, "\n")
+	rawLines := strings.FieldsFunc(raw, func(c rune) bool {
+		return c == '\n'
+	})
 	for _, rl := range rawLines {
 		if rl == "" {
 			continue
@@ -694,7 +696,9 @@ func parseRecycleList(raw string) ([]*DeletedEntry, error) {
 // recycle=ls recycle-bin=/eos/backup/proc/recycle/ uid=gonzalhu gid=it size=0 deletion-time=1510823151 type=recursive-dir keylength.restore-path=45 restore-path=/eos/scratch/user/g/gonzalhu/.sys.v#.app.ico/ restore-key=0000000000a35100
 // recycle=ls recycle-bin=/eos/backup/proc/recycle/ uid=gonzalhu gid=it size=381038 deletion-time=1510823151 type=file keylength.restore-path=36 restore-path=/eos/scratch/user/g/gonzalhu/app.ico restore-key=000000002544fdb3
 func parseRecycleEntry(raw string) (*DeletedEntry, error) {
-	partsBySpace := strings.Split(raw, " ")
+	partsBySpace := strings.FieldsFunc(raw, func(c rune) bool {
+		return c == ' '
+	})
 	restoreKeyPair, partsBySpace := partsBySpace[len(partsBySpace)-1], partsBySpace[:len(partsBySpace)-1]
 	restorePathPair := strings.Join(partsBySpace[8:], " ")
 
@@ -739,7 +743,9 @@ func getMap(partsBySpace []string) map[string]string {
 
 func (c *Client) parseFind(dirPath, raw string) ([]*FileInfo, error) {
 	finfos := []*FileInfo{}
-	rawLines := strings.Split(raw, "\n")
+	rawLines := strings.FieldsFunc(raw, func(c rune) bool {
+		return c == '\n'
+	})
 	for _, rl := range rawLines {
 		if rl == "" {
 			continue
@@ -760,12 +766,16 @@ func (c *Client) parseFind(dirPath, raw string) ([]*FileInfo, error) {
 }
 
 func (c Client) parseQuotaLine(line string) map[string]string {
-	partsBySpace := strings.Split(line, " ")
+	partsBySpace := strings.FieldsFunc(line, func(c rune) bool {
+		return c == ' '
+	})
 	m := getMap(partsBySpace)
 	return m
 }
 func (c *Client) parseQuota(path, raw string) (*QuotaInfo, error) {
-	rawLines := strings.Split(raw, "\n")
+	rawLines := strings.FieldsFunc(raw, func(c rune) bool {
+		return c == '\n'
+	})
 	for _, rl := range rawLines {
 		if rl == "" {
 			continue
@@ -817,7 +827,9 @@ func (c *Client) parseFileInfo(raw string) (*FileInfo, error) {
 	kv["file"] = strings.TrimSuffix(name, "/")
 
 	line = line[length+1:]
-	partsBySpace := strings.Split(line, " ") // we have [size=45 container=3 ...}
+	partsBySpace := strings.FieldsFunc(line, func(c rune) bool { // we have [size=45 container=3 ...}
+		return c == ' '
+	})
 	var previousXAttr = ""
 	for _, p := range partsBySpace {
 		partsByEqual := strings.Split(p, "=") // we have kv pairs like [size 14]
@@ -900,15 +912,26 @@ func (c *Client) mapToFileInfo(kv map[string]string) (*FileInfo, error) {
 		}
 	}
 
-	// mtime is split by a dot, we only take the first part, do we need subsec precision?
-	mtime := strings.Split(kv["mtime"], ".")
-	mtimesec, err := strconv.ParseUint(mtime[0], 10, 64)
-	if err != nil {
-		return nil, err
+	// look for the stime first as mtime is not updated for parent dirs; if that isn't set, we use mtime
+	var mtimesec, mtimenanos uint64
+	var mtimeSet bool
+	if val, ok := kv["stime"]; ok && val != "" {
+		stimeSplit := strings.Split(val, ".")
+		if mtimesec, err = strconv.ParseUint(stimeSplit[0], 10, 64); err == nil {
+			mtimeSet = true
+		}
+		if mtimenanos, err = strconv.ParseUint(stimeSplit[1], 10, 32); err != nil {
+			mtimeSet = false
+		}
 	}
-	mtimenanos, err := strconv.ParseUint(mtime[1], 10, 32)
-	if err != nil {
-		return nil, err
+	if !mtimeSet {
+		mtimeSplit := strings.Split(kv["mtime"], ".")
+		if mtimesec, err = strconv.ParseUint(mtimeSplit[0], 10, 64); err != nil {
+			return nil, err
+		}
+		if mtimenanos, err = strconv.ParseUint(mtimeSplit[1], 10, 32); err != nil {
+			return nil, err
+		}
 	}
 
 	isDir := false

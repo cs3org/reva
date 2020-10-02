@@ -1626,12 +1626,10 @@ func (s *svc) listSharesFolder(ctx context.Context) (*provider.ListContainerResp
 
 	for i, ref := range lcr.Infos {
 		info, protocol, err := s.checkRef(ctx, ref)
-		if err != nil {
-			if _, ok := err.(errtypes.IsNotFound); ok {
-				return &provider.ListContainerResponse{
-					Status: status.NewNotFound(ctx, "gateway: reference not found:"+ref.Target),
-				}, nil
-			}
+		if _, ok := err.(errtypes.IsNotFound); ok {
+			// this might arise when the shared resource has been moved to the recycle bin
+			continue
+		} else if err != nil {
 			return &provider.ListContainerResponse{
 				Status: status.NewInternal(ctx, err, "gateway: error resolving reference:"+ref.Path),
 			}, nil
@@ -1640,8 +1638,8 @@ func (s *svc) listSharesFolder(ctx context.Context) (*provider.ListContainerResp
 		if protocol == "webdav" {
 			info, err = s.webdavRefStat(ctx, ref.Target)
 			if err != nil {
-				// Might be the case that the webdav token has expired. In that case, use the reference's info
-				info = ref
+				// Might be the case that the webdav token has expired
+				continue
 			}
 		}
 

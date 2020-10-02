@@ -257,13 +257,19 @@ func (fs *eosfs) wrap(ctx context.Context, fn string) (internal string) {
 	return
 }
 
-func (fs *eosfs) unwrap(ctx context.Context, internal string) (external string) {
+func (fs *eosfs) unwrap(ctx context.Context, internal string) (string, error) {
 	log := appctx.GetLogger(ctx)
 	layout := fs.getLayout(ctx)
-	ns := fs.getNsMatch(internal, []string{fs.conf.Namespace, fs.conf.ShadowNamespace})
-	external = fs.unwrapInternal(ctx, ns, internal, layout)
+	ns, err := fs.getNsMatch(internal, []string{fs.conf.Namespace, fs.conf.ShadowNamespace})
+	if err != nil {
+		return "", err
+	}
+	external, err := fs.unwrapInternal(ctx, ns, internal, layout)
+	if err != nil {
+		return "", err
+	}
 	log.Debug().Msgf("eos: unwrap: internal=%s external=%s", internal, external)
-	return
+	return external, nil
 }
 
 func (fs *eosfs) getLayout(ctx context.Context) (layout string) {
@@ -277,7 +283,7 @@ func (fs *eosfs) getLayout(ctx context.Context) (layout string) {
 	return
 }
 
-func (fs *eosfs) getNsMatch(internal string, nss []string) string {
+func (fs *eosfs) getNsMatch(internal string, nss []string) (string, error) {
 	var match string
 
 	for _, ns := range nss {
@@ -287,21 +293,21 @@ func (fs *eosfs) getNsMatch(internal string, nss []string) string {
 	}
 
 	if match == "" {
-		panic(fmt.Sprintf("eos: path is outside namespaces: path=%s namespaces=%+v", internal, nss))
+		return "", errtypes.NotFound(fmt.Sprintf("eos: path is outside namespaces: path=%s namespaces=%+v", internal, nss))
 	}
 
-	return match
+	return match, nil
 }
 
-func (fs *eosfs) unwrapInternal(ctx context.Context, ns, np, layout string) (external string) {
+func (fs *eosfs) unwrapInternal(ctx context.Context, ns, np, layout string) (string, error) {
 	log := appctx.GetLogger(ctx)
 	trim := path.Join(ns, layout)
 
 	if !strings.HasPrefix(np, trim) {
-		panic("eos: resource is outside the directory of the logged-in user: internal=" + np + " trim=" + trim + " namespace=" + ns)
+		return "", errtypes.NotFound(fmt.Sprintf("eos: path is outside the directory of the logged-in user: internal=%s trim=%s namespace=%+v", np, trim, ns))
 	}
 
-	external = strings.TrimPrefix(np, trim)
+	external := strings.TrimPrefix(np, trim)
 
 	if external == "" {
 		external = "/"
@@ -309,7 +315,7 @@ func (fs *eosfs) unwrapInternal(ctx context.Context, ns, np, layout string) (ext
 
 	log.Debug().Msgf("eos: unwrapInternal: trim=%s external=%s ns=%s np=%s", trim, external, ns, np)
 
-	return
+	return external, nil
 }
 
 // resolve takes in a request path or request id and returns the unwrappedNominal path.
@@ -347,7 +353,7 @@ func (fs *eosfs) getPath(ctx context.Context, u *userpb.User, id *provider.Resou
 		return "", errors.Wrap(err, "eos: error getting file info by inode")
 	}
 
-	return fs.unwrap(ctx, eosFileInfo.File), nil
+	return fs.unwrap(ctx, eosFileInfo.File)
 }
 
 func (fs *eosfs) isShareFolder(ctx context.Context, p string) bool {
@@ -387,7 +393,7 @@ func (fs *eosfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (stri
 		return "", errors.Wrap(err, "eos: error getting file info by inode")
 	}
 
-	return fs.unwrap(ctx, eosFileInfo.File), nil
+	return fs.unwrap(ctx, eosFileInfo.File)
 }
 
 func (fs *eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
@@ -594,8 +600,7 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		return nil, err
 	}
 
-	fi := fs.convertToResourceInfo(ctx, eosFileInfo)
-	return fi, nil
+	return fs.convertToResourceInfo(ctx, eosFileInfo)
 }
 
 func (fs *eosfs) getMDShareFolder(ctx context.Context, p string, mdKeys []string) (*provider.ResourceInfo, error) {
@@ -618,9 +623,9 @@ func (fs *eosfs) getMDShareFolder(ctx context.Context, p string, mdKeys []string
 	// TODO(labkode): diff between root (dir) and children (ref)
 
 	if fs.isShareFolderRoot(ctx, p) {
-		return fs.convertToResourceInfo(ctx, eosFileInfo), nil
+		return fs.convertToResourceInfo(ctx, eosFileInfo)
 	}
-	return fs.convertToFileReference(ctx, eosFileInfo), nil
+	return fs.convertToFileReference(ctx, eosFileInfo)
 }
 
 func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
@@ -679,7 +684,9 @@ func (fs *eosfs) listWithNominalHome(ctx context.Context, p string) (finfos []*p
 			}
 		}
 
-		finfos = append(finfos, fs.convertToResourceInfo(ctx, eosFileInfo))
+		if finfo, err := fs.convertToResourceInfo(ctx, eosFileInfo); err != nil {
+			finfos = append(finfos, finfo)
+		}
 	}
 
 	return finfos, nil
@@ -733,9 +740,11 @@ func (fs *eosfs) listHome(ctx context.Context, home string) ([]*provider.Resourc
 				if hiddenReg.MatchString(base) {
 					continue
 				}
-
 			}
-			finfos = append(finfos, fs.convertToResourceInfo(ctx, eosFileInfo))
+
+			if finfo, err := fs.convertToResourceInfo(ctx, eosFileInfo); err != nil {
+				finfos = append(finfos, finfo)
+			}
 		}
 
 	}
@@ -769,8 +778,9 @@ func (fs *eosfs) listShareFolderRoot(ctx context.Context, p string) (finfos []*p
 			}
 		}
 
-		finfo := fs.convertToFileReference(ctx, eosFileInfo)
-		finfos = append(finfos, finfo)
+		if finfo, err := fs.convertToFileReference(ctx, eosFileInfo); err != nil {
+			finfos = append(finfos, finfo)
+		}
 	}
 
 	return finfos, nil
@@ -1181,8 +1191,9 @@ func (fs *eosfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]
 	}
 	revisions := []*provider.FileVersion{}
 	for _, eosRev := range eosRevisions {
-		rev := fs.convertToRevision(ctx, eosRev)
-		revisions = append(revisions, rev)
+		if rev, err := fs.convertToRevision(ctx, eosRev); err != nil {
+			revisions = append(revisions, rev)
+		}
 	}
 	return revisions, nil
 }
@@ -1280,8 +1291,9 @@ func (fs *eosfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, erro
 			}
 
 		}
-		recycleItem := fs.convertToRecycleItem(ctx, entry)
-		recycleEntries = append(recycleEntries, recycleItem)
+		if recycleItem, err := fs.convertToRecycleItem(ctx, entry); err != nil {
+			recycleEntries = append(recycleEntries, recycleItem)
+		}
 	}
 	return recycleEntries, nil
 }
@@ -1300,8 +1312,11 @@ func (fs *eosfs) RestoreRecycleItem(ctx context.Context, key string) error {
 	return fs.c.RestoreDeletedEntry(ctx, uid, gid, key)
 }
 
-func (fs *eosfs) convertToRecycleItem(ctx context.Context, eosDeletedItem *eosclient.DeletedEntry) *provider.RecycleItem {
-	path := fs.unwrap(ctx, eosDeletedItem.RestorePath)
+func (fs *eosfs) convertToRecycleItem(ctx context.Context, eosDeletedItem *eosclient.DeletedEntry) (*provider.RecycleItem, error) {
+	path, err := fs.unwrap(ctx, eosDeletedItem.RestorePath)
+	if err != nil {
+		return nil, err
+	}
 	recycleItem := &provider.RecycleItem{
 		Path:         path,
 		Key:          eosDeletedItem.RestoreKey,
@@ -1314,36 +1329,45 @@ func (fs *eosfs) convertToRecycleItem(ctx context.Context, eosDeletedItem *eoscl
 		// TODO(labkode): if eos returns more types oin the future we need to map them.
 		recycleItem.Type = provider.ResourceType_RESOURCE_TYPE_FILE
 	}
-	return recycleItem
+	return recycleItem, nil
 }
 
-func (fs *eosfs) convertToRevision(ctx context.Context, eosFileInfo *eosclient.FileInfo) *provider.FileVersion {
-	md := fs.convertToResourceInfo(ctx, eosFileInfo)
+func (fs *eosfs) convertToRevision(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.FileVersion, error) {
+	md, err := fs.convertToResourceInfo(ctx, eosFileInfo)
+	if err != nil {
+		return nil, err
+	}
 	revision := &provider.FileVersion{
 		Key:   path.Base(md.Path),
 		Size:  md.Size,
 		Mtime: md.Mtime.Seconds, // TODO do we need nanos here?
 	}
-	return revision
+	return revision, nil
 }
 
-func (fs *eosfs) convertToResourceInfo(ctx context.Context, eosFileInfo *eosclient.FileInfo) *provider.ResourceInfo {
+func (fs *eosfs) convertToResourceInfo(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.ResourceInfo, error) {
 	return fs.convert(ctx, eosFileInfo)
 }
 
-func (fs *eosfs) convertToFileReference(ctx context.Context, eosFileInfo *eosclient.FileInfo) *provider.ResourceInfo {
-	info := fs.convert(ctx, eosFileInfo)
+func (fs *eosfs) convertToFileReference(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.ResourceInfo, error) {
+	info, err := fs.convert(ctx, eosFileInfo)
+	if err != nil {
+		return nil, err
+	}
 	info.Type = provider.ResourceType_RESOURCE_TYPE_REFERENCE
 	val, ok := eosFileInfo.Attrs["user.reva.target"]
 	if !ok || val == "" {
-		panic("eos: reference does not contain target: target=" + val + " file=" + eosFileInfo.File)
+		return nil, errtypes.InternalError("eos: reference does not contain target: target=" + val + " file=" + eosFileInfo.File)
 	}
 	info.Target = val
-	return info
+	return info, nil
 }
 
-func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) *provider.ResourceInfo {
-	path := fs.unwrap(ctx, eosFileInfo.File)
+func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.ResourceInfo, error) {
+	path, err := fs.unwrap(ctx, eosFileInfo.File)
+	if err != nil {
+		return nil, err
+	}
 
 	size := eosFileInfo.Size
 	if eosFileInfo.IsDir {
@@ -1380,7 +1404,7 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) *
 	}
 
 	info.Type = getResourceType(eosFileInfo.IsDir)
-	return info
+	return info, nil
 }
 
 func getResourceType(isDir bool) provider.ResourceType {
