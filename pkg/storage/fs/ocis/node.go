@@ -148,10 +148,16 @@ func ReadNode(ctx context.Context, lu *Lookup, id string) (n *Node, err error) {
 
 	// lookup parent id in extended attributes
 	var attrBytes []byte
-	if attrBytes, err = xattr.Get(nodePath, parentidAttr); err == nil {
+	attrBytes, err = xattr.Get(nodePath, parentidAttr)
+	switch {
+	case err == nil:
 		n.ParentID = string(attrBytes)
-	} else {
-		return
+	case isNoData(err):
+		return nil, errtypes.InternalError(err.Error())
+	case isNotFound(err):
+		return nil, errtypes.NotFound(n.ID)
+	default:
+		return nil, errtypes.InternalError(err.Error())
 	}
 	// lookup name in extended attributes
 	if attrBytes, err = xattr.Get(nodePath, nameAttr); err == nil {

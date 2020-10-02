@@ -44,11 +44,11 @@ var defaultFilePerm = os.FileMode(0664)
 
 // TODO deprecated ... use tus
 
-func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
+func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) (err error) {
 
-	n, err := fs.lu.NodeFromResource(ctx, ref)
-	if err != nil {
-		return err
+	var n *Node
+	if n, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
+		return
 	}
 
 	// check permissions
@@ -60,9 +60,9 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 		})
 	} else {
 		// check permissions of parent
-		p, err := n.Parent()
-		if err != nil {
-			return errors.Wrap(err, "ocisfs: error getting parent "+n.ParentID)
+		p, perr := n.Parent()
+		if perr != nil {
+			return errors.Wrap(perr, "ocisfs: error getting parent "+n.ParentID)
 		}
 
 		ok, err = fs.p.HasPermission(ctx, p, func(rp *provider.ResourcePermissions) bool {
@@ -82,7 +82,8 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 
 	nodePath := fs.lu.toInternalPath(n.ID)
 
-	tmp, err := ioutil.TempFile(nodePath, "._reva_atomic_upload")
+	var tmp *os.File
+	tmp, err = ioutil.TempFile(nodePath, "._reva_atomic_upload")
 	if err != nil {
 		return errors.Wrap(err, "ocisfs: error creating tmp fn at "+nodePath)
 	}
@@ -96,9 +97,8 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 	//_ = os.RemoveAll(path.Join(nodePath, "content"))
 	appctx.GetLogger(ctx).Warn().Msg("TODO move old content to version")
 
-	err = os.Rename(tmp.Name(), nodePath)
-	if err != nil {
-		return err
+	if err = os.Rename(tmp.Name(), nodePath); err != nil {
+		return
 	}
 
 	if fs.o.EnableHome {
@@ -113,19 +113,18 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 		err = n.writeMetadata(nil)
 	}
 	if err != nil {
-		return err
+		return
 	}
 
 	if fs.o.TreeTimeAccounting {
 		// mark the home node as the end of propagation q
 		if err = xattr.Set(nodePath, propagationAttr, []byte("1")); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not mark node to propagate")
-			return err
+			return
 		}
 	}
 
 	return fs.tp.Propagate(ctx, n)
-
 }
 
 // InitiateUpload returns an upload id that can be used for uploads with tus
@@ -217,9 +216,9 @@ func (fs *ocisfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tus
 		})
 	} else {
 		// check permissions of parent
-		p, err := n.Parent()
-		if err != nil {
-			return nil, errors.Wrap(err, "ocisfs: error getting parent "+n.ParentID)
+		p, perr := n.Parent()
+		if perr != nil {
+			return nil, errors.Wrap(perr, "ocisfs: error getting parent "+n.ParentID)
 		}
 
 		ok, err = fs.p.HasPermission(ctx, p, func(rp *provider.ResourcePermissions) bool {

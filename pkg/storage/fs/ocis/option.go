@@ -43,6 +43,7 @@ type Options struct {
 }
 
 // newOptions initializes the available default options.
+/* for future use, commented to make linter happy
 func newOptions(opts ...Option) Options {
 	opt := Options{}
 
@@ -52,6 +53,7 @@ func newOptions(opts ...Option) Options {
 
 	return opt
 }
+*/
 
 // Root provides a function to set the root option.
 func Root(val string) Option {

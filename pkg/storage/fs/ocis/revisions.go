@@ -90,6 +90,9 @@ func (fs *ocisfs) DownloadRevision(ctx context.Context, ref *provider.Reference,
 
 	// check if the node is available and has not been deleted
 	n, err := ReadNode(ctx, fs.lu, kp[0])
+	if err != nil {
+		return nil, err
+	}
 	if !n.Exists {
 		err = errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
 		return nil, err
@@ -130,6 +133,9 @@ func (fs *ocisfs) RestoreRevision(ctx context.Context, ref *provider.Reference, 
 
 	// check if the node is available and has not been deleted
 	n, err := ReadNode(ctx, fs.lu, kp[0])
+	if err != nil {
+		return err
+	}
 	if !n.Exists {
 		err = errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
 		return err

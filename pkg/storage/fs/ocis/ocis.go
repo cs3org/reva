@@ -224,16 +224,19 @@ func (fs *ocisfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (str
 }
 
 func (fs *ocisfs) CreateDir(ctx context.Context, fn string) (err error) {
-	var node *Node
-	if node, err = fs.lu.NodeFromPath(ctx, fn); err != nil {
+	var n *Node
+	if n, err = fs.lu.NodeFromPath(ctx, fn); err != nil {
 		return
 	}
 
-	if node.Exists {
+	if n.Exists {
 		return errtypes.AlreadyExists(fn)
 	}
 
-	pn, err := node.Parent()
+	pn, err := n.Parent()
+	if err != nil {
+		return errors.Wrap(err, "ocisfs: error getting parent "+n.ParentID)
+	}
 	ok, err := fs.p.HasPermission(ctx, pn, func(rp *provider.ResourcePermissions) bool {
 		return rp.CreateContainer
 	})
@@ -241,16 +244,16 @@ func (fs *ocisfs) CreateDir(ctx context.Context, fn string) (err error) {
 	case err != nil:
 		return errtypes.InternalError(err.Error())
 	case !ok:
-		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
 	}
 
-	err = fs.tp.CreateDir(ctx, node)
+	err = fs.tp.CreateDir(ctx, n)
 
 	if fs.o.TreeTimeAccounting {
-		nodePath := node.lu.toInternalPath(node.ID)
+		nodePath := n.lu.toInternalPath(n.ID)
 		// mark the home node as the end of propagation
 		if err = xattr.Set(nodePath, propagationAttr, []byte("1")); err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Interface("node", node).Msg("could not mark node to propagate")
+			appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not mark node to propagate")
 			return
 		}
 	}

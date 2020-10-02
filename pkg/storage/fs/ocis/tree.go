@@ -225,12 +225,12 @@ func (t *Tree) ListFolder(ctx context.Context, node *Node) ([]*Node, error) {
 }
 
 // Delete deletes a node in the tree
-func (t *Tree) Delete(ctx context.Context, node *Node) (err error) {
+func (t *Tree) Delete(ctx context.Context, n *Node) (err error) {
 
 	// Prepare the trash
 	// TODO use layout?, but it requires resolving the owners user if the username is used instead of the id.
 	// the node knows the owner id so we use that for now
-	ownerid, _, err := node.Owner()
+	ownerid, _, err := n.Owner()
 	if err != nil {
 		return
 	}
@@ -244,13 +244,13 @@ func (t *Tree) Delete(ctx context.Context, node *Node) (err error) {
 	}
 
 	// get the original path
-	origin, err := t.lu.Path(ctx, node)
+	origin, err := t.lu.Path(ctx, n)
 	if err != nil {
 		return
 	}
 
 	// set origin location in metadata
-	nodePath := t.lu.toInternalPath(node.ID)
+	nodePath := t.lu.toInternalPath(n.ID)
 	if err := xattr.Set(nodePath, trashOriginAttr, []byte(origin)); err != nil {
 		return err
 	}
@@ -259,8 +259,8 @@ func (t *Tree) Delete(ctx context.Context, node *Node) (err error) {
 
 	// first make node appear in the owners (or root) trash
 	// parent id and name are stored as extended attributes in the node itself
-	trashLink := filepath.Join(t.lu.Options.Root, "trash", ownerid, node.ID)
-	err = os.Symlink("../nodes/"+node.ID+".T."+deletionTime, trashLink)
+	trashLink := filepath.Join(t.lu.Options.Root, "trash", ownerid, n.ID)
+	err = os.Symlink("../nodes/"+n.ID+".T."+deletionTime, trashLink)
 	if err != nil {
 		// To roll back changes
 		// TODO unset trashOriginAttr
@@ -280,7 +280,7 @@ func (t *Tree) Delete(ctx context.Context, node *Node) (err error) {
 	}
 
 	// finally remove the entry from the parent dir
-	src := filepath.Join(t.lu.toInternalPath(node.ParentID), node.Name)
+	src := filepath.Join(t.lu.toInternalPath(n.ParentID), n.Name)
 	err = os.Remove(src)
 	if err != nil {
 		// To roll back changes
@@ -290,9 +290,9 @@ func (t *Tree) Delete(ctx context.Context, node *Node) (err error) {
 		return
 	}
 
-	p, err := node.Parent()
+	p, err := n.Parent()
 	if err != nil {
-		return
+		return errors.Wrap(err, "ocisfs: error getting parent "+n.ParentID)
 	}
 	return t.Propagate(ctx, p)
 }

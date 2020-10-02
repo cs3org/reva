@@ -26,8 +26,8 @@ import (
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/storage/utils/ace"
 	"github.com/cs3org/reva/pkg/user"
+	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 )
 
@@ -136,7 +136,7 @@ func (p *Permissions) HasPermission(ctx context.Context, n *Node, check func(*pr
 		}
 
 		if cn, err = cn.Parent(); err != nil {
-			return false, err
+			return false, errors.Wrap(err, "ocisfs: error getting parent "+cn.ParentID)
 		}
 	}
 
@@ -184,15 +184,4 @@ func isNotFound(err error) bool {
 		}
 	}
 	return false
-}
-
-func (fs *ocisfs) readACE(ctx context.Context, ip string, principal string) (e *ace.ACE, err error) {
-	var b []byte
-	if b, err = xattr.Get(ip, grantPrefix+principal); err != nil {
-		return nil, err
-	}
-	if e, err = ace.Unmarshal(principal, b); err != nil {
-		return nil, err
-	}
-	return
 }
