@@ -42,11 +42,11 @@ const (
 	// ShareTypeUser refers to user shares
 	ShareTypeUser ShareType = 0
 
+	// ShareTypeGroup represents a group share
+	ShareTypeGroup ShareType = 1
+
 	// ShareTypePublicLink refers to public link shares
 	ShareTypePublicLink ShareType = 3
-
-	// ShareTypeGroup represents a group share
-	// ShareTypeGroup ShareType = 1
 
 	// ShareTypeFederatedCloudShare represents a federated share
 	ShareTypeFederatedCloudShare ShareType = 6
@@ -278,10 +278,15 @@ func AsCS3Permissions(p int, rp *provider.ResourcePermissions) *provider.Resourc
 func UserShare2ShareData(ctx context.Context, share *collaboration.Share) (*ShareData, error) {
 	sd := &ShareData{
 		Permissions:  UserSharePermissions2OCSPermissions(share.GetPermissions()),
-		ShareType:    ShareTypeUser,
 		UIDOwner:     LocalUserIDToString(share.GetCreator()),
 		UIDFileOwner: LocalUserIDToString(share.GetOwner()),
 		ShareWith:    LocalUserIDToString(share.GetGrantee().GetId()),
+	}
+	switch share.GetGrantee().GetType() {
+	case provider.GranteeType_GRANTEE_TYPE_GROUP:
+		sd.ShareType = ShareTypeGroup
+	default:
+		sd.ShareType = ShareTypeUser
 	}
 
 	if share.Id != nil && share.Id.OpaqueId != "" {

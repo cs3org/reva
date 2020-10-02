@@ -157,6 +157,8 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 	switch shareType {
 	case int(conversions.ShareTypeUser):
 		h.createUserShare(w, r)
+	case int(conversions.ShareTypeGroup):
+		h.createGroupShare(w, r)
 	case int(conversions.ShareTypePublicLink):
 		h.createPublicLinkShare(w, r)
 	case int(conversions.ShareTypeFederatedCloudShare):
@@ -302,6 +304,164 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request) {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc create share request failed", err)
 		return
 	}
+	s, err := conversions.UserShare2ShareData(ctx, createShareResponse.Share)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
+		return
+	}
+	err = h.addFileInfo(ctx, s, statRes.Info)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error adding fileinfo to share", err)
+		return
+	}
+	h.addDisplaynames(ctx, c, s)
+
+	response.WriteOCSSuccess(w, r, s)
+}
+
+// TODO all the create methods are screaming for a refactoring, they all start the same way
+func (h *Handler) createGroupShare(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
+		return
+	}
+	// prefix the path with the owners home, because ocs share requests are relative to the home dir
+	// TODO the path actually depends on the configured webdav_namespace
+	hRes, err := c.GetHome(ctx, &provider.GetHomeRequest{})
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc get home request", err)
+		return
+	}
+
+	prefix := hRes.GetPath()
+	sharepath := r.FormValue("path")
+	// if user sharing is disabled
+	if h.gatewayAddr == "" {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "user sharing service not configured", nil)
+		return
+	}
+
+	shareWith := r.FormValue("shareWith")
+	if shareWith == "" {
+		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "missing shareWith", nil)
+		return
+	}
+
+	// TODO we need to look up a group id
+	/*userRes, err := c.GetGroup(ctx, &userpb.GetUserRequest{
+		UserId: &userpb.UserId{OpaqueId: shareWith},
+	})
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error searching recipient", err)
+		return
+	}
+
+	if userRes.Status.Code != rpc.Code_CODE_OK {
+		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "user not found", err)
+		return
+	}
+	*/
+
+	statRes, err := h.stat(ctx, path.Join(prefix, sharepath))
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, fmt.Sprintf("stat on file %s failed", sharepath), err)
+		return
+	}
+
+	var permissions conversions.Permissions
+
+	role := r.FormValue("role")
+	// 2. if we don't have a role try to map the permissions
+	if role == "" {
+		pval := r.FormValue("permissions")
+		if pval == "" {
+			// default is all permissions / role coowner
+			permissions = conversions.PermissionAll
+			role = conversions.RoleCoowner
+		} else {
+			pint, err := strconv.Atoi(pval)
+			if err != nil {
+				response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "permissions must be an integer", nil)
+				return
+			}
+			permissions, err = conversions.NewPermissions(pint)
+			if err != nil {
+				if err == conversions.ErrPermissionNotInRange {
+					response.WriteOCSError(w, r, http.StatusNotFound, err.Error(), nil)
+				} else {
+					response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, err.Error(), nil)
+				}
+				return
+			}
+			role = conversions.Permissions2Role(permissions)
+		}
+	}
+
+	if statRes.Info != nil && statRes.Info.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
+		// Single file shares should never have delete or create permissions
+		permissions &^= conversions.PermissionCreate
+		permissions &^= conversions.PermissionDelete
+	}
+
+	var resourcePermissions *provider.ResourcePermissions
+	resourcePermissions = asCS3Permissions(permissions, resourcePermissions)
+
+	roleMap := map[string]string{"name": role}
+	val, err := json.Marshal(roleMap)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "could not encode role", err)
+		return
+	}
+
+	if statRes.Status.Code != rpc.Code_CODE_OK {
+		if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
+			return
+		}
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc stat request failed", err)
+		return
+	}
+
+	createShareReq := &collaboration.CreateShareRequest{
+		Opaque: &types.Opaque{
+			Map: map[string]*types.OpaqueEntry{
+				"role": {
+					Decoder: "json",
+					Value:   val,
+				},
+			},
+		},
+		ResourceInfo: statRes.Info,
+		Grant: &collaboration.ShareGrant{
+			Grantee: &provider.Grantee{
+				Type: provider.GranteeType_GRANTEE_TYPE_GROUP,
+				Id: &userpb.UserId{
+					// TODO Idp? sharewith is the groupname ...
+					OpaqueId: shareWith,
+				},
+			},
+			Permissions: &collaboration.SharePermissions{
+				Permissions: resourcePermissions,
+			},
+		},
+	}
+
+	createShareResponse, err := c.CreateShare(ctx, createShareReq)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc create share request", err)
+		return
+	}
+	if createShareResponse.Status.Code != rpc.Code_CODE_OK {
+		if createShareResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
+			return
+		}
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc create share request failed", err)
+		return
+	}
+	// IT is not only a User Share but rather a Collaboration? or CS3Share?
 	s, err := conversions.UserShare2ShareData(ctx, createShareResponse.Share)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
@@ -536,11 +696,11 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 	createShareReq := &ocm.CreateOCMShareRequest{
 		Opaque: &types.Opaque{
 			Map: map[string]*types.OpaqueEntry{
-				"permissions": &types.OpaqueEntry{
+				"permissions": {
 					Decoder: "plain",
 					Value:   []byte(strconv.Itoa(int(permissions))),
 				},
-				"name": &types.OpaqueEntry{
+				"name": {
 					Decoder: "plain",
 					Value:   []byte(statRes.Info.Path),
 				},
@@ -1429,7 +1589,12 @@ func (h *Handler) addDisplaynames(ctx context.Context, c gateway.GatewayAPIClien
 		s.DisplaynameFileOwner = h.getDisplayname(ctx, c, s.UIDFileOwner)
 	}
 	if s.ShareWithDisplayname == "" {
-		s.ShareWithDisplayname = h.getDisplayname(ctx, c, s.ShareWith)
+		if s.ShareType == conversions.ShareTypeUser {
+			s.ShareWithDisplayname = h.getDisplayname(ctx, c, s.ShareWith)
+		} else {
+			// TODO look up group displayname by id
+			s.ShareWithDisplayname = s.ShareWith
+		}
 	}
 }
 
