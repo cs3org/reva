@@ -452,5 +452,6 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, ref *collaboration.ShareR
 		return nil, err
 	}
 
+	rs.State = f.GetState()
 	return rs, nil
 }

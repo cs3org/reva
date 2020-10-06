@@ -27,7 +27,6 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	_ "github.com/go-sql-driver/mysql"
 )
 
 func granteeTypeToInt(g provider.GranteeType) int {
@@ -64,21 +63,6 @@ func resourceTypeToItem(r provider.ResourceType) string {
 		return "symlink"
 	default:
 		return ""
-	}
-}
-
-func itemToresourceType(r string) provider.ResourceType {
-	switch r {
-	case "file":
-		return provider.ResourceType_RESOURCE_TYPE_FILE
-	case "folder":
-		return provider.ResourceType_RESOURCE_TYPE_CONTAINER
-	case "reference":
-		return provider.ResourceType_RESOURCE_TYPE_REFERENCE
-	case "symlink":
-		return provider.ResourceType_RESOURCE_TYPE_SYMLINK
-	default:
-		return provider.ResourceType_RESOURCE_TYPE_INVALID
 	}
 }
 
@@ -130,6 +114,17 @@ func intTosharePerm(p int) *provider.ResourcePermissions {
 	}
 }
 
+func intToShareState(g int) collaboration.ShareState {
+	switch g {
+	case 0:
+		return collaboration.ShareState_SHARE_STATE_PENDING
+	case 1:
+		return collaboration.ShareState_SHARE_STATE_ACCEPTED
+	default:
+		return collaboration.ShareState_SHARE_STATE_INVALID
+	}
+}
+
 func formatUserID(u *userpb.UserId) string {
 	if u.Idp != "" {
 		return fmt.Sprintf("%s:%s", u.OpaqueId, u.Idp)
@@ -160,5 +155,13 @@ func convertToCS3Share(s dbShare) *collaboration.Share {
 		Creator:     extractUserID(s.UIDInitiator),
 		Ctime:       ts,
 		Mtime:       ts,
+	}
+}
+
+func convertToCS3ReceivedShare(s dbShare) *collaboration.ReceivedShare {
+	share := convertToCS3Share(s)
+	return &collaboration.ReceivedShare{
+		Share: share,
+		State: intToShareState(s.State),
 	}
 }
