@@ -30,7 +30,7 @@ import (
 )
 
 func (fs *ocisfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) (err error) {
-	n, err := fs.pw.NodeFromResource(ctx, ref)
+	n, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "ocisfs: error resolving ref")
 	}
@@ -39,7 +39,19 @@ func (fs *ocisfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 		err = errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
 		return err
 	}
-	nodePath := filepath.Join(fs.pw.Root, "nodes", n.ID)
+
+	ok, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
+		// TODO add explicit SetArbitraryMetadata grant to CS3 api, tracked in https://github.com/cs3org/cs3apis/issues/91
+		return rp.InitiateFileUpload
+	})
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !ok:
+		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
+	}
+
+	nodePath := n.lu.toInternalPath(n.ID)
 	for k, v := range md.Metadata {
 		// TODO set etag as temporary etag tmpEtagAttr
 		attrName := metadataPrefix + k
@@ -51,7 +63,7 @@ func (fs *ocisfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 }
 
 func (fs *ocisfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) (err error) {
-	n, err := fs.pw.NodeFromResource(ctx, ref)
+	n, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "ocisfs: error resolving ref")
 	}
@@ -60,7 +72,19 @@ func (fs *ocisfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refe
 		err = errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
 		return err
 	}
-	nodePath := filepath.Join(fs.pw.Root, "nodes", n.ID)
+
+	ok, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
+		// TODO use  SetArbitraryMetadata grant to CS3 api, tracked in https://github.com/cs3org/cs3apis/issues/91
+		return rp.InitiateFileUpload
+	})
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !ok:
+		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
+	}
+
+	nodePath := n.lu.toInternalPath(n.ID)
 	for i := range keys {
 		attrName := metadataPrefix + keys[i]
 		if err = xattr.Remove(nodePath, attrName); err != nil {

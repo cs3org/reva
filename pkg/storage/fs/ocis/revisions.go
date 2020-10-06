@@ -41,18 +41,28 @@ import (
 // and replace the revision file with a symbolic link in the future, if necessary.
 
 func (fs *ocisfs) ListRevisions(ctx context.Context, ref *provider.Reference) (revisions []*provider.FileVersion, err error) {
-	var node *Node
-	if node, err = fs.pw.NodeFromResource(ctx, ref); err != nil {
+	var n *Node
+	if n, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
 		return
 	}
-	if !node.Exists {
-		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
+	if !n.Exists {
+		err = errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
 		return
 	}
 
+	ok, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
+		return rp.ListFileVersions
+	})
+	switch {
+	case err != nil:
+		return nil, errtypes.InternalError(err.Error())
+	case !ok:
+		return nil, errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
+	}
+
 	revisions = []*provider.FileVersion{}
-	nodePath := filepath.Join(fs.pw.Root, "nodes", node.ID)
-	if items, err := filepath.Glob(nodePath + ".REV.*"); err == nil {
+	np := fs.lu.toInternalPath(n.ID)
+	if items, err := filepath.Glob(np + ".REV.*"); err == nil {
 		for i := range items {
 			if fi, err := os.Stat(items[i]); err == nil {
 				rev := &provider.FileVersion{
@@ -79,15 +89,27 @@ func (fs *ocisfs) DownloadRevision(ctx context.Context, ref *provider.Reference,
 	log.Debug().Str("revisionKey", revisionKey).Msg("DownloadRevision")
 
 	// check if the node is available and has not been deleted
-	nodePath := filepath.Join(fs.pw.Root, "nodes", kp[0])
-	if _, err := os.Stat(nodePath); err != nil {
-		if os.IsNotExist(err) {
-			return nil, errtypes.NotFound(nodePath)
-		}
-		return nil, errors.Wrap(err, "ocisfs: error stating node "+kp[0])
+	n, err := ReadNode(ctx, fs.lu, kp[0])
+	if err != nil {
+		return nil, err
+	}
+	if !n.Exists {
+		err = errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
+		return nil, err
 	}
 
-	contentPath := filepath.Join(fs.pw.Root, "nodes", revisionKey)
+	ok, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
+		// TODO add explicit permission in the CS3 api?
+		return rp.ListFileVersions && rp.RestoreFileVersion && rp.InitiateFileDownload
+	})
+	switch {
+	case err != nil:
+		return nil, errtypes.InternalError(err.Error())
+	case !ok:
+		return nil, errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
+	}
+
+	contentPath := fs.lu.toInternalPath(revisionKey)
 
 	r, err := os.Open(contentPath)
 	if err != nil {
@@ -109,12 +131,32 @@ func (fs *ocisfs) RestoreRevision(ctx context.Context, ref *provider.Reference, 
 		return errtypes.NotFound(revisionKey)
 	}
 
+	// check if the node is available and has not been deleted
+	n, err := ReadNode(ctx, fs.lu, kp[0])
+	if err != nil {
+		return err
+	}
+	if !n.Exists {
+		err = errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
+		return err
+	}
+
+	ok, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
+		return rp.RestoreFileVersion
+	})
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !ok:
+		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
+	}
+
 	// move current version to new revision
-	nodePath := filepath.Join(fs.pw.Root, "nodes", kp[0])
+	nodePath := fs.lu.toInternalPath(kp[0])
 	var fi os.FileInfo
 	if fi, err = os.Stat(nodePath); err == nil {
 		// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
-		versionsPath := filepath.Join(fs.pw.Root, "nodes", kp[0]+".REV."+fi.ModTime().UTC().Format(time.RFC3339Nano))
+		versionsPath := fs.lu.toInternalPath(kp[0] + ".REV." + fi.ModTime().UTC().Format(time.RFC3339Nano))
 
 		err = os.Rename(nodePath, versionsPath)
 		if err != nil {
@@ -123,7 +165,7 @@ func (fs *ocisfs) RestoreRevision(ctx context.Context, ref *provider.Reference, 
 
 		// copy old revision to current location
 
-		revisionPath := filepath.Join(fs.pw.Root, "nodes", revisionKey)
+		revisionPath := fs.lu.toInternalPath(revisionKey)
 		var revision, destination *os.File
 		revision, err = os.Open(revisionPath)
 		if err != nil {
@@ -144,6 +186,6 @@ func (fs *ocisfs) RestoreRevision(ctx context.Context, ref *provider.Reference, 
 		return fs.copyMD(revisionPath, nodePath)
 	}
 
-	log.Error().Err(err).Interface("ref", ref).Str("revisionKey", revisionKey).Msg("original node does not exist")
+	log.Error().Err(err).Interface("ref", ref).Str("originalnode", kp[0]).Str("revisionKey", revisionKey).Msg("original node does not exist")
 	return
 }

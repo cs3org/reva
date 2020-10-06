@@ -446,8 +446,7 @@ func (fs *ocfs) toStorageShadowPath(ctx context.Context, ip string) (sp string) 
 			sp = filepath.Join("/", segments[1], segments[3])
 		}
 	}
-	log := appctx.GetLogger(ctx)
-	log.Debug().Str("driver", "ocfs").Str("ipath", ip).Str("spath", sp).Msg("toStorageShadowPath")
+	appctx.GetLogger(ctx).Debug().Str("driver", "ocfs").Str("ipath", ip).Str("spath", sp).Msg("toStorageShadowPath")
 	return
 }
 

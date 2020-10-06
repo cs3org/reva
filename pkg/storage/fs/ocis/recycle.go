@@ -49,6 +49,19 @@ func (fs *ocisfs) ListRecycle(ctx context.Context) (items []*provider.RecycleIte
 
 	items = make([]*provider.RecycleItem, 0)
 
+	// TODO how do we check if the storage allows listing the recycle for the current user? check owner of the root of the storage?
+	if fs.o.EnableHome {
+		if !ownerPermissions.ListContainer {
+			log.Debug().Msg("owner not allowed to list trash")
+			return items, errtypes.PermissionDenied("owner not allowed to list trash")
+		}
+	} else {
+		if !defaultPermissions.ListContainer {
+			log.Debug().Msg("default permissions prevent listing trash")
+			return items, errtypes.PermissionDenied("default permissions prevent listing trash")
+		}
+	}
+
 	f, err := os.Open(trashRoot)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -62,25 +75,26 @@ func (fs *ocisfs) ListRecycle(ctx context.Context) (items []*provider.RecycleIte
 		return nil, err
 	}
 	for i := range names {
-		var link string
-		link, err = os.Readlink(filepath.Join(trashRoot, names[i]))
+		var trashnode string
+		trashnode, err = os.Readlink(filepath.Join(trashRoot, names[i]))
 		if err != nil {
 			log.Error().Err(err).Str("trashRoot", trashRoot).Str("name", names[i]).Msg("error reading trash link, skipping")
 			err = nil
 			continue
 		}
-		parts := strings.SplitN(filepath.Base(link), ".T.", 2)
+		parts := strings.SplitN(filepath.Base(trashnode), ".T.", 2)
 		if len(parts) != 2 {
-			log.Error().Err(err).Str("trashRoot", trashRoot).Str("name", names[i]).Str("link", link).Interface("parts", parts).Msg("malformed trash link, skipping")
+			log.Error().Err(err).Str("trashRoot", trashRoot).Str("name", names[i]).Str("trashnode", trashnode).Interface("parts", parts).Msg("malformed trash link, skipping")
 			continue
 		}
 
-		nodePath := filepath.Join(fs.pw.Root, "nodes", filepath.Base(link))
+		nodePath := fs.lu.toInternalPath(filepath.Base(trashnode))
 		md, err := os.Stat(nodePath)
 		if err != nil {
-			log.Error().Err(err).Str("trashRoot", trashRoot).Str("name", names[i]).Str("link", link).Interface("parts", parts).Msg("could not stat trash item, skipping")
+			log.Error().Err(err).Str("trashRoot", trashRoot).Str("name", names[i]).Str("trashnode", trashnode).Interface("parts", parts).Msg("could not stat trash item, skipping")
 			continue
 		}
+
 		item := &provider.RecycleItem{
 			Type: getResourceType(md.IsDir()),
 			Size: uint64(md.Size()),
@@ -92,15 +106,32 @@ func (fs *ocisfs) ListRecycle(ctx context.Context) (items []*provider.RecycleIte
 				// TODO nanos
 			}
 		} else {
-			log.Error().Err(err).Str("trashRoot", trashRoot).Str("name", names[i]).Str("link", link).Interface("parts", parts).Msg("could parse time format, ignoring")
+			log.Error().Err(err).Str("trashRoot", trashRoot).Str("name", names[i]).Str("link", trashnode).Interface("parts", parts).Msg("could parse time format, ignoring")
 		}
 
-		// lookup parent id in extended attributes
+		// lookup origin path in extended attributes
 		var attrBytes []byte
 		if attrBytes, err = xattr.Get(nodePath, trashOriginAttr); err == nil {
 			item.Path = string(attrBytes)
 		} else {
-			log.Error().Err(err).Str("trashRoot", trashRoot).Str("name", names[i]).Str("link", link).Msg("could not read origin path, skipping")
+			log.Error().Err(err).Str("trashRoot", trashRoot).Str("name", names[i]).Str("link", trashnode).Msg("could not read origin path, skipping")
+			continue
+		}
+		// TODO filter results by permission ... on the original parent? or the trashed node?
+		// if it were on the original parent it would be possible to see files that were trashed before the current user got access
+		// so -> check the trash node itself
+		// hmm listing trash currently lists the current users trash or the 'root' trash. from ocs only the home storage is queried for trash items.
+		// for now we can only really check if the current user is the owner
+		if attrBytes, err = xattr.Get(nodePath, ownerIDAttr); err == nil {
+			if fs.o.EnableHome {
+				u := user.ContextMustGetUser(ctx)
+				if u.Id.OpaqueId != string(attrBytes) {
+					log.Warn().Str("trashRoot", trashRoot).Str("name", names[i]).Str("link", trashnode).Msg("trash item not owned by current user, skipping")
+					continue
+				}
+			}
+		} else {
+			log.Error().Err(err).Str("trashRoot", trashRoot).Str("name", names[i]).Str("link", trashnode).Msg("could not read owner, skipping")
 			continue
 		}
 
@@ -112,45 +143,28 @@ func (fs *ocisfs) ListRecycle(ctx context.Context) (items []*provider.RecycleIte
 func (fs *ocisfs) RestoreRecycleItem(ctx context.Context, key string) (err error) {
 	log := appctx.GetLogger(ctx)
 
-	if key == "" {
-		return errtypes.InternalError("key is empty")
-	}
-
-	kp := strings.SplitN(key, ":", 2)
-	if len(kp) != 2 {
-		log.Error().Err(err).Str("key", key).Msg("malformed key")
-		return
-	}
-	trashItem := filepath.Join(fs.pw.Root, "trash", kp[0], kp[1])
-
-	var link string
-	link, err = os.Readlink(trashItem)
-	if err != nil {
-		log.Error().Err(err).Str("trashItem", trashItem).Msg("error reading trash link")
-		return
-	}
-	parts := strings.SplitN(filepath.Base(link), ".T.", 2)
-	if len(parts) != 2 {
-		log.Error().Err(err).Str("trashItem", trashItem).Interface("parts", parts).Msg("malformed trash link")
+	var rn *Node
+	var trashItem string
+	var deletedNodePath string
+	var origin string
+	if rn, trashItem, deletedNodePath, origin, err = ReadRecycleItem(ctx, fs.lu, key); err != nil {
 		return
 	}
 
-	deletedNodePath := filepath.Join(fs.pw.Root, "nodes", filepath.Base(link))
-
-	// get origin node
-	origin := "/"
-
-	// lookup parent id in extended attributes
-	var attrBytes []byte
-	if attrBytes, err = xattr.Get(deletedNodePath, trashOriginAttr); err == nil {
-		origin = string(attrBytes)
-	} else {
-		log.Error().Err(err).Str("trashItem", trashItem).Str("link", link).Str("deletedNodePath", deletedNodePath).Msg("could not read origin path, restoring to /")
+	// check permissions of deleted node
+	ok, err := fs.p.HasPermission(ctx, rn, func(rp *provider.ResourcePermissions) bool {
+		return rp.RestoreRecycleItem
+	})
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !ok:
+		return errtypes.PermissionDenied(key)
 	}
 
 	// link to origin
 	var n *Node
-	n, err = fs.pw.NodeFromPath(ctx, origin)
+	n, err = fs.lu.NodeFromPath(ctx, origin)
 	if err != nil {
 		return
 	}
@@ -159,18 +173,19 @@ func (fs *ocisfs) RestoreRecycleItem(ctx context.Context, key string) (err error
 		return errtypes.AlreadyExists("origin already exists")
 	}
 
+	// add the entry for the parent dir
+	err = os.Symlink("../"+rn.ID, filepath.Join(fs.lu.toInternalPath(n.ParentID), n.Name))
+	if err != nil {
+		return
+	}
+
 	// rename to node only name, so it is picked up by id
-	nodePath := filepath.Join(fs.pw.Root, "nodes", parts[0])
+	nodePath := fs.lu.toInternalPath(rn.ID)
 	err = os.Rename(deletedNodePath, nodePath)
 	if err != nil {
 		return
 	}
 
-	// add the entry for the parent dir
-	err = os.Symlink("../"+parts[0], filepath.Join(fs.pw.Root, "nodes", n.ParentID, n.Name))
-	if err != nil {
-		return
-	}
 	n.Exists = true
 
 	// delete item link in trash
@@ -184,22 +199,24 @@ func (fs *ocisfs) RestoreRecycleItem(ctx context.Context, key string) (err error
 func (fs *ocisfs) PurgeRecycleItem(ctx context.Context, key string) (err error) {
 	log := appctx.GetLogger(ctx)
 
-	kp := strings.SplitN(key, ":", 2)
-	if len(kp) != 2 {
-		log.Error().Str("key", key).Msg("malformed key")
-		return
-	}
-	trashItem := filepath.Join(fs.pw.Root, "trash", kp[0], kp[1])
-
-	var link string
-	link, err = os.Readlink(trashItem)
-	if err != nil {
-		log.Error().Err(err).Str("trashItem", trashItem).Msg("error reading trash link")
+	var rn *Node
+	var trashItem string
+	var deletedNodePath string
+	if rn, trashItem, deletedNodePath, _, err = ReadRecycleItem(ctx, fs.lu, key); err != nil {
 		return
 	}
 
-	// delete trash node link in nodes dir
-	deletedNodePath := filepath.Join(fs.pw.Root, "nodes", filepath.Base(link))
+	// check permissions of deleted node
+	ok, err := fs.p.HasPermission(ctx, rn, func(rp *provider.ResourcePermissions) bool {
+		return rp.PurgeRecycle
+	})
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !ok:
+		return errtypes.PermissionDenied(key)
+	}
+
 	if err = os.Remove(deletedNodePath); err != nil {
 		log.Error().Err(err).Str("deletedNodePath", deletedNodePath).Msg("error deleting trash node")
 		return
@@ -209,10 +226,18 @@ func (fs *ocisfs) PurgeRecycleItem(ctx context.Context, key string) (err error) 
 	if err = os.Remove(trashItem); err != nil {
 		log.Error().Err(err).Str("trashItem", trashItem).Msg("error deleting trash item")
 	}
+	// TODO recursively delete all children
 	return
 }
 
 func (fs *ocisfs) EmptyRecycle(ctx context.Context) error {
+	// TODO what permission should we check? we could check the root node of the user? or the owner permissions on his home root node?
+	// The current impl will wipe your own trash. or when enable home is false the trash of the 'root'
+	if fs.o.EnableHome {
+		u := user.ContextMustGetUser(ctx)
+		// TODO use layout, see Tree.Delete() for problem
+		return os.RemoveAll(filepath.Join(fs.o.Root, "trash", u.Id.OpaqueId))
+	}
 	return os.RemoveAll(fs.getRecycleRoot(ctx))
 }
 
@@ -224,10 +249,10 @@ func getResourceType(isDir bool) provider.ResourceType {
 }
 
 func (fs *ocisfs) getRecycleRoot(ctx context.Context) string {
-	if fs.pw.EnableHome {
+	if fs.o.EnableHome {
 		u := user.ContextMustGetUser(ctx)
 		// TODO use layout, see Tree.Delete() for problem
-		return filepath.Join(fs.pw.Root, "trash", u.Id.OpaqueId)
+		return filepath.Join(fs.o.Root, "trash", u.Id.OpaqueId)
 	}
-	return filepath.Join(fs.pw.Root, "trash", "root")
+	return filepath.Join(fs.o.Root, "trash", "root")
 }

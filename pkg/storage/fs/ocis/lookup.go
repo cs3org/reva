@@ -31,35 +31,19 @@ import (
 	"github.com/cs3org/reva/pkg/user"
 )
 
-// Path implements transformations from filepath to node and back
-type Path struct {
-	// ocis fs works on top of a dir of uuid nodes
-	Root string `mapstructure:"root"`
-
-	// UserLayout describes the relative path from the storage's root node to the users home node.
-	UserLayout string `mapstructure:"user_layout"`
-
-	// TODO NodeLayout option to save nodes as eg. nodes/1d/d8/1dd84abf-9466-4e14-bb86-02fc4ea3abcf
-	ShareFolder string `mapstructure:"share_folder"`
-
-	// EnableHome enables the creation of home directories.
-	EnableHome bool `mapstructure:"enable_home"`
-
-	// propagate mtime changes as tmtime (tree modification time) to the parent directory when user.ocis.propagation=1 is set on a node
-	TreeTimeAccounting bool `mapstructure:"treetime_accounting"`
-
-	// propagate size changes as treesize
-	TreeSizeAccounting bool `mapstructure:"treesize_accounting"`
+// Lookup implements transformations from filepath to node and back
+type Lookup struct {
+	Options *Options
 }
 
 // NodeFromResource takes in a request path or request id and converts it to a Node
-func (pw *Path) NodeFromResource(ctx context.Context, ref *provider.Reference) (*Node, error) {
+func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference) (*Node, error) {
 	if ref.GetPath() != "" {
-		return pw.NodeFromPath(ctx, ref.GetPath())
+		return lu.NodeFromPath(ctx, ref.GetPath())
 	}
 
 	if ref.GetId() != nil {
-		return pw.NodeFromID(ctx, ref.GetId())
+		return lu.NodeFromID(ctx, ref.GetId())
 	}
 
 	// reference is invalid
@@ -67,16 +51,16 @@ func (pw *Path) NodeFromResource(ctx context.Context, ref *provider.Reference) (
 }
 
 // NodeFromPath converts a filename into a Node
-func (pw *Path) NodeFromPath(ctx context.Context, fn string) (node *Node, err error) {
+func (lu *Lookup) NodeFromPath(ctx context.Context, fn string) (node *Node, err error) {
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("fn", fn).Msg("NodeFromPath()")
 
-	if node, err = pw.HomeOrRootNode(ctx); err != nil {
+	if node, err = lu.HomeOrRootNode(ctx); err != nil {
 		return
 	}
 
 	if fn != "/" {
-		node, err = pw.WalkPath(ctx, node, fn, func(ctx context.Context, n *Node) error {
+		node, err = lu.WalkPath(ctx, node, fn, func(ctx context.Context, n *Node) error {
 			log.Debug().Interface("node", n).Msg("NodeFromPath() walk")
 			return nil
 		})
@@ -86,17 +70,17 @@ func (pw *Path) NodeFromPath(ctx context.Context, fn string) (node *Node, err er
 }
 
 // NodeFromID returns the internal path for the id
-func (pw *Path) NodeFromID(ctx context.Context, id *provider.ResourceId) (n *Node, err error) {
+func (lu *Lookup) NodeFromID(ctx context.Context, id *provider.ResourceId) (n *Node, err error) {
 	if id == nil || id.OpaqueId == "" {
 		return nil, fmt.Errorf("invalid resource id %+v", id)
 	}
-	return ReadNode(ctx, pw, id.OpaqueId)
+	return ReadNode(ctx, lu, id.OpaqueId)
 }
 
 // Path returns the path for node
-func (pw *Path) Path(ctx context.Context, n *Node) (p string, err error) {
+func (lu *Lookup) Path(ctx context.Context, n *Node) (p string, err error) {
 	var root *Node
-	if root, err = pw.HomeOrRootNode(ctx); err != nil {
+	if root, err = lu.HomeOrRootNode(ctx); err != nil {
 		return
 	}
 	for n.ID != root.ID {
@@ -114,9 +98,9 @@ func (pw *Path) Path(ctx context.Context, n *Node) (p string, err error) {
 }
 
 // RootNode returns the root node of the storage
-func (pw *Path) RootNode(ctx context.Context) (node *Node, err error) {
+func (lu *Lookup) RootNode(ctx context.Context) (node *Node, err error) {
 	return &Node{
-		pw:       pw,
+		lu:       lu,
 		ID:       "root",
 		Name:     "",
 		ParentID: "",
@@ -125,21 +109,21 @@ func (pw *Path) RootNode(ctx context.Context) (node *Node, err error) {
 }
 
 // HomeNode returns the home node of a user
-func (pw *Path) HomeNode(ctx context.Context) (node *Node, err error) {
-	if !pw.EnableHome {
+func (lu *Lookup) HomeNode(ctx context.Context) (node *Node, err error) {
+	if !lu.Options.EnableHome {
 		return nil, errtypes.NotSupported("ocisfs: home supported disabled")
 	}
 
-	if node, err = pw.RootNode(ctx); err != nil {
+	if node, err = lu.RootNode(ctx); err != nil {
 		return
 	}
-	node, err = pw.WalkPath(ctx, node, pw.mustGetUserLayout(ctx), nil)
+	node, err = lu.WalkPath(ctx, node, lu.mustGetUserLayout(ctx), nil)
 	return
 }
 
 // WalkPath calls n.Child(segment) on every path segment in p starting at the node r
 // If a function f is given it will be executed for every segment node, but not the root node r
-func (pw *Path) WalkPath(ctx context.Context, r *Node, p string, f func(ctx context.Context, n *Node) error) (*Node, error) {
+func (lu *Lookup) WalkPath(ctx context.Context, r *Node, p string, f func(ctx context.Context, n *Node) error) (*Node, error) {
 	segments := strings.Split(strings.Trim(p, "/"), "/")
 	var err error
 	for i := range segments {
@@ -161,14 +145,18 @@ func (pw *Path) WalkPath(ctx context.Context, r *Node, p string, f func(ctx cont
 
 // HomeOrRootNode returns the users home node when home support is enabled.
 // it returns the storages root node otherwise
-func (pw *Path) HomeOrRootNode(ctx context.Context) (node *Node, err error) {
-	if pw.EnableHome {
-		return pw.HomeNode(ctx)
+func (lu *Lookup) HomeOrRootNode(ctx context.Context) (node *Node, err error) {
+	if lu.Options.EnableHome {
+		return lu.HomeNode(ctx)
 	}
-	return pw.RootNode(ctx)
+	return lu.RootNode(ctx)
 }
 
-func (pw *Path) mustGetUserLayout(ctx context.Context) string {
+func (lu *Lookup) mustGetUserLayout(ctx context.Context) string {
 	u := user.ContextMustGetUser(ctx)
-	return templates.WithUser(u, pw.UserLayout)
+	return templates.WithUser(u, lu.Options.UserLayout)
+}
+
+func (lu *Lookup) toInternalPath(id string) string {
+	return filepath.Join(lu.Options.Root, "nodes", id)
 }

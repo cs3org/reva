@@ -32,14 +32,17 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
+	"github.com/cs3org/reva/pkg/storage/utils/ace"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
+	"github.com/rs/zerolog/log"
 )
 
 // Node represents a node in the tree and provides methods to get a Parent or Child instance
 type Node struct {
-	pw       *Path
+	lu       *Lookup
 	ParentID string
 	ID       string
 	Name     string
@@ -49,14 +52,21 @@ type Node struct {
 }
 
 func (n *Node) writeMetadata(owner *userpb.UserId) (err error) {
-	nodePath := filepath.Join(n.pw.Root, "nodes", n.ID)
+	nodePath := n.lu.toInternalPath(n.ID)
 	if err = xattr.Set(nodePath, parentidAttr, []byte(n.ParentID)); err != nil {
 		return errors.Wrap(err, "ocisfs: could not set parentid attribute")
 	}
 	if err = xattr.Set(nodePath, nameAttr, []byte(n.Name)); err != nil {
 		return errors.Wrap(err, "ocisfs: could not set name attribute")
 	}
-	if owner != nil {
+	if owner == nil {
+		if err = xattr.Set(nodePath, ownerIDAttr, []byte("")); err != nil {
+			return errors.Wrap(err, "ocisfs: could not set empty owner id attribute")
+		}
+		if err = xattr.Set(nodePath, ownerIDPAttr, []byte("")); err != nil {
+			return errors.Wrap(err, "ocisfs: could not set empty owner idp attribute")
+		}
+	} else {
 		if err = xattr.Set(nodePath, ownerIDAttr, []byte(owner.OpaqueId)); err != nil {
 			return errors.Wrap(err, "ocisfs: could not set owner id attribute")
 		}
@@ -67,21 +77,87 @@ func (n *Node) writeMetadata(owner *userpb.UserId) (err error) {
 	return
 }
 
-// ReadNode creates a new instance from an id and checks if it exists
-func ReadNode(ctx context.Context, pw *Path, id string) (n *Node, err error) {
-	n = &Node{
-		pw: pw,
-		ID: id,
+// ReadRecycleItem reads a recycle item as a node
+// TODO refactor the returned params into Node properties? would make all the path transformations go away...
+func ReadRecycleItem(ctx context.Context, lu *Lookup, key string) (n *Node, trashItem string, deletedNodePath string, origin string, err error) {
+
+	if key == "" {
+		return nil, "", "", "", errtypes.InternalError("key is empty")
 	}
 
-	nodePath := filepath.Join(n.pw.Root, "nodes", n.ID)
+	kp := strings.SplitN(key, ":", 2)
+	if len(kp) != 2 {
+		appctx.GetLogger(ctx).Error().Err(err).Str("key", key).Msg("malformed key")
+		return
+	}
+	trashItem = filepath.Join(lu.Options.Root, "trash", kp[0], kp[1])
+
+	var link string
+	link, err = os.Readlink(trashItem)
+	if err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Str("trashItem", trashItem).Msg("error reading trash link")
+		return
+	}
+	parts := strings.SplitN(filepath.Base(link), ".T.", 2)
+	if len(parts) != 2 {
+		appctx.GetLogger(ctx).Error().Err(err).Str("trashItem", trashItem).Interface("parts", parts).Msg("malformed trash link")
+		return
+	}
+
+	n = &Node{
+		lu: lu,
+		ID: parts[0],
+	}
+
+	deletedNodePath = lu.toInternalPath(filepath.Base(link))
 
 	// lookup parent id in extended attributes
 	var attrBytes []byte
-	if attrBytes, err = xattr.Get(nodePath, parentidAttr); err == nil {
+	if attrBytes, err = xattr.Get(deletedNodePath, parentidAttr); err == nil {
 		n.ParentID = string(attrBytes)
 	} else {
 		return
+	}
+	// lookup name in extended attributes
+	if attrBytes, err = xattr.Get(deletedNodePath, nameAttr); err == nil {
+		n.Name = string(attrBytes)
+	} else {
+		return
+	}
+
+	// get origin node
+	origin = "/"
+
+	// lookup origin path in extended attributes
+	if attrBytes, err = xattr.Get(deletedNodePath, trashOriginAttr); err == nil {
+		origin = string(attrBytes)
+	} else {
+		log.Error().Err(err).Str("trashItem", trashItem).Str("link", link).Str("deletedNodePath", deletedNodePath).Msg("could not read origin path, restoring to /")
+	}
+	return
+}
+
+// ReadNode creates a new instance from an id and checks if it exists
+func ReadNode(ctx context.Context, lu *Lookup, id string) (n *Node, err error) {
+	n = &Node{
+		lu: lu,
+		ID: id,
+	}
+
+	nodePath := lu.toInternalPath(n.ID)
+
+	// lookup parent id in extended attributes
+	var attrBytes []byte
+	attrBytes, err = xattr.Get(nodePath, parentidAttr)
+	switch {
+	case err == nil:
+		n.ParentID = string(attrBytes)
+	case isNoData(err):
+		return nil, errtypes.InternalError(err.Error())
+	case isNotFound(err):
+		return n, nil // swallow not found, the node defaults to exists = false
+	default:
+		return nil, errtypes.InternalError(err.Error())
 	}
 	// lookup name in extended attributes
 	if attrBytes, err = xattr.Get(nodePath, nameAttr); err == nil {
@@ -91,7 +167,7 @@ func ReadNode(ctx context.Context, pw *Path, id string) (n *Node, err error) {
 	}
 
 	var root *Node
-	if root, err = pw.HomeOrRootNode(ctx); err != nil {
+	if root, err = lu.HomeOrRootNode(ctx); err != nil {
 		return
 	}
 	parentID := n.ParentID
@@ -100,14 +176,13 @@ func ReadNode(ctx context.Context, pw *Path, id string) (n *Node, err error) {
 	for parentID != root.ID {
 		log.Debug().Interface("node", n).Str("root.ID", root.ID).Msg("ReadNode()")
 		// walk to root to check node is not part of a deleted subtree
-		parentPath := filepath.Join(n.pw.Root, "nodes", parentID)
 
-		if attrBytes, err = xattr.Get(parentPath, parentidAttr); err == nil {
+		if attrBytes, err = xattr.Get(lu.toInternalPath(parentID), parentidAttr); err == nil {
 			parentID = string(attrBytes)
 			log.Debug().Interface("node", n).Str("root.ID", root.ID).Str("parentID", parentID).Msg("ReadNode() found parent")
 		} else {
 			log.Error().Err(err).Interface("node", n).Str("root.ID", root.ID).Msg("ReadNode()")
-			if os.IsNotExist(err) {
+			if isNotFound(err) {
 				return
 			}
 			return
@@ -123,12 +198,12 @@ func ReadNode(ctx context.Context, pw *Path, id string) (n *Node, err error) {
 // Child returns the child node with the given name
 func (n *Node) Child(name string) (c *Node, err error) {
 	c = &Node{
-		pw:       n.pw,
+		lu:       n.lu,
 		ParentID: n.ID,
 		Name:     name,
 	}
 	var link string
-	if link, err = os.Readlink(filepath.Join(n.pw.Root, "nodes", n.ID, name)); os.IsNotExist(err) {
+	if link, err = os.Readlink(filepath.Join(n.lu.toInternalPath(n.ID), name)); os.IsNotExist(err) {
 		err = nil // if the file does not exist we return a node that has Exists = false
 		return
 	}
@@ -151,11 +226,11 @@ func (n *Node) Parent() (p *Node, err error) {
 		return nil, fmt.Errorf("ocisfs: root has no parent")
 	}
 	p = &Node{
-		pw: n.pw,
+		lu: n.lu,
 		ID: n.ParentID,
 	}
 
-	parentPath := filepath.Join(n.pw.Root, "nodes", n.ParentID)
+	parentPath := n.lu.toInternalPath(n.ParentID)
 
 	// lookup parent id in extended attributes
 	var attrBytes []byte
@@ -185,7 +260,7 @@ func (n *Node) Owner() (id string, idp string, err error) {
 		return n.ownerID, n.ownerIDP, nil
 	}
 
-	nodePath := filepath.Join(n.pw.Root, "nodes", n.ParentID)
+	nodePath := n.lu.toInternalPath(n.ID)
 	// lookup parent id in extended attributes
 	var attrBytes []byte
 	// lookup name in extended attributes
@@ -208,7 +283,7 @@ func (n *Node) AsResourceInfo(ctx context.Context) (ri *provider.ResourceInfo, e
 	log := appctx.GetLogger(ctx)
 
 	var fn string
-	nodePath := filepath.Join(n.pw.Root, "nodes", n.ID)
+	nodePath := n.lu.toInternalPath(n.ID)
 
 	var fi os.FileInfo
 
@@ -235,7 +310,7 @@ func (n *Node) AsResourceInfo(ctx context.Context) (ri *provider.ResourceInfo, e
 
 	id := &provider.ResourceId{OpaqueId: n.ID}
 
-	fn, err = n.pw.Path(ctx, n)
+	fn, err = n.lu.Path(ctx, n)
 	if err != nil {
 		return nil, err
 	}
@@ -321,8 +396,7 @@ func (n *Node) AsResourceInfo(ctx context.Context) (ri *provider.ResourceInfo, e
 
 // HasPropagation checks if the propagation attribute exists and is set to "1"
 func (n *Node) HasPropagation() (propagation bool) {
-	nodePath := filepath.Join(n.pw.Root, "nodes", n.ID)
-	if b, err := xattr.Get(nodePath, propagationAttr); err == nil {
+	if b, err := xattr.Get(n.lu.toInternalPath(n.ID), propagationAttr); err == nil {
 		return string(b) == "1"
 	}
 	return false
@@ -330,9 +404,8 @@ func (n *Node) HasPropagation() (propagation bool) {
 
 // GetTMTime reads the tmtime from the extended attributes
 func (n *Node) GetTMTime() (tmTime time.Time, err error) {
-	nodePath := filepath.Join(n.pw.Root, "nodes", n.ID)
 	var b []byte
-	if b, err = xattr.Get(nodePath, treeMTimeAttr); err != nil {
+	if b, err = xattr.Get(n.lu.toInternalPath(n.ID), treeMTimeAttr); err != nil {
 		return
 	}
 	return time.Parse(time.RFC3339Nano, string(b))
@@ -340,17 +413,45 @@ func (n *Node) GetTMTime() (tmTime time.Time, err error) {
 
 // SetTMTime writes the tmtime to the extended attributes
 func (n *Node) SetTMTime(t time.Time) (err error) {
-	nodePath := filepath.Join(n.pw.Root, "nodes", n.ID)
-	return xattr.Set(nodePath, treeMTimeAttr, []byte(t.UTC().Format(time.RFC3339Nano)))
+	return xattr.Set(n.lu.toInternalPath(n.ID), treeMTimeAttr, []byte(t.UTC().Format(time.RFC3339Nano)))
 }
 
 // UnsetTempEtag removes the temporary etag attribute
 func (n *Node) UnsetTempEtag() (err error) {
-	nodePath := filepath.Join(n.pw.Root, "nodes", n.ID)
-	if err = xattr.Remove(nodePath, tmpEtagAttr); err != nil {
+	if err = xattr.Remove(n.lu.toInternalPath(n.ID), tmpEtagAttr); err != nil {
 		if e, ok := err.(*xattr.Error); ok && e.Err.Error() == "no data available" {
 			return nil
 		}
 	}
 	return err
+}
+
+// ListGrantees lists the grantees of the current node
+// We don't want to wast time and memory by creating grantee objects.
+// The function will return a list of opaque strings that can be used to make a ReadGrant call
+func (n *Node) ListGrantees(ctx context.Context) (grantees []string, err error) {
+	var attrs []string
+	if attrs, err = xattr.List(n.lu.toInternalPath(n.ID)); err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("error listing attributes")
+		return nil, err
+	}
+	for i := range attrs {
+		if strings.HasPrefix(attrs[i], grantPrefix) {
+			grantees = append(grantees, attrs[i])
+		}
+	}
+	return
+}
+
+// ReadGrant reads a CS3 grant
+func (n *Node) ReadGrant(ctx context.Context, grantee string) (g *provider.Grant, err error) {
+	var b []byte
+	if b, err = xattr.Get(n.lu.toInternalPath(n.ID), grantee); err != nil {
+		return nil, err
+	}
+	var e *ace.ACE
+	if e, err = ace.Unmarshal(strings.TrimPrefix(grantee, grantPrefix), b); err != nil {
+		return nil, err
+	}
+	return e.Grant(), nil
 }

@@ -109,27 +109,7 @@ func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, upl
 		return "", errors.Wrap(err, "ocfs: error resolving reference")
 	}
 
-	// check permissions
-	var perm *provider.ResourcePermissions
-	var perr error
-	// if destination exists
-	if _, err := os.Stat(ip); err == nil {
-		// check permissions of file to be overwritten
-		perm, perr = fs.readPermissions(ctx, ip)
-	} else {
-		// check permissions of parent
-		perm, perr = fs.readPermissions(ctx, filepath.Dir(ip))
-	}
-	if perr == nil {
-		if !perm.InitiateFileUpload {
-			return "", errtypes.PermissionDenied("")
-		}
-	} else {
-		if isNotFound(perr) {
-			return "", errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
-		}
-		return "", errors.Wrap(perr, "ocfs: error reading permissions")
-	}
+	// permissions are checked in NewUpload below
 
 	p := fs.toStoragePath(ctx, ip)
 

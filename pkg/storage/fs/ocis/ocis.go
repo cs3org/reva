@@ -56,8 +56,8 @@ const (
 	// updated when the file is renamed or moved
 	nameAttr string = ocisPrefix + "name"
 
-	// SharePrefix is the prefix for sharing related extended attributes
-	sharePrefix    string = ocisPrefix + "acl."
+	// grantPrefix is the prefix for sharing related extended attributes
+	grantPrefix    string = ocisPrefix + "grant."
 	metadataPrefix string = ocisPrefix + "md."
 	// TODO implement favorites metadata flag
 	//favPrefix   string = ocisPrefix + "fav."  // favorite flag, per user
@@ -87,47 +87,47 @@ func init() {
 	registry.Register("ocis", New)
 }
 
-func parseConfig(m map[string]interface{}) (*Path, error) {
-	pw := &Path{}
-	if err := mapstructure.Decode(m, pw); err != nil {
+func parseConfig(m map[string]interface{}) (*Options, error) {
+	o := &Options{}
+	if err := mapstructure.Decode(m, o); err != nil {
 		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
 	}
-	return pw, nil
+	return o, nil
 }
 
-func (pw *Path) init(m map[string]interface{}) {
-	if pw.UserLayout == "" {
-		pw.UserLayout = "{{.Id.OpaqueId}}"
+func (o *Options) init(m map[string]interface{}) {
+	if o.UserLayout == "" {
+		o.UserLayout = "{{.Id.OpaqueId}}"
 	}
 	// ensure user layout has no starting or trailing /
-	pw.UserLayout = strings.Trim(pw.UserLayout, "/")
+	o.UserLayout = strings.Trim(o.UserLayout, "/")
 
-	if pw.ShareFolder == "" {
-		pw.ShareFolder = "/Shares"
+	if o.ShareFolder == "" {
+		o.ShareFolder = "/Shares"
 	}
 	// ensure share folder always starts with slash
-	pw.ShareFolder = filepath.Join("/", pw.ShareFolder)
+	o.ShareFolder = filepath.Join("/", o.ShareFolder)
 
 	// c.DataDirectory should never end in / unless it is the root
-	pw.Root = filepath.Clean(pw.Root)
+	o.Root = filepath.Clean(o.Root)
 }
 
 // New returns an implementation to of the storage.FS interface that talk to
 // a local filesystem.
 func New(m map[string]interface{}) (storage.FS, error) {
-	pw, err := parseConfig(m)
+	o, err := parseConfig(m)
 	if err != nil {
 		return nil, err
 	}
-	pw.init(m)
+	o.init(m)
 
 	dataPaths := []string{
-		filepath.Join(pw.Root, "nodes"),
+		filepath.Join(o.Root, "nodes"),
 		// notes contain symlinks from nodes/<u-u-i-d>/uploads/<uploadid> to ../../uploads/<uploadid>
 		// better to keep uploads on a fast / volatile storage before a workflow finally moves them to the nodes dir
-		filepath.Join(pw.Root, "uploads"),
-		filepath.Join(pw.Root, "trash"),
+		filepath.Join(o.Root, "uploads"),
+		filepath.Join(o.Root, "trash"),
 	}
 	for _, v := range dataPaths {
 		if err := os.MkdirAll(v, 0700); err != nil {
@@ -137,26 +137,34 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		}
 	}
 
+	lu := &Lookup{
+		Options: o,
+	}
+
 	// the root node has an empty name, or use `.` ?
 	// the root node has no parent, or use `root` ?
-	if err = createNode(&Node{pw: pw, ID: "root"}, nil); err != nil {
+	if err = createNode(&Node{lu: lu, ID: "root"}, nil); err != nil {
 		return nil, err
 	}
 
-	tp, err := NewTree(pw)
+	tp, err := NewTree(lu)
 	if err != nil {
 		return nil, err
 	}
 
 	return &ocisfs{
 		tp: tp,
-		pw: pw,
+		lu: lu,
+		o:  o,
+		p:  &Permissions{lu: lu},
 	}, nil
 }
 
 type ocisfs struct {
 	tp TreePersistence
-	pw *Path
+	lu *Lookup
+	o  *Options
+	p  *Permissions
 }
 
 func (fs *ocisfs) Shutdown(ctx context.Context) error {
@@ -169,15 +177,15 @@ func (fs *ocisfs) GetQuota(ctx context.Context) (int, int, error) {
 
 // CreateHome creates a new root node that has no parent id
 func (fs *ocisfs) CreateHome(ctx context.Context) (err error) {
-	if !fs.pw.EnableHome || fs.pw.UserLayout == "" {
+	if !fs.o.EnableHome || fs.o.UserLayout == "" {
 		return errtypes.NotSupported("ocisfs: CreateHome() home supported disabled")
 	}
 
 	var n, h *Node
-	if n, err = fs.pw.RootNode(ctx); err != nil {
+	if n, err = fs.lu.RootNode(ctx); err != nil {
 		return
 	}
-	h, err = fs.pw.WalkPath(ctx, n, fs.pw.mustGetUserLayout(ctx), func(ctx context.Context, n *Node) error {
+	h, err = fs.lu.WalkPath(ctx, n, fs.lu.mustGetUserLayout(ctx), func(ctx context.Context, n *Node) error {
 		if !n.Exists {
 			if err := fs.tp.CreateDir(ctx, n); err != nil {
 				return err
@@ -186,8 +194,8 @@ func (fs *ocisfs) CreateHome(ctx context.Context) (err error) {
 		return nil
 	})
 
-	if fs.pw.TreeTimeAccounting {
-		homePath := filepath.Join(fs.pw.Root, "nodes", h.ID)
+	if fs.o.TreeTimeAccounting {
+		homePath := h.lu.toInternalPath(h.ID)
 		// mark the home node as the end of propagation
 		if err = xattr.Set(homePath, propagationAttr, []byte("1")); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("node", h).Msg("could not mark home as propagation root")
@@ -200,12 +208,12 @@ func (fs *ocisfs) CreateHome(ctx context.Context) (err error) {
 // GetHome is called to look up the home path for a user
 // It is NOT supposed to return the internal path but the external path
 func (fs *ocisfs) GetHome(ctx context.Context) (string, error) {
-	if !fs.pw.EnableHome || fs.pw.UserLayout == "" {
+	if !fs.o.EnableHome || fs.o.UserLayout == "" {
 		return "", errtypes.NotSupported("ocisfs: GetHome() home supported disabled")
 	}
 	u := user.ContextMustGetUser(ctx)
-	layout := templates.WithUser(u, fs.pw.UserLayout)
-	return filepath.Join(fs.pw.Root, layout), nil // TODO use a namespace?
+	layout := templates.WithUser(u, fs.o.UserLayout)
+	return filepath.Join(fs.o.Root, layout), nil // TODO use a namespace?
 }
 
 // Tree persistence
@@ -216,20 +224,36 @@ func (fs *ocisfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (str
 }
 
 func (fs *ocisfs) CreateDir(ctx context.Context, fn string) (err error) {
-	var node *Node
-	if node, err = fs.pw.NodeFromPath(ctx, fn); err != nil {
+	var n *Node
+	if n, err = fs.lu.NodeFromPath(ctx, fn); err != nil {
 		return
 	}
-	if node.Exists {
+
+	if n.Exists {
 		return errtypes.AlreadyExists(fn)
 	}
-	err = fs.tp.CreateDir(ctx, node)
 
-	if fs.pw.TreeTimeAccounting {
-		nodePath := filepath.Join(fs.pw.Root, "nodes", node.ID)
+	pn, err := n.Parent()
+	if err != nil {
+		return errors.Wrap(err, "ocisfs: error getting parent "+n.ParentID)
+	}
+	ok, err := fs.p.HasPermission(ctx, pn, func(rp *provider.ResourcePermissions) bool {
+		return rp.CreateContainer
+	})
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !ok:
+		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
+	}
+
+	err = fs.tp.CreateDir(ctx, n)
+
+	if fs.o.TreeTimeAccounting {
+		nodePath := n.lu.toInternalPath(n.ID)
 		// mark the home node as the end of propagation
 		if err = xattr.Set(nodePath, propagationAttr, []byte("1")); err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Interface("node", node).Msg("could not mark node to propagate")
+			appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not mark node to propagate")
 			return
 		}
 	}
@@ -247,16 +271,16 @@ func (fs *ocisfs) CreateReference(ctx context.Context, p string, targetURI *url.
 	parts := strings.Split(p, "/")
 
 	if len(parts) != 2 {
-		return errtypes.PermissionDenied("ocisfs: references must be a child of the share folder: share_folder=" + fs.pw.ShareFolder + " path=" + p)
+		return errtypes.PermissionDenied("ocisfs: references must be a child of the share folder: share_folder=" + fs.o.ShareFolder + " path=" + p)
 	}
 
-	if parts[0] != strings.Trim(fs.pw.ShareFolder, "/") {
-		return errtypes.PermissionDenied("ocisfs: cannot create references outside the share folder: share_folder=" + fs.pw.ShareFolder + " path=" + p)
+	if parts[0] != strings.Trim(fs.o.ShareFolder, "/") {
+		return errtypes.PermissionDenied("ocisfs: cannot create references outside the share folder: share_folder=" + fs.o.ShareFolder + " path=" + p)
 	}
 
 	// create Shares folder if it does not exist
 	var n *Node
-	if n, err = fs.pw.NodeFromPath(ctx, fs.pw.ShareFolder); err != nil {
+	if n, err = fs.lu.NodeFromPath(ctx, fs.o.ShareFolder); err != nil {
 		return errtypes.InternalError(err.Error())
 	} else if !n.Exists {
 		if err = fs.tp.CreateDir(ctx, n); err != nil {
@@ -277,7 +301,7 @@ func (fs *ocisfs) CreateReference(ctx context.Context, p string, targetURI *url.
 		return
 	}
 
-	internal := filepath.Join(fs.pw.Root, "nodes", n.ID)
+	internal := n.lu.toInternalPath(n.ID)
 	if err = xattr.Set(internal, referenceAttr, []byte(targetURI.String())); err != nil {
 		return errors.Wrapf(err, "ocisfs: error setting the target %s on the reference file %s", targetURI.String(), internal)
 	}
@@ -286,41 +310,81 @@ func (fs *ocisfs) CreateReference(ctx context.Context, p string, targetURI *url.
 
 func (fs *ocisfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (err error) {
 	var oldNode, newNode *Node
-	if oldNode, err = fs.pw.NodeFromResource(ctx, oldRef); err != nil {
+	if oldNode, err = fs.lu.NodeFromResource(ctx, oldRef); err != nil {
 		return
 	}
+
 	if !oldNode.Exists {
 		err = errtypes.NotFound(filepath.Join(oldNode.ParentID, oldNode.Name))
 		return
 	}
 
-	if newNode, err = fs.pw.NodeFromResource(ctx, newRef); err != nil {
+	ok, err := fs.p.HasPermission(ctx, oldNode, func(rp *provider.ResourcePermissions) bool {
+		return rp.Move
+	})
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !ok:
+		return errtypes.PermissionDenied(oldNode.ID)
+	}
+
+	if newNode, err = fs.lu.NodeFromResource(ctx, newRef); err != nil {
 		return
 	}
+	if newNode.Exists {
+		err = errtypes.AlreadyExists(filepath.Join(newNode.ParentID, newNode.Name))
+		return
+	}
+
 	return fs.tp.Move(ctx, oldNode, newNode)
 }
 
 func (fs *ocisfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (ri *provider.ResourceInfo, err error) {
 	var node *Node
-	if node, err = fs.pw.NodeFromResource(ctx, ref); err != nil {
+	if node, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
 		return
 	}
+
 	if !node.Exists {
 		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
 		return
 	}
+
+	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
+		return rp.Stat
+	})
+	switch {
+	case err != nil:
+		return nil, errtypes.InternalError(err.Error())
+	case !ok:
+		return nil, errtypes.PermissionDenied(node.ID)
+	}
+
 	return node.AsResourceInfo(ctx)
 }
 
 func (fs *ocisfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) (finfos []*provider.ResourceInfo, err error) {
 	var node *Node
-	if node, err = fs.pw.NodeFromResource(ctx, ref); err != nil {
+	if node, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
 		return
 	}
+
 	if !node.Exists {
 		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
 		return
 	}
+
+	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
+		return rp.ListContainer
+	})
+	switch {
+	case err != nil:
+		return nil, errtypes.InternalError(err.Error())
+	case !ok:
+		return nil, errtypes.PermissionDenied(node.ID)
+	}
+
 	var children []*Node
 	children, err = fs.tp.ListFolder(ctx, node)
 	if err != nil {
@@ -337,24 +401,35 @@ func (fs *ocisfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 
 func (fs *ocisfs) Delete(ctx context.Context, ref *provider.Reference) (err error) {
 	var node *Node
-	if node, err = fs.pw.NodeFromResource(ctx, ref); err != nil {
+	if node, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
 		return
 	}
 	if !node.Exists {
 		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
 		return
 	}
+
+	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
+		return rp.Delete
+	})
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !ok:
+		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+	}
+
 	return fs.tp.Delete(ctx, node)
 }
 
 // Data persistence
 
-func (fs *ocisfs) ContentPath(node *Node) string {
-	return filepath.Join(fs.pw.Root, "nodes", node.ID)
+func (fs *ocisfs) ContentPath(n *Node) string {
+	return n.lu.toInternalPath(n.ID)
 }
 
 func (fs *ocisfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
-	node, err := fs.pw.NodeFromResource(ctx, ref)
+	node, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "ocisfs: error resolving ref")
 	}
@@ -362,6 +437,16 @@ func (fs *ocisfs) Download(ctx context.Context, ref *provider.Reference) (io.Rea
 	if !node.Exists {
 		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
 		return nil, err
+	}
+
+	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
+		return rp.InitiateFileDownload
+	})
+	switch {
+	case err != nil:
+		return nil, errtypes.InternalError(err.Error())
+	case !ok:
+		return nil, errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 
 	contentPath := fs.ContentPath(node)
