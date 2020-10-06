@@ -40,6 +40,9 @@ type Options struct {
 
 	// propagate size changes as treesize
 	TreeSizeAccounting bool `mapstructure:"treesize_accounting"`
+
+	// set an owner for the root node
+	Owner string `mapstructure:"owner"`
 }
 
 // newOptions initializes the available default options.
