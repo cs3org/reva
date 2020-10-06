@@ -285,13 +285,6 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 	}
 	np := filepath.Join(upload.info.MetaData["dir"], upload.info.MetaData["filename"])
 
-	// TODO check etag with If-Match header
-	// if destination exists
-	//if _, err := os.Stat(np); err == nil {
-	// copy attributes of existing file to tmp file before overwriting the target?
-	// eos creates revisions internally
-	//}
-
 	err := upload.fs.c.WriteFile(ctx, upload.info.Storage["Username"], np, upload.binPath)
 
 	// only delete the upload if it was successfully written to eos
