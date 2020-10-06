@@ -28,7 +28,6 @@ import (
 	"os/exec"
 	gouser "os/user"
 	"path"
-	"path/filepath"
 	"strconv"
 	"syscall"
 
@@ -38,6 +37,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
 	"github.com/gofrs/uuid"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
 
 	"github.com/cs3org/reva/pkg/logger"
@@ -662,7 +662,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, username, path string) (
 
 	log.Info().Str("username", username).Str("path", path).Str("rsp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
 
-	return c.grpcMDResponseToFileInfo(rsp, filepath.Dir(path))
+	return c.grpcMDResponseToFileInfo(rsp, "")
 
 }
 
@@ -1037,14 +1037,17 @@ func (c *Client) Write(ctx context.Context, username, path string, stream io.Rea
 
 // WriteFile writes an existing file to the mgm
 func (c *Client) WriteFile(ctx context.Context, username, path, source string) error {
+
 	unixUser, err := c.getUnixUser(username)
 	if err != nil {
 		return err
 	}
+
 	xrdPath := fmt.Sprintf("%s//%s", c.opt.URL, path)
 	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, "--nopbar", "--silent", "-f", source, xrdPath, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s", unixUser.Uid, unixUser.Gid))
 	_, _, err = c.execute(ctx, cmd)
 	return err
+
 }
 
 // ListDeletedEntries returns a list of the deleted entries.
@@ -1239,17 +1242,22 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse, namepfx string) (
 			fi.File = namepfx + "/" + string(st.Cmd.Name)
 		}
 
+		var allattrs = ""
 		for k, v := range st.Cmd.Xattrs {
 			if fi.Attrs == nil {
 				fi.Attrs = make(map[string]string)
 			}
 			fi.Attrs[k] = string(v)
+			allattrs += string(v)
+			allattrs += ","
 		}
 
 		fi.Size = 0
 	}
 
 	fi.ETag = fi.Attrs["etag"]
+
+	log.Debug().Str("stat info - path", fi.File).Uint64("inode:", fi.Inode).Uint64("uid:", fi.UID).Uint64("gid:", fi.GID).Str("etag:", fi.ETag).Msg("grpc response")
 
 	return fi, nil
 }
