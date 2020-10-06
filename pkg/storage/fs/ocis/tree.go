@@ -94,17 +94,27 @@ func (t *Tree) CreateDir(ctx context.Context, node *Node) (err error) {
 	// create a directory node
 	node.ID = uuid.New().String()
 
-	if t.lu.Options.EnableHome {
-		if u, ok := user.ContextGetUser(ctx); ok {
-			err = createNode(node, u.Id)
-		} else {
-			log := appctx.GetLogger(ctx)
-			log.Error().Msg("home support enabled but no user in context")
-			err = errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
-		}
-	} else {
+	// who will become the owner?
+	u, ok := user.ContextGetUser(ctx)
+	switch {
+	case ok:
+		// we have a user in context
+		err = createNode(node, u.Id)
+	case t.lu.Options.EnableHome:
+		// enable home requires a user
+		log := appctx.GetLogger(ctx)
+		log.Error().Msg("home support enabled but no user in context")
+		err = errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
+	case t.lu.Options.Owner != "":
+		// fallback to owner?
+		err = createNode(node, &userpb.UserId{
+			OpaqueId: t.lu.Options.Owner,
+		})
+	default:
+		// fallback to parent owner?
 		err = createNode(node, nil)
 	}
+
 	if err != nil {
 		return nil
 	}

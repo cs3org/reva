@@ -83,12 +83,14 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 	nodePath := fs.lu.toInternalPath(n.ID)
 
 	var tmp *os.File
-	tmp, err = ioutil.TempFile(nodePath, "._reva_atomic_upload")
+	tmp, err = ioutil.TempFile(filepath.Dir(nodePath), "._reva_atomic_upload")
 	if err != nil {
 		return errors.Wrap(err, "ocisfs: error creating tmp fn at "+nodePath)
 	}
 
 	_, err = io.Copy(tmp, r)
+	r.Close()
+	tmp.Close()
 	if err != nil {
 		return errors.Wrap(err, "ocisfs: error writing to tmp file "+tmp.Name())
 	}
@@ -97,23 +99,51 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 	//_ = os.RemoveAll(path.Join(nodePath, "content"))
 	appctx.GetLogger(ctx).Warn().Msg("TODO move old content to version")
 
+	appctx.GetLogger(ctx).Debug().Str("tmp", tmp.Name()).Str("ipath", nodePath).Msg("moving tmp to content")
 	if err = os.Rename(tmp.Name(), nodePath); err != nil {
 		return
 	}
 
-	if fs.o.EnableHome {
-		if u, ok := user.ContextGetUser(ctx); ok {
-			err = n.writeMetadata(u.Id)
-		} else {
-			log := appctx.GetLogger(ctx)
-			log.Error().Msg("home support enabled but no user in context")
-			err = errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
-		}
-	} else {
+	// who will become the owner?
+	u, ok := user.ContextGetUser(ctx)
+	switch {
+	case ok:
+		err = n.writeMetadata(u.Id)
+	case fs.o.EnableHome:
+		log := appctx.GetLogger(ctx)
+		log.Error().Msg("home support enabled but no user in context")
+		err = errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
+	case fs.o.Owner != "":
+		err = n.writeMetadata(&userpb.UserId{
+			OpaqueId: fs.o.Owner,
+		})
+	default:
+		// fallback to parent owner?
 		err = n.writeMetadata(nil)
 	}
 	if err != nil {
 		return
+	}
+
+	// link child name to parent if it is new
+	childNameLink := filepath.Join(fs.lu.toInternalPath(n.ParentID), n.Name)
+	var link string
+	link, err = os.Readlink(childNameLink)
+	if err == nil && link != "../"+n.ID {
+		log.Err(err).
+			Interface("node", n).
+			Str("childNameLink", childNameLink).
+			Str("link", link).
+			Msg("ocisfs: child name link has wrong target id, repairing")
+
+		if err = os.Remove(childNameLink); err != nil {
+			return errors.Wrap(err, "ocisfs: could not remove symlink child entry")
+		}
+	}
+	if os.IsNotExist(err) || link != "../"+n.ID {
+		if err = os.Symlink("../"+n.ID, childNameLink); err != nil {
+			return errors.Wrap(err, "ocisfs: could not symlink child entry")
+		}
 	}
 
 	if fs.o.TreeTimeAccounting {
@@ -442,15 +472,21 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 			Msg("ocisfs: could not rename")
 		return
 	}
-	if upload.fs.o.EnableHome {
-		if u, ok := user.ContextGetUser(upload.ctx); ok {
-			err = n.writeMetadata(u.Id)
-		} else {
-			log := appctx.GetLogger(upload.ctx)
-			log.Error().Msg("home support enabled but no user in context")
-			err = errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
-		}
-	} else {
+	// who will become the owner?
+	u, ok := user.ContextGetUser(upload.ctx)
+	switch {
+	case ok:
+		err = n.writeMetadata(u.Id)
+	case upload.fs.o.EnableHome:
+		log := appctx.GetLogger(upload.ctx)
+		log.Error().Msg("home support enabled but no user in context")
+		err = errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from upload ctx")
+	case upload.fs.o.Owner != "":
+		err = n.writeMetadata(&userpb.UserId{
+			OpaqueId: upload.fs.o.Owner,
+		})
+	default:
+		// fallback to parent owner?
 		err = n.writeMetadata(nil)
 	}
 	if err != nil {
