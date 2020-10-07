@@ -34,7 +34,7 @@ func (s *svc) CreateTransfer(ctx context.Context, req *tx.CreateTransferRequest)
 
 func (s *svc) GetTransferStatus(ctx context.Context, in *tx.GetTransferStatusRequest) (*tx.GetTransferStatusResponse, error) {
 	return &tx.GetTransferStatusResponse{
-		Status: status.NewUnimplemented(ctx, errors.New("GetTransfer not implemented"), "GetTransfer not implemented"),
+		Status: status.NewUnimplemented(ctx, errors.New("GetTransferStatus not implemented"), "GetTransferStatus not implemented"),
 	}, nil
 }
 
