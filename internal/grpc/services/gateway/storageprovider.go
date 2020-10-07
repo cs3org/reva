@@ -2025,6 +2025,12 @@ func (s *svc) getSharedFolder(ctx context.Context) string {
 	return shareFolder
 }
 
+func (s *svc) CreateSymlink(ctx context.Context, req *provider.CreateSymlinkRequest) (*provider.CreateSymlinkResponse, error) {
+	return &provider.CreateSymlinkResponse{
+		Status: status.NewUnimplemented(ctx, errors.New("CreateSymlink not implemented"), "CreateSymlink not implemented"),
+	}, nil
+}
+
 func (s *svc) ListFileVersions(ctx context.Context, req *provider.ListFileVersionsRequest) (*provider.ListFileVersionsResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
