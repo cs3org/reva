@@ -40,7 +40,7 @@ require (
 	github.com/stretchr/testify v1.6.1
 	github.com/studio-b12/gowebdav v0.0.0-20200303150724-9380631c29a1
 	github.com/tus/tusd v1.1.1-0.20200416115059-9deabf9d80c2
-	go.opencensus.io v0.22.4
+	go.opencensus.io v0.22.5
 	golang.org/x/crypto v0.0.0-20200709230013-948cd5f35899
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	google.golang.org/grpc v1.32.0
