@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -122,6 +123,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	}
 	o.init(m)
 
+	// create data paths for internal layout
 	dataPaths := []string{
 		filepath.Join(o.Root, "nodes"),
 		// notes contain symlinks from nodes/<u-u-i-d>/uploads/<uploadid> to ../../uploads/<uploadid>
@@ -141,9 +143,14 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		Options: o,
 	}
 
-	// the root node has an empty name, or use `.` ?
-	// the root node has no parent, or use `root` ?
-	if err = createNode(&Node{lu: lu, ID: "root"}, nil); err != nil {
+	// the root node has an empty name
+	// the root node has no parent
+	if err = createNode(
+		&Node{lu: lu, ID: "root"},
+		&userv1beta1.UserId{
+			OpaqueId: o.Owner,
+		},
+	); err != nil {
 		return nil, err
 	}
 
