@@ -494,6 +494,10 @@ func (s *service) CreateReference(ctx context.Context, req *provider.CreateRefer
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
+func (s *service) CreateSymlink(ctx context.Context, req *provider.CreateSymlinkRequest) (*provider.CreateSymlinkResponse, error) {
+	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+}
+
 func (s *service) UpdateGrant(ctx context.Context, req *provider.UpdateGrantRequest) (*provider.UpdateGrantResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }

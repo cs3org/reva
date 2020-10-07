@@ -878,52 +878,6 @@ func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (
 	return res, nil
 }
 
-func (s *service) CreateReference(ctx context.Context, req *provider.CreateReferenceRequest) (*provider.CreateReferenceResponse, error) {
-	log := appctx.GetLogger(ctx)
-
-	// parse uri is valid
-	u, err := url.Parse(req.TargetUri)
-	if err != nil {
-		log.Err(err).Msg("invalid target uri")
-		return &provider.CreateReferenceResponse{
-			Status: status.NewInvalidArg(ctx, "target uri is invalid: "+err.Error()),
-		}, nil
-	}
-
-	ref := &provider.Reference{
-		Spec: &provider.Reference_Path{
-			Path: req.Path,
-		},
-	}
-
-	newRef, err := s.unwrap(ctx, ref)
-	if err != nil {
-		return &provider.CreateReferenceResponse{
-			Status: status.NewInternal(ctx, err, "error unwrapping path"),
-		}, nil
-	}
-
-	if err := s.storage.CreateReference(ctx, newRef.GetPath(), u); err != nil {
-		log.Err(err).Msg("error calling CreateReference")
-		var st *rpc.Status
-		switch err.(type) {
-		case errtypes.IsNotFound:
-			st = status.NewNotFound(ctx, "path not found when creating reference")
-		case errtypes.PermissionDenied:
-			st = status.NewPermissionDenied(ctx, err, "permission denied")
-		default:
-			st = status.NewInternal(ctx, err, "error creating reference")
-		}
-		return &provider.CreateReferenceResponse{
-			Status: st,
-		}, nil
-	}
-
-	return &provider.CreateReferenceResponse{
-		Status: status.NewOK(ctx),
-	}, nil
-}
-
 func (s *service) UpdateGrant(ctx context.Context, req *provider.UpdateGrantRequest) (*provider.UpdateGrantResponse, error) {
 	// check grantee type is valid
 	if req.Grant.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_INVALID {
@@ -994,6 +948,58 @@ func (s *service) RemoveGrant(ctx context.Context, req *provider.RemoveGrantRequ
 		Status: status.NewOK(ctx),
 	}
 	return res, nil
+}
+
+func (s *service) CreateReference(ctx context.Context, req *provider.CreateReferenceRequest) (*provider.CreateReferenceResponse, error) {
+	log := appctx.GetLogger(ctx)
+
+	// parse uri is valid
+	u, err := url.Parse(req.TargetUri)
+	if err != nil {
+		log.Err(err).Msg("invalid target uri")
+		return &provider.CreateReferenceResponse{
+			Status: status.NewInvalidArg(ctx, "target uri is invalid: "+err.Error()),
+		}, nil
+	}
+
+	ref := &provider.Reference{
+		Spec: &provider.Reference_Path{
+			Path: req.Path,
+		},
+	}
+
+	newRef, err := s.unwrap(ctx, ref)
+	if err != nil {
+		return &provider.CreateReferenceResponse{
+			Status: status.NewInternal(ctx, err, "error unwrapping path"),
+		}, nil
+	}
+
+	if err := s.storage.CreateReference(ctx, newRef.GetPath(), u); err != nil {
+		log.Err(err).Msg("error calling CreateReference")
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when creating reference")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error creating reference")
+		}
+		return &provider.CreateReferenceResponse{
+			Status: st,
+		}, nil
+	}
+
+	return &provider.CreateReferenceResponse{
+		Status: status.NewOK(ctx),
+	}, nil
+}
+
+func (s *service) CreateSymlink(ctx context.Context, req *provider.CreateSymlinkRequest) (*provider.CreateSymlinkResponse, error) {
+	return &provider.CreateSymlinkResponse{
+		Status: status.NewUnimplemented(ctx, errors.New("CreateSymlink not implemented"), "CreateSymlink not implemented"),
+	}, nil
 }
 
 func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (*provider.GetQuotaResponse, error) {
