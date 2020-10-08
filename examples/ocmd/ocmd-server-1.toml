@@ -69,6 +69,7 @@ driver = "memory"
 driver = "demo"
 iopsecret = "testsecret"
 wopiurl = "http://0.0.0.0:8880/"
+wopibridgeurl = "http://localhost:8000/"
 
 [grpc.services.appprovider.mimetypes]
 ".zmd" = "application/compressed-markdown"
