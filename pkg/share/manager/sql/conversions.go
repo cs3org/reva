@@ -70,8 +70,7 @@ func sharePermToInt(p *provider.ResourcePermissions) int {
 	var perm int
 	if p.CreateContainer {
 		perm = 15
-	}
-	if p.ListContainer {
+	} else if p.ListContainer {
 		perm = 1
 	}
 	return perm
