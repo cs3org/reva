@@ -355,9 +355,9 @@ func (n *Node) AsResourceInfo(ctx context.Context) (ri *provider.ResourceInfo, e
 
 	// use temporary etag if it is set
 	if b, err := xattr.Get(nodePath, tmpEtagAttr); err == nil {
-		ri.Etag = string(b)
+		ri.Etag = fmt.Sprintf(`"%x"`, string(b))
 	} else {
-		ri.Etag = fmt.Sprintf("%x", h.Sum(nil))
+		ri.Etag = fmt.Sprintf(`"%x"`, h.Sum(nil))
 	}
 
 	// mtime uses tmtime if present
