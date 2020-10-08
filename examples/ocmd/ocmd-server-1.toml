@@ -70,6 +70,9 @@ driver = "demo"
 iopsecret = "testsecret"
 wopiurl = "http://0.0.0.0:8880/"
 
+[grpc.services.appprovider.mimetypes]
+".zmd" = "application/compressed-markdown"
+
 [grpc.services.appregistry]
 driver = "static"
 
@@ -133,6 +136,3 @@ prefix = "ocs"
 [http.services.ocdav]
 
 [http.middlewares.cors]
-
-[appprovider.mimetypes]
-".zmd" = "application/compressed-markdown"
