@@ -46,7 +46,7 @@ import (
 
 func init() {
 	rgrpc.Register("appprovider", New)
-	// TODO Load [mime.mapping] configuration section
+	// TODO Load [appprovider.mimetypes] configuration section
 	// for now, the following is hardcoded
 	mime.RegisterMime(".zmd", "application/compressed-markdown")
 }

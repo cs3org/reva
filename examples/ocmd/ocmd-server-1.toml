@@ -134,5 +134,5 @@ prefix = "ocs"
 
 [http.middlewares.cors]
 
-[mime.mapping]
+[appprovider.mimetypes]
 ".zmd" = "application/compressed-markdown"
