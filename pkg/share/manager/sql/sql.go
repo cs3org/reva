@@ -59,7 +59,7 @@ type mgr struct {
 }
 
 type dbShare struct {
-	ID           int
+	ID           string
 	UIDOwner     string
 	UIDInitiator string
 	Prefix       string
@@ -172,12 +172,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabora
 }
 
 func (m *mgr) getByID(ctx context.Context, id *collaboration.ShareId) (*collaboration.Share, error) {
-	intID, err := strconv.ParseInt(id.OpaqueId, 10, 64)
-	if err != nil {
-		return nil, err
-	}
-
-	s := dbShare{ID: int(intID)}
+	s := dbShare{ID: id.OpaqueId}
 	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, stime, permissions, share_type FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND id=?"
 	if err := m.db.QueryRow(query, id.OpaqueId).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.STime, &s.Permissions, &s.ShareType); err != nil {
 		if err == sql.ErrNoRows {
@@ -376,17 +371,12 @@ func (m *mgr) ListReceivedShares(ctx context.Context) ([]*collaboration.Received
 func (m *mgr) getReceivedByID(ctx context.Context, id *collaboration.ShareId) (*collaboration.ReceivedShare, error) {
 	user := user.ContextMustGetUser(ctx)
 
-	intID, err := strconv.ParseInt(id.OpaqueId, 10, 64)
-	if err != nil {
-		return nil, err
-	}
-
 	params := []interface{}{id.OpaqueId, formatUserID(user.Id), formatUserID(user.Id)}
 	for _, v := range user.Groups {
 		params = append(params, v)
 	}
 
-	s := dbShare{ID: int(intID)}
+	s := dbShare{ID: id.OpaqueId}
 	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, stime, permissions, share_type, accepted FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND id=? AND id not in (SELECT distinct(id) FROM oc_share_acl WHERE rejected_by=?)"
 	if len(user.Groups) > 0 {
 		query += "AND (share_with=? OR share_with in (?" + strings.Repeat(",?", len(user.Groups)-1) + "))"

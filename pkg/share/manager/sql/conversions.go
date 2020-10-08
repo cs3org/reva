@@ -20,7 +20,6 @@ package sql
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -145,7 +144,7 @@ func convertToCS3Share(s dbShare) *collaboration.Share {
 	}
 	return &collaboration.Share{
 		Id: &collaboration.ShareId{
-			OpaqueId: strconv.Itoa(s.ID),
+			OpaqueId: s.ID,
 		},
 		ResourceId:  &provider.ResourceId{OpaqueId: s.ItemSource, StorageId: s.Prefix},
 		Permissions: &collaboration.SharePermissions{Permissions: intTosharePerm(s.Permissions)},
