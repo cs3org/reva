@@ -35,6 +35,7 @@ import (
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/provider/demo"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rhttp"
@@ -45,6 +46,9 @@ import (
 
 func init() {
 	rgrpc.Register("appprovider", New)
+	// TODO Load [mime.mapping] configuration section
+	// for now, the following is hardcoded
+	mime.RegisterMime(".zmd", "application/compressed-markdown")
 }
 
 type service struct {

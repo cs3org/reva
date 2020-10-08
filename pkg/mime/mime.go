@@ -29,9 +29,6 @@ var mimes map[string]string
 
 func init() {
 	mimes = map[string]string{}
-	// TODO Load [mime.mapping] configuration section
-	// for now, the following is hardcoded
-	mimes[".zmd"] = "application/compressed-markdown"
 }
 
 // RegisterMime is a package level function that registers
