@@ -36,6 +36,7 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storageregistry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
+	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
 
 	"go.opencensus.io/plugin/ocgrpc"
 	"google.golang.org/grpc"
@@ -71,6 +72,7 @@ var (
 	storageRegistries      = newProvider()
 	gatewayProviders       = newProvider()
 	userProviders          = newProvider()
+	dataTxs                = newProvider()
 )
 
 // NewConn creates a new connection to a grpc server
@@ -368,5 +370,24 @@ func GetOCMCoreClient(endpoint string) (ocmcore.OcmCoreAPIClient, error) {
 
 	v := ocmcore.NewOcmCoreAPIClient(conn)
 	ocmCores.conn[endpoint] = v
+	return v, nil
+}
+
+// GetDataTxClient returns a new DataTxClient.
+func GetDataTxClient(endpoint string) (datatx.TxAPIClient, error) {
+	dataTxs.m.Lock()
+	defer dataTxs.m.Unlock()
+
+	if c, ok := dataTxs.conn[endpoint]; ok {
+		return c.(datatx.TxAPIClient), nil
+	}
+
+	conn, err := NewConn(endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	v := datatx.NewTxAPIClient(conn)
+	dataTxs.conn[endpoint] = v
 	return v, nil
 }
