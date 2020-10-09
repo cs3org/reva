@@ -420,12 +420,36 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 		}
 	}
 
-	userSlice := make([]*userpb.User, len(users))
+	userSlice := []*userpb.User{}
 	for _, v := range users {
 		userSlice = append(userSlice, v)
 	}
 
 	return userSlice, nil
+}
+
+func (m *manager) FindGroups(ctx context.Context, query string) ([]string, error) {
+	url := fmt.Sprintf("%s/Group?filter=groupIdentifier:contains:%s", m.conf.APIBaseURL, query)
+	responseData, err := m.sendAPIRequest(ctx, url)
+	if err != nil {
+		return nil, err
+	}
+
+	groupSet := make(map[string]bool)
+	for _, g := range responseData {
+		group, ok := g.(map[string]interface{})
+		if !ok {
+			return nil, errors.New("rest: error in type assertion")
+		}
+		groupSet[group["groupIdentifier"].(string)] = true
+	}
+
+	groups := []string{}
+	for k := range groupSet {
+		groups = append(groups, k)
+	}
+
+	return groups, nil
 }
 
 func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {

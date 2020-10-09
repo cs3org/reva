@@ -137,6 +137,23 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 	return users, nil
 }
 
+func (m *manager) FindGroups(ctx context.Context, query string) ([]string, error) {
+	groupSet := make(map[string]bool)
+	for _, u := range m.users {
+		for _, g := range u.Groups {
+			if strings.Contains(g, query) {
+				groupSet[g] = true
+			}
+		}
+	}
+
+	groups := []string{}
+	for k := range groupSet {
+		groups = append(groups, k)
+	}
+	return groups, nil
+}
+
 func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
 	user, err := m.GetUser(ctx, uid)
 	if err != nil {

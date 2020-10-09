@@ -344,6 +344,10 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 	return users, nil
 }
 
+func (m *manager) FindGroups(ctx context.Context, query string) ([]string, error) {
+	return nil, errtypes.NotSupported("ldap: FindGroups is not supported")
+}
+
 func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
 	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.c.Hostname, m.c.Port), &tls.Config{InsecureSkipVerify: true})
 	if err != nil {
