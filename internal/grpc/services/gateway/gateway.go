@@ -50,6 +50,7 @@ type config struct {
 	OCMProviderAuthorizerEndpoint string `mapstructure:"ocmproviderauthorizersvc"`
 	OCMCoreEndpoint               string `mapstructure:"ocmcoresvc"`
 	UserProviderEndpoint          string `mapstructure:"userprovidersvc"`
+	DataTxEndpoint                string `mapstructure:"datatx"`
 	DataGatewayEndpoint           string `mapstructure:"datagateway"`
 	CommitShareToStorageGrant     bool   `mapstructure:"commit_share_to_storage_grant"`
 	CommitShareToStorageRef       bool   `mapstructure:"commit_share_to_storage_ref"`
@@ -88,6 +89,7 @@ func (c *config) init() {
 	c.OCMProviderAuthorizerEndpoint = sharedconf.GetGatewaySVC(c.OCMProviderAuthorizerEndpoint)
 	c.OCMCoreEndpoint = sharedconf.GetGatewaySVC(c.OCMCoreEndpoint)
 	c.UserProviderEndpoint = sharedconf.GetGatewaySVC(c.UserProviderEndpoint)
+	c.DataTxEndpoint = sharedconf.GetGatewaySVC(c.DataTxEndpoint)
 
 	c.DataGatewayEndpoint = sharedconf.GetDataGateway(c.DataGatewayEndpoint)
 
