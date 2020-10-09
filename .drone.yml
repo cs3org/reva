@@ -611,7 +611,7 @@ steps:
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_OCIS: 'true'
       TEST_REVA: 'true'
-      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage'
+      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OC-Storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 1
       EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.txt'
@@ -688,7 +688,7 @@ steps:
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_OCIS: 'true'
       TEST_REVA: 'true'
-      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage'
+      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OC-Storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 2
       EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.txt'
@@ -765,7 +765,7 @@ steps:
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_OCIS: 'true'
       TEST_REVA: 'true'
-      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage'
+      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OC-Storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 3
       EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.txt'
@@ -842,7 +842,7 @@ steps:
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_OCIS: 'true'
       TEST_REVA: 'true'
-      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage'
+      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OC-Storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 4
       EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.txt'
@@ -919,7 +919,7 @@ steps:
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_OCIS: 'true'
       TEST_REVA: 'true'
-      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage'
+      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OC-Storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 5
       EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.txt'
@@ -996,7 +996,7 @@ steps:
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_OCIS: 'true'
       TEST_REVA: 'true'
-      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage'
+      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OC-Storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 6
       EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.txt'
