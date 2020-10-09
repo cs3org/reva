@@ -182,7 +182,7 @@ func isRepoDirty() bool {
 
 func add(msg string, files ...string) {
 	for _, f := range files {
-		cmd := exec.Command("git", "add", f)
+		cmd := exec.Command("git", "add", "--all", f)
 		cmd.Dir = "."
 		run(cmd)
 	}
