@@ -7,7 +7,7 @@ require (
 	github.com/Masterminds/goutils v1.1.0 // indirect
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/Masterminds/sprig v2.22.0+incompatible
-	github.com/aws/aws-sdk-go v1.35.0
+	github.com/aws/aws-sdk-go v1.35.6
 	github.com/c-bata/go-prompt v0.2.5
 	github.com/cheggaaa/pb v1.0.29
 	github.com/coreos/go-oidc v2.2.1+incompatible
@@ -44,7 +44,6 @@ require (
 	golang.org/x/crypto v0.0.0-20200709230013-948cd5f35899
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	google.golang.org/grpc v1.32.0
-	gopkg.in/cheggaaa/pb.v1 v1.0.27 // indirect
 )
 
 go 1.13
