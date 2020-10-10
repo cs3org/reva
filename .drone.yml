@@ -460,6 +460,7 @@ steps:
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_OCIS: 'true'
       TEST_REVA: 'true'
+      DEBUG_ACCEPTANCE_API_CALLS: 'true'
       BEHAT_FILTER_TAGS: '~@skipOnOcis-OC-Storage'
       PATH_TO_CORE: '/drone/src/tmp/testrunner'
 
@@ -534,6 +535,7 @@ steps:
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_OCIS: 'true'
       TEST_REVA: 'true'
+      DEBUG_ACCEPTANCE_API_CALLS: 'true'
       BEHAT_FILTER_TAGS: '~@skipOnOcis-OCIS-Storage'
       PATH_TO_CORE: '/drone/src/tmp/testrunner'
 
