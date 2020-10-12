@@ -49,7 +49,9 @@ func (s *svc) Close() error {
 
 // Prefix returns the main endpoint of this service.
 func (s *svc) Prefix() string {
-	return ""
+	// We use a dummy endpoint as the service is not expected to be exposed
+	// directly to the user, but just start a background process.
+	return "register_metrics"
 }
 
 // Unprotected returns all endpoints that can be queried without prior authorization.
