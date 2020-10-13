@@ -870,16 +870,16 @@ apiTrashbin/trashbinFilesFolders.feature:104
 apiTrashbin/trashbinFilesFolders.feature:105
 apiTrashbin/trashbinFilesFolders.feature:136
 apiTrashbin/trashbinFilesFolders.feature:135
-apiTrashbin/trashbinFilesFolders.feature:215
-apiTrashbin/trashbinFilesFolders.feature:216
-apiTrashbin/trashbinFilesFolders.feature:233
-apiTrashbin/trashbinFilesFolders.feature:234
-apiTrashbin/trashbinFilesFolders.feature:257
-apiTrashbin/trashbinFilesFolders.feature:258
-apiTrashbin/trashbinFilesFolders.feature:271
-apiTrashbin/trashbinFilesFolders.feature:272
-apiTrashbin/trashbinFilesFolders.feature:285
-apiTrashbin/trashbinFilesFolders.feature:286
+apiTrashbin/trashbinFilesFolders.feature:184
+apiTrashbin/trashbinFilesFolders.feature:185
+apiTrashbin/trashbinFilesFolders.feature:202
+apiTrashbin/trashbinFilesFolders.feature:203
+apiTrashbin/trashbinFilesFolders.feature:226
+apiTrashbin/trashbinFilesFolders.feature:227
+apiTrashbin/trashbinFilesFolders.feature:240
+apiTrashbin/trashbinFilesFolders.feature:241
+apiTrashbin/trashbinFilesFolders.feature:254
+apiTrashbin/trashbinFilesFolders.feature:255
 #
 # https://github.com/owncloud/product/issues/179 Propfind to trashbin endpoint requires UUID
 # https://github.com/owncloud/product/issues/178 File deletion using dav gives unique string in filename in the trashbin
@@ -1202,9 +1202,6 @@ apiWebdavProperties2/getFileProperties.feature:175
 # https://github.com/owncloud/ocis-reva/issues/11 listing received shares does not work
 apiWebdavProperties2/getFileProperties.feature:206
 apiWebdavProperties2/getFileProperties.feature:207
-#
-apiWebdavProperties2/getFileProperties.feature:218
-apiWebdavProperties2/getFileProperties.feature:219
 #
 # https://github.com/owncloud/ocis-reva/issues/216 Private link support
 apiWebdavProperties2/getFileProperties.feature:232
