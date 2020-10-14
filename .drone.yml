@@ -454,7 +454,7 @@ steps:
       - make test-acceptance-api
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
-      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/'
+      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
@@ -529,7 +529,7 @@ steps:
       - make test-acceptance-api
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
-      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/'
+      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
@@ -605,7 +605,7 @@ steps:
       - make test-acceptance-api
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
-      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/'
+      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
@@ -682,7 +682,7 @@ steps:
       - make test-acceptance-api
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
-      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/'
+      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
@@ -759,7 +759,7 @@ steps:
       - make test-acceptance-api
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
-      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/'
+      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
@@ -836,7 +836,7 @@ steps:
       - make test-acceptance-api
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
-      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/'
+      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
@@ -913,7 +913,7 @@ steps:
       - make test-acceptance-api
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
-      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/'
+      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
@@ -990,7 +990,7 @@ steps:
       - make test-acceptance-api
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
-      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/'
+      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
