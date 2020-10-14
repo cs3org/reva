@@ -5,7 +5,7 @@ Feature: create a public link share
   Background:
     Given user "Alice" has been created with default attributes and without skeleton files
 
-  @issue-37605 @skipOnOcis-OCIS-Storage
+  @issue-37605 @skipOnOcis-OCIS-Storage @skipOnOcis-OC-Storage
   # after fixing all issues make the oC10 scenario like this one, and delete this scenario
   Scenario: Get the mtime of a file inside a folder shared by public link using new webDAV version (run on OCIS)
     Given user "Alice" has created folder "testFolder"
