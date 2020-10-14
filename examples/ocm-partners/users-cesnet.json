@@ -20,5 +20,16 @@
 		"mail": "milan@cesnet.cz",
 		"display_name": "Milan",
 		"groups": ["radium-lovers", "polonium-lovers", "physics-lovers"]
+	},
+	{
+		"id": {
+			"opaque_id": "test4242",
+			"idp": "cesnet.cz"
+		},
+		"username": "test",
+		"secret": "testpass",
+		"mail": "test42@cesnet.cz",
+		"display_name": "Testuser",
+		"groups": ["test-lovers", "bug-haters", "ai-lovers"]
 	}
 ]

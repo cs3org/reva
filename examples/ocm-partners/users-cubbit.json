@@ -20,5 +20,16 @@
 		"mail": "lorenzo@cubbit.io",
 		"display_name": "Lorenzo",
 		"groups": ["radium-lovers", "polonium-lovers", "physics-lovers"]
+	},
+	{
+		"id": {
+			"opaque_id": "test4242",
+			"idp": "cubbit.io"
+		},
+		"username": "test",
+		"secret": "testpass",
+		"mail": "test42@cubbit.io",
+		"display_name": "Testuser",
+		"groups": ["test-lovers", "bug-haters", "ai-lovers"]
 	}
 ]
