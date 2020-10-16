@@ -7,7 +7,7 @@ Feature: sharing
       | Alice    |
       | Brian    |
 
-  @issue-ocis-reva-374 @skipOnOcis-OCIS-Storage
+  @issue-ocis-reva-374
   # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario Outline: Get a share with a user that didn't receive the share
     Given using OCS API version "<ocs_api_version>"
