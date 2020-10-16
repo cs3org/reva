@@ -5,7 +5,7 @@ Feature: sharing
     Given user "Alice" has been created with default attributes and without skeleton files
     And user "Alice" has uploaded file with content "ownCloud test text file 0" to "/textfile0.txt"
 
-  @skipOnOcis-OC-Storage @issue-ocis-reva-301 @issue-ocis-reva-302 @skipOnOcis-OCIS-Storage
+  @skipOnOcis-OC-Storage @skipOnOcis-OCIS-Storage @issue-ocis-reva-301 @issue-ocis-reva-302
   # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario Outline: Creating a share of a file with a user and asking for various permission combinations
     Given using OCS API version "<ocs_api_version>"
@@ -43,7 +43,7 @@ Feature: sharing
 
   @issue-ocis-reva-243
   # after fixing all issues delete this Scenario and use the one from oC10 core
-  Scenario Outline: more tests to demonstrate different ocis-reva issue 243 behaviours (OCS API v1)
+  Scenario Outline: more tests to demonstrate different ocis-reva issue 243 behaviours
     Given using OCS API version "<ocs_api_version>"
     And user "Brian" has been created with default attributes and without skeleton files
     And user "Alice" has created folder "/home"
@@ -54,22 +54,9 @@ Feature: sharing
     Examples:
       | ocs_api_version | http_status_code_ocs | http_status_code_eos |
       | 1               | 200                | 500                |
-
-  @issue-ocis-reva-243 @skipOnOcis-OCIS-Storage
-  # after fixing all issues delete this Scenario and use the one from oC10 core
-  Scenario Outline: more tests to demonstrate different ocis-reva issue 243 behaviours (OCS API v2)
-    Given using OCS API version "<ocs_api_version>"
-    And user "Brian" has been created with default attributes and without skeleton files
-    And user "Alice" has created folder "/home"
-    And user "Alice" has uploaded file with content "Random data" to "/home/randomfile.txt"
-    When user "Alice" shares file "/home/randomfile.txt" with user "Brian" using the sharing API
-    And the HTTP status code should be "<http_status_code_ocs>" or "<http_status_code_eos>"
-    And as "Brian" file "randomfile.txt" should not exist
-    Examples:
-      | ocs_api_version | http_status_code_ocs | http_status_code_eos |
       | 2               | 200                | 500                |
 
-  @skipOnOcis-OC-Storage @issue-ocis-reva-301 @issue-ocis-reva-302 @skipOnOcis-OCIS-Storage
+  @skipOnOcis-OC-Storage @skipOnOcis-OCIS-Storage @issue-ocis-reva-301 @issue-ocis-reva-302
   # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario Outline: Creating a share of a folder with a user, the default permissions are all permissions(31)
     Given using OCS API version "<ocs_api_version>"
