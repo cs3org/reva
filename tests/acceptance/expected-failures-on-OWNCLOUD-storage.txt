@@ -493,6 +493,11 @@ apiSharePublicLink2/uploadToPublicLinkShare.feature:103
 apiSharePublicLink2/uploadToPublicLinkShare.feature:121
 apiSharePublicLink2/uploadToPublicLinkShare.feature:139
 #
+# Upload to deleted public link share returns 401 instead of 404 (note: passes in owncloud/ocis)
+#
+apiSharePublicLink2/uploadToPublicLinkShare.feature:48
+apiSharePublicLink2/uploadToPublicLinkShare.feature:49
+#
 # https://github.com/owncloud/ocis-reva/issues/286 Upload-only shares must not overwrite but create a separate file
 #
 apiSharePublicLink2/uploadToPublicLinkShare.feature:23
@@ -608,6 +613,15 @@ apiShareReshareToShares3/reShareUpdate.feature:25
 apiShareReshareToShares3/reShareUpdate.feature:26
 apiShareReshareToShares3/reShareUpdate.feature:59
 apiShareReshareToShares3/reShareUpdate.feature:60
+#
+# WebDav::listFolderAndReturnResponseXml Received empty response where XML was expected (Exception) (note: passes in owncloud/ocis)
+#
+apiShareReshareToShares3/reShareUpdate.feature:42
+apiShareReshareToShares3/reShareUpdate.feature:43
+apiShareReshareToShares3/reShareUpdate.feature:76
+apiShareReshareToShares3/reShareUpdate.feature:77
+apiShareReshareToShares3/reShareUpdate.feature:93
+apiShareReshareToShares3/reShareUpdate.feature:94
 #
 # https://github.com/owncloud/product/issues/207 Response is empty when accepting a share
 #
