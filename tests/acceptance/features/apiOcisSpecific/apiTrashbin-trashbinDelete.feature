@@ -14,9 +14,9 @@ Feature: files and folders can be deleted from the trashbin
     And user "Alice" has uploaded file with content "to delete" to "/PARENT/CHILD/child.txt"
 
   @smokeTest
-  @issue-product-139
-  @issue-product-178
-  @issue-product-179 @skipOnOcis-OCIS-Storage
+    @issue-product-139
+    @issue-product-178
+    @issue-product-179
   Scenario Outline: Trashbin cannot be emptied
   # after fixing all issues delete this Scenario and use the one from oC10 core
     Given user "Alice" has uploaded file with content "file with comma" to "sample,0.txt"
@@ -38,7 +38,8 @@ Feature: files and folders can be deleted from the trashbin
 
   @smokeTest
   @issue-ocis-reva-118
-  @issue-product-179 @skipOnOcis-OCIS-Storage
+  @issue-product-179
+  @skipOnOcis-OCIS-Storage
   # after fixing all issues delete this Scenario and use the one from oC10 core
   Scenario: delete a single file from the trashbin
     Given user "Alice" has deleted file "/textfile0.txt"
