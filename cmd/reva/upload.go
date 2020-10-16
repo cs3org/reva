@@ -84,7 +84,6 @@ func uploadCommand() *command {
 		if err != nil {
 			return err
 		}
-		defer fd.Close()
 
 		fmt.Printf("Local file size: %d bytes\n", md.Size())
 

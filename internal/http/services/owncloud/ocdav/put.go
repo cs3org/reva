@@ -19,6 +19,7 @@
 package ocdav
 
 import (
+	"io"
 	"net/http"
 	"path"
 	"regexp"
@@ -156,6 +157,23 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 		}
 	}
 
+	length, err := strconv.ParseInt(r.Header.Get("Content-Length"), 10, 64)
+	if err != nil {
+		// Fallback to Upload-Length
+		length, err = strconv.ParseInt(r.Header.Get("Upload-Length"), 10, 64)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	}
+
+	s.handlePutHelper(w, r, r.Body, fn, length)
+}
+
+func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io.Reader, fn string, length int64) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
 	client, err := s.getClient()
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
@@ -163,11 +181,10 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	sReq := &provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{Path: fn},
-		},
+	ref := &provider.Reference{
+		Spec: &provider.Reference_Path{Path: fn},
 	}
+	sReq := &provider.StatRequest{Ref: ref}
 	sRes, err := client.Stat(ctx, sReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending grpc stat request")
@@ -206,16 +223,6 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 		}
 	}
 
-	length, err := strconv.ParseInt(r.Header.Get("Content-Length"), 10, 64)
-	if err != nil {
-		// Fallback to Upload-Length
-		length, err = strconv.ParseInt(r.Header.Get("Upload-Length"), 10, 64)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-	}
-
 	opaqueMap := map[string]*typespb.OpaqueEntry{
 		"Upload-Length": {
 			Decoder: "plain",
@@ -235,9 +242,7 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	uReq := &provider.InitiateFileUploadRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{Path: fn},
-		},
+		Ref: ref,
 		Opaque: &typespb.Opaque{
 			Map: opaqueMap,
 		},
@@ -302,7 +307,7 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 		//"checksum": fmt.Sprintf("%s %s", storageprovider.GRPC2PKGXS(xsType).String(), xs),
 	}
 
-	upload := tus.NewUpload(r.Body, length, metadata, "")
+	upload := tus.NewUpload(content, length, metadata, "")
 
 	// create the uploader.
 	c.Store.Set(upload.Fingerprint, dataServerURL)

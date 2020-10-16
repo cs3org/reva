@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -37,13 +38,14 @@ func init() {
 
 // Credentials holds a pair of secret and userid
 type Credentials struct {
-	ID           *user.UserId `mapstructure:"id" json:"id"`
-	Username     string       `mapstructure:"username" json:"username"`
-	Mail         string       `mapstructure:"mail" json:"mail"`
-	MailVerified bool         `mapstructure:"mail_verified" json:"mail_verified"`
-	DisplayName  string       `mapstructure:"display_name" json:"display_name"`
-	Secret       string       `mapstructure:"secret" json:"secret"`
-	Groups       []string     `mapstructure:"groups" json:"groups"`
+	ID           *user.UserId    `mapstructure:"id" json:"id"`
+	Username     string          `mapstructure:"username" json:"username"`
+	Mail         string          `mapstructure:"mail" json:"mail"`
+	MailVerified bool            `mapstructure:"mail_verified" json:"mail_verified"`
+	DisplayName  string          `mapstructure:"display_name" json:"display_name"`
+	Secret       string          `mapstructure:"secret" json:"secret"`
+	Groups       []string        `mapstructure:"groups" json:"groups"`
+	Opaque       *typespb.Opaque `mapstructure:"opaque" json:"opaque"`
 }
 
 type manager struct {
@@ -109,6 +111,7 @@ func (m *manager) Authenticate(ctx context.Context, username string, secret stri
 				MailVerified: c.MailVerified,
 				DisplayName:  c.DisplayName,
 				Groups:       c.Groups,
+				Opaque:       c.Opaque,
 				// TODO add arbitrary keys as opaque data
 			}, nil
 		}
