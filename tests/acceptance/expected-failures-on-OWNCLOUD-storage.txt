@@ -192,7 +192,6 @@ apiSharees/sharees.feature:538
 # https://github.com/owncloud/ocis-reva/issues/34 groups endpoint does not exist
 #
 apiShareManagementToShares/acceptShares.feature:22
-apiShareManagementToShares/acceptShares.feature:52
 apiShareManagementToShares/acceptShares.feature:71
 apiShareManagementToShares/acceptShares.feature:156
 apiShareManagementToShares/acceptShares.feature:157
@@ -208,16 +207,9 @@ apiShareManagementToShares/acceptShares.feature:249
 apiShareManagementToShares/acceptShares.feature:270
 apiShareManagementToShares/acceptShares.feature:279
 apiShareManagementToShares/acceptShares.feature:298
-apiShareManagementToShares/acceptShares.feature:320
 apiShareManagementToShares/acceptShares.feature:342
 apiShareManagementToShares/acceptShares.feature:378
-apiShareManagementToShares/acceptShares.feature:398
 apiShareManagementToShares/acceptShares.feature:417
-apiShareManagementToShares/acceptShares.feature:439
-#
-# https://github.com/owncloud/product/issues/208 After accepting a share data in the received file cannot be downloaded
-#
-apiShareManagementToShares/acceptSharesToSharesFolder.feature:17
 #
 # https://github.com/owncloud/product/issues/207 Response is empty when accepting a share
 #
@@ -288,12 +280,8 @@ apiShareManagementBasicToShares/excludeGroupFromReceivingSharesToSharesFolder.fe
 apiShareManagementBasicToShares/excludeGroupFromReceivingSharesToSharesFolder.feature:70
 apiShareManagementBasicToShares/excludeGroupFromReceivingSharesToSharesFolder.feature:97
 apiShareManagementBasicToShares/excludeGroupFromReceivingSharesToSharesFolder.feature:98
-apiShareManagementBasicToShares/excludeGroupFromReceivingSharesToSharesFolder.feature:115
-apiShareManagementBasicToShares/excludeGroupFromReceivingSharesToSharesFolder.feature:116
 apiShareManagementBasicToShares/excludeGroupFromReceivingSharesToSharesFolder.feature:135
 apiShareManagementBasicToShares/excludeGroupFromReceivingSharesToSharesFolder.feature:136
-apiShareManagementBasicToShares/excludeGroupFromReceivingSharesToSharesFolder.feature:153
-apiShareManagementBasicToShares/excludeGroupFromReceivingSharesToSharesFolder.feature:154
 #
 # https://github.com/owncloud/product/issues/207 Response is empty when accepting a share
 #
@@ -304,10 +292,6 @@ apiShareManagementBasicToShares/createShareToSharesFolder.feature:343
 #
 apiShareManagementBasicToShares/deleteShareFromShares.feature:58
 apiShareManagementBasicToShares/deleteShareFromShares.feature:72
-#
-# https://github.com/owncloud/product/issues/270 share permissions are not enforced
-#
-apiShareManagementBasicToShares/deleteShareFromShares.feature:107
 #
 # cannot share a folder with create permission
 # https://github.com/owncloud/ocis-reva/issues/372 Listing shares via ocs API does not show path for parent folders
@@ -401,11 +385,8 @@ apiSharePublicLink1/changingPublicLinkShare.feature:96
 #
 apiSharePublicLink1/changingPublicLinkShare.feature:63
 apiSharePublicLink1/changingPublicLinkShare.feature:107
-apiSharePublicLink1/changingPublicLinkShare.feature:128
 apiSharePublicLink1/changingPublicLinkShare.feature:151
-apiSharePublicLink1/changingPublicLinkShare.feature:174
 apiSharePublicLink1/changingPublicLinkShare.feature:197
-apiSharePublicLink1/changingPublicLinkShare.feature:221
 apiSharePublicLink1/changingPublicLinkShare.feature:244
 #
 # https://github.com/owncloud/ocis-reva/issues/292 Public link enforce permissions
@@ -823,16 +804,6 @@ apiTrashbin/trashbinFilesFolders.feature:240
 apiTrashbin/trashbinFilesFolders.feature:241
 apiTrashbin/trashbinFilesFolders.feature:254
 apiTrashbin/trashbinFilesFolders.feature:255
-#
-# https://github.com/owncloud/product/issues/187
-# Cannot create user with different username and emails
-#
-apiTrashbin/trashbinFilesFolders.feature:269
-apiTrashbin/trashbinFilesFolders.feature:270
-apiTrashbin/trashbinFilesFolders.feature:271
-apiTrashbin/trashbinFilesFolders.feature:275
-apiTrashbin/trashbinFilesFolders.feature:276
-apiTrashbin/trashbinFilesFolders.feature:277
 #
 # https://github.com/owncloud/core/issues/38006 Review and fix the tests that have sharing step to work with ocis
 #
@@ -1298,12 +1269,3 @@ apiWebdavUpload2/uploadFileUsingOldChunking.feature:98
 apiWebdavUpload2/uploadFileUsingOldChunking.feature:99
 apiWebdavUpload2/uploadFileUsingOldChunking.feature:100
 apiWebdavUpload2/uploadFileUsingOldChunking.feature:101
-#
-# https://github.com/owncloud/ocis-ocs/issues/35 group support is not yet implemented
-#
-apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature:89
-apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature:90
-apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature:109
-apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature:110
-apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature:111
-apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature:112
