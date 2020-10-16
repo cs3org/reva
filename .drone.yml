@@ -446,7 +446,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 98ca871d3f62a585e3763590dcd239959e23543a
+      - git checkout 1df47648f944ab21521f6c8d538dc183e1e8f1ea
 
   - name: localAPIAcceptanceTestsOwncloudStorage
     image: owncloudci/php:7.2
@@ -455,6 +455,7 @@ steps:
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
       OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
+      STORAGE_DRIVER: 'OWNCLOUD'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
@@ -520,7 +521,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 98ca871d3f62a585e3763590dcd239959e23543a
+      - git checkout 1df47648f944ab21521f6c8d538dc183e1e8f1ea
 
   - name: localAPIAcceptanceTestsOcisStorage
     image: owncloudci/php:7.2
@@ -529,6 +530,7 @@ steps:
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
       OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
+      STORAGE_DRIVER: 'OCIS'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
       OCIS_SKELETON_STRATEGY: 'copy'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
@@ -595,7 +597,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 98ca871d3f62a585e3763590dcd239959e23543a
+      - git checkout 1df47648f944ab21521f6c8d538dc183e1e8f1ea
 
   - name: oC10APIAcceptanceTests
     image: owncloudci/php:7.2
@@ -605,6 +607,7 @@ steps:
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
       OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
+      STORAGE_DRIVER: 'OWNCLOUD'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
@@ -672,7 +675,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 98ca871d3f62a585e3763590dcd239959e23543a
+      - git checkout 1df47648f944ab21521f6c8d538dc183e1e8f1ea
 
   - name: oC10APIAcceptanceTests
     image: owncloudci/php:7.2
@@ -682,6 +685,7 @@ steps:
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
       OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
+      STORAGE_DRIVER: 'OWNCLOUD'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
@@ -749,7 +753,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 98ca871d3f62a585e3763590dcd239959e23543a
+      - git checkout 1df47648f944ab21521f6c8d538dc183e1e8f1ea
 
   - name: oC10APIAcceptanceTests
     image: owncloudci/php:7.2
@@ -759,6 +763,7 @@ steps:
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
       OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
+      STORAGE_DRIVER: 'OWNCLOUD'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
@@ -826,7 +831,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 98ca871d3f62a585e3763590dcd239959e23543a
+      - git checkout 1df47648f944ab21521f6c8d538dc183e1e8f1ea
 
   - name: oC10APIAcceptanceTests
     image: owncloudci/php:7.2
@@ -836,6 +841,7 @@ steps:
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
       OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
+      STORAGE_DRIVER: 'OWNCLOUD'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
@@ -903,7 +909,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 98ca871d3f62a585e3763590dcd239959e23543a
+      - git checkout 1df47648f944ab21521f6c8d538dc183e1e8f1ea
 
   - name: oC10APIAcceptanceTests
     image: owncloudci/php:7.2
@@ -913,6 +919,7 @@ steps:
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
       OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
+      STORAGE_DRIVER: 'OWNCLOUD'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
@@ -980,7 +987,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 98ca871d3f62a585e3763590dcd239959e23543a
+      - git checkout 1df47648f944ab21521f6c8d538dc183e1e8f1ea
 
   - name: oC10APIAcceptanceTests
     image: owncloudci/php:7.2
@@ -990,6 +997,7 @@ steps:
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
       OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
+      STORAGE_DRIVER: 'OWNCLOUD'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
