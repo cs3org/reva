@@ -32,11 +32,11 @@ wopibridgeurl = ""
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="mimetypes" type="map[string]string" default= %}}
+{{% dir name="mimetypes" type="map[string]string" default=nil %}}
 List of supported mime types and corresponding file extensions. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/appprovider/appprovider.go#L62)
 {{< highlight toml >}}
 [grpc.services.appprovider]
-mimetypes = 
+mimetypes = nil
 {{< /highlight >}}
 {{% /dir %}}
 

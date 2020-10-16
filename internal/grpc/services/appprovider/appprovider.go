@@ -59,7 +59,7 @@ type config struct {
 	IopSecret string                 `mapstructure:"iopsecret" docs:";The iopsecret used to connect to the wopiserver."`
 	WopiURL   string                 `mapstructure:"wopiurl" docs:";The wopiserver's URL."`
 	WopiBrURL string                 `mapstructure:"wopibridgeurl" docs:";The wopibridge's URL."`
-	MimeTypes map[string]string      `mapstructure:"mimetypes" docs:";List of supported mime types and corresponding file extensions."`
+	MimeTypes map[string]string      `mapstructure:"mimetypes" docs:"nil;List of supported mime types and corresponding file extensions."`
 }
 
 // New creates a new AppProviderService
