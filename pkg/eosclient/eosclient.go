@@ -552,9 +552,10 @@ func (c *Client) List(ctx context.Context, uid, gid, path string) ([]*FileInfo, 
 
 // Read reads a file from the mgm
 func (c *Client) Read(ctx context.Context, uid, gid, path string) (io.ReadCloser, error) {
-	uuid := uuid.Must(uuid.NewV4())
-	rand := "eosread-" + uuid.String()
+	rand := "eosread-" + uuid.Must(uuid.NewV4()).String()
 	localTarget := fmt.Sprintf("%s/%s", c.opt.CacheDirectory, rand)
+	defer os.RemoveAll(localTarget)
+
 	xrdPath := fmt.Sprintf("%s//%s", c.opt.URL, path)
 	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, "--nopbar", "--silent", "-f", xrdPath, localTarget, fmt.Sprintf("-OSeos.ruid=%s&eos.rgid=%s", uid, gid))
 	_, _, err := c.execute(ctx, cmd)

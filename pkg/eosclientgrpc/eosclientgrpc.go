@@ -997,9 +997,10 @@ func (c *Client) Read(ctx context.Context, username, path string) (io.ReadCloser
 	if err != nil {
 		return nil, err
 	}
-	uuid := uuid.Must(uuid.NewV4())
-	rand := "eosread-" + uuid.String()
+	rand := "eosread-" + uuid.Must(uuid.NewV4()).String()
 	localTarget := fmt.Sprintf("%s/%s", c.opt.CacheDirectory, rand)
+	defer os.RemoveAll(localTarget)
+
 	xrdPath := fmt.Sprintf("%s//%s", c.opt.URL, path)
 	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, "--nopbar", "--silent", "-f", xrdPath, localTarget, fmt.Sprintf("-OSeos.ruid=%s&eos.rgid=%s", unixUser.Uid, unixUser.Gid))
 	_, _, err = c.execute(ctx, cmd)
