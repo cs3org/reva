@@ -186,46 +186,31 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 	}
 
 	// TODO(labkode): if both commits are enabled they could be done concurrently.
-	/*
-		if s.c.CommitShareToStorageGrant {
-			getShareReq := &collaboration.GetShareRequest{
-				Ref: req.Ref,
-			}
-			getShareRes, err := c.GetShare(ctx, getShareReq)
-			if err != nil {
-				return nil, errors.Wrap(err, "gateway: error calling GetShare")
-			}
 
-			if getShareRes.Status.Code != rpc.Code_CODE_OK {
-				return &collaboration.UpdateShareResponse{
-					Status: status.NewInternal(ctx, status.NewErrorFromCode(getShareRes.Status.Code, "gateway"),
-						"error getting share when committing to the share"),
-				}, nil
-			}
-
-			grantReq := &provider.UpdateGrantRequest{
-				Ref: &provider.Reference{
-					Spec: &provider.Reference_Id{
-						Id: getShareRes.Share.ResourceId,
-					},
-				},
-				Grant: &provider.Grant{
-					Grantee:     getShareRes.Share.Grantee,
-					Permissions: getShareRes.Share.Permissions.Permissions,
-				},
-			}
-				grantRes, err := s.UpdateGrant(ctx, grantReq)
-				if err != nil {
-					return nil, errors.Wrap(err, "gateway: error calling UpdateGrant")
-				}
-				if grantRes.Status.Code != rpc.Code_CODE_OK {
-					return &collaboration.UpdateShareResponse{
-						Status: status.NewInternal(ctx, status.NewErrorFromCode(grantRes.Status.Code, "gateway"),
-							"error updating storage grant"),
-					}, nil
-				}
+	if s.c.CommitShareToStorageGrant {
+		getShareReq := &collaboration.GetShareRequest{
+			Ref: req.Ref,
 		}
-	*/
+		getShareRes, err := c.GetShare(ctx, getShareReq)
+		if err != nil {
+			return nil, errors.Wrap(err, "gateway: error calling GetShare")
+		}
+
+		if getShareRes.Status.Code != rpc.Code_CODE_OK {
+			return &collaboration.UpdateShareResponse{
+				Status: status.NewInternal(ctx, status.NewErrorFromCode(getShareRes.Status.Code, "gateway"),
+					"error getting share when committing to the share"),
+			}, nil
+		}
+		updateGrantStatus, err := s.updateGrant(ctx, getShareRes.GetShare().GetResourceId(),
+			getShareRes.GetShare().GetGrantee(),
+			getShareRes.GetShare().GetPermissions().GetPermissions())
+		if updateGrantStatus.Code != rpc.Code_CODE_OK {
+			return &collaboration.UpdateShareResponse{
+				Status: updateGrantStatus,
+			}, err
+		}
+	}
 
 	return res, nil
 }
@@ -455,6 +440,40 @@ func (s *svc) addGrant(ctx context.Context, id *provider.ResourceId, g *provider
 	grantRes, err := c.AddGrant(ctx, grantReq)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling AddGrant")
+	}
+	if grantRes.Status.Code != rpc.Code_CODE_OK {
+		return status.NewInternal(ctx, status.NewErrorFromCode(grantRes.Status.Code, "gateway"),
+			"error committing share to storage grant"), nil
+	}
+
+	return status.NewOK(ctx), nil
+}
+
+func (s *svc) updateGrant(ctx context.Context, id *provider.ResourceId, g *provider.Grantee, p *provider.ResourcePermissions) (*rpc.Status, error) {
+
+	grantReq := &provider.UpdateGrantRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Id{
+				Id: id,
+			},
+		},
+		Grant: &provider.Grant{
+			Grantee:     g,
+			Permissions: p,
+		},
+	}
+
+	c, err := s.findByID(ctx, id)
+	if err != nil {
+		if _, ok := err.(errtypes.IsNotFound); ok {
+			return status.NewNotFound(ctx, "storage provider not found"), nil
+		}
+		return status.NewInternal(ctx, err, "error finding storage provider"), nil
+	}
+
+	grantRes, err := c.UpdateGrant(ctx, grantReq)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling UpdateGrant")
 	}
 	if grantRes.Status.Code != rpc.Code_CODE_OK {
 		return status.NewInternal(ctx, status.NewErrorFromCode(grantRes.Status.Code, "gateway"),
