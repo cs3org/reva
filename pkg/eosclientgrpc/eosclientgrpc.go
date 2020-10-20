@@ -28,6 +28,7 @@ import (
 	"os/exec"
 	gouser "os/user"
 	"path"
+	"path/filepath"
 	"strconv"
 	"syscall"
 
@@ -662,7 +663,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, username, path string) (
 
 	log.Info().Str("username", username).Str("path", path).Str("rsp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
 
-	return c.grpcMDResponseToFileInfo(rsp, "")
+	return c.grpcMDResponseToFileInfo(rsp, filepath.Dir(path))
 
 }
 
