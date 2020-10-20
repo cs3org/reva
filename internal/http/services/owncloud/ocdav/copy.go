@@ -21,6 +21,11 @@ package ocdav
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
+	"path"
+	"strings"
+
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -31,10 +36,6 @@ import (
 	tokenpkg "github.com/cs3org/reva/pkg/token"
 	"github.com/eventials/go-tus"
 	"github.com/eventials/go-tus/memorystore"
-	"io"
-	"net/http"
-	"path"
-	"strings"
 )
 
 func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {

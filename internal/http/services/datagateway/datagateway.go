@@ -20,6 +20,12 @@ package datagateway
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"net/url"
+	"path"
+	"time"
+
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp"
@@ -29,11 +35,6 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"io"
-	"net/http"
-	"net/url"
-	"path"
-	"time"
 )
 
 const (

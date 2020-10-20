@@ -22,6 +22,13 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"net/http"
+	"net/url"
+	"os"
+	"path"
+	"strings"
+	"time"
+
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -35,12 +42,6 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"net/http"
-	"net/url"
-	"os"
-	"path"
-	"strings"
-	"time"
 )
 
 type ctxKey int
@@ -88,7 +89,7 @@ type svc struct {
 	c             *Config
 	webDavHandler *WebDavHandler
 	davHandler    *DavHandler
-	client *http.Client
+	client        *http.Client
 }
 
 // New returns a new ocdav
