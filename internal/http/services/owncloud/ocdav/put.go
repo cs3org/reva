@@ -31,7 +31,6 @@ import (
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/internal/http/utils"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp"
 	tokenpkg "github.com/cs3org/reva/pkg/token"
 	"github.com/eventials/go-tus"
 	"github.com/eventials/go-tus/memorystore"
@@ -272,11 +271,8 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 	// create the tus client.
 	c := tus.DefaultConfig()
 	c.Resume = true
-	c.HttpClient = rhttp.GetHTTPClient(
-		rhttp.Context(ctx),
-		rhttp.Timeout(time.Duration(s.c.Timeout*int64(time.Second))),
-		rhttp.Insecure(s.c.Insecure),
-	)
+	c.HttpClient = s.client
+
 	c.Store, err = memorystore.NewMemoryStore()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)

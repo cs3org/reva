@@ -27,11 +27,13 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
@@ -87,6 +89,7 @@ type svc struct {
 	c             *Config
 	webDavHandler *WebDavHandler
 	davHandler    *DavHandler
+	client        *http.Client
 }
 
 // New returns a new ocdav
@@ -106,6 +109,10 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		c:             conf,
 		webDavHandler: new(WebDavHandler),
 		davHandler:    new(DavHandler),
+		client: rhttp.GetHTTPClient(
+			rhttp.Timeout(time.Duration(conf.Timeout*int64(time.Second))),
+			rhttp.Insecure(conf.Insecure),
+		),
 	}
 	// initialize handlers and set default configs
 	if err := s.webDavHandler.init(conf.WebdavNamespace); err != nil {

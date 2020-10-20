@@ -121,11 +121,7 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 	httpReq.Header.Set(datagateway.TokenTransportHeader, dRes.Token)
-	httpClient := rhttp.GetHTTPClient(
-		rhttp.Context(ctx),
-		rhttp.Timeout(time.Duration(s.c.Timeout*int64(time.Second))),
-		rhttp.Insecure(s.c.Insecure),
-	)
+	httpClient := s.client
 
 	httpRes, err := httpClient.Do(httpReq)
 	if err != nil {

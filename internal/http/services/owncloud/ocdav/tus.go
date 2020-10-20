@@ -193,11 +193,7 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 		var httpRes *http.Response
 
 		if length != 0 {
-			httpClient := rhttp.GetHTTPClient(
-				rhttp.Context(ctx),
-				rhttp.Timeout(time.Duration(s.c.Timeout*int64(time.Second))),
-				rhttp.Insecure(s.c.Insecure),
-			)
+			httpClient := s.client
 			httpReq, err := rhttp.NewRequest(ctx, "PATCH", uRes.UploadEndpoint, r.Body)
 			if err != nil {
 				log.Err(err).Msg("wrong request")

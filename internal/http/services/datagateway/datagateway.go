@@ -69,6 +69,7 @@ func (c *config) init() {
 type svc struct {
 	conf    *config
 	handler http.Handler
+	client  *http.Client
 }
 
 // New returns a new datagateway
@@ -80,7 +81,13 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 
 	conf.init()
 
-	s := &svc{conf: conf}
+	s := &svc{
+		conf: conf,
+		client: rhttp.GetHTTPClient(
+			rhttp.Timeout(time.Duration(conf.Timeout*int64(time.Second))),
+			rhttp.Insecure(conf.Insecure),
+		),
+	}
 	s.setHandler()
 	return s, nil
 }
@@ -170,11 +177,7 @@ func (s *svc) doHead(w http.ResponseWriter, r *http.Request) {
 
 	log.Debug().Str("target", claims.Target).Msg("sending request to internal data server")
 
-	httpClient := rhttp.GetHTTPClient(
-		rhttp.Context(ctx),
-		rhttp.Timeout(time.Duration(s.conf.Timeout*int64(time.Second))),
-		rhttp.Insecure(s.conf.Insecure),
-	)
+	httpClient := s.client
 	httpReq, err := rhttp.NewRequest(ctx, "HEAD", claims.Target, nil)
 	if err != nil {
 		log.Err(err).Msg("wrong request")
@@ -215,11 +218,7 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 
 	log.Debug().Str("target", claims.Target).Msg("sending request to internal data server")
 
-	httpClient := rhttp.GetHTTPClient(
-		rhttp.Context(ctx),
-		rhttp.Timeout(time.Duration(s.conf.Timeout*int64(time.Second))),
-		rhttp.Insecure(s.conf.Insecure),
-	)
+	httpClient := s.client
 	httpReq, err := rhttp.NewRequest(ctx, "GET", claims.Target, nil)
 	if err != nil {
 		log.Err(err).Msg("wrong request")
@@ -275,11 +274,7 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 
 	log.Debug().Str("target", claims.Target).Msg("sending request to internal data server")
 
-	httpClient := rhttp.GetHTTPClient(
-		rhttp.Context(ctx),
-		rhttp.Timeout(time.Duration(s.conf.Timeout*int64(time.Second))),
-		rhttp.Insecure(s.conf.Insecure),
-	)
+	httpClient := s.client
 	httpReq, err := rhttp.NewRequest(ctx, "PUT", target, r.Body)
 	if err != nil {
 		log.Err(err).Msg("wrong request")
@@ -336,11 +331,7 @@ func (s *svc) doPatch(w http.ResponseWriter, r *http.Request) {
 
 	log.Debug().Str("target", claims.Target).Msg("sending request to internal data server")
 
-	httpClient := rhttp.GetHTTPClient(
-		rhttp.Context(ctx),
-		rhttp.Timeout(time.Duration(s.conf.Timeout*int64(time.Second))),
-		rhttp.Insecure(s.conf.Insecure),
-	)
+	httpClient := s.client
 	httpReq, err := rhttp.NewRequest(ctx, "PATCH", target, r.Body)
 	if err != nil {
 		log.Err(err).Msg("wrong request")
