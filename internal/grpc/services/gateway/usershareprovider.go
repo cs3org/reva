@@ -205,10 +205,15 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 		updateGrantStatus, err := s.updateGrant(ctx, getShareRes.GetShare().GetResourceId(),
 			getShareRes.GetShare().GetGrantee(),
 			getShareRes.GetShare().GetPermissions().GetPermissions())
+
+		if err != nil {
+			return nil, errors.Wrap(err, "gateway: error calling updateGrant")
+		}
+
 		if updateGrantStatus.Code != rpc.Code_CODE_OK {
 			return &collaboration.UpdateShareResponse{
 				Status: updateGrantStatus,
-			}, err
+			}, nil
 		}
 	}
 
