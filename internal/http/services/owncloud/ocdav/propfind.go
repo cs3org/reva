@@ -94,7 +94,7 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 			w.WriteHeader(http.StatusNotFound)
 		case rpc.Code_CODE_PERMISSION_DENIED:
 			log.Debug().Str("path", fn).Interface("status", res.Status).Msg("permission denied")
-			w.WriteHeader(http.StatusForbidden)
+			w.WriteHeader(http.StatusMultiStatus)
 		default:
 			log.Error().Str("path", fn).Interface("status", res.Status).Msg("grpc stat request failed")
 			w.WriteHeader(http.StatusInternalServerError)
