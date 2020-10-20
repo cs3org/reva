@@ -21,6 +21,7 @@ package ocdav
 import (
 	"io"
 	"net/http"
+	"os"
 	"path"
 	"regexp"
 	"strconv"
@@ -166,11 +167,22 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 			return
 		}
 	}
+	fileName, fd, err := s.createChunkTempFile()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	defer os.RemoveAll(fileName)
+	defer fd.Close()
+	if _, err := io.Copy(fd, r.Body); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
-	s.handlePutHelper(w, r, r.Body, fn, length)
+	s.handlePutHelper(w, r, fd, fn, length)
 }
 
-func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io.Reader, fn string, length int64) {
+func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io.ReadSeeker, fn string, length int64) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
