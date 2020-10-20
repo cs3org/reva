@@ -21,12 +21,6 @@ package ocdav
 import (
 	"context"
 	"fmt"
-	"io"
-	"net/http"
-	"path"
-	"strings"
-	"time"
-
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -37,6 +31,10 @@ import (
 	tokenpkg "github.com/cs3org/reva/pkg/token"
 	"github.com/eventials/go-tus"
 	"github.com/eventials/go-tus/memorystore"
+	"io"
+	"net/http"
+	"path"
+	"strings"
 )
 
 func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
@@ -282,11 +280,7 @@ func (s *svc) descend(ctx context.Context, client gateway.GatewayAPIClient, src 
 		}
 		httpDownloadReq.Header.Set(datagateway.TokenTransportHeader, dRes.Token)
 
-		httpDownloadClient := rhttp.GetHTTPClient(
-			rhttp.Context(ctx),
-			rhttp.Timeout(time.Duration(s.c.Timeout*int64(time.Second))),
-			rhttp.Insecure(s.c.Insecure),
-		)
+		httpDownloadClient := s.client
 
 		httpDownloadRes, err := httpDownloadClient.Do(httpDownloadReq)
 		if err != nil {
@@ -314,11 +308,7 @@ func (s *svc) tusUpload(ctx context.Context, dataServerURL string, transferToken
 	// create the tus client.
 	c := tus.DefaultConfig()
 	c.Resume = true
-	c.HttpClient = rhttp.GetHTTPClient(
-		rhttp.Context(ctx),
-		rhttp.Timeout(time.Duration(s.c.Timeout*int64(time.Second))),
-		rhttp.Insecure(s.c.Insecure),
-	)
+	c.HttpClient = s.client
 	c.Store, err = memorystore.NewMemoryStore()
 	if err != nil {
 		return err
