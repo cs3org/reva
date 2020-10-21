@@ -316,8 +316,6 @@ func (t *Tree) Propagate(ctx context.Context, n *Node) (err error) {
 	}
 	log := appctx.GetLogger(ctx)
 
-	nodePath := t.lu.toInternalPath(n.ID)
-
 	// is propagation enabled for the parent node?
 
 	var root *Node
@@ -325,12 +323,8 @@ func (t *Tree) Propagate(ctx context.Context, n *Node) (err error) {
 		return
 	}
 
-	var fi os.FileInfo
-	if fi, err = os.Stat(nodePath); err != nil {
-		return err
-	}
-
-	var b []byte
+	// use a sync time and don't rely on the mtime of the current node, as the stat might not change when a rename happened too quickly
+	sTime := time.Now().UTC()
 
 	for err == nil && n.ID != root.ID {
 		log.Debug().Interface("node", n).Msg("propagating")
@@ -355,22 +349,33 @@ func (t *Tree) Propagate(ctx context.Context, n *Node) (err error) {
 			switch {
 			case err != nil:
 				// missing attribute, or invalid format, overwrite
-				log.Error().Err(err).Interface("node", n).Msg("could not read tmtime attribute, overwriting")
+				log.Error().Err(err).
+					Interface("node", n).
+					Msg("could not read tmtime attribute, overwriting")
 				updateSyncTime = true
-			case tmTime.Before(fi.ModTime()):
-				log.Debug().Interface("node", n).Str("tmtime", string(b)).Str("mtime", fi.ModTime().UTC().Format(time.RFC3339Nano)).Msg("parent tmtime is older than node mtime, updating")
+			case tmTime.Before(sTime):
+				log.Debug().
+					Interface("node", n).
+					Time("tmtime", tmTime).
+					Time("stime", sTime).
+					Msg("parent tmtime is older than node mtime, updating")
 				updateSyncTime = true
 			default:
-				log.Debug().Interface("node", n).Str("tmtime", string(b)).Str("mtime", fi.ModTime().UTC().Format(time.RFC3339Nano)).Msg("parent tmtime is younger than node mtime, not updating")
+				log.Debug().
+					Interface("node", n).
+					Time("tmtime", tmTime).
+					Time("stime", sTime).
+					Dur("delta", sTime.Sub(tmTime)).
+					Msg("parent tmtime is younger than node mtime, not updating")
 			}
 
 			if updateSyncTime {
 				// update the tree time of the parent node
-				if err = n.SetTMTime(fi.ModTime()); err != nil {
-					log.Error().Err(err).Interface("node", n).Time("tmtime", fi.ModTime().UTC()).Msg("could not update tmtime of parent node")
+				if err = n.SetTMTime(sTime); err != nil {
+					log.Error().Err(err).Interface("node", n).Time("tmtime", sTime).Msg("could not update tmtime of parent node")
 					return
 				}
-				log.Debug().Interface("node", n).Time("tmtime", fi.ModTime().UTC()).Msg("updated tmtime of parent node")
+				log.Debug().Interface("node", n).Time("tmtime", sTime).Msg("updated tmtime of parent node")
 			}
 
 			if err := n.UnsetTempEtag(); err != nil {
