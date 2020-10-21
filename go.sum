@@ -306,8 +306,8 @@ github.com/onsi/ginkgo v1.6.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+W
 github.com/onsi/ginkgo v1.7.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
 github.com/onsi/gomega v1.4.3/go.mod h1:ex+gbHU/CVuBBDIJjb2X0qEXbFg53c61hWP/1CpauHY=
 github.com/opentracing/opentracing-go v1.1.0/go.mod h1:UkNAQd3GIcIGf0SeVgPpRdFStlNbqXla1AfSYxPUl2o=
-github.com/ory/fosite v0.35.0 h1:ugOMHhlcfAjBmIwLOVCK0LQMnYMP/8J/reb2+VEHrfg=
-github.com/ory/fosite v0.35.0/go.mod h1:h+ize9gk0GvRyGjabriqSEmTkMhny+O95cijb8DVqPE=
+github.com/ory/fosite v0.35.1 h1:mGPcwVGwHA7Yy9wr/7LDps6BEXyavL32NxizL9eH53Q=
+github.com/ory/fosite v0.35.1/go.mod h1:h+ize9gk0GvRyGjabriqSEmTkMhny+O95cijb8DVqPE=
 github.com/ory/go-acc v0.2.5 h1:31irXHzG2vnKQSE4weJm7AdfrnpaVjVCq3nD7viXCJE=
 github.com/ory/go-acc v0.2.5/go.mod h1:4Kb/UnPcT8qRAk3IAxta+hvVapdxTLWtrr7bFLlEgpw=
 github.com/ory/go-convenience v0.1.0 h1:zouLKfF2GoSGnJwGq+PE/nJAE6dj2Zj5QlTgmMTsTS8=
