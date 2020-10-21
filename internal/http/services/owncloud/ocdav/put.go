@@ -30,12 +30,8 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/internal/http/utils"
 	"github.com/cs3org/reva/pkg/appctx"
-	tokenpkg "github.com/cs3org/reva/pkg/token"
-	"github.com/eventials/go-tus"
-	"github.com/eventials/go-tus/memorystore"
 )
 
 func isChunked(fn string) (bool, error) {
@@ -283,52 +279,8 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 		return
 	}
 
-	dataServerURL := uRes.UploadEndpoint
-
-	// create the tus client.
-	c := tus.DefaultConfig()
-	c.Resume = true
-	c.HttpClient = s.client
-
-	c.Store, err = memorystore.NewMemoryStore()
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	log.Debug().
-		Str("upload-endpoint", dataServerURL).
-		Str("auth-header", tokenpkg.TokenHeader).
-		Str("auth-token", tokenpkg.ContextMustGetToken(ctx)).
-		Str("transfer-header", datagateway.TokenTransportHeader).
-		Str("transfer-token", uRes.Token).
-		Msg("adding tokens to headers")
-	c.Header.Set(tokenpkg.TokenHeader, tokenpkg.ContextMustGetToken(ctx))
-	c.Header.Set(datagateway.TokenTransportHeader, uRes.Token)
-
-	tusc, err := tus.NewClient(dataServerURL, c)
-	if err != nil {
-		log.Error().Err(err).Msg("Could not get TUS client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	metadata := map[string]string{
-		"filename": path.Base(fn),
-		"dir":      path.Dir(fn),
-		//"checksum": fmt.Sprintf("%s %s", storageprovider.GRPC2PKGXS(xsType).String(), xs),
-	}
-
-	upload := tus.NewUpload(content, length, metadata, "")
-
-	// create the uploader.
-	c.Store.Set(upload.Fingerprint, dataServerURL)
-	uploader := tus.NewUploader(tusc, dataServerURL, upload, 0)
-
-	// start the uploading process.
-	err = uploader.Upload()
-	if err != nil {
-		log.Error().Err(err).Msg("Could not start TUS upload")
+	if err = s.tusUpload(ctx, uRes.UploadEndpoint, uRes.Token, fn, content, length); err != nil {
+		log.Error().Err(err).Msg("TUS upload failed")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

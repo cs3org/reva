@@ -20,7 +20,10 @@ package dataprovider
 
 import (
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net/http"
+	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -71,6 +74,18 @@ func (s *svc) doTusPut(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+	}
+
+	fd, err := ioutil.TempFile(fmt.Sprintf("/%s", s.conf.TempDirectory), "")
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	defer os.RemoveAll(fd.Name())
+	defer fd.Close()
+	if _, err := io.Copy(fd, r.Body); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
 	dataServerURL := fmt.Sprintf("http://%s%s", r.Host, r.RequestURI)
