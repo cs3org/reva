@@ -35,7 +35,6 @@ import (
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"github.com/pkg/xattr"
 	"github.com/rs/zerolog/log"
 	tusd "github.com/tus/tusd/pkg/handler"
 )
@@ -143,14 +142,6 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 	if os.IsNotExist(err) || link != "../"+n.ID {
 		if err = os.Symlink("../"+n.ID, childNameLink); err != nil {
 			return errors.Wrap(err, "ocisfs: could not symlink child entry")
-		}
-	}
-
-	if fs.o.TreeTimeAccounting {
-		// mark the home node as the end of propagation q
-		if err = xattr.Set(nodePath, propagationAttr, []byte("1")); err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not mark node to propagate")
-			return
 		}
 	}
 
@@ -491,13 +482,6 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	}
 	if err != nil {
 		return
-	}
-	if upload.fs.o.TreeTimeAccounting {
-		// mark the home node as the end of propagation q
-		if err = xattr.Set(targetPath, propagationAttr, []byte("1")); err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not mark node to propagate")
-			return
-		}
 	}
 
 	// link child name to parent if it is new
