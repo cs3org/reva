@@ -66,12 +66,17 @@ func New(m map[string]interface{}) (invite.Manager, error) {
 		Invites:       sync.Map{},
 		AcceptedUsers: sync.Map{},
 		Config:        c,
+		Client: rhttp.GetHTTPClient(
+			rhttp.Timeout(5*time.Second),
+			rhttp.Insecure(c.InsecureConnections),
+		),
 	}, nil
 }
 
 type manager struct {
 	Invites       sync.Map
 	AcceptedUsers sync.Map
+	Client        *http.Client
 	Config        *config
 }
 
@@ -114,15 +119,13 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 	u.Path = path.Join(u.Path, acceptInviteEndpoint)
 	recipientURL := u.String()
 
-	client := rhttp.GetHTTPClient(rhttp.Insecure(m.Config.InsecureConnections))
-
 	req, err := http.NewRequest("POST", recipientURL, strings.NewReader(requestBody.Encode()))
 	if err != nil {
 		return errors.Wrap(err, "json: error framing post request")
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
 
-	resp, err := client.Do(req)
+	resp, err := m.Client.Do(req)
 	if err != nil {
 		err = errors.Wrap(err, "memory: error sending post request")
 		return err

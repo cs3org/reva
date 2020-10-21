@@ -26,7 +26,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"time"
 
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/pkg/errors"
@@ -159,15 +158,7 @@ func uploadCommand() *command {
 			q.Add("xs_type", storageprovider.GRPC2PKGXS(xsType).String())
 			httpReq.URL.RawQuery = q.Encode()
 
-			httpClient := rhttp.GetHTTPClient(
-				rhttp.Context(ctx),
-				// TODO make insecure configurable
-				rhttp.Insecure(true),
-				// TODO make timeout configurable
-				rhttp.Timeout(time.Duration(24*int64(time.Hour))),
-			)
-
-			httpRes, err := httpClient.Do(httpReq)
+			httpRes, err := client.Do(httpReq)
 			if err != nil {
 				return err
 			}
@@ -179,13 +170,7 @@ func uploadCommand() *command {
 			// create the tus client.
 			c := tus.DefaultConfig()
 			c.Resume = true
-			c.HttpClient = rhttp.GetHTTPClient(
-				rhttp.Context(ctx),
-				// TODO make insecure configurable
-				rhttp.Insecure(true),
-				// TODO make timeout configurable
-				rhttp.Timeout(time.Duration(24*int64(time.Hour))),
-			)
+			c.HttpClient = client
 			c.Store, err = memorystore.NewMemoryStore()
 			if err != nil {
 				return err

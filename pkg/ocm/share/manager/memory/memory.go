@@ -65,6 +65,9 @@ func New(m map[string]interface{}) (share.Manager, error) {
 		c:      c,
 		shares: sync.Map{},
 		state:  state,
+		client: rhttp.GetHTTPClient(
+			rhttp.Timeout(5 * time.Second),
+		),
 	}, nil
 }
 
@@ -72,6 +75,7 @@ type mgr struct {
 	c      *config
 	shares sync.Map
 	state  map[string]map[string]ocm.ShareState
+	client *http.Client
 }
 
 type config struct {
@@ -209,15 +213,13 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 		u.Path = path.Join(u.Path, createOCMCoreShareEndpoint)
 		recipientURL := u.String()
 
-		client := rhttp.GetHTTPClient(rhttp.Insecure(m.c.InsecureConnections))
-
 		req, err := http.NewRequest("POST", recipientURL, strings.NewReader(requestBody.Encode()))
 		if err != nil {
 			return nil, errors.Wrap(err, "json: error framing post request")
 		}
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
 
-		resp, err := client.Do(req)
+		resp, err := m.client.Do(req)
 		if err != nil {
 			err = errors.Wrap(err, "memory: error sending post request")
 			return nil, err

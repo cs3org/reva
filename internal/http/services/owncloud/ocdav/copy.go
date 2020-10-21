@@ -350,7 +350,7 @@ func (s *svc) tusUpload(ctx context.Context, dataServerURL string, transferToken
 		Str("dir", path.Dir(fn)).
 		Msg("tus.NewUpload")
 
-	upload := tus.NewUpload(body, int64(length), metadata, "")
+	upload := tus.NewUpload(body, length, metadata, "")
 
 	// create the uploader.
 	c.Store.Set(upload.Fingerprint, dataServerURL)

@@ -50,6 +50,7 @@ func init() {
 
 type service struct {
 	provider app.Provider
+	client   *http.Client
 	conf     *config
 }
 
@@ -79,6 +80,9 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	service := &service{
 		conf:     c,
 		provider: provider,
+		client: rhttp.GetHTTPClient(
+			rhttp.Timeout(5 * time.Second),
+		),
 	}
 
 	return service, nil
@@ -120,12 +124,6 @@ func getProvider(c *config) (app.Provider, error) {
 }
 
 func (s *service) getWopiAppEndpoints(ctx context.Context) (map[string]interface{}, error) {
-	httpClient := rhttp.GetHTTPClient(
-		rhttp.Context(ctx),
-		// calls to WOPI are expected to take a very short time, 5s (though hardcoded) ought to be far enough
-		rhttp.Timeout(time.Duration(5*int64(time.Second))),
-	)
-
 	// TODO this query will eventually be served by Reva.
 	// For the time being it is a remnant of the CERNBox-specific WOPI server, which justifies the /cbox path in the URL.
 	wopiurl, err := url.Parse(s.conf.WopiURL)
@@ -137,7 +135,7 @@ func (s *service) getWopiAppEndpoints(ctx context.Context) (map[string]interface
 	if err != nil {
 		return nil, err
 	}
-	appsRes, err := httpClient.Do(appsReq)
+	appsRes, err := s.client.Do(appsReq)
 	if err != nil {
 		return nil, err
 	}
@@ -164,12 +162,6 @@ func (s *service) getWopiAppEndpoints(ctx context.Context) (map[string]interface
 func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.OpenFileInAppProviderRequest) (*providerpb.OpenFileInAppProviderResponse, error) {
 
 	log := appctx.GetLogger(ctx)
-
-	httpClient := rhttp.GetHTTPClient(
-		rhttp.Context(ctx),
-		// calls to WOPI are expected to take a very short time, 5s (though hardcoded) ought to be far enough
-		rhttp.Timeout(time.Duration(5*int64(time.Second))),
-	)
 
 	wopiurl, err := url.Parse(s.conf.WopiURL)
 	if err != nil {
@@ -203,7 +195,7 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 
 	httpReq.URL.RawQuery = q.Encode()
 
-	openRes, err := httpClient.Do(httpReq)
+	openRes, err := s.client.Do(httpReq)
 
 	if err != nil {
 		res := &providerpb.OpenFileInAppProviderResponse{

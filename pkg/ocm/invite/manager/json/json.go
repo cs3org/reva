@@ -56,6 +56,7 @@ type manager struct {
 	config     *config
 	sync.Mutex // concurrent access to the file
 	model      *inviteModel
+	client     *http.Client
 }
 
 type config struct {
@@ -103,6 +104,10 @@ func New(m map[string]interface{}) (invite.Manager, error) {
 	manager := &manager{
 		config: config,
 		model:  model,
+		client: rhttp.GetHTTPClient(
+			rhttp.Timeout(5*time.Second),
+			rhttp.Insecure(config.InsecureConnections),
+		),
 	}
 
 	return manager, nil
@@ -214,15 +219,13 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 	u.Path = path.Join(u.Path, acceptInviteEndpoint)
 	recipientURL := u.String()
 
-	client := rhttp.GetHTTPClient(rhttp.Insecure(m.config.InsecureConnections))
-
 	req, err := http.NewRequest("POST", recipientURL, strings.NewReader(requestBody.Encode()))
 	if err != nil {
 		return errors.Wrap(err, "json: error framing post request")
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
 
-	resp, err := client.Do(req)
+	resp, err := m.client.Do(req)
 	if err != nil {
 		err = errors.Wrap(err, "json: error sending post request")
 		return err

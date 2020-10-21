@@ -73,6 +73,9 @@ func New(m map[string]interface{}) (share.Manager, error) {
 	mgr := &mgr{
 		c:     c,
 		model: model,
+		client: rhttp.GetHTTPClient(
+			rhttp.Timeout(5 * time.Second),
+		),
 	}
 
 	return mgr, nil
@@ -136,6 +139,7 @@ type mgr struct {
 	c          *config
 	sync.Mutex // concurrent access to the file
 	model      *shareModel
+	client     *http.Client
 }
 
 func (m *shareModel) Save() error {
@@ -299,15 +303,13 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 		u.Path = path.Join(u.Path, createOCMCoreShareEndpoint)
 		recipientURL := u.String()
 
-		client := rhttp.GetHTTPClient(rhttp.Insecure(m.c.InsecureConnections))
-
 		req, err := http.NewRequest("POST", recipientURL, strings.NewReader(requestBody.Encode()))
 		if err != nil {
 			return nil, errors.Wrap(err, "json: error framing post request")
 		}
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
 
-		resp, err := client.Do(req)
+		resp, err := m.client.Do(req)
 		if err != nil {
 			err = errors.Wrap(err, "json: error sending post request")
 			return nil, err
