@@ -58,7 +58,8 @@ type config struct {
 	Demo      map[string]interface{} `mapstructure:"demo"`
 	IopSecret string                 `mapstructure:"iopsecret" docs:";The iopsecret used to connect to the wopiserver."`
 	WopiURL   string                 `mapstructure:"wopiurl" docs:";The wopiserver's URL."`
-	MimeTypes map[string]string      `mapstructure:"mimetypes"`
+	WopiBrURL string                 `mapstructure:"wopibridgeurl" docs:";The wopibridge's URL."`
+	MimeTypes map[string]string      `mapstructure:"mimetypes" docs:"nil;List of supported mime types and corresponding file extensions."`
 }
 
 // New creates a new AppProviderService
@@ -257,8 +258,35 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 		appProviderURL += "?"
 	}
 	appProviderURL = fmt.Sprintf("%sWOPISrc=%s", appProviderURL, openResBody)
-	log.Info().Msg(fmt.Sprintf("Returning app provider URL %s", appProviderURL))
 
+	// In case of applications served by the WOPI bridge, resolve the URL and go to the app
+	// Note that URL matching is performed via string matching, not via IP resolution: may need to fix this
+	if strings.Contains(appProviderURL, s.conf.WopiBrURL) {
+		httpClient := rhttp.GetHTTPClient(
+			rhttp.Context(ctx),
+			rhttp.Timeout(time.Duration(5*int64(time.Second))),
+		)
+		httpClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+			// do not follow a redirect
+			return http.ErrUseLastResponse
+		}
+
+		bridgeReq, err := rhttp.NewRequest(ctx, "GET", appProviderURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		bridgeRes, err := httpClient.Do(bridgeReq)
+		if err != nil {
+			return nil, err
+		}
+		defer bridgeRes.Body.Close()
+		if bridgeRes.StatusCode != http.StatusFound {
+			return nil, fmt.Errorf("Request to WOPI bridge returned %d", bridgeRes.StatusCode)
+		}
+		appProviderURL = bridgeRes.Header.Get("Location")
+	}
+
+	log.Info().Msg(fmt.Sprintf("Returning app provider URL %s", appProviderURL))
 	return &providerpb.OpenFileInAppProviderResponse{
 		Status:         status.NewOK(ctx),
 		AppProviderUrl: appProviderURL,

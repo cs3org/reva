@@ -95,7 +95,7 @@ func (p *Permissions) HasPermission(ctx context.Context, n *Node, check func(*pr
 	for cn.ID != rn.ID {
 
 		var grantees []string
-		if grantees, err = n.ListGrantees(ctx); err != nil {
+		if grantees, err = cn.ListGrantees(ctx); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn).Msg("error listing grantees")
 			return false, err
 		}
@@ -106,11 +106,11 @@ func (p *Permissions) HasPermission(ctx context.Context, n *Node, check func(*pr
 			// we only need the find the user once per node
 			switch {
 			case !userFound && grantees[i] == userace:
-				g, err = n.ReadGrant(ctx, grantees[i])
+				g, err = cn.ReadGrant(ctx, grantees[i])
 			case strings.HasPrefix(grantees[i], grantPrefix+"g:"):
 				gr := strings.TrimPrefix(grantees[i], grantPrefix+"g:")
 				if groupsMap[gr] {
-					g, err = n.ReadGrant(ctx, grantees[i])
+					g, err = cn.ReadGrant(ctx, grantees[i])
 				} else {
 					// no need to check attribute
 					continue

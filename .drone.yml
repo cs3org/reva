@@ -446,7 +446,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout ceb1b471b639c0f5eb5af2c7e04ffd25395f4d57
+      - git checkout 914992f5f6d4bb562534fa52273e5bd0bc11b208
 
   - name: localAPIAcceptanceTestsOwncloudStorage
     image: owncloudci/php:7.2
@@ -454,7 +454,8 @@ steps:
       - make test-acceptance-api
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
-      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/'
+      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
+      STORAGE_DRIVER: 'OWNCLOUD'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
@@ -520,7 +521,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout ceb1b471b639c0f5eb5af2c7e04ffd25395f4d57
+      - git checkout 914992f5f6d4bb562534fa52273e5bd0bc11b208
 
   - name: localAPIAcceptanceTestsOcisStorage
     image: owncloudci/php:7.2
@@ -528,8 +529,10 @@ steps:
       - make test-acceptance-api
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
-      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/'
+      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
+      STORAGE_DRIVER: 'OCIS'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
+      OCIS_SKELETON_STRATEGY: 'copy'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_OCIS: 'true'
@@ -594,7 +597,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout ceb1b471b639c0f5eb5af2c7e04ffd25395f4d57
+      - git checkout 914992f5f6d4bb562534fa52273e5bd0bc11b208
 
   - name: oC10APIAcceptanceTests
     image: owncloudci/php:7.2
@@ -603,16 +606,17 @@ steps:
       - make test-acceptance-api
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
-      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/'
+      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
+      STORAGE_DRIVER: 'OWNCLOUD'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_OCIS: 'true'
       TEST_REVA: 'true'
-      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage'
+      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OC-Storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 1
-      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OC-storage.txt'
+      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.txt'
 
 services:
   - 'name': 'ldap'
@@ -671,7 +675,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout ceb1b471b639c0f5eb5af2c7e04ffd25395f4d57
+      - git checkout 914992f5f6d4bb562534fa52273e5bd0bc11b208
 
   - name: oC10APIAcceptanceTests
     image: owncloudci/php:7.2
@@ -680,16 +684,17 @@ steps:
       - make test-acceptance-api
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
-      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/'
+      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
+      STORAGE_DRIVER: 'OWNCLOUD'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_OCIS: 'true'
       TEST_REVA: 'true'
-      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage'
+      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OC-Storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 2
-      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OC-storage.txt'
+      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.txt'
 
 services:
   - 'name': 'ldap'
@@ -748,7 +753,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout ceb1b471b639c0f5eb5af2c7e04ffd25395f4d57
+      - git checkout 914992f5f6d4bb562534fa52273e5bd0bc11b208
 
   - name: oC10APIAcceptanceTests
     image: owncloudci/php:7.2
@@ -757,16 +762,17 @@ steps:
       - make test-acceptance-api
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
-      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/'
+      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
+      STORAGE_DRIVER: 'OWNCLOUD'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_OCIS: 'true'
       TEST_REVA: 'true'
-      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage'
+      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OC-Storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 3
-      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OC-storage.txt'
+      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.txt'
 
 services:
   - 'name': 'ldap'
@@ -825,7 +831,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout ceb1b471b639c0f5eb5af2c7e04ffd25395f4d57
+      - git checkout 914992f5f6d4bb562534fa52273e5bd0bc11b208
 
   - name: oC10APIAcceptanceTests
     image: owncloudci/php:7.2
@@ -834,16 +840,17 @@ steps:
       - make test-acceptance-api
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
-      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/'
+      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
+      STORAGE_DRIVER: 'OWNCLOUD'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_OCIS: 'true'
       TEST_REVA: 'true'
-      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage'
+      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OC-Storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 4
-      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OC-storage.txt'
+      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.txt'
 
 services:
   - 'name': 'ldap'
@@ -902,7 +909,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout ceb1b471b639c0f5eb5af2c7e04ffd25395f4d57
+      - git checkout 914992f5f6d4bb562534fa52273e5bd0bc11b208
 
   - name: oC10APIAcceptanceTests
     image: owncloudci/php:7.2
@@ -911,16 +918,17 @@ steps:
       - make test-acceptance-api
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
-      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/'
+      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
+      STORAGE_DRIVER: 'OWNCLOUD'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_OCIS: 'true'
       TEST_REVA: 'true'
-      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage'
+      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OC-Storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 5
-      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OC-storage.txt'
+      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.txt'
 
 services:
   - 'name': 'ldap'
@@ -979,7 +987,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout ceb1b471b639c0f5eb5af2c7e04ffd25395f4d57
+      - git checkout 914992f5f6d4bb562534fa52273e5bd0bc11b208
 
   - name: oC10APIAcceptanceTests
     image: owncloudci/php:7.2
@@ -988,16 +996,17 @@ steps:
       - make test-acceptance-api
     environment:
       TEST_SERVER_URL: 'http://revad-services:20080'
-      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/'
+      OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
+      STORAGE_DRIVER: 'OWNCLOUD'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
       TEST_EXTERNAL_USER_BACKENDS: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_OCIS: 'true'
       TEST_REVA: 'true'
-      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage'
+      BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OC-Storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 6
-      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OC-storage.txt'
+      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.txt'
 
 services:
   - 'name': 'ldap'
