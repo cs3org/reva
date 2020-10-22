@@ -96,6 +96,15 @@ func TestUserManager(t *testing.T) {
 		t.Fatalf("user not in group: expected=%v got=%v", []*userpb.User{}, resUsers)
 	}
 
+	// test FindGroups
+	resFindGroups, _ := manager.FindGroups(ctx, "violin")
+	if len(resFindGroups) != 1 {
+		t.Fatalf("too many groups found: expected=%d got=%+v", 1, resFindGroups)
+	}
+	if resFindGroups[0] != "violin-haters" {
+		t.Fatalf("group differs: expected=%v got=%v", "violin-haters", resFindGroups[0])
+	}
+
 	// positive test IsInGroup
 	resInGroup, _ := manager.IsInGroup(ctx, uidEinstein, "physics-lovers")
 	if !resInGroup {
