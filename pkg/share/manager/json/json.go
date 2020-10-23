@@ -272,6 +272,9 @@ func (m *mgr) Unshare(ctx context.Context, ref *collaboration.ShareReference) er
 	m.Lock()
 	defer m.Unlock()
 	user := user.ContextMustGetUser(ctx)
+	if v, ok := m.model.State[user.Id.String()]; ok {
+		delete(v, ref.GetId().String())
+	}
 	for i, s := range m.model.Shares {
 		if equal(ref, s) {
 			if (user.Id.Idp == s.Owner.Idp && user.Id.OpaqueId == s.Owner.OpaqueId) ||
