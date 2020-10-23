@@ -280,7 +280,9 @@ func (fs *eosfs) wrap(ctx context.Context, fn string) (internal string) {
 func (fs *eosfs) unwrap(ctx context.Context, internal string) (external string) {
 	log := appctx.GetLogger(ctx)
 	layout := fs.getLayout(ctx)
-	ns := fs.getNsMatch(internal, []string{fs.conf.Namespace, fs.conf.ShadowNamespace})
+	nss := []string{fs.conf.Namespace, fs.conf.ShadowNamespace}
+	log.Debug().Msgf("eos: unwrap: internal=%s external=%s", internal, nss)
+	ns := fs.getNsMatch(internal, nss)
 	external = fs.unwrapInternal(ctx, ns, internal, layout)
 	log.Debug().Msgf("eos: unwrap: internal=%s external=%s", internal, external)
 	return
