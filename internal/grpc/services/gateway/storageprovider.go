@@ -1623,29 +1623,33 @@ func (s *svc) listSharesFolder(ctx context.Context) (*provider.ListContainerResp
 			Status: status.NewInternal(ctx, err, "gateway: error listing shared folder"),
 		}, nil
 	}
-
-	for i, ref := range lcr.Infos {
-		info, protocol, err := s.checkRef(ctx, ref)
+	checkedInfos := make([]*provider.ResourceInfo, 0)
+	for i := range lcr.Infos {
+		info, protocol, err := s.checkRef(ctx, lcr.Infos[i])
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			// this might arise when the shared resource has been moved to the recycle bin
 			continue
+		} else if _, ok := err.(errtypes.PermissionDenied); ok {
+			// this might arise when the resource was unshared, but the share reference was not removed
+			continue
 		} else if err != nil {
 			return &provider.ListContainerResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error resolving reference:"+ref.Path),
+				Status: status.NewInternal(ctx, err, "gateway: error resolving reference:"+lcr.Infos[i].Path),
 			}, nil
 		}
 
 		if protocol == "webdav" {
-			info, err = s.webdavRefStat(ctx, ref.Target)
+			info, err = s.webdavRefStat(ctx, lcr.Infos[i].Target)
 			if err != nil {
 				// Might be the case that the webdav token has expired
 				continue
 			}
 		}
 
-		info.Path = ref.GetPath()
-		lcr.Infos[i] = info
+		info.Path = lcr.Infos[i].GetPath()
+		checkedInfos = append(checkedInfos, info)
 	}
+	lcr.Infos = checkedInfos
 
 	return lcr, nil
 }
