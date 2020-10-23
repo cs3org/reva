@@ -544,7 +544,7 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, username string, inode 
 		return nil, errtypes.InternalError(fmt.Sprintf("nil response for inode: '%d'", inode))
 	}
 
-	log.Info().Uint64("inode", inode).Msg("grpc response")
+	log.Info().Uint64("inode", inode).Str("rsp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
 
 	return c.grpcMDResponseToFileInfo(rsp, "")
 }
@@ -1217,6 +1217,7 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse, namepfx string) (
 		fi.UID = st.Fmd.Uid
 		fi.GID = st.Fmd.Gid
 		fi.MTimeSec = st.Fmd.Mtime.Sec
+		fi.ETag = st.Fmd.Etag
 		if namepfx == "" {
 			fi.File = string(st.Fmd.Name)
 		} else {
@@ -1237,6 +1238,7 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse, namepfx string) (
 		fi.UID = st.Cmd.Uid
 		fi.GID = st.Cmd.Gid
 		fi.MTimeSec = st.Cmd.Mtime.Sec
+		fi.ETag = st.Cmd.Etag
 		if namepfx == "" {
 			fi.File = string(st.Cmd.Name)
 		} else {
@@ -1255,8 +1257,6 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse, namepfx string) (
 
 		fi.Size = 0
 	}
-
-	fi.ETag = fi.Attrs["etag"]
 
 	log.Debug().Str("stat info - path", fi.File).Uint64("inode:", fi.Inode).Uint64("uid:", fi.UID).Uint64("gid:", fi.GID).Str("etag:", fi.ETag).Msg("grpc response")
 
