@@ -819,16 +819,6 @@ apiTrashbin/trashbinFilesFolders.feature:211
 apiTrashbin/trashbinFilesFolders.feature:224
 apiTrashbin/trashbinFilesFolders.feature:225
 #
-# https://github.com/owncloud/product/issues/187
-# Cannot create user with different username and emails
-#
-apiTrashbin/trashbinFilesFolders.feature:239
-apiTrashbin/trashbinFilesFolders.feature:240
-apiTrashbin/trashbinFilesFolders.feature:241
-apiTrashbin/trashbinFilesFolders.feature:245
-apiTrashbin/trashbinFilesFolders.feature:246
-apiTrashbin/trashbinFilesFolders.feature:247
-#
 # https://github.com/owncloud/core/issues/38006 Review and fix the tests that have sharing step to work with ocis
 #
 apiTrashbin/trashbinRestore.feature:40
