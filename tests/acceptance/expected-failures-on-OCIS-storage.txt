@@ -197,7 +197,6 @@ apiSharees/sharees.feature:538
 # https://github.com/owncloud/ocis-reva/issues/34 groups endpoint does not exist
 #
 apiShareManagementToShares/acceptShares.feature:22
-apiShareManagementToShares/acceptShares.feature:52
 apiShareManagementToShares/acceptShares.feature:71
 apiShareManagementToShares/acceptShares.feature:156
 apiShareManagementToShares/acceptShares.feature:157
@@ -213,12 +212,9 @@ apiShareManagementToShares/acceptShares.feature:249
 apiShareManagementToShares/acceptShares.feature:270
 apiShareManagementToShares/acceptShares.feature:279
 apiShareManagementToShares/acceptShares.feature:298
-apiShareManagementToShares/acceptShares.feature:320
 apiShareManagementToShares/acceptShares.feature:342
 apiShareManagementToShares/acceptShares.feature:378
-apiShareManagementToShares/acceptShares.feature:398
 apiShareManagementToShares/acceptShares.feature:417
-apiShareManagementToShares/acceptShares.feature:439
 #
 # https://github.com/owncloud/product/issues/207 Response is empty when accepting a share
 #
@@ -283,12 +279,8 @@ apiShareManagementBasicToShares/excludeGroupFromReceivingSharesToSharesFolder.fe
 apiShareManagementBasicToShares/excludeGroupFromReceivingSharesToSharesFolder.feature:70
 apiShareManagementBasicToShares/excludeGroupFromReceivingSharesToSharesFolder.feature:97
 apiShareManagementBasicToShares/excludeGroupFromReceivingSharesToSharesFolder.feature:98
-apiShareManagementBasicToShares/excludeGroupFromReceivingSharesToSharesFolder.feature:115
-apiShareManagementBasicToShares/excludeGroupFromReceivingSharesToSharesFolder.feature:116
 apiShareManagementBasicToShares/excludeGroupFromReceivingSharesToSharesFolder.feature:135
 apiShareManagementBasicToShares/excludeGroupFromReceivingSharesToSharesFolder.feature:136
-apiShareManagementBasicToShares/excludeGroupFromReceivingSharesToSharesFolder.feature:153
-apiShareManagementBasicToShares/excludeGroupFromReceivingSharesToSharesFolder.feature:154
 #
 # https://github.com/owncloud/ocis/issues/720 shares are mounted into /Shares folder even after the sharer deletes the collaborator
 # https://github.com/owncloud/ocis/issues/721 deleting share response does not contain `data` field
@@ -400,11 +392,8 @@ apiSharePublicLink1/changingPublicLinkShare.feature:96
 #
 apiSharePublicLink1/changingPublicLinkShare.feature:63
 apiSharePublicLink1/changingPublicLinkShare.feature:107
-apiSharePublicLink1/changingPublicLinkShare.feature:128
 apiSharePublicLink1/changingPublicLinkShare.feature:151
-apiSharePublicLink1/changingPublicLinkShare.feature:174
 apiSharePublicLink1/changingPublicLinkShare.feature:197
-apiSharePublicLink1/changingPublicLinkShare.feature:221
 apiSharePublicLink1/changingPublicLinkShare.feature:244
 #
 # https://github.com/owncloud/ocis-reva/issues/292 Public link enforce permissions
@@ -494,6 +483,27 @@ apiSharePublicLink2/updatePublicLinkShare.feature:94
 apiSharePublicLink2/updatePublicLinkShare.feature:284
 apiSharePublicLink2/updatePublicLinkShare.feature:285
 #
+# Issues when creating a public link share from a received share
+#
+apiSharePublicLink2/reShareAsPublicLinkToShares.feature:25
+apiSharePublicLink2/reShareAsPublicLinkToShares.feature:26
+apiSharePublicLink2/reShareAsPublicLinkToShares.feature:47
+apiSharePublicLink2/reShareAsPublicLinkToShares.feature:48
+apiSharePublicLink2/reShareAsPublicLinkToShares.feature:63
+apiSharePublicLink2/reShareAsPublicLinkToShares.feature:64
+apiSharePublicLink2/reShareAsPublicLinkToShares.feature:78
+apiSharePublicLink2/reShareAsPublicLinkToShares.feature:79
+apiSharePublicLink2/reShareAsPublicLinkToShares.feature:100
+apiSharePublicLink2/reShareAsPublicLinkToShares.feature:101
+apiSharePublicLink2/reShareAsPublicLinkToShares.feature:123
+apiSharePublicLink2/reShareAsPublicLinkToShares.feature:124
+apiSharePublicLink2/reShareAsPublicLinkToShares.feature:140
+apiSharePublicLink2/reShareAsPublicLinkToShares.feature:141
+apiSharePublicLink2/reShareAsPublicLinkToShares.feature:161
+apiSharePublicLink2/reShareAsPublicLinkToShares.feature:162
+apiSharePublicLink2/reShareAsPublicLinkToShares.feature:184
+apiSharePublicLink2/reShareAsPublicLinkToShares.feature:185
+#
 # https://github.com/owncloud/ocis-reva/issues/11 listing received shares does not work
 #
 apiSharePublicLink2/updatePublicLinkShare.feature:303
@@ -525,6 +535,11 @@ apiSharePublicLink2/uploadToPublicLinkShare.feature:83
 apiSharePublicLink2/uploadToPublicLinkShare.feature:103
 apiSharePublicLink2/uploadToPublicLinkShare.feature:121
 apiSharePublicLink2/uploadToPublicLinkShare.feature:139
+#
+# Upload to deleted public link share returns 401 instead of 404 (note: passes in owncloud/ocis)
+#
+apiSharePublicLink2/uploadToPublicLinkShare.feature:48
+apiSharePublicLink2/uploadToPublicLinkShare.feature:49
 #
 # https://github.com/owncloud/ocis-reva/issues/286 Upload-only shares must not overwrite but create a separate file
 #
@@ -1352,15 +1367,6 @@ apiWebdavPreviews/previews.feature:164
 apiWebdavPreviews/previews.feature:165
 apiWebdavPreviews/previews.feature:177
 apiWebdavPreviews/previews.feature:178
-#
-# https://github.com/owncloud/ocis-ocs/issues/35 group support is not yet implemented
-#
-apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature:89
-apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature:90
-apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature:109
-apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature:110
-apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature:111
-apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature:112
 #
 # https://github.com/owncloud/product/issues/241 deleting an item updates etags of grandparent but not on parent
 #
