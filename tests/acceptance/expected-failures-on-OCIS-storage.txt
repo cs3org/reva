@@ -1016,6 +1016,10 @@ apiWebdavOperations/refuseAccess.feature:22
 apiWebdavOperations/refuseAccess.feature:33
 apiWebdavOperations/refuseAccess.feature:34
 #
+# https://github.com/owncloud/core/pull/38035 PROPFIND to https://localhost:9200/remote.php/dav/files gets an error 500 response
+#
+apiWebdavOperations/propfind.feature:5
+#
 # https://github.com/owncloud/ocis-reva/issues/39  REPORT request not implemented
 #
 apiWebdavOperations/search.feature:42
@@ -1315,48 +1319,6 @@ apiWebdavUpload2/uploadFileUsingOldChunking.feature:97
 apiWebdavUpload2/uploadFileUsingOldChunking.feature:98
 apiWebdavUpload2/uploadFileUsingOldChunking.feature:99
 apiWebdavUpload2/uploadFileUsingOldChunking.feature:100
-#
-# https://github.com/owncloud/ocis/issues/187 Previews via webDAV API tests fail on OCIS
-#
-apiWebdavPreviews/previews.feature:15
-apiWebdavPreviews/previews.feature:16
-apiWebdavPreviews/previews.feature:17
-apiWebdavPreviews/previews.feature:18
-apiWebdavPreviews/previews.feature:19
-apiWebdavPreviews/previews.feature:29
-apiWebdavPreviews/previews.feature:30
-apiWebdavPreviews/previews.feature:31
-apiWebdavPreviews/previews.feature:32
-apiWebdavPreviews/previews.feature:33
-apiWebdavPreviews/previews.feature:34
-apiWebdavPreviews/previews.feature:35
-apiWebdavPreviews/previews.feature:46
-apiWebdavPreviews/previews.feature:47
-apiWebdavPreviews/previews.feature:48
-apiWebdavPreviews/previews.feature:49
-apiWebdavPreviews/previews.feature:50
-apiWebdavPreviews/previews.feature:51
-apiWebdavPreviews/previews.feature:52
-apiWebdavPreviews/previews.feature:55
-apiWebdavPreviews/previews.feature:70
-apiWebdavPreviews/previews.feature:71
-apiWebdavPreviews/previews.feature:72
-apiWebdavPreviews/previews.feature:82
-apiWebdavPreviews/previews.feature:83
-apiWebdavPreviews/previews.feature:86
-apiWebdavPreviews/previews.feature:94
-apiWebdavPreviews/previews.feature:103
-apiWebdavPreviews/previews.feature:112
-apiWebdavPreviews/previews.feature:119
-apiWebdavPreviews/previews.feature:126
-apiWebdavPreviews/previews.feature:134
-apiWebdavPreviews/previews.feature:143
-apiWebdavPreviews/previews.feature:162
-apiWebdavPreviews/previews.feature:163
-apiWebdavPreviews/previews.feature:164
-apiWebdavPreviews/previews.feature:165
-apiWebdavPreviews/previews.feature:177
-apiWebdavPreviews/previews.feature:178
 #
 # https://github.com/owncloud/product/issues/241 deleting an item updates etags of grandparent but not on parent
 #
