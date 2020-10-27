@@ -46,12 +46,12 @@ func TestCheckRPCInvocation(t *testing.T) {
 	tests := []struct {
 		operation     string
 		status        rpcStatusTest
-		callError     error
 		shouldSucceed bool
+		callError     error
 	}{
-		{"ok-check", rpcStatusTest{rpc.Code_CODE_OK}, nil, true},
-		{"fail-status", rpcStatusTest{rpc.Code_CODE_NOT_FOUND}, nil, false},
-		{"fail-err", rpcStatusTest{rpc.Code_CODE_OK}, fmt.Errorf("failed"), false},
+		{"ok-check", rpcStatusTest{rpc.Code_CODE_OK}, true, nil},
+		{"fail-status", rpcStatusTest{rpc.Code_CODE_NOT_FOUND}, false, nil},
+		{"fail-err", rpcStatusTest{rpc.Code_CODE_OK}, false, fmt.Errorf("failed")},
 	}
 
 	for _, test := range tests {
@@ -107,18 +107,20 @@ func TestWebDAVClient(t *testing.T) {
 				const fileName = "webdav-test.txt"
 
 				data := strings.NewReader("This is a simple WebDAV test")
-				if err := client.Write(fileName, data, data.Size()); err == nil && test.shouldSucceed {
-					if _, err := client.Read(fileName); err != nil {
-						t.Errorf(testintl.FormatTestError("WebDAVClient.Read", err))
-					}
+				if err := client.Write(fileName, data, data.Size()); err == nil {
+					if test.shouldSucceed {
+						if _, err := client.Read(fileName); err != nil {
+							t.Errorf(testintl.FormatTestError("WebDAVClient.Read", err))
+						}
 
-					if err := client.Remove(fileName); err != nil {
-						t.Errorf(testintl.FormatTestError("WebDAVClient.Remove", err))
+						if err := client.Remove(fileName); err != nil {
+							t.Errorf(testintl.FormatTestError("WebDAVClient.Remove", err))
+						}
+					} else {
+						t.Errorf(testintl.FormatTestError("WebDAVClient.Write", fmt.Errorf("writing to a non-WebDAV host succeeded"), fileName, data, data.Size()))
 					}
-				} else if err != nil && test.shouldSucceed {
+				} else if test.shouldSucceed {
 					t.Errorf(testintl.FormatTestError("WebDAVClient.Write", err, fileName, data, data.Size()))
-				} else if err == nil && !test.shouldSucceed {
-					t.Errorf(testintl.FormatTestError("WebDAVClient.Write", fmt.Errorf("writing to a non-WebDAV host succeeded"), fileName, data, data.Size()))
 				}
 			} else {
 				t.Errorf(testintl.FormatTestError("NewWebDavClient", err, test.endpoint, "testUser", "test12345"))

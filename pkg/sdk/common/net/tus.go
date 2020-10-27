@@ -80,9 +80,13 @@ func (client *TUSClient) checkEndpointCreationOption(endpoint string) bool {
 	}
 
 	if httpReq, err := http.NewRequest("OPTIONS", endpoint, nil); err == nil {
-		if res, err := httpClient.Do(httpReq); err == nil && res.StatusCode == http.StatusOK {
-			ext := strings.Split(res.Header.Get("Tus-Extension"), ",")
-			return common.FindStringNoCase(ext, "creation") != -1
+		if res, err := httpClient.Do(httpReq); err == nil {
+			defer res.Body.Close()
+
+			if res.StatusCode == http.StatusOK {
+				ext := strings.Split(res.Header.Get("Tus-Extension"), ",")
+				return common.FindStringNoCase(ext, "creation") != -1
+			}
 		}
 	}
 

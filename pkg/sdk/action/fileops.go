@@ -93,10 +93,9 @@ func (action *FileOperationsAction) MakePath(path string) error {
 			if err := net.CheckRPCInvocation("creating container", res, err); err != nil {
 				return err
 			}
-		} else { // The path exists, so make sure that is actually a directory
-			if fileInfo.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-				return fmt.Errorf("'%v' is not a directory", curPath)
-			}
+		} else if fileInfo.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+			// The path exists, so make sure that is actually a directory
+			return fmt.Errorf("'%v' is not a directory", curPath)
 		}
 	}
 

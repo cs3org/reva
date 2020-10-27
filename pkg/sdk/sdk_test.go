@@ -49,21 +49,19 @@ func TestSession(t *testing.T) {
 						t.Errorf(testintl.FormatTestError("Session.GetLoginMethods", fmt.Errorf("listing of login methods with an invalid host succeeded")))
 					}
 
-					if err := session.BasicLogin(test.username, test.password); err == nil && test.shouldLogin {
-						if !session.IsValid() {
-							t.Errorf(testintl.FormatTestError("Session.BasicLogin", fmt.Errorf("logged in, but session is invalid"), test.username, test.password))
+					if err := session.BasicLogin(test.username, test.password); err == nil {
+						if test.shouldLogin {
+							if !session.IsValid() {
+								t.Errorf(testintl.FormatTestError("Session.BasicLogin", fmt.Errorf("logged in, but session is invalid"), test.username, test.password))
+							}
+							if session.Token() == "" {
+								t.Errorf(testintl.FormatTestError("Session.BasicLogin", fmt.Errorf("logged in, but received no token"), test.username, test.password))
+							}
+						} else {
+							t.Errorf(testintl.FormatTestError("Session.BasicLogin", fmt.Errorf("logging in with invalid credentials succeeded"), test.username, test.password))
 						}
-						if session.Token() == "" {
-							t.Errorf(testintl.FormatTestError("Session.BasicLogin", fmt.Errorf("logged in, but received no token"), test.username, test.password))
-						}
-					} else if err != nil && test.shouldLogin {
+					} else if test.shouldLogin {
 						t.Errorf(testintl.FormatTestError("Session.BasicLogin", err, test.username, test.password))
-					} else if err == nil && !test.shouldLogin {
-						t.Errorf(testintl.FormatTestError("Session.BasicLogin", fmt.Errorf("logging in with invalid credentials succeeded"), test.username, test.password))
-					} else {
-						if session.IsValid() {
-							t.Errorf(testintl.FormatTestError("Session.BasicLogin", fmt.Errorf("not logged in, but session is valid"), test.username, test.password))
-						}
 					}
 				} else {
 					t.Errorf(testintl.FormatTestError("Session.Initiate", err, test.host, false))

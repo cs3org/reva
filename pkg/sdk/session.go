@@ -78,11 +78,7 @@ func (session *Session) GetLoginMethods() ([]string, error) {
 		return []string{}, err
 	}
 
-	methods := make([]string, 0, len(res.Types))
-	for _, method := range res.Types {
-		methods = append(methods, method)
-	}
-	return methods, nil
+	return res.Types, nil
 }
 
 // Login logs into Reva using the specified method and user credentials.

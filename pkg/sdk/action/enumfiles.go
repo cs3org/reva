@@ -58,9 +58,7 @@ func (action *EnumFilesAction) ListAll(path string, includeSubdirectories bool) 
 				return nil, err
 			}
 
-			for _, fiSub := range subFileList {
-				fileList = append(fileList, fiSub)
-			}
+			fileList = append(fileList, subFileList...)
 		}
 	}
 

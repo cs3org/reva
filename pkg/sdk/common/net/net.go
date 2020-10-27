@@ -23,9 +23,11 @@ import (
 	"github.com/cs3org/reva/pkg/token"
 )
 
+type ctxKey int
+
 const (
 	// AccessTokenIndex specifies the index of the Reva access token in a context.
-	AccessTokenIndex = 0
+	AccessTokenIndex ctxKey = iota
 	// AccessTokenName specifies the name of the Reva access token used during requests.
 	AccessTokenName = token.TokenHeader
 	// TransportTokenName specifies the name of the Reva transport token used during data transfers.

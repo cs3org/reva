@@ -32,8 +32,7 @@ func DecodeOpaqueMap(opaque *types.Opaque) map[string]string {
 	if opaque != nil {
 		for k, v := range opaque.GetMap() {
 			// Only plain values are currently supported
-			switch v.Decoder {
-			case "plain":
+			if v.Decoder == "plain" {
 				entries[k] = string(v.Value)
 			}
 		}
@@ -51,10 +50,8 @@ func GetValuesFromOpaque(opaque *types.Opaque, keys []string, mandatory bool) (m
 	for _, key := range keys {
 		if value, ok := entries[key]; ok {
 			values[key] = value
-		} else {
-			if mandatory {
-				return map[string]string{}, fmt.Errorf("missing opaque entry '%v'", key)
-			}
+		} else if mandatory {
+			return map[string]string{}, fmt.Errorf("missing opaque entry '%v'", key)
 		}
 	}
 
