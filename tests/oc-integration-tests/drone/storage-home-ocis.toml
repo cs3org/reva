@@ -34,7 +34,6 @@ root = "/drone/src/tmp/reva/data"
 enable_home = true
 treetime_accounting = true
 treesize_accounting = true
-redis = "redis:6379"
 
 
 [http]
@@ -49,4 +48,3 @@ root = "/drone/src/tmp/reva/data"
 enable_home = true
 treetime_accounting = true
 treesize_accounting = true
-redis = "redis:6379"
