@@ -24,7 +24,6 @@ data_server_url = "http://localhost:11001/data"
 root = "/drone/src/tmp/reva/data"
 treetime_accounting = true
 treesize_accounting = true
-redis = "redis:6379"
 userprovidersvc = "localhost:18000"
 
 [http]
@@ -38,4 +37,3 @@ temp_folder = "/drone/src/tmp/reva/tmp"
 root = "/drone/src/tmp/reva/data"
 treetime_accounting = true
 treesize_accounting = true
-redis = "redis:6379"

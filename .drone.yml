@@ -551,12 +551,6 @@ services:
       LDAP_TLS_VERIFY_CLIENT: 'never'
       HOSTNAME: 'ldap'
 
-  - name: redis
-    image: webhippie/redis
-    'pull': 'always'
-    'environment':
-      REDIS_DATABASES: 1
-
 ---
 kind: pipeline
 type: docker
@@ -629,12 +623,6 @@ services:
       LDAP_ADMIN_PASSWORD: 'admin'
       LDAP_TLS_VERIFY_CLIENT: 'never'
       HOSTNAME: 'ldap'
-
-  - name: redis
-    image: webhippie/redis
-    'pull': 'always'
-    'environment':
-      REDIS_DATABASES: 1
 
 ---
 kind: pipeline
@@ -709,12 +697,6 @@ services:
       LDAP_TLS_VERIFY_CLIENT: 'never'
       HOSTNAME: 'ldap'
 
-  - name: redis
-    image: webhippie/redis
-    'pull': 'always'
-    'environment':
-      REDIS_DATABASES: 1
-
 ---
 kind: pipeline
 type: docker
@@ -787,12 +769,6 @@ services:
       LDAP_ADMIN_PASSWORD: 'admin'
       LDAP_TLS_VERIFY_CLIENT: 'never'
       HOSTNAME: 'ldap'
-
-  - name: redis
-    image: webhippie/redis
-    'pull': 'always'
-    'environment':
-      REDIS_DATABASES: 1
 
 ---
 kind: pipeline
@@ -867,12 +843,6 @@ services:
       LDAP_TLS_VERIFY_CLIENT: 'never'
       HOSTNAME: 'ldap'
 
-  - name: redis
-    image: webhippie/redis
-    'pull': 'always'
-    'environment':
-      REDIS_DATABASES: 1
-
 ---
 kind: pipeline
 type: docker
@@ -946,12 +916,6 @@ services:
       LDAP_TLS_VERIFY_CLIENT: 'never'
       HOSTNAME: 'ldap'
 
-  - name: redis
-    image: webhippie/redis
-    'pull': 'always'
-    'environment':
-      REDIS_DATABASES: 1
-
 ---
 kind: pipeline
 type: docker
@@ -1024,12 +988,6 @@ services:
       LDAP_ADMIN_PASSWORD: 'admin'
       LDAP_TLS_VERIFY_CLIENT: 'never'
       HOSTNAME: 'ldap'
-
-  - name: redis
-    image: webhippie/redis
-    'pull': 'always'
-    'environment':
-      REDIS_DATABASES: 1
 
 ---
 kind: pipeline
