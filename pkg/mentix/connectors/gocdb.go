@@ -130,6 +130,7 @@ func (connector *GOCDBConnector) querySites(meshData *meshdata.MeshData) error {
 		organization := meshdata.GetPropertyValue(properties, meshdata.PropertyOrganization, site.OfficialName)
 
 		meshsite := &meshdata.Site{
+			Type:         meshdata.SiteTypeScienceMesh, // All sites stored in the GOCDB are part of the mesh
 			Name:         site.ShortName,
 			FullName:     site.OfficialName,
 			Organization: organization,

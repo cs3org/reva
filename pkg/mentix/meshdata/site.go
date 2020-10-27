@@ -18,8 +18,19 @@
 
 package meshdata
 
+const (
+	// SiteTypeScienceMesh flags a site as being part of the mesh.
+	SiteTypeScienceMesh = iota
+	// SiteTypeCommunity flags a site as being a community site.
+	SiteTypeCommunity
+)
+
+type SiteType int
+
 // Site represents a single site managed by Mentix.
 type Site struct {
+	Type SiteType `json:"-"`
+
 	Name         string
 	FullName     string
 	Organization string
