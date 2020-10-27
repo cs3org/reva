@@ -135,7 +135,7 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 			w.WriteHeader(http.StatusBadRequest)
 		}
 		*/
-		s.handlePutChunked(w, r)
+		s.handlePutChunked(w, r, ns)
 		return
 	}
 

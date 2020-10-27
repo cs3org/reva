@@ -25,6 +25,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -215,7 +216,7 @@ func (s *svc) saveChunk(ctx context.Context, path string, r io.ReadCloser) (bool
 
 	return true, assembledFileName, nil
 }
-func (s *svc) handlePutChunked(w http.ResponseWriter, r *http.Request) {
+func (s *svc) handlePutChunked(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -255,7 +256,7 @@ func (s *svc) handlePutChunked(w http.ResponseWriter, r *http.Request) {
 	}
 
 	chunkInfo, _ := getChunkBLOBInfo(fn)
-	fn = chunkInfo.path
+	fn = path.Join(applyLayout(ctx, ns), chunkInfo.path)
 
 	s.handlePutHelper(w, r, fd, fn, md.Size())
 
