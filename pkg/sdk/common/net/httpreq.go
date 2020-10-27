@@ -16,19 +16,19 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package sdk
+package net
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"time"
-
-	"github.com/cs3org/reva/pkg/sdk/common/net"
 )
 
-type httpRequest struct {
+// HTTPRequest performs Reva-specific requests through an HTTP endpoint.
+type HTTPRequest struct {
 	endpoint string
 	data     io.Reader
 
@@ -36,7 +36,7 @@ type httpRequest struct {
 	request *http.Request
 }
 
-func (request *httpRequest) initRequest(session *Session, endpoint string, method string, transportToken string, data io.Reader) error {
+func (request *HTTPRequest) initRequest(ctx context.Context, endpoint string, method string, accessToken string, transportToken string, data io.Reader) error {
 	request.endpoint = endpoint
 	request.data = data
 
@@ -46,20 +46,20 @@ func (request *httpRequest) initRequest(session *Session, endpoint string, metho
 	}
 
 	// Initialize the HTTP request
-	httpReq, err := http.NewRequestWithContext(session.Context(), method, endpoint, data)
+	httpReq, err := http.NewRequestWithContext(ctx, method, endpoint, data)
 	if err != nil {
 		return fmt.Errorf("unable to create the HTTP request: %v", err)
 	}
 	request.request = httpReq
 
 	// Set mandatory header values
-	request.request.Header.Set(net.AccessTokenName, session.Token())
-	request.request.Header.Set(net.TransportTokenName, transportToken)
+	request.request.Header.Set(AccessTokenName, accessToken)
+	request.request.Header.Set(TransportTokenName, transportToken)
 
 	return nil
 }
 
-func (request *httpRequest) do() (*http.Response, error) {
+func (request *HTTPRequest) do() (*http.Response, error) {
 	httpRes, err := request.client.Do(request.request)
 	if err != nil {
 		return nil, fmt.Errorf("unable to do the HTTP request: %v", err)
@@ -72,7 +72,7 @@ func (request *httpRequest) do() (*http.Response, error) {
 
 // AddParameters adds the specified parameters to the request.
 // The parameters are passed in the query URL.
-func (request *httpRequest) AddParameters(params map[string]string) {
+func (request *HTTPRequest) AddParameters(params map[string]string) {
 	query := request.request.URL.Query()
 	for k, v := range params {
 		query.Add(k, v)
@@ -82,7 +82,7 @@ func (request *httpRequest) AddParameters(params map[string]string) {
 
 // Do performs the request on the HTTP endpoint and returns the body data.
 // If checkStatus is set to true, the call will only succeed if the server returns a status code of 200.
-func (request *httpRequest) Do(checkStatus bool) ([]byte, error) {
+func (request *HTTPRequest) Do(checkStatus bool) ([]byte, error) {
 	httpRes, err := request.do()
 	if err != nil {
 		return nil, fmt.Errorf("unable to perform the HTTP request for '%v': %v", request.endpoint, err)
@@ -100,9 +100,10 @@ func (request *httpRequest) Do(checkStatus bool) ([]byte, error) {
 	return data, nil
 }
 
-func newHTTPRequest(session *Session, endpoint string, method string, transportToken string, data io.Reader) (*httpRequest, error) {
-	request := &httpRequest{}
-	if err := request.initRequest(session, endpoint, method, transportToken, data); err != nil {
+// NewHTTPRequest creates a new HTTP request.
+func NewHTTPRequest(ctx context.Context, endpoint string, method string, accessToken string, transportToken string, data io.Reader) (*HTTPRequest, error) {
+	request := &HTTPRequest{}
+	if err := request.initRequest(ctx, endpoint, method, accessToken, transportToken, data); err != nil {
 		return nil, fmt.Errorf("unable to initialize the HTTP request: %v", err)
 	}
 	return request, nil

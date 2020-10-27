@@ -23,17 +23,20 @@ import (
 	"io"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+
+	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
+	"github.com/cs3org/reva/pkg/crypto"
 )
 
 // ComputeChecksum calculates the checksum of the given data using the specified checksum type.
 func ComputeChecksum(checksumType provider.ResourceChecksumType, data io.Reader) (string, error) {
 	switch checksumType {
 	case provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_ADLER32:
-		return ComputeAdler32Checksum(data)
+		return crypto.ComputeAdler32XS(data)
 	case provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_MD5:
-		return ComputeMD5Checksum(data)
+		return crypto.ComputeMD5XS(data)
 	case provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_SHA1:
-		return ComputeSHA1Checksum(data)
+		return crypto.ComputeSHA1XS(data)
 	case provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET:
 		return "", nil
 	default:
@@ -43,16 +46,5 @@ func ComputeChecksum(checksumType provider.ResourceChecksumType, data io.Reader)
 
 // GetChecksumTypeName returns a stringified name of the given checksum type.
 func GetChecksumTypeName(checksumType provider.ResourceChecksumType) string {
-	switch checksumType {
-	case provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET:
-		return "unset"
-	case provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_SHA1:
-		return "sha1"
-	case provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_ADLER32:
-		return "adler32"
-	case provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_MD5:
-		return "md5"
-	default:
-		return "invalid"
-	}
+	return string(storageprovider.GRPC2PKGXS(checksumType))
 }

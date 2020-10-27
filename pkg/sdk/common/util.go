@@ -39,7 +39,7 @@ func FindString(a []string, x string) int {
 	return -1
 }
 
-// FindString performs a case-insensitive string search in a string vector and returns its index or -1 if it couldn't be found.
+// FindStringNoCase performs a case-insensitive string search in a string vector and returns its index or -1 if it couldn't be found.
 func FindStringNoCase(a []string, x string) int {
 	for i, n := range a {
 		if strings.EqualFold(x, n) {

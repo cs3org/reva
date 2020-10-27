@@ -132,8 +132,8 @@ func (session *Session) BasicLogin(username string, password string) error {
 }
 
 // NewHTTPRequest returns an HTTP request instance.
-func (session *Session) NewHTTPRequest(endpoint string, method string, transportToken string, data io.Reader) (*httpRequest, error) {
-	return newHTTPRequest(session, endpoint, method, transportToken, data)
+func (session *Session) NewHTTPRequest(endpoint string, method string, transportToken string, data io.Reader) (*net.HTTPRequest, error) {
+	return net.NewHTTPRequest(session.ctx, endpoint, method, session.token, transportToken, data)
 }
 
 // Client gets the gateway client instance.

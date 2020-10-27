@@ -80,32 +80,3 @@ func TestSession(t *testing.T) {
 		})
 	}
 }
-
-func TestHTTPRequest(t *testing.T) {
-	tests := []struct {
-		url           string
-		shouldSucceed bool
-	}{
-		{"https://google.de", true},
-		{"https://ujhwrgobniwoeo.de", false},
-	}
-
-	// Prepare the session
-	if session, err := testintl.CreateTestSession("sciencemesh-test.uni-muenster.de:9600", "test", "testpass"); err == nil {
-		for _, test := range tests {
-			t.Run(test.url, func(t *testing.T) {
-				if request, err := session.NewHTTPRequest(test.url, "GET", "", nil); err == nil {
-					if _, err := request.Do(true); err != nil && test.shouldSucceed {
-						t.Errorf(testintl.FormatTestError("HTTPRequest.Do", err))
-					} else if err == nil && !test.shouldSucceed {
-						t.Errorf(testintl.FormatTestError("HTTPRequest.Do", fmt.Errorf("send request to an invalid host succeeded")))
-					}
-				} else {
-					t.Errorf(testintl.FormatTestError("Session.NewHTTPRequest", err, test.url, "GET", "", nil))
-				}
-			})
-		}
-	} else {
-		t.Errorf(testintl.FormatTestError("CreateTestSession", err))
-	}
-}
