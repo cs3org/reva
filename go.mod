@@ -4,6 +4,7 @@ require (
 	contrib.go.opencensus.io/exporter/jaeger v0.2.1
 	contrib.go.opencensus.io/exporter/prometheus v0.2.0
 	github.com/BurntSushi/toml v0.3.1
+	github.com/Daniel-WWU-IT/libreva v0.0.0-20201020084352-b17e3e76d0db // indirect
 	github.com/Masterminds/goutils v1.1.0 // indirect
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/Masterminds/sprig v2.22.0+incompatible
