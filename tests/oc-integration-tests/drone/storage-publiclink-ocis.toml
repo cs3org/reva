@@ -19,4 +19,6 @@ enable_home_creation = true
 
 [grpc.services.publicstorageprovider.drivers.ocis]
 root = "/drone/src/tmp/reva/data"
+treetime_accounting = true
+treesize_accounting = true
 enable_home = true

@@ -22,6 +22,8 @@ data_server_url = "http://localhost:11001/data"
 
 [grpc.services.storageprovider.drivers.ocis]
 root = "/drone/src/tmp/reva/data"
+treetime_accounting = true
+treesize_accounting = true
 redis = "redis:6379"
 userprovidersvc = "localhost:18000"
 
@@ -34,4 +36,6 @@ temp_folder = "/drone/src/tmp/reva/tmp"
 
 [http.services.dataprovider.drivers.ocis]
 root = "/drone/src/tmp/reva/data"
+treetime_accounting = true
+treesize_accounting = true
 redis = "redis:6379"

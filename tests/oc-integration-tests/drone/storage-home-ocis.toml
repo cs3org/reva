@@ -32,6 +32,8 @@ enable_home_creation = true
 [grpc.services.storageprovider.drivers.ocis]
 root = "/drone/src/tmp/reva/data"
 enable_home = true
+treetime_accounting = true
+treesize_accounting = true
 redis = "redis:6379"
 
 
@@ -45,4 +47,6 @@ temp_folder = "/drone/src/tmp/reva/tmp"
 [http.services.dataprovider.drivers.ocis]
 root = "/drone/src/tmp/reva/data"
 enable_home = true
+treetime_accounting = true
+treesize_accounting = true
 redis = "redis:6379"
