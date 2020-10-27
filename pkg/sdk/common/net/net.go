@@ -24,11 +24,16 @@
 
 package net
 
+import (
+	"github.com/cs3org/reva/internal/http/services/datagateway"
+	"github.com/cs3org/reva/pkg/token"
+)
+
 const (
 	// AccessTokenIndex specifies the index of the Reva access token in a context.
 	AccessTokenIndex = 0
 	// AccessTokenName specifies the name of the Reva access token used during requests.
-	AccessTokenName = "x-access-token"
+	AccessTokenName = token.TokenHeader
 	// TransportTokenName specifies the name of the Reva transport token used during data transfers.
-	TransportTokenName = "X-Reva-Transfer"
+	TransportTokenName = datagateway.TokenTransportHeader
 )
