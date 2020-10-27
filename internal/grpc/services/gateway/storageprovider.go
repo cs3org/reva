@@ -48,7 +48,10 @@ type transferClaims struct {
 }
 
 func (s *svc) sign(_ context.Context, target string) (string, error) {
-	ttl := time.Duration(s.c.TransferExpires) * time.Second
+	// Tus sends a separate request to the datagateway service for every chunk.
+	// For large files, this can take a long time, so we extend the expiration
+	// for 10 minutes. TODO: Make this configurable.
+	ttl := time.Duration(s.c.TransferExpires) * 10 * time.Minute
 	claims := transferClaims{
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(ttl).Unix(),

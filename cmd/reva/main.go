@@ -21,10 +21,13 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/c-bata/go-prompt"
+	"github.com/cs3org/reva/pkg/rhttp"
 )
 
 var (
@@ -36,6 +39,8 @@ var (
 	helpCommandOutput string
 
 	gitCommit, buildDate, version, goVersion string
+
+	client *http.Client
 
 	commands = []*command{
 		versionCommand(),
@@ -93,6 +98,13 @@ func main() {
 			os.Exit(1)
 		}
 	}
+
+	client = rhttp.GetHTTPClient(
+		// TODO make insecure configurable
+		rhttp.Insecure(true),
+		// TODO make timeout configurable
+		rhttp.Timeout(time.Duration(24*int64(time.Hour))),
+	)
 
 	generateMainUsage()
 	executor := Executor{Timeout: timeout}

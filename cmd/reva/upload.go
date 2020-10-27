@@ -26,12 +26,10 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"time"
 
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/pkg/errors"
 
-	"github.com/cheggaaa/pb"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -84,7 +82,6 @@ func uploadCommand() *command {
 		if err != nil {
 			return err
 		}
-		defer fd.Close()
 
 		fmt.Printf("Local file size: %d bytes\n", md.Size())
 
@@ -149,14 +146,9 @@ func uploadCommand() *command {
 
 		dataServerURL := res.UploadEndpoint
 
-		bar := pb.New(int(md.Size())).SetUnits(pb.U_BYTES)
-		bar.Start()
-		reader := bar.NewProxyReader(fd)
-
 		if *disableTusFlag {
-			httpReq, err := rhttp.NewRequest(ctx, "PUT", dataServerURL, reader)
+			httpReq, err := rhttp.NewRequest(ctx, "PUT", dataServerURL, fd)
 			if err != nil {
-				bar.Finish()
 				return err
 			}
 
@@ -166,38 +158,21 @@ func uploadCommand() *command {
 			q.Add("xs_type", storageprovider.GRPC2PKGXS(xsType).String())
 			httpReq.URL.RawQuery = q.Encode()
 
-			httpClient := rhttp.GetHTTPClient(
-				rhttp.Context(ctx),
-				// TODO make insecure configurable
-				rhttp.Insecure(true),
-				// TODO make timeout configurable
-				rhttp.Timeout(time.Duration(24*int64(time.Hour))),
-			)
-
-			httpRes, err := httpClient.Do(httpReq)
+			httpRes, err := client.Do(httpReq)
 			if err != nil {
-				bar.Finish()
 				return err
 			}
 			defer httpRes.Body.Close()
 			if httpRes.StatusCode != http.StatusOK {
-				bar.Finish()
 				return err
 			}
 		} else {
 			// create the tus client.
 			c := tus.DefaultConfig()
 			c.Resume = true
-			c.HttpClient = rhttp.GetHTTPClient(
-				rhttp.Context(ctx),
-				// TODO make insecure configurable
-				rhttp.Insecure(true),
-				// TODO make timeout configurable
-				rhttp.Timeout(time.Duration(24*int64(time.Hour))),
-			)
+			c.HttpClient = client
 			c.Store, err = memorystore.NewMemoryStore()
 			if err != nil {
-				bar.Finish()
 				return err
 			}
 			if token, ok := tokenpkg.ContextGetToken(ctx); ok {
@@ -208,7 +183,6 @@ func uploadCommand() *command {
 			}
 			tusc, err := tus.NewClient(dataServerURL, c)
 			if err != nil {
-				bar.Finish()
 				return err
 			}
 
@@ -221,7 +195,7 @@ func uploadCommand() *command {
 			fingerprint := fmt.Sprintf("%s-%d-%s-%s", md.Name(), md.Size(), md.ModTime(), xs)
 
 			// create an upload from a file.
-			upload := tus.NewUpload(reader, md.Size(), metadata, fingerprint)
+			upload := tus.NewUpload(fd, md.Size(), metadata, fingerprint)
 
 			// create the uploader.
 			c.Store.Set(upload.Fingerprint, dataServerURL)
@@ -230,12 +204,9 @@ func uploadCommand() *command {
 			// start the uploading process.
 			err = uploader.Upload()
 			if err != nil {
-				bar.Finish()
 				return err
 			}
 		}
-
-		bar.Finish()
 
 		req2 := &provider.StatRequest{
 			Ref: &provider.Reference{
@@ -291,21 +262,15 @@ func checkUploadWebdavRef(endpoint string, opaque *typespb.Opaque, md os.FileInf
 		return errors.New("opaque entry decoder not recognized: " + fileOpaque.Decoder)
 	}
 
-	bar := pb.New(int(md.Size())).SetUnits(pb.U_BYTES)
-	bar.Start()
-	reader := bar.NewProxyReader(fd)
-
 	c := gowebdav.NewClient(endpoint, "", "")
 	c.SetHeader(tokenpkg.TokenHeader, token)
 	c.SetHeader("Upload-Length", strconv.FormatInt(md.Size(), 10))
 
-	err := c.WriteStream(filePath, reader, 0700)
+	err := c.WriteStream(filePath, fd, 0700)
 	if err != nil {
-		bar.Finish()
 		return err
 	}
 
-	bar.Finish()
 	fmt.Println("File uploaded")
 	return nil
 }

@@ -236,7 +236,12 @@ func (upload *fileUpload) GetInfo(ctx context.Context) (tusd.FileInfo, error) {
 
 // GetReader returns an io.Reader for the upload
 func (upload *fileUpload) GetReader(ctx context.Context) (io.Reader, error) {
-	return os.Open(upload.binPath)
+	f, err := os.Open(upload.binPath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return f, nil
 }
 
 // WriteChunk writes the stream from the reader to the given offset of the upload

@@ -19,7 +19,9 @@
 package ocdav
 
 import (
+	"io"
 	"net/http"
+	"os"
 	"path"
 	"regexp"
 	"strconv"
@@ -28,12 +30,8 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/internal/http/services/datagateway"
-	"github.com/cs3org/reva/internal/http/utils"
 	"github.com/cs3org/reva/pkg/appctx"
-	tokenpkg "github.com/cs3org/reva/pkg/token"
-	"github.com/eventials/go-tus"
-	"github.com/eventials/go-tus/memorystore"
+	"github.com/cs3org/reva/pkg/utils"
 )
 
 func isChunked(fn string) (bool, error) {
@@ -137,7 +135,7 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 			w.WriteHeader(http.StatusBadRequest)
 		}
 		*/
-		s.handlePutChunked(w, r)
+		s.handlePutChunked(w, r, ns)
 		return
 	}
 
@@ -156,6 +154,34 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 		}
 	}
 
+	length, err := strconv.ParseInt(r.Header.Get("Content-Length"), 10, 64)
+	if err != nil {
+		// Fallback to Upload-Length
+		length, err = strconv.ParseInt(r.Header.Get("Upload-Length"), 10, 64)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	}
+	fileName, fd, err := s.createChunkTempFile()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	defer os.RemoveAll(fileName)
+	defer fd.Close()
+	if _, err := io.Copy(fd, r.Body); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	s.handlePutHelper(w, r, fd, fn, length)
+}
+
+func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io.ReadSeeker, fn string, length int64) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+
 	client, err := s.getClient()
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
@@ -163,11 +189,10 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	sReq := &provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{Path: fn},
-		},
+	ref := &provider.Reference{
+		Spec: &provider.Reference_Path{Path: fn},
 	}
+	sReq := &provider.StatRequest{Ref: ref}
 	sRes, err := client.Stat(ctx, sReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending grpc stat request")
@@ -206,16 +231,6 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 		}
 	}
 
-	length, err := strconv.ParseInt(r.Header.Get("Content-Length"), 10, 64)
-	if err != nil {
-		// Fallback to Upload-Length
-		length, err = strconv.ParseInt(r.Header.Get("Upload-Length"), 10, 64)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-	}
-
 	opaqueMap := map[string]*typespb.OpaqueEntry{
 		"Upload-Length": {
 			Decoder: "plain",
@@ -235,9 +250,7 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	uReq := &provider.InitiateFileUploadRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{Path: fn},
-		},
+		Ref: ref,
 		Opaque: &typespb.Opaque{
 			Map: opaqueMap,
 		},
@@ -266,52 +279,8 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	dataServerURL := uRes.UploadEndpoint
-
-	// create the tus client.
-	c := tus.DefaultConfig()
-	c.Resume = true
-	c.HttpClient = s.client
-
-	c.Store, err = memorystore.NewMemoryStore()
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	log.Debug().
-		Str("upload-endpoint", dataServerURL).
-		Str("auth-header", tokenpkg.TokenHeader).
-		Str("auth-token", tokenpkg.ContextMustGetToken(ctx)).
-		Str("transfer-header", datagateway.TokenTransportHeader).
-		Str("transfer-token", uRes.Token).
-		Msg("adding tokens to headers")
-	c.Header.Set(tokenpkg.TokenHeader, tokenpkg.ContextMustGetToken(ctx))
-	c.Header.Set(datagateway.TokenTransportHeader, uRes.Token)
-
-	tusc, err := tus.NewClient(dataServerURL, c)
-	if err != nil {
-		log.Error().Err(err).Msg("Could not get TUS client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	metadata := map[string]string{
-		"filename": path.Base(fn),
-		"dir":      path.Dir(fn),
-		//"checksum": fmt.Sprintf("%s %s", storageprovider.GRPC2PKGXS(xsType).String(), xs),
-	}
-
-	upload := tus.NewUpload(r.Body, length, metadata, "")
-
-	// create the uploader.
-	c.Store.Set(upload.Fingerprint, dataServerURL)
-	uploader := tus.NewUploader(tusc, dataServerURL, upload, 0)
-
-	// start the uploading process.
-	err = uploader.Upload()
-	if err != nil {
-		log.Error().Err(err).Msg("Could not start TUS upload")
+	if err = s.tusUpload(ctx, uRes.UploadEndpoint, uRes.Token, fn, content, length); err != nil {
+		log.Error().Err(err).Msg("TUS upload failed")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

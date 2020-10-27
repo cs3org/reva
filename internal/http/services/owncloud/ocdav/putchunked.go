@@ -25,12 +25,11 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
 
-	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 )
 
@@ -215,10 +214,9 @@ func (s *svc) saveChunk(ctx context.Context, path string, r io.ReadCloser) (bool
 		return false, "", err
 	}
 
-	tempFileName := assembledFileName
-	return true, tempFileName, nil
+	return true, assembledFileName, nil
 }
-func (s *svc) handlePutChunked(w http.ResponseWriter, r *http.Request) {
+func (s *svc) handlePutChunked(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -250,57 +248,17 @@ func (s *svc) handlePutChunked(w http.ResponseWriter, r *http.Request) {
 	}
 	defer fd.Close()
 
+	md, err := fd.Stat()
+	if err != nil {
+		log.Error().Err(err).Msg("error statting chunk")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
 	chunkInfo, _ := getChunkBLOBInfo(fn)
+	fn = path.Join(applyLayout(ctx, ns), chunkInfo.path)
 
-	client, err := s.getClient()
-	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	ref := &provider.Reference{
-		Spec: &provider.Reference_Path{Path: chunkInfo.path},
-	}
-	req := &provider.StatRequest{Ref: ref}
-	res, err := client.Stat(ctx, req)
-	if err != nil {
-		log.Error().Err(err).Msg("error sending grpc stat request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if res.Status.Code != rpc.Code_CODE_OK && res.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		switch res.Status.Code {
-		case rpc.Code_CODE_PERMISSION_DENIED:
-			log.Debug().Str("path", fn).Interface("status", res.Status).Msg("permission denied")
-			w.WriteHeader(http.StatusForbidden)
-		default:
-			log.Error().Str("path", fn).Interface("status", res.Status).Msg("grpc stat request failed")
-			w.WriteHeader(http.StatusInternalServerError)
-		}
-		return
-	}
-
-	info := res.Info
-	if info != nil && info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
-		log.Warn().Msg("resource is not a file")
-		w.WriteHeader(http.StatusConflict)
-		return
-	}
-
-	if info != nil {
-		clientETag := r.Header.Get("If-Match")
-		serverETag := info.Etag
-		if clientETag != "" {
-			if clientETag != serverETag {
-				log.Warn().Str("client-etag", clientETag).Str("server-etag", serverETag).Msg("etags mismatch")
-				w.WriteHeader(http.StatusPreconditionFailed)
-				return
-			}
-		}
-	}
-	w.WriteHeader(http.StatusCreated)
+	s.handlePutHelper(w, r, fd, fn, md.Size())
 
 	// TODO(labkode): implement old chunking
 

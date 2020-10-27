@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path"
 	"strings"
 
@@ -293,8 +294,18 @@ func (s *svc) descend(ctx context.Context, client gateway.GatewayAPIClient, src 
 			return fmt.Errorf("status code %d", httpDownloadRes.StatusCode)
 		}
 
+		fileName, fd, err := s.createChunkTempFile()
+		if err != nil {
+			return err
+		}
+		defer os.RemoveAll(fileName)
+		defer fd.Close()
+		if _, err := io.Copy(fd, httpDownloadRes.Body); err != nil {
+			return err
+		}
+
 		// do upload
-		err = s.tusUpload(ctx, uRes.UploadEndpoint, uRes.Token, dst, httpDownloadRes.Body, src.GetSize())
+		err = s.tusUpload(ctx, uRes.UploadEndpoint, uRes.Token, dst, fd, int64(src.GetSize()))
 		if err != nil {
 			return err
 		}
@@ -302,7 +313,7 @@ func (s *svc) descend(ctx context.Context, client gateway.GatewayAPIClient, src 
 	return nil
 }
 
-func (s *svc) tusUpload(ctx context.Context, dataServerURL string, transferToken string, fn string, body io.Reader, length uint64) error {
+func (s *svc) tusUpload(ctx context.Context, dataServerURL string, transferToken string, fn string, body io.ReadSeeker, length int64) error {
 	var err error
 	log := appctx.GetLogger(ctx)
 
@@ -339,7 +350,7 @@ func (s *svc) tusUpload(ctx context.Context, dataServerURL string, transferToken
 		Str("dir", path.Dir(fn)).
 		Msg("tus.NewUpload")
 
-	upload := tus.NewUpload(body, int64(length), metadata, "")
+	upload := tus.NewUpload(body, length, metadata, "")
 
 	// create the uploader.
 	c.Store.Set(upload.Fingerprint, dataServerURL)

@@ -54,6 +54,7 @@ type manager struct {
 	conf      *config
 	redisPool *redis.Pool
 	oidcToken OIDCToken
+	client    *http.Client
 }
 
 // OIDCToken stores the OIDC token used to authenticate requests to the REST API service
@@ -128,6 +129,10 @@ func New(m map[string]interface{}) (user.Manager, error) {
 	return &manager{
 		conf:      c,
 		redisPool: redisPool,
+		client: rhttp.GetHTTPClient(
+			rhttp.Timeout(10*time.Second),
+			rhttp.Insecure(true),
+		),
 	}, nil
 }
 
@@ -156,7 +161,6 @@ func (m *manager) getAPIToken(ctx context.Context) (string, time.Time, error) {
 		"audience":   {m.conf.TargetAPI},
 	}
 
-	httpClient := rhttp.GetHTTPClient(rhttp.Context(ctx), rhttp.Timeout(10*time.Second), rhttp.Insecure(true))
 	httpReq, err := http.NewRequest("POST", m.conf.OIDCTokenEndpoint, strings.NewReader(params.Encode()))
 	if err != nil {
 		return "", time.Time{}, err
@@ -164,7 +168,7 @@ func (m *manager) getAPIToken(ctx context.Context) (string, time.Time, error) {
 	httpReq.SetBasicAuth(m.conf.ClientID, m.conf.ClientSecret)
 	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
 
-	httpRes, err := httpClient.Do(httpReq)
+	httpRes, err := m.client.Do(httpReq)
 	if err != nil {
 		return "", time.Time{}, err
 	}
@@ -192,7 +196,6 @@ func (m *manager) sendAPIRequest(ctx context.Context, url string) ([]interface{}
 		return nil, err
 	}
 
-	httpClient := rhttp.GetHTTPClient(rhttp.Context(ctx), rhttp.Timeout(10*time.Second), rhttp.Insecure(true))
 	httpReq, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -203,7 +206,7 @@ func (m *manager) sendAPIRequest(ctx context.Context, url string) ([]interface{}
 	// the token and expiration time while this request is in progress, the current token will still be valid.
 	httpReq.Header.Set("Authorization", "Bearer "+m.oidcToken.apiToken)
 
-	httpRes, err := httpClient.Do(httpReq)
+	httpRes, err := m.client.Do(httpReq)
 	if err != nil {
 		return nil, err
 	}
