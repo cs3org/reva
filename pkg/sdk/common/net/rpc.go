@@ -49,7 +49,7 @@ func CheckRPCStatus(operation string, res rpcStatusGetter) error {
 	status := res.GetStatus()
 	if status.Code != rpc.Code_CODE_OK {
 		return fmt.Errorf("%s: %q (code=%+v, trace=%q)", operation, status.Message, status.Code, status.Trace)
-	} else {
-		return nil
 	}
+
+	return nil
 }

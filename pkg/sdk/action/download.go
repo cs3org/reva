@@ -73,19 +73,19 @@ func (action *DownloadAction) Download(fileInfo *storage.ResourceInfo) ([]byte, 
 			return nil, fmt.Errorf("error while reading from '%v' via WebDAV: %v", download.DownloadEndpoint, err)
 		}
 		return data, nil
-	} else {
-		// WebDAV is not supported, so directly read the HTTP endpoint
-		request, err := action.session.NewHTTPRequest(download.DownloadEndpoint, "GET", download.Token, nil)
-		if err != nil {
-			return nil, fmt.Errorf("unable to create an HTTP request for '%v': %v", download.DownloadEndpoint, err)
-		}
-
-		data, err := request.Do(true)
-		if err != nil {
-			return nil, fmt.Errorf("error while reading from '%v' via HTTP: %v", download.DownloadEndpoint, err)
-		}
-		return data, nil
 	}
+
+	// WebDAV is not supported, so directly read the HTTP endpoint
+	request, err := action.session.NewHTTPRequest(download.DownloadEndpoint, "GET", download.Token, nil)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create an HTTP request for '%v': %v", download.DownloadEndpoint, err)
+	}
+
+	data, err := request.Do(true)
+	if err != nil {
+		return nil, fmt.Errorf("error while reading from '%v' via HTTP: %v", download.DownloadEndpoint, err)
+	}
+	return data, nil
 }
 
 func (action *DownloadAction) initiateDownload(fileInfo *storage.ResourceInfo) (*gateway.InitiateFileDownloadResponse, error) {

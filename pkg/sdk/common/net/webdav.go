@@ -31,8 +31,10 @@ import (
 )
 
 const (
+	// The header name of the WebDAV token.
 	WebDAVTokenName = "webdav-token"
-	WebDAVPathName  = "webdav-file-path"
+	// The header name of the WebDAV file path.
+	WebDAVPathName = "webdav-file-path"
 )
 
 // WebDAVClient is a simple client wrapper for down- and uploading files via WebDAV.
