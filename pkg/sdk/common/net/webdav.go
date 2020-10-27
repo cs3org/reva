@@ -31,9 +31,9 @@ import (
 )
 
 const (
-	// The header name of the WebDAV token.
+	// WebDAVTokenName is the header name of the WebDAV token.
 	WebDAVTokenName = "webdav-token"
-	// The header name of the WebDAV file path.
+	// WebDAVPathName is the header name of the WebDAV file path.
 	WebDAVPathName = "webdav-file-path"
 )
 
