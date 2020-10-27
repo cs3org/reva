@@ -117,7 +117,7 @@ func (s *svc) doTusPut(w http.ResponseWriter, r *http.Request) {
 		"dir":      path.Dir(fp),
 	}
 
-	upload := tus.NewUpload(r.Body, length, metadata, "")
+	upload := tus.NewUpload(fd, length, metadata, "")
 	defer r.Body.Close()
 
 	// create the uploader.

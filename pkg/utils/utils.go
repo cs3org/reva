@@ -25,6 +25,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
+
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 )
 
 var (
@@ -91,4 +94,15 @@ func ResolvePath(path string) (string, error) {
 	}
 
 	return path, nil
+}
+
+// TSToUnixNano converts a protobuf Timestamp to uint64
+// with nanoseconds resolution.
+func TSToUnixNano(ts *types.Timestamp) uint64 {
+	return uint64(time.Unix(int64(ts.Seconds), int64(ts.Nanos)).UnixNano())
+}
+
+// TSToTime converts a protobuf Timestamp to Go's time.Time.
+func TSToTime(ts *types.Timestamp) time.Time {
+	return time.Unix(int64(ts.Seconds), int64(ts.Nanos))
 }
