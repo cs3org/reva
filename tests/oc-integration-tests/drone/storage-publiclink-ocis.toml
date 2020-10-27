@@ -18,5 +18,7 @@ gateway_addr = "0.0.0.0:19000"
 enable_home_creation = true
 
 [grpc.services.publicstorageprovider.drivers.ocis]
-datadirectory = "/drone/src/tmp/reva/data"
+root = "/drone/src/tmp/reva/data"
+treetime_accounting = true
+treesize_accounting = true
 enable_home = true
