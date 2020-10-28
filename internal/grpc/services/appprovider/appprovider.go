@@ -253,7 +253,7 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 
 	// In case of applications served by the WOPI bridge, resolve the URL and go to the app
 	// Note that URL matching is performed via string matching, not via IP resolution: may need to fix this
-	if strings.Contains(appProviderURL, s.conf.WopiBrURL) {
+	if len(s.conf.WopiBrURL) > 0 && strings.Contains(appProviderURL, s.conf.WopiBrURL) {
 		httpClient := rhttp.GetHTTPClient(
 			rhttp.Context(ctx),
 			rhttp.Timeout(time.Duration(5*int64(time.Second))),
