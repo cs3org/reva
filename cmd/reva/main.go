@@ -81,6 +81,8 @@ var (
 		transferGetStatusCommand(),
 		transferCancelCommand(),
 		helpCommand(),
+		rcloneDoTransfer(),
+		rcloneGetTransferStatus(),
 	}
 )
 
