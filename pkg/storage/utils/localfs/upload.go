@@ -39,11 +39,10 @@ var defaultFilePerm = os.FileMode(0664)
 
 // TODO deprecated ... use tus
 func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
-	fn, err := fs.resolve(ctx, ref)
+	fn, err := fs.resolveUploadIDToPath(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "error resolving ref")
 	}
-	fn = fs.wrap(ctx, fn)
 
 	// we cannot rely on /tmp as it can live in another partition and we can
 	// hit invalid cross-device link errors, so we create the tmp file in the same directory
@@ -74,15 +73,24 @@ func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.Rea
 	return nil
 }
 
+func (fs *localfs) resolveUploadIDToPath(ctx context.Context, ref *provider.Reference) (string, error) {
+	upload, err := fs.GetUpload(ctx, ref.GetPath())
+	if err != nil {
+		return "", err
+	}
+	uploadInfo := upload.(*fileUpload)
+	if uploadInfo.info.Storage == nil {
+		return "", errors.New("storage for the upload ID is nil")
+	}
+	return uploadInfo.info.Storage["InternalDestination"], nil
+}
+
 // InitiateUpload returns an upload id that can be used for uploads with tus
 // It resolves the resource and then reuses the NewUpload function
 // Currently requires the uploadLength to be set
 // TODO to implement LengthDeferrerDataStore make size optional
 // TODO read optional content for small files in this request
 func (fs *localfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (uploadID string, err error) {
-	if fs.conf.DisableTus {
-		return ref.GetPath(), nil
-	}
 
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {

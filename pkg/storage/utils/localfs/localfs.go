@@ -47,7 +47,6 @@ import (
 type Config struct {
 	Root          string `mapstructure:"root"`
 	DisableHome   bool   `mapstructure:"disable_home"`
-	DisableTus    bool   `mapstructure:"disable_tus"`
 	UserLayout    string `mapstructure:"user_layout"`
 	ShareFolder   string `mapstructure:"share_folder"`
 	Uploads       string `mapstructure:"uploads"`
