@@ -266,17 +266,17 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 	// For example, https://data-server.example.org/home/docs/myfile.txt
 	// or ownclouds://data-server.example.org/home/docs/myfile.txt
 	log := appctx.GetLogger(ctx)
-	url := *s.dataServerURL
+	u := *s.dataServerURL
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.InitiateFileDownloadResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
 		}, nil
 	}
-	url.Path = path.Join("/", url.Path, newRef.GetPath())
-	log.Info().Str("data-server", url.String()).Str("fn", req.Ref.GetPath()).Msg("file download")
+	u.Path = path.Join(u.Path, newRef.GetPath())
+	log.Info().Str("data-server", u.String()).Str("fn", req.Ref.GetPath()).Msg("file download")
 	res := &provider.InitiateFileDownloadResponse{
-		DownloadEndpoint: url.String(),
+		DownloadEndpoint: u.String(),
 		Status:           status.NewOK(ctx),
 		Expose:           s.conf.ExposeDataServer,
 	}
@@ -330,7 +330,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		}, nil
 	}
 
-	u := s.dataServerURL
+	u := *s.dataServerURL
 	u.Path = path.Join(u.Path, uploadID)
 	if err != nil {
 		return &provider.InitiateFileUploadResponse{
