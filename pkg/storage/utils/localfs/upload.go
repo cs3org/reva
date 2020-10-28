@@ -80,6 +80,10 @@ func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.Rea
 // TODO to implement LengthDeferrerDataStore make size optional
 // TODO read optional content for small files in this request
 func (fs *localfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (uploadID string, err error) {
+	if fs.conf.DisableTus {
+		return ref.GetPath(), nil
+	}
+
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return "", errors.Wrap(err, "localfs: error resolving reference")

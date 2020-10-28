@@ -34,7 +34,7 @@ func (s *svc) handleOptions(w http.ResponseWriter, r *http.Request, ns string) {
 	w.Header().Set("Allow", allow)
 	w.Header().Set("DAV", "1, 2")
 	w.Header().Set("MS-Author-Via", "DAV")
-	if !s.c.DisableTus && !isPublic {
+	if !isPublic {
 		w.Header().Add("Access-Control-Allow-Headers", "Tus-Resumable")
 		w.Header().Add("Access-Control-Expose-Headers", "Tus-Resumable, Tus-Version, Tus-Extension")
 		w.Header().Set("Tus-Resumable", "1.0.0") // TODO(jfd): only for dirs?

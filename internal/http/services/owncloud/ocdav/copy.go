@@ -21,9 +21,7 @@ package ocdav
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
-	"os"
 	"path"
 	"strings"
 
@@ -34,9 +32,6 @@ import (
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
-	tokenpkg "github.com/cs3org/reva/pkg/token"
-	"github.com/eventials/go-tus"
-	"github.com/eventials/go-tus/memorystore"
 )
 
 func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
@@ -135,7 +130,7 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	var successCode int
+	successCode := http.StatusCreated // 201 if new resource was created, see https://tools.ietf.org/html/rfc4918#section-9.8.5
 	if dstStatRes.Status.Code == rpc.Code_CODE_OK {
 		successCode = http.StatusNoContent // 204 if target already existed, see https://tools.ietf.org/html/rfc4918#section-9.8.5
 
@@ -146,8 +141,6 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 		}
 
 	} else {
-		successCode = http.StatusCreated // 201 if new resource was created, see https://tools.ietf.org/html/rfc4918#section-9.8.5
-
 		// check if an intermediate path / the parent exists
 		intermediateDir := path.Dir(dst)
 		ref = &provider.Reference{
@@ -233,6 +226,7 @@ func (s *svc) descend(ctx context.Context, client gateway.GatewayAPIClient, src 
 		// copy file
 
 		// 1. get download url
+
 		dReq := &provider.InitiateFileDownloadRequest{
 			Ref: &provider.Reference{
 				Spec: &provider.Reference_Path{Path: src.Path},
@@ -282,84 +276,31 @@ func (s *svc) descend(ctx context.Context, client gateway.GatewayAPIClient, src 
 		}
 		httpDownloadReq.Header.Set(datagateway.TokenTransportHeader, dRes.Token)
 
-		httpDownloadClient := s.client
-
-		httpDownloadRes, err := httpDownloadClient.Do(httpDownloadReq)
+		httpDownloadRes, err := s.client.Do(httpDownloadReq)
 		if err != nil {
 			return err
 		}
 		defer httpDownloadRes.Body.Close()
-
 		if httpDownloadRes.StatusCode != http.StatusOK {
 			return fmt.Errorf("status code %d", httpDownloadRes.StatusCode)
 		}
 
-		fileName, fd, err := s.createChunkTempFile()
+		// 4. do upload
+
+		httpUploadReq, err := rhttp.NewRequest(ctx, "PUT", uRes.UploadEndpoint, httpDownloadRes.Body)
 		if err != nil {
 			return err
 		}
-		defer os.RemoveAll(fileName)
-		defer fd.Close()
-		if _, err := io.Copy(fd, httpDownloadRes.Body); err != nil {
-			return err
-		}
+		httpUploadReq.Header.Set(datagateway.TokenTransportHeader, uRes.Token)
 
-		// do upload
-		err = s.tusUpload(ctx, uRes.UploadEndpoint, uRes.Token, dst, fd, int64(src.GetSize()))
+		httpUploadRes, err := s.client.Do(httpUploadReq)
 		if err != nil {
 			return err
 		}
-	}
-	return nil
-}
-
-func (s *svc) tusUpload(ctx context.Context, dataServerURL string, transferToken string, fn string, body io.ReadSeeker, length int64) error {
-	var err error
-	log := appctx.GetLogger(ctx)
-
-	// create the tus client.
-	c := tus.DefaultConfig()
-	c.Resume = true
-	c.HttpClient = s.client
-	c.Store, err = memorystore.NewMemoryStore()
-	if err != nil {
-		return err
-	}
-
-	log.Debug().
-		Str("header", tokenpkg.TokenHeader).
-		Str("token", tokenpkg.ContextMustGetToken(ctx)).
-		Msg("adding token to header")
-	c.Header.Set(tokenpkg.TokenHeader, tokenpkg.ContextMustGetToken(ctx))
-	c.Header.Set(datagateway.TokenTransportHeader, transferToken)
-
-	tusc, err := tus.NewClient(dataServerURL, c)
-	if err != nil {
-		return nil
-	}
-
-	// TODO: also copy properties: https://tools.ietf.org/html/rfc4918#section-9.8.2
-	metadata := map[string]string{
-		"filename": path.Base(fn),
-		"dir":      path.Dir(fn),
-		//"checksum": fmt.Sprintf("%s %s", storageprovider.GRPC2PKGXS(xsType).String(), xs),
-	}
-	log.Debug().
-		Str("length", fmt.Sprintf("%d", length)).
-		Str("filename", path.Base(fn)).
-		Str("dir", path.Dir(fn)).
-		Msg("tus.NewUpload")
-
-	upload := tus.NewUpload(body, length, metadata, "")
-
-	// create the uploader.
-	c.Store.Set(upload.Fingerprint, dataServerURL)
-	uploader := tus.NewUploader(tusc, dataServerURL, upload, 0)
-
-	// start the uploading process.
-	err = uploader.Upload()
-	if err != nil {
-		return err
+		defer httpUploadRes.Body.Close()
+		if httpUploadRes.StatusCode != http.StatusOK {
+			return err
+		}
 	}
 	return nil
 }

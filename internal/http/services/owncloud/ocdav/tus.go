@@ -193,7 +193,6 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 		var httpRes *http.Response
 
 		if length != 0 {
-			httpClient := s.client
 			httpReq, err := rhttp.NewRequest(ctx, "PATCH", uRes.UploadEndpoint, r.Body)
 			if err != nil {
 				log.Err(err).Msg("wrong request")
@@ -210,7 +209,7 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 			}
 			httpReq.Header.Set("Tus-Resumable", r.Header.Get("Tus-Resumable"))
 
-			httpRes, err = httpClient.Do(httpReq)
+			httpRes, err = s.client.Do(httpReq)
 			if err != nil {
 				log.Err(err).Msg("error doing GET request to data service")
 				w.WriteHeader(http.StatusInternalServerError)

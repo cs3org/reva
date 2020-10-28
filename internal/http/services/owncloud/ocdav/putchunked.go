@@ -94,7 +94,6 @@ func (s *svc) saveChunk(ctx context.Context, path string, r io.ReadCloser) (bool
 	chunkInfo, err := getChunkBLOBInfo(path)
 	if err != nil {
 		err := fmt.Errorf("error getting chunk info from path: %s", path)
-		//c.logger.Error().Log("error", err)
 		return false, "", err
 	}
 
@@ -103,37 +102,30 @@ func (s *svc) saveChunk(ctx context.Context, path string, r io.ReadCloser) (bool
 
 	chunkTempFilename, chunkTempFile, err := s.createChunkTempFile()
 	if err != nil {
-		//c.logger.Error().Log("error", err)
 		return false, "", err
 	}
 	defer chunkTempFile.Close()
 
 	if _, err := io.Copy(chunkTempFile, r); err != nil {
-		//c.logger.Error().Log("error", err)
 		return false, "", err
 	}
 
 	// force close of the file here because if it is the last chunk to
 	// assemble the big file we must have all the chunks already closed.
 	if err = chunkTempFile.Close(); err != nil {
-		//c.logger.Error().Log("error", err)
 		return false, "", err
 	}
 
 	chunksFolderName, err := s.getChunkFolderName(chunkInfo)
 	if err != nil {
-		//c.logger.Error().Log("error", err)
 		return false, "", err
 	}
 	//c.logger.Info().Log("chunkfolder", chunksFolderName)
 
 	chunkTarget := chunksFolderName + "/" + fmt.Sprintf("%d", chunkInfo.currentChunk)
 	if err = os.Rename(chunkTempFilename, chunkTarget); err != nil {
-		//c.logger.Error().Log("error", err)
 		return false, "", err
 	}
-
-	//c.logger.Info().Log("chunktarget", chunkTarget)
 
 	// Check that all chunks are uploaded.
 	// This is very inefficient, the server has to check that it has all the
@@ -142,7 +134,6 @@ func (s *svc) saveChunk(ctx context.Context, path string, r io.ReadCloser) (bool
 	// assembly the chunks when the client asks for it.
 	chunksFolder, err := os.Open(chunksFolderName)
 	if err != nil {
-		//c.logger.Error().Log("error", err)
 		return false, "", err
 	}
 	defer chunksFolder.Close()
@@ -150,10 +141,8 @@ func (s *svc) saveChunk(ctx context.Context, path string, r io.ReadCloser) (bool
 	// read all the chunks inside the chunk folder; -1 == all
 	chunks, err := chunksFolder.Readdir(-1)
 	if err != nil {
-		//c.logger.Error().Log("error", err)
 		return false, "", err
 	}
-	//c.logger.Info().Log("msg", "chunkfolder readed", "nchunks", len(chunks))
 
 	// there is still some chunks to be uploaded.
 	// we return CodeUploadIsPartial to notify upper layers that the upload is still
@@ -166,12 +155,9 @@ func (s *svc) saveChunk(ctx context.Context, path string, r io.ReadCloser) (bool
 
 	assembledFileName, assembledFile, err := s.createChunkTempFile()
 	if err != nil {
-		//c.logger.Error().Log("error", err)
 		return false, "", err
 	}
 	defer assembledFile.Close()
-
-	//c.logger.Info().Log("assembledfile", assembledFileName)
 
 	// walk all chunks and append to assembled file
 	for i := range chunks {
@@ -179,21 +165,17 @@ func (s *svc) saveChunk(ctx context.Context, path string, r io.ReadCloser) (bool
 
 		chunk, err := os.Open(target)
 		if err != nil {
-			//c.logger.Error().Log("error", err)
 			return false, "", err
 		}
 		defer chunk.Close()
 
 		if _, err = io.Copy(assembledFile, chunk); err != nil {
-			//c.logger.Error().Log("error", err)
 			return false, "", err
 		}
-		//c.logger.Debug().Log("msg", "chunk appended to assembledfile")
 
 		// we close the chunk here because if the assembled file contains hundreds of chunks
 		// we will end up with hundreds of open file descriptors
 		if err = chunk.Close(); err != nil {
-			//c.logger.Error().Log("error", err)
 			return false, "", err
 
 		}
@@ -206,13 +188,6 @@ func (s *svc) saveChunk(ctx context.Context, path string, r io.ReadCloser) (bool
 			log.Warn().Err(err).Msg("error deleting chunk folder, remove folder manually/cron to not leak storage space")
 		}
 	}()
-
-	// when writing to the assembled file the write pointer points to the end of the file
-	// so we need to seek it to the beginning
-	if _, err = assembledFile.Seek(0, 0); err != nil {
-		//c.logger.Error().Log("error", err)
-		return false, "", err
-	}
 
 	return true, assembledFileName, nil
 }
