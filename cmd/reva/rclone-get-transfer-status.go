@@ -65,7 +65,11 @@ func rcloneGetTransferStatus() *command {
 		c.Init()
 
 		rclone := registry.GetDriver(c.DataTxDriverType)
-		rclone.Configure(c)
+
+		err := rclone.Configure(c)
+		if err != nil {
+			return err
+		}
 
 		// prepare the input Job
 		trID, err := strconv.ParseInt(*transferID, 10, 64)

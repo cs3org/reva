@@ -88,7 +88,10 @@ func rcloneDoTransfer() *command {
 		c.Init()
 
 		rclone := registry.GetDriver(c.DataTxDriverType)
-		rclone.Configure(c)
+		err := rclone.Configure(c)
+		if err != nil {
+			return err
+		}
 
 		rcloneJob, err := rclone.DoTransfer(*srcEndpoint, *srcPath, *srcToken, *destEndpoint, *destPath, *destToken)
 		if err != nil {
