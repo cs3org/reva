@@ -263,7 +263,7 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 		return
 	}
 
-	httpReq, err := rhttp.NewRequest(ctx, "PUT", uRes.UploadEndpoint, r.Body)
+	httpReq, err := rhttp.NewRequest(ctx, "PUT", uRes.UploadEndpoint, content)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
