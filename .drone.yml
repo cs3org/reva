@@ -446,7 +446,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 5711a600adc10b9cbdceae3ee316b22d302bee4f
+      - git checkout 21d80141035c2bc1becb7fe23ab04a24a62b6372
 
   - name: localAPIAcceptanceTestsOwncloudStorage
     image: owncloudci/php:7.2
@@ -521,7 +521,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 5711a600adc10b9cbdceae3ee316b22d302bee4f
+      - git checkout 21d80141035c2bc1becb7fe23ab04a24a62b6372
 
   - name: localAPIAcceptanceTestsOcisStorage
     image: owncloudci/php:7.2
@@ -591,7 +591,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 5711a600adc10b9cbdceae3ee316b22d302bee4f
+      - git checkout 21d80141035c2bc1becb7fe23ab04a24a62b6372
 
   - name: oC10APIAcceptanceTestsOcisStorage
     image: owncloudci/php:7.2
@@ -664,7 +664,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 5711a600adc10b9cbdceae3ee316b22d302bee4f
+      - git checkout 21d80141035c2bc1becb7fe23ab04a24a62b6372
 
   - name: oC10APIAcceptanceTestsOcisStorage
     image: owncloudci/php:7.2
@@ -737,7 +737,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 5711a600adc10b9cbdceae3ee316b22d302bee4f
+      - git checkout 21d80141035c2bc1becb7fe23ab04a24a62b6372
 
   - name: oC10APIAcceptanceTestsOcisStorage
     image: owncloudci/php:7.2
@@ -810,7 +810,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 5711a600adc10b9cbdceae3ee316b22d302bee4f
+      - git checkout 21d80141035c2bc1becb7fe23ab04a24a62b6372
 
   - name: oC10APIAcceptanceTestsOcisStorage
     image: owncloudci/php:7.2
@@ -883,7 +883,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 5711a600adc10b9cbdceae3ee316b22d302bee4f
+      - git checkout 21d80141035c2bc1becb7fe23ab04a24a62b6372
 
   - name: oC10APIAcceptanceTestsOcisStorage
     image: owncloudci/php:7.2
@@ -956,7 +956,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 5711a600adc10b9cbdceae3ee316b22d302bee4f
+      - git checkout 21d80141035c2bc1becb7fe23ab04a24a62b6372
 
   - name: oC10APIAcceptanceTestsOcisStorage
     image: owncloudci/php:7.2
@@ -1029,7 +1029,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 5711a600adc10b9cbdceae3ee316b22d302bee4f
+      - git checkout 21d80141035c2bc1becb7fe23ab04a24a62b6372
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
     image: owncloudci/php:7.2
@@ -1107,7 +1107,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 5711a600adc10b9cbdceae3ee316b22d302bee4f
+      - git checkout 21d80141035c2bc1becb7fe23ab04a24a62b6372
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
     image: owncloudci/php:7.2
@@ -1185,7 +1185,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 5711a600adc10b9cbdceae3ee316b22d302bee4f
+      - git checkout 21d80141035c2bc1becb7fe23ab04a24a62b6372
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
     image: owncloudci/php:7.2
@@ -1263,7 +1263,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 5711a600adc10b9cbdceae3ee316b22d302bee4f
+      - git checkout 21d80141035c2bc1becb7fe23ab04a24a62b6372
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
     image: owncloudci/php:7.2
@@ -1341,7 +1341,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 5711a600adc10b9cbdceae3ee316b22d302bee4f
+      - git checkout 21d80141035c2bc1becb7fe23ab04a24a62b6372
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
     image: owncloudci/php:7.2
@@ -1419,7 +1419,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout 5711a600adc10b9cbdceae3ee316b22d302bee4f
+      - git checkout 21d80141035c2bc1becb7fe23ab04a24a62b6372
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
     image: owncloudci/php:7.2
