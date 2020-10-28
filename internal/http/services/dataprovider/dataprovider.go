@@ -119,7 +119,7 @@ func (s *svc) setHandler() error {
 
 	tusHandler := s.getTusHandler()
 
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log := appctx.GetLogger(r.Context())
 		log.Info().Msgf("dataprovider routing: path=%s", r.URL.Path)
 
@@ -166,12 +166,6 @@ func (s *svc) setHandler() error {
 			return
 		}
 	})
-
-	if tusHandler != nil {
-		s.handler = tusHandler.Middleware(handler)
-	} else {
-		s.handler = handler
-	}
 
 	return nil
 }
