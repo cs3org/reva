@@ -46,7 +46,7 @@ var defaultFilePerm = os.FileMode(0664)
 func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) (err error) {
 
 	var n *Node
-	if n, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
+	if n, err = fs.resolveUploadIDToNode(ctx, ref); err != nil {
 		return
 	}
 
@@ -146,6 +146,24 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 	}
 
 	return fs.tp.Propagate(ctx, n)
+}
+
+func (fs *ocisfs) resolveUploadIDToNode(ctx context.Context, ref *provider.Reference) (*Node, error) {
+	upload, err := fs.GetUpload(ctx, ref.GetPath())
+	if err != nil {
+		return nil, err
+	}
+	uploadInfo := upload.(*fileUpload)
+	if uploadInfo.info.MetaData == nil {
+		return nil, errors.New("storage for the upload ID is nil")
+	}
+
+	p := filepath.Join(uploadInfo.info.MetaData["dir"], uploadInfo.info.MetaData["filename"])
+	var n *Node
+	if n, err = fs.lu.NodeFromResource(ctx, &provider.Reference{Spec: &provider.Reference_Path{Path: p}}); err != nil {
+		return nil, err
+	}
+	return n, nil
 }
 
 // InitiateUpload returns an upload id that can be used for uploads with tus
