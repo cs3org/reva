@@ -102,11 +102,11 @@ func (exporter *PrometheusSDExporter) registerScrapeCreators(conf *config.Config
 	}
 
 	// Register all scrape creators
-	if err := registerCreator("metrics", conf.PrometheusSD.MetricsOutputFile, createMetricsSDScrapeConfig); err != nil {
+	if err := registerCreator("metrics", conf.Exporters.PrometheusSD.MetricsOutputFile, createMetricsSDScrapeConfig); err != nil {
 		return fmt.Errorf("unable to register the 'metrics' scrape config creator: %v", err)
 	}
 
-	if err := registerCreator("blackbox", conf.PrometheusSD.BlackboxOutputFile, createBlackboxSDScrapeConfig); err != nil {
+	if err := registerCreator("blackbox", conf.Exporters.PrometheusSD.BlackboxOutputFile, createBlackboxSDScrapeConfig); err != nil {
 		return fmt.Errorf("unable to register the 'blackbox' scrape config creator: %v", err)
 	}
 

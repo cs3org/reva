@@ -27,7 +27,6 @@ import (
 
 	"github.com/cs3org/reva/pkg/mentix"
 	"github.com/cs3org/reva/pkg/mentix/config"
-	"github.com/cs3org/reva/pkg/mentix/exporters"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 )
 
@@ -88,8 +87,24 @@ func parseConfig(m map[string]interface{}) (*config.Configuration, error) {
 	if err := mapstructure.Decode(m, &cfg); err != nil {
 		return nil, errors.Wrap(err, "mentix: error decoding configuration")
 	}
+	applyInternalConfig(m, cfg)
 	applyDefaultConfig(cfg)
 	return cfg, nil
+}
+
+func applyInternalConfig(m map[string]interface{}, conf *config.Configuration) {
+	getSubsections := func(section string) []string {
+		subsections := make([]string, 0, 5)
+		if list, ok := m[section].(map[string]interface{}); ok {
+			for name, _ := range list {
+				subsections = append(subsections, name)
+			}
+		}
+		return subsections
+	}
+
+	conf.EnabledConnectors = getSubsections("connectors")
+	conf.EnabledExporters = getSubsections("exporters")
 }
 
 func applyDefaultConfig(conf *config.Configuration) {
@@ -101,28 +116,24 @@ func applyDefaultConfig(conf *config.Configuration) {
 		conf.Connector = config.ConnectorIDGOCDB // Use GOCDB
 	}
 
-	if len(conf.Exporters) == 0 {
-		conf.Exporters = exporters.RegisteredExporterIDs() // Enable all exporters
-	}
-
 	if conf.UpdateInterval == "" {
 		conf.UpdateInterval = "1h" // Update once per hour
 	}
 
-	if conf.Connectors.GOCDB.Scope == "" {
-		conf.Connectors.GOCDB.Scope = "SM" // TODO(Daniel-WWU-IT): This might change in the future
+	if conf.GOCDB.Scope == "" {
+		conf.GOCDB.Scope = "SM" // TODO(Daniel-WWU-IT): This might change in the future
 	}
 
-	if conf.WebAPI.Endpoint == "" {
-		conf.WebAPI.Endpoint = "/"
+	if conf.Exporters.WebAPI.Endpoint == "" {
+		conf.Exporters.WebAPI.Endpoint = "/"
 	}
 
-	if conf.CS3API.Endpoint == "" {
-		conf.CS3API.Endpoint = "/cs3"
+	if conf.Exporters.CS3API.Endpoint == "" {
+		conf.Exporters.CS3API.Endpoint = "/cs3"
 	}
 
-	if conf.SiteLocations.Endpoint == "" {
-		conf.SiteLocations.Endpoint = "/loc"
+	if conf.Exporters.SiteLocations.Endpoint == "" {
+		conf.Exporters.SiteLocations.Endpoint = "/loc"
 	}
 }
 

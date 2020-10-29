@@ -22,40 +22,43 @@ package config
 type Configuration struct {
 	Prefix string `mapstructure:"prefix"`
 
-	Connector      string   `mapstructure:"connector"`
-	Exporters      []string `mapstructure:"exporters"`
-	UpdateInterval string   `mapstructure:"update_interval"`
+	Connector      string `mapstructure:"connector"`
+	UpdateInterval string `mapstructure:"update_interval"`
 
-	Connectors struct {
-		GOCDB struct {
-			Address string `mapstructure:"address"`
-			Scope   string `mapstructure:"scope"`
-		} `mapstructure:"gocdb"`
+	GOCDB struct {
+		Address string `mapstructure:"address"`
+		Scope   string `mapstructure:"scope"`
+	} `mapstructure:"gocdb"`
 
-		File struct {
-			File string `mapstructure:"file"`
-		} `mapstructure:"file"`
-	} `mapstructure:"connectors"`
+	LocalFile struct {
+		File string `mapstructure:"file"`
+	} `mapstructure:"localfile"`
 
-	WebAPI struct {
-		Endpoint string `mapstructure:"endpoint"`
-	} `yaml:"webapi"`
+	Exporters struct {
+		WebAPI struct {
+			Endpoint string `mapstructure:"endpoint"`
+		} `mapstructure:"webapi"`
 
-	CS3API struct {
-		Endpoint string `mapstructure:"endpoint"`
-	} `yaml:"cs3api"`
+		CS3API struct {
+			Endpoint string `mapstructure:"endpoint"`
+		} `mapstructure:"cs3api"`
 
-	SiteLocations struct {
-		Endpoint string `mapstructure:"endpoint"`
-	} `yaml:"siteloc"`
+		SiteLocations struct {
+			Endpoint string `mapstructure:"endpoint"`
+		} `mapstructure:"siteloc"`
 
-	PrometheusSD struct {
-		MetricsOutputFile  string `mapstructure:"metrics_output_file"`
-		BlackboxOutputFile string `mapstructure:"blackbox_output_file"`
-	} `mapstructure:"promsd"`
+		PrometheusSD struct {
+			MetricsOutputFile  string `mapstructure:"metrics_output_file"`
+			BlackboxOutputFile string `mapstructure:"blackbox_output_file"`
+		} `mapstructure:"promsd"`
+	} `mapstructure:"exporters"`
+
+	// Internal settings
+	EnabledConnectors []string `mapstructure:"-"`
+	EnabledExporters  []string `mapstructure:"-"`
 }
 
-// Init sets sane defaults
+// Init sets sane defaults.
 func (c *Configuration) Init() {
 	if c.Prefix == "" {
 		c.Prefix = "mentix"

@@ -37,7 +37,7 @@ func (exporter *SiteLocationsExporter) Activate(conf *config.Configuration, log 
 	}
 
 	// Store SiteLocations specifics
-	exporter.endpoint = conf.SiteLocations.Endpoint
+	exporter.endpoint = conf.Exporters.SiteLocations.Endpoint
 	exporter.defaultMethodHandler = siteloc.HandleDefaultQuery
 
 	return nil

@@ -30,21 +30,21 @@ import (
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 
-// FileConnector is used to read sites from a local file.
-type FileConnector struct {
+// LocalFileConnector is used to read sites from a local file.
+type LocalFileConnector struct {
 	BaseConnector
 
 	filePath string
 }
 
 // Activate activates the connector.
-func (connector *FileConnector) Activate(conf *config.Configuration, log *zerolog.Logger) error {
+func (connector *LocalFileConnector) Activate(conf *config.Configuration, log *zerolog.Logger) error {
 	if err := connector.BaseConnector.Activate(conf, log); err != nil {
 		return err
 	}
 
 	// Check and store GOCDB specific settings
-	connector.filePath = conf.Connectors.File.File
+	connector.filePath = conf.LocalFile.File
 	if len(connector.filePath) == 0 {
 		return fmt.Errorf("no file configured")
 	}
@@ -53,7 +53,7 @@ func (connector *FileConnector) Activate(conf *config.Configuration, log *zerolo
 }
 
 // RetrieveMeshData fetches new mesh data.
-func (connector *FileConnector) RetrieveMeshData() (*meshdata.MeshData, error) {
+func (connector *LocalFileConnector) RetrieveMeshData() (*meshdata.MeshData, error) {
 	meshData := new(meshdata.MeshData)
 
 	jsonFile, err := os.Open(connector.filePath)
@@ -77,17 +77,17 @@ func (connector *FileConnector) RetrieveMeshData() (*meshdata.MeshData, error) {
 	return meshData, nil
 }
 
-func (connector *FileConnector) setSiteTypes(meshData *meshdata.MeshData) {
+func (connector *LocalFileConnector) setSiteTypes(meshData *meshdata.MeshData) {
 	for _, site := range meshData.Sites {
 		site.Type = meshdata.SiteTypeCommunity // Sites coming from a local file are always community sites
 	}
 }
 
 // GetName returns the display name of the connector.
-func (connector *FileConnector) GetName() string {
-	return "File"
+func (connector *LocalFileConnector) GetName() string {
+	return "Local file"
 }
 
 func init() {
-	registerConnector(config.ConnectorIDFile, &FileConnector{})
+	registerConnector(config.ConnectorIDLocalFile, &LocalFileConnector{})
 }

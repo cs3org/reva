@@ -113,7 +113,7 @@ func registerExporter(id string, exporter Exporter) {
 func AvailableExporters(conf *config.Configuration) ([]Exporter, error) {
 	// Try to add all exporters configured in the environment
 	var exporters []Exporter
-	for _, exporterID := range conf.Exporters {
+	for _, exporterID := range conf.EnabledExporters {
 		if exporter, ok := registeredExporters[exporterID]; ok {
 			exporters = append(exporters, exporter)
 		} else {
