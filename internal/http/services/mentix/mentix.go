@@ -109,8 +109,8 @@ func applyDefaultConfig(conf *config.Configuration) {
 		conf.UpdateInterval = "1h" // Update once per hour
 	}
 
-	if conf.GOCDB.Scope == "" {
-		conf.GOCDB.Scope = "SM" // TODO(Daniel-WWU-IT): This might change in the future
+	if conf.Connectors.GOCDB.Scope == "" {
+		conf.Connectors.GOCDB.Scope = "SM" // TODO(Daniel-WWU-IT): This might change in the future
 	}
 
 	if conf.WebAPI.Endpoint == "" {

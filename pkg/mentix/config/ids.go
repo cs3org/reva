@@ -21,6 +21,8 @@ package config
 const (
 	// ConnectorIDGOCDB is the connector identifier for GOCDB.
 	ConnectorIDGOCDB = "gocdb"
+	// ConnectorIDFile is the connector identifier for local files.
+	ConnectorIDFile = "file"
 )
 
 const (

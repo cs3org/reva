@@ -26,10 +26,16 @@ type Configuration struct {
 	Exporters      []string `mapstructure:"exporters"`
 	UpdateInterval string   `mapstructure:"update_interval"`
 
-	GOCDB struct {
-		Address string `mapstructure:"address"`
-		Scope   string `mapstructure:"scope"`
-	} `mapstructure:"gocdb"`
+	Connectors struct {
+		GOCDB struct {
+			Address string `mapstructure:"address"`
+			Scope   string `mapstructure:"scope"`
+		} `mapstructure:"gocdb"`
+
+		File struct {
+			File string `mapstructure:"file"`
+		} `mapstructure:"file"`
+	} `mapstructure:"connectors"`
 
 	WebAPI struct {
 		Endpoint string `mapstructure:"endpoint"`
