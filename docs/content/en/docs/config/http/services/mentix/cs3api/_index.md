@@ -13,7 +13,7 @@ The CS3API exporter exposes Mentix data in a format that is compliant with the C
 {{% dir name="endpoint" type="string" default="/" %}}
 The endpoint where the mesh data can be queried.
 {{< highlight toml >}}
-[http.services.mentix.cs3api]
+[http.services.mentix.exporters.cs3api]
 endpoint = "/data"
 {{< /highlight >}}
 {{% /dir %}}

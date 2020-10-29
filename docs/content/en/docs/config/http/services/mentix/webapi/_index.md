@@ -13,7 +13,7 @@ The WebAPI exporter exposes the _plain_ Mentix data via an HTTP endpoint.
 {{% dir name="endpoint" type="string" default="/" %}}
 The endpoint where the mesh data can be queried.
 {{< highlight toml >}}
-[http.services.mentix.webapi]
+[http.services.mentix.exporters.webapi]
 endpoint = "/data"
 {{< /highlight >}}
 {{% /dir %}}

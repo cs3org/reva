@@ -13,7 +13,7 @@ The Site Locations exporter exposes location information of all sites to be cons
 {{% dir name="endpoint" type="string" default="/" %}}
 The endpoint where the locations data can be queried.
 {{< highlight toml >}}
-[http.services.mentix.siteloc]
+[http.services.mentix.exporters.siteloc]
 endpoint = "/loc"
 {{< /highlight >}}
 {{% /dir %}}
