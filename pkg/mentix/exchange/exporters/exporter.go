@@ -24,7 +24,7 @@ import (
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/exchange"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
-	"github.com/cs3org/reva/pkg/mentix/registry"
+	"github.com/cs3org/reva/pkg/mentix/util/registry"
 )
 
 var (
@@ -73,7 +73,7 @@ func AvailableExporters(conf *config.Configuration) ([]Exporter, error) {
 		return nil, err
 	}
 
-	var exporters []Exporter
+	exporters := make([]Exporter, 0, len(entries))
 	for _, entry := range entries {
 		exporters = append(exporters, entry.(Exporter))
 	}

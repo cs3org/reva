@@ -20,19 +20,19 @@ package registry
 
 import "fmt"
 
-type RegistryEntry interface {
-}
-
+// Registry represents a simple id->entry map.
 type Registry struct {
-	Entries map[string]RegistryEntry
+	Entries map[string]interface{}
 }
 
-func (r *Registry) Register(id string, entry RegistryEntry) {
+// Register registers a new entry.
+func (r *Registry) Register(id string, entry interface{}) {
 	r.Entries[id] = entry
 }
 
-func (r *Registry) EntriesByID(ids []string) ([]RegistryEntry, error) {
-	var entries []RegistryEntry
+// EntriesByID returns all entries matching the provided IDs. If an entry with a certain ID doesn't exist, an error is returned.
+func (r *Registry) EntriesByID(ids []string) ([]interface{}, error) {
+	var entries []interface{}
 	for _, id := range ids {
 		if entry, ok := r.Entries[id]; ok {
 			entries = append(entries, entry)
@@ -46,6 +46,6 @@ func (r *Registry) EntriesByID(ids []string) ([]RegistryEntry, error) {
 
 func NewRegistry() *Registry {
 	return &Registry{
-		Entries: make(map[string]RegistryEntry),
+		Entries: make(map[string]interface{}),
 	}
 }

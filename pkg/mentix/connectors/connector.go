@@ -25,7 +25,7 @@ import (
 
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
-	"github.com/cs3org/reva/pkg/mentix/registry"
+	"github.com/cs3org/reva/pkg/mentix/util/registry"
 )
 
 var (
@@ -71,7 +71,7 @@ func AvailableConnectors(conf *config.Configuration) ([]Connector, error) {
 		return nil, err
 	}
 
-	var connectors []Connector
+	connectors := make([]Connector, 0, len(entries))
 	for _, entry := range entries {
 		connectors = append(connectors, entry.(Connector))
 	}
