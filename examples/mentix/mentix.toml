@@ -6,26 +6,20 @@ address = "0.0.0.0:9600"
 enabled_services = ["mentix"]
 
 [http.services.mentix]
-connector = "gocdb"
-exporters = ["webapi", "cs3api", "siteloc"]
-# Enable the Prometheus Service Discovery:
-# exporters = ["webapi", "cs3api", "siteloc", "promsd"]
 update_interval = "15m"
 
-[http.services.mentix.gocdb]
+[http.services.mentix.connectors.gocdb]
 address = "http://sciencemesh-test.uni-muenster.de"
 
-[http.services.mentix.webapi]
+[http.services.mentix.connectors.webapi]
 endpoint = "/"
 
-[http.services.mentix.cs3api]
-endpoint = "/cs3"
-
-[http.services.mentix.siteloc]
-endpoint = "/loc"
+# Enable the CS3API and Site Locations exporters
+[http.services.mentix.exporters.cs3api]
+[http.services.mentix.exporters.siteloc]
 
 # Configure the Prometheus Service Discovery:
-# [http.services.mentix.promsd]
+# [http.services.mentix.exporters.promsd]
 # The following files must be made available to Prometheus.
 # They can then be used as the file_sd source of a job.
 # metrics_output_file = "/usr/share/prom/sciencemesh_metrics.json"
