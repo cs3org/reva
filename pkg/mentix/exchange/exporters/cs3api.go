@@ -22,32 +22,32 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
-	"github.com/cs3org/reva/pkg/mentix/exporters/webapi"
+	"github.com/cs3org/reva/pkg/mentix/exchange/exporters/cs3api"
 )
 
-// WebAPIExporter implements the generic Web API exporter.
-type WebAPIExporter struct {
+// CS3APIExporter implements the CS3API exporter.
+type CS3APIExporter struct {
 	BaseRequestExporter
 }
 
 // Activate activates the exporter.
-func (exporter *WebAPIExporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
+func (exporter *CS3APIExporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
 	if err := exporter.BaseRequestExporter.Activate(conf, log); err != nil {
 		return err
 	}
 
-	// Store WebAPI specifics
-	exporter.SetEndpoint(conf.Exporters.WebAPI.Endpoint)
-	exporter.defaultMethodHandler = webapi.HandleDefaultQuery
+	// Store CS3API specifics
+	exporter.SetEndpoint(conf.Exporters.CS3API.Endpoint)
+	exporter.defaultMethodHandler = cs3api.HandleDefaultQuery
 
 	return nil
 }
 
 // GetName returns the display name of the exporter.
-func (exporter *WebAPIExporter) GetName() string {
-	return "WebAPI"
+func (exporter *CS3APIExporter) GetName() string {
+	return "CS3API"
 }
 
 func init() {
-	registerExporter(config.ExporterIDWebAPI, &WebAPIExporter{})
+	registerExporter(config.ExporterIDCS3API, &CS3APIExporter{})
 }

@@ -28,7 +28,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
-	"github.com/cs3org/reva/pkg/mentix/exporters/prometheus"
+	"github.com/cs3org/reva/pkg/mentix/exchange/exporters/prometheus"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 

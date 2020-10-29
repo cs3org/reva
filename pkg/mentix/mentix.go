@@ -30,7 +30,7 @@ import (
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/connectors"
 	"github.com/cs3org/reva/pkg/mentix/exchange"
-	"github.com/cs3org/reva/pkg/mentix/exporters"
+	"github.com/cs3org/reva/pkg/mentix/exchange/exporters"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 

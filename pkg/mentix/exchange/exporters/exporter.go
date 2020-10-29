@@ -24,10 +24,11 @@ import (
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/exchange"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
+	"github.com/cs3org/reva/pkg/mentix/registry"
 )
 
 var (
-	registeredExporters = exchange.NewRegistry()
+	registeredExporters = registry.NewRegistry()
 )
 
 // Exporter is the interface that all exporters must implement.

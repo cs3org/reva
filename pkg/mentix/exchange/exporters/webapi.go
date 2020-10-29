@@ -22,32 +22,32 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
-	"github.com/cs3org/reva/pkg/mentix/exporters/siteloc"
+	"github.com/cs3org/reva/pkg/mentix/exchange/exporters/webapi"
 )
 
-// SiteLocationsExporter implements the Site Locations exporter to use with Grafana.
-type SiteLocationsExporter struct {
+// WebAPIExporter implements the generic Web API exporter.
+type WebAPIExporter struct {
 	BaseRequestExporter
 }
 
 // Activate activates the exporter.
-func (exporter *SiteLocationsExporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
+func (exporter *WebAPIExporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
 	if err := exporter.BaseRequestExporter.Activate(conf, log); err != nil {
 		return err
 	}
 
-	// Store SiteLocations specifics
-	exporter.SetEndpoint(conf.Exporters.SiteLocations.Endpoint)
-	exporter.defaultMethodHandler = siteloc.HandleDefaultQuery
+	// Store WebAPI specifics
+	exporter.SetEndpoint(conf.Exporters.WebAPI.Endpoint)
+	exporter.defaultMethodHandler = webapi.HandleDefaultQuery
 
 	return nil
 }
 
 // GetName returns the display name of the exporter.
-func (exporter *SiteLocationsExporter) GetName() string {
-	return "Site Locations"
+func (exporter *WebAPIExporter) GetName() string {
+	return "WebAPI"
 }
 
 func init() {
-	registerExporter(config.ExporterIDSiteLocations, &SiteLocationsExporter{})
+	registerExporter(config.ExporterIDWebAPI, &WebAPIExporter{})
 }

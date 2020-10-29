@@ -24,12 +24,12 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
-	"github.com/cs3org/reva/pkg/mentix/exchange"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
+	"github.com/cs3org/reva/pkg/mentix/registry"
 )
 
 var (
-	registeredConnectors = exchange.NewRegistry()
+	registeredConnectors = registry.NewRegistry()
 )
 
 // Connector is the interface that all connectors must implement.
