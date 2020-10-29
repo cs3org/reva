@@ -42,10 +42,15 @@ var defaultFilePerm = os.FileMode(0664)
 
 // TODO deprecated ... use tus
 func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
-	ip, err := fs.resolveUploadIDToPath(ctx, ref)
+	upload, err := fs.GetUpload(ctx, ref.GetPath())
 	if err != nil {
-		return errors.Wrap(err, "ocfs: error resolving reference")
+		return errors.Wrap(err, "ocfs: error retrieving upload")
 	}
+	uploadInfo := upload.(*fileUpload)
+	if uploadInfo.info.Storage == nil {
+		return errors.New("ocfs: storage for the upload ID is nil")
+	}
+	ip := uploadInfo.info.Storage["InternalDestination"]
 
 	var perm *provider.ResourcePermissions
 	var perr error
@@ -98,19 +103,14 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 		return errors.Wrap(err, "ocfs: error renaming from "+tmp.Name()+" to "+ip)
 	}
 
-	return nil
-}
+	if uploadInfo.info.MetaData["mtime"] != "" {
+		err := uploadInfo.fs.setMtime(ctx, ip, uploadInfo.info.MetaData["mtime"])
+		if err != nil {
+			return errors.Wrap(err, "ocfs: could not set mtime metadata")
+		}
+	}
 
-func (fs *ocfs) resolveUploadIDToPath(ctx context.Context, ref *provider.Reference) (string, error) {
-	upload, err := fs.GetUpload(ctx, ref.GetPath())
-	if err != nil {
-		return "", err
-	}
-	uploadInfo := upload.(*fileUpload)
-	if uploadInfo.info.Storage == nil {
-		return "", errors.New("storage for the upload ID is nil")
-	}
-	return uploadInfo.info.Storage["InternalDestination"], nil
+	return nil
 }
 
 // InitiateUpload returns an upload id that can be used for uploads with tus
