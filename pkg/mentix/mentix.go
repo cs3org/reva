@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/pkg/mentix/connectors"
 	"github.com/cs3org/reva/pkg/mentix/exchange"
 	"github.com/cs3org/reva/pkg/mentix/exchange/exporters"
+	"github.com/cs3org/reva/pkg/mentix/exchange/importers"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 
@@ -41,6 +42,7 @@ type Mentix struct {
 
 	meshData   *meshdata.MeshData
 	connectors []connectors.Connector
+	importers  []importers.Importer
 	exporters  []exporters.Exporter
 
 	updateInterval time.Duration
@@ -66,6 +68,11 @@ func (mntx *Mentix) initialize(conf *config.Configuration, log *zerolog.Logger) 
 		return fmt.Errorf("unable to initialize connector: %v", err)
 	}
 
+	// Initialize the importers
+	if err := mntx.initImporters(); err != nil {
+		return fmt.Errorf("unable to initialize importers: %v", err)
+	}
+
 	// Initialize the exporters
 	if err := mntx.initExporters(); err != nil {
 		return fmt.Errorf("unable to initialize exporters: %v", err)
@@ -87,11 +94,15 @@ func (mntx *Mentix) initialize(conf *config.Configuration, log *zerolog.Logger) 
 	for idx, connector := range mntx.connectors {
 		connectorNames[idx] = connector.GetName()
 	}
+	importerNames := make([]string, len(mntx.importers))
+	for idx, importer := range mntx.importers {
+		importerNames[idx] = importer.GetName()
+	}
 	exporterNames := make([]string, len(mntx.exporters))
 	for idx, exporter := range mntx.exporters {
 		exporterNames[idx] = exporter.GetName()
 	}
-	log.Info().Msgf("mentix started with connectors: %v; exporters: %v; update interval: %v", strings.Join(connectorNames, ", "), strings.Join(exporterNames, ", "), duration)
+	log.Info().Msgf("mentix started with connectors: %v; importers: %v; exporters: %v; update interval: %v", strings.Join(connectorNames, ", "), strings.Join(importerNames, ", "), strings.Join(exporterNames, ", "), duration)
 
 	return nil
 }
@@ -114,6 +125,7 @@ func (mntx *Mentix) initConnectors() error {
 	return nil
 }
 
+// TODO: init,start,stop -> selbe Fnk. für Importers
 func (mntx *Mentix) initExporters() error {
 	// Use all exporters exposed by the exporters package
 	exps, err := exporters.AvailableExporters(mntx.conf)
@@ -151,7 +163,8 @@ func (mntx *Mentix) stopExporters() {
 }
 
 func (mntx *Mentix) destroy() {
-	// Stop all exporters
+	// Stop all im- & exporters
+	mntx.stopImporters()
 	mntx.stopExporters()
 }
 
@@ -160,7 +173,10 @@ func (mntx *Mentix) destroy() {
 func (mntx *Mentix) Run(stopSignal <-chan struct{}) error {
 	defer mntx.destroy()
 
-	// Start all exporters; they will be stopped in mntx.destroy
+	// Start all im- & exporters; they will be stopped in mntx.destroy
+	if err := mntx.startImporters(); err != nil {
+		return fmt.Errorf("unable to start importers: %v", err)
+	}
 	if err := mntx.startExporters(); err != nil {
 		return fmt.Errorf("unable to start exporters: %v", err)
 	}
@@ -228,6 +244,7 @@ func (mntx *Mentix) applyMeshData(meshData *meshdata.MeshData) error {
 	return nil
 }
 
+// TODO: selbe Fnk. für Importers
 // GetRequestExporters returns all exporters that can handle HTTP requests.
 func (mntx *Mentix) GetRequestExporters() []exchange.RequestExchanger {
 	// Return all exporters that implement the RequestExporter interface
@@ -257,6 +274,7 @@ func (mntx *Mentix) RequestHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// TODO: handle*request -> selbe Fnk. für Importers
 func (mntx *Mentix) handleGetRequest(w http.ResponseWriter, r *http.Request, log *zerolog.Logger) {
 	// Ask each RequestExporter if it wants to handle the request
 	for _, exporter := range mntx.GetRequestExporters() {
@@ -269,7 +287,14 @@ func (mntx *Mentix) handleGetRequest(w http.ResponseWriter, r *http.Request, log
 }
 
 func (mntx *Mentix) handlePostRequest(w http.ResponseWriter, r *http.Request, log *zerolog.Logger) {
-
+	// Ask each RequestImporter if it wants to handle the request
+	for _, importer := range mntx.GetRequestImporters() {
+		if importer.WantsRequest(r) {
+			if err := importer.HandleRequest(w, r); err != nil {
+				log.Err(err).Msg("error handling POST request")
+			}
+		}
+	}
 }
 
 // New creates a new Mentix service instance.

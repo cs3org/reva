@@ -56,6 +56,7 @@ type Configuration struct {
 
 	// Internal settings
 	EnabledConnectors []string `mapstructure:"-"`
+	EnabledImporters  []string `mapstructure:"-"`
 	EnabledExporters  []string `mapstructure:"-"`
 }
 

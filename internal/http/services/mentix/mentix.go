@@ -104,6 +104,7 @@ func applyInternalConfig(m map[string]interface{}, conf *config.Configuration) {
 	}
 
 	conf.EnabledConnectors = getSubsections("connectors")
+	conf.EnabledImporters = getSubsections("importers")
 	conf.EnabledExporters = getSubsections("exporters")
 }
 
