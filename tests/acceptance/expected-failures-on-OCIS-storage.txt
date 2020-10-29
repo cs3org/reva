@@ -514,7 +514,7 @@ apiSharePublicLink2/updatePublicLinkShare.feature:94
 apiSharePublicLink2/updatePublicLinkShare.feature:284
 apiSharePublicLink2/updatePublicLinkShare.feature:285
 #
-# Issues when creating a public link share from a received share
+# https://github.com/owncloud/ocis/issues/776 investigate ocis issues in apiSharePublicLink2/reShareAsPublicLinkToShares
 #
 apiSharePublicLink2/reShareAsPublicLinkToShares.feature:25
 apiSharePublicLink2/reShareAsPublicLinkToShares.feature:26
