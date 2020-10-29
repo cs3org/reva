@@ -33,6 +33,8 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/logger"
+	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/storage"
@@ -57,6 +59,7 @@ type config struct {
 	ExposeDataServer bool                              `mapstructure:"expose_data_server" docs:"false;Whether to expose data server."` // if true the client will be able to upload/download directly to it
 	DisableTus       bool                              `mapstructure:"disable_tus" docs:"false;Whether to disable TUS uploads."`
 	AvailableXS      map[string]uint32                 `mapstructure:"available_checksums" docs:"nil;List of available checksums."`
+	MimeTypes        map[string]string                 `mapstructure:"mimetypes" docs:"nil;List of supported mime types and corresponding file extensions."`
 }
 
 func (c *config) init() {
@@ -173,6 +176,8 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, fmt.Errorf("no available checksum, please set in config")
 	}
 
+	registerMimeTypes(c.MimeTypes)
+
 	service := &service{
 		conf:          c,
 		storage:       fs,
@@ -184,6 +189,15 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	}
 
 	return service, nil
+}
+
+func registerMimeTypes(mimes map[string]string) {
+	tlog := logger.New().With().Int("pid", os.Getpid()).Logger()
+
+	for k, v := range mimes {
+		tlog.Debug().Str("Registering mime type: ", "'"+fmt.Sprintf("%s -> %s", k, v)+"' ").Msg("")
+		mime.RegisterMime(k, v)
+	}
 }
 
 func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest) (*provider.SetArbitraryMetadataResponse, error) {
