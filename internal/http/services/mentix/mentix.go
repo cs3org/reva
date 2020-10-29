@@ -96,7 +96,7 @@ func applyInternalConfig(m map[string]interface{}, conf *config.Configuration) {
 	getSubsections := func(section string) []string {
 		subsections := make([]string, 0, 5)
 		if list, ok := m[section].(map[string]interface{}); ok {
-			for name, _ := range list {
+			for name := range list {
 				subsections = append(subsections, name)
 			}
 		}
@@ -112,16 +112,12 @@ func applyDefaultConfig(conf *config.Configuration) {
 		conf.Prefix = serviceName
 	}
 
-	if conf.Connector == "" {
-		conf.Connector = config.ConnectorIDGOCDB // Use GOCDB
-	}
-
 	if conf.UpdateInterval == "" {
 		conf.UpdateInterval = "1h" // Update once per hour
 	}
 
-	if conf.GOCDB.Scope == "" {
-		conf.GOCDB.Scope = "SM" // TODO(Daniel-WWU-IT): This might change in the future
+	if conf.Connectors.GOCDB.Scope == "" {
+		conf.Connectors.GOCDB.Scope = "SM" // TODO(Daniel-WWU-IT): This might change in the future
 	}
 
 	if conf.Exporters.WebAPI.Endpoint == "" {

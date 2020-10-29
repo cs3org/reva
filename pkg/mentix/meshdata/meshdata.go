@@ -35,6 +35,12 @@ func (meshData *MeshData) Clear() {
 	meshData.ServiceTypes = nil
 }
 
+// Merge merges data from another MeshData instance into this one (w/o checking for duplicates).
+func (meshData *MeshData) Merge(inData *MeshData) {
+	meshData.Sites = append(meshData.Sites, inData.Sites...)
+	meshData.ServiceTypes = append(meshData.ServiceTypes, inData.ServiceTypes...)
+}
+
 // ToJSON converts the data to JSON.
 func (meshData *MeshData) ToJSON() (string, error) {
 	data, err := json.MarshalIndent(meshData, "", "\t")

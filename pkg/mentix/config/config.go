@@ -22,17 +22,18 @@ package config
 type Configuration struct {
 	Prefix string `mapstructure:"prefix"`
 
-	Connector      string `mapstructure:"connector"`
+	Connectors struct {
+		GOCDB struct {
+			Address string `mapstructure:"address"`
+			Scope   string `mapstructure:"scope"`
+		} `mapstructure:"gocdb"`
+
+		LocalFile struct {
+			File string `mapstructure:"file"`
+		} `mapstructure:"localfile"`
+	} `mapstructure:"connectors"`
+
 	UpdateInterval string `mapstructure:"update_interval"`
-
-	GOCDB struct {
-		Address string `mapstructure:"address"`
-		Scope   string `mapstructure:"scope"`
-	} `mapstructure:"gocdb"`
-
-	LocalFile struct {
-		File string `mapstructure:"file"`
-	} `mapstructure:"localfile"`
 
 	Exporters struct {
 		WebAPI struct {

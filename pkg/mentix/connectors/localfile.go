@@ -44,7 +44,7 @@ func (connector *LocalFileConnector) Activate(conf *config.Configuration, log *z
 	}
 
 	// Check and store GOCDB specific settings
-	connector.filePath = conf.LocalFile.File
+	connector.filePath = conf.Connectors.LocalFile.File
 	if len(connector.filePath) == 0 {
 		return fmt.Errorf("no file configured")
 	}

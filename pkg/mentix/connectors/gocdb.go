@@ -47,7 +47,7 @@ func (connector *GOCDBConnector) Activate(conf *config.Configuration, log *zerol
 	}
 
 	// Check and store GOCDB specific settings
-	connector.gocdbAddress = conf.GOCDB.Address
+	connector.gocdbAddress = conf.Connectors.GOCDB.Address
 	if len(connector.gocdbAddress) == 0 {
 		return fmt.Errorf("no GOCDB address configured")
 	}
@@ -81,7 +81,7 @@ func (connector *GOCDBConnector) RetrieveMeshData() (*meshdata.MeshData, error) 
 func (connector *GOCDBConnector) query(v interface{}, method string, isPrivate bool, hasScope bool, params network.URLParams) error {
 	var scope string
 	if hasScope {
-		scope = connector.conf.GOCDB.Scope
+		scope = connector.conf.Connectors.GOCDB.Scope
 	}
 
 	// Get the data from GOCDB

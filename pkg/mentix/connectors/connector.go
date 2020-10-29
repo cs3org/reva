@@ -20,7 +20,6 @@ package connectors
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/rs/zerolog"
 
@@ -64,15 +63,24 @@ func (connector *BaseConnector) Activate(conf *config.Configuration, log *zerolo
 	return nil
 }
 
-// FindConnector searches for the given connector ID in all globally registered connectors.
-func FindConnector(connectorID string) (Connector, error) {
-	for id, connector := range registeredConnectors {
-		if strings.EqualFold(id, connectorID) {
-			return connector, nil
+// AvailableConnectors returns a list of all connectors that are enabled in the configuration.
+func AvailableConnectors(conf *config.Configuration) ([]Connector, error) {
+	// Try to add all connectors configured in the environment
+	var connectors []Connector
+	for _, connectorID := range conf.EnabledConnectors {
+		if connector, ok := registeredConnectors[connectorID]; ok {
+			connectors = append(connectors, connector)
+		} else {
+			return nil, fmt.Errorf("no connector with ID '%v' registered", connectorID)
 		}
 	}
 
-	return nil, fmt.Errorf("no connector with ID '%v' registered", connectorID)
+	// At least one connector must be configured
+	if len(connectors) == 0 {
+		return nil, fmt.Errorf("no connectors available")
+	}
+
+	return connectors, nil
 }
 
 func registerConnector(id string, connector Connector) {

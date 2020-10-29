@@ -38,9 +38,9 @@ type Mentix struct {
 	conf *config.Configuration
 	log  *zerolog.Logger
 
-	meshData  *meshdata.MeshData
-	connector connectors.Connector
-	exporters []exporters.Exporter
+	meshData   *meshdata.MeshData
+	connectors []connectors.Connector
+	exporters  []exporters.Exporter
 
 	updateInterval time.Duration
 }
@@ -60,8 +60,8 @@ func (mntx *Mentix) initialize(conf *config.Configuration, log *zerolog.Logger) 
 	}
 	mntx.log = log
 
-	// Initialize the connector that will be used to gather the mesh data
-	if err := mntx.initConnector(); err != nil {
+	// Initialize the connectors that will be used to gather the mesh data
+	if err := mntx.initConnectors(); err != nil {
 		return fmt.Errorf("unable to initialize connector: %v", err)
 	}
 
@@ -82,40 +82,46 @@ func (mntx *Mentix) initialize(conf *config.Configuration, log *zerolog.Logger) 
 	mntx.meshData = meshdata.New()
 
 	// Log some infos
+	connectorNames := make([]string, len(mntx.connectors))
+	for idx, connector := range mntx.connectors {
+		connectorNames[idx] = connector.GetName()
+	}
 	exporterNames := make([]string, len(mntx.exporters))
 	for idx, exporter := range mntx.exporters {
 		exporterNames[idx] = exporter.GetName()
 	}
-	log.Info().Msgf("mentix started with connector: %v; exporters: %v; update interval: %v", mntx.connector.GetName(), strings.Join(exporterNames, ", "), duration)
+	log.Info().Msgf("mentix started with connectors: %v; exporters: %v; update interval: %v", strings.Join(connectorNames, ", "), strings.Join(exporterNames, ", "), duration)
 
 	return nil
 }
 
-func (mntx *Mentix) initConnector() error {
-	// Try to get a connector with the configured ID
-	connector, err := connectors.FindConnector(mntx.conf.Connector)
+func (mntx *Mentix) initConnectors() error {
+	// Use all conns exposed by the conns package
+	conns, err := connectors.AvailableConnectors(mntx.conf)
 	if err != nil {
-		return fmt.Errorf("the desired connector could be found: %v", err)
+		return fmt.Errorf("unable to get registered conns: %v", err)
 	}
-	mntx.connector = connector
+	mntx.connectors = conns
 
-	// Activate the selected connector
-	if err := mntx.connector.Activate(mntx.conf, mntx.log); err != nil {
-		return fmt.Errorf("unable to activate connector: %v", err)
+	// Activate all conns
+	for _, connector := range mntx.connectors {
+		if err := connector.Activate(mntx.conf, mntx.log); err != nil {
+			return fmt.Errorf("unable to activate connector '%v': %v", connector.GetName(), err)
+		}
 	}
 
 	return nil
 }
 
 func (mntx *Mentix) initExporters() error {
-	// Use all exporters exposed by the exporters package
-	exporters, err := exporters.AvailableExporters(mntx.conf)
+	// Use all exps exposed by the exps package
+	exps, err := exporters.AvailableExporters(mntx.conf)
 	if err != nil {
-		return fmt.Errorf("unable to get registered exporters: %v", err)
+		return fmt.Errorf("unable to get registered exps: %v", err)
 	}
-	mntx.exporters = exporters
+	mntx.exporters = exps
 
-	// Activate all exporters
+	// Activate all exps
 	for _, exporter := range mntx.exporters {
 		if err := exporter.Activate(mntx.conf, mntx.log); err != nil {
 			return fmt.Errorf("unable to activate exporter '%v': %v", exporter.GetName(), err)
@@ -192,11 +198,17 @@ loop:
 }
 
 func (mntx *Mentix) retrieveMeshData() (*meshdata.MeshData, error) {
-	meshData, err := mntx.connector.RetrieveMeshData()
-	if err != nil {
-		return nil, fmt.Errorf("retrieving mesh data failed: %v", err)
+	var mergedMeshData meshdata.MeshData
+
+	for _, connector := range mntx.connectors {
+		meshData, err := connector.RetrieveMeshData()
+		if err != nil {
+			return nil, fmt.Errorf("retrieving mesh data from connector '%v' failed: %v", connector.GetName(), err)
+		}
+		mergedMeshData.Merge(meshData)
 	}
-	return meshData, nil
+
+	return &mergedMeshData, nil
 }
 
 func (mntx *Mentix) applyMeshData(meshData *meshdata.MeshData) error {
