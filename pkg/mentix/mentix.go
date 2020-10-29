@@ -29,6 +29,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/connectors"
+	"github.com/cs3org/reva/pkg/mentix/exchange"
 	"github.com/cs3org/reva/pkg/mentix/exporters"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
@@ -96,7 +97,7 @@ func (mntx *Mentix) initialize(conf *config.Configuration, log *zerolog.Logger) 
 }
 
 func (mntx *Mentix) initConnectors() error {
-	// Use all conns exposed by the conns package
+	// Use all connectors exposed by the connectors package
 	conns, err := connectors.AvailableConnectors(mntx.conf)
 	if err != nil {
 		return fmt.Errorf("unable to get registered conns: %v", err)
@@ -114,7 +115,7 @@ func (mntx *Mentix) initConnectors() error {
 }
 
 func (mntx *Mentix) initExporters() error {
-	// Use all exps exposed by the exps package
+	// Use all exporters exposed by the exporters package
 	exps, err := exporters.AvailableExporters(mntx.conf)
 	if err != nil {
 		return fmt.Errorf("unable to get registered exps: %v", err)
@@ -228,11 +229,11 @@ func (mntx *Mentix) applyMeshData(meshData *meshdata.MeshData) error {
 }
 
 // GetRequestExporters returns all exporters that can handle HTTP requests.
-func (mntx *Mentix) GetRequestExporters() []exporters.RequestExporter {
+func (mntx *Mentix) GetRequestExporters() []exchange.RequestExchanger {
 	// Return all exporters that implement the RequestExporter interface
-	var reqExporters []exporters.RequestExporter
+	var reqExporters []exchange.RequestExchanger
 	for _, exporter := range mntx.exporters {
-		if reqExporter, ok := exporter.(exporters.RequestExporter); ok {
+		if reqExporter, ok := exporter.(exchange.RequestExchanger); ok {
 			reqExporters = append(reqExporters, reqExporter)
 		}
 	}
@@ -244,14 +245,31 @@ func (mntx *Mentix) GetRequestExporters() []exporters.RequestExporter {
 func (mntx *Mentix) RequestHandler(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context())
 
+	switch r.Method {
+	case http.MethodGet:
+		mntx.handleGetRequest(w, r, log)
+
+	case http.MethodPost:
+		mntx.handlePostRequest(w, r, log)
+
+	default:
+		log.Err(fmt.Errorf("unsupported method")).Msg("error handling incoming request")
+	}
+}
+
+func (mntx *Mentix) handleGetRequest(w http.ResponseWriter, r *http.Request, log *zerolog.Logger) {
 	// Ask each RequestExporter if it wants to handle the request
 	for _, exporter := range mntx.GetRequestExporters() {
 		if exporter.WantsRequest(r) {
 			if err := exporter.HandleRequest(w, r); err != nil {
-				log.Err(err).Msg("error handling request")
+				log.Err(err).Msg("error handling GET request")
 			}
 		}
 	}
+}
+
+func (mntx *Mentix) handlePostRequest(w http.ResponseWriter, r *http.Request, log *zerolog.Logger) {
+
 }
 
 // New creates a new Mentix service instance.

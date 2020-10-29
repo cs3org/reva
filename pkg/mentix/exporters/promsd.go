@@ -146,15 +146,15 @@ func (exporter *PrometheusSDExporter) UpdateMeshData(meshData *meshdata.MeshData
 
 func (exporter *PrometheusSDExporter) exportMeshData() {
 	// Data is read, so acquire a read lock
-	exporter.locker.RLock()
-	defer exporter.locker.RUnlock()
+	exporter.Locker().RLock()
+	defer exporter.Locker().RUnlock()
 
 	for name, creator := range exporter.scrapeCreators {
 		scrapes := exporter.createScrapeConfigs(creator.creatorCallback)
 		if err := exporter.exportScrapeConfig(creator.outputFilename, scrapes); err != nil {
-			exporter.log.Err(err).Str("kind", name).Str("file", creator.outputFilename).Msg("error exporting Prometheus SD scrape config")
+			exporter.Log().Err(err).Str("kind", name).Str("file", creator.outputFilename).Msg("error exporting Prometheus SD scrape config")
 		} else {
-			exporter.log.Debug().Str("kind", name).Str("file", creator.outputFilename).Msg("exported Prometheus SD scrape config")
+			exporter.Log().Debug().Str("kind", name).Str("file", creator.outputFilename).Msg("exported Prometheus SD scrape config")
 		}
 	}
 }
@@ -168,7 +168,7 @@ func (exporter *PrometheusSDExporter) createScrapeConfigs(creatorCallback promet
 	}
 
 	// Create a scrape config for each service alongside any additional endpoints
-	for _, site := range exporter.meshData.Sites {
+	for _, site := range exporter.MeshData().Sites {
 		for _, service := range site.Services {
 			if !service.IsMonitored {
 				continue
@@ -206,7 +206,7 @@ func (exporter *PrometheusSDExporter) exportScrapeConfig(outputFilename string, 
 
 // GetName returns the display name of the exporter.
 func (exporter *PrometheusSDExporter) GetName() string {
-	return "PrometheusSD SD"
+	return "Prometheus SD"
 }
 
 func init() {

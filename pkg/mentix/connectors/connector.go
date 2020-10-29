@@ -24,11 +24,12 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
+	"github.com/cs3org/reva/pkg/mentix/exchange"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 
 var (
-	registeredConnectors = map[string]Connector{}
+	registeredConnectors = exchange.NewRegistry()
 )
 
 // Connector is the interface that all connectors must implement.
@@ -65,14 +66,14 @@ func (connector *BaseConnector) Activate(conf *config.Configuration, log *zerolo
 
 // AvailableConnectors returns a list of all connectors that are enabled in the configuration.
 func AvailableConnectors(conf *config.Configuration) ([]Connector, error) {
-	// Try to add all connectors configured in the environment
+	entries, err := registeredConnectors.EntriesByID(conf.EnabledConnectors)
+	if err != nil {
+		return nil, err
+	}
+
 	var connectors []Connector
-	for _, connectorID := range conf.EnabledConnectors {
-		if connector, ok := registeredConnectors[connectorID]; ok {
-			connectors = append(connectors, connector)
-		} else {
-			return nil, fmt.Errorf("no connector with ID '%v' registered", connectorID)
-		}
+	for _, entry := range entries {
+		connectors = append(connectors, entry.(Connector))
 	}
 
 	// At least one connector must be configured
@@ -84,5 +85,5 @@ func AvailableConnectors(conf *config.Configuration) ([]Connector, error) {
 }
 
 func registerConnector(id string, connector Connector) {
-	registeredConnectors[id] = connector
+	registeredConnectors.Register(id, connector)
 }

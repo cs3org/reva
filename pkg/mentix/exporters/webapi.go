@@ -32,12 +32,12 @@ type WebAPIExporter struct {
 
 // Activate activates the exporter.
 func (exporter *WebAPIExporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
-	if err := exporter.BaseExporter.Activate(conf, log); err != nil {
+	if err := exporter.BaseRequestExporter.Activate(conf, log); err != nil {
 		return err
 	}
 
 	// Store WebAPI specifics
-	exporter.endpoint = conf.Exporters.WebAPI.Endpoint
+	exporter.SetEndpoint(conf.Exporters.WebAPI.Endpoint)
 	exporter.defaultMethodHandler = webapi.HandleDefaultQuery
 
 	return nil

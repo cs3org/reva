@@ -32,12 +32,12 @@ type SiteLocationsExporter struct {
 
 // Activate activates the exporter.
 func (exporter *SiteLocationsExporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
-	if err := exporter.BaseExporter.Activate(conf, log); err != nil {
+	if err := exporter.BaseRequestExporter.Activate(conf, log); err != nil {
 		return err
 	}
 
 	// Store SiteLocations specifics
-	exporter.endpoint = conf.Exporters.SiteLocations.Endpoint
+	exporter.SetEndpoint(conf.Exporters.SiteLocations.Endpoint)
 	exporter.defaultMethodHandler = siteloc.HandleDefaultQuery
 
 	return nil

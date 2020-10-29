@@ -24,6 +24,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/cs3org/reva/pkg/mentix/exchange"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 
@@ -33,49 +34,17 @@ const (
 
 type queryCallback func(*meshdata.MeshData, url.Values) ([]byte, error)
 
-// RequestExporter is the interface implemented by exporters that offer an HTTP endpoint.
-type RequestExporter interface {
-	Exporter
-
-	// Endpoint returns the (relative) endpoint of the exporter.
-	Endpoint() string
-	// WantsRequest returns whether the exporter wants to handle the incoming request.
-	WantsRequest(r *http.Request) bool
-	// HandleRequest handles the actual HTTP request.
-	HandleRequest(resp http.ResponseWriter, req *http.Request) error
-}
-
 // BaseRequestExporter implements basic exporter functionality common to all request exporters.
 type BaseRequestExporter struct {
 	BaseExporter
-
-	endpoint string
+	exchange.BaseRequestExchanger
 
 	defaultMethodHandler queryCallback
 }
 
-// Endpoint returns the (relative) endpoint of the exporter.
-func (exporter *BaseRequestExporter) Endpoint() string {
-	// Ensure that the endpoint starts with a /
-	endpoint := exporter.endpoint
-	if !strings.HasPrefix(endpoint, "/") {
-		endpoint = "/" + endpoint
-	}
-	return strings.TrimSpace(endpoint)
-}
-
-// WantsRequest returns whether the exporter wants to handle the incoming request.
-func (exporter *BaseRequestExporter) WantsRequest(r *http.Request) bool {
-	return r.URL.Path == exporter.Endpoint()
-}
-
 // HandleRequest handles the actual HTTP request.
 func (exporter *BaseRequestExporter) HandleRequest(resp http.ResponseWriter, req *http.Request) error {
-	// Data is read, so acquire a read lock
-	exporter.locker.RLock()
-	defer exporter.locker.RUnlock()
-
-	data, err := exporter.handleQuery(exporter.meshData, req.URL.Query())
+	data, err := exporter.handleQuery(req.URL.Query())
 	if err == nil {
 		if _, err := resp.Write(data); err != nil {
 			return fmt.Errorf("error writing the API request response: %v", err)
@@ -87,12 +56,16 @@ func (exporter *BaseRequestExporter) HandleRequest(resp http.ResponseWriter, req
 	return nil
 }
 
-func (exporter *BaseRequestExporter) handleQuery(meshData *meshdata.MeshData, params url.Values) ([]byte, error) {
+func (exporter *BaseRequestExporter) handleQuery(params url.Values) ([]byte, error) {
+	// Data is read, so lock it for writing
+	exporter.Locker().RLock()
+	defer exporter.Locker().RUnlock()
+
 	method := params.Get("method")
 	switch strings.ToLower(method) {
 	case queryMethodDefault:
 		if exporter.defaultMethodHandler != nil {
-			return exporter.defaultMethodHandler(meshData, params)
+			return exporter.defaultMethodHandler(exporter.MeshData(), params)
 		}
 
 	default:

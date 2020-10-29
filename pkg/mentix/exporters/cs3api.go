@@ -32,12 +32,12 @@ type CS3APIExporter struct {
 
 // Activate activates the exporter.
 func (exporter *CS3APIExporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
-	if err := exporter.BaseExporter.Activate(conf, log); err != nil {
+	if err := exporter.BaseRequestExporter.Activate(conf, log); err != nil {
 		return err
 	}
 
 	// Store CS3API specifics
-	exporter.endpoint = conf.Exporters.CS3API.Endpoint
+	exporter.SetEndpoint(conf.Exporters.CS3API.Endpoint)
 	exporter.defaultMethodHandler = cs3api.HandleDefaultQuery
 
 	return nil

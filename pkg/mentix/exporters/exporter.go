@@ -20,66 +20,27 @@ package exporters
 
 import (
 	"fmt"
-	"sync"
-
-	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
+	"github.com/cs3org/reva/pkg/mentix/exchange"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 
 var (
-	registeredExporters = map[string]Exporter{}
+	registeredExporters = exchange.NewRegistry()
 )
 
 // Exporter is the interface that all exporters must implement.
 type Exporter interface {
-	// Activate activates the exporter.
-	Activate(conf *config.Configuration, log *zerolog.Logger) error
-	// Start starts the exporter; only exporters which perform periodical background tasks should do something here.
-	Start() error
-	// Stop stops any running background activities of the exporter.
-	Stop()
+	exchange.Exchanger
 
 	// UpdateMeshData is called whenever the mesh data has changed to reflect these changes.
 	UpdateMeshData(*meshdata.MeshData) error
-
-	// GetName returns the display name of the exporter.
-	GetName() string
 }
 
 // BaseExporter implements basic exporter functionality common to all exporters.
 type BaseExporter struct {
-	conf *config.Configuration
-	log  *zerolog.Logger
-
-	meshData *meshdata.MeshData
-	locker   sync.RWMutex
-}
-
-// Activate activates the exporter.
-func (exporter *BaseExporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
-	if conf == nil {
-		return fmt.Errorf("no configuration provided")
-	}
-	exporter.conf = conf
-
-	if log == nil {
-		return fmt.Errorf("no logger provided")
-	}
-	exporter.log = log
-
-	return nil
-}
-
-// Start starts the exporter; only exporters which perform periodical background tasks should do something here.
-func (exporter *BaseExporter) Start() error {
-	return nil
-}
-
-// Stop stops any running background activities of the exporter.
-func (exporter *BaseExporter) Stop() {
-
+	exchange.BaseExchanger
 }
 
 // UpdateMeshData is called whenever the mesh data has changed to reflect these changes.
@@ -93,32 +54,27 @@ func (exporter *BaseExporter) UpdateMeshData(meshData *meshdata.MeshData) error 
 }
 
 func (exporter *BaseExporter) storeMeshData(meshData *meshdata.MeshData) error {
-	exporter.locker.Lock()
-	defer exporter.locker.Unlock()
-
 	// Store the new mesh data by cloning it
-	exporter.meshData = meshData.Clone()
-	if exporter.meshData == nil {
+	meshDataCloned := meshData.Clone()
+	if meshDataCloned == nil {
 		return fmt.Errorf("unable to clone the mesh data")
 	}
+	exporter.SetMeshData(meshDataCloned)
 
 	return nil
-}
-
-func registerExporter(id string, exporter Exporter) {
-	registeredExporters[id] = exporter
 }
 
 // AvailableExporters returns a list of all exporters that are enabled in the configuration.
 func AvailableExporters(conf *config.Configuration) ([]Exporter, error) {
 	// Try to add all exporters configured in the environment
+	entries, err := registeredExporters.EntriesByID(conf.EnabledExporters)
+	if err != nil {
+		return nil, err
+	}
+
 	var exporters []Exporter
-	for _, exporterID := range conf.EnabledExporters {
-		if exporter, ok := registeredExporters[exporterID]; ok {
-			exporters = append(exporters, exporter)
-		} else {
-			return nil, fmt.Errorf("no exporter with ID '%v' registered", exporterID)
-		}
+	for _, entry := range entries {
+		exporters = append(exporters, entry.(Exporter))
 	}
 
 	// At least one exporter must be configured
@@ -129,11 +85,6 @@ func AvailableExporters(conf *config.Configuration) ([]Exporter, error) {
 	return exporters, nil
 }
 
-// RegisteredExporterIDs returns a list of all registered exporter IDs.
-func RegisteredExporterIDs() []string {
-	keys := make([]string, 0, len(registeredExporters))
-	for k := range registeredExporters {
-		keys = append(keys, k)
-	}
-	return keys
+func registerExporter(id string, exporter Exporter) {
+	registeredExporters.Register(id, exporter)
 }
