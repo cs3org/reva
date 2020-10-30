@@ -21,14 +21,8 @@ package exporters
 import (
 	"fmt"
 
-	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/exchange"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
-	"github.com/cs3org/reva/pkg/mentix/util/registry"
-)
-
-var (
-	registeredExporters = registry.NewRegistry()
 )
 
 // Exporter is the interface that all exporters must implement.
@@ -63,29 +57,4 @@ func (exporter *BaseExporter) storeMeshData(meshData *meshdata.MeshData) error {
 	exporter.SetMeshData(meshDataCloned)
 
 	return nil
-}
-
-// AvailableExporters returns a list of all exporters that are enabled in the configuration.
-func AvailableExporters(conf *config.Configuration) ([]Exporter, error) {
-	// Try to add all exporters configured in the environment
-	entries, err := registeredExporters.EntriesByID(conf.EnabledExporters)
-	if err != nil {
-		return nil, err
-	}
-
-	exporters := make([]Exporter, 0, len(entries))
-	for _, entry := range entries {
-		exporters = append(exporters, entry.(Exporter))
-	}
-
-	// At least one exporter must be configured
-	if len(exporters) == 0 {
-		return nil, fmt.Errorf("no exporters available")
-	}
-
-	return exporters, nil
-}
-
-func registerExporter(id string, exporter Exporter) {
-	registeredExporters.Register(id, exporter)
 }

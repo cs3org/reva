@@ -19,13 +19,7 @@
 package importers
 
 import (
-	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/exchange"
-	"github.com/cs3org/reva/pkg/mentix/util/registry"
-)
-
-var (
-	registeredImporters = registry.NewRegistry()
 )
 
 // Importer is the interface that all importers must implement.
@@ -36,24 +30,4 @@ type Importer interface {
 // BaseImporter implements basic importer functionality common to all importers.
 type BaseImporter struct {
 	exchange.BaseExchanger
-}
-
-// AvailableImporters returns a list of all importers that are enabled in the configuration.
-func AvailableImporters(conf *config.Configuration) ([]Importer, error) {
-	// Try to add all importers configured in the environment
-	entries, err := registeredImporters.EntriesByID(conf.EnabledImporters)
-	if err != nil {
-		return nil, err
-	}
-
-	importers := make([]Importer, 0, len(entries))
-	for _, entry := range entries {
-		importers = append(importers, entry.(Importer))
-	}
-
-	return importers, nil
-}
-
-func registerImporter(id string, exporter Importer) {
-	registeredImporters.Register(id, exporter)
 }

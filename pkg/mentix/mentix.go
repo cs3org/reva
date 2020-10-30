@@ -68,14 +68,9 @@ func (mntx *Mentix) initialize(conf *config.Configuration, log *zerolog.Logger) 
 		return fmt.Errorf("unable to initialize connector: %v", err)
 	}
 
-	// Initialize the importers
-	if err := mntx.initImporters(); err != nil {
-		return fmt.Errorf("unable to initialize importers: %v", err)
-	}
-
-	// Initialize the exporters
-	if err := mntx.initExporters(); err != nil {
-		return fmt.Errorf("unable to initialize exporters: %v", err)
+	// Initialize the exchangers
+	if err := mntx.initExchangers(); err != nil {
+		return fmt.Errorf("unable to initialize exchangers: %v", err)
 	}
 
 	// Get the update interval
@@ -125,47 +120,54 @@ func (mntx *Mentix) initConnectors() error {
 	return nil
 }
 
-// TODO: init,start,stop -> selbe Fnk. für Importers
-func (mntx *Mentix) initExporters() error {
+func (mntx *Mentix) initExchangers() error {
+	// Use all importers exposed by the importers package
+	imps, err := importers.AvailableImporters(mntx.conf)
+	if err != nil {
+		return fmt.Errorf("unable to get registered importers: %v", err)
+	}
+	mntx.importers = imps
+
+	if err := importers.ActivateImporters(mntx.importers, mntx.conf, mntx.log); err != nil {
+		return fmt.Errorf("unable to activate importers: %v", err)
+	}
+
 	// Use all exporters exposed by the exporters package
 	exps, err := exporters.AvailableExporters(mntx.conf)
 	if err != nil {
-		return fmt.Errorf("unable to get registered exps: %v", err)
+		return fmt.Errorf("unable to get registered exporters: %v", err)
 	}
 	mntx.exporters = exps
 
-	// Activate all exps
-	for _, exporter := range mntx.exporters {
-		if err := exporter.Activate(mntx.conf, mntx.log); err != nil {
-			return fmt.Errorf("unable to activate exporter '%v': %v", exporter.GetName(), err)
-		}
+	if err := exporters.ActivateExporters(mntx.exporters, mntx.conf, mntx.log); err != nil {
+		return fmt.Errorf("unable to activate exporters: %v", err)
 	}
 
 	return nil
 }
 
-func (mntx *Mentix) startExporters() error {
+func (mntx *Mentix) startExchangers() error {
+	// Start all importers
+	if err := importers.StartImporters(mntx.importers); err != nil {
+		return fmt.Errorf("unable to start importers: %v", err)
+	}
+
 	// Start all exporters
-	for _, exporter := range mntx.exporters {
-		if err := exporter.Start(); err != nil {
-			return fmt.Errorf("unable to start exporter '%v': %v", exporter.GetName(), err)
-		}
+	if err := exporters.StartExporters(mntx.exporters); err != nil {
+		return fmt.Errorf("unable to start exporters: %v", err)
 	}
 
 	return nil
 }
 
-func (mntx *Mentix) stopExporters() {
-	// Stop all exporters
-	for _, exporter := range mntx.exporters {
-		exporter.Stop()
-	}
+func (mntx *Mentix) stopExchangers() {
+	exporters.StopExporters(mntx.exporters)
+	importers.StopImporters(mntx.importers)
 }
 
 func (mntx *Mentix) destroy() {
 	// Stop all im- & exporters
-	mntx.stopImporters()
-	mntx.stopExporters()
+	mntx.stopExchangers()
 }
 
 // Run starts the Mentix service that will periodically pull the configured data source and publish this data
@@ -174,11 +176,8 @@ func (mntx *Mentix) Run(stopSignal <-chan struct{}) error {
 	defer mntx.destroy()
 
 	// Start all im- & exporters; they will be stopped in mntx.destroy
-	if err := mntx.startImporters(); err != nil {
-		return fmt.Errorf("unable to start importers: %v", err)
-	}
-	if err := mntx.startExporters(); err != nil {
-		return fmt.Errorf("unable to start exporters: %v", err)
+	if err := mntx.startExchangers(); err != nil {
+		return fmt.Errorf("unable to start exchangers: %v", err)
 	}
 
 	updateTimestamp := time.Time{}
@@ -244,54 +243,39 @@ func (mntx *Mentix) applyMeshData(meshData *meshdata.MeshData) error {
 	return nil
 }
 
-// TODO: selbe Fnk. für Importers
-// GetRequestExporters returns all exporters that can handle HTTP requests.
-func (mntx *Mentix) GetRequestExporters() []exchange.RequestExchanger {
-	// Return all exporters that implement the RequestExporter interface
-	var reqExporters []exchange.RequestExchanger
-	for _, exporter := range mntx.exporters {
-		if reqExporter, ok := exporter.(exchange.RequestExchanger); ok {
-			reqExporters = append(reqExporters, reqExporter)
-		}
-	}
-	return reqExporters
+// GetRequestImporters returns all exporters that can handle HTTP requests.
+func (mntx *Mentix) GetRequestImporters() []exchange.RequestExchanger {
+	return importers.GetRequestImporters(mntx.importers)
 }
 
-// RequestHandler handles any incoming HTTP requests by asking each RequestExporter whether it wants to
+// GetRequestExporters returns all exporters that can handle HTTP requests.
+func (mntx *Mentix) GetRequestExporters() []exchange.RequestExchanger {
+	return exporters.GetRequestExporters(mntx.exporters)
+}
+
+// RequestHandler handles any incoming HTTP requests by asking each RequestExchanger whether it wants to
 // handle the request (usually based on the relative URL path).
 func (mntx *Mentix) RequestHandler(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context())
 
 	switch r.Method {
 	case http.MethodGet:
-		mntx.handleGetRequest(w, r, log)
+		mntx.handleRequest(mntx.GetRequestExporters(), w, r, log)
 
 	case http.MethodPost:
-		mntx.handlePostRequest(w, r, log)
+		mntx.handleRequest(mntx.GetRequestImporters(), w, r, log)
 
 	default:
 		log.Err(fmt.Errorf("unsupported method")).Msg("error handling incoming request")
 	}
 }
 
-// TODO: handle*request -> selbe Fnk. für Importers
-func (mntx *Mentix) handleGetRequest(w http.ResponseWriter, r *http.Request, log *zerolog.Logger) {
-	// Ask each RequestExporter if it wants to handle the request
-	for _, exporter := range mntx.GetRequestExporters() {
+func (mntx *Mentix) handleRequest(exchangers []exchange.RequestExchanger, w http.ResponseWriter, r *http.Request, log *zerolog.Logger) {
+	// Ask each RequestExchanger if it wants to handle the request
+	for _, exporter := range exchangers {
 		if exporter.WantsRequest(r) {
 			if err := exporter.HandleRequest(w, r); err != nil {
-				log.Err(err).Msg("error handling GET request")
-			}
-		}
-	}
-}
-
-func (mntx *Mentix) handlePostRequest(w http.ResponseWriter, r *http.Request, log *zerolog.Logger) {
-	// Ask each RequestImporter if it wants to handle the request
-	for _, importer := range mntx.GetRequestImporters() {
-		if importer.WantsRequest(r) {
-			if err := importer.HandleRequest(w, r); err != nil {
-				log.Err(err).Msg("error handling POST request")
+				log.Err(err).Msg("error handling request")
 			}
 		}
 	}

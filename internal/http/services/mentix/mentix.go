@@ -59,9 +59,14 @@ func (s *svc) Prefix() string {
 }
 
 func (s *svc) Unprotected() []string {
-	// Get all endpoints exposed by the RequestExporters
+	// Get all endpoints exposed by the RequestExchangers
+	importers := s.mntx.GetRequestImporters()
 	exporters := s.mntx.GetRequestExporters()
-	endpoints := make([]string, len(exporters))
+
+	endpoints := make([]string, len(importers)+len(exporters))
+	for idx, importer := range importers {
+		endpoints[idx] = importer.Endpoint()
+	}
 	for idx, exporter := range exporters {
 		endpoints[idx] = exporter.Endpoint()
 	}
