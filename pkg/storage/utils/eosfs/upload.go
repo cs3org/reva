@@ -46,8 +46,21 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 		return errtypes.PermissionDenied("eos: cannot upload under the virtual share folder")
 	}
 
-	fn := fs.wrap(ctx, p)
+	ok, err := fs.chunkHandler.IsChunked(p)
+	if err != nil {
+		return errors.Wrap(err, "eos: error resolving reference")
+	}
+	if ok {
+		p, r, err = fs.chunkHandler.WriteChunk(p, r)
+		if err != nil {
+			return err
+		}
+		if p == "" {
+			return errtypes.PartialContent(ref.String())
+		}
+	}
 
+	fn := fs.wrap(ctx, p)
 	return fs.c.Write(ctx, uid, gid, fn, r)
 }
 

@@ -22,7 +22,6 @@ import (
 	"io"
 	"net/http"
 	"path"
-	"regexp"
 	"strconv"
 	"time"
 
@@ -34,11 +33,6 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/utils"
 )
-
-func isChunked(fn string) (bool, error) {
-	// FIXME: also need to check whether the OC-Chunked header is set
-	return regexp.MatchString(`-chunking-\w+-[0-9]+-[0-9]+$`, fn)
-}
 
 func sufferMacOSFinder(r *http.Request) bool {
 	return r.Header.Get("X-Expected-Entity-Length") != ""
@@ -115,27 +109,6 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 	if r.Body == nil {
 		log.Warn().Msg("body is nil")
 		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	ok, err := isChunked(fn)
-	if err != nil {
-		log.Error().Err(err).Msg("error checking if request is chunked or not")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if ok {
-		// TODO: disable if chunking capability is turned off in config
-		/**
-		if s.c.Capabilities.Dav.Chunking == "1.0" {
-			s.handlePutChunked(w, r)
-		} else {
-			log.Error().Err(err).Msg("chunking 1.0 is not enabled")
-			w.WriteHeader(http.StatusBadRequest)
-		}
-		*/
-		s.handlePutChunked(w, r, ns)
 		return
 	}
 
@@ -279,6 +252,10 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 		}
 		defer httpRes.Body.Close()
 		if httpRes.StatusCode != http.StatusOK {
+			if httpRes.StatusCode == http.StatusPartialContent {
+				w.WriteHeader(http.StatusPartialContent)
+				return
+			}
 			log.Err(err).Msg("PUT request to data server failed")
 			w.WriteHeader(http.StatusInternalServerError)
 			return

@@ -24,23 +24,28 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 )
 
 func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 	fn := r.URL.Path
+	defer r.Body.Close()
 
 	fsfn := strings.TrimPrefix(fn, s.conf.Prefix)
 	ref := &provider.Reference{Spec: &provider.Reference_Path{Path: fsfn}}
 
 	err := s.storage.Upload(ctx, ref, r.Body)
 	if err != nil {
+		if _, ok := err.(errtypes.IsPartialContent); ok {
+			w.WriteHeader(http.StatusPartialContent)
+			return
+		}
 		log.Error().Err(err).Msg("error uploading file")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	r.Body.Close()
 	w.WriteHeader(http.StatusOK)
 }
