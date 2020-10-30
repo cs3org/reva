@@ -263,24 +263,26 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 		return
 	}
 
-	httpReq, err := rhttp.NewRequest(ctx, "PUT", uRes.UploadEndpoint, content)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	httpReq.Header.Set(datagateway.TokenTransportHeader, uRes.Token)
+	if length > 0 {
+		httpReq, err := rhttp.NewRequest(ctx, "PUT", uRes.UploadEndpoint, content)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		httpReq.Header.Set(datagateway.TokenTransportHeader, uRes.Token)
 
-	httpRes, err := s.client.Do(httpReq)
-	if err != nil {
-		log.Err(err).Msg("error doing PUT request to data service")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	defer httpRes.Body.Close()
-	if httpRes.StatusCode != http.StatusOK {
-		log.Err(err).Msg("PUT request to data server failed")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		httpRes, err := s.client.Do(httpReq)
+		if err != nil {
+			log.Err(err).Msg("error doing PUT request to data service")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		defer httpRes.Body.Close()
+		if httpRes.StatusCode != http.StatusOK {
+			log.Err(err).Msg("PUT request to data server failed")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 	}
 
 	// stat again to check the new file's metadata

@@ -287,19 +287,21 @@ func (s *svc) descend(ctx context.Context, client gateway.GatewayAPIClient, src 
 
 		// 4. do upload
 
-		httpUploadReq, err := rhttp.NewRequest(ctx, "PUT", uRes.UploadEndpoint, httpDownloadRes.Body)
-		if err != nil {
-			return err
-		}
-		httpUploadReq.Header.Set(datagateway.TokenTransportHeader, uRes.Token)
+		if src.GetSize() > 0 {
+			httpUploadReq, err := rhttp.NewRequest(ctx, "PUT", uRes.UploadEndpoint, httpDownloadRes.Body)
+			if err != nil {
+				return err
+			}
+			httpUploadReq.Header.Set(datagateway.TokenTransportHeader, uRes.Token)
 
-		httpUploadRes, err := s.client.Do(httpUploadReq)
-		if err != nil {
-			return err
-		}
-		defer httpUploadRes.Body.Close()
-		if httpUploadRes.StatusCode != http.StatusOK {
-			return err
+			httpUploadRes, err := s.client.Do(httpUploadReq)
+			if err != nil {
+				return err
+			}
+			defer httpUploadRes.Body.Close()
+			if httpUploadRes.StatusCode != http.StatusOK {
+				return err
+			}
 		}
 	}
 	return nil

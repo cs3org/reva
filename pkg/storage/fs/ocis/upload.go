@@ -44,118 +44,17 @@ var defaultFilePerm = os.FileMode(0664)
 // TODO deprecated ... use tus
 
 func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) (err error) {
-
 	upload, err := fs.GetUpload(ctx, ref.GetPath())
 	if err != nil {
 		return errors.Wrap(err, "ocisfs: error retrieving upload")
 	}
+
 	uploadInfo := upload.(*fileUpload)
-	if uploadInfo.info.MetaData == nil {
-		return errors.New("ocisfs: storage for the upload ID is nil")
-	}
-	p := filepath.Join(uploadInfo.info.MetaData["dir"], uploadInfo.info.MetaData["filename"])
-
-	var n *Node
-	if n, err = fs.lu.NodeFromResource(ctx, &provider.Reference{Spec: &provider.Reference_Path{Path: p}}); err != nil {
-		return err
+	if _, err := uploadInfo.WriteChunk(ctx, 0, r); err != nil {
+		return errors.Wrap(err, "ocisfs: error writing to binary file")
 	}
 
-	// check permissions
-	var ok bool
-	if n.Exists {
-		// check permissions of file to be overwritten
-		ok, err = fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
-			return rp.InitiateFileUpload
-		})
-	} else {
-		// check permissions of parent
-		p, perr := n.Parent()
-		if perr != nil {
-			return errors.Wrap(perr, "ocisfs: error getting parent "+n.ParentID)
-		}
-
-		ok, err = fs.p.HasPermission(ctx, p, func(rp *provider.ResourcePermissions) bool {
-			return rp.InitiateFileUpload
-		})
-	}
-	switch {
-	case err != nil:
-		return errtypes.InternalError(err.Error())
-	case !ok:
-		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
-	}
-
-	if n.ID == "" {
-		n.ID = uuid.New().String()
-	}
-
-	nodePath := fs.lu.toInternalPath(n.ID)
-
-	var tmp *os.File
-	tmp, err = ioutil.TempFile(filepath.Dir(nodePath), "._reva_atomic_upload")
-	if err != nil {
-		return errors.Wrap(err, "ocisfs: error creating tmp fn at "+nodePath)
-	}
-
-	_, err = io.Copy(tmp, r)
-	r.Close()
-	tmp.Close()
-	if err != nil {
-		return errors.Wrap(err, "ocisfs: error writing to tmp file "+tmp.Name())
-	}
-
-	// TODO move old content to version
-	//_ = os.RemoveAll(path.Join(nodePath, "content"))
-	appctx.GetLogger(ctx).Warn().Msg("TODO move old content to version")
-
-	appctx.GetLogger(ctx).Debug().Str("tmp", tmp.Name()).Str("ipath", nodePath).Msg("moving tmp to content")
-	if err = os.Rename(tmp.Name(), nodePath); err != nil {
-		return
-	}
-
-	// who will become the owner?
-	u, ok := user.ContextGetUser(ctx)
-	switch {
-	case ok:
-		err = n.writeMetadata(u.Id)
-	case fs.o.EnableHome:
-		log := appctx.GetLogger(ctx)
-		log.Error().Msg("home support enabled but no user in context")
-		err = errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
-	case fs.o.Owner != "":
-		err = n.writeMetadata(&userpb.UserId{
-			OpaqueId: fs.o.Owner,
-		})
-	default:
-		// fallback to parent owner?
-		err = n.writeMetadata(nil)
-	}
-	if err != nil {
-		return
-	}
-
-	// link child name to parent if it is new
-	childNameLink := filepath.Join(fs.lu.toInternalPath(n.ParentID), n.Name)
-	var link string
-	link, err = os.Readlink(childNameLink)
-	if err == nil && link != "../"+n.ID {
-		log.Err(err).
-			Interface("node", n).
-			Str("childNameLink", childNameLink).
-			Str("link", link).
-			Msg("ocisfs: child name link has wrong target id, repairing")
-
-		if err = os.Remove(childNameLink); err != nil {
-			return errors.Wrap(err, "ocisfs: could not remove symlink child entry")
-		}
-	}
-	if os.IsNotExist(err) || link != "../"+n.ID {
-		if err = os.Symlink("../"+n.ID, childNameLink); err != nil {
-			return errors.Wrap(err, "ocisfs: could not symlink child entry")
-		}
-	}
-
-	return fs.tp.Propagate(ctx, n)
+	return uploadInfo.FinishUpload(ctx)
 }
 
 // InitiateUpload returns an upload id that can be used for uploads with tus

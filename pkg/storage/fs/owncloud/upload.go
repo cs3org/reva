@@ -46,71 +46,13 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error retrieving upload")
 	}
+
 	uploadInfo := upload.(*fileUpload)
-	if uploadInfo.info.Storage == nil {
-		return errors.New("ocfs: storage for the upload ID is nil")
-	}
-	ip := uploadInfo.info.Storage["InternalDestination"]
-
-	var perm *provider.ResourcePermissions
-	var perr error
-	// if destination exists
-	if _, err := os.Stat(ip); err == nil {
-		// check permissions of file to be overwritten
-		perm, perr = fs.readPermissions(ctx, ip)
-	} else {
-		// check permissions
-		perm, perr = fs.readPermissions(ctx, filepath.Dir(ip))
-	}
-	if perr == nil {
-		if !perm.InitiateFileUpload {
-			return errtypes.PermissionDenied("")
-		}
-	} else {
-		if isNotFound(perr) {
-			return errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
-		}
-		return errors.Wrap(perr, "ocfs: error reading permissions")
+	if _, err := uploadInfo.WriteChunk(ctx, 0, r); err != nil {
+		return errors.Wrap(err, "ocfs: error writing to binary file")
 	}
 
-	// we cannot rely on /tmp as it can live in another partition and we can
-	// hit invalid cross-device link errors, so we create the tmp file in the same directory
-	// the file is supposed to be written.
-	tmp, err := ioutil.TempFile(filepath.Dir(ip), "._reva_atomic_upload")
-	if err != nil {
-		return errors.Wrap(err, "ocfs: error creating tmp file at "+filepath.Dir(ip))
-	}
-
-	_, err = io.Copy(tmp, r)
-	if err != nil {
-		return errors.Wrap(err, "ocfs: error writing to tmp file "+tmp.Name())
-	}
-
-	// if destination exists
-	if _, err := os.Stat(ip); err == nil {
-		// copy attributes of existing file to tmp file
-		if err := fs.copyMD(ip, tmp.Name()); err != nil {
-			return errors.Wrap(err, "ocfs: error copying metadata from "+ip+" to "+tmp.Name())
-		}
-		// create revision
-		if err := fs.archiveRevision(ctx, fs.getVersionsPath(ctx, ip), ip); err != nil {
-			return err
-		}
-	}
-
-	// TODO(jfd): make sure rename is atomic, missing fsync ...
-	if err := os.Rename(tmp.Name(), ip); err != nil {
-		return errors.Wrap(err, "ocfs: error renaming from "+tmp.Name()+" to "+ip)
-	}
-
-	if uploadInfo.info.MetaData["mtime"] != "" {
-		err := uploadInfo.fs.setMtime(ctx, ip, uploadInfo.info.MetaData["mtime"])
-		if err != nil {
-			return errors.Wrap(err, "ocfs: could not set mtime metadata")
-		}
-	}
-
-	return nil
+	return uploadInfo.FinishUpload(ctx)
 }
 
 // InitiateUpload returns an upload id that can be used for uploads with tus
