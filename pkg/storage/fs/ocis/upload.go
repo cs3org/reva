@@ -41,8 +41,6 @@ import (
 
 var defaultFilePerm = os.FileMode(0664)
 
-// TODO deprecated ... use tus
-
 func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) (err error) {
 	upload, err := fs.GetUpload(ctx, ref.GetPath())
 	if err != nil {

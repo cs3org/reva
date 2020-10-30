@@ -37,52 +37,18 @@ import (
 
 var defaultFilePerm = os.FileMode(0664)
 
-// TODO deprecated ... use tus
 func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
-	fn, err := fs.resolveUploadIDToPath(ctx, ref)
-	if err != nil {
-		return errors.Wrap(err, "error resolving ref")
-	}
-
-	// we cannot rely on /tmp as it can live in another partition and we can
-	// hit invalid cross-device link errors, so we create the tmp file in the same directory
-	// the file is supposed to be written.
-	tmp, err := ioutil.TempFile(filepath.Dir(fn), "._reva_atomic_upload")
-	if err != nil {
-		return errors.Wrap(err, "localfs: error creating tmp fn at "+filepath.Dir(fn))
-	}
-
-	_, err = io.Copy(tmp, r)
-	if err != nil {
-		return errors.Wrap(err, "localfs: error writing to tmp file "+tmp.Name())
-	}
-
-	// if destination exists
-	if _, err := os.Stat(fn); err == nil {
-		// create revision
-		if err := fs.archiveRevision(ctx, fn); err != nil {
-			return err
-		}
-	}
-
-	// TODO(labkode): make sure rename is atomic, missing fsync ...
-	if err := os.Rename(tmp.Name(), fn); err != nil {
-		return errors.Wrap(err, "localfs: error renaming from "+tmp.Name()+" to "+fn)
-	}
-
-	return nil
-}
-
-func (fs *localfs) resolveUploadIDToPath(ctx context.Context, ref *provider.Reference) (string, error) {
 	upload, err := fs.GetUpload(ctx, ref.GetPath())
 	if err != nil {
-		return "", err
+		return errors.Wrap(err, "ocisfs: error retrieving upload")
 	}
+
 	uploadInfo := upload.(*fileUpload)
-	if uploadInfo.info.Storage == nil {
-		return "", errors.New("storage for the upload ID is nil")
+	if _, err := uploadInfo.WriteChunk(ctx, 0, r); err != nil {
+		return errors.Wrap(err, "ocisfs: error writing to binary file")
 	}
-	return uploadInfo.info.Storage["InternalDestination"], nil
+
+	return uploadInfo.FinishUpload(ctx)
 }
 
 // InitiateUpload returns an upload id that can be used for uploads with tus
