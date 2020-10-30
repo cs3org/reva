@@ -49,7 +49,7 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 
 	uploadInfo := upload.(*fileUpload)
 
-	p := uploadInfo.info.Storage["InternalDestination"]
+	p := uploadInfo.info.Storage["NodeName"]
 	ok, err := chunking.IsChunked(p)
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error checking path")
@@ -358,6 +358,7 @@ func (upload *fileUpload) writeInfo() error {
 
 // FinishUpload finishes an upload and moves the file to the internal destination
 func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
+	log := appctx.GetLogger(upload.ctx)
 
 	n := &Node{
 		lu:       upload.fs.lu,
@@ -370,8 +371,6 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		n.ID = uuid.New().String()
 	}
 	targetPath := upload.fs.lu.toInternalPath(n.ID)
-	log := appctx.GetLogger(upload.ctx)
-	log.Info().Msgf("targetPath: %+v, ID: %+v", targetPath, n.ID)
 
 	// if target exists create new version
 	var fi os.FileInfo
@@ -380,7 +379,6 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		versionsPath := upload.fs.lu.toInternalPath(n.ID + ".REV." + fi.ModTime().UTC().Format(time.RFC3339Nano))
 
 		if err = os.Rename(targetPath, versionsPath); err != nil {
-			log := appctx.GetLogger(upload.ctx)
 			log.Err(err).Interface("info", upload.info).
 				Str("binPath", upload.binPath).
 				Str("targetPath", targetPath).
