@@ -37,6 +37,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage"
+	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/grants"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/user"
@@ -84,8 +85,9 @@ func (c *Config) init() {
 }
 
 type localfs struct {
-	conf *Config
-	db   *sql.DB
+	conf         *Config
+	db           *sql.DB
+	chunkHandler *chunking.ChunkHandler
 }
 
 // NewLocalFS returns a storage.FS interface implementation that controls then
@@ -111,7 +113,11 @@ func NewLocalFS(c *Config) (storage.FS, error) {
 		return nil, errors.Wrap(err, "localfs: error initializing db")
 	}
 
-	return &localfs{conf: c, db: db}, nil
+	return &localfs{
+		conf:         c,
+		db:           db,
+		chunkHandler: chunking.NewChunkHandler(c.Uploads),
+	}, nil
 }
 
 func (fs *localfs) Shutdown(ctx context.Context) error {

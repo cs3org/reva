@@ -39,8 +39,8 @@ func IsChunked(fn string) (bool, error) {
 type ChunkBLOBInfo struct {
 	Path         string
 	TransferID   string
-	TotalChunks  int64
-	CurrentChunk int64
+	TotalChunks  int
+	CurrentChunk int
 }
 
 // Not using the resource path in the chunk folder name allows uploading to
@@ -54,12 +54,12 @@ func GetChunkBLOBInfo(path string) (*ChunkBLOBInfo, error) {
 	parts := strings.Split(path, "-chunking-")
 	tail := strings.Split(parts[1], "-")
 
-	totalChunks, err := strconv.ParseInt(tail[1], 10, 64)
+	totalChunks, err := strconv.Atoi(tail[1])
 	if err != nil {
 		return nil, err
 	}
 
-	currentChunk, err := strconv.ParseInt(tail[2], 10, 64)
+	currentChunk, err := strconv.Atoi(tail[2])
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +159,7 @@ func (c *ChunkHandler) saveChunk(path string, r io.ReadCloser) (bool, string, er
 	// not complete and requires more actions.
 	// This code is needed to notify the owncloud webservice that the upload has not yet been
 	// completed and needs to continue uploading chunks.
-	if len(chunks) < int(chunkInfo.TotalChunks) {
+	if len(chunks) < chunkInfo.TotalChunks {
 		return false, "", nil
 	}
 
@@ -198,7 +198,7 @@ func (c *ChunkHandler) saveChunk(path string, r io.ReadCloser) (bool, string, er
 	return true, assembledFileName, nil
 }
 
-// Write chunk saves an intermediate chunk temporarily and assembles all chunks
+// WriteChunk saves an intermediate chunk temporarily and assembles all chunks
 // once the final one is received.
 func (c *ChunkHandler) WriteChunk(fn string, r io.ReadCloser) (string, io.ReadCloser, error) {
 	finish, chunk, err := c.saveChunk(fn, r)

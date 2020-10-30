@@ -32,6 +32,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
+	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -48,6 +49,27 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 	}
 
 	uploadInfo := upload.(*fileUpload)
+
+	p := uploadInfo.info.Storage["InternalDestination"]
+	ok, err := chunking.IsChunked(p)
+	if err != nil {
+		return errors.Wrap(err, "ocfs: error checking path")
+	}
+	if ok {
+		p, r, err = fs.chunkHandler.WriteChunk(p, r)
+		if err != nil {
+			return err
+		}
+		if p == "" {
+			if err = uploadInfo.Terminate(ctx); err != nil {
+				return errors.Wrap(err, "ocfs: error removing auxiliary files")
+			}
+			return errtypes.PartialContent(ref.String())
+		}
+		uploadInfo.info.Storage["InternalDestination"] = p
+		defer r.Close()
+	}
+
 	if _, err := uploadInfo.WriteChunk(ctx, 0, r); err != nil {
 		return errors.Wrap(err, "ocisfs: error writing to binary file")
 	}

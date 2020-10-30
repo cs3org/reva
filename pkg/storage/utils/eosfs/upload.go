@@ -49,7 +49,7 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 
 	ok, err := chunking.IsChunked(p)
 	if err != nil {
-		return errors.Wrap(err, "eos: error resolving reference")
+		return errors.Wrap(err, "eos: error checking path")
 	}
 	if ok {
 		p, r, err = fs.chunkHandler.WriteChunk(p, r)

@@ -44,6 +44,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/ace"
+	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/gofrs/uuid"
@@ -198,12 +199,17 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		},
 	}
 
-	return &ocfs{c: c, pool: pool}, nil
+	return &ocfs{
+		c:            c,
+		pool:         pool,
+		chunkHandler: chunking.NewChunkHandler(c.UploadInfoDir),
+	}, nil
 }
 
 type ocfs struct {
-	c    *config
-	pool *redis.Pool
+	c            *config
+	pool         *redis.Pool
+	chunkHandler *chunking.ChunkHandler
 }
 
 func (fs *ocfs) Shutdown(ctx context.Context) error {
