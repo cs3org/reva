@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/utils"
 )
 
@@ -260,6 +261,24 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+	}
+
+	ok, err := chunking.IsChunked(fn)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if ok {
+		chunk, err := chunking.GetChunkBLOBInfo(fn)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		sReq = &provider.StatRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{
+					Path: chunk.Path},
+			}}
 	}
 
 	// stat again to check the new file's metadata

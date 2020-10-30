@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"path"
 	"strings"
 	"time"
@@ -67,7 +66,6 @@ type Config struct {
 	// and received path is /docs the internal path will be:
 	// /users/<first char of username>/<username>/docs
 	WebdavNamespace string `mapstructure:"webdav_namespace"`
-	ChunkFolder     string `mapstructure:"chunk_folder"`
 	GatewaySvc      string `mapstructure:"gatewaysvc"`
 	Timeout         int64  `mapstructure:"timeout"`
 	Insecure        bool   `mapstructure:"insecure"`
@@ -75,13 +73,7 @@ type Config struct {
 
 func (c *Config) init() {
 	// note: default c.Prefix is an empty string
-
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
-
-	if c.ChunkFolder == "" {
-		c.ChunkFolder = "/var/tmp/reva/tmp/davchunks"
-	}
-
 }
 
 type svc struct {
@@ -99,10 +91,6 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	}
 
 	conf.init()
-
-	if err := os.MkdirAll(conf.ChunkFolder, 0755); err != nil {
-		return nil, err
-	}
 
 	s := &svc{
 		c:             conf,
