@@ -55,7 +55,8 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 		return errors.Wrap(err, "ocfs: error checking path")
 	}
 	if ok {
-		p, r, err = fs.chunkHandler.WriteChunk(p, r)
+		var assembledFile string
+		p, assembledFile, err = fs.chunkHandler.WriteChunk(p, r)
 		if err != nil {
 			return err
 		}
@@ -66,7 +67,13 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 			return errtypes.PartialContent(ref.String())
 		}
 		uploadInfo.info.Storage["InternalDestination"] = p
-		defer r.Close()
+		fd, err := os.Open(assembledFile)
+		if err != nil {
+			return errors.Wrap(err, "eos: error opening assembled file")
+		}
+		defer fd.Close()
+		defer os.RemoveAll(assembledFile)
+		r = fd
 	}
 
 	if _, err := uploadInfo.WriteChunk(ctx, 0, r); err != nil {

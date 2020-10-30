@@ -200,29 +200,22 @@ func (c *ChunkHandler) saveChunk(path string, r io.ReadCloser) (bool, string, er
 
 // WriteChunk saves an intermediate chunk temporarily and assembles all chunks
 // once the final one is received.
-func (c *ChunkHandler) WriteChunk(fn string, r io.ReadCloser) (string, io.ReadCloser, error) {
+func (c *ChunkHandler) WriteChunk(fn string, r io.ReadCloser) (string, string, error) {
 	finish, chunk, err := c.saveChunk(fn, r)
 	if err != nil {
-		return "", nil, err
+		return "", "", err
 	}
 
 	if !finish {
-		return "", nil, nil
-	}
-
-	fd, err := os.Open(chunk)
-	if err != nil {
-		return "", nil, err
+		return "", "", nil
 	}
 
 	chunkInfo, err := GetChunkBLOBInfo(fn)
 	if err != nil {
-		return "", nil, err
+		return "", "", err
 	}
 
-	// Since we're returning a ReadCloser, it is the responsibility of the
-	// caller function to close it to prevent file descriptor leaks.
-	return chunkInfo.Path, fd, nil
+	return chunkInfo.Path, chunk, nil
 
 	// TODO(labkode): implement old chunking
 

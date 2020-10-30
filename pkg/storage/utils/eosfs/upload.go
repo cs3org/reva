@@ -21,6 +21,7 @@ package eosfs
 import (
 	"context"
 	"io"
+	"os"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -52,14 +53,21 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 		return errors.Wrap(err, "eos: error checking path")
 	}
 	if ok {
-		p, r, err = fs.chunkHandler.WriteChunk(p, r)
+		var assembledFile string
+		p, assembledFile, err = fs.chunkHandler.WriteChunk(p, r)
 		if err != nil {
 			return err
 		}
 		if p == "" {
 			return errtypes.PartialContent(ref.String())
 		}
-		defer r.Close()
+		fd, err := os.Open(assembledFile)
+		if err != nil {
+			return errors.Wrap(err, "eos: error opening assembled file")
+		}
+		defer fd.Close()
+		defer os.RemoveAll(assembledFile)
+		r = fd
 	}
 
 	fn := fs.wrap(ctx, p)

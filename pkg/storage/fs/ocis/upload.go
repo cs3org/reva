@@ -36,7 +36,6 @@ import (
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 	tusd "github.com/tus/tusd/pkg/handler"
 )
 
@@ -56,7 +55,8 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 		return errors.Wrap(err, "ocfs: error checking path")
 	}
 	if ok {
-		p, r, err = fs.chunkHandler.WriteChunk(p, r)
+		var assembledFile string
+		p, assembledFile, err = fs.chunkHandler.WriteChunk(p, r)
 		if err != nil {
 			return err
 		}
@@ -66,8 +66,14 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 			}
 			return errtypes.PartialContent(ref.String())
 		}
-		uploadInfo.info.Storage["InternalDestination"] = p
-		defer r.Close()
+		uploadInfo.info.Storage["NodeName"] = p
+		fd, err := os.Open(assembledFile)
+		if err != nil {
+			return errors.Wrap(err, "eos: error opening assembled file")
+		}
+		defer fd.Close()
+		defer os.RemoveAll(assembledFile)
+		r = fd
 	}
 
 	if _, err := uploadInfo.WriteChunk(ctx, 0, r); err != nil {
@@ -364,6 +370,8 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		n.ID = uuid.New().String()
 	}
 	targetPath := upload.fs.lu.toInternalPath(n.ID)
+	log := appctx.GetLogger(upload.ctx)
+	log.Info().Msgf("targetPath: %+v, ID: %+v", targetPath, n.ID)
 
 	// if target exists create new version
 	var fi os.FileInfo
