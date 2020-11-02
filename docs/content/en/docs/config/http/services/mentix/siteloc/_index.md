@@ -17,3 +17,11 @@ The endpoint where the locations data can be queried.
 endpoint = "/loc"
 {{< /highlight >}}
 {{% /dir %}}
+
+{{% dir name="enabled_connectors" type="[]string" default="*" %}}
+A list of all enabled connectors for the exporter.
+{{< highlight toml >}}
+[http.services.mentix.exporters.siteloc]
+enabled_connectors = ["gocdb"]
+{{< /highlight >}}
+{{% /dir %}}

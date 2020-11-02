@@ -25,3 +25,11 @@ The target filename of the generated Prometheus File SD scrape config for the bl
 blackbox_output_file = "/var/shared/prometheus/blackbox.json"
 {{< /highlight >}}
 {{% /dir %}}
+
+{{% dir name="enabled_connectors" type="[]string" default="*" %}}
+A list of all enabled connectors for the exporter.
+{{< highlight toml >}}
+[http.services.mentix.exporters.promsd]
+enabled_connectors = ["gocdb"]
+{{< /highlight >}}
+{{% /dir %}}

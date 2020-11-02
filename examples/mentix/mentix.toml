@@ -11,6 +11,10 @@ update_interval = "15m"
 [http.services.mentix.connectors.gocdb]
 address = "http://sciencemesh-test.uni-muenster.de"
 
+# Sites can also be stored in a local file
+[http.services.mentix.connectors.localfile]
+file = "/usr/share/revad/sites.json"
+
 # Enable the WebAPI exporter
 [http.services.mentix.exporters.webapi]
 endpoint = "/"
@@ -18,6 +22,8 @@ endpoint = "/"
 # Enable the CS3API and Site Locations exporters
 [http.services.mentix.exporters.cs3api]
 [http.services.mentix.exporters.siteloc]
+# If this setting is omitted, all connectors will be used as data sources
+enabled_connectors = ["gocdb"]
 
 # Configure the Prometheus Service Discovery:
 # [http.services.mentix.exporters.promsd]
