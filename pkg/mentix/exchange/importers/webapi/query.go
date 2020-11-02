@@ -16,25 +16,23 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package config
+package webapi
 
-const (
-	// ConnectorIDGOCDB is the connector identifier for GOCDB.
-	ConnectorIDGOCDB = "gocdb"
-	// ConnectorIDLocalFile is the connector identifier for local files.
-	ConnectorIDLocalFile = "localfile"
+import (
+	"net/http"
+	"net/url"
+
+	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 
-const (
-	// ImporterIDWebAPI is the identifier for the WebAPI importer.
-	ImporterIDWebAPI = "webapi"
+// HandleRegisterSiteQuery registers a site.
+func HandleRegisterSiteQuery(params url.Values) (*meshdata.MeshData, int, []byte, error) {
+	// TODO: Handlen + Response (ähnlich OCM)
+	return &meshdata.MeshData{}, http.StatusOK, []byte("registered"), nil
+}
 
-	// ExporterIDWebAPI is the identifier for the WebAPI exporter.
-	ExporterIDWebAPI = "webapi"
-	// ExporterIDCS3API is the identifier for the CS3API exporter.
-	ExporterIDCS3API = "cs3api"
-	// ExporterIDSiteLocations is the identifier for the Site Locations exporter.
-	ExporterIDSiteLocations = "siteloc"
-	// ExporterIDPrometheusSD is the identifier for the PrometheusSD SD exporter.
-	ExporterIDPrometheusSD = "promsd"
-)
+// HandleUnregisterSiteQuery unregisters a site.
+func HandleUnregisterSiteQuery(params url.Values) (*meshdata.MeshData, int, []byte, error) {
+	// TODO: Handlen + Response (ähnlich OCM)
+	return &meshdata.MeshData{}, http.StatusOK, []byte("unregistered"), nil
+}

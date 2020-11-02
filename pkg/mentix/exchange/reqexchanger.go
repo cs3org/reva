@@ -30,7 +30,7 @@ type RequestExchanger interface {
 	// WantsRequest returns whether the exchanger wants to handle the incoming request.
 	WantsRequest(r *http.Request) bool
 	// HandleRequest handles the actual HTTP request.
-	HandleRequest(resp http.ResponseWriter, req *http.Request) error
+	HandleRequest(resp http.ResponseWriter, req *http.Request)
 }
 
 // BaseRequestExchanger implements basic exporter functionality common to all request exporters.

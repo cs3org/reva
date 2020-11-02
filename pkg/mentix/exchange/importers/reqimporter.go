@@ -45,38 +45,33 @@ type BaseRequestImporter struct {
 }
 
 // HandleRequest handles the actual HTTP request.
-func (importer *BaseRequestImporter) HandleRequest(resp http.ResponseWriter, req *http.Request) error {
-	meshData, status, data, err := importer.handleQuery(req.URL.Query())
+func (importer *BaseRequestImporter) HandleRequest(resp http.ResponseWriter, req *http.Request) {
+	meshData, status, respData, err := importer.handleQuery(req.URL.Query())
 	if err == nil {
 		importer.mergeImportedMeshData(meshData)
-
-		resp.WriteHeader(status)
-		if _, err := resp.Write(data); err != nil {
-			return fmt.Errorf("error writing the API request response: %v", err)
-		}
 	} else {
-		return fmt.Errorf("error while serving API request: %v", err)
+		respData = []byte(err.Error())
 	}
-
-	return nil
+	resp.WriteHeader(status)
+	_, _ = resp.Write(respData)
 }
 
 func (importer *BaseRequestImporter) mergeImportedMeshData(meshData *meshdata.MeshData) {
-	// Data is written, so lock it completely
-	importer.Locker().Lock()
-	defer importer.Locker().Unlock()
-
 	// Merge the newly imported data with any existing data stored in the importer
 	if meshDataOld := importer.MeshData(); meshDataOld != nil {
+		// Need to manually lock the data for writing
+		importer.Locker().Lock()
+		defer importer.Locker().Unlock()
+
 		meshDataOld.Merge(meshData)
 	} else {
-		importer.SetMeshData(meshData)
+		importer.SetMeshData(meshData) // SetMeshData will do the locking itself
 	}
 }
 
 func (importer *BaseRequestImporter) handleQuery(params url.Values) (*meshdata.MeshData, int, []byte, error) {
-	method := params.Get("action")
-	switch strings.ToLower(method) {
+	action := params.Get("action")
+	switch strings.ToLower(action) {
 	case queryActionRegisterSite:
 		if importer.registerSiteActionHandler != nil {
 			return importer.registerSiteActionHandler(params)
@@ -88,8 +83,8 @@ func (importer *BaseRequestImporter) handleQuery(params url.Values) (*meshdata.M
 		}
 
 	default:
-		return nil, http.StatusNotImplemented, []byte{}, fmt.Errorf("unknown action '%v'", method)
+		return nil, http.StatusNotImplemented, []byte{}, fmt.Errorf("unknown action '%v'", action)
 	}
 
-	return nil, http.StatusNotFound, []byte{}, fmt.Errorf("unhandled query for action '%v'", method)
+	return nil, http.StatusNotFound, []byte{}, fmt.Errorf("unhandled query for action '%v'", action)
 }

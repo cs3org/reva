@@ -43,18 +43,13 @@ type BaseRequestExporter struct {
 }
 
 // HandleRequest handles the actual HTTP request.
-func (exporter *BaseRequestExporter) HandleRequest(resp http.ResponseWriter, req *http.Request) error {
-	status, data, err := exporter.handleQuery(req.URL.Query())
-	if err == nil {
-		resp.WriteHeader(status)
-		if _, err := resp.Write(data); err != nil {
-			return fmt.Errorf("error writing the API request response: %v", err)
-		}
-	} else {
-		return fmt.Errorf("error while serving API request: %v", err)
+func (exporter *BaseRequestExporter) HandleRequest(resp http.ResponseWriter, req *http.Request) {
+	status, respData, err := exporter.handleQuery(req.URL.Query())
+	if err != nil {
+		respData = []byte(err.Error())
 	}
-
-	return nil
+	resp.WriteHeader(status)
+	_, _ = resp.Write(respData)
 }
 
 func (exporter *BaseRequestExporter) handleQuery(params url.Values) (int, []byte, error) {
@@ -62,16 +57,16 @@ func (exporter *BaseRequestExporter) handleQuery(params url.Values) (int, []byte
 	exporter.Locker().RLock()
 	defer exporter.Locker().RUnlock()
 
-	method := params.Get("action")
-	switch strings.ToLower(method) {
+	action := params.Get("action")
+	switch strings.ToLower(action) {
 	case queryActionDefault:
 		if exporter.defaultActionHandler != nil {
 			return exporter.defaultActionHandler(exporter.MeshData(), params)
 		}
 
 	default:
-		return http.StatusNotImplemented, []byte{}, fmt.Errorf("unknown action '%v'", method)
+		return http.StatusNotImplemented, []byte{}, fmt.Errorf("unknown action '%v'", action)
 	}
 
-	return http.StatusNotImplemented, []byte{}, fmt.Errorf("unhandled query for action '%v'", method)
+	return http.StatusNotImplemented, []byte{}, fmt.Errorf("unhandled query for action '%v'", action)
 }

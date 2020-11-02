@@ -114,6 +114,7 @@ func applyInternalConfig(m map[string]interface{}, conf *config.Configuration) {
 }
 
 func applyDefaultConfig(conf *config.Configuration) {
+	// General
 	if conf.Prefix == "" {
 		conf.Prefix = serviceName
 	}
@@ -122,30 +123,37 @@ func applyDefaultConfig(conf *config.Configuration) {
 		conf.UpdateInterval = "1h" // Update once per hour
 	}
 
+	// Connectors
 	if conf.Connectors.GOCDB.Scope == "" {
 		conf.Connectors.GOCDB.Scope = "SM" // TODO(Daniel-WWU-IT): This might change in the future
+	}
+
+	// Importers
+	if conf.Importers.WebAPI.Endpoint == "" {
+		conf.Importers.WebAPI.Endpoint = "/"
+	}
+
+	// Exporters
+	addDefaultConnector := func(enabledList *[]string) {
+		if len(*enabledList) == 0 {
+			*enabledList = append(*enabledList, "*")
+		}
 	}
 
 	if conf.Exporters.WebAPI.Endpoint == "" {
 		conf.Exporters.WebAPI.Endpoint = "/"
 	}
-	if len(conf.Exporters.WebAPI.EnabledConnectors) == 0 {
-		conf.Exporters.WebAPI.EnabledConnectors = append(conf.Exporters.WebAPI.EnabledConnectors, "*")
-	}
+	addDefaultConnector(&conf.Exporters.WebAPI.EnabledConnectors)
 
 	if conf.Exporters.CS3API.Endpoint == "" {
 		conf.Exporters.CS3API.Endpoint = "/cs3"
 	}
-	if len(conf.Exporters.CS3API.EnabledConnectors) == 0 {
-		conf.Exporters.CS3API.EnabledConnectors = append(conf.Exporters.CS3API.EnabledConnectors, "*")
-	}
+	addDefaultConnector(&conf.Exporters.CS3API.EnabledConnectors)
 
 	if conf.Exporters.SiteLocations.Endpoint == "" {
 		conf.Exporters.SiteLocations.Endpoint = "/loc"
 	}
-	if len(conf.Exporters.SiteLocations.EnabledConnectors) == 0 {
-		conf.Exporters.SiteLocations.EnabledConnectors = append(conf.Exporters.SiteLocations.EnabledConnectors, "*")
-	}
+	addDefaultConnector(&conf.Exporters.SiteLocations.EnabledConnectors)
 }
 
 // New returns a new Mentix service.

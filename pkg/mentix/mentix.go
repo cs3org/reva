@@ -299,11 +299,9 @@ func (mntx *Mentix) RequestHandler(w http.ResponseWriter, r *http.Request) {
 
 func (mntx *Mentix) handleRequest(exchangers []exchange.RequestExchanger, w http.ResponseWriter, r *http.Request, log *zerolog.Logger) {
 	// Ask each RequestExchanger if it wants to handle the request
-	for _, exporter := range exchangers {
-		if exporter.WantsRequest(r) {
-			if err := exporter.HandleRequest(w, r); err != nil {
-				log.Err(err).Msg("error handling request")
-			}
+	for _, exchanger := range exchangers {
+		if exchanger.WantsRequest(r) {
+			exchanger.HandleRequest(w, r)
 		}
 	}
 }

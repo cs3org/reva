@@ -35,6 +35,13 @@ type Configuration struct {
 
 	UpdateInterval string `mapstructure:"update_interval"`
 
+	Importers struct {
+		WebAPI struct {
+			Endpoint          string   `mapstructure:"endpoint"`
+			EnabledConnectors []string `mapstructure:"enabled_connectors"`
+		} `mapstructure:"webapi"`
+	} `mapstructure:"importers"`
+
 	Exporters struct {
 		WebAPI struct {
 			Endpoint          string   `mapstructure:"endpoint"`
