@@ -29,8 +29,8 @@ import (
 type Exporter interface {
 	exchange.Exchanger
 
-	// UpdateMeshData is called whenever the mesh data has changed to reflect these changes.
-	UpdateMeshData(*meshdata.MeshData) error
+	// UpdateMeshDataSet is called whenever the mesh data set has changed to reflect these changes.
+	UpdateMeshDataSet(meshdata.MeshDataSet) error
 }
 
 // BaseExporter implements basic exporter functionality common to all exporters.
@@ -38,23 +38,28 @@ type BaseExporter struct {
 	exchange.BaseExchanger
 }
 
-// UpdateMeshData is called whenever the mesh data has changed to reflect these changes.
-func (exporter *BaseExporter) UpdateMeshData(meshData *meshdata.MeshData) error {
-	// Update the stored mesh data
-	if err := exporter.storeMeshData(meshData); err != nil {
+// UpdateMeshDataSet is called whenever the mesh data set has changed to reflect these changes.
+func (exporter *BaseExporter) UpdateMeshDataSet(meshDataSet meshdata.MeshDataSet) error {
+	// Update the stored mesh data set
+	if err := exporter.storeMeshDataSet(meshDataSet); err != nil {
 		return fmt.Errorf("unable to store the mesh data: %v", err)
 	}
 
 	return nil
 }
 
-func (exporter *BaseExporter) storeMeshData(meshData *meshdata.MeshData) error {
-	// Store the new mesh data by cloning it
-	meshDataCloned := meshData.Clone()
-	if meshDataCloned == nil {
-		return fmt.Errorf("unable to clone the mesh data")
+func (exporter *BaseExporter) storeMeshDataSet(meshDataSet meshdata.MeshDataSet) error {
+	// TODO: Filter based on connectorID
+	// Store the new mesh data set by cloning it and then merging the cloned data into one object
+	meshDataSetCloned := make(meshdata.MeshDataSet)
+	for connectorID, meshData := range meshDataSet {
+		meshDataCloned := meshData.Clone()
+		if meshDataCloned == nil {
+			return fmt.Errorf("unable to clone the mesh data")
+		}
+		meshDataSetCloned[connectorID] = meshDataCloned
 	}
-	exporter.SetMeshData(meshDataCloned)
+	exporter.SetMeshData(meshdata.MergeMeshDataSet(meshDataSetCloned))
 
 	return nil
 }

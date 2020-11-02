@@ -40,10 +40,11 @@ type Mentix struct {
 	conf *config.Configuration
 	log  *zerolog.Logger
 
-	meshData   *meshdata.MeshData
 	connectors []connectors.Connector
 	importers  []importers.Importer
 	exporters  []exporters.Exporter
+
+	meshDataSet meshdata.MeshDataSet
 
 	updateInterval time.Duration
 }
@@ -81,8 +82,8 @@ func (mntx *Mentix) initialize(conf *config.Configuration, log *zerolog.Logger) 
 	}
 	mntx.updateInterval = duration
 
-	// Create empty mesh data
-	mntx.meshData = meshdata.New()
+	// Create empty mesh data set
+	mntx.meshDataSet = make(meshdata.MeshDataSet)
 
 	// Log some infos
 	connectorNames := make([]string, len(mntx.connectors))
@@ -195,9 +196,9 @@ loop:
 
 		// If enough time has passed, retrieve the latest mesh data and update it
 		if time.Since(updateTimestamp) >= mntx.updateInterval {
-			meshData, err := mntx.retrieveMeshData()
+			meshDataSet, err := mntx.retrieveMeshDataSet()
 			if err == nil {
-				if err := mntx.applyMeshData(meshData); err != nil {
+				if err := mntx.applyMeshDataSet(meshDataSet); err != nil {
 					mntx.log.Err(err).Msg("failed to apply mesh data")
 				}
 			} else {
@@ -213,28 +214,37 @@ loop:
 	return nil
 }
 
-func (mntx *Mentix) retrieveMeshData() (*meshdata.MeshData, error) {
-	var mergedMeshData meshdata.MeshData
+func (mntx *Mentix) retrieveMeshDataSet() (meshdata.MeshDataSet, error) {
+	meshDataSet := make(meshdata.MeshDataSet)
 
 	for _, connector := range mntx.connectors {
 		meshData, err := connector.RetrieveMeshData()
 		if err != nil {
 			return nil, fmt.Errorf("retrieving mesh data from connector '%v' failed: %v", connector.GetName(), err)
 		}
-		mergedMeshData.Merge(meshData)
+		meshDataSet[connector.GetID()] = meshData
 	}
 
-	return &mergedMeshData, nil
+	return meshDataSet, nil
 }
 
-func (mntx *Mentix) applyMeshData(meshData *meshdata.MeshData) error {
-	if !meshData.Compare(mntx.meshData) {
+func (mntx *Mentix) applyMeshDataSet(meshDataSet meshdata.MeshDataSet) error {
+	// Check if mesh data from any connector has changed
+	meshDataChanged := false
+	for connectorID, meshData := range meshDataSet {
+		if !meshData.Compare(mntx.meshDataSet[connectorID]) {
+			meshDataChanged = true
+			break
+		}
+	}
+
+	if meshDataChanged {
 		mntx.log.Debug().Msg("mesh data changed, applying")
 
-		mntx.meshData = meshData
+		mntx.meshDataSet = meshDataSet
 
 		for _, exporter := range mntx.exporters {
-			if err := exporter.UpdateMeshData(meshData); err != nil {
+			if err := exporter.UpdateMeshDataSet(meshDataSet); err != nil {
 				return fmt.Errorf("unable to update mesh data on exporter '%v': %v", exporter.GetName(), err)
 			}
 		}

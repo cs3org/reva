@@ -133,9 +133,9 @@ func (exporter *PrometheusSDExporter) Activate(conf *config.Configuration, log *
 	return nil
 }
 
-// UpdateMeshData is called whenever the mesh data has changed to reflect these changes.
-func (exporter *PrometheusSDExporter) UpdateMeshData(meshData *meshdata.MeshData) error {
-	if err := exporter.BaseExporter.UpdateMeshData(meshData); err != nil {
+// UpdateMeshDataSet is called whenever the mesh data set has changed to reflect these changes.
+func (exporter *PrometheusSDExporter) UpdateMeshDataSet(meshDataSet meshdata.MeshDataSet) error {
+	if err := exporter.BaseExporter.UpdateMeshDataSet(meshDataSet); err != nil {
 		return err
 	}
 

@@ -43,7 +43,7 @@ type Exchanger interface {
 	// Stop stops any running background activities of the exchanger.
 	Stop()
 
-	// MeshData returns the mesh data object.
+	// MeshDataSet returns the mesh data.
 	MeshData() *meshdata.MeshData
 
 	// GetName returns the display name of the exchanger.
@@ -95,12 +95,12 @@ func (exchanger *BaseExchanger) Log() *zerolog.Logger {
 	return exchanger.log
 }
 
-// MeshData returns the mesh data object.
+// MeshDataSet returns the stored mesh data.
 func (exchanger *BaseExchanger) MeshData() *meshdata.MeshData {
 	return exchanger.meshData
 }
 
-// SetMeshData sets new mesh data.
+// SetMeshDataSet sets new mesh data.
 func (exchanger *BaseExchanger) SetMeshData(meshData *meshdata.MeshData) {
 	exchanger.Locker().Lock()
 	defer exchanger.Locker().Unlock()

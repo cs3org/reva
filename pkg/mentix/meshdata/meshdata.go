@@ -77,6 +77,10 @@ func (meshData *MeshData) Clone() *MeshData {
 
 // Compare checks whether the stored data equals the data of another MeshData object.
 func (meshData *MeshData) Compare(other *MeshData) bool {
+	if other == nil {
+		return false
+	}
+
 	// To avoid cumbersome comparisons, just compare the JSON-encoded data
 	json1, _ := meshData.ToJSON()
 	json2, _ := other.ToJSON()

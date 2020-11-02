@@ -89,5 +89,7 @@ func (connector *LocalFileConnector) GetName() string {
 }
 
 func init() {
-	registerConnector(config.ConnectorIDLocalFile, &LocalFileConnector{})
+	connector := &LocalFileConnector{}
+	connector.SetID(config.ConnectorIDLocalFile)
+	registerConnector(connector)
 }

@@ -34,6 +34,9 @@ var (
 
 // Connector is the interface that all connectors must implement.
 type Connector interface {
+	// GetID returns the ID of the connector.
+	GetID() string
+
 	// Activate activates a connector.
 	Activate(conf *config.Configuration, log *zerolog.Logger) error
 	// RetrieveMeshData fetches new mesh data.
@@ -45,8 +48,23 @@ type Connector interface {
 
 // BaseConnector implements basic connector functionality common to all connectors.
 type BaseConnector struct {
+	id string
+
 	conf *config.Configuration
 	log  *zerolog.Logger
+}
+
+// GetID returns the ID of the connector.
+func (connector *BaseConnector) GetID() string {
+	return connector.id
+}
+
+// SetID sets the ID of the connector.
+func (connector *BaseConnector) SetID(id string) {
+	// The ID can only be set once
+	if connector.id == "" {
+		connector.id = id
+	}
 }
 
 // Activate activates the connector.
@@ -84,6 +102,6 @@ func AvailableConnectors(conf *config.Configuration) ([]Connector, error) {
 	return connectors, nil
 }
 
-func registerConnector(id string, connector Connector) {
-	registeredConnectors.Register(id, connector)
+func registerConnector(connector Connector) {
+	registeredConnectors.Register(connector.GetID(), connector)
 }
