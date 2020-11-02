@@ -194,8 +194,15 @@ loop:
 			}
 		}
 
-		// If enough time has passed, retrieve the latest mesh data and update it
+		// If enough time has passed, process im- and exports of mesh data
 		if time.Since(updateTimestamp) >= mntx.updateInterval {
+			// Let all importers do their work first
+			if err := mntx.processImporters(); err != nil {
+				mntx.log.Err(err).Msgf("an error occurred while processing the importers: %v", err)
+			}
+
+			// Retrieve and update the mesh data; if the importers modified any data, these changes will
+			// be reflected automatically here
 			meshDataSet, err := mntx.retrieveMeshDataSet()
 			if err == nil {
 				if err := mntx.applyMeshDataSet(meshDataSet); err != nil {
@@ -209,6 +216,16 @@ loop:
 		}
 
 		time.Sleep(runLoopSleeptime)
+	}
+
+	return nil
+}
+
+func (mntx *Mentix) processImporters() error {
+	for _, importer := range mntx.importers {
+		if err := importer.Process(); err != nil {
+			return fmt.Errorf("unable to process importer '%v': %v", importer.GetName(), err)
+		}
 	}
 
 	return nil
@@ -244,7 +261,7 @@ func (mntx *Mentix) applyMeshDataSet(meshDataSet meshdata.MeshDataSet) error {
 		mntx.meshDataSet = meshDataSet
 
 		for _, exporter := range mntx.exporters {
-			if err := exporter.UpdateMeshDataSet(meshDataSet); err != nil {
+			if err := exporter.Update(meshDataSet); err != nil {
 				return fmt.Errorf("unable to update mesh data on exporter '%v': %v", exporter.GetName(), err)
 			}
 		}

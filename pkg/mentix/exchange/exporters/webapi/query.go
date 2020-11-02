@@ -21,18 +21,19 @@ package webapi
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 
 // HandleDefaultQuery processes a basic query.
-func HandleDefaultQuery(meshData *meshdata.MeshData, params url.Values) ([]byte, error) {
+func HandleDefaultQuery(meshData *meshdata.MeshData, params url.Values) (int, []byte, error) {
 	// Just return the plain, unfiltered data as JSON
 	data, err := json.MarshalIndent(meshData, "", "\t")
 	if err != nil {
-		return []byte{}, fmt.Errorf("unable to marshal the mesh data: %v", err)
+		return http.StatusBadRequest, []byte{}, fmt.Errorf("unable to marshal the mesh data: %v", err)
 	}
 
-	return data, nil
+	return http.StatusOK, data, nil
 }

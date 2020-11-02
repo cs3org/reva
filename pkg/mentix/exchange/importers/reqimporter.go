@@ -29,23 +29,28 @@ import (
 )
 
 const (
-	queryMethodDefault = ""
+	queryActionRegisterSite   = "register"
+	queryActionUnregisterSite = "unregister"
 )
 
-type queryCallback func(*meshdata.MeshData, url.Values) ([]byte, error)
+type queryCallback func(url.Values) (*meshdata.MeshData, int, []byte, error)
 
 // BaseRequestImporter implements basic importer functionality common to all request importers.
 type BaseRequestImporter struct {
 	BaseImporter
 	exchange.BaseRequestExchanger
 
-	defaultMethodHandler queryCallback
+	registerSiteActionHandler   queryCallback
+	unregisterSiteActionHandler queryCallback
 }
 
 // HandleRequest handles the actual HTTP request.
 func (importer *BaseRequestImporter) HandleRequest(resp http.ResponseWriter, req *http.Request) error {
-	data, err := importer.handleQuery(req.URL.Query())
+	meshData, status, data, err := importer.handleQuery(req.URL.Query())
 	if err == nil {
+		importer.mergeImportedMeshData(meshData)
+
+		resp.WriteHeader(status)
 		if _, err := resp.Write(data); err != nil {
 			return fmt.Errorf("error writing the API request response: %v", err)
 		}
@@ -56,21 +61,35 @@ func (importer *BaseRequestImporter) HandleRequest(resp http.ResponseWriter, req
 	return nil
 }
 
-func (importer *BaseRequestImporter) handleQuery(params url.Values) ([]byte, error) {
+func (importer *BaseRequestImporter) mergeImportedMeshData(meshData *meshdata.MeshData) {
 	// Data is written, so lock it completely
 	importer.Locker().Lock()
 	defer importer.Locker().Unlock()
 
-	method := params.Get("method")
+	// Merge the newly imported data with any existing data stored in the importer
+	if meshDataOld := importer.MeshData(); meshDataOld != nil {
+		meshDataOld.Merge(meshData)
+	} else {
+		importer.SetMeshData(meshData)
+	}
+}
+
+func (importer *BaseRequestImporter) handleQuery(params url.Values) (*meshdata.MeshData, int, []byte, error) {
+	method := params.Get("action")
 	switch strings.ToLower(method) {
-	case queryMethodDefault:
-		if importer.defaultMethodHandler != nil {
-			return importer.defaultMethodHandler(importer.MeshData(), params)
+	case queryActionRegisterSite:
+		if importer.registerSiteActionHandler != nil {
+			return importer.registerSiteActionHandler(params)
+		}
+
+	case queryActionUnregisterSite:
+		if importer.unregisterSiteActionHandler != nil {
+			return importer.unregisterSiteActionHandler(params)
 		}
 
 	default:
-		return []byte{}, fmt.Errorf("unknown API method '%v'", method)
+		return nil, http.StatusNotImplemented, []byte{}, fmt.Errorf("unknown action '%v'", method)
 	}
 
-	return []byte{}, fmt.Errorf("unhandled query for method '%v'", method)
+	return nil, http.StatusNotFound, []byte{}, fmt.Errorf("unhandled query for action '%v'", method)
 }

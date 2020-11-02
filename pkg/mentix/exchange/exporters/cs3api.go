@@ -40,7 +40,7 @@ func (exporter *CS3APIExporter) Activate(conf *config.Configuration, log *zerolo
 	exporter.SetEndpoint(conf.Exporters.CS3API.Endpoint)
 	exporter.SetEnabledConnectors(conf.Exporters.CS3API.EnabledConnectors)
 
-	exporter.defaultMethodHandler = cs3api.HandleDefaultQuery
+	exporter.defaultActionHandler = cs3api.HandleDefaultQuery
 
 	return nil
 }

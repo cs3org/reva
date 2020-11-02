@@ -21,6 +21,7 @@ package cs3api
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
@@ -29,20 +30,20 @@ import (
 )
 
 // HandleDefaultQuery processes a basic query.
-func HandleDefaultQuery(meshData *meshdata.MeshData, params url.Values) ([]byte, error) {
+func HandleDefaultQuery(meshData *meshdata.MeshData, params url.Values) (int, []byte, error) {
 	// Convert the mesh data
 	ocmData, err := convertMeshDataToOCMData(meshData)
 	if err != nil {
-		return []byte{}, fmt.Errorf("unable to convert the mesh data to OCM data structures: %v", err)
+		return http.StatusBadRequest, []byte{}, fmt.Errorf("unable to convert the mesh data to OCM data structures: %v", err)
 	}
 
 	// Marshal the OCM data as JSON
 	data, err := json.MarshalIndent(ocmData, "", "\t")
 	if err != nil {
-		return []byte{}, fmt.Errorf("unable to marshal the OCM data: %v", err)
+		return http.StatusBadRequest, []byte{}, fmt.Errorf("unable to marshal the OCM data: %v", err)
 	}
 
-	return data, nil
+	return http.StatusOK, data, nil
 }
 
 func convertMeshDataToOCMData(meshData *meshdata.MeshData) ([]*ocmprovider.ProviderInfo, error) {

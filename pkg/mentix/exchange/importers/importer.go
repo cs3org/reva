@@ -25,9 +25,17 @@ import (
 // Importer is the interface that all importers must implement.
 type Importer interface {
 	exchange.Exchanger
+
+	// Process is called periodically to perform its tasks.
+	Process() error
 }
 
 // BaseImporter implements basic importer functionality common to all importers.
 type BaseImporter struct {
 	exchange.BaseExchanger
+}
+
+// Process is called periodically to perform its tasks.
+func (importer *BaseImporter) Process() error {
+	return nil
 }

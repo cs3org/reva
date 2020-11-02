@@ -29,8 +29,8 @@ import (
 type Exporter interface {
 	exchange.Exchanger
 
-	// UpdateMeshDataSet is called whenever the mesh data set has changed to reflect these changes.
-	UpdateMeshDataSet(meshdata.MeshDataSet) error
+	// Update is called whenever the mesh data set has changed to reflect these changes.
+	Update(meshdata.MeshDataSet) error
 }
 
 // BaseExporter implements basic exporter functionality common to all exporters.
@@ -38,8 +38,8 @@ type BaseExporter struct {
 	exchange.BaseExchanger
 }
 
-// UpdateMeshDataSet is called whenever the mesh data set has changed to reflect these changes.
-func (exporter *BaseExporter) UpdateMeshDataSet(meshDataSet meshdata.MeshDataSet) error {
+// Update is called whenever the mesh data set has changed to reflect these changes.
+func (exporter *BaseExporter) Update(meshDataSet meshdata.MeshDataSet) error {
 	// Update the stored mesh data set
 	if err := exporter.storeMeshDataSet(meshDataSet); err != nil {
 		return fmt.Errorf("unable to store the mesh data: %v", err)

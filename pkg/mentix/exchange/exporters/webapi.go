@@ -40,7 +40,7 @@ func (exporter *WebAPIExporter) Activate(conf *config.Configuration, log *zerolo
 	exporter.SetEndpoint(conf.Exporters.WebAPI.Endpoint)
 	exporter.SetEnabledConnectors(conf.Exporters.WebAPI.EnabledConnectors)
 
-	exporter.defaultMethodHandler = webapi.HandleDefaultQuery
+	exporter.defaultActionHandler = webapi.HandleDefaultQuery
 
 	return nil
 }

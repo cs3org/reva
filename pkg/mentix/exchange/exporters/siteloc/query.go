@@ -21,26 +21,27 @@ package siteloc
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 
 // HandleDefaultQuery processes a basic query.
-func HandleDefaultQuery(meshData *meshdata.MeshData, params url.Values) ([]byte, error) {
+func HandleDefaultQuery(meshData *meshdata.MeshData, params url.Values) (int, []byte, error) {
 	// Convert the mesh data
 	locData, err := convertMeshDataToLocationData(meshData)
 	if err != nil {
-		return []byte{}, fmt.Errorf("unable to convert the mesh data to location data: %v", err)
+		return http.StatusBadRequest, []byte{}, fmt.Errorf("unable to convert the mesh data to location data: %v", err)
 	}
 
 	// Marshal the location data as JSON
 	data, err := json.MarshalIndent(locData, "", "\t")
 	if err != nil {
-		return []byte{}, fmt.Errorf("unable to marshal the location data: %v", err)
+		return http.StatusBadRequest, []byte{}, fmt.Errorf("unable to marshal the location data: %v", err)
 	}
 
-	return data, nil
+	return http.StatusOK, data, nil
 }
 
 func convertMeshDataToLocationData(meshData *meshdata.MeshData) ([]*SiteLocation, error) {

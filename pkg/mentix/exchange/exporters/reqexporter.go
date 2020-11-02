@@ -29,23 +29,24 @@ import (
 )
 
 const (
-	queryMethodDefault = ""
+	queryActionDefault = ""
 )
 
-type queryCallback func(*meshdata.MeshData, url.Values) ([]byte, error)
+type queryCallback func(*meshdata.MeshData, url.Values) (int, []byte, error)
 
 // BaseRequestExporter implements basic exporter functionality common to all request exporters.
 type BaseRequestExporter struct {
 	BaseExporter
 	exchange.BaseRequestExchanger
 
-	defaultMethodHandler queryCallback
+	defaultActionHandler queryCallback
 }
 
 // HandleRequest handles the actual HTTP request.
 func (exporter *BaseRequestExporter) HandleRequest(resp http.ResponseWriter, req *http.Request) error {
-	data, err := exporter.handleQuery(req.URL.Query())
+	status, data, err := exporter.handleQuery(req.URL.Query())
 	if err == nil {
+		resp.WriteHeader(status)
 		if _, err := resp.Write(data); err != nil {
 			return fmt.Errorf("error writing the API request response: %v", err)
 		}
@@ -56,21 +57,21 @@ func (exporter *BaseRequestExporter) HandleRequest(resp http.ResponseWriter, req
 	return nil
 }
 
-func (exporter *BaseRequestExporter) handleQuery(params url.Values) ([]byte, error) {
+func (exporter *BaseRequestExporter) handleQuery(params url.Values) (int, []byte, error) {
 	// Data is read, so lock it for writing
 	exporter.Locker().RLock()
 	defer exporter.Locker().RUnlock()
 
-	method := params.Get("method")
+	method := params.Get("action")
 	switch strings.ToLower(method) {
-	case queryMethodDefault:
-		if exporter.defaultMethodHandler != nil {
-			return exporter.defaultMethodHandler(exporter.MeshData(), params)
+	case queryActionDefault:
+		if exporter.defaultActionHandler != nil {
+			return exporter.defaultActionHandler(exporter.MeshData(), params)
 		}
 
 	default:
-		return []byte{}, fmt.Errorf("unknown API method '%v'", method)
+		return http.StatusNotImplemented, []byte{}, fmt.Errorf("unknown action '%v'", method)
 	}
 
-	return []byte{}, fmt.Errorf("unhandled query for method '%v'", method)
+	return http.StatusNotImplemented, []byte{}, fmt.Errorf("unhandled query for action '%v'", method)
 }
