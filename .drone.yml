@@ -441,7 +441,7 @@ steps:
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
-    image: owncloudci/php:7.2
+    image: owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
@@ -449,7 +449,7 @@ steps:
       - git checkout 8fee3047cadfaae5a4cee330a102af8d1ada8160
 
   - name: localAPIAcceptanceTestsOwncloudStorage
-    image: owncloudci/php:7.2
+    image: owncloudci/php:7.4
     commands:
       - make test-acceptance-api
     environment:
@@ -516,7 +516,7 @@ steps:
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
-    image: owncloudci/php:7.2
+    image: owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
@@ -524,7 +524,7 @@ steps:
       - git checkout 8fee3047cadfaae5a4cee330a102af8d1ada8160
 
   - name: localAPIAcceptanceTestsOcisStorage
-    image: owncloudci/php:7.2
+    image: owncloudci/php:7.4
     commands:
       - make test-acceptance-api
     environment:
@@ -586,7 +586,7 @@ steps:
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
-    image: owncloudci/php:7.2
+    image: owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
@@ -594,7 +594,7 @@ steps:
       - git checkout 8fee3047cadfaae5a4cee330a102af8d1ada8160
 
   - name: oC10APIAcceptanceTestsOcisStorage
-    image: owncloudci/php:7.2
+    image: owncloudci/php:7.4
     commands:
       - cd /drone/src/tmp/testrunner
       - make test-acceptance-api
@@ -659,7 +659,7 @@ steps:
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
-    image: owncloudci/php:7.2
+    image: owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
@@ -667,7 +667,7 @@ steps:
       - git checkout 8fee3047cadfaae5a4cee330a102af8d1ada8160
 
   - name: oC10APIAcceptanceTestsOcisStorage
-    image: owncloudci/php:7.2
+    image: owncloudci/php:7.4
     commands:
       - cd /drone/src/tmp/testrunner
       - make test-acceptance-api
@@ -732,7 +732,7 @@ steps:
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
-    image: owncloudci/php:7.2
+    image: owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
@@ -740,7 +740,7 @@ steps:
       - git checkout 8fee3047cadfaae5a4cee330a102af8d1ada8160
 
   - name: oC10APIAcceptanceTestsOcisStorage
-    image: owncloudci/php:7.2
+    image: owncloudci/php:7.4
     commands:
       - cd /drone/src/tmp/testrunner
       - make test-acceptance-api
@@ -805,7 +805,7 @@ steps:
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
-    image: owncloudci/php:7.2
+    image: owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
@@ -813,7 +813,7 @@ steps:
       - git checkout 8fee3047cadfaae5a4cee330a102af8d1ada8160
 
   - name: oC10APIAcceptanceTestsOcisStorage
-    image: owncloudci/php:7.2
+    image: owncloudci/php:7.4
     commands:
       - cd /drone/src/tmp/testrunner
       - make test-acceptance-api
@@ -878,7 +878,7 @@ steps:
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
-    image: owncloudci/php:7.2
+    image: owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
@@ -886,7 +886,7 @@ steps:
       - git checkout 8fee3047cadfaae5a4cee330a102af8d1ada8160
 
   - name: oC10APIAcceptanceTestsOcisStorage
-    image: owncloudci/php:7.2
+    image: owncloudci/php:7.4
     commands:
       - cd /drone/src/tmp/testrunner
       - make test-acceptance-api
@@ -951,7 +951,7 @@ steps:
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
-    image: owncloudci/php:7.2
+    image: owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
@@ -959,7 +959,7 @@ steps:
       - git checkout 8fee3047cadfaae5a4cee330a102af8d1ada8160
 
   - name: oC10APIAcceptanceTestsOcisStorage
-    image: owncloudci/php:7.2
+    image: owncloudci/php:7.4
     commands:
       - cd /drone/src/tmp/testrunner
       - make test-acceptance-api
@@ -1024,7 +1024,7 @@ steps:
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
-    image: owncloudci/php:7.2
+    image: owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
@@ -1032,7 +1032,7 @@ steps:
       - git checkout 8fee3047cadfaae5a4cee330a102af8d1ada8160
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
-    image: owncloudci/php:7.2
+    image: owncloudci/php:7.4
     commands:
       - cd /drone/src/tmp/testrunner
       - make test-acceptance-api
@@ -1102,7 +1102,7 @@ steps:
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
-    image: owncloudci/php:7.2
+    image: owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
@@ -1110,7 +1110,7 @@ steps:
       - git checkout 8fee3047cadfaae5a4cee330a102af8d1ada8160
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
-    image: owncloudci/php:7.2
+    image: owncloudci/php:7.4
     commands:
       - cd /drone/src/tmp/testrunner
       - make test-acceptance-api
@@ -1180,7 +1180,7 @@ steps:
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
-    image: owncloudci/php:7.2
+    image: owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
@@ -1188,7 +1188,7 @@ steps:
       - git checkout 8fee3047cadfaae5a4cee330a102af8d1ada8160
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
-    image: owncloudci/php:7.2
+    image: owncloudci/php:7.4
     commands:
       - cd /drone/src/tmp/testrunner
       - make test-acceptance-api
@@ -1258,7 +1258,7 @@ steps:
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
-    image: owncloudci/php:7.2
+    image: owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
@@ -1266,7 +1266,7 @@ steps:
       - git checkout 8fee3047cadfaae5a4cee330a102af8d1ada8160
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
-    image: owncloudci/php:7.2
+    image: owncloudci/php:7.4
     commands:
       - cd /drone/src/tmp/testrunner
       - make test-acceptance-api
@@ -1336,7 +1336,7 @@ steps:
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
-    image: owncloudci/php:7.2
+    image: owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
@@ -1344,7 +1344,7 @@ steps:
       - git checkout 8fee3047cadfaae5a4cee330a102af8d1ada8160
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
-    image: owncloudci/php:7.2
+    image: owncloudci/php:7.4
     commands:
       - cd /drone/src/tmp/testrunner
       - make test-acceptance-api
@@ -1414,7 +1414,7 @@ steps:
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
-    image: owncloudci/php:7.2
+    image: owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
@@ -1422,7 +1422,7 @@ steps:
       - git checkout 8fee3047cadfaae5a4cee330a102af8d1ada8160
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
-    image: owncloudci/php:7.2
+    image: owncloudci/php:7.4
     commands:
       - cd /drone/src/tmp/testrunner
       - make test-acceptance-api
