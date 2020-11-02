@@ -38,6 +38,8 @@ func (exporter *WebAPIExporter) Activate(conf *config.Configuration, log *zerolo
 
 	// Store WebAPI specifics
 	exporter.SetEndpoint(conf.Exporters.WebAPI.Endpoint)
+	exporter.SetEnabledConnectors(conf.Exporters.WebAPI.EnabledConnectors)
+
 	exporter.defaultMethodHandler = webapi.HandleDefaultQuery
 
 	return nil

@@ -129,13 +129,22 @@ func applyDefaultConfig(conf *config.Configuration) {
 	if conf.Exporters.WebAPI.Endpoint == "" {
 		conf.Exporters.WebAPI.Endpoint = "/"
 	}
+	if len(conf.Exporters.WebAPI.EnabledConnectors) == 0 {
+		conf.Exporters.WebAPI.EnabledConnectors = append(conf.Exporters.WebAPI.EnabledConnectors, "*")
+	}
 
 	if conf.Exporters.CS3API.Endpoint == "" {
 		conf.Exporters.CS3API.Endpoint = "/cs3"
 	}
+	if len(conf.Exporters.CS3API.EnabledConnectors) == 0 {
+		conf.Exporters.CS3API.EnabledConnectors = append(conf.Exporters.CS3API.EnabledConnectors, "*")
+	}
 
 	if conf.Exporters.SiteLocations.Endpoint == "" {
 		conf.Exporters.SiteLocations.Endpoint = "/loc"
+	}
+	if len(conf.Exporters.SiteLocations.EnabledConnectors) == 0 {
+		conf.Exporters.SiteLocations.EnabledConnectors = append(conf.Exporters.SiteLocations.EnabledConnectors, "*")
 	}
 }
 

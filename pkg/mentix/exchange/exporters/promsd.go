@@ -130,6 +130,9 @@ func (exporter *PrometheusSDExporter) Activate(conf *config.Configuration, log *
 		}
 	}
 
+	// Store PrometheusSD specifics
+	exporter.SetEnabledConnectors(conf.Exporters.PrometheusSD.EnabledConnectors)
+
 	return nil
 }
 

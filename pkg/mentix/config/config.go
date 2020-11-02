@@ -37,20 +37,24 @@ type Configuration struct {
 
 	Exporters struct {
 		WebAPI struct {
-			Endpoint string `mapstructure:"endpoint"`
+			Endpoint          string   `mapstructure:"endpoint"`
+			EnabledConnectors []string `mapstructure:"enabled_connectors"`
 		} `mapstructure:"webapi"`
 
 		CS3API struct {
-			Endpoint string `mapstructure:"endpoint"`
+			Endpoint          string   `mapstructure:"endpoint"`
+			EnabledConnectors []string `mapstructure:"enabled_connectors"`
 		} `mapstructure:"cs3api"`
 
 		SiteLocations struct {
-			Endpoint string `mapstructure:"endpoint"`
+			Endpoint          string   `mapstructure:"endpoint"`
+			EnabledConnectors []string `mapstructure:"enabled_connectors"`
 		} `mapstructure:"siteloc"`
 
 		PrometheusSD struct {
-			MetricsOutputFile  string `mapstructure:"metrics_output_file"`
-			BlackboxOutputFile string `mapstructure:"blackbox_output_file"`
+			MetricsOutputFile  string   `mapstructure:"metrics_output_file"`
+			BlackboxOutputFile string   `mapstructure:"blackbox_output_file"`
+			EnabledConnectors  []string `mapstructure:"enabled_connectors"`
 		} `mapstructure:"promsd"`
 	} `mapstructure:"exporters"`
 

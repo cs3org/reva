@@ -26,6 +26,7 @@ package exchange
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/rs/zerolog"
@@ -57,6 +58,8 @@ type BaseExchanger struct {
 	conf *config.Configuration
 	log  *zerolog.Logger
 
+	enabledConnectors []string
+
 	meshData *meshdata.MeshData
 	locker   sync.RWMutex
 }
@@ -85,6 +88,16 @@ func (exchanger *BaseExchanger) Start() error {
 func (exchanger *BaseExchanger) Stop() {
 }
 
+// IsConnectorEnabled checks if the given connector is enabled for the exchanger.
+func (exchanger *BaseExchanger) IsConnectorEnabled(id string) bool {
+	for _, connectorID := range exchanger.enabledConnectors {
+		if connectorID == "*" || strings.EqualFold(connectorID, id) {
+			return true
+		}
+	}
+	return false
+}
+
 // Config returns the configuration object.
 func (exchanger *BaseExchanger) Config() *config.Configuration {
 	return exchanger.conf
@@ -93,6 +106,16 @@ func (exchanger *BaseExchanger) Config() *config.Configuration {
 // Log returns the logger object.
 func (exchanger *BaseExchanger) Log() *zerolog.Logger {
 	return exchanger.log
+}
+
+// EnabledConnectors returns the list of all enabled connectors for the exchanger.
+func (exchanger *BaseExchanger) EnabledConnectors() []string {
+	return exchanger.enabledConnectors
+}
+
+// SetEnabledConnectors sets the list of all enabled connectors for the exchanger.
+func (exchanger *BaseExchanger) SetEnabledConnectors(connectors []string) {
+	exchanger.enabledConnectors = connectors
 }
 
 // MeshDataSet returns the stored mesh data.

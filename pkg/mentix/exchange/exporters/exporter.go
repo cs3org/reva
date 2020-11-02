@@ -49,10 +49,13 @@ func (exporter *BaseExporter) UpdateMeshDataSet(meshDataSet meshdata.MeshDataSet
 }
 
 func (exporter *BaseExporter) storeMeshDataSet(meshDataSet meshdata.MeshDataSet) error {
-	// TODO: Filter based on connectorID
 	// Store the new mesh data set by cloning it and then merging the cloned data into one object
 	meshDataSetCloned := make(meshdata.MeshDataSet)
 	for connectorID, meshData := range meshDataSet {
+		if !exporter.IsConnectorEnabled(connectorID) {
+			continue
+		}
+
 		meshDataCloned := meshData.Clone()
 		if meshDataCloned == nil {
 			return fmt.Errorf("unable to clone the mesh data")
