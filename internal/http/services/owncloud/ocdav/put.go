@@ -277,8 +277,10 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 		sReq = &provider.StatRequest{
 			Ref: &provider.Reference{
 				Spec: &provider.Reference_Path{
-					Path: chunk.Path},
-			}}
+					Path: chunk.Path,
+				},
+			},
+		}
 	}
 
 	// stat again to check the new file's metadata

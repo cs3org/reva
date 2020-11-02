@@ -36,27 +36,20 @@ func init() {
 }
 
 type config struct {
-	Prefix        string                            `mapstructure:"prefix" docs:"data;The prefix to be used for this HTTP service"`
-	Driver        string                            `mapstructure:"driver" docs:"localhome;The storage driver to be used."`
-	Drivers       map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:pkg/storage/fs/localhome/localhome.go;The configuration for the storage driver"`
-	Timeout       int64                             `mapstructure:"timeout"`
-	Insecure      bool                              `mapstructure:"insecure"`
-	TempDirectory string                            `mapstructure:"temp_directory"`
+	Prefix   string                            `mapstructure:"prefix" docs:"data;The prefix to be used for this HTTP service"`
+	Driver   string                            `mapstructure:"driver" docs:"localhome;The storage driver to be used."`
+	Drivers  map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:pkg/storage/fs/localhome/localhome.go;The configuration for the storage driver"`
+	Timeout  int64                             `mapstructure:"timeout"`
+	Insecure bool                              `mapstructure:"insecure"`
 }
 
 func (c *config) init() {
 	if c.Prefix == "" {
 		c.Prefix = "data"
 	}
-
 	if c.Driver == "" {
 		c.Driver = "localhome"
 	}
-
-	if c.TempDirectory == "" {
-		c.TempDirectory = "/var/tmp/reva/tmp"
-	}
-
 }
 
 type svc struct {
