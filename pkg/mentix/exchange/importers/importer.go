@@ -19,6 +19,8 @@
 package importers
 
 import (
+	"fmt"
+
 	"github.com/cs3org/reva/pkg/mentix/connectors"
 	"github.com/cs3org/reva/pkg/mentix/exchange"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
@@ -31,8 +33,8 @@ type Importer interface {
 	// MeshData returns the vector of imported mesh data.
 	MeshData() meshdata.Vector
 
-	// Process is called periodically to perform the actual import.
-	Process([]connectors.Connector) error
+	// Process is called periodically to perform the actual import; if data has been imported, true is returned.
+	Process([]connectors.Connector) (bool, error)
 }
 
 // BaseImporter implements basic importer functionality common to all importers.
@@ -42,24 +44,40 @@ type BaseImporter struct {
 	meshData meshdata.Vector
 }
 
-// Process is called periodically to perform the actual import.
-func (importer *BaseImporter) Process(connectors []connectors.Connector) error {
-	if meshData := importer.MeshData(); meshData != nil {
-		// Data is read, so lock it for writing
-		importer.Locker().RLock()
-
-		for _, connector := range connectors {
-			if !importer.IsConnectorEnabled(connector.GetID()) {
-				continue
-			}
-
-			// TODO: Use Connector to add/remove site/service
-		}
-
-		importer.Locker().RUnlock()
+// Process is called periodically to perform the actual import; if data has been imported, true is returned.
+func (importer *BaseImporter) Process(connectors []connectors.Connector) (bool, error) {
+	if importer.meshData == nil { // Nothing to do
+		return false, nil
 	}
 
+	// Data is read, so lock it for writing
+	importer.Locker().RLock()
+
+	for _, connector := range connectors {
+		if !importer.IsConnectorEnabled(connector.GetID()) {
+			continue
+		}
+
+		if err := importer.processMeshData(connector); err != nil {
+			importer.Locker().RUnlock()
+			return false, fmt.Errorf("unable to process imported mesh data for connector '%v': %v", connector.GetName(), err)
+		}
+	}
+
+	importer.Locker().RUnlock()
+
 	importer.SetMeshData(nil)
+	return true, nil
+}
+
+func (importer *BaseImporter) processMeshData(connector connectors.Connector) error {
+	for _, meshData := range importer.meshData {
+		// TODO: Add/remove stuff
+		for _, s := range meshData.Sites {
+			fmt.Println(s.Name)
+		}
+	}
+
 	return nil
 }
 

@@ -28,7 +28,7 @@ import (
 // HandleRegisterSiteQuery registers a site.
 func HandleRegisterSiteQuery(params url.Values) (meshdata.Vector, int, []byte, error) {
 	// TODO: Handlen + Response (ähnlich OCM)
-	return meshdata.Vector{}, http.StatusOK, []byte("registered"), nil
+	return meshdata.Vector{&meshdata.MeshData{[]*meshdata.Site{&meshdata.Site{Name: "TEST"}}, []*meshdata.ServiceType{}, 0}}, http.StatusOK, []byte("registered"), nil
 }
 
 // HandleUnregisterSiteQuery unregisters a site.
