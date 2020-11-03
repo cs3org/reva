@@ -93,7 +93,7 @@ func (exporter *PrometheusSDExporter) registerScrapeCreators(conf *config.Config
 			}
 
 			// Create the output directory for the target file so it exists when exporting
-			if err := os.MkdirAll(filepath.Dir(outputFilename), os.ModePerm); err != nil {
+			if err := os.MkdirAll(filepath.Dir(outputFilename), 0755); err != nil {
 				return fmt.Errorf("unable to create output directory tree: %v", err)
 			}
 		}
@@ -125,7 +125,7 @@ func (exporter *PrometheusSDExporter) Activate(conf *config.Configuration, log *
 
 	// Create all output directories
 	for _, creator := range exporter.scrapeCreators {
-		if err := os.MkdirAll(filepath.Dir(creator.outputFilename), os.ModePerm); err != nil {
+		if err := os.MkdirAll(filepath.Dir(creator.outputFilename), 0755); err != nil {
 			return fmt.Errorf("unable to create directory tree: %v", err)
 		}
 	}
@@ -200,7 +200,7 @@ func (exporter *PrometheusSDExporter) exportScrapeConfig(outputFilename string, 
 	}
 
 	// Write the data to disk
-	if err := ioutil.WriteFile(outputFilename, data, os.ModePerm); err != nil {
+	if err := ioutil.WriteFile(outputFilename, data, 0755); err != nil {
 		return fmt.Errorf("unable to write scrape config '%v': %v", outputFilename, err)
 	}
 

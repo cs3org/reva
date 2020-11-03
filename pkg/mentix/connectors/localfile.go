@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 
 	"github.com/rs/zerolog"
 
@@ -49,9 +50,13 @@ func (connector *LocalFileConnector) Activate(conf *config.Configuration, log *z
 		return fmt.Errorf("no file configured")
 	}
 
+	// Create the file directory if necessary
+	dir := filepath.Dir(connector.filePath)
+	_ = os.MkdirAll(dir, 0755)
+
 	// Create an empty file if it doesn't exist
 	if _, err := os.Stat(connector.filePath); os.IsNotExist(err) {
-		ioutil.WriteFile(connector.filePath, []byte("[]"), os.ModePerm)
+		_ = ioutil.WriteFile(connector.filePath, []byte("[]"), 0755)
 	}
 
 	return nil
@@ -94,7 +99,7 @@ func (connector *LocalFileConnector) UpdateMeshData(updatedData *meshdata.MeshDa
 
 	// Write the updated sites back to the file
 	jsonData, _ := json.MarshalIndent(meshData.Sites, "", "\t")
-	if err := ioutil.WriteFile(connector.filePath, jsonData, os.ModePerm); err != nil {
+	if err := ioutil.WriteFile(connector.filePath, jsonData, 0755); err != nil {
 		return fmt.Errorf("unable to write file '%v': %v", connector.filePath, err)
 	}
 
