@@ -23,16 +23,28 @@ import (
 	"fmt"
 )
 
+const (
+	// FlagsNone resets all mesh data flags.
+	FlagsNone = 0
+
+	// FlagObsolete flags the mesh data for removal.
+	FlagObsolete = 0x0001
+)
+
 // MeshData holds the entire mesh data managed by Mentix.
 type MeshData struct {
 	Sites        []*Site
 	ServiceTypes []*ServiceType
+
+	Flags int32 `json:"-"`
 }
 
 // Clear removes all saved data, leaving an empty mesh.
 func (meshData *MeshData) Clear() {
 	meshData.Sites = nil
 	meshData.ServiceTypes = nil
+
+	meshData.Flags = FlagsNone
 }
 
 // Merge merges data from another MeshData instance into this one (w/o checking for duplicates).

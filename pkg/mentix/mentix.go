@@ -44,7 +44,7 @@ type Mentix struct {
 	importers  []importers.Importer
 	exporters  []exporters.Exporter
 
-	meshDataSet meshdata.MeshDataSet
+	meshDataSet meshdata.Map
 
 	updateInterval time.Duration
 }
@@ -83,7 +83,7 @@ func (mntx *Mentix) initialize(conf *config.Configuration, log *zerolog.Logger) 
 	mntx.updateInterval = duration
 
 	// Create empty mesh data set
-	mntx.meshDataSet = make(meshdata.MeshDataSet)
+	mntx.meshDataSet = make(meshdata.Map)
 
 	// Log some infos
 	connectorNames := make([]string, len(mntx.connectors))
@@ -223,7 +223,7 @@ loop:
 
 func (mntx *Mentix) processImporters() error {
 	for _, importer := range mntx.importers {
-		if err := importer.Process(); err != nil {
+		if err := importer.Process(mntx.connectors); err != nil {
 			return fmt.Errorf("unable to process importer '%v': %v", importer.GetName(), err)
 		}
 	}
@@ -231,8 +231,8 @@ func (mntx *Mentix) processImporters() error {
 	return nil
 }
 
-func (mntx *Mentix) retrieveMeshDataSet() (meshdata.MeshDataSet, error) {
-	meshDataSet := make(meshdata.MeshDataSet)
+func (mntx *Mentix) retrieveMeshDataSet() (meshdata.Map, error) {
+	meshDataSet := make(meshdata.Map)
 
 	for _, connector := range mntx.connectors {
 		meshData, err := connector.RetrieveMeshData()
@@ -245,7 +245,7 @@ func (mntx *Mentix) retrieveMeshDataSet() (meshdata.MeshDataSet, error) {
 	return meshDataSet, nil
 }
 
-func (mntx *Mentix) applyMeshDataSet(meshDataSet meshdata.MeshDataSet) error {
+func (mntx *Mentix) applyMeshDataSet(meshDataSet meshdata.Map) error {
 	// Check if mesh data from any connector has changed
 	meshDataChanged := false
 	for connectorID, meshData := range meshDataSet {

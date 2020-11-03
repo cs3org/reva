@@ -33,7 +33,7 @@ const (
 	queryActionUnregisterSite = "unregister"
 )
 
-type queryCallback func(url.Values) (*meshdata.MeshData, int, []byte, error)
+type queryCallback func(url.Values) (meshdata.Vector, int, []byte, error)
 
 // BaseRequestImporter implements basic importer functionality common to all request importers.
 type BaseRequestImporter struct {
@@ -56,20 +56,20 @@ func (importer *BaseRequestImporter) HandleRequest(resp http.ResponseWriter, req
 	_, _ = resp.Write(respData)
 }
 
-func (importer *BaseRequestImporter) mergeImportedMeshData(meshData *meshdata.MeshData) {
+func (importer *BaseRequestImporter) mergeImportedMeshData(meshData meshdata.Vector) {
 	// Merge the newly imported data with any existing data stored in the importer
-	if meshDataOld := importer.MeshData(); meshDataOld != nil {
+	if importer.meshData != nil {
 		// Need to manually lock the data for writing
 		importer.Locker().Lock()
 		defer importer.Locker().Unlock()
 
-		meshDataOld.Merge(meshData)
+		importer.meshData = append(importer.meshData, meshData...)
 	} else {
 		importer.SetMeshData(meshData) // SetMeshData will do the locking itself
 	}
 }
 
-func (importer *BaseRequestImporter) handleQuery(params url.Values) (*meshdata.MeshData, int, []byte, error) {
+func (importer *BaseRequestImporter) handleQuery(params url.Values) (meshdata.Vector, int, []byte, error) {
 	action := params.Get("action")
 	switch strings.ToLower(action) {
 	case queryActionRegisterSite:

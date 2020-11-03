@@ -19,23 +19,59 @@
 package importers
 
 import (
+	"github.com/cs3org/reva/pkg/mentix/connectors"
 	"github.com/cs3org/reva/pkg/mentix/exchange"
+	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 
 // Importer is the interface that all importers must implement.
 type Importer interface {
 	exchange.Exchanger
 
-	// Process is called periodically to perform its tasks.
-	Process() error
+	// MeshData returns the vector of imported mesh data.
+	MeshData() meshdata.Vector
+
+	// Process is called periodically to perform the actual import.
+	Process([]connectors.Connector) error
 }
 
 // BaseImporter implements basic importer functionality common to all importers.
 type BaseImporter struct {
 	exchange.BaseExchanger
+
+	meshData meshdata.Vector
 }
 
-// Process is called periodically to perform its tasks.
-func (importer *BaseImporter) Process() error {
+// Process is called periodically to perform the actual import.
+func (importer *BaseImporter) Process(connectors []connectors.Connector) error {
+	if meshData := importer.MeshData(); meshData != nil {
+		// Data is read, so lock it for writing
+		importer.Locker().RLock()
+
+		for _, connector := range connectors {
+			if !importer.IsConnectorEnabled(connector.GetID()) {
+				continue
+			}
+
+			// TODO: Use Connector to add/remove site/service
+		}
+
+		importer.Locker().RUnlock()
+	}
+
+	importer.SetMeshData(nil)
 	return nil
+}
+
+// MeshData returns the vector of imported mesh data.
+func (importer *BaseImporter) MeshData() meshdata.Vector {
+	return importer.meshData
+}
+
+// SetMeshData sets the new mesh data vector.
+func (importer *BaseImporter) SetMeshData(meshData meshdata.Vector) {
+	importer.Locker().Lock()
+	defer importer.Locker().Unlock()
+
+	importer.meshData = meshData
 }

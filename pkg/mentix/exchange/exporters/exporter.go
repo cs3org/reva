@@ -29,17 +29,22 @@ import (
 type Exporter interface {
 	exchange.Exchanger
 
+	// MeshData returns the mesh data.
+	MeshData() *meshdata.MeshData
+
 	// Update is called whenever the mesh data set has changed to reflect these changes.
-	Update(meshdata.MeshDataSet) error
+	Update(meshdata.Map) error
 }
 
 // BaseExporter implements basic exporter functionality common to all exporters.
 type BaseExporter struct {
 	exchange.BaseExchanger
+
+	meshData *meshdata.MeshData
 }
 
 // Update is called whenever the mesh data set has changed to reflect these changes.
-func (exporter *BaseExporter) Update(meshDataSet meshdata.MeshDataSet) error {
+func (exporter *BaseExporter) Update(meshDataSet meshdata.Map) error {
 	// Update the stored mesh data set
 	if err := exporter.storeMeshDataSet(meshDataSet); err != nil {
 		return fmt.Errorf("unable to store the mesh data: %v", err)
@@ -48,9 +53,9 @@ func (exporter *BaseExporter) Update(meshDataSet meshdata.MeshDataSet) error {
 	return nil
 }
 
-func (exporter *BaseExporter) storeMeshDataSet(meshDataSet meshdata.MeshDataSet) error {
+func (exporter *BaseExporter) storeMeshDataSet(meshDataSet meshdata.Map) error {
 	// Store the new mesh data set by cloning it and then merging the cloned data into one object
-	meshDataSetCloned := make(meshdata.MeshDataSet)
+	meshDataSetCloned := make(meshdata.Map)
 	for connectorID, meshData := range meshDataSet {
 		if !exporter.IsConnectorEnabled(connectorID) {
 			continue
@@ -62,7 +67,20 @@ func (exporter *BaseExporter) storeMeshDataSet(meshDataSet meshdata.MeshDataSet)
 		}
 		meshDataSetCloned[connectorID] = meshDataCloned
 	}
-	exporter.SetMeshData(meshdata.MergeMeshDataSet(meshDataSetCloned))
+	exporter.SetMeshData(meshdata.MergeMeshDataMap(meshDataSetCloned))
 
 	return nil
+}
+
+// MeshData returns the stored mesh data.
+func (exporter *BaseExporter) MeshData() *meshdata.MeshData {
+	return exporter.meshData
+}
+
+// SetMeshData sets new mesh data.
+func (exporter *BaseExporter) SetMeshData(meshData *meshdata.MeshData) {
+	exporter.Locker().Lock()
+	defer exporter.Locker().Unlock()
+
+	exporter.meshData = meshData
 }

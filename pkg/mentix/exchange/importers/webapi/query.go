@@ -26,13 +26,13 @@ import (
 )
 
 // HandleRegisterSiteQuery registers a site.
-func HandleRegisterSiteQuery(params url.Values) (*meshdata.MeshData, int, []byte, error) {
+func HandleRegisterSiteQuery(params url.Values) (meshdata.Vector, int, []byte, error) {
 	// TODO: Handlen + Response (ähnlich OCM)
-	return &meshdata.MeshData{}, http.StatusOK, []byte("registered"), nil
+	return meshdata.Vector{}, http.StatusOK, []byte("registered"), nil
 }
 
 // HandleUnregisterSiteQuery unregisters a site.
-func HandleUnregisterSiteQuery(params url.Values) (*meshdata.MeshData, int, []byte, error) {
+func HandleUnregisterSiteQuery(params url.Values) (meshdata.Vector, int, []byte, error) {
 	// TODO: Handlen + Response (ähnlich OCM)
-	return &meshdata.MeshData{}, http.StatusOK, []byte("unregistered"), nil
+	return meshdata.Vector{}, http.StatusOK, []byte("unregistered"), nil
 }

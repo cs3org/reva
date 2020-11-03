@@ -18,11 +18,14 @@
 
 package meshdata
 
-// MeshDataSet represents a set of MeshData objects.
-type MeshDataSet = map[string]*MeshData
+// Vector represents a vector of MeshData objects.
+type Vector = []*MeshData
 
-// MergeMeshDataSet merges all mesh data objects within a set.
-func MergeMeshDataSet(meshDataSet MeshDataSet) *MeshData {
+// Map represents a map of MeshData objects.
+type Map = map[string]*MeshData
+
+// MergeMeshDataMap merges all mesh data objects within a map.
+func MergeMeshDataMap(meshDataSet Map) *MeshData {
 	mergedMeshData := &MeshData{}
 	for _, meshData := range meshDataSet {
 		mergedMeshData.Merge(meshData)
