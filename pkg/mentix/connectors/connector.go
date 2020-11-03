@@ -41,6 +41,8 @@ type Connector interface {
 	Activate(conf *config.Configuration, log *zerolog.Logger) error
 	// RetrieveMeshData fetches new mesh data.
 	RetrieveMeshData() (*meshdata.MeshData, error)
+	// UpdateMeshData updates the provided mesh data on the target side.
+	UpdateMeshData(data *meshdata.MeshData) error
 
 	// GetName returns the display name of the connector.
 	GetName() string
@@ -80,6 +82,11 @@ func (connector *BaseConnector) Activate(conf *config.Configuration, log *zerolo
 	connector.log = log
 
 	return nil
+}
+
+// UpdateMeshData updates the provided mesh data on the target side.
+func (connector *BaseConnector) UpdateMeshData(data *meshdata.MeshData) error {
+	return fmt.Errorf("the connector doesn't support updating of mesh data")
 }
 
 // AvailableConnectors returns a list of all connectors that are enabled in the configuration.

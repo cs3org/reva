@@ -20,6 +20,7 @@ package importers
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/cs3org/reva/pkg/mentix/connectors"
 	"github.com/cs3org/reva/pkg/mentix/exchange"
@@ -50,31 +51,34 @@ func (importer *BaseImporter) Process(connectors []connectors.Connector) (bool, 
 		return false, nil
 	}
 
-	// Data is read, so lock it for writing
-	importer.Locker().RLock()
+	var processErrs []string
 
+	// Data is read, so lock it for writing during the loop
+	importer.Locker().RLock()
 	for _, connector := range connectors {
 		if !importer.IsConnectorEnabled(connector.GetID()) {
 			continue
 		}
 
 		if err := importer.processMeshData(connector); err != nil {
-			importer.Locker().RUnlock()
-			return false, fmt.Errorf("unable to process imported mesh data for connector '%v': %v", connector.GetName(), err)
+			processErrs = append(processErrs, fmt.Sprintf("unable to process imported mesh data for connector '%v': %v", connector.GetName(), err))
 		}
 	}
-
 	importer.Locker().RUnlock()
 
 	importer.SetMeshData(nil)
-	return true, nil
+
+	var err error
+	if len(processErrs) != 0 {
+		err = fmt.Errorf(strings.Join(processErrs, "; "))
+	}
+	return true, err
 }
 
 func (importer *BaseImporter) processMeshData(connector connectors.Connector) error {
 	for _, meshData := range importer.meshData {
-		// TODO: Add/remove stuff
-		for _, s := range meshData.Sites {
-			fmt.Println(s.Name)
+		if err := connector.UpdateMeshData(meshData); err != nil {
+			return fmt.Errorf("error while updating mesh data: %v", err)
 		}
 	}
 
