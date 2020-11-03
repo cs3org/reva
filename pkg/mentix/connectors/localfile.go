@@ -49,32 +49,56 @@ func (connector *LocalFileConnector) Activate(conf *config.Configuration, log *z
 		return fmt.Errorf("no file configured")
 	}
 
+	// Create an empty file if it doesn't exist
+	if _, err := os.Stat(connector.filePath); os.IsNotExist(err) {
+		ioutil.WriteFile(connector.filePath, []byte("[]"), os.ModePerm)
+	}
+
 	return nil
 }
 
 // RetrieveMeshData fetches new mesh data.
 func (connector *LocalFileConnector) RetrieveMeshData() (*meshdata.MeshData, error) {
-	meshData := new(meshdata.MeshData)
+	meshData := &meshdata.MeshData{}
 
-	jsonFile, err := os.Open(connector.filePath)
+	jsonData, err := ioutil.ReadFile(connector.filePath)
 	if err != nil {
-		return nil, fmt.Errorf("unable to open input file '%v': %v", connector.filePath, err)
-	}
-	defer jsonFile.Close()
-
-	jsonData, err := ioutil.ReadAll(jsonFile)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read input file '%v': %v", connector.filePath, err)
+		return nil, fmt.Errorf("unable to read file '%v': %v", connector.filePath, err)
 	}
 
 	if err := json.Unmarshal(jsonData, &meshData.Sites); err != nil {
-		return nil, fmt.Errorf("invalid input file '%v': %v", connector.filePath, err)
+		return nil, fmt.Errorf("invalid file '%v': %v", connector.filePath, err)
 	}
 
 	// Update the site types, as these are not part of the JSON data
 	connector.setSiteTypes(meshData)
 
 	return meshData, nil
+}
+
+// UpdateMeshData updates the provided mesh data on the target side.
+func (connector *LocalFileConnector) UpdateMeshData(updatedData *meshdata.MeshData) error {
+	meshData, err := connector.RetrieveMeshData()
+	if err != nil {
+		// Ignore errors and start with an empty data set
+		meshData = &meshdata.MeshData{}
+	}
+
+	if (updatedData.Flags & meshdata.FlagObsolete) == meshdata.FlagObsolete {
+		// Remove data by unmerging
+		meshData.Unmerge(updatedData)
+	} else {
+		// Add/update data by merging
+		meshData.Merge(updatedData)
+	}
+
+	// Write the updated sites back to the file
+	jsonData, _ := json.MarshalIndent(meshData.Sites, "", "\t")
+	if err := ioutil.WriteFile(connector.filePath, jsonData, os.ModePerm); err != nil {
+		return fmt.Errorf("unable to write file '%v': %v", connector.filePath, err)
+	}
+
+	return nil
 }
 
 func (connector *LocalFileConnector) setSiteTypes(meshData *meshdata.MeshData) {

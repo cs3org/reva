@@ -236,6 +236,10 @@ func (mntx *Mentix) processImporters() (bool, error) {
 			return false, fmt.Errorf("unable to process importer '%v': %v", importer.GetName(), err)
 		}
 		meshDataUpdated = meshDataUpdated || updated
+
+		if updated {
+			mntx.log.Debug().Msgf("mesh data imported from '%v'", importer.GetName())
+		}
 	}
 
 	return meshDataUpdated, nil

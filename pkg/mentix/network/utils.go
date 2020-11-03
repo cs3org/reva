@@ -85,17 +85,19 @@ func CreateResponse(msg string, params ResponseParams) []byte {
 	return jsonData
 }
 
-// ExtractDomainFromURL extracts the domain name (domain.tld) from a URL.
-func ExtractDomainFromURL(hostURL *url.URL) string {
+// ExtractDomainFromURL extracts the domain name (domain.tld or subdomain.domain.tld) from a URL.
+func ExtractDomainFromURL(hostURL *url.URL, keepSubdomain bool) string {
 	// Remove host port if present
 	host, _, err := net.SplitHostPort(hostURL.Host)
 	if err != nil {
 		host = hostURL.Host
 	}
 
-	// Remove subdomain
-	if idx := strings.Index(host, "."); idx != -1 {
-		host = host[idx+1:]
+	if !keepSubdomain {
+		// Remove subdomain
+		if idx := strings.Index(host, "."); idx != -1 {
+			host = host[idx+1:]
+		}
 	}
 
 	return host

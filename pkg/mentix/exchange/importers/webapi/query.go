@@ -47,7 +47,7 @@ func decodeQueryData(data []byte) (*meshdata.MeshData, error) {
 		site.Homepage = fmt.Sprintf("http://www.%v", site.Domain)
 	} else if site.Domain == "" {
 		if URL, err := url.Parse(site.Homepage); err == nil {
-			site.Domain = network.ExtractDomainFromURL(URL)
+			site.Domain = network.ExtractDomainFromURL(URL, false)
 		}
 	}
 

@@ -20,6 +20,10 @@ package meshdata
 
 import (
 	"fmt"
+	"net/url"
+	"strings"
+
+	"github.com/cs3org/reva/pkg/mentix/network"
 )
 
 const (
@@ -52,8 +56,49 @@ type Site struct {
 	Properties map[string]string
 }
 
+// AddService adds a new service; if a service with the same name already exists, the existing one is overwritten.
+func (site *Site) AddService(service *Service) {
+	if serviceExisting := site.FindService(service.Name); serviceExisting != nil {
+		*service = *serviceExisting
+	} else {
+		site.Services = append(site.Services, service)
+	}
+}
+
+// RemoveService removes the provided service.
+func (site *Site) RemoveService(name string) {
+	if service := site.FindService(name); service != nil {
+		for idx, serviceExisting := range site.Services {
+			if serviceExisting == service {
+				lastIdx := len(site.Services) - 1
+				site.Services[idx] = site.Services[lastIdx]
+				site.Services[lastIdx] = nil
+				site.Services = site.Services[:lastIdx]
+				break
+			}
+		}
+	}
+}
+
+// FindService searches for a service with the given name.
+func (site *Site) FindService(name string) *Service {
+	for _, service := range site.Services {
+		if strings.EqualFold(service.Name, name) {
+			return service
+		}
+	}
+	return nil
+}
+
 // GetID generates a unique ID for the site; the following fields are used for this:
 // Name, Domain
 func (site *Site) GetID() string {
-	return fmt.Sprintf("%s::[%s]", site.Domain, site.Name)
+	host := site.Domain
+	if site.Homepage != "" {
+		if hostURL, err := url.Parse(site.Homepage); err == nil {
+			host = network.ExtractDomainFromURL(hostURL, true)
+		}
+	}
+
+	return fmt.Sprintf("%s::[%s]", host, site.Name)
 }
