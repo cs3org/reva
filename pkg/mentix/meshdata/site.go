@@ -18,6 +18,10 @@
 
 package meshdata
 
+import (
+	"fmt"
+)
+
 const (
 	// SiteTypeScienceMesh flags a site as being part of the mesh.
 	SiteTypeScienceMesh = iota
@@ -46,4 +50,10 @@ type Site struct {
 
 	Services   []*Service
 	Properties map[string]string
+}
+
+// GetID generates a unique ID for the site; the following fields are used for this:
+// Name, Domain
+func (site *Site) GetID() string {
+	return fmt.Sprintf("%s::[%s]", site.Domain, site.Name)
 }

@@ -20,6 +20,7 @@ package importers
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
@@ -33,7 +34,7 @@ const (
 	queryActionUnregisterSite = "unregister"
 )
 
-type queryCallback func(url.Values) (meshdata.Vector, int, []byte, error)
+type queryCallback func([]byte, url.Values) (meshdata.Vector, int, []byte, error)
 
 // BaseRequestImporter implements basic importer functionality common to all request importers.
 type BaseRequestImporter struct {
@@ -46,7 +47,8 @@ type BaseRequestImporter struct {
 
 // HandleRequest handles the actual HTTP request.
 func (importer *BaseRequestImporter) HandleRequest(resp http.ResponseWriter, req *http.Request) {
-	meshData, status, respData, err := importer.handleQuery(req.URL.Query())
+	body, _ := ioutil.ReadAll(req.Body)
+	meshData, status, respData, err := importer.handleQuery(body, req.URL.Query())
 	if err == nil {
 		importer.mergeImportedMeshData(meshData)
 	} else {
@@ -69,17 +71,17 @@ func (importer *BaseRequestImporter) mergeImportedMeshData(meshData meshdata.Vec
 	}
 }
 
-func (importer *BaseRequestImporter) handleQuery(params url.Values) (meshdata.Vector, int, []byte, error) {
+func (importer *BaseRequestImporter) handleQuery(data []byte, params url.Values) (meshdata.Vector, int, []byte, error) {
 	action := params.Get("action")
 	switch strings.ToLower(action) {
 	case queryActionRegisterSite:
 		if importer.registerSiteActionHandler != nil {
-			return importer.registerSiteActionHandler(params)
+			return importer.registerSiteActionHandler(data, params)
 		}
 
 	case queryActionUnregisterSite:
 		if importer.unregisterSiteActionHandler != nil {
-			return importer.unregisterSiteActionHandler(params)
+			return importer.unregisterSiteActionHandler(data, params)
 		}
 
 	default:

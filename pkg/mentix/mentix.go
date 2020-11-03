@@ -293,6 +293,8 @@ func (mntx *Mentix) GetRequestExporters() []exchange.RequestExchanger {
 // RequestHandler handles any incoming HTTP requests by asking each RequestExchanger whether it wants to
 // handle the request (usually based on the relative URL path).
 func (mntx *Mentix) RequestHandler(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
 	log := appctx.GetLogger(r.Context())
 
 	switch r.Method {

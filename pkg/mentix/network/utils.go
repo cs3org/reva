@@ -19,15 +19,21 @@
 package network
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	p "path"
+	"strings"
 )
 
 // URLParams holds Key-Value URL parameters; it is a simpler form of url.Values.
 type URLParams map[string]string
+
+// ResponseParams holds parameters of an HTTP response.
+type ResponseParams map[string]interface{}
 
 // GenerateURL creates a URL object from a host, path and optional parameters.
 func GenerateURL(host string, path string, params URLParams) (*url.URL, error) {
@@ -66,4 +72,31 @@ func ReadEndpoint(host string, path string, params URLParams) ([]byte, error) {
 	defer resp.Body.Close()
 	body, _ := ioutil.ReadAll(resp.Body)
 	return body, nil
+}
+
+// CreateResponse creates a generic HTTP response in JSON format.
+func CreateResponse(msg string, params ResponseParams) []byte {
+	if params == nil {
+		params = make(map[string]interface{})
+	}
+	params["message"] = msg
+
+	jsonData, _ := json.MarshalIndent(params, "", "\t")
+	return jsonData
+}
+
+// ExtractDomainFromURL extracts the domain name (domain.tld) from a URL.
+func ExtractDomainFromURL(hostURL *url.URL) string {
+	// Remove host port if present
+	host, _, err := net.SplitHostPort(hostURL.Host)
+	if err != nil {
+		host = hostURL.Host
+	}
+
+	// Remove subdomain
+	if idx := strings.Index(host, "."); idx != -1 {
+		host = host[idx+1:]
+	}
+
+	return host
 }
