@@ -83,6 +83,7 @@ var (
 		helpCommand(),
 		rcloneDoTransfer(),
 		rcloneGetTransferStatus(),
+		rcloneCancelTransfer(),
 	}
 )
 
