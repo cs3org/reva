@@ -90,6 +90,43 @@ func (site *Site) FindService(name string) *Service {
 	return nil
 }
 
+// Verify checks if the site data is valid.
+func (site *Site) Verify() error {
+	// Verify data
+	if site.Name == "" {
+		return fmt.Errorf("site name missing")
+	}
+	if site.Domain == "" && site.Homepage == "" {
+		return fmt.Errorf("site URL missing")
+	}
+
+	// Verify services
+	for _, service := range site.Services {
+		if err := service.Verify(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// InferMissingData infers missing data from other data where possible.
+func (site *Site) InferMissingData() {
+	// Infer missing data
+	if site.Homepage == "" {
+		site.Homepage = fmt.Sprintf("http://www.%v", site.Domain)
+	} else if site.Domain == "" {
+		if URL, err := url.Parse(site.Homepage); err == nil {
+			site.Domain = network.ExtractDomainFromURL(URL, false)
+		}
+	}
+
+	// Infer missing for services
+	for _, service := range site.Services {
+		service.InferMissingData()
+	}
+}
+
 // GetID generates a unique ID for the site; the following fields are used for this:
 // Name, Domain
 func (site *Site) GetID() string {

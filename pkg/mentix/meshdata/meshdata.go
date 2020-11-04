@@ -138,6 +138,38 @@ func (meshData *MeshData) Unmerge(inData *MeshData) {
 	}
 }
 
+// Verify checks if the mesh data is valid.
+func (meshData *MeshData) Verify() error {
+	// Verify all sites
+	for _, site := range meshData.Sites {
+		if err := site.Verify(); err != nil {
+			return err
+		}
+	}
+
+	// Verify all service types
+	for _, serviceType := range meshData.ServiceTypes {
+		if err := serviceType.Verify(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// InferMissingData infers missing data from other data where possible.
+func (meshData *MeshData) InferMissingData() {
+	// Infer missing site data
+	for _, site := range meshData.Sites {
+		site.InferMissingData()
+	}
+
+	// Infer missing service type data
+	for _, serviceType := range meshData.ServiceTypes {
+		serviceType.InferMissingData()
+	}
+}
+
 // ToJSON converts the data to JSON.
 func (meshData *MeshData) ToJSON() (string, error) {
 	data, err := json.MarshalIndent(meshData, "", "\t")

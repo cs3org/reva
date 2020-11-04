@@ -34,24 +34,12 @@ func decodeQueryData(data []byte) (*meshdata.MeshData, error) {
 		return nil, err
 	}
 
-	// Verify that the absolute minimum of information is provided
-	if site.Name == "" {
-		return nil, fmt.Errorf("site name missing")
+	meshData := &meshdata.MeshData{Sites: []*meshdata.Site{site}}
+	if err := meshData.Verify(); err != nil {
+		return nil, fmt.Errorf("verifying the imported mesh data failed: %v", err)
 	}
-	if site.Domain == "" && site.Homepage == "" {
-		return nil, fmt.Errorf("site URL missing")
-	}
-
-	// Infer missing data
-	if site.Homepage == "" {
-		site.Homepage = fmt.Sprintf("http://www.%v", site.Domain)
-	} else if site.Domain == "" {
-		if URL, err := url.Parse(site.Homepage); err == nil {
-			site.Domain = network.ExtractDomainFromURL(URL, false)
-		}
-	}
-
-	return &meshdata.MeshData{Sites: []*meshdata.Site{site}}, nil
+	meshData.InferMissingData()
+	return meshData, nil
 }
 
 func handleQuery(data []byte, params url.Values, flags int32, msg string) (meshdata.Vector, int, []byte, error) {
