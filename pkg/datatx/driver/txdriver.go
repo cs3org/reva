@@ -46,11 +46,11 @@ const StatusTransferComplete string = "STATUS_TRANSFER_COMPLETE"
 // StatusTransferFailed The data transfer has failed.
 const StatusTransferFailed string = "STATUS_TRANSFER_FAILED"
 
-// // The data transfer had been cancelled.
-// const STATUS_TRANSFER_CANCELLED string = "STATUS_TRANSFER_CANCELLED"
+// StatusTransferCancelled The data transfer had been cancelled.
+const StatusTransferCancelled string = "STATUS_TRANSFER_CANCELLED"
 
-// // The request for cancelling the data transfer has failed.
-// const STATUS_TRANSFER_CANCEL_FAILED string = "STATUS_TRANSFER_CANCEL_FAILED"
+// StatusTransferCancelFailed The request for cancelling the data transfer has failed.
+const StatusTransferCancelFailed string = "STATUS_TRANSFER_CANCEL_FAILED"
 
 // // The transfer has expired somewhere down the line.
 // const STATUS_TRANSFER_EXPIRED string = "STATUS_TRANSFER_EXPIRED"
@@ -76,6 +76,6 @@ type TxDriver interface {
 	DoTransfer(srcRemote string, srcPath string, srcToken string, destRemote string, destPath string, destToken string) (*Job, error)
 	// GetTransferStatus returns the status of the transfer defined by the specified job
 	GetTransferStatus(job *Job) (string, error)
-	// CancelTransfer cancels the transfer defined by the specified job
-	CancelTransfer(job *Job) (bool, error)
+	// CancelTransfer cancels the transfer defined by the specified job nd returns the status
+	CancelTransfer(job *Job) (string, error)
 }
