@@ -33,7 +33,7 @@ func rcloneDoTransfer() *command {
 	cmd := newCommand("rclone-do-transfer")
 	cmd.Description = func() string { return "initiates an rclone transfer" }
 	cmd.Usage = func() string { return "Usage: rclone-do-transfer [-flags]" }
-	senderEndpoint := cmd.String("senderEndpoint", "", "the transfer sender endpoint")
+	senderEndpoint := cmd.String("senderEndpoint", "", "rclone endpoint")
 	srcEndpoint := cmd.String("srcEndpoint", "", "the source endpoint")
 	srcToken := cmd.String("srcToken", "", "the token of the source user")
 	srcPath := cmd.String("srcPath", "", "source path of the resource")

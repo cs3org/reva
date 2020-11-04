@@ -35,8 +35,8 @@ func rcloneGetTransferStatus() *command {
 	cmd := newCommand("rclone-get-transfer-status")
 	cmd.Description = func() string { return "returns the rclone transfer status" }
 	cmd.Usage = func() string { return "Usage: rclone-get-transfer-status [-flags]" }
-	senderEndpoint := cmd.String("senderEndpoint", "", "the transfer sender endpoint")
-	transferID := cmd.String("transferID", "", "the transfer id")
+	senderEndpoint := cmd.String("senderEndpoint", "", "rclone endpoint")
+	transferID := cmd.String("transferID", "", "the job id")
 
 	cmd.ResetFlags = func() {
 		*senderEndpoint, *transferID = "", ""
@@ -52,10 +52,10 @@ func rcloneGetTransferStatus() *command {
 			return errors.New("transfer id must be specified: use -name flag\n" + cmd.Usage())
 		}
 		sndrEndpoint := fmt.Sprintf("\"senderEndpoint\":\"%v\"", *senderEndpoint)
-		tID := fmt.Sprintf("\"srcEndpoint\":\"%v\"", *transferID)
+		tID := fmt.Sprintf("\"job ID\":\"%v\"", *transferID)
 		callParams := fmt.Sprintf("{%v}", tID)
 		fmt.Printf("using: %v\n", sndrEndpoint)
-		fmt.Printf("calling rclone.DoTransfer with params: %v\n", callParams)
+		fmt.Printf("calling rclone.GetTransferStatus with params: %v\n", callParams)
 
 		// rclone configuration
 		c := &datatxConfig.Config{
