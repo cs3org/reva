@@ -25,9 +25,14 @@ endpoint = "/"
 # If this setting is omitted, all connectors will be used as data sources
 enabled_connectors = ["gocdb"]
 
+# Enable the WebAPI importer
+[http.services.mentix.importers.webapi]
+# For importers, this is obligatory; the connectors will be used as the target for data updates
+enabled_connectors = ["localfile"]
+
 # Configure the Prometheus Service Discovery:
-# [http.services.mentix.exporters.promsd]
+[http.services.mentix.exporters.promsd]
 # The following files must be made available to Prometheus.
 # They can then be used as the file_sd source of a job.
-# metrics_output_file = "/usr/share/prom/sciencemesh_metrics.json"
-# blackbox_output_file = "/usr/share/prom/sciencemesh_blackbox.json"
+metrics_output_file = "/usr/share/prom/sciencemesh_metrics.json"
+blackbox_output_file = "/usr/share/prom/sciencemesh_blackbox.json"
