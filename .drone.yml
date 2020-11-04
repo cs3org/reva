@@ -446,7 +446,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b adjust-testing-on-ocis-reva-logic --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout a50d1e539c0cff27111cc7b7e39d58db5626704b
+      - git checkout 05e430b641b4d0b95ea6903ef178737a7bcbaabd
 
   - name: localAPIAcceptanceTestsOwncloudStorage
     image: owncloudci/php:7.4
@@ -457,7 +457,7 @@ steps:
       OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
       STORAGE_DRIVER: 'OWNCLOUD'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
-      TEST_EXTERNAL_USER_BACKENDS: 'true'
+      TEST_WITH_LDAP: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_REVA: 'true'
       BEHAT_FILTER_TAGS: '~@skipOnOcis-OC-Storage'
@@ -520,7 +520,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b adjust-testing-on-ocis-reva-logic --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout a50d1e539c0cff27111cc7b7e39d58db5626704b
+      - git checkout 05e430b641b4d0b95ea6903ef178737a7bcbaabd
 
   - name: localAPIAcceptanceTestsOcisStorage
     image: owncloudci/php:7.4
@@ -532,7 +532,7 @@ steps:
       DELETE_USER_DATA_CMD: 'rm -rf /drone/src/tmp/reva/data/nodes/root/* /drone/src/tmp/reva/data/nodes/*-*-*-*'
       STORAGE_DRIVER: 'OCIS'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
-      TEST_EXTERNAL_USER_BACKENDS: 'true'
+      TEST_WITH_LDAP: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_REVA: 'true'
       BEHAT_FILTER_TAGS: '~@skipOnOcis-OCIS-Storage'
@@ -589,7 +589,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b adjust-testing-on-ocis-reva-logic --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout a50d1e539c0cff27111cc7b7e39d58db5626704b
+      - git checkout 05e430b641b4d0b95ea6903ef178737a7bcbaabd
 
   - name: oC10APIAcceptanceTestsOcisStorage
     image: owncloudci/php:7.4
@@ -602,7 +602,7 @@ steps:
       DELETE_USER_DATA_CMD: 'rm -rf /drone/src/tmp/reva/data/nodes/root/* /drone/src/tmp/reva/data/nodes/*-*-*-*'
       STORAGE_DRIVER: 'OCIS'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
-      TEST_EXTERNAL_USER_BACKENDS: 'true'
+      TEST_WITH_LDAP: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_REVA: 'true'
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage'
@@ -661,7 +661,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b adjust-testing-on-ocis-reva-logic --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout a50d1e539c0cff27111cc7b7e39d58db5626704b
+      - git checkout 05e430b641b4d0b95ea6903ef178737a7bcbaabd
 
   - name: oC10APIAcceptanceTestsOcisStorage
     image: owncloudci/php:7.4
@@ -674,7 +674,7 @@ steps:
       DELETE_USER_DATA_CMD: 'rm -rf /drone/src/tmp/reva/data/nodes/root/* /drone/src/tmp/reva/data/nodes/*-*-*-*'
       STORAGE_DRIVER: 'OCIS'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
-      TEST_EXTERNAL_USER_BACKENDS: 'true'
+      TEST_WITH_LDAP: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_REVA: 'true'
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage'
@@ -733,7 +733,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b adjust-testing-on-ocis-reva-logic --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout a50d1e539c0cff27111cc7b7e39d58db5626704b
+      - git checkout 05e430b641b4d0b95ea6903ef178737a7bcbaabd
 
   - name: oC10APIAcceptanceTestsOcisStorage
     image: owncloudci/php:7.4
@@ -746,7 +746,7 @@ steps:
       DELETE_USER_DATA_CMD: 'rm -rf /drone/src/tmp/reva/data/nodes/root/* /drone/src/tmp/reva/data/nodes/*-*-*-*'
       STORAGE_DRIVER: 'OCIS'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
-      TEST_EXTERNAL_USER_BACKENDS: 'true'
+      TEST_WITH_LDAP: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_REVA: 'true'
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage'
@@ -805,7 +805,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b adjust-testing-on-ocis-reva-logic --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout a50d1e539c0cff27111cc7b7e39d58db5626704b
+      - git checkout 05e430b641b4d0b95ea6903ef178737a7bcbaabd
 
   - name: oC10APIAcceptanceTestsOcisStorage
     image: owncloudci/php:7.4
@@ -818,7 +818,7 @@ steps:
       DELETE_USER_DATA_CMD: 'rm -rf /drone/src/tmp/reva/data/nodes/root/* /drone/src/tmp/reva/data/nodes/*-*-*-*'
       STORAGE_DRIVER: 'OCIS'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
-      TEST_EXTERNAL_USER_BACKENDS: 'true'
+      TEST_WITH_LDAP: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_REVA: 'true'
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage'
@@ -877,7 +877,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b adjust-testing-on-ocis-reva-logic --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout a50d1e539c0cff27111cc7b7e39d58db5626704b
+      - git checkout 05e430b641b4d0b95ea6903ef178737a7bcbaabd
 
   - name: oC10APIAcceptanceTestsOcisStorage
     image: owncloudci/php:7.4
@@ -890,7 +890,7 @@ steps:
       DELETE_USER_DATA_CMD: 'rm -rf /drone/src/tmp/reva/data/nodes/root/* /drone/src/tmp/reva/data/nodes/*-*-*-*'
       STORAGE_DRIVER: 'OCIS'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
-      TEST_EXTERNAL_USER_BACKENDS: 'true'
+      TEST_WITH_LDAP: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_REVA: 'true'
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage'
@@ -949,7 +949,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b adjust-testing-on-ocis-reva-logic --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout a50d1e539c0cff27111cc7b7e39d58db5626704b
+      - git checkout 05e430b641b4d0b95ea6903ef178737a7bcbaabd
 
   - name: oC10APIAcceptanceTestsOcisStorage
     image: owncloudci/php:7.4
@@ -962,7 +962,7 @@ steps:
       DELETE_USER_DATA_CMD: 'rm -rf /drone/src/tmp/reva/data/nodes/root/* /drone/src/tmp/reva/data/nodes/*-*-*-*'
       STORAGE_DRIVER: 'OCIS'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
-      TEST_EXTERNAL_USER_BACKENDS: 'true'
+      TEST_WITH_LDAP: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_REVA: 'true'
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage'
@@ -1021,7 +1021,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b adjust-testing-on-ocis-reva-logic --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout a50d1e539c0cff27111cc7b7e39d58db5626704b
+      - git checkout 05e430b641b4d0b95ea6903ef178737a7bcbaabd
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
     image: owncloudci/php:7.4
@@ -1033,7 +1033,7 @@ steps:
       OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
       STORAGE_DRIVER: 'OWNCLOUD'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
-      TEST_EXTERNAL_USER_BACKENDS: 'true'
+      TEST_WITH_LDAP: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_REVA: 'true'
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OC-Storage'
@@ -1098,7 +1098,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b adjust-testing-on-ocis-reva-logic --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout a50d1e539c0cff27111cc7b7e39d58db5626704b
+      - git checkout 05e430b641b4d0b95ea6903ef178737a7bcbaabd
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
     image: owncloudci/php:7.4
@@ -1110,7 +1110,7 @@ steps:
       OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
       STORAGE_DRIVER: 'OWNCLOUD'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
-      TEST_EXTERNAL_USER_BACKENDS: 'true'
+      TEST_WITH_LDAP: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_REVA: 'true'
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OC-Storage'
@@ -1175,7 +1175,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b adjust-testing-on-ocis-reva-logic --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout a50d1e539c0cff27111cc7b7e39d58db5626704b
+      - git checkout 05e430b641b4d0b95ea6903ef178737a7bcbaabd
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
     image: owncloudci/php:7.4
@@ -1187,7 +1187,7 @@ steps:
       OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
       STORAGE_DRIVER: 'OWNCLOUD'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
-      TEST_EXTERNAL_USER_BACKENDS: 'true'
+      TEST_WITH_LDAP: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_REVA: 'true'
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OC-Storage'
@@ -1252,7 +1252,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b adjust-testing-on-ocis-reva-logic --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout a50d1e539c0cff27111cc7b7e39d58db5626704b
+      - git checkout 05e430b641b4d0b95ea6903ef178737a7bcbaabd
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
     image: owncloudci/php:7.4
@@ -1264,7 +1264,7 @@ steps:
       OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
       STORAGE_DRIVER: 'OWNCLOUD'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
-      TEST_EXTERNAL_USER_BACKENDS: 'true'
+      TEST_WITH_LDAP: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_REVA: 'true'
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OC-Storage'
@@ -1329,7 +1329,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b adjust-testing-on-ocis-reva-logic --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout a50d1e539c0cff27111cc7b7e39d58db5626704b
+      - git checkout 05e430b641b4d0b95ea6903ef178737a7bcbaabd
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
     image: owncloudci/php:7.4
@@ -1341,7 +1341,7 @@ steps:
       OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
       STORAGE_DRIVER: 'OWNCLOUD'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
-      TEST_EXTERNAL_USER_BACKENDS: 'true'
+      TEST_WITH_LDAP: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_REVA: 'true'
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OC-Storage'
@@ -1406,7 +1406,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b adjust-testing-on-ocis-reva-logic --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout a50d1e539c0cff27111cc7b7e39d58db5626704b
+      - git checkout 05e430b641b4d0b95ea6903ef178737a7bcbaabd
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
     image: owncloudci/php:7.4
@@ -1418,7 +1418,7 @@ steps:
       OCIS_REVA_DATA_ROOT: '/drone/src/tmp/reva/data/'
       STORAGE_DRIVER: 'OWNCLOUD'
       SKELETON_DIR: '/drone/src/tmp/testing/data/apiSkeleton'
-      TEST_EXTERNAL_USER_BACKENDS: 'true'
+      TEST_WITH_LDAP: 'true'
       REVA_LDAP_HOSTNAME: 'ldap'
       TEST_REVA: 'true'
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OC-Storage'
