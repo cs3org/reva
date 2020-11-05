@@ -1412,6 +1412,12 @@ apiVersions/fileVersionsSharingToShares.feature:253
 # renaming a file/folder inside another folder doesn't changes etag of parent folder
 # restoring a file doesn't changes the etags of the parents
 #
+apiWebdavEtagPropagation1/deleteFileFolder.feature:183
+apiWebdavEtagPropagation2/createFolder.feature:65
+apiWebdavEtagPropagation2/createFolder.feature:88
+apiWebdavEtagPropagation2/createFolder.feature:89
+apiWebdavEtagPropagation2/upload.feature:87
+apiWebdavEtagPropagation2/upload.feature:88
 apiWebdavEtagPropagation1/moveFileFolder.feature:20
 apiWebdavEtagPropagation1/moveFileFolder.feature:21
 apiWebdavEtagPropagation1/moveFileFolder.feature:308
