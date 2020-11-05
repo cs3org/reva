@@ -29,6 +29,8 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -37,41 +39,46 @@ import (
 
 var defaultFilePerm = os.FileMode(0664)
 
-// TODO deprecated ... use tus
 func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
-	fn, err := fs.resolve(ctx, ref)
+	upload, err := fs.GetUpload(ctx, ref.GetPath())
 	if err != nil {
-		return errors.Wrap(err, "error resolving ref")
-	}
-	fn = fs.wrap(ctx, fn)
-
-	// we cannot rely on /tmp as it can live in another partition and we can
-	// hit invalid cross-device link errors, so we create the tmp file in the same directory
-	// the file is supposed to be written.
-	tmp, err := ioutil.TempFile(filepath.Dir(fn), "._reva_atomic_upload")
-	if err != nil {
-		return errors.Wrap(err, "localfs: error creating tmp fn at "+filepath.Dir(fn))
+		return errors.Wrap(err, "ocisfs: error retrieving upload")
 	}
 
-	_, err = io.Copy(tmp, r)
-	if err != nil {
-		return errors.Wrap(err, "localfs: error writing to tmp file "+tmp.Name())
-	}
+	uploadInfo := upload.(*fileUpload)
 
-	// if destination exists
-	if _, err := os.Stat(fn); err == nil {
-		// create revision
-		if err := fs.archiveRevision(ctx, fn); err != nil {
+	p := uploadInfo.info.Storage["InternalDestination"]
+	ok, err := chunking.IsChunked(p)
+	if err != nil {
+		return errors.Wrap(err, "ocfs: error checking path")
+	}
+	if ok {
+		var assembledFile string
+		p, assembledFile, err = fs.chunkHandler.WriteChunk(p, r)
+		if err != nil {
 			return err
 		}
+		if p == "" {
+			if err = uploadInfo.Terminate(ctx); err != nil {
+				return errors.Wrap(err, "ocfs: error removing auxiliary files")
+			}
+			return errtypes.PartialContent(ref.String())
+		}
+		uploadInfo.info.Storage["InternalDestination"] = p
+		fd, err := os.Open(assembledFile)
+		if err != nil {
+			return errors.Wrap(err, "eos: error opening assembled file")
+		}
+		defer fd.Close()
+		defer os.RemoveAll(assembledFile)
+		r = fd
 	}
 
-	// TODO(labkode): make sure rename is atomic, missing fsync ...
-	if err := os.Rename(tmp.Name(), fn); err != nil {
-		return errors.Wrap(err, "localfs: error renaming from "+tmp.Name()+" to "+fn)
+	if _, err := uploadInfo.WriteChunk(ctx, 0, r); err != nil {
+		return errors.Wrap(err, "ocisfs: error writing to binary file")
 	}
 
-	return nil
+	return uploadInfo.FinishUpload(ctx)
 }
 
 // InitiateUpload returns an upload id that can be used for uploads with tus
@@ -80,6 +87,7 @@ func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.Rea
 // TODO to implement LengthDeferrerDataStore make size optional
 // TODO read optional content for small files in this request
 func (fs *localfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (uploadID string, err error) {
+
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return "", errors.Wrap(err, "localfs: error resolving reference")

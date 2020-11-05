@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
+	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
@@ -40,65 +41,46 @@ import (
 
 var defaultFilePerm = os.FileMode(0664)
 
-// TODO deprecated ... use tus
 func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
-	ip, err := fs.resolve(ctx, ref)
+	upload, err := fs.GetUpload(ctx, ref.GetPath())
 	if err != nil {
-		return errors.Wrap(err, "ocfs: error resolving reference")
+		return errors.Wrap(err, "ocfs: error retrieving upload")
 	}
 
-	var perm *provider.ResourcePermissions
-	var perr error
-	// if destination exists
-	if _, err := os.Stat(ip); err == nil {
-		// check permissions of file to be overwritten
-		perm, perr = fs.readPermissions(ctx, ip)
-	} else {
-		// check permissions
-		perm, perr = fs.readPermissions(ctx, filepath.Dir(ip))
-	}
-	if perr == nil {
-		if !perm.InitiateFileUpload {
-			return errtypes.PermissionDenied("")
-		}
-	} else {
-		if isNotFound(perr) {
-			return errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
-		}
-		return errors.Wrap(perr, "ocfs: error reading permissions")
-	}
+	uploadInfo := upload.(*fileUpload)
 
-	// we cannot rely on /tmp as it can live in another partition and we can
-	// hit invalid cross-device link errors, so we create the tmp file in the same directory
-	// the file is supposed to be written.
-	tmp, err := ioutil.TempFile(filepath.Dir(ip), "._reva_atomic_upload")
+	p := uploadInfo.info.Storage["InternalDestination"]
+	ok, err := chunking.IsChunked(p)
 	if err != nil {
-		return errors.Wrap(err, "ocfs: error creating tmp file at "+filepath.Dir(ip))
+		return errors.Wrap(err, "ocfs: error checking path")
 	}
-
-	_, err = io.Copy(tmp, r)
-	if err != nil {
-		return errors.Wrap(err, "ocfs: error writing to tmp file "+tmp.Name())
-	}
-
-	// if destination exists
-	if _, err := os.Stat(ip); err == nil {
-		// copy attributes of existing file to tmp file
-		if err := fs.copyMD(ip, tmp.Name()); err != nil {
-			return errors.Wrap(err, "ocfs: error copying metadata from "+ip+" to "+tmp.Name())
-		}
-		// create revision
-		if err := fs.archiveRevision(ctx, fs.getVersionsPath(ctx, ip), ip); err != nil {
+	if ok {
+		var assembledFile string
+		p, assembledFile, err = fs.chunkHandler.WriteChunk(p, r)
+		if err != nil {
 			return err
 		}
+		if p == "" {
+			if err = uploadInfo.Terminate(ctx); err != nil {
+				return errors.Wrap(err, "ocfs: error removing auxiliary files")
+			}
+			return errtypes.PartialContent(ref.String())
+		}
+		uploadInfo.info.Storage["InternalDestination"] = p
+		fd, err := os.Open(assembledFile)
+		if err != nil {
+			return errors.Wrap(err, "eos: error opening assembled file")
+		}
+		defer fd.Close()
+		defer os.RemoveAll(assembledFile)
+		r = fd
 	}
 
-	// TODO(jfd): make sure rename is atomic, missing fsync ...
-	if err := os.Rename(tmp.Name(), ip); err != nil {
-		return errors.Wrap(err, "ocfs: error renaming from "+tmp.Name()+" to "+ip)
+	if _, err := uploadInfo.WriteChunk(ctx, 0, r); err != nil {
+		return errors.Wrap(err, "ocfs: error writing to binary file")
 	}
 
-	return nil
+	return uploadInfo.FinishUpload(ctx)
 }
 
 // InitiateUpload returns an upload id that can be used for uploads with tus

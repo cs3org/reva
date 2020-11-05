@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
+	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
@@ -160,18 +161,20 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	}
 
 	return &ocisfs{
-		tp: tp,
-		lu: lu,
-		o:  o,
-		p:  &Permissions{lu: lu},
+		tp:           tp,
+		lu:           lu,
+		o:            o,
+		p:            &Permissions{lu: lu},
+		chunkHandler: chunking.NewChunkHandler(filepath.Join(o.Root, "uploads")),
 	}, nil
 }
 
 type ocisfs struct {
-	tp TreePersistence
-	lu *Lookup
-	o  *Options
-	p  *Permissions
+	tp           TreePersistence
+	lu           *Lookup
+	o            *Options
+	p            *Permissions
+	chunkHandler *chunking.ChunkHandler
 }
 
 func (fs *ocisfs) Shutdown(ctx context.Context) error {

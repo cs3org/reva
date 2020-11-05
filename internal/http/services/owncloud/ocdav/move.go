@@ -114,7 +114,7 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	var successCode int
+	successCode := http.StatusCreated // 201 if new resource was created, see https://tools.ietf.org/html/rfc4918#section-9.9.4
 	if dstStatRes.Status.Code == rpc.Code_CODE_OK {
 		successCode = http.StatusNoContent // 204 if target already existed, see https://tools.ietf.org/html/rfc4918#section-9.9.4
 
@@ -145,8 +145,6 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 			return
 		}
 	} else {
-		successCode = http.StatusCreated // 201 if new resource was created, see https://tools.ietf.org/html/rfc4918#section-9.9.4
-
 		// check if an intermediate path / the parent exists
 		intermediateDir := path.Dir(dst)
 		ref2 := &provider.Reference{

@@ -42,6 +42,7 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
+	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/grants"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/user"
@@ -175,6 +176,7 @@ func (c *Config) init() {
 type eosfs struct {
 	c             *eosclient.Client
 	conf          *Config
+	chunkHandler  *chunking.ChunkHandler
 	singleUserUID string
 	singleUserGID string
 }
@@ -208,8 +210,9 @@ func NewEOSFS(c *Config) (storage.FS, error) {
 	eosClient := eosclient.New(eosClientOpts)
 
 	eosfs := &eosfs{
-		c:    eosClient,
-		conf: c,
+		c:            eosClient,
+		conf:         c,
+		chunkHandler: chunking.NewChunkHandler(c.CacheDirectory),
 	}
 
 	return eosfs, nil

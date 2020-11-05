@@ -21,23 +21,19 @@ package ocdav
 import (
 	"io"
 	"net/http"
-	"os"
 	"path"
-	"regexp"
 	"strconv"
 	"time"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/utils"
 )
-
-func isChunked(fn string) (bool, error) {
-	// FIXME: also need to check whether the OC-Chunked header is set
-	return regexp.MatchString(`-chunking-\w+-[0-9]+-[0-9]+$`, fn)
-}
 
 func sufferMacOSFinder(r *http.Request) bool {
 	return r.Header.Get("X-Expected-Entity-Length") != ""
@@ -109,33 +105,11 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 	log := appctx.GetLogger(ctx)
 
 	ns = applyLayout(ctx, ns)
-
 	fn := path.Join(ns, r.URL.Path)
 
 	if r.Body == nil {
 		log.Warn().Msg("body is nil")
 		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	ok, err := isChunked(fn)
-	if err != nil {
-		log.Error().Err(err).Msg("error checking if request is chunked or not")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if ok {
-		// TODO: disable if chunking capability is turned off in config
-		/**
-		if s.c.Capabilities.Dav.Chunking == "1.0" {
-			s.handlePutChunked(w, r)
-		} else {
-			log.Error().Err(err).Msg("chunking 1.0 is not enabled")
-			w.WriteHeader(http.StatusBadRequest)
-		}
-		*/
-		s.handlePutChunked(w, r, ns)
 		return
 	}
 
@@ -163,22 +137,11 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 			return
 		}
 	}
-	fileName, fd, err := s.createChunkTempFile()
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	defer os.RemoveAll(fileName)
-	defer fd.Close()
-	if _, err := io.Copy(fd, r.Body); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
 
-	s.handlePutHelper(w, r, fd, fn, length)
+	s.handlePutHelper(w, r, r.Body, fn, length)
 }
 
-func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io.ReadSeeker, fn string, length int64) {
+func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io.Reader, fn string, length int64) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -199,7 +162,6 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-
 	if sRes.Status.Code != rpc.Code_CODE_OK && sRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
 		switch sRes.Status.Code {
 		case rpc.Code_CODE_PERMISSION_DENIED:
@@ -213,13 +175,12 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 	}
 
 	info := sRes.Info
-	if info != nil && info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
-		log.Warn().Msg("resource is not a file")
-		w.WriteHeader(http.StatusConflict)
-		return
-	}
-
 	if info != nil {
+		if info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
+			log.Warn().Msg("resource is not a file")
+			w.WriteHeader(http.StatusConflict)
+			return
+		}
 		clientETag := r.Header.Get("If-Match")
 		serverETag := info.Etag
 		if clientETag != "" {
@@ -238,8 +199,7 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 		},
 	}
 
-	mtime := r.Header.Get("X-OC-Mtime")
-	if mtime != "" {
+	if mtime := r.Header.Get("X-OC-Mtime"); mtime != "" {
 		opaqueMap["X-OC-Mtime"] = &typespb.OpaqueEntry{
 			Decoder: "plain",
 			Value:   []byte(mtime),
@@ -250,10 +210,8 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 	}
 
 	uReq := &provider.InitiateFileUploadRequest{
-		Ref: ref,
-		Opaque: &typespb.Opaque{
-			Map: opaqueMap,
-		},
+		Ref:    ref,
+		Opaque: &typespb.Opaque{Map: opaqueMap},
 	}
 
 	// where to upload the file?
@@ -279,10 +237,50 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 		return
 	}
 
-	if err = s.tusUpload(ctx, uRes.UploadEndpoint, uRes.Token, fn, content, length); err != nil {
-		log.Error().Err(err).Msg("TUS upload failed")
+	if length > 0 {
+		httpReq, err := rhttp.NewRequest(ctx, "PUT", uRes.UploadEndpoint, content)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		httpReq.Header.Set(datagateway.TokenTransportHeader, uRes.Token)
+
+		httpRes, err := s.client.Do(httpReq)
+		if err != nil {
+			log.Err(err).Msg("error doing PUT request to data service")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		defer httpRes.Body.Close()
+		if httpRes.StatusCode != http.StatusOK {
+			if httpRes.StatusCode == http.StatusPartialContent {
+				w.WriteHeader(http.StatusPartialContent)
+				return
+			}
+			log.Err(err).Msg("PUT request to data server failed")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	}
+
+	ok, err := chunking.IsChunked(fn)
+	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
+	}
+	if ok {
+		chunk, err := chunking.GetChunkBLOBInfo(fn)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		sReq = &provider.StatRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{
+					Path: chunk.Path,
+				},
+			},
+		}
 	}
 
 	// stat again to check the new file's metadata
@@ -308,13 +306,13 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 		return
 	}
 
-	info2 := sRes.Info
+	newInfo := sRes.Info
 
-	w.Header().Add("Content-Type", info2.MimeType)
-	w.Header().Set("ETag", info2.Etag)
-	w.Header().Set("OC-FileId", wrapResourceID(info2.Id))
-	w.Header().Set("OC-ETag", info2.Etag)
-	t := utils.TSToTime(info2.Mtime)
+	w.Header().Add("Content-Type", newInfo.MimeType)
+	w.Header().Set("ETag", newInfo.Etag)
+	w.Header().Set("OC-FileId", wrapResourceID(newInfo.Id))
+	w.Header().Set("OC-ETag", newInfo.Etag)
+	t := utils.TSToTime(newInfo.Mtime)
 	lastModifiedString := t.Format(time.RFC1123Z)
 	w.Header().Set("Last-Modified", lastModifiedString)
 
