@@ -19,26 +19,24 @@
 package exporters
 
 import (
-	"fmt"
-
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
+	"github.com/cs3org/reva/pkg/mentix/entity"
 	"github.com/cs3org/reva/pkg/mentix/exchange"
-	"github.com/cs3org/reva/pkg/mentix/util/registry"
 )
 
 // Exporters is a vector of Exporter
 type Exporters = []Exporter
 
 var (
-	registeredExporters = registry.NewRegistry()
+	registeredExporters = entity.NewRegistry()
 )
 
 // AvailableExporters returns a list of all exporters that are enabled in the configuration.
 func AvailableExporters(conf *config.Configuration) ([]Exporter, error) {
 	// Try to add all exporters configured in the environment
-	entries, err := registeredExporters.EntriesByID(conf.EnabledExporters)
+	entries, err := registeredExporters.FindEntities(conf.EnabledExporters, true, false)
 	if err != nil {
 		return nil, err
 	}
@@ -46,11 +44,6 @@ func AvailableExporters(conf *config.Configuration) ([]Exporter, error) {
 	exporters := make([]Exporter, 0, len(entries))
 	for _, entry := range entries {
 		exporters = append(exporters, entry.(Exporter))
-	}
-
-	// At least one exporter must be configured
-	if len(exporters) == 0 {
-		return nil, fmt.Errorf("no exporters available")
 	}
 
 	return exporters, nil
@@ -84,6 +77,6 @@ func GetRequestExporters(exporters []Exporter) []exchange.RequestExchanger {
 	return exchange.GetRequestExchangers(asExchangers(exporters))
 }
 
-func registerExporter(id string, exporter Exporter) {
-	registeredExporters.Register(id, exporter)
+func registerExporter(exporter Exporter) {
+	registeredExporters.Register(exporter)
 }

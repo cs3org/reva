@@ -16,36 +16,42 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package registry
+package entity
 
 import "fmt"
 
-// Registry represents a simple id->entry map.
+// Registry represents a simple id->entity map.
 type Registry struct {
-	Entries map[string]interface{}
+	Entities map[string]Entity
 }
 
-// Register registers a new entry.
-func (r *Registry) Register(id string, entry interface{}) {
-	r.Entries[id] = entry
+// Register registers a new entity.
+func (r *Registry) Register(entity Entity) {
+	r.Entities[entity.GetID()] = entity
 }
 
-// EntriesByID returns all entries matching the provided IDs. If an entry with a certain ID doesn't exist, an error is returned.
-func (r *Registry) EntriesByID(ids []string) ([]interface{}, error) {
-	var entries []interface{}
+// FindEntities returns all entities matching the provided IDs.
+// If an entity with a certain ID doesn't exist and mustExist is true, an error is returned.
+func (r *Registry) FindEntities(ids []string, mustExist bool, anyRequired bool) ([]Entity, error) {
+	var entities []Entity
 	for _, id := range ids {
-		if entry, ok := r.Entries[id]; ok {
-			entries = append(entries, entry)
-		} else {
-			return nil, fmt.Errorf("no entry with ID '%v' registered", id)
+		if entity, ok := r.Entities[id]; ok {
+			entities = append(entities, entity)
+		} else if mustExist {
+			return nil, fmt.Errorf("no entity with ID '%v' registered", id)
 		}
 	}
 
-	return entries, nil
+	if anyRequired && len(entities) == 0 { // At least one entity must be configured
+		return nil, fmt.Errorf("no entities available")
+	}
+
+	return entities, nil
 }
 
+// NewRegistry returns a new entity registry.
 func NewRegistry() *Registry {
 	return &Registry{
-		Entries: make(map[string]interface{}),
+		Entities: make(map[string]Entity),
 	}
 }

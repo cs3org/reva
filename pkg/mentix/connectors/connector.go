@@ -24,18 +24,13 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
+	"github.com/cs3org/reva/pkg/mentix/entity"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
-	"github.com/cs3org/reva/pkg/mentix/util/registry"
-)
-
-var (
-	registeredConnectors = registry.NewRegistry()
 )
 
 // Connector is the interface that all connectors must implement.
 type Connector interface {
-	// GetID returns the ID of the connector.
-	GetID() string
+	entity.Entity
 
 	// Activate activates a connector.
 	Activate(conf *config.Configuration, log *zerolog.Logger) error
@@ -43,30 +38,12 @@ type Connector interface {
 	RetrieveMeshData() (*meshdata.MeshData, error)
 	// UpdateMeshData updates the provided mesh data on the target side.
 	UpdateMeshData(data *meshdata.MeshData) error
-
-	// GetName returns the display name of the connector.
-	GetName() string
 }
 
 // BaseConnector implements basic connector functionality common to all connectors.
 type BaseConnector struct {
-	id string
-
 	conf *config.Configuration
 	log  *zerolog.Logger
-}
-
-// GetID returns the ID of the connector.
-func (connector *BaseConnector) GetID() string {
-	return connector.id
-}
-
-// SetID sets the ID of the connector.
-func (connector *BaseConnector) SetID(id string) {
-	// The ID can only be set once
-	if connector.id == "" {
-		connector.id = id
-	}
 }
 
 // Activate activates the connector.
@@ -87,28 +64,4 @@ func (connector *BaseConnector) Activate(conf *config.Configuration, log *zerolo
 // UpdateMeshData updates the provided mesh data on the target side.
 func (connector *BaseConnector) UpdateMeshData(data *meshdata.MeshData) error {
 	return fmt.Errorf("the connector doesn't support updating of mesh data")
-}
-
-// AvailableConnectors returns a list of all connectors that are enabled in the configuration.
-func AvailableConnectors(conf *config.Configuration) ([]Connector, error) {
-	entries, err := registeredConnectors.EntriesByID(conf.EnabledConnectors)
-	if err != nil {
-		return nil, err
-	}
-
-	connectors := make([]Connector, 0, len(entries))
-	for _, entry := range entries {
-		connectors = append(connectors, entry.(Connector))
-	}
-
-	// At least one connector must be configured
-	if len(connectors) == 0 {
-		return nil, fmt.Errorf("no connectors available")
-	}
-
-	return connectors, nil
-}
-
-func registerConnector(connector Connector) {
-	registeredConnectors.Register(connector.GetID(), connector)
 }

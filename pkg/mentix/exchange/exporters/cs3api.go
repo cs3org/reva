@@ -45,11 +45,16 @@ func (exporter *CS3APIExporter) Activate(conf *config.Configuration, log *zerolo
 	return nil
 }
 
+// GetID returns the ID of the exporter.
+func (exporter *CS3APIExporter) GetID() string {
+	return config.ExporterIDCS3API
+}
+
 // GetName returns the display name of the exporter.
 func (exporter *CS3APIExporter) GetName() string {
 	return "CS3API"
 }
 
 func init() {
-	registerExporter(config.ExporterIDCS3API, &CS3APIExporter{})
+	registerExporter(&CS3APIExporter{})
 }

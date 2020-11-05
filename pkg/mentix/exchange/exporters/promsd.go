@@ -207,11 +207,16 @@ func (exporter *PrometheusSDExporter) exportScrapeConfig(outputFilename string, 
 	return nil
 }
 
+// GetID returns the ID of the exporter.
+func (exporter *PrometheusSDExporter) GetID() string {
+	return config.ExporterIDPrometheusSD
+}
+
 // GetName returns the display name of the exporter.
 func (exporter *PrometheusSDExporter) GetName() string {
 	return "Prometheus SD"
 }
 
 func init() {
-	registerExporter(config.ExporterIDPrometheusSD, &PrometheusSDExporter{})
+	registerExporter(&PrometheusSDExporter{})
 }

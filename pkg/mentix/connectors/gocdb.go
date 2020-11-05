@@ -258,13 +258,16 @@ func (connector *GOCDBConnector) getServiceURL(service *gocdb.Service, endpoint 
 	return svcURL, nil
 }
 
+// GetID returns the ID of the connector.
+func (connector *GOCDBConnector) GetID() string {
+	return config.ConnectorIDGOCDB
+}
+
 // GetName returns the display name of the connector.
 func (connector *GOCDBConnector) GetName() string {
 	return "GOCDB"
 }
 
 func init() {
-	connector := &GOCDBConnector{}
-	connector.SetID(config.ConnectorIDGOCDB)
-	registerConnector(connector)
+	registerConnector(&GOCDBConnector{})
 }

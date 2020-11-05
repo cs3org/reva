@@ -112,13 +112,16 @@ func (connector *LocalFileConnector) setSiteTypes(meshData *meshdata.MeshData) {
 	}
 }
 
+// GetID returns the ID of the connector.
+func (connector *LocalFileConnector) GetID() string {
+	return config.ConnectorIDLocalFile
+}
+
 // GetName returns the display name of the connector.
 func (connector *LocalFileConnector) GetName() string {
 	return "Local file"
 }
 
 func init() {
-	connector := &LocalFileConnector{}
-	connector.SetID(config.ConnectorIDLocalFile)
-	registerConnector(connector)
+	registerConnector(&LocalFileConnector{})
 }

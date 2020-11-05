@@ -26,19 +26,19 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
+	"github.com/cs3org/reva/pkg/mentix/entity"
 )
 
 // Exchanger is the base interface for importers and exporters.
 type Exchanger interface {
+	entity.Entity
+
 	// Activate activates the exchanger.
 	Activate(conf *config.Configuration, log *zerolog.Logger) error
 	// Start starts the exchanger; only exchangers which perform periodical background tasks should do something here.
 	Start() error
 	// Stop stops any running background activities of the exchanger.
 	Stop()
-
-	// GetName returns the display name of the exchanger.
-	GetName() string
 }
 
 // BaseExchanger implements basic exchanger functionality common to all exchangers.

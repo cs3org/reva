@@ -45,11 +45,16 @@ func (exporter *SiteLocationsExporter) Activate(conf *config.Configuration, log 
 	return nil
 }
 
+// GetID returns the ID of the exporter.
+func (exporter *SiteLocationsExporter) GetID() string {
+	return config.ExporterIDSiteLocations
+}
+
 // GetName returns the display name of the exporter.
 func (exporter *SiteLocationsExporter) GetName() string {
 	return "Site Locations"
 }
 
 func init() {
-	registerExporter(config.ExporterIDSiteLocations, &SiteLocationsExporter{})
+	registerExporter(&SiteLocationsExporter{})
 }

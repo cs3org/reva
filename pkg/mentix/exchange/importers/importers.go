@@ -22,24 +22,24 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
+	"github.com/cs3org/reva/pkg/mentix/entity"
 	"github.com/cs3org/reva/pkg/mentix/exchange"
-	"github.com/cs3org/reva/pkg/mentix/util/registry"
 )
 
 var (
-	registeredImporters = registry.NewRegistry()
+	registeredImporters = entity.NewRegistry()
 )
 
 // AvailableImporters returns a list of all importers that are enabled in the configuration.
 func AvailableImporters(conf *config.Configuration) ([]Importer, error) {
 	// Try to add all importers configured in the environment
-	entries, err := registeredImporters.EntriesByID(conf.EnabledImporters)
+	entities, err := registeredImporters.FindEntities(conf.EnabledImporters, true, false)
 	if err != nil {
 		return nil, err
 	}
 
-	importers := make([]Importer, 0, len(entries))
-	for _, entry := range entries {
+	importers := make([]Importer, 0, len(entities))
+	for _, entry := range entities {
 		importers = append(importers, entry.(Importer))
 	}
 
@@ -74,6 +74,6 @@ func asExchangers(importers []Importer) []exchange.Exchanger {
 	return exchangers
 }
 
-func registerImporter(id string, importer Importer) {
-	registeredImporters.Register(id, importer)
+func registerImporter(importer Importer) {
+	registeredImporters.Register(importer)
 }

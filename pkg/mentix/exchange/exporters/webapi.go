@@ -45,11 +45,16 @@ func (exporter *WebAPIExporter) Activate(conf *config.Configuration, log *zerolo
 	return nil
 }
 
+// GetID returns the ID of the exporter.
+func (exporter *WebAPIExporter) GetID() string {
+	return config.ExporterIDWebAPI
+}
+
 // GetName returns the display name of the exporter.
 func (exporter *WebAPIExporter) GetName() string {
 	return "WebAPI"
 }
 
 func init() {
-	registerExporter(config.ExporterIDWebAPI, &WebAPIExporter{})
+	registerExporter(&WebAPIExporter{})
 }

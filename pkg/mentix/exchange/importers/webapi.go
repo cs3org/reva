@@ -46,11 +46,16 @@ func (exporter *WebAPIImporter) Activate(conf *config.Configuration, log *zerolo
 	return nil
 }
 
+// GetID returns the ID of the importer.
+func (exporter *WebAPIImporter) GetID() string {
+	return config.ImporterIDWebAPI
+}
+
 // GetName returns the display name of the importer.
 func (exporter *WebAPIImporter) GetName() string {
 	return "WebAPI"
 }
 
 func init() {
-	registerImporter(config.ImporterIDWebAPI, &WebAPIImporter{})
+	registerImporter(&WebAPIImporter{})
 }
