@@ -33,8 +33,6 @@ import (
 type Exchanger interface {
 	entity.Entity
 
-	// Activate activates the exchanger.
-	Activate(conf *config.Configuration, log *zerolog.Logger) error
 	// Start starts the exchanger; only exchangers which perform periodical background tasks should do something here.
 	Start() error
 	// Stop stops any running background activities of the exchanger.

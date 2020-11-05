@@ -19,8 +19,6 @@
 package connectors
 
 import (
-	"fmt"
-
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
@@ -46,14 +44,7 @@ func (collection *Collection) Entities() []entity.Entity {
 }
 
 func (collection *Collection) ActivateAll(conf *config.Configuration, log *zerolog.Logger) error {
-	// Activate all connectors
-	for _, connector := range collection.Connectors {
-		if err := connector.Activate(conf, log); err != nil {
-			return fmt.Errorf("unable to activate connector '%v': %v", connector.GetName(), err)
-		}
-	}
-
-	return nil
+	return entity.ActivateEntities(collection, conf, log)
 }
 
 // AvailableConnectors returns a collection of all connectors that are enabled in the configuration.

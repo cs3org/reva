@@ -18,10 +18,19 @@
 
 package entity
 
+import (
+	"github.com/cs3org/reva/pkg/mentix/config"
+
+	"github.com/rs/zerolog"
+)
+
 // Entity is the base interface for all Mentix entities.
 type Entity interface {
 	// GetID returns the ID of the entity.
 	GetID() string
+
+	// Activate activates the entity.
+	Activate(conf *config.Configuration, log *zerolog.Logger) error
 
 	// GetName returns the display name of the entity.
 	GetName() string

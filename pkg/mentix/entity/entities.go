@@ -18,10 +18,29 @@
 
 package entity
 
+import (
+	"fmt"
+
+	"github.com/cs3org/reva/pkg/mentix/config"
+
+	"github.com/rs/zerolog"
+)
+
 // Collection is an interface for entity collections.
 type Collection interface {
 	// Entities returns a vector of entities within the collection.
 	Entities() []Entity
+}
+
+// ActivateEntities activates the given entities.
+func ActivateEntities(collection Collection, conf *config.Configuration, log *zerolog.Logger) error {
+	for _, exchanger := range collection.Entities() {
+		if err := exchanger.Activate(conf, log); err != nil {
+			return fmt.Errorf("unable to activate entity '%v': %v", exchanger.GetName(), err)
+		}
+	}
+
+	return nil
 }
 
 // GetIDs gets a list of entity IDs.

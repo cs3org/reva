@@ -51,7 +51,7 @@ func (collection *Collection) Exchangers() []exchangers.Exchanger {
 
 // ActivateAll activates all importers.
 func (collection *Collection) ActivateAll(conf *config.Configuration, log *zerolog.Logger) error {
-	return exchangers.ActivateExchangers(collection, conf, log)
+	return entity.ActivateEntities(collection, conf, log)
 }
 
 // StartAll starts all importers.

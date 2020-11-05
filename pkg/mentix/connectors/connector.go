@@ -32,8 +32,6 @@ import (
 type Connector interface {
 	entity.Entity
 
-	// Activate activates a connector.
-	Activate(conf *config.Configuration, log *zerolog.Logger) error
 	// RetrieveMeshData fetches new mesh data.
 	RetrieveMeshData() (*meshdata.MeshData, error)
 	// UpdateMeshData updates the provided mesh data on the target side.

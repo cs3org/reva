@@ -21,10 +21,7 @@ package exchangers
 import (
 	"fmt"
 
-	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/entity"
-
-	"github.com/rs/zerolog"
 )
 
 // Collection is an interface for exchanger collections.
@@ -50,17 +47,6 @@ func AsEntityCollection(collection Collection) entity.Collection {
 		wrapper.entities = append(wrapper.entities, exchanger)
 	}
 	return &wrapper
-}
-
-// ActivateExchangers activates the given exchangers.
-func ActivateExchangers(collection Collection, conf *config.Configuration, log *zerolog.Logger) error {
-	for _, exchanger := range collection.Exchangers() {
-		if err := exchanger.Activate(conf, log); err != nil {
-			return fmt.Errorf("unable to activate exchanger '%v': %v", exchanger.GetName(), err)
-		}
-	}
-
-	return nil
 }
 
 // StartExchangers starts the given exchangers.
