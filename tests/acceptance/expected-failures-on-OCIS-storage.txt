@@ -1356,33 +1356,33 @@ apiWebdavUpload2/uploadFileUsingOldChunking.feature:100
 #
 apiWebdavEtagPropagation1/deleteFileFolder.feature:25
 apiWebdavEtagPropagation1/deleteFileFolder.feature:26
-apiWebdavEtagPropagation1/deleteFileFolder.feature:43
 apiWebdavEtagPropagation1/deleteFileFolder.feature:44
-apiWebdavEtagPropagation1/deleteFileFolder.feature:62
+apiWebdavEtagPropagation1/deleteFileFolder.feature:45
 apiWebdavEtagPropagation1/deleteFileFolder.feature:63
-apiWebdavEtagPropagation1/deleteFileFolder.feature:185
-apiWebdavEtagPropagation1/deleteFileFolder.feature:199
+apiWebdavEtagPropagation1/deleteFileFolder.feature:64
+apiWebdavEtagPropagation1/deleteFileFolder.feature:187
+apiWebdavEtagPropagation1/deleteFileFolder.feature:202
 #
 # https://github.com/owncloud/product/issues/241 deleting an item updates etags of grandparent but not on parent
 # https://github.com/owncloud/product/issues/243 etags don't change for a share receiver
 #
-apiWebdavEtagPropagation1/deleteFileFolder.feature:91
 apiWebdavEtagPropagation1/deleteFileFolder.feature:92
-apiWebdavEtagPropagation1/deleteFileFolder.feature:120
+apiWebdavEtagPropagation1/deleteFileFolder.feature:93
 apiWebdavEtagPropagation1/deleteFileFolder.feature:121
-apiWebdavEtagPropagation1/deleteFileFolder.feature:151
+apiWebdavEtagPropagation1/deleteFileFolder.feature:122
 apiWebdavEtagPropagation1/deleteFileFolder.feature:152
-apiWebdavEtagPropagation1/deleteFileFolder.feature:182
+apiWebdavEtagPropagation1/deleteFileFolder.feature:153
 apiWebdavEtagPropagation1/deleteFileFolder.feature:183
+apiWebdavEtagPropagation1/deleteFileFolder.feature:184
 #
 # https://github.com/owncloud/product/issues/243 etags don't change for a share receiver
 #
-apiWebdavEtagPropagation1/moveFileFolder.feature:235
 apiWebdavEtagPropagation1/moveFileFolder.feature:236
-apiWebdavEtagPropagation1/moveFileFolder.feature:303
-apiWebdavEtagPropagation1/moveFileFolder.feature:304
-apiWebdavEtagPropagation2/copyFileFolder.feature:152
-apiWebdavEtagPropagation2/copyFileFolder.feature:153
+apiWebdavEtagPropagation1/moveFileFolder.feature:237
+apiWebdavEtagPropagation1/moveFileFolder.feature:305
+apiWebdavEtagPropagation1/moveFileFolder.feature:306
+apiWebdavEtagPropagation2/copyFileFolder.feature:157
+apiWebdavEtagPropagation2/copyFileFolder.feature:158
 #
 # https://github.com/owncloud/product/issues/209 Implement Trashbin Feature for ocis storage
 #

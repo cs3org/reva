@@ -1386,3 +1386,39 @@ apiVersions/fileVersionsSharingToShares.feature:267
 #
 apiVersions/fileVersionsSharingToShares.feature:252
 apiVersions/fileVersionsSharingToShares.feature:253
+#
+# https://github.com/owncloud/product/issues/279 etags are not updated on file operations
+#
+# renaming file/folder doesn't changes the etag of parent
+# moving a file/folder from one folder to another doesn't changes etag of destination folder
+# renaming a file/folder inside another folder doesn't changes etag of parent folder
+# restoring a file doesn't changes the etags of the parents
+#
+apiWebdavEtagPropagation1/moveFileFolder.feature:20
+apiWebdavEtagPropagation1/moveFileFolder.feature:21
+apiWebdavEtagPropagation1/moveFileFolder.feature:308
+apiWebdavEtagPropagation1/moveFileFolder.feature:323
+apiWebdavEtagPropagation1/moveFileFolder.feature:39
+apiWebdavEtagPropagation1/moveFileFolder.feature:40
+apiWebdavEtagPropagation1/moveFileFolder.feature:58
+apiWebdavEtagPropagation1/moveFileFolder.feature:59
+apiWebdavEtagPropagation1/moveFileFolder.feature:93
+apiWebdavEtagPropagation1/moveFileFolder.feature:94
+apiWebdavEtagPropagation1/moveFileFolder.feature:305
+apiWebdavEtagPropagation1/moveFileFolder.feature:306
+apiWebdavEtagPropagation1/moveFileFolder.feature:74
+apiWebdavEtagPropagation1/moveFileFolder.feature:75
+apiWebdavEtagPropagation1/moveFileFolder.feature:140
+apiWebdavEtagPropagation1/moveFileFolder.feature:141
+apiWebdavEtagPropagation1/moveFileFolder.feature:167
+apiWebdavEtagPropagation1/moveFileFolder.feature:168
+apiWebdavEtagPropagation1/moveFileFolder.feature:236
+apiWebdavEtagPropagation1/moveFileFolder.feature:237
+apiWebdavEtagPropagation2/restoreFromTrash.feature:25
+apiWebdavEtagPropagation2/restoreFromTrash.feature:26
+apiWebdavEtagPropagation2/restoreFromTrash.feature:46
+apiWebdavEtagPropagation2/restoreFromTrash.feature:47
+apiWebdavEtagPropagation2/restoreFromTrash.feature:65
+apiWebdavEtagPropagation2/restoreFromTrash.feature:66
+apiWebdavEtagPropagation2/restoreFromTrash.feature:86
+apiWebdavEtagPropagation2/restoreFromTrash.feature:87
