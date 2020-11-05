@@ -24,7 +24,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/cs3org/reva/pkg/mentix/exchange"
+	"github.com/cs3org/reva/pkg/mentix/exchangers"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 
@@ -37,7 +37,7 @@ type queryCallback func(*meshdata.MeshData, url.Values) (int, []byte, error)
 // BaseRequestExporter implements basic exporter functionality common to all request exporters.
 type BaseRequestExporter struct {
 	BaseExporter
-	exchange.BaseRequestExchanger
+	exchangers.BaseRequestExchanger
 
 	defaultActionHandler queryCallback
 }

@@ -22,7 +22,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
-	"github.com/cs3org/reva/pkg/mentix/exchange/exporters/cs3api"
+	"github.com/cs3org/reva/pkg/mentix/exchangers/exporters/cs3api"
 )
 
 // CS3APIExporter implements the CS3API exporter.

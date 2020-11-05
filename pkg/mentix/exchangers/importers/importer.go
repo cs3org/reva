@@ -23,30 +23,30 @@ import (
 	"strings"
 
 	"github.com/cs3org/reva/pkg/mentix/connectors"
-	"github.com/cs3org/reva/pkg/mentix/exchange"
+	"github.com/cs3org/reva/pkg/mentix/exchangers"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 
 // Importer is the interface that all importers must implement.
 type Importer interface {
-	exchange.Exchanger
+	exchangers.Exchanger
 
 	// MeshData returns the vector of imported mesh data.
 	MeshData() meshdata.Vector
 
 	// Process is called periodically to perform the actual import; if data has been imported, true is returned.
-	Process([]connectors.Connector) (bool, error)
+	Process(*connectors.Collection) (bool, error)
 }
 
 // BaseImporter implements basic importer functionality common to all importers.
 type BaseImporter struct {
-	exchange.BaseExchanger
+	exchangers.BaseExchanger
 
 	meshData meshdata.Vector
 }
 
 // Process is called periodically to perform the actual import; if data has been imported, true is returned.
-func (importer *BaseImporter) Process(connectors []connectors.Connector) (bool, error) {
+func (importer *BaseImporter) Process(connectors *connectors.Collection) (bool, error) {
 	if importer.meshData == nil { // Nothing to do
 		return false, nil
 	}
@@ -55,7 +55,7 @@ func (importer *BaseImporter) Process(connectors []connectors.Connector) (bool, 
 
 	// Data is read, so lock it for writing during the loop
 	importer.Locker().RLock()
-	for _, connector := range connectors {
+	for _, connector := range connectors.Connectors {
 		if !importer.IsConnectorEnabled(connector.GetID()) {
 			continue
 		}

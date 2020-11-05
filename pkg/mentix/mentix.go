@@ -29,9 +29,10 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/connectors"
-	"github.com/cs3org/reva/pkg/mentix/exchange"
-	"github.com/cs3org/reva/pkg/mentix/exchange/exporters"
-	"github.com/cs3org/reva/pkg/mentix/exchange/importers"
+	"github.com/cs3org/reva/pkg/mentix/entity"
+	"github.com/cs3org/reva/pkg/mentix/exchangers"
+	"github.com/cs3org/reva/pkg/mentix/exchangers/exporters"
+	"github.com/cs3org/reva/pkg/mentix/exchangers/importers"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 
@@ -40,9 +41,9 @@ type Mentix struct {
 	conf *config.Configuration
 	log  *zerolog.Logger
 
-	connectors []connectors.Connector
-	importers  []importers.Importer
-	exporters  []exporters.Exporter
+	connectors *connectors.Collection
+	importers  *importers.Collection
+	exporters  *exporters.Collection
 
 	meshDataSet meshdata.Map
 
@@ -86,19 +87,15 @@ func (mntx *Mentix) initialize(conf *config.Configuration, log *zerolog.Logger) 
 	mntx.meshDataSet = make(meshdata.Map)
 
 	// Log some infos
-	connectorNames := make([]string, len(mntx.connectors))
-	for idx, connector := range mntx.connectors {
-		connectorNames[idx] = connector.GetName()
-	}
-	importerNames := make([]string, len(mntx.importers))
-	for idx, importer := range mntx.importers {
-		importerNames[idx] = importer.GetName()
-	}
-	exporterNames := make([]string, len(mntx.exporters))
-	for idx, exporter := range mntx.exporters {
-		exporterNames[idx] = exporter.GetName()
-	}
-	log.Info().Msgf("mentix started with connectors: %v; importers: %v; exporters: %v; update interval: %v", strings.Join(connectorNames, ", "), strings.Join(importerNames, ", "), strings.Join(exporterNames, ", "), duration)
+	connectorNames := entity.GetNames(mntx.connectors)
+	importerNames := entity.GetNames(mntx.importers)
+	exporterNames := entity.GetNames(mntx.exporters)
+	log.Info().Msgf("mentix started with connectors: %v; importers: %v; exporters: %v; update interval: %v",
+		strings.Join(connectorNames, ", "),
+		strings.Join(importerNames, ", "),
+		strings.Join(exporterNames, ", "),
+		duration,
+	)
 
 	return nil
 }
@@ -111,11 +108,8 @@ func (mntx *Mentix) initConnectors() error {
 	}
 	mntx.connectors = conns
 
-	// Activate all conns
-	for _, connector := range mntx.connectors {
-		if err := connector.Activate(mntx.conf, mntx.log); err != nil {
-			return fmt.Errorf("unable to activate connector '%v': %v", connector.GetName(), err)
-		}
+	if err := mntx.connectors.ActivateAll(mntx.conf, mntx.log); err != nil {
+		return fmt.Errorf("unable to activate connectors: %v", err)
 	}
 
 	return nil
@@ -129,7 +123,7 @@ func (mntx *Mentix) initExchangers() error {
 	}
 	mntx.importers = imps
 
-	if err := importers.ActivateImporters(mntx.importers, mntx.conf, mntx.log); err != nil {
+	if err := mntx.importers.ActivateAll(mntx.conf, mntx.log); err != nil {
 		return fmt.Errorf("unable to activate importers: %v", err)
 	}
 
@@ -140,7 +134,7 @@ func (mntx *Mentix) initExchangers() error {
 	}
 	mntx.exporters = exps
 
-	if err := exporters.ActivateExporters(mntx.exporters, mntx.conf, mntx.log); err != nil {
+	if err := mntx.exporters.ActivateAll(mntx.conf, mntx.log); err != nil {
 		return fmt.Errorf("unable to activate exporters: %v", err)
 	}
 
@@ -149,12 +143,12 @@ func (mntx *Mentix) initExchangers() error {
 
 func (mntx *Mentix) startExchangers() error {
 	// Start all importers
-	if err := importers.StartImporters(mntx.importers); err != nil {
+	if err := mntx.importers.StartAll(); err != nil {
 		return fmt.Errorf("unable to start importers: %v", err)
 	}
 
 	// Start all exporters
-	if err := exporters.StartExporters(mntx.exporters); err != nil {
+	if err := mntx.exporters.StartAll(); err != nil {
 		return fmt.Errorf("unable to start exporters: %v", err)
 	}
 
@@ -162,12 +156,11 @@ func (mntx *Mentix) startExchangers() error {
 }
 
 func (mntx *Mentix) stopExchangers() {
-	exporters.StopExporters(mntx.exporters)
-	importers.StopImporters(mntx.importers)
+	mntx.exporters.StopAll()
+	mntx.importers.StopAll()
 }
 
 func (mntx *Mentix) destroy() {
-	// Stop all im- & exporters
 	mntx.stopExchangers()
 }
 
@@ -230,7 +223,7 @@ func (mntx *Mentix) tick(updateTimestamp *time.Time) {
 func (mntx *Mentix) processImporters() (bool, error) {
 	meshDataUpdated := false
 
-	for _, importer := range mntx.importers {
+	for _, importer := range mntx.importers.Importers {
 		updated, err := importer.Process(mntx.connectors)
 		if err != nil {
 			return false, fmt.Errorf("unable to process importer '%v': %v", importer.GetName(), err)
@@ -248,7 +241,7 @@ func (mntx *Mentix) processImporters() (bool, error) {
 func (mntx *Mentix) retrieveMeshDataSet() (meshdata.Map, error) {
 	meshDataSet := make(meshdata.Map)
 
-	for _, connector := range mntx.connectors {
+	for _, connector := range mntx.connectors.Connectors {
 		meshData, err := connector.RetrieveMeshData()
 		if err != nil {
 			return nil, fmt.Errorf("retrieving mesh data from connector '%v' failed: %v", connector.GetName(), err)
@@ -274,7 +267,7 @@ func (mntx *Mentix) applyMeshDataSet(meshDataSet meshdata.Map) error {
 
 		mntx.meshDataSet = meshDataSet
 
-		for _, exporter := range mntx.exporters {
+		for _, exporter := range mntx.exporters.Exporters {
 			if err := exporter.Update(meshDataSet); err != nil {
 				return fmt.Errorf("unable to update mesh data on exporter '%v': %v", exporter.GetName(), err)
 			}
@@ -285,13 +278,13 @@ func (mntx *Mentix) applyMeshDataSet(meshDataSet meshdata.Map) error {
 }
 
 // GetRequestImporters returns all exporters that can handle HTTP requests.
-func (mntx *Mentix) GetRequestImporters() []exchange.RequestExchanger {
-	return importers.GetRequestImporters(mntx.importers)
+func (mntx *Mentix) GetRequestImporters() []exchangers.RequestExchanger {
+	return mntx.importers.GetRequestImporters()
 }
 
 // GetRequestExporters returns all exporters that can handle HTTP requests.
-func (mntx *Mentix) GetRequestExporters() []exchange.RequestExchanger {
-	return exporters.GetRequestExporters(mntx.exporters)
+func (mntx *Mentix) GetRequestExporters() []exchangers.RequestExchanger {
+	return mntx.exporters.GetRequestExporters()
 }
 
 // RequestHandler handles any incoming HTTP requests by asking each RequestExchanger whether it wants to
@@ -313,7 +306,7 @@ func (mntx *Mentix) RequestHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (mntx *Mentix) handleRequest(exchangers []exchange.RequestExchanger, w http.ResponseWriter, r *http.Request, log *zerolog.Logger) {
+func (mntx *Mentix) handleRequest(exchangers []exchangers.RequestExchanger, w http.ResponseWriter, r *http.Request, log *zerolog.Logger) {
 	// Ask each RequestExchanger if it wants to handle the request
 	for _, exchanger := range exchangers {
 		if exchanger.WantsRequest(r) {

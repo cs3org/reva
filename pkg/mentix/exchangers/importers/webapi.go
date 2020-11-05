@@ -16,45 +16,46 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package exporters
+package importers
 
 import (
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
-	"github.com/cs3org/reva/pkg/mentix/exchange/exporters/webapi"
+	"github.com/cs3org/reva/pkg/mentix/exchangers/importers/webapi"
 )
 
-// WebAPIExporter implements the generic Web API exporter.
-type WebAPIExporter struct {
-	BaseRequestExporter
+// WebAPIImporter implements the generic Web API importer.
+type WebAPIImporter struct {
+	BaseRequestImporter
 }
 
-// Activate activates the exporter.
-func (exporter *WebAPIExporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
-	if err := exporter.BaseRequestExporter.Activate(conf, log); err != nil {
+// Activate activates the importer.
+func (exporter *WebAPIImporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
+	if err := exporter.BaseRequestImporter.Activate(conf, log); err != nil {
 		return err
 	}
 
 	// Store WebAPI specifics
-	exporter.SetEndpoint(conf.Exporters.WebAPI.Endpoint)
-	exporter.SetEnabledConnectors(conf.Exporters.WebAPI.EnabledConnectors)
+	exporter.SetEndpoint(conf.Importers.WebAPI.Endpoint)
+	exporter.SetEnabledConnectors(conf.Importers.WebAPI.EnabledConnectors)
 
-	exporter.defaultActionHandler = webapi.HandleDefaultQuery
+	exporter.registerSiteActionHandler = webapi.HandleRegisterSiteQuery
+	exporter.unregisterSiteActionHandler = webapi.HandleUnregisterSiteQuery
 
 	return nil
 }
 
-// GetID returns the ID of the exporter.
-func (exporter *WebAPIExporter) GetID() string {
-	return config.ExporterIDWebAPI
+// GetID returns the ID of the importer.
+func (exporter *WebAPIImporter) GetID() string {
+	return config.ImporterIDWebAPI
 }
 
-// GetName returns the display name of the exporter.
-func (exporter *WebAPIExporter) GetName() string {
+// GetName returns the display name of the importer.
+func (exporter *WebAPIImporter) GetName() string {
 	return "WebAPI"
 }
 
 func init() {
-	registerExporter(&WebAPIExporter{})
+	registerImporter(&WebAPIImporter{})
 }

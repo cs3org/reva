@@ -21,13 +21,13 @@ package exporters
 import (
 	"fmt"
 
-	"github.com/cs3org/reva/pkg/mentix/exchange"
+	"github.com/cs3org/reva/pkg/mentix/exchangers"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 
 // Exporter is the interface that all exporters must implement.
 type Exporter interface {
-	exchange.Exchanger
+	exchangers.Exchanger
 
 	// MeshData returns the mesh data.
 	MeshData() *meshdata.MeshData
@@ -38,7 +38,7 @@ type Exporter interface {
 
 // BaseExporter implements basic exporter functionality common to all exporters.
 type BaseExporter struct {
-	exchange.BaseExchanger
+	exchangers.BaseExchanger
 
 	meshData *meshdata.MeshData
 }

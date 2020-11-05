@@ -19,6 +19,10 @@
 package connectors
 
 import (
+	"fmt"
+
+	"github.com/rs/zerolog"
+
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/entity"
 )
@@ -27,8 +31,33 @@ var (
 	registeredConnectors = entity.NewRegistry()
 )
 
-// AvailableConnectors returns a list of all connectors that are enabled in the configuration.
-func AvailableConnectors(conf *config.Configuration) ([]Connector, error) {
+// Collection represents a collection of connectors.
+type Collection struct {
+	Connectors []Connector
+}
+
+// Entities gets the entities in this collection.
+func (collection *Collection) Entities() []entity.Entity {
+	entities := make([]entity.Entity, 0, len(collection.Connectors))
+	for _, connector := range collection.Connectors {
+		entities = append(entities, connector)
+	}
+	return entities
+}
+
+func (collection *Collection) ActivateAll(conf *config.Configuration, log *zerolog.Logger) error {
+	// Activate all connectors
+	for _, connector := range collection.Connectors {
+		if err := connector.Activate(conf, log); err != nil {
+			return fmt.Errorf("unable to activate connector '%v': %v", connector.GetName(), err)
+		}
+	}
+
+	return nil
+}
+
+// AvailableConnectors returns a collection of all connectors that are enabled in the configuration.
+func AvailableConnectors(conf *config.Configuration) (*Collection, error) {
 	entities, err := registeredConnectors.FindEntities(conf.EnabledConnectors, true, true)
 	if err != nil {
 		return nil, err
@@ -39,7 +68,7 @@ func AvailableConnectors(conf *config.Configuration) ([]Connector, error) {
 		connectors = append(connectors, entry.(Connector))
 	}
 
-	return connectors, nil
+	return &Collection{Connectors: connectors}, nil
 }
 
 func registerConnector(connector Connector) {

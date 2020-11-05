@@ -16,19 +16,45 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package exchange
+package exchangers
 
 import (
 	"fmt"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
+	"github.com/cs3org/reva/pkg/mentix/entity"
 
 	"github.com/rs/zerolog"
 )
 
+// Collection is an interface for exchanger collections.
+type Collection interface {
+	entity.Collection
+
+	// Exchangers returns a vector of exchangers within the collection.
+	Exchangers() []Exchanger
+}
+
+type entityCollectionWrapper struct {
+	entities []entity.Entity
+}
+
+func (collection *entityCollectionWrapper) Entities() []entity.Entity {
+	return collection.entities
+}
+
+// AsEntityCollection transforms an exchanger collection into an entity collection.
+func AsEntityCollection(collection Collection) entity.Collection {
+	wrapper := entityCollectionWrapper{}
+	for _, exchanger := range collection.Exchangers() {
+		wrapper.entities = append(wrapper.entities, exchanger)
+	}
+	return &wrapper
+}
+
 // ActivateExchangers activates the given exchangers.
-func ActivateExchangers(exchangers []Exchanger, conf *config.Configuration, log *zerolog.Logger) error {
-	for _, exchanger := range exchangers {
+func ActivateExchangers(collection Collection, conf *config.Configuration, log *zerolog.Logger) error {
+	for _, exchanger := range collection.Exchangers() {
 		if err := exchanger.Activate(conf, log); err != nil {
 			return fmt.Errorf("unable to activate exchanger '%v': %v", exchanger.GetName(), err)
 		}
@@ -38,8 +64,8 @@ func ActivateExchangers(exchangers []Exchanger, conf *config.Configuration, log 
 }
 
 // StartExchangers starts the given exchangers.
-func StartExchangers(exchangers []Exchanger) error {
-	for _, exchanger := range exchangers {
+func StartExchangers(collection Collection) error {
+	for _, exchanger := range collection.Exchangers() {
 		if err := exchanger.Start(); err != nil {
 			return fmt.Errorf("unable to start exchanger '%v': %v", exchanger.GetName(), err)
 		}
@@ -49,16 +75,16 @@ func StartExchangers(exchangers []Exchanger) error {
 }
 
 // StopExchangers stops the given exchangers.
-func StopExchangers(exchangers []Exchanger) {
-	for _, exchanger := range exchangers {
+func StopExchangers(collection Collection) {
+	for _, exchanger := range collection.Exchangers() {
 		exchanger.Stop()
 	}
 }
 
 // GetRequestExchangers gets all exchangers from a vector that implement the RequestExchanger interface.
-func GetRequestExchangers(exchangers []Exchanger) []RequestExchanger {
+func GetRequestExchangers(collection Collection) []RequestExchanger {
 	var reqExchangers []RequestExchanger
-	for _, exporter := range exchangers {
+	for _, exporter := range collection.Exchangers() {
 		if reqExchanger, ok := exporter.(RequestExchanger); ok {
 			reqExchangers = append(reqExchangers, reqExchanger)
 		}
