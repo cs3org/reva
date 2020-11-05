@@ -996,22 +996,25 @@ func (h *Handler) isListSharesWithMe(w http.ResponseWriter, r *http.Request) (li
 	return
 }
 
+const ocsStateUnknown = -1
 const ocsStateAccepted = 0
 const ocsStatePending = 1
 const ocsStateRejected = 2
 
 func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	// which pending state to list
+	var stateFilter collaboration.ShareState
 	switch r.FormValue("state") {
 	case "all":
-		// no filter
+		stateFilter = ocsStateUnknown // no filter
 	case "0": // accepted
-		// TODO implement accepted filter
+		stateFilter = collaboration.ShareState_SHARE_STATE_ACCEPTED // TODO implement accepted filter
 	case "1": // pending
-		// TODO implement pending filter
+		stateFilter = collaboration.ShareState_SHARE_STATE_PENDING // TODO implement pending filter
 	case "2": // rejected
-		// TODO implement rejected filter
+		stateFilter = collaboration.ShareState_SHARE_STATE_REJECTED // TODO implement rejected filter
 	default:
+		stateFilter = collaboration.ShareState_SHARE_STATE_ACCEPTED
 		// TODO only list accepted shares
 	}
 
@@ -1019,6 +1022,47 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
+	}
+
+	ctx := r.Context()
+
+	var info *provider.ResourceInfo
+	p := r.URL.Query().Get("path")
+	// we need to lookup the resource id so we can filter the list of shares later
+	if p != "" {
+		// prefix the path with the owners home, because ocs share requests are relative to the home dir
+		// TODO the path actually depends on the configured webdav_namespace
+		hRes, err := gwc.GetHome(ctx, &provider.GetHomeRequest{})
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc get home request", err)
+			return
+		}
+
+		target := path.Join(hRes.Path, r.FormValue("path"))
+
+		statReq := &provider.StatRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{
+					Path: target,
+				},
+			},
+		}
+
+		statRes, err := gwc.Stat(ctx, statReq)
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc stat request", err)
+			return
+		}
+
+		if statRes.Status.Code != rpc.Code_CODE_OK {
+			if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+				response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "path not found", nil)
+				return
+			}
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc stat request failed", err)
+			return
+		}
+		info = statRes.GetInfo()
 	}
 
 	lrsReq := collaboration.ListReceivedSharesRequest{}
@@ -1042,18 +1086,32 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	shares := make([]*conversions.ShareData, 0)
 	// TODO(refs) filter out "invalid" shares
 	for _, rs := range lrsRes.GetShares() {
-		statRequest := provider.StatRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Id{
-					Id: rs.Share.ResourceId,
-				},
-			},
+
+		if stateFilter != ocsStateUnknown && rs.GetState() != stateFilter {
+			continue
 		}
 
-		statResponse, err := gwc.Stat(r.Context(), &statRequest)
-		if err != nil {
-			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, err.Error(), err)
-			return
+		if info == nil {
+			statRequest := provider.StatRequest{
+				Ref: &provider.Reference{
+					Spec: &provider.Reference_Id{
+						Id: rs.Share.ResourceId,
+					},
+				},
+			}
+
+			statResponse, err := gwc.Stat(r.Context(), &statRequest)
+			if err != nil {
+				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, err.Error(), err)
+				return
+			}
+			// TODO check status codes
+			info = statResponse.GetInfo()
+		} else {
+			if rs.Share.ResourceId.StorageId != info.GetId().StorageId ||
+				rs.Share.ResourceId.OpaqueId != info.GetId().OpaqueId {
+				continue
+			}
 		}
 
 		data, err := conversions.UserShare2ShareData(r.Context(), rs.Share)
@@ -1070,10 +1128,10 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 		case collaboration.ShareState_SHARE_STATE_REJECTED:
 			data.State = ocsStateRejected
 		default:
-			data.State = -1
+			data.State = ocsStateUnknown
 		}
 
-		err = h.addFileInfo(r.Context(), data, statResponse.Info)
+		err = h.addFileInfo(r.Context(), data, info)
 		if err != nil {
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, err.Error(), err)
 			return
