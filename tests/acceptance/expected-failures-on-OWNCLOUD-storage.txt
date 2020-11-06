@@ -1411,7 +1411,7 @@ apiVersions/fileVersionsSharingToShares.feature:253
 # moving a file/folder from one folder to another doesn't changes etag of destination folder
 # renaming a file/folder inside another folder doesn't changes etag of parent folder
 # restoring a file doesn't changes the etags of the parents
-# This list seems intermittent - what to do? - the results are different each time (D)
+# This list seems intermittent - what to do? - the results are different each time (E)
 #
 apiWebdavEtagPropagation1/moveFileFolder.feature:21
 apiWebdavEtagPropagation1/moveFileFolder.feature:22
