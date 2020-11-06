@@ -346,10 +346,6 @@ apiSharePublicLink1/createPublicLinkShare.feature:779
 # https://github.com/owncloud/core/issues/37605 Public cannot upload file with mtime set on a public link share with new version of WebDAV API
 apiSharePublicLink1/createPublicLinkShare.feature:793
 #
-# https://github.com/owncloud/ocis-reva/issues/311 Deleting a public link after renaming a file
-apiSharePublicLink1/deletePublicLinkShare.feature:37
-apiSharePublicLink1/deletePublicLinkShare.feature:38
-#
 # https://github.com/owncloud/ocis-reva/issues/373 copying a folder within a public link folder to folder with same name as an already existing file overwrites the parent file
 apiSharePublicLink2/copyFromPublicLink.feature:60
 #

@@ -692,7 +692,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	var info *provider.ResourceInfo
+	var pinfo *provider.ResourceInfo
 	p := r.URL.Query().Get("path")
 	// we need to lookup the resource id so we can filter the list of shares later
 	if p != "" {
@@ -732,7 +732,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		info = statRes.GetInfo()
+		pinfo = statRes.GetInfo()
 	}
 
 	lrsReq := collaboration.ListReceivedSharesRequest{}
@@ -754,14 +754,25 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	lrsRes.GetShares()
 
 	shares := make([]*conversions.ShareData, 0)
+
+	var info *provider.ResourceInfo
 	// TODO(refs) filter out "invalid" shares
 	for _, rs := range lrsRes.GetShares() {
 
 		if stateFilter != ocsStateUnknown && rs.GetState() != stateFilter {
 			continue
 		}
-
-		if info == nil {
+		if pinfo != nil {
+			// check if the shared resource matches the path resource
+			if rs.Share.ResourceId.StorageId != pinfo.GetId().StorageId ||
+				rs.Share.ResourceId.OpaqueId != pinfo.GetId().OpaqueId {
+				// try next share
+				continue
+			}
+			// we can reuse the stat info
+			info = pinfo
+		} else {
+			// we need to do a stat call
 			statRequest := provider.StatRequest{
 				Ref: &provider.Reference{
 					Spec: &provider.Reference_Id{
@@ -777,9 +788,6 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			}
 
 			info = statRes.GetInfo()
-		} else if rs.Share.ResourceId.StorageId != info.GetId().StorageId ||
-			rs.Share.ResourceId.OpaqueId != info.GetId().OpaqueId {
-			continue
 		}
 
 		data, err := conversions.UserShare2ShareData(r.Context(), rs.Share)
