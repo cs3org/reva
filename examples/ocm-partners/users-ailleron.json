@@ -31,5 +31,16 @@
 		"mail": "dawid@softwaremind.com",
 		"display_name": "Dawid",
 		"groups": ["quantum-lovers", "philosophy-haters", "physics-lovers"]
+	},
+	{
+		"id": {
+			"opaque_id": "test4242",
+			"idp": "softwaremind.com"
+		},
+		"username": "test",
+		"secret": "testpass",
+		"mail": "test42@softwaremind.com",
+		"display_name": "Testuser",
+		"groups": ["test-lovers", "bug-haters", "ai-lovers"]
 	}
 ]

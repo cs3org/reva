@@ -20,5 +20,16 @@
 		"mail": "daniel@uni-muenster.de",
 		"display_name": "Daniel",
 		"groups": ["radium-lovers", "polonium-lovers", "physics-lovers"]
+	},
+	{
+		"id": {
+			"opaque_id": "test4242",
+			"idp": "uni-muenster.de"
+		},
+		"username": "test",
+		"secret": "testpass",
+		"mail": "test42@uni-muenster.de",
+		"display_name": "Testuser",
+		"groups": ["test-lovers", "bug-haters", "ai-lovers"]
 	}
 ]
