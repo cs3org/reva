@@ -19,9 +19,7 @@
 package loader
 
 import (
-	// Load core user manager drivers.
-	_ "github.com/cs3org/reva/pkg/user/manager/demo"
-	_ "github.com/cs3org/reva/pkg/user/manager/json"
-	_ "github.com/cs3org/reva/pkg/user/manager/ldap"
-	// Add your own here
+	// Load cbox specific drivers.
+	_ "github.com/cs3org/reva/pkg/cbox/share/sql"
+	_ "github.com/cs3org/reva/pkg/cbox/user/rest"
 )
