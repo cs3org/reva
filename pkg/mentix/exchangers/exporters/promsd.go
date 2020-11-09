@@ -78,6 +78,7 @@ func getScrapeTargetLabels(site *meshdata.Site, endpoint *meshdata.ServiceEndpoi
 	return map[string]string{
 		"__meta_site":         site.Name,
 		"__meta_site_type":    meshdata.GetSiteTypeName(site.Type),
+		"__meta_site_id":      site.GetID(),
 		"__meta_country":      site.CountryCode,
 		"__meta_service_type": endpoint.Type.Name,
 	}
