@@ -139,3 +139,17 @@ func (site *Site) GetID() string {
 
 	return fmt.Sprintf("%s::[%s]", host, site.Name)
 }
+
+// GetSiteTypeName returns the readable name of the given site type.
+func GetSiteTypeName(siteType SiteType) string {
+	switch siteType {
+	case SiteTypeScienceMesh:
+		return "sciencemesh"
+
+	case SiteTypeCommunity:
+		return "community"
+
+	default:
+		return "unknown"
+	}
+}

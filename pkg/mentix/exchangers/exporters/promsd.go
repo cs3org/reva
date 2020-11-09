@@ -46,11 +46,7 @@ type PrometheusSDExporter struct {
 }
 
 func createMetricsSDScrapeConfig(site *meshdata.Site, host string, endpoint *meshdata.ServiceEndpoint) *prometheus.ScrapeConfig {
-	labels := map[string]string{
-		"site":         site.Name,
-		"country":      site.CountryCode,
-		"service_type": endpoint.Type.Name,
-	}
+	labels := getScrapeTargetLabels(site, endpoint)
 
 	// If a metrics path was specified as a property, use that one by setting the corresponding label
 	if metricsPath := meshdata.GetPropertyValue(endpoint.Properties, meshdata.PropertyMetricsPath, ""); len(metricsPath) > 0 {
@@ -70,15 +66,20 @@ func createBlackboxSDScrapeConfig(site *meshdata.Site, host string, endpoint *me
 		return nil
 	}
 
-	labels := map[string]string{
-		"site":         site.Name,
-		"country":      site.CountryCode,
-		"service_type": endpoint.Type.Name,
-	}
+	labels := getScrapeTargetLabels(site, endpoint)
 
 	return &prometheus.ScrapeConfig{
 		Targets: []string{target},
 		Labels:  labels,
+	}
+}
+
+func getScrapeTargetLabels(site *meshdata.Site, endpoint *meshdata.ServiceEndpoint) map[string]string {
+	return map[string]string{
+		"__meta_site":         site.Name,
+		"__meta_site_type":    meshdata.GetSiteTypeName(site.Type),
+		"__meta_country":      site.CountryCode,
+		"__meta_service_type": endpoint.Type.Name,
 	}
 }
 

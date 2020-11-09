@@ -268,7 +268,7 @@ func (mntx *Mentix) applyMeshDataSet(meshDataSet meshdata.Map) error {
 		mntx.meshDataSet = meshDataSet
 
 		for _, exporter := range mntx.exporters.Exporters {
-			if err := exporter.Update(meshDataSet); err != nil {
+			if err := exporter.Update(mntx.meshDataSet); err != nil {
 				return fmt.Errorf("unable to update mesh data on exporter '%v': %v", exporter.GetName(), err)
 			}
 		}
