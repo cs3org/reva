@@ -5,4 +5,4 @@ versions of a file by returning the inode of the version folder which remains
 constant. It requires extra metadata operations so a flag is provided to disable
 it.
 
-https://github.com/cs3org/reva/pull/1174.
+https://github.com/cs3org/reva/pull/1174
