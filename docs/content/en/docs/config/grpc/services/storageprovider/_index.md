@@ -67,16 +67,8 @@ expose_data_server = false
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="disable_tus" type="bool" default=false %}}
-Whether to disable TUS uploads. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L60)
-{{< highlight toml >}}
-[grpc.services.storageprovider]
-disable_tus = false
-{{< /highlight >}}
-{{% /dir %}}
-
 {{% dir name="available_checksums" type="map[string]uint32" default=nil %}}
-List of available checksums. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L61)
+List of available checksums. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L60)
 {{< highlight toml >}}
 [grpc.services.storageprovider]
 available_checksums = nil
@@ -84,7 +76,7 @@ available_checksums = nil
 {{% /dir %}}
 
 {{% dir name="mimetypes" type="map[string]string" default=nil %}}
-List of supported mime types and corresponding file extensions. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L62)
+List of supported mime types and corresponding file extensions. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L61)
 {{< highlight toml >}}
 [grpc.services.storageprovider]
 mimetypes = nil
