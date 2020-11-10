@@ -218,7 +218,7 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 				tkn = res.Token
 				tokenWriter.WriteToken(tkn, w)
 			} else {
-				log.Info().Msg("access token is already provided")
+				log.Debug().Msg("access token is already provided")
 			}
 
 			// validate token
