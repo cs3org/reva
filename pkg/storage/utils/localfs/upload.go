@@ -19,7 +19,6 @@
 package localfs
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -45,12 +44,10 @@ func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.Rea
 	if err != nil {
 		// Upload corresponding to this ID was not found.
 		// Assume that this corresponds to the resource path to which the file has to be uploaded.
-		buf := &bytes.Buffer{}
-		length, err := io.Copy(buf, r)
-		if err != nil {
-			return err
-		}
-		uploadID, err := fs.InitiateUpload(ctx, ref, length, nil)
+
+		// Set the length to 0 and set SizeIsDeferred to true
+		metadata := map[string]string{"sizedeferred": "true"}
+		uploadID, err := fs.InitiateUpload(ctx, ref, 0, metadata)
 		if err != nil {
 			return err
 		}
@@ -115,8 +112,13 @@ func (fs *localfs) InitiateUpload(ctx context.Context, ref *provider.Reference, 
 		Size: uploadLength,
 	}
 
-	if metadata != nil && metadata["mtime"] != "" {
-		info.MetaData["mtime"] = metadata["mtime"]
+	if metadata != nil {
+		if metadata["mtime"] != "" {
+			info.MetaData["mtime"] = metadata["mtime"]
+		}
+		if _, ok := metadata["sizedeferred"]; ok {
+			info.SizeIsDeferred = true
+		}
 	}
 
 	upload, err := fs.NewUpload(ctx, info)

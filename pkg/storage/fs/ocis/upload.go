@@ -19,7 +19,6 @@
 package ocis
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -47,12 +46,10 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 	if err != nil {
 		// Upload corresponding to this ID was not found.
 		// Assume that this corresponds to the resource path to which the file has to be uploaded.
-		buf := &bytes.Buffer{}
-		length, err := io.Copy(buf, r)
-		if err != nil {
-			return err
-		}
-		uploadID, err := fs.InitiateUpload(ctx, ref, length, nil)
+
+		// Set the length to 0 and set SizeIsDeferred to true
+		metadata := map[string]string{"sizedeferred": "true"}
+		uploadID, err := fs.InitiateUpload(ctx, ref, 0, metadata)
 		if err != nil {
 			return err
 		}
@@ -125,8 +122,13 @@ func (fs *ocisfs) InitiateUpload(ctx context.Context, ref *provider.Reference, u
 		Size: uploadLength,
 	}
 
-	if metadata != nil && metadata["mtime"] != "" {
-		info.MetaData["mtime"] = metadata["mtime"]
+	if metadata != nil {
+		if metadata["mtime"] != "" {
+			info.MetaData["mtime"] = metadata["mtime"]
+		}
+		if _, ok := metadata["sizedeferred"]; ok {
+			info.SizeIsDeferred = true
+		}
 	}
 
 	log.Debug().Interface("info", info).Interface("node", n).Interface("metadata", metadata).Msg("ocisfs: resolved filename")
