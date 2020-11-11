@@ -38,12 +38,15 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 
 	err := s.storage.Upload(ctx, ref, r.Body)
 	if err != nil {
-		if _, ok := err.(errtypes.IsPartialContent); ok {
+		switch err.(type) {
+		case errtypes.IsPartialContent:
 			w.WriteHeader(http.StatusPartialContent)
-			return
+		case errtypes.NotSupported:
+			w.WriteHeader(http.StatusConflict)
+		case errtypes.PermissionDenied:
+			w.WriteHeader(http.StatusForbidden)
 		}
 		log.Error().Err(err).Msg("error uploading file")
-		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 

@@ -22,6 +22,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"path"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -42,6 +43,11 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 	p, err := fs.resolve(ctx, u, ref)
 	if err != nil {
 		return errors.Wrap(err, "eos: error resolving reference")
+	}
+
+	_, err = fs.GetMD(ctx, &provider.Reference{Spec: &provider.Reference_Path{Path: path.Dir(p)}}, nil)
+	if err != nil {
+		return errtypes.NotSupported("eos: parent directory doesn't exist")
 	}
 
 	if fs.isShareFolder(ctx, p) {

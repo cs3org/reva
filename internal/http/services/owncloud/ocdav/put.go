@@ -253,12 +253,8 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 		}
 		defer httpRes.Body.Close()
 		if httpRes.StatusCode != http.StatusOK {
-			if httpRes.StatusCode == http.StatusPartialContent {
-				w.WriteHeader(http.StatusPartialContent)
-				return
-			}
 			log.Err(err).Msg("PUT request to data server failed")
-			w.WriteHeader(http.StatusInternalServerError)
+			w.WriteHeader(httpRes.StatusCode)
 			return
 		}
 	}

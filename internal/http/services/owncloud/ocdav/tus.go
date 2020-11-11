@@ -103,13 +103,12 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	info := sRes.Info
-	if info != nil && info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
-		log.Warn().Msg("resource is not a file")
-		w.WriteHeader(http.StatusConflict)
-		return
-	}
-
 	if info != nil {
+		if info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
+			log.Warn().Msg("resource is not a file")
+			w.WriteHeader(http.StatusConflict)
+			return
+		}
 		clientETag := r.Header.Get("If-Match")
 		serverETag := info.Etag
 		if clientETag != "" {
