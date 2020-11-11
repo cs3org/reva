@@ -6,3 +6,4 @@ refactors that workflow to accept incoming requests following the tus protocol
 while using simpler transmission internally.
 
 https://github.com/cs3org/reva/pull/1285
+https://github.com/cs3org/reva/pull/1314

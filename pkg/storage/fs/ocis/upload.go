@@ -44,7 +44,18 @@ var defaultFilePerm = os.FileMode(0664)
 func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) (err error) {
 	upload, err := fs.GetUpload(ctx, ref.GetPath())
 	if err != nil {
-		return errors.Wrap(err, "ocisfs: error retrieving upload")
+		// Upload corresponding to this ID was not found.
+		// Assume that this corresponds to the resource path to which the file has to be uploaded.
+
+		// Set the length to 0 and set SizeIsDeferred to true
+		metadata := map[string]string{"sizedeferred": "true"}
+		uploadID, err := fs.InitiateUpload(ctx, ref, 0, metadata)
+		if err != nil {
+			return err
+		}
+		if upload, err = fs.GetUpload(ctx, uploadID); err != nil {
+			return errors.Wrap(err, "ocisfs: error retrieving upload")
+		}
 	}
 
 	uploadInfo := upload.(*fileUpload)
@@ -52,7 +63,7 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 	p := uploadInfo.info.Storage["NodeName"]
 	ok, err := chunking.IsChunked(p)
 	if err != nil {
-		return errors.Wrap(err, "ocfs: error checking path")
+		return errors.Wrap(err, "ocisfs: error checking path")
 	}
 	if ok {
 		var assembledFile string
@@ -69,7 +80,7 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 		uploadInfo.info.Storage["NodeName"] = p
 		fd, err := os.Open(assembledFile)
 		if err != nil {
-			return errors.Wrap(err, "eos: error opening assembled file")
+			return errors.Wrap(err, "ocisfs: error opening assembled file")
 		}
 		defer fd.Close()
 		defer os.RemoveAll(assembledFile)
@@ -111,8 +122,13 @@ func (fs *ocisfs) InitiateUpload(ctx context.Context, ref *provider.Reference, u
 		Size: uploadLength,
 	}
 
-	if metadata != nil && metadata["mtime"] != "" {
-		info.MetaData["mtime"] = metadata["mtime"]
+	if metadata != nil {
+		if metadata["mtime"] != "" {
+			info.MetaData["mtime"] = metadata["mtime"]
+		}
+		if _, ok := metadata["sizedeferred"]; ok {
+			info.SizeIsDeferred = true
+		}
 	}
 
 	log.Debug().Interface("info", info).Interface("node", n).Interface("metadata", metadata).Msg("ocisfs: resolved filename")

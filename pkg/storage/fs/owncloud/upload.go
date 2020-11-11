@@ -44,7 +44,18 @@ var defaultFilePerm = os.FileMode(0664)
 func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
 	upload, err := fs.GetUpload(ctx, ref.GetPath())
 	if err != nil {
-		return errors.Wrap(err, "ocfs: error retrieving upload")
+		// Upload corresponding to this ID was not found.
+		// Assume that this corresponds to the resource path to which the file has to be uploaded.
+
+		// Set the length to 0 and set SizeIsDeferred to true
+		metadata := map[string]string{"sizedeferred": "true"}
+		uploadID, err := fs.InitiateUpload(ctx, ref, 0, metadata)
+		if err != nil {
+			return err
+		}
+		if upload, err = fs.GetUpload(ctx, uploadID); err != nil {
+			return errors.Wrap(err, "ocfs: error retrieving upload")
+		}
 	}
 
 	uploadInfo := upload.(*fileUpload)
@@ -69,7 +80,7 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 		uploadInfo.info.Storage["InternalDestination"] = p
 		fd, err := os.Open(assembledFile)
 		if err != nil {
-			return errors.Wrap(err, "eos: error opening assembled file")
+			return errors.Wrap(err, "ocfs: error opening assembled file")
 		}
 		defer fd.Close()
 		defer os.RemoveAll(assembledFile)
@@ -103,8 +114,13 @@ func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, upl
 		Size: uploadLength,
 	}
 
-	if metadata != nil && metadata["mtime"] != "" {
-		info.MetaData["mtime"] = metadata["mtime"]
+	if metadata != nil {
+		if metadata["mtime"] != "" {
+			info.MetaData["mtime"] = metadata["mtime"]
+		}
+		if _, ok := metadata["sizedeferred"]; ok {
+			info.SizeIsDeferred = true
+		}
 	}
 
 	upload, err := fs.NewUpload(ctx, info)

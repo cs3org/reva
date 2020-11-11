@@ -42,7 +42,18 @@ var defaultFilePerm = os.FileMode(0664)
 func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
 	upload, err := fs.GetUpload(ctx, ref.GetPath())
 	if err != nil {
-		return errors.Wrap(err, "ocisfs: error retrieving upload")
+		// Upload corresponding to this ID was not found.
+		// Assume that this corresponds to the resource path to which the file has to be uploaded.
+
+		// Set the length to 0 and set SizeIsDeferred to true
+		metadata := map[string]string{"sizedeferred": "true"}
+		uploadID, err := fs.InitiateUpload(ctx, ref, 0, metadata)
+		if err != nil {
+			return err
+		}
+		if upload, err = fs.GetUpload(ctx, uploadID); err != nil {
+			return errors.Wrap(err, "localfs: error retrieving upload")
+		}
 	}
 
 	uploadInfo := upload.(*fileUpload)
@@ -50,7 +61,7 @@ func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.Rea
 	p := uploadInfo.info.Storage["InternalDestination"]
 	ok, err := chunking.IsChunked(p)
 	if err != nil {
-		return errors.Wrap(err, "ocfs: error checking path")
+		return errors.Wrap(err, "localfs: error checking path")
 	}
 	if ok {
 		var assembledFile string
@@ -60,14 +71,14 @@ func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.Rea
 		}
 		if p == "" {
 			if err = uploadInfo.Terminate(ctx); err != nil {
-				return errors.Wrap(err, "ocfs: error removing auxiliary files")
+				return errors.Wrap(err, "localfs: error removing auxiliary files")
 			}
 			return errtypes.PartialContent(ref.String())
 		}
 		uploadInfo.info.Storage["InternalDestination"] = p
 		fd, err := os.Open(assembledFile)
 		if err != nil {
-			return errors.Wrap(err, "eos: error opening assembled file")
+			return errors.Wrap(err, "localfs: error opening assembled file")
 		}
 		defer fd.Close()
 		defer os.RemoveAll(assembledFile)
@@ -75,7 +86,7 @@ func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.Rea
 	}
 
 	if _, err := uploadInfo.WriteChunk(ctx, 0, r); err != nil {
-		return errors.Wrap(err, "ocisfs: error writing to binary file")
+		return errors.Wrap(err, "localfs: error writing to binary file")
 	}
 
 	return uploadInfo.FinishUpload(ctx)
@@ -101,8 +112,13 @@ func (fs *localfs) InitiateUpload(ctx context.Context, ref *provider.Reference, 
 		Size: uploadLength,
 	}
 
-	if metadata != nil && metadata["mtime"] != "" {
-		info.MetaData["mtime"] = metadata["mtime"]
+	if metadata != nil {
+		if metadata["mtime"] != "" {
+			info.MetaData["mtime"] = metadata["mtime"]
+		}
+		if _, ok := metadata["sizedeferred"]; ok {
+			info.SizeIsDeferred = true
+		}
 	}
 
 	upload, err := fs.NewUpload(ctx, info)
@@ -331,8 +347,10 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 
 	// only delete the upload if it was successfully written to the fs
 	if err := os.Remove(upload.infoPath); err != nil {
-		log := appctx.GetLogger(ctx)
-		log.Err(err).Interface("info", upload.info).Msg("localfs: could not delete upload info")
+		if !os.IsNotExist(err) {
+			log := appctx.GetLogger(ctx)
+			log.Err(err).Interface("info", upload.info).Msg("localfs: could not delete upload info")
+		}
 	}
 
 	// TODO: set mtime if specified in metadata
