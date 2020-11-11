@@ -53,6 +53,9 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 			return err
 		}
 		uploadID, err := fs.InitiateUpload(ctx, ref, length, nil)
+		if err != nil {
+			return err
+		}
 		if upload, err = fs.GetUpload(ctx, uploadID); err != nil {
 			return errors.Wrap(err, "ocisfs: error retrieving upload")
 		}
@@ -443,7 +446,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 			Str("link", link).
 			Msg("ocisfs: child name link has wrong target id, repairing")
 
-		if err = os.Remove(childNameLink); err != nil {
+		if err = os.RemoveAll(childNameLink); err != nil {
 			return errors.Wrap(err, "ocisfs: could not remove symlink child entry")
 		}
 	}
@@ -454,7 +457,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	}
 
 	// only delete the upload if it was successfully written to the storage
-	if err = os.Remove(upload.infoPath); err != nil {
+	if err = os.RemoveAll(upload.infoPath); err != nil {
 		if !os.IsNotExist(err) {
 			log.Err(err).Interface("info", upload.info).Msg("ocisfs: could not delete upload info")
 			return
@@ -485,12 +488,12 @@ func (fs *ocisfs) AsTerminatableUpload(upload tusd.Upload) tusd.TerminatableUplo
 
 // Terminate terminates the upload
 func (upload *fileUpload) Terminate(ctx context.Context) error {
-	if err := os.Remove(upload.infoPath); err != nil {
+	if err := os.RemoveAll(upload.infoPath); err != nil {
 		if !os.IsNotExist(err) {
 			return err
 		}
 	}
-	if err := os.Remove(upload.binPath); err != nil {
+	if err := os.RemoveAll(upload.binPath); err != nil {
 		if !os.IsNotExist(err) {
 			return err
 		}

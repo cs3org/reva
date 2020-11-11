@@ -53,6 +53,9 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 			return err
 		}
 		uploadID, err := fs.InitiateUpload(ctx, ref, length, nil)
+		if err != nil {
+			return err
+		}
 		if upload, err = fs.GetUpload(ctx, uploadID); err != nil {
 			return errors.Wrap(err, "ocfs: error retrieving upload")
 		}
@@ -394,7 +397,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 	}
 
 	// only delete the upload if it was successfully written to the storage
-	if err := os.Remove(upload.infoPath); err != nil {
+	if err := os.RemoveAll(upload.infoPath); err != nil {
 		if !os.IsNotExist(err) {
 			log.Err(err).Interface("info", upload.info).Msg("ocfs: could not delete upload info")
 			return err
@@ -423,12 +426,12 @@ func (fs *ocfs) AsTerminatableUpload(upload tusd.Upload) tusd.TerminatableUpload
 
 // Terminate terminates the upload
 func (upload *fileUpload) Terminate(ctx context.Context) error {
-	if err := os.Remove(upload.infoPath); err != nil {
+	if err := os.RemoveAll(upload.infoPath); err != nil {
 		if !os.IsNotExist(err) {
 			return err
 		}
 	}
-	if err := os.Remove(upload.binPath); err != nil {
+	if err := os.RemoveAll(upload.binPath); err != nil {
 		if !os.IsNotExist(err) {
 			return err
 		}
