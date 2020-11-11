@@ -397,7 +397,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 	}
 
 	// only delete the upload if it was successfully written to the storage
-	if err := os.RemoveAll(upload.infoPath); err != nil {
+	if err := os.Remove(upload.infoPath); err != nil {
 		if !os.IsNotExist(err) {
 			log.Err(err).Interface("info", upload.info).Msg("ocfs: could not delete upload info")
 			return err
@@ -426,12 +426,12 @@ func (fs *ocfs) AsTerminatableUpload(upload tusd.Upload) tusd.TerminatableUpload
 
 // Terminate terminates the upload
 func (upload *fileUpload) Terminate(ctx context.Context) error {
-	if err := os.RemoveAll(upload.infoPath); err != nil {
+	if err := os.Remove(upload.infoPath); err != nil {
 		if !os.IsNotExist(err) {
 			return err
 		}
 	}
-	if err := os.RemoveAll(upload.binPath); err != nil {
+	if err := os.Remove(upload.binPath); err != nil {
 		if !os.IsNotExist(err) {
 			return err
 		}

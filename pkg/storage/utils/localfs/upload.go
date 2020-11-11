@@ -344,9 +344,11 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 	}
 
 	// only delete the upload if it was successfully written to the fs
-	if err := os.RemoveAll(upload.infoPath); err != nil {
-		log := appctx.GetLogger(ctx)
-		log.Err(err).Interface("info", upload.info).Msg("localfs: could not delete upload info")
+	if err := os.Remove(upload.infoPath); err != nil {
+		if !os.IsNotExist(err) {
+			log := appctx.GetLogger(ctx)
+			log.Err(err).Interface("info", upload.info).Msg("localfs: could not delete upload info")
+		}
 	}
 
 	// TODO: set mtime if specified in metadata
@@ -366,10 +368,10 @@ func (fs *localfs) AsTerminatableUpload(upload tusd.Upload) tusd.TerminatableUpl
 
 // Terminate terminates the upload
 func (upload *fileUpload) Terminate(ctx context.Context) error {
-	if err := os.RemoveAll(upload.infoPath); err != nil {
+	if err := os.Remove(upload.infoPath); err != nil {
 		return err
 	}
-	if err := os.RemoveAll(upload.binPath); err != nil {
+	if err := os.Remove(upload.binPath); err != nil {
 		return err
 	}
 	return nil
