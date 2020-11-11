@@ -76,7 +76,7 @@ func (s *svc) handleHead(w http.ResponseWriter, r *http.Request, ns string) {
 	w.Header().Set("ETag", info.Etag)
 	w.Header().Set("OC-FileId", wrapResourceID(info.Id))
 	w.Header().Set("OC-ETag", info.Etag)
-	t := utils.TSToTime(info.Mtime)
+	t := utils.TSToTime(info.Mtime).UTC()
 	lastModifiedString := t.Format(time.RFC1123Z)
 	w.Header().Set("Last-Modified", lastModifiedString)
 	w.WriteHeader(http.StatusOK)

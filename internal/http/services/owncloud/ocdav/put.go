@@ -312,7 +312,7 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 	w.Header().Set("ETag", newInfo.Etag)
 	w.Header().Set("OC-FileId", wrapResourceID(newInfo.Id))
 	w.Header().Set("OC-ETag", newInfo.Etag)
-	t := utils.TSToTime(newInfo.Mtime)
+	t := utils.TSToTime(newInfo.Mtime).UTC()
 	lastModifiedString := t.Format(time.RFC1123Z)
 	w.Header().Set("Last-Modified", lastModifiedString)
 

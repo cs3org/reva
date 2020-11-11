@@ -19,6 +19,7 @@
 package localfs
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -42,7 +43,17 @@ var defaultFilePerm = os.FileMode(0664)
 func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
 	upload, err := fs.GetUpload(ctx, ref.GetPath())
 	if err != nil {
-		return errors.Wrap(err, "ocisfs: error retrieving upload")
+		// Upload corresponding to this ID was not found.
+		// Assume that this corresponds to the resource path to which the file has to be uploaded.
+		buf := &bytes.Buffer{}
+		length, err := io.Copy(buf, r)
+		if err != nil {
+			return err
+		}
+		uploadID, err := fs.InitiateUpload(ctx, ref, length, nil)
+		if upload, err = fs.GetUpload(ctx, uploadID); err != nil {
+			return errors.Wrap(err, "localfs: error retrieving upload")
+		}
 	}
 
 	uploadInfo := upload.(*fileUpload)
@@ -50,7 +61,7 @@ func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.Rea
 	p := uploadInfo.info.Storage["InternalDestination"]
 	ok, err := chunking.IsChunked(p)
 	if err != nil {
-		return errors.Wrap(err, "ocfs: error checking path")
+		return errors.Wrap(err, "localfs: error checking path")
 	}
 	if ok {
 		var assembledFile string
@@ -60,14 +71,14 @@ func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.Rea
 		}
 		if p == "" {
 			if err = uploadInfo.Terminate(ctx); err != nil {
-				return errors.Wrap(err, "ocfs: error removing auxiliary files")
+				return errors.Wrap(err, "localfs: error removing auxiliary files")
 			}
 			return errtypes.PartialContent(ref.String())
 		}
 		uploadInfo.info.Storage["InternalDestination"] = p
 		fd, err := os.Open(assembledFile)
 		if err != nil {
-			return errors.Wrap(err, "eos: error opening assembled file")
+			return errors.Wrap(err, "localfs: error opening assembled file")
 		}
 		defer fd.Close()
 		defer os.RemoveAll(assembledFile)
@@ -75,7 +86,7 @@ func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.Rea
 	}
 
 	if _, err := uploadInfo.WriteChunk(ctx, 0, r); err != nil {
-		return errors.Wrap(err, "ocisfs: error writing to binary file")
+		return errors.Wrap(err, "localfs: error writing to binary file")
 	}
 
 	return uploadInfo.FinishUpload(ctx)
