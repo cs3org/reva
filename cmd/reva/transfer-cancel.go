@@ -20,6 +20,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"io"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -44,8 +45,14 @@ func transferCancelCommand() *command {
 			return err
 		}
 
-		cancelRequest := &datatx.CancelTransferRequest{}
+		cancelRequest := &datatx.CancelTransferRequest{
+			TxId: &datatx.TxId{
+				OpaqueId: *txID,
+			},
+		}
 
+		fmt.Println("transfer-cancel:")
+		fmt.Println("------------------------------------------------------------------------")
 		cancelResponse, err := client.CancelTransfer(ctx, cancelRequest)
 		if err != nil {
 			return err
@@ -53,6 +60,11 @@ func transferCancelCommand() *command {
 		if cancelResponse.Status.Code != rpc.Code_CODE_OK {
 			return formatError(cancelResponse.Status)
 		}
+
+		fmt.Printf(" response status: %v\n", cancelResponse.Status)
+		fmt.Printf(" transfer ID    : %v\n", cancelResponse.TxInfo.Id.OpaqueId)
+		fmt.Printf(" transfer status: %v\n", cancelResponse.TxInfo.Status)
+		fmt.Println("------------------------------------------------------------------------")
 
 		return nil
 	}
