@@ -856,7 +856,7 @@ func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 
 		filters, linkFilters, err = h.addFilters(w, r, hRes.GetPath())
 		if err != nil {
-			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, err.Error(), err)
+			// result has been written as part of addFilters
 			return
 		}
 	}
@@ -921,12 +921,13 @@ func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, prefix stri
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
+		err = errors.New(res.Status.Message)
 		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
-			return collaborationFilters, linkFilters, errors.New("fixme")
+			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", err)
+			return nil, nil, err
 		}
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc stat request failed", err)
-		return collaborationFilters, linkFilters, errors.New("fixme")
+		return nil, nil, err
 	}
 
 	info = res.Info
