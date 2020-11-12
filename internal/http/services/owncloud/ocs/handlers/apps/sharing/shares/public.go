@@ -163,11 +163,12 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
+	ocsDataPayload := make([]*conversions.ShareData, 0)
 	// TODO(refs) why is this guard needed? Are we moving towards a gateway only for service discovery? without a gateway this is dead code.
 	if h.gatewayAddr != "" {
 		c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 		if err != nil {
-			return nil, nil, err
+			return ocsDataPayload, nil, err
 		}
 
 		req := link.ListPublicSharesRequest{
@@ -175,11 +176,13 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 		}
 
 		res, err := c.ListPublicShares(ctx, &req)
-		if err != nil || res.Status.Code != rpc.Code_CODE_OK {
-			return nil, res.Status, err
+		if err != nil {
+			return ocsDataPayload, nil, err
+		}
+		if res.Status.Code != rpc.Code_CODE_OK {
+			return ocsDataPayload, res.Status, nil
 		}
 
-		ocsDataPayload := make([]*conversions.ShareData, 0)
 		for _, share := range res.GetShare() {
 
 			statRequest := &provider.StatRequest{
@@ -215,7 +218,7 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 		return ocsDataPayload, nil, nil
 	}
 
-	return nil, nil, errors.New("bad request")
+	return ocsDataPayload, nil, errors.New("bad request")
 }
 
 func (h *Handler) isPublicShare(r *http.Request, oid string) bool {
