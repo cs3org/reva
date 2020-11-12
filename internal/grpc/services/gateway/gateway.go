@@ -52,7 +52,7 @@ type config struct {
 	OCMProviderAuthorizerEndpoint string `mapstructure:"ocmproviderauthorizersvc"`
 	OCMCoreEndpoint               string `mapstructure:"ocmcoresvc"`
 	UserProviderEndpoint          string `mapstructure:"userprovidersvc"`
-	DataTxEndpoint                string `mapstructure:"datatx"`
+	DataTxEndpoint                string `mapstructure:"datatxsvc"`
 	DataGatewayEndpoint           string `mapstructure:"datagateway"`
 	CommitShareToStorageGrant     bool   `mapstructure:"commit_share_to_storage_grant"`
 	CommitShareToStorageRef       bool   `mapstructure:"commit_share_to_storage_ref"`
