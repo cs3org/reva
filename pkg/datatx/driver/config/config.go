@@ -20,14 +20,11 @@ package config
 
 // Config holds the config options that need to be passed down to the datatx driver
 type Config struct {
-	DataTxDriverType     string `mapstructure:"driver"`
-	DataTxSenderEndpoint string `mapstructure:"sender_endpoint"`
+	Driver   string `mapstructure:"driver"`
+	Endpoint string `mapstructure:"endpoint"`
 }
 
 // Init sets sane defaults
 func (c *Config) Init() {
-	if c.DataTxDriverType == "" {
-		// default values
-		c.DataTxDriverType = "rclone"
-	}
+	// TODO defaults ?
 }
