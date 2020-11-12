@@ -80,13 +80,16 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.ListS
 		// get a connection to the users share provider
 		c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 		if err != nil {
-			return nil, nil, err
+			return ocsDataPayload, nil, err
 		}
 
 		// do list shares request. filtered
 		lsUserSharesResponse, err := c.ListShares(ctx, &lsUserSharesRequest)
-		if err != nil || lsUserSharesResponse.Status.Code != rpc.Code_CODE_OK {
-			return nil, lsUserSharesResponse.Status, err
+		if err != nil {
+			return ocsDataPayload, nil, err
+		}
+		if lsUserSharesResponse.Status.Code != rpc.Code_CODE_OK {
+			return ocsDataPayload, lsUserSharesResponse.Status, nil
 		}
 
 		// build OCS response payload
