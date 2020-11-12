@@ -26,7 +26,7 @@ import (
 	"net/http"
 	"strings"
 
-	txdriver "github.com/cs3org/reva/pkg/datatx/driver"
+	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
 	config "github.com/cs3org/reva/pkg/datatx/driver/config"
 	registry "github.com/cs3org/reva/pkg/datatx/driver/registry"
 	"github.com/cs3org/reva/pkg/rhttp"
@@ -40,7 +40,7 @@ func init() {
 
 // Rclone the rclone driver
 type Rclone struct {
-	SenderEndpoint string
+	Endpoint string
 }
 
 func driverName() string {
@@ -49,19 +49,19 @@ func driverName() string {
 
 // Configure configures this driver
 func (driver *Rclone) Configure(c *config.Config) error {
-	if c.DataTxSenderEndpoint == "" {
+	if c.Endpoint == "" {
 		err := errors.New("Unable to initialize a data transfer driver, has the transfer sender endpoint been specified?")
 		return err
 	}
 
-	driver.SenderEndpoint = c.DataTxSenderEndpoint
+	driver.Endpoint = c.Endpoint
 
 	return nil
 }
 
-// DoTransfer initiates a transfer and returns the transfer job ID
-// If Job.jobID -1 is returned it means that the transfer could not be initiated
-func (driver *Rclone) DoTransfer(srcRemote string, srcPath string, srcToken string, destRemote string, destPath string, destToken string) (*txdriver.Job, error) {
+// DoTransfer initiates a transfer and returns the transfer job id.
+// If jobID -1 is returned it means that the transfer could not be initiated; and an error is possibly returned with it.
+func (driver *Rclone) DoTransfer(srcRemote string, srcPath string, srcToken string, destRemote string, destPath string, destToken string) (int64, error) {
 	// example call from surfsara to cernbox
 	//  - the users are to be defined with the remotes in the rclone config
 	//  - basic http auth is used (-u user:pass)
@@ -89,15 +89,15 @@ func (driver *Rclone) DoTransfer(srcRemote string, srcPath string, srcToken stri
 
 	data, err := json.Marshal(rcloneReq)
 	if err != nil {
-		return nil, errors.Wrap(err, "error marshalling rclone req data")
+		return -1, errors.Wrap(err, "error marshalling rclone req data")
 	}
 
 	// TODO handle directory transfers
 	transferFileMethod := "/operations/copyfile"
-	url := strings.Trim(driver.SenderEndpoint, "/") + transferFileMethod
+	url := strings.Trim(driver.Endpoint, "/") + transferFileMethod
 	req, err := http.NewRequest("POST", url, bytes.NewReader(data))
 	if err != nil {
-		return nil, errors.Wrap(err, "json: error framing post request")
+		return -1, errors.Wrap(err, "json: error framing post request")
 	}
 	req.Header.Set("Content-Type", "application/json")
 
@@ -109,7 +109,7 @@ func (driver *Rclone) DoTransfer(srcRemote string, srcPath string, srcToken stri
 	res, err := client.Do(req)
 	if err != nil {
 		err = errors.Wrap(err, "json: error sending post request")
-		return nil, err
+		return -1, err
 	}
 
 	defer res.Body.Close()
@@ -118,25 +118,19 @@ func (driver *Rclone) DoTransfer(srcRemote string, srcPath string, srcToken stri
 		resBody, err := ioutil.ReadAll(res.Body)
 		if err != nil {
 			err = errors.Wrap(err, "json: error reading response body")
-			return nil, err
+			return -1, err
 		}
 		err = errors.Wrap(errors.New(fmt.Sprintf("%s: %s", res.Status, string(resBody))), "json: rclone request responded with error")
-		return nil, err
+		return -1, err
 	}
 
 	var resData rcloneAsyncResJSON
 	if err = json.NewDecoder(res.Body).Decode(&resData); err != nil {
 		err = errors.Wrap(err, "json: error decoding response data")
-		return nil, err
+		return -1, err
 	}
 
-	// create new Job from jobID
-	newJob := txdriver.Job{
-		JobID:      resData.JobID,
-		SrcRemote:  txdriver.Remote{OpaqueName: srcRemote},
-		DestRemote: txdriver.Remote{OpaqueName: destRemote},
-	}
-	return &newJob, nil
+	return resData.JobID, nil
 }
 
 // rcloneStatusReqJSON the rclone job/status method json request
@@ -158,22 +152,22 @@ type rcloneStatusResJSON struct {
 	// "output": {} // output of the job as would have been returned if called synchronously
 }
 
-// GetTransferStatus returns the status of the transfer defined by the specified job
-func (driver *Rclone) GetTransferStatus(job *txdriver.Job) (string, error) {
+// GetTransferStatus returns the status of the transfer with the specified job id
+func (driver *Rclone) GetTransferStatus(jobID int64) (datatx.TxInfo_Status, error) {
 	rcloneStatusReq := &rcloneStatusReqJSON{
-		JobID: job.JobID,
+		JobID: jobID,
 	}
 
 	data, err := json.Marshal(rcloneStatusReq)
 	if err != nil {
-		return txdriver.StatusInvalid, errors.Wrap(err, "error marshalling rclone req data")
+		return datatx.TxInfo_STATUS_INVALID, errors.Wrap(err, "error marshalling rclone req data")
 	}
 
 	transferFileMethod := "/job/status"
-	url := strings.Trim(driver.SenderEndpoint, "/") + transferFileMethod
+	url := strings.Trim(driver.Endpoint, "/") + transferFileMethod
 	req, err := http.NewRequest("POST", url, bytes.NewReader(data))
 	if err != nil {
-		return txdriver.StatusInvalid, errors.Wrap(err, "json: error framing post request")
+		return datatx.TxInfo_STATUS_INVALID, errors.Wrap(err, "json: error framing post request")
 	}
 	req.Header.Set("Content-Type", "application/json")
 
@@ -185,7 +179,7 @@ func (driver *Rclone) GetTransferStatus(job *txdriver.Job) (string, error) {
 	res, err := client.Do(req)
 	if err != nil {
 		err = errors.Wrap(err, "json: error sending post request")
-		return txdriver.StatusInvalid, err
+		return datatx.TxInfo_STATUS_INVALID, err
 	}
 
 	defer res.Body.Close()
@@ -197,31 +191,31 @@ func (driver *Rclone) GetTransferStatus(job *txdriver.Job) (string, error) {
 		resBody, e := ioutil.ReadAll(res.Body)
 		if e != nil {
 			e = errors.Wrap(e, "json: error reading response body")
-			return txdriver.StatusInvalid, e
+			return datatx.TxInfo_STATUS_INVALID, e
 		}
 		err = errors.Wrap(errors.New(fmt.Sprintf("%s: %s", res.Status, string(resBody))), "json: rclone request responded with error")
-		return txdriver.StatusInvalid, err
+		return datatx.TxInfo_STATUS_INVALID, err
 	}
 
 	var resData rcloneStatusResJSON
 	if err = json.NewDecoder(res.Body).Decode(&resData); err != nil {
-		return txdriver.StatusInvalid, errors.Wrap(err, "json: error decoding response data")
+		return datatx.TxInfo_STATUS_INVALID, errors.Wrap(err, "json: error decoding response data")
 	}
 
 	if resData.Error != "" {
-		return txdriver.StatusInvalid, errors.New(resData.Error)
+		return datatx.TxInfo_STATUS_INVALID, errors.New(resData.Error)
 	}
 
 	if resData.Finished && resData.Success {
-		return txdriver.StatusTransferComplete, nil
+		return datatx.TxInfo_STATUS_TRANSFER_COMPLETE, nil
 	}
 	if !resData.Finished {
-		return txdriver.StatusTransferInProgress, nil
+		return datatx.TxInfo_STATUS_TRANSFER_IN_PROGRESS, nil
 	}
 	if !resData.Success {
-		return txdriver.StatusTransferFailed, nil
+		return datatx.TxInfo_STATUS_TRANSFER_FAILED, nil
 	}
-	return txdriver.StatusInvalid, nil
+	return datatx.TxInfo_STATUS_INVALID, nil
 }
 
 // rcloneCancelTransferReqJSON the rclone job/stop method json request
@@ -243,22 +237,22 @@ type rcloneCancelTransferResJSON struct {
 	// "output": {} // output of the job as would have been returned if called synchronously
 }
 
-// CancelTransfer cancels the transfer defined by the specified job
-func (driver *Rclone) CancelTransfer(job *txdriver.Job) (string, error) {
+// CancelTransfer cancels the transfer with the specified job id
+func (driver *Rclone) CancelTransfer(jobID int64) (datatx.TxInfo_Status, error) {
 	rcloneCancelTransferReq := &rcloneCancelTransferReqJSON{
-		JobID: job.JobID,
+		JobID: jobID,
 	}
 
 	data, err := json.Marshal(rcloneCancelTransferReq)
 	if err != nil {
-		return txdriver.StatusInvalid, errors.Wrap(err, "error marshalling rclone req data")
+		return datatx.TxInfo_STATUS_INVALID, errors.Wrap(err, "error marshalling rclone req data")
 	}
 
 	transferFileMethod := "/job/stop"
-	url := strings.Trim(driver.SenderEndpoint, "/") + transferFileMethod
+	url := strings.Trim(driver.Endpoint, "/") + transferFileMethod
 	req, err := http.NewRequest("POST", url, bytes.NewReader(data))
 	if err != nil {
-		return txdriver.StatusInvalid, errors.Wrap(err, "json: error framing post request")
+		return datatx.TxInfo_STATUS_INVALID, errors.Wrap(err, "json: error framing post request")
 	}
 	req.Header.Set("Content-Type", "application/json")
 
@@ -270,7 +264,7 @@ func (driver *Rclone) CancelTransfer(job *txdriver.Job) (string, error) {
 	res, err := client.Do(req)
 	if err != nil {
 		err = errors.Wrap(err, "json: error sending post request")
-		return txdriver.StatusInvalid, err
+		return datatx.TxInfo_STATUS_INVALID, err
 	}
 
 	defer res.Body.Close()
@@ -282,22 +276,22 @@ func (driver *Rclone) CancelTransfer(job *txdriver.Job) (string, error) {
 		resBody, e := ioutil.ReadAll(res.Body)
 		if e != nil {
 			e = errors.Wrap(e, "json: error reading response body")
-			return txdriver.StatusInvalid, e
+			return datatx.TxInfo_STATUS_INVALID, e
 		}
 		err = errors.Wrap(errors.New(fmt.Sprintf("%s: %s", res.Status, string(resBody))), "json: rclone request responded with error")
-		return txdriver.StatusInvalid, err
+		return datatx.TxInfo_STATUS_INVALID, err
 	}
 
 	var resData rcloneCancelTransferResJSON
 	if err = json.NewDecoder(res.Body).Decode(&resData); err != nil {
-		return txdriver.StatusInvalid, errors.Wrap(err, "json: error decoding response data")
+		return datatx.TxInfo_STATUS_INVALID, errors.Wrap(err, "json: error decoding response data")
 	}
 
 	if resData.Error != "" {
-		return txdriver.StatusTransferCancelFailed, errors.New(resData.Error)
+		return datatx.TxInfo_STATUS_TRANSFER_CANCEL_FAILED, errors.New(resData.Error)
 	}
 	// an empty response means success
-	return txdriver.StatusTransferCancelled, nil
+	return datatx.TxInfo_STATUS_TRANSFER_CANCELLED, nil
 }
 
 // rcloneAsyncReqJSON the rclone operations/filecopy async method json request
