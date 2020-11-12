@@ -25,7 +25,6 @@ import (
 	"io"
 	"strconv"
 
-	txdriver "github.com/cs3org/reva/pkg/datatx/driver"
 	datatxConfig "github.com/cs3org/reva/pkg/datatx/driver/config"
 	_ "github.com/cs3org/reva/pkg/datatx/driver/loader"
 	registry "github.com/cs3org/reva/pkg/datatx/driver/registry"
@@ -35,23 +34,23 @@ func rcloneCancelTransfer() *command {
 	cmd := newCommand("rclone-cancel-transfer")
 	cmd.Description = func() string { return "cancels a transfer" }
 	cmd.Usage = func() string { return "Usage: rclone-cancel-transfer [-flags]" }
-	senderEndpoint := cmd.String("senderEndpoint", "", "rclone endpoint")
+	endpoint := cmd.String("endpoint", "", "rclone endpoint")
 	transferID := cmd.String("transferID", "", "the job id")
 
 	cmd.ResetFlags = func() {
-		*senderEndpoint, *transferID = "", ""
+		*endpoint, *transferID = "", ""
 	}
 
 	cmd.Action = func(w ...io.Writer) error {
 
 		// validate flags
-		if *senderEndpoint == "" {
+		if *endpoint == "" {
 			return errors.New("sender endpoint must be specified: use -name flag\n" + cmd.Usage())
 		}
 		if *transferID == "" {
 			return errors.New("transfer id must be specified: use -name flag\n" + cmd.Usage())
 		}
-		sndrEndpoint := fmt.Sprintf("\"senderEndpoint\":\"%v\"", *senderEndpoint)
+		sndrEndpoint := fmt.Sprintf("\"endpoint\":\"%v\"", *endpoint)
 		tID := fmt.Sprintf("\"job ID\":\"%v\"", *transferID)
 		callParams := fmt.Sprintf("{%v}", tID)
 		fmt.Printf("using: %v\n", sndrEndpoint)
@@ -59,12 +58,12 @@ func rcloneCancelTransfer() *command {
 
 		// rclone configuration
 		c := &datatxConfig.Config{
-			DataTxDriverType:     "rclone",
-			DataTxSenderEndpoint: *senderEndpoint,
+			Driver:   "rclone",
+			Endpoint: *endpoint,
 		}
 		c.Init()
 
-		rclone := registry.GetDriver(c.DataTxDriverType)
+		rclone := registry.GetDriver(c.Driver)
 
 		err := rclone.Configure(c)
 		if err != nil {
@@ -76,10 +75,8 @@ func rcloneCancelTransfer() *command {
 		if err != nil {
 			return err
 		}
-		job := &txdriver.Job{
-			JobID: trID,
-		}
-		rcloneStatus, err := rclone.CancelTransfer(job)
+
+		rcloneStatus, err := rclone.CancelTransfer(trID)
 
 		fmt.Printf("received rclone job cancel status: %v\n", rcloneStatus)
 		if err != nil {

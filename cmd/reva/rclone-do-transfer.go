@@ -33,7 +33,7 @@ func rcloneDoTransfer() *command {
 	cmd := newCommand("rclone-do-transfer")
 	cmd.Description = func() string { return "initiates an rclone transfer" }
 	cmd.Usage = func() string { return "Usage: rclone-do-transfer [-flags]" }
-	senderEndpoint := cmd.String("senderEndpoint", "", "rclone endpoint")
+	endpoint := cmd.String("endpoint", "", "rclone endpoint")
 	srcEndpoint := cmd.String("srcEndpoint", "", "the source endpoint")
 	srcToken := cmd.String("srcToken", "", "the token of the source user")
 	srcPath := cmd.String("srcPath", "", "source path of the resource")
@@ -42,13 +42,13 @@ func rcloneDoTransfer() *command {
 	destToken := cmd.String("destToken", "", "the token of the destination user")
 
 	cmd.ResetFlags = func() {
-		*senderEndpoint, *srcEndpoint, *srcPath, *srcToken, *destEndpoint, *destPath, *destToken = "", "", "", "", "", "", ""
+		*endpoint, *srcEndpoint, *srcPath, *srcToken, *destEndpoint, *destPath, *destToken = "", "", "", "", "", "", ""
 	}
 
 	cmd.Action = func(w ...io.Writer) error {
 
 		// validate flags
-		if *senderEndpoint == "" {
+		if *endpoint == "" {
 			return errors.New("sender endpoint must be specified: use -name flag\n" + cmd.Usage())
 		}
 		if *srcEndpoint == "" {
@@ -69,7 +69,7 @@ func rcloneDoTransfer() *command {
 		if *destToken == "" {
 			return errors.New("destination token must be specified: use -name flag\n" + cmd.Usage())
 		}
-		sndrEndpoint := fmt.Sprintf("\"senderEndpoint\":\"%v\"", *senderEndpoint)
+		sndrEndpoint := fmt.Sprintf("\"endpoint\":\"%v\"", *endpoint)
 		sourceEndpoint := fmt.Sprintf("\"srcEndpoint\":\"%v\"", *srcEndpoint)
 		sourcePath := fmt.Sprintf("\"srcPath\":\"%v\"", *srcPath)
 		sourceToken := fmt.Sprintf("\"srcToken\":\"%v\"", *srcToken)
@@ -82,23 +82,23 @@ func rcloneDoTransfer() *command {
 
 		// rclone configuration
 		c := &datatxConfig.Config{
-			DataTxDriverType:     "rclone",
-			DataTxSenderEndpoint: *senderEndpoint,
+			Driver:   "rclone",
+			Endpoint: *endpoint,
 		}
 		c.Init()
 
-		rclone := registry.GetDriver(c.DataTxDriverType)
+		rclone := registry.GetDriver(c.Driver)
 		err := rclone.Configure(c)
 		if err != nil {
 			return err
 		}
 
-		rcloneJob, err := rclone.DoTransfer(*srcEndpoint, *srcPath, *srcToken, *destEndpoint, *destPath, *destToken)
+		jobID, err := rclone.DoTransfer(*srcEndpoint, *srcPath, *srcToken, *destEndpoint, *destPath, *destToken)
 		if err != nil {
 			return err
 		}
 
-		fmt.Printf("received rclone job id: %v\n", rcloneJob.JobID)
+		fmt.Printf("received rclone job id: %v\n", jobID)
 
 		return nil
 	}
