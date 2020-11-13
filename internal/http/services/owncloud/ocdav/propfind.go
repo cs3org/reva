@@ -95,6 +95,10 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 		case rpc.Code_CODE_PERMISSION_DENIED:
 			log.Debug().Str("path", fn).Interface("status", res.Status).Msg("permission denied")
 			w.WriteHeader(http.StatusMultiStatus)
+		// TODO this is not a correct mapping. A new code SHOULD be added to the cs3apis.
+		case rpc.Code_CODE_UNIMPLEMENTED:
+			log.Debug().Str("path", fn).Interface("status", res.Status).Msg("method not allowed")
+			w.WriteHeader(http.StatusMethodNotAllowed)
 		default:
 			log.Error().Str("path", fn).Interface("status", res.Status).Msg("grpc stat request failed")
 			w.WriteHeader(http.StatusInternalServerError)
