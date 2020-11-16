@@ -848,22 +848,21 @@ func (fs *eosfs) createShadowHome(ctx context.Context) error {
 		return nil
 	}
 	_, err = fs.c.GetFileInfoByPath(ctx, uid, gid, home)
-	if err == nil { // home already exists
-		return nil
+	if err != nil { // home already exists
+		// TODO(labkode): abort on any error that is not found
+		if _, ok := err.(errtypes.IsNotFound); !ok {
+			return errors.Wrap(err, "eos: error verifying if user home directory exists")
+		}
+
+		err = fs.createUserDir(ctx, u, home)
+		if err != nil {
+			return err
+		}
 	}
 
-	// TODO(labkode): abort on any error that is not found
-	if _, ok := err.(errtypes.IsNotFound); !ok {
-		return errors.Wrap(err, "eos: error verifying if user home directory exists")
-	}
-
-	err = fs.createUserDir(ctx, u, home)
-	if err != nil {
-		return err
-	}
 	shadowFolders := []string{fs.conf.ShareFolder}
 	for _, sf := range shadowFolders {
-		err = fs.createUserDir(ctx, u, path.Join(home, sf))
+		err = fs.c.CreateDir(ctx, uid, gid, path.Join(home, sf))
 		if err != nil {
 			return err
 		}

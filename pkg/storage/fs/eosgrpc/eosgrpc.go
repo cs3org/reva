@@ -747,14 +747,8 @@ func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 
 	// if path is home we need to add in the response any shadow folder in the shadown homedirectory.
 	if fs.conf.EnableHome {
-		home, err := fs.GetHome(ctx)
-		if err != nil {
-			err = errors.Wrap(err, "eos: error getting home")
-			return nil, err
-		}
-
-		if strings.HasPrefix(p, home) {
-			return fs.listWithHome(ctx, home, p)
+		if strings.HasPrefix(p, "/") {
+			return fs.listWithHome(ctx, "/", p)
 		}
 	}
 
