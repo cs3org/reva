@@ -900,61 +900,59 @@ func (fs *eosfs) createShadowHome(ctx context.Context) error {
 
 	home := fs.wrapShadow(ctx, "/")
 	_, err = fs.c.GetFileInfoByPath(ctx, "root", home)
-	if err == nil { // home already exists
-		return nil
-	}
-
-	// TODO(labkode): abort on any error that is not found
-	if _, ok := err.(errtypes.IsNotFound); !ok {
-		return errors.Wrap(err, "eos: error verifying if user home directory exists")
-	}
-
-	// TODO(labkode): only trigger creation on not found, copy from CERNBox logic.
-	err = fs.c.CreateDir(ctx, "root", home)
-	if err != nil {
-		// EOS will return success on mkdir over an existing directory.
-		return errors.Wrap(err, "eos: error creating dir")
-	}
-
-	err = fs.c.Chown(ctx, "root", u.Username, home)
-	if err != nil {
-		return errors.Wrap(err, "eos: error chowning directory")
-	}
-
-	err = fs.c.Chmod(ctx, "root", "770", home)
-	if err != nil {
-		return errors.Wrap(err, "eos: error chmoding directory")
-	}
-
-	attrs := []*eosclientgrpc.Attribute{
-		&eosclientgrpc.Attribute{
-			Type: eosclientgrpc.SystemAttr,
-			Key:  "mask",
-			Val:  "700",
-		},
-		&eosclientgrpc.Attribute{
-			Type: eosclientgrpc.SystemAttr,
-			Key:  "allow.oc.sync",
-			Val:  "1",
-		},
-		&eosclientgrpc.Attribute{
-			Type: eosclientgrpc.SystemAttr,
-			Key:  "mtime.propagation",
-			Val:  "1",
-		},
-		&eosclientgrpc.Attribute{
-			Type: eosclientgrpc.SystemAttr,
-			Key:  "forced.atomic",
-			Val:  "1",
-		},
-	}
-
-	for _, attr := range attrs {
-		err = fs.c.SetAttr(ctx, "root", attr, true, home)
-		if err != nil {
-			return errors.Wrap(err, "eos: error setting attribute")
+	if err != nil { // home already exists
+		// TODO(labkode): abort on any error that is not found
+		if _, ok := err.(errtypes.IsNotFound); !ok {
+			return errors.Wrap(err, "eos: error verifying if user home directory exists")
 		}
 
+		// TODO(labkode): only trigger creation on not found, copy from CERNBox logic.
+		err = fs.c.CreateDir(ctx, "root", home)
+		if err != nil {
+			// EOS will return success on mkdir over an existing directory.
+			return errors.Wrap(err, "eos: error creating dir")
+		}
+
+		err = fs.c.Chown(ctx, "root", u.Username, home)
+		if err != nil {
+			return errors.Wrap(err, "eos: error chowning directory")
+		}
+
+		err = fs.c.Chmod(ctx, "root", "770", home)
+		if err != nil {
+			return errors.Wrap(err, "eos: error chmoding directory")
+		}
+
+		attrs := []*eosclientgrpc.Attribute{
+			&eosclientgrpc.Attribute{
+				Type: eosclientgrpc.SystemAttr,
+				Key:  "mask",
+				Val:  "700",
+			},
+			&eosclientgrpc.Attribute{
+				Type: eosclientgrpc.SystemAttr,
+				Key:  "allow.oc.sync",
+				Val:  "1",
+			},
+			&eosclientgrpc.Attribute{
+				Type: eosclientgrpc.SystemAttr,
+				Key:  "mtime.propagation",
+				Val:  "1",
+			},
+			&eosclientgrpc.Attribute{
+				Type: eosclientgrpc.SystemAttr,
+				Key:  "forced.atomic",
+				Val:  "1",
+			},
+		}
+
+		for _, attr := range attrs {
+			err = fs.c.SetAttr(ctx, "root", attr, true, home)
+			if err != nil {
+				return errors.Wrap(err, "eos: error setting attribute")
+			}
+
+		}
 	}
 
 	// create shadow folders
@@ -966,7 +964,6 @@ func (fs *eosfs) createShadowHome(ctx context.Context) error {
 			// EOS will return success on mkdir over an existing directory.
 			return errors.Wrap(err, "eos: error creating dir")
 		}
-
 	}
 
 	return nil
