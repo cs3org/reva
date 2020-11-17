@@ -32,6 +32,7 @@ import (
 	storage "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/sdk"
 	"github.com/cs3org/reva/pkg/sdk/common"
 	"github.com/cs3org/reva/pkg/sdk/common/crypto"
@@ -86,14 +87,19 @@ func (action *UploadAction) upload(data io.Reader, dataInfo os.FileInfo, target 
 		return nil, err
 	}
 
+	simpleProtocol, err := getUploadProtocolInfo(upload.Protocols, "simple")
+	if err != nil {
+		return nil, err
+	}
+
 	// Try to upload the file via WebDAV first
-	if client, values, err := net.NewWebDAVClientWithOpaque(upload.UploadEndpoint, upload.Opaque); err == nil {
+	if client, values, err := net.NewWebDAVClientWithOpaque(simpleProtocol.UploadEndpoint, simpleProtocol.Opaque); err == nil {
 		if err := client.Write(values[net.WebDAVPathName], data, dataInfo.Size()); err != nil {
-			return nil, fmt.Errorf("error while writing to '%v' via WebDAV: %v", upload.UploadEndpoint, err)
+			return nil, fmt.Errorf("error while writing to '%v' via WebDAV: %v", simpleProtocol.UploadEndpoint, err)
 		}
 	} else {
 		// WebDAV is not supported, so directly write to the HTTP endpoint
-		checksumType := action.selectChecksumType(upload.AvailableChecksums)
+		checksumType := action.selectChecksumType(simpleProtocol.AvailableChecksums)
 		checksumTypeName := crypto.GetChecksumTypeName(checksumType)
 		checksum, err := crypto.ComputeChecksum(checksumType, data)
 		if err != nil {
@@ -106,12 +112,16 @@ func (action *UploadAction) upload(data io.Reader, dataInfo os.FileInfo, target 
 		}
 
 		if action.EnableTUS {
-			if err := action.uploadFileTUS(upload, target, data, dataInfo, checksum, checksumTypeName); err != nil {
-				return nil, fmt.Errorf("error while writing to '%v' via TUS: %v", upload.UploadEndpoint, err)
+			tusProtocol, err := getUploadProtocolInfo(upload.Protocols, "tus")
+			if err != nil {
+				return nil, err
+			}
+			if err := action.uploadFileTUS(tusProtocol, target, data, dataInfo, checksum, checksumTypeName); err != nil {
+				return nil, fmt.Errorf("error while writing to '%v' via TUS: %v", tusProtocol.UploadEndpoint, err)
 			}
 		} else {
-			if err := action.uploadFilePUT(upload, data, checksum, checksumTypeName); err != nil {
-				return nil, fmt.Errorf("error while writing to '%v' via HTTP: %v", upload.UploadEndpoint, err)
+			if err := action.uploadFilePUT(simpleProtocol, data, checksum, checksumTypeName); err != nil {
+				return nil, fmt.Errorf("error while writing to '%v' via HTTP: %v", simpleProtocol.UploadEndpoint, err)
 			}
 		}
 	}
@@ -145,6 +155,15 @@ func (action *UploadAction) initiateUpload(target string, size int64) (*gateway.
 	return res, nil
 }
 
+func getUploadProtocolInfo(protocolInfos []*gateway.FileUploadProtocol, protocol string) (*gateway.FileUploadProtocol, error) {
+	for _, p := range protocolInfos {
+		if p.Protocol == protocol {
+			return p, nil
+		}
+	}
+	return nil, errtypes.NotFound(protocol)
+}
+
 func (action *UploadAction) selectChecksumType(checksumTypes []*provider.ResourceChecksumPriority) provider.ResourceChecksumType {
 	var selChecksumType provider.ResourceChecksumType
 	var maxPrio uint32 = math.MaxUint32
@@ -157,7 +176,7 @@ func (action *UploadAction) selectChecksumType(checksumTypes []*provider.Resourc
 	return selChecksumType
 }
 
-func (action *UploadAction) uploadFilePUT(upload *gateway.InitiateFileUploadResponse, data io.Reader, checksum string, checksumType string) error {
+func (action *UploadAction) uploadFilePUT(upload *gateway.FileUploadProtocol, data io.Reader, checksum string, checksumType string) error {
 	request, err := action.session.NewHTTPRequest(upload.UploadEndpoint, "PUT", upload.Token, data)
 	if err != nil {
 		return fmt.Errorf("unable to create HTTP request for '%v': %v", upload.UploadEndpoint, err)
@@ -172,7 +191,7 @@ func (action *UploadAction) uploadFilePUT(upload *gateway.InitiateFileUploadResp
 	return err
 }
 
-func (action *UploadAction) uploadFileTUS(upload *gateway.InitiateFileUploadResponse, target string, data io.Reader, fileInfo os.FileInfo, checksum string, checksumType string) error {
+func (action *UploadAction) uploadFileTUS(upload *gateway.FileUploadProtocol, target string, data io.Reader, fileInfo os.FileInfo, checksum string, checksumType string) error {
 	tusClient, err := net.NewTUSClient(upload.UploadEndpoint, action.session.Token(), upload.Token)
 	if err != nil {
 		return fmt.Errorf("unable to create TUS client: %v", err)
