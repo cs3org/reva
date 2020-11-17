@@ -21,16 +21,15 @@ package simple
 import (
 	"io"
 	"net/http"
-	"strings"
 
 	"github.com/pkg/errors"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/rhttp/datatx"
+	"github.com/cs3org/reva/pkg/rhttp/datatx/manager/registry"
 	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/transfers"
-	"github.com/cs3org/reva/pkg/transfers/manager/registry"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -38,8 +37,11 @@ func init() {
 	registry.Register("simple", New)
 }
 
-type manager struct{}
 type config struct{}
+
+type manager struct {
+	conf *config
+}
 
 func parseConfig(m map[string]interface{}) (*config, error) {
 	c := &config{}
@@ -51,16 +53,16 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New returns a datatx manager implementation that relies on HTTP PUT/GET.
-func New(m map[string]interface{}) (transfers.Transfers, error) {
-	_, err := parseConfig(m)
+func New(m map[string]interface{}) (datatx.DataTX, error) {
+	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
 	}
 
-	return &manager{}, nil
+	return &manager{conf: c}, nil
 }
 
-func (m *manager) Handler(prefix string, fs storage.FS) (http.Handler, error) {
+func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":
@@ -74,8 +76,7 @@ func (m *manager) Handler(prefix string, fs storage.FS) (http.Handler, error) {
 				fn = files[0]
 			}
 
-			fsfn := strings.TrimPrefix(fn, prefix)
-			ref := &provider.Reference{Spec: &provider.Reference_Path{Path: fsfn}}
+			ref := &provider.Reference{Spec: &provider.Reference_Path{Path: fn}}
 
 			rc, err := fs.Download(ctx, ref)
 			if err != nil {
@@ -101,8 +102,7 @@ func (m *manager) Handler(prefix string, fs storage.FS) (http.Handler, error) {
 			fn := r.URL.Path
 			defer r.Body.Close()
 
-			fsfn := strings.TrimPrefix(fn, prefix)
-			ref := &provider.Reference{Spec: &provider.Reference_Path{Path: fsfn}}
+			ref := &provider.Reference{Spec: &provider.Reference_Path{Path: fn}}
 
 			err := fs.Upload(ctx, ref, r.Body)
 			if err != nil {

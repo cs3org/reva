@@ -18,7 +18,7 @@
 
 // Package datatx provides a library to abstract the complexity
 // of using various data transfer protocols.
-package transfers
+package datatx
 
 import (
 	"net/http"
@@ -26,6 +26,6 @@ import (
 	"github.com/cs3org/reva/pkg/storage"
 )
 
-type Transfers interface {
-	Handler(prefix string, fs storage.FS) (http.Handler, error)
+type DataTX interface {
+	Handler(fs storage.FS) (http.Handler, error)
 }

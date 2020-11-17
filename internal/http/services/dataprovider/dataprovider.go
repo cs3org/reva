@@ -23,12 +23,13 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/appctx"
+	datatxregistry "github.com/cs3org/reva/pkg/rhttp/datatx/manager/registry"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
-	tusd "github.com/tus/tusd/pkg/handler"
 )
 
 func init() {
@@ -39,6 +40,7 @@ type config struct {
 	Prefix   string                            `mapstructure:"prefix" docs:"data;The prefix to be used for this HTTP service"`
 	Driver   string                            `mapstructure:"driver" docs:"localhome;The storage driver to be used."`
 	Drivers  map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:pkg/storage/fs/localhome/localhome.go;The configuration for the storage driver"`
+	DataTXs  map[string]map[string]interface{} `mapstructure:"data_txs" docs:"url:pkg/rhttp/datatx/manager/simple/simple.go;The configuration for the data tx protocols"`
 	Timeout  int64                             `mapstructure:"timeout"`
 	Insecure bool                              `mapstructure:"insecure"`
 }
@@ -56,6 +58,7 @@ type svc struct {
 	conf    *config
 	handler http.Handler
 	storage storage.FS
+	dataTXs map[string]http.Handler
 }
 
 // New returns a new datasvc
@@ -72,32 +75,52 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		return nil, err
 	}
 
+	dataTXs, err := getDataTXs(conf, fs)
+	if err != nil {
+		return nil, err
+	}
+
 	s := &svc{
 		storage: fs,
 		conf:    conf,
+		dataTXs: dataTXs,
 	}
 
 	err = s.setHandler()
 	return s, err
 }
 
-// Close performs cleanup.
+func getFS(c *config) (storage.FS, error) {
+	if f, ok := registry.NewFuncs[c.Driver]; ok {
+		return f(c.Drivers[c.Driver])
+	}
+	return nil, fmt.Errorf("driver not found: %s", c.Driver)
+}
+
+func getDataTXs(c *config, fs storage.FS) (map[string]http.Handler, error) {
+	if c.DataTXs == nil || len(c.DataTXs) == 0 {
+		c.DataTXs["simple"] = make(map[string]interface{})
+	}
+
+	txs := make(map[string]http.Handler)
+	for t := range c.DataTXs {
+		if f, ok := datatxregistry.NewFuncs[t]; ok {
+			if tx, err := f(c.DataTXs[t]); err != nil {
+				if handler, err := tx.Handler(fs); err != nil {
+					txs[t] = handler
+				}
+			}
+		}
+	}
+	return txs, nil
+}
+
 func (s *svc) Close() error {
 	return nil
 }
 
 func (s *svc) Unprotected() []string {
 	return []string{}
-}
-
-// Create a new DataStore instance which is responsible for
-// storing the uploaded file on disk in the specified directory.
-// This path _must_ exist before we store uploads in it.
-func getFS(c *config) (storage.FS, error) {
-	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		return f(c.Drivers[c.Driver])
-	}
-	return nil, fmt.Errorf("driver not found: %s", c.Driver)
 }
 
 func (s *svc) Prefix() string {
@@ -110,88 +133,26 @@ func (s *svc) Handler() http.Handler {
 
 func (s *svc) setHandler() error {
 
-	tusHandler := s.getTusHandler()
-
 	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log := appctx.GetLogger(r.Context())
 		log.Debug().Msgf("dataprovider routing: path=%s", r.URL.Path)
 
-		method := r.Method
-		// https://github.com/tus/tus-resumable-upload-protocol/blob/master/protocol.md#x-http-method-override
-		if r.Header.Get("X-HTTP-Method-Override") != "" {
-			method = r.Header.Get("X-HTTP-Method-Override")
-		}
+		head, tail := router.ShiftPath(r.URL.Path)
 
-		switch method {
-		// old fashioned download.
-		// GET is not part of the tus.io protocol
-		// TODO allow range based get requests? that end before the current offset
-		case "GET":
-			s.doGet(w, r)
-		case "PUT":
-			s.doPut(w, r)
-		case "HEAD":
-			w.WriteHeader(http.StatusOK)
-
-		// tus.io based uploads
-		// uploads are initiated using the CS3 APIs Initiate Upload call
-		case "POST":
-			if tusHandler != nil {
-				tusHandler.PostFile(w, r)
-			} else {
-				w.WriteHeader(http.StatusNotImplemented)
-			}
-		case "PATCH":
-			if tusHandler != nil {
-				tusHandler.PatchFile(w, r)
-			} else {
-				w.WriteHeader(http.StatusNotImplemented)
-			}
-		// TODO Only attach the DELETE handler if the Terminate() method is provided
-		case "DELETE":
-			if tusHandler != nil {
-				tusHandler.DelFile(w, r)
-			} else {
-				w.WriteHeader(http.StatusNotImplemented)
-			}
-		default:
-			w.WriteHeader(http.StatusNotImplemented)
+		if handler, ok := s.dataTXs[head]; ok {
+			r.URL.Path = tail
+			handler.ServeHTTP(w, r)
 			return
 		}
+
+		// If we don't find a prefix match for any of the protocols, upload the resource
+		// through the direct HTTP protocol
+		if handler, ok := s.dataTXs["simple"]; ok {
+			handler.ServeHTTP(w, r)
+			return
+		}
+
 	})
 
-	return nil
-}
-
-// Composable is the interface that a struct needs to implement
-// to be composable, so that it can support the TUS methods
-type composable interface {
-	UseIn(composer *tusd.StoreComposer)
-}
-
-func (s *svc) getTusHandler() *tusd.UnroutedHandler {
-	composable, ok := s.storage.(composable)
-	if ok {
-		// A storage backend for tusd may consist of multiple different parts which
-		// handle upload creation, locking, termination and so on. The composer is a
-		// place where all those separated pieces are joined together. In this example
-		// we only use the file store but you may plug in multiple.
-		composer := tusd.NewStoreComposer()
-
-		// let the composable storage tell tus which extensions it supports
-		composable.UseIn(composer)
-
-		config := tusd.Config{
-			BasePath:      s.conf.Prefix,
-			StoreComposer: composer,
-			//Logger:        logger, // TODO use logger
-		}
-
-		handler, err := tusd.NewUnroutedHandler(config)
-		if err != nil {
-			return nil
-		}
-		return handler
-	}
 	return nil
 }
