@@ -49,11 +49,11 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 
 		// Set the length to 0 and set SizeIsDeferred to true
 		metadata := map[string]string{"sizedeferred": "true"}
-		uploadID, err := fs.InitiateUpload(ctx, ref, 0, metadata)
+		uploadIDs, err := fs.InitiateUpload(ctx, ref, 0, metadata)
 		if err != nil {
 			return err
 		}
-		if upload, err = fs.GetUpload(ctx, uploadID); err != nil {
+		if upload, err = fs.GetUpload(ctx, uploadIDs["simple"]); err != nil {
 			return errors.Wrap(err, "ocisfs: error retrieving upload")
 		}
 	}
@@ -94,9 +94,9 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 	return uploadInfo.FinishUpload(ctx)
 }
 
-// InitiateUpload returns an upload id that can be used for uploads with tus
+// InitiateUpload returns upload ids corresponding to different protocols it supports
 // TODO read optional content for small files in this request
-func (fs *ocisfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (uploadID string, err error) {
+func (fs *ocisfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
 
 	log := appctx.GetLogger(ctx)
 
@@ -104,14 +104,14 @@ func (fs *ocisfs) InitiateUpload(ctx context.Context, ref *provider.Reference, u
 
 	n, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// permissions are checked in NewUpload below
 
 	relative, err = fs.lu.Path(ctx, n)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	info := tusd.FileInfo{
@@ -135,12 +135,15 @@ func (fs *ocisfs) InitiateUpload(ctx context.Context, ref *provider.Reference, u
 
 	upload, err := fs.NewUpload(ctx, info)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	info, _ = upload.GetInfo(ctx)
 
-	return info.ID, nil
+	return map[string]string{
+		"simple": info.ID,
+		"tus":    info.ID,
+	}, nil
 }
 
 // UseIn tells the tus upload middleware which extensions it supports.

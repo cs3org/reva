@@ -273,12 +273,21 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
 		}, nil
 	}
-	u.Path = path.Join(u.Path, newRef.GetPath())
+
+	// Currently, we only support the simple protocol for GET requests
+	// Once we have multiple protocols, this would be moved to the fs layer
+	u.Path = path.Join(u.Path, "simple", newRef.GetPath())
+
 	log.Info().Str("data-server", u.String()).Str("fn", req.Ref.GetPath()).Msg("file download")
 	res := &provider.InitiateFileDownloadResponse{
-		DownloadEndpoint: u.String(),
-		Status:           status.NewOK(ctx),
-		Expose:           s.conf.ExposeDataServer,
+		Protocols: []*provider.FileDownloadProtocol{
+			&provider.FileDownloadProtocol{
+				Protocol:         "simple",
+				DownloadEndpoint: u.String(),
+				Expose:           s.conf.ExposeDataServer,
+			},
+		},
+		Status: status.NewOK(ctx),
 	}
 	return res, nil
 }
@@ -314,7 +323,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 			metadata["mtime"] = string(req.Opaque.Map["X-OC-Mtime"].Value)
 		}
 	}
-	uploadID, err := s.storage.InitiateUpload(ctx, newRef, uploadLength, metadata)
+	uploadIDs, err := s.storage.InitiateUpload(ctx, newRef, uploadLength, metadata)
 	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {
@@ -330,23 +339,25 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		}, nil
 	}
 
-	u := *s.dataServerURL
-	u.Path = path.Join(u.Path, uploadID)
-	if err != nil {
-		return &provider.InitiateFileUploadResponse{
-			Status: status.NewInternal(ctx, err, "error parsing data server URL"),
-		}, nil
+	protocols := make([]*provider.FileUploadProtocol, len(uploadIDs))
+	for protocol, ID := range uploadIDs {
+		u := *s.dataServerURL
+		u.Path = path.Join(u.Path, protocol, ID)
+		protocols = append(protocols, &provider.FileUploadProtocol{
+			Protocol:           protocol,
+			UploadEndpoint:     u.String(),
+			AvailableChecksums: s.availableXS,
+			Expose:             s.conf.ExposeDataServer,
+		})
+		log.Info().Str("data-server", u.String()).
+			Str("fn", req.Ref.GetPath()).
+			Str("xs", fmt.Sprintf("%+v", s.conf.AvailableXS)).
+			Msg("file upload")
 	}
 
-	log.Info().Str("data-server", u.String()).
-		Str("fn", req.Ref.GetPath()).
-		Str("xs", fmt.Sprintf("%+v", s.conf.AvailableXS)).
-		Msg("file upload")
 	res := &provider.InitiateFileUploadResponse{
-		UploadEndpoint:     u.String(),
-		Status:             status.NewOK(ctx),
-		AvailableChecksums: s.availableXS,
-		Expose:             s.conf.ExposeDataServer,
+		Protocols: protocols,
+		Status:    status.NewOK(ctx),
 	}
 	return res, nil
 }

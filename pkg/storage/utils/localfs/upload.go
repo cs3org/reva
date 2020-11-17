@@ -47,11 +47,11 @@ func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.Rea
 
 		// Set the length to 0 and set SizeIsDeferred to true
 		metadata := map[string]string{"sizedeferred": "true"}
-		uploadID, err := fs.InitiateUpload(ctx, ref, 0, metadata)
+		uploadIDs, err := fs.InitiateUpload(ctx, ref, 0, metadata)
 		if err != nil {
 			return err
 		}
-		if upload, err = fs.GetUpload(ctx, uploadID); err != nil {
+		if upload, err = fs.GetUpload(ctx, uploadIDs["simple"]); err != nil {
 			return errors.Wrap(err, "localfs: error retrieving upload")
 		}
 	}
@@ -92,16 +92,16 @@ func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.Rea
 	return uploadInfo.FinishUpload(ctx)
 }
 
-// InitiateUpload returns an upload id that can be used for uploads with tus
+// InitiateUpload returns upload ids corresponding to different protocols it supports
 // It resolves the resource and then reuses the NewUpload function
 // Currently requires the uploadLength to be set
 // TODO to implement LengthDeferrerDataStore make size optional
 // TODO read optional content for small files in this request
-func (fs *localfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (uploadID string, err error) {
+func (fs *localfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
 
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return "", errors.Wrap(err, "localfs: error resolving reference")
+		return nil, errors.Wrap(err, "localfs: error resolving reference")
 	}
 
 	info := tusd.FileInfo{
@@ -123,12 +123,15 @@ func (fs *localfs) InitiateUpload(ctx context.Context, ref *provider.Reference, 
 
 	upload, err := fs.NewUpload(ctx, info)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	info, _ = upload.GetInfo(ctx)
 
-	return info.ID, nil
+	return map[string]string{
+		"simple": info.ID,
+		"tus":    info.ID,
+	}, nil
 }
 
 // UseIn tells the tus upload middleware which extensions it supports.

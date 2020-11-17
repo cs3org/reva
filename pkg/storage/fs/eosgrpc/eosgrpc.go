@@ -237,9 +237,9 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	return eosfs, nil
 }
 
-// InitiateUpload returns an upload id that can be used for uploads with tus
-func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (uploadID string, err error) {
-	return "", errtypes.NotSupported("op not supported")
+// InitiateUpload returns upload ids corresponding to different protocols it supports
+func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
+	return nil, errtypes.NotSupported("op not supported")
 }
 
 func (fs *eosfs) Shutdown(ctx context.Context) error {
