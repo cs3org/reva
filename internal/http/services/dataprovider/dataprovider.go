@@ -98,15 +98,19 @@ func getFS(c *config) (storage.FS, error) {
 }
 
 func getDataTXs(c *config, fs storage.FS) (map[string]http.Handler, error) {
-	if c.DataTXs == nil || len(c.DataTXs) == 0 {
+	if c.DataTXs == nil {
+		c.DataTXs = make(map[string]map[string]interface{})
+	}
+	if len(c.DataTXs) == 0 {
 		c.DataTXs["simple"] = make(map[string]interface{})
+		c.DataTXs["tus"] = make(map[string]interface{})
 	}
 
 	txs := make(map[string]http.Handler)
 	for t := range c.DataTXs {
 		if f, ok := datatxregistry.NewFuncs[t]; ok {
-			if tx, err := f(c.DataTXs[t]); err != nil {
-				if handler, err := tx.Handler(fs); err != nil {
+			if tx, err := f(c.DataTXs[t]); err == nil {
+				if handler, err := tx.Handler(fs); err == nil {
 					txs[t] = handler
 				}
 			}
@@ -152,6 +156,7 @@ func (s *svc) setHandler() error {
 			return
 		}
 
+		w.WriteHeader(http.StatusInternalServerError)
 	})
 
 	return nil

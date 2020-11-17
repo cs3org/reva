@@ -18,6 +18,7 @@
 
 package action_test
 
+/*
 import (
 	"fmt"
 	"testing"
@@ -112,3 +113,4 @@ func TestActions(t *testing.T) {
 		})
 	}
 }
+*/

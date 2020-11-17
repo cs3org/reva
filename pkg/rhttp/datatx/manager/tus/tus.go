@@ -64,7 +64,19 @@ func New(m map[string]interface{}) (datatx.DataTX, error) {
 }
 
 func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
+	composable, ok := fs.(composable)
+	if !ok {
+		return nil, errtypes.NotSupported("file system does not support the tus protocol")
+	}
+
+	// A storage backend for tusd may consist of multiple different parts which
+	// handle upload creation, locking, termination and so on. The composer is a
+	// place where all those separated pieces are joined together. In this example
+	// we only use the file store but you may plug in multiple.
 	composer := tusd.NewStoreComposer()
+
+	// let the composable storage tell tus which extensions it supports
+	composable.UseIn(composer)
 
 	config := tusd.Config{
 		StoreComposer: composer,
@@ -125,8 +137,16 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 				log.Error().Err(err).Msg("error copying data to response")
 				return
 			}
+		default:
+			w.WriteHeader(http.StatusNotImplemented)
 		}
 	}))
 
 	return h, nil
+}
+
+// Composable is the interface that a struct needs to implement
+// to be composable, so that it can support the TUS methods
+type composable interface {
+	UseIn(composer *tusd.StoreComposer)
 }

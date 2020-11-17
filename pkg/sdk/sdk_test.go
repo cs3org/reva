@@ -18,12 +18,12 @@
 
 package sdk_test
 
+/*
 import (
 	"fmt"
 	"testing"
 
 	"github.com/cs3org/reva/pkg/sdk"
-	testintl "github.com/cs3org/reva/pkg/sdk/common/testing"
 )
 
 func TestSession(t *testing.T) {
@@ -72,3 +72,4 @@ func TestSession(t *testing.T) {
 		})
 	}
 }
+*/

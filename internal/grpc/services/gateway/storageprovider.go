@@ -360,11 +360,11 @@ func (s *svc) initiateFileDownload(ctx context.Context, req *provider.InitiateFi
 
 	protocols := make([]*gateway.FileDownloadProtocol, len(storageRes.Protocols))
 	for p := range storageRes.Protocols {
-		protocols = append(protocols, &gateway.FileDownloadProtocol{
+		protocols[p] = &gateway.FileDownloadProtocol{
 			Opaque:           storageRes.Protocols[p].Opaque,
 			Protocol:         storageRes.Protocols[p].Protocol,
 			DownloadEndpoint: storageRes.Protocols[p].DownloadEndpoint,
-		})
+		}
 
 		if !storageRes.Protocols[p].Expose {
 			// sign the download location and pass it to the data gateway
@@ -638,12 +638,12 @@ func (s *svc) initiateFileUpload(ctx context.Context, req *provider.InitiateFile
 
 	protocols := make([]*gateway.FileUploadProtocol, len(storageRes.Protocols))
 	for p := range storageRes.Protocols {
-		protocols = append(protocols, &gateway.FileUploadProtocol{
+		protocols[p] = &gateway.FileUploadProtocol{
 			Opaque:             storageRes.Protocols[p].Opaque,
 			Protocol:           storageRes.Protocols[p].Protocol,
 			UploadEndpoint:     storageRes.Protocols[p].UploadEndpoint,
 			AvailableChecksums: storageRes.Protocols[p].AvailableChecksums,
-		})
+		}
 
 		if !storageRes.Protocols[p].Expose {
 			// sign the upload location and pass it to the data gateway

@@ -119,10 +119,8 @@ func (action *UploadAction) upload(data io.Reader, dataInfo os.FileInfo, target 
 			if err := action.uploadFileTUS(tusProtocol, target, data, dataInfo, checksum, checksumTypeName); err != nil {
 				return nil, fmt.Errorf("error while writing to '%v' via TUS: %v", tusProtocol.UploadEndpoint, err)
 			}
-		} else {
-			if err := action.uploadFilePUT(simpleProtocol, data, checksum, checksumTypeName); err != nil {
-				return nil, fmt.Errorf("error while writing to '%v' via HTTP: %v", simpleProtocol.UploadEndpoint, err)
-			}
+		} else if err := action.uploadFilePUT(simpleProtocol, data, checksum, checksumTypeName); err != nil {
+			return nil, fmt.Errorf("error while writing to '%v' via HTTP: %v", simpleProtocol.UploadEndpoint, err)
 		}
 	}
 

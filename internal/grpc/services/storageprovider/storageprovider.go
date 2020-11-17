@@ -340,15 +340,17 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	}
 
 	protocols := make([]*provider.FileUploadProtocol, len(uploadIDs))
+	var i int
 	for protocol, ID := range uploadIDs {
 		u := *s.dataServerURL
 		u.Path = path.Join(u.Path, protocol, ID)
-		protocols = append(protocols, &provider.FileUploadProtocol{
+		protocols[i] = &provider.FileUploadProtocol{
 			Protocol:           protocol,
 			UploadEndpoint:     u.String(),
 			AvailableChecksums: s.availableXS,
 			Expose:             s.conf.ExposeDataServer,
-		})
+		}
+		i++
 		log.Info().Str("data-server", u.String()).
 			Str("fn", req.Ref.GetPath()).
 			Str("xs", fmt.Sprintf("%+v", s.conf.AvailableXS)).
