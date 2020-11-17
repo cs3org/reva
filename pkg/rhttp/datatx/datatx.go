@@ -26,6 +26,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage"
 )
 
+// DataTX provides an abstraction around various data transfer protocols.
 type DataTX interface {
 	Handler(fs storage.FS) (http.Handler, error)
 }
