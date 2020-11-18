@@ -157,7 +157,7 @@ func extractACEsFromAttrs(ctx context.Context, fsfn string, attrs []string) (ent
 			var e *ace.ACE
 			principal := attrs[i][len(grantPrefix):]
 			if e, err = ace.Unmarshal(principal, value); err != nil {
-				log.Error().Err(err).Str("principal", principal).Str("attr", attrs[i]).Msg("could unmarshal ace")
+				log.Error().Err(err).Str("principal", principal).Str("attr", attrs[i]).Msg("could not unmarshal ace")
 				continue
 			}
 			entries = append(entries, e)
