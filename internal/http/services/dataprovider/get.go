@@ -45,10 +45,10 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 	rc, err := s.storage.Download(ctx, ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
-			log.Err(err).Msg("datasvc: file not found")
+			log.Debug().Err(err).Msg("datasvc: file not found")
 			w.WriteHeader(http.StatusNotFound)
 		} else {
-			log.Err(err).Msg("datasvc: error downloading file")
+			log.Error().Err(err).Msg("datasvc: error downloading file")
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 		return
