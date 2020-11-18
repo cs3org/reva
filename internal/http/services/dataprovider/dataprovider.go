@@ -114,7 +114,7 @@ func (s *svc) setHandler() error {
 
 	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log := appctx.GetLogger(r.Context())
-		log.Info().Msgf("dataprovider routing: path=%s", r.URL.Path)
+		log.Debug().Msgf("dataprovider routing: path=%s", r.URL.Path)
 
 		method := r.Method
 		// https://github.com/tus/tus-resumable-upload-protocol/blob/master/protocol.md#x-http-method-override
