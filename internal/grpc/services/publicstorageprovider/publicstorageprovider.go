@@ -185,16 +185,24 @@ func (s *service) initiateFileDownload(ctx context.Context, req *provider.Initia
 		}, nil
 	}
 
-	if !strings.HasSuffix(dRes.DownloadEndpoint, "/") {
-		dRes.DownloadEndpoint += "/"
+	protocols := make([]*provider.FileDownloadProtocol, len(dRes.Protocols))
+	for p := range dRes.Protocols {
+		if !strings.HasSuffix(dRes.Protocols[p].DownloadEndpoint, "/") {
+			dRes.Protocols[p].DownloadEndpoint += "/"
+		}
+		dRes.Protocols[p].DownloadEndpoint += dRes.Protocols[p].Token
+
+		protocols = append(protocols, &provider.FileDownloadProtocol{
+			Opaque:           dRes.Protocols[p].Opaque,
+			Protocol:         dRes.Protocols[p].Protocol,
+			DownloadEndpoint: dRes.Protocols[p].DownloadEndpoint,
+			Expose:           true, // the gateway already has encoded the upload endpoint
+		})
 	}
-	dRes.DownloadEndpoint += dRes.Token
 
 	return &provider.InitiateFileDownloadResponse{
-		Opaque:           req.Opaque,
-		Status:           dRes.Status,
-		DownloadEndpoint: dRes.DownloadEndpoint,
-		Expose:           true, // the gateway already has encoded the upload endpoint
+		Status:    dRes.Status,
+		Protocols: protocols,
 	}, nil
 }
 
@@ -221,17 +229,25 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		}, nil
 	}
 
-	if !strings.HasSuffix(uRes.UploadEndpoint, "/") {
-		uRes.UploadEndpoint += "/"
+	protocols := make([]*provider.FileUploadProtocol, len(uRes.Protocols))
+	for p := range uRes.Protocols {
+		if !strings.HasSuffix(uRes.Protocols[p].UploadEndpoint, "/") {
+			uRes.Protocols[p].UploadEndpoint += "/"
+		}
+		uRes.Protocols[p].UploadEndpoint += uRes.Protocols[p].Token
+
+		protocols = append(protocols, &provider.FileUploadProtocol{
+			Opaque:             uRes.Protocols[p].Opaque,
+			Protocol:           uRes.Protocols[p].Protocol,
+			UploadEndpoint:     uRes.Protocols[p].UploadEndpoint,
+			AvailableChecksums: uRes.Protocols[p].AvailableChecksums,
+			Expose:             true, // the gateway already has encoded the upload endpoint
+		})
 	}
-	uRes.UploadEndpoint += uRes.Token
 
 	res := &provider.InitiateFileUploadResponse{
-		UploadEndpoint:     uRes.UploadEndpoint,
-		Status:             uRes.Status,
-		AvailableChecksums: uRes.AvailableChecksums,
-		Opaque:             uRes.Opaque,
-		Expose:             true, // the gateway already has encoded the upload endpoint
+		Status:    uRes.Status,
+		Protocols: protocols,
 	}
 
 	return res, nil

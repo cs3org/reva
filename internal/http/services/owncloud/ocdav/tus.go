@@ -168,16 +168,23 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	// TUS clients don't understand the reva transfer token. We need to append it to the upload endpoint.
-	// The DataGateway has to take care of pulling it back into the request header upon request arrival.
-	if uRes.Token != "" {
-		if !strings.HasSuffix(uRes.UploadEndpoint, "/") {
-			uRes.UploadEndpoint += "/"
+	var ep, token string
+	for _, p := range uRes.Protocols {
+		if p.Protocol == "tus" {
+			ep, token = p.UploadEndpoint, p.Token
 		}
-		uRes.UploadEndpoint += uRes.Token
 	}
 
-	w.Header().Set("Location", uRes.UploadEndpoint)
+	// TUS clients don't understand the reva transfer token. We need to append it to the upload endpoint.
+	// The DataGateway has to take care of pulling it back into the request header upon request arrival.
+	if token != "" {
+		if !strings.HasSuffix(ep, "/") {
+			ep += "/"
+		}
+		ep += token
+	}
+
+	w.Header().Set("Location", ep)
 
 	// for creation-with-upload extension forward bytes to dataprovider
 	// TODO check this really streams
@@ -193,7 +200,7 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 		var httpRes *http.Response
 
 		if length != 0 {
-			httpReq, err := rhttp.NewRequest(ctx, "PATCH", uRes.UploadEndpoint, r.Body)
+			httpReq, err := rhttp.NewRequest(ctx, "PATCH", ep, r.Body)
 			if err != nil {
 				log.Err(err).Msg("wrong request")
 				w.WriteHeader(http.StatusInternalServerError)
@@ -269,5 +276,6 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 			w.Header().Set("Last-Modified", lastModifiedString)
 		}
 	}
+
 	w.WriteHeader(http.StatusCreated)
 }

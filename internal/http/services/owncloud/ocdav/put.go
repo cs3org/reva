@@ -237,13 +237,20 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 		return
 	}
 
+	var ep, token string
+	for _, p := range uRes.Protocols {
+		if p.Protocol == "simple" {
+			ep, token = p.UploadEndpoint, p.Token
+		}
+	}
+
 	if length > 0 {
-		httpReq, err := rhttp.NewRequest(ctx, "PUT", uRes.UploadEndpoint, content)
+		httpReq, err := rhttp.NewRequest(ctx, "PUT", ep, content)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		httpReq.Header.Set(datagateway.TokenTransportHeader, uRes.Token)
+		httpReq.Header.Set(datagateway.TokenTransportHeader, token)
 
 		httpRes, err := s.client.Do(httpReq)
 		if err != nil {

@@ -49,11 +49,11 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 
 		// Set the length to 0 and set SizeIsDeferred to true
 		metadata := map[string]string{"sizedeferred": "true"}
-		uploadID, err := fs.InitiateUpload(ctx, ref, 0, metadata)
+		uploadIDs, err := fs.InitiateUpload(ctx, ref, 0, metadata)
 		if err != nil {
 			return err
 		}
-		if upload, err = fs.GetUpload(ctx, uploadID); err != nil {
+		if upload, err = fs.GetUpload(ctx, uploadIDs["simple"]); err != nil {
 			return errors.Wrap(err, "ocfs: error retrieving upload")
 		}
 	}
@@ -94,12 +94,12 @@ func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 	return uploadInfo.FinishUpload(ctx)
 }
 
-// InitiateUpload returns an upload id that can be used for uploads with tus
+// InitiateUpload returns upload ids corresponding to different protocols it supports
 // TODO read optional content for small files in this request
-func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (uploadID string, err error) {
+func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return "", errors.Wrap(err, "ocfs: error resolving reference")
+		return nil, errors.Wrap(err, "ocfs: error resolving reference")
 	}
 
 	// permissions are checked in NewUpload below
@@ -125,12 +125,15 @@ func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, upl
 
 	upload, err := fs.NewUpload(ctx, info)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	info, _ = upload.GetInfo(ctx)
 
-	return info.ID, nil
+	return map[string]string{
+		"simple": info.ID,
+		"tus":    info.ID,
+	}, nil
 }
 
 // UseIn tells the tus upload middleware which extensions it supports.

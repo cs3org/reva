@@ -242,6 +242,13 @@ func (s *svc) descend(ctx context.Context, client gateway.GatewayAPIClient, src 
 			return fmt.Errorf("status code %d", dRes.Status.Code)
 		}
 
+		var downloadEP, downloadToken string
+		for _, p := range dRes.Protocols {
+			if p.Protocol == "simple" {
+				downloadEP, downloadToken = p.DownloadEndpoint, p.Token
+			}
+		}
+
 		// 2. get upload url
 
 		uReq := &provider.InitiateFileUploadRequest{
@@ -268,13 +275,20 @@ func (s *svc) descend(ctx context.Context, client gateway.GatewayAPIClient, src 
 			return fmt.Errorf("status code %d", uRes.Status.Code)
 		}
 
+		var uploadEP, uploadToken string
+		for _, p := range uRes.Protocols {
+			if p.Protocol == "simple" {
+				uploadEP, uploadToken = p.UploadEndpoint, p.Token
+			}
+		}
+
 		// 3. do download
 
-		httpDownloadReq, err := rhttp.NewRequest(ctx, "GET", dRes.DownloadEndpoint, nil)
+		httpDownloadReq, err := rhttp.NewRequest(ctx, "GET", downloadEP, nil)
 		if err != nil {
 			return err
 		}
-		httpDownloadReq.Header.Set(datagateway.TokenTransportHeader, dRes.Token)
+		httpDownloadReq.Header.Set(datagateway.TokenTransportHeader, downloadToken)
 
 		httpDownloadRes, err := s.client.Do(httpDownloadReq)
 		if err != nil {
@@ -288,11 +302,11 @@ func (s *svc) descend(ctx context.Context, client gateway.GatewayAPIClient, src 
 		// 4. do upload
 
 		if src.GetSize() > 0 {
-			httpUploadReq, err := rhttp.NewRequest(ctx, "PUT", uRes.UploadEndpoint, httpDownloadRes.Body)
+			httpUploadReq, err := rhttp.NewRequest(ctx, "PUT", uploadEP, httpDownloadRes.Body)
 			if err != nil {
 				return err
 			}
-			httpUploadReq.Header.Set(datagateway.TokenTransportHeader, uRes.Token)
+			httpUploadReq.Header.Set(datagateway.TokenTransportHeader, uploadToken)
 
 			httpUploadRes, err := s.client.Do(httpUploadReq)
 			if err != nil {
