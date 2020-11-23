@@ -93,9 +93,6 @@ func (h *Handler) Init(c *config.Config) {
 		h.c.Capabilities.Files = &data.CapabilitiesFiles{}
 	}
 
-	// h.c.Capabilities.Files.PrivateLinks is boolean
-	// h.c.Capabilities.Files.BigFileChunking is boolean  // TODO is this old or new chunking? jfd: I guess old
-
 	if h.c.Capabilities.Files.BlacklistedFiles == nil {
 		h.c.Capabilities.Files.BlacklistedFiles = []string{}
 	}
@@ -104,6 +101,10 @@ func (h *Handler) Init(c *config.Config) {
 
 	if h.c.Capabilities.Files.TusSupport == nil && !c.DisableTus {
 		// these are global capabilities
+		// Need to disable other chunking methods
+		h.c.Capabilities.Files.BigFileChunking = false
+		h.c.Capabilities.Dav.Chunking = ""
+
 		// TODO: infer from various TUS handlers from all known storages
 		h.c.Capabilities.Files.TusSupport = &data.CapabilitiesFilesTusSupport{
 			Version:            "1.0.0",
@@ -112,6 +113,9 @@ func (h *Handler) Init(c *config.Config) {
 			MaxChunkSize:       0,
 			HTTPMethodOverride: "",
 		}
+	} else {
+		// Enable chunking support
+		h.c.Capabilities.Files.BigFileChunking = true
 	}
 
 	// dav
