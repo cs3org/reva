@@ -33,6 +33,7 @@ const (
 	SiteTypeCommunity
 )
 
+// SiteType holds the type of a site.
 type SiteType int
 
 // Site represents a single site managed by Mentix.

@@ -43,6 +43,7 @@ func (collection *Collection) Entities() []entity.Entity {
 	return entities
 }
 
+// ActivateAll activates all entities in the collection.
 func (collection *Collection) ActivateAll(conf *config.Configuration, log *zerolog.Logger) error {
 	return entity.ActivateEntities(collection, conf, log)
 }

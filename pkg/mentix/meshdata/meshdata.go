@@ -127,7 +127,7 @@ func (meshData *MeshData) Merge(inData *MeshData) {
 	}
 }
 
-// Merge removes data from another MeshData instance from this one.
+// Unmerge removes data from another MeshData instance from this one.
 func (meshData *MeshData) Unmerge(inData *MeshData) {
 	for _, site := range inData.Sites {
 		meshData.RemoveSite(site.GetID())
