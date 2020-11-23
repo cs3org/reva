@@ -28,10 +28,9 @@ import (
 type Entity interface {
 	// GetID returns the ID of the entity.
 	GetID() string
+	// GetName returns the display name of the entity.
+	GetName() string
 
 	// Activate activates the entity.
 	Activate(conf *config.Configuration, log *zerolog.Logger) error
-
-	// GetName returns the display name of the entity.
-	GetName() string
 }

@@ -47,7 +47,7 @@ type BaseImporter struct {
 
 // Process is called periodically to perform the actual import; if data has been imported, true is returned.
 func (importer *BaseImporter) Process(connectors *connectors.Collection) (bool, error) {
-	if importer.meshData == nil { // Nothing to do
+	if importer.meshData == nil { // No data present for updating, so nothing to process
 		return false, nil
 	}
 

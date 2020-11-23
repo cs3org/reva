@@ -28,7 +28,9 @@ const (
 const (
 	// ImporterIDWebAPI is the identifier for the WebAPI importer.
 	ImporterIDWebAPI = "webapi"
+)
 
+const (
 	// ExporterIDWebAPI is the identifier for the WebAPI exporter.
 	ExporterIDWebAPI = "webapi"
 	// ExporterIDCS3API is the identifier for the CS3API exporter.

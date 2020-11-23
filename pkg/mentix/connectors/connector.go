@@ -34,7 +34,8 @@ type Connector interface {
 
 	// RetrieveMeshData fetches new mesh data.
 	RetrieveMeshData() (*meshdata.MeshData, error)
-	// UpdateMeshData updates the provided mesh data on the target side.
+	// UpdateMeshData updates the provided mesh data on the target side. The provided data only contains the data that
+	// should be updated, not the entire data set.
 	UpdateMeshData(data *meshdata.MeshData) error
 }
 
@@ -59,7 +60,8 @@ func (connector *BaseConnector) Activate(conf *config.Configuration, log *zerolo
 	return nil
 }
 
-// UpdateMeshData updates the provided mesh data on the target side.
+// UpdateMeshData updates the provided mesh data on the target side. The provided data only contains the data that
+// should be updated, not the entire data set.
 func (connector *BaseConnector) UpdateMeshData(data *meshdata.MeshData) error {
 	return fmt.Errorf("the connector doesn't support updating of mesh data")
 }
