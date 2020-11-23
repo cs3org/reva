@@ -69,10 +69,7 @@ driver = "memory"
 driver = "demo"
 iopsecret = "testsecret"
 wopiurl = "http://0.0.0.0:8880/"
-wopibridgeurl = "http://localhost:8000/"
-
-[grpc.services.appprovider.mimetypes]
-".zmd" = "application/compressed-markdown"
+wopibridgeurl = "http://localhost:8000/wopib"
 
 [grpc.services.appregistry]
 driver = "static"
@@ -92,6 +89,9 @@ mount_id = "123e4567-e89b-12d3-a456-426655440000"
 expose_data_server = true
 data_server_url = "http://localhost:19001/data"
 enable_home_creation = true
+
+[grpc.services.storageprovider.mimetypes]
+".zmd" = "application/compressed-markdown"
 
 [grpc.services.storageprovider.drivers.localhome]
 user_layout = "{{.Username}}"

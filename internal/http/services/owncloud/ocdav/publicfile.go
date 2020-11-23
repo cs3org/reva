@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"path"
 
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/router"
@@ -106,6 +107,19 @@ func (s *svc) adjustResourcePathInURL(w http.ResponseWriter, r *http.Request) bo
 		w.WriteHeader(http.StatusNotFound)
 		return false
 	}
+	if pathRes.Status.Code != rpc.Code_CODE_OK {
+		switch pathRes.Status.Code {
+		case rpc.Code_CODE_NOT_FOUND:
+			w.WriteHeader(http.StatusNotFound)
+			return false
+		case rpc.Code_CODE_PERMISSION_DENIED:
+			w.WriteHeader(http.StatusForbidden)
+			return false
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
+			return false
+		}
+	}
 	if path.Base(r.URL.Path) != path.Base(pathRes.Path) {
 		w.WriteHeader(http.StatusNotFound)
 		return false
@@ -164,6 +178,19 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 			Msg("Could not get path of resource")
 		w.WriteHeader(http.StatusNotFound)
 		return
+	}
+	if pathRes.Status.Code != rpc.Code_CODE_OK {
+		switch pathRes.Status.Code {
+		case rpc.Code_CODE_NOT_FOUND:
+			w.WriteHeader(http.StatusNotFound)
+			return
+		case rpc.Code_CODE_PERMISSION_DENIED:
+			w.WriteHeader(http.StatusForbidden)
+			return
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 	}
 
 	infos := []*provider.ResourceInfo{}

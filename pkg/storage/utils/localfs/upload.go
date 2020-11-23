@@ -29,6 +29,8 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -37,52 +39,69 @@ import (
 
 var defaultFilePerm = os.FileMode(0664)
 
-// TODO deprecated ... use tus
 func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
-	fn, err := fs.resolve(ctx, ref)
+	upload, err := fs.GetUpload(ctx, ref.GetPath())
 	if err != nil {
-		return errors.Wrap(err, "error resolving ref")
-	}
-	fn = fs.wrap(ctx, fn)
+		// Upload corresponding to this ID was not found.
+		// Assume that this corresponds to the resource path to which the file has to be uploaded.
 
-	// we cannot rely on /tmp as it can live in another partition and we can
-	// hit invalid cross-device link errors, so we create the tmp file in the same directory
-	// the file is supposed to be written.
-	tmp, err := ioutil.TempFile(filepath.Dir(fn), "._reva_atomic_upload")
-	if err != nil {
-		return errors.Wrap(err, "localfs: error creating tmp fn at "+filepath.Dir(fn))
-	}
-
-	_, err = io.Copy(tmp, r)
-	if err != nil {
-		return errors.Wrap(err, "localfs: error writing to tmp file "+tmp.Name())
-	}
-
-	// if destination exists
-	if _, err := os.Stat(fn); err == nil {
-		// create revision
-		if err := fs.archiveRevision(ctx, fn); err != nil {
+		// Set the length to 0 and set SizeIsDeferred to true
+		metadata := map[string]string{"sizedeferred": "true"}
+		uploadIDs, err := fs.InitiateUpload(ctx, ref, 0, metadata)
+		if err != nil {
 			return err
+		}
+		if upload, err = fs.GetUpload(ctx, uploadIDs["simple"]); err != nil {
+			return errors.Wrap(err, "localfs: error retrieving upload")
 		}
 	}
 
-	// TODO(labkode): make sure rename is atomic, missing fsync ...
-	if err := os.Rename(tmp.Name(), fn); err != nil {
-		return errors.Wrap(err, "localfs: error renaming from "+tmp.Name()+" to "+fn)
+	uploadInfo := upload.(*fileUpload)
+
+	p := uploadInfo.info.Storage["InternalDestination"]
+	ok, err := chunking.IsChunked(p)
+	if err != nil {
+		return errors.Wrap(err, "localfs: error checking path")
+	}
+	if ok {
+		var assembledFile string
+		p, assembledFile, err = fs.chunkHandler.WriteChunk(p, r)
+		if err != nil {
+			return err
+		}
+		if p == "" {
+			if err = uploadInfo.Terminate(ctx); err != nil {
+				return errors.Wrap(err, "localfs: error removing auxiliary files")
+			}
+			return errtypes.PartialContent(ref.String())
+		}
+		uploadInfo.info.Storage["InternalDestination"] = p
+		fd, err := os.Open(assembledFile)
+		if err != nil {
+			return errors.Wrap(err, "localfs: error opening assembled file")
+		}
+		defer fd.Close()
+		defer os.RemoveAll(assembledFile)
+		r = fd
 	}
 
-	return nil
+	if _, err := uploadInfo.WriteChunk(ctx, 0, r); err != nil {
+		return errors.Wrap(err, "localfs: error writing to binary file")
+	}
+
+	return uploadInfo.FinishUpload(ctx)
 }
 
-// InitiateUpload returns an upload id that can be used for uploads with tus
+// InitiateUpload returns upload ids corresponding to different protocols it supports
 // It resolves the resource and then reuses the NewUpload function
 // Currently requires the uploadLength to be set
 // TODO to implement LengthDeferrerDataStore make size optional
 // TODO read optional content for small files in this request
-func (fs *localfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (uploadID string, err error) {
+func (fs *localfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
+
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return "", errors.Wrap(err, "localfs: error resolving reference")
+		return nil, errors.Wrap(err, "localfs: error resolving reference")
 	}
 
 	info := tusd.FileInfo{
@@ -93,18 +112,26 @@ func (fs *localfs) InitiateUpload(ctx context.Context, ref *provider.Reference, 
 		Size: uploadLength,
 	}
 
-	if metadata != nil && metadata["mtime"] != "" {
-		info.MetaData["mtime"] = metadata["mtime"]
+	if metadata != nil {
+		if metadata["mtime"] != "" {
+			info.MetaData["mtime"] = metadata["mtime"]
+		}
+		if _, ok := metadata["sizedeferred"]; ok {
+			info.SizeIsDeferred = true
+		}
 	}
 
 	upload, err := fs.NewUpload(ctx, info)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	info, _ = upload.GetInfo(ctx)
 
-	return info.ID, nil
+	return map[string]string{
+		"simple": info.ID,
+		"tus":    info.ID,
+	}, nil
 }
 
 // UseIn tells the tus upload middleware which extensions it supports.
@@ -323,8 +350,10 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 
 	// only delete the upload if it was successfully written to the fs
 	if err := os.Remove(upload.infoPath); err != nil {
-		log := appctx.GetLogger(ctx)
-		log.Err(err).Interface("info", upload.info).Msg("localfs: could not delete upload info")
+		if !os.IsNotExist(err) {
+			log := appctx.GetLogger(ctx)
+			log.Err(err).Interface("info", upload.info).Msg("localfs: could not delete upload info")
+		}
 	}
 
 	// TODO: set mtime if specified in metadata

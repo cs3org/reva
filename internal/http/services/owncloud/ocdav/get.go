@@ -111,16 +111,20 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	dataServerURL := dRes.DownloadEndpoint
+	var ep, token string
+	for _, p := range dRes.Protocols {
+		if p.Protocol == "simple" {
+			ep, token = p.DownloadEndpoint, p.Token
+		}
+	}
 
-	// TODO(labkode): perform protocol switch
-	httpReq, err := rhttp.NewRequest(ctx, "GET", dataServerURL, nil)
+	httpReq, err := rhttp.NewRequest(ctx, "GET", ep, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("error creating http request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	httpReq.Header.Set(datagateway.TokenTransportHeader, dRes.Token)
+	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
 	httpClient := s.client
 
 	httpRes, err := httpClient.Do(httpReq)
@@ -142,7 +146,7 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 	w.Header().Set("ETag", info.Etag)
 	w.Header().Set("OC-FileId", wrapResourceID(info.Id))
 	w.Header().Set("OC-ETag", info.Etag)
-	t := utils.TSToTime(info.Mtime)
+	t := utils.TSToTime(info.Mtime).UTC()
 	lastModifiedString := t.Format(time.RFC1123Z)
 	w.Header().Set("Last-Modified", lastModifiedString)
 	w.Header().Set("Content-Length", strconv.FormatUint(info.Size, 10))

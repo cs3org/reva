@@ -97,7 +97,7 @@ func writeLog(log *zerolog.Logger, req *http.Request, url url.URL, ts time.Time,
 	var event *zerolog.Event
 	switch {
 	case status < 400:
-		event = log.Info()
+		event = log.Debug()
 	case status < 500:
 		event = log.Warn()
 	default:

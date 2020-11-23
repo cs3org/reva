@@ -69,7 +69,9 @@ func shareUpdateCommand() *command {
 			},
 			Field: &collaboration.UpdateShareRequest_UpdateField{
 				Field: &collaboration.UpdateShareRequest_UpdateField_Permissions{
-					Permissions: perm,
+					Permissions: &collaboration.SharePermissions{
+						Permissions: perm,
+					},
 				},
 			},
 		}

@@ -228,9 +228,14 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 					}, nil
 				}
 				return &gateway.InitiateFileDownloadResponse{
-					Opaque:           opaque,
-					Status:           status.NewOK(ctx),
-					DownloadEndpoint: ep,
+					Status: status.NewOK(ctx),
+					Protocols: []*gateway.FileDownloadProtocol{
+						&gateway.FileDownloadProtocol{
+							Opaque:           opaque,
+							Protocol:         "simple",
+							DownloadEndpoint: ep,
+						},
+					},
 				}, nil
 			}
 
@@ -310,9 +315,14 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 				}, nil
 			}
 			return &gateway.InitiateFileDownloadResponse{
-				Opaque:           opaque,
-				Status:           status.NewOK(ctx),
-				DownloadEndpoint: ep,
+				Status: status.NewOK(ctx),
+				Protocols: []*gateway.FileDownloadProtocol{
+					&gateway.FileDownloadProtocol{
+						Opaque:           opaque,
+						Protocol:         "simple",
+						DownloadEndpoint: ep,
+					},
+				},
 			}, nil
 		}
 
@@ -331,7 +341,6 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 }
 
 func (s *svc) initiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {
-	log := appctx.GetLogger(ctx)
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
@@ -349,38 +358,42 @@ func (s *svc) initiateFileDownload(ctx context.Context, req *provider.InitiateFi
 		return nil, errors.Wrap(err, "gateway: error calling InitiateFileDownload")
 	}
 
-	res := &gateway.InitiateFileDownloadResponse{
-		Opaque:           storageRes.Opaque,
-		Status:           storageRes.Status,
-		DownloadEndpoint: storageRes.DownloadEndpoint,
+	protocols := make([]*gateway.FileDownloadProtocol, len(storageRes.Protocols))
+	for p := range storageRes.Protocols {
+		protocols[p] = &gateway.FileDownloadProtocol{
+			Opaque:           storageRes.Protocols[p].Opaque,
+			Protocol:         storageRes.Protocols[p].Protocol,
+			DownloadEndpoint: storageRes.Protocols[p].DownloadEndpoint,
+		}
+
+		if !storageRes.Protocols[p].Expose {
+			// sign the download location and pass it to the data gateway
+			u, err := url.Parse(protocols[p].DownloadEndpoint)
+			if err != nil {
+				return &gateway.InitiateFileDownloadResponse{
+					Status: status.NewInternal(ctx, err, "wrong format for download endpoint"),
+				}, nil
+			}
+
+			// TODO(labkode): calculate signature of the whole request? we only sign the URI now. Maybe worth https://tools.ietf.org/html/draft-cavage-http-signatures-11
+			target := u.String()
+			token, err := s.sign(ctx, target)
+			if err != nil {
+				return &gateway.InitiateFileDownloadResponse{
+					Status: status.NewInternal(ctx, err, "error creating signature for download"),
+				}, nil
+			}
+
+			protocols[p].DownloadEndpoint = s.c.DataGatewayEndpoint
+			protocols[p].Token = token
+		}
 	}
 
-	if storageRes.Expose {
-		log.Info().Msg("download is routed directly to data server - skipping data gateway")
-		return res, nil
-	}
-
-	// sign the download location and pass it to the data gateway
-	u, err := url.Parse(res.DownloadEndpoint)
-	if err != nil {
-		return &gateway.InitiateFileDownloadResponse{
-			Status: status.NewInternal(ctx, err, "wrong format for download endpoint"),
-		}, nil
-	}
-
-	// TODO(labkode): calculate signature of the whole request? we only sign the URI now. Maybe worth https://tools.ietf.org/html/draft-cavage-http-signatures-11
-	target := u.String()
-	token, err := s.sign(ctx, target)
-	if err != nil {
-		return &gateway.InitiateFileDownloadResponse{
-			Status: status.NewInternal(ctx, err, "error creating signature for download"),
-		}, nil
-	}
-
-	res.DownloadEndpoint = s.c.DataGatewayEndpoint
-	res.Token = token
-
-	return res, nil
+	return &gateway.InitiateFileDownloadResponse{
+		Opaque:    storageRes.Opaque,
+		Status:    storageRes.Status,
+		Protocols: protocols,
+	}, nil
 }
 
 func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*gateway.InitiateFileUploadResponse, error) {
@@ -481,9 +494,14 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 					}, nil
 				}
 				return &gateway.InitiateFileUploadResponse{
-					Opaque:         opaque,
-					Status:         status.NewOK(ctx),
-					UploadEndpoint: ep,
+					Status: status.NewOK(ctx),
+					Protocols: []*gateway.FileUploadProtocol{
+						&gateway.FileUploadProtocol{
+							Opaque:         opaque,
+							Protocol:       "simple",
+							UploadEndpoint: ep,
+						},
+					},
 				}, nil
 			}
 
@@ -558,9 +576,14 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 				}, nil
 			}
 			return &gateway.InitiateFileUploadResponse{
-				Opaque:         opaque,
-				Status:         status.NewOK(ctx),
-				UploadEndpoint: ep,
+				Status: status.NewOK(ctx),
+				Protocols: []*gateway.FileUploadProtocol{
+					&gateway.FileUploadProtocol{
+						Opaque:         opaque,
+						Protocol:       "simple",
+						UploadEndpoint: ep,
+					},
+				},
 			}, nil
 		}
 
@@ -578,7 +601,6 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 }
 
 func (s *svc) initiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*gateway.InitiateFileUploadResponse, error) {
-	log := appctx.GetLogger(ctx)
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
@@ -614,39 +636,43 @@ func (s *svc) initiateFileUpload(ctx context.Context, req *provider.InitiateFile
 		}
 	}
 
-	res := &gateway.InitiateFileUploadResponse{
-		Opaque:             storageRes.Opaque,
-		Status:             storageRes.Status,
-		UploadEndpoint:     storageRes.UploadEndpoint,
-		AvailableChecksums: storageRes.AvailableChecksums,
+	protocols := make([]*gateway.FileUploadProtocol, len(storageRes.Protocols))
+	for p := range storageRes.Protocols {
+		protocols[p] = &gateway.FileUploadProtocol{
+			Opaque:             storageRes.Protocols[p].Opaque,
+			Protocol:           storageRes.Protocols[p].Protocol,
+			UploadEndpoint:     storageRes.Protocols[p].UploadEndpoint,
+			AvailableChecksums: storageRes.Protocols[p].AvailableChecksums,
+		}
+
+		if !storageRes.Protocols[p].Expose {
+			// sign the upload location and pass it to the data gateway
+			u, err := url.Parse(protocols[p].UploadEndpoint)
+			if err != nil {
+				return &gateway.InitiateFileUploadResponse{
+					Status: status.NewInternal(ctx, err, "wrong format for upload endpoint"),
+				}, nil
+			}
+
+			// TODO(labkode): calculate signature of the whole request? we only sign the URI now. Maybe worth https://tools.ietf.org/html/draft-cavage-http-signatures-11
+			target := u.String()
+			token, err := s.sign(ctx, target)
+			if err != nil {
+				return &gateway.InitiateFileUploadResponse{
+					Status: status.NewInternal(ctx, err, "error creating signature for upload"),
+				}, nil
+			}
+
+			protocols[p].UploadEndpoint = s.c.DataGatewayEndpoint
+			protocols[p].Token = token
+		}
 	}
 
-	if storageRes.Expose {
-		log.Info().Msg("upload is routed directly to data server - skipping data gateway")
-		return res, nil
-	}
-
-	// sign the upload location and pass it to the data gateway
-	u, err := url.Parse(res.UploadEndpoint)
-	if err != nil {
-		return &gateway.InitiateFileUploadResponse{
-			Status: status.NewInternal(ctx, err, "wrong format for upload endpoint"),
-		}, nil
-	}
-
-	// TODO(labkode): calculate signature of the url, we only sign the URI. At some points maybe worth https://tools.ietf.org/html/draft-cavage-http-signatures-11
-	target := u.String()
-	token, err := s.sign(ctx, target)
-	if err != nil {
-		return &gateway.InitiateFileUploadResponse{
-			Status: status.NewInternal(ctx, err, "error creating signature for download"),
-		}, nil
-	}
-
-	res.UploadEndpoint = s.c.DataGatewayEndpoint
-	res.Token = token
-
-	return res, nil
+	return &gateway.InitiateFileUploadResponse{
+		Opaque:    storageRes.Opaque,
+		Status:    storageRes.Status,
+		Protocols: protocols,
+	}, nil
 }
 
 func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provider.GetPathResponse, error) {

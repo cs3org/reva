@@ -183,7 +183,7 @@ func ReadNode(ctx context.Context, lu *Lookup, id string) (n *Node, err error) {
 		} else {
 			log.Error().Err(err).Interface("node", n).Str("root.ID", root.ID).Msg("ReadNode()")
 			if isNotFound(err) {
-				return
+				return nil, errtypes.NotFound(err.Error())
 			}
 			return
 		}

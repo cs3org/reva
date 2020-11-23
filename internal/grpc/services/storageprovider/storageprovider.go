@@ -33,6 +33,8 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/logger"
+	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/storage"
@@ -55,8 +57,8 @@ type config struct {
 	TmpFolder        string                            `mapstructure:"tmp_folder" docs:"/var/tmp;Path to temporary folder."`
 	DataServerURL    string                            `mapstructure:"data_server_url" docs:"http://localhost/data;The URL for the data server."`
 	ExposeDataServer bool                              `mapstructure:"expose_data_server" docs:"false;Whether to expose data server."` // if true the client will be able to upload/download directly to it
-	DisableTus       bool                              `mapstructure:"disable_tus" docs:"false;Whether to disable TUS uploads."`
 	AvailableXS      map[string]uint32                 `mapstructure:"available_checksums" docs:"nil;List of available checksums."`
+	MimeTypes        map[string]string                 `mapstructure:"mimetypes" docs:"nil;List of supported mime types and corresponding file extensions."`
 }
 
 func (c *config) init() {
@@ -173,6 +175,8 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, fmt.Errorf("no available checksum, please set in config")
 	}
 
+	registerMimeTypes(c.MimeTypes)
+
 	service := &service{
 		conf:          c,
 		storage:       fs,
@@ -184,6 +188,15 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	}
 
 	return service, nil
+}
+
+func registerMimeTypes(mimes map[string]string) {
+	tlog := logger.New().With().Int("pid", os.Getpid()).Logger()
+
+	for k, v := range mimes {
+		tlog.Debug().Str("Registering mime type: ", "'"+fmt.Sprintf("%s -> %s", k, v)+"' ").Msg("")
+		mime.RegisterMime(k, v)
+	}
 }
 
 func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest) (*provider.SetArbitraryMetadataResponse, error) {
@@ -253,19 +266,28 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 	// For example, https://data-server.example.org/home/docs/myfile.txt
 	// or ownclouds://data-server.example.org/home/docs/myfile.txt
 	log := appctx.GetLogger(ctx)
-	url := *s.dataServerURL
+	u := *s.dataServerURL
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.InitiateFileDownloadResponse{
 			Status: status.NewInternal(ctx, err, "error unwrapping path"),
 		}, nil
 	}
-	url.Path = path.Join("/", url.Path, newRef.GetPath())
-	log.Info().Str("data-server", url.String()).Str("fn", req.Ref.GetPath()).Msg("file download")
+
+	// Currently, we only support the simple protocol for GET requests
+	// Once we have multiple protocols, this would be moved to the fs layer
+	u.Path = path.Join(u.Path, "simple", newRef.GetPath())
+
+	log.Info().Str("data-server", u.String()).Str("fn", req.Ref.GetPath()).Msg("file download")
 	res := &provider.InitiateFileDownloadResponse{
-		DownloadEndpoint: url.String(),
-		Status:           status.NewOK(ctx),
-		Expose:           s.conf.ExposeDataServer,
+		Protocols: []*provider.FileDownloadProtocol{
+			&provider.FileDownloadProtocol{
+				Protocol:         "simple",
+				DownloadEndpoint: u.String(),
+				Expose:           s.conf.ExposeDataServer,
+			},
+		},
+		Status: status.NewOK(ctx),
 	}
 	return res, nil
 }
@@ -284,53 +306,60 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 			Status: status.NewInternal(ctx, errors.New("can't upload to mount path"), "can't upload to mount path"),
 		}, nil
 	}
-	url := *s.dataServerURL
-	if s.conf.DisableTus {
-		url.Path = path.Join("/", url.Path, newRef.GetPath())
-	} else {
-		metadata := map[string]string{}
-		var uploadLength int64
-		if req.Opaque != nil && req.Opaque.Map != nil {
-			if req.Opaque.Map["Upload-Length"] != nil {
-				var err error
-				uploadLength, err = strconv.ParseInt(string(req.Opaque.Map["Upload-Length"].Value), 10, 64)
-				if err != nil {
-					return &provider.InitiateFileUploadResponse{
-						Status: status.NewInternal(ctx, err, "error parsing upload length"),
-					}, nil
-				}
-			}
-			if req.Opaque.Map["X-OC-Mtime"] != nil {
-				metadata["mtime"] = string(req.Opaque.Map["X-OC-Mtime"].Value)
+
+	metadata := map[string]string{}
+	var uploadLength int64
+	if req.Opaque != nil && req.Opaque.Map != nil {
+		if req.Opaque.Map["Upload-Length"] != nil {
+			var err error
+			uploadLength, err = strconv.ParseInt(string(req.Opaque.Map["Upload-Length"].Value), 10, 64)
+			if err != nil {
+				return &provider.InitiateFileUploadResponse{
+					Status: status.NewInternal(ctx, err, "error parsing upload length"),
+				}, nil
 			}
 		}
-		uploadID, err := s.storage.InitiateUpload(ctx, newRef, uploadLength, metadata)
-		if err != nil {
-			var st *rpc.Status
-			switch err.(type) {
-			case errtypes.IsNotFound:
-				st = status.NewNotFound(ctx, "path not found when initiating upload")
-			case errtypes.PermissionDenied:
-				st = status.NewPermissionDenied(ctx, err, "permission denied")
-			default:
-				st = status.NewInternal(ctx, err, "error getting upload id: "+req.Ref.String())
-			}
-			return &provider.InitiateFileUploadResponse{
-				Status: st,
-			}, nil
+		if req.Opaque.Map["X-OC-Mtime"] != nil {
+			metadata["mtime"] = string(req.Opaque.Map["X-OC-Mtime"].Value)
 		}
-		url.Path = path.Join("/", url.Path, uploadID)
+	}
+	uploadIDs, err := s.storage.InitiateUpload(ctx, newRef, uploadLength, metadata)
+	if err != nil {
+		var st *rpc.Status
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			st = status.NewNotFound(ctx, "path not found when initiating upload")
+		case errtypes.PermissionDenied:
+			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		default:
+			st = status.NewInternal(ctx, err, "error getting upload id: "+req.Ref.String())
+		}
+		return &provider.InitiateFileUploadResponse{
+			Status: st,
+		}, nil
 	}
 
-	log.Info().Str("data-server", url.String()).
-		Str("fn", req.Ref.GetPath()).
-		Str("xs", fmt.Sprintf("%+v", s.conf.AvailableXS)).
-		Msg("file upload")
+	protocols := make([]*provider.FileUploadProtocol, len(uploadIDs))
+	var i int
+	for protocol, ID := range uploadIDs {
+		u := *s.dataServerURL
+		u.Path = path.Join(u.Path, protocol, ID)
+		protocols[i] = &provider.FileUploadProtocol{
+			Protocol:           protocol,
+			UploadEndpoint:     u.String(),
+			AvailableChecksums: s.availableXS,
+			Expose:             s.conf.ExposeDataServer,
+		}
+		i++
+		log.Info().Str("data-server", u.String()).
+			Str("fn", req.Ref.GetPath()).
+			Str("xs", fmt.Sprintf("%+v", s.conf.AvailableXS)).
+			Msg("file upload")
+	}
+
 	res := &provider.InitiateFileUploadResponse{
-		UploadEndpoint:     url.String(),
-		Status:             status.NewOK(ctx),
-		AvailableChecksums: s.availableXS,
-		Expose:             s.conf.ExposeDataServer,
+		Protocols: protocols,
+		Status:    status.NewOK(ctx),
 	}
 	return res, nil
 }

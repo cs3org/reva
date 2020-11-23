@@ -99,9 +99,8 @@ You can also read the [build from sources guide](https://reva.link/docs/getting-
     TEST_SERVER_URL='http://localhost:20080' \
     OCIS_REVA_DATA_ROOT='/var/tmp/reva/' \
     SKELETON_DIR='./apps/testing/data/apiSkeleton' \
-    TEST_EXTERNAL_USER_BACKENDS='true' \
+    TEST_WITH_LDAP='true' \
     REVA_LDAP_HOSTNAME='localhost' \
-    TEST_OCIS='true' \
     TEST_REVA='true' \
     BEHAT_FILTER_TAGS='~@skipOnOcis&&~@skipOnOcis-OC-Storage' \
     make test-acceptance-api

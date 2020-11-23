@@ -35,7 +35,6 @@ import (
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/provider/demo"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rhttp"
@@ -60,7 +59,6 @@ type config struct {
 	IopSecret string                 `mapstructure:"iopsecret" docs:";The iopsecret used to connect to the wopiserver."`
 	WopiURL   string                 `mapstructure:"wopiurl" docs:";The wopiserver's URL."`
 	WopiBrURL string                 `mapstructure:"wopibridgeurl" docs:";The wopibridge's URL."`
-	MimeTypes map[string]string      `mapstructure:"mimetypes" docs:"nil;List of supported mime types and corresponding file extensions."`
 }
 
 // New creates a new AppProviderService
@@ -69,8 +67,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	registerMimeTypes(c.MimeTypes)
 
 	provider, err := getProvider(c)
 	if err != nil {
@@ -94,12 +90,6 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 		return nil, err
 	}
 	return c, nil
-}
-
-func registerMimeTypes(mimes map[string]string) {
-	for k, v := range mimes {
-		mime.RegisterMime(k, v)
-	}
 }
 
 func (s *service) Close() error {
@@ -253,7 +243,7 @@ func (s *service) OpenFileInAppProvider(ctx context.Context, req *providerpb.Ope
 
 	// In case of applications served by the WOPI bridge, resolve the URL and go to the app
 	// Note that URL matching is performed via string matching, not via IP resolution: may need to fix this
-	if strings.Contains(appProviderURL, s.conf.WopiBrURL) {
+	if len(s.conf.WopiBrURL) > 0 && strings.Contains(appProviderURL, s.conf.WopiBrURL) {
 		httpClient := rhttp.GetHTTPClient(
 			rhttp.Context(ctx),
 			rhttp.Timeout(time.Duration(5*int64(time.Second))),

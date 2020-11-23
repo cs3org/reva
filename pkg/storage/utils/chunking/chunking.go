@@ -16,47 +16,50 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocdav
+package chunking
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net/http"
 	"os"
-	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
-
-	"github.com/cs3org/reva/pkg/appctx"
 )
 
-type chunkBLOBInfo struct {
-	path         string
-	transferID   string
-	totalChunks  int64
-	currentChunk int64
+// IsChunked checks if a given path refers to a chunk or not
+func IsChunked(fn string) (bool, error) {
+	// FIXME: also need to check whether the OC-Chunked header is set
+	return regexp.MatchString(`-chunking-\w+-[0-9]+-[0-9]+$`, fn)
 }
 
-// not using the resource path in the chunk folder name allows uploading
-// to the same folder after a move without having to restart the chunk
-// upload
-func (c *chunkBLOBInfo) uploadID() string {
-	return fmt.Sprintf("chunking-%s-%d", c.transferID, c.totalChunks)
+// ChunkBLOBInfo stores info about a particular chunk
+type ChunkBLOBInfo struct {
+	Path         string
+	TransferID   string
+	TotalChunks  int
+	CurrentChunk int
 }
 
-func getChunkBLOBInfo(path string) (*chunkBLOBInfo, error) {
+// Not using the resource path in the chunk folder name allows uploading to
+// the same folder after a move without having to restart the chunk upload
+func (c *ChunkBLOBInfo) uploadID() string {
+	return fmt.Sprintf("chunking-%s-%d", c.TransferID, c.TotalChunks)
+}
+
+// GetChunkBLOBInfo decodes a chunk name to retrieve info about it.
+func GetChunkBLOBInfo(path string) (*ChunkBLOBInfo, error) {
 	parts := strings.Split(path, "-chunking-")
 	tail := strings.Split(parts[1], "-")
 
-	totalChunks, err := strconv.ParseInt(tail[1], 10, 64)
+	totalChunks, err := strconv.Atoi(tail[1])
 	if err != nil {
 		return nil, err
 	}
 
-	currentChunk, err := strconv.ParseInt(tail[2], 10, 64)
+	currentChunk, err := strconv.Atoi(tail[2])
 	if err != nil {
 		return nil, err
 	}
@@ -64,16 +67,27 @@ func getChunkBLOBInfo(path string) (*chunkBLOBInfo, error) {
 		return nil, fmt.Errorf("current chunk:%d exceeds total number of chunks:%d", currentChunk, totalChunks)
 	}
 
-	return &chunkBLOBInfo{
-		path:         parts[0],
-		transferID:   tail[0],
-		totalChunks:  totalChunks,
-		currentChunk: currentChunk,
+	return &ChunkBLOBInfo{
+		Path:         parts[0],
+		TransferID:   tail[0],
+		TotalChunks:  totalChunks,
+		CurrentChunk: currentChunk,
 	}, nil
 }
 
-func (s *svc) createChunkTempFile() (string, *os.File, error) {
-	file, err := ioutil.TempFile(fmt.Sprintf("/%s", s.c.ChunkFolder), "")
+// ChunkHandler manages chunked uploads, storing the chunks in a temporary directory
+// until it gets the final chunk which is then returned.
+type ChunkHandler struct {
+	ChunkFolder string `mapstructure:"chunk_folder"`
+}
+
+// NewChunkHandler creates a handler for chunked uploads.
+func NewChunkHandler(chunkFolder string) *ChunkHandler {
+	return &ChunkHandler{chunkFolder}
+}
+
+func (c *ChunkHandler) createChunkTempFile() (string, *os.File, error) {
+	file, err := ioutil.TempFile(fmt.Sprintf("/%s", c.ChunkFolder), "")
 	if err != nil {
 		return "", nil, err
 	}
@@ -81,59 +95,47 @@ func (s *svc) createChunkTempFile() (string, *os.File, error) {
 	return file.Name(), file, nil
 }
 
-func (s *svc) getChunkFolderName(i *chunkBLOBInfo) (string, error) {
-	path := "/" + s.c.ChunkFolder + filepath.Clean("/"+i.uploadID())
+func (c *ChunkHandler) getChunkFolderName(i *ChunkBLOBInfo) (string, error) {
+	path := "/" + c.ChunkFolder + filepath.Clean("/"+i.uploadID())
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return "", err
 	}
 	return path, nil
 }
 
-func (s *svc) saveChunk(ctx context.Context, path string, r io.ReadCloser) (bool, string, error) {
-	log := appctx.GetLogger(ctx)
-	chunkInfo, err := getChunkBLOBInfo(path)
+func (c *ChunkHandler) saveChunk(path string, r io.ReadCloser) (bool, string, error) {
+	chunkInfo, err := GetChunkBLOBInfo(path)
 	if err != nil {
 		err := fmt.Errorf("error getting chunk info from path: %s", path)
-		//c.logger.Error().Log("error", err)
 		return false, "", err
 	}
 
-	//c.logger.Info().Log("chunknum", chunkInfo.currentChunk, "chunks", chunkInfo.totalChunks,
-	//"transferid", chunkInfo.transferID, "uploadid", chunkInfo.uploadID())
-
-	chunkTempFilename, chunkTempFile, err := s.createChunkTempFile()
+	chunkTempFilename, chunkTempFile, err := c.createChunkTempFile()
 	if err != nil {
-		//c.logger.Error().Log("error", err)
 		return false, "", err
 	}
 	defer chunkTempFile.Close()
 
 	if _, err := io.Copy(chunkTempFile, r); err != nil {
-		//c.logger.Error().Log("error", err)
 		return false, "", err
 	}
 
 	// force close of the file here because if it is the last chunk to
 	// assemble the big file we must have all the chunks already closed.
 	if err = chunkTempFile.Close(); err != nil {
-		//c.logger.Error().Log("error", err)
 		return false, "", err
 	}
 
-	chunksFolderName, err := s.getChunkFolderName(chunkInfo)
+	chunksFolderName, err := c.getChunkFolderName(chunkInfo)
 	if err != nil {
-		//c.logger.Error().Log("error", err)
 		return false, "", err
 	}
 	//c.logger.Info().Log("chunkfolder", chunksFolderName)
 
-	chunkTarget := chunksFolderName + "/" + fmt.Sprintf("%d", chunkInfo.currentChunk)
+	chunkTarget := chunksFolderName + "/" + fmt.Sprintf("%d", chunkInfo.CurrentChunk)
 	if err = os.Rename(chunkTempFilename, chunkTarget); err != nil {
-		//c.logger.Error().Log("error", err)
 		return false, "", err
 	}
-
-	//c.logger.Info().Log("chunktarget", chunkTarget)
 
 	// Check that all chunks are uploaded.
 	// This is very inefficient, the server has to check that it has all the
@@ -142,7 +144,6 @@ func (s *svc) saveChunk(ctx context.Context, path string, r io.ReadCloser) (bool
 	// assembly the chunks when the client asks for it.
 	chunksFolder, err := os.Open(chunksFolderName)
 	if err != nil {
-		//c.logger.Error().Log("error", err)
 		return false, "", err
 	}
 	defer chunksFolder.Close()
@@ -150,28 +151,23 @@ func (s *svc) saveChunk(ctx context.Context, path string, r io.ReadCloser) (bool
 	// read all the chunks inside the chunk folder; -1 == all
 	chunks, err := chunksFolder.Readdir(-1)
 	if err != nil {
-		//c.logger.Error().Log("error", err)
 		return false, "", err
 	}
-	//c.logger.Info().Log("msg", "chunkfolder readed", "nchunks", len(chunks))
 
-	// there is still some chunks to be uploaded.
+	// there are still some chunks to be uploaded.
 	// we return CodeUploadIsPartial to notify upper layers that the upload is still
 	// not complete and requires more actions.
 	// This code is needed to notify the owncloud webservice that the upload has not yet been
 	// completed and needs to continue uploading chunks.
-	if len(chunks) < int(chunkInfo.totalChunks) {
+	if len(chunks) < chunkInfo.TotalChunks {
 		return false, "", nil
 	}
 
-	assembledFileName, assembledFile, err := s.createChunkTempFile()
+	assembledFileName, assembledFile, err := c.createChunkTempFile()
 	if err != nil {
-		//c.logger.Error().Log("error", err)
 		return false, "", err
 	}
 	defer assembledFile.Close()
-
-	//c.logger.Info().Log("assembledfile", assembledFileName)
 
 	// walk all chunks and append to assembled file
 	for i := range chunks {
@@ -179,21 +175,17 @@ func (s *svc) saveChunk(ctx context.Context, path string, r io.ReadCloser) (bool
 
 		chunk, err := os.Open(target)
 		if err != nil {
-			//c.logger.Error().Log("error", err)
 			return false, "", err
 		}
 		defer chunk.Close()
 
 		if _, err = io.Copy(assembledFile, chunk); err != nil {
-			//c.logger.Error().Log("error", err)
 			return false, "", err
 		}
-		//c.logger.Debug().Log("msg", "chunk appended to assembledfile")
 
 		// we close the chunk here because if the assembled file contains hundreds of chunks
 		// we will end up with hundreds of open file descriptors
 		if err = chunk.Close(); err != nil {
-			//c.logger.Error().Log("error", err)
 			return false, "", err
 
 		}
@@ -201,64 +193,29 @@ func (s *svc) saveChunk(ctx context.Context, path string, r io.ReadCloser) (bool
 
 	// at this point the assembled file is complete
 	// so we free space removing the chunks folder
-	defer func() {
-		if err = os.RemoveAll(chunksFolderName); err != nil {
-			log.Warn().Err(err).Msg("error deleting chunk folder, remove folder manually/cron to not leak storage space")
-		}
-	}()
-
-	// when writing to the assembled file the write pointer points to the end of the file
-	// so we need to seek it to the beginning
-	if _, err = assembledFile.Seek(0, 0); err != nil {
-		//c.logger.Error().Log("error", err)
-		return false, "", err
-	}
+	defer os.RemoveAll(chunksFolderName)
 
 	return true, assembledFileName, nil
 }
-func (s *svc) handlePutChunked(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
 
-	fn := r.URL.Path
-
-	if r.Body == nil {
-		log.Warn().Msg("body is nil")
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	finish, chunk, err := s.saveChunk(ctx, fn, r.Body)
+// WriteChunk saves an intermediate chunk temporarily and assembles all chunks
+// once the final one is received.
+func (c *ChunkHandler) WriteChunk(fn string, r io.ReadCloser) (string, string, error) {
+	finish, chunk, err := c.saveChunk(fn, r)
 	if err != nil {
-		log.Error().Err(err).Msg("error saving chunk")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return "", "", err
 	}
 
 	if !finish {
-		w.WriteHeader(http.StatusPartialContent)
-		return
+		return "", "", nil
 	}
 
-	fd, err := os.Open(chunk)
+	chunkInfo, err := GetChunkBLOBInfo(fn)
 	if err != nil {
-		log.Error().Err(err).Msg("error opening chunk")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	defer fd.Close()
-
-	md, err := fd.Stat()
-	if err != nil {
-		log.Error().Err(err).Msg("error statting chunk")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return "", "", err
 	}
 
-	chunkInfo, _ := getChunkBLOBInfo(fn)
-	fn = path.Join(applyLayout(ctx, ns), chunkInfo.path)
-
-	s.handlePutHelper(w, r, fd, fn, md.Size())
+	return chunkInfo.Path, chunk, nil
 
 	// TODO(labkode): implement old chunking
 

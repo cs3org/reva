@@ -35,11 +35,3 @@ user_layout = "{{.Username}}"
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="disable_tus" type="bool" default=false %}}
-Whether to disable TUS uploads. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/dataprovider/dataprovider.go#L44)
-{{< highlight toml >}}
-[http.services.dataprovider]
-disable_tus = false
-{{< /highlight >}}
-{{% /dir %}}
-

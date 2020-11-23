@@ -32,125 +32,71 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
+	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 	tusd "github.com/tus/tusd/pkg/handler"
 )
 
 var defaultFilePerm = os.FileMode(0664)
 
-// TODO deprecated ... use tus
-
 func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) (err error) {
+	upload, err := fs.GetUpload(ctx, ref.GetPath())
+	if err != nil {
+		// Upload corresponding to this ID was not found.
+		// Assume that this corresponds to the resource path to which the file has to be uploaded.
 
-	var n *Node
-	if n, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
-		return
-	}
-
-	// check permissions
-	var ok bool
-	if n.Exists {
-		// check permissions of file to be overwritten
-		ok, err = fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
-			return rp.InitiateFileUpload
-		})
-	} else {
-		// check permissions of parent
-		p, perr := n.Parent()
-		if perr != nil {
-			return errors.Wrap(perr, "ocisfs: error getting parent "+n.ParentID)
+		// Set the length to 0 and set SizeIsDeferred to true
+		metadata := map[string]string{"sizedeferred": "true"}
+		uploadIDs, err := fs.InitiateUpload(ctx, ref, 0, metadata)
+		if err != nil {
+			return err
 		}
-
-		ok, err = fs.p.HasPermission(ctx, p, func(rp *provider.ResourcePermissions) bool {
-			return rp.InitiateFileUpload
-		})
-	}
-	switch {
-	case err != nil:
-		return errtypes.InternalError(err.Error())
-	case !ok:
-		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
-	}
-
-	if n.ID == "" {
-		n.ID = uuid.New().String()
-	}
-
-	nodePath := fs.lu.toInternalPath(n.ID)
-
-	var tmp *os.File
-	tmp, err = ioutil.TempFile(filepath.Dir(nodePath), "._reva_atomic_upload")
-	if err != nil {
-		return errors.Wrap(err, "ocisfs: error creating tmp fn at "+nodePath)
-	}
-
-	_, err = io.Copy(tmp, r)
-	r.Close()
-	tmp.Close()
-	if err != nil {
-		return errors.Wrap(err, "ocisfs: error writing to tmp file "+tmp.Name())
-	}
-
-	// TODO move old content to version
-	//_ = os.RemoveAll(path.Join(nodePath, "content"))
-	appctx.GetLogger(ctx).Warn().Msg("TODO move old content to version")
-
-	appctx.GetLogger(ctx).Debug().Str("tmp", tmp.Name()).Str("ipath", nodePath).Msg("moving tmp to content")
-	if err = os.Rename(tmp.Name(), nodePath); err != nil {
-		return
-	}
-
-	// who will become the owner?
-	u, ok := user.ContextGetUser(ctx)
-	switch {
-	case ok:
-		err = n.writeMetadata(u.Id)
-	case fs.o.EnableHome:
-		log := appctx.GetLogger(ctx)
-		log.Error().Msg("home support enabled but no user in context")
-		err = errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
-	case fs.o.Owner != "":
-		err = n.writeMetadata(&userpb.UserId{
-			OpaqueId: fs.o.Owner,
-		})
-	default:
-		// fallback to parent owner?
-		err = n.writeMetadata(nil)
-	}
-	if err != nil {
-		return
-	}
-
-	// link child name to parent if it is new
-	childNameLink := filepath.Join(fs.lu.toInternalPath(n.ParentID), n.Name)
-	var link string
-	link, err = os.Readlink(childNameLink)
-	if err == nil && link != "../"+n.ID {
-		log.Err(err).
-			Interface("node", n).
-			Str("childNameLink", childNameLink).
-			Str("link", link).
-			Msg("ocisfs: child name link has wrong target id, repairing")
-
-		if err = os.Remove(childNameLink); err != nil {
-			return errors.Wrap(err, "ocisfs: could not remove symlink child entry")
-		}
-	}
-	if os.IsNotExist(err) || link != "../"+n.ID {
-		if err = os.Symlink("../"+n.ID, childNameLink); err != nil {
-			return errors.Wrap(err, "ocisfs: could not symlink child entry")
+		if upload, err = fs.GetUpload(ctx, uploadIDs["simple"]); err != nil {
+			return errors.Wrap(err, "ocisfs: error retrieving upload")
 		}
 	}
 
-	return fs.tp.Propagate(ctx, n)
+	uploadInfo := upload.(*fileUpload)
+
+	p := uploadInfo.info.Storage["NodeName"]
+	ok, err := chunking.IsChunked(p)
+	if err != nil {
+		return errors.Wrap(err, "ocisfs: error checking path")
+	}
+	if ok {
+		var assembledFile string
+		p, assembledFile, err = fs.chunkHandler.WriteChunk(p, r)
+		if err != nil {
+			return err
+		}
+		if p == "" {
+			if err = uploadInfo.Terminate(ctx); err != nil {
+				return errors.Wrap(err, "ocfs: error removing auxiliary files")
+			}
+			return errtypes.PartialContent(ref.String())
+		}
+		uploadInfo.info.Storage["NodeName"] = p
+		fd, err := os.Open(assembledFile)
+		if err != nil {
+			return errors.Wrap(err, "ocisfs: error opening assembled file")
+		}
+		defer fd.Close()
+		defer os.RemoveAll(assembledFile)
+		r = fd
+	}
+
+	if _, err := uploadInfo.WriteChunk(ctx, 0, r); err != nil {
+		return errors.Wrap(err, "ocisfs: error writing to binary file")
+	}
+
+	return uploadInfo.FinishUpload(ctx)
 }
 
-// InitiateUpload returns an upload id that can be used for uploads with tus
+// InitiateUpload returns upload ids corresponding to different protocols it supports
 // TODO read optional content for small files in this request
-func (fs *ocisfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (uploadID string, err error) {
+func (fs *ocisfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
 
 	log := appctx.GetLogger(ctx)
 
@@ -158,14 +104,14 @@ func (fs *ocisfs) InitiateUpload(ctx context.Context, ref *provider.Reference, u
 
 	n, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// permissions are checked in NewUpload below
 
 	relative, err = fs.lu.Path(ctx, n)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	info := tusd.FileInfo{
@@ -176,20 +122,28 @@ func (fs *ocisfs) InitiateUpload(ctx context.Context, ref *provider.Reference, u
 		Size: uploadLength,
 	}
 
-	if metadata != nil && metadata["mtime"] != "" {
-		info.MetaData["mtime"] = metadata["mtime"]
+	if metadata != nil {
+		if metadata["mtime"] != "" {
+			info.MetaData["mtime"] = metadata["mtime"]
+		}
+		if _, ok := metadata["sizedeferred"]; ok {
+			info.SizeIsDeferred = true
+		}
 	}
 
 	log.Debug().Interface("info", info).Interface("node", n).Interface("metadata", metadata).Msg("ocisfs: resolved filename")
 
 	upload, err := fs.NewUpload(ctx, info)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	info, _ = upload.GetInfo(ctx)
 
-	return info.ID, nil
+	return map[string]string{
+		"simple": info.ID,
+		"tus":    info.ID,
+	}, nil
 }
 
 // UseIn tells the tus upload middleware which extensions it supports.
@@ -423,6 +377,7 @@ func (upload *fileUpload) writeInfo() error {
 
 // FinishUpload finishes an upload and moves the file to the internal destination
 func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
+	log := appctx.GetLogger(upload.ctx)
 
 	n := &Node{
 		lu:       upload.fs.lu,
@@ -443,7 +398,6 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		versionsPath := upload.fs.lu.toInternalPath(n.ID + ".REV." + fi.ModTime().UTC().Format(time.RFC3339Nano))
 
 		if err = os.Rename(targetPath, versionsPath); err != nil {
-			log := appctx.GetLogger(upload.ctx)
 			log.Err(err).Interface("info", upload.info).
 				Str("binPath", upload.binPath).
 				Str("targetPath", targetPath).

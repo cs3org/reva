@@ -24,7 +24,7 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storage "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/sdk"
 	"github.com/cs3org/reva/pkg/sdk/common/net"
 )
@@ -60,24 +60,29 @@ func (action *DownloadAction) Download(fileInfo *storage.ResourceInfo) ([]byte, 
 		return nil, err
 	}
 
+	p, err := getDownloadProtocolInfo(download.Protocols, "simple")
+	if err != nil {
+		return nil, err
+	}
+
 	// Try to get the file via WebDAV first
-	if client, values, err := net.NewWebDAVClientWithOpaque(download.DownloadEndpoint, download.Opaque); err == nil {
+	if client, values, err := net.NewWebDAVClientWithOpaque(p.DownloadEndpoint, p.Opaque); err == nil {
 		data, err := client.Read(values[net.WebDAVPathName])
 		if err != nil {
-			return nil, fmt.Errorf("error while reading from '%v' via WebDAV: %v", download.DownloadEndpoint, err)
+			return nil, fmt.Errorf("error while reading from '%v' via WebDAV: %v", p.DownloadEndpoint, err)
 		}
 		return data, nil
 	}
 
 	// WebDAV is not supported, so directly read the HTTP endpoint
-	request, err := action.session.NewHTTPRequest(download.DownloadEndpoint, "GET", download.Token, nil)
+	request, err := action.session.NewHTTPRequest(p.DownloadEndpoint, "GET", p.Token, nil)
 	if err != nil {
-		return nil, fmt.Errorf("unable to create an HTTP request for '%v': %v", download.DownloadEndpoint, err)
+		return nil, fmt.Errorf("unable to create an HTTP request for '%v': %v", p.DownloadEndpoint, err)
 	}
 
 	data, err := request.Do(true)
 	if err != nil {
-		return nil, fmt.Errorf("error while reading from '%v' via HTTP: %v", download.DownloadEndpoint, err)
+		return nil, fmt.Errorf("error while reading from '%v' via HTTP: %v", p.DownloadEndpoint, err)
 	}
 	return data, nil
 }
@@ -96,6 +101,15 @@ func (action *DownloadAction) initiateDownload(fileInfo *storage.ResourceInfo) (
 		return nil, err
 	}
 	return res, nil
+}
+
+func getDownloadProtocolInfo(protocolInfos []*gateway.FileDownloadProtocol, protocol string) (*gateway.FileDownloadProtocol, error) {
+	for _, p := range protocolInfos {
+		if p.Protocol == protocol {
+			return p, nil
+		}
+	}
+	return nil, errtypes.NotFound(protocol)
 }
 
 // NewDownloadAction creates a new download action.

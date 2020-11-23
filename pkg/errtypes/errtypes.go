@@ -35,6 +35,9 @@ type InternalError string
 
 func (e InternalError) Error() string { return "internal error: " + string(e) }
 
+// IsInternalError is the method to check for w
+func (e InternalError) IsInternalError() {}
+
 // PermissionDenied is the error to use when a resource cannot be access because of missing permissions.
 type PermissionDenied string
 
@@ -75,6 +78,14 @@ func (e NotSupported) Error() string { return "error: not supported: " + string(
 // IsNotSupported implements the IsNotSupported interface.
 func (e NotSupported) IsNotSupported() {}
 
+// PartialContent is the error to use when the client request has partial data.
+type PartialContent string
+
+func (e PartialContent) Error() string { return "error: partial content: " + string(e) }
+
+// IsPartialContent implements the IsPartialContent interface.
+func (e PartialContent) IsPartialContent() {}
+
 // IsNotFound is the interface to implement
 // to specify that an a resource is not found.
 type IsNotFound interface {
@@ -112,7 +123,13 @@ type IsNotSupported interface {
 }
 
 // IsPermissionDenied is the interface to implement
-// to specify that an action is not supported.
+// to specify that an action is denied.
 type IsPermissionDenied interface {
 	IsPermissionDenied()
+}
+
+// IsPartialContent is the interface to implement
+// to specify that the client request has partial data.
+type IsPartialContent interface {
+	IsPartialContent()
 }

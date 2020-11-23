@@ -26,9 +26,9 @@ import (
 	"time"
 
 	"github.com/cheggaaa/pb"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp"
@@ -86,23 +86,28 @@ func downloadCommand() *command {
 			return formatError(res.Status)
 		}
 
-		// TODO(labkode): upload to data server
-		fmt.Printf("Downloading from: %s\n", res.DownloadEndpoint)
+		p, err := getDownloadProtocolInfo(res.Protocols, "simple")
+		if err != nil {
+			return err
+		}
 
-		content, err := checkDownloadWebdavRef(res.DownloadEndpoint, res.Opaque)
+		// TODO(labkode): upload to data server
+		fmt.Printf("Downloading from: %s\n", p.DownloadEndpoint)
+
+		content, err := checkDownloadWebdavRef(res.Protocols)
 		if err != nil {
 			if _, ok := err.(errtypes.IsNotSupported); !ok {
 				return err
 			}
 
-			dataServerURL := res.DownloadEndpoint
+			dataServerURL := p.DownloadEndpoint
 			// TODO(labkode): do a protocol switch
 			httpReq, err := rhttp.NewRequest(ctx, "GET", dataServerURL, nil)
 			if err != nil {
 				return err
 			}
 
-			httpReq.Header.Set(datagateway.TokenTransportHeader, res.Token)
+			httpReq.Header.Set(datagateway.TokenTransportHeader, p.Token)
 			httpClient := rhttp.GetHTTPClient(
 				rhttp.Context(ctx),
 				// TODO make insecure configurable
@@ -145,13 +150,27 @@ func downloadCommand() *command {
 	return cmd
 }
 
-func checkDownloadWebdavRef(endpoint string, opaque *typespb.Opaque) (io.Reader, error) {
-	if opaque == nil {
+func getDownloadProtocolInfo(protocolInfos []*gateway.FileDownloadProtocol, protocol string) (*gateway.FileDownloadProtocol, error) {
+	for _, p := range protocolInfos {
+		if p.Protocol == protocol {
+			return p, nil
+		}
+	}
+	return nil, errtypes.NotFound(protocol)
+}
+
+func checkDownloadWebdavRef(protocols []*gateway.FileDownloadProtocol) (io.Reader, error) {
+	p, err := getDownloadProtocolInfo(protocols, "simple")
+	if err != nil {
+		return nil, err
+	}
+
+	if p.Opaque == nil {
 		return nil, errtypes.NotSupported("opaque object not defined")
 	}
 
 	var token string
-	tokenOpaque, ok := opaque.Map["webdav-token"]
+	tokenOpaque, ok := p.Opaque.Map["webdav-token"]
 	if !ok {
 		return nil, errtypes.NotSupported("webdav token not defined")
 	}
@@ -163,7 +182,7 @@ func checkDownloadWebdavRef(endpoint string, opaque *typespb.Opaque) (io.Reader,
 	}
 
 	var filePath string
-	fileOpaque, ok := opaque.Map["webdav-file-path"]
+	fileOpaque, ok := p.Opaque.Map["webdav-file-path"]
 	if !ok {
 		return nil, errtypes.NotSupported("webdav file path not defined")
 	}
@@ -174,7 +193,7 @@ func checkDownloadWebdavRef(endpoint string, opaque *typespb.Opaque) (io.Reader,
 		return nil, errors.New("opaque entry decoder not recognized: " + fileOpaque.Decoder)
 	}
 
-	c := gowebdav.NewClient(endpoint, "", "")
+	c := gowebdav.NewClient(p.DownloadEndpoint, "", "")
 	c.SetHeader(tokenpkg.TokenHeader, token)
 
 	reader, err := c.ReadStream(filePath)

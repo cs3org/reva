@@ -61,12 +61,10 @@ func New(m map[string]interface{}) (share.Manager, error) {
 		return nil, err
 	}
 
-	mgr := &mgr{
+	return &mgr{
 		c:     c,
 		model: model,
-	}
-
-	return mgr, nil
+	}, nil
 }
 
 func loadOrCreate(file string) (*shareModel, error) {
@@ -454,5 +452,6 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, ref *collaboration.ShareR
 		return nil, err
 	}
 
+	rs.State = f.GetState()
 	return rs, nil
 }

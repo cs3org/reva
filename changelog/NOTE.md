@@ -1,206 +1,198 @@
-Changelog for reva 1.3.0 (2020-10-08)
+Changelog for reva 1.4.0 (2020-11-17)
 =======================================
 
-The following sections list the changes in reva 1.3.0 relevant to
+The following sections list the changes in reva 1.4.0 relevant to
 reva users. The changes are ordered by importance.
 
 Summary
 -------
 
- * Fix #1140: Call the gateway stat method from appprovider
- * Fix #1170: Up and download of file shares
- * Fix #1177: Fix ocis move
- * Fix #1178: Fix litmus failing on ocis storage
- * Fix #237: Fix missing quotes on OCIS-Storage
- * Fix #1210: No longer swallow permissions errors in the gateway
- * Fix #1183: Handle eos EPERM as permission denied
- * Fix #1206: No longer swallow permissions errors
- * Fix #1207: No longer swallow permissions errors in ocdav
- * Fix #1161: Cache display names in ocs service
- * Fix #1216: Add error handling for invalid references
- * Enh #1205: Allow using the username when accessing the users home
- * Enh #1131: Use updated cato to display nested package config in parent docs
- * Enh #1213: Check permissions in ocis driver
- * Enh #1202: Check permissions in owncloud driver
- * Enh #1228: Add GRPC stubs for CreateSymlink method
- * Enh #1174: Add logic in EOS FS for maintaining same inode across file versions
- * Enh #1142: Functionality to map home directory to different storage providers
- * Enh #1190: Add Blackbox Exporter support to Mentix
- * Enh #1229: New gateway datatx service
- * Enh #1225: Allow setting the owner when using the ocis driver
- * Enh #1180: Introduce ocis driver treetime accounting
- * Enh #1208: Calculate etags on-the-fly for shares directory and home folder
+ * Fix #1316: Fix listing shares for nonexisting path
+ * Fix #1274: Let the gateway filter invalid references
+ * Fix #1269: Handle more eos errors
+ * Fix #1297: Check the err and the response status code
+ * Fix #1260: Fix file descriptor leak on ocdav put handler
+ * Fix #1253: Upload file to storage provider after assembling chunks
+ * Fix #1264: Fix etag propagation in ocis driver
+ * Fix #1255: Check current node when iterating over path segments
+ * Fix #1265: Stop setting propagation xattr on new files
+ * Fix #260: Filter share with me requests
+ * Fix #1317: Prevent nil pointer when listing shares
+ * Fix #1259: Fix propfind response code on forbidden files
+ * Fix #1294: Fix error type in read node when file was not found
+ * Fix #1258: Update share grants on share update
+ * Enh #1257: Add a test user to all sites
+ * Enh #1234: Resolve a WOPI bridge appProviderURL by extracting its redirect
+ * Enh #1239: Add logic for finding groups to user provider service
+ * Enh #1280: Add a Reva SDK
+ * Enh #1237: Setup of grpc transfer service and cli
+ * Enh #1224: Add SQL driver for share manager
+ * Enh #1285: Refactor the uploading files workflow from various clients
+ * Enh #1233: Add support for custom CodiMD mimetype
 
 Details
 -------
 
- * Bugfix #1140: Call the gateway stat method from appprovider
+ * Bugfix #1316: Fix listing shares for nonexisting path
 
-   The appprovider service used to directly pass the stat request to the storage provider
-   bypassing the gateway, which resulted in errors while handling share children as they are
-   resolved in the gateway path.
+   When trying to list shares for a not existing file or folder the ocs sharing implementation no
+   longer responds with the wrong status code and broken xml.
 
-   https://github.com/cs3org/reva/pull/1140
+   https://github.com/cs3org/reva/pull/1316
 
- * Bugfix #1170: Up and download of file shares
+ * Bugfix #1274: Let the gateway filter invalid references
 
-   The shared folder logic in the gateway storageprovider was not allowing file up and downloads
-   for single file shares. We now check if the reference is actually a file to determine if up /
-   download should be allowed.
+   We now filter deleted and unshared entries from the response when listing the shares folder of a
+   user.
 
-   https://github.com/cs3org/reva/pull/1170
+   https://github.com/cs3org/reva/pull/1274
 
- * Bugfix #1177: Fix ocis move
+ * Bugfix #1269: Handle more eos errors
 
-   When renaming a file we updating the name attribute on the wrong node, causing the path
-   construction to use the wrong name. This fixes the litmus move_coll test.
+   We now treat E2BIG, EACCES as a permission error, which occur, eg. when acl checks fail and
+   return a permission denied error.
 
-   https://github.com/cs3org/reva/pull/1177
+   https://github.com/cs3org/reva/pull/1269
 
- * Bugfix #1178: Fix litmus failing on ocis storage
+ * Bugfix #1297: Check the err and the response status code
 
-   We now ignore the `no data available` error when removing a non existing metadata attribute,
-   which is ok because we are trying to delete it anyway.
+   The publicfile handler needs to check the response status code to return proper not pound and
+   permission errors in the webdav api.
 
-   https://github.com/cs3org/reva/issues/1178
-   https://github.com/cs3org/reva/pull/1179
+   https://github.com/cs3org/reva/pull/1297
 
- * Bugfix #237: Fix missing quotes on OCIS-Storage
+ * Bugfix #1260: Fix file descriptor leak on ocdav put handler
 
-   Etags have to be enclosed in quotes ". Return correct etags on OCIS-Storage.
+   File descriptors on the ocdav service, especially on the put handler was leaking http
+   connections. This PR addresses this.
 
-   https://github.com/owncloud/product/issues/237
-   https://github.com/cs3org/reva/pull/1232
+   https://github.com/cs3org/reva/pull/1260
 
- * Bugfix #1210: No longer swallow permissions errors in the gateway
+ * Bugfix #1253: Upload file to storage provider after assembling chunks
 
-   The gateway is no longer ignoring permissions errors. It will now check the status for
-   `rpc.Code_CODE_PERMISSION_DENIED` codes and report them properly using
-   `status.NewPermissionDenied` or `status.NewInternal` instead of reusing the original
+   In the PUT handler for chunked uploads in ocdav, we store the individual chunks in temporary
+   file but do not write the assembled file to storage. This PR fixes that.
+
+   https://github.com/cs3org/reva/pull/1253
+
+ * Bugfix #1264: Fix etag propagation in ocis driver
+
+   We now use a new synctime timestamp instead of trying to read the mtime to avoid race conditions
+   when the stat request happens too quickly.
+
+   https://github.com/owncloud/product/issues/249
+   https://github.com/cs3org/reva/pull/1264
+
+ * Bugfix #1255: Check current node when iterating over path segments
+
+   When checking permissions we were always checking the leaf instead of using the current node
+   while iterating over path segments.
+
+   https://github.com/cs3org/reva/pull/1255
+
+ * Bugfix #1265: Stop setting propagation xattr on new files
+
+   We no longer set the propagation flag on a file because it is only evaluated for folders anyway.
+
+   https://github.com/cs3org/reva/pull/1265
+
+ * Bugfix #260: Filter share with me requests
+
+   The OCS API now properly filters share with me requests by path and by share status (pending,
+   accepted, rejected, all)
+
+   https://github.com/owncloud/ocis-reva/issues/260
+   https://github.com/owncloud/ocis-reva/issues/311
+   https://github.com/cs3org/reva/pull/1301
+
+ * Bugfix #1317: Prevent nil pointer when listing shares
+
+   We now handle cases where the grpc connection failed correctly by no longer trying to access the
    response status.
 
-   https://github.com/cs3org/reva/pull/1210
+   https://github.com/cs3org/reva/pull/1317
 
- * Bugfix #1183: Handle eos EPERM as permission denied
+ * Bugfix #1259: Fix propfind response code on forbidden files
 
-   We now treat EPERM errors, which occur, eg. when acl checks fail and return a permission denied
-   error.
+   When executing a propfind to a resource owned by another user the service would respond with a
+   HTTP 403. In ownCloud 10 the response was HTTP 207. This change sets the response code to HTTP 207
+   to stay backwards compatible.
 
-   https://github.com/cs3org/reva/pull/1183
+   https://github.com/cs3org/reva/pull/1259
 
- * Bugfix #1206: No longer swallow permissions errors
+ * Bugfix #1294: Fix error type in read node when file was not found
 
-   The storageprovider is no longer ignoring permissions errors. It will now report them
-   properly using `status.NewPermissionDenied(...)` instead of `status.NewInternal(...)`
+   The method ReadNode in the ocis storage didn't return the error type NotFound when a file was not
+   found.
 
-   https://github.com/cs3org/reva/pull/1206
+   https://github.com/cs3org/reva/pull/1294
 
- * Bugfix #1207: No longer swallow permissions errors in ocdav
+ * Bugfix #1258: Update share grants on share update
 
-   The ocdav api is no longer ignoring permissions errors. It will now check the status for
-   `rpc.Code_CODE_PERMISSION_DENIED` codes and report them properly using
-   `http.StatusForbidden` instead of `http.StatusInternalServerError`
+   When a share was updated the share information in the share manager was updated but the grants
+   set by the storage provider were not.
 
-   https://github.com/cs3org/reva/pull/1207
+   https://github.com/cs3org/reva/pull/1258
 
- * Bugfix #1161: Cache display names in ocs service
+ * Enhancement #1257: Add a test user to all sites
 
-   The ocs list shares endpoint may need to fetch the displayname for multiple different users. We
-   are now caching the lookup fo 60 seconds to save redundant RPCs to the users service.
+   For health monitoring of all mesh sites, we need a special user account that is present on every
+   site. This PR adds such a user to each users-*.json file so that every site will have the same test
+   user credentials.
 
-   https://github.com/cs3org/reva/pull/1161
+   https://github.com/cs3org/reva/pull/1257
 
- * Bugfix #1216: Add error handling for invalid references
+ * Enhancement #1234: Resolve a WOPI bridge appProviderURL by extracting its redirect
 
-   https://github.com/cs3org/reva/pull/1216
-   https://github.com/cs3org/reva/pull/1218
+   Applications served by the WOPI bridge (CodiMD for the time being) require an extra
+   redirection as the WOPI bridge itself behaves like a user app. This change returns to the client
+   the redirected URL from the WOPI bridge, which is the real application URL.
 
- * Enhancement #1205: Allow using the username when accessing the users home
+   https://github.com/cs3org/reva/pull/1234
 
-   We now allow using the userid and the username when accessing the users home on the `/dev/files`
-   endpoint.
+ * Enhancement #1239: Add logic for finding groups to user provider service
 
-   https://github.com/cs3org/reva/pull/1205
+   To create shares with user groups, the functionality for searching for these based on a pattern
+   is needed. This PR adds that.
 
- * Enhancement #1131: Use updated cato to display nested package config in parent docs
+   https://github.com/cs3org/reva/pull/1239
 
-   Previously, in case of nested packages, we just had a link pointing to the child package. Now we
-   copy the nested package's documentation to the parent itself to make it easier for devs.
+ * Enhancement #1280: Add a Reva SDK
 
-   https://github.com/cs3org/reva/pull/1131
+   A Reva SDK has been added to make working with a remote Reva instance much easier by offering a
+   high-level API that hides all the underlying details of the CS3API.
 
- * Enhancement #1213: Check permissions in ocis driver
+   https://github.com/cs3org/reva/pull/1280
 
-   We are now checking grant permissions in the ocis storage driver.
+ * Enhancement #1237: Setup of grpc transfer service and cli
 
-   https://github.com/cs3org/reva/pull/1213
+   The grpc transfer service and cli for it.
 
- * Enhancement #1202: Check permissions in owncloud driver
+   https://github.com/cs3org/reva/pull/1237
 
-   We are now checking grant permissions in the owncloud storage driver.
+ * Enhancement #1224: Add SQL driver for share manager
 
-   https://github.com/cs3org/reva/pull/1202
+   This PR adds an SQL driver for the shares manager which expects a schema equivalent to the one
+   used in production for CERNBox.
 
- * Enhancement #1228: Add GRPC stubs for CreateSymlink method
+   https://github.com/cs3org/reva/pull/1224
 
-   https://github.com/cs3org/reva/pull/1228
+ * Enhancement #1285: Refactor the uploading files workflow from various clients
 
- * Enhancement #1174: Add logic in EOS FS for maintaining same inode across file versions
+   Previously, we were implementing the tus client logic in the ocdav service, leading to
+   restricting the whole of tus logic to the internal services. This PR refactors that workflow to
+   accept incoming requests following the tus protocol while using simpler transmission
+   internally.
 
-   This PR adds the functionality to maintain the same inode across various versions of a file by
-   returning the inode of the version folder which remains constant. It requires extra metadata
-   operations so a flag is provided to disable it.
+   https://github.com/cs3org/reva/pull/1285
+   https://github.com/cs3org/reva/pull/1314
 
-   https://github.com/cs3org/reva/pull/1174.
+ * Enhancement #1233: Add support for custom CodiMD mimetype
 
- * Enhancement #1142: Functionality to map home directory to different storage providers
+   The new mimetype is associated with the `.zmd` file extension. The corresponding
+   configuration is associated with the storageprovider.
 
-   We hardcode the home path for all users to /home. This forbids redirecting requests for
-   different users to multiple storage providers. This PR provides the option to map the home
-   directories of different users using user attributes.
-
-   https://github.com/cs3org/reva/pull/1142
-
- * Enhancement #1190: Add Blackbox Exporter support to Mentix
-
-   This update extends Mentix to export a Prometheus SD file specific to the Blackbox Exporter
-   which will be used for initial health monitoring. Usually, Prometheus requires its targets to
-   only consist of the target's hostname; the BBE though expects a full URL here. This makes
-   exporting two distinct files necessary.
-
-   https://github.com/cs3org/reva/pull/1190
-
- * Enhancement #1229: New gateway datatx service
-
-   Represents the CS3 datatx module in the gateway.
-
-   https://github.com/cs3org/reva/pull/1229
-
- * Enhancement #1225: Allow setting the owner when using the ocis driver
-
-   To support the metadata storage we allow setting the owner of the root node so that subsequent
-   requests with that owner can be used to manage the storage.
-
-   https://github.com/cs3org/reva/pull/1225
-
- * Enhancement #1180: Introduce ocis driver treetime accounting
-
-   We added tree time accounting to the ocis storage driver which is modeled after [eos synctime
-   accounting](http://eos-docs.web.cern.ch/eos-docs/configuration/namespace.html#enable-subtree-accounting).
-   It can be enabled using the new `treetime_accounting` option, which defaults to `false` The
-   `tmtime` is stored in an extended attribute `user.ocis.tmtime`. The treetime accounting is
-   enabled for nodes which have the `user.ocis.propagation` extended attribute set to `"1"`.
-   Currently, propagation is in sync.
-
-   https://github.com/cs3org/reva/pull/1180
-
- * Enhancement #1208: Calculate etags on-the-fly for shares directory and home folder
-
-   We create references for accepted shares in the shares directory, but these aren't updated
-   when the original resource is modified. This PR adds the functionality to generate the etag for
-   the shares directory and correspondingly, the home directory, based on the actual resources
-   which the references point to, enabling the sync functionality.
-
-   https://github.com/cs3org/reva/pull/1208
+   https://github.com/cs3org/reva/pull/1233
+   https://github.com/cs3org/reva/pull/1284
 
 

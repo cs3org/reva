@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
+	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
@@ -40,73 +41,65 @@ import (
 
 var defaultFilePerm = os.FileMode(0664)
 
-// TODO deprecated ... use tus
 func (fs *ocfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
-	ip, err := fs.resolve(ctx, ref)
+	upload, err := fs.GetUpload(ctx, ref.GetPath())
 	if err != nil {
-		return errors.Wrap(err, "ocfs: error resolving reference")
-	}
+		// Upload corresponding to this ID was not found.
+		// Assume that this corresponds to the resource path to which the file has to be uploaded.
 
-	var perm *provider.ResourcePermissions
-	var perr error
-	// if destination exists
-	if _, err := os.Stat(ip); err == nil {
-		// check permissions of file to be overwritten
-		perm, perr = fs.readPermissions(ctx, ip)
-	} else {
-		// check permissions
-		perm, perr = fs.readPermissions(ctx, filepath.Dir(ip))
-	}
-	if perr == nil {
-		if !perm.InitiateFileUpload {
-			return errtypes.PermissionDenied("")
-		}
-	} else {
-		if isNotFound(perr) {
-			return errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
-		}
-		return errors.Wrap(perr, "ocfs: error reading permissions")
-	}
-
-	// we cannot rely on /tmp as it can live in another partition and we can
-	// hit invalid cross-device link errors, so we create the tmp file in the same directory
-	// the file is supposed to be written.
-	tmp, err := ioutil.TempFile(filepath.Dir(ip), "._reva_atomic_upload")
-	if err != nil {
-		return errors.Wrap(err, "ocfs: error creating tmp file at "+filepath.Dir(ip))
-	}
-
-	_, err = io.Copy(tmp, r)
-	if err != nil {
-		return errors.Wrap(err, "ocfs: error writing to tmp file "+tmp.Name())
-	}
-
-	// if destination exists
-	if _, err := os.Stat(ip); err == nil {
-		// copy attributes of existing file to tmp file
-		if err := fs.copyMD(ip, tmp.Name()); err != nil {
-			return errors.Wrap(err, "ocfs: error copying metadata from "+ip+" to "+tmp.Name())
-		}
-		// create revision
-		if err := fs.archiveRevision(ctx, fs.getVersionsPath(ctx, ip), ip); err != nil {
+		// Set the length to 0 and set SizeIsDeferred to true
+		metadata := map[string]string{"sizedeferred": "true"}
+		uploadIDs, err := fs.InitiateUpload(ctx, ref, 0, metadata)
+		if err != nil {
 			return err
 		}
+		if upload, err = fs.GetUpload(ctx, uploadIDs["simple"]); err != nil {
+			return errors.Wrap(err, "ocfs: error retrieving upload")
+		}
 	}
 
-	// TODO(jfd): make sure rename is atomic, missing fsync ...
-	if err := os.Rename(tmp.Name(), ip); err != nil {
-		return errors.Wrap(err, "ocfs: error renaming from "+tmp.Name()+" to "+ip)
+	uploadInfo := upload.(*fileUpload)
+
+	p := uploadInfo.info.Storage["InternalDestination"]
+	ok, err := chunking.IsChunked(p)
+	if err != nil {
+		return errors.Wrap(err, "ocfs: error checking path")
+	}
+	if ok {
+		var assembledFile string
+		p, assembledFile, err = fs.chunkHandler.WriteChunk(p, r)
+		if err != nil {
+			return err
+		}
+		if p == "" {
+			if err = uploadInfo.Terminate(ctx); err != nil {
+				return errors.Wrap(err, "ocfs: error removing auxiliary files")
+			}
+			return errtypes.PartialContent(ref.String())
+		}
+		uploadInfo.info.Storage["InternalDestination"] = p
+		fd, err := os.Open(assembledFile)
+		if err != nil {
+			return errors.Wrap(err, "ocfs: error opening assembled file")
+		}
+		defer fd.Close()
+		defer os.RemoveAll(assembledFile)
+		r = fd
 	}
 
-	return nil
+	if _, err := uploadInfo.WriteChunk(ctx, 0, r); err != nil {
+		return errors.Wrap(err, "ocfs: error writing to binary file")
+	}
+
+	return uploadInfo.FinishUpload(ctx)
 }
 
-// InitiateUpload returns an upload id that can be used for uploads with tus
+// InitiateUpload returns upload ids corresponding to different protocols it supports
 // TODO read optional content for small files in this request
-func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (uploadID string, err error) {
+func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return "", errors.Wrap(err, "ocfs: error resolving reference")
+		return nil, errors.Wrap(err, "ocfs: error resolving reference")
 	}
 
 	// permissions are checked in NewUpload below
@@ -121,18 +114,26 @@ func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, upl
 		Size: uploadLength,
 	}
 
-	if metadata != nil && metadata["mtime"] != "" {
-		info.MetaData["mtime"] = metadata["mtime"]
+	if metadata != nil {
+		if metadata["mtime"] != "" {
+			info.MetaData["mtime"] = metadata["mtime"]
+		}
+		if _, ok := metadata["sizedeferred"]; ok {
+			info.SizeIsDeferred = true
+		}
 	}
 
 	upload, err := fs.NewUpload(ctx, info)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	info, _ = upload.GetInfo(ctx)
 
-	return info.ID, nil
+	return map[string]string{
+		"simple": info.ID,
+		"tus":    info.ID,
+	}, nil
 }
 
 // UseIn tells the tus upload middleware which extensions it supports.
