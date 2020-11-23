@@ -84,7 +84,9 @@ func shareCreateCommand() *command {
 		gt := getGrantType(*grantType)
 
 		grant := &collaboration.ShareGrant{
-			Permissions: perm,
+			Permissions: &collaboration.SharePermissions{
+				Permissions: perm,
+			},
 			Grantee: &provider.Grantee{
 				Type: gt,
 				Id: &userpb.UserId{
@@ -133,31 +135,27 @@ func getGrantType(t string) provider.GranteeType {
 	}
 }
 
-func getSharePerm(p string) (*collaboration.SharePermissions, error) {
+func getSharePerm(p string) (*provider.ResourcePermissions, error) {
 	if p == viewerPermission {
-		return &collaboration.SharePermissions{
-			Permissions: &provider.ResourcePermissions{
-				GetPath:              true,
-				InitiateFileDownload: true,
-				ListFileVersions:     true,
-				ListContainer:        true,
-				Stat:                 true,
-			},
+		return &provider.ResourcePermissions{
+			GetPath:              true,
+			InitiateFileDownload: true,
+			ListFileVersions:     true,
+			ListContainer:        true,
+			Stat:                 true,
 		}, nil
 	} else if p == editorPermission {
-		return &collaboration.SharePermissions{
-			Permissions: &provider.ResourcePermissions{
-				GetPath:              true,
-				InitiateFileDownload: true,
-				ListFileVersions:     true,
-				ListContainer:        true,
-				Stat:                 true,
-				CreateContainer:      true,
-				Delete:               true,
-				InitiateFileUpload:   true,
-				RestoreFileVersion:   true,
-				Move:                 true,
-			},
+		return &provider.ResourcePermissions{
+			GetPath:              true,
+			InitiateFileDownload: true,
+			ListFileVersions:     true,
+			ListContainer:        true,
+			Stat:                 true,
+			CreateContainer:      true,
+			Delete:               true,
+			InitiateFileUpload:   true,
+			RestoreFileVersion:   true,
+			Move:                 true,
 		}, nil
 	}
 	return nil, errors.New("invalid rol: " + p)

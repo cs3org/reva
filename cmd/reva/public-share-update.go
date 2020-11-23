@@ -23,14 +23,14 @@ import (
 	"io"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	"github.com/pkg/errors"
 )
 
-func shareUpdateCommand() *command {
-	cmd := newCommand("share-update")
-	cmd.Description = func() string { return "update a share" }
-	cmd.Usage = func() string { return "Usage: share-update [-flags] <share_id>" }
+func publicShareUpdateCommand() *command {
+	cmd := newCommand("public-share-update")
+	cmd.Description = func() string { return "update a public share" }
+	cmd.Usage = func() string { return "Usage: public-share-update [-flags] <share_id>" }
 	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor)")
 
 	cmd.ResetFlags = func() {
@@ -59,24 +59,25 @@ func shareUpdateCommand() *command {
 			return err
 		}
 
-		shareRequest := &collaboration.UpdateShareRequest{
-			Ref: &collaboration.ShareReference{
-				Spec: &collaboration.ShareReference_Id{
-					Id: &collaboration.ShareId{
+		shareRequest := &link.UpdatePublicShareRequest{
+			Ref: &link.PublicShareReference{
+				Spec: &link.PublicShareReference_Id{
+					Id: &link.PublicShareId{
 						OpaqueId: id,
 					},
 				},
 			},
-			Field: &collaboration.UpdateShareRequest_UpdateField{
-				Field: &collaboration.UpdateShareRequest_UpdateField_Permissions{
-					Permissions: &collaboration.SharePermissions{
+			Update: &link.UpdatePublicShareRequest_Update{
+				Type: link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS,
+				Grant: &link.Grant{
+					Permissions: &link.PublicSharePermissions{
 						Permissions: perm,
 					},
 				},
 			},
 		}
 
-		shareRes, err := shareClient.UpdateShare(ctx, shareRequest)
+		shareRes, err := shareClient.UpdatePublicShare(ctx, shareRequest)
 		if err != nil {
 			return err
 		}
