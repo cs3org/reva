@@ -55,6 +55,14 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 	if depth == "" {
 		depth = "1"
 	}
+
+	// if there is no file in the request url we assume the request url is: "/remote.php/dav/files"
+	// https://github.com/owncloud/core/blob/18475dac812064b21dabcc50f25ef3ffe55691a5/tests/acceptance/features/apiWebdavOperations/propfind.feature
+	if r.URL.Path == "/" {
+		log.Debug().Str("path", r.URL.Path).Msg("method not allowed")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+
 	// see https://tools.ietf.org/html/rfc4918#section-10.2
 	if depth != "0" && depth != "1" && depth != "infinity" {
 		log.Error().Msgf("invalid Depth header value %s", depth)
@@ -95,10 +103,6 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 		case rpc.Code_CODE_PERMISSION_DENIED:
 			log.Debug().Str("path", fn).Interface("status", res.Status).Msg("permission denied")
 			w.WriteHeader(http.StatusMultiStatus)
-		// TODO this is not a correct mapping. A new code SHOULD be added to the cs3apis.
-		case rpc.Code_CODE_UNIMPLEMENTED:
-			log.Debug().Str("path", fn).Interface("status", res.Status).Msg("method not allowed")
-			w.WriteHeader(http.StatusMethodNotAllowed)
 		default:
 			log.Error().Str("path", fn).Interface("status", res.Status).Msg("grpc stat request failed")
 			w.WriteHeader(http.StatusInternalServerError)

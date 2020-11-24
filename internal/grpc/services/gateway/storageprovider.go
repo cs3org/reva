@@ -1341,13 +1341,6 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		return s.statHome(ctx)
 	}
 
-	// webdav endpoint is called without a path. i.e: /remote.php/dav/files
-	if len(strings.Split(req.Ref.GetPath(), "/")) == 2 {
-		return &provider.StatResponse{
-			Status: status.NewUnimplemented(ctx, nil, "method not allowed"),
-		}, nil
-	}
-
 	if s.isSharedFolder(ctx, p) {
 		return s.statSharesFolder(ctx)
 	}
