@@ -25,6 +25,7 @@ import (
 type code int
 
 const (
+	// SabredavMethodNotAllowed maps to HTTP 405
 	SabredavMethodNotAllowed code = iota
 )
 
@@ -39,8 +40,8 @@ type exception struct {
 	message string
 }
 
+// Marshal just calls the xml marshaller for a given exception.
 func Marshal(e exception) ([]byte, error) {
-
 	return xml.Marshal(&errorXML{
 		Xmlnsd:    "DAV",
 		Xmlnss:    "http://sabredav.org/ns",
