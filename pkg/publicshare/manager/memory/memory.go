@@ -191,13 +191,24 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 	return shares, nil
 }
 
-func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, id string) (err error) {
+func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) error {
 	// check whether the reference exists
-	if _, err := m.GetPublicShareByToken(ctx, id, ""); err != nil {
+	switch {
+	case ref.GetId().OpaqueId != "":
+		s, err := m.getPublicShareByTokenID(ctx, *ref.GetId())
+		if err != nil {
+			return errors.New("reference does not exist")
+		}
+		m.shares.Delete(s.Token)
+	case ref.GetToken() != "":
+		if _, err := m.GetPublicShareByToken(ctx, ref.GetToken(), ""); err != nil {
+			return errors.New("reference does not exist")
+		}
+		m.shares.Delete(ref.GetToken())
+	default:
 		return errors.New("reference does not exist")
 	}
-	m.shares.Delete(id)
-	return
+	return nil
 }
 
 func (m *manager) GetPublicShareByToken(ctx context.Context, token string, password string) (*link.PublicShare, error) {
