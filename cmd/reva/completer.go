@@ -106,7 +106,7 @@ func (c *Completer) argumentCompleter(args ...string) []prompt.Suggest {
 			return prompt.FilterHasPrefix(c.lsArgumentCompleter(false), args[2], true)
 		}
 
-	case "rm", "stat", "share-create", "ocm-share-create", "open-file-in-app-provider", "download":
+	case "rm", "stat", "share-create", "ocm-share-create", "public-share-create", "open-file-in-app-provider", "download":
 		if len(args) == 2 {
 			return prompt.FilterHasPrefix(c.lsArgumentCompleter(false), args[1], true)
 		}

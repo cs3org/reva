@@ -349,7 +349,7 @@ func (t *Tree) Propagate(ctx context.Context, n *Node) (err error) {
 			switch {
 			case err != nil:
 				// missing attribute, or invalid format, overwrite
-				log.Error().Err(err).
+				log.Debug().Err(err).
 					Interface("node", n).
 					Msg("could not read tmtime attribute, overwriting")
 				updateSyncTime = true

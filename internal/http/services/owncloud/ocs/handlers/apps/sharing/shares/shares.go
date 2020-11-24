@@ -192,8 +192,9 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userRes, err := c.GetUser(ctx, &userpb.GetUserRequest{
-		UserId: &userpb.UserId{OpaqueId: shareWith},
+	userRes, err := c.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
+		Claim: "username",
+		Value: shareWith,
 	})
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error searching recipient", err)

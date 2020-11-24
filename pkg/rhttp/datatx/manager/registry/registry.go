@@ -16,16 +16,19 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package s3
+package registry
 
-import (
-	"context"
+import "github.com/cs3org/reva/pkg/rhttp/datatx"
 
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/errtypes"
-)
+// NewFunc is the function that data transfer implementations
+// should register at init time.
+type NewFunc func(map[string]interface{}) (datatx.DataTX, error)
 
-// InitiateUpload returns upload ids corresponding to different protocols it supports
-func (fs *s3FS) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
-	return nil, errtypes.NotSupported("op not supported")
+// NewFuncs is a map containing all the registered data transfers.
+var NewFuncs = map[string]NewFunc{}
+
+// Register registers a new data transfer new function.
+// Not safe for concurrent use. Safe for use from package init.
+func Register(name string, f NewFunc) {
+	NewFuncs[name] = f
 }

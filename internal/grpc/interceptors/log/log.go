@@ -57,7 +57,7 @@ func NewUnary() grpc.UnaryServerInterceptor {
 		if code != codes.OK {
 			event = log.Error()
 		} else {
-			event = log.Info()
+			event = log.Debug()
 		}
 
 		event.Str("user-agent", userAgent).
