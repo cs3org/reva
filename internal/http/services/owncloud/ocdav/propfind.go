@@ -70,7 +70,12 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		w.Write(b)
+		_, err = w.Write(b)
+		if err != nil {
+			log.Error().Msgf("error writing xml response: %s", b)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 		return
 	}
 
