@@ -28,12 +28,16 @@ import (
 
 // Handler renders the capability endpoint
 type Handler struct {
-	c data.CapabilitiesData
+	c                     data.CapabilitiesData
+	defaultUploadProtocol string
+	userAgentChunkingMap  map[string]string
 }
 
 // Init initializes this and any contained handlers
 func (h *Handler) Init(c *config.Config) {
 	h.c = c.Capabilities
+	h.defaultUploadProtocol = c.DefaultUploadProtocol
+	h.userAgentChunkingMap = c.UserAgentChunkingMap
 
 	// capabilities
 	if h.c.Capabilities == nil {
@@ -98,25 +102,6 @@ func (h *Handler) Init(c *config.Config) {
 	}
 	// h.c.Capabilities.Files.Undelete is boolean
 	// h.c.Capabilities.Files.Versioning is boolean
-
-	if h.c.Capabilities.Files.TusSupport == nil && !c.DisableTus {
-		// these are global capabilities
-		// Need to disable other chunking methods
-		h.c.Capabilities.Files.BigFileChunking = false
-		h.c.Capabilities.Dav.Chunking = ""
-
-		// TODO: infer from various TUS handlers from all known storages
-		h.c.Capabilities.Files.TusSupport = &data.CapabilitiesFilesTusSupport{
-			Version:            "1.0.0",
-			Resumable:          "1.0.0",
-			Extension:          "creation,creation-with-upload",
-			MaxChunkSize:       0,
-			HTTPMethodOverride: "",
-		}
-	} else {
-		// Enable chunking support
-		h.c.Capabilities.Files.BigFileChunking = true
-	}
 
 	// dav
 
@@ -225,11 +210,15 @@ func (h *Handler) Init(c *config.Config) {
 		}
 	}
 
+	// upload protocol-specific details
+	setCapabilitiesForChunkProtocol(chunkProtocol(h.defaultUploadProtocol), &h.c)
+
 }
 
 // Handler renders the capabilities
 func (h *Handler) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		response.WriteOCSSuccess(w, r, h.c)
+		c := h.getCapabilitiesForUserAgent(r.UserAgent())
+		response.WriteOCSSuccess(w, r, c)
 	})
 }
