@@ -61,6 +61,17 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 	if r.URL.Path == "/" {
 		log.Debug().Str("path", r.URL.Path).Msg("method not allowed")
 		w.WriteHeader(http.StatusMethodNotAllowed)
+		b, err := Marshal(exception{
+			code:    SabredavMethodNotAllowed,
+			message: "Listing members of this collection is disabled",
+		})
+		if err != nil {
+			log.Error().Msgf("error marshaling xml response: %s", b)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.Write(b)
+		return
 	}
 
 	// see https://tools.ietf.org/html/rfc4918#section-10.2
@@ -647,8 +658,12 @@ type propertyXML struct {
 
 // http://www.webdav.org/specs/rfc4918.html#ELEMENT_error
 type errorXML struct {
-	XMLName  xml.Name `xml:"d:error"`
-	InnerXML []byte   `xml:",innerxml"`
+	XMLName   xml.Name `xml:"d:error"`
+	Xmlnsd    string   `xml:"xmlns:d,attr"`
+	Xmlnss    string   `xml:"xmlns:s,attr"`
+	Exception string   `xml:"s:exception"`
+	Message   string   `xml:"s:message"`
+	InnerXML  []byte   `xml:",innerxml"`
 }
 
 var errInvalidPropfind = errors.New("webdav: invalid propfind")
