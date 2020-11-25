@@ -1067,10 +1067,6 @@ apiWebdavOperations/refuseAccess.feature:22
 apiWebdavOperations/refuseAccess.feature:33
 apiWebdavOperations/refuseAccess.feature:34
 #
-# https://github.com/owncloud/core/pull/38035 PROPFIND to https://localhost:9200/remote.php/dav/files gets an error 500 response
-#
-apiWebdavOperations/propfind.feature:5
-#
 # https://github.com/owncloud/ocis-reva/issues/39  REPORT request not implemented
 #
 apiWebdavOperations/search.feature:42
