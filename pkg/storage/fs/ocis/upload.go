@@ -546,6 +546,7 @@ func (upload *fileUpload) ConcatUploads(ctx context.Context, uploads []tusd.Uplo
 		if err != nil {
 			return err
 		}
+		defer src.Close()
 
 		if _, err := io.Copy(file, src); err != nil {
 			return err
