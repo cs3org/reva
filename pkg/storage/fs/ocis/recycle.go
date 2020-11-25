@@ -69,6 +69,7 @@ func (fs *ocisfs) ListRecycle(ctx context.Context) (items []*provider.RecycleIte
 		}
 		return nil, errors.Wrap(err, "tree: error listing "+trashRoot)
 	}
+	defer f.Close()
 
 	names, err := f.Readdirnames(0)
 	if err != nil {

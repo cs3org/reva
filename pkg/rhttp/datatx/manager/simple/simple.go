@@ -89,6 +89,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 				}
 				return
 			}
+			defer rc.Close()
 
 			_, err = io.Copy(w, rc)
 			if err != nil {

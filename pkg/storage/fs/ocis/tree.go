@@ -200,7 +200,6 @@ func (t *Tree) Move(ctx context.Context, oldNode *Node, newNode *Node) (err erro
 
 // ListFolder lists the content of a folder node
 func (t *Tree) ListFolder(ctx context.Context, node *Node) ([]*Node, error) {
-
 	dir := t.lu.toInternalPath(node.ID)
 	f, err := os.Open(dir)
 	if err != nil {
@@ -209,6 +208,7 @@ func (t *Tree) ListFolder(ctx context.Context, node *Node) ([]*Node, error) {
 		}
 		return nil, errors.Wrap(err, "tree: error listing "+dir)
 	}
+	defer f.Close()
 
 	names, err := f.Readdirnames(0)
 	if err != nil {
