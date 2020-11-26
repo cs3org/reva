@@ -22,7 +22,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
-	"github.com/cs3org/reva/pkg/mentix/exporters/webapi"
+	"github.com/cs3org/reva/pkg/mentix/exchangers/exporters/webapi"
 )
 
 // WebAPIExporter implements the generic Web API exporter.
@@ -32,15 +32,22 @@ type WebAPIExporter struct {
 
 // Activate activates the exporter.
 func (exporter *WebAPIExporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
-	if err := exporter.BaseExporter.Activate(conf, log); err != nil {
+	if err := exporter.BaseRequestExporter.Activate(conf, log); err != nil {
 		return err
 	}
 
 	// Store WebAPI specifics
-	exporter.endpoint = conf.WebAPI.Endpoint
-	exporter.defaultMethodHandler = webapi.HandleDefaultQuery
+	exporter.SetEndpoint(conf.Exporters.WebAPI.Endpoint)
+	exporter.SetEnabledConnectors(conf.Exporters.WebAPI.EnabledConnectors)
+
+	exporter.defaultActionHandler = webapi.HandleDefaultQuery
 
 	return nil
+}
+
+// GetID returns the ID of the exporter.
+func (exporter *WebAPIExporter) GetID() string {
+	return config.ExporterIDWebAPI
 }
 
 // GetName returns the display name of the exporter.
@@ -49,5 +56,5 @@ func (exporter *WebAPIExporter) GetName() string {
 }
 
 func init() {
-	registerExporter(config.ExporterIDWebAPI, &WebAPIExporter{})
+	registerExporter(&WebAPIExporter{})
 }

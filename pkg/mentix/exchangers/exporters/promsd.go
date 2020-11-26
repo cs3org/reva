@@ -28,7 +28,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
-	"github.com/cs3org/reva/pkg/mentix/exporters/prometheus"
+	"github.com/cs3org/reva/pkg/mentix/exchangers/exporters/prometheus"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 
@@ -46,11 +46,7 @@ type PrometheusSDExporter struct {
 }
 
 func createMetricsSDScrapeConfig(site *meshdata.Site, host string, endpoint *meshdata.ServiceEndpoint) *prometheus.ScrapeConfig {
-	labels := map[string]string{
-		"site":         site.Name,
-		"country":      site.CountryCode,
-		"service_type": endpoint.Type.Name,
-	}
+	labels := getScrapeTargetLabels(site, endpoint)
 
 	// If a metrics path was specified as a property, use that one by setting the corresponding label
 	if metricsPath := meshdata.GetPropertyValue(endpoint.Properties, meshdata.PropertyMetricsPath, ""); len(metricsPath) > 0 {
@@ -70,15 +66,21 @@ func createBlackboxSDScrapeConfig(site *meshdata.Site, host string, endpoint *me
 		return nil
 	}
 
-	labels := map[string]string{
-		"site":         site.Name,
-		"country":      site.CountryCode,
-		"service_type": endpoint.Type.Name,
-	}
+	labels := getScrapeTargetLabels(site, endpoint)
 
 	return &prometheus.ScrapeConfig{
 		Targets: []string{target},
 		Labels:  labels,
+	}
+}
+
+func getScrapeTargetLabels(site *meshdata.Site, endpoint *meshdata.ServiceEndpoint) map[string]string {
+	return map[string]string{
+		"__meta_mentix_site":         site.Name,
+		"__meta_mentix_site_type":    meshdata.GetSiteTypeName(site.Type),
+		"__meta_mentix_site_id":      site.GetID(),
+		"__meta_mentix_country":      site.CountryCode,
+		"__meta_mentix_service_type": endpoint.Type.Name,
 	}
 }
 
@@ -93,7 +95,7 @@ func (exporter *PrometheusSDExporter) registerScrapeCreators(conf *config.Config
 			}
 
 			// Create the output directory for the target file so it exists when exporting
-			if err := os.MkdirAll(filepath.Dir(outputFilename), os.ModePerm); err != nil {
+			if err := os.MkdirAll(filepath.Dir(outputFilename), 0755); err != nil {
 				return fmt.Errorf("unable to create output directory tree: %v", err)
 			}
 		}
@@ -102,11 +104,11 @@ func (exporter *PrometheusSDExporter) registerScrapeCreators(conf *config.Config
 	}
 
 	// Register all scrape creators
-	if err := registerCreator("metrics", conf.PrometheusSD.MetricsOutputFile, createMetricsSDScrapeConfig); err != nil {
+	if err := registerCreator("metrics", conf.Exporters.PrometheusSD.MetricsOutputFile, createMetricsSDScrapeConfig); err != nil {
 		return fmt.Errorf("unable to register the 'metrics' scrape config creator: %v", err)
 	}
 
-	if err := registerCreator("blackbox", conf.PrometheusSD.BlackboxOutputFile, createBlackboxSDScrapeConfig); err != nil {
+	if err := registerCreator("blackbox", conf.Exporters.PrometheusSD.BlackboxOutputFile, createBlackboxSDScrapeConfig); err != nil {
 		return fmt.Errorf("unable to register the 'blackbox' scrape config creator: %v", err)
 	}
 
@@ -125,17 +127,20 @@ func (exporter *PrometheusSDExporter) Activate(conf *config.Configuration, log *
 
 	// Create all output directories
 	for _, creator := range exporter.scrapeCreators {
-		if err := os.MkdirAll(filepath.Dir(creator.outputFilename), os.ModePerm); err != nil {
+		if err := os.MkdirAll(filepath.Dir(creator.outputFilename), 0755); err != nil {
 			return fmt.Errorf("unable to create directory tree: %v", err)
 		}
 	}
 
+	// Store PrometheusSD specifics
+	exporter.SetEnabledConnectors(conf.Exporters.PrometheusSD.EnabledConnectors)
+
 	return nil
 }
 
-// UpdateMeshData is called whenever the mesh data has changed to reflect these changes.
-func (exporter *PrometheusSDExporter) UpdateMeshData(meshData *meshdata.MeshData) error {
-	if err := exporter.BaseExporter.UpdateMeshData(meshData); err != nil {
+// Update is called whenever the mesh data set has changed to reflect these changes.
+func (exporter *PrometheusSDExporter) Update(meshDataSet meshdata.Map) error {
+	if err := exporter.BaseExporter.Update(meshDataSet); err != nil {
 		return err
 	}
 
@@ -146,15 +151,15 @@ func (exporter *PrometheusSDExporter) UpdateMeshData(meshData *meshdata.MeshData
 
 func (exporter *PrometheusSDExporter) exportMeshData() {
 	// Data is read, so acquire a read lock
-	exporter.locker.RLock()
-	defer exporter.locker.RUnlock()
+	exporter.Locker().RLock()
+	defer exporter.Locker().RUnlock()
 
 	for name, creator := range exporter.scrapeCreators {
 		scrapes := exporter.createScrapeConfigs(creator.creatorCallback)
 		if err := exporter.exportScrapeConfig(creator.outputFilename, scrapes); err != nil {
-			exporter.log.Err(err).Str("kind", name).Str("file", creator.outputFilename).Msg("error exporting Prometheus SD scrape config")
+			exporter.Log().Err(err).Str("kind", name).Str("file", creator.outputFilename).Msg("error exporting Prometheus SD scrape config")
 		} else {
-			exporter.log.Debug().Str("kind", name).Str("file", creator.outputFilename).Msg("exported Prometheus SD scrape config")
+			exporter.Log().Debug().Str("kind", name).Str("file", creator.outputFilename).Msg("exported Prometheus SD scrape config")
 		}
 	}
 }
@@ -168,7 +173,7 @@ func (exporter *PrometheusSDExporter) createScrapeConfigs(creatorCallback promet
 	}
 
 	// Create a scrape config for each service alongside any additional endpoints
-	for _, site := range exporter.meshData.Sites {
+	for _, site := range exporter.MeshData().Sites {
 		for _, service := range site.Services {
 			if !service.IsMonitored {
 				continue
@@ -197,18 +202,23 @@ func (exporter *PrometheusSDExporter) exportScrapeConfig(outputFilename string, 
 	}
 
 	// Write the data to disk
-	if err := ioutil.WriteFile(outputFilename, data, os.ModePerm); err != nil {
+	if err := ioutil.WriteFile(outputFilename, data, 0755); err != nil {
 		return fmt.Errorf("unable to write scrape config '%v': %v", outputFilename, err)
 	}
 
 	return nil
 }
 
+// GetID returns the ID of the exporter.
+func (exporter *PrometheusSDExporter) GetID() string {
+	return config.ExporterIDPrometheusSD
+}
+
 // GetName returns the display name of the exporter.
 func (exporter *PrometheusSDExporter) GetName() string {
-	return "PrometheusSD SD"
+	return "Prometheus SD"
 }
 
 func init() {
-	registerExporter(config.ExporterIDPrometheusSD, &PrometheusSDExporter{})
+	registerExporter(&PrometheusSDExporter{})
 }

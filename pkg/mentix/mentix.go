@@ -29,7 +29,10 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/connectors"
-	"github.com/cs3org/reva/pkg/mentix/exporters"
+	"github.com/cs3org/reva/pkg/mentix/entity"
+	"github.com/cs3org/reva/pkg/mentix/exchangers"
+	"github.com/cs3org/reva/pkg/mentix/exchangers/exporters"
+	"github.com/cs3org/reva/pkg/mentix/exchangers/importers"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 
@@ -38,9 +41,11 @@ type Mentix struct {
 	conf *config.Configuration
 	log  *zerolog.Logger
 
-	meshData  *meshdata.MeshData
-	connector connectors.Connector
-	exporters []exporters.Exporter
+	connectors *connectors.Collection
+	importers  *importers.Collection
+	exporters  *exporters.Collection
+
+	meshDataSet meshdata.Map
 
 	updateInterval time.Duration
 }
@@ -60,14 +65,14 @@ func (mntx *Mentix) initialize(conf *config.Configuration, log *zerolog.Logger) 
 	}
 	mntx.log = log
 
-	// Initialize the connector that will be used to gather the mesh data
-	if err := mntx.initConnector(); err != nil {
+	// Initialize the connectors that will be used to gather the mesh data
+	if err := mntx.initConnectors(); err != nil {
 		return fmt.Errorf("unable to initialize connector: %v", err)
 	}
 
-	// Initialize the exporters
-	if err := mntx.initExporters(); err != nil {
-		return fmt.Errorf("unable to initialize exporters: %v", err)
+	// Initialize the exchangers
+	if err := mntx.initExchangers(); err != nil {
+		return fmt.Errorf("unable to initialize exchangers: %v", err)
 	}
 
 	// Get the update interval
@@ -78,74 +83,85 @@ func (mntx *Mentix) initialize(conf *config.Configuration, log *zerolog.Logger) 
 	}
 	mntx.updateInterval = duration
 
-	// Create empty mesh data
-	mntx.meshData = meshdata.New()
+	// Create empty mesh data set
+	mntx.meshDataSet = make(meshdata.Map)
 
 	// Log some infos
-	exporterNames := make([]string, len(mntx.exporters))
-	for idx, exporter := range mntx.exporters {
-		exporterNames[idx] = exporter.GetName()
-	}
-	log.Info().Msgf("mentix started with connector: %v; exporters: %v; update interval: %v", mntx.connector.GetName(), strings.Join(exporterNames, ", "), duration)
+	connectorNames := entity.GetNames(mntx.connectors)
+	importerNames := entity.GetNames(mntx.importers)
+	exporterNames := entity.GetNames(mntx.exporters)
+	log.Info().Msgf("mentix started with connectors: %v; importers: %v; exporters: %v; update interval: %v",
+		strings.Join(connectorNames, ", "),
+		strings.Join(importerNames, ", "),
+		strings.Join(exporterNames, ", "),
+		duration,
+	)
 
 	return nil
 }
 
-func (mntx *Mentix) initConnector() error {
-	// Try to get a connector with the configured ID
-	connector, err := connectors.FindConnector(mntx.conf.Connector)
+func (mntx *Mentix) initConnectors() error {
+	// Use all connectors exposed by the connectors package
+	conns, err := connectors.AvailableConnectors(mntx.conf)
 	if err != nil {
-		return fmt.Errorf("the desired connector could be found: %v", err)
+		return fmt.Errorf("unable to get registered conns: %v", err)
 	}
-	mntx.connector = connector
+	mntx.connectors = conns
 
-	// Activate the selected connector
-	if err := mntx.connector.Activate(mntx.conf, mntx.log); err != nil {
-		return fmt.Errorf("unable to activate connector: %v", err)
+	if err := mntx.connectors.ActivateAll(mntx.conf, mntx.log); err != nil {
+		return fmt.Errorf("unable to activate connectors: %v", err)
 	}
 
 	return nil
 }
 
-func (mntx *Mentix) initExporters() error {
+func (mntx *Mentix) initExchangers() error {
+	// Use all importers exposed by the importers package
+	imps, err := importers.AvailableImporters(mntx.conf)
+	if err != nil {
+		return fmt.Errorf("unable to get registered importers: %v", err)
+	}
+	mntx.importers = imps
+
+	if err := mntx.importers.ActivateAll(mntx.conf, mntx.log); err != nil {
+		return fmt.Errorf("unable to activate importers: %v", err)
+	}
+
 	// Use all exporters exposed by the exporters package
-	exporters, err := exporters.AvailableExporters(mntx.conf)
+	exps, err := exporters.AvailableExporters(mntx.conf)
 	if err != nil {
 		return fmt.Errorf("unable to get registered exporters: %v", err)
 	}
-	mntx.exporters = exporters
+	mntx.exporters = exps
 
-	// Activate all exporters
-	for _, exporter := range mntx.exporters {
-		if err := exporter.Activate(mntx.conf, mntx.log); err != nil {
-			return fmt.Errorf("unable to activate exporter '%v': %v", exporter.GetName(), err)
-		}
+	if err := mntx.exporters.ActivateAll(mntx.conf, mntx.log); err != nil {
+		return fmt.Errorf("unable to activate exporters: %v", err)
 	}
 
 	return nil
 }
 
-func (mntx *Mentix) startExporters() error {
+func (mntx *Mentix) startExchangers() error {
+	// Start all importers
+	if err := mntx.importers.StartAll(); err != nil {
+		return fmt.Errorf("unable to start importers: %v", err)
+	}
+
 	// Start all exporters
-	for _, exporter := range mntx.exporters {
-		if err := exporter.Start(); err != nil {
-			return fmt.Errorf("unable to start exporter '%v': %v", exporter.GetName(), err)
-		}
+	if err := mntx.exporters.StartAll(); err != nil {
+		return fmt.Errorf("unable to start exporters: %v", err)
 	}
 
 	return nil
 }
 
-func (mntx *Mentix) stopExporters() {
-	// Stop all exporters
-	for _, exporter := range mntx.exporters {
-		exporter.Stop()
-	}
+func (mntx *Mentix) stopExchangers() {
+	mntx.exporters.StopAll()
+	mntx.importers.StopAll()
 }
 
 func (mntx *Mentix) destroy() {
-	// Stop all exporters
-	mntx.stopExporters()
+	mntx.stopExchangers()
 }
 
 // Run starts the Mentix service that will periodically pull the configured data source and publish this data
@@ -153,9 +169,9 @@ func (mntx *Mentix) destroy() {
 func (mntx *Mentix) Run(stopSignal <-chan struct{}) error {
 	defer mntx.destroy()
 
-	// Start all exporters; they will be stopped in mntx.destroy
-	if err := mntx.startExporters(); err != nil {
-		return fmt.Errorf("unable to start exporters: %v", err)
+	// Start all im- & exporters; they will be stopped in mntx.destroy
+	if err := mntx.startExchangers(); err != nil {
+		return fmt.Errorf("unable to start exchangers: %v", err)
 	}
 
 	updateTimestamp := time.Time{}
@@ -171,19 +187,8 @@ loop:
 			}
 		}
 
-		// If enough time has passed, retrieve the latest mesh data and update it
-		if time.Since(updateTimestamp) >= mntx.updateInterval {
-			meshData, err := mntx.retrieveMeshData()
-			if err == nil {
-				if err := mntx.applyMeshData(meshData); err != nil {
-					mntx.log.Err(err).Msg("failed to apply mesh data")
-				}
-			} else {
-				mntx.log.Err(err).Msg("failed to retrieve mesh data")
-			}
-
-			updateTimestamp = time.Now()
-		}
+		// Perform all regular actions
+		mntx.tick(&updateTimestamp)
 
 		time.Sleep(runLoopSleeptime)
 	}
@@ -191,22 +196,79 @@ loop:
 	return nil
 }
 
-func (mntx *Mentix) retrieveMeshData() (*meshdata.MeshData, error) {
-	meshData, err := mntx.connector.RetrieveMeshData()
+func (mntx *Mentix) tick(updateTimestamp *time.Time) {
+	// Let all importers do their work first
+	meshDataUpdated, err := mntx.processImporters()
 	if err != nil {
-		return nil, fmt.Errorf("retrieving mesh data failed: %v", err)
+		mntx.log.Err(err).Msgf("an error occurred while processing the importers: %v", err)
 	}
-	return meshData, nil
+
+	// If mesh data has been imported or enough time has passed, update the stored mesh data and all exporters
+	if meshDataUpdated || time.Since(*updateTimestamp) >= mntx.updateInterval {
+		// Retrieve and update the mesh data; if the importers modified any data, these changes will
+		// be reflected automatically here
+		meshDataSet, err := mntx.retrieveMeshDataSet()
+		if err == nil {
+			if err := mntx.applyMeshDataSet(meshDataSet); err != nil {
+				mntx.log.Err(err).Msg("failed to apply mesh data")
+			}
+		} else {
+			mntx.log.Err(err).Msg("failed to retrieve mesh data")
+		}
+
+		*updateTimestamp = time.Now()
+	}
 }
 
-func (mntx *Mentix) applyMeshData(meshData *meshdata.MeshData) error {
-	if !meshData.Compare(mntx.meshData) {
+func (mntx *Mentix) processImporters() (bool, error) {
+	meshDataUpdated := false
+
+	for _, importer := range mntx.importers.Importers {
+		updated, err := importer.Process(mntx.connectors)
+		if err != nil {
+			return false, fmt.Errorf("unable to process importer '%v': %v", importer.GetName(), err)
+		}
+		meshDataUpdated = meshDataUpdated || updated
+
+		if updated {
+			mntx.log.Debug().Msgf("mesh data imported from '%v'", importer.GetName())
+		}
+	}
+
+	return meshDataUpdated, nil
+}
+
+func (mntx *Mentix) retrieveMeshDataSet() (meshdata.Map, error) {
+	meshDataSet := make(meshdata.Map)
+
+	for _, connector := range mntx.connectors.Connectors {
+		meshData, err := connector.RetrieveMeshData()
+		if err != nil {
+			return nil, fmt.Errorf("retrieving mesh data from connector '%v' failed: %v", connector.GetName(), err)
+		}
+		meshDataSet[connector.GetID()] = meshData
+	}
+
+	return meshDataSet, nil
+}
+
+func (mntx *Mentix) applyMeshDataSet(meshDataSet meshdata.Map) error {
+	// Check if mesh data from any connector has changed
+	meshDataChanged := false
+	for connectorID, meshData := range meshDataSet {
+		if !meshData.Compare(mntx.meshDataSet[connectorID]) {
+			meshDataChanged = true
+			break
+		}
+	}
+
+	if meshDataChanged {
 		mntx.log.Debug().Msg("mesh data changed, applying")
 
-		mntx.meshData = meshData
+		mntx.meshDataSet = meshDataSet
 
-		for _, exporter := range mntx.exporters {
-			if err := exporter.UpdateMeshData(meshData); err != nil {
+		for _, exporter := range mntx.exporters.Exporters {
+			if err := exporter.Update(mntx.meshDataSet); err != nil {
 				return fmt.Errorf("unable to update mesh data on exporter '%v': %v", exporter.GetName(), err)
 			}
 		}
@@ -215,29 +277,40 @@ func (mntx *Mentix) applyMeshData(meshData *meshdata.MeshData) error {
 	return nil
 }
 
-// GetRequestExporters returns all exporters that can handle HTTP requests.
-func (mntx *Mentix) GetRequestExporters() []exporters.RequestExporter {
-	// Return all exporters that implement the RequestExporter interface
-	var reqExporters []exporters.RequestExporter
-	for _, exporter := range mntx.exporters {
-		if reqExporter, ok := exporter.(exporters.RequestExporter); ok {
-			reqExporters = append(reqExporters, reqExporter)
-		}
-	}
-	return reqExporters
+// GetRequestImporters returns all exporters that can handle HTTP requests.
+func (mntx *Mentix) GetRequestImporters() []exchangers.RequestExchanger {
+	return mntx.importers.GetRequestImporters()
 }
 
-// RequestHandler handles any incoming HTTP requests by asking each RequestExporter whether it wants to
+// GetRequestExporters returns all exporters that can handle HTTP requests.
+func (mntx *Mentix) GetRequestExporters() []exchangers.RequestExchanger {
+	return mntx.exporters.GetRequestExporters()
+}
+
+// RequestHandler handles any incoming HTTP requests by asking each RequestExchanger whether it wants to
 // handle the request (usually based on the relative URL path).
 func (mntx *Mentix) RequestHandler(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
 	log := appctx.GetLogger(r.Context())
 
-	// Ask each RequestExporter if it wants to handle the request
-	for _, exporter := range mntx.GetRequestExporters() {
-		if exporter.WantsRequest(r) {
-			if err := exporter.HandleRequest(w, r); err != nil {
-				log.Err(err).Msg("error handling request")
-			}
+	switch r.Method {
+	case http.MethodGet:
+		mntx.handleRequest(mntx.GetRequestExporters(), w, r, log)
+
+	case http.MethodPost:
+		mntx.handleRequest(mntx.GetRequestImporters(), w, r, log)
+
+	default:
+		log.Err(fmt.Errorf("unsupported method")).Msg("error handling incoming request")
+	}
+}
+
+func (mntx *Mentix) handleRequest(exchangers []exchangers.RequestExchanger, w http.ResponseWriter, r *http.Request, log *zerolog.Logger) {
+	// Ask each RequestExchanger if it wants to handle the request
+	for _, exchanger := range exchangers {
+		if exchanger.WantsRequest(r) {
+			exchanger.HandleRequest(w, r)
 		}
 	}
 }

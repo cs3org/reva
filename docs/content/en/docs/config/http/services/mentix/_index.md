@@ -7,7 +7,7 @@ description: >
 ---
 
 {{% pageinfo %}}
-Mentix (_**Me**sh E**nti**ty E**x**porter_) is a service to read mesh topology data from a source (e.g., a GOCDB instance) and export it to various targets like an HTTP endpoint or Prometheus.
+Mentix (_**Me**sh E**nti**ty E**x**changer_) is a service to read and write mesh topology data to and from one or more sources (e.g., a GOCDB instance) and export it to various targets like an HTTP endpoint or Prometheus.
 {{% /pageinfo %}}
 
 {{% dir name="prefix" type="string" default="mentix" %}}
@@ -18,24 +18,37 @@ prefix = "/mentix"
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="connector" type="string" default="gocdb" %}}
-Mentix is decoupled from the actual source of the mesh data by using a so-called _connector_. A connector is used to gather the data from a certain source, which are then converted into Mentix' own internal format.
-
-Supported values are:
-
-- **gocdb** 
-The [GOCDB](https://wiki.egi.eu/wiki/GOCDB/Documentation_Index) is a database specifically designed to organize the topology of a mesh of distributed sites and services. In order to use GOCDB with Mentix, its instance address has to be configured (see [here](gocdb)).    
-
+{{% dir name="update_interval" type="string" default="1h" %}}
+How frequently Mentix should pull and update the mesh data. Supports common time duration strings, like "1h30m", "1d" etc.
 {{< highlight toml >}}
 [http.services.mentix]
-connector = "gocdb"
+update_interval = "15m"
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="exporters" type="[]string" default="[webapi,cs3api,siteloc,promsd]" %}}
+## Connectors
+Mentix is decoupled from the actual sources of the mesh data by using so-called _connectors_. A connector is used to gather the data from a certain source, which are then converted into Mentix' own internal format.
+
+_Supported connectors:_
+
+- **gocdb** 
+The [GOCDB](https://wiki.egi.eu/wiki/GOCDB/Documentation_Index) is a database specifically designed to organize the topology of a mesh of distributed sites and services. In order to use GOCDB with Mentix, its instance address has to be configured (see [here](gocdb)).
+
+- **localfile**
+The [localfile](localfile) connector reads sites from a local JSON file. The file must contain an array of sites adhering to the `meshdata.Site` structure.
+ 
+## Importers
+Mentix can import mesh data from various sources and write it to one or more targets through the corresponding connectors.
+
+__Supported importers:__
+
+- **webapi**
+Mentix can import mesh data via an HTTP endpoint using the `webapi` importer. Data can be sent to the configured relative endpoint (see [here](webapi)).
+
+## Exporters
 Mentix exposes its gathered data by using one or more _exporters_. Such exporters can, for example, write the data to a file in a specific format, or offer the data via an HTTP endpoint.
 
-Supported values are:
+__Supported exporters:__
 
 - **webapi**
 Mentix exposes its data via an HTTP endpoint using the `webapi` exporter. Data can be retrieved at the configured relative endpoint (see [here](webapi)). The web API currently doesn't support any parameters but will most likely be extended in the future.
@@ -49,17 +62,3 @@ Mentix exposes its data via an HTTP endpoint using the `webapi` exporter. Data c
           - files:
              - '/usr/share/prom/sciencemesh_services.json'
   ```
-
-{{< highlight toml >}}
-[http.services.mentix]
-exporters = ["webapi", "promsd"]
-{{< /highlight >}}
-{{% /dir %}}
-
-{{% dir name="update_interval" type="string" default="1h" %}}
-How frequently Mentix should pull and update the mesh data. Supports common time duration strings, like "1h30m", "1d" etc.
-{{< highlight toml >}}
-[http.services.mentix]
-update_interval = "15m"
-{{< /highlight >}}
-{{% /dir %}}

@@ -16,23 +16,19 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package webapi
+package meshdata
 
-import (
-	"encoding/json"
-	"fmt"
-	"net/url"
+// Vector represents a vector of MeshData objects.
+type Vector = []*MeshData
 
-	"github.com/cs3org/reva/pkg/mentix/meshdata"
-)
+// Map represents a map of MeshData objects.
+type Map = map[string]*MeshData
 
-// HandleDefaultQuery processes a basic query.
-func HandleDefaultQuery(meshData *meshdata.MeshData, params url.Values) ([]byte, error) {
-	// Just return the plain, unfiltered data as JSON
-	data, err := json.MarshalIndent(meshData, "", "\t")
-	if err != nil {
-		return []byte{}, fmt.Errorf("unable to marshal the mesh data: %v", err)
+// MergeMeshDataMap merges all mesh data objects within a map.
+func MergeMeshDataMap(meshDataSet Map) *MeshData {
+	mergedMeshData := &MeshData{}
+	for _, meshData := range meshDataSet {
+		mergedMeshData.Merge(meshData)
 	}
-
-	return data, nil
+	return mergedMeshData
 }

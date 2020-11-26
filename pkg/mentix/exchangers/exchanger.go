@@ -1,0 +1,111 @@
+// Copyright 2018-2020 CERN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// In applying this license, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
+package exchangers
+
+import (
+	"fmt"
+	"strings"
+	"sync"
+
+	"github.com/rs/zerolog"
+
+	"github.com/cs3org/reva/pkg/mentix/config"
+	"github.com/cs3org/reva/pkg/mentix/entity"
+)
+
+// Exchanger is the base interface for importers and exporters.
+type Exchanger interface {
+	entity.Entity
+
+	// Start starts the exchanger; only exchangers which perform periodical background tasks should do something here.
+	Start() error
+	// Stop stops any running background activities of the exchanger.
+	Stop()
+}
+
+// BaseExchanger implements basic exchanger functionality common to all exchangers.
+type BaseExchanger struct {
+	Exchanger
+
+	conf *config.Configuration
+	log  *zerolog.Logger
+
+	enabledConnectors []string
+
+	locker sync.RWMutex
+}
+
+// Activate activates the exchanger.
+func (exchanger *BaseExchanger) Activate(conf *config.Configuration, log *zerolog.Logger) error {
+	if conf == nil {
+		return fmt.Errorf("no configuration provided")
+	}
+	exchanger.conf = conf
+
+	if log == nil {
+		return fmt.Errorf("no logger provided")
+	}
+	exchanger.log = log
+
+	return nil
+}
+
+// Start starts the exchanger; only exchanger which perform periodical background tasks should do something here.
+func (exchanger *BaseExchanger) Start() error {
+	return nil
+}
+
+// Stop stops any running background activities of the exchanger.
+func (exchanger *BaseExchanger) Stop() {
+}
+
+// IsConnectorEnabled checks if the given connector is enabled for the exchanger.
+func (exchanger *BaseExchanger) IsConnectorEnabled(id string) bool {
+	for _, connectorID := range exchanger.enabledConnectors {
+		if connectorID == "*" || strings.EqualFold(connectorID, id) {
+			return true
+		}
+	}
+	return false
+}
+
+// Config returns the configuration object.
+func (exchanger *BaseExchanger) Config() *config.Configuration {
+	return exchanger.conf
+}
+
+// Log returns the logger object.
+func (exchanger *BaseExchanger) Log() *zerolog.Logger {
+	return exchanger.log
+}
+
+// EnabledConnectors returns the list of all enabled connectors for the exchanger.
+func (exchanger *BaseExchanger) EnabledConnectors() []string {
+	return exchanger.enabledConnectors
+}
+
+// SetEnabledConnectors sets the list of all enabled connectors for the exchanger.
+func (exchanger *BaseExchanger) SetEnabledConnectors(connectors []string) {
+	exchanger.enabledConnectors = connectors
+}
+
+// Locker returns the locking object.
+func (exchanger *BaseExchanger) Locker() *sync.RWMutex {
+	return &exchanger.locker
+}

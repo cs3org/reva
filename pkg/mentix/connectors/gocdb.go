@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/mentix/network"
 )
 
+// GOCDBConnector is used to read mesh data from a GOCDB instance.
 type GOCDBConnector struct {
 	BaseConnector
 
@@ -46,7 +47,7 @@ func (connector *GOCDBConnector) Activate(conf *config.Configuration, log *zerol
 	}
 
 	// Check and store GOCDB specific settings
-	connector.gocdbAddress = conf.GOCDB.Address
+	connector.gocdbAddress = conf.Connectors.GOCDB.Address
 	if len(connector.gocdbAddress) == 0 {
 		return fmt.Errorf("no GOCDB address configured")
 	}
@@ -80,11 +81,11 @@ func (connector *GOCDBConnector) RetrieveMeshData() (*meshdata.MeshData, error) 
 func (connector *GOCDBConnector) query(v interface{}, method string, isPrivate bool, hasScope bool, params network.URLParams) error {
 	var scope string
 	if hasScope {
-		scope = connector.conf.GOCDB.Scope
+		scope = connector.conf.Connectors.GOCDB.Scope
 	}
 
 	// Get the data from GOCDB
-	data, err := gocdb.QueryGOCDB(connector.conf.GOCDB.Address, method, isPrivate, scope, params)
+	data, err := gocdb.QueryGOCDB(connector.gocdbAddress, method, isPrivate, scope, params)
 	if err != nil {
 		return err
 	}
@@ -130,6 +131,7 @@ func (connector *GOCDBConnector) querySites(meshData *meshdata.MeshData) error {
 		organization := meshdata.GetPropertyValue(properties, meshdata.PropertyOrganization, site.OfficialName)
 
 		meshsite := &meshdata.Site{
+			Type:         meshdata.SiteTypeScienceMesh, // All sites stored in the GOCDB are part of the mesh
 			Name:         site.ShortName,
 			FullName:     site.OfficialName,
 			Organization: organization,
@@ -256,11 +258,16 @@ func (connector *GOCDBConnector) getServiceURL(service *gocdb.Service, endpoint 
 	return svcURL, nil
 }
 
+// GetID returns the ID of the connector.
+func (connector *GOCDBConnector) GetID() string {
+	return config.ConnectorIDGOCDB
+}
+
 // GetName returns the display name of the connector.
 func (connector *GOCDBConnector) GetName() string {
 	return "GOCDB"
 }
 
 func init() {
-	registerConnector(config.ConnectorIDGOCDB, &GOCDBConnector{})
+	registerConnector(&GOCDBConnector{})
 }

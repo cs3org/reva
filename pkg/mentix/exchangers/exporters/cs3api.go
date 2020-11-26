@@ -22,32 +22,39 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
-	"github.com/cs3org/reva/pkg/mentix/exporters/siteloc"
+	"github.com/cs3org/reva/pkg/mentix/exchangers/exporters/cs3api"
 )
 
-// SiteLocationsExporter implements the Site Locations exporter to use with Grafana.
-type SiteLocationsExporter struct {
+// CS3APIExporter implements the CS3API exporter.
+type CS3APIExporter struct {
 	BaseRequestExporter
 }
 
 // Activate activates the exporter.
-func (exporter *SiteLocationsExporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
-	if err := exporter.BaseExporter.Activate(conf, log); err != nil {
+func (exporter *CS3APIExporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
+	if err := exporter.BaseRequestExporter.Activate(conf, log); err != nil {
 		return err
 	}
 
-	// Store SiteLocations specifics
-	exporter.endpoint = conf.SiteLocations.Endpoint
-	exporter.defaultMethodHandler = siteloc.HandleDefaultQuery
+	// Store CS3API specifics
+	exporter.SetEndpoint(conf.Exporters.CS3API.Endpoint)
+	exporter.SetEnabledConnectors(conf.Exporters.CS3API.EnabledConnectors)
+
+	exporter.defaultActionHandler = cs3api.HandleDefaultQuery
 
 	return nil
 }
 
+// GetID returns the ID of the exporter.
+func (exporter *CS3APIExporter) GetID() string {
+	return config.ExporterIDCS3API
+}
+
 // GetName returns the display name of the exporter.
-func (exporter *SiteLocationsExporter) GetName() string {
-	return "Site Locations"
+func (exporter *CS3APIExporter) GetName() string {
+	return "CS3API"
 }
 
 func init() {
-	registerExporter(config.ExporterIDSiteLocations, &SiteLocationsExporter{})
+	registerExporter(&CS3APIExporter{})
 }

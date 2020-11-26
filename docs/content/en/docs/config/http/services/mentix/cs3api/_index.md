@@ -13,7 +13,15 @@ The CS3API exporter exposes Mentix data in a format that is compliant with the C
 {{% dir name="endpoint" type="string" default="/" %}}
 The endpoint where the mesh data can be queried.
 {{< highlight toml >}}
-[http.services.mentix.cs3api]
+[http.services.mentix.exporters.cs3api]
 endpoint = "/data"
+{{< /highlight >}}
+{{% /dir %}}
+
+{{% dir name="enabled_connectors" type="[]string" default="*" %}}
+A list of all enabled connectors for the exporter.
+{{< highlight toml >}}
+[http.services.mentix.exporters.cs3api]
+enabled_connectors = ["gocdb"]
 {{< /highlight >}}
 {{% /dir %}}

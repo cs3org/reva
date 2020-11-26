@@ -16,38 +16,21 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package exporters
+package entity
 
 import (
-	"github.com/rs/zerolog"
-
 	"github.com/cs3org/reva/pkg/mentix/config"
-	"github.com/cs3org/reva/pkg/mentix/exporters/cs3api"
+
+	"github.com/rs/zerolog"
 )
 
-// CS3APIExporter implements the CS3API exporter.
-type CS3APIExporter struct {
-	BaseRequestExporter
-}
+// Entity is the base interface for all Mentix entities.
+type Entity interface {
+	// GetID returns the ID of the entity.
+	GetID() string
+	// GetName returns the display name of the entity.
+	GetName() string
 
-// Activate activates the exporter.
-func (exporter *CS3APIExporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
-	if err := exporter.BaseExporter.Activate(conf, log); err != nil {
-		return err
-	}
-
-	// Store CS3API specifics
-	exporter.endpoint = conf.CS3API.Endpoint
-	exporter.defaultMethodHandler = cs3api.HandleDefaultQuery
-
-	return nil
-}
-
-// GetName returns the display name of the exporter.
-func (exporter *CS3APIExporter) GetName() string {
-	return "CS3API"
-}
-
-func init() {
-	registerExporter(config.ExporterIDCS3API, &CS3APIExporter{})
+	// Activate activates the entity.
+	Activate(conf *config.Configuration, log *zerolog.Logger) error
 }
