@@ -180,12 +180,7 @@ type eosfs struct {
 	chunkHandler  *chunking.ChunkHandler
 	singleUserUID string
 	singleUserGID string
-	userIDCache   *userCache
-}
-
-type userCache struct {
-	*sync.RWMutex
-	cache map[string]*userpb.UserId
+	userIDCache   sync.Map
 }
 
 // NewEOSFS returns a storage.FS interface implementation that connects to an
@@ -220,10 +215,7 @@ func NewEOSFS(c *Config) (storage.FS, error) {
 		c:            eosClient,
 		conf:         c,
 		chunkHandler: chunking.NewChunkHandler(c.CacheDirectory),
-		userIDCache: &userCache{
-			&sync.RWMutex{},
-			make(map[string]*userpb.UserId),
-		},
+		userIDCache:  sync.Map{},
 	}
 
 	return eosfs, nil
@@ -1466,12 +1458,10 @@ func (fs *eosfs) getUIDGateway(ctx context.Context, u *userpb.UserId) (string, s
 }
 
 func (fs *eosfs) getUserIDGateway(ctx context.Context, uid string) (*userpb.UserId, error) {
-	fs.userIDCache.RLock()
-	if userID, ok := fs.userIDCache.cache[uid]; ok {
-		fs.userIDCache.RUnlock()
-		return userID, nil
+	if userIDInterface, ok := fs.userIDCache.Load(uid); ok {
+		return userIDInterface.(*userpb.UserId), nil
 	}
-	fs.userIDCache.RUnlock()
+
 	client, err := pool.GetGatewayServiceClient(fs.conf.GatewaySvc)
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: error getting gateway grpc client")
@@ -1486,9 +1476,8 @@ func (fs *eosfs) getUserIDGateway(ctx context.Context, uid string) (*userpb.User
 	if getUserResp.Status.Code != rpc.Code_CODE_OK {
 		return nil, errors.Wrap(err, "eos: grpc get user failed")
 	}
-	fs.userIDCache.Lock()
-	fs.userIDCache.cache[uid] = getUserResp.User.Id
-	fs.userIDCache.Unlock()
+
+	fs.userIDCache.Store(uid, getUserResp.User.Id)
 	return getUserResp.User.Id, nil
 }
 
