@@ -33,7 +33,6 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
@@ -191,10 +190,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 }
 
 func registerMimeTypes(mimes map[string]string) {
-	tlog := logger.New().With().Int("pid", os.Getpid()).Logger()
-
 	for k, v := range mimes {
-		tlog.Debug().Str("Registering mime type: ", "'"+fmt.Sprintf("%s -> %s", k, v)+"' ").Msg("")
 		mime.RegisterMime(k, v)
 	}
 }
