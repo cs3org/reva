@@ -25,6 +25,8 @@ const (
 	PropertyOrganization = "organization"
 	// PropertyMetricsPath identifies the metrics path property.
 	PropertyMetricsPath = "metrics_path"
+	// PropertyEnableHealthChecks identifies the enable health checks property.
+	PropertyEnableHealthChecks = "enable_health_checks"
 	// PropertyAPIVersion identifies the API version property.
 	PropertyAPIVersion = "api_version"
 )

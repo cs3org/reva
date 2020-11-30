@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/rs/zerolog"
 
@@ -67,6 +68,11 @@ func createBlackboxSDScrapeConfig(site *meshdata.Site, host string, endpoint *me
 	}
 
 	labels := getScrapeTargetLabels(site, endpoint)
+
+	// Check if health checks are enabled for the endpoint; if they aren't, skip this endpoint
+	if enableHealthChecks := meshdata.GetPropertyValue(endpoint.Properties, meshdata.PropertyEnableHealthChecks, "false"); !strings.EqualFold(enableHealthChecks, "true") {
+		return nil
+	}
 
 	return &prometheus.ScrapeConfig{
 		Targets: []string{target},
