@@ -136,6 +136,12 @@ func (t *Tree) Move(ctx context.Context, oldNode *Node, newNode *Node) (err erro
 			return errors.Wrap(err, "ocisfs: Move: error deleting target node "+newNode.ID)
 		}
 	}
+
+	// Always target the old node ID for xattr updates.
+	// The new node id is empty if the target does not exist
+	// and we need to overwrite the new one when overwriting an existing path.
+	tgtPath := t.lu.toInternalPath(oldNode.ID)
+
 	// are we just renaming (parent stays the same)?
 	if oldNode.ParentID == newNode.ParentID {
 
@@ -149,9 +155,6 @@ func (t *Tree) Move(ctx context.Context, oldNode *Node, newNode *Node) (err erro
 		if err != nil {
 			return errors.Wrap(err, "ocisfs: could not rename child")
 		}
-
-		// the new node id might be different, so we need to use the old nodes id
-		tgtPath := t.lu.toInternalPath(oldNode.ID)
 
 		// update name attribute
 		if err := xattr.Set(tgtPath, nameAttr, []byte(newNode.Name)); err != nil {
@@ -173,9 +176,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *Node, newNode *Node) (err erro
 		return errors.Wrap(err, "ocisfs: could not move child")
 	}
 
-	// update parentid and name
-	tgtPath := t.lu.toInternalPath(newNode.ID)
-
+	// update target parentid and name
 	if err := xattr.Set(tgtPath, parentidAttr, []byte(newNode.ParentID)); err != nil {
 		return errors.Wrap(err, "ocisfs: could not set parentid attribute")
 	}
