@@ -53,6 +53,7 @@ import (
 type Handler struct {
 	gatewayAddr      string
 	publicURL        string
+	sharePrefix      string
 	displayNameCache *ttlmap.TTLMap
 }
 
@@ -61,6 +62,7 @@ func (h *Handler) Init(c *config.Config) error {
 	h.gatewayAddr = c.GatewaySvc
 	h.publicURL = c.Config.Host
 	h.displayNameCache = ttlmap.New(1000, 60)
+	h.sharePrefix = c.SharePrefix
 	return nil
 }
 
@@ -813,6 +815,12 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		h.addDisplaynames(r.Context(), gwc, data)
+
+		if data.State == ocsStateAccepted {
+			// Needed because received shares can be jailed in a folder in the users home
+			data.FileTarget = path.Join(h.sharePrefix, path.Base(info.Path))
+			data.Path = path.Join(h.sharePrefix, path.Base(info.Path))
+		}
 
 		shares = append(shares, data)
 	}
