@@ -37,6 +37,8 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/eosclient"
+	"github.com/cs3org/reva/pkg/eosclient/eosbinary"
+	"github.com/cs3org/reva/pkg/eosclient/eosgrpc"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -54,82 +56,14 @@ const (
 	refTargetAttrKey = "reva.target"
 )
 
+const (
+	// SystemAttr is the system extended attribute.
+	SystemAttr eosclient.AttrType = iota
+	// UserAttr is the user extended attribute.
+	UserAttr
+)
+
 var hiddenReg = regexp.MustCompile(`\.sys\..#.`)
-
-// Config holds the configuration details for the EOS fs.
-type Config struct {
-	// Namespace for metadata operations
-	Namespace string `mapstructure:"namespace"`
-
-	// ShadowNamespace for storing shadow data
-	ShadowNamespace string `mapstructure:"shadow_namespace"`
-
-	// UploadsNamespace for storing upload data
-	UploadsNamespace string `mapstructure:"uploads_namespace"`
-
-	// ShareFolder defines the name of the folder in the
-	// shadowed namespace. Ex: /eos/user/.shadow/h/hugo/MyShares
-	ShareFolder string `mapstructure:"share_folder"`
-
-	// Location of the eos binary.
-	// Default is /usr/bin/eos.
-	EosBinary string `mapstructure:"eos_binary"`
-
-	// Location of the xrdcopy binary.
-	// Default is /usr/bin/xrdcopy.
-	XrdcopyBinary string `mapstructure:"xrdcopy_binary"`
-
-	// URL of the Master EOS MGM.
-	// Default is root://eos-example.org
-	MasterURL string `mapstructure:"master_url"`
-
-	// URL of the Slave EOS MGM.
-	// Default is root://eos-example.org
-	SlaveURL string `mapstructure:"slave_url"`
-
-	// Location on the local fs where to store reads.
-	// Defaults to os.TempDir()
-	CacheDirectory string `mapstructure:"cache_directory"`
-
-	// SecProtocol specifies the xrootd security protocol to use between the server and EOS.
-	SecProtocol string `mapstructure:"sec_protocol"`
-
-	// Keytab specifies the location of the keytab to use to authenticate to EOS.
-	Keytab string `mapstructure:"keytab"`
-
-	// SingleUsername is the username to use when SingleUserMode is enabled
-	SingleUsername string `mapstructure:"single_username"`
-
-	// UserLayout wraps the internal path with user information.
-	// Example: if conf.Namespace is /eos/user and received path is /docs
-	// and the UserLayout is {{.Username}} the internal path will be:
-	// /eos/user/<username>/docs
-	UserLayout string `mapstructure:"user_layout"`
-
-	// Enables logging of the commands executed
-	// Defaults to false
-	EnableLogging bool `mapstructure:"enable_logging"`
-
-	// ShowHiddenSysFiles shows internal EOS files like
-	// .sys.v# and .sys.a# files.
-	ShowHiddenSysFiles bool `mapstructure:"show_hidden_sys_files"`
-
-	// ForceSingleUserMode will force connections to EOS to use SingleUsername
-	ForceSingleUserMode bool `mapstructure:"force_single_user_mode"`
-
-	// UseKeyTabAuth changes will authenticate requests by using an EOS keytab.
-	UseKeytab bool `mapstructure:"use_keytab"`
-
-	// EnableHome enables the creation of home directories.
-	EnableHome bool `mapstructure:"enable_home"`
-
-	// Whether to maintain the same inode across various versions of a file.
-	// Requires extra metadata operations if set to true
-	VersionInvariant bool `mapstructure:"version_invariant"`
-
-	// GatewaySvc stores the endpoint at which the GRPC gateway is exposed.
-	GatewaySvc string `mapstructure:"gatewaysvc"`
-}
 
 func (c *Config) init() {
 	c.Namespace = path.Clean(c.Namespace)
@@ -175,7 +109,7 @@ func (c *Config) init() {
 }
 
 type eosfs struct {
-	c             *eosclient.Client
+	c             eosclient.EOSClient
 	conf          *Config
 	chunkHandler  *chunking.ChunkHandler
 	singleUserUID string
@@ -183,8 +117,7 @@ type eosfs struct {
 	userIDCache   sync.Map
 }
 
-// NewEOSFS returns a storage.FS interface implementation that connects to an
-// EOS instance
+// NewEOSFS returns a storage.FS interface implementation that connects to an EOS instance
 func NewEOSFS(c *Config) (storage.FS, error) {
 	c.init()
 
@@ -196,20 +129,37 @@ func NewEOSFS(c *Config) (storage.FS, error) {
 		}
 	}
 
-	eosClientOpts := &eosclient.Options{
-		XrdcopyBinary:       c.XrdcopyBinary,
-		URL:                 c.MasterURL,
-		EosBinary:           c.EosBinary,
-		CacheDirectory:      c.CacheDirectory,
-		ForceSingleUserMode: c.ForceSingleUserMode,
-		SingleUsername:      c.SingleUsername,
-		UseKeytab:           c.UseKeytab,
-		Keytab:              c.Keytab,
-		SecProtocol:         c.SecProtocol,
-		VersionInvariant:    c.VersionInvariant,
+	var eosClient eosclient.EOSClient
+	if c.UseGRPC {
+		eosClientOpts := &eosgrpc.Options{
+			XrdcopyBinary:       c.XrdcopyBinary,
+			URL:                 c.MasterURL,
+			GrpcURI:             c.GrpcURI,
+			CacheDirectory:      c.CacheDirectory,
+			ForceSingleUserMode: c.ForceSingleUserMode,
+			SingleUsername:      c.SingleUsername,
+			UseKeytab:           c.UseKeytab,
+			Keytab:              c.Keytab,
+			Authkey:             c.GRPCAuthkey,
+			SecProtocol:         c.SecProtocol,
+			VersionInvariant:    c.VersionInvariant,
+		}
+		eosClient = eosgrpc.New(eosClientOpts)
+	} else {
+		eosClientOpts := &eosbinary.Options{
+			XrdcopyBinary:       c.XrdcopyBinary,
+			URL:                 c.MasterURL,
+			EosBinary:           c.EosBinary,
+			CacheDirectory:      c.CacheDirectory,
+			ForceSingleUserMode: c.ForceSingleUserMode,
+			SingleUsername:      c.SingleUsername,
+			UseKeytab:           c.UseKeytab,
+			Keytab:              c.Keytab,
+			SecProtocol:         c.SecProtocol,
+			VersionInvariant:    c.VersionInvariant,
+		}
+		eosClient = eosbinary.New(eosClientOpts)
 	}
-
-	eosClient := eosclient.New(eosClientOpts)
 
 	eosfs := &eosfs{
 		c:            eosClient,
@@ -646,8 +596,6 @@ func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 		return nil, errors.Wrap(err, "eos: error resolving reference")
 	}
 
-	log.Debug().Msg("internal: " + p)
-
 	// if path is home we need to add in the response any shadow folder in the shadow homedirectory.
 	if fs.conf.EnableHome {
 		log.Debug().Msg("home enabled")
@@ -656,7 +604,6 @@ func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 		}
 	}
 
-	log.Debug().Msg("list with nominal home")
 	return fs.listWithNominalHome(ctx, p)
 }
 
@@ -699,14 +646,11 @@ func (fs *eosfs) listWithNominalHome(ctx context.Context, p string) (finfos []*p
 }
 
 func (fs *eosfs) listWithHome(ctx context.Context, home, p string) ([]*provider.ResourceInfo, error) {
-	log := appctx.GetLogger(ctx)
 	if p == home {
-		log.Debug().Msg("listing home")
 		return fs.listHome(ctx, home)
 	}
 
 	if fs.isShareFolderRoot(ctx, p) {
-		log.Debug().Msg("listing share root folder")
 		return fs.listShareFolderRoot(ctx, p)
 	}
 
@@ -715,7 +659,6 @@ func (fs *eosfs) listWithHome(ctx context.Context, home, p string) ([]*provider.
 	}
 
 	// path points to a resource in the nominal home
-	log.Debug().Msg("listing nominal home")
 	return fs.listWithNominalHome(ctx, p)
 }
 
@@ -941,22 +884,22 @@ func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string)
 
 	attrs := []*eosclient.Attribute{
 		&eosclient.Attribute{
-			Type: eosclient.SystemAttr,
+			Type: SystemAttr,
 			Key:  "mask",
 			Val:  "700",
 		},
 		&eosclient.Attribute{
-			Type: eosclient.SystemAttr,
+			Type: SystemAttr,
 			Key:  "allow.oc.sync",
 			Val:  "1",
 		},
 		&eosclient.Attribute{
-			Type: eosclient.SystemAttr,
+			Type: SystemAttr,
 			Key:  "mtime.propagation",
 			Val:  "1",
 		},
 		&eosclient.Attribute{
-			Type: eosclient.SystemAttr,
+			Type: SystemAttr,
 			Key:  "forced.atomic",
 			Val:  "1",
 		},
@@ -1018,7 +961,7 @@ func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.U
 
 	// set xattr on ref
 	attr := &eosclient.Attribute{
-		Type: eosclient.UserAttr,
+		Type: UserAttr,
 		Key:  refTargetAttrKey,
 		Val:  targetURI.String(),
 	}
@@ -1082,7 +1025,7 @@ func (fs *eosfs) deleteShadow(ctx context.Context, p string) error {
 		return fs.c.Remove(ctx, uid, gid, fn)
 	}
 
-	panic("eos: shadow delete of share folder that is neither root nor child. path=" + p)
+	return errors.New("eos: shadow delete of share folder that is neither root nor child. path=" + p)
 }
 
 func (fs *eosfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) error {
@@ -1164,7 +1107,6 @@ func (fs *eosfs) Download(ctx context.Context, ref *provider.Reference) (io.Read
 	}
 
 	fn := fs.wrap(ctx, p)
-
 	return fs.c.Read(ctx, uid, gid, fn)
 }
 
@@ -1504,6 +1446,17 @@ func (fs *eosfs) getRootUIDAndGID(ctx context.Context) (string, string, error) {
 		return fs.singleUserUID, fs.singleUserGID, err
 	}
 	return "0", "0", nil
+}
+
+func attrTypeToString(at eosclient.AttrType) string {
+	switch at {
+	case SystemAttr:
+		return "sys"
+	case UserAttr:
+		return "user"
+	default:
+		return "invalid"
+	}
 }
 
 type eosSysMetadata struct {
