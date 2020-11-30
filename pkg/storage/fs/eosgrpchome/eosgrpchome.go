@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package eosgrpc
+package eosgrpchome
 
 import (
 	"github.com/cs3org/reva/pkg/storage"
@@ -27,7 +27,7 @@ import (
 )
 
 func init() {
-	registry.Register("eosgrpc", New)
+	registry.Register("eosgrpchome", New)
 }
 
 func parseConfig(m map[string]interface{}) (*eosfs.Config, error) {
@@ -52,6 +52,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		return nil, err
 	}
 	c.UseGRPC = true
+	c.EnableHome = true
 
 	return eosfs.NewEOSFS(c)
 }

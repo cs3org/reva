@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package eosclientgrpc
+package eosgrpc
 
 import (
 	"bytes"
@@ -26,14 +26,15 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	gouser "os/user"
 	"path"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/cs3org/reva/pkg/appctx"
-	erpc "github.com/cs3org/reva/pkg/eosclientgrpc/eos_grpc"
+	"github.com/cs3org/reva/pkg/eosclient"
+	erpc "github.com/cs3org/reva/pkg/eosclient/eosgrpc/eos_grpc"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
 	"github.com/gofrs/uuid"
@@ -48,33 +49,12 @@ const (
 	versionPrefix = ".sys.v#."
 )
 
-// AttrType is the type of extended attribute,
-// either system (sys) or user (user).
-type AttrType uint32
-
 const (
 	// SystemAttr is the system extended attribute.
-	SystemAttr AttrType = iota
+	SystemAttr eosclient.AttrType = iota
 	// UserAttr is the user extended attribute.
 	UserAttr
 )
-
-func (at AttrType) String() string {
-	switch at {
-	case SystemAttr:
-		return "sys"
-	case UserAttr:
-		return "user"
-	default:
-		return "invalid"
-	}
-}
-
-// Attribute represents an EOS extended attribute.
-type Attribute struct {
-	Type     AttrType
-	Key, Val string
-}
 
 // Options to configure the Client.
 type Options struct {
@@ -85,6 +65,10 @@ type Options struct {
 
 	// UseKeyTabAuth changes will authenticate requests by using an EOS keytab.
 	UseKeytab bool
+
+	// Whether to maintain the same inode across various versions of a file.
+	// Requires extra metadata operations if set to true
+	VersionInvariant bool
 
 	// SingleUsername is the username to use when connecting to EOS.
 	// Defaults to apache
@@ -177,138 +161,78 @@ func newgrpc(ctx context.Context, opt *Options) (erpc.EosClient, error) {
 // New creates a new client with the given options.
 func New(opt *Options) *Client {
 	tlog := logger.New().With().Int("pid", os.Getpid()).Logger()
-
 	tlog.Debug().Str("Creating new eosgrpc client. opt: ", "'"+fmt.Sprintf("%#v", opt)+"' ").Msg("")
 
 	opt.init()
 	c := new(Client)
 	c.opt = opt
 
-	tctx := appctx.WithLogger(context.Background(), &tlog)
-
 	// Let's be successful if the ping was ok. This is an initialization phase
 	// and we enforce the server to be up
 	// This will likely improve as soon as the behaviour of grpc is understood
 	// in the case of server restarts or failures
+	tctx := appctx.WithLogger(context.Background(), &tlog)
 	ccl, err := newgrpc(tctx, opt)
 	if err != nil {
 		return nil
 	}
 	c.cl = ccl
 
-	// Some connection tests, useful for logging in this dev phase
-	tlog.Debug().Str("Connection tests to: ", "'"+opt.GrpcURI+"' ").Msg("")
-
-	tlog.Debug().Str("Going to stat", "/eos").Msg("")
-	frep, err := c.GetFileInfoByPath(tctx, "furano", "/eos")
-	if err != nil {
-		tlog.Error().Str("GetFileInfoByPath /eos to ", "'"+opt.GrpcURI+"' ").Str("err:", err.Error()).Msg("")
-		//	return nil
-	} else {
-		tlog.Info().Str("GetFileInfoByPath /eos to ", "'"+opt.GrpcURI+"' ").Str("resp:", frep.File).Msg("")
-	}
-
-	tlog.Debug().Str("Going to stat", "/eos-idonotexist").Msg("")
-	frep1, err := c.GetFileInfoByPath(tctx, "furano", "/eos-idonotexist")
-	if err != nil {
-		tlog.Info().Str("GetFileInfoByPath /eos-idonotexist to ", "'"+opt.GrpcURI+"' ").Str("err:", err.Error()).Msg("")
-
-		//	return nil
-	} else {
-		tlog.Error().Str("GetFileInfoByPath /eos-idonotexist to ", "'"+opt.GrpcURI+"' ").Str("wrong resp:", frep1.File).Msg("")
-	}
-
-	tlog.Debug().Str("Going to list", "/eos").Msg("")
-	lrep, err := c.List(context.Background(), "furano", "/eos")
-	if err != nil {
-		tlog.Error().Str("List /eos to ", "'"+opt.GrpcURI+"' ").Str("err:", err.Error()).Msg("")
-		//	return nil
-	} else {
-		tlog.Info().Str("List /eos to ", "'"+opt.GrpcURI+"' ").Int("nentries:", len(lrep)).Msg("")
-	}
-
 	return c
 }
 
 // Common code to create and initialize a NSRequest
-func (c *Client) initNSRequest(username string) (*erpc.NSRequest, error) {
+func (c *Client) initNSRequest(uid, gid string) (*erpc.NSRequest, error) {
 	// Stuff filename, uid, gid into the MDRequest type
 	rq := new(erpc.NSRequest)
-
-	// setting of the sys.acl is only possible from root user
-	unixUser, err := c.getUnixUser(username)
-	if err != nil {
-		return nil, err
-	}
 	rq.Role = new(erpc.RoleId)
 
-	uid, err := strconv.ParseUint(unixUser.Uid, 10, 64)
+	uidInt, err := strconv.ParseUint(uid, 10, 64)
 	if err != nil {
 		return nil, err
 	}
-	rq.Role.Uid = uid
-	gid, err := strconv.ParseUint(unixUser.Gid, 10, 64)
+	gidInt, err := strconv.ParseUint(gid, 10, 64)
 	if err != nil {
 		return nil, err
 	}
-	rq.Role.Gid = gid
-
+	rq.Role.Uid = uidInt
+	rq.Role.Gid = gidInt
 	rq.Authkey = c.opt.Authkey
 
 	return rq, nil
 }
 
 // Common code to create and initialize a NSRequest
-func (c *Client) initMDRequest(username string) (*erpc.MDRequest, error) {
+func (c *Client) initMDRequest(uid, gid string) (*erpc.MDRequest, error) {
 	// Stuff filename, uid, gid into the MDRequest type
 	mdrq := new(erpc.MDRequest)
-
-	unixUser, err := c.getUnixUser(username)
-	if err != nil {
-		return nil, err
-	}
 	mdrq.Role = new(erpc.RoleId)
 
-	uid, err := strconv.ParseUint(unixUser.Uid, 10, 64)
+	uidInt, err := strconv.ParseUint(uid, 10, 64)
 	if err != nil {
 		return nil, err
 	}
-	mdrq.Role.Uid = uid
-	gid, err := strconv.ParseUint(unixUser.Gid, 10, 64)
+	gidInt, err := strconv.ParseUint(gid, 10, 64)
 	if err != nil {
 		return nil, err
 	}
-	mdrq.Role.Gid = gid
+	mdrq.Role.Uid = uidInt
+	mdrq.Role.Gid = gidInt
 
 	mdrq.Authkey = c.opt.Authkey
 
 	return mdrq, nil
 }
 
-func (c *Client) getUnixUser(username string) (*gouser.User, error) {
-	if c.opt.ForceSingleUserMode {
-		username = c.opt.SingleUsername
-	}
-	return gouser.Lookup(username)
-}
-
 // AddACL adds an new acl to EOS with the given aclType.
-func (c *Client) AddACL(ctx context.Context, username, path string, a *acl.Entry) error {
+func (c *Client) AddACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, a *acl.Entry) error {
 	log := appctx.GetLogger(ctx)
 
-	acls, err := c.getACLForPath(ctx, username, path)
+	acls, err := c.getACLForPath(ctx, uid, gid, path)
 	if err != nil {
 		return err
 	}
 
-	// since EOS Citrine ACLs are is stored with uid, we need to convert username to uid
-	// only for users.
-	if a.Type == acl.TypeUser {
-		a.Qualifier, err = getUID(a.Qualifier)
-		if err != nil {
-			return err
-		}
-	}
 	err = acls.SetEntry(a.Type, a.Qualifier, a.Permissions)
 	if err != nil {
 		return err
@@ -316,7 +240,7 @@ func (c *Client) AddACL(ctx context.Context, username, path string, a *acl.Entry
 	sysACL := acls.Serialize()
 
 	// Init a new NSRequest
-	rq, err := c.initNSRequest(username)
+	rq, err := c.initNSRequest(uid, gid)
 	if err != nil {
 		return err
 	}
@@ -349,29 +273,19 @@ func (c *Client) AddACL(ctx context.Context, username, path string, a *acl.Entry
 }
 
 // RemoveACL removes the acl from EOS.
-func (c *Client) RemoveACL(ctx context.Context, username, path string, aclType string, recipient string) error {
+func (c *Client) RemoveACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, a *acl.Entry) error {
 	log := appctx.GetLogger(ctx)
 
-	acls, err := c.getACLForPath(ctx, username, path)
+	acls, err := c.getACLForPath(ctx, uid, gid, path)
 	if err != nil {
 		return err
 	}
 
-	// since EOS Citrine ACLs are is stored with uid, we need to convert username to uid
-	// only for users.
-
-	// since EOS Citrine ACLs are stored with uid, we need to convert username to uid
-	if aclType == acl.TypeUser {
-		recipient, err = getUID(recipient)
-		if err != nil {
-			return err
-		}
-	}
-	acls.DeleteEntry(aclType, recipient)
+	acls.DeleteEntry(a.Type, a.Qualifier)
 	sysACL := acls.Serialize()
 
 	// Init a new NSRequest
-	rq, err := c.initNSRequest(username)
+	rq, err := c.initNSRequest(uid, gid)
 	if err != nil {
 		return err
 	}
@@ -404,13 +318,13 @@ func (c *Client) RemoveACL(ctx context.Context, username, path string, aclType s
 }
 
 // UpdateACL updates the EOS acl.
-func (c *Client) UpdateACL(ctx context.Context, username, path string, a *acl.Entry) error {
-	return c.AddACL(ctx, username, path, a)
+func (c *Client) UpdateACL(ctx context.Context, uid, gid, rootUID, rootGID, path string, a *acl.Entry) error {
+	return c.AddACL(ctx, uid, gid, path, rootUID, rootGID, a)
 }
 
 // GetACL for a file
-func (c *Client) GetACL(ctx context.Context, username, path, aclType, target string) (*acl.Entry, error) {
-	acls, err := c.ListACLs(ctx, username, path)
+func (c *Client) GetACL(ctx context.Context, uid, gid, path, aclType, target string) (*acl.Entry, error) {
+	acls, err := c.ListACLs(ctx, uid, gid, path)
 	if err != nil {
 		return nil, err
 	}
@@ -423,52 +337,25 @@ func (c *Client) GetACL(ctx context.Context, username, path, aclType, target str
 
 }
 
-func getUsername(uid string) (string, error) {
-	user, err := gouser.LookupId(uid)
-	if err != nil {
-		return "", err
-	}
-	return user.Username, nil
-}
-
-func getUID(username string) (string, error) {
-	user, err := gouser.Lookup(username)
-	if err != nil {
-		return "", err
-	}
-	return user.Uid, nil
-}
-
 // ListACLs returns the list of ACLs present under the given path.
 // EOS returns uids/gid for Citrine version and usernames for older versions.
 // For Citire we need to convert back the uid back to username.
-func (c *Client) ListACLs(ctx context.Context, username, path string) ([]*acl.Entry, error) {
-	log := appctx.GetLogger(ctx)
-
-	parsedACLs, err := c.getACLForPath(ctx, username, path)
+func (c *Client) ListACLs(ctx context.Context, uid, gid, path string) ([]*acl.Entry, error) {
+	parsedACLs, err := c.getACLForPath(ctx, uid, gid, path)
 	if err != nil {
 		return nil, err
 	}
 
-	acls := []*acl.Entry{}
-	for _, acl := range parsedACLs.Entries {
-		// since EOS Citrine ACLs are is stored with uid, we need to convert uid to username
-		// TODO map group names as well if acl.Type == "g" ...
-		acl.Qualifier, err = getUsername(acl.Qualifier)
-		if err != nil {
-			log.Warn().Err(err).Str("path", path).Str("username", username).Str("qualifier", acl.Qualifier).Msg("cannot map qualifier to name")
-			continue
-		}
-		acls = append(acls, acl)
-	}
-	return acls, nil
+	// EOS Citrine ACLs are stored with uid. The UID will be resolved to the
+	// user opaque ID at the eosfs level.
+	return parsedACLs.Entries, nil
 }
 
-func (c *Client) getACLForPath(ctx context.Context, username, path string) (*acl.ACLs, error) {
+func (c *Client) getACLForPath(ctx context.Context, uid, gid, path string) (*acl.ACLs, error) {
 	log := appctx.GetLogger(ctx)
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(username)
+	rq, err := c.initNSRequest(uid, gid)
 	if err != nil {
 		return nil, err
 	}
@@ -487,22 +374,22 @@ func (c *Client) getACLForPath(ctx context.Context, username, path string) (*acl
 	resp, err := c.cl.Exec(context.Background(), rq)
 
 	if err != nil {
-		log.Error().Err(err).Str("username", username).Str("path", path).Str("err", err.Error())
+		log.Error().Err(err).Str("path", path).Str("err", err.Error())
 		return nil, err
 	}
 
 	if resp == nil {
-		return nil, errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' path: '%s'", username, path))
+		return nil, errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' path: '%s'", uid, path))
 	}
 
 	log.Debug().Str("Exec ", "'"+path+"' ").Str("resp:", fmt.Sprintf("%#v", resp)).Msg("")
 
 	if resp.Acl == nil {
-		return nil, errtypes.InternalError(fmt.Sprintf("nil acl for username: '%s' path: '%s'", username, path))
+		return nil, errtypes.InternalError(fmt.Sprintf("nil acl for uid: '%s' path: '%s'", uid, path))
 	}
 
 	if resp.GetError() != nil {
-		log.Info().Str("username", username).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+		log.Info().Str("uid", uid).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
 	}
 
 	aclret, err := acl.Parse(resp.Acl.Rule, acl.ShortTextForm)
@@ -513,11 +400,11 @@ func (c *Client) getACLForPath(ctx context.Context, username, path string) (*acl
 }
 
 // GetFileInfoByInode returns the FileInfo by the given inode
-func (c *Client) GetFileInfoByInode(ctx context.Context, username string, inode uint64) (*FileInfo, error) {
+func (c *Client) GetFileInfoByInode(ctx context.Context, uid, gid string, inode uint64) (*eosclient.FileInfo, error) {
 	log := appctx.GetLogger(ctx)
 
 	// Initialize the common fields of the MDReq
-	mdrq, err := c.initMDRequest(username)
+	mdrq, err := c.initMDRequest(uid, gid)
 	if err != nil {
 		return nil, err
 	}
@@ -546,15 +433,28 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, username string, inode 
 
 	log.Info().Uint64("inode", inode).Str("rsp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
 
-	return c.grpcMDResponseToFileInfo(rsp, "")
+	info, err := c.grpcMDResponseToFileInfo(rsp, "")
+	if err != nil {
+		return nil, err
+	}
+
+	if c.opt.VersionInvariant && isVersionFolder(info.File) {
+		info, err = c.getFileInfoFromVersion(ctx, uid, gid, info.File)
+		if err != nil {
+			return nil, err
+		}
+		info.Inode = inode
+	}
+
+	return info, nil
 }
 
 // SetAttr sets an extended attributes on a path.
-func (c *Client) SetAttr(ctx context.Context, username string, attr *Attribute, recursive bool, path string) error {
+func (c *Client) SetAttr(ctx context.Context, uid, gid string, attr *eosclient.Attribute, recursive bool, path string) error {
 	log := appctx.GetLogger(ctx)
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(username)
+	rq, err := c.initNSRequest(uid, gid)
 	if err != nil {
 		return err
 	}
@@ -573,26 +473,26 @@ func (c *Client) SetAttr(ctx context.Context, username string, attr *Attribute, 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(ctx, rq)
 	if err != nil {
-		log.Warn().Err(err).Str("username", username).Str("path", path).Str("err", err.Error())
+		log.Warn().Err(err).Str("path", path).Str("err", err.Error())
 		return err
 	}
 
 	if resp == nil {
-		return errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' path: '%s'", username, path))
+		return errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' gid: '%s' path: '%s'", uid, gid, path))
 	}
 
-	log.Info().Str("username", username).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+	log.Info().Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
 
 	return err
 
 }
 
 // UnsetAttr unsets an extended attribute on a path.
-func (c *Client) UnsetAttr(ctx context.Context, username string, attr *Attribute, path string) error {
+func (c *Client) UnsetAttr(ctx context.Context, uid, gid string, attr *eosclient.Attribute, path string) error {
 	log := appctx.GetLogger(ctx)
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(username)
+	rq, err := c.initNSRequest(uid, gid)
 	if err != nil {
 		return err
 	}
@@ -610,26 +510,26 @@ func (c *Client) UnsetAttr(ctx context.Context, username string, attr *Attribute
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(ctx, rq)
 	if err != nil {
-		log.Error().Err(err).Str("username", username).Str("path", path).Str("err", err.Error())
+		log.Error().Err(err).Str("path", path).Str("err", err.Error())
 		return err
 	}
 
 	if resp == nil {
-		return errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' path: '%s'", username, path))
+		return errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' gid: '%s' path: '%s'", uid, gid, path))
 	}
 
-	log.Info().Str("username", username).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+	log.Info().Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
 
 	return err
 
 }
 
 // GetFileInfoByPath returns the FilInfo at the given path
-func (c *Client) GetFileInfoByPath(ctx context.Context, username, path string) (*FileInfo, error) {
+func (c *Client) GetFileInfoByPath(ctx context.Context, uid, gid, path string) (*eosclient.FileInfo, error) {
 	log := appctx.GetLogger(ctx)
 
 	// Initialize the common fields of the MDReq
-	mdrq, err := c.initMDRequest(username)
+	mdrq, err := c.initMDRequest(uid, gid)
 	if err != nil {
 		return nil, err
 	}
@@ -641,13 +541,13 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, username, path string) (
 	// Now send the req and see what happens
 	resp, err := c.cl.MD(ctx, mdrq)
 	if err != nil {
-		log.Error().Err(err).Str("username", username).Str("path", path).Str("err", err.Error())
+		log.Error().Err(err).Str("path", path).Str("err", err.Error())
 
 		return nil, err
 	}
 	rsp, err := resp.Recv()
 	if err != nil {
-		log.Error().Err(err).Str("FIXME username", username).Str("path", path).Str("err", err.Error())
+		log.Error().Err(err).Str("path", path).Str("err", err.Error())
 
 		// FIXME: this is very very bad and poisonous for the project!!!!!!!
 		// Apparently here we have to assume that an error in Recv() means "file not found"
@@ -661,23 +561,39 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, username, path string) (
 		return nil, errtypes.NotFound(fmt.Sprintf("%s:%s", "acltype", path))
 	}
 
-	log.Info().Str("username", username).Str("path", path).Str("rsp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
+	log.Info().Str("path", path).Str("rsp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
 
-	return c.grpcMDResponseToFileInfo(rsp, filepath.Dir(path))
+	info, err := c.grpcMDResponseToFileInfo(rsp, filepath.Dir(path))
+	if err != nil {
+		return nil, err
+	}
 
+	if c.opt.VersionInvariant && !isVersionFolder(path) && !info.IsDir {
+		inode, err := c.getVersionFolderInode(ctx, uid, gid, path)
+		if err != nil {
+			return nil, err
+		}
+		info.Inode = inode
+	}
+	return info, nil
+}
+
+// GetFileInfoByFXID returns the FileInfo by the given file id in hexadecimal
+func (c *Client) GetFileInfoByFXID(ctx context.Context, uid, gid string, fxid string) (*eosclient.FileInfo, error) {
+	return nil, errtypes.NotSupported("eosgrpc: GetFileInfoByFXID not implemented")
 }
 
 // GetQuota gets the quota of a user on the quota node defined by path
-func (c *Client) GetQuota(ctx context.Context, username, path string) (int, int, error) {
-	return 0, 0, errtypes.NotSupported(fmt.Sprintf("%s:%s", "acltype", path))
+func (c *Client) GetQuota(ctx context.Context, username, rootUID, rootGID, path string) (*eosclient.QuotaInfo, error) {
+	return nil, errtypes.NotSupported("eosgrpc: GetQuota not implemented")
 }
 
 // Touch creates a 0-size,0-replica file in the EOS namespace.
-func (c *Client) Touch(ctx context.Context, username, path string) error {
+func (c *Client) Touch(ctx context.Context, uid, gid, path string) error {
 	log := appctx.GetLogger(ctx)
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(username)
+	rq, err := c.initNSRequest(uid, gid)
 	if err != nil {
 		return err
 	}
@@ -692,39 +608,33 @@ func (c *Client) Touch(ctx context.Context, username, path string) error {
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(ctx, rq)
 	if err != nil {
-		log.Warn().Err(err).Str("username", username).Str("path", path).Str("err", err.Error())
+		log.Warn().Err(err).Str("path", path).Str("err", err.Error())
 		return err
 	}
 
 	if resp == nil {
-		return errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' path: '%s'", username, path))
+		return errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' path: '%s'", uid, path))
 	}
 
-	log.Info().Str("username", username).Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
+	log.Info().Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 
 	return err
 
 }
 
 // Chown given path
-func (c *Client) Chown(ctx context.Context, username, chownUser, path string) error {
+func (c *Client) Chown(ctx context.Context, uid, gid, chownUID, chownGID, path string) error {
 	log := appctx.GetLogger(ctx)
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(username)
+	rq, err := c.initNSRequest(uid, gid)
 	if err != nil {
 		return err
 	}
 
 	msg := new(erpc.NSRequest_ChownRequest)
 	msg.Owner = new(erpc.RoleId)
-
-	chownunixUser, err := c.getUnixUser(chownUser)
-	if err != nil {
-		return err
-	}
-
-	msg.Owner.Uid, err = strconv.ParseUint(chownunixUser.Uid, 10, 64)
+	msg.Owner.Uid, err = strconv.ParseUint(chownUID, 10, 64)
 	if err != nil {
 		return err
 	}
@@ -737,26 +647,26 @@ func (c *Client) Chown(ctx context.Context, username, chownUser, path string) er
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(ctx, rq)
 	if err != nil {
-		log.Error().Err(err).Str("username", username).Str("chownuser", chownUser).Str("path", path).Str("err", err.Error())
+		log.Error().Err(err).Str("path", path).Str("err", err.Error())
 		return err
 	}
 
 	if resp == nil {
-		return errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' chownuser: '%s' path: '%s'", username, chownUser, path))
+		return errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' chownuid: '%s' path: '%s'", uid, chownUID, path))
 	}
 
-	log.Info().Str("username", username).Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
+	log.Info().Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 
 	return err
 
 }
 
 // Chmod given path
-func (c *Client) Chmod(ctx context.Context, username, mode, path string) error {
+func (c *Client) Chmod(ctx context.Context, uid, gid, mode, path string) error {
 	log := appctx.GetLogger(ctx)
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(username)
+	rq, err := c.initNSRequest(uid, gid)
 	if err != nil {
 		return err
 	}
@@ -777,26 +687,26 @@ func (c *Client) Chmod(ctx context.Context, username, mode, path string) error {
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(ctx, rq)
 	if err != nil {
-		log.Warn().Err(err).Str("username", username).Str("mode", mode).Str("path", path).Str("err", err.Error())
+		log.Warn().Err(err).Str("mode", mode).Str("path", path).Str("err", err.Error())
 		return err
 	}
 
 	if resp == nil {
-		return errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' mode: '%s' path: '%s'", username, mode, path))
+		return errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' mode: '%s' path: '%s'", uid, mode, path))
 	}
 
-	log.Info().Str("username", username).Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
+	log.Info().Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 
 	return err
 
 }
 
 // CreateDir creates a directory at the given path
-func (c *Client) CreateDir(ctx context.Context, username, path string) error {
+func (c *Client) CreateDir(ctx context.Context, uid, gid, path string) error {
 	log := appctx.GetLogger(ctx)
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(username)
+	rq, err := c.initNSRequest(uid, gid)
 	if err != nil {
 		return err
 	}
@@ -818,25 +728,25 @@ func (c *Client) CreateDir(ctx context.Context, username, path string) error {
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(ctx, rq)
 	if err != nil {
-		log.Warn().Err(err).Str("username", username).Str("path", path).Str("err", err.Error())
+		log.Warn().Err(err).Str("path", path).Str("err", err.Error())
 		return err
 	}
 
 	if resp == nil {
-		return errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' path: '%s'", username, path))
+		return errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' path: '%s'", uid, path))
 	}
 
-	log.Info().Str("username", username).Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
+	log.Info().Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 
 	return err
 
 }
 
-func (c *Client) rm(ctx context.Context, username, path string) error {
+func (c *Client) rm(ctx context.Context, uid, gid, path string) error {
 	log := appctx.GetLogger(ctx)
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(username)
+	rq, err := c.initNSRequest(uid, gid)
 	if err != nil {
 		return err
 	}
@@ -851,25 +761,25 @@ func (c *Client) rm(ctx context.Context, username, path string) error {
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(ctx, rq)
 	if err != nil {
-		log.Warn().Err(err).Str("username", username).Str("path", path).Str("err", err.Error())
+		log.Warn().Err(err).Str("path", path).Str("err", err.Error())
 		return err
 	}
 
 	if resp == nil {
-		return errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' path: '%s'", username, path))
+		return errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' path: '%s'", uid, path))
 	}
 
-	log.Info().Str("username", username).Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
+	log.Info().Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 
 	return err
 
 }
 
-func (c *Client) rmdir(ctx context.Context, username, path string) error {
+func (c *Client) rmdir(ctx context.Context, uid, gid, path string) error {
 	log := appctx.GetLogger(ctx)
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(username)
+	rq, err := c.initNSRequest(uid, gid)
 	if err != nil {
 		return err
 	}
@@ -884,43 +794,43 @@ func (c *Client) rmdir(ctx context.Context, username, path string) error {
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(ctx, rq)
 	if err != nil {
-		log.Warn().Err(err).Str("username", username).Str("path", path).Str("err", err.Error())
+		log.Warn().Err(err).Str("path", path).Str("err", err.Error())
 		return err
 	}
 
 	if resp == nil {
-		return errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' path: '%s'", username, path))
+		return errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' path: '%s'", uid, path))
 	}
 
-	log.Info().Str("username", username).Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
+	log.Info().Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 
 	return err
 }
 
 // Remove removes the resource at the given path
-func (c *Client) Remove(ctx context.Context, username, path string) error {
+func (c *Client) Remove(ctx context.Context, uid, gid, path string) error {
 	log := appctx.GetLogger(ctx)
 
-	nfo, err := c.GetFileInfoByPath(ctx, username, path)
+	nfo, err := c.GetFileInfoByPath(ctx, uid, gid, path)
 	if err != nil {
-		log.Warn().Err(err).Str("username", username).Str("path", path).Str("err", err.Error())
+		log.Warn().Err(err).Str("path", path).Str("err", err.Error())
 		return err
 	}
 
 	if nfo.IsDir {
-		return c.rmdir(ctx, username, path)
+		return c.rmdir(ctx, uid, gid, path)
 	}
 
-	return c.rm(ctx, username, path)
+	return c.rm(ctx, uid, gid, path)
 }
 
 // Rename renames the resource referenced by oldPath to newPath
-func (c *Client) Rename(ctx context.Context, username, oldPath, newPath string) error {
-	return errtypes.NotFound(fmt.Sprintf("%s:%s", "acltype", newPath))
+func (c *Client) Rename(ctx context.Context, uid, gid, oldPath, newPath string) error {
+	return errtypes.NotSupported("eosgrpc: Rename not implemented")
 }
 
 // List the contents of the directory given by path
-func (c *Client) List(ctx context.Context, username, dpath string) ([]*FileInfo, error) {
+func (c *Client) List(ctx context.Context, uid, gid, dpath string) ([]*eosclient.FileInfo, error) {
 	log := appctx.GetLogger(ctx)
 
 	// Stuff filename, uid, gid into the FindRequest type
@@ -930,34 +840,30 @@ func (c *Client) List(ctx context.Context, username, dpath string) ([]*FileInfo,
 	fdrq.Id = new(erpc.MDId)
 	fdrq.Id.Path = []byte(dpath)
 
-	unixUser, err := c.getUnixUser(username)
-	if err != nil {
-		return nil, err
-	}
 	fdrq.Role = new(erpc.RoleId)
 
-	uid, err := strconv.ParseUint(unixUser.Uid, 10, 64)
+	uidInt, err := strconv.ParseUint(uid, 10, 64)
 	if err != nil {
 		return nil, err
 	}
-	fdrq.Role.Uid = uid
-	gid, err := strconv.ParseUint(unixUser.Gid, 10, 64)
+	gidInt, err := strconv.ParseUint(gid, 10, 64)
 	if err != nil {
 		return nil, err
 	}
-	fdrq.Role.Gid = gid
+	fdrq.Role.Uid = uidInt
+	fdrq.Role.Gid = gidInt
 
 	fdrq.Authkey = c.opt.Authkey
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Find(context.Background(), fdrq)
 	if err != nil {
-		log.Error().Err(err).Str("username", username).Str("path", dpath).Str("err", err.Error())
+		log.Error().Err(err).Str("path", dpath).Str("err", err.Error())
 
 		return nil, err
 	}
 
-	var mylst []*FileInfo
+	var mylst []*eosclient.FileInfo
 	i := 0
 	for {
 		rsp, err := resp.Recv()
@@ -966,21 +872,21 @@ func (c *Client) List(ctx context.Context, username, dpath string) ([]*FileInfo,
 				return mylst, nil
 			}
 
-			log.Warn().Err(err).Str("username", username).Str("path", dpath).Str("err", err.Error())
+			log.Warn().Err(err).Str("path", dpath).Str("err", err.Error())
 
 			return nil, err
 		}
 
 		if rsp == nil {
-			log.Warn().Err(err).Str("username", username).Str("path", dpath).Str("err", "rsp is nil")
+			log.Warn().Err(err).Str("path", dpath).Str("err", "rsp is nil")
 			return nil, errtypes.NotFound(dpath)
 		}
 
-		log.Debug().Str("username", username).Str("path", dpath).Str("item resp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
+		log.Debug().Str("path", dpath).Str("item resp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
 
 		myitem, err := c.grpcMDResponseToFileInfo(rsp, dpath)
 		if err != nil {
-			log.Warn().Err(err).Str("username", username).Str("path", dpath).Str("could not convert item:", fmt.Sprintf("%#v", rsp)).Str("err:", err.Error()).Msg("")
+			log.Warn().Err(err).Str("path", dpath).Str("could not convert item:", fmt.Sprintf("%#v", rsp)).Str("err:", err.Error()).Msg("")
 
 			return nil, err
 		}
@@ -994,30 +900,21 @@ func (c *Client) List(ctx context.Context, username, dpath string) ([]*FileInfo,
 }
 
 // Read reads a file from the mgm
-func (c *Client) Read(ctx context.Context, username, path string) (io.ReadCloser, error) {
-	unixUser, err := c.getUnixUser(username)
-	if err != nil {
-		return nil, err
-	}
+func (c *Client) Read(ctx context.Context, uid, gid, path string) (io.ReadCloser, error) {
 	rand := "eosread-" + uuid.Must(uuid.NewV4()).String()
 	localTarget := fmt.Sprintf("%s/%s", c.opt.CacheDirectory, rand)
 	defer os.RemoveAll(localTarget)
 
 	xrdPath := fmt.Sprintf("%s//%s", c.opt.URL, path)
-	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, "--nopbar", "--silent", "-f", xrdPath, localTarget, fmt.Sprintf("-OSeos.ruid=%s&eos.rgid=%s", unixUser.Uid, unixUser.Gid))
-	_, _, err = c.execute(ctx, cmd)
-	if err != nil {
+	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, "--nopbar", "--silent", "-f", xrdPath, localTarget, fmt.Sprintf("-OSeos.ruid=%s&eos.rgid=%s", uid, gid))
+	if _, _, err := c.execute(ctx, cmd); err != nil {
 		return nil, err
 	}
 	return os.Open(localTarget)
 }
 
 // Write writes a file to the mgm
-func (c *Client) Write(ctx context.Context, username, path string, stream io.ReadCloser) error {
-	unixUser, err := c.getUnixUser(username)
-	if err != nil {
-		return err
-	}
+func (c *Client) Write(ctx context.Context, uid, gid, path string, stream io.ReadCloser) error {
 	fd, err := ioutil.TempFile(c.opt.CacheDirectory, "eoswrite-")
 	if err != nil {
 		return err
@@ -1030,33 +927,25 @@ func (c *Client) Write(ctx context.Context, username, path string, stream io.Rea
 	if err != nil {
 		return err
 	}
-	xrdPath := fmt.Sprintf("%s//%s", c.opt.URL, path)
-	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, "--nopbar", "--silent", "-f", fd.Name(), xrdPath, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s", unixUser.Uid, unixUser.Gid))
-	_, _, err = c.execute(ctx, cmd)
-	return err
+
+	return c.WriteFile(ctx, uid, gid, path, fd.Name())
 }
 
 // WriteFile writes an existing file to the mgm
-func (c *Client) WriteFile(ctx context.Context, username, path, source string) error {
-
-	unixUser, err := c.getUnixUser(username)
-	if err != nil {
-		return err
-	}
-
+func (c *Client) WriteFile(ctx context.Context, uid, gid, path, source string) error {
 	xrdPath := fmt.Sprintf("%s//%s", c.opt.URL, path)
-	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, "--nopbar", "--silent", "-f", source, xrdPath, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s", unixUser.Uid, unixUser.Gid))
-	_, _, err = c.execute(ctx, cmd)
+	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, "--nopbar", "--silent", "-f", source, xrdPath, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s", uid, gid))
+	_, _, err := c.execute(ctx, cmd)
 	return err
 
 }
 
 // ListDeletedEntries returns a list of the deleted entries.
-func (c *Client) ListDeletedEntries(ctx context.Context, username string) ([]*DeletedEntry, error) {
+func (c *Client) ListDeletedEntries(ctx context.Context, uid, gid string) ([]*eosclient.DeletedEntry, error) {
 	log := appctx.GetLogger(ctx)
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(username)
+	rq, err := c.initNSRequest(uid, gid)
 	if err != nil {
 		return nil, err
 	}
@@ -1069,29 +958,29 @@ func (c *Client) ListDeletedEntries(ctx context.Context, username string) ([]*De
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(context.Background(), rq)
 	if err != nil {
-		log.Warn().Err(err).Str("username", username).Str("err", err.Error())
+		log.Warn().Err(err).Str("err", err.Error())
 		return nil, err
 	}
 
 	if resp == nil {
-		return nil, errtypes.InternalError(fmt.Sprintf("nil response for username: '%s'", username))
+		return nil, errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s'", uid))
 	}
 
-	log.Info().Str("username", username).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+	log.Info().Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
 
 	// TODO(labkode): add protection if slave is configured and alive to count how many files are in the trashbin before
 	// triggering the recycle ls call that could break the instance because of unavailable memory.
 	// FF: I agree with labkode, if we think we may have memory problems then the semantics of the grpc call`and
 	// the semantics if this func will have to change. For now this is not foreseen
 
-	ret := make([]*DeletedEntry, 0)
+	ret := make([]*eosclient.DeletedEntry, 0)
 	for _, f := range resp.Recycle.Recycles {
 		if f == nil {
-			log.Info().Str("username", username).Msg("nil item in response")
+			log.Info().Msg("nil item in response")
 			continue
 		}
 
-		entry := &DeletedEntry{
+		entry := &eosclient.DeletedEntry{
 			RestorePath:   string(f.Id.Path),
 			RestoreKey:    f.Key,
 			Size:          f.Size,
@@ -1106,11 +995,11 @@ func (c *Client) ListDeletedEntries(ctx context.Context, username string) ([]*De
 }
 
 // RestoreDeletedEntry restores a deleted entry.
-func (c *Client) RestoreDeletedEntry(ctx context.Context, username, key string) error {
+func (c *Client) RestoreDeletedEntry(ctx context.Context, uid, gid, key string) error {
 	log := appctx.GetLogger(ctx)
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(username)
+	rq, err := c.initNSRequest(uid, gid)
 	if err != nil {
 		return err
 	}
@@ -1125,25 +1014,25 @@ func (c *Client) RestoreDeletedEntry(ctx context.Context, username, key string) 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(context.Background(), rq)
 	if err != nil {
-		log.Warn().Err(err).Str("username", username).Str("key", key).Str("err", err.Error())
+		log.Warn().Err(err).Str("key", key).Str("err", err.Error())
 		return err
 	}
 
 	if resp == nil {
-		return errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' key: '%s'", username, key))
+		return errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' key: '%s'", uid, key))
 	}
 
-	log.Info().Str("username", username).Str("key", key).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+	log.Info().Str("key", key).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
 
 	return err
 }
 
 // PurgeDeletedEntries purges all entries from the recycle bin.
-func (c *Client) PurgeDeletedEntries(ctx context.Context, username string) error {
+func (c *Client) PurgeDeletedEntries(ctx context.Context, uid, gid string) error {
 	log := appctx.GetLogger(ctx)
 
 	// Initialize the common fields of the NSReq
-	rq, err := c.initNSRequest(username)
+	rq, err := c.initNSRequest(uid, gid)
 	if err != nil {
 		return err
 	}
@@ -1156,40 +1045,35 @@ func (c *Client) PurgeDeletedEntries(ctx context.Context, username string) error
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(context.Background(), rq)
 	if err != nil {
-		log.Warn().Err(err).Str("username", username).Str("err", err.Error())
+		log.Warn().Err(err).Str("err", err.Error())
 		return err
 	}
 
 	if resp == nil {
-		return errtypes.InternalError(fmt.Sprintf("nil response for username: '%s' ", username))
+		return errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' ", uid))
 	}
 
-	log.Info().Str("username", username).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+	log.Info().Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
 
 	return err
 }
 
 // ListVersions list all the versions for a given file.
-func (c *Client) ListVersions(ctx context.Context, username, p string) ([]*FileInfo, error) {
-	basename := path.Base(p)
-	versionFolder := path.Join(path.Dir(p), versionPrefix+basename)
-	finfos, err := c.List(ctx, username, versionFolder)
+func (c *Client) ListVersions(ctx context.Context, uid, gid, p string) ([]*eosclient.FileInfo, error) {
+	versionFolder := getVersionFolder(p)
+	finfos, err := c.List(ctx, uid, gid, versionFolder)
 	if err != nil {
 		// we send back an empty list
-		return []*FileInfo{}, nil
+		return []*eosclient.FileInfo{}, nil
 	}
 	return finfos, nil
 }
 
 // RollbackToVersion rollbacks a file to a previous version.
-func (c *Client) RollbackToVersion(ctx context.Context, username, path, version string) error {
+func (c *Client) RollbackToVersion(ctx context.Context, uid, gid, path, version string) error {
 	// TODO(ffurano):
 	/*
-		unixUser, err := c.getUnixUser(username)
-		if err != nil {
-			return err
-		}
-		cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", unixUser.Uid, unixUser.Gid, "file", "versions", path, version)
+		cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", uid, gid, "file", "versions", path, version)
 		_, _, err = c.executeEOS(ctx, cmd)
 		return err
 	*/
@@ -1197,17 +1081,52 @@ func (c *Client) RollbackToVersion(ctx context.Context, username, path, version 
 }
 
 // ReadVersion reads the version for the given file.
-func (c *Client) ReadVersion(ctx context.Context, username, p, version string) (io.ReadCloser, error) {
-	basename := path.Base(p)
-	versionFile := path.Join(path.Dir(p), versionPrefix+basename, version)
-	return c.Read(ctx, username, versionFile)
+func (c *Client) ReadVersion(ctx context.Context, uid, gid, p, version string) (io.ReadCloser, error) {
+	versionFile := path.Join(getVersionFolder(p), version)
+	return c.Read(ctx, uid, gid, versionFile)
 }
 
-func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse, namepfx string) (*FileInfo, error) {
+func (c *Client) getVersionFolderInode(ctx context.Context, uid, gid, p string) (uint64, error) {
+	versionFolder := getVersionFolder(p)
+	md, err := c.GetFileInfoByPath(ctx, uid, gid, versionFolder)
+	if err != nil {
+		if err = c.CreateDir(ctx, uid, gid, versionFolder); err != nil {
+			return 0, err
+		}
+		md, err = c.GetFileInfoByPath(ctx, uid, gid, versionFolder)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return md.Inode, nil
+}
+
+func (c *Client) getFileInfoFromVersion(ctx context.Context, uid, gid, p string) (*eosclient.FileInfo, error) {
+	file := getFileFromVersionFolder(p)
+	md, err := c.GetFileInfoByPath(ctx, uid, gid, file)
+	if err != nil {
+		return nil, err
+	}
+	return md, nil
+}
+
+func isVersionFolder(p string) bool {
+	return strings.HasPrefix(path.Base(p), versionPrefix)
+}
+
+func getVersionFolder(p string) string {
+	return path.Join(path.Dir(p), versionPrefix+path.Base(p))
+}
+
+func getFileFromVersionFolder(p string) string {
+	return path.Join(path.Dir(p), strings.TrimPrefix(path.Base(p), versionPrefix))
+}
+
+func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse, namepfx string) (*eosclient.FileInfo, error) {
 	if st.Cmd == nil && st.Fmd == nil {
 		return nil, errors.Wrap(errtypes.NotSupported(""), "Invalid response (st.Cmd and st.Fmd are nil)")
 	}
-	fi := new(FileInfo)
+	fi := new(eosclient.FileInfo)
 
 	if st.Type != 0 {
 		fi.IsDir = true
@@ -1261,34 +1180,6 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse, namepfx string) (
 	log.Debug().Str("stat info - path", fi.File).Uint64("inode:", fi.Inode).Uint64("uid:", fi.UID).Uint64("gid:", fi.GID).Str("etag:", fi.ETag).Msg("grpc response")
 
 	return fi, nil
-}
-
-// FileInfo represents the metadata information returned by querying the EOS namespace.
-type FileInfo struct {
-	IsDir      bool
-	MTimeNanos uint32
-	Inode      uint64            `json:"inode"`
-	FID        uint64            `json:"fid"`
-	UID        uint64            `json:"uid"`
-	GID        uint64            `json:"gid"`
-	TreeSize   uint64            `json:"tree_size"`
-	MTimeSec   uint64            `json:"mtime_sec"`
-	Size       uint64            `json:"size"`
-	TreeCount  uint64            `json:"tree_count"`
-	File       string            `json:"eos_file"`
-	ETag       string            `json:"etag"`
-	Instance   string            `json:"instance"`
-	SysACL     string            `json:"sys_acl"`
-	Attrs      map[string]string `json:"attrs"`
-}
-
-// DeletedEntry represents an entry from the trashbin.
-type DeletedEntry struct {
-	RestorePath   string
-	RestoreKey    string
-	Size          uint64
-	DeletionMTime uint64
-	IsDir         bool
 }
 
 // exec executes the command and returns the stdout, stderr and return code
