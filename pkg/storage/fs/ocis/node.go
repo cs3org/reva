@@ -124,6 +124,18 @@ func ReadRecycleItem(ctx context.Context, lu *Lookup, key string) (n *Node, tras
 	} else {
 		return
 	}
+	// lookup ownerId in extended attributes
+	if attrBytes, err = xattr.Get(deletedNodePath, ownerIDAttr); err == nil {
+		n.ownerID = string(attrBytes)
+	} else {
+		return
+	}
+	// lookup ownerIdp in extended attributes
+	if attrBytes, err = xattr.Get(deletedNodePath, ownerIDPAttr); err == nil {
+		n.ownerIDP = string(attrBytes)
+	} else {
+		return
+	}
 
 	// get origin node
 	origin = "/"
