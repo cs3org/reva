@@ -2167,3 +2167,7 @@ apiVersions/fileVersionsSharingToShares.feature:279
 # https://github.com/owncloud/ocis/issues/719 when a share exists its impossible to share a renamed folder
 apiShareManagementBasicToShares/createShareToSharesFolder.feature:611
 apiShareManagementBasicToShares/createShareToSharesFolder.feature:612
+
+# https://github.com/owncloud/product/issues/293 sharing with group not available
+apiWebdavUploadTUS/uploadToShare.feature:52
+apiWebdavUploadTUS/uploadToShare.feature:53
