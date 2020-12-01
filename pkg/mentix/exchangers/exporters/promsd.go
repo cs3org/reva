@@ -67,10 +67,15 @@ func createBlackboxSDScrapeConfig(site *meshdata.Site, host string, endpoint *me
 		return nil
 	}
 
-	labels := getScrapeTargetLabels(site, host, endpoint)
-
 	// Check if health checks are enabled for the endpoint; if they aren't, skip this endpoint
 	if enableHealthChecks := meshdata.GetPropertyValue(endpoint.Properties, meshdata.PropertyEnableHealthChecks, "false"); !strings.EqualFold(enableHealthChecks, "true") {
+		return nil
+	}
+
+	labels := getScrapeTargetLabels(site, host, endpoint)
+
+	// For health checks, the gRPC port must be set
+	if _, ok := labels["__meta_mentix_grpc_port"]; !ok {
 		return nil
 	}
 
