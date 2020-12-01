@@ -21,6 +21,7 @@ package auth
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -47,15 +48,16 @@ type config struct {
 	Priority   int    `mapstructure:"priority"`
 	GatewaySvc string `mapstructure:"gatewaysvc"`
 	// TODO(jdf): Realm is optional, will be filled with request host if not given?
-	Realm                string                            `mapstructure:"realm"`
-	CredentialChain      []string                          `mapstructure:"credential_chain"`
-	CredentialStrategies map[string]map[string]interface{} `mapstructure:"credential_strategies"`
-	TokenStrategy        string                            `mapstructure:"token_strategy"`
-	TokenStrategies      map[string]map[string]interface{} `mapstructure:"token_strategies"`
-	TokenManager         string                            `mapstructure:"token_manager"`
-	TokenManagers        map[string]map[string]interface{} `mapstructure:"token_managers"`
-	TokenWriter          string                            `mapstructure:"token_writer"`
-	TokenWriters         map[string]map[string]interface{} `mapstructure:"token_writers"`
+	Realm                  string                            `mapstructure:"realm"`
+	CredentialsByUserAgent map[string]string                 `mapstructure:"credentials_by_user_agent"`
+	CredentialChain        []string                          `mapstructure:"credential_chain"`
+	CredentialStrategies   map[string]map[string]interface{} `mapstructure:"credential_strategies"`
+	TokenStrategy          string                            `mapstructure:"token_strategy"`
+	TokenStrategies        map[string]map[string]interface{} `mapstructure:"token_strategies"`
+	TokenManager           string                            `mapstructure:"token_manager"`
+	TokenManagers          map[string]map[string]interface{} `mapstructure:"token_managers"`
+	TokenWriter            string                            `mapstructure:"token_writer"`
+	TokenWriters           map[string]map[string]interface{} `mapstructure:"token_writers"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -93,8 +95,12 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 		conf.CredentialChain = []string{"basic", "bearer"}
 	}
 
-	credChain := []auth.CredentialStrategy{}
-	for i := range conf.CredentialChain {
+	if conf.CredentialsByUserAgent == nil {
+		conf.CredentialsByUserAgent = map[string]string{}
+	}
+
+	credChain := map[string]auth.CredentialStrategy{}
+	for i, key := range conf.CredentialChain {
 		f, ok := registry.NewCredentialFuncs[conf.CredentialChain[i]]
 		if !ok {
 			return nil, fmt.Errorf("credential strategy not found: %s", conf.CredentialChain[i])
@@ -104,7 +110,7 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 		if err != nil {
 			return nil, err
 		}
-		credChain = append(credChain, credStrategy)
+		credChain[key] = credStrategy
 	}
 
 	g, ok := tokenregistry.NewTokenFuncs[conf.TokenStrategy]
@@ -176,10 +182,43 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 				if creds == nil {
 					// TODO read realm from forwarded for header?
 					// see https://github.com/stanvit/go-forwarded as middleware
+
 					// indicate all possible authentications to the client
-					for i := range credChain {
-						credChain[i].AddWWWAuthenticate(w, r, conf.Realm)
+					// if the CredentialsByUserAgent is set, forward only configured credential
+					// challenge.
+
+					userAgent := r.UserAgent()
+					if len(conf.CredentialsByUserAgent) == 0 || userAgent == "" {
+						// set all available credentials challenges
+						for i := range credChain {
+							credChain[i].AddWWWAuthenticate(w, r, conf.Realm)
+						}
+
+					} else {
+						// set credentials depending on user agent.
+						// if not match, set all available credentials.
+						var match bool
+						for k, cred := range conf.CredentialsByUserAgent {
+							if strings.Contains(userAgent, k) {
+								if challenge, ok := credChain[cred]; ok {
+									challenge.AddWWWAuthenticate(w, r, conf.Realm)
+									match = true
+									continue
+								} else {
+									// warm that configured credential is not loaded
+									log.Warn().Msgf("auth: configured user-agent credential is not loaded: %s", cred)
+								}
+							}
+
+						}
+						// if no user agent is match, return all available challengues
+						if !match {
+							for i := range credChain {
+								credChain[i].AddWWWAuthenticate(w, r, conf.Realm)
+							}
+						}
 					}
+
 					w.WriteHeader(http.StatusUnauthorized)
 					return
 				}
@@ -246,4 +285,24 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 		})
 	}
 	return chain, nil
+}
+
+// applyWWWAuthenticate returns the WWW Authenticate challenges keys to use given an http request
+// and available credentials.
+func applyWWWAuthenticate(ua string, uam map[string]string, creds []string) []string {
+	if ua == "" || len(uam) == 0 {
+		return creds
+	}
+
+	cred, ok := uam[ua]
+	if ok {
+		for _, v := range creds {
+			if v == cred {
+				return []string{cred}
+			}
+		}
+		return creds
+	}
+
+	return nil
 }
