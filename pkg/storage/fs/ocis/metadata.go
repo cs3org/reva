@@ -90,7 +90,9 @@ func (fs *ocisfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refe
 		if err = xattr.Remove(nodePath, attrName); err != nil {
 			// a non-existing attribute will return an error, which we can ignore
 			// (using string compare because the error type is syscall.Errno and not wrapped/recognizable)
-			if e, ok := err.(*xattr.Error); !ok || e.Err.Error() != "no data available" {
+			if e, ok := err.(*xattr.Error); !ok || (e.Err.Error() != "no data available" ||
+				// darwin
+				e.Err.Error() != "attribute not found") {
 				appctx.GetLogger(ctx).Error().Err(err).
 					Interface("node", n).
 					Str("key", keys[i]).
