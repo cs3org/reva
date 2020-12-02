@@ -22,34 +22,56 @@ package config
 type Configuration struct {
 	Prefix string `mapstructure:"prefix"`
 
-	Connector      string   `mapstructure:"connector"`
-	Exporters      []string `mapstructure:"exporters"`
-	UpdateInterval string   `mapstructure:"update_interval"`
+	Connectors struct {
+		GOCDB struct {
+			Address string `mapstructure:"address"`
+			Scope   string `mapstructure:"scope"`
+		} `mapstructure:"gocdb"`
 
-	GOCDB struct {
-		Address string `mapstructure:"address"`
-		Scope   string `mapstructure:"scope"`
-	} `mapstructure:"gocdb"`
+		LocalFile struct {
+			File string `mapstructure:"file"`
+		} `mapstructure:"localfile"`
+	} `mapstructure:"connectors"`
 
-	WebAPI struct {
-		Endpoint string `mapstructure:"endpoint"`
-	} `yaml:"webapi"`
+	UpdateInterval string `mapstructure:"update_interval"`
 
-	CS3API struct {
-		Endpoint string `mapstructure:"endpoint"`
-	} `yaml:"cs3api"`
+	Importers struct {
+		WebAPI struct {
+			Endpoint          string   `mapstructure:"endpoint"`
+			EnabledConnectors []string `mapstructure:"enabled_connectors"`
+		} `mapstructure:"webapi"`
+	} `mapstructure:"importers"`
 
-	SiteLocations struct {
-		Endpoint string `mapstructure:"endpoint"`
-	} `yaml:"siteloc"`
+	Exporters struct {
+		WebAPI struct {
+			Endpoint          string   `mapstructure:"endpoint"`
+			EnabledConnectors []string `mapstructure:"enabled_connectors"`
+		} `mapstructure:"webapi"`
 
-	PrometheusSD struct {
-		MetricsOutputFile  string `mapstructure:"metrics_output_file"`
-		BlackboxOutputFile string `mapstructure:"blackbox_output_file"`
-	} `mapstructure:"promsd"`
+		CS3API struct {
+			Endpoint          string   `mapstructure:"endpoint"`
+			EnabledConnectors []string `mapstructure:"enabled_connectors"`
+		} `mapstructure:"cs3api"`
+
+		SiteLocations struct {
+			Endpoint          string   `mapstructure:"endpoint"`
+			EnabledConnectors []string `mapstructure:"enabled_connectors"`
+		} `mapstructure:"siteloc"`
+
+		PrometheusSD struct {
+			MetricsOutputFile  string   `mapstructure:"metrics_output_file"`
+			BlackboxOutputFile string   `mapstructure:"blackbox_output_file"`
+			EnabledConnectors  []string `mapstructure:"enabled_connectors"`
+		} `mapstructure:"promsd"`
+	} `mapstructure:"exporters"`
+
+	// Internal settings
+	EnabledConnectors []string `mapstructure:"-"`
+	EnabledImporters  []string `mapstructure:"-"`
+	EnabledExporters  []string `mapstructure:"-"`
 }
 
-// Init sets sane defaults
+// Init sets sane defaults.
 func (c *Configuration) Init() {
 	if c.Prefix == "" {
 		c.Prefix = "mentix"

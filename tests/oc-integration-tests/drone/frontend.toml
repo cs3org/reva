@@ -108,3 +108,10 @@ incoming = true
 
 [http.services.ocs.capabilities.capabilities.notifications]
 endpoints = ["disable"]
+
+[http.services.ocs.capabilities.capabilities.files.tus_support]
+version = "1.0.0"
+resumable = "1.0.0"
+extension = "creation,creation-with-upload"
+http_method_override = ""
+max_chunk_size = 0

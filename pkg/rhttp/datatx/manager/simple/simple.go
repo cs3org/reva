@@ -81,7 +81,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 			rc, err := fs.Download(ctx, ref)
 			if err != nil {
 				if _, ok := err.(errtypes.IsNotFound); ok {
-					log.Err(err).Msg("datasvc: file not found")
+					log.Debug().Err(err).Msg("datasvc: file not found")
 					w.WriteHeader(http.StatusNotFound)
 				} else {
 					log.Err(err).Msg("datasvc: error downloading file")
@@ -89,6 +89,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 				}
 				return
 			}
+			defer rc.Close()
 
 			_, err = io.Copy(w, rc)
 			if err != nil {

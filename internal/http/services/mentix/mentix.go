@@ -27,7 +27,6 @@ import (
 
 	"github.com/cs3org/reva/pkg/mentix"
 	"github.com/cs3org/reva/pkg/mentix/config"
-	"github.com/cs3org/reva/pkg/mentix/exporters"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 )
 
@@ -60,9 +59,14 @@ func (s *svc) Prefix() string {
 }
 
 func (s *svc) Unprotected() []string {
-	// Get all endpoints exposed by the RequestExporters
+	// Get all endpoints exposed by the RequestExchangers
+	importers := s.mntx.GetRequestImporters()
 	exporters := s.mntx.GetRequestExporters()
-	endpoints := make([]string, len(exporters))
+
+	endpoints := make([]string, len(importers)+len(exporters))
+	for idx, importer := range importers {
+		endpoints[idx] = importer.Endpoint()
+	}
 	for idx, exporter := range exporters {
 		endpoints[idx] = exporter.Endpoint()
 	}
@@ -88,42 +92,70 @@ func parseConfig(m map[string]interface{}) (*config.Configuration, error) {
 	if err := mapstructure.Decode(m, &cfg); err != nil {
 		return nil, errors.Wrap(err, "mentix: error decoding configuration")
 	}
+	applyInternalConfig(m, cfg)
 	applyDefaultConfig(cfg)
 	return cfg, nil
 }
 
+func applyInternalConfig(m map[string]interface{}, conf *config.Configuration) {
+	getSubsections := func(section string) []string {
+		subsections := make([]string, 0, 5)
+		if list, ok := m[section].(map[string]interface{}); ok {
+			for name := range list {
+				subsections = append(subsections, name)
+			}
+		}
+		return subsections
+	}
+
+	conf.EnabledConnectors = getSubsections("connectors")
+	conf.EnabledImporters = getSubsections("importers")
+	conf.EnabledExporters = getSubsections("exporters")
+}
+
 func applyDefaultConfig(conf *config.Configuration) {
+	// General
 	if conf.Prefix == "" {
 		conf.Prefix = serviceName
-	}
-
-	if conf.Connector == "" {
-		conf.Connector = config.ConnectorIDGOCDB // Use GOCDB
-	}
-
-	if len(conf.Exporters) == 0 {
-		conf.Exporters = exporters.RegisteredExporterIDs() // Enable all exporters
 	}
 
 	if conf.UpdateInterval == "" {
 		conf.UpdateInterval = "1h" // Update once per hour
 	}
 
-	if conf.GOCDB.Scope == "" {
-		conf.GOCDB.Scope = "SM" // TODO(Daniel-WWU-IT): This might change in the future
+	// Connectors
+	if conf.Connectors.GOCDB.Scope == "" {
+		conf.Connectors.GOCDB.Scope = "SM" // TODO(Daniel-WWU-IT): This might change in the future
 	}
 
-	if conf.WebAPI.Endpoint == "" {
-		conf.WebAPI.Endpoint = "/"
+	// Importers
+	if conf.Importers.WebAPI.Endpoint == "" {
+		conf.Importers.WebAPI.Endpoint = "/"
 	}
 
-	if conf.CS3API.Endpoint == "" {
-		conf.CS3API.Endpoint = "/cs3"
+	// Exporters
+	addDefaultConnector := func(enabledList *[]string) {
+		if len(*enabledList) == 0 {
+			*enabledList = append(*enabledList, "*")
+		}
 	}
 
-	if conf.SiteLocations.Endpoint == "" {
-		conf.SiteLocations.Endpoint = "/loc"
+	if conf.Exporters.WebAPI.Endpoint == "" {
+		conf.Exporters.WebAPI.Endpoint = "/"
 	}
+	addDefaultConnector(&conf.Exporters.WebAPI.EnabledConnectors)
+
+	if conf.Exporters.CS3API.Endpoint == "" {
+		conf.Exporters.CS3API.Endpoint = "/cs3"
+	}
+	addDefaultConnector(&conf.Exporters.CS3API.EnabledConnectors)
+
+	if conf.Exporters.SiteLocations.Endpoint == "" {
+		conf.Exporters.SiteLocations.Endpoint = "/loc"
+	}
+	addDefaultConnector(&conf.Exporters.SiteLocations.EnabledConnectors)
+
+	addDefaultConnector(&conf.Exporters.PrometheusSD.EnabledConnectors)
 }
 
 // New returns a new Mentix service.

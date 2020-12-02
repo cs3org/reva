@@ -144,6 +144,7 @@ apiSharePublicLink1/createPublicLinkShare.feature:793
 apiSharePublicLink1/createPublicLinkShare.feature:804
 #
 # https://github.com/owncloud/product/issues/292 invalid format of sharees response
+# https://github.com/owncloud/ocis/issues/547 Searching sharee with displayname
 #
 apiSharees/sharees.feature:32
 apiSharees/sharees.feature:33
@@ -322,7 +323,7 @@ apiShareOperationsToShares/gettingShares.feature:39
 #
 # https://github.com/owncloud/ocis-reva/issues/357 Delete shares from user when user is deleted
 # https://github.com/owncloud/ocis-reva/issues/301 no displayname_owner shown when creating a share
-# https://github.com/owncloud/ocis-reva/issues/302 when sharing a file mime-type field is set to application/octet-stream
+# https://github.com/owncloud/ocis/issues/578 when sharing a file mime-type field is set to application/octet-stream
 #
 apiShareOperationsToShares/gettingShares.feature:135
 apiShareOperationsToShares/gettingShares.feature:136
@@ -517,7 +518,7 @@ apiSharePublicLink2/updatePublicLinkShare.feature:94
 apiSharePublicLink2/updatePublicLinkShare.feature:284
 apiSharePublicLink2/updatePublicLinkShare.feature:285
 #
-# https://github.com/owncloud/ocis/issues/270 [OCIS] share permissions not enforced
+# https://github.com/owncloud/product/issues/270 [OCIS] share permissions not enforced
 #
 apiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:25
 apiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:26
@@ -840,7 +841,7 @@ apiShareReshareToShares3/reShareWithExpiryDate.feature:337
 apiShareReshareToShares3/reShareWithExpiryDate.feature:338
 #
 # https://github.com/owncloud/product/issues/254 empty trashbin does not work
-# https://github.com/owncloud/product/issues/254 delete from trashbin does not work
+# https://github.com/owncloud/ocis/issues/551 delete from trashbin does not work
 #
 apiTrashbin/trashbinDelete.feature:31
 apiTrashbin/trashbinDelete.feature:32
@@ -1066,10 +1067,6 @@ apiWebdavOperations/refuseAccess.feature:21
 apiWebdavOperations/refuseAccess.feature:22
 apiWebdavOperations/refuseAccess.feature:33
 apiWebdavOperations/refuseAccess.feature:34
-#
-# https://github.com/owncloud/core/pull/38035 PROPFIND to https://localhost:9200/remote.php/dav/files gets an error 500 response
-#
-apiWebdavOperations/propfind.feature:5
 #
 # https://github.com/owncloud/ocis-reva/issues/39  REPORT request not implemented
 #
@@ -1494,8 +1491,6 @@ apiVersions/fileVersionsSharingToShares.feature:179
 #
 apiVersions/fileVersionsSharingToShares.feature:222
 apiVersions/fileVersionsSharingToShares.feature:223
-apiVersions/fileVersionsSharingToShares.feature:224
-apiVersions/fileVersionsSharingToShares.feature:225
 #
 # getting the metadata without permission results in a 403 error https://github.com/owncloud/ocis/issues/773
 #
@@ -2219,3 +2214,48 @@ apiWebdavProperties1/copyFile.feature:306
 apiWebdavProperties1/copyFile.feature:307
 apiWebdavProperties1/copyFile.feature:329
 apiWebdavProperties1/copyFile.feature:330
+
+# https://github.com/owncloud/ocis/issues/772 requests to webdav URLs with an fileid containing an invalid storage_id result in error 500
+apiVersions/fileVersions.feature:384
+
+# https://github.com/owncloud/ocis/issues/771 requesting propfind with invalid fileid gives 502 error
+apiVersions/fileVersions.feature:389
+
+# https://github.com/owncloud/ocis/issues/760 user can access version metadata of a received share before accepting it
+apiVersions/fileVersionsSharingToShares.feature:279
+
+# https://github.com/owncloud/ocis/issues/719 when a share exists its impossible to share a renamed folder
+apiShareManagementBasicToShares/createShareToSharesFolder.feature:611
+apiShareManagementBasicToShares/createShareToSharesFolder.feature:612
+
+# https://github.com/owncloud/ocis/issues/965 ocis-storage does not use the mtime send in the `Upload-Metadata` header when uploading via TUS
+apiWebdavUploadTUS/uploadFileMtime.feature:17
+apiWebdavUploadTUS/uploadFileMtime.feature:18
+apiWebdavUploadTUS/uploadFileMtime.feature:27
+apiWebdavUploadTUS/uploadFileMtime.feature:28
+apiWebdavUploadTUS/uploadFileMtime.feature:38
+apiWebdavUploadTUS/uploadFileMtime.feature:39
+apiWebdavUploadTUS/uploadFileMtime.feature:49
+apiWebdavUploadTUS/uploadFileMtime.feature:50
+apiWebdavUploadTUS/uploadFileMtimeShares.feature:40
+apiWebdavUploadTUS/uploadFileMtimeShares.feature:41
+
+# https://github.com/owncloud/ocis/issues/968 [ocis-storage] PROPFIND on a file uploaded by share receiver is not possible
+apiWebdavUploadTUS/uploadFileMtimeShares.feature:26
+apiWebdavUploadTUS/uploadFileMtimeShares.feature:27
+apiWebdavUploadTUS/uploadFileMtimeShares.feature:55
+apiWebdavUploadTUS/uploadFileMtimeShares.feature:56
+
+# https://github.com/owncloud/ocis/issues/763 [OCIS-storage] reading a file that a collaborator uploaded is impossible
+apiWebdavUploadTUS/uploadFileMtimeShares.feature:70
+apiWebdavUploadTUS/uploadFileMtimeShares.feature:71
+
+# https://github.com/owncloud/ocis/issues/968 [ocis-storage] PROPFIND on a file uploaded by share receiver is not possible
+apiWebdavUploadTUS/uploadToShare.feature:23
+apiWebdavUploadTUS/uploadToShare.feature:24
+apiWebdavUploadTUS/uploadToShare.feature:37
+apiWebdavUploadTUS/uploadToShare.feature:38
+
+# https://github.com/owncloud/product/issues/293 sharing with group not available
+apiWebdavUploadTUS/uploadToShare.feature:52
+apiWebdavUploadTUS/uploadToShare.feature:53

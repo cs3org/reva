@@ -21,6 +21,13 @@ package config
 const (
 	// ConnectorIDGOCDB is the connector identifier for GOCDB.
 	ConnectorIDGOCDB = "gocdb"
+	// ConnectorIDLocalFile is the connector identifier for local files.
+	ConnectorIDLocalFile = "localfile"
+)
+
+const (
+	// ImporterIDWebAPI is the identifier for the WebAPI importer.
+	ImporterIDWebAPI = "webapi"
 )
 
 const (

@@ -55,7 +55,8 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 	if depth == "" {
 		depth = "1"
 	}
-	// see https://tools.ietf.org/html/rfc4918#section-10.2
+
+	// see https://tools.ietf.org/html/rfc4918#section-9.1
 	if depth != "0" && depth != "1" && depth != "infinity" {
 		log.Error().Msgf("invalid Depth header value %s", depth)
 		w.WriteHeader(http.StatusBadRequest)
@@ -639,8 +640,12 @@ type propertyXML struct {
 
 // http://www.webdav.org/specs/rfc4918.html#ELEMENT_error
 type errorXML struct {
-	XMLName  xml.Name `xml:"d:error"`
-	InnerXML []byte   `xml:",innerxml"`
+	XMLName   xml.Name `xml:"d:error"`
+	Xmlnsd    string   `xml:"xmlns:d,attr"`
+	Xmlnss    string   `xml:"xmlns:s,attr"`
+	Exception string   `xml:"s:exception"`
+	Message   string   `xml:"s:message"`
+	InnerXML  []byte   `xml:",innerxml"`
 }
 
 var errInvalidPropfind = errors.New("webdav: invalid propfind")

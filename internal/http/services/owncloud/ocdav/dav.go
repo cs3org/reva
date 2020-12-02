@@ -93,6 +93,36 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 		ctx := r.Context()
 		log := appctx.GetLogger(ctx)
 
+		// if there is no file in the request url we assume the request url is: "/remote.php/dav/files"
+		// https://github.com/owncloud/core/blob/18475dac812064b21dabcc50f25ef3ffe55691a5/tests/acceptance/features/apiWebdavOperations/propfind.feature
+		if r.URL.Path == "/files" {
+			log.Debug().Str("path", r.URL.Path).Msg("method not allowed")
+			contextUser, ok := ctxuser.ContextGetUser(ctx)
+			if ok {
+				r.URL.Path = path.Join(r.URL.Path, contextUser.Username)
+			}
+
+			if r.Header.Get("Depth") == "" {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				b, err := Marshal(exception{
+					code:    SabredavMethodNotAllowed,
+					message: "Listing members of this collection is disabled",
+				})
+				if err != nil {
+					log.Error().Msgf("error marshaling xml response: %s", b)
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				_, err = w.Write(b)
+				if err != nil {
+					log.Error().Msgf("error writing xml response: %s", b)
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				return
+			}
+		}
+
 		var head string
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 

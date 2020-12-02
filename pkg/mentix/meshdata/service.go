@@ -18,6 +18,13 @@
 
 package meshdata
 
+import (
+	"fmt"
+	"net/url"
+
+	"github.com/cs3org/reva/pkg/mentix/network"
+)
+
 // Service represents a service managed by Mentix.
 type Service struct {
 	*ServiceEndpoint
@@ -26,10 +33,49 @@ type Service struct {
 	AdditionalEndpoints []*ServiceEndpoint
 }
 
+// InferMissingData infers missing data from other data where possible.
+func (service *Service) InferMissingData() {
+	service.ServiceEndpoint.InferMissingData()
+
+	// Infer missing data
+	if service.Host == "" {
+		if serviceURL, err := url.Parse(service.URL); err == nil {
+			service.Host = network.ExtractDomainFromURL(serviceURL, true)
+		}
+	}
+}
+
+// Verify checks if the service data is valid.
+func (service *Service) Verify() error {
+	if err := service.ServiceEndpoint.Verify(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // ServiceType represents a service type managed by Mentix.
 type ServiceType struct {
 	Name        string
 	Description string
+}
+
+// InferMissingData infers missing data from other data where possible.
+func (serviceType *ServiceType) InferMissingData() {
+	// Infer missing data
+	if serviceType.Description == "" {
+		serviceType.Description = serviceType.Name
+	}
+}
+
+// Verify checks if the service type data is valid.
+func (serviceType *ServiceType) Verify() error {
+	// Verify data
+	if serviceType.Name == "" {
+		return fmt.Errorf("service type name missing")
+	}
+
+	return nil
 }
 
 // ServiceEndpoint represents a service endpoint managed by Mentix.
@@ -39,4 +85,23 @@ type ServiceEndpoint struct {
 	URL         string
 	IsMonitored bool
 	Properties  map[string]string
+}
+
+// InferMissingData infers missing data from other data where possible.
+func (serviceEndpoint *ServiceEndpoint) InferMissingData() {
+}
+
+// Verify checks if the service endpoint data is valid.
+func (serviceEndpoint *ServiceEndpoint) Verify() error {
+	if serviceEndpoint.Type == nil {
+		return fmt.Errorf("service endpoint type missing")
+	}
+	if serviceEndpoint.Name == "" {
+		return fmt.Errorf("service endpoint name missing")
+	}
+	if serviceEndpoint.URL == "" {
+		return fmt.Errorf("service endpoint URL missing")
+	}
+
+	return nil
 }

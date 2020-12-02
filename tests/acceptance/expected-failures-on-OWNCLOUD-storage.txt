@@ -141,6 +141,7 @@ apiFavorites/favoritesSharingToShares.feature:77
 apiFavorites/favoritesSharingToShares.feature:78
 #
 # https://github.com/owncloud/product/issues/292 invalid format of sharees response
+# https://github.com/owncloud/ocis/issues/547 Searching sharee with displayname
 #
 apiSharees/sharees.feature:32
 apiSharees/sharees.feature:33
@@ -308,7 +309,7 @@ apiShareOperationsToShares/gettingShares.feature:39
 #
 # https://github.com/owncloud/ocis-reva/issues/357 Delete shares from user when user is deleted
 # https://github.com/owncloud/ocis-reva/issues/301 no displayname_owner shown when creating a share
-# https://github.com/owncloud/ocis-reva/issues/302 when sharing a file mime-type field is set to application/octet-stream
+# https://github.com/owncloud/ocis/issues/578 when sharing a file mime-type field is set to application/octet-stream
 #
 apiShareOperationsToShares/gettingShares.feature:135
 apiShareOperationsToShares/gettingShares.feature:136
@@ -389,6 +390,7 @@ apiSharePublicLink1/changingPublicLinkShare.feature:197
 apiSharePublicLink1/changingPublicLinkShare.feature:244
 #
 # https://github.com/owncloud/ocis-reva/issues/292 Public link enforce permissions
+# https://github.com/owncloud/ocis/issues/723 upload-only public link does not refer to files-drop page, nor are the permissions enforced
 #
 apiSharePublicLink1/changingPublicLinkShare.feature:267
 apiSharePublicLink1/changingPublicLinkShare.feature:278
@@ -488,7 +490,7 @@ apiSharePublicLink2/updatePublicLinkShare.feature:94
 apiSharePublicLink2/updatePublicLinkShare.feature:284
 apiSharePublicLink2/updatePublicLinkShare.feature:285
 #
-# https://github.com/owncloud/ocis/issues/270 [OCIS] share permissions not enforced
+# https://github.com/owncloud/product/issues/270 [OCIS] share permissions not enforced
 #
 apiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:25
 apiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:26
@@ -809,7 +811,7 @@ apiShareReshareToShares3/reShareWithExpiryDate.feature:272
 apiShareReshareToShares3/reShareWithExpiryDate.feature:273
 #
 # https://github.com/owncloud/product/issues/254 empty trashbin does not work
-# https://github.com/owncloud/product/issues/254 delete from trashbin does not work
+# https://github.com/owncloud/ocis/issues/551 delete from trashbin does not work
 #
 apiTrashbin/trashbinDelete.feature:31
 apiTrashbin/trashbinDelete.feature:32
@@ -1037,10 +1039,6 @@ apiWebdavOperations/refuseAccess.feature:21
 apiWebdavOperations/refuseAccess.feature:22
 apiWebdavOperations/refuseAccess.feature:33
 apiWebdavOperations/refuseAccess.feature:34
-#
-# https://github.com/owncloud/core/pull/38035 PROPFIND to https://localhost:9200/remote.php/dav/files gets an error 500 response
-#
-apiWebdavOperations/propfind.feature:5
 #
 # https://github.com/owncloud/ocis-reva/issues/39  REPORT request not implemented
 #
@@ -2156,3 +2154,20 @@ apiWebdavProperties1/copyFile.feature:306
 apiWebdavProperties1/copyFile.feature:307
 apiWebdavProperties1/copyFile.feature:329
 apiWebdavProperties1/copyFile.feature:330
+
+# https://github.com/owncloud/ocis/issues/772 requests to webdav URLs with an fileid containing an invalid storage_id result in error 500
+apiVersions/fileVersions.feature:384
+
+# https://github.com/owncloud/ocis/issues/771 requesting propfind with invalid fileid gives 502 error
+apiVersions/fileVersions.feature:389
+
+# https://github.com/owncloud/ocis/issues/760 user can access version metadata of a received share before accepting it
+apiVersions/fileVersionsSharingToShares.feature:279
+
+# https://github.com/owncloud/ocis/issues/719 when a share exists its impossible to share a renamed folder
+apiShareManagementBasicToShares/createShareToSharesFolder.feature:611
+apiShareManagementBasicToShares/createShareToSharesFolder.feature:612
+
+# https://github.com/owncloud/product/issues/293 sharing with group not available
+apiWebdavUploadTUS/uploadToShare.feature:52
+apiWebdavUploadTUS/uploadToShare.feature:53

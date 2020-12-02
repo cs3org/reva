@@ -16,23 +16,36 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package webapi
+package ocdav
 
 import (
-	"encoding/json"
-	"fmt"
-	"net/url"
-
-	"github.com/cs3org/reva/pkg/mentix/meshdata"
+	"encoding/xml"
 )
 
-// HandleDefaultQuery processes a basic query.
-func HandleDefaultQuery(meshData *meshdata.MeshData, params url.Values) ([]byte, error) {
-	// Just return the plain, unfiltered data as JSON
-	data, err := json.MarshalIndent(meshData, "", "\t")
-	if err != nil {
-		return []byte{}, fmt.Errorf("unable to marshal the mesh data: %v", err)
-	}
+type code int
 
-	return data, nil
+const (
+	// SabredavMethodNotAllowed maps to HTTP 405
+	SabredavMethodNotAllowed code = iota
+)
+
+var (
+	codesEnum = []string{
+		"Sabre\\DAV\\Exception\\MethodNotAllowed",
+	}
+)
+
+type exception struct {
+	code    code
+	message string
+}
+
+// Marshal just calls the xml marshaller for a given exception.
+func Marshal(e exception) ([]byte, error) {
+	return xml.Marshal(&errorXML{
+		Xmlnsd:    "DAV",
+		Xmlnss:    "http://sabredav.org/ns",
+		Exception: codesEnum[e.code],
+		Message:   e.message,
+	})
 }

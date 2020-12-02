@@ -20,27 +20,23 @@ package connectors
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
+	"github.com/cs3org/reva/pkg/mentix/entity"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
-)
-
-var (
-	registeredConnectors = map[string]Connector{}
 )
 
 // Connector is the interface that all connectors must implement.
 type Connector interface {
-	// Activate activates a connector.
-	Activate(conf *config.Configuration, log *zerolog.Logger) error
+	entity.Entity
+
 	// RetrieveMeshData fetches new mesh data.
 	RetrieveMeshData() (*meshdata.MeshData, error)
-
-	// GetName returns the display name of the connector.
-	GetName() string
+	// UpdateMeshData updates the provided mesh data on the target side. The provided data only contains the data that
+	// should be updated, not the entire data set.
+	UpdateMeshData(data *meshdata.MeshData) error
 }
 
 // BaseConnector implements basic connector functionality common to all connectors.
@@ -64,17 +60,8 @@ func (connector *BaseConnector) Activate(conf *config.Configuration, log *zerolo
 	return nil
 }
 
-// FindConnector searches for the given connector ID in all globally registered connectors.
-func FindConnector(connectorID string) (Connector, error) {
-	for id, connector := range registeredConnectors {
-		if strings.EqualFold(id, connectorID) {
-			return connector, nil
-		}
-	}
-
-	return nil, fmt.Errorf("no connector with ID '%v' registered", connectorID)
-}
-
-func registerConnector(id string, connector Connector) {
-	registeredConnectors[id] = connector
+// UpdateMeshData updates the provided mesh data on the target side. The provided data only contains the data that
+// should be updated, not the entire data set.
+func (connector *BaseConnector) UpdateMeshData(data *meshdata.MeshData) error {
+	return fmt.Errorf("the connector doesn't support updating of mesh data")
 }
