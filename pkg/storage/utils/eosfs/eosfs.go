@@ -1448,16 +1448,16 @@ func (fs *eosfs) getRootUIDAndGID(ctx context.Context) (string, string, error) {
 	return "0", "0", nil
 }
 
-func attrTypeToString(at eosclient.AttrType) string {
-	switch at {
-	case SystemAttr:
-		return "sys"
-	case UserAttr:
-		return "user"
-	default:
-		return "invalid"
-	}
-}
+//func attrTypeToString(at eosclient.AttrType) string {
+//	switch at {
+//	case SystemAttr:
+//		return "sys"
+//	case UserAttr:
+//		return "user"
+//	default:
+//		return "invalid"
+//	}
+//}
 
 type eosSysMetadata struct {
 	TreeSize  uint64 `json:"tree_size"`
