@@ -363,16 +363,19 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 // RevokePublicShare undocumented.
 func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) error {
 	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
 	db, err := m.readDb()
 	if err != nil {
 		return err
 	}
+	m.mutex.Unlock()
 
 	switch {
-	case ref.GetId().OpaqueId != "":
-		delete(db, ref.GetId().OpaqueId)
+	case ref.GetId() != nil && ref.GetId().OpaqueId != "":
+		if _, ok := db[ref.GetId().OpaqueId]; ok {
+			delete(db, ref.GetId().OpaqueId)
+		} else {
+			return errors.New("reference does not exist")
+		}
 	case ref.GetToken() != "":
 		share, err := m.getByToken(ctx, ref.GetToken())
 		if err != nil {
@@ -383,6 +386,8 @@ func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link
 		return errors.New("reference does not exist")
 	}
 
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	return m.writeDb(db)
 }
 

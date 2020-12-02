@@ -194,7 +194,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) error {
 	// check whether the reference exists
 	switch {
-	case ref.GetId().OpaqueId != "":
+	case ref.GetId() != nil && ref.GetId().OpaqueId != "":
 		s, err := m.getPublicShareByTokenID(ctx, *ref.GetId())
 		if err != nil {
 			return errors.New("reference does not exist")
