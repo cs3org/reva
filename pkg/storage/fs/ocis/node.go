@@ -431,7 +431,9 @@ func (n *Node) SetTMTime(t time.Time) (err error) {
 // UnsetTempEtag removes the temporary etag attribute
 func (n *Node) UnsetTempEtag() (err error) {
 	if err = xattr.Remove(n.lu.toInternalPath(n.ID), tmpEtagAttr); err != nil {
-		if e, ok := err.(*xattr.Error); ok && e.Err.Error() == "no data available" {
+		if e, ok := err.(*xattr.Error); ok && (e.Err.Error() == "no data available" ||
+			// darwin
+			e.Err.Error() == "attribute not found") {
 			return nil
 		}
 	}
