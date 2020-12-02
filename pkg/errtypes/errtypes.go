@@ -22,12 +22,12 @@
 // and error is a reserved word :)
 package errtypes
 
-// NotFound is the error to use when a resource something is not found.
+// NotFound is the error to use when a something is not found.
 type NotFound string
 
 func (e NotFound) Error() string { return "error: not found: " + string(e) }
 
-// IsNotFound is the method to check for w
+// IsNotFound implements the IsNotFound interface.
 func (e NotFound) IsNotFound() {}
 
 // InternalError is the error to use when we really don't know what happened. Use with care
@@ -35,7 +35,7 @@ type InternalError string
 
 func (e InternalError) Error() string { return "internal error: " + string(e) }
 
-// IsInternalError is the method to check for w
+// IsInternalError implements the IsInternalError interface.
 func (e InternalError) IsInternalError() {}
 
 // PermissionDenied is the error to use when a resource cannot be access because of missing permissions.
@@ -43,7 +43,7 @@ type PermissionDenied string
 
 func (e PermissionDenied) Error() string { return "error: permission denied: " + string(e) }
 
-// IsPermissionDenied is the method to check for w
+// IsPermissionDenied implements the IsPermissionDenied interface.
 func (e PermissionDenied) IsPermissionDenied() {}
 
 // AlreadyExists is the error to use when a resource something is not found.
@@ -51,7 +51,7 @@ type AlreadyExists string
 
 func (e AlreadyExists) Error() string { return "error: already exists: " + string(e) }
 
-// IsAlreadyExists is the method to check for w
+// IsAlreadyExists implements the IsAlreadyExists interface.
 func (e AlreadyExists) IsAlreadyExists() {}
 
 // UserRequired represents an error when a resource is not found.
@@ -59,7 +59,7 @@ type UserRequired string
 
 func (e UserRequired) Error() string { return "error: user required: " + string(e) }
 
-// IsUserRequired implements the UserRequired interface.
+// IsUserRequired implements the IsUserRequired interface.
 func (e UserRequired) IsUserRequired() {}
 
 // InvalidCredentials is the error to use when receiving invalid credentials.
@@ -86,6 +86,14 @@ func (e PartialContent) Error() string { return "error: partial content: " + str
 // IsPartialContent implements the IsPartialContent interface.
 func (e PartialContent) IsPartialContent() {}
 
+// BadRequest is the error to use when the server cannot or will not process the request (due to a client error). Reauthenticating won't help.
+type BadRequest string
+
+func (e BadRequest) Error() string { return "error: bad request: " + string(e) }
+
+// IsBadRequest implements the IsBadRequest interface.
+func (e BadRequest) IsBadRequest() {}
+
 // IsNotFound is the interface to implement
 // to specify that an a resource is not found.
 type IsNotFound interface {
@@ -93,7 +101,7 @@ type IsNotFound interface {
 }
 
 // IsAlreadyExists is the interface to implement
-// to specify that an a resource is not found.
+// to specify that a resource already exists.
 type IsAlreadyExists interface {
 	IsAlreadyExists()
 }
@@ -132,4 +140,10 @@ type IsPermissionDenied interface {
 // to specify that the client request has partial data.
 type IsPartialContent interface {
 	IsPartialContent()
+}
+
+// IsBadRequest is the interface to implement
+// to specify that the server cannot or will not process the request.
+type IsBadRequest interface {
+	IsBadRequest()
 }
