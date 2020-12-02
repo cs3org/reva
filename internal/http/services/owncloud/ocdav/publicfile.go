@@ -87,12 +87,16 @@ func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 
 func (s *svc) adjustResourcePathInURL(w http.ResponseWriter, r *http.Request) bool {
 	ctx := r.Context()
+	ctx, span := trace.StartSpan(ctx, "adjustResourcePathInURL")
+	defer span.End()
+
 	// find actual file name
-	log := appctx.GetLogger(ctx)
 	tokenStatInfo := ctx.Value(tokenStatInfoKey{}).(*provider.ResourceInfo)
+	sublog := appctx.GetLogger(ctx).With().Interface("tokenStatInfo", tokenStatInfo).Logger()
+
 	client, err := s.getClient()
 	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
+		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return false
 	}
@@ -100,28 +104,20 @@ func (s *svc) adjustResourcePathInURL(w http.ResponseWriter, r *http.Request) bo
 		ResourceId: tokenStatInfo.GetId(),
 	})
 	if err != nil {
-		log.Warn().
-			Str("tokenStatInfo.Id", tokenStatInfo.GetId().String()).
-			Str("tokenStatInfo.Path", tokenStatInfo.Path).
-			Msg("Could not get path of resource")
-		w.WriteHeader(http.StatusNotFound)
+		sublog.Error().Msg("Could not get path of resource")
+		w.WriteHeader(http.StatusInternalServerError)
 		return false
 	}
 	if pathRes.Status.Code != rpc.Code_CODE_OK {
-		switch pathRes.Status.Code {
-		case rpc.Code_CODE_NOT_FOUND:
-			w.WriteHeader(http.StatusNotFound)
-			return false
-		case rpc.Code_CODE_PERMISSION_DENIED:
-			w.WriteHeader(http.StatusForbidden)
-			return false
-		default:
-			w.WriteHeader(http.StatusInternalServerError)
-			return false
-		}
+		handleErrorStatus(&sublog, w, pathRes.Status)
+		return false
 	}
 	if path.Base(r.URL.Path) != path.Base(pathRes.Path) {
-		w.WriteHeader(http.StatusNotFound)
+		sublog.Debug().
+			Str("requestbase", path.Base(r.URL.Path)).
+			Str("pathbase", path.Base(pathRes.Path)).
+			Msg("base paths don't match")
+		w.WriteHeader(http.StatusConflict)
 		return false
 	}
 
@@ -136,10 +132,10 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "propfind")
 	defer span.End()
-	log := appctx.GetLogger(ctx)
 
 	tokenStatInfo := ctx.Value(tokenStatInfoKey{}).(*provider.ResourceInfo)
-	log.Debug().Interface("tokenStatInfo", tokenStatInfo).Msg("handlePropfindOnToken")
+	sublog := appctx.GetLogger(ctx).With().Interface("tokenStatInfo", tokenStatInfo).Logger()
+	sublog.Debug().Msg("handlePropfindOnToken")
 
 	depth := r.Header.Get("Depth")
 	if depth == "" {
@@ -148,21 +144,21 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 
 	// see https://tools.ietf.org/html/rfc4918#section-10.2
 	if depth != "0" && depth != "1" && depth != "infinity" {
-		log.Error().Msgf("invalid Depth header value %s", depth)
+		sublog.Debug().Msgf("invalid Depth header value %s", depth)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	pf, status, err := readPropfind(r.Body)
 	if err != nil {
-		log.Error().Err(err).Msg("error reading propfind request")
+		sublog.Debug().Err(err).Msg("error reading propfind request")
 		w.WriteHeader(status)
 		return
 	}
 
 	client, err := s.getClient()
 	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
+		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -172,25 +168,13 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 		ResourceId: tokenStatInfo.GetId(),
 	})
 	if err != nil {
-		log.Warn().
-			Str("tokenStatInfo.Id", tokenStatInfo.GetId().String()).
-			Str("tokenStatInfo.Path", tokenStatInfo.Path).
-			Msg("Could not get path of resource")
-		w.WriteHeader(http.StatusNotFound)
+		sublog.Warn().Msg("Could not get path of resource")
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	if pathRes.Status.Code != rpc.Code_CODE_OK {
-		switch pathRes.Status.Code {
-		case rpc.Code_CODE_NOT_FOUND:
-			w.WriteHeader(http.StatusNotFound)
-			return
-		case rpc.Code_CODE_PERMISSION_DENIED:
-			w.WriteHeader(http.StatusForbidden)
-			return
-		default:
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
+		handleErrorStatus(&sublog, w, pathRes.Status)
+		return
 	}
 
 	infos := []*provider.ResourceInfo{}
@@ -229,7 +213,7 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 
 	propRes, err := s.formatPropfind(ctx, &pf, infos, ns)
 	if err != nil {
-		log.Error().Err(err).Msg("error formatting propfind")
+		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -238,6 +222,6 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 	w.WriteHeader(http.StatusMultiStatus)
 	if _, err := w.Write([]byte(propRes)); err != nil {
-		log.Err(err).Msg("error writing response")
+		sublog.Err(err).Msg("error writing response")
 	}
 }

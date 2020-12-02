@@ -28,6 +28,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"go.opencensus.io/trace"
 )
 
 // VersionsHandler handles version requests
@@ -74,18 +75,21 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 
 func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId) {
 	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
+	ctx, span := trace.StartSpan(ctx, "listVersions")
+	defer span.End()
+
+	sublog := appctx.GetLogger(ctx).With().Interface("resourceid", rid).Logger()
 
 	pf, status, err := readPropfind(r.Body)
 	if err != nil {
-		log.Error().Err(err).Msg("error reading propfind request")
+		sublog.Debug().Err(err).Msg("error reading propfind request")
 		w.WriteHeader(status)
 		return
 	}
 
 	client, err := s.getClient()
 	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
+		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -96,22 +100,12 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 	req := &provider.StatRequest{Ref: ref}
 	res, err := client.Stat(ctx, req)
 	if err != nil {
-		log.Error().Err(err).Msg("error sending a grpc stat request")
+		sublog.Error().Err(err).Msg("error sending a grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
-		switch res.Status.Code {
-		case rpc.Code_CODE_NOT_FOUND:
-			log.Debug().Interface("resourceid", rid).Interface("status", res.Status).Msg("resource not found")
-			w.WriteHeader(http.StatusNotFound)
-		case rpc.Code_CODE_PERMISSION_DENIED:
-			log.Debug().Interface("resourceid", rid).Interface("status", res.Status).Msg("permission denied")
-			w.WriteHeader(http.StatusForbidden)
-		default:
-			log.Error().Interface("resourceid", rid).Interface("status", res.Status).Msg("grpc stat request failed")
-			w.WriteHeader(http.StatusInternalServerError)
-		}
+		handleErrorStatus(&sublog, w, res.Status)
 		return
 	}
 
@@ -122,22 +116,12 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 	}
 	lvRes, err := client.ListFileVersions(ctx, lvReq)
 	if err != nil {
-		log.Error().Err(err).Msg("error sending list container grpc request")
+		sublog.Error().Err(err).Msg("error sending list container grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	if lvRes.Status.Code != rpc.Code_CODE_OK {
-		switch lvRes.Status.Code {
-		case rpc.Code_CODE_NOT_FOUND:
-			log.Debug().Interface("resourceid", rid).Interface("status", lvRes.Status).Msg("resource not found")
-			w.WriteHeader(http.StatusNotFound)
-		case rpc.Code_CODE_PERMISSION_DENIED:
-			log.Debug().Interface("resourceid", rid).Interface("status", lvRes.Status).Msg("permission denied")
-			w.WriteHeader(http.StatusForbidden)
-		default:
-			log.Error().Interface("resourceid", rid).Interface("status", lvRes.Status).Msg("grpc list file revisions request failed")
-			w.WriteHeader(http.StatusInternalServerError)
-		}
+		handleErrorStatus(&sublog, w, lvRes.Status)
 		return
 	}
 
@@ -185,7 +169,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 
 	propRes, err := s.formatPropfind(ctx, &pf, infos, "")
 	if err != nil {
-		log.Error().Err(err).Msg("error formatting propfind")
+		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -194,7 +178,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 	w.WriteHeader(http.StatusMultiStatus)
 	_, err = w.Write([]byte(propRes))
 	if err != nil {
-		log.Error().Err(err).Msg("error writing body")
+		sublog.Error().Err(err).Msg("error writing body")
 		return
 	}
 
@@ -202,11 +186,14 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 
 func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId, key string) {
 	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
+	ctx, span := trace.StartSpan(ctx, "restore")
+	defer span.End()
+
+	sublog := appctx.GetLogger(ctx).With().Interface("resourceid", rid).Str("key", key).Logger()
 
 	client, err := s.getClient()
 	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
+		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -220,21 +207,13 @@ func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *s
 
 	res, err := client.RestoreFileVersion(ctx, req)
 	if err != nil {
-		log.Error().Err(err).Msg("error sending a grpc restore version request")
+		sublog.Error().Err(err).Msg("error sending a grpc restore version request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	switch res.Status.Code {
-	case rpc.Code_CODE_OK:
-		w.WriteHeader(http.StatusNoContent)
-	case rpc.Code_CODE_NOT_FOUND:
-		log.Debug().Interface("resourceid", rid).Str("key", key).Interface("status", res.Status).Msg("resource not found")
-		w.WriteHeader(http.StatusNotFound)
-	case rpc.Code_CODE_PERMISSION_DENIED:
-		log.Debug().Interface("resourceid", rid).Str("key", key).Interface("status", res.Status).Msg("permission denied")
-		w.WriteHeader(http.StatusForbidden)
-	default:
-		log.Error().Interface("resourceid", rid).Str("key", key).Interface("status", res.Status).Msg("grpc restore file revision request failed")
-		w.WriteHeader(http.StatusInternalServerError)
+	if res.Status.Code != rpc.Code_CODE_OK {
+		handleErrorStatus(&sublog, w, res.Status)
+		return
 	}
+	w.WriteHeader(http.StatusNoContent)
 }

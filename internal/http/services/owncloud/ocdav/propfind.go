@@ -46,7 +46,6 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "propfind")
 	defer span.End()
-	log := appctx.GetLogger(ctx)
 
 	ns = applyLayout(ctx, ns)
 
@@ -56,23 +55,25 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 		depth = "1"
 	}
 
+	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
+
 	// see https://tools.ietf.org/html/rfc4918#section-9.1
 	if depth != "0" && depth != "1" && depth != "infinity" {
-		log.Error().Msgf("invalid Depth header value %s", depth)
+		sublog.Debug().Str("depth", depth).Msgf("invalid Depth header value")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	pf, status, err := readPropfind(r.Body)
 	if err != nil {
-		log.Error().Err(err).Msg("error reading propfind request")
+		sublog.Debug().Err(err).Msg("error reading propfind request")
 		w.WriteHeader(status)
 		return
 	}
 
 	client, err := s.getClient()
 	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
+		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -83,23 +84,13 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 	req := &provider.StatRequest{Ref: ref}
 	res, err := client.Stat(ctx, req)
 	if err != nil {
-		log.Error().Err(err).Msgf("error sending a grpc stat request to ref: %v", ref)
+		sublog.Error().Err(err).Msgf("error sending a grpc stat request to ref: %v", ref)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
-		switch res.Status.Code {
-		case rpc.Code_CODE_NOT_FOUND:
-			log.Debug().Str("path", fn).Interface("status", res.Status).Msg("resource not found")
-			w.WriteHeader(http.StatusNotFound)
-		case rpc.Code_CODE_PERMISSION_DENIED:
-			log.Debug().Str("path", fn).Interface("status", res.Status).Msg("permission denied")
-			w.WriteHeader(http.StatusMultiStatus)
-		default:
-			log.Error().Str("path", fn).Interface("status", res.Status).Msg("grpc stat request failed")
-			w.WriteHeader(http.StatusInternalServerError)
-		}
+		handleErrorStatus(&sublog, w, res.Status)
 		return
 	}
 
@@ -111,23 +102,13 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 		}
 		res, err := client.ListContainer(ctx, req)
 		if err != nil {
-			log.Error().Err(err).Msg("error sending list container grpc request")
+			sublog.Error().Err(err).Msg("error sending list container grpc request")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
 		if res.Status.Code != rpc.Code_CODE_OK {
-			switch res.Status.Code {
-			case rpc.Code_CODE_NOT_FOUND:
-				log.Debug().Str("path", fn).Interface("status", res.Status).Msg("resource not found")
-				w.WriteHeader(http.StatusNotFound)
-			case rpc.Code_CODE_PERMISSION_DENIED:
-				log.Debug().Str("path", fn).Interface("status", res.Status).Msg("permission denied")
-				w.WriteHeader(http.StatusForbidden)
-			default:
-				log.Error().Str("path", fn).Interface("status", res.Status).Msg("grpc list container request failed")
-				w.WriteHeader(http.StatusInternalServerError)
-			}
+			handleErrorStatus(&sublog, w, res.Status)
 			return
 		}
 		infos = append(infos, res.Infos...)
@@ -146,22 +127,12 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 			}
 			res, err := client.ListContainer(ctx, req)
 			if err != nil {
-				log.Error().Err(err).Str("path", path).Msg("error sending list container grpc request")
+				sublog.Error().Err(err).Str("path", path).Msg("error sending list container grpc request")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 			if res.Status.Code != rpc.Code_CODE_OK {
-				switch res.Status.Code {
-				case rpc.Code_CODE_NOT_FOUND:
-					log.Debug().Str("path", fn).Interface("status", res.Status).Msg("resource not found")
-					w.WriteHeader(http.StatusNotFound)
-				case rpc.Code_CODE_PERMISSION_DENIED:
-					log.Debug().Str("path", fn).Interface("status", res.Status).Msg("permission denied")
-					w.WriteHeader(http.StatusForbidden)
-				default:
-					log.Error().Str("path", fn).Interface("status", res.Status).Msg("grpc list container request failed")
-					w.WriteHeader(http.StatusInternalServerError)
-				}
+				handleErrorStatus(&sublog, w, res.Status)
 				return
 			}
 
@@ -188,7 +159,7 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 
 	propRes, err := s.formatPropfind(ctx, &pf, infos, ns)
 	if err != nil {
-		log.Error().Err(err).Msg("error formatting propfind")
+		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -203,7 +174,7 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 	}
 	w.WriteHeader(http.StatusMultiStatus)
 	if _, err := w.Write([]byte(propRes)); err != nil {
-		log.Err(err).Msg("error writing response")
+		sublog.Err(err).Msg("error writing response")
 	}
 }
 

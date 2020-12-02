@@ -28,19 +28,23 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/utils"
+	"go.opencensus.io/trace"
 )
 
 func (s *svc) handleHead(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
+	ctx, span := trace.StartSpan(ctx, "head")
+	defer span.End()
 
 	ns = applyLayout(ctx, ns)
 
 	fn := path.Join(ns, r.URL.Path)
 
+	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
+
 	client, err := s.getClient()
 	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
+		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -51,23 +55,13 @@ func (s *svc) handleHead(w http.ResponseWriter, r *http.Request, ns string) {
 	req := &provider.StatRequest{Ref: ref}
 	res, err := client.Stat(ctx, req)
 	if err != nil {
-		log.Error().Err(err).Msg("error sending grpc stat request")
+		sublog.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
-		switch res.Status.Code {
-		case rpc.Code_CODE_NOT_FOUND:
-			log.Debug().Str("path", fn).Interface("status", res.Status).Msg("resource not found")
-			w.WriteHeader(http.StatusNotFound)
-		case rpc.Code_CODE_PERMISSION_DENIED:
-			log.Debug().Str("path", fn).Interface("status", res.Status).Msg("permission denied")
-			w.WriteHeader(http.StatusForbidden)
-		default:
-			log.Error().Str("path", fn).Interface("status", res.Status).Msg("grpc stat request failed")
-			w.WriteHeader(http.StatusInternalServerError)
-		}
+		handleErrorStatus(&sublog, w, res.Status)
 		return
 	}
 
