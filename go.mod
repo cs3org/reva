@@ -52,4 +52,4 @@ go 1.13
 
 replace github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
 
-//replace google.golang.org/grpc => google.golang.org/grpc v1.26.0 // temporary downgrade
+replace google.golang.org/grpc => google.golang.org/grpc v1.26.0 // temporary downgrade
