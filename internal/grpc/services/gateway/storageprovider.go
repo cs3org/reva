@@ -1249,13 +1249,14 @@ func (s *svc) ListContainerStream(_ *provider.ListContainerStreamRequest, _ gate
 	return errtypes.NotSupported("Unimplemented")
 }
 
-func (s *svc) listHome(ctx context.Context) (*provider.ListContainerResponse, error) {
+func (s *svc) listHome(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
 	lcr, err := s.listContainer(ctx, &provider.ListContainerRequest{
 		Ref: &provider.Reference{
 			Spec: &provider.Reference_Path{
 				Path: s.getHome(ctx),
 			},
 		},
+		ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
 	})
 	if err != nil {
 		return &provider.ListContainerResponse{
@@ -1361,7 +1362,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 	}
 
 	if path.Clean(p) == s.getHome(ctx) {
-		return s.listHome(ctx)
+		return s.listHome(ctx, req)
 	}
 
 	if s.isSharedFolder(ctx, p) {
