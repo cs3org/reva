@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/rs/zerolog"
 
@@ -46,7 +47,7 @@ type PrometheusSDExporter struct {
 }
 
 func createMetricsSDScrapeConfig(site *meshdata.Site, host string, endpoint *meshdata.ServiceEndpoint) *prometheus.ScrapeConfig {
-	labels := getScrapeTargetLabels(site, endpoint)
+	labels := getScrapeTargetLabels(site, host, endpoint)
 
 	// If a metrics path was specified as a property, use that one by setting the corresponding label
 	if metricsPath := meshdata.GetPropertyValue(endpoint.Properties, meshdata.PropertyMetricsPath, ""); len(metricsPath) > 0 {
@@ -66,7 +67,17 @@ func createBlackboxSDScrapeConfig(site *meshdata.Site, host string, endpoint *me
 		return nil
 	}
 
-	labels := getScrapeTargetLabels(site, endpoint)
+	// Check if health checks are enabled for the endpoint; if they aren't, skip this endpoint
+	if enableHealthChecks := meshdata.GetPropertyValue(endpoint.Properties, meshdata.PropertyEnableHealthChecks, "false"); !strings.EqualFold(enableHealthChecks, "true") {
+		return nil
+	}
+
+	labels := getScrapeTargetLabels(site, host, endpoint)
+
+	// For health checks, the gRPC port must be set
+	if _, ok := labels["__meta_mentix_grpc_port"]; !ok {
+		return nil
+	}
 
 	return &prometheus.ScrapeConfig{
 		Targets: []string{target},
@@ -74,14 +85,22 @@ func createBlackboxSDScrapeConfig(site *meshdata.Site, host string, endpoint *me
 	}
 }
 
-func getScrapeTargetLabels(site *meshdata.Site, endpoint *meshdata.ServiceEndpoint) map[string]string {
-	return map[string]string{
+func getScrapeTargetLabels(site *meshdata.Site, host string, endpoint *meshdata.ServiceEndpoint) map[string]string {
+	labels := map[string]string{
 		"__meta_mentix_site":         site.Name,
 		"__meta_mentix_site_type":    meshdata.GetSiteTypeName(site.Type),
 		"__meta_mentix_site_id":      site.GetID(),
+		"__meta_mentix_host":         host,
 		"__meta_mentix_country":      site.CountryCode,
 		"__meta_mentix_service_type": endpoint.Type.Name,
 	}
+
+	// Get the gRPC port if the corresponding property has been set
+	if port := meshdata.GetPropertyValue(endpoint.Properties, meshdata.PropertyGRPCPort, ""); len(port) > 0 {
+		labels["__meta_mentix_grpc_port"] = port
+	}
+
+	return labels
 }
 
 func (exporter *PrometheusSDExporter) registerScrapeCreators(conf *config.Configuration) error {
