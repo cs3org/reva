@@ -22,9 +22,10 @@ package config
 type Config struct {
 	Driver   string `mapstructure:"driver"`
 	Endpoint string `mapstructure:"endpoint"`
+	AuthUser string `mapstructure:"auth_user"`
+	AuthPass string `mapstructure:"auth_pass"`
 }
 
 // Init sets sane defaults
 func (c *Config) Init() {
-	// TODO defaults ?
 }
