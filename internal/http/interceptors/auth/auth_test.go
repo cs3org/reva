@@ -22,7 +22,7 @@ import (
 	"testing"
 )
 
-func TestApplyWWWAuthenticate(t *testing.T) {
+func TestGetCredsForUserAgent(t *testing.T) {
 	type test struct {
 		userAgent            string
 		userAgentMap         map[string]string
@@ -35,8 +35,16 @@ func TestApplyWWWAuthenticate(t *testing.T) {
 		&test{
 			userAgent:            "",
 			userAgentMap:         map[string]string{},
-			availableCredentials: []string{},
-			expected:             []string{},
+			availableCredentials: []string{"basic"},
+			expected:             []string{"basic"},
+		},
+
+		// map set but user agent not in map
+		&test{
+			userAgent:            "curl",
+			userAgentMap:         map[string]string{"mirall": "basic"},
+			availableCredentials: []string{"basic", "bearer"},
+			expected:             []string{"basic", "bearer"},
 		},
 
 		// no user map we return all available credentials
@@ -73,7 +81,7 @@ func TestApplyWWWAuthenticate(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		got := applyWWWAuthenticate(
+		got := getCredsForUserAgent(
 			test.userAgent,
 			test.userAgentMap,
 			test.availableCredentials)

@@ -167,11 +167,11 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 			if tkn == "" {
 				log.Warn().Msg("core access token not set")
 
-				credKeys := applyWWWAuthenticate(r.UserAgent(), conf.CredentialsByUserAgent, conf.CredentialChain)
+				userAgentCredKeys := getCredsForUserAgent(r.UserAgent(), conf.CredentialsByUserAgent, conf.CredentialChain)
 
 				// obtain credentials (basic auth, bearer token, ...) based on user agent
 				var creds *auth.Credentials
-				for _, k := range credKeys {
+				for _, k := range userAgentCredKeys {
 					creds, err = credChain[k].GetCredentials(w, r)
 					if err != nil {
 						log.Debug().Err(err).Msg("error retrieving credentials")
@@ -185,7 +185,7 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 
 				// if no credentials are found, reply with authentication challenge depending on user agent
 				if creds == nil {
-					for _, key := range credKeys {
+					for _, key := range userAgentCredKeys {
 						if cred, ok := credChain[key]; ok {
 							cred.AddWWWAuthenticate(w, r, conf.Realm)
 						} else {
@@ -260,9 +260,9 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 	return chain, nil
 }
 
-// applyWWWAuthenticate returns the WWW Authenticate challenges keys to use given an http request
+// getCredsForUserAgent returns the WWW Authenticate challenges keys to use given an http request
 // and available credentials.
-func applyWWWAuthenticate(ua string, uam map[string]string, creds []string) []string {
+func getCredsForUserAgent(ua string, uam map[string]string, creds []string) []string {
 	if ua == "" || len(uam) == 0 {
 		return creds
 	}
@@ -277,5 +277,5 @@ func applyWWWAuthenticate(ua string, uam map[string]string, creds []string) []st
 		return creds
 	}
 
-	return nil
+	return creds
 }
