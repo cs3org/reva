@@ -21,7 +21,6 @@ package auth
 import (
 	"fmt"
 	"net/http"
-	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -164,61 +163,35 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 				return
 			}
 
-			// check for token
 			tkn := tokenStrategy.GetToken(r)
 			if tkn == "" {
 				log.Warn().Msg("core access token not set")
+
+				credKeys := applyWWWAuthenticate(r.UserAgent(), conf.CredentialsByUserAgent, conf.CredentialChain)
+
+				// obtain credentials (basic auth, bearer token, ...) based on user agent
 				var creds *auth.Credentials
-				for i := range credChain {
-					creds, err = credChain[i].GetCredentials(w, r)
+				for _, k := range credKeys {
+					creds, err = credChain[k].GetCredentials(w, r)
 					if err != nil {
 						log.Debug().Err(err).Msg("error retrieving credentials")
 					}
+
 					if creds != nil {
 						log.Debug().Msgf("credentials obtained from credential strategy: type: %s, client_id: %s", creds.Type, creds.ClientID)
 						break
 					}
 				}
+
+				// if no credentials are found, reply with authentication challenge depending on user agent
 				if creds == nil {
-					// TODO read realm from forwarded for header?
-					// see https://github.com/stanvit/go-forwarded as middleware
-
-					// indicate all possible authentications to the client
-					// if the CredentialsByUserAgent is set, forward only configured credential
-					// challenge.
-
-					userAgent := r.UserAgent()
-					if len(conf.CredentialsByUserAgent) == 0 || userAgent == "" {
-						// set all available credentials challenges
-						for i := range credChain {
-							credChain[i].AddWWWAuthenticate(w, r, conf.Realm)
-						}
-
-					} else {
-						// set credentials depending on user agent.
-						// if not match, set all available credentials.
-						var match bool
-						for k, cred := range conf.CredentialsByUserAgent {
-							if strings.Contains(userAgent, k) {
-								if challenge, ok := credChain[cred]; ok {
-									challenge.AddWWWAuthenticate(w, r, conf.Realm)
-									match = true
-									continue
-								} else {
-									// warm that configured credential is not loaded
-									log.Warn().Msgf("auth: configured user-agent credential is not loaded: %s", cred)
-								}
-							}
-
-						}
-						// if no user agent is match, return all available challengues
-						if !match {
-							for i := range credChain {
-								credChain[i].AddWWWAuthenticate(w, r, conf.Realm)
-							}
+					for _, key := range credKeys {
+						if cred, ok := credChain[key]; ok {
+							cred.AddWWWAuthenticate(w, r, conf.Realm)
+						} else {
+							panic("auth credential strategy: " + key + "must have been loaded in init method")
 						}
 					}
-
 					w.WriteHeader(http.StatusUnauthorized)
 					return
 				}
