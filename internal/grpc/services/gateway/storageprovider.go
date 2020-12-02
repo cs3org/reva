@@ -2016,7 +2016,7 @@ func (s *svc) split(ctx context.Context, p string, i int) bool {
 
 	// validate that we have always at least two elements
 	if len(parts) < 2 {
-		panic(fmt.Sprintf("split: len(parts) < 2: path:%s parts:%+v", p, parts))
+		return false
 	}
 
 	// validate the share folder is always the second element, first element is always the hardcoded value of "home"

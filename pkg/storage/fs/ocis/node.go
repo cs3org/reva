@@ -124,6 +124,18 @@ func ReadRecycleItem(ctx context.Context, lu *Lookup, key string) (n *Node, tras
 	} else {
 		return
 	}
+	// lookup ownerId in extended attributes
+	if attrBytes, err = xattr.Get(deletedNodePath, ownerIDAttr); err == nil {
+		n.ownerID = string(attrBytes)
+	} else {
+		return
+	}
+	// lookup ownerIdp in extended attributes
+	if attrBytes, err = xattr.Get(deletedNodePath, ownerIDPAttr); err == nil {
+		n.ownerIDP = string(attrBytes)
+	} else {
+		return
+	}
 
 	// get origin node
 	origin = "/"
@@ -419,7 +431,9 @@ func (n *Node) SetTMTime(t time.Time) (err error) {
 // UnsetTempEtag removes the temporary etag attribute
 func (n *Node) UnsetTempEtag() (err error) {
 	if err = xattr.Remove(n.lu.toInternalPath(n.ID), tmpEtagAttr); err != nil {
-		if e, ok := err.(*xattr.Error); ok && e.Err.Error() == "no data available" {
+		if e, ok := err.(*xattr.Error); ok && (e.Err.Error() == "no data available" ||
+			// darwin
+			e.Err.Error() == "attribute not found") {
 			return nil
 		}
 	}

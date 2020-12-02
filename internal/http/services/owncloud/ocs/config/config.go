@@ -31,12 +31,17 @@ type Config struct {
 	GatewaySvc            string                `mapstructure:"gatewaysvc"`
 	DefaultUploadProtocol string                `mapstructure:"default_upload_protocol"`
 	UserAgentChunkingMap  map[string]string     `mapstructure:"user_agent_chunking_map"`
+	SharePrefix           string                `mapstructure:"share_prefix"`
 }
 
 // Init sets sane defaults
 func (c *Config) Init() {
 	if c.Prefix == "" {
 		c.Prefix = "ocs"
+	}
+
+	if c.SharePrefix == "" {
+		c.SharePrefix = "/Shares"
 	}
 
 	if c.DefaultUploadProtocol == "" {
