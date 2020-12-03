@@ -789,7 +789,7 @@ func (c *Client) rmdir(ctx context.Context, uid, gid, path string) error {
 	msg.Id = new(erpc.MDId)
 	msg.Id.Path = []byte(path)
 	msg.Recursive = true
-	msg.Norecycle = true
+	msg.Norecycle = false
 
 	rq.Command = &erpc.NSRequest_Rm{Rm: msg}
 
