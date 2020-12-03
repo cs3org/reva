@@ -77,14 +77,8 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 	home := s.getHome(ctx)
 	c, err := s.findByPath(ctx, home)
 	if err != nil {
-		log.Err(err).Msg("gateway: error finding storage provider")
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return &provider.CreateHomeResponse{
-				Status: status.NewNotFound(ctx, "storage provider not found"),
-			}, nil
-		}
 		return &provider.CreateHomeResponse{
-			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+			Status: status.NewStatusFromErrType(ctx, "error finding home", err),
 		}, nil
 	}
 
@@ -113,21 +107,9 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 	log := appctx.GetLogger(ctx)
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
-		switch st.Code {
-		case rpc.Code_CODE_NOT_FOUND:
-			return &gateway.InitiateFileDownloadResponse{
-				Status: status.NewNotFound(ctx, "gateway: file not found:"+req.Ref.String()),
-			}, nil
-		case rpc.Code_CODE_PERMISSION_DENIED:
-			return &gateway.InitiateFileDownloadResponse{
-				Status: status.NewPermissionDenied(ctx, status.NewErrorFromCode(st.Code, "gateway"), st.Message),
-			}, nil
-		default:
-			err := status.NewErrorFromCode(st.Code, "gateway")
-			return &gateway.InitiateFileDownloadResponse{
-				Status: status.NewInternal(ctx, err, fmt.Sprintf("error initiating file download id: %v", req.Ref.GetId())),
-			}, nil
-		}
+		return &gateway.InitiateFileDownloadResponse{
+			Status: st,
+		}, nil
 	}
 
 	if !s.inSharedFolder(ctx, p) {
@@ -139,21 +121,9 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 			}, nil
 		}
 		if statRes.Status.Code != rpc.Code_CODE_OK {
-			switch statRes.Status.Code {
-			case rpc.Code_CODE_NOT_FOUND:
-				return &gateway.InitiateFileDownloadResponse{
-					Status: status.NewNotFound(ctx, "gateway: file not found:"+statReq.Ref.String()),
-				}, nil
-			case rpc.Code_CODE_PERMISSION_DENIED:
-				return &gateway.InitiateFileDownloadResponse{
-					Status: status.NewPermissionDenied(ctx, status.NewErrorFromCode(statRes.Status.Code, "gateway"), statRes.Status.Message),
-				}, nil
-			default:
-				err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
-				return &gateway.InitiateFileDownloadResponse{
-					Status: status.NewInternal(ctx, err, fmt.Sprintf("error error stating ref:"+statReq.Ref.String())),
-				}, nil
-			}
+			return &gateway.InitiateFileDownloadResponse{
+				Status: statRes.Status,
+			}, nil
 		}
 		return s.initiateFileDownload(ctx, req)
 	}
@@ -177,21 +147,9 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 			}, nil
 		}
 		if statRes.Status.Code != rpc.Code_CODE_OK {
-			switch statRes.Status.Code {
-			case rpc.Code_CODE_NOT_FOUND:
-				return &gateway.InitiateFileDownloadResponse{
-					Status: status.NewNotFound(ctx, "gateway: file not found:"+statReq.Ref.String()),
-				}, nil
-			case rpc.Code_CODE_PERMISSION_DENIED:
-				return &gateway.InitiateFileDownloadResponse{
-					Status: status.NewPermissionDenied(ctx, status.NewErrorFromCode(statRes.Status.Code, "gateway"), statRes.Status.Message),
-				}, nil
-			default:
-				err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
-				return &gateway.InitiateFileDownloadResponse{
-					Status: status.NewInternal(ctx, err, fmt.Sprintf("error error stating ref:"+statReq.Ref.String())),
-				}, nil
-			}
+			return &gateway.InitiateFileDownloadResponse{
+				Status: statRes.Status,
+			}, nil
 		}
 
 		if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
@@ -204,16 +162,11 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 
 		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
-			if _, ok := err.(errtypes.IsNotFound); ok {
-				return &gateway.InitiateFileDownloadResponse{
-					Status: status.NewNotFound(ctx, "gateway: reference not found:"+statRes.Info.Target),
-				}, nil
-			}
-			log.Err(err).Msg("gateway: error resolving reference")
 			return &gateway.InitiateFileDownloadResponse{
-				Status: status.NewInternal(ctx, err, "error initiating download"),
+				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
 			}, nil
 		}
+
 		// if it is a file allow download
 		if ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
 			log.Debug().Str("path", p).Interface("ri", ri).Msg("path points to share name file")
@@ -230,7 +183,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 				return &gateway.InitiateFileDownloadResponse{
 					Status: status.NewOK(ctx),
 					Protocols: []*gateway.FileDownloadProtocol{
-						&gateway.FileDownloadProtocol{
+						{
 							Opaque:           opaque,
 							Protocol:         "simple",
 							DownloadEndpoint: ep,
@@ -275,33 +228,15 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 		}
 
 		if statRes.Status.Code != rpc.Code_CODE_OK {
-			switch statRes.Status.Code {
-			case rpc.Code_CODE_NOT_FOUND:
-				return &gateway.InitiateFileDownloadResponse{
-					Status: status.NewNotFound(ctx, "gateway: file not found:"+statReq.Ref.String()),
-				}, nil
-			case rpc.Code_CODE_PERMISSION_DENIED:
-				return &gateway.InitiateFileDownloadResponse{
-					Status: status.NewPermissionDenied(ctx, status.NewErrorFromCode(statRes.Status.Code, "gateway"), statRes.Status.Message),
-				}, nil
-			default:
-				err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
-				return &gateway.InitiateFileDownloadResponse{
-					Status: status.NewInternal(ctx, err, fmt.Sprintf("error error stating ref:"+statReq.Ref.String())),
-				}, nil
-			}
+			return &gateway.InitiateFileDownloadResponse{
+				Status: statRes.Status,
+			}, nil
 		}
 
 		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
-			if _, ok := err.(errtypes.IsNotFound); ok {
-				return &gateway.InitiateFileDownloadResponse{
-					Status: status.NewNotFound(ctx, "gateway: reference not found:"+statRes.Info.Target),
-				}, nil
-			}
-			log.Err(err).Msg("gateway: error resolving reference")
 			return &gateway.InitiateFileDownloadResponse{
-				Status: status.NewInternal(ctx, err, "error creating container"),
+				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
 			}, nil
 		}
 
@@ -317,7 +252,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 			return &gateway.InitiateFileDownloadResponse{
 				Status: status.NewOK(ctx),
 				Protocols: []*gateway.FileDownloadProtocol{
-					&gateway.FileDownloadProtocol{
+					{
 						Opaque:           opaque,
 						Protocol:         "simple",
 						DownloadEndpoint: ep,
@@ -343,13 +278,8 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 func (s *svc) initiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return &gateway.InitiateFileDownloadResponse{
-				Status: status.NewNotFound(ctx, "storage provider not found"),
-			}, nil
-		}
 		return &gateway.InitiateFileDownloadResponse{
-			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+			Status: status.NewStatusFromErrType(ctx, "error initiating download ref="+req.Ref.String(), err),
 		}, nil
 	}
 
@@ -400,21 +330,9 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 	log := appctx.GetLogger(ctx)
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
-		switch st.Code {
-		case rpc.Code_CODE_NOT_FOUND:
-			return &gateway.InitiateFileUploadResponse{
-				Status: status.NewNotFound(ctx, "gateway: file not found:"+req.Ref.String()),
-			}, nil
-		case rpc.Code_CODE_PERMISSION_DENIED:
-			return &gateway.InitiateFileUploadResponse{
-				Status: status.NewPermissionDenied(ctx, status.NewErrorFromCode(st.Code, "gateway"), st.Message),
-			}, nil
-		default:
-			err := status.NewErrorFromCode(st.Code, "gateway")
-			return &gateway.InitiateFileUploadResponse{
-				Status: status.NewInternal(ctx, err, fmt.Sprintf("error initiating file upload id: %v", req.Ref.GetId())),
-			}, nil
-		}
+		return &gateway.InitiateFileUploadResponse{
+			Status: st,
+		}, nil
 	}
 
 	if !s.inSharedFolder(ctx, p) {
@@ -441,23 +359,9 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 			}, nil
 		}
 		if statRes.Status.Code != rpc.Code_CODE_OK {
-			switch statRes.Status.Code {
-			case rpc.Code_CODE_NOT_FOUND:
-				err = errtypes.PermissionDenied("gateway: cannot upload to share name: path=" + p)
-				log.Err(err).Msg("gateway: error uploading")
-				return &gateway.InitiateFileUploadResponse{
-					Status: status.NewInvalidArg(ctx, "path points to non existing share name"),
-				}, nil
-			case rpc.Code_CODE_PERMISSION_DENIED:
-				return &gateway.InitiateFileUploadResponse{
-					Status: status.NewPermissionDenied(ctx, status.NewErrorFromCode(statRes.Status.Code, "gateway"), statRes.Status.Message),
-				}, nil
-			default:
-				err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
-				return &gateway.InitiateFileUploadResponse{
-					Status: status.NewInternal(ctx, err, fmt.Sprintf("error error stating ref:"+statReq.Ref.String())),
-				}, nil
-			}
+			return &gateway.InitiateFileUploadResponse{
+				Status: statRes.Status,
+			}, nil
 		}
 
 		if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
@@ -470,16 +374,11 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 
 		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
-			if _, ok := err.(errtypes.IsNotFound); ok {
-				return &gateway.InitiateFileUploadResponse{
-					Status: status.NewNotFound(ctx, "gateway: reference not found:"+statRes.Info.Target),
-				}, nil
-			}
-			log.Err(err).Msg("gateway: error resolving reference")
 			return &gateway.InitiateFileUploadResponse{
-				Status: status.NewInternal(ctx, err, "error initiating upload"),
+				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
 			}, nil
 		}
+
 		// if it is a file allow upload
 		if ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
 			log.Debug().Str("path", p).Interface("ri", ri).Msg("path points to share name file")
@@ -496,7 +395,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 				return &gateway.InitiateFileUploadResponse{
 					Status: status.NewOK(ctx),
 					Protocols: []*gateway.FileUploadProtocol{
-						&gateway.FileUploadProtocol{
+						{
 							Opaque:         opaque,
 							Protocol:       "simple",
 							UploadEndpoint: ep,
@@ -541,28 +440,15 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 		}
 
 		if statRes.Status.Code != rpc.Code_CODE_OK {
-			if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-				return &gateway.InitiateFileUploadResponse{
-					Status: status.NewNotFound(ctx, "gateway: file not found:"+statReq.Ref.String()),
-				}, nil
-			}
-			err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
-			log.Err(err).Msg("gateway: error uploading")
 			return &gateway.InitiateFileUploadResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
+				Status: statRes.Status,
 			}, nil
 		}
 
 		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
-			if _, ok := err.(errtypes.IsNotFound); ok {
-				return &gateway.InitiateFileUploadResponse{
-					Status: status.NewNotFound(ctx, "gateway: reference not found:"+statRes.Info.Target),
-				}, nil
-			}
-			log.Err(err).Msg("gateway: error resolving reference")
 			return &gateway.InitiateFileUploadResponse{
-				Status: status.NewInternal(ctx, err, "error creating container"),
+				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
 			}, nil
 		}
 
@@ -578,7 +464,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 			return &gateway.InitiateFileUploadResponse{
 				Status: status.NewOK(ctx),
 				Protocols: []*gateway.FileUploadProtocol{
-					&gateway.FileUploadProtocol{
+					{
 						Opaque:         opaque,
 						Protocol:       "simple",
 						UploadEndpoint: ep,
@@ -603,13 +489,8 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 func (s *svc) initiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*gateway.InitiateFileUploadResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return &gateway.InitiateFileUploadResponse{
-				Status: status.NewNotFound(ctx, "storage provider not found"),
-			}, nil
-		}
 		return &gateway.InitiateFileUploadResponse{
-			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+			Status: status.NewStatusFromErrType(ctx, "initiateFileUpload ref="+req.Ref.String(), err),
 		}, nil
 	}
 
@@ -619,21 +500,9 @@ func (s *svc) initiateFileUpload(ctx context.Context, req *provider.InitiateFile
 	}
 
 	if storageRes.Status.Code != rpc.Code_CODE_OK {
-		switch storageRes.Status.Code {
-		case rpc.Code_CODE_NOT_FOUND:
-			return &gateway.InitiateFileUploadResponse{
-				Status: status.NewNotFound(ctx, "gateway: file not found:"+req.Ref.String()),
-			}, nil
-		case rpc.Code_CODE_PERMISSION_DENIED:
-			return &gateway.InitiateFileUploadResponse{
-				Status: status.NewPermissionDenied(ctx, status.NewErrorFromCode(storageRes.Status.Code, "gateway"), storageRes.Status.Message),
-			}, nil
-		default:
-			err := status.NewErrorFromCode(storageRes.Status.Code, "gateway")
-			return &gateway.InitiateFileUploadResponse{
-				Status: status.NewInternal(ctx, err, "error initiating upload"),
-			}, nil
-		}
+		return &gateway.InitiateFileUploadResponse{
+			Status: storageRes.Status,
+		}, nil
 	}
 
 	protocols := make([]*gateway.FileUploadProtocol, len(storageRes.Protocols))
@@ -690,21 +559,9 @@ func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provi
 	}
 
 	if statRes.Status.Code != rpc.Code_CODE_OK {
-		switch statRes.Status.Code {
-		case rpc.Code_CODE_NOT_FOUND:
-			return &provider.GetPathResponse{
-				Status: status.NewNotFound(ctx, "gateway: file not found:"+statReq.Ref.String()),
-			}, nil
-		case rpc.Code_CODE_PERMISSION_DENIED:
-			return &provider.GetPathResponse{
-				Status: status.NewPermissionDenied(ctx, status.NewErrorFromCode(statRes.Status.Code, "gateway"), statRes.Status.Message),
-			}, nil
-		default:
-			err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
-			return &provider.GetPathResponse{
-				Status: status.NewInternal(ctx, err, fmt.Sprintf("error error stating ref:"+statReq.Ref.String())),
-			}, nil
-		}
+		return &provider.GetPathResponse{
+			Status: statRes.Status,
+		}, nil
 	}
 
 	return &provider.GetPathResponse{
@@ -717,21 +574,9 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 	log := appctx.GetLogger(ctx)
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
-		switch st.Code {
-		case rpc.Code_CODE_NOT_FOUND:
-			return &provider.CreateContainerResponse{
-				Status: status.NewNotFound(ctx, "gateway: container not found:"+req.Ref.String()),
-			}, nil
-		case rpc.Code_CODE_PERMISSION_DENIED:
-			return &provider.CreateContainerResponse{
-				Status: status.NewPermissionDenied(ctx, status.NewErrorFromCode(st.Code, "gateway"), st.Message),
-			}, nil
-		default:
-			err := status.NewErrorFromCode(st.Code, "gateway")
-			return &provider.CreateContainerResponse{
-				Status: status.NewInternal(ctx, err, fmt.Sprintf("error creating container on reference id: %v", req.Ref.GetId())),
-			}, nil
-		}
+		return &provider.CreateContainerResponse{
+			Status: st,
+		}, nil
 	}
 
 	if !s.inSharedFolder(ctx, p) {
@@ -767,33 +612,15 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 		}
 
 		if statRes.Status.Code != rpc.Code_CODE_OK {
-			switch statRes.Status.Code {
-			case rpc.Code_CODE_NOT_FOUND:
-				return &provider.CreateContainerResponse{
-					Status: status.NewNotFound(ctx, "gateway: container not found:"+statReq.Ref.String()),
-				}, nil
-			case rpc.Code_CODE_PERMISSION_DENIED:
-				return &provider.CreateContainerResponse{
-					Status: status.NewPermissionDenied(ctx, status.NewErrorFromCode(statRes.Status.Code, "gateway"), statRes.Status.Message),
-				}, nil
-			default:
-				err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
-				return &provider.CreateContainerResponse{
-					Status: status.NewInternal(ctx, err, fmt.Sprintf("error error stating ref:"+statReq.Ref.String())),
-				}, nil
-			}
+			return &provider.CreateContainerResponse{
+				Status: statRes.Status,
+			}, nil
 		}
 
 		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
-			if _, ok := err.(errtypes.IsNotFound); ok {
-				return &provider.CreateContainerResponse{
-					Status: status.NewNotFound(ctx, "gateway: reference not found:"+statRes.Info.Target),
-				}, nil
-			}
-			log.Err(err).Msg("gateway: error resolving reference")
 			return &provider.CreateContainerResponse{
-				Status: status.NewInternal(ctx, err, "error creating container"),
+				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
 			}, nil
 		}
 
@@ -825,13 +652,8 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 func (s *svc) createContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return &provider.CreateContainerResponse{
-				Status: status.NewNotFound(ctx, "storage provider not found"),
-			}, nil
-		}
 		return &provider.CreateContainerResponse{
-			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+			Status: status.NewStatusFromErrType(ctx, "createContainer ref="+req.Ref.String(), err),
 		}, nil
 	}
 
@@ -853,21 +675,9 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 	log := appctx.GetLogger(ctx)
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
-		switch st.Code {
-		case rpc.Code_CODE_NOT_FOUND:
-			return &provider.DeleteResponse{
-				Status: status.NewNotFound(ctx, "gateway: file not found:"+req.Ref.String()),
-			}, nil
-		case rpc.Code_CODE_PERMISSION_DENIED:
-			return &provider.DeleteResponse{
-				Status: status.NewPermissionDenied(ctx, status.NewErrorFromCode(st.Code, "gateway"), st.Message),
-			}, nil
-		default:
-			err := status.NewErrorFromCode(st.Code, "gateway")
-			return &provider.DeleteResponse{
-				Status: status.NewInternal(ctx, err, fmt.Sprintf("error deleting reference id: %v", req.Ref.GetId())),
-			}, nil
-		}
+		return &provider.DeleteResponse{
+			Status: st,
+		}, nil
 	}
 
 	if !s.inSharedFolder(ctx, p) {
@@ -877,7 +687,7 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 	if s.isSharedFolder(ctx, p) {
 		// TODO(labkode): deleting share names should be allowed, means unmounting.
 		log.Debug().Msgf("path:%s points to shared folder or share name", p)
-		err := errtypes.PermissionDenied("gateway: cannot delete share folder or share name: path=" + p)
+		err := errtypes.BadRequest("gateway: cannot delete share folder or share name: path=" + p)
 		log.Err(err).Msg("gateway: error creating container")
 		return &provider.DeleteResponse{
 			Status: status.NewInvalidArg(ctx, "path points to share folder or share name"),
@@ -917,33 +727,15 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 		}
 
 		if statRes.Status.Code != rpc.Code_CODE_OK {
-			switch statRes.Status.Code {
-			case rpc.Code_CODE_NOT_FOUND:
-				return &provider.DeleteResponse{
-					Status: status.NewNotFound(ctx, "gateway: file not found:"+statReq.Ref.String()),
-				}, nil
-			case rpc.Code_CODE_PERMISSION_DENIED:
-				return &provider.DeleteResponse{
-					Status: status.NewPermissionDenied(ctx, status.NewErrorFromCode(statRes.Status.Code, "gateway"), statRes.Status.Message),
-				}, nil
-			default:
-				err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
-				return &provider.DeleteResponse{
-					Status: status.NewInternal(ctx, err, fmt.Sprintf("error deleting ref:"+statReq.Ref.String())),
-				}, nil
-			}
+			return &provider.DeleteResponse{
+				Status: statRes.Status,
+			}, nil
 		}
 
 		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
-			if _, ok := err.(errtypes.IsNotFound); ok {
-				return &provider.DeleteResponse{
-					Status: status.NewNotFound(ctx, "gateway: not found"),
-				}, nil
-			}
-			log.Err(err).Msg("gateway: error resolving reference")
 			return &provider.DeleteResponse{
-				Status: status.NewInternal(ctx, err, "error creating container"),
+				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
 			}, nil
 		}
 
@@ -977,13 +769,8 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 func (s *svc) delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return &provider.DeleteResponse{
-				Status: status.NewNotFound(ctx, "storage provider not found"),
-			}, nil
-		}
 		return &provider.DeleteResponse{
-			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+			Status: status.NewStatusFromErrType(ctx, "delete ref="+req.Ref.String(), err),
 		}, nil
 	}
 
@@ -999,27 +786,15 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 	log := appctx.GetLogger(ctx)
 	p, st := s.getPath(ctx, req.Source)
 	if st.Code != rpc.Code_CODE_OK {
-		switch st.Code {
-		case rpc.Code_CODE_NOT_FOUND:
-			return &provider.MoveResponse{
-				Status: status.NewNotFound(ctx, "gateway: file not found:"+req.Source.String()),
-			}, nil
-		case rpc.Code_CODE_PERMISSION_DENIED:
-			return &provider.MoveResponse{
-				Status: status.NewPermissionDenied(ctx, status.NewErrorFromCode(st.Code, "gateway"), st.Message),
-			}, nil
-		default:
-			err := status.NewErrorFromCode(st.Code, "gateway")
-			return &provider.MoveResponse{
-				Status: status.NewInternal(ctx, err, fmt.Sprintf("error moving reference id: %v to `%v`", req.Source.GetId(), req.Destination.String())),
-			}, nil
-		}
+		return &provider.MoveResponse{
+			Status: st,
+		}, nil
 	}
 
 	dp, st2 := s.getPath(ctx, req.Destination)
 	if st2.Code != rpc.Code_CODE_OK && st2.Code != rpc.Code_CODE_NOT_FOUND {
 		return &provider.MoveResponse{
-			Status: st,
+			Status: st2,
 		}, nil
 	}
 
@@ -1040,9 +815,9 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 		log.Debug().Msgf("srcpath:%s dstpath:%s srcsharename:%s srcsharechild: %s dstsharename:%s dstsharechild:%s ", p, dp, shareName, shareChild, dshareName, dshareChild)
 
 		if shareName != dshareName {
-			err := errors.New("gateway: move: src and dst points to different targets")
+			err := errtypes.BadRequest("gateway: move: src and dst points to different targets")
 			return &provider.MoveResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error moving"),
+				Status: status.NewStatusFromErrType(ctx, "gateway: error moving", err),
 			}, nil
 
 		}
@@ -1062,33 +837,15 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 		}
 
 		if statRes.Status.Code != rpc.Code_CODE_OK {
-			switch statRes.Status.Code {
-			case rpc.Code_CODE_NOT_FOUND:
-				return &provider.MoveResponse{
-					Status: status.NewNotFound(ctx, "gateway: file not found:"+statReq.Ref.String()),
-				}, nil
-			case rpc.Code_CODE_PERMISSION_DENIED:
-				return &provider.MoveResponse{
-					Status: status.NewPermissionDenied(ctx, status.NewErrorFromCode(statRes.Status.Code, "gateway"), statRes.Status.Message),
-				}, nil
-			default:
-				err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
-				return &provider.MoveResponse{
-					Status: status.NewInternal(ctx, err, fmt.Sprintf("error stating ref while moving: %v ", statReq.Ref.String())),
-				}, nil
-			}
+			return &provider.MoveResponse{
+				Status: statRes.Status,
+			}, nil
 		}
 
 		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
-			if _, ok := err.(errtypes.IsNotFound); ok {
-				return &provider.MoveResponse{
-					Status: status.NewNotFound(ctx, "gateway: reference not found:"+statRes.Info.Target),
-				}, nil
-			}
-			log.Err(err).Msg("gateway: error resolving reference")
 			return &provider.MoveResponse{
-				Status: status.NewInternal(ctx, err, "error moving"),
+				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
 			}, nil
 		}
 
@@ -1122,32 +879,22 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 	}
 
 	return &provider.MoveResponse{
-		Status: status.NewInternal(ctx, errors.New("gateway: move called on unknown path: "+p), ""),
+		Status: status.NewStatusFromErrType(ctx, "move", errtypes.BadRequest("gateway: move called on unknown path: "+p)),
 	}, nil
 }
 
 func (s *svc) move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
 	srcP, err := s.findProvider(ctx, req.Source)
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return &provider.MoveResponse{
-				Status: status.NewNotFound(ctx, "source storage provider not found"),
-			}, nil
-		}
 		return &provider.MoveResponse{
-			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+			Status: status.NewStatusFromErrType(ctx, "move src="+req.Source.String(), err),
 		}, nil
 	}
 
 	dstP, err := s.findProvider(ctx, req.Destination)
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return &provider.MoveResponse{
-				Status: status.NewNotFound(ctx, "destination storage provider not found"),
-			}, nil
-		}
 		return &provider.MoveResponse{
-			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+			Status: status.NewStatusFromErrType(ctx, "move dst="+req.Destination.String(), err),
 		}, nil
 	}
 
@@ -1172,13 +919,8 @@ func (s *svc) move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 func (s *svc) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest) (*provider.SetArbitraryMetadataResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return &provider.SetArbitraryMetadataResponse{
-				Status: status.NewNotFound(ctx, "storage provider not found"),
-			}, nil
-		}
 		return &provider.SetArbitraryMetadataResponse{
-			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+			Status: status.NewStatusFromErrType(ctx, "SetArbitraryMetadata ref="+req.Ref.String(), err),
 		}, nil
 	}
 
@@ -1193,13 +935,8 @@ func (s *svc) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitra
 func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArbitraryMetadataRequest) (*provider.UnsetArbitraryMetadataResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return &provider.UnsetArbitraryMetadataResponse{
-				Status: status.NewNotFound(ctx, "storage provider not found"),
-			}, nil
-		}
 		return &provider.UnsetArbitraryMetadataResponse{
-			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+			Status: status.NewStatusFromErrType(ctx, "SetArbitraryMetadata ref="+req.Ref.String(), err),
 		}, nil
 	}
 
@@ -1226,14 +963,8 @@ func (s *svc) statHome(ctx context.Context) (*provider.StatResponse, error) {
 	}
 
 	if statRes.Status.Code != rpc.Code_CODE_OK {
-		if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			return &provider.StatResponse{
-				Status: status.NewNotFound(ctx, "gateway: home not found"),
-			}, nil
-		}
-		err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
 		return &provider.StatResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error stating home"),
+			Status: statRes.Status,
 		}, nil
 	}
 
@@ -1248,9 +979,9 @@ func (s *svc) statHome(ctx context.Context) (*provider.StatResponse, error) {
 		if statSharedFolder.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			return statRes, nil
 		}
-		err := status.NewErrorFromCode(statSharedFolder.Status.Code, "gateway")
+		// otherwise return stat of share folder
 		return &provider.StatResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error stating shares folder"),
+			Status: statSharedFolder.Status,
 		}, nil
 	}
 
@@ -1273,14 +1004,8 @@ func (s *svc) statSharesFolder(ctx context.Context) (*provider.StatResponse, err
 	}
 
 	if statRes.Status.Code != rpc.Code_CODE_OK {
-		if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			return &provider.StatResponse{
-				Status: status.NewNotFound(ctx, "gateway: shares folder not found"),
-			}, nil
-		}
-		err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
 		return &provider.StatResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error stating shares folder"),
+			Status: statRes.Status,
 		}, nil
 	}
 
@@ -1291,9 +1016,8 @@ func (s *svc) statSharesFolder(ctx context.Context) (*provider.StatResponse, err
 		}, nil
 	}
 	if lsRes.Status.Code != rpc.Code_CODE_OK {
-		err := status.NewErrorFromCode(lsRes.Status.Code, "gateway")
 		return &provider.StatResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error stating shares folder"),
+			Status: lsRes.Status,
 		}, nil
 	}
 	statRes.Info.Etag = etag.GenerateEtagFromResources(statRes.Info, lsRes.Infos)
@@ -1303,13 +1027,8 @@ func (s *svc) statSharesFolder(ctx context.Context) (*provider.StatResponse, err
 func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return &provider.StatResponse{
-				Status: status.NewNotFound(ctx, "storage provider not found"),
-			}, nil
-		}
 		return &provider.StatResponse{
-			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+			Status: status.NewStatusFromErrType(ctx, "SetArbitraryMetadata ref="+req.Ref.String(), err),
 		}, nil
 	}
 
@@ -1317,24 +1036,11 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 }
 
 func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
-	log := appctx.GetLogger(ctx)
 	p, st := s.getPath(ctx, req.Ref, req.ArbitraryMetadataKeys...)
 	if st.Code != rpc.Code_CODE_OK {
-		switch st.Code {
-		case rpc.Code_CODE_NOT_FOUND:
-			return &provider.StatResponse{
-				Status: status.NewNotFound(ctx, "gateway: file not found:"+req.Ref.String()),
-			}, nil
-		case rpc.Code_CODE_PERMISSION_DENIED:
-			return &provider.StatResponse{
-				Status: status.NewPermissionDenied(ctx, status.NewErrorFromCode(st.Code, "gateway"), st.Message),
-			}, nil
-		default:
-			err := status.NewErrorFromCode(st.Code, "gateway")
-			return &provider.StatResponse{
-				Status: status.NewInternal(ctx, err, fmt.Sprintf("error during STAT id: %v", req.Ref.GetId())),
-			}, nil
-		}
+		return &provider.StatResponse{
+			Status: st,
+		}, nil
 	}
 
 	if path.Clean(p) == s.getHome(ctx) {
@@ -1359,32 +1065,15 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		}
 
 		if statRes.Status.Code != rpc.Code_CODE_OK {
-			switch statRes.Status.Code {
-			case rpc.Code_CODE_NOT_FOUND:
-				return &provider.StatResponse{
-					Status: status.NewNotFound(ctx, "gateway: file not found:"+req.Ref.String()),
-				}, nil
-			case rpc.Code_CODE_PERMISSION_DENIED:
-				return &provider.StatResponse{
-					Status: status.NewPermissionDenied(ctx, status.NewErrorFromCode(statRes.Status.Code, "gateway"), statRes.Status.Message),
-				}, nil
-			default:
-				err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
-				return &provider.StatResponse{
-					Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+req.Ref.String()),
-				}, nil
-			}
+			return &provider.StatResponse{
+				Status: statRes.Status,
+			}, nil
 		}
 
 		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
-			if _, ok := err.(errtypes.IsNotFound); ok {
-				return &provider.StatResponse{
-					Status: status.NewNotFound(ctx, "gateway: reference not found:"+statRes.Info.Target),
-				}, nil
-			}
 			return &provider.StatResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error resolving reference: "+p),
+				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
 			}, nil
 		}
 
@@ -1426,33 +1115,15 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		}
 
 		if statRes.Status.Code != rpc.Code_CODE_OK {
-			switch statRes.Status.Code {
-			case rpc.Code_CODE_NOT_FOUND:
-				return &provider.StatResponse{
-					Status: status.NewNotFound(ctx, "gateway: file not found:"+req.Ref.String()),
-				}, nil
-			case rpc.Code_CODE_PERMISSION_DENIED:
-				return &provider.StatResponse{
-					Status: status.NewPermissionDenied(ctx, status.NewErrorFromCode(statRes.Status.Code, "gateway"), statRes.Status.Message),
-				}, nil
-			default:
-				err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
-				return &provider.StatResponse{
-					Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+req.Ref.String()),
-				}, nil
-			}
+			return &provider.StatResponse{
+				Status: statRes.Status,
+			}, nil
 		}
 
 		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
-			if _, ok := err.(errtypes.IsNotFound); ok {
-				return &provider.StatResponse{
-					Status: status.NewNotFound(ctx, "gateway: reference not found:"+statRes.Info.Target),
-				}, nil
-			}
-			log.Err(err).Msg("gateway: error resolving reference")
 			return &provider.StatResponse{
-				Status: status.NewInternal(ctx, err, "error stating"),
+				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
 			}, nil
 		}
 
@@ -1483,21 +1154,9 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 			}, nil
 		}
 		if res.Status.Code != rpc.Code_CODE_OK {
-			switch res.Status.Code {
-			case rpc.Code_CODE_NOT_FOUND:
-				return &provider.StatResponse{
-					Status: status.NewNotFound(ctx, "gateway: file not found:"+req.Ref.String()),
-				}, nil
-			case rpc.Code_CODE_PERMISSION_DENIED:
-				return &provider.StatResponse{
-					Status: status.NewPermissionDenied(ctx, status.NewErrorFromCode(res.Status.Code, "gateway"), res.Status.Message),
-				}, nil
-			default:
-				err := status.NewErrorFromCode(res.Status.Code, "gateway")
-				return &provider.StatResponse{
-					Status: status.NewInternal(ctx, err, fmt.Sprintf("error stating ref:"+req.Ref.String())),
-				}, nil
-			}
+			return &provider.StatResponse{
+				Status: res.Status,
+			}, nil
 		}
 
 		// we need to make sure we don't expose the reference target in the resource
@@ -1516,7 +1175,7 @@ func (s *svc) checkRef(ctx context.Context, ri *provider.ResourceInfo) (*provide
 
 	// reference types MUST have a target resource id.
 	if ri.Target == "" {
-		err := errors.New("gateway: ref target is an empty uri")
+		err := errtypes.BadRequest("gateway: ref target is an empty uri")
 		return nil, "", err
 	}
 
@@ -1541,7 +1200,7 @@ func (s *svc) handleCS3Ref(ctx context.Context, opaque string) (*provider.Resour
 	// a cs3 ref has the following layout: <storage_id>/<opaque_id>
 	parts := strings.SplitN(opaque, "/", 2)
 	if len(parts) < 2 {
-		err := errors.New("gateway: cs3 ref does not follow the layout storageid/opaqueid:" + opaque)
+		err := errtypes.BadRequest("gateway: cs3 ref does not follow the layout storageid/opaqueid:" + opaque)
 		return nil, err
 	}
 
@@ -1569,6 +1228,10 @@ func (s *svc) handleCS3Ref(ctx context.Context, opaque string) (*provider.Resour
 			return nil, errtypes.NotFound(req.Ref.String())
 		case rpc.Code_CODE_PERMISSION_DENIED:
 			return nil, errtypes.PermissionDenied(req.Ref.String())
+		case rpc.Code_CODE_INVALID_ARGUMENT, rpc.Code_CODE_FAILED_PRECONDITION, rpc.Code_CODE_OUT_OF_RANGE:
+			return nil, errtypes.BadRequest(req.Ref.String())
+		case rpc.Code_CODE_UNIMPLEMENTED:
+			return nil, errtypes.NotSupported(req.Ref.String())
 		default:
 			return nil, errors.New("gateway: error stating target reference")
 		}
@@ -1583,7 +1246,7 @@ func (s *svc) handleCS3Ref(ctx context.Context, opaque string) (*provider.Resour
 }
 
 func (s *svc) ListContainerStream(_ *provider.ListContainerStreamRequest, _ gateway.GatewayAPI_ListContainerStreamServer) error {
-	return errors.New("Unimplemented")
+	return errtypes.NotSupported("Unimplemented")
 }
 
 func (s *svc) listHome(ctx context.Context) (*provider.ListContainerResponse, error) {
@@ -1600,9 +1263,8 @@ func (s *svc) listHome(ctx context.Context) (*provider.ListContainerResponse, er
 		}, nil
 	}
 	if lcr.Status.Code != rpc.Code_CODE_OK {
-		err := status.NewErrorFromCode(lcr.Status.Code, "gateway")
 		return &provider.ListContainerResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error listing home"),
+			Status: lcr.Status,
 		}, nil
 	}
 
@@ -1615,14 +1277,8 @@ func (s *svc) listHome(ctx context.Context) (*provider.ListContainerResponse, er
 				}, nil
 			}
 			if statSharedFolder.Status.Code != rpc.Code_CODE_OK {
-				if statSharedFolder.Status.Code == rpc.Code_CODE_NOT_FOUND {
-					return &provider.ListContainerResponse{
-						Status: status.NewNotFound(ctx, "gateway: shares folder not found"),
-					}, nil
-				}
-				err := status.NewErrorFromCode(statSharedFolder.Status.Code, "gateway")
 				return &provider.ListContainerResponse{
-					Status: status.NewInternal(ctx, err, "gateway: error stating shares folder"),
+					Status: statSharedFolder.Status,
 				}, nil
 			}
 			lcr.Infos[i] = statSharedFolder.Info
@@ -1647,24 +1303,20 @@ func (s *svc) listSharesFolder(ctx context.Context) (*provider.ListContainerResp
 		}, nil
 	}
 	if lcr.Status.Code != rpc.Code_CODE_OK {
-		err := status.NewErrorFromCode(lcr.Status.Code, "gateway")
 		return &provider.ListContainerResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error listing shared folder"),
+			Status: lcr.Status,
 		}, nil
 	}
 	checkedInfos := make([]*provider.ResourceInfo, 0)
 	for i := range lcr.Infos {
 		info, protocol, err := s.checkRef(ctx, lcr.Infos[i])
-		if _, ok := err.(errtypes.IsNotFound); ok {
+		if err != nil {
+			// create status to log the proper messages
 			// this might arise when the shared resource has been moved to the recycle bin
-			continue
-		} else if _, ok := err.(errtypes.PermissionDenied); ok {
 			// this might arise when the resource was unshared, but the share reference was not removed
+			status.NewStatusFromErrType(ctx, "error resolving reference "+lcr.Infos[i].Target, err)
+			// continue on errors so the user can see a list of the working shares
 			continue
-		} else if err != nil {
-			return &provider.ListContainerResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error resolving reference:"+lcr.Infos[i].Path),
-			}, nil
 		}
 
 		if protocol == "webdav" {
@@ -1686,13 +1338,8 @@ func (s *svc) listSharesFolder(ctx context.Context) (*provider.ListContainerResp
 func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return &provider.ListContainerResponse{
-				Status: status.NewNotFound(ctx, "storage provider not found"),
-			}, nil
-		}
 		return &provider.ListContainerResponse{
-			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+			Status: status.NewStatusFromErrType(ctx, "listContainer ref="+req.Ref.String(), err),
 		}, nil
 	}
 
@@ -1708,21 +1355,9 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 	log := appctx.GetLogger(ctx)
 	p, st := s.getPath(ctx, req.Ref, req.ArbitraryMetadataKeys...)
 	if st.Code != rpc.Code_CODE_OK {
-		switch st.Code {
-		case rpc.Code_CODE_NOT_FOUND:
-			return &provider.ListContainerResponse{
-				Status: status.NewNotFound(ctx, "gateway: file not found:"+req.Ref.String()),
-			}, nil
-		case rpc.Code_CODE_PERMISSION_DENIED:
-			return &provider.ListContainerResponse{
-				Status: status.NewPermissionDenied(ctx, status.NewErrorFromCode(st.Code, "gateway"), st.Message),
-			}, nil
-		default:
-			err := status.NewErrorFromCode(st.Code, "gateway")
-			return &provider.ListContainerResponse{
-				Status: status.NewInternal(ctx, err, fmt.Sprintf("error listing directory id: %v", req.Ref.GetId())),
-			}, nil
-		}
+		return &provider.ListContainerResponse{
+			Status: st,
+		}, nil
 	}
 
 	if path.Clean(p) == s.getHome(ctx) {
@@ -1754,32 +1389,15 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		}
 
 		if statRes.Status.Code != rpc.Code_CODE_OK {
-			switch statRes.Status.Code {
-			case rpc.Code_CODE_NOT_FOUND:
-				return &provider.ListContainerResponse{
-					Status: status.NewNotFound(ctx, "gateway: file not found:"+statReq.Ref.String()),
-				}, nil
-			case rpc.Code_CODE_PERMISSION_DENIED:
-				return &provider.ListContainerResponse{
-					Status: status.NewPermissionDenied(ctx, status.NewErrorFromCode(statRes.Status.Code, "gateway"), statRes.Status.Message),
-				}, nil
-			default:
-				err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
-				return &provider.ListContainerResponse{
-					Status: status.NewInternal(ctx, err, "gateway: error stating share:"+statReq.Ref.String()),
-				}, nil
-			}
+			return &provider.ListContainerResponse{
+				Status: statRes.Status,
+			}, nil
 		}
 
 		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
-			if _, ok := err.(errtypes.IsNotFound); ok {
-				return &provider.ListContainerResponse{
-					Status: status.NewNotFound(ctx, "gateway: reference not found:"+statRes.Info.Target),
-				}, nil
-			}
 			return &provider.ListContainerResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error resolving reference:"+p),
+				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
 			}, nil
 		}
 
@@ -1825,21 +1443,9 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		}
 
 		if newRes.Status.Code != rpc.Code_CODE_OK {
-			switch newRes.Status.Code {
-			case rpc.Code_CODE_NOT_FOUND:
-				return &provider.ListContainerResponse{
-					Status: status.NewNotFound(ctx, "gateway: container not found:"+newReq.Ref.String()),
-				}, nil
-			case rpc.Code_CODE_PERMISSION_DENIED:
-				return &provider.ListContainerResponse{
-					Status: status.NewPermissionDenied(ctx, status.NewErrorFromCode(newRes.Status.Code, "gateway"), newRes.Status.Message),
-				}, nil
-			default:
-				err := status.NewErrorFromCode(newRes.Status.Code, "gateway")
-				return &provider.ListContainerResponse{
-					Status: status.NewInternal(ctx, err, fmt.Sprintf("error listing directory id: %v", newReq.Ref.GetId())),
-				}, nil
-			}
+			return &provider.ListContainerResponse{
+				Status: newRes.Status,
+			}, nil
 		}
 
 		// paths needs to be converted
@@ -1870,32 +1476,15 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		}
 
 		if statRes.Status.Code != rpc.Code_CODE_OK {
-			switch statRes.Status.Code {
-			case rpc.Code_CODE_NOT_FOUND:
-				return &provider.ListContainerResponse{
-					Status: status.NewNotFound(ctx, "gateway: container not found:"+statReq.Ref.String()),
-				}, nil
-			case rpc.Code_CODE_PERMISSION_DENIED:
-				return &provider.ListContainerResponse{
-					Status: status.NewPermissionDenied(ctx, status.NewErrorFromCode(statRes.Status.Code, "gateway"), statRes.Status.Message),
-				}, nil
-			default:
-				err := status.NewErrorFromCode(statRes.Status.Code, "gateway")
-				return &provider.ListContainerResponse{
-					Status: status.NewInternal(ctx, err, "error stating share child "+statReq.Ref.String()),
-				}, nil
-			}
+			return &provider.ListContainerResponse{
+				Status: statRes.Status,
+			}, nil
 		}
 
 		ri, protocol, err := s.checkRef(ctx, statRes.Info)
 		if err != nil {
-			if _, ok := err.(errtypes.IsNotFound); ok {
-				return &provider.ListContainerResponse{
-					Status: status.NewNotFound(ctx, "gateway: reference not found:"+statReq.Ref.String()),
-				}, nil
-			}
 			return &provider.ListContainerResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error resolving reference:"+p),
+				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
 			}, nil
 		}
 
@@ -1941,21 +1530,9 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		}
 
 		if newRes.Status.Code != rpc.Code_CODE_OK {
-			switch newRes.Status.Code {
-			case rpc.Code_CODE_NOT_FOUND:
-				return &provider.ListContainerResponse{
-					Status: status.NewNotFound(ctx, "gateway: container not found:"+newReq.Ref.String()),
-				}, nil
-			case rpc.Code_CODE_PERMISSION_DENIED:
-				return &provider.ListContainerResponse{
-					Status: status.NewPermissionDenied(ctx, status.NewErrorFromCode(newRes.Status.Code, "gateway"), newRes.Status.Message),
-				}, nil
-			default:
-				err := status.NewErrorFromCode(newRes.Status.Code, "gateway")
-				return &provider.ListContainerResponse{
-					Status: status.NewInternal(ctx, err, "error listing "+newReq.Ref.String()),
-				}, nil
-			}
+			return &provider.ListContainerResponse{
+				Status: newRes.Status,
+			}, nil
 		}
 
 		// paths needs to be converted
@@ -2016,7 +1593,7 @@ func (s *svc) split(ctx context.Context, p string, i int) bool {
 
 	// validate that we have always at least two elements
 	if len(parts) < 2 {
-		panic(fmt.Sprintf("split: len(parts) < 2: path:%s parts:%+v", p, parts))
+		return false
 	}
 
 	// validate the share folder is always the second element, first element is always the hardcoded value of "home"
@@ -2067,13 +1644,8 @@ func (s *svc) CreateSymlink(ctx context.Context, req *provider.CreateSymlinkRequ
 func (s *svc) ListFileVersions(ctx context.Context, req *provider.ListFileVersionsRequest) (*provider.ListFileVersionsResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return &provider.ListFileVersionsResponse{
-				Status: status.NewNotFound(ctx, "storage provider not found"),
-			}, nil
-		}
 		return &provider.ListFileVersionsResponse{
-			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+			Status: status.NewStatusFromErrType(ctx, "ListFileVersions ref="+req.Ref.String(), err),
 		}, nil
 	}
 
@@ -2088,13 +1660,8 @@ func (s *svc) ListFileVersions(ctx context.Context, req *provider.ListFileVersio
 func (s *svc) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileVersionRequest) (*provider.RestoreFileVersionResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return &provider.RestoreFileVersionResponse{
-				Status: status.NewNotFound(ctx, "storage provider not found"),
-			}, nil
-		}
 		return &provider.RestoreFileVersionResponse{
-			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+			Status: status.NewStatusFromErrType(ctx, "RestoreFileVersion ref="+req.Ref.String(), err),
 		}, nil
 	}
 
@@ -2114,13 +1681,8 @@ func (s *svc) ListRecycleStream(_ *gateway.ListRecycleStreamRequest, _ gateway.G
 func (s *svc) ListRecycle(ctx context.Context, req *gateway.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
 	c, err := s.find(ctx, req.GetRef())
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return &provider.ListRecycleResponse{
-				Status: status.NewNotFound(ctx, "storage provider not found"),
-			}, nil
-		}
 		return &provider.ListRecycleResponse{
-			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+			Status: status.NewStatusFromErrType(ctx, "ListFileVersions ref="+req.Ref.String(), err),
 		}, nil
 	}
 
@@ -2139,13 +1701,8 @@ func (s *svc) ListRecycle(ctx context.Context, req *gateway.ListRecycleRequest) 
 func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecycleItemRequest) (*provider.RestoreRecycleItemResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return &provider.RestoreRecycleItemResponse{
-				Status: status.NewNotFound(ctx, "storage provider not found"),
-			}, nil
-		}
 		return &provider.RestoreRecycleItemResponse{
-			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+			Status: status.NewStatusFromErrType(ctx, "RestoreRecycleItem ref="+req.Ref.String(), err),
 		}, nil
 	}
 
@@ -2161,13 +1718,8 @@ func (s *svc) PurgeRecycle(ctx context.Context, req *gateway.PurgeRecycleRequest
 	// lookup storage by treating the key as a path. It has been prefixed with the storage path in ListRecycle
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
-		if _, ok := err.(errtypes.IsNotFound); ok {
-			return &provider.PurgeRecycleResponse{
-				Status: status.NewNotFound(ctx, "storage provider not found"),
-			}, nil
-		}
 		return &provider.PurgeRecycleResponse{
-			Status: status.NewInternal(ctx, err, "error finding storage provider"),
+			Status: status.NewStatusFromErrType(ctx, "PurgeRecycle ref="+req.Ref.String(), err),
 		}, nil
 	}
 
@@ -2263,10 +1815,18 @@ func (s *svc) getStorageProvider(ctx context.Context, ref *provider.Reference) (
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
-		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+		switch res.Status.Code {
+		case rpc.Code_CODE_NOT_FOUND:
 			return nil, errtypes.NotFound("gateway: storage provider not found for reference:" + ref.String())
+		case rpc.Code_CODE_PERMISSION_DENIED:
+			return nil, errtypes.PermissionDenied("gateway: " + res.Status.Message + " for " + ref.String() + " with code " + res.Status.Code.String())
+		case rpc.Code_CODE_INVALID_ARGUMENT, rpc.Code_CODE_FAILED_PRECONDITION, rpc.Code_CODE_OUT_OF_RANGE:
+			return nil, errtypes.BadRequest("gateway: " + res.Status.Message + " for " + ref.String() + " with code " + res.Status.Code.String())
+		case rpc.Code_CODE_UNIMPLEMENTED:
+			return nil, errtypes.NotSupported("gateway: " + res.Status.Message + " for " + ref.String() + " with code " + res.Status.Code.String())
+		default:
+			return nil, status.NewErrorFromCode(res.Status.Code, "gateway")
 		}
-		return nil, status.NewErrorFromCode(res.Status.Code, "gateway")
 	}
 
 	if res.Provider == nil {

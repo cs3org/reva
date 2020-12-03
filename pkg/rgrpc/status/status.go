@@ -27,6 +27,7 @@ import (
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"go.opencensus.io/trace"
 )
 
@@ -117,6 +118,26 @@ func NewInvalidArg(ctx context.Context, msg string) *rpc.Status {
 		Message: msg,
 		Trace:   getTrace(ctx),
 	}
+}
+
+// NewStatusFromErrType returns a status that corresponds to the given errtype
+func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Status {
+	switch e := err.(type) {
+	case nil:
+		NewOK(ctx)
+	case errtypes.IsNotFound:
+		return NewNotFound(ctx, "gateway: "+msg+": "+err.Error())
+	case errtypes.IsInvalidCredentials:
+		// TODO this maps badly
+		return NewUnauthenticated(ctx, err, "gateway: "+msg+": "+err.Error())
+	case errtypes.PermissionDenied:
+		return NewPermissionDenied(ctx, e, "gateway: "+msg+": "+err.Error())
+	case errtypes.IsNotSupported:
+		return NewUnimplemented(ctx, err, "gateway: "+msg+":"+err.Error())
+	case errtypes.BadRequest:
+		return NewInvalidArg(ctx, "gateway: "+msg+":"+err.Error())
+	}
+	return NewInternal(ctx, err, "gateway: "+msg+":"+err.Error())
 }
 
 // NewErrorFromCode returns a standardized Error for a given RPC code.
