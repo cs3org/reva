@@ -26,11 +26,13 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"go.opencensus.io/trace"
 )
 
 func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
+	ctx, span := trace.StartSpan(ctx, "move")
+	defer span.End()
 
 	ns = applyLayout(ctx, ns)
 
@@ -45,7 +47,8 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 	dst = path.Join(ns, dst)
 
-	log.Info().Str("src", src).Str("dst", dst).Str("overwrite", overwrite).Msg("move")
+	sublog := appctx.GetLogger(ctx).With().Str("src", src).Str("dst", dst).Logger()
+	sublog.Debug().Str("overwrite", overwrite).Msg("move")
 
 	overwrite = strings.ToUpper(overwrite)
 	if overwrite == "" {
@@ -59,7 +62,7 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 
 	client, err := s.getClient()
 	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
+		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -72,22 +75,12 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 	srcStatRes, err := client.Stat(ctx, srcStatReq)
 	if err != nil {
-		log.Error().Err(err).Msg("error sending grpc stat request")
+		sublog.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	if srcStatRes.Status.Code != rpc.Code_CODE_OK {
-		switch srcStatRes.Status.Code {
-		case rpc.Code_CODE_NOT_FOUND:
-			log.Debug().Str("src", src).Interface("status", srcStatRes.Status).Msg("resource not found")
-			w.WriteHeader(http.StatusNotFound)
-		case rpc.Code_CODE_PERMISSION_DENIED:
-			log.Debug().Str("src", src).Interface("status", srcStatRes.Status).Msg("permission denied")
-			w.WriteHeader(http.StatusForbidden)
-		default:
-			log.Error().Str("src", src).Interface("status", srcStatRes.Status).Msg("grpc stat request failed")
-			w.WriteHeader(http.StatusInternalServerError)
-		}
+		handleErrorStatus(&sublog, w, srcStatRes.Status)
 		return
 	}
 
@@ -98,19 +91,12 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 	dstStatReq := &provider.StatRequest{Ref: dstStatRef}
 	dstStatRes, err := client.Stat(ctx, dstStatReq)
 	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
+		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	if dstStatRes.Status.Code != rpc.Code_CODE_OK && dstStatRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		switch dstStatRes.Status.Code {
-		case rpc.Code_CODE_PERMISSION_DENIED:
-			log.Debug().Str("dst", dst).Interface("status", dstStatRes.Status).Msg("permission denied")
-			w.WriteHeader(http.StatusForbidden)
-		default:
-			log.Error().Str("dst", dst).Interface("status", dstStatRes.Status).Msg("grpc stat request failed")
-			w.WriteHeader(http.StatusInternalServerError)
-		}
+		handleErrorStatus(&sublog, w, srcStatRes.Status)
 		return
 	}
 
@@ -119,7 +105,7 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 		successCode = http.StatusNoContent // 204 if target already existed, see https://tools.ietf.org/html/rfc4918#section-9.9.4
 
 		if overwrite == "F" {
-			log.Warn().Str("dst", dst).Msg("dst already exists")
+			sublog.Warn().Str("overwrite", overwrite).Msg("dst already exists")
 			w.WriteHeader(http.StatusPreconditionFailed) // 412, see https://tools.ietf.org/html/rfc4918#section-9.9.4
 			return
 		}
@@ -128,20 +114,13 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 		delReq := &provider.DeleteRequest{Ref: dstStatRef}
 		delRes, err := client.Delete(ctx, delReq)
 		if err != nil {
-			log.Error().Err(err).Msg("error sending grpc delete request")
+			sublog.Error().Err(err).Msg("error sending grpc delete request")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
 		if delRes.Status.Code != rpc.Code_CODE_OK && delRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-			switch delRes.Status.Code {
-			case rpc.Code_CODE_PERMISSION_DENIED:
-				log.Debug().Str("dst", dst).Interface("status", delRes.Status).Msg("permission denied")
-				w.WriteHeader(http.StatusForbidden)
-			default:
-				log.Error().Str("dst", dst).Interface("status", delRes.Status).Msg("grpc delete request failed")
-				w.WriteHeader(http.StatusInternalServerError)
-			}
+			handleErrorStatus(&sublog, w, delRes.Status)
 			return
 		}
 	} else {
@@ -153,21 +132,17 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 		intStatReq := &provider.StatRequest{Ref: ref2}
 		intStatRes, err := client.Stat(ctx, intStatReq)
 		if err != nil {
-			log.Error().Err(err).Msg("error sending grpc stat request")
+			sublog.Error().Err(err).Msg("error sending grpc stat request")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		if intStatRes.Status.Code != rpc.Code_CODE_OK {
-			switch intStatRes.Status.Code {
-			case rpc.Code_CODE_NOT_FOUND:
+			if intStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 				// 409 if intermediate dir is missing, see https://tools.ietf.org/html/rfc4918#section-9.8.5
+				sublog.Debug().Str("parent", intermediateDir).Interface("status", intStatRes.Status).Msg("conflict")
 				w.WriteHeader(http.StatusConflict)
-			case rpc.Code_CODE_PERMISSION_DENIED:
-				log.Debug().Str("parent", intermediateDir).Interface("status", intStatRes.Status).Msg("permission denied")
-				w.WriteHeader(http.StatusForbidden)
-			default:
-				log.Error().Str("parent", intermediateDir).Interface("status", intStatRes.Status).Msg("grpc stat request failed")
-				w.WriteHeader(http.StatusInternalServerError)
+			} else {
+				handleErrorStatus(&sublog, w, intStatRes.Status)
 			}
 			return
 		}
@@ -183,45 +158,25 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 	mReq := &provider.MoveRequest{Source: sourceRef, Destination: dstRef}
 	mRes, err := client.Move(ctx, mReq)
 	if err != nil {
-		log.Error().Err(err).Msg("error sending move grpc request")
+		sublog.Error().Err(err).Msg("error sending move grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if mRes.Status.Code != rpc.Code_CODE_OK {
-		switch mRes.Status.Code {
-		case rpc.Code_CODE_NOT_FOUND:
-			log.Debug().Str("src", src).Str("dst", dst).Interface("status", mRes.Status).Msg("resource not found")
-			w.WriteHeader(http.StatusNotFound)
-		case rpc.Code_CODE_PERMISSION_DENIED:
-			log.Debug().Str("src", src).Str("dst", dst).Interface("status", mRes.Status).Msg("permission denied")
-			w.WriteHeader(http.StatusForbidden)
-		default:
-			log.Error().Str("src", src).Str("dst", dst).Interface("status", mRes.Status).Msg("grpc move request failed")
-			w.WriteHeader(http.StatusInternalServerError)
-		}
+		handleErrorStatus(&sublog, w, mRes.Status)
 		return
 	}
 
 	dstStatRes, err = client.Stat(ctx, dstStatReq)
 	if err != nil {
-		log.Error().Err(err).Msg("error sending grpc stat request")
+		sublog.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if dstStatRes.Status.Code != rpc.Code_CODE_OK {
-		switch dstStatRes.Status.Code {
-		case rpc.Code_CODE_NOT_FOUND:
-			log.Debug().Str("dst", dst).Interface("status", dstStatRes.Status).Msg("resource not found")
-			w.WriteHeader(http.StatusNotFound)
-		case rpc.Code_CODE_PERMISSION_DENIED:
-			log.Debug().Str("dst", dst).Interface("status", dstStatRes.Status).Msg("permission denied")
-			w.WriteHeader(http.StatusForbidden)
-		default:
-			log.Error().Str("dst", dst).Interface("status", dstStatRes.Status).Msg("grpc stat request failed")
-			w.WriteHeader(http.StatusInternalServerError)
-		}
+		handleErrorStatus(&sublog, w, dstStatRes.Status)
 		return
 	}
 

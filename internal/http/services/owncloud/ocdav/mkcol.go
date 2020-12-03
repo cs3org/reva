@@ -26,27 +26,31 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"go.opencensus.io/trace"
 )
 
 func (s *svc) handleMkcol(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
+	ctx, span := trace.StartSpan(ctx, "mkcol")
+	defer span.End()
 
 	ns = applyLayout(ctx, ns)
 
 	fn := path.Join(ns, r.URL.Path)
 
+	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
+
 	buf := make([]byte, 1)
 	_, err := r.Body.Read(buf)
 	if err != io.EOF {
-		log.Error().Err(err).Msg("error reading request body")
+		sublog.Error().Err(err).Msg("error reading request body")
 		w.WriteHeader(http.StatusUnsupportedMediaType)
 		return
 	}
 
 	client, err := s.getClient()
 	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
+		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -58,21 +62,16 @@ func (s *svc) handleMkcol(w http.ResponseWriter, r *http.Request, ns string) {
 	statReq := &provider.StatRequest{Ref: ref}
 	statRes, err := client.Stat(ctx, statReq)
 	if err != nil {
-		log.Error().Err(err).Msg("error sending a grpc stat request")
+		sublog.Error().Err(err).Msg("error sending a grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if statRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		switch statRes.Status.Code {
-		case rpc.Code_CODE_OK:
+		if statRes.Status.Code == rpc.Code_CODE_OK {
 			w.WriteHeader(http.StatusMethodNotAllowed) // 405 if it already exists
-		case rpc.Code_CODE_PERMISSION_DENIED:
-			log.Debug().Str("path", fn).Interface("status", statRes.Status).Msg("permission denied")
-			w.WriteHeader(http.StatusForbidden)
-		default:
-			log.Error().Str("path", fn).Interface("status", statRes.Status).Msg("grpc stat request failed")
-			w.WriteHeader(http.StatusInternalServerError)
+		} else {
+			handleErrorStatus(&sublog, w, statRes.Status)
 		}
 		return
 	}
@@ -80,22 +79,17 @@ func (s *svc) handleMkcol(w http.ResponseWriter, r *http.Request, ns string) {
 	req := &provider.CreateContainerRequest{Ref: ref}
 	res, err := client.CreateContainer(ctx, req)
 	if err != nil {
-		log.Error().Err(err).Msg("error sending create container grpc request")
+		sublog.Error().Err(err).Msg("error sending create container grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-
 	switch res.Status.Code {
 	case rpc.Code_CODE_OK:
 		w.WriteHeader(http.StatusCreated)
 	case rpc.Code_CODE_NOT_FOUND:
-		log.Debug().Str("path", fn).Interface("status", statRes.Status).Msg("resource not found")
+		sublog.Debug().Str("path", fn).Interface("status", statRes.Status).Msg("conflict")
 		w.WriteHeader(http.StatusConflict)
-	case rpc.Code_CODE_PERMISSION_DENIED:
-		log.Debug().Str("path", fn).Interface("status", statRes.Status).Msg("permission denied")
-		w.WriteHeader(http.StatusForbidden)
 	default:
-		log.Error().Str("path", fn).Interface("status", statRes.Status).Msg("grpc create container request failed")
-		w.WriteHeader(http.StatusInternalServerError)
+		handleErrorStatus(&sublog, w, res.Status)
 	}
 }

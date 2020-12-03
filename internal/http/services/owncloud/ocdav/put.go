@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/utils"
+	"go.opencensus.io/trace"
 )
 
 func sufferMacOSFinder(r *http.Request) bool {
@@ -102,19 +103,20 @@ func isContentRange(r *http.Request) bool {
 
 func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
 
 	ns = applyLayout(ctx, ns)
 	fn := path.Join(ns, r.URL.Path)
 
+	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
+
 	if r.Body == nil {
-		log.Warn().Msg("body is nil")
+		sublog.Debug().Msg("body is nil")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	if isContentRange(r) {
-		log.Warn().Msg("Content-Range not supported for PUT")
+		sublog.Debug().Msg("Content-Range not supported for PUT")
 		w.WriteHeader(http.StatusNotImplemented)
 		return
 	}
@@ -122,7 +124,7 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 	if sufferMacOSFinder(r) {
 		err := handleMacOSFinder(w, r)
 		if err != nil {
-			log.Error().Err(err).Msg("error handling Mac OS corner-case")
+			sublog.Debug().Err(err).Msg("error handling Mac OS corner-case")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -143,11 +145,13 @@ func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 
 func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io.Reader, fn string, length int64) {
 	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
+	ctx, span := trace.StartSpan(ctx, "put")
+	defer span.End()
 
+	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
 	client, err := s.getClient()
 	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
+		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -158,26 +162,19 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 	sReq := &provider.StatRequest{Ref: ref}
 	sRes, err := client.Stat(ctx, sReq)
 	if err != nil {
-		log.Error().Err(err).Msg("error sending grpc stat request")
+		sublog.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	if sRes.Status.Code != rpc.Code_CODE_OK && sRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		switch sRes.Status.Code {
-		case rpc.Code_CODE_PERMISSION_DENIED:
-			log.Debug().Str("path", fn).Interface("status", sRes.Status).Msg("permission denied")
-			w.WriteHeader(http.StatusForbidden)
-		default:
-			log.Error().Str("path", fn).Interface("status", sRes.Status).Msg("grpc stat request failed")
-			w.WriteHeader(http.StatusInternalServerError)
-		}
+		handleErrorStatus(&sublog, w, sRes.Status)
 		return
 	}
 
 	info := sRes.Info
 	if info != nil {
 		if info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
-			log.Warn().Msg("resource is not a file")
+			sublog.Debug().Msg("resource is not a file")
 			w.WriteHeader(http.StatusConflict)
 			return
 		}
@@ -185,7 +182,7 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 		serverETag := info.Etag
 		if clientETag != "" {
 			if clientETag != serverETag {
-				log.Warn().Str("client-etag", clientETag).Str("server-etag", serverETag).Msg("etags mismatch")
+				sublog.Debug().Str("client-etag", clientETag).Str("server-etag", serverETag).Msg("etags mismatch")
 				w.WriteHeader(http.StatusPreconditionFailed)
 				return
 			}
@@ -217,23 +214,13 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 	// where to upload the file?
 	uRes, err := client.InitiateFileUpload(ctx, uReq)
 	if err != nil {
-		log.Error().Err(err).Msg("error initiating file upload")
+		sublog.Error().Err(err).Msg("error initiating file upload")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if uRes.Status.Code != rpc.Code_CODE_OK {
-		switch uRes.Status.Code {
-		case rpc.Code_CODE_NOT_FOUND:
-			log.Debug().Str("path", fn).Interface("status", uRes.Status).Msg("resource not found")
-			w.WriteHeader(http.StatusNotFound)
-		case rpc.Code_CODE_PERMISSION_DENIED:
-			log.Debug().Str("path", fn).Interface("status", uRes.Status).Msg("permission denied")
-			w.WriteHeader(http.StatusForbidden)
-		default:
-			log.Error().Str("path", fn).Interface("status", uRes.Status).Msg("grpc initiate file upload request failed")
-			w.WriteHeader(http.StatusInternalServerError)
-		}
+		handleErrorStatus(&sublog, w, uRes.Status)
 		return
 	}
 
@@ -254,7 +241,7 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 
 		httpRes, err := s.client.Do(httpReq)
 		if err != nil {
-			log.Err(err).Msg("error doing PUT request to data service")
+			sublog.Error().Err(err).Msg("error doing PUT request to data service")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -264,7 +251,7 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 				w.WriteHeader(http.StatusPartialContent)
 				return
 			}
-			log.Err(err).Msg("PUT request to data server failed")
+			sublog.Error().Err(err).Msg("PUT request to data server failed")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -293,23 +280,13 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 	// stat again to check the new file's metadata
 	sRes, err = client.Stat(ctx, sReq)
 	if err != nil {
-		log.Error().Err(err).Msg("error sending grpc stat request")
+		sublog.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if sRes.Status.Code != rpc.Code_CODE_OK {
-		switch sRes.Status.Code {
-		case rpc.Code_CODE_NOT_FOUND:
-			log.Debug().Str("path", fn).Interface("status", sRes.Status).Msg("resource not found")
-			w.WriteHeader(http.StatusNotFound)
-		case rpc.Code_CODE_PERMISSION_DENIED:
-			log.Debug().Str("path", fn).Interface("status", sRes.Status).Msg("permission denied")
-			w.WriteHeader(http.StatusForbidden)
-		default:
-			log.Error().Str("path", fn).Interface("status", sRes.Status).Msg("grpc stat request failed")
-			w.WriteHeader(http.StatusInternalServerError)
-		}
+		handleErrorStatus(&sublog, w, sRes.Status)
 		return
 	}
 
