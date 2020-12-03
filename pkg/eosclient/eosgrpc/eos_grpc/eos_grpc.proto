@@ -29,13 +29,13 @@ option go_package = "eos_grpc";
 
 service Eos {
   // Replies to a ping
-  rpc Ping (PingRequest) returns (PingReply) {}  
+  rpc Ping (PingRequest) returns (PingReply) {}
 
   // ---------------------------------------------------------------------
   // NAMESPACE
   // ---------------------------------------------------------------------
 
-  // Replies to MD requests with a stream 
+  // Replies to MD requests with a stream
   rpc MD (MDRequest) returns (stream MDResponse) {}
 
   // Replies to Find requests with a stream
@@ -45,7 +45,7 @@ service Eos {
   rpc NsStat (NsStatRequest) returns (NsStatResponse) {}
 
   // Replies to an insert
-  rpc ContainerInsert (ContainerInsertRequest) returns (InsertReply) {}  
+  rpc ContainerInsert (ContainerInsertRequest) returns (InsertReply) {}
   rpc FileInsert (FileInsertRequest) returns (InsertReply) {}
 
   // Replies to a NsRequest operation
@@ -56,7 +56,7 @@ service Eos {
   // ---------------------------------------------------------------------
 
   // Manila Driver
-  rpc ManilaServerRequest (ManilaRequest) returns (ManilaResponse) {}  
+  rpc ManilaServerRequest (ManilaRequest) returns (ManilaResponse) {}
 }
 
 message PingRequest {
@@ -115,6 +115,7 @@ message FileMdProto {
   repeated uint32 unlink_locations = 14;
   map<string, bytes> xattrs = 15;
   bytes path = 16;
+  string etag = 17;
 }
 
 message ContainerMdProto {
@@ -131,13 +132,14 @@ message ContainerMdProto {
   Time stime = 11; // sync time
   map<string, bytes> xattrs = 12;
   bytes path = 13;
+  string etag = 14;
 }
 
-enum TYPE { FILE = 0; CONTAINER = 1; LISTING = 2; STAT = 3;}  
+enum TYPE { FILE = 0; CONTAINER = 1; LISTING = 2; STAT = 3;}
 
 enum QUOTATYPE { USER = 0; GROUP = 2; PROJECT = 3; ALL = 4;}
 
-message QuotaProto { 
+message QuotaProto {
   bytes path = 1;                 // quota node path
   string name = 2;                // associated name for the given type
   QUOTATYPE type = 3;             // user,group,project or all quota
@@ -152,7 +154,7 @@ message QuotaProto {
   string statusbytes = 12;        // status string for volume quota ok,warning,exceeded
   string statusfiles = 13;        // status string for inode quota ok,warning,exceeded
 }
-  
+
 message RoleId {
   uint64 uid = 1;
   uint64 gid = 2;
@@ -213,7 +215,7 @@ message MDResponse {
 message FindRequest {
   TYPE type = 1;
   MDId id = 2;
-  RoleId role = 3;	
+  RoleId role = 3;
   string authkey = 4;
   uint64 maxdepth = 5;
   MDSelection selection = 6;
@@ -251,11 +253,11 @@ message NSRequest {
     bool recursive = 2;
     int64 mode = 3;
   }
-  
+
   message RmdirRequest {
     MDId id = 1;
   }
- 
+
   message TouchRequest {
     MDId id = 1;
   }
@@ -293,7 +295,7 @@ message NSRequest {
   }
 
   message RecycleRequest {
-    string key = 1; 
+    string key = 1;
     enum RECYCLE_CMD {
       RESTORE = 0;
       PURGE = 1;
@@ -326,7 +328,7 @@ message NSRequest {
 
   message ChownRequest {
     MDId id = 1;
-    RoleId owner = 2;  
+    RoleId owner = 2;
   }
 
   message ChmodRequest {
@@ -389,7 +391,7 @@ message NSRequest {
 message NSResponse {
   message ErrorResponse {
     int64 code = 1;
-    string msg = 2;	
+    string msg = 2;
   }
 
   message VersionResponse {
@@ -398,14 +400,14 @@ message NSResponse {
       Time   mtime = 2;
     }
     int64 code = 1;
-    string msg = 2;	
+    string msg = 2;
     repeated VersionInfo versions = 3;
   }
 
   message RecycleResponse {
     int64 code = 1;
-    string msg = 2;	
-    
+    string msg = 2;
+
     message RecycleInfo {
       enum DELETIONTYPE { FILE = 0;  TREE = 1; }
       MDId   id = 1;
@@ -414,20 +416,20 @@ message NSResponse {
       uint64 size = 4;
       DELETIONTYPE type = 5;
       string key = 6;
-    }   
-    
+    }
+
     repeated RecycleInfo recycles = 3;
   }
 
   message AclResponse {
     int64 code = 1;
-    string msg = 2;	
+    string msg = 2;
     string rule = 3;
   }
 
   message QuotaResponse {
-    int64 code = 1;   
-    string msg = 2;   	
+    int64 code = 1;
+    string msg = 2;
     repeated QuotaProto quotanode = 3;
   }
 
@@ -517,5 +519,3 @@ message ManilaResponse {
    string new_share_path = 6;
 
 }
-
-
