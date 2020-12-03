@@ -34,9 +34,9 @@ import (
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/eosclient"
+	erpc "github.com/cs3org/reva/pkg/eosclient/eosgrpc/eos_grpc"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
-	erpc "github.com/ffurano/grpc-proto/protobuf"
 	"github.com/gofrs/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
