@@ -94,6 +94,8 @@ github.com/cs3org/go-cs3apis v0.0.0-20201118090759-87929f5bae21 h1:mZpylrgnCgSea
 github.com/cs3org/go-cs3apis v0.0.0-20201118090759-87929f5bae21/go.mod h1:UXha4TguuB52H14EMoSsCqDj7k8a/t7g4gVP+bgY5LY=
 github.com/cs3org/go-cs3apis v0.0.0-20201130144553-72667e613e44 h1:bvVU3EesXzpOJu+Sh6bffwCOaF7mW3KxRVaEmDpIw38=
 github.com/cs3org/go-cs3apis v0.0.0-20201130144553-72667e613e44/go.mod h1:UXha4TguuB52H14EMoSsCqDj7k8a/t7g4gVP+bgY5LY=
+github.com/cs3org/go-cs3apis v0.0.0-20210104105209-0d3ecb3453dc h1:vHFqu+Gb/iOKYFy2KswpwIG3G6zRMudRn+rQ2bg3TPE=
+github.com/cs3org/go-cs3apis v0.0.0-20210104105209-0d3ecb3453dc/go.mod h1:UXha4TguuB52H14EMoSsCqDj7k8a/t7g4gVP+bgY5LY=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
@@ -221,8 +223,6 @@ github.com/imdario/mergo v0.3.8 h1:CGgOkSJeqMRmt0D9XLWExdT4m4F1vd3FV3VPt+0VxkQ=
 github.com/imdario/mergo v0.3.8/go.mod h1:2EnlNZ0deacrJVfApfmtdGgDfMuh/nq6Ok1EcJh5FfA=
 github.com/inconshreveable/mousetrap v1.0.0 h1:Z8tu5sraLXCXIcARxBp/8cbvlwVa7Z1NHg9XEKhtSvM=
 github.com/inconshreveable/mousetrap v1.0.0/go.mod h1:PxqpIevigyE2G7u3NXJIT2ANytuPF1OarO4DADm73n8=
-github.com/ishank011/go-cs3apis v0.0.0-20201203124746-b2676dc530d8 h1:MKKaguh9VaZTgGru7qnBHT2w9CyOBUdsUZXD6m2OFWY=
-github.com/ishank011/go-cs3apis v0.0.0-20201203124746-b2676dc530d8/go.mod h1:UXha4TguuB52H14EMoSsCqDj7k8a/t7g4gVP+bgY5LY=
 github.com/jedib0t/go-pretty v4.3.0+incompatible h1:CGs8AVhEKg/n9YbUenWmNStRW2PHJzaeDodcfvRAbIo=
 github.com/jedib0t/go-pretty v4.3.0+incompatible/go.mod h1:XemHduiw8R651AF9Pt4FwCTKeG3oo7hrHJAoznj9nag=
 github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af/go.mod h1:Nht3zPeWKUH0NzdCt2Blrr5ys8VGpn0CEB0cQHVjt7k=

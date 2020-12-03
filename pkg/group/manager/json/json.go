@@ -22,6 +22,8 @@ import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
+	"strconv"
+	"strings"
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -86,21 +88,70 @@ func New(m map[string]interface{}) (group.Manager, error) {
 }
 
 func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId) (*grouppb.Group, error) {
-	return nil, errtypes.NotSupported("json: GetGroup is not implemented")
+	for _, g := range m.groups {
+		if g.Id.GetOpaqueId() == gid.OpaqueId || g.GroupName == gid.OpaqueId {
+			return g, nil
+		}
+	}
+	return nil, errtypes.NotFound(gid.OpaqueId)
 }
 
 func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string) (*grouppb.Group, error) {
-	return nil, errtypes.NotSupported("json: GetGroupByClaim is not implemented")
+	for _, g := range m.groups {
+		if groupClaim, err := extractClaim(g, claim); err == nil && value == groupClaim {
+			return g, nil
+		}
+	}
+	return nil, errtypes.NotFound(value)
+}
+
+func extractClaim(g *grouppb.Group, claim string) (string, error) {
+	switch claim {
+	case "group_name":
+		return g.GroupName, nil
+	case "gid_number":
+		return strconv.FormatInt(g.GidNumber, 10), nil
+	case "display_name":
+		return g.DisplayName, nil
+	case "mail":
+		return g.Mail, nil
+	}
+	return "", errors.New("json: invalid field")
 }
 
 func (m *manager) FindGroups(ctx context.Context, query string) ([]*grouppb.Group, error) {
-	return nil, errtypes.NotSupported("json: FindGroups is not implemented")
+	groups := []*grouppb.Group{}
+	for _, g := range m.groups {
+		if groupContains(g, query) {
+			groups = append(groups, g)
+		}
+	}
+	return groups, nil
+}
+
+func groupContains(g *grouppb.Group, query string) bool {
+	return strings.Contains(g.GroupName, query) || strings.Contains(g.DisplayName, query) || strings.Contains(g.Mail, query) || strings.Contains(g.Id.OpaqueId, query)
 }
 
 func (m *manager) GetMembers(ctx context.Context, gid *grouppb.GroupId) ([]*userpb.UserId, error) {
-	return nil, errtypes.NotSupported("json: GetMembers is not implemented")
+	for _, g := range m.groups {
+		if g.Id.GetOpaqueId() == gid.OpaqueId || g.GroupName == gid.OpaqueId {
+			return g.Members, nil
+		}
+	}
+	return nil, errtypes.NotFound(gid.OpaqueId)
 }
 
 func (m *manager) HasMember(ctx context.Context, gid *grouppb.GroupId, uid *userpb.UserId) (bool, error) {
-	return false, errtypes.NotSupported("json: HasMember is not implemented")
+	members, err := m.GetMembers(ctx, gid)
+	if err != nil {
+		return false, err
+	}
+
+	for _, u := range members {
+		if u.OpaqueId == uid.OpaqueId && u.Idp == uid.Idp {
+			return true, nil
+		}
+	}
+	return false, nil
 }
