@@ -95,35 +95,4 @@ func TestUserManager(t *testing.T) {
 	if len(resUsers) > 0 {
 		t.Fatalf("user not in group: expected=%v got=%v", []*userpb.User{}, resUsers)
 	}
-
-	// test FindGroups
-	resFindGroups, _ := manager.FindGroups(ctx, "violin")
-	if len(resFindGroups) != 1 {
-		t.Fatalf("too many groups found: expected=%d got=%+v", 1, resFindGroups)
-	}
-	if resFindGroups[0] != "violin-haters" {
-		t.Fatalf("group differs: expected=%v got=%v", "violin-haters", resFindGroups[0])
-	}
-
-	// positive test IsInGroup
-	resInGroup, _ := manager.IsInGroup(ctx, uidEinstein, "physics-lovers")
-	if !resInGroup {
-		t.Fatalf("user not in group: expected=%v got=%v", true, false)
-	}
-
-	// negative test IsInGroup with wrong group
-	resInGroup, _ = manager.IsInGroup(ctx, uidEinstein, "notARealGroup")
-	if resInGroup {
-		t.Fatalf("user not in group: expected=%v got=%v", true, false)
-	}
-
-	// negative test IsInGroup with wrong user
-	expectedErr = errtypes.NotFound(uidFake.OpaqueId)
-	resInGroup, err = manager.IsInGroup(ctx, uidFake, "physics-lovers")
-	if !reflect.DeepEqual(err, expectedErr) {
-		t.Fatalf("user not in group error differs: expected='%v' got='%v'", expectedErr, err)
-	}
-	if resInGroup {
-		t.Fatalf("user not in group bool differs: expected='%v' got='%v'", false, resInGroup)
-	}
 }

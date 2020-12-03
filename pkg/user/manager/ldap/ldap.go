@@ -344,10 +344,6 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 	return users, nil
 }
 
-func (m *manager) FindGroups(ctx context.Context, query string) ([]string, error) {
-	return nil, errtypes.NotSupported("ldap: FindGroups is not supported")
-}
-
 func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
 	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", m.c.Hostname, m.c.Port), &tls.Config{InsecureSkipVerify: true})
 	if err != nil {
@@ -385,22 +381,6 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 	}
 
 	return groups, nil
-}
-
-func (m *manager) IsInGroup(ctx context.Context, uid *userpb.UserId, group string) (bool, error) {
-	// TODO implement with dedicated ldap query
-	groups, err := m.GetUserGroups(ctx, uid)
-	if err != nil {
-		return false, err
-	}
-
-	for _, g := range groups {
-		if g == group {
-			return true, nil
-		}
-	}
-
-	return false, nil
 }
 
 func (m *manager) getUserFilter(uid *userpb.UserId) string {

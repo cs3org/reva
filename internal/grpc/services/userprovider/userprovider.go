@@ -151,23 +151,6 @@ func (s *service) FindUsers(ctx context.Context, req *userpb.FindUsersRequest) (
 	return res, nil
 }
 
-func (s *service) FindGroups(ctx context.Context, req *userpb.FindGroupsRequest) (*userpb.FindGroupsResponse, error) {
-	groups, err := s.usermgr.FindGroups(ctx, req.Filter)
-	if err != nil {
-		err = errors.Wrap(err, "userprovidersvc: error finding groups")
-		res := &userpb.FindGroupsResponse{
-			Status: status.NewInternal(ctx, err, "error finding groups"),
-		}
-		return res, nil
-	}
-
-	res := &userpb.FindGroupsResponse{
-		Status: status.NewOK(ctx),
-		Groups: groups,
-	}
-	return res, nil
-}
-
 func (s *service) GetUserGroups(ctx context.Context, req *userpb.GetUserGroupsRequest) (*userpb.GetUserGroupsResponse, error) {
 	groups, err := s.usermgr.GetUserGroups(ctx, req.UserId)
 	if err != nil {
@@ -182,23 +165,5 @@ func (s *service) GetUserGroups(ctx context.Context, req *userpb.GetUserGroupsRe
 		Status: status.NewOK(ctx),
 		Groups: groups,
 	}
-	return res, nil
-}
-
-func (s *service) IsInGroup(ctx context.Context, req *userpb.IsInGroupRequest) (*userpb.IsInGroupResponse, error) {
-	ok, err := s.usermgr.IsInGroup(ctx, req.UserId, req.Group)
-	if err != nil {
-		err = errors.Wrap(err, "userprovidersvc: error checking if user belongs to group")
-		res := &userpb.IsInGroupResponse{
-			Status: status.NewInternal(ctx, err, "error checking if user belongs to group"),
-		}
-		return res, nil
-	}
-
-	res := &userpb.IsInGroupResponse{
-		Status: status.NewOK(ctx),
-		Ok:     ok,
-	}
-
 	return res, nil
 }
