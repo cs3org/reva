@@ -784,12 +784,14 @@ func (c *Client) rmdir(ctx context.Context, uid, gid, path string) error {
 		return err
 	}
 
-	msg := new(erpc.NSRequest_RmdirRequest)
+	msg := new(erpc.NSRequest_RmRequest)
 
 	msg.Id = new(erpc.MDId)
 	msg.Id.Path = []byte(path)
+	msg.Recursive = true
+	msg.Norecycle = true
 
-	rq.Command = &erpc.NSRequest_Rmdir{Rmdir: msg}
+	rq.Command = &erpc.NSRequest_Rm{Rm: msg}
 
 	// Now send the req and see what happens
 	resp, err := c.cl.Exec(ctx, rq)
