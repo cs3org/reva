@@ -9,7 +9,7 @@ description: >
 # _struct: config_
 
 {{% dir name="mount_path" type="string" default="/" %}}
-The path where the file system would be mounted. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L53)
+The path where the file system would be mounted. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L52)
 {{< highlight toml >}}
 [grpc.services.storageprovider]
 mount_path = "/"
@@ -17,7 +17,7 @@ mount_path = "/"
 {{% /dir %}}
 
 {{% dir name="mount_id" type="string" default="-" %}}
-The ID of the mounted file system. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L54)
+The ID of the mounted file system. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L53)
 {{< highlight toml >}}
 [grpc.services.storageprovider]
 mount_id = "-"
@@ -25,7 +25,7 @@ mount_id = "-"
 {{% /dir %}}
 
 {{% dir name="driver" type="string" default="localhome" %}}
-The storage driver to be used. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L55)
+The storage driver to be used. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L54)
 {{< highlight toml >}}
 [grpc.services.storageprovider]
 driver = "localhome"
@@ -33,7 +33,7 @@ driver = "localhome"
 {{% /dir %}}
 
 {{% dir name="drivers" type="map[string]map[string]interface{}" default="localhome" %}}
- [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L56)
+ [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L55)
 {{< highlight toml >}}
 [grpc.services.storageprovider.drivers.localhome]
 root = "/var/tmp/reva/"
@@ -44,7 +44,7 @@ user_layout = "{{.Username}}"
 {{% /dir %}}
 
 {{% dir name="tmp_folder" type="string" default="/var/tmp" %}}
-Path to temporary folder. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L57)
+Path to temporary folder. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L56)
 {{< highlight toml >}}
 [grpc.services.storageprovider]
 tmp_folder = "/var/tmp"
@@ -52,7 +52,7 @@ tmp_folder = "/var/tmp"
 {{% /dir %}}
 
 {{% dir name="data_server_url" type="string" default="http://localhost/data" %}}
-The URL for the data server. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L58)
+The URL for the data server. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L57)
 {{< highlight toml >}}
 [grpc.services.storageprovider]
 data_server_url = "http://localhost/data"
@@ -60,7 +60,7 @@ data_server_url = "http://localhost/data"
 {{% /dir %}}
 
 {{% dir name="expose_data_server" type="bool" default=false %}}
-Whether to expose data server. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L59)
+Whether to expose data server. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L58)
 {{< highlight toml >}}
 [grpc.services.storageprovider]
 expose_data_server = false
@@ -68,7 +68,7 @@ expose_data_server = false
 {{% /dir %}}
 
 {{% dir name="available_checksums" type="map[string]uint32" default=nil %}}
-List of available checksums. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L60)
+List of available checksums. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L59)
 {{< highlight toml >}}
 [grpc.services.storageprovider]
 available_checksums = nil
@@ -76,7 +76,7 @@ available_checksums = nil
 {{% /dir %}}
 
 {{% dir name="mimetypes" type="map[string]string" default=nil %}}
-List of supported mime types and corresponding file extensions. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L61)
+List of supported mime types and corresponding file extensions. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/storageprovider/storageprovider.go#L60)
 {{< highlight toml >}}
 [grpc.services.storageprovider]
 mimetypes = nil

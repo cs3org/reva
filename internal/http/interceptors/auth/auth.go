@@ -47,15 +47,16 @@ type config struct {
 	Priority   int    `mapstructure:"priority"`
 	GatewaySvc string `mapstructure:"gatewaysvc"`
 	// TODO(jdf): Realm is optional, will be filled with request host if not given?
-	Realm                string                            `mapstructure:"realm"`
-	CredentialChain      []string                          `mapstructure:"credential_chain"`
-	CredentialStrategies map[string]map[string]interface{} `mapstructure:"credential_strategies"`
-	TokenStrategy        string                            `mapstructure:"token_strategy"`
-	TokenStrategies      map[string]map[string]interface{} `mapstructure:"token_strategies"`
-	TokenManager         string                            `mapstructure:"token_manager"`
-	TokenManagers        map[string]map[string]interface{} `mapstructure:"token_managers"`
-	TokenWriter          string                            `mapstructure:"token_writer"`
-	TokenWriters         map[string]map[string]interface{} `mapstructure:"token_writers"`
+	Realm                  string                            `mapstructure:"realm"`
+	CredentialsByUserAgent map[string]string                 `mapstructure:"credentials_by_user_agent"`
+	CredentialChain        []string                          `mapstructure:"credential_chain"`
+	CredentialStrategies   map[string]map[string]interface{} `mapstructure:"credential_strategies"`
+	TokenStrategy          string                            `mapstructure:"token_strategy"`
+	TokenStrategies        map[string]map[string]interface{} `mapstructure:"token_strategies"`
+	TokenManager           string                            `mapstructure:"token_manager"`
+	TokenManagers          map[string]map[string]interface{} `mapstructure:"token_managers"`
+	TokenWriter            string                            `mapstructure:"token_writer"`
+	TokenWriters           map[string]map[string]interface{} `mapstructure:"token_writers"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -93,8 +94,12 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 		conf.CredentialChain = []string{"basic", "bearer"}
 	}
 
-	credChain := []auth.CredentialStrategy{}
-	for i := range conf.CredentialChain {
+	if conf.CredentialsByUserAgent == nil {
+		conf.CredentialsByUserAgent = map[string]string{}
+	}
+
+	credChain := map[string]auth.CredentialStrategy{}
+	for i, key := range conf.CredentialChain {
 		f, ok := registry.NewCredentialFuncs[conf.CredentialChain[i]]
 		if !ok {
 			return nil, fmt.Errorf("credential strategy not found: %s", conf.CredentialChain[i])
@@ -104,7 +109,7 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 		if err != nil {
 			return nil, err
 		}
-		credChain = append(credChain, credStrategy)
+		credChain[key] = credStrategy
 	}
 
 	g, ok := tokenregistry.NewTokenFuncs[conf.TokenStrategy]
@@ -158,27 +163,34 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 				return
 			}
 
-			// check for token
 			tkn := tokenStrategy.GetToken(r)
 			if tkn == "" {
 				log.Warn().Msg("core access token not set")
+
+				userAgentCredKeys := getCredsForUserAgent(r.UserAgent(), conf.CredentialsByUserAgent, conf.CredentialChain)
+
+				// obtain credentials (basic auth, bearer token, ...) based on user agent
 				var creds *auth.Credentials
-				for i := range credChain {
-					creds, err = credChain[i].GetCredentials(w, r)
+				for _, k := range userAgentCredKeys {
+					creds, err = credChain[k].GetCredentials(w, r)
 					if err != nil {
 						log.Debug().Err(err).Msg("error retrieving credentials")
 					}
+
 					if creds != nil {
 						log.Debug().Msgf("credentials obtained from credential strategy: type: %s, client_id: %s", creds.Type, creds.ClientID)
 						break
 					}
 				}
+
+				// if no credentials are found, reply with authentication challenge depending on user agent
 				if creds == nil {
-					// TODO read realm from forwarded for header?
-					// see https://github.com/stanvit/go-forwarded as middleware
-					// indicate all possible authentications to the client
-					for i := range credChain {
-						credChain[i].AddWWWAuthenticate(w, r, conf.Realm)
+					for _, key := range userAgentCredKeys {
+						if cred, ok := credChain[key]; ok {
+							cred.AddWWWAuthenticate(w, r, conf.Realm)
+						} else {
+							panic("auth credential strategy: " + key + "must have been loaded in init method")
+						}
 					}
 					w.WriteHeader(http.StatusUnauthorized)
 					return
@@ -246,4 +258,24 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 		})
 	}
 	return chain, nil
+}
+
+// getCredsForUserAgent returns the WWW Authenticate challenges keys to use given an http request
+// and available credentials.
+func getCredsForUserAgent(ua string, uam map[string]string, creds []string) []string {
+	if ua == "" || len(uam) == 0 {
+		return creds
+	}
+
+	cred, ok := uam[ua]
+	if ok {
+		for _, v := range creds {
+			if v == cred {
+				return []string{cred}
+			}
+		}
+		return creds
+	}
+
+	return creds
 }
