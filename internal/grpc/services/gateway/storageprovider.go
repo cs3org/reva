@@ -989,7 +989,9 @@ func (s *svc) statHome(ctx context.Context) (*provider.StatResponse, error) {
 		statRes.Info.Etag = resEtag.(string)
 	} else {
 		statRes.Info.Etag = etag.GenerateEtagFromResources(statRes.Info, []*provider.ResourceInfo{statSharedFolder.Info})
-		_ = s.etagCache.Set(statRes.Info.Owner.OpaqueId+":"+statRes.Info.Path, statRes.Info.Etag)
+		if s.c.EtagCacheTTL > 0 {
+			_ = s.etagCache.Set(statRes.Info.Owner.OpaqueId+":"+statRes.Info.Path, statRes.Info.Etag)
+		}
 	}
 
 	return statRes, nil
@@ -1027,14 +1029,13 @@ func (s *svc) statSharesFolder(ctx context.Context) (*provider.StatResponse, err
 		}, nil
 	}
 
-	log := appctx.GetLogger(ctx)
 	if resEtag, err := s.etagCache.Get(statRes.Info.Owner.OpaqueId + ":" + statRes.Info.Path); err == nil {
-		log.Info().Msgf("Used etag cache for %s", statRes.Info.Owner.OpaqueId+":"+statRes.Info.Path)
 		statRes.Info.Etag = resEtag.(string)
 	} else {
 		statRes.Info.Etag = etag.GenerateEtagFromResources(statRes.Info, lsRes.Infos)
-		log.Info().Msgf("Calculated etag for %s", statRes.Info.Owner.OpaqueId+":"+statRes.Info.Path)
-		_ = s.etagCache.Set(statRes.Info.Owner.OpaqueId+":"+statRes.Info.Path, statRes.Info.Etag)
+		if s.c.EtagCacheTTL > 0 {
+			_ = s.etagCache.Set(statRes.Info.Owner.OpaqueId+":"+statRes.Info.Path, statRes.Info.Etag)
+		}
 	}
 	return statRes, nil
 }
