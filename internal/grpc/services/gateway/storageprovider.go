@@ -985,13 +985,10 @@ func (s *svc) statHome(ctx context.Context) (*provider.StatResponse, error) {
 		}, nil
 	}
 
-	log := appctx.GetLogger(ctx)
 	if resEtag, err := s.etagCache.Get(statRes.Info.Owner.OpaqueId + ":" + statRes.Info.Path); err == nil {
-		log.Info().Msgf("Used etag cache for %s", statRes.Info.Owner.OpaqueId+":"+statRes.Info.Path)
 		statRes.Info.Etag = resEtag.(string)
 	} else {
 		statRes.Info.Etag = etag.GenerateEtagFromResources(statRes.Info, []*provider.ResourceInfo{statSharedFolder.Info})
-		log.Info().Msgf("Calculated etag for %s", statRes.Info.Owner.OpaqueId+":"+statRes.Info.Path)
 		_ = s.etagCache.Set(statRes.Info.Owner.OpaqueId+":"+statRes.Info.Path, statRes.Info.Etag)
 	}
 

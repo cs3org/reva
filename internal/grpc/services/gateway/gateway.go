@@ -64,6 +64,7 @@ type config struct {
 	ShareFolder   string                            `mapstructure:"share_folder"`
 	HomeMapping   string                            `mapstructure:"home_mapping"`
 	TokenManagers map[string]map[string]interface{} `mapstructure:"token_managers"`
+	EtagCacheTTL  int                               `mapstructure:"etag_cache_ttl"`
 }
 
 // sets defaults
@@ -134,7 +135,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	}
 
 	etagCache := ttlcache.NewCache()
-	_ = etagCache.SetTTL(5 * time.Second)
+	_ = etagCache.SetTTL(time.Duration(c.EtagCacheTTL) * time.Second)
 	etagCache.SkipTTLExtensionOnHit(true)
 
 	s := &svc{
