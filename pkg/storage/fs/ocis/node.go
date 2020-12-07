@@ -42,8 +42,8 @@ import (
 )
 
 const (
-	_ShareTypesKey = "http://owncloud.org/ns/share-types"
-	_UserShareType = "0"
+	_shareTypesKey = "http://owncloud.org/ns/share-types"
+	_userShareType = "0"
 )
 
 // Node represents a node in the tree and provides methods to get a Parent or Child instance
@@ -405,9 +405,9 @@ func (n *Node) AsResourceInfo(ctx context.Context, mdKeys []string) (ri *provide
 		log.Error().Err(err).Interface("node", n).Msg("could not list attributes")
 	}
 
-	if common.FindString(mdKeys, _ShareTypesKey) != -1 {
+	if common.FindString(mdKeys, _shareTypesKey) != -1 {
 		if n.hasUserShares(ctx) {
-			ri.ArbitraryMetadata.Metadata[_ShareTypesKey] = _UserShareType
+			ri.ArbitraryMetadata.Metadata[_shareTypesKey] = _userShareType
 		}
 	}
 
@@ -490,7 +490,7 @@ func (n *Node) hasUserShares(ctx context.Context) bool {
 	}
 
 	for i := range g {
-		if strings.Contains(g[i], grantPrefix+"u") {
+		if strings.Contains(g[i], grantPrefix+_userAcePrefix) {
 			return true
 		}
 	}
