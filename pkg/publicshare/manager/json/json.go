@@ -372,6 +372,7 @@ func (m *manager) revokeExpiredPublicShare(ctx context.Context, s *link.PublicSh
 	})
 	if err != nil {
 		log.Err(err).Msg(fmt.Sprintf("publicShareJSONManager: error deleting public share with opaqueId: %s", s.Id.OpaqueId))
+		return err
 	}
 
 	return nil
