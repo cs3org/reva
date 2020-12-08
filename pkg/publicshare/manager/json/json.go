@@ -344,12 +344,22 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 			for _, f := range filters {
 				if f.Type == link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID {
 					t := time.Unix(int64(local.Expiration.GetSeconds()), int64(local.Expiration.GetNanos()))
-					if err != nil {
-						return nil, err
-					}
 					if local.ResourceId.StorageId == f.GetResourceId().StorageId && local.ResourceId.OpaqueId == f.GetResourceId().OpaqueId {
 						if (local.Expiration != nil && t.After(now)) || local.Expiration == nil {
 							shares = append(shares, &local.PublicShare)
+						} else {
+							// this has to happen on a non exclusive zone as RevokePublicShare attempts to take the same lock
+							m.mutex.Unlock()
+							_ = m.RevokePublicShare(ctx, u, &link.PublicShareReference{
+								Spec: &link.PublicShareReference_Id{
+									Id: &link.PublicShareId{
+										OpaqueId: local.Id.OpaqueId,
+									},
+								},
+							})
+
+							// take the lock once RevokePublicShare frees it so we can defer in this routine
+							m.mutex.Lock()
 						}
 					}
 				}
