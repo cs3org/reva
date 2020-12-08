@@ -331,12 +331,11 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 					if local.ResourceId.StorageId == filters[i].GetResourceId().StorageId && local.ResourceId.OpaqueId == filters[i].GetResourceId().OpaqueId {
 						if notExpired(&local.PublicShare) {
 							shares = append(shares, &local.PublicShare)
-						} else {
-							if err := m.revokeExpiredPublicShare(ctx, &local.PublicShare, u); err != nil {
-								return nil, err
-							}
+						} else if err := m.revokeExpiredPublicShare(ctx, &local.PublicShare, u); err != nil {
+							return nil, err
 						}
 					}
+
 				}
 			}
 		}
