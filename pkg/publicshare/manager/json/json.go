@@ -568,7 +568,3 @@ type publicShare struct {
 	link.PublicShare
 	Password string `json:"password"`
 }
-
-func cleanupExpired() {
-
-}
