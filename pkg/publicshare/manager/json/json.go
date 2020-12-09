@@ -28,8 +28,10 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -45,6 +47,30 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"go.opencensus.io/trace"
 )
+
+type janitor struct {
+	m        *manager
+	interval time.Duration
+}
+
+func (j *janitor) run() {
+	ticker := time.NewTicker(j.interval)
+	work := make(chan os.Signal, 1)
+	signal.Notify(work, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT)
+
+	for {
+		select {
+		case <-work:
+			return
+		case _ = <-ticker.C:
+			j.m.cleanupExpiredShares()
+		}
+	}
+}
+
+var j = janitor{
+	interval: time.Minute, // TODO we want this interval configurable
+}
 
 func init() {
 	registry.Register("json", New)
@@ -85,6 +111,9 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 			return nil, err
 		}
 	}
+
+	j.m = &m
+	go j.run()
 
 	return &m, nil
 }
@@ -359,6 +388,25 @@ func notExpired(s *link.PublicShare) bool {
 	return false
 }
 
+func (m *manager) cleanupExpiredShares() {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	db, _ := m.readDb()
+
+	for _, v := range db {
+		d := v.(map[string]interface{})["share"]
+
+		ps := &link.PublicShare{}
+		r := bytes.NewBuffer([]byte(d.(string)))
+		_ = m.unmarshaler.Unmarshal(r, ps)
+
+		if !notExpired(ps) {
+			_ = m.revokeExpiredPublicShare(context.Background(), ps, nil)
+		}
+	}
+}
+
 func (m *manager) revokeExpiredPublicShare(ctx context.Context, s *link.PublicShare, u *user.User) error {
 	m.mutex.Unlock()
 	defer m.mutex.Lock()
@@ -519,4 +567,8 @@ func (m *manager) writeDb(db map[string]interface{}) error {
 type publicShare struct {
 	link.PublicShare
 	Password string `json:"password"`
+}
+
+func cleanupExpired() {
+
 }
