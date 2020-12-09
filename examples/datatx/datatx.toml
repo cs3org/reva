@@ -1,0 +1,11 @@
+[grpc]
+address = ""
+
+[grpc.services.datatx]
+driver = "rclone"
+
+[grpc.services.datatx.drivers.rclone]
+endpoint = ""
+# endpoint basic auth credentials
+auth_user = ""
+auth_pass = ""
