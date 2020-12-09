@@ -99,6 +99,9 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 	if info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "1" {
 		req := &provider.ListContainerRequest{
 			Ref: ref,
+			ArbitraryMetadataKeys: []string{
+				"http://owncloud.org/ns/share-types",
+			},
 		}
 		res, err := client.ListContainer(ctx, req)
 		if err != nil {
@@ -124,6 +127,9 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 			}
 			req := &provider.ListContainerRequest{
 				Ref: ref,
+				ArbitraryMetadataKeys: []string{
+					"http://owncloud.org/ns/share-types",
+				},
 			}
 			res, err := client.ListContainer(ctx, req)
 			if err != nil {
@@ -255,7 +261,6 @@ func (s *svc) newProp(key, val string) *propertyXML {
 // ns is the CS3 namespace that needs to be removed from the CS3 path before
 // prefixing it with the baseURI
 func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, ns string) (*responseXML, error) {
-
 	md.Path = strings.TrimPrefix(md.Path, ns)
 
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
@@ -413,6 +418,15 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:checksums", ""))
 					}
+				case "share-types": // desktop
+					k := md.GetArbitraryMetadata()
+					amd := k.GetMetadata()
+					if amdv, ok := amd[fmt.Sprintf("%s/%s", pf.Prop[i].Space, pf.Prop[i].Local)]; ok {
+						st := fmt.Sprintf("<oc:share-type>%s</oc:share-type>", amdv)
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:share-types", st))
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:"+pf.Prop[i].Local, ""))
+					}
 				case "owner-display-name": // phoenix only
 					// TODO(jfd): lookup displayname? or let clients do that? They should cache that IMO
 					fallthrough
@@ -429,11 +443,6 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					// server implementation in https://github.com/owncloud/core/pull/24054
 					// see https://doc.owncloud.com/server/admin_manual/configuration/server/occ_command.html#maintenance-commands
 					// TODO(jfd): double check the client behavior with reva on backup restore
-					fallthrough
-				case "share-types": // desktop
-					// <oc:share-types>
-					//   <oc:share-type>1</oc:share-type>
-					// </oc:share-types>
 					fallthrough
 				default:
 					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:"+pf.Prop[i].Local, ""))

@@ -34,10 +34,16 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
+	"github.com/cs3org/reva/pkg/sdk/common"
 	"github.com/cs3org/reva/pkg/storage/utils/ace"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 	"github.com/rs/zerolog/log"
+)
+
+const (
+	_shareTypesKey = "http://owncloud.org/ns/share-types"
+	_userShareType = "0"
 )
 
 // Node represents a node in the tree and provides methods to get a Parent or Child instance
@@ -291,7 +297,7 @@ func (n *Node) Owner() (id string, idp string, err error) {
 }
 
 // AsResourceInfo return the node as CS3 ResourceInfo
-func (n *Node) AsResourceInfo(ctx context.Context) (ri *provider.ResourceInfo, err error) {
+func (n *Node) AsResourceInfo(ctx context.Context, mdKeys []string) (ri *provider.ResourceInfo, err error) {
 	log := appctx.GetLogger(ctx)
 
 	var fn string
@@ -399,6 +405,12 @@ func (n *Node) AsResourceInfo(ctx context.Context) (ri *provider.ResourceInfo, e
 		log.Error().Err(err).Interface("node", n).Msg("could not list attributes")
 	}
 
+	if common.FindString(mdKeys, _shareTypesKey) != -1 {
+		if n.hasUserShares(ctx) {
+			ri.ArbitraryMetadata.Metadata[_shareTypesKey] = _userShareType
+		}
+	}
+
 	log.Debug().
 		Interface("ri", ri).
 		Msg("AsResourceInfo")
@@ -468,4 +480,19 @@ func (n *Node) ReadGrant(ctx context.Context, grantee string) (g *provider.Grant
 		return nil, err
 	}
 	return e.Grant(), nil
+}
+
+func (n *Node) hasUserShares(ctx context.Context) bool {
+	g, err := n.ListGrantees(ctx)
+	if err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Msg("hasUserShares: listGrantees")
+		return false
+	}
+
+	for i := range g {
+		if strings.Contains(g[i], grantPrefix+_userAcePrefix) {
+			return true
+		}
+	}
+	return false
 }
