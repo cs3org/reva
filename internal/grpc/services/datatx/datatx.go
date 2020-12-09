@@ -122,7 +122,7 @@ func (s *service) CreateTransfer(ctx context.Context, req *datatx.CreateTransfer
 	var txID int64
 
 	u, ok := user.ContextGetUser(ctx)
-	if ok == false {
+	if !ok {
 		return nil, errors.New("could not find user in context")
 	}
 
