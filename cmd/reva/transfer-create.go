@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -30,23 +31,18 @@ import (
 )
 
 func transferCreateCommand() *command {
-	// eg. transfer file from marie @ surfsara.nl to einstein @ cern.ch
 	cmd := newCommand("transfer-create")
 	cmd.Description = func() string { return "create transfer between 2 sites" }
-	// <path> the path of the file to transfer
 	cmd.Usage = func() string { return "Usage: transfer-create [-flags] <path>" }
-	// the grantee opaque id; eg. "einstein"
 	grantee := cmd.String("grantee", "", "the grantee, receiver of the transfer")
-	//  the site the grantee belongs to; eg. cern.ch
+	granteeType := cmd.String("granteeType", "user", "the grantee type, one of: user, group")
 	idp := cmd.String("idp", "", "the idp of the grantee, default to same idp as the user triggering the action")
 
 	cmd.Action = func(w ...io.Writer) error {
-		// check if a resource to transfer has been specified
 		if cmd.NArg() < 1 {
 			return errors.New("Invalid arguments: " + cmd.Usage())
 		}
 
-		// validate flags
 		if *grantee == "" {
 			return errors.New("Grantee cannot be empty: use -grantee flag\n" + cmd.Usage())
 		}
@@ -63,8 +59,10 @@ func transferCreateCommand() *command {
 			return err
 		}
 
-		// transfers are between users
 		gt := provider.GranteeType_GRANTEE_TYPE_USER
+		if strings.ToLower(*granteeType) == "group" {
+			gt = provider.GranteeType_GRANTEE_TYPE_GROUP
+		}
 
 		transferRequest := &tx.CreateTransferRequest{
 			Ref: &provider.Reference{
