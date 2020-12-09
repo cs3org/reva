@@ -59,7 +59,6 @@ func (s *service) Register(ss *grpc.Server) {
 
 func parseConfig(m map[string]interface{}) (*config, error) {
 	c := &config{}
-	fmt.Printf("datatx config: \n%v", m)
 	if err := mapstructure.Decode(m, c); err != nil {
 		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
@@ -86,11 +85,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	// error := driver.Configure(c)
-	// if error != nil {
-	// 	return nil, error
-	// }
 
 	service := &service{
 		conf:     c,
