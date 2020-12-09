@@ -25,11 +25,11 @@ import (
 
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
-	txdriver "github.com/cs3org/reva/pkg/datatx/driver"
-	txdriverconfig "github.com/cs3org/reva/pkg/datatx/driver/config"
-	"github.com/cs3org/reva/pkg/datatx/driver/registry"
+	txdriver "github.com/cs3org/reva/pkg/datatx"
+	"github.com/cs3org/reva/pkg/datatx/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -39,17 +39,27 @@ func init() {
 	rgrpc.Register("datatx", New)
 }
 
+func (c *config) init() {
+	// set sane defaults
+}
+
+type config struct {
+	Driver  string                            `mapstructure:"driver"`
+	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
+}
+
 type service struct {
-	conf   *txdriverconfig.Config
-	driver txdriver.TxDriver
+	conf     *config
+	txDriver txdriver.TxDriver
 }
 
 func (s *service) Register(ss *grpc.Server) {
 	datatx.RegisterTxAPIServer(ss, s)
 }
 
-func parseConfig(m map[string]interface{}) (*txdriverconfig.Config, error) {
-	c := &txdriverconfig.Config{}
+func parseConfig(m map[string]interface{}) (*config, error) {
+	c := &config{}
+	fmt.Printf("datatx config: \n%v", m)
 	if err := mapstructure.Decode(m, c); err != nil {
 		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
@@ -57,13 +67,11 @@ func parseConfig(m map[string]interface{}) (*txdriverconfig.Config, error) {
 	return c, nil
 }
 
-func getDriver(c *txdriverconfig.Config) (txdriver.TxDriver, error) {
-	driver := registry.GetDriver(c.Driver)
-	if driver == nil {
-		return nil, fmt.Errorf("driver %s not found for datatx", c.Driver)
+func getDriver(c *config) (txdriver.TxDriver, error) {
+	if f, ok := registry.NewFuncs[c.Driver]; ok {
+		return f(c.Drivers[c.Driver])
 	}
-
-	return driver, nil
+	return nil, fmt.Errorf("datatx driver not found: %s", c.Driver)
 }
 
 // New creates a new datatx svc
@@ -72,21 +80,21 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	c.Init()
+	c.init()
 
 	driver, err := getDriver(c)
 	if err != nil {
 		return nil, err
 	}
 
-	error := driver.Configure(c)
-	if error != nil {
-		return nil, error
-	}
+	// error := driver.Configure(c)
+	// if error != nil {
+	// 	return nil, error
+	// }
 
 	service := &service{
-		conf:   c,
-		driver: driver,
+		conf:     c,
+		txDriver: driver,
 	}
 
 	return service, nil
@@ -119,16 +127,25 @@ func (s *service) CreateTransfer(ctx context.Context, req *datatx.CreateTransfer
 	// TODO create a new transfer id
 	var txID int64
 
-	// the local idp; TODO must retrieve the idp through owner of the resource ? Or via config ?
-	srcRemote := "reva"
+	u, ok := user.ContextGetUser(ctx)
+	if ok == false {
+		return nil, errors.New("could not find user in context")
+	}
+
+	srcRemote := u.GetId().GetIdp()
 	srcPath := req.GetRef().GetPath()
-	// (token is not actually used in transfer right now)
-	srcToken := "marie"
+
+	// Temp implementation is depending on current rclone version.
+	// (token is username for now, it is used like that in the current rclone driver implementation)
+	// TODO: re-implement when the connection-string-remote syntax is available in rclone
+	// TODO: implement proper token use
+	srcToken := u.GetUsername()
+	destToken := req.GetGrantee().GetId().GetOpaqueId()
+
 	destRemote := req.GetGrantee().GetId().GetIdp()
 	destPath := req.GetRef().GetPath()
-	destToken := "marie"
 
-	jobID, err := s.driver.DoTransfer(srcRemote, srcPath, srcToken, destRemote, destPath, destToken)
+	jobID, err := s.txDriver.DoTransfer(srcRemote, srcPath, srcToken, destRemote, destPath, destToken)
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +190,7 @@ func (s *service) GetTransferStatus(ctx context.Context, req *datatx.GetTransfer
 		return nil, err
 	}
 
-	txStatus, err := s.driver.GetTransferStatus(jobID)
+	txStatus, err := s.txDriver.GetTransferStatus(jobID)
 	if err != nil {
 		return nil, err
 	}
@@ -202,7 +219,7 @@ func (s *service) CancelTransfer(ctx context.Context, req *datatx.CancelTransfer
 		return nil, err
 	}
 
-	txStatus, err := s.driver.CancelTransfer(jobID)
+	txStatus, err := s.txDriver.CancelTransfer(jobID)
 	if err != nil {
 		return nil, err
 	}
