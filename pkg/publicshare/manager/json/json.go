@@ -62,7 +62,7 @@ func (j *janitor) run() {
 		select {
 		case <-work:
 			return
-		case _ = <-ticker.C:
+		case <-ticker.C:
 			j.m.cleanupExpiredShares()
 		}
 	}
