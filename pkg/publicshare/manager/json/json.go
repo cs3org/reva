@@ -292,6 +292,12 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 		}
 
 		if ref.GetId().GetOpaqueId() == ps.Id.OpaqueId {
+			if !notExpired(ps) {
+				if err := m.revokeExpiredPublicShare(ctx, ps, u); err != nil {
+					return nil, err
+				}
+				return nil, errors.New("no shares found by id:" + ref.GetId().String())
+			}
 			return ps, nil
 		}
 
@@ -452,15 +458,20 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token, password str
 		}
 
 		if local.Token == token {
-			// validate if it is password protected
+			if !notExpired(local) {
+				// TODO user is not needed at all in this API.
+				if err := m.revokeExpiredPublicShare(ctx, local, nil); err != nil {
+					return nil, err
+				}
+				break
+			}
+
 			if local.PasswordProtected {
 				password = base64.StdEncoding.EncodeToString([]byte(password))
-				// check sent password matches stored one
 				if passDB == password {
 					return local, nil
 				}
-				// TODO(refs): custom permission denied error to catch up
-				// in upper layers
+
 				return nil, errors.New("json: invalid password")
 			}
 			return local, nil
