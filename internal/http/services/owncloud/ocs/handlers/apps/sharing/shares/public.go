@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"path"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -38,46 +37,13 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
 	c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
-		return
-	}
-	// prefix the path with the owners home, because ocs share requests are relative to the home dir
-	// TODO the path actually depends on the configured webdav_namespace
-	hRes, err := c.GetHome(ctx, &provider.GetHomeRequest{})
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc get home request", err)
-		return
-	}
-
-	prefix := hRes.GetPath()
-
-	statReq := provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: path.Join(prefix, r.FormValue("path")), // TODO replace path with target
-			},
-		},
-	}
-
-	statRes, err := c.Stat(ctx, &statReq)
-	if err != nil {
-		log.Debug().Err(err).Str("createShare", "shares").Msg("error on stat call")
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "missing resource information", fmt.Errorf("error getting resource information"))
-		return
-	}
-
-	if statRes.Status.Code != rpc.Code_CODE_OK {
-		if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "resource not found", fmt.Errorf("error creating share on non-existing resource"))
-			return
-		}
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error when querying resource", fmt.Errorf("error when querying resource information while creating share, status %d", statRes.Status.Code))
 		return
 	}
 
@@ -104,7 +70,7 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request) 
 	}
 
 	req := link.CreatePublicShareRequest{
-		ResourceInfo: statRes.GetInfo(),
+		ResourceInfo: statInfo,
 		Grant: &link.Grant{
 			Permissions: &link.PublicSharePermissions{
 				Permissions: newPermissions,
@@ -137,8 +103,8 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request) 
 
 	createRes, err := c.CreatePublicShare(ctx, &req)
 	if err != nil {
-		log.Debug().Err(err).Str("createShare", "shares").Msgf("error creating a public share to resource id: %v", statRes.Info.GetId())
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error creating public share", fmt.Errorf("error creating a public share to resource id: %v", statRes.Info.GetId()))
+		log.Debug().Err(err).Str("createShare", "shares").Msgf("error creating a public share to resource id: %v", statInfo.GetId())
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error creating public share", fmt.Errorf("error creating a public share to resource id: %v", statInfo.GetId()))
 		return
 	}
 
@@ -149,7 +115,7 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request) 
 	}
 
 	s := conversions.PublicShare2ShareData(createRes.Share, r, h.publicURL)
-	err = h.addFileInfo(ctx, s, statRes.Info)
+	err = h.addFileInfo(ctx, s, statInfo)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error enhancing response with share data", err)
 		return

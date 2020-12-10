@@ -90,7 +90,7 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
-		handleErrorStatus(&sublog, w, res.Status)
+		HandleErrorStatus(&sublog, w, res.Status)
 		return
 	}
 
@@ -111,7 +111,7 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 		}
 
 		if res.Status.Code != rpc.Code_CODE_OK {
-			handleErrorStatus(&sublog, w, res.Status)
+			HandleErrorStatus(&sublog, w, res.Status)
 			return
 		}
 		infos = append(infos, res.Infos...)
@@ -138,7 +138,7 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 				return
 			}
 			if res.Status.Code != rpc.Code_CODE_OK {
-				handleErrorStatus(&sublog, w, res.Status)
+				HandleErrorStatus(&sublog, w, res.Status)
 				return
 			}
 

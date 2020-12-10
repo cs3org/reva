@@ -36,6 +36,7 @@ import (
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/sdk/common"
 	"github.com/cs3org/reva/pkg/storage/utils/ace"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 	"github.com/rs/zerolog/log"
@@ -296,6 +297,25 @@ func (n *Node) Owner() (id string, idp string, err error) {
 	return n.ownerID, n.ownerIDP, err
 }
 
+// PermissionSet returns the permission set for the curren user
+func (n *Node) PermissionSet(ctx context.Context) *provider.ResourcePermissions {
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("no user in context, returning default permissions")
+		return defaultPermissions
+	}
+	if u.Id.OpaqueId == n.ownerID && u.Id.Idp == n.ownerIDP {
+		return ownerPermissions
+	}
+	// TODO fix permissions for share recipients by traversing up to the next acl? or to the root?
+	// ouch ... if we have to read acls for every dir entry that would be n*depth additional xattr reads ...
+	// but we only need to read the parent tree once.
+	return &provider.ResourcePermissions{
+		ListContainer:   true,
+		CreateContainer: true,
+	}
+}
+
 // AsResourceInfo return the node as CS3 ResourceInfo
 func (n *Node) AsResourceInfo(ctx context.Context, mdKeys []string) (ri *provider.ResourceInfo, err error) {
 	log := appctx.GetLogger(ctx)
@@ -339,9 +359,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, mdKeys []string) (ri *provide
 		Type:     nodeType,
 		MimeType: mime.Detect(nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER, fn),
 		Size:     uint64(fi.Size()),
-		// TODO fix permissions
-		PermissionSet: &provider.ResourcePermissions{ListContainer: true, CreateContainer: true},
-		Target:        string(target),
+		Target:   string(target),
 	}
 
 	if owner, idp, err := n.Owner(); err == nil {
@@ -350,6 +368,8 @@ func (n *Node) AsResourceInfo(ctx context.Context, mdKeys []string) (ri *provide
 			OpaqueId: owner,
 		}
 	}
+
+	ri.PermissionSet = n.PermissionSet(ctx)
 
 	// etag currently is a hash of fileid + tmtime (or mtime)
 	// TODO make etag of files use fileid and checksum

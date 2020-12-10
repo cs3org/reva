@@ -66,7 +66,7 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	if sRes.Status.Code != rpc.Code_CODE_OK {
-		handleErrorStatus(&sublog, w, sRes.Status)
+		HandleErrorStatus(&sublog, w, sRes.Status)
 		return
 	}
 
@@ -91,7 +91,7 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	if dRes.Status.Code != rpc.Code_CODE_OK {
-		handleErrorStatus(&sublog, w, dRes.Status)
+		HandleErrorStatus(&sublog, w, dRes.Status)
 		return
 	}
 

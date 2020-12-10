@@ -65,15 +65,15 @@ func TestContain(t *testing.T) {
 
 func TestContainWithMultiplePermissions(t *testing.T) {
 	table := map[int][]Permissions{
-		3: []Permissions{
+		3: {
 			PermissionRead,
 			PermissionWrite,
 		},
-		5: []Permissions{
+		5: {
 			PermissionRead,
 			PermissionCreate,
 		},
-		31: []Permissions{
+		31: {
 			PermissionRead,
 			PermissionWrite,
 			PermissionCreate,

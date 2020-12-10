@@ -167,7 +167,7 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 		return
 	}
 	if sRes.Status.Code != rpc.Code_CODE_OK && sRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		handleErrorStatus(&sublog, w, sRes.Status)
+		HandleErrorStatus(&sublog, w, sRes.Status)
 		return
 	}
 
@@ -220,7 +220,7 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 	}
 
 	if uRes.Status.Code != rpc.Code_CODE_OK {
-		handleErrorStatus(&sublog, w, uRes.Status)
+		HandleErrorStatus(&sublog, w, uRes.Status)
 		return
 	}
 
@@ -286,7 +286,7 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 	}
 
 	if sRes.Status.Code != rpc.Code_CODE_OK {
-		handleErrorStatus(&sublog, w, sRes.Status)
+		HandleErrorStatus(&sublog, w, sRes.Status)
 		return
 	}
 

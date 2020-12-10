@@ -71,7 +71,7 @@ func (s *svc) handleMkcol(w http.ResponseWriter, r *http.Request, ns string) {
 		if statRes.Status.Code == rpc.Code_CODE_OK {
 			w.WriteHeader(http.StatusMethodNotAllowed) // 405 if it already exists
 		} else {
-			handleErrorStatus(&sublog, w, statRes.Status)
+			HandleErrorStatus(&sublog, w, statRes.Status)
 		}
 		return
 	}
@@ -90,6 +90,6 @@ func (s *svc) handleMkcol(w http.ResponseWriter, r *http.Request, ns string) {
 		sublog.Debug().Str("path", fn).Interface("status", statRes.Status).Msg("conflict")
 		w.WriteHeader(http.StatusConflict)
 	default:
-		handleErrorStatus(&sublog, w, res.Status)
+		HandleErrorStatus(&sublog, w, res.Status)
 	}
 }

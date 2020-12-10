@@ -78,7 +78,7 @@ func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string)
 	}
 
 	if statRes.Status.Code != rpc.Code_CODE_OK {
-		handleErrorStatus(&sublog, w, statRes.Status)
+		HandleErrorStatus(&sublog, w, statRes.Status)
 		return
 	}
 
@@ -128,7 +128,7 @@ func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string)
 				}
 
 				if res.Status.Code != rpc.Code_CODE_OK {
-					handleErrorStatus(&sublog, w, res.Status)
+					HandleErrorStatus(&sublog, w, res.Status)
 					return
 				}
 				removedProps = append(removedProps, propNameXML)
@@ -142,7 +142,7 @@ func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string)
 				}
 
 				if res.Status.Code != rpc.Code_CODE_OK {
-					handleErrorStatus(&sublog, w, res.Status)
+					HandleErrorStatus(&sublog, w, res.Status)
 					return
 				}
 

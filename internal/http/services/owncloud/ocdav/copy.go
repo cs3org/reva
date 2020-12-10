@@ -95,7 +95,7 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	if srcStatRes.Status.Code != rpc.Code_CODE_OK {
-		handleErrorStatus(&sublog, w, srcStatRes.Status)
+		HandleErrorStatus(&sublog, w, srcStatRes.Status)
 		return
 	}
 
@@ -111,7 +111,7 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 	if dstStatRes.Status.Code != rpc.Code_CODE_OK && dstStatRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		handleErrorStatus(&sublog, w, srcStatRes.Status)
+		HandleErrorStatus(&sublog, w, srcStatRes.Status)
 		return
 	}
 
@@ -144,7 +144,7 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 				sublog.Debug().Str("parent", intermediateDir).Interface("status", intStatRes.Status).Msg("conflict")
 				w.WriteHeader(http.StatusConflict)
 			} else {
-				handleErrorStatus(&sublog, w, srcStatRes.Status)
+				HandleErrorStatus(&sublog, w, srcStatRes.Status)
 			}
 			return
 		}

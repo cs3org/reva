@@ -46,6 +46,8 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
 		}, nil
 	}
+	// TODO the user share manager needs to be able to decide if the current user is allowed to create that share (and not eg. incerase permissions)
+	// jfd: AFAICT this can only be determined by a storage driver - either the storage provider is queried first or the share manager needs to access the storage using a storage driver
 	res, err := c.CreateShare(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling CreateShare")

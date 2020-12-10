@@ -20,7 +20,6 @@ package shares
 
 import (
 	"net/http"
-	"path"
 	"strconv"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -37,7 +36,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 )
 
-func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -46,15 +45,6 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
 	}
-	// prefix the path with the owners home, because ocs share requests are relative to the home dir
-	// TODO the path actually depends on the configured webdav_namespace
-	hRes, err := c.GetHome(ctx, &provider.GetHomeRequest{})
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc get home request", err)
-		return
-	}
-
-	prefix := hRes.GetPath()
 
 	shareWithUser, shareWithProvider := r.FormValue("shareWithUser"), r.FormValue("shareWithProvider")
 	if shareWithUser == "" || shareWithProvider == "" {
@@ -111,41 +101,20 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 		resourcePermissions = asCS3Permissions(permissions, nil)
 	}
 
-	statReq := &provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: path.Join(prefix, r.FormValue("path")),
-			},
-		},
-	}
-	statRes, err := c.Stat(ctx, statReq)
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc stat request", err)
-		return
-	}
-	if statRes.Status.Code != rpc.Code_CODE_OK {
-		if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
-			return
-		}
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc stat request failed", err)
-		return
-	}
-
 	createShareReq := &ocm.CreateOCMShareRequest{
 		Opaque: &types.Opaque{
 			Map: map[string]*types.OpaqueEntry{
-				"permissions": &types.OpaqueEntry{
+				"permissions": {
 					Decoder: "plain",
 					Value:   []byte(strconv.Itoa(int(permissions))),
 				},
-				"name": &types.OpaqueEntry{
+				"name": {
 					Decoder: "plain",
-					Value:   []byte(statRes.Info.Path),
+					Value:   []byte(statInfo.Path),
 				},
 			},
 		},
-		ResourceId: statRes.Info.Id,
+		ResourceId: statInfo.Id,
 		Grant: &ocm.ShareGrant{
 			Grantee: &provider.Grantee{
 				Type: provider.GranteeType_GRANTEE_TYPE_USER,
