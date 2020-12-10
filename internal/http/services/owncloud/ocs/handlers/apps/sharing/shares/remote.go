@@ -32,13 +32,11 @@ import (
 
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
-	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 )
 
 func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo) {
 	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
 
 	c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
@@ -72,41 +70,38 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var permissions conversions.Permissions
-	var role string
+	var role *conversions.Role
 
 	pval := r.FormValue("permissions")
 	if pval == "" {
 		// by default only allow read permissions / assign viewer role
-		permissions = conversions.PermissionRead
-		role = conversions.RoleViewer
+		role = conversions.NewViewerRole()
 	} else {
 		pint, err := strconv.Atoi(pval)
 		if err != nil {
 			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "permissions must be an integer", nil)
 			return
 		}
-		permissions, err = conversions.NewPermissions(pint)
+		permissions, err := conversions.NewPermissions(pint)
 		if err != nil {
 			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, err.Error(), nil)
 			return
 		}
-		role = conversions.Permissions2Role(permissions)
-	}
-
-	var resourcePermissions *provider.ResourcePermissions
-	resourcePermissions, err = h.map2CS3Permissions(role, permissions)
-	if err != nil {
-		log.Warn().Err(err).Msg("unknown role, mapping legacy permissions")
-		resourcePermissions = asCS3Permissions(permissions, nil)
+		role = conversions.RoleFromOCSPermissions(permissions)
 	}
 
 	createShareReq := &ocm.CreateOCMShareRequest{
 		Opaque: &types.Opaque{
 			Map: map[string]*types.OpaqueEntry{
+				/* TODO extend the spec with role names?
+				"role": {
+					Decoder: "plain",
+					Value:   []byte(role.Name),
+				},
+				*/
 				"permissions": {
 					Decoder: "plain",
-					Value:   []byte(strconv.Itoa(int(permissions))),
+					Value:   []byte(strconv.Itoa(int(role.OCSPermissions()))),
 				},
 				"name": {
 					Decoder: "plain",
@@ -121,7 +116,7 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 				Id:   remoteUserRes.RemoteUser.GetId(),
 			},
 			Permissions: &ocm.SharePermissions{
-				Permissions: resourcePermissions,
+				Permissions: role.CS3ResourcePermissions(),
 			},
 		},
 		RecipientMeshProvider: providerInfoResp.ProviderInfo,

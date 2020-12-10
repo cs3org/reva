@@ -195,11 +195,10 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// check the share permissions do not extend the user permissions
 	if !h.validatePermissions(w, r, statRes.Info.PermissionSet) {
 		return
 	}
-
-	// TODO check the share permissions do not extend the user permissions
 
 	switch shareType {
 	case int(conversions.ShareTypeUser):
@@ -217,24 +216,18 @@ func (h *Handler) validatePermissions(w http.ResponseWriter, r *http.Request, st
 
 	// 1. we start without permissions
 	var reqPermissions conversions.Permissions
-	var err error
 
 	reqRole := r.FormValue("role")
 
 	// the share role overrides the requested permissions
-	if reqRole != "" && reqRole != conversions.RoleLegacy {
-		reqPermissions, err = conversions.Role2Permissions(reqRole)
-		if err != nil {
-			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, err.Error(), nil)
-			return false
-		}
+	if reqRole != "" {
+		reqPermissions = conversions.RoleFromName(reqRole).OCSPermissions()
 	} else {
 		// map requested permissions
 		pval := r.FormValue("permissions")
 		if pval == "" {
 			// default is read permissions / role viewer
-			reqPermissions = conversions.PermissionAll
-			reqRole = conversions.RoleCoowner
+			reqPermissions = conversions.NewCoownerRole().OCSPermissions()
 		} else {
 			pint, err := strconv.Atoi(pval)
 			if err != nil {
@@ -250,11 +243,10 @@ func (h *Handler) validatePermissions(w http.ResponseWriter, r *http.Request, st
 				}
 				return false
 			}
-			reqRole = conversions.Permissions2Role(reqPermissions)
 		}
 	}
 
-	existingPermissions := conversions.ResourcePermissions2Permissions(statPerms)
+	existingPermissions := conversions.RoleFromResourcePermissions(statPerms).OCSPermissions()
 	if !existingPermissions.Contain(reqPermissions) {
 		response.WriteOCSError(w, r, http.StatusNotFound, "Cannot set the requested share permissions", nil)
 		return false
@@ -284,76 +276,6 @@ func (h *Handler) stat(ctx context.Context, path string) (*provider.StatResponse
 
 // PublicShareContextName represent cross boundaries context for the name of the public share
 type PublicShareContextName string
-
-// TODO sort out mapping, this is just a first guess
-// TODO use roles to make this configurable
-func asCS3Permissions(p conversions.Permissions, rp *provider.ResourcePermissions) *provider.ResourcePermissions {
-	if rp == nil {
-		rp = &provider.ResourcePermissions{}
-	}
-
-	if p.Contain(conversions.PermissionRead) {
-		rp.ListContainer = true
-		rp.ListGrants = true
-		rp.ListFileVersions = true
-		rp.ListRecycle = true
-		rp.Stat = true
-		rp.GetPath = true
-		rp.GetQuota = true
-		rp.InitiateFileDownload = true
-	}
-	if p.Contain(conversions.PermissionWrite) {
-		rp.InitiateFileUpload = true
-		rp.RestoreFileVersion = true
-		rp.RestoreRecycleItem = true
-	}
-	if p.Contain(conversions.PermissionCreate) {
-		rp.CreateContainer = true
-		// FIXME permissions mismatch: double check create vs write file
-		rp.InitiateFileUpload = true
-		if p.Contain(conversions.PermissionWrite) {
-			rp.Move = true // TODO move only when create and write?
-		}
-	}
-	if p.Contain(conversions.PermissionDelete) {
-		rp.Delete = true
-		rp.PurgeRecycle = true
-	}
-	if p.Contain(conversions.PermissionShare) {
-		rp.AddGrant = true
-		rp.RemoveGrant = true // TODO when are you able to unshare / delete
-		rp.UpdateGrant = true
-	}
-	return rp
-}
-
-func (h *Handler) map2CS3Permissions(role string, p conversions.Permissions) (*provider.ResourcePermissions, error) {
-	// TODO replace usage of this method with asCS3Permissions
-	rp := &provider.ResourcePermissions{
-		ListContainer:        p.Contain(conversions.PermissionRead),
-		ListGrants:           p.Contain(conversions.PermissionRead),
-		ListFileVersions:     p.Contain(conversions.PermissionRead),
-		ListRecycle:          p.Contain(conversions.PermissionRead),
-		Stat:                 p.Contain(conversions.PermissionRead),
-		GetPath:              p.Contain(conversions.PermissionRead),
-		GetQuota:             p.Contain(conversions.PermissionRead),
-		InitiateFileDownload: p.Contain(conversions.PermissionRead),
-
-		// FIXME: uploader role with only write permission can use InitiateFileUpload, not anything else
-		Move:               p.Contain(conversions.PermissionWrite),
-		InitiateFileUpload: p.Contain(conversions.PermissionWrite),
-		CreateContainer:    p.Contain(conversions.PermissionCreate),
-		Delete:             p.Contain(conversions.PermissionDelete),
-		RestoreFileVersion: p.Contain(conversions.PermissionWrite),
-		RestoreRecycleItem: p.Contain(conversions.PermissionWrite),
-		PurgeRecycle:       p.Contain(conversions.PermissionDelete),
-
-		AddGrant:    p.Contain(conversions.PermissionShare),
-		RemoveGrant: p.Contain(conversions.PermissionShare), // TODO when are you able to unshare / delete
-		UpdateGrant: p.Contain(conversions.PermissionShare),
-	}
-	return rp, nil
-}
 
 func (h *Handler) getShare(w http.ResponseWriter, r *http.Request, shareID string) {
 	var share *conversions.ShareData
@@ -516,7 +438,7 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 			Field: &collaboration.UpdateShareRequest_UpdateField_Permissions{
 				Permissions: &collaboration.SharePermissions{
 					// this completely overwrites the permissions for this user
-					Permissions: asCS3Permissions(permissions, nil),
+					Permissions: conversions.RoleFromOCSPermissions(permissions).CS3ResourcePermissions(),
 				},
 			},
 		},
@@ -1087,82 +1009,4 @@ func parseTimestamp(timestampString string) (*types.Timestamp, error) {
 		Seconds: uint64(final / 1000000000),
 		Nanos:   uint32(final % 1000000000),
 	}, nil
-}
-
-func ocPublicPermToCs3(permKey int, h *Handler) (*provider.ResourcePermissions, error) {
-	role, ok := ocPublicPermToRole[permKey]
-	if !ok {
-		log.Error().Str("ocPublicPermToCs3", "shares").Msgf("invalid oC permission: %s", role)
-		return nil, fmt.Errorf("invalid oC permission: %s", role)
-	}
-
-	perm, err := conversions.NewPermissions(permKey)
-	if err != nil {
-		return nil, err
-	}
-
-	p, err := h.map2CS3Permissions(role, perm)
-	if err != nil {
-		log.Error().Str("permissionFromRequest", "shares").Msgf("role to cs3permission %v", perm)
-		return nil, fmt.Errorf("role to cs3permission failed: %v", perm)
-	}
-
-	return p, nil
-}
-
-func permissionFromRequest(r *http.Request, h *Handler) (*provider.ResourcePermissions, error) {
-	var err error
-	// phoenix sends: {"permissions": 15}. See ocPublicPermToRole struct for mapping
-
-	permKey := 1
-
-	// note: "permissions" value has higher priority than "publicUpload"
-
-	// handle legacy "publicUpload" arg that overrides permissions differently depending on the scenario
-	// https://github.com/owncloud/core/blob/v10.4.0/apps/files_sharing/lib/Controller/Share20OcsController.php#L447
-	publicUploadString, ok := r.Form["publicUpload"]
-	if ok {
-		publicUploadFlag, err := strconv.ParseBool(publicUploadString[0])
-		if err != nil {
-			log.Error().Err(err).Str("publicUpload", publicUploadString[0]).Msg("could not parse publicUpload argument")
-			return nil, err
-		}
-
-		if publicUploadFlag {
-			// all perms except reshare
-			permKey = 15
-		}
-	} else {
-		permissionsString, ok := r.Form["permissions"]
-		if !ok {
-			// no permission values given
-			return nil, nil
-		}
-
-		permKey, err = strconv.Atoi(permissionsString[0])
-		if err != nil {
-			log.Error().Str("permissionFromRequest", "shares").Msgf("invalid type: %T", permKey)
-			return nil, fmt.Errorf("invalid type: %T", permKey)
-		}
-	}
-
-	p, err := ocPublicPermToCs3(permKey, h)
-	if err != nil {
-		return nil, err
-	}
-	return p, err
-}
-
-// TODO: add mapping for user share permissions to role
-
-// Maps oc10 public link permissions to roles
-var ocPublicPermToRole = map[int]string{
-	// Recipients can view and download contents.
-	1: "viewer",
-	// Recipients can view, download, edit, delete and upload contents
-	15: "editor",
-	// Recipients can upload but existing contents are not revealed
-	4: "uploader",
-	// Recipients can view, download and upload contents
-	5: "contributor",
 }

@@ -100,16 +100,16 @@ func TestPermissions2Role(t *testing.T) {
 	}
 
 	table := map[Permissions]string{
-		PermissionRead:                    RoleViewer,
-		PermissionWrite:                   RoleEditor,
-		PermissionShare:                   RoleCoowner,
+		PermissionRead: RoleViewer,
+		PermissionRead | PermissionWrite | PermissionCreate | PermissionDelete: RoleEditor,
 		PermissionAll:                     RoleCoowner,
-		PermissionRead | PermissionWrite:  RoleEditor,
-		PermissionWrite | PermissionShare: RoleCoowner,
+		PermissionWrite:                   RoleLegacy,
+		PermissionShare:                   RoleLegacy,
+		PermissionWrite | PermissionShare: RoleLegacy,
 	}
 
 	for permissions, role := range table {
-		actual := Permissions2Role(permissions)
+		actual := RoleFromOCSPermissions(permissions).Name
 		checkRole(role, actual)
 	}
 }

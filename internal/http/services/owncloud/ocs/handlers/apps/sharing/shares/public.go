@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -436,4 +437,76 @@ func (h *Handler) removePublicShare(w http.ResponseWriter, r *http.Request, shar
 	}
 
 	response.WriteOCSSuccess(w, r, nil)
+}
+
+func ocPublicPermToCs3(permKey int, h *Handler) (*provider.ResourcePermissions, error) {
+	role, ok := ocPublicPermToRole[permKey]
+	if !ok {
+		log.Error().Str("ocPublicPermToCs3", "shares").Msgf("invalid oC permission: %s", role)
+		return nil, fmt.Errorf("invalid oC permission: %s", role)
+	}
+
+	perm, err := conversions.NewPermissions(permKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return conversions.RoleFromOCSPermissions(perm).CS3ResourcePermissions(), nil
+}
+
+func permissionFromRequest(r *http.Request, h *Handler) (*provider.ResourcePermissions, error) {
+	var err error
+	// phoenix sends: {"permissions": 15}. See ocPublicPermToRole struct for mapping
+
+	permKey := 1
+
+	// note: "permissions" value has higher priority than "publicUpload"
+
+	// handle legacy "publicUpload" arg that overrides permissions differently depending on the scenario
+	// https://github.com/owncloud/core/blob/v10.4.0/apps/files_sharing/lib/Controller/Share20OcsController.php#L447
+	publicUploadString, ok := r.Form["publicUpload"]
+	if ok {
+		publicUploadFlag, err := strconv.ParseBool(publicUploadString[0])
+		if err != nil {
+			log.Error().Err(err).Str("publicUpload", publicUploadString[0]).Msg("could not parse publicUpload argument")
+			return nil, err
+		}
+
+		if publicUploadFlag {
+			// all perms except reshare
+			permKey = 15
+		}
+	} else {
+		permissionsString, ok := r.Form["permissions"]
+		if !ok {
+			// no permission values given
+			return nil, nil
+		}
+
+		permKey, err = strconv.Atoi(permissionsString[0])
+		if err != nil {
+			log.Error().Str("permissionFromRequest", "shares").Msgf("invalid type: %T", permKey)
+			return nil, fmt.Errorf("invalid type: %T", permKey)
+		}
+	}
+
+	p, err := ocPublicPermToCs3(permKey, h)
+	if err != nil {
+		return nil, err
+	}
+	return p, err
+}
+
+// TODO: add mapping for user share permissions to role
+
+// Maps oc10 public link permissions to roles
+var ocPublicPermToRole = map[int]string{
+	// Recipients can view and download contents.
+	1: "viewer",
+	// Recipients can view, download, edit, delete and upload contents
+	15: "editor",
+	// Recipients can upload but existing contents are not revealed
+	4: "uploader",
+	// Recipients can view, download and upload contents
+	5: "contributor",
 }

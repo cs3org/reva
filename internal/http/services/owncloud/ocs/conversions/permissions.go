@@ -20,8 +20,6 @@ package conversions
 
 import (
 	"fmt"
-
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
 // Permissions reflects the CRUD permissions used in the OCS sharing API
@@ -63,66 +61,4 @@ func NewPermissions(val int) (Permissions, error) {
 // Contain tests if the permissions contain another one.
 func (p Permissions) Contain(other Permissions) bool {
 	return p&other != 0
-}
-
-// Permissions2Role performs permission conversions for user and federated shares
-func Permissions2Role(p Permissions) string {
-	role := RoleLegacy
-	if p.Contain(PermissionRead) {
-		role = RoleViewer
-		if p.Contain(PermissionWrite) && p.Contain(PermissionCreate) && p.Contain(PermissionDelete) {
-			role = RoleEditor
-			if p.Contain(PermissionShare) {
-				role = RoleCoowner
-			}
-		}
-	}
-	return role
-}
-
-// Role2Permissions converts string roles into ocs permissions
-func Role2Permissions(r string) (Permissions, error) {
-	switch r {
-	case RoleViewer:
-		return PermissionRead, nil
-	case RoleEditor:
-		return PermissionRead & PermissionWrite & PermissionCreate & PermissionDelete, nil
-	case RoleCoowner:
-		return PermissionAll, nil
-	case RoleLegacy:
-		return PermissionInvalid, nil // FIXME
-	default:
-		return PermissionInvalid, fmt.Errorf("unknown role: %s", r)
-	}
-}
-
-// ResourcePermissions2Permissions converts CS3 storage resource permissions into ocs permissions
-func ResourcePermissions2Permissions(rp *provider.ResourcePermissions) Permissions {
-	// TODO what about trash? and versions?
-	p := PermissionInvalid
-	if rp.ListContainer == true &&
-		//rp.ListGrants == true &&
-		//rp.ListFileVersions == true &&
-		//rp.ListRecycle == true &&
-		//rp.Stat == true &&
-		//rp.GetPath == true &&
-		//rp.GetQuota == true &&
-		rp.InitiateFileDownload == true {
-		p = p | PermissionRead
-	}
-	if rp.InitiateFileUpload == true {
-		p = p | PermissionWrite
-	}
-	if rp.CreateContainer == true {
-		p = p | PermissionCreate
-	}
-	if rp.Delete == true {
-		p = p | PermissionDelete
-	}
-	if rp.AddGrant == true &&
-		rp.RemoveGrant == true &&
-		rp.UpdateGrant == true {
-		p = p | PermissionShare
-	}
-	return p
 }

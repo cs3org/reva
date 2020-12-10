@@ -43,23 +43,25 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statIn
 		return
 	}
 
-	var permissions conversions.Permissions
+	var role *conversions.Role
 
-	role := r.FormValue("role")
-	// 2. if we don't have a role try to map the permissions
-	if role == "" {
+	reqRole := r.FormValue("role")
+	if reqRole != "" {
+		// default is all permissions / role coowner
+		role = conversions.RoleFromName(reqRole)
+	} else {
+		// map requested permissions
 		pval := r.FormValue("permissions")
 		if pval == "" {
 			// default is all permissions / role coowner
-			permissions = conversions.PermissionAll
-			role = conversions.RoleCoowner
+			role = conversions.NewCoownerRole()
 		} else {
 			pint, err := strconv.Atoi(pval)
 			if err != nil {
 				response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "permissions must be an integer", nil)
 				return
 			}
-			permissions, err = conversions.NewPermissions(pint)
+			permissions, err := conversions.NewPermissions(pint)
 			if err != nil {
 				if err == conversions.ErrPermissionNotInRange {
 					response.WriteOCSError(w, r, http.StatusNotFound, err.Error(), nil)
@@ -68,20 +70,20 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statIn
 				}
 				return
 			}
-			role = conversions.Permissions2Role(permissions)
+			role = conversions.RoleFromOCSPermissions(permissions)
 		}
 	}
 
 	if statInfo != nil && statInfo.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
 		// Single file shares should never have delete or create permissions
+		permissions := role.OCSPermissions()
 		permissions &^= conversions.PermissionCreate
 		permissions &^= conversions.PermissionDelete
+		// editor should be come a file-editor role
+		role = conversions.RoleFromOCSPermissions(permissions)
 	}
 
-	var resourcePermissions *provider.ResourcePermissions
-	resourcePermissions = asCS3Permissions(permissions, resourcePermissions)
-
-	roleMap := map[string]string{"name": role}
+	roleMap := map[string]string{"name": role.Name}
 	val, err := json.Marshal(roleMap)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "could not encode role", err)
@@ -124,7 +126,7 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statIn
 				Id:   userRes.User.GetId(),
 			},
 			Permissions: &collaboration.SharePermissions{
-				Permissions: resourcePermissions,
+				Permissions: role.CS3ResourcePermissions(),
 			},
 		},
 	}
