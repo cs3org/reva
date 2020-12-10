@@ -33,10 +33,12 @@ import (
 
 	"go.opencensus.io/trace"
 
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxuser "github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 )
@@ -299,8 +301,16 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		}
 
 		if md.PermissionSet != nil {
-			// TODO(jfd) no longer hardcode permissions
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:permissions", "WCKDNVR"))
+			response.Propstat[0].Prop = append(
+				response.Propstat[0].Prop,
+				s.newProp("oc:permissions",
+					conversions.RoleFromResourcePermissions(md.PermissionSet).
+						WebDAVPermissions(
+							md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+							!isCurrentUserOwner(ctx, md.Owner),
+							false,
+							false,
+						)))
 		}
 
 		// always return size
@@ -378,8 +388,16 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					}
 				case "permissions": // both
 					if md.PermissionSet != nil {
-						// TODO(jfd): properly build permissions string
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:permissions", "WCKDNVR"))
+						propstatOK.Prop = append(
+							propstatOK.Prop,
+							s.newProp("oc:permissions",
+								conversions.RoleFromResourcePermissions(md.PermissionSet).
+									WebDAVPermissions(
+										md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+										!isCurrentUserOwner(ctx, md.Owner),
+										false,
+										false,
+									)))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:permissions", ""))
 					}
@@ -519,6 +537,17 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	}
 
 	return &response, nil
+}
+
+// a file is only yours if you are the owner
+func isCurrentUserOwner(ctx context.Context, owner *userv1beta1.UserId) bool {
+	contextUser, ok := ctxuser.ContextGetUser(ctx)
+	if ok && contextUser.Id != nil && owner != nil &&
+		contextUser.Id.Idp == owner.Idp &&
+		contextUser.Id.OpaqueId == owner.OpaqueId {
+		return true
+	}
+	return false
 }
 
 type countingReader struct {

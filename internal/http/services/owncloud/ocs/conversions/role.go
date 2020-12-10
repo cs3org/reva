@@ -19,7 +19,12 @@
 // Package conversions sits between CS3 type definitions and OCS API Responses
 package conversions
 
-import provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+import (
+	"fmt"
+	"strings"
+
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+)
 
 // Role describes the interface to transform different permission sets into each other
 type Role struct {
@@ -53,6 +58,62 @@ func (r *Role) CS3ResourcePermissions() *provider.ResourcePermissions {
 // OCSPermissions for the role
 func (r *Role) OCSPermissions() Permissions {
 	return r.OCSPermissions()
+}
+
+// WebDAVPermissions returns the webdav permissions used in propfinds, eg. "WCKDNVR"
+/*
+	from https://github.com/owncloud/core/blob/10715e2b1c85fc3855a38d2b1fe4426b5e3efbad/apps/dav/lib/Files/PublicFiles/SharedNodeTrait.php#L196-L215
+
+		$p = '';
+		if ($node->isDeletable() && $this->checkSharePermissions(Constants::PERMISSION_DELETE)) {
+			$p .= 'D';
+		}
+		if ($node->isUpdateable() && $this->checkSharePermissions(Constants::PERMISSION_UPDATE)) {
+			$p .= 'NV'; // Renameable, Moveable
+		}
+		if ($node->getType() === \OCP\Files\FileInfo::TYPE_FILE) {
+			if ($node->isUpdateable() && $this->checkSharePermissions(Constants::PERMISSION_UPDATE)) {
+				$p .= 'W';
+			}
+		} else {
+			if ($node->isCreatable() && $this->checkSharePermissions(Constants::PERMISSION_CREATE)) {
+				$p .= 'CK';
+			}
+		}
+
+*/
+// D = delete
+// NV = update (renameable moveable)
+// W = update (files only)
+// CK = create (folders only)
+// S = Shared
+// R = Shareable
+// M = Mounted
+func (r *Role) WebDAVPermissions(isDir, isShared, isMountpoint, isPublic bool) string {
+	var b strings.Builder
+	//b.Grow(7)
+	if r.ocsPermissions.Contain(PermissionDelete) {
+		fmt.Fprintf(&b, "D")
+	}
+	if r.ocsPermissions.Contain(PermissionWrite) {
+		fmt.Fprintf(&b, "NV")
+		if !isDir {
+			fmt.Fprintf(&b, "W")
+		}
+	}
+	if isDir && r.ocsPermissions.Contain(PermissionCreate) {
+		fmt.Fprintf(&b, "CK")
+	}
+	if !isPublic && isShared {
+		fmt.Fprintf(&b, "S")
+	}
+	if r.ocsPermissions.Contain(PermissionShare) {
+		fmt.Fprintf(&b, "R")
+	}
+	if !isPublic && isMountpoint {
+		fmt.Fprintf(&b, "M")
+	}
+	return b.String()
 }
 
 // RoleFromName creates a role from the name
