@@ -36,6 +36,7 @@ var (
 	insecure, skipverify, disableargprompt bool
 	timeout                                int
 
+	fmt.Pritnln("test")
 	helpCommandOutput string
 
 	gitCommit, buildDate, version, goVersion string
