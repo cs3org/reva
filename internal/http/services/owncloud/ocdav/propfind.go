@@ -263,6 +263,7 @@ func (s *svc) newProp(key, val string) *propertyXML {
 // ns is the CS3 namespace that needs to be removed from the CS3 path before
 // prefixing it with the baseURI
 func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, ns string) (*responseXML, error) {
+	sublog := appctx.GetLogger(ctx).With().Interface("md", md).Str("ns", ns).Logger()
 	md.Path = strings.TrimPrefix(md.Path, ns)
 
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
@@ -301,16 +302,17 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		}
 
 		if md.PermissionSet != nil {
+			r := conversions.RoleFromResourcePermissions(md.PermissionSet)
+			wdp := r.WebDAVPermissions(
+				md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+				!isCurrentUserOwner(ctx, md.Owner),
+				false,
+				false,
+			)
+			sublog.Debug().Interface("role", r).Str("dav-permissions", wdp).Msg("converted PermissionSet")
 			response.Propstat[0].Prop = append(
 				response.Propstat[0].Prop,
-				s.newProp("oc:permissions",
-					conversions.RoleFromResourcePermissions(md.PermissionSet).
-						WebDAVPermissions(
-							md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-							!isCurrentUserOwner(ctx, md.Owner),
-							false,
-							false,
-						)))
+				s.newProp("oc:permissions", wdp))
 		}
 
 		// always return size
@@ -388,16 +390,17 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					}
 				case "permissions": // both
 					if md.PermissionSet != nil {
+						r := conversions.RoleFromResourcePermissions(md.PermissionSet)
+						wdp := r.WebDAVPermissions(
+							md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+							!isCurrentUserOwner(ctx, md.Owner),
+							false,
+							false,
+						)
+						sublog.Debug().Interface("role", r).Str("dav-permissions", wdp).Msg("converted PermissionSet")
 						propstatOK.Prop = append(
 							propstatOK.Prop,
-							s.newProp("oc:permissions",
-								conversions.RoleFromResourcePermissions(md.PermissionSet).
-									WebDAVPermissions(
-										md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-										!isCurrentUserOwner(ctx, md.Owner),
-										false,
-										false,
-									)))
+							s.newProp("oc:permissions", wdp))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:permissions", ""))
 					}

@@ -279,6 +279,10 @@ func (n *Node) Owner() (id string, idp string, err error) {
 		return n.ownerID, n.ownerIDP, nil
 	}
 
+	// FIXME ... do we return the owner of the reference or the owner of the target?
+	// we don't really know the owner of the target ... and as the reference may point anywhere we cannot really find out
+	// but what are the permissions? all? none? the gateway has to fill in?
+	// TODO what if this is a reference?
 	nodePath := n.lu.toInternalPath(n.ID)
 	// lookup parent id in extended attributes
 	var attrBytes []byte
@@ -297,13 +301,14 @@ func (n *Node) Owner() (id string, idp string, err error) {
 	return n.ownerID, n.ownerIDP, err
 }
 
-// PermissionSet returns the permission set for the curren user
+// PermissionSet returns the permission set for the current user
 func (n *Node) PermissionSet(ctx context.Context) *provider.ResourcePermissions {
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("no user in context, returning default permissions")
 		return defaultPermissions
 	}
+	n.Owner() // read owner
 	if u.Id.OpaqueId == n.ownerID && u.Id.Idp == n.ownerIDP {
 		return ownerPermissions
 	}
@@ -317,7 +322,7 @@ func (n *Node) PermissionSet(ctx context.Context) *provider.ResourcePermissions 
 }
 
 // AsResourceInfo return the node as CS3 ResourceInfo
-func (n *Node) AsResourceInfo(ctx context.Context, mdKeys []string) (ri *provider.ResourceInfo, err error) {
+func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissions, mdKeys []string) (ri *provider.ResourceInfo, err error) {
 	log := appctx.GetLogger(ctx)
 
 	var fn string
@@ -354,12 +359,13 @@ func (n *Node) AsResourceInfo(ctx context.Context, mdKeys []string) (ri *provide
 	}
 
 	ri = &provider.ResourceInfo{
-		Id:       id,
-		Path:     fn,
-		Type:     nodeType,
-		MimeType: mime.Detect(nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER, fn),
-		Size:     uint64(fi.Size()),
-		Target:   string(target),
+		Id:            id,
+		Path:          fn,
+		Type:          nodeType,
+		MimeType:      mime.Detect(nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER, fn),
+		Size:          uint64(fi.Size()),
+		Target:        string(target),
+		PermissionSet: rp,
 	}
 
 	if owner, idp, err := n.Owner(); err == nil {
@@ -368,8 +374,6 @@ func (n *Node) AsResourceInfo(ctx context.Context, mdKeys []string) (ri *provide
 			OpaqueId: owner,
 		}
 	}
-
-	ri.PermissionSet = n.PermissionSet(ctx)
 
 	// etag currently is a hash of fileid + tmtime (or mtime)
 	// TODO make etag of files use fileid and checksum

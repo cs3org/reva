@@ -57,7 +57,7 @@ func (r *Role) CS3ResourcePermissions() *provider.ResourcePermissions {
 
 // OCSPermissions for the role
 func (r *Role) OCSPermissions() Permissions {
-	return r.OCSPermissions()
+	return r.ocsPermissions
 }
 
 // WebDAVPermissions returns the webdav permissions used in propfinds, eg. "WCKDNVR"

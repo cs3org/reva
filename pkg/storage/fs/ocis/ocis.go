@@ -360,18 +360,15 @@ func (fs *ocisfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
 		return
 	}
-
-	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
-		return rp.Stat
-	})
+	rp, err := fs.p.ReadUserPermissions(ctx, node)
 	switch {
 	case err != nil:
 		return nil, errtypes.InternalError(err.Error())
-	case !ok:
+	case !rp.Stat:
 		return nil, errtypes.PermissionDenied(node.ID)
 	}
 
-	return node.AsResourceInfo(ctx, mdKeys)
+	return node.AsResourceInfo(ctx, rp, mdKeys)
 }
 
 func (fs *ocisfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) (finfos []*provider.ResourceInfo, err error) {
@@ -385,13 +382,11 @@ func (fs *ocisfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 		return
 	}
 
-	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
-		return rp.ListContainer
-	})
+	rp, err := fs.p.ReadUserPermissions(ctx, node)
 	switch {
 	case err != nil:
 		return nil, errtypes.InternalError(err.Error())
-	case !ok:
+	case !rp.ListContainer:
 		return nil, errtypes.PermissionDenied(node.ID)
 	}
 
@@ -402,7 +397,10 @@ func (fs *ocisfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 	}
 
 	for i := range children {
-		if ri, err := children[i].AsResourceInfo(ctx, mdKeys); err == nil {
+		np := rp
+		addPermissions(np, node.PermissionSet(ctx))
+		// TODO only add this childs permissions
+		if ri, err := children[i].AsResourceInfo(ctx, np, mdKeys); err == nil {
 			finfos = append(finfos, ri)
 		}
 	}
