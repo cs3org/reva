@@ -523,6 +523,53 @@ func (fs *ocfs) getUser(ctx context.Context, usernameOrID string) (id *userpb.Us
 	return res.User, nil
 }
 
+// permissionSet returns the permission set for the current user
+func (fs *ocfs) permissionSet(ctx context.Context, owner *userpb.UserId) *provider.ResourcePermissions {
+	if owner == nil {
+		return &provider.ResourcePermissions{
+			Stat: true,
+		}
+	}
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		return &provider.ResourcePermissions{
+			// no permissions
+		}
+	}
+	if u.Id == nil {
+		return &provider.ResourcePermissions{
+			// no permissions
+		}
+	}
+	if u.Id.OpaqueId == owner.OpaqueId && u.Id.Idp == owner.Idp {
+		return &provider.ResourcePermissions{
+			// owner has all permissions
+			AddGrant:             true,
+			CreateContainer:      true,
+			Delete:               true,
+			GetPath:              true,
+			GetQuota:             true,
+			InitiateFileDownload: true,
+			InitiateFileUpload:   true,
+			ListContainer:        true,
+			ListFileVersions:     true,
+			ListGrants:           true,
+			ListRecycle:          true,
+			Move:                 true,
+			PurgeRecycle:         true,
+			RemoveGrant:          true,
+			RestoreFileVersion:   true,
+			RestoreRecycleItem:   true,
+			Stat:                 true,
+			UpdateGrant:          true,
+		}
+	}
+	// TODO fix permissions for share recipients by traversing reading acls up to the root? cache acls for the parent node and reuse it
+	return &provider.ResourcePermissions{
+		ListContainer:   true,
+		CreateContainer: true,
+	}
+}
 func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, ip string, sp string, c redis.Conn, mdKeys []string) *provider.ResourceInfo {
 	id := readOrCreateID(ctx, ip, c)
 
@@ -596,13 +643,12 @@ func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, ip st
 	}
 
 	ri := &provider.ResourceInfo{
-		Id:            &provider.ResourceId{OpaqueId: id},
-		Path:          sp,
-		Type:          getResourceType(fi.IsDir()),
-		Etag:          etag,
-		MimeType:      mime.Detect(fi.IsDir(), ip),
-		Size:          uint64(fi.Size()),
-		PermissionSet: &provider.ResourcePermissions{ListContainer: true, CreateContainer: true},
+		Id:       &provider.ResourceId{OpaqueId: id},
+		Path:     sp,
+		Type:     getResourceType(fi.IsDir()),
+		Etag:     etag,
+		MimeType: mime.Detect(fi.IsDir(), ip),
+		Size:     uint64(fi.Size()),
 		Mtime: &types.Timestamp{
 			Seconds: uint64(fi.ModTime().Unix()),
 			// TODO read nanos from where? Nanos:   fi.MTimeNanos,
@@ -617,6 +663,8 @@ func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, ip st
 	} else {
 		appctx.GetLogger(ctx).Error().Err(err).Msg("error getting owner")
 	}
+
+	ri.PermissionSet = fs.permissionSet(ctx, ri.Owner)
 
 	return ri
 }

@@ -1310,24 +1310,22 @@ func (fs *eosfs) convertToFileReference(ctx context.Context, eosFileInfo *eoscli
 	return info, nil
 }
 
-// permissionSet returns the permission set for the curren user
+// permissionSet returns the permission set for the current user
 func (fs *eosfs) permissionSet(ctx context.Context, owner *userpb.UserId) *provider.ResourcePermissions {
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
-		appctx.GetLogger(ctx).Debug().Msg("no user in context, returning default permissions (none)")
 		return &provider.ResourcePermissions{
 			// no permissions
 		}
 	}
 	if u.Id == nil {
-		appctx.GetLogger(ctx).Error().Msg("user has no id, returning default permissions (none)")
 		return &provider.ResourcePermissions{
 			// no permissions
 		}
 	}
 	if u.Id.OpaqueId == owner.OpaqueId && u.Id.Idp == owner.Idp {
 		return &provider.ResourcePermissions{
-			// owner has all all permissions
+			// owner has all permissions
 			AddGrant:             true,
 			CreateContainer:      true,
 			Delete:               true,

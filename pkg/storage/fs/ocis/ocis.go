@@ -398,8 +398,8 @@ func (fs *ocisfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 
 	for i := range children {
 		np := rp
+		// add this childs permissions
 		addPermissions(np, node.PermissionSet(ctx))
-		// TODO only add this childs permissions
 		if ri, err := children[i].AsResourceInfo(ctx, np, mdKeys); err == nil {
 			finfos = append(finfos, ri)
 		}
