@@ -50,13 +50,14 @@ func (fs *ocisfs) ListRecycle(ctx context.Context) (items []*provider.RecycleIte
 	items = make([]*provider.RecycleItem, 0)
 
 	// TODO how do we check if the storage allows listing the recycle for the current user? check owner of the root of the storage?
+	// use permissions ReadUserPermissions?
 	if fs.o.EnableHome {
 		if !ownerPermissions.ListContainer {
 			log.Debug().Msg("owner not allowed to list trash")
 			return items, errtypes.PermissionDenied("owner not allowed to list trash")
 		}
 	} else {
-		if !defaultPermissions.ListContainer {
+		if !noPermissions.ListContainer {
 			log.Debug().Msg("default permissions prevent listing trash")
 			return items, errtypes.PermissionDenied("default permissions prevent listing trash")
 		}

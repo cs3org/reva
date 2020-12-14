@@ -36,7 +36,7 @@ const (
 	_groupAcePrefix = "g:"
 )
 
-var defaultPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{
+var noPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{
 	// no permissions
 }
 
@@ -71,19 +71,19 @@ type Permissions struct {
 	lu *Lookup
 }
 
-// ReadUserPermissions will assemble the permissions for the current user on the given node
-func (p *Permissions) ReadUserPermissions(ctx context.Context, n *Node) (ap *provider.ResourcePermissions, err error) {
+// AssemblePermissions will assemble the permissions for the current user on the given node, taking into account all parent nodes
+func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap *provider.ResourcePermissions, err error) {
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("no user in context, returning default permissions")
-		return defaultPermissions, nil
+		return noPermissions, nil
 	}
 	// check if the current user is the owner
 	id, idp, err := n.Owner()
 	if err != nil {
 		// TODO check if a parent folder has the owner set?
 		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not determine owner, returning default permissions")
-		return defaultPermissions, err
+		return noPermissions, err
 	}
 	if id == "" {
 		// TODO what if no owner is set but grants are present?
@@ -111,47 +111,14 @@ func (p *Permissions) ReadUserPermissions(ctx context.Context, n *Node) (ap *pro
 		groupsMap[u.Groups[i]] = true
 	}
 
-	var g *provider.Grant
 	// for all segments, starting at the leaf
 	for cn.ID != rn.ID {
 
-		var grantees []string
-		if grantees, err = cn.ListGrantees(ctx); err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn).Msg("error listing grantees")
-			return nil, err
-		}
-
-		userace := grantPrefix + _userAcePrefix + u.Id.OpaqueId
-		userFound := false
-		for i := range grantees {
-			// we only need the find the user once per node
-			switch {
-			case !userFound && grantees[i] == userace:
-				g, err = cn.ReadGrant(ctx, grantees[i])
-			case strings.HasPrefix(grantees[i], grantPrefix+_groupAcePrefix):
-				gr := strings.TrimPrefix(grantees[i], grantPrefix+_groupAcePrefix)
-				if groupsMap[gr] {
-					g, err = cn.ReadGrant(ctx, grantees[i])
-				} else {
-					// no need to check attribute
-					continue
-				}
-			default:
-				// no need to check attribute
-				continue
-			}
-
-			switch {
-			case err == nil:
-				addPermissions(ap, g.GetPermissions())
-			case isNoData(err):
-				err = nil
-				appctx.GetLogger(ctx).Error().Interface("node", cn).Str("grant", grantees[i]).Interface("grantees", grantees).Msg("grant vanished from node after listing")
-				// continue with next segment
-			default:
-				appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn).Str("grant", grantees[i]).Msg("error reading permissions")
-				// continue with next segment
-			}
+		if np, err := cn.ReadUserPermissions(ctx, u); err == nil {
+			addPermissions(ap, np)
+		} else {
+			appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn).Msg("error reading permissions")
+			// continue with next segment
 		}
 
 		if cn, err = cn.Parent(); err != nil {
@@ -259,7 +226,7 @@ func (p *Permissions) HasPermission(ctx context.Context, n *Node, check func(*pr
 		}
 	}
 
-	appctx.GetLogger(ctx).Debug().Interface("permissions", defaultPermissions).Interface("node", n).Interface("user", u).Msg("no grant found, returning default permissions")
+	appctx.GetLogger(ctx).Debug().Interface("permissions", noPermissions).Interface("node", n).Interface("user", u).Msg("no grant found, returning default permissions")
 	return false, nil
 }
 
@@ -267,13 +234,13 @@ func (p *Permissions) getUserAndPermissions(ctx context.Context, n *Node) (*user
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("no user in context, returning default permissions")
-		return nil, defaultPermissions
+		return nil, noPermissions
 	}
 	// check if the current user is the owner
 	id, _, err := n.Owner()
 	if err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not determine owner, returning default permissions")
-		return nil, defaultPermissions
+		return nil, noPermissions
 	}
 	if id == "" {
 		// TODO what if no owner is set but grants are present?

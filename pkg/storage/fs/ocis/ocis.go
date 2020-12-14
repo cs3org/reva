@@ -360,7 +360,8 @@ func (fs *ocisfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
 		return
 	}
-	rp, err := fs.p.ReadUserPermissions(ctx, node)
+
+	rp, err := fs.p.AssemblePermissions(ctx, node)
 	switch {
 	case err != nil:
 		return nil, errtypes.InternalError(err.Error())
@@ -382,7 +383,7 @@ func (fs *ocisfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 		return
 	}
 
-	rp, err := fs.p.ReadUserPermissions(ctx, node)
+	rp, err := fs.p.AssemblePermissions(ctx, node)
 	switch {
 	case err != nil:
 		return nil, errtypes.InternalError(err.Error())

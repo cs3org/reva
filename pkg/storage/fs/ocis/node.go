@@ -306,7 +306,7 @@ func (n *Node) PermissionSet(ctx context.Context) *provider.ResourcePermissions 
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("no user in context, returning default permissions")
-		return defaultPermissions
+		return noPermissions
 	}
 	n.Owner() // read owner
 	if u.Id.OpaqueId == n.ownerID && u.Id.Idp == n.ownerIDP {
@@ -315,10 +315,10 @@ func (n *Node) PermissionSet(ctx context.Context) *provider.ResourcePermissions 
 	// TODO fix permissions for share recipients by traversing up to the next acl? or to the root?
 	// ouch ... if we have to read acls for every dir entry that would be n*depth additional xattr reads ...
 	// but we only need to read the parent tree once.
-	return &provider.ResourcePermissions{
-		ListContainer:   true,
-		CreateContainer: true,
+	if np, err := n.ReadUserPermissions(ctx, u); err == nil {
+		return np
 	}
+	return noPermissions
 }
 
 // AsResourceInfo return the node as CS3 ResourceInfo
@@ -474,6 +474,84 @@ func (n *Node) UnsetTempEtag() (err error) {
 		}
 	}
 	return err
+}
+
+// ReadUserPermissions will assemble the permissions for the current user on the given node without parent nodes
+func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap *provider.ResourcePermissions, err error) {
+	// check if the current user is the owner
+	id, idp, err := n.Owner()
+	if err != nil {
+		// TODO check if a parent folder has the owner set?
+		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not determine owner, returning default permissions")
+		return noPermissions, err
+	}
+	if id == "" {
+		// TODO what if no owner is set but grants are present?
+		return noOwnerPermissions, nil
+	}
+	if id == u.Id.OpaqueId && idp == u.Id.Idp {
+		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("user is owner, returning owner permissions")
+		return ownerPermissions, nil
+	}
+
+	ap = &provider.ResourcePermissions{}
+
+	// for an efficient group lookup convert the list of groups to a map
+	// groups are just strings ... groupnames ... or group ids ??? AAARGH !!!
+	groupsMap := make(map[string]bool, len(u.Groups))
+	for i := range u.Groups {
+		groupsMap[u.Groups[i]] = true
+	}
+
+	var g *provider.Grant
+
+	// we read all grantees from the node
+	var grantees []string
+	if grantees, err = n.ListGrantees(ctx); err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("error listing grantees")
+		return nil, err
+	}
+
+	// instead of making n getxattr syscalls we are going to list the acls and filter them here
+	// we have two options here:
+	// 1. we can start iterating over the acls / grants on the node or
+	// 2. we can iterate over the number of groups
+	// The current implementation tries to be defensive for cases where users have hundreds or thousants of groups, so we iterate over the existing acls.
+	userace := grantPrefix + _userAcePrefix + u.Id.OpaqueId
+	userFound := false
+	for i := range grantees {
+		switch {
+		// we only need to find the user once
+		case !userFound && grantees[i] == userace:
+			g, err = n.ReadGrant(ctx, grantees[i])
+		case strings.HasPrefix(grantees[i], grantPrefix+_groupAcePrefix): // only check group grantees
+			gr := strings.TrimPrefix(grantees[i], grantPrefix+_groupAcePrefix)
+			if groupsMap[gr] {
+				g, err = n.ReadGrant(ctx, grantees[i])
+			} else {
+				// no need to check attribute
+				continue
+			}
+		default:
+			// no need to check attribute
+			continue
+		}
+
+		switch {
+		case err == nil:
+			addPermissions(ap, g.GetPermissions())
+		case isNoData(err):
+			err = nil
+			appctx.GetLogger(ctx).Error().Interface("node", n).Str("grant", grantees[i]).Interface("grantees", grantees).Msg("grant vanished from node after listing")
+			// continue with next segment
+		default:
+			appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Str("grant", grantees[i]).Msg("error reading permissions")
+			// continue with next segment
+		}
+	}
+
+	appctx.GetLogger(ctx).Debug().Interface("permissions", ap).Interface("node", n).Interface("user", u).Msg("returning aggregated permissions")
+	return ap, nil
 }
 
 // ListGrantees lists the grantees of the current node
