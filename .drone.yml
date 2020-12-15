@@ -19,7 +19,7 @@ trigger:
 steps:
 
 - name: store-dev-release
-  image: golang:1.13
+  image: registry.cern.ch/docker.io/golang:1.13
   environment:
     USERNAME:
       from_secret: cbox_username
@@ -34,7 +34,7 @@ steps:
     - for i in $(ls /drone/src/dist);do curl --fail -X PUT -u $${USERNAME}:$${PASSWORD} https://cernbox.cern.ch/cernbox/desktop/remote.php/webdav/eos/project/r/reva/www/daily/`date '+%Y-%m-%d'`/${DRONE_COMMIT}/$${i} --data-binary @./dist/$${i} ; done
 
 - name: license-scan
-  image: golang:1.13
+  image: registry.cern.ch/docker.io/golang:1.13
   environment:
     FOSSA_API_KEY:
       from_secret: fossa_api_key
@@ -44,17 +44,17 @@ steps:
     - /go/bin/fossa analyze
 
 - name: build
-  image: golang:1.13
+  image: registry.cern.ch/docker.io/golang:1.13
   commands:
     - make ci
 
 - name: lint
-  image: golangci/golangci-lint:v1.26
+  image: registry.cern.ch/docker.io/golangci/golangci-lint:v1.26
   commands:
     - golangci-lint run --timeout 2m0s
 
 - name: license-check
-  image: golang:1.13
+  image: registry.cern.ch/docker.io/golang:1.13
   failure: ignore
   environment:
     FOSSA_API_KEY:
@@ -65,7 +65,7 @@ steps:
 
 - name: publish-docker-reva-latest
   pull: always
-  image: plugins/docker
+  image: registry.cern.ch/docker.io/plugins/docker
   settings:
     repo: cs3org/reva
     tags: latest
@@ -77,7 +77,7 @@ steps:
 
 - name: publish-docker-revad-latest
   pull: always
-  image: plugins/docker
+  image: registry.cern.ch/docker.io/plugins/docker
   settings:
     repo: cs3org/revad
     tags: latest
@@ -103,7 +103,7 @@ trigger:
 
 steps:
 - name: license-scan
-  image: golang:1.13
+  image: registry.cern.ch/docker.io/golang:1.13
   environment:
     FOSSA_API_KEY:
       from_secret: fossa_api_key
@@ -113,17 +113,17 @@ steps:
     - /go/bin/fossa analyze
 
 - name: build
-  image: golang:1.13
+  image: registry.cern.ch/docker.io/golang:1.13
   commands:
     - make ci
 
 - name: lint
-  image: golangci/golangci-lint:v1.26
+  image: registry.cern.ch/docker.io/golangci/golangci-lint:v1.26
   commands:
     - golangci-lint run --timeout 2m0s
 
 - name: changelog
-  image: golang:1.13
+  image: registry.cern.ch/docker.io/golang:1.13
   commands:
     - make release-deps && /go/bin/calens > /dev/null
     - make check-changelog-drone PR=$DRONE_PULL_REQUEST
@@ -132,7 +132,7 @@ steps:
       from_secret: github_api_token
 
 - name: license-check
-  image: golang:1.13
+  image: registry.cern.ch/docker.io/golang:1.13
   failure: ignore
   environment:
     FOSSA_API_KEY:
@@ -157,7 +157,7 @@ trigger:
 
 steps:
 - name: license-scan
-  image: golang:1.13
+  image: registry.cern.ch/docker.io/golang:1.13
   environment:
     FOSSA_API_KEY:
       from_secret: fossa_api_key
@@ -167,18 +167,18 @@ steps:
     - /go/bin/fossa analyze
 
 - name: build
-  image: golang:1.13
+  image: registry.cern.ch/docker.io/golang:1.13
   commands:
     - make ci
 
 - name: lint
   # will slow down build slightly. In order to get jsonpb deprecation.
-  image: golangci/golangci-lint:v1.26.0
+  image: registry.cern.ch/docker.io/golangci/golangci-lint:v1.26.0
   commands:
     - golangci-lint run --timeout 2m0s
 
 - name: license-check
-  image: golang:1.13
+  image: registry.cern.ch/docker.io/golang:1.13
   failure: ignore
   environment:
     FOSSA_API_KEY:
@@ -188,12 +188,12 @@ steps:
     - /go/bin/fossa test --timeout 900
 
 - name: create-dist
-  image: golang:1.13
+  image: registry.cern.ch/docker.io/golang:1.13
   commands:
     - go run tools/create-artifacts/main.go -version ${DRONE_TAG} -commit ${DRONE_COMMIT} -goversion `go version | awk '{print $$3}'`
 
 - name: publish
-  image: plugins/github-release
+  image: registry.cern.ch/docker.io/plugins/github-release
   settings:
     api_key:
       from_secret: github_token
@@ -202,7 +202,7 @@ steps:
 
 - name: docker-reva-tag
   pull: always
-  image: plugins/docker
+  image: registry.cern.ch/docker.io/plugins/docker
   settings:
     repo: cs3org/reva
     tags: ${DRONE_TAG}
@@ -214,7 +214,7 @@ steps:
 
 - name: docker-revad-tag
   pull: always
-  image: plugins/docker
+  image: registry.cern.ch/docker.io/plugins/docker
   settings:
     repo: cs3org/revad
     tags: ${DRONE_TAG}
@@ -241,12 +241,12 @@ trigger:
 
 steps:
   - name: build
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     commands:
       - make build-ci
 
   - name: revad-services
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -257,12 +257,12 @@ steps:
       - /drone/src/cmd/revad/revad -c users.toml
 
   - name: sleep-for-revad-start
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     commands:
       - sleep 5
 
   - name: litmus-owncloud-old-webdav
-    image: owncloud/litmus:latest
+    image: registry.cern.ch/docker.io/owncloud/litmus:latest
     environment:
       LITMUS_URL: http://revad-services:20080/remote.php/webdav
       LITMUS_USERNAME: einstein
@@ -286,12 +286,12 @@ trigger:
 
 steps:
   - name: build
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     commands:
       - make build-ci
 
   - name: revad-services
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -302,12 +302,12 @@ steps:
       - /drone/src/cmd/revad/revad -c users.toml
 
   - name: sleep-for-revad-start
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     commands:
       - sleep 5
 
   - name: litmus-ocis-old-webdav
-    image: owncloud/litmus:latest
+    image: registry.cern.ch/docker.io/owncloud/litmus:latest
     environment:
       LITMUS_URL: http://revad-services:20080/remote.php/webdav
       LITMUS_USERNAME: einstein
@@ -331,12 +331,12 @@ trigger:
 
 steps:
   - name: build
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     commands:
       - make build-ci
 
   - name: revad-services
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -347,12 +347,12 @@ steps:
       - /drone/src/cmd/revad/revad -c users.toml
 
   - name: sleep-for-revad-start
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     commands:
       - sleep 5
 
   - name: litmus-owncloud-new-webdav
-    image: owncloud/litmus:latest
+    image: registry.cern.ch/docker.io/owncloud/litmus:latest
     environment:
       # UUID is einstein user, see https://github.com/owncloud/ocis-accounts/blob/8de0530f31ed5ffb0bbb7f7f3471f87f429cb2ea/pkg/service/v0/service.go#L45
       LITMUS_URL: http://revad-services:20080/remote.php/dav/files/4c510ada-c86b-4815-8820-42cdf82c3d51
@@ -377,12 +377,12 @@ trigger:
 
 steps:
   - name: build
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     commands:
       - make build-ci
 
   - name: revad-services
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -393,12 +393,12 @@ steps:
       - /drone/src/cmd/revad/revad -c users.toml
 
   - name: sleep-for-revad-start
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     commands:
       - sleep 5
 
   - name: litmus-ocis-new-webdav
-    image: owncloud/litmus:latest
+    image: registry.cern.ch/docker.io/owncloud/litmus:latest
     environment:
       # UUID is einstein user, see https://github.com/owncloud/ocis-accounts/blob/8de0530f31ed5ffb0bbb7f7f3471f87f429cb2ea/pkg/service/v0/service.go#L45
       LITMUS_URL: http://revad-services:20080/remote.php/dav/files/4c510ada-c86b-4815-8820-42cdf82c3d51
@@ -423,12 +423,12 @@ trigger:
 
 steps:
   - name: build
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     commands:
       - make build-ci
 
   - name: revad-services
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -441,7 +441,7 @@ steps:
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
-    image: owncloudci/php:7.4
+    image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
@@ -449,7 +449,7 @@ steps:
       - git checkout ed326fd54c7f9142389e49aad87653a905c6ddb7
 
   - name: localAPIAcceptanceTestsOwncloudStorage
-    image: owncloudci/php:7.4
+    image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - make test-acceptance-api
     environment:
@@ -465,7 +465,7 @@ steps:
 
 services:
   - 'name': 'ldap'
-    'image': 'osixia/openldap:1.3.0'
+    'image': 'registry.cern.ch/docker.io/osixia/openldap:1.3.0'
     'pull': 'always'
     'environment':
       LDAP_DOMAIN: 'owncloud.com'
@@ -475,7 +475,7 @@ services:
       HOSTNAME: 'ldap'
 
   - name: redis
-    image: webhippie/redis
+    image: registry.cern.ch/docker.io/webhippie/redis
     'pull': 'always'
     'environment':
       REDIS_DATABASES: 1
@@ -497,12 +497,12 @@ trigger:
 
 steps:
   - name: build
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     commands:
       - make build-ci
 
   - name: revad-services
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -515,7 +515,7 @@ steps:
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
-    image: owncloudci/php:7.4
+    image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
@@ -523,7 +523,7 @@ steps:
       - git checkout ed326fd54c7f9142389e49aad87653a905c6ddb7
 
   - name: localAPIAcceptanceTestsOcisStorage
-    image: owncloudci/php:7.4
+    image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - make test-acceptance-api
     environment:
@@ -540,7 +540,7 @@ steps:
 
 services:
   - 'name': 'ldap'
-    'image': 'osixia/openldap:1.3.0'
+    'image': 'registry.cern.ch/docker.io/osixia/openldap:1.3.0'
     'pull': 'always'
     'environment':
       LDAP_DOMAIN: 'owncloud.com'
@@ -566,12 +566,12 @@ trigger:
 
 steps:
   - name: build
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     commands:
       - make build-ci
 
   - name: revad-services
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -584,7 +584,7 @@ steps:
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
-    image: owncloudci/php:7.4
+    image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
@@ -592,7 +592,7 @@ steps:
       - git checkout ed326fd54c7f9142389e49aad87653a905c6ddb7
 
   - name: oC10APIAcceptanceTestsOcisStorage
-    image: owncloudci/php:7.4
+    image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - cd /drone/src/tmp/testrunner
       - make test-acceptance-api
@@ -612,7 +612,7 @@ steps:
 
 services:
   - 'name': 'ldap'
-    'image': 'osixia/openldap:1.3.0'
+    'image': 'registry.cern.ch/docker.io/osixia/openldap:1.3.0'
     'pull': 'always'
     'environment':
       LDAP_DOMAIN: 'owncloud.com'
@@ -638,12 +638,12 @@ trigger:
 
 steps:
   - name: build
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     commands:
       - make build-ci
 
   - name: revad-services
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -656,7 +656,7 @@ steps:
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
-    image: owncloudci/php:7.4
+    image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
@@ -664,7 +664,7 @@ steps:
       - git checkout ed326fd54c7f9142389e49aad87653a905c6ddb7
 
   - name: oC10APIAcceptanceTestsOcisStorage
-    image: owncloudci/php:7.4
+    image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - cd /drone/src/tmp/testrunner
       - make test-acceptance-api
@@ -684,7 +684,7 @@ steps:
 
 services:
   - 'name': 'ldap'
-    'image': 'osixia/openldap:1.3.0'
+    'image': 'registry.cern.ch/docker.io/osixia/openldap:1.3.0'
     'pull': 'always'
     'environment':
       LDAP_DOMAIN: 'owncloud.com'
@@ -710,12 +710,12 @@ trigger:
 
 steps:
   - name: build
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     commands:
       - make build-ci
 
   - name: revad-services
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -728,7 +728,7 @@ steps:
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
-    image: owncloudci/php:7.4
+    image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
@@ -736,7 +736,7 @@ steps:
       - git checkout ed326fd54c7f9142389e49aad87653a905c6ddb7
 
   - name: oC10APIAcceptanceTestsOcisStorage
-    image: owncloudci/php:7.4
+    image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - cd /drone/src/tmp/testrunner
       - make test-acceptance-api
@@ -756,7 +756,7 @@ steps:
 
 services:
   - 'name': 'ldap'
-    'image': 'osixia/openldap:1.3.0'
+    'image': 'registry.cern.ch/docker.io/osixia/openldap:1.3.0'
     'pull': 'always'
     'environment':
       LDAP_DOMAIN: 'owncloud.com'
@@ -782,12 +782,12 @@ trigger:
 
 steps:
   - name: build
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     commands:
       - make build-ci
 
   - name: revad-services
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -800,7 +800,7 @@ steps:
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
-    image: owncloudci/php:7.4
+    image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
@@ -808,7 +808,7 @@ steps:
       - git checkout ed326fd54c7f9142389e49aad87653a905c6ddb7
 
   - name: oC10APIAcceptanceTestsOcisStorage
-    image: owncloudci/php:7.4
+    image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - cd /drone/src/tmp/testrunner
       - make test-acceptance-api
@@ -828,7 +828,7 @@ steps:
 
 services:
   - 'name': 'ldap'
-    'image': 'osixia/openldap:1.3.0'
+    'image': 'registry.cern.ch/docker.io/osixia/openldap:1.3.0'
     'pull': 'always'
     'environment':
       LDAP_DOMAIN: 'owncloud.com'
@@ -854,12 +854,12 @@ trigger:
 
 steps:
   - name: build
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     commands:
       - make build-ci
 
   - name: revad-services
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -872,7 +872,7 @@ steps:
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
-    image: owncloudci/php:7.4
+    image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
@@ -880,7 +880,7 @@ steps:
       - git checkout ed326fd54c7f9142389e49aad87653a905c6ddb7
 
   - name: oC10APIAcceptanceTestsOcisStorage
-    image: owncloudci/php:7.4
+    image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - cd /drone/src/tmp/testrunner
       - make test-acceptance-api
@@ -900,7 +900,7 @@ steps:
 
 services:
   - 'name': 'ldap'
-    'image': 'osixia/openldap:1.3.0'
+    'image': 'registry.cern.ch/docker.io/osixia/openldap:1.3.0'
     'pull': 'always'
     'environment':
       LDAP_DOMAIN: 'owncloud.com'
@@ -926,12 +926,12 @@ trigger:
 
 steps:
   - name: build
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     commands:
       - make build-ci
 
   - name: revad-services
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -944,7 +944,7 @@ steps:
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
-    image: owncloudci/php:7.4
+    image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
@@ -952,7 +952,7 @@ steps:
       - git checkout ed326fd54c7f9142389e49aad87653a905c6ddb7
 
   - name: oC10APIAcceptanceTestsOcisStorage
-    image: owncloudci/php:7.4
+    image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - cd /drone/src/tmp/testrunner
       - make test-acceptance-api
@@ -972,7 +972,7 @@ steps:
 
 services:
   - 'name': 'ldap'
-    'image': 'osixia/openldap:1.3.0'
+    'image': 'registry.cern.ch/docker.io/osixia/openldap:1.3.0'
     'pull': 'always'
     'environment':
       LDAP_DOMAIN: 'owncloud.com'
@@ -998,12 +998,12 @@ trigger:
 
 steps:
   - name: build
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     commands:
       - make build-ci
 
   - name: revad-services
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -1016,7 +1016,7 @@ steps:
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
-    image: owncloudci/php:7.4
+    image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
@@ -1024,7 +1024,7 @@ steps:
       - git checkout ed326fd54c7f9142389e49aad87653a905c6ddb7
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
-    image: owncloudci/php:7.4
+    image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - cd /drone/src/tmp/testrunner
       - make test-acceptance-api
@@ -1043,7 +1043,7 @@ steps:
 
 services:
   - 'name': 'ldap'
-    'image': 'osixia/openldap:1.3.0'
+    'image': 'registry.cern.ch/docker.io/osixia/openldap:1.3.0'
     'pull': 'always'
     'environment':
       LDAP_DOMAIN: 'owncloud.com'
@@ -1053,7 +1053,7 @@ services:
       HOSTNAME: 'ldap'
 
   - name: redis
-    image: webhippie/redis
+    image: registry.cern.ch/docker.io/webhippie/redis
     'pull': 'always'
     'environment':
       REDIS_DATABASES: 1
@@ -1075,12 +1075,12 @@ trigger:
 
 steps:
   - name: build
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     commands:
       - make build-ci
 
   - name: revad-services
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -1093,7 +1093,7 @@ steps:
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
-    image: owncloudci/php:7.4
+    image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
@@ -1101,7 +1101,7 @@ steps:
       - git checkout ed326fd54c7f9142389e49aad87653a905c6ddb7
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
-    image: owncloudci/php:7.4
+    image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - cd /drone/src/tmp/testrunner
       - make test-acceptance-api
@@ -1120,7 +1120,7 @@ steps:
 
 services:
   - 'name': 'ldap'
-    'image': 'osixia/openldap:1.3.0'
+    'image': 'registry.cern.ch/docker.io/osixia/openldap:1.3.0'
     'pull': 'always'
     'environment':
       LDAP_DOMAIN: 'owncloud.com'
@@ -1130,7 +1130,7 @@ services:
       HOSTNAME: 'ldap'
 
   - name: redis
-    image: webhippie/redis
+    image: registry.cern.ch/docker.io/webhippie/redis
     'pull': 'always'
     'environment':
       REDIS_DATABASES: 1
@@ -1152,12 +1152,12 @@ trigger:
 
 steps:
   - name: build
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     commands:
       - make build-ci
 
   - name: revad-services
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -1170,7 +1170,7 @@ steps:
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
-    image: owncloudci/php:7.4
+    image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
@@ -1178,7 +1178,7 @@ steps:
       - git checkout ed326fd54c7f9142389e49aad87653a905c6ddb7
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
-    image: owncloudci/php:7.4
+    image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - cd /drone/src/tmp/testrunner
       - make test-acceptance-api
@@ -1197,7 +1197,7 @@ steps:
 
 services:
   - 'name': 'ldap'
-    'image': 'osixia/openldap:1.3.0'
+    'image': 'registry.cern.ch/docker.io/osixia/openldap:1.3.0'
     'pull': 'always'
     'environment':
       LDAP_DOMAIN: 'owncloud.com'
@@ -1207,7 +1207,7 @@ services:
       HOSTNAME: 'ldap'
 
   - name: redis
-    image: webhippie/redis
+    image: registry.cern.ch/docker.io/webhippie/redis
     'pull': 'always'
     'environment':
       REDIS_DATABASES: 1
@@ -1229,12 +1229,12 @@ trigger:
 
 steps:
   - name: build
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     commands:
       - make build-ci
 
   - name: revad-services
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -1247,7 +1247,7 @@ steps:
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
-    image: owncloudci/php:7.4
+    image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
@@ -1255,7 +1255,7 @@ steps:
       - git checkout ed326fd54c7f9142389e49aad87653a905c6ddb7
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
-    image: owncloudci/php:7.4
+    image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - cd /drone/src/tmp/testrunner
       - make test-acceptance-api
@@ -1274,7 +1274,7 @@ steps:
 
 services:
   - 'name': 'ldap'
-    'image': 'osixia/openldap:1.3.0'
+    'image': 'registry.cern.ch/docker.io/osixia/openldap:1.3.0'
     'pull': 'always'
     'environment':
       LDAP_DOMAIN: 'owncloud.com'
@@ -1284,7 +1284,7 @@ services:
       HOSTNAME: 'ldap'
 
   - name: redis
-    image: webhippie/redis
+    image: registry.cern.ch/docker.io/webhippie/redis
     'pull': 'always'
     'environment':
       REDIS_DATABASES: 1
@@ -1306,12 +1306,12 @@ trigger:
 
 steps:
   - name: build
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     commands:
       - make build-ci
 
   - name: revad-services
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -1324,7 +1324,7 @@ steps:
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
-    image: owncloudci/php:7.4
+    image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
@@ -1332,7 +1332,7 @@ steps:
       - git checkout ed326fd54c7f9142389e49aad87653a905c6ddb7
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
-    image: owncloudci/php:7.4
+    image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - cd /drone/src/tmp/testrunner
       - make test-acceptance-api
@@ -1351,7 +1351,7 @@ steps:
 
 services:
   - 'name': 'ldap'
-    'image': 'osixia/openldap:1.3.0'
+    'image': 'registry.cern.ch/docker.io/osixia/openldap:1.3.0'
     'pull': 'always'
     'environment':
       LDAP_DOMAIN: 'owncloud.com'
@@ -1361,7 +1361,7 @@ services:
       HOSTNAME: 'ldap'
 
   - name: redis
-    image: webhippie/redis
+    image: registry.cern.ch/docker.io/webhippie/redis
     'pull': 'always'
     'environment':
       REDIS_DATABASES: 1
@@ -1383,12 +1383,12 @@ trigger:
 
 steps:
   - name: build
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     commands:
       - make build-ci
 
   - name: revad-services
-    image: golang:1.13
+    image: registry.cern.ch/docker.io/golang:1.13
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -1401,7 +1401,7 @@ steps:
       - /drone/src/cmd/revad/revad -c ldap-users.toml
 
   - name: clone-oC10-test-repos
-    image: owncloudci/php:7.4
+    image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
@@ -1409,7 +1409,7 @@ steps:
       - git checkout ed326fd54c7f9142389e49aad87653a905c6ddb7
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
-    image: owncloudci/php:7.4
+    image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - cd /drone/src/tmp/testrunner
       - make test-acceptance-api
@@ -1428,7 +1428,7 @@ steps:
 
 services:
   - 'name': 'ldap'
-    'image': 'osixia/openldap:1.3.0'
+    'image': 'registry.cern.ch/docker.io/osixia/openldap:1.3.0'
     'pull': 'always'
     'environment':
       LDAP_DOMAIN: 'owncloud.com'
@@ -1438,7 +1438,7 @@ services:
       HOSTNAME: 'ldap'
 
   - name: redis
-    image: webhippie/redis
+    image: registry.cern.ch/docker.io/webhippie/redis
     'pull': 'always'
     'environment':
       REDIS_DATABASES: 1
