@@ -118,6 +118,7 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.ListS
 				continue
 			}
 			h.addDisplaynames(ctx, c, data)
+			h.mapUserIds(ctx, c, data)
 
 			log.Debug().Interface("share", s).Interface("info", rInfo).Interface("shareData", data).Msg("mapped")
 			ocsDataPayload = append(ocsDataPayload, data)
