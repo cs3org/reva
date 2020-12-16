@@ -155,7 +155,7 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "shareType must be an integer", nil)
 		return
 	}
-	// TODO get user permissions on the shared file
+	// get user permissions on the shared file
 
 	c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {

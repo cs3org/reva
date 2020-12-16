@@ -280,7 +280,7 @@ func RoleFromOCSPermissions(p Permissions) *Role {
 	role := ""
 	if p.Contain(PermissionRead) {
 		role = RoleViewer
-		if p.Contain(PermissionWrite | PermissionCreate | PermissionDelete) {
+		if p.Contain(PermissionWrite) && p.Contain(PermissionCreate) && p.Contain(PermissionDelete) {
 			role = RoleEditor
 			if p.Contain(PermissionShare) {
 				role = RoleCoowner
@@ -374,7 +374,7 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 		r.ocsPermissions = r.ocsPermissions | PermissionShare
 	}
 	if r.ocsPermissions.Contain(PermissionRead) {
-		if r.ocsPermissions.Contain(PermissionWrite | PermissionCreate | PermissionDelete) {
+		if r.ocsPermissions.Contain(PermissionWrite) && r.ocsPermissions.Contain(PermissionCreate) && r.ocsPermissions.Contain(PermissionDelete) {
 			r.Name = RoleEditor
 			if r.ocsPermissions.Contain(PermissionShare) {
 				r.Name = RoleCoowner
