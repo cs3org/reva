@@ -447,6 +447,10 @@ apiSharePublicLink1/createPublicLinkShare.feature:537
 apiSharePublicLink1/createPublicLinkShare.feature:538
 apiSharePublicLink1/createPublicLinkShare.feature:574
 apiSharePublicLink1/createPublicLinkShare.feature:575
+#
+apiSharePublicLink1/createPublicLinkShare.feature:592
+apiSharePublicLink1/createPublicLinkShare.feature:593
+#
 apiSharePublicLink1/createPublicLinkShare.feature:635
 apiSharePublicLink1/createPublicLinkShare.feature:636
 apiSharePublicLink1/createPublicLinkShare.feature:649
