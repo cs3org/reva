@@ -103,7 +103,6 @@ func main() {
 		}
 	}
 
-	fmt.Println("Drone works")
 	client = rhttp.GetHTTPClient(
 		// TODO make insecure configurable
 		rhttp.Insecure(true),
