@@ -28,8 +28,10 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -45,6 +47,30 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"go.opencensus.io/trace"
 )
+
+type janitor struct {
+	m        *manager
+	interval time.Duration
+}
+
+func (j *janitor) run() {
+	ticker := time.NewTicker(j.interval)
+	work := make(chan os.Signal, 1)
+	signal.Notify(work, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT)
+
+	for {
+		select {
+		case <-work:
+			return
+		case <-ticker.C:
+			j.m.cleanupExpiredShares()
+		}
+	}
+}
+
+var j = janitor{
+	interval: time.Minute, // TODO we want this interval configurable
+}
 
 func init() {
 	registry.Register("json", New)
@@ -85,6 +111,9 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 			return nil, err
 		}
 	}
+
+	j.m = &m
+	go j.run()
 
 	return &m, nil
 }
@@ -292,6 +321,12 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 		}
 
 		if ref.GetId().GetOpaqueId() == ps.Id.OpaqueId {
+			if !notExpired(ps) {
+				if err := m.revokeExpiredPublicShare(ctx, ps, u); err != nil {
+					return nil, err
+				}
+				return nil, errors.New("no shares found by id:" + ref.GetId().String())
+			}
 			return ps, nil
 		}
 
@@ -351,6 +386,25 @@ func notExpired(s *link.PublicShare) bool {
 		return true
 	}
 	return false
+}
+
+func (m *manager) cleanupExpiredShares() {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	db, _ := m.readDb()
+
+	for _, v := range db {
+		d := v.(map[string]interface{})["share"]
+
+		ps := &link.PublicShare{}
+		r := bytes.NewBuffer([]byte(d.(string)))
+		_ = m.unmarshaler.Unmarshal(r, ps)
+
+		if !notExpired(ps) {
+			_ = m.revokeExpiredPublicShare(context.Background(), ps, nil)
+		}
+	}
 }
 
 func (m *manager) revokeExpiredPublicShare(ctx context.Context, s *link.PublicShare, u *user.User) error {
@@ -452,15 +506,20 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token, password str
 		}
 
 		if local.Token == token {
-			// validate if it is password protected
+			if !notExpired(local) {
+				// TODO user is not needed at all in this API.
+				if err := m.revokeExpiredPublicShare(ctx, local, nil); err != nil {
+					return nil, err
+				}
+				break
+			}
+
 			if local.PasswordProtected {
 				password = base64.StdEncoding.EncodeToString([]byte(password))
-				// check sent password matches stored one
 				if passDB == password {
 					return local, nil
 				}
-				// TODO(refs): custom permission denied error to catch up
-				// in upper layers
+
 				return nil, errors.New("json: invalid password")
 			}
 			return local, nil
