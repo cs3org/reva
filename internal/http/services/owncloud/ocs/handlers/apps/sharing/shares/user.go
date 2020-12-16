@@ -155,6 +155,7 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statIn
 		return
 	}
 	h.addDisplaynames(ctx, c, s)
+	h.mapUserIds(ctx, c, s)
 
 	response.WriteOCSSuccess(w, r, s)
 }
