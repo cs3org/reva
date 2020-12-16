@@ -277,21 +277,17 @@ func NewUploaderRole() *Role {
 
 // RoleFromOCSPermissions tries to map ocs permissions to a role
 func RoleFromOCSPermissions(p Permissions) *Role {
-	role := ""
 	if p.Contain(PermissionRead) {
-		role = RoleViewer
 		if p.Contain(PermissionWrite) && p.Contain(PermissionCreate) && p.Contain(PermissionDelete) {
-			role = RoleEditor
 			if p.Contain(PermissionShare) {
-				role = RoleCoowner
+				return NewCoownerRole()
 			}
-			return RoleFromName(role) // editor or coowner
+			return NewEditorRole()
 		}
 		if p == PermissionRead {
 			return NewViewerRole()
 		}
 	}
-	role = RoleLegacy
 	// legacy
 	return NewLegacyRoleFromOCSPermissions(p)
 }
@@ -353,25 +349,25 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 		rp.GetPath &&
 		rp.GetQuota &&
 		rp.InitiateFileDownload {
-		r.ocsPermissions = r.ocsPermissions | PermissionRead
+		r.ocsPermissions |= PermissionRead
 	}
 	if rp.InitiateFileUpload &&
 		rp.RestoreFileVersion &&
 		rp.RestoreRecycleItem {
-		r.ocsPermissions = r.ocsPermissions | PermissionWrite
+		r.ocsPermissions |= PermissionWrite
 	}
 	if rp.CreateContainer &&
 		rp.InitiateFileUpload {
-		r.ocsPermissions = r.ocsPermissions | PermissionCreate
+		r.ocsPermissions |= PermissionCreate
 	}
 	if rp.Delete &&
 		rp.PurgeRecycle {
-		r.ocsPermissions = r.ocsPermissions | PermissionDelete
+		r.ocsPermissions |= PermissionDelete
 	}
 	if rp.AddGrant &&
 		rp.RemoveGrant &&
 		rp.UpdateGrant {
-		r.ocsPermissions = r.ocsPermissions | PermissionShare
+		r.ocsPermissions |= PermissionShare
 	}
 	if r.ocsPermissions.Contain(PermissionRead) {
 		if r.ocsPermissions.Contain(PermissionWrite) && r.ocsPermissions.Contain(PermissionCreate) && r.ocsPermissions.Contain(PermissionDelete) {

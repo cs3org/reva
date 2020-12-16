@@ -79,17 +79,18 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap *pro
 		return noPermissions, nil
 	}
 	// check if the current user is the owner
-	id, idp, err := n.Owner()
+	o, err := n.Owner()
 	if err != nil {
 		// TODO check if a parent folder has the owner set?
 		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not determine owner, returning default permissions")
 		return noPermissions, err
 	}
-	if id == "" {
+	if o.OpaqueId == "" {
+		// this happens for root nodes in the storage. the extended attributes are set to emptystring to indicate: no owner
 		// TODO what if no owner is set but grants are present?
 		return noOwnerPermissions, nil
 	}
-	if id == u.Id.OpaqueId && idp == u.Id.Idp {
+	if isSameUserID(u.Id, o) {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("user is owner, returning owner permissions")
 		return ownerPermissions, nil
 	}
@@ -237,16 +238,17 @@ func (p *Permissions) getUserAndPermissions(ctx context.Context, n *Node) (*user
 		return nil, noPermissions
 	}
 	// check if the current user is the owner
-	id, _, err := n.Owner()
+	o, err := n.Owner()
 	if err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not determine owner, returning default permissions")
 		return nil, noPermissions
 	}
-	if id == "" {
+	if o.OpaqueId == "" {
+		// this happens for root nodes in the storage. the extended attributes are set to emptystring to indicate: no owner
 		// TODO what if no owner is set but grants are present?
 		return nil, noOwnerPermissions
 	}
-	if id == u.Id.OpaqueId {
+	if isSameUserID(u.Id, o) {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("user is owner, returning owner permissions")
 		return u, ownerPermissions
 	}

@@ -241,15 +241,15 @@ func (t *Tree) Delete(ctx context.Context, n *Node) (err error) {
 	// Prepare the trash
 	// TODO use layout?, but it requires resolving the owners user if the username is used instead of the id.
 	// the node knows the owner id so we use that for now
-	ownerid, _, err := n.Owner()
+	o, err := n.Owner()
 	if err != nil {
 		return
 	}
-	if ownerid == "" {
+	if o.OpaqueId == "" {
 		// fall back to root trash
-		ownerid = "root"
+		o.OpaqueId = "root"
 	}
-	err = os.MkdirAll(filepath.Join(t.lu.Options.Root, "trash", ownerid), 0700)
+	err = os.MkdirAll(filepath.Join(t.lu.Options.Root, "trash", o.OpaqueId), 0700)
 	if err != nil {
 		return
 	}
@@ -270,7 +270,7 @@ func (t *Tree) Delete(ctx context.Context, n *Node) (err error) {
 
 	// first make node appear in the owners (or root) trash
 	// parent id and name are stored as extended attributes in the node itself
-	trashLink := filepath.Join(t.lu.Options.Root, "trash", ownerid, n.ID)
+	trashLink := filepath.Join(t.lu.Options.Root, "trash", o.OpaqueId, n.ID)
 	err = os.Symlink("../nodes/"+n.ID+".T."+deletionTime, trashLink)
 	if err != nil {
 		// To roll back changes

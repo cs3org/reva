@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -495,4 +496,15 @@ func (fs *ocisfs) copyMD(s string, t string) (err error) {
 		}
 	}
 	return nil
+}
+
+func isSameUserID(i *userpb.UserId, j *userpb.UserId) bool {
+	switch {
+	case i == nil, j == nil:
+		return false
+	case i.OpaqueId == j.OpaqueId && i.Idp == j.Idp:
+		return true
+	default:
+		return false
+	}
 }

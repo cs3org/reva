@@ -53,8 +53,7 @@ type Node struct {
 	ParentID string
 	ID       string
 	Name     string
-	ownerID  string // used to cache the owner id
-	ownerIDP string // used to cache the owner idp
+	owner    *userpb.UserId
 	Exists   bool
 }
 
@@ -133,13 +132,17 @@ func ReadRecycleItem(ctx context.Context, lu *Lookup, key string) (n *Node, tras
 	}
 	// lookup ownerId in extended attributes
 	if attrBytes, err = xattr.Get(deletedNodePath, ownerIDAttr); err == nil {
-		n.ownerID = string(attrBytes)
+		n.owner = &userpb.UserId{}
+		n.owner.OpaqueId = string(attrBytes)
 	} else {
 		return
 	}
 	// lookup ownerIdp in extended attributes
 	if attrBytes, err = xattr.Get(deletedNodePath, ownerIDPAttr); err == nil {
-		n.ownerIDP = string(attrBytes)
+		if n.owner == nil {
+			n.owner = &userpb.UserId{}
+		}
+		n.owner.Idp = string(attrBytes)
 	} else {
 		return
 	}
@@ -274,9 +277,9 @@ func (n *Node) Parent() (p *Node, err error) {
 
 // Owner returns the cached owner id or reads it from the extended attributes
 // TODO can be private as only the AsResourceInfo uses it
-func (n *Node) Owner() (id string, idp string, err error) {
-	if n.ownerID != "" && n.ownerIDP != "" {
-		return n.ownerID, n.ownerIDP, nil
+func (n *Node) Owner() (o *userpb.UserId, err error) {
+	if n.owner != nil {
+		return n.owner, nil
 	}
 
 	// FIXME ... do we return the owner of the reference or the owner of the target?
@@ -288,33 +291,37 @@ func (n *Node) Owner() (id string, idp string, err error) {
 	var attrBytes []byte
 	// lookup name in extended attributes
 	if attrBytes, err = xattr.Get(nodePath, ownerIDAttr); err == nil {
-		n.ownerID = string(attrBytes)
+		if n.owner == nil {
+			n.owner = &userpb.UserId{}
+		}
+		n.owner.OpaqueId = string(attrBytes)
 	} else {
 		return
 	}
 	// lookup name in extended attributes
 	if attrBytes, err = xattr.Get(nodePath, ownerIDPAttr); err == nil {
-		n.ownerIDP = string(attrBytes)
+		if n.owner == nil {
+			n.owner = &userpb.UserId{}
+		}
+		n.owner.Idp = string(attrBytes)
 	} else {
 		return
 	}
-	return n.ownerID, n.ownerIDP, err
+	return n.owner, err
 }
 
 // PermissionSet returns the permission set for the current user
+// the parent nodes are not takeen into account
 func (n *Node) PermissionSet(ctx context.Context) *provider.ResourcePermissions {
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("no user in context, returning default permissions")
 		return noPermissions
 	}
-	n.Owner() // read owner
-	if u.Id.OpaqueId == n.ownerID && u.Id.Idp == n.ownerIDP {
+	if o, _ := n.Owner(); isSameUserID(u.Id, o) {
 		return ownerPermissions
 	}
-	// TODO fix permissions for share recipients by traversing up to the next acl? or to the root?
-	// ouch ... if we have to read acls for every dir entry that would be n*depth additional xattr reads ...
-	// but we only need to read the parent tree once.
+	// read the permissions for the current user from the acls of the current node
 	if np, err := n.ReadUserPermissions(ctx, u); err == nil {
 		return np
 	}
@@ -323,7 +330,7 @@ func (n *Node) PermissionSet(ctx context.Context) *provider.ResourcePermissions 
 
 // AsResourceInfo return the node as CS3 ResourceInfo
 func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissions, mdKeys []string) (ri *provider.ResourceInfo, err error) {
-	log := appctx.GetLogger(ctx)
+	sublog := appctx.GetLogger(ctx).With().Interface("node", n).Logger()
 
 	var fn string
 	nodePath := n.lu.toInternalPath(n.ID)
@@ -368,11 +375,8 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		PermissionSet: rp,
 	}
 
-	if owner, idp, err := n.Owner(); err == nil {
-		ri.Owner = &userpb.UserId{
-			Idp:      idp,
-			OpaqueId: owner,
-		}
+	if ri.Owner, err = n.Owner(); err != nil {
+		sublog.Debug().Err(err).Msg("could not determine owner")
 	}
 
 	// etag currently is a hash of fileid + tmtime (or mtime)
@@ -421,12 +425,12 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 				if v, err := xattr.Get(nodePath, attrs[i]); err == nil {
 					ri.ArbitraryMetadata.Metadata[k] = string(v)
 				} else {
-					log.Error().Err(err).Interface("node", n).Str("attr", attrs[i]).Msg("could not get attribute value")
+					sublog.Error().Err(err).Str("attr", attrs[i]).Msg("could not get attribute value")
 				}
 			}
 		}
 	} else {
-		log.Error().Err(err).Interface("node", n).Msg("could not list attributes")
+		sublog.Error().Err(err).Msg("could not list attributes")
 	}
 
 	if common.FindString(mdKeys, _shareTypesKey) != -1 {
@@ -435,7 +439,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		}
 	}
 
-	log.Debug().
+	sublog.Debug().
 		Interface("ri", ri).
 		Msg("AsResourceInfo")
 
@@ -479,17 +483,18 @@ func (n *Node) UnsetTempEtag() (err error) {
 // ReadUserPermissions will assemble the permissions for the current user on the given node without parent nodes
 func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap *provider.ResourcePermissions, err error) {
 	// check if the current user is the owner
-	id, idp, err := n.Owner()
+	o, err := n.Owner()
 	if err != nil {
 		// TODO check if a parent folder has the owner set?
 		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not determine owner, returning default permissions")
 		return noPermissions, err
 	}
-	if id == "" {
+	if o.OpaqueId == "" {
+		// this happens for root nodes in the storage. the extended attributes are set to emptystring to indicate: no owner
 		// TODO what if no owner is set but grants are present?
 		return noOwnerPermissions, nil
 	}
-	if id == u.Id.OpaqueId && idp == u.Id.Idp {
+	if isSameUserID(u.Id, o) {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("user is owner, returning owner permissions")
 		return ownerPermissions, nil
 	}

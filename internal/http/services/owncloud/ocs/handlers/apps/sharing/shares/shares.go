@@ -254,26 +254,6 @@ func (h *Handler) validatePermissions(w http.ResponseWriter, r *http.Request, st
 	return true
 }
 
-func (h *Handler) stat(ctx context.Context, path string) (*provider.StatResponse, error) {
-	c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
-	if err != nil {
-		return nil, fmt.Errorf("error getting grpc gateway client: %s", err.Error())
-	}
-	statReq := &provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: path,
-			},
-		},
-	}
-
-	statRes, err := c.Stat(ctx, statReq)
-	if err != nil {
-		return nil, fmt.Errorf("error sending a grpc stat request: %s", err.Error())
-	}
-	return statRes, nil
-}
-
 // PublicShareContextName represent cross boundaries context for the name of the public share
 type PublicShareContextName string
 
