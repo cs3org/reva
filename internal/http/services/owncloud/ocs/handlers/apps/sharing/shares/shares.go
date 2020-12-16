@@ -55,6 +55,7 @@ type Handler struct {
 	publicURL        string
 	sharePrefix      string
 	displayNameCache *ttlmap.TTLMap
+	userNameCache    *ttlmap.TTLMap
 }
 
 // Init initializes this and any contained handlers
@@ -62,6 +63,7 @@ func (h *Handler) Init(c *config.Config) error {
 	h.gatewayAddr = c.GatewaySvc
 	h.publicURL = c.Config.Host
 	h.displayNameCache = ttlmap.New(1000, 60)
+	h.userNameCache = ttlmap.New(1000, 60)
 	h.sharePrefix = c.SharePrefix
 	return nil
 }
@@ -313,6 +315,7 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.addDisplaynames(ctx, c, s)
+	h.mapUserIds(ctx, c, s)
 
 	response.WriteOCSSuccess(w, r, s)
 }
@@ -528,6 +531,7 @@ func (h *Handler) getShare(w http.ResponseWriter, r *http.Request, shareID strin
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
 	}
 	h.addDisplaynames(ctx, client, share)
+	h.mapUserIds(ctx, client, share)
 
 	response.WriteOCSSuccess(w, r, []*conversions.ShareData{share})
 }
@@ -651,6 +655,7 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 		return
 	}
 	h.addDisplaynames(ctx, uClient, share)
+	h.mapUserIds(ctx, uClient, share)
 
 	response.WriteOCSSuccess(w, r, share)
 }
@@ -815,6 +820,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		h.addDisplaynames(r.Context(), gwc, data)
+		h.mapUserIds(r.Context(), gwc, data)
 
 		if data.State == ocsStateAccepted {
 			// Needed because received shares can be jailed in a folder in the users home
@@ -1050,8 +1056,61 @@ func (h *Handler) getDisplayname(ctx context.Context, c gateway.GatewayAPIClient
 	}
 
 	h.displayNameCache.Put(userid, res.User.DisplayName)
+	h.userNameCache.Put(userid, res.User.Username)
 	log.Debug().Str("userid", userid).Msg("cache update")
 	return res.User.DisplayName
+}
+
+func (h *Handler) getUsername(ctx context.Context, c gateway.GatewayAPIClient, userid string) string {
+	log := appctx.GetLogger(ctx)
+	if userid == "" {
+		return ""
+	}
+	if un := h.userNameCache.Get(userid); un != "" {
+		log.Debug().Str("userid", userid).Msg("cache hit")
+		return un
+	}
+	log.Debug().Str("userid", userid).Msg("cache miss")
+	res, err := c.GetUser(ctx, &userpb.GetUserRequest{
+		UserId: &userpb.UserId{
+			OpaqueId: userid,
+		},
+	})
+	if err != nil {
+		log.Err(err).
+			Str("userid", userid).
+			Msg("could not look up user")
+		return ""
+	}
+	if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
+		log.Err(err).
+			Str("opaque_id", userid).
+			Int32("code", int32(res.GetStatus().GetCode())).
+			Str("message", res.GetStatus().GetMessage()).
+			Msg("get user call failed")
+		return ""
+	}
+	if res.User == nil {
+		log.Debug().
+			Str("opaque_id", userid).
+			Int32("code", int32(res.GetStatus().GetCode())).
+			Str("message", res.GetStatus().GetMessage()).
+			Msg("user not found")
+		return ""
+	}
+	if res.User.Username == "" {
+		log.Debug().
+			Str("opaque_id", userid).
+			Int32("code", int32(res.GetStatus().GetCode())).
+			Str("message", res.GetStatus().GetMessage()).
+			Msg("Username empty")
+		return ""
+	}
+
+	h.userNameCache.Put(userid, res.User.Username)
+	h.displayNameCache.Put(userid, res.User.DisplayName)
+	log.Debug().Str("userid", userid).Msg("cache update")
+	return res.User.Username
 }
 
 func (h *Handler) addDisplaynames(ctx context.Context, c gateway.GatewayAPIClient, s *conversions.ShareData) {
@@ -1064,6 +1123,12 @@ func (h *Handler) addDisplaynames(ctx context.Context, c gateway.GatewayAPIClien
 	if s.ShareWithDisplayname == "" {
 		s.ShareWithDisplayname = h.getDisplayname(ctx, c, s.ShareWith)
 	}
+}
+
+func (h *Handler) mapUserIds(ctx context.Context, c gateway.GatewayAPIClient, s *conversions.ShareData) {
+	s.UIDOwner = h.getUsername(ctx, c, s.UIDOwner)
+	s.UIDFileOwner = h.getUsername(ctx, c, s.UIDFileOwner)
+	s.ShareWith = h.getUsername(ctx, c, s.ShareWith)
 }
 
 func parseTimestamp(timestampString string) (*types.Timestamp, error) {
