@@ -263,14 +263,6 @@ func setupOpenCensus(conf *coreConf) error {
 		return nil
 	}
 
-	if conf.TracingEndpoint == "" {
-		conf.TracingEndpoint = "localhost:6831"
-	}
-
-	if conf.TracingCollector == "" {
-		conf.TracingCollector = "http://localhost:14268/api/traces"
-	}
-
 	if conf.TracingServiceName == "" {
 		conf.TracingServiceName = "revad"
 	}
