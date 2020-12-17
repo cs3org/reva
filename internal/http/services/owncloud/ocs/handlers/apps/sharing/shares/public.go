@@ -155,6 +155,7 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	h.addDisplaynames(ctx, c, s)
+	h.mapUserIds(ctx, c, s)
 
 	response.WriteOCSSuccess(w, r, s)
 }
@@ -208,6 +209,7 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 				continue
 			}
 			h.addDisplaynames(ctx, c, sData)
+			h.mapUserIds(ctx, c, sData)
 
 			log.Debug().Interface("share", share).Interface("info", statResponse.Info).Interface("shareData", share).Msg("mapped")
 
@@ -432,6 +434,7 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 		return
 	}
 	h.addDisplaynames(r.Context(), gwC, s)
+	h.mapUserIds(r.Context(), gwC, s)
 
 	response.WriteOCSSuccess(w, r, s)
 }

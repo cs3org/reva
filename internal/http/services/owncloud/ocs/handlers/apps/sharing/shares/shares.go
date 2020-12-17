@@ -1128,7 +1128,9 @@ func (h *Handler) addDisplaynames(ctx context.Context, c gateway.GatewayAPIClien
 func (h *Handler) mapUserIds(ctx context.Context, c gateway.GatewayAPIClient, s *conversions.ShareData) {
 	s.UIDOwner = h.getUsername(ctx, c, s.UIDOwner)
 	s.UIDFileOwner = h.getUsername(ctx, c, s.UIDFileOwner)
-	s.ShareWith = h.getUsername(ctx, c, s.ShareWith)
+	if s.ShareWith != conversions.RedactedField {
+		s.ShareWith = h.getUsername(ctx, c, s.ShareWith)
+	}
 }
 
 func parseTimestamp(timestampString string) (*types.Timestamp, error) {

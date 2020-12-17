@@ -52,6 +52,9 @@ const (
 	ShareTypeFederatedCloudShare ShareType = 6
 )
 
+// RedactedField is the constant value for redacted fields
+const RedactedField string = "***redacted***"
+
 // ResourceType indicates the OCS type of the resource
 type ResourceType int
 
@@ -323,8 +326,8 @@ func PublicShare2ShareData(share *link.PublicShare, r *http.Request, publicURL s
 	}
 
 	if share.PasswordProtected {
-		sd.ShareWith = "***redacted***"
-		sd.ShareWithDisplayname = "***redacted***"
+		sd.ShareWith = RedactedField
+		sd.ShareWithDisplayname = RedactedField
 	}
 
 	return sd
