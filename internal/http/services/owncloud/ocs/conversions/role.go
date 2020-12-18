@@ -259,19 +259,22 @@ func NewCoownerRole() *Role {
 }
 
 // NewUploaderRole creates an uploader role
-// TODO check this works properly
 func NewUploaderRole() *Role {
 	return &Role{
 		Name: RoleViewer,
 		cS3ResourcePermissions: &provider.ResourcePermissions{
+			// he will need to make stat requests
+			// TODO and List requests
+			Stat:          true,
+			ListContainer: true,
 			// read
 			GetPath: true,
-			// he will need to make stat requests
-			Stat: true,
+			// mkdir
+			CreateContainer: true,
 			// upload
 			InitiateFileUpload: true,
 		},
-		ocsPermissions: PermissionWrite,
+		ocsPermissions: PermissionCreate,
 	}
 }
 
@@ -287,6 +290,9 @@ func RoleFromOCSPermissions(p Permissions) *Role {
 		if p == PermissionRead {
 			return NewViewerRole()
 		}
+	}
+	if p == PermissionCreate {
+		return NewUploaderRole()
 	}
 	// legacy
 	return NewLegacyRoleFromOCSPermissions(p)
@@ -315,8 +321,12 @@ func NewLegacyRoleFromOCSPermissions(p Permissions) *Role {
 		r.cS3ResourcePermissions.RestoreRecycleItem = true
 	}
 	if p.Contain(PermissionCreate) {
+		r.cS3ResourcePermissions.Stat = true
+		r.cS3ResourcePermissions.ListContainer = true
 		r.cS3ResourcePermissions.CreateContainer = true
-		// FIXME permissions mismatch: double check create vs write file
+		// FIXME permissions mismatch: double check ocs create vs update file
+		// - if the file exists the ocs api needs to check update permisson,
+		// - if the file does not exist  the ocs api needs to check update permission
 		r.cS3ResourcePermissions.InitiateFileUpload = true
 		if p.Contain(PermissionWrite) {
 			r.cS3ResourcePermissions.Move = true // TODO move only when create and write?
@@ -356,7 +366,9 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 		rp.RestoreRecycleItem {
 		r.ocsPermissions |= PermissionWrite
 	}
-	if rp.CreateContainer &&
+	if rp.ListContainer &&
+		rp.Stat &&
+		rp.CreateContainer &&
 		rp.InitiateFileUpload {
 		r.ocsPermissions |= PermissionCreate
 	}
@@ -381,6 +393,10 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 			r.Name = RoleViewer
 			return r
 		}
+	}
+	if r.ocsPermissions == PermissionCreate {
+		r.Name = RoleUploader
+		return r
 	}
 	r.Name = RoleLegacy
 	// at this point other ocs permissions may have been mapped.

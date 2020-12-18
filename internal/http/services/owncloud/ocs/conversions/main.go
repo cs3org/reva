@@ -32,7 +32,6 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	publicsharemgr "github.com/cs3org/reva/pkg/publicshare/manager/registry"
 	usermgr "github.com/cs3org/reva/pkg/user/manager/registry"
@@ -251,7 +250,7 @@ func UserIDToString(userID *userpb.UserId) string {
 // UserSharePermissions2OCSPermissions transforms cs3api permissions into OCS Permissions data model
 func UserSharePermissions2OCSPermissions(sp *collaboration.SharePermissions) Permissions {
 	if sp != nil {
-		return Permissions2OCSPermissions(sp.GetPermissions())
+		return RoleFromResourcePermissions(sp.GetPermissions()).OCSPermissions()
 	}
 	return PermissionInvalid
 }
@@ -276,33 +275,9 @@ func GetPublicShareManager(manager string, m map[string]map[string]interface{}) 
 
 func publicSharePermissions2OCSPermissions(sp *link.PublicSharePermissions) Permissions {
 	if sp != nil {
-		return Permissions2OCSPermissions(sp.GetPermissions())
+		return RoleFromResourcePermissions(sp.GetPermissions()).OCSPermissions()
 	}
 	return PermissionInvalid
-}
-
-// TODO sort out mapping, this is just a first guess
-// public link permissions to OCS permissions
-func Permissions2OCSPermissions(p *provider.ResourcePermissions) Permissions {
-	permissions := PermissionInvalid
-	if p != nil {
-		if p.ListContainer {
-			permissions += PermissionRead
-		}
-		if p.InitiateFileUpload {
-			permissions += PermissionWrite
-		}
-		if p.CreateContainer {
-			permissions += PermissionCreate
-		}
-		if p.Delete {
-			permissions += PermissionDelete
-		}
-		if p.AddGrant {
-			permissions += PermissionShare
-		}
-	}
-	return permissions
 }
 
 // timestamp is assumed to be UTC ... just human readable ...

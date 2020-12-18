@@ -20,6 +20,7 @@ package publicstorageprovider
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path"
 	"strings"
@@ -28,6 +29,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
@@ -407,11 +409,11 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		return nil, err
 	}
 
-	originalPath, sh, err := s.resolveToken(ctx, tkn)
+	originalPath, ls, err := s.resolveToken(ctx, tkn)
 	if err != nil {
 		return nil, err
 	}
-	if sh.GetPermissions() == nil || !sh.GetPermissions().Permissions.Stat {
+	if ls.GetPermissions() == nil || !ls.GetPermissions().Permissions.Stat {
 		return &provider.StatResponse{
 			Status: status.NewPermissionDenied(ctx, nil, "share does not grant Stat permission"),
 		}, nil
@@ -434,11 +436,27 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 
 	// prevent leaking internal paths
 	if statResponse.Info != nil {
+		addShare(statResponse.Info, ls)
 		statResponse.Info.Path = path.Join(s.mountPath, "/", tkn, relativePath)
-		filterPermissions(statResponse.Info.PermissionSet, sh.GetPermissions().Permissions)
+		filterPermissions(statResponse.Info.PermissionSet, ls.GetPermissions().Permissions)
 	}
 
 	return statResponse, nil
+}
+
+func addShare(i *provider.ResourceInfo, ls *link.PublicShare) error {
+	if i.Opaque == nil {
+		i.Opaque = &typesv1beta1.Opaque{}
+	}
+	if i.Opaque.Map == nil {
+		i.Opaque.Map = map[string]*typesv1beta1.OpaqueEntry{}
+	}
+	val, err := json.Marshal(ls)
+	if err != nil {
+		return err
+	}
+	i.Opaque.Map["link-share"] = &typesv1beta1.OpaqueEntry{Decoder: "json", Value: val}
+	return nil
 }
 
 func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, ss provider.ProviderAPI_ListContainerStreamServer) error {
