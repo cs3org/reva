@@ -280,12 +280,23 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		Propstat: []propstatXML{},
 	}
 
+	// files never have the create container permission
+	if md.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
+		md.PermissionSet = copyPermissionSet(md.PermissionSet)
+		md.PermissionSet.CreateContainer = false
+	}
+
 	var ls *link.PublicShare
 	if md.Opaque != nil && md.Opaque.Map != nil && md.Opaque.Map["link-share"] != nil && md.Opaque.Map["link-share"].Decoder == "json" {
 		ls = &link.PublicShare{}
 		err := json.Unmarshal(md.Opaque.Map["link-share"].Value, ls)
 		if err != nil {
 			sublog.Error().Err(err).Msg("could not unmarshal link json")
+		}
+		// shared files never have the delete permission
+		if md.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
+			// the permission set has already been copied above
+			md.PermissionSet.Delete = false
 		}
 	}
 
@@ -612,6 +623,30 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	}
 
 	return &response, nil
+}
+
+// the permission set that is passed in needs to be copied so we don't accidentially overwrite the permission set of other entries
+func copyPermissionSet(p *provider.ResourcePermissions) *provider.ResourcePermissions {
+	return &provider.ResourcePermissions{
+		AddGrant:             p.AddGrant,
+		CreateContainer:      p.CreateContainer,
+		Delete:               p.Delete,
+		GetPath:              p.GetPath,
+		GetQuota:             p.GetQuota,
+		InitiateFileDownload: p.InitiateFileDownload,
+		InitiateFileUpload:   p.InitiateFileUpload,
+		ListGrants:           p.ListGrants,
+		ListContainer:        p.ListContainer,
+		ListFileVersions:     p.ListFileVersions,
+		ListRecycle:          p.ListRecycle,
+		Move:                 p.Move,
+		RemoveGrant:          p.RemoveGrant,
+		PurgeRecycle:         p.PurgeRecycle,
+		RestoreFileVersion:   p.RestoreFileVersion,
+		RestoreRecycleItem:   p.RestoreRecycleItem,
+		Stat:                 p.Stat,
+		UpdateGrant:          p.UpdateGrant,
+	}
 }
 
 // a file is only yours if you are the owner
