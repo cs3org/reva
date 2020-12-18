@@ -90,6 +90,14 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 		role = conversions.RoleFromOCSPermissions(permissions)
 	}
 
+	if statInfo != nil && statInfo.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
+		// Single file shares should never have delete or create permissions
+		permissions := role.OCSPermissions()
+		permissions &^= conversions.PermissionCreate
+		permissions &^= conversions.PermissionDelete
+		role = conversions.RoleFromOCSPermissions(permissions)
+	}
+
 	createShareReq := &ocm.CreateOCMShareRequest{
 		Opaque: &types.Opaque{
 			Map: map[string]*types.OpaqueEntry{

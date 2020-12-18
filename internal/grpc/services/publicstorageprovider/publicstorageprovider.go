@@ -436,7 +436,9 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 
 	// prevent leaking internal paths
 	if statResponse.Info != nil {
-		addShare(statResponse.Info, ls)
+		if err := addShare(statResponse.Info, ls); err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Interface("share", ls).Interface("info", statResponse.Info).Msg("error when adding share")
+		}
 		statResponse.Info.Path = path.Join(s.mountPath, "/", tkn, relativePath)
 		filterPermissions(statResponse.Info.PermissionSet, ls.GetPermissions().Permissions)
 	}

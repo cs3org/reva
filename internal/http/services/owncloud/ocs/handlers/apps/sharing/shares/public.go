@@ -70,6 +70,15 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 		}
 	}
 
+	if statInfo != nil && statInfo.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
+		// Single file shares should never have delete or create permissions
+		role := conversions.RoleFromResourcePermissions(newPermissions)
+		permissions := role.OCSPermissions()
+		permissions &^= conversions.PermissionCreate
+		permissions &^= conversions.PermissionDelete
+		newPermissions = conversions.RoleFromOCSPermissions(permissions).CS3ResourcePermissions()
+	}
+
 	req := link.CreatePublicShareRequest{
 		ResourceInfo: statInfo,
 		Grant: &link.Grant{
