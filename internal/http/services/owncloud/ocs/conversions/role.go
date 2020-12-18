@@ -325,7 +325,7 @@ func NewLegacyRoleFromOCSPermissions(p Permissions) *Role {
 		r.cS3ResourcePermissions.ListContainer = true
 		r.cS3ResourcePermissions.CreateContainer = true
 		// FIXME permissions mismatch: double check ocs create vs update file
-		// - if the file exists the ocs api needs to check update permisson,
+		// - if the file exists the ocs api needs to check update permission,
 		// - if the file does not exist  the ocs api needs to check update permission
 		r.cS3ResourcePermissions.InitiateFileUpload = true
 		if p.Contain(PermissionWrite) {
