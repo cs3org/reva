@@ -171,7 +171,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				w.WriteHeader(http.StatusNotFound)
 			}
 
-			_, pass, hasBasicAuth := r.BasicAuth()
+			_, pass, _ := r.BasicAuth()
 			token, _ := router.ShiftPath(r.URL.Path)
 
 			authenticateRequest := gatewayv1beta1.AuthenticateRequest{
@@ -181,16 +181,18 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			}
 
 			res, err := c.Authenticate(r.Context(), &authenticateRequest)
-			if err != nil {
+			switch {
+			case err != nil:
 				w.WriteHeader(http.StatusInternalServerError)
 				return
-			}
-			if res.Status.Code == rpcv1beta1.Code_CODE_UNAUTHENTICATED {
-				if hasBasicAuth {
-					w.WriteHeader(http.StatusUnauthorized)
-				} else {
-					w.WriteHeader(http.StatusNotFound)
-				}
+			case res.Status.Code == rpcv1beta1.Code_CODE_UNAUTHENTICATED:
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			case res.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
+				w.WriteHeader(http.StatusNotFound)
+				return
+			case res.Status.Code != rpcv1beta1.Code_CODE_OK:
+				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 

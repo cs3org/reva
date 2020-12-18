@@ -23,9 +23,11 @@ import (
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	userprovider "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -74,8 +76,15 @@ func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user
 		Token:    token,
 		Password: secret,
 	})
-	if err != nil {
+	switch {
+	case err != nil:
 		return nil, err
+	case publicShareResponse.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
+		return nil, errtypes.NotFound(publicShareResponse.Status.Message)
+	case publicShareResponse.Status.Code == rpcv1beta1.Code_CODE_PERMISSION_DENIED:
+		return nil, errtypes.InvalidCredentials(publicShareResponse.Status.Message)
+	case publicShareResponse.Status.Code != rpcv1beta1.Code_CODE_OK:
+		return nil, errtypes.InternalError(publicShareResponse.Status.Message)
 	}
 
 	getUserResponse, err := gwConn.GetUser(ctx, &userprovider.GetUserRequest{

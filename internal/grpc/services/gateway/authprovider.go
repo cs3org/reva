@@ -20,6 +20,7 @@ package gateway
 
 import (
 	"context"
+	"fmt"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
@@ -53,18 +54,20 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		ClientSecret: req.ClientSecret,
 	}
 	res, err := c.Authenticate(ctx, authProviderReq)
-	if err != nil {
-		log.Err(err).Msgf("gateway: error calling Authenticate for type: %s", req.Type)
+	switch {
+	case err != nil:
 		return &gateway.AuthenticateResponse{
-			Status: status.NewUnauthenticated(ctx, err, "error authenticating request"),
+			Status: status.NewInternal(ctx, err, fmt.Sprintf("gateway: error calling Authenticate for type: %s", req.Type)),
 		}, nil
-	}
-
-	if res.Status.Code != rpc.Code_CODE_OK {
-		err := status.NewErrorFromCode(res.Status.Code, "gateway")
-		log.Err(err).Msgf("error authenticating credentials to auth provider for type: %s", req.Type)
+	case res.Status.Code == rpc.Code_CODE_UNAUTHENTICATED, res.Status.Code == rpc.Code_CODE_NOT_FOUND:
+		// normal failures, no need to log
 		return &gateway.AuthenticateResponse{
-			Status: status.NewUnauthenticated(ctx, err, ""),
+			Status: res.Status,
+		}, nil
+	case res.Status.Code != rpc.Code_CODE_OK:
+		err := status.NewErrorFromCode(res.Status.Code, "gateway")
+		return &gateway.AuthenticateResponse{
+			Status: status.NewInternal(ctx, err, fmt.Sprintf("error authenticating credentials to auth provider for type: %s", req.Type)),
 		}, nil
 	}
 

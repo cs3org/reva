@@ -627,6 +627,9 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 
 // the permission set that is passed in needs to be copied so we don't accidentially overwrite the permission set of other entries
 func copyPermissionSet(p *provider.ResourcePermissions) *provider.ResourcePermissions {
+	if p == nil {
+		return nil
+	}
 	return &provider.ResourcePermissions{
 		AddGrant:             p.AddGrant,
 		CreateContainer:      p.CreateContainer,

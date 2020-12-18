@@ -391,9 +391,7 @@ apiSharePublicLink1/changingPublicLinkShare.feature:244
 # https://github.com/owncloud/ocis/issues/723 upload-only public link does not refer to files-drop page, nor are the permissions enforced
 #
 apiSharePublicLink1/changingPublicLinkShare.feature:267
-apiSharePublicLink1/changingPublicLinkShare.feature:278
 apiSharePublicLink1/changingPublicLinkShare.feature:289
-apiSharePublicLink1/changingPublicLinkShare.feature:300
 apiSharePublicLink1/createPublicLinkShare.feature:34
 apiSharePublicLink1/createPublicLinkShare.feature:35
 apiSharePublicLink1/createPublicLinkShare.feature:183
@@ -425,8 +423,6 @@ apiSharePublicLink1/createPublicLinkShare.feature:156
 #
 # https://github.com/owncloud/ocis-reva/issues/41 various sharing settings cannot be set
 #
-apiSharePublicLink1/createPublicLinkShare.feature:389
-apiSharePublicLink1/createPublicLinkShare.feature:390
 apiSharePublicLink1/createPublicLinkShare.feature:410
 apiSharePublicLink1/createPublicLinkShare.feature:411
 apiSharePublicLink1/createPublicLinkShare.feature:431
@@ -447,10 +443,6 @@ apiSharePublicLink1/createPublicLinkShare.feature:537
 apiSharePublicLink1/createPublicLinkShare.feature:538
 apiSharePublicLink1/createPublicLinkShare.feature:574
 apiSharePublicLink1/createPublicLinkShare.feature:575
-#
-apiSharePublicLink1/createPublicLinkShare.feature:592
-apiSharePublicLink1/createPublicLinkShare.feature:593
-#
 apiSharePublicLink1/createPublicLinkShare.feature:635
 apiSharePublicLink1/createPublicLinkShare.feature:636
 apiSharePublicLink1/createPublicLinkShare.feature:649
@@ -507,11 +499,6 @@ apiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:158
 apiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:179
 apiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:180
 #
-# https://github.com/owncloud/ocis-reva/issues/292 Public link enforce permissions
-#
-apiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:97
-apiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:98
-#
 # https://github.com/owncloud/product/issues/272 [OCIS] old public webdav api doesnt works
 #
 apiSharePublicLink2/reShareAsPublicLinkToSharesOldDav.feature:30
@@ -547,12 +534,9 @@ apiSharePublicLink2/updatePublicLinkShare.feature:440
 #
 # https://github.com/owncloud/ocis-reva/issues/292 Public link enforce permissions
 #
-apiSharePublicLink2/updatePublicLinkShare.feature:461
-apiSharePublicLink2/updatePublicLinkShare.feature:462
 apiSharePublicLink2/updatePublicLinkShare.feature:486
 apiSharePublicLink2/updatePublicLinkShare.feature:487
 apiSharePublicLink2/uploadToPublicLinkShare.feature:9
-apiSharePublicLink2/uploadToPublicLinkShare.feature:74
 apiSharePublicLink2/uploadToPublicLinkShare.feature:83
 apiSharePublicLink2/uploadToPublicLinkShare.feature:103
 apiSharePublicLink2/uploadToPublicLinkShare.feature:121
@@ -1352,11 +1336,6 @@ apiShareOperationsToShares/gettingShares.feature:168
 # https://github.com/owncloud/ocis-reva/issues/335  Moving resource loses associated shares
 #
 apiSharePublicLink2/multilinkSharing.feature:181
-#
-# https://github.com/owncloud/ocis/issues/762 path and other information are not shown if a share does not have "read" permission
-#
-apiShareOperationsToShares/uploadToShare.feature:64
-apiShareOperationsToShares/uploadToShare.feature:65
 #
 # https://github.com/owncloud/product/issues/293 sharing with group not available
 #
