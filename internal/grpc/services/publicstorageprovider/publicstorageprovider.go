@@ -21,7 +21,6 @@ package publicstorageprovider
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"path"
 	"strings"
 
@@ -133,16 +132,19 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 	return s.initiateFileDownload(ctx, req)
 }
 
-func (s *service) translatePublicRefToCS3Ref(ctx context.Context, ref *provider.Reference) (*provider.Reference, string, *link.PublicShare, error) {
+func (s *service) translatePublicRefToCS3Ref(ctx context.Context, ref *provider.Reference) (*provider.Reference, string, *link.PublicShare, *rpc.Status, error) {
 	log := appctx.GetLogger(ctx)
 	tkn, relativePath, err := s.unwrap(ctx, ref)
 	if err != nil {
-		return nil, "", nil, err
+		return nil, "", nil, nil, err
 	}
 
-	originalPath, sh, err := s.resolveToken(ctx, tkn)
-	if err != nil {
-		return nil, "", nil, err
+	originalPath, ls, st, err := s.resolveToken(ctx, tkn)
+	switch {
+	case err != nil:
+		return nil, "", nil, nil, err
+	case st != nil:
+		return nil, "", nil, st, nil
 	}
 
 	cs3Ref := &provider.Reference{
@@ -151,12 +153,12 @@ func (s *service) translatePublicRefToCS3Ref(ctx context.Context, ref *provider.
 	log.Debug().
 		Interface("sourceRef", ref).
 		Interface("cs3Ref", cs3Ref).
-		Interface("share", sh).
+		Interface("share", ls).
 		Str("tkn", tkn).
 		Str("originalPath", originalPath).
 		Str("relativePath", relativePath).
 		Msg("translatePublicRefToCS3Ref")
-	return cs3Ref, tkn, sh, nil
+	return cs3Ref, tkn, ls, nil, nil
 }
 
 // Both, t.dir and tokenPath paths need to be merged:
@@ -167,11 +169,15 @@ func (s *service) translatePublicRefToCS3Ref(ctx context.Context, ref *provider.
 // end         = /einstein/files/public-links/foldera/folderb/
 
 func (s *service) initiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*provider.InitiateFileDownloadResponse, error) {
-	cs3Ref, _, sh, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
-	if err != nil {
+	cs3Ref, _, ls, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
+	switch {
+	case err != nil:
 		return nil, err
-	}
-	if sh.GetPermissions() == nil || !sh.GetPermissions().Permissions.InitiateFileDownload {
+	case st != nil:
+		return &provider.InitiateFileDownloadResponse{
+			Status: st,
+		}, nil
+	case ls.GetPermissions() == nil || !ls.GetPermissions().Permissions.InitiateFileDownload:
 		return &provider.InitiateFileDownloadResponse{
 			Status: status.NewPermissionDenied(ctx, nil, "share does not grant InitiateFileDownload permission"),
 		}, nil
@@ -215,11 +221,15 @@ func (s *service) initiateFileDownload(ctx context.Context, req *provider.Initia
 }
 
 func (s *service) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*provider.InitiateFileUploadResponse, error) {
-	cs3Ref, _, sh, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
-	if err != nil {
+	cs3Ref, _, ls, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
+	switch {
+	case err != nil:
 		return nil, err
-	}
-	if sh.GetPermissions() == nil || !sh.GetPermissions().Permissions.InitiateFileUpload {
+	case st != nil:
+		return &provider.InitiateFileUploadResponse{
+			Status: st,
+		}, nil
+	case ls.GetPermissions() == nil || !ls.GetPermissions().Permissions.InitiateFileUpload:
 		return &provider.InitiateFileUploadResponse{
 			Status: status.NewPermissionDenied(ctx, nil, "share does not grant InitiateFileUpload permission"),
 		}, nil
@@ -286,11 +296,15 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 		trace.StringAttribute("ref", req.Ref.String()),
 	)
 
-	cs3Ref, _, sh, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
-	if err != nil {
+	cs3Ref, _, ls, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
+	switch {
+	case err != nil:
 		return nil, err
-	}
-	if sh.GetPermissions() == nil || !sh.GetPermissions().Permissions.CreateContainer {
+	case st != nil:
+		return &provider.CreateContainerResponse{
+			Status: st,
+		}, nil
+	case ls.GetPermissions() == nil || !ls.GetPermissions().Permissions.CreateContainer:
 		return &provider.CreateContainerResponse{
 			Status: status.NewPermissionDenied(ctx, nil, "share does not grant CreateContainer permission"),
 		}, nil
@@ -321,11 +335,15 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 		trace.StringAttribute("ref", req.Ref.String()),
 	)
 
-	cs3Ref, _, sh, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
-	if err != nil {
+	cs3Ref, _, ls, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
+	switch {
+	case err != nil:
 		return nil, err
-	}
-	if sh.GetPermissions() == nil || !sh.GetPermissions().Permissions.Delete {
+	case st != nil:
+		return &provider.DeleteResponse{
+			Status: st,
+		}, nil
+	case ls.GetPermissions() == nil || !ls.GetPermissions().Permissions.Delete:
 		return &provider.DeleteResponse{
 			Status: status.NewPermissionDenied(ctx, nil, "share does not grant Delete permission"),
 		}, nil
@@ -357,19 +375,28 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 		trace.StringAttribute("destination", req.Destination.String()),
 	)
 
-	cs3RefSource, tknSource, sh, err := s.translatePublicRefToCS3Ref(ctx, req.Source)
-	if err != nil {
+	cs3RefSource, tknSource, ls, st, err := s.translatePublicRefToCS3Ref(ctx, req.Source)
+	switch {
+	case err != nil:
 		return nil, err
-	}
-	if sh.GetPermissions() == nil || !sh.GetPermissions().Permissions.Move {
+	case st != nil:
+		return &provider.MoveResponse{
+			Status: st,
+		}, nil
+	case ls.GetPermissions() == nil || !ls.GetPermissions().Permissions.Move:
 		return &provider.MoveResponse{
 			Status: status.NewPermissionDenied(ctx, nil, "share does not grant Move permission"),
 		}, nil
 	}
 	// FIXME: maybe there's a shortcut possible here using the source path
-	cs3RefDestination, tknDest, _, err := s.translatePublicRefToCS3Ref(ctx, req.Destination)
-	if err != nil {
+	cs3RefDestination, tknDest, _, st, err := s.translatePublicRefToCS3Ref(ctx, req.Destination)
+	switch {
+	case err != nil:
 		return nil, err
+	case st != nil:
+		return &provider.MoveResponse{
+			Status: st,
+		}, nil
 	}
 
 	if tknSource != tknDest {
@@ -409,11 +436,15 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		return nil, err
 	}
 
-	originalPath, ls, err := s.resolveToken(ctx, tkn)
-	if err != nil {
+	originalPath, ls, st, err := s.resolveToken(ctx, tkn)
+	switch {
+	case err != nil:
 		return nil, err
-	}
-	if ls.GetPermissions() == nil || !ls.GetPermissions().Permissions.Stat {
+	case st != nil:
+		return &provider.StatResponse{
+			Status: st,
+		}, nil
+	case ls.GetPermissions() == nil || !ls.GetPermissions().Permissions.Stat:
 		return &provider.StatResponse{
 			Status: status.NewPermissionDenied(ctx, nil, "share does not grant Stat permission"),
 		}, nil
@@ -471,11 +502,16 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 		return nil, err
 	}
 
-	pathFromToken, sh, err := s.resolveToken(ctx, tkn)
-	if err != nil {
+	pathFromToken, ls, st, err := s.resolveToken(ctx, tkn)
+	switch {
+	case err != nil:
 		return nil, err
+	case st != nil:
+		return &provider.ListContainerResponse{
+			Status: st,
+		}, nil
 	}
-	if sh.GetPermissions() == nil || !sh.GetPermissions().Permissions.ListContainer {
+	if ls.GetPermissions() == nil || !ls.GetPermissions().Permissions.ListContainer {
 		return &provider.ListContainerResponse{
 			Status: status.NewPermissionDenied(ctx, nil, "share does not grant ListContainer permission"),
 		}, nil
@@ -498,7 +534,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 	}
 
 	for i := range listContainerR.Infos {
-		filterPermissions(listContainerR.Infos[i].PermissionSet, sh.GetPermissions().Permissions)
+		filterPermissions(listContainerR.Infos[i].PermissionSet, ls.GetPermissions().Permissions)
 		listContainerR.Infos[i].Path = path.Join(s.mountPath, "/", tkn, relativePath, path.Base(listContainerR.Infos[i].Path))
 	}
 
@@ -609,14 +645,14 @@ func (s *service) trimMountPrefix(fn string) (string, error) {
 	if strings.HasPrefix(fn, s.mountPath) {
 		return path.Join("/", strings.TrimPrefix(fn, s.mountPath)), nil
 	}
-	return "", errors.New(fmt.Sprintf("path=%q does not belong to this storage provider mount path=%q"+fn, s.mountPath))
+	return "", errors.Errorf("path=%q does not belong to this storage provider mount path=%q"+fn, s.mountPath)
 }
 
 // resolveToken returns the path and share for the publicly shared resource.
-func (s *service) resolveToken(ctx context.Context, token string) (string, *link.PublicShare, error) {
+func (s *service) resolveToken(ctx context.Context, token string) (string, *link.PublicShare, *rpc.Status, error) {
 	driver, err := pool.GetGatewayServiceClient(s.conf.GatewayAddr)
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 
 	publicShareResponse, err := driver.GetPublicShare(
@@ -629,16 +665,22 @@ func (s *service) resolveToken(ctx context.Context, token string) (string, *link
 			},
 		},
 	)
-	if err != nil {
-		return "", nil, err
+	switch {
+	case err != nil:
+		return "", nil, nil, err
+	case publicShareResponse.Status.Code != rpc.Code_CODE_OK:
+		return "", nil, publicShareResponse.Status, nil
 	}
 
 	pathRes, err := s.gateway.GetPath(ctx, &provider.GetPathRequest{
 		ResourceId: publicShareResponse.GetShare().GetResourceId(),
 	})
-	if err != nil {
-		return "", nil, err
+	switch {
+	case err != nil:
+		return "", nil, nil, err
+	case pathRes.Status.Code != rpc.Code_CODE_OK:
+		return "", nil, pathRes.Status, nil
 	}
 
-	return pathRes.Path, publicShareResponse.GetShare(), nil
+	return pathRes.Path, publicShareResponse.GetShare(), nil, nil
 }

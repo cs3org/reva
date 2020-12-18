@@ -936,7 +936,7 @@ func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArb
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &provider.UnsetArbitraryMetadataResponse{
-			Status: status.NewStatusFromErrType(ctx, "SetArbitraryMetadata ref="+req.Ref.String(), err),
+			Status: status.NewStatusFromErrType(ctx, "UnsetArbitraryMetadata ref="+req.Ref.String(), err),
 		}, nil
 	}
 
@@ -1044,7 +1044,7 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &provider.StatResponse{
-			Status: status.NewStatusFromErrType(ctx, "SetArbitraryMetadata ref="+req.Ref.String(), err),
+			Status: status.NewStatusFromErrType(ctx, "stat ref="+req.Ref.String(), err),
 		}, nil
 	}
 
