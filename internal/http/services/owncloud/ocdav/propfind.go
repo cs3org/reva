@@ -281,7 +281,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	}
 
 	// files never have the create container permission
-	if md.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
+	if md.Type == provider.ResourceType_RESOURCE_TYPE_FILE && md.PermissionSet != nil {
 		md.PermissionSet = copyPermissionSet(md.PermissionSet)
 		md.PermissionSet.CreateContainer = false
 	}
