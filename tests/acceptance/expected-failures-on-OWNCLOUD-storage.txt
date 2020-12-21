@@ -1205,10 +1205,6 @@ apiWebdavProperties2/getFileProperties.feature:327
 apiWebdavProperties2/getFileProperties.feature:328
 apiWebdavProperties2/getFileProperties.feature:376
 apiWebdavProperties2/getFileProperties.feature:377
-apiWebdavProperties2/getFileProperties.feature:415
-apiWebdavProperties2/getFileProperties.feature:416
-apiWebdavProperties2/getFileProperties.feature:428
-apiWebdavProperties2/getFileProperties.feature:429
 apiWebdavProperties2/getFileProperties.feature:441
 apiWebdavProperties2/getFileProperties.feature:442
 apiWebdavProperties2/getFileProperties.feature:454

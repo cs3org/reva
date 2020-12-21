@@ -369,11 +369,6 @@ apiShareOperationsToShares/gettingSharesSharedFilteredEmpty.feature:61
 apiShareOperationsToShares/gettingSharesSharedFilteredEmpty.feature:79
 apiShareOperationsToShares/gettingSharesSharedFilteredEmpty.feature:80
 #
-# https://github.com/owncloud/ocis-reva/issues/47 cannot get ocs:share-permissions via WebDAV
-#
-apiShareOperationsToShares/getWebDAVSharePermissions.feature:23
-apiShareOperationsToShares/getWebDAVSharePermissions.feature:24
-#
 # https://github.com/owncloud/product/issues/203 file_target in share response
 #
 apiShareOperationsToShares/gettingShares.feature:167
@@ -1200,10 +1195,6 @@ apiWebdavProperties2/getFileProperties.feature:327
 apiWebdavProperties2/getFileProperties.feature:328
 apiWebdavProperties2/getFileProperties.feature:376
 apiWebdavProperties2/getFileProperties.feature:377
-apiWebdavProperties2/getFileProperties.feature:415
-apiWebdavProperties2/getFileProperties.feature:416
-apiWebdavProperties2/getFileProperties.feature:428
-apiWebdavProperties2/getFileProperties.feature:429
 apiWebdavProperties2/getFileProperties.feature:441
 apiWebdavProperties2/getFileProperties.feature:442
 apiWebdavProperties2/getFileProperties.feature:454
@@ -1807,8 +1798,6 @@ apiShareOperationsToShares/getWebDAVSharePermissions.feature:129
 apiShareOperationsToShares/getWebDAVSharePermissions.feature:130
 apiShareOperationsToShares/getWebDAVSharePermissions.feature:177
 apiShareOperationsToShares/getWebDAVSharePermissions.feature:178
-apiShareOperationsToShares/getWebDAVSharePermissions.feature:191
-apiShareOperationsToShares/getWebDAVSharePermissions.feature:192
 apiShareOperationsToShares/getWebDAVSharePermissions.feature:212
 apiShareOperationsToShares/getWebDAVSharePermissions.feature:213
 apiShareOperationsToShares/getWebDAVSharePermissions.feature:247
