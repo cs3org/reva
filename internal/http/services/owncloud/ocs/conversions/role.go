@@ -93,7 +93,7 @@ func (r *Role) WebDAVPermissions(isDir, isShared, isMountpoint, isPublic bool) s
 	var b strings.Builder
 	//b.Grow(7)
 	if r.ocsPermissions.Contain(PermissionDelete) {
-		fmt.Fprintf(&b, "D")
+		fmt.Fprintf(&b, "D") // TODO oc10 shows received shares as deletable
 	}
 	if r.ocsPermissions.Contain(PermissionWrite) {
 		fmt.Fprintf(&b, "NV")

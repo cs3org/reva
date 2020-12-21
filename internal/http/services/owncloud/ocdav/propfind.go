@@ -416,7 +416,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					// W = update (files only)
 					// CK = create (folders only)
 					// S = Shared
-					// R = Shareable
+					// R = Shareable (Reshare)
 					// M = Mounted
 					// in contrast, the ocs:share-permissions further down below indicate clients the maximum permissions that can be granted
 					if md.PermissionSet != nil {
@@ -488,8 +488,14 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					// oc:size is also available on folders
 					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:size", size))
 				case "owner-id": // phoenix only
-					if md.Owner != nil && md.Owner.OpaqueId != "" {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-id", s.xmlEscaped(md.Owner.OpaqueId)))
+					if md.Owner != nil {
+						if isCurrentUserOwner(ctx, md.Owner) {
+							u := ctxuser.ContextMustGetUser(ctx)
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-id", s.xmlEscaped(u.Username)))
+						} else {
+							sublog.Debug().Msg("TODO fetch user username")
+							propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:owner-id", ""))
+						}
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:owner-id", ""))
 					}
@@ -531,7 +537,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					if md.Owner != nil {
 						if isCurrentUserOwner(ctx, md.Owner) {
 							u := ctxuser.ContextMustGetUser(ctx)
-							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-display-name", u.Username))
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-display-name", u.DisplayName))
 						} else {
 							sublog.Debug().Msg("TODO fetch user displayname")
 							propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:owner-display-name", ""))
