@@ -185,6 +185,8 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			case err != nil:
 				w.WriteHeader(http.StatusInternalServerError)
 				return
+			case res.Status.Code == rpcv1beta1.Code_CODE_PERMISSION_DENIED:
+				fallthrough
 			case res.Status.Code == rpcv1beta1.Code_CODE_UNAUTHENTICATED:
 				w.WriteHeader(http.StatusUnauthorized)
 				return
@@ -213,7 +215,9 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				log.Debug().Str("token", token).Interface("status", res.Status).Msg("resource not found")
 				w.WriteHeader(http.StatusForbidden) // log the difference
 				return
-			case sRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED, sRes.Status.Code == rpc.Code_CODE_UNAUTHENTICATED:
+			case sRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
+				fallthrough
+			case sRes.Status.Code == rpc.Code_CODE_UNAUTHENTICATED:
 				log.Debug().Str("token", token).Interface("status", res.Status).Msg("permission denied")
 				w.WriteHeader(http.StatusForbidden)
 				return

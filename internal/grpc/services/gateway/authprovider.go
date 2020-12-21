@@ -59,7 +59,11 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		return &gateway.AuthenticateResponse{
 			Status: status.NewInternal(ctx, err, fmt.Sprintf("gateway: error calling Authenticate for type: %s", req.Type)),
 		}, nil
-	case res.Status.Code == rpc.Code_CODE_UNAUTHENTICATED, res.Status.Code == rpc.Code_CODE_NOT_FOUND:
+	case res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
+		fallthrough
+	case res.Status.Code == rpc.Code_CODE_UNAUTHENTICATED:
+		fallthrough
+	case res.Status.Code == rpc.Code_CODE_NOT_FOUND:
 		// normal failures, no need to log
 		return &gateway.AuthenticateResponse{
 			Status: res.Status,
