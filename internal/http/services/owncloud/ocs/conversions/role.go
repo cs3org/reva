@@ -347,9 +347,12 @@ func NewLegacyRoleFromOCSPermissions(p Permissions) *Role {
 // RoleFromResourcePermissions tries to map cs3 resource permissions to a role
 func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 	r := &Role{
-		Name:                   RoleLegacy,
+		Name:                   RoleUnknown,
 		ocsPermissions:         PermissionInvalid,
 		cS3ResourcePermissions: rp,
+	}
+	if rp == nil {
+		return r
 	}
 	if rp.ListContainer &&
 		rp.ListGrants &&

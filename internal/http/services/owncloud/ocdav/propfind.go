@@ -280,8 +280,11 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		Propstat: []propstatXML{},
 	}
 
+	role := conversions.RoleFromResourcePermissions(md.PermissionSet)
+
 	// files never have the create container permission
 	if md.Type == provider.ResourceType_RESOURCE_TYPE_FILE && md.PermissionSet != nil {
+		// we need to copy the permission set in case it was reused when passing it in while listing a collection
 		md.PermissionSet = copyPermissionSet(md.PermissionSet)
 		md.PermissionSet.CreateContainer = false
 	}
@@ -292,11 +295,6 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		err := json.Unmarshal(md.Opaque.Map["link-share"].Value, ls)
 		if err != nil {
 			sublog.Error().Err(err).Msg("could not unmarshal link json")
-		}
-		// shared files never have the delete permission
-		if md.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
-			// the permission set has already been copied above
-			md.PermissionSet.Delete = false
 		}
 	}
 
@@ -326,14 +324,13 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		}
 
 		if md.PermissionSet != nil {
-			r := conversions.RoleFromResourcePermissions(md.PermissionSet)
-			wdp := r.WebDAVPermissions(
+			wdp := role.WebDAVPermissions(
 				md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 				isShared,
 				false,
 				false,
 			)
-			sublog.Debug().Interface("role", r).Str("dav-permissions", wdp).Msg("converted PermissionSet")
+			sublog.Debug().Interface("role", role).Str("dav-permissions", wdp).Msg("converted PermissionSet")
 			response.Propstat[0].Prop = append(
 				response.Propstat[0].Prop,
 				s.newProp("oc:permissions", wdp))
@@ -413,15 +410,23 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:id", ""))
 					}
 				case "permissions": // both
+					// oc:permissions take several char flags to indicate the permissions the user has on this node:
+					// D = delete
+					// NV = update (renameable moveable)
+					// W = update (files only)
+					// CK = create (folders only)
+					// S = Shared
+					// R = Shareable
+					// M = Mounted
+					// in contrast, the ocs:share-permissions further down below indicate clients the maximum permissions that can be granted
 					if md.PermissionSet != nil {
-						r := conversions.RoleFromResourcePermissions(md.PermissionSet)
-						wdp := r.WebDAVPermissions(
+						wdp := role.WebDAVPermissions(
 							md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 							isShared,
 							false,
 							false,
 						)
-						sublog.Debug().Interface("role", r).Str("dav-permissions", wdp).Msg("converted PermissionSet")
+						sublog.Debug().Interface("role", role).Str("dav-permissions", wdp).Msg("converted PermissionSet")
 						propstatOK.Prop = append(
 							propstatOK.Prop,
 							s.newProp("oc:permissions", wdp))
@@ -593,9 +598,21 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				}
 			case "http://open-collaboration-services.org/ns":
 				switch pf.Prop[i].Local {
+				// ocs:share-permissions indicate clients the maximum permissions that can be granted:
+				// 1 = read
+				// 2 = write (update)
+				// 4 = create
+				// 8 = delete
+				// 16 = share
+				// shared files can never have the create or delete permission bit set
 				case "share-permissions":
 					if md.PermissionSet != nil {
-						perms := conversions.RoleFromResourcePermissions(md.PermissionSet).OCSPermissions()
+						perms := role.OCSPermissions()
+						// shared files cant have the create or delete permission set
+						if md.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
+							perms &^= conversions.PermissionCreate
+							perms &^= conversions.PermissionDelete
+						}
 						propstatOK.Prop = append(propstatOK.Prop, s.newPropNS(pf.Prop[i].Space, pf.Prop[i].Local, strconv.FormatUint(uint64(perms), 10)))
 					}
 				default:
