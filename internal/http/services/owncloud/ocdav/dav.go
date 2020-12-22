@@ -185,11 +185,11 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			case err != nil:
 				w.WriteHeader(http.StatusInternalServerError)
 				return
-			case res.Status.Code == rpcv1beta1.Code_CODE_PERMISSION_DENIED:
-				fallthrough
 			case res.Status.Code == rpcv1beta1.Code_CODE_UNAUTHENTICATED:
 				w.WriteHeader(http.StatusUnauthorized)
 				return
+			case res.Status.Code == rpcv1beta1.Code_CODE_PERMISSION_DENIED:
+				fallthrough
 			case res.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
 				w.WriteHeader(http.StatusNotFound)
 				return
@@ -211,15 +211,15 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				log.Error().Err(err).Msg("error sending grpc stat request")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
-			case sRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
-				log.Debug().Str("token", token).Interface("status", res.Status).Msg("resource not found")
-				w.WriteHeader(http.StatusForbidden) // log the difference
-				return
 			case sRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
 				fallthrough
+			case sRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
+				log.Debug().Str("token", token).Interface("status", res.Status).Msg("resource not found")
+				w.WriteHeader(http.StatusNotFound) // log the difference
+				return
 			case sRes.Status.Code == rpc.Code_CODE_UNAUTHENTICATED:
-				log.Debug().Str("token", token).Interface("status", res.Status).Msg("permission denied")
-				w.WriteHeader(http.StatusForbidden)
+				log.Debug().Str("token", token).Interface("status", res.Status).Msg("unauthorized")
+				w.WriteHeader(http.StatusUnauthorized)
 				return
 			case sRes.Status.Code != rpc.Code_CODE_OK:
 				log.Error().Str("token", token).Interface("status", res.Status).Msg("grpc stat request failed")
