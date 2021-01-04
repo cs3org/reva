@@ -195,24 +195,31 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// check the share permissions do not extend the user permissions
-	if !h.validatePermissions(w, r, statRes.Info.PermissionSet) {
-		return
-	}
-
 	switch shareType {
 	case int(conversions.ShareTypeUser):
+		// user permissions default to coowner
+		if !h.validatePermissions(w, r, statRes.Info.PermissionSet, conversions.NewCoownerRole().OCSPermissions()) {
+			return
+		}
 		h.createUserShare(w, r, statRes.Info)
 	case int(conversions.ShareTypePublicLink):
+		// public links default to read only
+		if !h.validatePermissions(w, r, statRes.Info.PermissionSet, conversions.NewViewerRole().OCSPermissions()) {
+			return
+		}
 		h.createPublicLinkShare(w, r, statRes.Info)
 	case int(conversions.ShareTypeFederatedCloudShare):
+		// federated shares default to read only
+		if !h.validatePermissions(w, r, statRes.Info.PermissionSet, conversions.NewViewerRole().OCSPermissions()) {
+			return
+		}
 		h.createFederatedCloudShare(w, r, statRes.Info)
 	default:
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "unknown share type", nil)
 	}
 }
 
-func (h *Handler) validatePermissions(w http.ResponseWriter, r *http.Request, statPerms *provider.ResourcePermissions) bool {
+func (h *Handler) validatePermissions(w http.ResponseWriter, r *http.Request, statPerms *provider.ResourcePermissions, defaultPermissions conversions.Permissions) bool {
 
 	// 1. we start without permissions
 	var reqPermissions conversions.Permissions
@@ -227,7 +234,9 @@ func (h *Handler) validatePermissions(w http.ResponseWriter, r *http.Request, st
 		pval := r.FormValue("permissions")
 		if pval == "" {
 			// default is read permissions / role viewer
-			reqPermissions = conversions.NewCoownerRole().OCSPermissions()
+			// TODO default link vs user share
+			//reqPermissions = conversions.NewCoownerRole().OCSPermissions()
+			reqPermissions = defaultPermissions
 		} else {
 			pint, err := strconv.Atoi(pval)
 			if err != nil {
