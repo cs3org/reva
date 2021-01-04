@@ -22,9 +22,11 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 
+	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/token"
@@ -62,6 +64,7 @@ type config struct {
 	ShareFolder   string                            `mapstructure:"share_folder"`
 	HomeMapping   string                            `mapstructure:"home_mapping"`
 	TokenManagers map[string]map[string]interface{} `mapstructure:"token_managers"`
+	EtagCacheTTL  int                               `mapstructure:"etag_cache_ttl"`
 }
 
 // sets defaults
@@ -106,6 +109,7 @@ type svc struct {
 	c              *config
 	dataGatewayURL url.URL
 	tokenmgr       token.Manager
+	etagCache      *ttlcache.Cache `mapstructure:"etag_cache"`
 }
 
 // New creates a new gateway svc that acts as a proxy for any grpc operation.
@@ -130,10 +134,15 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
+	etagCache := ttlcache.NewCache()
+	_ = etagCache.SetTTL(time.Duration(c.EtagCacheTTL) * time.Second)
+	etagCache.SkipTTLExtensionOnHit(true)
+
 	s := &svc{
 		c:              c,
 		dataGatewayURL: *u,
 		tokenmgr:       tokenManager,
+		etagCache:      etagCache,
 	}
 
 	return s, nil
@@ -144,6 +153,7 @@ func (s *svc) Register(ss *grpc.Server) {
 }
 
 func (s *svc) Close() error {
+	s.etagCache.Close()
 	return nil
 }
 

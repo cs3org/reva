@@ -20,6 +20,10 @@ package ocdav
 
 import (
 	"encoding/xml"
+	"net/http"
+
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	"github.com/rs/zerolog"
 )
 
 type code int
@@ -48,4 +52,27 @@ func Marshal(e exception) ([]byte, error) {
 		Exception: codesEnum[e.code],
 		Message:   e.message,
 	})
+}
+
+func handleErrorStatus(log *zerolog.Logger, w http.ResponseWriter, s *rpc.Status) {
+	switch s.Code {
+	case rpc.Code_CODE_OK:
+		log.Debug().Interface("status", s).Msg("ok")
+		w.WriteHeader(http.StatusOK)
+	case rpc.Code_CODE_NOT_FOUND:
+		log.Debug().Interface("status", s).Msg("resource not found")
+		w.WriteHeader(http.StatusNotFound)
+	case rpc.Code_CODE_PERMISSION_DENIED:
+		log.Debug().Interface("status", s).Msg("permission denied")
+		w.WriteHeader(http.StatusForbidden)
+	case rpc.Code_CODE_INVALID_ARGUMENT:
+		log.Debug().Interface("status", s).Msg("bad request")
+		w.WriteHeader(http.StatusBadRequest)
+	case rpc.Code_CODE_UNIMPLEMENTED:
+		log.Debug().Interface("status", s).Msg("not implemented")
+		w.WriteHeader(http.StatusNotImplemented)
+	default:
+		log.Error().Interface("status", s).Msg("grpc request failed")
+		w.WriteHeader(http.StatusInternalServerError)
+	}
 }

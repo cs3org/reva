@@ -31,6 +31,11 @@ import (
 	"github.com/pkg/xattr"
 )
 
+const (
+	_userAcePrefix  = "u:"
+	_groupAcePrefix = "g:"
+)
+
 var defaultPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{
 	// no permissions
 }
@@ -100,15 +105,15 @@ func (p *Permissions) HasPermission(ctx context.Context, n *Node, check func(*pr
 			return false, err
 		}
 
-		userace := grantPrefix + "u:" + u.Id.OpaqueId
+		userace := grantPrefix + _userAcePrefix + u.Id.OpaqueId
 		userFound := false
 		for i := range grantees {
 			// we only need the find the user once per node
 			switch {
 			case !userFound && grantees[i] == userace:
 				g, err = cn.ReadGrant(ctx, grantees[i])
-			case strings.HasPrefix(grantees[i], grantPrefix+"g:"):
-				gr := strings.TrimPrefix(grantees[i], grantPrefix+"g:")
+			case strings.HasPrefix(grantees[i], grantPrefix+_groupAcePrefix):
+				gr := strings.TrimPrefix(grantees[i], grantPrefix+_groupAcePrefix)
 				if groupsMap[gr] {
 					g, err = cn.ReadGrant(ctx, grantees[i])
 				} else {

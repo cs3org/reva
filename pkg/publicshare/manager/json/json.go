@@ -28,9 +28,13 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
+
+	"github.com/rs/zerolog/log"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -41,7 +45,32 @@ import (
 	"github.com/cs3org/reva/pkg/publicshare/manager/registry"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/mitchellh/mapstructure"
+	"go.opencensus.io/trace"
 )
+
+type janitor struct {
+	m        *manager
+	interval time.Duration
+}
+
+func (j *janitor) run() {
+	ticker := time.NewTicker(j.interval)
+	work := make(chan os.Signal, 1)
+	signal.Notify(work, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT)
+
+	for {
+		select {
+		case <-work:
+			return
+		case <-ticker.C:
+			j.m.cleanupExpiredShares()
+		}
+	}
+}
+
+var j = janitor{
+	interval: time.Minute, // TODO we want this interval configurable
+}
 
 func init() {
 	registry.Register("json", New)
@@ -82,6 +111,9 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 			return nil, err
 		}
 	}
+
+	j.m = &m
+	go j.run()
 
 	return &m, nil
 }
@@ -279,10 +311,7 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 		return nil, err
 	}
 
-	// compare ref opaque id with share opaqueid
 	for _, v := range db {
-		// db[ref.GetId().GetOpaqueId()].(map[string]interface{})["share"]
-		// fmt.Printf("\nHERE\n%v\n\n", v.(map[string]interface{})["share"])
 		d := v.(map[string]interface{})["share"]
 
 		ps := &link.PublicShare{}
@@ -292,31 +321,22 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 		}
 
 		if ref.GetId().GetOpaqueId() == ps.Id.OpaqueId {
+			if !notExpired(ps) {
+				if err := m.revokeExpiredPublicShare(ctx, ps, u); err != nil {
+					return nil, err
+				}
+				return nil, errors.New("no shares found by id:" + ref.GetId().String())
+			}
 			return ps, nil
 		}
 
 	}
 	return nil, errors.New("no shares found by id:" + ref.GetId().String())
-
-	// found, ok := db[ref.GetId().GetOpaqueId()].(map[string]interface{})["share"]
-	// if !ok {
-	// 	return nil, errors.New("no shares found by id:" + ref.GetId().String())
-	// }
-
-	// ps := publicShare{}
-	// r := bytes.NewBuffer([]byte(found.(string)))
-	// if err := m.unmarshaler.Unmarshal(r, &ps); err != nil {
-	// 	return nil, err
-	// }
-
-	// return &ps.PublicShare, nil
-
 }
 
 // ListPublicShares retrieves all the shares on the manager that are valid.
 func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo) ([]*link.PublicShare, error) {
-	shares := []*link.PublicShare{}
-	now := time.Now()
+	var shares []*link.PublicShare
 
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -333,7 +353,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 			return nil, err
 		}
 
-		// Skip if the share isn't created by the current user
+		// skip if the share isn't created by the current user.
 		if local.Creator.GetOpaqueId() != u.Id.OpaqueId || (local.Creator.GetIdp() != "" && u.Id.Idp != local.Creator.GetIdp()) {
 			continue
 		}
@@ -341,23 +361,75 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 		if len(filters) == 0 {
 			shares = append(shares, &local.PublicShare)
 		} else {
-			for _, f := range filters {
-				if f.Type == link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID {
-					t := time.Unix(int64(local.Expiration.GetSeconds()), int64(local.Expiration.GetNanos()))
-					if err != nil {
-						return nil, err
-					}
-					if local.ResourceId.StorageId == f.GetResourceId().StorageId && local.ResourceId.OpaqueId == f.GetResourceId().OpaqueId {
-						if (local.Expiration != nil && t.After(now)) || local.Expiration == nil {
+			for i := range filters {
+				if filters[i].Type == link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID {
+					if local.ResourceId.StorageId == filters[i].GetResourceId().StorageId && local.ResourceId.OpaqueId == filters[i].GetResourceId().OpaqueId {
+						if notExpired(&local.PublicShare) {
 							shares = append(shares, &local.PublicShare)
+						} else if err := m.revokeExpiredPublicShare(ctx, &local.PublicShare, u); err != nil {
+							return nil, err
 						}
 					}
+
 				}
 			}
 		}
 	}
 
 	return shares, nil
+}
+
+// notExpired tests whether a public share is expired
+func notExpired(s *link.PublicShare) bool {
+	t := time.Unix(int64(s.Expiration.GetSeconds()), int64(s.Expiration.GetNanos()))
+	if (s.Expiration != nil && t.After(time.Now())) || s.Expiration == nil {
+		return true
+	}
+	return false
+}
+
+func (m *manager) cleanupExpiredShares() {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	db, _ := m.readDb()
+
+	for _, v := range db {
+		d := v.(map[string]interface{})["share"]
+
+		ps := &link.PublicShare{}
+		r := bytes.NewBuffer([]byte(d.(string)))
+		_ = m.unmarshaler.Unmarshal(r, ps)
+
+		if !notExpired(ps) {
+			_ = m.revokeExpiredPublicShare(context.Background(), ps, nil)
+		}
+	}
+}
+
+func (m *manager) revokeExpiredPublicShare(ctx context.Context, s *link.PublicShare, u *user.User) error {
+	m.mutex.Unlock()
+	defer m.mutex.Lock()
+
+	span := trace.FromContext(ctx)
+	span.AddAttributes(
+		trace.StringAttribute("operation", "delete expired share"),
+		trace.StringAttribute("opaqueId", s.Id.OpaqueId),
+	)
+
+	err := m.RevokePublicShare(ctx, u, &link.PublicShareReference{
+		Spec: &link.PublicShareReference_Id{
+			Id: &link.PublicShareId{
+				OpaqueId: s.Id.OpaqueId,
+			},
+		},
+	})
+	if err != nil {
+		log.Err(err).Msg(fmt.Sprintf("publicShareJSONManager: error deleting public share with opaqueId: %s", s.Id.OpaqueId))
+		return err
+	}
+
+	return nil
 }
 
 // RevokePublicShare undocumented.
@@ -434,15 +506,20 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token, password str
 		}
 
 		if local.Token == token {
-			// validate if it is password protected
+			if !notExpired(local) {
+				// TODO user is not needed at all in this API.
+				if err := m.revokeExpiredPublicShare(ctx, local, nil); err != nil {
+					return nil, err
+				}
+				break
+			}
+
 			if local.PasswordProtected {
 				password = base64.StdEncoding.EncodeToString([]byte(password))
-				// check sent password matches stored one
 				if passDB == password {
 					return local, nil
 				}
-				// TODO(refs): custom permission denied error to catch up
-				// in upper layers
+
 				return nil, errors.New("json: invalid password")
 			}
 			return local, nil

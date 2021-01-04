@@ -7,6 +7,7 @@ require (
 	github.com/Masterminds/goutils v1.1.0 // indirect
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/Masterminds/sprig v2.22.0+incompatible
+	github.com/ReneKroon/ttlcache/v2 v2.1.0
 	github.com/aws/aws-sdk-go v1.35.27
 	github.com/c-bata/go-prompt v0.2.5
 	github.com/cheggaaa/pb v1.0.29
@@ -43,6 +44,7 @@ require (
 	github.com/tus/tusd v1.1.1-0.20200416115059-9deabf9d80c2
 	go.opencensus.io v0.22.5
 	golang.org/x/crypto v0.0.0-20200709230013-948cd5f35899
+	golang.org/x/net v0.0.0-20200625001655-4c5254603344
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	google.golang.org/grpc v1.33.2
 )

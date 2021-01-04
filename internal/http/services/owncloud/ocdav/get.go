@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/cs3org/reva/internal/http/services/datagateway"
+	"go.opencensus.io/trace"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -36,15 +37,18 @@ import (
 
 func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
+	ctx, span := trace.StartSpan(ctx, "head")
+	defer span.End()
 
 	ns = applyLayout(ctx, ns)
 
 	fn := path.Join(ns, r.URL.Path)
 
+	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
+
 	client, err := s.getClient()
 	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
+		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -56,29 +60,19 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 	sRes, err := client.Stat(ctx, sReq)
 	if err != nil {
-		log.Error().Err(err).Msg("error sending grpc stat request")
+		sublog.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if sRes.Status.Code != rpc.Code_CODE_OK {
-		switch sRes.Status.Code {
-		case rpc.Code_CODE_NOT_FOUND:
-			log.Debug().Str("path", fn).Interface("status", sRes.Status).Msg("resource not found")
-			w.WriteHeader(http.StatusNotFound)
-		case rpc.Code_CODE_PERMISSION_DENIED:
-			log.Debug().Str("path", fn).Interface("status", sRes.Status).Msg("permission denied")
-			w.WriteHeader(http.StatusForbidden)
-		default:
-			log.Error().Str("path", fn).Interface("status", sRes.Status).Msg("grpc stat request failed")
-			w.WriteHeader(http.StatusInternalServerError)
-		}
+		handleErrorStatus(&sublog, w, sRes.Status)
 		return
 	}
 
 	info := sRes.Info
 	if info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-		log.Warn().Msg("resource is a folder and cannot be downloaded")
+		sublog.Warn().Msg("resource is a folder and cannot be downloaded")
 		w.WriteHeader(http.StatusNotImplemented)
 		return
 	}
@@ -91,23 +85,13 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 
 	dRes, err := client.InitiateFileDownload(ctx, dReq)
 	if err != nil {
-		log.Error().Err(err).Msg("error initiating file download")
+		sublog.Error().Err(err).Msg("error initiating file download")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if dRes.Status.Code != rpc.Code_CODE_OK {
-		switch dRes.Status.Code {
-		case rpc.Code_CODE_NOT_FOUND:
-			log.Debug().Str("path", fn).Interface("status", dRes.Status).Msg("resource not found")
-			w.WriteHeader(http.StatusNotFound)
-		case rpc.Code_CODE_PERMISSION_DENIED:
-			log.Debug().Str("path", fn).Interface("status", dRes.Status).Msg("permission denied")
-			w.WriteHeader(http.StatusForbidden)
-		default:
-			log.Error().Str("path", fn).Interface("status", dRes.Status).Msg("grpc initiate file download request failed")
-			w.WriteHeader(http.StatusInternalServerError)
-		}
+		handleErrorStatus(&sublog, w, dRes.Status)
 		return
 	}
 
@@ -120,7 +104,7 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 
 	httpReq, err := rhttp.NewRequest(ctx, "GET", ep, nil)
 	if err != nil {
-		log.Error().Err(err).Msg("error creating http request")
+		sublog.Error().Err(err).Msg("error creating http request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -129,7 +113,7 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 
 	httpRes, err := httpClient.Do(httpReq)
 	if err != nil {
-		log.Error().Err(err).Msg("error performing http request")
+		sublog.Error().Err(err).Msg("error performing http request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -156,6 +140,6 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 		}
 	*/
 	if _, err := io.Copy(w, httpRes.Body); err != nil {
-		log.Error().Err(err).Msg("error finishing copying data to response")
+		sublog.Error().Err(err).Msg("error finishing copying data to response")
 	}
 }

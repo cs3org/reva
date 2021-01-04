@@ -371,7 +371,7 @@ func (fs *ocisfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 		return nil, errtypes.PermissionDenied(node.ID)
 	}
 
-	return node.AsResourceInfo(ctx)
+	return node.AsResourceInfo(ctx, mdKeys)
 }
 
 func (fs *ocisfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) (finfos []*provider.ResourceInfo, err error) {
@@ -402,7 +402,7 @@ func (fs *ocisfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 	}
 
 	for i := range children {
-		if ri, err := children[i].AsResourceInfo(ctx); err == nil {
+		if ri, err := children[i].AsResourceInfo(ctx, mdKeys); err == nil {
 			finfos = append(finfos, ri)
 		}
 	}

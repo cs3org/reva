@@ -25,19 +25,23 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"go.opencensus.io/trace"
 )
 
 func (s *svc) handleDelete(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
+	ctx, span := trace.StartSpan(ctx, "head")
+	defer span.End()
 
 	ns = applyLayout(ctx, ns)
 
 	fn := path.Join(ns, r.URL.Path)
 
+	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
+
 	client, err := s.getClient()
 	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
+		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -48,22 +52,14 @@ func (s *svc) handleDelete(w http.ResponseWriter, r *http.Request, ns string) {
 	req := &provider.DeleteRequest{Ref: ref}
 	res, err := client.Delete(ctx, req)
 	if err != nil {
-		log.Error().Err(err).Msg("error performing delete grpc request")
+		sublog.Error().Err(err).Msg("error performing delete grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	switch res.Status.Code {
-	case rpc.Code_CODE_OK:
-		w.WriteHeader(http.StatusNoContent)
-	case rpc.Code_CODE_NOT_FOUND:
-		log.Debug().Str("path", fn).Interface("status", res.Status).Msg("resource not found")
-		w.WriteHeader(http.StatusNotFound)
-	case rpc.Code_CODE_PERMISSION_DENIED:
-		log.Debug().Str("path", fn).Interface("status", res.Status).Msg("permission denied")
-		w.WriteHeader(http.StatusForbidden)
-	default:
-		log.Error().Str("path", fn).Interface("status", res.Status).Msg("grpc delete request failed")
-		w.WriteHeader(http.StatusInternalServerError)
+	if res.Status.Code != rpc.Code_CODE_OK {
+		handleErrorStatus(&sublog, w, res.Status)
+		return
 	}
+	w.WriteHeader(http.StatusNoContent)
 }

@@ -40,7 +40,6 @@ func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string)
 	ctx := r.Context()
 	ctx, span := trace.StartSpan(ctx, "proppatch")
 	defer span.End()
-	log := appctx.GetLogger(ctx)
 
 	acceptedProps := []xml.Name{}
 	removedProps := []xml.Name{}
@@ -49,16 +48,18 @@ func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string)
 
 	fn := path.Join(ns, r.URL.Path)
 
+	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
+
 	pp, status, err := readProppatch(r.Body)
 	if err != nil {
-		log.Error().Err(err).Msg("error reading proppatch")
+		sublog.Debug().Err(err).Msg("error reading proppatch")
 		w.WriteHeader(status)
 		return
 	}
 
 	c, err := s.getClient()
 	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
+		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -71,23 +72,13 @@ func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string)
 	}
 	statRes, err := c.Stat(ctx, statReq)
 	if err != nil {
-		log.Error().Err(err).Msg("error sending a grpc stat request")
+		sublog.Error().Err(err).Msg("error sending a grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if statRes.Status.Code != rpc.Code_CODE_OK {
-		switch statRes.Status.Code {
-		case rpc.Code_CODE_NOT_FOUND:
-			log.Debug().Str("path", fn).Interface("status", statRes.Status).Msg("resource not found")
-			w.WriteHeader(http.StatusNotFound)
-		case rpc.Code_CODE_PERMISSION_DENIED:
-			log.Debug().Str("path", fn).Interface("status", statRes.Status).Msg("permission denied")
-			w.WriteHeader(http.StatusForbidden)
-		default:
-			log.Error().Str("path", fn).Interface("status", statRes.Status).Msg("grpc stat request failed")
-			w.WriteHeader(http.StatusInternalServerError)
-		}
+		handleErrorStatus(&sublog, w, statRes.Status)
 		return
 	}
 
@@ -131,23 +122,13 @@ func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string)
 				rreq.ArbitraryMetadataKeys[0] = key
 				res, err := c.UnsetArbitraryMetadata(ctx, rreq)
 				if err != nil {
-					log.Error().Err(err).Msg("error sending a grpc UnsetArbitraryMetadata request")
+					sublog.Error().Err(err).Msg("error sending a grpc UnsetArbitraryMetadata request")
 					w.WriteHeader(http.StatusInternalServerError)
 					return
 				}
 
 				if res.Status.Code != rpc.Code_CODE_OK {
-					switch res.Status.Code {
-					case rpc.Code_CODE_NOT_FOUND:
-						log.Debug().Str("path", fn).Interface("status", res.Status).Msg("resource not found")
-						w.WriteHeader(http.StatusNotFound)
-					case rpc.Code_CODE_PERMISSION_DENIED:
-						log.Debug().Str("path", fn).Interface("status", res.Status).Msg("permission denied")
-						w.WriteHeader(http.StatusForbidden)
-					default:
-						log.Error().Str("path", fn).Interface("status", res.Status).Msg("grpc unset arbitrary metadata request failed")
-						w.WriteHeader(http.StatusInternalServerError)
-					}
+					handleErrorStatus(&sublog, w, res.Status)
 					return
 				}
 				removedProps = append(removedProps, propNameXML)
@@ -155,23 +136,13 @@ func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string)
 				sreq.ArbitraryMetadata.Metadata[key] = value
 				res, err := c.SetArbitraryMetadata(ctx, sreq)
 				if err != nil {
-					log.Error().Err(err).Str("key", key).Str("value", value).Msg("error sending a grpc SetArbitraryMetadata request")
+					sublog.Error().Err(err).Str("key", key).Str("value", value).Msg("error sending a grpc SetArbitraryMetadata request")
 					w.WriteHeader(http.StatusInternalServerError)
 					return
 				}
 
 				if res.Status.Code != rpc.Code_CODE_OK {
-					switch res.Status.Code {
-					case rpc.Code_CODE_NOT_FOUND:
-						log.Debug().Str("path", fn).Interface("status", res.Status).Msg("resource not found")
-						w.WriteHeader(http.StatusNotFound)
-					case rpc.Code_CODE_PERMISSION_DENIED:
-						log.Debug().Str("path", fn).Interface("status", res.Status).Msg("permission denied")
-						w.WriteHeader(http.StatusForbidden)
-					default:
-						log.Error().Str("path", fn).Interface("status", res.Status).Msg("grpc set arbitrary metadata request failed")
-						w.WriteHeader(http.StatusInternalServerError)
-					}
+					handleErrorStatus(&sublog, w, res.Status)
 					return
 				}
 
@@ -192,7 +163,7 @@ func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string)
 
 	propRes, err := s.formatProppatchResponse(ctx, acceptedProps, removedProps, ref)
 	if err != nil {
-		log.Error().Err(err).Msg("error formatting proppatch response")
+		sublog.Error().Err(err).Msg("error formatting proppatch response")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -200,7 +171,7 @@ func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string)
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 	w.WriteHeader(http.StatusMultiStatus)
 	if _, err := w.Write([]byte(propRes)); err != nil {
-		log.Err(err).Msg("error writing response")
+		sublog.Err(err).Msg("error writing response")
 	}
 }
 
