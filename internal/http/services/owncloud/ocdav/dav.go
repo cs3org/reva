@@ -185,11 +185,11 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			case err != nil:
 				w.WriteHeader(http.StatusInternalServerError)
 				return
+			case res.Status.Code == rpcv1beta1.Code_CODE_PERMISSION_DENIED:
+				fallthrough
 			case res.Status.Code == rpcv1beta1.Code_CODE_UNAUTHENTICATED:
 				w.WriteHeader(http.StatusUnauthorized)
 				return
-			case res.Status.Code == rpcv1beta1.Code_CODE_PERMISSION_DENIED:
-				fallthrough
 			case res.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
 				w.WriteHeader(http.StatusNotFound)
 				return
