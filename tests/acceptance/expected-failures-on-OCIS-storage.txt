@@ -509,8 +509,6 @@ apiSharePublicLink2/updatePublicLinkShare.feature:285
 #
 # https://github.com/owncloud/product/issues/270 [OCIS] share permissions not enforced
 #
-apiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:77
-apiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:78
 apiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:157
 apiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:158
 apiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:179
@@ -570,8 +568,6 @@ apiSharePublicLink2/uploadToPublicLinkShare.feature:273
 #
 # https://github.com/owncloud/ocis-reva/issues/290 Accessing non-existing public link should return 404, not 500
 #
-apiSharePublicLink2/uploadToPublicLinkShare.feature:62
-apiSharePublicLink2/uploadToPublicLinkShare.feature:63
 apiSharePublicLink2/uploadToPublicLinkShare.feature:66
 #
 # https://github.com/owncloud/ocis-reva/issues/195 Set quota over settings
@@ -592,10 +588,6 @@ apiSharePublicLink2/uploadToPublicLinkShare.feature:255
 #
 # https://github.com/owncloud/product/issues/265 Resharing does not work with ocis storage
 #
-apiShareReshareToShares1/reShare.feature:24
-apiShareReshareToShares1/reShare.feature:25
-apiShareReshareToShares1/reShare.feature:39
-apiShareReshareToShares1/reShare.feature:40
 apiShareReshareToShares1/reShare.feature:56
 apiShareReshareToShares1/reShare.feature:57
 apiShareReshareToShares1/reShare.feature:72
@@ -604,12 +596,6 @@ apiShareReshareToShares1/reShare.feature:88
 apiShareReshareToShares1/reShare.feature:89
 apiShareReshareToShares1/reShare.feature:104
 apiShareReshareToShares1/reShare.feature:105
-apiShareReshareToShares1/reShare.feature:120
-apiShareReshareToShares1/reShare.feature:121
-apiShareReshareToShares1/reShare.feature:122
-apiShareReshareToShares1/reShare.feature:123
-apiShareReshareToShares1/reShare.feature:124
-apiShareReshareToShares1/reShare.feature:125
 apiShareReshareToShares1/reShare.feature:159
 apiShareReshareToShares1/reShare.feature:160
 apiShareReshareToShares1/reShare.feature:161
@@ -626,32 +612,6 @@ apiShareReshareToShares1/reShare.feature:171
 apiShareReshareToShares1/reShare.feature:172
 apiShareReshareToShares1/reShare.feature:173
 apiShareReshareToShares1/reShare.feature:174
-apiShareReshareToShares1/reShare.feature:189
-apiShareReshareToShares1/reShare.feature:190
-apiShareReshareToShares1/reShare.feature:191
-apiShareReshareToShares1/reShare.feature:192
-apiShareReshareToShares1/reShare.feature:193
-apiShareReshareToShares1/reShare.feature:194
-apiShareReshareToShares1/reShare.feature:195
-apiShareReshareToShares1/reShare.feature:196
-apiShareReshareToShares1/reShare.feature:197
-apiShareReshareToShares1/reShare.feature:198
-apiShareReshareToShares1/reShare.feature:199
-apiShareReshareToShares1/reShare.feature:200
-apiShareReshareToShares1/reShare.feature:210
-apiShareReshareToShares1/reShare.feature:211
-apiShareReshareToShares1/reShare.feature:212
-apiShareReshareToShares1/reShare.feature:213
-apiShareReshareToShares1/reShare.feature:228
-apiShareReshareToShares1/reShare.feature:229
-apiShareReshareToShares1/reShare.feature:230
-apiShareReshareToShares1/reShare.feature:231
-apiShareReshareToShares1/reShare.feature:232
-apiShareReshareToShares1/reShare.feature:233
-apiShareReshareToShares1/reShare.feature:237
-apiShareReshareToShares1/reShare.feature:238
-apiShareReshareToShares1/reShare.feature:239
-apiShareReshareToShares1/reShare.feature:240
 apiShareReshareToShares3/reShareWithExpiryDate.feature:365
 apiShareReshareToShares3/reShareWithExpiryDate.feature:366
 apiShareReshareToShares3/reShareWithExpiryDate.feature:367
@@ -700,32 +660,6 @@ apiShareReshareToShares2/reShareDisabled.feature:40
 #
 # https://github.com/owncloud/product/issues/270 share permissions are not enforced
 #
-apiShareReshareToShares2/reShareSubfolder.feature:47
-apiShareReshareToShares2/reShareSubfolder.feature:48
-apiShareReshareToShares2/reShareSubfolder.feature:49
-apiShareReshareToShares2/reShareSubfolder.feature:50
-apiShareReshareToShares2/reShareSubfolder.feature:51
-apiShareReshareToShares2/reShareSubfolder.feature:52
-apiShareReshareToShares2/reShareSubfolder.feature:53
-apiShareReshareToShares2/reShareSubfolder.feature:54
-apiShareReshareToShares2/reShareSubfolder.feature:55
-apiShareReshareToShares2/reShareSubfolder.feature:56
-apiShareReshareToShares2/reShareSubfolder.feature:57
-apiShareReshareToShares2/reShareSubfolder.feature:58
-apiShareReshareToShares2/reShareSubfolder.feature:68
-apiShareReshareToShares2/reShareSubfolder.feature:69
-apiShareReshareToShares2/reShareSubfolder.feature:70
-apiShareReshareToShares2/reShareSubfolder.feature:71
-apiShareReshareToShares2/reShareSubfolder.feature:73
-apiShareReshareToShares2/reShareSubfolder.feature:74
-apiShareReshareToShares2/reShareSubfolder.feature:75
-apiShareReshareToShares2/reShareSubfolder.feature:76
-apiShareReshareToShares2/reShareSubfolder.feature:77
-apiShareReshareToShares2/reShareSubfolder.feature:78
-apiShareReshareToShares2/reShareSubfolder.feature:82
-apiShareReshareToShares2/reShareSubfolder.feature:83
-apiShareReshareToShares2/reShareSubfolder.feature:84
-apiShareReshareToShares2/reShareSubfolder.feature:85
 apiShareManagementToShares/mergeShare.feature:24
 apiShareManagementToShares/mergeShare.feature:52
 apiShareManagementToShares/mergeShare.feature:79

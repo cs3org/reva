@@ -355,11 +355,6 @@ apiShareOperationsToShares/gettingSharesSharedFilteredEmpty.feature:61
 apiShareOperationsToShares/gettingSharesSharedFilteredEmpty.feature:79
 apiShareOperationsToShares/gettingSharesSharedFilteredEmpty.feature:80
 #
-# https://github.com/owncloud/ocis-reva/issues/47 cannot get ocs:share-permissions via WebDAV
-#
-apiShareOperationsToShares/getWebDAVSharePermissions.feature:23
-apiShareOperationsToShares/getWebDAVSharePermissions.feature:24
-#
 # https://github.com/owncloud/ocis-reva/issues/282 Split old public API webdav tests from new public webdav tests
 # https://github.com/owncloud/ocis-reva/issues/292 Public link enforce permissions
 # https://github.com/owncloud/ocis/issues/187 Previews via webDAV API tests fail on OCIS
@@ -554,8 +549,6 @@ apiSharePublicLink2/uploadToPublicLinkShare.feature:273
 #
 # https://github.com/owncloud/ocis-reva/issues/290 Accessing non-existing public link should return 404, not 500
 #
-apiSharePublicLink2/uploadToPublicLinkShare.feature:62
-apiSharePublicLink2/uploadToPublicLinkShare.feature:63
 apiSharePublicLink2/uploadToPublicLinkShare.feature:66
 #
 # https://github.com/owncloud/ocis-reva/issues/195 Set quota over settings
@@ -1763,8 +1756,6 @@ apiShareManagementToShares/moveReceivedShare.feature:70
 apiShareManagementToShares/moveReceivedShare.feature:71
 apiShareManagementToShares/moveReceivedShare.feature:73
 apiShareManagementToShares/moveReceivedShare.feature:88
-apiShareOperationsToShares/getWebDAVSharePermissions.feature:38
-apiShareOperationsToShares/getWebDAVSharePermissions.feature:39
 apiShareOperationsToShares/getWebDAVSharePermissions.feature:59
 apiShareOperationsToShares/getWebDAVSharePermissions.feature:60
 apiShareOperationsToShares/getWebDAVSharePermissions.feature:73
