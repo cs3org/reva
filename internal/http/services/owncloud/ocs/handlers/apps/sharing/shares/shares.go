@@ -195,31 +195,34 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// check user has share permissions
+	if !conversions.RoleFromResourcePermissions(statRes.Info.PermissionSet).OCSPermissions().Contain(conversions.PermissionShare) {
+		response.WriteOCSError(w, r, http.StatusNotFound, "No share permission", nil)
+		return
+	}
+
 	switch shareType {
 	case int(conversions.ShareTypeUser):
-		// user permissions default to coowner
-		if !h.validatePermissions(w, r, statRes.Info.PermissionSet, conversions.NewCoownerRole().OCSPermissions()) {
-			return
+		// user collaborations default to coowner
+		if h.validatePermissions(w, r, statRes.Info, conversions.NewCoownerRole().OCSPermissions()) {
+			h.createUserShare(w, r, statRes.Info)
 		}
-		h.createUserShare(w, r, statRes.Info)
 	case int(conversions.ShareTypePublicLink):
 		// public links default to read only
-		if !h.validatePermissions(w, r, statRes.Info.PermissionSet, conversions.NewViewerRole().OCSPermissions()) {
-			return
+		if h.validatePermissions(w, r, statRes.Info, conversions.NewViewerRole().OCSPermissions()) {
+			h.createPublicLinkShare(w, r, statRes.Info)
 		}
-		h.createPublicLinkShare(w, r, statRes.Info)
 	case int(conversions.ShareTypeFederatedCloudShare):
 		// federated shares default to read only
-		if !h.validatePermissions(w, r, statRes.Info.PermissionSet, conversions.NewViewerRole().OCSPermissions()) {
-			return
+		if h.validatePermissions(w, r, statRes.Info, conversions.NewViewerRole().OCSPermissions()) {
+			h.createFederatedCloudShare(w, r, statRes.Info)
 		}
-		h.createFederatedCloudShare(w, r, statRes.Info)
 	default:
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "unknown share type", nil)
 	}
 }
 
-func (h *Handler) validatePermissions(w http.ResponseWriter, r *http.Request, statPerms *provider.ResourcePermissions, defaultPermissions conversions.Permissions) bool {
+func (h *Handler) validatePermissions(w http.ResponseWriter, r *http.Request, ri *provider.ResourceInfo, defaultPermissions conversions.Permissions) bool {
 
 	// 1. we start without permissions
 	var reqPermissions conversions.Permissions
@@ -255,7 +258,13 @@ func (h *Handler) validatePermissions(w http.ResponseWriter, r *http.Request, st
 		}
 	}
 
-	existingPermissions := conversions.RoleFromResourcePermissions(statPerms).OCSPermissions()
+	if ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
+		// Single file shares should never have delete or create permissions
+		reqPermissions &^= conversions.PermissionCreate
+		reqPermissions &^= conversions.PermissionDelete
+	}
+
+	existingPermissions := conversions.RoleFromResourcePermissions(ri.PermissionSet).OCSPermissions()
 	if !existingPermissions.Contain(reqPermissions) {
 		response.WriteOCSError(w, r, http.StatusNotFound, "Cannot set the requested share permissions", nil)
 		return false
