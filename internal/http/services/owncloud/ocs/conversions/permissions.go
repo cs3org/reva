@@ -60,5 +60,5 @@ func NewPermissions(val int) (Permissions, error) {
 
 // Contain tests if the permissions contain another one.
 func (p Permissions) Contain(other Permissions) bool {
-	return p&other != 0
+	return p&other == other
 }
