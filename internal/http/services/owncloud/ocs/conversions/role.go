@@ -298,7 +298,7 @@ func RoleFromOCSPermissions(p Permissions) *Role {
 	return NewLegacyRoleFromOCSPermissions(p)
 }
 
-// NewLegacyRoleFromOCSPermissions tries to map ocs a lagecy combination of ocs permissions to cs3 resource permissions as a legacy role
+// NewLegacyRoleFromOCSPermissions tries to map a legacy combination of ocs permissions to cs3 resource permissions as a legacy role
 func NewLegacyRoleFromOCSPermissions(p Permissions) *Role {
 	r := &Role{
 		Name:                   RoleLegacy, // TODO custom role?

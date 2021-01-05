@@ -311,7 +311,7 @@ func (n *Node) Owner() (o *userpb.UserId, err error) {
 }
 
 // PermissionSet returns the permission set for the current user
-// the parent nodes are not takeen into account
+// the parent nodes are not taken into account
 func (n *Node) PermissionSet(ctx context.Context) *provider.ResourcePermissions {
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
@@ -521,7 +521,7 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap *pro
 	// we have two options here:
 	// 1. we can start iterating over the acls / grants on the node or
 	// 2. we can iterate over the number of groups
-	// The current implementation tries to be defensive for cases where users have hundreds or thousants of groups, so we iterate over the existing acls.
+	// The current implementation tries to be defensive for cases where users have hundreds or thousands of groups, so we iterate over the existing acls.
 	userace := grantPrefix + _userAcePrefix + u.Id.OpaqueId
 	userFound := false
 	for i := range grantees {
