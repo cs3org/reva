@@ -65,7 +65,7 @@ steps:
 
 - name: publish-docker-reva-latest
   pull: always
-  image: registry.cern.ch/docker.io/plugins/docker
+  image: plugins/docker
   settings:
     repo: cs3org/reva
     tags: latest
@@ -77,11 +77,23 @@ steps:
 
 - name: publish-docker-revad-latest
   pull: always
-  image: registry.cern.ch/docker.io/plugins/docker
+  image: plugins/docker
   settings:
     repo: cs3org/revad
     tags: latest
     dockerfile: Dockerfile.revad
+    username:
+      from_secret: dockerhub_username
+    password:
+      from_secret: dockerhub_password
+
+- name: publish-docker-revad-eos-latest
+  pull: always
+  image: plugins/docker
+  settings:
+    repo: cs3org/revad-eos
+    tags: latest
+    dockerfile: Dockerfile.revad-eos
     username:
       from_secret: dockerhub_username
     password:
@@ -202,7 +214,7 @@ steps:
 
 - name: docker-reva-tag
   pull: always
-  image: registry.cern.ch/docker.io/plugins/docker
+  image: plugins/docker
   settings:
     repo: cs3org/reva
     tags: ${DRONE_TAG}
@@ -214,11 +226,23 @@ steps:
 
 - name: docker-revad-tag
   pull: always
-  image: registry.cern.ch/docker.io/plugins/docker
+  image: plugins/docker
   settings:
     repo: cs3org/revad
     tags: ${DRONE_TAG}
     dockerfile: Dockerfile.revad
+    username:
+      from_secret: dockerhub_username
+    password:
+      from_secret: dockerhub_password
+
+- name: docker-revad-eos-tag
+  pull: always
+  image: plugins/docker
+  settings:
+    repo: cs3org/revad-eos
+    tags: ${DRONE_TAG}
+    dockerfile: Dockerfile.revad-eos
     username:
       from_secret: dockerhub_username
     password:
