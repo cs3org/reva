@@ -911,6 +911,8 @@ apiTrashbin/trashbinRestore.feature:331
 #
 apiTrashbin/trashbinSharingToShares.feature:24
 apiTrashbin/trashbinSharingToShares.feature:25
+apiShareManagementToShares/acceptShares.feature:469
+apiShareManagementToShares/acceptShares.feature:470
 #
 # https://github.com/owncloud/ocis/issues/1124 deleting a file inside a received shared folder is moved to the trash-bin of the sharer not the receiver
 #
@@ -1071,6 +1073,14 @@ apiWebdavOperations/downloadFile.feature:72
 apiWebdavOperations/downloadFile.feature:73
 apiWebdavOperations/downloadFile.feature:84
 apiWebdavOperations/downloadFile.feature:85
+apiWebdavOperations/downloadFile.feature:144
+apiWebdavOperations/downloadFile.feature:145
+apiWebdavOperations/downloadFile.feature:179
+apiWebdavOperations/downloadFile.feature:180
+apiWebdavOperations/downloadFile.feature:189
+apiWebdavOperations/downloadFile.feature:190
+apiWebdavOperations/downloadFile.feature:198
+apiWebdavOperations/downloadFile.feature:199
 apiWebdavOperations/refuseAccess.feature:21
 apiWebdavOperations/refuseAccess.feature:22
 apiWebdavOperations/refuseAccess.feature:33
@@ -1456,6 +1466,7 @@ apiWebdavEtagPropagation1/moveFileFolder.feature:62
 apiWebdavEtagPropagation1/moveFileFolder.feature:78
 apiWebdavEtagPropagation1/moveFileFolder.feature:79
 apiWebdavEtagPropagation1/moveFileFolder.feature:98
+apiWebdavEtagPropagation1/moveFileFolder.feature:99
 apiWebdavEtagPropagation1/moveFileFolder.feature:146
 apiWebdavEtagPropagation1/moveFileFolder.feature:147
 apiWebdavEtagPropagation1/moveFileFolder.feature:174
@@ -2234,3 +2245,22 @@ apiWebdavUploadTUS/uploadFile.feature:139
 apiWebdavUploadTUS/uploadFile.feature:140
 apiWebdavUploadTUS/uploadFile.feature:141
 apiWebdavUploadTUS/uploadFile.feature:142
+
+# https://github.com/owncloud/ocis/issues/1141 upload a file using TUS resource URL as an other user should not work
+apiWebdavUploadTUS/uploadFile.feature:155
+apiWebdavUploadTUS/uploadFile.feature:156
+
+# https://github.com/owncloud/ocis/issues/903 Share lists deleted user as 'user'
+apiShareManagementBasicToShares/createShareToSharesFolder.feature:632
+apiShareManagementBasicToShares/createShareToSharesFolder.feature:633
+
+# https://github.com/owncloud/ocis/issues/1126 share owner cannot delete other user's files
+apiShareUpdateToShares/updateShare.feature:384
+apiShareUpdateToShares/updateShare.feature:385
+
+# https://github.com/owncloud/ocis/issues/541 Deletion time in trash bin shows a wrong date
+apiTrashbin/trashbinFilesFolders.feature:284
+apiTrashbin/trashbinFilesFolders.feature:285
+
+# https://github.com/owncloud/ocis/issues/763 reading a file that a collaborator uploaded is impossible
+apiShareOperationsToShares/uploadToShare.feature:280
