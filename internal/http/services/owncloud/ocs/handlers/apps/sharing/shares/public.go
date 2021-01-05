@@ -449,10 +449,12 @@ func (h *Handler) removePublicShare(w http.ResponseWriter, r *http.Request, shar
 }
 
 func ocPublicPermToCs3(permKey int, h *Handler) (*provider.ResourcePermissions, error) {
-	role, ok := ocPublicPermToRole[permKey]
+	// TODO refactor this ocPublicPermToRole[permKey] check into a conversions.NewPublicSharePermissions?
+	// not all permissions are possible for public shares
+	_, ok := ocPublicPermToRole[permKey]
 	if !ok {
-		log.Error().Str("ocPublicPermToCs3", "shares").Msgf("invalid oC permission: %s", role)
-		return nil, fmt.Errorf("invalid oC permission: %s", role)
+		log.Error().Str("ocPublicPermToCs3", "shares").Int("perm", permKey).Msg("invalid public share permission")
+		return nil, fmt.Errorf("invalid public share permission: %d", permKey)
 	}
 
 	perm, err := conversions.NewPermissions(permKey)
