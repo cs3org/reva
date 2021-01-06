@@ -125,7 +125,7 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 	defer httpRes.Body.Close()
 
 	if httpRes.StatusCode != http.StatusOK && httpRes.StatusCode != http.StatusPartialContent {
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(httpRes.StatusCode)
 		return
 	}
 

@@ -30,13 +30,13 @@ import (
 
 // from https://golang.org/src/net/http/fs.go
 
-// errSeeker is returned by ServeContent's sizeFunc when the content
+// ErrSeeker is returned by ServeContent's sizeFunc when the content
 // doesn't seek properly. The underlying Seeker's error text isn't
 // included in the sizeFunc reply so it's not sent over HTTP to end
 // users.
 var ErrSeeker = errors.New("seeker can't seek")
 
-// errNoOverlap is returned by serveContent's parseRange if first-byte-pos of
+// ErrNoOverlap is returned by serveContent's parseRange if first-byte-pos of
 // all of the byte-range-spec values is greater than the content size.
 var ErrNoOverlap = errors.New("invalid range: failed to overlap")
 
