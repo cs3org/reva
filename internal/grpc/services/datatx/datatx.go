@@ -41,6 +41,9 @@ func init() {
 
 func (c *config) init() {
 	// set sane defaults
+	if c.Driver == "" {
+		c.Driver = "rclone"
+	}
 }
 
 type config struct {
@@ -104,14 +107,15 @@ func (s *service) UnprotectedEndpoints() []string {
 
 func (s *service) CreateTransfer(ctx context.Context, req *datatx.CreateTransferRequest) (*datatx.CreateTransferResponse, error) {
 	// ----------------------------------------------------------------------------------------
-	// TODO implement persistency component and job status check
+	// TODO implement persistency component and status check job
 	// Mechanism:
 	// 1. establish a new unique transfer id
-	// 2. initiate the transfer: receive the transfer job id from the driver
-	// 3. persist the new transfer id together with the job id and (empty) transfer status
-	// 4. start a job that periodically checks the driver whether the transfer is still running
-	//    until it is not anymore; update the transfer status with each check with the status
-	//    returned by the driver
+	// 2. persist the new transfer id together with the job id and (empty) transfer status
+	// 3. do OCM core share request (datatx protocol share type) towards the destination and receive a token
+	// 4. initiate the transfer: receive the transfer job id from the driver
+	// 5. start a job that periodically checks the status of the persisted transfer:
+	//    . case OCM share is accepted: start transfer, update transfer status accordingly
+	//    . case transfer is finished: update transfer status accordingly
 	//
 	// Notes:
 	// . rclone does NOT fail/error when the src can not be found: TODO ? check if scr exists ?
