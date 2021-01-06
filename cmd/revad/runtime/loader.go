@@ -31,6 +31,7 @@ import (
 	_ "github.com/cs3org/reva/pkg/auth/registry/loader"
 	_ "github.com/cs3org/reva/pkg/cbox/loader"
 	_ "github.com/cs3org/reva/pkg/datatx/manager/loader"
+	_ "github.com/cs3org/reva/pkg/datatx/persistency/loader"
 	_ "github.com/cs3org/reva/pkg/metrics/driver/loader"
 	_ "github.com/cs3org/reva/pkg/ocm/invite/manager/loader"
 	_ "github.com/cs3org/reva/pkg/ocm/provider/authorizer/loader"
