@@ -965,14 +965,6 @@ apiWebdavMove1/moveFileAsync.feature:234
 apiWebdavMove1/moveFileAsync.feature:235
 apiWebdavMove1/moveFileAsync.feature:240
 #
-# https://github.com/owncloud/ocis-reva/issues/12  Range Header is not obeyed when downloading a file
-#
-apiWebdavMove1/moveFileAsync.feature:156
-apiWebdavMove1/moveFileAsync.feature:173
-apiWebdavMove1/moveFileAsync.feature:174
-apiWebdavMove1/moveFileAsync.feature:184
-apiWebdavMove1/moveFileAsync.feature:185
-#
 # https://github.com/owncloud/product/issues/260 cannot set blacklisted file names
 #
 apiWebdavMove1/moveFileToBlacklistedNameAsync.feature:12
@@ -1071,10 +1063,6 @@ apiWebdavOperations/downloadFile.feature:72
 apiWebdavOperations/downloadFile.feature:73
 apiWebdavOperations/downloadFile.feature:84
 apiWebdavOperations/downloadFile.feature:85
-apiWebdavOperations/downloadFile.feature:169
-apiWebdavOperations/downloadFile.feature:170
-apiWebdavOperations/downloadFile.feature:198
-apiWebdavOperations/downloadFile.feature:199
 apiWebdavOperations/refuseAccess.feature:21
 apiWebdavOperations/refuseAccess.feature:22
 apiWebdavOperations/refuseAccess.feature:33
