@@ -182,7 +182,6 @@ func (s *service) GetTransferStatus(ctx context.Context, req *datatx.GetTransfer
 	txID := req.TxId.OpaqueId
 
 	// TODO find the jobID belonging to the transfer id; let transfer id be the jobID for now
-	var jobID int64
 	jobID, err := strconv.ParseInt(txID, 10, 64)
 	if err != nil {
 		return nil, err
