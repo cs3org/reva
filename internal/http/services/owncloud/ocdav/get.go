@@ -37,14 +37,14 @@ import (
 
 func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "head")
+	ctx, span := trace.StartSpan(ctx, "get")
 	defer span.End()
 
 	ns = applyLayout(ctx, ns)
 
 	fn := path.Join(ns, r.URL.Path)
 
-	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
+	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Str("svc", "ocdav").Str("handler", "get").Logger()
 
 	client, err := s.getClient()
 	if err != nil {
@@ -109,6 +109,11 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
+
+	if r.Header.Get("Range") != "" {
+		httpReq.Header.Set("Range", r.Header.Get("Range"))
+	}
+
 	httpClient := s.client
 
 	httpRes, err := httpClient.Do(httpReq)
@@ -119,7 +124,7 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 	defer httpRes.Body.Close()
 
-	if httpRes.StatusCode != http.StatusOK {
+	if httpRes.StatusCode != http.StatusOK && httpRes.StatusCode != http.StatusPartialContent {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -133,13 +138,31 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 	t := utils.TSToTime(info.Mtime).UTC()
 	lastModifiedString := t.Format(time.RFC1123Z)
 	w.Header().Set("Last-Modified", lastModifiedString)
-	w.Header().Set("Content-Length", strconv.FormatUint(info.Size, 10))
+
+	if httpRes.StatusCode == http.StatusPartialContent {
+		w.Header().Set("Content-Range", httpRes.Header.Get("Content-Range"))
+		w.Header().Set("Content-Length", httpRes.Header.Get("Content-Length"))
+		w.WriteHeader(http.StatusPartialContent)
+	} else {
+		w.Header().Set("Content-Length", strconv.FormatUint(info.Size, 10))
+	}
 	/*
 		if md.Checksum != "" {
 			w.Header().Set("OC-Checksum", md.Checksum)
 		}
 	*/
-	if _, err := io.Copy(w, httpRes.Body); err != nil {
+	var c int64
+	if c, err = io.Copy(w, httpRes.Body); err != nil {
 		sublog.Error().Err(err).Msg("error finishing copying data to response")
 	}
+	if httpRes.Header.Get("Content-Length") != "" {
+		i, err := strconv.ParseInt(httpRes.Header.Get("Content-Length"), 10, 64)
+		if err != nil {
+			sublog.Error().Err(err).Str("content-length", httpRes.Header.Get("Content-Length")).Msg("invalid content length in datagateway response")
+		}
+		if i != c {
+			sublog.Error().Int64("content-length", i).Int64("transferred-bytes", c).Msg("content length vs transferred bytes mismatch")
+		}
+	}
+	// TODO we need to send the If-Match etag in the GET to the datagateway to prevent race conditions between stating and reading the file
 }

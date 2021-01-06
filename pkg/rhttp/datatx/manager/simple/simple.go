@@ -19,10 +19,10 @@
 package simple
 
 import (
+	"fmt"
 	"io"
 	"net/http"
-
-	"github.com/pkg/errors"
+	"strconv"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/datatx/manager/registry"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
 )
 
 func init() {
@@ -64,10 +65,11 @@ func New(m map[string]interface{}) (datatx.DataTX, error) {
 
 func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		sublog := appctx.GetLogger(ctx).With().Str("datatx", "simple").Logger()
+
 		switch r.Method {
 		case "GET":
-			ctx := r.Context()
-			log := appctx.GetLogger(ctx)
 			var fn string
 			files, ok := r.URL.Query()["filename"]
 			if !ok || len(files[0]) < 1 {
@@ -78,28 +80,88 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 
 			ref := &provider.Reference{Spec: &provider.Reference_Path{Path: fn}}
 
+			// TODO check If-Range condition
+
+			var ranges []datatx.HTTPRange
+			var md *provider.ResourceInfo
+			var err error
+			if r.Header.Get("Range") != "" {
+				md, err = fs.GetMD(ctx, ref, nil)
+				switch err.(type) {
+				case nil:
+					ranges, err = datatx.ParseRange(r.Header.Get("Range"), int64(md.Size))
+					if err != nil || len(ranges) > 1 { // we currently only support one range
+						if err == datatx.ErrNoOverlap {
+							w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", md.Size))
+						}
+						w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+						fmt.Fprintln(w, err)
+						return
+					}
+					w.Header().Set("Content-Range", datatx.FormatRange(ranges[0], md.Size))
+				case errtypes.IsNotFound:
+					sublog.Debug().Err(err).Msg("datasvc: file not found")
+					w.WriteHeader(http.StatusNotFound)
+					return
+				case errtypes.IsPermissionDenied:
+					sublog.Debug().Err(err).Msg("datasvc: file not found")
+					w.WriteHeader(http.StatusForbidden)
+					return
+				default:
+					sublog.Error().Err(err).Msg("datasvc: error downloading file")
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+			}
+
+			// TODO always do a stat to set a Content-Length header
+
 			rc, err := fs.Download(ctx, ref)
 			if err != nil {
 				if _, ok := err.(errtypes.IsNotFound); ok {
-					log.Debug().Err(err).Msg("datasvc: file not found")
+					sublog.Debug().Err(err).Msg("datasvc: file not found")
 					w.WriteHeader(http.StatusNotFound)
 				} else {
-					log.Err(err).Msg("datasvc: error downloading file")
+					sublog.Error().Err(err).Msg("datasvc: error downloading file")
 					w.WriteHeader(http.StatusInternalServerError)
 				}
 				return
 			}
 			defer rc.Close()
 
-			_, err = io.Copy(w, rc)
+			var c int64
+
+			if len(ranges) > 0 {
+				sublog.Debug().Int64("start", ranges[0].Start).Int64("length", ranges[0].Length).Msg("datasvc: range request")
+				var s io.Seeker
+				if s, ok = rc.(io.Seeker); !ok {
+					sublog.Error().Int64("start", ranges[0].Start).Int64("length", ranges[0].Length).Msg("datasvc: ReadCloser is not seekable")
+					w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+					return
+				}
+				if _, err = s.Seek(ranges[0].Start, io.SeekStart); err != nil {
+					sublog.Error().Err(err).Int64("start", ranges[0].Start).Int64("length", ranges[0].Length).Msg("datasvc: could not seek for range request")
+					w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+					return
+				}
+				w.Header().Set("Content-Range", datatx.FormatRange(ranges[0], md.Size)) // md cannot be null because we did a stat for the range request
+				w.Header().Set("Content-Length", strconv.FormatInt(ranges[0].Length, 10))
+				w.WriteHeader(http.StatusPartialContent)
+				c, err = io.CopyN(w, rc, ranges[0].Length)
+				if ranges[0].Length != c {
+					sublog.Error().Int64("range-length", ranges[0].Length).Int64("transferred-bytes", c).Msg("range length vs transferred bytes mismatch")
+				}
+			} else {
+				_, err = io.Copy(w, rc)
+				// TODO check we sent the correct number of bytes. The stat info might be out dated. we need to send the If-Match etag in the GET to the datagateway
+			}
+
 			if err != nil {
-				log.Error().Err(err).Msg("error copying data to response")
+				sublog.Error().Err(err).Msg("error copying data to response")
 				return
 			}
 
 		case "PUT":
-			ctx := r.Context()
-			log := appctx.GetLogger(ctx)
 			fn := r.URL.Path
 			defer r.Body.Close()
 
@@ -111,7 +173,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 					w.WriteHeader(http.StatusPartialContent)
 					return
 				}
-				log.Error().Err(err).Msg("error uploading file")
+				sublog.Error().Err(err).Msg("error uploading file")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}

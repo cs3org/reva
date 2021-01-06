@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"time"
 
 	"github.com/cs3org/reva/pkg/appctx"
@@ -170,7 +171,7 @@ func (s *svc) doHead(w http.ResponseWriter, r *http.Request) {
 	claims, err := s.verify(ctx, r)
 	if err != nil {
 		err = errors.Wrap(err, "datagateway: error validating transfer token")
-		log.Err(err).Str("token", r.Header.Get(TokenTransportHeader)).Msg("invalid transfer token")
+		log.Error().Err(err).Str("token", r.Header.Get(TokenTransportHeader)).Msg("invalid transfer token")
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
@@ -180,7 +181,7 @@ func (s *svc) doHead(w http.ResponseWriter, r *http.Request) {
 	httpClient := s.client
 	httpReq, err := rhttp.NewRequest(ctx, "HEAD", claims.Target, nil)
 	if err != nil {
-		log.Err(err).Msg("wrong request")
+		log.Error().Err(err).Msg("wrong request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -188,7 +189,7 @@ func (s *svc) doHead(w http.ResponseWriter, r *http.Request) {
 
 	httpRes, err := httpClient.Do(httpReq)
 	if err != nil {
-		log.Err(err).Msg("error doing HEAD request to data service")
+		log.Error().Err(err).Msg("error doing HEAD request to data service")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -211,7 +212,7 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 	claims, err := s.verify(ctx, r)
 	if err != nil {
 		err = errors.Wrap(err, "datagateway: error validating transfer token")
-		log.Err(err).Str("token", r.Header.Get(TokenTransportHeader)).Msg("invalid transfer token")
+		log.Error().Err(err).Str("token", r.Header.Get(TokenTransportHeader)).Msg("invalid transfer token")
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
@@ -221,7 +222,7 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 	httpClient := s.client
 	httpReq, err := rhttp.NewRequest(ctx, "GET", claims.Target, nil)
 	if err != nil {
-		log.Err(err).Msg("wrong request")
+		log.Error().Err(err).Msg("wrong request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -229,22 +230,32 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 
 	httpRes, err := httpClient.Do(httpReq)
 	if err != nil {
-		log.Err(err).Msg("error doing GET request to data service")
+		log.Error().Err(err).Msg("error doing GET request to data service")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	defer httpRes.Body.Close()
 
 	copyHeader(w.Header(), httpRes.Header)
-	if httpRes.StatusCode != http.StatusOK {
-		w.WriteHeader(httpRes.StatusCode)
+	// TODO why do we swallow the body?
+	w.WriteHeader(httpRes.StatusCode)
+	if httpRes.StatusCode != http.StatusOK && httpRes.StatusCode != http.StatusPartialContent {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	_, err = io.Copy(w, httpRes.Body)
+	var c int64
+	c, err = io.Copy(w, httpRes.Body)
 	if err != nil {
-		log.Err(err).Msg("error writing body after headers were sent")
+		log.Error().Err(err).Msg("error writing body after headers were sent")
+	}
+	if httpRes.Header.Get("Content-Length") != "" {
+		i, err := strconv.ParseInt(httpRes.Header.Get("Content-Length"), 10, 64)
+		if err != nil {
+			log.Error().Err(err).Str("content-length", httpRes.Header.Get("Content-Length")).Msg("invalid content length in dataprovider response")
+		}
+		if i != c {
+			log.Error().Int64("content-length", i).Int64("transferred-bytes", c).Msg("content length vs transferred bytes mismatch")
+		}
 	}
 }
 

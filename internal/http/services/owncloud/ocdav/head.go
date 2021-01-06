@@ -73,6 +73,9 @@ func (s *svc) handleHead(w http.ResponseWriter, r *http.Request, ns string) {
 	t := utils.TSToTime(info.Mtime).UTC()
 	lastModifiedString := t.Format(time.RFC1123Z)
 	w.Header().Set("Last-Modified", lastModifiedString)
-	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Length", strconv.FormatUint(info.Size, 10))
+	if info.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		w.Header().Set("Accept-Ranges", "bytes")
+	}
+	w.WriteHeader(http.StatusOK)
 }
