@@ -65,7 +65,7 @@ steps:
 
 - name: publish-docker-reva-latest
   pull: always
-  image: registry.cern.ch/docker.io/plugins/docker
+  image: plugins/docker
   settings:
     repo: cs3org/reva
     tags: latest
@@ -74,10 +74,13 @@ steps:
       from_secret: dockerhub_username
     password:
       from_secret: dockerhub_password
+    custom_dns:
+      - 128.142.17.5
+      - 128.142.16.5
 
 - name: publish-docker-revad-latest
   pull: always
-  image: registry.cern.ch/docker.io/plugins/docker
+  image: plugins/docker
   settings:
     repo: cs3org/revad
     tags: latest
@@ -86,6 +89,24 @@ steps:
       from_secret: dockerhub_username
     password:
       from_secret: dockerhub_password
+    custom_dns:
+      - 128.142.17.5
+      - 128.142.16.5
+
+- name: publish-docker-revad-eos-latest
+  pull: always
+  image: plugins/docker
+  settings:
+    repo: cs3org/revad-eos
+    tags: latest
+    dockerfile: Dockerfile.revad-eos
+    username:
+      from_secret: dockerhub_username
+    password:
+      from_secret: dockerhub_password
+    custom_dns:
+      - 128.142.17.5
+      - 128.142.16.5
 
 ---
 kind: pipeline
@@ -202,7 +223,7 @@ steps:
 
 - name: docker-reva-tag
   pull: always
-  image: registry.cern.ch/docker.io/plugins/docker
+  image: plugins/docker
   settings:
     repo: cs3org/reva
     tags: ${DRONE_TAG}
@@ -211,10 +232,13 @@ steps:
       from_secret: dockerhub_username
     password:
       from_secret: dockerhub_password
+    custom_dns:
+    - 128.142.17.5
+    - 128.142.16.5
 
 - name: docker-revad-tag
   pull: always
-  image: registry.cern.ch/docker.io/plugins/docker
+  image: plugins/docker
   settings:
     repo: cs3org/revad
     tags: ${DRONE_TAG}
@@ -223,6 +247,24 @@ steps:
       from_secret: dockerhub_username
     password:
       from_secret: dockerhub_password
+    custom_dns:
+    - 128.142.17.5
+    - 128.142.16.5
+
+- name: docker-revad-eos-tag
+  pull: always
+  image: plugins/docker
+  settings:
+    repo: cs3org/revad-eos
+    tags: ${DRONE_TAG}
+    dockerfile: Dockerfile.revad-eos
+    username:
+      from_secret: dockerhub_username
+    password:
+      from_secret: dockerhub_password
+    custom_dns:
+    - 128.142.17.5
+    - 128.142.16.5
 
 ---
 kind: pipeline
