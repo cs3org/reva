@@ -4,6 +4,7 @@ Instead of hardcoding the permissions set for every file and folder to ListConta
 
 https://github.com/cs3org/reva/pull/1368
 https://github.com/owncloud/ocis/issues/552
+https://github.com/owncloud/ocis/issues/762
 https://github.com/owncloud/ocis/issues/763
 https://github.com/owncloud/ocis/issues/893
 https://github.com/owncloud/ocis/issues/1126

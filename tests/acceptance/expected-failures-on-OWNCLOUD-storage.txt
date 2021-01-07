@@ -400,12 +400,8 @@ apiSharePublicLink1/createPublicLinkShare.feature:371
 #
 # https://github.com/owncloud/ocis-reva/issues/12 Range Header is not obeyed when downloading a file
 #
-apiSharePublicLink1/createPublicLinkShare.feature:63
-apiSharePublicLink1/createPublicLinkShare.feature:64
 apiSharePublicLink1/createPublicLinkShare.feature:95
 apiSharePublicLink1/createPublicLinkShare.feature:96
-apiSharePublicLink1/createPublicLinkShare.feature:245
-apiSharePublicLink1/createPublicLinkShare.feature:246
 apiSharePublicLink1/createPublicLinkShare.feature:276
 apiSharePublicLink1/createPublicLinkShare.feature:277
 #

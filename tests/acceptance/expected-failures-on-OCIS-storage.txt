@@ -428,12 +428,8 @@ apiSharePublicLink1/createPublicLinkShare.feature:371
 #
 # https://github.com/owncloud/ocis-reva/issues/12 Range Header is not obeyed when downloading a file
 #
-apiSharePublicLink1/createPublicLinkShare.feature:63
-apiSharePublicLink1/createPublicLinkShare.feature:64
 apiSharePublicLink1/createPublicLinkShare.feature:95
 apiSharePublicLink1/createPublicLinkShare.feature:96
-apiSharePublicLink1/createPublicLinkShare.feature:245
-apiSharePublicLink1/createPublicLinkShare.feature:246
 apiSharePublicLink1/createPublicLinkShare.feature:276
 apiSharePublicLink1/createPublicLinkShare.feature:277
 #
@@ -1313,11 +1309,6 @@ apiWebdavEtagPropagation2/restoreFromTrash.feature:91
 #
 apiWebdavEtagPropagation2/restoreVersion.feature:10
 #
-# https://github.com/owncloud/ocis/issues/762 path and other information are not shown if a share does not have "read" permission
-#
-apiShareOperationsToShares/uploadToShare.feature:64
-apiShareOperationsToShares/uploadToShare.feature:65
-#
 # https://github.com/owncloud/product/issues/293 sharing with group not available
 #
 apiShareOperationsToShares/uploadToShare.feature:39
@@ -1326,11 +1317,6 @@ apiShareOperationsToShares/uploadToShare.feature:91
 apiShareOperationsToShares/uploadToShare.feature:92
 apiShareOperationsToShares/uploadToShare.feature:139
 apiShareOperationsToShares/uploadToShare.feature:140
-#
-# https://github.com/owncloud/ocis/issues/763 [OCIS-storage] reading a file that a collaborator uploaded is impossible
-#
-apiShareOperationsToShares/uploadToShare.feature:114
-apiShareOperationsToShares/uploadToShare.feature:115
 #
 # https://github.com/owncloud/product/issues/247 changing user quota gives ocs status 103 / Cannot set quota
 #
@@ -1367,17 +1353,10 @@ apiShareOperationsToShares/changingFilesShare.feature:60
 # [OCIS-storage] overwriting a file as share receiver, does not create a new file version for the sharer https://github.com/owncloud/ocis/issues/766
 #
 apiVersions/fileVersionsSharingToShares.feature:33
-apiVersions/fileVersionsSharingToShares.feature:56
 #
 # restoring an older version of a shared file deletes the share https://github.com/owncloud/ocis/issues/765
 #
 apiVersions/fileVersionsSharingToShares.feature:44
-#
-# [OCIS-storage] reading a file that a collaborator uploaded is impossible https://github.com/owncloud/ocis/issues/763
-#
-apiVersions/fileVersionsSharingToShares.feature:82
-apiVersions/fileVersionsSharingToShares.feature:95
-apiVersions/fileVersionsSharingToShares.feature:108
 #
 # https://github.com/owncloud/ocis/issues/560 cannot move from Shares folder
 #
@@ -2138,14 +2117,6 @@ apiWebdavUploadTUS/uploadFileMtimeShares.feature:56
 apiWebdavUploadTUS/uploadFileMtimeShares.feature:70
 apiWebdavUploadTUS/uploadFileMtimeShares.feature:71
 
-# https://github.com/owncloud/ocis/issues/968 [ocis-storage] PROPFIND on a file uploaded by share receiver is not possible
-apiWebdavUploadTUS/uploadToShare.feature:23
-apiWebdavUploadTUS/uploadToShare.feature:24
-apiWebdavUploadTUS/uploadToShare.feature:37
-apiWebdavUploadTUS/uploadToShare.feature:38
-apiWebdavUploadTUS/uploadToShare.feature:66
-apiWebdavUploadTUS/uploadToShare.feature:67
-
 # https://github.com/owncloud/product/issues/293 sharing with group not available
 apiWebdavUploadTUS/uploadToShare.feature:52
 apiWebdavUploadTUS/uploadToShare.feature:53
@@ -2168,17 +2139,9 @@ apiWebdavUploadTUS/uploadFile.feature:156
 apiShareManagementBasicToShares/createShareToSharesFolder.feature:632
 apiShareManagementBasicToShares/createShareToSharesFolder.feature:633
 
-# https://github.com/owncloud/ocis/issues/1126 share owner cannot delete other user's files
-apiShareUpdateToShares/updateShare.feature:384
-apiShareUpdateToShares/updateShare.feature:385
-
 # https://github.com/owncloud/ocis/issues/541 Deletion time in trash bin shows a wrong date
 apiTrashbin/trashbinFilesFolders.feature:284
 apiTrashbin/trashbinFilesFolders.feature:285
-
-# https://github.com/owncloud/ocis/issues/763 reading a file that a collaborator uploaded is impossible
-apiShareOperationsToShares/uploadToShare.feature:279
-apiShareOperationsToShares/uploadToShare.feature:280
 
 # https://github.com/owncloud/ocis/issues/766 [OCIS-storage] overwriting a file as share receiver, does not create a new file version for the sharer
 apiVersions/fileVersionsSharingToShares.feature:291
