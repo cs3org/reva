@@ -24,6 +24,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"strconv"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -88,17 +89,23 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS) {
 	defer content.Close()
 
 	code := http.StatusOK
-
 	sendSize := int64(md.Size)
 	var sendContent io.Reader = content
+
 	var s io.Seeker
+	if s, ok = content.(io.Seeker); ok {
+		// tell clients they can send range requests
+
+		w.Header().Set("Accept-Ranges", "bytes")
+	}
 	if len(ranges) > 0 {
 		sublog.Debug().Int64("start", ranges[0].Start).Int64("length", ranges[0].Length).Msg("range request")
-		if s, ok = content.(io.Seeker); !ok {
+		if s == nil {
 			sublog.Error().Int64("start", ranges[0].Start).Int64("length", ranges[0].Length).Msg("ReadCloser is not seekable")
 			w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
 			return
 		}
+
 		switch {
 		case len(ranges) == 1:
 			// RFC 7233, Section 4.1:
@@ -149,9 +156,13 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS) {
 				mw.Close()
 				pw.Close()
 			}()
-
 		}
 	}
+
+	if w.Header().Get("Content-Encoding") == "" {
+		w.Header().Set("Content-Length", strconv.FormatInt(sendSize, 10))
+	}
+
 	w.WriteHeader(code)
 
 	if r.Method != "HEAD" {
