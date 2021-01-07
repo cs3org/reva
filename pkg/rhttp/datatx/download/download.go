@@ -35,7 +35,7 @@ import (
 // GetOrHeadFile returns the requested file content
 func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS) {
 	ctx := r.Context()
-	sublog := appctx.GetLogger(ctx).With().Str("datatx", "tus").Logger()
+	sublog := appctx.GetLogger(ctx).With().Str("svc", "datatx").Str("handler", "download").Logger()
 
 	var fn string
 	files, ok := r.URL.Query()["filename"]
@@ -55,7 +55,7 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS) {
 	// do a stat to set a Content-Length header
 
 	if md, err = fs.GetMD(ctx, ref, nil); err != nil {
-		handleError(w, &sublog, err)
+		handleError(w, &sublog, err, "stat")
 		return
 	}
 
@@ -82,7 +82,7 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS) {
 
 	content, err := fs.Download(ctx, ref)
 	if err != nil {
-		handleError(w, &sublog, err)
+		handleError(w, &sublog, err, "download")
 		return
 	}
 	defer content.Close()
@@ -93,9 +93,9 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS) {
 	var sendContent io.Reader = content
 	var s io.Seeker
 	if len(ranges) > 0 {
-		sublog.Debug().Int64("start", ranges[0].Start).Int64("length", ranges[0].Length).Msg("datasvc: range request")
+		sublog.Debug().Int64("start", ranges[0].Start).Int64("length", ranges[0].Length).Msg("range request")
 		if s, ok = content.(io.Seeker); !ok {
-			sublog.Error().Int64("start", ranges[0].Start).Int64("length", ranges[0].Length).Msg("datasvc: ReadCloser is not seekable")
+			sublog.Error().Int64("start", ranges[0].Start).Int64("length", ranges[0].Length).Msg("ReadCloser is not seekable")
 			w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
 			return
 		}
@@ -114,7 +114,7 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS) {
 			// multipart responses."
 			ra := ranges[0]
 			if _, err := s.Seek(ra.Start, io.SeekStart); err != nil {
-				sublog.Error().Err(err).Int64("start", ra.Start).Int64("length", ra.Length).Msg("datasvc: content is not seekable")
+				sublog.Error().Err(err).Int64("start", ra.Start).Int64("length", ra.Length).Msg("content is not seekable")
 				w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
 				return
 			}
@@ -155,25 +155,29 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS) {
 	w.WriteHeader(code)
 
 	if r.Method != "HEAD" {
-		_, err = io.CopyN(w, sendContent, sendSize)
+		var c int64
+		c, err = io.CopyN(w, sendContent, sendSize)
 		if err != nil {
 			sublog.Error().Err(err).Msg("error copying data to response")
 			return
+		}
+		if c != sendSize {
+			sublog.Error().Int64("copied", c).Int64("size", sendSize).Msg("copied vs size mismatch")
 		}
 	}
 
 }
 
-func handleError(w http.ResponseWriter, log *zerolog.Logger, err error) {
+func handleError(w http.ResponseWriter, log *zerolog.Logger, err error, action string) {
 	switch err.(type) {
 	case errtypes.IsNotFound:
-		log.Debug().Err(err).Msg("datasvc: file not found")
+		log.Debug().Err(err).Str("action", action).Msg("file not found")
 		w.WriteHeader(http.StatusNotFound)
 	case errtypes.IsPermissionDenied:
-		log.Debug().Err(err).Msg("datasvc: permission denied")
+		log.Debug().Err(err).Str("action", action).Msg("permission denied")
 		w.WriteHeader(http.StatusForbidden)
 	default:
-		log.Error().Err(err).Msg("datasvc: error downloading file")
+		log.Error().Err(err).Str("action", action).Msg("unexpected error")
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 }
