@@ -205,6 +205,12 @@ func (fs *ocisfs) CreateHome(ctx context.Context) (err error) {
 		return nil
 	})
 
+	// update the owner
+	u := user.ContextMustGetUser(ctx)
+	if err = h.writeMetadata(u.Id); err != nil {
+		return
+	}
+
 	if fs.o.TreeTimeAccounting {
 		homePath := h.lu.toInternalPath(h.ID)
 		// mark the home node as the end of propagation
