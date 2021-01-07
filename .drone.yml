@@ -97,8 +97,8 @@ steps:
   pull: always
   image: plugins/docker
   settings:
-    repo: cs3org/revad-eos
-    tags: latest
+    repo: cs3org/revad
+    tags: latest-eos
     dockerfile: Dockerfile.revad-eos
     username:
       from_secret: dockerhub_username
@@ -255,8 +255,8 @@ steps:
   pull: always
   image: plugins/docker
   settings:
-    repo: cs3org/revad-eos
-    tags: ${DRONE_TAG}
+    repo: cs3org/revad
+    tags: ${DRONE_TAG}-eos
     dockerfile: Dockerfile.revad-eos
     username:
       from_secret: dockerhub_username
