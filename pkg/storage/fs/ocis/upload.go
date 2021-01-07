@@ -182,6 +182,12 @@ func (fs *ocisfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tus
 
 	log.Debug().Interface("info", info).Interface("node", n).Msg("ocisfs: resolved filename")
 
+	// the parent owner will become the new owner
+	p, perr := n.Parent()
+	if perr != nil {
+		return nil, errors.Wrap(perr, "ocisfs: error getting parent "+n.ParentID)
+	}
+
 	// check permissions
 	var ok bool
 	if n.Exists {
@@ -191,11 +197,6 @@ func (fs *ocisfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tus
 		})
 	} else {
 		// check permissions of parent
-		p, perr := n.Parent()
-		if perr != nil {
-			return nil, errors.Wrap(perr, "ocisfs: error getting parent "+n.ParentID)
-		}
-
 		ok, err = fs.p.HasPermission(ctx, p, func(rp *provider.ResourcePermissions) bool {
 			return rp.InitiateFileUpload
 		})
@@ -214,6 +215,12 @@ func (fs *ocisfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tus
 		return nil, errors.Wrap(err, "ocisfs: error resolving upload path")
 	}
 	usr := user.ContextMustGetUser(ctx)
+
+	owner, err := p.Owner()
+	if err != nil {
+		return nil, errors.Wrap(err, "ocisfs: error determining owner")
+	}
+
 	info.Storage = map[string]string{
 		"Type":    "OCISStore",
 		"BinPath": binPath,
@@ -225,6 +232,9 @@ func (fs *ocisfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tus
 		"Idp":      usr.Id.Idp,
 		"UserId":   usr.Id.OpaqueId,
 		"UserName": usr.Username,
+
+		"OwnerIdp": owner.Idp,
+		"OwnerId":  owner.OpaqueId,
 
 		"LogLevel": log.GetLevel().String(),
 	}
@@ -417,25 +427,14 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 			Msg("ocisfs: could not rename")
 		return
 	}
-	// who will become the owner?
-	u, ok := user.ContextGetUser(upload.ctx)
-	switch {
-	case ok:
-		err = n.writeMetadata(u.Id)
-	case upload.fs.o.EnableHome:
-		log := appctx.GetLogger(upload.ctx)
-		log.Error().Msg("home support enabled but no user in context")
-		err = errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from upload ctx")
-	case upload.fs.o.Owner != "":
-		err = n.writeMetadata(&userpb.UserId{
-			OpaqueId: upload.fs.o.Owner,
-		})
-	default:
-		// fallback to parent owner?
-		err = n.writeMetadata(nil)
-	}
+
+	// who will become the owner?  the owner of the parent actually ... not the currently logged in user
+	err = n.writeMetadata(&userpb.UserId{
+		Idp:      upload.info.Storage["OwnerIdp"],
+		OpaqueId: upload.info.Storage["OwnerId"],
+	})
 	if err != nil {
-		return
+		return errors.Wrap(err, "ocisfs: could not write metadata")
 	}
 
 	// link child name to parent if it is new
