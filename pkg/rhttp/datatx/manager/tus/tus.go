@@ -25,8 +25,8 @@ import (
 
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp/datatx"
-	"github.com/cs3org/reva/pkg/rhttp/datatx/download"
 	"github.com/cs3org/reva/pkg/rhttp/datatx/manager/registry"
+	"github.com/cs3org/reva/pkg/rhttp/datatx/utils/download"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/mitchellh/mapstructure"
 	tusd "github.com/tus/tusd/pkg/handler"
