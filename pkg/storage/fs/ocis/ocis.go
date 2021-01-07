@@ -204,6 +204,9 @@ func (fs *ocisfs) CreateHome(ctx context.Context) (err error) {
 		}
 		return nil
 	})
+	if err != nil {
+		return
+	}
 
 	// update the owner
 	u := user.ContextMustGetUser(ctx)
