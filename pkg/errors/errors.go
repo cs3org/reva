@@ -40,10 +40,14 @@ func packageName() string {
 	return path.Base(pkg)
 }
 
+// Newf is a wrapper on top of errors.New which prefixes the error with the name
+// of the package from which it was called.
 func Newf(format string, args ...interface{}) error {
 	return errors.Wrap(errors.New(fmt.Sprintf(format, args...)), packageName())
 }
 
+// Wrapf is a wrapper on top of errors.Wrapf which prefixes the wrapped error
+// with the name of the package from which it was called.
 func Wrapf(err error, format string, args ...interface{}) error {
 	return errors.Wrap(errors.Wrapf(err, format, args...), packageName())
 }
