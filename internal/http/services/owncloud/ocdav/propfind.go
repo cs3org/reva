@@ -280,15 +280,6 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		Propstat: []propstatXML{},
 	}
 
-	role := conversions.RoleFromResourcePermissions(md.PermissionSet)
-
-	// files never have the create container permission
-	if md.Type == provider.ResourceType_RESOURCE_TYPE_FILE && md.PermissionSet != nil {
-		// we need to copy the permission set in case it was reused when passing it in while listing a collection
-		md.PermissionSet = copyPermissionSet(md.PermissionSet)
-		md.PermissionSet.CreateContainer = false
-	}
-
 	var ls *link.PublicShare
 	if md.Opaque != nil && md.Opaque.Map != nil && md.Opaque.Map["link-share"] != nil && md.Opaque.Map["link-share"].Decoder == "json" {
 		ls = &link.PublicShare{}
@@ -298,7 +289,19 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		}
 	}
 
+	role := conversions.RoleFromResourcePermissions(md.PermissionSet)
+
 	isShared := !isCurrentUserOwner(ctx, md.Owner)
+	var wdp string
+	if md.PermissionSet != nil {
+		wdp = role.WebDAVPermissions(
+			md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+			isShared,
+			false,
+			false,
+		)
+		sublog.Debug().Interface("role", role).Str("dav-permissions", wdp).Msg("converted PermissionSet")
+	}
 
 	// when allprops has been requested
 	if pf.Allprop != nil {
@@ -324,16 +327,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		}
 
 		if md.PermissionSet != nil {
-			wdp := role.WebDAVPermissions(
-				md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-				isShared,
-				false,
-				false,
-			)
-			sublog.Debug().Interface("role", role).Str("dav-permissions", wdp).Msg("converted PermissionSet")
-			response.Propstat[0].Prop = append(
-				response.Propstat[0].Prop,
-				s.newProp("oc:permissions", wdp))
+			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:permissions", wdp))
 		}
 
 		// always return size
@@ -420,25 +414,15 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					// M = Mounted
 					// in contrast, the ocs:share-permissions further down below indicate clients the maximum permissions that can be granted
 					if md.PermissionSet != nil {
-						wdp := role.WebDAVPermissions(
-							md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-							isShared,
-							false,
-							false,
-						)
-						sublog.Debug().Interface("role", role).Str("dav-permissions", wdp).Msg("converted PermissionSet")
-						propstatOK.Prop = append(
-							propstatOK.Prop,
-							s.newProp("oc:permissions", wdp))
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:permissions", wdp))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:permissions", ""))
 					}
 				case "public-link-permission": // only on a share root node
 					if ls != nil && md.PermissionSet != nil {
-						r := conversions.RoleFromResourcePermissions(md.PermissionSet)
 						propstatOK.Prop = append(
 							propstatOK.Prop,
-							s.newProp("oc:public-link-permission", strconv.FormatUint(uint64(r.OCSPermissions()), 10)))
+							s.newProp("oc:public-link-permission", strconv.FormatUint(uint64(role.OCSPermissions()), 10)))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-permission", ""))
 					}
@@ -646,33 +630,6 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	}
 
 	return &response, nil
-}
-
-// the permission set that is passed in needs to be copied so we don't accidentially overwrite the permission set of other entries
-func copyPermissionSet(p *provider.ResourcePermissions) *provider.ResourcePermissions {
-	if p == nil {
-		return nil
-	}
-	return &provider.ResourcePermissions{
-		AddGrant:             p.AddGrant,
-		CreateContainer:      p.CreateContainer,
-		Delete:               p.Delete,
-		GetPath:              p.GetPath,
-		GetQuota:             p.GetQuota,
-		InitiateFileDownload: p.InitiateFileDownload,
-		InitiateFileUpload:   p.InitiateFileUpload,
-		ListGrants:           p.ListGrants,
-		ListContainer:        p.ListContainer,
-		ListFileVersions:     p.ListFileVersions,
-		ListRecycle:          p.ListRecycle,
-		Move:                 p.Move,
-		RemoveGrant:          p.RemoveGrant,
-		PurgeRecycle:         p.PurgeRecycle,
-		RestoreFileVersion:   p.RestoreFileVersion,
-		RestoreRecycleItem:   p.RestoreRecycleItem,
-		Stat:                 p.Stat,
-		UpdateGrant:          p.UpdateGrant,
-	}
 }
 
 // a file is only yours if you are the owner
