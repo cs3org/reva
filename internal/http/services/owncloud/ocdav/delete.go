@@ -58,7 +58,7 @@ func (s *svc) handleDelete(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
-		handleErrorStatus(&sublog, w, res.Status)
+		HandleErrorStatus(&sublog, w, res.Status)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

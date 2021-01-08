@@ -54,7 +54,9 @@ func Marshal(e exception) ([]byte, error) {
 	})
 }
 
-func handleErrorStatus(log *zerolog.Logger, w http.ResponseWriter, s *rpc.Status) {
+// HandleErrorStatus checks the status code, logs a Debug or Error level message
+// and writes an appropriate http status
+func HandleErrorStatus(log *zerolog.Logger, w http.ResponseWriter, s *rpc.Status) {
 	switch s.Code {
 	case rpc.Code_CODE_OK:
 		log.Debug().Interface("status", s).Msg("ok")

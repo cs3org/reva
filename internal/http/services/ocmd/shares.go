@@ -29,7 +29,6 @@ import (
 	ocmcore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -87,7 +86,7 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 	providerInfo := ocmprovider.ProviderInfo{
 		Domain: meshProvider,
 		Services: []*ocmprovider.Service{
-			&ocmprovider.Service{
+			{
 				Host: clientIP,
 			},
 		},
@@ -124,7 +123,7 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var permissions conversions.Permissions
-	var role, token string
+	var token string
 	options, ok := protocolDecoded["options"].(map[string]interface{})
 	if !ok {
 		WriteError(w, r, APIErrorInvalidParameter, "protocol: webdav token not provided", nil)
@@ -137,24 +136,20 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var role *conversions.Role
 	pval, ok := options["permissions"].(int)
 	if !ok {
-		role = conversions.RoleViewer
+		role = conversions.NewViewerRole()
 	} else {
 		permissions, err = conversions.NewPermissions(pval)
 		if err != nil {
 			WriteError(w, r, APIErrorInvalidParameter, err.Error(), nil)
 			return
 		}
-		role = conversions.Permissions2Role(permissions)
+		role = conversions.RoleFromOCSPermissions(permissions)
 	}
 
-	var resourcePermissions *provider.ResourcePermissions
-	resourcePermissions, err = conversions.Role2CS3Permissions(role)
-	if err != nil {
-		WriteError(w, r, APIErrorInvalidParameter, "unknown role", err)
-	}
-	val, err := json.Marshal(resourcePermissions)
+	val, err := json.Marshal(role.CS3ResourcePermissions())
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "could not encode role", nil)
 		return
@@ -173,11 +168,11 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			Name: protocolDecoded["name"].(string),
 			Opaque: &types.Opaque{
 				Map: map[string]*types.OpaqueEntry{
-					"permissions": &types.OpaqueEntry{
+					"permissions": {
 						Decoder: "json",
 						Value:   val,
 					},
-					"token": &types.OpaqueEntry{
+					"token": {
 						Decoder: "plain",
 						Value:   []byte(token),
 					},

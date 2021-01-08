@@ -36,6 +36,7 @@ import (
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/sdk/common"
 	"github.com/cs3org/reva/pkg/storage/utils/ace"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 	"github.com/rs/zerolog/log"
@@ -52,8 +53,7 @@ type Node struct {
 	ParentID string
 	ID       string
 	Name     string
-	ownerID  string // used to cache the owner id
-	ownerIDP string // used to cache the owner idp
+	owner    *userpb.UserId
 	Exists   bool
 }
 
@@ -132,13 +132,17 @@ func ReadRecycleItem(ctx context.Context, lu *Lookup, key string) (n *Node, tras
 	}
 	// lookup ownerId in extended attributes
 	if attrBytes, err = xattr.Get(deletedNodePath, ownerIDAttr); err == nil {
-		n.ownerID = string(attrBytes)
+		n.owner = &userpb.UserId{}
+		n.owner.OpaqueId = string(attrBytes)
 	} else {
 		return
 	}
 	// lookup ownerIdp in extended attributes
 	if attrBytes, err = xattr.Get(deletedNodePath, ownerIDPAttr); err == nil {
-		n.ownerIDP = string(attrBytes)
+		if n.owner == nil {
+			n.owner = &userpb.UserId{}
+		}
+		n.owner.Idp = string(attrBytes)
 	} else {
 		return
 	}
@@ -273,32 +277,60 @@ func (n *Node) Parent() (p *Node, err error) {
 
 // Owner returns the cached owner id or reads it from the extended attributes
 // TODO can be private as only the AsResourceInfo uses it
-func (n *Node) Owner() (id string, idp string, err error) {
-	if n.ownerID != "" && n.ownerIDP != "" {
-		return n.ownerID, n.ownerIDP, nil
+func (n *Node) Owner() (o *userpb.UserId, err error) {
+	if n.owner != nil {
+		return n.owner, nil
 	}
 
+	// FIXME ... do we return the owner of the reference or the owner of the target?
+	// we don't really know the owner of the target ... and as the reference may point anywhere we cannot really find out
+	// but what are the permissions? all? none? the gateway has to fill in?
+	// TODO what if this is a reference?
 	nodePath := n.lu.toInternalPath(n.ID)
 	// lookup parent id in extended attributes
 	var attrBytes []byte
 	// lookup name in extended attributes
 	if attrBytes, err = xattr.Get(nodePath, ownerIDAttr); err == nil {
-		n.ownerID = string(attrBytes)
+		if n.owner == nil {
+			n.owner = &userpb.UserId{}
+		}
+		n.owner.OpaqueId = string(attrBytes)
 	} else {
 		return
 	}
 	// lookup name in extended attributes
 	if attrBytes, err = xattr.Get(nodePath, ownerIDPAttr); err == nil {
-		n.ownerIDP = string(attrBytes)
+		if n.owner == nil {
+			n.owner = &userpb.UserId{}
+		}
+		n.owner.Idp = string(attrBytes)
 	} else {
 		return
 	}
-	return n.ownerID, n.ownerIDP, err
+	return n.owner, err
+}
+
+// PermissionSet returns the permission set for the current user
+// the parent nodes are not taken into account
+func (n *Node) PermissionSet(ctx context.Context) *provider.ResourcePermissions {
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("no user in context, returning default permissions")
+		return noPermissions
+	}
+	if o, _ := n.Owner(); isSameUserID(u.Id, o) {
+		return ownerPermissions
+	}
+	// read the permissions for the current user from the acls of the current node
+	if np, err := n.ReadUserPermissions(ctx, u); err == nil {
+		return np
+	}
+	return noPermissions
 }
 
 // AsResourceInfo return the node as CS3 ResourceInfo
-func (n *Node) AsResourceInfo(ctx context.Context, mdKeys []string) (ri *provider.ResourceInfo, err error) {
-	log := appctx.GetLogger(ctx)
+func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissions, mdKeys []string) (ri *provider.ResourceInfo, err error) {
+	sublog := appctx.GetLogger(ctx).With().Interface("node", n).Logger()
 
 	var fn string
 	nodePath := n.lu.toInternalPath(n.ID)
@@ -334,21 +366,17 @@ func (n *Node) AsResourceInfo(ctx context.Context, mdKeys []string) (ri *provide
 	}
 
 	ri = &provider.ResourceInfo{
-		Id:       id,
-		Path:     fn,
-		Type:     nodeType,
-		MimeType: mime.Detect(nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER, fn),
-		Size:     uint64(fi.Size()),
-		// TODO fix permissions
-		PermissionSet: &provider.ResourcePermissions{ListContainer: true, CreateContainer: true},
+		Id:            id,
+		Path:          fn,
+		Type:          nodeType,
+		MimeType:      mime.Detect(nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER, fn),
+		Size:          uint64(fi.Size()),
 		Target:        string(target),
+		PermissionSet: rp,
 	}
 
-	if owner, idp, err := n.Owner(); err == nil {
-		ri.Owner = &userpb.UserId{
-			Idp:      idp,
-			OpaqueId: owner,
-		}
+	if ri.Owner, err = n.Owner(); err != nil {
+		sublog.Debug().Err(err).Msg("could not determine owner")
 	}
 
 	// etag currently is a hash of fileid + tmtime (or mtime)
@@ -397,12 +425,12 @@ func (n *Node) AsResourceInfo(ctx context.Context, mdKeys []string) (ri *provide
 				if v, err := xattr.Get(nodePath, attrs[i]); err == nil {
 					ri.ArbitraryMetadata.Metadata[k] = string(v)
 				} else {
-					log.Error().Err(err).Interface("node", n).Str("attr", attrs[i]).Msg("could not get attribute value")
+					sublog.Error().Err(err).Str("attr", attrs[i]).Msg("could not get attribute value")
 				}
 			}
 		}
 	} else {
-		log.Error().Err(err).Interface("node", n).Msg("could not list attributes")
+		sublog.Error().Err(err).Msg("could not list attributes")
 	}
 
 	if common.FindString(mdKeys, _shareTypesKey) != -1 {
@@ -411,7 +439,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, mdKeys []string) (ri *provide
 		}
 	}
 
-	log.Debug().
+	sublog.Debug().
 		Interface("ri", ri).
 		Msg("AsResourceInfo")
 
@@ -450,6 +478,85 @@ func (n *Node) UnsetTempEtag() (err error) {
 		}
 	}
 	return err
+}
+
+// ReadUserPermissions will assemble the permissions for the current user on the given node without parent nodes
+func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap *provider.ResourcePermissions, err error) {
+	// check if the current user is the owner
+	o, err := n.Owner()
+	if err != nil {
+		// TODO check if a parent folder has the owner set?
+		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not determine owner, returning default permissions")
+		return noPermissions, err
+	}
+	if o.OpaqueId == "" {
+		// this happens for root nodes in the storage. the extended attributes are set to emptystring to indicate: no owner
+		// TODO what if no owner is set but grants are present?
+		return noOwnerPermissions, nil
+	}
+	if isSameUserID(u.Id, o) {
+		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("user is owner, returning owner permissions")
+		return ownerPermissions, nil
+	}
+
+	ap = &provider.ResourcePermissions{}
+
+	// for an efficient group lookup convert the list of groups to a map
+	// groups are just strings ... groupnames ... or group ids ??? AAARGH !!!
+	groupsMap := make(map[string]bool, len(u.Groups))
+	for i := range u.Groups {
+		groupsMap[u.Groups[i]] = true
+	}
+
+	var g *provider.Grant
+
+	// we read all grantees from the node
+	var grantees []string
+	if grantees, err = n.ListGrantees(ctx); err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("error listing grantees")
+		return nil, err
+	}
+
+	// instead of making n getxattr syscalls we are going to list the acls and filter them here
+	// we have two options here:
+	// 1. we can start iterating over the acls / grants on the node or
+	// 2. we can iterate over the number of groups
+	// The current implementation tries to be defensive for cases where users have hundreds or thousands of groups, so we iterate over the existing acls.
+	userace := grantPrefix + _userAcePrefix + u.Id.OpaqueId
+	userFound := false
+	for i := range grantees {
+		switch {
+		// we only need to find the user once
+		case !userFound && grantees[i] == userace:
+			g, err = n.ReadGrant(ctx, grantees[i])
+		case strings.HasPrefix(grantees[i], grantPrefix+_groupAcePrefix): // only check group grantees
+			gr := strings.TrimPrefix(grantees[i], grantPrefix+_groupAcePrefix)
+			if groupsMap[gr] {
+				g, err = n.ReadGrant(ctx, grantees[i])
+			} else {
+				// no need to check attribute
+				continue
+			}
+		default:
+			// no need to check attribute
+			continue
+		}
+
+		switch {
+		case err == nil:
+			addPermissions(ap, g.GetPermissions())
+		case isNoData(err):
+			err = nil
+			appctx.GetLogger(ctx).Error().Interface("node", n).Str("grant", grantees[i]).Interface("grantees", grantees).Msg("grant vanished from node after listing")
+			// continue with next segment
+		default:
+			appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Str("grant", grantees[i]).Msg("error reading permissions")
+			// continue with next segment
+		}
+	}
+
+	appctx.GetLogger(ctx).Debug().Interface("permissions", ap).Interface("node", n).Interface("user", u).Msg("returning aggregated permissions")
+	return ap, nil
 }
 
 // ListGrantees lists the grantees of the current node

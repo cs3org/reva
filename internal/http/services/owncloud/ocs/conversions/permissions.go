@@ -18,7 +18,9 @@
 
 package conversions
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // Permissions reflects the CRUD permissions used in the OCS sharing API
 type Permissions uint
@@ -58,20 +60,5 @@ func NewPermissions(val int) (Permissions, error) {
 
 // Contain tests if the permissions contain another one.
 func (p Permissions) Contain(other Permissions) bool {
-	return p&other != 0
-}
-
-// Permissions2Role performs permission conversions for user and federated shares
-func Permissions2Role(p Permissions) string {
-	role := RoleLegacy
-	if p.Contain(PermissionRead) {
-		role = RoleViewer
-	}
-	if p.Contain(PermissionWrite) {
-		role = RoleEditor
-	}
-	if p.Contain(PermissionShare) {
-		role = RoleCoowner
-	}
-	return role
+	return p&other == other
 }

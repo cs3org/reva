@@ -252,6 +252,65 @@ func (fs *localfs) isShareFolderChild(ctx context.Context, p string) bool {
 	return len(vals) > 1 && vals[1] != ""
 }
 
+// permissionSet returns the permission set for the current user
+func (fs *localfs) permissionSet(ctx context.Context, owner *userpb.UserId) *provider.ResourcePermissions {
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		return &provider.ResourcePermissions{
+			// no permissions
+		}
+	}
+	if u.Id == nil {
+		return &provider.ResourcePermissions{
+			// no permissions
+		}
+	}
+	if u.Id.OpaqueId == owner.OpaqueId && u.Id.Idp == owner.Idp {
+		return &provider.ResourcePermissions{
+			// owner has all permissions
+			AddGrant:             true,
+			CreateContainer:      true,
+			Delete:               true,
+			GetPath:              true,
+			GetQuota:             true,
+			InitiateFileDownload: true,
+			InitiateFileUpload:   true,
+			ListContainer:        true,
+			ListFileVersions:     true,
+			ListGrants:           true,
+			ListRecycle:          true,
+			Move:                 true,
+			PurgeRecycle:         true,
+			RemoveGrant:          true,
+			RestoreFileVersion:   true,
+			RestoreRecycleItem:   true,
+			Stat:                 true,
+			UpdateGrant:          true,
+		}
+	}
+	// TODO fix permissions for share recipients by traversing reading acls up to the root? cache acls for the parent node and reuse it
+	return &provider.ResourcePermissions{
+		AddGrant:             true,
+		CreateContainer:      true,
+		Delete:               true,
+		GetPath:              true,
+		GetQuota:             true,
+		InitiateFileDownload: true,
+		InitiateFileUpload:   true,
+		ListContainer:        true,
+		ListFileVersions:     true,
+		ListGrants:           true,
+		ListRecycle:          true,
+		Move:                 true,
+		PurgeRecycle:         true,
+		RemoveGrant:          true,
+		RestoreFileVersion:   true,
+		RestoreRecycleItem:   true,
+		Stat:                 true,
+		UpdateGrant:          true,
+	}
+}
+
 func (fs *localfs) normalize(ctx context.Context, fi os.FileInfo, fn string, mdKeys []string) (*provider.ResourceInfo, error) {
 	fp := fs.unwrap(ctx, path.Join("/", fn))
 	owner, err := getUser(ctx)
@@ -279,7 +338,7 @@ func (fs *localfs) normalize(ctx context.Context, fi os.FileInfo, fn string, mdK
 		Etag:          calcEtag(ctx, fi),
 		MimeType:      mime.Detect(fi.IsDir(), fp),
 		Size:          uint64(fi.Size()),
-		PermissionSet: &provider.ResourcePermissions{ListContainer: true, CreateContainer: true},
+		PermissionSet: fs.permissionSet(ctx, owner.Id),
 		Mtime: &types.Timestamp{
 			Seconds: uint64(fi.ModTime().Unix()),
 		},

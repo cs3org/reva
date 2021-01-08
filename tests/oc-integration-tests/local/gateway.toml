@@ -58,7 +58,7 @@ home_provider = "/home"
 "/home" = "localhost:12000"
 
 # mount a storage provider without a path wrapper for direct access to users.
-"/oc" = "localhost:11000"
+"/users" = "localhost:11000"
 "123e4567-e89b-12d3-a456-426655440000" = "localhost:11000"
 # another mount point might be "/projects/"
 

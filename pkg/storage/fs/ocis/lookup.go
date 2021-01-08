@@ -59,6 +59,7 @@ func (lu *Lookup) NodeFromPath(ctx context.Context, fn string) (node *Node, err 
 		return
 	}
 
+	// TODO collect permissions of the current user on every segment
 	if fn != "/" {
 		node, err = lu.WalkPath(ctx, node, fn, func(ctx context.Context, n *Node) error {
 			log.Debug().Interface("node", n).Msg("NodeFromPath() walk")

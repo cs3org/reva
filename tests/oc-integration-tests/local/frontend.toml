@@ -47,7 +47,7 @@ chunk_folder = "/var/tmp/reva/chunks"
 # for eos we need to rewrite the path
 # TODO strip the username from the path so the CS3 namespace can be mounted
 # at the files/<username> endpoint? what about migration? separate reva instance
-files_namespace = "/oc"
+files_namespace = "/users"
 
 # similar to the dav/files endpoint we can configure a prefix for the old webdav endpoint
 # we use the old webdav endpoint to present the cs3 namespace

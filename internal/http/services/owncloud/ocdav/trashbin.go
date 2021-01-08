@@ -157,7 +157,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 	if getHomeRes.Status.Code != rpc.Code_CODE_OK {
-		handleErrorStatus(&sublog, w, getHomeRes.Status)
+		HandleErrorStatus(&sublog, w, getHomeRes.Status)
 		return
 	}
 
@@ -178,7 +178,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	}
 
 	if getRecycleRes.Status.Code != rpc.Code_CODE_OK {
-		handleErrorStatus(&sublog, w, getHomeRes.Status)
+		HandleErrorStatus(&sublog, w, getHomeRes.Status)
 		return
 	}
 
@@ -371,7 +371,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		return
 	}
 	if getHomeRes.Status.Code != rpc.Code_CODE_OK {
-		handleErrorStatus(&sublog, w, getHomeRes.Status)
+		HandleErrorStatus(&sublog, w, getHomeRes.Status)
 		return
 	}
 
@@ -397,7 +397,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
-		handleErrorStatus(&sublog, w, res.Status)
+		HandleErrorStatus(&sublog, w, res.Status)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -425,7 +425,7 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 		return
 	}
 	if getHomeRes.Status.Code != rpc.Code_CODE_OK {
-		handleErrorStatus(&sublog, w, getHomeRes.Status)
+		HandleErrorStatus(&sublog, w, getHomeRes.Status)
 		return
 	}
 	sRes, err := client.Stat(ctx, &provider.StatRequest{
@@ -441,7 +441,7 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 		return
 	}
 	if sRes.Status.Code != rpc.Code_CODE_OK {
-		handleErrorStatus(&sublog, w, sRes.Status)
+		HandleErrorStatus(&sublog, w, sRes.Status)
 		return
 	}
 
@@ -472,6 +472,6 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 		sublog.Debug().Str("storageid", sRes.Info.Id.StorageId).Str("key", key).Interface("status", res.Status).Msg("resource not found")
 		w.WriteHeader(http.StatusConflict)
 	default:
-		handleErrorStatus(&sublog, w, res.Status)
+		HandleErrorStatus(&sublog, w, res.Status)
 	}
 }

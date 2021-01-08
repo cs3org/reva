@@ -203,6 +203,7 @@ func (e *ACE) grantPermissionSet() *provider.ResourcePermissions {
 	// r
 	if strings.Contains(e.permissions, "r") {
 		p.Stat = true
+		p.GetPath = true
 		p.InitiateFileDownload = true
 		p.ListContainer = true
 	}
@@ -259,7 +260,6 @@ func (e *ACE) grantPermissionSet() *provider.ResourcePermissions {
 	}
 
 	// ?
-	// TODO GetPath
 	if strings.Contains(e.permissions, "q") {
 		p.GetQuota = true
 	}
