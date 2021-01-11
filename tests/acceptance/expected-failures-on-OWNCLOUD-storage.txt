@@ -115,6 +115,7 @@ apiAuthWebDav/webDavPUTAuth.feature:38
 apiCapabilities/capabilitiesWithNormalUser.feature:11
 #
 # https://github.com/owncloud/ocis-reva/issues/39 REPORT request not implemented
+# https://github.com/cs3org/reva/issues/1394 ocis needs an api to list all files of a user he marked as favorite or that are tagged with a certain tag
 # And other missing implementation of favorites
 #
 apiFavorites/favorites.feature:91
