@@ -62,8 +62,9 @@ const (
 	// grantPrefix is the prefix for sharing related extended attributes
 	grantPrefix    string = ocisPrefix + "grant."
 	metadataPrefix string = ocisPrefix + "md."
-	// TODO implement favorites metadata flag
-	favPrefix string = ocisPrefix + "fav." // favorite flag, per user
+
+	// favorite flag, per user
+	favPrefix string = ocisPrefix + "fav."
 
 	// a temporary etag for a folder that is removed when the mtime propagation happens
 	tmpEtagAttr   string = ocisPrefix + "tmp.etag"

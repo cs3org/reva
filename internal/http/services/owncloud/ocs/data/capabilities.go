@@ -99,6 +99,7 @@ type CapabilitiesFiles struct {
 	BigFileChunking  ocsBool                      `json:"bigfilechunking" xml:"bigfilechunking"`
 	Undelete         ocsBool                      `json:"undelete" xml:"undelete"`
 	Versioning       ocsBool                      `json:"versioning" xml:"versioning"`
+	Favorites        ocsBool                      `json:"favorites" xml:"favorites"`
 	BlacklistedFiles []string                     `json:"blacklisted_files" xml:"blacklisted_files>element" mapstructure:"blacklisted_files"`
 	TusSupport       *CapabilitiesFilesTusSupport `json:"tus_support" xml:"tus_support" mapstructure:"tus_support"`
 }
