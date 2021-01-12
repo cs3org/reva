@@ -1,0 +1,10 @@
+[http]
+address = "0.0.0.0:5550"
+
+[http.services.metrics]
+metrics_data_driver_type = "xcloud"
+metrics_record_interval = 5000
+cloud_instance="http://localhost/nextcloud"
+
+[http.services.prometheus]
+

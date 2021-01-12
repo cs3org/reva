@@ -23,6 +23,8 @@ type Config struct {
 	MetricsDataDriverType string `mapstructure:"metrics_data_driver_type"`
 	MetricsDataLocation   string `mapstructure:"metrics_data_location"`
 	MetricsRecordInterval int    `mapstructure:"metrics_record_interval"`
+	CloudInstance         string `mapstructure:"cloud_instance"`
+	RegisterService       string `mapstructure:"register_service"`
 }
 
 // Init sets sane defaults
@@ -33,6 +35,7 @@ func (c *Config) Init() {
 			c.MetricsDataLocation = "/var/tmp/reva/metrics/metricsdata.json"
 		}
 	}
+
 	if c.MetricsRecordInterval == 0 {
 		c.MetricsRecordInterval = 5000
 	}
