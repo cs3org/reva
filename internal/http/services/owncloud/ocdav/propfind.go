@@ -50,8 +50,7 @@ const (
 	_nsOwncloud = "http://owncloud.org/ns"
 	_nsOCS      = "http://open-collaboration-services.org/ns"
 
-	_propOcFavorite   = "http://owncloud.org/ns/favorite"
-	_propOcShareTypes = "http://owncloud.org/ns/share-types"
+	_propOcFavorite = "http://owncloud.org/ns/favorite"
 )
 
 // ns is the namespace that is prefixed to the path in the cs3 namespace

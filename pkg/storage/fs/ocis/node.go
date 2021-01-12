@@ -482,10 +482,8 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	// use temporary etag if it is set
 	if b, err := xattr.Get(nodePath, tmpEtagAttr); err == nil {
 		ri.Etag = fmt.Sprintf(`"%x"`, string(b))
-	} else {
-		if ri.Etag, err = calculateEtag(n.ID, tmTime); err != nil {
-			sublog.Debug().Err(err).Msg("could not calculate etag")
-		}
+	} else if ri.Etag, err = calculateEtag(n.ID, tmTime); err != nil {
+		sublog.Debug().Err(err).Msg("could not calculate etag")
 	}
 
 	// mtime uses tmtime if present
