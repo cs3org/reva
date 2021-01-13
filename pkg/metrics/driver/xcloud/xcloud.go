@@ -51,6 +51,11 @@ func init() {
 	endpoint := fmt.Sprintf("%s/index.php/apps/sciencemesh/internal_metrics", driver.CloudInstance)
 
 	req, err := http.NewRequest("GET", endpoint, nil)
+	if err != nil {
+		log.Err(err).Msgf("xcloud: error creating request to %s", driver.CloudInstance)
+		return
+	}
+
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Err(err).Msgf("xcloud: error getting internal metrics from %s", driver.CloudInstance)
@@ -58,7 +63,7 @@ func init() {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		err := errors.New(fmt.Sprintf("xcloud: error getting internal metrics from %s", driver.CloudInstance))
+		err := fmt.Errorf("xcloud: error getting internal metrics from %s")
 		log.Err(err).Msgf("xcloud: error getting internal metrics from %s", driver.CloudInstance)
 		return
 	}
