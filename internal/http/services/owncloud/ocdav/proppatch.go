@@ -218,7 +218,7 @@ func (s *svc) formatProppatchResponse(ctx context.Context, acceptedProps []xml.N
 
 func (s *svc) isBooleanProperty(prop string) bool {
 	// TODO add other properties we know to be boolean?
-	return prop == "http://owncloud.org/ns/favorite"
+	return prop == _propOcFavorite
 }
 
 func (s *svc) as0or1(val string) string {
@@ -307,9 +307,9 @@ func readProppatch(r io.Reader) (patches []Proppatch, status int, err error) {
 	for _, op := range pu.SetRemove {
 		remove := false
 		switch op.XMLName {
-		case xml.Name{Space: "DAV:", Local: "set"}:
+		case xml.Name{Space: _nsDav, Local: "set"}:
 			// No-op.
-		case xml.Name{Space: "DAV:", Local: "remove"}:
+		case xml.Name{Space: _nsDav, Local: "remove"}:
 			for _, p := range op.Prop {
 				if len(p.InnerXML) > 0 {
 					return nil, http.StatusBadRequest, errInvalidProppatch

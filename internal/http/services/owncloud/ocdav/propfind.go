@@ -45,6 +45,14 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	_nsDav      = "DAV:"
+	_nsOwncloud = "http://owncloud.org/ns"
+	_nsOCS      = "http://open-collaboration-services.org/ns"
+
+	_propOcFavorite = "http://owncloud.org/ns/favorite"
+)
+
 // ns is the namespace that is prefixed to the path in the cs3 namespace
 func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
@@ -98,14 +106,23 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 		return
 	}
 
+	metadataKeys := []string{}
+	if pf.Allprop != nil {
+		metadataKeys = append(metadataKeys, "*")
+	} else {
+		for i := range pf.Prop {
+			if requiresExplicitFetching(&pf.Prop[i]) {
+				metadataKeys = append(metadataKeys, metadataKeyOf(&pf.Prop[i]))
+			}
+		}
+	}
+
 	info := res.Info
 	infos := []*provider.ResourceInfo{info}
 	if info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == "1" {
 		req := &provider.ListContainerRequest{
-			Ref: ref,
-			ArbitraryMetadataKeys: []string{
-				"http://owncloud.org/ns/share-types",
-			},
+			Ref:                   ref,
+			ArbitraryMetadataKeys: metadataKeys,
 		}
 		res, err := client.ListContainer(ctx, req)
 		if err != nil {
@@ -130,10 +147,8 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 				Spec: &provider.Reference_Path{Path: path},
 			}
 			req := &provider.ListContainerRequest{
-				Ref: ref,
-				ArbitraryMetadataKeys: []string{
-					"http://owncloud.org/ns/share-types",
-				},
+				Ref:                   ref,
+				ArbitraryMetadataKeys: metadataKeys,
 			}
 			res, err := client.ListContainer(ctx, req)
 			if err != nil {
@@ -186,6 +201,23 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 	if _, err := w.Write([]byte(propRes)); err != nil {
 		sublog.Err(err).Msg("error writing response")
 	}
+}
+
+func requiresExplicitFetching(n *xml.Name) bool {
+	switch n.Space {
+	case _nsDav:
+		return false
+	case _nsOwncloud:
+		switch n.Local {
+		case "favorite", "share-types":
+			return true
+		default:
+			return false
+		}
+	case _nsOCS:
+		return false
+	}
+	return true
 }
 
 // from https://github.com/golang/net/blob/e514e69ffb8bc3c76a71ae40de0118d794855992/webdav/xml.go#L178-L205
@@ -253,6 +285,7 @@ func (s *svc) newPropNS(namespace string, local string, val string) *propertyXML
 	}
 }
 
+// TODO properly use the space
 func (s *svc) newProp(key, val string) *propertyXML {
 	return &propertyXML{
 		XMLName:  xml.Name{Space: "", Local: key},
@@ -368,8 +401,8 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:favorite", "0"))
 		} else if amd := k.GetMetadata(); amd == nil {
 			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:favorite", "0"))
-		} else if v, ok := amd["http://owncloud.org/ns/favorite"]; ok && v != "" {
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:favorite", "1"))
+		} else if v, ok := amd[_propOcFavorite]; ok && v != "" {
+			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:favorite", v))
 		} else {
 			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:favorite", "0"))
 		}
@@ -387,7 +420,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		size := fmt.Sprintf("%d", md.Size)
 		for i := range pf.Prop {
 			switch pf.Prop[i].Space {
-			case "http://owncloud.org/ns":
+			case _nsOwncloud:
 				switch pf.Prop[i].Local {
 				// TODO(jfd): maybe phoenix and the other clients can just use this id as an opaque string?
 				// I tested the desktop client and phoenix to annotate which properties are requestted, see below cases
@@ -491,7 +524,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
 					} else if amd := k.GetMetadata(); amd == nil {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
-					} else if v, ok := amd["http://owncloud.org/ns/favorite"]; ok && v != "" {
+					} else if v, ok := amd[_propOcFavorite]; ok && v != "" {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "1"))
 					} else {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
@@ -511,7 +544,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				case "share-types": // desktop
 					k := md.GetArbitraryMetadata()
 					amd := k.GetMetadata()
-					if amdv, ok := amd[fmt.Sprintf("%s/%s", pf.Prop[i].Space, pf.Prop[i].Local)]; ok {
+					if amdv, ok := amd[metadataKeyOf(&pf.Prop[i])]; ok {
 						st := fmt.Sprintf("<oc:share-type>%s</oc:share-type>", amdv)
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:share-types", st))
 					} else {
@@ -546,7 +579,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				default:
 					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:"+pf.Prop[i].Local, ""))
 				}
-			case "DAV:":
+			case _nsDav:
 				switch pf.Prop[i].Local {
 				case "getetag": // both
 					if md.Etag != "" {
@@ -586,7 +619,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				default:
 					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:"+pf.Prop[i].Local, ""))
 				}
-			case "http://open-collaboration-services.org/ns":
+			case _nsOCS:
 				switch pf.Prop[i].Local {
 				// ocs:share-permissions indicate clients the maximum permissions that can be granted:
 				// 1 = read
@@ -614,7 +647,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newPropNS(pf.Prop[i].Space, pf.Prop[i].Local, ""))
 				} else if amd := k.GetMetadata(); amd == nil {
 					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newPropNS(pf.Prop[i].Space, pf.Prop[i].Local, ""))
-				} else if v, ok := amd[fmt.Sprintf("%s/%s", pf.Prop[i].Space, pf.Prop[i].Local)]; ok && v != "" {
+				} else if v, ok := amd[metadataKeyOf(&pf.Prop[i])]; ok && v != "" {
 					propstatOK.Prop = append(propstatOK.Prop, s.newPropNS(pf.Prop[i].Space, pf.Prop[i].Local, v))
 				} else {
 					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newPropNS(pf.Prop[i].Space, pf.Prop[i].Local, ""))
@@ -652,6 +685,10 @@ func (c *countingReader) Read(p []byte) (int, error) {
 	n, err := c.r.Read(p)
 	c.n += n
 	return n, err
+}
+
+func metadataKeyOf(n *xml.Name) string {
+	return fmt.Sprintf("%s/%s", n.Space, n.Local)
 }
 
 // http://www.webdav.org/specs/rfc4918.html#ELEMENT_prop (for propfind)

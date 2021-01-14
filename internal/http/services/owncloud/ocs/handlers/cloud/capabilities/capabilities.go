@@ -102,6 +102,7 @@ func (h *Handler) Init(c *config.Config) {
 	}
 	// h.c.Capabilities.Files.Undelete is boolean
 	// h.c.Capabilities.Files.Versioning is boolean
+	// h.c.Capabilities.Files.Favorites is boolean
 
 	// dav
 
