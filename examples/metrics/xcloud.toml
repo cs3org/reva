@@ -4,7 +4,8 @@ address = "0.0.0.0:5550"
 [http.services.metrics]
 metrics_data_driver_type = "xcloud"
 metrics_record_interval = 5000
-cloud_instance="http://localhost/nextcloud"
+xcloud_instance="http://localhost"
+xcloud_interval=5
 
 [http.services.prometheus]
 

@@ -23,8 +23,9 @@ type Config struct {
 	MetricsDataDriverType string `mapstructure:"metrics_data_driver_type"`
 	MetricsDataLocation   string `mapstructure:"metrics_data_location"`
 	MetricsRecordInterval int    `mapstructure:"metrics_record_interval"`
-	CloudInstance         string `mapstructure:"cloud_instance"`
-	RegisterService       string `mapstructure:"register_service"`
+	XcloudInstance string `mapstructure:"xcloud_instance"`
+	XcloudCatalog       string `mapstructure:"xcloud_catalog"`
+	XcloudPullInterval int `mapstructure:"xcloud_pull_interval"`
 }
 
 // Init sets sane defaults

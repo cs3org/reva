@@ -21,8 +21,10 @@ package json
 import (
 	"encoding/json"
 	"errors"
+	"sync"
 	"fmt"
 	"io/ioutil"
+	"time"
 	"net/http"
 	"os"
 
@@ -40,47 +42,6 @@ func init() {
 	driver := &CloudDriver{CloudData: &CloudData{}}
 	registry.Register(driverName(), driver)
 
-	// TODO(labkode): spawn goroutines to fetch metrics and update the register service
-
-	// get configuration from internal_metrics endpoint exposed
-	// by the sciencemesh app
-
-	client := &http.Client{}
-
-	// endpoint example: https://mybox.com or https://mybox.com/owncloud
-	endpoint := fmt.Sprintf("%s/index.php/apps/sciencemesh/internal_metrics", driver.CloudInstance)
-
-	req, err := http.NewRequest("GET", endpoint, nil)
-	if err != nil {
-		log.Err(err).Msgf("xcloud: error creating request to %s", driver.CloudInstance)
-		return
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Err(err).Msgf("xcloud: error getting internal metrics from %s", driver.CloudInstance)
-		return
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		err := fmt.Errorf("xcloud: error getting internal metrics from %s")
-		log.Err(err).Msgf("xcloud: error getting internal metrics from %s", driver.CloudInstance)
-		return
-	}
-	defer resp.Body.Close()
-
-	// read response body
-	data, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Err(err).Msgf("xcloud: error reading resp body from internal metrics from %s", driver.CloudInstance)
-	}
-
-	cd := &CloudData{}
-	if err := json.Unmarshal(data, cd); err != nil {
-		log.Err(err).Msgf("xcloud: error parsing body from internal metrics: body(%s)", string(data))
-	}
-
-	fmt.Printf("%+v\n", cd)
 }
 
 func driverName() string {
@@ -89,19 +50,90 @@ func driverName() string {
 
 // CloudDriver the JsonDriver struct
 type CloudDriver struct {
-	CloudInstance   string
-	RegisterService string
+	instance   string
+	catalog string
+	pullInterval int 
 	CloudData       *CloudData
+	sync.Mutex
 }
 
-// Configure configures this driver
-func (d *CloudDriver) Configure(c *config.Config) error {
-	if c.CloudInstance == "" {
-		err := errors.New("xcloud: missing cloud_instance config parameter")
+func (d *CloudDriver) refresh() error {
+	// TODO(labkode): spawn goroutines to fetch metrics and update the register service
+
+	// get configuration from internal_metrics endpoint exposed
+	// by the sciencemesh app
+	client := &http.Client{}
+
+	// endpoint example: https://mybox.com or https://mybox.com/owncloud
+	endpoint := fmt.Sprintf("%s/index.php/apps/sciencemesh/internal_metrics",d.instance)
+
+	req, err := http.NewRequest("GET", endpoint, nil)
+	if err != nil {
+		log.Err(err).Msgf("xcloud: error creating request to %s",d.instance)
 		return err
 	}
 
-	d.CloudInstance = c.CloudInstance
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Err(err).Msgf("xcloud: error getting internal metrics from %s",d.instance)
+		return err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		err := fmt.Errorf("xcloud: error getting internal metrics from %s. http status code (%d)", resp.StatusCode)
+		log.Err(err).Msgf("xcloud: error getting internal metrics from %s",d.instance)
+		return err
+	}
+	defer resp.Body.Close()
+
+	// read response body
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Err(err).Msgf("xcloud: error reading resp body from internal metrics from %s", d.instance)
+		return err
+	}
+
+	cd := &CloudData{}
+	if err := json.Unmarshal(data, cd); err != nil {
+		log.Err(err).Msgf("xcloud: error parsing body from internal metrics: body(%s)", string(data))
+		return err
+	}
+
+	d.Lock()
+	defer d.Unlock()
+	d.CloudData = cd
+	log.Info().Msgf("xcloud: received internal metrics from cloud provider: %+v", cd)
+	return nil
+
+}
+// Configure configures this driver
+func (d *CloudDriver) Configure(c *config.Config) error {
+	if c.XcloudInstance == "" {
+		err := errors.New("xcloud: missing xcloud_instance config parameter")
+		return err
+	}
+
+	if c.XcloudPullInterval  == 0 {
+		c.XcloudPullInterval = 10 // seconds
+	}
+
+	d.instance = c.XcloudInstance
+	d.pullInterval = c.XcloudPullInterval
+
+	ticker := time.NewTicker(5 * time.Second)
+	quit := make(chan struct{})
+	go func() {
+	    for {
+	       select {
+		case <- ticker.C:
+			d.refresh()
+		case <- quit:
+		    ticker.Stop()
+		    return
+		}
+	    }
+	 }()
+
 	return nil
 }
 
