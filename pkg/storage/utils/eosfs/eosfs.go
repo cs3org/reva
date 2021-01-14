@@ -1310,6 +1310,65 @@ func (fs *eosfs) convertToFileReference(ctx context.Context, eosFileInfo *eoscli
 	return info, nil
 }
 
+// permissionSet returns the permission set for the current user
+func (fs *eosfs) permissionSet(ctx context.Context, owner *userpb.UserId) *provider.ResourcePermissions {
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		return &provider.ResourcePermissions{
+			// no permissions
+		}
+	}
+	if u.Id == nil {
+		return &provider.ResourcePermissions{
+			// no permissions
+		}
+	}
+	if u.Id.OpaqueId == owner.OpaqueId && u.Id.Idp == owner.Idp {
+		return &provider.ResourcePermissions{
+			// owner has all permissions
+			AddGrant:             true,
+			CreateContainer:      true,
+			Delete:               true,
+			GetPath:              true,
+			GetQuota:             true,
+			InitiateFileDownload: true,
+			InitiateFileUpload:   true,
+			ListContainer:        true,
+			ListFileVersions:     true,
+			ListGrants:           true,
+			ListRecycle:          true,
+			Move:                 true,
+			PurgeRecycle:         true,
+			RemoveGrant:          true,
+			RestoreFileVersion:   true,
+			RestoreRecycleItem:   true,
+			Stat:                 true,
+			UpdateGrant:          true,
+		}
+	}
+	// TODO fix permissions for share recipients by traversing reading acls up to the root? cache acls for the parent node and reuse it
+	return &provider.ResourcePermissions{
+		AddGrant:             true,
+		CreateContainer:      true,
+		Delete:               true,
+		GetPath:              true,
+		GetQuota:             true,
+		InitiateFileDownload: true,
+		InitiateFileUpload:   true,
+		ListContainer:        true,
+		ListFileVersions:     true,
+		ListGrants:           true,
+		ListRecycle:          true,
+		Move:                 true,
+		PurgeRecycle:         true,
+		RemoveGrant:          true,
+		RestoreFileVersion:   true,
+		RestoreRecycleItem:   true,
+		Stat:                 true,
+		UpdateGrant:          true,
+	}
+}
+
 func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.ResourceInfo, error) {
 	path, err := fs.unwrap(ctx, eosFileInfo.File)
 	if err != nil {
@@ -1321,28 +1380,28 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 		size = eosFileInfo.TreeSize
 	}
 
-	username, err := fs.getUserIDGateway(ctx, strconv.FormatUint(eosFileInfo.UID, 10))
+	owner, err := fs.getUserIDGateway(ctx, strconv.FormatUint(eosFileInfo.UID, 10))
 	if err != nil {
 		log := appctx.GetLogger(ctx)
 		log.Warn().Uint64("uid", eosFileInfo.UID).Msg("could not lookup userid, leaving empty")
-		username = &userpb.UserId{}
+		owner = &userpb.UserId{}
 	}
 
 	info := &provider.ResourceInfo{
 		Id:            &provider.ResourceId{OpaqueId: fmt.Sprintf("%d", eosFileInfo.Inode)},
 		Path:          path,
-		Owner:         username,
+		Owner:         owner,
 		Etag:          fmt.Sprintf("\"%s\"", strings.Trim(eosFileInfo.ETag, "\"")),
 		MimeType:      mime.Detect(eosFileInfo.IsDir, path),
 		Size:          size,
-		PermissionSet: &provider.ResourcePermissions{ListContainer: true, CreateContainer: true},
+		PermissionSet: fs.permissionSet(ctx, owner),
 		Mtime: &types.Timestamp{
 			Seconds: eosFileInfo.MTimeSec,
 			Nanos:   eosFileInfo.MTimeNanos,
 		},
 		Opaque: &types.Opaque{
 			Map: map[string]*types.OpaqueEntry{
-				"eos": &types.OpaqueEntry{
+				"eos": {
 					Decoder: "json",
 					Value:   fs.getEosMetadata(eosFileInfo),
 				},

@@ -781,14 +781,6 @@ apiWebdavProperties2/getFileProperties.feature:402
 apiWebdavProperties2/getFileProperties.feature:403
 #
 # https://github.com/owncloud/ocis-reva/issues/217 Some failing tests with Webdav custom properties
-apiWebdavProperties2/getFileProperties.feature:415
-apiWebdavProperties2/getFileProperties.feature:416
-#
-# https://github.com/owncloud/ocis-reva/issues/217 Some failing tests with Webdav custom properties
-apiWebdavProperties2/getFileProperties.feature:428
-apiWebdavProperties2/getFileProperties.feature:429
-#
-# https://github.com/owncloud/ocis-reva/issues/217 Some failing tests with Webdav custom properties
 apiWebdavProperties2/getFileProperties.feature:441
 apiWebdavProperties2/getFileProperties.feature:442
 #

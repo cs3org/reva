@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -203,6 +204,15 @@ func (fs *ocisfs) CreateHome(ctx context.Context) (err error) {
 		}
 		return nil
 	})
+	if err != nil {
+		return
+	}
+
+	// update the owner
+	u := user.ContextMustGetUser(ctx)
+	if err = h.writeMetadata(u.Id); err != nil {
+		return
+	}
 
 	if fs.o.TreeTimeAccounting {
 		homePath := h.lu.toInternalPath(h.ID)
@@ -361,17 +371,15 @@ func (fs *ocisfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 		return
 	}
 
-	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
-		return rp.Stat
-	})
+	rp, err := fs.p.AssemblePermissions(ctx, node)
 	switch {
 	case err != nil:
 		return nil, errtypes.InternalError(err.Error())
-	case !ok:
+	case !rp.Stat:
 		return nil, errtypes.PermissionDenied(node.ID)
 	}
 
-	return node.AsResourceInfo(ctx, mdKeys)
+	return node.AsResourceInfo(ctx, rp, mdKeys)
 }
 
 func (fs *ocisfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) (finfos []*provider.ResourceInfo, err error) {
@@ -385,13 +393,11 @@ func (fs *ocisfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 		return
 	}
 
-	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
-		return rp.ListContainer
-	})
+	rp, err := fs.p.AssemblePermissions(ctx, node)
 	switch {
 	case err != nil:
 		return nil, errtypes.InternalError(err.Error())
-	case !ok:
+	case !rp.ListContainer:
 		return nil, errtypes.PermissionDenied(node.ID)
 	}
 
@@ -402,7 +408,10 @@ func (fs *ocisfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 	}
 
 	for i := range children {
-		if ri, err := children[i].AsResourceInfo(ctx, mdKeys); err == nil {
+		np := rp
+		// add this childs permissions
+		addPermissions(np, node.PermissionSet(ctx))
+		if ri, err := children[i].AsResourceInfo(ctx, np, mdKeys); err == nil {
 			finfos = append(finfos, ri)
 		}
 	}
@@ -496,4 +505,15 @@ func (fs *ocisfs) copyMD(s string, t string) (err error) {
 		}
 	}
 	return nil
+}
+
+func isSameUserID(i *userpb.UserId, j *userpb.UserId) bool {
+	switch {
+	case i == nil, j == nil:
+		return false
+	case i.OpaqueId == j.OpaqueId && i.Idp == j.Idp:
+		return true
+	default:
+		return false
+	}
 }

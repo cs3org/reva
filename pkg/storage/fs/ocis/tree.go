@@ -28,7 +28,6 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
@@ -94,27 +93,19 @@ func (t *Tree) CreateDir(ctx context.Context, node *Node) (err error) {
 	// create a directory node
 	node.ID = uuid.New().String()
 
-	// who will become the owner?
-	u, ok := user.ContextGetUser(ctx)
-	switch {
-	case ok:
-		// we have a user in context
-		err = createNode(node, u.Id)
-	case t.lu.Options.EnableHome:
-		// enable home requires a user
-		log := appctx.GetLogger(ctx)
-		log.Error().Msg("home support enabled but no user in context")
-		err = errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
-	case t.lu.Options.Owner != "":
-		// fallback to owner?
-		err = createNode(node, &userpb.UserId{
-			OpaqueId: t.lu.Options.Owner,
-		})
-	default:
-		// fallback to parent owner?
-		err = createNode(node, nil)
+	// who will become the owner? the owner of the parent node, not the current user
+	var p *Node
+	p, err = node.Parent()
+	if err != nil {
+		return
+	}
+	var owner *userpb.UserId
+	owner, err = p.Owner()
+	if err != nil {
+		return
 	}
 
+	err = createNode(node, owner)
 	if err != nil {
 		return nil
 	}
@@ -241,15 +232,15 @@ func (t *Tree) Delete(ctx context.Context, n *Node) (err error) {
 	// Prepare the trash
 	// TODO use layout?, but it requires resolving the owners user if the username is used instead of the id.
 	// the node knows the owner id so we use that for now
-	ownerid, _, err := n.Owner()
+	o, err := n.Owner()
 	if err != nil {
 		return
 	}
-	if ownerid == "" {
+	if o.OpaqueId == "" {
 		// fall back to root trash
-		ownerid = "root"
+		o.OpaqueId = "root"
 	}
-	err = os.MkdirAll(filepath.Join(t.lu.Options.Root, "trash", ownerid), 0700)
+	err = os.MkdirAll(filepath.Join(t.lu.Options.Root, "trash", o.OpaqueId), 0700)
 	if err != nil {
 		return
 	}
@@ -270,7 +261,7 @@ func (t *Tree) Delete(ctx context.Context, n *Node) (err error) {
 
 	// first make node appear in the owners (or root) trash
 	// parent id and name are stored as extended attributes in the node itself
-	trashLink := filepath.Join(t.lu.Options.Root, "trash", ownerid, n.ID)
+	trashLink := filepath.Join(t.lu.Options.Root, "trash", o.OpaqueId, n.ID)
 	err = os.Symlink("../nodes/"+n.ID+".T."+deletionTime, trashLink)
 	if err != nil {
 		// To roll back changes

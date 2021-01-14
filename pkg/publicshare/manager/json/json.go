@@ -41,6 +41,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/publicshare/manager/registry"
 	"github.com/golang/protobuf/jsonpb"
@@ -520,13 +521,13 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token, password str
 					return local, nil
 				}
 
-				return nil, errors.New("json: invalid password")
+				return nil, errtypes.InvalidCredentials("json: invalid password")
 			}
 			return local, nil
 		}
 	}
 
-	return nil, fmt.Errorf("share with token: `%v` not found", token)
+	return nil, errtypes.NotFound(fmt.Sprintf("share with token: `%v` not found", token))
 }
 
 // randString is a helper to create tokens. It could be a token manager instead.

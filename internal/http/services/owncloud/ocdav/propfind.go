@@ -21,6 +21,7 @@ package ocdav
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -33,10 +34,13 @@ import (
 
 	"go.opencensus.io/trace"
 
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxuser "github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 )
@@ -90,7 +94,7 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
-		handleErrorStatus(&sublog, w, res.Status)
+		HandleErrorStatus(&sublog, w, res.Status)
 		return
 	}
 
@@ -111,7 +115,7 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 		}
 
 		if res.Status.Code != rpc.Code_CODE_OK {
-			handleErrorStatus(&sublog, w, res.Status)
+			HandleErrorStatus(&sublog, w, res.Status)
 			return
 		}
 		infos = append(infos, res.Infos...)
@@ -138,7 +142,7 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 				return
 			}
 			if res.Status.Code != rpc.Code_CODE_OK {
-				handleErrorStatus(&sublog, w, res.Status)
+				HandleErrorStatus(&sublog, w, res.Status)
 				return
 			}
 
@@ -261,6 +265,7 @@ func (s *svc) newProp(key, val string) *propertyXML {
 // ns is the CS3 namespace that needs to be removed from the CS3 path before
 // prefixing it with the baseURI
 func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, ns string) (*responseXML, error) {
+	sublog := appctx.GetLogger(ctx).With().Interface("md", md).Str("ns", ns).Logger()
 	md.Path = strings.TrimPrefix(md.Path, ns)
 
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
@@ -273,6 +278,29 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	response := responseXML{
 		Href:     (&url.URL{Path: ref}).EscapedPath(), // url encode response.Href
 		Propstat: []propstatXML{},
+	}
+
+	var ls *link.PublicShare
+	if md.Opaque != nil && md.Opaque.Map != nil && md.Opaque.Map["link-share"] != nil && md.Opaque.Map["link-share"].Decoder == "json" {
+		ls = &link.PublicShare{}
+		err := json.Unmarshal(md.Opaque.Map["link-share"].Value, ls)
+		if err != nil {
+			sublog.Error().Err(err).Msg("could not unmarshal link json")
+		}
+	}
+
+	role := conversions.RoleFromResourcePermissions(md.PermissionSet)
+
+	isShared := !isCurrentUserOwner(ctx, md.Owner)
+	var wdp string
+	if md.PermissionSet != nil {
+		wdp = role.WebDAVPermissions(
+			md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+			isShared,
+			false,
+			false,
+		)
+		sublog.Debug().Interface("role", role).Str("dav-permissions", wdp).Msg("converted PermissionSet")
 	}
 
 	// when allprops has been requested
@@ -299,8 +327,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		}
 
 		if md.PermissionSet != nil {
-			// TODO(jfd) no longer hardcode permissions
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:permissions", "WCKDNVR"))
+			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:permissions", wdp))
 		}
 
 		// always return size
@@ -377,19 +404,82 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:id", ""))
 					}
 				case "permissions": // both
+					// oc:permissions take several char flags to indicate the permissions the user has on this node:
+					// D = delete
+					// NV = update (renameable moveable)
+					// W = update (files only)
+					// CK = create (folders only)
+					// S = Shared
+					// R = Shareable (Reshare)
+					// M = Mounted
+					// in contrast, the ocs:share-permissions further down below indicate clients the maximum permissions that can be granted
 					if md.PermissionSet != nil {
-						// TODO(jfd): properly build permissions string
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:permissions", "WCKDNVR"))
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:permissions", wdp))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:permissions", ""))
 					}
+				case "public-link-permission": // only on a share root node
+					if ls != nil && md.PermissionSet != nil {
+						propstatOK.Prop = append(
+							propstatOK.Prop,
+							s.newProp("oc:public-link-permission", strconv.FormatUint(uint64(role.OCSPermissions()), 10)))
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-permission", ""))
+					}
+				case "public-link-item-type": // only on a share root node
+					if ls != nil {
+						if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:public-link-item-type", "folder"))
+						} else {
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:public-link-item-type", "file"))
+							// redirectref is another option
+						}
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-item-type", ""))
+					}
+				case "public-link-share-datetime":
+					if ls != nil && ls.Mtime != nil {
+						t := utils.TSToTime(ls.Mtime).UTC() // TODO or ctime?
+						shareTimeString := t.Format(time.RFC1123Z)
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:public-link-share-datetime", shareTimeString))
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-share-datetime", ""))
+					}
+				case "public-link-share-owner":
+					if ls != nil && ls.Owner != nil {
+						if isCurrentUserOwner(ctx, ls.Owner) {
+							u := ctxuser.ContextMustGetUser(ctx)
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:public-link-share-owner", u.Username))
+						} else {
+							u, _ := ctxuser.ContextGetUser(ctx)
+							sublog.Error().Interface("share", ls).Interface("user", u).Msg("the current user in the context should be the owner of a public link share")
+							propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-share-owner", ""))
+						}
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-share-owner", ""))
+					}
+				case "public-link-expiration":
+					if ls != nil && ls.Expiration != nil {
+						t := utils.TSToTime(ls.Expiration).UTC()
+						expireTimeString := t.Format(time.RFC1123Z)
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:public-link-expiration", expireTimeString))
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-expiration", ""))
+					}
+					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-expiration", ""))
 				case "size": // phoenix only
 					// TODO we cannot find out if md.Size is set or not because ints in go default to 0
 					// oc:size is also available on folders
 					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:size", size))
 				case "owner-id": // phoenix only
-					if md.Owner != nil && md.Owner.OpaqueId != "" {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-id", s.xmlEscaped(md.Owner.OpaqueId)))
+					if md.Owner != nil {
+						if isCurrentUserOwner(ctx, md.Owner) {
+							u := ctxuser.ContextMustGetUser(ctx)
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-id", s.xmlEscaped(u.Username)))
+						} else {
+							sublog.Debug().Msg("TODO fetch user username")
+							propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:owner-id", ""))
+						}
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:owner-id", ""))
 					}
@@ -428,8 +518,17 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:"+pf.Prop[i].Local, ""))
 					}
 				case "owner-display-name": // phoenix only
-					// TODO(jfd): lookup displayname? or let clients do that? They should cache that IMO
-					fallthrough
+					if md.Owner != nil {
+						if isCurrentUserOwner(ctx, md.Owner) {
+							u := ctxuser.ContextMustGetUser(ctx)
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-display-name", u.DisplayName))
+						} else {
+							sublog.Debug().Msg("TODO fetch user displayname")
+							propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:owner-display-name", ""))
+						}
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:owner-display-name", ""))
+					}
 				case "privatelink": // phoenix only
 					// <oc:privatelink>https://phoenix.owncloud.com/f/9</oc:privatelink>
 					fallthrough
@@ -489,9 +588,21 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				}
 			case "http://open-collaboration-services.org/ns":
 				switch pf.Prop[i].Local {
+				// ocs:share-permissions indicate clients the maximum permissions that can be granted:
+				// 1 = read
+				// 2 = write (update)
+				// 4 = create
+				// 8 = delete
+				// 16 = share
+				// shared files can never have the create or delete permission bit set
 				case "share-permissions":
 					if md.PermissionSet != nil {
-						perms := conversions.Permissions2OCSPermissions(md.PermissionSet)
+						perms := role.OCSPermissions()
+						// shared files cant have the create or delete permission set
+						if md.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
+							perms &^= conversions.PermissionCreate
+							perms &^= conversions.PermissionDelete
+						}
 						propstatOK.Prop = append(propstatOK.Prop, s.newPropNS(pf.Prop[i].Space, pf.Prop[i].Local, strconv.FormatUint(uint64(perms), 10)))
 					}
 				default:
@@ -519,6 +630,17 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	}
 
 	return &response, nil
+}
+
+// a file is only yours if you are the owner
+func isCurrentUserOwner(ctx context.Context, owner *userv1beta1.UserId) bool {
+	contextUser, ok := ctxuser.ContextGetUser(ctx)
+	if ok && contextUser.Id != nil && owner != nil &&
+		contextUser.Id.Idp == owner.Idp &&
+		contextUser.Id.OpaqueId == owner.OpaqueId {
+		return true
+	}
+	return false
 }
 
 type countingReader struct {

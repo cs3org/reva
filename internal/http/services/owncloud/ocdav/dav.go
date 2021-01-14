@@ -181,12 +181,20 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			}
 
 			res, err := c.Authenticate(r.Context(), &authenticateRequest)
-			if err != nil {
+			switch {
+			case err != nil:
 				w.WriteHeader(http.StatusInternalServerError)
 				return
-			}
-			if res.Status.Code == rpcv1beta1.Code_CODE_UNAUTHENTICATED {
+			case res.Status.Code == rpcv1beta1.Code_CODE_PERMISSION_DENIED:
+				fallthrough
+			case res.Status.Code == rpcv1beta1.Code_CODE_UNAUTHENTICATED:
 				w.WriteHeader(http.StatusUnauthorized)
+				return
+			case res.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
+				w.WriteHeader(http.StatusNotFound)
+				return
+			case res.Status.Code != rpcv1beta1.Code_CODE_OK:
+				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 
@@ -196,24 +204,26 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 
 			r = r.WithContext(ctx)
 
+			// the public share manager knew the token, but does the referenced target still exist?
 			sRes, err := getTokenStatInfo(ctx, c, token)
-			if err != nil {
+			switch {
+			case err != nil:
 				log.Error().Err(err).Msg("error sending grpc stat request")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
-			}
-			if sRes.Status.Code != rpc.Code_CODE_OK {
-				switch sRes.Status.Code {
-				case rpc.Code_CODE_NOT_FOUND:
-					log.Debug().Str("token", token).Interface("status", res.Status).Msg("resource not found")
-					w.WriteHeader(http.StatusNotFound)
-				case rpc.Code_CODE_PERMISSION_DENIED:
-					log.Debug().Str("token", token).Interface("status", res.Status).Msg("permission denied")
-					w.WriteHeader(http.StatusForbidden)
-				default:
-					log.Error().Str("token", token).Interface("status", res.Status).Msg("grpc stat request failed")
-					w.WriteHeader(http.StatusInternalServerError)
-				}
+			case sRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
+				fallthrough
+			case sRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
+				log.Debug().Str("token", token).Interface("status", res.Status).Msg("resource not found")
+				w.WriteHeader(http.StatusNotFound) // log the difference
+				return
+			case sRes.Status.Code == rpc.Code_CODE_UNAUTHENTICATED:
+				log.Debug().Str("token", token).Interface("status", res.Status).Msg("unauthorized")
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			case sRes.Status.Code != rpc.Code_CODE_OK:
+				log.Error().Str("token", token).Interface("status", res.Status).Msg("grpc stat request failed")
+				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 			log.Debug().Interface("statInfo", sRes.Info).Msg("Stat info from public link token path")
@@ -233,12 +243,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 }
 
 func getTokenStatInfo(ctx context.Context, client gatewayv1beta1.GatewayAPIClient, token string) (*provider.StatResponse, error) {
-	ns := "/public"
-
-	fn := path.Join(ns, token)
-	ref := &provider.Reference{
-		Spec: &provider.Reference_Path{Path: fn},
-	}
-	req := &provider.StatRequest{Ref: ref}
-	return client.Stat(ctx, req)
+	return client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
+		Spec: &provider.Reference_Path{Path: path.Join("/public", token)},
+	}})
 }

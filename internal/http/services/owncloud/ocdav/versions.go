@@ -105,7 +105,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
-		handleErrorStatus(&sublog, w, res.Status)
+		HandleErrorStatus(&sublog, w, res.Status)
 		return
 	}
 
@@ -121,7 +121,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	if lvRes.Status.Code != rpc.Code_CODE_OK {
-		handleErrorStatus(&sublog, w, lvRes.Status)
+		HandleErrorStatus(&sublog, w, lvRes.Status)
 		return
 	}
 
@@ -212,7 +212,7 @@ func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *s
 		return
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
-		handleErrorStatus(&sublog, w, res.Status)
+		HandleErrorStatus(&sublog, w, res.Status)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

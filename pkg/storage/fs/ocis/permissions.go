@@ -36,7 +36,7 @@ const (
 	_groupAcePrefix = "g:"
 )
 
-var defaultPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{
+var noPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{
 	// no permissions
 }
 
@@ -69,6 +69,88 @@ var ownerPermissions *provider.ResourcePermissions = &provider.ResourcePermissio
 // Permissions implements permission checks
 type Permissions struct {
 	lu *Lookup
+}
+
+// AssemblePermissions will assemble the permissions for the current user on the given node, taking into account all parent nodes
+func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap *provider.ResourcePermissions, err error) {
+	u, ok := user.ContextGetUser(ctx)
+	if !ok {
+		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("no user in context, returning default permissions")
+		return noPermissions, nil
+	}
+	// check if the current user is the owner
+	o, err := n.Owner()
+	if err != nil {
+		// TODO check if a parent folder has the owner set?
+		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not determine owner, returning default permissions")
+		return noPermissions, err
+	}
+	if o.OpaqueId == "" {
+		// this happens for root nodes in the storage. the extended attributes are set to emptystring to indicate: no owner
+		// TODO what if no owner is set but grants are present?
+		return noOwnerPermissions, nil
+	}
+	if isSameUserID(u.Id, o) {
+		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("user is owner, returning owner permissions")
+		return ownerPermissions, nil
+	}
+
+	// determine root
+	var rn *Node
+	if rn, err = p.lu.RootNode(ctx); err != nil {
+		return nil, err
+	}
+
+	cn := n
+
+	ap = &provider.ResourcePermissions{}
+
+	// for an efficient group lookup convert the list of groups to a map
+	// groups are just strings ... groupnames ... or group ids ??? AAARGH !!!
+	groupsMap := make(map[string]bool, len(u.Groups))
+	for i := range u.Groups {
+		groupsMap[u.Groups[i]] = true
+	}
+
+	// for all segments, starting at the leaf
+	for cn.ID != rn.ID {
+
+		if np, err := cn.ReadUserPermissions(ctx, u); err == nil {
+			addPermissions(ap, np)
+		} else {
+			appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn).Msg("error reading permissions")
+			// continue with next segment
+		}
+
+		if cn, err = cn.Parent(); err != nil {
+			return ap, errors.Wrap(err, "ocisfs: error getting parent "+cn.ParentID)
+		}
+	}
+
+	appctx.GetLogger(ctx).Debug().Interface("permissions", ap).Interface("node", n).Interface("user", u).Msg("returning agregated permissions")
+	return ap, nil
+}
+
+// TODO we should use a bitfield for this ...
+func addPermissions(l *provider.ResourcePermissions, r *provider.ResourcePermissions) {
+	l.AddGrant = l.AddGrant || r.AddGrant
+	l.CreateContainer = l.CreateContainer || r.CreateContainer
+	l.Delete = l.Delete || r.Delete
+	l.GetPath = l.GetPath || r.GetPath
+	l.GetQuota = l.GetQuota || r.GetQuota
+	l.InitiateFileDownload = l.InitiateFileDownload || r.InitiateFileDownload
+	l.InitiateFileUpload = l.InitiateFileUpload || r.InitiateFileUpload
+	l.ListContainer = l.ListContainer || r.ListContainer
+	l.ListFileVersions = l.ListFileVersions || r.ListFileVersions
+	l.ListGrants = l.ListGrants || r.ListGrants
+	l.ListRecycle = l.ListRecycle || r.ListRecycle
+	l.Move = l.Move || r.Move
+	l.PurgeRecycle = l.PurgeRecycle || r.PurgeRecycle
+	l.RemoveGrant = l.RemoveGrant || r.RemoveGrant
+	l.RestoreFileVersion = l.RestoreFileVersion || r.RestoreFileVersion
+	l.RestoreRecycleItem = l.RestoreRecycleItem || r.RestoreRecycleItem
+	l.Stat = l.Stat || r.Stat
+	l.UpdateGrant = l.UpdateGrant || r.UpdateGrant
 }
 
 // HasPermission call check() for every node up to the root until check returns true
@@ -145,7 +227,7 @@ func (p *Permissions) HasPermission(ctx context.Context, n *Node, check func(*pr
 		}
 	}
 
-	appctx.GetLogger(ctx).Debug().Interface("permissions", defaultPermissions).Interface("node", n).Interface("user", u).Msg("no grant found, returning default permissions")
+	appctx.GetLogger(ctx).Debug().Interface("permissions", noPermissions).Interface("node", n).Interface("user", u).Msg("no grant found, returning default permissions")
 	return false, nil
 }
 
@@ -153,19 +235,20 @@ func (p *Permissions) getUserAndPermissions(ctx context.Context, n *Node) (*user
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("no user in context, returning default permissions")
-		return nil, defaultPermissions
+		return nil, noPermissions
 	}
 	// check if the current user is the owner
-	id, _, err := n.Owner()
+	o, err := n.Owner()
 	if err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not determine owner, returning default permissions")
-		return nil, defaultPermissions
+		return nil, noPermissions
 	}
-	if id == "" {
+	if o.OpaqueId == "" {
+		// this happens for root nodes in the storage. the extended attributes are set to emptystring to indicate: no owner
 		// TODO what if no owner is set but grants are present?
 		return nil, noOwnerPermissions
 	}
-	if id == u.Id.OpaqueId {
+	if isSameUserID(u.Id, o) {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("user is owner, returning owner permissions")
 		return u, ownerPermissions
 	}

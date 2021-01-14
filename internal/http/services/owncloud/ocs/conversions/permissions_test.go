@@ -45,7 +45,7 @@ func TestNewPermissionsWithInvalidValueShouldFail(t *testing.T) {
 	}
 }
 
-func TestContain(t *testing.T) {
+func TestContainPermissionAll(t *testing.T) {
 	table := map[int]Permissions{
 		1:  PermissionRead,
 		2:  PermissionWrite,
@@ -55,25 +55,68 @@ func TestContain(t *testing.T) {
 		31: PermissionAll,
 	}
 
-	for key, value := range table {
-		p, _ := NewPermissions(key)
+	p, _ := NewPermissions(31) // all permissions should contain all other permissions
+	for _, value := range table {
 		if !p.Contain(value) {
 			t.Errorf("permissions %d should contain %d", p, value)
+		}
+	}
+}
+func TestContainPermissionRead(t *testing.T) {
+	table := map[int]Permissions{
+		2:  PermissionWrite,
+		4:  PermissionCreate,
+		8:  PermissionDelete,
+		16: PermissionShare,
+		31: PermissionAll,
+	}
+
+	p, _ := NewPermissions(1) // read permission should not contain any other permissions
+	if !p.Contain(PermissionRead) {
+		t.Errorf("permissions %d should contain %d", p, PermissionRead)
+	}
+	for _, value := range table {
+		if p.Contain(value) {
+			t.Errorf("permissions %d should not contain %d", p, value)
+		}
+	}
+}
+
+func TestContainPermissionCustom(t *testing.T) {
+	table := map[int]Permissions{
+		2:  PermissionWrite,
+		8:  PermissionDelete,
+		31: PermissionAll,
+	}
+
+	p, _ := NewPermissions(21) // read, create & share permission
+	if !p.Contain(PermissionRead) {
+		t.Errorf("permissions %d should contain %d", p, PermissionRead)
+	}
+	if !p.Contain(PermissionCreate) {
+		t.Errorf("permissions %d should contain %d", p, PermissionCreate)
+	}
+	if !p.Contain(PermissionShare) {
+		t.Errorf("permissions %d should contain %d", p, PermissionShare)
+	}
+	for _, value := range table {
+		if p.Contain(value) {
+			t.Errorf("permissions %d should not contain %d", p, value)
 		}
 	}
 }
 
 func TestContainWithMultiplePermissions(t *testing.T) {
 	table := map[int][]Permissions{
-		3: []Permissions{
+		3: {
 			PermissionRead,
 			PermissionWrite,
 		},
-		5: []Permissions{
+		5: {
 			PermissionRead,
 			PermissionCreate,
 		},
-		31: []Permissions{
+		31: {
 			PermissionRead,
 			PermissionWrite,
 			PermissionCreate,
@@ -100,16 +143,16 @@ func TestPermissions2Role(t *testing.T) {
 	}
 
 	table := map[Permissions]string{
-		PermissionRead:                    RoleViewer,
-		PermissionWrite:                   RoleEditor,
-		PermissionShare:                   RoleCoowner,
+		PermissionRead: RoleViewer,
+		PermissionRead | PermissionWrite | PermissionCreate | PermissionDelete: RoleEditor,
 		PermissionAll:                     RoleCoowner,
-		PermissionRead | PermissionWrite:  RoleEditor,
-		PermissionWrite | PermissionShare: RoleCoowner,
+		PermissionWrite:                   RoleLegacy,
+		PermissionShare:                   RoleLegacy,
+		PermissionWrite | PermissionShare: RoleLegacy,
 	}
 
 	for permissions, role := range table {
-		actual := Permissions2Role(permissions)
+		actual := RoleFromOCSPermissions(permissions).Name
 		checkRole(role, actual)
 	}
 }

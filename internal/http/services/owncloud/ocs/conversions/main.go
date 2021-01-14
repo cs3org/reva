@@ -32,7 +32,6 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	publicsharemgr "github.com/cs3org/reva/pkg/publicshare/manager/registry"
 	usermgr "github.com/cs3org/reva/pkg/user/manager/registry"
@@ -168,111 +167,6 @@ type MatchValueData struct {
 	ShareWith string `json:"shareWith" xml:"shareWith"`
 }
 
-// Role2CS3Permissions converts string roles (from the request body) into cs3 permissions
-// TODO(refs) consider using a mask instead of booleans here, might reduce all this boilerplate
-func Role2CS3Permissions(r string) (*provider.ResourcePermissions, error) {
-	switch r {
-	case RoleViewer:
-		return &provider.ResourcePermissions{
-			ListContainer:        true,
-			ListGrants:           true,
-			ListFileVersions:     true,
-			ListRecycle:          true,
-			Stat:                 true,
-			GetPath:              true,
-			GetQuota:             true,
-			InitiateFileDownload: true,
-		}, nil
-	case RoleEditor:
-		return &provider.ResourcePermissions{
-			ListContainer:        true,
-			ListGrants:           true,
-			ListFileVersions:     true,
-			ListRecycle:          true,
-			Stat:                 true,
-			GetPath:              true,
-			GetQuota:             true,
-			InitiateFileDownload: true,
-
-			Move:               true,
-			InitiateFileUpload: true,
-			RestoreFileVersion: true,
-			RestoreRecycleItem: true,
-			CreateContainer:    true,
-			Delete:             true,
-			PurgeRecycle:       true,
-		}, nil
-	case RoleCoowner:
-		return &provider.ResourcePermissions{
-			ListContainer:        true,
-			ListGrants:           true,
-			ListFileVersions:     true,
-			ListRecycle:          true,
-			Stat:                 true,
-			GetPath:              true,
-			GetQuota:             true,
-			InitiateFileDownload: true,
-
-			Move:               true,
-			InitiateFileUpload: true,
-			RestoreFileVersion: true,
-			RestoreRecycleItem: true,
-			CreateContainer:    true,
-			Delete:             true,
-			PurgeRecycle:       true,
-
-			AddGrant:    true,
-			RemoveGrant: true, // TODO when are you able to unshare / delete
-			UpdateGrant: true,
-		}, nil
-	default:
-		return nil, fmt.Errorf("unknown role: %s", r)
-	}
-}
-
-// AsCS3Permissions returns permission values as cs3api permissions
-// TODO sort out mapping, this is just a first guess
-// TODO use roles to make this configurable
-func AsCS3Permissions(p int, rp *provider.ResourcePermissions) *provider.ResourcePermissions {
-	if rp == nil {
-		rp = &provider.ResourcePermissions{}
-	}
-
-	if p&int(PermissionRead) != 0 {
-		rp.ListContainer = true
-		rp.ListGrants = true
-		rp.ListFileVersions = true
-		rp.ListRecycle = true
-		rp.Stat = true
-		rp.GetPath = true
-		rp.GetQuota = true
-		rp.InitiateFileDownload = true
-	}
-	if p&int(PermissionWrite) != 0 {
-		rp.InitiateFileUpload = true
-		rp.RestoreFileVersion = true
-		rp.RestoreRecycleItem = true
-	}
-	if p&int(PermissionCreate) != 0 {
-		rp.CreateContainer = true
-		// FIXME permissions mismatch: double check create vs write file
-		rp.InitiateFileUpload = true
-		if p&int(PermissionWrite) != 0 {
-			rp.Move = true // TODO move only when create and write?
-		}
-	}
-	if p&int(PermissionDelete) != 0 {
-		rp.Delete = true
-		rp.PurgeRecycle = true
-	}
-	if p&int(PermissionShare) != 0 {
-		rp.AddGrant = true
-		rp.RemoveGrant = true // TODO when are you able to unshare / delete
-		rp.UpdateGrant = true
-	}
-	return rp
-}
-
 // UserShare2ShareData converts a cs3api user share into shareData data model
 // TODO(jfd) merge userShare2ShareData with publicShare2ShareData
 func UserShare2ShareData(ctx context.Context, share *collaboration.Share) (*ShareData, error) {
@@ -356,7 +250,7 @@ func UserIDToString(userID *userpb.UserId) string {
 // UserSharePermissions2OCSPermissions transforms cs3api permissions into OCS Permissions data model
 func UserSharePermissions2OCSPermissions(sp *collaboration.SharePermissions) Permissions {
 	if sp != nil {
-		return Permissions2OCSPermissions(sp.GetPermissions())
+		return RoleFromResourcePermissions(sp.GetPermissions()).OCSPermissions()
 	}
 	return PermissionInvalid
 }
@@ -381,33 +275,9 @@ func GetPublicShareManager(manager string, m map[string]map[string]interface{}) 
 
 func publicSharePermissions2OCSPermissions(sp *link.PublicSharePermissions) Permissions {
 	if sp != nil {
-		return Permissions2OCSPermissions(sp.GetPermissions())
+		return RoleFromResourcePermissions(sp.GetPermissions()).OCSPermissions()
 	}
 	return PermissionInvalid
-}
-
-// TODO sort out mapping, this is just a first guess
-// public link permissions to OCS permissions
-func Permissions2OCSPermissions(p *provider.ResourcePermissions) Permissions {
-	permissions := PermissionInvalid
-	if p != nil {
-		if p.ListContainer {
-			permissions += PermissionRead
-		}
-		if p.InitiateFileUpload {
-			permissions += PermissionWrite
-		}
-		if p.CreateContainer {
-			permissions += PermissionCreate
-		}
-		if p.Delete {
-			permissions += PermissionDelete
-		}
-		if p.AddGrant {
-			permissions += PermissionShare
-		}
-	}
-	return permissions
 }
 
 // timestamp is assumed to be UTC ... just human readable ...
@@ -415,14 +285,3 @@ func Permissions2OCSPermissions(p *provider.ResourcePermissions) Permissions {
 func timestampToExpiration(t *types.Timestamp) string {
 	return time.Unix(int64(t.Seconds), int64(t.Nanos)).UTC().Format("2006-01-02 15:05:05")
 }
-
-const (
-	// RoleLegacy provides backwards compatibility
-	RoleLegacy string = "legacy"
-	// RoleViewer grants non-editor role on a resource
-	RoleViewer string = "viewer"
-	// RoleEditor grants editor permission on a resource
-	RoleEditor string = "editor"
-	// RoleCoowner grants owner permissions on a resource
-	RoleCoowner string = "coowner"
-)

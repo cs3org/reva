@@ -109,7 +109,7 @@ func (s *svc) adjustResourcePathInURL(w http.ResponseWriter, r *http.Request) bo
 		return false
 	}
 	if pathRes.Status.Code != rpc.Code_CODE_OK {
-		handleErrorStatus(&sublog, w, pathRes.Status)
+		HandleErrorStatus(&sublog, w, pathRes.Status)
 		return false
 	}
 	if path.Base(r.URL.Path) != path.Base(pathRes.Path) {
@@ -173,7 +173,7 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 		return
 	}
 	if pathRes.Status.Code != rpc.Code_CODE_OK {
-		handleErrorStatus(&sublog, w, pathRes.Status)
+		HandleErrorStatus(&sublog, w, pathRes.Status)
 		return
 	}
 

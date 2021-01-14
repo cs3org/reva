@@ -70,8 +70,19 @@ func main() {
 	if *repo != "" {
 		branch = *repo + "/master"
 	}
-	cmd := exec.Command("git", "diff-index", branch, "--", "changelog/unreleased")
+
+	cmd := exec.Command("git", "diff-index", branch, "--", ".")
 	out, err := cmd.Output()
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Return successfully if there are no changes
+	if len(out) == 0 {
+		return
+	}
+
+	cmd = exec.Command("git", "diff-index", branch, "--", "changelog/unreleased")
+	out, err = cmd.Output()
 	if err != nil {
 		log.Fatal(err)
 	}

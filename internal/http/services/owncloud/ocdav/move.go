@@ -80,7 +80,7 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 	if srcStatRes.Status.Code != rpc.Code_CODE_OK {
-		handleErrorStatus(&sublog, w, srcStatRes.Status)
+		HandleErrorStatus(&sublog, w, srcStatRes.Status)
 		return
 	}
 
@@ -96,7 +96,7 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 	if dstStatRes.Status.Code != rpc.Code_CODE_OK && dstStatRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		handleErrorStatus(&sublog, w, srcStatRes.Status)
+		HandleErrorStatus(&sublog, w, srcStatRes.Status)
 		return
 	}
 
@@ -120,7 +120,7 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 		}
 
 		if delRes.Status.Code != rpc.Code_CODE_OK && delRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-			handleErrorStatus(&sublog, w, delRes.Status)
+			HandleErrorStatus(&sublog, w, delRes.Status)
 			return
 		}
 	} else {
@@ -142,7 +142,7 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 				sublog.Debug().Str("parent", intermediateDir).Interface("status", intStatRes.Status).Msg("conflict")
 				w.WriteHeader(http.StatusConflict)
 			} else {
-				handleErrorStatus(&sublog, w, intStatRes.Status)
+				HandleErrorStatus(&sublog, w, intStatRes.Status)
 			}
 			return
 		}
@@ -164,7 +164,7 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	if mRes.Status.Code != rpc.Code_CODE_OK {
-		handleErrorStatus(&sublog, w, mRes.Status)
+		HandleErrorStatus(&sublog, w, mRes.Status)
 		return
 	}
 
@@ -176,7 +176,7 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 	}
 
 	if dstStatRes.Status.Code != rpc.Code_CODE_OK {
-		handleErrorStatus(&sublog, w, dstStatRes.Status)
+		HandleErrorStatus(&sublog, w, dstStatRes.Status)
 		return
 	}
 

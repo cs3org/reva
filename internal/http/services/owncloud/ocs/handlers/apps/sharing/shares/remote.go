@@ -20,7 +20,6 @@ package shares
 
 import (
 	"net/http"
-	"path"
 	"strconv"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -33,28 +32,17 @@ import (
 
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
-	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 )
 
-func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo) {
 	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
 
 	c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
 	}
-	// prefix the path with the owners home, because ocs share requests are relative to the home dir
-	// TODO the path actually depends on the configured webdav_namespace
-	hRes, err := c.GetHome(ctx, &provider.GetHomeRequest{})
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc get home request", err)
-		return
-	}
-
-	prefix := hRes.GetPath()
 
 	shareWithUser, shareWithProvider := r.FormValue("shareWithUser"), r.FormValue("shareWithProvider")
 	if shareWithUser == "" || shareWithProvider == "" {
@@ -82,77 +70,61 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var permissions conversions.Permissions
-	var role string
+	var role *conversions.Role
 
 	pval := r.FormValue("permissions")
 	if pval == "" {
 		// by default only allow read permissions / assign viewer role
-		permissions = conversions.PermissionRead
-		role = conversions.RoleViewer
+		role = conversions.NewViewerRole()
 	} else {
 		pint, err := strconv.Atoi(pval)
 		if err != nil {
 			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "permissions must be an integer", nil)
 			return
 		}
-		permissions, err = conversions.NewPermissions(pint)
+		permissions, err := conversions.NewPermissions(pint)
 		if err != nil {
 			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, err.Error(), nil)
 			return
 		}
-		role = conversions.Permissions2Role(permissions)
+		role = conversions.RoleFromOCSPermissions(permissions)
 	}
 
-	var resourcePermissions *provider.ResourcePermissions
-	resourcePermissions, err = h.map2CS3Permissions(role, permissions)
-	if err != nil {
-		log.Warn().Err(err).Msg("unknown role, mapping legacy permissions")
-		resourcePermissions = asCS3Permissions(permissions, nil)
-	}
-
-	statReq := &provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: path.Join(prefix, r.FormValue("path")),
-			},
-		},
-	}
-	statRes, err := c.Stat(ctx, statReq)
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc stat request", err)
-		return
-	}
-	if statRes.Status.Code != rpc.Code_CODE_OK {
-		if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
-			return
-		}
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc stat request failed", err)
-		return
+	if statInfo != nil && statInfo.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
+		// Single file shares should never have delete or create permissions
+		permissions := role.OCSPermissions()
+		permissions &^= conversions.PermissionCreate
+		permissions &^= conversions.PermissionDelete
+		role = conversions.RoleFromOCSPermissions(permissions)
 	}
 
 	createShareReq := &ocm.CreateOCMShareRequest{
 		Opaque: &types.Opaque{
 			Map: map[string]*types.OpaqueEntry{
-				"permissions": &types.OpaqueEntry{
+				/* TODO extend the spec with role names?
+				"role": {
 					Decoder: "plain",
-					Value:   []byte(strconv.Itoa(int(permissions))),
+					Value:   []byte(role.Name),
 				},
-				"name": &types.OpaqueEntry{
+				*/
+				"permissions": {
 					Decoder: "plain",
-					Value:   []byte(statRes.Info.Path),
+					Value:   []byte(strconv.Itoa(int(role.OCSPermissions()))),
+				},
+				"name": {
+					Decoder: "plain",
+					Value:   []byte(statInfo.Path),
 				},
 			},
 		},
-		ResourceId: statRes.Info.Id,
+		ResourceId: statInfo.Id,
 		Grant: &ocm.ShareGrant{
 			Grantee: &provider.Grantee{
 				Type: provider.GranteeType_GRANTEE_TYPE_USER,
 				Id:   remoteUserRes.RemoteUser.GetId(),
 			},
 			Permissions: &ocm.SharePermissions{
-				Permissions: resourcePermissions,
+				Permissions: role.CS3ResourcePermissions(),
 			},
 		},
 		RecipientMeshProvider: providerInfoResp.ProviderInfo,
