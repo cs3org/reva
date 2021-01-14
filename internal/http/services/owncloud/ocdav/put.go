@@ -203,6 +203,9 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 		// TODO: find a way to check if the storage really accepted the value
 		w.Header().Set("X-OC-Mtime", "accepted")
 	}
+	// r.Header.Get("OC-Checksum")
+	// TODO must be SHA1, ADLER32 or MD5 ... in capital letters????
+	// curl -X PUT https://demo.owncloud.com/remote.php/webdav/testcs.bin -u demo:demo -d '123' -v -H 'OC-Checksum: SHA1:40bd001563085fc35165329ea1ff5c5ecbdbbeef'
 
 	uReq := &provider.InitiateFileUploadRequest{
 		Ref:    ref,

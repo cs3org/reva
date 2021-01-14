@@ -19,6 +19,7 @@
 package ocdav
 
 import (
+	"fmt"
 	"net/http"
 	"path"
 	"strconv"
@@ -68,6 +69,7 @@ func (s *svc) handleHead(w http.ResponseWriter, r *http.Request, ns string) {
 	w.Header().Set("ETag", info.Etag)
 	w.Header().Set("OC-FileId", wrapResourceID(info.Id))
 	w.Header().Set("OC-ETag", info.Etag)
+	w.Header().Set("OC-Checksum", fmt.Sprintf("%s:%s", info.Checksum.Type, info.Checksum.Sum))
 	t := utils.TSToTime(info.Mtime).UTC()
 	lastModifiedString := t.Format(time.RFC1123Z)
 	w.Header().Set("Last-Modified", lastModifiedString)

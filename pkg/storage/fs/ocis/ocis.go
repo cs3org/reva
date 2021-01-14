@@ -67,9 +67,9 @@ const (
 	favPrefix string = ocisPrefix + "fav."
 
 	// a temporary etag for a folder that is removed when the mtime propagation happens
-	tmpEtagAttr   string = ocisPrefix + "tmp.etag"
-	referenceAttr string = ocisPrefix + "cs3.ref" // arbitrary metadata
-	//checksumPrefix    string = ocisPrefix + "cs."   // TODO add checksum support
+	tmpEtagAttr     string = ocisPrefix + "tmp.etag"
+	referenceAttr   string = ocisPrefix + "cs3.ref"      // arbitrary metadata
+	checksumPrefix  string = ocisPrefix + "cs."          // checksum support
 	trashOriginAttr string = ocisPrefix + "trash.origin" // trash origin
 
 	// we use a single attribute to enable or disable propagation of both: synctime and treesize

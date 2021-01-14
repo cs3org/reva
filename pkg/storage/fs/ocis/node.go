@@ -21,6 +21,7 @@ package ocis
 import (
 	"context"
 	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -31,6 +32,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
@@ -45,7 +47,8 @@ const (
 	_shareTypesKey = "http://owncloud.org/ns/share-types"
 	_userShareType = "0"
 
-	_favoriteKey = "http://owncloud.org/ns/favorite"
+	_favoriteKey  = "http://owncloud.org/ns/favorite"
+	_checksumsKey = "http://owncloud.org/ns/checksums"
 )
 
 // Node represents a node in the tree and provides methods to get a Parent or Child instance
@@ -342,7 +345,7 @@ func calculateEtag(nodeID string, tmTime time.Time) (string, error) {
 	} else {
 		return "", err
 	}
-	return fmt.Sprintf(`"%x"`, h.Sum(nil)), nil
+	return `"` + hex.EncodeToString(h.Sum(nil)) + `"`, nil
 }
 
 // SetMtime sets the mtime and atime of a node
@@ -481,7 +484,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 
 	// use temporary etag if it is set
 	if b, err := xattr.Get(nodePath, tmpEtagAttr); err == nil {
-		ri.Etag = fmt.Sprintf(`"%x"`, string(b))
+		ri.Etag = fmt.Sprintf(`"%x"`, string(b)) // TODO why do we convert string(b)? is the temporary etag stored as string? -> should we use bytes? use hex.EncodeToString?
 	} else if ri.Etag, err = calculateEtag(n.ID, tmTime); err != nil {
 		sublog.Debug().Err(err).Msg("could not calculate etag")
 	}
@@ -535,24 +538,37 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		}
 	}
 
+	// checksums
+	if _, ok := mdKeysMap[_checksumsKey]; returnAllKeys || ok {
+		// TODO which checksum was requested? sha1 adler32 or md5? for now hardcode sha1?
+		if v, err := xattr.Get(nodePath, checksumPrefix+"sha1"); err == nil {
+			ri.Checksum = &provider.ResourceChecksum{
+				Type: storageprovider.PKG2GRPCXS("sha1"),
+				Sum:  hex.EncodeToString(v),
+			}
+		} else {
+			sublog.Error().Err(err).Str("cstype", "sha1").Msg("could not get checksum value")
+		}
+	}
+
 	// only read the requested metadata attributes
-	list, err := xattr.List(nodePath)
+	attrs, err := xattr.List(nodePath)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting list of extended attributes")
 	} else {
-		for _, entry := range list {
+		for i := range attrs {
 			// filter out non-custom properties
-			if !strings.HasPrefix(entry, metadataPrefix) {
+			if !strings.HasPrefix(attrs[i], metadataPrefix) {
 				continue
 			}
 			// only read when key was requested
-			k := entry[len(metadataPrefix):]
+			k := attrs[i][len(metadataPrefix):]
 			if _, ok := mdKeysMap[k]; returnAllKeys || ok {
-				if val, err := xattr.Get(nodePath, entry); err == nil {
+				if val, err := xattr.Get(nodePath, attrs[i]); err == nil {
 					metadata[k] = string(val)
 				} else {
 					sublog.Error().Err(err).
-						Str("entry", entry).
+						Str("entry", attrs[i]).
 						Msg("error retrieving xattr metadata")
 				}
 			}
@@ -590,6 +606,11 @@ func (n *Node) GetTMTime() (tmTime time.Time, err error) {
 // SetTMTime writes the tmtime to the extended attributes
 func (n *Node) SetTMTime(t time.Time) (err error) {
 	return xattr.Set(n.lu.toInternalPath(n.ID), treeMTimeAttr, []byte(t.UTC().Format(time.RFC3339Nano)))
+}
+
+// SetChecksum writes the checksum with the given checksum type to the extended attributes
+func (n *Node) SetChecksum(csType string, bytes []byte) (err error) {
+	return xattr.Set(n.lu.toInternalPath(n.ID), checksumPrefix+csType, bytes)
 }
 
 // UnsetTempEtag removes the temporary etag attribute

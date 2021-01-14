@@ -38,6 +38,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxuser "github.com/cs3org/reva/pkg/user"
@@ -207,7 +208,7 @@ func requiresExplicitFetching(n *xml.Name) bool {
 		return false
 	case _nsOwncloud:
 		switch n.Local {
-		case "favorite", "share-types":
+		case "favorite", "share-types", "checksums":
 			return true
 		default:
 			return false
@@ -389,8 +390,8 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 			// <oc:checksums>
 			//   <oc:checksum>SHA1:9bd253a09d58be107bcb4169ebf338c8df34d086 MD5:d90bcc6bf847403d22a4abba64e79994 ADLER32:fca23ff5</oc:checksum>
 			// </oc:checksums>
-			// yep, correct, space delimited key value pairs inside an oc:checksum tag inside an oc:checksums tag
-			value := fmt.Sprintf("<oc:checksum>%s:%s</oc:checksum>", md.Checksum.Type, md.Checksum.Sum)
+			// yep, correct, space delimited key value pairs inside an oc:checksum tag inside an oc:checksums tag 🤦 ... legacy reasons ... 😭
+			value := fmt.Sprintf("<oc:checksum>%s:%s</oc:checksum>", strings.ToUpper(string(storageprovider.GRPC2PKGXS(md.Checksum.Type))), md.Checksum.Sum)
 			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:checksums", value))
 		}
 
@@ -533,8 +534,8 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 						// <oc:checksums>
 						//   <oc:checksum>SHA1:9bd253a09d58be107bcb4169ebf338c8df34d086 MD5:d90bcc6bf847403d22a4abba64e79994 ADLER32:fca23ff5</oc:checksum>
 						// </oc:checksums>
-						// yep, correct, space delimited key value pairs inside an oc:checksum tag inside an oc:checksums tag
-						value := fmt.Sprintf("<oc:checksum>%s:%s</oc:checksum>", md.Checksum.Type, md.Checksum.Sum)
+						// yep, correct, space delimited key value pairs inside an oc:checksum tag inside an oc:checksums tag 🤦 ... legacy reasons ... 😭
+						value := fmt.Sprintf("<oc:checksum>%s:%s</oc:checksum>", strings.ToUpper(string(storageprovider.GRPC2PKGXS(md.Checksum.Type))), md.Checksum.Sum)
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:checksums", value))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:checksums", ""))

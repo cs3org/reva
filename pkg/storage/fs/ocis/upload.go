@@ -20,7 +20,10 @@ package ocis
 
 import (
 	"context"
+	"crypto/md5"
+	"crypto/sha1"
 	"encoding/json"
+	"hash/adler32"
 	"io"
 	"io/ioutil"
 	"os"
@@ -61,7 +64,7 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 	uploadInfo := upload.(*fileUpload)
 
 	p := uploadInfo.info.Storage["NodeName"]
-	ok, err := chunking.IsChunked(p)
+	ok, err := chunking.IsChunked(p) // check chunking v1
 	if err != nil {
 		return errors.Wrap(err, "ocisfs: error checking path")
 	}
@@ -130,6 +133,7 @@ func (fs *ocisfs) InitiateUpload(ctx context.Context, ref *provider.Reference, u
 			info.SizeIsDeferred = true
 		}
 	}
+	// checksum?
 
 	log.Debug().Interface("info", info).Interface("node", n).Interface("metadata", metadata).Msg("ocisfs: resolved filename")
 
@@ -426,6 +430,53 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 			Str("targetPath", targetPath).
 			Msg("ocisfs: could not rename")
 		return
+	}
+
+	// TODO the checksum could be calculated in a goroutine. Leaving in sync until we have a way to implement async upload handling
+	{
+		f, err := os.Open(targetPath)
+		if err != nil {
+			log.Err(err).Interface("info", upload.info).
+				Str("binPath", upload.binPath).
+				Str("targetPath", targetPath).
+				Msg("ocisfs: could not open file for checksumming")
+		}
+		defer f.Close()
+
+		sha1h := sha1.New()
+		r1 := io.TeeReader(f, sha1h)
+		md5h := md5.New()
+		r2 := io.TeeReader(r1, md5h)
+		adler32h := adler32.New()
+
+		if _, err := io.Copy(adler32h, r2); err != nil {
+			log.Err(err).Interface("info", upload.info).
+				Str("binPath", upload.binPath).
+				Str("targetPath", targetPath).
+				Msg("ocisfs: could not open file for checksumming")
+		}
+
+		if err := n.SetChecksum("sha1", sha1h.Sum(nil)); err != nil {
+			log.Err(err).Interface("info", upload.info).
+				Str("binPath", upload.binPath).
+				Str("targetPath", targetPath).
+				Str("csType", "sha1").
+				Msg("ocisfs: could not write checksum")
+		}
+		if err := n.SetChecksum("md5", md5h.Sum(nil)); err != nil {
+			log.Err(err).Interface("info", upload.info).
+				Str("binPath", upload.binPath).
+				Str("targetPath", targetPath).
+				Str("csType", "md5").
+				Msg("ocisfs: could not write checksum")
+		}
+		if err := n.SetChecksum("adler32", adler32h.Sum(nil)); err != nil {
+			log.Err(err).Interface("info", upload.info).
+				Str("binPath", upload.binPath).
+				Str("targetPath", targetPath).
+				Str("csType", "adler32").
+				Msg("ocisfs: could not write checksum")
+		}
 	}
 
 	// who will become the owner?  the owner of the parent actually ... not the currently logged in user
