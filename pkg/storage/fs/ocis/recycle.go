@@ -233,14 +233,15 @@ func (fs *ocisfs) PurgeRecycleItem(ctx context.Context, key string) (err error) 
 }
 
 func (fs *ocisfs) EmptyRecycle(ctx context.Context) error {
+	u, ok := user.ContextGetUser(ctx)
 	// TODO what permission should we check? we could check the root node of the user? or the owner permissions on his home root node?
-	// The current impl will wipe your own trash. or when enable home is false the trash of the 'root'
-	if fs.o.EnableHome {
-		u := user.ContextMustGetUser(ctx)
-		// TODO use layout, see Tree.Delete() for problem
-		return os.RemoveAll(filepath.Join(fs.o.Root, "trash", u.Id.OpaqueId))
+	// The current impl will wipe your own trash. or when no user provided the trash of 'root'
+	if !ok {
+		return os.RemoveAll(fs.getRecycleRoot(ctx))
 	}
-	return os.RemoveAll(fs.getRecycleRoot(ctx))
+
+	// TODO use layout, see Tree.Delete() for problem
+	return os.RemoveAll(filepath.Join(fs.o.Root, "trash", u.Id.OpaqueId))
 }
 
 func getResourceType(isDir bool) provider.ResourceType {

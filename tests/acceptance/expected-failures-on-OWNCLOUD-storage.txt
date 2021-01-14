@@ -791,10 +791,6 @@ apiShareReshareToShares3/reShareWithExpiryDate.feature:273
 # https://github.com/owncloud/product/issues/254 empty trashbin does not work
 # https://github.com/owncloud/ocis/issues/551 delete from trashbin does not work
 #
-apiTrashbin/trashbinDelete.feature:31
-apiTrashbin/trashbinDelete.feature:32
-apiTrashbin/trashbinDelete.feature:33
-apiTrashbin/trashbinDelete.feature:34
 apiTrashbin/trashbinDelete.feature:37
 apiTrashbin/trashbinDelete.feature:50
 apiTrashbin/trashbinDelete.feature:67

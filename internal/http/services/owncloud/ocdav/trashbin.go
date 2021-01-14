@@ -117,12 +117,13 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 			h.restore(w, r, s, u, dst, key)
 			return
 		}
-		if key != "" && r.Method == "DELETE" {
+
+		if r.Method == "DELETE" {
 			h.delete(w, r, s, u, key)
 			return
 		}
 
-		http.Error(w, "501 Forbidden", http.StatusNotImplemented)
+		http.Error(w, "501 Not implemented", http.StatusNotImplemented)
 	})
 }
 
