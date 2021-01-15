@@ -141,6 +141,11 @@ func (d *CloudDriver) refresh() error {
 
 	// send to register if catalog is set
 	req, err = http.NewRequest("POST", d.catalog, bytes.NewBuffer(j))
+	if err != nil {
+		log.Err(err).Msgf("xcloud: error creating POST request to: %s", d.catalog)
+		return err
+	}
+
 	resp, err = client.Do(req)
 	if err != nil {
 		log.Err(err).Msgf("xcloud: error registering catalog info to: %s with info: %s", d.catalog, string(j))
