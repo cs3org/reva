@@ -705,7 +705,6 @@ func (fs *eosfs) listShareFolderRoot(ctx context.Context, p string) (finfos []*p
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: no user in ctx")
 	}
-
 	uid, gid, err := fs.getUserUIDAndGID(ctx, u)
 	if err != nil {
 		return nil, err
@@ -805,7 +804,7 @@ func (fs *eosfs) createShadowHome(ctx context.Context) error {
 
 	shadowFolders := []string{fs.conf.ShareFolder}
 	for _, sf := range shadowFolders {
-		err = fs.c.CreateDir(ctx, uid, gid, path.Join(home, sf))
+		err = fs.createUserDir(ctx, u, path.Join(home, sf))
 		if err != nil {
 			return err
 		}
@@ -939,6 +938,10 @@ func (fs *eosfs) CreateDir(ctx context.Context, p string) error {
 func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.URL) error {
 	// TODO(labkode): for the time being we only allow to create references
 	// on the virtual share folder to not pollute the nominal user tree.
+	u, err := getUser(ctx)
+	if err != nil {
+		return errors.Wrap(err, "eos: no user in ctx")
+	}
 
 	if !fs.isShareFolder(ctx, p) {
 		return errtypes.PermissionDenied("eos: cannot create references outside the share folder: share_folder=" + fs.conf.ShareFolder + " path=" + p)
@@ -954,7 +957,7 @@ func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.U
 	if err != nil {
 		return nil
 	}
-	if err := fs.c.CreateDir(ctx, uid, gid, tmp); err != nil {
+	if err := fs.createUserDir(ctx, u, tmp); err != nil {
 		err = errors.Wrapf(err, "eos: error creating temporary ref file")
 		return err
 	}
@@ -1312,14 +1315,14 @@ func (fs *eosfs) convertToFileReference(ctx context.Context, eosFileInfo *eoscli
 
 // permissionSet returns the permission set for the current user
 func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileInfo, owner *userpb.UserId) *provider.ResourcePermissions {
-	u, ok := user.ContextGetUserID(ctx)
-	if !ok {
+	u, ok := user.ContextGetUser(ctx)
+	if !ok || owner == nil || u.Id == nil {
 		return &provider.ResourcePermissions{
 			// no permissions
 		}
 	}
 
-	if u.OpaqueId == owner.OpaqueId && u.Idp == owner.Idp {
+	if u.Id.OpaqueId == owner.OpaqueId && u.Id.Idp == owner.Idp {
 		return &provider.ResourcePermissions{
 			// owner has all permissions
 			AddGrant:             true,
@@ -1343,10 +1346,17 @@ func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 		}
 	}
 
+	uid, gid, err := fs.getUserUIDAndGID(ctx, u)
+	if err != nil {
+		return &provider.ResourcePermissions{
+			// no permissions
+		}
+	}
+
 	var perm string
-	var rp *provider.ResourcePermissions
+	var rp provider.ResourcePermissions
 	for _, e := range eosFileInfo.SysACL.Entries {
-		if e.Qualifier == u.OpaqueId {
+		if e.Qualifier == uid || e.Qualifier == gid {
 			perm = e.Permissions
 		}
 	}
@@ -1391,7 +1401,7 @@ func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 		rp.GetQuota = true
 	}
 
-	return rp
+	return &rp
 }
 
 func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.ResourceInfo, error) {
@@ -1407,8 +1417,8 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 
 	owner, err := fs.getUserIDGateway(ctx, strconv.FormatUint(eosFileInfo.UID, 10))
 	if err != nil {
-		log := appctx.GetLogger(ctx)
-		log.Warn().Uint64("uid", eosFileInfo.UID).Msg("could not lookup userid, leaving empty")
+		sublog := appctx.GetLogger(ctx).With().Logger()
+		sublog.Warn().Uint64("uid", eosFileInfo.UID).Msg("could not lookup userid, leaving empty")
 		owner = &userpb.UserId{}
 	}
 
@@ -1538,17 +1548,6 @@ func (fs *eosfs) getRootUIDAndGID(ctx context.Context) (string, string, error) {
 	}
 	return "0", "0", nil
 }
-
-//func attrTypeToString(at eosclient.AttrType) string {
-//	switch at {
-//	case SystemAttr:
-//		return "sys"
-//	case UserAttr:
-//		return "user"
-//	default:
-//		return "invalid"
-//	}
-//}
 
 type eosSysMetadata struct {
 	TreeSize  uint64 `json:"tree_size"`

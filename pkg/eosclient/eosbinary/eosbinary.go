@@ -57,7 +57,18 @@ const (
 )
 
 func serializeAttribute(a *eosclient.Attribute) string {
-	return fmt.Sprintf("%d.%s=%s", a.Type, a.Key, a.Val)
+	return fmt.Sprintf("%s.%s=%s", attrTypeToString(a.Type), a.Key, a.Val)
+}
+
+func attrTypeToString(at eosclient.AttrType) string {
+	switch at {
+	case SystemAttr:
+		return "sys"
+	case UserAttr:
+		return "user"
+	default:
+		return "invalid"
+	}
 }
 
 func isValidAttribute(a *eosclient.Attribute) bool {
@@ -830,7 +841,6 @@ func (c *Client) parseFileInfo(raw string) (*eosclient.FileInfo, error) {
 			}
 		}
 	}
-
 	fi, err := c.mapToFileInfo(kv)
 	if err != nil {
 		return nil, err
