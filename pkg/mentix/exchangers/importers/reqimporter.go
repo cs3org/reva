@@ -32,6 +32,7 @@ import (
 const (
 	queryActionRegisterSite   = "register"
 	queryActionUnregisterSite = "unregister"
+	queryActionAuthorizeSite  = "authorize"
 )
 
 type queryCallback func([]byte, url.Values) (meshdata.Vector, int, []byte, error)
@@ -43,12 +44,13 @@ type BaseRequestImporter struct {
 
 	registerSiteActionHandler   queryCallback
 	unregisterSiteActionHandler queryCallback
+	authorizeSiteActionHandler  queryCallback
 }
 
 // HandleRequest handles the actual HTTP request.
 func (importer *BaseRequestImporter) HandleRequest(resp http.ResponseWriter, req *http.Request) {
 	body, _ := ioutil.ReadAll(req.Body)
-	meshData, status, respData, err := importer.handleQuery(body, req.URL.Query())
+	meshData, status, respData, err := importer.handleQuery(body, req.URL.Path, req.URL.Query())
 	if err == nil {
 		if len(meshData) > 0 {
 			importer.mergeImportedMeshData(meshData)
@@ -73,7 +75,7 @@ func (importer *BaseRequestImporter) mergeImportedMeshData(meshData meshdata.Vec
 	}
 }
 
-func (importer *BaseRequestImporter) handleQuery(data []byte, params url.Values) (meshdata.Vector, int, []byte, error) {
+func (importer *BaseRequestImporter) handleQuery(data []byte, path string, params url.Values) (meshdata.Vector, int, []byte, error) {
 	action := params.Get("action")
 	switch strings.ToLower(action) {
 	case queryActionRegisterSite:
@@ -84,6 +86,11 @@ func (importer *BaseRequestImporter) handleQuery(data []byte, params url.Values)
 	case queryActionUnregisterSite:
 		if importer.unregisterSiteActionHandler != nil {
 			return importer.unregisterSiteActionHandler(data, params)
+		}
+
+	case queryActionAuthorizeSite:
+		if importer.authorizeSiteActionHandler != nil {
+			return importer.authorizeSiteActionHandler(data, params)
 		}
 
 	default:

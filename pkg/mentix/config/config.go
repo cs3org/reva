@@ -38,23 +38,33 @@ type Configuration struct {
 	Importers struct {
 		WebAPI struct {
 			Endpoint          string   `mapstructure:"endpoint"`
+			IsProtected       bool     `mapstructure:"is_protected"`
 			EnabledConnectors []string `mapstructure:"enabled_connectors"`
 		} `mapstructure:"webapi"`
+
+		AdminAPI struct {
+			Endpoint          string   `mapstructure:"endpoint"`
+			IsProtected       bool     `mapstructure:"is_protected"`
+			EnabledConnectors []string `mapstructure:"enabled_connectors"`
+		} `mapstructure:"adminapi"`
 	} `mapstructure:"importers"`
 
 	Exporters struct {
 		WebAPI struct {
 			Endpoint          string   `mapstructure:"endpoint"`
+			IsProtected       bool     `mapstructure:"is_protected"`
 			EnabledConnectors []string `mapstructure:"enabled_connectors"`
 		} `mapstructure:"webapi"`
 
 		CS3API struct {
 			Endpoint          string   `mapstructure:"endpoint"`
+			IsProtected       bool     `mapstructure:"is_protected"`
 			EnabledConnectors []string `mapstructure:"enabled_connectors"`
 		} `mapstructure:"cs3api"`
 
 		SiteLocations struct {
 			Endpoint          string   `mapstructure:"endpoint"`
+			IsProtected       bool     `mapstructure:"is_protected"`
 			EnabledConnectors []string `mapstructure:"enabled_connectors"`
 		} `mapstructure:"siteloc"`
 
