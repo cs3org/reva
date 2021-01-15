@@ -29,6 +29,7 @@ import (
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -102,7 +103,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		),
 	}
 	// initialize handlers and set default configs
-	if err := s.webDavHandler.init(conf.WebdavNamespace); err != nil {
+	if err := s.webDavHandler.init(conf.WebdavNamespace, true); err != nil {
 		return nil, err
 	}
 	if err := s.davHandler.init(conf); err != nil {
@@ -186,8 +187,20 @@ func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
 	return pool.GetGatewayServiceClient(s.c.GatewaySvc)
 }
 
-func applyLayout(ctx context.Context, ns string) string {
-	return templates.WithUser(ctxuser.ContextMustGetUser(ctx), ns)
+func applyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, requestPath string) string {
+	// If useLoggedInUserNS is false, that implies that the request is coming from
+	// the FilesHandler method invoked by a /dav/files/fileOwner where fileOwner
+	// is not the same as the logged in user. In that case, we'll treat fileOwner
+	// as the username whose files are to be accessed and use that in the
+	// namespace template.
+	u, ok := ctxuser.ContextGetUser(ctx)
+	if !ok || !useLoggedInUserNS {
+		requestUserID, _ := router.ShiftPath(requestPath)
+		u = &userpb.User{
+			Username: requestUserID,
+		}
+	}
+	return templates.WithUser(u, ns)
 }
 
 func wrapResourceID(r *provider.ResourceId) string {

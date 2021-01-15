@@ -40,8 +40,6 @@ func (s *svc) handleCopy(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx, span := trace.StartSpan(ctx, "head")
 	defer span.End()
 
-	ns = applyLayout(ctx, ns)
-
 	src := path.Join(ns, r.URL.Path)
 	dstHeader := r.Header.Get("Destination")
 	overwrite := r.Header.Get("Overwrite")

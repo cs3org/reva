@@ -34,8 +34,6 @@ func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx, span := trace.StartSpan(ctx, "move")
 	defer span.End()
 
-	ns = applyLayout(ctx, ns)
-
 	src := path.Join(ns, r.URL.Path)
 	dstHeader := r.Header.Get("Destination")
 	overwrite := r.Header.Get("Overwrite")

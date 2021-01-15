@@ -33,8 +33,6 @@ func (s *svc) handleDelete(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx, span := trace.StartSpan(ctx, "head")
 	defer span.End()
 
-	ns = applyLayout(ctx, ns)
-
 	fn := path.Join(ns, r.URL.Path)
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
