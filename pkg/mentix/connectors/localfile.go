@@ -104,6 +104,10 @@ func (connector *LocalFileConnector) UpdateMeshData(updatedData *meshdata.MeshDa
 		err = connector.authorizeData(meshData, updatedData, false)
 	}
 
+	if err != nil {
+		return err
+	}
+
 	// Write the updated sites back to the file
 	jsonData, _ := json.MarshalIndent(meshData.Sites, "", "\t")
 	if err := ioutil.WriteFile(connector.filePath, jsonData, 0755); err != nil {
