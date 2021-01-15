@@ -1311,11 +1311,35 @@ func (fs *eosfs) convertToFileReference(ctx context.Context, eosFileInfo *eoscli
 }
 
 // permissionSet returns the permission set for the current user
-func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileInfo) *provider.ResourcePermissions {
+func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileInfo, owner *userpb.UserId) *provider.ResourcePermissions {
 	u, ok := user.ContextGetUserID(ctx)
 	if !ok {
 		return &provider.ResourcePermissions{
 			// no permissions
+		}
+	}
+
+	if u.OpaqueId == owner.OpaqueId && u.Idp == owner.Idp {
+		return &provider.ResourcePermissions{
+			// owner has all permissions
+			AddGrant:             true,
+			CreateContainer:      true,
+			Delete:               true,
+			GetPath:              true,
+			GetQuota:             true,
+			InitiateFileDownload: true,
+			InitiateFileUpload:   true,
+			ListContainer:        true,
+			ListFileVersions:     true,
+			ListGrants:           true,
+			ListRecycle:          true,
+			Move:                 true,
+			PurgeRecycle:         true,
+			RemoveGrant:          true,
+			RestoreFileVersion:   true,
+			RestoreRecycleItem:   true,
+			Stat:                 true,
+			UpdateGrant:          true,
 		}
 	}
 
@@ -1395,7 +1419,7 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 		Etag:          fmt.Sprintf("\"%s\"", strings.Trim(eosFileInfo.ETag, "\"")),
 		MimeType:      mime.Detect(eosFileInfo.IsDir, path),
 		Size:          size,
-		PermissionSet: fs.permissionSet(ctx, eosFileInfo),
+		PermissionSet: fs.permissionSet(ctx, eosFileInfo, owner),
 		Mtime: &types.Timestamp{
 			Seconds: eosFileInfo.MTimeSec,
 			Nanos:   eosFileInfo.MTimeNanos,
