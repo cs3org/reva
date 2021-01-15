@@ -44,8 +44,6 @@ func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string)
 	acceptedProps := []xml.Name{}
 	removedProps := []xml.Name{}
 
-	ns = applyLayout(ctx, ns)
-
 	fn := path.Join(ns, r.URL.Path)
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()

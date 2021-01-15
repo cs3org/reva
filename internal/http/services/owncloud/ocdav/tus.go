@@ -65,8 +65,6 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	ns = applyLayout(ctx, ns)
-
 	// append filename to current dir
 	fn := path.Join(ns, r.URL.Path, meta["filename"])
 

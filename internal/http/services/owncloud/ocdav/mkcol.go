@@ -34,8 +34,6 @@ func (s *svc) handleMkcol(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx, span := trace.StartSpan(ctx, "mkcol")
 	defer span.End()
 
-	ns = applyLayout(ctx, ns)
-
 	fn := path.Join(ns, r.URL.Path)
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()

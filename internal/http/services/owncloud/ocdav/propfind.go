@@ -59,8 +59,6 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 	ctx, span := trace.StartSpan(ctx, "propfind")
 	defer span.End()
 
-	ns = applyLayout(ctx, ns)
-
 	fn := path.Join(ns, r.URL.Path)
 	depth := r.Header.Get("Depth")
 	if depth == "" {

@@ -40,8 +40,6 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx, span := trace.StartSpan(ctx, "get")
 	defer span.End()
 
-	ns = applyLayout(ctx, ns)
-
 	fn := path.Join(ns, r.URL.Path)
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Str("svc", "ocdav").Str("handler", "get").Logger()
