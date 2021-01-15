@@ -21,12 +21,12 @@ package json
 import (
 	"encoding/json"
 	"errors"
-	"sync"
 	"fmt"
 	"io/ioutil"
-	"time"
 	"net/http"
 	"os"
+	"sync"
+	"time"
 
 	"github.com/cs3org/reva/pkg/metrics/driver/registry"
 
@@ -50,10 +50,10 @@ func driverName() string {
 
 // CloudDriver the JsonDriver struct
 type CloudDriver struct {
-	instance   string
-	catalog string
-	pullInterval int 
-	CloudData       *CloudData
+	instance     string
+	catalog      string
+	pullInterval int
+	CloudData    *CloudData
 	sync.Mutex
 }
 
@@ -65,23 +65,23 @@ func (d *CloudDriver) refresh() error {
 	client := &http.Client{}
 
 	// endpoint example: https://mybox.com or https://mybox.com/owncloud
-	endpoint := fmt.Sprintf("%s/index.php/apps/sciencemesh/internal_metrics",d.instance)
+	endpoint := fmt.Sprintf("%s/index.php/apps/sciencemesh/internal_metrics", d.instance)
 
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
-		log.Err(err).Msgf("xcloud: error creating request to %s",d.instance)
+		log.Err(err).Msgf("xcloud: error creating request to %s", d.instance)
 		return err
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Err(err).Msgf("xcloud: error getting internal metrics from %s",d.instance)
+		log.Err(err).Msgf("xcloud: error getting internal metrics from %s", d.instance)
 		return err
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		err := fmt.Errorf("xcloud: error getting internal metrics from %s. http status code (%d)", resp.StatusCode)
-		log.Err(err).Msgf("xcloud: error getting internal metrics from %s",d.instance)
+		log.Err(err).Msgf("xcloud: error getting internal metrics from %s", d.instance)
 		return err
 	}
 	defer resp.Body.Close()
@@ -103,9 +103,64 @@ func (d *CloudDriver) refresh() error {
 	defer d.Unlock()
 	d.CloudData = cd
 	log.Info().Msgf("xcloud: received internal metrics from cloud provider: %+v", cd)
+
+	// if catalog is set, register site continously, this helps to also monitorize the health
+	// "xcloud: received internal metrics from cloud provider: &{Metrics:{TotalUsers:1 TotalGroups:0 TotalStorage:0} Settings:{IOPUrl:http://localhost:5550 Sitename:CERN Hostname:localhost Country:CH}}"
+	//
+	/*
+		{
+			"Name": "OC-Test@WWU",
+			"FullName": "ownCloud Test at University of Muenster",
+			"Homepage": "http://oc-test.uni-muenster.de",
+			"Description": "ownCloud Test Instance of University of Muenster",
+			"CountryCode": "DE",
+			"Services": [
+			    {
+				"Type": {
+				    "Name": "REVAD"
+				},
+				"Name": "oc-test.uni-muenster.de - REVAD",
+				"URL": "https://oc-test.uni-muenster.de/revad",
+				"IsMonitored": true,
+				"Properties": {
+				    "METRICS_PATH": "/revad/metrics"
+				},
+				"Host": "octest-test.uni-muenster.de"
+			    }
+			]
+	    	}
+	*/
+
+	mc := &MentixCatalog{
+		Name:        cd.Settings.Sitename,
+		FullName:    cd.Settings.Sitename,
+		Homepage:    cd.Settings.Hostname,
+		Description: "ScienceMesh App from " + cd.Settings.Sitename,
+		CountryCode: cd.Settings.Country,
+		Services: []*MentixService{
+			&MentixService{
+				Host: cd.Settings.Hostname,
+				IsMonitored: true,
+				Name: cd.Settings.Hostname + " - REVAD",
+				URL: " 
+
+				/*
+				&
+				Host        string                  `json:"Host"`
+				IsMonitored bool                     `json:"IsMonitored"`
+				Name        string                   `json:"Name"`
+				Properties  *MentixServiceProperties `json:"Properties"`
+				Type        *MentixServiceType       `json:"Type"`
+				URL         string                   `json:"URL"`
+				*/
+			},
+		},
+	}
+
 	return nil
 
 }
+
 // Configure configures this driver
 func (d *CloudDriver) Configure(c *config.Config) error {
 	if c.XcloudInstance == "" {
@@ -113,26 +168,26 @@ func (d *CloudDriver) Configure(c *config.Config) error {
 		return err
 	}
 
-	if c.XcloudPullInterval  == 0 {
+	if c.XcloudPullInterval == 0 {
 		c.XcloudPullInterval = 10 // seconds
 	}
 
 	d.instance = c.XcloudInstance
 	d.pullInterval = c.XcloudPullInterval
 
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(time.Duration(d.pullInterval) * time.Second)
 	quit := make(chan struct{})
 	go func() {
-	    for {
-	       select {
-		case <- ticker.C:
-			d.refresh()
-		case <- quit:
-		    ticker.Stop()
-		    return
+		for {
+			select {
+			case <-ticker.C:
+				d.refresh()
+			case <-quit:
+				ticker.Stop()
+				return
+			}
 		}
-	    }
-	 }()
+	}()
 
 	return nil
 }
@@ -168,4 +223,29 @@ type CloudDataSettings struct {
 	Sitename string `json:"sitename"`
 	Hostname string `json:"hostname"`
 	Country  string `json:"country"`
+}
+
+type MentixCatalog struct {
+	CountryCode string           `json:"CountryCode"`
+	Description string           `json:"Description"`
+	FullName    string           `json:"FullName"`
+	Homepage    string           `json:"Homepage"`
+	Name        string           `json:"Name"`
+	Services    []*MentixService `json:"Services"`
+}
+
+type MentixService struct {
+	Host        string                   `json:"Host"`
+	IsMonitored bool                     `json:"IsMonitored"`
+	Name        string                   `json:"Name"`
+	Properties  *MentixServiceProperties `json:"Properties"`
+	Type        *MentixServiceType       `json:"Type"`
+	URL         string                   `json:"URL"`
+}
+
+type MentixServiceProperties struct {
+	MetricsPath string `json:"METRICS_PATH"`
+}
+type MentixServiceType struct {
+	Name string `json:"Name"`
 }
