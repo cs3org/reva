@@ -1,4 +1,4 @@
-Feature: support remote cloud gathering metrics
+Enhancement: support remote cloud gathering metrics
 
 The current metrics package can only gather metrics either from
 json files. With this feature, the metrics can be gathered polling
