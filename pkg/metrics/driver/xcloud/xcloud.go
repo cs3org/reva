@@ -19,6 +19,7 @@
 package json
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -104,33 +105,6 @@ func (d *CloudDriver) refresh() error {
 	d.CloudData = cd
 	log.Info().Msgf("xcloud: received internal metrics from cloud provider: %+v", cd)
 
-	// if catalog is set, register site continously, this helps to also monitorize the health
-	// "xcloud: received internal metrics from cloud provider: &{Metrics:{TotalUsers:1 TotalGroups:0 TotalStorage:0} Settings:{IOPUrl:http://localhost:5550 Sitename:CERN Hostname:localhost Country:CH}}"
-	//
-	/*
-		{
-			"Name": "OC-Test@WWU",
-			"FullName": "ownCloud Test at University of Muenster",
-			"Homepage": "http://oc-test.uni-muenster.de",
-			"Description": "ownCloud Test Instance of University of Muenster",
-			"CountryCode": "DE",
-			"Services": [
-			    {
-				"Type": {
-				    "Name": "REVAD"
-				},
-				"Name": "oc-test.uni-muenster.de - REVAD",
-				"URL": "https://oc-test.uni-muenster.de/revad",
-				"IsMonitored": true,
-				"Properties": {
-				    "METRICS_PATH": "/revad/metrics"
-				},
-				"Host": "octest-test.uni-muenster.de"
-			    }
-			]
-	    	}
-	*/
-
 	mc := &MentixCatalog{
 		Name:        cd.Settings.Sitename,
 		FullName:    cd.Settings.Sitename,
@@ -139,26 +113,42 @@ func (d *CloudDriver) refresh() error {
 		CountryCode: cd.Settings.Country,
 		Services: []*MentixService{
 			&MentixService{
-				Host: cd.Settings.Hostname,
+				Host:        cd.Settings.Hostname,
 				IsMonitored: true,
-				Name: cd.Settings.Hostname + " - REVAD",
-				URL: " 
-
-				/*
-				&
-				Host        string                  `json:"Host"`
-				IsMonitored bool                     `json:"IsMonitored"`
-				Name        string                   `json:"Name"`
-				Properties  *MentixServiceProperties `json:"Properties"`
-				Type        *MentixServiceType       `json:"Type"`
-				URL         string                   `json:"URL"`
-				*/
+				Name:        cd.Settings.Hostname + " - REVAD",
+				URL:         cd.Settings.Siteurl,
+				Properties: &MentixServiceProperties{
+					MetricsPath: fmt.Sprintf("%s/index.php/apps/sciencemesh/metrics", cd.Settings.Siteurl),
+				},
+				Type: &MentixServiceType{
+					Name: "REVAD",
+				},
 			},
 		},
 	}
 
-	return nil
+	j, err := json.Marshal(mc)
+	if err != nil {
+		log.Err(err).Msgf("xcloud: error marhsaling mentix calalog info")
+		return err
+	}
 
+	log.Info().Msgf("xcloud: info to send to register: %s", string(j))
+
+	// send to register if catalog is set
+	req, err = http.NewRequest("POST", d.catalog, bytes.NewBuffer(j))
+	resp, err = client.Do(req)
+	if err != nil {
+		log.Err(err).Msgf("xcloud: error registering catalog info to: %s with info: %s", d.catalog, string(j))
+		return err
+	}
+
+	defer resp.Body.Close()
+	body, _ := ioutil.ReadAll(resp.Body)
+
+	log.Info().Msgf("xcloud: site registered: %s", string(body))
+
+	return nil
 }
 
 // Configure configures this driver
@@ -174,6 +164,7 @@ func (d *CloudDriver) Configure(c *config.Config) error {
 
 	d.instance = c.XcloudInstance
 	d.pullInterval = c.XcloudPullInterval
+	d.catalog = c.XcloudCatalog
 
 	ticker := time.NewTicker(time.Duration(d.pullInterval) * time.Second)
 	quit := make(chan struct{})
@@ -221,6 +212,7 @@ type CloudDataMetrics struct {
 type CloudDataSettings struct {
 	IOPUrl   string `json:"iopurl"`
 	Sitename string `json:"sitename"`
+	Siteurl  string `json:"siteurl"`
 	Hostname string `json:"hostname"`
 	Country  string `json:"country"`
 }
