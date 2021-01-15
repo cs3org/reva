@@ -3,9 +3,17 @@ address = ""
 
 [grpc.services.datatx]
 driver = "rclone"
+persistency_driver = "json"
+# check transfer job interval in milliseconds
+job_status_check_interval = 2000
+# the transfer timeout in milliseconds
+job_timeout = 120000
 
 [grpc.services.datatx.drivers.rclone]
 endpoint = ""
 # endpoint basic auth credentials
 auth_user = ""
 auth_pass = ""
+
+[grpc.services.datatx.persistency_drivers.json]
+file = "/var/tmp/reva/datatx-transfers.json"
