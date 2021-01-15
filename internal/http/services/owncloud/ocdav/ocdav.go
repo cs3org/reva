@@ -193,8 +193,8 @@ func applyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, request
 	// is not the same as the logged in user. In that case, we'll treat fileOwner
 	// as the username whose files are to be accessed and use that in the
 	// namespace template.
-	u := ctxuser.ContextMustGetUser(ctx)
-	if !useLoggedInUserNS {
+	u, ok := ctxuser.ContextGetUser(ctx)
+	if !ok || !useLoggedInUserNS {
 		requestUserID, _ := router.ShiftPath(requestPath)
 		u = &userpb.User{
 			Username: requestUserID,
