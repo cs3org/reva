@@ -50,7 +50,7 @@ func driverName() string {
 	return "xcloud"
 }
 
-// CloudDriver the JsonDriver struct
+// CloudDriver is the driver to use for Sciencemesh apps
 type CloudDriver struct {
 	instance     string
 	catalog      string
@@ -202,17 +202,20 @@ func (d *CloudDriver) GetAmountStorage() int64 {
 	return d.CloudData.Metrics.TotalStorage
 }
 
+// CloudData represents the information obtained from the sciencemesh app
 type CloudData struct {
 	Metrics  CloudDataMetrics  `json:"metrics"`
 	Settings CloudDataSettings `json:"settings"`
 }
 
+// CloudDataMetrics reprents the metrics gathered from the sciencemesh app
 type CloudDataMetrics struct {
 	TotalUsers   int64 `json:"total_users"`
 	TotalGroups  int64 `json:"total_groups"`
 	TotalStorage int64 `json:"total_storage"`
 }
 
+// CloudDataSettings represents the metrics gathered 
 type CloudDataSettings struct {
 	IOPUrl   string `json:"iopurl"`
 	Sitename string `json:"sitename"`
@@ -221,6 +224,7 @@ type CloudDataSettings struct {
 	Country  string `json:"country"`
 }
 
+// MentixCatalog represents the information needed to register a site into the mesh
 type MentixCatalog struct {
 	CountryCode string           `json:"CountryCode"`
 	Description string           `json:"Description"`
@@ -230,6 +234,7 @@ type MentixCatalog struct {
 	Services    []*MentixService `json:"Services"`
 }
 
+// MentixService represents the service running in a site
 type MentixService struct {
 	Host        string                   `json:"Host"`
 	IsMonitored bool                     `json:"IsMonitored"`
@@ -239,9 +244,12 @@ type MentixService struct {
 	URL         string                   `json:"URL"`
 }
 
+// MentixSiteProperties represents the properties to expose the metrics endpoint
 type MentixServiceProperties struct {
 	MetricsPath string `json:"METRICS_PATH"`
 }
+
+// MentixServiceType represents the type of service running
 type MentixServiceType struct {
 	Name string `json:"Name"`
 }
