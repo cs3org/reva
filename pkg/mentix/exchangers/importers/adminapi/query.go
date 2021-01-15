@@ -42,9 +42,9 @@ func decodeAdminQueryData(data []byte) (*meshdata.MeshData, error) {
 
 			meshData := &meshdata.MeshData{Sites: []*meshdata.Site{site}}
 			return meshData, nil
-		} else {
-			return nil, fmt.Errorf("site id invalid")
 		}
+
+		return nil, fmt.Errorf("site id invalid")
 	}
 
 	return nil, fmt.Errorf("site id missing")
