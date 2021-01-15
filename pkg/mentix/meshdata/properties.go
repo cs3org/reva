@@ -21,6 +21,8 @@ package meshdata
 import "strings"
 
 const (
+	// ProperyAuthorized identifies the authorization status property.
+	PropertyAuthorized = "authorized"
 	// PropertyOrganization identifies the organization property.
 	PropertyOrganization = "organization"
 	// PropertyMetricsPath identifies the metrics path property.

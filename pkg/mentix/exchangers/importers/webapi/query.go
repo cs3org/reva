@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 	"github.com/cs3org/reva/pkg/mentix/network"
@@ -38,6 +39,12 @@ func decodeQueryData(data []byte) (*meshdata.MeshData, error) {
 	if err := meshData.Verify(); err != nil {
 		return nil, fmt.Errorf("verifying the imported mesh data failed: %v", err)
 	}
+
+	// Set sites imported through the WebAPI to 'unauthorized' by default
+	for _, site := range meshData.Sites {
+		site.Properties[strings.ToUpper(meshdata.PropertyAuthorized)] = "false"
+	}
+
 	meshData.InferMissingData()
 	return meshData, nil
 }
