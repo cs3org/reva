@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"crypto/tls"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -63,7 +64,10 @@ func (d *CloudDriver) refresh() error {
 
 	// get configuration from internal_metrics endpoint exposed
 	// by the sciencemesh app
-	client := &http.Client{}
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: tr}
 
 	// endpoint example: https://mybox.com or https://mybox.com/owncloud
 	endpoint := fmt.Sprintf("%s/index.php/apps/sciencemesh/internal_metrics", d.instance)
@@ -118,7 +122,7 @@ func (d *CloudDriver) refresh() error {
 				Name:        cd.Settings.Hostname + " - REVAD",
 				URL:         cd.Settings.Siteurl,
 				Properties: &MentixServiceProperties{
-					MetricsPath: fmt.Sprintf("%s/index.php/apps/sciencemesh/metrics", cd.Settings.Siteurl),
+					MetricsPath: "/index.php/apps/sciencemesh/metrics",
 				},
 				Type: &MentixServiceType{
 					Name: "REVAD",
