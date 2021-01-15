@@ -81,7 +81,7 @@ type FileInfo struct {
 	File       string            `json:"eos_file"`
 	ETag       string            `json:"etag"`
 	Instance   string            `json:"instance"`
-	SysACL     string            `json:"sys_acl"`
+	SysACL     *acl.ACLs         `json:"sys_acl"`
 	Attrs      map[string]string `json:"attrs"`
 }
 

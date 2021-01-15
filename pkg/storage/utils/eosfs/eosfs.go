@@ -1311,62 +1311,63 @@ func (fs *eosfs) convertToFileReference(ctx context.Context, eosFileInfo *eoscli
 }
 
 // permissionSet returns the permission set for the current user
-func (fs *eosfs) permissionSet(ctx context.Context, owner *userpb.UserId) *provider.ResourcePermissions {
-	u, ok := user.ContextGetUser(ctx)
+func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileInfo) *provider.ResourcePermissions {
+	u, ok := user.ContextGetUserID(ctx)
 	if !ok {
 		return &provider.ResourcePermissions{
 			// no permissions
 		}
 	}
-	if u.Id == nil {
-		return &provider.ResourcePermissions{
-			// no permissions
+
+	var perm string
+	var rp *provider.ResourcePermissions
+	for _, e := range eosFileInfo.SysACL.Entries {
+		if e.Qualifier == u.OpaqueId {
+			perm = e.Permissions
 		}
 	}
-	if u.Id.OpaqueId == owner.OpaqueId && u.Id.Idp == owner.Idp {
-		return &provider.ResourcePermissions{
-			// owner has all permissions
-			AddGrant:             true,
-			CreateContainer:      true,
-			Delete:               true,
-			GetPath:              true,
-			GetQuota:             true,
-			InitiateFileDownload: true,
-			InitiateFileUpload:   true,
-			ListContainer:        true,
-			ListFileVersions:     true,
-			ListGrants:           true,
-			ListRecycle:          true,
-			Move:                 true,
-			PurgeRecycle:         true,
-			RemoveGrant:          true,
-			RestoreFileVersion:   true,
-			RestoreRecycleItem:   true,
-			Stat:                 true,
-			UpdateGrant:          true,
+
+	// Rules adapted from https://github.com/cern-eos/eos/blob/master/doc/configuration/permission.rst
+	if strings.Contains(perm, "r") && !strings.Contains(perm, "!r") {
+		rp.GetPath = true
+		rp.Stat = true
+		rp.ListFileVersions = true
+		rp.InitiateFileDownload = true
+		if eosFileInfo.IsDir {
+			rp.ListContainer = true
 		}
 	}
-	// TODO fix permissions for share recipients by traversing reading acls up to the root? cache acls for the parent node and reuse it
-	return &provider.ResourcePermissions{
-		AddGrant:             true,
-		CreateContainer:      true,
-		Delete:               true,
-		GetPath:              true,
-		GetQuota:             true,
-		InitiateFileDownload: true,
-		InitiateFileUpload:   true,
-		ListContainer:        true,
-		ListFileVersions:     true,
-		ListGrants:           true,
-		ListRecycle:          true,
-		Move:                 true,
-		PurgeRecycle:         true,
-		RemoveGrant:          true,
-		RestoreFileVersion:   true,
-		RestoreRecycleItem:   true,
-		Stat:                 true,
-		UpdateGrant:          true,
+
+	if strings.Contains(perm, "w") && !strings.Contains(perm, "!w") {
+		rp.Move = true
+		rp.Delete = true
+		rp.InitiateFileUpload = true
+		rp.RestoreFileVersion = true
+		if eosFileInfo.IsDir {
+			rp.CreateContainer = true
+		}
 	}
+
+	if strings.Contains(perm, "!x") {
+		rp.ListContainer = false
+		rp.ListFileVersions = false
+	}
+
+	if strings.Contains(perm, "!d") {
+		rp.Delete = false
+	}
+
+	if strings.Contains(perm, "m") && !strings.Contains(perm, "!m") {
+		rp.AddGrant = true
+		rp.ListGrants = true
+		rp.RemoveGrant = true
+	}
+
+	if strings.Contains(perm, "q") && !strings.Contains(perm, "!q") {
+		rp.GetQuota = true
+	}
+
+	return rp
 }
 
 func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.ResourceInfo, error) {
@@ -1394,7 +1395,7 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 		Etag:          fmt.Sprintf("\"%s\"", strings.Trim(eosFileInfo.ETag, "\"")),
 		MimeType:      mime.Detect(eosFileInfo.IsDir, path),
 		Size:          size,
-		PermissionSet: fs.permissionSet(ctx, owner),
+		PermissionSet: fs.permissionSet(ctx, eosFileInfo),
 		Mtime: &types.Timestamp{
 			Seconds: eosFileInfo.MTimeSec,
 			Nanos:   eosFileInfo.MTimeNanos,

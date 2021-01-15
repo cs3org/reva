@@ -377,7 +377,7 @@ func (c *Client) getACLForPath(ctx context.Context, uid, gid, path string) (*acl
 		return nil, err
 	}
 
-	return acl.Parse(finfo.SysACL, acl.ShortTextForm)
+	return finfo.SysACL, nil
 }
 
 // GetFileInfoByInode returns the FileInfo by the given inode
@@ -413,6 +413,29 @@ func (c *Client) GetFileInfoByFXID(ctx context.Context, uid, gid string, fxid st
 	return c.parseFileInfo(stdout)
 }
 
+// GetFileInfoByPath returns the FilInfo at the given path
+func (c *Client) GetFileInfoByPath(ctx context.Context, uid, gid, path string) (*eosclient.FileInfo, error) {
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", uid, gid, "file", "info", path, "-m")
+	stdout, _, err := c.executeEOS(ctx, cmd)
+	if err != nil {
+		return nil, err
+	}
+	info, err := c.parseFileInfo(stdout)
+	if err != nil {
+		return nil, err
+	}
+
+	if c.opt.VersionInvariant && !isVersionFolder(path) && !info.IsDir {
+		inode, err := c.getVersionFolderInode(ctx, uid, gid, path)
+		if err != nil {
+			return nil, err
+		}
+		info.Inode = inode
+	}
+
+	return info, nil
+}
+
 // SetAttr sets an extended attributes on a path.
 func (c *Client) SetAttr(ctx context.Context, uid, gid string, attr *eosclient.Attribute, recursive bool, path string) error {
 	if !isValidAttribute(attr) {
@@ -443,29 +466,6 @@ func (c *Client) UnsetAttr(ctx context.Context, uid, gid string, attr *eosclient
 		return err
 	}
 	return nil
-}
-
-// GetFileInfoByPath returns the FilInfo at the given path
-func (c *Client) GetFileInfoByPath(ctx context.Context, uid, gid, path string) (*eosclient.FileInfo, error) {
-	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", uid, gid, "file", "info", path, "-m")
-	stdout, _, err := c.executeEOS(ctx, cmd)
-	if err != nil {
-		return nil, err
-	}
-	info, err := c.parseFileInfo(stdout)
-	if err != nil {
-		return nil, err
-	}
-
-	if c.opt.VersionInvariant && !isVersionFolder(path) && !info.IsDir {
-		inode, err := c.getVersionFolderInode(ctx, uid, gid, path)
-		if err != nil {
-			return nil, err
-		}
-		info.Inode = inode
-	}
-
-	return info, nil
 }
 
 // GetQuota gets the quota of a user on the quota node defined by path
@@ -922,6 +922,11 @@ func (c *Client) mapToFileInfo(kv map[string]string) (*eosclient.FileInfo, error
 		isDir = true
 	}
 
+	sysACL, err := acl.Parse(kv["sys.acl"], acl.ShortTextForm)
+	if err != nil {
+		return nil, err
+	}
+
 	fi := &eosclient.FileInfo{
 		File:       kv["file"],
 		Inode:      inode,
@@ -935,7 +940,7 @@ func (c *Client) mapToFileInfo(kv map[string]string) (*eosclient.FileInfo, error
 		MTimeNanos: uint32(mtimenanos),
 		IsDir:      isDir,
 		Instance:   c.opt.URL,
-		SysACL:     kv["sys.acl"],
+		SysACL:     sysACL,
 		TreeCount:  treeCount,
 		Attrs:      kv,
 	}
