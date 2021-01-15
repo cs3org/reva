@@ -20,9 +20,9 @@ package json
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
-	"crypto/tls"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -85,7 +85,7 @@ func (d *CloudDriver) refresh() error {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		err := fmt.Errorf("xcloud: error getting internal metrics from %s. http status code (%d)", resp.StatusCode)
+		err := fmt.Errorf("xcloud: error getting internal metrics from %s. http status code (%d)", d.instance, resp.StatusCode)
 		log.Err(err).Msgf("xcloud: error getting internal metrics from %s", d.instance)
 		return err
 	}
@@ -220,7 +220,7 @@ type CloudDataMetrics struct {
 	TotalStorage int64 `json:"total_storage"`
 }
 
-// CloudDataSettings represents the metrics gathered 
+// CloudDataSettings represents the metrics gathered
 type CloudDataSettings struct {
 	IOPUrl   string `json:"iopurl"`
 	Sitename string `json:"sitename"`
@@ -249,7 +249,7 @@ type MentixService struct {
 	URL         string                   `json:"URL"`
 }
 
-// MentixSiteProperties represents the properties to expose the metrics endpoint
+// MentixServiceProperties represents the properties to expose the metrics endpoint
 type MentixServiceProperties struct {
 	MetricsPath string `json:"METRICS_PATH"`
 }
