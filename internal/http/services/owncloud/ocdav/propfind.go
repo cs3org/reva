@@ -385,14 +385,30 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		lastModifiedString := t.Format(time.RFC1123Z)
 		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("d:getlastmodified", lastModifiedString))
 
+		var checksums strings.Builder
 		if md.Checksum != nil {
-			// TODO(jfd): the actual value is an abomination like this:
-			// <oc:checksums>
-			//   <oc:checksum>SHA1:9bd253a09d58be107bcb4169ebf338c8df34d086 MD5:d90bcc6bf847403d22a4abba64e79994 ADLER32:fca23ff5</oc:checksum>
-			// </oc:checksums>
-			// yep, correct, space delimited key value pairs inside an oc:checksum tag inside an oc:checksums tag 🤦 ... legacy reasons ... 😭
-			value := fmt.Sprintf("<oc:checksum>%s:%s</oc:checksum>", strings.ToUpper(string(storageprovider.GRPC2PKGXS(md.Checksum.Type))), md.Checksum.Sum)
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:checksums", value))
+			checksums.WriteString("<oc:checksum>")
+			checksums.WriteString(strings.ToUpper(string(storageprovider.GRPC2PKGXS(md.Checksum.Type))))
+			checksums.WriteString(":")
+			checksums.WriteString(md.Checksum.Sum)
+			checksums.WriteString("</oc:checksum>")
+		}
+		if md.Opaque != nil {
+			if e, ok := md.Opaque.Map["md5"]; ok {
+				checksums.WriteString("<oc:checksum>")
+				checksums.WriteString("MD5:")
+				checksums.WriteString(string(e.Value))
+				checksums.WriteString("</oc:checksum>")
+			}
+			if e, ok := md.Opaque.Map["adler32"]; ok {
+				checksums.WriteString("<oc:checksum>")
+				checksums.WriteString("ADLER32:")
+				checksums.WriteString(string(e.Value))
+				checksums.WriteString("</oc:checksum>")
+			}
+		}
+		if checksums.Len() > 0 {
+			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:checksums", checksums.String()))
 		}
 
 		// favorites from arbitrary metadata
@@ -528,15 +544,31 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					} else {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
 					}
-				case "checksums": // desktop
+				case "checksums": // desktop ... not really ... the desktop sends the OC-Checksum header
+					var checksums strings.Builder
 					if md.Checksum != nil {
-						// TODO(jfd): the actual value is an abomination like this:
-						// <oc:checksums>
-						//   <oc:checksum>SHA1:9bd253a09d58be107bcb4169ebf338c8df34d086 MD5:d90bcc6bf847403d22a4abba64e79994 ADLER32:fca23ff5</oc:checksum>
-						// </oc:checksums>
-						// yep, correct, space delimited key value pairs inside an oc:checksum tag inside an oc:checksums tag 🤦 ... legacy reasons ... 😭
-						value := fmt.Sprintf("<oc:checksum>%s:%s</oc:checksum>", strings.ToUpper(string(storageprovider.GRPC2PKGXS(md.Checksum.Type))), md.Checksum.Sum)
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:checksums", value))
+						checksums.WriteString("<oc:checksum>")
+						checksums.WriteString(strings.ToUpper(string(storageprovider.GRPC2PKGXS(md.Checksum.Type))))
+						checksums.WriteString(":")
+						checksums.WriteString(md.Checksum.Sum)
+						checksums.WriteString("</oc:checksum>")
+					}
+					if md.Opaque != nil {
+						if e, ok := md.Opaque.Map["md5"]; ok {
+							checksums.WriteString("<oc:checksum>")
+							checksums.WriteString("MD5:")
+							checksums.WriteString(string(e.Value))
+							checksums.WriteString("</oc:checksum>")
+						}
+						if e, ok := md.Opaque.Map["adler32"]; ok {
+							checksums.WriteString("<oc:checksum>")
+							checksums.WriteString("ADLER32:")
+							checksums.WriteString(string(e.Value))
+							checksums.WriteString("</oc:checksum>")
+						}
+					}
+					if checksums.Len() > 0 {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:checksums", checksums.String()))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:checksums", ""))
 					}

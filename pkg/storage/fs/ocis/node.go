@@ -549,6 +549,32 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		} else {
 			sublog.Error().Err(err).Str("cstype", "sha1").Msg("could not get checksum value")
 		}
+		if v, err := xattr.Get(nodePath, checksumPrefix+"md5"); err == nil {
+			if ri.Opaque == nil {
+				ri.Opaque = &types.Opaque{
+					Map: map[string]*types.OpaqueEntry{},
+				}
+			}
+			ri.Opaque.Map["md5"] = &types.OpaqueEntry{
+				Decoder: "plain",
+				Value:   []byte(hex.EncodeToString(v)),
+			}
+		} else {
+			sublog.Error().Err(err).Str("cstype", "md5").Msg("could not get checksum value")
+		}
+		if v, err := xattr.Get(nodePath, checksumPrefix+"adler32"); err == nil {
+			if ri.Opaque == nil {
+				ri.Opaque = &types.Opaque{
+					Map: map[string]*types.OpaqueEntry{},
+				}
+			}
+			ri.Opaque.Map["adler32"] = &types.OpaqueEntry{
+				Decoder: "plain",
+				Value:   []byte(hex.EncodeToString(v)),
+			}
+		} else {
+			sublog.Error().Err(err).Str("cstype", "adler32").Msg("could not get checksum value")
+		}
 	}
 
 	// only read the requested metadata attributes

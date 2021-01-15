@@ -102,9 +102,12 @@ func (e ChecksumMismatch) Error() string { return "error: checksum mismatch: " +
 // IsChecksumMismatch implements the IsChecksumMismatch interface.
 func (e ChecksumMismatch) IsChecksumMismatch() {}
 
-// StatusChecksumMismatch 419 is an inofficial http status code in an unassigned range that is used for checksum mismatches
-// TUS uses unassigned 460 Checksum-Mismatch
-// see https://stackoverflow.com/a/35665694 and the storageprovider
+// StatusChecksumMismatch 419 is an unofficial http status code in an unassigned range that is used for checksum mismatches
+// Proposed by https://stackoverflow.com/a/35665694
+// Official HTTP status code registry: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
+// Note: TUS uses unassigned 460 Checksum-Mismatch
+// RFC proposal for checksum digest uses a `Want-Digest` header: https://tools.ietf.org/html/rfc3230
+// oc clienst issue: https://github.com/owncloud/core/issues/22711
 const StatusChecksumMismatch = 419
 
 // IsNotFound is the interface to implement
