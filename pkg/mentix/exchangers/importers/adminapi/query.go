@@ -45,9 +45,9 @@ func decodeAdminQueryData(data []byte) (*meshdata.MeshData, error) {
 		} else {
 			return nil, fmt.Errorf("site id invalid")
 		}
-	} else {
-		return nil, fmt.Errorf("site id missing")
 	}
+
+	return nil, fmt.Errorf("site id missing")
 }
 
 func handleAdminQuery(data []byte, params url.Values, status int, msg string) (meshdata.Vector, int, []byte, error) {
