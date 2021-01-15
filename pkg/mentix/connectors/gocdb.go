@@ -127,8 +127,10 @@ func (connector *GOCDBConnector) querySites(meshData *meshdata.MeshData) error {
 	for _, site := range sites.Sites {
 		properties := connector.extensionsToMap(&site.Extensions)
 
-		// Sites coming from the GOCDB are always authorized
-		properties[strings.ToUpper(meshdata.PropertyAuthorized)] = "true"
+		// Sites coming from the GOCDB are always authorized by default
+		if value := meshdata.GetPropertyValue(properties, meshdata.PropertyAuthorized, ""); len(value) == 0 {
+			meshdata.SetPropertyValue(properties, meshdata.PropertyAuthorized, "true")
+		}
 
 		// See if an organization has been defined using properties; otherwise, use the official name
 		organization := meshdata.GetPropertyValue(properties, meshdata.PropertyOrganization, site.OfficialName)

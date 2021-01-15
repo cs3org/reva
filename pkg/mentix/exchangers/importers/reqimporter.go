@@ -50,7 +50,9 @@ func (importer *BaseRequestImporter) HandleRequest(resp http.ResponseWriter, req
 	body, _ := ioutil.ReadAll(req.Body)
 	meshData, status, respData, err := importer.handleQuery(body, req.URL.Query())
 	if err == nil {
-		importer.mergeImportedMeshData(meshData)
+		if len(meshData) > 0 {
+			importer.mergeImportedMeshData(meshData)
+		}
 	} else {
 		respData = []byte(err.Error())
 	}
