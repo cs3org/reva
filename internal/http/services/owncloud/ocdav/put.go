@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -30,6 +31,7 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/utils"
@@ -203,9 +205,36 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 		// TODO: find a way to check if the storage really accepted the value
 		w.Header().Set("X-OC-Mtime", "accepted")
 	}
-	// r.Header.Get("OC-Checksum")
-	// TODO must be SHA1, ADLER32 or MD5 ... in capital letters????
+
 	// curl -X PUT https://demo.owncloud.com/remote.php/webdav/testcs.bin -u demo:demo -d '123' -v -H 'OC-Checksum: SHA1:40bd001563085fc35165329ea1ff5c5ecbdbbeef'
+
+	var cparts []string
+	// TUS Upload-Checksum header takes precedence
+	if checksum := r.Header.Get("Upload-Checksum"); checksum != "" {
+		cparts = strings.SplitN(checksum, " ", 2)
+		if len(cparts) != 2 {
+			sublog.Debug().Str("upload-checksum", checksum).Msg("invalid Upload-Checksum format, expected '[algorithm] [checksum]'")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		// Then try owncloud header
+	} else if checksum := r.Header.Get("OC-Checksum"); checksum != "" {
+		cparts = strings.SplitN(checksum, ":", 2)
+		if len(cparts) != 2 {
+			sublog.Debug().Str("oc-checksum", checksum).Msg("invalid OC-Checksum format, expected '[algorithm]:[checksum]'")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	}
+	// we do not check the algorithm here, because it might depend on the storage
+	if len(cparts) == 2 {
+		// Translate into TUS style Upload-Checksum header
+		opaqueMap["Upload-Checksum"] = &typespb.OpaqueEntry{
+			Decoder: "plain",
+			// algorithm is always lowercase, checksum is separated by space
+			Value: []byte(strings.ToLower(cparts[0]) + " " + cparts[1]),
+		}
+	}
 
 	uReq := &provider.InitiateFileUploadRequest{
 		Ref:    ref,
@@ -252,8 +281,21 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 				w.WriteHeader(http.StatusPartialContent)
 				return
 			}
+			if httpRes.StatusCode == errtypes.StatusChecksumMismatch {
+				w.WriteHeader(http.StatusBadRequest)
+				xml := `<?xml version="1.0" encoding="utf-8"?>
+<d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">
+  <s:exception>Sabre\DAV\Exception\BadRequest</s:exception>
+  <s:message>The computed checksum does not match the one received from the client.</s:message>
+</d:error>`
+				_, err := w.Write([]byte(xml))
+				if err != nil {
+					sublog.Err(err).Msg("error writing response")
+				}
+				return
+			}
 			sublog.Error().Err(err).Msg("PUT request to data server failed")
-			w.WriteHeader(http.StatusInternalServerError)
+			w.WriteHeader(httpRes.StatusCode)
 			return
 		}
 	}

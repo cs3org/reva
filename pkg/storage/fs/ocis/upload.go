@@ -22,12 +22,15 @@ import (
 	"context"
 	"crypto/md5"
 	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"hash/adler32"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -44,6 +47,8 @@ import (
 
 var defaultFilePerm = os.FileMode(0664)
 
+// TODO Upload (and InitiateUpload) needs a way to receive the expected checksum.
+// Maybe in metadata as 'checksum' => 'sha1 aeosvp45w5xaeoe' = lowercase, space separated?
 func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) (err error) {
 	upload, err := fs.GetUpload(ctx, ref.GetPath())
 	if err != nil {
@@ -99,6 +104,7 @@ func (fs *ocisfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 
 // InitiateUpload returns upload ids corresponding to different protocols it supports
 // TODO read optional content for small files in this request
+// TODO InitiateUpload (and Upload) needs a way to receive the expected checksum. Maybe in metadata as 'checksum' => 'sha1 aeosvp45w5xaeoe' = lowercase, space separated?
 func (fs *ocisfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
 
 	log := appctx.GetLogger(ctx)
@@ -132,8 +138,19 @@ func (fs *ocisfs) InitiateUpload(ctx context.Context, ref *provider.Reference, u
 		if _, ok := metadata["sizedeferred"]; ok {
 			info.SizeIsDeferred = true
 		}
+		if metadata["checksum"] != "" {
+			parts := strings.SplitN(metadata["checksum"], " ", 2)
+			if len(parts) != 2 {
+				return nil, errtypes.BadRequest("invalid checksum format. must be '[algorithm] [checksum]'")
+			}
+			switch parts[0] {
+			case "sha1", "md5", "adler32":
+				info.MetaData["checksum"] = metadata["checksum"]
+			default:
+				return nil, errtypes.BadRequest("unsupported checksum algorithm: " + parts[0])
+			}
+		}
 	}
-	// checksum?
 
 	log.Debug().Interface("info", info).Interface("node", n).Interface("metadata", metadata).Msg("ocisfs: resolved filename")
 
@@ -357,6 +374,10 @@ func (upload *fileUpload) WriteChunk(ctx context.Context, offset int64, src io.R
 	}
 	defer file.Close()
 
+	// calculate cheksum here? needed for the TUS checksum extension. https://tus.io/protocols/resumable-upload.html#checksum
+	// TODO but how do we get the `Upload-Checksum`? WriteChunk() only has a context, offset and the reader ...
+	// It is sent with the PATCH request, well or in the POST when the creation-with-upload extension is used
+	// but the tus handler uses a context.Background() so we cannot really check the header and put it in the context ...
 	n, err := io.Copy(file, src)
 
 	// If the HTTP PATCH request gets interrupted in the middle (e.g. because
@@ -391,7 +412,6 @@ func (upload *fileUpload) writeInfo() error {
 
 // FinishUpload finishes an upload and moves the file to the internal destination
 func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
-	log := appctx.GetLogger(upload.ctx)
 
 	n := &Node{
 		lu:       upload.fs.lu,
@@ -405,6 +425,58 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	}
 	targetPath := upload.fs.lu.toInternalPath(n.ID)
 
+	sublog := appctx.GetLogger(upload.ctx).With().Interface("info", upload.info).Str("binPath", upload.binPath).Str("targetPath", targetPath).Logger()
+
+	// calculate the checksum of the written bytes
+	// TODO only calculate in sync if checksum was sent?
+	sha1h := sha1.New()
+	md5h := md5.New()
+	adler32h := adler32.New()
+
+	f, err := os.Open(upload.binPath)
+	if err != nil {
+		sublog.Err(err).Msg("ocisfs: could not open file for checksumming")
+		// we can continue if no oc checksum header is set
+	}
+	defer f.Close()
+
+	r1 := io.TeeReader(f, sha1h)
+	r2 := io.TeeReader(r1, md5h)
+
+	if _, err := io.Copy(adler32h, r2); err != nil {
+		sublog.Err(err).Msg("ocisfs: could not copy bytes for checksumming")
+	}
+
+	// compare if they match the sent checksum
+	// TODO the tus checksum extension would do this on every chunk, but I currently don't see an easy way to pass in the requested checksum. for now we do it in FinishUpload which is also called for chunked uploads
+	if upload.info.MetaData["checksum"] != "" {
+		parts := strings.SplitN(upload.info.MetaData["checksum"], " ", 2)
+		if len(parts) != 2 {
+			return errtypes.BadRequest("invalid checksum format. must be '[algorithm] [checksum]'")
+		}
+		switch parts[0] {
+		case "sha1":
+			if parts[1] != hex.EncodeToString(sha1h.Sum(nil)) {
+				upload.discardChunk()
+				return errtypes.ChecksumMismatch(fmt.Sprintf("invalid checksum: expected %s got %x", upload.info.MetaData["checksum"], sha1h.Sum(nil)))
+			}
+		case "md5":
+			if parts[1] != hex.EncodeToString(md5h.Sum(nil)) {
+				upload.discardChunk()
+				return errtypes.ChecksumMismatch(fmt.Sprintf("invalid checksum: expected %s got %x", upload.info.MetaData["checksum"], md5h.Sum(nil)))
+			}
+		case "adler32":
+			if parts[1] != hex.EncodeToString(adler32h.Sum(nil)) {
+				upload.discardChunk()
+				return errtypes.ChecksumMismatch(fmt.Sprintf("invalid checksum: expected %s got %x", upload.info.MetaData["checksum"], adler32h.Sum(nil)))
+			}
+		default:
+			return errtypes.BadRequest("unsupported checksum algorithm: " + parts[0])
+		}
+	}
+
+	// defer writing the checksums until the node is in place
+
 	// if target exists create new version
 	var fi os.FileInfo
 	if fi, err = os.Stat(targetPath); err == nil {
@@ -412,9 +484,8 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		versionsPath := upload.fs.lu.toInternalPath(n.ID + ".REV." + fi.ModTime().UTC().Format(time.RFC3339Nano))
 
 		if err = os.Rename(targetPath, versionsPath); err != nil {
-			log.Err(err).Interface("info", upload.info).
-				Str("binPath", upload.binPath).
-				Str("targetPath", targetPath).
+			sublog.Err(err).
+				Str("versionsPath", versionsPath).
 				Msg("ocisfs: could not create version")
 			return
 		}
@@ -424,59 +495,32 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	// TODO put uploads on the same underlying storage as the destination dir?
 	// TODO trigger a workflow as the final rename might eg involve antivirus scanning
 	if err = os.Rename(upload.binPath, targetPath); err != nil {
-		log := appctx.GetLogger(upload.ctx)
-		log.Err(err).Interface("info", upload.info).
-			Str("binPath", upload.binPath).
-			Str("targetPath", targetPath).
+		sublog.Err(err).
 			Msg("ocisfs: could not rename")
 		return
 	}
 
-	// TODO the checksum could be calculated in a goroutine. Leaving in sync until we have a way to implement async upload handling
-	{
-		f, err := os.Open(targetPath)
-		if err != nil {
-			log.Err(err).Interface("info", upload.info).
-				Str("binPath", upload.binPath).
-				Str("targetPath", targetPath).
-				Msg("ocisfs: could not open file for checksumming")
-		}
-		defer f.Close()
-
-		sha1h := sha1.New()
-		r1 := io.TeeReader(f, sha1h)
-		md5h := md5.New()
-		r2 := io.TeeReader(r1, md5h)
-		adler32h := adler32.New()
-
-		if _, err := io.Copy(adler32h, r2); err != nil {
-			log.Err(err).Interface("info", upload.info).
-				Str("binPath", upload.binPath).
-				Str("targetPath", targetPath).
-				Msg("ocisfs: could not open file for checksumming")
-		}
-
-		if err := n.SetChecksum("sha1", sha1h.Sum(nil)); err != nil {
-			log.Err(err).Interface("info", upload.info).
-				Str("binPath", upload.binPath).
-				Str("targetPath", targetPath).
-				Str("csType", "sha1").
-				Msg("ocisfs: could not write checksum")
-		}
-		if err := n.SetChecksum("md5", md5h.Sum(nil)); err != nil {
-			log.Err(err).Interface("info", upload.info).
-				Str("binPath", upload.binPath).
-				Str("targetPath", targetPath).
-				Str("csType", "md5").
-				Msg("ocisfs: could not write checksum")
-		}
-		if err := n.SetChecksum("adler32", adler32h.Sum(nil)); err != nil {
-			log.Err(err).Interface("info", upload.info).
-				Str("binPath", upload.binPath).
-				Str("targetPath", targetPath).
-				Str("csType", "adler32").
-				Msg("ocisfs: could not write checksum")
-		}
+	// now write the checksums
+	if err := n.SetChecksum("sha1", sha1h.Sum(nil)); err != nil {
+		sublog.Err(err).
+			Str("csType", "sha1").
+			Bytes("hash", sha1h.Sum(nil)).
+			Msg("ocisfs: could not write checksum")
+		// this is not critical, the bytes are there so we will continue
+	}
+	if err := n.SetChecksum("md5", md5h.Sum(nil)); err != nil {
+		sublog.Err(err).
+			Str("csType", "md5").
+			Bytes("hash", md5h.Sum(nil)).
+			Msg("ocisfs: could not write checksum")
+		// this is not critical, the bytes are there so we will continue
+	}
+	if err := n.SetChecksum("adler32", adler32h.Sum(nil)); err != nil {
+		sublog.Err(err).
+			Str("csType", "adler32").
+			Bytes("hash", adler32h.Sum(nil)).
+			Msg("ocisfs: could not write checksum")
+		// this is not critical, the bytes are there so we will continue
 	}
 
 	// who will become the owner?  the owner of the parent actually ... not the currently logged in user
@@ -493,10 +537,8 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	var link string
 	link, err = os.Readlink(childNameLink)
 	if err == nil && link != "../"+n.ID {
-		log.Err(err).
-			Interface("info", upload.info).
+		sublog.Err(err).
 			Interface("node", n).
-			Str("targetPath", targetPath).
 			Str("childNameLink", childNameLink).
 			Str("link", link).
 			Msg("ocisfs: child name link has wrong target id, repairing")
@@ -514,7 +556,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	// only delete the upload if it was successfully written to the storage
 	if err = os.Remove(upload.infoPath); err != nil {
 		if !os.IsNotExist(err) {
-			log.Err(err).Interface("info", upload.info).Msg("ocisfs: could not delete upload info")
+			sublog.Err(err).Msg("ocisfs: could not delete upload info")
 			return
 		}
 	}
@@ -530,6 +572,15 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	n.Exists = true
 
 	return upload.fs.tp.Propagate(upload.ctx, n)
+}
+
+func (upload *fileUpload) discardChunk() {
+	if err := os.Remove(upload.binPath); err != nil {
+		if !os.IsNotExist(err) {
+			appctx.GetLogger(upload.ctx).Err(err).Interface("info", upload.info).Str("binPath", upload.binPath).Interface("info", upload.info).Msg("ocisfs: could not discard chunk")
+			return
+		}
+	}
 }
 
 // To implement the termination extension as specified in https://tus.io/protocols/resumable-upload.html#termination
