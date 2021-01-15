@@ -31,7 +31,6 @@ import (
 	"github.com/cs3org/reva/pkg/datatx/manager/registry"
 	txpersistency "github.com/cs3org/reva/pkg/datatx/persistency"
 	txpersistencyregistry "github.com/cs3org/reva/pkg/datatx/persistency/registry"
-	"github.com/cs3org/reva/pkg/datatx/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/user"
@@ -52,7 +51,6 @@ func (c *config) init() {
 	if c.JobStatusCheckInterval == 0 {
 		c.JobStatusCheckInterval = 2000
 	}
-	return nil
 }
 
 type config struct {
@@ -114,11 +112,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = c.init()
-	if err != nil {
-		err = errors.Wrap(err, "error setting config defaults for datatx service")
-		return nil, err
-	}
+	c.init()
 
 	driver, err := getDriver(c)
 	if err != nil {
