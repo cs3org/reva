@@ -1,198 +1,306 @@
-Changelog for reva 1.4.0 (2020-11-17)
+Changelog for reva 1.5.0 (2021-01-12)
 =======================================
 
-The following sections list the changes in reva 1.4.0 relevant to
+The following sections list the changes in reva 1.5.0 relevant to
 reva users. The changes are ordered by importance.
 
 Summary
 -------
 
- * Fix #1316: Fix listing shares for nonexisting path
- * Fix #1274: Let the gateway filter invalid references
- * Fix #1269: Handle more eos errors
- * Fix #1297: Check the err and the response status code
- * Fix #1260: Fix file descriptor leak on ocdav put handler
- * Fix #1253: Upload file to storage provider after assembling chunks
- * Fix #1264: Fix etag propagation in ocis driver
- * Fix #1255: Check current node when iterating over path segments
- * Fix #1265: Stop setting propagation xattr on new files
- * Fix #260: Filter share with me requests
- * Fix #1317: Prevent nil pointer when listing shares
- * Fix #1259: Fix propfind response code on forbidden files
- * Fix #1294: Fix error type in read node when file was not found
- * Fix #1258: Update share grants on share update
- * Enh #1257: Add a test user to all sites
- * Enh #1234: Resolve a WOPI bridge appProviderURL by extracting its redirect
- * Enh #1239: Add logic for finding groups to user provider service
- * Enh #1280: Add a Reva SDK
- * Enh #1237: Setup of grpc transfer service and cli
- * Enh #1224: Add SQL driver for share manager
- * Enh #1285: Refactor the uploading files workflow from various clients
- * Enh #1233: Add support for custom CodiMD mimetype
+ * Fix #1385: Run changelog check only if there are changes in the code
+ * Fix #1333: Delete sdk unit tests
+ * Fix #1342: Dav endpoint routing to home storage when request is remote.php/dav/files
+ * Fix #1338: Fix fd leaks
+ * Fix #1343: Fix ocis move
+ * Fix #551: Fix purging deleted files with the ocis storage
+ * Fix #863: Fix dav api for trashbin
+ * Fix #204: Fix the ocs share with me response
+ * Fix #1351: Fix xattr.Remove error check for macOS
+ * Fix #1320: Do not panic on remote.php/dav/files/
+ * Fix #1379: Make Jaeger agent usable
+ * Fix #1331: Fix capabilities response for multiple client versions
+ * Fix #1281: When sharing via ocs look up user by username
+ * Fix #1334: Handle removal of public shares by token or ID
+ * Chg #990: Replace the user uuid with the username in ocs share responses
+ * Enh #1350: Add auth protocol based on user agent
+ * Enh #1362: Mark 'store-dev-release' CI step as failed on 4XX/5XX errors
+ * Enh #1364: Remove expired Link on Get
+ * Enh #1340: Add cache to store UID to UserID mapping in EOS
+ * Enh #1154: Add support for the protobuf interface to eos metadata
+ * Enh #1154: Merge-rebase from master 10/11/2020
+ * Enh #1359: Add cache for calculated etags for home and shares directory
+ * Enh #1321: Add support for multiple data transfer protocols
+ * Enh #1324: Log expected errors with debug level
+ * Enh #1351: Map errtypes to status
+ * Enh #1347: Support property to enable health checking on a service
+ * Enh #1332: Add import support to Mentix
+ * Enh #1371: Use self-hosted Drone CI
+ * Enh #1354: Map bad request and unimplement to http status codes
+ * Enh #929: Include share types in ocs propfind responses
+ * Enh #1328: Add CLI commands for public shares
+ * Enh #1388: Support range header in GET requests
+ * Enh #1361: Remove expired Link on Access
+ * Enh #1386: Docker image for cs3org/revad:VERSION-eos
+ * Enh #1368: Calculate and expose actual file permission set
 
 Details
 -------
 
- * Bugfix #1316: Fix listing shares for nonexisting path
+ * Bugfix #1385: Run changelog check only if there are changes in the code
 
-   When trying to list shares for a not existing file or folder the ocs sharing implementation no
-   longer responds with the wrong status code and broken xml.
+   https://github.com/cs3org/reva/pull/1385
 
-   https://github.com/cs3org/reva/pull/1316
+ * Bugfix #1333: Delete sdk unit tests
 
- * Bugfix #1274: Let the gateway filter invalid references
+   These depend on a remote server running reva and thus fail in case of version mismatches.
 
-   We now filter deleted and unshared entries from the response when listing the shares folder of a
-   user.
+   https://github.com/cs3org/reva/pull/1333
 
-   https://github.com/cs3org/reva/pull/1274
+ * Bugfix #1342: Dav endpoint routing to home storage when request is remote.php/dav/files
 
- * Bugfix #1269: Handle more eos errors
+   There was a regression in which we were not routing correctly to the right storage depending on
+   the url.
 
-   We now treat E2BIG, EACCES as a permission error, which occur, eg. when acl checks fail and
-   return a permission denied error.
+   https://github.com/cs3org/reva/pull/1342
 
-   https://github.com/cs3org/reva/pull/1269
+ * Bugfix #1338: Fix fd leaks
 
- * Bugfix #1297: Check the err and the response status code
+   There were some left over open file descriptors on simple.go.
 
-   The publicfile handler needs to check the response status code to return proper not pound and
-   permission errors in the webdav api.
+   https://github.com/cs3org/reva/pull/1338
 
-   https://github.com/cs3org/reva/pull/1297
+ * Bugfix #1343: Fix ocis move
 
- * Bugfix #1260: Fix file descriptor leak on ocdav put handler
+   Use the old node id to build the target path for xattr updates.
 
-   File descriptors on the ocdav service, especially on the put handler was leaking http
-   connections. This PR addresses this.
+   https://github.com/owncloud/ocis/issues/975
+   https://github.com/cs3org/reva/pull/1343
 
-   https://github.com/cs3org/reva/pull/1260
+ * Bugfix #551: Fix purging deleted files with the ocis storage
 
- * Bugfix #1253: Upload file to storage provider after assembling chunks
+   The ocis storage could load the owner information of a deleted file. This caused the storage to
+   not be able to purge deleted files.
 
-   In the PUT handler for chunked uploads in ocdav, we store the individual chunks in temporary
-   file but do not write the assembled file to storage. This PR fixes that.
+   https://github.com/owncloud/ocis/issues/551
 
-   https://github.com/cs3org/reva/pull/1253
+ * Bugfix #863: Fix dav api for trashbin
 
- * Bugfix #1264: Fix etag propagation in ocis driver
+   The api was comparing the requested username to the userid.
 
-   We now use a new synctime timestamp instead of trying to read the mtime to avoid race conditions
-   when the stat request happens too quickly.
+   https://github.com/owncloud/ocis/issues/863
 
-   https://github.com/owncloud/product/issues/249
-   https://github.com/cs3org/reva/pull/1264
+ * Bugfix #204: Fix the ocs share with me response
 
- * Bugfix #1255: Check current node when iterating over path segments
+   The path of the files shared with me was incorrect.
 
-   When checking permissions we were always checking the leaf instead of using the current node
-   while iterating over path segments.
+   https://github.com/owncloud/product/issues/204
+   https://github.com/cs3org/reva/pull/1346
 
-   https://github.com/cs3org/reva/pull/1255
+ * Bugfix #1351: Fix xattr.Remove error check for macOS
 
- * Bugfix #1265: Stop setting propagation xattr on new files
+   Previously, we checked the xattr.Remove error only for linux systems. Now macOS is checked
+   also
 
-   We no longer set the propagation flag on a file because it is only evaluated for folders anyway.
+   https://github.com/cs3org/reva/pull/1351
 
-   https://github.com/cs3org/reva/pull/1265
+ * Bugfix #1320: Do not panic on remote.php/dav/files/
 
- * Bugfix #260: Filter share with me requests
+   Currently requests to /remote.php/dav/files/ result in panics since we cannot longer strip
+   the user + destination from the url. This fixes the server response code and adds an error body to
+   the response.
 
-   The OCS API now properly filters share with me requests by path and by share status (pending,
-   accepted, rejected, all)
+   https://github.com/cs3org/reva/pull/1320
 
-   https://github.com/owncloud/ocis-reva/issues/260
-   https://github.com/owncloud/ocis-reva/issues/311
-   https://github.com/cs3org/reva/pull/1301
+ * Bugfix #1379: Make Jaeger agent usable
 
- * Bugfix #1317: Prevent nil pointer when listing shares
+   Previously, you could not use tracing with jaeger agent because the tracing connector is
+   always used instead of the tracing endpoint.
 
-   We now handle cases where the grpc connection failed correctly by no longer trying to access the
-   response status.
+   This PR removes the defaults for collector and tracing endpoint.
 
-   https://github.com/cs3org/reva/pull/1317
+   https://github.com/cs3org/reva/pull/1379
 
- * Bugfix #1259: Fix propfind response code on forbidden files
+ * Bugfix #1331: Fix capabilities response for multiple client versions
 
-   When executing a propfind to a resource owned by another user the service would respond with a
-   HTTP 403. In ownCloud 10 the response was HTTP 207. This change sets the response code to HTTP 207
-   to stay backwards compatible.
+   https://github.com/cs3org/reva/pull/1331
 
-   https://github.com/cs3org/reva/pull/1259
+ * Bugfix #1281: When sharing via ocs look up user by username
 
- * Bugfix #1294: Fix error type in read node when file was not found
+   The ocs api returns usernames when listing share recipients, so the lookup when creating the
+   share needs to search the usernames and not the userid.
 
-   The method ReadNode in the ocis storage didn't return the error type NotFound when a file was not
-   found.
+   https://github.com/cs3org/reva/pull/1281
 
-   https://github.com/cs3org/reva/pull/1294
+ * Bugfix #1334: Handle removal of public shares by token or ID
 
- * Bugfix #1258: Update share grants on share update
+   Previously different drivers handled removing public shares using different means, either
+   the token or the ID. Now, both the drivers support both these methods.
 
-   When a share was updated the share information in the share manager was updated but the grants
-   set by the storage provider were not.
+   https://github.com/cs3org/reva/pull/1334
 
-   https://github.com/cs3org/reva/pull/1258
+ * Change #990: Replace the user uuid with the username in ocs share responses
 
- * Enhancement #1257: Add a test user to all sites
+   The ocs api should not send the users uuid. Replaced the uuid with the username.
 
-   For health monitoring of all mesh sites, we need a special user account that is present on every
-   site. This PR adds such a user to each users-*.json file so that every site will have the same test
-   user credentials.
+   https://github.com/owncloud/ocis/issues/990
+   https://github.com/cs3org/reva/pull/1375
 
-   https://github.com/cs3org/reva/pull/1257
+ * Enhancement #1350: Add auth protocol based on user agent
 
- * Enhancement #1234: Resolve a WOPI bridge appProviderURL by extracting its redirect
+   Previously, all available credential challenges are given to the client, for example, basic
+   auth, bearer token, etc ... Different clients have different priorities to use one method or
+   another, and before it was not possible to force a client to use one method without having a side
+   effect on other clients.
 
-   Applications served by the WOPI bridge (CodiMD for the time being) require an extra
-   redirection as the WOPI bridge itself behaves like a user app. This change returns to the client
-   the redirected URL from the WOPI bridge, which is the real application URL.
+   This PR adds the functionality to target a specific auth protocol based on the user agent HTTP
+   header.
 
-   https://github.com/cs3org/reva/pull/1234
+   https://github.com/cs3org/reva/pull/1350
 
- * Enhancement #1239: Add logic for finding groups to user provider service
+ * Enhancement #1362: Mark 'store-dev-release' CI step as failed on 4XX/5XX errors
 
-   To create shares with user groups, the functionality for searching for these based on a pattern
-   is needed. This PR adds that.
+   Prevent the errors while storing new 'daily' releases from going unnoticed on the CI.
 
-   https://github.com/cs3org/reva/pull/1239
+   https://github.com/cs3org/reva/pull/1362
 
- * Enhancement #1280: Add a Reva SDK
+ * Enhancement #1364: Remove expired Link on Get
 
-   A Reva SDK has been added to make working with a remote Reva instance much easier by offering a
-   high-level API that hides all the underlying details of the CS3API.
+   There is the scenario in which a public link has expired but ListPublicLink has not run,
+   accessing a technically expired public share is still possible.
 
-   https://github.com/cs3org/reva/pull/1280
+   https://github.com/cs3org/reva/pull/1364
 
- * Enhancement #1237: Setup of grpc transfer service and cli
+ * Enhancement #1340: Add cache to store UID to UserID mapping in EOS
 
-   The grpc transfer service and cli for it.
+   Previously, we used to send an RPC to the user provider service for every lookup of user IDs from
+   the UID stored in EOS. This PR adds an in-memory lock-protected cache to store this mapping.
 
-   https://github.com/cs3org/reva/pull/1237
+   https://github.com/cs3org/reva/pull/1340
 
- * Enhancement #1224: Add SQL driver for share manager
+ * Enhancement #1154: Add support for the protobuf interface to eos metadata
 
-   This PR adds an SQL driver for the shares manager which expects a schema equivalent to the one
-   used in production for CERNBox.
+   https://github.com/cs3org/reva/pull/1154
 
-   https://github.com/cs3org/reva/pull/1224
+ * Enhancement #1154: Merge-rebase from master 10/11/2020
 
- * Enhancement #1285: Refactor the uploading files workflow from various clients
+   https://github.com/cs3org/reva/pull/1154
 
-   Previously, we were implementing the tus client logic in the ocdav service, leading to
-   restricting the whole of tus logic to the internal services. This PR refactors that workflow to
-   accept incoming requests following the tus protocol while using simpler transmission
-   internally.
+ * Enhancement #1359: Add cache for calculated etags for home and shares directory
 
-   https://github.com/cs3org/reva/pull/1285
-   https://github.com/cs3org/reva/pull/1314
+   Since we store the references in the shares directory instead of actual resources, we need to
+   calculate the etag on every list/stat call. This is rather expensive so adding a cache would
+   help to a great extent with regard to the performance.
 
- * Enhancement #1233: Add support for custom CodiMD mimetype
+   https://github.com/cs3org/reva/pull/1359
 
-   The new mimetype is associated with the `.zmd` file extension. The corresponding
-   configuration is associated with the storageprovider.
+ * Enhancement #1321: Add support for multiple data transfer protocols
 
-   https://github.com/cs3org/reva/pull/1233
-   https://github.com/cs3org/reva/pull/1284
+   Previously, we had to configure which data transfer protocol to use in the dataprovider
+   service. A previous PR added the functionality to redirect requests to different handlers
+   based on the request method but that would lead to conflicts if multiple protocols don't
+   support mutually exclusive sets of requests. This PR adds the functionality to have multiple
+   such handlers simultaneously and the client can choose which protocol to use.
+
+   https://github.com/cs3org/reva/pull/1321
+   https://github.com/cs3org/reva/pull/1285/
+
+ * Enhancement #1324: Log expected errors with debug level
+
+   While trying to download a non existing file and reading a non existing attribute are
+   technically an error they are to be expected and nothing an admin can or even should act upon.
+
+   https://github.com/cs3org/reva/pull/1324
+
+ * Enhancement #1351: Map errtypes to status
+
+   When mapping errtypes to grpc statuses we now also map bad request and not implemented /
+   unsupported cases in the gateway storageprovider.
+
+   https://github.com/cs3org/reva/pull/1351
+
+ * Enhancement #1347: Support property to enable health checking on a service
+
+   This update introduces a new service property called `ENABLE_HEALTH_CHECKS` that must be
+   explicitly set to `true` if a service should be checked for its health status. This allows us to
+   only enable these checks for partner sites only, skipping vendor sites.
+
+   https://github.com/cs3org/reva/pull/1347
+
+ * Enhancement #1332: Add import support to Mentix
+
+   This update adds import support to Mentix, transforming it into a **Mesh Entity Exchanger**.
+   To properly support vendor site management, a new connector that works on a local file has been
+   added as well.
+
+   https://github.com/cs3org/reva/pull/1332
+
+ * Enhancement #1371: Use self-hosted Drone CI
+
+   Previously, we used the drone cloud to run the CI for the project. Due to unexpected and sudden
+   stop of the service for the cs3org we decided to self-host it.
+
+   https://github.com/cs3org/reva/pull/1371
+
+ * Enhancement #1354: Map bad request and unimplement to http status codes
+
+   We now return a 400 bad request when a grpc call fails with an invalid argument status and a 501 not
+   implemented when it fails with an unimplemented status. This prevents 500 errors when a user
+   tries to add resources to the Share folder or a storage does not implement an action.
+
+   https://github.com/cs3org/reva/pull/1354
+
+ * Enhancement #929: Include share types in ocs propfind responses
+
+   Added the share types to the ocs propfind response when a resource has been shared.
+
+   https://github.com/owncloud/ocis/issues/929
+   https://github.com/cs3org/reva/pull/1329
+
+ * Enhancement #1328: Add CLI commands for public shares
+
+   https://github.com/cs3org/reva/pull/1328
+
+ * Enhancement #1388: Support range header in GET requests
+
+   To allow resuming a download we now support GET requests with a range header.
+
+   https://github.com/owncloud/ocis-reva/issues/12
+   https://github.com/cs3org/reva/pull/1388
+
+ * Enhancement #1361: Remove expired Link on Access
+
+   Since there is no background jobs scheduled to wipe out expired resources, for the time being
+   public links are going to be removed on a "on demand" basis, meaning whenever there is an API call
+   that access the list of shares for a given resource, we will check whether the share is expired
+   and delete it if so.
+
+   https://github.com/cs3org/reva/pull/1361
+
+ * Enhancement #1386: Docker image for cs3org/revad:VERSION-eos
+
+   Based on eos:c8_4.8.15 (Centos8, version 4.8.15). To be used when the Reva daemon needs IPC
+   with xrootd/eos via stdin/out.
+
+   https://github.com/cs3org/reva/pull/1386
+   https://github.com/cs3org/reva/pull/1389
+
+ * Enhancement #1368: Calculate and expose actual file permission set
+
+   Instead of hardcoding the permissions set for every file and folder to ListContainer:true,
+   CreateContainer:true and always reporting the hardcoded string WCKDNVR for the WebDAV
+   permissions we now aggregate the actual cs3 resource permission set in the storage drivers and
+   correctly map them to ocs permissions and webdav permissions using a common role struct that
+   encapsulates the mapping logic.
+
+   https://github.com/owncloud/ocis/issues/552
+   https://github.com/owncloud/ocis/issues/762
+   https://github.com/owncloud/ocis/issues/763
+   https://github.com/owncloud/ocis/issues/893
+   https://github.com/owncloud/ocis/issues/1126
+   https://github.com/owncloud/ocis-reva/issues/47
+   https://github.com/owncloud/ocis-reva/issues/315
+   https://github.com/owncloud/ocis-reva/issues/316
+   https://github.com/owncloud/product/issues/270
+   https://github.com/cs3org/reva/pull/1368
 
 

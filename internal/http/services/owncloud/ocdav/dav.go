@@ -1,4 +1,4 @@
-// Copyright 2018-2020 CERN
+// Copyright 2018-2021 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -57,11 +57,11 @@ func (h *DavHandler) init(c *Config) error {
 		return err
 	}
 	h.FilesHandler = new(WebDavHandler)
-	if err := h.FilesHandler.init(c.FilesNamespace); err != nil {
+	if err := h.FilesHandler.init(c.FilesNamespace, false); err != nil {
 		return err
 	}
 	h.FilesHomeHandler = new(WebDavHandler)
-	if err := h.FilesHomeHandler.init(c.WebdavNamespace); err != nil {
+	if err := h.FilesHomeHandler.init(c.WebdavNamespace, true); err != nil {
 		return err
 	}
 	h.MetaHandler = new(MetaHandler)
@@ -71,7 +71,7 @@ func (h *DavHandler) init(c *Config) error {
 	h.TrashbinHandler = new(TrashbinHandler)
 
 	h.PublicFolderHandler = new(WebDavHandler)
-	if err := h.PublicFolderHandler.init("public"); err != nil { // jail public file requests to /public/ prefix
+	if err := h.PublicFolderHandler.init("public", true); err != nil { // jail public file requests to /public/ prefix
 		return err
 	}
 

@@ -1,4 +1,4 @@
-// Copyright 2018-2020 CERN
+// Copyright 2018-2021 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -64,8 +64,6 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 		w.WriteHeader(http.StatusPreconditionFailed)
 		return
 	}
-
-	ns = applyLayout(ctx, ns)
 
 	// append filename to current dir
 	fn := path.Join(ns, r.URL.Path, meta["filename"])
