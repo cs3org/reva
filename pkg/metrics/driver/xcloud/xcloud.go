@@ -181,7 +181,8 @@ func (d *CloudDriver) Configure(c *config.Config) error {
 		for {
 			select {
 			case <-ticker.C:
-				d.refresh()
+				err := d.refresh()
+				log.Err(err).Msgf("xcloud: error from refresh goroutine")
 			case <-quit:
 				ticker.Stop()
 				return
