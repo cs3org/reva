@@ -131,7 +131,7 @@ func (connector *LocalFileConnector) mergeData(meshData *meshdata.MeshData, upda
 	// Restore the authorization status for all sites
 	for siteID, status := range siteAuthorizationStatus {
 		if site := meshData.FindSite(siteID); site != nil {
-			meshdata.SetPropertyValue(site.Properties, meshdata.PropertyAuthorized, status)
+			meshdata.SetPropertyValue(&site.Properties, meshdata.PropertyAuthorized, status)
 		}
 	}
 	return nil
@@ -148,9 +148,9 @@ func (connector *LocalFileConnector) authorizeData(meshData *meshdata.MeshData, 
 		// The site ID is stored in the updated site's name
 		if site := meshData.FindSite(placeholderSite.Name); site != nil {
 			if authorize {
-				meshdata.SetPropertyValue(site.Properties, meshdata.PropertyAuthorized, "true")
+				meshdata.SetPropertyValue(&site.Properties, meshdata.PropertyAuthorized, "true")
 			} else {
-				meshdata.SetPropertyValue(site.Properties, meshdata.PropertyAuthorized, "false")
+				meshdata.SetPropertyValue(&site.Properties, meshdata.PropertyAuthorized, "false")
 			}
 		} else {
 			return fmt.Errorf("no site with id '%v' found", placeholderSite.Name)

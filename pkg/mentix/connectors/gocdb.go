@@ -130,7 +130,7 @@ func (connector *GOCDBConnector) querySites(meshData *meshdata.MeshData) error {
 
 		// Sites coming from the GOCDB are always authorized by default
 		if value := meshdata.GetPropertyValue(properties, meshdata.PropertyAuthorized, ""); len(value) == 0 {
-			meshdata.SetPropertyValue(properties, meshdata.PropertyAuthorized, "true")
+			meshdata.SetPropertyValue(&properties, meshdata.PropertyAuthorized, "true")
 		}
 
 		// See if an organization has been defined using properties; otherwise, use the official name
