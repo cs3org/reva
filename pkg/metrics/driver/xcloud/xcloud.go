@@ -155,6 +155,13 @@ func (d *CloudDriver) refresh() error {
 	defer resp.Body.Close()
 	body, _ := ioutil.ReadAll(resp.Body)
 
+	if resp.StatusCode != http.StatusOK {
+		err := fmt.Errorf("xcloud: error registering site: status code(%d) body(%s)", resp.StatusCode, string(body))
+		log.Err(err).Msg("xcloud: error registering site")
+		return err
+	}
+
+
 	log.Info().Msgf("xcloud: site registered: %s", string(body))
 
 	return nil
@@ -216,9 +223,9 @@ type CloudData struct {
 
 // CloudDataMetrics reprents the metrics gathered from the sciencemesh app
 type CloudDataMetrics struct {
-	TotalUsers   int64 `json:"total_users"`
-	TotalGroups  int64 `json:"total_groups"`
-	TotalStorage int64 `json:"total_storage"`
+	TotalUsers   int64 `json:"numusers"`
+	TotalGroups  int64 `json:"numgroups"`
+	TotalStorage int64 `json:"numstorage"`
 }
 
 // CloudDataSettings represents the metrics gathered
