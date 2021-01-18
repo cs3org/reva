@@ -385,29 +385,34 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		lastModifiedString := t.Format(time.RFC1123Z)
 		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("d:getlastmodified", lastModifiedString))
 
+		// stay bug compatible with oc10, see https://github.com/owncloud/core/pull/38304#issuecomment-762185241
 		var checksums strings.Builder
 		if md.Checksum != nil {
 			checksums.WriteString("<oc:checksum>")
 			checksums.WriteString(strings.ToUpper(string(storageprovider.GRPC2PKGXS(md.Checksum.Type))))
 			checksums.WriteString(":")
 			checksums.WriteString(md.Checksum.Sum)
-			checksums.WriteString("</oc:checksum>")
 		}
 		if md.Opaque != nil {
 			if e, ok := md.Opaque.Map["md5"]; ok {
-				checksums.WriteString("<oc:checksum>")
-				checksums.WriteString("MD5:")
+				if checksums.Len() == 0 {
+					checksums.WriteString("<oc:checksum>MD5:")
+				} else {
+					checksums.WriteString(" MD5:")
+				}
 				checksums.WriteString(string(e.Value))
-				checksums.WriteString("</oc:checksum>")
 			}
 			if e, ok := md.Opaque.Map["adler32"]; ok {
-				checksums.WriteString("<oc:checksum>")
-				checksums.WriteString("ADLER32:")
+				if checksums.Len() == 0 {
+					checksums.WriteString("<oc:checksum>ADLER32:")
+				} else {
+					checksums.WriteString(" ADLER32:")
+				}
 				checksums.WriteString(string(e.Value))
-				checksums.WriteString("</oc:checksum>")
 			}
 		}
-		if checksums.Len() > 0 {
+		if checksums.Len() > 13 {
+			checksums.WriteString("</oc:checksum>")
 			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:checksums", checksums.String()))
 		}
 
@@ -545,29 +550,35 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
 					}
 				case "checksums": // desktop ... not really ... the desktop sends the OC-Checksum header
+
+					// stay bug compatible with oc10, see https://github.com/owncloud/core/pull/38304#issuecomment-762185241
 					var checksums strings.Builder
 					if md.Checksum != nil {
 						checksums.WriteString("<oc:checksum>")
 						checksums.WriteString(strings.ToUpper(string(storageprovider.GRPC2PKGXS(md.Checksum.Type))))
 						checksums.WriteString(":")
 						checksums.WriteString(md.Checksum.Sum)
-						checksums.WriteString("</oc:checksum>")
 					}
 					if md.Opaque != nil {
 						if e, ok := md.Opaque.Map["md5"]; ok {
-							checksums.WriteString("<oc:checksum>")
-							checksums.WriteString("MD5:")
+							if checksums.Len() == 0 {
+								checksums.WriteString("<oc:checksum>MD5:")
+							} else {
+								checksums.WriteString(" MD5:")
+							}
 							checksums.WriteString(string(e.Value))
-							checksums.WriteString("</oc:checksum>")
 						}
 						if e, ok := md.Opaque.Map["adler32"]; ok {
-							checksums.WriteString("<oc:checksum>")
-							checksums.WriteString("ADLER32:")
+							if checksums.Len() == 0 {
+								checksums.WriteString("<oc:checksum>ADLER32:")
+							} else {
+								checksums.WriteString(" ADLER32:")
+							}
 							checksums.WriteString(string(e.Value))
-							checksums.WriteString("</oc:checksum>")
 						}
 					}
-					if checksums.Len() > 0 {
+					if checksums.Len() > 13 {
+						checksums.WriteString("</oc:checksum>")
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:checksums", checksums.String()))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:checksums", ""))
