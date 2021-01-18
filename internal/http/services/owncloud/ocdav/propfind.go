@@ -43,7 +43,6 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxuser "github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -818,15 +817,3 @@ type propertyXML struct {
 	// even including the DAV: namespace.
 	InnerXML []byte `xml:",innerxml"`
 }
-
-// http://www.webdav.org/specs/rfc4918.html#ELEMENT_error
-type errorXML struct {
-	XMLName   xml.Name `xml:"d:error"`
-	Xmlnsd    string   `xml:"xmlns:d,attr"`
-	Xmlnss    string   `xml:"xmlns:s,attr"`
-	Exception string   `xml:"s:exception"`
-	Message   string   `xml:"s:message"`
-	InnerXML  []byte   `xml:",innerxml"`
-}
-
-var errInvalidPropfind = errors.New("webdav: invalid propfind")

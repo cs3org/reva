@@ -283,12 +283,16 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 			}
 			if httpRes.StatusCode == errtypes.StatusChecksumMismatch {
 				w.WriteHeader(http.StatusBadRequest)
-				xml := `<?xml version="1.0" encoding="utf-8"?>
-<d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">
-  <s:exception>Sabre\DAV\Exception\BadRequest</s:exception>
-  <s:message>The computed checksum does not match the one received from the client.</s:message>
-</d:error>`
-				_, err := w.Write([]byte(xml))
+				b, err := Marshal(exception{
+					code:    SabredavMethodBadRequest,
+					message: "The computed checksum does not match the one received from the client.",
+				})
+				if err != nil {
+					sublog.Error().Msgf("error marshaling xml response: %s", b)
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				_, err = w.Write(b)
 				if err != nil {
 					sublog.Err(err).Msg("error writing response")
 				}
