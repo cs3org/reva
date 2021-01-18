@@ -45,6 +45,9 @@ __Supported importers:__
 - **webapi**
 Mentix can import mesh data via an HTTP endpoint using the `webapi` importer. Data can be sent to the configured relative endpoint (see [here](webapi)).
 
+- **adminapi**
+  Some aspects of Mentix can be administered through an HTTP endpoint using the `adminapi` importer. Queries can be sent to the configured relative endpoint (see [here](adminapi)).
+
 ## Exporters
 Mentix exposes its gathered data by using one or more _exporters_. Such exporters can, for example, write the data to a file in a specific format, or offer the data via an HTTP endpoint.
 

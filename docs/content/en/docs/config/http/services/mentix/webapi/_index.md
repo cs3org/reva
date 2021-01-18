@@ -24,11 +24,19 @@ Currently, the following actions are supported:
 
 For all actions, the site data must be sent as JSON data. If the call succeeded, status 200 is returned.
 
-{{% dir name="endpoint" type="string" default="/" %}}
+{{% dir name="endpoint" type="string" default="/sites" %}}
 The endpoint where the mesh data can be sent to.
 {{< highlight toml >}}
 [http.services.mentix.importers.webapi]
 endpoint = "/data"
+{{< /highlight >}}
+{{% /dir %}}
+
+{{% dir name="is_protected" type="bool" default="false" %}}
+Whether the endpoint requires authentication.
+{{< highlight toml >}}
+[http.services.mentix.importers.webapi]
+is_protected = true
 {{< /highlight >}}
 {{% /dir %}}
 
@@ -44,11 +52,19 @@ enabled_connectors = ["localfile"]
 
 The WebAPI exporter exposes the _plain_ Mentix data via an HTTP endpoint.
 
-{{% dir name="endpoint" type="string" default="/" %}}
+{{% dir name="endpoint" type="string" default="/sites" %}}
 The endpoint where the mesh data can be queried.
 {{< highlight toml >}}
 [http.services.mentix.exporters.webapi]
 endpoint = "/data"
+{{< /highlight >}}
+{{% /dir %}}
+
+{{% dir name="is_protected" type="bool" default="false" %}}
+Whether the endpoint requires authentication.
+{{< highlight toml >}}
+[http.services.mentix.exporters.webapi]
+is_protected = true
 {{< /highlight >}}
 {{% /dir %}}
 

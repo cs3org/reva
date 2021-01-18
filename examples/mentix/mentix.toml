@@ -30,6 +30,12 @@ enabled_connectors = ["gocdb"]
 # For importers, this is obligatory; the connectors will be used as the target for data updates
 enabled_connectors = ["localfile"]
 
+# Enable the AdminAPI importer
+[http.services.mentix.importers.adminapi]
+enabled_connectors = ["localfile"]
+# Should never allow access w/o prior authorization
+is_protected = true
+
 # Configure the Prometheus Service Discovery:
 [http.services.mentix.exporters.promsd]
 # The following files must be made available to Prometheus.

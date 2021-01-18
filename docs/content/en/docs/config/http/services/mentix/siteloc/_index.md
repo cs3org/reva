@@ -10,11 +10,19 @@ description: >
 The Site Locations exporter exposes location information of all sites to be consumed by Grafana via an HTTP endpoint.
 {{% /pageinfo %}}
 
-{{% dir name="endpoint" type="string" default="/" %}}
+{{% dir name="endpoint" type="string" default="/siteloc" %}}
 The endpoint where the locations data can be queried.
 {{< highlight toml >}}
 [http.services.mentix.exporters.siteloc]
 endpoint = "/loc"
+{{< /highlight >}}
+{{% /dir %}}
+
+{{% dir name="is_protected" type="bool" default="false" %}}
+Whether the endpoint requires authentication.
+{{< highlight toml >}}
+[http.services.mentix.exporters.siteloc]
+is_protected = true
 {{< /highlight >}}
 {{% /dir %}}
 
