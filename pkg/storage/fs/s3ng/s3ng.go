@@ -22,6 +22,7 @@ package s3ng
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/url"
 	"os"
@@ -35,6 +36,7 @@ import (
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
+	"github.com/cs3org/reva/pkg/storage/fs/s3ng/blobstore"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/user"
@@ -170,7 +172,12 @@ func New(m map[string]interface{}, lu *Lookup, permissionsChecker PermissionsChe
 		return nil, err
 	}
 
+	if !o.S3ConfigComplete() {
+		return nil, fmt.Errorf("S3 configuration incomplete")
+	}
+
 	return &s3ngfs{
+		Blobstore:    blobstore.New(o.S3Endpoint, o.S3Region, o.S3AccessKey, o.S3SecretKey),
 		tp:           tp,
 		lu:           lu,
 		o:            o,
@@ -179,10 +186,10 @@ func New(m map[string]interface{}, lu *Lookup, permissionsChecker PermissionsChe
 	}, nil
 }
 
-type Blobstore struct{}
 type s3ngfs struct {
+	Blobstore *blobstore.Blobstore
+
 	lu           *Lookup
-	Blobstore    *Blobstore
 	tp           TreePersistence
 	o            *Options
 	p            PermissionsChecker
