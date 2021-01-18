@@ -69,7 +69,12 @@ var _ = Describe("File uploads", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		options = map[string]interface{}{
-			"Root": tmpRoot,
+			"Root":          tmpRoot,
+			"s3.endpoint":   "http://1.2.3.4:5000",
+			"s3.region":     "default",
+			"s3.bucket":     "the-bucket",
+			"s3.access_key": "foo",
+			"s3.secret_key": "bar",
 		}
 		lookup = &s3ng.Lookup{}
 		permissions = &mocks.PermissionsChecker{}
@@ -107,10 +112,13 @@ var _ = Describe("File uploads", func() {
 		})
 
 		Describe("InitiateUpload", func() {
-			It("returns uploadIds", func() {
+			It("returns uploadIds for simple and tus uploads", func() {
 				uploadIds, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
+
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(uploadIds)).To(Equal(2))
+				Expect(uploadIds["simple"]).ToNot(BeEmpty())
+				Expect(uploadIds["tus"]).ToNot(BeEmpty())
 			})
 		})
 

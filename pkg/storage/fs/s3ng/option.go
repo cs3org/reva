@@ -43,6 +43,21 @@ type Options struct {
 
 	// set an owner for the root node
 	Owner string `mapstructure:"owner"`
+
+	// Endpoint of the s3 blobstore
+	S3Endpoint string `mapstructure:"s3.endpoint"`
+
+	// Region of the s3 blobstore
+	S3Region string `mapstructure:"s3.region"`
+
+	// Bucket of the s3 blobstore
+	S3Bucket string `mapstructure:"s3.bucket"`
+
+	// Access key for the s3 blobstore
+	S3AccessKey string `mapstructure:"s3.access_key"`
+
+	// Secret key for the s3 blobstore
+	S3SecretKey string `mapstructure:"s3.secret_key"`
 }
 
 // newOptions initializes the available default options.
@@ -98,4 +113,13 @@ func TreeSizeAccounting(val bool) Option {
 	return func(o *Options) {
 		o.TreeSizeAccounting = val
 	}
+}
+
+// S3ConfigComplete return true if all required s3 fields are set
+func (o *Options) S3ConfigComplete() bool {
+	return o.S3Endpoint != "" &&
+		o.S3Region != "" &&
+		o.S3Bucket != "" &&
+		o.S3AccessKey != "" &&
+		o.S3SecretKey != ""
 }
