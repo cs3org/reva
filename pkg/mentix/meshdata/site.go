@@ -125,7 +125,7 @@ func (site *Site) InferMissingData() {
 
 	// Automatically assign an ID to this site if it is missing
 	if len(site.ID) == 0 {
-		site.GenerateID()
+		site.generateID()
 	}
 
 	// Infer missing for services
@@ -134,9 +134,8 @@ func (site *Site) InferMissingData() {
 	}
 }
 
-// GenerateID generates a unique ID for the site; the following fields are used for this:
 // Name, Domain
-func (site *Site) GenerateID() {
+func (site *Site) generateID() {
 	host := site.Domain
 	if site.Homepage != "" {
 		if hostURL, err := url.Parse(site.Homepage); err == nil {
