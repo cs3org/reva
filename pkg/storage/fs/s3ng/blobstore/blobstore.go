@@ -18,9 +18,38 @@
 
 package blobstore
 
+import (
+	"io"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/pkg/errors"
+)
+
+// Blobstore provides an interface to an s3 compatible blobstore
 type Blobstore struct {
+	uploader *s3manager.Uploader
 }
 
-func New(endpoint, region, accessKey, secretKey string) *Blobstore {
-	return &Blobstore{}
+// New returns a new Blobstore
+func New(endpoint, region, bucket, accessKey, secretKey string) (*Blobstore, error) {
+	sess, err := session.NewSession(&aws.Config{
+		Endpoint:         aws.String(endpoint),
+		Region:           aws.String(region),
+		S3ForcePathStyle: aws.Bool(true),
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to setup s3 session")
+	}
+	uploader := s3manager.NewUploader(sess)
+
+	return &Blobstore{
+		uploader: uploader,
+	}, nil
+}
+
+// Upload stores some data in the blobstore under the given key
+func (bs *Blobstore) Upload(key string, reader io.Reader) error {
+	return nil
 }
