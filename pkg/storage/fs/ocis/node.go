@@ -345,7 +345,7 @@ func calculateEtag(nodeID string, tmTime time.Time) (string, error) {
 	} else {
 		return "", err
 	}
-	return `"` + hex.EncodeToString(h.Sum(nil)) + `"`, nil
+	return fmt.Sprintf(`"%x"`, h.Sum(nil)), nil
 }
 
 // SetMtime sets the mtime and atime of a node
