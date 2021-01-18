@@ -75,6 +75,7 @@ func (connector *GOCDBConnector) RetrieveMeshData() (*meshdata.MeshData, error) 
 		}
 	}
 
+	meshData.InferMissingData()
 	return meshData, nil
 }
 

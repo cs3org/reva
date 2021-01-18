@@ -54,7 +54,7 @@ func (meshData *MeshData) Clear() {
 
 // AddSite adds a new site; if a site with the same ID already exists, the existing one is overwritten.
 func (meshData *MeshData) AddSite(site *Site) {
-	if siteExisting := meshData.FindSite(site.GetID()); siteExisting != nil {
+	if siteExisting := meshData.FindSite(site.ID); siteExisting != nil {
 		*siteExisting = *site
 	} else {
 		meshData.Sites = append(meshData.Sites, site)
@@ -79,7 +79,7 @@ func (meshData *MeshData) RemoveSite(id string) {
 // FindSite searches for a site with the given ID.
 func (meshData *MeshData) FindSite(id string) *Site {
 	for _, site := range meshData.Sites {
-		if strings.EqualFold(site.GetID(), id) {
+		if strings.EqualFold(site.ID, id) {
 			return site
 		}
 	}
@@ -134,7 +134,7 @@ func (meshData *MeshData) Merge(inData *MeshData) {
 // Unmerge removes data from another MeshData instance from this one.
 func (meshData *MeshData) Unmerge(inData *MeshData) {
 	for _, site := range inData.Sites {
-		meshData.RemoveSite(site.GetID())
+		meshData.RemoveSite(site.ID)
 	}
 
 	for _, serviceType := range inData.ServiceTypes {

@@ -34,6 +34,9 @@ func decodeQueryData(data []byte) (*meshdata.MeshData, error) {
 		return nil, err
 	}
 
+	// Imported sites will be assigned an ID automatically
+	site.ID = ""
+
 	// Set sites imported through the WebAPI to 'unauthorized' by default
 	meshdata.SetPropertyValue(site.Properties, meshdata.PropertyAuthorized, "false")
 
@@ -52,7 +55,7 @@ func handleQuery(data []byte, params url.Values, status int, msg string) (meshda
 		return nil, http.StatusBadRequest, network.CreateResponse("INVALID_DATA", network.ResponseParams{"error": err.Error()}), nil
 	}
 	meshData.Status = status
-	return meshdata.Vector{meshData}, http.StatusOK, network.CreateResponse(msg, network.ResponseParams{"id": meshData.Sites[0].GetID()}), nil
+	return meshdata.Vector{meshData}, http.StatusOK, network.CreateResponse(msg, network.ResponseParams{"id": meshData.Sites[0].ID}), nil
 }
 
 // HandleRegisterSiteQuery registers a site.

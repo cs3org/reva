@@ -96,7 +96,7 @@ func getScrapeTargetLabels(site *meshdata.Site, host string, endpoint *meshdata.
 	labels := map[string]string{
 		"__meta_mentix_site":         site.Name,
 		"__meta_mentix_site_type":    meshdata.GetSiteTypeName(site.Type),
-		"__meta_mentix_site_id":      site.GetID(),
+		"__meta_mentix_site_id":      site.ID,
 		"__meta_mentix_host":         host,
 		"__meta_mentix_country":      site.CountryCode,
 		"__meta_mentix_service_type": endpoint.Type.Name,

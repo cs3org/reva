@@ -40,6 +40,8 @@ func (exporter *WebAPIExporter) Activate(conf *config.Configuration, log *zerolo
 	exporter.SetEndpoint(conf.Exporters.WebAPI.Endpoint, conf.Exporters.WebAPI.IsProtected)
 	exporter.SetEnabledConnectors(conf.Exporters.WebAPI.EnabledConnectors)
 
+	exporter.allowUnauthorizedSites = true
+
 	exporter.defaultActionHandler = webapi.HandleDefaultQuery
 
 	return nil

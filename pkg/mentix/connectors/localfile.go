@@ -78,6 +78,7 @@ func (connector *LocalFileConnector) RetrieveMeshData() (*meshdata.MeshData, err
 	// Update the site types, as these are not part of the JSON data
 	connector.setSiteTypes(meshData)
 
+	meshData.InferMissingData()
 	return meshData, nil
 }
 
@@ -121,7 +122,7 @@ func (connector *LocalFileConnector) mergeData(meshData *meshdata.MeshData, upda
 	// Store the previous authorization status for already existing sites
 	siteAuthorizationStatus := make(map[string]string)
 	for _, site := range meshData.Sites {
-		siteAuthorizationStatus[site.GetID()] = meshdata.GetPropertyValue(site.Properties, meshdata.PropertyAuthorized, "false")
+		siteAuthorizationStatus[site.ID] = meshdata.GetPropertyValue(site.Properties, meshdata.PropertyAuthorized, "false")
 	}
 
 	// Add/update data by merging
