@@ -21,6 +21,7 @@ package s3ng_test
 import (
 	"bytes"
 	"context"
+	"io"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -125,12 +126,22 @@ var _ = Describe("File uploads", func() {
 		})
 
 		Describe("Upload", func() {
-			It("stores the blob in s3", func() {
-				data := []byte("0123456789")
+			var (
+				fileContent = []byte("0123456789")
+			)
 
-				bs.On("Upload", mock.AnythingOfType("string"), mock.AnythingOfType("*os.File")).Return(nil)
+			It("stores the blob in the blobstore", func() {
+				bs.On("Upload", mock.AnythingOfType("string"), mock.AnythingOfType("*os.File")).
+					Return(nil).
+					Run(func(args mock.Arguments) {
+						reader := args.Get(1).(io.Reader)
+						data, err := ioutil.ReadAll(reader)
 
-				err := fs.Upload(ctx, ref, ioutil.NopCloser(bytes.NewReader(data)))
+						Expect(err).ToNot(HaveOccurred())
+						Expect(data).To(Equal([]byte("0123456789")))
+					})
+
+				err := fs.Upload(ctx, ref, ioutil.NopCloser(bytes.NewReader(fileContent)))
 				Expect(err).ToNot(HaveOccurred())
 
 				bs.AssertCalled(GinkgoT(), "Upload", mock.Anything, mock.Anything)

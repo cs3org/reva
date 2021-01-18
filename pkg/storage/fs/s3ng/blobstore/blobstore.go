@@ -22,6 +22,7 @@ import (
 	"io"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/pkg/errors"
@@ -30,6 +31,7 @@ import (
 // Blobstore provides an interface to an s3 compatible blobstore
 type Blobstore struct {
 	uploader *s3manager.Uploader
+	bucket   string
 }
 
 // New returns a new Blobstore
@@ -37,6 +39,7 @@ func New(endpoint, region, bucket, accessKey, secretKey string) (*Blobstore, err
 	sess, err := session.NewSession(&aws.Config{
 		Endpoint:         aws.String(endpoint),
 		Region:           aws.String(region),
+		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, ""),
 		S3ForcePathStyle: aws.Bool(true),
 	})
 	if err != nil {
@@ -51,5 +54,13 @@ func New(endpoint, region, bucket, accessKey, secretKey string) (*Blobstore, err
 
 // Upload stores some data in the blobstore under the given key
 func (bs *Blobstore) Upload(key string, reader io.Reader) error {
+	_, err := bs.uploader.Upload(&s3manager.UploadInput{
+		Bucket: aws.String(bs.bucket),
+		Key:    aws.String(key),
+		Body:   reader,
+	})
+	if err != nil {
+		return errors.Wrapf(err, "could not store object: %s", key)
+	}
 	return nil
 }
