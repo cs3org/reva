@@ -48,6 +48,7 @@ var _ = Describe("File uploads", func() {
 		options     map[string]interface{}
 		lookup      *s3ng.Lookup
 		permissions *mocks.PermissionsChecker
+		bs          *mocks.Blobstore
 	)
 
 	BeforeEach(func() {
@@ -78,6 +79,7 @@ var _ = Describe("File uploads", func() {
 		}
 		lookup = &s3ng.Lookup{}
 		permissions = &mocks.PermissionsChecker{}
+		bs = &mocks.Blobstore{}
 	})
 
 	AfterEach(func() {
@@ -89,7 +91,7 @@ var _ = Describe("File uploads", func() {
 
 	JustBeforeEach(func() {
 		var err error
-		fs, err = s3ng.New(options, lookup, permissions)
+		fs, err = s3ng.New(options, lookup, permissions, bs)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -126,8 +128,12 @@ var _ = Describe("File uploads", func() {
 			It("stores the blob in s3", func() {
 				data := []byte("0123456789")
 
+				bs.On("Upload", mock.AnythingOfType("string"), mock.AnythingOfType("*os.File")).Return(nil)
+
 				err := fs.Upload(ctx, ref, ioutil.NopCloser(bytes.NewReader(data)))
 				Expect(err).ToNot(HaveOccurred())
+
+				bs.AssertCalled(GinkgoT(), "Upload", mock.Anything, mock.Anything)
 			})
 		})
 	})

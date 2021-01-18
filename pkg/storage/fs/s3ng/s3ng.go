@@ -18,7 +18,7 @@
 
 package s3ng
 
-//go:generate mockery -name PermissionsChecker
+//go:generate mockery -name PermissionsChecker -name Blobstore
 
 import (
 	"context"
@@ -119,19 +119,36 @@ func (o *Options) init(m map[string]interface{}) {
 	o.Root = filepath.Clean(o.Root)
 }
 
+// PermissionsChecker defines an interface for checking permissions on a Node
 type PermissionsChecker interface {
 	HasPermission(ctx context.Context, n *Node, check func(*provider.ResourcePermissions) bool) (can bool, err error)
 }
 
+// Blobstore defines an interface for storing blobs in a blobstore
+type Blobstore interface {
+	Upload(key string, reader io.Reader) error
+}
+
+// NewDefault returns an s3ng filestore using the default configuration
 func NewDefault(m map[string]interface{}) (storage.FS, error) {
+	o, err := parseConfig(m)
+	if err != nil {
+		return nil, err
+	}
+
 	lu := &Lookup{}
 	p := &Permissions{lu: lu}
-	return New(m, lu, p)
+	bs, err := blobstore.New(o.S3Endpoint, o.S3Region, o.S3Bucket, o.S3AccessKey, o.S3SecretKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return New(m, lu, p, bs)
 }
 
 // New returns an implementation to of the storage.FS interface that talk to
 // a local filesystem.
-func New(m map[string]interface{}, lu *Lookup, permissionsChecker PermissionsChecker) (storage.FS, error) {
+func New(m map[string]interface{}, lu *Lookup, permissionsChecker PermissionsChecker, blobstore Blobstore) (storage.FS, error) {
 	o, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -177,7 +194,7 @@ func New(m map[string]interface{}, lu *Lookup, permissionsChecker PermissionsChe
 	}
 
 	return &s3ngfs{
-		Blobstore:    blobstore.New(o.S3Endpoint, o.S3Region, o.S3AccessKey, o.S3SecretKey),
+		Blobstore:    blobstore,
 		tp:           tp,
 		lu:           lu,
 		o:            o,
@@ -187,7 +204,7 @@ func New(m map[string]interface{}, lu *Lookup, permissionsChecker PermissionsChe
 }
 
 type s3ngfs struct {
-	Blobstore *blobstore.Blobstore
+	Blobstore Blobstore
 
 	lu           *Lookup
 	tp           TreePersistence

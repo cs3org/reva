@@ -405,6 +405,17 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		}
 	}
 
+	// upload the data to the blobstore
+	file, err := os.OpenFile(upload.binPath, os.O_RDONLY, defaultFilePerm)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	err = upload.fs.Blobstore.Upload(n.ID, file)
+	if err != nil {
+		return errors.Wrap(err, "failed to upload file to blostore")
+	}
+
 	// now rename the upload to the target path
 	// TODO put uploads on the same underlying storage as the destination dir?
 	// TODO trigger a workflow as the final rename might eg involve antivirus scanning
