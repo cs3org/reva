@@ -756,7 +756,7 @@ func (fs *eosfs) listShareFolderRoot(ctx context.Context, p string) (finfos []*p
 	return finfos, nil
 }
 
-func (fs *eosfs) GetQuota(ctx context.Context) (int, int, error) {
+func (fs *eosfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return 0, 0, errors.Wrap(err, "eos: no user in ctx")

@@ -1762,9 +1762,21 @@ func (s *svc) PurgeRecycle(ctx context.Context, req *gateway.PurgeRecycleRequest
 	return res, nil
 }
 
-func (s *svc) GetQuota(ctx context.Context, _ *gateway.GetQuotaRequest) (*provider.GetQuotaResponse, error) {
-	res := &provider.GetQuotaResponse{
-		Status: status.NewUnimplemented(ctx, nil, "GetQuota not yet implemented"),
+func (s *svc) GetQuota(ctx context.Context, req *gateway.GetQuotaRequest) (*provider.GetQuotaResponse, error) {
+	// lookup storage by treating the key as a path. It has been prefixed with the storage path in ListRecycle
+	c, err := s.find(ctx, req.Ref)
+	if err != nil {
+		return &provider.GetQuotaResponse{
+			Status: status.NewStatusFromErrType(ctx, "GetQuota ref="+req.Ref.String(), err),
+		}, nil
+	}
+
+	res, err := c.GetQuota(ctx, &provider.GetQuotaRequest{
+		Opaque: req.GetOpaque(),
+		//Ref:    req.GetRef(), // TODO send which storage space ... or root
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling GetQuota")
 	}
 	return res, nil
 }

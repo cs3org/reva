@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -183,8 +184,22 @@ func (fs *ocisfs) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (fs *ocisfs) GetQuota(ctx context.Context) (int, int, error) {
-	return 0, 0, nil
+func (fs *ocisfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
+	// TODO quota of which storage space?
+	// we could use the logged in user, but when a user has access to multiple storages this falls short
+	// for now return quota of root
+	n, err := fs.lu.NodeFromPath(ctx, "/")
+	if err != nil {
+		return 0, 0, err
+	}
+	stat := syscall.Statfs_t{}
+	err = syscall.Statfs(n.lu.toInternalPath(n.ID), &stat)
+	if err != nil {
+		return 0, 0, err
+	}
+	total := stat.Blocks * uint64(stat.Bsize) // Total data blocks in filesystem
+	used := stat.Bavail * uint64(stat.Bsize)  // Free blocks available to	unprivileged user
+	return total, used, nil
 }
 
 // CreateHome creates a new root node that has no parent id

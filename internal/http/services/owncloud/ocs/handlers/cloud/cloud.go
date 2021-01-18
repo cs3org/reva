@@ -40,6 +40,7 @@ type Handler struct {
 func (h *Handler) Init(c *config.Config) {
 	h.UserHandler = new(user.Handler)
 	h.UsersHandler = new(users.Handler)
+	h.UsersHandler.Init(c)
 	h.CapabilitiesHandler = new(capabilities.Handler)
 	h.CapabilitiesHandler.Init(c)
 }

@@ -1102,7 +1102,7 @@ func (fs *ocfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *pro
 	return fs.propagate(ctx, ip)
 }
 
-func (fs *ocfs) GetQuota(ctx context.Context) (int, int, error) {
+func (fs *ocfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
 	return 0, 0, nil
 }
 
