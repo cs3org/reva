@@ -1,4 +1,4 @@
-// Copyright 2018-2020 CERN
+// Copyright 2018-2021 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -102,6 +102,7 @@ func (h *Handler) Init(c *config.Config) {
 	}
 	// h.c.Capabilities.Files.Undelete is boolean
 	// h.c.Capabilities.Files.Versioning is boolean
+	// h.c.Capabilities.Files.Favorites is boolean
 
 	// dav
 

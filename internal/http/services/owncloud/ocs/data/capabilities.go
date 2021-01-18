@@ -1,4 +1,4 @@
-// Copyright 2018-2020 CERN
+// Copyright 2018-2021 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -99,6 +99,7 @@ type CapabilitiesFiles struct {
 	BigFileChunking  ocsBool                      `json:"bigfilechunking" xml:"bigfilechunking"`
 	Undelete         ocsBool                      `json:"undelete" xml:"undelete"`
 	Versioning       ocsBool                      `json:"versioning" xml:"versioning"`
+	Favorites        ocsBool                      `json:"favorites" xml:"favorites"`
 	BlacklistedFiles []string                     `json:"blacklisted_files" xml:"blacklisted_files>element" mapstructure:"blacklisted_files"`
 	TusSupport       *CapabilitiesFilesTusSupport `json:"tus_support" xml:"tus_support" mapstructure:"tus_support"`
 }

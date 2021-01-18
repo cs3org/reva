@@ -1,4 +1,4 @@
-// Copyright 2018-2020 CERN
+// Copyright 2018-2021 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -295,7 +295,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, pf *pr
 		size := fmt.Sprintf("%d", item.Size)
 		for i := range pf.Prop {
 			switch pf.Prop[i].Space {
-			case "http://owncloud.org/ns":
+			case _nsOwncloud:
 				switch pf.Prop[i].Local {
 				case "oc:size":
 					if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
@@ -314,7 +314,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, pf *pr
 				default:
 					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:"+pf.Prop[i].Local, ""))
 				}
-			case "DAV:":
+			case _nsDav:
 				switch pf.Prop[i].Local {
 				case "getcontentlength":
 					if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {

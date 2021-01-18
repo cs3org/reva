@@ -1,4 +1,4 @@
-// Copyright 2018-2020 CERN
+// Copyright 2018-2021 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -103,8 +103,6 @@ func isContentRange(r *http.Request) bool {
 
 func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
-
-	ns = applyLayout(ctx, ns)
 	fn := path.Join(ns, r.URL.Path)
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()

@@ -1,4 +1,4 @@
-// Copyright 2018-2020 CERN
+// Copyright 2018-2021 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,8 +43,6 @@ func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string)
 
 	acceptedProps := []xml.Name{}
 	removedProps := []xml.Name{}
-
-	ns = applyLayout(ctx, ns)
 
 	fn := path.Join(ns, r.URL.Path)
 
@@ -218,7 +216,7 @@ func (s *svc) formatProppatchResponse(ctx context.Context, acceptedProps []xml.N
 
 func (s *svc) isBooleanProperty(prop string) bool {
 	// TODO add other properties we know to be boolean?
-	return prop == "http://owncloud.org/ns/favorite"
+	return prop == _propOcFavorite
 }
 
 func (s *svc) as0or1(val string) string {
@@ -307,9 +305,9 @@ func readProppatch(r io.Reader) (patches []Proppatch, status int, err error) {
 	for _, op := range pu.SetRemove {
 		remove := false
 		switch op.XMLName {
-		case xml.Name{Space: "DAV:", Local: "set"}:
+		case xml.Name{Space: _nsDav, Local: "set"}:
 			// No-op.
-		case xml.Name{Space: "DAV:", Local: "remove"}:
+		case xml.Name{Space: _nsDav, Local: "remove"}:
 			for _, p := range op.Prop {
 				if len(p.InnerXML) > 0 {
 					return nil, http.StatusBadRequest, errInvalidProppatch

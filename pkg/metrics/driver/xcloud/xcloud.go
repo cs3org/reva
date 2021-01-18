@@ -19,6 +19,8 @@
 package json
 
 import (
+	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -48,7 +50,7 @@ func driverName() string {
 	return "xcloud"
 }
 
-// CloudDriver the JsonDriver struct
+// CloudDriver is the driver to use for Sciencemesh apps
 type CloudDriver struct {
 	instance     string
 	catalog      string
@@ -62,7 +64,10 @@ func (d *CloudDriver) refresh() error {
 
 	// get configuration from internal_metrics endpoint exposed
 	// by the sciencemesh app
-	client := &http.Client{}
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: tr}
 
 	// endpoint example: https://mybox.com or https://mybox.com/owncloud
 	endpoint := fmt.Sprintf("%s/index.php/apps/sciencemesh/internal_metrics", d.instance)
@@ -80,7 +85,7 @@ func (d *CloudDriver) refresh() error {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		err := fmt.Errorf("xcloud: error getting internal metrics from %s. http status code (%d)", resp.StatusCode)
+		err := fmt.Errorf("xcloud: error getting internal metrics from %s. http status code (%d)", d.instance, resp.StatusCode)
 		log.Err(err).Msgf("xcloud: error getting internal metrics from %s", d.instance)
 		return err
 	}
@@ -104,33 +109,6 @@ func (d *CloudDriver) refresh() error {
 	d.CloudData = cd
 	log.Info().Msgf("xcloud: received internal metrics from cloud provider: %+v", cd)
 
-	// if catalog is set, register site continously, this helps to also monitorize the health
-	// "xcloud: received internal metrics from cloud provider: &{Metrics:{TotalUsers:1 TotalGroups:0 TotalStorage:0} Settings:{IOPUrl:http://localhost:5550 Sitename:CERN Hostname:localhost Country:CH}}"
-	//
-	/*
-		{
-			"Name": "OC-Test@WWU",
-			"FullName": "ownCloud Test at University of Muenster",
-			"Homepage": "http://oc-test.uni-muenster.de",
-			"Description": "ownCloud Test Instance of University of Muenster",
-			"CountryCode": "DE",
-			"Services": [
-			    {
-				"Type": {
-				    "Name": "REVAD"
-				},
-				"Name": "oc-test.uni-muenster.de - REVAD",
-				"URL": "https://oc-test.uni-muenster.de/revad",
-				"IsMonitored": true,
-				"Properties": {
-				    "METRICS_PATH": "/revad/metrics"
-				},
-				"Host": "octest-test.uni-muenster.de"
-			    }
-			]
-	    	}
-	*/
-
 	mc := &MentixCatalog{
 		Name:        cd.Settings.Sitename,
 		FullName:    cd.Settings.Sitename,
@@ -139,26 +117,47 @@ func (d *CloudDriver) refresh() error {
 		CountryCode: cd.Settings.Country,
 		Services: []*MentixService{
 			&MentixService{
-				Host: cd.Settings.Hostname,
+				Host:        cd.Settings.Hostname,
 				IsMonitored: true,
-				Name: cd.Settings.Hostname + " - REVAD",
-				URL: " 
-
-				/*
-				&
-				Host        string                  `json:"Host"`
-				IsMonitored bool                     `json:"IsMonitored"`
-				Name        string                   `json:"Name"`
-				Properties  *MentixServiceProperties `json:"Properties"`
-				Type        *MentixServiceType       `json:"Type"`
-				URL         string                   `json:"URL"`
-				*/
+				Name:        cd.Settings.Hostname + " - REVAD",
+				URL:         cd.Settings.Siteurl,
+				Properties: &MentixServiceProperties{
+					MetricsPath: "/index.php/apps/sciencemesh/metrics",
+				},
+				Type: &MentixServiceType{
+					Name: "REVAD",
+				},
 			},
 		},
 	}
 
-	return nil
+	j, err := json.Marshal(mc)
+	if err != nil {
+		log.Err(err).Msgf("xcloud: error marhsaling mentix calalog info")
+		return err
+	}
 
+	log.Info().Msgf("xcloud: info to send to register: %s", string(j))
+
+	// send to register if catalog is set
+	req, err = http.NewRequest("POST", d.catalog, bytes.NewBuffer(j))
+	if err != nil {
+		log.Err(err).Msgf("xcloud: error creating POST request to: %s", d.catalog)
+		return err
+	}
+
+	resp, err = client.Do(req)
+	if err != nil {
+		log.Err(err).Msgf("xcloud: error registering catalog info to: %s with info: %s", d.catalog, string(j))
+		return err
+	}
+
+	defer resp.Body.Close()
+	body, _ := ioutil.ReadAll(resp.Body)
+
+	log.Info().Msgf("xcloud: site registered: %s", string(body))
+
+	return nil
 }
 
 // Configure configures this driver
@@ -174,6 +173,7 @@ func (d *CloudDriver) Configure(c *config.Config) error {
 
 	d.instance = c.XcloudInstance
 	d.pullInterval = c.XcloudPullInterval
+	d.catalog = c.XcloudCatalog
 
 	ticker := time.NewTicker(time.Duration(d.pullInterval) * time.Second)
 	quit := make(chan struct{})
@@ -181,7 +181,8 @@ func (d *CloudDriver) Configure(c *config.Config) error {
 		for {
 			select {
 			case <-ticker.C:
-				d.refresh()
+				err := d.refresh()
+				log.Err(err).Msgf("xcloud: error from refresh goroutine")
 			case <-quit:
 				ticker.Stop()
 				return
@@ -207,24 +208,29 @@ func (d *CloudDriver) GetAmountStorage() int64 {
 	return d.CloudData.Metrics.TotalStorage
 }
 
+// CloudData represents the information obtained from the sciencemesh app
 type CloudData struct {
 	Metrics  CloudDataMetrics  `json:"metrics"`
 	Settings CloudDataSettings `json:"settings"`
 }
 
+// CloudDataMetrics reprents the metrics gathered from the sciencemesh app
 type CloudDataMetrics struct {
 	TotalUsers   int64 `json:"total_users"`
 	TotalGroups  int64 `json:"total_groups"`
 	TotalStorage int64 `json:"total_storage"`
 }
 
+// CloudDataSettings represents the metrics gathered
 type CloudDataSettings struct {
 	IOPUrl   string `json:"iopurl"`
 	Sitename string `json:"sitename"`
+	Siteurl  string `json:"siteurl"`
 	Hostname string `json:"hostname"`
 	Country  string `json:"country"`
 }
 
+// MentixCatalog represents the information needed to register a site into the mesh
 type MentixCatalog struct {
 	CountryCode string           `json:"CountryCode"`
 	Description string           `json:"Description"`
@@ -234,6 +240,7 @@ type MentixCatalog struct {
 	Services    []*MentixService `json:"Services"`
 }
 
+// MentixService represents the service running in a site
 type MentixService struct {
 	Host        string                   `json:"Host"`
 	IsMonitored bool                     `json:"IsMonitored"`
@@ -243,9 +250,12 @@ type MentixService struct {
 	URL         string                   `json:"URL"`
 }
 
+// MentixServiceProperties represents the properties to expose the metrics endpoint
 type MentixServiceProperties struct {
 	MetricsPath string `json:"METRICS_PATH"`
 }
+
+// MentixServiceType represents the type of service running
 type MentixServiceType struct {
 	Name string `json:"Name"`
 }
