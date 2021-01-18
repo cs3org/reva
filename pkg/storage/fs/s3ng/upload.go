@@ -406,7 +406,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	}
 
 	// upload the data to the blobstore
-	file, err := os.OpenFile(upload.binPath, os.O_RDONLY, defaultFilePerm)
+	file, err := os.Open(upload.binPath)
 	if err != nil {
 		return err
 	}
@@ -416,9 +416,17 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		return errors.Wrap(err, "failed to upload file to blostore")
 	}
 
-	// now rename the upload to the target path
+	// now truncate the upload (the payload stays in the blobstore) and move it to the target path
 	// TODO put uploads on the same underlying storage as the destination dir?
 	// TODO trigger a workflow as the final rename might eg involve antivirus scanning
+	if err = os.Truncate(upload.binPath, 0); err != nil {
+		log := appctx.GetLogger(upload.ctx)
+		log.Err(err).Interface("info", upload.info).
+			Str("binPath", upload.binPath).
+			Str("targetPath", targetPath).
+			Msg("s3ngfs: could not truncate")
+		return
+	}
 	if err = os.Rename(upload.binPath, targetPath); err != nil {
 		log := appctx.GetLogger(upload.ctx)
 		log.Err(err).Interface("info", upload.info).
