@@ -1,4 +1,4 @@
-// Copyright 2018-2020 CERN
+// Copyright 2018-2021 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -62,8 +62,9 @@ const (
 	// grantPrefix is the prefix for sharing related extended attributes
 	grantPrefix    string = ocisPrefix + "grant."
 	metadataPrefix string = ocisPrefix + "md."
-	// TODO implement favorites metadata flag
-	//favPrefix   string = ocisPrefix + "fav."  // favorite flag, per user
+
+	// favorite flag, per user
+	favPrefix string = ocisPrefix + "fav."
 
 	// a temporary etag for a folder that is removed when the mtime propagation happens
 	tmpEtagAttr   string = ocisPrefix + "tmp.etag"

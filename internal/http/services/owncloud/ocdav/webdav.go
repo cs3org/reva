@@ -1,4 +1,4 @@
-// Copyright 2018-2020 CERN
+// Copyright 2018-2021 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,46 +25,49 @@ import (
 
 // WebDavHandler implements a dav endpoint
 type WebDavHandler struct {
-	namespace string
+	namespace         string
+	useLoggedInUserNS bool
 }
 
-func (h *WebDavHandler) init(ns string) error {
+func (h *WebDavHandler) init(ns string, useLoggedInUserNS bool) error {
 	h.namespace = path.Join("/", ns)
+	h.useLoggedInUserNS = useLoggedInUserNS
 	return nil
 }
 
 // Handler handles requests
 func (h *WebDavHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ns := applyLayout(r.Context(), h.namespace, h.useLoggedInUserNS, r.URL.Path)
 		switch r.Method {
 		case "PROPFIND":
-			s.handlePropfind(w, r, h.namespace)
+			s.handlePropfind(w, r, ns)
 		case "LOCK":
-			s.handleLock(w, r, h.namespace)
+			s.handleLock(w, r, ns)
 		case "UNLOCK":
-			s.handleUnlock(w, r, h.namespace)
+			s.handleUnlock(w, r, ns)
 		case "PROPPATCH":
-			s.handleProppatch(w, r, h.namespace)
+			s.handleProppatch(w, r, ns)
 		case "MKCOL":
-			s.handleMkcol(w, r, h.namespace)
+			s.handleMkcol(w, r, ns)
 		case "MOVE":
-			s.handleMove(w, r, h.namespace)
+			s.handleMove(w, r, ns)
 		case "COPY":
-			s.handleCopy(w, r, h.namespace)
+			s.handleCopy(w, r, ns)
 		case "REPORT":
-			s.handleReport(w, r, h.namespace)
+			s.handleReport(w, r, ns)
 		case http.MethodGet:
-			s.handleGet(w, r, h.namespace)
+			s.handleGet(w, r, ns)
 		case http.MethodPut:
-			s.handlePut(w, r, h.namespace)
+			s.handlePut(w, r, ns)
 		case http.MethodPost:
-			s.handleTusPost(w, r, h.namespace)
+			s.handleTusPost(w, r, ns)
 		case http.MethodOptions:
-			s.handleOptions(w, r, h.namespace)
+			s.handleOptions(w, r, ns)
 		case http.MethodHead:
-			s.handleHead(w, r, h.namespace)
+			s.handleHead(w, r, ns)
 		case http.MethodDelete:
-			s.handleDelete(w, r, h.namespace)
+			s.handleDelete(w, r, ns)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
