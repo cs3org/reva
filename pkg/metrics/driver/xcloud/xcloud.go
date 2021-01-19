@@ -57,17 +57,10 @@ type CloudDriver struct {
 	pullInterval int
 	CloudData    *CloudData
 	sync.Mutex
+	client *http.Client
 }
 
 func (d *CloudDriver) refresh() error {
-	// TODO(labkode): spawn goroutines to fetch metrics and update the register service
-
-	// get configuration from internal_metrics endpoint exposed
-	// by the sciencemesh app
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	client := &http.Client{Transport: tr}
 
 	// endpoint example: https://mybox.com or https://mybox.com/owncloud
 	endpoint := fmt.Sprintf("%s/index.php/apps/sciencemesh/internal_metrics", d.instance)
@@ -78,7 +71,7 @@ func (d *CloudDriver) refresh() error {
 		return err
 	}
 
-	resp, err := client.Do(req)
+	resp, err := d.client.Do(req)
 	if err != nil {
 		log.Err(err).Msgf("xcloud: error getting internal metrics from %s", d.instance)
 		return err
@@ -146,7 +139,7 @@ func (d *CloudDriver) refresh() error {
 		return err
 	}
 
-	resp, err = client.Do(req)
+	resp, err = d.client.Do(req)
 	if err != nil {
 		log.Err(err).Msgf("xcloud: error registering catalog info to: %s with info: %s", d.catalog, string(j))
 		return err
@@ -179,6 +172,14 @@ func (d *CloudDriver) Configure(c *config.Config) error {
 	d.instance = c.XcloudInstance
 	d.pullInterval = c.XcloudPullInterval
 	d.catalog = c.XcloudCatalog
+
+	// TODO(labkode): make it configurable once site adopted are prod-ready
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: tr}
+
+	d.client = client
 
 	ticker := time.NewTicker(time.Duration(d.pullInterval) * time.Second)
 	quit := make(chan struct{})
