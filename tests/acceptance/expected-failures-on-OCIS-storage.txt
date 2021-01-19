@@ -721,14 +721,7 @@ apiShareReshareToShares3/reShareWithExpiryDate.feature:335
 apiShareReshareToShares3/reShareWithExpiryDate.feature:336
 apiShareReshareToShares3/reShareWithExpiryDate.feature:337
 apiShareReshareToShares3/reShareWithExpiryDate.feature:338
-#
-# https://github.com/owncloud/product/issues/254 empty trashbin does not work
-#
-apiTrashbin/trashbinDelete.feature:31
-apiTrashbin/trashbinDelete.feature:32
-apiTrashbin/trashbinDelete.feature:33
-apiTrashbin/trashbinDelete.feature:34
-apiTrashbin/trashbinDelete.feature:37
+
 #
 # https://github.com/owncloud/ocis/issues/1120 href in trashbin PROPFIND response is wrong
 #
@@ -815,6 +808,10 @@ apiTrashbin/trashbinRestore.feature:311
 apiTrashbin/trashbinRestore.feature:312
 apiTrashbin/trashbinRestore.feature:330
 apiTrashbin/trashbinRestore.feature:331
+#
+# https://github.com/owncloud/product/issues/254 empty trashbin does not work
+#
+apiTrashbin/trashbinDelete.feature:37
 #
 # https://github.com/owncloud/ocis/issues/1123 deleting a received share-folder moves it to trash-bin but does not unshare it
 #
