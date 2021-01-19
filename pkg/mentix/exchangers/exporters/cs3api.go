@@ -37,7 +37,7 @@ func (exporter *CS3APIExporter) Activate(conf *config.Configuration, log *zerolo
 	}
 
 	// Store CS3API specifics
-	exporter.SetEndpoint(conf.Exporters.CS3API.Endpoint)
+	exporter.SetEndpoint(conf.Exporters.CS3API.Endpoint, conf.Exporters.CS3API.IsProtected)
 	exporter.SetEnabledConnectors(conf.Exporters.CS3API.EnabledConnectors)
 
 	exporter.defaultActionHandler = cs3api.HandleDefaultQuery

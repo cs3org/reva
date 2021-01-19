@@ -21,6 +21,8 @@ package meshdata
 import "strings"
 
 const (
+	// PropertyAuthorized identifies the authorization status property.
+	PropertyAuthorized = "authorized"
 	// PropertyOrganization identifies the organization property.
 	PropertyOrganization = "organization"
 	// PropertyMetricsPath identifies the metrics path property.
@@ -42,4 +44,14 @@ func GetPropertyValue(props map[string]string, id string, defValue string) strin
 	}
 
 	return defValue
+}
+
+// SetPropertyValue sets a property value.
+func SetPropertyValue(props *map[string]string, id string, value string) {
+	// If the provided properties map is nil, create an empty one
+	if *props == nil {
+		*props = make(map[string]string)
+	}
+
+	(*props)[strings.ToUpper(id)] = value
 }

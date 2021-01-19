@@ -20,6 +20,7 @@ package exporters
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/cs3org/reva/pkg/mentix/exchangers"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
@@ -41,6 +42,8 @@ type BaseExporter struct {
 	exchangers.BaseExchanger
 
 	meshData *meshdata.MeshData
+
+	allowUnauthorizedSites bool
 }
 
 // Update is called whenever the mesh data set has changed to reflect these changes.
@@ -65,6 +68,11 @@ func (exporter *BaseExporter) storeMeshDataSet(meshDataSet meshdata.Map) error {
 		if meshDataCloned == nil {
 			return fmt.Errorf("unable to clone the mesh data")
 		}
+
+		if !exporter.allowUnauthorizedSites {
+			exporter.removeUnauthorizedSites(meshDataCloned)
+		}
+
 		meshDataSetCloned[connectorID] = meshDataCloned
 	}
 	exporter.SetMeshData(meshdata.MergeMeshDataMap(meshDataSetCloned))
@@ -83,4 +91,15 @@ func (exporter *BaseExporter) SetMeshData(meshData *meshdata.MeshData) {
 	defer exporter.Locker().Unlock()
 
 	exporter.meshData = meshData
+}
+
+func (exporter *BaseExporter) removeUnauthorizedSites(meshData *meshdata.MeshData) {
+	cleanedSites := make([]*meshdata.Site, 0, len(meshData.Sites))
+	for _, site := range meshData.Sites {
+		// Only keep authorized sites
+		if value := meshdata.GetPropertyValue(site.Properties, meshdata.PropertyAuthorized, "false"); strings.EqualFold(value, "true") {
+			cleanedSites = append(cleanedSites, site)
+		}
+	}
+	meshData.Sites = cleanedSites
 }

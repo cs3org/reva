@@ -28,6 +28,8 @@ const (
 const (
 	// ImporterIDWebAPI is the identifier for the WebAPI importer.
 	ImporterIDWebAPI = "webapi"
+	// ImporterIDAdminAPI is the identifier for the AdminAPI importer.
+	ImporterIDAdminAPI = "adminapi"
 )
 
 const (

@@ -40,6 +40,7 @@ type SiteType int
 type Site struct {
 	Type SiteType `json:"-"`
 
+	ID           string
 	Name         string
 	FullName     string
 	Organization string
@@ -122,15 +123,19 @@ func (site *Site) InferMissingData() {
 		}
 	}
 
+	// Automatically assign an ID to this site if it is missing
+	if len(site.ID) == 0 {
+		site.generateID()
+	}
+
 	// Infer missing for services
 	for _, service := range site.Services {
 		service.InferMissingData()
 	}
 }
 
-// GetID generates a unique ID for the site; the following fields are used for this:
 // Name, Domain
-func (site *Site) GetID() string {
+func (site *Site) generateID() {
 	host := site.Domain
 	if site.Homepage != "" {
 		if hostURL, err := url.Parse(site.Homepage); err == nil {
@@ -138,7 +143,7 @@ func (site *Site) GetID() string {
 		}
 	}
 
-	return fmt.Sprintf("%s::[%s]", host, site.Name)
+	site.ID = fmt.Sprintf("%s::[%s]", host, site.Name)
 }
 
 // GetSiteTypeName returns the readable name of the given site type.

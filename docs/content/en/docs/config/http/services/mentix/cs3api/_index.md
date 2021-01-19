@@ -10,11 +10,19 @@ description: >
 The CS3API exporter exposes Mentix data in a format that is compliant with the CS3API `ProviderInfo` structure via an HTTP endpoint.
 {{% /pageinfo %}}
 
-{{% dir name="endpoint" type="string" default="/" %}}
+{{% dir name="endpoint" type="string" default="/cs3" %}}
 The endpoint where the mesh data can be queried.
 {{< highlight toml >}}
 [http.services.mentix.exporters.cs3api]
 endpoint = "/data"
+{{< /highlight >}}
+{{% /dir %}}
+
+{{% dir name="is_protected" type="bool" default="false" %}}
+Whether the endpoint requires authentication.
+{{< highlight toml >}}
+[http.services.mentix.exporters.cs3api]
+is_protected = true
 {{< /highlight >}}
 {{% /dir %}}
 

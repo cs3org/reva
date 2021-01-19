@@ -34,29 +34,36 @@ func decodeQueryData(data []byte) (*meshdata.MeshData, error) {
 		return nil, err
 	}
 
+	// Imported sites will be assigned an ID automatically
+	site.ID = ""
+
+	// Set sites imported through the WebAPI to 'unauthorized' by default
+	meshdata.SetPropertyValue(&site.Properties, meshdata.PropertyAuthorized, "false")
+
 	meshData := &meshdata.MeshData{Sites: []*meshdata.Site{site}}
 	if err := meshData.Verify(); err != nil {
 		return nil, fmt.Errorf("verifying the imported mesh data failed: %v", err)
 	}
+
 	meshData.InferMissingData()
 	return meshData, nil
 }
 
-func handleQuery(data []byte, params url.Values, flags int32, msg string) (meshdata.Vector, int, []byte, error) {
+func handleQuery(data []byte, params url.Values, status int, msg string) (meshdata.Vector, int, []byte, error) {
 	meshData, err := decodeQueryData(data)
 	if err != nil {
 		return nil, http.StatusBadRequest, network.CreateResponse("INVALID_DATA", network.ResponseParams{"error": err.Error()}), nil
 	}
-	meshData.Flags = flags
-	return meshdata.Vector{meshData}, http.StatusOK, network.CreateResponse(msg, network.ResponseParams{"id": meshData.Sites[0].GetID()}), nil
+	meshData.Status = status
+	return meshdata.Vector{meshData}, http.StatusOK, network.CreateResponse(msg, network.ResponseParams{"id": meshData.Sites[0].ID}), nil
 }
 
 // HandleRegisterSiteQuery registers a site.
 func HandleRegisterSiteQuery(data []byte, params url.Values) (meshdata.Vector, int, []byte, error) {
-	return handleQuery(data, params, meshdata.FlagsNone, "SITE_REGISTERED")
+	return handleQuery(data, params, meshdata.StatusDefault, "SITE_REGISTERED")
 }
 
 // HandleUnregisterSiteQuery unregisters a site.
 func HandleUnregisterSiteQuery(data []byte, params url.Values) (meshdata.Vector, int, []byte, error) {
-	return handleQuery(data, params, meshdata.FlagObsolete, "SITE_UNREGISTERED")
+	return handleQuery(data, params, meshdata.StatusObsolete, "SITE_UNREGISTERED")
 }

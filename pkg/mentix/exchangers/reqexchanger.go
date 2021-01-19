@@ -27,6 +27,8 @@ import (
 type RequestExchanger interface {
 	// Endpoint returns the (relative) endpoint of the exchanger.
 	Endpoint() string
+	// IsProtectedEndpoint returns true if the endpoint can only be accessed with authorization.
+	IsProtectedEndpoint() bool
 	// WantsRequest returns whether the exchanger wants to handle the incoming request.
 	WantsRequest(r *http.Request) bool
 	// HandleRequest handles the actual HTTP request.
@@ -37,7 +39,8 @@ type RequestExchanger interface {
 type BaseRequestExchanger struct {
 	RequestExchanger
 
-	endpoint string
+	endpoint            string
+	isProtectedEndpoint bool
 }
 
 // Endpoint returns the (relative) endpoint of the exchanger.
@@ -50,12 +53,18 @@ func (exchanger *BaseRequestExchanger) Endpoint() string {
 	return strings.TrimSpace(endpoint)
 }
 
-// SetEndpoint sets the (relative) endpoint of the exchanger.
-func (exchanger *BaseRequestExchanger) SetEndpoint(endpoint string) {
-	exchanger.endpoint = endpoint
+// IsProtectedEndpoint returns true if the endpoint can only be accessed with authorization.
+func (exchanger *BaseRequestExchanger) IsProtectedEndpoint() bool {
+	return exchanger.isProtectedEndpoint
 }
 
-// WantsRequest returns whether the exporter wants to handle the incoming request.
+// SetEndpoint sets the (relative) endpoint of the exchanger.
+func (exchanger *BaseRequestExchanger) SetEndpoint(endpoint string, isProtected bool) {
+	exchanger.endpoint = endpoint
+	exchanger.isProtectedEndpoint = isProtected
+}
+
+// WantsRequest returns whether the exchanger wants to handle the incoming request.
 func (exchanger *BaseRequestExchanger) WantsRequest(r *http.Request) bool {
 	return r.URL.Path == exchanger.Endpoint()
 }

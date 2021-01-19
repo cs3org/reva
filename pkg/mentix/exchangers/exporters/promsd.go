@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -49,6 +50,12 @@ type PrometheusSDExporter struct {
 func createMetricsSDScrapeConfig(site *meshdata.Site, host string, endpoint *meshdata.ServiceEndpoint) *prometheus.ScrapeConfig {
 	labels := getScrapeTargetLabels(site, host, endpoint)
 
+	// Support both HTTP and HTTPS endpoints by setting the scheme label accordingly
+	if len(endpoint.URL) > 0 {
+		if url, err := url.Parse(endpoint.URL); err == nil && (url.Scheme == "http" || url.Scheme == "https") {
+			labels["__scheme__"] = url.Scheme
+		}
+	}
 	// If a metrics path was specified as a property, use that one by setting the corresponding label
 	if metricsPath := meshdata.GetPropertyValue(endpoint.Properties, meshdata.PropertyMetricsPath, ""); len(metricsPath) > 0 {
 		labels["__metrics_path__"] = metricsPath
@@ -89,7 +96,7 @@ func getScrapeTargetLabels(site *meshdata.Site, host string, endpoint *meshdata.
 	labels := map[string]string{
 		"__meta_mentix_site":         site.Name,
 		"__meta_mentix_site_type":    meshdata.GetSiteTypeName(site.Type),
-		"__meta_mentix_site_id":      site.GetID(),
+		"__meta_mentix_site_id":      site.ID,
 		"__meta_mentix_host":         host,
 		"__meta_mentix_country":      site.CountryCode,
 		"__meta_mentix_service_type": endpoint.Type.Name,

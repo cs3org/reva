@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2020 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,40 +22,39 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
-	"github.com/cs3org/reva/pkg/mentix/exchangers/importers/webapi"
+	"github.com/cs3org/reva/pkg/mentix/exchangers/importers/adminapi"
 )
 
-// WebAPIImporter implements the generic Web API importer.
-type WebAPIImporter struct {
+// AdminAPIImporter implements the administrative API importer.
+type AdminAPIImporter struct {
 	BaseRequestImporter
 }
 
 // Activate activates the importer.
-func (importer *WebAPIImporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
+func (importer *AdminAPIImporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
 	if err := importer.BaseRequestImporter.Activate(conf, log); err != nil {
 		return err
 	}
 
-	// Store WebAPI specifics
-	importer.SetEndpoint(conf.Importers.WebAPI.Endpoint, conf.Importers.WebAPI.IsProtected)
-	importer.SetEnabledConnectors(conf.Importers.WebAPI.EnabledConnectors)
+	// Store AdminAPI specifics
+	importer.SetEndpoint(conf.Importers.AdminAPI.Endpoint, conf.Importers.AdminAPI.IsProtected)
+	importer.SetEnabledConnectors(conf.Importers.AdminAPI.EnabledConnectors)
 
-	importer.registerSiteActionHandler = webapi.HandleRegisterSiteQuery
-	importer.unregisterSiteActionHandler = webapi.HandleUnregisterSiteQuery
+	importer.authorizeSiteActionHandler = adminapi.HandleAuthorizeSiteQuery
 
 	return nil
 }
 
 // GetID returns the ID of the importer.
-func (importer *WebAPIImporter) GetID() string {
-	return config.ImporterIDWebAPI
+func (importer *AdminAPIImporter) GetID() string {
+	return config.ImporterIDAdminAPI
 }
 
 // GetName returns the display name of the importer.
-func (importer *WebAPIImporter) GetName() string {
-	return "WebAPI"
+func (importer *AdminAPIImporter) GetName() string {
+	return "AdminAPI"
 }
 
 func init() {
-	registerImporter(&WebAPIImporter{})
+	registerImporter(&AdminAPIImporter{})
 }

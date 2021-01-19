@@ -27,6 +27,7 @@ import (
 
 	"github.com/cs3org/reva/pkg/mentix"
 	"github.com/cs3org/reva/pkg/mentix/config"
+	"github.com/cs3org/reva/pkg/mentix/exchangers"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 )
 
@@ -63,13 +64,20 @@ func (s *svc) Unprotected() []string {
 	importers := s.mntx.GetRequestImporters()
 	exporters := s.mntx.GetRequestExporters()
 
-	endpoints := make([]string, len(importers)+len(exporters))
-	for idx, importer := range importers {
-		endpoints[idx] = importer.Endpoint()
+	getEndpoints := func(exchangers []exchangers.RequestExchanger) []string {
+		endpoints := make([]string, 0, len(exchangers))
+		for _, exchanger := range exchangers {
+			if !exchanger.IsProtectedEndpoint() {
+				endpoints = append(endpoints, exchanger.Endpoint())
+			}
+		}
+		return endpoints
 	}
-	for idx, exporter := range exporters {
-		endpoints[idx] = exporter.Endpoint()
-	}
+
+	endpoints := make([]string, 0, len(importers)+len(exporters))
+	endpoints = append(endpoints, getEndpoints(importers)...)
+	endpoints = append(endpoints, getEndpoints(exporters)...)
+
 	return endpoints
 }
 
@@ -130,7 +138,11 @@ func applyDefaultConfig(conf *config.Configuration) {
 
 	// Importers
 	if conf.Importers.WebAPI.Endpoint == "" {
-		conf.Importers.WebAPI.Endpoint = "/"
+		conf.Importers.WebAPI.Endpoint = "/sites"
+	}
+
+	if conf.Importers.AdminAPI.Endpoint == "" {
+		conf.Importers.AdminAPI.Endpoint = "/admin"
 	}
 
 	// Exporters
@@ -141,7 +153,7 @@ func applyDefaultConfig(conf *config.Configuration) {
 	}
 
 	if conf.Exporters.WebAPI.Endpoint == "" {
-		conf.Exporters.WebAPI.Endpoint = "/"
+		conf.Exporters.WebAPI.Endpoint = "/sites"
 	}
 	addDefaultConnector(&conf.Exporters.WebAPI.EnabledConnectors)
 

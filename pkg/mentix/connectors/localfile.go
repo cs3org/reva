@@ -78,6 +78,7 @@ func (connector *LocalFileConnector) RetrieveMeshData() (*meshdata.MeshData, err
 	// Update the site types, as these are not part of the JSON data
 	connector.setSiteTypes(meshData)
 
+	meshData.InferMissingData()
 	return meshData, nil
 }
 
@@ -89,18 +90,71 @@ func (connector *LocalFileConnector) UpdateMeshData(updatedData *meshdata.MeshDa
 		meshData = &meshdata.MeshData{}
 	}
 
-	if (updatedData.Flags & meshdata.FlagObsolete) == meshdata.FlagObsolete {
-		// Remove data by unmerging
-		meshData.Unmerge(updatedData)
-	} else {
-		// Add/update data by merging
-		meshData.Merge(updatedData)
+	err = nil
+	switch updatedData.Status {
+	case meshdata.StatusDefault:
+		err = connector.mergeData(meshData, updatedData)
+
+	case meshdata.StatusObsolete:
+		err = connector.unmergeData(meshData, updatedData)
+
+	case meshdata.StatusAuthorize:
+		err = connector.authorizeData(meshData, updatedData, true)
+
+	case meshdata.StatusUnauthorize:
+		err = connector.authorizeData(meshData, updatedData, false)
+	}
+
+	if err != nil {
+		return err
 	}
 
 	// Write the updated sites back to the file
 	jsonData, _ := json.MarshalIndent(meshData.Sites, "", "\t")
 	if err := ioutil.WriteFile(connector.filePath, jsonData, 0755); err != nil {
 		return fmt.Errorf("unable to write file '%v': %v", connector.filePath, err)
+	}
+
+	return nil
+}
+
+func (connector *LocalFileConnector) mergeData(meshData *meshdata.MeshData, updatedData *meshdata.MeshData) error {
+	// Store the previous authorization status for already existing sites
+	siteAuthorizationStatus := make(map[string]string)
+	for _, site := range meshData.Sites {
+		siteAuthorizationStatus[site.ID] = meshdata.GetPropertyValue(site.Properties, meshdata.PropertyAuthorized, "false")
+	}
+
+	// Add/update data by merging
+	meshData.Merge(updatedData)
+
+	// Restore the authorization status for all sites
+	for siteID, status := range siteAuthorizationStatus {
+		if site := meshData.FindSite(siteID); site != nil {
+			meshdata.SetPropertyValue(&site.Properties, meshdata.PropertyAuthorized, status)
+		}
+	}
+	return nil
+}
+
+func (connector *LocalFileConnector) unmergeData(meshData *meshdata.MeshData, updatedData *meshdata.MeshData) error {
+	// Remove data by unmerging
+	meshData.Unmerge(updatedData)
+	return nil
+}
+
+func (connector *LocalFileConnector) authorizeData(meshData *meshdata.MeshData, updatedData *meshdata.MeshData, authorize bool) error {
+	for _, placeholderSite := range updatedData.Sites {
+		// The site ID is stored in the updated site's name
+		if site := meshData.FindSite(placeholderSite.Name); site != nil {
+			if authorize {
+				meshdata.SetPropertyValue(&site.Properties, meshdata.PropertyAuthorized, "true")
+			} else {
+				meshdata.SetPropertyValue(&site.Properties, meshdata.PropertyAuthorized, "false")
+			}
+		} else {
+			return fmt.Errorf("no site with id '%v' found", placeholderSite.Name)
+		}
 	}
 
 	return nil

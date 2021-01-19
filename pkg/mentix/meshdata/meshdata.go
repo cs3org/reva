@@ -25,11 +25,15 @@ import (
 )
 
 const (
-	// FlagsNone resets all mesh data flags.
-	FlagsNone = 0
+	// StatusDefault signals that this is just regular data.
+	StatusDefault = iota
 
-	// FlagObsolete flags the mesh data for removal.
-	FlagObsolete = 0x0001
+	// StatusObsolete flags the mesh data for removal.
+	StatusObsolete
+	// StatusAuthorize flags the mesh data for authorization.
+	StatusAuthorize
+	// StatusUnauthorize flags the mesh data for unauthorization.
+	StatusUnauthorize
 )
 
 // MeshData holds the entire mesh data managed by Mentix.
@@ -37,7 +41,7 @@ type MeshData struct {
 	Sites        []*Site
 	ServiceTypes []*ServiceType
 
-	Flags int32 `json:"-"`
+	Status int `json:"-"`
 }
 
 // Clear removes all saved data, leaving an empty mesh.
@@ -45,12 +49,12 @@ func (meshData *MeshData) Clear() {
 	meshData.Sites = nil
 	meshData.ServiceTypes = nil
 
-	meshData.Flags = FlagsNone
+	meshData.Status = StatusDefault
 }
 
 // AddSite adds a new site; if a site with the same ID already exists, the existing one is overwritten.
 func (meshData *MeshData) AddSite(site *Site) {
-	if siteExisting := meshData.FindSite(site.GetID()); siteExisting != nil {
+	if siteExisting := meshData.FindSite(site.ID); siteExisting != nil {
 		*siteExisting = *site
 	} else {
 		meshData.Sites = append(meshData.Sites, site)
@@ -75,7 +79,7 @@ func (meshData *MeshData) RemoveSite(id string) {
 // FindSite searches for a site with the given ID.
 func (meshData *MeshData) FindSite(id string) *Site {
 	for _, site := range meshData.Sites {
-		if strings.EqualFold(site.GetID(), id) {
+		if strings.EqualFold(site.ID, id) {
 			return site
 		}
 	}
@@ -130,7 +134,7 @@ func (meshData *MeshData) Merge(inData *MeshData) {
 // Unmerge removes data from another MeshData instance from this one.
 func (meshData *MeshData) Unmerge(inData *MeshData) {
 	for _, site := range inData.Sites {
-		meshData.RemoveSite(site.GetID())
+		meshData.RemoveSite(site.ID)
 	}
 
 	for _, serviceType := range inData.ServiceTypes {

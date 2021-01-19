@@ -52,13 +52,8 @@ func (client *TUSClient) initClient(endpoint string, accessToken string, transpo
 	}
 	client.config.Store = memStore
 
-	if accessToken != "" {
-		client.config.Header.Add(AccessTokenName, accessToken)
-	}
-
-	if transportToken != "" {
-		client.config.Header.Add(TransportTokenName, transportToken)
-	}
+	client.config.Header.Add(AccessTokenName, accessToken)
+	client.config.Header.Add(TransportTokenName, transportToken)
 
 	// Create the TUS client
 	tusClient, err := tus.NewClient(endpoint, client.config)
