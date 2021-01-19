@@ -38,7 +38,7 @@ func decodeAdminQueryData(data []byte) (*meshdata.MeshData, error) {
 	if value, ok := jsonData["id"]; ok {
 		if id, ok := value.(string); ok {
 			site := &meshdata.Site{}
-			site.Name = id // Store the provided site ID in the site's name
+			site.ID = id // We only need to store the ID of the site
 
 			meshData := &meshdata.MeshData{Sites: []*meshdata.Site{site}}
 			return meshData, nil
