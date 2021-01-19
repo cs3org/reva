@@ -355,14 +355,15 @@ apiShareOperationsToShares/gettingSharesReceivedFilteredEmpty.feature:62
 apiShareOperationsToShares/gettingSharesReceivedFilteredEmpty.feature:63
 apiShareOperationsToShares/gettingSharesReceivedFilteredEmpty.feature:90
 apiShareOperationsToShares/gettingSharesReceivedFilteredEmpty.feature:91
-apiShareOperationsToShares/gettingSharesSharedFiltered.feature:47
+apiShareOperationsToShares/gettingSharesSharedFiltered.feature:49
 apiShareOperationsToShares/gettingSharesSharedFiltered.feature:48
-apiShareOperationsToShares/gettingSharesSharedFiltered.feature:60
-apiShareOperationsToShares/gettingSharesSharedFiltered.feature:61
-apiShareOperationsToShares/gettingSharesSharedFiltered.feature:73
-apiShareOperationsToShares/gettingSharesSharedFiltered.feature:74
-apiShareOperationsToShares/gettingSharesSharedFiltered.feature:88
-apiShareOperationsToShares/gettingSharesSharedFiltered.feature:89
+apiShareOperationsToShares/gettingSharesSharedFiltered.feature:49
+apiShareOperationsToShares/gettingSharesSharedFiltered.feature:62
+apiShareOperationsToShares/gettingSharesSharedFiltered.feature:63
+apiShareOperationsToShares/gettingSharesSharedFiltered.feature:76
+apiShareOperationsToShares/gettingSharesSharedFiltered.feature:77
+apiShareOperationsToShares/gettingSharesSharedFiltered.feature:92
+apiShareOperationsToShares/gettingSharesSharedFiltered.feature:93
 apiShareOperationsToShares/gettingSharesSharedFilteredEmpty.feature:39
 apiShareOperationsToShares/gettingSharesSharedFilteredEmpty.feature:40
 apiShareOperationsToShares/gettingSharesSharedFilteredEmpty.feature:60
@@ -1354,6 +1355,7 @@ apiVersions/fileVersionsSharingToShares.feature:33
 #
 # restoring an older version of a shared file deletes the share https://github.com/owncloud/ocis/issues/765
 #
+apiShareManagementToShares/acceptShares.feature:473
 apiVersions/fileVersionsSharingToShares.feature:44
 #
 # https://github.com/owncloud/ocis/issues/560 cannot move from Shares folder
@@ -2102,6 +2104,8 @@ apiVersions/fileVersionsSharingToShares.feature:279
 # https://github.com/owncloud/ocis/issues/719 when a share exists its impossible to share a renamed folder
 apiShareManagementBasicToShares/createShareToSharesFolder.feature:611
 apiShareManagementBasicToShares/createShareToSharesFolder.feature:612
+apiShareManagementBasicToShares/createShareToSharesFolder.feature:665
+apiShareManagementBasicToShares/createShareToSharesFolder.feature:666
 
 # https://github.com/owncloud/ocis/issues/965 ocis-storage does not use the mtime send in the `Upload-Metadata` header when uploading via TUS
 apiWebdavUploadTUS/uploadFileMtime.feature:17
