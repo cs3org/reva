@@ -161,9 +161,7 @@ func (d *CloudDriver) refresh() error {
 		return err
 	}
 
-
 	log.Info().Msgf("xcloud: site registered: %s", string(body))
-
 	return nil
 }
 
@@ -189,7 +187,9 @@ func (d *CloudDriver) Configure(c *config.Config) error {
 			select {
 			case <-ticker.C:
 				err := d.refresh()
-				log.Err(err).Msgf("xcloud: error from refresh goroutine")
+				if err != nil {
+					log.Err(err).Msgf("xcloud: error from refresh goroutine")
+				}
 			case <-quit:
 				ticker.Stop()
 				return
