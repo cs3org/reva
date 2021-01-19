@@ -86,7 +86,7 @@ func main() {
 func handleVersionFlag() {
 	if *versionFlag {
 		fmt.Fprintf(os.Stderr, "%s\n", getVersionString())
-		os.Exit(1)
+		os.Exit(0)
 	}
 }
 
