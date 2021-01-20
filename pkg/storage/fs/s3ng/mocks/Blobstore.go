@@ -13,6 +13,29 @@ type Blobstore struct {
 	mock.Mock
 }
 
+// Download provides a mock function with given fields: key
+func (_m *Blobstore) Download(key string) (io.ReadCloser, error) {
+	ret := _m.Called(key)
+
+	var r0 io.ReadCloser
+	if rf, ok := ret.Get(0).(func(string) io.ReadCloser); ok {
+		r0 = rf(key)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(io.ReadCloser)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(string) error); ok {
+		r1 = rf(key)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // Upload provides a mock function with given fields: key, reader
 func (_m *Blobstore) Upload(key string, reader io.Reader) error {
 	ret := _m.Called(key, reader)

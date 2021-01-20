@@ -24,14 +24,17 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/pkg/errors"
 )
 
 // Blobstore provides an interface to an s3 compatible blobstore
 type Blobstore struct {
+	s3       *s3.S3
 	uploader *s3manager.Uploader
-	bucket   string
+
+	bucket string
 }
 
 // New returns a new Blobstore
@@ -49,6 +52,8 @@ func New(endpoint, region, bucket, accessKey, secretKey string) (*Blobstore, err
 
 	return &Blobstore{
 		uploader: uploader,
+		s3:       s3.New(sess),
+		bucket:   bucket,
 	}, nil
 }
 
@@ -60,7 +65,20 @@ func (bs *Blobstore) Upload(key string, reader io.Reader) error {
 		Body:   reader,
 	})
 	if err != nil {
-		return errors.Wrapf(err, "could not store object: %s", key)
+		return errors.Wrapf(err, "could not store object '%s' into bucket '%s'", key, bs.bucket)
 	}
 	return nil
+}
+
+// Download retrieves a blob from the blobstore for reading
+func (bs *Blobstore) Download(key string) (io.ReadCloser, error) {
+	input := &s3.GetObjectInput{
+		Bucket: aws.String(bs.bucket),
+		Key:    aws.String(key),
+	}
+	result, err := bs.s3.GetObject(input)
+	if err != nil {
+		return nil, errors.Wrapf(err, "could not download object '%s' from bucket '%s'", key, bs.bucket)
+	}
+	return result.Body, nil
 }

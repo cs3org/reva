@@ -131,6 +131,7 @@ type PermissionsChecker interface {
 // Blobstore defines an interface for storing blobs in a blobstore
 type Blobstore interface {
 	Upload(key string, reader io.Reader) error
+	Download(key string) (io.ReadCloser, error)
 }
 
 // NewDefault returns an s3ng filestore using the default configuration
@@ -507,16 +508,11 @@ func (fs *s3ngfs) Download(ctx context.Context, ref *provider.Reference) (io.Rea
 		return nil, errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 
-	contentPath := fs.ContentPath(node)
-
-	r, err := os.Open(contentPath)
+	reader, err := fs.Blobstore.Download(node.ID)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, errtypes.NotFound(contentPath)
-		}
-		return nil, errors.Wrap(err, "s3ngfs: error reading "+contentPath)
+		return nil, errors.Wrap(err, "s3ngfs: error download blob '"+node.ID+"'")
 	}
-	return r, nil
+	return reader, nil
 }
 
 // arbitrary metadata persistence in metadata.go
