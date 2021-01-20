@@ -179,7 +179,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	}
 
 	if getRecycleRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, getHomeRes.Status)
+		HandleErrorStatus(&sublog, w, getRecycleRes.Status)
 		return
 	}
 
