@@ -539,42 +539,11 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	}
 
 	// checksums
-	if _, ok := mdKeysMap[_checksumsKey]; returnAllKeys || ok {
+	if _, ok := mdKeysMap[_checksumsKey]; (nodeType == provider.ResourceType_RESOURCE_TYPE_FILE) && returnAllKeys || ok {
 		// TODO which checksum was requested? sha1 adler32 or md5? for now hardcode sha1?
-		if v, err := xattr.Get(nodePath, checksumPrefix+"sha1"); err == nil {
-			ri.Checksum = &provider.ResourceChecksum{
-				Type: storageprovider.PKG2GRPCXS("sha1"),
-				Sum:  hex.EncodeToString(v),
-			}
-		} else {
-			sublog.Error().Err(err).Str("cstype", "sha1").Msg("could not get checksum value")
-		}
-		if v, err := xattr.Get(nodePath, checksumPrefix+"md5"); err == nil {
-			if ri.Opaque == nil {
-				ri.Opaque = &types.Opaque{
-					Map: map[string]*types.OpaqueEntry{},
-				}
-			}
-			ri.Opaque.Map["md5"] = &types.OpaqueEntry{
-				Decoder: "plain",
-				Value:   []byte(hex.EncodeToString(v)),
-			}
-		} else {
-			sublog.Error().Err(err).Str("cstype", "md5").Msg("could not get checksum value")
-		}
-		if v, err := xattr.Get(nodePath, checksumPrefix+"adler32"); err == nil {
-			if ri.Opaque == nil {
-				ri.Opaque = &types.Opaque{
-					Map: map[string]*types.OpaqueEntry{},
-				}
-			}
-			ri.Opaque.Map["adler32"] = &types.OpaqueEntry{
-				Decoder: "plain",
-				Value:   []byte(hex.EncodeToString(v)),
-			}
-		} else {
-			sublog.Error().Err(err).Str("cstype", "adler32").Msg("could not get checksum value")
-		}
+		readChecksumIntoResourceChecksum(ctx, nodePath, storageprovider.XSSHA1, ri)
+		readChecksumIntoOpaque(ctx, nodePath, storageprovider.XSMD5, ri)
+		readChecksumIntoOpaque(ctx, nodePath, storageprovider.XSAdler32, ri)
 	}
 
 	// only read the requested metadata attributes
@@ -610,6 +579,44 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		Msg("AsResourceInfo")
 
 	return ri, nil
+}
+
+func readChecksumIntoResourceChecksum(ctx context.Context, nodePath, algo string, ri *provider.ResourceInfo) {
+	v, err := xattr.Get(nodePath, checksumPrefix+algo)
+	switch {
+	case err == nil:
+		ri.Checksum = &provider.ResourceChecksum{
+			Type: storageprovider.PKG2GRPCXS(algo),
+			Sum:  hex.EncodeToString(v),
+		}
+	case isNoData(err):
+		appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", nodePath).Str("algorithm", algo).Msg("checksum not set")
+	case isNotFound(err):
+		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Str("algorithm", algo).Msg("file not fount")
+	default:
+		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Str("algorithm", algo).Msg("could not read checksum")
+	}
+}
+func readChecksumIntoOpaque(ctx context.Context, nodePath, algo string, ri *provider.ResourceInfo) {
+	v, err := xattr.Get(nodePath, checksumPrefix+algo)
+	switch {
+	case err == nil:
+		if ri.Opaque == nil {
+			ri.Opaque = &types.Opaque{
+				Map: map[string]*types.OpaqueEntry{},
+			}
+		}
+		ri.Opaque.Map[algo] = &types.OpaqueEntry{
+			Decoder: "plain",
+			Value:   []byte(hex.EncodeToString(v)),
+		}
+	case isNoData(err):
+		appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", nodePath).Str("algorithm", algo).Msg("checksum not set")
+	case isNotFound(err):
+		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Str("algorithm", algo).Msg("file not fount")
+	default:
+		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Str("algorithm", algo).Msg("could not read checksum")
+	}
 }
 
 // HasPropagation checks if the propagation attribute exists and is set to "1"
