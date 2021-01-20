@@ -488,7 +488,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout cedf060d9dbb7ffc859a0eb425cfa8cc51f172a9
+      - git checkout 35a5eca3a1e15e7e25df2e454e877fad048d6d25
 
   - name: localAPIAcceptanceTestsOwncloudStorage
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
@@ -562,7 +562,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout cedf060d9dbb7ffc859a0eb425cfa8cc51f172a9
+      - git checkout 35a5eca3a1e15e7e25df2e454e877fad048d6d25
 
   - name: localAPIAcceptanceTestsOcisStorage
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
@@ -631,7 +631,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout cedf060d9dbb7ffc859a0eb425cfa8cc51f172a9
+      - git checkout 35a5eca3a1e15e7e25df2e454e877fad048d6d25
 
   - name: oC10APIAcceptanceTestsOcisStorage
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
@@ -650,7 +650,7 @@ steps:
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 1
-      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OCIS-storage.txt'
+      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OCIS-storage.md'
 
 services:
   - 'name': 'ldap'
@@ -703,7 +703,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout cedf060d9dbb7ffc859a0eb425cfa8cc51f172a9
+      - git checkout 35a5eca3a1e15e7e25df2e454e877fad048d6d25
 
   - name: oC10APIAcceptanceTestsOcisStorage
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
@@ -722,7 +722,7 @@ steps:
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 2
-      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OCIS-storage.txt'
+      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OCIS-storage.md'
 
 services:
   - 'name': 'ldap'
@@ -775,7 +775,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout cedf060d9dbb7ffc859a0eb425cfa8cc51f172a9
+      - git checkout 35a5eca3a1e15e7e25df2e454e877fad048d6d25
 
   - name: oC10APIAcceptanceTestsOcisStorage
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
@@ -794,7 +794,7 @@ steps:
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 3
-      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OCIS-storage.txt'
+      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OCIS-storage.md'
 
 services:
   - 'name': 'ldap'
@@ -847,7 +847,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout cedf060d9dbb7ffc859a0eb425cfa8cc51f172a9
+      - git checkout 35a5eca3a1e15e7e25df2e454e877fad048d6d25
 
   - name: oC10APIAcceptanceTestsOcisStorage
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
@@ -866,7 +866,7 @@ steps:
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 4
-      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OCIS-storage.txt'
+      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OCIS-storage.md'
 
 services:
   - 'name': 'ldap'
@@ -919,7 +919,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout cedf060d9dbb7ffc859a0eb425cfa8cc51f172a9
+      - git checkout 35a5eca3a1e15e7e25df2e454e877fad048d6d25
 
   - name: oC10APIAcceptanceTestsOcisStorage
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
@@ -938,7 +938,7 @@ steps:
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 5
-      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OCIS-storage.txt'
+      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OCIS-storage.md'
 
 services:
   - 'name': 'ldap'
@@ -991,7 +991,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout cedf060d9dbb7ffc859a0eb425cfa8cc51f172a9
+      - git checkout 35a5eca3a1e15e7e25df2e454e877fad048d6d25
 
   - name: oC10APIAcceptanceTestsOcisStorage
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
@@ -1010,7 +1010,7 @@ steps:
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 6
-      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OCIS-storage.txt'
+      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OCIS-storage.md'
 
 services:
   - 'name': 'ldap'
@@ -1063,7 +1063,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout cedf060d9dbb7ffc859a0eb425cfa8cc51f172a9
+      - git checkout 35a5eca3a1e15e7e25df2e454e877fad048d6d25
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
@@ -1081,7 +1081,7 @@ steps:
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OC-Storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 1
-      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.txt'
+      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.md'
 
 services:
   - 'name': 'ldap'
@@ -1140,7 +1140,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout cedf060d9dbb7ffc859a0eb425cfa8cc51f172a9
+      - git checkout 35a5eca3a1e15e7e25df2e454e877fad048d6d25
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
@@ -1158,7 +1158,7 @@ steps:
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OC-Storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 2
-      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.txt'
+      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.md'
 
 services:
   - 'name': 'ldap'
@@ -1217,7 +1217,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout cedf060d9dbb7ffc859a0eb425cfa8cc51f172a9
+      - git checkout 35a5eca3a1e15e7e25df2e454e877fad048d6d25
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
@@ -1235,7 +1235,7 @@ steps:
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OC-Storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 3
-      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.txt'
+      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.md'
 
 services:
   - 'name': 'ldap'
@@ -1294,7 +1294,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout cedf060d9dbb7ffc859a0eb425cfa8cc51f172a9
+      - git checkout 35a5eca3a1e15e7e25df2e454e877fad048d6d25
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
@@ -1312,7 +1312,7 @@ steps:
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OC-Storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 4
-      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.txt'
+      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.md'
 
 services:
   - 'name': 'ldap'
@@ -1371,7 +1371,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout cedf060d9dbb7ffc859a0eb425cfa8cc51f172a9
+      - git checkout 35a5eca3a1e15e7e25df2e454e877fad048d6d25
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
@@ -1389,7 +1389,7 @@ steps:
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OC-Storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 5
-      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.txt'
+      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.md'
 
 services:
   - 'name': 'ldap'
@@ -1448,7 +1448,7 @@ steps:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
       - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout cedf060d9dbb7ffc859a0eb425cfa8cc51f172a9
+      - git checkout 35a5eca3a1e15e7e25df2e454e877fad048d6d25
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
@@ -1466,7 +1466,7 @@ steps:
       BEHAT_FILTER_TAGS: '~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OC-Storage'
       DIVIDE_INTO_NUM_PARTS: 6
       RUN_PART: 6
-      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.txt'
+      EXPECTED_FAILURES_FILE: '/drone/src/tests/acceptance/expected-failures-on-OWNCLOUD-storage.md'
 
 services:
   - 'name': 'ldap'
