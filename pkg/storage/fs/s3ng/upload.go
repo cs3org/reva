@@ -97,6 +97,7 @@ func (fs *s3ngfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 // InitiateUpload returns upload ids corresponding to different protocols it supports
 // TODO read optional content for small files in this request
 func (fs *s3ngfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
+
 	log := appctx.GetLogger(ctx)
 
 	var relative string // the internal path of the file node
@@ -181,6 +182,12 @@ func (fs *s3ngfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tus
 
 	log.Debug().Interface("info", info).Interface("node", n).Msg("s3ngfs: resolved filename")
 
+	// the parent owner will become the new owner
+	p, perr := n.Parent()
+	if perr != nil {
+		return nil, errors.Wrap(perr, "s3ngfs: error getting parent "+n.ParentID)
+	}
+
 	// check permissions
 	var ok bool
 	if n.Exists {
@@ -190,11 +197,6 @@ func (fs *s3ngfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tus
 		})
 	} else {
 		// check permissions of parent
-		p, perr := n.Parent()
-		if perr != nil {
-			return nil, errors.Wrap(perr, "s3ngfs: error getting parent "+n.ParentID)
-		}
-
 		ok, err = fs.p.HasPermission(ctx, p, func(rp *provider.ResourcePermissions) bool {
 			return rp.InitiateFileUpload
 		})
@@ -213,6 +215,12 @@ func (fs *s3ngfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tus
 		return nil, errors.Wrap(err, "s3ngfs: error resolving upload path")
 	}
 	usr := user.ContextMustGetUser(ctx)
+
+	owner, err := p.Owner()
+	if err != nil {
+		return nil, errors.Wrap(err, "s3ngfs: error determining owner")
+	}
+
 	info.Storage = map[string]string{
 		"Type":    "OCISStore",
 		"BinPath": binPath,
@@ -224,6 +232,9 @@ func (fs *s3ngfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tus
 		"Idp":      usr.Id.Idp,
 		"UserId":   usr.Id.OpaqueId,
 		"UserName": usr.Username,
+
+		"OwnerIdp": owner.Idp,
+		"OwnerId":  owner.OpaqueId,
 
 		"LogLevel": log.GetLevel().String(),
 	}
@@ -435,25 +446,14 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 			Msg("s3ngfs: could not rename")
 		return
 	}
-	// who will become the owner?
-	u, ok := user.ContextGetUser(upload.ctx)
-	switch {
-	case ok:
-		err = n.writeMetadata(u.Id)
-	case upload.fs.o.EnableHome:
-		log := appctx.GetLogger(upload.ctx)
-		log.Error().Msg("home support enabled but no user in context")
-		err = errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from upload ctx")
-	case upload.fs.o.Owner != "":
-		err = n.writeMetadata(&userpb.UserId{
-			OpaqueId: upload.fs.o.Owner,
-		})
-	default:
-		// fallback to parent owner?
-		err = n.writeMetadata(nil)
-	}
+
+	// who will become the owner?  the owner of the parent actually ... not the currently logged in user
+	err = n.writeMetadata(&userpb.UserId{
+		Idp:      upload.info.Storage["OwnerIdp"],
+		OpaqueId: upload.info.Storage["OwnerId"],
+	})
 	if err != nil {
-		return
+		return errors.Wrap(err, "s3ngfs: could not write metadata")
 	}
 
 	// link child name to parent if it is new

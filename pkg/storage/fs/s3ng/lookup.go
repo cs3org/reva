@@ -59,6 +59,7 @@ func (lu *Lookup) NodeFromPath(ctx context.Context, fn string) (node *Node, err 
 		return
 	}
 
+	// TODO collect permissions of the current user on every segment
 	if fn != "/" {
 		node, err = lu.WalkPath(ctx, node, fn, func(ctx context.Context, n *Node) error {
 			log.Debug().Interface("node", n).Msg("NodeFromPath() walk")
@@ -111,7 +112,7 @@ func (lu *Lookup) RootNode(ctx context.Context) (node *Node, err error) {
 // HomeNode returns the home node of a user
 func (lu *Lookup) HomeNode(ctx context.Context) (node *Node, err error) {
 	if !lu.Options.EnableHome {
-		return nil, errtypes.NotSupported("ocisfs: home supported disabled")
+		return nil, errtypes.NotSupported("s3ngfs: home supported disabled")
 	}
 
 	if node, err = lu.RootNode(ctx); err != nil {

@@ -18,7 +18,8 @@
 
 package s3ng
 
-//go:generate mockery -name PermissionsChecker -name Blobstore
+//go:generate mockery -name PermissionsChecker
+//go:generate mockery -name Blobstore
 
 import (
 	"context"
@@ -29,6 +30,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -65,8 +67,9 @@ const (
 	// grantPrefix is the prefix for sharing related extended attributes
 	grantPrefix    string = ocisPrefix + "grant."
 	metadataPrefix string = ocisPrefix + "md."
-	// TODO implement favorites metadata flag
-	//favPrefix   string = ocisPrefix + "fav."  // favorite flag, per user
+
+	// favorite flag, per user
+	favPrefix string = ocisPrefix + "fav."
 
 	// a temporary etag for a folder that is removed when the mtime propagation happens
 	tmpEtagAttr   string = ocisPrefix + "tmp.etag"
@@ -121,6 +124,7 @@ func (o *Options) init(m map[string]interface{}) {
 
 // PermissionsChecker defines an interface for checking permissions on a Node
 type PermissionsChecker interface {
+	AssemblePermissions(ctx context.Context, n *Node) (ap *provider.ResourcePermissions, err error)
 	HasPermission(ctx context.Context, n *Node, check func(*provider.ResourcePermissions) bool) (can bool, err error)
 }
 
@@ -239,6 +243,15 @@ func (fs *s3ngfs) CreateHome(ctx context.Context) (err error) {
 		}
 		return nil
 	})
+	if err != nil {
+		return
+	}
+
+	// update the owner
+	u := user.ContextMustGetUser(ctx)
+	if err = h.writeMetadata(u.Id); err != nil {
+		return
+	}
 
 	if fs.o.TreeTimeAccounting {
 		homePath := h.lu.toInternalPath(h.ID)
@@ -397,17 +410,15 @@ func (fs *s3ngfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 		return
 	}
 
-	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
-		return rp.Stat
-	})
+	rp, err := fs.p.AssemblePermissions(ctx, node)
 	switch {
 	case err != nil:
 		return nil, errtypes.InternalError(err.Error())
-	case !ok:
+	case !rp.Stat:
 		return nil, errtypes.PermissionDenied(node.ID)
 	}
 
-	return node.AsResourceInfo(ctx, mdKeys)
+	return node.AsResourceInfo(ctx, rp, mdKeys)
 }
 
 func (fs *s3ngfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) (finfos []*provider.ResourceInfo, err error) {
@@ -421,13 +432,11 @@ func (fs *s3ngfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 		return
 	}
 
-	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
-		return rp.ListContainer
-	})
+	rp, err := fs.p.AssemblePermissions(ctx, node)
 	switch {
 	case err != nil:
 		return nil, errtypes.InternalError(err.Error())
-	case !ok:
+	case !rp.ListContainer:
 		return nil, errtypes.PermissionDenied(node.ID)
 	}
 
@@ -438,7 +447,10 @@ func (fs *s3ngfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 	}
 
 	for i := range children {
-		if ri, err := children[i].AsResourceInfo(ctx, mdKeys); err == nil {
+		np := rp
+		// add this childs permissions
+		addPermissions(np, node.PermissionSet(ctx))
+		if ri, err := children[i].AsResourceInfo(ctx, np, mdKeys); err == nil {
 			finfos = append(finfos, ri)
 		}
 	}
@@ -532,4 +544,15 @@ func (fs *s3ngfs) copyMD(s string, t string) (err error) {
 		}
 	}
 	return nil
+}
+
+func isSameUserID(i *userpb.UserId, j *userpb.UserId) bool {
+	switch {
+	case i == nil, j == nil:
+		return false
+	case i.OpaqueId == j.OpaqueId && i.Idp == j.Idp:
+		return true
+	default:
+		return false
+	}
 }
