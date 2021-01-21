@@ -439,11 +439,6 @@ func (fs *s3ngfs) Delete(ctx context.Context, ref *provider.Reference) (err erro
 }
 
 // Data persistence
-
-func (fs *s3ngfs) ContentPath(n *node.Node) string {
-	return n.InternalPath()
-}
-
 func (fs *s3ngfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
 	node, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
