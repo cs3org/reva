@@ -54,7 +54,7 @@ type Node struct {
 	ParentID string
 	ID       string
 	Name     string
-	Blobsize *int64
+	Blobsize int64
 	owner    *userpb.UserId
 	Exists   bool
 
@@ -77,7 +77,7 @@ func New(id, parentID, name string, blobsize int64, owner *userpb.UserId, lu Pat
 		ID:       id,
 		ParentID: parentID,
 		Name:     name,
-		Blobsize: &blobsize,
+		Blobsize: blobsize,
 		owner:    owner,
 		lu:       lu,
 	}
@@ -85,10 +85,6 @@ func New(id, parentID, name string, blobsize int64, owner *userpb.UserId, lu Pat
 
 // WriteMetadata writes the Node metadata to disk
 func (n *Node) WriteMetadata(owner *userpb.UserId) (err error) {
-	if n.Blobsize == nil {
-		return fmt.Errorf("node does not have a blobsize set")
-	}
-
 	nodePath := n.InternalPath()
 	if err = xattr.Set(nodePath, xattrs.ParentidAttr, []byte(n.ParentID)); err != nil {
 		return errors.Wrap(err, "s3ngfs: could not set parentid attribute")
@@ -96,7 +92,7 @@ func (n *Node) WriteMetadata(owner *userpb.UserId) (err error) {
 	if err = xattr.Set(nodePath, xattrs.NameAttr, []byte(n.Name)); err != nil {
 		return errors.Wrap(err, "s3ngfs: could not set name attribute")
 	}
-	if err = xattr.Set(nodePath, xattrs.BlobsizeAttr, []byte(fmt.Sprintf("%d", *n.Blobsize))); err != nil {
+	if err = xattr.Set(nodePath, xattrs.BlobsizeAttr, []byte(fmt.Sprintf("%d", n.Blobsize))); err != nil {
 		return errors.Wrap(err, "s3ngfs: could not set blobsize attribute")
 	}
 	if owner == nil {
@@ -218,6 +214,17 @@ func ReadNode(ctx context.Context, lu PathLookup, id string) (n *Node, err error
 	// lookup name in extended attributes
 	if attrBytes, err = xattr.Get(nodePath, xattrs.NameAttr); err == nil {
 		n.Name = string(attrBytes)
+	} else {
+		return
+	}
+	// Lookup blobsize
+	if attrBytes, err = xattr.Get(nodePath, xattrs.BlobsizeAttr); err == nil {
+		var blobSize int64
+		if blobSize, err = strconv.ParseInt(string(attrBytes), 10, 64); err == nil {
+			n.Blobsize = blobSize
+		} else {
+			return
+		}
 	} else {
 		return
 	}
@@ -500,7 +507,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		Path:          fn,
 		Type:          nodeType,
 		MimeType:      mime.Detect(nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER, fn),
-		Size:          uint64(*n.Blobsize),
+		Size:          uint64(n.Blobsize),
 		Target:        string(target),
 		PermissionSet: rp,
 	}

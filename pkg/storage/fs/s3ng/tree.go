@@ -22,7 +22,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -216,13 +215,13 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 			// TODO log
 			continue
 		}
-		blobSizeString, err := xattr.Get(link, xattrs.BlobsizeAttr)
-		blobSize, err := strconv.ParseInt(string(blobSizeString), 10, 64)
+
+		n, err := node.ReadNode(ctx, t.lu, filepath.Base(link))
 		if err != nil {
 			// TODO log
 			continue
 		}
-		nodes = append(nodes, node.New(filepath.Base(link), n.ID, names[i], blobSize, nil, t.lu))
+		nodes = append(nodes, n)
 	}
 	return nodes, nil
 }
