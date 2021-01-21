@@ -32,6 +32,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
+	"github.com/cs3org/reva/pkg/storage/fs/s3ng/node"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
@@ -389,23 +390,31 @@ func (upload *fileUpload) writeInfo() error {
 func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	log := appctx.GetLogger(upload.ctx)
 
-	n := &Node{
-		lu:       upload.fs.lu,
-		ID:       upload.info.Storage["NodeId"],
-		ParentID: upload.info.Storage["NodeParentId"],
-		Name:     upload.info.Storage["NodeName"],
+	fi, err := os.Stat(upload.binPath)
+	if err != nil {
+		log.Err(err).Interface("info", upload.info).
+			Str("binPath", upload.binPath).
+			Msg("s3ngfs: could not stat uploaded file")
+		return
 	}
+	n := node.New(
+		upload.info.Storage["NodeId"],
+		upload.info.Storage["NodeParentId"],
+		upload.info.Storage["NodeName"],
+		fi.Size(),
+		nil,
+		upload.fs.lu,
+	)
 
 	if n.ID == "" {
 		n.ID = uuid.New().String()
 	}
-	targetPath := upload.fs.lu.toInternalPath(n.ID)
+	targetPath := n.InternalPath()
 
 	// if target exists create new version
-	var fi os.FileInfo
 	if fi, err = os.Stat(targetPath); err == nil {
 		// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
-		versionsPath := upload.fs.lu.toInternalPath(n.ID + ".REV." + fi.ModTime().UTC().Format(time.RFC3339Nano))
+		versionsPath := upload.fs.lu.InternalPath(n.ID + ".REV." + fi.ModTime().UTC().Format(time.RFC3339Nano))
 
 		if err = os.Rename(targetPath, versionsPath); err != nil {
 			log.Err(err).Interface("info", upload.info).
@@ -448,7 +457,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	}
 
 	// who will become the owner?  the owner of the parent actually ... not the currently logged in user
-	err = n.writeMetadata(&userpb.UserId{
+	err = n.WriteMetadata(&userpb.UserId{
 		Idp:      upload.info.Storage["OwnerIdp"],
 		OpaqueId: upload.info.Storage["OwnerId"],
 	})
@@ -457,7 +466,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	}
 
 	// link child name to parent if it is new
-	childNameLink := filepath.Join(upload.fs.lu.toInternalPath(n.ParentID), n.Name)
+	childNameLink := filepath.Join(upload.fs.lu.InternalPath(n.ParentID), n.Name)
 	var link string
 	link, err = os.Readlink(childNameLink)
 	if err == nil && link != "../"+n.ID {

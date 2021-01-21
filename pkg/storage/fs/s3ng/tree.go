@@ -22,12 +22,15 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/storage/fs/s3ng/node"
+	"github.com/cs3org/reva/pkg/storage/fs/s3ng/xattrs"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
@@ -47,13 +50,13 @@ func NewTree(lu *Lookup) (TreePersistence, error) {
 }
 
 // GetMD returns the metadata of a node in the tree
-func (t *Tree) GetMD(ctx context.Context, node *Node) (os.FileInfo, error) {
-	md, err := os.Stat(t.lu.toInternalPath(node.ID))
+func (t *Tree) GetMD(ctx context.Context, n *node.Node) (os.FileInfo, error) {
+	md, err := os.Stat(n.InternalPath())
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, errtypes.NotFound(node.ID)
+			return nil, errtypes.NotFound(n.ID)
 		}
-		return nil, errors.Wrap(err, "tree: error stating "+node.ID)
+		return nil, errors.Wrap(err, "tree: error stating "+n.ID)
 	}
 
 	return md, nil
@@ -61,7 +64,7 @@ func (t *Tree) GetMD(ctx context.Context, node *Node) (os.FileInfo, error) {
 
 // GetPathByID returns the fn pointed by the file id, without the internal namespace
 func (t *Tree) GetPathByID(ctx context.Context, id *provider.ResourceId) (relativeExternalPath string, err error) {
-	var node *Node
+	var node *node.Node
 	node, err = t.lu.NodeFromID(ctx, id)
 	if err != nil {
 		return
@@ -73,29 +76,29 @@ func (t *Tree) GetPathByID(ctx context.Context, id *provider.ResourceId) (relati
 
 // does not take care of linking back to parent
 // TODO check if node exists?
-func createNode(n *Node, owner *userpb.UserId) (err error) {
+func createNode(n *node.Node, owner *userpb.UserId) (err error) {
 	// create a directory node
-	nodePath := n.lu.toInternalPath(n.ID)
+	nodePath := n.InternalPath()
 	if err = os.MkdirAll(nodePath, 0700); err != nil {
 		return errors.Wrap(err, "s3ngfs: error creating node")
 	}
 
-	return n.writeMetadata(owner)
+	return n.WriteMetadata(owner)
 }
 
 // CreateDir creates a new directory entry in the tree
-func (t *Tree) CreateDir(ctx context.Context, node *Node) (err error) {
+func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 
-	if node.Exists || node.ID != "" {
-		return errtypes.AlreadyExists(node.ID) // path?
+	if n.Exists || n.ID != "" {
+		return errtypes.AlreadyExists(n.ID) // path?
 	}
 
 	// create a directory node
-	node.ID = uuid.New().String()
+	n.ID = uuid.New().String()
 
 	// who will become the owner? the owner of the parent node, not the current user
-	var p *Node
-	p, err = node.Parent()
+	var p *node.Node
+	p, err = n.Parent()
 	if err != nil {
 		return
 	}
@@ -105,25 +108,25 @@ func (t *Tree) CreateDir(ctx context.Context, node *Node) (err error) {
 		return
 	}
 
-	err = createNode(node, owner)
+	err = createNode(n, owner)
 	if err != nil {
 		return nil
 	}
 
 	// make child appear in listings
-	err = os.Symlink("../"+node.ID, filepath.Join(t.lu.toInternalPath(node.ParentID), node.Name))
+	err = os.Symlink("../"+n.ID, filepath.Join(t.lu.InternalPath(n.ParentID), n.Name))
 	if err != nil {
 		return
 	}
-	return t.Propagate(ctx, node)
+	return t.Propagate(ctx, n)
 }
 
 // Move replaces the target with the source
-func (t *Tree) Move(ctx context.Context, oldNode *Node, newNode *Node) (err error) {
+func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node) (err error) {
 	// if target exists delete it without trashing it
 	if newNode.Exists {
 		// TODO make sure all children are deleted
-		if err := os.RemoveAll(t.lu.toInternalPath(newNode.ID)); err != nil {
+		if err := os.RemoveAll(newNode.InternalPath()); err != nil {
 			return errors.Wrap(err, "s3ngfs: Move: error deleting target node "+newNode.ID)
 		}
 	}
@@ -131,12 +134,12 @@ func (t *Tree) Move(ctx context.Context, oldNode *Node, newNode *Node) (err erro
 	// Always target the old node ID for xattr updates.
 	// The new node id is empty if the target does not exist
 	// and we need to overwrite the new one when overwriting an existing path.
-	tgtPath := t.lu.toInternalPath(oldNode.ID)
+	tgtPath := oldNode.InternalPath()
 
 	// are we just renaming (parent stays the same)?
 	if oldNode.ParentID == newNode.ParentID {
 
-		parentPath := t.lu.toInternalPath(oldNode.ParentID)
+		parentPath := t.lu.InternalPath(oldNode.ParentID)
 
 		// rename child
 		err = os.Rename(
@@ -148,7 +151,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *Node, newNode *Node) (err erro
 		}
 
 		// update name attribute
-		if err := xattr.Set(tgtPath, nameAttr, []byte(newNode.Name)); err != nil {
+		if err := xattr.Set(tgtPath, xattrs.NameAttr, []byte(newNode.Name)); err != nil {
 			return errors.Wrap(err, "s3ngfs: could not set name attribute")
 		}
 
@@ -160,18 +163,18 @@ func (t *Tree) Move(ctx context.Context, oldNode *Node, newNode *Node) (err erro
 
 	// rename child
 	err = os.Rename(
-		filepath.Join(t.lu.toInternalPath(oldNode.ParentID), oldNode.Name),
-		filepath.Join(t.lu.toInternalPath(newNode.ParentID), newNode.Name),
+		filepath.Join(t.lu.InternalPath(oldNode.ParentID), oldNode.Name),
+		filepath.Join(t.lu.InternalPath(newNode.ParentID), newNode.Name),
 	)
 	if err != nil {
 		return errors.Wrap(err, "s3ngfs: could not move child")
 	}
 
 	// update target parentid and name
-	if err := xattr.Set(tgtPath, parentidAttr, []byte(newNode.ParentID)); err != nil {
+	if err := xattr.Set(tgtPath, xattrs.ParentidAttr, []byte(newNode.ParentID)); err != nil {
 		return errors.Wrap(err, "s3ngfs: could not set parentid attribute")
 	}
-	if err := xattr.Set(tgtPath, nameAttr, []byte(newNode.Name)); err != nil {
+	if err := xattr.Set(tgtPath, xattrs.NameAttr, []byte(newNode.Name)); err != nil {
 		return errors.Wrap(err, "s3ngfs: could not set name attribute")
 	}
 
@@ -191,8 +194,8 @@ func (t *Tree) Move(ctx context.Context, oldNode *Node, newNode *Node) (err erro
 }
 
 // ListFolder lists the content of a folder node
-func (t *Tree) ListFolder(ctx context.Context, node *Node) ([]*Node, error) {
-	dir := t.lu.toInternalPath(node.ID)
+func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, error) {
+	dir := n.InternalPath()
 	f, err := os.Open(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -206,28 +209,26 @@ func (t *Tree) ListFolder(ctx context.Context, node *Node) ([]*Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	nodes := []*Node{}
+	nodes := []*node.Node{}
 	for i := range names {
 		link, err := os.Readlink(filepath.Join(dir, names[i]))
 		if err != nil {
 			// TODO log
 			continue
 		}
-		n := &Node{
-			lu:       t.lu,
-			ParentID: node.ID,
-			ID:       filepath.Base(link),
-			Name:     names[i],
-			Exists:   true, // TODO
+		blobSizeString, err := xattr.Get(link, xattrs.BlobsizeAttr)
+		blobSize, err := strconv.ParseInt(string(blobSizeString), 10, 64)
+		if err != nil {
+			// TODO log
+			continue
 		}
-
-		nodes = append(nodes, n)
+		nodes = append(nodes, node.New(filepath.Base(link), n.ID, names[i], blobSize, nil, t.lu))
 	}
 	return nodes, nil
 }
 
 // Delete deletes a node in the tree
-func (t *Tree) Delete(ctx context.Context, n *Node) (err error) {
+func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 
 	// Prepare the trash
 	// TODO use layout?, but it requires resolving the owners user if the username is used instead of the id.
@@ -252,8 +253,8 @@ func (t *Tree) Delete(ctx context.Context, n *Node) (err error) {
 	}
 
 	// set origin location in metadata
-	nodePath := t.lu.toInternalPath(n.ID)
-	if err := xattr.Set(nodePath, trashOriginAttr, []byte(origin)); err != nil {
+	nodePath := n.InternalPath()
+	if err := xattr.Set(nodePath, xattrs.TrashOriginAttr, []byte(origin)); err != nil {
 		return err
 	}
 
@@ -282,7 +283,7 @@ func (t *Tree) Delete(ctx context.Context, n *Node) (err error) {
 	}
 
 	// finally remove the entry from the parent dir
-	src := filepath.Join(t.lu.toInternalPath(n.ParentID), n.Name)
+	src := filepath.Join(t.lu.InternalPath(n.ParentID), n.Name)
 	err = os.Remove(src)
 	if err != nil {
 		// To roll back changes
@@ -300,7 +301,7 @@ func (t *Tree) Delete(ctx context.Context, n *Node) (err error) {
 }
 
 // Propagate propagates changes to the root of the tree
-func (t *Tree) Propagate(ctx context.Context, n *Node) (err error) {
+func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 	if !t.lu.Options.TreeTimeAccounting && !t.lu.Options.TreeSizeAccounting {
 		// no propagation enabled
 		log.Debug().Msg("propagation disabled")
@@ -310,7 +311,7 @@ func (t *Tree) Propagate(ctx context.Context, n *Node) (err error) {
 
 	// is propagation enabled for the parent node?
 
-	var root *Node
+	var root *node.Node
 	if root, err = t.lu.HomeOrRootNode(ctx); err != nil {
 		return
 	}
@@ -327,7 +328,7 @@ func (t *Tree) Propagate(ctx context.Context, n *Node) (err error) {
 
 		// TODO none, sync and async?
 		if !n.HasPropagation() {
-			log.Debug().Interface("node", n).Str("attr", propagationAttr).Msg("propagation attribute not set or unreadable, not propagating")
+			log.Debug().Interface("node", n).Str("attr", xattrs.PropagationAttr).Msg("propagation attribute not set or unreadable, not propagating")
 			// if the attribute is not set treat it as false / none / no propagation
 			return nil
 		}

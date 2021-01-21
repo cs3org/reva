@@ -26,6 +26,8 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/storage/fs/s3ng/node"
+	"github.com/cs3org/reva/pkg/storage/fs/s3ng/xattrs"
 	"github.com/cs3org/reva/pkg/storage/utils/ace"
 	"github.com/pkg/xattr"
 )
@@ -33,7 +35,7 @@ import (
 func (fs *s3ngfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("ref", ref).Interface("grant", g).Msg("AddGrant()")
-	var node *Node
+	var node *node.Node
 	if node, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
 		return
 	}
@@ -53,17 +55,17 @@ func (fs *s3ngfs) AddGrant(ctx context.Context, ref *provider.Reference, g *prov
 		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 
-	np := fs.lu.toInternalPath(node.ID)
+	np := fs.lu.InternalPath(node.ID)
 	e := ace.FromGrant(g)
 	principal, value := e.Marshal()
-	if err := xattr.Set(np, grantPrefix+principal, value); err != nil {
+	if err := xattr.Set(np, xattrs.GrantPrefix+principal, value); err != nil {
 		return err
 	}
 	return fs.tp.Propagate(ctx, node)
 }
 
 func (fs *s3ngfs) ListGrants(ctx context.Context, ref *provider.Reference) (grants []*provider.Grant, err error) {
-	var node *Node
+	var node *node.Node
 	if node, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
 		return
 	}
@@ -83,7 +85,7 @@ func (fs *s3ngfs) ListGrants(ctx context.Context, ref *provider.Reference) (gran
 	}
 
 	log := appctx.GetLogger(ctx)
-	np := fs.lu.toInternalPath(node.ID)
+	np := fs.lu.InternalPath(node.ID)
 	var attrs []string
 	if attrs, err = xattr.List(np); err != nil {
 		log.Error().Err(err).Msg("error listing attributes")
@@ -103,7 +105,7 @@ func (fs *s3ngfs) ListGrants(ctx context.Context, ref *provider.Reference) (gran
 }
 
 func (fs *s3ngfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
-	var node *Node
+	var node *node.Node
 	if node, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
 		return
 	}
@@ -124,12 +126,12 @@ func (fs *s3ngfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *p
 
 	var attr string
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
-		attr = grantPrefix + _groupAcePrefix + g.Grantee.Id.OpaqueId
+		attr = xattrs.GrantPrefix + xattrs.GroupAcePrefix + g.Grantee.Id.OpaqueId
 	} else {
-		attr = grantPrefix + _userAcePrefix + g.Grantee.Id.OpaqueId
+		attr = xattrs.GrantPrefix + xattrs.UserAcePrefix + g.Grantee.Id.OpaqueId
 	}
 
-	np := fs.lu.toInternalPath(node.ID)
+	np := fs.lu.InternalPath(node.ID)
 	if err = xattr.Remove(np, attr); err != nil {
 		return
 	}
@@ -147,7 +149,7 @@ func extractACEsFromAttrs(ctx context.Context, fsfn string, attrs []string) (ent
 	log := appctx.GetLogger(ctx)
 	entries = []*ace.ACE{}
 	for i := range attrs {
-		if strings.HasPrefix(attrs[i], grantPrefix) {
+		if strings.HasPrefix(attrs[i], xattrs.GrantPrefix) {
 			var value []byte
 			var err error
 			if value, err = xattr.Get(fsfn, attrs[i]); err != nil {
@@ -155,7 +157,7 @@ func extractACEsFromAttrs(ctx context.Context, fsfn string, attrs []string) (ent
 				continue
 			}
 			var e *ace.ACE
-			principal := attrs[i][len(grantPrefix):]
+			principal := attrs[i][len(xattrs.GrantPrefix):]
 			if e, err = ace.Unmarshal(principal, value); err != nil {
 				log.Error().Err(err).Str("principal", principal).Str("attr", attrs[i]).Msg("could not unmarshal ace")
 				continue

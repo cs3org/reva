@@ -22,28 +22,16 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"strconv"
-	"strings"
-	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/storage/fs/s3ng/node"
+	"github.com/cs3org/reva/pkg/storage/fs/s3ng/xattrs"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 )
-
-func parseMTime(v string) (t time.Time, err error) {
-	p := strings.SplitN(v, ".", 2)
-	var sec, nsec int64
-	if sec, err = strconv.ParseInt(p[0], 10, 64); err == nil {
-		if len(p) > 1 {
-			nsec, err = strconv.ParseInt(p[1], 10, 64)
-		}
-	}
-	return time.Unix(sec, nsec), err
-}
 
 func (fs *s3ngfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) (err error) {
 	n, err := fs.lu.NodeFromResource(ctx, ref)
@@ -68,7 +56,7 @@ func (fs *s3ngfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
 	}
 
-	nodePath := n.lu.toInternalPath(n.ID)
+	nodePath := n.InternalPath()
 
 	errs := []error{}
 	// TODO should we really continue updating when an error occurs?
@@ -92,8 +80,8 @@ func (fs *s3ngfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 				errs = append(errs, errors.Wrap(err, "could not set etag"))
 			}
 		}
-		if val, ok := md.Metadata[_favoriteKey]; ok {
-			delete(md.Metadata, _favoriteKey)
+		if val, ok := md.Metadata[node.FavoriteKey]; ok {
+			delete(md.Metadata, node.FavoriteKey)
 			if u, ok := user.ContextGetUser(ctx); ok {
 				if uid := u.GetId(); uid != nil {
 					if err := n.SetFavorite(uid, val); err != nil {
@@ -113,7 +101,7 @@ func (fs *s3ngfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 		}
 	}
 	for k, v := range md.Metadata {
-		attrName := metadataPrefix + k
+		attrName := xattrs.MetadataPrefix + k
 		if err = xattr.Set(nodePath, attrName, []byte(v)); err != nil {
 			errs = append(errs, errors.Wrap(err, "s3ngfs: could not set metadata attribute "+attrName+" to "+k))
 		}
@@ -155,15 +143,15 @@ func (fs *s3ngfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refe
 		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
 	}
 
-	nodePath := n.lu.toInternalPath(n.ID)
+	nodePath := n.InternalPath()
 	errs := []error{}
 	for _, k := range keys {
 		switch k {
-		case _favoriteKey:
+		case node.FavoriteKey:
 			if u, ok := user.ContextGetUser(ctx); ok {
 				// the favorite flag is specific to the user, so we need to incorporate the userid
 				if uid := u.GetId(); uid != nil {
-					fa := fmt.Sprintf("%s%s@%s", favPrefix, uid.GetOpaqueId(), uid.GetIdp())
+					fa := fmt.Sprintf("%s%s@%s", xattrs.FavPrefix, uid.GetOpaqueId(), uid.GetIdp())
 					if err := xattr.Remove(nodePath, fa); err != nil {
 						sublog.Error().Err(err).
 							Interface("user", u).
@@ -184,7 +172,7 @@ func (fs *s3ngfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refe
 				errs = append(errs, errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx"))
 			}
 		default:
-			if err = xattr.Remove(nodePath, metadataPrefix+k); err != nil {
+			if err = xattr.Remove(nodePath, xattrs.MetadataPrefix+k); err != nil {
 				// a non-existing attribute will return an error, which we can ignore
 				// (using string compare because the error type is syscall.Errno and not wrapped/recognizable)
 				if e, ok := err.(*xattr.Error); !ok || !(e.Err.Error() == "no data available" ||

@@ -29,6 +29,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/storage/fs/s3ng/node"
 	"github.com/pkg/errors"
 )
 
@@ -41,7 +42,7 @@ import (
 // and replace the revision file with a symbolic link in the future, if necessary.
 
 func (fs *s3ngfs) ListRevisions(ctx context.Context, ref *provider.Reference) (revisions []*provider.FileVersion, err error) {
-	var n *Node
+	var n *node.Node
 	if n, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
 		return
 	}
@@ -61,7 +62,7 @@ func (fs *s3ngfs) ListRevisions(ctx context.Context, ref *provider.Reference) (r
 	}
 
 	revisions = []*provider.FileVersion{}
-	np := fs.lu.toInternalPath(n.ID)
+	np := n.InternalPath()
 	if items, err := filepath.Glob(np + ".REV.*"); err == nil {
 		for i := range items {
 			if fi, err := os.Stat(items[i]); err == nil {
@@ -89,7 +90,7 @@ func (fs *s3ngfs) DownloadRevision(ctx context.Context, ref *provider.Reference,
 	log.Debug().Str("revisionKey", revisionKey).Msg("DownloadRevision")
 
 	// check if the node is available and has not been deleted
-	n, err := ReadNode(ctx, fs.lu, kp[0])
+	n, err := node.ReadNode(ctx, fs.lu, kp[0])
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +110,7 @@ func (fs *s3ngfs) DownloadRevision(ctx context.Context, ref *provider.Reference,
 		return nil, errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
 	}
 
-	contentPath := fs.lu.toInternalPath(revisionKey)
+	contentPath := fs.lu.InternalPath(revisionKey)
 
 	r, err := os.Open(contentPath)
 	if err != nil {
@@ -132,7 +133,7 @@ func (fs *s3ngfs) RestoreRevision(ctx context.Context, ref *provider.Reference, 
 	}
 
 	// check if the node is available and has not been deleted
-	n, err := ReadNode(ctx, fs.lu, kp[0])
+	n, err := node.ReadNode(ctx, fs.lu, kp[0])
 	if err != nil {
 		return err
 	}
@@ -152,11 +153,11 @@ func (fs *s3ngfs) RestoreRevision(ctx context.Context, ref *provider.Reference, 
 	}
 
 	// move current version to new revision
-	nodePath := fs.lu.toInternalPath(kp[0])
+	nodePath := fs.lu.InternalPath(kp[0])
 	var fi os.FileInfo
 	if fi, err = os.Stat(nodePath); err == nil {
 		// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
-		versionsPath := fs.lu.toInternalPath(kp[0] + ".REV." + fi.ModTime().UTC().Format(time.RFC3339Nano))
+		versionsPath := fs.lu.InternalPath(kp[0] + ".REV." + fi.ModTime().UTC().Format(time.RFC3339Nano))
 
 		err = os.Rename(nodePath, versionsPath)
 		if err != nil {
@@ -165,7 +166,7 @@ func (fs *s3ngfs) RestoreRevision(ctx context.Context, ref *provider.Reference, 
 
 		// copy old revision to current location
 
-		revisionPath := fs.lu.toInternalPath(revisionKey)
+		revisionPath := fs.lu.InternalPath(revisionKey)
 		var revision, destination *os.File
 		revision, err = os.Open(revisionPath)
 		if err != nil {

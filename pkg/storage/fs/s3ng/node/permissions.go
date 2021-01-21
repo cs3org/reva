@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package s3ng
+package node
 
 import (
 	"context"
@@ -26,25 +26,21 @@ import (
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/storage/fs/s3ng/xattrs"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 )
 
-const (
-	_userAcePrefix  = "u:"
-	_groupAcePrefix = "g:"
-)
-
-var noPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{
+var NoPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{
 	// no permissions
 }
 
 // permissions for nodes that don't have an owner set, eg the root node
-var noOwnerPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{
+var NoOwnerPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{
 	Stat: true,
 }
-var ownerPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{
+var OwnerPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{
 	// all permissions
 	AddGrant:             true,
 	CreateContainer:      true,
@@ -68,7 +64,14 @@ var ownerPermissions *provider.ResourcePermissions = &provider.ResourcePermissio
 
 // Permissions implements permission checks
 type Permissions struct {
-	lu *Lookup
+	lu PathLookup
+}
+
+// NewPermissions returns a new Permissions instance
+func NewPermissions(lu PathLookup) *Permissions {
+	return &Permissions{
+		lu: lu,
+	}
 }
 
 // AssemblePermissions will assemble the permissions for the current user on the given node, taking into account all parent nodes
@@ -76,23 +79,23 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap *pro
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("no user in context, returning default permissions")
-		return noPermissions, nil
+		return NoPermissions, nil
 	}
 	// check if the current user is the owner
 	o, err := n.Owner()
 	if err != nil {
 		// TODO check if a parent folder has the owner set?
 		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not determine owner, returning default permissions")
-		return noPermissions, err
+		return NoPermissions, err
 	}
 	if o.OpaqueId == "" {
 		// this happens for root nodes in the storage. the extended attributes are set to emptystring to indicate: no owner
 		// TODO what if no owner is set but grants are present?
-		return noOwnerPermissions, nil
+		return NoOwnerPermissions, nil
 	}
 	if isSameUserID(u.Id, o) {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("user is owner, returning owner permissions")
-		return ownerPermissions, nil
+		return OwnerPermissions, nil
 	}
 
 	// determine root
@@ -116,7 +119,7 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap *pro
 	for cn.ID != rn.ID {
 
 		if np, err := cn.ReadUserPermissions(ctx, u); err == nil {
-			addPermissions(ap, np)
+			AddPermissions(ap, np)
 		} else {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn).Msg("error reading permissions")
 			// continue with next segment
@@ -132,7 +135,8 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap *pro
 }
 
 // TODO we should use a bitfield for this ...
-func addPermissions(l *provider.ResourcePermissions, r *provider.ResourcePermissions) {
+// AddPermissions merges a set of permissions into another
+func AddPermissions(l *provider.ResourcePermissions, r *provider.ResourcePermissions) {
 	l.AddGrant = l.AddGrant || r.AddGrant
 	l.CreateContainer = l.CreateContainer || r.CreateContainer
 	l.Delete = l.Delete || r.Delete
@@ -187,15 +191,15 @@ func (p *Permissions) HasPermission(ctx context.Context, n *Node, check func(*pr
 			return false, err
 		}
 
-		userace := grantPrefix + _userAcePrefix + u.Id.OpaqueId
+		userace := xattrs.GrantPrefix + xattrs.UserAcePrefix + u.Id.OpaqueId
 		userFound := false
 		for i := range grantees {
 			// we only need the find the user once per node
 			switch {
 			case !userFound && grantees[i] == userace:
 				g, err = cn.ReadGrant(ctx, grantees[i])
-			case strings.HasPrefix(grantees[i], grantPrefix+_groupAcePrefix):
-				gr := strings.TrimPrefix(grantees[i], grantPrefix+_groupAcePrefix)
+			case strings.HasPrefix(grantees[i], xattrs.GrantPrefix+xattrs.GroupAcePrefix):
+				gr := strings.TrimPrefix(grantees[i], xattrs.GrantPrefix+xattrs.GroupAcePrefix)
 				if groupsMap[gr] {
 					g, err = cn.ReadGrant(ctx, grantees[i])
 				} else {
@@ -227,7 +231,7 @@ func (p *Permissions) HasPermission(ctx context.Context, n *Node, check func(*pr
 		}
 	}
 
-	appctx.GetLogger(ctx).Debug().Interface("permissions", noPermissions).Interface("node", n).Interface("user", u).Msg("no grant found, returning default permissions")
+	appctx.GetLogger(ctx).Debug().Interface("permissions", NoPermissions).Interface("node", n).Interface("user", u).Msg("no grant found, returning default permissions")
 	return false, nil
 }
 
@@ -235,22 +239,22 @@ func (p *Permissions) getUserAndPermissions(ctx context.Context, n *Node) (*user
 	u, ok := user.ContextGetUser(ctx)
 	if !ok {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("no user in context, returning default permissions")
-		return nil, noPermissions
+		return nil, NoPermissions
 	}
 	// check if the current user is the owner
 	o, err := n.Owner()
 	if err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not determine owner, returning default permissions")
-		return nil, noPermissions
+		return nil, NoPermissions
 	}
 	if o.OpaqueId == "" {
 		// this happens for root nodes in the storage. the extended attributes are set to emptystring to indicate: no owner
 		// TODO what if no owner is set but grants are present?
-		return nil, noOwnerPermissions
+		return nil, NoOwnerPermissions
 	}
 	if isSameUserID(u.Id, o) {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("user is owner, returning owner permissions")
-		return u, ownerPermissions
+		return u, OwnerPermissions
 	}
 	return u, nil
 }

@@ -30,7 +30,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -39,57 +38,14 @@ import (
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/storage/fs/s3ng/blobstore"
+	"github.com/cs3org/reva/pkg/storage/fs/s3ng/node"
+	"github.com/cs3org/reva/pkg/storage/fs/s3ng/xattrs"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
-)
-
-const (
-	// TODO the below comment is currently copied from the owncloud driver, revisit
-	// Currently,extended file attributes have four separated
-	// namespaces (user, trusted, security and system) followed by a dot.
-	// A non root user can only manipulate the user. namespace, which is what
-	// we will use to store ownCloud specific metadata. To prevent name
-	// collisions with other apps We are going to introduce a sub namespace
-	// "user.ocis."
-
-	ocisPrefix   string = "user.ocis."
-	parentidAttr string = ocisPrefix + "parentid"
-	ownerIDAttr  string = ocisPrefix + "owner.id"
-	ownerIDPAttr string = ocisPrefix + "owner.idp"
-	// the base name of the node
-	// updated when the file is renamed or moved
-	nameAttr string = ocisPrefix + "name"
-
-	// grantPrefix is the prefix for sharing related extended attributes
-	grantPrefix    string = ocisPrefix + "grant."
-	metadataPrefix string = ocisPrefix + "md."
-
-	// favorite flag, per user
-	favPrefix string = ocisPrefix + "fav."
-
-	// a temporary etag for a folder that is removed when the mtime propagation happens
-	tmpEtagAttr   string = ocisPrefix + "tmp.etag"
-	referenceAttr string = ocisPrefix + "cs3.ref" // arbitrary metadata
-	//checksumPrefix    string = ocisPrefix + "cs."   // TODO add checksum support
-	trashOriginAttr string = ocisPrefix + "trash.origin" // trash origin
-
-	// we use a single attribute to enable or disable propagation of both: synctime and treesize
-	propagationAttr string = ocisPrefix + "propagation"
-
-	// the tree modification time of the tree below this node,
-	// propagated when synctime_accounting is true and
-	// user.ocis.propagation=1 is set
-	// stored as a readable time.RFC3339Nano
-	treeMTimeAttr string = ocisPrefix + "tmtime"
-
-	// the size of the tree below this node,
-	// propagated when treesize_accounting is true and
-	// user.ocis.propagation=1 is set
-	//treesizeAttr string = ocisPrefix + "treesize"
 )
 
 func init() {
@@ -124,8 +80,8 @@ func (o *Options) init(m map[string]interface{}) {
 
 // PermissionsChecker defines an interface for checking permissions on a Node
 type PermissionsChecker interface {
-	AssemblePermissions(ctx context.Context, n *Node) (ap *provider.ResourcePermissions, err error)
-	HasPermission(ctx context.Context, n *Node, check func(*provider.ResourcePermissions) bool) (can bool, err error)
+	AssemblePermissions(ctx context.Context, n *node.Node) (ap *provider.ResourcePermissions, err error)
+	HasPermission(ctx context.Context, n *node.Node, check func(*provider.ResourcePermissions) bool) (can bool, err error)
 }
 
 // Blobstore defines an interface for storing blobs in a blobstore
@@ -142,7 +98,7 @@ func NewDefault(m map[string]interface{}) (storage.FS, error) {
 	}
 
 	lu := &Lookup{}
-	p := &Permissions{lu: lu}
+	p := node.NewPermissions(lu)
 	bs, err := blobstore.New(o.S3Endpoint, o.S3Region, o.S3Bucket, o.S3AccessKey, o.S3SecretKey)
 	if err != nil {
 		return nil, err
@@ -180,8 +136,9 @@ func New(m map[string]interface{}, lu *Lookup, permissionsChecker PermissionsChe
 
 	// the root node has an empty name
 	// the root node has no parent
+	n := node.New("root", "", "", 0, nil, lu)
 	if err = createNode(
-		&Node{lu: lu, ID: "root"},
+		n,
 		&userv1beta1.UserId{
 			OpaqueId: o.Owner,
 		},
@@ -232,11 +189,11 @@ func (fs *s3ngfs) CreateHome(ctx context.Context) (err error) {
 		return errtypes.NotSupported("s3ngfs: CreateHome() home supported disabled")
 	}
 
-	var n, h *Node
+	var n, h *node.Node
 	if n, err = fs.lu.RootNode(ctx); err != nil {
 		return
 	}
-	h, err = fs.lu.WalkPath(ctx, n, fs.lu.mustGetUserLayout(ctx), func(ctx context.Context, n *Node) error {
+	h, err = fs.lu.WalkPath(ctx, n, fs.lu.mustGetUserLayout(ctx), func(ctx context.Context, n *node.Node) error {
 		if !n.Exists {
 			if err := fs.tp.CreateDir(ctx, n); err != nil {
 				return err
@@ -250,14 +207,14 @@ func (fs *s3ngfs) CreateHome(ctx context.Context) (err error) {
 
 	// update the owner
 	u := user.ContextMustGetUser(ctx)
-	if err = h.writeMetadata(u.Id); err != nil {
+	if err = h.WriteMetadata(u.Id); err != nil {
 		return
 	}
 
 	if fs.o.TreeTimeAccounting {
-		homePath := h.lu.toInternalPath(h.ID)
+		homePath := h.InternalPath()
 		// mark the home node as the end of propagation
-		if err = xattr.Set(homePath, propagationAttr, []byte("1")); err != nil {
+		if err = xattr.Set(homePath, xattrs.PropagationAttr, []byte("1")); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("node", h).Msg("could not mark home as propagation root")
 			return
 		}
@@ -284,7 +241,7 @@ func (fs *s3ngfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (str
 }
 
 func (fs *s3ngfs) CreateDir(ctx context.Context, fn string) (err error) {
-	var n *Node
+	var n *node.Node
 	if n, err = fs.lu.NodeFromPath(ctx, fn); err != nil {
 		return
 	}
@@ -310,9 +267,9 @@ func (fs *s3ngfs) CreateDir(ctx context.Context, fn string) (err error) {
 	err = fs.tp.CreateDir(ctx, n)
 
 	if fs.o.TreeTimeAccounting {
-		nodePath := n.lu.toInternalPath(n.ID)
+		nodePath := n.InternalPath()
 		// mark the home node as the end of propagation
-		if err = xattr.Set(nodePath, propagationAttr, []byte("1")); err != nil {
+		if err = xattr.Set(nodePath, xattrs.PropagationAttr, []byte("1")); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not mark node to propagate")
 			return
 		}
@@ -339,7 +296,7 @@ func (fs *s3ngfs) CreateReference(ctx context.Context, p string, targetURI *url.
 	}
 
 	// create Shares folder if it does not exist
-	var n *Node
+	var n *node.Node
 	if n, err = fs.lu.NodeFromPath(ctx, fs.o.ShareFolder); err != nil {
 		return errtypes.InternalError(err.Error())
 	} else if !n.Exists {
@@ -361,15 +318,15 @@ func (fs *s3ngfs) CreateReference(ctx context.Context, p string, targetURI *url.
 		return
 	}
 
-	internal := n.lu.toInternalPath(n.ID)
-	if err = xattr.Set(internal, referenceAttr, []byte(targetURI.String())); err != nil {
+	internal := n.InternalPath()
+	if err = xattr.Set(internal, xattrs.ReferenceAttr, []byte(targetURI.String())); err != nil {
 		return errors.Wrapf(err, "s3ngfs: error setting the target %s on the reference file %s", targetURI.String(), internal)
 	}
 	return nil
 }
 
 func (fs *s3ngfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (err error) {
-	var oldNode, newNode *Node
+	var oldNode, newNode *node.Node
 	if oldNode, err = fs.lu.NodeFromResource(ctx, oldRef); err != nil {
 		return
 	}
@@ -401,7 +358,7 @@ func (fs *s3ngfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) 
 }
 
 func (fs *s3ngfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (ri *provider.ResourceInfo, err error) {
-	var node *Node
+	var node *node.Node
 	if node, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
 		return
 	}
@@ -423,26 +380,26 @@ func (fs *s3ngfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 }
 
 func (fs *s3ngfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) (finfos []*provider.ResourceInfo, err error) {
-	var node *Node
-	if node, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
+	var n *node.Node
+	if n, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
 		return
 	}
 
-	if !node.Exists {
-		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
+	if !n.Exists {
+		err = errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
 		return
 	}
 
-	rp, err := fs.p.AssemblePermissions(ctx, node)
+	rp, err := fs.p.AssemblePermissions(ctx, n)
 	switch {
 	case err != nil:
 		return nil, errtypes.InternalError(err.Error())
 	case !rp.ListContainer:
-		return nil, errtypes.PermissionDenied(node.ID)
+		return nil, errtypes.PermissionDenied(n.ID)
 	}
 
-	var children []*Node
-	children, err = fs.tp.ListFolder(ctx, node)
+	var children []*node.Node
+	children, err = fs.tp.ListFolder(ctx, n)
 	if err != nil {
 		return
 	}
@@ -450,7 +407,7 @@ func (fs *s3ngfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 	for i := range children {
 		np := rp
 		// add this childs permissions
-		addPermissions(np, node.PermissionSet(ctx))
+		node.AddPermissions(np, n.PermissionSet(ctx))
 		if ri, err := children[i].AsResourceInfo(ctx, np, mdKeys); err == nil {
 			finfos = append(finfos, ri)
 		}
@@ -459,7 +416,7 @@ func (fs *s3ngfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 }
 
 func (fs *s3ngfs) Delete(ctx context.Context, ref *provider.Reference) (err error) {
-	var node *Node
+	var node *node.Node
 	if node, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
 		return
 	}
@@ -483,8 +440,8 @@ func (fs *s3ngfs) Delete(ctx context.Context, ref *provider.Reference) (err erro
 
 // Data persistence
 
-func (fs *s3ngfs) ContentPath(n *Node) string {
-	return n.lu.toInternalPath(n.ID)
+func (fs *s3ngfs) ContentPath(n *node.Node) string {
+	return n.InternalPath()
 }
 
 func (fs *s3ngfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
@@ -529,7 +486,7 @@ func (fs *s3ngfs) copyMD(s string, t string) (err error) {
 		return err
 	}
 	for i := range attrs {
-		if strings.HasPrefix(attrs[i], ocisPrefix) {
+		if strings.HasPrefix(attrs[i], xattrs.OcisPrefix) {
 			var d []byte
 			if d, err = xattr.Get(s, attrs[i]); err != nil {
 				return err
@@ -540,15 +497,4 @@ func (fs *s3ngfs) copyMD(s string, t string) (err error) {
 		}
 	}
 	return nil
-}
-
-func isSameUserID(i *userpb.UserId, j *userpb.UserId) bool {
-	switch {
-	case i == nil, j == nil:
-		return false
-	case i.OpaqueId == j.OpaqueId && i.Idp == j.Idp:
-		return true
-	default:
-		return false
-	}
 }

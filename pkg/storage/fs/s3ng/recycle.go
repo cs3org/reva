@@ -29,6 +29,8 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/storage/fs/s3ng/node"
+	"github.com/cs3org/reva/pkg/storage/fs/s3ng/xattrs"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
@@ -52,12 +54,12 @@ func (fs *s3ngfs) ListRecycle(ctx context.Context) (items []*provider.RecycleIte
 	// TODO how do we check if the storage allows listing the recycle for the current user? check owner of the root of the storage?
 	// use permissions ReadUserPermissions?
 	if fs.o.EnableHome {
-		if !ownerPermissions.ListContainer {
+		if !node.OwnerPermissions.ListContainer {
 			log.Debug().Msg("owner not allowed to list trash")
 			return items, errtypes.PermissionDenied("owner not allowed to list trash")
 		}
 	} else {
-		if !noPermissions.ListContainer {
+		if !node.NoPermissions.ListContainer {
 			log.Debug().Msg("default permissions prevent listing trash")
 			return items, errtypes.PermissionDenied("default permissions prevent listing trash")
 		}
@@ -90,7 +92,7 @@ func (fs *s3ngfs) ListRecycle(ctx context.Context) (items []*provider.RecycleIte
 			continue
 		}
 
-		nodePath := fs.lu.toInternalPath(filepath.Base(trashnode))
+		nodePath := fs.lu.InternalPath(filepath.Base(trashnode))
 		md, err := os.Stat(nodePath)
 		if err != nil {
 			log.Error().Err(err).Str("trashRoot", trashRoot).Str("name", names[i]).Str("trashnode", trashnode).Interface("parts", parts).Msg("could not stat trash item, skipping")
@@ -113,7 +115,7 @@ func (fs *s3ngfs) ListRecycle(ctx context.Context) (items []*provider.RecycleIte
 
 		// lookup origin path in extended attributes
 		var attrBytes []byte
-		if attrBytes, err = xattr.Get(nodePath, trashOriginAttr); err == nil {
+		if attrBytes, err = xattr.Get(nodePath, xattrs.TrashOriginAttr); err == nil {
 			item.Path = string(attrBytes)
 		} else {
 			log.Error().Err(err).Str("trashRoot", trashRoot).Str("name", names[i]).Str("link", trashnode).Msg("could not read origin path, skipping")
@@ -124,7 +126,7 @@ func (fs *s3ngfs) ListRecycle(ctx context.Context) (items []*provider.RecycleIte
 		// so -> check the trash node itself
 		// hmm listing trash currently lists the current users trash or the 'root' trash. from ocs only the home storage is queried for trash items.
 		// for now we can only really check if the current user is the owner
-		if attrBytes, err = xattr.Get(nodePath, ownerIDAttr); err == nil {
+		if attrBytes, err = xattr.Get(nodePath, xattrs.OwnerIDAttr); err == nil {
 			if fs.o.EnableHome {
 				u := user.ContextMustGetUser(ctx)
 				if u.Id.OpaqueId != string(attrBytes) {
@@ -145,11 +147,11 @@ func (fs *s3ngfs) ListRecycle(ctx context.Context) (items []*provider.RecycleIte
 func (fs *s3ngfs) RestoreRecycleItem(ctx context.Context, key string) (err error) {
 	log := appctx.GetLogger(ctx)
 
-	var rn *Node
+	var rn *node.Node
 	var trashItem string
 	var deletedNodePath string
 	var origin string
-	if rn, trashItem, deletedNodePath, origin, err = ReadRecycleItem(ctx, fs.lu, key); err != nil {
+	if rn, trashItem, deletedNodePath, origin, err = node.ReadRecycleItem(ctx, fs.lu, key); err != nil {
 		return
 	}
 
@@ -165,7 +167,7 @@ func (fs *s3ngfs) RestoreRecycleItem(ctx context.Context, key string) (err error
 	}
 
 	// link to origin
-	var n *Node
+	var n *node.Node
 	n, err = fs.lu.NodeFromPath(ctx, origin)
 	if err != nil {
 		return
@@ -176,13 +178,13 @@ func (fs *s3ngfs) RestoreRecycleItem(ctx context.Context, key string) (err error
 	}
 
 	// add the entry for the parent dir
-	err = os.Symlink("../"+rn.ID, filepath.Join(fs.lu.toInternalPath(n.ParentID), n.Name))
+	err = os.Symlink("../"+rn.ID, filepath.Join(fs.lu.InternalPath(n.ParentID), n.Name))
 	if err != nil {
 		return
 	}
 
 	// rename to node only name, so it is picked up by id
-	nodePath := fs.lu.toInternalPath(rn.ID)
+	nodePath := rn.InternalPath()
 	err = os.Rename(deletedNodePath, nodePath)
 	if err != nil {
 		return
@@ -201,10 +203,10 @@ func (fs *s3ngfs) RestoreRecycleItem(ctx context.Context, key string) (err error
 func (fs *s3ngfs) PurgeRecycleItem(ctx context.Context, key string) (err error) {
 	log := appctx.GetLogger(ctx)
 
-	var rn *Node
+	var rn *node.Node
 	var trashItem string
 	var deletedNodePath string
-	if rn, trashItem, deletedNodePath, _, err = ReadRecycleItem(ctx, fs.lu, key); err != nil {
+	if rn, trashItem, deletedNodePath, _, err = node.ReadRecycleItem(ctx, fs.lu, key); err != nil {
 		return
 	}
 
