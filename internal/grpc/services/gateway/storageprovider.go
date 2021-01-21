@@ -37,6 +37,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/etag"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/pkg/errors"
 )
@@ -985,12 +986,17 @@ func (s *svc) statHome(ctx context.Context) (*provider.StatResponse, error) {
 		}, nil
 	}
 
-	if resEtag, err := s.etagCache.Get(statRes.Info.Owner.OpaqueId + ":" + statRes.Info.Path); err == nil {
-		statRes.Info.Etag = resEtag.(string)
+	if etagIface, err := s.etagCache.Get(statRes.Info.Owner.OpaqueId + ":" + statRes.Info.Path); err == nil {
+		resMtime := utils.TSToTime(statRes.Info.Mtime)
+		resEtag := etagIface.(etagWithTS)
+		// Use the updated etag if the home folder has been modified
+		if resMtime.Before(resEtag.Timestamp) {
+			statRes.Info.Etag = resEtag.Etag
+		}
 	} else {
 		statRes.Info.Etag = etag.GenerateEtagFromResources(statRes.Info, []*provider.ResourceInfo{statSharedFolder.Info})
 		if s.c.EtagCacheTTL > 0 {
-			_ = s.etagCache.Set(statRes.Info.Owner.OpaqueId+":"+statRes.Info.Path, statRes.Info.Etag)
+			_ = s.etagCache.Set(statRes.Info.Owner.OpaqueId+":"+statRes.Info.Path, etagWithTS{statRes.Info.Etag, time.Now()})
 		}
 	}
 
@@ -1029,12 +1035,18 @@ func (s *svc) statSharesFolder(ctx context.Context) (*provider.StatResponse, err
 		}, nil
 	}
 
-	if resEtag, err := s.etagCache.Get(statRes.Info.Owner.OpaqueId + ":" + statRes.Info.Path); err == nil {
-		statRes.Info.Etag = resEtag.(string)
+	if etagIface, err := s.etagCache.Get(statRes.Info.Owner.OpaqueId + ":" + statRes.Info.Path); err == nil {
+		resMtime := utils.TSToTime(statRes.Info.Mtime)
+		resEtag := etagIface.(etagWithTS)
+		// Use the updated etag if the shares folder has been modified, i.e., a new
+		// reference has been created.
+		if resMtime.Before(resEtag.Timestamp) {
+			statRes.Info.Etag = resEtag.Etag
+		}
 	} else {
 		statRes.Info.Etag = etag.GenerateEtagFromResources(statRes.Info, lsRes.Infos)
 		if s.c.EtagCacheTTL > 0 {
-			_ = s.etagCache.Set(statRes.Info.Owner.OpaqueId+":"+statRes.Info.Path, statRes.Info.Etag)
+			_ = s.etagCache.Set(statRes.Info.Owner.OpaqueId+":"+statRes.Info.Path, etagWithTS{statRes.Info.Etag, time.Now()})
 		}
 	}
 	return statRes, nil
@@ -1851,4 +1863,9 @@ func (s *svc) getStorageProvider(ctx context.Context, ref *provider.Reference) (
 	}
 
 	return res.Provider, nil
+}
+
+type etagWithTS struct {
+	Etag      string
+	Timestamp time.Time
 }
