@@ -88,6 +88,7 @@ type PermissionsChecker interface {
 type Blobstore interface {
 	Upload(key string, reader io.Reader) error
 	Download(key string) (io.ReadCloser, error)
+	Delete(key string) error
 }
 
 // NewDefault returns an s3ng filestore using the default configuration
@@ -249,7 +250,6 @@ func (fs *s3ngfs) CreateDir(ctx context.Context, fn string) (err error) {
 	if n.Exists {
 		return errtypes.AlreadyExists(fn)
 	}
-
 	pn, err := n.Parent()
 	if err != nil {
 		return errors.Wrap(err, "s3ngfs: error getting parent "+n.ParentID)
@@ -435,6 +435,10 @@ func (fs *s3ngfs) Delete(ctx context.Context, ref *provider.Reference) (err erro
 		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 
+	err = fs.Blobstore.Delete(node.ID)
+	if err != nil {
+		return err
+	}
 	return fs.tp.Delete(ctx, node)
 }
 

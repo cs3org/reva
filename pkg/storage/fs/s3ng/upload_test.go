@@ -71,7 +71,7 @@ var _ = Describe("File uploads", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		options = map[string]interface{}{
-			"Root":          tmpRoot,
+			"root":          tmpRoot,
 			"s3.endpoint":   "http://1.2.3.4:5000",
 			"s3.region":     "default",
 			"s3.bucket":     "the-bucket",
@@ -84,7 +84,7 @@ var _ = Describe("File uploads", func() {
 	})
 
 	AfterEach(func() {
-		root := options["Root"].(string)
+		root := options["root"].(string)
 		if strings.HasPrefix(root, os.TempDir()) {
 			os.RemoveAll(root)
 		}

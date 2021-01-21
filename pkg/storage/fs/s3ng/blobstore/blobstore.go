@@ -82,3 +82,16 @@ func (bs *Blobstore) Download(key string) (io.ReadCloser, error) {
 	}
 	return result.Body, nil
 }
+
+// Delete deletes a blob from the blobstore
+func (bs *Blobstore) Delete(key string) error {
+	input := &s3.DeleteObjectInput{
+		Bucket: aws.String(bs.bucket),
+		Key:    aws.String(key),
+	}
+	_, err := bs.s3.DeleteObject(input)
+	if err != nil {
+		return errors.Wrapf(err, "could not delete object '%s' from bucket '%s'", key, bs.bucket)
+	}
+	return nil
+}
