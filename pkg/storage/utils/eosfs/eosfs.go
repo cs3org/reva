@@ -1409,6 +1409,13 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 		},
 	}
 
+	if eosFileInfo.IsDir {
+		info.Opaque.Map["disable_tus"] = &types.OpaqueEntry{
+			Decoder: "plain",
+			Value:   []byte("true"),
+		}
+	}
+
 	info.Type = getResourceType(eosFileInfo.IsDir)
 	return info, nil
 }
