@@ -259,28 +259,43 @@ func ReadNode(ctx context.Context, lu PathLookup, id string) (n *Node, err error
 }
 
 // Child returns the child node with the given name
-func (n *Node) Child(name string) (c *Node, err error) {
-	c = &Node{
+func (n *Node) Child(name string) (*Node, error) {
+	c := &Node{
 		lu:       n.lu,
 		ParentID: n.ID,
 		Name:     name,
 	}
-	var link string
-	if link, err = os.Readlink(filepath.Join(n.InternalPath(), name)); os.IsNotExist(err) {
-		err = nil // if the file does not exist we return a node that has Exists = false
-		return
-	}
+
+	link, err := os.Readlink(filepath.Join(n.InternalPath(), name))
 	if err != nil {
-		err = errors.Wrap(err, "s3ngfs: Wrap: readlink error")
-		return
+		if os.IsNotExist(err) {
+			err = nil // if the file does not exist we return a node that has Exists = false
+			return c, nil
+		} else {
+			return nil, errors.Wrap(err, "s3ngfs: Wrap: readlink error")
+		}
 	}
+
 	if strings.HasPrefix(link, "../") {
 		c.Exists = true
 		c.ID = filepath.Base(link)
 	} else {
-		err = fmt.Errorf("s3ngfs: expected '../ prefix, got' %+v", link)
+		return nil, fmt.Errorf("s3ngfs: expected '../ prefix, got' %+v", link)
 	}
-	return
+
+	// Lookup blobsize
+	if attrBytes, err := xattr.Get(c.InternalPath(), xattrs.BlobsizeAttr); err == nil {
+		blobSize, err := strconv.ParseInt(string(attrBytes), 10, 64)
+		if err != nil {
+			return nil, errors.Wrap(err, "node: could not parse blob size")
+
+		}
+		c.Blobsize = blobSize
+	} else {
+		return nil, errors.Wrap(err, "node: could not read blob size")
+	}
+
+	return c, nil
 }
 
 // Parent returns the parent node
