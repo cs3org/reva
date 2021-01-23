@@ -25,6 +25,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"hash"
 	"hash/adler32"
 	"io"
 	"io/ioutil"
@@ -42,6 +43,7 @@ import (
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	tusd "github.com/tus/tusd/pkg/handler"
 )
 
@@ -428,25 +430,27 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	sublog := appctx.GetLogger(upload.ctx).With().Interface("info", upload.info).Str("binPath", upload.binPath).Str("targetPath", targetPath).Logger()
 
 	// calculate the checksum of the written bytes
-	// TODO only calculate in sync if checksum was sent?
+	// they will all be written to the metadata later, so we cannot omit any of them
+	// TODO only calculate the checksum in sync that was requested to match, the rest could be async ... but the tests currently expect all to be present
+	// TODO the hashes all implement BinaryMarshaler so we could try to persist the state for resumable upload. we would neet do keep track of the copied bytes ...
 	sha1h := sha1.New()
 	md5h := md5.New()
 	adler32h := adler32.New()
+	{
+		f, err := os.Open(upload.binPath)
+		if err != nil {
+			sublog.Err(err).Msg("ocisfs: could not open file for checksumming")
+			// we can continue if no oc checksum header is set
+		}
+		defer f.Close()
 
-	f, err := os.Open(upload.binPath)
-	if err != nil {
-		sublog.Err(err).Msg("ocisfs: could not open file for checksumming")
-		// we can continue if no oc checksum header is set
+		r1 := io.TeeReader(f, sha1h)
+		r2 := io.TeeReader(r1, md5h)
+
+		if _, err := io.Copy(adler32h, r2); err != nil {
+			sublog.Err(err).Msg("ocisfs: could not copy bytes for checksumming")
+		}
 	}
-	defer f.Close()
-
-	r1 := io.TeeReader(f, sha1h)
-	r2 := io.TeeReader(r1, md5h)
-
-	if _, err := io.Copy(adler32h, r2); err != nil {
-		sublog.Err(err).Msg("ocisfs: could not copy bytes for checksumming")
-	}
-
 	// compare if they match the sent checksum
 	// TODO the tus checksum extension would do this on every chunk, but I currently don't see an easy way to pass in the requested checksum. for now we do it in FinishUpload which is also called for chunked uploads
 	if upload.info.MetaData["checksum"] != "" {
@@ -456,22 +460,16 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		}
 		switch parts[0] {
 		case "sha1":
-			if parts[1] != hex.EncodeToString(sha1h.Sum(nil)) {
-				upload.discardChunk()
-				return errtypes.ChecksumMismatch(fmt.Sprintf("invalid checksum: expected %s got %x", upload.info.MetaData["checksum"], sha1h.Sum(nil)))
-			}
+			err = upload.checkHash(parts[1], sha1h)
 		case "md5":
-			if parts[1] != hex.EncodeToString(md5h.Sum(nil)) {
-				upload.discardChunk()
-				return errtypes.ChecksumMismatch(fmt.Sprintf("invalid checksum: expected %s got %x", upload.info.MetaData["checksum"], md5h.Sum(nil)))
-			}
+			err = upload.checkHash(parts[1], md5h)
 		case "adler32":
-			if parts[1] != hex.EncodeToString(adler32h.Sum(nil)) {
-				upload.discardChunk()
-				return errtypes.ChecksumMismatch(fmt.Sprintf("invalid checksum: expected %s got %x", upload.info.MetaData["checksum"], adler32h.Sum(nil)))
-			}
+			err = upload.checkHash(parts[1], adler32h)
 		default:
-			return errtypes.BadRequest("unsupported checksum algorithm: " + parts[0])
+			err = errtypes.BadRequest("unsupported checksum algorithm: " + parts[0])
+		}
+		if err != nil {
+			return err
 		}
 	}
 
@@ -500,28 +498,10 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		return
 	}
 
-	// now write the checksums
-	if err := n.SetChecksum("sha1", sha1h.Sum(nil)); err != nil {
-		sublog.Err(err).
-			Str("csType", "sha1").
-			Bytes("hash", sha1h.Sum(nil)).
-			Msg("ocisfs: could not write checksum")
-		// this is not critical, the bytes are there so we will continue
-	}
-	if err := n.SetChecksum("md5", md5h.Sum(nil)); err != nil {
-		sublog.Err(err).
-			Str("csType", "md5").
-			Bytes("hash", md5h.Sum(nil)).
-			Msg("ocisfs: could not write checksum")
-		// this is not critical, the bytes are there so we will continue
-	}
-	if err := n.SetChecksum("adler32", adler32h.Sum(nil)); err != nil {
-		sublog.Err(err).
-			Str("csType", "adler32").
-			Bytes("hash", adler32h.Sum(nil)).
-			Msg("ocisfs: could not write checksum")
-		// this is not critical, the bytes are there so we will continue
-	}
+	// now try write all checksums
+	tryWritingChecksum(&sublog, n, "sha1", sha1h)
+	tryWritingChecksum(&sublog, n, "md5", md5h)
+	tryWritingChecksum(&sublog, n, "adler32", adler32h)
 
 	// who will become the owner?  the owner of the parent actually ... not the currently logged in user
 	err = n.writeMetadata(&userpb.UserId{
@@ -572,6 +552,23 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	n.Exists = true
 
 	return upload.fs.tp.Propagate(upload.ctx, n)
+}
+
+func (upload *fileUpload) checkHash(expected string, h hash.Hash) error {
+	if expected != hex.EncodeToString(h.Sum(nil)) {
+		upload.discardChunk()
+		return errtypes.ChecksumMismatch(fmt.Sprintf("invalid checksum: expected %s got %x", upload.info.MetaData["checksum"], h.Sum(nil)))
+	}
+	return nil
+}
+func tryWritingChecksum(log *zerolog.Logger, n *Node, algo string, h hash.Hash) {
+	if err := n.SetChecksum(algo, h); err != nil {
+		log.Err(err).
+			Str("csType", algo).
+			Bytes("hash", h.Sum(nil)).
+			Msg("ocisfs: could not write checksum")
+		// this is not critical, the bytes are there so we will continue
+	}
 }
 
 func (upload *fileUpload) discardChunk() {

@@ -23,6 +23,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"hash"
 	"io"
 	"os"
 	"path/filepath"
@@ -642,8 +643,8 @@ func (n *Node) SetTMTime(t time.Time) (err error) {
 }
 
 // SetChecksum writes the checksum with the given checksum type to the extended attributes
-func (n *Node) SetChecksum(csType string, bytes []byte) (err error) {
-	return xattr.Set(n.lu.toInternalPath(n.ID), checksumPrefix+csType, bytes)
+func (n *Node) SetChecksum(csType string, h hash.Hash) (err error) {
+	return xattr.Set(n.lu.toInternalPath(n.ID), checksumPrefix+csType, h.Sum(nil))
 }
 
 // UnsetTempEtag removes the temporary etag attribute

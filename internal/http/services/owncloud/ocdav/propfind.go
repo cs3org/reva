@@ -106,6 +106,11 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 
 	metadataKeys := []string{}
 	if pf.Allprop != nil {
+		// TODO this changes the behavior and returns all properties if allprops has been set,
+		// but allprops should only return some default properties
+		// see https://tools.ietf.org/html/rfc4918#section-9.1
+		// the description of arbitrary_metadata_keys in https://cs3org.github.io/cs3apis/#cs3.storage.provider.v1beta1.ListContainerRequest an others may need clarification
+		// tracked in https://github.com/cs3org/cs3apis/issues/104
 		metadataKeys = append(metadataKeys, "*")
 	} else {
 		for i := range pf.Prop {
@@ -410,7 +415,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				checksums.WriteString(string(e.Value))
 			}
 		}
-		if checksums.Len() > 13 {
+		if checksums.Len() > 0 {
 			checksums.WriteString("</oc:checksum>")
 			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:checksums", checksums.String()))
 		}
