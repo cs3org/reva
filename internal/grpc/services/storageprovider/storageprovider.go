@@ -823,7 +823,7 @@ func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRe
 			case errtypes.PermissionDenied:
 				st = status.NewPermissionDenied(ctx, err, "permission denied")
 			default:
-				st = status.NewInternal(ctx, err, "error restoring recycle item")
+				st = status.NewInternal(ctx, err, "error purging recycle item")
 			}
 			return &provider.PurgeRecycleResponse{
 				Status: st,
@@ -838,7 +838,7 @@ func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRe
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error restoring recycle bin")
+			st = status.NewInternal(ctx, err, "error purging recycle bin")
 		}
 		return &provider.PurgeRecycleResponse{
 			Status: st,
