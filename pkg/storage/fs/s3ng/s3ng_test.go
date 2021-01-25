@@ -20,7 +20,6 @@ package s3ng_test
 
 import (
 	"context"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -121,21 +120,11 @@ var _ = Describe("S3ng", func() {
 				permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil)
 			})
 
-			It("reports errors deleting from the blobstore", func() {
-				bs.On("Delete", mock.AnythingOfType("string")).Return(fmt.Errorf("the error"))
-
-				err := fs.Delete(ctx, ref)
-
-				Expect(err).To(MatchError("the error"))
-			})
-
-			It("deletes the blob from the blobstore", func() {
-				bs.On("Delete", mock.AnythingOfType("string")).Return(nil)
-
+			It("does not (yet) delete the blob from the blobstore", func() {
 				err := fs.Delete(ctx, ref)
 
 				Expect(err).ToNot(HaveOccurred())
-				bs.AssertCalled(GinkgoT(), "Delete", mock.AnythingOfType("string"))
+				bs.AssertNotCalled(GinkgoT(), "Delete", mock.AnythingOfType("string"))
 			})
 		})
 	})

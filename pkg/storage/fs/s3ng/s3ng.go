@@ -435,10 +435,6 @@ func (fs *s3ngfs) Delete(ctx context.Context, ref *provider.Reference) (err erro
 		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 
-	err = fs.Blobstore.Delete(node.ID)
-	if err != nil {
-		return err
-	}
 	return fs.tp.Delete(ctx, node)
 }
 
