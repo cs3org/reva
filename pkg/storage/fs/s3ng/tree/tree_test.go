@@ -93,7 +93,7 @@ var _ = Describe("Tree", func() {
 		})
 	})
 
-	Describe("Delete", func() {
+	Context("with an existingfile", func() {
 		var (
 			n *node.Node
 		)
@@ -101,31 +101,97 @@ var _ = Describe("Tree", func() {
 		JustBeforeEach(func() {
 			n = createEmptyNode("fooId", "root", "fooName", user.Id, lookup)
 			n.WriteMetadata(user.Id)
-
-			_, err := os.Stat(n.InternalPath())
-			Expect(err).ToNot(HaveOccurred())
-
-			Expect(t.Delete(ctx, n)).To(Succeed())
-
-			_, err = os.Stat(n.InternalPath())
-			Expect(err).To(HaveOccurred())
 		})
 
-		It("moves the file to the trash", func() {
-			trashPath := path.Join(options.Root, "trash", user.Id.OpaqueId, n.ID)
-			_, err := os.Stat(trashPath)
-			Expect(err).ToNot(HaveOccurred())
+		Describe("Delete", func() {
+			JustBeforeEach(func() {
+				_, err := os.Stat(n.InternalPath())
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(t.Delete(ctx, n)).To(Succeed())
+
+				_, err = os.Stat(n.InternalPath())
+				Expect(err).To(HaveOccurred())
+			})
+
+			It("moves the file to the trash", func() {
+				trashPath := path.Join(options.Root, "trash", user.Id.OpaqueId, n.ID)
+				_, err := os.Stat(trashPath)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("removes the file from its original location", func() {
+				_, err := os.Stat(n.InternalPath())
+				Expect(err).To(HaveOccurred())
+			})
+
+			It("sets the trash origin xattr", func() {
+				trashPath := path.Join(options.Root, "trash", user.Id.OpaqueId, n.ID)
+				attr, err := xattr.Get(trashPath, xattrs.TrashOriginAttr)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(string(attr)).To(Equal(n.Name))
+			})
+
+			It("does not delete the blob from the blobstore", func() {
+				blobstore.AssertNotCalled(GinkgoT(), "Delete", mock.AnythingOfType("string"))
+			})
 		})
 
-		It("sets the trash origin xattr", func() {
-			trashPath := path.Join(options.Root, "trash", user.Id.OpaqueId, n.ID)
-			attr, err := xattr.Get(trashPath, xattrs.TrashOriginAttr)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(string(attr)).To(Equal(n.Name))
-		})
+		Context("that was deleted", func() {
+			var (
+				trashPath string
+			)
 
-		It("does not delete the blob from the blobstore", func() {
-			blobstore.AssertNotCalled(GinkgoT(), "Delete", mock.AnythingOfType("string"))
+			BeforeEach(func() {
+				blobstore.On("Delete", n.ID).Return(nil)
+				trashPath = path.Join(options.Root, "trash", user.Id.OpaqueId, n.ID)
+			})
+
+			JustBeforeEach(func() {
+				Expect(t.Delete(ctx, n)).To(Succeed())
+			})
+
+			Describe("PurgeRecycleItemFunc", func() {
+				JustBeforeEach(func() {
+					_, err := os.Stat(trashPath)
+					Expect(err).ToNot(HaveOccurred())
+
+					_, purgeFunc, err := t.PurgeRecycleItemFunc(ctx, user.Id.OpaqueId+":"+n.ID)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(purgeFunc()).To(Succeed())
+				})
+
+				It("removes the file from the trash", func() {
+					_, err := os.Stat(trashPath)
+					Expect(err).To(HaveOccurred())
+				})
+
+				It("deletes the blob from the blobstore", func() {
+					blobstore.AssertCalled(GinkgoT(), "Delete", mock.AnythingOfType("string"))
+				})
+			})
+
+			Describe("RestoreRecycleItemFunc", func() {
+				JustBeforeEach(func() {
+					_, err := os.Stat(trashPath)
+					Expect(err).ToNot(HaveOccurred())
+					_, err = os.Stat(n.InternalPath())
+					Expect(err).To(HaveOccurred())
+
+					_, restoreFunc, err := t.RestoreRecycleItemFunc(ctx, user.Id.OpaqueId+":"+n.ID)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(restoreFunc()).To(Succeed())
+				})
+
+				It("restores the file to its original location", func() {
+					_, err := os.Stat(n.InternalPath())
+					Expect(err).ToNot(HaveOccurred())
+				})
+				It("removes the file from the trash", func() {
+					_, err := os.Stat(trashPath)
+					Expect(err).To(HaveOccurred())
+				})
+			})
 		})
 	})
 })

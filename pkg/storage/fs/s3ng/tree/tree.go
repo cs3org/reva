@@ -23,6 +23,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -48,6 +49,7 @@ type Blobstore interface {
 
 // PathLookup defines the interface for the lookup component
 type PathLookup interface {
+	NodeFromPath(ctx context.Context, fn string) (*node.Node, error)
 	NodeFromID(ctx context.Context, id *provider.ResourceId) (n *node.Node, err error)
 	RootNode(ctx context.Context) (node *node.Node, err error)
 	HomeOrRootNode(ctx context.Context) (node *node.Node, err error)
@@ -66,6 +68,9 @@ type Tree struct {
 	treeSizeAccounting bool
 	treeTimeAccounting bool
 }
+
+// PermissionCheckFunc defined a function used to check resource permissions
+type PermissionCheckFunc func(rp *provider.ResourcePermissions) bool
 
 // New returns a new instance of Tree
 func New(root string, tta bool, tsa bool, lu PathLookup, bs Blobstore) *Tree {
@@ -349,6 +354,77 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	return t.Propagate(ctx, p)
 }
 
+// RestoreRecycleItemFunc returns a node and a function to restore it from the trash
+func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, key string) (*node.Node, func() error, error) {
+	rn, trashItem, deletedNodePath, origin, err := t.readRecycleItem(ctx, key)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	fn := func() error {
+		// link to origin
+		var n *node.Node
+		n, err = t.lookup.NodeFromPath(ctx, origin)
+		if err != nil {
+			return err
+		}
+
+		if n.Exists {
+			return errtypes.AlreadyExists("origin already exists")
+		}
+
+		// add the entry for the parent dir
+		err = os.Symlink("../"+rn.ID, filepath.Join(t.lookup.InternalPath(n.ParentID), n.Name))
+		if err != nil {
+			return err
+		}
+
+		// rename to node only name, so it is picked up by id
+		nodePath := rn.InternalPath()
+		err = os.Rename(deletedNodePath, nodePath)
+		if err != nil {
+			return err
+		}
+
+		n.Exists = true
+
+		// delete item link in trash
+		if err = os.Remove(trashItem); err != nil {
+			log.Error().Err(err).Str("trashItem", trashItem).Msg("error deleting trashitem")
+		}
+		return t.Propagate(ctx, n)
+	}
+	return rn, fn, nil
+}
+
+// PurgeRecycleItemFunc returns a node and a function to purge it from the trash
+func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, key string) (*node.Node, func() error, error) {
+	rn, trashItem, deletedNodePath, _, err := t.readRecycleItem(ctx, key)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	fn := func() error {
+		if err := os.Remove(deletedNodePath); err != nil {
+			log.Error().Err(err).Str("deletedNodePath", deletedNodePath).Msg("error deleting trash node")
+			return err
+		}
+
+		// delete blob from blobstore
+		t.blobstore.Delete(rn.ID)
+
+		// delete item link in trash
+		if err = os.Remove(trashItem); err != nil {
+			log.Error().Err(err).Str("trashItem", trashItem).Msg("error deleting trash item")
+			return err
+		}
+
+		return nil
+	}
+
+	return rn, fn, nil
+}
+
 // Propagate propagates changes to the root of the tree
 func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 	if !t.treeTimeAccounting && !t.treeSizeAccounting {
@@ -445,4 +521,72 @@ func (t *Tree) createNode(n *node.Node, owner *userpb.UserId) (err error) {
 	}
 
 	return n.WriteMetadata(owner)
+}
+
+// TODO refactor the returned params into Node properties? would make all the path transformations go away...
+func (t *Tree) readRecycleItem(ctx context.Context, key string) (n *node.Node, trashItem string, deletedNodePath string, origin string, err error) {
+	if key == "" {
+		return nil, "", "", "", errtypes.InternalError("key is empty")
+	}
+
+	kp := strings.SplitN(key, ":", 2)
+	if len(kp) != 2 {
+		appctx.GetLogger(ctx).Error().Err(err).Str("key", key).Msg("malformed key")
+		return
+	}
+	trashItem = filepath.Join(t.lookup.InternalRoot(), "trash", kp[0], kp[1])
+
+	var link string
+	link, err = os.Readlink(trashItem)
+	if err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Str("trashItem", trashItem).Msg("error reading trash link")
+		return
+	}
+	parts := strings.SplitN(filepath.Base(link), ".T.", 2)
+	if len(parts) != 2 {
+		appctx.GetLogger(ctx).Error().Err(err).Str("trashItem", trashItem).Interface("parts", parts).Msg("malformed trash link")
+		return
+	}
+
+	var attrBytes []byte
+	deletedNodePath = t.lookup.InternalPath(filepath.Base(link))
+
+	owner := &userpb.UserId{}
+	// lookup ownerId in extended attributes
+	if attrBytes, err = xattr.Get(deletedNodePath, xattrs.OwnerIDAttr); err == nil {
+		owner.OpaqueId = string(attrBytes)
+	} else {
+		return
+	}
+	// lookup ownerIdp in extended attributes
+	if attrBytes, err = xattr.Get(deletedNodePath, xattrs.OwnerIDPAttr); err == nil {
+		owner.Idp = string(attrBytes)
+	} else {
+		return
+	}
+
+	n = node.New(parts[0], "", "", 0, owner, t.lookup)
+	// lookup parent id in extended attributes
+	if attrBytes, err = xattr.Get(deletedNodePath, xattrs.ParentidAttr); err == nil {
+		n.ParentID = string(attrBytes)
+	} else {
+		return
+	}
+	// lookup name in extended attributes
+	if attrBytes, err = xattr.Get(deletedNodePath, xattrs.NameAttr); err == nil {
+		n.Name = string(attrBytes)
+	} else {
+		return
+	}
+
+	// get origin node
+	origin = "/"
+
+	// lookup origin path in extended attributes
+	if attrBytes, err = xattr.Get(deletedNodePath, xattrs.TrashOriginAttr); err == nil {
+		origin = string(attrBytes)
+	} else {
+		log.Error().Err(err).Str("trashItem", trashItem).Str("link", link).Str("deletedNodePath", deletedNodePath).Msg("could not read origin path, restoring to /")
+	}
+	return
 }

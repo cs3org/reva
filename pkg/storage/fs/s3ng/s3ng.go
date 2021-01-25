@@ -102,6 +102,8 @@ type Tree interface {
 	//CreateReference(ctx context.Context, node *node.Node, targetURI *url.URL) error
 	Move(ctx context.Context, oldNode *node.Node, newNode *node.Node) (err error)
 	Delete(ctx context.Context, node *node.Node) (err error)
+	RestoreRecycleItemFunc(ctx context.Context, key string) (*node.Node, func() error, error)
+	PurgeRecycleItemFunc(ctx context.Context, key string) (*node.Node, func() error, error)
 
 	Propagate(ctx context.Context, node *node.Node) (err error)
 }

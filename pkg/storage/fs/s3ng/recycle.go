@@ -144,15 +144,10 @@ func (fs *s3ngfs) ListRecycle(ctx context.Context) (items []*provider.RecycleIte
 	return
 }
 
-func (fs *s3ngfs) RestoreRecycleItem(ctx context.Context, key string) (err error) {
-	log := appctx.GetLogger(ctx)
-
-	var rn *node.Node
-	var trashItem string
-	var deletedNodePath string
-	var origin string
-	if rn, trashItem, deletedNodePath, origin, err = node.ReadRecycleItem(ctx, fs.lu, key); err != nil {
-		return
+func (fs *s3ngfs) RestoreRecycleItem(ctx context.Context, key string) error {
+	rn, restoreFunc, err := fs.tp.RestoreRecycleItemFunc(ctx, key)
+	if err != nil {
+		return err
 	}
 
 	// check permissions of deleted node
@@ -166,48 +161,14 @@ func (fs *s3ngfs) RestoreRecycleItem(ctx context.Context, key string) (err error
 		return errtypes.PermissionDenied(key)
 	}
 
-	// link to origin
-	var n *node.Node
-	n, err = fs.lu.NodeFromPath(ctx, origin)
-	if err != nil {
-		return
-	}
-
-	if n.Exists {
-		return errtypes.AlreadyExists("origin already exists")
-	}
-
-	// add the entry for the parent dir
-	err = os.Symlink("../"+rn.ID, filepath.Join(fs.lu.InternalPath(n.ParentID), n.Name))
-	if err != nil {
-		return
-	}
-
-	// rename to node only name, so it is picked up by id
-	nodePath := rn.InternalPath()
-	err = os.Rename(deletedNodePath, nodePath)
-	if err != nil {
-		return
-	}
-
-	n.Exists = true
-
-	// delete item link in trash
-	if err = os.Remove(trashItem); err != nil {
-		log.Error().Err(err).Str("trashItem", trashItem).Msg("error deleting trashitem")
-	}
-	return fs.tp.Propagate(ctx, n)
-
+	// Run the restore func
+	return restoreFunc()
 }
 
-func (fs *s3ngfs) PurgeRecycleItem(ctx context.Context, key string) (err error) {
-	log := appctx.GetLogger(ctx)
-
-	var rn *node.Node
-	var trashItem string
-	var deletedNodePath string
-	if rn, trashItem, deletedNodePath, _, err = node.ReadRecycleItem(ctx, fs.lu, key); err != nil {
-		return
+func (fs *s3ngfs) PurgeRecycleItem(ctx context.Context, key string) error {
+	rn, purgeFunc, err := fs.tp.PurgeRecycleItemFunc(ctx, key)
+	if err != nil {
+		return err
 	}
 
 	// check permissions of deleted node
@@ -221,20 +182,8 @@ func (fs *s3ngfs) PurgeRecycleItem(ctx context.Context, key string) (err error) 
 		return errtypes.PermissionDenied(key)
 	}
 
-	if err = os.Remove(deletedNodePath); err != nil {
-		log.Error().Err(err).Str("deletedNodePath", deletedNodePath).Msg("error deleting trash node")
-		return
-	}
-
-	// delete blob from blobstore
-	fs.Blobstore.Delete(rn.ID)
-
-	// delete item link in trash
-	if err = os.Remove(trashItem); err != nil {
-		log.Error().Err(err).Str("trashItem", trashItem).Msg("error deleting trash item")
-	}
-	// TODO recursively delete all children
-	return
+	// Run the purge func
+	return purgeFunc()
 }
 
 func (fs *s3ngfs) EmptyRecycle(ctx context.Context) error {
