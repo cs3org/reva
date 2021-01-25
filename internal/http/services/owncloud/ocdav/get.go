@@ -19,12 +19,15 @@
 package ocdav
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"go.opencensus.io/trace"
 
@@ -144,11 +147,9 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ns string) {
 	} else {
 		w.Header().Set("Content-Length", strconv.FormatUint(info.Size, 10))
 	}
-	/*
-		if md.Checksum != "" {
-			w.Header().Set("OC-Checksum", md.Checksum)
-		}
-	*/
+	if info.Checksum != nil {
+		w.Header().Set("OC-Checksum", fmt.Sprintf("%s:%s", strings.ToUpper(string(storageprovider.GRPC2PKGXS(info.Checksum.Type))), info.Checksum.Sum))
+	}
 	var c int64
 	if c, err = io.Copy(w, httpRes.Body); err != nil {
 		sublog.Error().Err(err).Msg("error finishing copying data to response")

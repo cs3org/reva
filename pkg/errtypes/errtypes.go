@@ -94,6 +94,22 @@ func (e BadRequest) Error() string { return "error: bad request: " + string(e) }
 // IsBadRequest implements the IsBadRequest interface.
 func (e BadRequest) IsBadRequest() {}
 
+// ChecksumMismatch is the error to use when the sent hash does not match the calculated hash.
+type ChecksumMismatch string
+
+func (e ChecksumMismatch) Error() string { return "error: checksum mismatch: " + string(e) }
+
+// IsChecksumMismatch implements the IsChecksumMismatch interface.
+func (e ChecksumMismatch) IsChecksumMismatch() {}
+
+// StatusChecksumMismatch 419 is an unofficial http status code in an unassigned range that is used for checksum mismatches
+// Proposed by https://stackoverflow.com/a/35665694
+// Official HTTP status code registry: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
+// Note: TUS uses unassigned 460 Checksum-Mismatch
+// RFC proposal for checksum digest uses a `Want-Digest` header: https://tools.ietf.org/html/rfc3230
+// oc clienst issue: https://github.com/owncloud/core/issues/22711
+const StatusChecksumMismatch = 419
+
 // IsNotFound is the interface to implement
 // to specify that an a resource is not found.
 type IsNotFound interface {
@@ -146,4 +162,10 @@ type IsPartialContent interface {
 // to specify that the server cannot or will not process the request.
 type IsBadRequest interface {
 	IsBadRequest()
+}
+
+// IsChecksumMismatch is the interface to implement
+// to specify that a checksum does not match.
+type IsChecksumMismatch interface {
+	IsChecksumMismatch()
 }

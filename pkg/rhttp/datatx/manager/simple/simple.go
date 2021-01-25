@@ -76,18 +76,24 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 			ref := &provider.Reference{Spec: &provider.Reference_Path{Path: fn}}
 
 			err := fs.Upload(ctx, ref, r.Body)
-			if err != nil {
-				if _, ok := err.(errtypes.IsPartialContent); ok {
-					w.WriteHeader(http.StatusPartialContent)
-					return
-				}
-				sublog.Error().Err(err).Msg("error uploading file")
+			switch v := err.(type) {
+			case nil:
+				w.WriteHeader(http.StatusOK)
+			case errtypes.PartialContent:
+				w.WriteHeader(http.StatusPartialContent)
+			case errtypes.ChecksumMismatch:
+				w.WriteHeader(errtypes.StatusChecksumMismatch)
+			case errtypes.NotFound:
+				w.WriteHeader(http.StatusNotFound)
+			case errtypes.PermissionDenied:
+				w.WriteHeader(http.StatusForbidden)
+			case errtypes.InvalidCredentials:
+				w.WriteHeader(http.StatusUnauthorized)
+			default:
+				sublog.Error().Err(v).Msg("error uploading file")
 				w.WriteHeader(http.StatusInternalServerError)
-				return
 			}
-
-			w.WriteHeader(http.StatusOK)
-
+			return
 		default:
 			w.WriteHeader(http.StatusNotImplemented)
 		}

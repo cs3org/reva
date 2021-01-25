@@ -23,18 +23,23 @@ import (
 	"net/http"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
 type code int
 
 const (
+
+	// SabredavMethodBadRequest maps to HTTP 400
+	SabredavMethodBadRequest code = iota
 	// SabredavMethodNotAllowed maps to HTTP 405
-	SabredavMethodNotAllowed code = iota
+	SabredavMethodNotAllowed
 )
 
 var (
 	codesEnum = []string{
+		"Sabre\\DAV\\Exception\\BadRequest",
 		"Sabre\\DAV\\Exception\\MethodNotAllowed",
 	}
 )
@@ -53,6 +58,18 @@ func Marshal(e exception) ([]byte, error) {
 		Message:   e.message,
 	})
 }
+
+// http://www.webdav.org/specs/rfc4918.html#ELEMENT_error
+type errorXML struct {
+	XMLName   xml.Name `xml:"d:error"`
+	Xmlnsd    string   `xml:"xmlns:d,attr"`
+	Xmlnss    string   `xml:"xmlns:s,attr"`
+	Exception string   `xml:"s:exception"`
+	Message   string   `xml:"s:message"`
+	InnerXML  []byte   `xml:",innerxml"`
+}
+
+var errInvalidPropfind = errors.New("webdav: invalid propfind")
 
 // HandleErrorStatus checks the status code, logs a Debug or Error level message
 // and writes an appropriate http status

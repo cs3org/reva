@@ -38,11 +38,11 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxuser "github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -106,6 +106,11 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 
 	metadataKeys := []string{}
 	if pf.Allprop != nil {
+		// TODO this changes the behavior and returns all properties if allprops has been set,
+		// but allprops should only return some default properties
+		// see https://tools.ietf.org/html/rfc4918#section-9.1
+		// the description of arbitrary_metadata_keys in https://cs3org.github.io/cs3apis/#cs3.storage.provider.v1beta1.ListContainerRequest an others may need clarification
+		// tracked in https://github.com/cs3org/cs3apis/issues/104
 		metadataKeys = append(metadataKeys, "*")
 	} else {
 		for i := range pf.Prop {
@@ -214,7 +219,7 @@ func requiresExplicitFetching(n *xml.Name) bool {
 		return false
 	case _nsOwncloud:
 		switch n.Local {
-		case "favorite", "share-types":
+		case "favorite", "share-types", "checksums":
 			return true
 		default:
 			return false
@@ -391,14 +396,35 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		lastModifiedString := t.Format(time.RFC1123Z)
 		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("d:getlastmodified", lastModifiedString))
 
+		// stay bug compatible with oc10, see https://github.com/owncloud/core/pull/38304#issuecomment-762185241
+		var checksums strings.Builder
 		if md.Checksum != nil {
-			// TODO(jfd): the actual value is an abomination like this:
-			// <oc:checksums>
-			//   <oc:checksum>SHA1:9bd253a09d58be107bcb4169ebf338c8df34d086 MD5:d90bcc6bf847403d22a4abba64e79994 ADLER32:fca23ff5</oc:checksum>
-			// </oc:checksums>
-			// yep, correct, space delimited key value pairs inside an oc:checksum tag inside an oc:checksums tag
-			value := fmt.Sprintf("<oc:checksum>%s:%s</oc:checksum>", md.Checksum.Type, md.Checksum.Sum)
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:checksums", value))
+			checksums.WriteString("<oc:checksum>")
+			checksums.WriteString(strings.ToUpper(string(storageprovider.GRPC2PKGXS(md.Checksum.Type))))
+			checksums.WriteString(":")
+			checksums.WriteString(md.Checksum.Sum)
+		}
+		if md.Opaque != nil {
+			if e, ok := md.Opaque.Map["md5"]; ok {
+				if checksums.Len() == 0 {
+					checksums.WriteString("<oc:checksum>MD5:")
+				} else {
+					checksums.WriteString(" MD5:")
+				}
+				checksums.WriteString(string(e.Value))
+			}
+			if e, ok := md.Opaque.Map["adler32"]; ok {
+				if checksums.Len() == 0 {
+					checksums.WriteString("<oc:checksum>ADLER32:")
+				} else {
+					checksums.WriteString(" ADLER32:")
+				}
+				checksums.WriteString(string(e.Value))
+			}
+		}
+		if checksums.Len() > 0 {
+			checksums.WriteString("</oc:checksum>")
+			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:checksums", checksums.String()))
 		}
 
 		// favorites from arbitrary metadata
@@ -534,15 +560,37 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					} else {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
 					}
-				case "checksums": // desktop
+				case "checksums": // desktop ... not really ... the desktop sends the OC-Checksum header
+
+					// stay bug compatible with oc10, see https://github.com/owncloud/core/pull/38304#issuecomment-762185241
+					var checksums strings.Builder
 					if md.Checksum != nil {
-						// TODO(jfd): the actual value is an abomination like this:
-						// <oc:checksums>
-						//   <oc:checksum>SHA1:9bd253a09d58be107bcb4169ebf338c8df34d086 MD5:d90bcc6bf847403d22a4abba64e79994 ADLER32:fca23ff5</oc:checksum>
-						// </oc:checksums>
-						// yep, correct, space delimited key value pairs inside an oc:checksum tag inside an oc:checksums tag
-						value := fmt.Sprintf("<oc:checksum>%s:%s</oc:checksum>", md.Checksum.Type, md.Checksum.Sum)
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:checksums", value))
+						checksums.WriteString("<oc:checksum>")
+						checksums.WriteString(strings.ToUpper(string(storageprovider.GRPC2PKGXS(md.Checksum.Type))))
+						checksums.WriteString(":")
+						checksums.WriteString(md.Checksum.Sum)
+					}
+					if md.Opaque != nil {
+						if e, ok := md.Opaque.Map["md5"]; ok {
+							if checksums.Len() == 0 {
+								checksums.WriteString("<oc:checksum>MD5:")
+							} else {
+								checksums.WriteString(" MD5:")
+							}
+							checksums.WriteString(string(e.Value))
+						}
+						if e, ok := md.Opaque.Map["adler32"]; ok {
+							if checksums.Len() == 0 {
+								checksums.WriteString("<oc:checksum>ADLER32:")
+							} else {
+								checksums.WriteString(" ADLER32:")
+							}
+							checksums.WriteString(string(e.Value))
+						}
+					}
+					if checksums.Len() > 13 {
+						checksums.WriteString("</oc:checksum>")
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:checksums", checksums.String()))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:checksums", ""))
 					}
@@ -781,15 +829,3 @@ type propertyXML struct {
 	// even including the DAV: namespace.
 	InnerXML []byte `xml:",innerxml"`
 }
-
-// http://www.webdav.org/specs/rfc4918.html#ELEMENT_error
-type errorXML struct {
-	XMLName   xml.Name `xml:"d:error"`
-	Xmlnsd    string   `xml:"xmlns:d,attr"`
-	Xmlnss    string   `xml:"xmlns:s,attr"`
-	Exception string   `xml:"s:exception"`
-	Message   string   `xml:"s:message"`
-	InnerXML  []byte   `xml:",innerxml"`
-}
-
-var errInvalidPropfind = errors.New("webdav: invalid propfind")
