@@ -20,6 +20,7 @@ package s3ng
 
 //go:generate mockery -name PermissionsChecker
 //go:generate mockery -name Blobstore
+//go:generate mockery -name Tree
 
 import (
 	"context"
@@ -30,7 +31,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -39,6 +39,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/storage/fs/s3ng/blobstore"
 	"github.com/cs3org/reva/pkg/storage/fs/s3ng/node"
+	"github.com/cs3org/reva/pkg/storage/fs/s3ng/tree"
 	"github.com/cs3org/reva/pkg/storage/fs/s3ng/xattrs"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
@@ -91,6 +92,20 @@ type Blobstore interface {
 	Delete(key string) error
 }
 
+// Tree is used to manage a tree hierarchy
+type Tree interface {
+	GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error)
+	GetMD(ctx context.Context, node *node.Node) (os.FileInfo, error)
+	ListFolder(ctx context.Context, node *node.Node) ([]*node.Node, error)
+	//CreateHome(owner *userpb.UserId) (n *node.Node, err error)
+	CreateDir(ctx context.Context, node *node.Node) (err error)
+	//CreateReference(ctx context.Context, node *node.Node, targetURI *url.URL) error
+	Move(ctx context.Context, oldNode *node.Node, newNode *node.Node) (err error)
+	Delete(ctx context.Context, node *node.Node) (err error)
+
+	Propagate(ctx context.Context, node *node.Node) (err error)
+}
+
 // NewDefault returns an s3ng filestore using the default configuration
 func NewDefault(m map[string]interface{}) (storage.FS, error) {
 	o, err := parseConfig(m)
@@ -119,37 +134,12 @@ func New(m map[string]interface{}, lu *Lookup, permissionsChecker PermissionsChe
 
 	lu.Options = o
 
-	// create data paths for internal layout
-	dataPaths := []string{
-		filepath.Join(o.Root, "nodes"),
-		// notes contain symlinks from nodes/<u-u-i-d>/uploads/<uploadid> to ../../uploads/<uploadid>
-		// better to keep uploads on a fast / volatile storage before a workflow finally moves them to the nodes dir
-		filepath.Join(o.Root, "uploads"),
-		filepath.Join(o.Root, "trash"),
-	}
-	for _, v := range dataPaths {
-		if err := os.MkdirAll(v, 0700); err != nil {
-			logger.New().Error().Err(err).
-				Str("path", v).
-				Msg("could not create data dir")
-		}
-	}
-
-	// the root node has an empty name
-	// the root node has no parent
-	n := node.New("root", "", "", 0, nil, lu)
-	if err = createNode(
-		n,
-		&userv1beta1.UserId{
-			OpaqueId: o.Owner,
-		},
-	); err != nil {
-		return nil, err
-	}
-
-	tp, err := NewTree(lu)
+	tp := tree.New(o.Root, o.TreeTimeAccounting, o.TreeSizeAccounting, lu, blobstore)
+	err = tp.Setup(o.Owner)
 	if err != nil {
-		return nil, err
+		logger.New().Error().Err(err).
+			Msg("could not setup tree")
+		return nil, errors.Wrap(err, "could not setup tree")
 	}
 
 	if !o.S3ConfigComplete() {
@@ -170,7 +160,7 @@ type s3ngfs struct {
 	Blobstore Blobstore
 
 	lu           *Lookup
-	tp           TreePersistence
+	tp           Tree
 	o            *Options
 	p            PermissionsChecker
 	chunkHandler *chunking.ChunkHandler

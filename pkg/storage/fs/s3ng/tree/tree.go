@@ -16,10 +16,11 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package s3ng
+package tree
 
 import (
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -36,16 +37,77 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Tree manages a hierarchical tree
-type Tree struct {
-	lu *Lookup
+//go:generate mockery -name Blobstore
+
+// Blobstore defines an interface for storing blobs in a blobstore
+type Blobstore interface {
+	Upload(key string, reader io.Reader) error
+	Download(key string) (io.ReadCloser, error)
+	Delete(key string) error
 }
 
-// NewTree creates a new Tree instance
-func NewTree(lu *Lookup) (TreePersistence, error) {
+// PathLookup defines the interface for the lookup component
+type PathLookup interface {
+	NodeFromID(ctx context.Context, id *provider.ResourceId) (n *node.Node, err error)
+	RootNode(ctx context.Context) (node *node.Node, err error)
+	HomeOrRootNode(ctx context.Context) (node *node.Node, err error)
+
+	InternalRoot() string
+	InternalPath(ID string) string
+	Path(ctx context.Context, n *node.Node) (path string, err error)
+}
+
+// Tree manages a hierarchical tree
+type Tree struct {
+	lookup    PathLookup
+	blobstore Blobstore
+
+	root               string
+	treeSizeAccounting bool
+	treeTimeAccounting bool
+}
+
+// New returns a new instance of Tree
+func New(root string, tta bool, tsa bool, lu PathLookup, bs Blobstore) *Tree {
 	return &Tree{
-		lu: lu,
-	}, nil
+		lookup:             lu,
+		blobstore:          bs,
+		root:               root,
+		treeTimeAccounting: tta,
+		treeSizeAccounting: tsa,
+	}
+}
+
+// Setup prepares the tree structure
+func (t *Tree) Setup(owner string) error {
+	// create data paths for internal layout
+	dataPaths := []string{
+		filepath.Join(t.root, "nodes"),
+		// notes contain symlinks from nodes/<u-u-i-d>/uploads/<uploadid> to ../../uploads/<uploadid>
+		// better to keep uploads on a fast / volatile storage before a workflow finally moves them to the nodes dir
+		filepath.Join(t.root, "uploads"),
+		filepath.Join(t.root, "trash"),
+	}
+	for _, v := range dataPaths {
+		err := os.MkdirAll(v, 0700)
+		if err != nil {
+			return err
+		}
+	}
+
+	// the root node has an empty name
+	// the root node has no parent
+	n := node.New("root", "", "", 0, nil, t.lookup)
+	err := t.createNode(
+		n,
+		&userpb.UserId{
+			OpaqueId: owner,
+		},
+	)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // GetMD returns the metadata of a node in the tree
@@ -64,25 +126,13 @@ func (t *Tree) GetMD(ctx context.Context, n *node.Node) (os.FileInfo, error) {
 // GetPathByID returns the fn pointed by the file id, without the internal namespace
 func (t *Tree) GetPathByID(ctx context.Context, id *provider.ResourceId) (relativeExternalPath string, err error) {
 	var node *node.Node
-	node, err = t.lu.NodeFromID(ctx, id)
+	node, err = t.lookup.NodeFromID(ctx, id)
 	if err != nil {
 		return
 	}
 
-	relativeExternalPath, err = t.lu.Path(ctx, node)
+	relativeExternalPath, err = t.lookup.Path(ctx, node)
 	return
-}
-
-// does not take care of linking back to parent
-// TODO check if node exists?
-func createNode(n *node.Node, owner *userpb.UserId) (err error) {
-	// create a directory node
-	nodePath := n.InternalPath()
-	if err = os.MkdirAll(nodePath, 0700); err != nil {
-		return errors.Wrap(err, "s3ngfs: error creating node")
-	}
-
-	return n.WriteMetadata(owner)
 }
 
 // CreateDir creates a new directory entry in the tree
@@ -107,13 +157,13 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 		return
 	}
 
-	err = createNode(n, owner)
+	err = t.createNode(n, owner)
 	if err != nil {
 		return nil
 	}
 
 	// make child appear in listings
-	err = os.Symlink("../"+n.ID, filepath.Join(t.lu.InternalPath(n.ParentID), n.Name))
+	err = os.Symlink("../"+n.ID, filepath.Join(t.lookup.InternalPath(n.ParentID), n.Name))
 	if err != nil {
 		return
 	}
@@ -138,7 +188,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	// are we just renaming (parent stays the same)?
 	if oldNode.ParentID == newNode.ParentID {
 
-		parentPath := t.lu.InternalPath(oldNode.ParentID)
+		parentPath := t.lookup.InternalPath(oldNode.ParentID)
 
 		// rename child
 		err = os.Rename(
@@ -162,8 +212,8 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 
 	// rename child
 	err = os.Rename(
-		filepath.Join(t.lu.InternalPath(oldNode.ParentID), oldNode.Name),
-		filepath.Join(t.lu.InternalPath(newNode.ParentID), newNode.Name),
+		filepath.Join(t.lookup.InternalPath(oldNode.ParentID), oldNode.Name),
+		filepath.Join(t.lookup.InternalPath(newNode.ParentID), newNode.Name),
 	)
 	if err != nil {
 		return errors.Wrap(err, "s3ngfs: could not move child")
@@ -216,7 +266,7 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 			continue
 		}
 
-		n, err := node.ReadNode(ctx, t.lu, filepath.Base(link))
+		n, err := node.ReadNode(ctx, t.lookup, filepath.Base(link))
 		if err != nil {
 			// TODO log
 			continue
@@ -226,7 +276,7 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 	return nodes, nil
 }
 
-// Delete deletes a node in the tree
+// Delete deletes a node in the tree by moving it to the trash
 func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 
 	// Prepare the trash
@@ -240,13 +290,13 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 		// fall back to root trash
 		o.OpaqueId = "root"
 	}
-	err = os.MkdirAll(filepath.Join(t.lu.Options.Root, "trash", o.OpaqueId), 0700)
+	err = os.MkdirAll(filepath.Join(t.root, "trash", o.OpaqueId), 0700)
 	if err != nil {
 		return
 	}
 
 	// get the original path
-	origin, err := t.lu.Path(ctx, n)
+	origin, err := t.lookup.Path(ctx, n)
 	if err != nil {
 		return
 	}
@@ -261,8 +311,8 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 
 	// first make node appear in the owners (or root) trash
 	// parent id and name are stored as extended attributes in the node itself
-	trashLink := filepath.Join(t.lu.Options.Root, "trash", o.OpaqueId, n.ID)
-	err = os.Symlink("../nodes/"+n.ID+".T."+deletionTime, trashLink)
+	trashLink := filepath.Join(t.root, "trash", o.OpaqueId, n.ID)
+	err = os.Symlink("../../nodes/"+n.ID+".T."+deletionTime, trashLink)
 	if err != nil {
 		// To roll back changes
 		// TODO unset trashOriginAttr
@@ -282,7 +332,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	}
 
 	// finally remove the entry from the parent dir
-	src := filepath.Join(t.lu.InternalPath(n.ParentID), n.Name)
+	src := filepath.Join(t.lookup.InternalPath(n.ParentID), n.Name)
 	err = os.Remove(src)
 	if err != nil {
 		// To roll back changes
@@ -301,7 +351,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 
 // Propagate propagates changes to the root of the tree
 func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
-	if !t.lu.Options.TreeTimeAccounting && !t.lu.Options.TreeSizeAccounting {
+	if !t.treeTimeAccounting && !t.treeSizeAccounting {
 		// no propagation enabled
 		log.Debug().Msg("propagation disabled")
 		return
@@ -311,7 +361,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 	// is propagation enabled for the parent node?
 
 	var root *node.Node
-	if root, err = t.lu.HomeOrRootNode(ctx); err != nil {
+	if root, err = t.lookup.HomeOrRootNode(ctx); err != nil {
 		return
 	}
 
@@ -332,7 +382,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 			return nil
 		}
 
-		if t.lu.Options.TreeTimeAccounting {
+		if t.treeTimeAccounting {
 			// update the parent tree time if it is older than the nodes mtime
 			updateSyncTime := false
 
@@ -384,4 +434,15 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 		return
 	}
 	return
+}
+
+// TODO check if node exists?
+func (t *Tree) createNode(n *node.Node, owner *userpb.UserId) (err error) {
+	// create a directory node
+	nodePath := n.InternalPath()
+	if err = os.MkdirAll(nodePath, 0700); err != nil {
+		return errors.Wrap(err, "s3ngfs: error creating node")
+	}
+
+	return n.WriteMetadata(owner)
 }
