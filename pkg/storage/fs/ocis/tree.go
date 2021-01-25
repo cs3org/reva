@@ -262,7 +262,7 @@ func (t *Tree) Delete(ctx context.Context, n *Node) (err error) {
 	// first make node appear in the owners (or root) trash
 	// parent id and name are stored as extended attributes in the node itself
 	trashLink := filepath.Join(t.lu.Options.Root, "trash", o.OpaqueId, n.ID)
-	err = os.Symlink("../nodes/"+n.ID+".T."+deletionTime, trashLink)
+	err = os.Symlink("../../nodes/"+n.ID+".T."+deletionTime, trashLink)
 	if err != nil {
 		// To roll back changes
 		// TODO unset trashOriginAttr
