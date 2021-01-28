@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"path"
 	"strings"
 
@@ -176,7 +175,7 @@ func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string)
 func (s *svc) formatProppatchResponse(ctx context.Context, acceptedProps []xml.Name, removedProps []xml.Name, ref string) (string, error) {
 	responses := make([]responseXML, 0, 1)
 	response := responseXML{
-		Href:     (&url.URL{Path: ref}).EscapedPath(), // url encode response.Href
+		Href:     encodePath(ref),
 		Propstat: []propstatXML{},
 	}
 

@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"path"
 	"strconv"
 	"strings"
@@ -319,7 +318,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	}
 
 	response := responseXML{
-		Href:     (&url.URL{Path: ref}).EscapedPath(), // url encode response.Href
+		Href:     encodePath(ref),
 		Propstat: []propstatXML{},
 	}
 
