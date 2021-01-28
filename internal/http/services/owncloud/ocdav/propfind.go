@@ -280,22 +280,31 @@ func (s *svc) formatPropfind(ctx context.Context, pf *propfindXML, mds []*provid
 	return msg, nil
 }
 
-func (s *svc) xmlEscaped(val string) string {
+func (s *svc) xmlEscaped(val string) []byte {
 	buf := new(bytes.Buffer)
 	xml.Escape(buf, []byte(val))
-	return buf.String()
+	return buf.Bytes()
 }
 
 func (s *svc) newPropNS(namespace string, local string, val string) *propertyXML {
 	return &propertyXML{
 		XMLName:  xml.Name{Space: namespace, Local: local},
 		Lang:     "",
-		InnerXML: []byte(val),
+		InnerXML: s.xmlEscaped(val),
 	}
 }
 
 // TODO properly use the space
 func (s *svc) newProp(key, val string) *propertyXML {
+	return &propertyXML{
+		XMLName:  xml.Name{Space: "", Local: key},
+		Lang:     "",
+		InnerXML: s.xmlEscaped(val),
+	}
+}
+
+// TODO properly use the space
+func (s *svc) newPropRaw(key, val string) *propertyXML {
 	return &propertyXML{
 		XMLName:  xml.Name{Space: "", Local: key},
 		Lang:     "",
@@ -345,17 +354,21 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		sublog.Debug().Interface("role", role).Str("dav-permissions", wdp).Msg("converted PermissionSet")
 	}
 
+	propstatOK := propstatXML{
+		Status: "HTTP/1.1 200 OK",
+		Prop:   []*propertyXML{},
+	}
+	propstatNotFound := propstatXML{
+		Status: "HTTP/1.1 404 Not Found",
+		Prop:   []*propertyXML{},
+	}
 	// when allprops has been requested
 	if pf.Allprop != nil {
 		// return all known properties
-		response.Propstat = append(response.Propstat, propstatXML{
-			Status: "HTTP/1.1 200 OK",
-			Prop:   []*propertyXML{},
-		})
 
 		if md.Id != nil {
 			id := wrapResourceID(md.Id)
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop,
+			propstatOK.Prop = append(propstatOK.Prop,
 				s.newProp("oc:id", id),
 				s.newProp("oc:fileid", id),
 			)
@@ -365,27 +378,31 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 			// etags must be enclosed in double quotes and cannot contain them.
 			// See https://tools.ietf.org/html/rfc7232#section-2.3 for details
 			// TODO(jfd) handle weak tags that start with 'W/'
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("d:getetag", md.Etag))
+			propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getetag", md.Etag))
 		}
 
 		if md.PermissionSet != nil {
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:permissions", wdp))
+			propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:permissions", wdp))
 		}
 
 		// always return size
 		size := fmt.Sprintf("%d", md.Size)
 		if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop,
-				s.newProp("d:resourcetype", "<d:collection/>"),
-				s.newProp("d:getcontenttype", "httpd/unix-directory"),
+			propstatOK.Prop = append(propstatOK.Prop,
+				s.newPropRaw("d:resourcetype", "<d:collection/>"),
 				s.newProp("oc:size", size),
 			)
+			propstatNotFound.Prop = append(propstatNotFound.Prop,
+				s.newProp("d:getcontenttype", ""),
+				s.newProp("d:getcontentlength", ""),
+			)
 		} else {
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop,
+			propstatOK.Prop = append(propstatOK.Prop,
+				s.newProp("d:resourcetype", ""),
 				s.newProp("d:getcontentlength", size),
 			)
 			if md.MimeType != "" {
-				response.Propstat[0].Prop = append(response.Propstat[0].Prop,
+				propstatOK.Prop = append(propstatOK.Prop,
 					s.newProp("d:getcontenttype", md.MimeType),
 				)
 			}
@@ -393,7 +410,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		// Finder needs the getLastModified property to work.
 		t := utils.TSToTime(md.Mtime).UTC()
 		lastModifiedString := t.Format(time.RFC1123Z)
-		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("d:getlastmodified", lastModifiedString))
+		propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getlastmodified", lastModifiedString))
 
 		// stay bug compatible with oc10, see https://github.com/owncloud/core/pull/38304#issuecomment-762185241
 		var checksums strings.Builder
@@ -423,30 +440,22 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		}
 		if checksums.Len() > 0 {
 			checksums.WriteString("</oc:checksum>")
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:checksums", checksums.String()))
+			propstatOK.Prop = append(propstatOK.Prop, s.newPropRaw("oc:checksums", checksums.String()))
 		}
 
 		// favorites from arbitrary metadata
 		if k := md.GetArbitraryMetadata(); k == nil {
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:favorite", "0"))
+			propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
 		} else if amd := k.GetMetadata(); amd == nil {
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:favorite", "0"))
+			propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
 		} else if v, ok := amd[_propOcFavorite]; ok && v != "" {
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:favorite", v))
+			propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", v))
 		} else {
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:favorite", "0"))
+			propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
 		}
 		// TODO return other properties ... but how do we put them in a namespace?
 	} else {
 		// otherwise return only the requested properties
-		propstatOK := propstatXML{
-			Status: "HTTP/1.1 200 OK",
-			Prop:   []*propertyXML{},
-		}
-		propstatNotFound := propstatXML{
-			Status: "HTTP/1.1 404 Not Found",
-			Prop:   []*propertyXML{},
-		}
 		size := fmt.Sprintf("%d", md.Size)
 		for i := range pf.Prop {
 			switch pf.Prop[i].Space {
@@ -538,7 +547,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					if md.Owner != nil {
 						if isCurrentUserOwner(ctx, md.Owner) {
 							u := ctxuser.ContextMustGetUser(ctx)
-							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-id", s.xmlEscaped(u.Username)))
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-id", u.Username))
 						} else {
 							sublog.Debug().Msg("TODO fetch user username")
 							propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:owner-id", ""))
@@ -589,7 +598,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					}
 					if checksums.Len() > 13 {
 						checksums.WriteString("</oc:checksum>")
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:checksums", checksums.String()))
+						propstatOK.Prop = append(propstatOK.Prop, s.newPropRaw("oc:checksums", checksums.String()))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:checksums", ""))
 					}
@@ -598,7 +607,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					amd := k.GetMetadata()
 					if amdv, ok := amd[metadataKeyOf(&pf.Prop[i])]; ok {
 						st := fmt.Sprintf("<oc:share-type>%s</oc:share-type>", amdv)
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:share-types", st))
+						propstatOK.Prop = append(propstatOK.Prop, s.newPropRaw("oc:share-types", st))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:"+pf.Prop[i].Local, ""))
 					}
@@ -652,14 +661,15 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					}
 				case "resourcetype": // both
 					if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:resourcetype", "<d:collection/>"))
+						propstatOK.Prop = append(propstatOK.Prop, s.newPropRaw("d:resourcetype", "<d:collection/>"))
 					} else {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:resourcetype", ""))
 						// redirectref is another option
 					}
 				case "getcontenttype": // phoenix
 					if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontenttype", "httpd/unix-directory"))
+						// directories have no contenttype
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:getcontenttype", ""))
 					} else if md.MimeType != "" {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontenttype", md.MimeType))
 					}
@@ -706,12 +716,13 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				}
 			}
 		}
-		if len(propstatOK.Prop) > 0 {
-			response.Propstat = append(response.Propstat, propstatOK)
-		}
-		if len(propstatNotFound.Prop) > 0 {
-			response.Propstat = append(response.Propstat, propstatNotFound)
-		}
+	}
+
+	if len(propstatOK.Prop) > 0 {
+		response.Propstat = append(response.Propstat, propstatOK)
+	}
+	if len(propstatNotFound.Prop) > 0 {
+		response.Propstat = append(response.Propstat, propstatNotFound)
 	}
 
 	return &response, nil
@@ -819,7 +830,7 @@ type propertyXML struct {
 	Lang string `xml:"xml:lang,attr,omitempty"`
 
 	// InnerXML contains the XML representation of the property value.
-	// See http://www.ocwebdav.org/specs/rfc4918.html#property_values
+	// See http://www.webdav.org/specs/rfc4918.html#property_values
 	//
 	// Property values of complex type or mixed-content must have fully
 	// expanded XML namespaces or be self-contained with according
