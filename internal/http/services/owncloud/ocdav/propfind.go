@@ -29,7 +29,6 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"time"
 
 	"go.opencensus.io/trace"
 
@@ -50,6 +49,9 @@ const (
 	_nsOCS      = "http://open-collaboration-services.org/ns"
 
 	_propOcFavorite = "http://owncloud.org/ns/favorite"
+
+	// RFC1123 time that mimics oc10. time.RFC1123 would end in "UTC", see https://github.com/golang/go/issues/13781
+	RFC1123 = "Mon, 02 Jan 2006 15:04:05 GMT"
 )
 
 // ns is the namespace that is prefixed to the path in the cs3 namespace
@@ -344,7 +346,11 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 
 	isShared := !isCurrentUserOwner(ctx, md.Owner)
 	var wdp string
-	if md.PermissionSet != nil {
+	switch {
+	case ls != nil:
+		// link share only appears on root collection
+		wdp = ""
+	case md.PermissionSet != nil:
 		wdp = role.WebDAVPermissions(
 			md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 			isShared,
@@ -385,32 +391,30 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 			propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:permissions", wdp))
 		}
 
-		// always return size
+		// always return size, well nearly always ... public link shares are a little weird
 		size := fmt.Sprintf("%d", md.Size)
 		if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-			propstatOK.Prop = append(propstatOK.Prop,
-				s.newPropRaw("d:resourcetype", "<d:collection/>"),
-				s.newProp("oc:size", size),
-			)
-			propstatNotFound.Prop = append(propstatNotFound.Prop,
-				s.newProp("d:getcontenttype", ""),
-				s.newProp("d:getcontentlength", ""),
-			)
+			propstatOK.Prop = append(propstatOK.Prop, s.newPropRaw("d:resourcetype", "<d:collection/>"))
+			if ls == nil {
+				propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:size", size))
+			} else {
+				//no size, but also no 404
+			}
 		} else {
 			propstatOK.Prop = append(propstatOK.Prop,
 				s.newProp("d:resourcetype", ""),
 				s.newProp("d:getcontentlength", size),
 			)
 			if md.MimeType != "" {
-				propstatOK.Prop = append(propstatOK.Prop,
-					s.newProp("d:getcontenttype", md.MimeType),
-				)
+				propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontenttype", md.MimeType))
 			}
 		}
 		// Finder needs the getLastModified property to work.
-		t := utils.TSToTime(md.Mtime).UTC()
-		lastModifiedString := t.Format(time.RFC1123Z)
-		propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getlastmodified", lastModifiedString))
+		if md.Mtime != nil {
+			t := utils.TSToTime(md.Mtime).UTC()
+			lastModifiedString := t.Format(RFC1123)
+			propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getlastmodified", lastModifiedString))
+		}
 
 		// stay bug compatible with oc10, see https://github.com/owncloud/core/pull/38304#issuecomment-762185241
 		var checksums strings.Builder
@@ -443,15 +447,18 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 			propstatOK.Prop = append(propstatOK.Prop, s.newPropRaw("oc:checksums", checksums.String()))
 		}
 
-		// favorites from arbitrary metadata
-		if k := md.GetArbitraryMetadata(); k == nil {
-			propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
-		} else if amd := k.GetMetadata(); amd == nil {
-			propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
-		} else if v, ok := amd[_propOcFavorite]; ok && v != "" {
-			propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", v))
-		} else {
-			propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
+		// ls do not report any properties as missing by default
+		if ls == nil {
+			// favorites from arbitrary metadata
+			if k := md.GetArbitraryMetadata(); k == nil {
+				propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
+			} else if amd := k.GetMetadata(); amd == nil {
+				propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
+			} else if v, ok := amd[_propOcFavorite]; ok && v != "" {
+				propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", v))
+			} else {
+				propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
+			}
 		}
 		// TODO return other properties ... but how do we put them in a namespace?
 	} else {
@@ -512,7 +519,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				case "public-link-share-datetime":
 					if ls != nil && ls.Mtime != nil {
 						t := utils.TSToTime(ls.Mtime).UTC() // TODO or ctime?
-						shareTimeString := t.Format(time.RFC1123Z)
+						shareTimeString := t.Format(RFC1123)
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:public-link-share-datetime", shareTimeString))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-share-datetime", ""))
@@ -533,7 +540,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				case "public-link-expiration":
 					if ls != nil && ls.Expiration != nil {
 						t := utils.TSToTime(ls.Expiration).UTC()
-						expireTimeString := t.Format(time.RFC1123Z)
+						expireTimeString := t.Format(RFC1123)
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:public-link-expiration", expireTimeString))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-expiration", ""))
@@ -542,7 +549,12 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				case "size": // phoenix only
 					// TODO we cannot find out if md.Size is set or not because ints in go default to 0
 					// oc:size is also available on folders
-					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:size", size))
+					if ls == nil {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:size", size))
+					} else {
+						// link share root collection has no size
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:size", ""))
+					}
 				case "owner-id": // phoenix only
 					if md.Owner != nil {
 						if isCurrentUserOwner(ctx, md.Owner) {
@@ -559,14 +571,19 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					// TODO: can be 0 or 1?, in oc10 it is present or not
 					// TODO: read favorite via separate call? that would be expensive? I hope it is in the md
 					// TODO: this boolean favorite property is so horribly wrong ... either it is presont, or it is not ... unless ... it is possible to have a non binary value ... we need to double check
-					if k := md.GetArbitraryMetadata(); k == nil {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
-					} else if amd := k.GetMetadata(); amd == nil {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
-					} else if v, ok := amd[_propOcFavorite]; ok && v != "" {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "1"))
+					if ls == nil {
+						if k := md.GetArbitraryMetadata(); k == nil {
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
+						} else if amd := k.GetMetadata(); amd == nil {
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
+						} else if v, ok := amd[_propOcFavorite]; ok && v != "" {
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "1"))
+						} else {
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
+						}
 					} else {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
+						// link share root collection has no favorite
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:favorite", ""))
 					}
 				case "checksums": // desktop ... not really ... the desktop sends the OC-Checksum header
 
@@ -675,9 +692,13 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					}
 				case "getlastmodified": // both
 					// TODO we cannot find out if md.Mtime is set or not because ints in go default to 0
-					t := utils.TSToTime(md.Mtime).UTC()
-					lastModifiedString := t.Format(time.RFC1123Z)
-					propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getlastmodified", lastModifiedString))
+					if md.Mtime != nil {
+						t := utils.TSToTime(md.Mtime).UTC()
+						lastModifiedString := t.Format(RFC1123)
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getlastmodified", lastModifiedString))
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:getlastmodified", ""))
+					}
 				default:
 					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:"+pf.Prop[i].Local, ""))
 				}

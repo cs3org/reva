@@ -298,6 +298,11 @@ var hrefre = regexp.MustCompile(`([^A-Za-z0-9_\-.~()/:@])`)
 // ported from https://github.com/sabre-io/http/blob/bb27d1a8c92217b34e778ee09dcf79d9a2936e84/lib/functions.php#L369-L379
 func encodePath(path string) string {
 	return replaceAllStringSubmatchFunc(hrefre, path, func(groups []string) string {
-		return fmt.Sprintf("%%%02x", []byte(groups[1]))
+		b := groups[1]
+		var sb strings.Builder
+		for i := 0; i < len(b); i++ {
+			sb.WriteString(fmt.Sprintf("%%%X", b[i]))
+		}
+		return sb.String()
 	})
 }
