@@ -802,10 +802,6 @@ File and sync features in a shared scenario
 -   [apiMain/checksums.feature:119](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L119) Scenario: Sharing a file with checksum should return the checksum in the propfind using new DAV path
 -   [apiMain/checksums.feature:129](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L129) Scenario: Sharing and modifying a file should return correct checksum in the propfind using new DAV path
 
-#### ?
--   [apiSharePublicLink1/createPublicLinkShare.feature:793](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L793) Scenario: Get the mtime of a file inside a folder shared by public link using new webDAV version
--   [apiSharePublicLink1/createPublicLinkShare.feature:804](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L804) Scenario: overwriting a file changes its mtime (new public webDAV API)
-
 #### [Searching sharee with displayname](https://github.com/owncloud/ocis/issues/547)
 -   [apiSharees/sharees.feature:32](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharees/sharees.feature#L32)
 -   [apiSharees/sharees.feature:33](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharees/sharees.feature#L33)
