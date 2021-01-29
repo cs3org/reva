@@ -1,4 +1,4 @@
-## Scenarios from ownCloud10 core API tests that are expected to fail with owncloud storage
+## Scenarios from ownCloud10 core API tests that are expected to fail with OCIS storage
 
 ### File
 Basic file management like up and download, move, copy, properties, trash, versions and chunking.
@@ -405,8 +405,8 @@ _ocdav: return checksum in upload response for chunked upload_
 -   [apiMain/checksums.feature:138](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L138) Scenario: Upload new dav chunked file where checksum matches
 -   [apiMain/checksums.feature:147](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L147) Scenario: Upload new dav chunked file where checksum does not match
 -   [apiMain/checksums.feature:158](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L158) Scenario: Upload new dav chunked file using async MOVE where checksum matches
--   [apiMain/checksums.feature:174](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L174) Scenario: Upload new dav chunked file using async MOVE where checksum does not matches
--   [apiMain/checksums.feature:192](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L192) Scenario: Upload new dav chunked file using async MOVE where checksum does not matches - retry with correct checksum
+-   [apiMain/checksums.feature:174](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L174) Scenario: Upload new dav chunked file using async MOVE where checksum does not match
+-   [apiMain/checksums.feature:192](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L192) Scenario: Upload new dav chunked file using async MOVE where checksum does not match - retry with correct checksum
 -   [apiMain/checksums.feature:258](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L258) Scenario: Uploading an old method chunked file with checksum should fail using new DAV path
 -   [apiMain/checksums.feature:312](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L312) Scenario: Upload overwriting a file with new chunking and correct checksum
 -   [apiMain/checksums.feature:324](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L324) Scenario: Upload overwriting a file with new chunking and invalid checksum
@@ -419,7 +419,7 @@ Scenario Outline: upload file with mtime `expected -'1565237893', actual +'16111
     Scenario Outline: upload a file with mtime in a folder `expected -'1565237893', actual +'1611153591'`
 -   [apiWebdavUpload1/uploadFile.feature:173](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFile.feature#L173)
 -   [apiWebdavUpload1/uploadFile.feature:174](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFile.feature#L174)
-    Scenario Outline: moving a file does not changes its mtime `expected -'1565237893', actual +'1611153591'`
+    Scenario Outline: moving a file does not change its mtime `expected -'1565237893', actual +'1611153591'`
 -   [apiWebdavUpload1/uploadFile.feature:187](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFile.feature#L187)
 -   [apiWebdavUpload1/uploadFile.feature:188](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFile.feature#L188)
     Scenario Outline: overwriting a file changes its mtime `expected -'1565237893', actual +'1611153591'`
@@ -1440,7 +1440,7 @@ Scenario Outline: delete a folder when there is a default folder for received sh
     Scenario Outline: Retrieving folder quota when quota is set and a file was uploaded
 -   [apiWebdavProperties1/getQuota.feature:61](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L61)
 -   [apiWebdavProperties1/getQuota.feature:62](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L62)
-    Scenario Outline: Retrieving folder quota when quota is set and a file was recieved
+    Scenario Outline: Retrieving folder quota when quota is set and a file was received
 -   [apiWebdavProperties1/getQuota.feature:77](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L77)
 -   [apiWebdavProperties1/getQuota.feature:78](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L78)
 
@@ -1905,7 +1905,7 @@ _getting and setting quota_
 -   [apiProvisioning-v2/getUsers.feature:44](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiProvisioning-v2/getUsers.feature#L44)
 
 #### [incorrect ocs(v2) status value when getting info of user that does not exist should be 404, gives 998](https://github.com/owncloud/product/issues/250)
-_ocs: api compatability, return correct status code_
+_ocs: api compatibility, return correct status code_
 -   [apiProvisioning-v2/getUser.feature:47](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiProvisioning-v2/getUser.feature#L47)
 
 #### [subadmin endpoints not implemented for users](https://github.com/owncloud/product/issues/289)
@@ -2077,26 +2077,26 @@ API, search, favorites, config, capabilities, not existing endpoints, CORS and o
 -   [apiAuthOcs/ocsPUTAuth.feature:10](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsPUTAuth.feature#L10) Scenario: send PUT request to OCS endpoints as admin with wrong password
 
 #### [server returns 500 when trying to access a not existing file](https://github.com/owncloud/ocis-reva/issues/13)
-_ocdav: api compatability, return correct status code_
+_ocdav: api compatibility, return correct status code_
 -   [apiAuthWebDav/webDavDELETEAuth.feature:36](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavDELETEAuth.feature#L36) Scenario: send DELETE requests to another user's webDav endpoints as normal user
 
 #### [users can access each-others data using the new webdav API](https://github.com/owncloud/ocis/issues/1347)
-_ocdav: api compatability, return correct status code_
+_ocdav: api compatibility, return correct status code_
 -   [apiAuthWebDav/webDavLOCKAuth.feature:38](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavLOCKAuth.feature#L38) Scenario: send LOCK requests to another user's webDav endpoints as normal user
 -   [apiAuthWebDav/webDavMKCOLAuth.feature:37](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavMKCOLAuth.feature#L37) Scenario: send MKCOL requests to another user's webDav endpoints as normal user
 -   [apiAuthWebDav/webDavPROPFINDAuth.feature:37](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavPROPFINDAuth.feature#L37)  Scenario: send PROPFIND requests to another user's webDav endpoints as normal user
 -   [apiAuthWebDav/webDavPROPPATCHAuth.feature:38](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavPROPPATCHAuth.feature#L38) Scenario: send PROPPATCH requests to another user's webDav endpoints as normal user
 
 #### [renaming a resource does not work](https://github.com/owncloud/ocis-reva/issues/14)
-_ocdav: api compatability, return correct status code_
+_ocdav: api compatibility, return correct status code_
 -   [apiAuthWebDav/webDavMOVEAuth.feature:37](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavMOVEAuth.feature#L37) Scenario: send MOVE requests to another user's webDav endpoints as normal user
 
 #### [send POST requests to another user's webDav endpoints as normal user](https://github.com/owncloud/ocis/issues/1287)
-_ocdav: api compatability, return correct status code_
+_ocdav: api compatibility, return correct status code_
 -   [apiAuthWebDav/webDavPOSTAuth.feature:38](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavPOSTAuth.feature#L38)  Scenario: send POST requests to another user's webDav endpoints as normal user
 
 #### [PUT request with missing parent must return status code 409](https://github.com/owncloud/ocis/issues/824)
-_ocdav: api compatability, return correct status code_
+_ocdav: api compatibility, return correct status code_
 -   [apiAuthWebDav/webDavPUTAuth.feature:38](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavPUTAuth.feature#L38) Scenario: send PUT requests to another user's webDav endpoints as normal user
 
 #### [Default capabilities for normal user not same as in oC-core](https://github.com/owncloud/ocis/issues/1285)
