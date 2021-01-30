@@ -397,8 +397,6 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 			propstatOK.Prop = append(propstatOK.Prop, s.newPropRaw("d:resourcetype", "<d:collection/>"))
 			if ls == nil {
 				propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:size", size))
-			} else {
-				//no size, but also no 404
 			}
 		} else {
 			propstatOK.Prop = append(propstatOK.Prop,

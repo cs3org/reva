@@ -333,13 +333,6 @@ Scenario Outline: try to create a folder that already exists
 -   [apiWebdavProperties1/createFolder.feature:99](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFolder.feature#L99)
 -   [apiWebdavProperties1/createFolder.feature:100](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFolder.feature#L100)
 
-#### [XML properties in webdav response not properly encoded](https://github.com/owncloud/ocis/issues/1296)
-Scenario Outline: Do a PROPFIND of various folder names
--   [apiWebdavProperties2/getFileProperties.feature:59](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L59)
--   [apiWebdavProperties2/getFileProperties.feature:61](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L61)
--   [apiWebdavProperties2/getFileProperties.feature:66](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L66)
--   [apiWebdavProperties2/getFileProperties.feature:68](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L68)
-
 ### [Different webdav properties from core](https://github.com/owncloud/ocis/issues/1302)
 Scenario Outline: Propfind the content type of a file using webdav api `Property "d:getcontenttype" found with value "text/plain; charset=utf-8", expected "#^text/plain$#" or "#^text/plain$#"`
 -   [apiWebdavProperties2/getFileProperties.feature:327](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L327)
