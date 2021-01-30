@@ -301,7 +301,7 @@ func encodePath(path string) string {
 		b := groups[1]
 		var sb strings.Builder
 		for i := 0; i < len(b); i++ {
-			sb.WriteString(fmt.Sprintf("%%%X", b[i]))
+			sb.WriteString(fmt.Sprintf("%%%x", b[i]))
 		}
 		return sb.String()
 	})
