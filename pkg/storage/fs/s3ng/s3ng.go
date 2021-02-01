@@ -43,39 +43,12 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/user"
-	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 )
 
 func init() {
 	registry.Register("s3ng", NewDefault)
-}
-
-func parseConfig(m map[string]interface{}) (*Options, error) {
-	o := &Options{}
-	if err := mapstructure.Decode(m, o); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
-		return nil, err
-	}
-	return o, nil
-}
-
-func (o *Options) init(m map[string]interface{}) {
-	if o.UserLayout == "" {
-		o.UserLayout = "{{.Id.OpaqueId}}"
-	}
-	// ensure user layout has no starting or trailing /
-	o.UserLayout = strings.Trim(o.UserLayout, "/")
-
-	if o.ShareFolder == "" {
-		o.ShareFolder = "/Shares"
-	}
-	// ensure share folder always starts with slash
-	o.ShareFolder = filepath.Join("/", o.ShareFolder)
-
-	// c.DataDirectory should never end in / unless it is the root
-	o.Root = filepath.Clean(o.Root)
 }
 
 // PermissionsChecker defines an interface for checking permissions on a Node

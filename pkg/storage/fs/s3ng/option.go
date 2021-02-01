@@ -18,6 +18,14 @@
 
 package s3ng
 
+import (
+	"path/filepath"
+	"strings"
+
+	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
+)
+
 // Option defines a single option function.
 type Option func(o *Options)
 
@@ -60,61 +68,6 @@ type Options struct {
 	S3SecretKey string `mapstructure:"s3.secret_key"`
 }
 
-// newOptions initializes the available default options.
-/* for future use, commented to make linter happy
-func newOptions(opts ...Option) Options {
-	opt := Options{}
-
-	for _, o := range opts {
-		o(&opt)
-	}
-
-	return opt
-}
-*/
-
-// Root provides a function to set the root option.
-func Root(val string) Option {
-	return func(o *Options) {
-		o.Root = val
-	}
-}
-
-// UserLayout provides a function to set the user layout option.
-func UserLayout(val string) Option {
-	return func(o *Options) {
-		o.UserLayout = val
-	}
-}
-
-// ShareFolder provides a function to set the ShareFolder option.
-func ShareFolder(val string) Option {
-	return func(o *Options) {
-		o.ShareFolder = val
-	}
-}
-
-// EnableHome provides a function to set the EnableHome option.
-func EnableHome(val bool) Option {
-	return func(o *Options) {
-		o.EnableHome = val
-	}
-}
-
-// TreeTimeAccounting provides a function to set the TreeTimeAccounting option.
-func TreeTimeAccounting(val bool) Option {
-	return func(o *Options) {
-		o.TreeTimeAccounting = val
-	}
-}
-
-// TreeSizeAccounting provides a function to set the TreeSizeAccounting option.
-func TreeSizeAccounting(val bool) Option {
-	return func(o *Options) {
-		o.TreeSizeAccounting = val
-	}
-}
-
 // S3ConfigComplete return true if all required s3 fields are set
 func (o *Options) S3ConfigComplete() bool {
 	return o.S3Endpoint != "" &&
@@ -122,4 +75,30 @@ func (o *Options) S3ConfigComplete() bool {
 		o.S3Bucket != "" &&
 		o.S3AccessKey != "" &&
 		o.S3SecretKey != ""
+}
+
+func parseConfig(m map[string]interface{}) (*Options, error) {
+	o := &Options{}
+	if err := mapstructure.Decode(m, o); err != nil {
+		err = errors.Wrap(err, "error decoding conf")
+		return nil, err
+	}
+	return o, nil
+}
+
+func (o *Options) init(m map[string]interface{}) {
+	if o.UserLayout == "" {
+		o.UserLayout = "{{.Id.OpaqueId}}"
+	}
+	// ensure user layout has no starting or trailing /
+	o.UserLayout = strings.Trim(o.UserLayout, "/")
+
+	if o.ShareFolder == "" {
+		o.ShareFolder = "/Shares"
+	}
+	// ensure share folder always starts with slash
+	o.ShareFolder = filepath.Join("/", o.ShareFolder)
+
+	// c.DataDirectory should never end in / unless it is the root
+	o.Root = filepath.Clean(o.Root)
 }
