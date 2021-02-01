@@ -23,8 +23,8 @@ import (
 	"encoding/xml"
 	"fmt"
 	"net/http"
-	"net/url"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -203,7 +203,7 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *us
 	responses := make([]*responseXML, 0, len(items)+1)
 	// add trashbin dir . entry
 	responses = append(responses, &responseXML{
-		Href: (&url.URL{Path: ctx.Value(ctxKeyBaseURI).(string) + "/"}).EscapedPath(), // url encode response.Href TODO (jfd) really? /should be ok ... we may actually only need to escape the username
+		Href: encodePath(ctx.Value(ctxKeyBaseURI).(string) + "/"), // url encode response.Href TODO
 		Propstat: []propstatXML{
 			{
 				Status: "HTTP/1.1 200 OK",
@@ -224,7 +224,7 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *us
 	})
 
 	for i := range items {
-		res, err := h.itemToPropResponse(ctx, s, pf, items[i])
+		res, err := h.itemToPropResponse(ctx, s, u, pf, items[i])
 		if err != nil {
 			return "", err
 		}
@@ -244,16 +244,16 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *us
 // itemToPropResponse needs to create a listing that contains a key and destination
 // the key is the name of an entry in the trash listing
 // for now we need to limit trash to the users home, so we can expect all trash keys to have the home storage as the opaque id
-func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, pf *propfindXML, item *provider.RecycleItem) (*responseXML, error) {
+func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *userpb.User, pf *propfindXML, item *provider.RecycleItem) (*responseXML, error) {
 
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
-	ref := path.Join(baseURI, item.Key)
+	ref := path.Join(baseURI, u.Username, item.Key)
 	if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		ref += "/"
 	}
 
 	response := responseXML{
-		Href:     (&url.URL{Path: ref}).EscapedPath(), // url encode response.Href
+		Href:     encodePath(ref), // url encode response.Href
 		Propstat: []propstatXML{},
 	}
 
@@ -270,7 +270,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, pf *pr
 			Prop:   []*propertyXML{},
 		})
 		// yes this is redundant, can be derived from oc:trashbin-original-location which contains the full path, clients should not fetch it
-		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-filename", strings.TrimPrefix(item.Path, "/")))
+		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-filename", filepath.Base(item.Path)))
 		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-location", strings.TrimPrefix(item.Path, "/")))
 		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-delete-datetime", dTime))
 		if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
@@ -306,7 +306,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, pf *pr
 					}
 				case "trashbin-original-filename":
 					// yes this is redundant, can be derived from oc:trashbin-original-location which contains the full path, clients should not fetch it
-					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-original-filename", strings.TrimPrefix(item.Path, "/")))
+					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-original-filename", filepath.Base(item.Path)))
 				case "trashbin-original-location":
 					// TODO (jfd) double check and clarify the cs3 spec what the Key is about and if Path is only the folder that contains the file or if it includes the filename
 					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-original-location", strings.TrimPrefix(item.Path, "/")))
