@@ -24,8 +24,6 @@ import (
 	"os"
 	"strings"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -33,7 +31,13 @@ import (
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/s3ng"
 	"github.com/cs3org/reva/pkg/storage/fs/s3ng/mocks"
+	"github.com/cs3org/reva/pkg/storage/fs/s3ng/tree"
+	treemocks "github.com/cs3org/reva/pkg/storage/fs/s3ng/tree/mocks"
 	ruser "github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/tests/helpers"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("S3ng", func() {
@@ -45,7 +49,7 @@ var _ = Describe("S3ng", func() {
 		options     map[string]interface{}
 		lookup      *s3ng.Lookup
 		permissions *mocks.PermissionsChecker
-		bs          *mocks.Blobstore
+		bs          *treemocks.Blobstore
 		fs          storage.FS
 	)
 
@@ -70,6 +74,7 @@ var _ = Describe("S3ng", func() {
 		options = map[string]interface{}{
 			"root":          tmpRoot,
 			"enable_home":   true,
+			"share_folder":  "/Shares",
 			"s3.endpoint":   "http://1.2.3.4:5000",
 			"s3.region":     "default",
 			"s3.bucket":     "the-bucket",
@@ -78,16 +83,15 @@ var _ = Describe("S3ng", func() {
 		}
 		lookup = &s3ng.Lookup{}
 		permissions = &mocks.PermissionsChecker{}
-		bs = &mocks.Blobstore{}
+		bs = &treemocks.Blobstore{}
 	})
 
 	JustBeforeEach(func() {
 		var err error
-		fs, err = s3ng.New(options, lookup, permissions, bs)
-		Expect(fs.CreateHome(ctx)).To(Succeed())
-		permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil).Once()
-		Expect(fs.CreateDir(ctx, "foo")).To(Succeed())
+		tree := tree.New(options["root"].(string), true, true, lookup, bs)
+		fs, err = s3ng.New(options, lookup, permissions, tree)
 		Expect(err).ToNot(HaveOccurred())
+		Expect(fs.CreateHome(ctx)).To(Succeed())
 	})
 
 	AfterEach(func() {
@@ -105,6 +109,10 @@ var _ = Describe("S3ng", func() {
 	})
 
 	Describe("Delete", func() {
+		JustBeforeEach(func() {
+			helpers.CreateEmptyNode(ctx, "foo", "foo", user.Id, lookup)
+		})
+
 		Context("with insufficient permissions", func() {
 			It("returns an error", func() {
 				permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)

@@ -411,7 +411,7 @@ func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, key string) (*node.Node
 		}
 
 		// delete blob from blobstore
-		t.blobstore.Delete(rn.ID)
+		t.DeleteBlob(rn.ID)
 
 		// delete item link in trash
 		if err = os.Remove(trashItem); err != nil {
@@ -510,6 +510,21 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 		return
 	}
 	return
+}
+
+// WriteBlob writes a blob to the blobstore
+func (t *Tree) WriteBlob(key string, reader io.Reader) error {
+	return t.blobstore.Upload(key, reader)
+}
+
+// ReadBlob reads a blob from the blobstore
+func (t *Tree) ReadBlob(key string) (io.ReadCloser, error) {
+	return t.blobstore.Download(key)
+}
+
+// DeleteBlob deletes a blob from the blobstore
+func (t *Tree) DeleteBlob(key string) error {
+	return t.blobstore.Delete(key)
 }
 
 // TODO check if node exists?

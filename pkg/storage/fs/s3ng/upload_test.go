@@ -33,6 +33,8 @@ import (
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/s3ng"
 	"github.com/cs3org/reva/pkg/storage/fs/s3ng/mocks"
+	"github.com/cs3org/reva/pkg/storage/fs/s3ng/tree"
+	treemocks "github.com/cs3org/reva/pkg/storage/fs/s3ng/tree/mocks"
 	ruser "github.com/cs3org/reva/pkg/user"
 
 	. "github.com/onsi/ginkgo"
@@ -49,7 +51,7 @@ var _ = Describe("File uploads", func() {
 		options     map[string]interface{}
 		lookup      *s3ng.Lookup
 		permissions *mocks.PermissionsChecker
-		bs          *mocks.Blobstore
+		bs          *treemocks.Blobstore
 	)
 
 	BeforeEach(func() {
@@ -80,7 +82,7 @@ var _ = Describe("File uploads", func() {
 		}
 		lookup = &s3ng.Lookup{}
 		permissions = &mocks.PermissionsChecker{}
-		bs = &mocks.Blobstore{}
+		bs = &treemocks.Blobstore{}
 	})
 
 	AfterEach(func() {
@@ -92,7 +94,8 @@ var _ = Describe("File uploads", func() {
 
 	JustBeforeEach(func() {
 		var err error
-		fs, err = s3ng.New(options, lookup, permissions, bs)
+		tree := tree.New(options["root"].(string), true, true, lookup, bs)
+		fs, err = s3ng.New(options, lookup, permissions, tree)
 		Expect(err).ToNot(HaveOccurred())
 	})
 

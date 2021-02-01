@@ -506,7 +506,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		return err
 	}
 	defer file.Close()
-	err = upload.fs.Blobstore.Upload(n.ID, file)
+	err = upload.fs.tp.WriteBlob(n.ID, file)
 	if err != nil {
 		return errors.Wrap(err, "failed to upload file to blostore")
 	}

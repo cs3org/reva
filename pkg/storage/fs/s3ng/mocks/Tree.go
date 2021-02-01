@@ -4,9 +4,11 @@ package mocks
 
 import (
 	context "context"
+	io "io"
+
+	mock "github.com/stretchr/testify/mock"
 
 	node "github.com/cs3org/reva/pkg/storage/fs/s3ng/node"
-	mock "github.com/stretchr/testify/mock"
 
 	os "os"
 
@@ -39,6 +41,20 @@ func (_m *Tree) Delete(ctx context.Context, _a1 *node.Node) error {
 	var r0 error
 	if rf, ok := ret.Get(0).(func(context.Context, *node.Node) error); ok {
 		r0 = rf(ctx, _a1)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// DeleteBlob provides a mock function with given fields: key
+func (_m *Tree) DeleteBlob(key string) error {
+	ret := _m.Called(key)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(string) error); ok {
+		r0 = rf(key)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -134,6 +150,121 @@ func (_m *Tree) Propagate(ctx context.Context, _a1 *node.Node) error {
 	var r0 error
 	if rf, ok := ret.Get(0).(func(context.Context, *node.Node) error); ok {
 		r0 = rf(ctx, _a1)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// PurgeRecycleItemFunc provides a mock function with given fields: ctx, key
+func (_m *Tree) PurgeRecycleItemFunc(ctx context.Context, key string) (*node.Node, func() error, error) {
+	ret := _m.Called(ctx, key)
+
+	var r0 *node.Node
+	if rf, ok := ret.Get(0).(func(context.Context, string) *node.Node); ok {
+		r0 = rf(ctx, key)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*node.Node)
+		}
+	}
+
+	var r1 func() error
+	if rf, ok := ret.Get(1).(func(context.Context, string) func() error); ok {
+		r1 = rf(ctx, key)
+	} else {
+		if ret.Get(1) != nil {
+			r1 = ret.Get(1).(func() error)
+		}
+	}
+
+	var r2 error
+	if rf, ok := ret.Get(2).(func(context.Context, string) error); ok {
+		r2 = rf(ctx, key)
+	} else {
+		r2 = ret.Error(2)
+	}
+
+	return r0, r1, r2
+}
+
+// ReadBlob provides a mock function with given fields: key
+func (_m *Tree) ReadBlob(key string) (io.ReadCloser, error) {
+	ret := _m.Called(key)
+
+	var r0 io.ReadCloser
+	if rf, ok := ret.Get(0).(func(string) io.ReadCloser); ok {
+		r0 = rf(key)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(io.ReadCloser)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(string) error); ok {
+		r1 = rf(key)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// RestoreRecycleItemFunc provides a mock function with given fields: ctx, key
+func (_m *Tree) RestoreRecycleItemFunc(ctx context.Context, key string) (*node.Node, func() error, error) {
+	ret := _m.Called(ctx, key)
+
+	var r0 *node.Node
+	if rf, ok := ret.Get(0).(func(context.Context, string) *node.Node); ok {
+		r0 = rf(ctx, key)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*node.Node)
+		}
+	}
+
+	var r1 func() error
+	if rf, ok := ret.Get(1).(func(context.Context, string) func() error); ok {
+		r1 = rf(ctx, key)
+	} else {
+		if ret.Get(1) != nil {
+			r1 = ret.Get(1).(func() error)
+		}
+	}
+
+	var r2 error
+	if rf, ok := ret.Get(2).(func(context.Context, string) error); ok {
+		r2 = rf(ctx, key)
+	} else {
+		r2 = ret.Error(2)
+	}
+
+	return r0, r1, r2
+}
+
+// Setup provides a mock function with given fields: owner
+func (_m *Tree) Setup(owner string) error {
+	ret := _m.Called(owner)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(string) error); ok {
+		r0 = rf(owner)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// WriteBlob provides a mock function with given fields: key, reader
+func (_m *Tree) WriteBlob(key string, reader io.Reader) error {
+	ret := _m.Called(key, reader)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(string, io.Reader) error); ok {
+		r0 = rf(key, reader)
 	} else {
 		r0 = ret.Error(0)
 	}

@@ -19,7 +19,6 @@
 package s3ng
 
 //go:generate mockery -name PermissionsChecker
-//go:generate mockery -name Blobstore
 //go:generate mockery -name Tree
 
 import (
@@ -85,15 +84,10 @@ type PermissionsChecker interface {
 	HasPermission(ctx context.Context, n *node.Node, check func(*provider.ResourcePermissions) bool) (can bool, err error)
 }
 
-// Blobstore defines an interface for storing blobs in a blobstore
-type Blobstore interface {
-	Upload(key string, reader io.Reader) error
-	Download(key string) (io.ReadCloser, error)
-	Delete(key string) error
-}
-
 // Tree is used to manage a tree hierarchy
 type Tree interface {
+	Setup(owner string) error
+
 	GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error)
 	GetMD(ctx context.Context, node *node.Node) (os.FileInfo, error)
 	ListFolder(ctx context.Context, node *node.Node) ([]*node.Node, error)
@@ -104,6 +98,10 @@ type Tree interface {
 	Delete(ctx context.Context, node *node.Node) (err error)
 	RestoreRecycleItemFunc(ctx context.Context, key string) (*node.Node, func() error, error)
 	PurgeRecycleItemFunc(ctx context.Context, key string) (*node.Node, func() error, error)
+
+	WriteBlob(key string, reader io.Reader) error
+	ReadBlob(key string) (io.ReadCloser, error)
+	DeleteBlob(key string) error
 
 	Propagate(ctx context.Context, node *node.Node) (err error)
 }
@@ -121,13 +119,14 @@ func NewDefault(m map[string]interface{}) (storage.FS, error) {
 	if err != nil {
 		return nil, err
 	}
+	tp := tree.New(o.Root, o.TreeTimeAccounting, o.TreeSizeAccounting, lu, bs)
 
-	return New(m, lu, p, bs)
+	return New(m, lu, p, tp)
 }
 
 // New returns an implementation to of the storage.FS interface that talk to
 // a local filesystem.
-func New(m map[string]interface{}, lu *Lookup, permissionsChecker PermissionsChecker, blobstore Blobstore) (storage.FS, error) {
+func New(m map[string]interface{}, lu *Lookup, permissionsChecker PermissionsChecker, tp Tree) (storage.FS, error) {
 	o, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -136,7 +135,6 @@ func New(m map[string]interface{}, lu *Lookup, permissionsChecker PermissionsChe
 
 	lu.Options = o
 
-	tp := tree.New(o.Root, o.TreeTimeAccounting, o.TreeSizeAccounting, lu, blobstore)
 	err = tp.Setup(o.Owner)
 	if err != nil {
 		logger.New().Error().Err(err).
@@ -149,7 +147,6 @@ func New(m map[string]interface{}, lu *Lookup, permissionsChecker PermissionsChe
 	}
 
 	return &s3ngfs{
-		Blobstore:    blobstore,
 		tp:           tp,
 		lu:           lu,
 		o:            o,
@@ -159,8 +156,6 @@ func New(m map[string]interface{}, lu *Lookup, permissionsChecker PermissionsChe
 }
 
 type s3ngfs struct {
-	Blobstore Blobstore
-
 	lu           *Lookup
 	tp           Tree
 	o            *Options
@@ -452,7 +447,7 @@ func (fs *s3ngfs) Download(ctx context.Context, ref *provider.Reference) (io.Rea
 		return nil, errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 
-	reader, err := fs.Blobstore.Download(node.ID)
+	reader, err := fs.tp.ReadBlob(node.ID)
 	if err != nil {
 		return nil, errors.Wrap(err, "s3ngfs: error download blob '"+node.ID+"'")
 	}
