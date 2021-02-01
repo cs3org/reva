@@ -61,7 +61,6 @@ type PermissionsChecker interface {
 type Tree interface {
 	Setup(owner string) error
 
-	GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error)
 	GetMD(ctx context.Context, node *node.Node) (os.FileInfo, error)
 	ListFolder(ctx context.Context, node *node.Node) ([]*node.Node, error)
 	//CreateHome(owner *userpb.UserId) (n *node.Node, err error)
@@ -194,11 +193,14 @@ func (fs *s3ngfs) GetHome(ctx context.Context) (string, error) {
 	return filepath.Join(fs.o.Root, layout), nil // TODO use a namespace?
 }
 
-// Tree persistence
-
 // GetPathByID returns the fn pointed by the file id, without the internal namespace
 func (fs *s3ngfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
-	return fs.tp.GetPathByID(ctx, id)
+	node, err := fs.lu.NodeFromID(ctx, id)
+	if err != nil {
+		return "", err
+	}
+
+	return fs.lu.Path(ctx, node)
 }
 
 func (fs *s3ngfs) CreateDir(ctx context.Context, fn string) (err error) {

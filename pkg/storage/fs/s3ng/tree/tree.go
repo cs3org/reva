@@ -128,18 +128,6 @@ func (t *Tree) GetMD(ctx context.Context, n *node.Node) (os.FileInfo, error) {
 	return md, nil
 }
 
-// GetPathByID returns the fn pointed by the file id, without the internal namespace
-func (t *Tree) GetPathByID(ctx context.Context, id *provider.ResourceId) (relativeExternalPath string, err error) {
-	var node *node.Node
-	node, err = t.lookup.NodeFromID(ctx, id)
-	if err != nil {
-		return
-	}
-
-	relativeExternalPath, err = t.lookup.Path(ctx, node)
-	return
-}
-
 // CreateDir creates a new directory entry in the tree
 func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 
