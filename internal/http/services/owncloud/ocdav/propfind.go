@@ -52,6 +52,10 @@ const (
 
 	// RFC1123 time that mimics oc10. time.RFC1123 would end in "UTC", see https://github.com/golang/go/issues/13781
 	RFC1123 = "Mon, 02 Jan 2006 15:04:05 GMT"
+
+	_propQuotaUncalculated = "-1"
+	_propQuotaUnknown      = "-2"
+	_propQuotaUnlimited    = "-3"
 )
 
 // ns is the namespace that is prefixed to the path in the cs3 namespace
@@ -334,11 +338,26 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	}
 
 	var ls *link.PublicShare
-	if md.Opaque != nil && md.Opaque.Map != nil && md.Opaque.Map["link-share"] != nil && md.Opaque.Map["link-share"].Decoder == "json" {
-		ls = &link.PublicShare{}
-		err := json.Unmarshal(md.Opaque.Map["link-share"].Value, ls)
-		if err != nil {
-			sublog.Error().Err(err).Msg("could not unmarshal link json")
+	var treesize, quota string
+	// TODO refactor helper functions: GetOpaqueJSONEncoded(opaque, key string, *struct) err, GetOpaquePlainEncoded(opaque, key) value, err
+	// or use ok like pattern and return bool?
+	if md.Opaque != nil && md.Opaque.Map != nil {
+		if md.Opaque.Map["link-share"] != nil && md.Opaque.Map["link-share"].Decoder == "json" {
+			ls = &link.PublicShare{}
+			err := json.Unmarshal(md.Opaque.Map["link-share"].Value, ls)
+			if err != nil {
+				sublog.Error().Err(err).Msg("could not unmarshal link json")
+			}
+		}
+		if md.Opaque.Map["treesize"] != nil && md.Opaque.Map["treesize"].Decoder == "plain" {
+			treesize = string(md.Opaque.Map["treesize"].Value)
+		} else {
+			treesize = _propQuotaUnknown
+		}
+		if md.Opaque.Map["quota"] != nil && md.Opaque.Map["quota"].Decoder == "plain" {
+			quota = string(md.Opaque.Map["quota"].Value)
+		} else {
+			quota = _propQuotaUnknown
 		}
 	}
 
@@ -395,6 +414,8 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 			if ls == nil {
 				propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:size", size))
 			}
+			propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:quota-used-bytes", treesize))
+			propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:quota-available-bytes", quota))
 		} else {
 			propstatOK.Prop = append(propstatOK.Prop,
 				s.newProp("d:resourcetype", ""),
@@ -689,6 +710,20 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getlastmodified", lastModifiedString))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:getlastmodified", ""))
+					}
+				case "quota-used-bytes": // desktop client
+					// oc10 renders the tree size here
+					if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:quota-used-bytes", treesize))
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:quota-used-bytes", ""))
+					}
+				case "quota-available-bytes": // desktop client
+					// we can start with hardcoding unknown
+					if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:quota-available-bytes", _propQuotaUnknown))
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:quota-available-bytes", ""))
 					}
 				default:
 					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:"+pf.Prop[i].Local, ""))
