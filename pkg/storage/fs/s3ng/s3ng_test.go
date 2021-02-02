@@ -110,7 +110,8 @@ var _ = Describe("S3ng", func() {
 
 	Describe("Delete", func() {
 		JustBeforeEach(func() {
-			helpers.CreateEmptyNode(ctx, "foo", "foo", user.Id, lookup)
+			_, err := helpers.CreateEmptyNode(ctx, "foo", "foo", user.Id, lookup)
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		Context("with insufficient permissions", func() {

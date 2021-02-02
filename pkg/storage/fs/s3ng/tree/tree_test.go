@@ -100,7 +100,7 @@ var _ = Describe("Tree", func() {
 
 		JustBeforeEach(func() {
 			n = createEmptyNode("fooId", "root", "fooName", user.Id, lookup)
-			n.WriteMetadata(user.Id)
+			Expect(n.WriteMetadata(user.Id)).To(Succeed())
 		})
 
 		Describe("Delete", func() {

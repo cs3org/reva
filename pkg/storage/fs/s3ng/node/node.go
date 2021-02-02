@@ -198,8 +198,7 @@ func (n *Node) Child(name string) (*Node, error) {
 	link, err := os.Readlink(filepath.Join(n.InternalPath(), name))
 	if err != nil {
 		if os.IsNotExist(err) {
-			err = nil // if the file does not exist we return a node that has Exists = false
-			return c, nil
+			return c, nil // if the file does not exist we return a node that has Exists = false
 		}
 
 		return nil, errors.Wrap(err, "s3ngfs: Wrap: readlink error")
