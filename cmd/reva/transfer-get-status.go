@@ -20,6 +20,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"io"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -44,8 +45,14 @@ func transferGetStatusCommand() *command {
 			return err
 		}
 
-		getStatusRequest := &datatx.GetTransferStatusRequest{}
+		getStatusRequest := &datatx.GetTransferStatusRequest{
+			TxId: &datatx.TxId{
+				OpaqueId: *txID,
+			},
+		}
 
+		fmt.Println("transfer-get-status:")
+		fmt.Println("------------------------------------------------------------------------")
 		getStatusResponse, err := client.GetTransferStatus(ctx, getStatusRequest)
 		if err != nil {
 			return err
@@ -53,6 +60,11 @@ func transferGetStatusCommand() *command {
 		if getStatusResponse.Status.Code != rpc.Code_CODE_OK {
 			return formatError(getStatusResponse.Status)
 		}
+
+		fmt.Printf(" response status: %v\n", getStatusResponse.Status)
+		fmt.Printf(" transfer ID    : %v\n", getStatusResponse.TxInfo.Id.OpaqueId)
+		fmt.Printf(" transfer status: %v\n", getStatusResponse.TxInfo.Status)
+		fmt.Println("------------------------------------------------------------------------")
 
 		return nil
 	}
