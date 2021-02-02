@@ -67,6 +67,9 @@ func (lu *Lookup) NodeFromPath(ctx context.Context, fn string) (*node.Node, erro
 			log.Debug().Interface("node", n).Msg("NodeFromPath() walk")
 			return nil
 		})
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return n, nil
