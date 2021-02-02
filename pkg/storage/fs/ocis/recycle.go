@@ -219,7 +219,7 @@ func (fs *ocisfs) PurgeRecycleItem(ctx context.Context, key string) (err error) 
 		return errtypes.PermissionDenied(key)
 	}
 
-	if err = os.Remove(deletedNodePath); err != nil {
+	if err = os.RemoveAll(deletedNodePath); err != nil {
 		log.Error().Err(err).Str("deletedNodePath", deletedNodePath).Msg("error deleting trash node")
 		return
 	}
