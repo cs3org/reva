@@ -32,14 +32,15 @@ import (
 	"github.com/pkg/xattr"
 )
 
-var NoPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{
-	// no permissions
-}
+// NoPermissions represents an empty set of permssions
+var NoPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{}
 
-// permissions for nodes that don't have an owner set, eg the root node
+// NoOwnerPermissions defines permissions for nodes that don't have an owner set, eg the root node
 var NoOwnerPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{
 	Stat: true,
 }
+
+// OwnerPermissions defines permissions for nodes owned by the user
 var OwnerPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{
 	// all permissions
 	AddGrant:             true,
@@ -134,8 +135,8 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap *pro
 	return ap, nil
 }
 
-// TODO we should use a bitfield for this ...
 // AddPermissions merges a set of permissions into another
+// TODO we should use a bitfield for this ...
 func AddPermissions(l *provider.ResourcePermissions, r *provider.ResourcePermissions) {
 	l.AddGrant = l.AddGrant || r.AddGrant
 	l.CreateContainer = l.CreateContainer || r.CreateContainer

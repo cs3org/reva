@@ -46,6 +46,7 @@ import (
 	"github.com/cs3org/reva/pkg/user"
 )
 
+// Define keys and values used in the node metadata
 const (
 	FavoriteKey   = "http://owncloud.org/ns/favorite"
 	ShareTypesKey = "http://owncloud.org/ns/share-types"
@@ -199,9 +200,9 @@ func (n *Node) Child(name string) (*Node, error) {
 		if os.IsNotExist(err) {
 			err = nil // if the file does not exist we return a node that has Exists = false
 			return c, nil
-		} else {
-			return nil, errors.Wrap(err, "s3ngfs: Wrap: readlink error")
 		}
+
+		return nil, errors.Wrap(err, "s3ngfs: Wrap: readlink error")
 	}
 
 	if strings.HasPrefix(link, "../") {

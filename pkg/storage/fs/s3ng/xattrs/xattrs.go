@@ -18,15 +18,15 @@
 
 package xattrs
 
+// Declare a list of xattr keys
+// TODO the below comment is currently copied from the owncloud driver, revisit
+// Currently,extended file attributes have four separated
+// namespaces (user, trusted, security and system) followed by a dot.
+// A non root user can only manipulate the user. namespace, which is what
+// we will use to store ownCloud specific metadata. To prevent name
+// collisions with other apps We are going to introduce a sub namespace
+// "user.ocis."
 const (
-	// TODO the below comment is currently copied from the owncloud driver, revisit
-	// Currently,extended file attributes have four separated
-	// namespaces (user, trusted, security and system) followed by a dot.
-	// A non root user can only manipulate the user. namespace, which is what
-	// we will use to store ownCloud specific metadata. To prevent name
-	// collisions with other apps We are going to introduce a sub namespace
-	// "user.ocis."
-
 	OcisPrefix   string = "user.ocis."
 	ParentidAttr string = OcisPrefix + "parentid"
 	OwnerIDAttr  string = OcisPrefix + "owner.id"
