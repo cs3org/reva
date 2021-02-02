@@ -28,12 +28,10 @@ import (
 	"github.com/cs3org/reva/pkg/storage/fs/s3ng/node"
 	"github.com/cs3org/reva/pkg/storage/fs/s3ng/tree"
 	ruser "github.com/cs3org/reva/pkg/user"
-
-	. "github.com/onsi/gomega"
 )
 
 // CreateEmptyNodeForOtherUser creates a home and an empty node for a new user
-func CreateEmptyNodeForOtherUser(id, name string, fs storage.FS, lookup tree.PathLookup) *node.Node {
+func CreateEmptyNodeForOtherUser(id, name string, fs storage.FS, lookup tree.PathLookup) (*node.Node, error) {
 	user := &userpb.User{
 		Id: &userpb.UserId{
 			Idp:      "idp",
@@ -42,28 +40,42 @@ func CreateEmptyNodeForOtherUser(id, name string, fs storage.FS, lookup tree.Pat
 		Username: "otheruser",
 	}
 	ctx := ruser.ContextSetUser(context.Background(), user)
-	Expect(fs.CreateHome(ctx)).To(Succeed())
+	err := fs.CreateHome(ctx)
+	if err != nil {
+		return nil, err
+	}
 	return CreateEmptyNode(ctx, id, name, user.Id, lookup)
 }
 
 // CreateEmptyNode creates a home and an empty node for the given context
-func CreateEmptyNode(ctx context.Context, id, name string, userid *userpb.UserId, lookup tree.PathLookup) *node.Node {
+func CreateEmptyNode(ctx context.Context, id, name string, userid *userpb.UserId, lookup tree.PathLookup) (*node.Node, error) {
 	root, err := lookup.HomeOrRootNode(ctx)
-	Expect(err).ToNot(HaveOccurred())
+	if err != nil {
+		return nil, err
+	}
 
 	n := node.New(id, root.ID, name, 1234, userid, lookup)
 	p, err := n.Parent()
-	Expect(err).ToNot(HaveOccurred())
+	if err != nil {
+		return nil, err
+	}
 
 	// Create an empty file node
 	_, err = os.OpenFile(n.InternalPath(), os.O_CREATE, 0644)
-	Expect(err).ToNot(HaveOccurred())
+	if err != nil {
+		return nil, err
+	}
 
 	// ... and an according link in the parent
 	err = os.Symlink("../"+n.ID, path.Join(p.InternalPath(), n.Name))
-	Expect(err).ToNot(HaveOccurred())
+	if err != nil {
+		return nil, err
+	}
 
 	err = n.WriteMetadata(userid)
-	Expect(err).ToNot(HaveOccurred())
-	return n
+	if err != nil {
+		return nil, err
+	}
+
+	return n, nil
 }
