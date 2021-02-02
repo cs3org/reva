@@ -26,6 +26,7 @@ import (
 	authprovider "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	authregistry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	group "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmcore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
@@ -72,6 +73,7 @@ var (
 	storageRegistries      = newProvider()
 	gatewayProviders       = newProvider()
 	userProviders          = newProvider()
+	groupProviders         = newProvider()
 	dataTxs                = newProvider()
 )
 
@@ -123,6 +125,25 @@ func GetUserProviderServiceClient(endpoint string) (user.UserAPIClient, error) {
 
 	v := user.NewUserAPIClient(conn)
 	userProviders.conn[endpoint] = v
+	return v, nil
+}
+
+// GetGroupProviderServiceClient returns a GroupProviderServiceClient.
+func GetGroupProviderServiceClient(endpoint string) (group.GroupAPIClient, error) {
+	groupProviders.m.Lock()
+	defer groupProviders.m.Unlock()
+
+	if val, ok := groupProviders.conn[endpoint]; ok {
+		return val.(group.GroupAPIClient), nil
+	}
+
+	conn, err := NewConn(endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	v := group.NewGroupAPIClient(conn)
+	groupProviders.conn[endpoint] = v
 	return v, nil
 }
 

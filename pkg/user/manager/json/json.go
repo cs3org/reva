@@ -42,7 +42,7 @@ type manager struct {
 }
 
 type config struct {
-	// Users holds a path to a file containing json conforming the Users struct
+	// Users holds a path to a file containing json conforming to the Users struct
 	Users string `mapstructure:"users"`
 }
 
@@ -137,41 +137,10 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 	return users, nil
 }
 
-func (m *manager) FindGroups(ctx context.Context, query string) ([]string, error) {
-	groupSet := make(map[string]bool)
-	for _, u := range m.users {
-		for _, g := range u.Groups {
-			if strings.Contains(g, query) {
-				groupSet[g] = true
-			}
-		}
-	}
-
-	groups := []string{}
-	for k := range groupSet {
-		groups = append(groups, k)
-	}
-	return groups, nil
-}
-
 func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
 	user, err := m.GetUser(ctx, uid)
 	if err != nil {
 		return nil, err
 	}
 	return user.Groups, nil
-}
-
-func (m *manager) IsInGroup(ctx context.Context, uid *userpb.UserId, group string) (bool, error) {
-	user, err := m.GetUser(ctx, uid)
-	if err != nil {
-		return false, err
-	}
-
-	for _, g := range user.Groups {
-		if group == g {
-			return true, nil
-		}
-	}
-	return false, nil
 }
