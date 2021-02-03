@@ -59,7 +59,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if user != u.Username {
-		// FIXME allow fetching other users info?
+		// FIXME allow fetching other users info? only for admins
 		response.WriteOCSError(w, r, http.StatusForbidden, "user id mismatch", fmt.Errorf("%s tried to access %s user info endpoint", u.Id.OpaqueId, user))
 		return
 	}
@@ -147,9 +147,11 @@ func (h *Handler) handleUsers(w http.ResponseWriter, r *http.Request, u *userpb.
 	response.WriteOCSSuccess(w, r, &Users{
 		// ocs can only return the home storage quota
 		Quota: &Quota{
-			Free:       int64(getQuotaRes.TotalBytes - getQuotaRes.UsedBytes),
-			Used:       int64(getQuotaRes.UsedBytes),
-			Total:      int64(getQuotaRes.TotalBytes), // -1, -2 have special meaning?
+			Free: int64(getQuotaRes.TotalBytes - getQuotaRes.UsedBytes),
+			Used: int64(getQuotaRes.UsedBytes),
+			// TODO support negative values or flags for the quota to carry special meaning: -1 = uncalculated, -2 = unknown, -3 = unlimited
+			// for now we can only report total and used
+			Total:      int64(getQuotaRes.TotalBytes),
 			Relative:   float32(float64(getQuotaRes.UsedBytes) / float64(getQuotaRes.TotalBytes)),
 			Definition: "default",
 		},

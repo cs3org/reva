@@ -318,9 +318,11 @@ func (t *Tree) Propagate(ctx context.Context, n *Node) (err error) {
 	// use a sync time and don't rely on the mtime of the current node, as the stat might not change when a rename happened too quickly
 	sTime := time.Now().UTC()
 
+	// we loop until we reach the root
 	for err == nil && n.ID != root.ID {
 		log.Debug().Interface("node", n).Msg("propagating")
 
+		// make n the parent or break the loop
 		if n, err = n.Parent(); err != nil {
 			break
 		}
@@ -376,7 +378,49 @@ func (t *Tree) Propagate(ctx context.Context, n *Node) (err error) {
 
 		}
 
-		// TODO size accounting
+		// size accounting
+		if t.lu.Options.TreeSizeAccounting {
+			// update the treesize if it differs from the current size
+			updateTreeSize := false
+
+			var treeSize, calculatedTreeSize uint64
+			calculatedTreeSize, err = n.CalculateTreeSize(ctx)
+			if err != nil {
+				return
+			}
+
+			treeSize, err = n.GetTreeSize()
+			switch {
+			case err != nil:
+				// missing attribute, or invalid format, overwrite
+				log.Debug().Err(err).
+					Interface("node", n).
+					Msg("could not read treesize attribute, overwriting")
+				updateTreeSize = true
+			case treeSize != calculatedTreeSize:
+				log.Debug().
+					Interface("node", n).
+					Uint64("treesize", treeSize).
+					Uint64("calculatedTreeSize", calculatedTreeSize).
+					Msg("parent treesize is different then calculated treesize, updating")
+				updateTreeSize = true
+			default:
+				log.Debug().
+					Interface("node", n).
+					Uint64("treesize", treeSize).
+					Uint64("calculatedTreeSize", calculatedTreeSize).
+					Msg("parent size matches calculated size, not updating")
+			}
+
+			if updateTreeSize {
+				// update the tree time of the parent node
+				if err = n.SetTreeSize(calculatedTreeSize); err != nil {
+					log.Error().Err(err).Interface("node", n).Uint64("calculatedTreeSize", calculatedTreeSize).Msg("could not update treesize of parent node")
+					return
+				}
+				log.Debug().Interface("node", n).Uint64("calculatedTreeSize", calculatedTreeSize).Msg("updated treesize of parent node")
+			}
+		}
 
 	}
 	if err != nil {

@@ -93,22 +93,6 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 		return
 	}
 
-	ref := &provider.Reference{
-		Spec: &provider.Reference_Path{Path: fn},
-	}
-	req := &provider.StatRequest{Ref: ref}
-	res, err := client.Stat(ctx, req)
-	if err != nil {
-		sublog.Error().Err(err).Msgf("error sending a grpc stat request to ref: %v", ref)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if res.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, res.Status)
-		return
-	}
-
 	metadataKeys := []string{}
 	if pf.Allprop != nil {
 		// TODO this changes the behavior and returns all properties if allprops has been set,
@@ -123,6 +107,24 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 				metadataKeys = append(metadataKeys, metadataKeyOf(&pf.Prop[i]))
 			}
 		}
+	}
+	ref := &provider.Reference{
+		Spec: &provider.Reference_Path{Path: fn},
+	}
+	req := &provider.StatRequest{
+		Ref:                   ref,
+		ArbitraryMetadataKeys: metadataKeys,
+	}
+	res, err := client.Stat(ctx, req)
+	if err != nil {
+		sublog.Error().Err(err).Interface("req", req).Msg("error sending a grpc stat request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if res.Status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, res.Status)
+		return
 	}
 
 	info := res.Info
@@ -221,10 +223,17 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 func requiresExplicitFetching(n *xml.Name) bool {
 	switch n.Space {
 	case _nsDav:
-		return false
+		switch n.Local {
+		case "quota-available-bytes", "quota-used-bytes":
+			//  A <DAV:allprop> PROPFIND request SHOULD NOT return DAV:quota-available-bytes and DAV:quota-used-bytes
+			// from https://www.rfc-editor.org/rfc/rfc4331.html#section-2
+			return true
+		default:
+			return false
+		}
 	case _nsOwncloud:
 		switch n.Local {
-		case "favorite", "share-types", "checksums":
+		case "favorite", "share-types", "checksums", "size":
 			return true
 		default:
 			return false
@@ -338,7 +347,13 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	}
 
 	var ls *link.PublicShare
-	var treesize, quota string
+
+	// -1 indicates uncalculated
+	// -2 indicates unknown (default)
+	// -3 indicates unlimited
+	treesize := _propQuotaUnknown
+	quota := _propQuotaUnknown
+	size := fmt.Sprintf("%d", md.Size)
 	// TODO refactor helper functions: GetOpaqueJSONEncoded(opaque, key string, *struct) err, GetOpaquePlainEncoded(opaque, key) value, err
 	// or use ok like pattern and return bool?
 	if md.Opaque != nil && md.Opaque.Map != nil {
@@ -349,15 +364,16 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				sublog.Error().Err(err).Msg("could not unmarshal link json")
 			}
 		}
+		// TODO the ResourceInfo should have a dedicated TreeSize property for collections.
+		// Currently, we are reusing the Size but that cannot indicate an unknown size because it is uint64
 		if md.Opaque.Map["treesize"] != nil && md.Opaque.Map["treesize"].Decoder == "plain" {
 			treesize = string(md.Opaque.Map["treesize"].Value)
-		} else {
-			treesize = _propQuotaUnknown
+			if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+				size = treesize
+			}
 		}
 		if md.Opaque.Map["quota"] != nil && md.Opaque.Map["quota"].Decoder == "plain" {
 			quota = string(md.Opaque.Map["quota"].Value)
-		} else {
-			quota = _propQuotaUnknown
 		}
 	}
 
@@ -408,14 +424,15 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		}
 
 		// always return size, well nearly always ... public link shares are a little weird
-		size := fmt.Sprintf("%d", md.Size)
 		if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 			propstatOK.Prop = append(propstatOK.Prop, s.newPropRaw("d:resourcetype", "<d:collection/>"))
 			if ls == nil {
 				propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:size", size))
 			}
-			propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:quota-used-bytes", treesize))
-			propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:quota-available-bytes", quota))
+			//  A <DAV:allprop> PROPFIND request SHOULD NOT return DAV:quota-available-bytes and DAV:quota-used-bytes
+			// from https://www.rfc-editor.org/rfc/rfc4331.html#section-2
+			//propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:quota-used-bytes", treesize))
+			//propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:quota-available-bytes", quota))
 		} else {
 			propstatOK.Prop = append(propstatOK.Prop,
 				s.newProp("d:resourcetype", ""),
@@ -479,7 +496,6 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		// TODO return other properties ... but how do we put them in a namespace?
 	} else {
 		// otherwise return only the requested properties
-		size := fmt.Sprintf("%d", md.Size)
 		for i := range pf.Prop {
 			switch pf.Prop[i].Space {
 			case _nsOwncloud:
@@ -560,7 +576,8 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-expiration", ""))
 				case "size": // phoenix only
 					// TODO we cannot find out if md.Size is set or not because ints in go default to 0
-					// oc:size is also available on folders
+					// TODO what is the difference to d:quota-used-bytes (which only exists for collections)?
+					// oc:size is available on files and folders and behaves like d:getcontentlength or d:quota-used-bytes respectively
 					if ls == nil {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:size", size))
 					} else {
@@ -711,17 +728,20 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:getlastmodified", ""))
 					}
-				case "quota-used-bytes": // desktop client
-					// oc10 renders the tree size here
+				case "quota-used-bytes": // RFC 4331
 					if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+						// TODO RFC says if treesize is unknown return it as not found, what does oc10 do?
+						// always returns the current usage,
+						// in oc10 there seems to be a bug that makes the size in webdav differ from the one in the user properties, not taking shares into account
+						// in ocis we plan to always mak the quota a property of the storage space
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:quota-used-bytes", treesize))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:quota-used-bytes", ""))
 					}
-				case "quota-available-bytes": // desktop client
-					// we can start with hardcoding unknown
+				case "quota-available-bytes": // RFC 4331
 					if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:quota-available-bytes", _propQuotaUnknown))
+						// oc10 returns -3 for unlimited, -2 for unknown, -1 for uncalculated
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:quota-available-bytes", quota))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:quota-available-bytes", ""))
 					}
@@ -798,7 +818,16 @@ func (c *countingReader) Read(p []byte) (int, error) {
 }
 
 func metadataKeyOf(n *xml.Name) string {
-	return fmt.Sprintf("%s/%s", n.Space, n.Local)
+	switch {
+	case n.Space == _nsDav && n.Local == "quota-used-bytes":
+		return "treesize"
+	case n.Space == _nsDav && n.Local == "quota-available-bytes":
+		return "quota"
+	case n.Space == _nsOwncloud && n.Local == "size":
+		return "treesize"
+	default:
+		return fmt.Sprintf("%s/%s", n.Space, n.Local)
+	}
 }
 
 // http://www.webdav.org/specs/rfc4918.html#ELEMENT_prop (for propfind)
