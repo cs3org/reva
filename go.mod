@@ -33,6 +33,7 @@ require (
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible
 	github.com/mitchellh/copystructure v1.0.0 // indirect
 	github.com/mitchellh/mapstructure v1.3.3
+	github.com/oleiade/reflections v1.0.1 // indirect
 	github.com/onsi/ginkgo v1.7.0
 	github.com/onsi/gomega v1.4.3
 	github.com/ory/fosite v0.35.1
@@ -54,5 +55,5 @@ require (
 go 1.13
 
 replace github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
-
+replace github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
 replace google.golang.org/grpc => google.golang.org/grpc v1.26.0 // temporary downgrade
