@@ -47,8 +47,8 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/user"
-	"github.com/gofrs/uuid"
 	"github.com/gomodule/redigo/redis"
+	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
@@ -700,23 +700,20 @@ func readOrCreateID(ctx context.Context, ip string, conn redis.Conn) string {
 	var err error
 	if id, err = xattr.Get(ip, idAttribute); err != nil {
 		log.Warn().Err(err).Str("driver", "owncloud").Str("ipath", ip).Msg("error reading file id")
-		// try generating a uuid
-		if uuid, err := uuid.NewV4(); err != nil {
-			log.Error().Err(err).Str("driver", "owncloud").Str("ipath", ip).Msg("error generating fileid")
-		} else {
-			// store uuid
-			id = uuid.Bytes()
-			if err := xattr.Set(ip, idAttribute, id); err != nil {
-				log.Error().Err(err).Str("driver", "owncloud").Str("ipath", ip).Msg("error storing file id")
-			}
-			// TODO cache path for uuid in redis
-			// TODO reuse conn?
-			if conn != nil {
-				_, err := conn.Do("SET", uuid.String(), ip)
-				if err != nil {
-					log.Error().Err(err).Str("driver", "owncloud").Str("ipath", ip).Msg("error caching id")
-					// continue
-				}
+
+		uuid := uuid.New()
+		// store uuid
+		id = uuid[:]
+		if err := xattr.Set(ip, idAttribute, id); err != nil {
+			log.Error().Err(err).Str("driver", "owncloud").Str("ipath", ip).Msg("error storing file id")
+		}
+		// TODO cache path for uuid in redis
+		// TODO reuse conn?
+		if conn != nil {
+			_, err := conn.Do("SET", uuid.String(), ip)
+			if err != nil {
+				log.Error().Err(err).Str("driver", "owncloud").Str("ipath", ip).Msg("error caching id")
+				// continue
 			}
 		}
 	}

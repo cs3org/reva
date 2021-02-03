@@ -55,8 +55,8 @@ func Test_parseConfig(t *testing.T) {
 			want: nil,
 			wantErr: &mapstructure.Error{
 				Errors: []string{
-					"'driver' expected type 'string', got unconvertible type 'int'",
-					"'iopsecret' expected type 'string', got unconvertible type 'int'",
+					"'driver' expected type 'string', got unconvertible type 'int', value: '123'",
+					"'iopsecret' expected type 'string', got unconvertible type 'int', value: '456'",
 				},
 			},
 		},
