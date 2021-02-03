@@ -42,7 +42,7 @@ require (
 	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect
 	github.com/rs/cors v1.7.0
 	github.com/rs/zerolog v1.20.0
-	github.com/stretchr/testify v1.6.1
+	github.com/stretchr/testify v1.7.0
 	github.com/studio-b12/gowebdav v0.0.0-20200303150724-9380631c29a1
 	github.com/tus/tusd v1.1.1-0.20200416115059-9deabf9d80c2
 	go.opencensus.io v0.22.5
@@ -55,5 +55,7 @@ require (
 go 1.13
 
 replace github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
+
 replace github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
+
 replace google.golang.org/grpc => google.golang.org/grpc v1.26.0 // temporary downgrade
