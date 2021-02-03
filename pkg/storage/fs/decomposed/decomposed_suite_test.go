@@ -16,41 +16,16 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package s3ng_test
+package decomposed_test
 
 import (
-	"github.com/cs3org/reva/pkg/storage/fs/s3ng"
+	"testing"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("S3ng", func() {
-	var (
-		options map[string]interface{}
-	)
-
-	BeforeEach(func() {
-		options = map[string]interface{}{
-			"enable_home":   true,
-			"share_folder":  "/Shares",
-			"s3.endpoint":   "http://1.2.3.4:5000",
-			"s3.region":     "default",
-			"s3.bucket":     "the-bucket",
-			"s3.access_key": "foo",
-			"s3.secret_key": "bar",
-		}
-	})
-
-	Describe("New", func() {
-		It("fails on missing s3 configuration", func() {
-			_, err := s3ng.New(map[string]interface{}{})
-			Expect(err).To(MatchError("S3 configuration incomplete"))
-		})
-
-		It("works with complete configuration", func() {
-			_, err := s3ng.New(options)
-			Expect(err).ToNot(HaveOccurred())
-		})
-	})
-})
+func TestDecomposed(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Decomposed Suite")
+}

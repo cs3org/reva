@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package s3ng
+package decomposed
 
 import (
 	"context"
@@ -29,8 +29,8 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/storage/fs/s3ng/node"
-	"github.com/cs3org/reva/pkg/storage/fs/s3ng/xattrs"
+	"github.com/cs3org/reva/pkg/storage/fs/decomposed/node"
+	"github.com/cs3org/reva/pkg/storage/fs/decomposed/xattrs"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
@@ -44,7 +44,7 @@ import (
 // TODO For an efficient listing of deleted nodes the ocis storages trash folder should have
 // contain a directory with symlinks to trash files for every userid/"root"
 
-func (fs *s3ngfs) ListRecycle(ctx context.Context) (items []*provider.RecycleItem, err error) {
+func (fs *Decomposedfs) ListRecycle(ctx context.Context) (items []*provider.RecycleItem, err error) {
 	log := appctx.GetLogger(ctx)
 
 	trashRoot := fs.getRecycleRoot(ctx)
@@ -144,7 +144,7 @@ func (fs *s3ngfs) ListRecycle(ctx context.Context) (items []*provider.RecycleIte
 	return
 }
 
-func (fs *s3ngfs) RestoreRecycleItem(ctx context.Context, key string) error {
+func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, key string) error {
 	rn, restoreFunc, err := fs.tp.RestoreRecycleItemFunc(ctx, key)
 	if err != nil {
 		return err
@@ -165,7 +165,7 @@ func (fs *s3ngfs) RestoreRecycleItem(ctx context.Context, key string) error {
 	return restoreFunc()
 }
 
-func (fs *s3ngfs) PurgeRecycleItem(ctx context.Context, key string) error {
+func (fs *Decomposedfs) PurgeRecycleItem(ctx context.Context, key string) error {
 	rn, purgeFunc, err := fs.tp.PurgeRecycleItemFunc(ctx, key)
 	if err != nil {
 		return err
@@ -186,7 +186,7 @@ func (fs *s3ngfs) PurgeRecycleItem(ctx context.Context, key string) error {
 	return purgeFunc()
 }
 
-func (fs *s3ngfs) EmptyRecycle(ctx context.Context) error {
+func (fs *Decomposedfs) EmptyRecycle(ctx context.Context) error {
 	u, ok := user.ContextGetUser(ctx)
 	// TODO what permission should we check? we could check the root node of the user? or the owner permissions on his home root node?
 	// The current impl will wipe your own trash. or when no user provided the trash of 'root'
@@ -205,7 +205,7 @@ func getResourceType(isDir bool) provider.ResourceType {
 	return provider.ResourceType_RESOURCE_TYPE_FILE
 }
 
-func (fs *s3ngfs) getRecycleRoot(ctx context.Context) string {
+func (fs *Decomposedfs) getRecycleRoot(ctx context.Context) string {
 	if fs.o.EnableHome {
 		u := user.ContextMustGetUser(ctx)
 		// TODO use layout, see Tree.Delete() for problem

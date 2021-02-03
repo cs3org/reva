@@ -41,7 +41,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
-	"github.com/cs3org/reva/pkg/storage/fs/s3ng/xattrs"
+	"github.com/cs3org/reva/pkg/storage/fs/decomposed/xattrs"
 	"github.com/cs3org/reva/pkg/storage/utils/ace"
 	"github.com/cs3org/reva/pkg/user"
 )
@@ -92,27 +92,27 @@ func New(id, parentID, name string, blobsize int64, owner *userpb.UserId, lu Pat
 func (n *Node) WriteMetadata(owner *userpb.UserId) (err error) {
 	nodePath := n.InternalPath()
 	if err = xattr.Set(nodePath, xattrs.ParentidAttr, []byte(n.ParentID)); err != nil {
-		return errors.Wrap(err, "s3ngfs: could not set parentid attribute")
+		return errors.Wrap(err, "Decomposedfs: could not set parentid attribute")
 	}
 	if err = xattr.Set(nodePath, xattrs.NameAttr, []byte(n.Name)); err != nil {
-		return errors.Wrap(err, "s3ngfs: could not set name attribute")
+		return errors.Wrap(err, "Decomposedfs: could not set name attribute")
 	}
 	if err = xattr.Set(nodePath, xattrs.BlobsizeAttr, []byte(fmt.Sprintf("%d", n.Blobsize))); err != nil {
-		return errors.Wrap(err, "s3ngfs: could not set blobsize attribute")
+		return errors.Wrap(err, "Decomposedfs: could not set blobsize attribute")
 	}
 	if owner == nil {
 		if err = xattr.Set(nodePath, xattrs.OwnerIDAttr, []byte("")); err != nil {
-			return errors.Wrap(err, "s3ngfs: could not set empty owner id attribute")
+			return errors.Wrap(err, "Decomposedfs: could not set empty owner id attribute")
 		}
 		if err = xattr.Set(nodePath, xattrs.OwnerIDPAttr, []byte("")); err != nil {
-			return errors.Wrap(err, "s3ngfs: could not set empty owner idp attribute")
+			return errors.Wrap(err, "Decomposedfs: could not set empty owner idp attribute")
 		}
 	} else {
 		if err = xattr.Set(nodePath, xattrs.OwnerIDAttr, []byte(owner.OpaqueId)); err != nil {
-			return errors.Wrap(err, "s3ngfs: could not set owner id attribute")
+			return errors.Wrap(err, "Decomposedfs: could not set owner id attribute")
 		}
 		if err = xattr.Set(nodePath, xattrs.OwnerIDPAttr, []byte(owner.Idp)); err != nil {
-			return errors.Wrap(err, "s3ngfs: could not set owner idp attribute")
+			return errors.Wrap(err, "Decomposedfs: could not set owner idp attribute")
 		}
 	}
 	return
@@ -201,14 +201,14 @@ func (n *Node) Child(name string) (*Node, error) {
 			return c, nil // if the file does not exist we return a node that has Exists = false
 		}
 
-		return nil, errors.Wrap(err, "s3ngfs: Wrap: readlink error")
+		return nil, errors.Wrap(err, "Decomposedfs: Wrap: readlink error")
 	}
 
 	if strings.HasPrefix(link, "../") {
 		c.Exists = true
 		c.ID = filepath.Base(link)
 	} else {
-		return nil, fmt.Errorf("s3ngfs: expected '../ prefix, got' %+v", link)
+		return nil, fmt.Errorf("Decomposedfs: expected '../ prefix, got' %+v", link)
 	}
 
 	// Lookup blobsize
@@ -229,7 +229,7 @@ func (n *Node) Child(name string) (*Node, error) {
 // Parent returns the parent node
 func (n *Node) Parent() (p *Node, err error) {
 	if n.ParentID == "" {
-		return nil, fmt.Errorf("s3ngfs: root has no parent")
+		return nil, fmt.Errorf("Decomposedfs: root has no parent")
 	}
 	p = &Node{
 		lu: n.lu,

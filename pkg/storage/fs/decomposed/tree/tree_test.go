@@ -26,13 +26,13 @@ import (
 	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/pkg/storage/fs/s3ng"
-	"github.com/cs3org/reva/pkg/storage/fs/s3ng/node"
-	"github.com/cs3org/reva/pkg/storage/fs/s3ng/tree"
-	"github.com/cs3org/reva/pkg/storage/fs/s3ng/tree/mocks"
-	"github.com/cs3org/reva/pkg/storage/fs/s3ng/xattrs"
+	"github.com/cs3org/reva/pkg/storage/fs/decomposed"
+	"github.com/cs3org/reva/pkg/storage/fs/decomposed/node"
+	"github.com/cs3org/reva/pkg/storage/fs/decomposed/options"
+	"github.com/cs3org/reva/pkg/storage/fs/decomposed/tree"
+	"github.com/cs3org/reva/pkg/storage/fs/decomposed/tree/mocks"
+	"github.com/cs3org/reva/pkg/storage/fs/decomposed/xattrs"
 	ruser "github.com/cs3org/reva/pkg/user"
-	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/xattr"
 	"github.com/stretchr/testify/mock"
 
@@ -47,7 +47,7 @@ var _ = Describe("Tree", func() {
 
 		blobstore *mocks.Blobstore
 		lookup    tree.PathLookup
-		options   *s3ng.Options
+		o         *options.Options
 
 		t                  *tree.Tree
 		treeTimeAccounting bool
@@ -65,23 +65,22 @@ var _ = Describe("Tree", func() {
 		ctx = ruser.ContextSetUser(context.Background(), user)
 		tmpRoot, err := ioutil.TempDir("", "reva-unit-tests-*-root")
 		Expect(err).ToNot(HaveOccurred())
-		options = &s3ng.Options{}
-		err = mapstructure.Decode(map[string]interface{}{
+		o, err = options.New(map[string]interface{}{
 			"root": tmpRoot,
-		}, options)
+		})
 		Expect(err).ToNot(HaveOccurred())
 
 		blobstore = &mocks.Blobstore{}
-		lookup = &s3ng.Lookup{Options: options}
+		lookup = &decomposed.Lookup{Options: o}
 	})
 
 	JustBeforeEach(func() {
-		t = tree.New(options.Root, treeTimeAccounting, treeSizeAccounting, lookup, blobstore)
+		t = tree.New(o.Root, treeTimeAccounting, treeSizeAccounting, lookup, blobstore)
 		Expect(t.Setup("root")).To(Succeed())
 	})
 
 	AfterEach(func() {
-		root := options.Root
+		root := o.Root
 		if strings.HasPrefix(root, os.TempDir()) {
 			os.RemoveAll(root)
 		}
@@ -115,7 +114,7 @@ var _ = Describe("Tree", func() {
 			})
 
 			It("moves the file to the trash", func() {
-				trashPath := path.Join(options.Root, "trash", user.Id.OpaqueId, n.ID)
+				trashPath := path.Join(o.Root, "trash", user.Id.OpaqueId, n.ID)
 				_, err := os.Stat(trashPath)
 				Expect(err).ToNot(HaveOccurred())
 			})
@@ -126,7 +125,7 @@ var _ = Describe("Tree", func() {
 			})
 
 			It("sets the trash origin xattr", func() {
-				trashPath := path.Join(options.Root, "trash", user.Id.OpaqueId, n.ID)
+				trashPath := path.Join(o.Root, "trash", user.Id.OpaqueId, n.ID)
 				attr, err := xattr.Get(trashPath, xattrs.TrashOriginAttr)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(string(attr)).To(Equal(n.Name))
@@ -144,7 +143,7 @@ var _ = Describe("Tree", func() {
 
 			BeforeEach(func() {
 				blobstore.On("Delete", n.ID).Return(nil)
-				trashPath = path.Join(options.Root, "trash", user.Id.OpaqueId, n.ID)
+				trashPath = path.Join(o.Root, "trash", user.Id.OpaqueId, n.ID)
 			})
 
 			JustBeforeEach(func() {

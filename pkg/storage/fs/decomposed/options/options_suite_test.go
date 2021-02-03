@@ -1,4 +1,4 @@
-package s3ng_test
+package options_test
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestS3ng(t *testing.T) {
+func TestOptions(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "S3ng Suite")
+	RunSpecs(t, "Options Suite")
 }

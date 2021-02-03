@@ -30,8 +30,8 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/storage/fs/s3ng/node"
-	"github.com/cs3org/reva/pkg/storage/fs/s3ng/xattrs"
+	"github.com/cs3org/reva/pkg/storage/fs/decomposed/node"
+	"github.com/cs3org/reva/pkg/storage/fs/decomposed/xattrs"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
@@ -169,7 +169,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	if newNode.Exists {
 		// TODO make sure all children are deleted
 		if err := os.RemoveAll(newNode.InternalPath()); err != nil {
-			return errors.Wrap(err, "s3ngfs: Move: error deleting target node "+newNode.ID)
+			return errors.Wrap(err, "Decomposedfs: Move: error deleting target node "+newNode.ID)
 		}
 	}
 
@@ -189,12 +189,12 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 			filepath.Join(parentPath, newNode.Name),
 		)
 		if err != nil {
-			return errors.Wrap(err, "s3ngfs: could not rename child")
+			return errors.Wrap(err, "Decomposedfs: could not rename child")
 		}
 
 		// update name attribute
 		if err := xattr.Set(tgtPath, xattrs.NameAttr, []byte(newNode.Name)); err != nil {
-			return errors.Wrap(err, "s3ngfs: could not set name attribute")
+			return errors.Wrap(err, "Decomposedfs: could not set name attribute")
 		}
 
 		return t.Propagate(ctx, newNode)
@@ -209,15 +209,15 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		filepath.Join(t.lookup.InternalPath(newNode.ParentID), newNode.Name),
 	)
 	if err != nil {
-		return errors.Wrap(err, "s3ngfs: could not move child")
+		return errors.Wrap(err, "Decomposedfs: could not move child")
 	}
 
 	// update target parentid and name
 	if err := xattr.Set(tgtPath, xattrs.ParentidAttr, []byte(newNode.ParentID)); err != nil {
-		return errors.Wrap(err, "s3ngfs: could not set parentid attribute")
+		return errors.Wrap(err, "Decomposedfs: could not set parentid attribute")
 	}
 	if err := xattr.Set(tgtPath, xattrs.NameAttr, []byte(newNode.Name)); err != nil {
-		return errors.Wrap(err, "s3ngfs: could not set name attribute")
+		return errors.Wrap(err, "Decomposedfs: could not set name attribute")
 	}
 
 	// TODO inefficient because we might update several nodes twice, only propagate unchanged nodes?
@@ -226,11 +226,11 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 
 	err = t.Propagate(ctx, oldNode)
 	if err != nil {
-		return errors.Wrap(err, "s3ngfs: Move: could not propagate old node")
+		return errors.Wrap(err, "Decomposedfs: Move: could not propagate old node")
 	}
 	err = t.Propagate(ctx, newNode)
 	if err != nil {
-		return errors.Wrap(err, "s3ngfs: Move: could not propagate new node")
+		return errors.Wrap(err, "Decomposedfs: Move: could not propagate new node")
 	}
 	return nil
 }
@@ -337,7 +337,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 
 	p, err := n.Parent()
 	if err != nil {
-		return errors.Wrap(err, "s3ngfs: error getting parent "+n.ParentID)
+		return errors.Wrap(err, "Decomposedfs: error getting parent "+n.ParentID)
 	}
 	return t.Propagate(ctx, p)
 }
@@ -523,7 +523,7 @@ func (t *Tree) createNode(n *node.Node, owner *userpb.UserId) (err error) {
 	// create a directory node
 	nodePath := n.InternalPath()
 	if err = os.MkdirAll(nodePath, 0700); err != nil {
-		return errors.Wrap(err, "s3ngfs: error creating node")
+		return errors.Wrap(err, "Decomposedfs: error creating node")
 	}
 
 	return n.WriteMetadata(owner)

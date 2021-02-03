@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package s3ng
+package decomposed
 
 import (
 	"context"
@@ -39,7 +39,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
-	"github.com/cs3org/reva/pkg/storage/fs/s3ng/node"
+	"github.com/cs3org/reva/pkg/storage/fs/decomposed/node"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/google/uuid"
@@ -52,7 +52,7 @@ var defaultFilePerm = os.FileMode(0664)
 
 // TODO Upload (and InitiateUpload) needs a way to receive the expected checksum.
 // Maybe in metadata as 'checksum' => 'sha1 aeosvp45w5xaeoe' = lowercase, space separated?
-func (fs *s3ngfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) (err error) {
+func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) (err error) {
 	upload, err := fs.GetUpload(ctx, ref.GetPath())
 	if err != nil {
 		// Upload corresponding to this ID was not found.
@@ -65,7 +65,7 @@ func (fs *s3ngfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 			return err
 		}
 		if upload, err = fs.GetUpload(ctx, uploadIDs["simple"]); err != nil {
-			return errors.Wrap(err, "s3ngfs: error retrieving upload")
+			return errors.Wrap(err, "Decomposedfs: error retrieving upload")
 		}
 	}
 
@@ -74,7 +74,7 @@ func (fs *s3ngfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 	p := uploadInfo.info.Storage["NodeName"]
 	ok, err := chunking.IsChunked(p) // check chunking v1
 	if err != nil {
-		return errors.Wrap(err, "s3ngfs: error checking path")
+		return errors.Wrap(err, "Decomposedfs: error checking path")
 	}
 	if ok {
 		var assembledFile string
@@ -91,7 +91,7 @@ func (fs *s3ngfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 		uploadInfo.info.Storage["NodeName"] = p
 		fd, err := os.Open(assembledFile)
 		if err != nil {
-			return errors.Wrap(err, "s3ngfs: error opening assembled file")
+			return errors.Wrap(err, "Decomposedfs: error opening assembled file")
 		}
 		defer fd.Close()
 		defer os.RemoveAll(assembledFile)
@@ -99,7 +99,7 @@ func (fs *s3ngfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 	}
 
 	if _, err := uploadInfo.WriteChunk(ctx, 0, r); err != nil {
-		return errors.Wrap(err, "s3ngfs: error writing to binary file")
+		return errors.Wrap(err, "Decomposedfs: error writing to binary file")
 	}
 
 	return uploadInfo.FinishUpload(ctx)
@@ -108,7 +108,7 @@ func (fs *s3ngfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 // InitiateUpload returns upload ids corresponding to different protocols it supports
 // TODO read optional content for small files in this request
 // TODO InitiateUpload (and Upload) needs a way to receive the expected checksum. Maybe in metadata as 'checksum' => 'sha1 aeosvp45w5xaeoe' = lowercase, space separated?
-func (fs *s3ngfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
+func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
 
 	log := appctx.GetLogger(ctx)
 
@@ -155,7 +155,7 @@ func (fs *s3ngfs) InitiateUpload(ctx context.Context, ref *provider.Reference, u
 		}
 	}
 
-	log.Debug().Interface("info", info).Interface("node", n).Interface("metadata", metadata).Msg("s3ngfs: resolved filename")
+	log.Debug().Interface("info", info).Interface("node", n).Interface("metadata", metadata).Msg("Decomposedfs: resolved filename")
 
 	upload, err := fs.NewUpload(ctx, info)
 	if err != nil {
@@ -171,7 +171,7 @@ func (fs *s3ngfs) InitiateUpload(ctx context.Context, ref *provider.Reference, u
 }
 
 // UseIn tells the tus upload middleware which extensions it supports.
-func (fs *s3ngfs) UseIn(composer *tusd.StoreComposer) {
+func (fs *Decomposedfs) UseIn(composer *tusd.StoreComposer) {
 	composer.UseCore(fs)
 	composer.UseTerminater(fs)
 	composer.UseConcater(fs)
@@ -182,34 +182,34 @@ func (fs *s3ngfs) UseIn(composer *tusd.StoreComposer) {
 // - the storage needs to implement NewUpload and GetUpload
 // - the upload needs to implement the tusd.Upload interface: WriteChunk, GetInfo, GetReader and FinishUpload
 
-func (fs *s3ngfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.Upload, err error) {
+func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.Upload, err error) {
 
 	log := appctx.GetLogger(ctx)
-	log.Debug().Interface("info", info).Msg("s3ngfs: NewUpload")
+	log.Debug().Interface("info", info).Msg("Decomposedfs: NewUpload")
 
 	fn := info.MetaData["filename"]
 	if fn == "" {
-		return nil, errors.New("s3ngfs: missing filename in metadata")
+		return nil, errors.New("Decomposedfs: missing filename in metadata")
 	}
 	info.MetaData["filename"] = filepath.Clean(info.MetaData["filename"])
 
 	dir := info.MetaData["dir"]
 	if dir == "" {
-		return nil, errors.New("s3ngfs: missing dir in metadata")
+		return nil, errors.New("Decomposedfs: missing dir in metadata")
 	}
 	info.MetaData["dir"] = filepath.Clean(info.MetaData["dir"])
 
 	n, err := fs.lu.NodeFromPath(ctx, filepath.Join(info.MetaData["dir"], info.MetaData["filename"]))
 	if err != nil {
-		return nil, errors.Wrap(err, "s3ngfs: error wrapping filename")
+		return nil, errors.Wrap(err, "Decomposedfs: error wrapping filename")
 	}
 
-	log.Debug().Interface("info", info).Interface("node", n).Msg("s3ngfs: resolved filename")
+	log.Debug().Interface("info", info).Interface("node", n).Msg("Decomposedfs: resolved filename")
 
 	// the parent owner will become the new owner
 	p, perr := n.Parent()
 	if perr != nil {
-		return nil, errors.Wrap(perr, "s3ngfs: error getting parent "+n.ParentID)
+		return nil, errors.Wrap(perr, "Decomposedfs: error getting parent "+n.ParentID)
 	}
 
 	// check permissions
@@ -236,13 +236,13 @@ func (fs *s3ngfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tus
 
 	binPath, err := fs.getUploadPath(ctx, info.ID)
 	if err != nil {
-		return nil, errors.Wrap(err, "s3ngfs: error resolving upload path")
+		return nil, errors.Wrap(err, "Decomposedfs: error resolving upload path")
 	}
 	usr := user.ContextMustGetUser(ctx)
 
 	owner, err := p.Owner()
 	if err != nil {
-		return nil, errors.Wrap(err, "s3ngfs: error determining owner")
+		return nil, errors.Wrap(err, "Decomposedfs: error determining owner")
 	}
 
 	info.Storage = map[string]string{
@@ -263,7 +263,7 @@ func (fs *s3ngfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tus
 		"LogLevel": log.GetLevel().String(),
 	}
 	// Create binary file in the upload folder with no content
-	log.Debug().Interface("info", info).Msg("s3ngfs: built storage info")
+	log.Debug().Interface("info", info).Msg("Decomposedfs: built storage info")
 	file, err := os.OpenFile(binPath, os.O_CREATE|os.O_WRONLY, defaultFilePerm)
 	if err != nil {
 		return nil, err
@@ -279,7 +279,7 @@ func (fs *s3ngfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tus
 	}
 
 	if !info.SizeIsDeferred && info.Size == 0 {
-		log.Debug().Interface("info", info).Msg("s3ngfs: finishing upload for empty file")
+		log.Debug().Interface("info", info).Msg("Decomposedfs: finishing upload for empty file")
 		// no need to create info file and finish directly
 		err := u.FinishUpload(ctx)
 		if err != nil {
@@ -297,12 +297,12 @@ func (fs *s3ngfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tus
 	return u, nil
 }
 
-func (fs *s3ngfs) getUploadPath(ctx context.Context, uploadID string) (string, error) {
+func (fs *Decomposedfs) getUploadPath(ctx context.Context, uploadID string) (string, error) {
 	return filepath.Join(fs.o.Root, "uploads", uploadID), nil
 }
 
 // GetUpload returns the Upload for the given upload id
-func (fs *s3ngfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
+func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
 	infoPath := filepath.Join(fs.o.Root, "uploads", id+".info")
 
 	info := tusd.FileInfo{}
@@ -358,7 +358,7 @@ type fileUpload struct {
 	// binPath is the path to the binary file (which has no extension)
 	binPath string
 	// only fs knows how to handle metadata and versions
-	fs *s3ngfs
+	fs *Decomposedfs
 	// a context with a user
 	// TODO add logger as well?
 	ctx context.Context
@@ -417,7 +417,7 @@ func (upload *fileUpload) writeInfo() error {
 func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	fi, err := os.Stat(upload.binPath)
 	if err != nil {
-		appctx.GetLogger(upload.ctx).Err(err).Msg("s3ngfs: could not stat uploaded file")
+		appctx.GetLogger(upload.ctx).Err(err).Msg("Decomposedfs: could not stat uploaded file")
 		return
 	}
 	n := node.New(
@@ -450,7 +450,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	{
 		f, err := os.Open(upload.binPath)
 		if err != nil {
-			sublog.Err(err).Msg("s3ngfs: could not open file for checksumming")
+			sublog.Err(err).Msg("Decomposedfs: could not open file for checksumming")
 			// we can continue if no oc checksum header is set
 		}
 		defer f.Close()
@@ -459,7 +459,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		r2 := io.TeeReader(r1, md5h)
 
 		if _, err := io.Copy(adler32h, r2); err != nil {
-			sublog.Err(err).Msg("s3ngfs: could not copy bytes for checksumming")
+			sublog.Err(err).Msg("Decomposedfs: could not copy bytes for checksumming")
 		}
 	}
 	// compare if they match the sent checksum
@@ -495,7 +495,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 			sublog.Err(err).
 				Str("binPath", upload.binPath).
 				Str("versionsPath", versionsPath).
-				Msg("s3ngfs: could not create version")
+				Msg("Decomposedfs: could not create version")
 			return
 		}
 	}
@@ -516,12 +516,12 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	// TODO trigger a workflow as the final rename might eg involve antivirus scanning
 	if err = os.Truncate(upload.binPath, 0); err != nil {
 		sublog.Err(err).
-			Msg("s3ngfs: could not truncate")
+			Msg("Decomposedfs: could not truncate")
 		return
 	}
 	if err = os.Rename(upload.binPath, targetPath); err != nil {
 		sublog.Err(err).
-			Msg("s3ngfs: could not rename")
+			Msg("Decomposedfs: could not rename")
 		return
 	}
 
@@ -536,7 +536,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		OpaqueId: upload.info.Storage["OwnerId"],
 	})
 	if err != nil {
-		return errors.Wrap(err, "s3ngfs: could not write metadata")
+		return errors.Wrap(err, "Decomposedfs: could not write metadata")
 	}
 
 	// link child name to parent if it is new
@@ -548,22 +548,22 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 			Interface("node", n).
 			Str("childNameLink", childNameLink).
 			Str("link", link).
-			Msg("s3ngfs: child name link has wrong target id, repairing")
+			Msg("Decomposedfs: child name link has wrong target id, repairing")
 
 		if err = os.Remove(childNameLink); err != nil {
-			return errors.Wrap(err, "s3ngfs: could not remove symlink child entry")
+			return errors.Wrap(err, "Decomposedfs: could not remove symlink child entry")
 		}
 	}
 	if os.IsNotExist(err) || link != "../"+n.ID {
 		if err = os.Symlink("../"+n.ID, childNameLink); err != nil {
-			return errors.Wrap(err, "s3ngfs: could not symlink child entry")
+			return errors.Wrap(err, "Decomposedfs: could not symlink child entry")
 		}
 	}
 
 	// only delete the upload if it was successfully written to the storage
 	if err = os.Remove(upload.infoPath); err != nil {
 		if !os.IsNotExist(err) {
-			sublog.Err(err).Msg("s3ngfs: could not delete upload info")
+			sublog.Err(err).Msg("Decomposedfs: could not delete upload info")
 			return
 		}
 	}
@@ -571,7 +571,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	/*if upload.info.MetaData["mtime"] != "" {
 		err := upload.fs.SetMtime(ctx, np, upload.info.MetaData["mtime"])
 		if err != nil {
-			log.Err(err).Interface("info", upload.info).Msg("s3ngfs: could not set mtime metadata")
+			log.Err(err).Interface("info", upload.info).Msg("Decomposedfs: could not set mtime metadata")
 			return err
 		}
 	}*/
@@ -593,7 +593,7 @@ func tryWritingChecksum(log *zerolog.Logger, n *node.Node, algo string, h hash.H
 		log.Err(err).
 			Str("csType", algo).
 			Bytes("hash", h.Sum(nil)).
-			Msg("s3ngfs: could not write checksum")
+			Msg("Decomposedfs: could not write checksum")
 		// this is not critical, the bytes are there so we will continue
 	}
 }
@@ -601,7 +601,7 @@ func tryWritingChecksum(log *zerolog.Logger, n *node.Node, algo string, h hash.H
 func (upload *fileUpload) discardChunk() {
 	if err := os.Remove(upload.binPath); err != nil {
 		if !os.IsNotExist(err) {
-			appctx.GetLogger(upload.ctx).Err(err).Interface("info", upload.info).Str("binPath", upload.binPath).Interface("info", upload.info).Msg("s3ngfs: could not discard chunk")
+			appctx.GetLogger(upload.ctx).Err(err).Interface("info", upload.info).Str("binPath", upload.binPath).Interface("info", upload.info).Msg("Decomposedfs: could not discard chunk")
 			return
 		}
 	}
@@ -612,7 +612,7 @@ func (upload *fileUpload) discardChunk() {
 // - the upload needs to implement Terminate
 
 // AsTerminatableUpload returns a TerminatableUpload
-func (fs *s3ngfs) AsTerminatableUpload(upload tusd.Upload) tusd.TerminatableUpload {
+func (fs *Decomposedfs) AsTerminatableUpload(upload tusd.Upload) tusd.TerminatableUpload {
 	return upload.(*fileUpload)
 }
 
@@ -636,7 +636,7 @@ func (upload *fileUpload) Terminate(ctx context.Context) error {
 // - the upload needs to implement DeclareLength
 
 // AsLengthDeclarableUpload returns a LengthDeclarableUpload
-func (fs *s3ngfs) AsLengthDeclarableUpload(upload tusd.Upload) tusd.LengthDeclarableUpload {
+func (fs *Decomposedfs) AsLengthDeclarableUpload(upload tusd.Upload) tusd.LengthDeclarableUpload {
 	return upload.(*fileUpload)
 }
 
@@ -652,7 +652,7 @@ func (upload *fileUpload) DeclareLength(ctx context.Context, length int64) error
 // - the upload needs to implement ConcatUploads
 
 // AsConcatableUpload returns a ConcatableUpload
-func (fs *s3ngfs) AsConcatableUpload(upload tusd.Upload) tusd.ConcatableUpload {
+func (fs *Decomposedfs) AsConcatableUpload(upload tusd.Upload) tusd.ConcatableUpload {
 	return upload.(*fileUpload)
 }
 

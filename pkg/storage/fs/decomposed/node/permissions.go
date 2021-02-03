@@ -26,7 +26,7 @@ import (
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/storage/fs/s3ng/xattrs"
+	"github.com/cs3org/reva/pkg/storage/fs/decomposed/xattrs"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
@@ -127,7 +127,7 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap *pro
 		}
 
 		if cn, err = cn.Parent(); err != nil {
-			return ap, errors.Wrap(err, "s3ngfs: error getting parent "+cn.ParentID)
+			return ap, errors.Wrap(err, "Decomposedfs: error getting parent "+cn.ParentID)
 		}
 	}
 
@@ -228,7 +228,7 @@ func (p *Permissions) HasPermission(ctx context.Context, n *Node, check func(*pr
 		}
 
 		if cn, err = cn.Parent(); err != nil {
-			return false, errors.Wrap(err, "s3ngfs: error getting parent "+cn.ParentID)
+			return false, errors.Wrap(err, "Decomposedfs: error getting parent "+cn.ParentID)
 		}
 	}
 

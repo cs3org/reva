@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package s3ng
+package decomposed
 
 import (
 	"context"
@@ -26,17 +26,17 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/storage/fs/s3ng/node"
-	"github.com/cs3org/reva/pkg/storage/fs/s3ng/xattrs"
+	"github.com/cs3org/reva/pkg/storage/fs/decomposed/node"
+	"github.com/cs3org/reva/pkg/storage/fs/decomposed/xattrs"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 )
 
-func (fs *s3ngfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) (err error) {
+func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) (err error) {
 	n, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
-		return errors.Wrap(err, "s3ngfs: error resolving ref")
+		return errors.Wrap(err, "Decomposedfs: error resolving ref")
 	}
 	sublog := appctx.GetLogger(ctx).With().Interface("node", n).Logger()
 
@@ -103,7 +103,7 @@ func (fs *s3ngfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 	for k, v := range md.Metadata {
 		attrName := xattrs.MetadataPrefix + k
 		if err = xattr.Set(nodePath, attrName, []byte(v)); err != nil {
-			errs = append(errs, errors.Wrap(err, "s3ngfs: could not set metadata attribute "+attrName+" to "+k))
+			errs = append(errs, errors.Wrap(err, "Decomposedfs: could not set metadata attribute "+attrName+" to "+k))
 		}
 	}
 
@@ -120,10 +120,10 @@ func (fs *s3ngfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 	}
 }
 
-func (fs *s3ngfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) (err error) {
+func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) (err error) {
 	n, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
-		return errors.Wrap(err, "s3ngfs: error resolving ref")
+		return errors.Wrap(err, "Decomposedfs: error resolving ref")
 	}
 	sublog := appctx.GetLogger(ctx).With().Interface("node", n).Logger()
 

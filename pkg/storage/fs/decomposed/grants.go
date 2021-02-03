@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package s3ng
+package decomposed
 
 import (
 	"context"
@@ -26,13 +26,13 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/storage/fs/s3ng/node"
-	"github.com/cs3org/reva/pkg/storage/fs/s3ng/xattrs"
+	"github.com/cs3org/reva/pkg/storage/fs/decomposed/node"
+	"github.com/cs3org/reva/pkg/storage/fs/decomposed/xattrs"
 	"github.com/cs3org/reva/pkg/storage/utils/ace"
 	"github.com/pkg/xattr"
 )
 
-func (fs *s3ngfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
+func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("ref", ref).Interface("grant", g).Msg("AddGrant()")
 	var node *node.Node
@@ -64,7 +64,7 @@ func (fs *s3ngfs) AddGrant(ctx context.Context, ref *provider.Reference, g *prov
 	return fs.tp.Propagate(ctx, node)
 }
 
-func (fs *s3ngfs) ListGrants(ctx context.Context, ref *provider.Reference) (grants []*provider.Grant, err error) {
+func (fs *Decomposedfs) ListGrants(ctx context.Context, ref *provider.Reference) (grants []*provider.Grant, err error) {
 	var node *node.Node
 	if node, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
 		return
@@ -104,7 +104,7 @@ func (fs *s3ngfs) ListGrants(ctx context.Context, ref *provider.Reference) (gran
 	return grants, nil
 }
 
-func (fs *s3ngfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
+func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
 	var node *node.Node
 	if node, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
 		return
@@ -139,7 +139,7 @@ func (fs *s3ngfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *p
 	return fs.tp.Propagate(ctx, node)
 }
 
-func (fs *s3ngfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+func (fs *Decomposedfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	// TODO remove AddGrant or UpdateGrant grant from CS3 api, redundant? tracked in https://github.com/cs3org/cs3apis/issues/92
 	return fs.AddGrant(ctx, ref, g)
 }

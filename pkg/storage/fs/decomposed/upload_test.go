@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package s3ng_test
+package decomposed_test
 
 import (
 	"bytes"
@@ -31,10 +31,11 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/storage/fs/s3ng"
-	"github.com/cs3org/reva/pkg/storage/fs/s3ng/mocks"
-	"github.com/cs3org/reva/pkg/storage/fs/s3ng/tree"
-	treemocks "github.com/cs3org/reva/pkg/storage/fs/s3ng/tree/mocks"
+	"github.com/cs3org/reva/pkg/storage/fs/decomposed"
+	"github.com/cs3org/reva/pkg/storage/fs/decomposed/mocks"
+	"github.com/cs3org/reva/pkg/storage/fs/decomposed/options"
+	"github.com/cs3org/reva/pkg/storage/fs/decomposed/tree"
+	treemocks "github.com/cs3org/reva/pkg/storage/fs/decomposed/tree/mocks"
 	ruser "github.com/cs3org/reva/pkg/user"
 
 	. "github.com/onsi/ginkgo"
@@ -48,8 +49,8 @@ var _ = Describe("File uploads", func() {
 		user *userpb.User
 		ctx  context.Context
 
-		options     map[string]interface{}
-		lookup      *s3ng.Lookup
+		o           *options.Options
+		lookup      *decomposed.Lookup
 		permissions *mocks.PermissionsChecker
 		bs          *treemocks.Blobstore
 	)
@@ -72,21 +73,17 @@ var _ = Describe("File uploads", func() {
 		tmpRoot, err := ioutil.TempDir("", "reva-unit-tests-*-root")
 		Expect(err).ToNot(HaveOccurred())
 
-		options = map[string]interface{}{
-			"root":          tmpRoot,
-			"s3.endpoint":   "http://1.2.3.4:5000",
-			"s3.region":     "default",
-			"s3.bucket":     "the-bucket",
-			"s3.access_key": "foo",
-			"s3.secret_key": "bar",
-		}
-		lookup = &s3ng.Lookup{}
+		o, err = options.New(map[string]interface{}{
+			"root": tmpRoot,
+		})
+		Expect(err).ToNot(HaveOccurred())
+		lookup = &decomposed.Lookup{Options: o}
 		permissions = &mocks.PermissionsChecker{}
 		bs = &treemocks.Blobstore{}
 	})
 
 	AfterEach(func() {
-		root := options["root"].(string)
+		root := o.Root
 		if strings.HasPrefix(root, os.TempDir()) {
 			os.RemoveAll(root)
 		}
@@ -94,8 +91,8 @@ var _ = Describe("File uploads", func() {
 
 	JustBeforeEach(func() {
 		var err error
-		tree := tree.New(options["root"].(string), true, true, lookup, bs)
-		fs, err = s3ng.New(options, lookup, permissions, tree)
+		tree := tree.New(o.Root, true, true, lookup, bs)
+		fs, err = decomposed.New(o, lookup, permissions, tree)
 		Expect(err).ToNot(HaveOccurred())
 	})
 

@@ -16,41 +16,45 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package s3ng_test
+package options_test
 
 import (
-	"github.com/cs3org/reva/pkg/storage/fs/s3ng"
+	"github.com/cs3org/reva/pkg/storage/fs/decomposed/options"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("S3ng", func() {
+var _ = Describe("Options", func() {
 	var (
-		options map[string]interface{}
+		o      *options.Options
+		config map[string]interface{}
 	)
 
 	BeforeEach(func() {
-		options = map[string]interface{}{
-			"enable_home":   true,
-			"share_folder":  "/Shares",
-			"s3.endpoint":   "http://1.2.3.4:5000",
-			"s3.region":     "default",
-			"s3.bucket":     "the-bucket",
-			"s3.access_key": "foo",
-			"s3.secret_key": "bar",
-		}
+		config = map[string]interface{}{}
 	})
 
 	Describe("New", func() {
-		It("fails on missing s3 configuration", func() {
-			_, err := s3ng.New(map[string]interface{}{})
-			Expect(err).To(MatchError("S3 configuration incomplete"))
+		JustBeforeEach(func() {
+			var err error
+			o, err = options.New(config)
+			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("works with complete configuration", func() {
-			_, err := s3ng.New(options)
-			Expect(err).ToNot(HaveOccurred())
+		It("sets defaults", func() {
+			Expect(len(o.ShareFolder) > 0).To(BeTrue())
+			Expect(len(o.UserLayout) > 0).To(BeTrue())
+		})
+
+		Context("with unclean root path configuration", func() {
+			BeforeEach(func() {
+				config["root"] = "foo/"
+			})
+
+			It("sanitizes the root path", func() {
+				Expect(o.Root).To(Equal("foo"))
+			})
 		})
 	})
 })

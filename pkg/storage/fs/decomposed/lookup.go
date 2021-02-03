@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package s3ng
+package decomposed
 
 import (
 	"context"
@@ -27,14 +27,15 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/storage/fs/s3ng/node"
+	"github.com/cs3org/reva/pkg/storage/fs/decomposed/node"
+	"github.com/cs3org/reva/pkg/storage/fs/decomposed/options"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/user"
 )
 
 // Lookup implements transformations from filepath to node and back
 type Lookup struct {
-	Options *Options
+	Options *options.Options
 }
 
 // NodeFromResource takes in a request path or request id and converts it to a Node
@@ -111,7 +112,7 @@ func (lu *Lookup) RootNode(ctx context.Context) (*node.Node, error) {
 // HomeNode returns the home node of a user
 func (lu *Lookup) HomeNode(ctx context.Context) (node *node.Node, err error) {
 	if !lu.Options.EnableHome {
-		return nil, errtypes.NotSupported("s3ngfs: home supported disabled")
+		return nil, errtypes.NotSupported("Decomposedfs: home supported disabled")
 	}
 
 	if node, err = lu.RootNode(ctx); err != nil {

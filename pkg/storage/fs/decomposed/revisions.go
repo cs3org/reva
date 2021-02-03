@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package s3ng
+package decomposed
 
 import (
 	"context"
@@ -29,7 +29,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/storage/fs/s3ng/node"
+	"github.com/cs3org/reva/pkg/storage/fs/decomposed/node"
 	"github.com/pkg/errors"
 )
 
@@ -41,7 +41,7 @@ import (
 // We can add a background process to move old revisions to a slower storage
 // and replace the revision file with a symbolic link in the future, if necessary.
 
-func (fs *s3ngfs) ListRevisions(ctx context.Context, ref *provider.Reference) (revisions []*provider.FileVersion, err error) {
+func (fs *Decomposedfs) ListRevisions(ctx context.Context, ref *provider.Reference) (revisions []*provider.FileVersion, err error) {
 	var n *node.Node
 	if n, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
 		return
@@ -78,7 +78,7 @@ func (fs *s3ngfs) ListRevisions(ctx context.Context, ref *provider.Reference) (r
 	return
 }
 
-func (fs *s3ngfs) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (io.ReadCloser, error) {
+func (fs *Decomposedfs) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (io.ReadCloser, error) {
 	log := appctx.GetLogger(ctx)
 
 	// verify revision key format
@@ -117,12 +117,12 @@ func (fs *s3ngfs) DownloadRevision(ctx context.Context, ref *provider.Reference,
 		if os.IsNotExist(err) {
 			return nil, errtypes.NotFound(contentPath)
 		}
-		return nil, errors.Wrap(err, "s3ngfs: error opening revision "+revisionKey)
+		return nil, errors.Wrap(err, "Decomposedfs: error opening revision "+revisionKey)
 	}
 	return r, nil
 }
 
-func (fs *s3ngfs) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (err error) {
+func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (err error) {
 	log := appctx.GetLogger(ctx)
 
 	// verify revision key format
