@@ -351,7 +351,6 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	// -1 indicates uncalculated
 	// -2 indicates unknown (default)
 	// -3 indicates unlimited
-	treesize := _propQuotaUnknown
 	quota := _propQuotaUnknown
 	size := fmt.Sprintf("%d", md.Size)
 	// TODO refactor helper functions: GetOpaqueJSONEncoded(opaque, key string, *struct) err, GetOpaquePlainEncoded(opaque, key) value, err
@@ -362,14 +361,6 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 			err := json.Unmarshal(md.Opaque.Map["link-share"].Value, ls)
 			if err != nil {
 				sublog.Error().Err(err).Msg("could not unmarshal link json")
-			}
-		}
-		// TODO the ResourceInfo should have a dedicated TreeSize property for collections.
-		// Currently, we are reusing the Size but that cannot indicate an unknown size because it is uint64
-		if md.Opaque.Map["treesize"] != nil && md.Opaque.Map["treesize"].Decoder == "plain" {
-			treesize = string(md.Opaque.Map["treesize"].Value)
-			if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-				size = treesize
 			}
 		}
 		if md.Opaque.Map["quota"] != nil && md.Opaque.Map["quota"].Decoder == "plain" {
@@ -431,7 +422,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 			}
 			//  A <DAV:allprop> PROPFIND request SHOULD NOT return DAV:quota-available-bytes and DAV:quota-used-bytes
 			// from https://www.rfc-editor.org/rfc/rfc4331.html#section-2
-			//propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:quota-used-bytes", treesize))
+			//propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:quota-used-bytes", size))
 			//propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:quota-available-bytes", quota))
 		} else {
 			propstatOK.Prop = append(propstatOK.Prop,
@@ -730,11 +721,10 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					}
 				case "quota-used-bytes": // RFC 4331
 					if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-						// TODO RFC says if treesize is unknown return it as not found, what does oc10 do?
 						// always returns the current usage,
 						// in oc10 there seems to be a bug that makes the size in webdav differ from the one in the user properties, not taking shares into account
 						// in ocis we plan to always mak the quota a property of the storage space
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:quota-used-bytes", treesize))
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:quota-used-bytes", size))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:quota-used-bytes", ""))
 					}
@@ -819,12 +809,8 @@ func (c *countingReader) Read(p []byte) (int, error) {
 
 func metadataKeyOf(n *xml.Name) string {
 	switch {
-	case n.Space == _nsDav && n.Local == "quota-used-bytes":
-		return "treesize"
 	case n.Space == _nsDav && n.Local == "quota-available-bytes":
 		return "quota"
-	case n.Space == _nsOwncloud && n.Local == "size":
-		return "treesize"
 	default:
 		return fmt.Sprintf("%s/%s", n.Space, n.Local)
 	}

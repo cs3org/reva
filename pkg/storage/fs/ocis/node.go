@@ -51,7 +51,6 @@ const (
 
 	_favoriteKey  = "http://owncloud.org/ns/favorite"
 	_checksumsKey = "http://owncloud.org/ns/checksums"
-	_treesizeKey  = "treesize"
 	_quotaKey     = "quota"
 
 	_quotaUncalculated = "-1"
@@ -477,6 +476,15 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		Target:        string(target),
 		PermissionSet: rp,
 	}
+	if nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		ts, err := n.GetTreeSize()
+		if err == nil {
+			ri.Size = ts
+		} else {
+			ri.Size = 0 // make dirs always return 0 if it is unknown
+			sublog.Debug().Err(err).Msg("could not read treesize")
+		}
+	}
 
 	if ri.Owner, err = n.Owner(); err != nil {
 		sublog.Debug().Err(err).Msg("could not determine owner")
@@ -552,11 +560,6 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		readChecksumIntoResourceChecksum(ctx, nodePath, storageprovider.XSSHA1, ri)
 		readChecksumIntoOpaque(ctx, nodePath, storageprovider.XSMD5, ri)
 		readChecksumIntoOpaque(ctx, nodePath, storageprovider.XSAdler32, ri)
-	}
-
-	// treesize
-	if _, ok := mdKeysMap[_treesizeKey]; (nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER) && returnAllKeys || ok {
-		readTreesizeIntoOpaque(ctx, nodePath, ri)
 	}
 
 	// quota
@@ -651,34 +654,6 @@ func readChecksumIntoOpaque(ctx context.Context, nodePath, algo string, ri *prov
 		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Str("algorithm", algo).Msg("could not read checksum")
 	}
 }
-func readTreesizeIntoOpaque(ctx context.Context, nodePath string, ri *provider.ResourceInfo) {
-	v, err := xattr.Get(nodePath, treesizeAttr)
-	switch {
-	case err == nil:
-		// make sure we have a proper unsigned int
-		if treesize, err := strconv.ParseUint(string(v), 10, 64); err == nil {
-			if ri.Opaque == nil {
-				ri.Opaque = &types.Opaque{
-					Map: map[string]*types.OpaqueEntry{},
-				}
-			}
-			ri.Opaque.Map[_treesizeKey] = &types.OpaqueEntry{
-				Decoder: "plain",
-				Value:   v,
-			}
-			// when it exists it also overrules the size
-			ri.Size = treesize
-		} else {
-			appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Str("treesize", string(v)).Msg("malformed treesize")
-		}
-	case isNoData(err):
-		appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", nodePath).Msg("treesize not set")
-	case isNotFound(err):
-		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Msg("file not found when reading treesize")
-	default:
-		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Msg("could not read treesize")
-	}
-}
 
 // quota is always stored on the root node
 func readQuotaIntoOpaque(ctx context.Context, nodePath string, ri *provider.ResourceInfo) {
@@ -701,7 +676,7 @@ func readQuotaIntoOpaque(ctx context.Context, nodePath string, ri *provider.Reso
 				Value:   v,
 			}
 		} else {
-			appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Str("treesize", string(v)).Msg("malformed quota")
+			appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Str("quota", string(v)).Msg("malformed quota")
 		}
 	case isNoData(err):
 		appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", nodePath).Msg("quota not set")
@@ -712,6 +687,7 @@ func readQuotaIntoOpaque(ctx context.Context, nodePath string, ri *provider.Reso
 	}
 }
 
+// CalculateTreeSize will sum up the size of all children of a node
 func (n *Node) CalculateTreeSize(ctx context.Context) (uint64, error) {
 	var size uint64
 	// TODO check if this is a dir?
