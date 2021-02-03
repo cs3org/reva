@@ -26,7 +26,7 @@ import (
 	"path"
 	"strings"
 
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 )
 
 const (
@@ -101,7 +101,7 @@ func read(r *bufio.Reader) (string, error) {
 	return strings.TrimSpace(text), nil
 }
 func readPassword(fd int) (string, error) {
-	bytePassword, err := terminal.ReadPassword(fd)
+	bytePassword, err := term.ReadPassword(fd)
 	if err != nil {
 		return "", err
 	}
