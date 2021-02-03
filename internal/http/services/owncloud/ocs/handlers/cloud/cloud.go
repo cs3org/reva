@@ -37,12 +37,12 @@ type Handler struct {
 }
 
 // Init initializes this and any contained handlers
-func (h *Handler) Init(c *config.Config) {
+func (h *Handler) Init(c *config.Config) error {
 	h.UserHandler = new(user.Handler)
-	h.UsersHandler = new(users.Handler)
-	h.UsersHandler.Init(c)
 	h.CapabilitiesHandler = new(capabilities.Handler)
 	h.CapabilitiesHandler.Init(c)
+	h.UsersHandler = new(users.Handler)
+	return h.UsersHandler.Init(c)
 }
 
 // Handler routes the cloud endpoints

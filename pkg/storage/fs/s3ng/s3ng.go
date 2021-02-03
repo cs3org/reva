@@ -139,7 +139,7 @@ func (fs *s3ngfs) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (fs *s3ngfs) GetQuota(ctx context.Context) (int, int, error) {
+func (fs *s3ngfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
 	return 0, 0, nil
 }
 

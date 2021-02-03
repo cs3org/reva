@@ -53,9 +53,9 @@ const (
 	// RFC1123 time that mimics oc10. time.RFC1123 would end in "UTC", see https://github.com/golang/go/issues/13781
 	RFC1123 = "Mon, 02 Jan 2006 15:04:05 GMT"
 
-	_propQuotaUncalculated = "-1"
-	_propQuotaUnknown      = "-2"
-	_propQuotaUnlimited    = "-3"
+	//_propQuotaUncalculated = "-1"
+	_propQuotaUnknown = "-2"
+	//_propQuotaUnlimited    = "-3"
 )
 
 // ns is the namespace that is prefixed to the path in the cs3 namespace
