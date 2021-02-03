@@ -33,6 +33,8 @@ require (
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible
 	github.com/mitchellh/copystructure v1.0.0 // indirect
 	github.com/mitchellh/mapstructure v1.3.3
+	github.com/onsi/ginkgo v1.7.0
+	github.com/onsi/gomega v1.4.3
 	github.com/ory/fosite v0.35.1
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/xattr v0.4.2
