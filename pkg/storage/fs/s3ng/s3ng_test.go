@@ -31,10 +31,10 @@ import (
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/s3ng"
 	"github.com/cs3org/reva/pkg/storage/fs/s3ng/mocks"
+	helpers "github.com/cs3org/reva/pkg/storage/fs/s3ng/testhelpers"
 	"github.com/cs3org/reva/pkg/storage/fs/s3ng/tree"
 	treemocks "github.com/cs3org/reva/pkg/storage/fs/s3ng/tree/mocks"
 	ruser "github.com/cs3org/reva/pkg/user"
-	"github.com/cs3org/reva/tests/helpers"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
