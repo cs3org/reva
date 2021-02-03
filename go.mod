@@ -22,7 +22,7 @@ require (
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/gofrs/uuid v3.3.0+incompatible
 	github.com/golang/protobuf v1.4.3
-	github.com/gomodule/redigo v1.8.2
+	github.com/gomodule/redigo v1.8.3
 	github.com/google/go-github v17.0.0+incompatible
 	github.com/google/go-querystring v1.0.0 // indirect
 	github.com/google/uuid v1.1.2
@@ -55,5 +55,7 @@ require (
 go 1.13
 
 replace github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
+
 replace github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
+
 replace google.golang.org/grpc => google.golang.org/grpc v1.26.0 // temporary downgrade
