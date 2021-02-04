@@ -328,11 +328,12 @@ func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string) (*gr
 
 	switch claim {
 	case "mail":
-		claim = "mail"
+		claim = "groupIdentifier"
+		value = strings.TrimSuffix(value, "@cern.ch")
 	case "gid_number":
-		claim = "gid_number"
+		claim = "gid"
 	case "group_name":
-		claim = "group_name"
+		claim = "groupIdentifier"
 	default:
 		return nil, errors.New("rest: invalid field")
 	}
@@ -376,7 +377,7 @@ func (m *manager) findGroupsByFilter(ctx context.Context, url string, groups map
 		}
 		groups[groupID.OpaqueId] = &grouppb.Group{
 			Id:          groupID,
-			GroupName:   grpInfo["groupidentifier"].(string),
+			GroupName:   grpInfo["groupIdentifier"].(string),
 			Mail:        grpInfo["groupIdentifier"].(string) + "@cern.ch",
 			DisplayName: grpInfo["displayName"].(string),
 			GidNumber:   gid,
@@ -402,7 +403,7 @@ func (m *manager) FindGroups(ctx context.Context, query string) ([]*grouppb.Grou
 	groups := make(map[string]*grouppb.Group)
 
 	for _, f := range filters {
-		url := fmt.Sprintf("%s/Groups/?filter=%s:contains:%s&field=groupIdentifier&field=displayName&field=gid",
+		url := fmt.Sprintf("%s/Group/?filter=%s:contains:%s&field=groupIdentifier&field=displayName&field=gid",
 			m.conf.APIBaseURL, f, query)
 		err := m.findGroupsByFilter(ctx, url, groups)
 		if err != nil {
@@ -429,7 +430,7 @@ func (m *manager) GetMembers(ctx context.Context, gid *grouppb.GroupId) ([]*user
 	if err != nil {
 		return nil, err
 	}
-	url := fmt.Sprintf("%s/Group/%s/membergroups/precomputed", m.conf.APIBaseURL, internalID)
+	url := fmt.Sprintf("%s/Group/%s/memberidentities/precomputed", m.conf.APIBaseURL, internalID)
 	userData, err := m.sendAPIRequest(ctx, url)
 	if err != nil {
 		return nil, err
@@ -460,7 +461,7 @@ func (m *manager) HasMember(ctx context.Context, gid *grouppb.GroupId, uid *user
 	}
 
 	for _, u := range groupMemers {
-		if uid == u {
+		if uid.OpaqueId == u.OpaqueId {
 			return true, nil
 		}
 	}
