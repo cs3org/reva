@@ -393,7 +393,7 @@ func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, key string) (*node.Node
 	}
 
 	fn := func() error {
-		if err := os.Remove(deletedNodePath); err != nil {
+		if err := os.RemoveAll(deletedNodePath); err != nil {
 			log.Error().Err(err).Str("deletedNodePath", deletedNodePath).Msg("error deleting trash node")
 			return err
 		}
