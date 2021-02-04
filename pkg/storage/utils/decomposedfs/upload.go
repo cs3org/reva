@@ -50,6 +50,7 @@ import (
 
 var defaultFilePerm = os.FileMode(0664)
 
+// Upload uploads data to the given resource
 // TODO Upload (and InitiateUpload) needs a way to receive the expected checksum.
 // Maybe in metadata as 'checksum' => 'sha1 aeosvp45w5xaeoe' = lowercase, space separated?
 func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) (err error) {
@@ -182,6 +183,7 @@ func (fs *Decomposedfs) UseIn(composer *tusd.StoreComposer) {
 // - the storage needs to implement NewUpload and GetUpload
 // - the upload needs to implement the tusd.Upload interface: WriteChunk, GetInfo, GetReader and FinishUpload
 
+// NewUpload returns a new tus Upload instance
 func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.Upload, err error) {
 
 	log := appctx.GetLogger(ctx)

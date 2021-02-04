@@ -32,6 +32,7 @@ import (
 	"github.com/pkg/xattr"
 )
 
+// AddGrant adds a grant to a resource
 func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("ref", ref).Interface("grant", g).Msg("AddGrant()")
@@ -64,6 +65,7 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 	return fs.tp.Propagate(ctx, node)
 }
 
+// ListGrants lists the grants on the specified resource
 func (fs *Decomposedfs) ListGrants(ctx context.Context, ref *provider.Reference) (grants []*provider.Grant, err error) {
 	var node *node.Node
 	if node, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
@@ -104,6 +106,7 @@ func (fs *Decomposedfs) ListGrants(ctx context.Context, ref *provider.Reference)
 	return grants, nil
 }
 
+// RemoveGrant removes a grant from resource
 func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
 	var node *node.Node
 	if node, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
@@ -139,6 +142,7 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 	return fs.tp.Propagate(ctx, node)
 }
 
+// UpdateGrant updates a grant on a resource
 func (fs *Decomposedfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	// TODO remove AddGrant or UpdateGrant grant from CS3 api, redundant? tracked in https://github.com/cs3org/cs3apis/issues/92
 	return fs.AddGrant(ctx, ref, g)

@@ -33,6 +33,7 @@ import (
 	"github.com/pkg/xattr"
 )
 
+// SetArbitraryMetadata sets the metadata on a resource
 func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) (err error) {
 	n, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
@@ -120,6 +121,7 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 	}
 }
 
+// UnsetArbitraryMetadata unsets the metadata on the given resource
 func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) (err error) {
 	n, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {

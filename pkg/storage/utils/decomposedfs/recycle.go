@@ -44,6 +44,7 @@ import (
 // TODO For an efficient listing of deleted nodes the ocis storages trash folder should have
 // contain a directory with symlinks to trash files for every userid/"root"
 
+// ListRecycle returns the list of available recycle items
 func (fs *Decomposedfs) ListRecycle(ctx context.Context) (items []*provider.RecycleItem, err error) {
 	log := appctx.GetLogger(ctx)
 
@@ -144,6 +145,7 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context) (items []*provider.Recy
 	return
 }
 
+// RestoreRecycleItem restores the specified item
 func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, key string) error {
 	rn, restoreFunc, err := fs.tp.RestoreRecycleItemFunc(ctx, key)
 	if err != nil {
@@ -165,6 +167,7 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, key string) erro
 	return restoreFunc()
 }
 
+// PurgeRecycleItem purges the specified item
 func (fs *Decomposedfs) PurgeRecycleItem(ctx context.Context, key string) error {
 	rn, purgeFunc, err := fs.tp.PurgeRecycleItemFunc(ctx, key)
 	if err != nil {
@@ -186,6 +189,7 @@ func (fs *Decomposedfs) PurgeRecycleItem(ctx context.Context, key string) error 
 	return purgeFunc()
 }
 
+// EmptyRecycle empties the trash
 func (fs *Decomposedfs) EmptyRecycle(ctx context.Context) error {
 	u, ok := user.ContextGetUser(ctx)
 	// TODO what permission should we check? we could check the root node of the user? or the owner permissions on his home root node?

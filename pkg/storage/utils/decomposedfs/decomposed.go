@@ -83,6 +83,7 @@ type Decomposedfs struct {
 	chunkHandler *chunking.ChunkHandler
 }
 
+// NewDefault returns an instance with default components
 func NewDefault(m map[string]interface{}, bs tree.Blobstore) (storage.FS, error) {
 	o, err := options.New(m)
 	if err != nil {
@@ -117,10 +118,12 @@ func New(o *options.Options, lu *Lookup, p PermissionsChecker, tp Tree) (storage
 	}, nil
 }
 
+// Shutdown shuts down the storage
 func (fs *Decomposedfs) Shutdown(ctx context.Context) error {
 	return nil
 }
 
+// GetQuota returns the quota available
 // TODO Document in the cs3 should we return quota or free space?
 func (fs *Decomposedfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
 	var node *node.Node
@@ -233,6 +236,7 @@ func (fs *Decomposedfs) GetPathByID(ctx context.Context, id *provider.ResourceId
 	return fs.lu.Path(ctx, node)
 }
 
+// CreateDir creates the specified directory
 func (fs *Decomposedfs) CreateDir(ctx context.Context, fn string) (err error) {
 	var n *node.Node
 	if n, err = fs.lu.NodeFromPath(ctx, fn); err != nil {
@@ -317,6 +321,7 @@ func (fs *Decomposedfs) CreateReference(ctx context.Context, p string, targetURI
 	return nil
 }
 
+// Move moves a resource from one reference to another
 func (fs *Decomposedfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (err error) {
 	var oldNode, newNode *node.Node
 	if oldNode, err = fs.lu.NodeFromResource(ctx, oldRef); err != nil {
@@ -349,6 +354,7 @@ func (fs *Decomposedfs) Move(ctx context.Context, oldRef, newRef *provider.Refer
 	return fs.tp.Move(ctx, oldNode, newNode)
 }
 
+// GetMD returns the metadata for the specified resource
 func (fs *Decomposedfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (ri *provider.ResourceInfo, err error) {
 	var node *node.Node
 	if node, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
@@ -371,6 +377,7 @@ func (fs *Decomposedfs) GetMD(ctx context.Context, ref *provider.Reference, mdKe
 	return node.AsResourceInfo(ctx, rp, mdKeys)
 }
 
+// ListFolder returns a list of resources in the specified folder
 func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) (finfos []*provider.ResourceInfo, err error) {
 	var n *node.Node
 	if n, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
@@ -407,6 +414,7 @@ func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference,
 	return
 }
 
+// Delete deletes the specified resource
 func (fs *Decomposedfs) Delete(ctx context.Context, ref *provider.Reference) (err error) {
 	var node *node.Node
 	if node, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
@@ -430,7 +438,7 @@ func (fs *Decomposedfs) Delete(ctx context.Context, ref *provider.Reference) (er
 	return fs.tp.Delete(ctx, node)
 }
 
-// Data persistence
+// Download returns a reader to the specified resource
 func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
 	node, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
@@ -458,14 +466,6 @@ func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference) (
 	}
 	return reader, nil
 }
-
-// arbitrary metadata persistence in metadata.go
-
-// Version persistence in revisions.go
-
-// Trash persistence in recycle.go
-
-// share persistence in grants.go
 
 func (fs *Decomposedfs) copyMD(s string, t string) (err error) {
 	var attrs []string
