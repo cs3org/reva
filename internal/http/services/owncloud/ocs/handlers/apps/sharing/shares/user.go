@@ -154,7 +154,6 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statIn
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error adding fileinfo to share", err)
 		return
 	}
-	h.addDisplaynames(ctx, c, s)
 	h.mapUserIds(ctx, c, s)
 
 	response.WriteOCSSuccess(w, r, s)
@@ -246,7 +245,6 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.ListS
 				log.Debug().Interface("share", s).Interface("info", statResponse.Info).Interface("shareData", data).Err(err).Msg("could not add file info, skipping")
 				continue
 			}
-			h.addDisplaynames(ctx, c, data)
 			h.mapUserIds(ctx, c, data)
 
 			log.Debug().Interface("share", s).Interface("info", rInfo).Interface("shareData", data).Msg("mapped")

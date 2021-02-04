@@ -105,9 +105,9 @@ func (h *Handler) userAsMatch(u *userpb.User) *conversions.MatchData {
 		Label: u.DisplayName,
 		Value: &conversions.MatchValueData{
 			ShareType: int(conversions.ShareTypeUser),
-			// TODO(jfd) find more robust userid
-			// username might be ok as it is unique at a given point in time
-			ShareWith: u.Username,
+			// api compatibility with oc10: always use the username
+			ShareWith:               u.Username,
+			ShareWithAdditionalInfo: u.Mail,
 		},
 	}
 }

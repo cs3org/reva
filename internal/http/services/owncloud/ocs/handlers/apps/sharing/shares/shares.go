@@ -27,7 +27,6 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -35,7 +34,6 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/rs/zerolog/log"
 
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
@@ -51,19 +49,24 @@ import (
 
 // Handler implements the shares part of the ownCloud sharing API
 type Handler struct {
-	gatewayAddr      string
-	publicURL        string
-	sharePrefix      string
-	displayNameCache *ttlmap.TTLMap
-	userNameCache    *ttlmap.TTLMap
+	gatewayAddr         string
+	publicURL           string
+	sharePrefix         string
+	userIdentifierCache *ttlmap.TTLMap
+}
+
+// we only cache the minimal set of data instead of the full user metadata
+type userIdentifiers struct {
+	DisplayName string
+	UserName    string
+	Mail        string
 }
 
 // Init initializes this and any contained handlers
 func (h *Handler) Init(c *config.Config) error {
 	h.gatewayAddr = c.GatewaySvc
 	h.publicURL = c.Config.Host
-	h.displayNameCache = ttlmap.New(1000, 60)
-	h.userNameCache = ttlmap.New(1000, 60)
+	h.userIdentifierCache = ttlmap.New(1000, 60)
 	h.sharePrefix = c.SharePrefix
 	return nil
 }
@@ -392,7 +395,6 @@ func (h *Handler) getShare(w http.ResponseWriter, r *http.Request, shareID strin
 		log.Error().Err(err).Str("status", statResponse.Status.Code.String()).Msg("error mapping share data")
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
 	}
-	h.addDisplaynames(ctx, client, share)
 	h.mapUserIds(ctx, client, share)
 
 	response.WriteOCSSuccess(w, r, []*conversions.ShareData{share})
@@ -516,7 +518,6 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, err.Error(), err)
 		return
 	}
-	h.addDisplaynames(ctx, uClient, share)
 	h.mapUserIds(ctx, uClient, share)
 
 	response.WriteOCSSuccess(w, r, share)
@@ -681,7 +682,6 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			log.Debug().Interface("received_share", rs).Interface("info", info).Interface("shareData", data).Err(err).Msg("could not add file info, skipping")
 			continue
 		}
-		h.addDisplaynames(r.Context(), gwc, data)
 		h.mapUserIds(r.Context(), gwc, data)
 
 		if data.State == ocsStateAccepted {
@@ -871,140 +871,84 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 	return nil
 }
 
-func (h *Handler) getDisplayname(ctx context.Context, c gateway.GatewayAPIClient, userid string) string {
-	log := appctx.GetLogger(ctx)
+// mustGetUserIdentifiers always returns a struct with identifiers, if the user could not be found they will all be empty
+func (h *Handler) mustGetUserIdentifiers(ctx context.Context, c gateway.GatewayAPIClient, userid string) *userIdentifiers {
+	sublog := appctx.GetLogger(ctx).With().Str("userid", userid).Logger()
 	if userid == "" {
-		return ""
+		return &userIdentifiers{}
 	}
-	if dn := h.displayNameCache.Get(userid); dn != "" {
-		log.Debug().Str("userid", userid).Msg("cache hit")
-		return dn
+	//item := h.userIdentifierCache.Get(userid)
+	ui, ok := h.userIdentifierCache.Get(userid).(*userIdentifiers)
+	if ok {
+		sublog.Debug().Msg("cache hit")
+		return ui
 	}
-	log.Debug().Str("userid", userid).Msg("cache miss")
+	sublog.Debug().Msg("cache miss")
 	res, err := c.GetUser(ctx, &userpb.GetUserRequest{
 		UserId: &userpb.UserId{
 			OpaqueId: userid,
 		},
 	})
 	if err != nil {
-		log.Err(err).
-			Str("userid", userid).
-			Msg("could not look up user")
-		return ""
+		sublog.Err(err).Msg("could not look up user")
+		return &userIdentifiers{}
 	}
 	if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
-		log.Err(err).
-			Str("opaque_id", userid).
+		sublog.Err(err).
 			Int32("code", int32(res.GetStatus().GetCode())).
 			Str("message", res.GetStatus().GetMessage()).
 			Msg("get user call failed")
-		return ""
+		return &userIdentifiers{}
 	}
 	if res.User == nil {
-		log.Debug().
-			Str("opaque_id", userid).
+		sublog.Debug().
 			Int32("code", int32(res.GetStatus().GetCode())).
 			Str("message", res.GetStatus().GetMessage()).
 			Msg("user not found")
-		return ""
-	}
-	if res.User.DisplayName == "" {
-		log.Debug().
-			Str("opaque_id", userid).
-			Int32("code", int32(res.GetStatus().GetCode())).
-			Str("message", res.GetStatus().GetMessage()).
-			Msg("Displayname empty")
-		return ""
+		return &userIdentifiers{}
 	}
 
-	h.displayNameCache.Put(userid, res.User.DisplayName)
-	h.userNameCache.Put(userid, res.User.Username)
+	ui = &userIdentifiers{
+		DisplayName: res.User.DisplayName,
+		UserName:    res.User.Username,
+		Mail:        res.User.Mail,
+	}
+	h.userIdentifierCache.Put(userid, ui)
 	log.Debug().Str("userid", userid).Msg("cache update")
-	return res.User.DisplayName
-}
-
-func (h *Handler) getUsername(ctx context.Context, c gateway.GatewayAPIClient, userid string) string {
-	log := appctx.GetLogger(ctx)
-	if userid == "" {
-		return ""
-	}
-	if un := h.userNameCache.Get(userid); un != "" {
-		log.Debug().Str("userid", userid).Msg("cache hit")
-		return un
-	}
-	log.Debug().Str("userid", userid).Msg("cache miss")
-	res, err := c.GetUser(ctx, &userpb.GetUserRequest{
-		UserId: &userpb.UserId{
-			OpaqueId: userid,
-		},
-	})
-	if err != nil {
-		log.Err(err).
-			Str("userid", userid).
-			Msg("could not look up user")
-		return ""
-	}
-	if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
-		log.Err(err).
-			Str("opaque_id", userid).
-			Int32("code", int32(res.GetStatus().GetCode())).
-			Str("message", res.GetStatus().GetMessage()).
-			Msg("get user call failed")
-		return ""
-	}
-	if res.User == nil {
-		log.Debug().
-			Str("opaque_id", userid).
-			Int32("code", int32(res.GetStatus().GetCode())).
-			Str("message", res.GetStatus().GetMessage()).
-			Msg("user not found")
-		return ""
-	}
-	if res.User.Username == "" {
-		log.Debug().
-			Str("opaque_id", userid).
-			Int32("code", int32(res.GetStatus().GetCode())).
-			Str("message", res.GetStatus().GetMessage()).
-			Msg("Username empty")
-		return ""
-	}
-
-	h.userNameCache.Put(userid, res.User.Username)
-	h.displayNameCache.Put(userid, res.User.DisplayName)
-	log.Debug().Str("userid", userid).Msg("cache update")
-	return res.User.Username
-}
-
-func (h *Handler) addDisplaynames(ctx context.Context, c gateway.GatewayAPIClient, s *conversions.ShareData) {
-	if s.DisplaynameOwner == "" {
-		s.DisplaynameOwner = h.getDisplayname(ctx, c, s.UIDOwner)
-	}
-	if s.DisplaynameFileOwner == "" {
-		s.DisplaynameFileOwner = h.getDisplayname(ctx, c, s.UIDFileOwner)
-	}
-	if s.ShareWithDisplayname == "" {
-		s.ShareWithDisplayname = h.getDisplayname(ctx, c, s.ShareWith)
-	}
+	return ui
 }
 
 func (h *Handler) mapUserIds(ctx context.Context, c gateway.GatewayAPIClient, s *conversions.ShareData) {
-	s.UIDOwner = h.getUsername(ctx, c, s.UIDOwner)
-	s.UIDFileOwner = h.getUsername(ctx, c, s.UIDFileOwner)
-	s.ShareWith = h.getUsername(ctx, c, s.ShareWith)
-}
-
-func parseTimestamp(timestampString string) (*types.Timestamp, error) {
-	parsedTime, err := time.Parse("2006-01-02T15:04:05Z0700", timestampString)
-	if err != nil {
-		parsedTime, err = time.Parse("2006-01-02", timestampString)
+	if s.UIDOwner != "" {
+		owner := h.mustGetUserIdentifiers(ctx, c, s.UIDOwner)
+		s.UIDOwner = owner.UserName
+		if s.DisplaynameOwner == "" {
+			s.DisplaynameOwner = owner.DisplayName
+		}
+		if s.AdditionalInfoFileOwner == "" {
+			s.AdditionalInfoFileOwner = owner.Mail
+		}
 	}
-	if err != nil {
-		return nil, fmt.Errorf("datetime format invalid: %v", timestampString)
-	}
-	final := parsedTime.UnixNano()
 
-	return &types.Timestamp{
-		Seconds: uint64(final / 1000000000),
-		Nanos:   uint32(final % 1000000000),
-	}, nil
+	if s.UIDFileOwner != "" {
+		fileOwner := h.mustGetUserIdentifiers(ctx, c, s.UIDFileOwner)
+		s.UIDFileOwner = fileOwner.UserName
+		if s.DisplaynameFileOwner == "" {
+			s.DisplaynameFileOwner = fileOwner.DisplayName
+		}
+		if s.AdditionalInfoOwner == "" {
+			s.AdditionalInfoOwner = fileOwner.Mail
+		}
+	}
+
+	if s.ShareWith != "" && s.ShareWith != "***redacted***" {
+		shareWith := h.mustGetUserIdentifiers(ctx, c, s.ShareWith)
+		s.ShareWith = shareWith.UserName
+		if s.ShareWithDisplayname == "" {
+			s.ShareWithDisplayname = shareWith.DisplayName
+		}
+		if s.ShareWithAdditionalInfo == "" {
+			s.ShareWithAdditionalInfo = shareWith.Mail
+		}
+	}
 }
