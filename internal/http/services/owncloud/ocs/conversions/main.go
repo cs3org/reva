@@ -28,7 +28,9 @@ import (
 
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/utils"
 
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -169,8 +171,8 @@ type MatchValueData struct {
 	ShareWithAdditionalInfo string `json:"shareWithAdditionalInfo" xml:"shareWithAdditionalInfo"`
 }
 
-// UserShare2ShareData converts a cs3api user share into shareData data model
-func UserShare2ShareData(ctx context.Context, share *collaboration.Share) (*ShareData, error) {
+// CS3Share2ShareData converts a cs3api user share into shareData data model
+func CS3Share2ShareData(ctx context.Context, share *collaboration.Share) (*ShareData, error) {
 	sd := &ShareData{
 		// share.permissions are mapped below
 		// Displaynames are added later
@@ -179,6 +181,16 @@ func UserShare2ShareData(ctx context.Context, share *collaboration.Share) (*Shar
 		UIDFileOwner: LocalUserIDToString(share.GetOwner()),
 		ShareWith:    LocalUserIDToString(share.GetGrantee().GetGranteeId().GetUserId()),
 	}
+
+	uid, gid, isGroupShare := utils.ExtractGranteeID(share.GetGrantee().GetGranteeId())
+	if isGroupShare {
+		sd.ShareType = ShareTypeGroup
+		sd.ShareWith = LocalGroupIDToString(gid)
+	} else {
+		sd.ShareType = ShareTypeUser
+		sd.ShareWith = LocalUserIDToString(uid)
+	}
+
 	if share.Id != nil {
 		sd.ID = share.Id.OpaqueId
 	}
@@ -188,7 +200,6 @@ func UserShare2ShareData(ctx context.Context, share *collaboration.Share) (*Shar
 	if share.Ctime != nil {
 		sd.STime = share.Ctime.Seconds // TODO CS3 api birth time = btime
 	}
-	// TODO check grantee type for user vs group
 	return sd, nil
 }
 
@@ -234,6 +245,14 @@ func LocalUserIDToString(userID *userpb.UserId) string {
 		return ""
 	}
 	return userID.OpaqueId
+}
+
+// LocalGroupIDToString transforms a cs3api group id into an ocs data model without domain name
+func LocalGroupIDToString(groupID *grouppb.GroupId) string {
+	if groupID == nil || groupID.OpaqueId == "" {
+		return ""
+	}
+	return groupID.OpaqueId
 }
 
 // UserIDToString transforms a cs3api user id into an ocs data model

@@ -19,9 +19,7 @@
 package shares
 
 import (
-	"encoding/json"
 	"net/http"
-	"strconv"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -35,58 +33,11 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 )
 
-func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo) {
+func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo, role *conversions.Role, roleVal []byte) {
 	ctx := r.Context()
 	c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
-		return
-	}
-
-	var role *conversions.Role
-
-	reqRole := r.FormValue("role")
-	if reqRole != "" {
-		// default is all permissions / role coowner
-		role = conversions.RoleFromName(reqRole)
-	} else {
-		// map requested permissions
-		pval := r.FormValue("permissions")
-		if pval == "" {
-			// default is all permissions / role coowner
-			role = conversions.NewCoownerRole()
-		} else {
-			pint, err := strconv.Atoi(pval)
-			if err != nil {
-				response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "permissions must be an integer", nil)
-				return
-			}
-			permissions, err := conversions.NewPermissions(pint)
-			if err != nil {
-				if err == conversions.ErrPermissionNotInRange {
-					response.WriteOCSError(w, r, http.StatusNotFound, err.Error(), nil)
-				} else {
-					response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, err.Error(), nil)
-				}
-				return
-			}
-			role = conversions.RoleFromOCSPermissions(permissions)
-		}
-	}
-
-	if statInfo != nil && statInfo.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
-		// Single file shares should never have delete or create permissions
-		permissions := role.OCSPermissions()
-		permissions &^= conversions.PermissionCreate
-		permissions &^= conversions.PermissionDelete
-		// editor should be come a file-editor role
-		role = conversions.RoleFromOCSPermissions(permissions)
-	}
-
-	roleMap := map[string]string{"name": role.Name}
-	val, err := json.Marshal(roleMap)
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "could not encode role", err)
 		return
 	}
 
@@ -115,7 +66,7 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statIn
 			Map: map[string]*types.OpaqueEntry{
 				"role": {
 					Decoder: "json",
-					Value:   val,
+					Value:   roleVal,
 				},
 			},
 		},
@@ -144,7 +95,7 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statIn
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc create share request failed", err)
 		return
 	}
-	s, err := conversions.UserShare2ShareData(ctx, createShareResponse.Share)
+	s, err := conversions.CS3Share2ShareData(ctx, createShareResponse.Share)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
 		return
@@ -222,9 +173,9 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.ListS
 
 		// build OCS response payload
 		for _, s := range lsUserSharesResponse.Shares {
-			data, err := conversions.UserShare2ShareData(ctx, s)
+			data, err := conversions.CS3Share2ShareData(ctx, s)
 			if err != nil {
-				log.Debug().Interface("share", s).Interface("shareData", data).Err(err).Msg("could not UserShare2ShareData, skipping")
+				log.Debug().Interface("share", s).Interface("shareData", data).Err(err).Msg("could not CS3Share2ShareData, skipping")
 				continue
 			}
 

@@ -21,6 +21,7 @@ package shares
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"mime"
 	"net/http"
@@ -207,72 +208,84 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 	switch shareType {
 	case int(conversions.ShareTypeUser):
 		// user collaborations default to coowner
-		if h.validatePermissions(w, r, statRes.Info, conversions.NewCoownerRole().OCSPermissions()) {
-			h.createUserShare(w, r, statRes.Info)
+		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewCoownerRole()); err == nil {
+			h.createUserShare(w, r, statRes.Info, role, val)
+		}
+	case int(conversions.ShareTypeGroup):
+		// group collaborations default to coowner
+		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewCoownerRole()); err == nil {
+			h.createGroupShare(w, r, statRes.Info, role, val)
 		}
 	case int(conversions.ShareTypePublicLink):
 		// public links default to read only
-		if h.validatePermissions(w, r, statRes.Info, conversions.NewViewerRole().OCSPermissions()) {
+		if _, _, err := h.extractPermissions(w, r, statRes.Info, conversions.NewViewerRole()); err == nil {
 			h.createPublicLinkShare(w, r, statRes.Info)
 		}
 	case int(conversions.ShareTypeFederatedCloudShare):
 		// federated shares default to read only
-		if h.validatePermissions(w, r, statRes.Info, conversions.NewViewerRole().OCSPermissions()) {
-			h.createFederatedCloudShare(w, r, statRes.Info)
+		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewViewerRole()); err == nil {
+			h.createFederatedCloudShare(w, r, statRes.Info, role, val)
 		}
 	default:
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "unknown share type", nil)
 	}
 }
 
-func (h *Handler) validatePermissions(w http.ResponseWriter, r *http.Request, ri *provider.ResourceInfo, defaultPermissions conversions.Permissions) bool {
-
-	// 1. we start without permissions
-	var reqPermissions conversions.Permissions
-
-	reqRole := r.FormValue("role")
+func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri *provider.ResourceInfo, defaultPermissions *conversions.Role) (*conversions.Role, []byte, error) {
+	reqRole, reqPermissions := r.FormValue("role"), r.FormValue("permissions")
+	var role *conversions.Role
+	var permissions conversions.Permissions
 
 	// the share role overrides the requested permissions
 	if reqRole != "" {
-		reqPermissions = conversions.RoleFromName(reqRole).OCSPermissions()
+		role = conversions.RoleFromName(reqRole)
 	} else {
 		// map requested permissions
-		pval := r.FormValue("permissions")
-		if pval == "" {
-			// default is read permissions / role viewer
+		if reqPermissions == "" {
 			// TODO default link vs user share
-			//reqPermissions = conversions.NewCoownerRole().OCSPermissions()
-			reqPermissions = defaultPermissions
+			role = defaultPermissions
 		} else {
-			pint, err := strconv.Atoi(pval)
+			pint, err := strconv.Atoi(reqPermissions)
 			if err != nil {
 				response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "permissions must be an integer", nil)
-				return false
+				return nil, nil, err
 			}
-			reqPermissions, err = conversions.NewPermissions(pint)
+			permissions, err = conversions.NewPermissions(pint)
 			if err != nil {
 				if err == conversions.ErrPermissionNotInRange {
 					response.WriteOCSError(w, r, http.StatusNotFound, err.Error(), nil)
 				} else {
 					response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, err.Error(), nil)
 				}
-				return false
+				return nil, nil, err
 			}
+			role = conversions.RoleFromOCSPermissions(permissions)
 		}
 	}
 
-	if ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
+	permissions = role.OCSPermissions()
+	if ri != nil && ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
 		// Single file shares should never have delete or create permissions
-		reqPermissions &^= conversions.PermissionCreate
-		reqPermissions &^= conversions.PermissionDelete
+		permissions &^= conversions.PermissionCreate
+		permissions &^= conversions.PermissionDelete
+		// editor should become a file-editor role
 	}
 
 	existingPermissions := conversions.RoleFromResourcePermissions(ri.PermissionSet).OCSPermissions()
-	if !existingPermissions.Contain(reqPermissions) {
+	if !existingPermissions.Contain(permissions) {
 		response.WriteOCSError(w, r, http.StatusNotFound, "Cannot set the requested share permissions", nil)
-		return false
+		return nil, nil, fmt.Errorf("Cannot set the requested share permissions")
 	}
-	return true
+
+	role = conversions.RoleFromOCSPermissions(permissions)
+	roleMap := map[string]string{"name": role.Name}
+	val, err := json.Marshal(roleMap)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "could not encode role", err)
+		return nil, nil, err
+	}
+
+	return role, val, nil
 }
 
 // PublicShareContextName represent cross boundaries context for the name of the public share
@@ -354,7 +367,7 @@ func (h *Handler) getShare(w http.ResponseWriter, r *http.Request, shareID strin
 
 		if err == nil && uRes.GetShare() != nil {
 			resourceID = uRes.Share.ResourceId
-			share, err = conversions.UserShare2ShareData(ctx, uRes.Share)
+			share, err = conversions.CS3Share2ShareData(ctx, uRes.Share)
 			if err != nil {
 				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
 				return
@@ -482,7 +495,7 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 		return
 	}
 
-	share, err := conversions.UserShare2ShareData(ctx, gRes.Share)
+	share, err := conversions.CS3Share2ShareData(ctx, gRes.Share)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
 		return
@@ -661,9 +674,9 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			info = statRes.GetInfo()
 		}
 
-		data, err := conversions.UserShare2ShareData(r.Context(), rs.Share)
+		data, err := conversions.CS3Share2ShareData(r.Context(), rs.Share)
 		if err != nil {
-			log.Debug().Interface("share", rs.Share).Interface("shareData", data).Err(err).Msg("could not UserShare2ShareData, skipping")
+			log.Debug().Interface("share", rs.Share).Interface("shareData", data).Err(err).Msg("could not CS3Share2ShareData, skipping")
 			continue
 		}
 

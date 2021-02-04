@@ -27,6 +27,9 @@ import (
 	"strings"
 	"time"
 
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 )
 
@@ -105,4 +108,16 @@ func TSToUnixNano(ts *types.Timestamp) uint64 {
 // TSToTime converts a protobuf Timestamp to Go's time.Time.
 func TSToTime(ts *types.Timestamp) time.Time {
 	return time.Unix(int64(ts.Seconds), int64(ts.Nanos))
+}
+
+// ExtractGranteeID returns the ID, user or group, set in the GranteeId object
+func ExtractGranteeID(grantee *provider.GranteeId) (*userpb.UserId, *grouppb.GroupId, bool) {
+	switch t := grantee.Id.(type) {
+	case *provider.GranteeId_UserId:
+		return t.UserId, nil, false
+	case *provider.GranteeId_GroupId:
+		return nil, t.GroupId, true
+	default:
+		return nil, nil, false
+	}
 }

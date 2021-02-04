@@ -21,6 +21,7 @@ package sharees
 import (
 	"net/http"
 
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
@@ -68,24 +69,32 @@ func (h *Handler) findSharees(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req := userpb.FindUsersRequest{
-		Filter: term,
-	}
-
-	res, err := gwc.FindUsers(r.Context(), &req)
+	usersRes, err := gwc.FindUsers(r.Context(), &userpb.FindUsersRequest{Filter: term})
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error searching users", err)
 		return
 	}
+	log.Debug().Int("count", len(usersRes.GetUsers())).Str("search", term).Msg("users found")
 
-	log.Debug().Int("count", len(res.GetUsers())).Str("search", term).Msg("users found")
-
-	matches := make([]*conversions.MatchData, 0, len(res.GetUsers()))
-
-	for _, user := range res.GetUsers() {
+	userMatches := make([]*conversions.MatchData, 0, len(usersRes.GetUsers()))
+	for _, user := range usersRes.GetUsers() {
 		match := h.userAsMatch(user)
 		log.Debug().Interface("user", user).Interface("match", match).Msg("mapped")
-		matches = append(matches, match)
+		userMatches = append(userMatches, match)
+	}
+
+	groupsRes, err := gwc.FindGroups(r.Context(), &grouppb.FindGroupsRequest{Filter: term})
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error searching groups", err)
+		return
+	}
+	log.Debug().Int("count", len(groupsRes.GetGroups())).Str("search", term).Msg("groups found")
+
+	groupMatches := make([]*conversions.MatchData, 0, len(groupsRes.GetGroups()))
+	for _, g := range groupsRes.GetGroups() {
+		match := h.groupAsMatch(g)
+		log.Debug().Interface("group", g).Interface("match", match).Msg("mapped")
+		groupMatches = append(groupMatches, match)
 	}
 
 	response.WriteOCSSuccess(w, r, &conversions.ShareeData{
@@ -94,8 +103,8 @@ func (h *Handler) findSharees(w http.ResponseWriter, r *http.Request) {
 			Groups:  []*conversions.MatchData{},
 			Remotes: []*conversions.MatchData{},
 		},
-		Users:   matches,
-		Groups:  []*conversions.MatchData{},
+		Users:   userMatches,
+		Groups:  groupMatches,
 		Remotes: []*conversions.MatchData{},
 	})
 }
@@ -108,6 +117,18 @@ func (h *Handler) userAsMatch(u *userpb.User) *conversions.MatchData {
 			// api compatibility with oc10: always use the username
 			ShareWith:               u.Username,
 			ShareWithAdditionalInfo: u.Mail,
+		},
+	}
+}
+
+func (h *Handler) groupAsMatch(g *grouppb.Group) *conversions.MatchData {
+	return &conversions.MatchData{
+		Label: g.DisplayName,
+		Value: &conversions.MatchValueData{
+			ShareType: int(conversions.ShareTypeGroup),
+			// api compatibility with oc10
+			ShareWith:               g.GroupName,
+			ShareWithAdditionalInfo: g.Mail,
 		},
 	}
 }
