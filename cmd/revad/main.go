@@ -33,7 +33,7 @@ import (
 	"github.com/cs3org/reva/cmd/revad/runtime"
 	"github.com/cs3org/reva/pkg/sysinfo"
 
-	"github.com/gofrs/uuid"
+	"github.com/google/uuid"
 )
 
 var (
@@ -215,7 +215,7 @@ func runSingle(conf map[string]interface{}) {
 }
 
 func getPidfile() string {
-	uuid := uuid.Must(uuid.NewV4())
+	uuid := uuid.New().String()
 	name := fmt.Sprintf("revad-%s.pid", uuid)
 
 	return path.Join(os.TempDir(), name)

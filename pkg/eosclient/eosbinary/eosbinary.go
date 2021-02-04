@@ -35,7 +35,7 @@ import (
 	"github.com/cs3org/reva/pkg/eosclient"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
-	"github.com/gofrs/uuid"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 )
@@ -543,7 +543,7 @@ func (c *Client) List(ctx context.Context, uid, gid, path string) ([]*eosclient.
 
 // Read reads a file from the mgm
 func (c *Client) Read(ctx context.Context, uid, gid, path string) (io.ReadCloser, error) {
-	rand := "eosread-" + uuid.Must(uuid.NewV4()).String()
+	rand := "eosread-" + uuid.New().String()
 	localTarget := fmt.Sprintf("%s/%s", c.opt.CacheDirectory, rand)
 	defer os.RemoveAll(localTarget)
 
