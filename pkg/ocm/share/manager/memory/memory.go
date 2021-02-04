@@ -143,7 +143,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 
 	// do not allow share to myself if share is for a user
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER &&
-		g.Grantee.Id.Idp == userID.Idp && g.Grantee.Id.OpaqueId == userID.OpaqueId {
+		g.Grantee.GranteeId.GetUserId().Idp == userID.Idp && g.Grantee.GranteeId.GetUserId().OpaqueId == userID.OpaqueId {
 		return nil, errors.New("json: user and grantee are the same")
 	}
 
@@ -194,7 +194,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 		}
 
 		requestBody := url.Values{
-			"shareWith":    {g.Grantee.Id.OpaqueId},
+			"shareWith":    {g.Grantee.GranteeId.GetUserId().OpaqueId},
 			"name":         {name},
 			"providerId":   {fmt.Sprintf("%s:%s", md.StorageId, md.OpaqueId)},
 			"owner":        {userID.OpaqueId},
@@ -292,7 +292,8 @@ func (m *mgr) getByKey(ctx context.Context, key *ocm.ShareKey) (*ocm.Share, erro
 
 		if key.Owner.Idp == s.Owner.Idp && key.Owner.OpaqueId == s.Owner.OpaqueId &&
 			key.ResourceId.StorageId == s.ResourceId.StorageId && key.ResourceId.OpaqueId == s.ResourceId.OpaqueId &&
-			key.Grantee.Type == s.Grantee.Type && key.Grantee.Id.Idp == s.Grantee.Id.Idp && key.Grantee.Id.OpaqueId == s.Grantee.Id.OpaqueId {
+			key.Grantee.Type == s.Grantee.Type && key.Grantee.GranteeId.GetUserId().Idp == s.Grantee.GranteeId.GetUserId().Idp &&
+			key.Grantee.GranteeId.GetUserId().OpaqueId == s.Grantee.GranteeId.GetUserId().OpaqueId {
 
 			found = v.(*ocm.Share)
 			return true
@@ -447,7 +448,7 @@ func (m *mgr) ListReceivedShares(ctx context.Context) ([]*ocm.ReceivedShare, err
 			return true
 		}
 		if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
-			if user.Id.Idp == s.Grantee.Id.Idp && user.Id.OpaqueId == s.Grantee.Id.OpaqueId {
+			if user.Id.Idp == s.Grantee.GranteeId.GetUserId().Idp && user.Id.OpaqueId == s.Grantee.GranteeId.GetUserId().OpaqueId {
 				rs := m.convert(ctx, s)
 				receivedShares = append(receivedShares, rs)
 			}
@@ -455,7 +456,7 @@ func (m *mgr) ListReceivedShares(ctx context.Context) ([]*ocm.ReceivedShare, err
 			// check if all user groups match this share;
 			// TODO(labkode): filter shares created by us.
 			for _, g := range user.Groups {
-				if g == s.Grantee.Id.OpaqueId {
+				if g == s.Grantee.GranteeId.GetUserId().OpaqueId {
 					rs := m.convert(ctx, s)
 					receivedShares = append(receivedShares, rs)
 				}
@@ -494,12 +495,12 @@ func (m *mgr) GetReceivedShare(ctx context.Context, ref *ocm.ShareReference) (*o
 
 		if equal(ref, s) {
 			if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER &&
-				s.Grantee.Id.Idp == user.Id.Idp && s.Grantee.Id.OpaqueId == user.Id.OpaqueId {
+				s.Grantee.GranteeId.GetUserId().Idp == user.Id.Idp && s.Grantee.GranteeId.GetUserId().OpaqueId == user.Id.OpaqueId {
 				found = m.convert(ctx, s)
 				return true
 			} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 				for _, g := range user.Groups {
-					if s.Grantee.Id.OpaqueId == g {
+					if s.Grantee.GranteeId.GetUserId().OpaqueId == g {
 						found = m.convert(ctx, s)
 						return true
 					}

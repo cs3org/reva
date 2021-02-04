@@ -45,7 +45,7 @@ const (
 	ShareTypePublicLink ShareType = 3
 
 	// ShareTypeGroup represents a group share
-	// ShareTypeGroup ShareType = 1
+	ShareTypeGroup ShareType = 1
 
 	// ShareTypeFederatedCloudShare represents a federated share
 	ShareTypeFederatedCloudShare ShareType = 6
@@ -177,7 +177,7 @@ func UserShare2ShareData(ctx context.Context, share *collaboration.Share) (*Shar
 		ShareType:    ShareTypeUser,
 		UIDOwner:     LocalUserIDToString(share.GetCreator()),
 		UIDFileOwner: LocalUserIDToString(share.GetOwner()),
-		ShareWith:    LocalUserIDToString(share.GetGrantee().GetId()),
+		ShareWith:    LocalUserIDToString(share.GetGrantee().GetGranteeId().GetUserId()),
 	}
 	if share.Id != nil {
 		sd.ID = share.Id.OpaqueId

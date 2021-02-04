@@ -148,11 +148,14 @@ func convertToCS3Share(s dbShare) *collaboration.Share {
 		},
 		ResourceId:  &provider.ResourceId{OpaqueId: s.ItemSource, StorageId: s.Prefix},
 		Permissions: &collaboration.SharePermissions{Permissions: intTosharePerm(s.Permissions)},
-		Grantee:     &provider.Grantee{Type: intToGranteeType(s.ShareType), Id: extractUserID(s.ShareWith)},
-		Owner:       extractUserID(s.UIDOwner),
-		Creator:     extractUserID(s.UIDInitiator),
-		Ctime:       ts,
-		Mtime:       ts,
+		Grantee: &provider.Grantee{
+			Type:      intToGranteeType(s.ShareType),
+			GranteeId: &provider.GranteeId{Id: &provider.GranteeId_UserId{UserId: extractUserID(s.ShareWith)}},
+		},
+		Owner:   extractUserID(s.UIDOwner),
+		Creator: extractUserID(s.UIDInitiator),
+		Ctime:   ts,
+		Mtime:   ts,
 	}
 }
 

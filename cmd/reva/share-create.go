@@ -89,10 +89,10 @@ func shareCreateCommand() *command {
 			},
 			Grantee: &provider.Grantee{
 				Type: gt,
-				Id: &userpb.UserId{
+				GranteeId: &provider.GranteeId{Id: &provider.GranteeId_UserId{UserId: &userpb.UserId{
 					Idp:      *idp,
 					OpaqueId: *grantee,
-				},
+				}}},
 			},
 		}
 		shareRequest := &collaboration.CreateShareRequest{
@@ -115,7 +115,9 @@ func shareCreateCommand() *command {
 
 		s := shareRes.Share
 		t.AppendRows([]table.Row{
-			{s.Id.OpaqueId, s.Owner.Idp, s.Owner.OpaqueId, s.ResourceId.String(), s.Permissions.String(), s.Grantee.Type.String(), s.Grantee.Id.Idp, s.Grantee.Id.OpaqueId, time.Unix(int64(s.Ctime.Seconds), 0), time.Unix(int64(s.Mtime.Seconds), 0)},
+			{s.Id.OpaqueId, s.Owner.Idp, s.Owner.OpaqueId, s.ResourceId.String(), s.Permissions.String(),
+				s.Grantee.Type.String(), s.Grantee.GranteeId.GetUserId().Idp, s.Grantee.GranteeId.GetUserId().OpaqueId,
+				time.Unix(int64(s.Ctime.Seconds), 0), time.Unix(int64(s.Mtime.Seconds), 0)},
 		})
 		t.Render()
 

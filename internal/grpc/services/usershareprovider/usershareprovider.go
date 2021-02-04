@@ -22,7 +22,9 @@ import (
 	"context"
 	"fmt"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
@@ -109,9 +111,10 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.CreateShareResponse, error) {
 	u := user.ContextMustGetUser(ctx)
 	// TODO(labkode): validate input
-	if req.Grant.Grantee.Id.Idp == "" {
+	if req.Grant.Grantee.GranteeId.GetUserId().Idp == "" {
 		// use logged in user Idp as default.
-		req.Grant.Grantee.Id.Idp = u.Id.Idp
+		g := &userpb.UserId{OpaqueId: req.Grant.Grantee.GranteeId.GetUserId().OpaqueId, Idp: u.Id.Idp}
+		req.Grant.Grantee.GranteeId = &provider.GranteeId{Id: &provider.GranteeId_UserId{UserId: g}}
 	}
 	share, err := s.sm.Share(ctx, req.ResourceInfo, req.Grant)
 	if err != nil {

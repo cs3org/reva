@@ -405,12 +405,12 @@ func (fs *eosfs) getEosACL(ctx context.Context, g *provider.Grant) (*acl.Entry, 
 	if err != nil {
 		return nil, err
 	}
-	qualifier := g.Grantee.Id.OpaqueId
+	qualifier := g.Grantee.GranteeId.GetUserId().OpaqueId
 
 	// since EOS Citrine ACLs are stored with uid, we need to convert username to
 	// uid only for users.
 	if t == acl.TypeUser {
-		qualifier, _, err = fs.getUIDGateway(ctx, g.Grantee.Id)
+		qualifier, _, err = fs.getUIDGateway(ctx, g.Grantee.GranteeId.GetUserId())
 		if err != nil {
 			return nil, err
 		}
@@ -434,11 +434,11 @@ func (fs *eosfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pr
 	if err != nil {
 		return err
 	}
-	recipient := g.Grantee.Id.OpaqueId
+	recipient := g.Grantee.GranteeId.GetUserId().OpaqueId
 
 	// since EOS Citrine ACLs are stored with uid, we need to convert username to uid
 	if eosACLType == acl.TypeUser {
-		recipient, _, err = fs.getUIDGateway(ctx, g.Grantee.Id)
+		recipient, _, err = fs.getUIDGateway(ctx, g.Grantee.GranteeId.GetUserId())
 		if err != nil {
 			return err
 		}
@@ -511,8 +511,8 @@ func (fs *eosfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*pr
 			}
 		}
 		grantee := &provider.Grantee{
-			Id:   qualifier,
-			Type: grants.GetGranteeType(a.Type),
+			GranteeId: &provider.GranteeId{Id: &provider.GranteeId_UserId{UserId: qualifier}},
+			Type:      grants.GetGranteeType(a.Type),
 		}
 		grantList = append(grantList, &provider.Grant{
 			Grantee:     grantee,

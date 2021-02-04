@@ -164,8 +164,8 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabora
 	// do not allow share to myself or the owner if share is for a user
 	// TODO(labkode): should not this be caught already at the gw level?
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER &&
-		((g.Grantee.Id.Idp == user.Id.Idp && g.Grantee.Id.OpaqueId == user.Id.OpaqueId) ||
-			(g.Grantee.Id.Idp == md.Owner.Idp && g.Grantee.Id.OpaqueId == md.Owner.OpaqueId)) {
+		((g.Grantee.GranteeId.GetUserId().Idp == user.Id.Idp && g.Grantee.GranteeId.GetUserId().OpaqueId == user.Id.OpaqueId) ||
+			(g.Grantee.GranteeId.GetUserId().Idp == md.Owner.Idp && g.Grantee.GranteeId.GetUserId().OpaqueId == md.Owner.OpaqueId)) {
 		return nil, errors.New("json: owner/creator and grantee are the same")
 	}
 
@@ -225,7 +225,8 @@ func (m *mgr) getByKey(ctx context.Context, key *collaboration.ShareKey) (*colla
 		if ((key.Owner.Idp == s.Owner.Idp && key.Owner.OpaqueId == s.Owner.OpaqueId) ||
 			(key.Owner.Idp == s.Creator.Idp && key.Owner.OpaqueId == s.Creator.OpaqueId)) &&
 			key.ResourceId.StorageId == s.ResourceId.StorageId && key.ResourceId.OpaqueId == s.ResourceId.OpaqueId &&
-			key.Grantee.Type == s.Grantee.Type && key.Grantee.Id.Idp == s.Grantee.Id.Idp && key.Grantee.Id.OpaqueId == s.Grantee.Id.OpaqueId {
+			key.Grantee.Type == s.Grantee.Type && key.Grantee.GranteeId.GetUserId().Idp == s.Grantee.GranteeId.GetUserId().Idp &&
+			key.Grantee.GranteeId.GetUserId().OpaqueId == s.Grantee.GranteeId.GetUserId().OpaqueId {
 			return s, nil
 		}
 	}
@@ -368,14 +369,14 @@ func (m *mgr) ListReceivedShares(ctx context.Context) ([]*collaboration.Received
 			continue
 		}
 		if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
-			if user.Id.Idp == s.Grantee.Id.Idp && user.Id.OpaqueId == s.Grantee.Id.OpaqueId {
+			if user.Id.Idp == s.Grantee.GranteeId.GetUserId().Idp && user.Id.OpaqueId == s.Grantee.GranteeId.GetUserId().OpaqueId {
 				rs := m.convert(ctx, s)
 				rss = append(rss, rs)
 			}
 		} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 			// check if all user groups match this share; TODO(labkode): filter shares created by us.
 			for _, g := range user.Groups {
-				if g == s.Grantee.Id.OpaqueId {
+				if g == s.Grantee.GranteeId.GetUserId().OpaqueId {
 					rs := m.convert(ctx, s)
 					rss = append(rss, rs)
 				}
@@ -411,12 +412,12 @@ func (m *mgr) getReceived(ctx context.Context, ref *collaboration.ShareReference
 	for _, s := range m.model.Shares {
 		if equal(ref, s) {
 			if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER &&
-				s.Grantee.Id.Idp == user.Id.Idp && s.Grantee.Id.OpaqueId == user.Id.OpaqueId {
+				s.Grantee.GranteeId.GetUserId().Idp == user.Id.Idp && s.Grantee.GranteeId.GetUserId().OpaqueId == user.Id.OpaqueId {
 				rs := m.convert(ctx, s)
 				return rs, nil
 			} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 				for _, g := range user.Groups {
-					if s.Grantee.Id.OpaqueId == g {
+					if s.Grantee.GranteeId.GetUserId().OpaqueId == g {
 						rs := m.convert(ctx, s)
 						return rs, nil
 					}

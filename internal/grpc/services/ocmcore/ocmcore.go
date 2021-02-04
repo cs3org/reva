@@ -161,8 +161,8 @@ func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCM
 
 	grant := &ocm.ShareGrant{
 		Grantee: &provider.Grantee{
-			Type: provider.GranteeType_GRANTEE_TYPE_USER,
-			Id:   req.ShareWith,
+			Type:      provider.GranteeType_GRANTEE_TYPE_USER,
+			GranteeId: &provider.GranteeId{Id: &provider.GranteeId_UserId{UserId: req.ShareWith}},
 		},
 		Permissions: &ocm.SharePermissions{
 			Permissions: resourcePermissions,
