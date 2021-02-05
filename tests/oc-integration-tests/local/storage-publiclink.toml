@@ -9,7 +9,7 @@ address = "0.0.0.0:13000"
 # This is a storage provider that grants direct access to the wrapped storage
 # we have a locally running dataprovider
 [grpc.services.publicstorageprovider]
-driver = "owncloud"
+driver = "ocis"
 mount_path = "/public/"
 mount_id = "e1a73ede-549b-4226-abdf-40e69ca8230d"
 expose_data_server = true
