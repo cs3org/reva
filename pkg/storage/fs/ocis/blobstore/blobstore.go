@@ -21,7 +21,6 @@ package blobstore
 import (
 	"bufio"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 
@@ -68,7 +67,7 @@ func (bs *Blobstore) Download(key string) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not read blob '%s'", key)
 	}
-	return ioutil.NopCloser(file), nil
+	return file, nil
 }
 
 // Delete deletes a blob from the blobstore
