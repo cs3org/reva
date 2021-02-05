@@ -79,6 +79,7 @@ func (connector *LocalFileConnector) RetrieveMeshData() (*meshdata.MeshData, err
 	connector.setSiteTypes(meshData)
 
 	meshData.InferMissingData()
+
 	return meshData, nil
 }
 
