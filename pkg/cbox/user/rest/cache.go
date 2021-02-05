@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	userDetailsPrefix    = "user:"
+	userPrefix           = "user:"
 	userGroupsPrefix     = "groups:"
 	userInternalIDPrefix = "internal:"
 )
@@ -102,15 +102,15 @@ func (m *manager) getVal(key string) (string, error) {
 }
 
 func (m *manager) fetchCachedInternalID(uid *userpb.UserId) (string, error) {
-	return m.getVal(userInternalIDPrefix + uid.OpaqueId)
+	return m.getVal(userPrefix + userInternalIDPrefix + uid.OpaqueId)
 }
 
 func (m *manager) cacheInternalID(uid *userpb.UserId, internalID string) error {
-	return m.setVal(userInternalIDPrefix+uid.OpaqueId, internalID, -1)
+	return m.setVal(userPrefix+userInternalIDPrefix+uid.OpaqueId, internalID, -1)
 }
 
 func (m *manager) fetchCachedUserDetails(uid *userpb.UserId) (*userpb.User, error) {
-	user, err := m.getVal(userDetailsPrefix + uid.OpaqueId)
+	user, err := m.getVal(userPrefix + uid.OpaqueId)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +127,7 @@ func (m *manager) cacheUserDetails(u *userpb.User) error {
 	if err != nil {
 		return err
 	}
-	if err = m.setVal(userDetailsPrefix+u.Id.OpaqueId, string(encodedUser), -1); err != nil {
+	if err = m.setVal(userPrefix+u.Id.OpaqueId, string(encodedUser), -1); err != nil {
 		return err
 	}
 
@@ -136,24 +136,24 @@ func (m *manager) cacheUserDetails(u *userpb.User) error {
 		return err
 	}
 
-	if err = m.setVal("uid:"+uid, u.Id.OpaqueId, -1); err != nil {
+	if err = m.setVal(userPrefix+"uid:"+uid, u.Id.OpaqueId, -1); err != nil {
 		return err
 	}
-	if err = m.setVal("mail:"+u.Mail, u.Id.OpaqueId, -1); err != nil {
+	if err = m.setVal(userPrefix+"mail:"+u.Mail, u.Id.OpaqueId, -1); err != nil {
 		return err
 	}
-	if err = m.setVal("username:"+u.Username, u.Id.OpaqueId, -1); err != nil {
+	if err = m.setVal(userPrefix+"username:"+u.Username, u.Id.OpaqueId, -1); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (m *manager) fetchCachedParam(field, claim string) (string, error) {
-	return m.getVal(field + ":" + claim)
+	return m.getVal(userPrefix + field + ":" + claim)
 }
 
 func (m *manager) fetchCachedUserGroups(uid *userpb.UserId) ([]string, error) {
-	groups, err := m.getVal(userGroupsPrefix + uid.OpaqueId)
+	groups, err := m.getVal(userPrefix + userGroupsPrefix + uid.OpaqueId)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +169,7 @@ func (m *manager) cacheUserGroups(uid *userpb.UserId, groups []string) error {
 	if err != nil {
 		return err
 	}
-	if err = m.setVal(userGroupsPrefix+uid.OpaqueId, string(g), m.conf.UserGroupsCacheExpiration*60); err != nil {
+	if err = m.setVal(userPrefix+userGroupsPrefix+uid.OpaqueId, string(g), m.conf.UserGroupsCacheExpiration*60); err != nil {
 		return err
 	}
 	return nil

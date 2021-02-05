@@ -31,7 +31,7 @@ type TTLMap struct {
 }
 
 type item struct {
-	value      string
+	value      interface{}
 	lastAccess int64
 }
 
@@ -58,7 +58,7 @@ func (m *TTLMap) Len() int {
 }
 
 // Put sets or overwrites an item, resetting the ttl
-func (m *TTLMap) Put(k, v string) {
+func (m *TTLMap) Put(k string, v interface{}) {
 	m.l.Lock()
 	it, ok := m.m[k]
 	if !ok {
@@ -70,7 +70,7 @@ func (m *TTLMap) Put(k, v string) {
 }
 
 // Get retrieves an item from the cache, resetting the ttl
-func (m *TTLMap) Get(k string) (v string) {
+func (m *TTLMap) Get(k string) (v interface{}) {
 	m.l.Lock()
 	if it, ok := m.m[k]; ok {
 		v = it.value

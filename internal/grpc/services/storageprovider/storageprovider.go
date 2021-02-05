@@ -315,6 +315,11 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 				}, nil
 			}
 		}
+		// TUS forward Upload-Checksum header as checksum, uses '[type] [hash]' format
+		if req.Opaque.Map["Upload-Checksum"] != nil {
+			metadata["checksum"] = string(req.Opaque.Map["Upload-Checksum"].Value)
+		}
+		// ownCloud mtime to set for the uploaded file
 		if req.Opaque.Map["X-OC-Mtime"] != nil {
 			metadata["mtime"] = string(req.Opaque.Map["X-OC-Mtime"].Value)
 		}
@@ -325,6 +330,17 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		switch err.(type) {
 		case errtypes.IsNotFound:
 			st = status.NewNotFound(ctx, "path not found when initiating upload")
+		case errtypes.IsBadRequest, errtypes.IsChecksumMismatch:
+			st = status.NewInvalidArg(ctx, err.Error())
+			// TODO TUS uses a custom ChecksumMismatch 460 http status which is in an unnasigned range in
+			// https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
+			// maybe 409 conflict is good enough
+			// someone is proposing `419 Checksum Error`, see https://stackoverflow.com/a/35665694
+			// - it is also unassigned
+			// - ends in 9 as the 409 conflict
+			// - is near the 4xx errors about conditions: 415 Unsupported Media Type, 416 Range Not Satisfiable or 417 Expectation Failed
+			// owncloud only expects a 400 Bad request so InvalidArg is good enough for now
+			// seealso errtypes.StatusChecksumMismatch
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
@@ -807,7 +823,7 @@ func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRe
 			case errtypes.PermissionDenied:
 				st = status.NewPermissionDenied(ctx, err, "permission denied")
 			default:
-				st = status.NewInternal(ctx, err, "error restoring recycle item")
+				st = status.NewInternal(ctx, err, "error purging recycle item")
 			}
 			return &provider.PurgeRecycleResponse{
 				Status: st,
@@ -822,7 +838,7 @@ func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRe
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
-			st = status.NewInternal(ctx, err, "error restoring recycle bin")
+			st = status.NewInternal(ctx, err, "error purging recycle bin")
 		}
 		return &provider.PurgeRecycleResponse{
 			Status: st,

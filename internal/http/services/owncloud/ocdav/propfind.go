@@ -26,11 +26,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"path"
 	"strconv"
 	"strings"
-	"time"
 
 	"go.opencensus.io/trace"
 
@@ -38,11 +36,11 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxuser "github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -51,6 +49,9 @@ const (
 	_nsOCS      = "http://open-collaboration-services.org/ns"
 
 	_propOcFavorite = "http://owncloud.org/ns/favorite"
+
+	// RFC1123 time that mimics oc10. time.RFC1123 would end in "UTC", see https://github.com/golang/go/issues/13781
+	RFC1123 = "Mon, 02 Jan 2006 15:04:05 GMT"
 )
 
 // ns is the namespace that is prefixed to the path in the cs3 namespace
@@ -106,6 +107,11 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 
 	metadataKeys := []string{}
 	if pf.Allprop != nil {
+		// TODO this changes the behavior and returns all properties if allprops has been set,
+		// but allprops should only return some default properties
+		// see https://tools.ietf.org/html/rfc4918#section-9.1
+		// the description of arbitrary_metadata_keys in https://cs3org.github.io/cs3apis/#cs3.storage.provider.v1beta1.ListContainerRequest an others may need clarification
+		// tracked in https://github.com/cs3org/cs3apis/issues/104
 		metadataKeys = append(metadataKeys, "*")
 	} else {
 		for i := range pf.Prop {
@@ -188,12 +194,19 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 	}
 	w.Header().Set("DAV", "1, 3, extended-mkcol")
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+
+	var disableTus bool
 	// let clients know this collection supports tus.io POST requests to start uploads
 	if info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-		w.Header().Add("Access-Control-Expose-Headers", "Tus-Resumable, Tus-Version, Tus-Extension")
-		w.Header().Set("Tus-Resumable", "1.0.0")
-		w.Header().Set("Tus-Version", "1.0.0")
-		w.Header().Set("Tus-Extension", "creation,creation-with-upload")
+		if info.Opaque != nil {
+			_, disableTus = info.Opaque.Map["disable_tus"]
+		}
+		if !disableTus {
+			w.Header().Add("Access-Control-Expose-Headers", "Tus-Resumable, Tus-Version, Tus-Extension")
+			w.Header().Set("Tus-Resumable", "1.0.0")
+			w.Header().Set("Tus-Version", "1.0.0")
+			w.Header().Set("Tus-Extension", "creation,creation-with-upload")
+		}
 	}
 	w.WriteHeader(http.StatusMultiStatus)
 	if _, err := w.Write([]byte(propRes)); err != nil {
@@ -207,7 +220,7 @@ func requiresExplicitFetching(n *xml.Name) bool {
 		return false
 	case _nsOwncloud:
 		switch n.Local {
-		case "favorite", "share-types":
+		case "favorite", "share-types", "checksums":
 			return true
 		default:
 			return false
@@ -269,22 +282,31 @@ func (s *svc) formatPropfind(ctx context.Context, pf *propfindXML, mds []*provid
 	return msg, nil
 }
 
-func (s *svc) xmlEscaped(val string) string {
+func (s *svc) xmlEscaped(val string) []byte {
 	buf := new(bytes.Buffer)
 	xml.Escape(buf, []byte(val))
-	return buf.String()
+	return buf.Bytes()
 }
 
 func (s *svc) newPropNS(namespace string, local string, val string) *propertyXML {
 	return &propertyXML{
 		XMLName:  xml.Name{Space: namespace, Local: local},
 		Lang:     "",
-		InnerXML: []byte(val),
+		InnerXML: s.xmlEscaped(val),
 	}
 }
 
 // TODO properly use the space
 func (s *svc) newProp(key, val string) *propertyXML {
+	return &propertyXML{
+		XMLName:  xml.Name{Space: "", Local: key},
+		Lang:     "",
+		InnerXML: s.xmlEscaped(val),
+	}
+}
+
+// TODO properly use the space
+func (s *svc) newPropRaw(key, val string) *propertyXML {
 	return &propertyXML{
 		XMLName:  xml.Name{Space: "", Local: key},
 		Lang:     "",
@@ -307,7 +329,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	}
 
 	response := responseXML{
-		Href:     (&url.URL{Path: ref}).EscapedPath(), // url encode response.Href
+		Href:     encodePath(ref),
 		Propstat: []propstatXML{},
 	}
 
@@ -324,7 +346,11 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 
 	isShared := !isCurrentUserOwner(ctx, md.Owner)
 	var wdp string
-	if md.PermissionSet != nil {
+	switch {
+	case ls != nil:
+		// link share only appears on root collection
+		wdp = ""
+	case md.PermissionSet != nil:
 		wdp = role.WebDAVPermissions(
 			md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 			isShared,
@@ -334,17 +360,21 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		sublog.Debug().Interface("role", role).Str("dav-permissions", wdp).Msg("converted PermissionSet")
 	}
 
+	propstatOK := propstatXML{
+		Status: "HTTP/1.1 200 OK",
+		Prop:   []*propertyXML{},
+	}
+	propstatNotFound := propstatXML{
+		Status: "HTTP/1.1 404 Not Found",
+		Prop:   []*propertyXML{},
+	}
 	// when allprops has been requested
 	if pf.Allprop != nil {
 		// return all known properties
-		response.Propstat = append(response.Propstat, propstatXML{
-			Status: "HTTP/1.1 200 OK",
-			Prop:   []*propertyXML{},
-		})
 
 		if md.Id != nil {
 			id := wrapResourceID(md.Id)
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop,
+			propstatOK.Prop = append(propstatOK.Prop,
 				s.newProp("oc:id", id),
 				s.newProp("oc:fileid", id),
 			)
@@ -354,67 +384,83 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 			// etags must be enclosed in double quotes and cannot contain them.
 			// See https://tools.ietf.org/html/rfc7232#section-2.3 for details
 			// TODO(jfd) handle weak tags that start with 'W/'
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("d:getetag", md.Etag))
+			propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getetag", md.Etag))
 		}
 
 		if md.PermissionSet != nil {
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:permissions", wdp))
+			propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:permissions", wdp))
 		}
 
-		// always return size
+		// always return size, well nearly always ... public link shares are a little weird
 		size := fmt.Sprintf("%d", md.Size)
 		if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop,
-				s.newProp("d:resourcetype", "<d:collection/>"),
-				s.newProp("d:getcontenttype", "httpd/unix-directory"),
-				s.newProp("oc:size", size),
-			)
+			propstatOK.Prop = append(propstatOK.Prop, s.newPropRaw("d:resourcetype", "<d:collection/>"))
+			if ls == nil {
+				propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:size", size))
+			}
 		} else {
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop,
+			propstatOK.Prop = append(propstatOK.Prop,
+				s.newProp("d:resourcetype", ""),
 				s.newProp("d:getcontentlength", size),
 			)
 			if md.MimeType != "" {
-				response.Propstat[0].Prop = append(response.Propstat[0].Prop,
-					s.newProp("d:getcontenttype", md.MimeType),
-				)
+				propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontenttype", md.MimeType))
 			}
 		}
 		// Finder needs the getLastModified property to work.
-		t := utils.TSToTime(md.Mtime).UTC()
-		lastModifiedString := t.Format(time.RFC1123Z)
-		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("d:getlastmodified", lastModifiedString))
-
-		if md.Checksum != nil {
-			// TODO(jfd): the actual value is an abomination like this:
-			// <oc:checksums>
-			//   <oc:checksum>SHA1:9bd253a09d58be107bcb4169ebf338c8df34d086 MD5:d90bcc6bf847403d22a4abba64e79994 ADLER32:fca23ff5</oc:checksum>
-			// </oc:checksums>
-			// yep, correct, space delimited key value pairs inside an oc:checksum tag inside an oc:checksums tag
-			value := fmt.Sprintf("<oc:checksum>%s:%s</oc:checksum>", md.Checksum.Type, md.Checksum.Sum)
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:checksums", value))
+		if md.Mtime != nil {
+			t := utils.TSToTime(md.Mtime).UTC()
+			lastModifiedString := t.Format(RFC1123)
+			propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getlastmodified", lastModifiedString))
 		}
 
-		// favorites from arbitrary metadata
-		if k := md.GetArbitraryMetadata(); k == nil {
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:favorite", "0"))
-		} else if amd := k.GetMetadata(); amd == nil {
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:favorite", "0"))
-		} else if v, ok := amd[_propOcFavorite]; ok && v != "" {
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:favorite", v))
-		} else {
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:favorite", "0"))
+		// stay bug compatible with oc10, see https://github.com/owncloud/core/pull/38304#issuecomment-762185241
+		var checksums strings.Builder
+		if md.Checksum != nil {
+			checksums.WriteString("<oc:checksum>")
+			checksums.WriteString(strings.ToUpper(string(storageprovider.GRPC2PKGXS(md.Checksum.Type))))
+			checksums.WriteString(":")
+			checksums.WriteString(md.Checksum.Sum)
+		}
+		if md.Opaque != nil {
+			if e, ok := md.Opaque.Map["md5"]; ok {
+				if checksums.Len() == 0 {
+					checksums.WriteString("<oc:checksum>MD5:")
+				} else {
+					checksums.WriteString(" MD5:")
+				}
+				checksums.WriteString(string(e.Value))
+			}
+			if e, ok := md.Opaque.Map["adler32"]; ok {
+				if checksums.Len() == 0 {
+					checksums.WriteString("<oc:checksum>ADLER32:")
+				} else {
+					checksums.WriteString(" ADLER32:")
+				}
+				checksums.WriteString(string(e.Value))
+			}
+		}
+		if checksums.Len() > 0 {
+			checksums.WriteString("</oc:checksum>")
+			propstatOK.Prop = append(propstatOK.Prop, s.newPropRaw("oc:checksums", checksums.String()))
+		}
+
+		// ls do not report any properties as missing by default
+		if ls == nil {
+			// favorites from arbitrary metadata
+			if k := md.GetArbitraryMetadata(); k == nil {
+				propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
+			} else if amd := k.GetMetadata(); amd == nil {
+				propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
+			} else if v, ok := amd[_propOcFavorite]; ok && v != "" {
+				propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", v))
+			} else {
+				propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
+			}
 		}
 		// TODO return other properties ... but how do we put them in a namespace?
 	} else {
 		// otherwise return only the requested properties
-		propstatOK := propstatXML{
-			Status: "HTTP/1.1 200 OK",
-			Prop:   []*propertyXML{},
-		}
-		propstatNotFound := propstatXML{
-			Status: "HTTP/1.1 404 Not Found",
-			Prop:   []*propertyXML{},
-		}
 		size := fmt.Sprintf("%d", md.Size)
 		for i := range pf.Prop {
 			switch pf.Prop[i].Space {
@@ -471,7 +517,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				case "public-link-share-datetime":
 					if ls != nil && ls.Mtime != nil {
 						t := utils.TSToTime(ls.Mtime).UTC() // TODO or ctime?
-						shareTimeString := t.Format(time.RFC1123Z)
+						shareTimeString := t.Format(RFC1123)
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:public-link-share-datetime", shareTimeString))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-share-datetime", ""))
@@ -492,7 +538,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				case "public-link-expiration":
 					if ls != nil && ls.Expiration != nil {
 						t := utils.TSToTime(ls.Expiration).UTC()
-						expireTimeString := t.Format(time.RFC1123Z)
+						expireTimeString := t.Format(RFC1123)
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:public-link-expiration", expireTimeString))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-expiration", ""))
@@ -501,12 +547,17 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				case "size": // phoenix only
 					// TODO we cannot find out if md.Size is set or not because ints in go default to 0
 					// oc:size is also available on folders
-					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:size", size))
+					if ls == nil {
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:size", size))
+					} else {
+						// link share root collection has no size
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:size", ""))
+					}
 				case "owner-id": // phoenix only
 					if md.Owner != nil {
 						if isCurrentUserOwner(ctx, md.Owner) {
 							u := ctxuser.ContextMustGetUser(ctx)
-							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-id", s.xmlEscaped(u.Username)))
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-id", u.Username))
 						} else {
 							sublog.Debug().Msg("TODO fetch user username")
 							propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:owner-id", ""))
@@ -518,24 +569,51 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					// TODO: can be 0 or 1?, in oc10 it is present or not
 					// TODO: read favorite via separate call? that would be expensive? I hope it is in the md
 					// TODO: this boolean favorite property is so horribly wrong ... either it is presont, or it is not ... unless ... it is possible to have a non binary value ... we need to double check
-					if k := md.GetArbitraryMetadata(); k == nil {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
-					} else if amd := k.GetMetadata(); amd == nil {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
-					} else if v, ok := amd[_propOcFavorite]; ok && v != "" {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "1"))
+					if ls == nil {
+						if k := md.GetArbitraryMetadata(); k == nil {
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
+						} else if amd := k.GetMetadata(); amd == nil {
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
+						} else if v, ok := amd[_propOcFavorite]; ok && v != "" {
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "1"))
+						} else {
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
+						}
 					} else {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:favorite", "0"))
+						// link share root collection has no favorite
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:favorite", ""))
 					}
-				case "checksums": // desktop
+				case "checksums": // desktop ... not really ... the desktop sends the OC-Checksum header
+
+					// stay bug compatible with oc10, see https://github.com/owncloud/core/pull/38304#issuecomment-762185241
+					var checksums strings.Builder
 					if md.Checksum != nil {
-						// TODO(jfd): the actual value is an abomination like this:
-						// <oc:checksums>
-						//   <oc:checksum>SHA1:9bd253a09d58be107bcb4169ebf338c8df34d086 MD5:d90bcc6bf847403d22a4abba64e79994 ADLER32:fca23ff5</oc:checksum>
-						// </oc:checksums>
-						// yep, correct, space delimited key value pairs inside an oc:checksum tag inside an oc:checksums tag
-						value := fmt.Sprintf("<oc:checksum>%s:%s</oc:checksum>", md.Checksum.Type, md.Checksum.Sum)
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:checksums", value))
+						checksums.WriteString("<oc:checksum>")
+						checksums.WriteString(strings.ToUpper(string(storageprovider.GRPC2PKGXS(md.Checksum.Type))))
+						checksums.WriteString(":")
+						checksums.WriteString(md.Checksum.Sum)
+					}
+					if md.Opaque != nil {
+						if e, ok := md.Opaque.Map["md5"]; ok {
+							if checksums.Len() == 0 {
+								checksums.WriteString("<oc:checksum>MD5:")
+							} else {
+								checksums.WriteString(" MD5:")
+							}
+							checksums.WriteString(string(e.Value))
+						}
+						if e, ok := md.Opaque.Map["adler32"]; ok {
+							if checksums.Len() == 0 {
+								checksums.WriteString("<oc:checksum>ADLER32:")
+							} else {
+								checksums.WriteString(" ADLER32:")
+							}
+							checksums.WriteString(string(e.Value))
+						}
+					}
+					if checksums.Len() > 13 {
+						checksums.WriteString("</oc:checksum>")
+						propstatOK.Prop = append(propstatOK.Prop, s.newPropRaw("oc:checksums", checksums.String()))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:checksums", ""))
 					}
@@ -544,7 +622,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					amd := k.GetMetadata()
 					if amdv, ok := amd[metadataKeyOf(&pf.Prop[i])]; ok {
 						st := fmt.Sprintf("<oc:share-type>%s</oc:share-type>", amdv)
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:share-types", st))
+						propstatOK.Prop = append(propstatOK.Prop, s.newPropRaw("oc:share-types", st))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:"+pf.Prop[i].Local, ""))
 					}
@@ -598,22 +676,27 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					}
 				case "resourcetype": // both
 					if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:resourcetype", "<d:collection/>"))
+						propstatOK.Prop = append(propstatOK.Prop, s.newPropRaw("d:resourcetype", "<d:collection/>"))
 					} else {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:resourcetype", ""))
 						// redirectref is another option
 					}
 				case "getcontenttype": // phoenix
 					if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontenttype", "httpd/unix-directory"))
+						// directories have no contenttype
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:getcontenttype", ""))
 					} else if md.MimeType != "" {
 						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getcontenttype", md.MimeType))
 					}
 				case "getlastmodified": // both
 					// TODO we cannot find out if md.Mtime is set or not because ints in go default to 0
-					t := utils.TSToTime(md.Mtime).UTC()
-					lastModifiedString := t.Format(time.RFC1123Z)
-					propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getlastmodified", lastModifiedString))
+					if md.Mtime != nil {
+						t := utils.TSToTime(md.Mtime).UTC()
+						lastModifiedString := t.Format(RFC1123)
+						propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:getlastmodified", lastModifiedString))
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:getlastmodified", ""))
+					}
 				default:
 					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("d:"+pf.Prop[i].Local, ""))
 				}
@@ -652,12 +735,13 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 				}
 			}
 		}
-		if len(propstatOK.Prop) > 0 {
-			response.Propstat = append(response.Propstat, propstatOK)
-		}
-		if len(propstatNotFound.Prop) > 0 {
-			response.Propstat = append(response.Propstat, propstatNotFound)
-		}
+	}
+
+	if len(propstatOK.Prop) > 0 {
+		response.Propstat = append(response.Propstat, propstatOK)
+	}
+	if len(propstatNotFound.Prop) > 0 {
+		response.Propstat = append(response.Propstat, propstatNotFound)
 	}
 
 	return &response, nil
@@ -765,7 +849,7 @@ type propertyXML struct {
 	Lang string `xml:"xml:lang,attr,omitempty"`
 
 	// InnerXML contains the XML representation of the property value.
-	// See http://www.ocwebdav.org/specs/rfc4918.html#property_values
+	// See http://www.webdav.org/specs/rfc4918.html#property_values
 	//
 	// Property values of complex type or mixed-content must have fully
 	// expanded XML namespaces or be self-contained with according
@@ -774,15 +858,3 @@ type propertyXML struct {
 	// even including the DAV: namespace.
 	InnerXML []byte `xml:",innerxml"`
 }
-
-// http://www.webdav.org/specs/rfc4918.html#ELEMENT_error
-type errorXML struct {
-	XMLName   xml.Name `xml:"d:error"`
-	Xmlnsd    string   `xml:"xmlns:d,attr"`
-	Xmlnss    string   `xml:"xmlns:s,attr"`
-	Exception string   `xml:"s:exception"`
-	Message   string   `xml:"s:message"`
-	InnerXML  []byte   `xml:",innerxml"`
-}
-
-var errInvalidPropfind = errors.New("webdav: invalid propfind")

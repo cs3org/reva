@@ -92,7 +92,7 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 	expireTimeString, ok := r.Form["expireDate"]
 	if ok {
 		if expireTimeString[0] != "" {
-			expireTime, err := parseTimestamp(expireTimeString[0])
+			expireTime, err := conversions.ParseTimestamp(expireTimeString[0])
 			if err != nil {
 				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "invalid datetime format", err)
 				return
@@ -130,7 +130,7 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error enhancing response with share data", err)
 		return
 	}
-	h.addDisplaynames(ctx, c, s)
+	h.mapUserIds(ctx, c, s)
 
 	response.WriteOCSSuccess(w, r, s)
 }
@@ -183,7 +183,7 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 				log.Debug().Interface("share", share).Interface("info", statResponse.Info).Err(err).Msg("could not add file info, skipping")
 				continue
 			}
-			h.addDisplaynames(ctx, c, sData)
+			h.mapUserIds(ctx, c, sData)
 
 			log.Debug().Interface("share", share).Interface("info", statResponse.Info).Interface("shareData", share).Msg("mapped")
 
@@ -324,7 +324,7 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 		updatesFound = true
 		var newExpiration *types.Timestamp
 		if expireTimeString[0] != "" {
-			newExpiration, err = parseTimestamp(expireTimeString[0])
+			newExpiration, err = conversions.ParseTimestamp(expireTimeString[0])
 			if err != nil {
 				response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "invalid datetime format", err)
 				return
@@ -407,7 +407,7 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error enhancing response with share data", err)
 		return
 	}
-	h.addDisplaynames(r.Context(), gwC, s)
+	h.mapUserIds(r.Context(), gwC, s)
 
 	response.WriteOCSSuccess(w, r, s)
 }

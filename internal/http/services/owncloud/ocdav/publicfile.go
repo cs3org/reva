@@ -24,12 +24,13 @@ import (
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"go.opencensus.io/trace"
 )
 
-// PublicFileHandler handles trashbin requests
+// PublicFileHandler handles requests on a shared file. it needs to be wrapped in a collection
 type PublicFileHandler struct {
 	namespace string
 }
@@ -177,39 +178,15 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 		return
 	}
 
-	infos := []*provider.ResourceInfo{}
-
-	if onContainer {
-		// TODO: filter out metadata like favorite and arbitrary metadata
-		if depth != "0" {
-			// if the request is to a public link, we need to add yet another value for the file entry.
-			infos = append(infos, &provider.ResourceInfo{
-				// append the shared as a container. Annex to OC10 standards.
-				Id:            tokenStatInfo.Id,
-				Path:          tokenStatInfo.Path,
-				Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-				Mtime:         tokenStatInfo.Mtime,
-				Size:          tokenStatInfo.Size,
-				Etag:          tokenStatInfo.Etag,
-				PermissionSet: tokenStatInfo.PermissionSet,
-			})
-		}
-	} else if path.Base(r.URL.Path) != path.Base(pathRes.Path) {
+	if !onContainer && path.Base(r.URL.Path) != path.Base(pathRes.Path) {
 		// if queried on the wrong path, return not found
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
+	// adjust path
+	tokenStatInfo.Path = path.Join("/", tokenStatInfo.Path, path.Base(pathRes.Path))
 
-	infos = append(infos, &provider.ResourceInfo{
-		Id:            tokenStatInfo.Id,
-		Path:          path.Join("/", tokenStatInfo.Path, path.Base(pathRes.Path)),
-		Type:          tokenStatInfo.Type,
-		Size:          tokenStatInfo.Size,
-		MimeType:      tokenStatInfo.MimeType,
-		Mtime:         tokenStatInfo.Mtime,
-		Etag:          tokenStatInfo.Etag,
-		PermissionSet: tokenStatInfo.PermissionSet,
-	})
+	infos := s.getPublicFileInfos(onContainer, depth == "0", tokenStatInfo)
 
 	propRes, err := s.formatPropfind(ctx, &pf, infos, ns)
 	if err != nil {
@@ -224,4 +201,41 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 	if _, err := w.Write([]byte(propRes)); err != nil {
 		sublog.Err(err).Msg("error writing response")
 	}
+}
+
+// there are only two possible entries
+// 1. the non existing collection
+// 2. the shared file
+func (s *svc) getPublicFileInfos(onContainer, onlyRoot bool, i *provider.ResourceInfo) []*provider.ResourceInfo {
+	infos := []*provider.ResourceInfo{}
+	if onContainer {
+		// copy link-share data if present
+		// we don't copy everything because the checksum should not be present
+		var o *typesv1beta1.Opaque
+		if i.Opaque != nil && i.Opaque.Map != nil && i.Opaque.Map["link-share"] != nil {
+			o = &typesv1beta1.Opaque{
+				Map: map[string]*typesv1beta1.OpaqueEntry{
+					"link-share": i.Opaque.Map["link-share"],
+				},
+			}
+		}
+		// always add collection
+		infos = append(infos, &provider.ResourceInfo{
+			// Opaque carries the link-share data we need when rendering the collection root href
+			Opaque: o,
+			Path:   path.Dir(i.Path),
+			Type:   provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+		})
+		if onlyRoot {
+			return infos
+		}
+	}
+
+	// link share only appears on root collection
+	delete(i.Opaque.Map, "link-share")
+
+	// add the file info
+	infos = append(infos, i)
+
+	return infos
 }

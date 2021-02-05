@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"regexp"
 	"strings"
 	"time"
 
@@ -271,4 +272,37 @@ func extractDestination(dstHeader, baseURI string) (string, error) {
 	}
 
 	return urlSplit[1], nil
+}
+
+// replaceAllStringSubmatchFunc is taken from 'Go: Replace String with Regular Expression Callback'
+// see: https://elliotchance.medium.com/go-replace-string-with-regular-expression-callback-f89948bad0bb
+func replaceAllStringSubmatchFunc(re *regexp.Regexp, str string, repl func([]string) string) string {
+	result := ""
+	lastIndex := 0
+	for _, v := range re.FindAllSubmatchIndex([]byte(str), -1) {
+		groups := []string{}
+		for i := 0; i < len(v); i += 2 {
+			groups = append(groups, str[v[i]:v[i+1]])
+		}
+		result += str[lastIndex:v[0]] + repl(groups)
+		lastIndex = v[1]
+	}
+	return result + str[lastIndex:]
+}
+
+var hrefre = regexp.MustCompile(`([^A-Za-z0-9_\-.~()/:@])`)
+
+// encodePath encodes the path of a url.
+//
+// slashes (/) are treated as path-separators.
+// ported from https://github.com/sabre-io/http/blob/bb27d1a8c92217b34e778ee09dcf79d9a2936e84/lib/functions.php#L369-L379
+func encodePath(path string) string {
+	return replaceAllStringSubmatchFunc(hrefre, path, func(groups []string) string {
+		b := groups[1]
+		var sb strings.Builder
+		for i := 0; i < len(b); i++ {
+			sb.WriteString(fmt.Sprintf("%%%x", b[i]))
+		}
+		return sb.String()
+	})
 }
