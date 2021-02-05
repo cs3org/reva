@@ -275,11 +275,15 @@ func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri 
 		// Single file shares should never have delete or create permissions
 		permissions &^= conversions.PermissionCreate
 		permissions &^= conversions.PermissionDelete
+		if permissions == conversions.PermissionInvalid {
+			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Cannot set the requested share permissions", nil)
+			return nil, nil, fmt.Errorf("Cannot set the requested share permissions")
+		}
 	}
 
 	existingPermissions := conversions.RoleFromResourcePermissions(ri.PermissionSet).OCSPermissions()
 	if permissions == conversions.PermissionInvalid || !existingPermissions.Contain(permissions) {
-		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Cannot set the requested share permissions", nil)
+		response.WriteOCSError(w, r, http.StatusNotFound, "Cannot set the requested share permissions", nil)
 		return nil, nil, fmt.Errorf("Cannot set the requested share permissions")
 	}
 
