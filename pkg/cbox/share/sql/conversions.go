@@ -22,31 +22,47 @@ import (
 	"fmt"
 	"strings"
 
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/utils"
 )
 
-func granteeTypeToInt(g provider.GranteeType) int {
-	switch g {
+func formatGrantee(g *provider.Grantee) (int, string) {
+	var granteeType int
+	var formattedID string
+	uid, gid := utils.ExtractGranteeID(g.GranteeId)
+	switch g.Type {
 	case provider.GranteeType_GRANTEE_TYPE_USER:
-		return 0
+		granteeType = 0
+		formattedID = formatUserID(uid)
 	case provider.GranteeType_GRANTEE_TYPE_GROUP:
-		return 1
+		granteeType = 1
+		formattedID = gid.OpaqueId
 	default:
-		return -1
+		granteeType = -1
 	}
+	return granteeType, formattedID
 }
 
-func intToGranteeType(g int) provider.GranteeType {
-	switch g {
+func extractGrantee(t int, g string) *provider.Grantee {
+	var gType provider.GranteeType
+	var gID *provider.GranteeId
+	switch t {
 	case 0:
-		return provider.GranteeType_GRANTEE_TYPE_USER
+		gType = provider.GranteeType_GRANTEE_TYPE_USER
+		gID = &provider.GranteeId{Id: &provider.GranteeId_UserId{UserId: extractUserID(g)}}
 	case 1:
-		return provider.GranteeType_GRANTEE_TYPE_GROUP
+		gType = provider.GranteeType_GRANTEE_TYPE_GROUP
+		gID = &provider.GranteeId{Id: &provider.GranteeId_GroupId{GroupId: &grouppb.GroupId{OpaqueId: g}}}
 	default:
-		return provider.GranteeType_GRANTEE_TYPE_INVALID
+		gType = provider.GranteeType_GRANTEE_TYPE_INVALID
+	}
+	return &provider.Grantee{
+		Type:      gType,
+		GranteeId: gID,
 	}
 }
 
@@ -148,14 +164,11 @@ func convertToCS3Share(s dbShare) *collaboration.Share {
 		},
 		ResourceId:  &provider.ResourceId{OpaqueId: s.ItemSource, StorageId: s.Prefix},
 		Permissions: &collaboration.SharePermissions{Permissions: intTosharePerm(s.Permissions)},
-		Grantee: &provider.Grantee{
-			Type:      intToGranteeType(s.ShareType),
-			GranteeId: &provider.GranteeId{Id: &provider.GranteeId_UserId{UserId: extractUserID(s.ShareWith)}},
-		},
-		Owner:   extractUserID(s.UIDOwner),
-		Creator: extractUserID(s.UIDInitiator),
-		Ctime:   ts,
-		Mtime:   ts,
+		Grantee:     extractGrantee(s.ShareType, s.ShareWith),
+		Owner:       extractUserID(s.UIDOwner),
+		Creator:     extractUserID(s.UIDInitiator),
+		Ctime:       ts,
+		Mtime:       ts,
 	}
 }
 

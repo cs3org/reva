@@ -111,13 +111,38 @@ func TSToTime(ts *types.Timestamp) time.Time {
 }
 
 // ExtractGranteeID returns the ID, user or group, set in the GranteeId object
-func ExtractGranteeID(grantee *provider.GranteeId) (*userpb.UserId, *grouppb.GroupId, bool) {
+func ExtractGranteeID(grantee *provider.GranteeId) (*userpb.UserId, *grouppb.GroupId) {
 	switch t := grantee.Id.(type) {
 	case *provider.GranteeId_UserId:
-		return t.UserId, nil, false
+		return t.UserId, nil
 	case *provider.GranteeId_GroupId:
-		return nil, t.GroupId, true
+		return nil, t.GroupId
 	default:
-		return nil, nil, false
+		return nil, nil
 	}
+}
+
+// UserEqual returns whether two users have the same field values.
+func UserEqual(u, v *userpb.UserId) bool {
+	return u != nil && v != nil && u.Idp == v.Idp && u.OpaqueId == v.OpaqueId
+}
+
+// GroupEqual returns whether two groups have the same field values.
+func GroupEqual(u, v *grouppb.GroupId) bool {
+	return u != nil && v != nil && u.Idp == v.Idp && u.OpaqueId == v.OpaqueId
+}
+
+// ResourceEqual returns whether two resources have the same field values.
+func ResourceEqual(u, v *provider.ResourceId) bool {
+	return u != nil && v != nil && u.StorageId == v.StorageId && u.OpaqueId == v.OpaqueId
+}
+
+// GranteeEqual returns whether two grantees have the same field values.
+func GranteeEqual(u, v *provider.Grantee) bool {
+	if u == nil || v == nil {
+		return false
+	}
+	uu, ug := ExtractGranteeID(u.GetGranteeId())
+	vu, vg := ExtractGranteeID(v.GetGranteeId())
+	return u.Type == v.Type && (UserEqual(uu, vu) || GroupEqual(ug, vg))
 }

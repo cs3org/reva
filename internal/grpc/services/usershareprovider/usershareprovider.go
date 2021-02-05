@@ -110,8 +110,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 
 func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.CreateShareResponse, error) {
 	u := user.ContextMustGetUser(ctx)
-	// TODO(labkode): validate input
-	if req.Grant.Grantee.GranteeId.GetUserId().Idp == "" {
+	if req.Grant.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && req.Grant.Grantee.GranteeId.GetUserId().Idp == "" {
 		// use logged in user Idp as default.
 		g := &userpb.UserId{OpaqueId: req.Grant.Grantee.GranteeId.GetUserId().OpaqueId, Idp: u.Id.Idp}
 		req.Grant.Grantee.GranteeId = &provider.GranteeId{Id: &provider.GranteeId_UserId{UserId: g}}

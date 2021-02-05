@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"os"
-	"reflect"
 	"sync"
 	"time"
 
@@ -38,6 +37,7 @@ import (
 
 	"github.com/cs3org/reva/pkg/share/manager/registry"
 	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/utils"
 )
 
 func init() {
@@ -164,8 +164,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabora
 	// do not allow share to myself or the owner if share is for a user
 	// TODO(labkode): should not this be caught already at the gw level?
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER &&
-		((g.Grantee.GranteeId.GetUserId().Idp == user.Id.Idp && g.Grantee.GranteeId.GetUserId().OpaqueId == user.Id.OpaqueId) ||
-			(g.Grantee.GranteeId.GetUserId().Idp == md.Owner.Idp && g.Grantee.GranteeId.GetUserId().OpaqueId == md.Owner.OpaqueId)) {
+		(utils.UserEqual(g.Grantee.GranteeId.GetUserId(), user.Id) || utils.UserEqual(g.Grantee.GranteeId.GetUserId(), md.Owner)) {
 		return nil, errors.New("json: owner/creator and grantee are the same")
 	}
 
@@ -222,11 +221,8 @@ func (m *mgr) getByKey(ctx context.Context, key *collaboration.ShareKey) (*colla
 	m.Lock()
 	defer m.Unlock()
 	for _, s := range m.model.Shares {
-		if ((key.Owner.Idp == s.Owner.Idp && key.Owner.OpaqueId == s.Owner.OpaqueId) ||
-			(key.Owner.Idp == s.Creator.Idp && key.Owner.OpaqueId == s.Creator.OpaqueId)) &&
-			key.ResourceId.StorageId == s.ResourceId.StorageId && key.ResourceId.OpaqueId == s.ResourceId.OpaqueId &&
-			key.Grantee.Type == s.Grantee.Type && key.Grantee.GranteeId.GetUserId().Idp == s.Grantee.GranteeId.GetUserId().Idp &&
-			key.Grantee.GranteeId.GetUserId().OpaqueId == s.Grantee.GranteeId.GetUserId().OpaqueId {
+		if (utils.UserEqual(key.Owner, s.Owner) || utils.UserEqual(key.Owner, s.Creator)) &&
+			utils.ResourceEqual(key.ResourceId, s.ResourceId) && utils.GranteeEqual(key.Grantee, s.Grantee) {
 			return s, nil
 		}
 	}
@@ -249,8 +245,7 @@ func (m *mgr) get(ctx context.Context, ref *collaboration.ShareReference) (s *co
 
 	// check if we are the owner
 	user := user.ContextMustGetUser(ctx)
-	if (user.Id.Idp == s.Owner.Idp && user.Id.OpaqueId == s.Owner.OpaqueId) ||
-		(user.Id.Idp == s.Creator.Idp && user.Id.OpaqueId == s.Creator.OpaqueId) {
+	if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
 		return s, nil
 	}
 
@@ -272,9 +267,8 @@ func (m *mgr) Unshare(ctx context.Context, ref *collaboration.ShareReference) er
 	defer m.Unlock()
 	user := user.ContextMustGetUser(ctx)
 	for i, s := range m.model.Shares {
-		if equal(ref, s) {
-			if (user.Id.Idp == s.Owner.Idp && user.Id.OpaqueId == s.Owner.OpaqueId) ||
-				(user.Id.Idp == s.Creator.Idp && user.Id.OpaqueId == s.Creator.OpaqueId) {
+		if sharesEqual(ref, s) {
+			if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
 				m.model.Shares[len(m.model.Shares)-1], m.model.Shares[i] = m.model.Shares[i], m.model.Shares[len(m.model.Shares)-1]
 				m.model.Shares = m.model.Shares[:len(m.model.Shares)-1]
 				if err := m.model.Save(); err != nil {
@@ -288,15 +282,14 @@ func (m *mgr) Unshare(ctx context.Context, ref *collaboration.ShareReference) er
 	return errtypes.NotFound(ref.String())
 }
 
-// TODO(labkode): this is fragile, the check should be done on primitive types.
-func equal(ref *collaboration.ShareReference, s *collaboration.Share) bool {
+func sharesEqual(ref *collaboration.ShareReference, s *collaboration.Share) bool {
 	if ref.GetId() != nil && s.Id != nil {
 		if ref.GetId().OpaqueId == s.Id.OpaqueId {
 			return true
 		}
 	} else if ref.GetKey() != nil {
-		if (reflect.DeepEqual(*ref.GetKey().Owner, *s.Owner) || reflect.DeepEqual(*ref.GetKey().Owner, *s.Creator)) &&
-			reflect.DeepEqual(*ref.GetKey().ResourceId, *s.ResourceId) && reflect.DeepEqual(*ref.GetKey().Grantee, *s.Grantee) {
+		if (utils.UserEqual(ref.GetKey().Owner, s.Owner) || utils.UserEqual(ref.GetKey().Owner, s.Creator)) &&
+			utils.ResourceEqual(ref.GetKey().ResourceId, s.ResourceId) && utils.GranteeEqual(ref.GetKey().Grantee, s.Grantee) {
 			return true
 		}
 	}
@@ -308,9 +301,8 @@ func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference
 	defer m.Unlock()
 	user := user.ContextMustGetUser(ctx)
 	for i, s := range m.model.Shares {
-		if equal(ref, s) {
-			if (user.Id.Idp == s.Owner.Idp && user.Id.OpaqueId == s.Owner.OpaqueId) ||
-				(user.Id.Idp == s.Creator.Idp && user.Id.OpaqueId == s.Creator.OpaqueId) {
+		if sharesEqual(ref, s) {
+			if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
 				now := time.Now().UnixNano()
 				m.model.Shares[i].Permissions = p
 				m.model.Shares[i].Mtime = &typespb.Timestamp{
@@ -334,9 +326,7 @@ func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.ListShare
 	defer m.Unlock()
 	user := user.ContextMustGetUser(ctx)
 	for _, s := range m.model.Shares {
-		// TODO(labkode): add check for creator.
-		if (user.Id.Idp == s.Owner.Idp && user.Id.OpaqueId == s.Owner.OpaqueId) ||
-			(user.Id.Idp == s.Creator.Idp && user.Id.OpaqueId == s.Creator.OpaqueId) {
+		if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
 			// no filter we return earlier
 			if len(filters) == 0 {
 				ss = append(ss, s)
@@ -345,7 +335,7 @@ func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.ListShare
 				// TODO(labkode): add the rest of filters.
 				for _, f := range filters {
 					if f.Type == collaboration.ListSharesRequest_Filter_TYPE_RESOURCE_ID {
-						if s.ResourceId.StorageId == f.GetResourceId().StorageId && s.ResourceId.OpaqueId == f.GetResourceId().OpaqueId {
+						if utils.ResourceEqual(s.ResourceId, f.GetResourceId()) {
 							ss = append(ss, s)
 						}
 					}
@@ -363,20 +353,17 @@ func (m *mgr) ListReceivedShares(ctx context.Context) ([]*collaboration.Received
 	defer m.Unlock()
 	user := user.ContextMustGetUser(ctx)
 	for _, s := range m.model.Shares {
-		if (user.Id.Idp == s.Owner.Idp && user.Id.OpaqueId == s.Owner.OpaqueId) ||
-			(user.Id.Idp == s.Creator.Idp && user.Id.OpaqueId == s.Creator.OpaqueId) {
+		if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
 			// omit shares created by me
 			continue
 		}
-		if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
-			if user.Id.Idp == s.Grantee.GranteeId.GetUserId().Idp && user.Id.OpaqueId == s.Grantee.GranteeId.GetUserId().OpaqueId {
-				rs := m.convert(ctx, s)
-				rss = append(rss, rs)
-			}
+		if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, s.Grantee.GranteeId.GetUserId()) {
+			rs := m.convert(ctx, s)
+			rss = append(rss, rs)
 		} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 			// check if all user groups match this share; TODO(labkode): filter shares created by us.
 			for _, g := range user.Groups {
-				if g == s.Grantee.GranteeId.GetUserId().OpaqueId {
+				if g == s.Grantee.GranteeId.GetGroupId().OpaqueId {
 					rs := m.convert(ctx, s)
 					rss = append(rss, rs)
 				}
@@ -410,14 +397,13 @@ func (m *mgr) getReceived(ctx context.Context, ref *collaboration.ShareReference
 	defer m.Unlock()
 	user := user.ContextMustGetUser(ctx)
 	for _, s := range m.model.Shares {
-		if equal(ref, s) {
-			if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER &&
-				s.Grantee.GranteeId.GetUserId().Idp == user.Id.Idp && s.Grantee.GranteeId.GetUserId().OpaqueId == user.Id.OpaqueId {
+		if sharesEqual(ref, s) {
+			if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, s.Grantee.GranteeId.GetUserId()) {
 				rs := m.convert(ctx, s)
 				return rs, nil
 			} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 				for _, g := range user.Groups {
-					if s.Grantee.GranteeId.GetUserId().OpaqueId == g {
+					if s.Grantee.GranteeId.GetGroupId().OpaqueId == g {
 						rs := m.convert(ctx, s)
 						return rs, nil
 					}

@@ -47,7 +47,7 @@ func (h *Handler) createGroupShare(w http.ResponseWriter, r *http.Request, statI
 	}
 
 	groupRes, err := c.GetGroupByClaim(ctx, &grouppb.GetGroupByClaimRequest{
-		Claim: "username",
+		Claim: "group_name",
 		Value: shareWith,
 	})
 	if err != nil {

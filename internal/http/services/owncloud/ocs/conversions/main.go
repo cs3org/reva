@@ -176,19 +176,17 @@ func CS3Share2ShareData(ctx context.Context, share *collaboration.Share) (*Share
 	sd := &ShareData{
 		// share.permissions are mapped below
 		// Displaynames are added later
-		ShareType:    ShareTypeUser,
 		UIDOwner:     LocalUserIDToString(share.GetCreator()),
 		UIDFileOwner: LocalUserIDToString(share.GetOwner()),
-		ShareWith:    LocalUserIDToString(share.GetGrantee().GetGranteeId().GetUserId()),
 	}
 
-	uid, gid, isGroupShare := utils.ExtractGranteeID(share.GetGrantee().GetGranteeId())
-	if isGroupShare {
-		sd.ShareType = ShareTypeGroup
-		sd.ShareWith = LocalGroupIDToString(gid)
-	} else {
+	uid, gid := utils.ExtractGranteeID(share.GetGrantee().GetGranteeId())
+	if uid != nil {
 		sd.ShareType = ShareTypeUser
 		sd.ShareWith = LocalUserIDToString(uid)
+	} else if gid != nil {
+		sd.ShareType = ShareTypeGroup
+		sd.ShareWith = LocalGroupIDToString(gid)
 	}
 
 	if share.Id != nil {
