@@ -96,6 +96,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		default:
 			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Only GET, POST and PUT are allowed", nil)
 		}
+
 	case "pending":
 		var shareID string
 		shareID, r.URL.Path = router.ShiftPath(r.URL.Path)
@@ -104,12 +105,13 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		switch r.Method {
 		case "POST":
-			h.acceptShare(w, r, shareID)
+			h.updateReceivedShare(w, r, shareID, false)
 		case "DELETE":
-			h.rejectShare(w, r, shareID)
+			h.updateReceivedShare(w, r, shareID, true)
 		default:
 			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Only POST and DELETE are allowed", nil)
 		}
+
 	case "remote_shares":
 		var shareID string
 		shareID, r.URL.Path = router.ShiftPath(r.URL.Path)
@@ -126,6 +128,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		default:
 			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Only GET method is allowed", nil)
 		}
+
 	default:
 		switch r.Method {
 		case "GET":
@@ -144,7 +147,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				h.removePublicShare(w, r, shareID)
 				return
 			}
-
 			h.removeUserShare(w, r, head)
 		default:
 			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Only GET, POST and PUT are allowed", nil)
@@ -268,12 +270,11 @@ func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri 
 		// Single file shares should never have delete or create permissions
 		permissions &^= conversions.PermissionCreate
 		permissions &^= conversions.PermissionDelete
-		// editor should become a file-editor role
 	}
 
 	existingPermissions := conversions.RoleFromResourcePermissions(ri.PermissionSet).OCSPermissions()
-	if !existingPermissions.Contain(permissions) {
-		response.WriteOCSError(w, r, http.StatusNotFound, "Cannot set the requested share permissions", nil)
+	if permissions == conversions.PermissionInvalid || !existingPermissions.Contain(permissions) {
+		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Cannot set the requested share permissions", nil)
 		return nil, nil, fmt.Errorf("Cannot set the requested share permissions")
 	}
 
