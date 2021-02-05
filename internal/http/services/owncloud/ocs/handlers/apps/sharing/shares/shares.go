@@ -28,6 +28,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -37,6 +38,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/rs/zerolog/log"
 
+	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
@@ -44,7 +46,6 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
-	"github.com/cs3org/reva/pkg/ttlmap"
 	"github.com/pkg/errors"
 )
 
@@ -53,7 +54,7 @@ type Handler struct {
 	gatewayAddr         string
 	publicURL           string
 	sharePrefix         string
-	userIdentifierCache *ttlmap.TTLMap
+	userIdentifierCache *ttlcache.Cache
 }
 
 // we only cache the minimal set of data instead of the full user metadata
@@ -61,14 +62,18 @@ type userIdentifiers struct {
 	DisplayName string
 	UserName    string
 	Mail        string
+	Groups      []string
 }
 
 // Init initializes this and any contained handlers
 func (h *Handler) Init(c *config.Config) error {
 	h.gatewayAddr = c.GatewaySvc
 	h.publicURL = c.Config.Host
-	h.userIdentifierCache = ttlmap.New(1000, 60)
 	h.sharePrefix = c.SharePrefix
+
+	h.userIdentifierCache = ttlcache.NewCache()
+	_ = h.userIdentifierCache.SetTTL(60 * time.Second)
+
 	return nil
 }
 
@@ -891,11 +896,11 @@ func (h *Handler) mustGetUserIdentifiers(ctx context.Context, c gateway.GatewayA
 	if userid == "" {
 		return &userIdentifiers{}
 	}
-	//item := h.userIdentifierCache.Get(userid)
-	ui, ok := h.userIdentifierCache.Get(userid).(*userIdentifiers)
-	if ok {
+
+	uiIf, err := h.userIdentifierCache.Get(userid)
+	if err == nil {
 		sublog.Debug().Msg("cache hit")
-		return ui
+		return uiIf.(*userIdentifiers)
 	}
 	sublog.Debug().Msg("cache miss")
 	res, err := c.GetUser(ctx, &userpb.GetUserRequest{
@@ -922,12 +927,13 @@ func (h *Handler) mustGetUserIdentifiers(ctx context.Context, c gateway.GatewayA
 		return &userIdentifiers{}
 	}
 
-	ui = &userIdentifiers{
+	ui := &userIdentifiers{
 		DisplayName: res.User.DisplayName,
 		UserName:    res.User.Username,
 		Mail:        res.User.Mail,
+		Groups:      res.User.Groups,
 	}
-	h.userIdentifierCache.Put(userid, ui)
+	_ = h.userIdentifierCache.Set(userid, ui)
 	log.Debug().Str("userid", userid).Msg("cache update")
 	return ui
 }
