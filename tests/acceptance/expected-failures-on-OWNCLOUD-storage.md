@@ -1747,12 +1747,6 @@ Scenario Outline: Moving a file into a shared folder as the sharee and as the sh
 -   [apiShareCreateSpecialToShares1/createShareUniqueReceivedNames.feature:15](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareUniqueReceivedNames.feature#L15)
 -   [apiShareCreateSpecialToShares2/createShareWithDisabledUser.feature:18](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWithDisabledUser.feature#L18)
 -   [apiShareCreateSpecialToShares2/createShareWithDisabledUser.feature:21](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWithDisabledUser.feature#L21)
--   [apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature:51](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature#L51)
--   [apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature:52](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature#L52)
--   [apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature:70](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature#L70)
--   [apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature:71](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature#L71)
--   [apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature:72](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature#L72)
--   [apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature:73](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature#L73)
 -   [apiShareManagementToShares/moveReceivedShare.feature:14](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/moveReceivedShare.feature#L14)
 -   [apiShareManagementToShares/moveReceivedShare.feature:28](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/moveReceivedShare.feature#L28)
 -   [apiShareManagementToShares/moveReceivedShare.feature:39](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/moveReceivedShare.feature#L39)
@@ -2448,4 +2442,3 @@ Scenario Outline: Do a PROPFIND to a non-existing URL
 
 -   [apiTranslation/translation.feature:29](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTranslation/translation.feature#L29)
 -   [apiTranslation/translation.feature:30](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTranslation/translation.feature#L30)
-
