@@ -9,7 +9,7 @@ description: >
 # _struct: config_
 
 {{% dir name="insecure" type="bool" default=false %}}
-Whether to skip certificate checks when sending requests. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidc/oidc.go#L50)
+Whether to skip certificate checks when sending requests. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidc/oidc.go#L53)
 {{< highlight toml >}}
 [auth.manager.oidc]
 insecure = false
@@ -17,7 +17,7 @@ insecure = false
 {{% /dir %}}
 
 {{% dir name="issuer" type="string" default="" %}}
-The issuer of the OIDC token. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidc/oidc.go#L51)
+The issuer of the OIDC token. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidc/oidc.go#L54)
 {{< highlight toml >}}
 [auth.manager.oidc]
 issuer = ""
@@ -25,7 +25,7 @@ issuer = ""
 {{% /dir %}}
 
 {{% dir name="id_claim" type="string" default="sub" %}}
-The claim containing the ID of the user. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidc/oidc.go#L52)
+The claim containing the ID of the user. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidc/oidc.go#L55)
 {{< highlight toml >}}
 [auth.manager.oidc]
 id_claim = "sub"
@@ -33,7 +33,7 @@ id_claim = "sub"
 {{% /dir %}}
 
 {{% dir name="uid_claim" type="string" default="" %}}
-The claim containing the UID of the user. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidc/oidc.go#L53)
+The claim containing the UID of the user. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidc/oidc.go#L56)
 {{< highlight toml >}}
 [auth.manager.oidc]
 uid_claim = ""
@@ -41,10 +41,18 @@ uid_claim = ""
 {{% /dir %}}
 
 {{% dir name="gid_claim" type="string" default="" %}}
-The claim containing the GID of the user. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidc/oidc.go#L54)
+The claim containing the GID of the user. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidc/oidc.go#L57)
 {{< highlight toml >}}
 [auth.manager.oidc]
 gid_claim = ""
+{{< /highlight >}}
+{{% /dir %}}
+
+{{% dir name="gatewaysvc" type="string" default="" %}}
+The endpoint at which the GRPC gateway is exposed. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/auth/manager/oidc/oidc.go#L58)
+{{< highlight toml >}}
+[auth.manager.oidc]
+gatewaysvc = ""
 {{< /highlight >}}
 {{% /dir %}}
 
