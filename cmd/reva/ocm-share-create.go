@@ -110,6 +110,8 @@ func ocmShareCreateCommand() *command {
 			Permissions: perm,
 			Grantee: &provider.Grantee{
 				Type: gt,
+				// For now, we only support user shares.
+				// TODO (ishank011): To be updated once this is decided.
 				Id: &provider.Grantee_UserId{UserId: &userpb.UserId{
 					Idp:      *idp,
 					OpaqueId: *grantee,

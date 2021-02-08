@@ -86,9 +86,15 @@ func shareListCommand() *command {
 				"Grantee.Idp", "Grantee.OpaqueId", "Created", "Updated"})
 
 			for _, s := range shareRes.Shares {
+				var idp, opaque string
+				if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
+					idp, opaque = s.Grantee.GetUserId().Idp, s.Grantee.GetUserId().OpaqueId
+				} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
+					idp, opaque = s.Grantee.GetGroupId().Idp, s.Grantee.GetGroupId().OpaqueId
+				}
 				t.AppendRows([]table.Row{
 					{s.Id.OpaqueId, s.Owner.Idp, s.Owner.OpaqueId, s.ResourceId.String(), s.Permissions.String(),
-						s.Grantee.Type.String(), s.Grantee.GetUserId().Idp, s.Grantee.GetUserId().OpaqueId,
+						s.Grantee.Type.String(), idp, opaque,
 						time.Unix(int64(s.Ctime.Seconds), 0), time.Unix(int64(s.Mtime.Seconds), 0)},
 				})
 			}
