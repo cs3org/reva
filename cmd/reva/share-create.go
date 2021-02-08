@@ -92,17 +92,18 @@ func shareCreateCommand() *command {
 				Type: gt,
 			},
 		}
-		if *grantType == "user" {
+		switch *grantType {
+		case "user":
 			grant.Grantee.Id = &provider.Grantee_UserId{UserId: &userpb.UserId{
 				Idp:      *idp,
 				OpaqueId: *grantee,
 			}}
-		} else if *grantType == "group" {
+		case "group":
 			grant.Grantee.Id = &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{
 				Idp:      *idp,
 				OpaqueId: *grantee,
 			}}
-		} else {
+		default:
 			return errors.New("Invalid grantee type argument: " + *grantType)
 		}
 

@@ -183,7 +183,7 @@ func CS3Share2ShareData(ctx context.Context, share *collaboration.Share) (*Share
 	if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
 		sd.ShareType = ShareTypeUser
 		sd.ShareWith = LocalUserIDToString(share.Grantee.GetUserId())
-	} else if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
+	} else if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 		sd.ShareType = ShareTypeGroup
 		sd.ShareWith = LocalGroupIDToString(share.Grantee.GetGroupId())
 	}
