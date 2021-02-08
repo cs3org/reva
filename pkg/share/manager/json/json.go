@@ -26,6 +26,8 @@ import (
 	"sync"
 	"time"
 
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -95,6 +97,18 @@ func loadOrCreate(file string) (*shareModel, error) {
 		return nil, err
 	}
 
+	// There are discrepancies in the marshalling of oneof fields, so these need
+	// to be stored separately
+	for i := range m.Grantees {
+		id := m.Grantees[i].(map[string]interface{})
+		if m.Shares[i].Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
+			m.Shares[i].Grantee.Id = &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: id["opaque_id"].(string), Idp: id["idp"].(string)}}
+		} else if m.Shares[i].Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
+			m.Shares[i].Grantee.Id = &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: id["opaque_id"].(string), Idp: id["idp"].(string)}}
+		}
+	}
+	m.Grantees = nil
+
 	if m.State == nil {
 		m.State = map[string]map[string]collaboration.ShareState{}
 	}
@@ -104,13 +118,29 @@ func loadOrCreate(file string) (*shareModel, error) {
 }
 
 type shareModel struct {
-	file   string
-	State  map[string]map[string]collaboration.ShareState `json:"state"` // map[username]map[share_id]boolean
-	Shares []*collaboration.Share                         `json:"shares"`
+	file     string
+	State    map[string]map[string]collaboration.ShareState `json:"state"` // map[username]map[share_id]boolean
+	Shares   []*collaboration.Share                         `json:"shares"`
+	Grantees []interface{}                                  `json:"grantees"`
 }
 
 func (m *shareModel) Save() error {
-	data, err := json.Marshal(m)
+	temp := *m
+	temp.Grantees = []interface{}{}
+	temp.Shares = []*collaboration.Share{}
+	for i := range m.Shares {
+		s := *m.Shares[i]
+		u, g := utils.ExtractGranteeID(s.Grantee)
+		if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
+			temp.Grantees = append(temp.Grantees, u)
+		} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
+			temp.Grantees = append(temp.Grantees, g)
+		}
+		s.Grantee = &provider.Grantee{Type: s.Grantee.Type}
+		temp.Shares = append(temp.Shares, &s)
+	}
+
+	data, err := json.Marshal(temp)
 	if err != nil {
 		err = errors.Wrap(err, "error encoding to json")
 		return err
