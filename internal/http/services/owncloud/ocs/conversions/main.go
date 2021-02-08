@@ -28,12 +28,12 @@ import (
 
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/user"
-	"github.com/cs3org/reva/pkg/utils"
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	publicsharemgr "github.com/cs3org/reva/pkg/publicshare/manager/registry"
 	usermgr "github.com/cs3org/reva/pkg/user/manager/registry"
@@ -180,13 +180,12 @@ func CS3Share2ShareData(ctx context.Context, share *collaboration.Share) (*Share
 		UIDFileOwner: LocalUserIDToString(share.GetOwner()),
 	}
 
-	uid, gid := utils.ExtractGranteeID(share.GetGrantee())
-	if uid != nil {
+	if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
 		sd.ShareType = ShareTypeUser
-		sd.ShareWith = LocalUserIDToString(uid)
-	} else if gid != nil {
+		sd.ShareWith = LocalUserIDToString(share.Grantee.GetUserId())
+	} else if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
 		sd.ShareType = ShareTypeGroup
-		sd.ShareWith = LocalGroupIDToString(gid)
+		sd.ShareWith = LocalGroupIDToString(share.Grantee.GetGroupId())
 	}
 
 	if share.Id != nil {

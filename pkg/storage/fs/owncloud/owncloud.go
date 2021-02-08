@@ -1064,7 +1064,7 @@ func (fs *ocfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pro
 
 	var attr string
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
-		attr = sharePrefix + "g:" + g.Grantee.GetUserId().OpaqueId
+		attr = sharePrefix + "g:" + g.Grantee.GetGroupId().OpaqueId
 	} else {
 		attr = sharePrefix + "u:" + g.Grantee.GetUserId().OpaqueId
 	}

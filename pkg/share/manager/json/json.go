@@ -130,11 +130,10 @@ func (m *shareModel) Save() error {
 	temp.Shares = []*collaboration.Share{}
 	for i := range m.Shares {
 		s := *m.Shares[i]
-		u, g := utils.ExtractGranteeID(s.Grantee)
 		if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
-			temp.Grantees = append(temp.Grantees, u)
+			temp.Grantees = append(temp.Grantees, s.Grantee.GetUserId())
 		} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
-			temp.Grantees = append(temp.Grantees, g)
+			temp.Grantees = append(temp.Grantees, s.Grantee.GetGroupId())
 		}
 		s.Grantee = &provider.Grantee{Type: s.Grantee.Type}
 		temp.Shares = append(temp.Shares, &s)

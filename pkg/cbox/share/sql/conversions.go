@@ -27,20 +27,18 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/pkg/utils"
 )
 
 func formatGrantee(g *provider.Grantee) (int, string) {
 	var granteeType int
 	var formattedID string
-	uid, gid := utils.ExtractGranteeID(g)
 	switch g.Type {
 	case provider.GranteeType_GRANTEE_TYPE_USER:
 		granteeType = 0
-		formattedID = formatUserID(uid)
+		formattedID = formatUserID(g.GetUserId())
 	case provider.GranteeType_GRANTEE_TYPE_GROUP:
 		granteeType = 1
-		formattedID = gid.OpaqueId
+		formattedID = formatGroupID(g.GetGroupId())
 	default:
 		granteeType = -1
 	}
@@ -55,7 +53,7 @@ func extractGrantee(t int, g string) *provider.Grantee {
 		grantee.Id = &provider.Grantee_UserId{UserId: extractUserID(g)}
 	case 1:
 		grantee.Type = provider.GranteeType_GRANTEE_TYPE_GROUP
-		grantee.Id = &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: g}}
+		grantee.Id = &provider.Grantee_GroupId{GroupId: extractGroupID(g)}
 	default:
 		grantee.Type = provider.GranteeType_GRANTEE_TYPE_INVALID
 	}
@@ -148,6 +146,21 @@ func extractUserID(u string) *userpb.UserId {
 		return &userpb.UserId{OpaqueId: parts[0], Idp: parts[1]}
 	}
 	return &userpb.UserId{OpaqueId: parts[0]}
+}
+
+func formatGroupID(u *grouppb.GroupId) string {
+	if u.Idp != "" {
+		return fmt.Sprintf("%s:%s", u.OpaqueId, u.Idp)
+	}
+	return u.OpaqueId
+}
+
+func extractGroupID(u string) *grouppb.GroupId {
+	parts := strings.Split(u, ":")
+	if len(parts) > 1 {
+		return &grouppb.GroupId{OpaqueId: parts[0], Idp: parts[1]}
+	}
+	return &grouppb.GroupId{OpaqueId: parts[0]}
 }
 
 func convertToCS3Share(s dbShare) *collaboration.Share {
