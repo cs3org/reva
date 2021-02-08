@@ -422,11 +422,13 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		appctx.GetLogger(upload.ctx).Err(err).Msg("Decomposedfs: could not stat uploaded file")
 		return
 	}
+
 	n := node.New(
 		upload.info.Storage["NodeId"],
 		upload.info.Storage["NodeParentId"],
 		upload.info.Storage["NodeName"],
 		fi.Size(),
+		"",
 		nil,
 		upload.fs.lu,
 	)
@@ -485,6 +487,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 			return err
 		}
 	}
+	n.BlobID = fmt.Sprintf("%x", sha1h.Sum(nil))
 
 	// defer writing the checksums until the node is in place
 
@@ -508,7 +511,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		return err
 	}
 	defer file.Close()
-	err = upload.fs.tp.WriteBlob(n.ID, file)
+	err = upload.fs.tp.WriteBlob(n.BlobID, file)
 	if err != nil {
 		return errors.Wrap(err, "failed to upload file to blostore")
 	}

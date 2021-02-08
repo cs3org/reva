@@ -60,7 +60,7 @@ var _ = Describe("Tree", func() {
 
 		JustBeforeEach(func() {
 			var err error
-			n, err = env.Lookup.NodeFromPath(env.Ctx, "dir1")
+			n, err = env.Lookup.NodeFromPath(env.Ctx, "dir1/file1")
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -90,7 +90,7 @@ var _ = Describe("Tree", func() {
 				trashPath := path.Join(env.Root, "trash", env.Owner.Id.OpaqueId, n.ID)
 				attr, err := xattr.Get(trashPath, xattrs.TrashOriginAttr)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(string(attr)).To(Equal(n.Name))
+				Expect(string(attr)).To(Equal("dir1/file1"))
 			})
 
 			It("does not delete the blob from the blobstore", func() {
@@ -104,7 +104,7 @@ var _ = Describe("Tree", func() {
 			)
 
 			JustBeforeEach(func() {
-				env.Blobstore.On("Delete", n.ID).Return(nil)
+				env.Blobstore.On("Delete", n.BlobID).Return(nil)
 				trashPath = path.Join(env.Root, "trash", env.Owner.Id.OpaqueId, n.ID)
 				Expect(t.Delete(env.Ctx, n)).To(Succeed())
 			})

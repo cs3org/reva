@@ -38,8 +38,7 @@ import (
 	ruser "github.com/cs3org/reva/pkg/user"
 )
 
-type CleanupFunc func()
-
+// TestEnv represents a test environment for unit tests
 type TestEnv struct {
 	Root        string
 	Fs          storage.FS
@@ -49,17 +48,23 @@ type TestEnv struct {
 	Owner       *userpb.User
 	Lookup      *decomposedfs.Lookup
 	Ctx         context.Context
-
-	Cleanup CleanupFunc
 }
 
+// Cleanup removes all files from disk
+func (t *TestEnv) Cleanup() {
+	os.RemoveAll(t.Root)
+}
+
+// NewTestEnv prepares a test environment on disk
+// The storage contains some directories and a file:
+//
+//  dir1/
+//  dir1/file1
+//  dir1/subdir1/
 func NewTestEnv() (*TestEnv, error) {
 	tmpRoot, err := ioutil.TempDir("", "reva-unit-tests-*-root")
 	if err != nil {
 		return nil, err
-	}
-	cleanup := func() {
-		os.RemoveAll(tmpRoot)
 	}
 
 	config := map[string]interface{}{
@@ -117,9 +122,9 @@ func NewTestEnv() (*TestEnv, error) {
 	file := node.New(
 		uuid.New().String(),
 		dir1.ID,
-		"filename1",
+		"file1",
 		1234,
-		"",
+		"file1-blobid",
 		nil,
 		lookup,
 	)
@@ -146,7 +151,6 @@ func NewTestEnv() (*TestEnv, error) {
 		Permissions: permissions,
 		Blobstore:   bs,
 		Owner:       owner,
-		Cleanup:     cleanup,
 		Ctx:         ctx,
 	}, nil
 }

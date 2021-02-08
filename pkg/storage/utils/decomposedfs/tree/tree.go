@@ -102,7 +102,7 @@ func (t *Tree) Setup(owner string) error {
 
 	// the root node has an empty name
 	// the root node has no parent
-	n := node.New("root", "", "", 0, nil, t.lookup)
+	n := node.New("root", "", "", 0, "", nil, t.lookup)
 	err := t.createNode(
 		n,
 		&userpb.UserId{
@@ -399,7 +399,7 @@ func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, key string) (*node.Node
 		}
 
 		// delete blob from blobstore
-		if err = t.DeleteBlob(rn.ID); err != nil {
+		if err = t.DeleteBlob(rn.BlobID); err != nil {
 			log.Error().Err(err).Str("trashItem", trashItem).Msg("error deleting trash item blob")
 			return err
 		}
@@ -609,7 +609,14 @@ func (t *Tree) readRecycleItem(ctx context.Context, key string) (n *node.Node, t
 		return
 	}
 
-	n = node.New(parts[0], "", "", 0, owner, t.lookup)
+	n = node.New(parts[0], "", "", 0, "", owner, t.lookup)
+	// lookup blobID in extended attributes
+	if attrBytes, err = xattr.Get(deletedNodePath, xattrs.BlobIDAttr); err == nil {
+		n.BlobID = string(attrBytes)
+	} else {
+		return
+	}
+
 	// lookup parent id in extended attributes
 	if attrBytes, err = xattr.Get(deletedNodePath, xattrs.ParentidAttr); err == nil {
 		n.ParentID = string(attrBytes)

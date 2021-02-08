@@ -19,6 +19,7 @@
 package node_test
 
 import (
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	helpers "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/testhelpers"
 
@@ -49,13 +50,48 @@ var _ = Describe("Node", func() {
 		}
 	})
 
-	Describe("BlobKey", func() {
+	Describe("New", func() {
 		It("generates unique blob ids if none are given", func() {
 			n1 := node.New(id, "", name, 10, "", env.Owner.Id, env.Lookup)
 			n2 := node.New(id, "", name, 10, "", env.Owner.Id, env.Lookup)
 
-			Expect(len(n1.BlobID) > 0).To(BeTrue())
+			Expect(len(n1.BlobID)).To(Equal(36))
 			Expect(n1.BlobID).ToNot(Equal(n2.BlobID))
+		})
+	})
+
+	Describe("ReadNode", func() {
+		It("reads the blobID from the xattrs", func() {
+			lookupNode, err := env.Lookup.NodeFromPath(env.Ctx, "dir1/file1")
+			Expect(err).ToNot(HaveOccurred())
+
+			n, err := node.ReadNode(env.Ctx, env.Lookup, lookupNode.ID)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(n.BlobID).To(Equal("file1-blobid"))
+		})
+	})
+
+	Describe("WriteMetadata", func() {
+		It("writes all xattrs", func() {
+			n, err := env.Lookup.NodeFromPath(env.Ctx, "dir1/file1")
+			Expect(err).ToNot(HaveOccurred())
+
+			blobsize := 239485734
+			n.Name = "TestName"
+			n.BlobID = "TestBlobID"
+			n.Blobsize = int64(blobsize)
+			owner := &userpb.UserId{
+				Idp:      "testidp",
+				OpaqueId: "testuserid",
+			}
+
+			err = n.WriteMetadata(owner)
+			Expect(err).ToNot(HaveOccurred())
+			n2, err := env.Lookup.NodeFromPath(env.Ctx, "dir1/file1")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(n2.Name).To(Equal("TestName"))
+			Expect(n2.BlobID).To(Equal("TestBlobID"))
+			Expect(n2.Blobsize).To(Equal(int64(blobsize)))
 		})
 	})
 
@@ -102,12 +138,12 @@ var _ = Describe("Node", func() {
 		})
 
 		It("returns a file node with all metadata", func() {
-			child, err := parent.Child(env.Ctx, "filename1")
+			child, err := parent.Child(env.Ctx, "file1")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(child).ToNot(BeNil())
 			Expect(child.Exists).To(BeTrue())
 			Expect(child.ParentID).To(Equal(parent.ID))
-			Expect(child.Name).To(Equal("filename1"))
+			Expect(child.Name).To(Equal("file1"))
 			Expect(child.Blobsize).To(Equal(int64(1234)))
 		})
 	})

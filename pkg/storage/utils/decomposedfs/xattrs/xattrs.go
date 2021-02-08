@@ -34,6 +34,7 @@ const (
 	// the base name of the node
 	// updated when the file is renamed or moved
 	NameAttr     string = OcisPrefix + "name"
+	BlobIDAttr   string = OcisPrefix + "blobid"
 	BlobsizeAttr string = OcisPrefix + "blobsize"
 
 	// grantPrefix is the prefix for sharing related extended attributes

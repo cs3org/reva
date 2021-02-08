@@ -106,7 +106,7 @@ func (lu *Lookup) Path(ctx context.Context, n *node.Node) (p string, err error) 
 
 // RootNode returns the root node of the storage
 func (lu *Lookup) RootNode(ctx context.Context) (*node.Node, error) {
-	return node.New("root", "", "", 0, nil, lu), nil
+	return node.New("root", "", "", 0, "", nil, lu), nil
 }
 
 // HomeNode returns the home node of a user
@@ -128,7 +128,7 @@ func (lu *Lookup) WalkPath(ctx context.Context, r *node.Node, p string, f func(c
 	segments := strings.Split(strings.Trim(p, "/"), "/")
 	var err error
 	for i := range segments {
-		if r, err = r.Child(segments[i]); err != nil {
+		if r, err = r.Child(ctx, segments[i]); err != nil {
 			return r, err
 		}
 		// if an intermediate node is missing return not found

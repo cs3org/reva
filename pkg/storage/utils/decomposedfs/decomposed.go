@@ -301,7 +301,7 @@ func (fs *Decomposedfs) CreateReference(ctx context.Context, p string, targetURI
 		}
 	}
 
-	if n, err = n.Child(parts[1]); err != nil {
+	if n, err = n.Child(ctx, parts[1]); err != nil {
 		return errtypes.InternalError(err.Error())
 	}
 
@@ -460,7 +460,7 @@ func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference) (
 		return nil, errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 
-	reader, err := fs.tp.ReadBlob(node.ID)
+	reader, err := fs.tp.ReadBlob(node.BlobID)
 	if err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: error download blob '"+node.ID+"'")
 	}

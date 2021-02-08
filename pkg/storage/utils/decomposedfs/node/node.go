@@ -31,6 +31,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 
@@ -65,6 +66,7 @@ type Node struct {
 	ID       string
 	Name     string
 	Blobsize int64
+	BlobID   string
 	owner    *userpb.UserId
 	Exists   bool
 
@@ -82,7 +84,10 @@ type PathLookup interface {
 }
 
 // New returns a new instance of Node
-func New(id, parentID, name string, blobsize int64, owner *userpb.UserId, lu PathLookup) *Node {
+func New(id, parentID, name string, blobsize int64, blobID string, owner *userpb.UserId, lu PathLookup) *Node {
+	if blobID == "" {
+		blobID = uuid.New().String()
+	}
 	return &Node{
 		ID:       id,
 		ParentID: parentID,
@@ -90,6 +95,7 @@ func New(id, parentID, name string, blobsize int64, owner *userpb.UserId, lu Pat
 		Blobsize: blobsize,
 		owner:    owner,
 		lu:       lu,
+		BlobID:   blobID,
 	}
 }
 
@@ -101,6 +107,9 @@ func (n *Node) WriteMetadata(owner *userpb.UserId) (err error) {
 	}
 	if err = xattr.Set(nodePath, xattrs.NameAttr, []byte(n.Name)); err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not set name attribute")
+	}
+	if err = xattr.Set(nodePath, xattrs.BlobIDAttr, []byte(n.BlobID)); err != nil {
+		return errors.Wrap(err, "Decomposedfs: could not set blobid attribute")
 	}
 	if err = xattr.Set(nodePath, xattrs.BlobsizeAttr, []byte(fmt.Sprintf("%d", n.Blobsize))); err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not set blobsize attribute")
@@ -151,6 +160,12 @@ func ReadNode(ctx context.Context, lu PathLookup, id string) (n *Node, err error
 	} else {
 		return
 	}
+	// lookup blobID in extended attributes
+	if attrBytes, err = xattr.Get(nodePath, xattrs.BlobIDAttr); err == nil {
+		n.BlobID = string(attrBytes)
+	} else {
+		return
+	}
 	// Lookup blobsize
 	if attrBytes, err = xattr.Get(nodePath, xattrs.BlobsizeAttr); err == nil {
 		var blobSize int64
@@ -163,69 +178,42 @@ func ReadNode(ctx context.Context, lu PathLookup, id string) (n *Node, err error
 		return
 	}
 
-	var root *Node
-	if root, err = lu.HomeOrRootNode(ctx); err != nil {
-		return
-	}
-	parentID := n.ParentID
-
-	log := appctx.GetLogger(ctx)
-	for parentID != root.ID {
-		log.Debug().Interface("node", n).Str("root.ID", root.ID).Msg("ReadNode()")
-		// walk to root to check node is not part of a deleted subtree
-
-		if attrBytes, err = xattr.Get(lu.InternalPath(parentID), xattrs.ParentidAttr); err == nil {
-			parentID = string(attrBytes)
-			log.Debug().Interface("node", n).Str("root.ID", root.ID).Str("parentID", parentID).Msg("ReadNode() found parent")
-		} else {
-			log.Error().Err(err).Interface("node", n).Str("root.ID", root.ID).Msg("ReadNode()")
-			if isNotFound(err) {
-				return nil, errtypes.NotFound(err.Error())
-			}
-			return
+	// Check if parent exists. Otherwise this node is part of a deleted subtree
+	_, err = os.Stat(lu.InternalPath(n.ParentID))
+	if err != nil {
+		if isNotFound(err) {
+			return nil, errtypes.NotFound(err.Error())
 		}
+		return nil, err
 	}
-
 	n.Exists = true
-	log.Debug().Interface("node", n).Msg("ReadNode() found node")
-
 	return
 }
 
 // Child returns the child node with the given name
-func (n *Node) Child(name string) (*Node, error) {
-	c := &Node{
-		lu:       n.lu,
-		ParentID: n.ID,
-		Name:     name,
-	}
-
+func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
 	link, err := os.Readlink(filepath.Join(n.InternalPath(), name))
 	if err != nil {
 		if os.IsNotExist(err) {
+			c := &Node{
+				lu:       n.lu,
+				ParentID: n.ID,
+				Name:     name,
+			}
 			return c, nil // if the file does not exist we return a node that has Exists = false
 		}
 
 		return nil, errors.Wrap(err, "Decomposedfs: Wrap: readlink error")
 	}
 
+	var c *Node
 	if strings.HasPrefix(link, "../") {
-		c.Exists = true
-		c.ID = filepath.Base(link)
+		c, err = ReadNode(ctx, n.lu, filepath.Base(link))
+		if err != nil {
+			return nil, errors.Wrap(err, "could not read child node")
+		}
 	} else {
 		return nil, fmt.Errorf("Decomposedfs: expected '../ prefix, got' %+v", link)
-	}
-
-	// Lookup blobsize
-	if attrBytes, err := xattr.Get(c.InternalPath(), xattrs.BlobsizeAttr); err == nil {
-		blobSize, err := strconv.ParseInt(string(attrBytes), 10, 64)
-		if err != nil {
-			return nil, errors.Wrap(err, "node: could not parse blob size")
-
-		}
-		c.Blobsize = blobSize
-	} else {
-		return nil, errors.Wrap(err, "node: could not read blob size")
 	}
 
 	return c, nil
