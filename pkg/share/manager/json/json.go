@@ -164,7 +164,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabora
 	// do not allow share to myself or the owner if share is for a user
 	// TODO(labkode): should not this be caught already at the gw level?
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER &&
-		(utils.UserEqual(g.Grantee.GranteeId.GetUserId(), user.Id) || utils.UserEqual(g.Grantee.GranteeId.GetUserId(), md.Owner)) {
+		(utils.UserEqual(g.Grantee.GetUserId(), user.Id) || utils.UserEqual(g.Grantee.GetUserId(), md.Owner)) {
 		return nil, errors.New("json: owner/creator and grantee are the same")
 	}
 
@@ -357,13 +357,13 @@ func (m *mgr) ListReceivedShares(ctx context.Context) ([]*collaboration.Received
 			// omit shares created by me
 			continue
 		}
-		if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, s.Grantee.GranteeId.GetUserId()) {
+		if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, s.Grantee.GetUserId()) {
 			rs := m.convert(ctx, s)
 			rss = append(rss, rs)
 		} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 			// check if all user groups match this share; TODO(labkode): filter shares created by us.
 			for _, g := range user.Groups {
-				if g == s.Grantee.GranteeId.GetGroupId().OpaqueId {
+				if g == s.Grantee.GetGroupId().OpaqueId {
 					rs := m.convert(ctx, s)
 					rss = append(rss, rs)
 				}
@@ -398,12 +398,12 @@ func (m *mgr) getReceived(ctx context.Context, ref *collaboration.ShareReference
 	user := user.ContextMustGetUser(ctx)
 	for _, s := range m.model.Shares {
 		if sharesEqual(ref, s) {
-			if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, s.Grantee.GranteeId.GetUserId()) {
+			if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, s.Grantee.GetUserId()) {
 				rs := m.convert(ctx, s)
 				return rs, nil
 			} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 				for _, g := range user.Groups {
-					if s.Grantee.GranteeId.GetGroupId().OpaqueId == g {
+					if s.Grantee.GetGroupId().OpaqueId == g {
 						rs := m.convert(ctx, s)
 						return rs, nil
 					}

@@ -111,11 +111,11 @@ func TSToTime(ts *types.Timestamp) time.Time {
 }
 
 // ExtractGranteeID returns the ID, user or group, set in the GranteeId object
-func ExtractGranteeID(grantee *provider.GranteeId) (*userpb.UserId, *grouppb.GroupId) {
+func ExtractGranteeID(grantee *provider.Grantee) (*userpb.UserId, *grouppb.GroupId) {
 	switch t := grantee.Id.(type) {
-	case *provider.GranteeId_UserId:
+	case *provider.Grantee_UserId:
 		return t.UserId, nil
-	case *provider.GranteeId_GroupId:
+	case *provider.Grantee_GroupId:
 		return nil, t.GroupId
 	default:
 		return nil, nil
@@ -142,7 +142,7 @@ func GranteeEqual(u, v *provider.Grantee) bool {
 	if u == nil || v == nil {
 		return false
 	}
-	uu, ug := ExtractGranteeID(u.GetGranteeId())
-	vu, vg := ExtractGranteeID(v.GetGranteeId())
+	uu, ug := ExtractGranteeID(u)
+	vu, vg := ExtractGranteeID(v)
 	return u.Type == v.Type && (UserEqual(uu, vu) || GroupEqual(ug, vg))
 }

@@ -71,8 +71,8 @@ func (h *Handler) createGroupShare(w http.ResponseWriter, r *http.Request, statI
 		ResourceInfo: statInfo,
 		Grant: &collaboration.ShareGrant{
 			Grantee: &provider.Grantee{
-				Type:      provider.GranteeType_GRANTEE_TYPE_GROUP,
-				GranteeId: &provider.GranteeId{Id: &provider.GranteeId_GroupId{GroupId: groupRes.Group.GetId()}},
+				Type: provider.GranteeType_GRANTEE_TYPE_GROUP,
+				Id:   &provider.Grantee_GroupId{GroupId: groupRes.Group.GetId()},
 			},
 			Permissions: &collaboration.SharePermissions{
 				Permissions: role.CS3ResourcePermissions(),

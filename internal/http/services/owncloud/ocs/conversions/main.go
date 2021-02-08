@@ -180,7 +180,7 @@ func CS3Share2ShareData(ctx context.Context, share *collaboration.Share) (*Share
 		UIDFileOwner: LocalUserIDToString(share.GetOwner()),
 	}
 
-	uid, gid := utils.ExtractGranteeID(share.GetGrantee().GetGranteeId())
+	uid, gid := utils.ExtractGranteeID(share.GetGrantee())
 	if uid != nil {
 		sd.ShareType = ShareTypeUser
 		sd.ShareWith = LocalUserIDToString(uid)

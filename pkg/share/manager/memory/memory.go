@@ -76,7 +76,7 @@ func (m *manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 	}
 
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER &&
-		(utils.UserEqual(g.Grantee.GranteeId.GetUserId(), user.Id) || utils.UserEqual(g.Grantee.GranteeId.GetUserId(), md.Owner)) {
+		(utils.UserEqual(g.Grantee.GetUserId(), user.Id) || utils.UserEqual(g.Grantee.GetUserId(), md.Owner)) {
 		return nil, errors.New("memory: owner/creator and grantee are the same")
 	}
 
@@ -252,13 +252,13 @@ func (m *manager) ListReceivedShares(ctx context.Context) ([]*collaboration.Rece
 			// omit shares created by me
 			continue
 		}
-		if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, s.Grantee.GranteeId.GetUserId()) {
+		if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, s.Grantee.GetUserId()) {
 			rs := m.convert(ctx, s)
 			rss = append(rss, rs)
 		} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 			// check if all user groups match this share; TODO(labkode): filter shares created by us.
 			for _, g := range user.Groups {
-				if g == s.Grantee.GranteeId.GetGroupId().OpaqueId {
+				if g == s.Grantee.GetGroupId().OpaqueId {
 					rs := m.convert(ctx, s)
 					rss = append(rss, rs)
 				}
@@ -293,12 +293,12 @@ func (m *manager) getReceived(ctx context.Context, ref *collaboration.ShareRefer
 	user := user.ContextMustGetUser(ctx)
 	for _, s := range m.shares {
 		if sharesEqual(ref, s) {
-			if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, s.Grantee.GranteeId.GetUserId()) {
+			if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, s.Grantee.GetUserId()) {
 				rs := m.convert(ctx, s)
 				return rs, nil
 			} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 				for _, g := range user.Groups {
-					if s.Grantee.GranteeId.GetGroupId().OpaqueId == g {
+					if s.Grantee.GetGroupId().OpaqueId == g {
 						rs := m.convert(ctx, s)
 						return rs, nil
 					}

@@ -432,7 +432,7 @@ func (fs *localfs) AddGrant(ctx context.Context, ref *provider.Reference, g *pro
 	if err != nil {
 		return errors.Wrap(err, "localfs: error getting grantee type")
 	}
-	grantee := fmt.Sprintf("%s:%s@%s", granteeType, g.Grantee.GranteeId.GetUserId().OpaqueId, g.Grantee.GranteeId.GetUserId().Idp)
+	grantee := fmt.Sprintf("%s:%s@%s", granteeType, g.Grantee.GetUserId().OpaqueId, g.Grantee.GetUserId().Idp)
 
 	err = fs.addToACLDB(ctx, fn, grantee, role)
 	if err != nil {
@@ -462,8 +462,8 @@ func (fs *localfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*
 			return nil, errors.Wrap(err, "localfs: error scanning db rows")
 		}
 		grantee := &provider.Grantee{
-			GranteeId: &provider.GranteeId{Id: &provider.GranteeId_UserId{UserId: &userpb.UserId{OpaqueId: granteeID[2:]}}},
-			Type:      grants.GetGranteeType(string(granteeID[0])),
+			Id:   &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: granteeID[2:]}},
+			Type: grants.GetGranteeType(string(granteeID[0])),
 		}
 		permissions := grants.GetGrantPermissionSet(role)
 
@@ -487,7 +487,7 @@ func (fs *localfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *
 	if err != nil {
 		return errors.Wrap(err, "localfs: error getting grantee type")
 	}
-	grantee := fmt.Sprintf("%s:%s@%s", granteeType, g.Grantee.GranteeId.GetUserId().OpaqueId, g.Grantee.GranteeId.GetUserId().Idp)
+	grantee := fmt.Sprintf("%s:%s@%s", granteeType, g.Grantee.GetUserId().OpaqueId, g.Grantee.GetUserId().Idp)
 
 	err = fs.removeFromACLDB(ctx, fn, grantee)
 	if err != nil {

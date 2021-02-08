@@ -124,9 +124,9 @@ func (fs *ocisfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *p
 
 	var attr string
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
-		attr = grantPrefix + _groupAcePrefix + g.Grantee.GranteeId.GetUserId().OpaqueId
+		attr = grantPrefix + _groupAcePrefix + g.Grantee.GetUserId().OpaqueId
 	} else {
-		attr = grantPrefix + _userAcePrefix + g.Grantee.GranteeId.GetUserId().OpaqueId
+		attr = grantPrefix + _userAcePrefix + g.Grantee.GetUserId().OpaqueId
 	}
 
 	np := fs.lu.toInternalPath(node.ID)

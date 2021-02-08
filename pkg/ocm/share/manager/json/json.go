@@ -234,7 +234,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 	}
 
 	// do not allow share to myself if share is for a user
-	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(g.Grantee.GranteeId.GetUserId(), userID) {
+	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(g.Grantee.GetUserId(), userID) {
 		return nil, errors.New("json: user and grantee are the same")
 	}
 
@@ -283,7 +283,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 		}
 
 		requestBody := url.Values{
-			"shareWith":    {g.Grantee.GranteeId.GetUserId().OpaqueId},
+			"shareWith":    {g.Grantee.GetUserId().OpaqueId},
 			"name":         {name},
 			"providerId":   {fmt.Sprintf("%s:%s", md.StorageId, md.OpaqueId)},
 			"owner":        {userID.OpaqueId},
@@ -532,13 +532,13 @@ func (m *mgr) ListReceivedShares(ctx context.Context) ([]*ocm.ReceivedShare, err
 			// omit shares created by me
 			continue
 		}
-		if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, s.Grantee.GranteeId.GetUserId()) {
+		if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, s.Grantee.GetUserId()) {
 			rs := m.convert(ctx, s)
 			rss = append(rss, rs)
 		} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 			// check if all user groups match this share; TODO(labkode): filter shares created by us.
 			for _, g := range user.Groups {
-				if g == s.Grantee.GranteeId.GetUserId().OpaqueId {
+				if g == s.Grantee.GetGroupId().OpaqueId {
 					rs := m.convert(ctx, s)
 					rss = append(rss, rs)
 					break
@@ -580,12 +580,12 @@ func (m *mgr) getReceived(ctx context.Context, ref *ocm.ShareReference) (*ocm.Re
 	user := user.ContextMustGetUser(ctx)
 	for _, s := range m.model.ReceivedShares {
 		if sharesEqual(ref, s) {
-			if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, s.Grantee.GranteeId.GetUserId()) {
+			if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, s.Grantee.GetUserId()) {
 				rs := m.convert(ctx, s)
 				return rs, nil
 			} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 				for _, g := range user.Groups {
-					if s.Grantee.GranteeId.GetUserId().OpaqueId == g {
+					if s.Grantee.GetGroupId().OpaqueId == g {
 						rs := m.convert(ctx, s)
 						return rs, nil
 					}

@@ -534,6 +534,8 @@ github.com/inconshreveable/mousetrap v1.0.0 h1:Z8tu5sraLXCXIcARxBp/8cbvlwVa7Z1NH
 github.com/inconshreveable/mousetrap v1.0.0/go.mod h1:PxqpIevigyE2G7u3NXJIT2ANytuPF1OarO4DADm73n8=
 github.com/ishank011/go-cs3apis v0.0.0-20210204144528-d11157d32665 h1:rjjkUBECRzi9o735hSn97VaGbJ4wVeQpknixPEoNexo=
 github.com/ishank011/go-cs3apis v0.0.0-20210204144528-d11157d32665/go.mod h1:UXha4TguuB52H14EMoSsCqDj7k8a/t7g4gVP+bgY5LY=
+github.com/ishank011/go-cs3apis v0.0.0-20210208124423-1b0fed01380f h1:MkF7hsrN/TEfREk2iKtPJ4IZq7AzZ7nRpQEKR6QBkGE=
+github.com/ishank011/go-cs3apis v0.0.0-20210208124423-1b0fed01380f/go.mod h1:UXha4TguuB52H14EMoSsCqDj7k8a/t7g4gVP+bgY5LY=
 github.com/jackc/chunkreader v1.0.0/go.mod h1:RT6O25fNZIuasFJRyZ4R/Y2BbhasbmZXF9QQ7T3kePo=
 github.com/jackc/chunkreader/v2 v2.0.0/go.mod h1:odVSm741yZoC3dpHEUXIqA9tQRhFrgOHwnPIn9lDKlk=
 github.com/jackc/chunkreader/v2 v2.0.1/go.mod h1:odVSm741yZoC3dpHEUXIqA9tQRhFrgOHwnPIn9lDKlk=

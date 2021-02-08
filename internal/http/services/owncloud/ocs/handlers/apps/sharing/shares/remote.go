@@ -92,8 +92,8 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 		ResourceId: statInfo.Id,
 		Grant: &ocm.ShareGrant{
 			Grantee: &provider.Grantee{
-				Type:      provider.GranteeType_GRANTEE_TYPE_USER,
-				GranteeId: &provider.GranteeId{Id: &provider.GranteeId_UserId{UserId: remoteUserRes.RemoteUser.GetId()}},
+				Type: provider.GranteeType_GRANTEE_TYPE_USER,
+				Id:   &provider.Grantee_UserId{UserId: remoteUserRes.RemoteUser.GetId()},
 			},
 			Permissions: &ocm.SharePermissions{
 				Permissions: role.CS3ResourcePermissions(),

@@ -33,7 +33,7 @@ import (
 func formatGrantee(g *provider.Grantee) (int, string) {
 	var granteeType int
 	var formattedID string
-	uid, gid := utils.ExtractGranteeID(g.GranteeId)
+	uid, gid := utils.ExtractGranteeID(g)
 	switch g.Type {
 	case provider.GranteeType_GRANTEE_TYPE_USER:
 		granteeType = 0
@@ -48,22 +48,18 @@ func formatGrantee(g *provider.Grantee) (int, string) {
 }
 
 func extractGrantee(t int, g string) *provider.Grantee {
-	var gType provider.GranteeType
-	var gID *provider.GranteeId
+	var grantee *provider.Grantee
 	switch t {
 	case 0:
-		gType = provider.GranteeType_GRANTEE_TYPE_USER
-		gID = &provider.GranteeId{Id: &provider.GranteeId_UserId{UserId: extractUserID(g)}}
+		grantee.Type = provider.GranteeType_GRANTEE_TYPE_USER
+		grantee.Id = &provider.Grantee_UserId{UserId: extractUserID(g)}
 	case 1:
-		gType = provider.GranteeType_GRANTEE_TYPE_GROUP
-		gID = &provider.GranteeId{Id: &provider.GranteeId_GroupId{GroupId: &grouppb.GroupId{OpaqueId: g}}}
+		grantee.Type = provider.GranteeType_GRANTEE_TYPE_GROUP
+		grantee.Id = &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: g}}
 	default:
-		gType = provider.GranteeType_GRANTEE_TYPE_INVALID
+		grantee.Type = provider.GranteeType_GRANTEE_TYPE_INVALID
 	}
-	return &provider.Grantee{
-		Type:      gType,
-		GranteeId: gID,
-	}
+	return grantee
 }
 
 func resourceTypeToItem(r provider.ResourceType) string {

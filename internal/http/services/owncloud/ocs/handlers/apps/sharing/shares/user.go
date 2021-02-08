@@ -73,8 +73,8 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statIn
 		ResourceInfo: statInfo,
 		Grant: &collaboration.ShareGrant{
 			Grantee: &provider.Grantee{
-				Type:      provider.GranteeType_GRANTEE_TYPE_USER,
-				GranteeId: &provider.GranteeId{Id: &provider.GranteeId_UserId{UserId: userRes.User.GetId()}},
+				Type: provider.GranteeType_GRANTEE_TYPE_USER,
+				Id:   &provider.Grantee_UserId{UserId: userRes.User.GetId()},
 			},
 			Permissions: &collaboration.SharePermissions{
 				Permissions: role.CS3ResourcePermissions(),

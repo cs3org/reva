@@ -132,9 +132,9 @@ func FromGrant(g *provider.Grant) *ACE {
 	}
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 		e.flags = "g"
-		e.principal = "g:" + g.Grantee.GranteeId.GetUserId().OpaqueId
+		e.principal = "g:" + g.Grantee.GetUserId().OpaqueId
 	} else {
-		e.principal = "u:" + g.Grantee.GranteeId.GetUserId().OpaqueId
+		e.principal = "u:" + g.Grantee.GetUserId().OpaqueId
 	}
 	return e
 }
@@ -182,8 +182,8 @@ func Unmarshal(principal string, v []byte) (e *ACE, err error) {
 func (e *ACE) Grant() *provider.Grant {
 	return &provider.Grant{
 		Grantee: &provider.Grantee{
-			GranteeId: &provider.GranteeId{Id: &provider.GranteeId_UserId{UserId: &userpb.UserId{OpaqueId: e.principal}}},
-			Type:      e.granteeType(),
+			Id:   &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: e.principal}},
+			Type: e.granteeType(),
 		},
 		Permissions: e.grantPermissionSet(),
 	}

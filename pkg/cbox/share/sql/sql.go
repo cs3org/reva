@@ -106,7 +106,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabora
 	// do not allow share to myself or the owner if share is for a user
 	// TODO(labkode): should not this be caught already at the gw level?
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER &&
-		(utils.UserEqual(g.Grantee.GranteeId.GetUserId(), user.Id) || utils.UserEqual(g.Grantee.GranteeId.GetUserId(), md.Owner)) {
+		(utils.UserEqual(g.Grantee.GetUserId(), user.Id) || utils.UserEqual(g.Grantee.GetUserId(), md.Owner)) {
 		return nil, errors.New("sql: owner/creator and grantee are the same")
 	}
 
@@ -425,13 +425,13 @@ func (m *mgr) GetReceivedShare(ctx context.Context, ref *collaboration.ShareRefe
 	}
 
 	user := user.ContextMustGetUser(ctx)
-	if s.Share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, s.Share.Grantee.GranteeId.GetUserId()) {
+	if s.Share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, s.Share.Grantee.GetUserId()) {
 		return s, nil
 	}
 
 	if s.Share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 		for _, v := range user.Groups {
-			if s.Share.Grantee.GranteeId.GetGroupId().OpaqueId == v {
+			if s.Share.Grantee.GetGroupId().OpaqueId == v {
 				return s, nil
 			}
 		}

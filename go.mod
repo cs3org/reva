@@ -57,6 +57,6 @@ replace github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-2
 
 replace github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
 
-replace github.com/cs3org/go-cs3apis => github.com/ishank011/go-cs3apis v0.0.0-20210204144528-d11157d32665
+replace github.com/cs3org/go-cs3apis => github.com/ishank011/go-cs3apis v0.0.0-20210208124423-1b0fed01380f
 
 replace google.golang.org/grpc => google.golang.org/grpc v1.26.0 // temporary downgrade

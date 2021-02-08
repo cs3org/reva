@@ -110,10 +110,10 @@ func ocmShareCreateCommand() *command {
 			Permissions: perm,
 			Grantee: &provider.Grantee{
 				Type: gt,
-				GranteeId: &provider.GranteeId{Id: &provider.GranteeId_UserId{UserId: &userpb.UserId{
+				Id: &provider.Grantee_UserId{UserId: &userpb.UserId{
 					Idp:      *idp,
 					OpaqueId: *grantee,
-				}}},
+				}},
 			},
 		}
 
@@ -154,7 +154,7 @@ func ocmShareCreateCommand() *command {
 		s := shareRes.Share
 		t.AppendRows([]table.Row{
 			{s.Id.OpaqueId, s.Owner.Idp, s.Owner.OpaqueId, s.ResourceId.String(), s.Permissions.String(),
-				s.Grantee.Type.String(), s.Grantee.GranteeId.GetUserId().Idp, s.Grantee.GranteeId.GetUserId().OpaqueId,
+				s.Grantee.Type.String(), s.Grantee.GetUserId().Idp, s.Grantee.GetUserId().OpaqueId,
 				time.Unix(int64(s.Ctime.Seconds), 0), time.Unix(int64(s.Mtime.Seconds), 0)},
 		})
 		t.Render()
