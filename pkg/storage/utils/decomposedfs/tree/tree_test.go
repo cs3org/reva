@@ -19,20 +19,13 @@
 package tree_test
 
 import (
-	"context"
-	"io/ioutil"
 	"os"
 	"path"
-	"strings"
 
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/options"
+	helpers "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/testhelpers"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
-	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree/mocks"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
-	ruser "github.com/cs3org/reva/pkg/user"
 	"github.com/pkg/xattr"
 	"github.com/stretchr/testify/mock"
 
@@ -42,54 +35,22 @@ import (
 
 var _ = Describe("Tree", func() {
 	var (
-		user *userpb.User
-		ctx  context.Context
+		env *helpers.TestEnv
 
-		blobstore *mocks.Blobstore
-		lookup    tree.PathLookup
-		o         *options.Options
-
-		t                  *tree.Tree
-		treeTimeAccounting bool
-		treeSizeAccounting bool
+		t *tree.Tree
 	)
 
-	BeforeEach(func() {
-		user = &userpb.User{
-			Id: &userpb.UserId{
-				Idp:      "idp",
-				OpaqueId: "userid",
-			},
-			Username: "username",
-		}
-		ctx = ruser.ContextSetUser(context.Background(), user)
-		tmpRoot, err := ioutil.TempDir("", "reva-unit-tests-*-root")
-		Expect(err).ToNot(HaveOccurred())
-		o, err = options.New(map[string]interface{}{
-			"root": tmpRoot,
-		})
-		Expect(err).ToNot(HaveOccurred())
-
-		blobstore = &mocks.Blobstore{}
-		lookup = &decomposedfs.Lookup{Options: o}
-	})
-
 	JustBeforeEach(func() {
-		t = tree.New(o.Root, treeTimeAccounting, treeSizeAccounting, lookup, blobstore)
-		Expect(t.Setup("root")).To(Succeed())
+		var err error
+		env, err = helpers.NewTestEnv()
+		Expect(err).ToNot(HaveOccurred())
+		t = env.Tree
 	})
 
 	AfterEach(func() {
-		root := o.Root
-		if strings.HasPrefix(root, os.TempDir()) {
-			os.RemoveAll(root)
+		if env != nil {
+			env.Cleanup()
 		}
-	})
-
-	Describe("New", func() {
-		It("returns a Tree instance", func() {
-			Expect(t).ToNot(BeNil())
-		})
 	})
 
 	Context("with an existingfile", func() {
@@ -98,8 +59,9 @@ var _ = Describe("Tree", func() {
 		)
 
 		JustBeforeEach(func() {
-			n = createEmptyNode("fooId", "root", "fooName", user.Id, lookup)
-			Expect(n.WriteMetadata(user.Id)).To(Succeed())
+			var err error
+			n, err = env.Lookup.NodeFromPath(env.Ctx, "dir1")
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		Describe("Delete", func() {
@@ -107,14 +69,14 @@ var _ = Describe("Tree", func() {
 				_, err := os.Stat(n.InternalPath())
 				Expect(err).ToNot(HaveOccurred())
 
-				Expect(t.Delete(ctx, n)).To(Succeed())
+				Expect(t.Delete(env.Ctx, n)).To(Succeed())
 
 				_, err = os.Stat(n.InternalPath())
 				Expect(err).To(HaveOccurred())
 			})
 
 			It("moves the file to the trash", func() {
-				trashPath := path.Join(o.Root, "trash", user.Id.OpaqueId, n.ID)
+				trashPath := path.Join(env.Root, "trash", env.Owner.Id.OpaqueId, n.ID)
 				_, err := os.Stat(trashPath)
 				Expect(err).ToNot(HaveOccurred())
 			})
@@ -125,14 +87,14 @@ var _ = Describe("Tree", func() {
 			})
 
 			It("sets the trash origin xattr", func() {
-				trashPath := path.Join(o.Root, "trash", user.Id.OpaqueId, n.ID)
+				trashPath := path.Join(env.Root, "trash", env.Owner.Id.OpaqueId, n.ID)
 				attr, err := xattr.Get(trashPath, xattrs.TrashOriginAttr)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(string(attr)).To(Equal(n.Name))
 			})
 
 			It("does not delete the blob from the blobstore", func() {
-				blobstore.AssertNotCalled(GinkgoT(), "Delete", mock.AnythingOfType("string"))
+				env.Blobstore.AssertNotCalled(GinkgoT(), "Delete", mock.AnythingOfType("string"))
 			})
 		})
 
@@ -141,13 +103,10 @@ var _ = Describe("Tree", func() {
 				trashPath string
 			)
 
-			BeforeEach(func() {
-				blobstore.On("Delete", n.ID).Return(nil)
-				trashPath = path.Join(o.Root, "trash", user.Id.OpaqueId, n.ID)
-			})
-
 			JustBeforeEach(func() {
-				Expect(t.Delete(ctx, n)).To(Succeed())
+				env.Blobstore.On("Delete", n.ID).Return(nil)
+				trashPath = path.Join(env.Root, "trash", env.Owner.Id.OpaqueId, n.ID)
+				Expect(t.Delete(env.Ctx, n)).To(Succeed())
 			})
 
 			Describe("PurgeRecycleItemFunc", func() {
@@ -155,7 +114,7 @@ var _ = Describe("Tree", func() {
 					_, err := os.Stat(trashPath)
 					Expect(err).ToNot(HaveOccurred())
 
-					_, purgeFunc, err := t.PurgeRecycleItemFunc(ctx, user.Id.OpaqueId+":"+n.ID)
+					_, purgeFunc, err := t.PurgeRecycleItemFunc(env.Ctx, env.Owner.Id.OpaqueId+":"+n.ID)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(purgeFunc()).To(Succeed())
 				})
@@ -166,7 +125,7 @@ var _ = Describe("Tree", func() {
 				})
 
 				It("deletes the blob from the blobstore", func() {
-					blobstore.AssertCalled(GinkgoT(), "Delete", mock.AnythingOfType("string"))
+					env.Blobstore.AssertCalled(GinkgoT(), "Delete", mock.AnythingOfType("string"))
 				})
 			})
 
@@ -177,7 +136,7 @@ var _ = Describe("Tree", func() {
 					_, err = os.Stat(n.InternalPath())
 					Expect(err).To(HaveOccurred())
 
-					_, restoreFunc, err := t.RestoreRecycleItemFunc(ctx, user.Id.OpaqueId+":"+n.ID)
+					_, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, env.Owner.Id.OpaqueId+":"+n.ID)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(restoreFunc()).To(Succeed())
 				})
@@ -194,19 +153,3 @@ var _ = Describe("Tree", func() {
 		})
 	})
 })
-
-func createEmptyNode(id, parent, name string, userid *userpb.UserId, lookup tree.PathLookup) *node.Node {
-	n := node.New(id, parent, name, 0, userid, lookup)
-	p, err := n.Parent()
-	ExpectWithOffset(1, err).ToNot(HaveOccurred())
-
-	// Create an empty file node
-	_, err = os.OpenFile(n.InternalPath(), os.O_CREATE, 0644)
-	ExpectWithOffset(1, err).ToNot(HaveOccurred())
-
-	// ... and an according link in the parent
-	err = os.Symlink("../"+n.ID, path.Join(p.InternalPath(), n.Name))
-	ExpectWithOffset(1, err).ToNot(HaveOccurred())
-
-	return n
-}

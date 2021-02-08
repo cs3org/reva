@@ -19,9 +19,96 @@
 package node_test
 
 import (
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
+	helpers "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/testhelpers"
+
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("Node", func() {
+	var (
+		env *helpers.TestEnv
 
+		id   string
+		name string
+	)
+
+	BeforeEach(func() {
+		var err error
+		env, err = helpers.NewTestEnv()
+		Expect(err).ToNot(HaveOccurred())
+
+		id = "fooId"
+		name = "foo"
+	})
+
+	AfterEach(func() {
+		if env != nil {
+			env.Cleanup()
+		}
+	})
+
+	Describe("BlobKey", func() {
+		It("generates unique blob ids if none are given", func() {
+			n1 := node.New(id, "", name, 10, "", env.Owner.Id, env.Lookup)
+			n2 := node.New(id, "", name, 10, "", env.Owner.Id, env.Lookup)
+
+			Expect(len(n1.BlobID) > 0).To(BeTrue())
+			Expect(n1.BlobID).ToNot(Equal(n2.BlobID))
+		})
+	})
+
+	Describe("Parent", func() {
+		It("returns the parent node", func() {
+			child, err := env.Lookup.NodeFromPath(env.Ctx, "dir1/subdir1")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(child).ToNot(BeNil())
+
+			parent, err := child.Parent()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(parent).ToNot(BeNil())
+			Expect(parent.ID).To(Equal(child.ParentID))
+		})
+	})
+
+	Describe("Child", func() {
+		var (
+			parent *node.Node
+		)
+
+		BeforeEach(func() {
+			var err error
+			parent, err = env.Lookup.NodeFromPath(env.Ctx, "dir1")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(parent).ToNot(BeNil())
+		})
+
+		It("returns an empty node if the child does not exist", func() {
+			child, err := parent.Child(env.Ctx, "does-not-exist")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(child).ToNot(BeNil())
+			Expect(child.Exists).To(BeFalse())
+		})
+
+		It("returns a directory node with all metadata", func() {
+			child, err := parent.Child(env.Ctx, "subdir1")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(child).ToNot(BeNil())
+			Expect(child.Exists).To(BeTrue())
+			Expect(child.ParentID).To(Equal(parent.ID))
+			Expect(child.Name).To(Equal("subdir1"))
+			Expect(child.Blobsize).To(Equal(int64(0)))
+		})
+
+		It("returns a file node with all metadata", func() {
+			child, err := parent.Child(env.Ctx, "filename1")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(child).ToNot(BeNil())
+			Expect(child.Exists).To(BeTrue())
+			Expect(child.ParentID).To(Equal(parent.ID))
+			Expect(child.Name).To(Equal("filename1"))
+			Expect(child.Blobsize).To(Equal(int64(1234)))
+		})
+	})
 })

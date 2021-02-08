@@ -20,62 +20,133 @@ package helpers
 
 import (
 	"context"
+	"io/ioutil"
 	"os"
-	"path"
+	"path/filepath"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/mock"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/storage"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/mocks"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
+	treemocks "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree/mocks"
 	ruser "github.com/cs3org/reva/pkg/user"
 )
 
-// CreateEmptyNodeForOtherUser creates a home and an empty node for a new user
-func CreateEmptyNodeForOtherUser(id, name string, fs storage.FS, lookup tree.PathLookup) (*node.Node, error) {
-	user := &userpb.User{
-		Id: &userpb.UserId{
-			Idp:      "idp",
-			OpaqueId: "userid2",
-		},
-		Username: "otheruser",
-	}
-	ctx := ruser.ContextSetUser(context.Background(), user)
-	err := fs.CreateHome(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return CreateEmptyNode(ctx, id, name, user.Id, lookup)
+type CleanupFunc func()
+
+type TestEnv struct {
+	Root        string
+	Fs          storage.FS
+	Tree        *tree.Tree
+	Permissions *mocks.PermissionsChecker
+	Blobstore   *treemocks.Blobstore
+	Owner       *userpb.User
+	Lookup      *decomposedfs.Lookup
+	Ctx         context.Context
+
+	Cleanup CleanupFunc
 }
 
-// CreateEmptyNode creates a home and an empty node for the given context
-func CreateEmptyNode(ctx context.Context, id, name string, userid *userpb.UserId, lookup tree.PathLookup) (*node.Node, error) {
-	root, err := lookup.HomeOrRootNode(ctx)
+func NewTestEnv() (*TestEnv, error) {
+	tmpRoot, err := ioutil.TempDir("", "reva-unit-tests-*-root")
+	if err != nil {
+		return nil, err
+	}
+	cleanup := func() {
+		os.RemoveAll(tmpRoot)
+	}
+
+	config := map[string]interface{}{
+		"root":         tmpRoot,
+		"enable_home":  true,
+		"share_folder": "/Shares",
+		"user_layout":  "{{.Id.OpaqueId}}",
+	}
+	o, err := options.New(config)
 	if err != nil {
 		return nil, err
 	}
 
-	n := node.New(id, root.ID, name, 1234, userid, lookup)
-	p, err := n.Parent()
+	owner := &userpb.User{
+		Id: &userpb.UserId{
+			Idp:      "idp",
+			OpaqueId: "userid",
+		},
+		Username: "username",
+	}
+	lookup := &decomposedfs.Lookup{Options: o}
+	permissions := &mocks.PermissionsChecker{}
+	permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil).Twice() // Permissions required for setup below
+	bs := &treemocks.Blobstore{}
+	tree := tree.New(o.Root, true, true, lookup, bs)
+	fs, err := decomposedfs.New(o, lookup, permissions, tree)
+	if err != nil {
+		return nil, err
+	}
+	ctx := ruser.ContextSetUser(context.Background(), owner)
+
+	// Create home
+	err = fs.CreateHome(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// Create an empty file node
-	_, err = os.OpenFile(n.InternalPath(), os.O_CREATE, 0644)
+	// Create dir1
+	err = fs.CreateDir(ctx, "dir1")
+	if err != nil {
+		return nil, err
+	}
+	dir1, err := lookup.NodeFromPath(ctx, "dir1")
 	if err != nil {
 		return nil, err
 	}
 
-	// ... and an according link in the parent
-	err = os.Symlink("../"+n.ID, path.Join(p.InternalPath(), n.Name))
+	// Create subdir1 in dir1
+	err = fs.CreateDir(ctx, "dir1/subdir1")
 	if err != nil {
 		return nil, err
 	}
 
-	err = n.WriteMetadata(userid)
+	// Create file in dir1
+	file := node.New(
+		uuid.New().String(),
+		dir1.ID,
+		"filename1",
+		1234,
+		"",
+		nil,
+		lookup,
+	)
+	_, err = os.OpenFile(file.InternalPath(), os.O_CREATE, 0700)
+	if err != nil {
+		return nil, err
+	}
+	err = file.WriteMetadata(owner.Id)
+	if err != nil {
+		return nil, err
+	}
+	// Link in parent
+	childNameLink := filepath.Join(lookup.InternalPath(file.ParentID), file.Name)
+	err = os.Symlink("../"+file.ID, childNameLink)
 	if err != nil {
 		return nil, err
 	}
 
-	return n, nil
+	return &TestEnv{
+		Root:        tmpRoot,
+		Fs:          fs,
+		Tree:        tree,
+		Lookup:      lookup,
+		Permissions: permissions,
+		Blobstore:   bs,
+		Owner:       owner,
+		Cleanup:     cleanup,
+		Ctx:         ctx,
+	}, nil
 }

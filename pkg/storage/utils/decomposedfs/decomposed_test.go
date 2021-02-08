@@ -19,23 +19,12 @@
 package decomposedfs_test
 
 import (
-	"context"
-	"io/ioutil"
-	"os"
-	"strings"
-
 	"github.com/stretchr/testify/mock"
 
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs"
-	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/mocks"
-	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/options"
 	helpers "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/testhelpers"
-	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
 	treemocks "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree/mocks"
-	ruser "github.com/cs3org/reva/pkg/user"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -43,83 +32,47 @@ import (
 
 var _ = Describe("Decomposed", func() {
 	var (
-		ref  *provider.Reference
-		user *userpb.User
-		ctx  context.Context
+		env *helpers.TestEnv
 
-		config      map[string]interface{}
-		o           *options.Options
-		lookup      *decomposedfs.Lookup
-		permissions *mocks.PermissionsChecker
-		bs          *treemocks.Blobstore
-		fs          storage.FS
+		ref *provider.Reference
 	)
 
 	BeforeEach(func() {
 		ref = &provider.Reference{
 			Spec: &provider.Reference_Path{
-				Path: "foo",
+				Path: "dir1",
 			},
 		}
-		user = &userpb.User{
-			Id: &userpb.UserId{
-				Idp:      "idp",
-				OpaqueId: "userid",
-			},
-			Username: "username",
-		}
-		ctx = ruser.ContextSetUser(context.Background(), user)
-
-		tmpRoot, err := ioutil.TempDir("", "reva-unit-tests-*-root")
-		Expect(err).ToNot(HaveOccurred())
-
-		config = map[string]interface{}{
-			"root":         tmpRoot,
-			"enable_home":  true,
-			"share_folder": "/Shares",
-		}
-		o, err = options.New(config)
-		Expect(err).ToNot(HaveOccurred())
-		lookup = &decomposedfs.Lookup{Options: o}
-		permissions = &mocks.PermissionsChecker{}
-		bs = &treemocks.Blobstore{}
 	})
 
 	JustBeforeEach(func() {
 		var err error
-		tree := tree.New(o.Root, true, true, lookup, bs)
-		fs, err = decomposedfs.New(o, lookup, permissions, tree)
+		env, err = helpers.NewTestEnv()
 		Expect(err).ToNot(HaveOccurred())
-		Expect(fs.CreateHome(ctx)).To(Succeed())
 	})
 
 	AfterEach(func() {
-		root := o.Root
-		if strings.HasPrefix(root, os.TempDir()) {
-			os.RemoveAll(root)
+		if env != nil {
+			env.Cleanup()
 		}
 	})
 
 	Describe("NewDefault", func() {
 		It("works", func() {
+			bs := &treemocks.Blobstore{}
 			_, err := decomposedfs.NewDefault(map[string]interface{}{
-				"root": o.Root,
+				"root": env.Root,
 			}, bs)
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 
 	Describe("Delete", func() {
-		JustBeforeEach(func() {
-			_, err := helpers.CreateEmptyNode(ctx, "foo", "foo", user.Id, lookup)
-			Expect(err).ToNot(HaveOccurred())
-		})
-
 		Context("with insufficient permissions", func() {
 			It("returns an error", func() {
-				permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
+				env.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
 
-				err := fs.Delete(ctx, ref)
+				err := env.Fs.Delete(env.Ctx, ref)
 
 				Expect(err).To(MatchError(ContainSubstring("permission denied")))
 			})
@@ -127,14 +80,14 @@ var _ = Describe("Decomposed", func() {
 
 		Context("with sufficient permissions", func() {
 			JustBeforeEach(func() {
-				permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil)
+				env.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil)
 			})
 
 			It("does not (yet) delete the blob from the blobstore", func() {
-				err := fs.Delete(ctx, ref)
+				err := env.Fs.Delete(env.Ctx, ref)
 
 				Expect(err).ToNot(HaveOccurred())
-				bs.AssertNotCalled(GinkgoT(), "Delete", mock.AnythingOfType("string"))
+				env.Blobstore.AssertNotCalled(GinkgoT(), "Delete", mock.AnythingOfType("string"))
 			})
 		})
 	})
