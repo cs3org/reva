@@ -21,9 +21,7 @@ package filesystem
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -35,6 +33,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+	"golang.org/x/crypto/bcrypt"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -46,6 +45,7 @@ import (
 	"github.com/cs3org/reva/pkg/publicshare/manager/registry"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 )
 
@@ -87,10 +87,11 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 	conf.init()
 
 	m := manager{
-		mutex:       &sync.Mutex{},
-		marshaler:   jsonpb.Marshaler{},
-		unmarshaler: jsonpb.Unmarshaler{},
-		file:        conf.File,
+		mutex:            &sync.Mutex{},
+		marshaler:        jsonpb.Marshaler{},
+		unmarshaler:      jsonpb.Unmarshaler{},
+		file:             conf.File,
+		passwordHashCost: conf.SharePasswordHashCost,
 	}
 
 	// attempt to create the db file
@@ -120,12 +121,16 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 }
 
 type config struct {
-	File string `mapstructure:"file"`
+	File                  string `mapstructure:"file"`
+	SharePasswordHashCost int    `mapstructure:"password_hash_cost"`
 }
 
 func (c *config) init() {
 	if c.File == "" {
 		c.File = "/var/tmp/reva/publicshares"
+	}
+	if c.SharePasswordHashCost == 0 {
+		c.SharePasswordHashCost = 11
 	}
 }
 
@@ -133,8 +138,9 @@ type manager struct {
 	mutex *sync.Mutex
 	file  string
 
-	marshaler   jsonpb.Marshaler
-	unmarshaler jsonpb.Unmarshaler
+	marshaler        jsonpb.Marshaler
+	unmarshaler      jsonpb.Unmarshaler
+	passwordHashCost int
 }
 
 // CreatePublicShare adds a new entry to manager.shares
@@ -154,7 +160,11 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 	var passwordProtected bool
 	password := g.Password
 	if len(password) > 0 {
-		password = base64.StdEncoding.EncodeToString([]byte(password))
+		h, err := bcrypt.GenerateFromPassword([]byte(password), m.passwordHashCost)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not hash share password")
+		}
+		password = string(h)
 		passwordProtected = true
 	}
 
@@ -249,7 +259,11 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 			share.PasswordProtected = false
 			newPasswordEncoded = ""
 		} else {
-			newPasswordEncoded = base64.StdEncoding.EncodeToString([]byte(req.Update.GetGrant().Password))
+			h, err := bcrypt.GenerateFromPassword([]byte(req.Update.GetGrant().Password), m.passwordHashCost)
+			if err != nil {
+				return nil, errors.Wrap(err, "could not hash share password")
+			}
+			newPasswordEncoded = string(h)
 			share.PasswordProtected = true
 		}
 	default:
@@ -516,8 +530,7 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token, password str
 			}
 
 			if local.PasswordProtected {
-				password = base64.StdEncoding.EncodeToString([]byte(password))
-				if passDB == password {
+				if err := bcrypt.CompareHashAndPassword([]byte(passDB), []byte(password)); err == nil {
 					return local, nil
 				}
 
