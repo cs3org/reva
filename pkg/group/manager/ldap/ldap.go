@@ -66,7 +66,7 @@ type config struct {
 type attributes struct {
 	// DN is the distinguished name in ldap, e.g. `cn=admins,ou=groups,dc=example,dc=org`
 	DN string `mapstructure:"dn"`
-	// UID is an immutable group id, see https://docs.microsoft.com/en-us/azure/active-directory/hybrid/plan-connect-design-concepts
+	// GID is an immutable group id, see https://docs.microsoft.com/en-us/azure/active-directory/hybrid/plan-connect-design-concepts
 	GID string `mapstructure:"gid"`
 	// CN is the group name, typically `cn`, `gid` or `samaccountname`
 	CN string `mapstructure:"cn"`
@@ -81,7 +81,7 @@ type attributes struct {
 // Default attributes (Active Directory)
 var ldapDefaults = attributes{
 	DN:          "dn",
-	GID:         "objectGUID", // you can fall back to objectguid or even samaccountname but you will run into trouble when user names change. You have been warned.
+	GID:         "objectGUID", // you can fall back to samaccountname but you will run into trouble when group names change. You have been warned.
 	CN:          "cn",
 	Mail:        "mail",
 	DisplayName: "displayName",
