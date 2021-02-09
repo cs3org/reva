@@ -38,6 +38,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage"
+	"github.com/cs3org/reva/pkg/storage/utils/acl"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/grants"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
@@ -434,9 +435,9 @@ func (fs *localfs) AddGrant(ctx context.Context, ref *provider.Reference, g *pro
 		return errors.Wrap(err, "localfs: error getting grantee type")
 	}
 	var grantee string
-	if granteeType == "u" {
+	if granteeType == acl.TypeUser {
 		grantee = fmt.Sprintf("%s:%s@%s", granteeType, g.Grantee.GetUserId().OpaqueId, g.Grantee.GetUserId().Idp)
-	} else if granteeType == "g" {
+	} else if granteeType == acl.TypeGroup {
 		grantee = fmt.Sprintf("%s:%s@%s", granteeType, g.Grantee.GetGroupId().OpaqueId, g.Grantee.GetGroupId().Idp)
 	}
 
@@ -467,14 +468,15 @@ func (fs *localfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*
 		if err != nil {
 			return nil, errors.Wrap(err, "localfs: error scanning db rows")
 		}
-		grantee := &provider.Grantee{Type: grants.GetGranteeType(string(granteeID[0]))}
-		parts := strings.Split(granteeID[2:], "@")
-		if granteeID[0] == 'u' {
+		grantSplit := strings.Split(granteeID, ":")
+		grantee := &provider.Grantee{Type: grants.GetGranteeType(grantSplit[0])}
+		parts := strings.Split(grantSplit[1], "@")
+		if grantSplit[0] == acl.TypeUser {
 			grantee.Id = &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: parts[0], Idp: parts[1]}}
-		} else if granteeID[0] == 'g' {
+		} else if grantSplit[0] == acl.TypeGroup {
 			grantee.Id = &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: parts[0], Idp: parts[1]}}
 		}
-		permissions := grants.GetGrantPermissionSet(role)
+		permissions := grants.GetGrantPermissionSet(role, true)
 
 		grantList = append(grantList, &provider.Grant{
 			Grantee:     grantee,
@@ -497,9 +499,9 @@ func (fs *localfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *
 		return errors.Wrap(err, "localfs: error getting grantee type")
 	}
 	var grantee string
-	if granteeType == "u" {
+	if granteeType == acl.TypeUser {
 		grantee = fmt.Sprintf("%s:%s@%s", granteeType, g.Grantee.GetUserId().OpaqueId, g.Grantee.GetUserId().Idp)
-	} else if granteeType == "g" {
+	} else if granteeType == acl.TypeGroup {
 		grantee = fmt.Sprintf("%s:%s@%s", granteeType, g.Grantee.GetGroupId().OpaqueId, g.Grantee.GetGroupId().Idp)
 	}
 

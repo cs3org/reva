@@ -43,7 +43,7 @@ const (
 	// TypeUser indicates the qualifier identifies a user
 	TypeUser = "u"
 	// TypeGroup indicates the qualifier identifies a group
-	TypeGroup = "g"
+	TypeGroup = "egroup"
 )
 
 // Parse parses an acl string with the given delimiter (LongTextForm or ShortTextForm)
@@ -84,7 +84,6 @@ func (m *ACLs) Serialize() string {
 
 // DeleteEntry removes an entry uniquely identified by acl type and qualifier
 func (m *ACLs) DeleteEntry(aclType string, qualifier string) {
-	aclType = getShortType(aclType)
 	for i, e := range m.Entries {
 		if e.Qualifier == qualifier && e.Type == aclType {
 			m.Entries = append(m.Entries[:i], m.Entries[i+1:]...)
@@ -100,7 +99,7 @@ func (m *ACLs) SetEntry(aclType string, qualifier string, permissions string) er
 	}
 	m.DeleteEntry(aclType, qualifier)
 	entry := &Entry{
-		Type:        getShortType(aclType),
+		Type:        aclType,
 		Qualifier:   qualifier,
 		Permissions: permissions,
 	}
@@ -126,7 +125,7 @@ func ParseEntry(singleSysACL string) (*Entry, error) {
 	}
 
 	return &Entry{
-		Type:        getShortType(tokens[0]),
+		Type:        tokens[0],
 		Qualifier:   tokens[1],
 		Permissions: tokens[2],
 	}, nil
@@ -135,17 +134,6 @@ func ParseEntry(singleSysACL string) (*Entry, error) {
 // CitrineSerialize serializes an ACL entry for citrine EOS ACLs
 func (a *Entry) CitrineSerialize() string {
 	return fmt.Sprintf("%s:%s=%s", a.Type, a.Qualifier, a.Permissions)
-}
-
-func getShortType(aclType string) string {
-	switch aclType[:1] {
-	case TypeUser:
-		return TypeUser
-	case TypeGroup:
-		return TypeGroup
-	default:
-		return aclType // TODO mark as invalid?
-	}
 }
 
 func (a *Entry) serialize() string {

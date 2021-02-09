@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/storage/utils/acl"
 )
 
 // GetACLPerm generates a string representation of CS3APIs' ResourcePermissions
@@ -36,8 +37,14 @@ func GetACLPerm(set *provider.ResourcePermissions) (string, error) {
 	if set.CreateContainer || set.InitiateFileUpload || set.Delete || set.Move {
 		b.WriteString("w")
 	}
-	if set.ListContainer {
+	if set.ListContainer || set.ListFileVersions {
 		b.WriteString("x")
+	}
+	if set.AddGrant || set.ListGrants || set.RemoveGrant {
+		b.WriteString("m")
+	}
+	if set.GetQuota {
+		b.WriteString("q")
 	}
 
 	if set.Delete {
@@ -46,79 +53,63 @@ func GetACLPerm(set *provider.ResourcePermissions) (string, error) {
 		b.WriteString("!d")
 	}
 
-	// TODO sharing
-	// TODO trash
-	// TODO versions
 	return b.String(), nil
 }
 
-// GetGrantPermissionSet converts CSEAPIs' ResourcePermissions from a string
+// GetGrantPermissionSet converts CS3APIs' ResourcePermissions from a string
 // TODO(labkode): add more fine grained controls.
 // EOS acls are a mix of ACLs and POSIX permissions. More details can be found in
 // https://github.com/cern-eos/eos/blob/master/doc/configuration/permission.rst
-// TODO we need to evaluate all acls in the list at once to properly forbid (!) and overwrite (+) permissions
-// This is ugly, because those are actually negative permissions ...
-func GetGrantPermissionSet(mode string) *provider.ResourcePermissions {
+func GetGrantPermissionSet(perm string, isDir bool) *provider.ResourcePermissions {
+	var rp provider.ResourcePermissions
 
-	// TODO also check unix permissions for read access
-	p := &provider.ResourcePermissions{}
-	// r
-	if strings.Contains(mode, "r") {
-		p.Stat = true
-		p.InitiateFileDownload = true
+	if strings.Contains(perm, "r") && !strings.Contains(perm, "!r") {
+		rp.GetPath = true
+		rp.Stat = true
+		rp.InitiateFileDownload = true
 	}
-	// w
-	if strings.Contains(mode, "w") {
-		p.CreateContainer = true
-		p.InitiateFileUpload = true
-		p.Delete = true
-		if p.InitiateFileDownload {
-			p.Move = true
+
+	if strings.Contains(perm, "w") && !strings.Contains(perm, "!w") {
+		rp.Move = true
+		rp.Delete = true
+		rp.InitiateFileUpload = true
+		rp.RestoreFileVersion = true
+		if isDir {
+			rp.CreateContainer = true
 		}
 	}
-	if strings.Contains(mode, "wo") {
-		p.CreateContainer = true
-		//	p.InitiateFileUpload = false // TODO only when the file exists
-		p.Delete = false
-	}
-	if strings.Contains(mode, "!d") {
-		p.Delete = false
-	} else if strings.Contains(mode, "+d") {
-		p.Delete = true
-	}
-	// x
-	if strings.Contains(mode, "x") {
-		p.ListContainer = true
+
+	if strings.Contains(perm, "x") && !strings.Contains(perm, "!x") {
+		rp.ListFileVersions = true
+		if isDir {
+			rp.ListContainer = true
+		}
 	}
 
-	// sharing
-	// TODO AddGrant
-	// TODO ListGrants
-	// TODO RemoveGrant
-	// TODO UpdateGrant
+	if strings.Contains(perm, "!d") {
+		rp.Delete = false
+	}
 
-	// trash
-	// TODO ListRecycle
-	// TODO RestoreRecycleItem
-	// TODO PurgeRecycle
+	if strings.Contains(perm, "m") && !strings.Contains(perm, "!m") {
+		rp.AddGrant = true
+		rp.ListGrants = true
+		rp.RemoveGrant = true
+	}
 
-	// versions
-	// TODO ListFileVersions
-	// TODO RestoreFileVersion
+	if strings.Contains(perm, "q") && !strings.Contains(perm, "!q") {
+		rp.GetQuota = true
+	}
 
-	// ?
-	// TODO GetPath
-	// TODO GetQuota
-	return p
+	return &rp
 }
 
 // GetACLType returns a char representation of the type of grantee
 func GetACLType(gt provider.GranteeType) (string, error) {
 	switch gt {
 	case provider.GranteeType_GRANTEE_TYPE_USER:
-		return "u", nil
+		return acl.TypeUser, nil
 	case provider.GranteeType_GRANTEE_TYPE_GROUP:
-		return "g", nil
+		return acl.TypeGroup, nil
 	default:
 		return "", errors.New("no eos acl for grantee type: " + gt.String())
 	}
@@ -127,9 +118,9 @@ func GetACLType(gt provider.GranteeType) (string, error) {
 // GetGranteeType returns the grantee type from a char
 func GetGranteeType(aclType string) provider.GranteeType {
 	switch aclType {
-	case "u":
+	case acl.TypeUser:
 		return provider.GranteeType_GRANTEE_TYPE_USER
-	case "g":
+	case acl.TypeGroup:
 		return provider.GranteeType_GRANTEE_TYPE_GROUP
 	default:
 		return provider.GranteeType_GRANTEE_TYPE_INVALID
