@@ -13,7 +13,7 @@ require (
 	github.com/cheggaaa/pb v1.0.29
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
-	github.com/cs3org/go-cs3apis v0.0.0-20210104105209-0d3ecb3453dc
+	github.com/cs3org/go-cs3apis v0.0.0-20210209082852-35ace33082f5
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/eventials/go-tus v0.0.0-20200718001131-45c7ec8f5d59
 	github.com/go-ldap/ldap/v3 v3.2.4
@@ -56,7 +56,5 @@ go 1.13
 replace github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
 
 replace github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
-
-replace github.com/cs3org/go-cs3apis => github.com/ishank011/go-cs3apis v0.0.0-20210208124423-1b0fed01380f
 
 replace google.golang.org/grpc => google.golang.org/grpc v1.26.0 // temporary downgrade
