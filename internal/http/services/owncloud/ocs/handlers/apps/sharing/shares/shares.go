@@ -31,6 +31,7 @@ import (
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -62,7 +63,6 @@ type userIdentifiers struct {
 	DisplayName string
 	UserName    string
 	Mail        string
-	Groups      []string
 }
 
 // Init initializes this and any contained handlers
@@ -894,57 +894,89 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 	return nil
 }
 
-// mustGetUserIdentifiers always returns a struct with identifiers, if the user could not be found they will all be empty
-func (h *Handler) mustGetUserIdentifiers(ctx context.Context, c gateway.GatewayAPIClient, userid string) *userIdentifiers {
-	sublog := appctx.GetLogger(ctx).With().Str("userid", userid).Logger()
-	if userid == "" {
+// mustGetIdentifiers always returns a struct with identifiers, if the user or group could not be found they will all be empty
+func (h *Handler) mustGetIdentifiers(ctx context.Context, c gateway.GatewayAPIClient, id string, isGroup bool) *userIdentifiers {
+	sublog := appctx.GetLogger(ctx).With().Str("id", id).Logger()
+	if id == "" {
 		return &userIdentifiers{}
 	}
 
-	uiIf, err := h.userIdentifierCache.Get(userid)
+	idIf, err := h.userIdentifierCache.Get(id)
 	if err == nil {
 		sublog.Debug().Msg("cache hit")
-		return uiIf.(*userIdentifiers)
-	}
-	sublog.Debug().Msg("cache miss")
-	res, err := c.GetUser(ctx, &userpb.GetUserRequest{
-		UserId: &userpb.UserId{
-			OpaqueId: userid,
-		},
-	})
-	if err != nil {
-		sublog.Err(err).Msg("could not look up user")
-		return &userIdentifiers{}
-	}
-	if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
-		sublog.Err(err).
-			Int32("code", int32(res.GetStatus().GetCode())).
-			Str("message", res.GetStatus().GetMessage()).
-			Msg("get user call failed")
-		return &userIdentifiers{}
-	}
-	if res.User == nil {
-		sublog.Debug().
-			Int32("code", int32(res.GetStatus().GetCode())).
-			Str("message", res.GetStatus().GetMessage()).
-			Msg("user not found")
-		return &userIdentifiers{}
+		return idIf.(*userIdentifiers)
 	}
 
-	ui := &userIdentifiers{
-		DisplayName: res.User.DisplayName,
-		UserName:    res.User.Username,
-		Mail:        res.User.Mail,
-		Groups:      res.User.Groups,
+	sublog.Debug().Msg("cache miss")
+	var ui *userIdentifiers
+
+	if isGroup {
+		res, err := c.GetGroup(ctx, &grouppb.GetGroupRequest{
+			GroupId: &grouppb.GroupId{
+				OpaqueId: id,
+			},
+		})
+		if err != nil {
+			sublog.Err(err).Msg("could not look up group")
+			return &userIdentifiers{}
+		}
+		if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
+			sublog.Err(err).
+				Int32("code", int32(res.GetStatus().GetCode())).
+				Str("message", res.GetStatus().GetMessage()).
+				Msg("get group call failed")
+			return &userIdentifiers{}
+		}
+		if res.Group == nil {
+			sublog.Debug().
+				Int32("code", int32(res.GetStatus().GetCode())).
+				Str("message", res.GetStatus().GetMessage()).
+				Msg("group not found")
+			return &userIdentifiers{}
+		}
+		ui = &userIdentifiers{
+			DisplayName: res.Group.DisplayName,
+			UserName:    res.Group.GroupName,
+			Mail:        res.Group.Mail,
+		}
+	} else {
+		res, err := c.GetUser(ctx, &userpb.GetUserRequest{
+			UserId: &userpb.UserId{
+				OpaqueId: id,
+			},
+		})
+		if err != nil {
+			sublog.Err(err).Msg("could not look up user")
+			return &userIdentifiers{}
+		}
+		if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
+			sublog.Err(err).
+				Int32("code", int32(res.GetStatus().GetCode())).
+				Str("message", res.GetStatus().GetMessage()).
+				Msg("get user call failed")
+			return &userIdentifiers{}
+		}
+		if res.User == nil {
+			sublog.Debug().
+				Int32("code", int32(res.GetStatus().GetCode())).
+				Str("message", res.GetStatus().GetMessage()).
+				Msg("user not found")
+			return &userIdentifiers{}
+		}
+		ui = &userIdentifiers{
+			DisplayName: res.User.DisplayName,
+			UserName:    res.User.Username,
+			Mail:        res.User.Mail,
+		}
 	}
-	_ = h.userIdentifierCache.Set(userid, ui)
-	log.Debug().Str("userid", userid).Msg("cache update")
+	_ = h.userIdentifierCache.Set(id, ui)
+	log.Debug().Str("id", id).Msg("cache update")
 	return ui
 }
 
 func (h *Handler) mapUserIds(ctx context.Context, c gateway.GatewayAPIClient, s *conversions.ShareData) {
 	if s.UIDOwner != "" {
-		owner := h.mustGetUserIdentifiers(ctx, c, s.UIDOwner)
+		owner := h.mustGetIdentifiers(ctx, c, s.UIDOwner, false)
 		s.UIDOwner = owner.UserName
 		if s.DisplaynameOwner == "" {
 			s.DisplaynameOwner = owner.DisplayName
@@ -955,7 +987,7 @@ func (h *Handler) mapUserIds(ctx context.Context, c gateway.GatewayAPIClient, s 
 	}
 
 	if s.UIDFileOwner != "" {
-		fileOwner := h.mustGetUserIdentifiers(ctx, c, s.UIDFileOwner)
+		fileOwner := h.mustGetIdentifiers(ctx, c, s.UIDFileOwner, false)
 		s.UIDFileOwner = fileOwner.UserName
 		if s.DisplaynameFileOwner == "" {
 			s.DisplaynameFileOwner = fileOwner.DisplayName
@@ -966,7 +998,7 @@ func (h *Handler) mapUserIds(ctx context.Context, c gateway.GatewayAPIClient, s 
 	}
 
 	if s.ShareWith != "" && s.ShareWith != "***redacted***" {
-		shareWith := h.mustGetUserIdentifiers(ctx, c, s.ShareWith)
+		shareWith := h.mustGetIdentifiers(ctx, c, s.ShareWith, s.ShareType == conversions.ShareTypeGroup)
 		s.ShareWith = shareWith.UserName
 		if s.ShareWithDisplayname == "" {
 			s.ShareWithDisplayname = shareWith.DisplayName
