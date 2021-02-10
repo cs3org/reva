@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package options_test
+package blobstore_test
 
 import (
 	"testing"
@@ -25,7 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestOptions(t *testing.T) {
+func TestBlobstore(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Options Suite")
+	RunSpecs(t, "Blobstore Suite")
 }

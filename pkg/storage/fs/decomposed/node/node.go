@@ -52,6 +52,11 @@ const (
 	ShareTypesKey = "http://owncloud.org/ns/share-types"
 	ChecksumsKey  = "http://owncloud.org/ns/checksums"
 	UserShareType = "0"
+	QuotaKey      = "quota"
+
+	QuotaUncalculated = "-1"
+	QuotaUnknown      = "-2"
+	QuotaUnlimited    = "-3"
 )
 
 // Node represents a node in the tree and provides methods to get a Parent or Child instance
@@ -455,6 +460,16 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		PermissionSet: rp,
 	}
 
+	if nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		ts, err := n.GetTreeSize()
+		if err == nil {
+			ri.Size = ts
+		} else {
+			ri.Size = 0 // make dirs always return 0 if it is unknown
+			sublog.Debug().Err(err).Msg("could not read treesize")
+		}
+	}
+
 	if ri.Owner, err = n.Owner(); err != nil {
 		sublog.Debug().Err(err).Msg("could not determine owner")
 	}
@@ -529,6 +544,25 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		readChecksumIntoResourceChecksum(ctx, nodePath, storageprovider.XSSHA1, ri)
 		readChecksumIntoOpaque(ctx, nodePath, storageprovider.XSMD5, ri)
 		readChecksumIntoOpaque(ctx, nodePath, storageprovider.XSAdler32, ri)
+	}
+	// quota
+	if _, ok := mdKeysMap[_quotaKey]; (nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER) && returnAllKeys || ok {
+		var quotaPath string
+		if n.lu.Options.EnableHome {
+			if r, err := n.lu.HomeNode(ctx); err == nil {
+				quotaPath = n.lu.toInternalPath(r.ID)
+				readQuotaIntoOpaque(ctx, quotaPath, ri)
+			} else {
+				sublog.Error().Err(err).Msg("error determining home node for quota")
+			}
+		} else {
+			if r, err := n.lu.RootNode(ctx); err == nil {
+				quotaPath = n.lu.toInternalPath(r.ID)
+				readQuotaIntoOpaque(ctx, quotaPath, ri)
+			} else {
+				sublog.Error().Err(err).Msg("error determining root node for quota")
+			}
+		}
 	}
 
 	// only read the requested metadata attributes
@@ -605,6 +639,85 @@ func readChecksumIntoOpaque(ctx context.Context, nodePath, algo string, ri *prov
 	}
 }
 
+// quota is always stored on the root node
+func readQuotaIntoOpaque(ctx context.Context, nodePath string, ri *provider.ResourceInfo) {
+	v, err := xattr.Get(nodePath, xattrs.QuotaAttr)
+	switch {
+	case err == nil:
+		// make sure we have a proper signed int
+		// we use the same magic numbers to indicate:
+		// -1 = uncalculated
+		// -2 = unknown
+		// -3 = unlimited
+		if _, err := strconv.ParseInt(string(v), 10, 64); err == nil {
+			if ri.Opaque == nil {
+				ri.Opaque = &types.Opaque{
+					Map: map[string]*types.OpaqueEntry{},
+				}
+			}
+			ri.Opaque.Map[_quotaKey] = &types.OpaqueEntry{
+				Decoder: "plain",
+				Value:   v,
+			}
+		} else {
+			appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Str("quota", string(v)).Msg("malformed quota")
+		}
+	case isNoData(err):
+		appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", nodePath).Msg("quota not set")
+	case isNotFound(err):
+		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Msg("file not found when reading quota")
+	default:
+		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Msg("could not read quota")
+	}
+}
+
+// CalculateTreeSize will sum up the size of all children of a node
+func (n *Node) CalculateTreeSize(ctx context.Context) (uint64, error) {
+	var size uint64
+	// TODO check if this is a dir?
+	nodePath := n.InternalPath()
+
+	f, err := os.Open(nodePath)
+	if err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Msg("could not open dir")
+		return 0, err
+	}
+	defer f.Close()
+
+	names, err := f.Readdirnames(0)
+	if err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Msg("could not read dirnames")
+		return 0, err
+	}
+	for i := range names {
+		cPath := filepath.Join(nodePath, names[i])
+		info, err := os.Stat(cPath)
+		if err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Str("childpath", cPath).Msg("could not stat child entry")
+			continue // continue after an error
+		}
+		if !info.IsDir() {
+			size += uint64(info.Size())
+		} else {
+			// read from attr
+			var b []byte
+			// xattr.Get will follow the symlink
+			if b, err = xattr.Get(cPath, treesizeAttr); err != nil {
+				// TODO recursively descend and recalculate treesize
+				continue // continue after an error
+			}
+			csize, err := strconv.ParseUint(string(b), 10, 64)
+			if err != nil {
+				// TODO recursively descend and recalculate treesize
+				continue // continue after an error
+			}
+			size += csize
+		}
+	}
+	return size, err
+
+}
+
 // HasPropagation checks if the propagation attribute exists and is set to "1"
 func (n *Node) HasPropagation() (propagation bool) {
 	if b, err := xattr.Get(n.lu.InternalPath(n.ID), xattrs.PropagationAttr); err == nil {
@@ -625,6 +738,20 @@ func (n *Node) GetTMTime() (tmTime time.Time, err error) {
 // SetTMTime writes the tmtime to the extended attributes
 func (n *Node) SetTMTime(t time.Time) (err error) {
 	return xattr.Set(n.lu.InternalPath(n.ID), xattrs.TreeMTimeAttr, []byte(t.UTC().Format(time.RFC3339Nano)))
+}
+
+// GetTreeSize reads the treesize from the extended attributes
+func (n *Node) GetTreeSize() (treesize uint64, err error) {
+	var b []byte
+	if b, err = xattr.Get(n.InternalPath(), xattrs.TreesizeAttr); err != nil {
+		return
+	}
+	return strconv.ParseUint(string(b), 10, 64)
+}
+
+// SetTreeSize writes the treesize to the extended attributes
+func (n *Node) SetTreeSize(ts uint64) (err error) {
+	return xattr.Set(n.InternalPath(), xattrs.TreesizeAttr, []byte(strconv.FormatUint(ts, 10)))
 }
 
 // SetChecksum writes the checksum with the given checksum type to the extended attributes

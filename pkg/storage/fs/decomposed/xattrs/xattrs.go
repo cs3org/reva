@@ -61,7 +61,11 @@ const (
 	// the size of the tree below this node,
 	// propagated when treesize_accounting is true and
 	// user.ocis.propagation=1 is set
-	//treesizeAttr string = OcisPrefix + "treesize"
+	// stored as uint64, little endian
+	TreesizeAttr string = ocisPrefix + "treesize"
+
+	// the quota for the storage space / tree, regardless who accesses it
+	QuotaAttr string = ocisPrefix + "quota"
 
 	UserAcePrefix  string = "u:"
 	GroupAcePrefix string = "g:"

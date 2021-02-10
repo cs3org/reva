@@ -418,12 +418,12 @@ func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, key string) (*node.Node
 
 // Propagate propagates changes to the root of the tree
 func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
+	sublog := appctx.GetLogger(ctx).With().Interface("node", n).Logger()
 	if !t.treeTimeAccounting && !t.treeSizeAccounting {
 		// no propagation enabled
-		log.Debug().Msg("propagation disabled")
+		sublog.Debug().Msg("propagation disabled")
 		return
 	}
-	log := appctx.GetLogger(ctx)
 
 	// is propagation enabled for the parent node?
 
@@ -435,16 +435,19 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 	// use a sync time and don't rely on the mtime of the current node, as the stat might not change when a rename happened too quickly
 	sTime := time.Now().UTC()
 
+	// we loop until we reach the root
 	for err == nil && n.ID != root.ID {
-		log.Debug().Interface("node", n).Msg("propagating")
+		sublog.Debug().Msg("propagating")
 
 		if n, err = n.Parent(); err != nil {
 			break
 		}
 
+		sublog = sublog.With().Interface("node", n).Logger()
+
 		// TODO none, sync and async?
 		if !n.HasPropagation() {
-			log.Debug().Interface("node", n).Str("attr", xattrs.PropagationAttr).Msg("propagation attribute not set or unreadable, not propagating")
+			sublog.Debug().Str("attr", xattrs.PropagationAttr).Msg("propagation attribute not set or unreadable, not propagating")
 			// if the attribute is not set treat it as false / none / no propagation
 			return nil
 		}
@@ -458,20 +461,17 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 			switch {
 			case err != nil:
 				// missing attribute, or invalid format, overwrite
-				log.Debug().Err(err).
-					Interface("node", n).
+				sublog.Debug().Err(err).
 					Msg("could not read tmtime attribute, overwriting")
 				updateSyncTime = true
 			case tmTime.Before(sTime):
-				log.Debug().
-					Interface("node", n).
+				sublog.Debug().
 					Time("tmtime", tmTime).
 					Time("stime", sTime).
 					Msg("parent tmtime is older than node mtime, updating")
 				updateSyncTime = true
 			default:
-				log.Debug().
-					Interface("node", n).
+				sublog.Debug().
 					Time("tmtime", tmTime).
 					Time("stime", sTime).
 					Dur("delta", sTime.Sub(tmTime)).
@@ -481,23 +481,61 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 			if updateSyncTime {
 				// update the tree time of the parent node
 				if err = n.SetTMTime(sTime); err != nil {
-					log.Error().Err(err).Interface("node", n).Time("tmtime", sTime).Msg("could not update tmtime of parent node")
-					return
-				}
-				log.Debug().Interface("node", n).Time("tmtime", sTime).Msg("updated tmtime of parent node")
+					sublog.Error().Err(err).Time("tmtime", sTime).Msg("could not update tmtime of parent node")
+				} else {
+					sublog.Debug().Time("tmtime", sTime).Msg("updated tmtime of parent node")
+				}					}
 			}
 
 			if err := n.UnsetTempEtag(); err != nil {
-				log.Error().Err(err).Interface("node", n).Msg("could not remove temporary etag attribute")
+				sublog.Error().Err(err).Msg("could not remove temporary etag attribute")
 			}
 
 		}
 
-		// TODO size accounting
+		// size accounting
+		if t.lu.Options.TreeSizeAccounting {
+			// update the treesize if it differs from the current size
+			updateTreeSize := false
 
+			var treeSize, calculatedTreeSize uint64
+			calculatedTreeSize, err = n.CalculateTreeSize(ctx)
+			if err != nil {
+				continue
+			}
+
+			treeSize, err = n.GetTreeSize()
+			switch {
+			case err != nil:
+				// missing attribute, or invalid format, overwrite
+				sublog.Debug().Err(err).Msg("could not read treesize attribute, overwriting")
+				updateTreeSize = true
+			case treeSize != calculatedTreeSize:
+				sublog.Debug().
+					Uint64("treesize", treeSize).
+					Uint64("calculatedTreeSize", calculatedTreeSize).
+					Msg("parent treesize is different then calculated treesize, updating")
+				updateTreeSize = true
+			default:
+				sublog.Debug().
+					Uint64("treesize", treeSize).
+					Uint64("calculatedTreeSize", calculatedTreeSize).
+					Msg("parent size matches calculated size, not updating")
+			}
+
+
+			if updateTreeSize {
+				// update the tree time of the parent node
+				if err = n.SetTreeSize(calculatedTreeSize); err != nil {
+					sublog.Error().Err(err).Uint64("calculatedTreeSize", calculatedTreeSize).Msg("could not update treesize of parent node")
+				} else {
+					sublog.Debug().Uint64("calculatedTreeSize", calculatedTreeSize).Msg("updated treesize of parent node")
+				}
+			}
+		}
 	}
 	if err != nil {
-		log.Error().Err(err).Interface("node", n).Msg("error propagating")
+		sublog.Error().Err(err).Msg("error propagating")
 		return
 	}
 	return
