@@ -25,8 +25,8 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/storage/fs/decomposed/node"
-	"github.com/cs3org/reva/pkg/storage/fs/decomposed/tree"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
 	ruser "github.com/cs3org/reva/pkg/user"
 )
 

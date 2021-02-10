@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package decomposed
+package decomposedfs
 
 import (
 	"context"
@@ -29,8 +29,8 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/storage/fs/decomposed/node"
-	"github.com/cs3org/reva/pkg/storage/fs/decomposed/xattrs"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"

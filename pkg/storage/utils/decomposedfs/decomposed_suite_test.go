@@ -16,45 +16,16 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package options_test
+package decomposedfs_test
 
 import (
-	"github.com/cs3org/reva/pkg/storage/fs/decomposed/options"
+	"testing"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Options", func() {
-	var (
-		o      *options.Options
-		config map[string]interface{}
-	)
-
-	BeforeEach(func() {
-		config = map[string]interface{}{}
-	})
-
-	Describe("New", func() {
-		JustBeforeEach(func() {
-			var err error
-			o, err = options.New(config)
-			Expect(err).ToNot(HaveOccurred())
-		})
-
-		It("sets defaults", func() {
-			Expect(len(o.ShareFolder) > 0).To(BeTrue())
-			Expect(len(o.UserLayout) > 0).To(BeTrue())
-		})
-
-		Context("with unclean root path configuration", func() {
-			BeforeEach(func() {
-				config["root"] = "foo/"
-			})
-
-			It("sanitizes the root path", func() {
-				Expect(o.Root).To(Equal("foo"))
-			})
-		})
-	})
-})
+func TestDecomposed(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Decomposed Suite")
+}

@@ -22,9 +22,9 @@ import (
 	"fmt"
 
 	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/storage/fs/decomposed"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/storage/fs/s3ng/blobstore"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs"
 )
 
 func init() {
@@ -48,5 +48,5 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		return nil, err
 	}
 
-	return decomposed.NewDefault(m, bs)
+	return decomposedfs.NewDefault(m, bs)
 }

@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package decomposed_test
+package decomposedfs_test
 
 import (
 	"context"
@@ -29,12 +29,12 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/storage/fs/decomposed"
-	"github.com/cs3org/reva/pkg/storage/fs/decomposed/mocks"
-	"github.com/cs3org/reva/pkg/storage/fs/decomposed/options"
-	helpers "github.com/cs3org/reva/pkg/storage/fs/decomposed/testhelpers"
-	"github.com/cs3org/reva/pkg/storage/fs/decomposed/tree"
-	treemocks "github.com/cs3org/reva/pkg/storage/fs/decomposed/tree/mocks"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/mocks"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/options"
+	helpers "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/testhelpers"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
+	treemocks "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree/mocks"
 	ruser "github.com/cs3org/reva/pkg/user"
 
 	. "github.com/onsi/ginkgo"
@@ -49,7 +49,7 @@ var _ = Describe("Decomposed", func() {
 
 		config      map[string]interface{}
 		o           *options.Options
-		lookup      *decomposed.Lookup
+		lookup      *decomposedfs.Lookup
 		permissions *mocks.PermissionsChecker
 		bs          *treemocks.Blobstore
 		fs          storage.FS
@@ -80,7 +80,7 @@ var _ = Describe("Decomposed", func() {
 		}
 		o, err = options.New(config)
 		Expect(err).ToNot(HaveOccurred())
-		lookup = &decomposed.Lookup{Options: o}
+		lookup = &decomposedfs.Lookup{Options: o}
 		permissions = &mocks.PermissionsChecker{}
 		bs = &treemocks.Blobstore{}
 	})
@@ -88,7 +88,7 @@ var _ = Describe("Decomposed", func() {
 	JustBeforeEach(func() {
 		var err error
 		tree := tree.New(o.Root, true, true, lookup, bs)
-		fs, err = decomposed.New(o, lookup, permissions, tree)
+		fs, err = decomposedfs.New(o, lookup, permissions, tree)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(fs.CreateHome(ctx)).To(Succeed())
 	})
@@ -102,7 +102,9 @@ var _ = Describe("Decomposed", func() {
 
 	Describe("NewDefault", func() {
 		It("works", func() {
-			_, err := decomposed.NewDefault(map[string]interface{}{}, bs)
+			_, err := decomposedfs.NewDefault(map[string]interface{}{
+				"root": o.Root,
+			}, bs)
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})

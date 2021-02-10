@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package decomposed_test
+package decomposedfs_test
 
 import (
 	"bytes"
@@ -31,11 +31,11 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/storage/fs/decomposed"
-	"github.com/cs3org/reva/pkg/storage/fs/decomposed/mocks"
-	"github.com/cs3org/reva/pkg/storage/fs/decomposed/options"
-	"github.com/cs3org/reva/pkg/storage/fs/decomposed/tree"
-	treemocks "github.com/cs3org/reva/pkg/storage/fs/decomposed/tree/mocks"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/mocks"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/options"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
+	treemocks "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree/mocks"
 	ruser "github.com/cs3org/reva/pkg/user"
 
 	. "github.com/onsi/ginkgo"
@@ -50,7 +50,7 @@ var _ = Describe("File uploads", func() {
 		ctx  context.Context
 
 		o           *options.Options
-		lookup      *decomposed.Lookup
+		lookup      *decomposedfs.Lookup
 		permissions *mocks.PermissionsChecker
 		bs          *treemocks.Blobstore
 	)
@@ -77,7 +77,7 @@ var _ = Describe("File uploads", func() {
 			"root": tmpRoot,
 		})
 		Expect(err).ToNot(HaveOccurred())
-		lookup = &decomposed.Lookup{Options: o}
+		lookup = &decomposedfs.Lookup{Options: o}
 		permissions = &mocks.PermissionsChecker{}
 		bs = &treemocks.Blobstore{}
 	})
@@ -92,7 +92,7 @@ var _ = Describe("File uploads", func() {
 	JustBeforeEach(func() {
 		var err error
 		tree := tree.New(o.Root, true, true, lookup, bs)
-		fs, err = decomposed.New(o, lookup, permissions, tree)
+		fs, err = decomposedfs.New(o, lookup, permissions, tree)
 		Expect(err).ToNot(HaveOccurred())
 	})
 

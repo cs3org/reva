@@ -26,12 +26,12 @@ import (
 	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/pkg/storage/fs/decomposed"
-	"github.com/cs3org/reva/pkg/storage/fs/decomposed/node"
-	"github.com/cs3org/reva/pkg/storage/fs/decomposed/options"
-	"github.com/cs3org/reva/pkg/storage/fs/decomposed/tree"
-	"github.com/cs3org/reva/pkg/storage/fs/decomposed/tree/mocks"
-	"github.com/cs3org/reva/pkg/storage/fs/decomposed/xattrs"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/options"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree/mocks"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	ruser "github.com/cs3org/reva/pkg/user"
 	"github.com/pkg/xattr"
 	"github.com/stretchr/testify/mock"
@@ -71,7 +71,7 @@ var _ = Describe("Tree", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		blobstore = &mocks.Blobstore{}
-		lookup = &decomposed.Lookup{Options: o}
+		lookup = &decomposedfs.Lookup{Options: o}
 	})
 
 	JustBeforeEach(func() {

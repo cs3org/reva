@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package decomposed
+package decomposedfs
 
 //go:generate mockery -name PermissionsChecker
 //go:generate mockery -name Tree
@@ -36,11 +36,11 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/storage/fs/decomposed/node"
-	"github.com/cs3org/reva/pkg/storage/fs/decomposed/options"
-	"github.com/cs3org/reva/pkg/storage/fs/decomposed/tree"
-	"github.com/cs3org/reva/pkg/storage/fs/decomposed/xattrs"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/options"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/pkg/errors"

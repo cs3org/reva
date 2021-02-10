@@ -19,6 +19,10 @@
 package s3ng_test
 
 import (
+	"io/ioutil"
+	"os"
+	"strings"
+
 	"github.com/cs3org/reva/pkg/storage/fs/s3ng"
 
 	. "github.com/onsi/ginkgo"
@@ -28,10 +32,15 @@ import (
 var _ = Describe("S3ng", func() {
 	var (
 		options map[string]interface{}
+		tmpRoot string
 	)
 
 	BeforeEach(func() {
+		tmpRoot, err := ioutil.TempDir("", "reva-unit-tests-*-root")
+		Expect(err).ToNot(HaveOccurred())
+
 		options = map[string]interface{}{
+			"root":          tmpRoot,
 			"enable_home":   true,
 			"share_folder":  "/Shares",
 			"s3.endpoint":   "http://1.2.3.4:5000",
@@ -39,6 +48,12 @@ var _ = Describe("S3ng", func() {
 			"s3.bucket":     "the-bucket",
 			"s3.access_key": "foo",
 			"s3.secret_key": "bar",
+		}
+	})
+
+	AfterEach(func() {
+		if strings.HasPrefix(tmpRoot, os.TempDir()) {
+			os.RemoveAll(tmpRoot)
 		}
 	})
 
