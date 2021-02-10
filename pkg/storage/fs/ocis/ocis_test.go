@@ -23,23 +23,24 @@ package ocis
 import (
 	"context"
 	"fmt"
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/user"
-	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"os"
 	"path"
 	"sync"
 	"testing"
+
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/user"
+	"github.com/stretchr/testify/assert"
 )
 
 // TestLackAdvisoryLocks demonstrates that access to a file
 // is not mutually exclusive on the oCIS storage.
 var (
 	config = make(map[string]interface{})
-	ctx context.Context
-	f, f1 *os.File
+	ctx    context.Context
+	f, f1  *os.File
 	tmpDir string
 )
 
@@ -76,19 +77,19 @@ func TestMain(m *testing.M) {
 	}
 
 	// do not do this. Prepare f0
-	if err = ioutil.WriteFile(fmt.Sprintf("%s/%s", tmpDir,"f.lol"), []byte("test"), 0644); err != nil {
+	if err = ioutil.WriteFile(fmt.Sprintf("%s/%s", tmpDir, "f.lol"), []byte("test"), 0644); err != nil {
 		panic(err)
 	}
-	f, err = os.Open(fmt.Sprintf("%s/%s", tmpDir,"f.lol"))
+	f, err = os.Open(fmt.Sprintf("%s/%s", tmpDir, "f.lol"))
 	if err != nil {
 		panic(err)
 	}
 
 	// do not do this. Prepare f1
-	if err = ioutil.WriteFile(fmt.Sprintf("%s/%s", tmpDir,"f1.lol"), []byte("another run"), 0644); err != nil {
+	if err = ioutil.WriteFile(fmt.Sprintf("%s/%s", tmpDir, "f1.lol"), []byte("another run"), 0644); err != nil {
 		panic(err)
 	}
-	f1, err = os.Open(fmt.Sprintf("%s/%s", tmpDir,"f1.lol"))
+	f1, err = os.Open(fmt.Sprintf("%s/%s", tmpDir, "f1.lol"))
 	if err != nil {
 		panic(err)
 	}
@@ -155,8 +156,8 @@ func TestParallelMkcol(t *testing.T) {
 		t.Error(err)
 	}
 
-	for i:=0; i< 10; i++ {
-		t.Run("", func (t *testing.T) {
+	for i := 0; i < 10; i++ {
+		t.Run("", func(t *testing.T) {
 			t.Parallel()
 			if err := ofs.CreateDir(ctx, "fightforit"); err != nil {
 				rinfo, err := ofs.GetMD(ctx, &provider.Reference{

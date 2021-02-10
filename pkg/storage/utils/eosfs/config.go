@@ -38,7 +38,7 @@ type Config struct {
 	EosBinary string `mapstructure:"eos_binary"`
 
 	// Location of the xrdcopy binary.
-	// Default is /usr/bin/xrdcopy.
+	// Default is /opt/eos/xrootd/bin/xrdcopy.
 	XrdcopyBinary string `mapstructure:"xrdcopy_binary"`
 
 	// URL of the Master EOS MGM.

@@ -75,7 +75,7 @@ type Options struct {
 	SingleUsername string
 
 	// Location of the xrdcopy binary.
-	// Default is /usr/bin/xrdcopy.
+	// Default is /opt/eos/xrootd/bin/xrdcopy.
 	XrdcopyBinary string
 
 	// URL of the EOS MGM.
@@ -107,7 +107,7 @@ func (opt *Options) init() {
 	}
 
 	if opt.XrdcopyBinary == "" {
-		opt.XrdcopyBinary = "/usr/bin/xrdcopy"
+		opt.XrdcopyBinary = "/opt/eos/xrootd/bin/xrdcopy"
 	}
 
 	if opt.URL == "" {
