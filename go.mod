@@ -8,7 +8,7 @@ require (
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/ReneKroon/ttlcache/v2 v2.3.0
-	github.com/aws/aws-sdk-go v1.37.3
+	github.com/aws/aws-sdk-go v1.37.8
 	github.com/c-bata/go-prompt v0.2.5
 	github.com/cheggaaa/pb v1.0.29
 	github.com/coreos/go-oidc v2.2.1+incompatible
@@ -44,6 +44,7 @@ require (
 	github.com/studio-b12/gowebdav v0.0.0-20200303150724-9380631c29a1
 	github.com/tus/tusd v1.1.1-0.20200416115059-9deabf9d80c2
 	go.opencensus.io v0.22.6
+	golang.org/x/crypto v0.0.0-20201203163018-be400aefbc4c
 	golang.org/x/net v0.0.0-20201202161906-c7110b5ffcbb
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	golang.org/x/term v0.0.0-20201117132131-f5c789dd3221
