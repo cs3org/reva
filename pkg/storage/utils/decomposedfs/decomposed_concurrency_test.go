@@ -108,7 +108,7 @@ var _ = Describe("Decomposed", func() {
 
 				// upload file with contents: "test"
 				go func(wg *sync.WaitGroup) {
-					fs.Upload(ctx, &provider.Reference{
+					_ = fs.Upload(ctx, &provider.Reference{
 						Spec: &provider.Reference_Path{Path: "uploaded.txt"},
 					}, f)
 					wg.Done()
@@ -116,7 +116,7 @@ var _ = Describe("Decomposed", func() {
 
 				// upload file with contents: "another run"
 				go func(wg *sync.WaitGroup) {
-					fs.Upload(ctx, &provider.Reference{
+					_ = fs.Upload(ctx, &provider.Reference{
 						Spec: &provider.Reference_Path{Path: "uploaded.txt"},
 					}, f1)
 					wg.Done()
