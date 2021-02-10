@@ -86,7 +86,7 @@ func (c *Config) init() {
 	}
 
 	if c.XrdcopyBinary == "" {
-		c.XrdcopyBinary = "/usr/bin/xrdcopy"
+		c.XrdcopyBinary = "/opt/eos/xrootd/bin/xrdcopy"
 	}
 
 	if c.MasterURL == "" {
