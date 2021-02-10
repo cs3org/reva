@@ -793,30 +793,24 @@ func (fs *eosfs) createShadowHome(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
 	}
-
-	home := fs.wrapShadow(ctx, "/")
 	uid, gid, err := fs.getRootUIDAndGID(ctx)
 	if err != nil {
 		return nil
 	}
-	_, err = fs.c.GetFileInfoByPath(ctx, uid, gid, home)
-	if err != nil { // home already exists
-		// TODO(labkode): abort on any error that is not found
-		if _, ok := err.(errtypes.IsNotFound); !ok {
-			return errors.Wrap(err, "eos: error verifying if user home directory exists")
-		}
-
-		err = fs.createUserDir(ctx, u, home)
-		if err != nil {
-			return err
-		}
-	}
-
+	home := fs.wrapShadow(ctx, "/")
 	shadowFolders := []string{fs.conf.ShareFolder}
+
 	for _, sf := range shadowFolders {
-		err = fs.createUserDir(ctx, u, path.Join(home, sf))
+		fn := path.Join(home, sf)
+		_, err = fs.c.GetFileInfoByPath(ctx, uid, gid, fn)
 		if err != nil {
-			return err
+			if _, ok := err.(errtypes.IsNotFound); !ok {
+				return errors.Wrap(err, "eos: error verifying if shadow directory exists")
+			}
+			err = fs.createUserDir(ctx, u, fn, false)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -839,12 +833,11 @@ func (fs *eosfs) createNominalHome(ctx context.Context) error {
 		return nil
 	}
 
-	// TODO(labkode): abort on any error that is not found
 	if _, ok := err.(errtypes.IsNotFound); !ok {
 		return errors.Wrap(err, "eos: error verifying if user home directory exists")
 	}
 
-	err = fs.createUserDir(ctx, u, home)
+	err = fs.createUserDir(ctx, u, home, false)
 	return err
 }
 
@@ -864,7 +857,7 @@ func (fs *eosfs) CreateHome(ctx context.Context) error {
 	return nil
 }
 
-func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string) error {
+func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string, recursiveAttr bool) error {
 	uid, gid, err := fs.getRootUIDAndGID(ctx)
 	if err != nil {
 		return nil
@@ -915,7 +908,7 @@ func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string)
 	}
 
 	for _, attr := range attrs {
-		err = fs.c.SetAttr(ctx, uid, gid, attr, true, path)
+		err = fs.c.SetAttr(ctx, uid, gid, attr, recursiveAttr, path)
 		if err != nil {
 			return errors.Wrap(err, "eos: error setting attribute")
 		}
@@ -967,7 +960,7 @@ func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.U
 	if err != nil {
 		return nil
 	}
-	if err := fs.createUserDir(ctx, u, tmp); err != nil {
+	if err := fs.createUserDir(ctx, u, tmp, false); err != nil {
 		err = errors.Wrapf(err, "eos: error creating temporary ref file")
 		return err
 	}

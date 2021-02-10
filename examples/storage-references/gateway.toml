@@ -28,4 +28,3 @@ home_provider = "/home"
 [http.services.ocmd]
 [http.services.ocdav]
 [http.services.ocs]
-prefix = "ocs"
