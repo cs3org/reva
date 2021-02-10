@@ -225,11 +225,12 @@ func (fs *ocisfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
 		return 0, 0, err
 	}
 
-	total := stat.Blocks * uint64(stat.Bsize) // Total data blocks in filesystem
+	total := +ri.Size + (stat.Bavail * uint64(stat.Bsize)) // used treesize + available space
+
 	switch {
 	case quotaStr == _quotaUncalculated, quotaStr == _quotaUnknown, quotaStr == _quotaUnlimited:
 	// best we can do is return current total
-	// TODO indicate unlimited total?
+	// TODO indicate unlimited total? -> in opaque data?
 	default:
 		if quota, err := strconv.ParseUint(quotaStr, 10, 64); err == nil {
 			if total > quota {
