@@ -72,7 +72,7 @@ type config struct {
 	// The password for connecting to the redis server
 	RedisPassword string `mapstructure:"redis_password" docs:""`
 	// The time in minutes for which the members of a group would be cached
-	GroupMembersCacheExpiration int `mapstructure:"user_groups_cache_expiration" docs:"5"`
+	GroupMembersCacheExpiration int `mapstructure:"group_members_cache_expiration" docs:"5"`
 	// The OIDC Provider
 	IDProvider string `mapstructure:"id_provider" docs:"http://cernbox.cern.ch"`
 	// Base API Endpoint
