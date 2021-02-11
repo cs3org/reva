@@ -486,9 +486,8 @@ steps:
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
-      - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
+      - git clone -b log-ldap-group-in-ci --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout e9d76ae1bad48fdd7fed51b1a45f045c834f423c
 
   - name: localAPIAcceptanceTestsOwncloudStorage
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
@@ -560,9 +559,8 @@ steps:
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
-      - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
+      - git clone -b log-ldap-group-in-ci --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout e9d76ae1bad48fdd7fed51b1a45f045c834f423c
 
   - name: localAPIAcceptanceTestsOcisStorage
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
@@ -629,9 +627,8 @@ steps:
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
-      - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
+      - git clone -b log-ldap-group-in-ci --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout e9d76ae1bad48fdd7fed51b1a45f045c834f423c
 
   - name: oC10APIAcceptanceTestsOcisStorage
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
@@ -701,9 +698,8 @@ steps:
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
-      - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
+      - git clone -b log-ldap-group-in-ci --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout e9d76ae1bad48fdd7fed51b1a45f045c834f423c
 
   - name: oC10APIAcceptanceTestsOcisStorage
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
@@ -773,9 +769,8 @@ steps:
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
-      - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
+      - git clone -b log-ldap-group-in-ci --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout e9d76ae1bad48fdd7fed51b1a45f045c834f423c
 
   - name: oC10APIAcceptanceTestsOcisStorage
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
@@ -845,9 +840,8 @@ steps:
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
-      - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
+      - git clone -b log-ldap-group-in-ci --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout e9d76ae1bad48fdd7fed51b1a45f045c834f423c
 
   - name: oC10APIAcceptanceTestsOcisStorage
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
@@ -917,9 +911,8 @@ steps:
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
-      - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
+      - git clone -b log-ldap-group-in-ci --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout e9d76ae1bad48fdd7fed51b1a45f045c834f423c
 
   - name: oC10APIAcceptanceTestsOcisStorage
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
@@ -989,9 +982,8 @@ steps:
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
-      - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
+      - git clone -b log-ldap-group-in-ci --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout e9d76ae1bad48fdd7fed51b1a45f045c834f423c
 
   - name: oC10APIAcceptanceTestsOcisStorage
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
@@ -1061,9 +1053,8 @@ steps:
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
-      - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
+      - git clone -b log-ldap-group-in-ci --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout e9d76ae1bad48fdd7fed51b1a45f045c834f423c
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
@@ -1138,9 +1129,8 @@ steps:
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
-      - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
+      - git clone -b log-ldap-group-in-ci --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout e9d76ae1bad48fdd7fed51b1a45f045c834f423c
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
@@ -1215,9 +1205,8 @@ steps:
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
-      - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
+      - git clone -b log-ldap-group-in-ci --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout e9d76ae1bad48fdd7fed51b1a45f045c834f423c
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
@@ -1292,9 +1281,8 @@ steps:
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
-      - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
+      - git clone -b log-ldap-group-in-ci --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout e9d76ae1bad48fdd7fed51b1a45f045c834f423c
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
@@ -1369,9 +1357,8 @@ steps:
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
-      - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
+      - git clone -b log-ldap-group-in-ci --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout e9d76ae1bad48fdd7fed51b1a45f045c834f423c
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
@@ -1446,9 +1433,8 @@ steps:
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
     commands:
       - git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing
-      - git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
+      - git clone -b log-ldap-group-in-ci --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner
       - cd /drone/src/tmp/testrunner
-      - git checkout e9d76ae1bad48fdd7fed51b1a45f045c834f423c
 
   - name: oC10APIAcceptanceTestsOwncloudStorage
     image: registry.cern.ch/docker.io/owncloudci/php:7.4
