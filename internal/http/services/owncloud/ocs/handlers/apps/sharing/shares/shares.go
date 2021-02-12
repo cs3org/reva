@@ -21,14 +21,17 @@ package shares
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"mime"
 	"net/http"
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -36,6 +39,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/rs/zerolog/log"
 
+	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
@@ -43,7 +47,6 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
-	"github.com/cs3org/reva/pkg/ttlmap"
 	"github.com/pkg/errors"
 )
 
@@ -52,7 +55,7 @@ type Handler struct {
 	gatewayAddr         string
 	publicURL           string
 	sharePrefix         string
-	userIdentifierCache *ttlmap.TTLMap
+	userIdentifierCache *ttlcache.Cache
 }
 
 // we only cache the minimal set of data instead of the full user metadata
@@ -66,8 +69,11 @@ type userIdentifiers struct {
 func (h *Handler) Init(c *config.Config) error {
 	h.gatewayAddr = c.GatewaySvc
 	h.publicURL = c.Config.Host
-	h.userIdentifierCache = ttlmap.New(1000, 60)
 	h.sharePrefix = c.SharePrefix
+
+	h.userIdentifierCache = ttlcache.NewCache()
+	_ = h.userIdentifierCache.SetTTL(60 * time.Second)
+
 	return nil
 }
 
@@ -95,6 +101,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		default:
 			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Only GET, POST and PUT are allowed", nil)
 		}
+
 	case "pending":
 		var shareID string
 		shareID, r.URL.Path = router.ShiftPath(r.URL.Path)
@@ -103,12 +110,13 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		switch r.Method {
 		case "POST":
-			h.acceptShare(w, r, shareID)
+			h.updateReceivedShare(w, r, shareID, false)
 		case "DELETE":
-			h.rejectShare(w, r, shareID)
+			h.updateReceivedShare(w, r, shareID, true)
 		default:
 			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Only POST and DELETE are allowed", nil)
 		}
+
 	case "remote_shares":
 		var shareID string
 		shareID, r.URL.Path = router.ShiftPath(r.URL.Path)
@@ -125,6 +133,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		default:
 			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Only GET method is allowed", nil)
 		}
+
 	default:
 		switch r.Method {
 		case "GET":
@@ -143,7 +152,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				h.removePublicShare(w, r, shareID)
 				return
 			}
-
 			h.removeUserShare(w, r, head)
 		default:
 			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Only GET, POST and PUT are allowed", nil)
@@ -207,72 +215,87 @@ func (h *Handler) createShare(w http.ResponseWriter, r *http.Request) {
 	switch shareType {
 	case int(conversions.ShareTypeUser):
 		// user collaborations default to coowner
-		if h.validatePermissions(w, r, statRes.Info, conversions.NewCoownerRole().OCSPermissions()) {
-			h.createUserShare(w, r, statRes.Info)
+		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewCoownerRole()); err == nil {
+			h.createUserShare(w, r, statRes.Info, role, val)
+		}
+	case int(conversions.ShareTypeGroup):
+		// group collaborations default to coowner
+		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewCoownerRole()); err == nil {
+			h.createGroupShare(w, r, statRes.Info, role, val)
 		}
 	case int(conversions.ShareTypePublicLink):
 		// public links default to read only
-		if h.validatePermissions(w, r, statRes.Info, conversions.NewViewerRole().OCSPermissions()) {
+		if _, _, err := h.extractPermissions(w, r, statRes.Info, conversions.NewViewerRole()); err == nil {
 			h.createPublicLinkShare(w, r, statRes.Info)
 		}
 	case int(conversions.ShareTypeFederatedCloudShare):
 		// federated shares default to read only
-		if h.validatePermissions(w, r, statRes.Info, conversions.NewViewerRole().OCSPermissions()) {
-			h.createFederatedCloudShare(w, r, statRes.Info)
+		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewViewerRole()); err == nil {
+			h.createFederatedCloudShare(w, r, statRes.Info, role, val)
 		}
 	default:
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "unknown share type", nil)
 	}
 }
 
-func (h *Handler) validatePermissions(w http.ResponseWriter, r *http.Request, ri *provider.ResourceInfo, defaultPermissions conversions.Permissions) bool {
-
-	// 1. we start without permissions
-	var reqPermissions conversions.Permissions
-
-	reqRole := r.FormValue("role")
+func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri *provider.ResourceInfo, defaultPermissions *conversions.Role) (*conversions.Role, []byte, error) {
+	reqRole, reqPermissions := r.FormValue("role"), r.FormValue("permissions")
+	var role *conversions.Role
+	var permissions conversions.Permissions
 
 	// the share role overrides the requested permissions
 	if reqRole != "" {
-		reqPermissions = conversions.RoleFromName(reqRole).OCSPermissions()
+		role = conversions.RoleFromName(reqRole)
 	} else {
 		// map requested permissions
-		pval := r.FormValue("permissions")
-		if pval == "" {
-			// default is read permissions / role viewer
+		if reqPermissions == "" {
 			// TODO default link vs user share
-			//reqPermissions = conversions.NewCoownerRole().OCSPermissions()
-			reqPermissions = defaultPermissions
+			role = defaultPermissions
 		} else {
-			pint, err := strconv.Atoi(pval)
+			pint, err := strconv.Atoi(reqPermissions)
 			if err != nil {
 				response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "permissions must be an integer", nil)
-				return false
+				return nil, nil, err
 			}
-			reqPermissions, err = conversions.NewPermissions(pint)
+			permissions, err = conversions.NewPermissions(pint)
 			if err != nil {
 				if err == conversions.ErrPermissionNotInRange {
 					response.WriteOCSError(w, r, http.StatusNotFound, err.Error(), nil)
 				} else {
 					response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, err.Error(), nil)
 				}
-				return false
+				return nil, nil, err
 			}
+			role = conversions.RoleFromOCSPermissions(permissions)
 		}
 	}
 
-	if ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
+	permissions = role.OCSPermissions()
+	if ri != nil && ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
 		// Single file shares should never have delete or create permissions
-		reqPermissions &^= conversions.PermissionCreate
-		reqPermissions &^= conversions.PermissionDelete
+		permissions &^= conversions.PermissionCreate
+		permissions &^= conversions.PermissionDelete
+		if permissions == conversions.PermissionInvalid {
+			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Cannot set the requested share permissions", nil)
+			return nil, nil, fmt.Errorf("Cannot set the requested share permissions")
+		}
 	}
 
 	existingPermissions := conversions.RoleFromResourcePermissions(ri.PermissionSet).OCSPermissions()
-	if !existingPermissions.Contain(reqPermissions) {
+	if permissions == conversions.PermissionInvalid || !existingPermissions.Contain(permissions) {
 		response.WriteOCSError(w, r, http.StatusNotFound, "Cannot set the requested share permissions", nil)
-		return false
+		return nil, nil, fmt.Errorf("Cannot set the requested share permissions")
 	}
-	return true
+
+	role = conversions.RoleFromOCSPermissions(permissions)
+	roleMap := map[string]string{"name": role.Name}
+	val, err := json.Marshal(roleMap)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "could not encode role", err)
+		return nil, nil, err
+	}
+
+	return role, val, nil
 }
 
 // PublicShareContextName represent cross boundaries context for the name of the public share
@@ -354,7 +377,7 @@ func (h *Handler) getShare(w http.ResponseWriter, r *http.Request, shareID strin
 
 		if err == nil && uRes.GetShare() != nil {
 			resourceID = uRes.Share.ResourceId
-			share, err = conversions.UserShare2ShareData(ctx, uRes.Share)
+			share, err = conversions.CS3Share2ShareData(ctx, uRes.Share)
 			if err != nil {
 				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
 				return
@@ -482,7 +505,7 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 		return
 	}
 
-	share, err := conversions.UserShare2ShareData(ctx, gRes.Share)
+	share, err := conversions.CS3Share2ShareData(ctx, gRes.Share)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
 		return
@@ -661,9 +684,9 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			info = statRes.GetInfo()
 		}
 
-		data, err := conversions.UserShare2ShareData(r.Context(), rs.Share)
+		data, err := conversions.CS3Share2ShareData(r.Context(), rs.Share)
 		if err != nil {
-			log.Debug().Interface("share", rs.Share).Interface("shareData", data).Err(err).Msg("could not UserShare2ShareData, skipping")
+			log.Debug().Interface("share", rs.Share).Interface("shareData", data).Err(err).Msg("could not CS3Share2ShareData, skipping")
 			continue
 		}
 
@@ -871,56 +894,89 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 	return nil
 }
 
-// mustGetUserIdentifiers always returns a struct with identifiers, if the user could not be found they will all be empty
-func (h *Handler) mustGetUserIdentifiers(ctx context.Context, c gateway.GatewayAPIClient, userid string) *userIdentifiers {
-	sublog := appctx.GetLogger(ctx).With().Str("userid", userid).Logger()
-	if userid == "" {
-		return &userIdentifiers{}
-	}
-	//item := h.userIdentifierCache.Get(userid)
-	ui, ok := h.userIdentifierCache.Get(userid).(*userIdentifiers)
-	if ok {
-		sublog.Debug().Msg("cache hit")
-		return ui
-	}
-	sublog.Debug().Msg("cache miss")
-	res, err := c.GetUser(ctx, &userpb.GetUserRequest{
-		UserId: &userpb.UserId{
-			OpaqueId: userid,
-		},
-	})
-	if err != nil {
-		sublog.Err(err).Msg("could not look up user")
-		return &userIdentifiers{}
-	}
-	if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
-		sublog.Err(err).
-			Int32("code", int32(res.GetStatus().GetCode())).
-			Str("message", res.GetStatus().GetMessage()).
-			Msg("get user call failed")
-		return &userIdentifiers{}
-	}
-	if res.User == nil {
-		sublog.Debug().
-			Int32("code", int32(res.GetStatus().GetCode())).
-			Str("message", res.GetStatus().GetMessage()).
-			Msg("user not found")
+// mustGetIdentifiers always returns a struct with identifiers, if the user or group could not be found they will all be empty
+func (h *Handler) mustGetIdentifiers(ctx context.Context, c gateway.GatewayAPIClient, id string, isGroup bool) *userIdentifiers {
+	sublog := appctx.GetLogger(ctx).With().Str("id", id).Logger()
+	if id == "" {
 		return &userIdentifiers{}
 	}
 
-	ui = &userIdentifiers{
-		DisplayName: res.User.DisplayName,
-		UserName:    res.User.Username,
-		Mail:        res.User.Mail,
+	idIf, err := h.userIdentifierCache.Get(id)
+	if err == nil {
+		sublog.Debug().Msg("cache hit")
+		return idIf.(*userIdentifiers)
 	}
-	h.userIdentifierCache.Put(userid, ui)
-	log.Debug().Str("userid", userid).Msg("cache update")
+
+	sublog.Debug().Msg("cache miss")
+	var ui *userIdentifiers
+
+	if isGroup {
+		res, err := c.GetGroup(ctx, &grouppb.GetGroupRequest{
+			GroupId: &grouppb.GroupId{
+				OpaqueId: id,
+			},
+		})
+		if err != nil {
+			sublog.Err(err).Msg("could not look up group")
+			return &userIdentifiers{}
+		}
+		if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
+			sublog.Err(err).
+				Int32("code", int32(res.GetStatus().GetCode())).
+				Str("message", res.GetStatus().GetMessage()).
+				Msg("get group call failed")
+			return &userIdentifiers{}
+		}
+		if res.Group == nil {
+			sublog.Debug().
+				Int32("code", int32(res.GetStatus().GetCode())).
+				Str("message", res.GetStatus().GetMessage()).
+				Msg("group not found")
+			return &userIdentifiers{}
+		}
+		ui = &userIdentifiers{
+			DisplayName: res.Group.DisplayName,
+			UserName:    res.Group.GroupName,
+			Mail:        res.Group.Mail,
+		}
+	} else {
+		res, err := c.GetUser(ctx, &userpb.GetUserRequest{
+			UserId: &userpb.UserId{
+				OpaqueId: id,
+			},
+		})
+		if err != nil {
+			sublog.Err(err).Msg("could not look up user")
+			return &userIdentifiers{}
+		}
+		if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
+			sublog.Err(err).
+				Int32("code", int32(res.GetStatus().GetCode())).
+				Str("message", res.GetStatus().GetMessage()).
+				Msg("get user call failed")
+			return &userIdentifiers{}
+		}
+		if res.User == nil {
+			sublog.Debug().
+				Int32("code", int32(res.GetStatus().GetCode())).
+				Str("message", res.GetStatus().GetMessage()).
+				Msg("user not found")
+			return &userIdentifiers{}
+		}
+		ui = &userIdentifiers{
+			DisplayName: res.User.DisplayName,
+			UserName:    res.User.Username,
+			Mail:        res.User.Mail,
+		}
+	}
+	_ = h.userIdentifierCache.Set(id, ui)
+	log.Debug().Str("id", id).Msg("cache update")
 	return ui
 }
 
 func (h *Handler) mapUserIds(ctx context.Context, c gateway.GatewayAPIClient, s *conversions.ShareData) {
 	if s.UIDOwner != "" {
-		owner := h.mustGetUserIdentifiers(ctx, c, s.UIDOwner)
+		owner := h.mustGetIdentifiers(ctx, c, s.UIDOwner, false)
 		s.UIDOwner = owner.UserName
 		if s.DisplaynameOwner == "" {
 			s.DisplaynameOwner = owner.DisplayName
@@ -931,7 +987,7 @@ func (h *Handler) mapUserIds(ctx context.Context, c gateway.GatewayAPIClient, s 
 	}
 
 	if s.UIDFileOwner != "" {
-		fileOwner := h.mustGetUserIdentifiers(ctx, c, s.UIDFileOwner)
+		fileOwner := h.mustGetIdentifiers(ctx, c, s.UIDFileOwner, false)
 		s.UIDFileOwner = fileOwner.UserName
 		if s.DisplaynameFileOwner == "" {
 			s.DisplaynameFileOwner = fileOwner.DisplayName
@@ -942,7 +998,7 @@ func (h *Handler) mapUserIds(ctx context.Context, c gateway.GatewayAPIClient, s 
 	}
 
 	if s.ShareWith != "" && s.ShareWith != "***redacted***" {
-		shareWith := h.mustGetUserIdentifiers(ctx, c, s.ShareWith)
+		shareWith := h.mustGetIdentifiers(ctx, c, s.ShareWith, s.ShareType == conversions.ShareTypeGroup)
 		s.ShareWith = shareWith.UserName
 		if s.ShareWithDisplayname == "" {
 			s.ShareWithDisplayname = shareWith.DisplayName

@@ -29,9 +29,11 @@ import (
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/user"
 
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	publicsharemgr "github.com/cs3org/reva/pkg/publicshare/manager/registry"
 	usermgr "github.com/cs3org/reva/pkg/user/manager/registry"
@@ -45,7 +47,7 @@ const (
 	ShareTypePublicLink ShareType = 3
 
 	// ShareTypeGroup represents a group share
-	// ShareTypeGroup ShareType = 1
+	ShareTypeGroup ShareType = 1
 
 	// ShareTypeFederatedCloudShare represents a federated share
 	ShareTypeFederatedCloudShare ShareType = 6
@@ -169,16 +171,23 @@ type MatchValueData struct {
 	ShareWithAdditionalInfo string `json:"shareWithAdditionalInfo" xml:"shareWithAdditionalInfo"`
 }
 
-// UserShare2ShareData converts a cs3api user share into shareData data model
-func UserShare2ShareData(ctx context.Context, share *collaboration.Share) (*ShareData, error) {
+// CS3Share2ShareData converts a cs3api user share into shareData data model
+func CS3Share2ShareData(ctx context.Context, share *collaboration.Share) (*ShareData, error) {
 	sd := &ShareData{
 		// share.permissions are mapped below
 		// Displaynames are added later
-		ShareType:    ShareTypeUser,
 		UIDOwner:     LocalUserIDToString(share.GetCreator()),
 		UIDFileOwner: LocalUserIDToString(share.GetOwner()),
-		ShareWith:    LocalUserIDToString(share.GetGrantee().GetId()),
 	}
+
+	if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
+		sd.ShareType = ShareTypeUser
+		sd.ShareWith = LocalUserIDToString(share.Grantee.GetUserId())
+	} else if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
+		sd.ShareType = ShareTypeGroup
+		sd.ShareWith = LocalGroupIDToString(share.Grantee.GetGroupId())
+	}
+
 	if share.Id != nil {
 		sd.ID = share.Id.OpaqueId
 	}
@@ -188,7 +197,6 @@ func UserShare2ShareData(ctx context.Context, share *collaboration.Share) (*Shar
 	if share.Ctime != nil {
 		sd.STime = share.Ctime.Seconds // TODO CS3 api birth time = btime
 	}
-	// TODO check grantee type for user vs group
 	return sd, nil
 }
 
@@ -234,6 +242,14 @@ func LocalUserIDToString(userID *userpb.UserId) string {
 		return ""
 	}
 	return userID.OpaqueId
+}
+
+// LocalGroupIDToString transforms a cs3api group id into an ocs data model without domain name
+func LocalGroupIDToString(groupID *grouppb.GroupId) string {
+	if groupID == nil || groupID.OpaqueId == "" {
+		return ""
+	}
+	return groupID.OpaqueId
 }
 
 // UserIDToString transforms a cs3api user id into an ocs data model

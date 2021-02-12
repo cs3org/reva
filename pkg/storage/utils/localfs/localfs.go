@@ -31,12 +31,14 @@ import (
 	"strings"
 	"time"
 
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage"
+	"github.com/cs3org/reva/pkg/storage/utils/acl"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/grants"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
@@ -432,7 +434,12 @@ func (fs *localfs) AddGrant(ctx context.Context, ref *provider.Reference, g *pro
 	if err != nil {
 		return errors.Wrap(err, "localfs: error getting grantee type")
 	}
-	grantee := fmt.Sprintf("%s:%s@%s", granteeType, g.Grantee.Id.OpaqueId, g.Grantee.Id.Idp)
+	var grantee string
+	if granteeType == acl.TypeUser {
+		grantee = fmt.Sprintf("%s:%s@%s", granteeType, g.Grantee.GetUserId().OpaqueId, g.Grantee.GetUserId().Idp)
+	} else if granteeType == acl.TypeGroup {
+		grantee = fmt.Sprintf("%s:%s@%s", granteeType, g.Grantee.GetGroupId().OpaqueId, g.Grantee.GetGroupId().Idp)
+	}
 
 	err = fs.addToACLDB(ctx, fn, grantee, role)
 	if err != nil {
@@ -461,11 +468,15 @@ func (fs *localfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*
 		if err != nil {
 			return nil, errors.Wrap(err, "localfs: error scanning db rows")
 		}
-		grantee := &provider.Grantee{
-			Id:   &userpb.UserId{OpaqueId: granteeID[2:]},
-			Type: grants.GetGranteeType(string(granteeID[0])),
+		grantSplit := strings.Split(granteeID, ":")
+		grantee := &provider.Grantee{Type: grants.GetGranteeType(grantSplit[0])}
+		parts := strings.Split(grantSplit[1], "@")
+		if grantSplit[0] == acl.TypeUser {
+			grantee.Id = &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: parts[0], Idp: parts[1]}}
+		} else if grantSplit[0] == acl.TypeGroup {
+			grantee.Id = &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: parts[0], Idp: parts[1]}}
 		}
-		permissions := grants.GetGrantPermissionSet(role)
+		permissions := grants.GetGrantPermissionSet(role, true)
 
 		grantList = append(grantList, &provider.Grant{
 			Grantee:     grantee,
@@ -487,7 +498,12 @@ func (fs *localfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *
 	if err != nil {
 		return errors.Wrap(err, "localfs: error getting grantee type")
 	}
-	grantee := fmt.Sprintf("%s:%s@%s", granteeType, g.Grantee.Id.OpaqueId, g.Grantee.Id.Idp)
+	var grantee string
+	if granteeType == acl.TypeUser {
+		grantee = fmt.Sprintf("%s:%s@%s", granteeType, g.Grantee.GetUserId().OpaqueId, g.Grantee.GetUserId().Idp)
+	} else if granteeType == acl.TypeGroup {
+		grantee = fmt.Sprintf("%s:%s@%s", granteeType, g.Grantee.GetGroupId().OpaqueId, g.Grantee.GetGroupId().Idp)
+	}
 
 	err = fs.removeFromACLDB(ctx, fn, grantee)
 	if err != nil {

@@ -72,7 +72,7 @@ type config struct {
 	// The password for connecting to the redis server
 	RedisPassword string `mapstructure:"redis_password" docs:""`
 	// The time in minutes for which the members of a group would be cached
-	GroupMembersCacheExpiration int `mapstructure:"user_groups_cache_expiration" docs:"5"`
+	GroupMembersCacheExpiration int `mapstructure:"group_members_cache_expiration" docs:"5"`
 	// The OIDC Provider
 	IDProvider string `mapstructure:"id_provider" docs:"http://cernbox.cern.ch"`
 	// Base API Endpoint
@@ -136,10 +136,10 @@ func New(m map[string]interface{}) (group.Manager, error) {
 	}, nil
 }
 
-func (m *manager) renewAPIToken(ctx context.Context) error {
+func (m *manager) renewAPIToken(ctx context.Context, forceRenewal bool) error {
 	// Received tokens have an expiration time of 20 minutes.
 	// Take a couple of seconds as buffer time for the API call to complete
-	if m.oidcToken.tokenExpirationTime.Before(time.Now().Add(time.Second * time.Duration(2))) {
+	if forceRenewal || m.oidcToken.tokenExpirationTime.Before(time.Now().Add(time.Second*time.Duration(2))) {
 		token, expiration, err := m.getAPIToken(ctx)
 		if err != nil {
 			return err
@@ -178,6 +178,9 @@ func (m *manager) getAPIToken(ctx context.Context) (string, time.Time, error) {
 	if err != nil {
 		return "", time.Time{}, err
 	}
+	if httpRes.StatusCode < 200 || httpRes.StatusCode > 299 {
+		return "", time.Time{}, errors.New("rest: get token endpoint returned " + httpRes.Status)
+	}
 
 	var result map[string]interface{}
 	err = json.Unmarshal(body, &result)
@@ -190,8 +193,8 @@ func (m *manager) getAPIToken(ctx context.Context) (string, time.Time, error) {
 	return result["access_token"].(string), expirationTime, nil
 }
 
-func (m *manager) sendAPIRequest(ctx context.Context, url string) ([]interface{}, error) {
-	err := m.renewAPIToken(ctx)
+func (m *manager) sendAPIRequest(ctx context.Context, url string, forceRenewal bool) ([]interface{}, error) {
+	err := m.renewAPIToken(ctx, forceRenewal)
 	if err != nil {
 		return nil, err
 	}
@@ -211,6 +214,14 @@ func (m *manager) sendAPIRequest(ctx context.Context, url string) ([]interface{}
 		return nil, err
 	}
 	defer httpRes.Body.Close()
+
+	if httpRes.StatusCode == http.StatusUnauthorized {
+		// The token is no longer valid, try renewing it
+		return m.sendAPIRequest(ctx, url, true)
+	}
+	if httpRes.StatusCode < 200 || httpRes.StatusCode > 299 {
+		return nil, errors.New("rest: API request returned " + httpRes.Status)
+	}
 
 	body, err := ioutil.ReadAll(httpRes.Body)
 	if err != nil {
@@ -234,12 +245,12 @@ func (m *manager) sendAPIRequest(ctx context.Context, url string) ([]interface{}
 func (m *manager) getGroupByParam(ctx context.Context, param, val string) (map[string]interface{}, error) {
 	url := fmt.Sprintf("%s/Group?filter=%s:%s&field=groupIdentifier&field=displayName&field=gid",
 		m.conf.APIBaseURL, param, val)
-	responseData, err := m.sendAPIRequest(ctx, url)
+	responseData, err := m.sendAPIRequest(ctx, url, false)
 	if err != nil {
 		return nil, err
 	}
-	if len(responseData) == 0 {
-		return nil, errors.New("rest: no user found")
+	if len(responseData) != 1 {
+		return nil, errors.New("rest: group not found")
 	}
 
 	userData, ok := responseData[0].(map[string]interface{})
@@ -356,7 +367,7 @@ func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string) (*gr
 
 func (m *manager) findGroupsByFilter(ctx context.Context, url string, groups map[string]*grouppb.Group) error {
 
-	groupData, err := m.sendAPIRequest(ctx, url)
+	groupData, err := m.sendAPIRequest(ctx, url, false)
 	if err != nil {
 		return err
 	}
@@ -431,7 +442,7 @@ func (m *manager) GetMembers(ctx context.Context, gid *grouppb.GroupId) ([]*user
 		return nil, err
 	}
 	url := fmt.Sprintf("%s/Group/%s/memberidentities/precomputed", m.conf.APIBaseURL, internalID)
-	userData, err := m.sendAPIRequest(ctx, url)
+	userData, err := m.sendAPIRequest(ctx, url, false)
 	if err != nil {
 		return nil, err
 	}

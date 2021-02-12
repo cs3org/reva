@@ -136,10 +136,10 @@ func New(m map[string]interface{}) (user.Manager, error) {
 	}, nil
 }
 
-func (m *manager) renewAPIToken(ctx context.Context) error {
+func (m *manager) renewAPIToken(ctx context.Context, forceRenewal bool) error {
 	// Received tokens have an expiration time of 20 minutes.
 	// Take a couple of seconds as buffer time for the API call to complete
-	if m.oidcToken.tokenExpirationTime.Before(time.Now().Add(time.Second * time.Duration(2))) {
+	if forceRenewal || m.oidcToken.tokenExpirationTime.Before(time.Now().Add(time.Second*time.Duration(2))) {
 		token, expiration, err := m.getAPIToken(ctx)
 		if err != nil {
 			return err
@@ -173,6 +173,9 @@ func (m *manager) getAPIToken(ctx context.Context) (string, time.Time, error) {
 		return "", time.Time{}, err
 	}
 	defer httpRes.Body.Close()
+	if httpRes.StatusCode < 200 || httpRes.StatusCode > 299 {
+		return "", time.Time{}, errors.New("rest: get token endpoint returned " + httpRes.Status)
+	}
 
 	body, err := ioutil.ReadAll(httpRes.Body)
 	if err != nil {
@@ -190,8 +193,8 @@ func (m *manager) getAPIToken(ctx context.Context) (string, time.Time, error) {
 	return result["access_token"].(string), expirationTime, nil
 }
 
-func (m *manager) sendAPIRequest(ctx context.Context, url string) ([]interface{}, error) {
-	err := m.renewAPIToken(ctx)
+func (m *manager) sendAPIRequest(ctx context.Context, url string, forceRenewal bool) ([]interface{}, error) {
+	err := m.renewAPIToken(ctx, forceRenewal)
 	if err != nil {
 		return nil, err
 	}
@@ -211,6 +214,14 @@ func (m *manager) sendAPIRequest(ctx context.Context, url string) ([]interface{}
 		return nil, err
 	}
 	defer httpRes.Body.Close()
+
+	if httpRes.StatusCode == http.StatusUnauthorized {
+		// The token is no longer valid, try renewing it
+		return m.sendAPIRequest(ctx, url, true)
+	}
+	if httpRes.StatusCode < 200 || httpRes.StatusCode > 299 {
+		return nil, errors.New("rest: API request returned " + httpRes.Status)
+	}
 
 	body, err := ioutil.ReadAll(httpRes.Body)
 	if err != nil {
@@ -232,19 +243,23 @@ func (m *manager) sendAPIRequest(ctx context.Context, url string) ([]interface{}
 }
 
 func (m *manager) getUserByParam(ctx context.Context, param, val string) (map[string]interface{}, error) {
-	url := fmt.Sprintf("%s/Identity?filter=%s:%s&field=upn&field=primaryAccountEmail&field=displayName&field=uid&field=gid",
+	url := fmt.Sprintf("%s/Identity?filter=%s:%s&field=upn&field=primaryAccountEmail&field=displayName&field=uid&field=gid&field=type",
 		m.conf.APIBaseURL, param, val)
-	responseData, err := m.sendAPIRequest(ctx, url)
+	responseData, err := m.sendAPIRequest(ctx, url, false)
 	if err != nil {
 		return nil, err
 	}
-	if len(responseData) == 0 {
-		return nil, errors.New("rest: no user found")
+	if len(responseData) != 1 {
+		return nil, errors.New("rest: user not found")
 	}
 
 	userData, ok := responseData[0].(map[string]interface{})
 	if !ok {
 		return nil, errors.New("rest: error in type assertion")
+	}
+
+	if userData["type"].(string) == "Application" || strings.HasPrefix(userData["upn"].(string), "guest") {
+		return nil, errors.New("rest: guest and application accounts not supported")
 	}
 	return userData, nil
 }
@@ -362,7 +377,7 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 
 func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[string]*userpb.User) error {
 
-	userData, err := m.sendAPIRequest(ctx, url)
+	userData, err := m.sendAPIRequest(ctx, url, false)
 	if err != nil {
 		return err
 	}
@@ -371,6 +386,9 @@ func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[s
 		usrInfo, ok := usr.(map[string]interface{})
 		if !ok {
 			return errors.New("rest: error in type assertion")
+		}
+		if usrInfo["type"].(string) == "Application" || strings.HasPrefix(usrInfo["upn"].(string), "guest") {
+			continue
 		}
 
 		uid := &userpb.UserId{
@@ -415,7 +433,7 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 	users := make(map[string]*userpb.User)
 
 	for _, f := range filters {
-		url := fmt.Sprintf("%s/Identity/?filter=%s:contains:%s&field=id&field=upn&field=primaryAccountEmail&field=displayName&field=uid&field=gid",
+		url := fmt.Sprintf("%s/Identity/?filter=%s:contains:%s&field=id&field=upn&field=primaryAccountEmail&field=displayName&field=uid&field=gid&field=type",
 			m.conf.APIBaseURL, f, query)
 		err := m.findUsersByFilter(ctx, url, users)
 		if err != nil {
@@ -443,7 +461,7 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 		return nil, err
 	}
 	url := fmt.Sprintf("%s/Identity/%s/groups", m.conf.APIBaseURL, internalID)
-	groupData, err := m.sendAPIRequest(ctx, url)
+	groupData, err := m.sendAPIRequest(ctx, url, false)
 	if err != nil {
 		return nil, err
 	}

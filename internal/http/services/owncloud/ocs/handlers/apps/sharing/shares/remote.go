@@ -35,7 +35,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 )
 
-func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo) {
+func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo, role *conversions.Role, roleVal []byte) {
 	ctx := r.Context()
 
 	c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
@@ -70,34 +70,6 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var role *conversions.Role
-
-	pval := r.FormValue("permissions")
-	if pval == "" {
-		// by default only allow read permissions / assign viewer role
-		role = conversions.NewViewerRole()
-	} else {
-		pint, err := strconv.Atoi(pval)
-		if err != nil {
-			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "permissions must be an integer", nil)
-			return
-		}
-		permissions, err := conversions.NewPermissions(pint)
-		if err != nil {
-			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, err.Error(), nil)
-			return
-		}
-		role = conversions.RoleFromOCSPermissions(permissions)
-	}
-
-	if statInfo != nil && statInfo.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
-		// Single file shares should never have delete or create permissions
-		permissions := role.OCSPermissions()
-		permissions &^= conversions.PermissionCreate
-		permissions &^= conversions.PermissionDelete
-		role = conversions.RoleFromOCSPermissions(permissions)
-	}
-
 	createShareReq := &ocm.CreateOCMShareRequest{
 		Opaque: &types.Opaque{
 			Map: map[string]*types.OpaqueEntry{
@@ -121,7 +93,7 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 		Grant: &ocm.ShareGrant{
 			Grantee: &provider.Grantee{
 				Type: provider.GranteeType_GRANTEE_TYPE_USER,
-				Id:   remoteUserRes.RemoteUser.GetId(),
+				Id:   &provider.Grantee_UserId{UserId: remoteUserRes.RemoteUser.GetId()},
 			},
 			Permissions: &ocm.SharePermissions{
 				Permissions: role.CS3ResourcePermissions(),

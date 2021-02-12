@@ -5,6 +5,7 @@
 [grpc.services.authprovider]
 [grpc.services.authregistry]
 [grpc.services.userprovider]
+[grpc.services.groupprovider]
 [grpc.services.usershareprovider]
 [grpc.services.publicshareprovider]
 [grpc.services.ocmcore]
@@ -17,3 +18,4 @@
 [http.services.prometheus]
 [http.services.ocmd]
 [http.services.ocdav]
+[http.services.ocs]

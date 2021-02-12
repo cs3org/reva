@@ -22,32 +22,42 @@ import (
 	"fmt"
 	"strings"
 
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 )
 
-func granteeTypeToInt(g provider.GranteeType) int {
-	switch g {
+func formatGrantee(g *provider.Grantee) (int, string) {
+	var granteeType int
+	var formattedID string
+	switch g.Type {
 	case provider.GranteeType_GRANTEE_TYPE_USER:
-		return 0
+		granteeType = 0
+		formattedID = formatUserID(g.GetUserId())
 	case provider.GranteeType_GRANTEE_TYPE_GROUP:
-		return 1
+		granteeType = 1
+		formattedID = formatGroupID(g.GetGroupId())
 	default:
-		return -1
+		granteeType = -1
 	}
+	return granteeType, formattedID
 }
 
-func intToGranteeType(g int) provider.GranteeType {
-	switch g {
+func extractGrantee(t int, g string) *provider.Grantee {
+	var grantee *provider.Grantee
+	switch t {
 	case 0:
-		return provider.GranteeType_GRANTEE_TYPE_USER
+		grantee.Type = provider.GranteeType_GRANTEE_TYPE_USER
+		grantee.Id = &provider.Grantee_UserId{UserId: extractUserID(g)}
 	case 1:
-		return provider.GranteeType_GRANTEE_TYPE_GROUP
+		grantee.Type = provider.GranteeType_GRANTEE_TYPE_GROUP
+		grantee.Id = &provider.Grantee_GroupId{GroupId: extractGroupID(g)}
 	default:
-		return provider.GranteeType_GRANTEE_TYPE_INVALID
+		grantee.Type = provider.GranteeType_GRANTEE_TYPE_INVALID
 	}
+	return grantee
 }
 
 func resourceTypeToItem(r provider.ResourceType) string {
@@ -138,6 +148,21 @@ func extractUserID(u string) *userpb.UserId {
 	return &userpb.UserId{OpaqueId: parts[0]}
 }
 
+func formatGroupID(u *grouppb.GroupId) string {
+	if u.Idp != "" {
+		return fmt.Sprintf("%s:%s", u.OpaqueId, u.Idp)
+	}
+	return u.OpaqueId
+}
+
+func extractGroupID(u string) *grouppb.GroupId {
+	parts := strings.Split(u, ":")
+	if len(parts) > 1 {
+		return &grouppb.GroupId{OpaqueId: parts[0], Idp: parts[1]}
+	}
+	return &grouppb.GroupId{OpaqueId: parts[0]}
+}
+
 func convertToCS3Share(s dbShare) *collaboration.Share {
 	ts := &typespb.Timestamp{
 		Seconds: uint64(s.STime),
@@ -148,7 +173,7 @@ func convertToCS3Share(s dbShare) *collaboration.Share {
 		},
 		ResourceId:  &provider.ResourceId{OpaqueId: s.ItemSource, StorageId: s.Prefix},
 		Permissions: &collaboration.SharePermissions{Permissions: intTosharePerm(s.Permissions)},
-		Grantee:     &provider.Grantee{Type: intToGranteeType(s.ShareType), Id: extractUserID(s.ShareWith)},
+		Grantee:     extractGrantee(s.ShareType, s.ShareWith),
 		Owner:       extractUserID(s.UIDOwner),
 		Creator:     extractUserID(s.UIDInitiator),
 		Ctime:       ts,

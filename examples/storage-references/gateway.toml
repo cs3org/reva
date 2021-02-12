@@ -16,6 +16,7 @@ home_provider = "/home"
 [grpc.services.authregistry]
 [grpc.services.userprovider]
 [grpc.services.usershareprovider]
+[grpc.services.groupprovider]
 [grpc.services.publicshareprovider]
 [grpc.services.ocmcore]
 [grpc.services.ocmshareprovider]
@@ -26,3 +27,4 @@ home_provider = "/home"
 [http.services.prometheus]
 [http.services.ocmd]
 [http.services.ocdav]
+[http.services.ocs]

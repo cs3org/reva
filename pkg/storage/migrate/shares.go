@@ -97,9 +97,9 @@ func shareReq(info *provider.ResourceInfo, share *share) *collaboration.CreateSh
 		Grant: &collaboration.ShareGrant{
 			Grantee: &provider.Grantee{
 				Type: provider.GranteeType_GRANTEE_TYPE_USER,
-				Id: &user.UserId{
+				Id: &provider.Grantee_UserId{UserId: &user.UserId{
 					OpaqueId: share.SharedWith,
-				},
+				}},
 			},
 			Permissions: &collaboration.SharePermissions{
 				Permissions: convertPermissions(share.Permissions),
