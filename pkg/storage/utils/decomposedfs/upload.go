@@ -487,7 +487,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 			return err
 		}
 	}
-	n.BlobID = fmt.Sprintf("%x", sha1h.Sum(nil))
+	n.BlobID = upload.info.ID // This can be changed to a content hash in the future when reference counting for the blobs was added
 
 	// defer writing the checksums until the node is in place
 
