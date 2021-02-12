@@ -19,8 +19,11 @@
 package meshdata
 
 import (
+	"bytes"
+	"encoding/gob"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -196,10 +199,13 @@ func (meshData *MeshData) FromJSON(data string) error {
 func (meshData *MeshData) Clone() *MeshData {
 	clone := &MeshData{}
 
-	// To avoid any "deep copy" packages, use JSON en- and decoding instead
-	data, err := meshData.ToJSON()
-	if err == nil {
-		if err := clone.FromJSON(data); err != nil {
+	// To avoid any "deep copy" packages, use gob en- and decoding instead
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	dec := gob.NewDecoder(&buf)
+
+	if err := enc.Encode(meshData); err == nil {
+		if err := dec.Decode(clone); err != nil {
 			// In case of an error, clear the data
 			clone.Clear()
 		}
@@ -210,14 +216,7 @@ func (meshData *MeshData) Clone() *MeshData {
 
 // Compare checks whether the stored data equals the data of another MeshData object.
 func (meshData *MeshData) Compare(other *MeshData) bool {
-	if other == nil {
-		return false
-	}
-
-	// To avoid cumbersome comparisons, just compare the JSON-encoded data
-	json1, _ := meshData.ToJSON()
-	json2, _ := other.ToJSON()
-	return json1 == json2
+	return reflect.DeepEqual(meshData, other)
 }
 
 // New returns a new (empty) MeshData object.

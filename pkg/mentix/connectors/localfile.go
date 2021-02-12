@@ -79,6 +79,7 @@ func (connector *LocalFileConnector) RetrieveMeshData() (*meshdata.MeshData, err
 	connector.setSiteTypes(meshData)
 
 	meshData.InferMissingData()
+
 	return meshData, nil
 }
 
@@ -145,8 +146,7 @@ func (connector *LocalFileConnector) unmergeData(meshData *meshdata.MeshData, up
 
 func (connector *LocalFileConnector) authorizeData(meshData *meshdata.MeshData, updatedData *meshdata.MeshData, authorize bool) error {
 	for _, placeholderSite := range updatedData.Sites {
-		// The site ID is stored in the updated site's name
-		if site := meshData.FindSite(placeholderSite.Name); site != nil {
+		if site := meshData.FindSite(placeholderSite.ID); site != nil {
 			if authorize {
 				meshdata.SetPropertyValue(&site.Properties, meshdata.PropertyAuthorized, "true")
 			} else {
