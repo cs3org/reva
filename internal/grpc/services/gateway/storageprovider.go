@@ -1216,6 +1216,9 @@ func (s *svc) checkRef(ctx context.Context, ri *provider.ResourceInfo) (*provide
 	case "cs3":
 		ref, err := s.handleCS3Ref(ctx, uri.Opaque)
 		return ref, "cs3", err
+	case "cubbit":
+		ref, err := s.handleCubbitRef(ctx, uri.Opaque)
+		return ref, "cubbit", err
 	case "webdav":
 		return nil, "webdav", nil
 	default:
@@ -1271,6 +1274,11 @@ func (s *svc) handleCS3Ref(ctx context.Context, opaque string) (*provider.Resour
 	}
 
 	return res.Info, nil
+}
+
+func (s *svc) handleCubbitRef(ctx context.Context, opaque string) (*provider.ResourceInfo, error) {
+	// a cubbit ref needs the chunk-id, key, etc ...
+	return nil, errors.New("gateway: cubbit handler not implemented")
 }
 
 func (s *svc) ListContainerStream(_ *provider.ListContainerStreamRequest, _ gateway.GatewayAPI_ListContainerStreamServer) error {
