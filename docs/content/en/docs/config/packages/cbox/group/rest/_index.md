@@ -16,11 +16,11 @@ redis_address = "localhost:6379"
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="user_groups_cache_expiration" type="int" default=5 %}}
+{{% dir name="group_members_cache_expiration" type="int" default=5 %}}
 The time in minutes for which the members of a group would be cached [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/cbox/group/rest/rest.go#L75)
 {{< highlight toml >}}
 [cbox.group.rest]
-user_groups_cache_expiration = 5
+group_members_cache_expiration = 5
 {{< /highlight >}}
 {{% /dir %}}
 

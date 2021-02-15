@@ -76,6 +76,18 @@ func (c *Config) init() {
 		c.ShadowNamespace = path.Join(c.Namespace, ".shadow")
 	}
 
+	// Quota node defaults to namespace if empty
+	if c.QuotaNode == "" {
+		c.QuotaNode = c.Namespace
+	}
+
+	if c.DefaultQuotaBytes == 0 {
+		c.DefaultQuotaBytes = 1000000000000 // 1 TB
+	}
+	if c.DefaultQuotaFiles == 0 {
+		c.DefaultQuotaFiles = 1000000 // 1 Million
+	}
+
 	if c.ShareFolder == "" {
 		c.ShareFolder = "/MyShares"
 	}
@@ -838,6 +850,25 @@ func (fs *eosfs) createNominalHome(ctx context.Context) error {
 	}
 
 	err = fs.createUserDir(ctx, u, home, false)
+	if err != nil {
+		err := errors.Wrap(err, "eosfs: error creating user dir")
+		return err
+	}
+
+	// set quota for user
+	quotaInfo := &eosclient.SetQuotaInfo{
+		Username:  u.Username,
+		MaxBytes:  fs.conf.DefaultQuotaBytes,
+		MaxFiles:  fs.conf.DefaultQuotaFiles,
+		QuotaNode: fs.conf.QuotaNode,
+	}
+
+	err = fs.c.SetQuota(ctx, uid, gid, quotaInfo)
+	if err != nil {
+		err := errors.Wrap(err, "eosfs: error setting quota")
+		return err
+	}
+
 	return err
 }
 
@@ -913,6 +944,7 @@ func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string,
 			return errors.Wrap(err, "eos: error setting attribute")
 		}
 	}
+
 	return nil
 }
 
@@ -941,11 +973,6 @@ func (fs *eosfs) CreateDir(ctx context.Context, p string) error {
 func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.URL) error {
 	// TODO(labkode): for the time being we only allow to create references
 	// on the virtual share folder to not pollute the nominal user tree.
-	u, err := getUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "eos: no user in ctx")
-	}
-
 	if !fs.isShareFolder(ctx, p) {
 		return errtypes.PermissionDenied("eos: cannot create references outside the share folder: share_folder=" + fs.conf.ShareFolder + " path=" + p)
 	}
@@ -960,9 +987,11 @@ func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.U
 	if err != nil {
 		return nil
 	}
-	if err := fs.createUserDir(ctx, u, tmp, false); err != nil {
-		err = errors.Wrapf(err, "eos: error creating temporary ref file")
-		return err
+
+	err = fs.c.CreateDir(ctx, uid, gid, tmp)
+	if err != nil {
+		// EOS will return success on mkdir over an existing directory.
+		return errors.Wrap(err, "eos: error creating ref-dir")
 	}
 
 	// set xattr on ref

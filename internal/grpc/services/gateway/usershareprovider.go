@@ -64,6 +64,9 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 	// TODO(labkode): if both commits are enabled they could be done concurrently.
 	if s.c.CommitShareToStorageGrant {
 		addGrantStatus, err := s.addGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, req.Grant.Permissions.Permissions)
+		if err != nil {
+			return nil, errors.Wrap(err, "gateway: error adding grant to storage")
+		}
 		if addGrantStatus.Code != rpc.Code_CODE_OK {
 			return &collaboration.CreateShareResponse{
 				Status: addGrantStatus,

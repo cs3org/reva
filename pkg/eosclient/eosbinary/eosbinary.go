@@ -489,6 +489,18 @@ func (c *Client) GetQuota(ctx context.Context, username, rootUID, rootGID, path 
 	return c.parseQuota(path, stdout)
 }
 
+// SetQuota sets the quota of a user on the quota node defined by path
+func (c *Client) SetQuota(ctx context.Context, rootUID, rootGID string, info *eosclient.SetQuotaInfo) error {
+	maxBytes := fmt.Sprintf("%d", info.MaxBytes)
+	maxFiles := fmt.Sprintf("%d", info.MaxFiles)
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", rootUID, rootGID, "quota", "set", "-u", info.Username, "-p", info.QuotaNode, "-v", maxBytes, "-i", maxFiles)
+	_, _, err := c.executeEOS(ctx, cmd)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // Touch creates a 0-size,0-replica file in the EOS namespace.
 func (c *Client) Touch(ctx context.Context, uid, gid, path string) error {
 	cmd := exec.CommandContext(ctx, "/usr/bin/eos", "-r", uid, gid, "file", "touch", path)
