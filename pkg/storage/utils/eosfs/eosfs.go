@@ -976,6 +976,10 @@ func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.U
 	if !fs.isShareFolder(ctx, p) {
 		return errtypes.PermissionDenied("eos: cannot create references outside the share folder: share_folder=" + fs.conf.ShareFolder + " path=" + p)
 	}
+	u, err := getUser(ctx)
+	if err != nil {
+		return errors.Wrap(err, "eos: no user in ctx")
+	}
 
 	fn := fs.wrapShadow(ctx, p)
 
