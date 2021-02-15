@@ -850,6 +850,25 @@ func (fs *eosfs) createNominalHome(ctx context.Context) error {
 	}
 
 	err = fs.createUserDir(ctx, u, home, false)
+	if err != nil {
+		err := errors.Wrap(err, "eosfs: error creating user dir")
+		return err
+	}
+
+	// set quota for user
+	quotaInfo := &eosclient.SetQuotaInfo{
+		Username:  u.Username,
+		MaxBytes:  fs.conf.DefaultQuotaBytes,
+		MaxFiles:  fs.conf.DefaultQuotaFiles,
+		QuotaNode: fs.conf.QuotaNode,
+	}
+
+	err = fs.c.SetQuota(ctx, uid, gid, quotaInfo)
+	if err != nil {
+		err := errors.Wrap(err, "eosfs: error setting quota")
+		return err
+	}
+
 	return err
 }
 
@@ -926,20 +945,6 @@ func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string,
 		}
 	}
 
-	// set quota for user
-	quotaInfo := &eosclient.SetQuotaInfo{
-		Username:  u.Username,
-		MaxBytes:  fs.conf.DefaultQuotaBytes,
-		MaxFiles:  fs.conf.DefaultQuotaFiles,
-		QuotaNode: fs.conf.QuotaNode,
-	}
-
-	err = fs.c.SetQuota(ctx, uid, gid, quotaInfo)
-	if err != nil {
-		err := errors.Wrap(err, "eosfs: error setting quota")
-		return err
-	}
-
 	return nil
 }
 
@@ -987,6 +992,7 @@ func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.U
 	if err != nil {
 		return nil
 	}
+
 	if err := fs.createUserDir(ctx, u, tmp, false); err != nil {
 		err = errors.Wrapf(err, "eos: error creating temporary ref file")
 		return err
