@@ -287,15 +287,19 @@ func (m *manager) getInternalUserID(ctx context.Context, uid *userpb.UserId) (st
 }
 
 func (m *manager) parseAndCacheUser(ctx context.Context, userData map[string]interface{}) *userpb.User {
+	upn, _ := userData["upn"].(string)
+	mail, _ := userData["primaryAccountEmail"].(string)
+	name, _ := userData["displayName"].(string)
+
 	userID := &userpb.UserId{
-		OpaqueId: userData["upn"].(string),
+		OpaqueId: upn,
 		Idp:      m.conf.IDProvider,
 	}
 	u := &userpb.User{
 		Id:          userID,
-		Username:    userData["upn"].(string),
-		Mail:        userData["primaryAccountEmail"].(string),
-		DisplayName: userData["displayName"].(string),
+		Username:    upn,
+		Mail:        mail,
+		DisplayName: name,
 		Opaque: &types.Opaque{
 			Map: map[string]*types.OpaqueEntry{
 				"uid": &types.OpaqueEntry{
@@ -384,22 +388,23 @@ func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[s
 
 	for _, usr := range userData {
 		usrInfo, ok := usr.(map[string]interface{})
-		if !ok {
-			return errors.New("rest: error in type assertion")
-		}
-		if usrInfo["type"].(string) == "Application" || strings.HasPrefix(usrInfo["upn"].(string), "guest") {
+		if !ok || usrInfo["type"].(string) == "Application" || strings.HasPrefix(usrInfo["upn"].(string), "guest") {
 			continue
 		}
 
+		upn, _ := usrInfo["upn"].(string)
+		mail, _ := usrInfo["primaryAccountEmail"].(string)
+		name, _ := usrInfo["displayName"].(string)
+
 		uid := &userpb.UserId{
-			OpaqueId: usrInfo["upn"].(string),
+			OpaqueId: upn,
 			Idp:      m.conf.IDProvider,
 		}
 		users[uid.OpaqueId] = &userpb.User{
 			Id:          uid,
-			Username:    usrInfo["upn"].(string),
-			Mail:        usrInfo["primaryAccountEmail"].(string),
-			DisplayName: usrInfo["displayName"].(string),
+			Username:    upn,
+			Mail:        mail,
+			DisplayName: name,
 			Opaque: &types.Opaque{
 				Map: map[string]*types.OpaqueEntry{
 					"uid": &types.OpaqueEntry{
@@ -473,7 +478,10 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 		if !ok {
 			return nil, errors.New("rest: error in type assertion")
 		}
-		groups = append(groups, groupInfo["displayName"].(string))
+		name, ok := groupInfo["displayName"].(string)
+		if ok {
+			groups = append(groups, name)
+		}
 	}
 
 	if err = m.cacheUserGroups(uid, groups); err != nil {
