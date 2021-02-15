@@ -57,8 +57,7 @@ func (bs *Blobstore) Upload(key string, data io.Reader) error {
 		return errors.Wrapf(err, "could not write blob '%s'", key)
 	}
 
-	w.Flush()
-	return nil
+	return w.Flush()
 }
 
 // Download retrieves a blob from the blobstore for reading

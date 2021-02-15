@@ -51,6 +51,8 @@ const (
 	TrashOriginAttr string = OcisPrefix + "trash.origin" // trash origin
 
 	// we use a single attribute to enable or disable propagation of both: synctime and treesize
+	// The propagation attribute is set to '1' at the top of the (sub)tree. Propagation will stop at
+	// that node.
 	PropagationAttr string = OcisPrefix + "propagation"
 
 	// the tree modification time of the tree below this node,

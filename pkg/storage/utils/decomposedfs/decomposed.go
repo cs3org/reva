@@ -99,7 +99,7 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore) (storage.FS, error)
 	return New(o, lu, p, tp)
 }
 
-// New returns an implementation to of the storage.FS interface that talk to
+// New returns an implementation of the storage.FS interface that talks to
 // a local filesystem.
 func New(o *options.Options, lu *Lookup, p PermissionsChecker, tp Tree) (storage.FS, error) {
 	err := tp.Setup(o.Owner)
@@ -176,7 +176,7 @@ func (fs *Decomposedfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
 	return total, ri.Size, nil
 }
 
-// CreateHome creates a new root node that has no parent id
+// CreateHome creates a new home node for the given user
 func (fs *Decomposedfs) CreateHome(ctx context.Context) (err error) {
 	if !fs.o.EnableHome || fs.o.UserLayout == "" {
 		return errtypes.NotSupported("Decomposedfs: CreateHome() home supported disabled")
