@@ -283,8 +283,11 @@ func (m *manager) getInternalGroupID(ctx context.Context, gid *grouppb.GroupId) 
 }
 
 func (m *manager) parseAndCacheGroup(ctx context.Context, groupData map[string]interface{}) *grouppb.Group {
+	id, _ := groupData["groupIdentifier"].(string)
+	name, _ := groupData["displayName"].(string)
+
 	groupID := &grouppb.GroupId{
-		OpaqueId: groupData["groupIdentifier"].(string),
+		OpaqueId: id,
 		Idp:      m.conf.IDProvider,
 	}
 	gid, ok := groupData["gid"].(int64)
@@ -293,9 +296,9 @@ func (m *manager) parseAndCacheGroup(ctx context.Context, groupData map[string]i
 	}
 	g := &grouppb.Group{
 		Id:          groupID,
-		GroupName:   groupData["groupIdentifier"].(string),
-		Mail:        groupData["groupIdentifier"].(string) + "@cern.ch",
-		DisplayName: groupData["displayName"].(string),
+		GroupName:   id,
+		Mail:        id + "@cern.ch",
+		DisplayName: name,
 		GidNumber:   gid,
 	}
 
@@ -375,11 +378,13 @@ func (m *manager) findGroupsByFilter(ctx context.Context, url string, groups map
 	for _, grp := range groupData {
 		grpInfo, ok := grp.(map[string]interface{})
 		if !ok {
-			return errors.New("rest: error in type assertion")
+			continue
 		}
+		id, _ := grpInfo["groupIdentifier"].(string)
+		name, _ := grpInfo["displayName"].(string)
 
 		groupID := &grouppb.GroupId{
-			OpaqueId: grpInfo["groupIdentifier"].(string),
+			OpaqueId: id,
 			Idp:      m.conf.IDProvider,
 		}
 		gid, ok := grpInfo["gid"].(int64)
@@ -388,9 +393,9 @@ func (m *manager) findGroupsByFilter(ctx context.Context, url string, groups map
 		}
 		groups[groupID.OpaqueId] = &grouppb.Group{
 			Id:          groupID,
-			GroupName:   grpInfo["groupIdentifier"].(string),
-			Mail:        grpInfo["groupIdentifier"].(string) + "@cern.ch",
-			DisplayName: grpInfo["displayName"].(string),
+			GroupName:   id,
+			Mail:        id + "@cern.ch",
+			DisplayName: name,
 			GidNumber:   gid,
 		}
 	}
