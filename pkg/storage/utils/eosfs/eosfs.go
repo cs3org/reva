@@ -973,11 +973,6 @@ func (fs *eosfs) CreateDir(ctx context.Context, p string) error {
 func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.URL) error {
 	// TODO(labkode): for the time being we only allow to create references
 	// on the virtual share folder to not pollute the nominal user tree.
-	u, err := getUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "eos: no user in ctx")
-	}
-
 	if !fs.isShareFolder(ctx, p) {
 		return errtypes.PermissionDenied("eos: cannot create references outside the share folder: share_folder=" + fs.conf.ShareFolder + " path=" + p)
 	}
@@ -993,9 +988,10 @@ func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.U
 		return nil
 	}
 
-	if err := fs.createUserDir(ctx, u, tmp, false); err != nil {
-		err = errors.Wrapf(err, "eos: error creating temporary ref file")
-		return err
+	err = fs.c.CreateDir(ctx, uid, gid, tmp)
+	if err != nil {
+		// EOS will return success on mkdir over an existing directory.
+		return errors.Wrap(err, "eos: error creating ref-dir")
 	}
 
 	// set xattr on ref
