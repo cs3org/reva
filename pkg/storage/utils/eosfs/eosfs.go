@@ -976,6 +976,10 @@ func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.U
 	if !fs.isShareFolder(ctx, p) {
 		return errtypes.PermissionDenied("eos: cannot create references outside the share folder: share_folder=" + fs.conf.ShareFolder + " path=" + p)
 	}
+	u, err := getUser(ctx)
+	if err != nil {
+		return errors.Wrap(err, "eos: no user in ctx")
+	}
 
 	fn := fs.wrapShadow(ctx, p)
 
@@ -988,10 +992,9 @@ func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.U
 		return nil
 	}
 
-	err = fs.c.CreateDir(ctx, uid, gid, tmp)
-	if err != nil {
-		// EOS will return success on mkdir over an existing directory.
-		return errors.Wrap(err, "eos: error creating ref-dir")
+	if err := fs.createUserDir(ctx, u, tmp, false); err != nil {
+		err = errors.Wrapf(err, "eos: error creating temporary ref file")
+		return err
 	}
 
 	// set xattr on ref
