@@ -588,6 +588,11 @@ func (c *Client) GetQuota(ctx context.Context, username, rootUID, rootGID, path 
 	return nil, errtypes.NotSupported("eosgrpc: GetQuota not implemented")
 }
 
+// SetQuota sets the quota of a user on the quota node defined by path
+func (c *Client) SetQuota(ctx context.Context, rootUID, rootGID string, info *eosclient.SetQuotaInfo) error {
+	return errtypes.NotSupported("eosgrpc: SetQuota not implemented")
+}
+
 // Touch creates a 0-size,0-replica file in the EOS namespace.
 func (c *Client) Touch(ctx context.Context, uid, gid, path string) error {
 	log := appctx.GetLogger(ctx)

@@ -76,6 +76,18 @@ func (c *Config) init() {
 		c.ShadowNamespace = path.Join(c.Namespace, ".shadow")
 	}
 
+	// Quota node defaults to namespace if empty
+	if c.QuotaNode == "" {
+		c.QuotaNode = c.Namespace
+	}
+
+	if c.DefaultQuotaBytes == 0 {
+		c.DefaultQuotaBytes = 1000000000000 // 1 TB
+	}
+	if c.DefaultQuotaFiles == 0 {
+		c.DefaultQuotaFiles = 1000000 // 1 Million
+	}
+
 	if c.ShareFolder == "" {
 		c.ShareFolder = "/MyShares"
 	}
@@ -913,6 +925,21 @@ func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string,
 			return errors.Wrap(err, "eos: error setting attribute")
 		}
 	}
+
+	// set quota for user
+	quotaInfo := &eosclient.SetQuotaInfo{
+		Username:  u.Username,
+		MaxBytes:  fs.conf.DefaultQuotaBytes,
+		MaxFiles:  fs.conf.DefaultQuotaFiles,
+		QuotaNode: fs.conf.QuotaNode,
+	}
+
+	err = fs.c.SetQuota(ctx, uid, gid, quotaInfo)
+	if err != nil {
+		err := errors.Wrap(err, "eosfs: error setting quota")
+		return err
+	}
+
 	return nil
 }
 

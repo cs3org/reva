@@ -38,6 +38,7 @@ type EOSClient interface {
 	SetAttr(ctx context.Context, uid, gid string, attr *Attribute, recursive bool, path string) error
 	UnsetAttr(ctx context.Context, uid, gid string, attr *Attribute, path string) error
 	GetQuota(ctx context.Context, username, rootUID, rootGID, path string) (*QuotaInfo, error)
+	SetQuota(ctx context.Context, rootUID, rootGID string, info *SetQuotaInfo) error
 	Touch(ctx context.Context, uid, gid, path string) error
 	Chown(ctx context.Context, uid, gid, chownUID, chownGID, path string) error
 	Chmod(ctx context.Context, uid, gid, mode, path string) error
@@ -98,4 +99,13 @@ type DeletedEntry struct {
 type QuotaInfo struct {
 	AvailableBytes, UsedBytes   int
 	AvailableInodes, UsedInodes int
+}
+
+// SetQuotaInfo encapsulates the information needed to
+// create a quota space in EOS for a user
+type SetQuotaInfo struct {
+	Username  string
+	QuotaNode string
+	MaxBytes  uint64
+	MaxFiles  uint64
 }

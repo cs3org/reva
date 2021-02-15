@@ -23,6 +23,15 @@ type Config struct {
 	// Namespace for metadata operations
 	Namespace string `mapstructure:"namespace"`
 
+	// QuotaNode for storing quota information
+	QuotaNode string `mapstructure:"quota_node"`
+
+	// DefaultQuotaBytes sets the default maximum bytes available for a user
+	DefaultQuotaBytes uint64 `mapstructure:"default_quota_bytes"`
+
+	// DefaultQuotaFiles sets the default maximum files available for a user
+	DefaultQuotaFiles uint64 `mapstructure:"default_quota_files"`
+
 	// ShadowNamespace for storing shadow data
 	ShadowNamespace string `mapstructure:"shadow_namespace"`
 
