@@ -73,7 +73,7 @@ func (bs *Blobstore) Download(key string) (io.ReadCloser, error) {
 func (bs *Blobstore) Delete(key string) error {
 	err := os.Remove(bs.path(key))
 	if err != nil {
-		return errors.Wrapf(err, "could not delete blod '%s'", key)
+		return errors.Wrapf(err, "could not delete blob '%s'", key)
 	}
 	return nil
 }

@@ -87,7 +87,7 @@ func NewTestEnv() (*TestEnv, error) {
 	}
 	lookup := &decomposedfs.Lookup{Options: o}
 	permissions := &mocks.PermissionsChecker{}
-	permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil).Twice() // Permissions required for setup below
+	permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil).Times(3) // Permissions required for setup below
 	bs := &treemocks.Blobstore{}
 	tree := tree.New(o.Root, true, true, lookup, bs)
 	fs, err := decomposedfs.New(o, lookup, permissions, tree)
@@ -139,6 +139,12 @@ func NewTestEnv() (*TestEnv, error) {
 	// Link in parent
 	childNameLink := filepath.Join(lookup.InternalPath(file.ParentID), file.Name)
 	err = os.Symlink("../"+file.ID, childNameLink)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create emptydir
+	err = fs.CreateDir(ctx, "emptydir")
 	if err != nil {
 		return nil, err
 	}

@@ -152,4 +152,47 @@ var _ = Describe("Tree", func() {
 			})
 		})
 	})
+
+	Context("with an empty directory", func() {
+		var (
+			n *node.Node
+		)
+
+		JustBeforeEach(func() {
+			var err error
+			n, err = env.Lookup.NodeFromPath(env.Ctx, "emptydir")
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		Context("that was deleted", func() {
+			var (
+				trashPath string
+			)
+
+			JustBeforeEach(func() {
+				trashPath = path.Join(env.Root, "trash", env.Owner.Id.OpaqueId, n.ID)
+				Expect(t.Delete(env.Ctx, n)).To(Succeed())
+			})
+
+			Describe("PurgeRecycleItemFunc", func() {
+				JustBeforeEach(func() {
+					_, err := os.Stat(trashPath)
+					Expect(err).ToNot(HaveOccurred())
+
+					_, purgeFunc, err := t.PurgeRecycleItemFunc(env.Ctx, env.Owner.Id.OpaqueId+":"+n.ID)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(purgeFunc()).To(Succeed())
+				})
+
+				It("removes the file from the trash", func() {
+					_, err := os.Stat(trashPath)
+					Expect(err).To(HaveOccurred())
+				})
+
+				It("does not try to delete a blob from the blobstore", func() {
+					env.Blobstore.AssertNotCalled(GinkgoT(), "Delete", mock.AnythingOfType("string"))
+				})
+			})
+		})
+	})
 })

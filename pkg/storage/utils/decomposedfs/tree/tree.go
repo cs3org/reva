@@ -20,6 +20,7 @@ package tree
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -399,9 +400,11 @@ func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, key string) (*node.Node
 		}
 
 		// delete blob from blobstore
-		if err = t.DeleteBlob(rn.BlobID); err != nil {
-			log.Error().Err(err).Str("trashItem", trashItem).Msg("error deleting trash item blob")
-			return err
+		if rn.BlobID != "" {
+			if err = t.DeleteBlob(rn.BlobID); err != nil {
+				log.Error().Err(err).Str("trashItem", trashItem).Msg("error deleting trash item blob")
+				return err
+			}
 		}
 
 		// delete item link in trash
@@ -553,6 +556,10 @@ func (t *Tree) ReadBlob(key string) (io.ReadCloser, error) {
 
 // DeleteBlob deletes a blob from the blobstore
 func (t *Tree) DeleteBlob(key string) error {
+	if key == "" {
+		return fmt.Errorf("could not delete blob, empty key was given")
+	}
+
 	return t.blobstore.Delete(key)
 }
 
