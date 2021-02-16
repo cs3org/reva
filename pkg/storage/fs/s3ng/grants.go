@@ -126,9 +126,9 @@ func (fs *s3ngfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *p
 
 	var attr string
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
-		attr = xattrs.GrantPrefix + xattrs.GroupAcePrefix + g.Grantee.Id.OpaqueId
+		attr = xattrs.GrantPrefix + xattrs.GroupAcePrefix + g.Grantee.GetGroupId().OpaqueId
 	} else {
-		attr = xattrs.GrantPrefix + xattrs.UserAcePrefix + g.Grantee.Id.OpaqueId
+		attr = xattrs.GrantPrefix + xattrs.UserAcePrefix + g.Grantee.GetUserId().OpaqueId
 	}
 
 	np := fs.lu.InternalPath(node.ID)

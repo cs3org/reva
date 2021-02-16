@@ -31,6 +31,7 @@ import (
 	"strings"
 	"sync"
 
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -75,6 +76,18 @@ func (c *Config) init() {
 		c.ShadowNamespace = path.Join(c.Namespace, ".shadow")
 	}
 
+	// Quota node defaults to namespace if empty
+	if c.QuotaNode == "" {
+		c.QuotaNode = c.Namespace
+	}
+
+	if c.DefaultQuotaBytes == 0 {
+		c.DefaultQuotaBytes = 1000000000000 // 1 TB
+	}
+	if c.DefaultQuotaFiles == 0 {
+		c.DefaultQuotaFiles = 1000000 // 1 Million
+	}
+
 	if c.ShareFolder == "" {
 		c.ShareFolder = "/MyShares"
 	}
@@ -86,7 +99,7 @@ func (c *Config) init() {
 	}
 
 	if c.XrdcopyBinary == "" {
-		c.XrdcopyBinary = "/usr/bin/xrdcopy"
+		c.XrdcopyBinary = "/opt/eos/xrootd/bin/xrdcopy"
 	}
 
 	if c.MasterURL == "" {
@@ -405,15 +418,17 @@ func (fs *eosfs) getEosACL(ctx context.Context, g *provider.Grant) (*acl.Entry, 
 	if err != nil {
 		return nil, err
 	}
-	qualifier := g.Grantee.Id.OpaqueId
 
-	// since EOS Citrine ACLs are stored with uid, we need to convert username to
-	// uid only for users.
+	var qualifier string
 	if t == acl.TypeUser {
-		qualifier, _, err = fs.getUIDGateway(ctx, g.Grantee.Id)
+		// since EOS Citrine ACLs are stored with uid, we need to convert username to
+		// uid only for users.
+		qualifier, _, err = fs.getUIDGateway(ctx, g.Grantee.GetUserId())
 		if err != nil {
 			return nil, err
 		}
+	} else {
+		qualifier = g.Grantee.GetGroupId().OpaqueId
 	}
 
 	eosACL := &acl.Entry{
@@ -434,14 +449,16 @@ func (fs *eosfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pr
 	if err != nil {
 		return err
 	}
-	recipient := g.Grantee.Id.OpaqueId
 
-	// since EOS Citrine ACLs are stored with uid, we need to convert username to uid
+	var recipient string
 	if eosACLType == acl.TypeUser {
-		recipient, _, err = fs.getUIDGateway(ctx, g.Grantee.Id)
+		// since EOS Citrine ACLs are stored with uid, we need to convert username to uid
+		recipient, _, err = fs.getUIDGateway(ctx, g.Grantee.GetUserId())
 		if err != nil {
 			return err
 		}
+	} else {
+		recipient = g.Grantee.GetGroupId().OpaqueId
 	}
 
 	eosACL := &acl.Entry{
@@ -501,22 +518,27 @@ func (fs *eosfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*pr
 
 	grantList := []*provider.Grant{}
 	for _, a := range acls {
-		// EOS Citrine ACLs are stored with uid.
-		// This needs to be resolved to the user opaque ID.
-		qualifier := &userpb.UserId{OpaqueId: a.Qualifier}
+		var grantee *provider.Grantee
 		if a.Type == acl.TypeUser {
-			qualifier, err = fs.getUserIDGateway(ctx, a.Qualifier)
+			// EOS Citrine ACLs are stored with uid for users.
+			// This needs to be resolved to the user opaque ID.
+			qualifier, err := fs.getUserIDGateway(ctx, a.Qualifier)
 			if err != nil {
 				return nil, err
 			}
-		}
-		grantee := &provider.Grantee{
-			Id:   qualifier,
-			Type: grants.GetGranteeType(a.Type),
+			grantee = &provider.Grantee{
+				Id:   &provider.Grantee_UserId{UserId: qualifier},
+				Type: grants.GetGranteeType(a.Type),
+			}
+		} else {
+			grantee = &provider.Grantee{
+				Id:   &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: a.Qualifier}},
+				Type: grants.GetGranteeType(a.Type),
+			}
 		}
 		grantList = append(grantList, &provider.Grant{
 			Grantee:     grantee,
-			Permissions: grants.GetGrantPermissionSet(a.Permissions),
+			Permissions: grants.GetGrantPermissionSet(a.Permissions, true),
 		})
 	}
 
@@ -783,30 +805,24 @@ func (fs *eosfs) createShadowHome(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
 	}
-
-	home := fs.wrapShadow(ctx, "/")
 	uid, gid, err := fs.getRootUIDAndGID(ctx)
 	if err != nil {
 		return nil
 	}
-	_, err = fs.c.GetFileInfoByPath(ctx, uid, gid, home)
-	if err != nil { // home already exists
-		// TODO(labkode): abort on any error that is not found
-		if _, ok := err.(errtypes.IsNotFound); !ok {
-			return errors.Wrap(err, "eos: error verifying if user home directory exists")
-		}
-
-		err = fs.createUserDir(ctx, u, home)
-		if err != nil {
-			return err
-		}
-	}
-
+	home := fs.wrapShadow(ctx, "/")
 	shadowFolders := []string{fs.conf.ShareFolder}
+
 	for _, sf := range shadowFolders {
-		err = fs.createUserDir(ctx, u, path.Join(home, sf))
+		fn := path.Join(home, sf)
+		_, err = fs.c.GetFileInfoByPath(ctx, uid, gid, fn)
 		if err != nil {
-			return err
+			if _, ok := err.(errtypes.IsNotFound); !ok {
+				return errors.Wrap(err, "eos: error verifying if shadow directory exists")
+			}
+			err = fs.createUserDir(ctx, u, fn, false)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -829,12 +845,30 @@ func (fs *eosfs) createNominalHome(ctx context.Context) error {
 		return nil
 	}
 
-	// TODO(labkode): abort on any error that is not found
 	if _, ok := err.(errtypes.IsNotFound); !ok {
 		return errors.Wrap(err, "eos: error verifying if user home directory exists")
 	}
 
-	err = fs.createUserDir(ctx, u, home)
+	err = fs.createUserDir(ctx, u, home, false)
+	if err != nil {
+		err := errors.Wrap(err, "eosfs: error creating user dir")
+		return err
+	}
+
+	// set quota for user
+	quotaInfo := &eosclient.SetQuotaInfo{
+		Username:  u.Username,
+		MaxBytes:  fs.conf.DefaultQuotaBytes,
+		MaxFiles:  fs.conf.DefaultQuotaFiles,
+		QuotaNode: fs.conf.QuotaNode,
+	}
+
+	err = fs.c.SetQuota(ctx, uid, gid, quotaInfo)
+	if err != nil {
+		err := errors.Wrap(err, "eosfs: error setting quota")
+		return err
+	}
+
 	return err
 }
 
@@ -854,7 +888,7 @@ func (fs *eosfs) CreateHome(ctx context.Context) error {
 	return nil
 }
 
-func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string) error {
+func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string, recursiveAttr bool) error {
 	uid, gid, err := fs.getRootUIDAndGID(ctx)
 	if err != nil {
 		return nil
@@ -905,11 +939,12 @@ func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string)
 	}
 
 	for _, attr := range attrs {
-		err = fs.c.SetAttr(ctx, uid, gid, attr, true, path)
+		err = fs.c.SetAttr(ctx, uid, gid, attr, recursiveAttr, path)
 		if err != nil {
 			return errors.Wrap(err, "eos: error setting attribute")
 		}
 	}
+
 	return nil
 }
 
@@ -938,13 +973,12 @@ func (fs *eosfs) CreateDir(ctx context.Context, p string) error {
 func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.URL) error {
 	// TODO(labkode): for the time being we only allow to create references
 	// on the virtual share folder to not pollute the nominal user tree.
+	if !fs.isShareFolder(ctx, p) {
+		return errtypes.PermissionDenied("eos: cannot create references outside the share folder: share_folder=" + fs.conf.ShareFolder + " path=" + p)
+	}
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
-	}
-
-	if !fs.isShareFolder(ctx, p) {
-		return errtypes.PermissionDenied("eos: cannot create references outside the share folder: share_folder=" + fs.conf.ShareFolder + " path=" + p)
 	}
 
 	fn := fs.wrapShadow(ctx, p)
@@ -957,7 +991,8 @@ func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.U
 	if err != nil {
 		return nil
 	}
-	if err := fs.createUserDir(ctx, u, tmp); err != nil {
+
+	if err := fs.createUserDir(ctx, u, tmp, false); err != nil {
 		err = errors.Wrapf(err, "eos: error creating temporary ref file")
 		return err
 	}
@@ -1354,54 +1389,13 @@ func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 	}
 
 	var perm string
-	var rp provider.ResourcePermissions
 	for _, e := range eosFileInfo.SysACL.Entries {
 		if e.Qualifier == uid || e.Qualifier == gid {
 			perm = e.Permissions
 		}
 	}
 
-	// Rules adapted from https://github.com/cern-eos/eos/blob/master/doc/configuration/permission.rst
-	if strings.Contains(perm, "r") && !strings.Contains(perm, "!r") {
-		rp.GetPath = true
-		rp.Stat = true
-		rp.ListFileVersions = true
-		rp.InitiateFileDownload = true
-		if eosFileInfo.IsDir {
-			rp.ListContainer = true
-		}
-	}
-
-	if strings.Contains(perm, "w") && !strings.Contains(perm, "!w") {
-		rp.Move = true
-		rp.Delete = true
-		rp.InitiateFileUpload = true
-		rp.RestoreFileVersion = true
-		if eosFileInfo.IsDir {
-			rp.CreateContainer = true
-		}
-	}
-
-	if strings.Contains(perm, "!x") {
-		rp.ListContainer = false
-		rp.ListFileVersions = false
-	}
-
-	if strings.Contains(perm, "!d") {
-		rp.Delete = false
-	}
-
-	if strings.Contains(perm, "m") && !strings.Contains(perm, "!m") {
-		rp.AddGrant = true
-		rp.ListGrants = true
-		rp.RemoveGrant = true
-	}
-
-	if strings.Contains(perm, "q") && !strings.Contains(perm, "!q") {
-		rp.GetQuota = true
-	}
-
-	return &rp
+	return grants.GetGrantPermissionSet(perm, eosFileInfo.IsDir)
 }
 
 func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.ResourceInfo, error) {

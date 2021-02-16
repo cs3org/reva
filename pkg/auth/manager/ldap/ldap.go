@@ -25,12 +25,15 @@ import (
 	"strings"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/go-ldap/ldap/v3"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -53,6 +56,7 @@ type config struct {
 	BindUsername string     `mapstructure:"bind_username"`
 	BindPassword string     `mapstructure:"bind_password"`
 	Idp          string     `mapstructure:"idp"`
+	GatewaySvc   string     `mapstructure:"gatewaysvc"`
 	Schema       attributes `mapstructure:"schema"`
 }
 
@@ -111,6 +115,8 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 		c.LoginFilter = strings.ReplaceAll(c.LoginFilter, "%s", "{{login}}")
 	}
 
+	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+
 	return &mgr{
 		c: c,
 	}, nil
@@ -159,15 +165,30 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, err
 	}
 
+	userID := &user.UserId{
+		Idp:      am.c.Idp,
+		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.UID),
+	}
+	gwc, err := pool.GetGatewayServiceClient(am.c.GatewaySvc)
+	if err != nil {
+		return nil, errors.Wrap(err, "ldap: error getting gateway grpc client")
+	}
+	getGroupsResp, err := gwc.GetUserGroups(ctx, &user.GetUserGroupsRequest{
+		UserId: userID,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "ldap: error getting user groups")
+	}
+	if getGroupsResp.Status.Code != rpc.Code_CODE_OK {
+		return nil, errors.Wrap(err, "ldap: grpc getting user groups failed")
+	}
+
 	u := &user.User{
-		Id: &user.UserId{
-			Idp:      am.c.Idp,
-			OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.UID),
-		},
+		Id: userID,
 		// TODO add more claims from the StandardClaims, eg EmailVerified
 		Username: sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.CN),
 		// TODO groups
-		Groups:      []string{},
+		Groups:      getGroupsResp.Groups,
 		Mail:        sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.Mail),
 		DisplayName: sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.DisplayName),
 		Opaque: &types.Opaque{

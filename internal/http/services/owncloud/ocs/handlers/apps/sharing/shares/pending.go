@@ -28,7 +28,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (h *Handler) acceptShare(w http.ResponseWriter, r *http.Request, shareID string) {
+func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, shareID string, rejectShare bool) {
 	ctx := r.Context()
 
 	uClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
@@ -51,48 +51,17 @@ func (h *Handler) acceptShare(w http.ResponseWriter, r *http.Request, shareID st
 			},
 		},
 	}
-
-	shareRes, err := uClient.UpdateReceivedShare(ctx, shareRequest)
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc update received share request (accept) failed", err)
-		return
-	}
-
-	if shareRes.Status.Code != rpc.Code_CODE_OK {
-		if shareRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
-			return
-		}
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc update received share request (accept) failed", errors.Errorf("code: %d, message: %s", shareRes.Status.Code, shareRes.Status.Message))
-		return
-	}
-}
-func (h *Handler) rejectShare(w http.ResponseWriter, r *http.Request, shareID string) {
-	ctx := r.Context()
-	uClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
-		return
-	}
-
-	shareRequest := &collaboration.UpdateReceivedShareRequest{
-		Ref: &collaboration.ShareReference{
-			Spec: &collaboration.ShareReference_Id{
-				Id: &collaboration.ShareId{
-					OpaqueId: shareID,
-				},
-			},
-		},
-		Field: &collaboration.UpdateReceivedShareRequest_UpdateField{
+	if rejectShare {
+		shareRequest.Field = &collaboration.UpdateReceivedShareRequest_UpdateField{
 			Field: &collaboration.UpdateReceivedShareRequest_UpdateField_State{
 				State: collaboration.ShareState_SHARE_STATE_REJECTED,
 			},
-		},
+		}
 	}
 
 	shareRes, err := uClient.UpdateReceivedShare(ctx, shareRequest)
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc update received share request (reject) failed", err)
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc update received share request failed", err)
 		return
 	}
 
@@ -101,7 +70,7 @@ func (h *Handler) rejectShare(w http.ResponseWriter, r *http.Request, shareID st
 			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
 			return
 		}
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc update received share request (reject) failed", errors.Errorf("code: %d, message: %s", shareRes.Status.Code, shareRes.Status.Message))
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc update received share request failed", errors.Errorf("code: %d, message: %s", shareRes.Status.Code, shareRes.Status.Message))
 		return
 	}
 }

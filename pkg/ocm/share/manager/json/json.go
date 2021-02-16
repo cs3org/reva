@@ -27,7 +27,6 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -43,6 +42,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp"
 	tokenpkg "github.com/cs3org/reva/pkg/token"
 	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -234,8 +234,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 	}
 
 	// do not allow share to myself if share is for a user
-	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER &&
-		g.Grantee.Id.Idp == userID.Idp && g.Grantee.Id.OpaqueId == userID.OpaqueId {
+	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(g.Grantee.GetUserId(), userID) {
 		return nil, errors.New("json: user and grantee are the same")
 	}
 
@@ -284,7 +283,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 		}
 
 		requestBody := url.Values{
-			"shareWith":    {g.Grantee.Id.OpaqueId},
+			"shareWith":    {g.Grantee.GetUserId().OpaqueId},
 			"name":         {name},
 			"providerId":   {fmt.Sprintf("%s:%s", md.StorageId, md.OpaqueId)},
 			"owner":        {userID.OpaqueId},
@@ -374,9 +373,8 @@ func (m *mgr) getByKey(ctx context.Context, key *ocm.ShareKey) (*ocm.Share, erro
 	}
 
 	for _, s := range m.model.Shares {
-		if key.Owner.Idp == s.Owner.Idp && key.Owner.OpaqueId == s.Owner.OpaqueId &&
-			key.ResourceId.StorageId == s.ResourceId.StorageId && key.ResourceId.OpaqueId == s.ResourceId.OpaqueId &&
-			key.Grantee.Type == s.Grantee.Type && key.Grantee.Id.Idp == s.Grantee.Id.Idp && key.Grantee.Id.OpaqueId == s.Grantee.Id.OpaqueId {
+		if (utils.UserEqual(key.Owner, s.Owner) || utils.UserEqual(key.Owner, s.Creator)) &&
+			utils.ResourceEqual(key.ResourceId, s.ResourceId) && utils.GranteeEqual(key.Grantee, s.Grantee) {
 			return s, nil
 		}
 	}
@@ -398,9 +396,8 @@ func (m *mgr) get(ctx context.Context, ref *ocm.ShareReference) (s *ocm.Share, e
 	}
 
 	// check if we are the owner
-	// TODO(labkode): check for creator also.
 	user := user.ContextMustGetUser(ctx)
-	if user.Id.Idp == s.Owner.Idp && user.Id.OpaqueId == s.Owner.OpaqueId {
+	if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
 		return s, nil
 	}
 
@@ -428,8 +425,8 @@ func (m *mgr) Unshare(ctx context.Context, ref *ocm.ShareReference) error {
 
 	user := user.ContextMustGetUser(ctx)
 	for i, s := range m.model.Shares {
-		if equal(ref, s) {
-			if user.Id.Idp == s.Owner.Idp && user.Id.OpaqueId == s.Owner.OpaqueId {
+		if sharesEqual(ref, s) {
+			if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
 				m.model.Shares[len(m.model.Shares)-1], m.model.Shares[i] = m.model.Shares[i], m.model.Shares[len(m.model.Shares)-1]
 				m.model.Shares = m.model.Shares[:len(m.model.Shares)-1]
 				if err := m.model.Save(); err != nil {
@@ -443,13 +440,14 @@ func (m *mgr) Unshare(ctx context.Context, ref *ocm.ShareReference) error {
 	return errtypes.NotFound(ref.String())
 }
 
-func equal(ref *ocm.ShareReference, s *ocm.Share) bool {
+func sharesEqual(ref *ocm.ShareReference, s *ocm.Share) bool {
 	if ref.GetId() != nil && s.Id != nil {
 		if ref.GetId().OpaqueId == s.Id.OpaqueId {
 			return true
 		}
 	} else if ref.GetKey() != nil {
-		if reflect.DeepEqual(*ref.GetKey().Owner, *s.Owner) && reflect.DeepEqual(*ref.GetKey().ResourceId, *s.ResourceId) && reflect.DeepEqual(*ref.GetKey().Grantee, *s.Grantee) {
+		if (utils.UserEqual(ref.GetKey().Owner, s.Owner) || utils.UserEqual(ref.GetKey().Owner, s.Creator)) &&
+			utils.ResourceEqual(ref.GetKey().ResourceId, s.ResourceId) && utils.GranteeEqual(ref.GetKey().Grantee, s.Grantee) {
 			return true
 		}
 	}
@@ -467,8 +465,8 @@ func (m *mgr) UpdateShare(ctx context.Context, ref *ocm.ShareReference, p *ocm.S
 
 	user := user.ContextMustGetUser(ctx)
 	for i, s := range m.model.Shares {
-		if equal(ref, s) {
-			if user.Id.Idp == s.Owner.Idp && user.Id.OpaqueId == s.Owner.OpaqueId {
+		if sharesEqual(ref, s) {
+			if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
 				now := time.Now().UnixNano()
 				m.model.Shares[i].Permissions = p
 				m.model.Shares[i].Mtime = &typespb.Timestamp{
@@ -498,8 +496,7 @@ func (m *mgr) ListShares(ctx context.Context, filters []*ocm.ListOCMSharesReques
 
 	user := user.ContextMustGetUser(ctx)
 	for _, s := range m.model.Shares {
-		// TODO(labkode): add check for creator.
-		if user.Id.Idp == s.Owner.Idp && user.Id.OpaqueId == s.Owner.OpaqueId {
+		if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
 			// no filter we return earlier
 			if len(filters) == 0 {
 				ss = append(ss, s)
@@ -531,20 +528,17 @@ func (m *mgr) ListReceivedShares(ctx context.Context) ([]*ocm.ReceivedShare, err
 
 	user := user.ContextMustGetUser(ctx)
 	for _, s := range m.model.ReceivedShares {
-		if user.Id.Idp == s.Owner.Idp && user.Id.OpaqueId == s.Owner.OpaqueId {
+		if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
 			// omit shares created by me
-			// TODO(labkode): apply check for s.Creator also.
 			continue
 		}
-		if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
-			if user.Id.Idp == s.Grantee.Id.Idp && user.Id.OpaqueId == s.Grantee.Id.OpaqueId {
-				rs := m.convert(ctx, s)
-				rss = append(rss, rs)
-			}
+		if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, s.Grantee.GetUserId()) {
+			rs := m.convert(ctx, s)
+			rss = append(rss, rs)
 		} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 			// check if all user groups match this share; TODO(labkode): filter shares created by us.
 			for _, g := range user.Groups {
-				if g == s.Grantee.Id.OpaqueId {
+				if g == s.Grantee.GetGroupId().OpaqueId {
 					rs := m.convert(ctx, s)
 					rss = append(rss, rs)
 					break
@@ -585,14 +579,13 @@ func (m *mgr) getReceived(ctx context.Context, ref *ocm.ShareReference) (*ocm.Re
 
 	user := user.ContextMustGetUser(ctx)
 	for _, s := range m.model.ReceivedShares {
-		if equal(ref, s) {
-			if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER &&
-				s.Grantee.Id.Idp == user.Id.Idp && s.Grantee.Id.OpaqueId == user.Id.OpaqueId {
+		if sharesEqual(ref, s) {
+			if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, s.Grantee.GetUserId()) {
 				rs := m.convert(ctx, s)
 				return rs, nil
 			} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 				for _, g := range user.Groups {
-					if s.Grantee.Id.OpaqueId == g {
+					if s.Grantee.GetGroupId().OpaqueId == g {
 						rs := m.convert(ctx, s)
 						return rs, nil
 					}

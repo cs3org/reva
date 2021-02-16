@@ -102,7 +102,7 @@ type Options struct {
 	EosBinary string
 
 	// Location of the xrdcopy binary.
-	// Default is /usr/bin/xrdcopy.
+	// Default is /opt/eos/xrootd/bin/xrdcopy.
 	XrdcopyBinary string
 
 	// URL of the EOS MGM.
@@ -131,7 +131,7 @@ func (opt *Options) init() {
 	}
 
 	if opt.XrdcopyBinary == "" {
-		opt.XrdcopyBinary = "/usr/bin/xrdcopy"
+		opt.XrdcopyBinary = "/opt/eos/xrootd/bin/xrdcopy"
 	}
 
 	if opt.URL == "" {
@@ -487,6 +487,18 @@ func (c *Client) GetQuota(ctx context.Context, username, rootUID, rootGID, path 
 		return nil, err
 	}
 	return c.parseQuota(path, stdout)
+}
+
+// SetQuota sets the quota of a user on the quota node defined by path
+func (c *Client) SetQuota(ctx context.Context, rootUID, rootGID string, info *eosclient.SetQuotaInfo) error {
+	maxBytes := fmt.Sprintf("%d", info.MaxBytes)
+	maxFiles := fmt.Sprintf("%d", info.MaxFiles)
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", rootUID, rootGID, "quota", "set", "-u", info.Username, "-p", info.QuotaNode, "-v", maxBytes, "-i", maxFiles)
+	_, _, err := c.executeEOS(ctx, cmd)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // Touch creates a 0-size,0-replica file in the EOS namespace.

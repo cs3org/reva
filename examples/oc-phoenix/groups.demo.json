@@ -1,0 +1,140 @@
+[
+  {
+    "id": {
+      "opaque_id": "sailing-lovers",
+      "idp": "localhost:20080"
+    },
+    "group_name": "sailing-lovers",
+    "mail": "sailing-lovers@example.org",
+    "display_name": "Sailing Lovers",
+    "gid_number": 123,
+    "members": [
+      {
+        "id": {
+          "opaque_id": "4c510ada-c86b-4815-8820-42cdf82c3d51",
+          "idp": "localhost:20080"
+        }
+      }
+    ]
+  },
+  {
+    "id": {
+      "opaque_id": "violin-haters",
+      "idp": "localhost:20080"
+    },
+    "group_name": "violin-haters",
+    "mail": "violin-haters@example.org",
+    "display_name": "Violin Haters",
+    "gid_number": 456,
+    "members": [
+      {
+        "id": {
+          "opaque_id": "4c510ada-c86b-4815-8820-42cdf82c3d51",
+          "idp": "localhost:20080"
+        }
+      }
+    ]
+  },
+  {
+    "id": {
+      "opaque_id": "radium-lovers",
+      "idp": "localhost:20080"
+    },
+    "group_name": "radium-lovers",
+    "mail": "radium-lovers@example.org",
+    "display_name": "Radium Lovers",
+    "gid_number": 789,
+    "members": [
+      {
+        "id": {
+          "opaque_id": "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+          "idp": "localhost:20080"
+        }
+      }
+    ]
+  },
+  {
+    "id": {
+      "opaque_id": "polonium-lovers",
+      "idp": "localhost:20080"
+    },
+    "group_name": "polonium-lovers",
+    "mail": "polonium-lovers@example.org",
+    "display_name": "Polonium Lovers",
+    "gid_number": 987,
+    "members": [
+      {
+        "id": {
+          "opaque_id": "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+          "idp": "localhost:20080"
+        }
+      }
+    ]
+  },
+  {
+    "id": {
+      "opaque_id": "quantum-lovers",
+      "idp": "localhost:20080"
+    },
+    "group_name": "quantum-lovers",
+    "mail": "quantum-lovers@example.org",
+    "display_name": "Quantum Lovers",
+    "gid_number": 654,
+    "members": [
+      {
+        "id": {
+          "opaque_id": "932b4540-8d16-481e-8ef4-588e4b6b151c",
+          "idp": "localhost:20080"
+        }
+      }
+    ]
+  },
+  {
+    "id": {
+      "opaque_id": "philosophy-haters",
+      "idp": "localhost:20080"
+    },
+    "group_name": "philosophy-haters",
+    "mail": "philosophy-haters@example.org",
+    "display_name": "Philosophy Haters",
+    "gid_number": 321,
+    "members": [
+      {
+        "id": {
+          "opaque_id": "932b4540-8d16-481e-8ef4-588e4b6b151c",
+          "idp": "localhost:20080"
+        }
+      }
+    ]
+  },
+  {
+    "id": {
+      "opaque_id": "physics-lovers",
+      "idp": "localhost:20080"
+    },
+    "group_name": "physics-lovers",
+    "mail": "physics-lovers@example.org",
+    "display_name": "Physics Lovers",
+    "gid_number": 101,
+    "members": [
+      {
+        "id": {
+          "opaque_id": "4c510ada-c86b-4815-8820-42cdf82c3d51",
+          "idp": "localhost:20080"
+        }
+      },
+      {
+        "id": {
+          "opaque_id": "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+          "idp": "localhost:20080"
+        }
+      },
+      {
+        "id": {
+          "opaque_id": "932b4540-8d16-481e-8ef4-588e4b6b151c",
+          "idp": "localhost:20080"
+        }
+      }
+    ]
+  }
+]

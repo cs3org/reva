@@ -300,6 +300,8 @@ to be investigated and issues raised or comments added here
 -   [apiSharees/sharees.feature:516](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharees/sharees.feature#L516)
 -   [apiSharees/sharees.feature:537](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharees/sharees.feature#L537)
 -   [apiSharees/sharees.feature:538](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharees/sharees.feature#L538)
+-   [apiSharees/sharees.feature:560](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharees/sharees.feature#L560)
+-   [apiSharees/sharees.feature:561](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharees/sharees.feature#L561)
 
 ### [various sharing settings cannot be set (shareapi_auto_accept_share)](https://github.com/owncloud/ocis/issues/1328)
 -   [apiShareManagement/acceptShares.feature:155](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagement/acceptShares.feature#L155)

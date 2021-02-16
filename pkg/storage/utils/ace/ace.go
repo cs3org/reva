@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 
+	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
@@ -132,9 +133,9 @@ func FromGrant(g *provider.Grant) *ACE {
 	}
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 		e.flags = "g"
-		e.principal = "g:" + g.Grantee.Id.OpaqueId
+		e.principal = "g:" + g.Grantee.GetGroupId().OpaqueId
 	} else {
-		e.principal = "u:" + g.Grantee.Id.OpaqueId
+		e.principal = "u:" + g.Grantee.GetUserId().OpaqueId
 	}
 	return e
 }
@@ -180,13 +181,18 @@ func Unmarshal(principal string, v []byte) (e *ACE, err error) {
 
 // Grant returns a CS3 grant
 func (e *ACE) Grant() *provider.Grant {
-	return &provider.Grant{
+	g := &provider.Grant{
 		Grantee: &provider.Grantee{
-			Id:   &userpb.UserId{OpaqueId: e.principal},
 			Type: e.granteeType(),
 		},
 		Permissions: e.grantPermissionSet(),
 	}
+	if e.granteeType() == provider.GranteeType_GRANTEE_TYPE_GROUP {
+		g.Grantee.Id = &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: e.principal}}
+	} else if e.granteeType() == provider.GranteeType_GRANTEE_TYPE_USER {
+		g.Grantee.Id = &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: e.principal}}
+	}
+	return g
 }
 
 // granteeType returns the CS3 grantee type

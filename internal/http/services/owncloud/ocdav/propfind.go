@@ -346,16 +346,13 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 
 	isShared := !isCurrentUserOwner(ctx, md.Owner)
 	var wdp string
-	switch {
-	case ls != nil:
-		// link share only appears on root collection
-		wdp = ""
-	case md.PermissionSet != nil:
+	isPublic := ls != nil
+	if md.PermissionSet != nil {
 		wdp = role.WebDAVPermissions(
 			md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 			isShared,
 			false,
-			false,
+			isPublic,
 		)
 		sublog.Debug().Interface("role", role).Str("dav-permissions", wdp).Msg("converted PermissionSet")
 	}
@@ -490,11 +487,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					// R = Shareable (Reshare)
 					// M = Mounted
 					// in contrast, the ocs:share-permissions further down below indicate clients the maximum permissions that can be granted
-					if md.PermissionSet != nil {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:permissions", wdp))
-					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:permissions", ""))
-					}
+					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:permissions", wdp))
 				case "public-link-permission": // only on a share root node
 					if ls != nil && md.PermissionSet != nil {
 						propstatOK.Prop = append(
