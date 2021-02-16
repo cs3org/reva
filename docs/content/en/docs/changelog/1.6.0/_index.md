@@ -1,3 +1,12 @@
+
+---
+title: "v1.6.0"
+linkTitle: "v1.6.0"
+weight: 40
+description: >
+  Changelog for Reva v1.6.0 (2021-02-16)
+---
+
 Changelog for reva 1.6.0 (2021-02-16)
 =======================================
 
