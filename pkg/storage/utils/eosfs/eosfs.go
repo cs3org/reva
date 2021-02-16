@@ -767,7 +767,7 @@ func (fs *eosfs) GetQuota(ctx context.Context) (int, int, error) {
 		return 0, 0, err
 	}
 
-	qi, err := fs.c.GetQuota(ctx, u.Username, rootUID, rootGID, fs.conf.Namespace)
+	qi, err := fs.c.GetQuota(ctx, u.Username, rootUID, rootGID, fs.conf.QuotaNode)
 	if err != nil {
 		err := errors.Wrap(err, "eosfs: error getting quota")
 		return 0, 0, err
