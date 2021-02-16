@@ -21,6 +21,7 @@ package accounts
 import (
 	"bytes"
 	"encoding/gob"
+	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -28,6 +29,7 @@ import (
 
 	"github.com/cs3org/reva/internal/http/services/accounts/config"
 	"github.com/cs3org/reva/internal/http/services/accounts/data"
+	"github.com/cs3org/reva/pkg/apikey"
 )
 
 // Manager is responsible for all user account related tasks.
@@ -74,9 +76,6 @@ func (mngr *Manager) createStorage(driver string) (data.Storage, error) {
 }
 
 func (mngr *Manager) readAllAccounts() {
-	mngr.mutex.Lock()
-	defer mngr.mutex.Unlock()
-
 	if accounts, err := mngr.storage.ReadAll(); err == nil {
 		mngr.accounts = *accounts
 	} else {
@@ -86,17 +85,100 @@ func (mngr *Manager) readAllAccounts() {
 }
 
 func (mngr *Manager) writeAllAccounts() {
-	mngr.mutex.RLock()
-	defer mngr.mutex.RUnlock()
-
 	if err := mngr.storage.WriteAll(&mngr.accounts); err != nil {
 		// Just warn when not being able to write accounts
 		mngr.log.Warn().Err(err).Msg("error while writing accounts")
 	}
 }
 
-// ClonedAccounts retrieves all accounts currently stored by cloning the data, thus avoiding race conflicts and making outside modifications impossible.
-func (mngr *Manager) ClonedAccounts() data.Accounts {
+func (mngr *Manager) findAccountByEmail(email string) *data.Account {
+	if email == "" {
+		return nil
+	}
+
+	// Perform a case-insensitive search of the given email address
+	for _, account := range mngr.accounts {
+		if strings.EqualFold(account.Email, email) {
+			return account
+		}
+	}
+	return nil
+}
+
+func (mngr *Manager) findAccountByAPIKey(key apikey.APIKey) *data.Account {
+	if key == "" {
+		return nil
+	}
+
+	// Perform a case-sensitive search of the given API key
+	for _, account := range mngr.accounts {
+		if account.Data.APIKey == key {
+			return account
+		}
+	}
+	return nil
+}
+
+// CreateAccount creates a new account; if an account with the same email address already exists, an error is returned.
+func (mngr *Manager) CreateAccount(accountData *data.Account) error {
+	mngr.mutex.Lock()
+	defer mngr.mutex.Unlock()
+
+	// Accounts must be unique (identified by their email address)
+	if mngr.findAccountByEmail(accountData.Email) != nil {
+		return errors.Errorf("an account with the specified email address already exists")
+	}
+
+	if account, err := data.NewAccount(accountData.Email, accountData.FirstName, accountData.LastName); err == nil {
+		mngr.accounts = append(mngr.accounts, account)
+		mngr.storage.AccountAdded(account)
+		mngr.writeAllAccounts()
+	} else {
+		return errors.Wrap(err, "error while creating account")
+	}
+
+	return nil
+}
+
+// UpdateAccount updates the account identified by the account email; if no such account exists, an error is returned.
+func (mngr *Manager) UpdateAccount(accountData *data.Account, copyData bool) error {
+	mngr.mutex.Lock()
+	defer mngr.mutex.Unlock()
+
+	account := mngr.findAccountByEmail(accountData.Email)
+	if account == nil {
+		return errors.Errorf("no account with the specified email exists")
+	}
+
+	if err := account.Copy(accountData, copyData); err == nil {
+		mngr.storage.AccountUpdated(account)
+		mngr.writeAllAccounts()
+	} else {
+		return errors.Wrap(err, "error while updating account")
+	}
+
+	return nil
+}
+
+// RemoveAccount removes the account identified by the account email; if no such account exists, an error is returned.
+func (mngr *Manager) RemoveAccount(accountData *data.Account) error {
+	mngr.mutex.Lock()
+	defer mngr.mutex.Unlock()
+
+	for i, account := range mngr.accounts {
+		if strings.EqualFold(account.Email, accountData.Email) {
+			mngr.accounts = append(mngr.accounts[:i], mngr.accounts[i+1:]...)
+			mngr.storage.AccountRemoved(account)
+			mngr.writeAllAccounts()
+			return nil
+		}
+	}
+
+	return errors.Errorf("no account with the specified email exists")
+}
+
+// CloneAccounts retrieves all accounts currently stored by cloning the data, thus avoiding race conflicts and making outside modifications impossible.
+func (mngr *Manager) CloneAccounts() data.Accounts {
 	mngr.mutex.RLock()
 	defer mngr.mutex.RUnlock()
 

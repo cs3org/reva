@@ -21,6 +21,10 @@ package config
 const (
 	// EndpointList is the endpoint path for listing all stored accounts.
 	EndpointList = "/list"
-	// EndpointRegister is the endpoint path for account registration.
-	EndpointRegister = "/register"
+	// EndpointCreate is the endpoint path for account creation.
+	EndpointCreate = "/create"
+	// EndpointUpdate is the endpoint path for account updates.
+	EndpointUpdate = "/update"
+	// EndpointRemove is the endpoint path for account removal.
+	EndpointRemove = "/remove"
 )

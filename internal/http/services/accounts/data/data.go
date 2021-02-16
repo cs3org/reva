@@ -43,18 +43,39 @@ type AccountData struct {
 // Accounts holds an array of user accounts.
 type Accounts = []*Account
 
+// Copy copies the data of the given account to this account; if copyData is true, the account data is copied as well.
+func (acc *Account) Copy(other *Account, copyData bool) error {
+	if err := other.verify(); err != nil {
+		return errors.Wrap(err, "unable to update account data")
+	}
+
+	// Manually update fields
+	acc.FirstName = other.FirstName
+	acc.LastName = other.LastName
+
+	if copyData {
+		acc.Data = other.Data
+	}
+
+	return nil
+}
+
+func (acc *Account) verify() error {
+	if acc.Email == "" {
+		return errors.Errorf("no email address provided")
+	} else if !utils.IsEmailValid(acc.Email) {
+		return errors.Errorf("invalid email address: %v", acc.Email)
+	}
+
+	if acc.FirstName == "" || acc.LastName == "" {
+		return errors.Errorf("no or incomplete name provided")
+	}
+
+	return nil
+}
+
 // NewAccount creates a new user account.
 func NewAccount(email string, firstName, lastName string) (*Account, error) {
-	if email == "" {
-		return nil, errors.Errorf("no email address provided")
-	} else if !utils.IsEmailValid(email) {
-		return nil, errors.Errorf("invalid email address: %v", email)
-	}
-
-	if firstName == "" || lastName == "" {
-		return nil, errors.Errorf("no or incomplete name provided")
-	}
-
 	acc := &Account{
 		Email:     email,
 		FirstName: firstName,
@@ -63,6 +84,10 @@ func NewAccount(email string, firstName, lastName string) (*Account, error) {
 			APIKey:     "",
 			Authorized: false,
 		},
+	}
+
+	if err := acc.verify(); err != nil {
+		return nil, err
 	}
 
 	return acc, nil

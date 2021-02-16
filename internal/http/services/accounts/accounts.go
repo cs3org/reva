@@ -30,6 +30,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/internal/http/services/accounts/config"
+	"github.com/cs3org/reva/internal/http/services/accounts/data"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 )
 
@@ -63,7 +64,7 @@ func (s *svc) Unprotected() []string {
 	// TODO: For testing only
 	return []string{"/"}
 	// This service currently only has one public endpoint (called "register") used for account registration
-	return []string{config.EndpointRegister}
+	return []string{config.EndpointCreate}
 }
 
 // Handler serves all HTTP requests.
@@ -77,7 +78,9 @@ func (s *svc) Handler() http.Handler {
 
 	endpoints := []Endpoint{
 		{config.EndpointList, http.MethodGet, s.handleList},
-		{config.EndpointRegister, http.MethodPost, s.handleRegister},
+		{config.EndpointCreate, http.MethodPost, s.handleCreate},
+		{config.EndpointUpdate, http.MethodPost, s.handleUpdate},
+		{config.EndpointRemove, http.MethodPost, s.handleRemove},
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -126,12 +129,50 @@ func (s *svc) Handler() http.Handler {
 	})
 }
 
-func (s *svc) handleList(values url.Values, data []byte) (interface{}, error) {
-	return s.manager.ClonedAccounts(), nil
+func (s *svc) handleList(values url.Values, body []byte) (interface{}, error) {
+	return s.manager.CloneAccounts(), nil
 }
 
-func (s *svc) handleRegister(values url.Values, data []byte) (interface{}, error) {
-	return map[string]string{"id": "okiii"}, nil
+func (s *svc) handleCreate(values url.Values, body []byte) (interface{}, error) {
+	account := &data.Account{}
+	if err := json.Unmarshal(body, account); err != nil {
+		return nil, errors.Wrap(err, "invalid account data")
+	}
+
+	// Create a new account through the account manager
+	if err := s.manager.CreateAccount(account); err != nil {
+		return nil, errors.Wrap(err, "unable to create account")
+	}
+
+	return nil, nil
+}
+
+func (s *svc) handleUpdate(values url.Values, body []byte) (interface{}, error) {
+	account := &data.Account{}
+	if err := json.Unmarshal(body, account); err != nil {
+		return nil, errors.Wrap(err, "invalid account data")
+	}
+
+	// Update the account through the account manager; only the basic data of an account can be updated through this endpoint
+	if err := s.manager.UpdateAccount(account, false); err != nil {
+		return nil, errors.Wrap(err, "unable to update account")
+	}
+
+	return nil, nil
+}
+
+func (s *svc) handleRemove(values url.Values, body []byte) (interface{}, error) {
+	account := &data.Account{}
+	if err := json.Unmarshal(body, account); err != nil {
+		return nil, errors.Wrap(err, "invalid account data")
+	}
+
+	// Remove the account through the account manager
+	if err := s.manager.RemoveAccount(account); err != nil {
+		return nil, errors.Wrap(err, "unable to remove account")
+	}
+
+	return nil, nil
 }
 
 func parseConfig(m map[string]interface{}) (*config.Configuration, error) {

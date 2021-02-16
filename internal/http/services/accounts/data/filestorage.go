@@ -86,21 +86,18 @@ func (storage *FileStorage) WriteAll(accounts *Accounts) error {
 }
 
 // AccountAdded is called when an account has been added.
-func (storage *FileStorage) AccountAdded(account *Account) error {
+func (storage *FileStorage) AccountAdded(account *Account) {
 	// Simply skip this action; all data is saved solely in WriteAll
-	return nil
 }
 
 // AccountAdded is called when an account has been updated.
-func (storage *FileStorage) AccountUpdated(account *Account) error {
+func (storage *FileStorage) AccountUpdated(account *Account) {
 	// Simply skip this action; all data is saved solely in WriteAll
-	return nil
 }
 
 // AccountAdded is called when an account has been removed.
-func (storage *FileStorage) AccountRemoved(account *Account) error {
+func (storage *FileStorage) AccountRemoved(account *Account) {
 	// Simply skip this action; all data is saved solely in WriteAll
-	return nil
 }
 
 // NewFileStorage creates a new filePath storage.

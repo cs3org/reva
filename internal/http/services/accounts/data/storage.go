@@ -26,9 +26,9 @@ type Storage interface {
 	WriteAll(accounts *Accounts) error
 
 	// AccountAdded is called when an account has been added.
-	AccountAdded(account *Account) error
+	AccountAdded(account *Account)
 	// AccountAdded is called when an account has been updated.
-	AccountUpdated(account *Account) error
+	AccountUpdated(account *Account)
 	// AccountAdded is called when an account has been removed.
-	AccountRemoved(account *Account) error
+	AccountRemoved(account *Account)
 }
