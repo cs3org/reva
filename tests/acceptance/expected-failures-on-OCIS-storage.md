@@ -815,6 +815,8 @@ File and sync features in a shared scenario
 -   [apiSharees/sharees.feature:516](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharees/sharees.feature#L516)
 -   [apiSharees/sharees.feature:537](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharees/sharees.feature#L537)
 -   [apiSharees/sharees.feature:538](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharees/sharees.feature#L538)
+-   [apiSharees/sharees.feature:560](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharees/sharees.feature#L560)
+-   [apiSharees/sharees.feature:561](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharees/sharees.feature#L561)
 
 #### [sharing with group not available](https://github.com/owncloud/product/issues/293)
 -   [apiShareManagementToShares/acceptShares.feature:22](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/acceptShares.feature#L22)
