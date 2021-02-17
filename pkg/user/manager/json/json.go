@@ -124,7 +124,9 @@ func extractClaim(u *userpb.User, claim string) (string, error) {
 
 // TODO(jfd) search Opaque? compare sub?
 func userContains(u *userpb.User, query string) bool {
-	return strings.Contains(u.Username, query) || strings.Contains(u.DisplayName, query) || strings.Contains(u.Mail, query) || strings.Contains(u.Id.OpaqueId, query)
+	query = strings.ToLower(query)
+	return strings.Contains(strings.ToLower(u.Username), query) || strings.Contains(strings.ToLower(u.DisplayName), query) ||
+		strings.Contains(strings.ToLower(u.Mail), query) || strings.Contains(strings.ToLower(u.Id.OpaqueId), query)
 }
 
 func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {

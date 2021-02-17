@@ -130,7 +130,9 @@ func (m *manager) FindGroups(ctx context.Context, query string) ([]*grouppb.Grou
 }
 
 func groupContains(g *grouppb.Group, query string) bool {
-	return strings.Contains(g.GroupName, query) || strings.Contains(g.DisplayName, query) || strings.Contains(g.Mail, query) || strings.Contains(g.Id.OpaqueId, query)
+	query = strings.ToLower(query)
+	return strings.Contains(strings.ToLower(g.GroupName), query) || strings.Contains(strings.ToLower(g.DisplayName), query) ||
+		strings.Contains(strings.ToLower(g.Mail), query) || strings.Contains(strings.ToLower(g.Id.OpaqueId), query)
 }
 
 func (m *manager) GetMembers(ctx context.Context, gid *grouppb.GroupId) ([]*userpb.UserId, error) {

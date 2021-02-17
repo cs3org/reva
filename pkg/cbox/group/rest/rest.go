@@ -315,7 +315,6 @@ func (m *manager) parseAndCacheGroup(ctx context.Context, groupData map[string]i
 }
 
 func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId) (*grouppb.Group, error) {
-
 	g, err := m.fetchCachedGroupDetails(gid)
 	if err != nil {
 		groupData, err := m.getGroupByParam(ctx, "groupIdentifier", gid.OpaqueId)
@@ -335,6 +334,7 @@ func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId) (*grouppb.
 }
 
 func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string) (*grouppb.Group, error) {
+	value = url.QueryEscape(value)
 	opaqueID, err := m.fetchCachedParam(claim, value)
 	if err == nil {
 		return m.GetGroup(ctx, &grouppb.GroupId{OpaqueId: opaqueID})
@@ -420,7 +420,7 @@ func (m *manager) FindGroups(ctx context.Context, query string) ([]*grouppb.Grou
 
 	for _, f := range filters {
 		url := fmt.Sprintf("%s/Group/?filter=%s:contains:%s&field=groupIdentifier&field=displayName&field=gid",
-			m.conf.APIBaseURL, f, query)
+			m.conf.APIBaseURL, f, url.QueryEscape(query))
 		err := m.findGroupsByFilter(ctx, url, groups)
 		if err != nil {
 			return nil, err

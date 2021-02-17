@@ -44,3 +44,24 @@ uid="uid"
 displayName="displayName"
 dn="dn"
 cn="cn"
+
+[grpc.services.groupprovider]
+driver = "ldap"
+
+[grpc.services.groupprovider.drivers.ldap]
+hostname="ldap"
+port=636
+base_dn="dc=owncloud,dc=com"
+groupfilter="(&(objectclass=posixGroup)(|(gid={{.OpaqueId}})(cn={{.OpaqueId}})))"
+findfilter="(&(objectclass=posixGroup)(|(cn={{query}}*)(displayname={{query}}*)(mail={{query}}*)))"
+attributefilter="(&(objectclass=posixGroup)({{attr}}={{value}}))"
+memberfilter="(&(objectclass=posixAccount)(cn={{.OpaqueId}}))"
+bind_username="cn=admin,dc=owncloud,dc=com"
+bind_password="admin"
+idp="http://localhost:18000"
+
+[grpc.services.groupprovider.drivers.ldap.schema]
+gid="gid"
+displayName="displayName"
+dn="dn"
+cn="cn"

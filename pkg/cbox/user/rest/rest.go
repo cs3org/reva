@@ -327,7 +327,6 @@ func (m *manager) parseAndCacheUser(ctx context.Context, userData map[string]int
 }
 
 func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
-
 	u, err := m.fetchCachedUserDetails(uid)
 	if err != nil {
 		userData, err := m.getUserByParam(ctx, "upn", uid.OpaqueId)
@@ -347,6 +346,7 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 }
 
 func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
+	value = url.QueryEscape(value)
 	opaqueID, err := m.fetchCachedParam(claim, value)
 	if err == nil {
 		return m.GetUser(ctx, &userpb.UserId{OpaqueId: opaqueID})
@@ -439,7 +439,7 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 
 	for _, f := range filters {
 		url := fmt.Sprintf("%s/Identity/?filter=%s:contains:%s&field=id&field=upn&field=primaryAccountEmail&field=displayName&field=uid&field=gid&field=type",
-			m.conf.APIBaseURL, f, query)
+			m.conf.APIBaseURL, f, url.QueryEscape(query))
 		err := m.findUsersByFilter(ctx, url, users)
 		if err != nil {
 			return nil, err
