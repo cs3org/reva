@@ -19,6 +19,7 @@ storageregistrysvc = "localhost:19000"
 # user metadata
 preferencessvc = "localhost:18000"
 userprovidersvc = "localhost:18000"
+groupprovidersvc = "localhost:18000"
 # an approvider lives on "localhost:18000" as well, see users.toml
 # sharing
 usershareprovidersvc = "localhost:17000"
