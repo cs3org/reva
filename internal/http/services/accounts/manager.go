@@ -21,14 +21,17 @@ package accounts
 import (
 	"bytes"
 	"encoding/gob"
+	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/internal/http/services/accounts/config"
 	"github.com/cs3org/reva/internal/http/services/accounts/data"
+	"github.com/cs3org/reva/internal/http/services/accounts/panel"
 	"github.com/cs3org/reva/pkg/apikey"
 )
 
@@ -39,6 +42,8 @@ type Manager struct {
 
 	accounts data.Accounts
 	storage  data.Storage
+
+	panel *panel.Panel
 
 	mutex sync.RWMutex
 }
@@ -62,6 +67,13 @@ func (mngr *Manager) initialize(conf *config.Configuration, log *zerolog.Logger)
 		mngr.readAllAccounts()
 	} else {
 		return errors.Wrap(err, "unable to create accounts storage")
+	}
+
+	// Create the web interface panel
+	if pnl, err := panel.NewPanel(conf, log); err == nil {
+		mngr.panel = pnl
+	} else {
+		return errors.Wrap(err, "unable to create panel")
 	}
 
 	return nil
@@ -119,6 +131,12 @@ func (mngr *Manager) findAccountByAPIKey(key apikey.APIKey) *data.Account {
 	return nil
 }
 
+func (mngr *Manager) ShowPanel(w http.ResponseWriter) error {
+	// The panel only shows the stored accounts and offers actions through links, so let it use cloned data
+	accounts := mngr.CloneAccounts()
+	return mngr.panel.Execute(w, &accounts)
+}
+
 // CreateAccount creates a new account; if an account with the same email address already exists, an error is returned.
 func (mngr *Manager) CreateAccount(accountData *data.Account) error {
 	mngr.mutex.Lock()
@@ -151,11 +169,31 @@ func (mngr *Manager) UpdateAccount(accountData *data.Account, copyData bool) err
 	}
 
 	if err := account.Copy(accountData, copyData); err == nil {
+		account.DateModified = time.Now()
+
 		mngr.storage.AccountUpdated(account)
 		mngr.writeAllAccounts()
 	} else {
 		return errors.Wrap(err, "error while updating account")
 	}
+
+	return nil
+}
+
+// AuthorizeAccount sets the authorization status of the account identified by the account email; if no such account exists, an error is returned.
+func (mngr *Manager) AuthorizeAccount(accountData *data.Account, authorized bool) error {
+	mngr.mutex.Lock()
+	defer mngr.mutex.Unlock()
+
+	account := mngr.findAccountByEmail(accountData.Email)
+	if account == nil {
+		return errors.Errorf("no account with the specified email exists")
+	}
+
+	account.Data.Authorized = authorized
+
+	mngr.storage.AccountUpdated(account)
+	mngr.writeAllAccounts()
 
 	return nil
 }

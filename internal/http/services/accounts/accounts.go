@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -69,6 +70,27 @@ func (s *svc) Unprotected() []string {
 
 // Handler serves all HTTP requests.
 func (s *svc) Handler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+
+		switch r.URL.Path {
+		case config.EndpointPanel:
+			s.handlePanelEndpoint(w, r)
+
+		default:
+			s.handleRequestEndpoints(w, r)
+		}
+	})
+}
+
+func (s *svc) handlePanelEndpoint(w http.ResponseWriter, r *http.Request) {
+	if err := s.manager.ShowPanel(w); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(fmt.Sprintf("Unable to show the web interface panel: %v", err)))
+	}
+}
+
+func (s *svc) handleRequestEndpoints(w http.ResponseWriter, r *http.Request) {
 	// Allow definition of endpoints in a flexible and easy way
 	type Endpoint struct {
 		Path    string
@@ -76,57 +98,54 @@ func (s *svc) Handler() http.Handler {
 		Handler func(url.Values, []byte) (interface{}, error)
 	}
 
+	// Every request to the accounts service results in a standardized JSON response
+	type Response struct {
+		Success bool        `json:"success"`
+		Error   string      `json:"error,omitempty"`
+		Data    interface{} `json:"data,omitempty"`
+	}
+
 	endpoints := []Endpoint{
 		{config.EndpointList, http.MethodGet, s.handleList},
 		{config.EndpointCreate, http.MethodPost, s.handleCreate},
 		{config.EndpointUpdate, http.MethodPost, s.handleUpdate},
 		{config.EndpointRemove, http.MethodPost, s.handleRemove},
+		{config.EndpointAuthorize, http.MethodPost, s.handleAuthorize},
 	}
 
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer r.Body.Close()
+	// The default response is an unknown endpoint (for the specified method)
+	resp := Response{
+		Success: false,
+		Error:   fmt.Sprintf("unknown endpoint %v for method %v", r.URL.Path, r.Method),
+		Data:    nil,
+	}
 
-		// Every request to the accounts service results in a standardized JSON response
-		type Response struct {
-			Success bool        `json:"success"`
-			Error   string      `json:"error,omitempty"`
-			Data    interface{} `json:"data,omitempty"`
-		}
+	// Check each endpoint if it can handle the request
+	for _, endpoint := range endpoints {
+		if r.URL.Path == endpoint.Path && r.Method == endpoint.Method {
+			body, _ := ioutil.ReadAll(r.Body)
 
-		// The default response is an unknown endpoint (for the specified method)
-		resp := Response{
-			Success: false,
-			Error:   fmt.Sprintf("unknown endpoint %v for method %v", r.URL.Path, r.Method),
-			Data:    nil,
-		}
-
-		// Check each endpoint if it can handle the request
-		for _, endpoint := range endpoints {
-			if r.URL.Path == endpoint.Path && r.Method == endpoint.Method {
-				body, _ := ioutil.ReadAll(r.Body)
-
-				if data, err := endpoint.Handler(r.URL.Query(), body); err == nil {
-					resp.Success = true
-					resp.Error = ""
-					resp.Data = data
-				} else {
-					resp.Success = false
-					resp.Error = fmt.Sprintf("%v", err)
-					resp.Data = nil
-				}
-
-				break
+			if data, err := endpoint.Handler(r.URL.Query(), body); err == nil {
+				resp.Success = true
+				resp.Error = ""
+				resp.Data = data
+			} else {
+				resp.Success = false
+				resp.Error = fmt.Sprintf("%v", err)
+				resp.Data = nil
 			}
-		}
 
-		// Any failure during query handling results in a bad request
-		if !resp.Success {
-			w.WriteHeader(http.StatusBadRequest)
+			break
 		}
+	}
 
-		jsonData, _ := json.MarshalIndent(&resp, "", "\t")
-		_, _ = w.Write(jsonData)
-	})
+	// Any failure during query handling results in a bad request
+	if !resp.Success {
+		w.WriteHeader(http.StatusBadRequest)
+	}
+
+	jsonData, _ := json.MarshalIndent(&resp, "", "\t")
+	_, _ = w.Write(jsonData)
 }
 
 func (s *svc) handleList(values url.Values, body []byte) (interface{}, error) {
@@ -134,9 +153,9 @@ func (s *svc) handleList(values url.Values, body []byte) (interface{}, error) {
 }
 
 func (s *svc) handleCreate(values url.Values, body []byte) (interface{}, error) {
-	account := &data.Account{}
-	if err := json.Unmarshal(body, account); err != nil {
-		return nil, errors.Wrap(err, "invalid account data")
+	account, err := s.unmarshalRequestData(body)
+	if err != nil {
+		return nil, err
 	}
 
 	// Create a new account through the account manager
@@ -148,9 +167,9 @@ func (s *svc) handleCreate(values url.Values, body []byte) (interface{}, error) 
 }
 
 func (s *svc) handleUpdate(values url.Values, body []byte) (interface{}, error) {
-	account := &data.Account{}
-	if err := json.Unmarshal(body, account); err != nil {
-		return nil, errors.Wrap(err, "invalid account data")
+	account, err := s.unmarshalRequestData(body)
+	if err != nil {
+		return nil, err
 	}
 
 	// Update the account through the account manager; only the basic data of an account can be updated through this endpoint
@@ -162,9 +181,9 @@ func (s *svc) handleUpdate(values url.Values, body []byte) (interface{}, error) 
 }
 
 func (s *svc) handleRemove(values url.Values, body []byte) (interface{}, error) {
-	account := &data.Account{}
-	if err := json.Unmarshal(body, account); err != nil {
-		return nil, errors.Wrap(err, "invalid account data")
+	account, err := s.unmarshalRequestData(body)
+	if err != nil {
+		return nil, err
 	}
 
 	// Remove the account through the account manager
@@ -173,6 +192,44 @@ func (s *svc) handleRemove(values url.Values, body []byte) (interface{}, error) 
 	}
 
 	return nil, nil
+}
+
+func (s *svc) handleAuthorize(values url.Values, body []byte) (interface{}, error) {
+	account, err := s.unmarshalRequestData(body)
+	if err != nil {
+		return nil, err
+	}
+
+	if val, ok := values["status"]; ok && len(val) > 0 {
+		var authorize bool
+		switch strings.ToLower(val[0]) {
+		case "true":
+			authorize = true
+
+		case "false":
+			authorize = false
+
+		default:
+			return nil, errors.Errorf("unsupported authorization status %v", val[0])
+		}
+
+		// Authorize the account through the account manager
+		if err := s.manager.AuthorizeAccount(account, authorize); err != nil {
+			return nil, errors.Wrap(err, "unable to remove account")
+		}
+	} else {
+		return nil, errors.Errorf("no authorization status provided")
+	}
+
+	return nil, nil
+}
+
+func (s *svc) unmarshalRequestData(body []byte) (*data.Account, error) {
+	account := &data.Account{}
+	if err := json.Unmarshal(body, account); err != nil {
+		return nil, errors.Wrap(err, "invalid account data")
+	}
+	return account, nil
 }
 
 func parseConfig(m map[string]interface{}) (*config.Configuration, error) {

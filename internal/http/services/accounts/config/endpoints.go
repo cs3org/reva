@@ -19,12 +19,19 @@
 package config
 
 const (
+	// EndpointPanel is the endpoint of the web interface panel.
+	EndpointPanel = "/panel"
+
 	// EndpointList is the endpoint path for listing all stored accounts.
 	EndpointList = "/list"
+
 	// EndpointCreate is the endpoint path for account creation.
 	EndpointCreate = "/create"
 	// EndpointUpdate is the endpoint path for account updates.
 	EndpointUpdate = "/update"
 	// EndpointRemove is the endpoint path for account removal.
 	EndpointRemove = "/remove"
+
+	// EndpointAuthorize is the endpoint path for account authorization
+	EndpointAuthorize = "/authorize"
 )

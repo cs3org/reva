@@ -19,6 +19,8 @@
 package data
 
 import (
+	"time"
+
 	"github.com/pkg/errors"
 
 	"github.com/cs3org/reva/pkg/apikey"
@@ -30,6 +32,9 @@ type Account struct {
 	Email     string `json:"email"`
 	FirstName string `json:"firstName"`
 	LastName  string `json:"lastName"`
+
+	DateCreated  time.Time `json:"dateCreated"`
+	DateModified time.Time `json:"dateModified"`
 
 	Data AccountData `json:"data"`
 }
@@ -76,10 +81,14 @@ func (acc *Account) verify() error {
 
 // NewAccount creates a new user account.
 func NewAccount(email string, firstName, lastName string) (*Account, error) {
+	t := time.Now()
+
 	acc := &Account{
-		Email:     email,
-		FirstName: firstName,
-		LastName:  lastName,
+		Email:        email,
+		FirstName:    firstName,
+		LastName:     lastName,
+		DateCreated:  t,
+		DateModified: t,
 		Data: AccountData{
 			APIKey:     "",
 			Authorized: false,
