@@ -67,7 +67,7 @@ const panelTemplate = `
 				{{.FirstName}} {{.LastName}} <em>(Joined: {{.DateCreated.Format "Jan 01, 2000 10:00"}}; Last modified: {{.DateModified.Format "Jan 01, 2000 10:00"}})</em>
 			</p>
 			<p>
-				<strong>API-Key:</strong>
+				<strong>API Key:</strong>
 			{{if .Data.APIKey}}
 				{{.Data.APIKey}}
 			{{else}}
@@ -83,7 +83,7 @@ const panelTemplate = `
 			</p>
 			<p>
 				<form method="POST">
-					<button type="button" onClick="handleAction('assign-api-key', '{{.Email}}');" {{if .Data.APIKey}}disabled{{end}}>Assign API-Key</button>
+					<button type="button" onClick="handleAction('assign-api-key', '{{.Email}}');" {{if .Data.APIKey}}disabled{{end}}>Assign API Key</button>
 	
 				{{if .Data.Authorized}}
 					<button type="button" onClick="handleAction('authorize?status=false', '{{.Email}}');">Unauthorize</button>

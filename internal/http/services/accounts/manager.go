@@ -198,6 +198,31 @@ func (mngr *Manager) AuthorizeAccount(accountData *data.Account, authorized bool
 	return nil
 }
 
+func (mngr *Manager) AssignAPIKeyToAccount(accountData *data.Account, flags int16) error {
+	mngr.mutex.Lock()
+	defer mngr.mutex.Unlock()
+
+	account := mngr.findAccountByEmail(accountData.Email)
+	if account == nil {
+		return errors.Errorf("no account with the specified email exists")
+	}
+
+	if len(account.Data.APIKey) > 0 {
+		return errors.Errorf("the account already has an API key assigned")
+	}
+
+	apiKey, err := apikey.GenerateAPIKey(strings.ToLower(account.Email), flags) // Use the (lowered) email address as the key's salt value
+	if err != nil {
+		return errors.Wrap(err, "error while generating API key")
+	}
+	account.Data.APIKey = apiKey
+
+	mngr.storage.AccountUpdated(account)
+	mngr.writeAllAccounts()
+
+	return nil
+}
+
 // RemoveAccount removes the account identified by the account email; if no such account exists, an error is returned.
 func (mngr *Manager) RemoveAccount(accountData *data.Account) error {
 	mngr.mutex.Lock()

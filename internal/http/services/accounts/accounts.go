@@ -32,6 +32,7 @@ import (
 
 	"github.com/cs3org/reva/internal/http/services/accounts/config"
 	"github.com/cs3org/reva/internal/http/services/accounts/data"
+	"github.com/cs3org/reva/pkg/apikey"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 )
 
@@ -106,11 +107,13 @@ func (s *svc) handleRequestEndpoints(w http.ResponseWriter, r *http.Request) {
 	}
 
 	endpoints := []Endpoint{
+		{config.EndpointGenerateAPIKey, http.MethodGet, s.handleGenerateAPIKey},
 		{config.EndpointList, http.MethodGet, s.handleList},
 		{config.EndpointCreate, http.MethodPost, s.handleCreate},
 		{config.EndpointUpdate, http.MethodPost, s.handleUpdate},
 		{config.EndpointRemove, http.MethodPost, s.handleRemove},
 		{config.EndpointAuthorize, http.MethodPost, s.handleAuthorize},
+		{config.EndpointAssignAPIKey, http.MethodPost, s.handleAssignAPIKey},
 	}
 
 	// The default response is an unknown endpoint (for the specified method)
@@ -146,6 +149,39 @@ func (s *svc) handleRequestEndpoints(w http.ResponseWriter, r *http.Request) {
 
 	jsonData, _ := json.MarshalIndent(&resp, "", "\t")
 	_, _ = w.Write(jsonData)
+}
+
+func (s *svc) handleGenerateAPIKey(values url.Values, body []byte) (interface{}, error) {
+	email := values.Get("email")
+	flags := apikey.FlagDefault
+
+	if strings.EqualFold(values.Get("isScienceMesh"), "true") {
+		flags |= apikey.FlagScienceMesh
+	}
+
+	if len(email) == 0 {
+		return nil, errors.Errorf("no email provided")
+	}
+
+	apiKey, err := apikey.GenerateAPIKey(email, flags)
+	if err != nil {
+		return nil, errors.Wrap(err, "unable to generate API key")
+	}
+	return map[string]string{"apiKey": apiKey}, nil
+}
+
+func (s *svc) handleAssignAPIKey(values url.Values, body []byte) (interface{}, error) {
+	account, err := s.unmarshalRequestData(body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Assign a new API key to the account through the account manager
+	if err := s.manager.AssignAPIKeyToAccount(account, apikey.FlagDefault); err != nil {
+		return nil, errors.Wrap(err, "unable to assign API key")
+	}
+
+	return nil, nil
 }
 
 func (s *svc) handleList(values url.Values, body []byte) (interface{}, error) {
@@ -200,9 +236,9 @@ func (s *svc) handleAuthorize(values url.Values, body []byte) (interface{}, erro
 		return nil, err
 	}
 
-	if val, ok := values["status"]; ok && len(val) > 0 {
+	if val := values.Get("status"); len(val) > 0 {
 		var authorize bool
-		switch strings.ToLower(val[0]) {
+		switch strings.ToLower(val) {
 		case "true":
 			authorize = true
 

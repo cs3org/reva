@@ -19,8 +19,11 @@
 package config
 
 const (
-	// EndpointPanel is the endpoint of the web interface panel.
+	// EndpointPanel is the endpoint path of the web interface panel.
 	EndpointPanel = "/panel"
+
+	// EndpointGenerateAPIKey is the endpoint path of the API key generator.
+	EndpointGenerateAPIKey = "/generate-api-key"
 
 	// EndpointList is the endpoint path for listing all stored accounts.
 	EndpointList = "/list"
@@ -34,4 +37,6 @@ const (
 
 	// EndpointAuthorize is the endpoint path for account authorization
 	EndpointAuthorize = "/authorize"
+	// EndpointAssignsAPIKey is the endpoint path used for assigning an API key to an account.
+	EndpointAssignAPIKey = "/assign-api-key"
 )
