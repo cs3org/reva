@@ -64,7 +64,7 @@ const panelTemplate = `
 		<li>
 			<p>
 				<strong>{{.Email}}</strong><br>
-				{{.FirstName}} {{.LastName}} <em>(Joined: {{.DateCreated.Format "Jan 01, 2000 10:00"}}; Last modified: {{.DateModified.Format "Jan 01, 2000 10:00"}})</em>
+				{{.FirstName}} {{.LastName}} <em>(Joined: {{.DateCreated.Format "Jan 02, 2006 15:04"}}; Last modified: {{.DateModified.Format "Jan 02, 2006 15:04"}})</em>
 			</p>
 			<p>
 				<strong>API Key:</strong>
