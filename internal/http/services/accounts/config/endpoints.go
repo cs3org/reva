@@ -24,6 +24,10 @@ const (
 
 	// EndpointGenerateAPIKey is the endpoint path of the API key generator.
 	EndpointGenerateAPIKey = "/generate-api-key"
+	// EndpointGenerateAPIKey is the endpoint path for API key verification.
+	EndpointVerifyAPIKey = "/verify-api-key"
+	// EndpointAssignsAPIKey is the endpoint path used for assigning an API key to an account.
+	EndpointAssignAPIKey = "/assign-api-key"
 
 	// EndpointList is the endpoint path for listing all stored accounts.
 	EndpointList = "/list"
@@ -41,6 +45,4 @@ const (
 	EndpointAuthorize = "/authorize"
 	// EndpointIsAuthorized is the endpoint path used to check the authorization status of an account.
 	EndpointIsAuthorized = "/is-authorized"
-	// EndpointAssignsAPIKey is the endpoint path used for assigning an API key to an account.
-	EndpointAssignAPIKey = "/assign-api-key"
 )

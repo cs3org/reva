@@ -228,7 +228,7 @@ func (mngr *Manager) AuthorizeAccount(accountData *data.Account, authorized bool
 	return nil
 }
 
-func (mngr *Manager) AssignAPIKeyToAccount(accountData *data.Account, flags int16) error {
+func (mngr *Manager) AssignAPIKeyToAccount(accountData *data.Account, flags int8) error {
 	mngr.mutex.Lock()
 	defer mngr.mutex.Unlock()
 

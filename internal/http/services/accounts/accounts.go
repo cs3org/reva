@@ -108,6 +108,8 @@ func (s *svc) handleRequestEndpoints(w http.ResponseWriter, r *http.Request) {
 
 	endpoints := []Endpoint{
 		{config.EndpointGenerateAPIKey, http.MethodGet, s.handleGenerateAPIKey},
+		{config.EndpointVerifyAPIKey, http.MethodGet, s.handleVerifyAPIKey},
+		{config.EndpointAssignAPIKey, http.MethodPost, s.handleAssignAPIKey},
 		{config.EndpointList, http.MethodGet, s.handleList},
 		{config.EndpointFind, http.MethodGet, s.handleFind},
 		{config.EndpointCreate, http.MethodPost, s.handleCreate},
@@ -115,7 +117,6 @@ func (s *svc) handleRequestEndpoints(w http.ResponseWriter, r *http.Request) {
 		{config.EndpointRemove, http.MethodPost, s.handleRemove},
 		{config.EndpointAuthorize, http.MethodPost, s.handleAuthorize},
 		{config.EndpointIsAuthorized, http.MethodGet, s.handleIsAuthorized},
-		{config.EndpointAssignAPIKey, http.MethodPost, s.handleAssignAPIKey},
 	}
 
 	// The default response is an unknown endpoint (for the specified method)
@@ -165,11 +166,30 @@ func (s *svc) handleGenerateAPIKey(values url.Values, body []byte) (interface{},
 		return nil, errors.Errorf("no email provided")
 	}
 
-	apiKey, err := apikey.GenerateAPIKey(email, flags)
+	apiKey, err := apikey.GenerateAPIKey(strings.ToLower(email), flags)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to generate API key")
 	}
 	return map[string]string{"apiKey": apiKey}, nil
+}
+
+func (s *svc) handleVerifyAPIKey(values url.Values, body []byte) (interface{}, error) {
+	apiKey := values.Get("apiKey")
+	email := values.Get("email")
+
+	if len(apiKey) == 0 {
+		return nil, errors.Errorf("no API key provided")
+	}
+
+	if len(email) == 0 {
+		return nil, errors.Errorf("no email provided")
+	}
+
+	err := apikey.VerifyAPIKey(apiKey, strings.ToLower(email))
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid API key")
+	}
+	return nil, nil
 }
 
 func (s *svc) handleAssignAPIKey(values url.Values, body []byte) (interface{}, error) {
