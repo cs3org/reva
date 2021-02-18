@@ -35,6 +35,11 @@ import (
 	"github.com/cs3org/reva/pkg/apikey"
 )
 
+const (
+	FindByEmail  = "email"
+	FindByAPIKey = "apikey"
+)
+
 // Manager is responsible for all user account related tasks.
 type Manager struct {
 	conf *config.Configuration
@@ -180,6 +185,31 @@ func (mngr *Manager) UpdateAccount(accountData *data.Account, copyData bool) err
 	return nil
 }
 
+func (mngr *Manager) FindAccount(by string, value string) (*data.Account, error) {
+	mngr.mutex.RLock()
+	defer mngr.mutex.RUnlock()
+
+	var account *data.Account
+	switch strings.ToLower(by) {
+	case FindByEmail:
+		account = mngr.findAccountByEmail(value)
+
+	case FindByAPIKey:
+		account = mngr.findAccountByAPIKey(value)
+
+	default:
+		return nil, errors.Errorf("invalid search type %v", by)
+	}
+
+	if account != nil {
+		// Clone the account to avoid external data changes
+		clonedAccount := *account
+		return &clonedAccount, nil
+	}
+
+	return nil, errors.Errorf("no user found matching the specified criteria")
+}
+
 // AuthorizeAccount sets the authorization status of the account identified by the account email; if no such account exists, an error is returned.
 func (mngr *Manager) AuthorizeAccount(accountData *data.Account, authorized bool) error {
 	mngr.mutex.Lock()
@@ -211,11 +241,18 @@ func (mngr *Manager) AssignAPIKeyToAccount(accountData *data.Account, flags int1
 		return errors.Errorf("the account already has an API key assigned")
 	}
 
-	apiKey, err := apikey.GenerateAPIKey(strings.ToLower(account.Email), flags) // Use the (lowered) email address as the key's salt value
-	if err != nil {
-		return errors.Wrap(err, "error while generating API key")
+	for {
+		apiKey, err := apikey.GenerateAPIKey(strings.ToLower(account.Email), flags) // Use the (lowered) email address as the key's salt value
+		if err != nil {
+			return errors.Wrap(err, "error while generating API key")
+		}
+
+		// See if the key already exists (super extremely unlikely); if so, generate a new one and try again
+		if mngr.findAccountByAPIKey(apiKey) == nil {
+			account.Data.APIKey = apiKey
+			break
+		}
 	}
-	account.Data.APIKey = apiKey
 
 	mngr.storage.AccountUpdated(account)
 	mngr.writeAllAccounts()

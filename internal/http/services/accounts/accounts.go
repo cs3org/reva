@@ -109,10 +109,12 @@ func (s *svc) handleRequestEndpoints(w http.ResponseWriter, r *http.Request) {
 	endpoints := []Endpoint{
 		{config.EndpointGenerateAPIKey, http.MethodGet, s.handleGenerateAPIKey},
 		{config.EndpointList, http.MethodGet, s.handleList},
+		{config.EndpointFind, http.MethodGet, s.handleFind},
 		{config.EndpointCreate, http.MethodPost, s.handleCreate},
 		{config.EndpointUpdate, http.MethodPost, s.handleUpdate},
 		{config.EndpointRemove, http.MethodPost, s.handleRemove},
 		{config.EndpointAuthorize, http.MethodPost, s.handleAuthorize},
+		{config.EndpointIsAuthorized, http.MethodGet, s.handleIsAuthorized},
 		{config.EndpointAssignAPIKey, http.MethodPost, s.handleAssignAPIKey},
 	}
 
@@ -188,6 +190,22 @@ func (s *svc) handleList(values url.Values, body []byte) (interface{}, error) {
 	return s.manager.CloneAccounts(), nil
 }
 
+func (s *svc) handleFind(values url.Values, body []byte) (interface{}, error) {
+	by := values.Get("by")
+	value := values.Get("value")
+
+	if len(by) == 0 && len(value) == 0 {
+		return nil, errors.Errorf("missing search criteria")
+	}
+
+	// Find the account using the account manager
+	account, err := s.manager.FindAccount(by, value)
+	if err != nil {
+		return nil, errors.Wrap(err, "no user found")
+	}
+	return map[string]interface{}{"account": account}, nil
+}
+
 func (s *svc) handleCreate(values url.Values, body []byte) (interface{}, error) {
 	account, err := s.unmarshalRequestData(body)
 	if err != nil {
@@ -228,6 +246,21 @@ func (s *svc) handleRemove(values url.Values, body []byte) (interface{}, error) 
 	}
 
 	return nil, nil
+}
+
+func (s *svc) handleIsAuthorized(values url.Values, body []byte) (interface{}, error) {
+	apiKey := values.Get("apiKey")
+
+	if len(apiKey) == 0 {
+		return nil, errors.Errorf("no API key specified")
+	}
+
+	// Find the account associated with the given API key
+	account, err := s.manager.FindAccount(FindByAPIKey, apiKey)
+	if err != nil {
+		return nil, errors.Wrap(err, "no user with the specified API key found")
+	}
+	return account.Data.Authorized, nil
 }
 
 func (s *svc) handleAuthorize(values url.Values, body []byte) (interface{}, error) {

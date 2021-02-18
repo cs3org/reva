@@ -27,6 +27,8 @@ const (
 
 	// EndpointList is the endpoint path for listing all stored accounts.
 	EndpointList = "/list"
+	// EndpointFind is the endpoint path for finding accounts.
+	EndpointFind = "/find"
 
 	// EndpointCreate is the endpoint path for account creation.
 	EndpointCreate = "/create"
@@ -37,6 +39,8 @@ const (
 
 	// EndpointAuthorize is the endpoint path for account authorization
 	EndpointAuthorize = "/authorize"
+	// EndpointIsAuthorized is the endpoint path used to check the authorization status of an account.
+	EndpointIsAuthorized = "/is-authorized"
 	// EndpointAssignsAPIKey is the endpoint path used for assigning an API key to an account.
 	EndpointAssignAPIKey = "/assign-api-key"
 )
