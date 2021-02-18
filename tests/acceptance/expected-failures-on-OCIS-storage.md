@@ -1,7 +1,7 @@
 ## Scenarios from ownCloud10 core API tests that are expected to fail with OCIS storage
 
 ### File
-Basic file management like up and download, move, copy, properties, trash, versions and chunking.
+Basic file management like up and download, move, copy, properties, quota, trash, versions and chunking.
 
 #### [Implement Trashbin Feature for ocis storage](https://github.com/owncloud/product/issues/209)
 
@@ -326,9 +326,6 @@ Scenario Outline: try to create a folder with a name of an existing file
 ### [Different webdav properties from core](https://github.com/owncloud/ocis/issues/1302)
 -   [apiWebdavProperties2/getFileProperties.feature:327](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L327)
 -   [apiWebdavProperties2/getFileProperties.feature:328](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L328)
-Scenario Outline: Propfind the size of a folder using webdav api `Property "oc:size" found with value "10", expected "#^0$#" or "#^0$#"`  
--   [apiWebdavProperties2/getFileProperties.feature:376](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L376)
--   [apiWebdavProperties2/getFileProperties.feature:377](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L377)
 Scenario Outline: Propfind the permissions on a file using webdav api `Property "oc:permissions" found with value "DNVWR", expected "/RM{0,1}DNVW/"`
 -   [apiWebdavProperties2/getFileProperties.feature:441](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L441)
 -   [apiWebdavProperties2/getFileProperties.feature:442](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L442)
@@ -1186,6 +1183,7 @@ File and sync features in a shared scenario
 -   [apiSharePublicLink2/uploadToPublicLinkShare.feature:66](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/uploadToPublicLinkShare.feature#L66)
 
 #### [Set quota over settings](https://github.com/owncloud/ocis/issues/1290)
+_requires a [CS3 user provisioning api that can update the quota for a user](https://github.com/cs3org/cs3apis/pull/95#issuecomment-772780683)_
 -   [apiSharePublicLink2/uploadToPublicLinkShare.feature:148](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/uploadToPublicLinkShare.feature#L148)
 -   [apiSharePublicLink2/uploadToPublicLinkShare.feature:158](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/uploadToPublicLinkShare.feature#L158)
 -   [apiSharePublicLink2/uploadToPublicLinkShare.feature:167](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/uploadToPublicLinkShare.feature#L167)
@@ -1393,6 +1391,7 @@ Scenario Outline: delete a folder when there is a default folder for received sh
 -   [apiWebdavProperties1/copyFile.feature:475](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L475)
 
 #### [quota query](https://github.com/owncloud/ocis/issues/1313)
+_requires a [CS3 user provisioning api that can update the quota for a user](https://github.com/cs3org/cs3apis/pull/95#issuecomment-772780683)_
 -   [apiMain/quota.feature:41](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/quota.feature#L41) Scenario: Uploading a file in received folder having enough quota
 -   [apiMain/quota.feature:54](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/quota.feature#L54) Scenario: Uploading a file in received folder having insufficient quota
 -   [apiMain/quota.feature:68](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/quota.feature#L68) Scenario: Overwriting a file in received folder having enough quota
@@ -1425,6 +1424,7 @@ Scenario Outline: Retrieving folder quota when quota is set and a file was recei
 -   [apiWebdavProperties2/getFileProperties.feature:233](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L233)
 
 #### [changing user quota gives ocs status 103 / Cannot set quota](https://github.com/owncloud/product/issues/247)
+_requires a [CS3 user provisioning api that can update the quota for a user](https://github.com/cs3org/cs3apis/pull/95#issuecomment-772780683)_
 -   [apiShareOperationsToShares/uploadToShare.feature:162](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares/uploadToShare.feature#L162)
 -   [apiShareOperationsToShares/uploadToShare.feature:163](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares/uploadToShare.feature#L163)
 -   [apiShareOperationsToShares/uploadToShare.feature:181](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares/uploadToShare.feature#L181)
@@ -1837,7 +1837,7 @@ User and group management features
 -   [apiProvisioning-v2/editUser.feature:47](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiProvisioning-v2/editUser.feature#L47)
 
 #### [quota query](https://github.com/owncloud/ocis/issues/1313)
-_getting and setting quota_
+_requires a [CS3 user provisioning api that can update the quota for a user](https://github.com/cs3org/cs3apis/pull/95#issuecomment-772780683)_
 -   [apiMain/quota.feature:9](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/quota.feature#L9) Scenario: Uploading a file as owner having enough quota
 -   [apiMain/quota.feature:16](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/quota.feature#L16) Scenario: Uploading a file as owner having insufficient quota
 -   [apiMain/quota.feature:23](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/quota.feature#L23) Scenario: Overwriting a file as owner having enough quota
@@ -1850,6 +1850,7 @@ Scenario Outline: Retrieving folder quota when quota is set
 -   [apiWebdavProperties1/getQuota.feature:28](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L28)
 
 #### [changing user quota gives ocs status 103 / Cannot set quota](https://github.com/owncloud/product/issues/247)
+_requires a [CS3 user provisioning api that can update the quota for a user](https://github.com/cs3org/cs3apis/pull/95#issuecomment-772780683)_
 -   [apiProvisioning-v1/editUser.feature:56](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiProvisioning-v1/editUser.feature#L56)
 -   [apiProvisioning-v1/editUser.feature:122](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiProvisioning-v1/editUser.feature#L122)
 -   [apiProvisioning-v2/editUser.feature:56](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiProvisioning-v2/editUser.feature#L56)

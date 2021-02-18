@@ -24,7 +24,9 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -84,7 +86,11 @@ const (
 	// the size of the tree below this node,
 	// propagated when treesize_accounting is true and
 	// user.ocis.propagation=1 is set
-	//treesizeAttr string = ocisPrefix + "treesize"
+	// stored as uint64, little endian
+	treesizeAttr string = ocisPrefix + "treesize"
+
+	// the quota for the storage space / tree, regardless who accesses it
+	quotaAttr string = ocisPrefix + "quota"
 )
 
 func init() {
@@ -183,8 +189,56 @@ func (fs *ocisfs) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (fs *ocisfs) GetQuota(ctx context.Context) (int, int, error) {
-	return 0, 0, nil
+// TODO Document in the cs3 should we return quota or free space?
+func (fs *ocisfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
+	var node *Node
+	var err error
+	if node, err = fs.lu.HomeOrRootNode(ctx); err != nil {
+		return 0, 0, err
+	}
+
+	if !node.Exists {
+		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
+		return 0, 0, err
+	}
+
+	rp, err := fs.p.AssemblePermissions(ctx, node)
+	switch {
+	case err != nil:
+		return 0, 0, errtypes.InternalError(err.Error())
+	case !rp.GetQuota:
+		return 0, 0, errtypes.PermissionDenied(node.ID)
+	}
+
+	ri, err := node.AsResourceInfo(ctx, rp, []string{"treesize", "quota"})
+	if err != nil {
+		return 0, 0, err
+	}
+
+	quotaStr := _quotaUnknown
+	if ri.Opaque != nil && ri.Opaque.Map != nil && ri.Opaque.Map["quota"] != nil && ri.Opaque.Map["quota"].Decoder == "plain" {
+		quotaStr = string(ri.Opaque.Map["quota"].Value)
+	}
+	stat := syscall.Statfs_t{}
+	err = syscall.Statfs(fs.lu.toInternalPath(node.ID), &stat)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	total := ri.Size + (stat.Bavail * uint64(stat.Bsize)) // used treesize + available space
+
+	switch {
+	case quotaStr == _quotaUncalculated, quotaStr == _quotaUnknown, quotaStr == _quotaUnlimited:
+	// best we can do is return current total
+	// TODO indicate unlimited total? -> in opaque data?
+	default:
+		if quota, err := strconv.ParseUint(quotaStr, 10, 64); err == nil {
+			if total > quota {
+				total = quota
+			}
+		}
+	}
+	return total, ri.Size, nil
 }
 
 // CreateHome creates a new root node that has no parent id

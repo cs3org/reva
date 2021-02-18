@@ -51,7 +51,7 @@ type FS interface {
 	RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error)
-	GetQuota(ctx context.Context) (int, int, error)
+	GetQuota(ctx context.Context) (uint64, uint64, error)
 	CreateReference(ctx context.Context, path string, targetURI *url.URL) error
 	Shutdown(ctx context.Context) error
 	SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error
