@@ -225,7 +225,7 @@ func (fs *ocisfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
 		return 0, 0, err
 	}
 
-	total := +ri.Size + (stat.Bavail * uint64(stat.Bsize)) // used treesize + available space
+	total := ri.Size + (stat.Bavail * uint64(stat.Bsize)) // used treesize + available space
 
 	switch {
 	case quotaStr == _quotaUncalculated, quotaStr == _quotaUnknown, quotaStr == _quotaUnlimited:
