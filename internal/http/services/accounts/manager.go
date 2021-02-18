@@ -31,8 +31,10 @@ import (
 
 	"github.com/cs3org/reva/internal/http/services/accounts/config"
 	"github.com/cs3org/reva/internal/http/services/accounts/data"
+	"github.com/cs3org/reva/internal/http/services/accounts/email"
 	"github.com/cs3org/reva/internal/http/services/accounts/panel"
 	"github.com/cs3org/reva/pkg/apikey"
+	"github.com/cs3org/reva/pkg/smtpclient"
 )
 
 const (
@@ -49,6 +51,7 @@ type Manager struct {
 	storage  data.Storage
 
 	panel *panel.Panel
+	smtp  *smtpclient.SMTPCredentials
 
 	mutex sync.RWMutex
 }
@@ -79,6 +82,11 @@ func (mngr *Manager) initialize(conf *config.Configuration, log *zerolog.Logger)
 		mngr.panel = pnl
 	} else {
 		return errors.Wrap(err, "unable to create panel")
+	}
+
+	// Create the SMTP client
+	if conf.SMTP != nil {
+		mngr.smtp = smtpclient.NewSMTPCredentials(conf.SMTP)
 	}
 
 	return nil
@@ -156,6 +164,8 @@ func (mngr *Manager) CreateAccount(accountData *data.Account) error {
 		mngr.accounts = append(mngr.accounts, account)
 		mngr.storage.AccountAdded(account)
 		mngr.writeAllAccounts()
+
+		_ = email.SendAccountCreated(account, account.Email, mngr.smtp)
 	} else {
 		return errors.Wrap(err, "error while creating account")
 	}
@@ -220,10 +230,15 @@ func (mngr *Manager) AuthorizeAccount(accountData *data.Account, authorized bool
 		return errors.Errorf("no account with the specified email exists")
 	}
 
+	authorizedOld := account.Data.Authorized
 	account.Data.Authorized = authorized
 
 	mngr.storage.AccountUpdated(account)
 	mngr.writeAllAccounts()
+
+	if account.Data.Authorized && account.Data.Authorized != authorizedOld {
+		_ = email.SendAccountAuthorized(account, account.Email, mngr.smtp)
+	}
 
 	return nil
 }
@@ -256,6 +271,8 @@ func (mngr *Manager) AssignAPIKeyToAccount(accountData *data.Account, flags int8
 
 	mngr.storage.AccountUpdated(account)
 	mngr.writeAllAccounts()
+
+	_ = email.SendAPIKeyAssigned(account, account.Email, mngr.smtp)
 
 	return nil
 }

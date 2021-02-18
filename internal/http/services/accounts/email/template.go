@@ -16,21 +16,36 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package config
+package email
 
-import "github.com/cs3org/reva/pkg/smtpclient"
+const accountCreatedTemplate = `
+Dear {{.FirstName}} {{.LastName}},
 
-// Configuration holds the general service configuration.
-type Configuration struct {
-	Prefix string `mapstructure:"prefix"`
+Your ScienceMesh account has been successfully created!
 
-	Storage struct {
-		Driver string `mapstructure:"driver"`
+An administrator will soon create an API key for your account; you will receive a separate email containing the key.
 
-		File struct {
-			File string `mapstructure:"file"`
-		} `mapstructure:"file"`
-	} `mapstructure:"storage"`
+Kind regards,
+The ScienceMesh Team
+`
 
-	SMTP *smtpclient.SMTPCredentials `mapstructure:"smtp"`
-}
+const apiKeyAssignedTemplate = `
+Dear {{.FirstName}} {{.LastName}},
+
+An API key has been created for your account:
+{{.Data.APIKey}}
+
+Keep this key in a safe and secret place!
+
+Kind regards,
+The ScienceMesh Team
+`
+
+const accountAuthorizedTemplate = `
+Dear {{.FirstName}} {{.LastName}},
+
+Congratulations - your site registration has been authorized!
+
+Kind regards,
+The ScienceMesh Team
+`
