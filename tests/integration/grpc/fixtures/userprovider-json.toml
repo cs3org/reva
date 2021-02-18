@@ -5,4 +5,4 @@ address = "0.0.0.0:19000"
 driver = "json"
 
 [grpc.services.userprovider.drivers.json]
-users = "userproviders/users.demo.json"
+users = "fixtures/users.demo.json"
