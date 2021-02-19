@@ -19,15 +19,19 @@
 package grpc_test
 
 import (
-	"errors"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
+	"path"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/pkg/errors"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -72,10 +76,27 @@ func startRevad(config string) (*Revad, error) {
 		return revad, nil
 	}
 
-	cmd := exec.Command("../../../cmd/revad/revad", "-c", config)
-	err := cmd.Start()
+	// Create a temporary root for this revad
+	tmpRoot, err := ioutil.TempDir("", "reva-grpc-integration-tests-*-root")
 	if err != nil {
-		return nil, fmt.Errorf("Could not start revad! ERROR: %v", err)
+		return nil, errors.Wrapf(err, "Could not create tmpdir")
+	}
+	newCfgPath := path.Join(tmpRoot, "config.toml")
+	rawCfg, err := ioutil.ReadFile(config)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Could not read config file")
+	}
+	cfg := string(rawCfg)
+	strings.ReplaceAll(cfg, "{{root}}", tmpRoot)
+	err = ioutil.WriteFile(newCfgPath, []byte(cfg), 0600)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Could not write config file")
+	}
+
+	cmd := exec.Command("../../../cmd/revad/revad", "-c", newCfgPath)
+	err = cmd.Start()
+	if err != nil {
+		return nil, errors.Wrapf(err, "Could not start revad")
 	}
 
 	err = waitForPort("open")
@@ -95,6 +116,7 @@ func startRevad(config string) (*Revad, error) {
 			return fmt.Errorf("Could not kill revad! ERROR: %v", err)
 		}
 		waitForPort("close")
+		os.RemoveAll(tmpRoot)
 		return nil
 	}
 
