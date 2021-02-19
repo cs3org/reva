@@ -63,8 +63,6 @@ func (s *svc) Prefix() string {
 
 // Unprotected returns all endpoints that can be queried without prior authorization.
 func (s *svc) Unprotected() []string {
-	// TODO: For testing only
-	return []string{"/"}
 	// This service currently only has one public endpoint (called "register") used for account registration
 	return []string{config.EndpointCreate}
 }
