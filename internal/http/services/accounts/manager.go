@@ -33,7 +33,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/accounts/data"
 	"github.com/cs3org/reva/internal/http/services/accounts/email"
 	"github.com/cs3org/reva/internal/http/services/accounts/panel"
-	"github.com/cs3org/reva/pkg/apikey"
+	"github.com/cs3org/reva/pkg/mentix/apikey"
 	"github.com/cs3org/reva/pkg/smtpclient"
 )
 
@@ -165,7 +165,7 @@ func (mngr *Manager) CreateAccount(accountData *data.Account) error {
 		mngr.storage.AccountAdded(account)
 		mngr.writeAllAccounts()
 
-		_ = email.SendAccountCreated(account, account.Email, mngr.smtp)
+		_ = email.SendAccountCreated(account, []string{account.Email, mngr.conf.NotificationsMail}, mngr.smtp)
 	} else {
 		return errors.Wrap(err, "error while creating account")
 	}
@@ -237,7 +237,7 @@ func (mngr *Manager) AuthorizeAccount(accountData *data.Account, authorized bool
 	mngr.writeAllAccounts()
 
 	if account.Data.Authorized && account.Data.Authorized != authorizedOld {
-		_ = email.SendAccountAuthorized(account, account.Email, mngr.smtp)
+		_ = email.SendAccountAuthorized(account, []string{account.Email, mngr.conf.NotificationsMail}, mngr.smtp)
 	}
 
 	return nil
@@ -272,7 +272,7 @@ func (mngr *Manager) AssignAPIKeyToAccount(accountData *data.Account, flags int8
 	mngr.storage.AccountUpdated(account)
 	mngr.writeAllAccounts()
 
-	_ = email.SendAPIKeyAssigned(account, account.Email, mngr.smtp)
+	_ = email.SendAPIKeyAssigned(account, []string{account.Email, mngr.conf.NotificationsMail}, mngr.smtp)
 
 	return nil
 }

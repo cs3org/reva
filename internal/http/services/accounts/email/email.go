@@ -29,23 +29,23 @@ import (
 )
 
 // SendAccountCreated sends an email about account creation.
-func SendAccountCreated(account *data.Account, recipient string, smtp *smtpclient.SMTPCredentials) error {
-	return send(recipient, "ScienceMesh: User account created", accountCreatedTemplate, account, smtp)
+func SendAccountCreated(account *data.Account, recipients []string, smtp *smtpclient.SMTPCredentials) error {
+	return send(recipients, "ScienceMesh: User account created", accountCreatedTemplate, account, smtp)
 }
 
 // SendAPIKeyAssigned sends an email about API key assignment.
-func SendAPIKeyAssigned(account *data.Account, recipient string, smtp *smtpclient.SMTPCredentials) error {
-	return send(recipient, "ScienceMesh: Your API key", apiKeyAssignedTemplate, account, smtp)
+func SendAPIKeyAssigned(account *data.Account, recipients []string, smtp *smtpclient.SMTPCredentials) error {
+	return send(recipients, "ScienceMesh: Your API key", apiKeyAssignedTemplate, account, smtp)
 }
 
 // SendAccountAuthorized sends an email about account authorization.
-func SendAccountAuthorized(account *data.Account, recipient string, smtp *smtpclient.SMTPCredentials) error {
-	return send(recipient, "ScienceMesh: Site registration authorized", accountAuthorizedTemplate, account, smtp)
+func SendAccountAuthorized(account *data.Account, recipients []string, smtp *smtpclient.SMTPCredentials) error {
+	return send(recipients, "ScienceMesh: Site registration authorized", accountAuthorizedTemplate, account, smtp)
 }
 
-func send(recipient string, subject string, bodyTemplate string, data interface{}, smtp *smtpclient.SMTPCredentials) error {
+func send(recipients []string, subject string, bodyTemplate string, data interface{}, smtp *smtpclient.SMTPCredentials) error {
 	// Do not fail if no SMTP client or recipient is given
-	if smtp == nil || len(recipient) == 0 {
+	if smtp == nil {
 		return nil
 	}
 
@@ -59,5 +59,15 @@ func send(recipient string, subject string, bodyTemplate string, data interface{
 		return errors.Wrap(err, "error while executing email template")
 	}
 
-	return smtp.SendMail(recipient, subject, body.String())
+	for _, recipient := range recipients {
+		if len(recipient) == 0 {
+			continue
+		}
+
+		if err := smtp.SendMail(recipient, subject, body.String()); err != nil {
+			return errors.Wrapf(err, "failed sending email to %v", recipient)
+		}
+	}
+
+	return nil
 }

@@ -23,7 +23,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cs3org/reva/pkg/apikey"
+	"github.com/cs3org/reva/pkg/mentix/apikey"
 	"github.com/cs3org/reva/pkg/utils"
 )
 

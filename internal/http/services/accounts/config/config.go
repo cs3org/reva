@@ -32,5 +32,6 @@ type Configuration struct {
 		} `mapstructure:"file"`
 	} `mapstructure:"storage"`
 
-	SMTP *smtpclient.SMTPCredentials `mapstructure:"smtp"`
+	SMTP              *smtpclient.SMTPCredentials `mapstructure:"smtp"`
+	NotificationsMail string                      `mapstructure:"notifications_mail"`
 }

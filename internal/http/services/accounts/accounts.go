@@ -32,7 +32,7 @@ import (
 
 	"github.com/cs3org/reva/internal/http/services/accounts/config"
 	"github.com/cs3org/reva/internal/http/services/accounts/data"
-	"github.com/cs3org/reva/pkg/apikey"
+	"github.com/cs3org/reva/pkg/mentix/apikey"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 )
 
