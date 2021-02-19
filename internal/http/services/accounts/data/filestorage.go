@@ -21,6 +21,8 @@ package data
 import (
 	"encoding/json"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -53,6 +55,10 @@ func (storage *FileStorage) initialize(conf *config.Configuration, log *zerolog.
 		return errors.Errorf("no file set in the configuration")
 	}
 	storage.filePath = conf.Storage.File.File
+
+	// Create the file directory if necessary
+	dir := filepath.Dir(storage.filePath)
+	_ = os.MkdirAll(dir, 0755)
 
 	return nil
 }
