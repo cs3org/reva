@@ -122,6 +122,22 @@ var _ = Describe("storage providers", func() {
 		})
 	}
 
+	assertDelete := func() {
+		It("deletes a directory", func() {
+			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+			res, err := serviceClient.Delete(ctx, &storagep.DeleteRequest{Ref: subdirRef})
+			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(err).ToNot(HaveOccurred())
+
+			statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
+		})
+	}
+
 	assertGetPath := func() {
 		It("gets the path to an ID", func() {
 			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
@@ -130,6 +146,54 @@ var _ = Describe("storage providers", func() {
 			res, err := serviceClient.GetPath(ctx, &storagep.GetPathRequest{ResourceId: statRes.Info.Id})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(res.Path).To(Equal(subdirRef.Spec.(*storagep.Reference_Path).Path))
+		})
+	}
+
+	assertGrants := func() {
+		It("lists, adds and removes grants", func() {
+			By("there are no grants initially")
+			listRes, err := serviceClient.ListGrants(ctx, &storagep.ListGrantsRequest{Ref: subdirRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(listRes.Grants)).To(Equal(0))
+
+			By("adding a grant")
+			grant := &storagep.Grant{
+				Grantee: &storagep.Grantee{
+					Type: storagep.GranteeType_GRANTEE_TYPE_USER,
+					Id: &storagep.Grantee_UserId{
+						UserId: &userpb.UserId{
+							OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51",
+						},
+					},
+				},
+				Permissions: &storagep.ResourcePermissions{
+					Stat:   true,
+					Move:   true,
+					Delete: false,
+				},
+			}
+			addRes, err := serviceClient.AddGrant(ctx, &storagep.AddGrantRequest{Ref: subdirRef, Grant: grant})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(addRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+			By("listing the new grant")
+			listRes, err = serviceClient.ListGrants(ctx, &storagep.ListGrantsRequest{Ref: subdirRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(listRes.Grants)).To(Equal(1))
+			readGrant := listRes.Grants[0]
+			Expect(readGrant.Permissions.Stat).To(BeTrue())
+			Expect(readGrant.Permissions.Move).To(BeTrue())
+			Expect(readGrant.Permissions.Delete).To(BeFalse())
+
+			By("deleting a grant")
+			delRes, err := serviceClient.RemoveGrant(ctx, &storagep.RemoveGrantRequest{Ref: subdirRef, Grant: readGrant})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(delRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+			By("the grant is gone")
+			listRes, err = serviceClient.ListGrants(ctx, &storagep.ListGrantsRequest{Ref: subdirRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(listRes.Grants)).To(Equal(0))
 		})
 	}
 
@@ -153,6 +217,8 @@ var _ = Describe("storage providers", func() {
 
 			assertCreateContainer()
 			assertGetPath()
+			assertDelete()
+			assertGrants()
 		})
 	})
 })
