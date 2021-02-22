@@ -45,12 +45,6 @@ var _ = Describe("user providers", func() {
 		serviceClient userpb.UserAPIClient
 	)
 
-	BeforeEach(func() {
-		var err error
-		serviceClient, err = pool.GetUserProviderServiceClient(grpcAddress)
-		Expect(err).ToNot(HaveOccurred())
-	})
-
 	JustBeforeEach(func() {
 		var err error
 		ctx = context.Background()
@@ -71,6 +65,8 @@ var _ = Describe("user providers", func() {
 		ctx = ruser.ContextSetUser(ctx, user)
 
 		revad, err = startRevad(path.Join("fixtures", "userprovider-"+provider+".toml"))
+		Expect(err).ToNot(HaveOccurred())
+		serviceClient, err = pool.GetUserProviderServiceClient(revad.GrpcAddress)
 		Expect(err).ToNot(HaveOccurred())
 	})
 

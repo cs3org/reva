@@ -43,12 +43,18 @@ var _ = Describe("storage providers", func() {
 
 		ctx           context.Context
 		serviceClient storagep.ProviderAPIClient
+
+		homeRef   *storagep.Reference
+		subdirRef *storagep.Reference
 	)
 
 	BeforeEach(func() {
-		var err error
-		serviceClient, err = pool.GetStorageProviderServiceClient(grpcAddress)
-		Expect(err).ToNot(HaveOccurred())
+		homeRef = &storagep.Reference{
+			Spec: &storagep.Reference_Path{Path: "/"},
+		}
+		subdirRef = &storagep.Reference{
+			Spec: &storagep.Reference_Path{Path: "/subdir"},
+		}
 	})
 
 	JustBeforeEach(func() {
@@ -72,27 +78,58 @@ var _ = Describe("storage providers", func() {
 
 		revad, err = startRevad(path.Join("fixtures", "storageprovider-"+provider+".toml"))
 		Expect(err).ToNot(HaveOccurred())
+		serviceClient, err = pool.GetStorageProviderServiceClient(revad.GrpcAddress)
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 	AfterEach(func() {
 		revad.Cleanup()
 	})
 
-	assertCreateHomeResponses := func() {
+	assertCreateHome := func() {
 		It("creates a home directory", func() {
-			homeRef := &storagep.Reference{
-				Spec: &storagep.Reference_Path{Path: "/"},
-			}
-			res, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
+			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
+			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
 
-			_, err = serviceClient.CreateHome(ctx, &storagep.CreateHomeRequest{})
-			Expect(err).ToNot(HaveOccurred())
-
-			res, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
-			Expect(err).ToNot(HaveOccurred())
+			res, err := serviceClient.CreateHome(ctx, &storagep.CreateHomeRequest{})
 			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(err).ToNot(HaveOccurred())
+
+			statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: homeRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+		})
+	}
+
+	assertCreateContainer := func() {
+		It("creates a new directory", func() {
+			newRef := &storagep.Reference{
+				Spec: &storagep.Reference_Path{Path: "/newdir"},
+			}
+
+			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: newRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
+
+			res, err := serviceClient.CreateContainer(ctx, &storagep.CreateContainerRequest{Ref: newRef})
+			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(err).ToNot(HaveOccurred())
+
+			statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: newRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+		})
+	}
+
+	assertGetPath := func() {
+		It("gets the path to an ID", func() {
+			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
+			Expect(err).ToNot(HaveOccurred())
+
+			res, err := serviceClient.GetPath(ctx, &storagep.GetPathRequest{ResourceId: statRes.Info.Id})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.Path).To(Equal(subdirRef.Spec.(*storagep.Reference_Path).Path))
 		})
 	}
 
@@ -101,6 +138,21 @@ var _ = Describe("storage providers", func() {
 			provider = "ocis"
 		})
 
-		assertCreateHomeResponses()
+		assertCreateHome()
+
+		Context("with a home and a subdirectory", func() {
+			JustBeforeEach(func() {
+				res, err := serviceClient.CreateHome(ctx, &storagep.CreateHomeRequest{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+				subdirRes, err := serviceClient.CreateContainer(ctx, &storagep.CreateContainerRequest{Ref: subdirRef})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(subdirRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			})
+
+			assertCreateContainer()
+			assertGetPath()
+		})
 	})
 })
