@@ -324,7 +324,7 @@ func unmarshalKV(s string) (*ACE, error) {
 func getACEPerm(set *provider.ResourcePermissions) string {
 	var b strings.Builder
 
-	if set.Stat || set.InitiateFileDownload || set.ListContainer {
+	if set.Stat || set.InitiateFileDownload || set.ListContainer || set.GetPath {
 		b.WriteString("r")
 	}
 	if set.InitiateFileUpload || set.Move {
