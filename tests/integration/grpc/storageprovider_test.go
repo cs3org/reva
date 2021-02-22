@@ -45,12 +45,16 @@ var _ = Describe("storage providers", func() {
 		serviceClient storagep.ProviderAPIClient
 
 		homeRef   *storagep.Reference
+		fileRef   *storagep.Reference
 		subdirRef *storagep.Reference
 	)
 
 	BeforeEach(func() {
 		homeRef = &storagep.Reference{
 			Spec: &storagep.Reference_Path{Path: "/"},
+		}
+		fileRef = &storagep.Reference{
+			Spec: &storagep.Reference_Path{Path: "/file"},
 		}
 		subdirRef = &storagep.Reference{
 			Spec: &storagep.Reference_Path{Path: "/subdir"},
@@ -119,6 +123,20 @@ var _ = Describe("storage providers", func() {
 			statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: newRef})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+		})
+	}
+
+	assertListContainer := func() {
+		It("lists a directory", func() {
+			listRes, err := serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: homeRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(len(listRes.Infos)).To(Equal(1))
+
+			info := listRes.Infos[0]
+			Expect(info.Type).To(Equal(storagep.ResourceType_RESOURCE_TYPE_CONTAINER))
+			Expect(info.Path).To(Equal(subdirRef.Spec.(*storagep.Reference_Path).Path))
+			Expect(info.Owner.OpaqueId).To(Equal("f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c"))
 		})
 	}
 
@@ -197,6 +215,24 @@ var _ = Describe("storage providers", func() {
 		})
 	}
 
+	assertUploads := func() {
+		It("returns upload URLs for simple and tus", func() {
+			res, err := serviceClient.InitiateFileUpload(ctx, &storagep.InitiateFileUploadRequest{Ref: fileRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(len(res.Protocols)).To(Equal(2))
+		})
+	}
+
+	assertDownloads := func() {
+		It("returns 'simple' download URLs", func() {
+			res, err := serviceClient.InitiateFileDownload(ctx, &storagep.InitiateFileDownloadRequest{Ref: fileRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(len(res.Protocols)).To(Equal(1))
+		})
+	}
+
 	Describe("ocis", func() {
 		BeforeEach(func() {
 			provider = "ocis"
@@ -216,9 +252,12 @@ var _ = Describe("storage providers", func() {
 			})
 
 			assertCreateContainer()
+			assertListContainer()
 			assertGetPath()
 			assertDelete()
 			assertGrants()
+			assertUploads()
+			assertDownloads()
 		})
 	})
 })
