@@ -50,14 +50,14 @@ const panelTemplate = `
 			font-family: monospace !important;
 		}
 		button {
-			min-width: 130px;
+			min-width: 140px;
 		}
 	</style>
 	<title>Accounts panel</title>
 </head>
 <body>
 
-<h1>Accounts ({{.Count}})</h1>
+<h1>Accounts ({{.Accounts | len}})</h1>
 <p>
 	<ul>
 	{{range .Accounts}}
@@ -74,6 +74,8 @@ const panelTemplate = `
 				<em>Not assigned</em>
 			{{end}}
 				<br>
+				<strong>Site ID:</strong> {{.GetSiteID}}
+				<br><br>
 				<strong>Authorized:</strong>
 			{{if .Data.Authorized}}
 				<em>Yes</em>
@@ -83,7 +85,8 @@ const panelTemplate = `
 			</p>
 			<p>
 				<form method="POST">
-					<button type="button" onClick="handleAction('assign-api-key', '{{.Email}}');" {{if .Data.APIKey}}disabled{{end}}>Assign API Key</button>
+					<button type="button" onClick="handleAction('assign-api-key', '{{.Email}}');" {{if .Data.APIKey}}disabled{{end}}>Default API Key</button>
+					<button type="button" onClick="handleAction('assign-api-key?isScienceMesh', '{{.Email}}');" {{if .Data.APIKey}}disabled{{end}}>ScienceMesh API Key</button>
 	
 				{{if .Data.Authorized}}
 					<button type="button" onClick="handleAction('authorize?status=false', '{{.Email}}');">Unauthorize</button>

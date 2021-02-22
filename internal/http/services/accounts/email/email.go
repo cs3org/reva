@@ -64,9 +64,10 @@ func send(recipients []string, subject string, bodyTemplate string, data interfa
 			continue
 		}
 
-		if err := smtp.SendMail(recipient, subject, body.String()); err != nil {
-			return errors.Wrapf(err, "failed sending email to %v", recipient)
-		}
+		// Send the mail w/o blocking the main thread
+		go func(recipient string) {
+			_ = smtp.SendMail(recipient, subject, body.String())
+		}(recipient)
 	}
 
 	return nil

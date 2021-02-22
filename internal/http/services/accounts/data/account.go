@@ -23,7 +23,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cs3org/reva/pkg/mentix/apikey"
+	"github.com/cs3org/reva/pkg/mentix/key"
 	"github.com/cs3org/reva/pkg/utils"
 )
 
@@ -41,12 +41,20 @@ type Account struct {
 
 // AccountData holds additional data for a user account.
 type AccountData struct {
-	APIKey     apikey.APIKey `json:"apiKey"`
-	Authorized bool          `json:"authorized"`
+	APIKey     key.APIKey `json:"apiKey"`
+	Authorized bool       `json:"authorized"`
 }
 
 // Accounts holds an array of user accounts.
 type Accounts = []*Account
+
+func (acc *Account) GetSiteID() key.SiteIdentifier {
+	if id, err := key.CalculateSiteID(acc.Data.APIKey); err == nil {
+		return id
+	}
+
+	return ""
+}
 
 // Copy copies the data of the given account to this account; if copyData is true, the account data is copied as well.
 func (acc *Account) Copy(other *Account, copyData bool) error {

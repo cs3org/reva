@@ -32,7 +32,7 @@ import (
 
 	"github.com/cs3org/reva/internal/http/services/accounts/config"
 	"github.com/cs3org/reva/internal/http/services/accounts/data"
-	"github.com/cs3org/reva/pkg/mentix/apikey"
+	"github.com/cs3org/reva/pkg/mentix/key"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 )
 
@@ -154,17 +154,17 @@ func (s *svc) handleRequestEndpoints(w http.ResponseWriter, r *http.Request) {
 
 func (s *svc) handleGenerateAPIKey(values url.Values, body []byte) (interface{}, error) {
 	email := values.Get("email")
-	flags := apikey.FlagDefault
+	flags := key.FlagDefault
 
 	if strings.EqualFold(values.Get("isScienceMesh"), "true") {
-		flags |= apikey.FlagScienceMesh
+		flags |= key.FlagScienceMesh
 	}
 
 	if len(email) == 0 {
 		return nil, errors.Errorf("no email provided")
 	}
 
-	apiKey, err := apikey.GenerateAPIKey(strings.ToLower(email), flags)
+	apiKey, err := key.GenerateAPIKey(strings.ToLower(email), flags)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to generate API key")
 	}
@@ -183,7 +183,7 @@ func (s *svc) handleVerifyAPIKey(values url.Values, body []byte) (interface{}, e
 		return nil, errors.Errorf("no email provided")
 	}
 
-	err := apikey.VerifyAPIKey(apiKey, strings.ToLower(email))
+	err := key.VerifyAPIKey(apiKey, strings.ToLower(email))
 	if err != nil {
 		return nil, errors.Wrap(err, "invalid API key")
 	}
@@ -196,8 +196,13 @@ func (s *svc) handleAssignAPIKey(values url.Values, body []byte) (interface{}, e
 		return nil, err
 	}
 
+	flags := key.FlagDefault
+	if _, ok := values["isScienceMesh"]; ok {
+		flags |= key.FlagScienceMesh
+	}
+
 	// Assign a new API key to the account through the account manager
-	if err := s.manager.AssignAPIKeyToAccount(account, apikey.FlagDefault); err != nil {
+	if err := s.manager.AssignAPIKeyToAccount(account, flags); err != nil {
 		return nil, errors.Wrap(err, "unable to assign API key")
 	}
 

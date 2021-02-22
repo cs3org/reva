@@ -59,12 +59,10 @@ func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) 
 
 func (panel *Panel) Execute(w http.ResponseWriter, accounts *data.Accounts) error {
 	type TemplateData struct {
-		Count    int
 		Accounts *data.Accounts
 	}
 
 	data := TemplateData{
-		Count:    len(*accounts),
 		Accounts: accounts,
 	}
 

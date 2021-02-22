@@ -33,7 +33,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/accounts/data"
 	"github.com/cs3org/reva/internal/http/services/accounts/email"
 	"github.com/cs3org/reva/internal/http/services/accounts/panel"
-	"github.com/cs3org/reva/pkg/mentix/apikey"
+	"github.com/cs3org/reva/pkg/mentix/key"
 	"github.com/cs3org/reva/pkg/smtpclient"
 )
 
@@ -130,7 +130,7 @@ func (mngr *Manager) findAccountByEmail(email string) *data.Account {
 	return nil
 }
 
-func (mngr *Manager) findAccountByAPIKey(key apikey.APIKey) *data.Account {
+func (mngr *Manager) findAccountByAPIKey(key key.APIKey) *data.Account {
 	if key == "" {
 		return nil
 	}
@@ -257,7 +257,7 @@ func (mngr *Manager) AssignAPIKeyToAccount(accountData *data.Account, flags int8
 	}
 
 	for {
-		apiKey, err := apikey.GenerateAPIKey(strings.ToLower(account.Email), flags) // Use the (lowered) email address as the key's salt value
+		apiKey, err := key.GenerateAPIKey(strings.ToLower(account.Email), flags) // Use the (lowered) email address as the key's salt value
 		if err != nil {
 			return errors.Wrap(err, "error while generating API key")
 		}
