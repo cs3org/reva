@@ -123,27 +123,10 @@ func (site *Site) InferMissingData() {
 		}
 	}
 
-	// Automatically assign an ID to this site if it is missing
-	if len(site.ID) == 0 {
-		site.generateID()
-	}
-
 	// Infer missing for services
 	for _, service := range site.Services {
 		service.InferMissingData()
 	}
-}
-
-// Name, Domain
-func (site *Site) generateID() {
-	host := site.Domain
-	if site.Homepage != "" {
-		if hostURL, err := url.Parse(site.Homepage); err == nil {
-			host = network.ExtractDomainFromURL(hostURL, true)
-		}
-	}
-
-	site.ID = fmt.Sprintf("%s::[%s]", host, site.Name)
 }
 
 // GetSiteTypeName returns the readable name of the given site type.

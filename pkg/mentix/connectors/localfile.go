@@ -98,12 +98,6 @@ func (connector *LocalFileConnector) UpdateMeshData(updatedData *meshdata.MeshDa
 
 	case meshdata.StatusObsolete:
 		err = connector.unmergeData(meshData, updatedData)
-
-	case meshdata.StatusAuthorize:
-		err = connector.authorizeData(meshData, updatedData, true)
-
-	case meshdata.StatusUnauthorize:
-		err = connector.authorizeData(meshData, updatedData, false)
 	}
 
 	if err != nil {
@@ -141,22 +135,6 @@ func (connector *LocalFileConnector) mergeData(meshData *meshdata.MeshData, upda
 func (connector *LocalFileConnector) unmergeData(meshData *meshdata.MeshData, updatedData *meshdata.MeshData) error {
 	// Remove data by unmerging
 	meshData.Unmerge(updatedData)
-	return nil
-}
-
-func (connector *LocalFileConnector) authorizeData(meshData *meshdata.MeshData, updatedData *meshdata.MeshData, authorize bool) error {
-	for _, placeholderSite := range updatedData.Sites {
-		if site := meshData.FindSite(placeholderSite.ID); site != nil {
-			if authorize {
-				meshdata.SetPropertyValue(&site.Properties, meshdata.PropertyAuthorized, "true")
-			} else {
-				meshdata.SetPropertyValue(&site.Properties, meshdata.PropertyAuthorized, "false")
-			}
-		} else {
-			return fmt.Errorf("no site with id '%v' found", placeholderSite.Name)
-		}
-	}
-
 	return nil
 }
 
