@@ -49,30 +49,6 @@ import (
 	"go.opencensus.io/trace"
 )
 
-type janitor struct {
-	m        *manager
-	interval time.Duration
-}
-
-func (j *janitor) run() {
-	ticker := time.NewTicker(j.interval)
-	work := make(chan os.Signal, 1)
-	signal.Notify(work, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT)
-
-	for {
-		select {
-		case <-work:
-			return
-		case <-ticker.C:
-			j.m.cleanupExpiredShares()
-		}
-	}
-}
-
-var j = janitor{
-	interval: time.Minute, // TODO we want this interval configurable
-}
-
 func init() {
 	registry.Register("json", New)
 }
@@ -114,8 +90,7 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 		}
 	}
 
-	j.m = &m
-	go j.run()
+	go m.startJanitorRun()
 
 	return &m, nil
 }
@@ -123,6 +98,7 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 type config struct {
 	File                  string `mapstructure:"file"`
 	SharePasswordHashCost int    `mapstructure:"password_hash_cost"`
+	JanitorRunInterval    int    `mapstructure:"janitor_run_interval"`
 }
 
 func (c *config) init() {
@@ -132,15 +108,34 @@ func (c *config) init() {
 	if c.SharePasswordHashCost == 0 {
 		c.SharePasswordHashCost = 11
 	}
+	if c.JanitorRunInterval == 0 {
+		c.JanitorRunInterval = 60
+	}
 }
 
 type manager struct {
 	mutex *sync.Mutex
 	file  string
 
-	marshaler        jsonpb.Marshaler
-	unmarshaler      jsonpb.Unmarshaler
-	passwordHashCost int
+	marshaler          jsonpb.Marshaler
+	unmarshaler        jsonpb.Unmarshaler
+	passwordHashCost   int
+	janitorRunInterval int
+}
+
+func (m *manager) startJanitorRun() {
+	ticker := time.NewTicker(time.Duration(m.janitorRunInterval))
+	work := make(chan os.Signal, 1)
+	signal.Notify(work, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT)
+
+	for {
+		select {
+		case <-work:
+			return
+		case <-ticker.C:
+			m.cleanupExpiredShares()
+		}
+	}
 }
 
 // CreatePublicShare adds a new entry to manager.shares
@@ -173,11 +168,6 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 		Nanos:   uint32(now % 1000000000),
 	}
 
-	modifiedAt := &typespb.Timestamp{
-		Seconds: uint64(now / 1000000000),
-		Nanos:   uint32(now % 1000000000),
-	}
-
 	s := link.PublicShare{
 		Id:                id,
 		Owner:             rInfo.GetOwner(),
@@ -186,7 +176,7 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 		Token:             tkn,
 		Permissions:       g.Permissions,
 		Ctime:             createdAt,
-		Mtime:             modifiedAt,
+		Mtime:             createdAt,
 		PasswordProtected: passwordProtected,
 		Expiration:        g.Expiration,
 		DisplayName:       displayName,
