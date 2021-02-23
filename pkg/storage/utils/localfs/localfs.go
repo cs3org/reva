@@ -29,7 +29,6 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
@@ -516,20 +515,6 @@ func (fs *localfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *
 
 func (fs *localfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	return fs.AddGrant(ctx, ref, g)
-}
-
-func (fs *localfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
-	// TODO quota of which storage space?
-	// we could use the logged in user, but when a user has access to multiple storages this falls short
-	// for now return quota of root
-	stat := syscall.Statfs_t{}
-	err := syscall.Statfs(fs.conf.Root, &stat)
-	if err != nil {
-		return 0, 0, err
-	}
-	total := stat.Blocks * uint64(stat.Bsize)                // Total data blocks in filesystem
-	used := (stat.Blocks - stat.Bavail) * uint64(stat.Bsize) // Free blocks available to unprivileged user
-	return total, used, nil
 }
 
 func (fs *localfs) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
