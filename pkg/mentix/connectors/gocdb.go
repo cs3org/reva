@@ -128,6 +128,11 @@ func (connector *GOCDBConnector) querySites(meshData *meshdata.MeshData) error {
 	for _, site := range sites.Sites {
 		properties := connector.extensionsToMap(&site.Extensions)
 
+		siteID := meshdata.GetPropertyValue(properties, meshdata.PropertySiteID, "")
+		if len(siteID) == 0 {
+			return fmt.Errorf("site ID missing for site '%v'", site.ShortName)
+		}
+
 		// Sites coming from the GOCDB are always authorized by default
 		if value := meshdata.GetPropertyValue(properties, meshdata.PropertyAuthorized, ""); len(value) == 0 {
 			meshdata.SetPropertyValue(&properties, meshdata.PropertyAuthorized, "true")
@@ -138,6 +143,7 @@ func (connector *GOCDBConnector) querySites(meshData *meshdata.MeshData) error {
 
 		meshsite := &meshdata.Site{
 			Type:         meshdata.SiteTypeScienceMesh, // All sites stored in the GOCDB are part of the mesh
+			ID:           siteID,
 			Name:         site.ShortName,
 			FullName:     site.OfficialName,
 			Organization: organization,

@@ -21,6 +21,8 @@ package meshdata
 import "strings"
 
 const (
+	// PropertySiteID identifies the site ID property.
+	PropertySiteID = "site_id"
 	// PropertyAuthorized identifies the authorization status property.
 	PropertyAuthorized = "authorized"
 	// PropertyOrganization identifies the organization property.
