@@ -41,12 +41,6 @@ type Configuration struct {
 			IsProtected       bool     `mapstructure:"is_protected"`
 			EnabledConnectors []string `mapstructure:"enabled_connectors"`
 		} `mapstructure:"webapi"`
-
-		AdminAPI struct {
-			Endpoint          string   `mapstructure:"endpoint"`
-			IsProtected       bool     `mapstructure:"is_protected"`
-			EnabledConnectors []string `mapstructure:"enabled_connectors"`
-		} `mapstructure:"adminapi"`
 	} `mapstructure:"importers"`
 
 	Exporters struct {

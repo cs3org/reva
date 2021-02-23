@@ -141,10 +141,6 @@ func applyDefaultConfig(conf *config.Configuration) {
 		conf.Importers.WebAPI.Endpoint = "/sites"
 	}
 
-	if conf.Importers.AdminAPI.Endpoint == "" {
-		conf.Importers.AdminAPI.Endpoint = "/admin"
-	}
-
 	// Exporters
 	addDefaultConnector := func(enabledList *[]string) {
 		if len(*enabledList) == 0 {
