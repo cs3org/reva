@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/cs3org/reva/pkg/mentix/network"
+	"github.com/cs3org/reva/pkg/mentix/utils/network"
 )
 
 // Service represents a service managed by Mentix.

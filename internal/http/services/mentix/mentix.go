@@ -141,6 +141,10 @@ func applyDefaultConfig(conf *config.Configuration) {
 		conf.Importers.WebAPI.Endpoint = "/sites"
 	}
 
+	if conf.Importers.SiteRegistration.Endpoint == "" {
+		conf.Importers.SiteRegistration.Endpoint = "/sitereg"
+	}
+
 	// Exporters
 	addDefaultConnector := func(enabledList *[]string) {
 		if len(*enabledList) == 0 {

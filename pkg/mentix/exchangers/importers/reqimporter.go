@@ -27,8 +27,6 @@ import (
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 
-type queryCallback func([]byte, url.Values) (meshdata.Vector, int, []byte, error)
-
 // BaseRequestImporter implements basic importer functionality common to all request importers.
 type BaseRequestImporter struct {
 	BaseImporter

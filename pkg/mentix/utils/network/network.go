@@ -42,6 +42,10 @@ func GenerateURL(host string, path string, params URLParams) (*url.URL, error) {
 		return nil, fmt.Errorf("unable to generate URL: base=%v, path=%v, params=%v", host, path, params)
 	}
 
+	if len(fullURL.Scheme) == 0 {
+		fullURL.Scheme = "https"
+	}
+
 	fullURL.Path = p.Join(fullURL.Path, path)
 
 	query := make(url.Values)

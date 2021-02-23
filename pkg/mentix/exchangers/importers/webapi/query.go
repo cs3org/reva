@@ -25,7 +25,7 @@ import (
 	"net/url"
 
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
-	"github.com/cs3org/reva/pkg/mentix/network"
+	"github.com/cs3org/reva/pkg/mentix/utils/network"
 )
 
 func decodeQueryData(data []byte) (*meshdata.MeshData, error) {
@@ -59,11 +59,11 @@ func handleQuery(data []byte, params url.Values, status int, msg string) (meshda
 }
 
 // HandleRegisterSiteQuery registers a site.
-func HandleRegisterSiteQuery(meshData *meshdata.MeshData, data []byte, params url.Values) (meshdata.Vector, int, []byte, error) {
+func HandleRegisterSiteQuery(_ *meshdata.MeshData, data []byte, params url.Values) (meshdata.Vector, int, []byte, error) {
 	return handleQuery(data, params, meshdata.StatusDefault, "SITE_REGISTERED")
 }
 
 // HandleUnregisterSiteQuery unregisters a site.
-func HandleUnregisterSiteQuery(meshData *meshdata.MeshData, data []byte, params url.Values) (meshdata.Vector, int, []byte, error) {
+func HandleUnregisterSiteQuery(_ *meshdata.MeshData, data []byte, params url.Values) (meshdata.Vector, int, []byte, error) {
 	return handleQuery(data, params, meshdata.StatusObsolete, "SITE_UNREGISTERED")
 }

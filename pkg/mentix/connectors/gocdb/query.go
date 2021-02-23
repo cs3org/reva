@@ -21,7 +21,7 @@ package gocdb
 import (
 	"fmt"
 
-	"github.com/cs3org/reva/pkg/mentix/network"
+	"github.com/cs3org/reva/pkg/mentix/utils/network"
 )
 
 // QueryGOCDB retrieves data from one of GOCDB's endpoints.

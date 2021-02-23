@@ -23,12 +23,12 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/cs3org/reva/pkg/mentix/network"
+	"github.com/cs3org/reva/pkg/mentix/utils/network"
 )
 
 const (
 	// SiteTypeScienceMesh flags a site as being part of the mesh.
-	SiteTypeScienceMesh = iota
+	SiteTypeScienceMesh SiteType = iota
 	// SiteTypeCommunity flags a site as being a community site.
 	SiteTypeCommunity
 )
