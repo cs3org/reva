@@ -85,14 +85,16 @@ var _ = Describe("storage providers", func() {
 		ctx = metadata.AppendToOutgoingContext(ctx, token.TokenHeader, t)
 		ctx = ruser.ContextSetUser(ctx, user)
 
-		revad, err = startRevad(path.Join("fixtures", "storageprovider-"+provider+".toml"))
+		revads, err := startRevads(dependencies)
 		Expect(err).ToNot(HaveOccurred())
-		serviceClient, err = pool.GetStorageProviderServiceClient(revad.GrpcAddress)
+		serviceClient, err = pool.GetStorageProviderServiceClient(revads["storage"].GrpcAddress)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
 	AfterEach(func() {
-		revad.Cleanup()
+		for _, r := range revads {
+			Expect(r.Cleanup()).To(Succeed())
+		}
 	})
 
 	assertCreateHome := func() {
@@ -256,7 +258,9 @@ var _ = Describe("storage providers", func() {
 
 	Describe("ocis", func() {
 		BeforeEach(func() {
-			provider = "ocis"
+			dependencies = map[string]string{
+				"storage": "storageprovider-ocis.toml",
+			}
 		})
 
 		assertCreateHome()

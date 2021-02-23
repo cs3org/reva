@@ -20,7 +20,6 @@ package grpc_test
 
 import (
 	"context"
-	"path"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -37,9 +36,10 @@ import (
 
 var _ = Describe("user providers", func() {
 	var (
-		provider    string
+		dependencies map[string]string
+		revads       map[string]*Revad
+
 		existingIdp string
-		revad       *Revad
 
 		ctx           context.Context
 		serviceClient userpb.UserAPIClient
@@ -64,14 +64,16 @@ var _ = Describe("user providers", func() {
 		ctx = metadata.AppendToOutgoingContext(ctx, token.TokenHeader, t)
 		ctx = ruser.ContextSetUser(ctx, user)
 
-		revad, err = startRevad(path.Join("fixtures", "userprovider-"+provider+".toml"))
+		revads, err = startRevads(dependencies)
 		Expect(err).ToNot(HaveOccurred())
-		serviceClient, err = pool.GetUserProviderServiceClient(revad.GrpcAddress)
+		serviceClient, err = pool.GetUserProviderServiceClient(revads["users"].GrpcAddress)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
 	AfterEach(func() {
-		revad.Cleanup()
+		for _, r := range revads {
+			r.Cleanup()
+		}
 	})
 
 	var assertGetUserByClaimResponses = func() {
@@ -234,7 +236,9 @@ var _ = Describe("user providers", func() {
 
 	Describe("the json userprovider", func() {
 		BeforeEach(func() {
-			provider = "json"
+			dependencies = map[string]string{
+				"users": "userprovider-json.toml",
+			}
 			existingIdp = "localhost:20080"
 		})
 
@@ -245,7 +249,9 @@ var _ = Describe("user providers", func() {
 
 	Describe("the demo userprovider", func() {
 		BeforeEach(func() {
-			provider = "demo"
+			dependencies = map[string]string{
+				"users": "userprovider-demo.toml",
+			}
 			existingIdp = "http://localhost:9998"
 		})
 

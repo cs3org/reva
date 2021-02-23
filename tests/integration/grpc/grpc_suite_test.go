@@ -27,7 +27,6 @@ import (
 	"path"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -48,90 +47,86 @@ func TestGprc(t *testing.T) {
 	RunSpecs(t, "Gprc Suite")
 }
 
-type shutdownFunc func() error
+type cleanupFunc func() error
 
 type Revad struct {
 	GrpcAddress string
-	shutdown    shutdownFunc
-	references  int32
+	Cleanup     cleanupFunc
 }
 
-func (r *Revad) Use() {
-	atomic.AddInt32(&r.references, 1)
-}
-
-func (r *Revad) Cleanup() {
-	references := atomic.AddInt32(&r.references, -1)
-	if references == 0 {
-		r.shutdown()
-	}
-}
-
-func startRevad(config string) (*Revad, error) {
+func startRevads(configs map[string]string) (map[string]*Revad, error) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	if revads[config] != nil {
-		fmt.Println("Reusing revad for config", config)
-		revad := revads[config]
-		revad.Use()
-		return revad, nil
+	revads := map[string]*Revad{}
+	addresses := map[string]string{}
+	for name, _ := range configs {
+		addresses[name] = fmt.Sprintf("localhost:%d", port)
+		port += 1
 	}
 
-	// Define a grpc address
-	grpcAddress := fmt.Sprintf("localhost:%d", port)
-	port += 1
+	for name, config := range configs {
+		ownAddress := addresses[name]
 
-	// Create a temporary root for this revad
-	tmpRoot, err := ioutil.TempDir("", "reva-grpc-integration-tests-*-root")
-	if err != nil {
-		return nil, errors.Wrapf(err, "Could not create tmpdir")
-	}
-	newCfgPath := path.Join(tmpRoot, "config.toml")
-	rawCfg, err := ioutil.ReadFile(config)
-	if err != nil {
-		return nil, errors.Wrapf(err, "Could not read config file")
-	}
-	cfg := string(rawCfg)
-	cfg = strings.ReplaceAll(cfg, "{{root}}", tmpRoot)
-	cfg = strings.ReplaceAll(cfg, "{{grpc_address}}", grpcAddress)
-	err = ioutil.WriteFile(newCfgPath, []byte(cfg), 0600)
-	if err != nil {
-		return nil, errors.Wrapf(err, "Could not write config file")
-	}
-
-	// Run revad
-	cmd := exec.Command("../../../cmd/revad/revad", "-c", newCfgPath)
-	err = cmd.Start()
-	if err != nil {
-		return nil, errors.Wrapf(err, "Could not start revad")
-	}
-
-	err = waitForPort(grpcAddress, "open")
-	if err != nil {
-		return nil, err
-	}
-
-	//even the port is open the service might not be available yet
-	time.Sleep(1 * time.Second)
-
-	revad := &Revad{
-		GrpcAddress: grpcAddress,
-		references:  1,
-	}
-	revad.shutdown = func() error {
-		err := cmd.Process.Signal(os.Kill)
+		// Create a temporary root for this revad
+		tmpRoot, err := ioutil.TempDir("", "reva-grpc-integration-tests-*-root")
 		if err != nil {
-			return errors.Wrap(err, "Could not kill revad")
+			return nil, errors.Wrapf(err, "Could not create tmpdir")
 		}
-		waitForPort(grpcAddress, "close")
-		os.RemoveAll(tmpRoot)
-		revads[config] = nil
-		return nil
-	}
-	revads[config] = revad
+		newCfgPath := path.Join(tmpRoot, "config.toml")
+		rawCfg, err := ioutil.ReadFile(path.Join("fixtures", config))
+		if err != nil {
+			return nil, errors.Wrapf(err, "Could not read config file")
+		}
+		cfg := string(rawCfg)
+		cfg = strings.ReplaceAll(cfg, "{{root}}", tmpRoot)
+		cfg = strings.ReplaceAll(cfg, "{{grpc_address}}", ownAddress)
+		for name, address := range addresses {
+			cfg = strings.ReplaceAll(cfg, "{{"+name+"_address}}", address)
+		}
+		err = ioutil.WriteFile(newCfgPath, []byte(cfg), 0600)
+		if err != nil {
+			return nil, errors.Wrapf(err, "Could not write config file")
+		}
 
-	return revad, nil
+		// Run revad
+		cmd := exec.Command("../../../cmd/revad/revad", "-c", newCfgPath)
+
+		outfile, err := os.Create(path.Join(tmpRoot, name+"-out.log"))
+		if err != nil {
+			panic(err)
+		}
+		defer outfile.Close()
+		cmd.Stdout = outfile
+
+		err = cmd.Start()
+		if err != nil {
+			return nil, errors.Wrapf(err, "Could not start revad")
+		}
+
+		err = waitForPort(ownAddress, "open")
+		if err != nil {
+			return nil, err
+		}
+
+		//even the port is open the service might not be available yet
+		time.Sleep(1 * time.Second)
+
+		revad := &Revad{
+			GrpcAddress: ownAddress,
+			Cleanup: func() error {
+				err := cmd.Process.Signal(os.Kill)
+				if err != nil {
+					return errors.Wrap(err, "Could not kill revad")
+				}
+				waitForPort(ownAddress, "close")
+				os.RemoveAll(tmpRoot)
+				return nil
+			},
+		}
+		revads[name] = revad
+	}
+	return revads, nil
 }
 
 func waitForPort(grpcAddress, expectedStatus string) error {
