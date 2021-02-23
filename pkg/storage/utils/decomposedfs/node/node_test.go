@@ -62,7 +62,7 @@ var _ = Describe("Node", func() {
 
 	Describe("ReadNode", func() {
 		It("reads the blobID from the xattrs", func() {
-			lookupNode, err := env.Lookup.NodeFromPath(env.Ctx, "dir1/file1")
+			lookupNode, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1/file1")
 			Expect(err).ToNot(HaveOccurred())
 
 			n, err := node.ReadNode(env.Ctx, env.Lookup, lookupNode.ID)
@@ -73,7 +73,7 @@ var _ = Describe("Node", func() {
 
 	Describe("WriteMetadata", func() {
 		It("writes all xattrs", func() {
-			n, err := env.Lookup.NodeFromPath(env.Ctx, "dir1/file1")
+			n, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1/file1")
 			Expect(err).ToNot(HaveOccurred())
 
 			blobsize := 239485734
@@ -87,7 +87,7 @@ var _ = Describe("Node", func() {
 
 			err = n.WriteMetadata(owner)
 			Expect(err).ToNot(HaveOccurred())
-			n2, err := env.Lookup.NodeFromPath(env.Ctx, "dir1/file1")
+			n2, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1/file1")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(n2.Name).To(Equal("TestName"))
 			Expect(n2.BlobID).To(Equal("TestBlobID"))
@@ -97,7 +97,7 @@ var _ = Describe("Node", func() {
 
 	Describe("Parent", func() {
 		It("returns the parent node", func() {
-			child, err := env.Lookup.NodeFromPath(env.Ctx, "dir1/subdir1")
+			child, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1/subdir1")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(child).ToNot(BeNil())
 
@@ -115,7 +115,7 @@ var _ = Describe("Node", func() {
 
 		BeforeEach(func() {
 			var err error
-			parent, err = env.Lookup.NodeFromPath(env.Ctx, "dir1")
+			parent, err = env.Lookup.NodeFromPath(env.Ctx, "/dir1")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(parent).ToNot(BeNil())
 		})

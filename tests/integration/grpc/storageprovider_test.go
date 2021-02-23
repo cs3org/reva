@@ -20,7 +20,6 @@ package grpc_test
 
 import (
 	"context"
-	"path"
 
 	"google.golang.org/grpc/metadata"
 
@@ -38,27 +37,33 @@ import (
 
 var _ = Describe("storage providers", func() {
 	var (
-		provider string
-		revad    *Revad
+		dependencies map[string]string
+		revads       map[string]*Revad
 
 		ctx           context.Context
 		serviceClient storagep.ProviderAPIClient
 
-		homeRef   *storagep.Reference
-		fileRef   *storagep.Reference
-		subdirRef *storagep.Reference
+		homeRef    *storagep.Reference
+		filePath   string
+		fileRef    *storagep.Reference
+		subdirPath string
+		subdirRef  *storagep.Reference
 	)
 
 	BeforeEach(func() {
 		homeRef = &storagep.Reference{
 			Spec: &storagep.Reference_Path{Path: "/"},
 		}
+		filePath = "/file"
 		fileRef = &storagep.Reference{
-			Spec: &storagep.Reference_Path{Path: "/file"},
+			Spec: &storagep.Reference_Path{Path: filePath},
 		}
+		subdirPath = "/subdir"
 		subdirRef = &storagep.Reference{
-			Spec: &storagep.Reference_Path{Path: "/subdir"},
+			Spec: &storagep.Reference_Path{Path: subdirPath},
 		}
+		revads = map[string]*Revad{}
+		dependencies = map[string]string{}
 	})
 
 	JustBeforeEach(func() {
@@ -135,7 +140,7 @@ var _ = Describe("storage providers", func() {
 
 			info := listRes.Infos[0]
 			Expect(info.Type).To(Equal(storagep.ResourceType_RESOURCE_TYPE_CONTAINER))
-			Expect(info.Path).To(Equal(subdirRef.Spec.(*storagep.Reference_Path).Path))
+			Expect(info.Path).To(Equal(subdirPath))
 			Expect(info.Owner.OpaqueId).To(Equal("f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c"))
 		})
 	}
@@ -163,7 +168,7 @@ var _ = Describe("storage providers", func() {
 
 			res, err := serviceClient.GetPath(ctx, &storagep.GetPathRequest{ResourceId: statRes.Info.Id})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(res.Path).To(Equal(subdirRef.Spec.(*storagep.Reference_Path).Path))
+			Expect(res.Path).To(Equal(subdirPath))
 		})
 	}
 
@@ -233,6 +238,22 @@ var _ = Describe("storage providers", func() {
 		})
 	}
 
+	assertRecycle := func() {
+		It("lists and restores resources", func() {
+			res, err := serviceClient.Delete(ctx, &storagep.DeleteRequest{Ref: subdirRef})
+			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(err).ToNot(HaveOccurred())
+
+			listRes, err := serviceClient.ListRecycle(ctx, &storagep.ListRecycleRequest{})
+			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(len(listRes.RecycleItems)).To(Equal(1))
+			item := listRes.RecycleItems[0]
+			Expect(item.Path).To(Equal(subdirPath))
+		})
+	}
+
 	Describe("ocis", func() {
 		BeforeEach(func() {
 			provider = "ocis"
@@ -258,6 +279,7 @@ var _ = Describe("storage providers", func() {
 			assertGrants()
 			assertUploads()
 			assertDownloads()
+			assertRecycle()
 		})
 	})
 })

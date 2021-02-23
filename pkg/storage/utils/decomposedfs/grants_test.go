@@ -43,7 +43,7 @@ var _ = Describe("Grants", func() {
 	BeforeEach(func() {
 		ref = &provider.Reference{
 			Spec: &provider.Reference_Path{
-				Path: "dir1",
+				Path: "/dir1",
 			},
 		}
 
@@ -96,7 +96,7 @@ var _ = Describe("Grants", func() {
 
 		Describe("AddGrant", func() {
 			It("adds grants", func() {
-				n, err := env.Lookup.NodeFromPath(env.Ctx, "dir1")
+				n, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1")
 				Expect(err).ToNot(HaveOccurred())
 
 				err = env.Fs.AddGrant(env.Ctx, ref, grant)
