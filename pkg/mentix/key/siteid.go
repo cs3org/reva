@@ -29,14 +29,15 @@ import (
 type SiteIdentifier = string
 
 // CalculateSiteID calculates a (stable) site ID from the given API key.
-// The site ID is actually the CRC64 hash of the provided API key, thus it is stable for any given key.
-func CalculateSiteID(apiKey APIKey) (SiteIdentifier, error) {
+// The site ID is actually the CRC64 hash of the provided API key plus a salt value, thus it is stable for any given key & salt pair.
+func CalculateSiteID(apiKey APIKey, salt string) (SiteIdentifier, error) {
 	if len(apiKey) != apiKeyLength {
 		return "", errors.Errorf("invalid API key length")
 	}
 
 	hash := crc64.New(crc64.MakeTable(crc64.ECMA))
 	_, _ = hash.Write([]byte(apiKey))
+	_, _ = hash.Write([]byte(salt))
 	value := hash.Sum(nil)
 	return fmt.Sprintf("%4x-%4x-%4x-%4x", value[:2], value[2:4], value[4:6], value[6:]), nil
 }

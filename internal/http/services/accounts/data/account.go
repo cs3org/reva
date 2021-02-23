@@ -19,6 +19,7 @@
 package data
 
 import (
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -49,7 +50,7 @@ type AccountData struct {
 type Accounts = []*Account
 
 func (acc *Account) GetSiteID() key.SiteIdentifier {
-	if id, err := key.CalculateSiteID(acc.Data.APIKey); err == nil {
+	if id, err := key.CalculateSiteID(acc.Data.APIKey, strings.ToLower(acc.Email)); err == nil {
 		return id
 	}
 

@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/pkg/errors"
 
@@ -56,7 +57,10 @@ func decodeAPIKey(params url.Values) (key.SiteIdentifier, int8, error) {
 		return "", 0, errors.Errorf("sticky API key specified")
 	}
 
-	siteID, err := key.CalculateSiteID(apiKey)
+	// TODO: Extract email from account
+	email := ""
+
+	siteID, err := key.CalculateSiteID(apiKey, strings.ToLower(email))
 	if err != nil {
 		return "", 0, errors.Wrap(err, "unable to get site ID")
 	}
@@ -111,6 +115,11 @@ func HandleUnregisterSiteQuery(_ *meshdata.MeshData, _ []byte, params url.Values
 	}
 
 	// TODO: Check if site with ID exists; bail out if not
+
+	// The site ID must be provided in the call as well to enhance security further
+	if params.Get("siteId") != siteID {
+		return createErrorResponse("INVALID_SITE_ID", errors.Errorf("site ID mismatch"))
+	}
 
 	// To remove a site, a meshdata object that contains a site with the given ID needs to be created
 	site := &meshdata.Site{ID: siteID}
