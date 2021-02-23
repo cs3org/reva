@@ -19,19 +19,12 @@
 package importers
 
 import (
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"strings"
 
 	"github.com/cs3org/reva/pkg/mentix/exchangers"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
-)
-
-const (
-	queryActionRegisterSite   = "register"
-	queryActionUnregisterSite = "unregister"
 )
 
 type queryCallback func([]byte, url.Values) (meshdata.Vector, int, []byte, error)
@@ -40,18 +33,15 @@ type queryCallback func([]byte, url.Values) (meshdata.Vector, int, []byte, error
 type BaseRequestImporter struct {
 	BaseImporter
 	exchangers.BaseRequestExchanger
-
-	registerSiteActionHandler   queryCallback
-	unregisterSiteActionHandler queryCallback
 }
 
 // HandleRequest handles the actual HTTP request.
 func (importer *BaseRequestImporter) HandleRequest(resp http.ResponseWriter, req *http.Request) {
 	body, _ := ioutil.ReadAll(req.Body)
-	meshData, status, respData, err := importer.handleQuery(body, req.URL.Path, req.URL.Query())
+	meshDataSet, status, respData, err := importer.handleQuery(body, req.URL.Query())
 	if err == nil {
-		if len(meshData) > 0 {
-			importer.mergeImportedMeshData(meshData)
+		if len(meshDataSet) > 0 {
+			importer.mergeImportedMeshDataSet(meshDataSet)
 		}
 	} else {
 		respData = []byte(err.Error())
@@ -60,35 +50,19 @@ func (importer *BaseRequestImporter) HandleRequest(resp http.ResponseWriter, req
 	_, _ = resp.Write(respData)
 }
 
-func (importer *BaseRequestImporter) mergeImportedMeshData(meshData meshdata.Vector) {
+func (importer *BaseRequestImporter) mergeImportedMeshDataSet(meshDataSet meshdata.Vector) {
 	// Merge the newly imported data with any existing data stored in the importer
 	if importer.meshData != nil {
 		// Need to manually lock the data for writing
 		importer.Locker().Lock()
 		defer importer.Locker().Unlock()
 
-		importer.meshData = append(importer.meshData, meshData...)
+		importer.meshData = append(importer.meshData, meshDataSet...)
 	} else {
-		importer.SetMeshData(meshData) // SetMeshData will do the locking itself
+		importer.SetMeshData(meshDataSet) // SetMeshData will do the locking itself
 	}
 }
 
-func (importer *BaseRequestImporter) handleQuery(data []byte, path string, params url.Values) (meshdata.Vector, int, []byte, error) {
-	action := params.Get("action")
-	switch strings.ToLower(action) {
-	case queryActionRegisterSite:
-		if importer.registerSiteActionHandler != nil {
-			return importer.registerSiteActionHandler(data, params)
-		}
-
-	case queryActionUnregisterSite:
-		if importer.unregisterSiteActionHandler != nil {
-			return importer.unregisterSiteActionHandler(data, params)
-		}
-
-	default:
-		return nil, http.StatusNotImplemented, []byte{}, fmt.Errorf("unknown action '%v'", action)
-	}
-
-	return nil, http.StatusNotFound, []byte{}, fmt.Errorf("unhandled query for action '%v'", action)
+func (importer *BaseRequestImporter) handleQuery(data []byte, params url.Values) (meshdata.Vector, int, []byte, error) {
+	return importer.HandleAction(nil, data, params)
 }

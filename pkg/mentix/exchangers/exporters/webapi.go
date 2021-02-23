@@ -42,7 +42,7 @@ func (exporter *WebAPIExporter) Activate(conf *config.Configuration, log *zerolo
 
 	exporter.allowUnauthorizedSites = true
 
-	exporter.defaultActionHandler = webapi.HandleDefaultQuery
+	exporter.RegisterActionHandler("", webapi.HandleDefaultQuery)
 
 	return nil
 }

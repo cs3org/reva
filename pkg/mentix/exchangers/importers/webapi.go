@@ -40,8 +40,8 @@ func (importer *WebAPIImporter) Activate(conf *config.Configuration, log *zerolo
 	importer.SetEndpoint(conf.Importers.WebAPI.Endpoint, conf.Importers.WebAPI.IsProtected)
 	importer.SetEnabledConnectors(conf.Importers.WebAPI.EnabledConnectors)
 
-	importer.registerSiteActionHandler = webapi.HandleRegisterSiteQuery
-	importer.unregisterSiteActionHandler = webapi.HandleUnregisterSiteQuery
+	importer.RegisterActionHandler("register", webapi.HandleRegisterSiteQuery)
+	importer.RegisterActionHandler("unregister", webapi.HandleUnregisterSiteQuery)
 
 	return nil
 }

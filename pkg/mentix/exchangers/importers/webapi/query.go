@@ -59,11 +59,11 @@ func handleQuery(data []byte, params url.Values, status int, msg string) (meshda
 }
 
 // HandleRegisterSiteQuery registers a site.
-func HandleRegisterSiteQuery(data []byte, params url.Values) (meshdata.Vector, int, []byte, error) {
+func HandleRegisterSiteQuery(meshData *meshdata.MeshData, data []byte, params url.Values) (meshdata.Vector, int, []byte, error) {
 	return handleQuery(data, params, meshdata.StatusDefault, "SITE_REGISTERED")
 }
 
 // HandleUnregisterSiteQuery unregisters a site.
-func HandleUnregisterSiteQuery(data []byte, params url.Values) (meshdata.Vector, int, []byte, error) {
+func HandleUnregisterSiteQuery(meshData *meshdata.MeshData, data []byte, params url.Values) (meshdata.Vector, int, []byte, error) {
 	return handleQuery(data, params, meshdata.StatusObsolete, "SITE_UNREGISTERED")
 }

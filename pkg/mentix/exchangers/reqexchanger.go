@@ -19,8 +19,12 @@
 package exchangers
 
 import (
+	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
+
+	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 
 // RequestExchanger is the interface implemented by exchangers that offer an HTTP endpoint.
@@ -35,12 +39,16 @@ type RequestExchanger interface {
 	HandleRequest(resp http.ResponseWriter, req *http.Request)
 }
 
+type queryCallback func(*meshdata.MeshData, []byte, url.Values) (meshdata.Vector, int, []byte, error)
+
 // BaseRequestExchanger implements basic exporter functionality common to all request exporters.
 type BaseRequestExchanger struct {
 	RequestExchanger
 
 	endpoint            string
 	isProtectedEndpoint bool
+
+	actionHandlers map[string]queryCallback
 }
 
 // Endpoint returns the (relative) endpoint of the exchanger.
@@ -72,4 +80,24 @@ func (exchanger *BaseRequestExchanger) WantsRequest(r *http.Request) bool {
 // HandleRequest handles the actual HTTP request.
 func (exchanger *BaseRequestExchanger) HandleRequest(resp http.ResponseWriter, req *http.Request) error {
 	return nil
+}
+
+// RegisterActionHandler registers a new handler for the specified action.
+func (exchanger *BaseRequestExchanger) RegisterActionHandler(action string, callback queryCallback) {
+	if exchanger.actionHandlers == nil {
+		exchanger.actionHandlers = make(map[string]queryCallback)
+	}
+	exchanger.actionHandlers[action] = callback
+}
+
+// HandleAction executes the registered handler for the specified action, if any.
+func (exchanger *BaseRequestExchanger) HandleAction(meshData *meshdata.MeshData, body []byte, params url.Values) (meshdata.Vector, int, []byte, error) {
+	reqAction := params.Get("action")
+	for action, handler := range exchanger.actionHandlers {
+		if strings.EqualFold(action, reqAction) {
+			return handler(meshData, body, params)
+		}
+	}
+
+	return nil, http.StatusNotFound, []byte{}, fmt.Errorf("unhandled query for action '%v'", reqAction)
 }
