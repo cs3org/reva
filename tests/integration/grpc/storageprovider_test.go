@@ -19,7 +19,9 @@
 package grpc_test
 
 import (
+	"bytes"
 	"context"
+	"io/ioutil"
 
 	"google.golang.org/grpc/metadata"
 
@@ -27,6 +29,7 @@ import (
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	storagep "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/storage/fs/ocis"
 	"github.com/cs3org/reva/pkg/token"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
 	ruser "github.com/cs3org/reva/pkg/user"
@@ -40,14 +43,17 @@ var _ = Describe("storage providers", func() {
 		dependencies map[string]string
 		revads       map[string]*Revad
 
+		user          *userpb.User
 		ctx           context.Context
 		serviceClient storagep.ProviderAPIClient
 
-		homeRef    *storagep.Reference
-		filePath   string
-		fileRef    *storagep.Reference
-		subdirPath string
-		subdirRef  *storagep.Reference
+		homeRef           *storagep.Reference
+		versionedFilePath string
+		versionedFileRef  *storagep.Reference
+		filePath          string
+		fileRef           *storagep.Reference
+		subdirPath        string
+		subdirRef         *storagep.Reference
 	)
 
 	BeforeEach(func() {
@@ -57,6 +63,10 @@ var _ = Describe("storage providers", func() {
 		filePath = "/file"
 		fileRef = &storagep.Reference{
 			Spec: &storagep.Reference_Path{Path: filePath},
+		}
+		versionedFilePath = "/versionedFile"
+		versionedFileRef = &storagep.Reference{
+			Spec: &storagep.Reference_Path{Path: versionedFilePath},
 		}
 		subdirPath = "/subdir"
 		subdirRef = &storagep.Reference{
@@ -71,7 +81,7 @@ var _ = Describe("storage providers", func() {
 		ctx = context.Background()
 
 		// Add auth token
-		user := &userpb.User{
+		user = &userpb.User{
 			Id: &userpb.UserId{
 				Idp:      "0.0.0.0:19000",
 				OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
@@ -144,6 +154,38 @@ var _ = Describe("storage providers", func() {
 			Expect(info.Type).To(Equal(storagep.ResourceType_RESOURCE_TYPE_CONTAINER))
 			Expect(info.Path).To(Equal(subdirPath))
 			Expect(info.Owner.OpaqueId).To(Equal("f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c"))
+		})
+	}
+
+	assertFileVersions := func() {
+		It("lists file versions", func() {
+			listRes, err := serviceClient.ListFileVersions(ctx, &storagep.ListFileVersionsRequest{Ref: versionedFileRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(len(listRes.Versions)).To(Equal(1))
+			Expect(listRes.Versions[0].Size).To(Equal(uint64(1)))
+		})
+
+		It("restores a file version", func() {
+			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: versionedFileRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(statRes.Info.Size).To(Equal(uint64(2))) // second version contains 2 bytes
+
+			listRes, err := serviceClient.ListFileVersions(ctx, &storagep.ListFileVersionsRequest{Ref: versionedFileRef})
+			Expect(err).ToNot(HaveOccurred())
+			restoreRes, err := serviceClient.RestoreFileVersion(ctx,
+				&storagep.RestoreFileVersionRequest{
+					Ref: versionedFileRef,
+					Key: listRes.Versions[0].Key,
+				})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(restoreRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+			statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: versionedFileRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(statRes.Info.Size).To(Equal(uint64(1))) // initial version contains 1 byte
 		})
 	}
 
@@ -366,6 +408,30 @@ var _ = Describe("storage providers", func() {
 			assertUploads()
 			assertDownloads()
 			assertRecycle()
+		})
+
+		Context("with an existing file /versioned_file", func() {
+			JustBeforeEach(func() {
+				fs, err := ocis.New(map[string]interface{}{
+					"root":        revads["storage"].TmpRoot,
+					"enable_home": true,
+				})
+				Expect(err).ToNot(HaveOccurred())
+
+				content1 := ioutil.NopCloser(bytes.NewReader([]byte("1")))
+				content2 := ioutil.NopCloser(bytes.NewReader([]byte("22")))
+
+				ctx := ruser.ContextSetUser(context.Background(), user)
+
+				err = fs.CreateHome(ctx)
+				Expect(err).ToNot(HaveOccurred())
+				err = fs.Upload(ctx, versionedFileRef, content1)
+				Expect(err).ToNot(HaveOccurred())
+				err = fs.Upload(ctx, versionedFileRef, content2)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			assertFileVersions()
 		})
 	})
 })

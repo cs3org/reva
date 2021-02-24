@@ -50,6 +50,7 @@ func TestGprc(t *testing.T) {
 type cleanupFunc func() error
 
 type Revad struct {
+	TmpRoot     string
 	GrpcAddress string
 	Cleanup     cleanupFunc
 }
@@ -113,6 +114,7 @@ func startRevads(configs map[string]string) (map[string]*Revad, error) {
 		time.Sleep(1 * time.Second)
 
 		revad := &Revad{
+			TmpRoot:     tmpRoot,
 			GrpcAddress: ownAddress,
 			Cleanup: func() error {
 				err := cmd.Process.Signal(os.Kill)
