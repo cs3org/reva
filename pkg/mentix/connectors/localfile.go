@@ -75,7 +75,7 @@ func (connector *LocalFileConnector) RetrieveMeshData() (*meshdata.MeshData, err
 		return nil, fmt.Errorf("invalid file '%v': %v", connector.filePath, err)
 	}
 
-	// Update the site types, as these are not part of the JSON data
+	// Enforce site types
 	connector.setSiteTypes(meshData)
 
 	meshData.InferMissingData()

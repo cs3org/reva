@@ -23,6 +23,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/cs3org/reva/pkg/mentix/accservice"
 	"github.com/cs3org/reva/pkg/mentix/utils/network"
 )
 
@@ -135,7 +136,14 @@ func (site *Site) IsAuthorized() bool {
 		return true
 	}
 
-	// TODO: Use accounts service
+	// Use the accounts service to find out whether the site is authorized
+	resp, err := accservice.Query("is-authorized", network.URLParams{"by": "siteid", "value": site.ID})
+	if err == nil && resp.Success {
+		if authorized, ok := resp.Data.(bool); ok {
+			return authorized
+		}
+	}
+
 	return false
 }
 
