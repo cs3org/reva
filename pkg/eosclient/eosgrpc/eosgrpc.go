@@ -147,7 +147,7 @@ func (c *Client) GetHTTPCl() *ehttp.Client {
 	return ehttp.New(&c.htopts, c.httptransport)
 }
 
-// GetHttpCl: Create an http client for immediate usage, using the already instantiated resources
+// GetHttpCl creates an http client for immediate usage, using the already instantiated resources
 func (c *Client) GetHttpCl() *ehttp.EosHttpClient {
 	return ehttp.New(&c.opt.httpopts)
 }
