@@ -23,7 +23,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -35,6 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/eosclient"
 	erpc "github.com/cs3org/reva/pkg/eosclient/eosgrpc/eos_grpc"
+	ehttp "github.com/cs3org/reva/pkg/eosclient/eosgrpc/eos_http"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
 	"github.com/google/uuid"
@@ -59,20 +59,12 @@ const (
 // Options to configure the Client.
 type Options struct {
 
-	// ForceSingleUserMode forces all connections to use only one user.
-	// This is the case when access to EOS is done from FUSE under apache or www-data.
-	ForceSingleUserMode bool
-
 	// UseKeyTabAuth changes will authenticate requests by using an EOS keytab.
 	UseKeytab bool
 
 	// Whether to maintain the same inode across various versions of a file.
 	// Requires extra metadata operations if set to true
 	VersionInvariant bool
-
-	// SingleUsername is the username to use when connecting to EOS.
-	// Defaults to apache
-	SingleUsername string
 
 	// Location of the xrdcopy binary.
 	// Default is /opt/eos/xrootd/bin/xrdcopy.
@@ -99,12 +91,11 @@ type Options struct {
 	// SecProtocol is the comma separated list of security protocols used by xrootd.
 	// For example: "sss, unix"
 	SecProtocol string
+
+	httpopts ehttp.Options
 }
 
 func (opt *Options) init() {
-	if opt.ForceSingleUserMode && opt.SingleUsername != "" {
-		opt.SingleUsername = "apache"
-	}
 
 	if opt.XrdcopyBinary == "" {
 		opt.XrdcopyBinary = "/opt/eos/xrootd/bin/xrdcopy"
@@ -117,6 +108,10 @@ func (opt *Options) init() {
 	if opt.CacheDirectory == "" {
 		opt.CacheDirectory = os.TempDir()
 	}
+
+	opt.httpopts.Init()
+	opt.httpopts.BaseURL = opt.URL
+
 }
 
 // Client performs actions against a EOS management node (MGM)
@@ -124,6 +119,10 @@ func (opt *Options) init() {
 type Client struct {
 	opt *Options
 	cl  erpc.EosClient
+}
+
+func (c *Client) GetHttpCl() *ehttp.EosHttpClient {
+	return ehttp.New(&c.opt.httpopts)
 }
 
 // Create and connect a grpc eos Client
@@ -979,11 +978,24 @@ func (c *Client) Read(ctx context.Context, uid, gid, path string) (io.ReadCloser
 	localTarget := fmt.Sprintf("%s/%s", c.opt.CacheDirectory, rand)
 	defer os.RemoveAll(localTarget)
 
-	xrdPath := fmt.Sprintf("%s//%s", c.opt.URL, path)
-	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, "--nopbar", "--silent", "-f", xrdPath, localTarget, fmt.Sprintf("-OSeos.ruid=%s&eos.rgid=%s", uid, gid))
-	if _, _, err := c.execute(ctx, cmd); err != nil {
-		return nil, err
+	localfile, err := os.Create(localTarget)
+	if err != nil {
+		log.Error().Str("func", "Read").Str("path", path).Str("uid,gid", uid+","+gid).Str("err", err.Error()).Msg("")
+		return nil, errtypes.InternalError(fmt.Sprintf("can't open local cache file '%s'", localTarget))
 	}
+
+	//	xrdPath := fmt.Sprintf("%s//%s", c.opt.URL, path)
+	//	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, "--nopbar", "--silent", "-f", xrdPath, localTarget, fmt.Sprintf("-OSeos.ruid=%s&eos.rgid=%s", uid, gid))
+	//	if _, _, err := c.execute(ctx, cmd); err != nil {
+	//		return nil, err
+	//	}
+
+	err = c.GetHttpCl().GETFile(ctx, "", uid, gid, path, localfile)
+	if err != nil {
+		log.Error().Str("func", "Read").Str("path", path).Str("uid,gid", uid+","+gid).Str("err", err.Error()).Msg("")
+		return nil, errtypes.InternalError(fmt.Sprintf("can't GET local cache file '%s'", localTarget))
+	}
+
 	return os.Open(localTarget)
 }
 
@@ -992,24 +1004,28 @@ func (c *Client) Write(ctx context.Context, uid, gid, path string, stream io.Rea
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "Write").Str("uid,gid", uid+","+gid).Str("path", path).Msg("")
 
-	fd, err := ioutil.TempFile(c.opt.CacheDirectory, "eoswrite-")
-	if err != nil {
-		return err
-	}
-	defer fd.Close()
-	defer os.RemoveAll(fd.Name())
+	//fd, err := ioutil.TempFile(c.opt.CacheDirectory, "eoswrite-")
+	//if err != nil {
+	//		return err
+	//	}
+	//	defer fd.Close()
+	//	defer os.RemoveAll(fd.Name())
+	//
+	//	// copy stream to local temp file
+	//	_, err = io.Copy(fd, stream)
+	//	if err != nil {
+	//return err
+	//}
 
-	// copy stream to local temp file
-	_, err = io.Copy(fd, stream)
-	if err != nil {
-		return err
-	}
+	return c.GetHttpCl().PUTFile(ctx, "", uid, gid, path, stream)
 
-	return c.WriteFile(ctx, uid, gid, path, fd.Name())
+	//return c.GetHttpCl().PUTFile(ctx, remoteuser, uid, gid, urlpathng, stream)
+	//return c.WriteFile(ctx, uid, gid, path, fd.Name())
 }
 
 // WriteFile writes an existing file to the mgm
 func (c *Client) WriteFile(ctx context.Context, uid, gid, path, source string) error {
+
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "WriteFile").Str("uid,gid", uid+","+gid).Str("path", path).Str("source", source).Msg("")
 

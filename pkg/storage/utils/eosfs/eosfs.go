@@ -153,17 +153,15 @@ func NewEOSFS(c *Config) (storage.FS, error) {
 	var eosClient eosclient.EOSClient
 	if c.UseGRPC {
 		eosClientOpts := &eosgrpc.Options{
-			XrdcopyBinary:       c.XrdcopyBinary,
-			URL:                 c.MasterURL,
-			GrpcURI:             c.GrpcURI,
-			CacheDirectory:      c.CacheDirectory,
-			ForceSingleUserMode: c.ForceSingleUserMode,
-			SingleUsername:      c.SingleUsername,
-			UseKeytab:           c.UseKeytab,
-			Keytab:              c.Keytab,
-			Authkey:             c.GRPCAuthkey,
-			SecProtocol:         c.SecProtocol,
-			VersionInvariant:    c.VersionInvariant,
+			XrdcopyBinary:    c.XrdcopyBinary,
+			URL:              c.MasterURL,
+			GrpcURI:          c.GrpcURI,
+			CacheDirectory:   c.CacheDirectory,
+			UseKeytab:        c.UseKeytab,
+			Keytab:           c.Keytab,
+			Authkey:          c.GRPCAuthkey,
+			SecProtocol:      c.SecProtocol,
+			VersionInvariant: c.VersionInvariant,
 		}
 		eosClient = eosgrpc.New(eosClientOpts)
 	} else {
