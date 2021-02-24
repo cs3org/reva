@@ -19,7 +19,6 @@
 package importers
 
 import (
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
@@ -35,10 +34,6 @@ type SiteRegistrationImporter struct {
 func (importer *SiteRegistrationImporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
 	if err := importer.BaseRequestImporter.Activate(conf, log); err != nil {
 		return err
-	}
-
-	if err := sitereg.ConfigureAccountsService(conf.AccountsService.URL, conf.AccountsService.User, conf.AccountsService.Password); err != nil {
-		return errors.Wrap(err, "error while configuring the accounts service")
 	}
 
 	// Store SiteRegistration specifics

@@ -27,14 +27,9 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/utils/network"
 )
-
-type accountsServiceSettings struct {
-	URL      *url.URL
-	user     string
-	password string
-}
 
 type requestResponse struct {
 	Success bool
@@ -42,31 +37,18 @@ type requestResponse struct {
 	Data    interface{}
 }
 
-var (
-	accountsService accountsServiceSettings
-)
-
-// ConfigureAccountsService configures the accounts service for the site registration importer.
-func ConfigureAccountsService(address string, user string, password string) error {
-	endpointURL, err := url.Parse(address)
+func queryAccountsService(endpoint string, params network.URLParams, conf *config.Configuration) (*requestResponse, error) {
+	URL, err := url.Parse(conf.AccountsService.URL)
 	if err != nil {
-		return errors.Wrap(err, "unable to parse the accounts service URL")
+		return nil, errors.Wrap(err, "unable to parse the accounts service URL")
 	}
 
-	accountsService.URL = endpointURL
-	accountsService.user = user
-	accountsService.password = password
-
-	return nil
-}
-
-func queryAccountsService(endpoint string, params network.URLParams) (*requestResponse, error) {
-	fullURL, err := network.GenerateURL(fmt.Sprintf("%v://%v", accountsService.URL.Scheme, accountsService.URL.Host), path.Join(accountsService.URL.Path, endpoint), params)
+	fullURL, err := network.GenerateURL(fmt.Sprintf("%v://%v", URL.Scheme, URL.Host), path.Join(URL.Path, endpoint), params)
 	if err != nil {
 		return nil, errors.Wrap(err, "error while building the service accounts query URL")
 	}
 
-	data, err := network.ReadEndpoint(fullURL, &network.BasicAuth{User: accountsService.user, Password: accountsService.password}, false)
+	data, err := network.ReadEndpoint(fullURL, &network.BasicAuth{User: conf.AccountsService.User, Password: conf.AccountsService.Password}, false)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to query the service accounts endpoint")
 	}

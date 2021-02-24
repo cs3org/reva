@@ -23,6 +23,9 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/rs/zerolog"
+
+	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/exchangers"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
@@ -34,9 +37,9 @@ type BaseRequestImporter struct {
 }
 
 // HandleRequest handles the actual HTTP request.
-func (importer *BaseRequestImporter) HandleRequest(resp http.ResponseWriter, req *http.Request) {
+func (importer *BaseRequestImporter) HandleRequest(resp http.ResponseWriter, req *http.Request, conf *config.Configuration, log *zerolog.Logger) {
 	body, _ := ioutil.ReadAll(req.Body)
-	meshDataSet, status, respData, err := importer.handleQuery(body, req.URL.Query())
+	meshDataSet, status, respData, err := importer.handleQuery(body, req.URL.Query(), conf, log)
 	if err == nil {
 		if len(meshDataSet) > 0 {
 			importer.mergeImportedMeshDataSet(meshDataSet)
@@ -61,10 +64,10 @@ func (importer *BaseRequestImporter) mergeImportedMeshDataSet(meshDataSet meshda
 	}
 }
 
-func (importer *BaseRequestImporter) handleQuery(data []byte, params url.Values) (meshdata.Vector, int, []byte, error) {
+func (importer *BaseRequestImporter) handleQuery(data []byte, params url.Values, conf *config.Configuration, log *zerolog.Logger) (meshdata.Vector, int, []byte, error) {
 	// Data is read, so lock it for writing
 	importer.Locker().RLock()
 	defer importer.Locker().RUnlock()
 
-	return importer.HandleAction(importer.MeshData(), data, params)
+	return importer.HandleAction(importer.MeshData(), data, params, conf, log)
 }

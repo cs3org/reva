@@ -25,12 +25,14 @@ import (
 	"net/url"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	"github.com/rs/zerolog"
 
+	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 
 // HandleDefaultQuery processes a basic query.
-func HandleDefaultQuery(meshData *meshdata.MeshData, body []byte, params url.Values) (meshdata.Vector, int, []byte, error) {
+func HandleDefaultQuery(meshData *meshdata.MeshData, body []byte, params url.Values, _ *config.Configuration, _ *zerolog.Logger) (meshdata.Vector, int, []byte, error) {
 	// Convert the mesh data
 	ocmData, err := convertMeshDataToOCMData(meshData)
 	if err != nil {

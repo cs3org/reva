@@ -43,9 +43,10 @@ type Configuration struct {
 		} `mapstructure:"webapi"`
 
 		SiteRegistration struct {
-			Endpoint          string   `mapstructure:"endpoint"`
-			IsProtected       bool     `mapstructure:"is_protected"`
-			EnabledConnectors []string `mapstructure:"enabled_connectors"`
+			Endpoint               string   `mapstructure:"endpoint"`
+			IsProtected            bool     `mapstructure:"is_protected"`
+			EnabledConnectors      []string `mapstructure:"enabled_connectors"`
+			IgnoreScienceMeshSites bool     `mapstructure:"ignore_sm_sites"`
 		} `mapstructure:"sitereg"`
 	} `mapstructure:"importers"`
 

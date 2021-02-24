@@ -314,7 +314,7 @@ func (mntx *Mentix) handleRequest(exchangers []exchangers.RequestExchanger, w ht
 	// Ask each RequestExchanger if it wants to handle the request
 	for _, exchanger := range exchangers {
 		if exchanger.WantsRequest(r) {
-			exchanger.HandleRequest(w, r)
+			exchanger.HandleRequest(w, r, mntx.conf, log)
 		}
 	}
 }

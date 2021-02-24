@@ -23,6 +23,9 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/rs/zerolog"
+
+	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/exchangers"
 )
 
@@ -33,9 +36,9 @@ type BaseRequestExporter struct {
 }
 
 // HandleRequest handles the actual HTTP request.
-func (exporter *BaseRequestExporter) HandleRequest(resp http.ResponseWriter, req *http.Request) {
+func (exporter *BaseRequestExporter) HandleRequest(resp http.ResponseWriter, req *http.Request, conf *config.Configuration, log *zerolog.Logger) {
 	body, _ := ioutil.ReadAll(req.Body)
-	status, respData, err := exporter.handleQuery(body, req.URL.Query())
+	status, respData, err := exporter.handleQuery(body, req.URL.Query(), conf, log)
 	if err != nil {
 		respData = []byte(err.Error())
 	}
@@ -43,11 +46,11 @@ func (exporter *BaseRequestExporter) HandleRequest(resp http.ResponseWriter, req
 	_, _ = resp.Write(respData)
 }
 
-func (exporter *BaseRequestExporter) handleQuery(body []byte, params url.Values) (int, []byte, error) {
+func (exporter *BaseRequestExporter) handleQuery(body []byte, params url.Values, conf *config.Configuration, log *zerolog.Logger) (int, []byte, error) {
 	// Data is read, so lock it for writing
 	exporter.Locker().RLock()
 	defer exporter.Locker().RUnlock()
 
-	_, status, data, err := exporter.HandleAction(exporter.MeshData(), body, params)
+	_, status, data, err := exporter.HandleAction(exporter.MeshData(), body, params, conf, log)
 	return status, data, err
 }

@@ -24,6 +24,9 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/rs/zerolog"
+
+	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 
@@ -36,10 +39,10 @@ type RequestExchanger interface {
 	// WantsRequest returns whether the exchanger wants to handle the incoming request.
 	WantsRequest(r *http.Request) bool
 	// HandleRequest handles the actual HTTP request.
-	HandleRequest(resp http.ResponseWriter, req *http.Request)
+	HandleRequest(resp http.ResponseWriter, req *http.Request, conf *config.Configuration, log *zerolog.Logger)
 }
 
-type queryCallback func(*meshdata.MeshData, []byte, url.Values) (meshdata.Vector, int, []byte, error)
+type queryCallback func(*meshdata.MeshData, []byte, url.Values, *config.Configuration, *zerolog.Logger) (meshdata.Vector, int, []byte, error)
 
 // BaseRequestExchanger implements basic exporter functionality common to all request exporters.
 type BaseRequestExchanger struct {
@@ -78,7 +81,7 @@ func (exchanger *BaseRequestExchanger) WantsRequest(r *http.Request) bool {
 }
 
 // HandleRequest handles the actual HTTP request.
-func (exchanger *BaseRequestExchanger) HandleRequest(resp http.ResponseWriter, req *http.Request) error {
+func (exchanger *BaseRequestExchanger) HandleRequest(resp http.ResponseWriter, req *http.Request, conf *config.Configuration, log *zerolog.Logger) error {
 	return nil
 }
 
@@ -91,11 +94,11 @@ func (exchanger *BaseRequestExchanger) RegisterActionHandler(action string, call
 }
 
 // HandleAction executes the registered handler for the specified action, if any.
-func (exchanger *BaseRequestExchanger) HandleAction(meshData *meshdata.MeshData, body []byte, params url.Values) (meshdata.Vector, int, []byte, error) {
+func (exchanger *BaseRequestExchanger) HandleAction(meshData *meshdata.MeshData, body []byte, params url.Values, conf *config.Configuration, log *zerolog.Logger) (meshdata.Vector, int, []byte, error) {
 	reqAction := params.Get("action")
 	for action, handler := range exchanger.actionHandlers {
 		if strings.EqualFold(action, reqAction) {
-			return handler(meshData, body, params)
+			return handler(meshData, body, params, conf, log)
 		}
 	}
 

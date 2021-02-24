@@ -24,6 +24,9 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/rs/zerolog"
+
+	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 	"github.com/cs3org/reva/pkg/mentix/utils/network"
 )
@@ -59,11 +62,11 @@ func handleQuery(data []byte, params url.Values, status int, msg string) (meshda
 }
 
 // HandleRegisterSiteQuery registers a site.
-func HandleRegisterSiteQuery(_ *meshdata.MeshData, data []byte, params url.Values) (meshdata.Vector, int, []byte, error) {
+func HandleRegisterSiteQuery(_ *meshdata.MeshData, data []byte, params url.Values, _ *config.Configuration, _ *zerolog.Logger) (meshdata.Vector, int, []byte, error) {
 	return handleQuery(data, params, meshdata.StatusDefault, "SITE_REGISTERED")
 }
 
 // HandleUnregisterSiteQuery unregisters a site.
-func HandleUnregisterSiteQuery(_ *meshdata.MeshData, data []byte, params url.Values) (meshdata.Vector, int, []byte, error) {
+func HandleUnregisterSiteQuery(_ *meshdata.MeshData, data []byte, params url.Values, _ *config.Configuration, _ *zerolog.Logger) (meshdata.Vector, int, []byte, error) {
 	return handleQuery(data, params, meshdata.StatusObsolete, "SITE_UNREGISTERED")
 }
