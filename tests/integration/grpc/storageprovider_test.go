@@ -210,6 +210,21 @@ var _ = Describe("storage providers", func() {
 			Expect(readGrant.Permissions.Move).To(BeTrue())
 			Expect(readGrant.Permissions.Delete).To(BeFalse())
 
+			By("updating the grant")
+			grant.Permissions.Delete = true
+			updateRes, err := serviceClient.UpdateGrant(ctx, &storagep.UpdateGrantRequest{Ref: subdirRef, Grant: grant})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updateRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+			By("listing the update grant")
+			listRes, err = serviceClient.ListGrants(ctx, &storagep.ListGrantsRequest{Ref: subdirRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(listRes.Grants)).To(Equal(1))
+			readGrant = listRes.Grants[0]
+			Expect(readGrant.Permissions.Stat).To(BeTrue())
+			Expect(readGrant.Permissions.Move).To(BeTrue())
+			Expect(readGrant.Permissions.Delete).To(BeTrue())
+
 			By("deleting a grant")
 			delRes, err := serviceClient.RemoveGrant(ctx, &storagep.RemoveGrantRequest{Ref: subdirRef, Grant: readGrant})
 			Expect(err).ToNot(HaveOccurred())
