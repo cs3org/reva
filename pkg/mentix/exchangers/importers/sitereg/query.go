@@ -86,7 +86,7 @@ func createErrorResponse(msg string, err error) (meshdata.Vector, int, []byte, e
 }
 
 // HandleRegisterSiteQuery registers a site.
-func HandleRegisterSiteQuery(_ *meshdata.MeshData, data []byte, params url.Values) (meshdata.Vector, int, []byte, error) {
+func HandleRegisterSiteQuery(meshData *meshdata.MeshData, data []byte, params url.Values) (meshdata.Vector, int, []byte, error) {
 	siteID, flags, err := decodeAPIKey(params)
 	if err != nil {
 		return createErrorResponse("INVALID_API_KEY", err)
@@ -108,34 +108,42 @@ func HandleRegisterSiteQuery(_ *meshdata.MeshData, data []byte, params url.Value
 		return createErrorResponse("INVALID_SITE_DATA", err)
 	}
 
-	meshData := &meshdata.MeshData{Sites: []*meshdata.Site{site}}
-	if err := meshData.Verify(); err != nil {
+	meshDataUpdate := &meshdata.MeshData{Sites: []*meshdata.Site{site}}
+	if err := meshDataUpdate.Verify(); err != nil {
 		return createErrorResponse("INVALID_MESH_DATA", err)
 	}
-	meshData.Status = meshdata.StatusDefault
-	meshData.InferMissingData()
+	meshDataUpdate.Status = meshdata.StatusDefault
+	meshDataUpdate.InferMissingData()
 
-	return meshdata.Vector{meshData}, http.StatusOK, network.CreateResponse("SITE_REGISTERED", network.ResponseParams{"id": siteID}), nil
+	msg := "SITE_REGISTERED"
+	if meshData.FindSite(siteID) != nil {
+		msg = "SITE_UPDATED"
+	}
+
+	return meshdata.Vector{meshDataUpdate}, http.StatusOK, network.CreateResponse(msg, network.ResponseParams{"id": siteID}), nil
 }
 
 // HandleUnregisterSiteQuery unregisters a site.
-func HandleUnregisterSiteQuery(_ *meshdata.MeshData, _ []byte, params url.Values) (meshdata.Vector, int, []byte, error) {
+func HandleUnregisterSiteQuery(meshData *meshdata.MeshData, _ []byte, params url.Values) (meshdata.Vector, int, []byte, error) {
 	siteID, _, err := decodeAPIKey(params)
 	if err != nil {
 		return createErrorResponse("INVALID_API_KEY", err)
 	}
-
-	// TODO: Check if site with ID exists; bail out if not
 
 	// The site ID must be provided in the call as well to enhance security further
 	if params.Get("siteId") != siteID {
 		return createErrorResponse("INVALID_SITE_ID", errors.Errorf("site ID mismatch"))
 	}
 
+	// Check if the site to be removed actually exists
+	if meshData.FindSite(siteID) == nil {
+		return createErrorResponse("INVALID_SITE_ID", errors.Errorf("site not found"))
+	}
+
 	// To remove a site, a meshdata object that contains a site with the given ID needs to be created
 	site := &meshdata.Site{ID: siteID}
-	meshData := &meshdata.MeshData{Sites: []*meshdata.Site{site}}
-	meshData.Status = meshdata.StatusObsolete
+	meshDataUpdate := &meshdata.MeshData{Sites: []*meshdata.Site{site}}
+	meshDataUpdate.Status = meshdata.StatusObsolete
 
-	return meshdata.Vector{meshData}, http.StatusOK, network.CreateResponse("SITE_UNREGISTERED", network.ResponseParams{"id": siteID}), nil
+	return meshdata.Vector{meshDataUpdate}, http.StatusOK, network.CreateResponse("SITE_UNREGISTERED", network.ResponseParams{"id": siteID}), nil
 }

@@ -62,5 +62,9 @@ func (importer *BaseRequestImporter) mergeImportedMeshDataSet(meshDataSet meshda
 }
 
 func (importer *BaseRequestImporter) handleQuery(data []byte, params url.Values) (meshdata.Vector, int, []byte, error) {
-	return importer.HandleAction(nil, data, params)
+	// Data is read, so lock it for writing
+	importer.Locker().RLock()
+	defer importer.Locker().RUnlock()
+
+	return importer.HandleAction(importer.MeshData(), data, params)
 }
