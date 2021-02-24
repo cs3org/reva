@@ -85,7 +85,7 @@ var _ = Describe("storage providers", func() {
 		ctx = metadata.AppendToOutgoingContext(ctx, token.TokenHeader, t)
 		ctx = ruser.ContextSetUser(ctx, user)
 
-		revads, err := startRevads(dependencies)
+		revads, err = startRevads(dependencies)
 		Expect(err).ToNot(HaveOccurred())
 		serviceClient, err = pool.GetStorageProviderServiceClient(revads["storage"].GrpcAddress)
 		Expect(err).ToNot(HaveOccurred())
@@ -242,17 +242,60 @@ var _ = Describe("storage providers", func() {
 
 	assertRecycle := func() {
 		It("lists and restores resources", func() {
+			By("deleting an item")
 			res, err := serviceClient.Delete(ctx, &storagep.DeleteRequest{Ref: subdirRef})
+			Expect(err).ToNot(HaveOccurred())
 			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-			Expect(err).ToNot(HaveOccurred())
 
+			By("listing the recycle items")
 			listRes, err := serviceClient.ListRecycle(ctx, &storagep.ListRecycleRequest{})
-			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 			Expect(err).ToNot(HaveOccurred())
+			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
 			Expect(len(listRes.RecycleItems)).To(Equal(1))
 			item := listRes.RecycleItems[0]
 			Expect(item.Path).To(Equal(subdirPath))
+
+			By("restoring a recycle item")
+			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
+
+			restoreRes, err := serviceClient.RestoreRecycleItem(ctx,
+				&storagep.RestoreRecycleItemRequest{
+					Ref: subdirRef,
+					Key: item.Key,
+				},
+			)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(restoreRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+			statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+		})
+
+		It("purges recycle items resources", func() {
+			By("deleting an item")
+			res, err := serviceClient.Delete(ctx, &storagep.DeleteRequest{Ref: subdirRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+			By("listing recycle items")
+			listRes, err := serviceClient.ListRecycle(ctx, &storagep.ListRecycleRequest{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(len(listRes.RecycleItems)).To(Equal(1))
+
+			By("purging a recycle item")
+			purgeRes, err := serviceClient.PurgeRecycle(ctx, &storagep.PurgeRecycleRequest{Ref: subdirRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(purgeRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+			listRes, err = serviceClient.ListRecycle(ctx, &storagep.ListRecycleRequest{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(len(listRes.RecycleItems)).To(Equal(0))
 		})
 	}
 
