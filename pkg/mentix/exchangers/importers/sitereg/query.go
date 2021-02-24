@@ -46,19 +46,19 @@ func decodeQueryData(data []byte) (*siteRegistrationData, error) {
 	return siteData, nil
 }
 
-func decodeAPIKey(params url.Values, conf *config.Configuration) (key.SiteIdentifier, int8, error) {
+func extractQueryInformation(params url.Values, conf *config.Configuration) (key.SiteIdentifier, int8, string, error) {
 	apiKey := params.Get("apiKey")
 	if len(apiKey) == 0 {
-		return "", 0, errors.Errorf("no API key specified")
+		return "", 0, "", errors.Errorf("no API key specified")
 	}
 
 	// Try to get an account that is associated with the given API key; if none exists, return an error
 	resp, err := queryAccountsService("find", network.URLParams{"by": "apikey", "value": apiKey}, conf)
 	if err != nil {
-		return "", 0, errors.Wrap(err, "error while querying the accounts service")
+		return "", 0, "", errors.Wrap(err, "error while querying the accounts service")
 	}
 	if !resp.Success {
-		return "", 0, errors.Errorf("unable to fetch account associated with the provided API key: %v", resp.Error)
+		return "", 0, "", errors.Errorf("unable to fetch account associated with the provided API key: %v", resp.Error)
 	}
 
 	// Extract email from account data; this is needed to calculate the site ID from the API key
@@ -67,20 +67,20 @@ func decodeAPIKey(params url.Values, conf *config.Configuration) (key.SiteIdenti
 		email, _ = value.(string)
 	}
 	if len(email) == 0 {
-		return "", 0, errors.Errorf("could not get the email address of the user account")
+		return "", 0, "", errors.Errorf("could not get the email address of the user account")
 	}
 
 	_, flags, _, err := key.SplitAPIKey(apiKey)
 	if err != nil {
-		return "", 0, errors.Errorf("sticky API key specified")
+		return "", 0, "", errors.Errorf("sticky API key specified")
 	}
 
 	siteID, err := key.CalculateSiteID(apiKey, strings.ToLower(email))
 	if err != nil {
-		return "", 0, errors.Wrap(err, "unable to get site ID")
+		return "", 0, "", errors.Wrap(err, "unable to get site ID")
 	}
 
-	return siteID, flags, nil
+	return siteID, flags, email, nil
 }
 
 func createErrorResponse(msg string, err error) (meshdata.Vector, int, []byte, error) {
@@ -89,7 +89,7 @@ func createErrorResponse(msg string, err error) (meshdata.Vector, int, []byte, e
 
 // HandleRegisterSiteQuery registers a site.
 func HandleRegisterSiteQuery(meshData *meshdata.MeshData, data []byte, params url.Values, conf *config.Configuration, _ *zerolog.Logger) (meshdata.Vector, int, []byte, error) {
-	siteID, flags, err := decodeAPIKey(params, conf)
+	siteID, flags, email, err := extractQueryInformation(params, conf)
 	if err != nil {
 		return createErrorResponse("INVALID_API_KEY", err)
 	}
@@ -105,7 +105,7 @@ func HandleRegisterSiteQuery(meshData *meshdata.MeshData, data []byte, params ur
 		siteType = meshdata.SiteTypeScienceMesh
 	}
 
-	site, err := siteData.ToMeshDataSite(siteID, siteType)
+	site, err := siteData.ToMeshDataSite(siteID, siteType, email)
 	if err != nil {
 		return createErrorResponse("INVALID_SITE_DATA", err)
 	}
@@ -127,7 +127,7 @@ func HandleRegisterSiteQuery(meshData *meshdata.MeshData, data []byte, params ur
 
 // HandleUnregisterSiteQuery unregisters a site.
 func HandleUnregisterSiteQuery(meshData *meshdata.MeshData, _ []byte, params url.Values, conf *config.Configuration, _ *zerolog.Logger) (meshdata.Vector, int, []byte, error) {
-	siteID, _, err := decodeAPIKey(params, conf)
+	siteID, _, _, err := extractQueryInformation(params, conf)
 	if err != nil {
 		return createErrorResponse("INVALID_API_KEY", err)
 	}

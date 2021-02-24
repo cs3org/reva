@@ -82,7 +82,7 @@ func (siteData *siteRegistrationData) Verify() error {
 }
 
 // ToMeshDataSite converts the stored data into a meshdata site object, filling out as much data as possible.
-func (siteData *siteRegistrationData) ToMeshDataSite(siteID key.SiteIdentifier, siteType meshdata.SiteType) (*meshdata.Site, error) {
+func (siteData *siteRegistrationData) ToMeshDataSite(siteID key.SiteIdentifier, siteType meshdata.SiteType, email string) (*meshdata.Site, error) {
 	siteUrl, err := url.Parse(siteData.URL)
 	if err != nil {
 		return nil, errors.Wrap(err, "invalid site URL")
@@ -127,7 +127,7 @@ func (siteData *siteRegistrationData) ToMeshDataSite(siteID key.SiteIdentifier, 
 		Organization: "",
 		Domain:       network.ExtractDomainFromURL(siteUrl, true),
 		Homepage:     siteData.URL,
-		Email:        "", // TODO: Get account data
+		Email:        email,
 		Description:  siteData.Name + " @ " + siteData.URL,
 		Country:      countries.LookupCountry(siteData.CountryCode),
 		CountryCode:  siteData.CountryCode,
