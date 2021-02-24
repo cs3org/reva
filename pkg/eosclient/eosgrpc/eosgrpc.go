@@ -37,7 +37,6 @@ import (
 	ehttp "github.com/cs3org/reva/pkg/eosclient/eosgrpc/eos_http"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
-	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
@@ -970,28 +969,35 @@ func (c *Client) List(ctx context.Context, uid, gid, dpath string) ([]*eosclient
 
 }
 
-// Read reads a file from the mgm
+// Read reads a file from the mgm. It may or may not create a temp copy in the local filesystem
 func (c *Client) Read(ctx context.Context, uid, gid, path string) (io.ReadCloser, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "Read").Str("uid,gid", uid+","+gid).Str("path", path).Msg("")
 
-	rand := "eosread-" + uuid.Must(uuid.NewV4()).String()
-	localTarget := fmt.Sprintf("%s/%s", c.opt.CacheDirectory, rand)
-	defer os.RemoveAll(localTarget)
+	var localTarget string
+	//rand := "eosread-" + uuid.New().String()
+	//localTarget := fmt.Sprintf("%s/%s", c.opt.CacheDirectory, rand)
+	//defer os.RemoveAll(localTarget)
 
-	localfile, err := os.Create(localTarget)
-	if err != nil {
-		log.Error().Str("func", "Read").Str("path", path).Str("uid,gid", uid+","+gid).Str("err", err.Error()).Msg("")
-		return nil, errtypes.InternalError(fmt.Sprintf("can't open local cache file '%s'", localTarget))
-	}
+	var localfile io.WriteCloser
+	localfile = nil
 
-	err = c.GetHttpCl().GETFile(ctx, "", uid, gid, path, localfile)
+	// Uncomment to create a local  temp file. Otherwise it streams. With the streaming
+	// it's more difficult to return a sound error in the case of troubles
+	//	localfile, err := os.Create(localTarget)
+	//	if err != nil {
+	//		log.Error().Str("func", "Read").Str("path", path).Str("uid,gid", uid+","+gid).Str("err", err.Error()).Msg("")
+	//		return nil, errtypes.InternalError(fmt.Sprintf("can't open local cache file '%s'", localTarget))
+	//	}
+
+	err, bodystream := c.GetHttpCl().GETFile(ctx, "", uid, gid, path, localfile)
 	if err != nil {
 		log.Error().Str("func", "Read").Str("path", path).Str("uid,gid", uid+","+gid).Str("err", err.Error()).Msg("")
 		return nil, errtypes.InternalError(fmt.Sprintf("can't GET local cache file '%s'", localTarget))
 	}
 
-	return os.Open(localTarget)
+	return bodystream, nil
+	//return os.Open(localTarget)
 }
 
 // Write writes a file to the mgm
