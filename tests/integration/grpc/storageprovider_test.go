@@ -40,53 +40,44 @@ import (
 
 var _ = Describe("storage providers", func() {
 	var (
-		dependencies map[string]string
-		revads       map[string]*Revad
+		dependencies = map[string]string{}
+		revads       = map[string]*Revad{}
 
-		user          *userpb.User
 		ctx           context.Context
 		serviceClient storagep.ProviderAPIClient
-
-		homeRef           *storagep.Reference
-		versionedFilePath string
-		versionedFileRef  *storagep.Reference
-		filePath          string
-		fileRef           *storagep.Reference
-		subdirPath        string
-		subdirRef         *storagep.Reference
-	)
-
-	BeforeEach(func() {
-		homeRef = &storagep.Reference{
-			Spec: &storagep.Reference_Path{Path: "/"},
+		user          = &userpb.User{
+			Id: &userpb.UserId{
+				Idp:      "0.0.0.0:19000",
+				OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+			},
 		}
-		filePath = "/file"
-		fileRef = &storagep.Reference{
+
+		homeRef = &storagep.Reference{
+			Spec: &storagep.Reference_Path{Path: "/home"},
+		}
+		filePath = "/home/file"
+		fileRef  = &storagep.Reference{
 			Spec: &storagep.Reference_Path{Path: filePath},
 		}
-		versionedFilePath = "/versionedFile"
-		versionedFileRef = &storagep.Reference{
+		versionedFilePath = "/home/versionedFile"
+		versionedFileRef  = &storagep.Reference{
 			Spec: &storagep.Reference_Path{Path: versionedFilePath},
 		}
-		subdirPath = "/subdir"
-		subdirRef = &storagep.Reference{
+		subdirPath = "/home/subdir"
+		subdirRef  = &storagep.Reference{
 			Spec: &storagep.Reference_Path{Path: subdirPath},
 		}
-		revads = map[string]*Revad{}
-		dependencies = map[string]string{}
-	})
+		sharesPath = "/Shares"
+		sharesRef  = &storagep.Reference{
+			Spec: &storagep.Reference_Path{Path: sharesPath},
+		}
+	)
 
 	JustBeforeEach(func() {
 		var err error
 		ctx = context.Background()
 
 		// Add auth token
-		user = &userpb.User{
-			Id: &userpb.UserId{
-				Idp:      "0.0.0.0:19000",
-				OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-			},
-		}
 		tokenManager, err := jwt.New(map[string]interface{}{"secret": "changemeplease"})
 		Expect(err).ToNot(HaveOccurred())
 		t, err := tokenManager.MintToken(ctx, user)
@@ -379,6 +370,59 @@ var _ = Describe("storage providers", func() {
 		})
 	}
 
+	assertReferences := func() {
+		It("creates references", func() {
+			listRes, err := serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: sharesRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
+			Expect(len(listRes.Infos)).To(Equal(0))
+
+			res, err := serviceClient.CreateReference(ctx, &storagep.CreateReferenceRequest{Path: "/Shares/reference", TargetUri: "scheme://target"})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+			listRes, err = serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: sharesRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(len(listRes.Infos)).To(Equal(1))
+		})
+	}
+
+	assertMetadata := func() {
+		It("sets and unsets metadata", func() {
+			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(statRes.Info.ArbitraryMetadata.Metadata["foo"]).To(BeEmpty())
+
+			By("setting arbitrary metadata")
+			samRes, err := serviceClient.SetArbitraryMetadata(ctx, &storagep.SetArbitraryMetadataRequest{
+				Ref:               subdirRef,
+				ArbitraryMetadata: &storagep.ArbitraryMetadata{Metadata: map[string]string{"foo": "bar"}},
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(samRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+			statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(statRes.Info.ArbitraryMetadata.Metadata["foo"]).To(Equal("bar"))
+
+			By("unsetting arbitrary metadata")
+			uamRes, err := serviceClient.UnsetArbitraryMetadata(ctx, &storagep.UnsetArbitraryMetadataRequest{
+				Ref:                   subdirRef,
+				ArbitraryMetadataKeys: []string{"foo"},
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(uamRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+			statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(statRes.Info.ArbitraryMetadata.Metadata["foo"]).To(BeEmpty())
+		})
+	}
+
 	Describe("ocis", func() {
 		BeforeEach(func() {
 			dependencies = map[string]string{
@@ -408,6 +452,8 @@ var _ = Describe("storage providers", func() {
 			assertUploads()
 			assertDownloads()
 			assertRecycle()
+			assertReferences()
+			assertMetadata()
 		})
 
 		Context("with an existing file /versioned_file", func() {
