@@ -75,6 +75,12 @@ type Configuration struct {
 		} `mapstructure:"promsd"`
 	} `mapstructure:"exporters"`
 
+	AccountsService struct {
+		URL      string `mapstructure:"url"`
+		User     string `mapstructure:"user"`
+		Password string `mapstructure:"password"`
+	} `mapstructure:"accounts"`
+
 	// Internal settings
 	EnabledConnectors []string `mapstructure:"-"`
 	EnabledImporters  []string `mapstructure:"-"`

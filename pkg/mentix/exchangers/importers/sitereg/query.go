@@ -50,15 +50,28 @@ func decodeAPIKey(params url.Values) (key.SiteIdentifier, int8, error) {
 		return "", 0, errors.Errorf("no API key specified")
 	}
 
-	// TODO: Check & verify API key (does exist?), query user data etc. blabla (depending on key flags)
+	// Try to get an account that is associated with the given API key; if none exists, return an error
+	resp, err := queryAccountsService("find", network.URLParams{"by": "apikey", "value": apiKey})
+	if err != nil {
+		return "", 0, errors.Wrap(err, "error while querying the accounts service")
+	}
+	if !resp.Success {
+		return "", 0, errors.Errorf("unable to fetch account associated with the provided API key: %v", resp.Error)
+	}
+
+	// Extract email from account data; this is needed to calculate the site ID from the API key
+	email := ""
+	if value := getResponseValue(resp, "account.email"); value != nil {
+		email, _ = value.(string)
+	}
+	if len(email) == 0 {
+		return "", 0, errors.Errorf("could not get the email address of the user account")
+	}
 
 	_, flags, _, err := key.SplitAPIKey(apiKey)
 	if err != nil {
 		return "", 0, errors.Errorf("sticky API key specified")
 	}
-
-	// TODO: Extract email from account
-	email := ""
 
 	siteID, err := key.CalculateSiteID(apiKey, strings.ToLower(email))
 	if err != nil {

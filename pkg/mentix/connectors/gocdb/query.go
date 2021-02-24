@@ -43,7 +43,12 @@ func QueryGOCDB(address string, method string, isPrivate bool, scope string, par
 	}
 
 	// Query the data from GOCDB
-	data, err := network.ReadEndpoint(address, path, params)
+	endpointURL, err := network.GenerateURL(address, path, params)
+	if err != nil {
+		return nil, fmt.Errorf("unable to generate the GOCDB URL: %v", err)
+	}
+
+	data, err := network.ReadEndpoint(endpointURL, nil, true)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read GOCDB endpoint: %v", err)
 	}
