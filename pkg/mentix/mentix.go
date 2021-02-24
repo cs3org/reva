@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/mentix/exchangers/exporters"
 	"github.com/cs3org/reva/pkg/mentix/exchangers/importers"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
+	"github.com/cs3org/reva/pkg/mentix/utils/accservice"
 )
 
 // Mentix represents the main Mentix service object.
@@ -321,6 +322,11 @@ func (mntx *Mentix) handleRequest(exchangers []exchangers.RequestExchanger, w ht
 
 // New creates a new Mentix service instance.
 func New(conf *config.Configuration, log *zerolog.Logger) (*Mentix, error) {
+	// Configure the accounts service upfront
+	if err := accservice.InitAccountsService(conf); err != nil {
+		return nil, fmt.Errorf("unable to initialize the accounts service: %v", err)
+	}
+
 	mntx := new(Mentix)
 	if err := mntx.initialize(conf, log); err != nil {
 		return nil, fmt.Errorf("unable to initialize Mentix: %v", err)

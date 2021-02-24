@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/key"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
+	"github.com/cs3org/reva/pkg/mentix/utils/accservice"
 	"github.com/cs3org/reva/pkg/mentix/utils/network"
 )
 
@@ -46,14 +47,14 @@ func decodeQueryData(data []byte) (*siteRegistrationData, error) {
 	return siteData, nil
 }
 
-func extractQueryInformation(params url.Values, conf *config.Configuration) (key.SiteIdentifier, int8, string, error) {
+func extractQueryInformation(params url.Values) (key.SiteIdentifier, int8, string, error) {
 	apiKey := params.Get("apiKey")
 	if len(apiKey) == 0 {
 		return "", 0, "", errors.Errorf("no API key specified")
 	}
 
 	// Try to get an account that is associated with the given API key; if none exists, return an error
-	resp, err := queryAccountsService("find", network.URLParams{"by": "apikey", "value": apiKey}, conf)
+	resp, err := accservice.Query("find", network.URLParams{"by": "apikey", "value": apiKey})
 	if err != nil {
 		return "", 0, "", errors.Wrap(err, "error while querying the accounts service")
 	}
@@ -63,7 +64,7 @@ func extractQueryInformation(params url.Values, conf *config.Configuration) (key
 
 	// Extract email from account data; this is needed to calculate the site ID from the API key
 	email := ""
-	if value := getResponseValue(resp, "account.email"); value != nil {
+	if value := accservice.GetResponseValue(resp, "account.email"); value != nil {
 		email, _ = value.(string)
 	}
 	if len(email) == 0 {
@@ -89,7 +90,7 @@ func createErrorResponse(msg string, err error) (meshdata.Vector, int, []byte, e
 
 // HandleRegisterSiteQuery registers a site.
 func HandleRegisterSiteQuery(meshData *meshdata.MeshData, data []byte, params url.Values, conf *config.Configuration, _ *zerolog.Logger) (meshdata.Vector, int, []byte, error) {
-	siteID, flags, email, err := extractQueryInformation(params, conf)
+	siteID, flags, email, err := extractQueryInformation(params)
 	if err != nil {
 		return createErrorResponse("INVALID_API_KEY", err)
 	}
@@ -131,8 +132,8 @@ func HandleRegisterSiteQuery(meshData *meshdata.MeshData, data []byte, params ur
 }
 
 // HandleUnregisterSiteQuery unregisters a site.
-func HandleUnregisterSiteQuery(meshData *meshdata.MeshData, _ []byte, params url.Values, conf *config.Configuration, _ *zerolog.Logger) (meshdata.Vector, int, []byte, error) {
-	siteID, _, _, err := extractQueryInformation(params, conf)
+func HandleUnregisterSiteQuery(meshData *meshdata.MeshData, _ []byte, params url.Values, _ *config.Configuration, _ *zerolog.Logger) (meshdata.Vector, int, []byte, error) {
+	siteID, _, _, err := extractQueryInformation(params)
 	if err != nil {
 		return createErrorResponse("INVALID_API_KEY", err)
 	}

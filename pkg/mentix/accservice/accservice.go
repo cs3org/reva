@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package sitereg
+package accservice
 
 import (
 	"encoding/json"
@@ -37,18 +37,22 @@ type requestResponse struct {
 	Data    interface{}
 }
 
-func queryAccountsService(endpoint string, params network.URLParams, conf *config.Configuration) (*requestResponse, error) {
-	URL, err := url.Parse(conf.AccountsService.URL)
-	if err != nil {
-		return nil, errors.Wrap(err, "unable to parse the accounts service URL")
-	}
+type accountsServiceSettings struct {
+	URL      *url.URL
+	User     string
+	Password string
+}
 
-	fullURL, err := network.GenerateURL(fmt.Sprintf("%v://%v", URL.Scheme, URL.Host), path.Join(URL.Path, endpoint), params)
+var settings accountsServiceSettings
+
+// Query performs an account service query.
+func Query(endpoint string, params network.URLParams) (*requestResponse, error) {
+	fullURL, err := network.GenerateURL(fmt.Sprintf("%v://%v", settings.URL.Scheme, settings.URL.Host), path.Join(settings.URL.Path, endpoint), params)
 	if err != nil {
 		return nil, errors.Wrap(err, "error while building the service accounts query URL")
 	}
 
-	data, err := network.ReadEndpoint(fullURL, &network.BasicAuth{User: conf.AccountsService.User, Password: conf.AccountsService.Password}, false)
+	data, err := network.ReadEndpoint(fullURL, &network.BasicAuth{User: settings.User, Password: settings.Password}, false)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to query the service accounts endpoint")
 	}
@@ -60,7 +64,8 @@ func queryAccountsService(endpoint string, params network.URLParams, conf *confi
 	return resp, nil
 }
 
-func getResponseValue(resp *requestResponse, path string) interface{} {
+// GetResponseValue gets a value from an account service query using a dotted path notation.
+func GetResponseValue(resp *requestResponse, path string) interface{} {
 	if data, ok := resp.Data.(map[string]interface{}); ok {
 		tokens := strings.Split(path, ".")
 		for i, name := range tokens {
@@ -76,6 +81,19 @@ func getResponseValue(resp *requestResponse, path string) interface{} {
 
 		}
 	}
+
+	return nil
+}
+
+func InitAccountsService(conf *config.Configuration) error {
+	URL, err := url.Parse(conf.AccountsService.URL)
+	if err != nil {
+		return errors.Wrap(err, "unable to parse the accounts service URL")
+	}
+
+	settings.URL = URL
+	settings.User = conf.AccountsService.User
+	settings.Password = conf.AccountsService.Password
 
 	return nil
 }

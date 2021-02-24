@@ -129,6 +129,16 @@ func (site *Site) InferMissingData() {
 	}
 }
 
+func (site *Site) IsAuthorized() bool {
+	// ScienceMesh sites are always authorized
+	if site.Type == SiteTypeScienceMesh {
+		return true
+	}
+
+	// TODO: Use accounts service
+	return false
+}
+
 // GetSiteTypeName returns the readable name of the given site type.
 func GetSiteTypeName(siteType SiteType) string {
 	switch siteType {
