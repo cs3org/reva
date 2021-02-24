@@ -60,7 +60,7 @@ type mgr struct {
 	db *sql.DB
 }
 
-// New returns a new mgr.
+// New returns a new share manager.
 func New(m map[string]interface{}) (share.Manager, error) {
 	c, err := parseConfig(m)
 	if err != nil {

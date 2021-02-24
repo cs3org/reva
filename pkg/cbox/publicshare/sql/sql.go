@@ -65,20 +65,6 @@ type manager struct {
 	db *sql.DB
 }
 
-type dbShare struct {
-	ID           string
-	UIDOwner     string
-	UIDInitiator string
-	Prefix       string
-	ItemSource   string
-	ShareWith    string
-	Permissions  int
-	ShareType    int
-	STime        int
-	FileTarget   string
-	State        int
-}
-
 func (c *config) init() {
 	if c.SharePasswordHashCost == 0 {
 		c.SharePasswordHashCost = 11
@@ -103,6 +89,7 @@ func (m *manager) startJanitorRun() {
 	}
 }
 
+// New returns a new public share manager.
 func New(m map[string]interface{}) (publicshare.Manager, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
