@@ -52,7 +52,7 @@ func convertMeshDataToLocationData(meshData *meshdata.MeshData) ([]*SiteLocation
 	locations := make([]*SiteLocation, 0, len(meshData.Sites))
 	for _, site := range meshData.Sites {
 		locations = append(locations, &SiteLocation{
-			Site:      site.Name,
+			SiteID:    site.ID,
 			FullName:  site.FullName,
 			Longitude: site.Longitude,
 			Latitude:  site.Latitude,

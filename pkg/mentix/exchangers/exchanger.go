@@ -164,7 +164,8 @@ func (exchanger *BaseExchanger) SetEnabledConnectors(connectors []string) {
 	exchanger.enabledConnectors = connectors
 }
 
-// MeshData returns the stored mesh data.
+// MeshData returns the stored mesh data. The returned data is cloned to prevent accidental data changes.
+// Unauthorized sites are also removed if this exchanger doesn't allow them.
 func (exchanger *BaseExchanger) MeshData() *meshdata.MeshData {
 	return exchanger.cloneMeshData(true)
 }
