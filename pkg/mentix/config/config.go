@@ -36,12 +36,6 @@ type Configuration struct {
 	UpdateInterval string `mapstructure:"update_interval"`
 
 	Importers struct {
-		WebAPI struct {
-			Endpoint          string   `mapstructure:"endpoint"`
-			IsProtected       bool     `mapstructure:"is_protected"`
-			EnabledConnectors []string `mapstructure:"enabled_connectors"`
-		} `mapstructure:"webapi"`
-
 		SiteRegistration struct {
 			Endpoint               string   `mapstructure:"endpoint"`
 			IsProtected            bool     `mapstructure:"is_protected"`

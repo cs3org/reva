@@ -26,8 +26,6 @@ const (
 )
 
 const (
-	// ImporterIDWebAPI is the identifier for the WebAPI importer.
-	ImporterIDWebAPI = "webapi"
 	// ImporterIDSiteRegistration is the identifier for the external site registration importer.
 	ImporterIDSiteRegistration = "sitereg"
 )
