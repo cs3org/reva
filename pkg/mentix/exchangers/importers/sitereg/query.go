@@ -94,6 +94,11 @@ func HandleRegisterSiteQuery(meshData *meshdata.MeshData, data []byte, params ur
 		return createErrorResponse("INVALID_API_KEY", err)
 	}
 
+	msg := "SITE_REGISTERED"
+	if meshData.FindSite(siteID) != nil {
+		msg = "SITE_UPDATED"
+	}
+
 	// Decode the site registration data and convert it to a meshdata object
 	siteData, err := decodeQueryData(data)
 	if err != nil {
@@ -103,6 +108,11 @@ func HandleRegisterSiteQuery(meshData *meshdata.MeshData, data []byte, params ur
 	siteType := meshdata.SiteTypeCommunity
 	if flags&key.FlagScienceMesh == key.FlagScienceMesh {
 		siteType = meshdata.SiteTypeScienceMesh
+	}
+
+	// If the corresponding setting is set, ignore registrations of ScienceMesh sites
+	if siteType == meshdata.SiteTypeScienceMesh && conf.Importers.SiteRegistration.IgnoreScienceMeshSites {
+		return meshdata.Vector{}, http.StatusOK, network.CreateResponse(msg, network.ResponseParams{"id": siteID}), nil
 	}
 
 	site, err := siteData.ToMeshDataSite(siteID, siteType, email)
@@ -116,11 +126,6 @@ func HandleRegisterSiteQuery(meshData *meshdata.MeshData, data []byte, params ur
 	}
 	meshDataUpdate.Status = meshdata.StatusDefault
 	meshDataUpdate.InferMissingData()
-
-	msg := "SITE_REGISTERED"
-	if meshData.FindSite(siteID) != nil {
-		msg = "SITE_UPDATED"
-	}
 
 	return meshdata.Vector{meshDataUpdate}, http.StatusOK, network.CreateResponse(msg, network.ResponseParams{"id": siteID}), nil
 }
