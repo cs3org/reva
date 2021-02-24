@@ -63,11 +63,12 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 	conf.init()
 
 	m := manager{
-		mutex:            &sync.Mutex{},
-		marshaler:        jsonpb.Marshaler{},
-		unmarshaler:      jsonpb.Unmarshaler{},
-		file:             conf.File,
-		passwordHashCost: conf.SharePasswordHashCost,
+		mutex:              &sync.Mutex{},
+		marshaler:          jsonpb.Marshaler{},
+		unmarshaler:        jsonpb.Unmarshaler{},
+		file:               conf.File,
+		passwordHashCost:   conf.SharePasswordHashCost,
+		janitorRunInterval: conf.JanitorRunInterval,
 	}
 
 	// attempt to create the db file
@@ -124,7 +125,7 @@ type manager struct {
 }
 
 func (m *manager) startJanitorRun() {
-	ticker := time.NewTicker(time.Duration(m.janitorRunInterval))
+	ticker := time.NewTicker(time.Duration(m.janitorRunInterval) * time.Second)
 	work := make(chan os.Signal, 1)
 	signal.Notify(work, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT)
 

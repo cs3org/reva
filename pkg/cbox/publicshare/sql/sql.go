@@ -75,7 +75,7 @@ func (c *config) init() {
 }
 
 func (m *manager) startJanitorRun() {
-	ticker := time.NewTicker(time.Duration(m.c.JanitorRunInterval))
+	ticker := time.NewTicker(time.Duration(m.c.JanitorRunInterval) * time.Second)
 	work := make(chan os.Signal, 1)
 	signal.Notify(work, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT)
 
