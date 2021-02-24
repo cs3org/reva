@@ -63,6 +63,7 @@ func (s *svc) Prefix() string {
 
 // Unprotected returns all endpoints that can be queried without prior authorization.
 func (s *svc) Unprotected() []string {
+	return []string{"/"}
 	// This service currently only has one public endpoint (called "register") used for account registration
 	return []string{config.EndpointCreate}
 }
@@ -272,14 +273,15 @@ func (s *svc) handleRemove(values url.Values, body []byte) (interface{}, error) 
 }
 
 func (s *svc) handleIsAuthorized(values url.Values, body []byte) (interface{}, error) {
-	apiKey := values.Get("apiKey")
+	by := values.Get("by")
+	value := values.Get("value")
 
-	if len(apiKey) == 0 {
-		return nil, errors.Errorf("no API key specified")
+	if len(by) == 0 && len(value) == 0 {
+		return nil, errors.Errorf("missing search criteria")
 	}
 
 	// Find the account associated with the given API key
-	account, err := s.manager.FindAccount(FindByAPIKey, apiKey)
+	account, err := s.manager.FindAccount(by, value)
 	if err != nil {
 		return nil, errors.Wrap(err, "no user with the specified API key found")
 	}

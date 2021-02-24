@@ -40,6 +40,7 @@ import (
 const (
 	FindByEmail  = "email"
 	FindByAPIKey = "apikey"
+	FindBySiteID = "siteid"
 )
 
 // Manager is responsible for all user account related tasks.
@@ -144,6 +145,20 @@ func (mngr *Manager) findAccountByAPIKey(key key.APIKey) *data.Account {
 	return nil
 }
 
+func (mngr *Manager) findAccountBySiteID(siteID key.SiteIdentifier) *data.Account {
+	if siteID == "" {
+		return nil
+	}
+
+	// Perform a case-sensitive search of the given site ID
+	for _, account := range mngr.accounts {
+		if account.GetSiteID() == siteID {
+			return account
+		}
+	}
+	return nil
+}
+
 func (mngr *Manager) ShowPanel(w http.ResponseWriter) error {
 	// The panel only shows the stored accounts and offers actions through links, so let it use cloned data
 	accounts := mngr.CloneAccounts()
@@ -206,6 +221,9 @@ func (mngr *Manager) FindAccount(by string, value string) (*data.Account, error)
 
 	case FindByAPIKey:
 		account = mngr.findAccountByAPIKey(value)
+
+	case FindBySiteID:
+		account = mngr.findAccountBySiteID(value)
 
 	default:
 		return nil, errors.Errorf("invalid search type %v", by)
