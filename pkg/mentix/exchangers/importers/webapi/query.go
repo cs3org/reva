@@ -40,9 +40,6 @@ func decodeQueryData(data []byte) (*meshdata.MeshData, error) {
 	// Imported sites will be assigned an ID automatically
 	site.ID = ""
 
-	// Set sites imported through the WebAPI to 'unauthorized' by default
-	meshdata.SetPropertyValue(&site.Properties, meshdata.PropertyAuthorized, "false")
-
 	meshData := &meshdata.MeshData{Sites: []*meshdata.Site{site}}
 	if err := meshData.Verify(); err != nil {
 		return nil, fmt.Errorf("verifying the imported mesh data failed: %v", err)

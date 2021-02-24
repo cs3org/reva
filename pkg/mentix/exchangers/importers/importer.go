@@ -32,9 +32,6 @@ import (
 type Importer interface {
 	exchangers.Exchanger
 
-	// MeshDataUpdates returns the vector of imported mesh data.
-	MeshDataUpdates() meshdata.Vector
-
 	// Process is called periodically to perform the actual import; if data has been imported, true is returned.
 	Process(*connectors.Collection) (bool, error)
 }
@@ -86,11 +83,6 @@ func (importer *BaseImporter) processMeshDataUpdates(connector connectors.Connec
 	}
 
 	return nil
-}
-
-// MeshData returns the vector of imported mesh data.
-func (importer *BaseImporter) MeshDataUpdates() meshdata.Vector {
-	return importer.meshDataUpdates
 }
 
 func (importer *BaseImporter) setMeshDataUpdates(meshDataUpdates meshdata.Vector) {

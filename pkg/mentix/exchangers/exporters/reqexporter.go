@@ -47,10 +47,6 @@ func (exporter *BaseRequestExporter) HandleRequest(resp http.ResponseWriter, req
 }
 
 func (exporter *BaseRequestExporter) handleQuery(body []byte, params url.Values, conf *config.Configuration, log *zerolog.Logger) (int, []byte, error) {
-	// Data is read, so lock it for writing
-	exporter.Locker().RLock()
-	defer exporter.Locker().RUnlock()
-
 	_, status, data, err := exporter.HandleAction(exporter.MeshData(), body, params, conf, log)
 	return status, data, err
 }

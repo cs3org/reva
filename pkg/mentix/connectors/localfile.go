@@ -114,21 +114,8 @@ func (connector *LocalFileConnector) UpdateMeshData(updatedData *meshdata.MeshDa
 }
 
 func (connector *LocalFileConnector) mergeData(meshData *meshdata.MeshData, updatedData *meshdata.MeshData) error {
-	// Store the previous authorization status for already existing sites
-	siteAuthorizationStatus := make(map[string]string)
-	for _, site := range meshData.Sites {
-		siteAuthorizationStatus[site.ID] = meshdata.GetPropertyValue(site.Properties, meshdata.PropertyAuthorized, "false")
-	}
-
 	// Add/update data by merging
 	meshData.Merge(updatedData)
-
-	// Restore the authorization status for all sites
-	for siteID, status := range siteAuthorizationStatus {
-		if site := meshData.FindSite(siteID); site != nil {
-			meshdata.SetPropertyValue(&site.Properties, meshdata.PropertyAuthorized, status)
-		}
-	}
 	return nil
 }
 

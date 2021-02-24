@@ -118,10 +118,6 @@ func (exchanger *BaseExchanger) storeMeshDataSet(meshDataSet meshdata.Map) error
 			return fmt.Errorf("unable to clone the mesh data")
 		}
 
-		if !exchanger.allowUnauthorizedSites {
-			exchanger.removeUnauthorizedSites(meshDataCloned)
-		}
-
 		meshDataSetCloned[connectorID] = meshDataCloned
 	}
 	exchanger.setMeshData(meshdata.MergeMeshDataMap(meshDataSetCloned))
@@ -129,15 +125,23 @@ func (exchanger *BaseExchanger) storeMeshDataSet(meshDataSet meshdata.Map) error
 	return nil
 }
 
-func (exchanger *BaseExchanger) removeUnauthorizedSites(meshData *meshdata.MeshData) {
-	cleanedSites := make([]*meshdata.Site, 0, len(meshData.Sites))
-	for _, site := range meshData.Sites {
-		// Only keep authorized sites
-		if value := meshdata.GetPropertyValue(site.Properties, meshdata.PropertyAuthorized, "false"); strings.EqualFold(value, "true") {
-			cleanedSites = append(cleanedSites, site)
+func (exchanger *BaseExchanger) cloneMeshData(clean bool) *meshdata.MeshData {
+	exchanger.locker.RLock()
+	meshDataClone := exchanger.meshData.Clone()
+	exchanger.locker.RUnlock()
+
+	if clean && !exchanger.allowUnauthorizedSites {
+		cleanedSites := make([]*meshdata.Site, 0, len(meshDataClone.Sites))
+		for _, site := range meshDataClone.Sites {
+			// Only keep authorized sites
+			if site.IsAuthorized() {
+				cleanedSites = append(cleanedSites, site)
+			}
 		}
+		meshDataClone.Sites = cleanedSites
 	}
-	meshData.Sites = cleanedSites
+
+	return meshDataClone
 }
 
 // Config returns the configuration object.
@@ -162,7 +166,7 @@ func (exchanger *BaseExchanger) SetEnabledConnectors(connectors []string) {
 
 // MeshData returns the stored mesh data.
 func (exchanger *BaseExchanger) MeshData() *meshdata.MeshData {
-	return exchanger.meshData
+	return exchanger.cloneMeshData(true)
 }
 
 func (exchanger *BaseExchanger) setMeshData(meshData *meshdata.MeshData) {
