@@ -92,8 +92,6 @@ func HandleRegisterSiteQuery(_ *meshdata.MeshData, data []byte, params url.Value
 		return createErrorResponse("INVALID_API_KEY", err)
 	}
 
-	// TODO: Check if site with ID already exists; bail out if so (or update, whatever)
-
 	// Decode the site registration data and convert it to a meshdata object
 	siteData, err := decodeQueryData(data)
 	if err != nil {

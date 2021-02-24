@@ -21,6 +21,7 @@ package importers
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/cs3org/reva/pkg/mentix/connectors"
 	"github.com/cs3org/reva/pkg/mentix/exchangers"
@@ -31,8 +32,8 @@ import (
 type Importer interface {
 	exchangers.Exchanger
 
-	// MeshData returns the vector of imported mesh data.
-	MeshData() meshdata.Vector
+	// MeshDataUpdates returns the vector of imported mesh data.
+	MeshDataUpdates() meshdata.Vector
 
 	// Process is called periodically to perform the actual import; if data has been imported, true is returned.
 	Process(*connectors.Collection) (bool, error)
@@ -42,31 +43,33 @@ type Importer interface {
 type BaseImporter struct {
 	exchangers.BaseExchanger
 
-	meshData meshdata.Vector
+	meshDataUpdates meshdata.Vector
+
+	updatesLocker sync.RWMutex
 }
 
 // Process is called periodically to perform the actual import; if data has been imported, true is returned.
 func (importer *BaseImporter) Process(connectors *connectors.Collection) (bool, error) {
-	if importer.meshData == nil { // No data present for updating, so nothing to process
+	if importer.meshDataUpdates == nil { // No data present for updating, so nothing to process
 		return false, nil
 	}
 
 	var processErrs []string
 
 	// Data is read, so lock it for writing during the loop
-	importer.Locker().RLock()
+	importer.updatesLocker.RLock()
 	for _, connector := range connectors.Connectors {
 		if !importer.IsConnectorEnabled(connector.GetID()) {
 			continue
 		}
 
-		if err := importer.processMeshData(connector); err != nil {
+		if err := importer.processMeshDataUpdates(connector); err != nil {
 			processErrs = append(processErrs, fmt.Sprintf("unable to process imported mesh data for connector '%v': %v", connector.GetName(), err))
 		}
 	}
-	importer.Locker().RUnlock()
+	importer.updatesLocker.RUnlock()
 
-	importer.SetMeshData(nil)
+	importer.setMeshDataUpdates(nil)
 
 	var err error
 	if len(processErrs) != 0 {
@@ -75,8 +78,8 @@ func (importer *BaseImporter) Process(connectors *connectors.Collection) (bool, 
 	return true, err
 }
 
-func (importer *BaseImporter) processMeshData(connector connectors.Connector) error {
-	for _, meshData := range importer.meshData {
+func (importer *BaseImporter) processMeshDataUpdates(connector connectors.Connector) error {
+	for _, meshData := range importer.meshDataUpdates {
 		if err := connector.UpdateMeshData(meshData); err != nil {
 			return fmt.Errorf("error while updating mesh data: %v", err)
 		}
@@ -86,14 +89,13 @@ func (importer *BaseImporter) processMeshData(connector connectors.Connector) er
 }
 
 // MeshData returns the vector of imported mesh data.
-func (importer *BaseImporter) MeshData() meshdata.Vector {
-	return importer.meshData
+func (importer *BaseImporter) MeshDataUpdates() meshdata.Vector {
+	return importer.meshDataUpdates
 }
 
-// SetMeshData sets the new mesh data vector.
-func (importer *BaseImporter) SetMeshData(meshData meshdata.Vector) {
-	importer.Locker().Lock()
-	defer importer.Locker().Unlock()
+func (importer *BaseImporter) setMeshDataUpdates(meshDataUpdates meshdata.Vector) {
+	importer.updatesLocker.Lock()
+	defer importer.updatesLocker.Unlock()
 
-	importer.meshData = meshData
+	importer.meshDataUpdates = meshDataUpdates
 }

@@ -27,6 +27,7 @@ import (
 
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/entity"
+	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 
 // Exchanger is the base interface for importers and exporters.
@@ -37,6 +38,12 @@ type Exchanger interface {
 	Start() error
 	// Stop stops any running background activities of the exchanger.
 	Stop()
+
+	// MeshData returns the mesh data.
+	MeshData() *meshdata.MeshData
+
+	// Update is called whenever the mesh data set has changed to reflect these changes.
+	Update(meshdata.Map) error
 }
 
 // BaseExchanger implements basic exchanger functionality common to all exchangers.
@@ -47,6 +54,9 @@ type BaseExchanger struct {
 	log  *zerolog.Logger
 
 	enabledConnectors []string
+
+	meshData               *meshdata.MeshData
+	allowUnauthorizedSites bool
 
 	locker sync.RWMutex
 }
@@ -85,6 +95,51 @@ func (exchanger *BaseExchanger) IsConnectorEnabled(id string) bool {
 	return false
 }
 
+// Update is called whenever the mesh data set has changed to reflect these changes.
+func (exchanger *BaseExchanger) Update(meshDataSet meshdata.Map) error {
+	// Update the stored mesh data set
+	if err := exchanger.storeMeshDataSet(meshDataSet); err != nil {
+		return fmt.Errorf("unable to store the mesh data: %v", err)
+	}
+
+	return nil
+}
+
+func (exchanger *BaseExchanger) storeMeshDataSet(meshDataSet meshdata.Map) error {
+	// Store the new mesh data set by cloning it and then merging the cloned data into one object
+	meshDataSetCloned := make(meshdata.Map)
+	for connectorID, meshData := range meshDataSet {
+		if !exchanger.IsConnectorEnabled(connectorID) {
+			continue
+		}
+
+		meshDataCloned := meshData.Clone()
+		if meshDataCloned == nil {
+			return fmt.Errorf("unable to clone the mesh data")
+		}
+
+		if !exchanger.allowUnauthorizedSites {
+			exchanger.removeUnauthorizedSites(meshDataCloned)
+		}
+
+		meshDataSetCloned[connectorID] = meshDataCloned
+	}
+	exchanger.setMeshData(meshdata.MergeMeshDataMap(meshDataSetCloned))
+
+	return nil
+}
+
+func (exchanger *BaseExchanger) removeUnauthorizedSites(meshData *meshdata.MeshData) {
+	cleanedSites := make([]*meshdata.Site, 0, len(meshData.Sites))
+	for _, site := range meshData.Sites {
+		// Only keep authorized sites
+		if value := meshdata.GetPropertyValue(site.Properties, meshdata.PropertyAuthorized, "false"); strings.EqualFold(value, "true") {
+			cleanedSites = append(cleanedSites, site)
+		}
+	}
+	meshData.Sites = cleanedSites
+}
+
 // Config returns the configuration object.
 func (exchanger *BaseExchanger) Config() *config.Configuration {
 	return exchanger.conf
@@ -103,6 +158,23 @@ func (exchanger *BaseExchanger) EnabledConnectors() []string {
 // SetEnabledConnectors sets the list of all enabled connectors for the exchanger.
 func (exchanger *BaseExchanger) SetEnabledConnectors(connectors []string) {
 	exchanger.enabledConnectors = connectors
+}
+
+// MeshData returns the stored mesh data.
+func (exchanger *BaseExchanger) MeshData() *meshdata.MeshData {
+	return exchanger.meshData
+}
+
+func (exchanger *BaseExchanger) setMeshData(meshData *meshdata.MeshData) {
+	exchanger.locker.Lock()
+	defer exchanger.locker.Unlock()
+
+	exchanger.meshData = meshData
+}
+
+// SetAllowUnauthorizedSites sets whether this exchanger allows the exchange of unauthorized sites.
+func (exchanger *BaseExchanger) SetAllowUnauthorizedSites(allow bool) {
+	exchanger.allowUnauthorizedSites = allow
 }
 
 // Locker returns the locking object.

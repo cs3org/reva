@@ -267,9 +267,13 @@ func (mntx *Mentix) applyMeshDataSet(meshDataSet meshdata.Map) error {
 
 		mntx.meshDataSet = meshDataSet
 
-		for _, exporter := range mntx.exporters.Exporters {
-			if err := exporter.Update(mntx.meshDataSet); err != nil {
-				return fmt.Errorf("unable to update mesh data on exporter '%v': %v", exporter.GetName(), err)
+		exchangers := make([]exchangers.Exchanger, 0, len(mntx.exporters.Exporters)+len(mntx.importers.Importers))
+		exchangers = append(exchangers, mntx.exporters.Exchangers()...)
+		exchangers = append(exchangers, mntx.importers.Exchangers()...)
+
+		for _, exchanger := range exchangers {
+			if err := exchanger.Update(mntx.meshDataSet); err != nil {
+				return fmt.Errorf("unable to update mesh data on exchanger '%v': %v", exchanger.GetName(), err)
 			}
 		}
 	}

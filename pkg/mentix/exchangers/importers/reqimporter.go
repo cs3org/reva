@@ -50,14 +50,14 @@ func (importer *BaseRequestImporter) HandleRequest(resp http.ResponseWriter, req
 
 func (importer *BaseRequestImporter) mergeImportedMeshDataSet(meshDataSet meshdata.Vector) {
 	// Merge the newly imported data with any existing data stored in the importer
-	if importer.meshData != nil {
+	if importer.meshDataUpdates != nil {
 		// Need to manually lock the data for writing
-		importer.Locker().Lock()
-		defer importer.Locker().Unlock()
+		importer.updatesLocker.Lock()
+		defer importer.updatesLocker.Unlock()
 
-		importer.meshData = append(importer.meshData, meshDataSet...)
+		importer.meshDataUpdates = append(importer.meshDataUpdates, meshDataSet...)
 	} else {
-		importer.SetMeshData(meshDataSet) // SetMeshData will do the locking itself
+		importer.setMeshDataUpdates(meshDataSet) // SetMeshData will do the locking itself
 	}
 }
 
