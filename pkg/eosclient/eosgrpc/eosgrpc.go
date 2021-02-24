@@ -23,7 +23,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -1227,6 +1226,7 @@ func (c *Client) Write(ctx context.Context, uid, gid, path string, stream io.Rea
 
 // WriteFile writes an existing file to the mgm. Old xrdcp utility
 func (c *Client) WriteFile(ctx context.Context, uid, gid, path, source string) error {
+
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "WriteFile").Str("uid,gid", uid+","+gid).Str("path", path).Str("source", source).Msg("")
 
