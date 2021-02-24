@@ -163,6 +163,29 @@ var _ = Describe("storage providers", func() {
 		})
 	}
 
+	assertMove := func() {
+		It("moves a directory", func() {
+			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+			targetRef := &storagep.Reference{
+				Spec: &storagep.Reference_Path{Path: "/new_subdir"},
+			}
+			res, err := serviceClient.Move(ctx, &storagep.MoveRequest{Source: subdirRef, Destination: targetRef})
+			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+			Expect(err).ToNot(HaveOccurred())
+
+			statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
+
+			statRes, err = serviceClient.Stat(ctx, &storagep.StatRequest{Ref: targetRef})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+		})
+	}
+
 	assertGetPath := func() {
 		It("gets the path to an ID", func() {
 			statRes, err := serviceClient.Stat(ctx, &storagep.StatRequest{Ref: subdirRef})
@@ -338,6 +361,7 @@ var _ = Describe("storage providers", func() {
 			assertListContainer()
 			assertGetPath()
 			assertDelete()
+			assertMove()
 			assertGrants()
 			assertUploads()
 			assertDownloads()
