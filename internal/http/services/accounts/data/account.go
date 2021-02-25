@@ -49,6 +49,7 @@ type AccountData struct {
 // Accounts holds an array of user accounts.
 type Accounts = []*Account
 
+// GetSiteID returns the site ID (generated from the API key) for the given account.
 func (acc *Account) GetSiteID() key.SiteIdentifier {
 	if id, err := key.CalculateSiteID(acc.Data.APIKey, strings.ToLower(acc.Email)); err == nil {
 		return id

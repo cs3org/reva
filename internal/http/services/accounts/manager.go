@@ -38,8 +38,11 @@ import (
 )
 
 const (
-	FindByEmail  = "email"
+	// FindByEmail holds the string value of the corresponding search criterium.
+	FindByEmail = "email"
+	// FindByAPIKey holds the string value of the corresponding search criterium.
 	FindByAPIKey = "apikey"
+	// FindBySiteID holds the string value of the corresponding search criterium.
 	FindBySiteID = "siteid"
 )
 
@@ -117,42 +120,36 @@ func (mngr *Manager) writeAllAccounts() {
 	}
 }
 
-func (mngr *Manager) findAccountByEmail(email string) *data.Account {
-	if email == "" {
-		return nil
+func (mngr *Manager) findAccount(by string, value string) (*data.Account, error) {
+	if len(value) == 0 {
+		return nil, errors.Errorf("no search value specified")
 	}
 
-	// Perform a case-insensitive search of the given email address
-	for _, account := range mngr.accounts {
-		if strings.EqualFold(account.Email, email) {
-			return account
-		}
+	var account *data.Account
+	switch strings.ToLower(by) {
+	case FindByEmail:
+		account = mngr.findAccountByPredicate(func(account *data.Account) bool { return strings.EqualFold(account.Email, value) })
+
+	case FindByAPIKey:
+		account = mngr.findAccountByPredicate(func(account *data.Account) bool { return account.Data.APIKey == value })
+
+	case FindBySiteID:
+		account = mngr.findAccountByPredicate(func(account *data.Account) bool { return account.GetSiteID() == value })
+
+	default:
+		return nil, errors.Errorf("invalid search type %v", by)
 	}
-	return nil
+
+	if account != nil {
+		return account, nil
+	}
+
+	return nil, errors.Errorf("no user found matching the specified criteria")
 }
 
-func (mngr *Manager) findAccountByAPIKey(key key.APIKey) *data.Account {
-	if key == "" {
-		return nil
-	}
-
-	// Perform a case-sensitive search of the given API key
+func (mngr *Manager) findAccountByPredicate(predicate func(*data.Account) bool) *data.Account {
 	for _, account := range mngr.accounts {
-		if account.Data.APIKey == key {
-			return account
-		}
-	}
-	return nil
-}
-
-func (mngr *Manager) findAccountBySiteID(siteID key.SiteIdentifier) *data.Account {
-	if siteID == "" {
-		return nil
-	}
-
-	// Perform a case-sensitive search of the given site ID
-	for _, account := range mngr.accounts {
-		if account.GetSiteID() == siteID {
+		if predicate(account) {
 			return account
 		}
 	}
@@ -171,7 +168,7 @@ func (mngr *Manager) CreateAccount(accountData *data.Account) error {
 	defer mngr.mutex.Unlock()
 
 	// Accounts must be unique (identified by their email address)
-	if mngr.findAccountByEmail(accountData.Email) != nil {
+	if account, _ := mngr.findAccount(FindByEmail, accountData.Email); account != nil {
 		return errors.Errorf("an account with the specified email address already exists")
 	}
 
@@ -193,9 +190,9 @@ func (mngr *Manager) UpdateAccount(accountData *data.Account, copyData bool) err
 	mngr.mutex.Lock()
 	defer mngr.mutex.Unlock()
 
-	account := mngr.findAccountByEmail(accountData.Email)
-	if account == nil {
-		return errors.Errorf("no account with the specified email exists")
+	account, err := mngr.findAccount(FindByEmail, accountData.Email)
+	if err != nil {
+		return errors.Wrap(err, "user to update not found")
 	}
 
 	if err := account.Copy(accountData, copyData); err == nil {
@@ -214,28 +211,14 @@ func (mngr *Manager) FindAccount(by string, value string) (*data.Account, error)
 	mngr.mutex.RLock()
 	defer mngr.mutex.RUnlock()
 
-	var account *data.Account
-	switch strings.ToLower(by) {
-	case FindByEmail:
-		account = mngr.findAccountByEmail(value)
-
-	case FindByAPIKey:
-		account = mngr.findAccountByAPIKey(value)
-
-	case FindBySiteID:
-		account = mngr.findAccountBySiteID(value)
-
-	default:
-		return nil, errors.Errorf("invalid search type %v", by)
+	account, err := mngr.findAccount(by, value)
+	if err != nil {
+		return nil, err
 	}
 
-	if account != nil {
-		// Clone the account to avoid external data changes
-		clonedAccount := *account
-		return &clonedAccount, nil
-	}
-
-	return nil, errors.Errorf("no user found matching the specified criteria")
+	// Clone the account to avoid external data changes
+	clonedAccount := *account
+	return &clonedAccount, nil
 }
 
 // AuthorizeAccount sets the authorization status of the account identified by the account email; if no such account exists, an error is returned.
@@ -243,9 +226,9 @@ func (mngr *Manager) AuthorizeAccount(accountData *data.Account, authorized bool
 	mngr.mutex.Lock()
 	defer mngr.mutex.Unlock()
 
-	account := mngr.findAccountByEmail(accountData.Email)
-	if account == nil {
-		return errors.Errorf("no account with the specified email exists")
+	account, err := mngr.findAccount(FindByEmail, accountData.Email)
+	if err != nil {
+		return errors.Wrap(err, "no account with the specified email exists")
 	}
 
 	authorizedOld := account.Data.Authorized
@@ -265,9 +248,9 @@ func (mngr *Manager) AssignAPIKeyToAccount(accountData *data.Account, flags int8
 	mngr.mutex.Lock()
 	defer mngr.mutex.Unlock()
 
-	account := mngr.findAccountByEmail(accountData.Email)
-	if account == nil {
-		return errors.Errorf("no account with the specified email exists")
+	account, err := mngr.findAccount(FindByEmail, accountData.Email)
+	if err != nil {
+		return errors.Wrap(err, "no account with the specified email exists")
 	}
 
 	if len(account.Data.APIKey) > 0 {
@@ -281,10 +264,12 @@ func (mngr *Manager) AssignAPIKeyToAccount(accountData *data.Account, flags int8
 		}
 
 		// See if the key already exists (super extremely unlikely); if so, generate a new one and try again
-		if mngr.findAccountByAPIKey(apiKey) == nil {
-			account.Data.APIKey = apiKey
-			break
+		if acc, _ := mngr.findAccount(FindByAPIKey, apiKey); acc != nil {
+			continue
 		}
+
+		account.Data.APIKey = apiKey
+		break
 	}
 
 	mngr.storage.AccountUpdated(account)

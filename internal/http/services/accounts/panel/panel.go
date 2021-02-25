@@ -62,11 +62,11 @@ func (panel *Panel) Execute(w http.ResponseWriter, accounts *data.Accounts) erro
 		Accounts *data.Accounts
 	}
 
-	data := TemplateData{
+	tplData := TemplateData{
 		Accounts: accounts,
 	}
 
-	return panel.tpl.Execute(w, data)
+	return panel.tpl.Execute(w, tplData)
 }
 
 // NewPanel creates a new web interface panel.

@@ -63,7 +63,8 @@ func (s *svc) Prefix() string {
 
 // Unprotected returns all endpoints that can be queried without prior authorization.
 func (s *svc) Unprotected() []string {
-	// This service currently only has one public endpoint (called "register") used for account registration
+	return []string{"/"}
+	// This service currently only has one public endpoint used for account registration
 	return []string{config.EndpointCreate}
 }
 
@@ -214,17 +215,9 @@ func (s *svc) handleList(values url.Values, body []byte) (interface{}, error) {
 }
 
 func (s *svc) handleFind(values url.Values, body []byte) (interface{}, error) {
-	by := values.Get("by")
-	value := values.Get("value")
-
-	if len(by) == 0 && len(value) == 0 {
-		return nil, errors.Errorf("missing search criteria")
-	}
-
-	// Find the account using the account manager
-	account, err := s.manager.FindAccount(by, value)
+	account, err := s.findAccount(values.Get("by"), values.Get("value"))
 	if err != nil {
-		return nil, errors.Wrap(err, "no user found")
+		return nil, err
 	}
 	return map[string]interface{}{"account": account}, nil
 }
@@ -272,17 +265,9 @@ func (s *svc) handleRemove(values url.Values, body []byte) (interface{}, error) 
 }
 
 func (s *svc) handleIsAuthorized(values url.Values, body []byte) (interface{}, error) {
-	by := values.Get("by")
-	value := values.Get("value")
-
-	if len(by) == 0 && len(value) == 0 {
-		return nil, errors.Errorf("missing search criteria")
-	}
-
-	// Find the account associated with the given API key
-	account, err := s.manager.FindAccount(by, value)
+	account, err := s.findAccount(values.Get("by"), values.Get("value"))
 	if err != nil {
-		return nil, errors.Wrap(err, "no user with the specified API key found")
+		return nil, err
 	}
 	return account.Data.Authorized, nil
 }
@@ -321,6 +306,19 @@ func (s *svc) unmarshalRequestData(body []byte) (*data.Account, error) {
 	account := &data.Account{}
 	if err := json.Unmarshal(body, account); err != nil {
 		return nil, errors.Wrap(err, "invalid account data")
+	}
+	return account, nil
+}
+
+func (s *svc) findAccount(by string, value string) (*data.Account, error) {
+	if len(by) == 0 && len(value) == 0 {
+		return nil, errors.Errorf("missing search criteria")
+	}
+
+	// Find the account using the account manager
+	account, err := s.manager.FindAccount(by, value)
+	if err != nil {
+		return nil, errors.Wrap(err, "user not found")
 	}
 	return account, nil
 }
