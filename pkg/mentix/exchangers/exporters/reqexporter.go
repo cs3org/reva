@@ -47,6 +47,6 @@ func (exporter *BaseRequestExporter) HandleRequest(resp http.ResponseWriter, req
 }
 
 func (exporter *BaseRequestExporter) handleQuery(body []byte, params url.Values, conf *config.Configuration, log *zerolog.Logger) (int, []byte, error) {
-	_, status, data, err := exporter.HandleAction(exporter.MeshData(), body, params, conf, log)
+	_, status, data, err := exporter.HandleAction(exporter.MeshData(), body, params, false, conf, log)
 	return status, data, err
 }

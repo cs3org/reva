@@ -41,8 +41,8 @@ func (importer *SiteRegistrationImporter) Activate(conf *config.Configuration, l
 	importer.SetEnabledConnectors(conf.Importers.SiteRegistration.EnabledConnectors)
 	importer.SetAllowUnauthorizedSites(true)
 
-	importer.RegisterActionHandler("register", sitereg.HandleRegisterSiteQuery)
-	importer.RegisterActionHandler("unregister", sitereg.HandleUnregisterSiteQuery)
+	importer.RegisterExtendedActionHandler("register", sitereg.HandleRegisterSiteQuery)
+	importer.RegisterExtendedActionHandler("unregister", sitereg.HandleUnregisterSiteQuery)
 
 	return nil
 }

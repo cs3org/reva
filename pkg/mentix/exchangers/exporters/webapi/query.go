@@ -31,12 +31,12 @@ import (
 )
 
 // HandleDefaultQuery processes a basic query.
-func HandleDefaultQuery(meshData *meshdata.MeshData, body []byte, params url.Values, _ *config.Configuration, _ *zerolog.Logger) (meshdata.Vector, int, []byte, error) {
+func HandleDefaultQuery(meshData *meshdata.MeshData, params url.Values, _ *config.Configuration, _ *zerolog.Logger) (int, []byte, error) {
 	// Just return the plain, unfiltered data as JSON
 	data, err := json.MarshalIndent(meshData, "", "\t")
 	if err != nil {
-		return nil, http.StatusBadRequest, []byte{}, fmt.Errorf("unable to marshal the mesh data: %v", err)
+		return http.StatusBadRequest, []byte{}, fmt.Errorf("unable to marshal the mesh data: %v", err)
 	}
 
-	return nil, http.StatusOK, data, nil
+	return http.StatusOK, data, nil
 }

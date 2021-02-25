@@ -130,6 +130,8 @@ func (site *Site) InferMissingData() {
 	}
 }
 
+// IsAuthorized checks whether the site is authorized. ScienceMesh are always authorized, while for community sites,
+// the accounts service is queried.
 func (site *Site) IsAuthorized() bool {
 	// ScienceMesh sites are always authorized
 	if site.Type == SiteTypeScienceMesh {

@@ -69,5 +69,5 @@ func (importer *BaseRequestImporter) handleQuery(data []byte, params url.Values,
 	importer.Locker().RLock()
 	defer importer.Locker().RUnlock()
 
-	return importer.HandleAction(importer.MeshData(), data, params, conf, log)
+	return importer.HandleAction(importer.MeshData(), data, params, true, conf, log)
 }

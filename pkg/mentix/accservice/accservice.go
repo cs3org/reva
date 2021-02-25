@@ -78,13 +78,13 @@ func GetResponseValue(resp *requestResponse, path string) interface{} {
 			if data, ok = data[name].(map[string]interface{}); !ok {
 				break
 			}
-
 		}
 	}
 
 	return nil
 }
 
+// InitAccountsService initializes the global accounts service.
 func InitAccountsService(conf *config.Configuration) error {
 	URL, err := url.Parse(conf.AccountsService.URL)
 	if err != nil {

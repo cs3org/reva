@@ -42,7 +42,8 @@ type RequestExchanger interface {
 	HandleRequest(resp http.ResponseWriter, req *http.Request, conf *config.Configuration, log *zerolog.Logger)
 }
 
-type queryCallback func(*meshdata.MeshData, []byte, url.Values, *config.Configuration, *zerolog.Logger) (meshdata.Vector, int, []byte, error)
+type queryCallback func(*meshdata.MeshData, url.Values, *config.Configuration, *zerolog.Logger) (int, []byte, error)
+type extendedQueryCallback func(*meshdata.MeshData, []byte, url.Values, *config.Configuration, *zerolog.Logger) (meshdata.Vector, int, []byte, error)
 
 // BaseRequestExchanger implements basic exporter functionality common to all request exporters.
 type BaseRequestExchanger struct {
@@ -51,7 +52,8 @@ type BaseRequestExchanger struct {
 	endpoint            string
 	isProtectedEndpoint bool
 
-	actionHandlers map[string]queryCallback
+	actionHandlers         map[string]queryCallback
+	extendedActionHandlers map[string]extendedQueryCallback
 }
 
 // Endpoint returns the (relative) endpoint of the exchanger.
@@ -93,12 +95,30 @@ func (exchanger *BaseRequestExchanger) RegisterActionHandler(action string, call
 	exchanger.actionHandlers[action] = callback
 }
 
+// RegisterExtendedActionHandler registers a new handler for the specified extended action.
+func (exchanger *BaseRequestExchanger) RegisterExtendedActionHandler(action string, callback extendedQueryCallback) {
+	if exchanger.extendedActionHandlers == nil {
+		exchanger.extendedActionHandlers = make(map[string]extendedQueryCallback)
+	}
+	exchanger.extendedActionHandlers[action] = callback
+}
+
 // HandleAction executes the registered handler for the specified action, if any.
-func (exchanger *BaseRequestExchanger) HandleAction(meshData *meshdata.MeshData, body []byte, params url.Values, conf *config.Configuration, log *zerolog.Logger) (meshdata.Vector, int, []byte, error) {
+func (exchanger *BaseRequestExchanger) HandleAction(meshData *meshdata.MeshData, body []byte, params url.Values, isExtended bool, conf *config.Configuration, log *zerolog.Logger) (meshdata.Vector, int, []byte, error) {
 	reqAction := params.Get("action")
-	for action, handler := range exchanger.actionHandlers {
-		if strings.EqualFold(action, reqAction) {
-			return handler(meshData, body, params, conf, log)
+
+	if isExtended {
+		for action, handler := range exchanger.extendedActionHandlers {
+			if strings.EqualFold(action, reqAction) {
+				return handler(meshData, body, params, conf, log)
+			}
+		}
+	} else {
+		for action, handler := range exchanger.actionHandlers {
+			if strings.EqualFold(action, reqAction) {
+				status, data, err := handler(meshData, params, conf, log)
+				return nil, status, data, err
+			}
 		}
 	}
 

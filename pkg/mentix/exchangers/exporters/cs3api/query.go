@@ -32,20 +32,20 @@ import (
 )
 
 // HandleDefaultQuery processes a basic query.
-func HandleDefaultQuery(meshData *meshdata.MeshData, body []byte, params url.Values, _ *config.Configuration, _ *zerolog.Logger) (meshdata.Vector, int, []byte, error) {
+func HandleDefaultQuery(meshData *meshdata.MeshData, params url.Values, _ *config.Configuration, _ *zerolog.Logger) (int, []byte, error) {
 	// Convert the mesh data
 	ocmData, err := convertMeshDataToOCMData(meshData)
 	if err != nil {
-		return nil, http.StatusBadRequest, []byte{}, fmt.Errorf("unable to convert the mesh data to OCM data structures: %v", err)
+		return http.StatusBadRequest, []byte{}, fmt.Errorf("unable to convert the mesh data to OCM data structures: %v", err)
 	}
 
 	// Marshal the OCM data as JSON
 	data, err := json.MarshalIndent(ocmData, "", "\t")
 	if err != nil {
-		return nil, http.StatusBadRequest, []byte{}, fmt.Errorf("unable to marshal the OCM data: %v", err)
+		return http.StatusBadRequest, []byte{}, fmt.Errorf("unable to marshal the OCM data: %v", err)
 	}
 
-	return nil, http.StatusOK, data, nil
+	return http.StatusOK, data, nil
 }
 
 func convertMeshDataToOCMData(meshData *meshdata.MeshData) ([]*ocmprovider.ProviderInfo, error) {

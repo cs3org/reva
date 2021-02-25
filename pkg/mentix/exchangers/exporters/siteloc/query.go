@@ -31,20 +31,20 @@ import (
 )
 
 // HandleDefaultQuery processes a basic query.
-func HandleDefaultQuery(meshData *meshdata.MeshData, body []byte, params url.Values, _ *config.Configuration, _ *zerolog.Logger) (meshdata.Vector, int, []byte, error) {
+func HandleDefaultQuery(meshData *meshdata.MeshData, params url.Values, _ *config.Configuration, _ *zerolog.Logger) (int, []byte, error) {
 	// Convert the mesh data
 	locData, err := convertMeshDataToLocationData(meshData)
 	if err != nil {
-		return nil, http.StatusBadRequest, []byte{}, fmt.Errorf("unable to convert the mesh data to location data: %v", err)
+		return http.StatusBadRequest, []byte{}, fmt.Errorf("unable to convert the mesh data to location data: %v", err)
 	}
 
 	// Marshal the location data as JSON
 	data, err := json.MarshalIndent(locData, "", "\t")
 	if err != nil {
-		return nil, http.StatusBadRequest, []byte{}, fmt.Errorf("unable to marshal the location data: %v", err)
+		return http.StatusBadRequest, []byte{}, fmt.Errorf("unable to marshal the location data: %v", err)
 	}
 
-	return nil, http.StatusOK, data, nil
+	return http.StatusOK, data, nil
 }
 
 func convertMeshDataToLocationData(meshData *meshdata.MeshData) ([]*SiteLocation, error) {
