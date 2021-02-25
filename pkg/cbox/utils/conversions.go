@@ -68,7 +68,7 @@ func FormatGrantee(g *provider.Grantee) (int, string) {
 
 // ExtractGrantee retrieves the CS3API grantee from a formatted string
 func ExtractGrantee(t int, g string) *provider.Grantee {
-	var grantee *provider.Grantee
+	var grantee provider.Grantee
 	switch t {
 	case 0:
 		grantee.Type = provider.GranteeType_GRANTEE_TYPE_USER
@@ -79,7 +79,7 @@ func ExtractGrantee(t int, g string) *provider.Grantee {
 	default:
 		grantee.Type = provider.GranteeType_GRANTEE_TYPE_INVALID
 	}
-	return grantee
+	return &grantee
 }
 
 // ResourceTypeToItem maps a resource type to an integer
@@ -230,11 +230,13 @@ func ConvertToCS3PublicShare(s DBShare) *link.PublicShare {
 	if s.ShareWith != "" {
 		pwd = true
 	}
-	var expires uint64
+	var expires *typespb.Timestamp
 	if s.Expiration != "" {
 		t, err := time.Parse("2006-01-02 03:04:05", s.Expiration)
 		if err == nil {
-			expires = uint64(t.Unix())
+			expires = &typespb.Timestamp{
+				Seconds: uint64(t.Unix()),
+			}
 		}
 	}
 	return &link.PublicShare{
@@ -248,10 +250,8 @@ func ConvertToCS3PublicShare(s DBShare) *link.PublicShare {
 		Token:             s.Token,
 		DisplayName:       s.ShareName,
 		PasswordProtected: pwd,
-		Expiration: &typespb.Timestamp{
-			Seconds: expires,
-		},
-		Ctime: ts,
-		Mtime: ts,
+		Expiration:        expires,
+		Ctime:             ts,
+		Mtime:             ts,
 	}
 }

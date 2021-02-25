@@ -153,7 +153,7 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 		params = append(params, password)
 	}
 
-	if g.Expiration.Seconds != 0 {
+	if g.Expiration != nil && g.Expiration.Seconds != 0 {
 		t := time.Unix(int64(g.Expiration.Seconds), 0)
 		query += ",expiration=?"
 		params = append(params, t)
@@ -286,14 +286,7 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 	}
 
 	if expired(s) {
-		req := link.PublicShareReference{
-			Spec: &link.PublicShareReference_Id{
-				Id: &link.PublicShareId{
-					OpaqueId: s.Id.OpaqueId,
-				},
-			},
-		}
-		if err := m.RevokePublicShare(ctx, u, &req); err != nil {
+		if err := m.cleanupExpiredShares(); err != nil {
 			return nil, err
 		}
 		return nil, errtypes.NotFound(ref.String())
@@ -348,13 +341,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 		}
 		cs3Share := conversions.ConvertToCS3PublicShare(s)
 		if expired(cs3Share) {
-			_ = m.RevokePublicShare(ctx, u, &link.PublicShareReference{
-				Spec: &link.PublicShareReference_Id{
-					Id: &link.PublicShareId{
-						OpaqueId: cs3Share.Id.OpaqueId,
-					},
-				},
-			})
+			_ = m.cleanupExpiredShares()
 		} else {
 			shares = append(shares, cs3Share)
 		}
@@ -368,7 +355,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 
 func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) error {
 	uid := conversions.FormatUserID(u.Id)
-	query := "delete from oc_share where"
+	query := "delete from oc_share where "
 	params := []interface{}{}
 
 	switch {
@@ -411,12 +398,20 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token, password str
 		return nil, err
 	}
 	if s.ShareWith != "" {
-		if check := checkPasswordHash(password, s.ShareWith); check {
-			return conversions.ConvertToCS3PublicShare(s), nil
+		if check := checkPasswordHash(password, s.ShareWith); !check {
+			return nil, errtypes.InvalidCredentials(token)
 		}
 	}
 
-	return nil, errtypes.NotFound(fmt.Sprintf("share with token: " + token))
+	cs3Share := conversions.ConvertToCS3PublicShare(s)
+	if expired(cs3Share) {
+		if err := m.cleanupExpiredShares(); err != nil {
+			return nil, err
+		}
+		return nil, errtypes.NotFound(token)
+	}
+
+	return cs3Share, nil
 }
 
 func (m *manager) cleanupExpiredShares() error {

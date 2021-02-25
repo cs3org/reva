@@ -159,9 +159,10 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabora
 }
 
 func (m *mgr) getByID(ctx context.Context, id *collaboration.ShareId) (*collaboration.Share, error) {
+	uid := conversions.FormatUserID(user.ContextMustGetUser(ctx).Id)
 	s := conversions.DBShare{ID: id.OpaqueId}
 	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, stime, permissions, share_type FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND id=? AND (uid_owner=? or uid_initiator=?)"
-	if err := m.db.QueryRow(query, id.OpaqueId).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.STime, &s.Permissions, &s.ShareType); err != nil {
+	if err := m.db.QueryRow(query, id.OpaqueId, uid, uid).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.STime, &s.Permissions, &s.ShareType); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errtypes.NotFound(id.OpaqueId)
 		}
@@ -207,7 +208,6 @@ func (m *mgr) GetShare(ctx context.Context, ref *collaboration.ShareReference) (
 
 func (m *mgr) Unshare(ctx context.Context, ref *collaboration.ShareReference) error {
 	uid := conversions.FormatUserID(user.ContextMustGetUser(ctx).Id)
-
 	var query string
 	params := []interface{}{}
 	switch {
