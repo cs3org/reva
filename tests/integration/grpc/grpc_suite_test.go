@@ -38,7 +38,6 @@ import (
 
 const timeoutMs = 30000
 
-var revads = map[string]*Revad{}
 var mutex = sync.Mutex{}
 var port = 19000
 
@@ -47,15 +46,37 @@ func TestGprc(t *testing.T) {
 	RunSpecs(t, "Gprc Suite")
 }
 
-type cleanupFunc func() error
+type cleanupFunc func(bool) error
 
+// Revad represents a running revad process
 type Revad struct {
-	TmpRoot     string
-	GrpcAddress string
-	Cleanup     cleanupFunc
+	TmpRoot     string      // Temporary directory on disk. Will be cleaned up by the Cleanup func.
+	GrpcAddress string      // Address of the grpc service
+	Cleanup     cleanupFunc // Function to kill the process and cleanup the temp. root. If the given parameter is true the files will be kept to make debugging failures easier.
 }
 
-func startRevads(configs map[string]string) (map[string]*Revad, error) {
+// stardRevads takes a list of revad configuration files plus a map of
+// variables that need to be substituted in them and starts them.
+//
+// A unique port is assigned to each spawned instance.
+// Placeholders in the config files can be replaced the variables from the
+// `variables` map, e.g. the config
+//
+//   redis = "{{redis_address}}"
+//
+// and the variables map
+//
+//   variables = map[string]string{"redis_address": "localhost:6379"}
+//
+// will result in the config
+//
+//   redis = "localhost:6379"
+//
+// Special variables are created for the revad addresses, e.g. having a
+// `storage` and a `users` revad will make `storage_address` and
+// `users_address` available wit the dynamically assigned ports so that
+// the services can be made available to each other.
+func startRevads(configs map[string]string, variables map[string]string) (map[string]*Revad, error) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
@@ -82,6 +103,9 @@ func startRevads(configs map[string]string) (map[string]*Revad, error) {
 		cfg := string(rawCfg)
 		cfg = strings.ReplaceAll(cfg, "{{root}}", tmpRoot)
 		cfg = strings.ReplaceAll(cfg, "{{grpc_address}}", ownAddress)
+		for v, value := range variables {
+			cfg = strings.ReplaceAll(cfg, "{{"+v+"}}", value)
+		}
 		for name, address := range addresses {
 			cfg = strings.ReplaceAll(cfg, "{{"+name+"_address}}", address)
 		}
@@ -99,6 +123,7 @@ func startRevads(configs map[string]string) (map[string]*Revad, error) {
 		}
 		defer outfile.Close()
 		cmd.Stdout = outfile
+		cmd.Stderr = outfile
 
 		err = cmd.Start()
 		if err != nil {
@@ -116,13 +141,17 @@ func startRevads(configs map[string]string) (map[string]*Revad, error) {
 		revad := &Revad{
 			TmpRoot:     tmpRoot,
 			GrpcAddress: ownAddress,
-			Cleanup: func() error {
+			Cleanup: func(keepLogs bool) error {
 				err := cmd.Process.Signal(os.Kill)
 				if err != nil {
 					return errors.Wrap(err, "Could not kill revad")
 				}
 				waitForPort(ownAddress, "close")
-				os.RemoveAll(tmpRoot)
+				if keepLogs {
+					fmt.Println("Test failed, keeping root", tmpRoot, "around for debugging")
+				} else {
+					os.RemoveAll(tmpRoot)
+				}
 				return nil
 			},
 		}

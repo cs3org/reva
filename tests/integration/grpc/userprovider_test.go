@@ -64,7 +64,7 @@ var _ = Describe("user providers", func() {
 		ctx = metadata.AppendToOutgoingContext(ctx, token.TokenHeader, t)
 		ctx = ruser.ContextSetUser(ctx, user)
 
-		revads, err = startRevads(dependencies)
+		revads, err = startRevads(dependencies, map[string]string{})
 		Expect(err).ToNot(HaveOccurred())
 		serviceClient, err = pool.GetUserProviderServiceClient(revads["users"].GrpcAddress)
 		Expect(err).ToNot(HaveOccurred())
@@ -72,7 +72,7 @@ var _ = Describe("user providers", func() {
 
 	AfterEach(func() {
 		for _, r := range revads {
-			r.Cleanup()
+			r.Cleanup(CurrentGinkgoTestDescription().Failed)
 		}
 	})
 
