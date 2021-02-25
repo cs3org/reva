@@ -31,7 +31,8 @@ import (
 	"github.com/cs3org/reva/pkg/mentix/utils/network"
 )
 
-type requestResponse struct {
+// RequestResponse holds the response of an accounts service query.
+type RequestResponse struct {
 	Success bool
 	Error   string
 	Data    interface{}
@@ -46,7 +47,7 @@ type accountsServiceSettings struct {
 var settings accountsServiceSettings
 
 // Query performs an account service query.
-func Query(endpoint string, params network.URLParams) (*requestResponse, error) {
+func Query(endpoint string, params network.URLParams) (*RequestResponse, error) {
 	fullURL, err := network.GenerateURL(fmt.Sprintf("%v://%v", settings.URL.Scheme, settings.URL.Host), path.Join(settings.URL.Path, endpoint), params)
 	if err != nil {
 		return nil, errors.Wrap(err, "error while building the service accounts query URL")
@@ -57,7 +58,7 @@ func Query(endpoint string, params network.URLParams) (*requestResponse, error) 
 		return nil, errors.Wrap(err, "unable to query the service accounts endpoint")
 	}
 
-	resp := &requestResponse{}
+	resp := &RequestResponse{}
 	if err := json.Unmarshal(data, resp); err != nil {
 		return nil, errors.Wrap(err, "unable to unmarshal response data")
 	}
@@ -65,7 +66,7 @@ func Query(endpoint string, params network.URLParams) (*requestResponse, error) 
 }
 
 // GetResponseValue gets a value from an account service query using a dotted path notation.
-func GetResponseValue(resp *requestResponse, path string) interface{} {
+func GetResponseValue(resp *RequestResponse, path string) interface{} {
 	if data, ok := resp.Data.(map[string]interface{}); ok {
 		tokens := strings.Split(path, ".")
 		for i, name := range tokens {

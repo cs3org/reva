@@ -83,21 +83,21 @@ func (siteData *siteRegistrationData) Verify() error {
 
 // ToMeshDataSite converts the stored data into a meshdata site object, filling out as much data as possible.
 func (siteData *siteRegistrationData) ToMeshDataSite(siteID key.SiteIdentifier, siteType meshdata.SiteType, email string) (*meshdata.Site, error) {
-	siteUrl, err := url.Parse(siteData.URL)
+	siteURL, err := url.Parse(siteData.URL)
 	if err != nil {
 		return nil, errors.Wrap(err, "invalid site URL")
 	}
 
 	// Create the Reva service entry
 	revaHost := siteData.Reva.Host
-	revaUrl := siteData.Reva.URL
+	revaURL := siteData.Reva.URL
 
 	if len(revaHost) == 0 { // Infer host from URL
-		URL, _ := url.Parse(revaUrl)
+		URL, _ := url.Parse(revaURL)
 		revaHost = network.ExtractDomainFromURL(URL, true)
-	} else if len(revaUrl) == 0 { // Infer URL from host
+	} else if len(revaURL) == 0 { // Infer URL from host
 		URL, _ := network.GenerateURL(revaHost, "", network.URLParams{})
-		revaUrl = URL.String()
+		revaURL = URL.String()
 	}
 
 	properties := make(map[string]string, 1)
@@ -110,7 +110,7 @@ func (siteData *siteRegistrationData) ToMeshDataSite(siteID key.SiteIdentifier, 
 				Description: "Reva Daemon",
 			},
 			Name:        revaHost + " - REVAD",
-			URL:         revaUrl,
+			URL:         revaURL,
 			IsMonitored: true,
 			Properties:  properties,
 		},
@@ -125,7 +125,7 @@ func (siteData *siteRegistrationData) ToMeshDataSite(siteID key.SiteIdentifier, 
 		Name:         siteData.Name,
 		FullName:     siteData.Name,
 		Organization: "",
-		Domain:       network.ExtractDomainFromURL(siteUrl, true),
+		Domain:       network.ExtractDomainFromURL(siteURL, true),
 		Homepage:     siteData.URL,
 		Email:        email,
 		Description:  siteData.Name + " @ " + siteData.URL,

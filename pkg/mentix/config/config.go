@@ -38,8 +38,8 @@ type Configuration struct {
 	Importers struct {
 		SiteRegistration struct {
 			Endpoint               string   `mapstructure:"endpoint"`
-			IsProtected            bool     `mapstructure:"is_protected"`
 			EnabledConnectors      []string `mapstructure:"enabled_connectors"`
+			IsProtected            bool     `mapstructure:"is_protected"`
 			IgnoreScienceMeshSites bool     `mapstructure:"ignore_sm_sites"`
 		} `mapstructure:"sitereg"`
 	} `mapstructure:"importers"`
@@ -47,20 +47,20 @@ type Configuration struct {
 	Exporters struct {
 		WebAPI struct {
 			Endpoint          string   `mapstructure:"endpoint"`
-			IsProtected       bool     `mapstructure:"is_protected"`
 			EnabledConnectors []string `mapstructure:"enabled_connectors"`
+			IsProtected       bool     `mapstructure:"is_protected"`
 		} `mapstructure:"webapi"`
 
 		CS3API struct {
 			Endpoint          string   `mapstructure:"endpoint"`
-			IsProtected       bool     `mapstructure:"is_protected"`
 			EnabledConnectors []string `mapstructure:"enabled_connectors"`
+			IsProtected       bool     `mapstructure:"is_protected"`
 		} `mapstructure:"cs3api"`
 
 		SiteLocations struct {
 			Endpoint          string   `mapstructure:"endpoint"`
-			IsProtected       bool     `mapstructure:"is_protected"`
 			EnabledConnectors []string `mapstructure:"enabled_connectors"`
+			IsProtected       bool     `mapstructure:"is_protected"`
 		} `mapstructure:"siteloc"`
 
 		PrometheusSD struct {
