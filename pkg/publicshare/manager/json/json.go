@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package filesystem
+package json
 
 import (
 	"bytes"
@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"math/rand"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -43,6 +42,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/publicshare/manager/registry"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -142,10 +142,10 @@ func (m *manager) startJanitorRun() {
 // CreatePublicShare adds a new entry to manager.shares
 func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error) {
 	id := &link.PublicShareId{
-		OpaqueId: randString(15),
+		OpaqueId: utils.RandString(15),
 	}
 
-	tkn := randString(15)
+	tkn := utils.RandString(15)
 	now := time.Now().UnixNano()
 
 	displayName, ok := rInfo.ArbitraryMetadata.Metadata["name"]
@@ -532,16 +532,6 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token, password str
 	}
 
 	return nil, errtypes.NotFound(fmt.Sprintf("share with token: `%v` not found", token))
-}
-
-// randString is a helper to create tokens. It could be a token manager instead.
-func randString(n int) string {
-	var l = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = l[rand.Intn(len(l))]
-	}
-	return string(b)
 }
 
 func (m *manager) readDb() (map[string]interface{}, error) {

@@ -16,13 +16,12 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package filesystem
+package sql
 
 import (
 	"context"
 	"database/sql"
 	"fmt"
-	"math/rand"
 	"os"
 	"os/signal"
 	"strconv"
@@ -40,6 +39,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/publicshare/manager/registry"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -113,7 +113,7 @@ func New(m map[string]interface{}) (publicshare.Manager, error) {
 
 func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error) {
 
-	tkn := randString(15)
+	tkn := utils.RandString(15)
 	now := time.Now().Unix()
 
 	displayName, ok := rInfo.ArbitraryMetadata.Metadata["name"]
@@ -445,13 +445,4 @@ func hashPassword(password string, cost int) (string, error) {
 func checkPasswordHash(password, hash string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(strings.TrimPrefix(hash, "1|")), []byte(password))
 	return err == nil
-}
-
-func randString(n int) string {
-	var l = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = l[rand.Intn(len(l))]
-	}
-	return string(b)
 }
