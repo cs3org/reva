@@ -126,26 +126,26 @@ func (fs *Decomposedfs) Shutdown(ctx context.Context) error {
 // GetQuota returns the quota available
 // TODO Document in the cs3 should we return quota or free space?
 func (fs *Decomposedfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
-	var node *node.Node
+	var n *node.Node
 	var err error
-	if node, err = fs.lu.HomeOrRootNode(ctx); err != nil {
+	if n, err = fs.lu.HomeOrRootNode(ctx); err != nil {
 		return 0, 0, err
 	}
 
-	if !node.Exists {
-		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
+	if !n.Exists {
+		err = errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
 		return 0, 0, err
 	}
 
-	rp, err := fs.p.AssemblePermissions(ctx, node)
+	rp, err := fs.p.AssemblePermissions(ctx, n)
 	switch {
 	case err != nil:
 		return 0, 0, errtypes.InternalError(err.Error())
 	case !rp.GetQuota:
-		return 0, 0, errtypes.PermissionDenied(node.ID)
+		return 0, 0, errtypes.PermissionDenied(n.ID)
 	}
 
-	ri, err := node.AsResourceInfo(ctx, rp, []string{"treesize", "quota"})
+	ri, err := n.AsResourceInfo(ctx, rp, []string{"treesize", "quota"})
 	if err != nil {
 		return 0, 0, err
 	}
@@ -155,7 +155,7 @@ func (fs *Decomposedfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
 		quotaStr = string(ri.Opaque.Map["quota"].Value)
 	}
 	stat := syscall.Statfs_t{}
-	err = syscall.Statfs(fs.lu.toInternalPath(node.ID), &stat)
+	err = syscall.Statfs(n.InternalPath(), &stat)
 	if err != nil {
 		return 0, 0, err
 	}

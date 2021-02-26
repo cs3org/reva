@@ -534,22 +534,13 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		readChecksumIntoOpaque(ctx, nodePath, storageprovider.XSAdler32, ri)
 	}
 	// quota
-	if _, ok := mdKeysMap[_quotaKey]; (nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER) && returnAllKeys || ok {
+	if _, ok := mdKeysMap[QuotaKey]; (nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER) && returnAllKeys || ok {
 		var quotaPath string
-		if n.lu.Options.EnableHome {
-			if r, err := n.lu.HomeNode(ctx); err == nil {
-				quotaPath = n.lu.toInternalPath(r.ID)
-				readQuotaIntoOpaque(ctx, quotaPath, ri)
-			} else {
-				sublog.Error().Err(err).Msg("error determining home node for quota")
-			}
+		if r, err := n.lu.HomeOrRootNode(ctx); err == nil {
+			quotaPath = r.InternalPath()
+			readQuotaIntoOpaque(ctx, quotaPath, ri)
 		} else {
-			if r, err := n.lu.RootNode(ctx); err == nil {
-				quotaPath = n.lu.toInternalPath(r.ID)
-				readQuotaIntoOpaque(ctx, quotaPath, ri)
-			} else {
-				sublog.Error().Err(err).Msg("error determining root node for quota")
-			}
+			sublog.Error().Err(err).Msg("error determining home or root node for quota")
 		}
 	}
 
@@ -643,7 +634,7 @@ func readQuotaIntoOpaque(ctx context.Context, nodePath string, ri *provider.Reso
 					Map: map[string]*types.OpaqueEntry{},
 				}
 			}
-			ri.Opaque.Map[_quotaKey] = &types.OpaqueEntry{
+			ri.Opaque.Map[QuotaKey] = &types.OpaqueEntry{
 				Decoder: "plain",
 				Value:   v,
 			}
@@ -690,7 +681,7 @@ func (n *Node) CalculateTreeSize(ctx context.Context) (uint64, error) {
 			// read from attr
 			var b []byte
 			// xattr.Get will follow the symlink
-			if b, err = xattr.Get(cPath, treesizeAttr); err != nil {
+			if b, err = xattr.Get(cPath, xattrs.TreesizeAttr); err != nil {
 				// TODO recursively descend and recalculate treesize
 				continue // continue after an error
 			}

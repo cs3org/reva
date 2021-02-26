@@ -487,17 +487,16 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 					sublog.Error().Err(err).Time("tmtime", sTime).Msg("could not update tmtime of parent node")
 				} else {
 					sublog.Debug().Time("tmtime", sTime).Msg("updated tmtime of parent node")
-				}					}
+				}
 			}
 
 			if err := n.UnsetTempEtag(); err != nil {
 				sublog.Error().Err(err).Msg("could not remove temporary etag attribute")
 			}
-
 		}
 
 		// size accounting
-		if t.lu.Options.TreeSizeAccounting {
+		if t.treeSizeAccounting {
 			// update the treesize if it differs from the current size
 			updateTreeSize := false
 
@@ -525,7 +524,6 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 					Uint64("calculatedTreeSize", calculatedTreeSize).
 					Msg("parent size matches calculated size, not updating")
 			}
-
 
 			if updateTreeSize {
 				// update the tree time of the parent node
