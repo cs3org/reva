@@ -19,6 +19,7 @@
 package utils
 
 import (
+	"math/rand"
 	"net"
 	"net/http"
 	"os/user"
@@ -97,6 +98,16 @@ func ResolvePath(path string) (string, error) {
 	}
 
 	return path, nil
+}
+
+// RandString is a helper to create tokens.
+func RandString(n int) string {
+	var l = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = l[rand.Intn(len(l))]
+	}
+	return string(b)
 }
 
 // TSToUnixNano converts a protobuf Timestamp to uint64

@@ -16,51 +16,74 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package sql
+package utils
 
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 )
 
-func formatGrantee(g *provider.Grantee) (int, string) {
+// DBShare stores information about user and public shares.
+type DBShare struct {
+	ID           string
+	UIDOwner     string
+	UIDInitiator string
+	Prefix       string
+	ItemSource   string
+	ShareWith    string
+	Token        string
+	Expiration   string
+	Permissions  int
+	ShareType    int
+	ShareName    string
+	STime        int
+	FileTarget   string
+	State        int
+}
+
+// FormatGrantee formats a CS3API grantee to a string
+func FormatGrantee(g *provider.Grantee) (int, string) {
 	var granteeType int
 	var formattedID string
 	switch g.Type {
 	case provider.GranteeType_GRANTEE_TYPE_USER:
 		granteeType = 0
-		formattedID = formatUserID(g.GetUserId())
+		formattedID = FormatUserID(g.GetUserId())
 	case provider.GranteeType_GRANTEE_TYPE_GROUP:
 		granteeType = 1
-		formattedID = formatGroupID(g.GetGroupId())
+		formattedID = FormatGroupID(g.GetGroupId())
 	default:
 		granteeType = -1
 	}
 	return granteeType, formattedID
 }
 
-func extractGrantee(t int, g string) *provider.Grantee {
-	var grantee *provider.Grantee
+// ExtractGrantee retrieves the CS3API grantee from a formatted string
+func ExtractGrantee(t int, g string) *provider.Grantee {
+	var grantee provider.Grantee
 	switch t {
 	case 0:
 		grantee.Type = provider.GranteeType_GRANTEE_TYPE_USER
-		grantee.Id = &provider.Grantee_UserId{UserId: extractUserID(g)}
+		grantee.Id = &provider.Grantee_UserId{UserId: ExtractUserID(g)}
 	case 1:
 		grantee.Type = provider.GranteeType_GRANTEE_TYPE_GROUP
-		grantee.Id = &provider.Grantee_GroupId{GroupId: extractGroupID(g)}
+		grantee.Id = &provider.Grantee_GroupId{GroupId: ExtractGroupID(g)}
 	default:
 		grantee.Type = provider.GranteeType_GRANTEE_TYPE_INVALID
 	}
-	return grantee
+	return &grantee
 }
 
-func resourceTypeToItem(r provider.ResourceType) string {
+// ResourceTypeToItem maps a resource type to an integer
+func ResourceTypeToItem(r provider.ResourceType) string {
 	switch r {
 	case provider.ResourceType_RESOURCE_TYPE_FILE:
 		return "file"
@@ -75,7 +98,8 @@ func resourceTypeToItem(r provider.ResourceType) string {
 	}
 }
 
-func sharePermToInt(p *provider.ResourcePermissions) int {
+// SharePermToInt maps read/write permissions to an integer
+func SharePermToInt(p *provider.ResourcePermissions) int {
 	var perm int
 	if p.CreateContainer {
 		perm = 15
@@ -85,7 +109,8 @@ func sharePermToInt(p *provider.ResourcePermissions) int {
 	return perm
 }
 
-func intTosharePerm(p int) *provider.ResourcePermissions {
+// IntTosharePerm retrieves read/write permissions from an integer
+func IntTosharePerm(p int) *provider.ResourcePermissions {
 	switch p {
 	case 1:
 		return &provider.ResourcePermissions{
@@ -122,7 +147,8 @@ func intTosharePerm(p int) *provider.ResourcePermissions {
 	}
 }
 
-func intToShareState(g int) collaboration.ShareState {
+// IntToShareState retrieves the received share state from an integer
+func IntToShareState(g int) collaboration.ShareState {
 	switch g {
 	case 0:
 		return collaboration.ShareState_SHARE_STATE_PENDING
@@ -133,14 +159,16 @@ func intToShareState(g int) collaboration.ShareState {
 	}
 }
 
-func formatUserID(u *userpb.UserId) string {
+// FormatUserID formats a CS3API user ID to a string
+func FormatUserID(u *userpb.UserId) string {
 	if u.Idp != "" {
 		return fmt.Sprintf("%s:%s", u.OpaqueId, u.Idp)
 	}
 	return u.OpaqueId
 }
 
-func extractUserID(u string) *userpb.UserId {
+// ExtractUserID retrieves a CS3API user ID from a string
+func ExtractUserID(u string) *userpb.UserId {
 	parts := strings.Split(u, ":")
 	if len(parts) > 1 {
 		return &userpb.UserId{OpaqueId: parts[0], Idp: parts[1]}
@@ -148,14 +176,16 @@ func extractUserID(u string) *userpb.UserId {
 	return &userpb.UserId{OpaqueId: parts[0]}
 }
 
-func formatGroupID(u *grouppb.GroupId) string {
+// FormatGroupID formats a CS3API group ID to a string
+func FormatGroupID(u *grouppb.GroupId) string {
 	if u.Idp != "" {
 		return fmt.Sprintf("%s:%s", u.OpaqueId, u.Idp)
 	}
 	return u.OpaqueId
 }
 
-func extractGroupID(u string) *grouppb.GroupId {
+// ExtractGroupID retrieves a CS3API group ID from a string
+func ExtractGroupID(u string) *grouppb.GroupId {
 	parts := strings.Split(u, ":")
 	if len(parts) > 1 {
 		return &grouppb.GroupId{OpaqueId: parts[0], Idp: parts[1]}
@@ -163,7 +193,8 @@ func extractGroupID(u string) *grouppb.GroupId {
 	return &grouppb.GroupId{OpaqueId: parts[0]}
 }
 
-func convertToCS3Share(s dbShare) *collaboration.Share {
+// ConvertToCS3Share converts a DBShare to a CS3API collaboration share
+func ConvertToCS3Share(s DBShare) *collaboration.Share {
 	ts := &typespb.Timestamp{
 		Seconds: uint64(s.STime),
 	}
@@ -172,19 +203,55 @@ func convertToCS3Share(s dbShare) *collaboration.Share {
 			OpaqueId: s.ID,
 		},
 		ResourceId:  &provider.ResourceId{OpaqueId: s.ItemSource, StorageId: s.Prefix},
-		Permissions: &collaboration.SharePermissions{Permissions: intTosharePerm(s.Permissions)},
-		Grantee:     extractGrantee(s.ShareType, s.ShareWith),
-		Owner:       extractUserID(s.UIDOwner),
-		Creator:     extractUserID(s.UIDInitiator),
+		Permissions: &collaboration.SharePermissions{Permissions: IntTosharePerm(s.Permissions)},
+		Grantee:     ExtractGrantee(s.ShareType, s.ShareWith),
+		Owner:       ExtractUserID(s.UIDOwner),
+		Creator:     ExtractUserID(s.UIDInitiator),
 		Ctime:       ts,
 		Mtime:       ts,
 	}
 }
 
-func convertToCS3ReceivedShare(s dbShare) *collaboration.ReceivedShare {
-	share := convertToCS3Share(s)
+// ConvertToCS3ReceivedShare converts a DBShare to a CS3API collaboration received share
+func ConvertToCS3ReceivedShare(s DBShare) *collaboration.ReceivedShare {
+	share := ConvertToCS3Share(s)
 	return &collaboration.ReceivedShare{
 		Share: share,
-		State: intToShareState(s.State),
+		State: IntToShareState(s.State),
+	}
+}
+
+// ConvertToCS3PublicShare converts a DBShare to a CS3API public share
+func ConvertToCS3PublicShare(s DBShare) *link.PublicShare {
+	ts := &typespb.Timestamp{
+		Seconds: uint64(s.STime),
+	}
+	pwd := false
+	if s.ShareWith != "" {
+		pwd = true
+	}
+	var expires *typespb.Timestamp
+	if s.Expiration != "" {
+		t, err := time.Parse("2006-01-02 03:04:05", s.Expiration)
+		if err == nil {
+			expires = &typespb.Timestamp{
+				Seconds: uint64(t.Unix()),
+			}
+		}
+	}
+	return &link.PublicShare{
+		Id: &link.PublicShareId{
+			OpaqueId: s.ID,
+		},
+		ResourceId:        &provider.ResourceId{OpaqueId: s.ItemSource, StorageId: s.Prefix},
+		Permissions:       &link.PublicSharePermissions{Permissions: IntTosharePerm(s.Permissions)},
+		Owner:             ExtractUserID(s.UIDOwner),
+		Creator:           ExtractUserID(s.UIDInitiator),
+		Token:             s.Token,
+		DisplayName:       s.ShareName,
+		PasswordProtected: pwd,
+		Expiration:        expires,
+		Ctime:             ts,
+		Mtime:             ts,
 	}
 }
