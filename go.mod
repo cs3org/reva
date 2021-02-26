@@ -49,7 +49,7 @@ require (
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	golang.org/x/sys v0.0.0-20210218155724-8ebf48af031b
 	golang.org/x/term v0.0.0-20201117132131-f5c789dd3221
-	google.golang.org/grpc v1.35.0
+	google.golang.org/grpc v1.36.0
 )
 
 go 1.13
