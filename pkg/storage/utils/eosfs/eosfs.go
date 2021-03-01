@@ -756,7 +756,7 @@ func (fs *eosfs) listShareFolderRoot(ctx context.Context, p string) (finfos []*p
 	return finfos, nil
 }
 
-func (fs *eosfs) GetQuota(ctx context.Context) (int, int, error) {
+func (fs *eosfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
 	u, err := getUser(ctx)
 	if err != nil {
 		return 0, 0, errors.Wrap(err, "eos: no user in ctx")
@@ -767,7 +767,7 @@ func (fs *eosfs) GetQuota(ctx context.Context) (int, int, error) {
 		return 0, 0, err
 	}
 
-	qi, err := fs.c.GetQuota(ctx, u.Username, rootUID, rootGID, fs.conf.Namespace)
+	qi, err := fs.c.GetQuota(ctx, u.Username, rootUID, rootGID, fs.conf.QuotaNode)
 	if err != nil {
 		err := errors.Wrap(err, "eosfs: error getting quota")
 		return 0, 0, err
@@ -1306,7 +1306,7 @@ func (fs *eosfs) convertToRecycleItem(ctx context.Context, eosDeletedItem *eoscl
 		Path:         path,
 		Key:          eosDeletedItem.RestoreKey,
 		Size:         eosDeletedItem.Size,
-		DeletionTime: &types.Timestamp{Seconds: eosDeletedItem.DeletionMTime / 1000}, // TODO(labkode): check if eos time is millis or nanos
+		DeletionTime: &types.Timestamp{Seconds: eosDeletedItem.DeletionMTime},
 	}
 	if eosDeletedItem.IsDir {
 		recycleItem.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER

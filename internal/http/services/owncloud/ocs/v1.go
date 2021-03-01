@@ -37,15 +37,14 @@ type V1Handler struct {
 }
 
 func (h *V1Handler) init(c *config.Config) error {
+	h.ConfigHandler = new(configHandler.Handler)
+	h.ConfigHandler.Init(c)
 	h.AppsHandler = new(apps.Handler)
 	if err := h.AppsHandler.Init(c); err != nil {
 		return err
 	}
 	h.CloudHandler = new(cloud.Handler)
-	h.CloudHandler.Init(c)
-	h.ConfigHandler = new(configHandler.Handler)
-	h.ConfigHandler.Init(c)
-	return nil
+	return h.CloudHandler.Init(c)
 }
 
 // Handler handles requests

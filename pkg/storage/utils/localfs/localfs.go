@@ -517,10 +517,6 @@ func (fs *localfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *
 	return fs.AddGrant(ctx, ref, g)
 }
 
-func (fs *localfs) GetQuota(ctx context.Context) (int, int, error) {
-	return 0, 0, nil
-}
-
 func (fs *localfs) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
 	if !fs.isShareFolder(ctx, path) {
 		return errtypes.PermissionDenied("localfs: cannot create references outside the share folder")

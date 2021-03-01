@@ -1062,8 +1062,8 @@ func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (
 
 	res := &provider.GetQuotaResponse{
 		Status:     status.NewOK(ctx),
-		TotalBytes: uint64(total),
-		UsedBytes:  uint64(used),
+		TotalBytes: total,
+		UsedBytes:  used,
 	}
 	return res, nil
 }

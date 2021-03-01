@@ -96,9 +96,10 @@ type DeletedEntry struct {
 }
 
 // QuotaInfo reports the available bytes and inodes for a particular user.
+// eos reports all quota values are unsigned long, see https://github.com/cern-eos/eos/blob/93515df8c0d5a858982853d960bec98f983c1285/mgm/Quota.hh#L135
 type QuotaInfo struct {
-	AvailableBytes, UsedBytes   int
-	AvailableInodes, UsedInodes int
+	AvailableBytes, UsedBytes   uint64
+	AvailableInodes, UsedInodes uint64
 }
 
 // SetQuotaInfo encapsulates the information needed to

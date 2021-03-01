@@ -794,19 +794,19 @@ func (c *Client) parseQuota(path, raw string) (*eosclient.QuotaInfo, error) {
 		if strings.HasPrefix(path, space) {
 			maxBytesString := m["maxlogicalbytes"]
 			usedBytesString := m["usedlogicalbytes"]
-			maxBytes, _ := strconv.ParseInt(maxBytesString, 10, 64)
-			usedBytes, _ := strconv.ParseInt(usedBytesString, 10, 64)
+			maxBytes, _ := strconv.ParseUint(maxBytesString, 10, 64)
+			usedBytes, _ := strconv.ParseUint(usedBytesString, 10, 64)
 
 			maxInodesString := m["maxfiles"]
 			usedInodesString := m["usedfiles"]
-			maxInodes, _ := strconv.ParseInt(maxInodesString, 10, 64)
-			usedInodes, _ := strconv.ParseInt(usedInodesString, 10, 64)
+			maxInodes, _ := strconv.ParseUint(maxInodesString, 10, 64)
+			usedInodes, _ := strconv.ParseUint(usedInodesString, 10, 64)
 
 			qi := &eosclient.QuotaInfo{
-				AvailableBytes:  int(maxBytes),
-				UsedBytes:       int(usedBytes),
-				AvailableInodes: int(maxInodes),
-				UsedInodes:      int(usedInodes),
+				AvailableBytes:  maxBytes,
+				UsedBytes:       usedBytes,
+				AvailableInodes: maxInodes,
+				UsedInodes:      usedInodes,
 			}
 			return qi, nil
 		}
