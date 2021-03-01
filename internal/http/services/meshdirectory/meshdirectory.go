@@ -23,15 +23,19 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/rs/zerolog"
+	"github.com/rakyll/statik/fs"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+
+	// SPA UI distribution module
+	_ "github.com/cs3org/reva/examples/meshdirectory/statik"
 	"github.com/cs3org/reva/internal/http/services/ocmd"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/mitchellh/mapstructure"
@@ -43,7 +47,6 @@ func init() {
 
 type config struct {
 	Prefix     string `mapstructure:"prefix"`
-	Static     string `mapstructure:"static"`
 	GatewaySvc string `mapstructure:"gatewaysvc"`
 }
 
@@ -52,10 +55,6 @@ func (c *config) init() {
 
 	if c.Prefix == "" {
 		c.Prefix = "meshdir"
-	}
-
-	if c.Static == "" {
-		c.Static = "static"
 	}
 }
 
@@ -106,11 +105,15 @@ func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
 	return pool.GetGatewayServiceClient(s.conf.GatewaySvc)
 }
 
-func (s *svc) serveIndex(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-
-	fs := http.FileServer(http.Dir(s.conf.Static))
-	fs.ServeHTTP(w, r)
+func (s *svc) serveStatik(w http.ResponseWriter, r *http.Request) {
+	statikFS, err := fs.New()
+	if err != nil {
+		ocmd.WriteError(w, r, ocmd.APIErrorServerError,
+			fmt.Sprintf("error getting static fs contents"), err)
+		return
+	}
+	server := http.FileServer(statikFS)
+	server.ServeHTTP(w, r)
 }
 
 func (s *svc) serveJSON(w http.ResponseWriter, r *http.Request) {
@@ -152,13 +155,13 @@ func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var head string
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
-
 		switch head {
-		case "":
-			s.serveIndex(w, r)
-			return
 		case "providers":
 			s.serveJSON(w, r)
+			return
+		default:
+			r.URL.Path = head + r.URL.Path
+			s.serveStatik(w, r)
 			return
 		}
 	})
