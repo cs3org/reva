@@ -96,12 +96,12 @@ func (storage *FileStorage) AccountAdded(account *Account) {
 	// Simply skip this action; all data is saved solely in WriteAll
 }
 
-// AccountAdded is called when an account has been updated.
+// AccountUpdated is called when an account has been updated.
 func (storage *FileStorage) AccountUpdated(account *Account) {
 	// Simply skip this action; all data is saved solely in WriteAll
 }
 
-// AccountAdded is called when an account has been removed.
+// AccountRemoved is called when an account has been removed.
 func (storage *FileStorage) AccountRemoved(account *Account) {
 	// Simply skip this action; all data is saved solely in WriteAll
 }

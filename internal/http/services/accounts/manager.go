@@ -156,6 +156,7 @@ func (mngr *Manager) findAccountByPredicate(predicate func(*data.Account) bool) 
 	return nil
 }
 
+// ShowPanel writes the panel HTTP output directly to the response writer.
 func (mngr *Manager) ShowPanel(w http.ResponseWriter) error {
 	// The panel only shows the stored accounts and offers actions through links, so let it use cloned data
 	accounts := mngr.CloneAccounts()
@@ -207,6 +208,7 @@ func (mngr *Manager) UpdateAccount(accountData *data.Account, copyData bool) err
 	return nil
 }
 
+// FindAccount is used to find an account by various criteria.
 func (mngr *Manager) FindAccount(by string, value string) (*data.Account, error) {
 	mngr.mutex.RLock()
 	defer mngr.mutex.RUnlock()
@@ -244,6 +246,7 @@ func (mngr *Manager) AuthorizeAccount(accountData *data.Account, authorized bool
 	return nil
 }
 
+// AssignAPIKeyToAccount is used to assign a new API key to the account identified by the account email; if no such account exists, an error is returned.
 func (mngr *Manager) AssignAPIKeyToAccount(accountData *data.Account, flags int8) error {
 	mngr.mutex.Lock()
 	defer mngr.mutex.Unlock()

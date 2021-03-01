@@ -35,6 +35,7 @@ type URLParams map[string]string
 // ResponseParams holds parameters of an HTTP response.
 type ResponseParams map[string]interface{}
 
+// BasicAuth holds user credentials for basic HTTP authentication.
 type BasicAuth struct {
 	User     string
 	Password string

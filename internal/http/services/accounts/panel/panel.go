@@ -57,6 +57,7 @@ func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) 
 	return nil
 }
 
+// Execute generates the HTTP output of the panel and writes it to the response writer.
 func (panel *Panel) Execute(w http.ResponseWriter, accounts *data.Accounts) error {
 	type TemplateData struct {
 		Accounts *data.Accounts

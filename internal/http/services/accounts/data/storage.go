@@ -27,8 +27,8 @@ type Storage interface {
 
 	// AccountAdded is called when an account has been added.
 	AccountAdded(account *Account)
-	// AccountAdded is called when an account has been updated.
+	// AccountUpdated is called when an account has been updated.
 	AccountUpdated(account *Account)
-	// AccountAdded is called when an account has been removed.
+	// AccountRemoved is called when an account has been removed.
 	AccountRemoved(account *Account)
 }
