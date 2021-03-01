@@ -33,9 +33,9 @@ type APIKey = string
 
 const (
 	// FlagDefault marks API keys for default (community) accounts.
-	FlagDefault int8 = 0x0000
+	FlagDefault = 0x0000
 	// FlagScienceMesh marks API keys for ScienceMesh (partner) accounts.
-	FlagScienceMesh int8 = 0x0001
+	FlagScienceMesh = 0x0001
 )
 
 const (
@@ -48,7 +48,7 @@ const (
 // GenerateAPIKey generates a new (random) API key which also contains flags and a (salted) hash.
 // An API key has the following format:
 //   <RandomString:30><Flags:2><SaltedHash:32>
-func GenerateAPIKey(salt string, flags int8) (APIKey, error) {
+func GenerateAPIKey(salt string, flags int) (APIKey, error) {
 	if len(salt) == 0 {
 		return "", errors.Errorf("no salt specified")
 	}
@@ -79,7 +79,7 @@ func VerifyAPIKey(apiKey APIKey, salt string) error {
 }
 
 // SplitAPIKey splits an API key into its pieces: RandomString, Flags and Hash.
-func SplitAPIKey(apiKey APIKey) (string, int8, string, error) {
+func SplitAPIKey(apiKey APIKey) (string, int, string, error) {
 	if len(apiKey) != apiKeyLength {
 		return "", 0, "", errors.Errorf("invalid API key length")
 	}
@@ -91,10 +91,10 @@ func SplitAPIKey(apiKey APIKey) (string, int8, string, error) {
 	}
 	hash := apiKey[randomStringLength+2:]
 
-	return randomString, int8(flags), hash, nil
+	return randomString, flags, hash, nil
 }
 
-func calculateHash(randomString string, flags int8, salt string) hashpkg.Hash {
+func calculateHash(randomString string, flags int, salt string) hashpkg.Hash {
 	hash := md5.New()
 	_, _ = hash.Write([]byte(randomString))
 	_, _ = hash.Write([]byte(salt))

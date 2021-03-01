@@ -24,13 +24,13 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cs3org/reva/internal/http/services/accounts/data"
+	"github.com/cs3org/reva/internal/http/services/siteacc/data"
 	"github.com/cs3org/reva/pkg/smtpclient"
 )
 
 // SendAccountCreated sends an email about account creation.
 func SendAccountCreated(account *data.Account, recipients []string, smtp *smtpclient.SMTPCredentials) error {
-	return send(recipients, "ScienceMesh: User account created", accountCreatedTemplate, account, smtp)
+	return send(recipients, "ScienceMesh: Site account created", accountCreatedTemplate, account, smtp)
 }
 
 // SendAPIKeyAssigned sends an email about API key assignment.

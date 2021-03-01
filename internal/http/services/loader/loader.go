@@ -20,7 +20,6 @@ package loader
 
 import (
 	// Load core HTTP services
-	_ "github.com/cs3org/reva/internal/http/services/accounts"
 	_ "github.com/cs3org/reva/internal/http/services/datagateway"
 	_ "github.com/cs3org/reva/internal/http/services/dataprovider"
 	_ "github.com/cs3org/reva/internal/http/services/helloworld"
@@ -32,6 +31,7 @@ import (
 	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
 	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocs"
 	_ "github.com/cs3org/reva/internal/http/services/prometheus"
+	_ "github.com/cs3org/reva/internal/http/services/siteacc"
 	_ "github.com/cs3org/reva/internal/http/services/sysinfo"
 	_ "github.com/cs3org/reva/internal/http/services/wellknown"
 	// Add your own service here

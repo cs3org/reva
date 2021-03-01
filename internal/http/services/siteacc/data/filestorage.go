@@ -27,7 +27,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
-	"github.com/cs3org/reva/internal/http/services/accounts/config"
+	"github.com/cs3org/reva/internal/http/services/siteacc/config"
 )
 
 // FileStorage implements a filePath-based storage.

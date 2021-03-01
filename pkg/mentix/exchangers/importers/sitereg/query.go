@@ -47,7 +47,7 @@ func decodeQueryData(data []byte) (*siteRegistrationData, error) {
 	return siteData, nil
 }
 
-func extractQueryInformation(params url.Values) (key.SiteIdentifier, int8, string, error) {
+func extractQueryInformation(params url.Values) (key.SiteIdentifier, int, string, error) {
 	apiKey := params.Get("apiKey")
 	if len(apiKey) == 0 {
 		return "", 0, "", errors.Errorf("no API key specified")

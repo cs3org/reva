@@ -28,7 +28,7 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 )
 
-// Account represents a single user account.
+// Account represents a single site account.
 type Account struct {
 	Email     string `json:"email"`
 	FirstName string `json:"firstName"`
@@ -40,13 +40,13 @@ type Account struct {
 	Data AccountData `json:"data"`
 }
 
-// AccountData holds additional data for a user account.
+// AccountData holds additional data for a site account.
 type AccountData struct {
 	APIKey     key.APIKey `json:"apiKey"`
 	Authorized bool       `json:"authorized"`
 }
 
-// Accounts holds an array of user accounts.
+// Accounts holds an array of site accounts.
 type Accounts = []*Account
 
 // GetSiteID returns the site ID (generated from the API key) for the given account.
@@ -89,7 +89,7 @@ func (acc *Account) verify() error {
 	return nil
 }
 
-// NewAccount creates a new user account.
+// NewAccount creates a new site account.
 func NewAccount(email string, firstName, lastName string) (*Account, error) {
 	t := time.Now()
 

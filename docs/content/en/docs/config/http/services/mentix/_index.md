@@ -64,11 +64,11 @@ Mentix exposes its data via an HTTP endpoint using the `webapi` exporter. Data c
              - '/usr/share/prom/sciencemesh_services.json'
   ```
 
-## Accounts service
-Mentix uses the Reva accounts service to query information about user accounts. The following settings under the `accounts` group must be configured properly:
+## Site Accounts service
+Mentix uses the Reva site accounts service to query information about site accounts. The following settings must be configured properly:
 
 {{% dir name="url" type="string" default="" %}}
-The URL of the accounts service.
+The URL of the site accounts service.
 {{< highlight toml >}}
 [http.services.mentix.accounts]
 url = "https://example.com/accounts"

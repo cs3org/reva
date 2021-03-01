@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package accounts
+package siteacc
 
 import (
 	"encoding/json"
@@ -30,8 +30,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
-	"github.com/cs3org/reva/internal/http/services/accounts/config"
-	"github.com/cs3org/reva/internal/http/services/accounts/data"
+	"github.com/cs3org/reva/internal/http/services/siteacc/config"
+	"github.com/cs3org/reva/internal/http/services/siteacc/data"
 	"github.com/cs3org/reva/pkg/mentix/key"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 )
@@ -48,7 +48,7 @@ type svc struct {
 }
 
 const (
-	serviceName = "accounts"
+	serviceName = "siteacc"
 )
 
 // Close is called when this service is being stopped.
@@ -341,7 +341,7 @@ func applyDefaultConfig(conf *config.Configuration) {
 	}
 }
 
-// New returns a new Accounts service.
+// New returns a new Site Accounts service.
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	// Prepare the configuration
 	conf, err := parseConfig(m)
@@ -352,7 +352,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	// Create the accounts manager instance
 	mngr, err := newManager(conf, log)
 	if err != nil {
-		return nil, errors.Wrap(err, "error creating the accounts service")
+		return nil, errors.Wrap(err, "error creating the site accounts service")
 	}
 
 	// Create the service

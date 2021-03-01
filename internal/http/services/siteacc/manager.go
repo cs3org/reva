@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package accounts
+package siteacc
 
 import (
 	"bytes"
@@ -29,10 +29,10 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
-	"github.com/cs3org/reva/internal/http/services/accounts/config"
-	"github.com/cs3org/reva/internal/http/services/accounts/data"
-	"github.com/cs3org/reva/internal/http/services/accounts/email"
-	"github.com/cs3org/reva/internal/http/services/accounts/panel"
+	"github.com/cs3org/reva/internal/http/services/siteacc/config"
+	"github.com/cs3org/reva/internal/http/services/siteacc/data"
+	"github.com/cs3org/reva/internal/http/services/siteacc/email"
+	"github.com/cs3org/reva/internal/http/services/siteacc/panel"
 	"github.com/cs3org/reva/pkg/mentix/key"
 	"github.com/cs3org/reva/pkg/smtpclient"
 )
@@ -46,7 +46,7 @@ const (
 	FindBySiteID = "siteid"
 )
 
-// Manager is responsible for all user account related tasks.
+// Manager is responsible for all site account related tasks.
 type Manager struct {
 	conf *config.Configuration
 	log  *zerolog.Logger
@@ -73,7 +73,7 @@ func (mngr *Manager) initialize(conf *config.Configuration, log *zerolog.Logger)
 
 	mngr.accounts = make(data.Accounts, 0, 32) // Reserve some space for accounts
 
-	// Create the user accounts storage and read all stored data
+	// Create the site accounts storage and read all stored data
 	if storage, err := mngr.createStorage(conf.Storage.Driver); err == nil {
 		mngr.storage = storage
 		mngr.readAllAccounts()
@@ -247,7 +247,7 @@ func (mngr *Manager) AuthorizeAccount(accountData *data.Account, authorized bool
 }
 
 // AssignAPIKeyToAccount is used to assign a new API key to the account identified by the account email; if no such account exists, an error is returned.
-func (mngr *Manager) AssignAPIKeyToAccount(accountData *data.Account, flags int8) error {
+func (mngr *Manager) AssignAPIKeyToAccount(accountData *data.Account, flags int) error {
 	mngr.mutex.Lock()
 	defer mngr.mutex.Unlock()
 
