@@ -19,6 +19,8 @@
 package node_test
 
 import (
+	"github.com/stretchr/testify/mock"
+
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	helpers "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/testhelpers"
@@ -145,6 +147,53 @@ var _ = Describe("Node", func() {
 			Expect(child.ParentID).To(Equal(parent.ID))
 			Expect(child.Name).To(Equal("file1"))
 			Expect(child.Blobsize).To(Equal(int64(1234)))
+		})
+	})
+
+	Describe("CalculateTreeSize", func() {
+		var dir *node.Node
+
+		BeforeEach(func() {
+			env.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil)
+
+			// Create test dir
+			var err error
+			dir, err = env.CreateTestDir("testdir")
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("calculates the size", func() {
+			_, err := env.CreateTestFile("file1", "", 1, dir.ID)
+			Expect(err).ToNot(HaveOccurred())
+
+			size, err := dir.CalculateTreeSize(env.Ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(size).To(Equal(uint64(1)))
+		})
+
+		It("considers all files", func() {
+			_, err := env.CreateTestFile("file1", "", 1, dir.ID)
+			Expect(err).ToNot(HaveOccurred())
+			_, err = env.CreateTestFile("file2", "", 100, dir.ID)
+			Expect(err).ToNot(HaveOccurred())
+
+			size, err := dir.CalculateTreeSize(env.Ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(size).To(Equal(uint64(101)))
+		})
+
+		It("adds the size of child directories", func() {
+			subdir, err := env.CreateTestDir("testdir/subdir")
+			Expect(err).ToNot(HaveOccurred())
+			err = subdir.SetTreeSize(uint64(200))
+			Expect(err).ToNot(HaveOccurred())
+
+			_, err = env.CreateTestFile("file1", "", 1, dir.ID)
+			Expect(err).ToNot(HaveOccurred())
+
+			size, err := dir.CalculateTreeSize(env.Ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(size).To(Equal(uint64(201)))
 		})
 	})
 })

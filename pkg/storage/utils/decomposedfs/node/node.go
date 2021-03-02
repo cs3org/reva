@@ -672,7 +672,12 @@ func (n *Node) CalculateTreeSize(ctx context.Context) (uint64, error) {
 			continue // continue after an error
 		}
 		if !info.IsDir() {
-			size += uint64(info.Size())
+			blobSize, err := ReadBlobSizeAttr(cPath)
+			if err != nil {
+				appctx.GetLogger(ctx).Error().Err(err).Str("childpath", cPath).Msg("could not read blobSize xattr")
+				continue // continue after an error
+			}
+			size += uint64(blobSize)
 		} else {
 			// read from attr
 			var b []byte

@@ -50,11 +50,6 @@ type TestEnv struct {
 	Ctx         context.Context
 }
 
-// Cleanup removes all files from disk
-func (t *TestEnv) Cleanup() {
-	os.RemoveAll(t.Root)
-}
-
 // NewTestEnv prepares a test environment on disk
 // The storage contains some directories and a file:
 //
@@ -96,6 +91,17 @@ func NewTestEnv() (*TestEnv, error) {
 	}
 	ctx := ruser.ContextSetUser(context.Background(), owner)
 
+	env := &TestEnv{
+		Root:        tmpRoot,
+		Fs:          fs,
+		Tree:        tree,
+		Lookup:      lookup,
+		Permissions: permissions,
+		Blobstore:   bs,
+		Owner:       owner,
+		Ctx:         ctx,
+	}
+
 	// Create home
 	err = fs.CreateHome(ctx)
 	if err != nil {
@@ -103,11 +109,13 @@ func NewTestEnv() (*TestEnv, error) {
 	}
 
 	// Create dir1
-	err = fs.CreateDir(ctx, "dir1")
+	dir1, err := env.CreateTestDir("dir1")
 	if err != nil {
 		return nil, err
 	}
-	dir1, err := lookup.NodeFromPath(ctx, "dir1")
+
+	// Create file1 in dir1
+	_, err = env.CreateTestFile("file1", "file1-blobid", 1234, dir1.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -118,45 +126,60 @@ func NewTestEnv() (*TestEnv, error) {
 		return nil, err
 	}
 
-	// Create file in dir1
-	file := node.New(
-		uuid.New().String(),
-		dir1.ID,
-		"file1",
-		1234,
-		"file1-blobid",
-		nil,
-		lookup,
-	)
-	_, err = os.OpenFile(file.InternalPath(), os.O_CREATE, 0700)
-	if err != nil {
-		return nil, err
-	}
-	err = file.WriteMetadata(owner.Id)
-	if err != nil {
-		return nil, err
-	}
-	// Link in parent
-	childNameLink := filepath.Join(lookup.InternalPath(file.ParentID), file.Name)
-	err = os.Symlink("../"+file.ID, childNameLink)
-	if err != nil {
-		return nil, err
-	}
-
 	// Create emptydir
 	err = fs.CreateDir(ctx, "emptydir")
 	if err != nil {
 		return nil, err
 	}
 
-	return &TestEnv{
-		Root:        tmpRoot,
-		Fs:          fs,
-		Tree:        tree,
-		Lookup:      lookup,
-		Permissions: permissions,
-		Blobstore:   bs,
-		Owner:       owner,
-		Ctx:         ctx,
-	}, nil
+	return env, nil
+}
+
+// Cleanup removes all files from disk
+func (t *TestEnv) Cleanup() {
+	os.RemoveAll(t.Root)
+}
+
+// CreateTestDir create a directory and returns a corresponding Node
+func (t *TestEnv) CreateTestDir(name string) (*node.Node, error) {
+	err := t.Fs.CreateDir(t.Ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	n, err := t.Lookup.NodeFromPath(t.Ctx, name)
+	if err != nil {
+		return nil, err
+	}
+
+	return n, nil
+}
+
+// CreateTestFile creates a new file and its metadata and returns a corresponding Node
+func (t *TestEnv) CreateTestFile(name, blobID string, blobSize int64, parentID string) (*node.Node, error) {
+	// Create file in dir1
+	file := node.New(
+		uuid.New().String(),
+		parentID,
+		name,
+		blobSize,
+		blobID,
+		nil,
+		t.Lookup,
+	)
+	_, err := os.OpenFile(file.InternalPath(), os.O_CREATE, 0700)
+	if err != nil {
+		return nil, err
+	}
+	err = file.WriteMetadata(t.Owner.Id)
+	if err != nil {
+		return nil, err
+	}
+	// Link in parent
+	childNameLink := filepath.Join(t.Lookup.InternalPath(file.ParentID), file.Name)
+	err = os.Symlink("../"+file.ID, childNameLink)
+	if err != nil {
+		return nil, err
+	}
+
+	return file, err
 }
