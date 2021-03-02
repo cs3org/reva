@@ -1,4 +1,4 @@
-Enhancement: Separate blobs from metadata in the ocis storage driver
+Change: Separate blobs from metadata in the ocis storage driver
 
 We changed the ocis storage driver to keep the file content separate from the
 metadata by storing the blobs in a separate directory. This allows for using
