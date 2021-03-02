@@ -23,13 +23,11 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/rakyll/statik/fs"
+	"github.com/sciencemesh/meshdirectory-web"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 
-	// SPA UI distribution module
-	_ "github.com/cs3org/reva/examples/meshdirectory/statik"
 	"github.com/cs3org/reva/internal/http/services/ocmd"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
@@ -105,17 +103,6 @@ func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
 	return pool.GetGatewayServiceClient(s.conf.GatewaySvc)
 }
 
-func (s *svc) serveStatik(w http.ResponseWriter, r *http.Request) {
-	statikFS, err := fs.New()
-	if err != nil {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError,
-			fmt.Sprintf("error getting static fs contents"), err)
-		return
-	}
-	server := http.FileServer(statikFS)
-	server.ServeHTTP(w, r)
-}
-
 func (s *svc) serveJSON(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -161,7 +148,7 @@ func (s *svc) Handler() http.Handler {
 			return
 		default:
 			r.URL.Path = head + r.URL.Path
-			s.serveStatik(w, r)
+			meshdirectory_web.ServeMeshDirectorySPA(w, r)
 			return
 		}
 	})
