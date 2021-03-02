@@ -74,7 +74,7 @@ type Tree interface {
 	Propagate(ctx context.Context, node *node.Node) (err error)
 }
 
-// Decomposedfs provides
+// Decomposedfs provides the base for decomposed filesystem implementations
 type Decomposedfs struct {
 	lu           *Lookup
 	tp           Tree
