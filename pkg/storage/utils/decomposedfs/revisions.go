@@ -23,7 +23,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -31,9 +30,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/pkg/errors"
-	"github.com/pkg/xattr"
 )
 
 // Revision entries are stored inside the node folder and start with the same uuid as the current version.
@@ -74,13 +71,9 @@ func (fs *Decomposedfs) ListRevisions(ctx context.Context, ref *provider.Referen
 					Key:   filepath.Base(items[i]),
 					Mtime: uint64(fi.ModTime().Unix()),
 				}
-				attrBytes, err := xattr.Get(items[i], xattrs.BlobsizeAttr)
+				blobSize, err := node.ReadBlobSizeAttr(items[i])
 				if err != nil {
 					return nil, errors.Wrapf(err, "error reading blobsize xattr")
-				}
-				blobSize, err := strconv.ParseInt(string(attrBytes), 10, 64)
-				if err != nil {
-					return nil, errors.Wrapf(err, "invalid blobsize xattr format")
 				}
 				rev.Size = uint64(blobSize)
 				revisions = append(revisions, rev)

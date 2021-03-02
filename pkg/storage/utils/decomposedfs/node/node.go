@@ -167,13 +167,9 @@ func ReadNode(ctx context.Context, lu PathLookup, id string) (n *Node, err error
 		return
 	}
 	// Lookup blobsize
-	if attrBytes, err = xattr.Get(nodePath, xattrs.BlobsizeAttr); err == nil {
-		var blobSize int64
-		if blobSize, err = strconv.ParseInt(string(attrBytes), 10, 64); err == nil {
-			n.Blobsize = blobSize
-		} else {
-			return
-		}
+	var blobSize int64
+	if blobSize, err = ReadBlobSizeAttr(nodePath); err == nil {
+		n.Blobsize = blobSize
 	} else {
 		return
 	}
@@ -857,6 +853,19 @@ func (n *Node) ReadGrant(ctx context.Context, grantee string) (g *provider.Grant
 		return nil, err
 	}
 	return e.Grant(), nil
+}
+
+// ReadBlobSizeAttr reads the blobsize from the xattrs
+func ReadBlobSizeAttr(path string) (int64, error) {
+	attrBytes, err := xattr.Get(path, xattrs.BlobsizeAttr)
+	if err != nil {
+		return 0, errors.Wrapf(err, "error reading blobsize xattr")
+	}
+	blobSize, err := strconv.ParseInt(string(attrBytes), 10, 64)
+	if err != nil {
+		return 0, errors.Wrapf(err, "invalid blobsize xattr format")
+	}
+	return blobSize, nil
 }
 
 func (n *Node) hasUserShares(ctx context.Context) bool {
