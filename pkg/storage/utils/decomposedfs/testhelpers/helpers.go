@@ -63,10 +63,12 @@ func NewTestEnv() (*TestEnv, error) {
 	}
 
 	config := map[string]interface{}{
-		"root":         tmpRoot,
-		"enable_home":  true,
-		"share_folder": "/Shares",
-		"user_layout":  "{{.Id.OpaqueId}}",
+		"root":                tmpRoot,
+		"enable_home":         true,
+		"treetime_accounting": true,
+		"treesize_accounting": true,
+		"share_folder":        "/Shares",
+		"user_layout":         "{{.Id.OpaqueId}}",
 	}
 	o, err := options.New(config)
 	if err != nil {

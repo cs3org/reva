@@ -195,4 +195,87 @@ var _ = Describe("Tree", func() {
 			})
 		})
 	})
+
+	Describe("Propagate", func() {
+		var dir *node.Node
+
+		JustBeforeEach(func() {
+			env.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil)
+
+			// Create test dir
+			var err error
+			dir, err = env.CreateTestDir("testdir")
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		Describe("with TreeSizeAccounting enabled", func() {
+			It("calculates the size", func() {
+				file, err := env.CreateTestFile("file1", "", 1, dir.ID)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = env.Tree.Propagate(env.Ctx, file)
+				Expect(err).ToNot(HaveOccurred())
+				size, err := dir.GetTreeSize()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(size).To(Equal(uint64(1)))
+			})
+
+			It("considers all files", func() {
+				_, err := env.CreateTestFile("file1", "", 1, dir.ID)
+				Expect(err).ToNot(HaveOccurred())
+				file2, err := env.CreateTestFile("file2", "", 100, dir.ID)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = env.Tree.Propagate(env.Ctx, file2)
+				Expect(err).ToNot(HaveOccurred())
+				size, err := dir.GetTreeSize()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(size).To(Equal(uint64(101)))
+			})
+
+			It("adds the size of child directories", func() {
+				subdir, err := env.CreateTestDir("testdir/200bytes")
+				Expect(err).ToNot(HaveOccurred())
+				err = subdir.SetTreeSize(uint64(200))
+				Expect(err).ToNot(HaveOccurred())
+
+				file, err := env.CreateTestFile("file1", "", 1, dir.ID)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = env.Tree.Propagate(env.Ctx, file)
+				Expect(err).ToNot(HaveOccurred())
+				size, err := dir.GetTreeSize()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(size).To(Equal(uint64(201)))
+			})
+
+			It("stops at nodes with no propagation flag", func() {
+				subdir, err := env.CreateTestDir("testdir/200bytes")
+				Expect(err).ToNot(HaveOccurred())
+				err = subdir.SetTreeSize(uint64(200))
+				Expect(err).ToNot(HaveOccurred())
+
+				err = env.Tree.Propagate(env.Ctx, subdir)
+				Expect(err).ToNot(HaveOccurred())
+				size, err := dir.GetTreeSize()
+				Expect(size).To(Equal(uint64(200)))
+				Expect(err).ToNot(HaveOccurred())
+
+				stopdir, err := env.CreateTestDir("testdir/stophere")
+				Expect(err).ToNot(HaveOccurred())
+				err = xattr.Set(stopdir.InternalPath(), xattrs.PropagationAttr, []byte("0"))
+				Expect(err).ToNot(HaveOccurred())
+				otherdir, err := env.CreateTestDir("testdir/stophere/lotsofbytes")
+				Expect(err).ToNot(HaveOccurred())
+				err = otherdir.SetTreeSize(uint64(100000))
+				Expect(err).ToNot(HaveOccurred())
+				err = env.Tree.Propagate(env.Ctx, otherdir)
+				Expect(err).ToNot(HaveOccurred())
+
+				size, err = dir.GetTreeSize()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(size).To(Equal(uint64(200)))
+			})
+		})
+	})
 })

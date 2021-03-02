@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -501,7 +502,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 			updateTreeSize := false
 
 			var treeSize, calculatedTreeSize uint64
-			calculatedTreeSize, err = n.CalculateTreeSize(ctx)
+			calculatedTreeSize, err = calculateTreeSize(ctx, n.InternalPath())
 			if err != nil {
 				continue
 			}
@@ -540,6 +541,55 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 		return
 	}
 	return
+}
+
+func calculateTreeSize(ctx context.Context, nodePath string) (uint64, error) {
+	var size uint64
+
+	f, err := os.Open(nodePath)
+	if err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Msg("could not open dir")
+		return 0, err
+	}
+	defer f.Close()
+
+	names, err := f.Readdirnames(0)
+	if err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Msg("could not read dirnames")
+		return 0, err
+	}
+	for i := range names {
+		cPath := filepath.Join(nodePath, names[i])
+		info, err := os.Stat(cPath)
+		if err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Str("childpath", cPath).Msg("could not stat child entry")
+			continue // continue after an error
+		}
+		if !info.IsDir() {
+			blobSize, err := node.ReadBlobSizeAttr(cPath)
+			if err != nil {
+				appctx.GetLogger(ctx).Error().Err(err).Str("childpath", cPath).Msg("could not read blobSize xattr")
+				continue // continue after an error
+			}
+			size += uint64(blobSize)
+		} else {
+			// read from attr
+			var b []byte
+			// xattr.Get will follow the symlink
+			if b, err = xattr.Get(cPath, xattrs.TreesizeAttr); err != nil {
+				// TODO recursively descend and recalculate treesize
+				continue // continue after an error
+			}
+			csize, err := strconv.ParseUint(string(b), 10, 64)
+			if err != nil {
+				// TODO recursively descend and recalculate treesize
+				continue // continue after an error
+			}
+			size += csize
+		}
+	}
+	return size, err
+
 }
 
 // WriteBlob writes a blob to the blobstore

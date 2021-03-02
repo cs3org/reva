@@ -646,58 +646,6 @@ func readQuotaIntoOpaque(ctx context.Context, nodePath string, ri *provider.Reso
 	}
 }
 
-// CalculateTreeSize will sum up the size of all children of a node
-func (n *Node) CalculateTreeSize(ctx context.Context) (uint64, error) {
-	var size uint64
-	// TODO check if this is a dir?
-	nodePath := n.InternalPath()
-
-	f, err := os.Open(nodePath)
-	if err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Msg("could not open dir")
-		return 0, err
-	}
-	defer f.Close()
-
-	names, err := f.Readdirnames(0)
-	if err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Msg("could not read dirnames")
-		return 0, err
-	}
-	for i := range names {
-		cPath := filepath.Join(nodePath, names[i])
-		info, err := os.Stat(cPath)
-		if err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Str("childpath", cPath).Msg("could not stat child entry")
-			continue // continue after an error
-		}
-		if !info.IsDir() {
-			blobSize, err := ReadBlobSizeAttr(cPath)
-			if err != nil {
-				appctx.GetLogger(ctx).Error().Err(err).Str("childpath", cPath).Msg("could not read blobSize xattr")
-				continue // continue after an error
-			}
-			size += uint64(blobSize)
-		} else {
-			// read from attr
-			var b []byte
-			// xattr.Get will follow the symlink
-			if b, err = xattr.Get(cPath, xattrs.TreesizeAttr); err != nil {
-				// TODO recursively descend and recalculate treesize
-				continue // continue after an error
-			}
-			csize, err := strconv.ParseUint(string(b), 10, 64)
-			if err != nil {
-				// TODO recursively descend and recalculate treesize
-				continue // continue after an error
-			}
-			size += csize
-		}
-	}
-	return size, err
-
-}
-
 // HasPropagation checks if the propagation attribute exists and is set to "1"
 func (n *Node) HasPropagation() (propagation bool) {
 	if b, err := xattr.Get(n.lu.InternalPath(n.ID), xattrs.PropagationAttr); err == nil {
