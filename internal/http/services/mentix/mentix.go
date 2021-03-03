@@ -137,12 +137,8 @@ func applyDefaultConfig(conf *config.Configuration) {
 	}
 
 	// Importers
-	if conf.Importers.WebAPI.Endpoint == "" {
-		conf.Importers.WebAPI.Endpoint = "/sites"
-	}
-
-	if conf.Importers.AdminAPI.Endpoint == "" {
-		conf.Importers.AdminAPI.Endpoint = "/admin"
+	if conf.Importers.SiteRegistration.Endpoint == "" {
+		conf.Importers.SiteRegistration.Endpoint = "/sitereg"
 	}
 
 	// Exporters

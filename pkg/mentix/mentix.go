@@ -27,6 +27,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/mentix/accservice"
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/connectors"
 	"github.com/cs3org/reva/pkg/mentix/entity"
@@ -267,9 +268,13 @@ func (mntx *Mentix) applyMeshDataSet(meshDataSet meshdata.Map) error {
 
 		mntx.meshDataSet = meshDataSet
 
-		for _, exporter := range mntx.exporters.Exporters {
-			if err := exporter.Update(mntx.meshDataSet); err != nil {
-				return fmt.Errorf("unable to update mesh data on exporter '%v': %v", exporter.GetName(), err)
+		exchangers := make([]exchangers.Exchanger, 0, len(mntx.exporters.Exporters)+len(mntx.importers.Importers))
+		exchangers = append(exchangers, mntx.exporters.Exchangers()...)
+		exchangers = append(exchangers, mntx.importers.Exchangers()...)
+
+		for _, exchanger := range exchangers {
+			if err := exchanger.Update(mntx.meshDataSet); err != nil {
+				return fmt.Errorf("unable to update mesh data on exchanger '%v': %v", exchanger.GetName(), err)
 			}
 		}
 	}
@@ -310,13 +315,18 @@ func (mntx *Mentix) handleRequest(exchangers []exchangers.RequestExchanger, w ht
 	// Ask each RequestExchanger if it wants to handle the request
 	for _, exchanger := range exchangers {
 		if exchanger.WantsRequest(r) {
-			exchanger.HandleRequest(w, r)
+			exchanger.HandleRequest(w, r, mntx.conf, log)
 		}
 	}
 }
 
 // New creates a new Mentix service instance.
 func New(conf *config.Configuration, log *zerolog.Logger) (*Mentix, error) {
+	// Configure the accounts service upfront
+	if err := accservice.InitAccountsService(conf); err != nil {
+		return nil, fmt.Errorf("unable to initialize the accounts service: %v", err)
+	}
+
 	mntx := new(Mentix)
 	if err := mntx.initialize(conf, log); err != nil {
 		return nil, fmt.Errorf("unable to initialize Mentix: %v", err)

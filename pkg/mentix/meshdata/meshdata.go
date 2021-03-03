@@ -33,10 +33,6 @@ const (
 
 	// StatusObsolete flags the mesh data for removal.
 	StatusObsolete
-	// StatusAuthorize flags the mesh data for authorization.
-	StatusAuthorize
-	// StatusUnauthorize flags the mesh data for unauthorization.
-	StatusUnauthorize
 )
 
 // MeshData holds the entire mesh data managed by Mentix.
@@ -65,16 +61,14 @@ func (meshData *MeshData) AddSite(site *Site) {
 }
 
 // RemoveSite removes the provided site.
-func (meshData *MeshData) RemoveSite(id string) {
-	if site := meshData.FindSite(id); site != nil {
-		for idx, siteExisting := range meshData.Sites {
-			if siteExisting == site {
-				lastIdx := len(meshData.Sites) - 1
-				meshData.Sites[idx] = meshData.Sites[lastIdx]
-				meshData.Sites[lastIdx] = nil
-				meshData.Sites = meshData.Sites[:lastIdx]
-				break
-			}
+func (meshData *MeshData) RemoveSite(site *Site) {
+	for idx, siteExisting := range meshData.Sites {
+		if strings.EqualFold(siteExisting.ID, site.ID) { // Remove the site by its ID
+			lastIdx := len(meshData.Sites) - 1
+			meshData.Sites[idx] = meshData.Sites[lastIdx]
+			meshData.Sites[lastIdx] = nil
+			meshData.Sites = meshData.Sites[:lastIdx]
+			break
 		}
 	}
 }
@@ -99,16 +93,14 @@ func (meshData *MeshData) AddServiceType(serviceType *ServiceType) {
 }
 
 // RemoveServiceType removes the provided service type.
-func (meshData *MeshData) RemoveServiceType(name string) {
-	if serviceType := meshData.FindServiceType(name); serviceType != nil {
-		for idx, svcTypeExisting := range meshData.ServiceTypes {
-			if svcTypeExisting == serviceType {
-				lastIdx := len(meshData.ServiceTypes) - 1
-				meshData.ServiceTypes[idx] = meshData.ServiceTypes[lastIdx]
-				meshData.ServiceTypes[lastIdx] = nil
-				meshData.ServiceTypes = meshData.ServiceTypes[:lastIdx]
-				break
-			}
+func (meshData *MeshData) RemoveServiceType(serviceType *ServiceType) {
+	for idx, svcTypeExisting := range meshData.ServiceTypes {
+		if strings.EqualFold(svcTypeExisting.Name, serviceType.Name) { // Remove the service type by its name
+			lastIdx := len(meshData.ServiceTypes) - 1
+			meshData.ServiceTypes[idx] = meshData.ServiceTypes[lastIdx]
+			meshData.ServiceTypes[lastIdx] = nil
+			meshData.ServiceTypes = meshData.ServiceTypes[:lastIdx]
+			break
 		}
 	}
 }
@@ -137,11 +129,11 @@ func (meshData *MeshData) Merge(inData *MeshData) {
 // Unmerge removes data from another MeshData instance from this one.
 func (meshData *MeshData) Unmerge(inData *MeshData) {
 	for _, site := range inData.Sites {
-		meshData.RemoveSite(site.ID)
+		meshData.RemoveSite(site)
 	}
 
 	for _, serviceType := range inData.ServiceTypes {
-		meshData.RemoveServiceType(serviceType.Name)
+		meshData.RemoveServiceType(serviceType)
 	}
 }
 

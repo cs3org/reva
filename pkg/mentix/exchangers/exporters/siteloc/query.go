@@ -24,11 +24,14 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/rs/zerolog"
+
+	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 
 // HandleDefaultQuery processes a basic query.
-func HandleDefaultQuery(meshData *meshdata.MeshData, params url.Values) (int, []byte, error) {
+func HandleDefaultQuery(meshData *meshdata.MeshData, params url.Values, _ *config.Configuration, _ *zerolog.Logger) (int, []byte, error) {
 	// Convert the mesh data
 	locData, err := convertMeshDataToLocationData(meshData)
 	if err != nil {
@@ -49,7 +52,7 @@ func convertMeshDataToLocationData(meshData *meshdata.MeshData) ([]*SiteLocation
 	locations := make([]*SiteLocation, 0, len(meshData.Sites))
 	for _, site := range meshData.Sites {
 		locations = append(locations, &SiteLocation{
-			Site:      site.Name,
+			SiteID:    site.ID,
 			FullName:  site.FullName,
 			Longitude: site.Longitude,
 			Latitude:  site.Latitude,

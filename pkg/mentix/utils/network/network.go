@@ -35,11 +35,21 @@ type URLParams map[string]string
 // ResponseParams holds parameters of an HTTP response.
 type ResponseParams map[string]interface{}
 
+// BasicAuth holds user credentials for basic HTTP authentication.
+type BasicAuth struct {
+	User     string
+	Password string
+}
+
 // GenerateURL creates a URL object from a host, path and optional parameters.
 func GenerateURL(host string, path string, params URLParams) (*url.URL, error) {
 	fullURL, err := url.Parse(host)
 	if err != nil {
 		return nil, fmt.Errorf("unable to generate URL: base=%v, path=%v, params=%v", host, path, params)
+	}
+
+	if len(fullURL.Scheme) == 0 {
+		fullURL.Scheme = "https"
 	}
 
 	fullURL.Path = p.Join(fullURL.Path, path)
@@ -54,18 +64,23 @@ func GenerateURL(host string, path string, params URLParams) (*url.URL, error) {
 }
 
 // ReadEndpoint reads data from an HTTP endpoint.
-func ReadEndpoint(host string, path string, params URLParams) ([]byte, error) {
-	endpointURL, err := GenerateURL(host, path, params)
+func ReadEndpoint(endpointURL *url.URL, auth *BasicAuth, checkStatus bool) ([]byte, error) {
+	// Prepare the request
+	req, err := http.NewRequest("GET", endpointURL.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("unable to generate endpoint URL: %v", err)
+		return nil, fmt.Errorf("unable to create HTTP request: %v", err)
+	}
+
+	if auth != nil {
+		req.SetBasicAuth(auth.User, auth.Password)
 	}
 
 	// Fetch the data and read the body
-	resp, err := http.Get(endpointURL.String())
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get data from endpoint: %v", err)
 	}
-	if resp.StatusCode >= 400 {
+	if checkStatus && resp.StatusCode >= 400 {
 		return nil, fmt.Errorf("invalid response received: %v", resp.Status)
 	}
 
