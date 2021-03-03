@@ -62,7 +62,7 @@ func (bs *Blobstore) Upload(key string, data io.Reader) error {
 
 // Download retrieves a blob from the blobstore for reading
 func (bs *Blobstore) Download(key string) (io.ReadCloser, error) {
-	file, err := os.Open(path.Join(bs.root, key))
+	file, err := os.Open(bs.path(key))
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not read blob '%s'", key)
 	}
