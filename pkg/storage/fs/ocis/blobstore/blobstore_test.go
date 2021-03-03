@@ -82,6 +82,15 @@ var _ = Describe("Blobstore", func() {
 		})
 
 		Describe("Download", func() {
+			It("cleans the key", func() {
+				reader, err := bs.Download("../" + key)
+				Expect(err).ToNot(HaveOccurred())
+
+				readData, err := ioutil.ReadAll(reader)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(readData).To(Equal(data))
+			})
+
 			It("returns a reader to the blob", func() {
 				reader, err := bs.Download(key)
 				Expect(err).ToNot(HaveOccurred())

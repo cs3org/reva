@@ -22,7 +22,7 @@ import (
 	"bufio"
 	"io"
 	"os"
-	"path"
+	"path/filepath"
 
 	"github.com/pkg/errors"
 )
@@ -79,5 +79,5 @@ func (bs *Blobstore) Delete(key string) error {
 }
 
 func (bs *Blobstore) path(key string) string {
-	return path.Join(bs.root, key)
+	return filepath.Join(bs.root, filepath.Clean(filepath.Join("/", key)))
 }
