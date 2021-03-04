@@ -169,7 +169,7 @@ func FormatUserID(u *userpb.UserId) string {
 
 // ExtractUserID retrieves a CS3API user ID from a string
 func ExtractUserID(u string) *userpb.UserId {
-	parts := strings.Split(u, ":")
+	parts := strings.SplitN(u, ":", 2)
 	if len(parts) > 1 {
 		return &userpb.UserId{OpaqueId: parts[0], Idp: parts[1]}
 	}
@@ -186,7 +186,7 @@ func FormatGroupID(u *grouppb.GroupId) string {
 
 // ExtractGroupID retrieves a CS3API group ID from a string
 func ExtractGroupID(u string) *grouppb.GroupId {
-	parts := strings.Split(u, ":")
+	parts := strings.SplitN(u, ":", 2)
 	if len(parts) > 1 {
 		return &grouppb.GroupId{OpaqueId: parts[0], Idp: parts[1]}
 	}

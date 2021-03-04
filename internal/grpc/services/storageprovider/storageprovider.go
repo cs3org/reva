@@ -418,7 +418,30 @@ func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeReques
 		Status: status.NewOK(ctx),
 	}
 	return res, nil
+}
 
+func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+	return &provider.CreateStorageSpaceResponse{
+		Status: status.NewUnimplemented(ctx, errors.New("CreateStorageSpace not implemented"), "CreateStorageSpace not implemented"),
+	}, nil
+}
+
+func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
+	return &provider.ListStorageSpacesResponse{
+		Status: status.NewUnimplemented(ctx, errors.New("ListStorageSpaces not implemented"), "ListStorageSpaces not implemented"),
+	}, nil
+}
+
+func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	return &provider.UpdateStorageSpaceResponse{
+		Status: status.NewUnimplemented(ctx, errors.New("UpdateStorageSpace not implemented"), "UpdateStorageSpace not implemented"),
+	}, nil
+}
+
+func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
+	return &provider.DeleteStorageSpaceResponse{
+		Status: status.NewUnimplemented(ctx, errors.New("DeleteStorageSpace not implemented"), "DeleteStorageSpace not implemented"),
+	}, nil
 }
 
 func (s *service) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {

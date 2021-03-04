@@ -51,13 +51,14 @@ func init() {
 }
 
 type config struct {
-	SharePasswordHashCost int    `mapstructure:"password_hash_cost"`
-	JanitorRunInterval    int    `mapstructure:"janitor_run_interval"`
-	DbUsername            string `mapstructure:"db_username"`
-	DbPassword            string `mapstructure:"db_password"`
-	DbHost                string `mapstructure:"db_host"`
-	DbPort                int    `mapstructure:"db_port"`
-	DbName                string `mapstructure:"db_name"`
+	SharePasswordHashCost      int    `mapstructure:"password_hash_cost"`
+	JanitorRunInterval         int    `mapstructure:"janitor_run_interval"`
+	EnableExpiredSharesCleanup bool   `mapstructure:"enable_expired_shares_cleanup"`
+	DbUsername                 string `mapstructure:"db_username"`
+	DbPassword                 string `mapstructure:"db_password"`
+	DbHost                     string `mapstructure:"db_host"`
+	DbPort                     int    `mapstructure:"db_port"`
+	DbName                     string `mapstructure:"db_name"`
 }
 
 type manager struct {
@@ -75,6 +76,10 @@ func (c *config) init() {
 }
 
 func (m *manager) startJanitorRun() {
+	if !m.c.EnableExpiredSharesCleanup {
+		return
+	}
+
 	ticker := time.NewTicker(time.Duration(m.c.JanitorRunInterval) * time.Second)
 	work := make(chan os.Signal, 1)
 	signal.Notify(work, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT)
@@ -415,6 +420,10 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token, password str
 }
 
 func (m *manager) cleanupExpiredShares() error {
+	if !m.c.EnableExpiredSharesCleanup {
+		return nil
+	}
+
 	query := "delete from oc_share where expiration IS NOT NULL AND expiration < ?"
 	params := []interface{}{time.Now().Format("2006-01-02 03:04:05")}
 

@@ -90,10 +90,99 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 			Status: status.NewInternal(ctx, err, "error calling CreateHome"),
 		}, nil
 	}
-
 	return res, nil
-
 }
+
+func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+	log := appctx.GetLogger(ctx)
+	// TODO: needs to be fixed
+	c, err := s.findByPath(ctx, req.Type)
+	if err != nil {
+		return &provider.CreateStorageSpaceResponse{
+			Status: status.NewStatusFromErrType(ctx, "error finding path", err),
+		}, nil
+	}
+
+	res, err := c.CreateStorageSpace(ctx, req)
+	if err != nil {
+		log.Err(err).Msg("gateway: error creating storage space on storage provider")
+		return &provider.CreateStorageSpaceResponse{
+			Status: status.NewInternal(ctx, err, "error calling CreateStorageSpace"),
+		}, nil
+	}
+	return res, nil
+}
+
+func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
+	log := appctx.GetLogger(ctx)
+	// TODO: needs to be fixed
+	var id *provider.StorageSpaceId
+	for _, f := range req.Filters {
+		if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID {
+			id = f.GetId()
+		}
+	}
+	c, err := s.findByID(ctx, &provider.ResourceId{
+		OpaqueId: id.OpaqueId,
+	})
+	if err != nil {
+		return &provider.ListStorageSpacesResponse{
+			Status: status.NewStatusFromErrType(ctx, "error finding path", err),
+		}, nil
+	}
+
+	res, err := c.ListStorageSpaces(ctx, req)
+	if err != nil {
+		log.Err(err).Msg("gateway: error listing storage space on storage provider")
+		return &provider.ListStorageSpacesResponse{
+			Status: status.NewInternal(ctx, err, "error calling ListStorageSpaces"),
+		}, nil
+	}
+	return res, nil
+}
+
+func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	log := appctx.GetLogger(ctx)
+	// TODO: needs to be fixed
+	c, err := s.findByID(ctx, req.StorageSpace.Root)
+	if err != nil {
+		return &provider.UpdateStorageSpaceResponse{
+			Status: status.NewStatusFromErrType(ctx, "error finding ID", err),
+		}, nil
+	}
+
+	res, err := c.UpdateStorageSpace(ctx, req)
+	if err != nil {
+		log.Err(err).Msg("gateway: error creating update space on storage provider")
+		return &provider.UpdateStorageSpaceResponse{
+			Status: status.NewInternal(ctx, err, "error calling UpdateStorageSpace"),
+		}, nil
+	}
+	return res, nil
+}
+
+func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
+	log := appctx.GetLogger(ctx)
+	// TODO: needs to be fixed
+	c, err := s.findByID(ctx, &provider.ResourceId{
+		OpaqueId: req.Id.OpaqueId,
+	})
+	if err != nil {
+		return &provider.DeleteStorageSpaceResponse{
+			Status: status.NewStatusFromErrType(ctx, "error finding path", err),
+		}, nil
+	}
+
+	res, err := c.DeleteStorageSpace(ctx, req)
+	if err != nil {
+		log.Err(err).Msg("gateway: error deleting storage space on storage provider")
+		return &provider.DeleteStorageSpaceResponse{
+			Status: status.NewInternal(ctx, err, "error calling DeleteStorageSpace"),
+		}, nil
+	}
+	return res, nil
+}
+
 func (s *svc) GetHome(ctx context.Context, _ *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
 	home := s.getHome(ctx)
 	homeRes := &provider.GetHomeResponse{Path: home, Status: status.NewOK(ctx)}
