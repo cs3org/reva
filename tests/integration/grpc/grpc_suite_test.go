@@ -82,9 +82,9 @@ func startRevads(configs map[string]string, variables map[string]string) (map[st
 
 	revads := map[string]*Revad{}
 	addresses := map[string]string{}
-	for name, _ := range configs {
+	for name := range configs {
 		addresses[name] = fmt.Sprintf("localhost:%d", port)
-		port += 1
+		port++
 	}
 
 	for name, config := range configs {
