@@ -63,12 +63,13 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 	conf.init()
 
 	m := manager{
-		mutex:              &sync.Mutex{},
-		marshaler:          jsonpb.Marshaler{},
-		unmarshaler:        jsonpb.Unmarshaler{},
-		file:               conf.File,
-		passwordHashCost:   conf.SharePasswordHashCost,
-		janitorRunInterval: conf.JanitorRunInterval,
+		mutex:                      &sync.Mutex{},
+		marshaler:                  jsonpb.Marshaler{},
+		unmarshaler:                jsonpb.Unmarshaler{},
+		file:                       conf.File,
+		passwordHashCost:           conf.SharePasswordHashCost,
+		janitorRunInterval:         conf.JanitorRunInterval,
+		enableExpiredSharesCleanup: conf.EnableExpiredSharesCleanup,
 	}
 
 	// attempt to create the db file
@@ -97,9 +98,10 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 }
 
 type config struct {
-	File                  string `mapstructure:"file"`
-	SharePasswordHashCost int    `mapstructure:"password_hash_cost"`
-	JanitorRunInterval    int    `mapstructure:"janitor_run_interval"`
+	File                       string `mapstructure:"file"`
+	SharePasswordHashCost      int    `mapstructure:"password_hash_cost"`
+	JanitorRunInterval         int    `mapstructure:"janitor_run_interval"`
+	EnableExpiredSharesCleanup bool   `mapstructure:"enable_expired_shares_cleanup"`
 }
 
 func (c *config) init() {
@@ -118,13 +120,18 @@ type manager struct {
 	mutex *sync.Mutex
 	file  string
 
-	marshaler          jsonpb.Marshaler
-	unmarshaler        jsonpb.Unmarshaler
-	passwordHashCost   int
-	janitorRunInterval int
+	marshaler                  jsonpb.Marshaler
+	unmarshaler                jsonpb.Unmarshaler
+	passwordHashCost           int
+	janitorRunInterval         int
+	enableExpiredSharesCleanup bool
 }
 
 func (m *manager) startJanitorRun() {
+	if !m.enableExpiredSharesCleanup {
+		return
+	}
+
 	ticker := time.NewTicker(time.Duration(m.janitorRunInterval) * time.Second)
 	work := make(chan os.Signal, 1)
 	signal.Notify(work, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT)
@@ -414,6 +421,10 @@ func (m *manager) cleanupExpiredShares() {
 }
 
 func (m *manager) revokeExpiredPublicShare(ctx context.Context, s *link.PublicShare, u *user.User) error {
+	if !m.enableExpiredSharesCleanup {
+		return nil
+	}
+
 	m.mutex.Unlock()
 	defer m.mutex.Lock()
 

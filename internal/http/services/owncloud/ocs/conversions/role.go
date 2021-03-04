@@ -92,6 +92,15 @@ func (r *Role) OCSPermissions() Permissions {
 func (r *Role) WebDAVPermissions(isDir, isShared, isMountpoint, isPublic bool) string {
 	var b strings.Builder
 	//b.Grow(7)
+	if !isPublic && isShared {
+		fmt.Fprintf(&b, "S")
+	}
+	if r.ocsPermissions.Contain(PermissionShare) {
+		fmt.Fprintf(&b, "R")
+	}
+	if !isPublic && isMountpoint {
+		fmt.Fprintf(&b, "M")
+	}
 	if r.ocsPermissions.Contain(PermissionDelete) {
 		fmt.Fprintf(&b, "D") // TODO oc10 shows received shares as deletable
 	}
@@ -103,15 +112,6 @@ func (r *Role) WebDAVPermissions(isDir, isShared, isMountpoint, isPublic bool) s
 	}
 	if isDir && r.ocsPermissions.Contain(PermissionCreate) {
 		fmt.Fprintf(&b, "CK")
-	}
-	if !isPublic && isShared {
-		fmt.Fprintf(&b, "S")
-	}
-	if r.ocsPermissions.Contain(PermissionShare) {
-		fmt.Fprintf(&b, "R")
-	}
-	if !isPublic && isMountpoint {
-		fmt.Fprintf(&b, "M")
 	}
 	return b.String()
 }

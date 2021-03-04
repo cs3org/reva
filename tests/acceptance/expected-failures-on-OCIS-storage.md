@@ -327,12 +327,6 @@ Scenario Outline: try to create a folder with a name of an existing file
 ### [Different webdav properties from core](https://github.com/owncloud/ocis/issues/1302)
 -   [apiWebdavProperties2/getFileProperties.feature:327](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L327)
 -   [apiWebdavProperties2/getFileProperties.feature:328](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L328)
-Scenario Outline: Propfind the permissions on a file using webdav api `Property "oc:permissions" found with value "DNVWR", expected "/RM{0,1}DNVW/"`
--   [apiWebdavProperties2/getFileProperties.feature:441](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L441)
--   [apiWebdavProperties2/getFileProperties.feature:442](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L442)
-Scenario Outline: Propfind the permissions on a folder using webdav api `Property "oc:permissions" found with value "DNVCKR", expected "/RM{0,1}DNVCK/"`
--   [apiWebdavProperties2/getFileProperties.feature:454](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L454)
--   [apiWebdavProperties2/getFileProperties.feature:455](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L455)
 
 #### [Some failing tests with Webdav custom properties](https://github.com/owncloud/ocis/issues/1297)
 _ocdav: double check the webdav property parsing when custom namespaces are used_
@@ -1273,9 +1267,7 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 
 #### [share permissions are not enforced](https://github.com/owncloud/product/issues/270)
 
--   [apiShareManagementToShares/mergeShare.feature:24](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L24)
 -   [apiShareManagementToShares/mergeShare.feature:52](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L52)
--   [apiShareManagementToShares/mergeShare.feature:79](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L79)
 -   [apiShareManagementToShares/mergeShare.feature:99](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L99)
 -   [apiShareReshareToShares3/reShareUpdate.feature:59](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares3/reShareUpdate.feature#L59)
 -   [apiShareReshareToShares3/reShareUpdate.feature:60](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares3/reShareUpdate.feature#L60)
@@ -1682,8 +1674,6 @@ Scenario Outline: Renaming a file to a path with extension .part should not be p
 -   [apiShareCreateSpecialToShares2/createShareDefaultFolderForReceivedShares.feature:22](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareDefaultFolderForReceivedShares.feature#L22)
 
 #### [Group shares support ](https://github.com/owncloud/ocis/issues/1289)
--   [apiShareOperationsToShares/gettingShares.feature:103](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares/gettingShares.feature#L103)
--   [apiShareOperationsToShares/gettingShares.feature:104](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares/gettingShares.feature#L104)
 -   [apiShareOperationsToShares/gettingShares.feature:184](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares/gettingShares.feature#L184)
 
 #### [various sharing settings cannot be set](https://github.com/owncloud/ocis/issues/1328)
@@ -1701,8 +1691,6 @@ Scenario Outline: Renaming a file to a path with extension .part should not be p
 #### [Sharing seems to work but does not work](https://github.com/owncloud/ocis/issues/1303)
 -   [apiShareUpdateToShares/updateShare.feature:61](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareUpdateToShares/updateShare.feature#L61)
 -   [apiShareUpdateToShares/updateShare.feature:62](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareUpdateToShares/updateShare.feature#L62)
--   [apiShareUpdateToShares/updateShare.feature:75](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareUpdateToShares/updateShare.feature#L75)
--   [apiShareUpdateToShares/updateShare.feature:76](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareUpdateToShares/updateShare.feature#L76)
 -   [apiShareUpdateToShares/updateShare.feature:115](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareUpdateToShares/updateShare.feature#L115)
 -   [apiShareUpdateToShares/updateShare.feature:116](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareUpdateToShares/updateShare.feature#L116)
 -   [apiShareUpdateToShares/updateShare.feature:117](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareUpdateToShares/updateShare.feature#L117)
