@@ -146,7 +146,7 @@ func startRevads(configs map[string]string, variables map[string]string) (map[st
 				if err != nil {
 					return errors.Wrap(err, "Could not kill revad")
 				}
-				waitForPort(ownAddress, "close")
+				_ = waitForPort(ownAddress, "close")
 				if keepLogs {
 					fmt.Println("Test failed, keeping root", tmpRoot, "around for debugging")
 				} else {
