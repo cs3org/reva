@@ -2087,3 +2087,10 @@ Scenario Outline: Do a PROPFIND to a non-existing URL
 -   [apiTranslation/translation.feature:25](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTranslation/translation.feature#L25)
 -   [apiTranslation/translation.feature:26](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTranslation/translation.feature#L26)
 -   [apiTranslation/translation.feature:27](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTranslation/translation.feature#L27)
+
+#### [Sharing a same file twice to the same group](https://github.com/owncloud/ocis/issues/1710)
+[apiShareManagementBasicToShares/createShareToSharesFolder.feature:679](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L679)
+[apiShareManagementBasicToShares/createShareToSharesFolder.feature:680](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L680)
+
+#### [Request to edit non-existing user by authorized admin gets unauthorized in http response](https://github.com/owncloud/core/issues/38423)
+[apiAuthOcs/ocsPUTAuth.feature:26](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsPUTAuth.feature#L26)
