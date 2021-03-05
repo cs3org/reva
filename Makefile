@@ -37,7 +37,10 @@ build-reva: imports
 	go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
 
 test: off
-	go test -race ./...
+	go test -race $$(go list ./... | grep -v /tests/integration)
+
+test-integration: build-ci
+	cd tests/integration && go test -race ./...
 
 lint:
 	go run tools/check-license/check-license.go
