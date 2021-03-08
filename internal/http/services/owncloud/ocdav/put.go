@@ -206,6 +206,20 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 		w.Header().Set("X-OC-Mtime", "accepted")
 	}
 
+	// Set other OC headers
+	opaqueMap["Oc-Chunk-Size"] = &typespb.OpaqueEntry{
+		Decoder: "plain",
+		Value:   []byte(r.Header.Get("Oc-Chunk-Size")),
+	}
+	opaqueMap["Oc-Chunked"] = &typespb.OpaqueEntry{
+		Decoder: "plain",
+		Value:   []byte(r.Header.Get("Oc-Chunked")),
+	}
+	opaqueMap["Oc-Total-Length"] = &typespb.OpaqueEntry{
+		Decoder: "plain",
+		Value:   []byte(r.Header.Get("Oc-Total-Length")),
+	}
+
 	// curl -X PUT https://demo.owncloud.com/remote.php/webdav/testcs.bin -u demo:demo -d '123' -v -H 'OC-Checksum: SHA1:40bd001563085fc35165329ea1ff5c5ecbdbbeef'
 
 	var cparts []string

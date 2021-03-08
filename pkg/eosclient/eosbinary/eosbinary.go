@@ -578,9 +578,11 @@ func (c *Client) Write(ctx context.Context, uid, gid, path string, stream io.Rea
 	defer os.RemoveAll(fd.Name())
 
 	// copy stream to local temp file
-	_, err = io.Copy(fd, stream)
-	if err != nil {
-		return err
+	if stream != nil {
+		_, err = io.Copy(fd, stream)
+		if err != nil {
+			return err
+		}
 	}
 
 	return c.WriteFile(ctx, uid, gid, path, fd.Name())

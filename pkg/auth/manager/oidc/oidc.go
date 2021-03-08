@@ -155,18 +155,10 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		OpaqueId: claims[am.c.IDClaim].(string), // a stable non reassignable id
 		Idp:      claims["issuer"].(string),     // in the scope of this issuer
 	}
-	gwc, err := pool.GetGatewayServiceClient(am.c.GatewaySvc)
+
+	groups, err := am.getUserGroups(ctx, userID)
 	if err != nil {
-		return nil, errors.Wrap(err, "oidc: error getting gateway grpc client")
-	}
-	getGroupsResp, err := gwc.GetUserGroups(ctx, &user.GetUserGroupsRequest{
-		UserId: userID,
-	})
-	if err != nil {
-		return nil, errors.Wrap(err, "oidc: error getting user groups")
-	}
-	if getGroupsResp.Status.Code != rpc.Code_CODE_OK {
-		return nil, errors.Wrap(err, "oidc: grpc getting user groups failed")
+		log.Warn().Err(err).Msg("unable to retrieve user groups")
 	}
 
 	u := &user.User{
@@ -176,7 +168,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		// to the admin to choose what claim provides the groups.
 		// TODO(labkode) ... use all claims from oidc?
 		// TODO(labkode): do like K8s does it: https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/apiserver/plugin/pkg/authenticator/token/oidc/oidc.go
-		Groups:       getGroupsResp.Groups,
+		Groups:       groups,
 		Mail:         claims["email"].(string),
 		MailVerified: claims["email_verified"].(bool),
 		DisplayName:  claims["name"].(string),
@@ -216,4 +208,21 @@ func (am *mgr) getOIDCProvider(ctx context.Context) (*oidc.Provider, error) {
 
 	am.provider = provider
 	return am.provider, nil
+}
+
+func (am *mgr) getUserGroups(ctx context.Context, userID *user.UserId) ([]string, error) {
+	gwc, err := pool.GetGatewayServiceClient(am.c.GatewaySvc)
+	if err != nil {
+		return nil, errors.Wrap(err, "oidc: error getting gateway grpc client")
+	}
+	getGroupsResp, err := gwc.GetUserGroups(ctx, &user.GetUserGroupsRequest{
+		UserId: userID,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "oidc: error getting user groups")
+	}
+	if getGroupsResp.Status.Code != rpc.Code_CODE_OK {
+		return nil, errors.Wrap(err, "oidc: grpc getting user groups failed")
+	}
+	return getGroupsResp.Groups, nil
 }

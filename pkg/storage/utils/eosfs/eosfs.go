@@ -885,6 +885,11 @@ func (fs *eosfs) CreateHome(ctx context.Context) error {
 		return errors.Wrap(err, "eos: error creating shadow home")
 	}
 
+	// Create the uploads directory
+	if err := os.MkdirAll(fs.getUploadInfoPath(ctx, ""), defaultFilePerm); err != nil {
+		return errors.Wrap(err, "eos: error creating uploads dir")
+	}
+
 	return nil
 }
 
