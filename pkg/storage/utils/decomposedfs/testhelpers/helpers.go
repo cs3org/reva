@@ -20,7 +20,6 @@ package helpers
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -36,6 +35,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
 	treemocks "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree/mocks"
 	ruser "github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/tests/helpers"
 )
 
 // TestEnv represents a test environment for unit tests
@@ -57,7 +57,7 @@ type TestEnv struct {
 //  /dir1/file1
 //  /dir1/subdir1/
 func NewTestEnv() (*TestEnv, error) {
-	tmpRoot, err := ioutil.TempDir("", "reva-unit-tests-*-root")
+	tmpRoot, err := helpers.TempDir("reva-unit-tests-*-root")
 	if err != nil {
 		return nil, err
 	}
