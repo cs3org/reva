@@ -187,6 +187,14 @@ func (c *Client) getRespError(rsp *erpc.NSResponse, err error) error {
 		return err
 	}
 
+	if rsp == nil {
+		return nil
+	}
+
+	if rsp.Error == nil {
+		return nil
+	}
+
 	if rsp.Error.Code == 0 {
 		return nil
 	}
@@ -628,12 +636,141 @@ func (c *Client) GetFileInfoByFXID(ctx context.Context, uid, gid string, fxid st
 
 // GetQuota gets the quota of a user on the quota node defined by path
 func (c *Client) GetQuota(ctx context.Context, username, rootUID, rootGID, path string) (*eosclient.QuotaInfo, error) {
-	return nil, errtypes.NotSupported("eosgrpc: GetQuota not implemented")
+	log := appctx.GetLogger(ctx)
+	log.Info().Str("func", "GetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("username", username).Str("path", path).Msg("")
+
+	// Initialize the common fields of the NSReq
+	rq, err := c.initNSRequest(ctx, rootUID, rootGID)
+	if err != nil {
+		return nil, err
+	}
+
+	msg := new(erpc.NSRequest_QuotaRequest)
+	msg.Path = []byte(path)
+	msg.Id = new(erpc.RoleId)
+
+	// Eos filters the returned quotas by username. This means that EOS must know it, someone
+	// must have created an user with that name
+	msg.Id.Username = username
+	rq.Command = &erpc.NSRequest_Quota{Quota: msg}
+
+	// Now send the req and see what happens
+	resp, err := c.cl.Exec(ctx, rq)
+	e := c.getRespError(resp, err)
+	if e != nil {
+		log.Info().Str("func", "GetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("username", username).Str("info:", fmt.Sprintf("%#v", resp)).Str("err", e.Error()).Msg("")
+		return nil, e
+	}
+
+	if resp == nil {
+		return nil, errtypes.InternalError(fmt.Sprintf("nil response for rootuid: '%s' rootgid: '%s' username: '%s' path: '%s'", rootUID, rootGID, username, path))
+	}
+
+	if resp.GetError() != nil {
+		log.Info().Str("func", "GetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("username", username).Str("info:", fmt.Sprintf("%#v", resp)).Int64("eoserrcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+	} else {
+		log.Info().Str("func", "GetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("username", username).Str("info:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
+	}
+
+	if resp.Quota == nil {
+		return nil, errtypes.InternalError(fmt.Sprintf("nil quota response?  rootuid: '%s' rootgid: '%s'  path: '%s'", rootUID, rootGID, path))
+	}
+
+	if resp.Quota.Code != 0 {
+		return nil, errtypes.InternalError(fmt.Sprintf("Quota error from eos. rootuid: '%s' rootgid: '%s' info: '%#v'", rootUID, rootGID, resp.Quota))
+	}
+
+	log.Debug().Str("func", "GetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("quotanode:", fmt.Sprintf("%#v", resp.Quota.Quotanode[0])).Msg("grpc response")
+
+	qi := new(eosclient.QuotaInfo)
+	if resp == nil {
+		return nil, errtypes.InternalError("Out of memory")
+	}
+
+	// Let's loop on all the quotas that match this uid (apparently there can be many)
+	for i := 0; i < len(resp.Quota.Quotanode); i++ {
+
+		mx := resp.Quota.Quotanode[i].Maxlogicalbytes - resp.Quota.Quotanode[i].Usedbytes
+		if mx < 0 {
+			mx = 0
+		}
+		qi.AvailableBytes += mx
+		qi.UsedBytes += resp.Quota.Quotanode[0].Usedbytes
+
+		mx = resp.Quota.Quotanode[0].Maxfiles - resp.Quota.Quotanode[0].Usedfiles
+		if mx < 0 {
+			mx = 0
+		}
+		qi.AvailableInodes += mx
+		qi.UsedInodes += resp.Quota.Quotanode[0].Usedfiles
+	}
+
+	return qi, err
+
 }
 
 // SetQuota sets the quota of a user on the quota node defined by path
 func (c *Client) SetQuota(ctx context.Context, rootUID, rootGID string, info *eosclient.SetQuotaInfo) error {
-	return errtypes.NotSupported("eosgrpc: SetQuota not implemented")
+	{
+		log := appctx.GetLogger(ctx)
+		log.Info().Str("func", "SetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("info:", fmt.Sprintf("%#v", info)).Msg("")
+
+		// EOS does not have yet this command... work in progress, this is a draft piece of code
+		//return errtypes.NotSupported("eosgrpc: SetQuota not implemented")
+
+		// Initialize the common fields of the NSReq
+		rq, err := c.initNSRequest(ctx, rootUID, rootGID)
+		if err != nil {
+			return err
+		}
+
+		msg := new(erpc.NSRequest_QuotaRequest)
+		msg.Path = []byte(info.QuotaNode)
+		msg.Id = new(erpc.RoleId)
+		uidInt, err := strconv.ParseUint(info.Uid, 10, 64)
+		if err != nil {
+			return err
+		}
+		gidInt, err := strconv.ParseUint(info.Gid, 10, 64)
+		if err != nil {
+			return err
+		}
+		msg.Id.Uid = uidInt
+		msg.Id.Gid = gidInt
+		msg.Id.Username = info.Username
+		rq.Command = &erpc.NSRequest_Quota{Quota: msg}
+
+		// Now send the req and see what happens
+		resp, err := c.cl.Exec(ctx, rq)
+		e := c.getRespError(resp, err)
+		if e != nil {
+			log.Info().Str("func", "SetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("info:", fmt.Sprintf("%#v", resp)).Str("err", e.Error()).Msg("")
+			return e
+		}
+
+		if resp == nil {
+			return errtypes.InternalError(fmt.Sprintf("nil response for rootuid: '%s' rootgid: '%s' info: '%#v'", rootUID, rootGID, info))
+		}
+
+		if resp.GetError() != nil {
+			log.Info().Str("func", "SetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("info:", fmt.Sprintf("%#v", resp)).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+		} else {
+			log.Info().Str("func", "SetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("info:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
+		}
+
+		if resp.Quota == nil {
+			return errtypes.InternalError(fmt.Sprintf("nil quota response?  rootuid: '%s' rootgid: '%s'  path: '%s'", rootUID, rootGID, info))
+		}
+
+		if resp.Quota.Code != 0 {
+			return errtypes.InternalError(fmt.Sprintf("Quota error from eos. rootuid: '%s' rootgid: '%s' quota: '%#v'", rootUID, rootGID, resp.Quota))
+		}
+
+		log.Debug().Str("func", "GetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("quotanodes", fmt.Sprintf("%d", len(resp.Quota.Quotanode))).Msg("grpc response")
+
+		return err
+
+	}
 }
 
 // Touch creates a 0-size,0-replica file in the EOS namespace.

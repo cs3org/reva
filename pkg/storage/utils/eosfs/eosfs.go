@@ -642,6 +642,34 @@ func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 		return nil, errors.Wrap(err, "eos: no user in ctx")
 	}
 
+	// test... remove me
+	rootuid, rootgid, err := fs.getRootUIDAndGID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	uid, gid, err := fs.getUserUIDAndGID(ctx, u)
+	if err != nil {
+		return nil, errors.Wrap(err, "eos: no uid in ctx")
+	}
+	// set quota for user
+	quotaInfo := &eosclient.SetQuotaInfo{
+		Username:  u.Username,
+		Uid:       uid,
+		Gid:       gid,
+		MaxBytes:  fs.conf.DefaultQuotaBytes,
+		MaxFiles:  fs.conf.DefaultQuotaFiles,
+		QuotaNode: fs.conf.QuotaNode,
+	}
+
+	err = fs.c.SetQuota(ctx, rootuid, rootgid, quotaInfo)
+	if err != nil {
+		err := errors.Wrap(err, "eosfs: error setting quota")
+		return nil, err
+	}
+
+	fs.GetQuota(ctx)
+	// end test
+
 	p, err := fs.resolve(ctx, u, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: error resolving reference")
@@ -792,12 +820,17 @@ func (fs *eosfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
 		return 0, 0, errors.Wrap(err, "eos: no user in ctx")
 	}
 
+	uid, _, err := fs.getUserUIDAndGID(ctx, u)
+	if err != nil {
+		return 0, 0, errors.Wrap(err, "eos: no uid in ctx")
+	}
+
 	rootUID, rootGID, err := fs.getRootUIDAndGID(ctx)
 	if err != nil {
 		return 0, 0, err
 	}
 
-	qi, err := fs.c.GetQuota(ctx, u.Username, rootUID, rootGID, fs.conf.QuotaNode)
+	qi, err := fs.c.GetQuota(ctx, uid, rootUID, rootGID, fs.conf.QuotaNode)
 	if err != nil {
 		err := errors.Wrap(err, "eosfs: error getting quota")
 		return 0, 0, err
@@ -866,11 +899,17 @@ func (fs *eosfs) createNominalHome(ctx context.Context) error {
 	}
 
 	home := fs.wrap(ctx, "/")
-	uid, gid, err := fs.getRootUIDAndGID(ctx)
+	rootuid, rootgid, err := fs.getRootUIDAndGID(ctx)
 	if err != nil {
 		return nil
 	}
-	_, err = fs.c.GetFileInfoByPath(ctx, uid, gid, home)
+
+	uid, gid, err := fs.getUserUIDAndGID(ctx, u)
+	if err != nil {
+		return err
+	}
+
+	_, err = fs.c.GetFileInfoByPath(ctx, rootuid, rootgid, home)
 	if err == nil { // home already exists
 		return nil
 	}
@@ -888,12 +927,14 @@ func (fs *eosfs) createNominalHome(ctx context.Context) error {
 	// set quota for user
 	quotaInfo := &eosclient.SetQuotaInfo{
 		Username:  u.Username,
+		Uid:       uid,
+		Gid:       gid,
 		MaxBytes:  fs.conf.DefaultQuotaBytes,
 		MaxFiles:  fs.conf.DefaultQuotaFiles,
 		QuotaNode: fs.conf.QuotaNode,
 	}
 
-	err = fs.c.SetQuota(ctx, uid, gid, quotaInfo)
+	err = fs.c.SetQuota(ctx, rootuid, rootgid, quotaInfo)
 	if err != nil {
 		err := errors.Wrap(err, "eosfs: error setting quota")
 		return err

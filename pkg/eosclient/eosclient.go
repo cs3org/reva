@@ -113,6 +113,8 @@ type QuotaInfo struct {
 // create a quota space in EOS for a user
 type SetQuotaInfo struct {
 	Username  string
+	Uid       string
+	Gid       string
 	QuotaNode string
 	MaxBytes  uint64
 	MaxFiles  uint64
