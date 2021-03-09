@@ -23,12 +23,13 @@ import (
 	"encoding/json"
 	"io"
 	"io/ioutil"
+	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	tusd "github.com/tus/tusd/pkg/handler"
@@ -53,38 +54,9 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 		}
 	}
 
-	p := upload.MetaData["filename"]
-	ok, err := chunking.IsChunked(p)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: error checking path")
-	}
-	if ok {
-		var assembledFile string
-		p, assembledFile, err = fs.chunkHandler.WriteChunk(p, r)
-		if err != nil {
-			return err
-		}
-		if p == "" {
-			if err = fs.TerminateUpload(ctx, upload); err != nil {
-				return errors.Wrap(err, "eosfs: error removing auxiliary files")
-			}
-			return errtypes.PartialContent(ref.String())
-		}
-		upload.MetaData["filename"] = p
-		fd, err := os.Open(assembledFile)
-		if err != nil {
-			return errors.Wrap(err, "eosfs: error opening assembled file")
-		}
-		defer fd.Close()
-		defer os.RemoveAll(assembledFile)
-		r = fd
-	}
-
 	return fs.FinishUpload(ctx, upload, r)
 }
 
-// InitiateUpload returns upload ids corresponding to different protocols it supports
-// TODO: read optional content for small files in this request
 func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
 	u, err := getUser(ctx)
 	if err != nil {
@@ -128,9 +100,12 @@ func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, up
 			return nil, err
 		}
 	} else {
-		// writeInfo writes the info file to disk
-		err = fs.writeInfo(ctx, info)
+		// write the info file to disk
+		data, err := json.Marshal(info)
 		if err != nil {
+			return nil, err
+		}
+		if err = ioutil.WriteFile(fs.getUploadInfoPath(ctx, info.ID), data, defaultFilePerm); err != nil {
 			return nil, err
 		}
 	}
@@ -144,15 +119,6 @@ func (fs *eosfs) getUploadInfoPath(ctx context.Context, uploadID string) string 
 	return filepath.Join(fs.conf.CacheDirectory, fs.getLayout(ctx), "uploads", uploadID)
 }
 
-func (fs *eosfs) writeInfo(ctx context.Context, info tusd.FileInfo) error {
-	data, err := json.Marshal(info)
-	if err != nil {
-		return err
-	}
-	return ioutil.WriteFile(fs.getUploadInfoPath(ctx, info.ID), data, defaultFilePerm)
-}
-
-// GetUpload returns the Upload for the given upload id
 func (fs *eosfs) GetUpload(ctx context.Context, id string) (tusd.FileInfo, error) {
 	var info tusd.FileInfo
 	data, err := ioutil.ReadFile(fs.getUploadInfoPath(ctx, id))
@@ -170,14 +136,52 @@ func (fs *eosfs) FinishUpload(ctx context.Context, upload tusd.FileInfo, r io.Re
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
 	}
-	uid, gid, err := fs.getUserUIDAndGID(ctx, u)
+
+	host, err := os.Hostname()
+	if err != nil {
+		host = "localhost"
+	}
+
+	url, err := url.Parse(fs.conf.HTTPURL)
 	if err != nil {
 		return err
 	}
-	err = fs.c.Write(ctx, uid, gid, upload.MetaData["filename"], r)
+	url.Path = path.Join(url.Path, upload.MetaData["filename"])
+
+	req, err := http.NewRequest("PUT", url.String(), r)
 	if err != nil {
 		return err
 	}
+
+	req.Header.Set("Remote-User", u.Id.GetOpaqueId())
+	req.Header.Set("Host", host)
+	req.Header.Set("X-Real-IP", host)
+	req.Header.Set("X-Forwarded-For", host)
+	req.Header.Set("CBOX-SKIP-LOCATION-ON-MOVE", "1")
+	req.Header.Set("Connection", "")
+
+	if val, ok := upload.MetaData["chunk-size"]; ok {
+		req.Header.Set("Oc-Chunk-Size", val)
+	}
+	if val, ok := upload.MetaData["total-length"]; ok {
+		req.Header.Set("Oc-Total-Length", val)
+	}
+	if val, ok := upload.MetaData["chunked"]; ok {
+		req.Header.Set("Oc-Chunked", val)
+	}
+
+	// EOS MGM returns a 307 redirect with the endpoint for an FST.
+	// The go HTTP client handles redirects with the same parameters as the
+	// original request.
+	resp, err := fs.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return errors.New("eos: HTTP PUT call returned " + resp.Status)
+	}
+
 	return fs.TerminateUpload(ctx, upload)
 }
 
