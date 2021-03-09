@@ -2108,3 +2108,9 @@ _ocdav: return checksum in upload response for chunked upload_
 -   [apiMain/checksums.feature:158](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L158) Scenario: Upload new dav chunked file using async MOVE where checksum matches
 -   [apiMain/checksums.feature:174](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L174) Scenario: Upload new dav chunked file using async MOVE where checksum does not match
 -   [apiMain/checksums.feature:192](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L192) Scenario: Upload new dav chunked file using async MOVE where checksum does not match - retry with correct checksum
+
+#### [PATCH request for TUS upload with wrong checksum gives incorrect response](https://github.com/owncloud/ocis/issues/1755)
+-   [apiWebdavUploadTUS/checksums.feature:59](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/checksums.feature#L59)
+-   [apiWebdavUploadTUS/checksums.feature:60](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/checksums.feature#L60)
+-   [apiWebdavUploadTUS/checksums.feature:61](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/checksums.feature#L61)
+-   [apiWebdavUploadTUS/checksums.feature:62](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/checksums.feature#L62)
