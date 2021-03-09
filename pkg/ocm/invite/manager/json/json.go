@@ -273,7 +273,7 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 	return nil
 }
 
-func (m *manager) GetRemoteUser(ctx context.Context, remoteUserID *userpb.UserId) (*userpb.User, error) {
+func (m *manager) GetAcceptedUser(ctx context.Context, remoteUserID *userpb.UserId) (*userpb.User, error) {
 
 	userKey := user.ContextMustGetUser(ctx).GetId().GetOpaqueId()
 	for _, acceptedUser := range m.model.AcceptedUsers[userKey] {
@@ -282,6 +282,23 @@ func (m *manager) GetRemoteUser(ctx context.Context, remoteUserID *userpb.UserId
 		}
 	}
 	return nil, errtypes.NotFound(remoteUserID.OpaqueId)
+}
+
+func (m *manager) FindAcceptedUsers(ctx context.Context, query string) ([]*userpb.User, error) {
+	users := []*userpb.User{}
+	userKey := user.ContextMustGetUser(ctx).GetId().GetOpaqueId()
+	for _, acceptedUser := range m.model.AcceptedUsers[userKey] {
+		if query == "" || userContains(acceptedUser, query) {
+			users = append(users, acceptedUser)
+		}
+	}
+	return users, nil
+}
+
+func userContains(u *userpb.User, query string) bool {
+	query = strings.ToLower(query)
+	return strings.Contains(strings.ToLower(u.Username), query) || strings.Contains(strings.ToLower(u.DisplayName), query) ||
+		strings.Contains(strings.ToLower(u.Mail), query) || strings.Contains(strings.ToLower(u.Id.OpaqueId), query)
 }
 
 func (m *manager) getTokenIfValid(token *invitepb.InviteToken) (*invitepb.InviteToken, error) {

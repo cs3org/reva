@@ -39,7 +39,7 @@ import (
 func ocmShareCreateCommand() *command {
 	cmd := newCommand("ocm-share-create")
 	cmd.Description = func() string { return "create OCM share to a user or group" }
-	cmd.Usage = func() string { return "Usage: ocm-share create [-flags] <path>" }
+	cmd.Usage = func() string { return "Usage: ocm-share-create [-flags] <path>" }
 	grantType := cmd.String("type", "user", "grantee type (user or group)")
 	grantee := cmd.String("grantee", "", "the grantee")
 	idp := cmd.String("idp", "", "the idp of the grantee, default to same idp as the user triggering the action")
@@ -78,7 +78,7 @@ func ocmShareCreateCommand() *command {
 			return err
 		}
 
-		remoteUserRes, err := client.GetRemoteUser(ctx, &invitepb.GetRemoteUserRequest{
+		remoteUserRes, err := client.GetAcceptedUser(ctx, &invitepb.GetAcceptedUserRequest{
 			RemoteUserId: &userpb.UserId{OpaqueId: *grantee, Idp: *idp},
 		})
 		if err != nil {

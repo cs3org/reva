@@ -34,7 +34,7 @@ require (
 	github.com/mitchellh/mapstructure v1.4.1
 	github.com/onsi/ginkgo v1.15.1
 	github.com/onsi/gomega v1.11.0
-	github.com/ory/fosite v0.38.0
+	github.com/ory/fosite v0.39.0
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/xattr v0.4.3
 	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect
@@ -54,8 +54,9 @@ require (
 
 go 1.13
 
-replace github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
-
-replace github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
-
-replace google.golang.org/grpc => google.golang.org/grpc v1.26.0 // temporary downgrade
+replace (
+	github.com/cs3org/go-cs3apis => ../cs3apis/build/go-cs3apis
+	github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
+github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
+google.golang.org/grpc => google.golang.org/grpc v1.26.0 // temporary downgrade
+)
