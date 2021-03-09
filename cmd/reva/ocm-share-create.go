@@ -19,7 +19,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"strconv"
@@ -148,7 +147,6 @@ func ocmShareCreateCommand() *command {
 			return formatError(shareRes.Status)
 		}
 
-		fmt.Println("create share done")
 		t := table.NewWriter()
 		t.SetOutputMirror(os.Stdout)
 		t.AppendHeader(table.Row{"#", "Owner.Idp", "Owner.OpaqueId", "ResourceId", "Permissions", "Type", "Grantee.Idp", "Grantee.OpaqueId", "Created", "Updated"})
