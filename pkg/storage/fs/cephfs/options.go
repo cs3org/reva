@@ -20,11 +20,8 @@ package cephfs
 
 // Options for the cephfs module
 type Options struct {
-	Root           string `mapstructure:"root"`
 	ShareFolder    string `mapstructure:"share_folder"`
 	Uploads        string `mapstructure:"uploads"`
-	Shadow         string `mapstructure:"shadow"`
-	References     string `mapstructure:"references"`
 	GatewaySvc     string `mapstructure:"gatewaysvc"`
 	DirMode        uint32 `mapstructure:"dirmode"`
 	DisableHome    bool   `mapstructure:"disable_home"`

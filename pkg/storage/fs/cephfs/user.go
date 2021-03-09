@@ -234,7 +234,6 @@ func (user *User) getUserByID(uid string) (*userpb.User, error) {
 	if entity, found := user.fs.conn.userCache.Get(uid); found {
 		return entity.(*userpb.User), nil
 	}
-
 	client, err := pool.GetGatewayServiceClient(user.fs.conf.GatewaySvc)
 	if err != nil {
 		return nil, errors.Wrap(err, "cephfs: error getting gateway grpc client")

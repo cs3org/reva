@@ -338,54 +338,6 @@ func (fs *cephfs) RestoreRevision(ctx context.Context, ref *provider.Reference, 
 	return
 }
 
-func (fs *cephfs) ListRecycle(ctx context.Context) (ri []*provider.RecycleItem, err error) {
-	user := fs.makeUser(ctx)
-	user.op(func(cv cacheVal) {
-		var snapdir, basicDir *cephfs2.Directory
-		var cEntry *cephfs2.DirEntry
-
-		snapdir, err = cv.mount.OpenDir(".snap")
-		if err != nil {
-			return
-		}
-		defer closeDir(snapdir)
-
-		basicDir, err = cv.mount.OpenDir(".")
-		if err != nil {
-			return
-		}
-		defer closeDir(basicDir)
-
-		// Skip . and  ..
-		for cEntry, err = basicDir.ReadDir(); err == nil && cEntry != nil && strings.HasPrefix(cEntry.Name(), "."); cEntry, err = basicDir.ReadDir() {
-		}
-		if err != nil {
-			return
-		}
-
-		for snap, e := snapdir.ReadDirPlus(cephfs2.StatxBasicStats, 0); snap != nil && e == nil; snap, e = snapdir.ReadDirPlus(cephfs2.StatxBasicStats, 0) {
-			if strings.HasPrefix(snap.Name(), ".") {
-				continue
-			}
-
-		}
-	})
-
-	return
-}
-
-func (fs *cephfs) RestoreRecycleItem(ctx context.Context, key string, ref *provider.Reference) error {
-	panic("implement me")
-}
-
-func (fs *cephfs) PurgeRecycleItem(ctx context.Context, key string) error {
-	return errors.New("cephfs: Recycled items can't be purged, they are handled by snapshots, which are read-only")
-}
-
-func (fs *cephfs) EmptyRecycle(ctx context.Context) error {
-	return errors.New("cephfs: recycle is based on snapshots and can't be edited")
-}
-
 func (fs *cephfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (str string, err error) {
 	user := fs.makeUser(ctx)
 
@@ -547,4 +499,24 @@ func (fs *cephfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refe
 	})
 
 	return
+}
+
+func (fs *cephfs) ListRecycle(ctx context.Context, key, path string) ([]*provider.RecycleItem, error) {
+	return nil, errtypes.NotSupported("list recycle")
+}
+
+func (fs *cephfs) RestoreRecycleItem(ctx context.Context, key, path string, restoreRef *provider.Reference) error {
+	return errtypes.NotSupported("restore recycle item")
+}
+
+func (fs *cephfs) PurgeRecycleItem(ctx context.Context, key, path string) error {
+	return errtypes.NotSupported("purge recycle item")
+}
+
+func (fs *cephfs) EmptyRecycle(ctx context.Context) error {
+	return errtypes.NotSupported("empty recycle")
+}
+
+func (fs *cephfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+	return nil, errtypes.NotSupported("list storage spaces")
 }

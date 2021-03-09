@@ -116,13 +116,14 @@ func calcChecksum(filepath string, mt Mount, stat Statx) (checksum string) {
 }
 
 func resolveRevRef(mt Mount, ref *provider.Reference, revKey string) (str string, err error) {
+	var buf []byte
 	if ref.GetResourceId() != nil {
 		str, err = mt.Readlink(filepath.Join(snap, revKey, ref.ResourceId.OpaqueId))
 		if err != nil {
 			return "", fmt.Errorf("cephfs: invalid reference %+v", ref)
 		}
 	} else if str = ref.GetPath(); str != "" {
-		buf, err := mt.GetXattr(str, xattrFid)
+		buf, err = mt.GetXattr(str, xattrFid)
 		if err != nil {
 			return
 		}
