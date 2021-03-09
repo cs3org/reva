@@ -6,8 +6,6 @@ Basic file management like up and download, move, copy, properties, quota, trash
 #### [Implement Trashbin Feature for ocis storage](https://github.com/owncloud/product/issues/209)
 -   [apiWebdavEtagPropagation2/restoreFromTrash.feature:48](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation2/restoreFromTrash.feature#L48)
 -   [apiWebdavEtagPropagation2/restoreFromTrash.feature:49](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation2/restoreFromTrash.feature#L49)
--   [apiWebdavEtagPropagation2/restoreFromTrash.feature:68](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation2/restoreFromTrash.feature#L68)
--   [apiWebdavEtagPropagation2/restoreFromTrash.feature:69](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation2/restoreFromTrash.feature#L69)
 -   [apiWebdavEtagPropagation2/restoreFromTrash.feature:90](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation2/restoreFromTrash.feature#L90)
 -   [apiWebdavEtagPropagation2/restoreFromTrash.feature:91](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation2/restoreFromTrash.feature#L91)
 
@@ -2243,3 +2241,13 @@ _ocdav: return checksum in upload response for chunked upload_
 -   [apiMain/checksums.feature:158](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L158) Scenario: Upload new dav chunked file using async MOVE where checksum matches
 -   [apiMain/checksums.feature:174](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L174) Scenario: Upload new dav chunked file using async MOVE where checksum does not match
 -   [apiMain/checksums.feature:192](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L192) Scenario: Upload new dav chunked file using async MOVE where checksum does not match - retry with correct checksum
+
+#### [PATCH request for TUS upload with wrong checksum gives incorrect response](https://github.com/owncloud/ocis/issues/1755)
+-   [apiWebdavUploadTUS/checksums.feature:32](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/checksums.feature#L32)
+-   [apiWebdavUploadTUS/checksums.feature:33](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/checksums.feature#L33)
+-   [apiWebdavUploadTUS/checksums.feature:45](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/checksums.feature#L45)
+-   [apiWebdavUploadTUS/checksums.feature:46](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/checksums.feature#L46)
+-   [apiWebdavUploadTUS/checksums.feature:59](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/checksums.feature#L59)
+-   [apiWebdavUploadTUS/checksums.feature:60](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/checksums.feature#L60)
+-   [apiWebdavUploadTUS/checksums.feature:61](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/checksums.feature#L61)
+-   [apiWebdavUploadTUS/checksums.feature:62](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/checksums.feature#L62)
