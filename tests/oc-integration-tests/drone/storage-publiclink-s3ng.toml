@@ -1,0 +1,29 @@
+# This storage.toml config file will start a reva service that:
+[shared]
+jwt_secret = "Pive-Fumkiu4"
+gatewaysvc = "localhost:19000"
+
+[grpc]
+address = "0.0.0.0:13000"
+
+# This is a storage provider that grants direct access to the wrapped storage
+# we have a locally running dataprovider
+[grpc.services.publicstorageprovider]
+driver = "s3ng"
+mount_path = "/public/"
+mount_id = "e1a73ede-549b-4226-abdf-40e69ca8230d"
+expose_data_server = true
+data_server_url = "http://revad-services:13001/data"
+gateway_addr = "0.0.0.0:19000"
+enable_home_creation = true
+
+[grpc.services.publicstorageprovider.drivers.s3ng]
+root = "/drone/src/tmp/reva/data"
+treetime_accounting = true
+treesize_accounting = true
+enable_home = true
+"s3.endpoint" = "http://ceph:8080"
+"s3.region" = "default"
+"s3.bucket" = "test"
+"s3.access_key" = "test"
+"s3.secret_key" = "test"
