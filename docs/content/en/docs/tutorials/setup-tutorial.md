@@ -60,11 +60,11 @@ Reva daemons are spawned using configuration specified in `toml` format. Multipl
 You can start these three daemons using the `-dev-dir` flag which fires up a daemon for each toml file in a directory. The user, group and mesh provider services use JSON files by default as their data store, and expects these to be located at `/etc/revad`.
 
 ```
-> cd examples/ocmd/ && mkdir -p /var/tmp/reva
-> cp users.demo.json /etc/revad/users.json
-> cp groups.demo.json /etc/revad/groups.json
-> cp providers.demo.json /etc/revad/ocm-providers.json
-> ../../cmd/revad/revad -dev-dir .
+> mkdir -p /var/tmp/reva
+> cp examples/storage-references/users.demo.json /etc/revad/users.json
+> cp examples/storage-references/groups.demo.json /etc/revad/groups.json
+> cp examples/storage-references/providers.demo.json /etc/revad/ocm-providers.json
+> cmd/revad/revad -dev-dir examples/storage-references
 ```
 
 ## 4. Access through the CLI
