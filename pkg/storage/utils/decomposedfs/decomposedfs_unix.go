@@ -16,37 +16,17 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package s3ng
+// +build !windows
 
-import (
-	"fmt"
+package decomposedfs
 
-	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/storage/fs/registry"
-	"github.com/cs3org/reva/pkg/storage/fs/s3ng/blobstore"
-	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs"
-)
+import "syscall"
 
-func init() {
-	registry.Register("s3ng", New)
-}
-
-// New returns an implementation to of the storage.FS interface that talk to
-// a local filesystem.
-func New(m map[string]interface{}) (storage.FS, error) {
-	o, err := parseConfig(m)
+func (fs *Decomposedfs) getAvailableSize(path string) (uint64, error) {
+	stat := syscall.Statfs_t{}
+	err := syscall.Statfs(path, &stat)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-
-	if !o.S3ConfigComplete() {
-		return nil, fmt.Errorf("S3 configuration incomplete")
-	}
-
-	bs, err := blobstore.New(o.S3Endpoint, o.S3Region, o.S3Bucket, o.S3AccessKey, o.S3SecretKey)
-	if err != nil {
-		return nil, err
-	}
-
-	return decomposedfs.NewDefault(m, bs)
+	return stat.Bavail * uint64(stat.Bsize), nil
 }

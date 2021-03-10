@@ -16,37 +16,45 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package s3ng
+package options_test
 
 import (
-	"fmt"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/options"
 
-	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/storage/fs/registry"
-	"github.com/cs3org/reva/pkg/storage/fs/s3ng/blobstore"
-	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
 
-func init() {
-	registry.Register("s3ng", New)
-}
+var _ = Describe("Options", func() {
+	var (
+		o      *options.Options
+		config map[string]interface{}
+	)
 
-// New returns an implementation to of the storage.FS interface that talk to
-// a local filesystem.
-func New(m map[string]interface{}) (storage.FS, error) {
-	o, err := parseConfig(m)
-	if err != nil {
-		return nil, err
-	}
+	BeforeEach(func() {
+		config = map[string]interface{}{}
+	})
 
-	if !o.S3ConfigComplete() {
-		return nil, fmt.Errorf("S3 configuration incomplete")
-	}
+	Describe("New", func() {
+		JustBeforeEach(func() {
+			var err error
+			o, err = options.New(config)
+			Expect(err).ToNot(HaveOccurred())
+		})
 
-	bs, err := blobstore.New(o.S3Endpoint, o.S3Region, o.S3Bucket, o.S3AccessKey, o.S3SecretKey)
-	if err != nil {
-		return nil, err
-	}
+		It("sets defaults", func() {
+			Expect(len(o.ShareFolder) > 0).To(BeTrue())
+			Expect(len(o.UserLayout) > 0).To(BeTrue())
+		})
 
-	return decomposedfs.NewDefault(m, bs)
-}
+		Context("with unclean root path configuration", func() {
+			BeforeEach(func() {
+				config["root"] = "foo/"
+			})
+
+			It("sanitizes the root path", func() {
+				Expect(o.Root).To(Equal("foo"))
+			})
+		})
+	})
+})

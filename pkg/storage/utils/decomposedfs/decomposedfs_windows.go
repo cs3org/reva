@@ -16,37 +16,21 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package s3ng
+// +build windows
 
-import (
-	"fmt"
+package decomposedfs
 
-	"github.com/cs3org/reva/pkg/storage"
-	"github.com/cs3org/reva/pkg/storage/fs/registry"
-	"github.com/cs3org/reva/pkg/storage/fs/s3ng/blobstore"
-	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs"
-)
+import "golang.org/x/sys/windows"
 
-func init() {
-	registry.Register("s3ng", New)
-}
-
-// New returns an implementation to of the storage.FS interface that talk to
-// a local filesystem.
-func New(m map[string]interface{}) (storage.FS, error) {
-	o, err := parseConfig(m)
+func (fs *Decomposedfs) getAvailableSize(path string) (uint64, error) {
+	var free, total, avail uint64
+	pathPtr, err := windows.UTF16PtrFromString(path)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-
-	if !o.S3ConfigComplete() {
-		return nil, fmt.Errorf("S3 configuration incomplete")
-	}
-
-	bs, err := blobstore.New(o.S3Endpoint, o.S3Region, o.S3Bucket, o.S3AccessKey, o.S3SecretKey)
+	err = windows.GetDiskFreeSpaceEx(pathPtr, &avail, &total, &free)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-
-	return decomposedfs.NewDefault(m, bs)
+	return avail, nil
 }
