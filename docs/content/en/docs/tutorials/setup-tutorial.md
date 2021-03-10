@@ -1,7 +1,7 @@
 ---
 title: "Setting up Reva and basic functionalities"
 linkTitle: "Setting up Reva"
-weight: 5
+weight: 10
 description: >
   Setting up and executing fundamental features
 ---
