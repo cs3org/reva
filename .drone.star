@@ -41,7 +41,7 @@ def cloneOc10TestReposStep():
         "git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing",
         "git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner",
         "cd /drone/src/tmp/testrunner",
-        "git checkout 82ca858ca6018cc705d2ab910745644edda16fbf",
+        "git checkout 90edbb40800b36fadc4aba6216a3fd16b559f1e3",
       ],
   }
 
