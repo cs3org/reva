@@ -19,7 +19,6 @@
 package json
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -44,7 +43,6 @@ import (
 	tokenpkg "github.com/cs3org/reva/pkg/token"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
-	"github.com/golang/protobuf/jsonpb"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -78,8 +76,6 @@ func New(m map[string]interface{}) (share.Manager, error) {
 		client: rhttp.GetHTTPClient(
 			rhttp.Timeout(5 * time.Second),
 		),
-		marshaler:   jsonpb.Marshaler{},
-		unmarshaler: jsonpb.Unmarshaler{},
 	}
 
 	return mgr, nil
@@ -142,12 +138,10 @@ func (c *config) init() {
 }
 
 type mgr struct {
-	c           *config
-	sync.Mutex  // concurrent access to the file
-	model       *shareModel
-	marshaler   jsonpb.Marshaler
-	unmarshaler jsonpb.Unmarshaler
-	client      *http.Client
+	c          *config
+	sync.Mutex // concurrent access to the file
+	model      *shareModel
+	client     *http.Client
 }
 
 func (m *shareModel) Save() error {
@@ -341,22 +335,20 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 	}
 
 	if isOwnersMeshProvider {
-		encShare := bytes.Buffer{}
-		err = m.marshaler.Marshal(&encShare, s)
+		encShare, err := utils.MarshalProtoV1ToJSON(s)
 		if err != nil {
 			return nil, err
 		}
-		m.model.Shares[s.Id.OpaqueId] = encShare.String()
+		m.model.Shares[s.Id.OpaqueId] = string(encShare)
 	} else {
-		encShare := bytes.Buffer{}
-		err = m.marshaler.Marshal(&encShare, &ocm.ReceivedShare{
+		encShare, err := utils.MarshalProtoV1ToJSON(&ocm.ReceivedShare{
 			Share: s,
 			State: ocm.ShareState_SHARE_STATE_PENDING,
 		})
 		if err != nil {
 			return nil, err
 		}
-		m.model.ReceivedShares[s.Id.OpaqueId] = encShare.String()
+		m.model.ReceivedShares[s.Id.OpaqueId] = string(encShare)
 	}
 
 	if err := m.model.Save(); err != nil {
@@ -379,8 +371,7 @@ func (m *mgr) getByID(ctx context.Context, id *ocm.ShareId) (*ocm.Share, error) 
 
 	if s, ok := m.model.Shares[id.OpaqueId]; ok {
 		var share ocm.Share
-		r := bytes.NewBuffer([]byte(s.(string)))
-		if err := m.unmarshaler.Unmarshal(r, &share); err != nil {
+		if err := utils.UnmarshalJSONToProtoV1([]byte(s.(string)), &share); err != nil {
 			return nil, err
 		}
 		return &share, nil
@@ -400,8 +391,7 @@ func (m *mgr) getByKey(ctx context.Context, key *ocm.ShareKey) (*ocm.Share, erro
 
 	for _, s := range m.model.Shares {
 		var share ocm.Share
-		r := bytes.NewBuffer([]byte(s.(string)))
-		if err := m.unmarshaler.Unmarshal(r, &share); err != nil {
+		if err := utils.UnmarshalJSONToProtoV1([]byte(s.(string)), &share); err != nil {
 			continue
 		}
 		if (utils.UserEqual(key.Owner, share.Owner) || utils.UserEqual(key.Owner, share.Creator)) &&
@@ -457,8 +447,7 @@ func (m *mgr) Unshare(ctx context.Context, ref *ocm.ShareReference) error {
 	user := user.ContextMustGetUser(ctx)
 	for id, s := range m.model.Shares {
 		var share ocm.Share
-		r := bytes.NewBuffer([]byte(s.(string)))
-		if err := m.unmarshaler.Unmarshal(r, &share); err != nil {
+		if err := utils.UnmarshalJSONToProtoV1([]byte(s.(string)), &share); err != nil {
 			continue
 		}
 		if sharesEqual(ref, &share) {
@@ -501,8 +490,7 @@ func (m *mgr) UpdateShare(ctx context.Context, ref *ocm.ShareReference, p *ocm.S
 	user := user.ContextMustGetUser(ctx)
 	for id, s := range m.model.Shares {
 		var share ocm.Share
-		r := bytes.NewBuffer([]byte(s.(string)))
-		if err := m.unmarshaler.Unmarshal(r, &share); err != nil {
+		if err := utils.UnmarshalJSONToProtoV1([]byte(s.(string)), &share); err != nil {
 			continue
 		}
 		if sharesEqual(ref, &share) {
@@ -513,11 +501,11 @@ func (m *mgr) UpdateShare(ctx context.Context, ref *ocm.ShareReference, p *ocm.S
 					Seconds: uint64(now / 1000000000),
 					Nanos:   uint32(now % 1000000000),
 				}
-				encShare := bytes.Buffer{}
-				if err := m.marshaler.Marshal(&encShare, &share); err != nil {
+				encShare, err := utils.MarshalProtoV1ToJSON(&share)
+				if err != nil {
 					return nil, err
 				}
-				m.model.Shares[id] = encShare.String()
+				m.model.Shares[id] = string(encShare)
 				if err := m.model.Save(); err != nil {
 					err = errors.Wrap(err, "error saving model")
 					return nil, err
@@ -542,8 +530,7 @@ func (m *mgr) ListShares(ctx context.Context, filters []*ocm.ListOCMSharesReques
 	user := user.ContextMustGetUser(ctx)
 	for _, s := range m.model.Shares {
 		var share ocm.Share
-		r := bytes.NewBuffer([]byte(s.(string)))
-		if err := m.unmarshaler.Unmarshal(r, &share); err != nil {
+		if err := utils.UnmarshalJSONToProtoV1([]byte(s.(string)), &share); err != nil {
 			continue
 		}
 		if utils.UserEqual(user.Id, share.Owner) || utils.UserEqual(user.Id, share.Creator) {
@@ -579,8 +566,7 @@ func (m *mgr) ListReceivedShares(ctx context.Context) ([]*ocm.ReceivedShare, err
 	user := user.ContextMustGetUser(ctx)
 	for _, s := range m.model.ReceivedShares {
 		var rs ocm.ReceivedShare
-		r := bytes.NewBuffer([]byte(s.(string)))
-		if err := m.unmarshaler.Unmarshal(r, &rs); err != nil {
+		if err := utils.UnmarshalJSONToProtoV1([]byte(s.(string)), &rs); err != nil {
 			continue
 		}
 		share := rs.Share
@@ -619,8 +605,7 @@ func (m *mgr) getReceived(ctx context.Context, ref *ocm.ShareReference) (*ocm.Re
 	user := user.ContextMustGetUser(ctx)
 	for _, s := range m.model.ReceivedShares {
 		var rs ocm.ReceivedShare
-		r := bytes.NewBuffer([]byte(s.(string)))
-		if err := m.unmarshaler.Unmarshal(r, &rs); err != nil {
+		if err := utils.UnmarshalJSONToProtoV1([]byte(s.(string)), &rs); err != nil {
 			continue
 		}
 		share := rs.Share
@@ -654,11 +639,11 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, ref *ocm.ShareReference, 
 	}
 
 	rs.State = f.GetState()
-	encShare := bytes.Buffer{}
-	if err := m.marshaler.Marshal(&encShare, rs); err != nil {
+	encShare, err := utils.MarshalProtoV1ToJSON(rs)
+	if err != nil {
 		return nil, err
 	}
-	m.model.ReceivedShares[rs.Share.Id.GetOpaqueId()] = encShare.String()
+	m.model.ReceivedShares[rs.Share.Id.GetOpaqueId()] = string(encShare)
 
 	if err := m.model.Save(); err != nil {
 		err = errors.Wrap(err, "error saving model")

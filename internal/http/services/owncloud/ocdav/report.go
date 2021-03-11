@@ -29,7 +29,7 @@ import (
 func (s *svc) handleReport(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
-	//fn := path.Join(ns, r.URL.Path)
+	// fn := path.Join(ns, r.URL.Path)
 
 	rep, status, err := readReport(r.Body)
 	if err != nil {

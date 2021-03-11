@@ -56,7 +56,7 @@ func setCapabilitiesForChunkProtocol(cp chunkProtocol, c *data.CapabilitiesData)
 		c.Capabilities.Files.TusSupport = nil
 
 	case chunkNG:
-		//2.7+ will use Chunking NG if "capabilities > files > bigfilechunking" is "true" AND "capabilities > dav > chunking" = 1.0
+		// 2.7+ will use Chunking NG if "capabilities > files > bigfilechunking" is "true" AND "capabilities > dav > chunking" = 1.0
 		c.Capabilities.Files.BigFileChunking = true
 		c.Capabilities.Dav.Chunking = "1.0"
 		c.Capabilities.Files.TusSupport = nil

@@ -554,7 +554,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, uid, gid, path string) (
 		// - "File not found is not an error", it's a legitimate result of a legitimate check
 		// - Assuming that any error means file not found is doubly poisonous
 		return nil, errtypes.NotFound(err.Error())
-		//return nil, nil
+		// return nil, nil
 	}
 
 	if rsp == nil {

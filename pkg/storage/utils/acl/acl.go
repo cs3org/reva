@@ -60,9 +60,9 @@ func Parse(acls string, delimiter string) (*ACLs, error) {
 			return nil, err
 		}
 		// for now we ignore default / empty qualifiers
-		//if entry.Qualifier == "" {
+		// if entry.Qualifier == "" {
 		//	continue
-		//}
+		// }
 		entries = append(entries, entry)
 	}
 

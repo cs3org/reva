@@ -130,7 +130,7 @@ func (c *ChunkHandler) saveChunk(path string, r io.ReadCloser) (bool, string, er
 	if err != nil {
 		return false, "", err
 	}
-	//c.logger.Info().Log("chunkfolder", chunksFolderName)
+	// c.logger.Info().Log("chunkfolder", chunksFolderName)
 
 	chunkTarget := chunksFolderName + "/" + fmt.Sprintf("%d", chunkInfo.CurrentChunk)
 	if err = os.Rename(chunkTempFilename, chunkTarget); err != nil {

@@ -102,7 +102,7 @@ var _ = Describe("Decomposed", func() {
 			})
 
 			PIt("generates two revisions", func() {
-				//runtime.GOMAXPROCS(1) // uncomment to remove concurrency and see revisions working.
+				// runtime.GOMAXPROCS(1) // uncomment to remove concurrency and see revisions working.
 				wg := &sync.WaitGroup{}
 				wg.Add(2)
 

@@ -32,6 +32,8 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 var (
@@ -161,8 +163,21 @@ func GranteeEqual(u, v *provider.Grantee) bool {
 
 // IsEmailValid checks whether the provided email has a valid format.
 func IsEmailValid(e string) bool {
-	if len(e) < 3 && len(e) > 254 {
+	if len(e) < 3 || len(e) > 254 {
 		return false
 	}
 	return matchEmail.MatchString(e)
+}
+
+func MarshalProtoV1ToJSON(m proto.Message) ([]byte, error) {
+	mV2 := proto.MessageV2(m)
+	return protojson.Marshal(mV2)
+}
+
+func UnmarshalJSONToProtoV1(b []byte, m proto.Message) error {
+	mV2 := proto.MessageV2(m)
+	if err := protojson.Unmarshal(b, mV2); err != nil {
+		return err
+	}
+	return nil
 }

@@ -18,8 +18,8 @@
 
 package decomposedfs
 
-//go:generate mockery -name PermissionsChecker
-//go:generate mockery -name Tree
+// go:generate mockery -name PermissionsChecker
+// go:generate mockery -name Tree
 
 import (
 	"context"
@@ -58,9 +58,9 @@ type Tree interface {
 
 	GetMD(ctx context.Context, node *node.Node) (os.FileInfo, error)
 	ListFolder(ctx context.Context, node *node.Node) ([]*node.Node, error)
-	//CreateHome(owner *userpb.UserId) (n *node.Node, err error)
+	// CreateHome(owner *userpb.UserId) (n *node.Node, err error)
 	CreateDir(ctx context.Context, node *node.Node) (err error)
-	//CreateReference(ctx context.Context, node *node.Node, targetURI *url.URL) error
+	// CreateReference(ctx context.Context, node *node.Node, targetURI *url.URL) error
 	Move(ctx context.Context, oldNode *node.Node, newNode *node.Node) (err error)
 	Delete(ctx context.Context, node *node.Node) (err error)
 	RestoreRecycleItemFunc(ctx context.Context, key string) (*node.Node, func() error, error)

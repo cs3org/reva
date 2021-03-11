@@ -110,7 +110,7 @@ import (
 // 0x00 = key value
 // 0x01 = v1 ...
 type ACE struct {
-	//NFSv4 acls
+	// NFSv4 acls
 	_type       string // t
 	flags       string // f
 	principal   string // im key
@@ -220,21 +220,21 @@ func (e *ACE) grantPermissionSet() *provider.ResourcePermissions {
 			p.Move = true
 		}
 	}
-	//a
+	// a
 	if strings.Contains(e.permissions, "a") {
 		// TODO append data to file permission?
 		p.CreateContainer = true
 	}
-	//x
-	//if strings.Contains(e.Permissions, "x") {
+	// x
+	// if strings.Contains(e.Permissions, "x") {
 	// TODO execute file permission?
 	// TODO change directory permission?
-	//}
-	//d
+	// }
+	// d
 	if strings.Contains(e.permissions, "d") {
 		p.Delete = true
 	}
-	//D ?
+	// D ?
 
 	// sharing
 	if strings.Contains(e.permissions, "C") {

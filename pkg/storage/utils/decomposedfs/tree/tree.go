@@ -40,7 +40,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-//go:generate mockery -name Blobstore
+// go:generate mockery -name Blobstore
 
 // Blobstore defines an interface for storing blobs in a blobstore
 type Blobstore interface {

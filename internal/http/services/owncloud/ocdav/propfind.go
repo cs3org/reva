@@ -53,9 +53,9 @@ const (
 	// RFC1123 time that mimics oc10. time.RFC1123 would end in "UTC", see https://github.com/golang/go/issues/13781
 	RFC1123 = "Mon, 02 Jan 2006 15:04:05 GMT"
 
-	//_propQuotaUncalculated = "-1"
+	// _propQuotaUncalculated = "-1"
 	_propQuotaUnknown = "-2"
-	//_propQuotaUnlimited    = "-3"
+	// _propQuotaUnlimited    = "-3"
 )
 
 // ns is the namespace that is prefixed to the path in the cs3 namespace
@@ -184,7 +184,7 @@ func (s *svc) handlePropfind(w http.ResponseWriter, r *http.Request, ns string) 
 			// check sub-containers in reverse order and add them to the stack
 			// the reversed order here will produce a more logical sorting of results
 			for i := len(res.Infos) - 1; i >= 0; i-- {
-				//for i := range res.Infos {
+				// for i := range res.Infos {
 				if res.Infos[i].Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 					stack = append(stack, res.Infos[i].Path)
 				}
@@ -420,10 +420,10 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 			if ls == nil {
 				propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:size", size))
 			}
-			//  A <DAV:allprop> PROPFIND request SHOULD NOT return DAV:quota-available-bytes and DAV:quota-used-bytes
+			// A <DAV:allprop> PROPFIND request SHOULD NOT return DAV:quota-available-bytes and DAV:quota-used-bytes
 			// from https://www.rfc-editor.org/rfc/rfc4331.html#section-2
-			//propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:quota-used-bytes", size))
-			//propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:quota-available-bytes", quota))
+			// propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:quota-used-bytes", size))
+			// propstatOK.Prop = append(propstatOK.Prop, s.newProp("d:quota-available-bytes", quota))
 		} else {
 			propstatOK.Prop = append(propstatOK.Prop,
 				s.newProp("d:resourcetype", ""),

@@ -511,7 +511,7 @@ message ManilaRequest {
 }
 
 message ManilaResponse {
-   string msg = 1; //for generic messages
+   string msg = 1; // for generic messages
    int32 code = 2; // < 1 is an error -- > 1 is OK
    int64 total_used = 3;
    int64 total_capacity = 4;
