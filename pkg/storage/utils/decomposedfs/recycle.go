@@ -147,7 +147,7 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context) (items []*provider.Recy
 
 // RestoreRecycleItem restores the specified item
 func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, key string) error {
-	rn, restoreFunc, err := fs.tp.RestoreRecycleItemFunc(ctx, key)
+	rn, restoreFunc, err := fs.tp.RestoreRecycleItemFunc(ctx, key, "")
 	if err != nil {
 		return err
 	}
