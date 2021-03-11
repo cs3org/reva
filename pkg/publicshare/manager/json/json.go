@@ -354,7 +354,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 
 	for _, v := range db {
 		var local publicShare
-		if err := utils.UnmarshalJSONToProtoV1([]byte(v.(map[string]interface{})["share"].(string)), &local); err != nil {
+		if err := utils.UnmarshalJSONToProtoV1([]byte(v.(map[string]interface{})["share"].(string)), &local.PublicShare); err != nil {
 			return nil, err
 		}
 
