@@ -13,7 +13,7 @@ require (
 	github.com/cheggaaa/pb v1.0.29
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
-	github.com/cs3org/go-cs3apis v0.0.0-20210209091240-d16c30974508
+	github.com/cs3org/go-cs3apis v0.0.0-20210310133342-f4a10134033c
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/eventials/go-tus v0.0.0-20200718001131-45c7ec8f5d59
 	github.com/go-ldap/ldap/v3 v3.2.4
@@ -34,7 +34,7 @@ require (
 	github.com/mitchellh/mapstructure v1.4.1
 	github.com/onsi/ginkgo v1.15.1
 	github.com/onsi/gomega v1.11.0
-	github.com/ory/fosite v0.38.0
+	github.com/ory/fosite v0.39.0
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/xattr v0.4.3
 	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect
@@ -50,12 +50,13 @@ require (
 	golang.org/x/sys v0.0.0-20210218155724-8ebf48af031b
 	golang.org/x/term v0.0.0-20201117132131-f5c789dd3221
 	google.golang.org/grpc v1.36.0
+	google.golang.org/protobuf v1.23.0
 )
 
 go 1.13
 
-replace github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
-
-replace github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
-
-replace google.golang.org/grpc => google.golang.org/grpc v1.26.0 // temporary downgrade
+replace (
+	github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
+	github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
+	google.golang.org/grpc => google.golang.org/grpc v1.26.0 // temporary downgrade
+)

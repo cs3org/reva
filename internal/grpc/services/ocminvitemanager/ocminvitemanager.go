@@ -141,16 +141,30 @@ func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRe
 	}, nil
 }
 
-func (s *service) GetRemoteUser(ctx context.Context, req *invitepb.GetRemoteUserRequest) (*invitepb.GetRemoteUserResponse, error) {
-	remoteUser, err := s.im.GetRemoteUser(ctx, req.RemoteUserId)
+func (s *service) GetAcceptedUser(ctx context.Context, req *invitepb.GetAcceptedUserRequest) (*invitepb.GetAcceptedUserResponse, error) {
+	remoteUser, err := s.im.GetAcceptedUser(ctx, req.RemoteUserId)
 	if err != nil {
-		return &invitepb.GetRemoteUserResponse{
+		return &invitepb.GetAcceptedUserResponse{
 			Status: status.NewInternal(ctx, err, "error fetching remote user details"),
 		}, nil
 	}
 
-	return &invitepb.GetRemoteUserResponse{
+	return &invitepb.GetAcceptedUserResponse{
 		Status:     status.NewOK(ctx),
 		RemoteUser: remoteUser,
+	}, nil
+}
+
+func (s *service) FindAcceptedUsers(ctx context.Context, req *invitepb.FindAcceptedUsersRequest) (*invitepb.FindAcceptedUsersResponse, error) {
+	acceptedUsers, err := s.im.FindAcceptedUsers(ctx, req.Filter)
+	if err != nil {
+		return &invitepb.FindAcceptedUsersResponse{
+			Status: status.NewInternal(ctx, err, "error finding remote users"),
+		}, nil
+	}
+
+	return &invitepb.FindAcceptedUsersResponse{
+		Status:        status.NewOK(ctx),
+		AcceptedUsers: acceptedUsers,
 	}, nil
 }

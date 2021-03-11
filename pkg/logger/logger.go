@@ -35,7 +35,7 @@ func init() {
 type Mode string
 
 const (
-	//JSONMode outputs JSON.
+	// JSONMode outputs JSON.
 	JSONMode Mode = "json"
 	// ConsoleMode outputs human-readable logs.
 	ConsoleMode Mode = "console"

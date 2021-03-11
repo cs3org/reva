@@ -329,7 +329,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 
 	// TODO check etag with If-Match header
 	// if destination exists
-	//if _, err := os.Stat(np); err == nil {
+	// if _, err := os.Stat(np); err == nil {
 	// the local storage does not store metadata
 	// the fileid is based on the path, so no we do not need to copy it to the new file
 	// the local storage does not track revisions

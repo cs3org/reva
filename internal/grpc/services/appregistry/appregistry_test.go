@@ -49,7 +49,7 @@ func Test_ListAppProviders(t *testing.T) {
 				"currently/ignored": "an other address",
 			},
 
-			//only Status and Providers will be asserted in the tests
+			// only Status and Providers will be asserted in the tests
 			want: &registrypb.ListAppProvidersResponse{
 				Status: &rpcv1beta1.Status{
 					Code:    1,
@@ -79,7 +79,7 @@ func Test_ListAppProviders(t *testing.T) {
 			name:  "empty rules",
 			rules: map[string]interface{}{},
 
-			//only Status and Providers will be asserted in the tests
+			// only Status and Providers will be asserted in the tests
 			want: &registrypb.ListAppProvidersResponse{
 				Status: &rpcv1beta1.Status{
 					Code:    1,
@@ -97,7 +97,7 @@ func Test_ListAppProviders(t *testing.T) {
 				"text/json": nil,
 			},
 
-			//only Status and Providers will be asserted in the tests
+			// only Status and Providers will be asserted in the tests
 			want: &registrypb.ListAppProvidersResponse{
 				Status: &rpcv1beta1.Status{
 					Code:    1,
@@ -154,7 +154,7 @@ func Test_GetAppProviders(t *testing.T) {
 		{
 			name:   "simple",
 			search: &providerv1beta1.ResourceInfo{MimeType: "text/json"},
-			//only Status and Providers will be asserted in the tests
+			// only Status and Providers will be asserted in the tests
 			want: &registrypb.GetAppProvidersResponse{
 				Status: &rpcv1beta1.Status{
 					Code:    1,

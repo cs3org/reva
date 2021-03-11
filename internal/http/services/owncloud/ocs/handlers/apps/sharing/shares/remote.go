@@ -58,7 +58,7 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	remoteUserRes, err := c.GetRemoteUser(ctx, &invitepb.GetRemoteUserRequest{
+	remoteUserRes, err := c.GetAcceptedUser(ctx, &invitepb.GetAcceptedUserRequest{
 		RemoteUserId: &userpb.UserId{OpaqueId: shareWithUser, Idp: shareWithProvider},
 	})
 	if err != nil {

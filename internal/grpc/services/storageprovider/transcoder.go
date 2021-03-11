@@ -30,7 +30,7 @@ func (x XS) String() string { return string(x) }
 const (
 	// XSInvalid means the checksum type is invalid.
 	XSInvalid XS = "invalid"
-	//XSUnset means the checksum is optional.
+	// XSUnset means the checksum is optional.
 	XSUnset = "unset"
 	// XSAdler32 means the checksum is adler32
 	XSAdler32 = "adler32"

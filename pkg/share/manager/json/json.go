@@ -119,7 +119,7 @@ func loadOrCreate(file string) (*shareModel, error) {
 
 type shareModel struct {
 	file     string
-	State    map[string]map[string]collaboration.ShareState `json:"state"` // map[username]map[share_id]boolean
+	State    map[string]map[string]collaboration.ShareState `json:"state"` // map[username]map[share_id]ShareState
 	Shares   []*collaboration.Share                         `json:"shares"`
 	Grantees []interface{}                                  `json:"grantees"`
 }

@@ -53,7 +53,7 @@ func Test_service_GetUser(t *testing.T) {
 
 	for _, tt := range providers {
 		t.Run(tt.name, func(t *testing.T) {
-			//start revad with the specific provider
+			// start revad with the specific provider
 			cmd := exec.Command("../cmd/revad/revad", "-c", "userproviders/"+tt.name+".toml")
 			err := cmd.Start()
 
@@ -61,15 +61,15 @@ func Test_service_GetUser(t *testing.T) {
 				t.Fatalf("Could not start revad! ERROR: %v", err)
 			}
 
-			//wait till port is open
+			// wait till port is open
 			_ = waitForPort("open")
 
-			//even the port is open the service might not be available yet
+			// even the port is open the service might not be available yet
 			time.Sleep(1 * time.Second)
 
 			GetUser(t, tt.existingIdp)
 
-			//kill revad
+			// kill revad
 			err = cmd.Process.Signal(os.Kill)
 			if err != nil {
 				t.Fatalf("Could not kill revad! ERROR: %v", err)
@@ -184,7 +184,7 @@ func GetUser(t *testing.T, existingIdp string) {
 			if tt.want.User == nil {
 				assert.Nil(t, userResp.User)
 			} else {
-				//make sure not to run into a nil pointer error
+				// make sure not to run into a nil pointer error
 				if userResp.User == nil {
 					t.Fatalf("no user in response %v", userResp)
 				}

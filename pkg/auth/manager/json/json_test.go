@@ -132,7 +132,7 @@ func TestGetManagerWithJSONObject(t *testing.T) {
 				assert.EqualError(t, err, tt.expectedError.message)
 			}
 		})
-		//cleanup
+		// cleanup
 		os.Remove(tmpFile.Name())
 	}
 }

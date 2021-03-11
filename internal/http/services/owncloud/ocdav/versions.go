@@ -138,7 +138,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		MimeType: "httpd/unix-directory",
 		Mtime:    info.Mtime,
 		Path:     "v",
-		//PermissionSet
+		// PermissionSet
 		Size:  0,
 		Owner: info.Owner,
 	})
@@ -146,21 +146,21 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 	for i := range versions {
 		vi := &provider.ResourceInfo{
 			// TODO(jfd) we cannot access version content, this will be a problem when trying to fetch version thumbnails
-			//Opaque
+			// Opaque
 			Type: provider.ResourceType_RESOURCE_TYPE_FILE,
 			Id: &provider.ResourceId{
 				StorageId: "versions", // this is a virtual storage
 				OpaqueId:  info.Id.OpaqueId + "@" + versions[i].GetKey(),
 			},
-			//Checksum
-			//Etag: v.ETag,
-			//MimeType
+			// Checksum
+			// Etag: v.ETag,
+			// MimeType
 			Mtime: &types.Timestamp{
 				Seconds: versions[i].Mtime,
 				// TODO cs3apis FileVersion should use types.Timestamp instead of uint64
 			},
 			Path: path.Join("v", versions[i].Key),
-			//PermissionSet
+			// PermissionSet
 			Size:  versions[i].Size,
 			Owner: info.Owner,
 		}

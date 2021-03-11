@@ -144,7 +144,7 @@ func initCPUCount(conf *coreConf, log *zerolog.Logger) {
 		log.Error().Err(err).Msg("error adjusting number of cpus")
 		os.Exit(1)
 	}
-	//log.Info().Msgf("%s", getVersionString())
+	// log.Info().Msgf("%s", getVersionString())
 	log.Info().Msgf("running on %d cpus", ncpus)
 }
 
