@@ -86,12 +86,6 @@ Basic file management like up and download, move, copy, properties, quota, trash
 -   [apiTrashbin/trashbinRestore.feature:338](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L338)
 -   [apiTrashbin/trashbinRestore.feature:339](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L339)
 
-#### [requesting propfind with invalid fileid gives 502 error](https://github.com/owncloud/ocis/issues/771)
--   [apiVersions/fileVersions.feature:395](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L395)
--   [apiVersions/fileVersions.feature:396](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L396)
--   [apiVersions/fileVersions.feature:397](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L397)
--   [apiVersions/fileVersions.feature:398](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L398)
-
 #### [Implement Versions Feature for ocis storage](https://github.com/owncloud/product/issues/210)
 -   [apiWebdavEtagPropagation2/restoreVersion.feature:10](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation2/restoreVersion.feature#L10)
 

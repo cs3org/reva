@@ -46,6 +46,11 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
+		if rid == (*provider.ResourceId)(nil) {
+			http.Error(w, "404 Not Found", http.StatusNotFound)
+			return
+		}
+
 		// baseURI is encoded as part of the response payload in href field
 		baseURI := path.Join(ctx.Value(ctxKeyBaseURI).(string), wrapResourceID(rid))
 		ctx = context.WithValue(ctx, ctxKeyBaseURI, baseURI)
