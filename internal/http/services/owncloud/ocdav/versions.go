@@ -130,17 +130,6 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 	// add version dir . entry, derived from file info
 	infos = append(infos, &provider.ResourceInfo{
 		Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-		Id: &provider.ResourceId{
-			StorageId: "virtual", // this is a virtual storage
-			OpaqueId:  path.Join("meta", wrapResourceID(rid), "v"),
-		},
-		Etag:     info.Etag,
-		MimeType: "httpd/unix-directory",
-		Mtime:    info.Mtime,
-		Path:     "v",
-		// PermissionSet
-		Size:  0,
-		Owner: info.Owner,
 	})
 
 	for i := range versions {

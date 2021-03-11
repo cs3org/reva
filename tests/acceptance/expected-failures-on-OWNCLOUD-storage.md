@@ -136,9 +136,7 @@ The following scenarios fail on OWNCLOUD storage but not on OCIS storage:
 -   [apiVersions/fileVersions.feature:104](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L104)
 
 #### [Version count is 1 more than on oC10](https://github.com/owncloud/ocis/issues/1633)
--   [apiVersions/fileVersions.feature:373](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L373)
 -   [apiVersions/fileVersions.feature:409](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L409)
--   [apiVersions/fileVersions.feature:420](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L420)
 -   [apiVersions/fileVersions.feature:426](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L426)
 
 #### [Version cannot be restored when file has been renamed](https://github.com/owncloud/ocis/issues/1633)
@@ -1489,9 +1487,6 @@ Scenario Outline: Moving a file into a shared folder as the sharee and as the sh
 
 #### [getting the metadata without permission results in a 403 error](https://github.com/owncloud/ocis/issues/773)
 -   [apiVersions/fileVersionsSharingToShares.feature:256](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L256)
-
-#### [The version number of a file is incorrect because of the incorrect number of `<d:getetag>` and `<d:getlastmodified>` element](https://github.com/owncloud/ocis/issues/1234)
--   [apiVersions/fileVersionsSharingToShares.feature:267](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L267)
 
 #### [Sharing seems to work but does not work](https://github.com/owncloud/ocis/issues/1303)
 #### [Expiration date for user shares is not implemented](https://github.com/owncloud/ocis/issues/1250)

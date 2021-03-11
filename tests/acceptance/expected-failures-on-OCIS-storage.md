@@ -122,10 +122,8 @@ Basic file management like up and download, move, copy, properties, quota, trash
 -   [apiWebdavUpload2/uploadFileUsingNewChunking.feature:169](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload2/uploadFileUsingNewChunking.feature#L169)
 
 #### [Version count is 1 more than on oC10](https://github.com/owncloud/ocis/issues/1633)
--   [apiVersions/fileVersions.feature:373](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L373)
--   [apiVersions/fileVersions.feature:409](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L409)
--   [apiVersions/fileVersions.feature:420](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L420)
 -   [apiVersions/fileVersions.feature:426](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L426)
+
 
 #### [PUT request with missing parent must return status code 409](https://github.com/owncloud/ocis/issues/824)
 -   [apiWebdavUpload1/uploadFile.feature:112](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFile.feature#L112)
@@ -1370,9 +1368,6 @@ Scenario Outline: Renaming a file to a path with extension .part should not be p
 
 #### [getting the metadata without permission results in a 403 error](https://github.com/owncloud/ocis/issues/773)
 -   [apiVersions/fileVersionsSharingToShares.feature:256](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L256)
-
-#### [The version number of a file is incorrect because of the incorrect number of `<d:getetag>` and `<d:getlastmodified>` element](https://github.com/owncloud/ocis/issues/1234)
--   [apiVersions/fileVersionsSharingToShares.feature:267](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L267)
 
 #### [Sharing seems to work but does not work](https://github.com/owncloud/ocis/issues/1303)
 #### [Expiration date for user shares is not implemented](https://github.com/owncloud/ocis/issues/1250)
