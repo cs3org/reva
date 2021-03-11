@@ -169,11 +169,15 @@ func IsEmailValid(e string) bool {
 	return matchEmail.MatchString(e)
 }
 
+// MarshalProtoV1ToJSON marshals a proto V1 message to a JSON byte array
+// TODO: update this once we start using V2 in CS3APIs
 func MarshalProtoV1ToJSON(m proto.Message) ([]byte, error) {
 	mV2 := proto.MessageV2(m)
 	return protojson.Marshal(mV2)
 }
 
+// UnmarshalJSONToProtoV1 decodes a JSON byte array to a specified proto message type
+// TODO: update this once we start using V2 in CS3APIs
 func UnmarshalJSONToProtoV1(b []byte, m proto.Message) error {
 	mV2 := proto.MessageV2(m)
 	if err := protojson.Unmarshal(b, mV2); err != nil {
