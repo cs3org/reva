@@ -921,7 +921,7 @@ func (c *Client) Read(ctx context.Context, uid, gid, path string) (io.ReadCloser
 }
 
 // Write writes a file to the mgm
-func (c *Client) Write(ctx context.Context, uid, gid, path string, stream io.ReadCloser) error {
+func (c *Client) Write(ctx context.Context, uid, gid, path string, stream io.ReadCloser, metadata map[string]string) error {
 	fd, err := ioutil.TempFile(c.opt.CacheDirectory, "eoswrite-")
 	if err != nil {
 		return err
@@ -935,11 +935,11 @@ func (c *Client) Write(ctx context.Context, uid, gid, path string, stream io.Rea
 		return err
 	}
 
-	return c.WriteFile(ctx, uid, gid, path, fd.Name())
+	return c.WriteFile(ctx, uid, gid, path, fd.Name(), metadata)
 }
 
 // WriteFile writes an existing file to the mgm
-func (c *Client) WriteFile(ctx context.Context, uid, gid, path, source string) error {
+func (c *Client) WriteFile(ctx context.Context, uid, gid, path, source string, metadata map[string]string) error {
 	xrdPath := fmt.Sprintf("%s//%s", c.opt.URL, path)
 	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, "--nopbar", "--silent", "-f", source, xrdPath, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s", uid, gid))
 	_, _, err := c.execute(ctx, cmd)

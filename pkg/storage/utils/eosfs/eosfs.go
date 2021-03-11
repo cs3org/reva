@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"net/url"
 	"os"
 	"path"
@@ -44,7 +43,6 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
@@ -134,7 +132,6 @@ type eosfs struct {
 	singleUserUID string
 	singleUserGID string
 	userIDCache   sync.Map
-	httpClient    *http.Client
 }
 
 // NewEOSFS returns a storage.FS interface implementation that connects to an EOS instance
@@ -177,6 +174,7 @@ func NewEOSFS(c *Config) (storage.FS, error) {
 			Keytab:              c.Keytab,
 			SecProtocol:         c.SecProtocol,
 			VersionInvariant:    c.VersionInvariant,
+			HTTPURL:             c.HTTPURL,
 		}
 		eosClient = eosbinary.New(eosClientOpts)
 	}
@@ -186,7 +184,6 @@ func NewEOSFS(c *Config) (storage.FS, error) {
 		conf:         c,
 		chunkHandler: chunking.NewChunkHandler(c.CacheDirectory),
 		userIDCache:  sync.Map{},
-		httpClient:   rhttp.GetHTTPClient(),
 	}
 
 	return eosfs, nil

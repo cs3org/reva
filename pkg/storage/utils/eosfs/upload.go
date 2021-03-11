@@ -23,10 +23,7 @@ import (
 	"encoding/json"
 	"io"
 	"io/ioutil"
-	"net/http"
-	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -136,50 +133,14 @@ func (fs *eosfs) FinishUpload(ctx context.Context, upload tusd.FileInfo, r io.Re
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
 	}
-
-	host, err := os.Hostname()
-	if err != nil {
-		host = "localhost"
-	}
-
-	url, err := url.Parse(fs.conf.HTTPURL)
+	uid, gid, err := fs.getUserUIDAndGID(ctx, u)
 	if err != nil {
 		return err
 	}
-	url.Path = path.Join(url.Path, upload.MetaData["filename"])
+	upload.MetaData["remote-user"] = u.Id.GetOpaqueId()
 
-	req, err := http.NewRequest("PUT", url.String(), r)
-	if err != nil {
+	if err := fs.c.Write(ctx, uid, gid, upload.MetaData["filename"], r, upload.MetaData); err != nil {
 		return err
-	}
-
-	req.Header.Set("Remote-User", u.Id.GetOpaqueId())
-	req.Header.Set("Host", host)
-	req.Header.Set("X-Real-IP", host)
-	req.Header.Set("X-Forwarded-For", host)
-	req.Header.Set("CBOX-SKIP-LOCATION-ON-MOVE", "1")
-	req.Header.Set("Connection", "")
-
-	if val, ok := upload.MetaData["chunk-size"]; ok {
-		req.Header.Set("Oc-Chunk-Size", val)
-	}
-	if val, ok := upload.MetaData["total-length"]; ok {
-		req.Header.Set("Oc-Total-Length", val)
-	}
-	if val, ok := upload.MetaData["chunked"]; ok {
-		req.Header.Set("Oc-Chunked", val)
-	}
-
-	// EOS MGM returns a 307 redirect with the endpoint for an FST.
-	// The go HTTP client handles redirects with the same parameters as the
-	// original request.
-	resp, err := fs.httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return errors.New("eos: HTTP PUT call returned " + resp.Status)
 	}
 
 	return fs.TerminateUpload(ctx, upload)
