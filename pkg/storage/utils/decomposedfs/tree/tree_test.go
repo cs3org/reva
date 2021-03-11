@@ -208,6 +208,23 @@ var _ = Describe("Tree", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
+		Describe("with TreeTimeAccounting enabled", func() {
+			It("sets the tmtime of the parent", func() {
+				file, err := env.CreateTestFile("file1", "", 1, dir.ID)
+				Expect(err).ToNot(HaveOccurred())
+
+				riBefore, err := dir.AsResourceInfo(env.Ctx, node.OwnerPermissions, []string{})
+				Expect(err).ToNot(HaveOccurred())
+
+				err = env.Tree.Propagate(env.Ctx, file)
+				Expect(err).ToNot(HaveOccurred())
+
+				riAfter, err := dir.AsResourceInfo(env.Ctx, node.OwnerPermissions, []string{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(riAfter.Etag).ToNot(Equal(riBefore.Etag))
+			})
+		})
+
 		Describe("with TreeSizeAccounting enabled", func() {
 			It("calculates the size", func() {
 				file, err := env.CreateTestFile("file1", "", 1, dir.ID)
