@@ -75,7 +75,7 @@ func (connector *LocalFileConnector) RetrieveMeshData() (*meshdata.MeshData, err
 		return nil, fmt.Errorf("invalid file '%v': %v", connector.filePath, err)
 	}
 
-	// Update the site types, as these are not part of the JSON data
+	// Enforce site types
 	connector.setSiteTypes(meshData)
 
 	meshData.InferMissingData()
@@ -98,12 +98,6 @@ func (connector *LocalFileConnector) UpdateMeshData(updatedData *meshdata.MeshDa
 
 	case meshdata.StatusObsolete:
 		err = connector.unmergeData(meshData, updatedData)
-
-	case meshdata.StatusAuthorize:
-		err = connector.authorizeData(meshData, updatedData, true)
-
-	case meshdata.StatusUnauthorize:
-		err = connector.authorizeData(meshData, updatedData, false)
 	}
 
 	if err != nil {
@@ -120,43 +114,14 @@ func (connector *LocalFileConnector) UpdateMeshData(updatedData *meshdata.MeshDa
 }
 
 func (connector *LocalFileConnector) mergeData(meshData *meshdata.MeshData, updatedData *meshdata.MeshData) error {
-	// Store the previous authorization status for already existing sites
-	siteAuthorizationStatus := make(map[string]string)
-	for _, site := range meshData.Sites {
-		siteAuthorizationStatus[site.ID] = meshdata.GetPropertyValue(site.Properties, meshdata.PropertyAuthorized, "false")
-	}
-
 	// Add/update data by merging
 	meshData.Merge(updatedData)
-
-	// Restore the authorization status for all sites
-	for siteID, status := range siteAuthorizationStatus {
-		if site := meshData.FindSite(siteID); site != nil {
-			meshdata.SetPropertyValue(&site.Properties, meshdata.PropertyAuthorized, status)
-		}
-	}
 	return nil
 }
 
 func (connector *LocalFileConnector) unmergeData(meshData *meshdata.MeshData, updatedData *meshdata.MeshData) error {
 	// Remove data by unmerging
 	meshData.Unmerge(updatedData)
-	return nil
-}
-
-func (connector *LocalFileConnector) authorizeData(meshData *meshdata.MeshData, updatedData *meshdata.MeshData, authorize bool) error {
-	for _, placeholderSite := range updatedData.Sites {
-		if site := meshData.FindSite(placeholderSite.ID); site != nil {
-			if authorize {
-				meshdata.SetPropertyValue(&site.Properties, meshdata.PropertyAuthorized, "true")
-			} else {
-				meshdata.SetPropertyValue(&site.Properties, meshdata.PropertyAuthorized, "false")
-			}
-		} else {
-			return fmt.Errorf("no site with id '%v' found", placeholderSite.Name)
-		}
-	}
-
 	return nil
 }
 

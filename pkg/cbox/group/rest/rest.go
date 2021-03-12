@@ -46,8 +46,7 @@ func init() {
 }
 
 var (
-	emailRegex     = regexp.MustCompile(`^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$`)
-	groupNameRegex = regexp.MustCompile(`^[ a-zA-Z0-9._-]+$`)
+	emailRegex = regexp.MustCompile(`^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$`)
 )
 
 type manager struct {
@@ -404,16 +403,10 @@ func (m *manager) findGroupsByFilter(ctx context.Context, url string, groups map
 }
 
 func (m *manager) FindGroups(ctx context.Context, query string) ([]*grouppb.Group, error) {
-
-	var filters []string
-	switch {
-	case groupNameRegex.MatchString(query):
-		filters = []string{"groupidentifier", "displayName"}
-	case emailRegex.MatchString(query):
-		filters = []string{"groupidentifier"}
-		query = strings.TrimSuffix(query, "@cern.ch")
-	default:
-		return nil, errors.New("rest: illegal characters present in query")
+	filters := []string{"groupIdentifier"}
+	if emailRegex.MatchString(query) {
+		parts := strings.Split(query, "@")
+		query = parts[0]
 	}
 
 	groups := make(map[string]*grouppb.Group)

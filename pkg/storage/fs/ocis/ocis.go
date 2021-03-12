@@ -26,7 +26,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -219,13 +218,12 @@ func (fs *ocisfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
 	if ri.Opaque != nil && ri.Opaque.Map != nil && ri.Opaque.Map["quota"] != nil && ri.Opaque.Map["quota"].Decoder == "plain" {
 		quotaStr = string(ri.Opaque.Map["quota"].Value)
 	}
-	stat := syscall.Statfs_t{}
-	err = syscall.Statfs(fs.lu.toInternalPath(node.ID), &stat)
+
+	avail, err := fs.getAvailableSize(fs.lu.toInternalPath(node.ID))
 	if err != nil {
 		return 0, 0, err
 	}
-
-	total := ri.Size + (stat.Bavail * uint64(stat.Bsize)) // used treesize + available space
+	total := avail + ri.Size
 
 	switch {
 	case quotaStr == _quotaUncalculated, quotaStr == _quotaUnknown, quotaStr == _quotaUnlimited:

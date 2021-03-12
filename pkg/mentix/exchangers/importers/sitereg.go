@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2020 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,40 +22,41 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
-	"github.com/cs3org/reva/pkg/mentix/exchangers/importers/webapi"
+	"github.com/cs3org/reva/pkg/mentix/exchangers/importers/sitereg"
 )
 
-// WebAPIImporter implements the generic Web API importer.
-type WebAPIImporter struct {
+// SiteRegistrationImporter implements the external site registration importer.
+type SiteRegistrationImporter struct {
 	BaseRequestImporter
 }
 
 // Activate activates the importer.
-func (importer *WebAPIImporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
+func (importer *SiteRegistrationImporter) Activate(conf *config.Configuration, log *zerolog.Logger) error {
 	if err := importer.BaseRequestImporter.Activate(conf, log); err != nil {
 		return err
 	}
 
-	// Store WebAPI specifics
-	importer.SetEndpoint(conf.Importers.WebAPI.Endpoint, conf.Importers.WebAPI.IsProtected)
-	importer.SetEnabledConnectors(conf.Importers.WebAPI.EnabledConnectors)
+	// Store SiteRegistration specifics
+	importer.SetEndpoint(conf.Importers.SiteRegistration.Endpoint, conf.Importers.SiteRegistration.IsProtected)
+	importer.SetEnabledConnectors(conf.Importers.SiteRegistration.EnabledConnectors)
+	importer.SetAllowUnauthorizedSites(true)
 
-	importer.registerSiteActionHandler = webapi.HandleRegisterSiteQuery
-	importer.unregisterSiteActionHandler = webapi.HandleUnregisterSiteQuery
+	importer.RegisterExtendedActionHandler("register", sitereg.HandleRegisterSiteQuery)
+	importer.RegisterExtendedActionHandler("unregister", sitereg.HandleUnregisterSiteQuery)
 
 	return nil
 }
 
 // GetID returns the ID of the importer.
-func (importer *WebAPIImporter) GetID() string {
-	return config.ImporterIDWebAPI
+func (importer *SiteRegistrationImporter) GetID() string {
+	return config.ImporterIDSiteRegistration
 }
 
 // GetName returns the display name of the importer.
-func (importer *WebAPIImporter) GetName() string {
-	return "WebAPI"
+func (importer *SiteRegistrationImporter) GetName() string {
+	return "SiteRegistration"
 }
 
 func init() {
-	registerImporter(&WebAPIImporter{})
+	registerImporter(&SiteRegistrationImporter{})
 }

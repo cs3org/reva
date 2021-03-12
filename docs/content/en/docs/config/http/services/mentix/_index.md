@@ -10,6 +10,7 @@ description: >
 Mentix (_**Me**sh E**nti**ty E**x**changer_) is a service to read and write mesh topology data to and from one or more sources (e.g., a GOCDB instance) and export it to various targets like an HTTP endpoint or Prometheus.
 {{% /pageinfo %}}
 
+## General settings
 {{% dir name="prefix" type="string" default="mentix" %}}
 The relative root path of all exposed HTTP endpoints of Mentix.
 {{< highlight toml >}}
@@ -42,11 +43,8 @@ Mentix can import mesh data from various sources and write it to one or more tar
 
 __Supported importers:__
 
-- **webapi**
-Mentix can import mesh data via an HTTP endpoint using the `webapi` importer. Data can be sent to the configured relative endpoint (see [here](webapi)).
-
-- **adminapi**
-  Some aspects of Mentix can be administered through an HTTP endpoint using the `adminapi` importer. Queries can be sent to the configured relative endpoint (see [here](adminapi)).
+- **sitereg**
+Mentix can import new sites via an HTTP endpoint using the `sitereg` importer. Data can be sent to the configured relative endpoint (see [here](sitereg)).
 
 ## Exporters
 Mentix exposes its gathered data by using one or more _exporters_. Such exporters can, for example, write the data to a file in a specific format, or offer the data via an HTTP endpoint.
@@ -65,3 +63,30 @@ Mentix exposes its data via an HTTP endpoint using the `webapi` exporter. Data c
           - files:
              - '/usr/share/prom/sciencemesh_services.json'
   ```
+
+## Site Accounts service
+Mentix uses the Reva site accounts service to query information about site accounts. The following settings must be configured properly:
+
+{{% dir name="url" type="string" default="" %}}
+The URL of the site accounts service.
+{{< highlight toml >}}
+[http.services.mentix.accounts]
+url = "https://example.com/accounts"
+{{< /highlight >}}
+{{% /dir %}}
+
+{{% dir name="user" type="string" default="" %}}
+The user name to use for basic HTTP authentication.
+{{< highlight toml >}}
+[http.services.mentix.accounts]
+user = "hans"
+{{< /highlight >}}
+{{% /dir %}}
+
+{{% dir name="password" type="string" default="" %}}
+The user password to use for basic HTTP authentication.
+{{< highlight toml >}}
+[http.services.mentix.accounts]
+password = "secret"
+{{< /highlight >}}
+{{% /dir %}}

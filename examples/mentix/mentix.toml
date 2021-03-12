@@ -1,9 +1,5 @@
-[shared]
-jwt_secret = "Ment1x-T0pS3cr3t"
-
 [http]
 address = "0.0.0.0:9600"
-enabled_services = ["mentix"]
 
 [http.services.mentix]
 update_interval = "15m"
@@ -25,16 +21,19 @@ endpoint = "/"
 # If this setting is omitted, all connectors will be used as data sources
 enabled_connectors = ["gocdb"]
 
-# Enable the WebAPI importer
-[http.services.mentix.importers.webapi]
+# Enable the site registration importer
+[http.services.mentix.importers.sitereg]
 # For importers, this is obligatory; the connectors will be used as the target for data updates
 enabled_connectors = ["localfile"]
+# If set to true, ScienceMesh sites will be ignored when they try to register
+ignore_sm_sites = false
 
-# Enable the AdminAPI importer
-[http.services.mentix.importers.adminapi]
-enabled_connectors = ["localfile"]
-# Should never allow access w/o prior authorization
-is_protected = true
+# Set up the accounts service used to query information about accounts associated with registered sites
+[http.services.mentix.accounts]
+# Depending on where the service is running, localhost may also be used here
+url = "https://sciencemesh.example.com/iop/accounts"
+user = "username"
+password = "userpass"
 
 # Configure the Prometheus Service Discovery:
 [http.services.mentix.exporters.promsd]

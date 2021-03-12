@@ -20,7 +20,7 @@ package siteloc
 
 // SiteLocation represents the location information of a site.
 type SiteLocation struct {
-	Site      string  `json:"key"`
+	SiteID    string  `json:"key"`
 	FullName  string  `json:"name"`
 	Longitude float32 `json:"longitude"`
 	Latitude  float32 `json:"latitude"`

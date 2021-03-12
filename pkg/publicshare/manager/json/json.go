@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package filesystem
+package json
 
 import (
 	"bytes"
@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"math/rand"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -43,35 +42,12 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/publicshare/manager/registry"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 )
-
-type janitor struct {
-	m        *manager
-	interval time.Duration
-}
-
-func (j *janitor) run() {
-	ticker := time.NewTicker(j.interval)
-	work := make(chan os.Signal, 1)
-	signal.Notify(work, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT)
-
-	for {
-		select {
-		case <-work:
-			return
-		case <-ticker.C:
-			j.m.cleanupExpiredShares()
-		}
-	}
-}
-
-var j = janitor{
-	interval: time.Minute, // TODO we want this interval configurable
-}
 
 func init() {
 	registry.Register("json", New)
@@ -87,11 +63,13 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 	conf.init()
 
 	m := manager{
-		mutex:            &sync.Mutex{},
-		marshaler:        jsonpb.Marshaler{},
-		unmarshaler:      jsonpb.Unmarshaler{},
-		file:             conf.File,
-		passwordHashCost: conf.SharePasswordHashCost,
+		mutex:                      &sync.Mutex{},
+		marshaler:                  jsonpb.Marshaler{},
+		unmarshaler:                jsonpb.Unmarshaler{},
+		file:                       conf.File,
+		passwordHashCost:           conf.SharePasswordHashCost,
+		janitorRunInterval:         conf.JanitorRunInterval,
+		enableExpiredSharesCleanup: conf.EnableExpiredSharesCleanup,
 	}
 
 	// attempt to create the db file
@@ -114,15 +92,16 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 		}
 	}
 
-	j.m = &m
-	go j.run()
+	go m.startJanitorRun()
 
 	return &m, nil
 }
 
 type config struct {
-	File                  string `mapstructure:"file"`
-	SharePasswordHashCost int    `mapstructure:"password_hash_cost"`
+	File                       string `mapstructure:"file"`
+	SharePasswordHashCost      int    `mapstructure:"password_hash_cost"`
+	JanitorRunInterval         int    `mapstructure:"janitor_run_interval"`
+	EnableExpiredSharesCleanup bool   `mapstructure:"enable_expired_shares_cleanup"`
 }
 
 func (c *config) init() {
@@ -132,24 +111,48 @@ func (c *config) init() {
 	if c.SharePasswordHashCost == 0 {
 		c.SharePasswordHashCost = 11
 	}
+	if c.JanitorRunInterval == 0 {
+		c.JanitorRunInterval = 60
+	}
 }
 
 type manager struct {
 	mutex *sync.Mutex
 	file  string
 
-	marshaler        jsonpb.Marshaler
-	unmarshaler      jsonpb.Unmarshaler
-	passwordHashCost int
+	marshaler                  jsonpb.Marshaler
+	unmarshaler                jsonpb.Unmarshaler
+	passwordHashCost           int
+	janitorRunInterval         int
+	enableExpiredSharesCleanup bool
+}
+
+func (m *manager) startJanitorRun() {
+	if !m.enableExpiredSharesCleanup {
+		return
+	}
+
+	ticker := time.NewTicker(time.Duration(m.janitorRunInterval) * time.Second)
+	work := make(chan os.Signal, 1)
+	signal.Notify(work, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT)
+
+	for {
+		select {
+		case <-work:
+			return
+		case <-ticker.C:
+			m.cleanupExpiredShares()
+		}
+	}
 }
 
 // CreatePublicShare adds a new entry to manager.shares
 func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error) {
 	id := &link.PublicShareId{
-		OpaqueId: randString(15),
+		OpaqueId: utils.RandString(15),
 	}
 
-	tkn := randString(15)
+	tkn := utils.RandString(15)
 	now := time.Now().UnixNano()
 
 	displayName, ok := rInfo.ArbitraryMetadata.Metadata["name"]
@@ -173,11 +176,6 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 		Nanos:   uint32(now % 1000000000),
 	}
 
-	modifiedAt := &typespb.Timestamp{
-		Seconds: uint64(now / 1000000000),
-		Nanos:   uint32(now % 1000000000),
-	}
-
 	s := link.PublicShare{
 		Id:                id,
 		Owner:             rInfo.GetOwner(),
@@ -186,7 +184,7 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 		Token:             tkn,
 		Permissions:       g.Permissions,
 		Ctime:             createdAt,
-		Mtime:             modifiedAt,
+		Mtime:             createdAt,
 		PasswordProtected: passwordProtected,
 		Expiration:        g.Expiration,
 		DisplayName:       displayName,
@@ -423,6 +421,10 @@ func (m *manager) cleanupExpiredShares() {
 }
 
 func (m *manager) revokeExpiredPublicShare(ctx context.Context, s *link.PublicShare, u *user.User) error {
+	if !m.enableExpiredSharesCleanup {
+		return nil
+	}
+
 	m.mutex.Unlock()
 	defer m.mutex.Lock()
 
@@ -541,16 +543,6 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token, password str
 	}
 
 	return nil, errtypes.NotFound(fmt.Sprintf("share with token: `%v` not found", token))
-}
-
-// randString is a helper to create tokens. It could be a token manager instead.
-func randString(n int) string {
-	var l = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = l[rand.Intn(len(l))]
-	}
-	return string(b)
 }
 
 func (m *manager) readDb() (map[string]interface{}, error) {

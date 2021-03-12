@@ -169,7 +169,7 @@ func uploadCommand() *command {
 			}
 			defer httpRes.Body.Close()
 			if httpRes.StatusCode != http.StatusOK {
-				return err
+				return errors.New("upload: PUT request returned " + httpRes.Status)
 			}
 		} else {
 			// create the tus client.

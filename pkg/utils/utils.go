@@ -19,6 +19,7 @@
 package utils
 
 import (
+	"math/rand"
 	"net"
 	"net/http"
 	"os/user"
@@ -36,6 +37,7 @@ import (
 var (
 	matchFirstCap = regexp.MustCompile("(.)([A-Z][a-z]+)")
 	matchAllCap   = regexp.MustCompile("([a-z0-9])([A-Z])")
+	matchEmail    = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
 )
 
 // Skip  evaluates whether a source endpoint contains any of the prefixes.
@@ -99,6 +101,16 @@ func ResolvePath(path string) (string, error) {
 	return path, nil
 }
 
+// RandString is a helper to create tokens.
+func RandString(n int) string {
+	var l = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = l[rand.Intn(len(l))]
+	}
+	return string(b)
+}
+
 // TSToUnixNano converts a protobuf Timestamp to uint64
 // with nanoseconds resolution.
 func TSToUnixNano(ts *types.Timestamp) uint64 {
@@ -145,4 +157,12 @@ func GranteeEqual(u, v *provider.Grantee) bool {
 	uu, ug := ExtractGranteeID(u)
 	vu, vg := ExtractGranteeID(v)
 	return u.Type == v.Type && (UserEqual(uu, vu) || GroupEqual(ug, vg))
+}
+
+// IsEmailValid checks whether the provided email has a valid format.
+func IsEmailValid(e string) bool {
+	if len(e) < 3 && len(e) > 254 {
+		return false
+	}
+	return matchEmail.MatchString(e)
 }
