@@ -296,10 +296,11 @@ func (c *Client) AddACL(ctx context.Context, uid, gid, rootUID, rootGID, path st
 		return e
 	}
 
-	log.Debug().Str("func", "AddACL").Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("")
 	if resp == nil {
 		return errtypes.NotFound(fmt.Sprintf("Path: %s", path))
 	}
+
+	log.Debug().Str("func", "AddACL").Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 
 	return err
 
@@ -344,10 +345,11 @@ func (c *Client) RemoveACL(ctx context.Context, uid, gid, rootUID, rootGID, path
 		return e
 	}
 
-	log.Debug().Str("func", "RemoveACL").Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("")
 	if resp == nil {
 		return errtypes.NotFound(fmt.Sprintf("Path: %s", path))
 	}
+
+	log.Debug().Str("func", "RemoveACL").Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 
 	return err
 
@@ -426,14 +428,14 @@ func (c *Client) getACLForPath(ctx context.Context, uid, gid, path string) (*acl
 		return nil, errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' path: '%s'", uid, path))
 	}
 
-	log.Debug().Str("func", "GetACLForPath").Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("")
+	log.Debug().Str("func", "GetACLForPath").Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 
 	if resp.Acl == nil {
 		return nil, errtypes.InternalError(fmt.Sprintf("nil acl for uid: '%s' path: '%s'", uid, path))
 	}
 
 	if resp.GetError() != nil {
-		log.Info().Str("func", "GetACLForPath").Str("uid", uid).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+		log.Info().Str("func", "GetACLForPath").Str("uid", uid).Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
 	}
 
 	aclret, err := acl.Parse(resp.Acl.Rule, acl.ShortTextForm)
@@ -476,7 +478,7 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, uid, gid string, inode 
 		return nil, errtypes.InternalError(fmt.Sprintf("nil response for inode: '%d'", inode))
 	}
 
-	log.Info().Uint64("inode", inode).Str("rsp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
+	log.Debug().Uint64("inode", inode).Str("rsp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
 
 	info, err := c.grpcMDResponseToFileInfo(rsp, "")
 	if err != nil {
@@ -491,7 +493,7 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, uid, gid string, inode 
 		info.Inode = inode
 	}
 
-	log.Info().Str("func", "GetFileInfoByInode").Uint64("inode", inode).Msg("grpc response")
+	log.Debug().Str("func", "GetFileInfoByInode").Uint64("inode", inode).Msg("")
 	return info, nil
 }
 
@@ -529,7 +531,9 @@ func (c *Client) SetAttr(ctx context.Context, uid, gid string, attr *eosclient.A
 		return errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' gid: '%s' path: '%s'", uid, gid, path))
 	}
 
-	log.Info().Str("func", "setAttr").Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+	if resp.GetError() != nil {
+		log.Info().Str("func", "setAttr").Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative result")
+	}
 
 	return err
 
@@ -568,8 +572,9 @@ func (c *Client) UnsetAttr(ctx context.Context, uid, gid string, attr *eosclient
 		return errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' gid: '%s' path: '%s'", uid, gid, path))
 	}
 
-	log.Info().Str("func", "UnsetAttr").Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
-
+	if resp.GetError() != nil {
+		log.Info().Str("func", "UnsetAttr").Str("path", path).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
+	}
 	return err
 
 }
@@ -612,7 +617,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, uid, gid, path string) (
 		return nil, errtypes.NotFound(fmt.Sprintf("%s:%s", "acltype", path))
 	}
 
-	log.Info().Str("func", "GetFileInfoByPath").Str("path", path).Str("rsp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
+	log.Debug().Str("func", "GetFileInfoByPath").Str("path", path).Str("rsp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
 
 	info, err := c.grpcMDResponseToFileInfo(rsp, filepath.Dir(path))
 	if err != nil {
@@ -658,7 +663,6 @@ func (c *Client) GetQuota(ctx context.Context, username, rootUID, rootGID, path 
 	resp, err := c.cl.Exec(ctx, rq)
 	e := c.getRespError(resp, err)
 	if e != nil {
-		log.Info().Str("func", "GetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("username", username).Str("info:", fmt.Sprintf("%#v", resp)).Str("err", e.Error()).Msg("")
 		return nil, e
 	}
 
@@ -667,9 +671,9 @@ func (c *Client) GetQuota(ctx context.Context, username, rootUID, rootGID, path 
 	}
 
 	if resp.GetError() != nil {
-		log.Info().Str("func", "GetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("username", username).Str("info:", fmt.Sprintf("%#v", resp)).Int64("eoserrcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+		log.Info().Str("func", "GetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("username", username).Str("info:", fmt.Sprintf("%#v", resp)).Int64("eoserrcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
 	} else {
-		log.Info().Str("func", "GetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("username", username).Str("info:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
+		log.Debug().Str("func", "GetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("username", username).Str("info:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 	}
 
 	if resp.Quota == nil {
@@ -680,29 +684,29 @@ func (c *Client) GetQuota(ctx context.Context, username, rootUID, rootGID, path 
 		return nil, errtypes.InternalError(fmt.Sprintf("Quota error from eos. rootuid: '%s' rootgid: '%s' info: '%#v'", rootUID, rootGID, resp.Quota))
 	}
 
-	log.Debug().Str("func", "GetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("quotanode:", fmt.Sprintf("%#v", resp.Quota.Quotanode[0])).Msg("grpc response")
-
 	qi := new(eosclient.QuotaInfo)
 	if resp == nil {
 		return nil, errtypes.InternalError("Out of memory")
 	}
 
 	// Let's loop on all the quotas that match this uid (apparently there can be many)
+	// If there are many for this node, we sum them up
 	for i := 0; i < len(resp.Quota.Quotanode); i++ {
+		log.Debug().Str("func", "GetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("quotanode:", fmt.Sprintf("%d: %#v", i, resp.Quota.Quotanode[i])).Msg("")
 
 		mx := resp.Quota.Quotanode[i].Maxlogicalbytes - resp.Quota.Quotanode[i].Usedbytes
 		if mx < 0 {
 			mx = 0
 		}
 		qi.AvailableBytes += mx
-		qi.UsedBytes += resp.Quota.Quotanode[0].Usedbytes
+		qi.UsedBytes += resp.Quota.Quotanode[i].Usedbytes
 
-		mx = resp.Quota.Quotanode[0].Maxfiles - resp.Quota.Quotanode[0].Usedfiles
+		mx = resp.Quota.Quotanode[i].Maxfiles - resp.Quota.Quotanode[i].Usedfiles
 		if mx < 0 {
 			mx = 0
 		}
 		qi.AvailableInodes += mx
-		qi.UsedInodes += resp.Quota.Quotanode[0].Usedfiles
+		qi.UsedInodes += resp.Quota.Quotanode[i].Usedfiles
 	}
 
 	return qi, err
@@ -744,7 +748,6 @@ func (c *Client) SetQuota(ctx context.Context, rootUID, rootGID string, info *eo
 		resp, err := c.cl.Exec(ctx, rq)
 		e := c.getRespError(resp, err)
 		if e != nil {
-			log.Info().Str("func", "SetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("info:", fmt.Sprintf("%#v", resp)).Str("err", e.Error()).Msg("")
 			return e
 		}
 
@@ -753,13 +756,13 @@ func (c *Client) SetQuota(ctx context.Context, rootUID, rootGID string, info *eo
 		}
 
 		if resp.GetError() != nil {
-			log.Info().Str("func", "SetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("info:", fmt.Sprintf("%#v", resp)).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
+			log.Info().Str("func", "SetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("info:", fmt.Sprintf("%#v", resp)).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
 		} else {
-			log.Info().Str("func", "SetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("info:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
+			log.Debug().Str("func", "SetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("info:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 		}
 
 		if resp.Quota == nil {
-			return errtypes.InternalError(fmt.Sprintf("nil quota response?  rootuid: '%s' rootgid: '%s'  path: '%s'", rootUID, rootGID, info))
+			return errtypes.InternalError(fmt.Sprintf("nil quota response?  rootuid: '%s' rootgid: '%s'  info: '%#v'", rootUID, rootGID, info))
 		}
 
 		if resp.Quota.Code != 0 {
@@ -803,7 +806,7 @@ func (c *Client) Touch(ctx context.Context, uid, gid, path string) error {
 		return errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' path: '%s'", uid, path))
 	}
 
-	log.Info().Str("func", "Touch").Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
+	log.Debug().Str("func", "Touch").Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 
 	return err
 
@@ -848,7 +851,7 @@ func (c *Client) Chown(ctx context.Context, uid, gid, chownUID, chownGID, path s
 		return errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' chownuid: '%s' path: '%s'", uid, chownUID, path))
 	}
 
-	log.Info().Str("func", "Chown").Str("path", path).Str("uid,gid", uid+","+gid).Str("chownuid,chowngid", chownUID+","+chownGID).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
+	log.Debug().Str("func", "Chown").Str("path", path).Str("uid,gid", uid+","+gid).Str("chownuid,chowngid", chownUID+","+chownGID).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 
 	return err
 
@@ -890,7 +893,7 @@ func (c *Client) Chmod(ctx context.Context, uid, gid, mode, path string) error {
 		return errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' mode: '%s' path: '%s'", uid, mode, path))
 	}
 
-	log.Info().Str("func", "Chmod").Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
+	log.Debug().Str("func", "Chmod").Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 
 	return err
 
@@ -933,7 +936,7 @@ func (c *Client) CreateDir(ctx context.Context, uid, gid, path string) error {
 		return errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' path: '%s'", uid, path))
 	}
 
-	log.Info().Str("func", "Createdir").Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
+	log.Debug().Str("func", "Createdir").Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 
 	return err
 
@@ -968,7 +971,7 @@ func (c *Client) rm(ctx context.Context, uid, gid, path string) error {
 		return errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' path: '%s'", uid, path))
 	}
 
-	log.Info().Str("func", "rm").Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
+	log.Debug().Str("func", "rm").Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 
 	return err
 
@@ -1005,7 +1008,7 @@ func (c *Client) rmdir(ctx context.Context, uid, gid, path string) error {
 		return errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' path: '%s'", uid, path))
 	}
 
-	log.Info().Str("func", "rmdir").Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
+	log.Debug().Str("func", "rmdir").Str("path", path).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
 
 	return err
 }
@@ -1030,7 +1033,38 @@ func (c *Client) Remove(ctx context.Context, uid, gid, path string) error {
 
 // Rename renames the resource referenced by oldPath to newPath
 func (c *Client) Rename(ctx context.Context, uid, gid, oldPath, newPath string) error {
-	return errtypes.NotSupported("eosgrpc: Rename not implemented")
+	log := appctx.GetLogger(ctx)
+	log.Info().Str("func", "Rename").Str("uid,gid", uid+","+gid).Str("oldPath", oldPath).Str("newPath", newPath).Msg("")
+
+	// Initialize the common fields of the NSReq
+	rq, err := c.initNSRequest(ctx, uid, gid)
+	if err != nil {
+		return err
+	}
+
+	msg := new(erpc.NSRequest_RenameRequest)
+
+	msg.Id = new(erpc.MDId)
+	msg.Id.Path = []byte(oldPath)
+	msg.Target = []byte(newPath)
+	rq.Command = &erpc.NSRequest_Rename{Rename: msg}
+
+	// Now send the req and see what happens
+	resp, err := c.cl.Exec(ctx, rq)
+	e := c.getRespError(resp, err)
+	if e != nil {
+		log.Error().Str("func", "Rename").Str("oldPath", oldPath).Str("newPath", newPath).Str("err", e.Error()).Msg("")
+		return e
+	}
+
+	if resp == nil {
+		return errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' oldpath: '%s' newpath: '%s'", uid, oldPath, newPath))
+	}
+
+	log.Debug().Str("func", "Rename").Str("oldPath", oldPath).Str("newPath", newPath).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
+
+	return err
+
 }
 
 // List the contents of the directory given by path
@@ -1073,30 +1107,38 @@ func (c *Client) List(ctx context.Context, uid, gid, dpath string) ([]*eosclient
 	for {
 		rsp, err := resp.Recv()
 		if err != nil {
-			log.Debug().Err(err).Str("func", "List").Str("path", dpath).Str("got err from EOS", err.Error()).Msg("grpc response")
-			if err == io.EOF || i > 0 {
-				log.Debug().Str("path", dpath).Int("nitems", i-1).Msg("OK, no more items")
+			if err == io.EOF {
+				log.Debug().Str("path", dpath).Int("nitems", i).Msg("OK, no more items, clean exit")
 				return mylst, nil
 			}
 
-			return nil, err
+			// We got an error while reading items. We log this as an error and we return
+			// the items we have
+			log.Error().Err(err).Str("func", "List").Int("nitems", i).Str("path", dpath).Str("got err from EOS", err.Error()).Msg("")
+			if i > 0 {
+				log.Error().Str("path", dpath).Int("nitems", i).Msg("No more items, dirty exit")
+				return mylst, nil
+			}
 		}
 
 		if rsp == nil {
-			log.Warn().Err(err).Str("func", "List").Str("path", dpath).Str("err", "rsp is nil").Msg("grpc response")
+			log.Error().Int("nitems", i).Err(err).Str("func", "List").Str("path", dpath).Str("err", "rsp is nil").Msg("grpc response")
 			return nil, errtypes.NotFound(dpath)
 		}
 
 		i++
+
+		// The first item is the directory itself... skip
 		if i == 1 {
-			log.Debug().Str("func", "List").Str("path", dpath).Str("skipping item resp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
+			log.Debug().Str("func", "List").Str("path", dpath).Str("skipping first item resp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
 			continue
 		}
+
 		log.Debug().Str("func", "List").Str("path", dpath).Str("item resp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
 
 		myitem, err := c.grpcMDResponseToFileInfo(rsp, dpath)
 		if err != nil {
-			log.Warn().Err(err).Str("func", "List").Str("path", dpath).Str("could not convert item:", fmt.Sprintf("%#v", rsp)).Str("err", err.Error()).Msg("")
+			log.Error().Err(err).Str("func", "List").Str("path", dpath).Str("could not convert item:", fmt.Sprintf("%#v", rsp)).Str("err", err.Error()).Msg("")
 
 			return nil, err
 		}
@@ -1106,7 +1148,12 @@ func (c *Client) List(ctx context.Context, uid, gid, dpath string) ([]*eosclient
 
 }
 
-// Read reads a file from the mgm. It may or may not create a temp copy in the local filesystem
+// Read reads a file from the mgm and returns a handle to read it
+// This handle could be directly the body of the response or a local tmp file
+//  returning a handle to the body is nice, yet it gives less control on the transaction
+//  itself, e.g. strange timeouts or TCP issues may be more difficult to trace
+// Let's consider this experimental for the moment, maybe I'll like to add a config
+// parameter to choose between the two behaviours
 func (c *Client) Read(ctx context.Context, uid, gid, path string) (io.ReadCloser, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "Read").Str("uid,gid", uid+","+gid).Str("path", path).Msg("")
@@ -1138,6 +1185,7 @@ func (c *Client) Read(ctx context.Context, uid, gid, path string) (io.ReadCloser
 }
 
 // Write writes a file to the mgm
+// Somehow the same considerations as Read apply
 func (c *Client) Write(ctx context.Context, uid, gid, path string, stream io.ReadCloser) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "Write").Str("uid,gid", uid+","+gid).Str("path", path).Msg("")
@@ -1161,7 +1209,7 @@ func (c *Client) Write(ctx context.Context, uid, gid, path string, stream io.Rea
 	//return c.WriteFile(ctx, uid, gid, path, fd.Name())
 }
 
-// WriteFile writes an existing file to the mgm
+// WriteFile writes an existing file to the mgm. Old xrdcp utility
 func (c *Client) WriteFile(ctx context.Context, uid, gid, path, source string) error {
 
 	log := appctx.GetLogger(ctx)
@@ -1202,8 +1250,11 @@ func (c *Client) ListDeletedEntries(ctx context.Context, uid, gid string) ([]*eo
 		return nil, errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s'", uid))
 	}
 
-	log.Info().Str("func", "ListDeletedEntries").Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
-
+	if resp.GetError() != nil {
+		log.Info().Str("func", "ListDeletedEntries").Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
+	} else {
+		log.Debug().Str("func", "ListDeletedEntries").Str("info:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
+	}
 	// TODO(labkode): add protection if slave is configured and alive to count how many files are in the trashbin before
 	// triggering the recycle ls call that could break the instance because of unavailable memory.
 	// FF: I agree with labkode, if we think we may have memory problems then the semantics of the grpc call`and
@@ -1260,8 +1311,11 @@ func (c *Client) RestoreDeletedEntry(ctx context.Context, uid, gid, key string) 
 		return errtypes.InternalError(fmt.Sprintf("nil response for uid: '%s' key: '%s'", uid, key))
 	}
 
-	log.Info().Str("func", "RestoreDeletedEntries").Str("key", key).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("grpc response")
-
+	if resp.GetError() != nil {
+		log.Info().Str("func", "RestoreDeletedEntries").Str("key", key).Int64("errcode", resp.GetError().Code).Str("errmsg", resp.GetError().Msg).Msg("EOS negative resp")
+	} else {
+		log.Info().Str("func", "RestoreDeletedEntries").Str("key", key).Str("resp:", fmt.Sprintf("%#v", resp)).Msg("grpc response")
+	}
 	return err
 }
 
