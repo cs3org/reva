@@ -1192,11 +1192,12 @@ func (fs *localfs) RestoreRecycleItem(ctx context.Context, restoreKey, restorePa
 	}
 
 	var localRestorePath string
-	if restorePath != "" {
+	switch {
+	case restorePath != "":
 		localRestorePath = fs.wrap(ctx, restorePath)
-	} else if fs.isShareFolder(ctx, filePath) {
+	case fs.isShareFolder(ctx, filePath):
 		localRestorePath = fs.wrapReferences(ctx, filePath)
-	} else {
+	default:
 		localRestorePath = fs.wrap(ctx, filePath)
 	}
 

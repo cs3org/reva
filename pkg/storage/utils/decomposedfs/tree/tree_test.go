@@ -145,6 +145,7 @@ var _ = Describe("Tree", func() {
 					Expect(restoreFunc()).To(Succeed())
 
 					originalNode, err := env.Lookup.NodeFromPath(env.Ctx, originalPath)
+					Expect(err).ToNot(HaveOccurred())
 					Expect(originalNode.Exists).To(BeTrue())
 				})
 
@@ -155,9 +156,11 @@ var _ = Describe("Tree", func() {
 					Expect(restoreFunc()).To(Succeed())
 
 					newNode, err := env.Lookup.NodeFromPath(env.Ctx, "dir1/newLocation")
+					Expect(err).ToNot(HaveOccurred())
 					Expect(newNode.Exists).To(BeTrue())
 
 					originalNode, err := env.Lookup.NodeFromPath(env.Ctx, originalPath)
+					Expect(err).ToNot(HaveOccurred())
 					Expect(originalNode.Exists).To(BeFalse())
 				})
 
