@@ -1250,6 +1250,20 @@ func (c *Client) Write(ctx context.Context, uid, gid, path string, stream io.Rea
 
 		return c.GetHTTPCl().PUTFile(ctx, c.httptransport, "", uid, gid, path, wfd, length)
 	}
+=======
+	//fd, err := ioutil.TempFile(c.opt.CacheDirectory, "eoswrite-")
+	//if err != nil {
+	//		return err
+	//	}
+	//	defer fd.Close()
+	//	defer os.RemoveAll(fd.Name())
+	//
+	//	// copy stream to local temp file
+	//	_, err = io.Copy(fd, stream)
+	//	if err != nil {
+	//return err
+	//}
+>>>>>>> Shut up another warning from Hound
 
 	return c.GetHTTPCl().PUTFile(ctx, c.httptransport, "", uid, gid, path, stream, length)
 
