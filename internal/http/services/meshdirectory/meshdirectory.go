@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/sciencemesh/meshdirectory-web"
+	meshdirectoryweb "github.com/sciencemesh/meshdirectory-web"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
@@ -148,7 +148,7 @@ func (s *svc) Handler() http.Handler {
 			return
 		default:
 			r.URL.Path = head + r.URL.Path
-			meshdirectory_web.ServeMeshDirectorySPA(w, r)
+			meshdirectoryweb.ServeMeshDirectorySPA(w, r)
 			return
 		}
 	})

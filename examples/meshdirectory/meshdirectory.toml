@@ -6,8 +6,20 @@
 [grpc.services.usershareprovider]
 [grpc.services.publicshareprovider]
 [grpc.services.ocmcore]
-[grpc.services.ocmshareprovider]
+driver = "json"
+
+[grpc.services.ocmcore.drivers.json]
+file = "/var/tmp/reva/shares_server_1.json"
+
 [grpc.services.ocminvitemanager]
+driver = "json"
+
+[grpc.services.ocmshareprovider]
+driver = "json"
+
+[grpc.services.ocmshareprovider.drivers.json]
+file = "/var/tmp/reva/shares_server_1.json"
+
 [http.services.datagateway]
 [http.services.dataprovider]
 [http.services.prometheus]
