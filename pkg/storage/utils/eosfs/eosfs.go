@@ -654,8 +654,8 @@ func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 	// set quota for user
 	quotaInfo := &eosclient.SetQuotaInfo{
 		Username:  u.Username,
-		Uid:       uid,
-		Gid:       gid,
+		UID:       uid,
+		GID:       gid,
 		MaxBytes:  fs.conf.DefaultQuotaBytes,
 		MaxFiles:  fs.conf.DefaultQuotaFiles,
 		QuotaNode: fs.conf.QuotaNode,
@@ -927,8 +927,8 @@ func (fs *eosfs) createNominalHome(ctx context.Context) error {
 	// set quota for user
 	quotaInfo := &eosclient.SetQuotaInfo{
 		Username:  u.Username,
-		Uid:       uid,
-		Gid:       gid,
+		UID:       uid,
+		GID:       gid,
 		MaxBytes:  fs.conf.DefaultQuotaBytes,
 		MaxFiles:  fs.conf.DefaultQuotaFiles,
 		QuotaNode: fs.conf.QuotaNode,

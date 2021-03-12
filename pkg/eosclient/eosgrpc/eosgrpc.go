@@ -731,11 +731,11 @@ func (c *Client) SetQuota(ctx context.Context, rootUID, rootGID string, info *eo
 		msg := new(erpc.NSRequest_QuotaRequest)
 		msg.Path = []byte(info.QuotaNode)
 		msg.Id = new(erpc.RoleId)
-		uidInt, err := strconv.ParseUint(info.Uid, 10, 64)
+		uidInt, err := strconv.ParseUint(info.UID, 10, 64)
 		if err != nil {
 			return err
 		}
-		gidInt, err := strconv.ParseUint(info.Gid, 10, 64)
+		gidInt, err := strconv.ParseUint(info.GID, 10, 64)
 		if err != nil {
 			return err
 		}
