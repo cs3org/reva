@@ -1284,7 +1284,7 @@ func (fs *eosfs) ListRecycle(ctx context.Context) ([]*provider.RecycleItem, erro
 	return recycleEntries, nil
 }
 
-func (fs *eosfs) RestoreRecycleItem(ctx context.Context, key string) error {
+func (fs *eosfs) RestoreRecycleItem(ctx context.Context, key, restorePath string) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eos: no user in ctx")
