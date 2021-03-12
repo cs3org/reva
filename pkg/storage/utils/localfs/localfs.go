@@ -1043,6 +1043,7 @@ func (fs *localfs) ListRevisions(ctx context.Context, ref *provider.Reference) (
 			Key:   version,
 			Size:  uint64(mds[i].Size()),
 			Mtime: uint64(mtime),
+			Etag:  calcEtag(ctx, mds[i]),
 		})
 	}
 	return revisions, nil

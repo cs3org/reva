@@ -147,7 +147,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 				OpaqueId:  info.Id.OpaqueId + "@" + versions[i].GetKey(),
 			},
 			// Checksum
-			// Etag: v.ETag,
+			Etag: versions[i].Etag,
 			// MimeType
 			Mtime: &types.Timestamp{
 				Seconds: versions[i].Mtime,

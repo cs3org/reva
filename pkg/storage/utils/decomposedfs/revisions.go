@@ -67,15 +67,21 @@ func (fs *Decomposedfs) ListRevisions(ctx context.Context, ref *provider.Referen
 	if items, err := filepath.Glob(np + ".REV.*"); err == nil {
 		for i := range items {
 			if fi, err := os.Stat(items[i]); err == nil {
+				mtime := fi.ModTime()
 				rev := &provider.FileVersion{
 					Key:   filepath.Base(items[i]),
-					Mtime: uint64(fi.ModTime().Unix()),
+					Mtime: uint64(mtime.Unix()),
 				}
 				blobSize, err := node.ReadBlobSizeAttr(items[i])
 				if err != nil {
 					return nil, errors.Wrapf(err, "error reading blobsize xattr")
 				}
 				rev.Size = uint64(blobSize)
+				etag, err := node.CalculateEtag(np, mtime)
+				if err != nil {
+					return nil, errors.Wrapf(err, "error calculating etag")
+				}
+				rev.Etag = etag
 				revisions = append(revisions, rev)
 			}
 		}

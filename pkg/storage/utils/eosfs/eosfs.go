@@ -1326,6 +1326,7 @@ func (fs *eosfs) convertToRevision(ctx context.Context, eosFileInfo *eosclient.F
 		Key:   path.Base(md.Path),
 		Size:  md.Size,
 		Mtime: md.Mtime.Seconds, // TODO do we need nanos here?
+		Etag: md.Etag,
 	}
 	return revision, nil
 }
