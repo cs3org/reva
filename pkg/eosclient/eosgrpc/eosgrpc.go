@@ -33,7 +33,8 @@ import (
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/eosclient"
-	erpc "github.com/cs3org/reva/pkg/eosclient/eosgrpc/eos_grpc"
+
+	//erpc "github.com/cs3org/reva/pkg/eosclient/eosgrpc/eos_grpc"
 	ehttp "github.com/cs3org/reva/pkg/eosclient/eosgrpc/eos_http"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
@@ -1183,11 +1184,7 @@ func (c *Client) Read(ctx context.Context, uid, gid, path string) (io.ReadCloser
 		}
 	}
 
-<<<<<<< HEAD
 	bodystream, err := c.GetHTTPCl().GETFile(ctx, "", uid, gid, path, localfile)
-=======
-	err, bodystream := c.GetHTTPCl().GETFile(ctx, "", uid, gid, path, localfile)
->>>>>>> Shut up another warning from Hound
 	if err != nil {
 		log.Error().Str("func", "Read").Str("path", path).Str("uid,gid", uid+","+gid).Str("err", err.Error()).Msg("")
 		return nil, errtypes.InternalError(fmt.Sprintf("can't GET local cache file '%s'", localTarget))
@@ -1203,7 +1200,6 @@ func (c *Client) Write(ctx context.Context, uid, gid, path string, stream io.Rea
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "Write").Str("uid,gid", uid+","+gid).Str("path", path).Msg("")
 
-<<<<<<< HEAD
 	if c.opt.ReadUsesLocalTemp {
 		fd, err := ioutil.TempFile(c.opt.CacheDirectory, "eoswrite-")
 		if err != nil {
@@ -1228,20 +1224,6 @@ func (c *Client) Write(ctx context.Context, uid, gid, path string, stream io.Rea
 
 		return c.GetHTTPCl().PUTFile(ctx, "", uid, gid, path, wfd)
 	}
-=======
-	//fd, err := ioutil.TempFile(c.opt.CacheDirectory, "eoswrite-")
-	//if err != nil {
-	//		return err
-	//	}
-	//	defer fd.Close()
-	//	defer os.RemoveAll(fd.Name())
-	//
-	//	// copy stream to local temp file
-	//	_, err = io.Copy(fd, stream)
-	//	if err != nil {
-	//return err
-	//}
->>>>>>> Shut up another warning from Hound
 
 	return c.GetHTTPCl().PUTFile(ctx, "", uid, gid, path, stream)
 
