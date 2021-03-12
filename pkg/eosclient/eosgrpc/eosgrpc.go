@@ -121,7 +121,7 @@ type Client struct {
 }
 
 // GetHttpCl creates an http client for immediate usage, using the already instantiated resources
-func (c *Client) GetHttpCl() *ehttp.EosHttpClient {
+func (c *Client) GetHTTPCl() *ehttp.EosHttpClient {
 	return ehttp.New(&c.opt.httpopts)
 }
 
@@ -1174,7 +1174,7 @@ func (c *Client) Read(ctx context.Context, uid, gid, path string) (io.ReadCloser
 	//		return nil, errtypes.InternalError(fmt.Sprintf("can't open local cache file '%s'", localTarget))
 	//	}
 
-	err, bodystream := c.GetHttpCl().GETFile(ctx, "", uid, gid, path, localfile)
+	err, bodystream := c.GetHTTPCl().GETFile(ctx, "", uid, gid, path, localfile)
 	if err != nil {
 		log.Error().Str("func", "Read").Str("path", path).Str("uid,gid", uid+","+gid).Str("err", err.Error()).Msg("")
 		return nil, errtypes.InternalError(fmt.Sprintf("can't GET local cache file '%s'", localTarget))
@@ -1203,7 +1203,7 @@ func (c *Client) Write(ctx context.Context, uid, gid, path string, stream io.Rea
 	//return err
 	//}
 
-	return c.GetHttpCl().PUTFile(ctx, "", uid, gid, path, stream)
+	return c.GetHTTPCl().PUTFile(ctx, "", uid, gid, path, stream)
 
 	//return c.GetHttpCl().PUTFile(ctx, remoteuser, uid, gid, urlpathng, stream)
 	//return c.WriteFile(ctx, uid, gid, path, fd.Name())
