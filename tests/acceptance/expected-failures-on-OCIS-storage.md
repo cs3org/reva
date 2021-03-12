@@ -3,13 +3,6 @@
 ### File
 Basic file management like up and download, move, copy, properties, quota, trash, versions and chunking.
 
-#### [Implement Trashbin Feature for ocis storage](https://github.com/owncloud/product/issues/209)
-
--   [apiWebdavEtagPropagation2/restoreFromTrash.feature:48](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation2/restoreFromTrash.feature#L48)
--   [apiWebdavEtagPropagation2/restoreFromTrash.feature:49](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation2/restoreFromTrash.feature#L49)
--   [apiWebdavEtagPropagation2/restoreFromTrash.feature:90](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation2/restoreFromTrash.feature#L90)
--   [apiWebdavEtagPropagation2/restoreFromTrash.feature:91](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation2/restoreFromTrash.feature#L91)
-
 #### [QA trashcan cannot delete a deep tree](https://github.com/owncloud/ocis/issues/1077)
 -   [apiTrashbin/trashbinDelete.feature:107](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L107)
 -   [apiTrashbin/trashbinDelete.feature:123](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L123)
