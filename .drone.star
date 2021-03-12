@@ -27,7 +27,7 @@ def makeStep(target):
 def lintStep():
   return {
     "name": "lint",
-    "image": "registry.cern.ch/docker.io/golangci/golangci-lint:v1.26",
+    "image": "registry.cern.ch/docker.io/golangci/golangci-lint:v1.38",
     "commands": [
       "golangci-lint run --timeout 2m0s",
     ],
