@@ -53,7 +53,7 @@ require (
 	google.golang.org/grpc v1.36.0
 )
 
-go 1.13
+go 1.16
 
 replace github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
 

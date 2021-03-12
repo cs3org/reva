@@ -19,7 +19,7 @@ trigger:
 steps:
 
 - name: store-dev-release
-  image: registry.cern.ch/docker.io/library/golang:1.13
+  image: registry.cern.ch/docker.io/library/golang:1.16
   environment:
     USERNAME:
       from_secret: cbox_username
@@ -34,7 +34,7 @@ steps:
     - for i in $(ls /drone/src/dist);do curl --fail -X PUT -u $${USERNAME}:$${PASSWORD} https://cernbox.cern.ch/cernbox/desktop/remote.php/webdav/eos/project/r/reva/www/daily/`date '+%Y-%m-%d'`/${DRONE_COMMIT}/$${i} --data-binary @./dist/$${i} ; done
 
 - name: license-scan
-  image: registry.cern.ch/docker.io/library/golang:1.13
+  image: registry.cern.ch/docker.io/library/golang:1.16
   environment:
     FOSSA_API_KEY:
       from_secret: fossa_api_key
@@ -44,7 +44,7 @@ steps:
     - /go/bin/fossa analyze
 
 - name: build
-  image: registry.cern.ch/docker.io/library/golang:1.13
+  image: registry.cern.ch/docker.io/library/golang:1.16
   commands:
     - make ci
 
@@ -54,7 +54,7 @@ steps:
     - golangci-lint run --timeout 2m0s
 
 - name: license-check
-  image: registry.cern.ch/docker.io/library/golang:1.13
+  image: registry.cern.ch/docker.io/library/golang:1.16
   failure: ignore
   environment:
     FOSSA_API_KEY:
@@ -124,7 +124,7 @@ trigger:
 
 steps:
 - name: license-scan
-  image: registry.cern.ch/docker.io/library/golang:1.13
+  image: registry.cern.ch/docker.io/library/golang:1.16
   environment:
     FOSSA_API_KEY:
       from_secret: fossa_api_key
@@ -134,7 +134,7 @@ steps:
     - /go/bin/fossa analyze
 
 - name: build
-  image: registry.cern.ch/docker.io/library/golang:1.13
+  image: registry.cern.ch/docker.io/library/golang:1.16
   commands:
     - make ci
 
@@ -144,7 +144,7 @@ steps:
     - golangci-lint run --timeout 2m0s
 
 - name: changelog
-  image: registry.cern.ch/docker.io/library/golang:1.13
+  image: registry.cern.ch/docker.io/library/golang:1.16
   commands:
     - make release-deps && /go/bin/calens > /dev/null
     - make check-changelog-drone PR=$DRONE_PULL_REQUEST
@@ -153,7 +153,7 @@ steps:
       from_secret: github_api_token
 
 - name: license-check
-  image: registry.cern.ch/docker.io/library/golang:1.13
+  image: registry.cern.ch/docker.io/library/golang:1.16
   failure: ignore
   environment:
     FOSSA_API_KEY:
@@ -178,7 +178,7 @@ trigger:
 
 steps:
 - name: license-scan
-  image: registry.cern.ch/docker.io/library/golang:1.13
+  image: registry.cern.ch/docker.io/library/golang:1.16
   environment:
     FOSSA_API_KEY:
       from_secret: fossa_api_key
@@ -188,7 +188,7 @@ steps:
     - /go/bin/fossa analyze
 
 - name: build
-  image: registry.cern.ch/docker.io/library/golang:1.13
+  image: registry.cern.ch/docker.io/library/golang:1.16
   commands:
     - make ci
 
@@ -199,7 +199,7 @@ steps:
     - golangci-lint run --timeout 2m0s
 
 - name: license-check
-  image: registry.cern.ch/docker.io/library/golang:1.13
+  image: registry.cern.ch/docker.io/library/golang:1.16
   failure: ignore
   environment:
     FOSSA_API_KEY:
@@ -209,7 +209,7 @@ steps:
     - /go/bin/fossa test --timeout 900
 
 - name: create-dist
-  image: registry.cern.ch/docker.io/library/golang:1.13
+  image: registry.cern.ch/docker.io/library/golang:1.16
   commands:
     - go run tools/create-artifacts/main.go -version ${DRONE_TAG} -commit ${DRONE_COMMIT} -goversion `go version | awk '{print $$3}'`
 
@@ -283,12 +283,12 @@ trigger:
 
 steps:
   - name: build
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     commands:
       - make build-ci
 
   - name: revad-services
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -299,7 +299,7 @@ steps:
       - /drone/src/cmd/revad/revad -c users.toml
 
   - name: sleep-for-revad-start
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     commands:
       - sleep 5
 
@@ -328,12 +328,12 @@ trigger:
 
 steps:
   - name: build
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     commands:
       - make build-ci
 
   - name: revad-services
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -344,7 +344,7 @@ steps:
       - /drone/src/cmd/revad/revad -c users.toml
 
   - name: sleep-for-revad-start
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     commands:
       - sleep 5
 
@@ -373,12 +373,12 @@ trigger:
 
 steps:
   - name: build
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     commands:
       - make build-ci
 
   - name: revad-services
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -389,7 +389,7 @@ steps:
       - /drone/src/cmd/revad/revad -c users.toml
 
   - name: sleep-for-revad-start
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     commands:
       - sleep 5
 
@@ -419,12 +419,12 @@ trigger:
 
 steps:
   - name: build
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     commands:
       - make build-ci
 
   - name: revad-services
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -435,7 +435,7 @@ steps:
       - /drone/src/cmd/revad/revad -c users.toml
 
   - name: sleep-for-revad-start
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     commands:
       - sleep 5
 
@@ -465,12 +465,12 @@ trigger:
 
 steps:
   - name: build
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     commands:
       - make build-ci
 
   - name: revad-services
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -539,12 +539,12 @@ trigger:
 
 steps:
   - name: build
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     commands:
       - make build-ci
 
   - name: revad-services
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -608,12 +608,12 @@ trigger:
 
 steps:
   - name: build
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     commands:
       - make build-ci
 
   - name: revad-services
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -680,12 +680,12 @@ trigger:
 
 steps:
   - name: build
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     commands:
       - make build-ci
 
   - name: revad-services
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -752,12 +752,12 @@ trigger:
 
 steps:
   - name: build
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     commands:
       - make build-ci
 
   - name: revad-services
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -824,12 +824,12 @@ trigger:
 
 steps:
   - name: build
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     commands:
       - make build-ci
 
   - name: revad-services
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -896,12 +896,12 @@ trigger:
 
 steps:
   - name: build
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     commands:
       - make build-ci
 
   - name: revad-services
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -968,12 +968,12 @@ trigger:
 
 steps:
   - name: build
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     commands:
       - make build-ci
 
   - name: revad-services
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -1040,12 +1040,12 @@ trigger:
 
 steps:
   - name: build
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     commands:
       - make build-ci
 
   - name: revad-services
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -1117,12 +1117,12 @@ trigger:
 
 steps:
   - name: build
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     commands:
       - make build-ci
 
   - name: revad-services
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -1194,12 +1194,12 @@ trigger:
 
 steps:
   - name: build
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     commands:
       - make build-ci
 
   - name: revad-services
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -1271,12 +1271,12 @@ trigger:
 
 steps:
   - name: build
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     commands:
       - make build-ci
 
   - name: revad-services
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -1348,12 +1348,12 @@ trigger:
 
 steps:
   - name: build
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     commands:
       - make build-ci
 
   - name: revad-services
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
@@ -1425,12 +1425,12 @@ trigger:
 
 steps:
   - name: build
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     commands:
       - make build-ci
 
   - name: revad-services
-    image: registry.cern.ch/docker.io/library/golang:1.13
+    image: registry.cern.ch/docker.io/library/golang:1.16
     detach: true
     commands:
       - cd /drone/src/tests/oc-integration-tests/drone/
