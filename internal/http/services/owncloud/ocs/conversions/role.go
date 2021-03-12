@@ -91,7 +91,7 @@ func (r *Role) OCSPermissions() Permissions {
 // M = Mounted
 func (r *Role) WebDAVPermissions(isDir, isShared, isMountpoint, isPublic bool) string {
 	var b strings.Builder
-	//b.Grow(7)
+	// b.Grow(7)
 	if !isPublic && isShared {
 		fmt.Fprintf(&b, "S")
 	}

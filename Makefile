@@ -48,7 +48,7 @@ contrib:
 
 # for manual building only
 deps:
-	cd /tmp && rm -rf golangci-lint &&  git clone --quiet -b 'v1.26.0' --single-branch --depth 1 https://github.com/golangci/golangci-lint &> /dev/null && cd golangci-lint/cmd/golangci-lint && go install
+	cd /tmp && rm -rf golangci-lint &&  git clone --quiet -b 'v1.38.0' --single-branch --depth 1 https://github.com/golangci/golangci-lint &> /dev/null && cd golangci-lint/cmd/golangci-lint && go install
 	cd /tmp && go get golang.org/x/tools/cmd/goimports
 
 build-ci: off

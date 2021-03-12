@@ -203,7 +203,7 @@ func getStore(clients map[string]fosite.Client) *storage.MemoryStore {
 		Clients:                clients,
 		AuthorizeCodes:         map[string]storage.StoreAuthorizeCode{},
 		AccessTokens:           map[string]fosite.Requester{},
-		RefreshTokens:          map[string]fosite.Requester{},
+		RefreshTokens:          map[string]storage.StoreRefreshToken{},
 		PKCES:                  map[string]fosite.Requester{},
 		AccessTokenRequestIDs:  map[string]string{},
 		RefreshTokenRequestIDs: map[string]string{},

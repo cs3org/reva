@@ -504,7 +504,7 @@ func (fs *s3FS) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []str
 		log.Debug().
 			Str("fn", fn).
 			Msg("trying to list prefix")
-		//try by listing parent to find directory
+		// try by listing parent to find directory
 		input := &s3.ListObjectsV2Input{
 			Bucket:    aws.String(fs.config.Bucket),
 			Prefix:    aws.String(fn),

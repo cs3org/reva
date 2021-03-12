@@ -1861,7 +1861,7 @@ func (s *svc) GetQuota(ctx context.Context, req *gateway.GetQuotaRequest) (*prov
 
 	res, err := c.GetQuota(ctx, &provider.GetQuotaRequest{
 		Opaque: req.GetOpaque(),
-		//Ref:    req.GetRef(), // TODO send which storage space ... or root
+		// Ref:    req.GetRef(), // TODO send which storage space ... or root
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling GetQuota")

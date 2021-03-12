@@ -48,15 +48,15 @@ type share struct {
 	Token          string `json:"token"`
 }
 
-//ImportShares from a shares.jsonl file in exportPath. The files must already be present on the storage
+// ImportShares from a shares.jsonl file in exportPath. The files must already be present on the storage
 func ImportShares(ctx context.Context, client gateway.GatewayAPIClient, exportPath string, ns string) error {
 
 	sharesJSONL, err := os.Open(path.Join(exportPath, "shares.jsonl"))
 	if err != nil {
 		return err
 	}
-	defer sharesJSONL.Close()
 	jsonLines := bufio.NewScanner(sharesJSONL)
+	sharesJSONL.Close()
 
 	for jsonLines.Scan() {
 		var shareData share
@@ -65,7 +65,7 @@ func ImportShares(ctx context.Context, client gateway.GatewayAPIClient, exportPa
 			return err
 		}
 
-		//Stat file, skip share creation if it does not exist on the target system
+		// Stat file, skip share creation if it does not exist on the target system
 		resourcePath := path.Join(ns, path.Base(exportPath), shareData.Path)
 		statReq := &provider.StatRequest{
 			Ref: &provider.Reference{

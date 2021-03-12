@@ -75,17 +75,33 @@ func (s *svc) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteReques
 	return res, nil
 }
 
-func (s *svc) GetRemoteUser(ctx context.Context, req *invitepb.GetRemoteUserRequest) (*invitepb.GetRemoteUserResponse, error) {
+func (s *svc) GetAcceptedUser(ctx context.Context, req *invitepb.GetAcceptedUserRequest) (*invitepb.GetAcceptedUserResponse, error) {
 	c, err := pool.GetOCMInviteManagerClient(s.c.OCMInviteManagerEndpoint)
 	if err != nil {
-		return &invitepb.GetRemoteUserResponse{
+		return &invitepb.GetAcceptedUserResponse{
 			Status: status.NewInternal(ctx, err, "error getting user invite provider client"),
 		}, nil
 	}
 
-	res, err := c.GetRemoteUser(ctx, req)
+	res, err := c.GetAcceptedUser(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling AcceptInvite")
+		return nil, errors.Wrap(err, "gateway: error calling GetAcceptedUser")
+	}
+
+	return res, nil
+}
+
+func (s *svc) FindAcceptedUsers(ctx context.Context, req *invitepb.FindAcceptedUsersRequest) (*invitepb.FindAcceptedUsersResponse, error) {
+	c, err := pool.GetOCMInviteManagerClient(s.c.OCMInviteManagerEndpoint)
+	if err != nil {
+		return &invitepb.FindAcceptedUsersResponse{
+			Status: status.NewInternal(ctx, err, "error getting user invite provider client"),
+		}, nil
+	}
+
+	res, err := c.FindAcceptedUsers(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling FindAcceptedUsers")
 	}
 
 	return res, nil

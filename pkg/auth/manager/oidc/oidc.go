@@ -114,10 +114,10 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	}
 	log.Debug().Interface("claims", claims).Interface("userInfo", userInfo).Msg("unmarshalled userinfo")
 
-	if claims["issuer"] == nil { //This is not set in simplesamlphp
+	if claims["issuer"] == nil { // This is not set in simplesamlphp
 		claims["issuer"] = am.c.Issuer
 	}
-	if claims["email_verified"] == nil { //This is not set in simplesamlphp
+	if claims["email_verified"] == nil { // This is not set in simplesamlphp
 		claims["email_verified"] = false
 	}
 

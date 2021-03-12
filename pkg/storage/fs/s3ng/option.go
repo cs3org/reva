@@ -19,9 +19,6 @@
 package s3ng
 
 import (
-	"path/filepath"
-	"strings"
-
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -31,26 +28,6 @@ type Option func(o *Options)
 
 // Options defines the available options for this package.
 type Options struct {
-	// ocis fs works on top of a dir of uuid nodes
-	Root string `mapstructure:"root"`
-
-	// UserLayout describes the relative path from the storage's root node to the users home node.
-	UserLayout string `mapstructure:"user_layout"`
-
-	// TODO NodeLayout option to save nodes as eg. nodes/1d/d8/1dd84abf-9466-4e14-bb86-02fc4ea3abcf
-	ShareFolder string `mapstructure:"share_folder"`
-
-	// EnableHome enables the creation of home directories.
-	EnableHome bool `mapstructure:"enable_home"`
-
-	// propagate mtime changes as tmtime (tree modification time) to the parent directory when user.ocis.propagation=1 is set on a node
-	TreeTimeAccounting bool `mapstructure:"treetime_accounting"`
-
-	// propagate size changes as treesize
-	TreeSizeAccounting bool `mapstructure:"treesize_accounting"`
-
-	// set an owner for the root node
-	Owner string `mapstructure:"owner"`
 
 	// Endpoint of the s3 blobstore
 	S3Endpoint string `mapstructure:"s3.endpoint"`
@@ -84,21 +61,4 @@ func parseConfig(m map[string]interface{}) (*Options, error) {
 		return nil, err
 	}
 	return o, nil
-}
-
-func (o *Options) init(m map[string]interface{}) {
-	if o.UserLayout == "" {
-		o.UserLayout = "{{.Id.OpaqueId}}"
-	}
-	// ensure user layout has no starting or trailing /
-	o.UserLayout = strings.Trim(o.UserLayout, "/")
-
-	if o.ShareFolder == "" {
-		o.ShareFolder = "/Shares"
-	}
-	// ensure share folder always starts with slash
-	o.ShareFolder = filepath.Join("/", o.ShareFolder)
-
-	// c.DataDirectory should never end in / unless it is the root
-	o.Root = filepath.Clean(o.Root)
 }

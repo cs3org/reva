@@ -116,7 +116,7 @@ func testBadLayout() {
 	WithUser(user, layout)
 }
 
-//should panic
+// should panic
 func testBadUser() {
 	layout := "{{ .DoesNotExist }}"
 	user := &userpb.User{}
