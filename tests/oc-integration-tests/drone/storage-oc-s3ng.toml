@@ -1,0 +1,49 @@
+# This storage.toml config file will start a reva service that:
+[shared]
+jwt_secret = "Pive-Fumkiu4"
+gatewaysvc = "localhost:19000"
+
+# - authenticates grpc storage provider requests using the internal jwt token
+# - authenticates http upload and download requests requests using basic auth
+# - serves the storage provider on grpc port 11000
+# - serves http dataprovider for this storage on port 11001
+#   - /data - dataprovider: file up and download
+[grpc]
+address = "0.0.0.0:11000"
+
+# This is a storage provider that grants direct access to the wrapped storage
+# we have a locally running dataprovider
+[grpc.services.storageprovider]
+driver = "s3ng"
+mount_path = "/oc"
+mount_id = "123e4567-e89b-12d3-a456-426655440000"
+expose_data_server = true
+data_server_url = "http://revad-services:11001/data"
+
+[grpc.services.storageprovider.drivers.s3ng]
+root = "/drone/src/tmp/reva/data"
+treetime_accounting = true
+treesize_accounting = true
+userprovidersvc = "localhost:18000"
+"s3.endpoint" = "http://ceph:8080"
+"s3.region" = "default"
+"s3.bucket" = "test"
+"s3.access_key" = "test"
+"s3.secret_key" = "test"
+
+[http]
+address = "0.0.0.0:11001"
+
+[http.services.dataprovider]
+driver = "s3ng"
+temp_folder = "/drone/src/tmp/reva/tmp"
+
+[http.services.dataprovider.drivers.s3ng]
+root = "/drone/src/tmp/reva/data"
+treetime_accounting = true
+treesize_accounting = true
+"s3.endpoint" = "http://ceph:8080"
+"s3.region" = "default"
+"s3.bucket" = "test"
+"s3.access_key" = "test"
+"s3.secret_key" = "test"

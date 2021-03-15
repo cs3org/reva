@@ -19,51 +19,49 @@
 package blobstore
 
 import (
+	"context"
 	"io"
+	"net/url"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/pkg/errors"
 )
 
 // Blobstore provides an interface to an s3 compatible blobstore
 type Blobstore struct {
-	s3       *s3.S3
-	uploader *s3manager.Uploader
+	client *minio.Client
 
 	bucket string
 }
 
 // New returns a new Blobstore
 func New(endpoint, region, bucket, accessKey, secretKey string) (*Blobstore, error) {
-	sess, err := session.NewSession(&aws.Config{
-		Endpoint:         aws.String(endpoint),
-		Region:           aws.String(region),
-		Credentials:      credentials.NewStaticCredentials(accessKey, secretKey, ""),
-		S3ForcePathStyle: aws.Bool(true),
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to parse s3 endpoint")
+	}
+
+	useSSL := u.Scheme != "http"
+	client, err := minio.New(u.Host, &minio.Options{
+		Region: region,
+		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
+		Secure: useSSL,
 	})
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to setup s3 session")
+		return nil, errors.Wrap(err, "failed to setup s3 client")
 	}
-	uploader := s3manager.NewUploader(sess)
 
 	return &Blobstore{
-		uploader: uploader,
-		s3:       s3.New(sess),
-		bucket:   bucket,
+		client: client,
+		bucket: bucket,
 	}, nil
 }
 
 // Upload stores some data in the blobstore under the given key
 func (bs *Blobstore) Upload(key string, reader io.Reader) error {
-	_, err := bs.uploader.Upload(&s3manager.UploadInput{
-		Bucket: aws.String(bs.bucket),
-		Key:    aws.String(key),
-		Body:   reader,
-	})
+	_, err := bs.client.PutObject(context.Background(), bs.bucket, key, reader, -1, minio.PutObjectOptions{ContentType: "application/octet-stream"})
+
 	if err != nil {
 		return errors.Wrapf(err, "could not store object '%s' into bucket '%s'", key, bs.bucket)
 	}
@@ -72,24 +70,16 @@ func (bs *Blobstore) Upload(key string, reader io.Reader) error {
 
 // Download retrieves a blob from the blobstore for reading
 func (bs *Blobstore) Download(key string) (io.ReadCloser, error) {
-	input := &s3.GetObjectInput{
-		Bucket: aws.String(bs.bucket),
-		Key:    aws.String(key),
-	}
-	result, err := bs.s3.GetObject(input)
+	reader, err := bs.client.GetObject(context.Background(), bs.bucket, key, minio.GetObjectOptions{})
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not download object '%s' from bucket '%s'", key, bs.bucket)
 	}
-	return result.Body, nil
+	return reader, nil
 }
 
 // Delete deletes a blob from the blobstore
 func (bs *Blobstore) Delete(key string) error {
-	input := &s3.DeleteObjectInput{
-		Bucket: aws.String(bs.bucket),
-		Key:    aws.String(key),
-	}
-	_, err := bs.s3.DeleteObject(input)
+	err := bs.client.RemoveObject(context.Background(), bs.bucket, key, minio.RemoveObjectOptions{})
 	if err != nil {
 		return errors.Wrapf(err, "could not delete object '%s' from bucket '%s'", key, bs.bucket)
 	}
