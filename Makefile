@@ -42,13 +42,14 @@ build-reva: imports
 test: off
 	go test -race ./...
 
-litmus-test:
+litmus-test: build
 	cd tests/oc-integration-tests/local && ../../../cmd/revad/revad -c frontend.toml &
 	cd tests/oc-integration-tests/local && ../../../cmd/revad/revad -c gateway.toml &
 	cd tests/oc-integration-tests/local && ../../../cmd/revad/revad -c storage-home.toml &
 	cd tests/oc-integration-tests/local && ../../../cmd/revad/revad -c storage-users.toml &
 	cd tests/oc-integration-tests/local && ../../../cmd/revad/revad -c users.toml &
-	docker run --rm --network=host -e LITMUS_URL=$(LITMUS_URL) -e LITMUS_USERNAME=$(LITMUS_USERNAME) -e LITMUS_PASSWORD=$(LITMUS_PASSWORD) owncloud/litmus:latest
+	sudo docker run --rm --network=host -e LITMUS_URL=$(LITMUS_URL) -e LITMUS_USERNAME=$(LITMUS_USERNAME) -e LITMUS_PASSWORD=$(LITMUS_PASSWORD) owncloud/litmus:latest
+	pkill revad
 lint:
 	go run tools/check-license/check-license.go
 	`go env GOPATH`/bin/golangci-lint run --timeout 2m0s
