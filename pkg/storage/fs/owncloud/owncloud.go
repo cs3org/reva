@@ -72,7 +72,7 @@ const (
 	mdPrefix          string = ocPrefix + "md."   // arbitrary metadata
 	favPrefix         string = ocPrefix + "fav."  // favorite flag, per user
 	etagPrefix        string = ocPrefix + "etag." // allow overriding a calculated etag with one from the extended attributes
-	//checksumPrefix    string = ocPrefix + "cs."   // TODO add checksum support
+	// checksumPrefix    string = ocPrefix + "cs."   // TODO add checksum support
 
 )
 
@@ -695,7 +695,7 @@ func readOrCreateID(ctx context.Context, ip string, conn redis.Conn) string {
 	log := appctx.GetLogger(ctx)
 
 	// read extended file attribute for id
-	//generate if not present
+	// generate if not present
 	var id []byte
 	var err error
 	if id, err = xattr.Get(ip, idAttribute); err != nil {

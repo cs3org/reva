@@ -36,36 +36,31 @@ type Configuration struct {
 	UpdateInterval string `mapstructure:"update_interval"`
 
 	Importers struct {
-		WebAPI struct {
-			Endpoint          string   `mapstructure:"endpoint"`
-			IsProtected       bool     `mapstructure:"is_protected"`
-			EnabledConnectors []string `mapstructure:"enabled_connectors"`
-		} `mapstructure:"webapi"`
-
-		AdminAPI struct {
-			Endpoint          string   `mapstructure:"endpoint"`
-			IsProtected       bool     `mapstructure:"is_protected"`
-			EnabledConnectors []string `mapstructure:"enabled_connectors"`
-		} `mapstructure:"adminapi"`
+		SiteRegistration struct {
+			Endpoint               string   `mapstructure:"endpoint"`
+			EnabledConnectors      []string `mapstructure:"enabled_connectors"`
+			IsProtected            bool     `mapstructure:"is_protected"`
+			IgnoreScienceMeshSites bool     `mapstructure:"ignore_sm_sites"`
+		} `mapstructure:"sitereg"`
 	} `mapstructure:"importers"`
 
 	Exporters struct {
 		WebAPI struct {
 			Endpoint          string   `mapstructure:"endpoint"`
-			IsProtected       bool     `mapstructure:"is_protected"`
 			EnabledConnectors []string `mapstructure:"enabled_connectors"`
+			IsProtected       bool     `mapstructure:"is_protected"`
 		} `mapstructure:"webapi"`
 
 		CS3API struct {
 			Endpoint          string   `mapstructure:"endpoint"`
-			IsProtected       bool     `mapstructure:"is_protected"`
 			EnabledConnectors []string `mapstructure:"enabled_connectors"`
+			IsProtected       bool     `mapstructure:"is_protected"`
 		} `mapstructure:"cs3api"`
 
 		SiteLocations struct {
 			Endpoint          string   `mapstructure:"endpoint"`
-			IsProtected       bool     `mapstructure:"is_protected"`
 			EnabledConnectors []string `mapstructure:"enabled_connectors"`
+			IsProtected       bool     `mapstructure:"is_protected"`
 		} `mapstructure:"siteloc"`
 
 		PrometheusSD struct {
@@ -74,6 +69,12 @@ type Configuration struct {
 			EnabledConnectors  []string `mapstructure:"enabled_connectors"`
 		} `mapstructure:"promsd"`
 	} `mapstructure:"exporters"`
+
+	AccountsService struct {
+		URL      string `mapstructure:"url"`
+		User     string `mapstructure:"user"`
+		Password string `mapstructure:"password"`
+	} `mapstructure:"accounts"`
 
 	// Internal settings
 	EnabledConnectors []string `mapstructure:"-"`

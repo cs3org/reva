@@ -16,7 +16,7 @@
 # granted to it by virtue of its status as an Intergovernmental Organization
 # or submit itself to any jurisdiction.
 
-FROM golang:1.13
+FROM golang:1.16
 
 WORKDIR /go/src/github/cs3org/reva
 COPY . .

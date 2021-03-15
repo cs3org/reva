@@ -40,7 +40,7 @@ func (exporter *SiteLocationsExporter) Activate(conf *config.Configuration, log 
 	exporter.SetEndpoint(conf.Exporters.SiteLocations.Endpoint, conf.Exporters.SiteLocations.IsProtected)
 	exporter.SetEnabledConnectors(conf.Exporters.SiteLocations.EnabledConnectors)
 
-	exporter.defaultActionHandler = siteloc.HandleDefaultQuery
+	exporter.RegisterActionHandler("", siteloc.HandleDefaultQuery)
 
 	return nil
 }

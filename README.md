@@ -43,7 +43,7 @@ You can also read the [build from sources guide](https://reva.link/docs/getting-
    ../../../cmd/revad/revad -c frontend.toml &
    ../../../cmd/revad/revad -c gateway.toml &
    ../../../cmd/revad/revad -c storage-home.toml &
-   ../../../cmd/revad/revad -c storage-oc.toml &
+   ../../../cmd/revad/revad -c storage-users.toml &
    ../../../cmd/revad/revad -c users.toml
    ```
 
@@ -82,7 +82,7 @@ You can also read the [build from sources guide](https://reva.link/docs/getting-
     ../../../cmd/revad/revad -c gateway.toml &
     ../../../cmd/revad/revad -c shares.toml &
     ../../../cmd/revad/revad -c storage-home.toml &
-    ../../../cmd/revad/revad -c storage-oc.toml &
+    ../../../cmd/revad/revad -c storage-users.toml &
     ../../../cmd/revad/revad -c storage-publiclink.toml &
     ../../../cmd/revad/revad -c ldap-users.toml
     ```

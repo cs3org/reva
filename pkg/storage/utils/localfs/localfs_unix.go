@@ -64,3 +64,17 @@ func calcEtag(ctx context.Context, fi os.FileInfo) string {
 	etag := fmt.Sprintf(`"%x"`, h.Sum(nil))
 	return fmt.Sprintf("\"%s\"", strings.Trim(etag, "\""))
 }
+
+func (fs *localfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
+	// TODO quota of which storage space?
+	// we could use the logged in user, but when a user has access to multiple storages this falls short
+	// for now return quota of root
+	stat := syscall.Statfs_t{}
+	err := syscall.Statfs(fs.wrap(ctx, "/"), &stat)
+	if err != nil {
+		return 0, 0, err
+	}
+	total := stat.Blocks * uint64(stat.Bsize)                // Total data blocks in filesystem
+	used := (stat.Blocks - stat.Bavail) * uint64(stat.Bsize) // Free blocks available to unprivileged user
+	return total, used, nil
+}

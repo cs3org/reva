@@ -1306,7 +1306,7 @@ func (fs *eosfs) convertToRecycleItem(ctx context.Context, eosDeletedItem *eoscl
 		Path:         path,
 		Key:          eosDeletedItem.RestoreKey,
 		Size:         eosDeletedItem.Size,
-		DeletionTime: &types.Timestamp{Seconds: eosDeletedItem.DeletionMTime / 1000}, // TODO(labkode): check if eos time is millis or nanos
+		DeletionTime: &types.Timestamp{Seconds: eosDeletedItem.DeletionMTime},
 	}
 	if eosDeletedItem.IsDir {
 		recycleItem.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER

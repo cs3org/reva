@@ -95,7 +95,7 @@ type Users struct {
 	Email       string `json:"email" xml:"email"`
 	DisplayName string `json:"displayname" xml:"displayname"`
 	// FIXME home should never be exposed ... even in oc 10
-	//home
+	// home
 	TwoFactorAuthEnabled bool `json:"two_factor_auth_enabled" xml:"two_factor_auth_enabled"`
 }
 

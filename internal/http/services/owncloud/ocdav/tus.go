@@ -60,7 +60,7 @@ func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, ns string) {
 	// TODO must be SHA1, ADLER32 or MD5 ... in capital letters????
 	// curl -X PUT https://demo.owncloud.com/remote.php/webdav/testcs.bin -u demo:demo -d '123' -v -H 'OC-Checksum: SHA1:40bd001563085fc35165329ea1ff5c5ecbdbbeef'
 
-	//TODO check Expect: 100-continue
+	// TODO check Expect: 100-continue
 
 	// read filename from metadata
 	meta := tusd.ParseMetadataHeader(r.Header.Get("Upload-Metadata"))

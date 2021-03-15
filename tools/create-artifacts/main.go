@@ -113,10 +113,11 @@ func hashFile(file string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer f.Close()
 	if _, err := io.Copy(hasher, f); err != nil {
+		f.Close()
 		log.Fatal(err)
 	}
+	f.Close()
 	val := hex.EncodeToString(hasher.Sum(nil))
 	if err := ioutil.WriteFile(file+".sha256", []byte(val), 0644); err != nil {
 		log.Fatal(err)

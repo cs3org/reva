@@ -16,15 +16,13 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package filesystem
+package json
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"math/rand"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -43,35 +41,11 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/publicshare/manager/registry"
-	"github.com/golang/protobuf/jsonpb"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 )
-
-type janitor struct {
-	m        *manager
-	interval time.Duration
-}
-
-func (j *janitor) run() {
-	ticker := time.NewTicker(j.interval)
-	work := make(chan os.Signal, 1)
-	signal.Notify(work, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT)
-
-	for {
-		select {
-		case <-work:
-			return
-		case <-ticker.C:
-			j.m.cleanupExpiredShares()
-		}
-	}
-}
-
-var j = janitor{
-	interval: time.Minute, // TODO we want this interval configurable
-}
 
 func init() {
 	registry.Register("json", New)
@@ -87,11 +61,11 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 	conf.init()
 
 	m := manager{
-		mutex:            &sync.Mutex{},
-		marshaler:        jsonpb.Marshaler{},
-		unmarshaler:      jsonpb.Unmarshaler{},
-		file:             conf.File,
-		passwordHashCost: conf.SharePasswordHashCost,
+		mutex:                      &sync.Mutex{},
+		file:                       conf.File,
+		passwordHashCost:           conf.SharePasswordHashCost,
+		janitorRunInterval:         conf.JanitorRunInterval,
+		enableExpiredSharesCleanup: conf.EnableExpiredSharesCleanup,
 	}
 
 	// attempt to create the db file
@@ -114,15 +88,16 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 		}
 	}
 
-	j.m = &m
-	go j.run()
+	go m.startJanitorRun()
 
 	return &m, nil
 }
 
 type config struct {
-	File                  string `mapstructure:"file"`
-	SharePasswordHashCost int    `mapstructure:"password_hash_cost"`
+	File                       string `mapstructure:"file"`
+	SharePasswordHashCost      int    `mapstructure:"password_hash_cost"`
+	JanitorRunInterval         int    `mapstructure:"janitor_run_interval"`
+	EnableExpiredSharesCleanup bool   `mapstructure:"enable_expired_shares_cleanup"`
 }
 
 func (c *config) init() {
@@ -132,24 +107,46 @@ func (c *config) init() {
 	if c.SharePasswordHashCost == 0 {
 		c.SharePasswordHashCost = 11
 	}
+	if c.JanitorRunInterval == 0 {
+		c.JanitorRunInterval = 60
+	}
 }
 
 type manager struct {
 	mutex *sync.Mutex
 	file  string
 
-	marshaler        jsonpb.Marshaler
-	unmarshaler      jsonpb.Unmarshaler
-	passwordHashCost int
+	passwordHashCost           int
+	janitorRunInterval         int
+	enableExpiredSharesCleanup bool
+}
+
+func (m *manager) startJanitorRun() {
+	if !m.enableExpiredSharesCleanup {
+		return
+	}
+
+	ticker := time.NewTicker(time.Duration(m.janitorRunInterval) * time.Second)
+	work := make(chan os.Signal, 1)
+	signal.Notify(work, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT)
+
+	for {
+		select {
+		case <-work:
+			return
+		case <-ticker.C:
+			m.cleanupExpiredShares()
+		}
+	}
 }
 
 // CreatePublicShare adds a new entry to manager.shares
 func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error) {
 	id := &link.PublicShareId{
-		OpaqueId: randString(15),
+		OpaqueId: utils.RandString(15),
 	}
 
-	tkn := randString(15)
+	tkn := utils.RandString(15)
 	now := time.Now().UnixNano()
 
 	displayName, ok := rInfo.ArbitraryMetadata.Metadata["name"]
@@ -173,11 +170,6 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 		Nanos:   uint32(now % 1000000000),
 	}
 
-	modifiedAt := &typespb.Timestamp{
-		Seconds: uint64(now / 1000000000),
-		Nanos:   uint32(now % 1000000000),
-	}
-
 	s := link.PublicShare{
 		Id:                id,
 		Owner:             rInfo.GetOwner(),
@@ -186,7 +178,7 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 		Token:             tkn,
 		Permissions:       g.Permissions,
 		Ctime:             createdAt,
-		Mtime:             modifiedAt,
+		Mtime:             createdAt,
 		PasswordProtected: passwordProtected,
 		Expiration:        g.Expiration,
 		DisplayName:       displayName,
@@ -200,8 +192,8 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	encShare := bytes.Buffer{}
-	if err := m.marshaler.Marshal(&encShare, &ps.PublicShare); err != nil {
+	encShare, err := utils.MarshalProtoV1ToJSON(&ps.PublicShare)
+	if err != nil {
 		return nil, err
 	}
 
@@ -212,7 +204,7 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 
 	if _, ok := db[s.Id.GetOpaqueId()]; !ok {
 		db[s.Id.GetOpaqueId()] = map[string]interface{}{
-			"share":    encShare.String(),
+			"share":    string(encShare),
 			"password": ps.Password,
 		}
 	} else {
@@ -283,8 +275,8 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 		return nil, err
 	}
 
-	buff := bytes.Buffer{}
-	if err := m.marshaler.Marshal(&buff, share); err != nil {
+	encShare, err := utils.MarshalProtoV1ToJSON(share)
+	if err != nil {
 		return nil, err
 	}
 
@@ -296,7 +288,7 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 	if ok && passwordChanged {
 		data["password"] = newPasswordEncoded
 	}
-	data["share"] = buff.String()
+	data["share"] = string(encShare)
 
 	db[share.Id.OpaqueId] = data
 
@@ -329,20 +321,19 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 	for _, v := range db {
 		d := v.(map[string]interface{})["share"]
 
-		ps := &link.PublicShare{}
-		r := bytes.NewBuffer([]byte(d.(string)))
-		if err := m.unmarshaler.Unmarshal(r, ps); err != nil {
+		var ps link.PublicShare
+		if err := utils.UnmarshalJSONToProtoV1([]byte(d.(string)), &ps); err != nil {
 			return nil, err
 		}
 
 		if ref.GetId().GetOpaqueId() == ps.Id.OpaqueId {
-			if !notExpired(ps) {
-				if err := m.revokeExpiredPublicShare(ctx, ps, u); err != nil {
+			if !notExpired(&ps) {
+				if err := m.revokeExpiredPublicShare(ctx, &ps, u); err != nil {
 					return nil, err
 				}
 				return nil, errors.New("no shares found by id:" + ref.GetId().String())
 			}
-			return ps, nil
+			return &ps, nil
 		}
 
 	}
@@ -362,9 +353,8 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 	}
 
 	for _, v := range db {
-		r := bytes.NewBuffer([]byte(v.(map[string]interface{})["share"].(string)))
-		local := &publicShare{}
-		if err := m.unmarshaler.Unmarshal(r, &local.PublicShare); err != nil {
+		var local publicShare
+		if err := utils.UnmarshalJSONToProtoV1([]byte(v.(map[string]interface{})["share"].(string)), &local.PublicShare); err != nil {
 			return nil, err
 		}
 
@@ -412,17 +402,20 @@ func (m *manager) cleanupExpiredShares() {
 	for _, v := range db {
 		d := v.(map[string]interface{})["share"]
 
-		ps := &link.PublicShare{}
-		r := bytes.NewBuffer([]byte(d.(string)))
-		_ = m.unmarshaler.Unmarshal(r, ps)
+		var ps link.PublicShare
+		_ = utils.UnmarshalJSONToProtoV1([]byte(d.(string)), &ps)
 
-		if !notExpired(ps) {
-			_ = m.revokeExpiredPublicShare(context.Background(), ps, nil)
+		if !notExpired(&ps) {
+			_ = m.revokeExpiredPublicShare(context.Background(), &ps, nil)
 		}
 	}
 }
 
 func (m *manager) revokeExpiredPublicShare(ctx context.Context, s *link.PublicShare, u *user.User) error {
+	if !m.enableExpiredSharesCleanup {
+		return nil
+	}
+
 	m.mutex.Unlock()
 	defer m.mutex.Lock()
 
@@ -488,14 +481,13 @@ func (m *manager) getByToken(ctx context.Context, token string) (*link.PublicSha
 	defer m.mutex.Unlock()
 
 	for _, v := range db {
-		r := bytes.NewBuffer([]byte(v.(map[string]interface{})["share"].(string)))
-		local := &link.PublicShare{}
-		if err := m.unmarshaler.Unmarshal(r, local); err != nil {
+		var local link.PublicShare
+		if err := utils.UnmarshalJSONToProtoV1([]byte(v.(map[string]interface{})["share"].(string)), &local); err != nil {
 			return nil, err
 		}
 
 		if local.Token == token {
-			return local, nil
+			return &local, nil
 		}
 	}
 
@@ -513,17 +505,16 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token, password str
 	defer m.mutex.Unlock()
 
 	for _, v := range db {
-		r := bytes.NewBuffer([]byte(v.(map[string]interface{})["share"].(string)))
 		passDB := v.(map[string]interface{})["password"].(string)
-		local := &link.PublicShare{}
-		if err := m.unmarshaler.Unmarshal(r, local); err != nil {
+		var local link.PublicShare
+		if err := utils.UnmarshalJSONToProtoV1([]byte(v.(map[string]interface{})["share"].(string)), &local); err != nil {
 			return nil, err
 		}
 
 		if local.Token == token {
-			if !notExpired(local) {
+			if !notExpired(&local) {
 				// TODO user is not needed at all in this API.
-				if err := m.revokeExpiredPublicShare(ctx, local, nil); err != nil {
+				if err := m.revokeExpiredPublicShare(ctx, &local, nil); err != nil {
 					return nil, err
 				}
 				break
@@ -531,26 +522,16 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token, password str
 
 			if local.PasswordProtected {
 				if err := bcrypt.CompareHashAndPassword([]byte(passDB), []byte(password)); err == nil {
-					return local, nil
+					return &local, nil
 				}
 
 				return nil, errtypes.InvalidCredentials("json: invalid password")
 			}
-			return local, nil
+			return &local, nil
 		}
 	}
 
 	return nil, errtypes.NotFound(fmt.Sprintf("share with token: `%v` not found", token))
-}
-
-// randString is a helper to create tokens. It could be a token manager instead.
-func randString(n int) string {
-	var l = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = l[rand.Intn(len(l))]
-	}
-	return string(b)
 }
 
 func (m *manager) readDb() (map[string]interface{}, error) {

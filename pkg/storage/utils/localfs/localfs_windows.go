@@ -29,6 +29,7 @@ import (
 	"strings"
 
 	"github.com/cs3org/reva/pkg/appctx"
+	"golang.org/x/sys/windows"
 )
 
 // calcEtag will create an etag based on the md5 of
@@ -51,4 +52,23 @@ func calcEtag(ctx context.Context, fi os.FileInfo) string {
 	}
 	etag := fmt.Sprintf(`"%x"`, h.Sum(nil))
 	return fmt.Sprintf("\"%s\"", strings.Trim(etag, "\""))
+}
+
+func (fs *localfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
+	// TODO quota of which storage space?
+	// we could use the logged in user, but when a user has access to multiple storages this falls short
+	// for now return quota of root
+	var free, total, avail uint64
+
+	pathPtr, err := windows.UTF16PtrFromString(fs.wrap(ctx, "/"))
+	if err != nil {
+		return 0, 0, err
+	}
+	err = windows.GetDiskFreeSpaceEx(pathPtr, &avail, &total, &free)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	used := total - free
+	return total, used, nil
 }

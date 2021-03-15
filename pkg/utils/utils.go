@@ -19,6 +19,7 @@
 package utils
 
 import (
+	"math/rand"
 	"net"
 	"net/http"
 	"os/user"
@@ -31,11 +32,14 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 var (
 	matchFirstCap = regexp.MustCompile("(.)([A-Z][a-z]+)")
 	matchAllCap   = regexp.MustCompile("([a-z0-9])([A-Z])")
+	matchEmail    = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
 )
 
 // Skip  evaluates whether a source endpoint contains any of the prefixes.
@@ -99,6 +103,16 @@ func ResolvePath(path string) (string, error) {
 	return path, nil
 }
 
+// RandString is a helper to create tokens.
+func RandString(n int) string {
+	var l = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = l[rand.Intn(len(l))]
+	}
+	return string(b)
+}
+
 // TSToUnixNano converts a protobuf Timestamp to uint64
 // with nanoseconds resolution.
 func TSToUnixNano(ts *types.Timestamp) uint64 {
@@ -145,4 +159,29 @@ func GranteeEqual(u, v *provider.Grantee) bool {
 	uu, ug := ExtractGranteeID(u)
 	vu, vg := ExtractGranteeID(v)
 	return u.Type == v.Type && (UserEqual(uu, vu) || GroupEqual(ug, vg))
+}
+
+// IsEmailValid checks whether the provided email has a valid format.
+func IsEmailValid(e string) bool {
+	if len(e) < 3 || len(e) > 254 {
+		return false
+	}
+	return matchEmail.MatchString(e)
+}
+
+// MarshalProtoV1ToJSON marshals a proto V1 message to a JSON byte array
+// TODO: update this once we start using V2 in CS3APIs
+func MarshalProtoV1ToJSON(m proto.Message) ([]byte, error) {
+	mV2 := proto.MessageV2(m)
+	return protojson.Marshal(mV2)
+}
+
+// UnmarshalJSONToProtoV1 decodes a JSON byte array to a specified proto message type
+// TODO: update this once we start using V2 in CS3APIs
+func UnmarshalJSONToProtoV1(b []byte, m proto.Message) error {
+	mV2 := proto.MessageV2(m)
+	if err := protojson.Unmarshal(b, mV2); err != nil {
+		return err
+	}
+	return nil
 }

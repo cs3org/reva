@@ -61,7 +61,7 @@ bind_password="admin"
 idp="http://localhost:18000"
 
 [grpc.services.groupprovider.drivers.ldap.schema]
-gid="gid"
-displayName="displayName"
+gid="cn"
+displayName="cn"
 dn="dn"
 cn="cn"

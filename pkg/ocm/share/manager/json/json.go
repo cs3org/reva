@@ -109,8 +109,11 @@ func loadOrCreate(file string) (*shareModel, error) {
 		return nil, err
 	}
 
-	if m.State == nil {
-		m.State = map[string]map[string]ocm.ShareState{}
+	if m.Shares == nil {
+		m.Shares = map[string]interface{}{}
+	}
+	if m.ReceivedShares == nil {
+		m.ReceivedShares = map[string]interface{}{}
 	}
 	m.file = file
 
@@ -119,9 +122,8 @@ func loadOrCreate(file string) (*shareModel, error) {
 
 type shareModel struct {
 	file           string
-	State          map[string]map[string]ocm.ShareState `json:"state"` // map[username]map[share_id]boolean
-	Shares         []*ocm.Share                         `json:"shares"`
-	ReceivedShares []*ocm.Share                         `json:"received_shares"`
+	Shares         map[string]interface{} `json:"shares"`
+	ReceivedShares map[string]interface{} `json:"received_shares"`
 }
 
 type config struct {
@@ -331,10 +333,22 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 		err = errors.Wrap(err, "error reading model")
 		return nil, err
 	}
+
 	if isOwnersMeshProvider {
-		m.model.Shares = append(m.model.Shares, s)
+		encShare, err := utils.MarshalProtoV1ToJSON(s)
+		if err != nil {
+			return nil, err
+		}
+		m.model.Shares[s.Id.OpaqueId] = string(encShare)
 	} else {
-		m.model.ReceivedShares = append(m.model.ReceivedShares, s)
+		encShare, err := utils.MarshalProtoV1ToJSON(&ocm.ReceivedShare{
+			Share: s,
+			State: ocm.ShareState_SHARE_STATE_PENDING,
+		})
+		if err != nil {
+			return nil, err
+		}
+		m.model.ReceivedShares[s.Id.OpaqueId] = string(encShare)
 	}
 
 	if err := m.model.Save(); err != nil {
@@ -355,11 +369,14 @@ func (m *mgr) getByID(ctx context.Context, id *ocm.ShareId) (*ocm.Share, error) 
 		return nil, err
 	}
 
-	for _, s := range m.model.Shares {
-		if s.GetId().OpaqueId == id.OpaqueId {
-			return s, nil
+	if s, ok := m.model.Shares[id.OpaqueId]; ok {
+		var share ocm.Share
+		if err := utils.UnmarshalJSONToProtoV1([]byte(s.(string)), &share); err != nil {
+			return nil, err
 		}
+		return &share, nil
 	}
+
 	return nil, errtypes.NotFound(id.String())
 }
 
@@ -373,9 +390,13 @@ func (m *mgr) getByKey(ctx context.Context, key *ocm.ShareKey) (*ocm.Share, erro
 	}
 
 	for _, s := range m.model.Shares {
-		if (utils.UserEqual(key.Owner, s.Owner) || utils.UserEqual(key.Owner, s.Creator)) &&
-			utils.ResourceEqual(key.ResourceId, s.ResourceId) && utils.GranteeEqual(key.Grantee, s.Grantee) {
-			return s, nil
+		var share ocm.Share
+		if err := utils.UnmarshalJSONToProtoV1([]byte(s.(string)), &share); err != nil {
+			continue
+		}
+		if (utils.UserEqual(key.Owner, share.Owner) || utils.UserEqual(key.Owner, share.Creator)) &&
+			utils.ResourceEqual(key.ResourceId, share.ResourceId) && utils.GranteeEqual(key.Grantee, share.Grantee) {
+			return &share, nil
 		}
 	}
 	return nil, errtypes.NotFound(key.String())
@@ -424,11 +445,14 @@ func (m *mgr) Unshare(ctx context.Context, ref *ocm.ShareReference) error {
 	}
 
 	user := user.ContextMustGetUser(ctx)
-	for i, s := range m.model.Shares {
-		if sharesEqual(ref, s) {
-			if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
-				m.model.Shares[len(m.model.Shares)-1], m.model.Shares[i] = m.model.Shares[i], m.model.Shares[len(m.model.Shares)-1]
-				m.model.Shares = m.model.Shares[:len(m.model.Shares)-1]
+	for id, s := range m.model.Shares {
+		var share ocm.Share
+		if err := utils.UnmarshalJSONToProtoV1([]byte(s.(string)), &share); err != nil {
+			continue
+		}
+		if sharesEqual(ref, &share) {
+			if utils.UserEqual(user.Id, share.Owner) || utils.UserEqual(user.Id, share.Creator) {
+				delete(m.model.Shares, id)
 				if err := m.model.Save(); err != nil {
 					err = errors.Wrap(err, "error saving model")
 					return err
@@ -464,20 +488,29 @@ func (m *mgr) UpdateShare(ctx context.Context, ref *ocm.ShareReference, p *ocm.S
 	}
 
 	user := user.ContextMustGetUser(ctx)
-	for i, s := range m.model.Shares {
-		if sharesEqual(ref, s) {
-			if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
+	for id, s := range m.model.Shares {
+		var share ocm.Share
+		if err := utils.UnmarshalJSONToProtoV1([]byte(s.(string)), &share); err != nil {
+			continue
+		}
+		if sharesEqual(ref, &share) {
+			if utils.UserEqual(user.Id, share.Owner) || utils.UserEqual(user.Id, share.Creator) {
 				now := time.Now().UnixNano()
-				m.model.Shares[i].Permissions = p
-				m.model.Shares[i].Mtime = &typespb.Timestamp{
+				share.Permissions = p
+				share.Mtime = &typespb.Timestamp{
 					Seconds: uint64(now / 1000000000),
 					Nanos:   uint32(now % 1000000000),
 				}
+				encShare, err := utils.MarshalProtoV1ToJSON(&share)
+				if err != nil {
+					return nil, err
+				}
+				m.model.Shares[id] = string(encShare)
 				if err := m.model.Save(); err != nil {
 					err = errors.Wrap(err, "error saving model")
 					return nil, err
 				}
-				return m.model.Shares[i], nil
+				return &share, nil
 			}
 		}
 	}
@@ -496,17 +529,21 @@ func (m *mgr) ListShares(ctx context.Context, filters []*ocm.ListOCMSharesReques
 
 	user := user.ContextMustGetUser(ctx)
 	for _, s := range m.model.Shares {
-		if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
+		var share ocm.Share
+		if err := utils.UnmarshalJSONToProtoV1([]byte(s.(string)), &share); err != nil {
+			continue
+		}
+		if utils.UserEqual(user.Id, share.Owner) || utils.UserEqual(user.Id, share.Creator) {
 			// no filter we return earlier
 			if len(filters) == 0 {
-				ss = append(ss, s)
+				ss = append(ss, &share)
 			} else {
 				// check filters
 				// TODO(labkode): add the rest of filters.
 				for _, f := range filters {
 					if f.Type == ocm.ListOCMSharesRequest_Filter_TYPE_RESOURCE_ID {
-						if s.ResourceId.StorageId == f.GetResourceId().StorageId && s.ResourceId.OpaqueId == f.GetResourceId().OpaqueId {
-							ss = append(ss, s)
+						if share.ResourceId.StorageId == f.GetResourceId().StorageId && share.ResourceId.OpaqueId == f.GetResourceId().OpaqueId {
+							ss = append(ss, &share)
 						}
 					}
 				}
@@ -528,40 +565,28 @@ func (m *mgr) ListReceivedShares(ctx context.Context) ([]*ocm.ReceivedShare, err
 
 	user := user.ContextMustGetUser(ctx)
 	for _, s := range m.model.ReceivedShares {
-		if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
+		var rs ocm.ReceivedShare
+		if err := utils.UnmarshalJSONToProtoV1([]byte(s.(string)), &rs); err != nil {
+			continue
+		}
+		share := rs.Share
+		if utils.UserEqual(user.Id, share.Owner) || utils.UserEqual(user.Id, share.Creator) {
 			// omit shares created by me
 			continue
 		}
-		if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, s.Grantee.GetUserId()) {
-			rs := m.convert(ctx, s)
-			rss = append(rss, rs)
-		} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
+		if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, share.Grantee.GetUserId()) {
+			rss = append(rss, &rs)
+		} else if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 			// check if all user groups match this share; TODO(labkode): filter shares created by us.
 			for _, g := range user.Groups {
-				if g == s.Grantee.GetGroupId().OpaqueId {
-					rs := m.convert(ctx, s)
-					rss = append(rss, rs)
+				if g == share.Grantee.GetGroupId().OpaqueId {
+					rss = append(rss, &rs)
 					break
 				}
 			}
 		}
 	}
 	return rss, nil
-}
-
-// convert must be called in a lock-controlled block.
-func (m *mgr) convert(ctx context.Context, s *ocm.Share) *ocm.ReceivedShare {
-	rs := &ocm.ReceivedShare{
-		Share: s,
-		State: ocm.ShareState_SHARE_STATE_PENDING,
-	}
-	user := user.ContextMustGetUser(ctx)
-	if v, ok := m.model.State[user.Id.String()]; ok {
-		if state, ok := v[s.Id.String()]; ok {
-			rs.State = state
-		}
-	}
-	return rs
 }
 
 func (m *mgr) GetReceivedShare(ctx context.Context, ref *ocm.ShareReference) (*ocm.ReceivedShare, error) {
@@ -579,15 +604,18 @@ func (m *mgr) getReceived(ctx context.Context, ref *ocm.ShareReference) (*ocm.Re
 
 	user := user.ContextMustGetUser(ctx)
 	for _, s := range m.model.ReceivedShares {
-		if sharesEqual(ref, s) {
-			if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, s.Grantee.GetUserId()) {
-				rs := m.convert(ctx, s)
-				return rs, nil
-			} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
+		var rs ocm.ReceivedShare
+		if err := utils.UnmarshalJSONToProtoV1([]byte(s.(string)), &rs); err != nil {
+			continue
+		}
+		share := rs.Share
+		if sharesEqual(ref, share) {
+			if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, share.Grantee.GetUserId()) {
+				return &rs, nil
+			} else if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 				for _, g := range user.Groups {
-					if s.Grantee.GetGroupId().OpaqueId == g {
-						rs := m.convert(ctx, s)
-						return rs, nil
+					if share.Grantee.GetGroupId().OpaqueId == g {
+						return &rs, nil
 					}
 				}
 			}
@@ -602,7 +630,6 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, ref *ocm.ShareReference, 
 		return nil, err
 	}
 
-	user := user.ContextMustGetUser(ctx)
 	m.Lock()
 	defer m.Unlock()
 
@@ -611,15 +638,12 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, ref *ocm.ShareReference, 
 		return nil, err
 	}
 
-	if v, ok := m.model.State[user.Id.String()]; ok {
-		v[rs.Share.Id.String()] = f.GetState()
-		m.model.State[user.Id.String()] = v
-	} else {
-		a := map[string]ocm.ShareState{
-			rs.Share.Id.String(): f.GetState(),
-		}
-		m.model.State[user.Id.String()] = a
+	rs.State = f.GetState()
+	encShare, err := utils.MarshalProtoV1ToJSON(rs)
+	if err != nil {
+		return nil, err
 	}
+	m.model.ReceivedShares[rs.Share.Id.GetOpaqueId()] = string(encShare)
 
 	if err := m.model.Save(); err != nil {
 		err = errors.Wrap(err, "error saving model")

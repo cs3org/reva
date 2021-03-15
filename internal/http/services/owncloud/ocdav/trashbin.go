@@ -87,7 +87,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 		key, r.URL.Path = router.ShiftPath(r.URL.Path)
 
 		// TODO another options handler should not be necessary
-		//if r.Method == http.MethodOptions {
+		// if r.Method == http.MethodOptions {
 		//	s.doOptions(w, r, "trashbin")
 		//	return
 		//}
