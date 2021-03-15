@@ -23,6 +23,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -36,12 +37,13 @@ import (
 	erpc "github.com/cs3org/reva/pkg/eosclient/eosgrpc/eos_grpc"
 	ehttp "github.com/cs3org/reva/pkg/eosclient/eosgrpc/eos_http"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
+	erpc "github.com/ffurano/grpc-proto/protobuf"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
-
-	"github.com/cs3org/reva/pkg/logger"
 )
 
 const (
@@ -79,6 +81,14 @@ type Options struct {
 	// Location on the local fs where to store reads.
 	// Defaults to os.TempDir()
 	CacheDirectory string
+
+	// Set to true to use the local disk as a buffer for chunk
+	// reads from EOS. Default is false, i.e. pure streaming
+	ReadUsesLocalTemp bool
+
+	// Set to true to use the local disk as a buffer for chunk
+	// writes to EOS. Default is false, i.e. pure streaming
+	WriteUsesLocalTemp bool
 
 	// Keytab is the location of the EOS keytab file.
 	Keytab string
@@ -653,7 +663,7 @@ func (c *Client) GetQuota(ctx context.Context, username, rootUID, rootGID, path 
 	msg := new(erpc.NSRequest_QuotaRequest)
 	msg.Path = []byte(path)
 	msg.Id = new(erpc.RoleId)
-
+	msg.Op = erpc.QUOTAOP_GET
 	// Eos filters the returned quotas by username. This means that EOS must know it, someone
 	// must have created an user with that name
 	msg.Id.Username = username
@@ -735,13 +745,14 @@ func (c *Client) SetQuota(ctx context.Context, rootUID, rootGID string, info *eo
 		if err != nil {
 			return err
 		}
-		gidInt, err := strconv.ParseUint(info.GID, 10, 64)
-		if err != nil {
-			return err
-		}
+
+		// We set a quota for an user, not a group!
 		msg.Id.Uid = uidInt
-		msg.Id.Gid = gidInt
+		msg.Id.Gid = 0
 		msg.Id.Username = info.Username
+		msg.Op = erpc.QUOTAOP_SET
+		msg.Maxbytes = info.MaxBytes
+		msg.Maxfiles = info.MaxFiles
 		rq.Command = &erpc.NSRequest_Quota{Quota: msg}
 
 		// Now send the req and see what happens
@@ -1159,20 +1170,22 @@ func (c *Client) Read(ctx context.Context, uid, gid, path string) (io.ReadCloser
 	log.Info().Str("func", "Read").Str("uid,gid", uid+","+gid).Str("path", path).Msg("")
 
 	var localTarget string
-	//rand := "eosread-" + uuid.New().String()
-	//localTarget := fmt.Sprintf("%s/%s", c.opt.CacheDirectory, rand)
-	//defer os.RemoveAll(localTarget)
-
+	var err error
 	var localfile io.WriteCloser
 	localfile = nil
 
-	// Uncomment to create a local  temp file. Otherwise it streams. With the streaming
-	// it's more difficult to return a sound error in the case of troubles
-	//	localfile, err := os.Create(localTarget)
-	//	if err != nil {
-	//		log.Error().Str("func", "Read").Str("path", path).Str("uid,gid", uid+","+gid).Str("err", err.Error()).Msg("")
-	//		return nil, errtypes.InternalError(fmt.Sprintf("can't open local cache file '%s'", localTarget))
-	//	}
+	if c.opt.ReadUsesLocalTemp {
+		rand := "eosread-" + uuid.New().String()
+		localTarget := fmt.Sprintf("%s/%s", c.opt.CacheDirectory, rand)
+		defer os.RemoveAll(localTarget)
+
+		log.Info().Str("func", "Read").Str("uid,gid", uid+","+gid).Str("path", path).Str("tempfile", localTarget).Msg("")
+		localfile, err = os.Create(localTarget)
+		if err != nil {
+			log.Error().Str("func", "Read").Str("path", path).Str("uid,gid", uid+","+gid).Str("err", err.Error()).Msg("")
+			return nil, errtypes.InternalError(fmt.Sprintf("can't open local temp file '%s'", localTarget))
+		}
+	}
 
 	err, bodystream := c.GetHTTPCl().GETFile(ctx, "", uid, gid, path, localfile)
 	if err != nil {
@@ -1190,18 +1203,30 @@ func (c *Client) Write(ctx context.Context, uid, gid, path string, stream io.Rea
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "Write").Str("uid,gid", uid+","+gid).Str("path", path).Msg("")
 
-	//fd, err := ioutil.TempFile(c.opt.CacheDirectory, "eoswrite-")
-	//if err != nil {
-	//		return err
-	//	}
-	//	defer fd.Close()
-	//	defer os.RemoveAll(fd.Name())
-	//
-	//	// copy stream to local temp file
-	//	_, err = io.Copy(fd, stream)
-	//	if err != nil {
-	//return err
-	//}
+	if c.opt.ReadUsesLocalTemp {
+		fd, err := ioutil.TempFile(c.opt.CacheDirectory, "eoswrite-")
+		if err != nil {
+			return err
+		}
+		defer fd.Close()
+		defer os.RemoveAll(fd.Name())
+
+		log.Info().Str("func", "Write").Str("uid,gid", uid+","+gid).Str("path", path).Str("tempfile", fd.Name()).Msg("")
+		// copy stream to local temp file
+		_, err = io.Copy(fd, stream)
+		if err != nil {
+			return err
+		}
+
+		wfd, err := os.Open(fd.Name())
+		defer wfd.Close()
+		defer os.RemoveAll(fd.Name())
+		if err != nil {
+			return err
+		}
+
+		return c.GetHTTPCl().PUTFile(ctx, "", uid, gid, path, wfd)
+	}
 
 	return c.GetHTTPCl().PUTFile(ctx, "", uid, gid, path, stream)
 
