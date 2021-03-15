@@ -41,6 +41,8 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
+	erpc "github.com/ffurano/grpc-proto/protobuf"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
@@ -91,6 +93,14 @@ type Options struct {
 	// Location on the local fs where to store reads.
 	// Defaults to os.TempDir()
 	CacheDirectory string
+
+	// Set to true to use the local disk as a buffer for chunk
+	// reads from EOS. Default is false, i.e. pure streaming
+	ReadUsesLocalTemp bool
+
+	// Set to true to use the local disk as a buffer for chunk
+	// writes to EOS. Default is false, i.e. pure streaming
+	WriteUsesLocalTemp bool
 
 	// Keytab is the location of the EOS keytab file.
 	Keytab string
