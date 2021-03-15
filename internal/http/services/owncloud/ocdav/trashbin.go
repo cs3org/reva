@@ -79,7 +79,21 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 		if u.Username != username {
 			log.Debug().Str("username", username).Interface("user", u).Msg("trying to read another users trash")
 			// listing other users trash is forbidden, no auth will change that
+			b, err := Marshal(exception{
+				code: SabredavMethodNotAuthenticated,
+			})
+			if err != nil {
+				log.Error().Msgf("error marshaling xml response: %s", b)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
 			w.WriteHeader(http.StatusUnauthorized)
+			_, err = w.Write(b)
+			if err != nil {
+				log.Error().Msgf("error writing xml response: %s", b)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
 			return
 		}
 
