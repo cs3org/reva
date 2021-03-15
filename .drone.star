@@ -2,7 +2,7 @@
 def licenseScanStep():
   return {
     "name": "license-scan",
-    "image": "registry.cern.ch/docker.io/library/golang:1.13",
+    "image": "registry.cern.ch/docker.io/library/golang:1.16",
     "environment": {
       "FOSSA_API_KEY": {
         "from_secret": "fossa_api_key",
@@ -18,7 +18,7 @@ def licenseScanStep():
 def makeStep(target):
   return {
     "name": "build",
-    "image": "registry.cern.ch/docker.io/library/golang:1.13",
+    "image": "registry.cern.ch/docker.io/library/golang:1.16",
     "commands": [
       "make %s" % target,
     ]
@@ -27,7 +27,7 @@ def makeStep(target):
 def lintStep():
   return {
     "name": "lint",
-    "image": "registry.cern.ch/docker.io/golangci/golangci-lint:v1.26",
+    "image": "registry.cern.ch/docker.io/golangci/golangci-lint:v1.38",
     "commands": [
       "golangci-lint run --timeout 2m0s",
     ],
@@ -108,7 +108,7 @@ def buildAndPublishDocker():
     "steps": [
       {
         "name": "store-dev-release",
-        "image": "registry.cern.ch/docker.io/library/golang:1.13",
+        "image": "registry.cern.ch/docker.io/library/golang:1.16",
         "environment": {
           "USERNAME": {
             "from_secret": "cbox_username",
@@ -131,7 +131,7 @@ def buildAndPublishDocker():
       lintStep(),
       {
         "name": "license-check",
-        "image": "registry.cern.ch/docker.io/library/golang:1.13",
+        "image": "registry.cern.ch/docker.io/library/golang:1.16",
         "failure": "ignore",
         "environment":{
           "FOSSA_API_KEY":{
@@ -228,7 +228,7 @@ def buildOnly():
       lintStep(),
       {
         "name": "changelog",
-        "image": "registry.cern.ch/docker.io/library/golang:1.13",
+        "image": "registry.cern.ch/docker.io/library/golang:1.16",
         "commands": [
           "make release-deps && /go/bin/calens > /dev/null",
           "make check-changelog-drone PR=$DRONE_PULL_REQUEST",
@@ -241,7 +241,7 @@ def buildOnly():
       },
       {
         "name": "license-check",
-        "image": "registry.cern.ch/docker.io/library/golang:1.13",
+        "image": "registry.cern.ch/docker.io/library/golang:1.16",
         "failure": "ignore",
         "environment": {
           "FOSSA_API_KEY": {
@@ -278,7 +278,7 @@ def release():
       lintStep(),
       {
         "name": "create-dist",
-        "image": "registry.cern.ch/docker.io/library/golang:1.13",
+        "image": "registry.cern.ch/docker.io/library/golang:1.16",
         "commands": [
           "go run tools/create-artifacts/main.go -version ${DRONE_TAG} -commit ${DRONE_COMMIT} -goversion `go version | awk '{print $$3}'`",
         ],
@@ -378,7 +378,7 @@ def litmusOcisOldWebdav():
       makeStep("build-ci"),
       {
         "name": "revad-services",
-        "image": "registry.cern.ch/docker.io/library/golang:1.13",
+        "image": "registry.cern.ch/docker.io/library/golang:1.16",
         "detach": True,
         "commands": [
           "cd /drone/src/tests/oc-integration-tests/drone/",
@@ -391,7 +391,7 @@ def litmusOcisOldWebdav():
       },
       {
         "name": "sleep-for-revad-start",
-        "image": "registry.cern.ch/docker.io/library/golang:1.13",
+        "image": "registry.cern.ch/docker.io/library/golang:1.16",
         "commands": [
           "sleep 5",
         ],
@@ -430,7 +430,7 @@ def litmusOcisNewWebdav():
       makeStep("build-ci"),
       {
         "name": "revad-services",
-        "image": "registry.cern.ch/docker.io/library/golang:1.13",
+        "image": "registry.cern.ch/docker.io/library/golang:1.16",
         "detach": True,
         "commands": [
           "cd /drone/src/tests/oc-integration-tests/drone/",
@@ -443,7 +443,7 @@ def litmusOcisNewWebdav():
       },
       {
         "name": "sleep-for-revad-start",
-        "image": "registry.cern.ch/docker.io/library/golang:1.13",
+        "image": "registry.cern.ch/docker.io/library/golang:1.16",
         "commands":[
           "sleep 5",
         ],
@@ -483,7 +483,7 @@ def localIntegrationTestsOwncloud():
       makeStep("build-ci"),
       {
         "name": "revad-services",
-        "image": "registry.cern.ch/docker.io/library/golang:1.13",
+        "image": "registry.cern.ch/docker.io/library/golang:1.16",
         "detach": True,
         "commands": [
           "cd /drone/src/tests/oc-integration-tests/drone/",
@@ -543,7 +543,7 @@ def localIntegrationTestsOcis():
       makeStep("build-ci"),
       {
         "name": "revad-services",
-        "image": "registry.cern.ch/docker.io/library/golang:1.13",
+        "image": "registry.cern.ch/docker.io/library/golang:1.16",
         "detach": True,
         "commands": [
           "cd /drone/src/tests/oc-integration-tests/drone/",
@@ -606,7 +606,7 @@ def ocisIntegrationTests(parallelRuns):
           makeStep("build-ci"),
           {
             "name": "revad-services",
-            "image": "registry.cern.ch/docker.io/library/golang:1.13",
+            "image": "registry.cern.ch/docker.io/library/golang:1.16",
             "detach": True,
             "commands": [
               "cd /drone/src/tests/oc-integration-tests/drone/",
@@ -675,7 +675,7 @@ def owncloudIntegrationTests(parallelRuns):
           makeStep("build-ci"),
           {
             "name": "revad-services",
-            "image": "registry.cern.ch/docker.io/library/golang:1.13",
+            "image": "registry.cern.ch/docker.io/library/golang:1.16",
             "detach": True,
             "commands": [
               "cd /drone/src/tests/oc-integration-tests/drone/",
