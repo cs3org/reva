@@ -78,7 +78,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 		if u.Username != username {
 			log.Debug().Str("username", username).Interface("user", u).Msg("trying to read another users trash")
 			// listing other users trash is forbidden, no auth will change that
-			w.WriteHeader(http.StatusMethodNotAllowed)
+			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 
