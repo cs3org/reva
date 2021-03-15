@@ -208,7 +208,7 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *us
 			{
 				Status: "HTTP/1.1 200 OK",
 				Prop: []*propertyXML{
-					s.newProp("d:resourcetype", "<d:collection/>"),
+					s.newPropRaw("d:resourcetype", "<d:collection/>"),
 				},
 			},
 			{
