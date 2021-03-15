@@ -8,9 +8,11 @@ GIT_DIRTY=`git diff-index --quiet HEAD -- || echo "dirty-"`
 VERSION=`git describe --always`
 GO_VERSION=`go version | awk '{print $$3}'`
 BUILD_FLAGS="-X main.gitCommit=${GIT_COMMIT} -X main.version=${VERSION} -X main.goVersion=${GO_VERSION} -X main.buildDate=${BUILD_DATE}"
-LITMUS_URL="http://localhost:20080/remote.php/webdav"
+LITMUS_URL_OLD="http://localhost:20080/remote.php/webdav"
+LITMUS_URL_NEW="http://localhost:20080/remote.php/dav/files/4c510ada-c86b-4815-8820-42cdf82c3d51"
 LITMUS_USERNAME="einstein"
 LITMUS_PASSWORD="relativity"
+TESTS="basic http copymove props"
 
 default: build test lint gen-doc check-changelog
 release: deps build test lint gen-doc
@@ -42,13 +44,21 @@ build-reva: imports
 test: off
 	go test -race ./...
 
-litmus-test: build
+litmus-test-old: build
 	cd tests/oc-integration-tests/local && ../../../cmd/revad/revad -c frontend.toml &
 	cd tests/oc-integration-tests/local && ../../../cmd/revad/revad -c gateway.toml &
 	cd tests/oc-integration-tests/local && ../../../cmd/revad/revad -c storage-home.toml &
 	cd tests/oc-integration-tests/local && ../../../cmd/revad/revad -c storage-users.toml &
 	cd tests/oc-integration-tests/local && ../../../cmd/revad/revad -c users.toml &
-	sudo docker run --rm --network=host -e LITMUS_URL=$(LITMUS_URL) -e LITMUS_USERNAME=$(LITMUS_USERNAME) -e LITMUS_PASSWORD=$(LITMUS_PASSWORD) owncloud/litmus:latest
+	docker run --rm --network=host -e LITMUS_URL=$(LITMUS_URL_OLD) -e LITMUS_USERNAME=$(LITMUS_USERNAME) -e LITMUS_PASSWORD=$(LITMUS_PASSWORD) -e TESTS=$(TESTS) owncloud/litmus:latest
+	pkill revad
+litmus-test-new: build
+	cd tests/oc-integration-tests/local && ../../../cmd/revad/revad -c frontend.toml &
+	cd tests/oc-integration-tests/local && ../../../cmd/revad/revad -c gateway.toml &
+	cd tests/oc-integration-tests/local && ../../../cmd/revad/revad -c storage-home.toml &
+	cd tests/oc-integration-tests/local && ../../../cmd/revad/revad -c storage-users.toml &
+	cd tests/oc-integration-tests/local && ../../../cmd/revad/revad -c users.toml &
+	docker run --rm --network=host -e LITMUS_URL=$(LITMUS_URL_NEW) -e LITMUS_USERNAME=$(LITMUS_USERNAME) -e LITMUS_PASSWORD=$(LITMUS_PASSWORD) -e TESTS=$(TESTS) owncloud/litmus:latest
 	pkill revad
 lint:
 	go run tools/check-license/check-license.go
