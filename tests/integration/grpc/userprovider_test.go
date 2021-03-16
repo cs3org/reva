@@ -189,7 +189,7 @@ var _ = Describe("user providers", func() {
 				if t.want.User == nil {
 					Expect(userResp.User).To(BeNil())
 				} else {
-					//make sure not to run into a nil pointer error
+					// make sure not to run into a nil pointer error
 					Expect(userResp.User).ToNot(BeNil())
 					Expect(t.want.User.Username).To(Equal(userResp.User.Username))
 					Expect(t.want.User.Mail).To(Equal(userResp.User.Mail))
