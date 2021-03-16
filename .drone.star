@@ -295,7 +295,7 @@ def testIntegration():
     "steps": [
       {
         "name": "test",
-        "image": "registry.cern.ch/docker.io/library/golang:1.13",
+        "image": "registry.cern.ch/docker.io/library/golang:1.16",
         "commands": [
           "make test-integration",
         ],
@@ -797,7 +797,7 @@ def s3ngIntegrationTests(parallelRuns):
           makeStep("build-ci"),
           {
             "name": "revad-services",
-            "image": "registry.cern.ch/docker.io/library/golang:1.13",
+            "image": "registry.cern.ch/docker.io/library/golang:1.16",
             "detach": True,
             "commands": [
               "cd /drone/src/tests/oc-integration-tests/drone/",

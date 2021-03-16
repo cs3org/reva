@@ -135,7 +135,7 @@ func startRevads(configs map[string]string, variables map[string]string) (map[st
 			return nil, err
 		}
 
-		//even the port is open the service might not be available yet
+		// even the port is open the service might not be available yet
 		time.Sleep(1 * time.Second)
 
 		revad := &Revad{
