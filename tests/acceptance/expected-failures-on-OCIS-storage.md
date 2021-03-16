@@ -115,10 +115,6 @@ Basic file management like up and download, move, copy, properties, quota, trash
 -   [apiWebdavUpload2/uploadFileUsingNewChunking.feature:168](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload2/uploadFileUsingNewChunking.feature#L168)
 -   [apiWebdavUpload2/uploadFileUsingNewChunking.feature:169](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload2/uploadFileUsingNewChunking.feature#L169)
 
-#### [Version count is 1 more than on oC10](https://github.com/owncloud/ocis/issues/1633)
--   [apiVersions/fileVersions.feature:426](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L426)
-
-
 #### [PUT request with missing parent must return status code 409](https://github.com/owncloud/ocis/issues/824)
 -   [apiWebdavUpload1/uploadFile.feature:112](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFile.feature#L112)
 -   [apiWebdavUpload1/uploadFile.feature:113](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFile.feature#L113)

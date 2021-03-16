@@ -131,7 +131,6 @@ The following scenarios fail on OWNCLOUD storage but not on OCIS storage:
 
 #### [Version count is 1 more than on oC10](https://github.com/owncloud/ocis/issues/1633)
 -   [apiVersions/fileVersions.feature:409](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L409)
--   [apiVersions/fileVersions.feature:426](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L426)
 
 #### [Version cannot be restored when file has been renamed](https://github.com/owncloud/ocis/issues/1633)
 -   [apiVersions/fileVersions.feature:400](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L400)
