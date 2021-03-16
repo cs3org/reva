@@ -158,6 +158,11 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 
 	log.Debug().Interface("info", info).Interface("node", n).Interface("metadata", metadata).Msg("Decomposedfs: resolved filename")
 
+	_, err = checkQuota(ctx, fs, uint64(info.Size))
+	if err != nil {
+		return nil, err
+	}
+
 	upload, err := fs.NewUpload(ctx, info)
 	if err != nil {
 		return nil, err
@@ -417,10 +422,19 @@ func (upload *fileUpload) writeInfo() error {
 
 // FinishUpload finishes an upload and moves the file to the internal destination
 func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
+
+	// ensure cleanup
+	defer upload.discardChunk()
+
 	fi, err := os.Stat(upload.binPath)
 	if err != nil {
 		appctx.GetLogger(upload.ctx).Err(err).Msg("Decomposedfs: could not stat uploaded file")
 		return
+	}
+
+	_, err = checkQuota(upload.ctx, upload.fs, uint64(fi.Size()))
+	if err != nil {
+		return err
 	}
 
 	n := node.New(
@@ -610,6 +624,12 @@ func (upload *fileUpload) discardChunk() {
 			return
 		}
 	}
+	if err := os.Remove(upload.infoPath); err != nil {
+		if !os.IsNotExist(err) {
+			appctx.GetLogger(upload.ctx).Err(err).Interface("info", upload.info).Str("infoPath", upload.infoPath).Interface("info", upload.info).Msg("Decomposedfs: could not discard chunk info")
+			return
+		}
+	}
 }
 
 // To implement the termination extension as specified in https://tus.io/protocols/resumable-upload.html#termination
@@ -684,4 +704,21 @@ func (upload *fileUpload) ConcatUploads(ctx context.Context, uploads []tusd.Uplo
 	}
 
 	return
+}
+
+func checkQuota(ctx context.Context, fs *Decomposedfs, fileSize uint64) (quotaSufficient bool, err error) {
+	total, inUse, err := fs.GetQuota(ctx)
+	if err != nil {
+		switch err.(type) {
+		case errtypes.NotFound:
+			// no quota for this storage (eg. no user context)
+			return true, nil
+		default:
+			return false, err
+		}
+	}
+	if !(total == 0) && fileSize > total-inUse {
+		return false, errtypes.InsufficientStorage("quota exceeded")
+	}
+	return true, nil
 }

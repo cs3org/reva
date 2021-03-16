@@ -90,6 +90,9 @@ func HandleErrorStatus(log *zerolog.Logger, w http.ResponseWriter, s *rpc.Status
 	case rpc.Code_CODE_UNIMPLEMENTED:
 		log.Debug().Interface("status", s).Msg("not implemented")
 		w.WriteHeader(http.StatusNotImplemented)
+	case rpc.Code_CODE_INSUFFICIENT_STORAGE:
+		log.Debug().Interface("status", s).Msg("insufficient storage")
+		w.WriteHeader(http.StatusInsufficientStorage)
 	default:
 		log.Error().Interface("status", s).Msg("grpc request failed")
 		w.WriteHeader(http.StatusInternalServerError)
