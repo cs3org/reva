@@ -129,8 +129,7 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 
 	info := tusd.FileInfo{
 		MetaData: tusd.MetaData{
-			"filename": filepath.Base(relative),
-			"dir":      filepath.Dir(relative),
+			"filename": relative,
 		},
 		Size: uploadLength,
 	}
@@ -195,13 +194,7 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 	}
 	info.MetaData["filename"] = filepath.Clean(info.MetaData["filename"])
 
-	dir := info.MetaData["dir"]
-	if dir == "" {
-		return nil, errors.New("Decomposedfs: missing dir in metadata")
-	}
-	info.MetaData["dir"] = filepath.Clean(info.MetaData["dir"])
-
-	n, err := fs.lu.NodeFromPath(ctx, filepath.Join(info.MetaData["dir"], info.MetaData["filename"]))
+	n, err := fs.lu.NodeFromPath(ctx, info.MetaData["filename"])
 	if err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: error wrapping filename")
 	}
