@@ -94,6 +94,7 @@ def main(ctx):
   return [
     buildAndPublishDocker(),
     buildOnly(),
+    testIntegration(),
     release(),
     litmusOcisOldWebdav(),
     litmusOcisNewWebdav(),
@@ -273,6 +274,39 @@ def buildOnly():
         ],
       },
     ]
+  }
+
+def testIntegration():
+  return {
+    "kind": "pipeline",
+    "type": "docker",
+    "name": "test-integration",
+    "platform": {
+      "os": "linux",
+      "arch": "amd64",
+    },
+    "trigger": {
+      "event": {
+        "include": [
+          "pull_request",
+        ],
+      },
+    },
+    "steps": [
+      {
+        "name": "test",
+        "image": "registry.cern.ch/docker.io/library/golang:1.13",
+        "commands": [
+          "make test-integration",
+        ],
+        "environment": {
+          "REDIS_ADDRESS": "redis:6379",
+        },
+      }
+    ],
+    "services": [
+      redisService(),
+    ],
   }
 
 def release():

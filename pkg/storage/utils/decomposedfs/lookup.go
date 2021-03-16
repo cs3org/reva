@@ -101,6 +101,7 @@ func (lu *Lookup) Path(ctx context.Context, n *node.Node) (p string, err error) 
 			return
 		}
 	}
+	p = filepath.Join("/", p)
 	return
 }
 

@@ -187,10 +187,11 @@ func (e *ACE) Grant() *provider.Grant {
 		},
 		Permissions: e.grantPermissionSet(),
 	}
+	id := e.principal[2:]
 	if e.granteeType() == provider.GranteeType_GRANTEE_TYPE_GROUP {
-		g.Grantee.Id = &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: e.principal}}
+		g.Grantee.Id = &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: id}}
 	} else if e.granteeType() == provider.GranteeType_GRANTEE_TYPE_USER {
-		g.Grantee.Id = &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: e.principal}}
+		g.Grantee.Id = &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: id}}
 	}
 	return g
 }
@@ -324,7 +325,7 @@ func unmarshalKV(s string) (*ACE, error) {
 func getACEPerm(set *provider.ResourcePermissions) string {
 	var b strings.Builder
 
-	if set.Stat || set.InitiateFileDownload || set.ListContainer {
+	if set.Stat || set.InitiateFileDownload || set.ListContainer || set.GetPath {
 		b.WriteString("r")
 	}
 	if set.InitiateFileUpload || set.Move {

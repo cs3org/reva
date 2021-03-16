@@ -1,0 +1,11 @@
+[grpc]
+address = "{{grpc_address}}"
+
+[grpc.services.storageprovider]
+driver = "owncloud"
+
+[grpc.services.storageprovider.drivers.owncloud]
+enable_home = true
+datadirectory = "{{root}}"
+userprovidersvc = "{{users_address}}"
+redis = "{{redis_address}}"
