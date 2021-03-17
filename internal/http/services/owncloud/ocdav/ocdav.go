@@ -41,7 +41,6 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	ctxuser "github.com/cs3org/reva/pkg/user"
-	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -218,11 +217,6 @@ func wrap(sid string, oid string) string {
 	return base64.URLEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", sid, oid)))
 }
 
-func isValidUUID(u string) bool {
-	_, err := uuid.Parse(u)
-	return err == nil
-}
-
 func unwrap(rid string) *provider.ResourceId {
 	decodedID, err := base64.URLEncoding.DecodeString(rid)
 	if err != nil {
@@ -235,10 +229,6 @@ func unwrap(rid string) *provider.ResourceId {
 	}
 
 	if !utf8.ValidString(parts[0]) || !utf8.ValidString(parts[1]) {
-		return nil
-	}
-
-	if !isValidUUID(parts[0]) || !isValidUUID(parts[1]) {
 		return nil
 	}
 
