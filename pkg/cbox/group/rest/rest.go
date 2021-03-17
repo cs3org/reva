@@ -34,6 +34,7 @@ import (
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/group"
 	"github.com/cs3org/reva/pkg/group/manager/registry"
 	"github.com/cs3org/reva/pkg/rhttp"
@@ -178,7 +179,7 @@ func (m *manager) getAPIToken(ctx context.Context) (string, time.Time, error) {
 		return "", time.Time{}, err
 	}
 	if httpRes.StatusCode < 200 || httpRes.StatusCode > 299 {
-		return "", time.Time{}, errors.New("rest: get token endpoint returned " + httpRes.Status)
+		return "", time.Time{}, errtypes.InternalError("rest: get token endpoint returned " + httpRes.Status)
 	}
 
 	var result map[string]interface{}
@@ -219,7 +220,7 @@ func (m *manager) sendAPIRequest(ctx context.Context, url string, forceRenewal b
 		return m.sendAPIRequest(ctx, url, true)
 	}
 	if httpRes.StatusCode < 200 || httpRes.StatusCode > 299 {
-		return nil, errors.New("rest: API request returned " + httpRes.Status)
+		return nil, errtypes.InternalError("rest: API request returned " + httpRes.Status)
 	}
 
 	body, err := ioutil.ReadAll(httpRes.Body)
@@ -235,7 +236,7 @@ func (m *manager) sendAPIRequest(ctx context.Context, url string, forceRenewal b
 
 	responseData, ok := result["data"].([]interface{})
 	if !ok {
-		return nil, errors.New("rest: error in type assertion")
+		return nil, errtypes.InternalError("rest: error in type assertion")
 	}
 
 	return responseData, nil
@@ -249,12 +250,12 @@ func (m *manager) getGroupByParam(ctx context.Context, param, val string) (map[s
 		return nil, err
 	}
 	if len(responseData) != 1 {
-		return nil, errors.New("rest: group not found")
+		return nil, errtypes.NotFound("rest: group not found")
 	}
 
 	userData, ok := responseData[0].(map[string]interface{})
 	if !ok {
-		return nil, errors.New("rest: error in type assertion")
+		return nil, errtypes.InternalError("rest: error in type assertion")
 	}
 	return userData, nil
 }
@@ -269,7 +270,7 @@ func (m *manager) getInternalGroupID(ctx context.Context, gid *grouppb.GroupId) 
 		}
 		id, ok := groupData["id"].(string)
 		if !ok {
-			return "", errors.New("rest: error in type assertion")
+			return "", errtypes.InternalError("rest: error in type assertion")
 		}
 
 		if err = m.cacheInternalID(gid, id); err != nil {
@@ -348,7 +349,7 @@ func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string) (*gr
 	case "group_name":
 		claim = "groupIdentifier"
 	default:
-		return nil, errors.New("rest: invalid field")
+		return nil, errtypes.NotSupported("rest: invalid field")
 	}
 
 	groupData, err := m.getGroupByParam(ctx, claim, value)

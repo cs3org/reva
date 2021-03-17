@@ -853,8 +853,8 @@ func (c *Client) parseQuota(path, raw string) (*eosclient.QuotaInfo, error) {
 		m := c.parseQuotaLine(rl)
 		// map[maxbytes:2000000000000 maxlogicalbytes:1000000000000 percentageusedbytes:0.49 quota:node uid:gonzalhu space:/eos/scratch/user/ usedbytes:9829986500 usedlogicalbytes:4914993250 statusfiles:ok usedfiles:334 maxfiles:1000000 statusbytes:ok]
 
-		space := m["space"]
-		if strings.HasPrefix(path, filepath.Clean(space)) {
+		space := filepath.Clean(m["space"])
+		if strings.HasPrefix(path, space) {
 			maxBytesString := m["maxlogicalbytes"]
 			usedBytesString := m["usedlogicalbytes"]
 			maxBytes, _ := strconv.ParseUint(maxBytesString, 10, 64)
