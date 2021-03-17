@@ -10,19 +10,11 @@ Basic file management like up and download, move, copy, properties, quota, trash
 -   [apiWebdavEtagPropagation2/restoreFromTrash.feature:90](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation2/restoreFromTrash.feature#L90)
 -   [apiWebdavEtagPropagation2/restoreFromTrash.feature:91](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation2/restoreFromTrash.feature#L91)
 
-#### [Deletion time in trash bin shows a wrong date](https://github.com/owncloud/ocis/issues/541)
--   [apiTrashbin/trashbinFilesFolders.feature:284](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L284)
--   [apiTrashbin/trashbinFilesFolders.feature:285](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L285)
-
 #### [QA trashcan cannot delete a deep tree](https://github.com/owncloud/ocis/issues/1077)
 -   [apiTrashbin/trashbinDelete.feature:107](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L107)
 -   [apiTrashbin/trashbinDelete.feature:123](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L123)
 
 #### [invalid webdav responses for unauthorized requests.](https://github.com/owncloud/product/issues/273)
--   [apiTrashbin/trashbinFilesFolders.feature:154](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L154)
--   [apiTrashbin/trashbinFilesFolders.feature:155](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L155)
--   [apiTrashbin/trashbinFilesFolders.feature:172](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L172)
--   [apiTrashbin/trashbinFilesFolders.feature:173](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L173)
 -   [apiTrashbin/trashbinFilesFolders.feature:196](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L196)
 -   [apiTrashbin/trashbinFilesFolders.feature:197](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L197)
 -   [apiTrashbin/trashbinFilesFolders.feature:210](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L210)
@@ -35,32 +27,10 @@ Basic file management like up and download, move, copy, properties, quota, trash
 -   [apiTrashbin/trashbinFilesFolders.feature:273](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L273)
 
 #### [href in trashbin PROPFIND response is wrong](https://github.com/owncloud/ocis/issues/1120)
--   [apiTrashbin/trashbinRestore.feature:51](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L51)
--   [apiTrashbin/trashbinRestore.feature:52](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L52)
--   [apiTrashbin/trashbinRestore.feature:69](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L69)
--   [apiTrashbin/trashbinRestore.feature:70](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L70)
 -   [apiTrashbin/trashbinRestore.feature:117](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L117)
 -   [apiTrashbin/trashbinRestore.feature:118](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L118)
 -   [apiTrashbin/trashbinRestore.feature:119](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L119)
 -   [apiTrashbin/trashbinRestore.feature:120](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L120)
--   [apiTrashbin/trashbinRestore.feature:213](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L213)
--   [apiTrashbin/trashbinRestore.feature:214](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L214)
--   [apiTrashbin/trashbinRestore.feature:261](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L261)
--   [apiTrashbin/trashbinRestore.feature:262](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L262)
--   [apiTrashbin/trashbinRestore.feature:263](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L263)
--   [apiTrashbin/trashbinRestore.feature:258](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L258)
--   [apiTrashbin/trashbinRestore.feature:259](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L259)
--   [apiTrashbin/trashbinRestore.feature:260](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L260)
--   [apiTrashbin/trashbinRestore.feature:280](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L280)
--   [apiTrashbin/trashbinRestore.feature:281](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L281)
--   [apiTrashbin/trashbinRestore.feature:298](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L298)
--   [apiTrashbin/trashbinRestore.feature:299](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L299)
--   [apiTrashbin/trashbinRestore.feature:372](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L372)
--   [apiTrashbin/trashbinRestore.feature:373](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L373)
--   [apiTrashbin/trashbinRestore.feature:411](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L411)
--   [apiTrashbin/trashbinRestore.feature:412](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L412)
--   [apiTrashbin/trashbinRestore.feature:450](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L450)
--   [apiTrashbin/trashbinRestore.feature:451](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L451)
 
 #### [href in trashbin PROPFIND response is wrong](https://github.com/owncloud/ocis/issues/1120)
 #### [trash-bin restore move does not send back Etag and other headers](https://github.com/owncloud/ocis/issues/1121)
@@ -1203,9 +1173,6 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 -   [apiTrashbin/trashbinSharingToShares.feature:84](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinSharingToShares.feature#L84)
 -   [apiTrashbin/trashbinSharingToShares.feature:103](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinSharingToShares.feature#L103)
 -   [apiTrashbin/trashbinSharingToShares.feature:104](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinSharingToShares.feature#L104)
-
-#### shared trash status code
--   [apiTrashbin/trashbinDelete.feature:67](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L67) Scenario: User tries to delete another user's trashbin `status code: expected 401, actual 405`
 
 #### [remote.php/dav/uploads endpoint does not exist](https://github.com/owncloud/ocis/issues/1321)
 -   [apiShareOperationsToShares/uploadToShare.feature:246](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares/uploadToShare.feature#L246)
