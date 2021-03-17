@@ -65,6 +65,10 @@ func ocmInviteForwardCommand() *command {
 			return err
 		}
 
+		if providerInfo.Status.Code != rpc.Code_CODE_OK {
+			return formatError(providerInfo.Status)
+		}
+
 		forwardToken, err := client.ForwardInvite(ctx, &invitepb.ForwardInviteRequest{
 			InviteToken:          inviteToken,
 			OriginSystemProvider: providerInfo.ProviderInfo,
