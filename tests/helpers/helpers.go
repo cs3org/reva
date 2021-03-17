@@ -16,45 +16,31 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocis_test
+package helpers
 
 import (
+	"io/ioutil"
 	"os"
-
-	"github.com/cs3org/reva/pkg/storage/fs/ocis"
-	"github.com/cs3org/reva/tests/helpers"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"path/filepath"
+	"runtime"
 )
 
-var _ = Describe("Ocis", func() {
-	var (
-		options map[string]interface{}
-		tmpRoot string
-	)
+// TempDir creates a temporary directory in tmp/ and returns its path
+//
+// Temporary test directories are created in reva/tmp because system
+// /tmp directories are often tmpfs mounts which do not support user
+// extended attributes.
+func TempDir(name string) (string, error) {
+	_, currentFileName, _, _ := runtime.Caller(0)
+	tmpDir := filepath.Join(filepath.Dir(currentFileName), "../../tmp")
+	err := os.MkdirAll(tmpDir, 0755)
+	if err != nil {
+		return "nil", err
+	}
+	tmpRoot, err := ioutil.TempDir(tmpDir, "reva-unit-tests-*-root")
+	if err != nil {
+		return "nil", err
+	}
 
-	BeforeEach(func() {
-		tmpRoot, err := helpers.TempDir("reva-unit-tests-*-root")
-		Expect(err).ToNot(HaveOccurred())
-
-		options = map[string]interface{}{
-			"root":         tmpRoot,
-			"enable_home":  true,
-			"share_folder": "/Shares",
-		}
-	})
-
-	AfterEach(func() {
-		if tmpRoot != "" {
-			os.RemoveAll(tmpRoot)
-		}
-	})
-
-	Describe("New", func() {
-		It("returns a new instance", func() {
-			_, err := ocis.New(options)
-			Expect(err).ToNot(HaveOccurred())
-		})
-	})
-})
+	return tmpRoot, nil
+}

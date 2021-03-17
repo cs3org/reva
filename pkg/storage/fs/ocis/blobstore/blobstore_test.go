@@ -23,9 +23,9 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
-	"strings"
 
 	"github.com/cs3org/reva/pkg/storage/fs/ocis/blobstore"
+	"github.com/cs3org/reva/tests/helpers"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -43,7 +43,7 @@ var _ = Describe("Blobstore", func() {
 
 	BeforeEach(func() {
 		var err error
-		tmpRoot, err = ioutil.TempDir("", "reva-unit-tests-*-root")
+		tmpRoot, err = helpers.TempDir("reva-unit-tests-*-root")
 		Expect(err).ToNot(HaveOccurred())
 
 		data = []byte("1234567890")
@@ -55,7 +55,7 @@ var _ = Describe("Blobstore", func() {
 	})
 
 	AfterEach(func() {
-		if strings.HasPrefix(tmpRoot, os.TempDir()) {
+		if tmpRoot != "" {
 			os.RemoveAll(tmpRoot)
 		}
 	})
