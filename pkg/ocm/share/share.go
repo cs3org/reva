@@ -31,7 +31,7 @@ import (
 type Manager interface {
 	// Create a new share in fn with the given acl.
 	Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGrant, name string,
-		pi *ocmprovider.ProviderInfo, pm string, owner *userpb.UserId, token string) (*ocm.Share, error)
+		pi *ocmprovider.ProviderInfo, pm string, owner *userpb.UserId, token string, st ocm.Share_ShareType) (*ocm.Share, error)
 
 	// GetShare gets the information for a share by the given ref.
 	GetShare(ctx context.Context, ref *ocm.ShareReference) (*ocm.Share, error)
