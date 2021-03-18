@@ -193,6 +193,7 @@ func (s *svc) getHome(_ context.Context) string {
 	// TODO(labkode): issue #601, /home will be hardcoded.
 	return "/home"
 }
+
 func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {
 	log := appctx.GetLogger(ctx)
 	p, st := s.getPath(ctx, req.Ref)
@@ -974,19 +975,20 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 }
 
 func (s *svc) move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
-	srcP, err := s.findProvider(ctx, req.Source)
+	srcList, err := s.findProviders(ctx, req.Source)
 	if err != nil {
 		return &provider.MoveResponse{
 			Status: status.NewStatusFromErrType(ctx, "move src="+req.Source.String(), err),
 		}, nil
 	}
 
-	dstP, err := s.findProvider(ctx, req.Destination)
+	dstList, err := s.findProviders(ctx, req.Destination)
 	if err != nil {
 		return &provider.MoveResponse{
 			Status: status.NewStatusFromErrType(ctx, "move dst="+req.Destination.String(), err),
 		}, nil
 	}
+	srcP, dstP := srcList[0], dstList[0]
 
 	// if providers are not the same we do not implement cross storage copy yet.
 	if srcP.Address != dstP.Address {
@@ -1888,11 +1890,11 @@ func (s *svc) findByPath(ctx context.Context, path string) (provider.ProviderAPI
 }
 
 func (s *svc) find(ctx context.Context, ref *provider.Reference) (provider.ProviderAPIClient, error) {
-	p, err := s.findProvider(ctx, ref)
+	p, err := s.findProviders(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
-	return s.getStorageProviderClient(ctx, p)
+	return s.getStorageProviderClient(ctx, p[0])
 }
 
 func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderInfo) (provider.ProviderAPIClient, error) {
@@ -1905,7 +1907,7 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 	return c, nil
 }
 
-func (s *svc) findProvider(ctx context.Context, ref *provider.Reference) (*registry.ProviderInfo, error) {
+func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error) {
 	home := s.getHome(ctx)
 	if strings.HasPrefix(ref.GetPath(), home) && s.c.HomeMapping != "" {
 		if u, ok := user.ContextGetUser(ctx); ok {
@@ -1915,7 +1917,7 @@ func (s *svc) findProvider(ctx context.Context, ref *provider.Reference) (*regis
 					Path: path.Join(layout, strings.TrimPrefix(ref.GetPath(), home)),
 				},
 			}
-			res, err := s.getStorageProvider(ctx, newRef)
+			res, err := s.getStorageProviders(ctx, newRef)
 			if err != nil {
 				// if we get a NotFound error, default to the original reference
 				if _, ok := err.(errtypes.IsNotFound); !ok {
@@ -1926,16 +1928,16 @@ func (s *svc) findProvider(ctx context.Context, ref *provider.Reference) (*regis
 			}
 		}
 	}
-	return s.getStorageProvider(ctx, ref)
+	return s.getStorageProviders(ctx, ref)
 }
 
-func (s *svc) getStorageProvider(ctx context.Context, ref *provider.Reference) (*registry.ProviderInfo, error) {
+func (s *svc) getStorageProviders(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error) {
 	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}
 
-	res, err := c.GetStorageProvider(ctx, &registry.GetStorageProviderRequest{
+	res, err := c.GetStorageProviders(ctx, &registry.GetStorageProvidersRequest{
 		Ref: ref,
 	})
 
@@ -1958,11 +1960,11 @@ func (s *svc) getStorageProvider(ctx context.Context, ref *provider.Reference) (
 		}
 	}
 
-	if res.Provider == nil {
+	if res.Providers == nil {
 		return nil, errors.New("gateway: provider is nil")
 	}
 
-	return res.Provider, nil
+	return res.Providers, nil
 }
 
 type etagWithTS struct {

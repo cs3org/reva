@@ -20,6 +20,7 @@ package static
 
 import (
 	"context"
+	"path"
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -81,8 +82,8 @@ func (b *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, er
 	providers := []*registrypb.ProviderInfo{}
 	for k, v := range b.c.Rules {
 		providers = append(providers, &registrypb.ProviderInfo{
-			Address:      v,
 			ProviderPath: k,
+			Address:      v,
 		})
 	}
 	return providers, nil
@@ -101,25 +102,37 @@ func (b *reg) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error) {
 	return nil, errors.New("static: home not found")
 }
 
-func (b *reg) FindProvider(ctx context.Context, ref *provider.Reference) (*registrypb.ProviderInfo, error) {
+func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*registrypb.ProviderInfo, error) {
 	// find longest match
-	var match string
+	var match *registrypb.ProviderInfo
+	var shardedMatches []*registrypb.ProviderInfo
 
 	// we try to find first by path as most storage operations will be done on path.
-	fn := ref.GetPath()
+	fn := path.Clean(ref.GetPath())
 	if fn != "" {
-		for prefix := range b.c.Rules {
-			if strings.HasPrefix(fn, prefix) && len(prefix) > len(match) {
-				match = prefix
+		for prefix, addr := range b.c.Rules {
+			if strings.HasPrefix(fn, prefix) && len(prefix) > len(match.ProviderPath) {
+				match = &registrypb.ProviderInfo{
+					ProviderPath: prefix,
+					Address:      addr,
+				}
+			}
+			// Check if the current rule forms a part of a reference spread across storage providers.
+			if fn != "/" && strings.HasPrefix(prefix, fn) {
+				shardedMatches = append(shardedMatches, &registrypb.ProviderInfo{
+					ProviderPath: prefix,
+					Address:      addr,
+				})
 			}
 		}
 	}
 
-	if match != "" {
-		return &registrypb.ProviderInfo{
-			ProviderPath: match,
-			Address:      b.c.Rules[match],
-		}, nil
+	if match.ProviderPath != "" {
+		return []*registrypb.ProviderInfo{match}, nil
+	} else if len(shardedMatches) > 0 {
+		// If we don't find a perfect match but at least one provider is encapsulated
+		// by the reference, return all such providers.
+		return shardedMatches, nil
 	}
 
 	// we try with id
@@ -127,13 +140,12 @@ func (b *reg) FindProvider(ctx context.Context, ref *provider.Reference) (*regis
 	if id == nil {
 		return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())
 	}
-	address, ok := b.c.Rules[id.StorageId]
-	if ok {
+	if address, ok := b.c.Rules[id.StorageId]; ok {
 		// TODO(labkode): fill path info based on provider id, if path and storage id points to same id, take that.
-		return &registrypb.ProviderInfo{
+		return []*registrypb.ProviderInfo{&registrypb.ProviderInfo{
 			ProviderId: id.StorageId,
 			Address:    address,
-		}, nil
+		}}, nil
 	}
 	return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())
 }
