@@ -227,8 +227,8 @@ func runMultiple(confs []map[string]interface{}) {
 		wg.Add(1)
 		pidfile := getPidfile()
 		go func(wg *sync.WaitGroup, conf map[string]interface{}) {
+			defer wg.Done()
 			runtime.Run(conf, pidfile, *logFlag)
-			wg.Done()
 		}(&wg, conf)
 	}
 	wg.Wait()

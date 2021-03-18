@@ -12,6 +12,17 @@ home_provider = "/home"
 "/reva" = "localhost:18000"
 "123e4567-e89b-12d3-a456-426655440000" = "localhost:18000"
 
+[grpc.services.storageregistry.drivers.static.temp]
+  [grpc.services.storageregistry.drivers.static.temp."/home"]
+    mapping = "/home-{{}}"
+    [grpc.services.storageregistry.drivers.static.temp."/home".list]
+    "/home/a" = "localhost:17000"
+    "/home/b" = "localhost:17000"
+
+  [grpc.services.storageregistry.drivers.static.temp."/reva"]
+    address = "localhost:18000"
+
+
 [grpc.services.authprovider]
 [grpc.services.authregistry]
 [grpc.services.userprovider]

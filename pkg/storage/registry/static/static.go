@@ -20,15 +20,20 @@ package static
 
 import (
 	"context"
+	"os"
 	"path"
+	"regexp"
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/registry/registry"
+	"github.com/cs3org/reva/pkg/storage/utils/templates"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -37,9 +42,15 @@ func init() {
 	registry.Register("static", New)
 }
 
+type rule struct {
+	Mapping string            `mapstructure:"mapping"`
+	Address string            `mapstructure:"address"`
+	Aliases map[string]string `mapstructure:"aliases"`
+}
+
 type config struct {
-	Rules        map[string]string `mapstructure:"rules"`
-	HomeProvider string            `mapstructure:"home_provider"`
+	Rules        map[string]rule `mapstructure:"rules"`
+	HomeProvider string          `mapstructure:"home_provider"`
 }
 
 func (c *config) init() {
@@ -48,9 +59,13 @@ func (c *config) init() {
 	}
 
 	if len(c.Rules) == 0 {
-		c.Rules = map[string]string{
-			"/":                                    sharedconf.GetGatewaySVC(""),
-			"00000000-0000-0000-0000-000000000000": sharedconf.GetGatewaySVC(""),
+		c.Rules = map[string]rule{
+			"/": rule{
+				Address: sharedconf.GetGatewaySVC(""),
+			},
+			"00000000-0000-0000-0000-000000000000": rule{
+				Address: sharedconf.GetGatewaySVC(""),
+			},
 		}
 	}
 }
@@ -71,6 +86,8 @@ func New(m map[string]interface{}) (storage.Registry, error) {
 		return nil, err
 	}
 	c.init()
+	tlog := logger.New().With().Int("pid", os.Getpid()).Logger()
+	tlog.Info().Msgf("config: %+v", c)
 	return &reg{c: c}, nil
 }
 
@@ -78,26 +95,45 @@ type reg struct {
 	c *config
 }
 
+func getProviderAddr(ctx context.Context, r rule) string {
+	addr := r.Address
+	if addr == "" {
+		if u, ok := user.ContextGetUser(ctx); ok {
+			layout := templates.WithUser(u, r.Mapping)
+			for k, v := range r.Aliases {
+				if match, _ := regexp.MatchString("^"+k, layout); match {
+					addr = v
+				}
+			}
+		}
+	}
+	return addr
+}
+
 func (b *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, error) {
 	providers := []*registrypb.ProviderInfo{}
 	for k, v := range b.c.Rules {
-		providers = append(providers, &registrypb.ProviderInfo{
-			ProviderPath: k,
-			Address:      v,
-		})
+		if addr := getProviderAddr(ctx, v); addr != "" {
+			// TODO(ishank011): Generate all combinations from the regexp.
+			providers = append(providers, &registrypb.ProviderInfo{
+				ProviderPath: k,
+				Address:      addr,
+			})
+		}
 	}
 	return providers, nil
 }
 
 // returns the the root path of the first provider in the list.
-// TODO(labkode): this is not production ready.
 func (b *reg) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error) {
-	address, ok := b.c.Rules[b.c.HomeProvider]
-	if ok {
-		return &registrypb.ProviderInfo{
-			ProviderPath: b.c.HomeProvider,
-			Address:      address,
-		}, nil
+	// Assume that HomeProvider is not a regexp
+	if r, ok := b.c.Rules[b.c.HomeProvider]; ok {
+		if addr := getProviderAddr(ctx, r); addr != "" {
+			return &registrypb.ProviderInfo{
+				ProviderPath: b.c.HomeProvider,
+				Address:      addr,
+			}, nil
+		}
 	}
 	return nil, errors.New("static: home not found")
 }
@@ -107,18 +143,24 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	var match *registrypb.ProviderInfo
 	var shardedMatches []*registrypb.ProviderInfo
 
-	// we try to find first by path as most storage operations will be done on path.
+	// we try to find by path first as most storage operations will be done using the path.
 	fn := path.Clean(ref.GetPath())
 	if fn != "" {
-		for prefix, addr := range b.c.Rules {
-			if strings.HasPrefix(fn, prefix) && len(prefix) > len(match.ProviderPath) {
+		for prefix, rule := range b.c.Rules {
+			addr := getProviderAddr(ctx, rule)
+			r, err := regexp.Compile("^" + prefix)
+			if err != nil {
+				continue
+			}
+			if m := r.FindStringSubmatch(fn); len(m) > 0 {
 				match = &registrypb.ProviderInfo{
-					ProviderPath: prefix,
+					ProviderPath: m[0],
 					Address:      addr,
 				}
 			}
 			// Check if the current rule forms a part of a reference spread across storage providers.
-			if fn != "/" && strings.HasPrefix(prefix, fn) {
+			if strings.HasPrefix(prefix, fn) {
+				// TODO(ishank011): Generate all combinations from the regexp.
 				shardedMatches = append(shardedMatches, &registrypb.ProviderInfo{
 					ProviderPath: prefix,
 					Address:      addr,
@@ -140,12 +182,21 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	if id == nil {
 		return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())
 	}
-	if address, ok := b.c.Rules[id.StorageId]; ok {
+
+	for prefix, rule := range b.c.Rules {
+		addr := getProviderAddr(ctx, rule)
+		r, err := regexp.Compile("^" + prefix + "$")
+		if err != nil {
+			continue
+		}
 		// TODO(labkode): fill path info based on provider id, if path and storage id points to same id, take that.
-		return []*registrypb.ProviderInfo{&registrypb.ProviderInfo{
-			ProviderId: id.StorageId,
-			Address:    address,
-		}}, nil
+		if m := r.FindStringSubmatch(id.StorageId); len(m) > 0 {
+			return []*registrypb.ProviderInfo{&registrypb.ProviderInfo{
+				ProviderId: id.StorageId,
+				Address:    addr,
+			}}, nil
+		}
 	}
+
 	return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())
 }
