@@ -130,7 +130,7 @@ type Client struct {
 	cl  erpc.EosClient
 }
 
-// GetHttpCl creates an http client for immediate usage, using the already instantiated resources
+// GetHTTPCl creates an http client for immediate usage, using the already instantiated resources
 func (c *Client) GetHTTPCl() *ehttp.EosHttpClient {
 	return ehttp.New(&c.opt.httpopts)
 }
@@ -704,18 +704,18 @@ func (c *Client) GetQuota(ctx context.Context, username, rootUID, rootGID, path 
 	for i := 0; i < len(resp.Quota.Quotanode); i++ {
 		log.Debug().Str("func", "GetQuota").Str("rootuid,rootgid", rootUID+","+rootGID).Str("quotanode:", fmt.Sprintf("%d: %#v", i, resp.Quota.Quotanode[i])).Msg("")
 
-		mx := resp.Quota.Quotanode[i].Maxlogicalbytes - resp.Quota.Quotanode[i].Usedbytes
+		mx := int64(resp.Quota.Quotanode[i].Maxlogicalbytes) - int64(resp.Quota.Quotanode[i].Usedbytes)
 		if mx < 0 {
 			mx = 0
 		}
-		qi.AvailableBytes += mx
+		qi.AvailableBytes += uint64(mx)
 		qi.UsedBytes += resp.Quota.Quotanode[i].Usedbytes
 
-		mx = resp.Quota.Quotanode[i].Maxfiles - resp.Quota.Quotanode[i].Usedfiles
+		mx = int64(resp.Quota.Quotanode[i].Maxfiles) - int64(resp.Quota.Quotanode[i].Usedfiles)
 		if mx < 0 {
 			mx = 0
 		}
-		qi.AvailableInodes += mx
+		qi.AvailableInodes += uint64(mx)
 		qi.UsedInodes += resp.Quota.Quotanode[i].Usedfiles
 	}
 
