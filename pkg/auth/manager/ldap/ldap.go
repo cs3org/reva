@@ -22,12 +22,12 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"strconv"
 	"strings"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
@@ -184,7 +184,14 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	if getGroupsResp.Status.Code != rpc.Code_CODE_OK {
 		return nil, nil, errors.Wrap(err, "ldap: grpc getting user groups failed")
 	}
-
+	gidNumber, err := strconv.ParseInt(sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.GIDNumber), 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	uidNumber, err := strconv.ParseInt(sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.UIDNumber), 10, 64)
+	if err != nil {
+		return nil, err
+	}
 	u := &user.User{
 		Id: userID,
 		// TODO add more claims from the StandardClaims, eg EmailVerified
@@ -193,18 +200,8 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		Groups:      getGroupsResp.Groups,
 		Mail:        sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.Mail),
 		DisplayName: sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.DisplayName),
-		Opaque: &types.Opaque{
-			Map: map[string]*types.OpaqueEntry{
-				"uid": {
-					Decoder: "plain",
-					Value:   []byte(sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.UIDNumber)),
-				},
-				"gid": {
-					Decoder: "plain",
-					Value:   []byte(sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.GIDNumber)),
-				},
-			},
-		},
+		UidNumber:   uidNumber,
+		GidNumber:   gidNumber,
 	}
 
 	scope, err := scope.GetOwnerScope()

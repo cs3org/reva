@@ -21,6 +21,7 @@ package json
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"strings"
 
@@ -111,12 +112,8 @@ func extractClaim(u *userpb.User, claim string) (string, error) {
 	case "username":
 		return u.Username, nil
 	case "uid":
-		if u.Opaque != nil && u.Opaque.Map != nil {
-			if uidObj, ok := u.Opaque.Map["uid"]; ok {
-				if uidObj.Decoder == "plain" {
-					return string(uidObj.Value), nil
-				}
-			}
+		if u.UidNumber != 0 {
+			return fmt.Sprintf("%v", u.UidNumber), nil
 		}
 	}
 	return "", errors.New("json: invalid field")

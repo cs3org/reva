@@ -23,12 +23,12 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"strconv"
 	"strings"
 	"text/template"
 
 	"github.com/Masterminds/sprig"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/user"
@@ -176,24 +176,22 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User
 	if err != nil {
 		return nil, err
 	}
+	gidNumber, err := strconv.ParseInt(sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GIDNumber), 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	uidNumber, err := strconv.ParseInt(sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UIDNumber), 10, 64)
+	if err != nil {
+		return nil, err
+	}
 	u := &userpb.User{
 		Id:          id,
 		Username:    sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.CN),
 		Groups:      groups,
 		Mail:        sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.Mail),
 		DisplayName: sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.DisplayName),
-		Opaque: &types.Opaque{
-			Map: map[string]*types.OpaqueEntry{
-				"uid": {
-					Decoder: "plain",
-					Value:   []byte(sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UIDNumber)),
-				},
-				"gid": {
-					Decoder: "plain",
-					Value:   []byte(sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GIDNumber)),
-				},
-			},
-		},
+		GidNumber:   gidNumber,
+		UidNumber:   uidNumber,
 	}
 
 	return u, nil
@@ -257,24 +255,22 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 	if err != nil {
 		return nil, err
 	}
+	gidNumber, err := strconv.ParseInt(sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GIDNumber), 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	uidNumber, err := strconv.ParseInt(sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UIDNumber), 10, 64)
+	if err != nil {
+		return nil, err
+	}
 	u := &userpb.User{
 		Id:          id,
 		Username:    sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.CN),
 		Groups:      groups,
 		Mail:        sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.Mail),
 		DisplayName: sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.DisplayName),
-		Opaque: &types.Opaque{
-			Map: map[string]*types.OpaqueEntry{
-				"uid": {
-					Decoder: "plain",
-					Value:   []byte(sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UIDNumber)),
-				},
-				"gid": {
-					Decoder: "plain",
-					Value:   []byte(sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GIDNumber)),
-				},
-			},
-		},
+		GidNumber:   gidNumber,
+		UidNumber:   uidNumber,
 	}
 
 	return u, nil
@@ -319,24 +315,22 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 		if err != nil {
 			return nil, err
 		}
+		gidNumber, err := strconv.ParseInt(sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.GIDNumber), 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		uidNumber, err := strconv.ParseInt(sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UIDNumber), 10, 64)
+		if err != nil {
+			return nil, err
+		}
 		user := &userpb.User{
 			Id:          id,
 			Username:    entry.GetEqualFoldAttributeValue(m.c.Schema.CN),
 			Groups:      groups,
 			Mail:        entry.GetEqualFoldAttributeValue(m.c.Schema.Mail),
 			DisplayName: entry.GetEqualFoldAttributeValue(m.c.Schema.DisplayName),
-			Opaque: &types.Opaque{
-				Map: map[string]*types.OpaqueEntry{
-					"uid": {
-						Decoder: "plain",
-						Value:   []byte(entry.GetEqualFoldAttributeValue(m.c.Schema.UIDNumber)),
-					},
-					"gid": {
-						Decoder: "plain",
-						Value:   []byte(entry.GetEqualFoldAttributeValue(m.c.Schema.GIDNumber)),
-					},
-				},
-			},
+			GidNumber:   gidNumber,
+			UidNumber:   uidNumber,
 		}
 		users = append(users, user)
 	}
