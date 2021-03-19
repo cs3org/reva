@@ -47,6 +47,8 @@ type Credentials struct {
 	DisplayName  string          `mapstructure:"display_name" json:"display_name"`
 	Secret       string          `mapstructure:"secret" json:"secret"`
 	Groups       []string        `mapstructure:"groups" json:"groups"`
+	UIDNumber    int64           `mapstructure:"uid_number" json:"uid_number"`
+	GIDNumber    int64           `mapstructure:"gid_number" json:"gid_number"`
 	Opaque       *typespb.Opaque `mapstructure:"opaque" json:"opaque"`
 }
 
@@ -118,6 +120,8 @@ func (m *manager) Authenticate(ctx context.Context, username string, secret stri
 				MailVerified: c.MailVerified,
 				DisplayName:  c.DisplayName,
 				Groups:       c.Groups,
+				UidNumber:    c.UIDNumber,
+				GidNumber:    c.GIDNumber,
 				Opaque:       c.Opaque,
 				// TODO add arbitrary keys as opaque data
 			}, scope, nil

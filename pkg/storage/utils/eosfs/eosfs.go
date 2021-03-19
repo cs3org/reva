@@ -1505,23 +1505,13 @@ func getResourceType(isDir bool) provider.ResourceType {
 }
 
 func (fs *eosfs) extractUIDAndGID(u *userpb.User) (string, string, error) {
-	var uid, gid string
-	if u.Opaque != nil && u.Opaque.Map != nil {
-		if uidObj, ok := u.Opaque.Map["uid"]; ok {
-			if uidObj.Decoder == "plain" {
-				uid = string(uidObj.Value)
-			}
-		}
-		if gidObj, ok := u.Opaque.Map["gid"]; ok {
-			if gidObj.Decoder == "plain" {
-				gid = string(gidObj.Value)
-			}
-		}
+	if u.UidNumber == 0 {
+		return "", "", errors.New("eos: uid missing for user")
 	}
-	if uid == "" || gid == "" {
-		return "", "", errors.New("eos: uid or gid missing for user")
+	if u.GidNumber == 0 {
+		return "", "", errors.New("eos: gid missing for user")
 	}
-	return uid, gid, nil
+	return fmt.Sprintf("%v", u.UidNumber), fmt.Sprintf("%v", u.GidNumber), nil
 }
 
 func (fs *eosfs) getUIDGateway(ctx context.Context, u *userpb.UserId) (string, string, error) {
