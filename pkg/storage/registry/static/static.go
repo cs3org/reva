@@ -143,7 +143,7 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	var match *registrypb.ProviderInfo
 	var shardedMatches []*registrypb.ProviderInfo
 
-	// we try to find by path first as most storage operations will be done using the path.
+	// Try to find by path first as most storage operations will be done using the path.
 	fn := path.Clean(ref.GetPath())
 	if fn != "" {
 		for prefix, rule := range b.c.Rules {
@@ -152,9 +152,9 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 			if err != nil {
 				continue
 			}
-			if m := r.FindStringSubmatch(fn); len(m) > 0 {
+			if m := r.FindString(fn); m != "" {
 				match = &registrypb.ProviderInfo{
-					ProviderPath: m[0],
+					ProviderPath: m,
 					Address:      addr,
 				}
 			}
@@ -179,7 +179,7 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 		return shardedMatches, nil
 	}
 
-	// we try with id
+	// Try with id
 	id := ref.GetId()
 	if id == nil {
 		return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())
@@ -192,7 +192,7 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 			continue
 		}
 		// TODO(labkode): fill path info based on provider id, if path and storage id points to same id, take that.
-		if m := r.FindStringSubmatch(id.StorageId); len(m) > 0 {
+		if m := r.FindString(id.StorageId); m != "" {
 			return []*registrypb.ProviderInfo{&registrypb.ProviderInfo{
 				ProviderId: id.StorageId,
 				Address:    addr,
@@ -210,11 +210,17 @@ func generateRegexCombinations(rex string) []string {
 		return []string{rex}
 	}
 	var combinations []string
-	f, l := r[0], r[len(r)-1]
-	for i := f; i <= l; i++ {
-		p := strings.Replace(rex, m, string(i), 1)
-		combs := generateRegexCombinations(p)
-		combinations = append(combinations, combs...)
+	for i := 0; i < len(r); i++ {
+		if i < len(r)-2 && r[i+1] == '-' {
+			for j := r[i]; j <= r[i+2]; j++ {
+				p := strings.Replace(rex, m, string(j), 1)
+				combinations = append(combinations, generateRegexCombinations(p)...)
+			}
+			i += 2
+		} else {
+			p := strings.Replace(rex, m, string(r[i]), 1)
+			combinations = append(combinations, generateRegexCombinations(p)...)
+		}
 	}
 	return combinations
 }

@@ -34,32 +34,33 @@ import (
 var _ = Describe("Static", func() {
 
 	totalProviders, rootProviders, eosProviders := 32, 30, 28
+
 	handler, err := static.New(map[string]interface{}{
 		"home_provider": "/home",
 		"rules": map[string]interface{}{
 			"/home": map[string]interface{}{
 				"mapping": "/home-{{substr 0 1 .Id.OpaqueId}}",
 				"aliases": map[string]string{
-					"/home-[a-h]": "home-00-home",
-					"/home-[i-r]": "home-01-home",
-					"/home-[s-z]": "home-02-home",
+					"/home-[a-fg-o]": "home-00-home",
+					"/home-[pqrstu]": "home-01-home",
+					"/home-[v-z]":    "home-02-home",
 				},
 			},
 			"/MyShares": map[string]interface{}{
 				"mapping": "/MyShares-{{substr 0 1 .Id.OpaqueId}}",
 				"aliases": map[string]string{
-					"/MyShares-[a-h]": "home-00-shares",
-					"/MyShares-[i-r]": "home-01-shares",
-					"/MyShares-[s-z]": "home-02-shares",
+					"/MyShares-[a-fg-o]": "home-00-shares",
+					"/MyShares-[pqrstu]": "home-01-shares",
+					"/MyShares-[v-z]":    "home-02-shares",
 				},
 			},
-			"/eos/user/[a-h]": map[string]interface{}{
+			"/eos/user/[a-fg-o]": map[string]interface{}{
 				"address": "home-00-eos",
 			},
-			"/eos/user/[i-r]": map[string]interface{}{
+			"/eos/user/[pqrstu]": map[string]interface{}{
 				"address": "home-01-eos",
 			},
-			"/eos/user/[s-z]": map[string]interface{}{
+			"/eos/user/[v-z]": map[string]interface{}{
 				"address": "home-02-eos",
 			},
 			"/eos/project": map[string]interface{}{
@@ -107,7 +108,6 @@ var _ = Describe("Static", func() {
 		It("get the home provider for user alice", func() {
 			home, err := handler.GetHome(ctxAlice)
 			Expect(err).ToNot(HaveOccurred())
-
 			Expect(home).To(Equal(&registrypb.ProviderInfo{
 				ProviderPath: "/home",
 				Address:      "home-00-home",
@@ -117,7 +117,6 @@ var _ = Describe("Static", func() {
 		It("get the home provider for user robert", func() {
 			home, err := handler.GetHome(ctxRobert)
 			Expect(err).ToNot(HaveOccurred())
-
 			Expect(home).To(Equal(&registrypb.ProviderInfo{
 				ProviderPath: "/home",
 				Address:      "home-01-home",
@@ -131,10 +130,10 @@ var _ = Describe("Static", func() {
 				Path: "/home/abcd",
 			},
 		}
+
 		It("finds all providers for user alice for a home ref", func() {
 			providers, err := handler.FindProviders(ctxAlice, ref)
 			Expect(err).ToNot(HaveOccurred())
-
 			Expect(providers).To(Equal([]*registrypb.ProviderInfo{
 				&registrypb.ProviderInfo{
 					ProviderPath: "/home",
@@ -145,7 +144,6 @@ var _ = Describe("Static", func() {
 		It("finds all providers for user robert for a home ref", func() {
 			providers, err := handler.FindProviders(ctxRobert, ref)
 			Expect(err).ToNot(HaveOccurred())
-
 			Expect(providers).To(Equal([]*registrypb.ProviderInfo{
 				&registrypb.ProviderInfo{
 					ProviderPath: "/home",
@@ -160,10 +158,10 @@ var _ = Describe("Static", func() {
 				Path: "/eos/user/b/bob/xyz",
 			},
 		}
+
 		It("finds all providers for user alice for an eos ref", func() {
 			providers, err := handler.FindProviders(ctxAlice, ref)
 			Expect(err).ToNot(HaveOccurred())
-
 			Expect(providers).To(Equal([]*registrypb.ProviderInfo{
 				&registrypb.ProviderInfo{
 					ProviderPath: "/eos/user/b",
@@ -174,7 +172,6 @@ var _ = Describe("Static", func() {
 		It("finds all providers for user robert for an eos ref", func() {
 			providers, err := handler.FindProviders(ctxRobert, ref)
 			Expect(err).ToNot(HaveOccurred())
-
 			Expect(providers).To(Equal([]*registrypb.ProviderInfo{
 				&registrypb.ProviderInfo{
 					ProviderPath: "/eos/user/b",
@@ -189,10 +186,10 @@ var _ = Describe("Static", func() {
 				Path: "/eos/project/pqr",
 			},
 		}
+
 		It("finds all providers for user alice for a project ref", func() {
 			providers, err := handler.FindProviders(ctxAlice, ref)
 			Expect(err).ToNot(HaveOccurred())
-
 			Expect(providers).To(Equal([]*registrypb.ProviderInfo{
 				&registrypb.ProviderInfo{
 					ProviderPath: "/eos/project",
@@ -203,7 +200,6 @@ var _ = Describe("Static", func() {
 		It("finds all providers for user robert for a project ref", func() {
 			providers, err := handler.FindProviders(ctxRobert, ref)
 			Expect(err).ToNot(HaveOccurred())
-
 			Expect(providers).To(Equal([]*registrypb.ProviderInfo{
 				&registrypb.ProviderInfo{
 					ProviderPath: "/eos/project",
@@ -252,15 +248,15 @@ var _ = Describe("Static", func() {
 	Describe("FindProviders for reference containing ID", func() {
 		ref := &provider.Reference{
 			Spec: &provider.Reference_Id{
-				&provider.ResourceId{
+				Id: &provider.ResourceId{
 					StorageId: "123e4567-e89b-12d3-a456-426655440000",
 				},
 			},
 		}
+
 		It("finds all providers for user alice for ref containing ID", func() {
 			providers, err := handler.FindProviders(ctxAlice, ref)
 			Expect(err).ToNot(HaveOccurred())
-
 			Expect(providers).To(Equal([]*registrypb.ProviderInfo{
 				&registrypb.ProviderInfo{
 					ProviderId: "123e4567-e89b-12d3-a456-426655440000",
@@ -271,7 +267,6 @@ var _ = Describe("Static", func() {
 		It("finds all providers for user robert for ref containing ID", func() {
 			providers, err := handler.FindProviders(ctxRobert, ref)
 			Expect(err).ToNot(HaveOccurred())
-
 			Expect(providers).To(Equal([]*registrypb.ProviderInfo{
 				&registrypb.ProviderInfo{
 					ProviderId: "123e4567-e89b-12d3-a456-426655440000",

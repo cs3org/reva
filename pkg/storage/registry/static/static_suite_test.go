@@ -27,5 +27,5 @@ import (
 
 func TestStaticDriver(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Static driver Suite")
+	RunSpecs(t, "Static driver suite")
 }
