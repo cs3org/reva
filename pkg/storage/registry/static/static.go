@@ -20,7 +20,6 @@ package static
 
 import (
 	"context"
-	"os"
 	"path"
 	"regexp"
 	"strings"
@@ -28,7 +27,6 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/registry/registry"
@@ -41,6 +39,8 @@ import (
 func init() {
 	registry.Register("static", New)
 }
+
+var bracketRegex = regexp.MustCompile(`\[(.*?)\]`)
 
 type rule struct {
 	Mapping string            `mapstructure:"mapping"`
@@ -78,16 +78,14 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-// New returns an implementation to of the storage.FS interface that talk to
-// a local filesystem.
+// New returns an implementation of the storage.Registry interface that
+// redirects requests to corresponding storage drivers.
 func New(m map[string]interface{}) (storage.Registry, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
 	}
 	c.init()
-	tlog := logger.New().With().Int("pid", os.Getpid()).Logger()
-	tlog.Info().Msgf("config: %+v", c)
 	return &reg{c: c}, nil
 }
 
@@ -114,11 +112,13 @@ func (b *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, er
 	providers := []*registrypb.ProviderInfo{}
 	for k, v := range b.c.Rules {
 		if addr := getProviderAddr(ctx, v); addr != "" {
-			// TODO(ishank011): Generate all combinations from the regexp.
-			providers = append(providers, &registrypb.ProviderInfo{
-				ProviderPath: k,
-				Address:      addr,
-			})
+			combs := generateRegexCombinations(k)
+			for _, c := range combs {
+				providers = append(providers, &registrypb.ProviderInfo{
+					ProviderPath: c,
+					Address:      addr,
+				})
+			}
 		}
 	}
 	return providers, nil
@@ -160,16 +160,18 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 			}
 			// Check if the current rule forms a part of a reference spread across storage providers.
 			if strings.HasPrefix(prefix, fn) {
-				// TODO(ishank011): Generate all combinations from the regexp.
-				shardedMatches = append(shardedMatches, &registrypb.ProviderInfo{
-					ProviderPath: prefix,
-					Address:      addr,
-				})
+				combs := generateRegexCombinations(prefix)
+				for _, c := range combs {
+					shardedMatches = append(shardedMatches, &registrypb.ProviderInfo{
+						ProviderPath: c,
+						Address:      addr,
+					})
+				}
 			}
 		}
 	}
 
-	if match.ProviderPath != "" {
+	if match != nil && match.ProviderPath != "" {
 		return []*registrypb.ProviderInfo{match}, nil
 	} else if len(shardedMatches) > 0 {
 		// If we don't find a perfect match but at least one provider is encapsulated
@@ -199,4 +201,20 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	}
 
 	return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())
+}
+
+func generateRegexCombinations(rex string) []string {
+	m := bracketRegex.FindString(rex)
+	r := strings.Trim(strings.Trim(m, "["), "]")
+	if r == "" {
+		return []string{rex}
+	}
+	var combinations []string
+	f, l := r[0], r[len(r)-1]
+	for i := f; i <= l; i++ {
+		p := strings.Replace(rex, m, string(i), 1)
+		combs := generateRegexCombinations(p)
+		combinations = append(combinations, combs...)
+	}
+	return combinations
 }
