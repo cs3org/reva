@@ -33,7 +33,7 @@ import (
 
 var _ = Describe("Static", func() {
 
-	totalProviders, eosProviders := 30, 28
+	totalProviders, rootProviders, eosProviders := 32, 30, 28
 	handler, err := static.New(map[string]interface{}{
 		"home_provider": "/home",
 		"rules": map[string]interface{}{
@@ -67,6 +67,12 @@ var _ = Describe("Static", func() {
 			},
 			"/eos/media": map[string]interface{}{
 				"address": "media-00",
+			},
+			"123e4567-e89b-12d3-a456-426655440000": map[string]interface{}{
+				"address": "home-00-home",
+			},
+			"123e4567-e89b-12d3-a456-426655440001": map[string]interface{}{
+				"address": "home-01-home",
 			},
 		},
 	})
@@ -233,13 +239,44 @@ var _ = Describe("Static", func() {
 		It("finds all providers for user alice for a virtual root ref", func() {
 			providers, err := handler.FindProviders(ctxAlice, ref2)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(len(providers)).To(Equal(totalProviders))
+			Expect(len(providers)).To(Equal(rootProviders))
 		})
 
 		It("finds all providers for user robert for a virtual root ref", func() {
 			providers, err := handler.FindProviders(ctxRobert, ref2)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(len(providers)).To(Equal(totalProviders))
+			Expect(len(providers)).To(Equal(rootProviders))
+		})
+	})
+
+	Describe("FindProviders for reference containing ID", func() {
+		ref := &provider.Reference{
+			Spec: &provider.Reference_Id{
+				&provider.ResourceId{
+					StorageId: "123e4567-e89b-12d3-a456-426655440000",
+				},
+			},
+		}
+		It("finds all providers for user alice for ref containing ID", func() {
+			providers, err := handler.FindProviders(ctxAlice, ref)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(providers).To(Equal([]*registrypb.ProviderInfo{
+				&registrypb.ProviderInfo{
+					ProviderId: "123e4567-e89b-12d3-a456-426655440000",
+					Address:    "home-00-home",
+				}}))
+		})
+
+		It("finds all providers for user robert for ref containing ID", func() {
+			providers, err := handler.FindProviders(ctxRobert, ref)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(providers).To(Equal([]*registrypb.ProviderInfo{
+				&registrypb.ProviderInfo{
+					ProviderId: "123e4567-e89b-12d3-a456-426655440000",
+					Address:    "home-00-home",
+				}}))
 		})
 	})
 })
