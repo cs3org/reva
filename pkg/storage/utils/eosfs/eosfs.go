@@ -196,6 +196,12 @@ func getUser(ctx context.Context) (*userpb.User, error) {
 		err := errors.Wrap(errtypes.UserRequired(""), "eos: error getting user from ctx")
 		return nil, err
 	}
+	if u.UidNumber == 0 {
+		return nil, errors.New("eos: invalid user id")
+	}
+	if u.GidNumber == 0 {
+		return nil, errors.New("eos: invalid group id")
+	}
 	return u, nil
 }
 
