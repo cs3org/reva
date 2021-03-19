@@ -20,20 +20,18 @@ package rest
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	utils "github.com/cs3org/reva/pkg/cbox/utils"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
@@ -53,15 +51,7 @@ var (
 type manager struct {
 	conf      *config
 	redisPool *redis.Pool
-	oidcToken OIDCToken
 	client    *http.Client
-}
-
-// OIDCToken stores the OIDC token used to authenticate requests to the REST API service
-type OIDCToken struct {
-	sync.Mutex          // concurrent access to apiToken and tokenExpirationTime
-	apiToken            string
-	tokenExpirationTime time.Time
 }
 
 type config struct {
@@ -136,116 +126,10 @@ func New(m map[string]interface{}) (user.Manager, error) {
 	}, nil
 }
 
-func (m *manager) renewAPIToken(ctx context.Context, forceRenewal bool) error {
-	// Received tokens have an expiration time of 20 minutes.
-	// Take a couple of seconds as buffer time for the API call to complete
-	if forceRenewal || m.oidcToken.tokenExpirationTime.Before(time.Now().Add(time.Second*time.Duration(2))) {
-		token, expiration, err := m.getAPIToken(ctx)
-		if err != nil {
-			return err
-		}
-
-		m.oidcToken.Lock()
-		defer m.oidcToken.Unlock()
-
-		m.oidcToken.apiToken = token
-		m.oidcToken.tokenExpirationTime = expiration
-	}
-	return nil
-}
-
-func (m *manager) getAPIToken(ctx context.Context) (string, time.Time, error) {
-
-	params := url.Values{
-		"grant_type": {"client_credentials"},
-		"audience":   {m.conf.TargetAPI},
-	}
-
-	httpReq, err := http.NewRequest("POST", m.conf.OIDCTokenEndpoint, strings.NewReader(params.Encode()))
-	if err != nil {
-		return "", time.Time{}, err
-	}
-	httpReq.SetBasicAuth(m.conf.ClientID, m.conf.ClientSecret)
-	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
-
-	httpRes, err := m.client.Do(httpReq)
-	if err != nil {
-		return "", time.Time{}, err
-	}
-	defer httpRes.Body.Close()
-	if httpRes.StatusCode < 200 || httpRes.StatusCode > 299 {
-		return "", time.Time{}, errors.New("rest: get token endpoint returned " + httpRes.Status)
-	}
-
-	body, err := ioutil.ReadAll(httpRes.Body)
-	if err != nil {
-		return "", time.Time{}, err
-	}
-
-	var result map[string]interface{}
-	err = json.Unmarshal(body, &result)
-	if err != nil {
-		return "", time.Time{}, err
-	}
-
-	expirationSecs := result["expires_in"].(float64)
-	expirationTime := time.Now().Add(time.Second * time.Duration(expirationSecs))
-	return result["access_token"].(string), expirationTime, nil
-}
-
-func (m *manager) sendAPIRequest(ctx context.Context, url string, forceRenewal bool) ([]interface{}, error) {
-	err := m.renewAPIToken(ctx, forceRenewal)
-	if err != nil {
-		return nil, err
-	}
-
-	httpReq, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	// We don't need to take the lock when reading apiToken, because if we reach here,
-	// the token is valid at least for a couple of seconds. Even if another request modifies
-	// the token and expiration time while this request is in progress, the current token will still be valid.
-	httpReq.Header.Set("Authorization", "Bearer "+m.oidcToken.apiToken)
-
-	httpRes, err := m.client.Do(httpReq)
-	if err != nil {
-		return nil, err
-	}
-	defer httpRes.Body.Close()
-
-	if httpRes.StatusCode == http.StatusUnauthorized {
-		// The token is no longer valid, try renewing it
-		return m.sendAPIRequest(ctx, url, true)
-	}
-	if httpRes.StatusCode < 200 || httpRes.StatusCode > 299 {
-		return nil, errors.New("rest: API request returned " + httpRes.Status)
-	}
-
-	body, err := ioutil.ReadAll(httpRes.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	var result map[string]interface{}
-	err = json.Unmarshal(body, &result)
-	if err != nil {
-		return nil, err
-	}
-
-	responseData, ok := result["data"].([]interface{})
-	if !ok {
-		return nil, errors.New("rest: error in type assertion")
-	}
-
-	return responseData, nil
-}
-
 func (m *manager) getUserByParam(ctx context.Context, param, val string) (map[string]interface{}, error) {
 	url := fmt.Sprintf("%s/Identity?filter=%s:%s&field=upn&field=primaryAccountEmail&field=displayName&field=uid&field=gid&field=type",
 		m.conf.APIBaseURL, param, val)
-	responseData, err := m.sendAPIRequest(ctx, url, false)
+	responseData, err := utils.SendAPIRequest(ctx, url, false, m.client, m.conf.TargetAPI, m.conf.OIDCTokenEndpoint, m.conf.ClientID, m.conf.ClientSecret)
 	if err != nil {
 		return nil, err
 	}
@@ -381,7 +265,7 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 
 func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[string]*userpb.User) error {
 
-	userData, err := m.sendAPIRequest(ctx, url, false)
+	userData, err := utils.SendAPIRequest(ctx, url, false, m.client, m.conf.TargetAPI, m.conf.OIDCTokenEndpoint, m.conf.ClientID, m.conf.ClientSecret)
 	if err != nil {
 		return err
 	}
@@ -466,7 +350,7 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 		return nil, err
 	}
 	url := fmt.Sprintf("%s/Identity/%s/groups", m.conf.APIBaseURL, internalID)
-	groupData, err := m.sendAPIRequest(ctx, url, false)
+	groupData, err := utils.SendAPIRequest(ctx, url, false, m.client, m.conf.TargetAPI, m.conf.OIDCTokenEndpoint, m.conf.ClientID, m.conf.ClientSecret)
 	if err != nil {
 		return nil, err
 	}
