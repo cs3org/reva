@@ -17,7 +17,6 @@
 // or submit itself to any jurisdiction.
 
 //go:build eos
-// +build eos
 
 package eosfs
 

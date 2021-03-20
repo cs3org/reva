@@ -16,22 +16,27 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-//go:build darwin
-// +build darwin
+//go:build !windows && !freebsd
 
-package node
+package localfs
 
 import (
-	"syscall"
+	"context"
 
-	"github.com/pkg/xattr"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"golang.org/x/sys/unix"
 )
 
-func isAttrUnset(err error) bool {
-	if xerr, ok := err.(*xattr.Error); ok {
-		if serr, ok2 := xerr.Err.(syscall.Errno); ok2 {
-			return serr == syscall.ENOATTR
-		}
+func (fs *localfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, error) {
+	// TODO quota of which storage space?
+	// we could use the logged in user, but when a user has access to multiple storages this falls short
+	// for now return quota of root
+	stat := unix.Statfs_t{}
+	err := unix.Statfs(fs.wrap(ctx, "/"), &stat)
+	if err != nil {
+		return 0, 0, err
 	}
-	return false
+	total := stat.Blocks * uint64(stat.Bsize)                // Total data blocks in filesystem
+	used := (stat.Blocks - stat.Bavail) * uint64(stat.Bsize) // Free blocks available to unprivileged user
+	return total, used, nil
 }

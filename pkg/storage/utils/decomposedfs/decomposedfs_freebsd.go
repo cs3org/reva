@@ -16,18 +16,17 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-//go:build !windows
+//go:build freebsd
 
-package node
+package decomposedfs
 
 import "golang.org/x/sys/unix"
 
-// GetAvailableSize stats the filesystem and return the available bytes
-func GetAvailableSize(path string) (uint64, error) {
+func (fs *Decomposedfs) getAvailableSize(path string) (uint64, error) {
 	stat := unix.Statfs_t{}
 	err := unix.Statfs(path, &stat)
 	if err != nil {
 		return 0, err
 	}
-	return stat.Bavail * uint64(stat.Bsize), nil
+	return uint64(stat.Bavail) * uint64(stat.Bsize), nil
 }

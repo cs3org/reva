@@ -29,7 +29,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -788,7 +787,7 @@ func (fs *ocfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (strin
 			return "", errtypes.PermissionDenied("")
 		}
 	} else {
-		if isNotFound(err) {
+		if errtypes.XattrIsNotFound(err) {
 			return "", errtypes.NotFound(fs.toStoragePath(ctx, ip))
 		}
 		return "", errors.Wrap(err, "ocfs: error reading permissions")
@@ -830,7 +829,7 @@ func (fs *ocfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provid
 			return errtypes.PermissionDenied("")
 		}
 	} else {
-		if isNotFound(err) {
+		if errtypes.XattrIsNotFound(err) {
 			return errtypes.NotFound(fs.toStoragePath(ctx, ip))
 		}
 		return errors.Wrap(err, "ocfs: error reading permissions")
@@ -939,7 +938,7 @@ func (fs *ocfs) readPermissions(ctx context.Context, ip string) (p *provider.Res
 			case err == nil:
 				addPermissions(aggregatedPermissions, e.Grant().GetPermissions())
 				appctx.GetLogger(ctx).Debug().Str("ipath", np).Str("principal", strings.TrimPrefix(attrs[i], sharePrefix)).Interface("permissions", aggregatedPermissions).Msg("adding permissions")
-			case isNoData(err):
+			case errtypes.XattrIsNoData(err):
 				err = nil
 				appctx.GetLogger(ctx).Error().Str("ipath", np).Str("principal", strings.TrimPrefix(attrs[i], sharePrefix)).Interface("attrs", attrs).Msg("no permissions found on node, but they were listed")
 			default:
@@ -972,26 +971,6 @@ func (fs *ocfs) readPermissions(ctx context.Context, ip string) (p *provider.Res
 	// TODO we need to read all parents ... until we find a matching ace?
 	appctx.GetLogger(ctx).Debug().Interface("permissions", aggregatedPermissions).Str("ipath", ip).Msg("returning aggregated permissions")
 	return aggregatedPermissions, nil
-}
-
-func isNoData(err error) bool {
-	if xerr, ok := err.(*xattr.Error); ok {
-		if serr, ok2 := xerr.Err.(syscall.Errno); ok2 {
-			return serr == syscall.ENODATA
-		}
-	}
-	return false
-}
-
-// The os not exists error is buried inside the xattr error,
-// so we cannot just use os.IsNotExists().
-func isNotFound(err error) bool {
-	if xerr, ok := err.(*xattr.Error); ok {
-		if serr, ok2 := xerr.Err.(syscall.Errno); ok2 {
-			return serr == syscall.ENOENT
-		}
-	}
-	return false
 }
 
 func (fs *ocfs) readACE(ctx context.Context, ip string, principal string) (e *ace.ACE, err error) {
@@ -1040,7 +1019,7 @@ func (fs *ocfs) ListGrants(ctx context.Context, ref *provider.Reference) (grants
 			return nil, errtypes.PermissionDenied("")
 		}
 	} else {
-		if isNotFound(err) {
+		if errtypes.XattrIsNotFound(err) {
 			return nil, errtypes.NotFound(fs.toStoragePath(ctx, ip))
 		}
 		return nil, errors.Wrap(err, "ocfs: error reading permissions")
@@ -1078,7 +1057,7 @@ func (fs *ocfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pro
 			return errtypes.PermissionDenied("")
 		}
 	} else {
-		if isNotFound(err) {
+		if errtypes.XattrIsNotFound(err) {
 			return errtypes.NotFound(fs.toStoragePath(ctx, ip))
 		}
 		return errors.Wrap(err, "ocfs: error reading permissions")
@@ -1110,7 +1089,7 @@ func (fs *ocfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *pro
 			return errtypes.PermissionDenied("")
 		}
 	} else {
-		if isNotFound(err) {
+		if errtypes.XattrIsNotFound(err) {
 			return errtypes.NotFound(fs.toStoragePath(ctx, ip))
 		}
 		return errors.Wrap(err, "ocfs: error reading permissions")
@@ -1170,7 +1149,7 @@ func (fs *ocfs) CreateDir(ctx context.Context, ref *provider.Reference) (err err
 			return errtypes.PermissionDenied("")
 		}
 	} else {
-		if isNotFound(err) {
+		if errtypes.XattrIsNotFound(err) {
 			return errtypes.NotFound(ref.Path)
 		}
 		return errors.Wrap(err, "ocfs: error reading permissions")
@@ -1258,7 +1237,7 @@ func (fs *ocfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referenc
 			return errtypes.PermissionDenied("")
 		}
 	} else {
-		if isNotFound(err) {
+		if errtypes.XattrIsNotFound(err) {
 			return errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
 		return errors.Wrap(err, "ocfs: error reading permissions")
@@ -1401,7 +1380,7 @@ func (fs *ocfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 			return errtypes.PermissionDenied("")
 		}
 	} else {
-		if isNotFound(err) {
+		if errtypes.XattrIsNotFound(err) {
 			return errtypes.NotFound(fs.toStoragePath(ctx, ip))
 		}
 		return errors.Wrap(err, "ocfs: error reading permissions")
@@ -1514,7 +1493,7 @@ func (fs *ocfs) Delete(ctx context.Context, ref *provider.Reference) (err error)
 			return errtypes.PermissionDenied("")
 		}
 	} else {
-		if isNotFound(err) {
+		if errtypes.XattrIsNotFound(err) {
 			return errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
 		return errors.Wrap(err, "ocfs: error reading permissions")
@@ -1612,7 +1591,7 @@ func (fs *ocfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (e
 			return errtypes.PermissionDenied("")
 		}
 	} else {
-		if isNotFound(err) {
+		if errtypes.XattrIsNotFound(err) {
 			return errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(oldIP)))
 		}
 		return errors.Wrap(err, "ocfs: error reading permissions")
@@ -1686,7 +1665,7 @@ func (fs *ocfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []str
 			return nil, errtypes.PermissionDenied("")
 		}
 	} else {
-		if isNotFound(err) {
+		if errtypes.XattrIsNotFound(err) {
 			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
 		return nil, errors.Wrap(err, "ocfs: error reading permissions")
@@ -1715,7 +1694,7 @@ func (fs *ocfs) getMDShareFolder(ctx context.Context, sp string, mdKeys []string
 			return nil, errtypes.PermissionDenied("")
 		}
 	} else {
-		if isNotFound(err) {
+		if errtypes.XattrIsNotFound(err) {
 			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
 		return nil, errors.Wrap(err, "ocfs: error reading permissions")
@@ -1735,7 +1714,7 @@ func (fs *ocfs) getMDShareFolder(ctx context.Context, sp string, mdKeys []string
 		m.Type = provider.ResourceType_RESOURCE_TYPE_REFERENCE
 		ref, err := xattr.Get(ip, mdPrefix+"target")
 		if err != nil {
-			if isNotFound(err) {
+			if errtypes.XattrIsNotFound(err) {
 				return nil, errtypes.NotFound(fs.toStorageShadowPath(ctx, ip))
 			}
 			return nil, err
@@ -1783,7 +1762,7 @@ func (fs *ocfs) listWithNominalHome(ctx context.Context, ip string, mdKeys []str
 			return nil, errtypes.PermissionDenied("")
 		}
 	} else {
-		if isNotFound(err) {
+		if errtypes.XattrIsNotFound(err) {
 			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
 		return nil, errors.Wrap(err, "ocfs: error reading permissions")
@@ -1834,7 +1813,7 @@ func (fs *ocfs) listHome(ctx context.Context, home string, mdKeys []string) ([]*
 			return nil, errtypes.PermissionDenied("")
 		}
 	} else {
-		if isNotFound(err) {
+		if errtypes.XattrIsNotFound(err) {
 			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
 		return nil, errors.Wrap(err, "ocfs: error reading permissions")
@@ -1878,7 +1857,7 @@ func (fs *ocfs) listShareFolderRoot(ctx context.Context, sp string, mdKeys []str
 			return nil, errtypes.PermissionDenied("")
 		}
 	} else {
-		if isNotFound(err) {
+		if errtypes.XattrIsNotFound(err) {
 			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
 		return nil, errors.Wrap(err, "ocfs: error reading permissions")
@@ -1957,7 +1936,7 @@ func (fs *ocfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadC
 			return nil, errtypes.PermissionDenied("")
 		}
 	} else {
-		if isNotFound(err) {
+		if errtypes.XattrIsNotFound(err) {
 			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
 		return nil, errors.Wrap(err, "ocfs: error reading permissions")
@@ -1985,7 +1964,7 @@ func (fs *ocfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*
 			return nil, errtypes.PermissionDenied("")
 		}
 	} else {
-		if isNotFound(err) {
+		if errtypes.XattrIsNotFound(err) {
 			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
 		return nil, errors.Wrap(err, "ocfs: error reading permissions")
@@ -2047,7 +2026,7 @@ func (fs *ocfs) RestoreRevision(ctx context.Context, ref *provider.Reference, re
 			return errtypes.PermissionDenied("")
 		}
 	} else {
-		if isNotFound(err) {
+		if errtypes.XattrIsNotFound(err) {
 			return errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
 		return errors.Wrap(err, "ocfs: error reading permissions")
@@ -2328,9 +2307,9 @@ func readChecksumIntoResourceChecksum(ctx context.Context, nodePath, algo string
 			Type: storageprovider.PKG2GRPCXS(algo),
 			Sum:  hex.EncodeToString(v),
 		}
-	case isNoData(err):
+	case errtypes.XattrIsNoData(err):
 		log.Msg("checksum not set")
-	case isNotFound(err):
+	case errtypes.XattrIsNotFound(err):
 		log.Msg("file not found")
 	default:
 		log.Msg("could not read checksum")
@@ -2355,9 +2334,9 @@ func readChecksumIntoOpaque(ctx context.Context, nodePath, algo string, ri *prov
 			Decoder: "plain",
 			Value:   []byte(hex.EncodeToString(v)),
 		}
-	case isNoData(err):
+	case errtypes.XattrIsNoData(err):
 		log.Msg("checksum not set")
-	case isNotFound(err):
+	case errtypes.XattrIsNotFound(err):
 		log.Msg("file not found")
 	default:
 		log.Msg("could not read checksum")

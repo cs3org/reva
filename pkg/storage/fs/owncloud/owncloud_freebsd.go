@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-//go:build windows
+//go:build freebsd
 
 package owncloud
 
@@ -27,11 +27,12 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"syscall"
 
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	"golang.org/x/sys/windows"
 )
+
+// TODO(jfd) get rid of the differences between unix and windows. the inode and dev should never be used for the etag because it interferes with backups
 
 // calcEtag will create an etag based on the md5 of
 // - mtime,
@@ -46,7 +47,18 @@ func calcEtag(ctx context.Context, fi os.FileInfo) string {
 	if err != nil {
 		log.Error().Err(err).Msg("error writing mtime")
 	}
-	// device and inode have no meaning on windows
+	stat, ok := fi.Sys().(*syscall.Stat_t)
+	if ok {
+		// take device and inode into account
+		err = binary.Write(h, binary.BigEndian, stat.Ino)
+		if err != nil {
+			log.Error().Err(err).Msg("error writing inode")
+		}
+		err = binary.Write(h, binary.BigEndian, stat.Dev)
+		if err != nil {
+			log.Error().Err(err).Msg("error writing device")
+		}
+	}
 	err = binary.Write(h, binary.BigEndian, fi.Size())
 	if err != nil {
 		log.Error().Err(err).Msg("error writing size")
@@ -55,21 +67,16 @@ func calcEtag(ctx context.Context, fi os.FileInfo) string {
 	return fmt.Sprintf("\"%s\"", strings.Trim(etag, "\""))
 }
 
-func (fs *ocfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, error) {
+func (fs *ocfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
 	// TODO quota of which storage space?
 	// we could use the logged in user, but when a user has access to multiple storages this falls short
 	// for now return quota of root
-	var free, total, avail uint64
-
-	pathPtr, err := windows.UTF16PtrFromString(fs.toInternalPath(ctx, "/"))
+	stat := syscall.Statfs_t{}
+	err := syscall.Statfs(fs.toInternalPath(ctx, "/"), &stat)
 	if err != nil {
 		return 0, 0, err
 	}
-	err = windows.GetDiskFreeSpaceEx(pathPtr, &avail, &total, &free)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	used := total - free
+	total := stat.Blocks * uint64(stat.Bsize)                        // Total data blocks in filesystem
+	used := (stat.Blocks - uint64(stat.Bavail)) * uint64(stat.Bsize) // Free blocks available to unprivileged user
 	return total, used, nil
 }
