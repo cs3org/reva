@@ -125,10 +125,21 @@ func New(m map[string]interface{}) (group.Manager, error) {
 	}, nil
 }
 
+func (m *manager) newAPITokenManager() *utils.APITokenManager {
+	return &utils.APITokenManager{
+		TargetAPI:         m.conf.TargetAPI,
+		OIDCTokenEndpoint: m.conf.OIDCTokenEndpoint,
+		ClientID:          m.conf.ClientID,
+		ClientSecret:      m.conf.ClientSecret,
+		Client:            m.client,
+	}
+}
+
 func (m *manager) getGroupByParam(ctx context.Context, param, val string) (map[string]interface{}, error) {
 	url := fmt.Sprintf("%s/Group?filter=%s:%s&field=groupIdentifier&field=displayName&field=gid",
 		m.conf.APIBaseURL, param, val)
-	responseData, err := utils.SendAPIRequest(ctx, url, false, m.client, m.conf.TargetAPI, m.conf.OIDCTokenEndpoint, m.conf.ClientID, m.conf.ClientSecret)
+	apiTokenManager := m.newAPITokenManager()
+	responseData, err := apiTokenManager.SendAPIGetRequest(ctx, url, false)
 	if err != nil {
 		return nil, err
 	}
@@ -253,7 +264,8 @@ func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string) (*gr
 
 func (m *manager) findGroupsByFilter(ctx context.Context, url string, groups map[string]*grouppb.Group) error {
 
-	groupData, err := utils.SendAPIRequest(ctx, url, false, m.client, m.conf.TargetAPI, m.conf.OIDCTokenEndpoint, m.conf.ClientID, m.conf.ClientSecret)
+	apiTokenManager := m.newAPITokenManager()
+	groupData, err := apiTokenManager.SendAPIGetRequest(ctx, url, false)
 	if err != nil {
 		return err
 	}
@@ -324,7 +336,8 @@ func (m *manager) GetMembers(ctx context.Context, gid *grouppb.GroupId) ([]*user
 		return nil, err
 	}
 	url := fmt.Sprintf("%s/Group/%s/memberidentities/precomputed", m.conf.APIBaseURL, internalID)
-	userData, err := utils.SendAPIRequest(ctx, url, false, m.client, m.conf.TargetAPI, m.conf.OIDCTokenEndpoint, m.conf.ClientID, m.conf.ClientSecret)
+	apiTokenManager := m.newAPITokenManager()
+	userData, err := apiTokenManager.SendAPIGetRequest(ctx, url, false)
 	if err != nil {
 		return nil, err
 	}

@@ -126,10 +126,21 @@ func New(m map[string]interface{}) (user.Manager, error) {
 	}, nil
 }
 
+func (m *manager) newAPITokenManager() *utils.APITokenManager {
+	return &utils.APITokenManager{
+		TargetAPI:         m.conf.TargetAPI,
+		OIDCTokenEndpoint: m.conf.OIDCTokenEndpoint,
+		ClientID:          m.conf.ClientID,
+		ClientSecret:      m.conf.ClientSecret,
+		Client:            m.client,
+	}
+}
+
 func (m *manager) getUserByParam(ctx context.Context, param, val string) (map[string]interface{}, error) {
 	url := fmt.Sprintf("%s/Identity?filter=%s:%s&field=upn&field=primaryAccountEmail&field=displayName&field=uid&field=gid&field=type",
 		m.conf.APIBaseURL, param, val)
-	responseData, err := utils.SendAPIRequest(ctx, url, false, m.client, m.conf.TargetAPI, m.conf.OIDCTokenEndpoint, m.conf.ClientID, m.conf.ClientSecret)
+	apiTokenManager := m.newAPITokenManager()
+	responseData, err := apiTokenManager.SendAPIGetRequest(ctx, url, false)
 	if err != nil {
 		return nil, err
 	}
@@ -265,7 +276,8 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 
 func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[string]*userpb.User) error {
 
-	userData, err := utils.SendAPIRequest(ctx, url, false, m.client, m.conf.TargetAPI, m.conf.OIDCTokenEndpoint, m.conf.ClientID, m.conf.ClientSecret)
+	apiTokenManager := m.newAPITokenManager()
+	userData, err := apiTokenManager.SendAPIGetRequest(ctx, url, false)
 	if err != nil {
 		return err
 	}
@@ -350,7 +362,8 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 		return nil, err
 	}
 	url := fmt.Sprintf("%s/Identity/%s/groups", m.conf.APIBaseURL, internalID)
-	groupData, err := utils.SendAPIRequest(ctx, url, false, m.client, m.conf.TargetAPI, m.conf.OIDCTokenEndpoint, m.conf.ClientID, m.conf.ClientSecret)
+	apiTokenManager := m.newAPITokenManager()
+	groupData, err := apiTokenManager.SendAPIGetRequest(ctx, url, false)
 	if err != nil {
 		return nil, err
 	}

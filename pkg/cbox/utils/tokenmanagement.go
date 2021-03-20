@@ -12,42 +12,50 @@ import (
 	"time"
 )
 
-var expirationTime time.Time
-
-func renewAPIToken(ctx context.Context, forceRenewal bool, targetAPI string, OIDCTokenEndpoint string, clientID string, clientSecret string, client *http.Client) (string, error) {
-	// Recieved tokens have an expiration time of 20 minutes.
-	// Take a couple of seconds as buffer time for the API call to complete
-	var apiToken string
-	var mutex = &sync.Mutex{}
-	if forceRenewal || expirationTime.Before(time.Now().Add(time.Second*time.Duration(2))) {
-		token, expiration, err := getAPIToken(ctx, targetAPI, OIDCTokenEndpoint, clientID, clientSecret, client)
-		if err != nil {
-			return "", err
-		}
-
-		mutex.Lock()
-		defer mutex.Unlock()
-
-		apiToken = token
-		expirationTime = expiration
-	}
-	return apiToken, nil
+type APITokenManager struct {
+	oidcApiToken            string
+	oidcTokenExpirationTime time.Time
+	TargetAPI               string
+	OIDCTokenEndpoint       string
+	ClientID                string
+	ClientSecret            string
+	Client                  *http.Client
+	mu                      sync.Mutex
 }
 
-func getAPIToken(ctx context.Context, targetAPI string, OIDCTokenEndpoint string, clientID string, clientSecret string, client *http.Client) (string, time.Time, error) {
+func (a *APITokenManager) renewAPIToken(ctx context.Context, forceRenewal bool) error {
+	// Recieved tokens have an expiration time of 20 minutes.
+	// Take a couple of seconds as buffer time for the API call to complete
+	if forceRenewal || a.oidcTokenExpirationTime.Before(time.Now().Add(time.Second*time.Duration(2))) {
+		token, expiration, err := a.getAPIToken(ctx)
+		if err != nil {
+			return err
+		}
+
+		a.mu.Lock()
+		defer a.mu.Unlock()
+
+		a.oidcApiToken = token
+		a.oidcTokenExpirationTime = expiration
+	}
+	return nil
+}
+
+func (a *APITokenManager) getAPIToken(ctx context.Context) (string, time.Time, error) {
+
 	params := url.Values{
-		"grant_type": {"client_credentials"},
-		"audience":   {targetAPI},
+		"grant_types": {"client_credentials"},
+		"audience":    {a.TargetAPI},
 	}
 
-	httpReq, err := http.NewRequest("POST", OIDCTokenEndpoint, strings.NewReader(params.Encode()))
+	httpReq, err := http.NewRequest("POST", a.OIDCTokenEndpoint, strings.NewReader(params.Encode()))
 	if err != nil {
 		return "", time.Time{}, err
 	}
-	httpReq.SetBasicAuth(clientID, clientSecret)
+	httpReq.SetBasicAuth(a.ClientID, a.ClientSecret)
 	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
 
-	httpRes, err := client.Do(httpReq)
+	httpRes, err := a.Client.Do(httpReq)
 	if err != nil {
 		return "", time.Time{}, err
 	}
@@ -69,12 +77,11 @@ func getAPIToken(ctx context.Context, targetAPI string, OIDCTokenEndpoint string
 
 	expirationSecs := result["expires_in"].(float64)
 	expirationTime := time.Now().Add(time.Second * time.Duration(expirationSecs))
-
 	return result["access_token"].(string), expirationTime, nil
 }
 
-func SendAPIRequest(ctx context.Context, url string, forceRenewal bool, client *http.Client, targetAPI string, OIDCTokenEndpoint string, clientID string, clientSecret string) ([]interface{}, error) {
-	token, err := renewAPIToken(ctx, forceRenewal, targetAPI, OIDCTokenEndpoint, clientID, clientSecret, client)
+func (a *APITokenManager) SendAPIGetRequest(ctx context.Context, url string, forceRenewal bool) ([]interface{}, error) {
+	err := a.renewAPIToken(ctx, forceRenewal)
 	if err != nil {
 		return nil, err
 	}
@@ -87,9 +94,9 @@ func SendAPIRequest(ctx context.Context, url string, forceRenewal bool, client *
 	// We don't need to take the lock when reading apiToken, because if we reach here,
 	// the token is valid at least for a couple of seconds. Even if another request modifies
 	// the token and expiration time while this request is in progress, the current token will still be valid.
-	httpReq.Header.Set("Authorization", "Bearer "+token)
+	httpReq.Header.Set("Authorization", "Bearer "+a.oidcApiToken)
 
-	httpRes, err := client.Do(httpReq)
+	httpRes, err := a.Client.Do(httpReq)
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +104,7 @@ func SendAPIRequest(ctx context.Context, url string, forceRenewal bool, client *
 
 	if httpRes.StatusCode == http.StatusUnauthorized {
 		// The token is no longer valid, try renewing it
-		return SendAPIRequest(ctx, url, true, client, targetAPI, OIDCTokenEndpoint, clientID, clientSecret)
+		return a.SendAPIGetRequest(ctx, url, true)
 	}
 	if httpRes.StatusCode < 200 || httpRes.StatusCode > 299 {
 		return nil, errors.New("rest: API request returned " + httpRes.Status)
