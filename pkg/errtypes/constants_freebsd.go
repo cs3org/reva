@@ -16,17 +16,14 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// +build !windows,!freebsd
+// +build freebsd
 
-package decomposedfs
+package errtypes
 
 import "golang.org/x/sys/unix"
 
-func (fs *Decomposedfs) getAvailableSize(path string) (uint64, error) {
-	stat := unix.Statfs_t{}
-	err := unix.Statfs(path, &stat)
-	if err != nil {
-		return 0, err
-	}
-	return stat.Bavail * uint64(stat.Bsize), nil
-}
+// ENODATA is not defined on FreeBSD. Instead it is frequently aliased to ENOATTR.
+// References:
+// - https://groups.google.com/g/muc.lists.freebsd.hackers/c/70x4p3g6h4Y
+// - https://github.com/dotnet/corefx/pull/17091
+const ENODATA = unix.ENOATTR
