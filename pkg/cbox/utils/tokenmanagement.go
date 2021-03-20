@@ -32,7 +32,7 @@ import (
 
 // APITokenManager stores config related to api management
 type APITokenManager struct {
-	oidcApiToken            string
+	oidcAPIToken            string
 	oidcTokenExpirationTime time.Time
 	TargetAPI               string
 	OIDCTokenEndpoint       string
@@ -54,7 +54,7 @@ func (a *APITokenManager) renewAPIToken(ctx context.Context, forceRenewal bool) 
 		a.mu.Lock()
 		defer a.mu.Unlock()
 
-		a.oidcApiToken = token
+		a.oidcAPIToken = token
 		a.oidcTokenExpirationTime = expiration
 	}
 	return nil
@@ -114,7 +114,7 @@ func (a *APITokenManager) SendAPIGetRequest(ctx context.Context, url string, for
 	// We don't need to take the lock when reading apiToken, because if we reach here,
 	// the token is valid at least for a couple of seconds. Even if another request modifies
 	// the token and expiration time while this request is in progress, the current token will still be valid.
-	httpReq.Header.Set("Authorization", "Bearer "+a.oidcApiToken)
+	httpReq.Header.Set("Authorization", "Bearer "+a.oidcAPIToken)
 
 	httpRes, err := a.Client.Do(httpReq)
 	if err != nil {
