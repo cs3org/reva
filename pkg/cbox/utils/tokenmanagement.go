@@ -43,7 +43,7 @@ type APITokenManager struct {
 }
 
 func (a *APITokenManager) renewAPIToken(ctx context.Context, forceRenewal bool) error {
-	// Recieved tokens have an expiration time of 20 minutes.
+	// Received tokens have an expiration time of 20 minutes.
 	// Take a couple of seconds as buffer time for the API call to complete
 	if forceRenewal || a.oidcTokenExpirationTime.Before(time.Now().Add(time.Second*time.Duration(2))) {
 		token, expiration, err := a.getAPIToken(ctx)
