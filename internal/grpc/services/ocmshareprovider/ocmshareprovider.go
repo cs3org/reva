@@ -20,6 +20,7 @@ package ocmshareprovider
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
@@ -44,6 +45,11 @@ type config struct {
 type service struct {
 	conf *config
 	sm   share.Manager
+}
+
+type shareProtocol struct {
+	Name    string                 `json:"name"`
+	Options map[string]interface{} `json:"options"`
 }
 
 func (c *config) init() {
@@ -103,7 +109,6 @@ func (s *service) UnprotectedEndpoints() []string {
 }
 
 func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareRequest) (*ocm.CreateOCMShareResponse, error) {
-
 	if req.Opaque == nil {
 		return &ocm.CreateOCMShareResponse{
 			Status: status.NewInternal(ctx, errors.New("can't find resource permissions"), ""),
@@ -144,7 +149,31 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		}, nil
 	}
 
-	share, err := s.sm.Share(ctx, req.ResourceId, req.Grant, name, req.RecipientMeshProvider, permissions, nil, "", ocm.Share_SHARE_TYPE_REGULAR)
+	// discover share type
+	sharetype := ocm.Share_SHARE_TYPE_REGULAR
+	protocol, ok := req.Opaque.Map["protocol"]
+	if ok {
+		var sp *shareProtocol
+		switch protocol.Decoder {
+		case "json":
+			err := json.Unmarshal(protocol.Value, &sp)
+			if err != nil {
+				return &ocm.CreateOCMShareResponse{
+					Status: status.NewInternal(ctx, err, "error decoding protocol"),
+				}, nil
+			}
+			if sp.Name == "datatx" {
+				sharetype = ocm.Share_SHARE_TYPE_TRANSFER
+			}
+		default:
+			err := errors.New("protocol decoder not recognized")
+			return &ocm.CreateOCMShareResponse{
+				Status: status.NewInternal(ctx, err, "error creating share"),
+			}, nil
+		}
+	}
+
+	share, err := s.sm.Share(ctx, req.ResourceId, req.Grant, name, req.RecipientMeshProvider, permissions, nil, "", sharetype)
 	if err != nil {
 		return &ocm.CreateOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "error creating share"),
