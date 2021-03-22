@@ -1953,6 +1953,7 @@ func (fs *ocfs) filterAsRevision(ctx context.Context, bn string, md os.FileInfo)
 			Key:   version,
 			Size:  uint64(md.Size()),
 			Mtime: uint64(mtime),
+			Etag:  calcEtag(ctx, md),
 		}
 	}
 	return nil

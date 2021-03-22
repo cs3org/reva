@@ -306,6 +306,11 @@ func (n *Node) InternalPath() string {
 	return n.lu.InternalPath(n.ID)
 }
 
+// CalculateEtag returns a hash of fileid + tmtime (or mtime)
+func CalculateEtag(nodeID string, tmTime time.Time) (string, error) {
+	return calculateEtag(nodeID, tmTime)
+}
+
 // calculateEtag returns a hash of fileid + tmtime (or mtime)
 func calculateEtag(nodeID string, tmTime time.Time) (string, error) {
 	h := md5.New()

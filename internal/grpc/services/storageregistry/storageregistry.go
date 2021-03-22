@@ -24,6 +24,7 @@ import (
 
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/storage"
@@ -123,9 +124,16 @@ func (s *service) ListStorageProviders(ctx context.Context, req *registrypb.List
 func (s *service) GetStorageProvider(ctx context.Context, req *registrypb.GetStorageProviderRequest) (*registrypb.GetStorageProviderResponse, error) {
 	p, err := s.reg.FindProvider(ctx, req.Ref)
 	if err != nil {
-		return &registrypb.GetStorageProviderResponse{
-			Status: status.NewInternal(ctx, err, "error finding storage provider"),
-		}, nil
+		switch err.(type) {
+		case errtypes.IsNotFound:
+			return &registrypb.GetStorageProviderResponse{
+				Status: status.NewNotFound(ctx, err.Error()),
+			}, nil
+		default:
+			return &registrypb.GetStorageProviderResponse{
+				Status: status.NewInternal(ctx, err, "error finding storage provider"),
+			}, nil
+		}
 	}
 
 	fill(p)
