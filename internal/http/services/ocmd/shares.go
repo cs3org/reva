@@ -57,7 +57,6 @@ func (h *sharesHandler) Handler() http.Handler {
 }
 
 func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
-	fmt.Printf("sharesHandler: req: %v\n", r)
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
