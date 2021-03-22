@@ -41,7 +41,7 @@ type APITokenManager struct {
 
 // OIDCToken stores the OIDC token used to authenticate requests to the REST API service
 type OIDCToken struct {
-	sync.Mutex          //concurrent access to apiToken and tokenExpirationTime
+	sync.Mutex          // concurrent access to apiToken and tokenExpirationTime
 	apiToken            string
 	tokenExpirationTime time.Time
 }
@@ -53,6 +53,7 @@ type config struct {
 	ClientSecret      string
 }
 
+// InitAPITokenManager initializes a new APITokenManager
 func InitAPITokenManager(targetAPI, oidcTokenEndpoint, clientID, clientSecret string) *APITokenManager {
 	return &APITokenManager{
 		conf: &config{
