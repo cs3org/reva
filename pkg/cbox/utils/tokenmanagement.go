@@ -28,34 +28,60 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/cs3org/reva/pkg/rhttp"
 )
 
 // APITokenManager stores config related to api management
 type APITokenManager struct {
-	oidcAPIToken            string
-	oidcTokenExpirationTime time.Time
-	TargetAPI               string
-	OIDCTokenEndpoint       string
-	ClientID                string
-	ClientSecret            string
-	Client                  *http.Client
-	mu                      sync.Mutex
+	oidcToken OIDCToken
+	conf      *config
+	client    *http.Client
+}
+
+// OIDCToken stores the OIDC token used to authenticate requests to the REST API service
+type OIDCToken struct {
+	sync.Mutex          //concurrent access to apiToken and tokenExpirationTime
+	apiToken            string
+	tokenExpirationTime time.Time
+}
+
+type config struct {
+	TargetAPI         string
+	OIDCTokenEndpoint string
+	ClientID          string
+	ClientSecret      string
+}
+
+func InitAPITokenManager(targetAPI, oidcTokenEndpoint, clientID, clientSecret string) *APITokenManager {
+	return &APITokenManager{
+		conf: &config{
+			TargetAPI:         targetAPI,
+			OIDCTokenEndpoint: oidcTokenEndpoint,
+			ClientID:          clientID,
+			ClientSecret:      clientSecret,
+		},
+		client: rhttp.GetHTTPClient(
+			rhttp.Timeout(10*time.Second),
+			rhttp.Insecure(true),
+		),
+	}
 }
 
 func (a *APITokenManager) renewAPIToken(ctx context.Context, forceRenewal bool) error {
 	// Received tokens have an expiration time of 20 minutes.
 	// Take a couple of seconds as buffer time for the API call to complete
-	if forceRenewal || a.oidcTokenExpirationTime.Before(time.Now().Add(time.Second*time.Duration(2))) {
+	if forceRenewal || a.oidcToken.tokenExpirationTime.Before(time.Now().Add(time.Second*time.Duration(2))) {
 		token, expiration, err := a.getAPIToken(ctx)
 		if err != nil {
 			return err
 		}
 
-		a.mu.Lock()
-		defer a.mu.Unlock()
+		a.oidcToken.Lock()
+		defer a.oidcToken.Unlock()
 
-		a.oidcAPIToken = token
-		a.oidcTokenExpirationTime = expiration
+		a.oidcToken.apiToken = token
+		a.oidcToken.tokenExpirationTime = expiration
 	}
 	return nil
 }
@@ -64,17 +90,17 @@ func (a *APITokenManager) getAPIToken(ctx context.Context) (string, time.Time, e
 
 	params := url.Values{
 		"grant_types": {"client_credentials"},
-		"audience":    {a.TargetAPI},
+		"audience":    {a.conf.TargetAPI},
 	}
 
-	httpReq, err := http.NewRequest("POST", a.OIDCTokenEndpoint, strings.NewReader(params.Encode()))
+	httpReq, err := http.NewRequest("POST", a.conf.OIDCTokenEndpoint, strings.NewReader(params.Encode()))
 	if err != nil {
 		return "", time.Time{}, err
 	}
-	httpReq.SetBasicAuth(a.ClientID, a.ClientSecret)
+	httpReq.SetBasicAuth(a.conf.ClientID, a.conf.ClientSecret)
 	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
 
-	httpRes, err := a.Client.Do(httpReq)
+	httpRes, err := a.client.Do(httpReq)
 	if err != nil {
 		return "", time.Time{}, err
 	}
@@ -114,9 +140,9 @@ func (a *APITokenManager) SendAPIGetRequest(ctx context.Context, url string, for
 	// We don't need to take the lock when reading apiToken, because if we reach here,
 	// the token is valid at least for a couple of seconds. Even if another request modifies
 	// the token and expiration time while this request is in progress, the current token will still be valid.
-	httpReq.Header.Set("Authorization", "Bearer "+a.oidcAPIToken)
+	httpReq.Header.Set("Authorization", "Bearer "+a.oidcToken.apiToken)
 
-	httpRes, err := a.Client.Do(httpReq)
+	httpRes, err := a.client.Do(httpReq)
 	if err != nil {
 		return nil, err
 	}

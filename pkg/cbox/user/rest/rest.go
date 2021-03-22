@@ -22,17 +22,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
-	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	utils "github.com/cs3org/reva/pkg/cbox/utils"
-	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
 	"github.com/gomodule/redigo/redis"
@@ -49,9 +46,9 @@ var (
 )
 
 type manager struct {
-	conf      *config
-	redisPool *redis.Pool
-	client    *http.Client
+	conf            *config
+	redisPool       *redis.Pool
+	apiTokenManager *utils.APITokenManager
 }
 
 type config struct {
@@ -116,31 +113,18 @@ func New(m map[string]interface{}) (user.Manager, error) {
 	c.init()
 
 	redisPool := initRedisPool(c.RedisAddress, c.RedisUsername, c.RedisPassword)
+	apiTokenManager := utils.InitAPITokenManager(c.TargetAPI, c.OIDCTokenEndpoint, c.ClientID, c.ClientSecret)
 	return &manager{
-		conf:      c,
-		redisPool: redisPool,
-		client: rhttp.GetHTTPClient(
-			rhttp.Timeout(10*time.Second),
-			rhttp.Insecure(true),
-		),
+		conf:            c,
+		redisPool:       redisPool,
+		apiTokenManager: apiTokenManager,
 	}, nil
-}
-
-func (m *manager) newAPITokenManager() *utils.APITokenManager {
-	return &utils.APITokenManager{
-		TargetAPI:         m.conf.TargetAPI,
-		OIDCTokenEndpoint: m.conf.OIDCTokenEndpoint,
-		ClientID:          m.conf.ClientID,
-		ClientSecret:      m.conf.ClientSecret,
-		Client:            m.client,
-	}
 }
 
 func (m *manager) getUserByParam(ctx context.Context, param, val string) (map[string]interface{}, error) {
 	url := fmt.Sprintf("%s/Identity?filter=%s:%s&field=upn&field=primaryAccountEmail&field=displayName&field=uid&field=gid&field=type",
 		m.conf.APIBaseURL, param, val)
-	apiTokenManager := m.newAPITokenManager()
-	responseData, err := apiTokenManager.SendAPIGetRequest(ctx, url, false)
+	responseData, err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false)
 	if err != nil {
 		return nil, err
 	}
@@ -276,8 +260,7 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 
 func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[string]*userpb.User) error {
 
-	apiTokenManager := m.newAPITokenManager()
-	userData, err := apiTokenManager.SendAPIGetRequest(ctx, url, false)
+	userData, err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false)
 	if err != nil {
 		return err
 	}
@@ -362,8 +345,7 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 		return nil, err
 	}
 	url := fmt.Sprintf("%s/Identity/%s/groups", m.conf.APIBaseURL, internalID)
-	apiTokenManager := m.newAPITokenManager()
-	groupData, err := apiTokenManager.SendAPIGetRequest(ctx, url, false)
+	groupData, err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false)
 	if err != nil {
 		return nil, err
 	}
