@@ -57,6 +57,7 @@ func (h *sharesHandler) Handler() http.Handler {
 }
 
 func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
+	fmt.Printf("sharesHandler: req: %v\n", r)
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -155,6 +156,11 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	desiredProtocol, ok := options["desired-protocol"].(string)
+	if !ok {
+		desiredProtocol = ""
+	}
+
 	ownerID := &userpb.UserId{
 		OpaqueId: owner,
 		Idp:      meshProvider,
@@ -175,6 +181,10 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 					"token": {
 						Decoder: "plain",
 						Value:   []byte(token),
+					},
+					"desired-protocol": {
+						Decoder: "plain",
+						Value:   []byte(desiredProtocol),
 					},
 				},
 			},
