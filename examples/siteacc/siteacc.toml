@@ -2,6 +2,8 @@
 address = "0.0.0.0:9600"
 
 [http.services.siteacc]
+# If this is set to true, the service will expose a simple form for account registration
+enable_registration_form = true
 # All notification emails are sent to this email
 notifications_mail = "science.mesh@example.com"
 

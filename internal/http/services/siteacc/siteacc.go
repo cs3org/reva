@@ -63,8 +63,15 @@ func (s *svc) Prefix() string {
 
 // Unprotected returns all endpoints that can be queried without prior authorization.
 func (s *svc) Unprotected() []string {
-	// This service currently only has one public endpoint used for account registration
-	return []string{config.EndpointCreate}
+	// The account creation endpoint is always unprotected
+	endpoints := []string{config.EndpointCreate}
+
+	// If enabled, the registration registrationForm endpoint is also unprotected
+	if s.conf.EnableRegistrationForm {
+		endpoints = append(endpoints, config.EndpointRegistration)
+	}
+
+	return endpoints
 }
 
 // Handler serves all HTTP requests.
@@ -76,6 +83,11 @@ func (s *svc) Handler() http.Handler {
 		case config.EndpointPanel:
 			s.handlePanelEndpoint(w, r)
 
+		case config.EndpointRegistration:
+			if s.conf.EnableRegistrationForm {
+				s.handleRegistrationEndpoint(w, r)
+			}
+
 		default:
 			s.handleRequestEndpoints(w, r)
 		}
@@ -86,6 +98,13 @@ func (s *svc) handlePanelEndpoint(w http.ResponseWriter, r *http.Request) {
 	if err := s.manager.ShowPanel(w); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(fmt.Sprintf("Unable to show the web interface panel: %v", err)))
+	}
+}
+
+func (s *svc) handleRegistrationEndpoint(w http.ResponseWriter, r *http.Request) {
+	if err := s.manager.ShowRegistrationForm(w); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(fmt.Sprintf("Unable to show the web interface registration registrationForm: %v", err)))
 	}
 }
 
