@@ -35,14 +35,15 @@ def lintStep():
 
 def cloneOc10TestReposStep():
   return {
-      "name": "clone-oC10-test-repos",
-      "image": "registry.cern.ch/docker.io/owncloudci/php:7.4",
-      "commands": [
-        "git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing",
-        "git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner",
-        "cd /drone/src/tmp/testrunner",
-        "git checkout f0b9f3e842e925ad9f981344d6a0a7b590479a3b",
-      ],
+    "name": "clone-oC10-test-repos",
+    "image": "registry.cern.ch/docker.io/owncloudci/alpine:latest",
+    "commands": [
+      "source /drone/src/.drone.env",
+      "git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing",
+      "git clone -b $CORE_BRANCH --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner",
+      "cd /drone/src/tmp/testrunner",
+      "git checkout $CORE_COMMITID",
+    ],
   }
 
 # Shared service definitions

@@ -13,14 +13,14 @@ require (
 	github.com/cheggaaa/pb v1.0.29
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
-	github.com/cs3org/go-cs3apis v0.0.0-20210310133342-f4a10134033c
+	github.com/cs3org/go-cs3apis v0.0.0-20210316113645-e4a74cb8761c
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/eventials/go-tus v0.0.0-20200718001131-45c7ec8f5d59
 	github.com/go-ldap/ldap/v3 v3.2.4
 	github.com/go-openapi/errors v0.19.6 // indirect
 	github.com/go-openapi/strfmt v0.19.2 // indirect
 	github.com/go-sql-driver/mysql v1.5.0
-	github.com/golang/protobuf v1.4.3
+	github.com/golang/protobuf v1.5.1
 	github.com/gomodule/redigo v1.8.4
 	github.com/google/go-github v17.0.0+incompatible
 	github.com/google/go-querystring v1.0.0 // indirect
@@ -30,10 +30,10 @@ require (
 	github.com/imdario/mergo v0.3.8 // indirect
 	github.com/jedib0t/go-pretty v4.3.0+incompatible
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible
-	github.com/minio/minio-go/v7 v7.0.9
+	github.com/minio/minio-go/v7 v7.0.10
 	github.com/mitchellh/copystructure v1.0.0 // indirect
 	github.com/mitchellh/mapstructure v1.4.1
-	github.com/onsi/ginkgo v1.15.1
+	github.com/onsi/ginkgo v1.15.2
 	github.com/onsi/gomega v1.11.0
 	github.com/ory/fosite v0.39.0
 	github.com/pkg/errors v0.9.1
@@ -52,7 +52,7 @@ require (
 	golang.org/x/sys v0.0.0-20210218155724-8ebf48af031b
 	golang.org/x/term v0.0.0-20201117132131-f5c789dd3221
 	google.golang.org/grpc v1.36.0
-	google.golang.org/protobuf v1.25.0
+	google.golang.org/protobuf v1.26.0
 )
 
 go 1.16

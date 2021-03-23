@@ -28,6 +28,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -221,10 +222,16 @@ func unwrap(rid string) *provider.ResourceId {
 	if err != nil {
 		return nil
 	}
+
 	parts := strings.SplitN(string(decodedID), ":", 2)
 	if len(parts) != 2 {
 		return nil
 	}
+
+	if !utf8.ValidString(parts[0]) || !utf8.ValidString(parts[1]) {
+		return nil
+	}
+
 	return &provider.ResourceId{
 		StorageId: parts[0],
 		OpaqueId:  parts[1],
