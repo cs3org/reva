@@ -169,8 +169,7 @@ func newgrpc(ctx context.Context, opt *Options) (erpc.EosClient, error) {
 
 	conn, err := grpc.Dial(opt.GrpcURI, grpc.WithInsecure())
 	if err != nil {
-		log.Debug().Str("Error connecting to ", "'"+opt.GrpcURI+"' ").Str("err", err.Error()).Msg("")
-		return nil, err
+		log.Warn().Str("Error connecting to ", "'"+opt.GrpcURI+"' ").Str("err", err.Error()).Msg("")
 	}
 
 	log.Debug().Str("Going to ping ", "'"+opt.GrpcURI+"' ").Msg("")
@@ -182,8 +181,7 @@ func newgrpc(ctx context.Context, opt *Options) (erpc.EosClient, error) {
 	prq.Message = []byte("hi this is a ping from reva")
 	prep, err := ecl.Ping(ctx, prq)
 	if err != nil {
-		log.Error().Str("Ping to ", "'"+opt.GrpcURI+"' ").Str("err", err.Error()).Msg("")
-		return nil, err
+		log.Warn().Str("Could not ping to ", "'"+opt.GrpcURI+"' ").Str("err", err.Error()).Msg("")
 	}
 
 	if prep == nil {
