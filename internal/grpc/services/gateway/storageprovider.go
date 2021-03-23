@@ -35,8 +35,6 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/storage/utils/etag"
-	"github.com/cs3org/reva/pkg/storage/utils/templates"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/pkg/errors"
@@ -367,6 +365,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 }
 
 func (s *svc) initiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {
+	// TODO(ishank011): enable downloading references spread across storage providers, eg. /eos
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &gateway.InitiateFileDownloadResponse{
@@ -858,6 +857,7 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 }
 
 func (s *svc) delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
+	// TODO(ishank011): enable deleting references spread across storage providers, eg. /eos
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &provider.DeleteResponse{
@@ -1009,6 +1009,7 @@ func (s *svc) move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 }
 
 func (s *svc) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest) (*provider.SetArbitraryMetadataResponse, error) {
+	// TODO(ishank011): enable for references spread across storage providers, eg. /eos
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &provider.SetArbitraryMetadataResponse{
@@ -1025,6 +1026,7 @@ func (s *svc) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitra
 }
 
 func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArbitraryMetadataRequest) (*provider.UnsetArbitraryMetadataResponse, error) {
+	// TODO(ishank011): enable for references spread across storage providers, eg. /eos
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &provider.UnsetArbitraryMetadataResponse{
@@ -1144,6 +1146,7 @@ func (s *svc) statSharesFolder(ctx context.Context) (*provider.StatResponse, err
 }
 
 func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
+	// TODO(ishank011): enable for references spread across storage providers, eg. /eos
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &provider.StatResponse{
@@ -1456,19 +1459,49 @@ func (s *svc) listSharesFolder(ctx context.Context) (*provider.ListContainerResp
 }
 
 func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
-	c, err := s.find(ctx, req.Ref)
+	providers, err := s.findProviders(ctx, req.Ref)
 	if err != nil {
 		return &provider.ListContainerResponse{
-			Status: status.NewStatusFromErrType(ctx, "listContainer ref="+req.Ref.String(), err),
+			Status: status.NewStatusFromErrType(ctx, "listContainer ref: "+req.Ref.String(), err),
 		}, nil
 	}
 
-	res, err := c.ListContainer(ctx, req)
-	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling ListContainer")
+	var infos []*provider.ResourceInfo
+
+	for _, p := range providers {
+		c, err := s.getStorageProviderClient(ctx, p)
+		if err != nil {
+			return &provider.ListContainerResponse{
+				Status: status.NewInternal(ctx, err, "error connecting to storage provider="+providers[0].Address),
+			}, nil
+		}
+
+		resPath := req.Ref.GetPath()
+		if resPath != "" && !strings.HasPrefix(resPath, p.ProviderPath) {
+			req = &provider.ListContainerRequest{
+				Ref: &provider.Reference{
+					Spec: &provider.Reference_Path{
+						Path: p.ProviderPath,
+					},
+				},
+			}
+		}
+		res, err := c.ListContainer(ctx, req)
+		if err != nil {
+			return nil, errors.Wrap(err, "gateway: error calling ListContainer")
+		}
+		for _, inf := range res.Infos {
+			if parent := path.Dir(inf.Path); resPath != "" && path.Clean(resPath) != parent {
+				continue
+			}
+			infos = append(infos, inf)
+		}
 	}
 
-	return res, nil
+	return &provider.ListContainerResponse{
+		Status: status.NewOK(ctx),
+		Infos:  infos,
+	}, nil
 }
 
 func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
@@ -1908,30 +1941,6 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 }
 
 func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error) {
-	home := s.getHome(ctx)
-	if strings.HasPrefix(ref.GetPath(), home) && s.c.HomeMapping != "" {
-		if u, ok := user.ContextGetUser(ctx); ok {
-			layout := templates.WithUser(u, s.c.HomeMapping)
-			newRef := &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: path.Join(layout, strings.TrimPrefix(ref.GetPath(), home)),
-				},
-			}
-			res, err := s.getStorageProviders(ctx, newRef)
-			if err != nil {
-				// if we get a NotFound error, default to the original reference
-				if _, ok := err.(errtypes.IsNotFound); !ok {
-					return nil, err
-				}
-			} else {
-				return res, nil
-			}
-		}
-	}
-	return s.getStorageProviders(ctx, ref)
-}
-
-func (s *svc) getStorageProviders(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error) {
 	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
