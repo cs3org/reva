@@ -138,32 +138,29 @@ func (c *Client) GetHTTPCl() *ehttp.EosHttpClient {
 // Create and connect a grpc eos Client
 func newgrpc(ctx context.Context, opt *Options) (erpc.EosClient, error) {
 	log := appctx.GetLogger(ctx)
-	log.Debug().Str("Connecting to ", "'"+opt.GrpcURI+"'").Msg("")
+	log.Info().Str("Setting up GRPC towards ", "'"+opt.GrpcURI+"'").Msg("")
 
 	conn, err := grpc.Dial(opt.GrpcURI, grpc.WithInsecure())
 	if err != nil {
-		log.Debug().Str("Error connecting to ", "'"+opt.GrpcURI+"' ").Str("err", err.Error()).Msg("")
-		return nil, err
+		log.Warn().Str("Error connecting to ", "'"+opt.GrpcURI+"' ").Str("err", err.Error()).Msg("")
 	}
 
 	log.Debug().Str("Going to ping ", "'"+opt.GrpcURI+"' ").Msg("")
 	ecl := erpc.NewEosClient(conn)
-	// If we can't ping... treat it as an error... we will see if this has to be kept, for now it's practical
+	// If we can't ping... just print ugly warnings. In the case EOS is down, grpc will take care of
+	// connecting later
 	prq := new(erpc.PingRequest)
 	prq.Authkey = opt.Authkey
 	prq.Message = []byte("hi this is a ping from reva")
 	prep, err := ecl.Ping(ctx, prq)
 	if err != nil {
-		log.Error().Str("Ping to ", "'"+opt.GrpcURI+"' ").Str("err", err.Error()).Msg("")
-		return nil, err
+		log.Warn().Str("Could not ping to ", "'"+opt.GrpcURI+"' ").Str("err", err.Error()).Msg("")
 	}
 
 	if prep == nil {
-		log.Debug().Str("Ping to ", "'"+opt.GrpcURI+"' ").Str("gave nil response", "").Msg("")
-		return nil, errtypes.InternalError("nil response from ping")
+		log.Warn().Str("Could not ping to ", "'"+opt.GrpcURI+"' ").Str("nil response", "").Msg("")
 	}
 
-	log.Info().Str("Ping to ", "'"+opt.GrpcURI+"' ").Msg(" was successful")
 	return ecl, nil
 }
 
@@ -176,10 +173,6 @@ func New(opt *Options) *Client {
 	c := new(Client)
 	c.opt = opt
 
-	// Let's be successful if the ping was ok. This is an initialization phase
-	// and we enforce the server to be up
-	// This will likely improve as soon as the behaviour of grpc is understood
-	// in the case of server restarts or failures
 	tctx := appctx.WithLogger(context.Background(), &tlog)
 	ccl, err := newgrpc(tctx, opt)
 	if err != nil {
