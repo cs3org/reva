@@ -108,8 +108,7 @@ func (fs *ocfs) InitiateUpload(ctx context.Context, ref *provider.Reference, upl
 
 	info := tusd.FileInfo{
 		MetaData: tusd.MetaData{
-			"filename": filepath.Base(p),
-			"dir":      filepath.Dir(p),
+			"filename": p,
 		},
 		Size: uploadLength,
 	}
@@ -158,13 +157,7 @@ func (fs *ocfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.
 	}
 	info.MetaData["filename"] = filepath.Clean(info.MetaData["filename"])
 
-	dir := info.MetaData["dir"]
-	if dir == "" {
-		return nil, errors.New("ocfs: missing dir in metadata")
-	}
-	info.MetaData["dir"] = filepath.Clean(info.MetaData["dir"])
-
-	ip := fs.toInternalPath(ctx, filepath.Join(info.MetaData["dir"], info.MetaData["filename"]))
+	ip := fs.toInternalPath(ctx, info.MetaData["filename"])
 
 	// check permissions
 	var perm *provider.ResourcePermissions

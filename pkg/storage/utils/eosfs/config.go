@@ -58,6 +58,10 @@ type Config struct {
 	// Default is root://eos-example.org
 	SlaveURL string `mapstructure:"slave_url"`
 
+	// The URL containing the HTTP endpoint exposed by the Master EOS MGM.
+	// Default is http://eos-example.org:8080/
+	HTTPURL string `mapstructure:"http_url"`
+
 	// Location on the local fs where to store reads.
 	// Defaults to os.TempDir()
 	CacheDirectory string `mapstructure:"cache_directory"`

@@ -169,18 +169,10 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		Idp:      am.c.Idp,
 		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.UID),
 	}
-	gwc, err := pool.GetGatewayServiceClient(am.c.GatewaySvc)
+
+	groups, err := am.getUserGroups(ctx, userID)
 	if err != nil {
-		return nil, errors.Wrap(err, "ldap: error getting gateway grpc client")
-	}
-	getGroupsResp, err := gwc.GetUserGroups(ctx, &user.GetUserGroupsRequest{
-		UserId: userID,
-	})
-	if err != nil {
-		return nil, errors.Wrap(err, "ldap: error getting user groups")
-	}
-	if getGroupsResp.Status.Code != rpc.Code_CODE_OK {
-		return nil, errors.Wrap(err, "ldap: grpc getting user groups failed")
+		log.Warn().Err(err).Msg("unable to retrieve user groups")
 	}
 
 	u := &user.User{
@@ -188,7 +180,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		// TODO add more claims from the StandardClaims, eg EmailVerified
 		Username: sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.CN),
 		// TODO groups
-		Groups:      getGroupsResp.Groups,
+		Groups:      groups,
 		Mail:        sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.Mail),
 		DisplayName: sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.DisplayName),
 		Opaque: &types.Opaque{
@@ -208,6 +200,23 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 
 	return u, nil
 
+}
+
+func (am *mgr) getUserGroups(ctx context.Context, userID *user.UserId) ([]string, error) {
+	gwc, err := pool.GetGatewayServiceClient(am.c.GatewaySvc)
+	if err != nil {
+		return nil, errors.Wrap(err, "ldap: error getting gateway grpc client")
+	}
+	getGroupsResp, err := gwc.GetUserGroups(ctx, &user.GetUserGroupsRequest{
+		UserId: userID,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "ldap: error getting user groups")
+	}
+	if getGroupsResp.Status.Code != rpc.Code_CODE_OK {
+		return nil, errors.Wrap(err, "ldap: grpc getting user groups failed")
+	}
+	return getGroupsResp.Groups, nil
 }
 
 func (am *mgr) getLoginFilter(login string) string {

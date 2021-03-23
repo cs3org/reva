@@ -47,8 +47,8 @@ type EOSClient interface {
 	Rename(ctx context.Context, uid, gid, oldPath, newPath string) error
 	List(ctx context.Context, uid, gid, path string) ([]*FileInfo, error)
 	Read(ctx context.Context, uid, gid, path string) (io.ReadCloser, error)
-	Write(ctx context.Context, uid, gid, path string, stream io.ReadCloser) error
-	WriteFile(ctx context.Context, uid, gid, path, source string) error
+	Write(ctx context.Context, uid, gid, path string, stream io.ReadCloser, metadata map[string]string) error
+	WriteFile(ctx context.Context, uid, gid, path, source string, metadata map[string]string) error
 	ListDeletedEntries(ctx context.Context, uid, gid string) ([]*DeletedEntry, error)
 	RestoreDeletedEntry(ctx context.Context, uid, gid, key string) error
 	PurgeDeletedEntries(ctx context.Context, uid, gid string) error

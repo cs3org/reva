@@ -23,10 +23,12 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -109,6 +111,10 @@ type Options struct {
 	// Default is root://eos-example.org
 	URL string
 
+	// The URL containing the HTTP endpoint exposed by the Master EOS MGM.
+	// Default is http://eos-example.org:8080/
+	HTTPURL string
+
 	// Location on the local fs where to store reads.
 	// Defaults to os.TempDir()
 	CacheDirectory string
@@ -119,6 +125,9 @@ type Options struct {
 	// SecProtocol is the comma separated list of security protocols used by xrootd.
 	// For example: "sss, unix"
 	SecProtocol string
+
+	// The EOS Version.
+	EOSVersion eosVersion
 }
 
 func (opt *Options) init() {
@@ -146,15 +155,23 @@ func (opt *Options) init() {
 // Client performs actions against a EOS management node (MGM).
 // It requires the eos-client and xrootd-client packages installed to work.
 type Client struct {
-	opt *Options
+	opt        *Options
+	httpClient *http.Client
 }
 
 // New creates a new client with the given options.
 func New(opt *Options) *Client {
 	opt.init()
-	c := new(Client)
-	c.opt = opt
-	return c
+	return &Client{
+		opt: opt,
+		httpClient: &http.Client{
+			Transport: &http.Transport{
+				MaxIdleConns:        100,
+				MaxConnsPerHost:     100,
+				MaxIdleConnsPerHost: 100,
+			},
+		},
+	}
 }
 
 // exec executes the command and returns the stdout, stderr and return code
@@ -263,12 +280,15 @@ func (c *Client) executeEOS(ctx context.Context, cmd *exec.Cmd) (string, string,
 }
 
 func (c *Client) getVersion(ctx context.Context, rootUID, rootGID string) (eosVersion, error) {
-	cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", rootUID, rootGID, "version")
-	stdout, _, err := c.executeEOS(ctx, cmd)
-	if err != nil {
-		return "", err
+	if c.opt.EOSVersion == "" {
+		cmd := exec.CommandContext(ctx, c.opt.EosBinary, "-r", rootUID, rootGID, "version")
+		stdout, _, err := c.executeEOS(ctx, cmd)
+		if err != nil {
+			return "", err
+		}
+		c.opt.EOSVersion = c.parseVersion(ctx, stdout)
 	}
-	return c.parseVersion(ctx, stdout), nil
+	return c.opt.EOSVersion, nil
 }
 
 func (c *Client) parseVersion(ctx context.Context, raw string) eosVersion {
@@ -297,24 +317,34 @@ func (c *Client) AddACL(ctx context.Context, uid, gid, rootUID, rootGID, path st
 		return err
 	}
 
-	var cmd *exec.Cmd
+	finfo, err := c.GetFileInfoByPath(ctx, uid, gid, path)
+	if err != nil {
+		return err
+	}
+
+	var args []string
 	if version == versionCitrine {
 		sysACL := a.CitrineSerialize()
-		cmd = exec.CommandContext(ctx, c.opt.EosBinary, "-r", rootUID, rootGID, "acl", "--sys", "--recursive", sysACL, path)
-	} else {
-		acls, err := c.getACLForPath(ctx, uid, gid, path)
-		if err != nil {
-			return err
+		args = []string{"-r", rootUID, rootGID, "acl", "--sys"}
+		if finfo.IsDir {
+			args = append(args, "--recursive")
 		}
-
+		args = append(args, sysACL, path)
+	} else {
+		acls := finfo.SysACL
 		err = acls.SetEntry(a.Type, a.Qualifier, a.Permissions)
 		if err != nil {
 			return err
 		}
 		sysACL := acls.Serialize()
-		cmd = exec.CommandContext(ctx, c.opt.EosBinary, "-r", rootUID, rootGID, "attr", "-r", "set", fmt.Sprintf("sys.acl=%s", sysACL), path)
+		args = []string{"-r", rootUID, rootGID, "attr"}
+		if finfo.IsDir {
+			args = append(args, "-r")
+		}
+		args = append(args, "set", fmt.Sprintf("sys.acl=%s", sysACL), path)
 	}
 
+	cmd := exec.CommandContext(ctx, c.opt.EosBinary, args...)
 	_, _, err = c.executeEOS(ctx, cmd)
 	return err
 
@@ -569,25 +599,58 @@ func (c *Client) Read(ctx context.Context, uid, gid, path string) (io.ReadCloser
 }
 
 // Write writes a stream to the mgm
-func (c *Client) Write(ctx context.Context, uid, gid, path string, stream io.ReadCloser) error {
-	fd, err := ioutil.TempFile(c.opt.CacheDirectory, "eoswrite-")
+func (c *Client) Write(ctx context.Context, uid, gid, path string, stream io.ReadCloser, metadata map[string]string) error {
+
+	host, err := os.Hostname()
+	if err != nil {
+		host = "localhost"
+	}
+
+	url, err := url.Parse(c.opt.HTTPURL)
 	if err != nil {
 		return err
 	}
-	defer fd.Close()
-	defer os.RemoveAll(fd.Name())
+	url.Path = filepath.Join(url.Path, path)
 
-	// copy stream to local temp file
-	_, err = io.Copy(fd, stream)
+	req, err := http.NewRequest("PUT", url.String(), stream)
 	if err != nil {
 		return err
 	}
 
-	return c.WriteFile(ctx, uid, gid, path, fd.Name())
+	req.Header.Set("Remote-User", metadata["remote-user"])
+	req.Header.Set("Host", host)
+	req.Header.Set("X-Real-IP", host)
+	req.Header.Set("X-Forwarded-For", host)
+	req.Header.Set("CBOX-SKIP-LOCATION-ON-MOVE", "1")
+	req.Header.Set("Connection", "")
+
+	if val, ok := metadata["chunk-size"]; ok {
+		req.Header.Set("Oc-Chunk-Size", val)
+	}
+	if val, ok := metadata["total-length"]; ok {
+		req.Header.Set("Oc-Total-Length", val)
+	}
+	if val, ok := metadata["chunked"]; ok {
+		req.Header.Set("Oc-Chunked", val)
+	}
+
+	// EOS MGM returns a 307 redirect with the endpoint for an FST.
+	// The go HTTP client handles redirects with the same parameters as the
+	// original request.
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return errors.New("eos: HTTP PUT call returned " + resp.Status)
+	}
+
+	return nil
 }
 
 // WriteFile writes an existing file to the mgm
-func (c *Client) WriteFile(ctx context.Context, uid, gid, path, source string) error {
+func (c *Client) WriteFile(ctx context.Context, uid, gid, path, source string, metadata map[string]string) error {
 	xrdPath := fmt.Sprintf("%s//%s", c.opt.URL, path)
 	cmd := exec.CommandContext(ctx, c.opt.XrdcopyBinary, "--nopbar", "--silent", "-f", source, xrdPath, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s", uid, gid))
 	_, _, err := c.execute(ctx, cmd)
@@ -790,7 +853,7 @@ func (c *Client) parseQuota(path, raw string) (*eosclient.QuotaInfo, error) {
 		m := c.parseQuotaLine(rl)
 		// map[maxbytes:2000000000000 maxlogicalbytes:1000000000000 percentageusedbytes:0.49 quota:node uid:gonzalhu space:/eos/scratch/user/ usedbytes:9829986500 usedlogicalbytes:4914993250 statusfiles:ok usedfiles:334 maxfiles:1000000 statusbytes:ok]
 
-		space := m["space"]
+		space := filepath.Clean(m["space"])
 		if strings.HasPrefix(path, space) {
 			maxBytesString := m["maxlogicalbytes"]
 			usedBytesString := m["usedlogicalbytes"]

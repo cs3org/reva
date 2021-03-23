@@ -110,6 +110,10 @@ func (c *Config) init() {
 		c.SlaveURL = c.MasterURL
 	}
 
+	if c.HTTPURL == "" {
+		c.HTTPURL = "http://eos-example.org:8080/"
+	}
+
 	if c.CacheDirectory == "" {
 		c.CacheDirectory = os.TempDir()
 	}
@@ -170,6 +174,7 @@ func NewEOSFS(c *Config) (storage.FS, error) {
 			Keytab:              c.Keytab,
 			SecProtocol:         c.SecProtocol,
 			VersionInvariant:    c.VersionInvariant,
+			HTTPURL:             c.HTTPURL,
 		}
 		eosClient = eosbinary.New(eosClientOpts)
 	}
@@ -883,6 +888,11 @@ func (fs *eosfs) CreateHome(ctx context.Context) error {
 
 	if err := fs.createShadowHome(ctx); err != nil {
 		return errors.Wrap(err, "eos: error creating shadow home")
+	}
+
+	// Create the uploads directory
+	if err := os.MkdirAll(fs.getUploadInfoPath(ctx, ""), defaultFilePerm); err != nil {
+		return errors.Wrap(err, "eos: error creating uploads dir")
 	}
 
 	return nil

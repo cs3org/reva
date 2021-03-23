@@ -21,7 +21,6 @@ package rest
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -34,6 +33,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
@@ -174,7 +174,7 @@ func (m *manager) getAPIToken(ctx context.Context) (string, time.Time, error) {
 	}
 	defer httpRes.Body.Close()
 	if httpRes.StatusCode < 200 || httpRes.StatusCode > 299 {
-		return "", time.Time{}, errors.New("rest: get token endpoint returned " + httpRes.Status)
+		return "", time.Time{}, errtypes.InternalError("rest: get token endpoint returned " + httpRes.Status)
 	}
 
 	body, err := ioutil.ReadAll(httpRes.Body)
@@ -220,7 +220,7 @@ func (m *manager) sendAPIRequest(ctx context.Context, url string, forceRenewal b
 		return m.sendAPIRequest(ctx, url, true)
 	}
 	if httpRes.StatusCode < 200 || httpRes.StatusCode > 299 {
-		return nil, errors.New("rest: API request returned " + httpRes.Status)
+		return nil, errtypes.InternalError("rest: API request returned " + httpRes.Status)
 	}
 
 	body, err := ioutil.ReadAll(httpRes.Body)
@@ -236,7 +236,7 @@ func (m *manager) sendAPIRequest(ctx context.Context, url string, forceRenewal b
 
 	responseData, ok := result["data"].([]interface{})
 	if !ok {
-		return nil, errors.New("rest: error in type assertion")
+		return nil, errtypes.InternalError("rest: error in type assertion")
 	}
 
 	return responseData, nil
@@ -250,16 +250,16 @@ func (m *manager) getUserByParam(ctx context.Context, param, val string) (map[st
 		return nil, err
 	}
 	if len(responseData) != 1 {
-		return nil, errors.New("rest: user not found")
+		return nil, errtypes.NotFound("rest: user " + val)
 	}
 
 	userData, ok := responseData[0].(map[string]interface{})
 	if !ok {
-		return nil, errors.New("rest: error in type assertion")
+		return nil, errtypes.InternalError("rest: error in type assertion")
 	}
 
 	if userData["type"].(string) == "Application" || strings.HasPrefix(userData["upn"].(string), "guest") {
-		return nil, errors.New("rest: guest and application accounts not supported")
+		return nil, errtypes.NotSupported("rest: guest and application accounts not supported")
 	}
 	return userData, nil
 }
@@ -274,7 +274,7 @@ func (m *manager) getInternalUserID(ctx context.Context, uid *userpb.UserId) (st
 		}
 		id, ok := userData["id"].(string)
 		if !ok {
-			return "", errors.New("rest: error in type assertion")
+			return "", errtypes.InternalError("rest: error in type assertion")
 		}
 
 		if err = m.cacheInternalID(uid, id); err != nil {
@@ -360,7 +360,7 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*use
 	case "username":
 		claim = "upn"
 	default:
-		return nil, errors.New("rest: invalid field")
+		return nil, errtypes.NotSupported("rest: invalid field")
 	}
 
 	userData, err := m.getUserByParam(ctx, claim, value)
@@ -432,7 +432,7 @@ func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, 
 	case emailRegex.MatchString(query):
 		filters = []string{"primaryAccountEmail"}
 	default:
-		return nil, errors.New("rest: illegal characters present in query")
+		return nil, errtypes.NotSupported("rest: illegal characters present in query")
 	}
 
 	users := make(map[string]*userpb.User)
@@ -476,7 +476,7 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 	for _, g := range groupData {
 		groupInfo, ok := g.(map[string]interface{})
 		if !ok {
-			return nil, errors.New("rest: error in type assertion")
+			return nil, errtypes.InternalError("rest: error in type assertion")
 		}
 		name, ok := groupInfo["displayName"].(string)
 		if ok {
@@ -514,5 +514,5 @@ func extractUID(u *userpb.User) (string, error) {
 			}
 		}
 	}
-	return "", errors.New("rest: could not retrieve UID from user")
+	return "", errtypes.InternalError("rest: could not retrieve UID from user")
 }

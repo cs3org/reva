@@ -106,8 +106,7 @@ func (fs *localfs) InitiateUpload(ctx context.Context, ref *provider.Reference, 
 
 	info := tusd.FileInfo{
 		MetaData: tusd.MetaData{
-			"filename": filepath.Base(np),
-			"dir":      filepath.Dir(np),
+			"filename": np,
 		},
 		Size: uploadLength,
 	}
@@ -156,13 +155,7 @@ func (fs *localfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tu
 	}
 	info.MetaData["filename"] = filepath.Clean(info.MetaData["filename"])
 
-	dir := info.MetaData["dir"]
-	if dir == "" {
-		return nil, errors.New("localfs: missing dir in metadata")
-	}
-	info.MetaData["dir"] = filepath.Clean(info.MetaData["dir"])
-
-	np := fs.wrap(ctx, filepath.Join(info.MetaData["dir"], info.MetaData["filename"]))
+	np := fs.wrap(ctx, info.MetaData["filename"])
 
 	log.Debug().Interface("info", info).Msg("localfs: resolved filename")
 

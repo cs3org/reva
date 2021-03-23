@@ -323,6 +323,15 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		if req.Opaque.Map["X-OC-Mtime"] != nil {
 			metadata["mtime"] = string(req.Opaque.Map["X-OC-Mtime"].Value)
 		}
+		if req.Opaque.Map["Oc-Chunk-Size"] != nil {
+			metadata["chunk-size"] = string(req.Opaque.Map["Oc-Chunk-Size"].Value)
+		}
+		if req.Opaque.Map["Oc-Total-Length"] != nil {
+			metadata["total-length"] = string(req.Opaque.Map["Oc-Total-Length"].Value)
+		}
+		if req.Opaque.Map["Oc-Chunked"] != nil {
+			metadata["chunked"] = string(req.Opaque.Map["Oc-Chunked"].Value)
+		}
 	}
 	uploadIDs, err := s.storage.InitiateUpload(ctx, newRef, uploadLength, metadata)
 	if err != nil {
