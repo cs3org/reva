@@ -89,6 +89,7 @@ var _ = Describe("user providers", func() {
 			for claim, value := range tests {
 				user, err := serviceClient.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{Claim: claim, Value: value})
 				Expect(err).ToNot(HaveOccurred())
+				Expect(user.User).ToNot(BeNil())
 				Expect(user.User.Mail).To(Equal("einstein@example.org"))
 			}
 		})
