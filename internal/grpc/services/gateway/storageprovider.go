@@ -37,6 +37,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/etag"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/dgrijalva/jwt-go"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 )
 
@@ -1146,15 +1147,65 @@ func (s *svc) statSharesFolder(ctx context.Context) (*provider.StatResponse, err
 }
 
 func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
-	// TODO(ishank011): enable for references spread across storage providers, eg. /eos
-	c, err := s.find(ctx, req.Ref)
+	providers, err := s.findProviders(ctx, req.Ref)
 	if err != nil {
 		return &provider.StatResponse{
-			Status: status.NewStatusFromErrType(ctx, "stat ref="+req.Ref.String(), err),
+			Status: status.NewStatusFromErrType(ctx, "stat ref: "+req.Ref.String(), err),
 		}, nil
 	}
 
-	return c.Stat(ctx, req)
+	resPath := req.Ref.GetPath()
+	if len(providers) == 1 && (resPath == "" || strings.HasPrefix(resPath, providers[0].ProviderPath)) {
+		c, err := s.getStorageProviderClient(ctx, providers[0])
+		if err != nil {
+			return &provider.StatResponse{
+				Status: status.NewInternal(ctx, err, "error connecting to storage provider="+providers[0].Address),
+			}, nil
+		}
+		return c.Stat(ctx, req)
+	}
+
+	var totalSize uint64
+	var infos []*provider.ResourceInfo
+	for _, p := range providers {
+		c, err := s.getStorageProviderClient(ctx, p)
+		if err != nil {
+			return &provider.StatResponse{
+				Status: status.NewInternal(ctx, err, "error connecting to storage provider="+p.Address),
+			}, nil
+		}
+
+		if resPath != "" && !strings.HasPrefix(resPath, p.ProviderPath) {
+			req = &provider.StatRequest{
+				Ref: &provider.Reference{
+					Spec: &provider.Reference_Path{
+						Path: p.ProviderPath,
+					},
+				},
+			}
+		}
+		res, err := c.Stat(ctx, req)
+		if err != nil {
+			return nil, errors.Wrap(err, "gateway: error calling ListContainer")
+		}
+		totalSize += res.Info.Size
+		infos = append(infos, res.Info)
+	}
+
+	// TODO(ishank011): aggregrate other properties for references spread across storage providers, eg. /eos
+	return &provider.StatResponse{
+		Status: status.NewOK(ctx),
+		Info: &provider.ResourceInfo{
+			Id: &provider.ResourceId{
+				StorageId: "/",
+				OpaqueId:  uuid.New().String(),
+			},
+			Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+			Etag: etag.GenerateEtagFromResources(nil, infos),
+			Path: resPath,
+			Size: totalSize,
+		},
+	}, nil
 }
 
 func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
@@ -1472,7 +1523,7 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 		c, err := s.getStorageProviderClient(ctx, p)
 		if err != nil {
 			return &provider.ListContainerResponse{
-				Status: status.NewInternal(ctx, err, "error connecting to storage provider="+providers[0].Address),
+				Status: status.NewInternal(ctx, err, "error connecting to storage provider="+p.Address),
 			}, nil
 		}
 

@@ -37,12 +37,14 @@ import (
 
 // Handler renders user data for the user id given in the url path
 type Handler struct {
-	gatewayAddr string
+	gatewayAddr   string
+	homeNamespace string
 }
 
 // Init initializes this and any contained handlers
 func (h *Handler) Init(c *config.Config) error {
 	h.gatewayAddr = c.GatewaySvc
+	h.homeNamespace = c.HomeNamespace
 	return nil
 }
 
@@ -115,21 +117,10 @@ func (h *Handler) handleUsers(w http.ResponseWriter, r *http.Request, u *userpb.
 		return
 	}
 
-	getHomeRes, err := gc.GetHome(ctx, &provider.GetHomeRequest{})
-	if err != nil {
-		sublog.Error().Err(err).Msg("error calling GetHome")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if getHomeRes.Status.Code != rpc.Code_CODE_OK {
-		ocdav.HandleErrorStatus(sublog, w, getHomeRes.Status)
-		return
-	}
-
 	getQuotaRes, err := gc.GetQuota(ctx, &gateway.GetQuotaRequest{
 		Ref: &provider.Reference{
 			Spec: &provider.Reference_Path{
-				Path: getHomeRes.Path,
+				Path: h.homeNamespace,
 			},
 		},
 	})
