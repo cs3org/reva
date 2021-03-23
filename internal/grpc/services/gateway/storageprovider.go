@@ -1518,6 +1518,7 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 	}
 
 	var infos []*provider.ResourceInfo
+	indirects := make(map[string][]*provider.ResourceInfo)
 
 	for _, p := range providers {
 		c, err := s.getStorageProviderClient(ctx, p)
@@ -1527,7 +1528,7 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 			}, nil
 		}
 
-		resPath := req.Ref.GetPath()
+		resPath := path.Clean(req.Ref.GetPath())
 		if resPath != "" && !strings.HasPrefix(resPath, p.ProviderPath) {
 			req = &provider.ListContainerRequest{
 				Ref: &provider.Reference{
@@ -1542,11 +1543,28 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 			return nil, errors.Wrap(err, "gateway: error calling ListContainer")
 		}
 		for _, inf := range res.Infos {
-			if parent := path.Dir(inf.Path); resPath != "" && path.Clean(resPath) != parent {
-				continue
+			if parent := path.Dir(inf.Path); resPath != "" && resPath != parent {
+				parts := strings.Split(strings.TrimPrefix(inf.Path, resPath), "/")
+				p := path.Join(resPath, parts[1])
+				indirects[p] = append(indirects[p], inf)
+			} else {
+				infos = append(infos, inf)
 			}
-			infos = append(infos, inf)
 		}
+	}
+
+	for k, v := range indirects {
+		inf := &provider.ResourceInfo{
+			Id: &provider.ResourceId{
+				StorageId: "/",
+				OpaqueId:  uuid.New().String(),
+			},
+			Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+			Etag: etag.GenerateEtagFromResources(nil, v),
+			Path: k,
+			Size: 0,
+		}
+		infos = append(infos, inf)
 	}
 
 	return &provider.ListContainerResponse{
