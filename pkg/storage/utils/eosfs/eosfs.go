@@ -1272,7 +1272,19 @@ func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 	if fs.conf.EnableHome {
 		return fs.listWithHome(ctx, p)
 	}
+	return fs.listWithNominalHome(ctx, p)
+}
 
+func (fs *eosfs) listWithHome(ctx context.Context, p string) ([]*provider.ResourceInfo, error) {
+	if fs.isShareFolderRoot(ctx, p) {
+		return fs.listShareFolderRoot(ctx, p)
+	}
+
+	if fs.isShareFolderChild(ctx, p) {
+		return nil, errtypes.PermissionDenied("eos: error listing folders inside the shared folder, only file references are stored inside")
+	}
+
+	// path points to a resource in the nominal home
 	return fs.listWithNominalHome(ctx, p)
 }
 
