@@ -25,7 +25,7 @@ $ git clone https://github.com/cs3org/reva
 $ cd reva
 $ make deps
 $ make
-$ cd examples/separate
+$ cd examples/storage-references
 $ ../../cmd/revad/revad -dev-dir .
 ```
 
