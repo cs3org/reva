@@ -1166,31 +1166,26 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		return c.Stat(ctx, req)
 	}
 
+	infoFromProviders := make([]*provider.ResourceInfo, len(providers))
+	errors := make([]error, len(providers))
+	var wg sync.WaitGroup
+
+	for i, p := range providers {
+		wg.Add(1)
+		go s.statOnProvider(ctx, req, infoFromProviders[i], p, &errors[i], &wg)
+	}
+	wg.Wait()
+
 	var totalSize uint64
-	infos := []*provider.ResourceInfo{}
-	for _, p := range providers {
-		c, err := s.getStorageProviderClient(ctx, p)
-		if err != nil {
+	for i := range providers {
+		if errors[i] != nil {
 			return &provider.StatResponse{
-				Status: status.NewInternal(ctx, err, "error connecting to storage provider="+p.Address),
+				Status: status.NewStatusFromErrType(ctx, "stat ref: "+req.Ref.String(), errors[i]),
 			}, nil
 		}
-
-		if resPath != "" && !strings.HasPrefix(resPath, p.ProviderPath) {
-			req = &provider.StatRequest{
-				Ref: &provider.Reference{
-					Spec: &provider.Reference_Path{
-						Path: p.ProviderPath,
-					},
-				},
-			}
+		if infoFromProviders[i] != nil {
+			totalSize += infoFromProviders[i].Size
 		}
-		res, err := c.Stat(ctx, req)
-		if err != nil {
-			return nil, errors.Wrap(err, "gateway: error calling ListContainer")
-		}
-		totalSize += res.Info.Size
-		infos = append(infos, res.Info)
 	}
 
 	// TODO(ishank011): aggregrate other properties for references spread across storage providers, eg. /eos
@@ -1202,11 +1197,40 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 				OpaqueId:  uuid.New().String(),
 			},
 			Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-			Etag: etag.GenerateEtagFromResources(nil, infos),
 			Path: resPath,
 			Size: totalSize,
 		},
 	}, nil
+}
+
+func (s *svc) statOnProvider(ctx context.Context, req *provider.StatRequest, res *provider.ResourceInfo, p *registry.ProviderInfo, e *error, wg *sync.WaitGroup) {
+	defer wg.Done()
+	c, err := s.getStorageProviderClient(ctx, p)
+	if err != nil {
+		*e = errors.Wrap(err, "error connecting to storage provider="+p.Address)
+		return
+	}
+
+	resPath := path.Clean(req.Ref.GetPath())
+	newPath := req.Ref.GetPath()
+	if resPath != "" && !strings.HasPrefix(resPath, p.ProviderPath) {
+		newPath = p.ProviderPath
+	}
+	r, err := c.Stat(ctx, &provider.StatRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: newPath,
+			},
+		},
+	})
+	if err != nil {
+		*e = errors.Wrap(err, "gateway: error calling ListContainer")
+		return
+	}
+	if res == nil {
+		res = &provider.ResourceInfo{}
+	}
+	*res = *r.Info
 }
 
 func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
