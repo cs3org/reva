@@ -985,7 +985,7 @@ func (s *svc) move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 	}
 
 	// if providers are not the same we do not implement cross storage copy yet.
-	if len(srcList) != 0 || len(dstList) != 0 {
+	if len(srcList) != 1 || len(dstList) != 1 {
 		res := &provider.MoveResponse{
 			Status: status.NewUnimplemented(ctx, nil, "gateway: cross storage copy not yet implemented"),
 		}

@@ -138,18 +138,17 @@ func (s *svc) listSharesFolder(ctx context.Context) (*provider.ListContainerResp
 	for i := range lcr.Infos {
 		info, protocol, err := s.checkRef(ctx, lcr.Infos[i])
 		if err != nil {
-			// create status to log the proper messages
-			// this might arise when the shared resource has been moved to the recycle bin
-			// this might arise when the resource was unshared, but the share reference was not removed
+			// Create status to log the proper messages
+			// This might arise when the shared resource has been moved to the recycle bin
+			// or when the resource was unshared, but the share reference was not removed
 			status.NewStatusFromErrType(ctx, "error resolving reference "+lcr.Infos[i].Target, err)
-			// continue on errors so the user can see a list of the working shares
 			continue
 		}
 
 		if protocol == "webdav" {
 			info, err = s.webdavRefStat(ctx, lcr.Infos[i].Target)
 			if err != nil {
-				// Might be the case that the webdav token has expired
+				// This might arise when the webdav token has expired
 				continue
 			}
 		}
