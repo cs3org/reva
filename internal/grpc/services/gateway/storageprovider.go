@@ -1367,6 +1367,12 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 	nestedInfos := make(map[string][]*provider.ResourceInfo)
 	for i := range providers {
 		if errors[i] != nil {
+			// return if there's only one mount, else skip this one
+			if len(providers) == 1 {
+				return &provider.ListContainerResponse{
+					Status: status.NewStatusFromErrType(ctx, "listContainer ref: "+req.Ref.String(), errors[i]),
+				}, nil
+			}
 			log := appctx.GetLogger(ctx)
 			log.Warn().Msgf("listing container on provider %s returned err %+v", providers[i].ProviderPath, errors[i])
 			continue
