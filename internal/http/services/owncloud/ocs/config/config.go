@@ -32,6 +32,7 @@ type Config struct {
 	DefaultUploadProtocol string                `mapstructure:"default_upload_protocol"`
 	UserAgentChunkingMap  map[string]string     `mapstructure:"user_agent_chunking_map"`
 	SharePrefix           string                `mapstructure:"share_prefix"`
+	HomeNamespace         string                `mapstructure:"home_namespace"`
 }
 
 // Init sets sane defaults
@@ -46,6 +47,10 @@ func (c *Config) Init() {
 
 	if c.DefaultUploadProtocol == "" {
 		c.DefaultUploadProtocol = "tus"
+	}
+
+	if c.HomeNamespace == "" {
+		c.HomeNamespace = "/home"
 	}
 
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)

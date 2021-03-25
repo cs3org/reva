@@ -90,8 +90,8 @@ func (a *APITokenManager) renewAPIToken(ctx context.Context, forceRenewal bool) 
 func (a *APITokenManager) getAPIToken(ctx context.Context) (string, time.Time, error) {
 
 	params := url.Values{
-		"grant_types": {"client_credentials"},
-		"audience":    {a.conf.TargetAPI},
+		"grant_type": {"client_credentials"},
+		"audience":   {a.conf.TargetAPI},
 	}
 
 	httpReq, err := http.NewRequest("POST", a.conf.OIDCTokenEndpoint, strings.NewReader(params.Encode()))

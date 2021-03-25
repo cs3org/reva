@@ -95,9 +95,9 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS) {
 	var s io.Seeker
 	if s, ok = content.(io.Seeker); ok {
 		// tell clients they can send range requests
-
 		w.Header().Set("Accept-Ranges", "bytes")
 	}
+
 	if len(ranges) > 0 {
 		sublog.Debug().Int64("start", ranges[0].Start).Int64("length", ranges[0].Length).Msg("range request")
 		if s == nil {
