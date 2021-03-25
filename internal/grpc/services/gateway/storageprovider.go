@@ -1167,7 +1167,7 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 	}
 
 	var totalSize uint64
-	var infos []*provider.ResourceInfo
+	infos := []*provider.ResourceInfo{}
 	for _, p := range providers {
 		c, err := s.getStorageProviderClient(ctx, p)
 		if err != nil {
@@ -1529,7 +1529,7 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 	}
 	wg.Wait()
 
-	var infos []*provider.ResourceInfo
+	infos := []*provider.ResourceInfo{}
 	indirects := make(map[string][]*provider.ResourceInfo)
 	for i := range providers {
 		if errors[i] != nil {
