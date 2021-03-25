@@ -416,7 +416,7 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 					Status: createRefStatus,
 				}, err
 			case ocm.ShareState_SHARE_STATE_REJECTED:
-				s.removeReference(ctx, req.GetShare().GetShare().ResourceId) // error is logged inside removeReference
+				s.removeOCMReference(ctx, req.GetShare().GetShare().GetResourceId()) // error is logged inside removeReference
 				// FIXME we are ignoring an error from removeReference here
 				return res, nil
 			}
@@ -448,6 +448,77 @@ func (s *svc) GetReceivedOCMShare(ctx context.Context, req *ocm.GetReceivedOCMSh
 	}
 
 	return res, nil
+}
+
+func (s *svc) removeOCMReference(ctx context.Context, resourceID *provider.ResourceId) *rpc.Status {
+	log := appctx.GetLogger(ctx)
+
+	idReference := &provider.Reference{ResourceId: resourceID}
+	storageProvider, err := s.find(ctx, idReference)
+	if err != nil {
+		if _, ok := err.(errtypes.IsNotFound); ok {
+			return status.NewNotFound(ctx, "storage provider not found")
+		}
+		return status.NewInternal(ctx, err, "error finding storage provider")
+	}
+
+	statRes, err := storageProvider.Stat(ctx, &provider.StatRequest{Ref: idReference})
+	if err != nil {
+		return status.NewInternal(ctx, err, "gateway: error calling Stat for the share resource id: "+resourceID.String())
+	}
+
+	// FIXME how can we delete a reference if the original resource was deleted?
+	if statRes.Status.Code != rpc.Code_CODE_OK {
+		err := status.NewErrorFromCode(statRes.Status.GetCode(), "gateway")
+		return status.NewInternal(ctx, err, "could not delete share reference")
+	}
+
+	homeRes, err := s.GetHome(ctx, &provider.GetHomeRequest{})
+	if err != nil {
+		err := errors.Wrap(err, "gateway: error calling GetHome")
+		return status.NewInternal(ctx, err, "could not delete share reference")
+	}
+
+	sharePath := path.Join(homeRes.Path, s.c.ShareFolder, path.Base(statRes.Info.Path))
+	log.Debug().Str("share_path", sharePath).Msg("remove reference of share")
+
+	homeProvider, err := s.find(ctx, &provider.Reference{Path: sharePath})
+	if err != nil {
+		if _, ok := err.(errtypes.IsNotFound); ok {
+			return status.NewNotFound(ctx, "storage provider not found")
+		}
+		return status.NewInternal(ctx, err, "error finding storage provider")
+	}
+
+	deleteReq := &provider.DeleteRequest{
+		Opaque: &types.Opaque{
+			Map: map[string]*types.OpaqueEntry{
+				// This signals the storageprovider that we want to delete the share reference and not the underlying file.
+				"deleting_shared_resource": {},
+			},
+		},
+		Ref: &provider.Reference{Path: sharePath},
+	}
+
+	deleteResp, err := homeProvider.Delete(ctx, deleteReq)
+	if err != nil {
+		return status.NewInternal(ctx, err, "could not delete share reference")
+	}
+
+	switch deleteResp.Status.Code {
+	case rpc.Code_CODE_OK:
+		// we can continue deleting the reference
+	case rpc.Code_CODE_NOT_FOUND:
+		// This is fine, we wanted to delete it anyway
+		return status.NewOK(ctx)
+	default:
+		err := status.NewErrorFromCode(deleteResp.Status.GetCode(), "gateway")
+		return status.NewInternal(ctx, err, "could not delete share reference")
+	}
+
+	log.Debug().Str("share_path", sharePath).Msg("share reference successfully removed")
+
+	return status.NewOK(ctx)
 }
 
 func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.Status, error) {
