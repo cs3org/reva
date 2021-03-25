@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/url"
 	"path"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -36,7 +37,6 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/storage/utils/etag"
-	"github.com/cs3org/reva/pkg/utils"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -184,9 +184,10 @@ func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorag
 }
 
 func (s *svc) GetHome(ctx context.Context, _ *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
-	home := s.getHome(ctx)
-	homeRes := &provider.GetHomeResponse{Path: home, Status: status.NewOK(ctx)}
-	return homeRes, nil
+	return &provider.GetHomeResponse{
+		Path:   s.getHome(ctx),
+		Status: status.NewOK(ctx),
+	}, nil
 }
 
 func (s *svc) getHome(_ context.Context) string {
@@ -264,7 +265,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 
 			if protocol == "webdav" {
 				// TODO(ishank011): pass this through the datagateway service
-				// for now, we just expose the file server to the user
+				// For now, we just expose the file server to the user
 				ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target)
 				if err != nil {
 					return &gateway.InitiateFileDownloadResponse{
@@ -333,7 +334,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 
 		if protocol == "webdav" {
 			// TODO(ishank011): pass this through the datagateway service
-			// for now, we just expose the file server to the user
+			// For now, we just expose the file server to the user
 			ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target, shareChild)
 			if err != nil {
 				return &gateway.InitiateFileDownloadResponse{
@@ -353,13 +354,11 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 		}
 
 		// append child to target
-		target := path.Join(ri.Path, shareChild)
 		req.Ref = &provider.Reference{
 			Spec: &provider.Reference_Path{
-				Path: target,
+				Path: path.Join(ri.Path, shareChild),
 			},
 		}
-		log.Debug().Msg("download path: " + target)
 		return s.initiateFileDownload(ctx, req)
 	}
 
@@ -566,10 +565,9 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 		}
 
 		// append child to target
-		target := path.Join(ri.Path, shareChild)
 		req.Ref = &provider.Reference{
 			Spec: &provider.Reference_Path{
-				Path: target,
+				Path: path.Join(ri.Path, shareChild),
 			},
 		}
 		return s.initiateFileUpload(ctx, req)
@@ -637,29 +635,36 @@ func (s *svc) initiateFileUpload(ctx context.Context, req *provider.InitiateFile
 }
 
 func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provider.GetPathResponse, error) {
-	statReq := &provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Id{
-				Id: req.ResourceId,
-			},
+	p, st := s.getPath(ctx, &provider.Reference{
+		Spec: &provider.Reference_Id{
+			Id: req.ResourceId,
 		},
-	}
-	statRes, err := s.stat(ctx, statReq)
-	if err != nil {
-		err = errors.Wrap(err, "gateway: error stating ref:"+statReq.Ref.String())
-		return nil, err
-	}
-
-	if statRes.Status.Code != rpc.Code_CODE_OK {
-		return &provider.GetPathResponse{
-			Status: statRes.Status,
-		}, nil
-	}
-
+	})
 	return &provider.GetPathResponse{
-		Status: statRes.Status,
-		Path:   statRes.GetInfo().GetPath(),
+		Status: st,
+		Path:   p,
 	}, nil
+}
+
+func (s *svc) getPath(ctx context.Context, ref *provider.Reference, keys ...string) (string, *rpc.Status) {
+	if ref.GetPath() != "" {
+		return ref.GetPath(), &rpc.Status{Code: rpc.Code_CODE_OK}
+	}
+
+	if ref.GetId() != nil && ref.GetId().GetOpaqueId() != "" {
+		req := &provider.StatRequest{Ref: ref, ArbitraryMetadataKeys: keys}
+		res, err := s.stat(ctx, req)
+		if err != nil {
+			return "", status.NewStatusFromErrType(ctx, "getPath ref="+req.Ref.String(), err)
+		}
+		if res != nil && res.Status.Code != rpc.Code_CODE_OK {
+			return "", res.Status
+		}
+
+		return res.Info.Path, res.Status
+	}
+
+	return "", &rpc.Status{Code: rpc.Code_CODE_INTERNAL}
 }
 
 func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
@@ -682,7 +687,6 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 		return &provider.CreateContainerResponse{
 			Status: status.NewInvalidArg(ctx, "path points to share folder or share name"),
 		}, nil
-
 	}
 
 	if s.isShareChild(ctx, p) {
@@ -729,10 +733,9 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 		}
 
 		// append child to target
-		target := path.Join(ri.Path, shareChild)
 		req.Ref = &provider.Reference{
 			Spec: &provider.Reference_Path{
-				Path: target,
+				Path: path.Join(ri.Path, shareChild),
 			},
 		}
 		return s.createContainer(ctx, req)
@@ -755,12 +758,6 @@ func (s *svc) createContainer(ctx context.Context, req *provider.CreateContainer
 	}
 
 	return res, nil
-}
-
-// check if the path contains the prefix of the shared folder
-func (s *svc) inSharedFolder(ctx context.Context, p string) bool {
-	sharedFolder := s.getSharedFolder(ctx)
-	return strings.HasPrefix(p, sharedFolder)
 }
 
 func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
@@ -844,14 +841,11 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 		}
 
 		// append child to target
-		target := path.Join(ri.Path, shareChild)
-		ref = &provider.Reference{
+		req.Ref = &provider.Reference{
 			Spec: &provider.Reference_Path{
-				Path: target,
+				Path: path.Join(ri.Path, shareChild),
 			},
 		}
-
-		req.Ref = ref
 		return s.delete(ctx, req)
 	}
 
@@ -884,10 +878,10 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 		}, nil
 	}
 
-	dp, st2 := s.getPath(ctx, req.Destination)
-	if st2.Code != rpc.Code_CODE_OK && st2.Code != rpc.Code_CODE_NOT_FOUND {
+	dp, st := s.getPath(ctx, req.Destination)
+	if st.Code != rpc.Code_CODE_OK && st.Code != rpc.Code_CODE_NOT_FOUND {
 		return &provider.MoveResponse{
-			Status: st2,
+			Status: st,
 		}, nil
 	}
 
@@ -928,7 +922,6 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
 			}, nil
 		}
-
 		if statRes.Status.Code != rpc.Code_CODE_OK {
 			return &provider.MoveResponse{
 				Status: statRes.Status,
@@ -990,9 +983,16 @@ func (s *svc) move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 			Status: status.NewStatusFromErrType(ctx, "move dst="+req.Destination.String(), err),
 		}, nil
 	}
-	srcP, dstP := srcList[0], dstList[0]
 
 	// if providers are not the same we do not implement cross storage copy yet.
+	if len(srcList) != 0 || len(dstList) != 0 {
+		res := &provider.MoveResponse{
+			Status: status.NewUnimplemented(ctx, nil, "gateway: cross storage copy not yet implemented"),
+		}
+		return res, nil
+	}
+
+	srcP, dstP := srcList[0], dstList[0]
 	if srcP.Address != dstP.Address {
 		res := &provider.MoveResponse{
 			Status: status.NewUnimplemented(ctx, nil, "gateway: cross storage copy not yet implemented"),
@@ -1044,109 +1044,6 @@ func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArb
 	return res, nil
 }
 
-func (s *svc) statHome(ctx context.Context) (*provider.StatResponse, error) {
-	statRes, err := s.stat(ctx, &provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: s.getHome(ctx),
-			},
-		},
-	})
-	if err != nil {
-		return &provider.StatResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error stating home"),
-		}, nil
-	}
-
-	if statRes.Status.Code != rpc.Code_CODE_OK {
-		return &provider.StatResponse{
-			Status: statRes.Status,
-		}, nil
-	}
-
-	statSharedFolder, err := s.statSharesFolder(ctx)
-	if err != nil {
-		return &provider.StatResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error stating shares folder"),
-		}, nil
-	}
-	if statSharedFolder.Status.Code != rpc.Code_CODE_OK {
-		// If shares folder is not found, skip updating the etag
-		if statSharedFolder.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			return statRes, nil
-		}
-		// otherwise return stat of share folder
-		return &provider.StatResponse{
-			Status: statSharedFolder.Status,
-		}, nil
-	}
-
-	if etagIface, err := s.etagCache.Get(statRes.Info.Owner.OpaqueId + ":" + statRes.Info.Path); err == nil {
-		resMtime := utils.TSToTime(statRes.Info.Mtime)
-		resEtag := etagIface.(etagWithTS)
-		// Use the updated etag if the home folder has been modified
-		if resMtime.Before(resEtag.Timestamp) {
-			statRes.Info.Etag = resEtag.Etag
-		}
-	} else {
-		statRes.Info.Etag = etag.GenerateEtagFromResources(statRes.Info, []*provider.ResourceInfo{statSharedFolder.Info})
-		if s.c.EtagCacheTTL > 0 {
-			_ = s.etagCache.Set(statRes.Info.Owner.OpaqueId+":"+statRes.Info.Path, etagWithTS{statRes.Info.Etag, time.Now()})
-		}
-	}
-
-	return statRes, nil
-}
-
-func (s *svc) statSharesFolder(ctx context.Context) (*provider.StatResponse, error) {
-	statRes, err := s.stat(ctx, &provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: s.getSharedFolder(ctx),
-			},
-		},
-	})
-	if err != nil {
-		return &provider.StatResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error stating shares folder"),
-		}, nil
-	}
-
-	if statRes.Status.Code != rpc.Code_CODE_OK {
-		return &provider.StatResponse{
-			Status: statRes.Status,
-		}, nil
-	}
-
-	lsRes, err := s.listSharesFolder(ctx)
-	if err != nil {
-		return &provider.StatResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error listing shares folder"),
-		}, nil
-	}
-	if lsRes.Status.Code != rpc.Code_CODE_OK {
-		return &provider.StatResponse{
-			Status: lsRes.Status,
-		}, nil
-	}
-
-	if etagIface, err := s.etagCache.Get(statRes.Info.Owner.OpaqueId + ":" + statRes.Info.Path); err == nil {
-		resMtime := utils.TSToTime(statRes.Info.Mtime)
-		resEtag := etagIface.(etagWithTS)
-		// Use the updated etag if the shares folder has been modified, i.e., a new
-		// reference has been created.
-		if resMtime.Before(resEtag.Timestamp) {
-			statRes.Info.Etag = resEtag.Etag
-		}
-	} else {
-		statRes.Info.Etag = etag.GenerateEtagFromResources(statRes.Info, lsRes.Infos)
-		if s.c.EtagCacheTTL > 0 {
-			_ = s.etagCache.Set(statRes.Info.Owner.OpaqueId+":"+statRes.Info.Path, etagWithTS{statRes.Info.Etag, time.Now()})
-		}
-	}
-	return statRes, nil
-}
-
 func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
 	providers, err := s.findProviders(ctx, req.Ref)
 	if err != nil {
@@ -1166,6 +1063,10 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		return c.Stat(ctx, req)
 	}
 
+	return s.statAcrossProviders(ctx, req, providers)
+}
+
+func (s *svc) statAcrossProviders(ctx context.Context, req *provider.StatRequest, providers []*registry.ProviderInfo) (*provider.StatResponse, error) {
 	infoFromProviders := make([]*provider.ResourceInfo, len(providers))
 	errors := make([]error, len(providers))
 	var wg sync.WaitGroup
@@ -1179,9 +1080,9 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 	var totalSize uint64
 	for i := range providers {
 		if errors[i] != nil {
-			return &provider.StatResponse{
-				Status: status.NewStatusFromErrType(ctx, "stat ref: "+req.Ref.String(), errors[i]),
-			}, nil
+			log := appctx.GetLogger(ctx)
+			log.Warn().Msgf("statting on provider %s returned err %+v", providers[i].ProviderPath, errors[i])
+			continue
 		}
 		if infoFromProviders[i] != nil {
 			totalSize += infoFromProviders[i].Size
@@ -1197,7 +1098,7 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 				OpaqueId:  uuid.New().String(),
 			},
 			Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-			Path: resPath,
+			Path: req.Ref.GetPath(),
 			Size: totalSize,
 		},
 	}, nil
@@ -1224,7 +1125,7 @@ func (s *svc) statOnProvider(ctx context.Context, req *provider.StatRequest, res
 		},
 	})
 	if err != nil {
-		*e = errors.Wrap(err, "gateway: error calling ListContainer")
+		*e = errors.Wrap(err, fmt.Sprintf("gateway: error calling Stat %s: %+v", newPath, p))
 		return
 	}
 	if res == nil {
@@ -1239,10 +1140,6 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		return &provider.StatResponse{
 			Status: st,
 		}, nil
-	}
-
-	if path.Clean(p) == s.getHome(ctx) {
-		return s.statHome(ctx)
 	}
 
 	if s.isSharedFolder(ctx, p) {
@@ -1447,93 +1344,6 @@ func (s *svc) ListContainerStream(_ *provider.ListContainerStreamRequest, _ gate
 	return errtypes.NotSupported("Unimplemented")
 }
 
-func (s *svc) listHome(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
-	lcr, err := s.listContainer(ctx, &provider.ListContainerRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: s.getHome(ctx),
-			},
-		},
-		ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
-	})
-	if err != nil {
-		return &provider.ListContainerResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error listing home"),
-		}, nil
-	}
-	if lcr.Status.Code != rpc.Code_CODE_OK {
-		return &provider.ListContainerResponse{
-			Status: lcr.Status,
-		}, nil
-	}
-
-	for i := range lcr.Infos {
-		if s.isSharedFolder(ctx, lcr.Infos[i].Path) {
-			statSharedFolder, err := s.statSharesFolder(ctx)
-			if err != nil {
-				return &provider.ListContainerResponse{
-					Status: status.NewInternal(ctx, err, "gateway: error stating shares folder"),
-				}, nil
-			}
-			if statSharedFolder.Status.Code != rpc.Code_CODE_OK {
-				return &provider.ListContainerResponse{
-					Status: statSharedFolder.Status,
-				}, nil
-			}
-			lcr.Infos[i] = statSharedFolder.Info
-			break
-		}
-	}
-
-	return lcr, nil
-}
-
-func (s *svc) listSharesFolder(ctx context.Context) (*provider.ListContainerResponse, error) {
-	lcr, err := s.listContainer(ctx, &provider.ListContainerRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: s.getSharedFolder(ctx),
-			},
-		},
-	})
-	if err != nil {
-		return &provider.ListContainerResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error listing shared folder"),
-		}, nil
-	}
-	if lcr.Status.Code != rpc.Code_CODE_OK {
-		return &provider.ListContainerResponse{
-			Status: lcr.Status,
-		}, nil
-	}
-	checkedInfos := make([]*provider.ResourceInfo, 0)
-	for i := range lcr.Infos {
-		info, protocol, err := s.checkRef(ctx, lcr.Infos[i])
-		if err != nil {
-			// create status to log the proper messages
-			// this might arise when the shared resource has been moved to the recycle bin
-			// this might arise when the resource was unshared, but the share reference was not removed
-			status.NewStatusFromErrType(ctx, "error resolving reference "+lcr.Infos[i].Target, err)
-			// continue on errors so the user can see a list of the working shares
-			continue
-		}
-
-		if protocol == "webdav" {
-			info, err = s.webdavRefStat(ctx, lcr.Infos[i].Target)
-			if err != nil {
-				// Might be the case that the webdav token has expired
-				continue
-			}
-		}
-
-		info.Path = lcr.Infos[i].GetPath()
-		checkedInfos = append(checkedInfos, info)
-	}
-	lcr.Infos = checkedInfos
-
-	return lcr, nil
-}
-
 func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
 	providers, err := s.findProviders(ctx, req.Ref)
 	if err != nil {
@@ -1554,25 +1364,29 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 	wg.Wait()
 
 	infos := []*provider.ResourceInfo{}
-	indirects := make(map[string][]*provider.ResourceInfo)
+	nestedInfos := make(map[string][]*provider.ResourceInfo)
 	for i := range providers {
 		if errors[i] != nil {
-			return &provider.ListContainerResponse{
-				Status: status.NewStatusFromErrType(ctx, "listContainer ref: "+req.Ref.String(), errors[i]),
-			}, nil
+			log := appctx.GetLogger(ctx)
+			log.Warn().Msgf("listing container on provider %s returned err %+v", providers[i].ProviderPath, errors[i])
+			continue
 		}
 		for _, inf := range infoFromProviders[i] {
 			if parent := path.Dir(inf.Path); resPath != "" && resPath != parent {
-				parts := strings.Split(strings.TrimPrefix(inf.Path, resPath), "/")
-				p := path.Join(resPath, parts[1])
-				indirects[p] = append(indirects[p], inf)
+				rel, err := filepath.Rel(resPath, inf.Path)
+				if err != nil {
+					continue
+				}
+				parts := strings.Split(rel, "/")
+				p := path.Join(resPath, parts[0])
+				nestedInfos[p] = append(nestedInfos[p], inf)
 			} else {
 				infos = append(infos, inf)
 			}
 		}
 	}
 
-	for k, v := range indirects {
+	for k, v := range nestedInfos {
 		inf := &provider.ResourceInfo{
 			Id: &provider.ResourceId{
 				StorageId: "/",
@@ -1626,10 +1440,6 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		return &provider.ListContainerResponse{
 			Status: st,
 		}, nil
-	}
-
-	if path.Clean(p) == s.getHome(ctx) {
-		return s.listHome(ctx, req)
 	}
 
 	if s.isSharedFolder(ctx, p) {
@@ -1814,93 +1624,6 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 	}
 
 	panic("gateway: stating an unknown path:" + p)
-}
-
-func (s *svc) getPath(ctx context.Context, ref *provider.Reference, keys ...string) (string, *rpc.Status) {
-	if ref.GetPath() != "" {
-		return ref.GetPath(), &rpc.Status{Code: rpc.Code_CODE_OK}
-	}
-
-	if ref.GetId() != nil && ref.GetId().GetOpaqueId() != "" {
-		req := &provider.StatRequest{Ref: ref, ArbitraryMetadataKeys: keys}
-		res, err := s.stat(ctx, req)
-		if (res != nil && res.Status.Code != rpc.Code_CODE_OK) || err != nil {
-			return "", res.Status
-		}
-
-		return res.Info.Path, res.Status
-	}
-
-	return "", &rpc.Status{Code: rpc.Code_CODE_INTERNAL}
-}
-
-// /home/MyShares/
-func (s *svc) isSharedFolder(ctx context.Context, p string) bool {
-	return s.split(ctx, p, 2)
-}
-
-// /home/MyShares/photos/
-func (s *svc) isShareName(ctx context.Context, p string) bool {
-	return s.split(ctx, p, 3)
-}
-
-// /home/MyShares/photos/Ibiza/beach.png
-func (s *svc) isShareChild(ctx context.Context, p string) bool {
-	return s.split(ctx, p, 4)
-}
-
-// always validate that the path contains the share folder
-// split cannot be called with i<2
-func (s *svc) split(ctx context.Context, p string, i int) bool {
-	log := appctx.GetLogger(ctx)
-	if i < 2 {
-		panic("split called with i < 2")
-	}
-
-	parts := s.splitPath(ctx, p)
-
-	// validate that we have always at least two elements
-	if len(parts) < 2 {
-		return false
-	}
-
-	// validate the share folder is always the second element, first element is always the hardcoded value of "home"
-	if parts[1] != s.c.ShareFolder {
-		log.Debug().Msgf("gateway: split: parts[1]:%+v != shareFolder:%+v", parts[1], s.c.ShareFolder)
-		return false
-	}
-
-	log.Debug().Msgf("gateway: split: path:%+v parts:%+v shareFolder:%+v", p, parts, s.c.ShareFolder)
-
-	if len(parts) == i && parts[i-1] != "" {
-		return true
-	}
-
-	return false
-}
-
-// path must contain a share path with share children, if not it will panic.
-// should be called after checking isShareChild == true
-func (s *svc) splitShare(ctx context.Context, p string) (string, string) {
-	parts := s.splitPath(ctx, p)
-	if len(parts) != 4 {
-		panic("gateway: path for splitShare does not contain 4 elements:" + p)
-	}
-
-	shareName := path.Join("/", parts[0], parts[1], parts[2])
-	shareChild := path.Join("/", parts[3])
-	return shareName, shareChild
-}
-
-func (s *svc) splitPath(_ context.Context, p string) []string {
-	p = strings.Trim(p, "/")
-	return strings.SplitN(p, "/", 4) // ["home", "MyShares", "photos", "Ibiza/beach.png"]
-}
-
-func (s *svc) getSharedFolder(ctx context.Context) string {
-	home := s.getHome(ctx)
-	shareFolder := path.Join(home, s.c.ShareFolder)
-	return shareFolder
 }
 
 func (s *svc) CreateSymlink(ctx context.Context, req *provider.CreateSymlinkRequest) (*provider.CreateSymlinkResponse, error) {
@@ -2089,9 +1812,4 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	}
 
 	return res.Providers, nil
-}
-
-type etagWithTS struct {
-	Etag      string
-	Timestamp time.Time
 }
