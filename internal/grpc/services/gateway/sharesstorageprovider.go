@@ -41,21 +41,21 @@ func (s *svc) inSharedFolder(ctx context.Context, p string) bool {
 
 // /MyShares/
 func (s *svc) isSharedFolder(ctx context.Context, p string) bool {
-	return p == path.Join("/", s.c.ShareFolder)
+	return p == s.getSharedFolder(ctx)
 }
 
 // /MyShares/photos/
 func (s *svc) isShareName(ctx context.Context, p string) bool {
 	sharedFolder := s.getSharedFolder(ctx)
 	rel := strings.Trim(strings.TrimPrefix(p, sharedFolder), "/")
-	return strings.HasPrefix(p, sharedFolder) && len(strings.Split(rel, "/")) == 2
+	return strings.HasPrefix(p, sharedFolder) && len(strings.Split(rel, "/")) == 1
 }
 
 // /MyShares/photos/Ibiza/beach.png
 func (s *svc) isShareChild(ctx context.Context, p string) bool {
 	sharedFolder := s.getSharedFolder(ctx)
 	rel := strings.Trim(strings.TrimPrefix(p, sharedFolder), "/")
-	return strings.HasPrefix(p, sharedFolder) && len(strings.Split(rel, "/")) > 2
+	return strings.HasPrefix(p, sharedFolder) && len(strings.Split(rel, "/")) > 1
 }
 
 // path must contain a share path with share children, if not it will panic.
