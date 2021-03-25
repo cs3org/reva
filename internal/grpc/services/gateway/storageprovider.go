@@ -24,6 +24,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"sync"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -1517,32 +1518,26 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 		}, nil
 	}
 
+	resPath := path.Clean(req.Ref.GetPath())
+	infoFromProviders := make([][]*provider.ResourceInfo, len(providers))
+	errors := make([]error, len(providers))
+	var wg sync.WaitGroup
+
+	for i, p := range providers {
+		wg.Add(1)
+		go s.listContainerOnProvider(ctx, req, &infoFromProviders[i], p, &errors[i], &wg)
+	}
+	wg.Wait()
+
 	var infos []*provider.ResourceInfo
 	indirects := make(map[string][]*provider.ResourceInfo)
-
-	for _, p := range providers {
-		c, err := s.getStorageProviderClient(ctx, p)
-		if err != nil {
+	for i := range providers {
+		if errors[i] != nil {
 			return &provider.ListContainerResponse{
-				Status: status.NewInternal(ctx, err, "error connecting to storage provider="+p.Address),
+				Status: status.NewStatusFromErrType(ctx, "listContainer ref: "+req.Ref.String(), errors[i]),
 			}, nil
 		}
-
-		resPath := path.Clean(req.Ref.GetPath())
-		if resPath != "" && !strings.HasPrefix(resPath, p.ProviderPath) {
-			req = &provider.ListContainerRequest{
-				Ref: &provider.Reference{
-					Spec: &provider.Reference_Path{
-						Path: p.ProviderPath,
-					},
-				},
-			}
-		}
-		res, err := c.ListContainer(ctx, req)
-		if err != nil {
-			return nil, errors.Wrap(err, "gateway: error calling ListContainer")
-		}
-		for _, inf := range res.Infos {
+		for _, inf := range infoFromProviders[i] {
 			if parent := path.Dir(inf.Path); resPath != "" && resPath != parent {
 				parts := strings.Split(strings.TrimPrefix(inf.Path, resPath), "/")
 				p := path.Join(resPath, parts[1])
@@ -1571,6 +1566,33 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 		Status: status.NewOK(ctx),
 		Infos:  infos,
 	}, nil
+}
+
+func (s *svc) listContainerOnProvider(ctx context.Context, req *provider.ListContainerRequest, res *[]*provider.ResourceInfo, p *registry.ProviderInfo, e *error, wg *sync.WaitGroup) {
+	defer wg.Done()
+	c, err := s.getStorageProviderClient(ctx, p)
+	if err != nil {
+		*e = errors.Wrap(err, "error connecting to storage provider="+p.Address)
+		return
+	}
+
+	resPath := path.Clean(req.Ref.GetPath())
+	newPath := req.Ref.GetPath()
+	if resPath != "" && !strings.HasPrefix(resPath, p.ProviderPath) {
+		newPath = p.ProviderPath
+	}
+	r, err := c.ListContainer(ctx, &provider.ListContainerRequest{
+		Ref: &provider.Reference{
+			Spec: &provider.Reference_Path{
+				Path: newPath,
+			},
+		},
+	})
+	if err != nil {
+		*e = errors.Wrap(err, "gateway: error calling ListContainer")
+		return
+	}
+	*res = r.Infos
 }
 
 func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
