@@ -24,7 +24,6 @@ type Config struct {
 	MetricsDataLocation   string `mapstructure:"metrics_data_location"`
 	MetricsRecordInterval int    `mapstructure:"metrics_record_interval"`
 	XcloudInstance        string `mapstructure:"xcloud_instance"`
-	XcloudCatalog         string `mapstructure:"xcloud_catalog"`
 	XcloudPullInterval    int    `mapstructure:"xcloud_pull_interval"`
 }
 
@@ -39,5 +38,9 @@ func (c *Config) Init() {
 
 	if c.MetricsRecordInterval == 0 {
 		c.MetricsRecordInterval = 5000
+	}
+
+	if c.XcloudPullInterval == 0 {
+		c.XcloudPullInterval = 5
 	}
 }
