@@ -52,11 +52,12 @@ import (
 
 // Handler implements the shares part of the ownCloud sharing API
 type Handler struct {
-	gatewayAddr         string
-	publicURL           string
-	sharePrefix         string
-	homeNamespace       string
-	userIdentifierCache *ttlcache.Cache
+	gatewayAddr             string
+	publicURL               string
+	sharePrefix             string
+	homeNamespace           string
+	additionalInfoAttribute string
+	userIdentifierCache     *ttlcache.Cache
 }
 
 // we only cache the minimal set of data instead of the full user metadata
@@ -72,6 +73,7 @@ func (h *Handler) Init(c *config.Config) error {
 	h.publicURL = c.Config.Host
 	h.sharePrefix = c.SharePrefix
 	h.homeNamespace = c.HomeNamespace
+	h.additionalInfoAttribute = c.AdditionalInfoAttribute
 
 	h.userIdentifierCache = ttlcache.NewCache()
 	_ = h.userIdentifierCache.SetTTL(60 * time.Second)
@@ -945,7 +947,7 @@ func (h *Handler) mapUserIds(ctx context.Context, c gateway.GatewayAPIClient, s 
 			s.DisplaynameOwner = owner.DisplayName
 		}
 		if s.AdditionalInfoFileOwner == "" {
-			s.AdditionalInfoFileOwner = owner.Mail
+			s.AdditionalInfoFileOwner = h.getAdditionalInfoAttribute(owner)
 		}
 	}
 
@@ -956,7 +958,7 @@ func (h *Handler) mapUserIds(ctx context.Context, c gateway.GatewayAPIClient, s 
 			s.DisplaynameFileOwner = fileOwner.DisplayName
 		}
 		if s.AdditionalInfoOwner == "" {
-			s.AdditionalInfoOwner = fileOwner.Mail
+			s.AdditionalInfoOwner = h.getAdditionalInfoAttribute(fileOwner)
 		}
 	}
 
@@ -967,7 +969,14 @@ func (h *Handler) mapUserIds(ctx context.Context, c gateway.GatewayAPIClient, s 
 			s.ShareWithDisplayname = shareWith.DisplayName
 		}
 		if s.ShareWithAdditionalInfo == "" {
-			s.ShareWithAdditionalInfo = shareWith.Mail
+			s.ShareWithAdditionalInfo = h.getAdditionalInfoAttribute(shareWith)
 		}
 	}
+}
+
+func (h *Handler) getAdditionalInfoAttribute(u *userIdentifiers) string {
+	if h.additionalInfoAttribute == "username" {
+		return u.UserName
+	}
+	return u.Mail
 }
