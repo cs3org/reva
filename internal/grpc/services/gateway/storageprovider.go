@@ -1340,6 +1340,11 @@ func (s *svc) statAcrossProviders(ctx context.Context, req *provider.StatRequest
 	}
 
 	for _, p := range providers {
+		// If it's a share storage provider, don't consider it in virtual views
+		if strings.HasPrefix(p.ProviderPath, "/Shares") {
+			continue
+		}
+
 		c, err := s.getStorageProviderClient(ctx, p)
 		if err != nil {
 			log.Err(err).Msg("error connecting to storage provider=" + p.Address)
@@ -1659,6 +1664,11 @@ func (s *svc) listContainerAcrossProviders(ctx context.Context, req *provider.Li
 	log := appctx.GetLogger(ctx)
 
 	for _, p := range s.filterProvidersByUserAgent(ctx, providers) {
+		// If it's a share storage provider, don't consider it in virtual views
+		if strings.HasPrefix(p.ProviderPath, "/Shares") {
+			continue
+		}
+
 		c, err := s.getStorageProviderClient(ctx, p)
 		if err != nil {
 			log.Err(err).Msg("error connecting to storage provider=" + p.Address)
@@ -2088,9 +2098,4 @@ func getUniqueProviders(providers []*registry.ProviderInfo) []*registry.Provider
 		res = append(res, provider)
 	}
 	return res
-}
-
-type etagWithTS struct {
-	Etag      string
-	Timestamp time.Time
 }
