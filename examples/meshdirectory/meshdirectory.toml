@@ -64,3 +64,4 @@ timeout = 10
 refresh = 900
 
 [http.services.meshdirectory]
+mesh_directory_url = 'http://localhost:19001/meshdir/'

@@ -24,7 +24,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
-	"strings"
 	"sync"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -33,6 +32,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs"
 	treemocks "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree/mocks"
 	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/tests/helpers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -46,7 +46,7 @@ var _ = Describe("Decomposed", func() {
 	)
 
 	BeforeEach(func() {
-		tmpRoot, err := ioutil.TempDir("", "reva-unit-tests-*-root")
+		tmpRoot, err := helpers.TempDir("reva-unit-tests-*-root")
 		Expect(err).ToNot(HaveOccurred())
 
 		options = map[string]interface{}{
@@ -77,7 +77,7 @@ var _ = Describe("Decomposed", func() {
 	})
 
 	AfterEach(func() {
-		if strings.HasPrefix(tmpRoot, os.TempDir()) {
+		if tmpRoot != "" {
 			os.RemoveAll(tmpRoot)
 		}
 	})

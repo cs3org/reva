@@ -196,7 +196,7 @@ func getOCMEndpoint(originProvider *ocmprovider.ProviderInfo) (string, error) {
 }
 
 func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGrant, name string,
-	pi *ocmprovider.ProviderInfo, pm string, owner *userpb.UserId, token string) (*ocm.Share, error) {
+	pi *ocmprovider.ProviderInfo, pm string, owner *userpb.UserId, token string, st ocm.Share_ShareType) (*ocm.Share, error) {
 
 	id := genID()
 	now := time.Now().UnixNano()
@@ -265,6 +265,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 		Creator:     userID,
 		Ctime:       ts,
 		Mtime:       ts,
+		ShareType:   st,
 	}
 
 	if isOwnersMeshProvider {

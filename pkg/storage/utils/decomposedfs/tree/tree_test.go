@@ -60,7 +60,7 @@ var _ = Describe("Tree", func() {
 
 		JustBeforeEach(func() {
 			var err error
-			n, err = env.Lookup.NodeFromPath(env.Ctx, "dir1/file1")
+			n, err = env.Lookup.NodeFromPath(env.Ctx, "/dir1/file1")
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -90,7 +90,7 @@ var _ = Describe("Tree", func() {
 				trashPath := path.Join(env.Root, "trash", env.Owner.Id.OpaqueId, n.ID)
 				attr, err := xattr.Get(trashPath, xattrs.TrashOriginAttr)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(string(attr)).To(Equal("dir1/file1"))
+				Expect(string(attr)).To(Equal("/dir1/file1"))
 			})
 
 			It("does not delete the blob from the blobstore", func() {
@@ -206,6 +206,23 @@ var _ = Describe("Tree", func() {
 			var err error
 			dir, err = env.CreateTestDir("testdir")
 			Expect(err).ToNot(HaveOccurred())
+		})
+
+		Describe("with TreeTimeAccounting enabled", func() {
+			It("sets the tmtime of the parent", func() {
+				file, err := env.CreateTestFile("file1", "", 1, dir.ID)
+				Expect(err).ToNot(HaveOccurred())
+
+				riBefore, err := dir.AsResourceInfo(env.Ctx, node.OwnerPermissions, []string{})
+				Expect(err).ToNot(HaveOccurred())
+
+				err = env.Tree.Propagate(env.Ctx, file)
+				Expect(err).ToNot(HaveOccurred())
+
+				riAfter, err := dir.AsResourceInfo(env.Ctx, node.OwnerPermissions, []string{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(riAfter.Etag).ToNot(Equal(riBefore.Etag))
+			})
 		})
 
 		Describe("with TreeSizeAccounting enabled", func() {

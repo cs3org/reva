@@ -19,6 +19,8 @@
 package node_test
 
 import (
+	"time"
+
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	helpers "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/testhelpers"
@@ -62,7 +64,7 @@ var _ = Describe("Node", func() {
 
 	Describe("ReadNode", func() {
 		It("reads the blobID from the xattrs", func() {
-			lookupNode, err := env.Lookup.NodeFromPath(env.Ctx, "dir1/file1")
+			lookupNode, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1/file1")
 			Expect(err).ToNot(HaveOccurred())
 
 			n, err := node.ReadNode(env.Ctx, env.Lookup, lookupNode.ID)
@@ -73,7 +75,7 @@ var _ = Describe("Node", func() {
 
 	Describe("WriteMetadata", func() {
 		It("writes all xattrs", func() {
-			n, err := env.Lookup.NodeFromPath(env.Ctx, "dir1/file1")
+			n, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1/file1")
 			Expect(err).ToNot(HaveOccurred())
 
 			blobsize := 239485734
@@ -87,7 +89,7 @@ var _ = Describe("Node", func() {
 
 			err = n.WriteMetadata(owner)
 			Expect(err).ToNot(HaveOccurred())
-			n2, err := env.Lookup.NodeFromPath(env.Ctx, "dir1/file1")
+			n2, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1/file1")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(n2.Name).To(Equal("TestName"))
 			Expect(n2.BlobID).To(Equal("TestBlobID"))
@@ -97,7 +99,7 @@ var _ = Describe("Node", func() {
 
 	Describe("Parent", func() {
 		It("returns the parent node", func() {
-			child, err := env.Lookup.NodeFromPath(env.Ctx, "dir1/subdir1")
+			child, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1/subdir1")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(child).ToNot(BeNil())
 
@@ -115,7 +117,7 @@ var _ = Describe("Node", func() {
 
 		BeforeEach(func() {
 			var err error
-			parent, err = env.Lookup.NodeFromPath(env.Ctx, "dir1")
+			parent, err = env.Lookup.NodeFromPath(env.Ctx, "/dir1")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(parent).ToNot(BeNil())
 		})
@@ -145,6 +147,40 @@ var _ = Describe("Node", func() {
 			Expect(child.ParentID).To(Equal(parent.ID))
 			Expect(child.Name).To(Equal("file1"))
 			Expect(child.Blobsize).To(Equal(int64(1234)))
+		})
+	})
+
+	Describe("AsResourceInfo", func() {
+		var (
+			n *node.Node
+		)
+
+		BeforeEach(func() {
+			var err error
+			n, err = env.Lookup.NodeFromPath(env.Ctx, "dir1/file1")
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		Describe("the Etag field", func() {
+			It("is set", func() {
+				ri, err := n.AsResourceInfo(env.Ctx, node.OwnerPermissions, []string{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(ri.Etag)).To(Equal(34))
+			})
+
+			It("changes when the tmtime is set", func() {
+				ri, err := n.AsResourceInfo(env.Ctx, node.OwnerPermissions, []string{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(ri.Etag)).To(Equal(34))
+				before := ri.Etag
+
+				Expect(n.SetTMTime(time.Now().UTC())).To(Succeed())
+
+				ri, err = n.AsResourceInfo(env.Ctx, node.OwnerPermissions, []string{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(ri.Etag)).To(Equal(34))
+				Expect(ri.Etag).ToNot(Equal(before))
+			})
 		})
 	})
 })

@@ -19,11 +19,10 @@
 package ocis_test
 
 import (
-	"io/ioutil"
 	"os"
-	"strings"
 
 	"github.com/cs3org/reva/pkg/storage/fs/ocis"
+	"github.com/cs3org/reva/tests/helpers"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -36,7 +35,7 @@ var _ = Describe("Ocis", func() {
 	)
 
 	BeforeEach(func() {
-		tmpRoot, err := ioutil.TempDir("", "reva-unit-tests-*-root")
+		tmpRoot, err := helpers.TempDir("reva-unit-tests-*-root")
 		Expect(err).ToNot(HaveOccurred())
 
 		options = map[string]interface{}{
@@ -47,7 +46,7 @@ var _ = Describe("Ocis", func() {
 	})
 
 	AfterEach(func() {
-		if strings.HasPrefix(tmpRoot, os.TempDir()) {
+		if tmpRoot != "" {
 			os.RemoveAll(tmpRoot)
 		}
 	})

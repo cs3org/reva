@@ -659,7 +659,8 @@ func (fs *eosfs) listWithNominalHome(ctx context.Context, p string) (finfos []*p
 			}
 		}
 
-		if finfo, err := fs.convertToResourceInfo(ctx, eosFileInfo); err == nil {
+		// Remove the hidden folders in the topmost directory
+		if finfo, err := fs.convertToResourceInfo(ctx, eosFileInfo); err == nil && finfo.Path != "/" && !strings.HasPrefix(finfo.Path, "/.") {
 			finfos = append(finfos, finfo)
 		}
 	}
@@ -713,7 +714,7 @@ func (fs *eosfs) listHome(ctx context.Context, home string) ([]*provider.Resourc
 				}
 			}
 
-			if finfo, err := fs.convertToResourceInfo(ctx, eosFileInfo); err == nil {
+			if finfo, err := fs.convertToResourceInfo(ctx, eosFileInfo); err == nil && finfo.Path != "/" && !strings.HasPrefix(finfo.Path, "/.") {
 				finfos = append(finfos, finfo)
 			}
 		}
@@ -1326,6 +1327,7 @@ func (fs *eosfs) convertToRevision(ctx context.Context, eosFileInfo *eosclient.F
 		Key:   path.Base(md.Path),
 		Size:  md.Size,
 		Mtime: md.Mtime.Seconds, // TODO do we need nanos here?
+		Etag:  md.Etag,
 	}
 	return revision, nil
 }

@@ -24,7 +24,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -37,6 +36,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
 	treemocks "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree/mocks"
 	ruser "github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/tests/helpers"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -70,7 +70,7 @@ var _ = Describe("File uploads", func() {
 		}
 		ctx = ruser.ContextSetUser(context.Background(), user)
 
-		tmpRoot, err := ioutil.TempDir("", "reva-unit-tests-*-root")
+		tmpRoot, err := helpers.TempDir("reva-unit-tests-*-root")
 		Expect(err).ToNot(HaveOccurred())
 
 		o, err = options.New(map[string]interface{}{
@@ -84,7 +84,7 @@ var _ = Describe("File uploads", func() {
 
 	AfterEach(func() {
 		root := o.Root
-		if strings.HasPrefix(root, os.TempDir()) {
+		if root != "" {
 			os.RemoveAll(root)
 		}
 	})

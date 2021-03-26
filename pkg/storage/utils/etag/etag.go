@@ -51,15 +51,17 @@ var (
 // GenerateEtagFromResources creates a unique etag for the root folder deriving
 // information from its multiple children
 func GenerateEtagFromResources(root *provider.ResourceInfo, children []*provider.ResourceInfo) string {
-	if params := getEtagParams(eosMtimeEtag, root.Etag); len(params) > 0 {
-		mtime := time.Unix(int64(root.Mtime.Seconds), int64(root.Mtime.Nanos))
-		for _, r := range children {
-			m := time.Unix(int64(r.Mtime.Seconds), int64(r.Mtime.Nanos))
-			if m.After(mtime) {
-				mtime = m
+	if root != nil {
+		if params := getEtagParams(eosMtimeEtag, root.Etag); len(params) > 0 {
+			mtime := time.Unix(int64(root.Mtime.Seconds), int64(root.Mtime.Nanos))
+			for _, r := range children {
+				m := time.Unix(int64(r.Mtime.Seconds), int64(r.Mtime.Nanos))
+				if m.After(mtime) {
+					mtime = m
+				}
 			}
+			return fmt.Sprintf("\"%s:%d.%s\"", params["inode"], mtime.Unix(), strconv.FormatInt(mtime.UnixNano(), 10)[:3])
 		}
-		return fmt.Sprintf("\"%s:%d.%s\"", params["inode"], mtime.Unix(), strconv.FormatInt(mtime.UnixNano(), 10)[:3])
 	}
 
 	return combineEtags(children)

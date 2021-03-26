@@ -19,11 +19,10 @@
 package s3ng_test
 
 import (
-	"io/ioutil"
 	"os"
-	"strings"
 
 	"github.com/cs3org/reva/pkg/storage/fs/s3ng"
+	"github.com/cs3org/reva/tests/helpers"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -36,7 +35,7 @@ var _ = Describe("S3ng", func() {
 	)
 
 	BeforeEach(func() {
-		tmpRoot, err := ioutil.TempDir("", "reva-unit-tests-*-root")
+		tmpRoot, err := helpers.TempDir("reva-unit-tests-*-root")
 		Expect(err).ToNot(HaveOccurred())
 
 		options = map[string]interface{}{
@@ -52,7 +51,7 @@ var _ = Describe("S3ng", func() {
 	})
 
 	AfterEach(func() {
-		if strings.HasPrefix(tmpRoot, os.TempDir()) {
+		if tmpRoot != "" {
 			os.RemoveAll(tmpRoot)
 		}
 	})

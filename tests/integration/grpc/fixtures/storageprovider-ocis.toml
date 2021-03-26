@@ -1,0 +1,12 @@
+[grpc]
+address = "{{grpc_address}}"
+
+[grpc.services.storageprovider]
+driver = "ocis"
+
+[grpc.services.storageprovider.drivers.ocis]
+root = "{{root}}"
+treetime_accounting = true
+treesize_accounting = true
+enable_home = true
+userprovidersvc = "localhost:18000"

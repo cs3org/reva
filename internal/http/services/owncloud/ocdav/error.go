@@ -35,12 +35,15 @@ const (
 	SabredavMethodBadRequest code = iota
 	// SabredavMethodNotAllowed maps to HTTP 405
 	SabredavMethodNotAllowed
+	// SabredavMethodNotAuthenticated maps to HTTP 401
+	SabredavMethodNotAuthenticated
 )
 
 var (
 	codesEnum = []string{
 		"Sabre\\DAV\\Exception\\BadRequest",
 		"Sabre\\DAV\\Exception\\MethodNotAllowed",
+		"Sabre\\DAV\\Exception\\NotAuthenticated",
 	}
 )
 

@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -78,7 +79,21 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 		if u.Username != username {
 			log.Debug().Str("username", username).Interface("user", u).Msg("trying to read another users trash")
 			// listing other users trash is forbidden, no auth will change that
-			w.WriteHeader(http.StatusMethodNotAllowed)
+			b, err := Marshal(exception{
+				code: SabredavMethodNotAuthenticated,
+			})
+			if err != nil {
+				log.Error().Msgf("error marshaling xml response: %s", b)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusUnauthorized)
+			_, err = w.Write(b)
+			if err != nil {
+				log.Error().Msgf("error writing xml response: %s", b)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
 			return
 		}
 
@@ -208,7 +223,7 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *us
 			{
 				Status: "HTTP/1.1 200 OK",
 				Prop: []*propertyXML{
-					s.newProp("d:resourcetype", "<d:collection/>"),
+					s.newPropRaw("d:resourcetype", "<d:collection/>"),
 				},
 			},
 			{
@@ -272,6 +287,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *use
 		// yes this is redundant, can be derived from oc:trashbin-original-location which contains the full path, clients should not fetch it
 		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-filename", filepath.Base(item.Path)))
 		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-location", strings.TrimPrefix(item.Path, "/")))
+		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-delete-timestamp", strconv.FormatUint(item.DeletionTime.Seconds, 10)))
 		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-delete-datetime", dTime))
 		if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newPropRaw("d:resourcetype", "<d:collection/>"))
@@ -312,6 +328,8 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *use
 					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-original-location", strings.TrimPrefix(item.Path, "/")))
 				case "trashbin-delete-datetime":
 					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-delete-datetime", dTime))
+				case "trashbin-delete-timestamp":
+					propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:trashbin-delete-timestamp", strconv.FormatUint(item.DeletionTime.Seconds, 10)))
 				default:
 					propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:"+pf.Prop[i].Local, ""))
 				}
@@ -401,7 +419,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		HandleErrorStatus(&sublog, w, res.Status)
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+	w.WriteHeader(http.StatusCreated)
 }
 
 // delete has only a key

@@ -35,14 +35,15 @@ def lintStep():
 
 def cloneOc10TestReposStep():
   return {
-      "name": "clone-oC10-test-repos",
-      "image": "registry.cern.ch/docker.io/owncloudci/php:7.4",
-      "commands": [
-        "git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing",
-        "git clone -b master --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner",
-        "cd /drone/src/tmp/testrunner",
-        "git checkout d90b7027097ddfe8fbcb947f5f88b075207fb96f",
-      ],
+    "name": "clone-oC10-test-repos",
+    "image": "registry.cern.ch/docker.io/owncloudci/alpine:latest",
+    "commands": [
+      "source /drone/src/.drone.env",
+      "git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing",
+      "git clone -b $CORE_BRANCH --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner",
+      "cd /drone/src/tmp/testrunner",
+      "git checkout $CORE_COMMITID",
+    ],
   }
 
 # Shared service definitions
@@ -70,17 +71,37 @@ def redisService():
     },
   }
 
+def cephService():
+  return {
+    "name": "ceph",
+    "image": "ceph/daemon",
+    "pull": "always",
+    "environment": {
+      "CEPH_DAEMON": "demo",
+      "NETWORK_AUTO_DETECT": "4",
+      "MON_IP": "0.0.0.0",
+      "CEPH_PUBLIC_NETWORK": "0.0.0.0/0",
+      "RGW_CIVETWEB_PORT": "4000 ",
+      "RGW_NAME": "ceph",
+      "CEPH_DEMO_UID": "test-user",
+      "CEPH_DEMO_ACCESS_KEY": "test",
+      "CEPH_DEMO_SECRET_KEY": "test",
+      "CEPH_DEMO_BUCKET": "test",
+    }
+  }
+
 # Pipeline definitions
 def main(ctx):
   return [
     buildAndPublishDocker(),
     buildOnly(),
+    testIntegration(),
     release(),
     litmusOcisOldWebdav(),
     litmusOcisNewWebdav(),
     localIntegrationTestsOwncloud(),
     localIntegrationTestsOcis(),
-  ] + ocisIntegrationTests(6) + owncloudIntegrationTests(6)
+  ] + ocisIntegrationTests(6) + owncloudIntegrationTests(6) + s3ngIntegrationTests(12)
 
 
 def buildAndPublishDocker():
@@ -254,6 +275,39 @@ def buildOnly():
         ],
       },
     ]
+  }
+
+def testIntegration():
+  return {
+    "kind": "pipeline",
+    "type": "docker",
+    "name": "test-integration",
+    "platform": {
+      "os": "linux",
+      "arch": "amd64",
+    },
+    "trigger": {
+      "event": {
+        "include": [
+          "pull_request",
+        ],
+      },
+    },
+    "steps": [
+      {
+        "name": "test",
+        "image": "registry.cern.ch/docker.io/library/golang:1.16",
+        "commands": [
+          "make test-integration",
+        ],
+        "environment": {
+          "REDIS_ADDRESS": "redis:6379",
+        },
+      }
+    ],
+    "services": [
+      redisService(),
+    ],
   }
 
 def release():
@@ -714,6 +768,76 @@ def owncloudIntegrationTests(parallelRuns):
         "services": [
           ldapService(),
           redisService(),
+        ],
+      }
+    )
+
+  return pipelines
+
+def s3ngIntegrationTests(parallelRuns):
+  pipelines = []
+  for runPart in range(1, parallelRuns + 1):
+    pipelines.append(
+      {
+        "kind": "pipeline",
+        "type": "docker",
+        "name": "s3ng-integration-tests-%s" % runPart,
+        "platform": {
+          "os": "linux",
+          "arch": "amd64",
+        },
+        "trigger": {
+          "event": {
+            "include": [
+              "pull_request",
+              "tag",
+            ],
+          },
+        },
+        "steps": [
+          makeStep("build-ci"),
+          {
+            "name": "revad-services",
+            "image": "registry.cern.ch/docker.io/library/golang:1.16",
+            "detach": True,
+            "commands": [
+              "cd /drone/src/tests/oc-integration-tests/drone/",
+              "/drone/src/cmd/revad/revad -c frontend.toml &",
+              "/drone/src/cmd/revad/revad -c gateway.toml &",
+              "/drone/src/cmd/revad/revad -c shares.toml &",
+              "/drone/src/cmd/revad/revad -c storage-home-s3ng.toml &",
+              "/drone/src/cmd/revad/revad -c storage-oc-s3ng.toml &",
+              "/drone/src/cmd/revad/revad -c storage-publiclink-s3ng.toml &",
+              "/drone/src/cmd/revad/revad -c ldap-users.toml",
+            ],
+          },
+          cloneOc10TestReposStep(),
+          {
+            "name": "oC10APIAcceptanceTestsS3ngStorage",
+            "image": "registry.cern.ch/docker.io/owncloudci/php:7.4",
+            "commands": [
+              "cd /drone/src/tmp/testrunner",
+              "make test-acceptance-api",
+            ],
+            "environment": {
+              "TEST_SERVER_URL": "http://revad-services:20080",
+              "OCIS_REVA_DATA_ROOT": "/drone/src/tmp/reva/data/",
+              "DELETE_USER_DATA_CMD": "rm -rf /drone/src/tmp/reva/data/nodes/root/* /drone/src/tmp/reva/data/nodes/*-*-*-*",
+              "STORAGE_DRIVER": "S3NG",
+              "SKELETON_DIR": "/drone/src/tmp/testing/data/apiSkeleton",
+              "TEST_WITH_LDAP": "true",
+              "REVA_LDAP_HOSTNAME": "ldap",
+              "TEST_REVA": "true",
+              "BEHAT_FILTER_TAGS": "~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage",
+              "DIVIDE_INTO_NUM_PARTS": parallelRuns,
+              "RUN_PART": runPart,
+              "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-on-S3NG-storage.md",
+            },
+          },
+        ],
+        "services": [
+          ldapService(),
+          cephService(),
         ],
       }
     )

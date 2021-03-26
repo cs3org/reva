@@ -1814,6 +1814,9 @@ func (fs *ocfs) listShareFolderRoot(ctx context.Context, sp string, mdKeys []str
 
 	mds, err := ioutil.ReadDir(ip)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
+		}
 		return nil, errors.Wrap(err, "ocfs: error listing shadow_files")
 	}
 
@@ -1950,6 +1953,7 @@ func (fs *ocfs) filterAsRevision(ctx context.Context, bn string, md os.FileInfo)
 			Key:   version,
 			Size:  uint64(md.Size()),
 			Mtime: uint64(mtime),
+			Etag:  calcEtag(ctx, md),
 		}
 	}
 	return nil
