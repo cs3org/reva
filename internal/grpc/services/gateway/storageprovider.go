@@ -259,31 +259,30 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 			}, nil
 		}
 
+		if protocol == "webdav" {
+			// TODO(ishank011): pass this through the datagateway service
+			// For now, we just expose the file server to the user
+			ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target)
+			if err != nil {
+				return &gateway.InitiateFileDownloadResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error downloading from webdav host: "+p),
+				}, nil
+			}
+			return &gateway.InitiateFileDownloadResponse{
+				Status: status.NewOK(ctx),
+				Protocols: []*gateway.FileDownloadProtocol{
+					{
+						Opaque:           opaque,
+						Protocol:         "simple",
+						DownloadEndpoint: ep,
+					},
+				},
+			}, nil
+		}
+
 		// if it is a file allow download
 		if ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
 			log.Debug().Str("path", p).Interface("ri", ri).Msg("path points to share name file")
-
-			if protocol == "webdav" {
-				// TODO(ishank011): pass this through the datagateway service
-				// For now, we just expose the file server to the user
-				ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target)
-				if err != nil {
-					return &gateway.InitiateFileDownloadResponse{
-						Status: status.NewInternal(ctx, err, "gateway: error downloading from webdav host: "+p),
-					}, nil
-				}
-				return &gateway.InitiateFileDownloadResponse{
-					Status: status.NewOK(ctx),
-					Protocols: []*gateway.FileDownloadProtocol{
-						{
-							Opaque:           opaque,
-							Protocol:         "simple",
-							DownloadEndpoint: ep,
-						},
-					},
-				}, nil
-			}
-
 			req.Ref = &provider.Reference{
 				Spec: &provider.Reference_Path{
 					Path: ri.Path,
