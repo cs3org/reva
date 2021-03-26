@@ -552,6 +552,9 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 	for i := range listContainerR.Infos {
 		filterPermissions(listContainerR.Infos[i].PermissionSet, ls.GetPermissions().Permissions)
 		listContainerR.Infos[i].Path = path.Join(s.mountPath, "/", tkn, relativePath, path.Base(listContainerR.Infos[i].Path))
+		if err := addShare(listContainerR.Infos[i], ls); err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Interface("share", ls).Interface("info", listContainerR.Infos[i]).Msg("error when adding share")
+		}
 	}
 
 	return listContainerR, nil
@@ -679,6 +682,7 @@ func (s *service) resolveToken(ctx context.Context, token string) (string, *link
 					Token: token,
 				},
 			},
+			Sign: true,
 		},
 	)
 	switch {
@@ -697,6 +701,5 @@ func (s *service) resolveToken(ctx context.Context, token string) (string, *link
 	case pathRes.Status.Code != rpc.Code_CODE_OK:
 		return "", nil, pathRes.Status, nil
 	}
-
 	return pathRes.Path, publicShareResponse.GetShare(), nil, nil
 }

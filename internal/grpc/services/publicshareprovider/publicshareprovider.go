@@ -149,7 +149,7 @@ func (s *service) GetPublicShareByToken(ctx context.Context, req *link.GetPublic
 	log.Debug().Msg("getting public share by token")
 
 	// there are 2 passes here, and the second request has no password
-	found, err := s.sm.GetPublicShareByToken(ctx, req.GetToken(), req.GetPassword())
+	found, err := s.sm.GetPublicShareByToken(ctx, req.GetToken(), req.GetAuthentication(), req.GetSign())
 	switch v := err.(type) {
 	case nil:
 		return &link.GetPublicShareByTokenResponse{
@@ -180,7 +180,7 @@ func (s *service) GetPublicShare(ctx context.Context, req *link.GetPublicShareRe
 		log.Error().Msg("error getting user from context")
 	}
 
-	found, err := s.sm.GetPublicShare(ctx, u, req.Ref)
+	found, err := s.sm.GetPublicShare(ctx, u, req.Ref, req.GetSign())
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +196,7 @@ func (s *service) ListPublicShares(ctx context.Context, req *link.ListPublicShar
 	log.Info().Str("publicshareprovider", "list").Msg("list public share")
 	user, _ := user.ContextGetUser(ctx)
 
-	shares, err := s.sm.ListPublicShares(ctx, user, req.Filters, &provider.ResourceInfo{})
+	shares, err := s.sm.ListPublicShares(ctx, user, req.Filters, &provider.ResourceInfo{}, req.GetSign())
 	if err != nil {
 		log.Err(err).Msg("error listing shares")
 		return &link.ListPublicSharesResponse{

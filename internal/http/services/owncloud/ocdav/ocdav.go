@@ -72,6 +72,7 @@ type Config struct {
 	GatewaySvc      string `mapstructure:"gatewaysvc"`
 	Timeout         int64  `mapstructure:"timeout"`
 	Insecure        bool   `mapstructure:"insecure"`
+	PublicURL       string `mapstructure:"public_url"`
 }
 
 func (c *Config) init() {
