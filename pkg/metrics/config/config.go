@@ -26,6 +26,7 @@ type Config struct {
 	XcloudInstance        string `mapstructure:"xcloud_instance"`
 	XcloudCatalog         string `mapstructure:"xcloud_catalog"`
 	XcloudPullInterval    int    `mapstructure:"xcloud_pull_interval"`
+	InsecureSkipVerify    bool   `mapstructure:"insecure_skip_verify"`
 }
 
 // Init sets sane defaults
