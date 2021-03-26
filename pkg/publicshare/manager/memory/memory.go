@@ -105,7 +105,7 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 // UpdatePublicShare updates the expiration date, permissions and Mtime
 func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link.UpdatePublicShareRequest, g *link.Grant) (*link.PublicShare, error) {
 	log := appctx.GetLogger(ctx)
-	share, err := m.GetPublicShare(ctx, u, req.Ref)
+	share, err := m.GetPublicShare(ctx, u, req.Ref, false)
 	if err != nil {
 		return nil, errors.New("ref does not exist")
 	}
@@ -144,12 +144,12 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 	return share, nil
 }
 
-func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) (share *link.PublicShare, err error) {
+func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference, sign bool) (share *link.PublicShare, err error) {
 	// TODO(refs) return an error if the share is expired.
 
 	// Attempt to fetch public share by token
 	if ref.GetToken() != "" {
-		share, err = m.GetPublicShareByToken(ctx, ref.GetToken(), "")
+		share, err = m.GetPublicShareByToken(ctx, ref.GetToken(), &link.PublicShareAuthentication{}, sign)
 		if err != nil {
 			return nil, errors.New("no shares found by token")
 		}
@@ -166,7 +166,7 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 	return
 }
 
-func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo) ([]*link.PublicShare, error) {
+func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo, sign bool) ([]*link.PublicShare, error) {
 	// TODO(refs) filter out expired shares
 	shares := []*link.PublicShare{}
 	m.shares.Range(func(k, v interface{}) bool {
@@ -202,7 +202,7 @@ func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link
 		}
 		m.shares.Delete(s.Token)
 	case ref.GetToken() != "":
-		if _, err := m.GetPublicShareByToken(ctx, ref.GetToken(), ""); err != nil {
+		if _, err := m.GetPublicShareByToken(ctx, ref.GetToken(), &link.PublicShareAuthentication{}, false); err != nil {
 			return errors.New("reference does not exist")
 		}
 		m.shares.Delete(ref.GetToken())
@@ -212,7 +212,7 @@ func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link
 	return nil
 }
 
-func (m *manager) GetPublicShareByToken(ctx context.Context, token string, password string) (*link.PublicShare, error) {
+func (m *manager) GetPublicShareByToken(ctx context.Context, token string, auth *link.PublicShareAuthentication, sign bool) (*link.PublicShare, error) {
 	if ps, ok := m.shares.Load(token); ok {
 		return ps.(*link.PublicShare), nil
 	}
