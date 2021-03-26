@@ -274,7 +274,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 
 		if protocol == "webdav" {
 			// TODO(ishank011): pass this through the datagateway service
-			// for now, we just expose the file server to the user
+			// For now, we just expose the file server to the user
 			ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target)
 			if err != nil {
 				return &gateway.InitiateFileDownloadResponse{

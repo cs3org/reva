@@ -61,14 +61,15 @@ func (s *svc) isShareChild(ctx context.Context, p string) bool {
 // path must contain a share path with share children, if not it will panic.
 // should be called after checking isShareChild == true
 func (s *svc) splitShare(ctx context.Context, p string) (string, string) {
-	p = strings.Trim(p, "/")
-	parts := strings.SplitN(p, "/", 3)
-	if len(parts) != 3 {
-		panic("gateway: path for splitShare does not contain 3 elements:" + p)
+	sharedFolder := s.getSharedFolder(ctx)
+	p = strings.Trim(strings.TrimPrefix(p, sharedFolder), "/")
+	parts := strings.SplitN(p, "/", 2)
+	if len(parts) != 2 {
+		panic("gateway: path for splitShare does not contain 2 elements:" + p)
 	}
 
-	shareName := path.Join("/", parts[0], parts[1])
-	shareChild := path.Join("/", parts[2])
+	shareName := path.Join(sharedFolder, parts[0])
+	shareChild := path.Join("/", parts[1])
 	return shareName, shareChild
 }
 
