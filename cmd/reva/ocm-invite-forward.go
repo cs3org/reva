@@ -80,7 +80,7 @@ func ocmInviteForwardCommand() *command {
 		if forwardToken.Status.Code != rpc.Code_CODE_OK {
 			return formatError(forwardToken.Status)
 		}
-		fmt.Println(forwardToken.Status.Code)
+		fmt.Println("OK")
 		return nil
 	}
 	return cmd
