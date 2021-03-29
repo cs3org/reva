@@ -118,7 +118,9 @@ func (opt *Options) init() {
 		opt.CacheDirectory = os.TempDir()
 	}
 
-	opt.httpopts.Init()
+	if opt.httpopts.Init() != nil {
+		os.Exit(255)
+	}
 	opt.httpopts.BaseURL = opt.URL
 
 }

@@ -33,7 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
-	"github.com/rs/zerolog/log"
+	//"github.com/rs/zerolog/log"
 )
 
 const (
@@ -120,6 +120,10 @@ func (opt *Options) Init() error {
 
 	if httpTransport == nil {
 
+		// TODO: the error reporting of http.transport is insufficient
+		// must check manually at least the existence of the certfiles
+		// The point is that also the error reporting of the context that calls this function
+		// is weak
 		httpTransport = &http.Transport{
 			TLSClientConfig: &tls.Config{
 				Certificates: []tls.Certificate{cert},
@@ -144,8 +148,8 @@ type EosHttpClient struct {
 
 // New creates a new client with the given options.
 func New(opt *Options) *EosHttpClient {
-	tlog := logger.New().With().Int("pid", os.Getpid()).Logger()
-	tlog.Debug().Str("func", "New").Str("Creating new eoshttp client. opt: ", "'"+fmt.Sprintf("%#v", opt)+"' ").Msg("")
+	log := logger.New().With().Int("pid", os.Getpid()).Logger()
+	log.Debug().Str("func", "New").Str("Creating new eoshttp client. opt: ", "'"+fmt.Sprintf("%#v", opt)+"' ").Msg("")
 
 	if opt == nil {
 		log.Debug().Str("opt is nil, Error creating http client ", "").Msg("")
