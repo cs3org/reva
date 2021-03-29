@@ -25,10 +25,12 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/google/uuid"
@@ -186,11 +188,21 @@ func ReadNode(ctx context.Context, lu PathLookup, id string) (n *Node, err error
 	return
 }
 
+// The os not exists error is buried inside the fs.PathError error
+func isNotDir(err error) bool {
+	if perr, ok := err.(*fs.PathError); ok {
+		if serr, ok2 := perr.Err.(syscall.Errno); ok2 {
+			return serr == syscall.ENOTDIR
+		}
+	}
+	return false
+}
+
 // Child returns the child node with the given name
 func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
 	link, err := os.Readlink(filepath.Join(n.InternalPath(), name))
 	if err != nil {
-		if os.IsNotExist(err) {
+		if os.IsNotExist(err) || isNotDir(err) {
 			c := &Node{
 				lu:       n.lu,
 				ParentID: n.ID,
