@@ -63,6 +63,8 @@ func (s *svc) Prefix() string {
 
 // Unprotected returns all endpoints that can be queried without prior authorization.
 func (s *svc) Unprotected() []string {
+	return []string{"/"}
+
 	// The account creation endpoint is always unprotected
 	endpoints := []string{config.EndpointCreate}
 

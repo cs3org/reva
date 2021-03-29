@@ -42,11 +42,12 @@ func UnregisterSite(serviceUrl string, apiKey key.APIKey, siteId key.SiteIdentif
 	if err != nil {
 		return errors.Wrap(err, "unable to parse the site registration service URL")
 	}
-	fullURL.Query().Add("action", "unregister")
-	fullURL.Query().Add("apiKey", apiKey)
-	fullURL.Query().Add("siteId", siteId)
 
-	fmt.Println(fullURL.String())
+	query := make(url.Values)
+	query.Set("action", "unregister")
+	query.Set("apiKey", apiKey)
+	query.Set("siteId", siteId)
+	fullURL.RawQuery = query.Encode()
 
 	_, err = network.WriteEndpoint(fullURL, nil, true)
 	if err != nil {
