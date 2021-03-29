@@ -460,7 +460,7 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 		case errtypes.IsNotFound:
 			st = status.NewNotFound(ctx, "path not found when creating container")
 		case errtypes.AlreadyExists:
-			st = status.NewInternal(ctx, err, "error: container already exists")
+			st = status.NewAlreadyExists(ctx, err, "container already exists")
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
