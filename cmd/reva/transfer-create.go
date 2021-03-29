@@ -19,15 +19,24 @@
 package main
 
 import (
-	"errors"
-	"fmt"
+	"encoding/json"
 	"io"
+	"os"
+	"path"
+	"strconv"
 	"strings"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
+	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	tx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
+	"github.com/jedib0t/go-pretty/table"
+	"github.com/pkg/errors"
 )
 
 func transferCreateCommand() *command {
@@ -51,10 +60,65 @@ func transferCreateCommand() *command {
 		}
 
 		// the resource to transfer; the path
-		fn := cmd.Args()[0]
+		rPath := cmd.Args()[0]
 
 		ctx := getAuthContext()
 		client, err := getClient()
+		if err != nil {
+			return err
+		}
+
+		// check if invitation has been accepted
+		acceptedUserRes, err := client.GetAcceptedUser(ctx, &invitepb.GetAcceptedUserRequest{
+			RemoteUserId: &userpb.UserId{OpaqueId: *grantee, Idp: *idp},
+		})
+		if err != nil {
+			return err
+		}
+		if acceptedUserRes.Status.Code != rpc.Code_CODE_OK {
+			return formatError(acceptedUserRes.Status)
+		}
+
+		// verify resource stats
+		hRes, err := client.GetHome(ctx, &provider.GetHomeRequest{})
+		if err != nil {
+			return err
+		}
+		prefix := hRes.GetPath()
+		path := path.Join(prefix, rPath)
+		statReq := &provider.StatRequest{
+			Ref: &provider.Reference{
+				Spec: &provider.Reference_Path{
+					Path: path,
+				},
+			},
+		}
+		statRes, err := client.Stat(ctx, statReq)
+		if err != nil {
+			return err
+		}
+		if statRes.Status.Code != rpc.Code_CODE_OK {
+			return formatError(statRes.Status)
+		}
+
+		providerInfoResp, err := client.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
+			Domain: *idp,
+		})
+		if err != nil {
+			return err
+		}
+		permissions := conversions.PermissionWrite
+		resourcePermissions := &provider.ResourcePermissions{
+			InitiateFileDownload: true,
+		}
+		datatxProtocol, err := json.Marshal(
+			map[string]interface{}{
+				"name": "datatx",
+				"options": map[string]string{
+					"desired-protocol": "webdav",
+				},
+			},
+		)
 		if err != nil {
 			return err
 		}
@@ -64,39 +128,65 @@ func transferCreateCommand() *command {
 			gt = provider.GranteeType_GRANTEE_TYPE_GROUP
 		}
 
-		transferRequest := &tx.CreateTransferRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: fn,
-				},
-			},
-			Grantee: &provider.Grantee{
-				Type: gt,
-				Id: &provider.Grantee_UserId{
-					UserId: &userpb.UserId{
-						Idp:      *idp,
-						OpaqueId: *grantee,
+		createShareReq := &ocm.CreateOCMShareRequest{
+			Opaque: &types.Opaque{
+				Map: map[string]*types.OpaqueEntry{
+					"permissions": &types.OpaqueEntry{
+						Decoder: "plain",
+						Value:   []byte(strconv.Itoa(int(permissions))),
+					},
+					"name": &types.OpaqueEntry{
+						Decoder: "plain",
+						Value:   []byte(path),
+					},
+					"protocol": &types.OpaqueEntry{
+						Decoder: "json",
+						Value:   datatxProtocol,
 					},
 				},
 			},
+			ResourceId: statRes.Info.Id,
+			Grant: &ocm.ShareGrant{
+				Grantee: &provider.Grantee{
+					Type: gt,
+					Id: &provider.Grantee_UserId{
+						UserId: &userpb.UserId{
+							Idp:      *idp,
+							OpaqueId: *grantee,
+						},
+					},
+				},
+				Permissions: &ocm.SharePermissions{
+					Permissions: resourcePermissions,
+				},
+			},
+			RecipientMeshProvider: providerInfoResp.ProviderInfo,
 		}
 
-		fmt.Println("transfer-create:")
-		fmt.Println("------------------------------------------------------------------------")
-		transferResponse, err := client.CreateTransfer(ctx, transferRequest)
+		createShareResponse, err := client.CreateOCMShare(ctx, createShareReq)
 		if err != nil {
 			return err
 		}
-		if transferResponse.Status.Code != rpc.Code_CODE_OK {
-			return formatError(transferResponse.Status)
+		if createShareResponse.Status.Code != rpc.Code_CODE_OK {
+			if createShareResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
+				return formatError(statRes.Status)
+			}
+			return err
 		}
 
-		fmt.Printf(" response status: %v\n", transferResponse.Status)
-		fmt.Printf(" transfer ID    : %v\n", transferResponse.TxInfo.Id.OpaqueId)
-		fmt.Printf(" transfer status: %v\n", transferResponse.TxInfo.Status)
-		fmt.Println("------------------------------------------------------------------------")
+		t := table.NewWriter()
+		t.SetOutputMirror(os.Stdout)
+		t.AppendHeader(table.Row{"#", "Owner.Idp", "Owner.OpaqueId", "ResourceId", "Permissions", "Type", "Grantee.Idp", "Grantee.OpaqueId", "ShareType", "Created", "Updated"})
 
+		s := createShareResponse.Share
+		t.AppendRows([]table.Row{
+			{s.Id.OpaqueId, s.Owner.Idp, s.Owner.OpaqueId, s.ResourceId.String(), s.Permissions.String(),
+				s.Grantee.Type.String(), s.Grantee.GetUserId().Idp, s.Grantee.GetUserId().OpaqueId, s.ShareType.String(),
+				time.Unix(int64(s.Ctime.Seconds), 0), time.Unix(int64(s.Mtime.Seconds), 0)},
+		})
+		t.Render()
 		return nil
 	}
+
 	return cmd
 }
